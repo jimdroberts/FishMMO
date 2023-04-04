@@ -5,6 +5,7 @@ using UnityEngine.SceneManagement;
 using System;
 using System.Collections;
 using System.Text.RegularExpressions;
+using Microsoft.EntityFrameworkCore;
 
 #if UNITY_EDITOR
 using UnityEditor;
@@ -21,6 +22,7 @@ namespace Server
 		public ushort port;
 		public string relayAddress;
 		public ushort relayPort;
+		public ServerDbContext DbContext;
 
 		public NetworkManager NetworkManager { get; private set; }
 
@@ -129,6 +131,12 @@ namespace Server
 			ServerWindowTitleUpdater = GetComponent<ServerWindowTitleUpdater>();
 			if (ServerWindowTitleUpdater != null)
 				ServerWindowTitleUpdater.InternalInitializeOnce(this, NetworkManager.ServerManager);
+			
+			// setup the DB context and ensure that it's been created
+			var factory = new ServerDbContextFactory();
+			DbContext = factory.CreateDbContext(new string[] { });
+			DbContext.Database.EnsureCreated();
+			DbContext.Database.Migrate();
 
 			switch (serverType)
 			{

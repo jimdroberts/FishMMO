@@ -21,19 +21,6 @@ namespace Server
 		public const int accountNameMinLength = 3;
 		public const int accountNameMaxLength = 32;
 
-		private void Awake()
-		{
-			var connectionString = "";
-			
-			Debug.Log($"Database.Instance.databaseFile: {Database.Instance.databaseFile}");
-
-			var factory = new ServerDbContextFactory();
-			var context = factory.CreateDbContext(new string[] { });
-
-			context.Database.EnsureCreated();
-			context.Database.Migrate();
-		}
-
 		public virtual bool IsAllowedUsername(string accountName)
 		{
 			return !string.IsNullOrWhiteSpace(accountName) && 
