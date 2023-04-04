@@ -1,0 +1,68 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 338615fedeaa1344faabba5c756f75ab, type: 3}
+  m_Name: WorldSceneDetails
+  m_EditorClassIdentifier: 
+  initialSpawnTag: InitialSpawnPosition
+  respawnTag: RespawnPosition
+  teleporterTag: Teleporter
+  teleporterDestinationTag: TeleporterDestination
+  scenes:
+    m_keys:
+    - Felwithe
+    - Greater Faydark
+    m_values:
+    - initialSpawnPositions:
+        m_keys:
+        - West Felwithe
+        - East Felwithe
+        m_values:
+        - spawnerName: West Felwithe
+          sceneName: Felwithe
+          position: {x: 8, y: 2, z: 0}
+          rotation: {x: -0, y: -0, z: -0, w: 1}
+        - spawnerName: East Felwithe
+          sceneName: Felwithe
+          position: {x: 26.76, y: 10, z: 1.21}
+          rotation: {x: -0, y: 0.7071068, z: -0, w: 0.7071068}
+      respawnPositions:
+        m_keys:
+        - Respawn 1
+        m_values:
+        - {x: -44.69, y: 5, z: 0}
+      teleporters:
+        m_keys:
+        - FelwitheNorth
+        m_values:
+        - toScene: Greater Faydark
+          toPosition: {x: 2.2199998, y: -0.64000005, z: 0}
+    - initialSpawnPositions:
+        m_keys:
+        - Spire
+        m_values:
+        - spawnerName: Spire
+          sceneName: Greater Faydark
+          position: {x: -13.06, y: 5.51, z: -12.29}
+          rotation: {x: -0, y: 0.7071068, z: -0, w: 0.7071068}
+      respawnPositions:
+        m_keys:
+        - Respawn 1
+        - Respawn 2
+        m_values:
+        - {x: 0, y: 2, z: 0}
+        - {x: 224.6, y: 2, z: 0}
+      teleporters:
+        m_keys:
+        - GreaterFaydarkEast
+        m_values:
+        - toScene: Felwithe
+          toPosition: {x: 2.27, y: 0, z: 0}
