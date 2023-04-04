@@ -95,6 +95,8 @@ namespace Server
 			// we also use Path.Combine for platform independent paths
 			// and we need persistentDataPath on android
 			string path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), databaseFile);
+            
+            Debug.Log($"Path: {path}");
 
             // open connection
             // note: automatically creates database file if not created yet

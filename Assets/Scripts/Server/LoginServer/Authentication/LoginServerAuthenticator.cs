@@ -4,6 +4,8 @@ using FishNet.Managing;
 using FishNet.Transporting;
 using System;
 using System.Text.RegularExpressions;
+using Microsoft.EntityFrameworkCore;
+using UnityEngine;
 
 namespace Server
 {
@@ -18,6 +20,19 @@ namespace Server
 
 		public const int accountNameMinLength = 3;
 		public const int accountNameMaxLength = 32;
+
+		private void Awake()
+		{
+			var connectionString = "";
+			
+			Debug.Log($"Database.Instance.databaseFile: {Database.Instance.databaseFile}");
+
+			var factory = new ServerDbContextFactory();
+			var context = factory.CreateDbContext(new string[] { });
+
+			context.Database.EnsureCreated();
+			context.Database.Migrate();
+		}
 
 		public virtual bool IsAllowedUsername(string accountName)
 		{
@@ -87,6 +102,7 @@ namespace Server
 			// if the username is valid get OR create the account for the client
 			if (IsAllowedUsername(username))
 			{
+				// TODO: need database account service
 				result = Database.Instance.TryLogin(username, password);
 			}
 
