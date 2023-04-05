@@ -5,6 +5,7 @@ using FishNet.Transporting;
 using System;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
+using Server.Services;
 using UnityEngine;
 
 namespace Server
@@ -89,8 +90,9 @@ namespace Server
 			// if the username is valid get OR create the account for the client
 			if (IsAllowedUsername(username))
 			{
-				// TODO: need database account service
-				result = Database.Instance.TryLogin(username, password);
+				// TODO: need database account service; this service should be resolved some different way maybe?
+				var accountService = new AccountService();
+				result = accountService.TryLogin(username, password);
 			}
 
 			return new ClientAuthResultBroadcast() { result = result, };

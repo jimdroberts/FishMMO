@@ -1,17 +1,20 @@
-﻿using System;
-using SQLite;
+﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+using Microsoft.EntityFrameworkCore;
 
 namespace Server.Entities
 {
-    
-    //[Table("account", Schema = "mmo")]
-    [Table("character_itemcooldowns")]
+    [Table("character_itemcooldowns", Schema = "fishMMO")]
+    [Index(nameof(CharacterId))]
+    [Index(nameof(CharacterId), nameof(Category), IsUnique = true)]
     public class CharacterItemCooldownEntity
     {
-        //[PrimaryKey] // important for performance: O(log n) instead of O(n)
-        public string character { get; set; }
-        public string category { get; set; }
-        public float cooldownEnd { get; set; }
+        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+        public long Id { get; set; }
+        public long CharacterId { get; set; }
+        public CharacterEntity Character { get; set; }
+        public string Category { get; set; }
+        public float CooldownEnd { get; set; }
         
     }
 }

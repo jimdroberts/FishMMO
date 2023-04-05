@@ -1,12 +1,9 @@
-﻿using System;
-using SQLite;
-//using Npgsql.EntityFrameworkCore.PostgreSQL;
+﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Server.Entities
 {
-    
-    //[Table("account", Schema = "mmo")]
-    [Table("buff")]
+    [Table("buff", Schema = "fishMMO")]
     public class BuffEntity
     {
     }

@@ -1,19 +1,18 @@
 ﻿using System;
-using SQLite;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Server.Entities
 {
-    
-    //[Table("account", Schema = "mmo")]
-    [Table("world_server")]
+    [Table("world_servers", Schema = "fishMMO")]
     public class WorldServerEntity
     {
-        //[PrimaryKey]
-        public string name { get; set; }
-        public DateTime lastPulse { get; set; }
-        public string address { get; set; }
-        public ushort port { get; set; }
-        public int characterCount { get; set; }
-        public bool locked { get; set; }
+        [Key]
+        public string Name { get; set; }
+        public DateTime LastPulse { get; set; }
+        public string Address { get; set; }
+        public ushort Port { get; set; }
+        public int CharacterCount { get; set; }
+        public bool Locked { get; set; }
     }
 }

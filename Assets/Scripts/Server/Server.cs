@@ -22,7 +22,7 @@ namespace Server
 		public ushort port;
 		public string relayAddress;
 		public ushort relayPort;
-		public ServerDbContext DbContext;
+		public ServerDbContextFactory DbContextFactory;
 
 		public NetworkManager NetworkManager { get; private set; }
 
@@ -30,6 +30,7 @@ namespace Server
 		public CharacterSelectSystem CharacterSelectSystem { get; private set; }
 		public CharacterCreateSystem CharacterCreateSystem { get; private set; }
 		public ServerSelectSystem ServerSelectSystem { get; private set; }
+		public DatabaseInitializerSystem DatabaseInitializerSystem { get; private set; }
 		#endregion
 
 		#region WORLD
@@ -133,10 +134,7 @@ namespace Server
 				ServerWindowTitleUpdater.InternalInitializeOnce(this, NetworkManager.ServerManager);
 			
 			// setup the DB context and ensure that it's been created
-			var factory = new ServerDbContextFactory();
-			DbContext = factory.CreateDbContext(new string[] { });
-			DbContext.Database.EnsureCreated();
-			DbContext.Database.Migrate();
+			DbContextFactory = new ServerDbContextFactory();
 
 			switch (serverType)
 			{
@@ -149,6 +147,10 @@ namespace Server
 
 					ServerSelectSystem = GetOrCreateComponent<ServerSelectSystem>();
 					ServerSelectSystem.InternalInitializeOnce(this, NetworkManager.ServerManager);
+					
+					// TODO: where should this behavior live?
+					DatabaseInitializerSystem = GetOrCreateComponent<DatabaseInitializerSystem>();
+					DatabaseInitializerSystem.InternalInitializeOnce(this, NetworkManager.ServerManager);
 					break;
 				case "WORLD":
 					WorldServerSystem = GetOrCreateComponent<WorldServerSystem>();

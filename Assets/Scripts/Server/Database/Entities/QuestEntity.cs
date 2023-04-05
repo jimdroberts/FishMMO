@@ -1,11 +1,10 @@
 ﻿using System;
-using SQLite;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Server.Entities
 {
-    
-    //[Table("account", Schema = "mmo")]
-    [Table("quest")]
+    [Table("quest", Schema = "fishMMO")]
     public class QuestEntity
     {
     }

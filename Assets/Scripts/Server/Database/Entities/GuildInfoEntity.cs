@@ -1,15 +1,20 @@
 ﻿using System;
-using SQLite;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+using Microsoft.EntityFrameworkCore;
 
 namespace Server.Entities
 {
-    
-    //[Table("account", Schema = "mmo")]
-    [Table("guild_info")]
+    [Table("guild_info", Schema = "fishMMO")]
+    [Index(nameof(Name))]
     public class GuildInfoEntity
     {
-        //[PrimaryKey] // important for performance: O(log n) instead of O(n)
-        public string name { get; set; }
-        public string notice { get; set; }
+        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+        public long Id { get; set; }
+        public string Name { get; set; }
+        public string Notice { get; set; }
+        
+        public List<CharacterGuildEntity> Characters { get; set; }
     }
 }

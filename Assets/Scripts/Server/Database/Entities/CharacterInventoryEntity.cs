@@ -1,19 +1,23 @@
-﻿using System;
-using SQLite;
+﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+using Microsoft.EntityFrameworkCore;
 
 namespace Server.Entities
 {
-    
-    //[Table("account", Schema = "mmo")]
-    [Table("character_inventory")]
+    [Table("character_inventory", Schema = "fishMMO")]
+    [Index(nameof(CharacterId))]
+    [Index(nameof(CharacterId), nameof(Slot), IsUnique = true)]
     public class CharacterInventoryEntity
     {
-        public string character { get; set; }
-        public long instanceID { get; set; }
-        public int templateID { get; set; }
-        public int seed { get; set; }
-        public int slot { get; set; }
-        public string name { get; set; }
-        public int amount { get; set; }
+        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+        public long Id { get; set; }
+        public long CharacterId { get; set; }
+        public CharacterEntity Character { get; set; }
+        public long InstanceID { get; set; }
+        public int TemplateID { get; set; }
+        public int Seed { get; set; }
+        public int Slot { get; set; }
+        public string Name { get; set; }
+        public int Amount { get; set; }
     }
 }

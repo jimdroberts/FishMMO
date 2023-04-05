@@ -1,15 +1,21 @@
-﻿using SQLite;
+﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+using Microsoft.EntityFrameworkCore;
 
 namespace Server.Entities
 {
-    [Table("character_skills")]
+    [Table("character_skills", Schema = "fishMMO")]
+    [Index(nameof(CharacterId))]
+    [Index(nameof(CharacterId), nameof(Hash), IsUnique = true)]
     public class CharacterSkillEntity
     {
-        public string character { get; set; }
-        public int hash { get; set; }
-        public int level { get; set; }
-        public float castTimeEnd { get; set; }
-        public float cooldownEnd { get; set; }
-        // PRIMARY KEY (character, name) is created manually.
+        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+        public long Id { get; set; }
+        public long CharacterId { get; set; }
+        public CharacterEntity Character { get; set; }
+        public int Hash { get; set; }
+        public int Level { get; set; }
+        public float CastTimeEnd { get; set; }
+        public float CooldownEnd { get; set; }
     }
 }

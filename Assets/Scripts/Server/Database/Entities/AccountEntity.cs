@@ -1,20 +1,18 @@
 ﻿using System;
-using SQLite;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+using Microsoft.EntityFrameworkCore;
 
 namespace Server.Entities
 {
-    
-    //[Table("account", Schema = "mmo")]
-    [Table("account")]
+    [Table("accounts", Schema = "fishMMO")]
     public class AccountEntity
     {
-        //[DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-        //public int id { get; set; }
-        [PrimaryKey]
-        public string name { get; set; }
-        public string password { get; set; }
-        public DateTime created { get; set; }
-        public DateTime lastlogin { get; set; }
-        public bool banned { get; set; }
+        [Key]
+        public string Name { get; set; }
+        public string Password { get; set; }
+        public DateTime Created { get; set; }
+        public DateTime Lastlogin { get; set; }
+        public bool Banned { get; set; }
     }
 }
