@@ -285,7 +285,6 @@
     <Compile Include="Assets\Scripts\Shared\Network\CharacterSelect\CharacterDetails.cs" />
     <Compile Include="Assets\Scripts\Server\LoginServer\ServerSelectSystem.cs" />
     <Compile Include="Assets\KinematicCharacterController\Walkthrough\2- Basic Movement and Gravity\Scripts\MyCharacterController.cs" />
-    <Compile Include="Assets\Scripts\Shared\Entity\Movement\CharacterFlags.cs" />
     <Compile Include="Assets\Scripts\Shared\Tools\Extensions\Primitive\Int\IntBitExtensions.cs" />
     <Compile Include="Assets\Scripts\Shared\Tools\Extensions\Primitive\Short\ShortExtensions.cs" />
     <Compile Include="Assets\Scripts\Client\UI\Controls\World\ResourceBar\UIManaBar.cs" />
@@ -341,6 +340,8 @@
     <Compile Include="Assets\Scripts\Shared\Entity\Region\Template\RegionDisplayNameAction.cs" />
     <Compile Include="Assets\KinematicCharacterController\Examples\Scripts\PrefabLauncher.cs" />
     <Compile Include="Assets\Scripts\Client\UI\Controls\World\ResourceBar\UIHealthBar.cs" />
+    <Compile Include="Assets\Scripts\Shared\Tools\Extensions\Unity\CustomBuildTool.cs" />
+    <Compile Include="Assets\Scripts\Shared\Tools\Extensions\Unity\ServerBuildTool.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Assets\TextMesh Pro\Shaders\TMPro.cginc" />

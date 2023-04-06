@@ -1,4 +1,5 @@
-﻿using FishNet.Component.Prediction;
+﻿using Client;
+using FishNet.Component.Prediction;
 using FishNet.Component.Transforming;
 using FishNet.Object;
 using FishNet.Object.Synchronizing;
@@ -49,6 +50,7 @@ public class Character : NetworkBehaviour
 	public GuildController GuildController;
 	public PartyController PartyController;
 	public KinematicCharacterMotor Motor;
+	public PlayerInputController PlayerInputController;
 
 	[SyncVar(Channel = Channel.Unreliable, OnChange = nameof(OnCharacterNameChanged))]
 	public string characterName;
@@ -102,6 +104,7 @@ public class Character : NetworkBehaviour
 		if (base.IsOwner)
 		{
 			localCharacter = this;
+			PlayerInputController = gameObject.AddComponent<PlayerInputController>();
 		}
 	}
 
@@ -111,6 +114,11 @@ public class Character : NetworkBehaviour
 		if (base.IsOwner)
 		{
 			localCharacter = null;
+
+			if (PlayerInputController != null)
+			{
+				PlayerInputController.enabled = false;
+			}
 		}
 	}
 }

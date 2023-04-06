@@ -39,6 +39,7 @@ namespace Server
 		#region SCENE
 		public SceneServerSystem SceneServerSystem { get; private set; }
 		public CharacterSystem CharacterSystem { get; private set; }
+		public CharacterInventorySystem CharacterInventorySystem { get; private set; }
 		public ChatSystem ChatSystem { get; private set; }
 		public GuildSystem GuildSystem { get; private set; }
 		public PartySystem PartySystem { get; private set; }
@@ -163,6 +164,9 @@ namespace Server
 					CharacterSystem = GetOrCreateComponent<CharacterSystem>();
 					CharacterSystem.SceneServerSystem = SceneServerSystem;
 					CharacterSystem.InternalInitializeOnce(this, NetworkManager.ServerManager, NetworkManager.ClientManager);
+
+					CharacterInventorySystem = GetOrCreateComponent<CharacterInventorySystem>();
+					CharacterInventorySystem.InternalInitializeOnce(this, NetworkManager.ServerManager);
 
 					ChatSystem = GetOrCreateComponent<ChatSystem>();
 					ChatSystem.SceneManager = NetworkManager.SceneManager;

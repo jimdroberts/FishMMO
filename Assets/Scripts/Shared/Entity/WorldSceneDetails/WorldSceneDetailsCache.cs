@@ -10,6 +10,8 @@ using UnityEngine.SceneManagement;
 [CreateAssetMenu(fileName = "WorldSceneDetails", menuName = "World Scene Details")]
 public class WorldSceneDetailsCache : ScriptableObject
 {
+	public const string WORLD_SCENE_PATH = "/WorldScene/";
+
 	[Tooltip("Apply this tag to any object in your starting scenes to turn them into initial spawn locations.")]
 	public string initialSpawnTag = "InitialSpawnPosition";
 	[Tooltip("Apply this tag to any object in your scene you would like to behave as a respawn location.")]
@@ -21,10 +23,15 @@ public class WorldSceneDetailsCache : ScriptableObject
 
 	public WorldSceneDetailsDictionary scenes = new WorldSceneDetailsDictionary();
 
-	public void Search()
+	public void Rebuild()
 	{
 #if UNITY_EDITOR
-		Debug.Log("[" + DateTime.UtcNow + "] WorldSceneDetails: Searching");
+		if (EditorSceneManager.GetActiveScene().path.Contains(WORLD_SCENE_PATH))
+		{
+			Debug.Log("[" + DateTime.UtcNow + "] WorldSceneDetails: Unable to rebuild scene details while a WorldScene is open. Load a bootstrap scene instead! TODO: Automate");
+			return;
+		}
+		Debug.Log("[" + DateTime.UtcNow + "] WorldSceneDetails: Rebuilding");
 
 		scenes.Clear();
 		scenes = new WorldSceneDetailsDictionary();
@@ -38,7 +45,7 @@ public class WorldSceneDetailsCache : ScriptableObject
 				continue;
 
 			// ensure the scene is a world scene
-			if (!scene.path.Contains("/WorldScene/"))
+			if (!scene.path.Contains(WORLD_SCENE_PATH))
 				continue;
 
 			// load the scene
@@ -140,7 +147,7 @@ public class WorldSceneDetailsCache : ScriptableObject
 			}
 		}
 
-		Debug.Log("[" + DateTime.UtcNow + "] WorldSceneDetails: Search Complete");
+		Debug.Log("[" + DateTime.UtcNow + "] WorldSceneDetails: Rebuild Complete");
 #endif
 	}
 }

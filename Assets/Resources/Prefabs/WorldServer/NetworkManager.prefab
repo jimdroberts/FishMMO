@@ -55,7 +55,7 @@ MonoBehaviour:
   _objectPool: {fileID: 0}
   _persistence: 0
   _logging: {fileID: 0}
-  _spawnablePrefabs: {fileID: 11400000, guid: 9ecfbeed12eca0447b0f77c800abc7c6, type: 2}
+  _spawnablePrefabs: {fileID: 11400000, guid: 4211299e9ac449a4caa5f547b75992bd, type: 2}
 --- !u!114 &1702419421884921806
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -68,7 +68,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 68828c85278210948b9d50a8db3aab74, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _authenticator: {fileID: 3213959078885105799}
+  _syncTypeRate: 0.1
   SpawnPacking:
     Position: 0
     Rotation: 2
@@ -129,4 +129,3 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1d678b81cf0047640b4bb844b5f799ff, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  autoAccountCreation: 1

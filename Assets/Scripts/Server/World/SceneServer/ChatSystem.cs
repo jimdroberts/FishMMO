@@ -152,6 +152,10 @@ namespace Server
 		/// </summary>
 		private string GetCommandAndTrim(ref string text)
 		{
+			if (!text.StartsWith("/"))
+			{
+				return "";
+			}
 			int firstSpace = text.IndexOf(' ');
 			if (firstSpace < 0)
 			{
