@@ -23,13 +23,13 @@ public class WorldSceneDetailsCache : ScriptableObject
 
 	public WorldSceneDetailsDictionary scenes = new WorldSceneDetailsDictionary();
 
-	public void Rebuild()
+	public bool Rebuild()
 	{
 #if UNITY_EDITOR
 		if (EditorSceneManager.GetActiveScene().path.Contains(WORLD_SCENE_PATH))
 		{
 			Debug.Log("[" + DateTime.UtcNow + "] WorldSceneDetails: Unable to rebuild scene details while a WorldScene is open. Load a bootstrap scene instead! TODO: Automate");
-			return;
+			return false;
 		}
 		Debug.Log("[" + DateTime.UtcNow + "] WorldSceneDetails: Rebuilding");
 
@@ -148,6 +148,7 @@ public class WorldSceneDetailsCache : ScriptableObject
 		}
 
 		Debug.Log("[" + DateTime.UtcNow + "] WorldSceneDetails: Rebuild Complete");
+		return true;
 #endif
 	}
 }

@@ -401,12 +401,12 @@ MonoBehaviour:
   _teleportThreshold: 1
   _clientAuthoritative: 0
   _sendToOwner: 0
-  _synchronizePosition: 0
+  _synchronizePosition: 1
   _positionSnapping:
     X: 0
     Y: 0
     Z: 0
-  _synchronizeRotation: 0
+  _synchronizeRotation: 1
   _rotationSnapping:
     X: 0
     Y: 0
