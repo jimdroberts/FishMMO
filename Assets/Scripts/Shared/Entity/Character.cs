@@ -9,7 +9,7 @@ using KinematicCharacterController.Examples;
 using UnityEngine;
 
 /// <summary>
-/// Character contains references to all the controllers associated with the character.
+/// Character contains references to all of the controllers associated with the character.
 /// </summary>
 #region KCC
 [RequireComponent(typeof(PredictedObject))]
@@ -50,8 +50,12 @@ public class Character : NetworkBehaviour
 	public GuildController GuildController;
 	public PartyController PartyController;
 	public KinematicCharacterMotor Motor;
-	public PlayerInputController PlayerInputController;
+	public LocalInputController LocalInputController;
+	public UILabel3D PlayerNameLabel;
 
+	/// <summary>
+	/// The characters real name. Use this if you are referencing a character by name. Avoid character.name unless you want the name of the game object.
+	/// </summary>
 	[SyncVar(Channel = Channel.Unreliable, OnChange = nameof(OnCharacterNameChanged))]
 	public string characterName;
 	private void OnCharacterNameChanged(string prev, string next, bool asServer)
@@ -59,6 +63,20 @@ public class Character : NetworkBehaviour
 		if (!asServer)
 		{
 			gameObject.name = next;
+
+			if (PlayerNameLabel == null)
+			{
+				float calcHeight = 100.0f;
+				if (Motor != null && Motor.Capsule != null)
+				{
+					calcHeight *= Motor.Capsule.height * 0.75f;
+				}
+				PlayerNameLabel = UILabel3D.Create(next, 12, transform, new Vector2(0.0f, calcHeight));
+			}
+			else
+			{
+				PlayerNameLabel.Text = next;
+			}
 		}
 	}
 
@@ -104,7 +122,7 @@ public class Character : NetworkBehaviour
 		if (base.IsOwner)
 		{
 			localCharacter = this;
-			PlayerInputController = gameObject.AddComponent<PlayerInputController>();
+			LocalInputController = gameObject.AddComponent<LocalInputController>();
 		}
 	}
 
@@ -115,9 +133,9 @@ public class Character : NetworkBehaviour
 		{
 			localCharacter = null;
 
-			if (PlayerInputController != null)
+			if (LocalInputController != null)
 			{
-				PlayerInputController.enabled = false;
+				Destroy(LocalInputController);
 			}
 		}
 	}

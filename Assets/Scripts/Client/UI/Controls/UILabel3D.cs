@@ -42,9 +42,11 @@ namespace Client
 		}
 		public static UILabel3D Create(string text, string extraText, int fontSize, Color color, bool isFade, Transform transform, Vector2 pixelOffset)
 		{
-			GameObject newObject = new GameObject("GUILabel3D: " + text + extraText);
+			GameObject newObject = new GameObject("UILabel3D: " + text + extraText);
 			newObject.transform.position = transform.position;
-			newObject.transform.SetParent(transform);
+
+			Transform tryChild = transform.GetChild(0);
+			newObject.transform.SetParent(tryChild != null ? tryChild : transform);
 
 			UILabel3D label = (UILabel3D)newObject.AddComponent<UILabel3D>();
 			label.Setup(text, extraText, FontStyle.Bold, null, fontSize, pixelOffset, color, isFade);

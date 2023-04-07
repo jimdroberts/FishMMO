@@ -30,9 +30,9 @@ namespace Server
 			}
 		}
 
-		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs obj)
+		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs args)
 		{
-			if (obj.ConnectionState == LocalConnectionState.Started)
+			if (args.ConnectionState == LocalConnectionState.Started)
 			{
 				// server handles command parsing so add default commands here
 				commandEvents.Add("/w", OnWorldChat);
@@ -60,7 +60,7 @@ namespace Server
 				ClientManager.RegisterBroadcast<WorldChatBroadcast>(OnServerWorldChatBroadcastReceived);
 				ClientManager.RegisterBroadcast<WorldChatTellBroadcast>(OnServerWorldChatTellBroadcastReceived);
 			}
-			else if (obj.ConnectionState == LocalConnectionState.Stopped)
+			else if (args.ConnectionState == LocalConnectionState.Stopped)
 			{
 				commandEvents.Clear();
 
@@ -190,7 +190,7 @@ namespace Server
 				return;
 			}
 			msg.channel = ChatChannel.World;
-			msg.text = sender.name + ": " + msg.text;
+			msg.text = sender.characterName + ": " + msg.text;
 
 			// World chat is broadcast to all scene servers... forward to the World Server
 			ClientManager.Broadcast(new WorldChatBroadcast() { chatMsg = msg, });
@@ -203,7 +203,7 @@ namespace Server
 				return;
 			}
 			msg.channel = ChatChannel.Region;
-			msg.text = sender.name + ": " + msg.text;
+			msg.text = sender.characterName + ": " + msg.text;
 
 			// get the senders observed scene
 			UnityEngine.SceneManagement.Scene scene = UnityEngine.SceneManagement.SceneManager.GetSceneByName(sender.sceneName);
@@ -229,7 +229,7 @@ namespace Server
 			if (sender.PartyController.current != null)
 			{
 				msg.channel = ChatChannel.Party;
-				msg.text = sender.name + ": " + msg.text;
+				msg.text = sender.characterName + ": " + msg.text;
 
 				foreach (PartyController member in sender.PartyController.current.members)
 				{
@@ -249,7 +249,7 @@ namespace Server
 			if (sender.GuildController.current != null)
 			{
 				msg.channel = ChatChannel.Guild;
-				msg.text = sender.name + ": " + msg.text;
+				msg.text = sender.characterName + ": " + msg.text;
 
 				foreach (GuildController member in sender.GuildController.current.members)
 				{
@@ -283,7 +283,7 @@ namespace Server
 			conn.Broadcast(msg);
 
 			// format the message to send to the target player
-			msg.text = "[From:" + sender.name + "]: " + text;
+			msg.text = "[From:" + sender.characterName + "]: " + text;
 
 			// attempt to broadcast the message to the target
 			if (!Server.CharacterSystem.SendBroadcastToCharacter(targetName, msg))
@@ -304,7 +304,7 @@ namespace Server
 				return;
 			}
 			msg.channel = ChatChannel.Trade;
-			msg.text = sender.name + ": " + msg.text;
+			msg.text = sender.characterName + ": " + msg.text;
 
 			// trade chat is broadcast to all scene servers... forward to the World Server
 			// **TODO** Optimize chat channels. Make server aware of which channels we have enabled.
@@ -319,7 +319,7 @@ namespace Server
 			}
 
 			msg.channel = ChatChannel.Say;
-			msg.text = sender.name + ": " + msg.text;
+			msg.text = sender.characterName + ": " + msg.text;
 
 			// get the senders observed characters and send them the chat message
 			foreach (NetworkConnection obsConnection in sender.Observers)

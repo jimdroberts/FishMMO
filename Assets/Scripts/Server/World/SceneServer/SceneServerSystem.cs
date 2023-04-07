@@ -69,15 +69,15 @@ namespace Server
 		{
 		}
 
-		private void ClientManager_OnClientConnectionState(ClientConnectionStateArgs obj)
+		private void ClientManager_OnClientConnectionState(ClientConnectionStateArgs args)
 		{
 			loginAuthenticator = FindObjectOfType<SceneServerAuthenticator>();
 			if (loginAuthenticator == null)
 				return;
 
-			serverState = obj.ConnectionState;
+			serverState = args.ConnectionState;
 
-			if (obj.ConnectionState == LocalConnectionState.Started)
+			if (args.ConnectionState == LocalConnectionState.Started)
 			{
 				loginAuthenticator.OnSceneServerAuthenticationResult += Authenticator_OnSceneServerAuthenticationResult;
 
@@ -87,7 +87,7 @@ namespace Server
 				ClientManager.RegisterBroadcast<SceneLoadBroadcast>(OnClientSceneLoadBroadcastReceived);
 				ClientManager.RegisterBroadcast<SceneUnloadBroadcast>(OnClientSceneUnloadBroadcastReceived);
 			}
-			else if (obj.ConnectionState == LocalConnectionState.Stopped)
+			else if (args.ConnectionState == LocalConnectionState.Stopped)
 			{
 				loginAuthenticator.OnSceneServerAuthenticationResult -= Authenticator_OnSceneServerAuthenticationResult;
 

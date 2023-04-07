@@ -26,11 +26,11 @@ namespace Server
 			}
 		}
 
-		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs obj)
+		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs args)
 		{
-			serverState = obj.ConnectionState;
+			serverState = args.ConnectionState;
 
-			if (obj.ConnectionState == LocalConnectionState.Started)
+			if (args.ConnectionState == LocalConnectionState.Started)
 			{
 				if (TryGetServerIPv4AddressFromTransport(out ServerAddress server))
 				{
@@ -43,7 +43,7 @@ namespace Server
 					}
 				}
 			}
-			else if (obj.ConnectionState == LocalConnectionState.Stopped)
+			else if (args.ConnectionState == LocalConnectionState.Stopped)
 			{
 				if (Server.configuration.TryGetString("ServerName", out string name))
 				{

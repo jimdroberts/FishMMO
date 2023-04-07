@@ -258,6 +258,9 @@ namespace Server
 					// set position and rotation just incase..
 					nob.transform.SetPositionAndRotation(spawnPos, spawnRot);
 
+					// set the game object name -- should we even do this??
+					nob.gameObject.name = row.name;
+
 					Debug.Log("[" + DateTime.UtcNow + "] " + row.name + " has been instantiated at Pos:" + nob.transform.position.ToString() + " Rot:" + nob.transform.rotation.ToString());
 
 					character = nob.GetComponent<Character>();

@@ -17,7 +17,7 @@
 							if (dragObject.hotkeyType == HotkeyType.Inventory)
 							{
 								// swap item slots in the inventory
-								character.InventoryController.SwapItemSlots(index, dragIndex);
+								character.InventoryController.SendSwapItemSlotsRequest(index, dragIndex);
 							}
 							// we can also unequip items
 							else if (dragObject.hotkeyType == HotkeyType.Equipment)

@@ -76,15 +76,15 @@ namespace Server
 			Database.Instance.SaveCharacters(new List<Character>(characters.Values), false);
 		}
 
-		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs obj)
+		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs args)
 		{
 			loginAuthenticator = FindObjectOfType<SceneServerAuthenticator>();
 			if (loginAuthenticator == null)
 				return;
 
-			serverState = obj.ConnectionState;
+			serverState = args.ConnectionState;
 
-			if (obj.ConnectionState == LocalConnectionState.Started)
+			if (args.ConnectionState == LocalConnectionState.Started)
 			{
 				loginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
 
@@ -93,7 +93,7 @@ namespace Server
 
 				ServerManager.RegisterBroadcast<CharacterSceneChangeRequestBroadcast>(OnServerCharacterSceneChangeRequestReceived, true);
 			}
-			else if (obj.ConnectionState == LocalConnectionState.Stopped)
+			else if (args.ConnectionState == LocalConnectionState.Stopped)
 			{
 				loginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
 

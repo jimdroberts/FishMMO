@@ -324,7 +324,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _defaultDespawnType: 0
   NetworkObserver: {fileID: 0}
-  <PrefabId>k__BackingField: 0
+  <PrefabId>k__BackingField: 1
   <SpawnableCollectionId>k__BackingField: 0
   _scenePathHash: 0
   <SceneId>k__BackingField: 0
@@ -774,7 +774,8 @@ MonoBehaviour:
   GuildController: {fileID: 0}
   PartyController: {fileID: 0}
   Motor: {fileID: 0}
-  PlayerInputController: {fileID: 0}
+  LocalInputController: {fileID: 0}
+  PlayerNameLabel: {fileID: 0}
   characterName: 
   account: 
   isGameMaster: 0

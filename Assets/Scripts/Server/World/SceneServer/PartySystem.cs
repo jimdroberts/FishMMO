@@ -27,9 +27,9 @@ namespace Server
 			}
 		}
 
-		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs obj)
+		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs args)
 		{
-			if (obj.ConnectionState == LocalConnectionState.Started)
+			if (args.ConnectionState == LocalConnectionState.Started)
 			{
 				ServerManager.RegisterBroadcast<PartyCreateBroadcast>(OnServerPartyCreateBroadcastReceived, true);
 				ServerManager.RegisterBroadcast<PartyInviteBroadcast>(OnServerPartyInviteBroadcastReceived, true);
@@ -38,7 +38,7 @@ namespace Server
 				ServerManager.RegisterBroadcast<PartyLeaveBroadcast>(OnServerPartyLeaveBroadcastReceived, true);
 				ServerManager.RegisterBroadcast<PartyRemoveBroadcast>(OnServerPartyRemoveBroadcastReceived, true);
 			}
-			else if (obj.ConnectionState == LocalConnectionState.Stopped)
+			else if (args.ConnectionState == LocalConnectionState.Stopped)
 			{
 				ServerManager.UnregisterBroadcast<PartyCreateBroadcast>(OnServerPartyCreateBroadcastReceived);
 				ServerManager.UnregisterBroadcast<PartyInviteBroadcast>(OnServerPartyInviteBroadcastReceived);

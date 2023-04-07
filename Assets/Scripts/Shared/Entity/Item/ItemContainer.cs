@@ -191,23 +191,23 @@ public abstract class ItemContainer : NetworkBehaviour
 		return true;
 	}
 
-	public bool SwapItemSlots(int first, int second)
+	public bool SwapItemSlots(int from, int to)
 	{
 		if (!CanManipulate() ||
-			first < 0 ||
-			second < 0 ||
-			first > items.Count ||
-			second > items.Count)
+			from < 0 ||
+			to < 0 ||
+			from > items.Count ||
+			to > items.Count)
 		{
 			// swapping the items failed
 			return false;
 		}
 
-		Item firstItem = items[first];
-		Item secondItem = items[second];
+		Item firstItem = items[from];
+		Item secondItem = items[to];
 
-		if (!SetItemSlot(secondItem, first) ||
-			SetItemSlot(firstItem, second))
+		if (!SetItemSlot(secondItem, from) ||
+			SetItemSlot(firstItem, to))
 		{
 			// swapping the items failed
 			return false;
