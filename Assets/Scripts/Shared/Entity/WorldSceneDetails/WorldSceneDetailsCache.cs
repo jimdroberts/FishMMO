@@ -148,7 +148,7 @@ public class WorldSceneDetailsCache : ScriptableObject
 		}
 
 		Debug.Log("[" + DateTime.UtcNow + "] WorldSceneDetails: Rebuild Complete");
-		return true;
 #endif
+		return true;
 	}
 }
