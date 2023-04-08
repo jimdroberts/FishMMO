@@ -51,7 +51,9 @@ public class Character : NetworkBehaviour
 	public PartyController PartyController;
 	public KinematicCharacterMotor Motor;
 	public LocalInputController LocalInputController;
-	public UILabel3D PlayerNameLabel;
+
+	//temporary
+	public UILabel3D CharacterNameLabel;
 
 	/// <summary>
 	/// The characters real name. Use this if you are referencing a character by name. Avoid character.name unless you want the name of the game object.
@@ -64,18 +66,18 @@ public class Character : NetworkBehaviour
 		{
 			gameObject.name = next;
 
-			if (PlayerNameLabel == null)
+			if (CharacterNameLabel == null)
 			{
 				float calcHeight = 100.0f;
 				if (Motor != null && Motor.Capsule != null)
 				{
 					calcHeight *= Motor.Capsule.height * 0.75f;
 				}
-				PlayerNameLabel = UILabel3D.Create(next, 12, transform, new Vector2(0.0f, calcHeight));
+				CharacterNameLabel = UILabel3D.Create(next, 12, transform, new Vector2(0.0f, calcHeight));
 			}
 			else
 			{
-				PlayerNameLabel.Text = next;
+				CharacterNameLabel.Text = next;
 			}
 		}
 	}
