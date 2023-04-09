@@ -17,7 +17,6 @@ namespace Client
 		public TMP_InputField password;
 		public Button signInButton;
 		public TMP_Text handshakeMSG;
-		public List<ServerAddress> loginServerAddresses;
 
 		public override void OnStarting()
 		{
@@ -98,11 +97,9 @@ namespace Client
 				// set username and password in the authenticator
 				loginAuthenticator.SetLoginCredentials(username.text, password.text);
 
-				if (loginServerAddresses != null && loginServerAddresses.Count > 0)
+				if (Client.Instance.TryGetRandomLoginServerAddress(out ServerAddress serverAddress))
 				{
-					// pick a random login server
-					ServerAddress server = loginServerAddresses.GetRandom();
-					Client.Instance.ConnectToServer(server.address, server.port);
+					Client.Instance.ConnectToServer(serverAddress.address, serverAddress.port);
 
 					SetSignInLocked(true);
 				}

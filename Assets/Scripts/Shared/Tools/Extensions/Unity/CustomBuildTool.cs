@@ -96,7 +96,14 @@ public class CustomBuildTool
 				defaultFileDirectory = Application.dataPath;
 #endif
 
-				FileUtil.ReplaceFile(defaultFileDirectory + "/START.bat", buildPath + "/START.bat");
+				if (buildTarget == BuildTarget.StandaloneWindows64)
+				{
+					FileUtil.ReplaceFile(defaultFileDirectory + "/START.bat", buildPath + "/START.bat");
+				}
+				else if (buildTarget == BuildTarget.StandaloneLinux64)
+				{
+					FileUtil.ReplaceFile(defaultFileDirectory + "/START.sh", buildPath + "/START.sh");
+				}
 
 				// append the data folder for configuration copy
 				buildPath += "/" + executableName + "_Data";

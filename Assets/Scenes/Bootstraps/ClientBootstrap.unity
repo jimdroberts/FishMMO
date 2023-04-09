@@ -1154,6 +1154,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b5c2edaa6d4e0fd4393eb1def39f4f2f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  loginServerAddresses:
+  - address: 127.0.0.1
+    port: 7770
 --- !u!4 &1045518713
 Transform:
   m_ObjectHideFlags: 0
@@ -1731,7 +1734,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1994176931, guid: c87590e7a452dcf4eac6b0921e679a50, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: 91.50003
+      value: 91.500046
       objectReference: {fileID: 0}
     - target: {fileID: 2037370771, guid: c87590e7a452dcf4eac6b0921e679a50, type: 3}
       propertyPath: m_AnchorMax.x
@@ -4824,7 +4827,7 @@ PrefabInstance:
     - target: {fileID: 7758741671887000672, guid: 42fd896028d1b0740a61b839b49b9d0b,
         type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: 0
+      value: 0.000061035156
       objectReference: {fileID: 0}
     - target: {fileID: 7758741671893074963, guid: 42fd896028d1b0740a61b839b49b9d0b,
         type: 3}
