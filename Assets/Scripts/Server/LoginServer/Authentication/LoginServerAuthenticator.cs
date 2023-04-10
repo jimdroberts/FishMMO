@@ -90,9 +90,11 @@ namespace Server
 			// if the username is valid get OR create the account for the client
 			if (IsAllowedUsername(username))
 			{
-				// TODO: need database account service; this service should be resolved some different way maybe?
-				var accountService = new AccountService();
-				result = accountService.TryLogin(username, password);
+				// TODO: when the db context factory is passed from the server, use it instead
+				var dbContextFactory = new ServerDbContextFactory();
+				using var dbContext = dbContextFactory.CreateDbContext(new string[] {});
+				
+				result = AccountService.TryLogin(dbContext, username, password);
 			}
 
 			return new ClientAuthResultBroadcast() { result = result, };

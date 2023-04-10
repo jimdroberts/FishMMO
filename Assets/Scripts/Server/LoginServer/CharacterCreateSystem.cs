@@ -1,6 +1,9 @@
 ﻿using FishNet.Connection;
 using FishNet.Transporting;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
+using Server.Entities;
+using Server.Services;
 
 namespace Server
 {
@@ -62,7 +65,9 @@ namespace Server
 					return;
 				}
 
-				if (Database.Instance.CharacterExists(msg.characterName) != false)
+				using var dbContext = Server.DbContextFactory.CreateDbContext();
+				var character = CharacterService.GetCharacterByName(dbContext, msg.characterName);
+				if (character == null)
 				{
 					// character name already taken
 					conn.Broadcast(new CharacterCreateResultBroadcast()
@@ -90,8 +95,25 @@ namespace Server
 						if (AccountManager.GetAccountNameByConnection(conn, out string accountName))
 						{
 							// add the new character to the database
-							Database.Instance.NewCharacter(accountName, msg.characterName, msg.raceName, msg.initialSpawnPosition);
-
+							var newCharacter = new CharacterEntity()
+							{
+								Account = accountName,
+								Name = msg.characterName,
+								NameLowercase = msg.characterName?.ToLower(),
+								RaceName = msg.raceName,
+								SceneName = msg.initialSpawnPosition.sceneName,
+								X = msg.initialSpawnPosition.position.x,
+								Y = msg.initialSpawnPosition.position.y,
+								Z = msg.initialSpawnPosition.position.z,
+								RotX = msg.initialSpawnPosition.rotation.x,
+								RotY = msg.initialSpawnPosition.rotation.y,
+								RotZ = msg.initialSpawnPosition.rotation.z,
+								RotW = msg.initialSpawnPosition.rotation.w,
+							};
+							//Database.Instance.NewCharacter(accountName, msg.characterName, msg.raceName, msg.initialSpawnPosition);
+							dbContext.Characters.Add(newCharacter);
+							dbContext.SaveChanges();
+							
 							// send success to the client
 							conn.Broadcast(new CharacterCreateResultBroadcast()
 							{

@@ -1,6 +1,7 @@
 ﻿using FishNet.Connection;
 using FishNet.Transporting;
 using System.Collections.Generic;
+using Server.Services;
 
 namespace Server
 {
@@ -46,8 +47,9 @@ namespace Server
 			}
 			else if (conn.IsActive)
 			{
+				using var dbContext = Server.DbContextFactory.CreateDbContext();
                 // load all character details for the account from database
-                List<global::CharacterDetails> characterList = Database.Instance.GetCharacterList(accountName);
+                List<global::CharacterDetails> characterList = CharacterService.GetCharacterList(dbContext, accountName);
 
 				// append the characters to the broadcast message
 				CharacterListBroadcast characterListMsg = new CharacterListBroadcast()
@@ -63,7 +65,8 @@ namespace Server
 		{
 			if (conn.IsActive && AccountManager.GetAccountNameByConnection(conn, out string accountName))
 			{
-				Database.Instance.DeleteCharacter(accountName, msg.characterName);
+				using var dbContext = Server.DbContextFactory.CreateDbContext();
+				CharacterService.DeleteCharacter(dbContext, accountName, msg.characterName);
 
 				CharacterDeleteBroadcast charDeleteMsg = new CharacterDeleteBroadcast()
 				{

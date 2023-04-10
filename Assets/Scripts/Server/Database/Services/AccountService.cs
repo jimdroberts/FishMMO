@@ -8,13 +8,10 @@ namespace Server.Services
     {
         public const bool AUTO_ACCOUNT_CREATION = true;
         
-        public ClientAuthenticationResult TryLogin(string account, string password)
+        public static ClientAuthenticationResult TryLogin(ServerDbContext dbContext, string account, string password)
         {
             if (!string.IsNullOrWhiteSpace(account) && !string.IsNullOrWhiteSpace(password))
             {
-                var dbContextFactory = new ServerDbContextFactory();
-                using var dbContext = dbContextFactory.CreateDbContext(new string[] {});
-
                 var accountEntity = dbContext.Accounts.FirstOrDefault(a => a.Name == account);
                 
                 // demo feature: create account if it doesn't exist yet.
