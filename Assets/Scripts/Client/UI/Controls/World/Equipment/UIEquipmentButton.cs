@@ -20,11 +20,9 @@
 							Item item = character.InventoryController.items[dragIndex];
 							if (item != null)
 							{
-								if (character.EquipmentController.Equip(item, dragIndex, itemSlotType))
-								{
-									// clear the drag object if we succeed in equipping our item
-									dragObject.Clear();
-								}
+								character.EquipmentController.SendEquipRequest(dragIndex, (byte)itemSlotType);
+								// clear the drag object if we succeed in equipping our item
+								dragObject.Clear();
 							}
 							else
 							{
@@ -33,7 +31,7 @@
 							}
 						}
 					}
-					else if (!character.EquipmentController.IsSlotEmpty((int)itemSlotType))
+					else if (!character.EquipmentController.IsSlotEmpty((byte)itemSlotType))
 					{
 						dragObject.SetReference(icon.texture, referenceID, hotkeyType);
 					}
@@ -50,11 +48,9 @@
 			}
 			if (character != null && hotkeyType == HotkeyType.Equipment)
 			{
-				if (icon != null) icon.texture = null;
-				//inventorySlots[i].cooldownText = character.CooldownController.IsOnCooldown();
-				if (amountText != null) amountText.text = "";
+				Clear();
 
-				character.EquipmentController.Unequip((int)itemSlotType);
+				character.EquipmentController.SendUnequipRequest((byte)itemSlotType);
 			}
 		}
 

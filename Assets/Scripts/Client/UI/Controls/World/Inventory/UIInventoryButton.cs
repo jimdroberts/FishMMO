@@ -22,8 +22,17 @@
 							// we can also unequip items
 							else if (dragObject.hotkeyType == HotkeyType.Equipment)
 							{
-								// unequip the item
-								character.EquipmentController.Unequip(dragIndex);
+								if (dragIndex < byte.MinValue ||
+									dragIndex > byte.MaxValue)
+								{
+									// unable to process this index, Equipment slot index is a byte.
+								}
+								else
+								{
+									// unequip the item
+									character.EquipmentController.SendUnequipRequest((byte)dragIndex);
+								}
+								
 							}
 						}
 						// clear the drag object no matter what

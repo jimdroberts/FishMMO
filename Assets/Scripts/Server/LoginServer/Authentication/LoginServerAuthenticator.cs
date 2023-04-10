@@ -16,6 +16,8 @@ namespace Server
 		public override event Action<NetworkConnection, bool> OnAuthenticationResult;
 		public event Action<NetworkConnection, bool> OnClientAuthenticationResult;
 
+		//public DbContextFactory DBContextFactory;
+
 		public const int accountNameMinLength = 3;
 		public const int accountNameMaxLength = 32;
 

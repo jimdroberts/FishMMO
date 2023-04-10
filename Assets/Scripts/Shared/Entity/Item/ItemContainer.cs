@@ -5,7 +5,7 @@ public abstract class ItemContainer : NetworkBehaviour
 {
 	public readonly List<Item> items = new List<Item>();
 
-	public delegate void ItemslotUpdated(Item item, int slotIndex);
+	public delegate void ItemslotUpdated(ItemContainer container, Item item, int slotIndex);
 	public event ItemslotUpdated OnSlotUpdated;
 
 	/// <summary>
@@ -34,7 +34,8 @@ public abstract class ItemContainer : NetworkBehaviour
 	public bool IsSlotEmpty(int slot)
 	{
 		return IsValidSlot(slot) &&
-			   (items[slot] == null || items[slot].stackSize < 1);
+			   (items[slot] == null ||
+			    items[slot].stackSize < 1);
 	}
 
 	/// <summary>
@@ -43,8 +44,8 @@ public abstract class ItemContainer : NetworkBehaviour
 	public bool IsValidItem(int slot)
 	{
 		return IsValidSlot(slot) &&
-			  items[slot] != null &&
-			  items[slot].stackSize > 0;
+			   items[slot] != null &&
+			   items[slot].stackSize > 0;
 	}
 
 	/// <summary>
@@ -54,7 +55,7 @@ public abstract class ItemContainer : NetworkBehaviour
 	{
 		for (int i = 0; i < amount; ++i)
 		{
-			this.items.Add(items != null && i < items.Count ? items[i] : new Item(0));
+			this.items.Add(items != null && i < items.Count ? items[i] : null);
 		}
 	}
 
@@ -144,7 +145,7 @@ public abstract class ItemContainer : NetworkBehaviour
 				modifiedItems.Add(items[i]);
 				modifiedItems.Add(item);
 
-				OnSlotUpdated?.Invoke(item, i);
+				OnSlotUpdated?.Invoke(this, item, i);
 			}
 
 			// we added the item to the container
@@ -187,7 +188,7 @@ public abstract class ItemContainer : NetworkBehaviour
 		{
 			item.slot = slot; // we store the item slot on the item. it's easier.
 		}
-		OnSlotUpdated?.Invoke(item, slot);
+		OnSlotUpdated?.Invoke(this, item, slot);
 		return true;
 	}
 

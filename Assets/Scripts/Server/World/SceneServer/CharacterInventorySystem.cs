@@ -86,10 +86,10 @@ namespace Server
 			}
 
 			InventoryController inventory = conn.FirstObject.GetComponent<InventoryController>();
-			if (inventory == null)
+			if (inventory != null)
 			{
-				// no inventory???
-				return;
+				inventory.RemoveItem(msg.slot);
+				conn.Broadcast(msg);
 			}
 		}
 
@@ -101,13 +101,8 @@ namespace Server
 			}
 
 			InventoryController inventory = conn.FirstObject.GetComponent<InventoryController>();
-			if (inventory == null)
-			{
-				// no inventory???
-				return;
-			}
-
-			if (inventory.SwapItemSlots(msg.from, msg.to))
+			if (inventory != null &&
+				inventory.SwapItemSlots(msg.from, msg.to))
 			{
 				conn.Broadcast(msg);
 			}

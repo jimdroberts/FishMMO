@@ -41,8 +41,7 @@ namespace Client
 				character.EquipmentController.OnSlotUpdated += OnEquipmentSlotUpdated;
 			}
 
-			Dictionary<string, CharacterAttribute> attributes = character.AttributeController.Attributes;
-			if (attributeLabels == null || attributeLabels.Count != attributes.Count)
+			if (attributeLabels == null || attributeLabels.Count != character.AttributeController.attributes.Count)
 			{
 				if (attributeLabels != null)
 				{
@@ -53,7 +52,7 @@ namespace Client
 					attributeLabels.Clear();
 				}
 
-				foreach (CharacterAttribute attribute in attributes.Values)
+				foreach (CharacterAttribute attribute in character.AttributeController.attributes.Values)
 				{
 					attribute.OnAttributeUpdated -= OnAttributeUpdated; // just incase..
 					TMP_Text label = Instantiate(attributePrefab, content);
@@ -64,20 +63,28 @@ namespace Client
 			}
 		}
 
-		public void OnEquipmentSlotUpdated(Item item, int equipmentSlot)
+		public void OnEquipmentSlotUpdated(ItemContainer container, Item item, int equipmentSlot)
 		{
-			if (buttons == null || equipmentSlot < 0 || equipmentSlot > buttons.Count)
+			if (buttons == null)
 			{
 				return;
 			}
-			UIEquipmentButton button = buttons[equipmentSlot];
-			button.referenceID = ((int)equipmentSlot).ToString();
-			// just for safety
-			button.hotkeyType = HotkeyType.Equipment;
-			// update icon data -- should probably do this in UIEquipment
-			if (button.icon != null) button.icon.texture = item != null ? item.Template.Icon : null;
-			// equipmentSlots[i].cooldownText = character.CooldownController.IsOnCooldown();
-			if (button.amountText != null) button.amountText.text = item != null ? item.stackSize.ToString() : null;
+
+			if (container.IsValidItem(equipmentSlot))
+			{
+				// update our button display
+				UIEquipmentButton button = buttons[equipmentSlot];
+				button.referenceID = ((int)equipmentSlot).ToString();
+				button.hotkeyType = HotkeyType.Equipment;
+				if (button.icon != null) button.icon.texture = item.Template.Icon;
+				//inventorySlots[i].cooldownText = character.CooldownController.IsOnCooldown();
+				if (button.amountText != null) button.amountText.text = item.stackSize.ToString();
+			}
+			else
+			{
+				// clear the slot
+				buttons[equipmentSlot].Clear();
+			}
 		}
 
 		public void OnAttributeUpdated(CharacterAttribute attribute)

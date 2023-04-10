@@ -10,14 +10,14 @@ public class Ability
 	private AbilityResourceDictionary requirements = new AbilityResourceDictionary();
 
 	public int templateID;
-	public AbilityTemplate Template { get { return AbilityTemplate.Cache[templateID]; } }
-
 	public float activationTime = 0.0f;
 	public float cooldown = 0.0f;
 	public float range = 0.0f;
 	public float speed = 0.0f;
 
 	public Dictionary<string, AbilityNode> Nodes = new Dictionary<string, AbilityNode>();
+
+	public AbilityTemplate Template { get { return AbilityTemplate.Cache[templateID]; } }
 
 	public string Name
 	{

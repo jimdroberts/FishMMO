@@ -8,27 +8,22 @@ public class Item
 
 	/// <summary>
 	/// The character the item is currently equipped on.
-	/// Assigned in Equip function.
 	/// </summary>
 	public Character character;
 
 	public int templateID;
-	public BaseItemTemplate Template { get { return BaseItemTemplate.Cache[templateID]; } }
-
 	public ulong instanceID;
 	public int seed;
 	public int slot;
-	/// <summary>
-	/// The current size of the stack.
-	/// </summary>
 	public uint stackSize;
-	
+
+	public BaseItemTemplate Template { get { return BaseItemTemplate.Cache[templateID]; } }
 	public bool IsStackFull { get { return stackSize == Template.MaxStackSize; } }
 
-	public Item(ulong instanceID)
+	public Item(ulong instanceID, int templateID)
 	{
 		this.instanceID = instanceID;
-		this.templateID = 0;
+		this.templateID = templateID;
 		this.stackSize = 0;
 	}
 	public Item(ulong instanceID, int templateID, uint amount)

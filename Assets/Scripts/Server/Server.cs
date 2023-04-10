@@ -23,6 +23,7 @@ namespace Server
 		public ushort relayPort;
 
 		public NetworkManager NetworkManager { get; private set; }
+		//public DbContextFactory DBContextFactory { get; private set; }
 
 		#region LOGIN
 		public CharacterSelectSystem CharacterSelectSystem { get; private set; }
@@ -73,6 +74,8 @@ namespace Server
 			}
 
 			string serverType = GetServerType();
+
+			//DBContextFactory = new DbContextFactory();
 
 			InternalInitializeOnce(serverType);
 
@@ -130,6 +133,12 @@ namespace Server
 			ServerWindowTitleUpdater = GetComponent<ServerWindowTitleUpdater>();
 			if (ServerWindowTitleUpdater != null)
 				ServerWindowTitleUpdater.InternalInitializeOnce(this, NetworkManager.ServerManager);
+
+			LoginServerAuthenticator authenticator = NetworkManager.Authenticator as LoginServerAuthenticator;
+			if (authenticator != null)
+			{
+				//authenticator.DBContextFactory = DbContextFactory;
+			}
 
 			switch (serverType)
 			{
