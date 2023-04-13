@@ -7,7 +7,8 @@
 	{
 		return character != null &&
 			   item != null &&
-			   item.stackSize > 1 &&
+			   item.IsStackable &&
+			   item.stackable.amount > 1 &&
 			   !character.CooldownController.IsOnCooldown(ConsumableType.ToString());
 	}
 
@@ -16,7 +17,15 @@
 		if (CanConsume(character, item))
 		{
 			character.CooldownController.AddCooldown(ConsumableType.ToString(), new CooldownInstance(Cooldown));
-			--item.stackSize;
+			if (item.IsStackable)
+			{
+				//consume 1 charge
+				item.stackable.Remove(1);
+			}
+			else
+			{
+				item.Destroy();
+			}
 		}
 	}
 }

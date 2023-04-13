@@ -69,11 +69,6 @@ public class InventoryController : ItemContainer
 	private void OnClientInventorySetItemBroadcastReceived(InventorySetItemBroadcast msg)
 	{
 		Item newItem = new Item(msg.instanceID, msg.templateID, msg.stackSize, msg.seed);
-		// attributes are visual only on the client
-		if (msg.generateAttributes)
-		{
-			newItem.GenerateAttributes();
-		}
 		SetItemSlot(newItem, msg.slot);
 	}
 
@@ -85,11 +80,6 @@ public class InventoryController : ItemContainer
 		foreach (InventorySetItemBroadcast subMsg in msg.items)
 		{
 			Item newItem = new Item(subMsg.instanceID, subMsg.templateID, subMsg.stackSize, subMsg.seed);
-			// attributes are visual only on the client
-			if (subMsg.generateAttributes)
-			{
-				newItem.GenerateAttributes();
-			}
 			SetItemSlot(newItem, subMsg.slot);
 		}
 	}

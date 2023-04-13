@@ -75,8 +75,10 @@ namespace Server
 
 			string serverType = GetServerType();
 
+			// ensure our DbContextFactory exists
 			//DBContextFactory = new DbContextFactory();
 
+			// initialize required components for our specified server type
 			InternalInitializeOnce(serverType);
 
 			// automatically start the server
@@ -88,7 +90,7 @@ namespace Server
 				Transport transport = NetworkManager.TransportManager.Transport;
 				if (transport != null)
 				{
-					Debug.Log(transport.GetServerBindAddress(IPAddressType.IPv4) + ":" + transport.GetPort());
+					Debug.Log("[" + DateTime.UtcNow + "] Server: " + transport.GetServerBindAddress(IPAddressType.IPv4) + ":" + transport.GetPort());
 				}
 				NetworkManager.ServerManager.OnServerConnectionState += ServerManager_OnServerConnectionState;
 
@@ -128,12 +130,17 @@ namespace Server
 			return "Invalid";
 		}
 
+		/// <summary>
+		/// Order of Execution, Dependency Injection, and all other server initialization should be handled here.
+		/// </summary>
 		internal void InternalInitializeOnce(string serverType)
 		{
+			// only use title updater if it has been added to the scene
 			ServerWindowTitleUpdater = GetComponent<ServerWindowTitleUpdater>();
 			if (ServerWindowTitleUpdater != null)
 				ServerWindowTitleUpdater.InternalInitializeOnce(this, NetworkManager.ServerManager);
 
+			// database factory DI
 			LoginServerAuthenticator authenticator = NetworkManager.Authenticator as LoginServerAuthenticator;
 			if (authenticator != null)
 			{
@@ -162,6 +169,7 @@ namespace Server
 					WorldChatSystem = GetOrCreateComponent<WorldChatSystem>();
 					WorldChatSystem.InternalInitializeOnce(this, NetworkManager.ServerManager);
 
+					// world server has special title bar that handles relay information
 					if (ServerWindowTitleUpdater != null)
 						ServerWindowTitleUpdater.WorldSceneSystem = WorldSceneSystem;
 					break;
@@ -231,6 +239,9 @@ namespace Server
 			yield return null;
 		}
 
+		/// <summary>
+		/// Loads transport server details from the configuration file.
+		/// </summary>
 		private bool LoadTransportServerDetails()
 		{
 			Transport transport = NetworkManager.TransportManager.Transport;
@@ -247,6 +258,9 @@ namespace Server
 			return false;
 		}
 
+		/// <summary>
+		/// Loads relay server details from the configuration file.
+		/// </summary>
 		private bool LoadRelayServerAddress()
 		{
 			if (configuration.TryGetString("RelayAddress", out relayAddress) &&
@@ -259,6 +273,9 @@ namespace Server
 			return false;
 		}
 
+		/// <summary>
+		/// IPv4 Regex, can we get IPv6 support???
+		/// </summary>
 		public bool IsRelayAddressValid(string address)
 		{
 			const string ValidIpAddressRegex = "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$";

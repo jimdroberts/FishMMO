@@ -73,9 +73,12 @@ public class EquipmentController : ItemContainer
 
 		byte slotIndex = (byte)slot;
 		Item prevItem = items[slotIndex];
-		if (prevItem != null && prevItem.stackSize > 0)
+		if (prevItem != null &&
+			prevItem.IsStackable &&
+			prevItem.stackable.amount > 0 &&
+			prevItem.equippable != null)
 		{
-			prevItem.Unequip();
+			prevItem.equippable.Unequip();
 
 			// swap the items
 			if (character.InventoryController != null)
@@ -99,7 +102,10 @@ public class EquipmentController : ItemContainer
 		}
 
 		// equip the item to the character (adds attributes.. etc..)
-		item.Equip(character);
+		if (item.equippable != null)
+		{
+			item.equippable.Equip(character);
+		}
 		return true;
 	}
 
@@ -114,6 +120,7 @@ public class EquipmentController : ItemContainer
 		}
 		Item item = items[slot];
 
+		// see if we can add the item back to our inventory
 		if (character.InventoryController != null &&
 			!character.InventoryController.CanAddItem(item))
 		{
@@ -124,9 +131,12 @@ public class EquipmentController : ItemContainer
 		SetItemSlot(null, slot);
 
 		// unequip the item
-		item.Unequip();
+		if (item.equippable != null)
+		{
+			item.equippable.Unequip();
+		}
 
-		// add the item back to the inventory
+		// try to add the item back to the inventory
 		if (character.InventoryController != null)
 		{
 			character.InventoryController.TryAddItem(item, out List<Item> modifiedItems);
@@ -136,7 +146,7 @@ public class EquipmentController : ItemContainer
 	}
 
 	/// <summary>
-	/// Server sent a set item broadcast. Item slot is set to the received item details.
+	/// Server sent an equip item broadcast.
 	/// </summary>
 	private void OnClientEquipmentEquipItemBroadcastReceived(EquipmentEquipItemBroadcast msg)
 	{
@@ -151,13 +161,12 @@ public class EquipmentController : ItemContainer
 	}
 
 	/// <summary>
-	/// Server sent a remove item from slot broadcast. Item is removed from the received slot with server authority.
+	/// Server sent an unequip item broadcast.
 	/// </summary>
 	private void OnClientEquipmentUnequipItemBroadcastReceived(EquipmentUnequipItemBroadcast msg)
 	{
 		Unequip(msg.slot);
 	}
-
 
 	public void SendEquipRequest(int inventoryIndex, byte slot)
 	{

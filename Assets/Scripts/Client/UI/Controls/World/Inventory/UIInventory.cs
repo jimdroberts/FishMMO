@@ -75,7 +75,7 @@ namespace Client
 				button.hotkeyType = HotkeyType.Inventory;
 				if (button.icon != null) button.icon.texture = item.Template.Icon;
 				//inventorySlots[i].cooldownText = character.CooldownController.IsOnCooldown();
-				if (button.amountText != null) button.amountText.text = item.stackSize.ToString();
+				if (button.amountText != null) button.amountText.text = item.IsStackable ? item.stackable.amount.ToString() : "";
 			}
 			else
 			{
