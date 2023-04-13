@@ -5,6 +5,7 @@ using FishNet.Object;
 using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
+using Server.Services;
 using UnityEngine;
 
 namespace Server
@@ -64,7 +65,9 @@ namespace Server
 					Debug.Log("[" + DateTime.UtcNow + "] CharacterManager: Save");
 
 					// all characters are periodically saved
-					Database.Instance.SaveCharacters(new List<Character>(characters.Values));
+					using var dbContext = Server.DbContextFactory.CreateDbContext();
+					CharacterService.SaveCharacters(dbContext, new List<Character>(characters.Values));
+					dbContext.SaveChanges();
 				}
 			}
 		}
@@ -73,7 +76,9 @@ namespace Server
 		{
 			Debug.Log("Disconnecting...");
 			// save all the characters before we quit
-			Database.Instance.SaveCharacters(new List<Character>(characters.Values), false);
+			using var dbContext = Server.DbContextFactory.CreateDbContext();
+			CharacterService.SaveCharacters(dbContext, new List<Character>(characters.Values), false);
+			dbContext.SaveChanges();
 		}
 
 		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs obj)
@@ -165,7 +170,9 @@ namespace Server
 					character.RemoveOwnership();
 
 					// save the character and set online to false
-					Database.Instance.SaveCharacter(character, false, false);
+					using var dbContext = Server.DbContextFactory.CreateDbContext();
+					CharacterService.SaveCharacter(dbContext, character, false);
+					dbContext.SaveChanges();
 
 					// immediately log out for now.. we could add a timeout later on..?
 					ServerManager.Despawn(character.NetworkObject, DespawnType.Pool);
@@ -370,7 +377,9 @@ namespace Server
 				character.transform.SetPositionAndRotation(teleporter.toPosition, character.transform.rotation);// teleporter.toRotation);
 
 				// save the character with new scene and position
-				Database.Instance.SaveCharacter(character, true, true);
+				using var dbContext = Server.DbContextFactory.CreateDbContext();
+				CharacterService.SaveCharacter(dbContext, character, true);
+				dbContext.SaveChanges();
 
 				// tell the connection to reconnect to the world server for automatic re-entry?
 				SceneWorldReconnectBroadcast sceneReconnect = new SceneWorldReconnectBroadcast()

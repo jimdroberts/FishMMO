@@ -171,54 +171,6 @@ namespace Server
 		}
 
 		/// <summary>
-		/// Save a character to the database. Only Scene Servers should be saving characters. A character can only be in one scene at a time.
-		/// </summary>
-		public void SaveCharacter(Character character, bool online = true, bool useTransaction = true)
-		{
-			if (useTransaction) connection.BeginTransaction();
-
-			connection.InsertOrReplace(new characters
-			{
-				name = character.characterName,
-				account = character.account,
-				isGameMaster = character.isGameMaster,
-				raceName = character.raceName,
-				sceneName = character.sceneName,
-				x = character.transform.position.x,
-				y = character.transform.position.y,
-				z = character.transform.position.z,
-				rotX = character.transform.rotation.x,
-				rotY = character.transform.rotation.y,
-				rotZ = character.transform.rotation.z,
-				rotW = character.transform.rotation.w,
-				online = online,
-				lastSaved = DateTime.UtcNow,
-			});
-
-			//SaveAttributes(character.AttributeController);
-			//SaveCooldowns(character.CooldownController);
-			//SaveInventory(character.InventoryController);
-			//SaveEquipment(character.EquipmentController);
-			//SaveAbilities(character.AbilityController);
-			//SaveAchievements(character.AchievementController);
-			//SaveBuffs(character.BuffController);
-			//SaveQuests(character.QuestController);
-			//SavePosition(character.CharacterMovementController);
-			//SaveGuild(character.GuildController);
-			//SaveParty(character.PartyController);
-
-			if (useTransaction) connection.Commit();
-		}
-
-		public void SaveCharacters(List<Character> characters, bool online = true)
-		{
-			connection.BeginTransaction(); // transaction for performance
-			foreach (Character character in characters)
-				SaveCharacter(character, online, false);
-			connection.Commit(); // end transaction
-		}
-
-		/// <summary>
 		/// Don't actually delete anything. Deleted is simply set to true just incase we need to reinstate a character..
 		/// </summary>
 		public void DeleteCharacter(string account, string characterName)

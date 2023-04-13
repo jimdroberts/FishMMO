@@ -110,7 +110,6 @@ namespace Server
 								RotZ = msg.initialSpawnPosition.rotation.z,
 								RotW = msg.initialSpawnPosition.rotation.w,
 							};
-							//Database.Instance.NewCharacter(accountName, msg.characterName, msg.raceName, msg.initialSpawnPosition);
 							dbContext.Characters.Add(newCharacter);
 							dbContext.SaveChanges();
 							
