@@ -1,4 +1,5 @@
-﻿using FishNet.Component.Prediction;
+﻿using Client;
+using FishNet.Component.Prediction;
 using FishNet.Component.Transforming;
 using FishNet.Object;
 using FishNet.Object.Synchronizing;
@@ -8,7 +9,7 @@ using KinematicCharacterController.Examples;
 using UnityEngine;
 
 /// <summary>
-/// Character contains references to all the controllers associated with the character.
+/// Character contains references to all of the controllers associated with the character.
 /// </summary>
 #region KCC
 [RequireComponent(typeof(PredictedObject))]
@@ -49,7 +50,14 @@ public class Character : NetworkBehaviour
 	public GuildController GuildController;
 	public PartyController PartyController;
 	public KinematicCharacterMotor Motor;
+	public LocalInputController LocalInputController;
 
+	//temporary
+	public UILabel3D CharacterNameLabel;
+
+	/// <summary>
+	/// The characters real name. Use this if you are referencing a character by name. Avoid character.name unless you want the name of the game object.
+	/// </summary>
 	[SyncVar(Channel = Channel.Unreliable, OnChange = nameof(OnCharacterNameChanged))]
 	public string characterName;
 	private void OnCharacterNameChanged(string prev, string next, bool asServer)
@@ -57,6 +65,20 @@ public class Character : NetworkBehaviour
 		if (!asServer)
 		{
 			gameObject.name = next;
+
+			if (CharacterNameLabel == null)
+			{
+				float calcHeight = 100.0f;
+				if (Motor != null && Motor.Capsule != null)
+				{
+					calcHeight *= Motor.Capsule.height * 0.75f;
+				}
+				CharacterNameLabel = UILabel3D.Create(next, 12, transform, new Vector2(0.0f, calcHeight));
+			}
+			else
+			{
+				CharacterNameLabel.Text = next;
+			}
 		}
 	}
 
@@ -102,6 +124,7 @@ public class Character : NetworkBehaviour
 		if (base.IsOwner)
 		{
 			localCharacter = this;
+			LocalInputController = gameObject.AddComponent<LocalInputController>();
 		}
 	}
 
@@ -111,6 +134,11 @@ public class Character : NetworkBehaviour
 		if (base.IsOwner)
 		{
 			localCharacter = null;
+
+			if (LocalInputController != null)
+			{
+				Destroy(LocalInputController);
+			}
 		}
 	}
 }

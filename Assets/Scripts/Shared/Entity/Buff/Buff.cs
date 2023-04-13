@@ -3,15 +3,13 @@
 public class Buff
 {
 	public int templateID;
-	public BuffTemplate Template { get { return BuffTemplate.Cache[templateID]; } }
-
 	public Character buffer;
 	public float tickTime;
 	public float remainingTime;
 	private List<BuffAttribute> attributeBonuses = new List<BuffAttribute>();
 	private List<Buff> stacks = new List<Buff>();
 
-
+	public BuffTemplate Template { get { return BuffTemplate.Cache[templateID]; } }
 	public List<BuffAttribute> AttributeBonuses { get { return attributeBonuses; } }
 	public List<Buff> Stacks { get { return stacks; } }
 

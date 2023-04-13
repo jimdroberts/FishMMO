@@ -21,8 +21,8 @@ public struct InventoryRemoveItemBroadcast : IBroadcast
 	public int slot;
 }
 
-public struct InventoryMoveItemBroadcast : IBroadcast
+public struct InventorySwapItemSlotsBroadcast : IBroadcast
 {
-	public int fromSlot;
-	public int toSlot;
+	public int from;
+	public int to;
 }

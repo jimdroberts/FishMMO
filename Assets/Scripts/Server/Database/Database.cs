@@ -68,7 +68,7 @@ namespace Server
     public partial class Database
     {
         // file name
-        public string databaseFile = "Database.sqlite";
+        public string databaseFile = "/Database.sqlite";
 
         // connection (public so it can be used by addons)
         public SQLiteConnection connection;
@@ -94,13 +94,21 @@ namespace Server
 			// instead we put it above that.
 			// we also use Path.Combine for platform independent paths
 			// and we need persistentDataPath on android
-			string path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), databaseFile);
-            
-            Debug.Log($"Path: {path}");
 
-            // open connection
-            // note: automatically creates database file if not created yet
-            connection = new SQLiteConnection(path);
+			string path = "";
+#if UNITY_EDITOR
+			path = Directory.GetParent(Application.dataPath).FullName;
+#elif UNITY_ANDROID
+			path = Directory.GetParent(Application.persistentDataPath.FullName;
+#elif UNITY_IOS
+			path = Directory.GetParent(Application.persistentDataPath.FullName;
+#else
+			path = Directory.GetParent(Application.dataPath).FullName;
+#endif
+
+			// open connection
+			// note: automatically creates database file if not created yet
+			connection = new SQLiteConnection(path);
 
             // create tables if they don't exist yet or were deleted
             //connection.CreateTable<worldServers>();

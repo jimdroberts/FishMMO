@@ -35,13 +35,13 @@ namespace Server
 			}
 		}
 
-		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs obj)
+		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs args)
 		{
 			loginAuthenticator = FindObjectOfType<WorldServerAuthenticator>();
 			if (loginAuthenticator == null)
 				return;
 
-			if (obj.ConnectionState == LocalConnectionState.Started)
+			if (args.ConnectionState == LocalConnectionState.Started)
 			{
 				loginAuthenticator.OnRelayAuthenticationResult += Authenticator_OnRelayServerAuthenticationResult;
 				loginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
@@ -54,7 +54,7 @@ namespace Server
 				ServerManager.RegisterBroadcast<SceneCharacterConnectedBroadcast>(OnServerSceneCharacterConnectedBroadcastReceived, true);
 				ServerManager.RegisterBroadcast<SceneCharacterDisconnectedBroadcast>(OnServerSceneCharacterDisconnectedBroadcastReceived, true);
 			}
-			else if (obj.ConnectionState == LocalConnectionState.Stopped)
+			else if (args.ConnectionState == LocalConnectionState.Stopped)
 			{
 				loginAuthenticator.OnRelayAuthenticationResult -= Authenticator_OnRelayServerAuthenticationResult;
 				loginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;

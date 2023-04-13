@@ -2,7 +2,7 @@
 
 namespace Client
 {
-	public class PlayerInputController : MonoBehaviour
+	public class LocalInputController : MonoBehaviour
 	{
 		private void OnEnable()
 		{

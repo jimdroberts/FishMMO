@@ -78,9 +78,21 @@ namespace KinematicCharacterController.Examples
 			//Quang: The remote object must not have movement related logic code, destroy it. Network transform will handle the movements
 			else if (!base.IsServer)
 			{
-				Destroy(GetComponent<KinematicCharacterMotor>());
-				Destroy(GetComponent<ExampleCharacterController>());
-				GetComponent<Rigidbody>().isKinematic = true;
+				KinematicCharacterMotor motor = GetComponent<KinematicCharacterMotor>();
+				if (motor != null)
+				{
+					motor.enabled = false;
+				}
+				ExampleCharacterController controller = GetComponent<ExampleCharacterController>();
+				if (controller != null)
+				{
+					controller.enabled = false;
+				}
+				Rigidbody rb = GetComponent<Rigidbody>();
+				if (rb != null)
+				{
+					rb.isKinematic = true;
+				}
 			}
 		}
 
@@ -104,8 +116,6 @@ namespace KinematicCharacterController.Examples
 				KinematicCharacterMotorState state = Character.Motor.GetState();
 				Reconcile(TranslateReconcileData(state), true);
 			}
-			if (!base.IsOwner && !base.IsServer)
-				GetComponent<Rigidbody>().isKinematic = true;
 		}
 
 		[Replicate]

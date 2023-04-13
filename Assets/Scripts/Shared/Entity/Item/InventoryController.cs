@@ -20,7 +20,7 @@ public class InventoryController : ItemContainer
 		ClientManager.RegisterBroadcast<InventorySetItemBroadcast>(OnClientInventorySetItemBroadcastReceived);
 		ClientManager.RegisterBroadcast<InventorySetMultipleItemsBroadcast>(OnClientInventorySetMultipleItemsBroadcastReceived);
 		ClientManager.RegisterBroadcast<InventoryRemoveItemBroadcast>(OnClientInventoryRemoveItemBroadcastReceived);
-		ClientManager.RegisterBroadcast<InventoryMoveItemBroadcast>(OnClientInventoryMoveItemBroadcastReceived);
+		ClientManager.RegisterBroadcast<InventorySwapItemSlotsBroadcast>(OnClientInventorySwapItemSlotsBroadcastReceived);
 	}
 
 	public override void OnStopClient()
@@ -32,7 +32,7 @@ public class InventoryController : ItemContainer
 			ClientManager.UnregisterBroadcast<InventorySetItemBroadcast>(OnClientInventorySetItemBroadcastReceived);
 			ClientManager.UnregisterBroadcast<InventorySetMultipleItemsBroadcast>(OnClientInventorySetMultipleItemsBroadcastReceived);
 			ClientManager.UnregisterBroadcast<InventoryRemoveItemBroadcast>(OnClientInventoryRemoveItemBroadcastReceived);
-			ClientManager.UnregisterBroadcast<InventoryMoveItemBroadcast>(OnClientInventoryMoveItemBroadcastReceived);
+			ClientManager.UnregisterBroadcast<InventorySwapItemSlotsBroadcast>(OnClientInventorySwapItemSlotsBroadcastReceived);
 		}
 	}
 
@@ -106,8 +106,17 @@ public class InventoryController : ItemContainer
 	/// Server sent a swap slot broadcast. Both slots are swapped with server authority.
 	/// </summary>
 	/// <param name="msg"></param>
-	private void OnClientInventoryMoveItemBroadcastReceived(InventoryMoveItemBroadcast msg)
+	private void OnClientInventorySwapItemSlotsBroadcastReceived(InventorySwapItemSlotsBroadcast msg)
 	{
-		SwapItemSlots(msg.fromSlot, msg.toSlot);
+		SwapItemSlots(msg.from, msg.to);
+	}
+
+	public void SendSwapItemSlotsRequest(int from, int to)
+	{
+		ClientManager.Broadcast(new InventorySwapItemSlotsBroadcast()
+		{
+			from = from,
+			to = to,
+		});
 	}
 }

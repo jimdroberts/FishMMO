@@ -47,27 +47,27 @@ namespace Server
 			}
 		}*/
 
-		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs obj)
+		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs args)
 		{
 			loginAuthenticator = FindObjectOfType<SceneServerAuthenticator>();
 			if (loginAuthenticator == null)
 				return;
 
-			serverState = obj.ConnectionState;
+			serverState = args.ConnectionState;
 
-			if (obj.ConnectionState == LocalConnectionState.Started)
+			if (args.ConnectionState == LocalConnectionState.Started)
 			{
 				loginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
 
 				ServerManager.RegisterBroadcast<InventoryRemoveItemBroadcast>(OnServerInventoryRemoveItemBroadcastReceived, true);
-				ServerManager.RegisterBroadcast<InventoryMoveItemBroadcast>(OnServerInventoryMoveItemBroadcastReceived, true);
+				ServerManager.RegisterBroadcast<InventorySwapItemSlotsBroadcast>(OnServerInventorySwapItemSlotsBroadcastReceived, true);
 			}
-			else if (obj.ConnectionState == LocalConnectionState.Stopped)
+			else if (args.ConnectionState == LocalConnectionState.Stopped)
 			{
 				loginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
 
 				ServerManager.UnregisterBroadcast<InventoryRemoveItemBroadcast>(OnServerInventoryRemoveItemBroadcastReceived);
-				ServerManager.UnregisterBroadcast<InventoryMoveItemBroadcast>(OnServerInventoryMoveItemBroadcastReceived);
+				ServerManager.UnregisterBroadcast<InventorySwapItemSlotsBroadcast>(OnServerInventorySwapItemSlotsBroadcastReceived);
 			}
 		}
 
@@ -87,14 +87,14 @@ namespace Server
 			}
 
 			InventoryController inventory = conn.FirstObject.GetComponent<InventoryController>();
-			if (inventory == null)
+			if (inventory != null)
 			{
-				// no inventory???
-				return;
+				inventory.RemoveItem(msg.slot);
+				conn.Broadcast(msg);
 			}
 		}
 
-		private void OnServerInventoryMoveItemBroadcastReceived(NetworkConnection conn, InventoryMoveItemBroadcast msg)
+		private void OnServerInventorySwapItemSlotsBroadcastReceived(NetworkConnection conn, InventorySwapItemSlotsBroadcast msg)
 		{
 			if (conn.FirstObject == null)
 			{
@@ -102,13 +102,8 @@ namespace Server
 			}
 
 			InventoryController inventory = conn.FirstObject.GetComponent<InventoryController>();
-			if (inventory == null)
-			{
-				// no inventory???
-				return;
-			}
-
-			if (inventory.SwapItemSlots(msg.fromSlot, msg.toSlot))
+			if (inventory != null &&
+				inventory.SwapItemSlots(msg.from, msg.to))
 			{
 				conn.Broadcast(msg);
 			}

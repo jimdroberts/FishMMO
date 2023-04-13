@@ -3,6 +3,7 @@ using FishNet.Managing;
 using FishNet.Transporting;
 using Server;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Client
@@ -33,6 +34,8 @@ namespace Client
 		private NetworkManager networkManager;
 		private ClientLoginAuthenticator loginAuthenticator;
 		private LocalConnectionState clientState = LocalConnectionState.Stopped;
+
+		public List<ServerAddress> loginServerAddresses;
 
 		void Awake()
 		{
@@ -153,6 +156,18 @@ namespace Client
 			networkManager.ClientManager.StartConnection(address, port);
 
 			yield return null;
+		}
+
+		public bool TryGetRandomLoginServerAddress(out ServerAddress serverAddress)
+		{
+			if (loginServerAddresses != null && loginServerAddresses.Count > 0)
+			{
+				// pick a random login server
+				serverAddress = loginServerAddresses.GetRandom();
+				return true;
+			}
+			serverAddress = default;
+			return false;
 		}
 	}
 }

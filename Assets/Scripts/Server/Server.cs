@@ -25,6 +25,7 @@ namespace Server
 		public ServerDbContextFactory DbContextFactory;
 
 		public NetworkManager NetworkManager { get; private set; }
+		//public DbContextFactory DBContextFactory { get; private set; }
 
 		#region LOGIN
 		public CharacterSelectSystem CharacterSelectSystem { get; private set; }
@@ -42,6 +43,7 @@ namespace Server
 		#region SCENE
 		public SceneServerSystem SceneServerSystem { get; private set; }
 		public CharacterSystem CharacterSystem { get; private set; }
+		public CharacterInventorySystem CharacterInventorySystem { get; private set; }
 		public ChatSystem ChatSystem { get; private set; }
 		public GuildSystem GuildSystem { get; private set; }
 		public PartySystem PartySystem { get; private set; }
@@ -75,6 +77,8 @@ namespace Server
 			}
 
 			string serverType = GetServerType();
+
+			//DBContextFactory = new DbContextFactory();
 
 			InternalInitializeOnce(serverType);
 
@@ -136,6 +140,12 @@ namespace Server
 			// setup the DB context and ensure that it's been created
 			DbContextFactory = new ServerDbContextFactory();
 
+			LoginServerAuthenticator authenticator = NetworkManager.Authenticator as LoginServerAuthenticator;
+			if (authenticator != null)
+			{
+				//authenticator.DBContextFactory = DbContextFactory;
+			}
+
 			switch (serverType)
 			{
 				case "LOGIN":
@@ -173,6 +183,9 @@ namespace Server
 					CharacterSystem = GetOrCreateComponent<CharacterSystem>();
 					CharacterSystem.SceneServerSystem = SceneServerSystem;
 					CharacterSystem.InternalInitializeOnce(this, NetworkManager.ServerManager, NetworkManager.ClientManager);
+
+					CharacterInventorySystem = GetOrCreateComponent<CharacterInventorySystem>();
+					CharacterInventorySystem.InternalInitializeOnce(this, NetworkManager.ServerManager);
 
 					ChatSystem = GetOrCreateComponent<ChatSystem>();
 					ChatSystem.SceneManager = NetworkManager.SceneManager;

@@ -54,16 +54,21 @@ namespace Client
 				button.referenceID = i.ToString(); // helper for UIDragObject
 				button.allowedHotkeyType = HotkeyType.Inventory;
 				button.hotkeyType = HotkeyType.Inventory;
-				button.icon.texture = inventory.items[i] != null && inventory.items[i].stackSize > 0 ? inventory.items[i].Template.Icon : null;
+				button.icon.texture = inventory.IsValidItem(i) ? inventory.items[i].Template.Icon : null;
 				inventorySlots.Add(button); // track inventory slots for easy updating
 			}
 			// update our buttons when the inventory slots change
 			inventory.OnSlotUpdated += OnInventorySlotUpdated;
 		}
 
-		public void OnInventorySlotUpdated(Item item, int inventoryIndex)
+		public void OnInventorySlotUpdated(ItemContainer container, Item item, int inventoryIndex)
 		{
-			if (item != null && item.stackSize > 0 && inventoryIndex > -1 && inventoryIndex < inventorySlots.Count)
+			if (inventorySlots == null)
+			{
+				return;
+			}
+
+			if (container.IsValidItem(inventoryIndex))
 			{
 				// update our button display
 				UIInventoryButton button = inventorySlots[inventoryIndex];

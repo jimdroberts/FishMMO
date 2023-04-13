@@ -5,10 +5,8 @@ public class CharacterAttributeController : MonoBehaviour
 {
 	public CharacterAttributeTemplateDatabase CharacterAttributeDatabase;
 
-	private Dictionary<string, CharacterAttribute> attributes = new Dictionary<string, CharacterAttribute>();
-	private Dictionary<string, CharacterResourceAttribute> resourceAttributes = new Dictionary<string, CharacterResourceAttribute>();
-
-	public Dictionary<string, CharacterAttribute> Attributes { get { return attributes; } }
+	public readonly Dictionary<string, CharacterAttribute> attributes = new Dictionary<string, CharacterAttribute>();
+	public readonly Dictionary<string, CharacterResourceAttribute> resourceAttributes = new Dictionary<string, CharacterResourceAttribute>();
 
 	protected void Awake()
 	{

@@ -10,9 +10,9 @@ public class WorldSceneDetailsCacheEditor : Editor
 		base.OnInspectorGUI();
 		var script = (WorldSceneDetailsCache)target;
 
-		if (GUILayout.Button("Search", GUILayout.Height(40)))
+		if (GUILayout.Button("Rebuild", GUILayout.Height(40)))
 		{
-			script.Search();
+			script.Rebuild();
 			EditorUtility.SetDirty(script);
 		}
 	}

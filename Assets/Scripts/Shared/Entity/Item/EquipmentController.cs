@@ -17,6 +17,20 @@ public class EquipmentController : ItemContainer
 			enabled = false;
 			return;
 		}
+
+		ClientManager.RegisterBroadcast<EquipmentEquipItemBroadcast>(OnClientEquipmentEquipItemBroadcastReceived);
+		ClientManager.RegisterBroadcast<EquipmentUnequipItemBroadcast>(OnClientEquipmentUnequipItemBroadcastReceived);
+	}
+
+	public override void OnStopClient()
+	{
+		base.OnStopClient();
+
+		if (base.IsOwner)
+		{
+			ClientManager.UnregisterBroadcast<EquipmentEquipItemBroadcast>(OnClientEquipmentEquipItemBroadcastReceived);
+			ClientManager.UnregisterBroadcast<EquipmentUnequipItemBroadcast>(OnClientEquipmentUnequipItemBroadcastReceived);
+		}
 	}
 
 	public override bool CanManipulate()
@@ -57,7 +71,7 @@ public class EquipmentController : ItemContainer
 			return false;
 		}
 
-		int slotIndex = (int)slot;
+		byte slotIndex = (byte)slot;
 		Item prevItem = items[slotIndex];
 		if (prevItem != null && prevItem.stackSize > 0)
 		{
@@ -92,7 +106,7 @@ public class EquipmentController : ItemContainer
 	/// <summary>
 	/// Unequips the item and puts it in the inventory.
 	/// </summary>
-	public bool Unequip(int slot)
+	public bool Unequip(byte slot)
 	{
 		if (!CanManipulate() || !IsValidItem(slot))
 		{
@@ -119,5 +133,46 @@ public class EquipmentController : ItemContainer
 		}
 
 		return true;
+	}
+
+	/// <summary>
+	/// Server sent a set item broadcast. Item slot is set to the received item details.
+	/// </summary>
+	private void OnClientEquipmentEquipItemBroadcastReceived(EquipmentEquipItemBroadcast msg)
+	{
+		InventoryController inventory = character.InventoryController;
+		if (inventory != null)
+		{
+			if (inventory.IsValidItem(msg.inventoryIndex))
+			{
+				Equip(inventory.items[msg.inventoryIndex], msg.inventoryIndex, (ItemSlot)msg.slot);
+			}
+		}
+	}
+
+	/// <summary>
+	/// Server sent a remove item from slot broadcast. Item is removed from the received slot with server authority.
+	/// </summary>
+	private void OnClientEquipmentUnequipItemBroadcastReceived(EquipmentUnequipItemBroadcast msg)
+	{
+		Unequip(msg.slot);
+	}
+
+
+	public void SendEquipRequest(int inventoryIndex, byte slot)
+	{
+		ClientManager.Broadcast(new EquipmentEquipItemBroadcast()
+		{
+			inventoryIndex = inventoryIndex,
+			slot = slot,
+		});
+	}
+
+	public void SendUnequipRequest(byte slot)
+	{
+		ClientManager.Broadcast(new EquipmentUnequipItemBroadcast()
+		{
+			slot = slot,
+		});
 	}
 }
