@@ -98,39 +98,6 @@ namespace Server
 		}
 
 		/// <summary>
-		/// Returns true if we successfully get our selected characters scene for the connections account, otherwise returns false.
-		/// </summary>
-		public bool TryGetSelectedCharacterSceneName(string account, out string sceneName)
-		{
-			characters accountRow = connection.FindWithQuery<characters>("SELECT * FROM characters WHERE account=? AND selected=1 AND deleted=0", account);
-			if (accountRow != null)
-			{
-				sceneName = accountRow.sceneName;
-				return true;
-			}
-			sceneName = "";
-			return false;
-		}
-
-		/// <summary>
-		/// Returns true if we successfully set our selected character for the connections account, otherwise returns false.
-		/// </summary>
-		public bool TrySetCharacterOnline(string account, string characterName)
-		{
-			if (connection.FindWithQuery<characters>("SELECT * FROM characters WHERE account=? AND deleted=0 AND online=1", account) != null)
-			{
-				// a character on this account is already online, we should disconnect them
-				return false;
-			}
-			if (connection.FindWithQuery<characters>("SELECT * FROM characters WHERE name=? AND account=? AND deleted=0", characterName, account) != null)
-			{
-				connection.Execute("UPDATE characters SET online=1 WHERE name=? AND account=?", characterName, account);
-				return true;
-			}
-			return false;
-		}
-
-		/// <summary>
 		/// Save a new character to the database. Only the Login Server should be calling this function. A character can only be in one scene at a time.
 		/// </summary>
 		public void NewCharacter(string accountName, string characterName, string raceName, CharacterInitialSpawnPosition initialSpawnPosition)
@@ -170,9 +137,7 @@ namespace Server
 			connection.Commit();
 		}
 
-		/// <summary>
-		/// Don't actually delete anything. Deleted is simply set to true just incase we need to reinstate a character..
-		/// </summary>
+		
 		public void DeleteCharacter(string account, string characterName)
 		{
 			connection.BeginTransaction(); // transaction for performance

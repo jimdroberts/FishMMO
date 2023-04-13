@@ -189,7 +189,10 @@ namespace Server
 				return;
 			}
 
-			if (Database.Instance.TryGetSelectedCharacterDetails(accountName, out string selectedCharacterName))
+			// create the db context
+			using var dbContext = Server.DbContextFactory.CreateDbContext();
+
+			if (CharacterService.TryGetSelectedCharacterDetails(dbContext, accountName, out string selectedCharacterName))
 			{
 				if (characters.ContainsKey(selectedCharacterName) ||
 					waitingSceneLoadCharacters.ContainsKey(conn))
@@ -200,7 +203,9 @@ namespace Server
 					conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
 					return;
 				}
-				if (Database.Instance.TryLoadCharacter(selectedCharacterName, characterPrefabs, Server.NetworkManager, out Character character))
+				
+				if (CharacterService.TryLoadCharacter(dbContext, selectedCharacterName, characterPrefabs, 
+					    Server.NetworkManager, out Character character))
 				{
 					waitingSceneLoadCharacters.Add(conn, character);
 
@@ -325,7 +330,9 @@ namespace Server
 				if (AccountManager.GetAccountNameByConnection(conn, out string accountName))
 				{
 					// doesn't contain any important functionality yet.. we just do it for fun
-					Database.Instance.TrySetCharacterOnline(accountName, character.characterName);
+					using var dbContext = Server.DbContextFactory.CreateDbContext();
+					CharacterService.TrySetCharacterOnline(dbContext, accountName, character.characterName);
+					dbContext.SaveChanges();
 				}
 
 				// tell the world server the character is active

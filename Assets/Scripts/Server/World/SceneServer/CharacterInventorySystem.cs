@@ -41,6 +41,7 @@ namespace Server
 					Debug.Log("[" + DateTime.UtcNow + "] CharacterInventoryManager: Save");
 
 					// all characters inventories are periodically saved
+					// TODO: create an InventoryService with a save inventories function
 					//Database.Instance.SaveInventories(new List<Character>(characters.Values));
 				}
 			}

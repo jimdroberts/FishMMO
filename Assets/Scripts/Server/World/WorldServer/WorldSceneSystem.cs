@@ -4,6 +4,7 @@ using FishNet.Managing.Server;
 using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
+using Server.Services;
 using UnityEngine;
 
 namespace Server
@@ -201,10 +202,11 @@ namespace Server
 		/// </summary>
 		private void SendWorldSceneConnectBroadcast(NetworkConnection conn)
 		{
+			using var dbContext = Server.DbContextFactory.CreateDbContext();
 			// get the scene for the selected character
 			if (sceneServers.Count < 1 ||
 				!AccountManager.GetAccountNameByConnection(conn, out string accountName) ||
-				!Database.Instance.TryGetSelectedCharacterSceneName(accountName, out string sceneName))
+				!CharacterService.TryGetSelectedCharacterSceneName(dbContext, accountName, out string sceneName))
 			{
 				conn.Kick(KickReason.UnexpectedProblem);
 				return;
