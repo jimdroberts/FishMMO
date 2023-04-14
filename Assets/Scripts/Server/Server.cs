@@ -5,6 +5,7 @@ using UnityEngine.SceneManagement;
 using System;
 using System.Collections;
 using System.Text.RegularExpressions;
+using Microsoft.EntityFrameworkCore;
 
 #if UNITY_EDITOR
 using UnityEditor;
@@ -21,6 +22,7 @@ namespace Server
 		public ushort port;
 		public string relayAddress;
 		public ushort relayPort;
+		public ServerDbContextFactory DbContextFactory;
 
 		public NetworkManager NetworkManager { get; private set; }
 		//public DbContextFactory DBContextFactory { get; private set; }
@@ -29,6 +31,7 @@ namespace Server
 		public CharacterSelectSystem CharacterSelectSystem { get; private set; }
 		public CharacterCreateSystem CharacterCreateSystem { get; private set; }
 		public ServerSelectSystem ServerSelectSystem { get; private set; }
+		public DatabaseInitializerSystem DatabaseInitializerSystem { get; private set; }
 		#endregion
 
 		#region WORLD
@@ -139,6 +142,9 @@ namespace Server
 			ServerWindowTitleUpdater = GetComponent<ServerWindowTitleUpdater>();
 			if (ServerWindowTitleUpdater != null)
 				ServerWindowTitleUpdater.InternalInitializeOnce(this, NetworkManager.ServerManager);
+			
+			// setup the DB context and ensure that it's been created
+			DbContextFactory = new ServerDbContextFactory();
 
 			// database factory DI
 			LoginServerAuthenticator authenticator = NetworkManager.Authenticator as LoginServerAuthenticator;
@@ -158,6 +164,10 @@ namespace Server
 
 					ServerSelectSystem = GetOrCreateComponent<ServerSelectSystem>();
 					ServerSelectSystem.InternalInitializeOnce(this, NetworkManager.ServerManager);
+					
+					// TODO: where should this behavior live?
+					DatabaseInitializerSystem = GetOrCreateComponent<DatabaseInitializerSystem>();
+					DatabaseInitializerSystem.InternalInitializeOnce(this, NetworkManager.ServerManager);
 					break;
 				case "WORLD":
 					WorldServerSystem = GetOrCreateComponent<WorldServerSystem>();

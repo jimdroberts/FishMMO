@@ -1,6 +1,7 @@
 ﻿using FishNet.Managing.Server;
 using FishNet.Transporting;
 using System;
+using Server.Services;
 using UnityEngine;
 
 namespace Server
@@ -29,6 +30,7 @@ namespace Server
 		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs args)
 		{
 			serverState = args.ConnectionState;
+			using var dbContext = Server.DbContextFactory.CreateDbContext();
 
 			if (args.ConnectionState == LocalConnectionState.Started)
 			{
@@ -39,7 +41,8 @@ namespace Server
 					if (Server.configuration.TryGetString("ServerName", out string name))
 					{
 						Debug.Log("Adding World Server to Database: " + name + ":" + server.address + ":" + server.port);
-						Database.Instance.AddWorldServer(name, server.address, server.port, characterCount, locked);
+						WorldServerService.AddWorldServer(dbContext, name, server.address, server.port, characterCount, locked);
+						dbContext.SaveChanges();
 					}
 				}
 			}
@@ -48,7 +51,8 @@ namespace Server
 				if (Server.configuration.TryGetString("ServerName", out string name))
 				{
 					Debug.Log("Removing World Server from Database: " + name);
-					Database.Instance.DeleteWorldServer(name);
+					WorldServerService.DeleteWorldServer(dbContext, name);
+					dbContext.SaveChanges();
 				}
 			}
 		}
@@ -61,9 +65,13 @@ namespace Server
 				nextPulse -= Time.deltaTime;
 				if (nextPulse < 0)
 				{
+					// TODO: maybe this one should exist....how expensive will this be to run on update?
+					using var dbContext = Server.DbContextFactory.CreateDbContext();
+				
 					nextPulse = pulseRate;
 					Debug.Log("[" + DateTime.UtcNow + "] " + name + ": Pulse");
-					Database.Instance.WorldServerPulse(name);
+					WorldServerService.WorldServerPulse(dbContext, name);
+					dbContext.SaveChanges();
 				}
 			}
 		}
@@ -72,8 +80,10 @@ namespace Server
 		{
 			if (Server.configuration.TryGetString("ServerName", out string name))
 			{
+				using var dbContext = Server.DbContextFactory.CreateDbContext();
 				Debug.Log("Removing World Server: " + name);
-				Database.Instance.DeleteWorldServer(name);
+				WorldServerService.DeleteWorldServer(dbContext, name);
+				dbContext.SaveChanges();
 			}
 		}
 

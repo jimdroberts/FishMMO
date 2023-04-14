@@ -1,6 +1,7 @@
 ﻿using FishNet.Connection;
 using System.Collections.Generic;
 using FishNet.Transporting;
+using Server.Services;
 
 namespace Server
 {
@@ -35,9 +36,11 @@ namespace Server
 
 		private void OnServerRequestServerListBroadcastReceived(NetworkConnection conn, RequestServerListBroadcast msg)
 		{
+			using var dbContext = Server.DbContextFactory.CreateDbContext();
+			
 			if (conn.IsActive)
 			{
-				List<WorldServerDetails> worldServerList = Database.Instance.GetWorldServerList();
+				List<WorldServerDetails> worldServerList = WorldServerService.GetWorldServerList(dbContext);
 
 				ServerListBroadcast serverListMsg = new ServerListBroadcast()
 				{

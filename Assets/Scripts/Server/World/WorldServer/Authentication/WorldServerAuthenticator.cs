@@ -1,3 +1,5 @@
+using Server.Services;
+
 namespace Server
 {
 	// World that allows clients to connect with basic password authentication.
@@ -7,15 +9,17 @@ namespace Server
 		{
 			ClientAuthenticationResult result = ClientAuthenticationResult.InvalidUsernameOrPassword;
 
+			// TODO: replace this whenever the authenticators have the factory from server
+			using var dbContext = new ServerDbContextFactory().CreateDbContext();
 			// if the username is valid try to get the account for the client...
 			if (IsAllowedUsername(username))
 			{
-				result = Database.Instance.TryLogin(username, password);
+				result = AccountService.TryLogin(dbContext, username, password);
 			}
 
 			// make sure we have selected a character
 			if (result == ClientAuthenticationResult.LoginSuccess &&
-				Database.Instance.TryGetSelectedCharacterDetails(username, out string characterName))
+				CharacterService.TryGetSelectedCharacterDetails(dbContext, username, out string characterName))
 			{
 				result = ClientAuthenticationResult.WorldLoginSuccess;
 			}

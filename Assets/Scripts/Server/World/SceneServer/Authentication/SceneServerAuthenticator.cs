@@ -2,6 +2,7 @@
 using FishNet.Managing.Logging;
 using FishNet.Transporting;
 using System;
+using Server.Services;
 using UnityEngine;
 
 namespace Server
@@ -64,10 +65,12 @@ namespace Server
 		{
 			ClientAuthenticationResult result = ClientAuthenticationResult.InvalidUsernameOrPassword;
 
+			// TODO: replace this whenever the authenticators have the factory from server
+			using var dbContext = new ServerDbContextFactory().CreateDbContext();
 			// if the username is valid try to get the account for the client...
 			if (IsAllowedUsername(username))
 			{
-				result = Database.Instance.TryLogin(username, password);
+				result = AccountService.TryLogin(dbContext, username, password);
 			}
 
 			// this is easier...

@@ -4,6 +4,9 @@ using FishNet.Managing;
 using FishNet.Transporting;
 using System;
 using System.Text.RegularExpressions;
+using Microsoft.EntityFrameworkCore;
+using Server.Services;
+using UnityEngine;
 
 namespace Server
 {
@@ -89,7 +92,11 @@ namespace Server
 			// if the username is valid get OR create the account for the client
 			if (IsAllowedUsername(username))
 			{
-				result = Database.Instance.TryLogin(username, password);
+				// TODO: when the db context factory is passed from the server, use it instead
+				var dbContextFactory = new ServerDbContextFactory();
+				using var dbContext = dbContextFactory.CreateDbContext(new string[] {});
+				
+				result = AccountService.TryLogin(dbContext, username, password);
 			}
 
 			return new ClientAuthResultBroadcast() { result = result, };

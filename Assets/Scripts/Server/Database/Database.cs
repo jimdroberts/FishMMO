@@ -111,7 +111,7 @@ namespace Server
 			connection = new SQLiteConnection(path);
 
             // create tables if they don't exist yet or were deleted
-            connection.CreateTable<worldServers>();
+            //connection.CreateTable<worldServers>();
             connection.CreateTable<accounts>();
             connection.CreateTable<characters>();
             connection.CreateTable<character_inventory>();
