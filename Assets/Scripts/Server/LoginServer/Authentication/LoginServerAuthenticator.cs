@@ -4,9 +4,7 @@ using FishNet.Managing;
 using FishNet.Transporting;
 using System;
 using System.Text.RegularExpressions;
-using Microsoft.EntityFrameworkCore;
 using Server.Services;
-using UnityEngine;
 
 namespace Server
 {
@@ -19,7 +17,7 @@ namespace Server
 		public override event Action<NetworkConnection, bool> OnAuthenticationResult;
 		public event Action<NetworkConnection, bool> OnClientAuthenticationResult;
 
-		//public DbContextFactory DBContextFactory;
+		public ServerDbContextFactory DBContextFactory;
 
 		public const int accountNameMinLength = 3;
 		public const int accountNameMaxLength = 32;
@@ -90,11 +88,9 @@ namespace Server
 			ClientAuthenticationResult result = ClientAuthenticationResult.InvalidUsernameOrPassword;
 
 			// if the username is valid get OR create the account for the client
-			if (IsAllowedUsername(username))
+			if (DBContextFactory != null && IsAllowedUsername(username))
 			{
-				// TODO: when the db context factory is passed from the server, use it instead
-				var dbContextFactory = new ServerDbContextFactory();
-				using var dbContext = dbContextFactory.CreateDbContext(new string[] {});
+				using ServerDbContext dbContext = DBContextFactory.CreateDbContext(new string[] {});
 				
 				result = AccountService.TryLogin(dbContext, username, password);
 			}

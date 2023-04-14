@@ -65,8 +65,8 @@ namespace Server
 		{
 			ClientAuthenticationResult result = ClientAuthenticationResult.InvalidUsernameOrPassword;
 
-			// TODO: replace this whenever the authenticators have the factory from server
-			using var dbContext = new ServerDbContextFactory().CreateDbContext();
+			using ServerDbContext dbContext = DBContextFactory.CreateDbContext();
+
 			// if the username is valid try to get the account for the client...
 			if (IsAllowedUsername(username))
 			{

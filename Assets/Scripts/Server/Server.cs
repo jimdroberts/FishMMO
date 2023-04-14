@@ -5,7 +5,6 @@ using UnityEngine.SceneManagement;
 using System;
 using System.Collections;
 using System.Text.RegularExpressions;
-using Microsoft.EntityFrameworkCore;
 
 #if UNITY_EDITOR
 using UnityEditor;
@@ -66,6 +65,10 @@ namespace Server
 				configuration.Set("Port", 7770);
 				configuration.Set("RelayAddress", "");
 				configuration.Set("RelayPort", 0);
+				configuration.Set("DbAddress", "127.0.0.1");
+				configuration.Set("DbName", "fish_mmo");
+				configuration.Set("DbUsername", "user");
+				configuration.Set("DbPassword", "pass");
 				configuration.Save();
 			}
 
@@ -77,9 +80,6 @@ namespace Server
 			}
 
 			string serverType = GetServerType();
-
-			// ensure our DbContextFactory exists
-			//DBContextFactory = new DbContextFactory();
 
 			// initialize required components for our specified server type
 			InternalInitializeOnce(serverType);
@@ -144,13 +144,13 @@ namespace Server
 				ServerWindowTitleUpdater.InternalInitializeOnce(this, NetworkManager.ServerManager);
 			
 			// setup the DB context and ensure that it's been created
-			DbContextFactory = new ServerDbContextFactory();
+			DbContextFactory = new ServerDbContextFactory(this);
 
 			// database factory DI
 			LoginServerAuthenticator authenticator = NetworkManager.Authenticator as LoginServerAuthenticator;
 			if (authenticator != null)
 			{
-				//authenticator.DBContextFactory = DbContextFactory;
+				authenticator.DBContextFactory = DbContextFactory;
 			}
 
 			switch (serverType)

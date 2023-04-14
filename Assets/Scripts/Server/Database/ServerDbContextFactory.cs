@@ -1,40 +1,43 @@
-﻿using System;
-using System.IO;
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 
 namespace Server
 {
     public class ServerDbContextFactory : IDesignTimeDbContextFactory<ServerDbContext>
     {
-        public string databaseFile = "EFDatabase.sqlite";
+		public string databaseFile = "EFDatabase.sqlite";
 
-        public ServerDbContext CreateDbContext()
+		public Server Server { get; private set; }
+
+        public ServerDbContextFactory(Server server)
+        {
+            Server = server;
+        }
+
+		public ServerDbContext CreateDbContext()
         {
             return CreateDbContext(new string[] { });
         }
         
         public ServerDbContext CreateDbContext(string[] args)
         {
-            // SQLITE
-            /*string path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), databaseFile);
-            
-            var optionsBuilder = new DbContextOptionsBuilder<ServerDbContext>();
-            optionsBuilder*/
-            
-            // Postgresql
-            var optionsBuilder = new DbContextOptionsBuilder<ServerDbContext>();
-            optionsBuilder
-                /**
-                 * TODO:
-                 * this should probably come from the configuration files for each server. That would give
-                 * the user the ability to run servers as certain users (and thus limit what each server has permission
-                 * to do
-                 **/
-                .UseNpgsql("Host=localhost;Database=fish_mmo;Username=user;Password=p@55w0rd!");
-                //.UseSnakeCaseNamingConvention();
+			DbContextOptionsBuilder optionsBuilder = new DbContextOptionsBuilder<ServerDbContext>();
 
-            return new ServerDbContext(optionsBuilder.Options);
-        }
+			if (Server.configuration.TryGetString("DbAddress", out string dbAddress) &&
+                Server.configuration.TryGetString("DbName", out string dbName) &&
+                Server.configuration.TryGetString("DbUsername", out string dbUsername) &&
+                Server.configuration.TryGetString("DbPassword", out string dbPassword))
+            {
+                string hostString = "Host=" + dbAddress + ";" +
+                                    "Database=" + dbName + ";" +
+                                    "Username=" + dbUsername + ";" +
+                                    "Password=" + dbPassword;
+                                    
+				optionsBuilder.UseNpgsql(hostString);
+				//.UseSnakeCaseNamingConvention();
+				
+			}
+			return new ServerDbContext(optionsBuilder.Options);
+		}
     }
 }

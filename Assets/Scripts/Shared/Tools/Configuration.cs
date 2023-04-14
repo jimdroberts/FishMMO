@@ -7,7 +7,7 @@ using UnityEngine;
 
 public class Configuration
 {
-	private CultureInfo cultureInfo = new CultureInfo("en-US", true);
+	private CultureInfo cultureInfo = CultureInfo.InvariantCulture;//new CultureInfo("en-US", true);
 	private Dictionary<string, string> settings = new Dictionary<string, string>();
 
 	public string defaultFileDirectory;
@@ -70,7 +70,8 @@ public class Configuration
 				sb.Append(pair.Key);
 				sb.Append("=");
 				sb.Append(pair.Value);
-				sb.Append(",");
+				sb.AppendLine();
+				//sb.Append(",");
 			}
 			byte[] bytes = Encoding.UTF8.GetBytes(sb.ToString());
 			bw.Write(bytes);
@@ -110,7 +111,7 @@ public class Configuration
 			settings.Clear();
 			string unsplit = Encoding.UTF8.GetString(bytes);
 			unsplit = RemoveBOM(unsplit);
-			string[] lines = unsplit.Split(new string[] { ",", }, StringSplitOptions.RemoveEmptyEntries);
+			string[] lines = unsplit.Split(new string[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries);
 			foreach (string line in lines)
 			{
 				if (line != null && line.Length > 0)
