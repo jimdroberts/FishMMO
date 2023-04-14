@@ -5,6 +5,7 @@ using UnityEngine.SceneManagement;
 using System;
 using System.Collections;
 using System.Text.RegularExpressions;
+using UnityEditor.Experimental.GraphView;
 
 #if UNITY_EDITOR
 using UnityEditor;
@@ -66,6 +67,7 @@ namespace Server
 				configuration.Set("RelayAddress", "");
 				configuration.Set("RelayPort", 0);
 				configuration.Set("DbAddress", "127.0.0.1");
+				configuration.Set("DbPort", "5432");
 				configuration.Set("DbName", "fish_mmo");
 				configuration.Set("DbUsername", "user");
 				configuration.Set("DbPassword", "pass");
@@ -145,6 +147,8 @@ namespace Server
 			
 			// setup the DB context and ensure that it's been created
 			DbContextFactory = new ServerDbContextFactory(this);
+			DatabaseInitializerSystem = GetOrCreateComponent<DatabaseInitializerSystem>();
+			DatabaseInitializerSystem.InternalInitializeOnce(this, NetworkManager.ServerManager);
 
 			// database factory DI
 			LoginServerAuthenticator authenticator = NetworkManager.Authenticator as LoginServerAuthenticator;
@@ -164,10 +168,6 @@ namespace Server
 
 					ServerSelectSystem = GetOrCreateComponent<ServerSelectSystem>();
 					ServerSelectSystem.InternalInitializeOnce(this, NetworkManager.ServerManager);
-					
-					// TODO: where should this behavior live?
-					DatabaseInitializerSystem = GetOrCreateComponent<DatabaseInitializerSystem>();
-					DatabaseInitializerSystem.InternalInitializeOnce(this, NetworkManager.ServerManager);
 					break;
 				case "WORLD":
 					WorldServerSystem = GetOrCreateComponent<WorldServerSystem>();

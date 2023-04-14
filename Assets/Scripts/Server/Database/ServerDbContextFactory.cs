@@ -24,11 +24,13 @@ namespace Server
 			DbContextOptionsBuilder optionsBuilder = new DbContextOptionsBuilder<ServerDbContext>();
 
 			if (Server.configuration.TryGetString("DbAddress", out string dbAddress) &&
+                Server.configuration.TryGetString("DbPort", out string dbPort) &&
                 Server.configuration.TryGetString("DbName", out string dbName) &&
                 Server.configuration.TryGetString("DbUsername", out string dbUsername) &&
                 Server.configuration.TryGetString("DbPassword", out string dbPassword))
             {
                 string hostString = "Host=" + dbAddress + ";" +
+                                    "Port=" + dbPort + ";" +
                                     "Database=" + dbName + ";" +
                                     "Username=" + dbUsername + ";" +
                                     "Password=" + dbPassword;

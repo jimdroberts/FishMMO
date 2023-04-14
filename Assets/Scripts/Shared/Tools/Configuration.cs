@@ -7,7 +7,7 @@ using UnityEngine;
 
 public class Configuration
 {
-	private CultureInfo cultureInfo = CultureInfo.InvariantCulture;//new CultureInfo("en-US", true);
+	private CultureInfo cultureInfo = CultureInfo.InvariantCulture;
 	private Dictionary<string, string> settings = new Dictionary<string, string>();
 
 	public string defaultFileDirectory;
@@ -71,7 +71,6 @@ public class Configuration
 				sb.Append("=");
 				sb.Append(pair.Value);
 				sb.AppendLine();
-				//sb.Append(",");
 			}
 			byte[] bytes = Encoding.UTF8.GetBytes(sb.ToString());
 			bw.Write(bytes);
