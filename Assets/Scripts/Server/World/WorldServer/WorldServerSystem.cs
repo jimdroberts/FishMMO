@@ -42,6 +42,7 @@ namespace Server
 					{
 						Debug.Log("Adding World Server to Database: " + name + ":" + server.address + ":" + server.port);
 						WorldServerService.AddWorldServer(dbContext, name, server.address, server.port, characterCount, locked);
+						dbContext.SaveChanges();
 					}
 				}
 			}
@@ -51,6 +52,7 @@ namespace Server
 				{
 					Debug.Log("Removing World Server from Database: " + name);
 					WorldServerService.DeleteWorldServer(dbContext, name);
+					dbContext.SaveChanges();
 				}
 			}
 		}
@@ -69,6 +71,7 @@ namespace Server
 					nextPulse = pulseRate;
 					Debug.Log("[" + DateTime.UtcNow + "] " + name + ": Pulse");
 					WorldServerService.WorldServerPulse(dbContext, name);
+					dbContext.SaveChanges();
 				}
 			}
 		}
@@ -80,6 +83,7 @@ namespace Server
 				using var dbContext = Server.DbContextFactory.CreateDbContext();
 				Debug.Log("Removing World Server: " + name);
 				WorldServerService.DeleteWorldServer(dbContext, name);
+				dbContext.SaveChanges();
 			}
 		}
 

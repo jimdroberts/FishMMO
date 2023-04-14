@@ -67,7 +67,7 @@ namespace Server
 
 				using var dbContext = Server.DbContextFactory.CreateDbContext();
 				var character = CharacterService.GetCharacterByName(dbContext, msg.characterName);
-				if (character == null)
+				if (character != null)
 				{
 					// character name already taken
 					conn.Broadcast(new CharacterCreateResultBroadcast()

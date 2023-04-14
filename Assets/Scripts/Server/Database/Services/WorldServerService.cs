@@ -41,7 +41,7 @@ namespace Server.Services
         public static void WorldServerPulse(ServerDbContext dbContext, string name)
         {
             var worldServer = dbContext.WorldServers
-                .FirstOrDefault(server => server.Name == name.ToLower());
+                .FirstOrDefault(server => server.Name.ToLower() == name.ToLower());
             if (worldServer == null) throw new Exception($"Couldn't find world with name {name}");
             
             worldServer.LastPulse = DateTime.UtcNow;
@@ -50,7 +50,7 @@ namespace Server.Services
         public static void DeleteWorldServer(ServerDbContext dbContext, string name) 
         {
             var worldServer = dbContext.WorldServers
-                .FirstOrDefault(server => server.Name == name.ToLower());
+                .FirstOrDefault(server => server.Name.ToLower() == name.ToLower());
             if (worldServer == null) throw new Exception($"Couldn't find world with name {name}");
 
             dbContext.WorldServers.Remove(worldServer);

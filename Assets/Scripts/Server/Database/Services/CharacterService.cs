@@ -24,8 +24,11 @@ namespace Server.Services
         {
             var character = dbContext.Characters
                 .FirstOrDefault(c => c.NameLowercase == name.ToLower());
-            
-            if (character == null) throw new Exception($"Couldn't find character with name {name}");
+
+            if (character == null)
+            {
+                // Log: $"Couldn't find character with name {name}"
+            }
             return character;
         }
 
