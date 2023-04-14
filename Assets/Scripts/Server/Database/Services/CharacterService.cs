@@ -1,10 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 using FishNet.Managing;
 using FishNet.Object;
-using Microsoft.EntityFrameworkCore;
 using Server.Entities;
 using UnityEngine;
 
@@ -84,7 +82,7 @@ namespace Server.Services
             existingCharacter.NameLowercase = character.characterName.ToLower();
             existingCharacter.Account = character.account;
             existingCharacter.IsGameMaster = character.isGameMaster;
-            existingCharacter.RaceName = character.raceName;
+            existingCharacter.RaceID = character.raceID;
             existingCharacter.SceneName = character.sceneName;
             existingCharacter.X = charPosition.x;
             existingCharacter.Y = charPosition.y;
@@ -206,50 +204,52 @@ namespace Server.Services
         /// <summary>
         /// Attempts to load a character from the database. The character is loaded to the last known position/rotation and set inactive.
         /// </summary>
-        public static bool TryLoadCharacter(ServerDbContext dbContext, string characterName, 
-            List<NetworkObject> prefabs, NetworkManager networkManager, out Character character)
+        public static bool TryLoadCharacter(ServerDbContext dbContext, string characterName, NetworkManager networkManager, out Character character)
         {
-            var dbCharacter =
+			var dbCharacter =
                 dbContext.Characters.FirstOrDefault((c) => c.NameLowercase == characterName.ToLower() && !c.Deleted);
             if (dbCharacter != null)
             {
-                NetworkObject prefab = prefabs.Find(p => p.name == dbCharacter.RaceName);
-                if (prefab != null)
-                {
-                    Vector3 spawnPos = new Vector3(dbCharacter.X, dbCharacter.Y, dbCharacter.Z);
-                    Quaternion spawnRot = new Quaternion(dbCharacter.RotX, dbCharacter.RotY, dbCharacter.RotZ, dbCharacter.RotW);
+				// find prefab
+				NetworkObject prefab = networkManager.SpawnablePrefabs.GetObject(true, dbCharacter.RaceID);
+				if (prefab != null)
+				{
+					Vector3 spawnPos = new Vector3(dbCharacter.X, dbCharacter.Y, dbCharacter.Z);
+					Quaternion spawnRot = new Quaternion(dbCharacter.RotX, dbCharacter.RotY, dbCharacter.RotZ, dbCharacter.RotW);
 
-                    // set the prefab position to our spawn position so the player spawns in the right spot
-                    var transform = prefab.transform;
-                    transform.position = spawnPos;
+					// set the prefab position to our spawn position so the player spawns in the right spot
+					var transform = prefab.transform;
+					transform.position = spawnPos;
 
-                    // set the prefab rotation so our player spawns with the proper orientation
-                    transform.rotation = spawnRot;
+					// set the prefab rotation so our player spawns with the proper orientation
+					transform.rotation = spawnRot;
 
-                    // instantiate the character object
-                    NetworkObject nob = networkManager.GetPooledInstantiated(prefab, true);
+					// instantiate the character object
+					NetworkObject nob = networkManager.GetPooledInstantiated(prefab, true);
 
-                    // immediately deactive the game object.. we are not ready yet
-                    nob.gameObject.SetActive(false);
+					// immediately deactive the game object.. we are not ready yet
+					nob.gameObject.SetActive(false);
 
-                    // set position and rotation just incase..
-                    nob.transform.SetPositionAndRotation(spawnPos, spawnRot);
+					// set position and rotation just incase..
+					nob.transform.SetPositionAndRotation(spawnPos, spawnRot);
 
-                    Debug.Log("[" + DateTime.UtcNow + "] " + dbCharacter.Name + " has been instantiated at Pos:" + 
-                              nob.transform.position.ToString() + " Rot:" + nob.transform.rotation.ToString());
+					Debug.Log("[" + DateTime.UtcNow + "] " + dbCharacter.Name + " has been instantiated at Pos:" +
+							  nob.transform.position.ToString() + " Rot:" + nob.transform.rotation.ToString());
 
-                    character = nob.GetComponent<Character>();
-                    if (character != null)
-                    {
-                        character.characterName = dbCharacter.Name;
-                        character.account = dbCharacter.Account;
-                        character.isGameMaster = dbCharacter.IsGameMaster;
-                        character.raceName = dbCharacter.RaceName;
-                        character.sceneName = dbCharacter.SceneName;
-                        return true;
-                    }
-                }
-            }
+					character = nob.GetComponent<Character>();
+					if (character != null)
+					{
+						Debug.Log("[" + DateTime.UtcNow + "] test4");
+						character.characterName = dbCharacter.Name;
+						character.account = dbCharacter.Account;
+						character.isGameMaster = dbCharacter.IsGameMaster;
+						character.raceID = dbCharacter.RaceID;
+						character.raceName = prefab.name;
+						character.sceneName = dbCharacter.SceneName;
+						return true;
+					}
+				}
+			}
             character = null;
             return false;
         }

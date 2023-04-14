@@ -85,6 +85,7 @@ public class Character : NetworkBehaviour
 	// accountName for reference
 	public string account;
 	public bool isGameMaster;
+	public int raceID;
 	public string raceName;
 	public string sceneName;
 	public int sceneHandle;

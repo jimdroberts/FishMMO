@@ -1,9 +1,11 @@
 ﻿using FishNet.Connection;
 using FishNet.Transporting;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 using Server.Entities;
 using Server.Services;
+using FishNet.Managing;
+using FishNet.Object;
+using UnityEngine.TextCore.Text;
 
 namespace Server
 {
@@ -88,10 +90,25 @@ namespace Server
 					});
 					return;
 				}
+				// validate spawn details
 				if (worldSceneDetailsCache.scenes.TryGetValue(msg.initialSpawnPosition.sceneName, out WorldSceneDetails details))
 				{
+					// validate spawner
 					if (details.initialSpawnPositions.ContainsKey(msg.initialSpawnPosition.spawnerName))
 					{
+						// invalid race name! default to first race for now....
+						// FIXME add race selection to UICharacterCreate.cs
+						int raceID = 0;
+						for (int i = 0; i < Server.NetworkManager.SpawnablePrefabs.GetObjectCount(); ++i)
+						{
+							NetworkObject prefab = Server.NetworkManager.SpawnablePrefabs.GetObject(true, i);
+							if (prefab != null &&
+								(string.IsNullOrEmpty(msg.raceName) || prefab.name == msg.raceName))
+							{
+								raceID = i;
+								break;
+							}
+						}
 						if (AccountManager.GetAccountNameByConnection(conn, out string accountName))
 						{
 							// add the new character to the database
@@ -100,7 +117,7 @@ namespace Server
 								Account = accountName,
 								Name = msg.characterName,
 								NameLowercase = msg.characterName?.ToLower(),
-								RaceName = msg.raceName,
+								RaceID = raceID,
 								SceneName = msg.initialSpawnPosition.sceneName,
 								X = msg.initialSpawnPosition.position.x,
 								Y = msg.initialSpawnPosition.position.y,

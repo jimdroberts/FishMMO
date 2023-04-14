@@ -186,7 +186,7 @@ namespace Server
 						character.characterName = row.name;
 						character.account = row.account;
 						character.isGameMaster = row.isGameMaster;
-						character.raceName = row.raceName;
+						//character.raceName = row.raceName;
 						character.sceneName = row.sceneName;
 						return true;
 					}

@@ -21,7 +21,6 @@ namespace Server
 		public float saveRate = 60.0f;
 		private float nextSave = 0.0f;
 
-		public List<NetworkObject> characterPrefabs = new List<NetworkObject>();
 		public WorldSceneDetailsCache worldSceneDetailsCache;
 
 		public Dictionary<string, Character> characters = new Dictionary<string, Character>();
@@ -188,7 +187,6 @@ namespace Server
 				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
 				return;
 			}
-
 			// create the db context
 			using var dbContext = Server.DbContextFactory.CreateDbContext();
 
@@ -203,10 +201,11 @@ namespace Server
 					conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
 					return;
 				}
-				
-				if (CharacterService.TryLoadCharacter(dbContext, selectedCharacterName, characterPrefabs, 
-					    Server.NetworkManager, out Character character))
+
+				if (CharacterService.TryLoadCharacter(dbContext, selectedCharacterName, Server.NetworkManager, out Character character))
 				{
+					Debug.Log("[" + DateTime.UtcNow + "] test3");
+
 					waitingSceneLoadCharacters.Add(conn, character);
 
 					// check if the scene is valid, loaded, and cached properly

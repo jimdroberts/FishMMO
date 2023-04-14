@@ -19,7 +19,7 @@ namespace Server.Entities
         public string Name { get; set; }
         public string NameLowercase { get; set; }
         public string Account { get; set; }
-        public string RaceName { get; set; }
+        public int RaceID { get; set; }
         public string SceneName { get; set; }
         public float X { get; set; }
         public float Y { get; set; }
