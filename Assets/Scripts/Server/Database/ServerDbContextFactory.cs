@@ -33,7 +33,7 @@ namespace Server
                                     "Port=" + dbPort + ";" +
                                     "Database=" + dbName + ";" +
                                     "Username=" + dbUsername + ";" +
-                                    "Password=" + dbPassword;
+                                    "Password=" + dbPassword + ";";
                                     
 				optionsBuilder.UseNpgsql(hostString);
 				//.UseSnakeCaseNamingConvention();
