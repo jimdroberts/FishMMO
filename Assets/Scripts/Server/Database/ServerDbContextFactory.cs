@@ -35,8 +35,7 @@ namespace Server
                                     "Username=" + dbUsername + ";" +
                                     "Password=" + dbPassword + ";";
                                     
-				optionsBuilder.UseNpgsql(hostString);
-				//.UseSnakeCaseNamingConvention();
+				optionsBuilder.UseNpgsql(hostString).UseSnakeCaseNamingConvention();
 				
 			}
 			return new ServerDbContext(optionsBuilder.Options);

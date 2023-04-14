@@ -204,8 +204,6 @@ namespace Server
 
 				if (CharacterService.TryLoadCharacter(dbContext, selectedCharacterName, Server.NetworkManager, out Character character))
 				{
-					Debug.Log("[" + DateTime.UtcNow + "] test3");
-
 					waitingSceneLoadCharacters.Add(conn, character);
 
 					// check if the scene is valid, loaded, and cached properly
