@@ -34,8 +34,7 @@ public abstract class ItemContainer : NetworkBehaviour
 	public bool IsSlotEmpty(int slot)
 	{
 		return IsValidSlot(slot) &&
-			   (items[slot] == null ||
-			    items[slot].stackSize < 1);
+			   items[slot] == null;
 	}
 
 	/// <summary>
@@ -44,8 +43,7 @@ public abstract class ItemContainer : NetworkBehaviour
 	public bool IsValidItem(int slot)
 	{
 		return IsValidSlot(slot) &&
-			   items[slot] != null &&
-			   items[slot].stackSize > 0;
+			   items[slot] != null;
 	}
 
 	/// <summary>
@@ -93,10 +91,9 @@ public abstract class ItemContainer : NetworkBehaviour
 		}
 
 		// we can't add an item with a stack size of 0.. a 0 stack size means the item doesn't exist!
-		if (item == null ||
-			item.stackSize < 1) return false;
+		if (item == null) return false;
 
-		uint amountRemaining = item.stackSize;
+		uint amountRemaining = item.IsStackable ? item.stackable.amount : 1;
 		for (int i = 0; i < items.Count; ++i)
 		{
 			// if we find an empty slot we return instantly
@@ -106,9 +103,11 @@ public abstract class ItemContainer : NetworkBehaviour
 			}
 
 			// if we find another item of the same type and it's stack is not full
-			if (!items[i].IsStackFull && items[i].templateID == item.templateID && items[i].seed == item.seed)
+			if (items[i].IsStackable &&
+				!items[i].stackable.IsStackFull &&
+				items[i].IsMatch(item))
 			{
-				uint remainingCapacity = items[i].Template.MaxStackSize - items[i].stackSize;
+				uint remainingCapacity = items[i].Template.MaxStackSize - items[i].stackable.amount;
 
 				amountRemaining = remainingCapacity.AbsoluteSubtract(amountRemaining);
 			}
@@ -132,14 +131,16 @@ public abstract class ItemContainer : NetworkBehaviour
 			return false;
 		}
 
-		uint amount = item.stackSize;
+		uint amount = item.IsStackable ? item.stackable.amount : 1;
 		for (int i = 0; i < items.Count; ++i)
 		{
 			// add the item to the current slot
-			if (items[i] != null && items[i].AddItem(item))
+			if (items[i] != null &&
+				items[i].IsStackable &&
+				items[i].stackable.AddToStack(item))
 			{
 				// set the remaining amount to the items stack size
-				amount = item.stackSize;
+				amount = item.stackable.amount;
 
 				// add the modified items to the list
 				modifiedItems.Add(items[i]);
@@ -184,10 +185,6 @@ public abstract class ItemContainer : NetworkBehaviour
 		}
 
 		items[slot] = item;
-		if (item != null)
-		{
-			item.slot = slot; // we store the item slot on the item. it's easier.
-		}
 		OnSlotUpdated?.Invoke(this, item, slot);
 		return true;
 	}

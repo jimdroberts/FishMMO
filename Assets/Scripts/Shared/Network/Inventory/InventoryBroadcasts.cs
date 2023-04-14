@@ -8,7 +8,6 @@ public struct InventorySetItemBroadcast : IBroadcast
 	public int seed;
 	public int slot;
 	public uint stackSize;
-	public bool generateAttributes;
 }
 
 public struct InventorySetMultipleItemsBroadcast : IBroadcast
