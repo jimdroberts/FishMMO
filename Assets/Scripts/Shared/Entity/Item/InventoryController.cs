@@ -5,11 +5,14 @@ public class InventoryController : ItemContainer
 {
 	public Character character;
 
+	private void Awake()
+	{
+		AddSlots(null, 32);
+	}
+
 	public override void OnStartClient()
 	{
 		base.OnStartClient();
-
-		AddSlots(null, 32);
 
 		if (character == null || !base.IsOwner)
 		{

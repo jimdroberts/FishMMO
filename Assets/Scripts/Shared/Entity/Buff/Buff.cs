@@ -3,7 +3,6 @@
 public class Buff
 {
 	public int templateID;
-	public Character buffer;
 	public float tickTime;
 	public float remainingTime;
 	private List<BuffAttribute> attributeBonuses = new List<BuffAttribute>();
@@ -13,10 +12,9 @@ public class Buff
 	public List<BuffAttribute> AttributeBonuses { get { return attributeBonuses; } }
 	public List<Buff> Stacks { get { return stacks; } }
 
-	public Buff(int templateID, Character buffer)
+	public Buff(int templateID)
 	{
 		this.templateID = templateID;
-		this.buffer = buffer;
 		tickTime = Template.TickRate;
 		remainingTime = Template.Duration;
 	}
@@ -62,7 +60,6 @@ public class Buff
 
 	private void Reset()
 	{
-		buffer = null;
 		attributeBonuses.Clear();
 	}
 

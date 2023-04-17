@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
-using UnityEngine;
+using FishNet.Object;
 
-public class CharacterAttributeController : MonoBehaviour
+public class CharacterAttributeController : NetworkBehaviour
 {
 	public CharacterAttributeTemplateDatabase CharacterAttributeDatabase;
 
@@ -25,6 +25,31 @@ public class CharacterAttributeController : MonoBehaviour
 					AddAttribute(new CharacterAttribute(attribute.ID, attribute.InitialValue, 0));
 				}
 			}
+		}
+	}
+
+	public override void OnStartClient()
+	{
+		base.OnStartClient();
+
+		if (!base.IsOwner)
+		{
+			enabled = false;
+			return;
+		}
+
+		ClientManager.RegisterBroadcast<CharacterAttributeUpdateBroadcast>(OnClientCharacterAttributeUpdateBroadcastReceived);
+		ClientManager.RegisterBroadcast<CharacterAttributeUpdateMultipleBroadcast>(OnClientCharacterAttributeUpdateMultipleBroadcastReceived);
+	}
+
+	public override void OnStopClient()
+	{
+		base.OnStopClient();
+
+		if (base.IsOwner)
+		{
+			ClientManager.UnregisterBroadcast<CharacterAttributeUpdateBroadcast>(OnClientCharacterAttributeUpdateBroadcastReceived);
+			ClientManager.UnregisterBroadcast<CharacterAttributeUpdateMultipleBroadcast>(OnClientCharacterAttributeUpdateMultipleBroadcastReceived);
 		}
 	}
 
@@ -79,6 +104,35 @@ public class CharacterAttributeController : MonoBehaviour
 				{
 					instance.AddDependant(dependantInstance);
 				}
+			}
+		}
+	}
+
+	/// <summary>
+	/// Server sent an attribute update broadcast.
+	/// </summary>
+	private void OnClientCharacterAttributeUpdateBroadcastReceived(CharacterAttributeUpdateBroadcast msg)
+	{
+		if (CharacterAttributeTemplate.Cache.TryGetValue(msg.templateID, out CharacterAttributeTemplate template) &&
+			attributes.TryGetValue(template.Name, out CharacterAttribute attribute))
+		{
+			attribute.SetModifier(msg.modifier);
+			attribute.SetValue(msg.baseValue);
+		}
+	}
+
+	/// <summary>
+	/// Server sent a multiple attribute update broadcasts.
+	/// </summary>
+	private void OnClientCharacterAttributeUpdateMultipleBroadcastReceived(CharacterAttributeUpdateMultipleBroadcast msg)
+	{
+		foreach (CharacterAttributeUpdateBroadcast subMsg in msg.attributes)
+		{
+			if (CharacterAttributeTemplate.Cache.TryGetValue(subMsg.templateID, out CharacterAttributeTemplate template) &&
+				attributes.TryGetValue(template.Name, out CharacterAttribute attribute))
+			{
+				attribute.SetModifier(subMsg.modifier);
+				attribute.SetValue(subMsg.baseValue);
 			}
 		}
 	}

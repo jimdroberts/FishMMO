@@ -22,6 +22,25 @@ public class CharacterAttribute
 	}
 
 	public int BaseValue { get { return baseValue; } }
+	public void SetValue(int newValue)
+	{
+		SetValue(newValue, false);
+	}
+	public void SetValue(int newValue, bool skipUpdate)
+	{
+		if (baseValue != newValue)
+		{
+			baseValue = newValue;
+			if (!skipUpdate)
+			{
+				UpdateValues(true);
+			}
+		}
+	}
+	/// <summary>
+	/// Used to add or subtract an amount from the base value of the attribute. Addition: AddValue(123) | Subtraction: AddValue(-123)
+	/// </summary>
+	/// <param name="amount"></param>
 	public void AddValue(int amount)
 	{
 		AddValue(amount, false);
@@ -38,38 +57,24 @@ public class CharacterAttribute
 			}
 		}
 	}
+	public void SetModifier(int newValue)
+	{
+		if (modifier != newValue)
+		{
+			modifier = newValue;
+			finalValue = CalculateFinalValue();
+		}
+	}
 	public void AddModifier(int amount)
 	{
 		int tmp = modifier + amount;
 		if (modifier != tmp)
 		{
 			modifier = tmp;
-			if (Template.ClampFinalValue)
-			{
-				finalValue = (baseValue + modifier).Clamp(Template.MinValue, Template.MaxValue);
-			}
-			else
-			{
-				finalValue = baseValue + modifier;
-			}
+			finalValue = CalculateFinalValue();
 		}
 	}
-	public void RemoveValue(int amount)
-	{
-		RemoveValue(amount, false);
-	}
-	public void RemoveValue(int amount, bool skipUpdate)
-	{
-		int tmp = baseValue - amount;
-		if (baseValue != tmp)
-		{
-			baseValue = tmp;
-			if (!skipUpdate)
-			{
-				UpdateValues(true);
-			}
-		}
-	}
+
 	public int Modifier { get { return modifier; } }
 	public int FinalValue { get { return finalValue; } }
 	/// <summary>
@@ -95,14 +100,7 @@ public class CharacterAttribute
 		this.templateID = templateID;
 		baseValue = initialValue;
 		modifier = initialModifier;
-		if (Template.ClampFinalValue)
-		{
-			finalValue = (baseValue + modifier).Clamp(Template.MinValue, Template.MaxValue);
-		}
-		else
-		{
-			finalValue = baseValue + modifier;
-		}
+		finalValue = CalculateFinalValue();
 	}
 
 	public void AddParent(CharacterAttribute parent)
@@ -219,14 +217,16 @@ public class CharacterAttribute
 				}
 			}
 		}
+		finalValue = CalculateFinalValue();
+		OnAttributeUpdated?.Invoke(this);
+	}
+
+	private int CalculateFinalValue()
+	{
 		if (Template.ClampFinalValue)
 		{
-			finalValue = (baseValue + modifier).Clamp(Template.MinValue, Template.MaxValue);
+			return (baseValue + modifier).Clamp(Template.MinValue, Template.MaxValue);
 		}
-		else
-		{
-			finalValue = baseValue + modifier;
-		}
-		OnAttributeUpdated?.Invoke(this);
+		return baseValue + modifier;
 	}
 }

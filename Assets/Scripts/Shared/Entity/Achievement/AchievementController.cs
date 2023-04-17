@@ -7,6 +7,17 @@ public class AchievementController : NetworkBehaviour
 
 	private Dictionary<string, Achievement> achievements = new Dictionary<string, Achievement>();
 
+	private void Awake()
+	{
+		if (AchievementDatabase != null)
+		{
+			foreach (AchievementTemplate achievement in AchievementDatabase.Achievements.Values)
+			{
+				AddAchievement(new Achievement(achievement.ID, achievement.InitialValue));
+			}
+		}
+	}
+
 	public override void OnStartClient()
 	{
 		base.OnStartClient();
@@ -17,12 +28,18 @@ public class AchievementController : NetworkBehaviour
 			return;
 		}
 
-		if (AchievementDatabase != null)
+		ClientManager.RegisterBroadcast<AchievementUpdateBroadcast>(OnClientAchievementUpdateBroadcastReceived);
+		ClientManager.RegisterBroadcast<AchievementUpdateMultipleBroadcast>(OnClientAchievementUpdateMultipleBroadcastReceived);
+	}
+
+	public override void OnStopClient()
+	{
+		base.OnStopClient();
+
+		if (base.IsOwner)
 		{
-			foreach (AchievementTemplate achievement in AchievementDatabase.Achievements.Values)
-			{
-				AddAchievement(new Achievement(achievement.ID, achievement.InitialValue));
-			}
+			ClientManager.UnregisterBroadcast<AchievementUpdateBroadcast>(OnClientAchievementUpdateBroadcastReceived);
+			ClientManager.UnregisterBroadcast<AchievementUpdateMultipleBroadcast>(OnClientAchievementUpdateMultipleBroadcastReceived);
 		}
 	}
 
@@ -41,6 +58,33 @@ public class AchievementController : NetworkBehaviour
 		if (!achievements.ContainsKey(instance.Template.Name))
 		{
 			achievements.Add(instance.Template.Name, instance);
+		}
+	}
+
+	/// <summary>
+	/// Server sent an achievement update broadcast.
+	/// </summary>
+	private void OnClientAchievementUpdateBroadcastReceived(AchievementUpdateBroadcast msg)
+	{
+		if (AchievementTemplate.Cache.TryGetValue(msg.templateID, out AchievementTemplate template) &&
+			achievements.TryGetValue(template.Name, out Achievement achievement))
+		{
+			achievement.currentValue = msg.newValue;
+		}
+	}
+
+	/// <summary>
+	/// Server sent a multiple achievement update broadcasts.
+	/// </summary>
+	private void OnClientAchievementUpdateMultipleBroadcastReceived(AchievementUpdateMultipleBroadcast msg)
+	{
+		foreach (AchievementUpdateBroadcast subMsg in msg.achievements)
+		{
+			if (AchievementTemplate.Cache.TryGetValue(subMsg.templateID, out AchievementTemplate template) &&
+				achievements.TryGetValue(template.Name, out Achievement achievement))
+			{
+				achievement.currentValue = subMsg.newValue;
+			}
 		}
 	}
 }

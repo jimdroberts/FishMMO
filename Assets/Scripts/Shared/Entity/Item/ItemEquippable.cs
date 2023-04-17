@@ -53,7 +53,7 @@ public class ItemEquippable : IEquippable<Character>
 			if (owner.AttributeController != null &&
 				owner.AttributeController.TryGetAttribute(attribute.Template.CharacterAttribute.Name, out CharacterAttribute characterAttribute))
 			{
-				characterAttribute.RemoveValue(oldValue);
+				characterAttribute.AddValue(-oldValue);
 				characterAttribute.AddValue(newValue);
 			}
 		}

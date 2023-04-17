@@ -16,7 +16,7 @@ namespace Server.EntityConfigurations
             
             builder.HasIndex(e => e.NameLowercase)
                 .IsUnique()
-                .HasName("IX_CharacterEntity_NameLowercase");
+                .HasDatabaseName("IX_CharacterEntity_NameLowercase");
 
             /*builder.HasIndex($"LOWER(\"{nameof(CharacterEntity.name)}\")")
                 .IsUnique()

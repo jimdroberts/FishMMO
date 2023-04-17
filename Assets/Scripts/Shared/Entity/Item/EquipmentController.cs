@@ -6,11 +6,14 @@ public class EquipmentController : ItemContainer
 {
 	public Character character;
 
+	private void Awake()
+	{
+		AddSlots(null, System.Enum.GetNames(typeof(ItemSlot)).Length); // equipment size = itemslot size
+	}
+
 	public override void OnStartClient()
 	{
 		base.OnStartClient();
-
-		AddSlots(null, System.Enum.GetNames(typeof(ItemSlot)).Length); // equipment size = itemslot size
 
 		if (character == null || !base.IsOwner)
 		{

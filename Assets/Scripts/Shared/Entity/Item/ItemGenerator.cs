@@ -136,7 +136,7 @@ public class ItemGenerator : BaseRNGenerator
 		{
 			if (character.AttributeController.TryGetAttribute(pair.Value.Template.CharacterAttribute.Name, out CharacterAttribute characterAttribute))
 			{
-				characterAttribute.RemoveValue(pair.Value.value);
+				characterAttribute.AddValue(-pair.Value.value);
 			}
 		}
 	}
