@@ -12,7 +12,7 @@ namespace Server.EntityConfigurations
                 .IsRequired();
             
             builder.Property(e => e.NameLowercase)
-                .HasComputedColumnSql("LOWER(\"Name\")", stored: true);
+                .HasComputedColumnSql("LOWER(\"name\")", stored: true);
             
             builder.HasIndex(e => e.NameLowercase)
                 .IsUnique()
