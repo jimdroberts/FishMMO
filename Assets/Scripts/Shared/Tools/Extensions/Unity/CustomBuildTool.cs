@@ -3,6 +3,7 @@ using UnityEditor;
 using UnityEngine;
 using System.IO;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using System;
 using UnityEditor.Build.Reporting;
 using Debug = UnityEngine.Debug;
@@ -218,11 +219,22 @@ public class CustomBuildTool
 			configuration.TryGetString("DbAddress", out string dbAddress) &&
 			configuration.TryGetString("DbPort", out string dbPort))
 		{
+			Debug.Log("Creating Docker container with postgresql 14");
 			await Docker.RunAsync("run --name " + dbName +
 								  " -e POSTGRES_USER=" + dbUsername +
 								  " -e POSTGRES_PASSWORD=" + dbPassword +
 								  " -p " + dbAddress + ":" + dbPort + ":" + dbPort +
 								  " -d postgres:14");
+
+			Debug.Log("Ensuring container exists... Please wait...");
+			await Task.Delay(5000);
+
+			Debug.Log("Creating base database.");
+			await Docker.RunAsync("exec " + dbName +
+								  " createdb " + dbName +
+								  " -U " + dbUsername);
+
+			Debug.Log("Database created successfully.");
 		}
 	}
 }

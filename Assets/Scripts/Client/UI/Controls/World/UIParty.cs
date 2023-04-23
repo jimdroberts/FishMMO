@@ -65,25 +65,21 @@ namespace Client
 			members.Clear();
 		}
 
-		public void OnPartyAddMember(int partyMemberId, PartyRank rank)
+		public void OnPartyAddMember(string partyMemberName, PartyRank rank)
 		{
 			if (partyMemberPrefab != null)
 			{
-				if (networkManager.ClientManager.Clients.TryGetValue(partyMemberId, out NetworkConnection conn) && conn.FirstObject != null)
-				{
-					TMP_Text partyMember = Instantiate(partyMemberPrefab, partyMemberParent);
-					partyMember.text = conn.FirstObject.name;
-					members.Add(partyMember);
-				}
+				TMP_Text partyMember = Instantiate(partyMemberPrefab, partyMemberParent);
+				partyMember.text = partyMemberName;
+				members.Add(partyMember);
 			}
 		}
 
-		public void OnPartyRemoveMember(int partyMemberId, PartyRank rank)
+		public void OnPartyRemoveMember(string partyMemberName, PartyRank rank)
 		{
 			foreach (TMP_Text member in members)
 			{
-				if (networkManager.ClientManager.Clients.TryGetValue(partyMemberId, out NetworkConnection conn) && conn.FirstObject != null &&
-					conn.FirstObject.name == member.text)
+				if (partyMemberName.Equals(member.name))
 				{
 					members.Remove(member);
 					return;
@@ -119,7 +115,10 @@ namespace Client
 					Character targetCharacter = character.TargetController.current.target.GetComponent<Character>();
 					if (targetCharacter != null)
 					{
-						networkManager.ClientManager.Broadcast(new PartyInviteBroadcast() { targetClientId = targetCharacter.OwnerId });
+						networkManager.ClientManager.Broadcast(new PartyInviteBroadcast()
+						{
+							targetCharacterId = targetCharacter.id
+						});
 					}
 				}
 			}

@@ -60,9 +60,7 @@ namespace Server
 
 #if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
 			SetConsoleTitle(title);
-#elif UNITY_STANDALONE_OSX || UNITY_EDITOR_OSX
-			SetWindowTitle(title);
-#elif UNITY_STANDALONE_LINUX || UNITY_EDITOR_LINUX
+#elif UNITY_STANDALONE_LINUX || UNITY_EDITOR_LINUX || UNITY_STANDALONE_OSX || UNITY_EDITOR_OSX
 			SetProcTitleLinux(title);
 #endif
 		}

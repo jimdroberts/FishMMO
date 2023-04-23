@@ -8,7 +8,7 @@ public struct PartyCreateBroadcast : IBroadcast
 
 public struct PartyInviteBroadcast : IBroadcast
 {
-	public int targetClientId;
+	public long targetCharacterId;
 }
 
 public struct PartyAcceptInviteBroadcast : IBroadcast
@@ -20,12 +20,12 @@ public struct PartyDeclineInviteBroadcast : IBroadcast
 
 public struct PartyJoinedBroadcast : IBroadcast
 {
-	public List<int> members;
+	public List<long> members;
 }
 
 public struct PartyNewMemberBroadcast : IBroadcast
 {
-	public int newMemberClientId;
+	public string newMemberName;
 	public PartyRank rank;
 }
 
@@ -35,5 +35,5 @@ public struct PartyLeaveBroadcast : IBroadcast
 
 public struct PartyRemoveBroadcast : IBroadcast
 {
-	public int memberId;
+	public string memberName;
 }

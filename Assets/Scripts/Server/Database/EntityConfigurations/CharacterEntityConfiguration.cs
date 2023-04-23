@@ -8,7 +8,7 @@ namespace Server.EntityConfigurations
     {
         public void Configure(EntityTypeBuilder<CharacterEntity> builder)
         {
-            builder.Property(e => e.Name)
+			builder.Property(e => e.Name)
                 .IsRequired();
             
             builder.Property(e => e.NameLowercase)

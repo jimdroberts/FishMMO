@@ -23,7 +23,8 @@ namespace Server
 
 		public WorldSceneDetailsCache worldSceneDetailsCache;
 
-		public Dictionary<string, Character> characters = new Dictionary<string, Character>();
+		public Dictionary<long, Character> charactersById = new Dictionary<long, Character>();
+		public Dictionary<string, Character> charactersByName = new Dictionary<string, Character>();
 		public Dictionary<NetworkConnection, Character> connectionCharacters = new Dictionary<NetworkConnection, Character>();
 
 
@@ -65,7 +66,7 @@ namespace Server
 
 					// all characters are periodically saved
 					using var dbContext = Server.DbContextFactory.CreateDbContext();
-					CharacterService.SaveCharacters(dbContext, new List<Character>(characters.Values));
+					CharacterService.SaveCharacters(dbContext, new List<Character>(charactersById.Values));
 					dbContext.SaveChanges();
 				}
 			}
@@ -76,7 +77,7 @@ namespace Server
 			Debug.Log("Disconnecting...");
 			// save all the characters before we quit
 			using var dbContext = Server.DbContextFactory.CreateDbContext();
-			CharacterService.SaveCharacters(dbContext, new List<Character>(characters.Values), false);
+			CharacterService.SaveCharacters(dbContext, new List<Character>(charactersById.Values), false);
 			dbContext.SaveChanges();
 		}
 
@@ -149,12 +150,14 @@ namespace Server
 					{
 						ClientManager.Broadcast(new SceneCharacterDisconnectedBroadcast()
 						{
-							characterName = character.characterName,
+							characterId = character.id,
 						});
 					}
 
+					// remove the characterId->character entry
+					charactersById.Remove(character.id);
 					// remove the characterName->character entry
-					characters.Remove(character.characterName);
+					charactersByName.Remove(character.characterName);
 					// remove the connection->character entry
 					connectionCharacters.Remove(conn);
 
@@ -190,19 +193,19 @@ namespace Server
 			// create the db context
 			using var dbContext = Server.DbContextFactory.CreateDbContext();
 
-			if (CharacterService.TryGetSelectedCharacterDetails(dbContext, accountName, out string selectedCharacterName))
+			if (CharacterService.TryGetSelectedCharacterDetails(dbContext, accountName, out long selectedCharacterId))
 			{
-				if (characters.ContainsKey(selectedCharacterName) ||
+				if (charactersById.ContainsKey(selectedCharacterId) ||
 					waitingSceneLoadCharacters.ContainsKey(conn))
 				{
-					Debug.Log("[" + DateTime.UtcNow + "] " + selectedCharacterName + " is already loaded or loading. FIXME");
+					Debug.Log("[" + DateTime.UtcNow + "] " + selectedCharacterId + " is already loaded or loading. FIXME");
 
 					// character load already started or complete
 					conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
 					return;
 				}
 
-				if (CharacterService.TryLoadCharacter(dbContext, selectedCharacterName, Server.NetworkManager, out Character character))
+				if (CharacterService.TryLoadCharacter(dbContext, selectedCharacterId, Server.NetworkManager, out Character character))
 				{
 					waitingSceneLoadCharacters.Add(conn, character);
 
@@ -314,13 +317,15 @@ namespace Server
 				}
 
 				// add a characterName->character map for ease of use
-				if (characters.ContainsKey(character.characterName))
+				if (charactersById.ContainsKey(character.id))
 				{
-					characters[character.characterName] = character;
+					charactersById[character.id] = character;
+					charactersByName[character.characterName] = character;
 				}
 				else
 				{
-					characters.Add(character.characterName, character);
+					charactersById.Add(character.id, character);
+					charactersByName.Add(character.characterName, character);
 				}
 
 				// set the character status to online
@@ -337,7 +342,7 @@ namespace Server
 				{
 					ClientManager.Broadcast(new SceneCharacterConnectedBroadcast()
 					{
-						characterName = character.characterName,
+						characterId = character.id,
 						sceneName = character.sceneName,
 					});
 				}
@@ -407,7 +412,22 @@ namespace Server
 		/// </summary>
 		public bool SendBroadcastToCharacter<T>(string characterName, T msg) where T : struct, IBroadcast
 		{
-			if (characters.TryGetValue(characterName, out Character character))
+			if (charactersByName.TryGetValue(characterName, out Character character))
+			{
+				character.Owner.Broadcast(msg);
+				return true;
+			}
+			return false;
+		}
+
+		/// <summary>
+		/// Allows sending a broadcast to a specific character by their character id.
+		/// Returns true if the broadcast was sent successfully.
+		/// False if the character could not by found.
+		/// </summary>
+		public bool SendBroadcastToCharacter<T>(long characterId, T msg) where T : struct, IBroadcast
+		{
+			if (charactersById.TryGetValue(characterId, out Character character))
 			{
 				character.Owner.Broadcast(msg);
 				return true;

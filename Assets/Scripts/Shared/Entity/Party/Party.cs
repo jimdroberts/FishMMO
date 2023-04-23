@@ -15,11 +15,24 @@ public class Party
 		members.Add(leader);
 	}
 
-	public PartyController RemoveMember(int memberId)
+	public PartyController RemoveMember(long memberId)
 	{
 		foreach (PartyController member in members)
 		{
-			if (member.character.OwnerId == memberId)
+			if (member.character.id == memberId)
+			{
+				members.Remove(member);
+				return member;
+			}
+		}
+		return null;
+	}
+
+	public PartyController RemoveMember(string memberName)
+	{
+		foreach (PartyController member in members)
+		{
+			if (member.character.characterName.Equals(memberName))
 			{
 				members.Remove(member);
 				return member;

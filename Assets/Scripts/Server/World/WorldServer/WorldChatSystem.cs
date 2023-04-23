@@ -56,7 +56,7 @@ namespace Server
 		{
 			if (WorldSceneSystem != null)
 			{
-				WorldSceneSystem.BroadcastToCharacter(msg.targetName, msg);
+				WorldSceneSystem.BroadcastToCharacter(msg.targetId, msg);
 			}
 		}
 	}

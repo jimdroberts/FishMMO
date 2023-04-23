@@ -35,13 +35,13 @@ namespace Server
 
 	public struct SceneCharacterConnectedBroadcast : IBroadcast
 	{
-		public string characterName;
+		public long characterId;
 		public string sceneName;
 	}
 
 	public struct SceneCharacterDisconnectedBroadcast : IBroadcast
 	{
-		public string characterName;
+		public long characterId;
 	}
 
 	public struct SceneWorldReconnectBroadcast : IBroadcast
@@ -57,7 +57,7 @@ namespace Server
 
 	public struct WorldChatTellBroadcast : IBroadcast
 	{
-		public string targetName;
+		public long targetId;
 		public ChatBroadcast chatMsg;
 	}
 }

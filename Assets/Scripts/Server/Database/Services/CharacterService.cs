@@ -17,8 +17,8 @@ namespace Server.Services
             if (character == null) throw new Exception($"Couldn't find character with id {id}");
             return character;
         }
-        
-        public static CharacterEntity GetCharacterByName(ServerDbContext dbContext, string name)
+
+		public static CharacterEntity GetCharacterByName(ServerDbContext dbContext, string name)
         {
             var character = dbContext.Characters
                 .FirstOrDefault(c => c.NameLowercase == name.ToLower());
@@ -148,17 +148,16 @@ namespace Server.Services
         /// <summary>
         /// Returns true if we successfully get our selected character for the connections account, otherwise returns false.
         /// </summary>
-        public static bool TryGetSelectedCharacterDetails(ServerDbContext dbContext, string account, 
-            out string characterName)
+        public static bool TryGetSelectedCharacterDetails(ServerDbContext dbContext, string account, out long characterId)
         {
             var character = dbContext.Characters
                 .FirstOrDefault((c) => c.Account == account && c.Selected && !c.Deleted);
             if (character != null)
             {
-                characterName = character.Name;
+				characterId = character.Id;
                 return true;
             }
-            characterName = "";
+			characterId = 0;
             return false;
         }
         
@@ -204,10 +203,10 @@ namespace Server.Services
         /// <summary>
         /// Attempts to load a character from the database. The character is loaded to the last known position/rotation and set inactive.
         /// </summary>
-        public static bool TryLoadCharacter(ServerDbContext dbContext, string characterName, NetworkManager networkManager, out Character character)
+        public static bool TryLoadCharacter(ServerDbContext dbContext, long characterId, NetworkManager networkManager, out Character character)
         {
 			var dbCharacter =
-                dbContext.Characters.FirstOrDefault((c) => c.NameLowercase == characterName.ToLower() && !c.Deleted);
+                dbContext.Characters.FirstOrDefault((c) => c.Id == characterId && !c.Deleted);
             if (dbCharacter != null)
             {
 				// find prefab
@@ -239,7 +238,7 @@ namespace Server.Services
 					character = nob.GetComponent<Character>();
 					if (character != null)
 					{
-						Debug.Log("[" + DateTime.UtcNow + "] test4");
+                        character.id = dbCharacter.Id;
 						character.characterName = dbCharacter.Name;
 						character.account = dbCharacter.Account;
 						character.isGameMaster = dbCharacter.IsGameMaster;

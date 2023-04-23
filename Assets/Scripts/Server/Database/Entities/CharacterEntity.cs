@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using Microsoft.EntityFrameworkCore;
 
@@ -34,6 +33,7 @@ namespace Server.Entities
         // just 'online', or 'online && (DateTime.UtcNow - lastsaved) <= 1min)
         // which is robust to server crashes too.
         public bool Online { get; set; }
+        public DateTime TimeCreated { get; set; }
         public DateTime LastSaved { get; set; }
         public DateTime TimeDeleted { get; set; }
         public bool Deleted { get; set; }

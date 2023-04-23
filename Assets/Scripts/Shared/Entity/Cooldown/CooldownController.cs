@@ -16,6 +16,20 @@ public class CooldownController : NetworkBehaviour
 			enabled = false;
 			return;
 		}
+
+		ClientManager.RegisterBroadcast<CooldownAddBroadcast>(OnClientCooldownAddBroadcastReceived);
+		ClientManager.RegisterBroadcast<CooldownRemoveBroadcast>(OnClientCooldownRemoveBroadcastReceived);
+	}
+
+	public override void OnStopClient()
+	{
+		base.OnStopClient();
+
+		if (base.IsOwner)
+		{
+			ClientManager.UnregisterBroadcast<CooldownAddBroadcast>(OnClientCooldownAddBroadcastReceived);
+			ClientManager.UnregisterBroadcast<CooldownRemoveBroadcast>(OnClientCooldownRemoveBroadcastReceived);
+		}
 	}
 
 	void Update()
@@ -46,5 +60,21 @@ public class CooldownController : NetworkBehaviour
 	public void RemoveCooldown(string name)
 	{
 		cooldowns.Remove(name);
+	}
+
+	/// <summary>
+	/// Server sent a cooldown add broadcast.
+	/// </summary>
+	private void OnClientCooldownAddBroadcastReceived(CooldownAddBroadcast broadcast)
+	{
+		AddCooldown(broadcast.name, new CooldownInstance(broadcast.value));
+	}
+
+	/// <summary>
+	/// Server sent a cooldown remove broadcast.
+	/// </summary>
+	private void OnClientCooldownRemoveBroadcastReceived(CooldownRemoveBroadcast broadcast)
+	{
+		RemoveCooldown(broadcast.name);
 	}
 }

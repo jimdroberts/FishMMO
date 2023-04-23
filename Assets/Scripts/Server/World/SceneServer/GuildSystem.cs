@@ -9,11 +9,13 @@ namespace Server
 	/// </summary>
 	public class GuildSystem : ServerBehaviour
 	{
+		public CharacterSystem CharacterSystem;
+
 		public ulong nextGuildId = 0;
 		public Dictionary<ulong, Guild> guilds = new Dictionary<ulong, Guild>();
 
 		// clientId / guildId
-		public readonly Dictionary<int, ulong> pendingInvitations = new Dictionary<int, ulong>();
+		public readonly Dictionary<long, ulong> pendingInvitations = new Dictionary<long, ulong>();
 
 		public override void InitializeOnce()
 		{
@@ -95,14 +97,10 @@ namespace Server
 				return;
 			}
 
-			if (!pendingInvitations.ContainsKey(msg.targetClientId) &&
-				ServerManager.Clients.TryGetValue(msg.targetClientId, out NetworkConnection targetConn))
+			if (!pendingInvitations.ContainsKey(msg.targetCharacterId) &&
+				CharacterSystem.charactersById.TryGetValue(msg.targetCharacterId, out Character targetCharacter))
 			{
-				if (targetConn.FirstObject == null)
-				{
-					return;
-				}
-				GuildController targetGuildController = targetConn.FirstObject.GetComponent<GuildController>();
+				GuildController targetGuildController = targetCharacter.GetComponent<GuildController>();
 
 				// validate target
 				if (targetGuildController == null || targetGuildController.current != null)
@@ -112,8 +110,8 @@ namespace Server
 				}
 
 				// add to our list of pending invitations... used for validation when accepting/declining a guild invite
-				pendingInvitations.Add(targetConn.ClientId, leaderGuildController.current.id);
-				targetConn.Broadcast(new GuildInviteBroadcast() { targetClientId = targetConn.ClientId });
+				pendingInvitations.Add(targetCharacter.id, leaderGuildController.current.id);
+				targetCharacter.Owner.Broadcast(new GuildInviteBroadcast() { targetCharacterId = targetCharacter.id });
 			}
 		}
 
@@ -132,17 +130,17 @@ namespace Server
 			}
 
 			// validate guild invite
-			if (pendingInvitations.TryGetValue(conn.ClientId, out ulong pendingGuildId))
+			if (pendingInvitations.TryGetValue(guildController.character.id, out ulong pendingGuildId))
 			{
-				pendingInvitations.Remove(conn.ClientId);
+				pendingInvitations.Remove(guildController.character.id);
 
 				if (guilds.TryGetValue(pendingGuildId, out Guild guild) && !guild.IsFull)
 				{
-					List<int> currentMembers = new List<int>();
+					List<long> currentMembers = new List<long>();
 
 					GuildNewMemberBroadcast newMember = new GuildNewMemberBroadcast()
 					{
-						newMemberClientId = conn.ClientId,
+						newMemberCharacterId = guildController.character.id,
 						rank = GuildRank.Member,
 					};
 
@@ -150,7 +148,7 @@ namespace Server
 					{
 						// tell our guild members we joined the guild
 						guild.members[i].Owner.Broadcast(newMember);
-						currentMembers.Add(guild.members[i].OwnerId);
+						currentMembers.Add(guild.members[i].character.id);
 					}
 
 					guildController.rank = GuildRank.Member;
@@ -226,7 +224,7 @@ namespace Server
 
 				GuildRemoveBroadcast removeCharacterBroadcast = new GuildRemoveBroadcast()
 				{
-					memberId = conn.ClientId,
+					memberId = guildController.character.id,
 				};
 
 				// tell the remaining guild members we left the guild
@@ -249,7 +247,7 @@ namespace Server
 			if (guildController == null ||
 				guildController.current == null ||
 				guildController.rank != GuildRank.Leader ||
-				conn.ClientId == msg.memberId) // we can't kick ourself
+				guildController.character.id == msg.memberId) // we can't kick ourself
 			{
 				return;
 			}

@@ -19,7 +19,7 @@ namespace Server
 
 			// make sure we have selected a character
 			if (result == ClientAuthenticationResult.LoginSuccess &&
-				CharacterService.TryGetSelectedCharacterDetails(dbContext, username, out string characterName))
+				CharacterService.TryGetSelectedCharacterDetails(dbContext, username, out long characterId))
 			{
 				result = ClientAuthenticationResult.WorldLoginSuccess;
 			}

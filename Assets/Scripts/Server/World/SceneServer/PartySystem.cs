@@ -9,11 +9,13 @@ namespace Server
 	/// </summary>
 	public class PartySystem : ServerBehaviour
 	{
+		public CharacterSystem CharacterSystem;
+
 		public ulong nextPartyId = 0;
 		public Dictionary<ulong, Party> parties = new Dictionary<ulong, Party>();
 
 		// clientId / partyId
-		public readonly Dictionary<int, ulong> pendingInvitations = new Dictionary<int, ulong>();
+		public readonly Dictionary<long, ulong> pendingInvitations = new Dictionary<long, ulong>();
 
 		public override void InitializeOnce()
 		{
@@ -95,14 +97,10 @@ namespace Server
 				return;
 			}
 
-			if (!pendingInvitations.ContainsKey(msg.targetClientId) &&
-				ServerManager.Clients.TryGetValue(msg.targetClientId, out NetworkConnection targetConn))
+			if (!pendingInvitations.ContainsKey(msg.targetCharacterId) &&
+				CharacterSystem.charactersById.TryGetValue(msg.targetCharacterId, out Character targetCharacter))
 			{
-				if (targetConn.FirstObject == null)
-				{
-					return;
-				}
-				PartyController targetPartyController = targetConn.FirstObject.GetComponent<PartyController>();
+				PartyController targetPartyController = targetCharacter.GetComponent<PartyController>();
 
 				// validate target
 				if (targetPartyController == null || targetPartyController.current != null)
@@ -112,8 +110,8 @@ namespace Server
 				}
 
 				// add to our list of pending invitations... used for validation when accepting/declining a party invite
-				pendingInvitations.Add(targetConn.ClientId, leaderPartyController.current.id);
-				targetConn.Broadcast(new PartyInviteBroadcast() { targetClientId = targetConn.ClientId });
+				pendingInvitations.Add(msg.targetCharacterId, leaderPartyController.current.id);
+				targetCharacter.Owner.Broadcast(new PartyInviteBroadcast() { targetCharacterId = leaderPartyController.character.id });
 			}
 		}
 
@@ -132,17 +130,17 @@ namespace Server
 			}
 
 			// validate party invite
-			if (pendingInvitations.TryGetValue(conn.ClientId, out ulong pendingPartyId))
+			if (pendingInvitations.TryGetValue(partyController.character.id, out ulong pendingPartyId))
 			{
-				pendingInvitations.Remove(conn.ClientId);
+				pendingInvitations.Remove(partyController.character.id);
 
 				if (parties.TryGetValue(pendingPartyId, out Party party) && !party.IsFull)
 				{
-					List<int> currentMembers = new List<int>();
+					List<long> currentMembers = new List<long>();
 
 					PartyNewMemberBroadcast newMember = new PartyNewMemberBroadcast()
 					{
-						newMemberClientId = conn.ClientId,
+						newMemberName = partyController.character.name,
 						rank = PartyRank.Member,
 					};
 
@@ -150,7 +148,7 @@ namespace Server
 					{
 						// tell our party members we joined the party
 						party.members[i].Owner.Broadcast(newMember);
-						currentMembers.Add(party.members[i].OwnerId);
+						currentMembers.Add(party.members[i].character.id);
 					}
 
 					partyController.rank = PartyRank.Member;
@@ -226,7 +224,7 @@ namespace Server
 
 				PartyRemoveBroadcast removeCharacterBroadcast = new PartyRemoveBroadcast()
 				{
-					memberId = conn.ClientId,
+					memberName = partyController.character.characterName,
 				};
 
 				// tell the remaining party members we left the party
@@ -249,7 +247,7 @@ namespace Server
 			if (partyController == null ||
 				partyController.current == null ||
 				partyController.rank != PartyRank.Leader ||
-				conn.ClientId == msg.memberId) // we can't kick ourself
+				partyController.character.characterName.Equals(msg.memberName)) // we can't kick ourself
 			{
 				return;
 			}
@@ -257,7 +255,7 @@ namespace Server
 			// validate party
 			if (parties.TryGetValue(partyController.current.id, out Party party))
 			{
-				PartyController removedMember = partyController.current.RemoveMember(msg.memberId);
+				PartyController removedMember = partyController.current.RemoveMember(msg.memberName);
 				if (removedMember != null)
 				{
 					removedMember.rank = PartyRank.None;
@@ -265,7 +263,7 @@ namespace Server
 
 					PartyRemoveBroadcast removeCharacterBroadcast = new PartyRemoveBroadcast()
 					{
-						memberId = msg.memberId,
+						memberName = msg.memberName,
 					};
 
 					// tell the remaining party members someone was removed

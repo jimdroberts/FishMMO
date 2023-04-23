@@ -14,6 +14,7 @@ namespace Server
 		public const int MAX_LENGTH = 128;
 
 		public SceneManager SceneManager;
+		public CharacterSystem CharacterSystem;
 
 		public delegate void ChatCommand(NetworkConnection conn, Character character, ChatBroadcast msg);
 		public Dictionary<string, ChatCommand> commandEvents = new Dictionary<string, ChatCommand>();
@@ -118,7 +119,7 @@ namespace Server
 		/// </summary>
 		private void OnServerWorldChatTellBroadcastReceived(WorldChatTellBroadcast msg)
 		{
-			Server.CharacterSystem.SendBroadcastToCharacter(msg.targetName, msg);
+			Server.CharacterSystem.SendBroadcastToCharacter(msg.targetId, msg);
 		}
 
 		private bool ValidateMessage(ChatBroadcast msg)
@@ -273,6 +274,12 @@ namespace Server
 				return;
 			}
 
+			if (CharacterSystem == null ||
+				!CharacterSystem.charactersByName.TryGetValue(targetName, out Character targetCharacter))
+			{
+				return;
+			}
+
 			// cache the original message
 			string text = msg.text;
 
@@ -286,12 +293,12 @@ namespace Server
 			msg.text = "[From:" + sender.characterName + "]: " + text;
 
 			// attempt to broadcast the message to the target
-			if (!Server.CharacterSystem.SendBroadcastToCharacter(targetName, msg))
+			if (!Server.CharacterSystem.SendBroadcastToCharacter(targetCharacter.id, msg))
 			{
 				// attempt to find the target on the world server
 				ServerManager.Broadcast(new WorldChatTellBroadcast()
 				{
-					targetName = targetName,
+					targetId = targetCharacter.id,
 					chatMsg = msg,
 				});
 			}

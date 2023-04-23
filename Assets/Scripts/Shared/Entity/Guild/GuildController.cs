@@ -17,11 +17,11 @@ public class GuildController : NetworkBehaviour
 	public event GuildEvent OnGuildCreated;
 	public event GuildEvent OnLeaveGuild;
 
-	public delegate void GuildMemberEvent(int guildMemberId, GuildRank rank);
+	public delegate void GuildMemberEvent(long guildMemberId, GuildRank rank);
 	public event GuildMemberEvent OnAddMember;
 	public event GuildMemberEvent OnRemoveMember;
 
-	public delegate void GuildAcceptEvent(List<int> guildMemberIds);
+	public delegate void GuildAcceptEvent(List<long> guildMemberIds);
 	public event GuildAcceptEvent OnGuildInviteAccepted;
 
 	public override void OnStartClient()
@@ -96,7 +96,7 @@ public class GuildController : NetworkBehaviour
 	public void OnClientGuildNewMemberBroadcastReceived(GuildNewMemberBroadcast msg)
 	{
 		// update our Guild list with the new Guild member
-		OnAddMember?.Invoke(msg.newMemberClientId, msg.rank);
+		OnAddMember?.Invoke(msg.newMemberCharacterId, msg.rank);
 	}
 
 	/// <summary>

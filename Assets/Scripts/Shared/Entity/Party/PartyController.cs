@@ -17,11 +17,11 @@ public class PartyController : NetworkBehaviour
 	public event PartyEvent OnPartyCreated;
 	public event PartyEvent OnLeaveParty;
 
-	public delegate void PartyMemberEvent(int partyMemberId, PartyRank rank);
+	public delegate void PartyMemberEvent(string partyMemberName, PartyRank rank);
 	public event PartyMemberEvent OnAddMember;
 	public event PartyMemberEvent OnRemoveMember;
 
-	public delegate void PartyAcceptEvent(List<int> partyMemberIds);
+	public delegate void PartyAcceptEvent(List<long> partyMemberIds);
 	public event PartyAcceptEvent OnPartyInviteAccepted;
 
 	public override void OnStartClient()
@@ -75,6 +75,10 @@ public class PartyController : NetworkBehaviour
 	/// </summary>
 	public void OnClientPartyInviteBroadcastReceived(PartyInviteBroadcast msg)
 	{
+		if (character.id == msg.targetCharacterId)
+		{
+			return;
+		}
 		ClientManager.Broadcast(new PartyAcceptInviteBroadcast());// instant party accept, temp for testing
 		//ClientManager.Broadcast(new PartyDeclineInviteBroadcast());// instant decline invite, temp for testing
 
@@ -96,7 +100,7 @@ public class PartyController : NetworkBehaviour
 	public void OnClientPartyNewMemberBroadcastReceived(PartyNewMemberBroadcast msg)
 	{
 		// update our party list with the new party member
-		OnAddMember?.Invoke(msg.newMemberClientId, msg.rank);
+		OnAddMember?.Invoke(msg.newMemberName, msg.rank);
 	}
 
 	/// <summary>
@@ -117,8 +121,8 @@ public class PartyController : NetworkBehaviour
 	{
 		if (current != null)
 		{
-			PartyController removedMember = current.RemoveMember(msg.memberId);
-			OnRemoveMember?.Invoke(msg.memberId, PartyRank.None);
+			PartyController removedMember = current.RemoveMember(msg.memberName);
+			OnRemoveMember?.Invoke(msg.memberName, PartyRank.None);
 		}
 	}
 }

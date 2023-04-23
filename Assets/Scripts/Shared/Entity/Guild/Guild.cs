@@ -15,11 +15,11 @@ public class Guild
 		members.Add(leader);
 	}
 
-	public GuildController RemoveMember(int memberId)
+	public GuildController RemoveMember(long memberId)
 	{
 		foreach (GuildController member in members)
 		{
-			if (member.character.OwnerId == memberId)
+			if (member.character.id == memberId)
 			{
 				members.Remove(member);
 				return member;

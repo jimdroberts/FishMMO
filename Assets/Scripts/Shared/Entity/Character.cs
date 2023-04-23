@@ -83,6 +83,8 @@ public class Character : NetworkBehaviour
 	}
 
 	// accountName for reference
+	[SyncVar(Channel = Channel.Reliable)]
+	public long id;
 	public string account;
 	public bool isGameMaster;
 	public int raceID;
@@ -126,7 +128,6 @@ public class Character : NetworkBehaviour
 		{
 			localCharacter = this;
 			LocalInputController = gameObject.AddComponent<LocalInputController>();
-
 		}
 	}
 

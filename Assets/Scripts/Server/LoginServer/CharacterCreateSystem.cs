@@ -1,11 +1,10 @@
 ﻿using FishNet.Connection;
 using FishNet.Transporting;
+using System;
 using System.Text.RegularExpressions;
 using Server.Entities;
 using Server.Services;
-using FishNet.Managing;
 using FishNet.Object;
-using UnityEngine.TextCore.Text;
 
 namespace Server
 {
@@ -94,7 +93,7 @@ namespace Server
 				if (worldSceneDetailsCache.scenes.TryGetValue(msg.initialSpawnPosition.sceneName, out WorldSceneDetails details))
 				{
 					// validate spawner
-					if (details.initialSpawnPositions.ContainsKey(msg.initialSpawnPosition.spawnerName))
+					if (details.initialSpawnPositions.TryGetValue(msg.initialSpawnPosition.spawnerName, out CharacterInitialSpawnPosition initialSpawnPosition))
 					{
 						// invalid race name! default to first race for now....
 						// FIXME add race selection to UICharacterCreate.cs
@@ -118,14 +117,15 @@ namespace Server
 								Name = msg.characterName,
 								NameLowercase = msg.characterName?.ToLower(),
 								RaceID = raceID,
-								SceneName = msg.initialSpawnPosition.sceneName,
-								X = msg.initialSpawnPosition.position.x,
-								Y = msg.initialSpawnPosition.position.y,
-								Z = msg.initialSpawnPosition.position.z,
-								RotX = msg.initialSpawnPosition.rotation.x,
-								RotY = msg.initialSpawnPosition.rotation.y,
-								RotZ = msg.initialSpawnPosition.rotation.z,
-								RotW = msg.initialSpawnPosition.rotation.w,
+								SceneName = initialSpawnPosition.sceneName,
+								X = initialSpawnPosition.position.x,
+								Y = initialSpawnPosition.position.y,
+								Z = initialSpawnPosition.position.z,
+								RotX = initialSpawnPosition.rotation.x,
+								RotY = initialSpawnPosition.rotation.y,
+								RotZ = initialSpawnPosition.rotation.z,
+								RotW = initialSpawnPosition.rotation.w,
+								TimeCreated = DateTime.UtcNow,
 							};
 							dbContext.Characters.Add(newCharacter);
 							dbContext.SaveChanges();

@@ -20,7 +20,7 @@ namespace Server
 		public Dictionary<NetworkConnection, SceneServerDetails> sceneServers = new Dictionary<NetworkConnection, SceneServerDetails>();
 
 		// characterName, sceneConnection
-		public Dictionary<string, NetworkConnection> sceneCharacters = new Dictionary<string, NetworkConnection>();
+		public Dictionary<long, NetworkConnection> sceneCharacters = new Dictionary<long, NetworkConnection>();
 
 		public override void InitializeOnce()
 		{
@@ -278,13 +278,13 @@ namespace Server
 		/// </summary>
 		private void OnServerSceneCharacterConnectedBroadcastReceived(NetworkConnection conn, SceneCharacterConnectedBroadcast msg)
 		{
-			if (sceneCharacters.ContainsKey(msg.characterName))
+			if (sceneCharacters.ContainsKey(msg.characterId))
 			{
-				sceneCharacters[msg.characterName] = conn;
+				sceneCharacters[msg.characterId] = conn;
 			}
 			else
 			{
-				sceneCharacters.Add(msg.characterName, conn);
+				sceneCharacters.Add(msg.characterId, conn);
 			}
 		}
 
@@ -293,7 +293,7 @@ namespace Server
 		/// </summary>
 		private void OnServerSceneCharacterDisconnectedBroadcastReceived(NetworkConnection conn, SceneCharacterDisconnectedBroadcast msg)
 		{
-			sceneCharacters.Remove(msg.characterName);
+			sceneCharacters.Remove(msg.characterId);
 		}
 
 		public void BroadcastToAllScenes<T>(T msg) where T : struct, IBroadcast
@@ -304,9 +304,9 @@ namespace Server
 			}
 		}
 
-		public void BroadcastToCharacter<T>(string characterName, T msg) where T : struct, IBroadcast
+		public void BroadcastToCharacter<T>(long characterId, T msg) where T : struct, IBroadcast
 		{
-			if (sceneCharacters.TryGetValue(characterName, out NetworkConnection sceneConn))
+			if (sceneCharacters.TryGetValue(characterId, out NetworkConnection sceneConn))
 			{
 				sceneConn.Broadcast(msg);
 			}

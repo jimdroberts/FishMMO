@@ -8,7 +8,7 @@ public struct GuildCreateBroadcast : IBroadcast
 
 public struct GuildInviteBroadcast : IBroadcast
 {
-	public int targetClientId;
+	public long targetCharacterId;
 }
 
 public struct GuildAcceptInviteBroadcast : IBroadcast
@@ -20,12 +20,12 @@ public struct GuildDeclineInviteBroadcast : IBroadcast
 
 public struct GuildJoinedBroadcast : IBroadcast
 {
-	public List<int> members;
+	public List<long> members;
 }
 
 public struct GuildNewMemberBroadcast : IBroadcast
 {
-	public int newMemberClientId;
+	public long newMemberCharacterId;
 	public GuildRank rank;
 }
 
@@ -35,5 +35,5 @@ public struct GuildLeaveBroadcast : IBroadcast
 
 public struct GuildRemoveBroadcast : IBroadcast
 {
-	public int memberId;
+	public long memberId;
 }

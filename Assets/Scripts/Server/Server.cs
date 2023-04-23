@@ -196,12 +196,15 @@ namespace Server
 
 					ChatSystem = GetOrCreateComponent<ChatSystem>();
 					ChatSystem.SceneManager = NetworkManager.SceneManager;
+					ChatSystem.CharacterSystem = CharacterSystem;
 					ChatSystem.InternalInitializeOnce(this, NetworkManager.ServerManager, NetworkManager.ClientManager);
 
 					GuildSystem = GetOrCreateComponent<GuildSystem>();
+					GuildSystem.CharacterSystem = CharacterSystem;
 					GuildSystem.InternalInitializeOnce(this, NetworkManager.ServerManager);
 
 					PartySystem = GetOrCreateComponent<PartySystem>();
+					PartySystem.CharacterSystem = CharacterSystem;
 					PartySystem.InternalInitializeOnce(this, NetworkManager.ServerManager);
 					break;
 				default:
