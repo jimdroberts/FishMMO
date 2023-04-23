@@ -9,22 +9,11 @@ namespace Server
 		public WorldSceneSystem WorldSceneSystem;
 
 #if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
-		[DllImport("user32.dll")]
-		static extern bool SetWindowText(System.IntPtr hWnd, string lpString);
-		[DllImport("user32.dll")]
-		static extern System.IntPtr GetActiveWindow();
-#elif UNITY_STANDALONE_OSX || UNITY_EDITOR_OSX
-        [DllImport("__Internal")]
-        static extern void SetWindowTitle(string title);
+		[DllImport("kernel32.dll")]
+		private static extern bool SetConsoleTitle(string title);
 #elif UNITY_STANDALONE_LINUX || UNITY_EDITOR_LINUX
-        [DllImport("libX11")]
-        static extern System.IntPtr XOpenDisplay(string display_name);
-        [DllImport("libX11")]
-        static extern void XCloseDisplay(System.IntPtr display);
-        [DllImport("libX11")]
-        static extern void XStoreName(System.IntPtr display, System.IntPtr w, string title);
-        [DllImport("libX11")]
-        static extern System.IntPtr XRootWindow(System.IntPtr display, int screen_number);
+		[DllImport("libc", EntryPoint = "setproctitle")]
+		private static extern void SetProcTitleLinux(string title);
 #endif
 
 		public string title = "";
@@ -70,19 +59,11 @@ namespace Server
 			title = BuildWindowTitle();
 
 #if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
-			SetWindowText(GetActiveWindow(), title);
+			SetConsoleTitle(title);
 #elif UNITY_STANDALONE_OSX || UNITY_EDITOR_OSX
 			SetWindowTitle(title);
 #elif UNITY_STANDALONE_LINUX || UNITY_EDITOR_LINUX
-			// Get the display and root window for the default screen
-			System.IntPtr display = XOpenDisplay(null);
-			System.IntPtr root = XRootWindow(display, 0);
-
-			// Set the window title using XStoreName
-			XStoreName(display, root, title);
-
-			// Clean up
-			XCloseDisplay(display);
+			SetProcTitleLinux(title);
 #endif
 		}
 

@@ -6,7 +6,6 @@ using System.Collections.Generic;
 using System;
 using UnityEditor.Build.Reporting;
 using Debug = UnityEngine.Debug;
-using FishNet.Configuring;
 
 public class CustomBuildTool
 {
