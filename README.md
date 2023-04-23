@@ -11,12 +11,15 @@ If you're on a Windows Operating System please install WSL2.
 2) RUN wsl.exe --install
 
 Install Docker. This will make Postgresql database setup significantly easier!
+
 Docker: https://docs.docker.com/engine/install/
 
 If you don't want to install Docker you can manually install Postgresql Server.
+
 Postgresql: https://www.postgresql.org/download/
 
 Download the source files from the Github Repository.
+
 Github: https://github.com/jimdroberts/FishMMO/
 
 Create a NEW Unity3D URP Project with any name.
