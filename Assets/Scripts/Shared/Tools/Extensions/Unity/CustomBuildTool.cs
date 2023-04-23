@@ -5,6 +5,8 @@ using System.IO;
 using System.Collections.Generic;
 using System;
 using UnityEditor.Build.Reporting;
+using Debug = UnityEngine.Debug;
+using FishNet.Configuring;
 
 public class CustomBuildTool
 {
@@ -193,6 +195,36 @@ public class CustomBuildTool
 						BuildOptions.CleanBuildCache | BuildOptions.Development | BuildOptions.ShowBuiltPlayer,
 						StandaloneBuildSubtarget.Player,
 						BuildTarget.StandaloneLinux64);
+	}
+
+	[MenuItem("FishMMO/Setup Docker Database")]
+	public static async void Database()
+	{
+		// load configuration first
+		Configuration configuration = new Configuration();
+		if (!configuration.Load("PostgresqlSetup.cfg"))
+		{
+			// if we failed to load the file.. save a new one
+			configuration.Set("DbName", "fish_mmo");
+			configuration.Set("DbUsername", "user");
+			configuration.Set("DbPassword", "pass");
+			configuration.Set("DbAddress", "127.0.0.1");
+			configuration.Set("DbPort", "5432");
+			configuration.Save();
+		}
+
+		if (configuration.TryGetString("DbName", out string dbName) &&
+			configuration.TryGetString("DbUsername", out string dbUsername) &&
+			configuration.TryGetString("DbPassword", out string dbPassword) &&
+			configuration.TryGetString("DbAddress", out string dbAddress) &&
+			configuration.TryGetString("DbPort", out string dbPort))
+		{
+			await Docker.RunAsync("run --name " + dbName +
+								  " -e POSTGRES_USER=" + dbUsername +
+								  " -e POSTGRES_PASSWORD=" + dbPassword +
+								  " -p " + dbAddress + ":" + dbPort + ":" + dbPort +
+								  " -d postgres:14");
+		}
 	}
 }
 #endif

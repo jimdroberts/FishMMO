@@ -139,12 +139,10 @@ namespace Server
 		/// </summary>
 		internal void InternalInitializeOnce(string serverType)
 		{
-#if PLATFORM_STANDALONE_WIN
 			// only use title updater if it has been added to the scene
 			ServerWindowTitleUpdater = GetComponent<ServerWindowTitleUpdater>();
 			if (ServerWindowTitleUpdater != null)
 				ServerWindowTitleUpdater.InternalInitializeOnce(this, NetworkManager.ServerManager);
-#endif
 
 			// setup the DB context and ensure that it's been created
 			DbContextFactory = new ServerDbContextFactory(this);

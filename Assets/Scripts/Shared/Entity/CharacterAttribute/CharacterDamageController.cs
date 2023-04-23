@@ -1,4 +1,5 @@
 ﻿using FishNet.Object;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -11,6 +12,8 @@ public class CharacterDamageController : NetworkBehaviour, IDamageable, IHealabl
 
 	[Tooltip("The resource attribute the damage will be applied to.")]
 	public CharacterAttributeTemplate resourceAttribute;
+
+	public event Action OnDamaged;
 
 	public List<AchievementTemplate> OnDamagedAchievements;
 	public List<AchievementTemplate> OnDamageDealtAchievements;
@@ -25,7 +28,9 @@ public class CharacterDamageController : NetworkBehaviour, IDamageable, IHealabl
 	public override void OnStartClient()
 	{
 		base.OnStartClient();
-		if (character == null || resourceAttribute == null || !character.AttributeController.TryGetResourceAttribute(resourceAttribute.Name, out this.resourceInstance))
+		if (character == null ||
+			resourceAttribute == null ||
+			!character.AttributeController.TryGetResourceAttribute(resourceAttribute.Name, out this.resourceInstance))
 		{
 			throw new UnityException("Character Damage Controller ResourceAttribute is missing");
 		}
@@ -99,6 +104,10 @@ public class CharacterDamageController : NetworkBehaviour, IDamageable, IHealabl
 			{
 				character.DeathController.Kill(attacker);
 			}
+			else
+			{
+				OnDamaged?.Invoke();
+			}
 		}
 	}
 
@@ -124,15 +133,13 @@ public class CharacterDamageController : NetworkBehaviour, IDamageable, IHealabl
 			}
 
 			//ATTACKER
-			QuestController healerQuests = healer.GetComponent<QuestController>();
-			if (healerQuests != null)
+			if (healer.QuestController != null)
 			{
 				//healerQuests.OnHeal(Entity, amount);
 			}
 			if (OnHealAchievements != null && OnHealAchievements.Count > 0)
 			{
-				AchievementController achievements = healer.GetComponent<AchievementController>();
-				if (achievements != null)
+				if (healer.AchievementController != null)
 				{
 					foreach (AchievementTemplate achievement in OnHealAchievements)
 					{

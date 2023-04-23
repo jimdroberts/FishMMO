@@ -126,6 +126,7 @@ public class Character : NetworkBehaviour
 		{
 			localCharacter = this;
 			LocalInputController = gameObject.AddComponent<LocalInputController>();
+
 		}
 	}
 
