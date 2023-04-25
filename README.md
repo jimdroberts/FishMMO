@@ -1,6 +1,8 @@
 # FishMMO
 FishNetworking MMO Template
 
+Discord: https://discord.gg/9JQEYjkSNk
+
 INITIAL SETUP INSTRUCTIONS
 
 -IMPORTANT-
