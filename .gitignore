@@ -72,4 +72,4 @@ crashlytics-build.properties
 /[Aa]ssets/[Ss]treamingAssets/aa/*
 
 # Local directory, anything here will be ignored
-/[Aa]ssets/[Ll][Oo][Cc][Aa][Ll]/*
+/[Aa]ssets/[Ll][Oo][Cc][Aa][Ll]*
