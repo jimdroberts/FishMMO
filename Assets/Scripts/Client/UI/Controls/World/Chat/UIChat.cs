@@ -1,7 +1,6 @@
-﻿using FishNet;
-using UnityEngine;
+﻿using UnityEngine;
+using System;
 using System.Collections.Generic;
-using FishNet.Managing.Client;
 using FishNet.Transporting;
 using FishNet.Managing;
 
@@ -36,6 +35,9 @@ namespace Client
 		public event ChatMessageChange OnMessageAdded;
 		public event ChatMessageChange OnMessageRemoved;
 		public List<ClientChatMessage> messages = new List<ClientChatMessage>();
+		public bool allowRepeatMessages = false;
+		[Tooltip("The rate at which messages can be sent in milliseconds.")]
+		public float messageRateLimit = 0.0f;
 
 		public delegate void ChatCommand(Character sender, ChatBroadcast msg);
 		public Dictionary<string, ChatCommand> commandEvents = new Dictionary<string, ChatCommand>();
@@ -129,7 +131,7 @@ namespace Client
 
 		public void OnSubmit(string input)
 		{
-			if (string.IsNullOrEmpty(input))
+			if (string.IsNullOrWhiteSpace(input))
 			{
 				return;
 			}
@@ -138,6 +140,26 @@ namespace Client
 				if (input.Length > MAX_LENGTH)
 				{
 					input = input.Substring(0, MAX_LENGTH);
+				}
+				Character character = Character.localCharacter;
+				if (character != null)
+				{
+					if (messageRateLimit > 0)
+					{
+						if (character.nextChatMessageTime > DateTime.UtcNow)
+						{
+							return;
+						}
+						character.nextChatMessageTime = DateTime.UtcNow.AddMilliseconds(messageRateLimit);
+					}
+					if (!allowRepeatMessages)
+					{
+						if (character.lastChatMessage.Equals(input))
+						{
+							return;
+						}
+						character.lastChatMessage = input;
+					}
 				}
 				networkManager.ClientManager.Broadcast(new ChatBroadcast() { text = input });
 			}
@@ -217,7 +239,7 @@ namespace Client
 
 		private void OnClientChatMessageReceived(ChatBroadcast msg)
 		{
-			if (!string.IsNullOrEmpty(currentTab) && tabs.TryGetValue(currentTab, out ChatTab tab))
+			if (!string.IsNullOrWhiteSpace(currentTab) && tabs.TryGetValue(currentTab, out ChatTab tab))
 			{
 				if (tab.activeChannels.Contains(msg.channel))
 				{

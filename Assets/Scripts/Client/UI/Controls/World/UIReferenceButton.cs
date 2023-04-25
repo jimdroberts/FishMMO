@@ -30,7 +30,7 @@ namespace Client
 			base.OnPointerEnter(eventData);
 
 			Character character = Character.localCharacter;
-			if (character != null && !string.IsNullOrEmpty(referenceID))
+			if (character != null && !string.IsNullOrWhiteSpace(referenceID))
 			{
 				switch (hotkeyType)
 				{
@@ -57,7 +57,7 @@ namespace Client
 						}
 						break;
 					case HotkeyType.Ability:
-						if (!string.IsNullOrEmpty(referenceID))
+						if (!string.IsNullOrWhiteSpace(referenceID))
 						{
 							/*if (character.AbilityController.abilities.TryGetValue(referenceID, out Ability ability) &&
 								UIManager.TryGet("UITooltip", out UITooltip tooltip))

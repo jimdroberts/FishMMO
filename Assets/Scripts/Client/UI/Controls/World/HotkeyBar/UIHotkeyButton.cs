@@ -23,7 +23,7 @@
 
 		public override void OnRightClick()
 		{
-			if (UIManager.TryGet("UIDragObject", out UIDragObject dragObject) && !string.IsNullOrEmpty(referenceID))
+			if (UIManager.TryGet("UIDragObject", out UIDragObject dragObject) && !string.IsNullOrWhiteSpace(referenceID))
 			{
 				dragObject.SetReference(icon.texture, referenceID, hotkeyType);
 				Clear();
@@ -33,7 +33,7 @@
 		public void Activate()
 		{
 			Character character = Character.localCharacter;
-			if (character != null && !string.IsNullOrEmpty(keyMap))
+			if (character != null && !string.IsNullOrWhiteSpace(keyMap))
 			{
 				switch (hotkeyType)
 				{

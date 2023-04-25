@@ -44,12 +44,12 @@ public class CustomBuildTool
 	private static void BuildExecutable(string executableName, string[] bootstrapScenes, BuildOptions buildOptions, StandaloneBuildSubtarget subTarget, BuildTarget buildTarget)
 	{
 		string rootPath = EditorUtility.SaveFolderPanel("Pick a save directory", "", "");
-		if (string.IsNullOrEmpty(rootPath))
+		if (string.IsNullOrWhiteSpace(rootPath))
 		{
 			return;
 		}
 
-		if (string.IsNullOrEmpty(executableName) ||
+		if (string.IsNullOrWhiteSpace(executableName) ||
 			bootstrapScenes == null ||
 			bootstrapScenes.Length < 1)
 		{

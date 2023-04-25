@@ -50,7 +50,7 @@ public class AbilityController : NetworkBehaviour
 
 	public void Activate(string referenceID, KeyCode heldKey)
 	{
-		if (!string.IsNullOrEmpty(referenceID) && abilities.ContainsKey(referenceID) /*&& abilities[referenceID].isHotkey*/)
+		if (!string.IsNullOrWhiteSpace(referenceID) && abilities.ContainsKey(referenceID) /*&& abilities[referenceID].isHotkey*/)
 		{
 			if (abilities[referenceID].Template.IsHoldToActivate)
 			{

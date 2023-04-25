@@ -23,7 +23,7 @@ public class Ability
 	{
 		get
 		{
-			return string.IsNullOrEmpty(name) ? Template.name : name;
+			return string.IsNullOrWhiteSpace(name) ? Template.name : name;
 		}
 	}
 

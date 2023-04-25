@@ -353,7 +353,7 @@ MonoBehaviour:
   _teleportThreshold: 1
   _ownerSmoothPosition: 1
   _ownerSmoothRotation: 1
-  _ownerInterpolation: 1
+  _ownerInterpolation: 3
   _predictionType: 0
   _rigidbody: {fileID: 6736601265633566295}
   _rigidbody2d: {fileID: 0}
@@ -535,6 +535,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b3d0ebacb7f3bee499ea9651cbb74449, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 784751938054981284}
+  _networkObjectCache: {fileID: 0}
   CharacterAttributeDatabase: {fileID: 11400000, guid: 8fe93c66f5bc53c45a7b0f8334be9016,
     type: 2}
 --- !u!114 &1643789448904715060
@@ -775,10 +778,12 @@ MonoBehaviour:
   PartyController: {fileID: 0}
   Motor: {fileID: 0}
   LocalInputController: {fileID: 0}
-  PlayerNameLabel: {fileID: 0}
+  CharacterNameLabel: {fileID: 0}
   characterName: 
+  id: 0
   account: 
   isGameMaster: 0
+  raceID: 0
   raceName: 
   sceneName: 
   sceneHandle: 0

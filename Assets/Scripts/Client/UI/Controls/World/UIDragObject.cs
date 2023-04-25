@@ -25,7 +25,7 @@ namespace Client
 		{
 			if (visible)
 			{
-				if (icon == null || icon.texture == null || string.IsNullOrEmpty(referenceID))
+				if (icon == null || icon.texture == null || string.IsNullOrWhiteSpace(referenceID))
 				{
 					Clear();
 					return;

@@ -102,7 +102,7 @@ namespace Server
 						{
 							NetworkObject prefab = Server.NetworkManager.SpawnablePrefabs.GetObject(true, i);
 							if (prefab != null &&
-								(string.IsNullOrEmpty(msg.raceName) || prefab.name == msg.raceName))
+								(string.IsNullOrWhiteSpace(msg.raceName) || prefab.name == msg.raceName))
 							{
 								raceID = i;
 								break;

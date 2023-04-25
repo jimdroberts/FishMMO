@@ -3,6 +3,7 @@ using FishNet.Transporting;
 using FishNet.Managing.Scened;
 using UnityEngine;
 using System.Collections.Generic;
+using System;
 
 namespace Server
 {
@@ -15,6 +16,10 @@ namespace Server
 
 		public SceneManager SceneManager;
 		public CharacterSystem CharacterSystem;
+
+		public bool allowRepeatMessages = false;
+		[Tooltip("The server chat rate limit in milliseconds. This should be equal to the clients UIChat.messageRateLimit")]
+		public float messageRateLimit = 0.0f;
 
 		public delegate void ChatCommand(NetworkConnection conn, Character character, ChatBroadcast msg);
 		public Dictionary<string, ChatCommand> commandEvents = new Dictionary<string, ChatCommand>();
@@ -77,16 +82,17 @@ namespace Server
 		/// </summary>
 		private void OnServerChatMessageReceived(NetworkConnection conn, ChatBroadcast msg)
 		{
-			if (!ValidateMessage(msg))
-			{
-				conn.Kick(FishNet.Managing.Server.KickReason.ExploitExcessiveData);
-			}
-
 			if (conn.FirstObject != null)
 			{
 				Character character = conn.FirstObject.GetComponent<Character>();
 				if (character != null)
 				{
+					if (!ValidateMessage(msg))
+					{
+						conn.Kick(FishNet.Managing.Server.KickReason.ExploitExcessiveData);
+						return;
+					}
+
 					ParseMessage(conn, character, msg);
 				}
 			}
@@ -124,7 +130,7 @@ namespace Server
 
 		private bool ValidateMessage(ChatBroadcast msg)
 		{
-			if (!string.IsNullOrEmpty(msg.text) &&
+			if (!string.IsNullOrWhiteSpace(msg.text) &&
 				msg.text.Length <= MAX_LENGTH)
 			{
 				return true;
@@ -135,7 +141,24 @@ namespace Server
 		private void ParseMessage(NetworkConnection conn, Character character, ChatBroadcast msg)
 		{
 			// do things here
-			string cmd = GetCommandAndTrim(ref msg.text);
+			string cmd = GetAndRemoveCommand(ref msg.text);
+
+			if (messageRateLimit > 0)
+			{
+				if (character.nextChatMessageTime > DateTime.UtcNow)
+				{
+					return;
+				}
+				character.nextChatMessageTime = DateTime.UtcNow.AddMilliseconds(messageRateLimit);
+			}
+			if (!allowRepeatMessages)
+			{
+				if (!character.lastChatMessage.Equals(msg.text))
+				{
+					return;
+				}
+				character.lastChatMessage = msg.text;
+			}
 
 			// parse our command or send the message to our /say channel
 			if (commandEvents.TryGetValue(cmd, out ChatCommand command))
@@ -151,7 +174,7 @@ namespace Server
 		/// <summary>
 		/// Attempts to get the command from the text. If no commands are found it returns an empty string.
 		/// </summary>
-		private string GetCommandAndTrim(ref string text)
+		private string GetAndRemoveCommand(ref string text)
 		{
 			if (!text.StartsWith("/"))
 			{

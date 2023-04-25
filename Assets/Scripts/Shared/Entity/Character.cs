@@ -7,6 +7,7 @@ using FishNet.Transporting;
 using KinematicCharacterController;
 using KinematicCharacterController.Examples;
 using UnityEngine;
+using System;
 
 /// <summary>
 /// Character contains references to all of the controllers associated with the character.
@@ -91,6 +92,8 @@ public class Character : NetworkBehaviour
 	public string raceName;
 	public string sceneName;
 	public int sceneHandle;
+	public string lastChatMessage = "";
+	public DateTime nextChatMessageTime = DateTime.UtcNow;
 
 	void Awake()
 	{

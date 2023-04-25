@@ -65,7 +65,7 @@ namespace Client
 		{
 			if (input != null)
 			{
-				if (!string.IsNullOrEmpty(input.text))
+				if (!string.IsNullOrWhiteSpace(input.text))
 				{
 					if (UIManager.TryGet("UIChat", out UIChat chat))
 					{

@@ -110,7 +110,7 @@ namespace Client
 			for (int i = 0; i < hotkeys.Count; ++i)
 			{
 				string keyMap = GetHotkeyIndexKeyMap(i);
-				if (string.IsNullOrEmpty(keyMap)) return;
+				if (string.IsNullOrWhiteSpace(keyMap)) return;
 
 				if (hotkeys[i] != null && InputManager.GetKeyDown(keyMap))
 				{
