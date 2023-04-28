@@ -49,6 +49,7 @@ namespace Client
 			AddKey("Equipment", KeyCode.O);
 			AddKey("Party", KeyCode.P);
 			AddKey("Menu", KeyCode.Escape);
+			AddKey("ToggleFirstPerson", KeyCode.F9);
 			MouseMode = true;
 
 			//InputManager.LoadConfig();

@@ -39,6 +39,7 @@ namespace KinematicCharacterController.Examples
 		private const string VerticalInput = "Vertical";
 		private const string JumpInput = "Jump";
 		private const string CrouchInput = "Crouch";
+		private const string ToggleFirstPersonInput = "ToggleFirstPerson";
 
 		private bool _jumpQueued = false;
 		private bool _crouchDownQueued = false;
@@ -241,15 +242,12 @@ namespace KinematicCharacterController.Examples
 			CharacterCamera.UpdateWithInput((float)base.TimeManager.TickDelta, scrollInput, lookInputVector);
 
 			// Handle toggling zoom level
-			if (Input.GetMouseButtonDown(1))
+			if (InputManager.GetKeyDown(ToggleFirstPersonInput))
 			{
 				CharacterCamera.TargetDistance = (CharacterCamera.TargetDistance == 0f) ? CharacterCamera.DefaultDistance : 0f;
 			}
 
-			//if (CharacterCamera.TargetDistance == 0f)
-				SetOrientationMethod(Character.OrientationMethod);
-			//else
-			//	SetOrientationMethod(OrientationMethod.TowardsMovement);
+			SetOrientationMethod(Character.OrientationMethod);
 		}
 
 		[ServerRpc(RunLocally = true)]
