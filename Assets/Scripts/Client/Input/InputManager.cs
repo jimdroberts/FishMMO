@@ -41,6 +41,7 @@ namespace Client
 			AddKey("Hotkey 0", KeyCode.Alpha0);
 			AddKey("Run", KeyCode.LeftShift);
 			AddKey("Jump", KeyCode.Space);
+			AddKey("Crouch", KeyCode.C);
 			AddKey("Mouse Mode", KeyCode.M);
 			AddKey("Interact", KeyCode.E);
 			AddKey("Inventory", KeyCode.I);
