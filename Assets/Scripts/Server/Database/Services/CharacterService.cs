@@ -30,10 +30,10 @@ namespace Server.Services
             return character;
         }
 
-        public static List<CharacterDetails> GetCharacterList(ServerDbContext dbContext, string accountName)
+        public static List<CharacterDetails> GetCharacterList(ServerDbContext dbContext, string account)
         {
             return dbContext.Characters
-                .Where(c => c.Account == accountName.ToLower())
+                .Where(c => c.Account == account && !c.Deleted)
                 .ToList()
                 .Select(c => new CharacterDetails()
                 {
@@ -101,8 +101,8 @@ namespace Server.Services
         public static void DeleteCharacter(ServerDbContext dbContext, string account, string characterName)
         {
             var character = dbContext.Characters
-                .FirstOrDefault(c => c.Account == account.ToLower() && 
-                                                 c.NameLowercase == characterName.ToLower());
+                .FirstOrDefault(c => c.Account == account &&
+                                c.NameLowercase == characterName.ToLower());
 
             if (character == null) throw new Exception($"Can't find character with name {characterName}");
             character.TimeDeleted = DateTime.UtcNow;
@@ -224,7 +224,7 @@ namespace Server.Services
 					transform.rotation = spawnRot;
 
 					// instantiate the character object
-					NetworkObject nob = networkManager.GetPooledInstantiated(prefab, true);
+					NetworkObject nob = networkManager.GetPooledInstantiated(prefab, prefab.SpawnableCollectionId, true);
 
 					// immediately deactive the game object.. we are not ready yet
 					nob.gameObject.SetActive(false);
