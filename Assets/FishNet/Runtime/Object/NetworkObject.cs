@@ -591,7 +591,8 @@ namespace FishNet.Object
 
             State = NetworkObjectState.Unset;
             SetOwner(NetworkManager.EmptyConnection);
-            NetworkObserver.Deinitialize(false);
+			if (NetworkObserver != null)
+				NetworkObserver.Deinitialize(false);
             //QOL references.
             NetworkManager = null;
             ServerManager = null;

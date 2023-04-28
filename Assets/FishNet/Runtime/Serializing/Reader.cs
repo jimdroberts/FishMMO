@@ -882,7 +882,7 @@ namespace FishNet.Serializing
             bool isServer = NetworkManager.ServerManager.Started;
             bool isClient = NetworkManager.ClientManager.Started;
 
-            Debug.Log($"Reading nob. Id {objectOrPrefabId}. IsSpawned {isSpawned}. IsClient {isClient}. IsServer {isServer}");
+            // Debug.Log($"Reading nob. Id {objectOrPrefabId}. IsSpawned {isSpawned}. IsClient {isClient}. IsServer {isServer}");
 
             NetworkObject result;
             //Is spawned.
