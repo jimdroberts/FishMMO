@@ -41,8 +41,10 @@ namespace FishNet.Utility.Performance
         /// <param name="prefabId">PrefabId of the object to return.</param>
         /// <param name="asServer">True if being called on the server side.</param>
         /// <returns></returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)] //Remove on 2024/01/01.
+#pragma warning disable CS0672 // Member overrides obsolete member
         public override NetworkObject RetrieveObject(int prefabId, bool asServer)
+#pragma warning restore CS0672 // Member overrides obsolete member
         {
             return RetrieveObject(prefabId, 0, asServer);
         }
@@ -116,7 +118,7 @@ namespace FishNet.Utility.Performance
         /// <param name="prefab">Prefab to cache.</param>
         /// <param name="count">Quantity to spawn.</param>
         /// <param name="asServer">True if storing prefabs for the server collection. This is only applicable when using DualPrefabObjects.</param>
-        public void CacheObjects(NetworkObject prefab, int count, bool asServer)
+        public override void CacheObjects(NetworkObject prefab, int count, bool asServer)
         {
             if (!_enabled)
                 return;
@@ -140,7 +142,7 @@ namespace FishNet.Utility.Performance
         }
 
         /// <summary>
-        /// Clears pools for all collectionIds
+        /// Clears pools destroying objects for all collectionIds
         /// </summary>
         public void ClearPool()
         {
@@ -150,7 +152,7 @@ namespace FishNet.Utility.Performance
         }
 
         /// <summary>
-        /// Clears a pool for collectionId.
+        /// Clears a pool destroying objects for collectionId.
         /// </summary>
         /// <param name="collectionId">CollectionId to clear for.</param>
         public void ClearPool(int collectionId)
@@ -159,13 +161,17 @@ namespace FishNet.Utility.Performance
                 return;
 
             Dictionary<int, Stack<NetworkObject>> dict = _cache[collectionId];
-            //Convert to a list from the stack so we do not modify the stack directly.
-            ListCache<NetworkObject> nobCache = ListCaches.GetNetworkObjectCache();
             foreach (Stack<NetworkObject> item in dict.Values)
             {
                 while (item.Count > 0)
-                    nobCache.AddValue(item.Pop());
+                {
+                    NetworkObject nob = item.Pop();
+                    if (nob != null)
+                        Destroy(nob.gameObject);
+                }
             }
+
+            dict.Clear();
         }
 
 

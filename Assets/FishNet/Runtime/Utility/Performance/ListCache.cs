@@ -1,7 +1,5 @@
 ﻿using FishNet.Connection;
-using FishNet.Managing;
 using FishNet.Object;
-using FishNet.Serializing.Helping;
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
@@ -9,9 +7,195 @@ using UnityEngine;
 
 namespace FishNet.Utility.Performance
 {
+    #region Disposable caches.
+    /// <summary>
+    /// Holds cached Lists of value types.
+    /// </summary>
+    public static class DisposableListCaches<T> where T : IDisposable
+    {
+
+        /// <summary>
+        /// Cache.
+        /// </summary>
+        private static Stack<List<T>> _listCache = new Stack<List<T>>();
+        
+        /// <summary>
+        /// Retrieves a List<T>.
+        /// </summary>
+        /// <returns></returns>
+        public static List<T> Retrieve()
+        {
+            if (_listCache.Count == 0)
+                return new List<T>();
+            else
+                return _listCache.Pop();
+        }
+
+        /// <summary>
+        /// Stores an instance of List<T>.
+        /// </summary>
+        /// <param name="value">Value to store.</param>
+        public static void Store(List<T> value)
+        {
+            foreach (T item in value)
+                item.Dispose();
+            value.Clear();
+            _listCache.Push(value);
+        }
+
+    }
+
+    /// <summary>
+    /// Holds cached diposable types.
+    /// </summary>
+    public static class DisposableObjectCaches<T> where T : IDisposable
+    {
+        /// <summary>
+        /// Cache.
+        /// </summary>
+        private static DisposableObjectCache<T> _objectCache = new DisposableObjectCache<T>();
+
+        /// <summary>
+        /// Retrieves an instance of T.
+        /// </summary>
+        public static T Retrieve() => _objectCache.Retrieve();
+        /// <summary>
+        /// Stores an instance of T.
+        /// </summary>
+        /// <param name="value">Value to store.</param>
+        public static void Store(T value) => _objectCache.Store(value);
+    }
+
+    /// <summary>
+    /// A cache for a disposable type.
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    public class DisposableObjectCache<T> where T : IDisposable
+    {
+        /// <summary>
+        /// Stack to use.
+        /// </summary>
+        private Stack<T> _stack = new Stack<T>();
+
+        /// <summary>
+        /// Returns a value from the stack or creates an instance when the stack is empty.
+        /// </summary>
+        /// <returns></returns>
+        public T Retrieve()
+        {
+            if (_stack.Count == 0)
+                return Activator.CreateInstance<T>();
+            else
+                return _stack.Pop();
+        }
+
+        /// <summary>
+        /// Stores a value to the stack.
+        /// </summary>
+        /// <param name="value"></param>
+        public void Store(T value)
+        {
+            value.Dispose();
+            _stack.Push(value);
+        }
+    }
+    #endregion
+
+    #region NonDisposable caches.
+    /// <summary>
+    /// Holds cached Lists of value types.
+    /// </summary>
+    public static class CollectionCaches<T>
+    {
+
+        /// <summary>
+        /// Cache.
+        /// </summary>
+        private static Stack<List<T>> _listCache = new Stack<List<T>>();
+
+        /// <summary>
+        /// Retrieves a List<T>.
+        /// </summary>
+        /// <returns></returns>
+        public static List<T> Retrieve()
+        {
+            if (_listCache.Count == 0)
+                return new List<T>();
+            else
+                return _listCache.Pop();
+        }
+
+        /// <summary>
+        /// Stores an instance of List<T>.
+        /// </summary>
+        /// <param name="value">Value to store.</param>
+        public static void Store(List<T> value)
+        {
+            value.Clear();
+            _listCache.Push(value);
+        }
+
+    }
+
+    /// <summary>
+    /// Holds cached diposable types.
+    /// </summary>
+    public static class ObjectCaches<T>
+    {
+        /// <summary>
+        /// Cache.
+        /// </summary>
+        private static ObjectCache<T> _objectCache = new ObjectCache<T>();
+
+        /// <summary>
+        /// Retrieves an instance of T.
+        /// </summary>
+        public static T Retrieve() => _objectCache.Retrieve();
+        /// <summary>
+        /// Stores an instance of T.
+        /// </summary>
+        /// <param name="value">Value to store.</param>
+        public static void Store(T value) => _objectCache.Store(value);
+    }
+
+    /// <summary>
+    /// A cache for a disposable type.
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    public class ObjectCache<T>
+    {
+        /// <summary>
+        /// Stack to use.
+        /// </summary>
+        private Stack<T> _stack = new Stack<T>();
+
+        /// <summary>
+        /// Returns a value from the stack or creates an instance when the stack is empty.
+        /// </summary>
+        /// <returns></returns>
+        public T Retrieve()
+        {
+            if (_stack.Count == 0)
+                return Activator.CreateInstance<T>();
+            else
+                return _stack.Pop();
+        }
+
+        /// <summary>
+        /// Stores a value to the stack.
+        /// </summary>
+        /// <param name="value"></param>
+        public void Store(T value)
+        {
+            _stack.Push(value);
+        }
+    }
+    #endregion
+
     /// <summary>
     /// Various ListCache instances that may be used on the Unity thread.
     /// </summary>
+    [Obsolete("ListCache has been discovered potentially contain a small memory leak depending on the type being cached. Use ObjectCaches, DisposableObjectCaches, CollectionCaches, DisposableCollectionCaches instead.")] //remove on 2023/01/01
     public static class ListCaches
     {
 
@@ -20,7 +204,7 @@ namespace FishNet.Utility.Performance
         /// </summary>
         private static Stack<ListCache<NetworkObject>> _networkObjectCaches = new Stack<ListCache<NetworkObject>>();
         /// <summary>
-        /// Cache collection for NetworkObjects.
+        /// Cache collection for NetworkBehaviours.
         /// </summary>
         private static Stack<ListCache<NetworkBehaviour>> _networkBehaviourCaches = new Stack<ListCache<NetworkBehaviour>>();
         /// <summary>
@@ -38,11 +222,13 @@ namespace FishNet.Utility.Performance
 
 
         #region GetCache.
+        [Obsolete("Use RetrieveNetworkObjectCache().")] //Remove on 2024/01/01
+        public static ListCache<NetworkObject> GetNetworkObjectCache() => RetrieveNetworkObjectCache();
         /// <summary>
         /// Returns a NetworkObject cache. Use StoreCache to return the cache.
         /// </summary>
         /// <returns></returns>
-        public static ListCache<NetworkObject> GetNetworkObjectCache()
+        public static ListCache<NetworkObject> RetrieveNetworkObjectCache()
         {
             ListCache<NetworkObject> result;
             if (_networkObjectCaches.Count == 0)
@@ -52,11 +238,13 @@ namespace FishNet.Utility.Performance
 
             return result;
         }
+        [Obsolete("Use RetrieveNetworkConnectionCache().")] //Remove on 2024/01/01
+        public static ListCache<NetworkConnection> GetNetworkConnectionCache() => RetrieveNetworkConnectionCache();
         /// <summary>
         /// Returns a NetworkConnection cache. Use StoreCache to return the cache.
         /// </summary>
         /// <returns></returns>
-        public static ListCache<NetworkConnection> GetNetworkConnectionCache()
+        public static ListCache<NetworkConnection> RetrieveNetworkConnectionCache()
         {
             ListCache<NetworkConnection> result;
             if (_networkConnectionCaches.Count == 0)
@@ -66,11 +254,13 @@ namespace FishNet.Utility.Performance
 
             return result;
         }
+        [Obsolete("Use RetrieveTransformCache().")] //Remove on 2024/01/01
+        public static ListCache<Transform> GetTransformCache() => RetrieveTransformCache();
         /// <summary>
         /// Returns a Transform cache. Use StoreCache to return the cache.
         /// </summary>
         /// <returns></returns>
-        public static ListCache<Transform> GetTransformCache()
+        public static ListCache<Transform> RetrieveTransformCache()
         {
             ListCache<Transform> result;
             if (_transformCaches.Count == 0)
@@ -80,11 +270,13 @@ namespace FishNet.Utility.Performance
 
             return result;
         }
+        [Obsolete("Use RetrieveNetworkBehaviourCache().")] //Remove on 2024/01/01
+        public static ListCache<NetworkBehaviour> GetNetworkBehaviourCache() => RetrieveNetworkBehaviourCache();
         /// <summary>
         /// Returns a NetworkBehaviour cache. Use StoreCache to return the cache.
         /// </summary>
         /// <returns></returns>
-        public static ListCache<NetworkBehaviour> GetNetworkBehaviourCache()
+        public static ListCache<NetworkBehaviour> RetrieveNetworkBehaviourCache()
         {
             ListCache<NetworkBehaviour> result;
             if (_networkBehaviourCaches.Count == 0)
@@ -94,11 +286,13 @@ namespace FishNet.Utility.Performance
 
             return result;
         }
+        [Obsolete("Use RetrieveGetIntCache().")] //Remove on 2024/01/01
+        public static ListCache<int> GetIntCache() => RetrieveIntCache();
         /// <summary>
         /// Returns an int cache. Use StoreCache to return the cache.
         /// </summary>
         /// <returns></returns>
-        public static ListCache<int> GetIntCache()
+        public static ListCache<int> RetrieveIntCache()
         {
             ListCache<int> result;
             if (_intCaches.Count == 0)
@@ -316,7 +510,7 @@ namespace FishNet.Utility.Performance
 
         /// <summary>
         /// Adds values to Collection.
-        /// </summary>
+        /// </summary> 
         /// <param name="value"></param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void AddValues(IReadOnlyCollection<T> values)

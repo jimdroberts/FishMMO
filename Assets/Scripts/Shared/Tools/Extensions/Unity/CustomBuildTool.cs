@@ -1,12 +1,24 @@
 ﻿#if UNITY_EDITOR
 using UnityEditor;
 using UnityEngine;
+using System.Linq;
 using System.IO;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System;
 using UnityEditor.Build.Reporting;
 using Debug = UnityEngine.Debug;
+using Server;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Design;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.EntityFrameworkCore.Migrations.Internal;
+using Microsoft.EntityFrameworkCore.Migrations.Design;
+using Microsoft.EntityFrameworkCore.Design.Internal;
+using Microsoft.EntityFrameworkCore.Migrations.Operations;
+using Microsoft.Extensions.DependencyInjection;
 
 public class CustomBuildTool
 {
@@ -113,6 +125,7 @@ public class CustomBuildTool
 				FileUtil.ReplaceFile(defaultFileDirectory + "/LoginServer.cfg", buildPath + "/LoginServer.cfg");
 				FileUtil.ReplaceFile(defaultFileDirectory + "/WorldServer.cfg", buildPath + "/WorldServer.cfg");
 				FileUtil.ReplaceFile(defaultFileDirectory + "/SceneServer.cfg", buildPath + "/SceneServer.cfg");
+				FileUtil.ReplaceFile(defaultFileDirectory + "/Database.cfg", buildPath + "/Database.cfg");
 			}
 		}
 		else if (summary.result == BuildResult.Failed)
@@ -197,21 +210,13 @@ public class CustomBuildTool
 						BuildTarget.StandaloneLinux64);
 	}
 
-	[MenuItem("FishMMO/Setup Docker Database")]
+	[MenuItem("FishMMO/Setup Docker Database Container")]
 	public static async void Database()
 	{
+		ServerDbContextFactory dbContextFactory = new ServerDbContextFactory(true);
+
 		// load configuration first
-		Configuration configuration = new Configuration();
-		if (!configuration.Load("PostgresqlSetup.cfg"))
-		{
-			// if we failed to load the file.. save a new one
-			configuration.Set("DbName", "fish_mmo");
-			configuration.Set("DbUsername", "user");
-			configuration.Set("DbPassword", "pass");
-			configuration.Set("DbAddress", "127.0.0.1");
-			configuration.Set("DbPort", "5432");
-			configuration.Save();
-		}
+		Configuration configuration = dbContextFactory.GetOrCreateDatabaseConfiguration();
 
 		if (configuration.TryGetString("DbName", out string dbName) &&
 			configuration.TryGetString("DbUsername", out string dbUsername) &&
@@ -229,12 +234,143 @@ public class CustomBuildTool
 			Debug.Log("Ensuring container exists... Please wait...");
 			await Task.Delay(5000);
 
-			Debug.Log("Creating base database.");
-			await Docker.RunAsync("exec " + dbName +
-								  " createdb " + dbName +
-								  " -U " + dbUsername);
+			using ServerDbContext dbContext = dbContextFactory.CreateDbContext();
 
-			Debug.Log("Database created successfully.");
+			Debug.Log("Ensuring database exists... Please wait...");
+			GenerateDatabaseSQL(dbContext);
+			Debug.Log("Database setup completed!");
+		}
+	}
+
+	[MenuItem("FishMMO/Migrate Database")]
+	public static void MigrateDatabase()
+	{
+		ServerDbContextFactory dbContextFactory = new ServerDbContextFactory(true);
+
+		using ServerDbContext dbContext = dbContextFactory.CreateDbContext();
+
+		Debug.Log("Migrating...");
+
+		var migrator = dbContext.Database.GetService<IMigrator>();
+		if (migrator == null)
+		{
+			Debug.LogError("Database context does not have a Migrator service!");
+			return;
+		}
+		migrator.Migrate();
+
+		Debug.Log("Migration complete!");
+	}
+
+	public static void GenerateDatabaseSQL(DbContext dbContext)
+	{
+		var migrator = dbContext.Database.GetService<IMigrator>();
+		if (migrator == null)
+		{
+			Debug.LogError("Database context does not have a Migrator service!");
+			return;
+		}
+		migrator.Migrate();
+
+		// Get the MigrationsAssembly from the DbContext's IInfrastructure
+		var migrationsAssembly = dbContext.GetService<IMigrationsAssembly>();
+
+		// Generate a migration script for the latest changes to the database
+		var migrationSqlGenerator = dbContext.GetService<IMigrationsSqlGenerator>();
+
+		// Get the latest migration
+		var appliedMigrations = dbContext.Database.GetAppliedMigrations();
+
+		var modelSnapshot = migrationsAssembly.ModelSnapshot;
+
+		var currentModel = dbContext.Model.GetRelationalModel();
+		var targetModel = modelSnapshot?.Model.GetRelationalModel();
+
+		// Compare the current model with the target model to get the migration operations
+		var modelDiffer = dbContext.GetService<IMigrationsModelDiffer>();
+		var migrationOperations = modelDiffer.GetDifferences(targetModel, currentModel);
+
+		// Add the NpgsqlDatabaseOperations provider if it's not already registered
+		var migrationCommandList = migrationSqlGenerator.Generate(migrationOperations);
+		var migrationCommands = migrationCommandList.Select(c => c.CommandText);
+
+		// Execute the migration commands
+		var migrationCommandExecutor = dbContext.GetService<IMigrationCommandExecutor>();
+		var relationalConnection = dbContext.GetService<IRelationalConnection>();
+
+		try
+		{
+			migrationCommandExecutor.ExecuteNonQuery(migrationCommandList, relationalConnection);
+		}
+		catch (Exception e)
+		{
+			// ignore errors with the query.. most of them are redundant race condition errors :D
+			Debug.Log(e.Message);
+		}
+
+		// save script to sql file
+		var script = string.Join(Environment.NewLine, migrationCommands);
+
+		string filePath = "migrationScript.sql";
+		File.WriteAllText(filePath, script);
+	}
+
+	public static void TEST2Migration(ServerDbContext dbContext)
+	{
+		var reporter = new OperationReporter(
+				new OperationReportHandler(
+					m => Console.WriteLine("  error: " + m),
+					m => Console.WriteLine("   warn: " + m),
+					m => Console.WriteLine("   info: " + m),
+					m => Console.WriteLine("verbose: " + m)));
+
+		var designTimeServices = new ServiceCollection()
+			.AddSingleton(dbContext.GetService<IHistoryRepository>())
+			.AddSingleton(dbContext.GetService<IMigrationsIdGenerator>())
+			.AddSingleton(dbContext.GetService<IMigrationsModelDiffer>())
+			.AddSingleton(dbContext.GetService<IMigrationsAssembly>())
+			.AddSingleton(dbContext.Model)
+			.AddSingleton(dbContext.GetService<ICurrentDbContext>())
+			.AddSingleton(dbContext.GetService<IDatabaseProvider>())
+			.AddSingleton<MigrationsCodeGeneratorDependencies>()
+			.AddSingleton<ICSharpHelper, CSharpHelper>()
+			.AddSingleton<CSharpMigrationOperationGeneratorDependencies>()
+			.AddSingleton<ICSharpMigrationOperationGenerator, CSharpMigrationOperationGenerator>()
+			.AddSingleton<CSharpSnapshotGeneratorDependencies>()
+			.AddSingleton<ICSharpSnapshotGenerator, CSharpSnapshotGenerator>()
+			.AddSingleton<CSharpMigrationsGeneratorDependencies>()
+			.AddSingleton<IMigrationsCodeGenerator, CSharpMigrationsGenerator>()
+			.AddSingleton<IOperationReporter>(reporter)
+			.AddSingleton<MigrationsScaffolderDependencies>()
+			.AddSingleton<ISnapshotModelProcessor, SnapshotModelProcessor>()
+			.AddSingleton<MigrationsScaffolder>()
+			.BuildServiceProvider();
+
+		var scaffolderDependencies = designTimeServices.GetRequiredService<MigrationsScaffolderDependencies>();
+
+		var modelSnapshot = scaffolderDependencies.MigrationsAssembly.ModelSnapshot;
+		var lastModel = scaffolderDependencies.SnapshotModelProcessor.Process(modelSnapshot?.Model);
+		var source = lastModel.GetRelationalModel();
+		var target = scaffolderDependencies.Model.GetRelationalModel();
+		var upOperations = scaffolderDependencies.MigrationsModelDiffer.GetDifferences(source, target);
+		var downOperations = upOperations.Any() ? scaffolderDependencies.MigrationsModelDiffer.GetDifferences(target, source) : new List<MigrationOperation>();
+
+		if (upOperations.Count() > 0 || downOperations.Count() > 0)
+		{
+			var scaffolder = designTimeServices.GetRequiredService<MigrationsScaffolder>();
+
+			var migration = scaffolder.ScaffoldMigration(
+				"MyMigration",
+				"MyApp.Data");
+
+			File.WriteAllText(
+				migration.MigrationId + migration.FileExtension,
+				migration.MigrationCode);
+			File.WriteAllText(
+				migration.MigrationId + ".Designer" + migration.FileExtension,
+				migration.MetadataCode);
+			File.WriteAllText(migration.SnapshotName + migration.FileExtension,
+			   migration.SnapshotCode);
 		}
 	}
 }

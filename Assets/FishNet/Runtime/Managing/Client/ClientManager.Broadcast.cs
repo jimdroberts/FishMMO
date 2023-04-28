@@ -39,9 +39,7 @@ namespace FishNet.Managing.Client
         /// <param name="handler">Method to call.</param>
         public void RegisterBroadcast<T>(Action<T> handler) where T : struct, IBroadcast
         {
-			InstanceFinder.NetworkManager.Log("[Registered Broadcast][" + typeof(T) + "]");
-
-			ushort key = typeof(T).FullName.GetStableHash16();
+            ushort key = typeof(T).FullName.GetStableHash16();
             /* Create delegate and add for
              * handler method. */
             HashSet<ServerBroadcastDelegate> handlers;
@@ -73,9 +71,7 @@ namespace FishNet.Managing.Client
         /// <param name="handler">Method to unregister.</param>
         public void UnregisterBroadcast<T>(Action<T> handler) where T : struct, IBroadcast
         {
-			InstanceFinder.NetworkManager.Log("[Unregistered Broadcast][" + typeof(T) + "]");
-
-			ushort key = BroadcastHelper.GetKey<T>();
+            ushort key = BroadcastHelper.GetKey<T>();
 
             /* If key is found for T then look for
              * the appropriate handler to remove. */
@@ -161,7 +157,6 @@ namespace FishNet.Managing.Client
         /// <param name="channel">Channel to send on.</param>
         public void Broadcast<T>(T message, Channel channel = Channel.Reliable) where T : struct, IBroadcast
         {
-			InstanceFinder.NetworkManager.Log("[Broadcast][" + typeof(T) + "]");
             //Check local connection state.
             if (!Started)
             {

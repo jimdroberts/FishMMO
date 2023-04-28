@@ -16,8 +16,8 @@ namespace Server.Entities
         // note: the collation has been added in the DbContext OnModelCreating function since the Postgres provider
         // doesn't support collations via attributes
         public string Name { get; set; }
-        public string NameLowercase { get; set; }
-        public string Account { get; set; }
+		public string NameLowercase { get; set; }
+		public string Account { get; set; }
         public int RaceID { get; set; }
         public string SceneName { get; set; }
         public float X { get; set; }

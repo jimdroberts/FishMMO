@@ -9,6 +9,7 @@ using FishNet.Utility.Performance;
 using System;
 using FishNet.Managing.Object;
 using FishNet.Component.Ownership;
+using FishNet.Component.Observing;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -16,7 +17,7 @@ using UnityEditor;
 namespace FishNet.Object
 {
     [DisallowMultipleComponent]
-    public sealed partial class NetworkObject : MonoBehaviour
+    public partial class NetworkObject : MonoBehaviour
     {
         #region Public.
         /// <summary>
@@ -33,6 +34,12 @@ namespace FishNet.Object
         /// </summary>
         [System.NonSerialized]
         internal bool ActiveDuringEdit;
+        /// <summary>
+        /// Set true if this object uses prediction methods.
+        /// </summary>
+        [Tooltip("Set true if this object uses prediction methods.")]
+        [SerializeField]
+        private bool _usesPrediction;
         /// <summary>
         /// Returns if this object was placed in the scene during edit-time.
         /// </summary>
@@ -198,12 +205,13 @@ namespace FishNet.Object
 #endif
         #endregion
 
-        private void Awake()
+        protected virtual void Awake()
         {
+            _isStatic = gameObject.isStatic;
             SetChildDespawnedState();
         }
 
-        private void Start()
+        protected virtual void Start()
         {
             TryStartDeactivation();
         }
@@ -308,6 +316,9 @@ namespace FishNet.Object
             //Does this need to be here? I'm thinking no, remove it and examine later. //todo
             if (Owner.IsValid)
                 Owner.RemoveObject(this);
+
+            if (NetworkObserver != null)
+                NetworkObserver.Deinitialize(true);
             //Already being deinitialized by FishNet.
             if (IsDeinitializing)
                 return;
@@ -368,7 +379,7 @@ namespace FishNet.Object
             IsClient = isActive;
         }
         /// <summary>
-        /// Initializes this script. This is only called once even when as host.
+        /// Preinitializes this object for the network.
         /// </summary>
         /// <param name="networkManager"></param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -398,15 +409,23 @@ namespace FishNet.Object
             AddDefaultNetworkObserverConditions();
 
             for (int i = 0; i < NetworkBehaviours.Length; i++)
-                NetworkBehaviours[i].InitializeOnce_Internal();
+                NetworkBehaviours[i].Preinitialize_Internal(this, asServer);
 
             /* NetworkObserver uses some information from
              * NetworkBehaviour so it must be preinitialized
              * after NetworkBehaviours are. */
             if (asServer)
-                NetworkObserver.PreInitialize(this);
+            {
+                _hashGrid = networkManager.GetInstance<HashGrid>(false);
+                if (_hashGrid != null)
+                    HashGridEntry = _hashGrid.GetGridEntry(this);
+                NetworkObserver.Initialize(this);
+            }
             _networkObserverInitiliazed = true;
 
+#if PREDICTION_V2
+            Prediction_Preinitialize(networkManager, asServer);
+#endif
             //Add to connection objects if owner exist.
             if (owner != null)
                 owner.AddObject(this);
@@ -464,14 +483,14 @@ namespace FishNet.Object
             ParentNetworkObject = parentNob;
 
             //Transforms which can be searched for networkbehaviours.
-            ListCache<Transform> transformCache = ListCaches.GetTransformCache();
-            transformCache.Reset();
+            List<Transform> transformCache = CollectionCaches<Transform>.Retrieve();
             ChildNetworkObjects.Clear();
 
-            transformCache.AddValue(transform);
-            for (int z = 0; z < transformCache.Written; z++)
+            transformCache.Add(transform);
+            int transformCount = transformCache.Count;
+            for (int z = 0; z < transformCount; z++)
             {
-                Transform currentT = transformCache.Collection[z];
+                Transform currentT = transformCache[z];
                 for (int i = 0; i < currentT.childCount; i++)
                 {
                     Transform t = currentT.GetChild(i);
@@ -491,34 +510,29 @@ namespace FishNet.Object
                     }
                     else
                     {
-                        transformCache.AddValue(t);
+                        transformCache.Add(t);
                     }
                 }
             }
 
-            int written;
             //Iterate all cached transforms and get networkbehaviours.
-            ListCache<NetworkBehaviour> nbCache = ListCaches.GetNetworkBehaviourCache();
-            nbCache.Reset();
-            written = transformCache.Written;
-            List<Transform> ts = transformCache.Collection;
+            List<NetworkBehaviour> nbCache = CollectionCaches<NetworkBehaviour>.Retrieve();
             //
-            for (int i = 0; i < written; i++)
-                nbCache.AddValues(ts[i].GetNetworkBehaviours());
+            for (int i = 0; i < transformCount; i++)
+                nbCache.AddRange(transformCache[i].GetNetworkBehaviours());
 
             //Copy to array.
-            written = nbCache.Written;
-            List<NetworkBehaviour> nbs = nbCache.Collection;
-            NetworkBehaviours = new NetworkBehaviour[written];
+            int nbCount = nbCache.Count;
+            NetworkBehaviours = new NetworkBehaviour[nbCount];
             //
-            for (int i = 0; i < written; i++)
+            for (int i = 0; i < nbCount; i++)
             {
-                NetworkBehaviours[i] = nbs[i];
+                NetworkBehaviours[i] = nbCache[i];
                 NetworkBehaviours[i].SerializeComponents(this, (byte)i);
             }
 
-            ListCaches.StoreCache(transformCache);
-            ListCaches.StoreCache(nbCache);
+            CollectionCaches<Transform>.Store(transformCache);
+            CollectionCaches<NetworkBehaviour>.Store(nbCache);
 
             //Tell children nobs to update their NetworkBehaviours.
             foreach (NetworkObject item in ChildNetworkObjects)
@@ -542,6 +556,9 @@ namespace FishNet.Object
         /// </summary>
         internal void Deinitialize(bool asServer)
         {
+#if PREDICTION_V2
+            Prediction_Deinitialize(asServer);
+#endif
             InvokeStopCallbacks(asServer);
             if (asServer)
             {
@@ -574,7 +591,7 @@ namespace FishNet.Object
 
             State = NetworkObjectState.Unset;
             SetOwner(NetworkManager.EmptyConnection);
-            NetworkObserver.Deinitialize();
+            NetworkObserver.Deinitialize(false);
             //QOL references.
             NetworkManager = null;
             ServerManager = null;

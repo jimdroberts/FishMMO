@@ -24,13 +24,11 @@ namespace Server
 		public ServerDbContextFactory DbContextFactory;
 
 		public NetworkManager NetworkManager { get; private set; }
-		//public DbContextFactory DBContextFactory { get; private set; }
 
 		#region LOGIN
 		public CharacterSelectSystem CharacterSelectSystem { get; private set; }
 		public CharacterCreateSystem CharacterCreateSystem { get; private set; }
 		public ServerSelectSystem ServerSelectSystem { get; private set; }
-		public DatabaseInitializerSystem DatabaseInitializerSystem { get; private set; }
 		#endregion
 
 		#region WORLD
@@ -65,11 +63,6 @@ namespace Server
 				configuration.Set("Port", 7770);
 				configuration.Set("RelayAddress", "");
 				configuration.Set("RelayPort", 0);
-				configuration.Set("DbAddress", "127.0.0.1");
-				configuration.Set("DbPort", "5432");
-				configuration.Set("DbName", "fish_mmo");
-				configuration.Set("DbUsername", "user");
-				configuration.Set("DbPassword", "pass");
 				configuration.Save();
 			}
 
@@ -145,9 +138,7 @@ namespace Server
 				ServerWindowTitleUpdater.InternalInitializeOnce(this, NetworkManager.ServerManager);
 
 			// setup the DB context and ensure that it's been created
-			DbContextFactory = new ServerDbContextFactory(this);
-			DatabaseInitializerSystem = GetOrCreateComponent<DatabaseInitializerSystem>();
-			DatabaseInitializerSystem.InternalInitializeOnce(this, NetworkManager.ServerManager);
+			DbContextFactory = new ServerDbContextFactory(false);
 
 			// database factory DI
 			LoginServerAuthenticator authenticator = NetworkManager.Authenticator as LoginServerAuthenticator;

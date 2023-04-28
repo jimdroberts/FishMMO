@@ -47,8 +47,6 @@ namespace FishNet.Managing.Server
         /// <param name="requireAuthentication">True if the client must be authenticated for the method to call.</param>
         public void RegisterBroadcast<T>(Action<NetworkConnection, T> handler, bool requireAuthentication = true) where T : struct, IBroadcast
         {
-            InstanceFinder.NetworkManager.Log("[Registered Broadcast][" + typeof(T) + "]");
-
             ushort key = BroadcastHelper.GetKey<T>();
 
             /* Create delegate and add for
@@ -82,9 +80,7 @@ namespace FishNet.Managing.Server
         /// <param name="handler">Method to unregister.</param>
         public void UnregisterBroadcast<T>(Action<NetworkConnection, T> handler) where T : struct, IBroadcast
         {
-			InstanceFinder.NetworkManager.Log("[Unregistered Broadcast][" + typeof(T) + "]");
-
-			ushort key = BroadcastHelper.GetKey<T>();
+            ushort key = BroadcastHelper.GetKey<T>();
 
             /* If key is found for T then look for
              * the appropriate handler to remove. */
@@ -217,9 +213,7 @@ namespace FishNet.Managing.Server
                 return;
             }
 
-			NetworkManager.Log("[Broadcast][" + typeof(T) + "]");
-
-			using (PooledWriter writer = WriterPool.GetWriter())
+            using (PooledWriter writer = WriterPool.GetWriter())
             {
                 Broadcasts.WriteBroadcast<T>(writer, message, channel);
                 ArraySegment<byte> segment = writer.GetArraySegment();
@@ -244,9 +238,7 @@ namespace FishNet.Managing.Server
                 return;
             }
 
-			NetworkManager.Log("[Broadcast][" + typeof(T) + "]");
-
-			bool failedAuthentication = false;
+            bool failedAuthentication = false;
             using (PooledWriter writer = WriterPool.GetWriter())
             {
                 Broadcasts.WriteBroadcast<T>(writer, message, channel);
@@ -436,9 +428,7 @@ namespace FishNet.Managing.Server
                 return;
             }
 
-			NetworkManager.Log("[Broadcast][" + typeof(T) + "]");
-
-			bool failedAuthentication = false;
+            bool failedAuthentication = false;
             using (PooledWriter writer = WriterPool.GetWriter())
             {
                 Broadcasts.WriteBroadcast<T>(writer, message, channel);

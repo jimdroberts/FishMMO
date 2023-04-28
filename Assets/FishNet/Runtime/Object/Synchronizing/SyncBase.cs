@@ -45,7 +45,8 @@ namespace FishNet.Object.Synchronizing.Internal
         /// </summary>
         public NetworkBehaviour NetworkBehaviour = null;
         /// <summary>
-        /// Next time a SyncVar may send data/
+        /// Next time this SyncType may send data.
+        /// This is also the next time a client may send to the server when using client-authoritative SyncTypes.
         /// </summary>
         public uint NextSyncTick = 0;
         /// <summary>
@@ -113,25 +114,21 @@ namespace FishNet.Object.Synchronizing.Internal
         {
             NetworkManager = networkManager;
             if (Settings.SendRate < 0f)
-            {
-                if (networkManager.ClientManager != null)
-                {
-					Settings.SendRate = networkManager.ClientManager.GetSynctypeRate();
-				}
-                else if (networkManager.ServerManager != null)
-                {
-					Settings.SendRate = networkManager.ServerManager.GetSynctypeRate();
-				}
-			}
+                Settings.SendRate = (networkManager == null || networkManager.ServerManager == null) ? 0.1f : networkManager.ServerManager.GetSynctypeRate();
 
             _timeToTicks = NetworkManager.TimeManager.TimeToTicks(Settings.SendRate, TickRounding.RoundUp);
         }
 
         /// <summary>
-        /// Called after OnStartXXXX has occurred.
+        /// Called after OnStartXXXX has occurred for the NetworkBehaviour.
         /// </summary>
         /// <param name="asServer">True if OnStartServer was called, false if OnStartClient.</param>
         public virtual void OnStartCallback(bool asServer) { }
+        /// <summary>
+        /// Called before OnStopXXXX has occurred for the NetworkBehaviour.
+        /// </summary>
+        /// <param name="asServer">True if OnStopServer was called, false if OnStopClient.</param>
+        public virtual void OnStopCallback(bool asServer) { }
 
         protected bool CanNetworkSetValues(bool warn = true)
         {
@@ -156,7 +153,7 @@ namespace FishNet.Object.Synchronizing.Internal
                 return true;
             /* If here then server is not active and additional
              * checks must be performed. */
-            bool result = (Settings.ReadPermission == ReadPermission.ExcludeOwner && NetworkBehaviour.IsOwner);
+            bool result = (Settings.WritePermission == WritePermission.ClientUnsynchronized) || (Settings.ReadPermission == ReadPermission.ExcludeOwner && NetworkBehaviour.IsOwner);
             if (!result && warn)
                 LogServerNotActiveWarning();
 
@@ -169,7 +166,7 @@ namespace FishNet.Object.Synchronizing.Internal
         protected void LogServerNotActiveWarning()
         {
             if (NetworkManager != null)
-                NetworkManager.LogWarning($"Cannot complete operation as server when server is not active.");
+                NetworkManager.LogWarning($"Cannot complete operation as server when server is not active. You can disable this warning by setting WritePermissions to {WritePermission.ClientUnsynchronized.ToString()}.");
         }
 
         /// <summary>
@@ -217,7 +214,7 @@ namespace FishNet.Object.Synchronizing.Internal
         /// </summary>
         /// <param name="tick"></param>
         /// <returns></returns>
-        internal bool WriteTimeMet(uint tick)
+        internal bool SyncTimeMet(uint tick)
         {
             return (IsDirty && tick >= NextSyncTick);
         }
@@ -239,7 +236,7 @@ namespace FishNet.Object.Synchronizing.Internal
         protected virtual void WriteHeader(PooledWriter writer, bool resetSyncTick = true)
         {
             if (resetSyncTick)
-                NextSyncTick = NetworkManager.TimeManager.Tick + _timeToTicks;
+                NextSyncTick = NetworkManager.TimeManager.LocalTick + _timeToTicks;
 
             writer.WriteByte((byte)SyncIndex);
         }

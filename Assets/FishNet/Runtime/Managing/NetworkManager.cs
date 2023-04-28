@@ -116,14 +116,14 @@ namespace FishNet.Managing
 		/// True if only the client is active and authenticated.
 		/// </summary>
 		public bool IsClientOnly => (!IsServer && IsClient);
-        /// <summary>
+		/// <summary>
         /// True if client and server are active.
         /// </summary>
         public bool IsHost => false;// (IsServer && IsClient); we never use hostmode
-		/// <summary>
-		/// True if client nor server are active.
-		/// </summary>
-		public bool IsOffline => (!IsServer && !IsClient);
+        /// <summary>
+        /// True if client nor server are active.
+        /// </summary>
+        public bool IsOffline => (!IsServer && !IsClient);
         /// <summary>
         /// PredictionManager for this NetworkManager.
         /// </summary>
@@ -136,7 +136,7 @@ namespace FishNet.Managing
 		/// ServerManager for this NetworkManager.
 		/// </summary>
 		public ServerManager ServerManager { get; private set; }
-        /// <summary>
+		/// <summary>
         /// ClientManager for this NetworkManager.
         /// </summary>
         public ClientManager ClientManager { get; private set; }
@@ -157,6 +157,7 @@ namespace FishNet.Managing
         /// </summary>
         public ObserverManager ObserverManager { get; private set; }
         /// <summary>
+
         /// DebugManager for this NetworkManager.
         /// </summary>
         public DebugManager DebugManager { get; private set; }
@@ -200,6 +201,7 @@ namespace FishNet.Managing
         /// <summary>
         /// Object pool to use for this NetworkManager. Value may be null.
         /// </summary>
+        public ObjectPool ObjectPool => _objectPool;
         [Tooltip("Object pool to use for this NetworkManager. Value may be null.")]
         [SerializeField]
         private ObjectPool _objectPool;
@@ -282,7 +284,7 @@ namespace FishNet.Managing
 			ClientManager = GetComponent<ClientManager>();
 			//ClientManager = GetOrCreateComponent<ClientManager>();
 			TimeManager = GetOrCreateComponent<TimeManager>();
-            SceneManager = GetOrCreateComponent<SceneManager>();
+			SceneManager = GetOrCreateComponent<SceneManager>();
             ObserverManager = GetOrCreateComponent<ObserverManager>();
             RollbackManager = GetOrCreateComponent<RollbackManager>();
             PredictionManager = GetOrCreateComponent<PredictionManager>();
@@ -290,9 +292,9 @@ namespace FishNet.Managing
             if (_objectPool == null)
                 _objectPool = GetOrCreateComponent<DefaultObjectPool>();
 
-			_instances.Add(this);
+            _instances.Add(this);
 			InitializeComponents();
-
+			
             Initialized = true;
         }
 
@@ -301,7 +303,7 @@ namespace FishNet.Managing
 			if (ServerManager != null)
 				ServerManager.StartForHeadless();
 		}
-
+		
         private void OnDestroy()
         {
             _instances.Remove(this);
@@ -325,8 +327,8 @@ namespace FishNet.Managing
             ObserverManager.InitializeOnce_Internal(this);
 			if (RollbackManager != null)
 				RollbackManager.InitializeOnce_Internal(this);
-            PredictionManager.InitializeOnce_Internal(this);
-            StatisticsManager.InitializeOnce_Internal(this);
+			PredictionManager.InitializeOnce_Internal(this);
+			StatisticsManager.InitializeOnce_Internal(this);
             _objectPool.InitializeOnce(this);
         }
 
@@ -486,6 +488,7 @@ namespace FishNet.Managing
         /// <summary>
         /// Returns an instantiated copy of prefab.
         /// </summary>
+        [Obsolete("Use GetPooledInstantiated(NetworkObject, ushort, bool).")] //Remove on 2024/01/01.
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public NetworkObject GetPooledInstantiated(NetworkObject prefab, bool asServer)
         {
@@ -502,6 +505,7 @@ namespace FishNet.Managing
         /// <summary>
         /// Returns an instantiated copy of prefab.
         /// </summary>
+        [Obsolete("Use GetPooledInstantiated(GameObject, ushort, bool).")] //Remove on 2024/01/01.
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public NetworkObject GetPooledInstantiated(GameObject prefab, bool asServer)
         {
@@ -526,6 +530,7 @@ namespace FishNet.Managing
         /// <summary>
         /// Returns an instantiated object that has prefabId.
         /// </summary>
+        [Obsolete("Use GetPooledInstantiated(int, ushort, bool).")] //Remove on 2024/01/01.
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public NetworkObject GetPooledInstantiated(int prefabId, bool asServer)
         {
@@ -557,6 +562,16 @@ namespace FishNet.Managing
         public void StorePooledInstantiated(NetworkObject instantiated, bool asServer)
         {
             _objectPool.StoreObject(instantiated, asServer);
+        }
+        /// <summary>
+        /// Instantiates a number of objects and adds them to the pool.
+        /// </summary>
+        /// <param name="prefab">Prefab to cache.</param>
+        /// <param name="count">Quantity to spawn.</param>
+        /// <param name="asServer">True if storing prefabs for the server collection. This is only applicable when using DualPrefabObjects.</param>
+        public void CacheObjects(NetworkObject prefab, int count, bool asServer)
+        {
+            _objectPool.CacheObjects(prefab, count, asServer);
         }
         #endregion
 
