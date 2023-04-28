@@ -391,7 +391,7 @@ MonoBehaviour:
   _componentIndexCache: 1
   _addedNetworkObject: {fileID: 784751938054981284}
   _networkObjectCache: {fileID: 784751938054981284}
-  _componentConfiguration: 0
+  _componentConfiguration: 1
   _synchronizeParent: 0
   _packing:
     Position: 1
@@ -467,19 +467,19 @@ MonoBehaviour:
   MaxStableMoveSpeed: 10
   StableMovementSharpness: 15
   OrientationSharpness: 10
-  OrientationMethod: 1
-  MaxAirMoveSpeed: 15
-  AirAccelerationSpeed: 15
+  OrientationMethod: 0
+  MaxAirMoveSpeed: 10
+  AirAccelerationSpeed: 0
   Drag: 0.1
   AllowJumpingWhenSliding: 0
   JumpUpSpeed: 5
-  JumpScalableForwardSpeed: 5
+  JumpScalableForwardSpeed: 0
   JumpPreGroundingGraceTime: 0
   JumpPostGroundingGraceTime: 0
   IgnoredColliders: []
   BonusOrientationMethod: 0
   BonusOrientationSharpness: 10
-  Gravity: {x: 0, y: -5, z: 0}
+  Gravity: {x: 0, y: -10, z: 0}
   MeshRoot: {fileID: 4109116143672956399}
   CameraFollowPoint: {fileID: 4109116143672956399}
   CrouchedCapsuleHeight: 1
@@ -500,7 +500,7 @@ MonoBehaviour:
   CapsuleHeight: 2
   CapsuleYOffset: 0
   CapsulePhysicsMaterial: {fileID: 0}
-  GroundDetectionExtraDistance: 0
+  GroundDetectionExtraDistance: 0.001
   MaxStableSlopeAngle: 60
   StableGroundLayers:
     serializedVersion: 2

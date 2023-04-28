@@ -172,9 +172,6 @@ namespace KinematicCharacterController
             }
         }
 
-        
-
-
         private void LateUpdate()
         {
             if (Settings.Interpolate)

@@ -176,7 +176,7 @@ namespace KinematicCharacterController.Examples
 			return state;
 		}
 
-		private void LateUpdate()
+		private void Update()
 		{
 			if (!base.IsOwner)
 			{
@@ -194,7 +194,14 @@ namespace KinematicCharacterController.Examples
 			{
 				_crouchUpQueued = true;
 			}
+		}
 
+		private void LateUpdate()
+		{
+			if (!base.IsOwner)
+			{
+				return;
+			}
 			// Handle rotating the camera along with physics movers
 			if (CharacterCamera != null && CharacterCamera.RotateWithPhysicsMover && Character.Motor.AttachedRigidbody != null)
 			{
@@ -231,7 +238,7 @@ namespace KinematicCharacterController.Examples
 #endif
 
 			// Apply inputs to the camera
-			CharacterCamera.UpdateWithInput(Time.deltaTime, scrollInput, lookInputVector);
+			CharacterCamera.UpdateWithInput((float)base.TimeManager.TickDelta, scrollInput, lookInputVector);
 
 			// Handle toggling zoom level
 			if (Input.GetMouseButtonDown(1))
@@ -239,10 +246,10 @@ namespace KinematicCharacterController.Examples
 				CharacterCamera.TargetDistance = (CharacterCamera.TargetDistance == 0f) ? CharacterCamera.DefaultDistance : 0f;
 			}
 
-			if (CharacterCamera.TargetDistance == 0f)
-				SetOrientationMethod(OrientationMethod.TowardsCamera);
-			else
-				SetOrientationMethod(OrientationMethod.TowardsMovement);
+			//if (CharacterCamera.TargetDistance == 0f)
+				SetOrientationMethod(Character.OrientationMethod);
+			//else
+			//	SetOrientationMethod(OrientationMethod.TowardsMovement);
 		}
 
 		[ServerRpc(RunLocally = true)]

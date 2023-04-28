@@ -1279,7 +1279,6 @@ namespace KinematicCharacterController
             }
 
             int groundSweepsMade = 0;
-            RaycastHit groundSweepHit = new RaycastHit();
             bool groundSweepingIsOver = false;
             Vector3 groundSweepPosition = probingPosition;
             Vector3 groundSweepDirection = (atRotation * -_cachedWorldUp);
@@ -1292,7 +1291,7 @@ namespace KinematicCharacterController
                         atRotation, // rotation
                         groundSweepDirection, // direction
                         groundProbeDistanceRemaining, // distance
-                        out groundSweepHit)) // hit
+                        out RaycastHit groundSweepHit)) // hit
                 {
                     Vector3 targetPosition = groundSweepPosition + (groundSweepDirection * groundSweepHit.distance);
                     HitStabilityReport groundHitStabilityReport = new HitStabilityReport();
