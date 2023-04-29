@@ -167,6 +167,7 @@ namespace Server
 					WorldSceneSystem.InternalInitializeOnce(this, NetworkManager.ServerManager);
 
 					WorldChatSystem = GetOrCreateComponent<WorldChatSystem>();
+					WorldChatSystem.WorldSceneSystem = WorldSceneSystem;
 					WorldChatSystem.InternalInitializeOnce(this, NetworkManager.ServerManager);
 
 					// world server has special title bar that handles relay information

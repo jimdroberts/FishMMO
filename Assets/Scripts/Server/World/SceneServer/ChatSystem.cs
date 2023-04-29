@@ -41,25 +41,25 @@ namespace Server
 			if (args.ConnectionState == LocalConnectionState.Started)
 			{
 				// server handles command parsing so add default commands here
-				commandEvents.Add("/w", OnWorldChat);
-				commandEvents.Add("/world", OnWorldChat);
+				AddCommandEvent("/w", OnWorldChat);
+				AddCommandEvent("/world", OnWorldChat);
 
-				commandEvents.Add("/r", OnRegionChat);
-				commandEvents.Add("/region", OnRegionChat);
+				AddCommandEvent("/r", OnRegionChat);
+				AddCommandEvent("/region", OnRegionChat);
 
-				commandEvents.Add("/p", OnPartyChat);
-				commandEvents.Add("/party", OnPartyChat);
+				AddCommandEvent("/p", OnPartyChat);
+				AddCommandEvent("/party", OnPartyChat);
 
-				commandEvents.Add("/g", OnGuildChat);
-				commandEvents.Add("/guild", OnGuildChat);
+				AddCommandEvent("/g", OnGuildChat);
+				AddCommandEvent("/guild", OnGuildChat);
 
-				commandEvents.Add("/tell", OnTellChat);
+				AddCommandEvent("/tell", OnTellChat);
 
-				commandEvents.Add("/t", OnTradeChat);
-				commandEvents.Add("/trade", OnTradeChat);
+				AddCommandEvent("/t", OnTradeChat);
+				AddCommandEvent("/trade", OnTradeChat);
 
-				commandEvents.Add("/s", OnSayChat);
-				commandEvents.Add("/say", OnSayChat);
+				AddCommandEvent("/s", OnSayChat);
+				AddCommandEvent("/say", OnSayChat);
 
 				ServerManager.RegisterBroadcast<ChatBroadcast>(OnServerChatMessageReceived, true);
 					
@@ -76,6 +76,16 @@ namespace Server
 				ClientManager.UnregisterBroadcast<WorldChatTellBroadcast>(OnServerWorldChatTellBroadcastReceived);
 			}
 		}
+
+		public void AddCommandEvent(string command, ChatCommand commandFunction)
+		{
+			if (!commandEvents.ContainsKey(command))
+			{
+				Debug.Log("[" + DateTime.UtcNow + "] ChatSystem: Added command[" + command + "]");
+
+				commandEvents.Add(command, commandFunction);
+			}
+		}	
 
 		/// <summary>
 		/// Chat message received from a character.
@@ -107,8 +117,6 @@ namespace Server
 		/// </summary>
 		private void OnServerWorldChatBroadcastReceived(WorldChatBroadcast msg)
 		{
-			Debug.Log(msg.chatMsg.channel + ": " + msg.chatMsg.text);
-
 			switch (msg.chatMsg.channel)
 			{
 				case ChatChannel.World:
@@ -143,6 +151,10 @@ namespace Server
 			// do things here
 			string cmd = GetAndRemoveCommand(ref msg.text);
 
+			//Debug.Log("[" + DateTime.UtcNow + "] ChatSystem: " + character.characterName +
+			//		  " last chat message[" + character.lastChatMessage + "] " +
+			//		  " current chat message[" + msg.text + "]");
+
 			if (messageRateLimit > 0)
 			{
 				if (character.nextChatMessageTime > DateTime.UtcNow)
@@ -153,7 +165,7 @@ namespace Server
 			}
 			if (!allowRepeatMessages)
 			{
-				if (!character.lastChatMessage.Equals(msg.text))
+				if (character.lastChatMessage.Equals(msg.text))
 				{
 					return;
 				}
@@ -163,10 +175,12 @@ namespace Server
 			// parse our command or send the message to our /say channel
 			if (commandEvents.TryGetValue(cmd, out ChatCommand command))
 			{
+				//Debug.Log("[" + DateTime.UtcNow + "] ChatSystem: Invoking command[" + cmd + "]");
 				command?.Invoke(conn, character, msg);
 			}
 			else
 			{
+				//Debug.Log("[" + DateTime.UtcNow + "] ChatSystem: Default command[Say]");
 				OnSayChat(conn, character, msg); // default to say chat?
 			}
 		}
