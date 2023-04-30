@@ -70,6 +70,7 @@ crashlytics-build.properties
 # Temporary auto-generated Android Assets
 /[Aa]ssets/[Ss]treamingAssets/aa.meta
 /[Aa]ssets/[Ss]treamingAssets/aa/*
+.idea/
 
 # Local directory, anything here will be ignored
 /[Aa]ssets/[Ll][Oo][Cc][Aa][Ll]*
