@@ -1,5 +1,4 @@
-﻿using FishNet.Authenticating;
-using FishNet.Component.Observing;
+﻿using FishNet.Component.Observing;
 using FishNet.Connection;
 using FishNet.Managing.Client;
 using FishNet.Managing.Debugging;
@@ -14,7 +13,6 @@ using FishNet.Utility.Performance;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using UnityEngine;
 
 namespace FishNet.Managing.Server
@@ -163,7 +161,7 @@ namespace FishNet.Managing.Server
                 NetworkManager.Authenticator.OnAuthenticationResult += Authenticator_OnAuthenticationResult;
             }
 
-			_cachedLevelOfDetailInterval = ClientManager.LevelOfDetailInterval;
+            _cachedLevelOfDetailInterval = ClientManager.LevelOfDetailInterval;
             _cachedUseLod = NetworkManager.ObserverManager.GetUseNetworkLod();
         }
 
@@ -306,12 +304,12 @@ namespace FishNet.Managing.Server
             }
         }
 
-		/// <summary>
-		/// Called when authenticator has concluded a result for a connection. Boolean is true if authentication passed, false if failed.
-		/// Server listens for this event automatically.
-		/// </summary>
-		private void Authenticator_OnAuthenticationResult(NetworkConnection conn, bool authenticated)
-		{
+        /// <summary>
+        /// Called when authenticator has concluded a result for a connection. Boolean is true if authentication passed, false if failed.
+        /// Server listens for this event automatically.
+        /// </summary>
+        private void Authenticator_OnAuthenticationResult(NetworkConnection conn, bool authenticated)
+        {
             if (!authenticated)
                 conn.Disconnect(false);
             else
@@ -329,11 +327,10 @@ namespace FishNet.Managing.Server
             Started = AnyServerStarted();
 			if (NetworkManager.ClientManager != null)
 				NetworkManager.ClientManager.Objects.OnServerConnectionState(args);
-
             //If no servers are started then reset match conditions.
             if (!Started)
             {
-                MatchCondition.ClearMatchesWithoutRebuilding();
+                MatchCondition.StoreCollections(NetworkManager);
                 //Despawn without synchronizing network objects.
                 Objects.DespawnWithoutSynchronization(true);
             }
@@ -395,7 +392,7 @@ namespace FishNet.Managing.Server
                         conn.SetDisconnecting(true);
                         OnRemoteConnectionState?.Invoke(conn, args);
                         Clients.Remove(id);
-                        MatchCondition.RemoveFromMatchWithoutRebuild(conn, NetworkManager);
+                        conn.Deinitialize();
                         Objects.ClientDisconnected(conn);
                         BroadcastClientConnectionChange(false, conn);
                         //Return predictedObjectIds.
@@ -445,7 +442,6 @@ namespace FishNet.Managing.Server
         /// </summary>
         private void Transport_OnServerReceivedData(ServerReceivedDataArgs args)
         {
-            args.Data = NetworkManager.TransportManager.ProcessIntermediateIncoming(args.Data, false);
             ParseReceived(args);
         }
 
@@ -476,14 +472,16 @@ namespace FishNet.Managing.Server
                 return;
             }
 
+            bool hasIntermediateLayer = NetworkManager.TransportManager.HasIntermediateLayer;
             PacketId packetId = PacketId.Unset;
 #if !UNITY_EDITOR && !DEVELOPMENT_BUILD
             try
             {
 #endif
-            using (PooledReader reader = ReaderPool.GetReader(segment, NetworkManager))
+            Reader.DataSource dataSource = Reader.DataSource.Client;
+            using (PooledReader reader = ReaderPool.GetReader(segment, NetworkManager, dataSource))
             {
-                uint tick = reader.ReadUInt32(AutoPackType.Unpacked);
+                uint tick = reader.ReadTickUnpacked();
                 NetworkManager.TimeManager.LastPacketTick = tick;
                 /* This is a special condition where a message may arrive split.
                 * When this occurs buffer each packet until all packets are
@@ -515,10 +513,24 @@ namespace FishNet.Managing.Server
                      * unrelated data added afterwards. We're going to cut
                      * the client some slack in this situation for the sake
                      * of keeping things simple. */
-                    //Initialize reader with full message.
-                    reader.Initialize(fullMessage, NetworkManager);
-                }
 
+                    //Initialize reader with full message.
+                    if (hasIntermediateLayer)
+                        reader.Initialize(NetworkManager.TransportManager.ProcessIntermediateIncoming(fullMessage, false), NetworkManager, dataSource);
+                    else
+                        reader.Initialize(fullMessage, NetworkManager, dataSource);
+                }
+                //Not Split.
+                else
+                {
+                    //Override values with intermediate layer changes.
+                    if (hasIntermediateLayer)
+                    {
+                        ArraySegment<byte> modified = NetworkManager.TransportManager.ProcessIntermediateIncoming(reader.GetRemainingData(), false);
+                        reader.Initialize(modified, NetworkManager, dataSource);
+                    }
+                }
+                
                 //Parse reader.
                 while (reader.Remaining > 0)
                 {
@@ -634,7 +646,7 @@ namespace FishNet.Managing.Server
              * have clients use a stopwatch rather than frame time
              * for checks to ensure it's not possible to send
              * excessively should their game stutter then catch back up. */
-            uint clientTick = reader.ReadUInt32(AutoPackType.Unpacked);
+            uint clientTick = reader.ReadTickUnpacked();
             if (conn.CanPingPong())
                 NetworkManager.TimeManager.SendPong(conn, clientTick);
         }
@@ -684,16 +696,16 @@ namespace FishNet.Managing.Server
                 if (connected)
                 {
                     //Send already connected clients to the connection that just joined.
-                    ListCache<int> lc = ListCaches.GetIntCache();
+                    List<int> cache = CollectionCaches<int>.Retrieve();
                     foreach (int key in Clients.Keys)
-                        lc.AddValue(key);
+                        cache.Add(key);
 
                     ConnectedClientsBroadcast allMsg = new ConnectedClientsBroadcast()
                     {
-                        ListCache = lc
+                        Values = cache
                     };
                     conn.Broadcast(allMsg);
-                    ListCaches.StoreCache(lc);
+                    CollectionCaches<int>.Store(cache);
                 }
             }
             //If not sharing Ids then only send ConnectionChange to conn.

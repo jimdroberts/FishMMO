@@ -1,4 +1,5 @@
 ﻿using FishNet.Transporting;
+using System;
 using System.Runtime.InteropServices;
 using UnityEngine;
 
@@ -12,8 +13,14 @@ namespace Server
 		[DllImport("kernel32.dll")]
 		private static extern bool SetConsoleTitle(string title);
 #elif UNITY_STANDALONE_LINUX || UNITY_EDITOR_LINUX
-		[DllImport("libc", EntryPoint = "setproctitle")]
-		private static extern void SetProcTitleLinux(string title);
+		private const int PR_SET_NAME = 15;
+
+		[DllImport("libc.so.6", SetLastError=true)]
+		private static extern int prctl(int option, string arg2, IntPtr arg3, IntPtr arg4, IntPtr arg5);
+#elif UNITY_STANDALONE_OSX || UNITY_EDITOR_OSX
+
+		[DllImport("libc.dylib", SetLastError=true)]
+		private static extern void setproctitle(string fmt, string str_arg);
 #endif
 
 		public string title = "";
@@ -60,8 +67,10 @@ namespace Server
 
 #if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
 			SetConsoleTitle(title);
-#elif UNITY_STANDALONE_LINUX || UNITY_EDITOR_LINUX || UNITY_STANDALONE_OSX || UNITY_EDITOR_OSX
-			SetProcTitleLinux(title);
+#elif UNITY_STANDALONE_LINUX || UNITY_EDITOR_LINUX
+			prctl(PR_SET_NAME, title, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
+#elif UNITY_STANDALONE_OSX || UNITY_EDITOR_OSX
+			setproctitle("{0}", title);
 #endif
 		}
 

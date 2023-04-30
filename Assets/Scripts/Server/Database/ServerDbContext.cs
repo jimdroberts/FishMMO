@@ -5,8 +5,8 @@ using Server.EntityConfigurations;
 namespace Server
 {
     public class ServerDbContext : DbContext
-    {
-        public ServerDbContext(DbContextOptions options) : base(options)
+	{
+		public ServerDbContext(DbContextOptions options) : base(options)
         {
         }
         
@@ -33,9 +33,9 @@ namespace Server
 
             // add collation to character entity name
             modelBuilder.ApplyConfiguration(new CharacterEntityConfiguration());
-            
-            // other settings
-            /*modelBuilder.Entity<CharacterBuffEntity>()
+
+			// other settings
+			/*modelBuilder.Entity<CharacterBuffEntity>()
                 .HasKey(cb => new { cb.character, cb.name });
             modelBuilder.Entity<CharacterEquipmentEntity>()
                 .HasKey(ce => new { ce.character, ce.slot });
@@ -49,6 +49,6 @@ namespace Server
                 .HasKey(cq => new { cq.character, cq.name });
             modelBuilder.Entity<CharacterSkillEntity>()
                 .HasKey(cs => new { cs.character, cs.hash });*/
-        }
-    }
+		}
+	}
 }

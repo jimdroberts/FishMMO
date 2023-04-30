@@ -1,6 +1,5 @@
 ﻿using FishNet.Connection;
 using FishNet.Documenting;
-using FishNet.Managing.Logging;
 using FishNet.Managing.Transporting;
 using FishNet.Object.Synchronizing;
 using FishNet.Object.Synchronizing.Internal;
@@ -122,26 +121,43 @@ namespace FishNet.Object
         /// <summary>
         /// Initializes SyncTypes. This will only call once even as host.
         /// </summary>
-        private void InitializeOnceSyncTypes()
+        private void InitializeOnceSyncTypes(bool asServer)
         {
-            if (_readPermissions == null)
+            if (asServer)
             {
-                System.Array arr = System.Enum.GetValues(typeof(ReadPermission));
-                _readPermissions = new ReadPermission[arr.Length];
-
-                int count = 0;
-                foreach (ReadPermission rp in arr)
+                if (!_initializedOnce)
                 {
-                    _readPermissions[count] = rp;
-                    count++;
+                    //optimization Cache synctypewriters on despawn and get from cache on spawn.
+                    //Only need to initialize readpermissions once, it's static.
+                    if (_readPermissions == null)
+                    {
+                        System.Array arr = System.Enum.GetValues(typeof(ReadPermission));
+                        _readPermissions = new ReadPermission[arr.Length];
+
+                        int count = 0;
+                        foreach (ReadPermission rp in arr)
+                        {
+                            _readPermissions[count] = rp;
+                            count++;
+                        }
+                    }
+
+                    //Build writers for observers and owner.
+                    _syncTypeWriters = new SyncTypeWriter[_readPermissions.Length];
+                    for (int i = 0; i < _syncTypeWriters.Length; i++)
+                        _syncTypeWriters[i] = new SyncTypeWriter(_readPermissions[i]);
+                }
+                else
+                {
+                    //Reset writers.
+                    for (int i = 0; i < _syncTypeWriters.Length; i++)
+                        _syncTypeWriters[i].Reset();
                 }
             }
-
-            //Build writers for observers and owner.
-            _syncTypeWriters = new SyncTypeWriter[_readPermissions.Length];
-            for (int i = 0; i < _syncTypeWriters.Length; i++)
-                _syncTypeWriters[i] = new SyncTypeWriter(_readPermissions[i]);
-
+            
+            /* Initialize synctypes every spawn because there could be
+             * callbacks which occur that the user or even we may implement
+             * during the initialization. */
             foreach (SyncBase sb in _syncVars.Values)
                 sb.PreInitialize(_networkObjectCache.NetworkManager);
             foreach (SyncBase sb in _syncObjects.Values)
@@ -225,7 +241,7 @@ namespace FishNet.Object
                     continue;
 
                 dirtyFound = true;
-                if (ignoreInterval || sb.WriteTimeMet(tick))
+                if (ignoreInterval || sb.SyncTimeMet(tick))
                 {
                     //If writers still need to be reset.
                     if (!writersReset)

@@ -37,6 +37,13 @@ namespace KinematicCharacterController.Examples
 		private const string MouseScrollInput = "Mouse ScrollWheel";
 		private const string HorizontalInput = "Horizontal";
 		private const string VerticalInput = "Vertical";
+		private const string JumpInput = "Jump";
+		private const string CrouchInput = "Crouch";
+		private const string ToggleFirstPersonInput = "ToggleFirstPerson";
+
+		private bool _jumpQueued = false;
+		private bool _crouchDownQueued = false;
+		private bool _crouchUpQueued = false;
 
 		void Awake()
 		{
@@ -170,8 +177,32 @@ namespace KinematicCharacterController.Examples
 			return state;
 		}
 
+		private void Update()
+		{
+			if (!base.IsOwner)
+			{
+				return;
+			}
+			if (InputManager.GetKeyDown(JumpInput))
+			{
+				_jumpQueued = true;
+			}
+			else if (InputManager.GetKeyDown(CrouchInput))
+			{
+				_crouchDownQueued = true;
+			}
+			else if (InputManager.GetKeyUp(CrouchInput))
+			{
+				_crouchUpQueued = true;
+			}
+		}
+
 		private void LateUpdate()
 		{
+			if (!base.IsOwner)
+			{
+				return;
+			}
 			// Handle rotating the camera along with physics movers
 			if (CharacterCamera != null && CharacterCamera.RotateWithPhysicsMover && Character.Motor.AttachedRigidbody != null)
 			{
@@ -208,18 +239,15 @@ namespace KinematicCharacterController.Examples
 #endif
 
 			// Apply inputs to the camera
-			CharacterCamera.UpdateWithInput(Time.deltaTime, scrollInput, lookInputVector);
+			CharacterCamera.UpdateWithInput((float)base.TimeManager.TickDelta, scrollInput, lookInputVector);
 
 			// Handle toggling zoom level
-			if (Input.GetMouseButtonDown(1))
+			if (InputManager.GetKeyDown(ToggleFirstPersonInput))
 			{
 				CharacterCamera.TargetDistance = (CharacterCamera.TargetDistance == 0f) ? CharacterCamera.DefaultDistance : 0f;
 			}
 
-			if (CharacterCamera.TargetDistance == 0f)
-				SetOrientationMethod(OrientationMethod.TowardsCamera);
-			else
-				SetOrientationMethod(OrientationMethod.TowardsMovement);
+			SetOrientationMethod(Character.OrientationMethod);
 		}
 
 		[ServerRpc(RunLocally = true)]
@@ -244,12 +272,14 @@ namespace KinematicCharacterController.Examples
 			// Build the CharacterInputs struct
 			characterInputs.MoveAxisForward = InputManager.GetAxis(VerticalInput);
 			characterInputs.MoveAxisRight = InputManager.GetAxis(HorizontalInput);
+			characterInputs.JumpDown = _jumpQueued;
+			characterInputs.CrouchDown = _crouchDownQueued;
+			characterInputs.CrouchUp = _crouchUpQueued;
 
-			//Quang: Should add jump queued function in order for not missing input, here I use get key for quick demo, should not use in final project
-			characterInputs.JumpDown = Input.GetKeyDown(KeyCode.Space);
-
-			characterInputs.CrouchDown = Input.GetKeyDown(KeyCode.C);
-			characterInputs.CrouchUp = Input.GetKeyUp(KeyCode.C);
+			// Reset the queued inputs
+			_jumpQueued = false;
+			_crouchDownQueued = false;
+			_crouchUpQueued = false;
 		}
 	}
 }

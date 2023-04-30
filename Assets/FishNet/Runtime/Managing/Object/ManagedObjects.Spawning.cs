@@ -13,41 +13,41 @@ namespace FishNet.Managing.Object
 {
     public abstract partial class ManagedObjects
     {
-        /// <summary>
-        /// Reads and outputs a transforms values.
-        /// </summary>
-        protected void ReadTransformProperties(Reader reader, out Vector3? localPosition, out Quaternion? localRotation, out Vector3? localScale)
-        {
-            //Read changed.
-            ChangedTransformProperties ctp = (ChangedTransformProperties)reader.ReadByte();
-            //Position.
-            if (ChangedTransformPropertiesEnum.Contains(ctp, ChangedTransformProperties.LocalPosition))
-                localPosition = reader.ReadVector3();
-            else
-                localPosition = null;
-            //Rotation.
-            if (ChangedTransformPropertiesEnum.Contains(ctp, ChangedTransformProperties.LocalRotation))
-            {
+		/// <summary>
+		/// Reads and outputs a transforms values.
+		/// </summary>
+		protected void ReadTransformProperties(Reader reader, out Vector3? localPosition, out Quaternion? localRotation, out Vector3? localScale)
+		{
+			//Read changed.
+			ChangedTransformProperties ctp = (ChangedTransformProperties)reader.ReadByte();
+			//Position.
+			if (ChangedTransformPropertiesEnum.Contains(ctp, ChangedTransformProperties.LocalPosition))
+				localPosition = reader.ReadVector3();
+			else
+				localPosition = null;
+			//Rotation.
+			if (ChangedTransformPropertiesEnum.Contains(ctp, ChangedTransformProperties.LocalRotation))
+			{
 				AutoPackType packType = AutoPackType.PackedLess;
 				if (NetworkManager.ServerManager != null)
-                {
-                    packType = NetworkManager.ServerManager.SpawnPacking.Rotation;
+				{
+					packType = NetworkManager.ServerManager.SpawnPacking.Rotation;
 				}
 				localRotation = reader.ReadQuaternion(packType);
 			}
-            else
-                localRotation = null;
-            //Scale.
-            if (ChangedTransformPropertiesEnum.Contains(ctp, ChangedTransformProperties.LocalScale))
-                localScale = reader.ReadVector3();
-            else
-                localScale = null;
-        }
+			else
+				localRotation = null;
+			//Scale.
+			if (ChangedTransformPropertiesEnum.Contains(ctp, ChangedTransformProperties.LocalScale))
+				localScale = reader.ReadVector3();
+			else
+				localScale = null;
+		}
 
-        /// <summary>
-        /// Writes a spawn to clients.
-        /// </summary>
-        internal void WriteSpawn_Server(NetworkObject nob, NetworkConnection connection, Writer everyoneWriter, Writer ownerWriter)
+		/// <summary>
+		/// Writes a spawn to clients.
+		/// </summary>
+		internal void WriteSpawn_Server(NetworkObject nob, NetworkConnection connection, Writer everyoneWriter, Writer ownerWriter)
         {
             /* Using a number of writers to prevent rebuilding the
              * packets excessively for values that are owner only

@@ -54,14 +54,14 @@ namespace KinematicCharacterController.Examples
         public OrientationMethod OrientationMethod = OrientationMethod.TowardsCamera;
 
         [Header("Air Movement")]
-        public float MaxAirMoveSpeed = 15f;
-        public float AirAccelerationSpeed = 15f;
+        public float MaxAirMoveSpeed = 10f;
+        public float AirAccelerationSpeed = 0f;
         public float Drag = 0.1f;
 
         [Header("Jumping")]
         public bool AllowJumpingWhenSliding = false;
-        public float JumpUpSpeed = 10f;
-        public float JumpScalableForwardSpeed = 10f;
+        public float JumpUpSpeed = 5f;
+        public float JumpScalableForwardSpeed = 0f;
         public float JumpPreGroundingGraceTime = 0f;
         public float JumpPostGroundingGraceTime = 0f;
 
@@ -69,7 +69,7 @@ namespace KinematicCharacterController.Examples
         public List<Collider> IgnoredColliders = new List<Collider>();
         public BonusOrientationMethod BonusOrientationMethod = BonusOrientationMethod.None;
         public float BonusOrientationSharpness = 10f;
-        public Vector3 Gravity = new Vector3(0, -0.5f, 0);
+        public Vector3 Gravity = new Vector3(0, -10.0f, 0);
         public Transform MeshRoot;
         public Transform CameraFollowPoint;
         public float CrouchedCapsuleHeight = 0.5f;

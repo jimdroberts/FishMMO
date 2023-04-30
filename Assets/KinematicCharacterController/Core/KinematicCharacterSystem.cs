@@ -134,9 +134,9 @@ namespace KinematicCharacterController
         {
             if (Settings.AutoSimulation)
             {
-                float deltaTime = Time.deltaTime;
+				float deltaTime = (float)InstanceFinder.TimeManager.TickDelta;
 
-                if (Settings.Interpolate)
+				if (Settings.Interpolate)
                 {
                     PreSimulationInterpolationUpdate(deltaTime);
                 }
@@ -171,9 +171,6 @@ namespace KinematicCharacterController
                 }
             }
         }
-
-        
-
 
         private void LateUpdate()
         {

@@ -1,6 +1,7 @@
 ﻿using FishNet.Connection;
 using FishNet.Managing.Server;
 using FishNet.Object;
+using System;
 using UnityEngine;
 
 namespace FishNet.Observing
@@ -54,10 +55,18 @@ namespace FishNet.Observing
         /// <summary>
         /// Initializes this script for use.
         /// </summary>
-        /// <param name="networkObject"></param>
-        public virtual void InitializeOnce(NetworkObject networkObject)
+        /// <param name="networkObject">NetworkObject this condition is initializing for.</param>
+        public virtual void Initialize(NetworkObject networkObject)
         {
             NetworkObject = networkObject;
+        }
+        /// <summary>
+        /// Deinitializes this script.
+        /// </summary>
+        /// <param name="destroyed">True if the object is being destroyed, false if being despawned. An object may deinitialize for despawn, then destroy after.</param>
+        public virtual void Deinitialize(bool destroyed)
+        {
+            NetworkObject = null;
         }
         /// <summary>
         /// Returns if the object which this condition resides should be visible to connection.
