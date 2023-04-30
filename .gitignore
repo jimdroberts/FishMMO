@@ -73,3 +73,6 @@ crashlytics-build.properties
 
 # Local directory, anything here will be ignored
 /[Aa]ssets/[Ll][Oo][Cc][Aa][Ll]*
+
+# Special ignore directory, anything here will be ignored
+/[Aa]ssets/[Pp]lugins/[Dd][Aa][Tt][Aa][Bb][Aa][Ss][Ee]*
