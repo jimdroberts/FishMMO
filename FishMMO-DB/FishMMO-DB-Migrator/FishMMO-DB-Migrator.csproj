@@ -24,6 +24,7 @@
 
     <ItemGroup>
       <ProjectReference Include="..\..\Assembly-CSharp.csproj" />
+      <ProjectReference Include="..\FishMMO-DB\FishMMO-DB.csproj" />
     </ItemGroup>
 
 </Project>
