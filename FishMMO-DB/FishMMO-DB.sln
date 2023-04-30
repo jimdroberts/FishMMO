@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.4.33213.308
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FishMMO-DB-Migrator", "FishMMO-DB-Migrator\FishMMO-DB-Migrator.csproj", "{DB180754-0863-407C-B4C4-ACAF8DA1565D}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FishMMO-DB", "FishMMO-DB\FishMMO-DB.csproj", "{77E86306-D805-4B90-81D8-3AAAEACD9D05}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{DB180754-0863-407C-B4C4-ACAF8DA1565D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DB180754-0863-407C-B4C4-ACAF8DA1565D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DB180754-0863-407C-B4C4-ACAF8DA1565D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DB180754-0863-407C-B4C4-ACAF8DA1565D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{77E86306-D805-4B90-81D8-3AAAEACD9D05}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{77E86306-D805-4B90-81D8-3AAAEACD9D05}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{77E86306-D805-4B90-81D8-3AAAEACD9D05}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{77E86306-D805-4B90-81D8-3AAAEACD9D05}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {D7D17F95-9AFF-44AD-9811-03AF58454422}
+	EndGlobalSection
+EndGlobal

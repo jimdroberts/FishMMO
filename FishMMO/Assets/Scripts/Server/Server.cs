@@ -4,7 +4,9 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using System;
 using System.Collections;
+using System.IO;
 using System.Text.RegularExpressions;
+using FishMMO_DB;
 
 #if UNITY_EDITOR
 using UnityEditor;
@@ -52,8 +54,19 @@ namespace Server
 
 		void Awake()
 		{
+			string path;
+#if UNITY_EDITOR
+			path = Directory.GetParent(Application.dataPath).FullName;
+#elif UNITY_ANDROID
+			path = Application.persistentDataPath;
+#elif UNITY_IOS
+			path = Application.persistentDataPath;
+#else
+			path = Application.dataPath;
+#endif
+
 			// load configuration first
-			configuration = new Configuration();
+			configuration = new Configuration(path);
 			if (!configuration.Load(configurationFileName))
 			{
 				// if we failed to load the file.. save a new one

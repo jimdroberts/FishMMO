@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text;
-using UnityEngine;
 
 public class Configuration
 {
@@ -13,17 +12,9 @@ public class Configuration
 	public string defaultFileDirectory;
 	public string fileName = "Configuration.cfg";
 
-	public Configuration()
+	public Configuration(string defaultFileDirectory)
 	{
-#if UNITY_EDITOR
-		defaultFileDirectory = Directory.GetParent(Application.dataPath).FullName;
-#elif UNITY_ANDROID
-		defaultFileDirectory = Application.persistentDataPath;
-#elif UNITY_IOS
-		defaultFileDirectory = Application.persistentDataPath;
-#else
-		defaultFileDirectory = Application.dataPath;
-#endif
+		this.defaultFileDirectory = defaultFileDirectory;
 	}
 
 	/// <summary>

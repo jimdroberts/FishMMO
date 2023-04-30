@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Linq;
-using Server.Entities;
+using FishMMO_DB;
+using FishMMO_DB.Entities;
 
 namespace Server.Services
 {

@@ -10,7 +10,6 @@ using UnityEngine;
 using UnitySettingsProviderAttribute = UnityEditor.SettingsProviderAttribute;
 using UnitySettingsProvider = UnityEditor.SettingsProvider;
 using FishNet.Configuring;
-using System.Linq;
 
 namespace FishNet.Editing.PrefabCollectionGenerator
 {
@@ -50,7 +49,7 @@ namespace FishNet.Editing.PrefabCollectionGenerator
         private static void OnGUI(string searchContext)
         {
             if (_settings == null)
-                _settings = Configuration.Configurations.PrefabGenerator;
+                _settings = FishNet.Configuring.Configuration.Configurations.PrefabGenerator;
             if (_folderIcon == null)
                 _folderIcon = EditorGUIUtility.IconContent("d_FolderOpened Icon");
             if (_deleteIcon == null)

@@ -1,0 +1,3 @@
+﻿namespace FishMMO_Utils
+{
+}

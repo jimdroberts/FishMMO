@@ -2,7 +2,8 @@
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.EntityFrameworkCore;
-using Server.Entities;
+using FishMMO_DB;
+using FishMMO_DB.Entities;
 
 namespace Server.Services
 {

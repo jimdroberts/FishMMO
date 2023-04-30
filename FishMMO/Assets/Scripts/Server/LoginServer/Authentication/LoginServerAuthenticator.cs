@@ -2,6 +2,8 @@
 using FishNet.Connection;
 using FishNet.Managing;
 using FishNet.Transporting;
+using FishMMO_DB;
+using FishMMO_DB.Entities;
 using System;
 using System.Text.RegularExpressions;
 using Server.Services;
