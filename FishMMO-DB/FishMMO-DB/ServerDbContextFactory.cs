@@ -30,11 +30,7 @@ namespace FishMMO_DB
 			Configuration configuration = GetOrCreateDatabaseConfiguration();
 			string hostString = CreateDatabaseHostString(configuration);
 
-			DbContextOptionsBuilder optionsBuilder = new DbContextOptionsBuilder<ServerDbContext>().UseNpgsql(hostString, b =>
-			{
-				b.MigrationsHistoryTable("__EFMigrationsHistory", "public");
-				b.MigrationsAssembly(typeof(ServerDbContext).Name);
-			})
+			DbContextOptionsBuilder optionsBuilder = new DbContextOptionsBuilder<ServerDbContext>().UseNpgsql(hostString)
 				.UseSnakeCaseNamingConvention();
 
 			if (enableLogging)

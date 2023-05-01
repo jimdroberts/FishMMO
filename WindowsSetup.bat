@@ -36,7 +36,7 @@ where /q wsl.exe
 if %ERRORLEVEL% EQU 0 (
     echo WSL is already installed.
 ) else (
-    choice /M "Do you want to install WSL? (y/n)"
+    choice /M "Do you want to install WSL?"
     if %errorlevel% EQU 0 (
         echo Installing WSL...
         dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart
@@ -52,7 +52,7 @@ if %ERRORLEVEL% EQU 0 (
     if %ERRORLEVEL% EQU 0 (
         echo .NET 7 is already installed.
     ) else (
-        choice /M "Do you want to install .NET 7? (y/n)"
+        choice /M "Do you want to install .NET 7?"
         if %errorlevel% EQU 0 (
             echo .NET 7 is not installed. Installing...
             powershell.exe -ExecutionPolicy Bypass -Command "& {Invoke-WebRequest -Uri https://dot.net/v1/dotnet-install.ps1 -OutFile dotnet-install.ps1}"
@@ -62,7 +62,7 @@ if %ERRORLEVEL% EQU 0 (
         )
     )
 ) else (
-    choice /M "Do you want to install .NET 7? (y/n)"
+    choice /M "Do you want to install .NET 7?"
     if %errorlevel% EQU 0 (
         echo .NET is not installed. Installing...
         powershell.exe -ExecutionPolicy Bypass -Command "& {Invoke-WebRequest -Uri https://dot.net/v1/dotnet-install.ps1 -OutFile dotnet-install.ps1}"
@@ -75,7 +75,7 @@ if %ERRORLEVEL% EQU 0 (
 dotnet ef --version >nul 2>&1
 if %ERRORLEVEL% NEQ 0 (
     echo dotnet-ef is not installed.
-    choice /M "Do you want to install the dotnet-ef tool? (y/n)"
+    choice /M "Do you want to install the dotnet-ef tool?"
     if %errorlevel% neq 0 (
         dotnet tool install --global dotnet-ef
     ) else (
@@ -90,7 +90,7 @@ if %ERRORLEVEL% EQU 0 (
     echo Docker is already installed.
 ) else (
     echo Docker is not installed.
-    choice /M "Do you want to install Docker? (y/n)"
+    choice /M "Do you want to install Docker?"
     if %errorlevel% EQU 0 (
         echo Downloading and installing Docker...
         curl https://download.docker.com/win/stable/Docker%20Desktop%20Installer.exe -o DockerInstaller.exe
@@ -104,18 +104,19 @@ if %ERRORLEVEL% EQU 0 (
 
 where /q docker
 if %ERRORLEVEL% EQU 0 (
-    choice /M "Do you want to create a Docker container for PostgreSQL 14? (y/n)"
+    choice /M "Do you want to create a Docker container for PostgreSQL 14?"
     if %errorlevel% EQU 0 (
         echo Creating Docker container for PostgreSQL 14...
         setlocal enabledelayedexpansion
-        for /f "tokens=1,* delims==" %%a in (Database.cfg) do (
+        for /f "tokens=1,* delims==" %%a in (./FishMMO/Database.cfg) do (
             set "%%a=%%b"
         )
         docker run --name !DbName! -e POSTGRES_USER=!DbUsername! -e POSTGRES_PASSWORD=!DbPassword! -p !DbAddress!:!DbPort!:!DbPort! -d postgres:14
         echo Docker container for PostgreSQL 14 has been created.
-        choice /M "Do you want to create the database and initial migration? (y/n)"
+        choice /M "Do you want to create the database and initial migration?"
         if %errorlevel% EQU 0 (
-            dotnet ef migrations list -p ./FishMMO-DB/FishMMO-DB/FishMMO-DB.csproj -s ./FishMMO-DB/FishMMO-DB-Migrator/FishMMO-DB-Migrator.csproj
+            dotnet ef migrations add Initial -p ./FishMMO-DB/FishMMO-DB/FishMMO-DB.csproj -s ./FishMMO-DB/FishMMO-DB-Migrator/FishMMO-DB-Migrator.csproj
+            dotnet ef database update -p ./FishMMO-DB/FishMMO-DB/FishMMO-DB.csproj -s ./FishMMO-DB/FishMMO-DB-Migrator/FishMMO-DB-Migrator.csproj
         ) else (
             echo Migration failed.
         )
