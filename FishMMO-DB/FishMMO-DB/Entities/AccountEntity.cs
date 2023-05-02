@@ -4,7 +4,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace FishMMO_DB.Entities
 {
-    [Table("accounts", Schema = "fishMMO")]
+    [Table("accounts", Schema = "fish_mmo_postgresql")]
     public class AccountEntity
     {
         [Key]

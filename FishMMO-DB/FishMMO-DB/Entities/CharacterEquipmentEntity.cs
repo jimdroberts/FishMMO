@@ -1,10 +1,9 @@
-﻿using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
+﻿using System.ComponentModel.DataAnnotations.Schema;
 using Microsoft.EntityFrameworkCore;
 
 namespace FishMMO_DB.Entities
 {
-    [Table("character_equipment", Schema = "fishMMO")]
+    [Table("character_equipment", Schema = "fish_mmo_postgresql")]
     [Index(nameof(CharacterId))]
     [Index(nameof(CharacterId), nameof(Slot), IsUnique = true)]
     public class CharacterEquipmentEntity

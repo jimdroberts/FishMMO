@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FishMMO_DB.Entities
 {
-    [Table("characters", Schema = "fishMMO")]
+    [Table("characters", Schema = "fish_mmo_postgresql")]
     [Index(nameof(Name))]
     [Index(nameof(Account))]
     public class CharacterEntity
@@ -16,7 +16,7 @@ namespace FishMMO_DB.Entities
         // note: the collation has been added in the DbContext OnModelCreating function since the Postgres provider
         // doesn't support collations via attributes
         public string Name { get; set; }
-        public string NameLowercase { get; set; }
+		public string NameLowercase { get; set; }
         public string Account { get; set; }
         public int RaceID { get; set; }
         public string SceneName { get; set; }

@@ -1,12 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using Microsoft.EntityFrameworkCore;
 
 namespace FishMMO_DB.Entities
 {
-    [Table("guild_info", Schema = "fishMMO")]
+    [Table("guild_info", Schema = "fish_mmo_postgresql")]
     [Index(nameof(Name))]
     public class GuildInfoEntity
     {

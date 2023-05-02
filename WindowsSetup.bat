@@ -32,99 +32,139 @@ if %ERRORLEVEL% NEQ 0 (
     goto end
 )
 
+:Start
+cls
+echo                                   %TIME%
+echo  =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+echo  -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+echo  This program is designed to help install all the applications required to run
+echo  a FishMMO server. Please ensure all of the following 
+echo  Type the number of the option you wish to execute, followed by the [ENTER] key
+echo  =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+echo  -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+echo.
+echo                         1 - Install wsl
+echo                         2 - Install dotnet 7
+echo                         3 - Install dotnet-ef
+echo                         4 - Install docker
+echo                         5 - Create docker container
+echo                         6 - Create initial migration
+echo                         7 - Create new migration
+echo                         8 - Exit
+
+set Choice=
+set /p Choice=""
+
+if '%Choice%'=='1' goto installWSL
+if '%Choice%'=='2' goto installDOTNET
+if '%Choice%'=='3' goto installDOTNETEF
+if '%Choice%'=='4' goto installDocker
+if '%Choice%'=='5' goto createDockerContainer
+if '%Choice%'=='6' goto createInitialMigration
+if '%Choice%'=='7' goto createNewMigration
+if '%Choice%'=='8' goto exit
+
+:installWSL
 where /q wsl.exe
-if %ERRORLEVEL% EQU 0 (
-    echo WSL is already installed.
+if %ERRORLEVEL% NEQ 0 (
+    echo Installing WSL...
+    dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart
+    echo WSL has been installed.
+    pause
+    goto Start
 ) else (
-    choice /C YN /M "Do you want to install WSL?"
-    if errorlevel 1 (
-        echo Installing WSL...
-        dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart
-        echo WSL has been installed.
-    ) else (
-        echo WSL installation cancelled.
-    )
+    goto Start
 )
 
+:installDOTNET
 where /q dotnet
 if %ERRORLEVEL% EQU 0 (
     dotnet --list-sdks | findstr /B "7." > nul
-    if %ERRORLEVEL% EQU 0 (
-        echo .NET 7 is already installed.
+    if %ERRORLEVEL% NEQ 0 (
+        echo Downloading and installing dotnet v7...
+        powershell.exe -ExecutionPolicy Bypass -Command "& {Invoke-WebRequest -Uri https://dot.net/v1/dotnet-install.ps1 -OutFile dotnet-install.ps1}"
+        powershell.exe -ExecutionPolicy Bypass -Command "& {.\dotnet-install.ps1 -Version 7.0.202 -InstallDir 'C:\Program Files\dotnet'}"
+        pause
+        goto Start
     ) else (
-        choice /C YN /M "Do you want to install .NET 7?"
-        if errorlevel  1 (
-            echo .NET 7 is not installed. Installing...
-            powershell.exe -ExecutionPolicy Bypass -Command "& {Invoke-WebRequest -Uri https://dot.net/v1/dotnet-install.ps1 -OutFile dotnet-install.ps1}"
-            powershell.exe -ExecutionPolicy Bypass -Command "& {.\dotnet-install.ps1 -Version 7.x -InstallDir 'C:\Program Files\dotnet'}"
-        ) else (
-            echo .NET 7 installation cancelled.
-        )
+        goto Start
     )
 ) else (
-    choice /C YN /M "Do you want to install .NET 7?"
-    if errorlevel 1 (
-        echo .NET is not installed. Installing...
-        powershell.exe -ExecutionPolicy Bypass -Command "& {Invoke-WebRequest -Uri https://dot.net/v1/dotnet-install.ps1 -OutFile dotnet-install.ps1}"
-        powershell.exe -ExecutionPolicy Bypass -Command "& {.\dotnet-install.ps1 -Version 7.x -InstallDir 'C:\Program Files\dotnet'}"
-    ) else (
-        echo .NET installation cancelled.
-    )
+    echo Downloading and installing dotnet v7...
+    powershell.exe -ExecutionPolicy Bypass -Command "& {Invoke-WebRequest -Uri https://dot.net/v1/dotnet-install.ps1 -OutFile dotnet-install.ps1}"
+    powershell.exe -ExecutionPolicy Bypass -Command "& {.\dotnet-install.ps1 -Version 7.0.202 -InstallDir 'C:\Program Files\dotnet'}"
+    pause
+    goto Start
 )
 
+:installDOTNETEF
 dotnet ef --version >nul 2>&1
 if %ERRORLEVEL% NEQ 0 (
-    echo dotnet-ef is not installed.
-    choice /C YN /M "Do you want to install the dotnet-ef tool?"
-    if errorlevel 1 (
-        dotnet tool install --global dotnet-ef
-    ) else (
-        echo .NET installation cancelled.
-    )
+    echo Downloading and installing dotnet-ef...
+    dotnet tool install --global dotnet-ef
+    pause
+    goto Start
 ) else (
-    echo dotnet-ef is already installed.
+    goto Start
 )
 
+:installDocker
 where /q docker
-if %ERRORLEVEL% EQU 0 (
-    echo Docker is already installed.
+if %ERRORLEVEL% NEQ 0 (
+    echo Downloading and installing docker...
+    curl https://download.docker.com/win/stable/Docker%20Desktop%20Installer.exe -o DockerInstaller.exe
+    start /wait DockerInstaller.exe
+    del DockerInstaller.exe
+    echo Docker has been installed.
+    pause
+    goto Start
 ) else (
-    echo Docker is not installed.
-    choice /C YN /M "Do you want to install Docker?"
-    if errorlevel 1 (
-        echo Downloading and installing Docker...
-        curl https://download.docker.com/win/stable/Docker%20Desktop%20Installer.exe -o DockerInstaller.exe
-        start /wait DockerInstaller.exe
-        del DockerInstaller.exe
-        echo Docker has been installed.
-    ) else if errorlevel 2 (
-        echo Docker installation cancelled.
-    )
+    goto Start
 )
 
+:createDockerContainer
 where /q docker
 if %ERRORLEVEL% EQU 0 (
-    choice /C YN /M "Do you want to create a Docker container for PostgreSQL 14?"
-    if errorlevel 1 (
-        echo Creating Docker container for PostgreSQL 14...
-        setlocal enabledelayedexpansion
-        for /f "tokens=1,* delims==" %%a in (./FishMMO/Database.cfg) do (
-            set "%%a=%%b"
-        )
-        docker run --name !DbName! -e POSTGRES_USER=!DbUsername! -e POSTGRES_PASSWORD=!DbPassword! -p !DbAddress!:!DbPort!:!DbPort! -d postgres:14
-        echo Docker container for PostgreSQL 14 has been created.
-        choice /C YN /M "Do you want to create the database and initial migration?"
-        if errorlevel 1 (
-            dotnet ef migrations add Initial -p ./FishMMO-DB/FishMMO-DB/FishMMO-DB.csproj -s ./FishMMO-DB/FishMMO-DB-Migrator/FishMMO-DB-Migrator.csproj
-            dotnet ef database update -p ./FishMMO-DB/FishMMO-DB/FishMMO-DB.csproj -s ./FishMMO-DB/FishMMO-DB-Migrator/FishMMO-DB-Migrator.csproj
-        ) else if errorlevel 2 (
-            echo Migration failed.
-        )
-    ) else if errorlevel 2 (
-        echo Docker container creation cancelled.
+    echo Attempting to create a new docker container with postgresql v14...
+    setlocal enabledelayedexpansion
+    for /f "tokens=1,* delims==" %%a in (./FishMMO/Database.cfg) do (
+        set "%%a=%%b"
     )
+    docker run --name !DbName! -e POSTGRES_USER=!DbUsername! -e POSTGRES_PASSWORD=!DbPassword! -p !DbAddress!:!DbPort!:!DbPort! -d postgres:14
+    pause
+    goto Start
 ) else (
-    echo Error: Docker is not installed.
+    goto Start
+)
+
+:createInitialMigration
+where /q docker
+if %ERRORLEVEL% EQU 0 (
+    set "projectPath=./FishMMO-DB/FishMMO-DB/FishMMO-DB.csproj"
+    set "startupProject=./FishMMO-DB/FishMMO-DB-Migrator/FishMMO-DB-Migrator.csproj"
+    dotnet ef migrations add Initial -p "!projectPath!" -s "!startupProject!"
+    dotnet ef database update -p "!projectPath!" -s "!startupProject!"
+    pause
+    goto Start
+) else (
+    goto Start
+)
+
+:createNewMigration
+where /q docker
+if %ERRORLEVEL% EQU 0 (
+    setlocal enabledelayedexpansion
+    set "projectPath=./FishMMO-DB/FishMMO-DB/FishMMO-DB.csproj"
+    set "startupProject=./FishMMO-DB/FishMMO-DB-Migrator/FishMMO-DB-Migrator.csproj"
+    set "timestamp=%DATE:/=-%%TIME::=-%"
+    set "timestamp=!timestamp:.=-!"
+    set "migrationName=Migration_!timestamp!"
+    dotnet ef migrations add "!migrationName!" -p "!projectPath!" -s "!startupProject!"
+    dotnet ef database update -p "!projectPath!" -s "!startupProject!"
+    pause
+    goto Start
+) else (
+    goto Start
 )
 
 pause

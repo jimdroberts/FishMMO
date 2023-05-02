@@ -4,7 +4,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace FishMMO_DB.Entities
 {
-    [Table("world_servers", Schema = "fishMMO")]
+    [Table("world_servers", Schema = "fish_mmo_postgresql")]
     public class WorldServerEntity
     {
         [Key]
