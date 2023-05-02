@@ -167,5 +167,4 @@ if %ERRORLEVEL% EQU 0 (
     goto Start
 )
 
-pause
 :end
