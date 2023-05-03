@@ -26,9 +26,6 @@ FishMMO will build your project for you.
 Click any of the Server or Client build types and select the output folder.
 All configuration files will be copied over automatically from the root project directory.
 
-You can also automatically set up the Postgresql Docker Database if you did not manually install Postgresql Server.
-Remember to configure PostgresqlSetup.cfg beforehand.
-
 ![buildgame](https://user-images.githubusercontent.com/19621936/233815094-711358a3-ca4b-44c4-84ea-b2c56b771c56.png)
 
 
