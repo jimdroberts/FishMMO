@@ -116,7 +116,7 @@ createDockerContainer() {
         echo "Attempting to create a new docker container with postgresql v14..."
         while IFS='=' read -r name value; do
             export "$name=$value"
-        done < ./FishMMO/Database.cfg
+        done < ./Database.cfg
         docker run --name $DbName -e POSTGRES_USER=$DbUsername -e POSTGRES_PASSWORD=$DbPassword -p $DbAddress:$DbPort:$DbPort -d postgres:14
         read -p "Press enter to continue"
         Start

@@ -127,7 +127,7 @@ where /q docker
 if %ERRORLEVEL% EQU 0 (
     echo Attempting to create a new docker container with postgresql v14...
     setlocal enabledelayedexpansion
-    for /f "tokens=1,* delims==" %%a in (./FishMMO/Database.cfg) do (
+    for /f "tokens=1,* delims==" %%a in (./Database.cfg) do (
         set "%%a=%%b"
     )
     docker run --name !DbName! -e POSTGRES_USER=!DbUsername! -e POSTGRES_PASSWORD=!DbPassword! -p !DbAddress!:!DbPort!:!DbPort! -d postgres:14

@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
+using System.IO;
 
 #if UNITY_STANDALONE
 using UnityEngine;
@@ -54,6 +55,7 @@ namespace FishMMO_DB
 #elif UNITY_STANDALONE
 			path = Application.dataPath;
 #endif
+			string rootPath = Directory.GetParent(path).FullName;
 
 			Configuration configuration = new Configuration(path);
 			if (!configuration.Load("Database.cfg"))

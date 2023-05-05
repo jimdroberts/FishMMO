@@ -64,9 +64,9 @@ namespace Server
 #else
 			path = Application.dataPath;
 #endif
-
+			string rootPath = Directory.GetParent(path).FullName;
 			// load configuration first
-			configuration = new Configuration(path);
+			configuration = new Configuration(rootPath);
 			if (!configuration.Load(configurationFileName))
 			{
 				// if we failed to load the file.. save a new one

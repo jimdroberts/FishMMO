@@ -97,16 +97,17 @@ public class CustomBuildTool
 				defaultFileDirectory = Application.dataPath;
 #endif
 
+				string root = Directory.GetParent(defaultFileDirectory).FullName;
 				if (buildTarget == BuildTarget.StandaloneWindows64)
 				{
-					FileUtil.ReplaceFile(defaultFileDirectory + "/START.bat", buildPath + "/START.bat");
+					FileUtil.ReplaceFile(root + "/START.bat", buildPath + "/START.bat");
 				}
 				else if (buildTarget == BuildTarget.StandaloneLinux64)
 				{
-					FileUtil.ReplaceFile(defaultFileDirectory + "/START.sh", buildPath + "/START.sh");
+					FileUtil.ReplaceFile(root + "/START.sh", buildPath + "/START.sh");
 				}
 
-				string root = Directory.GetParent(defaultFileDirectory).FullName;
+				
 				if (buildTarget == BuildTarget.StandaloneWindows64)
 				{
 					FileUtil.ReplaceFile(root + "/WindowsSetup.bat", buildPath + "/WindowsSetup.bat");
@@ -117,12 +118,12 @@ public class CustomBuildTool
 				}
 
 				// append the data folder for configuration copy
-				buildPath += "/" + executableName + "_Data";
+				//buildPath += "/" + executableName + "_Data";
 
-				FileUtil.ReplaceFile(defaultFileDirectory + "/LoginServer.cfg", buildPath + "/LoginServer.cfg");
-				FileUtil.ReplaceFile(defaultFileDirectory + "/WorldServer.cfg", buildPath + "/WorldServer.cfg");
-				FileUtil.ReplaceFile(defaultFileDirectory + "/SceneServer.cfg", buildPath + "/SceneServer.cfg");
-				FileUtil.ReplaceFile(defaultFileDirectory + "/Database.cfg", buildPath + "/Database.cfg");
+				FileUtil.ReplaceFile(root + "/LoginServer.cfg", buildPath + "/LoginServer.cfg");
+				FileUtil.ReplaceFile(root + "/WorldServer.cfg", buildPath + "/WorldServer.cfg");
+				FileUtil.ReplaceFile(root + "/SceneServer.cfg", buildPath + "/SceneServer.cfg");
+				FileUtil.ReplaceFile(root + "/Database.cfg", buildPath + "/Database.cfg");
 			}
 		}
 		else if (summary.result == BuildResult.Failed)
