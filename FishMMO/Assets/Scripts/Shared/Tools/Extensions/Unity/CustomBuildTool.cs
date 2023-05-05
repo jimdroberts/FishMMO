@@ -106,13 +106,14 @@ public class CustomBuildTool
 					FileUtil.ReplaceFile(defaultFileDirectory + "/START.sh", buildPath + "/START.sh");
 				}
 
+				string root = Directory.GetParent(defaultFileDirectory).FullName;
 				if (buildTarget == BuildTarget.StandaloneWindows64)
 				{
-					FileUtil.ReplaceFile(defaultFileDirectory + "/WindowsSetup.bat", buildPath + "/WindowsSetup.bat");
+					FileUtil.ReplaceFile(root + "/WindowsSetup.bat", buildPath + "/WindowsSetup.bat");
 				}
 				else if (buildTarget == BuildTarget.StandaloneLinux64)
 				{
-					FileUtil.ReplaceFile(defaultFileDirectory + "/LinuxSetup.sh", buildPath + "/LinuxSetup.sh");
+					FileUtil.ReplaceFile(root + "/LinuxSetup.sh", buildPath + "/LinuxSetup.sh");
 				}
 
 				// append the data folder for configuration copy
