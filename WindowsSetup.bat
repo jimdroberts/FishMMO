@@ -140,6 +140,7 @@ if %ERRORLEVEL% EQU 0 (
 :createInitialMigration
 where /q docker
 if %ERRORLEVEL% EQU 0 (
+    setlocal enabledelayedexpansion
     set "projectPath=./FishMMO-DB/FishMMO-DB/FishMMO-DB.csproj"
     set "startupProject=./FishMMO-DB/FishMMO-DB-Migrator/FishMMO-DB-Migrator.csproj"
     dotnet ef migrations add Initial -p "!projectPath!" -s "!startupProject!"
