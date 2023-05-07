@@ -1,6 +1,5 @@
 ﻿#if UNITY_EDITOR
 using UnityEditor;
-using UnityEngine;
 using System.IO;
 using System.Collections.Generic;
 using System;
@@ -14,15 +13,15 @@ public class CustomBuildTool
 
 	public static readonly string[] SERVER_BOOTSTRAP_SCENES = new string[]
 	{
-		"Assets/Scenes/Bootstraps/ServerLauncher.unity",
-		"Assets/Scenes/Bootstraps/LoginServer.unity",
-		"Assets/Scenes/Bootstraps/WorldServer.unity",
-		"Assets/Scenes/Bootstraps/SceneServer.unity",
+		"Assets\\Scenes\\Bootstraps\\ServerLauncher.unity",
+		"Assets\\Scenes\\Bootstraps\\LoginServer.unity",
+		"Assets\\Scenes\\Bootstraps\\WorldServer.unity",
+		"Assets\\Scenes\\Bootstraps\\SceneServer.unity",
 	};
 
 	public static readonly string[] CLIENT_BOOTSTRAP_SCENES = new string[]
 	{
-		"Assets/Scenes/Bootstraps/ClientBootstrap.unity",
+		"Assets\\Scenes\\Bootstraps\\ClientBootstrap.unity",
 	};
 
 	public static string GetBuildTargetShortName(BuildTarget target)
@@ -64,12 +63,12 @@ public class CustomBuildTool
 		string[] scenes = GetBuildScenePaths(bootstrapScenes);
 
 		string folderName = executableName + GetBuildTargetShortName(buildTarget);
-		string buildPath = rootPath + "/" + folderName;
+		string buildPath = rootPath + "\\" + folderName;
 
 		// build the project
 		BuildReport report = BuildPipeline.BuildPlayer(new BuildPlayerOptions()
 		{
-			locationPathName = buildPath + "/" + executableName + ".exe",
+			locationPathName = buildPath + "\\" + executableName + ".exe",
 			options = buildOptions,
 			scenes = scenes,
 			subtarget = (int)subTarget,
@@ -86,44 +85,33 @@ public class CustomBuildTool
 			// copy the configuration files if it's a server build
 			if (subTarget == StandaloneBuildSubtarget.Server)
 			{
-				string defaultFileDirectory = "";
-#if UNITY_EDITOR
-				defaultFileDirectory = Directory.GetParent(Application.dataPath).FullName;
-#elif UNITY_ANDROID
-				defaultFileDirectory = Application.persistentDataPath;
-#elif UNITY_IOS
-				defaultFileDirectory = Application.persistentDataPath;
-#else
-				defaultFileDirectory = Application.dataPath;
-#endif
-
-				string root = Directory.GetParent(defaultFileDirectory).FullName;
+				string root = Directory.GetParent(Directory.GetCurrentDirectory()).FullName;
 				if (buildTarget == BuildTarget.StandaloneWindows64)
 				{
-					FileUtil.ReplaceFile(root + "/START.bat", buildPath + "/START.bat");
+					FileUtil.ReplaceFile(root + "\\START.bat", buildPath + "\\START.bat");
 				}
 				else if (buildTarget == BuildTarget.StandaloneLinux64)
 				{
-					FileUtil.ReplaceFile(root + "/START.sh", buildPath + "/START.sh");
+					FileUtil.ReplaceFile(root + "\\START.sh", buildPath + "\\START.sh");
 				}
 
 				
 				if (buildTarget == BuildTarget.StandaloneWindows64)
 				{
-					FileUtil.ReplaceFile(root + "/WindowsSetup.bat", buildPath + "/WindowsSetup.bat");
+					FileUtil.ReplaceFile(root + "\\WindowsSetup.bat", buildPath + "\\WindowsSetup.bat");
 				}
 				else if (buildTarget == BuildTarget.StandaloneLinux64)
 				{
-					FileUtil.ReplaceFile(root + "/LinuxSetup.sh", buildPath + "/LinuxSetup.sh");
+					FileUtil.ReplaceFile(root + "\\LinuxSetup.sh", buildPath + "\\LinuxSetup.sh");
 				}
 
 				// append the data folder for configuration copy
 				//buildPath += "/" + executableName + "_Data";
 
-				FileUtil.ReplaceFile(root + "/LoginServer.cfg", buildPath + "/LoginServer.cfg");
-				FileUtil.ReplaceFile(root + "/WorldServer.cfg", buildPath + "/WorldServer.cfg");
-				FileUtil.ReplaceFile(root + "/SceneServer.cfg", buildPath + "/SceneServer.cfg");
-				FileUtil.ReplaceFile(root + "/Database.cfg", buildPath + "/Database.cfg");
+				FileUtil.ReplaceFile(root + "\\LoginServer.cfg", buildPath + "\\LoginServer.cfg");
+				FileUtil.ReplaceFile(root + "\\WorldServer.cfg", buildPath + "\\WorldServer.cfg");
+				FileUtil.ReplaceFile(root + "\\SceneServer.cfg", buildPath + "\\SceneServer.cfg");
+				FileUtil.ReplaceFile(root + "\\Database.cfg", buildPath + "\\Database.cfg");
 			}
 		}
 		else if (summary.result == BuildResult.Failed)

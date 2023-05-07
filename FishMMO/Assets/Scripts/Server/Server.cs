@@ -54,19 +54,10 @@ namespace Server
 
 		void Awake()
 		{
-			string path;
-#if UNITY_EDITOR
-			path = Directory.GetParent(Application.dataPath).FullName;
-#elif UNITY_ANDROID
-			path = Application.persistentDataPath;
-#elif UNITY_IOS
-			path = Application.persistentDataPath;
-#else
-			path = Application.dataPath;
-#endif
-			string rootPath = Directory.GetParent(path).FullName;
+			string path = Directory.GetParent(Directory.GetCurrentDirectory()).FullName;
+
 			// load configuration first
-			configuration = new Configuration(rootPath);
+			configuration = new Configuration(path);
 			if (!configuration.Load(configurationFileName))
 			{
 				// if we failed to load the file.. save a new one

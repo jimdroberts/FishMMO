@@ -1,6 +1,6 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using System.IO;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
-using System.IO;
 
 #if UNITY_STANDALONE
 using UnityEngine;
@@ -45,17 +45,7 @@ namespace FishMMO_DB
 
 		public Configuration GetOrCreateDatabaseConfiguration()
 		{
-			string path = "";
-#if UNITY_EDITOR
-			path = Directory.GetParent(Application.dataPath).FullName;
-#elif UNITY_ANDROID
-			path = Application.persistentDataPath;
-#elif UNITY_IOS
-			path = Application.persistentDataPath;
-#elif UNITY_STANDALONE
-			path = Application.dataPath;
-#endif
-			string rootPath = Directory.GetParent(path).FullName;
+			string path = Directory.GetParent(Directory.GetCurrentDirectory()).FullName;
 
 			Configuration configuration = new Configuration(path);
 			if (!configuration.Load("Database.cfg"))
