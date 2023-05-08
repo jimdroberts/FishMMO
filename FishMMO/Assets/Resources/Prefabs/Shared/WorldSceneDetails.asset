@@ -44,7 +44,7 @@ MonoBehaviour:
         - FelwitheNorth
         m_values:
         - toScene: Greater Faydark
-          toPosition: {x: 2.2199998, y: -0.64000005, z: 0}
+          toPosition: {x: -7.61, y: 0.95, z: -12.43}
     - initialSpawnPositions:
         m_keys:
         - Spire
@@ -65,4 +65,4 @@ MonoBehaviour:
         - GreaterFaydarkEast
         m_values:
         - toScene: Felwithe
-          toPosition: {x: 2.27, y: 0, z: 0}
+          toPosition: {x: -7.23, y: 1.67, z: -12.45}
