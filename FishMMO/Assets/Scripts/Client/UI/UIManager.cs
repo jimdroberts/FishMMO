@@ -32,10 +32,6 @@ namespace Client
 			}
 			else
 			{
-				if (!controls.TryGetValue(control.Name, out control))
-				{
-					return;
-				}
 				//Debug.Log("UIManager: Unregistered " + control.Name);
 				controls.Remove(control.Name);
 			}
@@ -43,17 +39,15 @@ namespace Client
 
 		public static bool TryGet<T>(string name, out T control) where T : UIControl
 		{
-			UIControl result = null;
-			if (!controls.TryGetValue(name, out result))
+			if (controls.TryGetValue(name, out UIControl result))
 			{
-				control = null;
-				return false;
+				if ((control = result as T) != null)
+				{
+					return true;
+				}
 			}
-			if ((control = result as T) == null)
-			{
-				return false;
-			}
-			return true;
+			control = null;
+			return false;
 		}
 
 		public static bool Exists(string name)

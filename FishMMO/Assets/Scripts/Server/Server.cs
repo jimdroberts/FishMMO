@@ -54,7 +54,11 @@ namespace Server
 
 		void Awake()
 		{
+#if UNITY_EDITOR
 			string path = Directory.GetParent(Directory.GetCurrentDirectory()).FullName;
+#else
+			string path = Directory.GetCurrentDirectory();
+#endif
 
 			// load configuration first
 			configuration = new Configuration(path);
