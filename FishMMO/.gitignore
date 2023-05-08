@@ -79,6 +79,3 @@ crashlytics-build.properties
 
 # Visual Studio Config
 .vsconfig
-
-# Editor Build Settings, these are changed by the CustomBuildTool
-/ProjectSettings/EditorBuildSettings.asset

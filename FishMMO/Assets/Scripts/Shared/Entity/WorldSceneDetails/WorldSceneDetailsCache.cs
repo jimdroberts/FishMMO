@@ -109,12 +109,12 @@ public class WorldSceneDetailsCache : ScriptableObject
 					{
 						string teleporterDestinationName = obj.name.Trim();
 
-						Debug.Log("[" + DateTime.UtcNow + "] WorldSceneDetails: Found new TeleporterDestination: [Destination:" + teleporterDestinationName + " " + obj.transform.localPosition + "]");
+						Debug.Log("[" + DateTime.UtcNow + "] WorldSceneDetails: Found new TeleporterDestination: [Destination:" + teleporterDestinationName + " " + obj.transform.position + "]");
 
 						teleporterDestinationCache.Add(obj.name.Trim(), new TeleporterDestinationDetails()
 						{
 							scene = s.name,
-							position = obj.transform.localPosition,
+							position = obj.transform.position,
 						});
 					}
 
