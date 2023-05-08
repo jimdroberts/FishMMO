@@ -21,8 +21,6 @@ namespace Server
 		public float saveRate = 60.0f;
 		private float nextSave = 0.0f;
 
-		public WorldSceneDetailsCache worldSceneDetailsCache;
-
 		public Dictionary<long, Character> charactersById = new Dictionary<long, Character>();
 		public Dictionary<string, Character> charactersByName = new Dictionary<string, Character>();
 		public Dictionary<NetworkConnection, Character> connectionCharacters = new Dictionary<NetworkConnection, Character>();

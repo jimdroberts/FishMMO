@@ -6,7 +6,7 @@ using System;
 
 public class SceneTeleporter : NetworkBehaviour
 {
-	public CharacterSystem CharacterSystem;
+	private SceneServerSystem sceneServerSystem;
 
 	public override void OnStartNetwork()
 	{
@@ -17,21 +17,21 @@ public class SceneTeleporter : NetworkBehaviour
 			enabled = false;
 		}
 
-		if (CharacterSystem == null)
+		if (sceneServerSystem == null)
 		{
-			CharacterSystem = FindObjectOfType<CharacterSystem>();
+			sceneServerSystem = ServerBehaviour.Get<SceneServerSystem>();
 		}
 	}
 
 	void OnTriggerEnter(Collider other)
 	{
-		if (other != null && other.gameObject != null && CharacterSystem != null)
+		if (other != null && other.gameObject != null && sceneServerSystem != null)
 		{
 			Character character = other.gameObject.GetComponent<Character>();
 			if (character != null && !character.isTeleporting)
 			{
-				if (CharacterSystem.worldSceneDetailsCache != null &&
-					CharacterSystem.worldSceneDetailsCache.scenes.TryGetValue(character.sceneName, out WorldSceneDetails details) &&
+				if (sceneServerSystem.worldSceneDetailsCache != null &&
+					sceneServerSystem.worldSceneDetailsCache.scenes.TryGetValue(character.sceneName, out WorldSceneDetails details) &&
 					details.teleporters.TryGetValue(gameObject.name, out SceneTeleporterDetails teleporter) &&
 					gameObject.name.Equals(teleporter.from))
 				{
@@ -58,7 +58,7 @@ public class SceneTeleporter : NetworkBehaviour
 					Debug.Log("[" + DateTime.UtcNow + "] " + character.characterName + " has been saved at: " + character.transform.position.ToString());
 
 					// save the character with new scene and position
-					using var dbContext = CharacterSystem.Server.DbContextFactory.CreateDbContext();
+					using var dbContext = sceneServerSystem.Server.DbContextFactory.CreateDbContext();
 					CharacterService.SaveCharacter(dbContext, character, true);
 					dbContext.SaveChanges();
 
@@ -68,8 +68,8 @@ public class SceneTeleporter : NetworkBehaviour
 					// tell the client to reconnect to the world server for automatic re-entry
 					character.Owner.Broadcast(new SceneWorldReconnectBroadcast()
 					{
-						address = CharacterSystem.Server.relayAddress,
-						port = CharacterSystem.Server.relayPort,
+						address = sceneServerSystem.Server.relayAddress,
+						port = sceneServerSystem.Server.relayPort,
 					});
 				}
 				else
