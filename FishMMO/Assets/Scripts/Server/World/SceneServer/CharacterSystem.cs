@@ -95,8 +95,6 @@ namespace Server
 
 				SceneServerSystem.OnSceneLoadComplete += SceneManager_OnSceneLoadComplete;
 				SceneServerSystem.SceneManager.OnClientLoadedStartScenes += SceneManager_OnClientLoadedStartScenes;
-
-				ServerManager.RegisterBroadcast<CharacterSceneChangeRequestBroadcast>(OnServerCharacterSceneChangeRequestReceived, true);
 			}
 			else if (args.ConnectionState == LocalConnectionState.Stopped)
 			{
@@ -104,8 +102,6 @@ namespace Server
 
 				SceneServerSystem.OnSceneLoadComplete -= SceneManager_OnSceneLoadComplete;
 				SceneServerSystem.SceneManager.OnClientLoadedStartScenes -= SceneManager_OnClientLoadedStartScenes;
-
-				ServerManager.UnregisterBroadcast<CharacterSceneChangeRequestBroadcast>(OnServerCharacterSceneChangeRequestReceived);
 			}
 		}
 
@@ -161,13 +157,17 @@ namespace Server
 					// remove the connection->character entry
 					connectionCharacters.Remove(conn);
 
+					if (character.isTeleporting)
+					{
+						// teleporter handles the rest
+						return;
+					}
+
 					// character becomes immortal on disconnect and mortal when fully loaded into the scene
 					if (character.DamageController != null)
 					{
 						character.DamageController.immortal = true;
 					}
-
-					Debug.Log("[" + DateTime.UtcNow + "] " + character.characterName + " has been saved at: " + character.transform.position.ToString());
 
 					character.RemoveOwnership();
 
@@ -175,6 +175,8 @@ namespace Server
 					using var dbContext = Server.DbContextFactory.CreateDbContext();
 					CharacterService.SaveCharacter(dbContext, character, false);
 					dbContext.SaveChanges();
+
+					Debug.Log("[" + DateTime.UtcNow + "] " + character.characterName + " has been saved at: " + character.transform.position.ToString());
 
 					// immediately log out for now.. we could add a timeout later on..?
 					ServerManager.Despawn(character.NetworkObject, DespawnType.Pool);
@@ -353,55 +355,6 @@ namespace Server
 			{
 				// couldn't find the character details for the connection.. kick the player
 				conn.Kick(FishNet.Managing.Server.KickReason.UnexpectedProblem);
-			}
-		}
-
-		/// <summary>
-		/// Handles changing a characters scene by telling the connection to reconnect to the world server.
-		/// </summary>
-		private void OnServerCharacterSceneChangeRequestReceived(NetworkConnection conn, CharacterSceneChangeRequestBroadcast msg)
-		{
-			if (worldSceneDetailsCache != null &&
-				connectionCharacters.TryGetValue(conn, out Character character) &&
-				worldSceneDetailsCache.scenes.TryGetValue(character.sceneName, out WorldSceneDetails details) &&
-				details.teleporters.TryGetValue(msg.teleporterName, out SceneTeleporterDetails teleporter) &&
-				msg.fromTeleporter == teleporter.from)
-			{
-				// should we prevent players from moving to a different scene if they are in combat?
-				/*if (character.DamageController.Attackers.Count > 0)
-				{
-					return;
-				}*/
-
-				// remove ownership of the connections character
-				character.RemoveOwnership();
-
-				// make the character immortal for teleport
-				if (character.DamageController != null)
-				{
-					character.DamageController.immortal = true;
-				}
-
-				character.sceneName = teleporter.toScene;
-				character.transform.SetPositionAndRotation(teleporter.toPosition, character.transform.rotation);// teleporter.toRotation);
-
-				// save the character with new scene and position
-				using var dbContext = Server.DbContextFactory.CreateDbContext();
-				CharacterService.SaveCharacter(dbContext, character, true);
-				dbContext.SaveChanges();
-
-				// tell the connection to reconnect to the world server for automatic re-entry?
-				SceneWorldReconnectBroadcast sceneReconnect = new SceneWorldReconnectBroadcast()
-				{
-					address = Server.relayAddress,
-					port = Server.relayPort,
-				};
-
-				conn.Broadcast(sceneReconnect);
-			}
-			else
-			{
-				// destination not found
 			}
 		}
 

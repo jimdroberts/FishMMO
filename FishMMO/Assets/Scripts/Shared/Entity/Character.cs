@@ -87,7 +87,8 @@ public class Character : NetworkBehaviour
 	[SyncVar(Channel = Channel.Reliable)]
 	public long id;
 	public string account;
-	public bool isGameMaster;
+	public bool isGameMaster = false;
+	public bool isTeleporting = false;
 	public int raceID;
 	public string raceName;
 	public string sceneName;

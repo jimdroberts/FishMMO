@@ -1,6 +1,4 @@
-﻿using FishNet;
-using FishNet.Managing.Scened;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -761,10 +759,10 @@ namespace KinematicCharacterController
 		// scene stacking
 		private PhysicsScene _physicsScene;
 
-		public void SetPhysicsScene(UnityEngine.SceneManagement.Scene scene)
+		public void SetPhysicsScene(PhysicsScene physicsScene)
 		{
 			//Debug.Log($"Received physics scene for scene '{scene.name}'.");
-			_physicsScene = scene.GetPhysicsScene();
+			_physicsScene = physicsScene;
 		}
 
 		/// <summary>
