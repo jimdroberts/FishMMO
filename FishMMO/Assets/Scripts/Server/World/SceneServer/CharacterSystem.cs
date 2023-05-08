@@ -167,8 +167,6 @@ namespace Server
 						character.DamageController.immortal = true;
 					}
 
-					character.RemoveOwnership();
-
 					// save the character and set online to false
 					using var dbContext = Server.DbContextFactory.CreateDbContext();
 					CharacterService.SaveCharacter(dbContext, character, false);
@@ -178,7 +176,6 @@ namespace Server
 
 					// immediately log out for now.. we could add a timeout later on..?
 					ServerManager.Despawn(character.NetworkObject, DespawnType.Pool);
-					character.gameObject.SetActive(false);
 				}
 			}
 		}

@@ -8,10 +8,8 @@ public class SceneTeleporter : NetworkBehaviour
 {
 	private SceneServerSystem sceneServerSystem;
 
-	public override void OnStartServer()
+	void Awake()
 	{
-		base.OnStartServer();
-
 		if (sceneServerSystem == null)
 		{
 			sceneServerSystem = ServerBehaviour.Get<SceneServerSystem>();
@@ -27,8 +25,7 @@ public class SceneTeleporter : NetworkBehaviour
 			{
 				if (sceneServerSystem.worldSceneDetailsCache != null &&
 					sceneServerSystem.worldSceneDetailsCache.scenes.TryGetValue(character.sceneName, out WorldSceneDetails details) &&
-					details.teleporters.TryGetValue(gameObject.name, out SceneTeleporterDetails teleporter) &&
-					gameObject.name.Equals(teleporter.from))
+					details.teleporters.TryGetValue(gameObject.name, out SceneTeleporterDetails teleporter))
 				{
 					character.isTeleporting = true;
 
@@ -44,9 +41,6 @@ public class SceneTeleporter : NetworkBehaviour
 						character.DamageController.immortal = true;
 					}
 
-					// remove ownership of the connections character
-					character.RemoveOwnership();
-
 					character.sceneName = teleporter.toScene;
 					character.transform.SetPositionAndRotation(teleporter.toPosition, character.transform.rotation);// teleporter.toRotation);
 
@@ -54,11 +48,8 @@ public class SceneTeleporter : NetworkBehaviour
 
 					// save the character with new scene and position
 					using var dbContext = sceneServerSystem.Server.DbContextFactory.CreateDbContext();
-					CharacterService.SaveCharacter(dbContext, character, true);
+					CharacterService.SaveCharacter(dbContext, character, false);
 					dbContext.SaveChanges();
-
-					sceneServerSystem.ServerManager.Despawn(character.NetworkObject, DespawnType.Pool);
-					character.gameObject.SetActive(false);
 
 					// tell the client to reconnect to the world server for automatic re-entry
 					character.Owner.Broadcast(new SceneWorldReconnectBroadcast()
@@ -66,6 +57,8 @@ public class SceneTeleporter : NetworkBehaviour
 						address = sceneServerSystem.Server.relayAddress,
 						port = sceneServerSystem.Server.relayPort,
 					});
+
+					sceneServerSystem.ServerManager.Despawn(character.NetworkObject, DespawnType.Pool);
 				}
 				else
 				{

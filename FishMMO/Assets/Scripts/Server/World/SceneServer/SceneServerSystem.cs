@@ -128,9 +128,10 @@ namespace Server
 
 				if (!handles.ContainsKey(scene.handle))
 				{
-					GameObject physicTicker = new GameObject("PhysicsTicker");
-					physicTicker.AddComponent<PhysicsTicker>();
-					UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(physicTicker, scene);
+					GameObject gob = new GameObject("PhysicsTicker");
+					PhysicsTicker physicsTicker = gob.AddComponent<PhysicsTicker>();
+					physicsTicker.InitializeOnce(scene.GetPhysicsScene());
+					UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(gob, scene);
 
 					// cache the newly loaded scene
 					handles.Add(scene.handle, new SceneInstanceDetails()

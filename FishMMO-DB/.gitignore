@@ -38,4 +38,3 @@ msbuild.wrn
 
 # Special ignore directory, anything here will be ignored
 /[Ff]ishMMO-DB/[Mm]igrations*
-/[Dd]atabase.cfg
