@@ -1,9 +1,11 @@
 ﻿using FishNet.Managing;
 using FishNet.Transporting;
+using FishNet.Managing.Scened;
 using Server;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace Client
 {
@@ -36,6 +38,8 @@ namespace Client
 
 		public List<ServerAddress> loginServerAddresses;
 
+		private Dictionary<string, Scene> serverLoadedScenes = new Dictionary<string, Scene>();
+
 		void Awake()
 		{
 			networkManager = FindObjectOfType<NetworkManager>();
@@ -53,6 +57,11 @@ namespace Client
 			else
 			{
 				networkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
+				networkManager.SceneManager.OnLoadStart += SceneManager_OnLoadStart;
+				networkManager.SceneManager.OnLoadPercentChange += SceneManager_OnLoadPercentChange;
+				networkManager.SceneManager.OnLoadEnd += SceneManager_OnLoadEnd;
+				networkManager.SceneManager.OnUnloadStart += SceneManager_OnUnloadStart;
+				networkManager.SceneManager.OnUnloadEnd += SceneManager_OnUnloadEnd;
 				loginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
 
 				networkManager.ClientManager.RegisterBroadcast<SceneWorldReconnectBroadcast>(OnClientSceneWorldReconnectBroadcastReceived);
@@ -113,6 +122,43 @@ namespace Client
 		private void ClientManager_OnClientConnectionState(ClientConnectionStateArgs obj)
 		{
 			clientState = obj.ConnectionState;
+		}
+
+		private void SceneManager_OnLoadStart(SceneLoadStartEventArgs args)
+		{
+			// unload previous scene
+			foreach (Scene scene in serverLoadedScenes.Values)
+			{
+				UnityEngine.SceneManagement.SceneManager.UnloadSceneAsync(scene);
+			}
+			serverLoadedScenes.Clear();
+		}
+
+		private void SceneManager_OnLoadPercentChange(SceneLoadPercentEventArgs args)
+		{
+		}
+
+		private void SceneManager_OnLoadEnd(SceneLoadEndEventArgs args)
+		{
+			// add loaded scenes to list
+			if (args.LoadedScenes != null)
+			{
+				foreach (Scene scene in args.LoadedScenes)
+				{
+					if (!serverLoadedScenes.ContainsKey(scene.name))
+					{
+						serverLoadedScenes.Add(scene.name, scene);
+					}
+				}
+			}
+		}
+
+		private void SceneManager_OnUnloadStart(SceneUnloadStartEventArgs args)
+		{
+		}
+
+		private void SceneManager_OnUnloadEnd(SceneUnloadEndEventArgs args)
+		{
 		}
 
 		private void Authenticator_OnClientAuthenticationResult(ClientAuthenticationResult result)
