@@ -128,6 +128,10 @@ namespace Server
 
 				if (!handles.ContainsKey(scene.handle))
 				{
+					GameObject physicTicker = new GameObject("PhysicsTicker");
+					physicTicker.AddComponent<PhysicsTicker>();
+					UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(physicTicker, scene);
+
 					// cache the newly loaded scene
 					handles.Add(scene.handle, new SceneInstanceDetails()
 					{
@@ -273,7 +277,8 @@ namespace Server
 			UnityEngine.SceneManagement.Scene scene = SceneManager.GetScene(character.sceneHandle);
 			if (scene != null && scene.IsValid() && scene.isLoaded)
 			{
-				character.Motor.SetPhysicsScene(scene);
+				UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(character.gameObject, scene);
+				character.Motor.SetPhysicsScene(scene.GetPhysicsScene());
 			}
 		}
 	}
