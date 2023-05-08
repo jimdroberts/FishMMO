@@ -16,12 +16,13 @@ namespace Server
 			{
 				return;
 			}
-			if (behaviours.ContainsKey(typeof(T)))
+			Type type = behaviour.GetType();
+			if (behaviours.ContainsKey(type))
 			{
 				return;
 			}
 			//Debug.Log("UIManager: Registered " + control.Name);
-			behaviours.Add(typeof(T), behaviour);
+			behaviours.Add(type, behaviour);
 		}
 
 		internal static void Unregister<T>(T behaviour) where T : ServerBehaviour
@@ -33,7 +34,7 @@ namespace Server
 			else
 			{
 				//Debug.Log("UIManager: Unregistered " + control.Name);
-				behaviours.Remove(typeof(T));
+				behaviours.Remove(behaviour.GetType());
 			}
 		}
 
@@ -81,8 +82,6 @@ namespace Server
 			if (Initialized)
 				return;
 
-			ServerBehaviour.Register(this);
-
 			Server = server;
 			ServerManager = serverManager;
 			ClientManager = clientManager;
@@ -92,6 +91,11 @@ namespace Server
 		}
 
 		public abstract void InitializeOnce();
+
+		private void Awake()
+		{
+			ServerBehaviour.Register(this);
+		}
 
 		private void OnDestroy()
 		{

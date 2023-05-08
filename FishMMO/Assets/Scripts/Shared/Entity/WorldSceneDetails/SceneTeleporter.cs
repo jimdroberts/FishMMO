@@ -8,14 +8,9 @@ public class SceneTeleporter : NetworkBehaviour
 {
 	private SceneServerSystem sceneServerSystem;
 
-	public override void OnStartNetwork()
+	public override void OnStartServer()
 	{
-		base.OnStartNetwork();
-
-		if (!IsServer)
-		{
-			enabled = false;
-		}
+		base.OnStartServer();
 
 		if (sceneServerSystem == null)
 		{
@@ -62,7 +57,7 @@ public class SceneTeleporter : NetworkBehaviour
 					CharacterService.SaveCharacter(dbContext, character, true);
 					dbContext.SaveChanges();
 
-					ServerManager.Despawn(character.NetworkObject, DespawnType.Pool);
+					sceneServerSystem.ServerManager.Despawn(character.NetworkObject, DespawnType.Pool);
 					character.gameObject.SetActive(false);
 
 					// tell the client to reconnect to the world server for automatic re-entry
