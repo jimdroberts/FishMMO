@@ -175,7 +175,8 @@ namespace Server
 					Debug.Log("[" + DateTime.UtcNow + "] " + character.characterName + " has been saved at: " + character.transform.position.ToString());
 
 					// immediately log out for now.. we could add a timeout later on..?
-					ServerManager.Despawn(character.NetworkObject, DespawnType.Pool);
+					if (character.NetworkObject.IsSpawned)
+						ServerManager.Despawn(character.NetworkObject, DespawnType.Pool);
 				}
 			}
 		}

@@ -231,15 +231,13 @@ namespace Server.Services
 					nob.gameObject.SetActive(false);
 
 					// set position and rotation just incase..
-					nob.transform.SetPositionAndRotation(spawnPos, spawnRot);
-
-					Debug.Log("[" + DateTime.UtcNow + "] " + dbCharacter.Name + " has been instantiated at Pos:" +
-							  nob.transform.position.ToString() + " Rot:" + nob.transform.rotation.ToString());
+					//nob.transform.SetPositionAndRotation(spawnPos, spawnRot);
 
 					character = nob.GetComponent<Character>();
 					if (character != null)
 					{
-                        character.id = dbCharacter.Id;
+                        character.Motor.SetPositionAndRotation(spawnPos, spawnRot);
+						character.id = dbCharacter.Id;
 						character.characterName = dbCharacter.Name;
 						character.account = dbCharacter.Account;
 						character.isGameMaster = dbCharacter.IsGameMaster;
@@ -248,6 +246,11 @@ namespace Server.Services
 						character.sceneName = dbCharacter.SceneName;
 						return true;
 					}
+
+					Debug.Log("[" + DateTime.UtcNow + "] " + dbCharacter.Name + " has been instantiated at Pos:" +
+							  nob.transform.position.ToString() + " Rot:" + nob.transform.rotation.ToString());
+
+					Debug.Log("[" + DateTime.UtcNow + "] " + dbCharacter.Name + " A:" + nob.transform.position.ToString());
 				}
 			}
             character = null;
