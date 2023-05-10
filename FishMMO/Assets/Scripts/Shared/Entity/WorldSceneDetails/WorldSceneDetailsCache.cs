@@ -33,6 +33,24 @@ public class WorldSceneDetailsCache : ScriptableObject
 		}
 		Debug.Log("[" + DateTime.UtcNow + "] WorldSceneDetails: Rebuilding");
 
+		// Keep track of teleporter sprites
+		Dictionary<string, Dictionary<string, Sprite>> teleporterSpriteCache = new Dictionary<string, Dictionary<string, Sprite>>();
+		foreach (var worldSceneEntry in scenes)
+		{
+			foreach (var teleporterEntry in worldSceneEntry.Value.teleporters)
+			{
+				if (teleporterEntry.Value.sceneTransitionImage == null) continue;
+				
+				if(teleporterSpriteCache.TryGetValue(worldSceneEntry.Key, out Dictionary<string, Sprite> spriteCache) == false)
+				{
+					spriteCache = new Dictionary<string, Sprite>();
+					teleporterSpriteCache.Add(worldSceneEntry.Key, spriteCache);
+				}
+
+				spriteCache.Add(teleporterEntry.Key, teleporterEntry.Value.sceneTransitionImage);
+			}
+		}
+
 		scenes.Clear();
 		scenes = new WorldSceneDetailsDictionary();
 
@@ -138,6 +156,15 @@ public class WorldSceneDetailsCache : ScriptableObject
 					{
 						pair.Value.toScene = destination.scene;
 						pair.Value.toPosition = destination.position;
+                        pair.Value.sceneTransitionImage = null;
+
+                        if (teleporterSpriteCache.TryGetValue(teleporterDetailsPair.Key, out Dictionary<string, Sprite> spriteCache))
+						{
+							if(spriteCache.TryGetValue(pair.Key, out Sprite sprite))
+							{
+								pair.Value.sceneTransitionImage = sprite;
+							}
+						}
 
 						Debug.Log("[" + DateTime.UtcNow + "] WorldSceneDetails: Teleporter [" + pair.Key + "] linked to: [Scene:" + destination.scene + " " + pair.Value.toPosition + "]");
 
