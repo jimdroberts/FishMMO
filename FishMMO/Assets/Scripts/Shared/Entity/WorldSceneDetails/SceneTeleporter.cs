@@ -41,6 +41,7 @@ public class SceneTeleporter : NetworkBehaviour
 						character.DamageController.immortal = true;
 					}
 
+					string playerScene = character.sceneName;
 					character.sceneName = teleporter.toScene;
 					character.Motor.SetPositionAndRotation(teleporter.toPosition, character.transform.rotation);// teleporter.toRotation);
 
@@ -56,7 +57,9 @@ public class SceneTeleporter : NetworkBehaviour
 					{
 						address = sceneServerSystem.Server.relayAddress,
 						port = sceneServerSystem.Server.relayPort,
-					});
+						teleporterName = gameObject.name,
+						sceneName = playerScene
+                    });
 
 					sceneServerSystem.ServerManager.Despawn(character.NetworkObject, DespawnType.Pool);
 				}

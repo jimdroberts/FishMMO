@@ -45,6 +45,8 @@ MonoBehaviour:
         m_values:
         - toScene: Greater Faydark
           toPosition: {x: -7.61, y: 0.95, z: -12.43}
+          sceneTransitionImage: {fileID: 21300000, guid: af9d2e8814f76f4498e2ed07cc8191ef,
+            type: 3}
     - initialSpawnPositions:
         m_keys:
         - Spire
@@ -66,3 +68,5 @@ MonoBehaviour:
         m_values:
         - toScene: Felwithe
           toPosition: {x: -7.23, y: 1.67, z: -12.45}
+          sceneTransitionImage: {fileID: 21300000, guid: 5c2d23be0cbdd4048a53de5b3b050809,
+            type: 3}

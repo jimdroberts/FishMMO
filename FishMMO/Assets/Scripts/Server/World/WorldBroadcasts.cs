@@ -48,6 +48,8 @@ namespace Server
 	{
 		public string address;
 		public ushort port;
+		public string sceneName;
+		public string teleporterName;
 	}
 
 	public struct WorldChatBroadcast : IBroadcast
