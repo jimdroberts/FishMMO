@@ -38,7 +38,10 @@ namespace FishMMO.Server
 
         private void Initialize(string bootstrapSceneName)
         {
-			SceneManager.LoadScene(bootstrapSceneName, LoadSceneMode.Single);
+#if UNITY_SERVER && !UNITY_EDITOR
+            Application.SetStackTraceLogType(LogType.Log, StackTraceLogType.None);
+#endif
+            SceneManager.LoadScene(bootstrapSceneName, LoadSceneMode.Single);
         }
     }
 }
