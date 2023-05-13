@@ -1,13 +1,15 @@
 ﻿using FishNet.Managing;
 using FishNet.Transporting;
 using FishNet.Managing.Scened;
-using Server;
 using System.Collections;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using FishNet.Connection;
+using System;
 
-namespace Client
+namespace FishMMO.Client
 {
 	/// <summary>
 	/// Client controls connecting to servers, 
@@ -39,6 +41,16 @@ namespace Client
 		public List<ServerAddress> loginServerAddresses;
 
 		private Dictionary<string, Scene> serverLoadedScenes = new Dictionary<string, Scene>();
+
+		public event Action OnConnectionSuccessful;
+		public event Action<byte, byte> OnReconnectAttempt;
+		public event Action OnReconnectFailed;
+
+		private const byte reconnectAttempts = 10;
+		private byte reconnectsAttempted = 0;
+		private bool forceDisconnect = false;
+		private string lastAddress = "";
+		private ushort lastPort = 0;
 
 		void Awake()
 		{
@@ -122,6 +134,39 @@ namespace Client
 		private void ClientManager_OnClientConnectionState(ClientConnectionStateArgs obj)
 		{
 			clientState = obj.ConnectionState;
+
+			switch (clientState)
+			{
+				case LocalConnectionState.Stopped:
+					if (!forceDisconnect)
+					{
+						if (reconnectsAttempted < reconnectAttempts)
+						{
+							if (IsAddressValid(lastAddress) && lastPort != 0)
+							{
+								++reconnectsAttempted;
+								OnReconnectAttempt?.Invoke(reconnectsAttempted, reconnectAttempts);
+								ConnectToServer(lastAddress, lastPort);
+							}
+						}
+						else
+						{
+							if (UIManager.TryGet("UILogin", out UILogin login) &&
+								login.visible)
+							{
+								login.SetSignInLocked(false);
+							}
+							reconnectsAttempted = 0;
+							OnReconnectFailed?.Invoke();
+						}
+					}
+					forceDisconnect = false;
+					break;
+				case LocalConnectionState.Started:
+					OnConnectionSuccessful?.Invoke();
+					reconnectsAttempted = 0;
+					break;
+			}
 		}
 
 		private void SceneManager_OnLoadStart(SceneLoadStartEventArgs args)
@@ -191,6 +236,15 @@ namespace Client
 			StartCoroutine(OnAwaitingConnectionReady(address, port));
 		}
 
+		public void OnTryReconnect()
+		{
+			if (IsAddressValid(lastAddress) && lastPort != 0)
+			{
+				// connect to the server
+				ConnectToServer(lastAddress, lastPort);
+			}
+		}
+
 		IEnumerator OnAwaitingConnectionReady(string address, ushort port)
 		{
 			// wait for the connection to the current server to stop
@@ -199,10 +253,27 @@ namespace Client
 				yield return new WaitForSeconds(0.2f);
 			}
 
+			if (forceDisconnect)
+			{
+				forceDisconnect = false;
+				yield return null;
+			}
+
+			lastAddress = address;
+			lastPort = port;
+
 			// connect to the next server
 			networkManager.ClientManager.StartConnection(address, port);
 
 			yield return null;
+		}
+
+		public void ForceDisconnect()
+		{
+			forceDisconnect = true;
+
+			// stop current connection if any
+			networkManager.ClientManager.StopConnection();
 		}
 
 		public bool TryGetRandomLoginServerAddress(out ServerAddress serverAddress)
@@ -215,6 +286,16 @@ namespace Client
 			}
 			serverAddress = default;
 			return false;
+		}
+
+		/// <summary>
+		/// IPv4 Regex, can we get IPv6 support???
+		/// </summary>
+		public bool IsAddressValid(string address)
+		{
+			const string ValidIpAddressRegex = "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$";
+			Match match = Regex.Match(address, ValidIpAddressRegex);
+			return match.Success;
 		}
 	}
 }

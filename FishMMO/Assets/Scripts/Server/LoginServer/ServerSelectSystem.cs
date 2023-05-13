@@ -1,9 +1,9 @@
 ﻿using FishNet.Connection;
 using System.Collections.Generic;
 using FishNet.Transporting;
-using Server.Services;
+using FishMMO.Server.Services;
 
-namespace Server
+namespace FishMMO.Server
 {
 	/// <summary>
 	/// Server Select system.

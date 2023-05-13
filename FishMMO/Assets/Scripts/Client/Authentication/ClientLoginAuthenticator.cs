@@ -7,7 +7,7 @@ using System;
 using UnityEngine;
 using System.Text.RegularExpressions;
 
-namespace Client
+namespace FishMMO.Client
 {
 	public class ClientLoginAuthenticator : Authenticator
 	{

@@ -1,4 +1,6 @@
-﻿using Client;
+﻿#if !UNITY_SERVER
+using FishMMO.Client;
+#endif
 using FishNet.Component.Prediction;
 using FishNet.Component.Transforming;
 using FishNet.Object;
@@ -52,10 +54,12 @@ public class Character : NetworkBehaviour, IPooledResettable
 	public GuildController GuildController;
 	public PartyController PartyController;
 	public KinematicCharacterMotor Motor;
+#if !UNITY_SERVER
 	public LocalInputController LocalInputController;
 
 	//temporary
 	public UILabel3D CharacterNameLabel;
+#endif
 
 	/// <summary>
 	/// The characters real name. Use this if you are referencing a character by name. Avoid character.name unless you want the name of the game object.
@@ -64,24 +68,23 @@ public class Character : NetworkBehaviour, IPooledResettable
 	public string characterName;
 	private void OnCharacterNameChanged(string prev, string next, bool asServer)
 	{
-		if (!asServer)
-		{
-			gameObject.name = next;
+#if !UNITY_SERVER
+		gameObject.name = next;
 
-			if (CharacterNameLabel == null)
+		if (CharacterNameLabel == null)
+		{
+			float calcHeight = 100.0f;
+			if (Motor != null && Motor.Capsule != null)
 			{
-				float calcHeight = 100.0f;
-				if (Motor != null && Motor.Capsule != null)
-				{
-					calcHeight *= Motor.Capsule.height * 0.75f;
-				}
-				CharacterNameLabel = UILabel3D.Create(next, 12, transform, new Vector2(0.0f, calcHeight));
+				calcHeight *= Motor.Capsule.height * 0.75f;
 			}
-			else
-			{
-				CharacterNameLabel.Text = next;
-			}
+			CharacterNameLabel = UILabel3D.Create(next, 12, transform, new Vector2(0.0f, calcHeight));
 		}
+		else
+		{
+			CharacterNameLabel.Text = next;
+		}
+#endif
 	}
 
 	// accountName for reference
@@ -118,7 +121,6 @@ public class Character : NetworkBehaviour, IPooledResettable
 		BuffController.character = this;
 		QuestController = gameObject.GetComponent<QuestController>();
 		QuestController.character = this;
-		//CharacterMovementController = gameObject.GetComponent<CharacterMovementController>();
 		GuildController = gameObject.GetComponent<GuildController>();
 		GuildController.character = this;
 		PartyController = gameObject.GetComponent<PartyController>();
@@ -132,7 +134,10 @@ public class Character : NetworkBehaviour, IPooledResettable
 		if (base.IsOwner)
 		{
 			localCharacter = this;
+
+#if !UNITY_SERVER
 			LocalInputController = gameObject.AddComponent<LocalInputController>();
+#endif
 		}
 	}
 
@@ -142,11 +147,12 @@ public class Character : NetworkBehaviour, IPooledResettable
 		if (base.IsOwner)
 		{
 			localCharacter = null;
-
+#if !UNITY_SERVER
 			if (LocalInputController != null)
 			{
 				Destroy(LocalInputController);
 			}
+#endif
 		}
 	}
 

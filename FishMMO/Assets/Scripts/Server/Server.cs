@@ -12,7 +12,7 @@ using FishMMO_DB;
 using UnityEditor;
 #endif
 
-namespace Server
+namespace FishMMO.Server
 {
 	// Main Server class, handles configuration and starting connections.
 	public class Server : MonoBehaviour

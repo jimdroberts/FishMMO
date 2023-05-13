@@ -1,7 +1,7 @@
 ﻿using FishNet.Connection;
 using System.Collections.Generic;
 
-namespace Server
+namespace FishMMO.Server
 {
 	/// <summary>
 	/// AccountManager maps connections to usernames and usernames to connections. This is a helper class. Adding a connection should only be done in your authenticator.

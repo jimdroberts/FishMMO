@@ -1,6 +1,6 @@
-﻿using Client;
+﻿using FishMMO.Client;
 
-namespace Client
+namespace FishMMO.Client
 {
 	public class UIRightClickContextMenu : UIControl
 	{

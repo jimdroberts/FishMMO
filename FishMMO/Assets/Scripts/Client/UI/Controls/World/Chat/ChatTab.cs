@@ -2,7 +2,7 @@
 using TMPro;
 using UnityEngine;
 
-namespace Client
+namespace FishMMO.Client
 {
 	public class ChatTab : MonoBehaviour
 	{

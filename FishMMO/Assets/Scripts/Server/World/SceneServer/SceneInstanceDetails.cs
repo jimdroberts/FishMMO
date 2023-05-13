@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Server
+namespace FishMMO.Server
 {
 	[Serializable]
 	public struct SceneInstanceDetails

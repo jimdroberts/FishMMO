@@ -5,7 +5,7 @@ using System;
 using UnityEditor;
 #endif
 
-namespace Server
+namespace FishMMO.Server
 {
     public class ServerLauncher : MonoBehaviour
     {

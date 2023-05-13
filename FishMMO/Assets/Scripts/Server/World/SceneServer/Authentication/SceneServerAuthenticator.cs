@@ -3,10 +3,10 @@ using FishNet.Managing.Logging;
 using FishNet.Transporting;
 using FishMMO_DB;
 using System;
-using Server.Services;
+using FishMMO.Server.Services;
 using UnityEngine;
 
-namespace Server
+namespace FishMMO.Server
 {
 	// Scene Server Authenticator, Scene Authenticator connects with basic password authentication.
 	public class SceneServerAuthenticator : LoginServerAuthenticator

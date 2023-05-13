@@ -3,7 +3,7 @@ using UnityEngine;
 //using UnityEngine.Events;
 using UnityEngine.EventSystems;
 
-namespace Client
+namespace FishMMO.Client
 {
 	public abstract class UIControl : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler, IPointerDownHandler, IPointerUpHandler, IDragHandler
 	{

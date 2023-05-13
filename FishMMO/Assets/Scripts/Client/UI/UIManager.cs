@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
 using UnityEngine.EventSystems;
 
-namespace Client
+namespace FishMMO.Client
 {
 	/// <summary>
 	/// Helper class for our UI

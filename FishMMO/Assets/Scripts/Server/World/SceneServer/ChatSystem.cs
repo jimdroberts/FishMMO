@@ -5,7 +5,7 @@ using UnityEngine;
 using System.Collections.Generic;
 using System;
 
-namespace Server
+namespace FishMMO.Server
 {
 	/// <summary>
 	/// Server chat system.

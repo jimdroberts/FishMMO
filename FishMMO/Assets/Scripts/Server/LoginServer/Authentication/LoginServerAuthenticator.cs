@@ -5,9 +5,9 @@ using FishNet.Transporting;
 using FishMMO_DB;
 using System;
 using System.Text.RegularExpressions;
-using Server.Services;
+using FishMMO.Server.Services;
 
-namespace Server
+namespace FishMMO.Server
 {
 	// Login Server Authenticator that allows Clients to connect with basic password authentication.
 	public class LoginServerAuthenticator : Authenticator

@@ -3,7 +3,7 @@ using System.Linq;
 using FishMMO_DB;
 using FishMMO_DB.Entities;
 
-namespace Server.Services
+namespace FishMMO.Server.Services
 {
     public class AccountService
     {

@@ -4,7 +4,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-namespace Client
+namespace FishMMO.Client
 {
 	public class UIChatChannelPicker : UIControl
 	{

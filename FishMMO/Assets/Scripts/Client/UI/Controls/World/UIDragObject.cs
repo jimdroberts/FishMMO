@@ -2,7 +2,7 @@
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
-namespace Client
+namespace FishMMO.Client
 {
 	public class UIDragObject : UIControl
 	{

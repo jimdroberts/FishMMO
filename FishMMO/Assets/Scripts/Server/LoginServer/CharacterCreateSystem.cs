@@ -3,10 +3,10 @@ using FishNet.Transporting;
 using System;
 using System.Text.RegularExpressions;
 using FishMMO_DB.Entities;
-using Server.Services;
+using FishMMO.Server.Services;
 using FishNet.Object;
 
-namespace Server
+namespace FishMMO.Server
 {
 	/// <summary>
 	/// Server Character Creation system.

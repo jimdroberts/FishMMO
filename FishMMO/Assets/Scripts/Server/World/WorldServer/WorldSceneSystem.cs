@@ -4,10 +4,10 @@ using FishNet.Managing.Server;
 using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
-using Server.Services;
+using FishMMO.Server.Services;
 using UnityEngine;
 
-namespace Server
+namespace FishMMO.Server
 {
 	// World scene system handles the node services
 	public class WorldSceneSystem : ServerBehaviour

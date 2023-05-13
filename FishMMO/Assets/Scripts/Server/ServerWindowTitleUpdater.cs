@@ -3,7 +3,7 @@ using System;
 using System.Runtime.InteropServices;
 using UnityEngine;
 
-namespace Server
+namespace FishMMO.Server
 {
 	public class ServerWindowTitleUpdater : ServerBehaviour
 	{

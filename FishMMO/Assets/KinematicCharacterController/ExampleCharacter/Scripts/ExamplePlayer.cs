@@ -4,7 +4,7 @@ using FishNet.Object.Prediction;
 using FishNet.Managing.Logging;
 using FishNet.Transporting;
 using UnityEngine;
-using Client;
+using FishMMO.Client;
 
 namespace KinematicCharacterController.Examples
 {

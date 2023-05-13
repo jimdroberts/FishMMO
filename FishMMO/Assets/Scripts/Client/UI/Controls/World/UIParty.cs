@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 
-namespace Client
+namespace FishMMO.Client
 {
 	public class UIParty : UIControl
 	{

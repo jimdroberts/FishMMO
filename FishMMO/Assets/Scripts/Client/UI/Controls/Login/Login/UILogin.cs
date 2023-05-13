@@ -1,12 +1,11 @@
 ﻿using FishNet.Managing;
 using FishNet.Transporting;
-using System.Collections.Generic;
 using TMPro;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UI;
 
-namespace Client
+namespace FishMMO.Client
 {
 	public class UILogin : UIControl
 	{
@@ -56,7 +55,7 @@ namespace Client
 
 		private void ClientManager_OnClientConnectionState(ClientConnectionStateArgs obj)
 		{
-			handshakeMSG.text = obj.ConnectionState.ToString();
+			//handshakeMSG.text = obj.ConnectionState.ToString();
 		}
 
 		private void Authenticator_OnClientAuthenticationResult(ClientAuthenticationResult result)
@@ -121,7 +120,7 @@ namespace Client
 		/// <summary>
 		/// Sets locked state for signing in.
 		/// </summary>
-		private void SetSignInLocked(bool locked)
+		public void SetSignInLocked(bool locked)
 		{
 			signInButton.interactable = !locked;
 			username.enabled = !locked;

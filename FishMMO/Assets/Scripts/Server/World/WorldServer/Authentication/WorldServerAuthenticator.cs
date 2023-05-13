@@ -1,7 +1,7 @@
 using FishMMO_DB;
-using Server.Services;
+using FishMMO.Server.Services;
 
-namespace Server
+namespace FishMMO.Server
 {
 	// World that allows clients to connect with basic password authentication.
 	public class WorldServerAuthenticator : RelayServerAuthenticator

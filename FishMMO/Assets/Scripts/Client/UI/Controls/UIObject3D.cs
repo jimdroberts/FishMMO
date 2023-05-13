@@ -1,6 +1,6 @@
 ﻿using UnityEngine;
 
-namespace Client
+namespace FishMMO.Client
 {
 	public class UIObject3D : MonoBehaviour
 	{

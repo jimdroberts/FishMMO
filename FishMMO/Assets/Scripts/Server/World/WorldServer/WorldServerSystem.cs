@@ -1,10 +1,10 @@
 ﻿using FishNet.Managing.Server;
 using FishNet.Transporting;
 using System;
-using Server.Services;
+using FishMMO.Server.Services;
 using UnityEngine;
 
-namespace Server
+namespace FishMMO.Server
 {
 	// World Manager handles the database heartbeat for Login Service
 	public class WorldServerSystem : ServerBehaviour

@@ -4,7 +4,7 @@ using UnityEngine;
 using System;
 using System.Collections.Generic;
 
-namespace Server
+namespace FishMMO.Server
 {
 	public abstract class ServerBehaviour : MonoBehaviour
 	{

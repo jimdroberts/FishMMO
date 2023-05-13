@@ -1,7 +1,7 @@
 ﻿using FishNet.Broadcast;
 using System.Collections.Generic;
 
-namespace Server
+namespace FishMMO.Server
 {
 	public struct ScenePulseBroadcast : IBroadcast
 	{
@@ -42,14 +42,6 @@ namespace Server
 	public struct SceneCharacterDisconnectedBroadcast : IBroadcast
 	{
 		public long characterId;
-	}
-
-	public struct SceneWorldReconnectBroadcast : IBroadcast
-	{
-		public string address;
-		public ushort port;
-		public string sceneName;
-		public string teleporterName;
 	}
 
 	public struct WorldChatBroadcast : IBroadcast

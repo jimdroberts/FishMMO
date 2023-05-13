@@ -1,7 +1,7 @@
 using System;
 using TMPro;
 
-namespace Client
+namespace FishMMO.Client
 {
 	public class UIConfirmationTooltip : UIControl
 	{

@@ -5,7 +5,7 @@ using UnityEditor;
 using UnityEngine;
 using UnityEngine.UI;
 
-namespace Client
+namespace FishMMO.Client
 {
 	public class UIServerSelect : UIControl
 	{

@@ -2,7 +2,7 @@
 using FishNet.Transporting;
 using System.Collections.Generic;
 
-namespace Server
+namespace FishMMO.Server
 {
 	/// <summary>
 	/// Server guild system.

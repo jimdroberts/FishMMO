@@ -5,10 +5,10 @@ using FishNet.Object;
 using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
-using Server.Services;
+using FishMMO.Server.Services;
 using UnityEngine;
 
-namespace Server
+namespace FishMMO.Server
 {
 	// Character manager handles the players character
 	public class CharacterSystem : ServerBehaviour

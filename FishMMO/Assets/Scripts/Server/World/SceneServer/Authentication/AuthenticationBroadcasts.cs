@@ -1,6 +1,6 @@
 ﻿using FishNet.Broadcast;
 
-namespace Server
+namespace FishMMO.Server
 {
 	public struct SceneServerAuthBroadcast : IBroadcast
 	{

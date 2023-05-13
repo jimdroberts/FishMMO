@@ -2,7 +2,7 @@
 using FishNet.Managing;
 using System;
 
-namespace Server
+namespace FishMMO.Server
 {
 	// Advanced Login Server Authenticator, Relay Authenticator allows Scene Servers to connect with basic password authentication.
 	public class RelayServerAuthenticator : LoginServerAuthenticator

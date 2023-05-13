@@ -7,7 +7,7 @@ using FishMMO_DB;
 using FishMMO_DB.Entities;
 using UnityEngine;
 
-namespace Server.Services
+namespace FishMMO.Server.Services
 {
     public class CharacterService
     {

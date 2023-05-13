@@ -2,7 +2,7 @@
 using FishNet.Transporting;
 using FishNet.Managing.Server;
 
-namespace Server
+namespace FishMMO.Server
 {
 	/// <summary>
 	/// World server chat system.

@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
 
-namespace Client
+namespace FishMMO.Client
 {
 	public static class InputManager
 	{

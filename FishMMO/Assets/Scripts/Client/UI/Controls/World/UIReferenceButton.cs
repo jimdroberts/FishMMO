@@ -3,7 +3,7 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
-namespace Client
+namespace FishMMO.Client
 {
 	/// <summary>
 	/// Advanced button class used for the inventory, equipment, and hotkey UI.

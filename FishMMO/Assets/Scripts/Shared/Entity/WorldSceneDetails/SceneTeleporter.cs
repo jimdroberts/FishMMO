@@ -1,11 +1,14 @@
 using FishNet.Object;
-using Server.Services;
-using Server;
 using UnityEngine;
 using System;
+#if UNITY_SERVER
+using FishMMO.Server;
+using FishMMO.Server.Services;
+#endif
 
 public class SceneTeleporter : NetworkBehaviour
 {
+#if UNITY_SERVER
 	private SceneServerSystem sceneServerSystem;
 
 	void Awake()
@@ -59,7 +62,7 @@ public class SceneTeleporter : NetworkBehaviour
 						port = sceneServerSystem.Server.relayPort,
 						teleporterName = gameObject.name,
 						sceneName = playerScene
-                    });
+					});
 
 					sceneServerSystem.ServerManager.Despawn(character.NetworkObject, DespawnType.Pool);
 				}
@@ -83,4 +86,5 @@ public class SceneTeleporter : NetworkBehaviour
 			}
 		}
 	}
+#endif
 }

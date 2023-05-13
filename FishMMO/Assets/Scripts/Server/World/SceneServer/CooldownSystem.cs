@@ -2,7 +2,7 @@
 using FishNet.Transporting;
 using System.Collections.Generic;
 
-namespace Server
+namespace FishMMO.Server
 {
 	// Cooldown System handles all of the cooldowns for the scene server.
 	public class CooldownSystem : ServerBehaviour

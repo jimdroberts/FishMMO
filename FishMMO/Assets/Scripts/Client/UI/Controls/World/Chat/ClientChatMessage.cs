@@ -1,7 +1,7 @@
 ﻿using TMPro;
 using UnityEngine;
 
-namespace Client
+namespace FishMMO.Client
 {
 	public class ClientChatMessage : MonoBehaviour//, IPointerEnterHandler, IPointerExitHandler
 	{

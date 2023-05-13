@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using FishNet.Transporting;
 using FishNet.Managing;
 
-namespace Client
+namespace FishMMO.Client
 {
 	public class UIChat : UIControl
 	{

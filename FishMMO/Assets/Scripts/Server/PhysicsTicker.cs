@@ -1,29 +1,32 @@
 ﻿using FishNet;
 using UnityEngine;
 
-public class PhysicsTicker : MonoBehaviour
+namespace FishMMO.Server
 {
-	private PhysicsScene _physicsScene;
-
-	internal void InitializeOnce(PhysicsScene physicsScene)
+	public class PhysicsTicker : MonoBehaviour
 	{
-		if (InstanceFinder.TimeManager != null)
+		private PhysicsScene _physicsScene;
+
+		internal void InitializeOnce(PhysicsScene physicsScene)
 		{
-			InstanceFinder.TimeManager.OnTick += TimeManager_OnTick;
-			_physicsScene = physicsScene;
+			if (InstanceFinder.TimeManager != null)
+			{
+				InstanceFinder.TimeManager.OnTick += TimeManager_OnTick;
+				_physicsScene = physicsScene;
+			}
 		}
-	}
 
-	void OnDestroy()
-	{
-		if (InstanceFinder.TimeManager != null)
+		void OnDestroy()
 		{
-			InstanceFinder.TimeManager.OnTick -= TimeManager_OnTick;
+			if (InstanceFinder.TimeManager != null)
+			{
+				InstanceFinder.TimeManager.OnTick -= TimeManager_OnTick;
+			}
 		}
-	}
 
-	void TimeManager_OnTick()
-	{
-		_physicsScene.Simulate((float)InstanceFinder.TimeManager.TickDelta);
+		void TimeManager_OnTick()
+		{
+			_physicsScene.Simulate((float)InstanceFinder.TimeManager.TickDelta);
+		}
 	}
 }

@@ -1,4 +1,4 @@
-﻿namespace Client
+﻿namespace FishMMO.Client
 {
 	public enum HotkeyType : byte
 	{

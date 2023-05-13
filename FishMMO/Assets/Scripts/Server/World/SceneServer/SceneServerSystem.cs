@@ -6,7 +6,7 @@ using System;
 using System.Collections.Generic;
 using FishNet.Connection;
 
-namespace Server
+namespace FishMMO.Server
 {
 	// Scene Manager handles the node services and heartbeat to World Server
 	public class SceneServerSystem : ServerBehaviour

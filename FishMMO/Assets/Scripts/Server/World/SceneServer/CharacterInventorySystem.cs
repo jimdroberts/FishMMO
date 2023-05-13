@@ -1,7 +1,7 @@
 ﻿using FishNet.Connection;
 using FishNet.Transporting;
 
-namespace Server
+namespace FishMMO.Server
 {
 	// Character Inventory Manager handles the players inventory
 	public class CharacterInventorySystem : ServerBehaviour

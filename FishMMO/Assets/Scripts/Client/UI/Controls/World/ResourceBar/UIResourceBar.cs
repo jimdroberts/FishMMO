@@ -1,7 +1,7 @@
 ﻿using TMPro;
 using UnityEngine.UI;
 
-namespace Client
+namespace FishMMO.Client
 {
 	public abstract class UIResourceBar : UIControl
 	{
