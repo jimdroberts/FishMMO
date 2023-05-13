@@ -3,7 +3,6 @@ using FishNet.Connection;
 using FishNet.Managing;
 using FishNet.Transporting;
 using FishMMO_DB;
-using FishMMO_DB.Entities;
 using System;
 using System.Text.RegularExpressions;
 using Server.Services;
@@ -93,8 +92,14 @@ namespace Server
 			if (DBContextFactory != null && IsAllowedUsername(username))
 			{
 				using ServerDbContext dbContext = DBContextFactory.CreateDbContext(new string[] {});
-				
-				result = AccountService.TryLogin(dbContext, username, password);
+				if (!CharacterService.TryGetOnlineCharacter(dbContext, username))
+				{
+					result = AccountService.TryLogin(dbContext, username, password, true);
+				}
+				else
+				{
+					result = ClientAuthenticationResult.AlreadyOnline;
+				}
 			}
 
 			return new ClientAuthResultBroadcast() { result = result, };

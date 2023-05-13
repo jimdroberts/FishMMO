@@ -7,9 +7,7 @@ namespace Server.Services
 {
     public class AccountService
     {
-        public const bool AUTO_ACCOUNT_CREATION = true;
-        
-        public static ClientAuthenticationResult TryLogin(ServerDbContext dbContext, string account, string password)
+        public static ClientAuthenticationResult TryLogin(ServerDbContext dbContext, string account, string password, bool autoCreateAccount = false)
         {
             if (!string.IsNullOrWhiteSpace(account) && !string.IsNullOrWhiteSpace(password))
             {
@@ -17,7 +15,7 @@ namespace Server.Services
                 
                 // demo feature: create account if it doesn't exist yet.
                 // note: sqlite-net has no InsertOrIgnore so we do it in two steps
-                if (AUTO_ACCOUNT_CREATION && accountEntity == null)
+                if (autoCreateAccount && accountEntity == null)
                 {
                     dbContext.Accounts.Add(new AccountEntity()
                     {

@@ -167,6 +167,8 @@ namespace Client
 			{
 				case ClientAuthenticationResult.InvalidUsernameOrPassword:
 					break;
+				case ClientAuthenticationResult.AlreadyOnline:
+					break;
 				case ClientAuthenticationResult.Banned:
 					break;
 				case ClientAuthenticationResult.LoginSuccess:

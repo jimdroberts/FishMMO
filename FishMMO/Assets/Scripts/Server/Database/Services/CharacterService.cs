@@ -172,7 +172,7 @@ namespace Server.Services
                 .ToList();
             if (characters.Any((c) => c.Online))
             {
-                // a character on this account is already online, we should disconnect them
+                // a character on this account is already online, we should disconnect them FIXME
                 return false;
             }
 
@@ -184,11 +184,26 @@ namespace Server.Services
             }
             return false;
         }
-        
-        /// <summary>
-        /// Returns true if we successfully get our selected characters scene for the connections account, otherwise returns false.
-        /// </summary>
-        public static bool TryGetSelectedCharacterSceneName(ServerDbContext dbContext, string account, out string sceneName)
+
+		/// <summary>
+		/// Returns true if any of the accounts characters are currently online.
+		/// </summary>
+		public static bool TryGetOnlineCharacter(ServerDbContext dbContext, string account)
+		{
+			var characters = dbContext.Characters
+	            .Where((c) => c.Account == account && !c.Deleted)
+	            .ToList();
+			if (characters.Any((c) => c.Online))
+			{
+				return true;
+			}
+			return false;
+		}
+
+		/// <summary>
+		/// Returns true if we successfully get our selected characters scene for the connections account, otherwise returns false.
+		/// </summary>
+		public static bool TryGetSelectedCharacterSceneName(ServerDbContext dbContext, string account, out string sceneName)
         {
             var character = dbContext.Characters
                 .FirstOrDefault((c) => c.Account == account && c.Selected && !c.Deleted);

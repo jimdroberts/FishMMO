@@ -67,6 +67,9 @@ namespace Client
 					// update the handshake message
 					handshakeMSG.text = "Invalid Username or Password.";
 					break;
+				case ClientAuthenticationResult.AlreadyOnline:
+					handshakeMSG.text = "Account is already online.";
+					break;
 				case ClientAuthenticationResult.Banned:
 					// update the handshake message
 					handshakeMSG.text = "Account is banned. Please contact the system administrator.";
