@@ -214,29 +214,15 @@ namespace Server.Services
 				NetworkObject prefab = networkManager.SpawnablePrefabs.GetObject(true, dbCharacter.RaceID);
 				if (prefab != null)
 				{
-					Vector3 spawnPos = new Vector3(dbCharacter.X, dbCharacter.Y, dbCharacter.Z);
-					Quaternion spawnRot = new Quaternion(dbCharacter.RotX, dbCharacter.RotY, dbCharacter.RotZ, dbCharacter.RotW);
-
-					// set the prefab position to our spawn position so the player spawns in the right spot
-					var transform = prefab.transform;
-					transform.position = spawnPos;
-
-					// set the prefab rotation so our player spawns with the proper orientation
-					transform.rotation = spawnRot;
-
 					// instantiate the character object
 					NetworkObject nob = networkManager.GetPooledInstantiated(prefab, prefab.SpawnableCollectionId, true);
-
-					// immediately deactive the game object.. we are not ready yet
-					nob.gameObject.SetActive(false);
-
-					// set position and rotation just incase..
-					//nob.transform.SetPositionAndRotation(spawnPos, spawnRot);
 
 					character = nob.GetComponent<Character>();
 					if (character != null)
 					{
-                        character.Motor.SetPositionAndRotation(spawnPos, spawnRot);
+                        character.Motor.SetPositionAndRotationAndVelocity(new Vector3(dbCharacter.X, dbCharacter.Y, dbCharacter.Z),
+                                                                          new Quaternion(dbCharacter.RotX, dbCharacter.RotY, dbCharacter.RotZ, dbCharacter.RotW),
+                                                                          Vector3.zero);
 						character.id = dbCharacter.Id;
 						character.characterName = dbCharacter.Name;
 						character.account = dbCharacter.Account;
@@ -244,13 +230,12 @@ namespace Server.Services
 						character.raceID = dbCharacter.RaceID;
 						character.raceName = prefab.name;
 						character.sceneName = dbCharacter.SceneName;
+                        character.isTeleporting = false;
 						return true;
 					}
 
 					Debug.Log("[" + DateTime.UtcNow + "] " + dbCharacter.Name + " has been instantiated at Pos:" +
 							  nob.transform.position.ToString() + " Rot:" + nob.transform.rotation.ToString());
-
-					Debug.Log("[" + DateTime.UtcNow + "] " + dbCharacter.Name + " A:" + nob.transform.position.ToString());
 				}
 			}
             character = null;

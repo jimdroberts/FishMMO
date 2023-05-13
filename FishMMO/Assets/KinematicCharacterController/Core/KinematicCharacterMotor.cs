@@ -656,10 +656,31 @@ namespace KinematicCharacterController
             }
         }
 
-        /// <summary>
-        /// Moves the character position, taking all movement collision solving int account. The actual move is done the next time the motor updates are called
-        /// </summary>
-        public void MoveCharacter(Vector3 toPosition)
+		/// <summary>
+		/// Sets the character's position and rotation directly
+		/// </summary>
+		public void SetPositionAndRotationAndVelocity(Vector3 position, Quaternion rotation, Vector3 velocity, bool bypassInterpolation = true)
+		{
+			_transform.SetPositionAndRotation(position, rotation);
+			_initialSimulationPosition = position;
+			_initialSimulationRotation = rotation;
+			_transientPosition = position;
+            _movePositionTarget = position;
+			TransientRotation = rotation;
+			BaseVelocity = velocity;
+			_attachedRigidbodyVelocity = velocity;
+
+			if (bypassInterpolation)
+			{
+				InitialTickPosition = position;
+				InitialTickRotation = rotation;
+			}
+		}
+
+		/// <summary>
+		/// Moves the character position, taking all movement collision solving int account. The actual move is done the next time the motor updates are called
+		/// </summary>
+		public void MoveCharacter(Vector3 toPosition)
         {
             _movePositionDirty = true;
             _movePositionTarget = toPosition;

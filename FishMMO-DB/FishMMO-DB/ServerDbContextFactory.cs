@@ -1,23 +1,27 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
-
-#if UNITY_STANDALONE
-using UnityEngine;
-#endif
 
 namespace FishMMO_DB
 {
 	public class ServerDbContextFactory : IDesignTimeDbContextFactory<ServerDbContext>
 	{
+		private string configPath = "";
 		private bool enableLogging = false;
 
 		public ServerDbContextFactory()
 		{
+			this.configPath = Directory.GetParent(AppDomain.CurrentDomain.BaseDirectory).FullName;
+		}
+		public ServerDbContextFactory(string configPath)
+		{
+			this.configPath = configPath;
 		}
 
-		public ServerDbContextFactory(bool enableLogging)
+		public ServerDbContextFactory(string configPath, bool enableLogging)
 		{
+			this.configPath = configPath;
 			this.enableLogging = enableLogging;
 		}
 
@@ -45,9 +49,7 @@ namespace FishMMO_DB
 
 		public Configuration GetOrCreateDatabaseConfiguration()
 		{
-			string path = Directory.GetParent(Directory.GetCurrentDirectory()).FullName;
-
-			Configuration configuration = new Configuration(path);
+			Configuration configuration = new Configuration(configPath);
 			if (!configuration.Load("Database.cfg"))
 			{
 				// if we failed to load the file.. save a new one

@@ -8,18 +8,18 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/Bootstraps/ClientBootstrap.unity
     guid: 99c9720ab356a0642a771bea13969a05
-  - enabled: 1
+  - enabled: 0
     path: Assets/Scenes/Bootstraps/ServerLauncher.unity
     guid: 4687cf31330e7c1499e44fba9490c8ac
-  - enabled: 1
+  - enabled: 0
     path: Assets/Scenes/Bootstraps/LoginServer.unity
     guid: e4f01a5d084fafb47a77f7552e2af05e
-  - enabled: 1
-    path: Assets/Scenes/Bootstraps/SceneServer.unity
-    guid: 7e1b8e5abbda71a4b9f84cee5252b68c
-  - enabled: 1
+  - enabled: 0
     path: Assets/Scenes/Bootstraps/WorldServer.unity
     guid: c5c748f123bdc7e41bcb72c4f239ca6b
+  - enabled: 0
+    path: Assets/Scenes/Bootstraps/SceneServer.unity
+    guid: 7e1b8e5abbda71a4b9f84cee5252b68c
   - enabled: 1
     path: Assets/Scenes/WorldScene/Felwithe.unity
     guid: e8a5917e2e784024a83eee958f6f9689

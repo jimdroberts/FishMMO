@@ -46,6 +46,7 @@ ExportedObj/
 *.mdb
 *.opendb
 *.VC.db
+*.vsconfig
 
 # Unity3D generated meta files
 *.pidb.meta
@@ -76,6 +77,3 @@ crashlytics-build.properties
 
 # Special ignore directory, anything here will be ignored
 /[Aa]ssets/[Pp]lugins/[Dd][Aa][Tt][Aa][Bb][Aa][Ss][Ee]*
-
-# Visual Studio Config
-.vsconfig

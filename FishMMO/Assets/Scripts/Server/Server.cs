@@ -55,12 +55,12 @@ namespace Server
 		void Awake()
 		{
 #if UNITY_EDITOR
-			string path = Directory.GetParent(Directory.GetCurrentDirectory()).FullName;
+			string path = Directory.GetParent(AppDomain.CurrentDomain.BaseDirectory).FullName;
 #else
-			string path = Directory.GetCurrentDirectory();
+			string path = AppDomain.CurrentDomain.BaseDirectory;
 #endif
 
-			// load configuration first
+			// load configuration
 			configuration = new Configuration(path);
 			if (!configuration.Load(configurationFileName))
 			{
@@ -73,6 +73,9 @@ namespace Server
 				configuration.Set("RelayPort", 0);
 				configuration.Save();
 			}
+
+			// setup the DB context and ensure that it's been created
+			DbContextFactory = new ServerDbContextFactory(path, false);
 
 			// ensure our NetworkManager exists in the scene
 			NetworkManager = FindObjectOfType<NetworkManager>();
@@ -144,9 +147,6 @@ namespace Server
 			ServerWindowTitleUpdater = GetComponent<ServerWindowTitleUpdater>();
 			if (ServerWindowTitleUpdater != null)
 				ServerWindowTitleUpdater.InternalInitializeOnce(this, NetworkManager.ServerManager);
-
-			// setup the DB context and ensure that it's been created
-			DbContextFactory = new ServerDbContextFactory(false);
 
 			// database factory DI
 			LoginServerAuthenticator authenticator = NetworkManager.Authenticator as LoginServerAuthenticator;

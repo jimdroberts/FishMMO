@@ -201,6 +201,11 @@ PrefabInstance:
       propertyPath: m_Name
       value: NetworkManager
       objectReference: {fileID: 0}
+    - target: {fileID: 6375733014718908463, guid: 0b886ac5562272946adae2cfc9971678,
+        type: 3}
+      propertyPath: _objectPool
+      value: 
+      objectReference: {fileID: 1359145392}
     m_RemovedComponents: []
     m_AddedGameObjects: []
   m_SourcePrefab: {fileID: 100100000, guid: 0b886ac5562272946adae2cfc9971678, type: 3}
@@ -222,6 +227,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7d331f979d46e8e4a9fc90070c596d44, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _useNetworkLod: 0
+  _levelOfDetailDistances: []
   _updateHostVisibility: 1
   _defaultConditions:
   - {fileID: 11400000, guid: bcf92670d91dbb74dad77c56b9b8712e, type: 2}
@@ -237,6 +244,19 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1d678b81cf0047640b4bb844b5f799ff, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+--- !u!114 &1359145392
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1359145389}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1afeaa36377bbf847880613509e71d54, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _enabled: 1
 --- !u!1 &2093683971
 GameObject:
   m_ObjectHideFlags: 0

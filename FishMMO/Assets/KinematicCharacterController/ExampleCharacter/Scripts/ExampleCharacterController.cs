@@ -103,10 +103,16 @@ namespace KinematicCharacterController.Examples
             Motor.CharacterController = this;
         }
 
-        /// <summary>
-        /// Handles movement state transitions and enter/exit callbacks
-        /// </summary>
-        public void TransitionToState(CharacterState newState)
+		private void OnEnable()
+		{
+			_moveInputVector = Vector3.zero;
+			_lookInputVector = Vector3.zero;
+		}
+
+		/// <summary>
+		/// Handles movement state transitions and enter/exit callbacks
+		/// </summary>
+		public void TransitionToState(CharacterState newState)
         {
             CharacterState tmpInitialState = CurrentCharacterState;
             OnStateExit(tmpInitialState, newState);

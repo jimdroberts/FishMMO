@@ -8,6 +8,7 @@ using KinematicCharacterController;
 using KinematicCharacterController.Examples;
 using UnityEngine;
 using System;
+using Shared;
 
 /// <summary>
 /// Character contains references to all of the controllers associated with the character.
@@ -33,7 +34,7 @@ using System;
 [RequireComponent(typeof(CharacterDeathController))]
 [RequireComponent(typeof(GuildController))]
 [RequireComponent(typeof(PartyController))]
-public class Character : NetworkBehaviour
+public class Character : NetworkBehaviour, IPooledResettable
 {
 	public static Character localCharacter;
 
@@ -146,6 +147,28 @@ public class Character : NetworkBehaviour
 			{
 				Destroy(LocalInputController);
 			}
+		}
+	}
+
+	/// <summary>
+	/// Resets the Character values to default for pooling.
+	/// </summary>
+	public void OnPooledReset()
+	{
+		id = -1;
+		characterName = "";
+		account = "";
+		isGameMaster = false;
+		isTeleporting = false;
+		raceID = 0;
+		raceName = "";
+		sceneName = "";
+		sceneHandle = 0;
+		lastChatMessage = "";
+		nextChatMessageTime = DateTime.UtcNow;
+		if (Motor != null)
+		{
+			Motor.SetPositionAndRotationAndVelocity(Vector3.zero, Quaternion.identity, Vector3.zero);
 		}
 	}
 }
