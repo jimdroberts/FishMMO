@@ -7,6 +7,7 @@ TagManager:
   - InitialSpawnPosition
   - RespawnPosition
   - Teleporter
+  - TeleporterDestination
   layers:
   - Default
   - TransparentFX

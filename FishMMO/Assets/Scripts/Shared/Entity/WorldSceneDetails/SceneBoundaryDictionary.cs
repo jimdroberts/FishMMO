@@ -14,8 +14,6 @@ public class SceneBoundaryDictionary : SerializableDictionary<string, SceneBound
             if (details.ContainsPoint(point)) return true;
         }
 
-        Debug.Log("Point not contained in boundaries");
-
         return false;
     }
 }

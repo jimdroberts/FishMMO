@@ -2,20 +2,33 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class SceneBoundary : MonoBehaviour
+namespace FishMMO.Server
 {
-    [Header("Scene Boundaries are *inclusive*, if a player is not within one, they'll respawn!")]
-    public Vector3 BoundarySize;
-
-    public void OnDrawGizmos()
+    public class SceneBoundary : IBoundary
     {
-        Gizmos.color = Color.grey;
-        Gizmos.DrawWireCube(transform.position, BoundarySize);
-    }
+        [Header("Scene Boundaries are *inclusive*, if a player is not within it, it will not apply!")]
+        public Vector3 BoundarySize;
 
-    public void OnDrawGizmosSelected()
-    {
-        Gizmos.color = Color.green;
-        Gizmos.DrawCube(transform.position, BoundarySize);
+        public void OnDrawGizmos()
+        {
+            Gizmos.color = Color.grey;
+            Gizmos.DrawWireCube(transform.position, BoundarySize);
+        }
+
+        public void OnDrawGizmosSelected()
+        {
+            Gizmos.color = Color.green;
+            Gizmos.DrawCube(transform.position, BoundarySize);
+        }
+
+        public override Vector3 GetBoundaryOffset()
+        {
+            return transform.position;
+        }
+
+        public override Vector3 GetBoundarySize()
+        {
+            return BoundarySize;
+        }
     }
 }
