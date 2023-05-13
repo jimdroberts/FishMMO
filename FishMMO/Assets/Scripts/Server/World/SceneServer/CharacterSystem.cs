@@ -29,14 +29,7 @@ namespace FishMMO.Server
 		public Dictionary<string, Character> charactersByName = new Dictionary<string, Character>();
 		public Dictionary<NetworkConnection, Character> connectionCharacters = new Dictionary<NetworkConnection, Character>();
 
-
 		public Dictionary<NetworkConnection, Character> waitingSceneLoadCharacters = new Dictionary<NetworkConnection, Character>();
-
-		/// <summary>
-		/// WaitingCharacters are all the loaded characters waiting for the server to load a scene
-		/// </summary>
-		// sceneName, <connection, character>
-		public Dictionary<string, Dictionary<NetworkConnection, Character>> waitingCharacters = new Dictionary<string, Dictionary<NetworkConnection, Character>>();
 
 		public override void InitializeOnce()
 		{
@@ -118,15 +111,11 @@ namespace FishMMO.Server
 			if (args.ConnectionState == LocalConnectionState.Started)
 			{
 				loginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
-
-				SceneServerSystem.OnSceneLoadComplete += SceneManager_OnSceneLoadComplete;
 				SceneServerSystem.SceneManager.OnClientLoadedStartScenes += SceneManager_OnClientLoadedStartScenes;
 			}
 			else if (args.ConnectionState == LocalConnectionState.Stopped)
 			{
 				loginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
-
-				SceneServerSystem.OnSceneLoadComplete -= SceneManager_OnSceneLoadComplete;
 				SceneServerSystem.SceneManager.OnClientLoadedStartScenes -= SceneManager_OnClientLoadedStartScenes;
 			}
 		}
@@ -138,26 +127,6 @@ namespace FishMMO.Server
 		{
 			if (args.ConnectionState == RemoteConnectionState.Stopped)
 			{
-				// remove the waiting scene load character if it exists
-				if (waitingSceneLoadCharacters.TryGetValue(conn, out Character waitingSceneCharacter))
-				{
-					Destroy(waitingSceneCharacter);
-					waitingSceneCharacter.gameObject.SetActive(false);
-					waitingSceneLoadCharacters.Remove(conn);
-				}
-
-				// remove connection from wait list if it's waiting for the scene server to load
-				foreach (Dictionary<NetworkConnection, Character> waiting in waitingCharacters.Values)
-				{
-					if (waiting.TryGetValue(conn, out Character waitingCharacter))
-					{
-						Destroy(waitingCharacter);
-						waitingCharacter.gameObject.SetActive(false);
-						waiting.Remove(conn);
-						break;
-					}
-				}
-
 				if (connectionCharacters.TryGetValue(conn, out Character character))
 				{
 					if (character == null)
@@ -221,8 +190,7 @@ namespace FishMMO.Server
 
 			if (CharacterService.TryGetSelectedCharacterDetails(dbContext, accountName, out long selectedCharacterId))
 			{
-				if (charactersById.ContainsKey(selectedCharacterId) ||
-					waitingSceneLoadCharacters.ContainsKey(conn))
+				if (charactersById.ContainsKey(selectedCharacterId))
 				{
 					Debug.Log("[" + DateTime.UtcNow + "] " + selectedCharacterId + " is already loaded or loading. FIXME");
 
@@ -233,12 +201,12 @@ namespace FishMMO.Server
 
 				if (CharacterService.TryLoadCharacter(dbContext, selectedCharacterId, Server.NetworkManager, out Character character))
 				{
-					waitingSceneLoadCharacters.Add(conn, character);
-
 					// check if the scene is valid, loaded, and cached properly
 					if (SceneServerSystem.TryGetValidScene(character.sceneName, out SceneInstanceDetails instance))
 					{
-						Debug.Log("[" + DateTime.UtcNow + "] " + character.characterName + " is loading Scene: " + character.sceneName);
+                        waitingSceneLoadCharacters.Add(conn, character);
+
+                        Debug.Log("[" + DateTime.UtcNow + "] " + character.characterName + " is loading Scene: " + character.sceneName);
 
 						if (SceneServerSystem.TryLoadSceneForConnection(conn, instance))
 						{
@@ -256,51 +224,20 @@ namespace FishMMO.Server
 					}
 					else
 					{
-						Debug.Log("[" + DateTime.UtcNow + "] " + character.characterName + " has been enqueued for SceneLoad: " + character.sceneName);
+						// Scene load should not be the responsibility of the scene server!
+						// This should be forwarded back to the world server to ensure the client follows
+						// currently expected flows!
 
-						// if the scene isn't loaded yet put the connection into a wait queue
-						if (waitingCharacters.TryGetValue(character.sceneName, out Dictionary<NetworkConnection, Character> waiting))
+                        // Corrective fix for the above mentioned issue
+                        conn.Broadcast(new SceneWorldReconnectBroadcast()
 						{
-							if (!waiting.ContainsKey(conn))
-							{
-								waiting.Add(conn, character);
-							}
-						}
-						else
-						{
-							waitingCharacters.Add(character.sceneName, new Dictionary<NetworkConnection, Character>()
-							{
-								{ conn, character },
-							});
-						}
-					}
+							address = Server.relayAddress,
+							port = Server.relayPort
+						});
+
+                        Destroy(character.gameObject);
+                    }
 				}
-			}
-		}
-
-		/// <summary>
-		/// Tell all the players the server finished loading the scene they were trying to enter.
-		/// </summary>
-		private void SceneManager_OnSceneLoadComplete(string sceneName)
-		{
-			if (waitingCharacters.TryGetValue(sceneName, out Dictionary<NetworkConnection, Character> characters))
-			{
-				foreach (Character character in characters.Values)
-				{
-					// check if the scene is valid, loaded, and cached properly
-					if (SceneServerSystem.TryGetValidScene(character.sceneName, out SceneInstanceDetails instance))
-					{
-						Debug.Log("[" + DateTime.UtcNow + "] " + character.characterName + " is loading Scene: " + character.sceneName);
-
-						if (SceneServerSystem.TryLoadSceneForConnection(character.Owner, instance))
-						{
-							// assign scene handle for later..
-							character.sceneHandle = instance.handle;
-						}
-					}
-				}
-				characters.Clear();
-				waitingCharacters.Remove(sceneName);
 			}
 		}
 
