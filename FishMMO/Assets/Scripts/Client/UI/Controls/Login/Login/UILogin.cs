@@ -65,14 +65,20 @@ namespace FishMMO.Client
 				case ClientAuthenticationResult.InvalidUsernameOrPassword:
 					// update the handshake message
 					handshakeMSG.text = "Invalid Username or Password.";
+					Client.Instance.ForceDisconnect();
+					SetSignInLocked(false);
 					break;
 				case ClientAuthenticationResult.AlreadyOnline:
 					handshakeMSG.text = "Account is already online.";
-					break;
+                    Client.Instance.ForceDisconnect();
+                    SetSignInLocked(false);
+                    break;
 				case ClientAuthenticationResult.Banned:
 					// update the handshake message
 					handshakeMSG.text = "Account is banned. Please contact the system administrator.";
-					break;
+                    Client.Instance.ForceDisconnect();
+                    SetSignInLocked(false);
+                    break;
 				case ClientAuthenticationResult.LoginSuccess:
 					// reset handshake message and hide the panel
 					handshakeMSG.text = "";
@@ -99,12 +105,18 @@ namespace FishMMO.Client
 				// set username and password in the authenticator
 				loginAuthenticator.SetLoginCredentials(username.text, password.text);
 
-				if (Client.Instance.TryGetRandomLoginServerAddress(out ServerAddress serverAddress))
+                handshakeMSG.text = "";
+
+                if (Client.Instance.TryGetRandomLoginServerAddress(out ServerAddress serverAddress))
 				{
 					Client.Instance.ConnectToServer(serverAddress.address, serverAddress.port);
 
 					SetSignInLocked(true);
 				}
+				else
+				{
+                    handshakeMSG.text = "Failed to get a login server!";
+                }
 			}
 		}
 
