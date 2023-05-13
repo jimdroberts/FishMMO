@@ -7,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using FishMMO.Server.Services;
 using UnityEngine;
+using System.Linq;
 
 namespace FishMMO.Server
 {
@@ -20,6 +21,9 @@ namespace FishMMO.Server
 
 		public float saveRate = 60.0f;
 		private float nextSave = 0.0f;
+
+		public float outOfBoundsCheckRate = 5f;
+		private float nextOutOfBoundsCheck = 0.0f;
 
 		public Dictionary<long, Character> charactersById = new Dictionary<long, Character>();
 		public Dictionary<string, Character> charactersByName = new Dictionary<string, Character>();
@@ -56,6 +60,30 @@ namespace FishMMO.Server
 			if (serverState == LocalConnectionState.Started)
 			{
 				nextSave -= Time.deltaTime;
+				nextOutOfBoundsCheck -= Time.deltaTime;
+
+				if(nextOutOfBoundsCheck < 0)
+				{
+					nextOutOfBoundsCheck = outOfBoundsCheckRate;
+
+					// TODO: Should the character be doing this and more often?
+					// They'd need a cached world boundaries to check themselves against
+					// which would prevent the need to do all of this lookup stuff.
+					foreach (Character character in connectionCharacters.Values)
+					{
+						if(SceneServerSystem.worldSceneDetailsCache.scenes.TryGetValue(character.sceneName, out WorldSceneDetails details))
+						{
+							// Check if they are within some bounds, if not we need to move them to a respawn location!
+							// TODO: Try to prevent combat escape, maybe this needs to be handled on the game design level?
+							if(details.boundaries.PointContainedInBoundaries(character.transform.position) == false)
+							{
+								Vector3 spawnPoint = GetRandomRespawnPoint(details.respawnPositions);
+								character.Motor.SetPositionAndRotationAndVelocity(spawnPoint, character.transform.rotation, Vector3.zero);
+							}
+						}
+					}
+				}
+
 				if (nextSave < 0)
 				{
 					nextSave = saveRate;
@@ -382,6 +410,15 @@ namespace FishMMO.Server
 				return true;
 			}
 			return false;
+		}
+
+		private Vector3 GetRandomRespawnPoint(RespawnPositionDictionary respawnPoints)
+		{
+			Vector3[] spawnPoints = respawnPoints.Values.ToArray();
+
+			if (spawnPoints.Length == 0) throw new IndexOutOfRangeException("Failed to get a respawn point! Please ensure you have rebuilt your world scene cache and have respawn points in your scene!");
+
+			return spawnPoints[UnityEngine.Random.Range(0, spawnPoints.Length)];
 		}
 	}
 }

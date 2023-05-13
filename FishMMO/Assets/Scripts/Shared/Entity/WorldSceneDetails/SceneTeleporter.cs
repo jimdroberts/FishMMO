@@ -1,15 +1,15 @@
 using FishNet.Object;
 using UnityEngine;
 using System;
-#if UNITY_SERVER
+#if UNITY_SERVER || UNITY_EDITOR
 using FishMMO.Server;
 using FishMMO.Server.Services;
 #endif
 
 public class SceneTeleporter : NetworkBehaviour
 {
-#if UNITY_SERVER
-	private SceneServerSystem sceneServerSystem;
+#if UNITY_SERVER || UNITY_EDITOR
+    private SceneServerSystem sceneServerSystem;
 
 	void Awake()
 	{

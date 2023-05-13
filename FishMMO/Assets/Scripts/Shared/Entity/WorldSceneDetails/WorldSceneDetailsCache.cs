@@ -20,6 +20,8 @@ public class WorldSceneDetailsCache : ScriptableObject
 	public string teleporterTag = "Teleporter";
 	[Tooltip("Apply this tag to any object in your scene that you would like to act as a teleporter destination.")]
 	public string teleporterDestinationTag = "TeleporterDestination";
+	[Tooltip("Apply this tag to any object in your scene to add an additional world boundary, players will be moved to respawn locations automatically.")]
+	public string worldBoundaryTag = "WorldBoundary";
 
 	public WorldSceneDetailsDictionary scenes = new WorldSceneDetailsDictionary();
 
@@ -100,6 +102,17 @@ public class WorldSceneDetailsCache : ScriptableObject
 						Debug.Log("[" + DateTime.UtcNow + "] WorldSceneDetails: Found new RespawnPosition: [" + obj.name + " " + obj.transform.position + "]");
 
 						sceneDetails.respawnPositions.Add(obj.name, obj.transform.position);
+					}
+
+					// Search for world bounds (bounds activate when outside of all of them)
+					SceneBoundary[] sceneBoundaries = GameObject.FindObjectsOfType<SceneBoundary>();
+					foreach (SceneBoundary obj in sceneBoundaries)
+					{
+						sceneDetails.boundaries.Add(obj.name, new SceneBoundaryDetails()
+						{
+							BoundaryOrigin = obj.transform.position,
+							BoundarySize = obj.BoundarySize
+						});
 					}
 
 					// search for teleporters

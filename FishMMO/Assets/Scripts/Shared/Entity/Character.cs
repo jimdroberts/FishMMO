@@ -1,4 +1,4 @@
-﻿#if !UNITY_SERVER
+﻿#if !UNITY_SERVER || UNITY_EDITOR
 using FishMMO.Client;
 #endif
 using FishNet.Component.Prediction;
@@ -54,7 +54,7 @@ public class Character : NetworkBehaviour, IPooledResettable
 	public GuildController GuildController;
 	public PartyController PartyController;
 	public KinematicCharacterMotor Motor;
-#if !UNITY_SERVER
+#if !UNITY_SERVER || UNITY_EDITOR
 	public LocalInputController LocalInputController;
 
 	//temporary
@@ -68,8 +68,8 @@ public class Character : NetworkBehaviour, IPooledResettable
 	public string characterName;
 	private void OnCharacterNameChanged(string prev, string next, bool asServer)
 	{
-#if !UNITY_SERVER
-		gameObject.name = next;
+#if !UNITY_SERVER || UNITY_EDITOR
+        gameObject.name = next;
 
 		if (CharacterNameLabel == null)
 		{
@@ -135,8 +135,8 @@ public class Character : NetworkBehaviour, IPooledResettable
 		{
 			localCharacter = this;
 
-#if !UNITY_SERVER
-			LocalInputController = gameObject.AddComponent<LocalInputController>();
+#if !UNITY_SERVER || UNITY_EDITOR
+            LocalInputController = gameObject.AddComponent<LocalInputController>();
 #endif
 		}
 	}
@@ -147,8 +147,8 @@ public class Character : NetworkBehaviour, IPooledResettable
 		if (base.IsOwner)
 		{
 			localCharacter = null;
-#if !UNITY_SERVER
-			if (LocalInputController != null)
+#if !UNITY_SERVER || UNITY_EDITOR
+            if (LocalInputController != null)
 			{
 				Destroy(LocalInputController);
 			}

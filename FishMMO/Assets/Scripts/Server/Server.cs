@@ -55,7 +55,7 @@ namespace FishMMO.Server
 		void Awake()
 		{
 #if UNITY_EDITOR
-			string path = Directory.GetParent(AppDomain.CurrentDomain.BaseDirectory).FullName;
+			string path = Directory.GetParent(Directory.GetParent(Application.dataPath).FullName).FullName;
 #else
 			string path = AppDomain.CurrentDomain.BaseDirectory;
 #endif
