@@ -289,6 +289,12 @@ namespace FishMMO.Client
 			yield return null;
 		}
 
+		public void ReconnectCancel()
+		{
+            OnReconnectFailed?.Invoke();
+            ForceDisconnect();
+		}
+
 		public void ForceDisconnect()
 		{
 			forceDisconnect = true;

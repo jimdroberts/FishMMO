@@ -33,7 +33,7 @@ public class UIReconnectDisplay : UIControl
 
     public void OnCancelClicked()
     {
-        Client.Instance.ForceDisconnect();
+        Client.Instance.ReconnectCancel();
         visible = false;
     }
 

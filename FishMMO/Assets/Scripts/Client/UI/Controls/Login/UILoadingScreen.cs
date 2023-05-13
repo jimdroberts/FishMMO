@@ -13,6 +13,7 @@ namespace FishMMO.Client
         public Slider LoadingProgress;
         public Image LoadingImage;
         public WorldSceneDetailsCache Details;
+        public Sprite DefaultLoadingScreenSprite;
 
         public override void OnStarting()
         {
@@ -52,7 +53,7 @@ namespace FishMMO.Client
             }
             else
             {
-                LoadingImage.sprite = null;
+                LoadingImage.sprite = DefaultLoadingScreenSprite;
             }
 
             ShowLoadingScreen();

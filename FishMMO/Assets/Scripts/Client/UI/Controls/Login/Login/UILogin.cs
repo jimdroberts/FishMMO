@@ -36,6 +36,7 @@ namespace FishMMO.Client
 			{
 				networkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
 				loginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
+				Client.Instance.OnReconnectFailed += ClientManager_OnReconnectFailed;
 			}
 		}
 
@@ -51,11 +52,21 @@ namespace FishMMO.Client
 			{
 				loginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
 			}
-		}
+
+            Client.Instance.OnReconnectFailed -= ClientManager_OnReconnectFailed;
+        }
 
 		private void ClientManager_OnClientConnectionState(ClientConnectionStateArgs obj)
 		{
 			//handshakeMSG.text = obj.ConnectionState.ToString();
+		}
+
+		private void ClientManager_OnReconnectFailed()
+		{
+			if (visible == true) return;
+
+			visible = true;
+			SetSignInLocked(false);
 		}
 
 		private void Authenticator_OnClientAuthenticationResult(ClientAuthenticationResult result)

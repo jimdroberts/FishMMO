@@ -156,6 +156,11 @@ PrefabInstance:
       propertyPath: m_Name
       value: UIReconnectingScreen
       objectReference: {fileID: 0}
+    - target: {fileID: 3205336543945873641, guid: 7d81b8535fdaa4c48915c53911895423,
+        type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 3205336543945873646, guid: 7d81b8535fdaa4c48915c53911895423,
         type: 3}
       propertyPath: m_Pivot.x
@@ -842,6 +847,11 @@ PrefabInstance:
         type: 3}
       propertyPath: m_Name
       value: UICharacterCreate
+      objectReference: {fileID: 0}
+    - target: {fileID: 1419794991761815497, guid: 72a8e16445661d84d91a7386257b5e8e,
+        type: 3}
+      propertyPath: m_IsActive
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 1419794991761815501, guid: 72a8e16445661d84d91a7386257b5e8e,
         type: 3}
@@ -1810,45 +1820,10 @@ PrefabInstance:
     serializedVersion: 2
     m_TransformParent: {fileID: 978504970}
     m_Modifications:
-    - target: {fileID: 6975439588418327722, guid: 92d61b3010aa6254d832799f650863a4,
-        type: 3}
-      propertyPath: m_fontSize
-      value: 22
-      objectReference: {fileID: 0}
-    - target: {fileID: 6975439588418327722, guid: 92d61b3010aa6254d832799f650863a4,
-        type: 3}
-      propertyPath: m_fontStyle
-      value: 32
-      objectReference: {fileID: 0}
-    - target: {fileID: 6975439588418327722, guid: 92d61b3010aa6254d832799f650863a4,
-        type: 3}
-      propertyPath: m_fontSizeBase
-      value: 22
-      objectReference: {fileID: 0}
-    - target: {fileID: 6975439588470251072, guid: 92d61b3010aa6254d832799f650863a4,
-        type: 3}
-      propertyPath: m_fontSize
-      value: 22
-      objectReference: {fileID: 0}
-    - target: {fileID: 6975439588470251072, guid: 92d61b3010aa6254d832799f650863a4,
-        type: 3}
-      propertyPath: m_fontStyle
-      value: 32
-      objectReference: {fileID: 0}
-    - target: {fileID: 6975439588470251072, guid: 92d61b3010aa6254d832799f650863a4,
-        type: 3}
-      propertyPath: m_fontSizeBase
-      value: 22
-      objectReference: {fileID: 0}
     - target: {fileID: 6975439588524082748, guid: 92d61b3010aa6254d832799f650863a4,
         type: 3}
       propertyPath: m_Name
       value: UILogin
-      objectReference: {fileID: 0}
-    - target: {fileID: 6975439588524082748, guid: 92d61b3010aa6254d832799f650863a4,
-        type: 3}
-      propertyPath: m_IsActive
-      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 6975439588524082749, guid: 92d61b3010aa6254d832799f650863a4,
         type: 3}
@@ -1868,32 +1843,32 @@ PrefabInstance:
     - target: {fileID: 6975439588524082749, guid: 92d61b3010aa6254d832799f650863a4,
         type: 3}
       propertyPath: m_AnchorMax.x
-      value: 0.5
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 6975439588524082749, guid: 92d61b3010aa6254d832799f650863a4,
         type: 3}
       propertyPath: m_AnchorMax.y
-      value: 0.5
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 6975439588524082749, guid: 92d61b3010aa6254d832799f650863a4,
         type: 3}
       propertyPath: m_AnchorMin.x
-      value: 0.5
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 6975439588524082749, guid: 92d61b3010aa6254d832799f650863a4,
         type: 3}
       propertyPath: m_AnchorMin.y
-      value: 0.5
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 6975439588524082749, guid: 92d61b3010aa6254d832799f650863a4,
         type: 3}
       propertyPath: m_SizeDelta.x
-      value: 300
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 6975439588524082749, guid: 92d61b3010aa6254d832799f650863a4,
         type: 3}
       propertyPath: m_SizeDelta.y
-      value: 200
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 6975439588524082749, guid: 92d61b3010aa6254d832799f650863a4,
         type: 3}
@@ -1954,51 +1929,6 @@ PrefabInstance:
         type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 6975439588524082750, guid: 92d61b3010aa6254d832799f650863a4,
-        type: 3}
-      propertyPath: loginServerAddresses.Array.size
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 6975439588524082750, guid: 92d61b3010aa6254d832799f650863a4,
-        type: 3}
-      propertyPath: loginServerAddresses.Array.data[0].port
-      value: 7770
-      objectReference: {fileID: 0}
-    - target: {fileID: 6975439588524082750, guid: 92d61b3010aa6254d832799f650863a4,
-        type: 3}
-      propertyPath: loginServerAddresses.Array.data[0].address
-      value: 127.0.0.1
-      objectReference: {fileID: 0}
-    - target: {fileID: 6975439589005697420, guid: 92d61b3010aa6254d832799f650863a4,
-        type: 3}
-      propertyPath: m_text
-      value: Enter password...
-      objectReference: {fileID: 0}
-    - target: {fileID: 6975439589005697420, guid: 92d61b3010aa6254d832799f650863a4,
-        type: 3}
-      propertyPath: m_fontStyle
-      value: 34
-      objectReference: {fileID: 0}
-    - target: {fileID: 6975439589528881699, guid: 92d61b3010aa6254d832799f650863a4,
-        type: 3}
-      propertyPath: m_text
-      value: Enter username...
-      objectReference: {fileID: 0}
-    - target: {fileID: 6975439589528881699, guid: 92d61b3010aa6254d832799f650863a4,
-        type: 3}
-      propertyPath: m_fontStyle
-      value: 34
-      objectReference: {fileID: 0}
-    - target: {fileID: 6975439589611202094, guid: 92d61b3010aa6254d832799f650863a4,
-        type: 3}
-      propertyPath: m_fontStyle
-      value: 32
-      objectReference: {fileID: 0}
-    - target: {fileID: 6975439589879863215, guid: 92d61b3010aa6254d832799f650863a4,
-        type: 3}
-      propertyPath: m_fontStyle
-      value: 32
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_AddedGameObjects: []
@@ -2112,7 +2042,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1994176931, guid: c87590e7a452dcf4eac6b0921e679a50, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: 91.500015
+      value: 91.499954
       objectReference: {fileID: 0}
     - target: {fileID: 2037370771, guid: c87590e7a452dcf4eac6b0921e679a50, type: 3}
       propertyPath: m_AnchorMax.x
@@ -5235,7 +5165,7 @@ PrefabInstance:
     - target: {fileID: 7758741671887000672, guid: 42fd896028d1b0740a61b839b49b9d0b,
         type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: -0.000061035156
+      value: 0.00012207031
       objectReference: {fileID: 0}
     - target: {fileID: 7758741671893074963, guid: 42fd896028d1b0740a61b839b49b9d0b,
         type: 3}
