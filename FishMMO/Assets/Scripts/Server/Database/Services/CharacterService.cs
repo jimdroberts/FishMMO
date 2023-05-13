@@ -193,9 +193,20 @@ namespace Server.Services
 			var characters = dbContext.Characters
 	            .Where((c) => c.Account == account && !c.Deleted)
 	            .ToList();
-			if (characters.Any((c) => c.Online))
+
+			foreach (var characterEntity in characters)
 			{
-				return true;
+                if (characterEntity.Online)
+                {
+					if (characterEntity.LastSaved.AddMinutes(10) < DateTime.UtcNow)
+                    {
+						characterEntity.Online = false;
+					}
+                    else
+                    {
+                        return true;
+                    }
+                }
 			}
 			return false;
 		}
