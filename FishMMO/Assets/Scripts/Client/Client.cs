@@ -256,11 +256,6 @@ namespace FishMMO.Client
             }
             else
             {
-                if (UIManager.TryGet("UILogin", out UILogin login) &&
-                    login.visible)
-                {
-                    login.SetSignInLocked(false);
-                }
                 reconnectsAttempted = 0;
                 OnReconnectFailed?.Invoke();
             }

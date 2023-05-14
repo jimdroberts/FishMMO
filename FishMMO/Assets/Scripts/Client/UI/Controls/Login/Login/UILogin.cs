@@ -63,8 +63,6 @@ namespace FishMMO.Client
 
 		private void ClientManager_OnReconnectFailed()
 		{
-			if (visible == true) return;
-
 			visible = true;
 			SetSignInLocked(false);
 		}
