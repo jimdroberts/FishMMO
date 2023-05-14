@@ -127,6 +127,14 @@ namespace FishMMO.Server
 		{
 			if (args.ConnectionState == RemoteConnectionState.Stopped)
 			{
+				// Remove the waiting scene load character if it exists
+				if(waitingSceneLoadCharacters.TryGetValue(conn, out Character waitingSceneCharacter))
+				{
+					Server.NetworkManager.StorePooledInstantiated(waitingSceneCharacter.NetworkObject, true);
+					waitingSceneLoadCharacters.Remove(conn);
+					return;
+				}
+
 				if (connectionCharacters.TryGetValue(conn, out Character character))
 				{
 					if (character == null)
@@ -174,6 +182,8 @@ namespace FishMMO.Server
 					// immediately log out for now.. we could add a timeout later on..?
 					if (character.NetworkObject.IsSpawned)
 						ServerManager.Despawn(character.NetworkObject, DespawnType.Pool);
+					else
+						Destroy(character.gameObject);
 				}
 			}
 		}
@@ -201,11 +211,11 @@ namespace FishMMO.Server
 
 				if (CharacterService.TryLoadCharacter(dbContext, selectedCharacterId, Server.NetworkManager, out Character character))
 				{
-					// check if the scene is valid, loaded, and cached properly
-					if (SceneServerSystem.TryGetValidScene(character.sceneName, out SceneInstanceDetails instance))
-					{
-                        waitingSceneLoadCharacters.Add(conn, character);
+                    waitingSceneLoadCharacters.Add(conn, character);
 
+                    // check if the scene is valid, loaded, and cached properly
+                    if (SceneServerSystem.TryGetValidScene(character.sceneName, out SceneInstanceDetails instance))
+					{
                         Debug.Log("[" + DateTime.UtcNow + "] " + character.characterName + " is loading Scene: " + character.sceneName);
 
 						if (SceneServerSystem.TryLoadSceneForConnection(conn, instance))
@@ -217,25 +227,19 @@ namespace FishMMO.Server
 						{
 							Debug.Log("[" + DateTime.UtcNow + "] " + character.characterName + " scene failed to load for connection.");
 
-							// character scene not found even after validated
-							conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+                            // character scene not found even after validated
+                            conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
 							return;
 						}
 					}
 					else
 					{
-						// Scene load should not be the responsibility of the scene server!
-						// This should be forwarded back to the world server to ensure the client follows
-						// currently expected flows!
-
-                        // Corrective fix for the above mentioned issue
+                        // Scene loading is the responsibility of the world server, send them over there to reconnect to a scene server
                         conn.Broadcast(new SceneWorldReconnectBroadcast()
 						{
 							address = Server.relayAddress,
 							port = Server.relayPort
 						});
-
-                        Destroy(character.gameObject);
                     }
 				}
 			}
