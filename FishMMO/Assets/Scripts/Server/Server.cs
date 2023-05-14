@@ -233,16 +233,16 @@ namespace FishMMO.Server
 			serverState = obj.ConnectionState;
 		}
 
-        public void ReconnectToRelay()
-        {
-            // stop current connection if any
-            NetworkManager.ClientManager.StopConnection();
+		public void ReconnectToRelay()
+		{
+			// stop current connection if any
+			NetworkManager.ClientManager.StopConnection();
 
-            // connect to the server
-            StartCoroutine(OnAwaitingConnectionReady());
-        }
+			// connect to the server
+			StartCoroutine(OnAwaitingConnectionReady());
+		}
 
-        IEnumerator OnAwaitingConnectionReady()
+		IEnumerator OnAwaitingConnectionReady()
 		{
 			// wait for the connection to the current server to start before we connect the client
 			while (serverState != LocalConnectionState.Started)

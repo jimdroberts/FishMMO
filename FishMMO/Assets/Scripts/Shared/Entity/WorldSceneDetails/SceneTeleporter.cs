@@ -9,7 +9,7 @@ using FishMMO.Server.Services;
 public class SceneTeleporter : NetworkBehaviour
 {
 #if UNITY_SERVER || UNITY_EDITOR
-    private SceneServerSystem sceneServerSystem;
+	private SceneServerSystem sceneServerSystem;
 
 	void Awake()
 	{

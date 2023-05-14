@@ -182,8 +182,6 @@ namespace FishMMO.Server
 					// immediately log out for now.. we could add a timeout later on..?
 					if (character.NetworkObject.IsSpawned)
 						ServerManager.Despawn(character.NetworkObject, DespawnType.Pool);
-					else
-						Destroy(character.gameObject);
 				}
 			}
 		}
@@ -211,12 +209,12 @@ namespace FishMMO.Server
 
 				if (CharacterService.TryLoadCharacter(dbContext, selectedCharacterId, Server.NetworkManager, out Character character))
 				{
-                    waitingSceneLoadCharacters.Add(conn, character);
+					waitingSceneLoadCharacters.Add(conn, character);
 
-                    // check if the scene is valid, loaded, and cached properly
-                    if (SceneServerSystem.TryGetValidScene(character.sceneName, out SceneInstanceDetails instance))
+					// check if the scene is valid, loaded, and cached properly
+					if (SceneServerSystem.TryGetValidScene(character.sceneName, out SceneInstanceDetails instance))
 					{
-                        Debug.Log("[" + DateTime.UtcNow + "] " + character.characterName + " is loading Scene: " + character.sceneName);
+						Debug.Log("[" + DateTime.UtcNow + "] " + character.characterName + " is loading Scene: " + character.sceneName);
 
 						if (SceneServerSystem.TryLoadSceneForConnection(conn, instance))
 						{
@@ -227,20 +225,20 @@ namespace FishMMO.Server
 						{
 							Debug.Log("[" + DateTime.UtcNow + "] " + character.characterName + " scene failed to load for connection.");
 
-                            // character scene not found even after validated
-                            conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+							// character scene not found even after validated
+							conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
 							return;
 						}
 					}
 					else
 					{
-                        // Scene loading is the responsibility of the world server, send them over there to reconnect to a scene server
-                        conn.Broadcast(new SceneWorldReconnectBroadcast()
+						// Scene loading is the responsibility of the world server, send them over there to reconnect to a scene server
+						conn.Broadcast(new SceneWorldReconnectBroadcast()
 						{
 							address = Server.relayAddress,
 							port = Server.relayPort
 						});
-                    }
+					}
 				}
 			}
 		}

@@ -2,8 +2,8 @@ using UnityEngine;
 
 namespace FishMMO
 {
-    public class ShowReadonlyAttribute : PropertyAttribute
-    {
+	public class ShowReadonlyAttribute : PropertyAttribute
+	{
 
-    }
+	}
 }

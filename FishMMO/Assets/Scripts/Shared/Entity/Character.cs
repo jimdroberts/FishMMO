@@ -69,7 +69,7 @@ public class Character : NetworkBehaviour, IPooledResettable
 	private void OnCharacterNameChanged(string prev, string next, bool asServer)
 	{
 #if !UNITY_SERVER || UNITY_EDITOR
-        gameObject.name = next;
+		gameObject.name = next;
 
 		if (CharacterNameLabel == null)
 		{
@@ -136,7 +136,7 @@ public class Character : NetworkBehaviour, IPooledResettable
 			localCharacter = this;
 
 #if !UNITY_SERVER || UNITY_EDITOR
-            LocalInputController = gameObject.AddComponent<LocalInputController>();
+			LocalInputController = gameObject.AddComponent<LocalInputController>();
 #endif
 		}
 	}
@@ -148,7 +148,7 @@ public class Character : NetworkBehaviour, IPooledResettable
 		{
 			localCharacter = null;
 #if !UNITY_SERVER || UNITY_EDITOR
-            if (LocalInputController != null)
+			if (LocalInputController != null)
 			{
 				Destroy(LocalInputController);
 			}

@@ -83,9 +83,9 @@ namespace FishMMO.Client
 			}
 		}
 
-        private void Update()
-        {
-            if(timeTillFirstReconnectAttempt > 0)
+		private void Update()
+		{
+			if(timeTillFirstReconnectAttempt > 0)
 			{
 				timeTillFirstReconnectAttempt -= Time.deltaTime;
 
@@ -97,12 +97,12 @@ namespace FishMMO.Client
 
 				return;
 			}
-        }
+		}
 
-        /// <summary>
-        /// SceneServer told the client to reconnect to the World server
-        /// </summary>
-        private void OnClientSceneWorldReconnectBroadcastReceived(SceneWorldReconnectBroadcast msg)
+		/// <summary>
+		/// SceneServer told the client to reconnect to the World server
+		/// </summary>
+		private void OnClientSceneWorldReconnectBroadcastReceived(SceneWorldReconnectBroadcast msg)
 		{
 			ConnectToServer(msg.address, msg.port);
 		}
@@ -172,7 +172,7 @@ namespace FishMMO.Client
 					reconnectsAttempted = 0;
 					timeTillFirstReconnectAttempt = -1;
 					reconnectActive = false;
-                    break;
+					break;
 			}
 		}
 
@@ -245,21 +245,21 @@ namespace FishMMO.Client
 
 		public void OnTryReconnect()
 		{
-            if (reconnectsAttempted < reconnectAttempts)
-            {
-                if (IsAddressValid(lastAddress) && lastPort != 0)
-                {
-                    ++reconnectsAttempted;
-                    OnReconnectAttempt?.Invoke(reconnectsAttempted, reconnectAttempts);
-                    ConnectToServer(lastAddress, lastPort);
-                }
-            }
-            else
-            {
-                reconnectsAttempted = 0;
-                OnReconnectFailed?.Invoke();
-            }
-        }
+			if (reconnectsAttempted < reconnectAttempts)
+			{
+				if (IsAddressValid(lastAddress) && lastPort != 0)
+				{
+					++reconnectsAttempted;
+					OnReconnectAttempt?.Invoke(reconnectsAttempted, reconnectAttempts);
+					ConnectToServer(lastAddress, lastPort);
+				}
+			}
+			else
+			{
+				reconnectsAttempted = 0;
+				OnReconnectFailed?.Invoke();
+			}
+		}
 
 		IEnumerator OnAwaitingConnectionReady(string address, ushort port)
 		{
@@ -286,8 +286,8 @@ namespace FishMMO.Client
 
 		public void ReconnectCancel()
 		{
-            OnReconnectFailed?.Invoke();
-            ForceDisconnect();
+			OnReconnectFailed?.Invoke();
+			ForceDisconnect();
 		}
 
 		public void ForceDisconnect()

@@ -53,8 +53,8 @@ namespace FishMMO.Client
 				loginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
 			}
 
-            Client.Instance.OnReconnectFailed -= ClientManager_OnReconnectFailed;
-        }
+			Client.Instance.OnReconnectFailed -= ClientManager_OnReconnectFailed;
+		}
 
 		private void ClientManager_OnClientConnectionState(ClientConnectionStateArgs obj)
 		{
@@ -79,15 +79,15 @@ namespace FishMMO.Client
 					break;
 				case ClientAuthenticationResult.AlreadyOnline:
 					handshakeMSG.text = "Account is already online.";
-                    Client.Instance.ForceDisconnect();
-                    SetSignInLocked(false);
-                    break;
+					Client.Instance.ForceDisconnect();
+					SetSignInLocked(false);
+					break;
 				case ClientAuthenticationResult.Banned:
 					// update the handshake message
 					handshakeMSG.text = "Account is banned. Please contact the system administrator.";
-                    Client.Instance.ForceDisconnect();
-                    SetSignInLocked(false);
-                    break;
+					Client.Instance.ForceDisconnect();
+					SetSignInLocked(false);
+					break;
 				case ClientAuthenticationResult.LoginSuccess:
 					// reset handshake message and hide the panel
 					handshakeMSG.text = "";
@@ -114,9 +114,9 @@ namespace FishMMO.Client
 				// set username and password in the authenticator
 				loginAuthenticator.SetLoginCredentials(username.text, password.text);
 
-                handshakeMSG.text = "";
+				handshakeMSG.text = "";
 
-                if (Client.Instance.TryGetRandomLoginServerAddress(out ServerAddress serverAddress))
+				if (Client.Instance.TryGetRandomLoginServerAddress(out ServerAddress serverAddress))
 				{
 					Client.Instance.ConnectToServer(serverAddress.address, serverAddress.port);
 
@@ -124,8 +124,8 @@ namespace FishMMO.Client
 				}
 				else
 				{
-                    handshakeMSG.text = "Failed to get a login server!";
-                }
+					handshakeMSG.text = "Failed to get a login server!";
+				}
 			}
 		}
 

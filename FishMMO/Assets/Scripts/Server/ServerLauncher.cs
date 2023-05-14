@@ -7,25 +7,25 @@ using UnityEditor;
 
 namespace FishMMO.Server
 {
-    public class ServerLauncher : MonoBehaviour
-    {
-        public Server Server { get; private set; }
+	public class ServerLauncher : MonoBehaviour
+	{
+		public Server Server { get; private set; }
 
-        void Start()
-        {
-            string[] args = Environment.GetCommandLineArgs();
-            switch (args[1].ToUpper())
-            {
-                case "LOGIN":
+		void Start()
+		{
+			string[] args = Environment.GetCommandLineArgs();
+			switch (args[1].ToUpper())
+			{
+				case "LOGIN":
 					Initialize("LoginServer");
 					break;
-                case "WORLD":
+				case "WORLD":
 					Initialize("WorldServer");
 					break;
-                case "SCENE":
+				case "SCENE":
 					Initialize("SceneServer");
 					break;
-                default:
+				default:
 					Debug.Log("[" + DateTime.UtcNow + "] ServerLauncher: Unknown server type. Available servers {Login, World, Scene}");
 #if UNITY_EDITOR
 					EditorApplication.ExitPlaymode();
@@ -33,15 +33,15 @@ namespace FishMMO.Server
 					Application.Quit();
 #endif
 					break;
-            }
-        }
+			}
+		}
 
-        private void Initialize(string bootstrapSceneName)
-        {
+		private void Initialize(string bootstrapSceneName)
+		{
 #if UNITY_SERVER && !UNITY_EDITOR
-            Application.SetStackTraceLogType(LogType.Log, StackTraceLogType.None);
+			Application.SetStackTraceLogType(LogType.Log, StackTraceLogType.None);
 #endif
-            SceneManager.LoadScene(bootstrapSceneName, LoadSceneMode.Single);
-        }
-    }
+			SceneManager.LoadScene(bootstrapSceneName, LoadSceneMode.Single);
+		}
+	}
 }
