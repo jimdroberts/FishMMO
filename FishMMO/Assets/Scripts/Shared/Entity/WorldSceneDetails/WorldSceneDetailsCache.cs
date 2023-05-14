@@ -102,6 +102,19 @@ public class WorldSceneDetailsCache : ScriptableObject
 						sceneDetails.respawnPositions.Add(obj.name, obj.transform.position);
 					}
 
+					// Search for world bounds (bounds activate when outside of all of them)
+					IBoundary[] sceneBoundaries = GameObject.FindObjectsOfType<IBoundary>();
+					foreach (IBoundary obj in sceneBoundaries)
+					{
+						Debug.Log($"[{DateTime.UtcNow}] WorldSceneDetails: Found new boundary: [Name: {obj.name}, Center: {obj.GetBoundaryOffset()}, Size: {obj.GetBoundarySize()}]");
+
+						sceneDetails.boundaries.Add(obj.name, new SceneBoundaryDetails()
+						{
+							BoundaryOrigin = obj.GetBoundaryOffset(),
+							BoundarySize = obj.GetBoundarySize()
+						});
+					}
+
 					// search for teleporters
 					SceneTeleporter[] teleports = GameObject.FindObjectsOfType<SceneTeleporter>();
 					foreach (SceneTeleporter obj in teleports)
@@ -156,9 +169,9 @@ public class WorldSceneDetailsCache : ScriptableObject
 					{
 						pair.Value.toScene = destination.scene;
 						pair.Value.toPosition = destination.position;
-                        pair.Value.sceneTransitionImage = null;
+						pair.Value.sceneTransitionImage = null;
 
-                        if (teleporterSpriteCache.TryGetValue(teleporterDetailsPair.Key, out Dictionary<string, Sprite> spriteCache))
+						if (teleporterSpriteCache.TryGetValue(teleporterDetailsPair.Key, out Dictionary<string, Sprite> spriteCache))
 						{
 							if(spriteCache.TryGetValue(pair.Key, out Sprite sprite))
 							{

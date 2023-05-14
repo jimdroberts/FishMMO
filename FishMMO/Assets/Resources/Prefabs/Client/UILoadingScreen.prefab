@@ -426,6 +426,8 @@ MonoBehaviour:
   LoadingProgress: {fileID: 4170189730588255181}
   LoadingImage: {fileID: 4170189731522560780}
   Details: {fileID: 11400000, guid: ee8f2ab36344dae4c8c59b28985d5338, type: 2}
+  DefaultLoadingScreenSprite: {fileID: 21300000, guid: 41f73c28208285445b37a7980665ead3,
+    type: 3}
 --- !u!114 &4170189731979957683
 MonoBehaviour:
   m_ObjectHideFlags: 0

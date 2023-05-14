@@ -55,7 +55,7 @@ namespace FishMMO.Server
 		void Awake()
 		{
 #if UNITY_EDITOR
-			string path = Directory.GetParent(AppDomain.CurrentDomain.BaseDirectory).FullName;
+			string path = Directory.GetParent(Directory.GetParent(Application.dataPath).FullName).FullName;
 #else
 			string path = AppDomain.CurrentDomain.BaseDirectory;
 #endif
@@ -231,6 +231,15 @@ namespace FishMMO.Server
 		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs obj)
 		{
 			serverState = obj.ConnectionState;
+		}
+
+		public void ReconnectToRelay()
+		{
+			// stop current connection if any
+			NetworkManager.ClientManager.StopConnection();
+
+			// connect to the server
+			StartCoroutine(OnAwaitingConnectionReady());
 		}
 
 		IEnumerator OnAwaitingConnectionReady()

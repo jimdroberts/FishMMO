@@ -36,6 +36,7 @@ namespace FishMMO.Client
 			{
 				networkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
 				loginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
+				Client.Instance.OnReconnectFailed += ClientManager_OnReconnectFailed;
 			}
 		}
 
@@ -51,11 +52,19 @@ namespace FishMMO.Client
 			{
 				loginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
 			}
+
+			Client.Instance.OnReconnectFailed -= ClientManager_OnReconnectFailed;
 		}
 
 		private void ClientManager_OnClientConnectionState(ClientConnectionStateArgs obj)
 		{
 			//handshakeMSG.text = obj.ConnectionState.ToString();
+		}
+
+		private void ClientManager_OnReconnectFailed()
+		{
+			visible = true;
+			SetSignInLocked(false);
 		}
 
 		private void Authenticator_OnClientAuthenticationResult(ClientAuthenticationResult result)
@@ -65,13 +74,19 @@ namespace FishMMO.Client
 				case ClientAuthenticationResult.InvalidUsernameOrPassword:
 					// update the handshake message
 					handshakeMSG.text = "Invalid Username or Password.";
+					Client.Instance.ForceDisconnect();
+					SetSignInLocked(false);
 					break;
 				case ClientAuthenticationResult.AlreadyOnline:
 					handshakeMSG.text = "Account is already online.";
+					Client.Instance.ForceDisconnect();
+					SetSignInLocked(false);
 					break;
 				case ClientAuthenticationResult.Banned:
 					// update the handshake message
 					handshakeMSG.text = "Account is banned. Please contact the system administrator.";
+					Client.Instance.ForceDisconnect();
+					SetSignInLocked(false);
 					break;
 				case ClientAuthenticationResult.LoginSuccess:
 					// reset handshake message and hide the panel
@@ -99,11 +114,17 @@ namespace FishMMO.Client
 				// set username and password in the authenticator
 				loginAuthenticator.SetLoginCredentials(username.text, password.text);
 
+				handshakeMSG.text = "";
+
 				if (Client.Instance.TryGetRandomLoginServerAddress(out ServerAddress serverAddress))
 				{
 					Client.Instance.ConnectToServer(serverAddress.address, serverAddress.port);
 
 					SetSignInLocked(true);
+				}
+				else
+				{
+					handshakeMSG.text = "Failed to get a login server!";
 				}
 			}
 		}

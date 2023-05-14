@@ -7,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using FishMMO.Server.Services;
 using UnityEngine;
+using System.Linq;
 
 namespace FishMMO.Server
 {
@@ -21,18 +22,14 @@ namespace FishMMO.Server
 		public float saveRate = 60.0f;
 		private float nextSave = 0.0f;
 
+		public float outOfBoundsCheckRate = 5f;
+		private float nextOutOfBoundsCheck = 0.0f;
+
 		public Dictionary<long, Character> charactersById = new Dictionary<long, Character>();
 		public Dictionary<string, Character> charactersByName = new Dictionary<string, Character>();
 		public Dictionary<NetworkConnection, Character> connectionCharacters = new Dictionary<NetworkConnection, Character>();
 
-
 		public Dictionary<NetworkConnection, Character> waitingSceneLoadCharacters = new Dictionary<NetworkConnection, Character>();
-
-		/// <summary>
-		/// WaitingCharacters are all the loaded characters waiting for the server to load a scene
-		/// </summary>
-		// sceneName, <connection, character>
-		public Dictionary<string, Dictionary<NetworkConnection, Character>> waitingCharacters = new Dictionary<string, Dictionary<NetworkConnection, Character>>();
 
 		public override void InitializeOnce()
 		{
@@ -56,6 +53,30 @@ namespace FishMMO.Server
 			if (serverState == LocalConnectionState.Started)
 			{
 				nextSave -= Time.deltaTime;
+				nextOutOfBoundsCheck -= Time.deltaTime;
+
+				if(nextOutOfBoundsCheck < 0)
+				{
+					nextOutOfBoundsCheck = outOfBoundsCheckRate;
+
+					// TODO: Should the character be doing this and more often?
+					// They'd need a cached world boundaries to check themselves against
+					// which would prevent the need to do all of this lookup stuff.
+					foreach (Character character in connectionCharacters.Values)
+					{
+						if(SceneServerSystem.worldSceneDetailsCache.scenes.TryGetValue(character.sceneName, out WorldSceneDetails details))
+						{
+							// Check if they are within some bounds, if not we need to move them to a respawn location!
+							// TODO: Try to prevent combat escape, maybe this needs to be handled on the game design level?
+							if(details.boundaries.PointContainedInBoundaries(character.transform.position) == false)
+							{
+								Vector3 spawnPoint = GetRandomRespawnPoint(details.respawnPositions);
+								character.Motor.SetPositionAndRotationAndVelocity(spawnPoint, character.transform.rotation, Vector3.zero);
+							}
+						}
+					}
+				}
+
 				if (nextSave < 0)
 				{
 					nextSave = saveRate;
@@ -90,15 +111,11 @@ namespace FishMMO.Server
 			if (args.ConnectionState == LocalConnectionState.Started)
 			{
 				loginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
-
-				SceneServerSystem.OnSceneLoadComplete += SceneManager_OnSceneLoadComplete;
 				SceneServerSystem.SceneManager.OnClientLoadedStartScenes += SceneManager_OnClientLoadedStartScenes;
 			}
 			else if (args.ConnectionState == LocalConnectionState.Stopped)
 			{
 				loginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
-
-				SceneServerSystem.OnSceneLoadComplete -= SceneManager_OnSceneLoadComplete;
 				SceneServerSystem.SceneManager.OnClientLoadedStartScenes -= SceneManager_OnClientLoadedStartScenes;
 			}
 		}
@@ -110,24 +127,12 @@ namespace FishMMO.Server
 		{
 			if (args.ConnectionState == RemoteConnectionState.Stopped)
 			{
-				// remove the waiting scene load character if it exists
-				if (waitingSceneLoadCharacters.TryGetValue(conn, out Character waitingSceneCharacter))
+				// Remove the waiting scene load character if it exists
+				if(waitingSceneLoadCharacters.TryGetValue(conn, out Character waitingSceneCharacter))
 				{
-					Destroy(waitingSceneCharacter);
-					waitingSceneCharacter.gameObject.SetActive(false);
+					Server.NetworkManager.StorePooledInstantiated(waitingSceneCharacter.NetworkObject, true);
 					waitingSceneLoadCharacters.Remove(conn);
-				}
-
-				// remove connection from wait list if it's waiting for the scene server to load
-				foreach (Dictionary<NetworkConnection, Character> waiting in waitingCharacters.Values)
-				{
-					if (waiting.TryGetValue(conn, out Character waitingCharacter))
-					{
-						Destroy(waitingCharacter);
-						waitingCharacter.gameObject.SetActive(false);
-						waiting.Remove(conn);
-						break;
-					}
+					return;
 				}
 
 				if (connectionCharacters.TryGetValue(conn, out Character character))
@@ -193,8 +198,7 @@ namespace FishMMO.Server
 
 			if (CharacterService.TryGetSelectedCharacterDetails(dbContext, accountName, out long selectedCharacterId))
 			{
-				if (charactersById.ContainsKey(selectedCharacterId) ||
-					waitingSceneLoadCharacters.ContainsKey(conn))
+				if (charactersById.ContainsKey(selectedCharacterId))
 				{
 					Debug.Log("[" + DateTime.UtcNow + "] " + selectedCharacterId + " is already loaded or loading. FIXME");
 
@@ -228,51 +232,14 @@ namespace FishMMO.Server
 					}
 					else
 					{
-						Debug.Log("[" + DateTime.UtcNow + "] " + character.characterName + " has been enqueued for SceneLoad: " + character.sceneName);
-
-						// if the scene isn't loaded yet put the connection into a wait queue
-						if (waitingCharacters.TryGetValue(character.sceneName, out Dictionary<NetworkConnection, Character> waiting))
+						// Scene loading is the responsibility of the world server, send them over there to reconnect to a scene server
+						conn.Broadcast(new SceneWorldReconnectBroadcast()
 						{
-							if (!waiting.ContainsKey(conn))
-							{
-								waiting.Add(conn, character);
-							}
-						}
-						else
-						{
-							waitingCharacters.Add(character.sceneName, new Dictionary<NetworkConnection, Character>()
-							{
-								{ conn, character },
-							});
-						}
+							address = Server.relayAddress,
+							port = Server.relayPort
+						});
 					}
 				}
-			}
-		}
-
-		/// <summary>
-		/// Tell all the players the server finished loading the scene they were trying to enter.
-		/// </summary>
-		private void SceneManager_OnSceneLoadComplete(string sceneName)
-		{
-			if (waitingCharacters.TryGetValue(sceneName, out Dictionary<NetworkConnection, Character> characters))
-			{
-				foreach (Character character in characters.Values)
-				{
-					// check if the scene is valid, loaded, and cached properly
-					if (SceneServerSystem.TryGetValidScene(character.sceneName, out SceneInstanceDetails instance))
-					{
-						Debug.Log("[" + DateTime.UtcNow + "] " + character.characterName + " is loading Scene: " + character.sceneName);
-
-						if (SceneServerSystem.TryLoadSceneForConnection(character.Owner, instance))
-						{
-							// assign scene handle for later..
-							character.sceneHandle = instance.handle;
-						}
-					}
-				}
-				characters.Clear();
-				waitingCharacters.Remove(sceneName);
 			}
 		}
 
@@ -382,6 +349,15 @@ namespace FishMMO.Server
 				return true;
 			}
 			return false;
+		}
+
+		private Vector3 GetRandomRespawnPoint(RespawnPositionDictionary respawnPoints)
+		{
+			Vector3[] spawnPoints = respawnPoints.Values.ToArray();
+
+			if (spawnPoints.Length == 0) throw new IndexOutOfRangeException("Failed to get a respawn point! Please ensure you have rebuilt your world scene cache and have respawn points in your scene!");
+
+			return spawnPoints[UnityEngine.Random.Range(0, spawnPoints.Length)];
 		}
 	}
 }

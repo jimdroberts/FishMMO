@@ -9,6 +9,13 @@ using UnityEngine;
 
 namespace FishMMO.Server
 {
+	public class SceneWaitQueueData
+	{
+		public string address = "";
+		public ushort port = 0;
+		public bool ready = false;
+	}
+
 	// World scene system handles the node services
 	public class WorldSceneSystem : ServerBehaviour
 	{
@@ -21,6 +28,15 @@ namespace FishMMO.Server
 
 		// characterName, sceneConnection
 		public Dictionary<long, NetworkConnection> sceneCharacters = new Dictionary<long, NetworkConnection>();
+
+		// sceneName, waitingConnections
+		public Dictionary<string, HashSet<NetworkConnection>> waitingConnections = new Dictionary<string, HashSet<NetworkConnection>>();
+
+		// sceneName, waitingSceneServer
+		public Dictionary<string, SceneWaitQueueData> waitingScenes = new Dictionary<string, SceneWaitQueueData>();
+
+		private float waitQueueRate = 2.0f;
+		private float nextWaitQueueUpdate = 0.0f;
 
 		public override void InitializeOnce()
 		{
@@ -66,6 +82,45 @@ namespace FishMMO.Server
 				ServerManager.UnregisterBroadcast<SceneUnloadBroadcast>(OnServerSceneUnloadBroadcastReceived);
 				ServerManager.UnregisterBroadcast<SceneCharacterConnectedBroadcast>(OnServerSceneCharacterConnectedBroadcastReceived);
 				ServerManager.UnregisterBroadcast<SceneCharacterDisconnectedBroadcast>(OnServerSceneCharacterDisconnectedBroadcastReceived);
+			}
+		}
+
+		private void Update()
+		{
+			nextWaitQueueUpdate -= Time.deltaTime;
+			if (nextWaitQueueUpdate < 0)
+			{
+				nextWaitQueueUpdate = waitQueueRate;
+
+				foreach (string sceneName in new List<string>(waitingConnections.Keys))
+				{
+					TryClearWaitQueues(sceneName);
+				}
+			}
+		}
+
+		private void TryClearWaitQueues(string sceneName)
+		{
+			if (waitingScenes.TryGetValue(sceneName, out SceneWaitQueueData waitData) &&
+				waitData.ready)
+			{
+				if (waitingConnections.TryGetValue(sceneName, out HashSet<NetworkConnection> connections))
+				{
+					foreach (NetworkConnection conn in connections)
+					{
+						// tell the character to reconnect to the scene server
+						conn.Broadcast(new WorldSceneConnectBroadcast()
+						{
+							address = waitData.address,
+							port = waitData.port,
+						});
+					}
+
+					connections.Clear();
+					waitingConnections.Remove(sceneName);
+				}
+
+				waitingScenes.Remove(sceneName);
 			}
 		}
 
@@ -166,7 +221,6 @@ namespace FishMMO.Server
 			}
 		}
 
-
 		/// <summary>
 		/// The scene server loaded a scene
 		/// </summary>
@@ -183,6 +237,11 @@ namespace FishMMO.Server
 						clientCount = 0,
 					});
 				}
+			}
+
+			if (waitingScenes.TryGetValue(msg.sceneName, out SceneWaitQueueData waitData))
+			{
+				waitData.ready = true;
 			}
 		}
 
@@ -220,7 +279,7 @@ namespace FishMMO.Server
 			{
 				foreach (SceneInstanceDetails instance in details.scenes.Values)
 				{
-					if (instance.name == sceneName &&
+					if (instance.name.Equals(sceneName) &&
 						instance.clientCount < MAX_CLIENTS_PER_INSTANCE)
 					{
 						address = details.address;
@@ -230,13 +289,39 @@ namespace FishMMO.Server
 				}
 			}
 
-			// load the scene on a scene server if we didn't get a valid address
-			if (string.IsNullOrWhiteSpace(address))
+			// tell the client to connect to the scene server
+			if (!string.IsNullOrWhiteSpace(address))
 			{
-				SceneServerDetails sceneServer = null;
+				// tell the character to reconnect to the scene server for further load balancing
+				conn.Broadcast(new WorldSceneConnectBroadcast()
+				{
+					address = address,
+					port = port,
+				});
+			}
+			// load the scene on a scene server if we didn't get a valid address
+			else
+			{
+				// add the connection to the waiting list until the scene is loaded
+				if (!waitingConnections.TryGetValue(sceneName, out HashSet<NetworkConnection> connections))
+				{
+					waitingConnections.Add(sceneName, connections = new HashSet<NetworkConnection>());
+				}
+
+				if (!connections.Contains(conn))
+				{
+					connections.Add(conn);
+				}
 
 				// !!! load balance here !!!
 
+				if (waitingScenes.ContainsKey(sceneName))
+				{
+					// we are waiting for a scene server to load the scene already!
+					return;
+				}
+
+				SceneServerDetails sceneServer = null;
 				// find the scene server with the fewest number of characters
 				foreach (SceneServerDetails sceneConn in sceneServers.Values)
 				{
@@ -261,16 +346,13 @@ namespace FishMMO.Server
 					sceneName = sceneName,
 				});
 
-				address = sceneServer.address;
-				port = sceneServer.port;
+				waitingScenes.Add(sceneName, new SceneWaitQueueData()
+				{
+					address = sceneServer.address,
+					port = sceneServer.port,
+					ready = false,
+				});
 			}
-
-			// tell the character to reconnect to the scene server for further load balancing
-			conn.Broadcast(new WorldSceneConnectBroadcast()
-			{
-				address = address,
-				port = port,
-			});
 		}
 
 		/// <summary>

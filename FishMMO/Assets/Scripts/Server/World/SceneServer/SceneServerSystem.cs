@@ -96,6 +96,9 @@ namespace FishMMO.Server
 				ClientManager.UnregisterBroadcast<SceneListBroadcast>(OnClientSceneListBroadcastReceived);
 				ClientManager.UnregisterBroadcast<SceneLoadBroadcast>(OnClientSceneLoadBroadcastReceived);
 				ClientManager.UnregisterBroadcast<SceneUnloadBroadcast>(OnClientSceneUnloadBroadcastReceived);
+
+				Debug.LogWarning("Connection to relay server failed, attempting reconnect!");
+				Server.ReconnectToRelay();
 			}
 		}
 
