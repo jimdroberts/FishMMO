@@ -667,7 +667,8 @@ namespace FishNet.Object
 
             if (asServer)
             {
-                IsDeinitializing = true;
+				NetworkObserver?.Deinitialize(false);
+				IsDeinitializing = true;
             }
             else
             {

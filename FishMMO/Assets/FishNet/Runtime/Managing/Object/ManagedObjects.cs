@@ -133,7 +133,7 @@ namespace FishNet.Managing.Object
                         /* If client-host has visibility
                          * then disable and wait for client-host to get destroy
                          * message. Otherwise destroy immediately. */
-                        if (nob.Observers.Contains(NetworkManager.ClientManager.Connection))
+                        if (NetworkManager.IsHost && nob.Observers.Contains(NetworkManager.ClientManager.Connection))
                             NetworkManager.ServerManager.Objects.AddToPending(nob);
                         else
                             destroy = true;
