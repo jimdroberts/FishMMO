@@ -177,12 +177,13 @@ namespace FishNet.Observing
                     {
                         observerFound = true;
 
-                        /* Make an instance of each condition so values are
+						/* Make an instance of each condition so values are
                          * not overwritten when the condition exist more than
                          * once in the scene. Double edged sword of using scriptable
                          * objects for conditions. */
-                        _observerConditions[i] = _observerConditions[i].Clone();
-                        ObserverCondition oc = _observerConditions[i];
+						ObserverCondition oc = _observerConditions[i].Clone();
+						_observerConditions[i] = oc;
+
                         //If timed also register as containing timed conditions.
                         if (oc.Timed())
                             _timedConditions.Add(oc);
