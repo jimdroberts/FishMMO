@@ -199,6 +199,13 @@ namespace FishNet.Observing
                 if (!observerFound)
                     return;
             }
+            else
+            {
+                for (int i = 0; i < _observerConditions.Count; i++)
+                {
+                    _observerConditions[i].Initialize(networkObject);
+                }
+			}
 
 
             RegisterTimedConditions();
