@@ -532,12 +532,12 @@ namespace KinematicCharacterController
         private void OnEnable()
         {
             KinematicCharacterSystem.EnsureCreation();
-            KinematicCharacterSystem.RegisterCharacterMotor(this);
+            //KinematicCharacterSystem.RegisterCharacterMotor(this);
         }
 
         private void OnDisable()
         {
-            KinematicCharacterSystem.UnregisterCharacterMotor(this);
+            //KinematicCharacterSystem.UnregisterCharacterMotor(this);
         }
 
         private void Reset()

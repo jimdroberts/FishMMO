@@ -130,12 +130,7 @@ namespace KinematicCharacterController.Examples
 		{
 			Character.SetInputs(ref input);
 
-			//Quang: When Fishnet reconcile, it will run this Replicate method as replay in order for redo missing input,
-			// so we have to simulate KCC tick manually here, but only when replaying
-			if (replaying)
-			{
-				KinematicCharacterSystem.SimulateThisTick((float)base.TimeManager.TickDelta);
-			}
+			SimulateMotor((float)base.TimeManager.TickDelta);
 		}
 
 		[Reconcile]
@@ -145,6 +140,15 @@ namespace KinematicCharacterController.Examples
 			// and doesn't have to be reconciled, so we build a new Reconcile data that exclude Rigidbody field
 			Character.Motor.ApplyState(TranslateStateData(rd));
 		}
+
+		private void SimulateMotor(float deltaTime)
+		{
+			Character.Motor.UpdatePhase1(deltaTime);
+			Character.Motor.UpdatePhase2(deltaTime);
+
+			Character.Motor.Transform.SetPositionAndRotation(Character.Motor.TransientPosition, Character.Motor.TransientRotation);
+		}
+
 		private ReconcileData TranslateReconcileData(KinematicCharacterMotorState state)
 		{
 			ReconcileData rd = new ReconcileData();
