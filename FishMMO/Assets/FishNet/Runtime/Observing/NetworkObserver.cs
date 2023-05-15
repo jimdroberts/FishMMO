@@ -183,7 +183,6 @@ namespace FishNet.Observing
                          * objects for conditions. */
                         _observerConditions[i] = _observerConditions[i].Clone();
                         ObserverCondition oc = _observerConditions[i];
-                        oc.Initialize(_networkObject);
                         //If timed also register as containing timed conditions.
                         if (oc.Timed())
                             _timedConditions.Add(oc);
@@ -199,12 +198,10 @@ namespace FishNet.Observing
                 if (!observerFound)
                     return;
             }
-            else
+
+            for (int i = 0; i < _observerConditions.Count; i++)
             {
-                for (int i = 0; i < _observerConditions.Count; i++)
-                {
-                    _observerConditions[i].Initialize(networkObject);
-                }
+                _observerConditions[i].Initialize(networkObject);
 			}
 
 
