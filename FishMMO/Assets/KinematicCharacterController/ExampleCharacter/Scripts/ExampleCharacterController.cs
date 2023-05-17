@@ -73,35 +73,40 @@ namespace KinematicCharacterController.Examples
         public Transform MeshRoot;
         public Transform CameraFollowPoint;
         public float CrouchedCapsuleHeight = 0.5f;
+        public float FullCapsuleHeight = 2f;
+        public float CapsuleBaseOffset = 1f;
 
         public CharacterState CurrentCharacterState { get; private set; }
 
         private Collider[] _probedColliders = new Collider[8];
         private RaycastHit[] _probedHits = new RaycastHit[8];
-        private Vector3 _moveInputVector;
-        private Vector3 _lookInputVector;
-        //Quang: add camera roation field for smooth rotate
-        private Quaternion _cameraRotation;
-        private bool _jumpRequested = false;
-        //private bool _jumpConsumed = false;
-        //private bool _jumpedThisFrame = false;
-        private float _timeSinceJumpRequested = Mathf.Infinity;
+
+        private Animator _animator = null;
+
+		// Current frame input state
+		private Vector3 _moveInputVector;
+		private Vector3 _lookInputVector;
+		//Quang: add camera roation field for smooth rotate
+		private Quaternion _cameraRotation;
+		private bool _crouchInputDown = false;
+		private bool _jumpRequested = false;
+
+        // Multi Frame State, this needs to be syncronized
+        private float _timeSinceJumpRequested = float.MaxValue;
         private float _timeSinceLastAbleToJump = 0f;
-        private Vector3 _internalVelocityAdd = Vector3.zero;
-        private bool _shouldBeCrouching = false;
-        private bool _isCrouching = false;
+		private bool _isCrouching = false;
 
-        private Vector3 lastInnerNormal = Vector3.zero;
-        private Vector3 lastOuterNormal = Vector3.zero;
-
-        private void Awake()
+		private void Awake()
         {
             // Handle initial state
             TransitionToState(CharacterState.Default);
 
             // Assign the characterController to the motor
             Motor.CharacterController = this;
-        }
+
+			_animator = GetComponentInChildren<Animator>();
+
+		}
 
 		private void OnEnable()
 		{
@@ -148,10 +153,32 @@ namespace KinematicCharacterController.Examples
             }
         }
 
-        /// <summary>
-        /// This is called every frame by ExamplePlayer in order to tell the character what its inputs are
-        /// </summary>
-        public void SetInputs(ref PlayerCharacterInputs inputs)
+		public void ApplyState(KinematicCharacterMotorState state)
+		{
+            // Take any state needed for the controller here
+            _timeSinceLastAbleToJump = state.TimeSinceLastAbleToJump;
+            _isCrouching = state.IsCrouching;
+            _timeSinceJumpRequested = state.TimeSinceJumpRequested;
+
+			Motor.ApplyState(state);
+		}
+
+		public KinematicCharacterMotorState GetState()
+		{
+			KinematicCharacterMotorState baseState = Motor.GetState();
+
+			// Apply state from controller here.
+            baseState.TimeSinceLastAbleToJump = _timeSinceLastAbleToJump;
+            baseState.IsCrouching = _isCrouching;
+            baseState.TimeSinceJumpRequested = _timeSinceJumpRequested;
+
+			return baseState;
+		}
+
+		/// <summary>
+		/// This is called every frame by ExamplePlayer in order to tell the character what its inputs are
+		/// </summary>
+		public void SetInputs(ref PlayerCharacterInputs inputs)
         {
             // Clamp input
             Vector3 moveInputVector = Vector3.ClampMagnitude(new Vector3(inputs.MoveAxisRight, 0f, inputs.MoveAxisForward), 1f);
@@ -191,18 +218,17 @@ namespace KinematicCharacterController.Examples
                         // Crouching input
                         if (inputs.CrouchDown)
                         {
-                            _shouldBeCrouching = true;
+                            _crouchInputDown = true;
 
                             if (!_isCrouching)
                             {
                                 _isCrouching = true;
-                                Motor.SetCapsuleDimensions(0.5f, CrouchedCapsuleHeight, 0.0f);
-                                MeshRoot.localScale = new Vector3(1f, CrouchedCapsuleHeight, 1f);
+                                Motor.SetCapsuleDimensions(Motor.Capsule.radius, CrouchedCapsuleHeight, CapsuleBaseOffset / (FullCapsuleHeight / CrouchedCapsuleHeight));
                             }
                         }
                         else if (inputs.CrouchUp)
                         {
-                            _shouldBeCrouching = false;
+                            _crouchInputDown = false;
                         }
 
                         break;
@@ -210,22 +236,20 @@ namespace KinematicCharacterController.Examples
             }
         }
 
-        /// <summary>
-        /// This is called every frame by the AI script in order to tell the character what its inputs are
-        /// </summary>
-        public void SetInputs(ref AICharacterInputs inputs)
-        {
-            _moveInputVector = inputs.MoveVector;
-            _lookInputVector = inputs.LookVector;
-        }
+		/// <summary>
+		/// This is called every frame by the AI script in order to tell the character what its inputs are
+		/// </summary>
+		public void SetInputs(ref AICharacterInputs inputs)
+		{
+			_moveInputVector = inputs.MoveVector;
+			_lookInputVector = inputs.LookVector;
+		}
 
-        private Quaternion _tmpTransientRot;
-
-        /// <summary>
-        /// (Called by KinematicCharacterMotor during its update cycle)
-        /// This is called before the character begins its movement update
-        /// </summary>
-        public void BeforeCharacterUpdate(float deltaTime)
+		/// <summary>
+		/// (Called by KinematicCharacterMotor during its update cycle)
+		/// This is called before the character begins its movement update
+		/// </summary>
+		public void BeforeCharacterUpdate(float deltaTime)
         {
         }
 
@@ -376,29 +400,34 @@ namespace KinematicCharacterController.Examples
                         _timeSinceJumpRequested += deltaTime;
                         if (_jumpRequested)
                         {
-							// Calculate jump direction before ungrounding
-							Vector3 jumpDirection = Motor.CharacterUp;
-							if (Motor.GroundingStatus.FoundAnyGround && !Motor.GroundingStatus.IsStableOnGround)
-							{
-								jumpDirection = Motor.GroundingStatus.GroundNormal;
+							// See if we actually are allowed to jump
+							if (((AllowJumpingWhenSliding ? Motor.GroundingStatus.FoundAnyGround : Motor.GroundingStatus.IsStableOnGround) || _timeSinceLastAbleToJump <= JumpPostGroundingGraceTime))
+                            {
+								// Calculate jump direction before ungrounding
+								Vector3 jumpDirection = Motor.CharacterUp;
+								if (Motor.GroundingStatus.FoundAnyGround && !Motor.GroundingStatus.IsStableOnGround)
+								{
+									jumpDirection = Motor.GroundingStatus.GroundNormal;
+								}
+
+								// Makes the character skip ground probing/snapping on its next update. 
+								// If this line weren't here, the character would remain snapped to the ground when trying to jump. Try commenting this line out and see.
+								Motor.ForceUnground();
+
+								// Add to the return velocity and reset jump state
+								currentVelocity += (jumpDirection * JumpUpSpeed) - Vector3.Project(currentVelocity, Motor.CharacterUp);
+								currentVelocity += (_moveInputVector * JumpScalableForwardSpeed);
+
+								_jumpRequested = false;
 							}
-
-							// Makes the character skip ground probing/snapping on its next update. 
-							// If this line weren't here, the character would remain snapped to the ground when trying to jump. Try commenting this line out and see.
-							Motor.ForceUnground();
-
-							// Add to the return velocity and reset jump state
-							currentVelocity += (jumpDirection * JumpUpSpeed) - Vector3.Project(currentVelocity, Motor.CharacterUp);
-							currentVelocity += (_moveInputVector * JumpScalableForwardSpeed);
-                            _jumpRequested = false;
 						}
 
                         // Take into account additive velocity
-                        if (_internalVelocityAdd.sqrMagnitude > 0f)
-                        {
-                            currentVelocity += _internalVelocityAdd;
-                            _internalVelocityAdd = Vector3.zero;
-                        }
+                        //if (_internalVelocityAdd.sqrMagnitude > 0f)
+                        //{
+                        //    currentVelocity += _internalVelocityAdd;
+                        //    _internalVelocityAdd = Vector3.zero;
+                        //}
                         break;
                     }
             }
@@ -414,11 +443,30 @@ namespace KinematicCharacterController.Examples
             {
                 case CharacterState.Default:
                     {
-                        // Handle uncrouching
-                        if (_isCrouching && !_shouldBeCrouching)
+						// Handle jump-related values
+						{
+							if (_jumpRequested && _timeSinceJumpRequested > JumpPreGroundingGraceTime)
+							{
+								_jumpRequested = false;
+							}
+
+							if (AllowJumpingWhenSliding ? Motor.GroundingStatus.FoundAnyGround : Motor.GroundingStatus.IsStableOnGround)
+							{
+								// If we're on a ground surface, reset jumping values
+								_timeSinceLastAbleToJump = 0f;
+							}
+							else
+							{
+								// Keep track of time since we were last able to jump (for grace period)
+								_timeSinceLastAbleToJump += deltaTime;
+							}
+						}
+
+						// Handle uncrouching
+						if (_isCrouching && !_crouchInputDown)
                         {
                             // Do an overlap test with the character's standing height to see if there are any obstructions
-                            Motor.SetCapsuleDimensions(0.5f, 1.0f, 0.0f);
+                            Motor.SetCapsuleDimensions(Motor.Capsule.radius, FullCapsuleHeight, CapsuleBaseOffset);
                             if (Motor.CharacterOverlap(
                                 Motor.TransientPosition,
                                 Motor.TransientRotation,
@@ -426,17 +474,25 @@ namespace KinematicCharacterController.Examples
                                 Motor.CollidableLayers,
                                 QueryTriggerInteraction.Ignore) > 0)
                             {
-                                // If obstructions, just stick to crouching dimensions
-                                Motor.SetCapsuleDimensions(0.5f, CrouchedCapsuleHeight, 0.0f);
-                            }
+								// If obstructions, just stick to crouching dimensions
+								// This is offset to ensure the crouch goes towards the feet
+								// instead of towards the head. Otherwise we can't uncrouch!
+								//MeshRoot.localScale = new Vector3(1f, CrouchedCapsuleHeight / FullCapsuleHeight, 1f);
+								Motor.SetCapsuleDimensions(Motor.Capsule.radius, CrouchedCapsuleHeight, CapsuleBaseOffset / (FullCapsuleHeight / CrouchedCapsuleHeight));
+							}
                             else
                             {
                                 // If no obstructions, uncrouch
-                                MeshRoot.localScale = new Vector3(1f, 1f, 1f);
                                 _isCrouching = false;
                             }
                         }
-                        break;
+
+						if (_animator != null)
+						{
+							_animator.SetBool("Crouching", _isCrouching);
+                            _animator.SetBool("OnGround", Motor.GroundingStatus.FoundAnyGround);
+						}
+						break;
                     }
             }
         }

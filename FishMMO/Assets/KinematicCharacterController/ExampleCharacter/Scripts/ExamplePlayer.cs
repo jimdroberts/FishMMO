@@ -19,6 +19,9 @@ namespace KinematicCharacterController.Examples
 		public bool LastMovementIterationFoundAnyGround;
 		public CharacterTransientGroundingReport GroundingStatus;
 		public Vector3 AttachedRigidbodyVelocity;
+		public float TimeSinceLastAbleToJump;
+		public bool IsCrouching;
+		public float TimeSinceJumpRequested;
 
 		private uint _tick;
 		public void Dispose() { }
@@ -120,7 +123,7 @@ namespace KinematicCharacterController.Examples
 			if (base.IsServer)
 			{
 				Replicate(default, true);
-				KinematicCharacterMotorState state = Character.Motor.GetState();
+				KinematicCharacterMotorState state = Character.GetState();
 				Reconcile(TranslateReconcileData(state), true);
 			}
 		}
@@ -138,7 +141,7 @@ namespace KinematicCharacterController.Examples
 		{
 			//Quang: Note - KCCMotorState has Rigidbody field, this component is not serialized, 
 			// and doesn't have to be reconciled, so we build a new Reconcile data that exclude Rigidbody field
-			Character.Motor.ApplyState(TranslateStateData(rd));
+			Character.ApplyState(TranslateStateData(rd));
 		}
 
 		private void SimulateMotor(float deltaTime)
@@ -161,6 +164,9 @@ namespace KinematicCharacterController.Examples
 			rd.LastMovementIterationFoundAnyGround = state.LastMovementIterationFoundAnyGround;
 			rd.GroundingStatus = state.GroundingStatus;
 			rd.AttachedRigidbodyVelocity = state.AttachedRigidbodyVelocity;
+			rd.TimeSinceLastAbleToJump = state.TimeSinceLastAbleToJump;
+			rd.IsCrouching = state.IsCrouching;
+			rd.TimeSinceJumpRequested = state.TimeSinceJumpRequested;
 
 			return rd;
 		}
@@ -177,6 +183,9 @@ namespace KinematicCharacterController.Examples
 			state.LastMovementIterationFoundAnyGround = rd.LastMovementIterationFoundAnyGround;
 			state.GroundingStatus = rd.GroundingStatus;
 			state.AttachedRigidbodyVelocity = rd.AttachedRigidbodyVelocity;
+			state.TimeSinceLastAbleToJump = rd.TimeSinceLastAbleToJump;
+			state.IsCrouching = rd.IsCrouching;
+			state.TimeSinceJumpRequested = rd.TimeSinceJumpRequested;
 
 			return state;
 		}

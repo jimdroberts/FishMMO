@@ -44,7 +44,11 @@ namespace KinematicCharacterController
 
         public Rigidbody AttachedRigidbody;
         public Vector3 AttachedRigidbodyVelocity;
-    }
+        public float TimeSinceLastAbleToJump;
+        public bool IsCrouching;
+        public float TimeSinceJumpRequested;
+
+	}
 
     /// <summary>
     /// Describes an overlap between the character capsule and another collider
