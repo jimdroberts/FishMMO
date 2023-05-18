@@ -45,7 +45,7 @@
 	<Target Name="Test" AfterTargets="Build">
 		<!-- Move the DLL to the Unity project. -->
 		<PropertyGroup>
-			<TargetDir>..\..\FishMMO\Assets\Plugins\Npgsql</TargetDir>
+			<TargetDir>..\FishMMO\Assets\Plugins\Npgsql</TargetDir>
 		</PropertyGroup>
 		<ItemGroup>
 			<SourceDir Include="bin\Release\**\*.*" />
