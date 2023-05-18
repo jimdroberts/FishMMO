@@ -242,7 +242,7 @@ MonoBehaviour:
   _teleportThreshold: 1
   _ownerSmoothPosition: 1
   _ownerSmoothRotation: 1
-  _ownerInterpolation: 4
+  _ownerInterpolation: 1
   _predictionType: 0
   _rigidbody: {fileID: 6736601265633566295}
   _rigidbody2d: {fileID: 0}
@@ -352,7 +352,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   Motor: {fileID: 961999050755331747}
   MaxStableMoveSpeed: 10
-  StableMovementSharpness: 5000
+  StableMovementSharpness: 20
   OrientationSharpness: 10
   OrientationMethod: 0
   MaxAirMoveSpeed: 10

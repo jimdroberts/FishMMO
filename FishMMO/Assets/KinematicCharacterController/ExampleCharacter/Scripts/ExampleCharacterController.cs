@@ -347,7 +347,7 @@ namespace KinematicCharacterController.Examples
 							Vector3 targetMovementVelocity = reorientedInput * MaxStableMoveSpeed;
 
 							// Smooth movement Velocity
-							currentVelocity = Vector3.Lerp(currentVelocity, targetMovementVelocity, 1f - Mathf.Exp(-StableMovementSharpness * deltaTime));
+							currentVelocity = Vector3.Lerp(currentVelocity, targetMovementVelocity, StableMovementSharpness * deltaTime);
 						}
 						// Air movement
 						else
