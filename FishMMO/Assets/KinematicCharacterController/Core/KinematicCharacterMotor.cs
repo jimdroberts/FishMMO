@@ -44,7 +44,11 @@ namespace KinematicCharacterController
 
         public Rigidbody AttachedRigidbody;
         public Vector3 AttachedRigidbodyVelocity;
-    }
+        public float TimeSinceLastAbleToJump;
+        public bool IsCrouching;
+        public float TimeSinceJumpRequested;
+
+	}
 
     /// <summary>
     /// Describes an overlap between the character capsule and another collider
@@ -532,12 +536,12 @@ namespace KinematicCharacterController
         private void OnEnable()
         {
             KinematicCharacterSystem.EnsureCreation();
-            KinematicCharacterSystem.RegisterCharacterMotor(this);
+            //KinematicCharacterSystem.RegisterCharacterMotor(this);
         }
 
         private void OnDisable()
         {
-            KinematicCharacterSystem.UnregisterCharacterMotor(this);
+            //KinematicCharacterSystem.UnregisterCharacterMotor(this);
         }
 
         private void Reset()

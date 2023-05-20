@@ -119,14 +119,14 @@ namespace KinematicCharacterController
             _instance = this;
 
             //Quang: Subscribe for tick update
-            InstanceFinder.TimeManager.OnTick += TimeManager_OnTick;
+            //InstanceFinder.TimeManager.OnTick += TimeManager_OnTick;
         }
 
         private void OnDestroy()
         {
             if (InstanceFinder.TimeManager != null)
             {
-                InstanceFinder.TimeManager.OnTick -= TimeManager_OnTick;
+                //InstanceFinder.TimeManager.OnTick -= TimeManager_OnTick;
             }
         }
 
