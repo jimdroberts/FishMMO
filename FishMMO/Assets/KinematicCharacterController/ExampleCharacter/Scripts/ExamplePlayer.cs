@@ -42,11 +42,12 @@ namespace KinematicCharacterController.Examples
 		private const string VerticalInput = "Vertical";
 		private const string JumpInput = "Jump";
 		private const string CrouchInput = "Crouch";
+		private const string RunInput = "Run";
 		private const string ToggleFirstPersonInput = "ToggleFirstPerson";
 
 		private bool _jumpQueued = false;
-		private bool _crouchDownQueued = false;
-		private bool _crouchUpQueued = false;
+		private bool _crouchInputActive = false;
+		private bool _sprintInputActive = false;
 
 		void Awake()
 		{
@@ -196,18 +197,15 @@ namespace KinematicCharacterController.Examples
 			{
 				return;
 			}
+
 			if (InputManager.GetKeyDown(JumpInput))
 			{
 				_jumpQueued = true;
 			}
-			else if (InputManager.GetKeyDown(CrouchInput))
-			{
-				_crouchDownQueued = true;
-			}
-			else if (InputManager.GetKeyUp(CrouchInput))
-			{
-				_crouchUpQueued = true;
-			}
+			
+			_crouchInputActive = InputManager.GetKey(CrouchInput);
+
+			_sprintInputActive = InputManager.GetKey(RunInput);
 		}
 
 		private void LateUpdate()
@@ -286,13 +284,11 @@ namespace KinematicCharacterController.Examples
 			characterInputs.MoveAxisForward = InputManager.GetAxis(VerticalInput);
 			characterInputs.MoveAxisRight = InputManager.GetAxis(HorizontalInput);
 			characterInputs.JumpDown = _jumpQueued;
-			characterInputs.CrouchDown = _crouchDownQueued;
-			characterInputs.CrouchUp = _crouchUpQueued;
+			characterInputs.CrouchActive = _crouchInputActive;
+			characterInputs.SprintActive = _sprintInputActive;
 
 			// Reset the queued inputs
 			_jumpQueued = false;
-			_crouchDownQueued = false;
-			_crouchUpQueued = false;
 		}
 	}
 }

@@ -21,8 +21,8 @@ namespace KinematicCharacterController.Examples
 		public float MoveAxisRight;
 		public Quaternion CameraRotation;
 		public bool JumpDown;
-		public bool CrouchDown;
-		public bool CrouchUp;
+		public bool CrouchActive;
+		public bool SprintActive;
 
 		private uint _tick;
 		public void Dispose() { }
@@ -48,13 +48,15 @@ namespace KinematicCharacterController.Examples
 		public KinematicCharacterMotor Motor;
 
 		[Header("Stable Movement")]
-		public float MaxStableMoveSpeed = 10f;
+		public float MaxStableSprintSpeed = 10f;
+		public float MaxStableMoveSpeed = 5f;
+		public float MaxStableCrouchSpeed = 3f;
 		public float StableMovementSharpness = 15f;
 		public float OrientationSharpness = 10f;
 		public OrientationMethod OrientationMethod = OrientationMethod.TowardsCamera;
 
 		[Header("Air Movement")]
-		public float MaxAirMoveSpeed = 10f;
+		public float MaxAirMoveSpeed = 6f;
 		public float AirAccelerationSpeed = 0f;
 		public float Drag = 0.1f;
 
@@ -90,6 +92,7 @@ namespace KinematicCharacterController.Examples
 		private Quaternion _cameraRotation;
 		private bool _crouchInputDown = false;
 		private bool _jumpRequested = false;
+		private bool _sprintInputDown = false;
 
 		// Multi Frame State, this needs to be syncronized
 		private float _timeSinceJumpRequested = float.MaxValue;
@@ -105,7 +108,6 @@ namespace KinematicCharacterController.Examples
 			Motor.CharacterController = this;
 
 			_animator = GetComponentInChildren<Animator>();
-
 		}
 
 		private void OnEnable()
@@ -216,20 +218,10 @@ namespace KinematicCharacterController.Examples
 						}
 
 						// Crouching input
-						if (inputs.CrouchDown)
-						{
-							_crouchInputDown = true;
+						_crouchInputDown = inputs.CrouchActive;
 
-							if (!_isCrouching)
-							{
-								_isCrouching = true;
-								Motor.SetCapsuleDimensions(Motor.Capsule.radius, CrouchedCapsuleHeight, CapsuleBaseOffset / (FullCapsuleHeight / CrouchedCapsuleHeight));
-							}
-						}
-						else if (inputs.CrouchUp)
-						{
-							_crouchInputDown = false;
-						}
+						// Sprinting input
+						_sprintInputDown = inputs.SprintActive;
 
 						break;
 					}
@@ -344,7 +336,18 @@ namespace KinematicCharacterController.Examples
 							// Calculate target velocity
 							Vector3 inputRight = Vector3.Cross(_moveInputVector, Motor.CharacterUp);
 							Vector3 reorientedInput = Vector3.Cross(effectiveGroundNormal, inputRight).normalized * _moveInputVector.magnitude;
-							Vector3 targetMovementVelocity = reorientedInput * MaxStableMoveSpeed;
+
+							float targetSpeed = MaxStableMoveSpeed;
+							if(_isCrouching)
+							{
+								targetSpeed = MaxStableCrouchSpeed;
+							}
+							else if(_sprintInputDown)
+							{
+								targetSpeed = MaxStableSprintSpeed;
+							}
+
+							Vector3 targetMovementVelocity = reorientedInput * targetSpeed;
 
 							// Smooth movement Velocity
 							currentVelocity = Vector3.Lerp(currentVelocity, targetMovementVelocity, StableMovementSharpness * deltaTime);
@@ -463,7 +466,12 @@ namespace KinematicCharacterController.Examples
 						}
 
 						// Handle uncrouching
-						if (_isCrouching && !_crouchInputDown)
+						if (!_isCrouching && _crouchInputDown)
+						{
+							_isCrouching = true;
+							Motor.SetCapsuleDimensions(Motor.Capsule.radius, CrouchedCapsuleHeight, CapsuleBaseOffset / (FullCapsuleHeight / CrouchedCapsuleHeight));
+						}
+						else if (_isCrouching && !_crouchInputDown)
 						{
 							// Do an overlap test with the character's standing height to see if there are any obstructions
 							Motor.SetCapsuleDimensions(Motor.Capsule.radius, FullCapsuleHeight, CapsuleBaseOffset);
