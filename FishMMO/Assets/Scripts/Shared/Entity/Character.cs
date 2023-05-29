@@ -54,6 +54,7 @@ public class Character : NetworkBehaviour, IPooledResettable
 	public GuildController GuildController;
 	public PartyController PartyController;
 	public KinematicCharacterMotor Motor;
+	public Transform AbilitySpawnPoint;
 #if !UNITY_SERVER || UNITY_EDITOR
 	public LocalInputController LocalInputController;
 

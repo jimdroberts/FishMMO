@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using UnityEngine;
 
 public class Ability
 {
@@ -82,6 +83,7 @@ public class Ability
 
 	public bool HasAbilityNode(AbilityNode node)
 	{
+		if (node == null) return false;
 		return Nodes.ContainsKey(node.Name);
 	}
 
@@ -159,22 +161,35 @@ public class Ability
 
 	public void Start(Character self, TargetInfo targetInfo)
 	{
-		Template.OnStart(this, self, targetInfo);
+		Template.OnStartEvent?.Invoke(this, self, targetInfo, null);
 	}
 
 	public void Update(Character self, TargetInfo targetInfo)
 	{
-		Template.OnUpdate(this, self, targetInfo);
+		Template.OnUpdateEvent?.Invoke(this, self, targetInfo, null);
+	}
+
+	public void Hit(Character attacker, TargetInfo hitTarget, GameObject abilityObject)
+	{
+		if (hitTarget.target != null)
+		{
+			Character hitCharacter = hitTarget.target.GetComponent<Character>();
+			if (hitCharacter != null)
+			{
+				hitCharacter.AbilityController?.Interrupt(attacker);
+			}
+		}
+		Template.OnHitEvent?.Invoke(this, attacker, hitTarget, abilityObject);
 	}
 
 	public void Finish(Character self, TargetInfo targetInfo)
 	{
-		Template.OnFinish(this, self, targetInfo);
+		Template.OnFinishEvent?.Invoke(this, self, targetInfo, null);
 	}
 
 	public void Interrupt(Character self, TargetInfo attacker)
 	{
-		Template.OnInterrupt(this, self, attacker);
+		Template.OnInterruptEvent?.Invoke(this, self, attacker, null);
 	}
 
 	public bool MeetsRequirements(Character character)

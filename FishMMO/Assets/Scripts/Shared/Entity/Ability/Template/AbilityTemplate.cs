@@ -15,11 +15,11 @@ public abstract class AbilityTemplate : CachedScriptableObject<AbilityTemplate>
 	public CharacterAttributeTemplate CooldownReductionAttribute;
 	public AbilityResourceDictionary Resources = new AbilityResourceDictionary();
 	public AbilityResourceDictionary Requirements = new AbilityResourceDictionary();
+	public AbilityEvent OnStartEvent = null;
+	public AbilityEvent OnUpdateEvent = null;
+	public AbilityHitEvent OnHitEvent = null;
+	public AbilityEvent OnFinishEvent = null;
+	public AbilityEvent OnInterruptEvent = null;
 
 	public string Name { get { return this.name; } }
-
-	public abstract void OnStart(Ability ability, Character self, TargetInfo targetInfo);
-	public abstract void OnUpdate(Ability ability, Character self, TargetInfo targetInfo);
-	public abstract void OnFinish(Ability ability, Character self, TargetInfo targetInfo);
-	public abstract void OnInterrupt(Ability ability, Character self, TargetInfo attacker);
 }

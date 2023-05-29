@@ -4,6 +4,7 @@ using UnityEngine;
 [RequireComponent(typeof(Character))]
 public class TargetController : NetworkBehaviour
 {
+
 	public Character character;
 	public LayerMask layerMask;
 	public float targetDistance = 50.0f;
