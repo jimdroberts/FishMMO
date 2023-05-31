@@ -99,6 +99,8 @@ namespace KinematicCharacterController.Examples
 		private float _timeSinceLastAbleToJump = 0f;
 		private bool _isCrouching = false;
 
+		public bool IsJumping { get; private set; }
+
 		private void Awake()
 		{
 			// Handle initial state
@@ -404,7 +406,7 @@ namespace KinematicCharacterController.Examples
 						if (_jumpRequested)
 						{
 							// See if we actually are allowed to jump
-							if (((AllowJumpingWhenSliding ? Motor.GroundingStatus.FoundAnyGround : Motor.GroundingStatus.IsStableOnGround) || _timeSinceLastAbleToJump <= JumpPostGroundingGraceTime))
+							if (((AllowJumpingWhenSliding ? Motor.GroundingStatus.FoundAnyGround : Motor.GroundingStatus.IsStableOnGround) && _timeSinceLastAbleToJump <= JumpPostGroundingGraceTime))
 							{
 								// Calculate jump direction before ungrounding
 								Vector3 jumpDirection = Motor.CharacterUp;
@@ -422,6 +424,8 @@ namespace KinematicCharacterController.Examples
 								currentVelocity += (_moveInputVector * JumpScalableForwardSpeed);
 
 								_jumpRequested = false;
+
+								IsJumping = true;
 							}
 						}
 
@@ -499,6 +503,11 @@ namespace KinematicCharacterController.Examples
 						{
 							_animator.SetBool("Crouching", _isCrouching);
 							_animator.SetBool("OnGround", Motor.GroundingStatus.FoundAnyGround);
+
+							/*if (!_isCrouching && !IsJumping && Motor.GroundingStatus.FoundAnyGround)
+							{
+								_animator.SetBool("Running", (_moveInputVector.sqrMagnitude > 0));
+							}*/
 						}
 						break;
 					}
@@ -547,6 +556,7 @@ namespace KinematicCharacterController.Examples
 
 		protected void OnLanded()
 		{
+			IsJumping = false;
 		}
 
 		protected void OnLeaveStableGround()

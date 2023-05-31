@@ -364,7 +364,7 @@ MonoBehaviour:
   JumpUpSpeed: 5
   JumpScalableForwardSpeed: 0
   JumpPreGroundingGraceTime: 0.1
-  JumpPostGroundingGraceTime: 0.2
+  JumpPostGroundingGraceTime: 0.1
   IgnoredColliders: []
   BonusOrientationMethod: 0
   BonusOrientationSharpness: 10

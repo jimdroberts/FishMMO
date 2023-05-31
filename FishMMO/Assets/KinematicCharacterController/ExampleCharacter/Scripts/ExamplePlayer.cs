@@ -198,7 +198,7 @@ namespace KinematicCharacterController.Examples
 				return;
 			}
 
-			if (InputManager.GetKeyDown(JumpInput))
+			if (InputManager.GetKeyDown(JumpInput) && !Character.IsJumping)
 			{
 				_jumpQueued = true;
 			}
