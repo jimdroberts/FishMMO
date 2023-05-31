@@ -285,8 +285,8 @@ namespace FishMMO.Server
 		private bool LoadRelayServerAddress()
 		{
 			if (configuration.TryGetString("RelayAddress", out relayAddress) &&
-				address.Length > 0 &&
-				IsRelayAddressValid(address) &&
+				relayAddress.Length > 0 &&
+				IsRelayAddressValid(relayAddress) &&
 				configuration.TryGetUShort("RelayPort", out relayPort))
 			{
 				return true;
