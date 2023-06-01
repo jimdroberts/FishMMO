@@ -138,7 +138,6 @@ GameObject:
   - component: {fileID: 14910057}
   - component: {fileID: 14910056}
   - component: {fileID: 14910055}
-  - component: {fileID: 14910062}
   m_Layer: 0
   m_Name: Merchant
   m_TagString: Untagged
@@ -295,22 +294,6 @@ Transform:
   m_Father: {fileID: 0}
   m_RootOrder: 3
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &14910062
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 14910054}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c71fd7f855ec523429999fc4e14a1928, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  _overrideType: 2
-  _updateHostVisibility: 1
-  _observerConditions:
-  - {fileID: 11400000, guid: 2033f54fd2794464bae08fa5a55c8996, type: 2}
 --- !u!1 &301058211
 GameObject:
   m_ObjectHideFlags: 0
@@ -1598,51 +1581,6 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1242019264}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
---- !u!1 &1328058708
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1328058710}
-  - component: {fileID: 1328058709}
-  m_Layer: 0
-  m_Name: Primary Boundary
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &1328058709
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1328058708}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d344420706c4fa34ab1059a6b1c23ec3, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  BoundarySize: {x: 1000, y: 175, z: 1000}
---- !u!4 &1328058710
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1328058708}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 75, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_RootOrder: 6
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1464471138
 GameObject:
   m_ObjectHideFlags: 0
@@ -1653,7 +1591,6 @@ GameObject:
   m_Component:
   - component: {fileID: 1464471139}
   - component: {fileID: 1464471140}
-  - component: {fileID: 1464471141}
   m_Layer: 0
   m_Name: Teleporters
   m_TagString: Untagged
@@ -1714,22 +1651,6 @@ MonoBehaviour:
   - {fileID: 14910055}
   - {fileID: 1464471140}
   - {fileID: 2076367148}
---- !u!114 &1464471141
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1464471138}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c71fd7f855ec523429999fc4e14a1928, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  _overrideType: 2
-  _updateHostVisibility: 1
-  _observerConditions:
-  - {fileID: 11400000, guid: 2033f54fd2794464bae08fa5a55c8996, type: 2}
 --- !u!1 &1576632834
 GameObject:
   m_ObjectHideFlags: 0
@@ -1998,7 +1919,6 @@ GameObject:
   - component: {fileID: 2076367147}
   - component: {fileID: 2076367149}
   - component: {fileID: 2076367148}
-  - component: {fileID: 2076367150}
   m_Layer: 0
   m_Name: FelwitheNorth
   m_TagString: Teleporter
@@ -2058,7 +1978,7 @@ MonoBehaviour:
     Position: {x: -9.5, y: 1.67, z: -12.45}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     LocalScale: {x: 1, y: 1, z: 1}
-  _isNetworked: 0
+  _isNetworked: 1
   _isGlobal: 0
   _initializeOrder: 0
   _defaultDespawnType: 0
@@ -2087,22 +2007,6 @@ MonoBehaviour:
   _componentIndexCache: 0
   _addedNetworkObject: {fileID: 1464471140}
   _networkObjectCache: {fileID: 2076367148}
---- !u!114 &2076367150
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2076367145}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c71fd7f855ec523429999fc4e14a1928, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  _overrideType: 2
-  _updateHostVisibility: 1
-  _observerConditions:
-  - {fileID: 11400000, guid: 2033f54fd2794464bae08fa5a55c8996, type: 2}
 --- !u!1 &2101700571
 GameObject:
   m_ObjectHideFlags: 0
