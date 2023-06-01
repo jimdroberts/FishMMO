@@ -6,7 +6,7 @@ using FishMMO.Server;
 using FishMMO.Server.Services;
 #endif
 
-public class SceneTeleporter : NetworkBehaviour
+public class SceneTeleporter : MonoBehaviour
 {
 #if UNITY_SERVER || UNITY_EDITOR
 	private SceneServerSystem sceneServerSystem;
