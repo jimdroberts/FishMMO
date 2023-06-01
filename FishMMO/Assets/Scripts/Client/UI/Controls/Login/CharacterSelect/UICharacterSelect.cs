@@ -1,7 +1,9 @@
 ﻿using FishNet.Managing;
 using FishNet.Transporting;
 using System.Collections.Generic;
+#if UNITY_EDITOR
 using UnityEditor;
+#endif
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -15,51 +17,30 @@ namespace FishMMO.Client
 		public RectTransform characterButtonParent;
 		public CharacterDetailsButton characterButtonPrefab;
 
-		private NetworkManager networkManager;
-		private ClientLoginAuthenticator loginAuthenticator;
-
 		private List<CharacterDetailsButton> characterList = new List<CharacterDetailsButton>();
 		private CharacterDetailsButton selectedCharacter;
 
 		public override void OnStarting()
 		{
-			networkManager = FindObjectOfType<NetworkManager>();
-			loginAuthenticator = FindObjectOfType<ClientLoginAuthenticator>();
-			if (networkManager == null)
-			{
-				Debug.LogError("UICharacterSelect: NetworkManager not found, HUD will not function.");
-				return;
-			}
-			else if (loginAuthenticator == null)
-			{
-				Debug.LogError("UICharacterSelect: LoginAuthenticator not found, HUD will not function.");
-				return;
-			}
-			else
-			{
-				networkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
-				networkManager.ClientManager.RegisterBroadcast<CharacterListBroadcast>(OnClientCharacterListBroadcastReceived);
-				networkManager.ClientManager.RegisterBroadcast<CharacterCreateBroadcast>(OnClientCharacterCreateBroadcastReceived);
-				networkManager.ClientManager.RegisterBroadcast<CharacterDeleteBroadcast>(OnClientCharacterDeleteBroadcastReceived);
+			Client.NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
+			Client.NetworkManager.ClientManager.RegisterBroadcast<CharacterListBroadcast>(OnClientCharacterListBroadcastReceived);
+			Client.NetworkManager.ClientManager.RegisterBroadcast<CharacterCreateBroadcast>(OnClientCharacterCreateBroadcastReceived);
+			Client.NetworkManager.ClientManager.RegisterBroadcast<CharacterDeleteBroadcast>(OnClientCharacterDeleteBroadcastReceived);
 
-				loginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
-			}
+			Client.LoginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
 		}
 
 
 		public override void OnDestroying()
 		{
-			if (networkManager != null)
-			{
-				networkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
-				networkManager.ClientManager.UnregisterBroadcast<CharacterListBroadcast>(OnClientCharacterListBroadcastReceived);
-				networkManager.ClientManager.UnregisterBroadcast<CharacterCreateBroadcast>(OnClientCharacterCreateBroadcastReceived);
-				networkManager.ClientManager.UnregisterBroadcast<CharacterDeleteBroadcast>(OnClientCharacterDeleteBroadcastReceived);
-			}
+			Client.NetworkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
+			Client.NetworkManager.ClientManager.UnregisterBroadcast<CharacterListBroadcast>(OnClientCharacterListBroadcastReceived);
+			Client.NetworkManager.ClientManager.UnregisterBroadcast<CharacterCreateBroadcast>(OnClientCharacterCreateBroadcastReceived);
+			Client.NetworkManager.ClientManager.UnregisterBroadcast<CharacterDeleteBroadcast>(OnClientCharacterDeleteBroadcastReceived);
 
-			if (loginAuthenticator != null)
+			if (Client.LoginAuthenticator != null)
 			{
-				loginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
+				Client.LoginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
 			}
 
 			DestroyCharacterList();
@@ -181,14 +162,14 @@ namespace FishMMO.Client
 
 		public void OnClick_SelectCharacter()
 		{	
-			if (Client.Instance.IsConnectionReady() &&
+			if (Client.IsConnectionReady() &&
 				selectedCharacter != null &&
 				selectedCharacter.details != null)
 			{
 				visible = false;
 
 				// tell the login server about our character selection
-				networkManager.ClientManager.Broadcast(new CharacterSelectBroadcast()
+				Client.NetworkManager.ClientManager.Broadcast(new CharacterSelectBroadcast()
 				{
 					characterName = selectedCharacter.details.characterName,
 				});
@@ -198,7 +179,7 @@ namespace FishMMO.Client
 
 		public void OnClick_DeleteCharacter()
 		{
-			if (Client.Instance.IsConnectionReady() &&
+			if (Client.IsConnectionReady() &&
 				selectedCharacter != null &&
 				selectedCharacter.details != null)
 			{
@@ -209,7 +190,7 @@ namespace FishMMO.Client
 					tooltip.Open("Are you sure you would like to delete this character?", () =>
 					{
 						// delete character
-						networkManager.ClientManager.Broadcast(new CharacterDeleteBroadcast()
+						Client.NetworkManager.ClientManager.Broadcast(new CharacterDeleteBroadcast()
 						{
 							characterName = selectedCharacter.details.characterName,
 						});

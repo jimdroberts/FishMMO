@@ -12,17 +12,8 @@ namespace FishMMO.Client
 		public TMP_Text partyMemberPrefab;
 		public List<TMP_Text> members;
 
-		private NetworkManager networkManager;
-
 		public override void OnStarting()
 		{
-			networkManager = FindObjectOfType<NetworkManager>();
-			if (networkManager == null)
-			{
-				Debug.LogError("UICharacterSelect: NetworkManager not found, HUD will not function.");
-				return;
-			}
-
 			Character character = Character.localCharacter;
 			if (character != null)
 			{
@@ -90,32 +81,32 @@ namespace FishMMO.Client
 		public void OnButtonCreateParty()
 		{
 			Character character = Character.localCharacter;
-			if (character != null && character.PartyController.current == null && networkManager.IsClient)
+			if (character != null && character.PartyController.current == null && Client.NetworkManager.IsClient)
 			{
-				networkManager.ClientManager.Broadcast(new PartyCreateBroadcast());
+				Client.NetworkManager.ClientManager.Broadcast(new PartyCreateBroadcast());
 			}
 		}
 
 		public void OnButtonLeaveParty()
 		{
 			Character character = Character.localCharacter;
-			if (character != null && character.PartyController.current != null && networkManager.IsClient)
+			if (character != null && character.PartyController.current != null && Client.NetworkManager.IsClient)
 			{
-				networkManager.ClientManager.Broadcast(new PartyLeaveBroadcast());
+				Client.NetworkManager.ClientManager.Broadcast(new PartyLeaveBroadcast());
 			}
 		}
 
 		public void OnButtonInviteToParty()
 		{
 			Character character = Character.localCharacter;
-			if (character != null && character.PartyController.current != null && networkManager.IsClient)
+			if (character != null && character.PartyController.current != null && Client.NetworkManager.IsClient)
 			{
 				if (character.TargetController.current.target != null)
 				{
 					Character targetCharacter = character.TargetController.current.target.GetComponent<Character>();
 					if (targetCharacter != null)
 					{
-						networkManager.ClientManager.Broadcast(new PartyInviteBroadcast()
+						Client.NetworkManager.ClientManager.Broadcast(new PartyInviteBroadcast()
 						{
 							targetCharacterId = targetCharacter.id
 						});

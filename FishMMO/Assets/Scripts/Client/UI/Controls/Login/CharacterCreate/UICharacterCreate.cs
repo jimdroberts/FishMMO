@@ -2,7 +2,9 @@ using FishNet.Managing;
 using FishNet.Transporting;
 using System.Collections.Generic;
 using TMPro;
+#if UNITY_EDITOR
 using UnityEditor;
+#endif
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -15,8 +17,6 @@ namespace FishMMO.Client
 		public TMP_Dropdown startLocationDropdown;
 		public RectTransform characterParent;
 
-		private NetworkManager networkManager;
-
 		public string characterName = "";
 		public string raceName = "";
 		public List<string> initialSpawnLocationNames = new List<string>();
@@ -25,13 +25,6 @@ namespace FishMMO.Client
 
 		public override void OnStarting()
 		{
-			networkManager = FindObjectOfType<NetworkManager>();
-			if (networkManager == null)
-			{
-				Debug.LogError("UICharacterSelect: NetworkManager not found, HUD will not function.");
-				return;
-			}
-
 			initialSpawnLocationNames.Clear();
 			if (startLocationDropdown != null &&
 				initialSpawnLocationNames != null &&
@@ -50,18 +43,15 @@ namespace FishMMO.Client
 				selectedSpawnPosition = startLocationDropdown.value;
 			}
 
-			networkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
-			networkManager.ClientManager.RegisterBroadcast<CharacterCreateResultBroadcast>(OnClientCharacterCreateResultBroadcastReceived);
+			Client.NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
+			Client.NetworkManager.ClientManager.RegisterBroadcast<CharacterCreateResultBroadcast>(OnClientCharacterCreateResultBroadcastReceived);
 		}
 
 
 		public override void OnDestroying()
 		{
-			if (networkManager != null)
-			{
-				networkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
-				networkManager.ClientManager.UnregisterBroadcast<CharacterCreateResultBroadcast>(OnClientCharacterCreateResultBroadcastReceived);
-			}
+			Client.NetworkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
+			Client.NetworkManager.ClientManager.UnregisterBroadcast<CharacterCreateResultBroadcast>(OnClientCharacterCreateResultBroadcastReceived);
 		}
 
 		private void ClientManager_OnClientConnectionState(ClientConnectionStateArgs obj)
@@ -98,7 +88,7 @@ namespace FishMMO.Client
 
 		public void OnClick_CreateCharacter()
 		{
-			if (Client.Instance.IsConnectionReady() &&
+			if (Client.IsConnectionReady() &&
 				!string.IsNullOrWhiteSpace(characterName) &&
 				worldSceneDetailsCache != null &&
 				selectedSpawnPosition >= 0)
@@ -108,7 +98,7 @@ namespace FishMMO.Client
 					if (details.initialSpawnPositions.TryGetValue(initialSpawnLocationNames[selectedSpawnPosition], out CharacterInitialSpawnPosition spawnPosition))
 					{
 						// create character
-						networkManager.ClientManager.Broadcast(new CharacterCreateBroadcast()
+						Client.NetworkManager.ClientManager.Broadcast(new CharacterCreateBroadcast()
 						{
 							characterName = characterName,
 							raceName = raceName,

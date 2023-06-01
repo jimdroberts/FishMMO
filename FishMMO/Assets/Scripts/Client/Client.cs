@@ -6,8 +6,10 @@ using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using FishNet.Connection;
 using System;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 namespace FishMMO.Client
 {
@@ -16,26 +18,6 @@ namespace FishMMO.Client
 	/// </summary>
 	public class Client : MonoBehaviour
 	{
-		private static Client instance;
-		public static Client Instance
-		{
-			get
-			{
-				if (instance == null)
-				{
-					instance = FindObjectOfType<Client>();
-					if (instance == null)
-					{
-						GameObject go = new GameObject("ClientBootstrap");
-						instance = go.AddComponent<Client>();
-					}
-				}
-				return instance;
-			}
-		}
-
-		private NetworkManager networkManager;
-		private ClientLoginAuthenticator loginAuthenticator;
 		private LocalConnectionState clientState = LocalConnectionState.Stopped;
 
 		public List<ServerAddress> loginServerAddresses;
@@ -55,31 +37,47 @@ namespace FishMMO.Client
 		private float timeTillFirstReconnectAttempt = 0;
 		private bool reconnectActive = false;
 
+		public NetworkManager NetworkManager { get; private set; }
+		public ClientLoginAuthenticator LoginAuthenticator { get; private set; }
+
 		void Awake()
 		{
-			networkManager = FindObjectOfType<NetworkManager>();
-			loginAuthenticator = FindObjectOfType<ClientLoginAuthenticator>();
-			if (networkManager == null)
+			NetworkManager = FindObjectOfType<NetworkManager>();
+			LoginAuthenticator = FindObjectOfType<ClientLoginAuthenticator>();
+			if (NetworkManager == null)
 			{
 				Debug.LogError("Client: NetworkManager not found.");
-				return;
+
+#if UNITY_EDITOR
+				EditorApplication.ExitPlaymode();
+#else
+				Application.Quit();
+#endif
 			}
-			else if (loginAuthenticator == null)
+			else if (LoginAuthenticator == null)
 			{
 				Debug.LogError("Client: LoginAuthenticator not found.");
-				return;
+
+#if UNITY_EDITOR
+				EditorApplication.ExitPlaymode();
+#else
+				Application.Quit();
+#endif
 			}
 			else
 			{
-				networkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
-				networkManager.SceneManager.OnLoadStart += SceneManager_OnLoadStart;
-				networkManager.SceneManager.OnLoadPercentChange += SceneManager_OnLoadPercentChange;
-				networkManager.SceneManager.OnLoadEnd += SceneManager_OnLoadEnd;
-				networkManager.SceneManager.OnUnloadStart += SceneManager_OnUnloadStart;
-				networkManager.SceneManager.OnUnloadEnd += SceneManager_OnUnloadEnd;
-				loginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
+				// do dependency injection here if needed
+				UIManager.SetClient(this);
 
-				networkManager.ClientManager.RegisterBroadcast<SceneWorldReconnectBroadcast>(OnClientSceneWorldReconnectBroadcastReceived);
+				NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
+				NetworkManager.SceneManager.OnLoadStart += SceneManager_OnLoadStart;
+				NetworkManager.SceneManager.OnLoadPercentChange += SceneManager_OnLoadPercentChange;
+				NetworkManager.SceneManager.OnLoadEnd += SceneManager_OnLoadEnd;
+				NetworkManager.SceneManager.OnUnloadStart += SceneManager_OnUnloadStart;
+				NetworkManager.SceneManager.OnUnloadEnd += SceneManager_OnUnloadEnd;
+				LoginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
+
+				NetworkManager.ClientManager.RegisterBroadcast<SceneWorldReconnectBroadcast>(OnClientSceneWorldReconnectBroadcastReceived);
 			}
 		}
 
@@ -133,16 +131,16 @@ namespace FishMMO.Client
 		/// </summary>
 		public bool IsConnectionReady(LocalConnectionState clientState, bool requireAuthentication)
 		{
-			if (loginAuthenticator == null ||
-				networkManager == null ||
+			if (LoginAuthenticator == null ||
+				NetworkManager == null ||
 				this.clientState != clientState)
 			{
 				return false;
 			}
 
 			if (requireAuthentication &&
-				(!networkManager.ClientManager.Connection.IsValid ||
-				!networkManager.ClientManager.Connection.Authenticated))
+				(!NetworkManager.ClientManager.Connection.IsValid ||
+				!NetworkManager.ClientManager.Connection.Authenticated))
 			{
 				return false;
 			}
@@ -237,7 +235,7 @@ namespace FishMMO.Client
 		public void ConnectToServer(string address, ushort port)
 		{
 			// stop current connection if any
-			networkManager.ClientManager.StopConnection();
+			NetworkManager.ClientManager.StopConnection();
 
 			// connect to the server
 			StartCoroutine(OnAwaitingConnectionReady(address, port));
@@ -279,7 +277,7 @@ namespace FishMMO.Client
 			lastPort = port;
 
 			// connect to the next server
-			networkManager.ClientManager.StartConnection(address, port);
+			NetworkManager.ClientManager.StartConnection(address, port);
 
 			yield return null;
 		}
@@ -295,7 +293,7 @@ namespace FishMMO.Client
 			forceDisconnect = true;
 
 			// stop current connection if any
-			networkManager.ClientManager.StopConnection();
+			NetworkManager.ClientManager.StopConnection();
 		}
 
 		public bool TryGetRandomLoginServerAddress(out ServerAddress serverAddress)

@@ -9,6 +9,15 @@ namespace FishMMO.Client
 	public static class UIManager
 	{
 		private static Dictionary<string, UIControl> controls = new Dictionary<string, UIControl>();
+		private static Client _client;
+
+		/// <summary>
+		/// Dependency injection for the Client.
+		/// </summary>
+		internal static void SetClient(Client client)
+		{
+			_client = client;
+		}
 
 		internal static void Register(UIControl control)
 		{
@@ -20,7 +29,10 @@ namespace FishMMO.Client
 			{
 				return;
 			}
-			//Debug.Log("UIManager: Registered " + control.Name);
+
+			control.SetClient(_client);
+
+			UnityEngine.Debug.Log("UIManager: Registered " + control.Name);
 			controls.Add(control.Name, control);
 		}
 

@@ -1,4 +1,3 @@
-using FishNet.Managing;
 using FishNet.Managing.Scened;
 using UnityEngine;
 using UnityEngine.UI;
@@ -7,8 +6,6 @@ namespace FishMMO.Client
 {
 	public class UILoadingScreen : UIControl
 	{
-		private NetworkManager networkManager;
-
 		[Header("Loading Screen Parameters")]
 		public Slider LoadingProgress;
 		public Image LoadingImage;
@@ -17,21 +14,20 @@ namespace FishMMO.Client
 
 		public override void OnStarting()
 		{
-			networkManager = FindObjectOfType<NetworkManager>();
-			networkManager.SceneManager.OnLoadStart += OnSceneStartLoad;
-			networkManager.SceneManager.OnLoadPercentChange += OnSceneProgressUpdate;
-			networkManager.SceneManager.OnLoadEnd += OnSceneEndLoad;
+			Client.NetworkManager.SceneManager.OnLoadStart += OnSceneStartLoad;
+			Client.NetworkManager.SceneManager.OnLoadPercentChange += OnSceneProgressUpdate;
+			Client.NetworkManager.SceneManager.OnLoadEnd += OnSceneEndLoad;
 
-			networkManager.ClientManager.RegisterBroadcast<SceneWorldReconnectBroadcast>(OnServerChange);
+			Client.NetworkManager.ClientManager.RegisterBroadcast<SceneWorldReconnectBroadcast>(OnServerChange);
 		}
 
 		public override void OnDestroying()
 		{
-			networkManager.SceneManager.OnLoadStart -= OnSceneStartLoad;
-			networkManager.SceneManager.OnLoadPercentChange -= OnSceneProgressUpdate;
-			networkManager.SceneManager.OnLoadEnd -= OnSceneEndLoad;
+			Client.NetworkManager.SceneManager.OnLoadStart -= OnSceneStartLoad;
+			Client.NetworkManager.SceneManager.OnLoadPercentChange -= OnSceneProgressUpdate;
+			Client.NetworkManager.SceneManager.OnLoadEnd -= OnSceneEndLoad;
 
-			networkManager.ClientManager.UnregisterBroadcast<SceneWorldReconnectBroadcast>(OnServerChange);
+			Client.NetworkManager.ClientManager.UnregisterBroadcast<SceneWorldReconnectBroadcast>(OnServerChange);
 		}
 
 		private void ShowLoadingScreen()

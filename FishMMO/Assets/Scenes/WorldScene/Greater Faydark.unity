@@ -138,6 +138,7 @@ GameObject:
   - component: {fileID: 14910057}
   - component: {fileID: 14910056}
   - component: {fileID: 14910055}
+  - component: {fileID: 14910062}
   m_Layer: 0
   m_Name: Merchant
   m_TagString: Untagged
@@ -294,6 +295,22 @@ Transform:
   m_Father: {fileID: 0}
   m_RootOrder: 3
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &14910062
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 14910054}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c71fd7f855ec523429999fc4e14a1928, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _overrideType: 2
+  _updateHostVisibility: 1
+  _observerConditions:
+  - {fileID: 11400000, guid: 2033f54fd2794464bae08fa5a55c8996, type: 2}
 --- !u!1 &187680798
 GameObject:
   m_ObjectHideFlags: 0
@@ -628,6 +645,7 @@ GameObject:
   - component: {fileID: 598504142}
   - component: {fileID: 598504143}
   - component: {fileID: 598504144}
+  - component: {fileID: 598504145}
   m_Layer: 0
   m_Name: GreaterFaydarkEast
   m_TagString: Teleporter
@@ -716,6 +734,22 @@ MonoBehaviour:
   - {fileID: 14910055}
   - {fileID: 598504144}
   - {fileID: 700411446}
+--- !u!114 &598504145
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 598504140}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c71fd7f855ec523429999fc4e14a1928, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _overrideType: 2
+  _updateHostVisibility: 1
+  _observerConditions:
+  - {fileID: 11400000, guid: 2033f54fd2794464bae08fa5a55c8996, type: 2}
 --- !u!1 &692402323
 GameObject:
   m_ObjectHideFlags: 0
@@ -766,6 +800,7 @@ GameObject:
   m_Component:
   - component: {fileID: 700411445}
   - component: {fileID: 700411446}
+  - component: {fileID: 700411447}
   m_Layer: 0
   m_Name: Teleporters
   m_TagString: Untagged
@@ -826,6 +861,22 @@ MonoBehaviour:
   - {fileID: 14910055}
   - {fileID: 598504144}
   - {fileID: 700411446}
+--- !u!114 &700411447
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 700411444}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c71fd7f855ec523429999fc4e14a1928, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _overrideType: 2
+  _updateHostVisibility: 1
+  _observerConditions:
+  - {fileID: 11400000, guid: 2033f54fd2794464bae08fa5a55c8996, type: 2}
 --- !u!1 &726647510
 GameObject:
   m_ObjectHideFlags: 0

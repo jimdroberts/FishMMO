@@ -88,13 +88,13 @@ namespace KinematicCharacterController.Examples
 		// Current frame input state
 		private Vector3 _moveInputVector;
 		private Vector3 _lookInputVector;
-		//Quang: add camera roation field for smooth rotate
+		// Quang: add camera rotation field for smooth rotate
 		private Quaternion _cameraRotation;
 		private bool _crouchInputDown = false;
 		private bool _jumpRequested = false;
 		private bool _sprintInputDown = false;
 
-		// Multi Frame State, this needs to be syncronized
+		// Multi Frame State, this needs to be synchronized
 		private float _timeSinceJumpRequested = float.MaxValue;
 		private float _timeSinceLastAbleToJump = 0f;
 		private bool _isCrouching = false;

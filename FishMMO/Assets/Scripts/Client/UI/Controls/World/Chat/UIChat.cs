@@ -42,17 +42,8 @@ namespace FishMMO.Client
 		public delegate void ChatCommand(Character sender, ChatBroadcast msg);
 		public Dictionary<string, ChatCommand> commandEvents = new Dictionary<string, ChatCommand>();
 
-		private NetworkManager networkManager;
-
 		public override void OnStarting()
 		{
-			networkManager = FindObjectOfType<NetworkManager>();
-			if (networkManager == null)
-			{
-				Debug.LogError("UIChat: NetworkManager not found, UI will not function.");
-				return;
-			}
-
 			if (initialTabs != null && initialTabs.Count > 0)
 			{
 				// activate the first tab
@@ -67,10 +58,7 @@ namespace FishMMO.Client
 				}
 			}
 
-			if (networkManager.ClientManager != null)
-			{
-				networkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
-			}
+			Client.NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
 		}
 
 		public override void OnDestroying()
@@ -86,21 +74,18 @@ namespace FishMMO.Client
 				}
 			}
 
-			if (networkManager.ClientManager != null)
-			{
-				networkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
-			}
+			Client.NetworkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
 		}
 
 		public void ClientManager_OnClientConnectionState(ClientConnectionStateArgs args)
 		{
 			if (args.ConnectionState == LocalConnectionState.Started)
 			{
-				networkManager.ClientManager.RegisterBroadcast<ChatBroadcast>(OnClientChatMessageReceived);
+				Client.NetworkManager.ClientManager.RegisterBroadcast<ChatBroadcast>(OnClientChatMessageReceived);
 			}
 			else if (args.ConnectionState == LocalConnectionState.Stopped)
 			{
-				networkManager.ClientManager.UnregisterBroadcast<ChatBroadcast>(OnClientChatMessageReceived);
+				Client.NetworkManager.ClientManager.UnregisterBroadcast<ChatBroadcast>(OnClientChatMessageReceived);
 			}
 		}
 
@@ -135,7 +120,7 @@ namespace FishMMO.Client
 			{
 				return;
 			}
-			if (networkManager.IsClient)
+			if (Client.NetworkManager.IsClient)
 			{
 				if (input.Length > MAX_LENGTH)
 				{
@@ -161,7 +146,7 @@ namespace FishMMO.Client
 						character.lastChatMessage = input;
 					}
 				}
-				networkManager.ClientManager.Broadcast(new ChatBroadcast() { text = input });
+				Client.NetworkManager.ClientManager.Broadcast(new ChatBroadcast() { text = input });
 			}
 			inputField.text = "";
 		}

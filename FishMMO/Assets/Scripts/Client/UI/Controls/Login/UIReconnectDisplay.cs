@@ -1,5 +1,4 @@
 using FishMMO.Client;
-using System;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -13,16 +12,16 @@ public class UIReconnectDisplay : UIControl
 
 	public override void OnStarting()
 	{
-		Client.Instance.OnReconnectAttempt += OnReconnectAttemptsChanged;
-		Client.Instance.OnConnectionSuccessful += OnCloseScreen;
-		Client.Instance.OnReconnectFailed += OnCloseScreen;
+		Client.OnReconnectAttempt += OnReconnectAttemptsChanged;
+		Client.OnConnectionSuccessful += OnCloseScreen;
+		Client.OnReconnectFailed += OnCloseScreen;
 	}
 
 	public override void OnDestroying()
 	{
-		Client.Instance.OnReconnectAttempt -= OnReconnectAttemptsChanged;
-		Client.Instance.OnConnectionSuccessful -= OnCloseScreen;
-		Client.Instance.OnReconnectFailed -= OnCloseScreen;
+		Client.OnReconnectAttempt -= OnReconnectAttemptsChanged;
+		Client.OnConnectionSuccessful -= OnCloseScreen;
+		Client.OnReconnectFailed -= OnCloseScreen;
 	}
 
 	public void OnReconnectAttemptsChanged(byte attempts, byte maxAttempts)
@@ -33,7 +32,7 @@ public class UIReconnectDisplay : UIControl
 
 	public void OnCancelClicked()
 	{
-		Client.Instance.ReconnectCancel();
+		Client.ReconnectCancel();
 		visible = false;
 	}
 

@@ -24,13 +24,12 @@ namespace FishMMO.Client
 		private Vector2 dragOffset = Vector2.zero;
 		private bool isDragging;
 
+		public Client Client { get; private set; }
 		public string Name { get { return gameObject.name; } set { gameObject.name = value; } }
 		public bool visible { get { return gameObject.activeSelf; } set { gameObject.SetActive(value); } }
 
 		private void Awake()
 		{
-			UIManager.Register(this);
-
 			startPosition = transform.position;
 
 			/*if (mainPanel != null)
@@ -47,9 +46,19 @@ namespace FishMMO.Client
 
 		private void Start()
 		{
+			UIManager.Register(this);
+
 			OnStarting();
 
 			if (!startOpen) visible = false;
+		}
+
+		/// <summary>
+		/// Dependency injection for the Client.
+		/// </summary>
+		public void SetClient(Client client)
+		{
+			Client = client;
 		}
 
 		/// <summary>

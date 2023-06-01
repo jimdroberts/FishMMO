@@ -1,7 +1,8 @@
-﻿using FishNet;
-using FishNet.Managing;
+﻿using FishNet.Managing;
 using System.Collections.Generic;
+#if UNITY_EDITOR
 using UnityEditor;
+#endif
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -14,9 +15,6 @@ namespace FishMMO.Client
 		public RectTransform serverParent;
 		public ServerDetailsButton serverButtonPrefab;
 
-		private NetworkManager networkManager;
-		private ClientLoginAuthenticator loginAuthenticator;
-
 		private List<ServerDetailsButton> serverList = new List<ServerDetailsButton>();
 		private ServerDetailsButton selectedServer;
 
@@ -27,40 +25,19 @@ namespace FishMMO.Client
 		{
 			nextRefresh = refreshRate;
 
-			networkManager = FindObjectOfType<NetworkManager>();
-			loginAuthenticator = FindObjectOfType<ClientLoginAuthenticator>();
-			if (networkManager == null)
-			{
-				Debug.LogError("UIServerSelect: NetworkManager not found, HUD will not function.");
-				return;
-			}
-			else if (loginAuthenticator == null)
-			{
-				Debug.LogError("UIServerSelect: LoginAuthenticator not found, HUD will not function.");
-				return;
-			}
-			else
-			{
-				networkManager.ClientManager.RegisterBroadcast<ServerListBroadcast>(OnClientServerListBroadcastReceived);
-				networkManager.ClientManager.RegisterBroadcast<WorldSceneConnectBroadcast>(OnClientWorldSceneConnectBroadcastReceived);
+			Client.NetworkManager.ClientManager.RegisterBroadcast<ServerListBroadcast>(OnClientServerListBroadcastReceived);
+			Client.NetworkManager.ClientManager.RegisterBroadcast<WorldSceneConnectBroadcast>(OnClientWorldSceneConnectBroadcastReceived);
 
-				loginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
-			}
+			Client.LoginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
 		}
 
 
 		public override void OnDestroying()
 		{
-			if (networkManager != null)
-			{
-				networkManager.ClientManager.UnregisterBroadcast<ServerListBroadcast>(OnClientServerListBroadcastReceived);
-				networkManager.ClientManager.UnregisterBroadcast<WorldSceneConnectBroadcast>(OnClientWorldSceneConnectBroadcastReceived);
-			}
+			Client.NetworkManager.ClientManager.UnregisterBroadcast<ServerListBroadcast>(OnClientServerListBroadcastReceived);
+			Client.NetworkManager.ClientManager.UnregisterBroadcast<WorldSceneConnectBroadcast>(OnClientWorldSceneConnectBroadcastReceived);
 
-			if (loginAuthenticator != null)
-			{
-				loginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
-			}
+			Client.LoginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
 
 			DestroyServerList();
 		}
@@ -130,11 +107,11 @@ namespace FishMMO.Client
 
 		private void OnClientWorldSceneConnectBroadcastReceived(WorldSceneConnectBroadcast msg)
 		{
-			if (Client.Instance.IsConnectionReady() &&
+			if (Client.IsConnectionReady() &&
 				selectedServer != null)
 			{
 				// connect to the scene server
-				Client.Instance.ConnectToServer(msg.address, msg.port);
+				Client.ConnectToServer(msg.address, msg.port);
 
 				SetConnectToServerLocked(true);
 			}
@@ -157,11 +134,11 @@ namespace FishMMO.Client
 
 		public void OnClick_ConnectToServer()
 		{
-			if (Client.Instance.IsConnectionReady() &&
+			if (Client.IsConnectionReady() &&
 				selectedServer != null)
 			{
 				// connect to the world server
-				Client.Instance.ConnectToServer(selectedServer.details.address, selectedServer.details.port);
+				Client.ConnectToServer(selectedServer.details.address, selectedServer.details.port);
 
 				SetConnectToServerLocked(true);
 			}
@@ -176,7 +153,7 @@ namespace FishMMO.Client
 
 				// request an updated server list
 				RequestServerListBroadcast requestServerList = new RequestServerListBroadcast();
-				networkManager.ClientManager.Broadcast(requestServerList);
+				Client.NetworkManager.ClientManager.Broadcast(requestServerList);
 			}
 		}
 

@@ -1,17 +1,15 @@
 ﻿using FishNet.Managing;
 using FishNet.Transporting;
 using TMPro;
+#if UNITY_EDITOR
 using UnityEditor;
-using UnityEngine;
+#endif
 using UnityEngine.UI;
 
 namespace FishMMO.Client
 {
 	public class UILogin : UIControl
 	{
-		private NetworkManager networkManager;
-		private ClientLoginAuthenticator loginAuthenticator;
-
 		public TMP_InputField username;
 		public TMP_InputField password;
 		public Button signInButton;
@@ -19,41 +17,19 @@ namespace FishMMO.Client
 
 		public override void OnStarting()
 		{
-			networkManager = FindObjectOfType<NetworkManager>();
-			loginAuthenticator = FindObjectOfType<ClientLoginAuthenticator>();
-			
-			if (networkManager == null)
-			{
-				Debug.LogError("UILogin: NetworkManager not found, HUD will not function.");
-				return;
-			}
-			else if (loginAuthenticator == null)
-			{
-				Debug.LogError("UILogin: LoginAuthenticator not found, HUD will not function.");
-				return;
-			}
-			else
-			{
-				networkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
-				loginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
-				Client.Instance.OnReconnectFailed += ClientManager_OnReconnectFailed;
-			}
+			Client.NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
+			Client.LoginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
+			Client.OnReconnectFailed += ClientManager_OnReconnectFailed;
 		}
 
 
 		public override void OnDestroying()
 		{
-			if (networkManager != null)
-			{
-				networkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
-			}
+			Client.NetworkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
 
-			if (loginAuthenticator != null)
-			{
-				loginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
-			}
+			Client.LoginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
 
-			Client.Instance.OnReconnectFailed -= ClientManager_OnReconnectFailed;
+			Client.OnReconnectFailed -= ClientManager_OnReconnectFailed;
 		}
 
 		private void ClientManager_OnClientConnectionState(ClientConnectionStateArgs obj)
@@ -74,18 +50,18 @@ namespace FishMMO.Client
 				case ClientAuthenticationResult.InvalidUsernameOrPassword:
 					// update the handshake message
 					handshakeMSG.text = "Invalid Username or Password.";
-					Client.Instance.ForceDisconnect();
+					Client.ForceDisconnect();
 					SetSignInLocked(false);
 					break;
 				case ClientAuthenticationResult.AlreadyOnline:
 					handshakeMSG.text = "Account is already online.";
-					Client.Instance.ForceDisconnect();
+					Client.ForceDisconnect();
 					SetSignInLocked(false);
 					break;
 				case ClientAuthenticationResult.Banned:
 					// update the handshake message
 					handshakeMSG.text = "Account is banned. Please contact the system administrator.";
-					Client.Instance.ForceDisconnect();
+					Client.ForceDisconnect();
 					SetSignInLocked(false);
 					break;
 				case ClientAuthenticationResult.LoginSuccess:
@@ -95,7 +71,7 @@ namespace FishMMO.Client
 
 					// request the character list
 					CharacterRequestListBroadcast requestCharacterList = new CharacterRequestListBroadcast();
-					networkManager.ClientManager.Broadcast(requestCharacterList);
+					Client.NetworkManager.ClientManager.Broadcast(requestCharacterList);
 					break;
 				case ClientAuthenticationResult.WorldLoginSuccess:
 					break;
@@ -107,18 +83,18 @@ namespace FishMMO.Client
 
 		public void OnClick_Login()
 		{
-			if (Client.Instance.IsConnectionReady(LocalConnectionState.Stopped) &&
-				loginAuthenticator.IsAllowedUsername(username.text) &&
-				loginAuthenticator.IsAllowedPassword(password.text))
+			if (Client.IsConnectionReady(LocalConnectionState.Stopped) &&
+				Client.LoginAuthenticator.IsAllowedUsername(username.text) &&
+				Client.LoginAuthenticator.IsAllowedPassword(password.text))
 			{
 				// set username and password in the authenticator
-				loginAuthenticator.SetLoginCredentials(username.text, password.text);
+				Client.LoginAuthenticator.SetLoginCredentials(username.text, password.text);
 
 				handshakeMSG.text = "";
 
-				if (Client.Instance.TryGetRandomLoginServerAddress(out ServerAddress serverAddress))
+				if (Client.TryGetRandomLoginServerAddress(out ServerAddress serverAddress))
 				{
-					Client.Instance.ConnectToServer(serverAddress.address, serverAddress.port);
+					Client.ConnectToServer(serverAddress.address, serverAddress.port);
 
 					SetSignInLocked(true);
 				}
