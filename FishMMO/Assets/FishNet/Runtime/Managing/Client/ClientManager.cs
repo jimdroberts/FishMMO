@@ -5,6 +5,7 @@ using FishNet.Managing.Server;
 using FishNet.Managing.Transporting;
 using FishNet.Serializing;
 using FishNet.Transporting;
+using FishNet.Transporting.Multipass;
 using FishNet.Utility.Extension;
 using FishNet.Utility.Performance;
 using System;
@@ -127,7 +128,7 @@ namespace FishNet.Managing.Client
 
             if (args.Connected)
             {
-                Clients[args.Id] = new NetworkConnection(NetworkManager, args.Id, false);
+                Clients[args.Id] = new NetworkConnection(NetworkManager, args.Id, -1, false);
                 OnRemoteConnectionState?.Invoke(rcs);
             }
             else
@@ -158,7 +159,7 @@ namespace FishNet.Managing.Client
             for (int i = 0; i < count; i++)
             {
                 int id = collection[i];
-                Clients[id] = new NetworkConnection(NetworkManager, id, false);
+                Clients[id] = new NetworkConnection(NetworkManager, id, -1, false);
             }
 
             CollectionCaches<int>.Store(collection);
@@ -188,36 +189,49 @@ namespace FishNet.Managing.Client
         }
 
         /// <summary>
+        /// Gets the transport index being used for the local client.
+        /// If only one transport is used this will return 0. If Multipass is being used this will return the client's transport in multipass.
+        /// </summary>
+        /// <returns></returns>
+        public int GetTransportIndex()
+        {
+            if (NetworkManager.TransportManager.Transport is Multipass mp)
+                return mp.ClientTransport.Index;
+            else
+                return 0;
+        }
+
+        /// <summary>
         /// Stops the local client connection.
         /// </summary>
-        public void StopConnection()
+        public bool StopConnection()
         {
-            NetworkManager.TransportManager.Transport.StopConnection(false);
+            return NetworkManager.TransportManager.Transport.StopConnection(false);
         }
 
         /// <summary>
         /// Starts the local client connection.
         /// </summary>
-        public void StartConnection()
+        public bool StartConnection()
         {
-            NetworkManager.TransportManager.Transport.StartConnection(false);
+            return NetworkManager.TransportManager.Transport.StartConnection(false);
         }
 
         /// <summary>
         /// Sets the transport address and starts the local client connection.
         /// </summary>
-        public void StartConnection(string address)
+        public bool StartConnection(string address)
         {
-            StartConnection(address, NetworkManager.TransportManager.Transport.GetPort());
+            return StartConnection(address, NetworkManager.TransportManager.Transport.GetPort());
         }
         /// <summary>
         /// Sets the transport address and port, and starts the local client connection.
         /// </summary>
-        public void StartConnection(string address, ushort port)
+        public bool StartConnection(string address, ushort port)
         {
             NetworkManager.TransportManager.Transport.SetClientAddress(address);
             NetworkManager.TransportManager.Transport.SetPort(port);
-            StartConnection();
+            return StartConnection();
         }
 
         /// <summary>
@@ -285,10 +299,10 @@ namespace FishNet.Managing.Client
             if (segment.Count <= TransportManager.TICK_BYTES)
                 return;
 
-            PooledReader reader = ReaderPool.GetReader(segment, NetworkManager, Reader.DataSource.Server);
+            PooledReader reader = ReaderPool.Retrieve(segment, NetworkManager, Reader.DataSource.Server);
             NetworkManager.TimeManager.LastPacketTick = reader.ReadTickUnpacked();
             ParseReader(reader, args.Channel);
-            ReaderPool.Recycle(reader);
+            ReaderPool.Store(reader);
 
         }
 
@@ -419,7 +433,7 @@ namespace FishNet.Managing.Client
                     }
                     else if (packetId == PacketId.TimingUpdate)
                     {
-                        NetworkManager.TimeManager.ParseTimingUpdate();
+                        NetworkManager.TimeManager.ParseTimingUpdate(reader);
                     }
                     else if (packetId == PacketId.OwnershipChange)
                     {
@@ -498,9 +512,9 @@ namespace FishNet.Managing.Client
                 }
                 else
                 {
-					// This is intended behaviour for the SceneServer. Ignore the Error logging and just create the connection.
-					//networkManager.LogError($"Unable to lookup LocalConnection for {connectionId} as host.");
-                    Connection = new NetworkConnection(networkManager, connectionId, false);
+                    // Intended behaviour in FishMMO.
+                    //networkManager.LogError($"Unable to lookup LocalConnection for {connectionId} as host.");
+                    Connection = new NetworkConnection(networkManager, connectionId, GetTransportIndex(), false);
                 }
             }
 
@@ -531,7 +545,7 @@ namespace FishNet.Managing.Client
              * won't fire, and since client isn't authenticated
             * at the connection start phase objects won't be added. */
             Objects.RegisterAndDespawnSceneObjects();
-        }       
+        }
     }
 
 }

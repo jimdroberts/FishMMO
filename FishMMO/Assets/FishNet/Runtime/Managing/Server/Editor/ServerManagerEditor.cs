@@ -40,7 +40,7 @@ namespace FishNet.Managing.Server.Editing
             GUI.enabled = true;
 
 
-            //EditorGUILayout.PropertyField(_authenticator);
+            EditorGUILayout.PropertyField(_authenticator);
             EditorGUILayout.PropertyField(_syncTypeRate);
             EditorGUILayout.PropertyField(SpawnPacking);
             EditorGUILayout.PropertyField(_changeFrameRate);

@@ -98,28 +98,26 @@ namespace FishNet.Managing
             }
         }
 
-		public bool IsNode = false;
-
-		/// <summary>
-		/// True if server is active.
-		/// </summary>
-		public bool IsServer => ServerManager != null && ServerManager.Started;
-		/// <summary>
-		/// True if only the server is active.
-		/// </summary>
-		public bool IsServerOnly => (IsServer && !IsClient);
-		/// <summary>
-		/// True if the client is active and authenticated.
-		/// </summary>
-		public bool IsClient => (ClientManager != null && ClientManager.Started && ClientManager.Connection.Authenticated);
-		/// <summary>
-		/// True if only the client is active and authenticated.
-		/// </summary>
-		public bool IsClientOnly => (!IsServer && IsClient);
-		/// <summary>
+        /// <summary>
+        /// True if server is active.
+        /// </summary>
+        public bool IsServer => ServerManager.Started;
+        /// <summary>
+        /// True if only the server is active.
+        /// </summary>
+        public bool IsServerOnly => (IsServer && !IsClient);
+        /// <summary>
+        /// True if the client is active and authenticated.
+        /// </summary>
+        public bool IsClient => (ClientManager.Started && ClientManager.Connection.Authenticated);
+        /// <summary>
+        /// True if only the client is active and authenticated.
+        /// </summary>
+        public bool IsClientOnly => (!IsServer && IsClient);
+        /// <summary>
         /// True if client and server are active.
         /// </summary>
-        public bool IsHost => false;// (IsServer && IsClient); we never use hostmode
+        public bool IsHost => (IsServer && IsClient);
         /// <summary>
         /// True if client nor server are active.
         /// </summary>
@@ -128,15 +126,11 @@ namespace FishNet.Managing
         /// PredictionManager for this NetworkManager.
         /// </summary>
         internal PredictionManager PredictionManager { get; private set; }
-		/// <summary>
-		/// Gets the Authenticator for this manager.
-		/// </summary>
-		public Authenticator Authenticator { get; private set; }
-		/// <summary>
-		/// ServerManager for this NetworkManager.
-		/// </summary>
-		public ServerManager ServerManager { get; private set; }
-		/// <summary>
+        /// <summary>
+        /// ServerManager for this NetworkManager.
+        /// </summary>
+        public ServerManager ServerManager { get; private set; }
+        /// <summary>
         /// ClientManager for this NetworkManager.
         /// </summary>
         public ClientManager ClientManager { get; private set; }
@@ -157,7 +151,11 @@ namespace FishNet.Managing
         /// </summary>
         public ObserverManager ObserverManager { get; private set; }
         /// <summary>
-
+        /// Authenticator for this NetworkManager. May be null if no Authenticator is used.
+        /// </summary>
+        [Obsolete("Use ServerManager.GetAuthenticator or ServerManager.SetAuthenticator instead.")] //Remove on 2023/06/01
+        public Authenticator Authenticator => ServerManager.Authenticator;
+        /// <summary>
         /// DebugManager for this NetworkManager.
         /// </summary>
         public DebugManager DebugManager { get; private set; }
@@ -278,13 +276,11 @@ namespace FishNet.Managing
             SetRunInBackground();
             DebugManager = GetOrCreateComponent<DebugManager>();
             TransportManager = GetOrCreateComponent<TransportManager>();
-			Authenticator = GetComponent<Authenticator>();
-			ServerManager = GetComponent<ServerManager>();
-			//ServerManager = GetOrCreateComponent<ServerManager>();
-			ClientManager = GetComponent<ClientManager>();
-			//ClientManager = GetOrCreateComponent<ClientManager>();
-			TimeManager = GetOrCreateComponent<TimeManager>();
-			SceneManager = GetOrCreateComponent<SceneManager>();
+
+            ServerManager = GetOrCreateComponent<ServerManager>();
+            ClientManager = GetOrCreateComponent<ClientManager>();
+            TimeManager = GetOrCreateComponent<TimeManager>();
+            SceneManager = GetOrCreateComponent<SceneManager>();
             ObserverManager = GetOrCreateComponent<ObserverManager>();
             RollbackManager = GetOrCreateComponent<RollbackManager>();
             PredictionManager = GetOrCreateComponent<PredictionManager>();
@@ -292,18 +288,17 @@ namespace FishNet.Managing
             if (_objectPool == null)
                 _objectPool = GetOrCreateComponent<DefaultObjectPool>();
 
+            InitializeComponents();
+
             _instances.Add(this);
-			InitializeComponents();
-			
             Initialized = true;
         }
 
         private void Start()
         {
-			if (ServerManager != null)
-				ServerManager.StartForHeadless();
-		}
-		
+            ServerManager.StartForHeadless();
+        }
+
         private void OnDestroy()
         {
             _instances.Remove(this);
@@ -318,17 +313,12 @@ namespace FishNet.Managing
             TimeManager.OnLateUpdate += TimeManager_OnLateUpdate;
             SceneManager.InitializeOnce_Internal(this);
             TransportManager.InitializeOnce_Internal(this);
-			if (Authenticator != null)
-				Authenticator.InitializeOnce(this);
-			if (ServerManager != null)
-				ServerManager.InitializeOnce_Internal(this);
-			if (ClientManager != null)
-				ClientManager.InitializeOnce_Internal(this);
+            ClientManager.InitializeOnce_Internal(this);
+            ServerManager.InitializeOnce_Internal(this);
             ObserverManager.InitializeOnce_Internal(this);
-			if (RollbackManager != null)
-				RollbackManager.InitializeOnce_Internal(this);
-			PredictionManager.InitializeOnce_Internal(this);
-			StatisticsManager.InitializeOnce_Internal(this);
+            RollbackManager.InitializeOnce_Internal(this);
+            PredictionManager.InitializeOnce_Internal(this);
+            StatisticsManager.InitializeOnce_Internal(this);
             _objectPool.InitializeOnce(this);
         }
 
@@ -337,8 +327,8 @@ namespace FishNet.Managing
         /// </summary>
         internal void UpdateFramerate()
         {
-            bool clientStarted = ClientManager != null && ClientManager.Started;
-            bool serverStarted = ServerManager != null && ServerManager.Started;
+            bool clientStarted = ClientManager.Started;
+            bool serverStarted = ServerManager.Started;
 
             int frameRate = 0;
             //If both client and server are started then use whichever framerate is higher.
@@ -476,12 +466,45 @@ namespace FishNet.Managing
         /// Clears a client collection after disposing of the NetworkConnections.
         /// </summary>
         /// <param name="clients"></param>
-        internal void ClearClientsCollection(Dictionary<int, NetworkConnection> clients)
+        internal void ClearClientsCollection(Dictionary<int, NetworkConnection> clients, int transportIndex = -1)
         {
-            foreach (NetworkConnection conn in clients.Values)
-                conn.Dispose();
+            //True to dispose all connections.
+            bool disposeAll = (transportIndex < 0);
+            List<int> cache = CollectionCaches<int>.RetrieveList();
 
-            clients.Clear();
+
+            foreach (KeyValuePair<int, NetworkConnection> kvp in clients)
+            {
+                NetworkConnection value = kvp.Value;
+                //If to check transport index.
+                if (!disposeAll)
+                {
+                    if (value.TransportIndex == transportIndex)
+                    {
+                        cache.Add(kvp.Key);
+                        value.Dispose();
+                    }
+                }
+                //Not using transport index, no check required.
+                else
+                {
+                    value.Dispose();
+                }
+            }
+
+            //If all are being disposed the collection can be cleared.
+            if (disposeAll)
+            {
+                clients.Clear();
+            }
+            //Otherwise, only remove those which were disposed.
+            else
+            {
+                foreach (int item in cache)
+                    clients.Remove(item);
+            }
+
+            CollectionCaches<int>.Store(cache);
         }
 
         #region Object pool.

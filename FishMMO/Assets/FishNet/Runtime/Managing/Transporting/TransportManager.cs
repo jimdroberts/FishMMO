@@ -481,7 +481,7 @@ namespace FishNet.Managing.Transporting
             }
 
             byte channelId = (byte)Channel.Reliable;
-            PooledWriter headerWriter = WriterPool.GetWriter();
+            PooledWriter headerWriter = WriterPool.Retrieve();
             headerWriter.WritePacketId(PacketId.Split);
             headerWriter.WriteInt32(requiredMessages);
             ArraySegment<byte> headerSegment = headerWriter.GetArraySegment();
@@ -518,7 +518,7 @@ namespace FishNet.Managing.Transporting
                 writeIndex += chunkSize;
             }
 
-            headerWriter.Dispose();
+            headerWriter.Store();
         }
         #endregion
 
@@ -551,10 +551,9 @@ namespace FishNet.Managing.Transporting
             {
                 TimeManager tm = _networkManager.TimeManager;
                 uint localTick = tm.LocalTick;
-				//Write any dirty syncTypes.
-				if (_networkManager.ServerManager != null)
-					_networkManager.ServerManager.Objects.WriteDirtySyncTypes();
-					
+                //Write any dirty syncTypes.
+                _networkManager.ServerManager.Objects.WriteDirtySyncTypes();
+
                 int dirtyCount = _dirtyToClients.Count;
 
                 //Run through all dirty connections to send data to.

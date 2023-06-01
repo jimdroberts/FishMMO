@@ -13,41 +13,34 @@ namespace FishNet.Managing.Object
 {
     public abstract partial class ManagedObjects
     {
-		/// <summary>
-		/// Reads and outputs a transforms values.
-		/// </summary>
-		protected void ReadTransformProperties(Reader reader, out Vector3? localPosition, out Quaternion? localRotation, out Vector3? localScale)
-		{
-			//Read changed.
-			ChangedTransformProperties ctp = (ChangedTransformProperties)reader.ReadByte();
-			//Position.
-			if (ChangedTransformPropertiesEnum.Contains(ctp, ChangedTransformProperties.LocalPosition))
-				localPosition = reader.ReadVector3();
-			else
-				localPosition = null;
-			//Rotation.
-			if (ChangedTransformPropertiesEnum.Contains(ctp, ChangedTransformProperties.LocalRotation))
-			{
-				AutoPackType packType = AutoPackType.PackedLess;
-				if (NetworkManager.ServerManager != null)
-				{
-					packType = NetworkManager.ServerManager.SpawnPacking.Rotation;
-				}
-				localRotation = reader.ReadQuaternion(packType);
-			}
-			else
-				localRotation = null;
-			//Scale.
-			if (ChangedTransformPropertiesEnum.Contains(ctp, ChangedTransformProperties.LocalScale))
-				localScale = reader.ReadVector3();
-			else
-				localScale = null;
-		}
+        /// <summary>
+        /// Reads and outputs a transforms values.
+        /// </summary>
+        protected void ReadTransformProperties(Reader reader, out Vector3? localPosition, out Quaternion? localRotation, out Vector3? localScale)
+        {
+            //Read changed.
+            ChangedTransformProperties ctp = (ChangedTransformProperties)reader.ReadByte();
+            //Position.
+            if (ChangedTransformPropertiesEnum.Contains(ctp, ChangedTransformProperties.LocalPosition))
+                localPosition = reader.ReadVector3();
+            else
+                localPosition = null;
+            //Rotation.
+            if (ChangedTransformPropertiesEnum.Contains(ctp, ChangedTransformProperties.LocalRotation))
+                localRotation = reader.ReadQuaternion(NetworkManager.ServerManager.SpawnPacking.Rotation);
+            else
+                localRotation = null;
+            //Scale.
+            if (ChangedTransformPropertiesEnum.Contains(ctp, ChangedTransformProperties.LocalScale))
+                localScale = reader.ReadVector3();
+            else
+                localScale = null;
+        }
 
-		/// <summary>
-		/// Writes a spawn to clients.
-		/// </summary>
-		internal void WriteSpawn_Server(NetworkObject nob, NetworkConnection connection, Writer everyoneWriter, Writer ownerWriter)
+        /// <summary>
+        /// Writes a spawn to clients.
+        /// </summary>
+        internal void WriteSpawn_Server(NetworkObject nob, NetworkConnection connection, Writer everyoneWriter, Writer ownerWriter)
         {
             /* Using a number of writers to prevent rebuilding the
              * packets excessively for values that are owner only
@@ -65,7 +58,7 @@ namespace FishNet.Managing.Object
              * for every connection it's going to and filling a single
              * writer with values based on if owner or not. This would
              * result in significantly more iterations. */
-            PooledWriter headerWriter = WriterPool.GetWriter();
+            PooledWriter headerWriter = WriterPool.Retrieve();
             headerWriter.WritePacketId(PacketId.ObjectSpawn);
             headerWriter.WriteNetworkObjectForSpawn(nob);
             if (NetworkManager.ServerManager.ShareIds || connection == nob.Owner)
@@ -176,7 +169,7 @@ namespace FishNet.Managing.Object
 
             /* Used to write latest data which must be sent to
              * clients, such as SyncTypes and RpcLinks. */
-            PooledWriter tempWriter = WriterPool.GetWriter();
+            PooledWriter tempWriter = WriterPool.Retrieve();
             //Send RpcLinks first.
             foreach (NetworkBehaviour nb in nob.NetworkBehaviours)
                 nb.WriteRpcLinks(tempWriter);
@@ -203,8 +196,8 @@ namespace FishNet.Managing.Object
             }
 
             //Dispose of writers created in this method.
-            headerWriter.Dispose();
-            tempWriter.Dispose();
+            headerWriter.Store();
+            tempWriter.Store();
         }
 
         /// <summary>

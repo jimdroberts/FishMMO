@@ -1,9 +1,15 @@
-﻿using FishNet.Documenting;
+﻿using FishNet.Connection;
+using FishNet.Documenting;
+using FishNet.Managing.Timing;
+using FishNet.Managing.Transporting;
 using FishNet.Object;
+using FishNet.Serializing;
 using FishNet.Serializing.Helping;
 using FishNet.Transporting;
+using FishNet.Utility.Performance;
 using System;
 using System.Collections.Generic;
+using System.Text;
 using UnityEngine;
 using UnityScene = UnityEngine.SceneManagement.Scene;
 
@@ -77,7 +83,6 @@ namespace FishNet.Managing.Predicting
         /// Called after the server sends a reconcile.
         /// </summary>
         public event Action<NetworkBehaviour> OnPostServerReconcile;
-#endif
         /// <summary>
         /// Last tick any object reconciled.
         /// </summary>
@@ -90,6 +95,7 @@ namespace FishNet.Managing.Predicting
         /// True if rigidbodies are being predicted.
         /// </summary>
         internal bool UsingRigidbodies => (_rigidbodies.Count > 0);
+#endif
         /// <summary>
         /// Returns if any prediction is replaying.
         /// </summary>
@@ -116,6 +122,32 @@ namespace FishNet.Managing.Predicting
         #endregion
 
         #region Serialized.
+        /// <summary>
+        /// 
+        /// </summary>
+        [Tooltip("Number of inputs to keep in queue should the server miss receiving an input update from the client. " +
+            "Higher values will increase the likeliness of the server always having input from the client while lower values will allow the client input to run on the server faster. " +
+            "This value cannot be higher than MaximumServerReplicates.")]
+        [Range(1, 15)]
+        [SerializeField]
+        private ushort _queuedInputs = 1;
+        /// <summary>
+        /// Number of inputs to keep in queue should the server miss receiving an input update from the client.
+        /// Higher values will increase the likeliness of the server always having input from the client while lower values will allow the client input to run on the server faster.
+        /// This value cannot be higher than MaximumServerReplicates.
+        /// </summary>
+        public ushort QueuedInputs => _queuedInputs;
+        /// <summary>
+        /// 
+        /// </summary>
+        [Tooltip("How often to send reconcile states to clients.")]
+        [Range(0f, 2f)]
+        [SerializeField]
+        private float _reconcileInterval = 0.1f;
+        /// <summary>
+        /// How often in ticks to send reconcile states to clients.
+        /// </summary>
+        internal float ReconcileIntervalTickDivisor => _networkManager.TimeManager.TimeToTicks(_reconcileInterval, TickRounding.RoundUp);
         /// <summary>
         /// 
         /// </summary>
@@ -197,6 +229,7 @@ namespace FishNet.Managing.Predicting
         #endregion
 
         #region Private.
+#if !PREDICTION_V2
         /// <summary>
         /// Number of active predicted rigidbodies.
         /// </summary>
@@ -208,13 +241,14 @@ namespace FishNet.Managing.Predicting
         [System.NonSerialized]
         private HashSet<UnityEngine.Component> _componentCache = new HashSet<UnityEngine.Component>();
         /// <summary>
-        /// NetworkManager used with this.
-        /// </summary>
-        private NetworkManager _networkManager;
-        /// <summary>
         /// Scenes which are currently replaying prediction.
         /// </summary>
         private HashSet<UnityScene> _replayingScenes = new HashSet<UnityScene>(new SceneHandleEqualityComparer());
+#endif
+        /// <summary>
+        /// NetworkManager used with this.
+        /// </summary>
+        private NetworkManager _networkManager;
         #endregion
 
         #region Const.
@@ -251,8 +285,7 @@ namespace FishNet.Managing.Predicting
         internal void InitializeOnce_Internal(NetworkManager manager)
         {
             _networkManager = manager;
-            if (_networkManager.ClientManager != null)
-                _networkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
+            _networkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
         }
 
         /// <summary>
@@ -260,10 +293,11 @@ namespace FishNet.Managing.Predicting
         /// </summary>
         private void ClientManager_OnClientConnectionState(ClientConnectionStateArgs obj)
         {
+#if !PREDICTION_V2
             if (obj.ConnectionState != LocalConnectionState.Started)
                 _replayingScenes.Clear();
+#endif
             _isReplaying = false;
-
         }
 
 
@@ -281,6 +315,7 @@ namespace FishNet.Managing.Predicting
 #endif
         }
 
+#if !PREDICTION_V2
         /// <summary>
         /// Increases Rigidbodies count by 1.
         /// </summary>
@@ -323,7 +358,6 @@ namespace FishNet.Managing.Predicting
             }
         }
 
-#if !PREDICTION_V2
         /// <summary>
         /// Invokes OnPre/PostReconcile events.
         /// Internal use.
@@ -378,6 +412,7 @@ namespace FishNet.Managing.Predicting
         /// 4 Last packet tick from connection.
         /// </summary>
         internal const int STATE_HEADER_RESERVE_COUNT = 6;
+
         /// <summary>
         /// Sends written states for clients.
         /// </summary>
@@ -386,8 +421,7 @@ namespace FishNet.Managing.Predicting
             TransportManager tm = _networkManager.TransportManager;
             foreach (NetworkConnection nc in _networkManager.ServerManager.Clients.Values)
             {
-                PooledWriter writer = nc.PredictionStateWriter;
-                if (writer.Length > 0)
+                foreach (PooledWriter writer in nc.PredictionStateWriters)
                 {
                     /* Packet is sent as follows...
                      * PacketId.
@@ -402,13 +436,12 @@ namespace FishNet.Managing.Predicting
                      * off immediately upon receiving. */
                     int dataLength = (segment.Count - STATE_HEADER_RESERVE_COUNT);
                     //Write length.
-                    writer.WriteInt32(dataLength, AutoPackType.Unpacked);                    
-                    //string buffer = BitConverter.ToString(segment.Array, segment.Offset, segment.Count);
-                    //Debug.Log("DataLength " + dataLength + ". Out " + buffer);
+                    writer.WriteInt32(dataLength, AutoPackType.Unpacked);
 
                     tm.SendToClient((byte)Channel.Reliable, segment, nc, true);
-                    writer.Reset();
                 }
+
+                nc.StorePredictionStateWriters();
             }
         }
 
@@ -435,10 +468,10 @@ namespace FishNet.Managing.Predicting
             /* Keep a state in buffer. This helps ensure all packets have come through for the state
              * by waiting until another is received. */
             if (_recievedStates.Count < 2)
-                return;    
+                return;
 
             StatePacket state = _recievedStates.Dequeue();
-            PooledReader reader = ReaderPool.GetReader(state.Data, _networkManager, Reader.DataSource.Server);
+            PooledReader reader = ReaderPool.Retrieve(state.Data, _networkManager, Reader.DataSource.Server);
             StateClientTick = reader.ReadTickUnpacked();
             StateServerTick = state.ServerTick;
 
@@ -475,7 +508,7 @@ namespace FishNet.Managing.Predicting
                 OnPreReplicateReplay?.Invoke(clientReplayTick, serverReplayTick);
                 OnReplicateReplay?.Invoke(clientReplayTick, serverReplayTick);
                 if (timeManagerPhysics)
-                {                    
+                {
                     Physics2D.Simulate(tickDelta);
                     Physics.Simulate(tickDelta);
                 }
@@ -496,7 +529,7 @@ namespace FishNet.Managing.Predicting
             OnPostReconcile?.Invoke(StateClientTick, StateServerTick);
 
             ByteArrayPool.Store(state.Data.Array);
-            ReaderPool.Recycle(reader);
+            ReaderPool.Store(reader);
         }
 
         private Queue<StatePacket> _recievedStates = new Queue<StatePacket>();
@@ -514,6 +547,14 @@ namespace FishNet.Managing.Predicting
             //Make segment and store into states.
             ArraySegment<byte> segment = new ArraySegment<byte>(arr, 0, length);
             _recievedStates.Enqueue(new StatePacket(segment, _networkManager.TimeManager.LastPacketTick));
+        }
+#endif
+
+#if UNITY_EDITOR
+        private void OnValidate()
+        {
+            if (_queuedInputs > _maximumServerReplicates && _dropExcessiveReplicates)
+                _queuedInputs = _maximumServerReplicates;
         }
 #endif
     }

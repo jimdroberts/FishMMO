@@ -114,7 +114,7 @@ namespace FishNet.Object.Synchronizing.Internal
         {
             NetworkManager = networkManager;
             if (Settings.SendRate < 0f)
-                Settings.SendRate = (networkManager == null || networkManager.ServerManager == null) ? 0.1f : networkManager.ServerManager.GetSynctypeRate();
+                Settings.SendRate = networkManager.ServerManager.GetSynctypeRate();
 
             _timeToTicks = NetworkManager.TimeManager.TimeToTicks(Settings.SendRate, TickRounding.RoundUp);
         }
@@ -249,7 +249,7 @@ namespace FishNet.Object.Synchronizing.Internal
         /// Sets current value as client.
         /// </summary>
         /// <param name="reader"></param>
-        [Obsolete("Use Read(PooledReader, bool).")]
+        [Obsolete("Use Read(PooledReader, bool).")] //Remove on 2023/06/01
         public virtual void Read(PooledReader reader) { }
         /// <summary>
         /// Sets current value as server or client.

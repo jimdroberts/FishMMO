@@ -149,7 +149,7 @@ namespace FishMMO.Server
 				ServerWindowTitleUpdater.InternalInitializeOnce(this, NetworkManager.ServerManager);
 
 			// database factory DI
-			LoginServerAuthenticator authenticator = NetworkManager.Authenticator as LoginServerAuthenticator;
+			LoginServerAuthenticator authenticator = NetworkManager.ServerManager.GetAuthenticator() as LoginServerAuthenticator;
 			if (authenticator != null)
 			{
 				authenticator.DBContextFactory = DbContextFactory;

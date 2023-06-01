@@ -27,11 +27,11 @@ namespace FishNet.CodeGenerating.ILCore
             if (compiledAssembly.Name.StartsWith("Unity."))
                 return false;
             if (compiledAssembly.Name.StartsWith("UnityEngine."))
-                return false;
-            if (compiledAssembly.Name.StartsWith("UnityEditor."))
+                return false;  
+            if (compiledAssembly.Name.StartsWith("UnityEditor.")) 
                 return false;
             if (compiledAssembly.Name.Contains("Editor"))
-                return false;
+                return false; 
 
             /* This line contradicts the one below where referencesFishNet
              * becomes true if the assembly is FishNetAssembly. This is here
@@ -60,7 +60,7 @@ namespace FishNet.CodeGenerating.ILCore
 
             CodegenSession session = new CodegenSession();
             if (!session.Initialize(assemblyDef.MainModule))
-                return null;
+                return null; 
 
             bool modified = false;
 

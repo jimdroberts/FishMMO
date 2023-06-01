@@ -775,6 +775,7 @@ namespace FishNet.Component.Animating
 
                 _forceAllOnTimed = false;
             }
+
             //Sends segment to clients
             void SendSegment(ArraySegment<byte> data)
             {
@@ -984,107 +985,111 @@ namespace FishNet.Component.Animating
             if (updatedParameters.Count == 0)
                 return;
 
+            PooledReader reader = ReaderPool.Retrieve(updatedParameters, base.NetworkManager);
+
             try
             {
-                using (PooledReader reader = ReaderPool.GetReader(updatedParameters, base.NetworkManager))
+                while (reader.Remaining > 0)
                 {
-                    while (reader.Remaining > 0)
+                    byte parameterIndex = reader.ReadByte();
+                    //Layer weight
+                    if (parameterIndex == LAYER_WEIGHT)
                     {
-                        byte parameterIndex = reader.ReadByte();
-                        //Layer weight
-                        if (parameterIndex == LAYER_WEIGHT)
+                        byte layerIndex = reader.ReadByte();
+                        float value = reader.ReadSingle(AutoPackType.Packed);
+                        _animator.SetLayerWeight((int)layerIndex, value);
+                    }
+                    //Speed.
+                    else if (parameterIndex == SPEED)
+                    {
+                        float value = reader.ReadSingle(AutoPackType.Packed);
+                        _animator.speed = value;
+                    }
+                    //State.
+                    else if (parameterIndex == STATE)
+                    {
+                        byte layerIndex = reader.ReadByte();
+                        //Hashes will always be too large to compress.
+                        int hash = reader.ReadInt32();
+                        float normalizedTime = reader.ReadSingle(AutoPackType.Packed);
+                        //Play results.
+                        _animator.Play(hash, layerIndex, normalizedTime);
+                    }
+                    //Crossfade.
+                    else if (parameterIndex == CROSSFADE)
+                    {
+                        byte layerIndex = reader.ReadByte();
+                        //Hashes will always be too large to compress.
+                        int hash = reader.ReadInt32();
+                        bool useFixedTime = reader.ReadBoolean();
+                        //Get time values.
+                        float durationTime = reader.ReadSingle(AutoPackType.Packed);
+                        float offsetTime = reader.ReadSingle(AutoPackType.Packed);
+                        float normalizedTransitionTime = reader.ReadSingle(AutoPackType.Packed);
+                        //If using fixed.
+                        if (useFixedTime)
+                            _animator.CrossFadeInFixedTime(hash, durationTime, layerIndex, offsetTime, normalizedTransitionTime);
+                        else
+                            _animator.CrossFade(hash, durationTime, layerIndex, offsetTime, normalizedTransitionTime);
+                    }
+                    //Not a predetermined index, is an actual parameter.
+                    else
+                    {
+                        AnimatorControllerParameterType acpt = _parameterDetails[parameterIndex].ControllerParameter.type;
+                        if (acpt == AnimatorControllerParameterType.Bool)
                         {
-                            byte layerIndex = reader.ReadByte();
+                            bool value = reader.ReadBoolean();
+                            _animator.SetBool(_parameterDetails[parameterIndex].Hash, value);
+                        }
+                        //Float.
+                        else if (acpt == AnimatorControllerParameterType.Float)
+                        {
                             float value = reader.ReadSingle(AutoPackType.Packed);
-                            _animator.SetLayerWeight((int)layerIndex, value);
-                        }
-                        //Speed.
-                        else if (parameterIndex == SPEED)
-                        {
-                            float value = reader.ReadSingle(AutoPackType.Packed);
-                            _animator.speed = value;
-                        }
-                        //State.
-                        else if (parameterIndex == STATE)
-                        {
-                            byte layerIndex = reader.ReadByte();
-                            //Hashes will always be too large to compress.
-                            int hash = reader.ReadInt32();
-                            float normalizedTime = reader.ReadSingle(AutoPackType.Packed);
-                            //Play results.
-                            _animator.Play(hash, layerIndex, normalizedTime);
-                        }
-                        //Crossfade.
-                        else if (parameterIndex == CROSSFADE)
-                        {
-                            byte layerIndex = reader.ReadByte();
-                            //Hashes will always be too large to compress.
-                            int hash = reader.ReadInt32();
-                            bool useFixedTime = reader.ReadBoolean();
-                            //Get time values.
-                            float durationTime = reader.ReadSingle(AutoPackType.Packed);
-                            float offsetTime = reader.ReadSingle(AutoPackType.Packed);
-                            float normalizedTransitionTime = reader.ReadSingle(AutoPackType.Packed);
-                            //If using fixed.
-                            if (useFixedTime)
-                                _animator.CrossFadeInFixedTime(hash, durationTime, layerIndex, offsetTime, normalizedTransitionTime);
+                            //If able to smooth floats.
+                            if (_canSmoothFloats)
+                            {
+                                float currentValue = _animator.GetFloat(_parameterDetails[parameterIndex].Hash);
+                                float past = (float)base.TimeManager.TickDelta;
+                                //float past = _synchronizeInterval + INTERPOLATION;
+                                float rate = Mathf.Abs(currentValue - value) / past;
+                                _smoothedFloats[_parameterDetails[parameterIndex].Hash] = new SmoothedFloat(rate, value);
+                            }
                             else
-                                _animator.CrossFade(hash, durationTime, layerIndex, offsetTime, normalizedTransitionTime);
+                            {
+                                _animator.SetFloat(_parameterDetails[parameterIndex].Hash, value);
+                            }
                         }
-                        //Not a predetermined index, is an actual parameter.
+                        //Integer.
+                        else if (acpt == AnimatorControllerParameterType.Int)
+                        {
+                            int value = reader.ReadInt32();
+                            _animator.SetInteger(_parameterDetails[parameterIndex].Hash, value);
+                        }
+                        //Trigger.
+                        else if (acpt == AnimatorControllerParameterType.Trigger)
+                        {
+                            bool value = reader.ReadBoolean();
+                            if (value)
+                                _animator.SetTrigger(_parameterDetails[parameterIndex].Hash);
+                            else
+                                _animator.ResetTrigger(_parameterDetails[parameterIndex].Hash);
+                        }
+                        //Unhandled.
                         else
                         {
-                            AnimatorControllerParameterType acpt = _parameterDetails[parameterIndex].ControllerParameter.type;
-                            if (acpt == AnimatorControllerParameterType.Bool)
-                            {
-                                bool value = reader.ReadBoolean();
-                                _animator.SetBool(_parameterDetails[parameterIndex].Hash, value);
-                            }
-                            //Float.
-                            else if (acpt == AnimatorControllerParameterType.Float)
-                            {
-                                float value = reader.ReadSingle(AutoPackType.Packed);
-                                //If able to smooth floats.
-                                if (_canSmoothFloats)
-                                {
-                                    float currentValue = _animator.GetFloat(_parameterDetails[parameterIndex].Hash);
-                                    float past = (float)base.TimeManager.TickDelta;
-                                    //float past = _synchronizeInterval + INTERPOLATION;
-                                    float rate = Mathf.Abs(currentValue - value) / past;
-                                    _smoothedFloats[_parameterDetails[parameterIndex].Hash] = new SmoothedFloat(rate, value);
-                                }
-                                else
-                                {
-                                    _animator.SetFloat(_parameterDetails[parameterIndex].Hash, value);
-                                }
-                            }
-                            //Integer.
-                            else if (acpt == AnimatorControllerParameterType.Int)
-                            {
-                                int value = reader.ReadInt32();
-                                _animator.SetInteger(_parameterDetails[parameterIndex].Hash, value);
-                            }
-                            //Trigger.
-                            else if (acpt == AnimatorControllerParameterType.Trigger)
-                            {
-                                bool value = reader.ReadBoolean();
-                                if (value)
-                                    _animator.SetTrigger(_parameterDetails[parameterIndex].Hash);
-                                else
-                                    _animator.ResetTrigger(_parameterDetails[parameterIndex].Hash);
-                            }
-                            //Unhandled.
-                            else
-                            {
-                                Debug.LogWarning($"Unhandled parameter type of {acpt}.");
-                            }
+                            Debug.LogWarning($"Unhandled parameter type of {acpt}.");
                         }
                     }
                 }
+
             }
             catch
             {
                 Debug.LogWarning("An error occurred while applying updates. This may occur when malformed data is sent or when you change the animator or controller but not on all connections.");
+            }
+            finally
+            {
+                reader?.Store();
             }
         }
 
@@ -1326,8 +1331,8 @@ namespace FishNet.Component.Animating
         {
             if (!_isAnimatorEnabled)
                 return;
-                
-			bool clientAuth = ClientAuthoritative;
+
+            bool clientAuth = ClientAuthoritative;
             //If there is an owner perform checks.
             if (base.Owner.IsValid)
             {
@@ -1341,7 +1346,7 @@ namespace FishNet.Component.Animating
                 if (!base.IsServer)
                     return;
             }
-            
+
             //Update locally.
             if (set)
                 _animator.SetTrigger(hash);
@@ -1355,7 +1360,7 @@ namespace FishNet.Component.Animating
             bool canSend = (clientAuth && base.IsOwner)
                 || (clientAuth && !base.Owner.IsValid)
                 || (!clientAuth && base.IsServer);
-                
+
             //Only queue a send if proper side.
             if (canSend)
             {

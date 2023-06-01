@@ -142,7 +142,7 @@ namespace FishNet.CodeGenerating.Helping
         public bool IsSpecialWriteMethod(SR.MethodInfo methodInfo)
         {
             /* Special methods. */
-            if (methodInfo.Name == nameof(PooledWriter.Dispose))
+            if (methodInfo.Name == nameof(PooledWriter.Store))
                 return true;
             else if (methodInfo.Name == nameof(PooledWriter.WritePackedWhole))
                 return true;
@@ -462,7 +462,7 @@ namespace FishNet.CodeGenerating.Helping
 
         /// <summary>
         /// Creates a PooledWriter within the body/ and returns its variable index.
-        /// EG: PooledWriter writer = WriterPool.GetWriter();
+        /// EG: PooledWriter writer = WriterPool.RetrieveWriter();
         /// </summary>
         internal VariableDefinition CreatePooledWriter(MethodDefinition methodDef, int length)
         {
@@ -475,7 +475,7 @@ namespace FishNet.CodeGenerating.Helping
         }
         /// <summary>
         /// Creates a PooledWriter within the body/ and returns its variable index.
-        /// EG: PooledWriter writer = WriterPool.GetWriter();
+        /// EG: PooledWriter writer = WriterPool.RetrieveWriter();
         /// </summary>
         /// <param name="processor"></param>
         /// <param name="methodDef"></param>

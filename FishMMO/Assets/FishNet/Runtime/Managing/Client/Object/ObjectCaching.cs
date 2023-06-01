@@ -305,16 +305,15 @@ namespace FishNet.Managing.Client
 
                     if (spawn)
                     {
-						NetworkConnection owner;
+                        NetworkConnection owner;
                         int objectId;
                         //If not server then initialize by using lookups.
                         if (!_networkManager.IsServer)
                         {
-							objectId = cnob.ObjectId;
+                            objectId = cnob.ObjectId;
                             int ownerId = cnob.OwnerId;
                             //If local client is owner then use localconnection reference.
                             NetworkConnection localConnection = _networkManager.ClientManager.Connection;
-
                             //If owner is self.
                             if (ownerId == localConnection.ClientId)
                             {
@@ -328,14 +327,14 @@ namespace FishNet.Managing.Client
                                     owner = NetworkManager.EmptyConnection;
                             }
                         }
-						//Otherwise initialize using server values.
+                        //Otherwise initialize using server values.
                         else
                         {
                             owner = nob.Owner;
                             objectId = nob.ObjectId;
                         }
                         //Preinitialize client side.
-                        nob.Preinitialize_Internal(_networkManager,  objectId, owner, false);
+                        nob.Preinitialize_Internal(_networkManager, objectId, owner, false);
 
                         _clientObjects.AddToSpawned(cnob.NetworkObject, false);
                         SpawningObjects.Add(cnob.ObjectId, cnob.NetworkObject);
@@ -492,7 +491,8 @@ namespace FishNet.Managing.Client
         {
             _initializeOrderChanged = false;
             foreach (CachedNetworkObject item in _cachedObjects)
-                item.Dispose();
+                DisposableObjectCaches<CachedNetworkObject>.Store(item);
+
             _cachedObjects.Clear();
             _iteratedSpawns.Clear();
             SpawningObjects.Clear();
@@ -592,8 +592,8 @@ namespace FishNet.Managing.Client
             RpcLinks = rpcLinks;
             SyncValues = syncValues;
 
-            RpcLinkReader = ReaderPool.GetReader(rpcLinks, manager);
-            SyncValuesReader = ReaderPool.GetReader(syncValues, manager);
+            RpcLinkReader = ReaderPool.Retrieve(rpcLinks, manager);
+            SyncValuesReader = ReaderPool.Retrieve(syncValues, manager);
         }
 
         /// <summary>
@@ -614,6 +614,16 @@ namespace FishNet.Managing.Client
         private void ResetValues()
         {
             NetworkObject = null;
+            if (RpcLinkReader != null)
+            { 
+                ReaderPool.Store(RpcLinkReader);
+                RpcLinkReader = null;
+            }
+            if (SyncValuesReader != null)
+            { 
+                ReaderPool.Store(SyncValuesReader);
+                SyncValuesReader = null;
+            }
         }
 
         public void Dispose()
@@ -623,10 +633,9 @@ namespace FishNet.Managing.Client
 
         ~CachedNetworkObject()
         {
-            if (RpcLinkReader != null)
-                RpcLinkReader.Dispose();
-            if (SyncValuesReader != null)
-                SyncValuesReader.Dispose();
+            NetworkObject = null;
+            //RpcLinkReader?.Dispose();
+            //SyncValuesReader?.Dispose();
         }
     }
 
