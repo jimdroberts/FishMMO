@@ -28,7 +28,7 @@
 	<Target Name="Test" AfterTargets="Build">
 		<!-- Move the DLL to the Unity project. -->
 		<PropertyGroup>
-			<TargetDir>..\..\FishMMO\Assets\Plugins\Database</TargetDir>
+			<TargetDir>..\..\FishMMO\Assets\Plugins\FishMMO-DB</TargetDir>
 		</PropertyGroup>
 		<ItemGroup>
 			<SourceDir Include="bin\Release\**\*.*" />

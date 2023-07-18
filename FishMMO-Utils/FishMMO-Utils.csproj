@@ -33,6 +33,7 @@
 		<PackageReference Include="Microsoft.Extensions.Primitives" Version="7.0.0" />
 		<PackageReference Include="Npgsql" Version="5.0.16" />
 		<PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="5.0.10" />
+		<PackageReference Include="NRedisStack" Version="0.8.0" />
 		<PackageReference Include="System.Collections.Immutable" Version="7.0.0" />
 		<PackageReference Include="System.ComponentModel.Annotations" Version="5.0.0" />
 		<PackageReference Include="System.Diagnostics.DiagnosticSource" Version="7.0.2" />
@@ -45,10 +46,10 @@
 	<Target Name="Test" AfterTargets="Build">
 		<!-- Move the DLL to the Unity project. -->
 		<PropertyGroup>
-			<TargetDir>..\FishMMO\Assets\Plugins\Npgsql</TargetDir>
+			<TargetDir>..\FishMMO\Assets\Plugins\FishMMO-Utils</TargetDir>
 		</PropertyGroup>
 		<ItemGroup>
-			<SourceDir Include="bin\Release\**\*.*" />
+			<SourceDir Include="bin\Release\**\*.dll" Exclude="bin\Release\**\Microsoft.CSharp.dll" />
 		</ItemGroup>
 		<Copy SourceFiles="@(SourceDir)" DestinationFolder="$(TargetDir)" />
 	</Target>
