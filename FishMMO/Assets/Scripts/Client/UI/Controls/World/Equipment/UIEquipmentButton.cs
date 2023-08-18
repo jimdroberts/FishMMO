@@ -14,13 +14,13 @@
 					if (dragObject.visible)
 					{
 						// we check the hotkey type because we can only equip items from the inventory
-						if (dragObject.hotkeyType == HotkeyType.Inventory && int.TryParse(dragObject.referenceID, out int dragIndex))
+						if (dragObject.hotkeyType == HotkeyType.Inventory)
 						{
 							// get the item from the Inventory
-							Item item = character.InventoryController.items[dragIndex];
+							Item item = character.InventoryController.items[referenceID];
 							if (item != null)
 							{
-								character.EquipmentController.SendEquipRequest(dragIndex, (byte)itemSlotType);
+								character.EquipmentController.SendEquipRequest(referenceID, (byte)itemSlotType);
 								// clear the drag object if we succeed in equipping our item
 								dragObject.Clear();
 							}

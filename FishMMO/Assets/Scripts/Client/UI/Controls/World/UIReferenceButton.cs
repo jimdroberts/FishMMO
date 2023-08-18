@@ -11,8 +11,10 @@ namespace FishMMO.Client
 	/// </summary>
 	public class UIReferenceButton : Button
 	{
+		public const int NULL_REFERENCE_ID = -1;
+
 		public int index = -1;
-		public string referenceID = "";
+		public int referenceID = NULL_REFERENCE_ID;
 		public HotkeyType allowedHotkeyType = HotkeyType.Any;
 		public HotkeyType hotkeyType = HotkeyType.None;
 		[SerializeField]
@@ -30,8 +32,9 @@ namespace FishMMO.Client
 			base.OnPointerEnter(eventData);
 
 			Character character = Character.localCharacter;
-			if (character != null && !string.IsNullOrWhiteSpace(referenceID))
+			if (character != null && referenceID > -1)
 			{
+				UITooltip tooltip;
 				switch (hotkeyType)
 				{
 					case HotkeyType.None:
@@ -39,33 +42,22 @@ namespace FishMMO.Client
 					case HotkeyType.Any:
 						break;
 					case HotkeyType.Inventory:
-						if (int.TryParse(referenceID, out int inventoryIndex))
+						if (character.InventoryController.TryGetItem(referenceID, out Item inventoryItem) && UIManager.TryGet("UITooltip", out tooltip))
 						{
-							if (character.InventoryController.IsValidItem(inventoryIndex) && UIManager.TryGet("UITooltip", out UITooltip tooltip))
-							{
-								tooltip.SetText(character.InventoryController.items[inventoryIndex].Tooltip(), true);
-							}
+							tooltip.SetText(inventoryItem.Tooltip(), true);
 						}
 						break;
 					case HotkeyType.Equipment:
-						if (int.TryParse(referenceID, out int equipmentIndex))
+						if (character.EquipmentController.TryGetItem(referenceID, out Item equippedItem) && UIManager.TryGet("UITooltip", out tooltip))
 						{
-							if (character.EquipmentController.IsValidItem(equipmentIndex) && UIManager.TryGet("UITooltip", out UITooltip tooltip))
-							{
-								tooltip.SetText(character.EquipmentController.items[equipmentIndex].Tooltip(), true);
-							}
+							tooltip.SetText(equippedItem.Tooltip(), true);
 						}
 						break;
 					case HotkeyType.Ability:
-						if (!string.IsNullOrWhiteSpace(referenceID))
+						if (character.AbilityController.knownAbilities.TryGetValue(referenceID, out Ability ability) && UIManager.TryGet("UITooltip", out tooltip))
 						{
-							/*if (character.AbilityController.abilities.TryGetValue(referenceID, out Ability ability) &&
-								UIManager.TryGet("UITooltip", out UITooltip tooltip))
-							{
-								tooltip.SetText(ability.Tooltip(), true);
-							}*/
+							tooltip.SetText(ability.Tooltip(), true);
 						}
-
 						break;
 					default:
 						return;
@@ -99,7 +91,7 @@ namespace FishMMO.Client
 
 		public virtual void Clear()
 		{
-			referenceID = "";
+			referenceID = NULL_REFERENCE_ID;
 			hotkeyType = HotkeyType.None;
 			if (icon != null) icon.texture = null;
 			if (cooldownText != null) cooldownText.text = "";

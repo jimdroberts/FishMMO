@@ -23,7 +23,7 @@
 
 		public override void OnRightClick()
 		{
-			if (UIManager.TryGet("UIDragObject", out UIDragObject dragObject) && !string.IsNullOrWhiteSpace(referenceID))
+			if (UIManager.TryGet("UIDragObject", out UIDragObject dragObject) && referenceID != NULL_REFERENCE_ID)
 			{
 				dragObject.SetReference(icon.texture, referenceID, hotkeyType);
 				Clear();
@@ -42,19 +42,13 @@
 					case HotkeyType.Any:
 						break;
 					case HotkeyType.Inventory:
-						if (int.TryParse(referenceID, out int inventoryIndex))
-						{
-							character.InventoryController.Activate(inventoryIndex);
-						}
+						character.InventoryController.Activate(referenceID);
 						break;
 					case HotkeyType.Equipment:
-						if (int.TryParse(referenceID, out int equipmentIndex))
-						{
-							character.EquipmentController.Activate(equipmentIndex);
-						}
+						character.EquipmentController.Activate(referenceID);
 						break;
 					case HotkeyType.Ability:
-						character.AbilityController.Activate(referenceID, InputManager.GetKeyCode(keyMap));
+						character.AbilityController.QueueActivation(referenceID, InputManager.GetKeyCode(keyMap));
 						break;
 					default:
 						return;

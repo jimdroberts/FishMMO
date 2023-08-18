@@ -1,6 +1,6 @@
 ﻿public enum AbilityActivationEventResult
 {
-	Update = 0,
+	Updated = 0,
 	Finished,
-	Reset,
+	Interrupted,
 }

@@ -7,7 +7,7 @@ namespace FishMMO.Client
 	public class UIDragObject : UIControl
 	{
 		public RawImage icon;
-		public string referenceID = "";
+		public int referenceID = UIReferenceButton.NULL_REFERENCE_ID;
 		public HotkeyType hotkeyType = HotkeyType.None;
 
 		public LayerMask layerMask;
@@ -25,7 +25,7 @@ namespace FishMMO.Client
 		{
 			if (visible)
 			{
-				if (icon == null || icon.texture == null || string.IsNullOrWhiteSpace(referenceID))
+				if (icon == null || icon.texture == null || referenceID == UIReferenceButton.NULL_REFERENCE_ID)
 				{
 					Clear();
 					return;
@@ -56,7 +56,7 @@ namespace FishMMO.Client
 			}
 		}
 
-		public void SetReference(Texture icon, string referenceID, HotkeyType hotkeyType)
+		public void SetReference(Texture icon, int referenceID, HotkeyType hotkeyType)
 		{
 			this.icon.texture = icon;
 			this.referenceID = referenceID;
@@ -74,7 +74,7 @@ namespace FishMMO.Client
 			visible = false;
 
 			icon.texture = null;
-			referenceID = "";
+			referenceID = UIReferenceButton.NULL_REFERENCE_ID;
 			hotkeyType = HotkeyType.None;
 			//transform.position = new Vector3(-9999.0f, -9999.0f, 0.0f); // do we need to do this?
 		}

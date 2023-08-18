@@ -1,49 +1,56 @@
 ﻿using System.Collections.Generic;
-using UnityEngine;
+using System.Text;
 
 public class Ability
 {
-	public const string BLOOD_RESOURCE = "Health";
-	public const string BLOOD_RESOURCE_CONVERSION = "Blood Magic";
-
-	private string name = null;
-	private AbilityResourceDictionary resources = new AbilityResourceDictionary();
-	private AbilityResourceDictionary requirements = new AbilityResourceDictionary();
-
+	public int abilityID;
 	public int templateID;
 	public float activationTime = 0.0f;
 	public float cooldown = 0.0f;
 	public float range = 0.0f;
 	public float speed = 0.0f;
+	public AbilityResourceDictionary resources = new AbilityResourceDictionary();
+	public AbilityResourceDictionary requirements = new AbilityResourceDictionary();
 
-	public Dictionary<string, AbilityNode> Nodes = new Dictionary<string, AbilityNode>();
+	// cache of all ability events
+	public Dictionary<string, AbilityEvent> AbilityEvents = new Dictionary<string, AbilityEvent>();
+	public Dictionary<string, SpawnEvent> PreSpawnEvents = new Dictionary<string, SpawnEvent>();
+	public Dictionary<string, SpawnEvent> SpawnEvents = new Dictionary<string, SpawnEvent>();
+	public Dictionary<string, MoveEvent> MoveEvents = new Dictionary<string, MoveEvent>();
+	public Dictionary<string, HitEvent> HitEvents = new Dictionary<string, HitEvent>();
 
 	public AbilityTemplate Template { get { return AbilityTemplate.Cache[templateID]; } }
 
-	public string Name
+	public int TotalResourceCost
 	{
 		get
 		{
-			return string.IsNullOrWhiteSpace(name) ? Template.name : name;
+			int totalCost = 0;
+			foreach (int cost in resources.Values)
+			{
+				totalCost += cost;
+			}
+			return totalCost;
 		}
 	}
 
-	public Ability(int templateID)
+	public Ability(int abilityID, int templateID) : this(abilityID, templateID, null)
 	{
-		this.templateID = templateID;
-
-		InternalAddTemplateModifiers(Template);
 	}
 
-	public Ability(int templateID, List<AbilityNode> nodes)
+	public Ability(int abilityID, int templateID, List<AbilityEvent> events)
 	{
+		this.abilityID = abilityID;
 		this.templateID = templateID;
 
 		InternalAddTemplateModifiers(Template);
 
-		for (int i = 0; i < nodes.Count; ++i)
+		if (events != null)
 		{
-			AddAbilityNode(nodes[i]);
+			for (int i = 0; i < events.Count; ++i)
+			{
+				AddAbilityEvent(events[i]);
+			}
 		}
 	}
 
@@ -81,115 +88,156 @@ public class Ability
 		}
 	}
 
-	public bool HasAbilityNode(AbilityNode node)
+	public bool TryGetAbilityEvent<T>(string name, out T modifier) where T : AbilityEvent
 	{
-		if (node == null) return false;
-		return Nodes.ContainsKey(node.Name);
-	}
-
-	public void AddAbilityNode(AbilityNode node)
-	{
-		if (!Nodes.ContainsKey(node.Name))
+		if (AbilityEvents.TryGetValue(name, out AbilityEvent result))
 		{
-			Nodes.Add(node.Name, node);
-			InternalAddAbilityNode(node);
-		}
-	}
-
-	public void RemoveAbilityNode(AbilityNode node)
-	{
-		if (Nodes.ContainsKey(node.Name))
-		{
-			Nodes.Remove(node.Name);
-			InternalRemoveAbilityNode(node);
-		}
-	}
-
-	internal void InternalAddAbilityNode(AbilityNode node)
-	{
-		activationTime += node.ActivationTime;
-		cooldown += node.Cooldown;
-		range += node.Range;
-		speed += node.Speed;
-		foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in node.Resources)
-		{
-			if (!resources.ContainsKey(pair.Key))
+			if ((modifier = result as T) != null)
 			{
-				resources.Add(pair.Key, pair.Value);
-				
+				return true;
+			}
+		}
+		modifier = null;
+		return false;
+	}
+
+	public bool HasAbilityEvent(string name)
+	{
+		if (string.IsNullOrWhiteSpace(name)) return false;
+		return AbilityEvents.ContainsKey(name);
+	}
+
+	public void AddAbilityEvent(AbilityEvent abilityEvent)
+	{
+		if (!AbilityEvents.ContainsKey(abilityEvent.Name))
+		{
+			AbilityEvents.Add(abilityEvent.Name, abilityEvent);
+
+			SpawnEvent spawnEvent = abilityEvent as SpawnEvent;
+			if (spawnEvent != null)
+			{
+				switch (spawnEvent.SpawnEventType)
+				{
+					case SpawnEventType.OnPreSpawn:
+						if (!PreSpawnEvents.ContainsKey(spawnEvent.Name))
+						{
+							PreSpawnEvents.Add(spawnEvent.Name, spawnEvent);
+						}
+						break;
+					case SpawnEventType.OnSpawn:
+						if (!SpawnEvents.ContainsKey(spawnEvent.Name))
+						{
+							SpawnEvents.Add(spawnEvent.Name, spawnEvent);
+						}
+						break;
+					default:
+						break;
+				}
 			}
 			else
 			{
-				resources[pair.Key] += pair.Value;
+				HitEvent hitEvent = abilityEvent as HitEvent;
+				if (hitEvent != null)
+				{
+					HitEvents.Add(abilityEvent.name, hitEvent);
+				}
+				else
+				{
+					MoveEvent moveEvent = abilityEvent as MoveEvent;
+					if (moveEvent != null)
+					{
+						MoveEvents.Add(abilityEvent.name, moveEvent);
+					}
+				}
+			}
+
+			activationTime += abilityEvent.ActivationTime;
+			cooldown += abilityEvent.Cooldown;
+			range += abilityEvent.Range;
+			speed += abilityEvent.Speed;
+			foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in abilityEvent.Resources)
+			{
+				if (!resources.ContainsKey(pair.Key))
+				{
+					resources.Add(pair.Key, pair.Value);
+
+				}
+				else
+				{
+					resources[pair.Key] += pair.Value;
+				}
+			}
+			foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in abilityEvent.Requirements)
+			{
+				if (!requirements.ContainsKey(pair.Key))
+				{
+					requirements.Add(pair.Key, pair.Value);
+				}
+				else
+				{
+					requirements[pair.Key] += pair.Value;
+				}
 			}
 		}
-		foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in node.Requirements)
-		{
-			if (!requirements.ContainsKey(pair.Key))
-			{
-				requirements.Add(pair.Key, pair.Value);
+	}
 
+	public void RemoveAbilityEvent(AbilityEvent abilityEvent)
+	{
+		if (AbilityEvents.ContainsKey(abilityEvent.Name))
+		{
+			AbilityEvents.Remove(abilityEvent.Name);
+
+			SpawnEvent spawnEvent = abilityEvent as SpawnEvent;
+			if (spawnEvent != null)
+			{
+				switch (spawnEvent.SpawnEventType)
+				{
+					case SpawnEventType.OnPreSpawn:
+						PreSpawnEvents.Remove(spawnEvent.Name);
+						break;
+					case SpawnEventType.OnSpawn:
+						SpawnEvents.Remove(spawnEvent.Name);
+						break;
+					default:
+						break;
+				}
 			}
 			else
 			{
-				requirements[pair.Key] += pair.Value;
+				HitEvent hitEvent = abilityEvent as HitEvent;
+				if (hitEvent != null)
+				{
+					HitEvents.Remove(abilityEvent.name);
+				}
+				else
+				{
+					MoveEvent moveEvent = abilityEvent as MoveEvent;
+					if (moveEvent != null)
+					{
+						MoveEvents.Remove(abilityEvent.name);
+					}
+				}
 			}
-		}
-	}
 
-	internal void InternalRemoveAbilityNode(AbilityNode node)
-	{
-		activationTime -= node.ActivationTime;
-		cooldown -= node.Cooldown;
-		range -= node.Range;
-		speed -= node.Speed;
-		foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in node.Resources)
-		{
-			if (resources.ContainsKey(pair.Key))
+			activationTime -= abilityEvent.ActivationTime;
+			cooldown -= abilityEvent.Cooldown;
+			range -= abilityEvent.Range;
+			speed -= abilityEvent.Speed;
+			foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in abilityEvent.Resources)
 			{
-				resources[pair.Key] -= pair.Value;
+				if (resources.ContainsKey(pair.Key))
+				{
+					resources[pair.Key] -= pair.Value;
+				}
 			}
-		}
-		foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in node.Requirements)
-		{
-			if (requirements.ContainsKey(pair.Key))
+			foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in abilityEvent.Requirements)
 			{
-				requirements[pair.Key] += pair.Value;
+				if (requirements.ContainsKey(pair.Key))
+				{
+					requirements[pair.Key] += pair.Value;
+				}
 			}
 		}
-	}
-
-	public void Start(Character self, TargetInfo targetInfo)
-	{
-		Template.OnStartEvent?.Invoke(this, self, targetInfo, null);
-	}
-
-	public void Update(Character self, TargetInfo targetInfo)
-	{
-		Template.OnUpdateEvent?.Invoke(this, self, targetInfo, null);
-	}
-
-	public void Hit(Character attacker, TargetInfo hitTarget, GameObject abilityObject)
-	{
-		if (hitTarget.target != null)
-		{
-			Character hitCharacter = hitTarget.target.GetComponent<Character>();
-			if (hitCharacter != null)
-			{
-				hitCharacter.AbilityController?.Interrupt(attacker);
-			}
-		}
-		Template.OnHitEvent?.Invoke(this, attacker, hitTarget, abilityObject);
-	}
-
-	public void Finish(Character self, TargetInfo targetInfo)
-	{
-		Template.OnFinishEvent?.Invoke(this, self, targetInfo, null);
-	}
-
-	public void Interrupt(Character self, TargetInfo attacker)
-	{
-		Template.OnInterruptEvent?.Invoke(this, self, attacker, null);
 	}
 
 	public bool MeetsRequirements(Character character)
@@ -205,17 +253,14 @@ public class Ability
 		return true;
 	}
 
-	public bool HasResource(Character character)
+	public bool HasResource(Character character, AbilityEvent bloodResourceConversion, CharacterAttributeTemplate bloodResource)
 	{
-		if (Nodes.ContainsKey(BLOOD_RESOURCE_CONVERSION))
+		if (AbilityEvents.ContainsKey(bloodResourceConversion.Name))
 		{
-			int totalCost = 0;
-			foreach (int cost in resources.Values)
-			{
-				totalCost += cost;
-			}
+			int totalCost = TotalResourceCost;
+
 			CharacterResourceAttribute resource;
-			if (!character.AttributeController.TryGetResourceAttribute(BLOOD_RESOURCE, out resource) ||
+			if (!character.AttributeController.TryGetResourceAttribute(bloodResource.Name, out resource) ||
 				resource.CurrentValue < totalCost)
 			{
 				return false;
@@ -236,33 +281,36 @@ public class Ability
 		return true;
 	}
 
-	public void ConsumeResource(Character character)
+	public string Tooltip()
 	{
-		if (Nodes.ContainsKey(BLOOD_RESOURCE_CONVERSION))
-		{
-			int totalCost = 0;
-			foreach (int cost in resources.Values)
-			{
-				totalCost += cost;
-			}
-			CharacterResourceAttribute resource;
-			if (character.AttributeController.TryGetResourceAttribute(BLOOD_RESOURCE, out resource) &&
-				resource.CurrentValue >= totalCost)
-			{
-				resource.Consume(totalCost);
-			}
-		}
-		else if (HasResource(character)) // consume is handled after we check all the resources exist
-		{
-			foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in resources)
-			{
-				CharacterResourceAttribute resource;
-				if (character.AttributeController.TryGetResourceAttribute(pair.Key.Name, out resource) &&
-					resource.CurrentValue < pair.Value)
-				{
-					resource.Consume(pair.Value);
-				}
-			}
-		}
+		StringBuilder sb = new StringBuilder();
+		sb.Append("<size=120%><color=#f5ad6e>");
+		sb.Append(Template.Name);
+		sb.Append("</color></size>");
+		sb.AppendLine();
+		sb.Append("<color=#a66ef5>AbilityID: ");
+		sb.Append(abilityID);
+		sb.Append("</color>");
+		sb.AppendLine();
+		sb.Append("<color=#a66ef5>TemplateID: ");
+		sb.Append(templateID);
+		sb.Append("</color>");
+		sb.AppendLine();
+		sb.Append("<color=#a66ef5>Activation Time: ");
+		sb.Append(activationTime);
+		sb.Append("</color>");
+		sb.AppendLine();
+		sb.Append("<color=#a66ef5>Cooldown: ");
+		sb.Append(cooldown);
+		sb.Append("</color>");
+		sb.AppendLine();
+		sb.Append("<color=#a66ef5>Range: ");
+		sb.Append(range);
+		sb.Append("</color>");
+		sb.AppendLine();
+		sb.Append("<color=#a66ef5>Speed: ");
+		sb.Append(speed);
+		sb.Append("</color>");
+		return sb.ToString();
 	}
 }

@@ -51,10 +51,13 @@ namespace FishMMO.Client
 			{
 				UIInventoryButton button = Instantiate(buttonPrefab, content);
 				button.index = i;
-				button.referenceID = i.ToString(); // helper for UIDragObject
+				button.referenceID = i; // helper for UIDragObject
 				button.allowedHotkeyType = HotkeyType.Inventory;
 				button.hotkeyType = HotkeyType.Inventory;
-				button.icon.texture = inventory.IsValidItem(i) ? inventory.items[i].Template.Icon : null;
+				if (inventory.TryGetItem(i, out Item item))
+				{
+					button.icon.texture = item.Template.Icon;
+				}
 				inventorySlots.Add(button); // track inventory slots for easy updating
 			}
 			// update our buttons when the inventory slots change

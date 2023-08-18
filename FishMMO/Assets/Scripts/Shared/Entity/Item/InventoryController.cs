@@ -59,7 +59,7 @@ public class InventoryController : ItemContainer
 
 	public void Activate(int index)
 	{
-		if (IsValidItem(index))
+		if (TryGetItem(index, out Item item))
 		{
 			Debug.Log("InventoryController: using item in slot[" + index + "]");
 			//items[index].OnUseItem();

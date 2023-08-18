@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using FishNet.Object;
 
 public abstract class ItemContainer : NetworkBehaviour
@@ -44,6 +45,20 @@ public abstract class ItemContainer : NetworkBehaviour
 	{
 		return IsValidSlot(slot) &&
 			   items[slot] != null;
+	}
+
+	/// <summary>
+	/// Validates the item slot exists and returns whatever is in the slot. Returns false if the item doesn't exist.
+	/// </summary>
+	public bool TryGetItem(int slot, out Item item)
+	{
+		if (IsValidSlot(slot))
+		{
+			item = items[slot];
+			return item != null;
+		}
+		item = null;
+		return false;
 	}
 
 	/// <summary>

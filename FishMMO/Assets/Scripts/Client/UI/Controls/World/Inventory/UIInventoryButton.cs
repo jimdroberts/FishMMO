@@ -11,32 +11,25 @@
 				{
 					if (dragObject.visible)
 					{
-						if (int.TryParse(dragObject.referenceID, out int dragIndex))
+						// we check the hotkey type because we can swap items in the inventory
+						if (dragObject.hotkeyType == HotkeyType.Inventory)
 						{
-							// we check the hotkey type because we can swap items in the inventory
-							if (dragObject.hotkeyType == HotkeyType.Inventory)
-							{
 								// swap item slots in the inventory
-								character.InventoryController.SendSwapItemSlotsRequest(index, dragIndex);
-							}
-							// we can also unequip items
-							else if (dragObject.hotkeyType == HotkeyType.Equipment)
-							{
-								if (dragIndex < byte.MinValue ||
-									dragIndex > byte.MaxValue)
-								{
-									// unable to process this index, Equipment slot index is a byte.
-								}
-								else
-								{
-									// unequip the item
-									character.EquipmentController.SendUnequipRequest((byte)dragIndex);
-								}
-								
-							}
+								character.InventoryController.SendSwapItemSlotsRequest(index, dragObject.referenceID);
 						}
-						// clear the drag object no matter what
-						dragObject.Clear();
+						// we can also unequip items
+						else if (dragObject.hotkeyType == HotkeyType.Equipment &&
+								 dragObject.referenceID >= byte.MinValue && // Equipment slot index is a byte, validate here
+								 dragObject.referenceID <= byte.MaxValue)
+						{
+							// unequip the item
+							character.EquipmentController.SendUnequipRequest((byte)dragObject.referenceID);
+						}
+						else
+						{
+							// clear the drag object no matter what
+							dragObject.Clear();
+						}
 					}
 					else
 					{

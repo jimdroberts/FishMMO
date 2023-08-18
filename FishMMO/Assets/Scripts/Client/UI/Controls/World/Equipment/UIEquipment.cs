@@ -74,7 +74,7 @@ namespace FishMMO.Client
 			{
 				// update our button display
 				UIEquipmentButton button = buttons[equipmentSlot];
-				button.referenceID = ((int)equipmentSlot).ToString();
+				button.referenceID = equipmentSlot;
 				button.hotkeyType = HotkeyType.Equipment;
 				if (button.icon != null) button.icon.texture = item.Template.Icon;
 				//inventorySlots[i].cooldownText = character.CooldownController.IsOnCooldown();

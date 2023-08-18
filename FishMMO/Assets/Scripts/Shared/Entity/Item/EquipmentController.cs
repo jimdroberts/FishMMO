@@ -56,7 +56,7 @@ public class EquipmentController : ItemContainer
 
 	public void Activate(int index)
 	{
-		if (IsValidItem(index))
+		if (TryGetItem(index, out Item item))
 		{
 			Debug.Log("EquipmentController: using item in slot[" + index + "]");
 			//items[index].OnUseItem();
@@ -117,11 +117,10 @@ public class EquipmentController : ItemContainer
 	/// </summary>
 	public bool Unequip(byte slot)
 	{
-		if (!CanManipulate() || !IsValidItem(slot))
+		if (!CanManipulate() || !TryGetItem(slot, out Item item))
 		{
 			return false;
 		}
-		Item item = items[slot];
 
 		// see if we can add the item back to our inventory
 		if (character.InventoryController != null &&
@@ -156,9 +155,9 @@ public class EquipmentController : ItemContainer
 		InventoryController inventory = character.InventoryController;
 		if (inventory != null)
 		{
-			if (inventory.IsValidItem(msg.inventoryIndex))
+			if (inventory.TryGetItem(msg.inventoryIndex, out Item item))
 			{
-				Equip(inventory.items[msg.inventoryIndex], msg.inventoryIndex, (ItemSlot)msg.slot);
+				Equip(item, msg.inventoryIndex, (ItemSlot)msg.slot);
 			}
 		}
 	}
