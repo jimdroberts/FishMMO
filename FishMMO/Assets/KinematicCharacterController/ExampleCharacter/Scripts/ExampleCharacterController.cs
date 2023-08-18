@@ -1,5 +1,4 @@
-﻿using FishNet.Object.Prediction;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 
 namespace KinematicCharacterController.Examples
@@ -13,21 +12,6 @@ namespace KinematicCharacterController.Examples
 	{
 		TowardsCamera,
 		TowardsMovement,
-	}
-
-	public struct PlayerCharacterInputs : IReplicateData
-	{
-		public float MoveAxisForward;
-		public float MoveAxisRight;
-		public Quaternion CameraRotation;
-		public bool JumpDown;
-		public bool CrouchActive;
-		public bool SprintActive;
-
-		private uint _tick;
-		public void Dispose() { }
-		public uint GetTick() => _tick;
-		public void SetTick(uint value) => _tick = value;
 	}
 
 	public struct AICharacterInputs

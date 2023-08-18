@@ -8,27 +8,6 @@ using FishMMO.Client;
 
 namespace KinematicCharacterController.Examples
 {
-	public struct ReconcileData : IReconcileData
-	{
-		public Vector3 Position;
-		public Quaternion Rotation;
-		public Vector3 BaseVelocity;
-
-		public bool MustUnground;
-		public float MustUngroundTime;
-		public bool LastMovementIterationFoundAnyGround;
-		public CharacterTransientGroundingReport GroundingStatus;
-		public Vector3 AttachedRigidbodyVelocity;
-		public float TimeSinceLastAbleToJump;
-		public bool IsCrouching;
-		public float TimeSinceJumpRequested;
-
-		private uint _tick;
-		public void Dispose() { }
-		public uint GetTick() => _tick;
-		public void SetTick(uint value) => _tick = value;
-	}
-
 	public class ExamplePlayer : NetworkBehaviour
 	{
 		public ExampleCharacterController Character;
@@ -125,7 +104,7 @@ namespace KinematicCharacterController.Examples
 			{
 				Replicate(default, true);
 				KinematicCharacterMotorState state = Character.GetState();
-				Reconcile(TranslateReconcileData(state), true);
+				Reconcile(state, true);
 			}
 		}
 
@@ -138,11 +117,11 @@ namespace KinematicCharacterController.Examples
 		}
 
 		[Reconcile]
-		private void Reconcile(ReconcileData rd, bool asServer, Channel channel = Channel.Unreliable)
+		private void Reconcile(KinematicCharacterMotorState rd, bool asServer, Channel channel = Channel.Unreliable)
 		{
 			//Quang: Note - KCCMotorState has Rigidbody field, this component is not serialized, 
 			// and doesn't have to be reconciled, so we build a new Reconcile data that exclude Rigidbody field
-			Character.ApplyState(TranslateStateData(rd));
+			Character.ApplyState(rd);
 		}
 
 		private void SimulateMotor(float deltaTime)
@@ -151,44 +130,6 @@ namespace KinematicCharacterController.Examples
 			Character.Motor.UpdatePhase2(deltaTime);
 
 			Character.Motor.Transform.SetPositionAndRotation(Character.Motor.TransientPosition, Character.Motor.TransientRotation);
-		}
-
-		private ReconcileData TranslateReconcileData(KinematicCharacterMotorState state)
-		{
-			ReconcileData rd = new ReconcileData();
-			rd.Position = state.Position;
-			rd.Rotation = state.Rotation;
-			rd.BaseVelocity = state.BaseVelocity;
-
-			rd.MustUnground = state.MustUnground;
-			rd.MustUngroundTime = state.MustUngroundTime;
-			rd.LastMovementIterationFoundAnyGround = state.LastMovementIterationFoundAnyGround;
-			rd.GroundingStatus = state.GroundingStatus;
-			rd.AttachedRigidbodyVelocity = state.AttachedRigidbodyVelocity;
-			rd.TimeSinceLastAbleToJump = state.TimeSinceLastAbleToJump;
-			rd.IsCrouching = state.IsCrouching;
-			rd.TimeSinceJumpRequested = state.TimeSinceJumpRequested;
-
-			return rd;
-		}
-
-		private KinematicCharacterMotorState TranslateStateData(ReconcileData rd)
-		{
-			KinematicCharacterMotorState state = new KinematicCharacterMotorState();
-			state.Position = rd.Position;
-			state.Rotation = rd.Rotation;
-			state.BaseVelocity = rd.BaseVelocity;
-
-			state.MustUnground = rd.MustUnground;
-			state.MustUngroundTime = rd.MustUngroundTime;
-			state.LastMovementIterationFoundAnyGround = rd.LastMovementIterationFoundAnyGround;
-			state.GroundingStatus = rd.GroundingStatus;
-			state.AttachedRigidbodyVelocity = rd.AttachedRigidbodyVelocity;
-			state.TimeSinceLastAbleToJump = rd.TimeSinceLastAbleToJump;
-			state.IsCrouching = rd.IsCrouching;
-			state.TimeSinceJumpRequested = rd.TimeSinceJumpRequested;
-
-			return state;
 		}
 
 		private void Update()
