@@ -1,5 +1,5 @@
 ﻿using FishNet.Transporting;
-using System;
+using System.Text;
 using System.Runtime.InteropServices;
 using UnityEngine;
 
@@ -76,41 +76,59 @@ namespace FishMMO.Server
 
 		public string BuildWindowTitle()
 		{
-			string windowTitle;
-			if (!Server.configuration.TryGetString("ServerName", out windowTitle))
+			StringBuilder windowTitle = new StringBuilder();
+			if (Server.configuration.TryGetString("ServerName", out string title))
 			{
-				windowTitle = "NAMELOADFAIL";
+				windowTitle.Append(title);
 			}
 
 			Transport transport = Server.NetworkManager.TransportManager.Transport;
 			if (transport != null)
 			{
+				windowTitle.Append(transport.GetConnectionState(true) == LocalConnectionState.Started ? " [Online]" : " [Offline]");
+
 				int onlineCount = ServerManager.Clients.Count;
-				string sceneServerCountText = "";
+				int sceneServerCount = -1;
 				if (WorldSceneSystem != null)
 				{
-					int sceneServerCount = WorldSceneSystem.sceneServers.Count;
-					sceneServerCountText = " SceneServers:" + sceneServerCount;
+					sceneServerCount = WorldSceneSystem.sceneServers.Count;
 					onlineCount -= sceneServerCount;
 				}
-
-				windowTitle += " " + (transport.GetConnectionState(true) == LocalConnectionState.Started ? "[Online]" : "[Offline]");
 				
 				if (Server.configuration.TryGetString("Address", out string address) &&
 					address.Length  > 0 &&
 					Server.configuration.TryGetUShort("Port", out ushort port))
 				{
-					windowTitle += " [Server:" + address + ":" + port + " Clients:" + onlineCount + sceneServerCountText + "]";
+					windowTitle.Append(" [Server:");
+					windowTitle.Append(address);
+					windowTitle.Append(":");
+					windowTitle.Append(port);
+					windowTitle.Append(" Clients:");
+					if (sceneServerCount > 0)
+					{
+						windowTitle.Append(onlineCount - sceneServerCount);
+						windowTitle.Append(" SceneServers:");
+						windowTitle.Append(sceneServerCount);
+					}
+					else
+					{
+						windowTitle.Append(onlineCount);
+					}
+					windowTitle.Append("]");
 				}
 				
 				if (Server.configuration.TryGetString("RelayAddress", out address) &&
 					address.Length > 0 &&
 					Server.configuration.TryGetUShort("RelayPort", out port))
 				{
-					windowTitle += " [ConnectedToRelay:" + address + ":" + port + "]";
+					windowTitle.Append(" [ConnectedToRelay:");
+					windowTitle.Append(address);
+					windowTitle.Append(":");
+					windowTitle.Append(port);
+					windowTitle.Append("]");
 				}
 			}
-			return windowTitle;
+			return windowTitle.ToString();
 		}
 	}
 }
