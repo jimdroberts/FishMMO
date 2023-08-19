@@ -6,4 +6,5 @@
 	LoginSuccess,
 	WorldLoginSuccess,
 	SceneLoginSuccess,
+	ServerFull,
 }

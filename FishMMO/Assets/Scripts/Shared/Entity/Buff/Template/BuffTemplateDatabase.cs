@@ -13,8 +13,7 @@ public class BuffTemplateDatabase : ScriptableObject
 
 	public BuffTemplate GetBuff(string name)
 	{
-		BuffTemplate buff;
-		this.buffs.TryGetValue(name, out buff);
+		this.buffs.TryGetValue(name, out BuffTemplate buff);
 		return buff;
 	}
 }

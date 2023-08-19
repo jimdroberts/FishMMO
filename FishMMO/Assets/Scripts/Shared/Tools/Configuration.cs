@@ -156,14 +156,7 @@ public class Configuration
 
 	public bool TryGetString(string name, out string result)
 	{
-		string test;
-		if (settings.TryGetValue(name, out test))
-		{
-			result = test;
-			return true;
-		}
-		result = test;
-		return false;
+		return settings.TryGetValue(name, out result);
 	}
 
 	public bool TryGetChar(string name, out char result)

@@ -14,8 +14,7 @@ public class ItemTemplateDatabase : ScriptableObject
 
 	public BaseItemTemplate GetItem(string name)
 	{
-		BaseItemTemplate item;
-		items.TryGetValue(name, out item);
+		items.TryGetValue(name, out BaseItemTemplate item);
 		return item;
 	}
 }

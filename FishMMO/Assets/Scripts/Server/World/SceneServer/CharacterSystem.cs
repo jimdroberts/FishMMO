@@ -144,15 +144,6 @@ namespace FishMMO.Server
 						return;
 					}
 
-					// tell the world server the character disconnected
-					if (ClientManager != null)
-					{
-						ClientManager.Broadcast(new SceneCharacterDisconnectedBroadcast()
-						{
-							characterId = character.id,
-						});
-					}
-
 					// remove the characterId->character entry
 					charactersById.Remove(character.id);
 					// remove the characterName->character entry
@@ -164,6 +155,15 @@ namespace FishMMO.Server
 					{
 						// teleporter handles the rest
 						return;
+					}
+
+					// tell the world server the character disconnected, this only happens on a full disconnect
+					if (ClientManager != null)
+					{
+						ClientManager.Broadcast(new SceneCharacterDisconnectedBroadcast()
+						{
+							characterId = character.id,
+						});
 					}
 
 					// character becomes immortal on disconnect and mortal when fully loaded into the scene

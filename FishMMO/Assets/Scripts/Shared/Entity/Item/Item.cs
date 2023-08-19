@@ -100,10 +100,6 @@ public class Item
 		sb.Append("<color=#a66ef5>InstanceID: ");
 		sb.Append(instanceID);
 		sb.Append("</color>");
-		sb.AppendLine();
-		sb.Append("<color=#a66ef5>TemplateID: ");
-		sb.Append(templateID);
-		sb.Append("</color>");
 
 		generator?.Tooltip(sb);
 		return sb.ToString();

@@ -149,39 +149,33 @@ public class CharacterAttribute
 
 	public CharacterAttribute GetDependant(string name)
 	{
-		CharacterAttribute result;
-		dependencies.TryGetValue(name, out result);
+		dependencies.TryGetValue(name, out CharacterAttribute result);
 		return result;
 	}
 
 	public int GetDependantBaseValue(string name)
 	{
-		CharacterAttribute attribute;
-		return (!dependencies.TryGetValue(name, out attribute)) ? 0 : attribute.BaseValue;
+		return (!dependencies.TryGetValue(name, out CharacterAttribute attribute)) ? 0 : attribute.BaseValue;
 	}
 
 	public int GetDependantMinValue(string name)
 	{
-		CharacterAttribute attribute;
-		return (!dependencies.TryGetValue(name, out attribute)) ? 0 : attribute.Template.MinValue;
+		return (!dependencies.TryGetValue(name, out CharacterAttribute attribute)) ? 0 : attribute.Template.MinValue;
 	}
 
 	public int GetDependantMaxValue(string name)
 	{
-		CharacterAttribute attribute;
-		return (!dependencies.TryGetValue(name, out attribute)) ? 0 : attribute.Template.MaxValue;
+		return (!dependencies.TryGetValue(name, out CharacterAttribute attribute)) ? 0 : attribute.Template.MaxValue;
 	}
 
 	public int GetDependantModifier(string name)
 	{
-		CharacterAttribute attribute;
-		return (!dependencies.TryGetValue(name, out attribute)) ? 0 : attribute.Modifier;
+		return (!dependencies.TryGetValue(name, out CharacterAttribute attribute)) ? 0 : attribute.Modifier;
 	}
 
 	public int GetDependantFinalValue(string name)
 	{
-		CharacterAttribute attribute;
-		return (!dependencies.TryGetValue(name, out attribute)) ? 0 : attribute.FinalValue;
+		return (!dependencies.TryGetValue(name, out CharacterAttribute attribute)) ? 0 : attribute.FinalValue;
 	}
 
 	public void UpdateValues()
@@ -210,8 +204,7 @@ public class CharacterAttribute
 		{
 			foreach (KeyValuePair<CharacterAttributeTemplate, CharacterAttributeFormulaTemplate> pair in Template.Formulas)
 			{
-				CharacterAttribute child;
-				if (children.TryGetValue(pair.Key.Name, out child))
+				if (children.TryGetValue(pair.Key.Name, out CharacterAttribute child))
 				{
 					modifier += pair.Value.CalculateBonus(this, child);
 				}

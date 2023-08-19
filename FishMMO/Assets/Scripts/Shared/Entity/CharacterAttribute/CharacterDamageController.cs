@@ -41,7 +41,7 @@ public class CharacterDamageController : NetworkBehaviour, IDamageable, IHealabl
 		}
 	}
 
-	public int ApplyModifiers(Character target, DamageAttributeTemplate damageAttribute, int amount)
+	public int ApplyModifiers(Character target, int amount, DamageAttributeTemplate damageAttribute)
 	{
 		const int MIN_DAMAGE = 0;
 		const int MAX_DAMAGE = 999999;
@@ -62,7 +62,7 @@ public class CharacterDamageController : NetworkBehaviour, IDamageable, IHealabl
 
 		if (resourceInstance != null && resourceInstance.CurrentValue > 0)
 		{
-			amount = ApplyModifiers(character, damageAttribute, amount);
+			amount = ApplyModifiers(character, amount, damageAttribute);
 			resourceInstance.Consume(amount);
 
 			// tell the client to display damage

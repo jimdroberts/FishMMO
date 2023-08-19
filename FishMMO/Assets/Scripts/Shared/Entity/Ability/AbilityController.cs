@@ -150,10 +150,7 @@ public class AbilityController : NetworkBehaviour
 		}
 		else
 		{
-			if (knownAbilities.ContainsKey(rd.AbilityID))
-			{
-				currentAbilityEvent.AbilityID = rd.AbilityID;
-			}
+			currentAbilityEvent.AbilityID = rd.AbilityID;
 			currentAbilityEvent.RemainingTime = rd.RemainingTime;
 		}
 	}

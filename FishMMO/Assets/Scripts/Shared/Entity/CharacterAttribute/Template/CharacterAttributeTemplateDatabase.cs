@@ -9,8 +9,7 @@ public class CharacterAttributeTemplateDatabase : ScriptableObject
 
 	public CharacterAttributeTemplate GetCharacterAttribute(string name)
 	{
-		CharacterAttributeTemplate attribute;
-		attributes.TryGetValue(name, out attribute);
+		attributes.TryGetValue(name, out CharacterAttributeTemplate attribute);
 		return attribute;
 	}
 }

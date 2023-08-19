@@ -89,8 +89,7 @@ public class BuffController : NetworkBehaviour
 
 	public void Remove(string buffName)
 	{
-		Buff buffInstance;
-		if (buffs.TryGetValue(buffName, out buffInstance))
+		if (buffs.TryGetValue(buffName, out Buff buffInstance))
 		{
 			foreach (Buff stack in buffInstance.Stacks)
 			{

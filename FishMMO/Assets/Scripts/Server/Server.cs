@@ -173,6 +173,11 @@ namespace FishMMO.Server
 
 					WorldSceneSystem = GetOrCreateComponent<WorldSceneSystem>();
 					WorldSceneSystem.InternalInitializeOnce(this, NetworkManager.ServerManager);
+					WorldServerAuthenticator worldAuthenticator = NetworkManager.ServerManager.GetAuthenticator() as WorldServerAuthenticator;
+					if (worldAuthenticator != null)
+					{
+						worldAuthenticator.WorldSceneSystem = WorldSceneSystem;
+					}
 
 					WorldChatSystem = GetOrCreateComponent<WorldChatSystem>();
 					WorldChatSystem.WorldSceneSystem = WorldSceneSystem;

@@ -39,13 +39,14 @@ namespace FishMMO.Server.Services
             return server;
         }
 
-        public static void WorldServerPulse(ServerDbContext dbContext, string name)
+        public static void WorldServerPulse(ServerDbContext dbContext, string name, int characterCount)
         {
             var worldServer = dbContext.WorldServers
                 .FirstOrDefault(server => server.Name.ToLower() == name.ToLower());
             if (worldServer == null) throw new Exception($"Couldn't find world with name {name}");
             
             worldServer.LastPulse = DateTime.UtcNow;
+            worldServer.CharacterCount = characterCount;
         }
         
         public static void DeleteWorldServer(ServerDbContext dbContext, string name) 

@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Text;
 
 public class Buff
 {
@@ -88,5 +89,26 @@ public class Buff
 	public void RemoveStack(Character target)
 	{
 		Template.OnRemoveStack(this, target);
+	}
+
+	public string Tooltip()
+	{
+		StringBuilder sb = new StringBuilder();
+		sb.Append("<size=120%><color=#f5ad6e>");
+		sb.Append(Template.Name);
+		sb.Append("</color></size>");
+		sb.AppendLine();
+		sb.Append("<color=#a66ef5>Remaining Time: ");
+		sb.Append(remainingTime);
+		sb.Append("</color>");
+		if (attributeBonuses != null)
+		{
+			foreach (BuffAttribute attribute in attributeBonuses)
+			{
+				sb.AppendLine();
+				sb.Append(attribute.Tooltip());
+			}
+		}
+		return sb.ToString();
 	}
 }

@@ -70,7 +70,8 @@ namespace FishMMO.Server
 				
 					nextPulse = pulseRate;
 					Debug.Log("[" + DateTime.UtcNow + "] " + name + ": Pulse");
-					WorldServerService.WorldServerPulse(dbContext, name);
+					int characterCount = ServerManager.Clients.Count;
+					WorldServerService.WorldServerPulse(dbContext, name, characterCount);
 					dbContext.SaveChanges();
 				}
 			}

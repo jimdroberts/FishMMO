@@ -73,8 +73,7 @@ namespace FishMMO.Client
 
 		public static void Show(string name)
 		{
-			UIControl result = null;
-			if (controls.TryGetValue(name, out result))
+			if (controls.TryGetValue(name, out UIControl result))
 			{
 				result.OnShow();
 			}
@@ -82,8 +81,7 @@ namespace FishMMO.Client
 
 		public static void Hide(string name)
 		{
-			UIControl result = null;
-			if (controls.TryGetValue(name, out result) && result.visible)
+			if (controls.TryGetValue(name, out UIControl result) && result.visible)
 			{
 				result.OnHide();
 			}

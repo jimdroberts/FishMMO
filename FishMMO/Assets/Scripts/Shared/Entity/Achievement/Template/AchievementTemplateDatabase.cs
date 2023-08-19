@@ -13,8 +13,7 @@ public class AchievementTemplateDatabase : ScriptableObject
 
 	public AchievementTemplate GetAchievement(string name)
 	{
-		AchievementTemplate achievement;
-		this.achievements.TryGetValue(name, out achievement);
+		this.achievements.TryGetValue(name, out AchievementTemplate achievement);
 		return achievement;
 	}
 }

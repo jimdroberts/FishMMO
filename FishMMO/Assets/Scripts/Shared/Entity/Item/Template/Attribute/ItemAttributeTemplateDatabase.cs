@@ -13,8 +13,7 @@ public class ItemAttributeTemplateDatabase : ScriptableObject
 
 	public ItemAttributeTemplate GetItemAttribute(string name)
 	{
-		ItemAttributeTemplate attribute;
-		this.attributes.TryGetValue(name, out attribute);
+		this.attributes.TryGetValue(name, out ItemAttributeTemplate attribute);
 		return attribute;
 	}
 }

@@ -9,7 +9,7 @@ public class ResourceTemplatePreload : MonoBehaviour
 	private void Awake()
 	{
 		var a = AbilityTemplate.Cache;
-		var an = AbilityNode.Cache;
+		var an = AbilityEvent.Cache;
 		var ach = AchievementTemplate.Cache;
 		var buff = BuffTemplate.Cache;
 		var c = CharacterAttributeTemplate.Cache;
@@ -20,7 +20,7 @@ public class ResourceTemplatePreload : MonoBehaviour
 	private void OnApplicationQuit()
 	{
 		AbilityTemplate.UnloadCache();
-		AbilityNode.UnloadCache();
+		AbilityEvent.UnloadCache();
 		AchievementTemplate.UnloadCache();
 		BuffTemplate.UnloadCache();
 		CharacterAttributeTemplate.UnloadCache();

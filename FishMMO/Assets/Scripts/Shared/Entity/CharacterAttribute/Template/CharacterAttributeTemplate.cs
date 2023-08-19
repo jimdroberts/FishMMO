@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Text;
 using UnityEngine;
 
 [CreateAssetMenu(fileName = "New Character Attribute", menuName = "Character/Attribute/Character Attribute", order = 1)]
@@ -22,4 +23,44 @@ public class CharacterAttributeTemplate : CachedScriptableObject<CharacterAttrib
 	public CharacterAttributeFormulaDictionary Formulas = new CharacterAttributeFormulaDictionary();
 
 	public string Name { get { return this.name; } }
+
+	public string Tooltip()
+	{
+		StringBuilder sb = new StringBuilder();
+		if (!string.IsNullOrWhiteSpace(Name))
+		{
+			sb.Append("<size=120%><color=#f5ad6e>");
+			sb.Append(Name);
+			sb.Append("</color></size>");
+		}
+		if (!string.IsNullOrWhiteSpace(Description))
+		{
+			sb.AppendLine();
+			sb.Append("<color=#a66ef5>Description: ");
+			sb.Append(Description);
+			sb.Append("</color>");
+		}
+		if (InitialValue > 0)
+		{
+			sb.AppendLine();
+			sb.Append("<color=#a66ef5>Initial Value: ");
+			sb.Append(InitialValue);
+			sb.Append("</color>");
+		}
+		if (MinValue > 0)
+		{
+			sb.AppendLine();
+			sb.Append("<color=#a66ef5>Min Value: ");
+			sb.Append(MinValue);
+			sb.Append("</color>");
+		}
+		if (MaxValue > 0)
+		{
+			sb.AppendLine();
+			sb.Append("<color=#a66ef5>Max Value: ");
+			sb.Append(MaxValue);
+			sb.Append("</color>");
+		}
+		return sb.ToString();
+	}
 }

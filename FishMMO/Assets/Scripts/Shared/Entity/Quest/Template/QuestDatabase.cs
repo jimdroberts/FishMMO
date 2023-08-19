@@ -13,8 +13,7 @@ public class QuestDatabase : ScriptableObject
 
 	public QuestTemplate GetQuest(string name)
 	{
-		QuestTemplate quest;
-		this.quests.TryGetValue(name, out quest);
+		this.quests.TryGetValue(name, out QuestTemplate quest);
 		return quest;
 	}
 }

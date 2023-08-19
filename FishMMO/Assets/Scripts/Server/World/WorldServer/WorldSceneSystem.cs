@@ -24,16 +24,36 @@ namespace FishMMO.Server
 		private WorldServerAuthenticator loginAuthenticator;
 
 		// sceneConnection, sceneDetails
+		/// <summary>
+		/// Active scene servers.
+		/// </summary>
 		public Dictionary<NetworkConnection, SceneServerDetails> sceneServers = new Dictionary<NetworkConnection, SceneServerDetails>();
 
 		// characterName, sceneConnection
+		/// <summary>
+		/// Active client connections.
+		/// </summary>
 		public Dictionary<long, NetworkConnection> sceneCharacters = new Dictionary<long, NetworkConnection>();
 
 		// sceneName, waitingConnections
+		/// <summary>
+		/// Connections waiting for a scene to finish loading.
+		/// </summary>
 		public Dictionary<string, HashSet<NetworkConnection>> waitingConnections = new Dictionary<string, HashSet<NetworkConnection>>();
 
 		// sceneName, waitingSceneServer
+		/// <summary>
+		/// Scenes that are waiting to be loaded fully.
+		/// </summary>
 		public Dictionary<string, SceneWaitQueueData> waitingScenes = new Dictionary<string, SceneWaitQueueData>();
+
+		public int ConnectionCount
+		{
+			get
+			{
+				return waitingConnections.Count + sceneCharacters.Count;
+			}
+		}
 
 		private float waitQueueRate = 2.0f;
 		private float nextWaitQueueUpdate = 0.0f;
