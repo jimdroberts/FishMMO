@@ -10,8 +10,8 @@ using UnityEngine;
 [RequireComponent(typeof(Character))]
 public class AbilityController : NetworkBehaviour
 {
-	private AbilityActivationEventData queuedAbilityEvent = null;
-	private AbilityActivationEventData currentAbilityEvent = null;
+	private AbilityActivationReplicateData queuedAbilityEvent = null;
+	private AbilityActivationReplicateData currentAbilityEvent = null;
 	//public Random currentSeed = 12345;
 
 	public Transform abilitySpawner;
@@ -30,7 +30,7 @@ public class AbilityController : NetworkBehaviour
 	// Invoked when the current ability is cancelled.
 	public Action OnCancelled;
 
-	public AbilityActivationEventData CurrentAbilityEvent { get { return currentAbilityEvent; } }
+	public AbilityActivationReplicateData CurrentAbilityEvent { get { return currentAbilityEvent; } }
 
 	private void Awake()
 	{
@@ -61,7 +61,7 @@ public class AbilityController : NetworkBehaviour
 		if (base.IsOwner)
 		{
 			Reconcile(default, false);
-			HandleActivation(out AbilityActivationEventData activationData);
+			HandleActivation(out AbilityActivationReplicateData activationData);
 			Replicate(activationData, false);
 		}
 		if (base.IsServer)
@@ -78,7 +78,7 @@ public class AbilityController : NetworkBehaviour
 	}
 
 	[Replicate]
-	private void Replicate(AbilityActivationEventData activationData, bool asServer, Channel channel = Channel.Unreliable, bool replaying = false)
+	private void Replicate(AbilityActivationReplicateData activationData, bool asServer, Channel channel = Channel.Unreliable, bool replaying = false)
 	{
 		// Simulate the Ability Activation
 		if (activationData != null)
@@ -166,7 +166,7 @@ public class AbilityController : NetworkBehaviour
 			{
 				if (heldKey != KeyCode.None)
 				{
-					queuedAbilityEvent = new AbilityHoldEventData()
+					queuedAbilityEvent = new AbilityHoldActivationReplicateData()
 					{
 						AbilityID = ability.abilityID,
 						RemainingTime = ability.activationTime,
@@ -179,7 +179,7 @@ public class AbilityController : NetworkBehaviour
 			}
 			else
 			{
-				queuedAbilityEvent = new AbilityActivationEventData()
+				queuedAbilityEvent = new AbilityActivationReplicateData()
 				{
 					AbilityID = ability.abilityID,
 					RemainingTime = ability.activationTime,
@@ -191,7 +191,7 @@ public class AbilityController : NetworkBehaviour
 		}
 	}
 
-	private void HandleActivation(out AbilityActivationEventData activationEventData)
+	private void HandleActivation(out AbilityActivationReplicateData activationEventData)
 	{
 		activationEventData = null;
 
@@ -211,7 +211,7 @@ public class AbilityController : NetworkBehaviour
 	/// <summary>
 	/// Validates that we can activate the ability and returns it if successful.
 	/// </summary>
-	private bool CanActivate(AbilityActivationEventData activationEvent, out Ability ability)
+	private bool CanActivate(AbilityActivationReplicateData activationEvent, out Ability ability)
 	{
 		// validate UI controls are focused so we aren't casting spells when hovering over interfaces.
 		if (!UIManager.ControlHasFocus() && !UIManager.InputControlHasFocus() && !InputManager.MouseMode)
@@ -247,6 +247,10 @@ public class AbilityController : NetworkBehaviour
 		if (currentAbilityEvent != null)
 		{
 			currentAbilityEvent.Interrupt(attacker);
+		}
+		if (queuedAbilityEvent != null)
+		{
+			queuedAbilityEvent = null;
 		}
 	}
 

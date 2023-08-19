@@ -1,6 +1,6 @@
 ﻿using FishNet.Object.Prediction;
 
-public class AbilityActivationEventData : IReplicateData
+public class AbilityActivationReplicateData : IReplicateData
 {
 	public bool InterruptQueued;
 	public int AbilityID;

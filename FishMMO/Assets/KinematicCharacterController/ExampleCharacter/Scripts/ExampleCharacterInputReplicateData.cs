@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace KinematicCharacterController.Examples
 {
-	public struct PlayerCharacterInputs : IReplicateData
+	public struct ExampleCharacterInputReplicateData : IReplicateData
 	{
 		public float MoveAxisForward;
 		public float MoveAxisRight;

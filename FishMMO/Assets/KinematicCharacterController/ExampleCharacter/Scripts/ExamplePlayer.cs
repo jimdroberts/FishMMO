@@ -97,7 +97,7 @@ namespace KinematicCharacterController.Examples
 			if (base.IsOwner)
 			{
 				Reconcile(default, false);
-				HandleCharacterInput(out PlayerCharacterInputs inputData);
+				HandleCharacterInput(out ExampleCharacterInputReplicateData inputData);
 				Replicate(inputData, false);
 			}
 			if (base.IsServer)
@@ -109,7 +109,7 @@ namespace KinematicCharacterController.Examples
 		}
 
 		[Replicate]
-		private void Replicate(PlayerCharacterInputs input, bool asServer, Channel channel = Channel.Unreliable, bool replaying = false)
+		private void Replicate(ExampleCharacterInputReplicateData input, bool asServer, Channel channel = Channel.Unreliable, bool replaying = false)
 		{
 			Character.SetInputs(ref input);
 
@@ -208,7 +208,7 @@ namespace KinematicCharacterController.Examples
 			Character.OrientationMethod = method;
 		}
 
-		private void HandleCharacterInput(out PlayerCharacterInputs characterInputs)
+		private void HandleCharacterInput(out ExampleCharacterInputReplicateData characterInputs)
 		{
 			characterInputs = default;
 

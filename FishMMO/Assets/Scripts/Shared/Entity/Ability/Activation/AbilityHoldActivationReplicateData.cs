@@ -1,6 +1,6 @@
 ﻿using UnityEngine;
 
-public class AbilityHoldEventData : AbilityActivationEventData
+public class AbilityHoldActivationReplicateData : AbilityActivationReplicateData
 {
 	public KeyCode HeldKey;
 

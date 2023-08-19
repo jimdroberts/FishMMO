@@ -166,7 +166,7 @@ namespace KinematicCharacterController.Examples
 		/// <summary>
 		/// This is called every frame by ExamplePlayer in order to tell the character what its inputs are
 		/// </summary>
-		public void SetInputs(ref PlayerCharacterInputs inputs)
+		public void SetInputs(ref ExampleCharacterInputReplicateData inputs)
 		{
 			// Clamp input
 			Vector3 moveInputVector = Vector3.ClampMagnitude(new Vector3(inputs.MoveAxisRight, 0f, inputs.MoveAxisForward), 1f);
