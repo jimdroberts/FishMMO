@@ -3,7 +3,6 @@ using TMPro;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
-using UnityEngine;
 using UnityEngine.UI;
 
 namespace FishMMO.Client
@@ -74,6 +73,8 @@ namespace FishMMO.Client
 					Client.NetworkManager.ClientManager.Broadcast(requestCharacterList);
 					break;
 				case ClientAuthenticationResult.WorldLoginSuccess:
+					break;
+				case ClientAuthenticationResult.ServerFull:
 					break;
 				default:
 					break;

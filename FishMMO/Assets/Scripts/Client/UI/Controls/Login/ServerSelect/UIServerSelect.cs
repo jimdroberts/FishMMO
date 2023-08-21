@@ -68,6 +68,8 @@ namespace FishMMO.Client
 					SetConnectToServerLocked(false);
 					visible = false;
 					break;
+				case ClientAuthenticationResult.ServerFull:
+					break;
 				default:
 					break;
 			}

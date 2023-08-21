@@ -71,7 +71,7 @@ public class AbilityObject : MonoBehaviour
 		AbilityTemplate template = ability.Template;
 
 		// TODO create/fetch from pool
-		GameObject go = new GameObject(template.name);
+		GameObject go = Instantiate(template.Prefab);
 		switch (template.AbilitySpawnTarget)
 		{
 			case AbilitySpawnTarget.Self:

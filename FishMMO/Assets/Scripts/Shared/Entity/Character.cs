@@ -9,6 +9,7 @@ using FishNet.Transporting;
 using KinematicCharacterController;
 using KinematicCharacterController.Examples;
 using UnityEngine;
+using TMPro;
 using System;
 using Shared;
 
@@ -33,7 +34,6 @@ using Shared;
 [RequireComponent(typeof(BuffController))]
 [RequireComponent(typeof(QuestController))]
 [RequireComponent(typeof(CharacterDamageController))]
-[RequireComponent(typeof(CharacterDeathController))]
 [RequireComponent(typeof(GuildController))]
 [RequireComponent(typeof(PartyController))]
 public class Character : NetworkBehaviour, IPooledResettable
@@ -42,7 +42,6 @@ public class Character : NetworkBehaviour, IPooledResettable
 
 	public CharacterAttributeController AttributeController;
 	public CharacterDamageController DamageController;
-	public CharacterDeathController DeathController;
 	public TargetController TargetController;
 	public CooldownController CooldownController;
 	public InventoryController InventoryController;
@@ -57,9 +56,7 @@ public class Character : NetworkBehaviour, IPooledResettable
 	public Transform AbilitySpawnPoint;
 #if !UNITY_SERVER || UNITY_EDITOR
 	public LocalInputController LocalInputController;
-
-	//temporary
-	public UILabel3D CharacterNameLabel;
+	public TextMeshPro CharacterNameLabel;
 #endif
 
 	/// <summary>
@@ -72,19 +69,8 @@ public class Character : NetworkBehaviour, IPooledResettable
 #if !UNITY_SERVER || UNITY_EDITOR
 		gameObject.name = next;
 
-		if (CharacterNameLabel == null)
-		{
-			float calcHeight = 100.0f;
-			if (Motor != null && Motor.Capsule != null)
-			{
-				calcHeight *= Motor.Capsule.height * 0.75f;
-			}
-			CharacterNameLabel = UILabel3D.Create(next, 12, transform, new Vector2(0.0f, calcHeight));
-		}
-		else
-		{
-			CharacterNameLabel.Text = next;
-		}
+		if (CharacterNameLabel != null)
+			CharacterNameLabel.text = next;
 #endif
 	}
 
@@ -106,8 +92,6 @@ public class Character : NetworkBehaviour, IPooledResettable
 		AttributeController = gameObject.GetComponent<CharacterAttributeController>();
 		DamageController = gameObject.GetComponent<CharacterDamageController>();
 		DamageController.character = this;
-		DeathController = gameObject.GetComponent<CharacterDeathController>();
-		DeathController.character = this;
 		TargetController = gameObject.GetComponent<TargetController>();
 		TargetController.character = this;
 		CooldownController = gameObject.GetComponent<CooldownController>();

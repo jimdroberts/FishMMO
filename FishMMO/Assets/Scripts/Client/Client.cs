@@ -227,6 +227,8 @@ namespace FishMMO.Client
 					break;
 				case ClientAuthenticationResult.SceneLoginSuccess:
 					break;
+				case ClientAuthenticationResult.ServerFull:
+					break;
 				default:
 					break;
 			}

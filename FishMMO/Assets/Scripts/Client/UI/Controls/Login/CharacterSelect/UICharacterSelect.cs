@@ -73,6 +73,8 @@ namespace FishMMO.Client
 				case ClientAuthenticationResult.SceneLoginSuccess:
 					visible = false;
 					break;
+				case ClientAuthenticationResult.ServerFull:
+					break;
 				default:
 					break;
 			}

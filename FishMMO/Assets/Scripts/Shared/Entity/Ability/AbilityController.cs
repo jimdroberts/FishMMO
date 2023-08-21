@@ -129,6 +129,8 @@ public class AbilityController : NetworkBehaviour
 							character.CooldownController.AddCooldown(currentAbilityTemplate.Name, new CooldownInstance(cooldown));
 						}
 
+						// we need better target system as character.TargetController is not operational on the server
+
 						// spawn the ability object
 						AbilityObject.Spawn(ability, character, character.TargetController.current);
 					}
