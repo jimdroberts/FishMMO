@@ -113,7 +113,8 @@ public class CharacterAttributeController : NetworkBehaviour
 	/// </summary>
 	private void OnClientCharacterAttributeUpdateBroadcastReceived(CharacterAttributeUpdateBroadcast msg)
 	{
-		if (CharacterAttributeTemplate.Cache.TryGetValue(msg.templateID, out CharacterAttributeTemplate template) &&
+		CharacterAttributeTemplate template = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(msg.templateID);
+		if (template != null &&
 			attributes.TryGetValue(template.Name, out CharacterAttribute attribute))
 		{
 			attribute.SetModifier(msg.modifier);
@@ -128,7 +129,8 @@ public class CharacterAttributeController : NetworkBehaviour
 	{
 		foreach (CharacterAttributeUpdateBroadcast subMsg in msg.attributes)
 		{
-			if (CharacterAttributeTemplate.Cache.TryGetValue(subMsg.templateID, out CharacterAttributeTemplate template) &&
+			CharacterAttributeTemplate template = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(subMsg.templateID);
+			if (template != null &&
 				attributes.TryGetValue(template.Name, out CharacterAttribute attribute))
 			{
 				attribute.SetModifier(subMsg.modifier);

@@ -6,46 +6,71 @@ public abstract class CachedScriptableObject<T> : ScriptableObject where T : Cac
 {
 	public int ID;
 
-	private static Dictionary<int, T> cache = null;
-	public static Dictionary<int, T> Cache
-	{
-		get
-		{
-			if (cache == null)
-			{
-				T[] resources = Resources.LoadAll<T>("");
-				cache = new Dictionary<int, T>();
-				if (resources.Length > 0)
-				{
-					foreach (T resource in resources)
-					{
-						resource.ID = resource.name.GetDeterministicHashCode();
+	private static Dictionary<Type, Dictionary<int, T>> resourceCache = new Dictionary<Type, Dictionary<int, T>>();
 
-						if (!cache.ContainsKey(resource.ID))
-						{
-							cache.Add(resource.ID, resource);
-							Debug.Log("[" + DateTime.UtcNow + "] Resource: " + typeof(T).Name + "[" + resource.name + " ID:" + resource.ID + "] - Loaded");
-						}
-						else
-						{
-							Resources.UnloadAsset(resource);
-						}
+	/// <summary>
+	/// Returns the cached object as type U or null if it cannot be found.
+	/// </summary>
+	public static U Get<U>(int id) where U : T
+	{
+		Dictionary<int, T> cache = LoadCache<U>();
+		if (cache != null &&
+			cache.TryGetValue(id, out T obj))
+		{
+			return obj as U;
+		}
+		return null;
+	}
+
+	/// <summary>
+	/// Attempts to load and return cached objects of type U.
+	/// </summary>
+	public static Dictionary<int, T> LoadCache<U>() where U : T
+	{
+		Type t = typeof(U);
+		if (!resourceCache.TryGetValue(t, out Dictionary<int, T> cache))
+		{
+			resourceCache.Add(t, cache = new Dictionary<int, T>());
+
+			U[] resources = Resources.LoadAll<U>("");
+			if (resources != null && resources.Length > 0)
+			{
+				foreach (U resource in resources)
+				{
+					resource.ID = resource.name.GetDeterministicHashCode();
+
+					if (!cache.ContainsKey(resource.ID))
+					{
+						cache.Add(resource.ID, resource);
+						Debug.Log("[" + DateTime.UtcNow + "] Loaded " + t.Name + "[" + resource.name + " ID:" + resource.ID + "]");
+					}
+					else
+					{
+						Resources.UnloadAsset(resource);
 					}
 				}
 			}
-			return cache;
 		}
+		return cache;
 	}
 
-	public static void UnloadCache()
+	/// <summary>
+	/// Attemps to unload cached objects of type U.
+	/// </summary>
+	public static void UnloadCache<U>() where U : T
 	{
-		foreach (T resource in new List<T>(cache.Values))
+		Type t = typeof(U);
+		if (resourceCache.TryGetValue(t, out Dictionary<int, T> cache))
 		{
-			Debug.Log("[" + DateTime.UtcNow + "] Resource: " + typeof(T).Name + "[" + resource.name + " ID:" + resource.ID + "] - Unloaded");
-
-			Resources.UnloadAsset(resource);
-			cache.Remove(resource.ID);
+			foreach (U resource in new List<T>(cache.Values))
+			{
+				if (resource != null)
+				{
+					Debug.Log("[" + DateTime.UtcNow + "] Unloaded " + t.Name + "[" + resource.name + " ID:" + resource.ID + "]");
+					Resources.UnloadAsset(resource);
+				}
+				cache.Remove(resource.ID);
+			}
 		}
-		
 	}
 }

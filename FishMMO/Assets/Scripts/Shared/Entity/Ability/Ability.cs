@@ -13,13 +13,14 @@ public class Ability
 	public AbilityResourceDictionary requirements = new AbilityResourceDictionary();
 
 	// cache of all ability events
-	public Dictionary<string, AbilityEvent> AbilityEvents = new Dictionary<string, AbilityEvent>();
-	public Dictionary<string, SpawnEvent> PreSpawnEvents = new Dictionary<string, SpawnEvent>();
-	public Dictionary<string, SpawnEvent> SpawnEvents = new Dictionary<string, SpawnEvent>();
-	public Dictionary<string, MoveEvent> MoveEvents = new Dictionary<string, MoveEvent>();
-	public Dictionary<string, HitEvent> HitEvents = new Dictionary<string, HitEvent>();
+	public Dictionary<int, AbilityEvent> AbilityEvents = new Dictionary<int, AbilityEvent>();
+	public Dictionary<int, SpawnEvent> PreSpawnEvents = new Dictionary<int, SpawnEvent>();
+	public Dictionary<int, SpawnEvent> SpawnEvents = new Dictionary<int, SpawnEvent>();
+	public Dictionary<int, MoveEvent> MoveEvents = new Dictionary<int, MoveEvent>();
+	public Dictionary<int, HitEvent> HitEvents = new Dictionary<int, HitEvent>();
 
-	public AbilityTemplate Template { get { return AbilityTemplate.Cache[templateID]; } }
+	private AbilityTemplate cachedTemplate;
+	public AbilityTemplate Template { get { return cachedTemplate; } }
 
 	public int TotalResourceCost
 	{
@@ -42,6 +43,7 @@ public class Ability
 	{
 		this.abilityID = abilityID;
 		this.templateID = templateID;
+		this.cachedTemplate = AbilityTemplate.Get<AbilityTemplate>(templateID);
 
 		InternalAddTemplateModifiers(Template);
 
@@ -88,9 +90,9 @@ public class Ability
 		}
 	}
 
-	public bool TryGetAbilityEvent<T>(string name, out T modifier) where T : AbilityEvent
+	public bool TryGetAbilityEvent<T>(int templateID, out T modifier) where T : AbilityEvent
 	{
-		if (AbilityEvents.TryGetValue(name, out AbilityEvent result))
+		if (AbilityEvents.TryGetValue(templateID, out AbilityEvent result))
 		{
 			if ((modifier = result as T) != null)
 			{
@@ -101,17 +103,16 @@ public class Ability
 		return false;
 	}
 
-	public bool HasAbilityEvent(string name)
+	public bool HasAbilityEvent(int templateID)
 	{
-		if (string.IsNullOrWhiteSpace(name)) return false;
-		return AbilityEvents.ContainsKey(name);
+		return AbilityEvents.ContainsKey(templateID);
 	}
 
 	public void AddAbilityEvent(AbilityEvent abilityEvent)
 	{
-		if (!AbilityEvents.ContainsKey(abilityEvent.Name))
+		if (!AbilityEvents.ContainsKey(abilityEvent.ID))
 		{
-			AbilityEvents.Add(abilityEvent.Name, abilityEvent);
+			AbilityEvents.Add(abilityEvent.ID, abilityEvent);
 
 			SpawnEvent spawnEvent = abilityEvent as SpawnEvent;
 			if (spawnEvent != null)
@@ -119,15 +120,15 @@ public class Ability
 				switch (spawnEvent.SpawnEventType)
 				{
 					case SpawnEventType.OnPreSpawn:
-						if (!PreSpawnEvents.ContainsKey(spawnEvent.Name))
+						if (!PreSpawnEvents.ContainsKey(spawnEvent.ID))
 						{
-							PreSpawnEvents.Add(spawnEvent.Name, spawnEvent);
+							PreSpawnEvents.Add(spawnEvent.ID, spawnEvent);
 						}
 						break;
 					case SpawnEventType.OnSpawn:
-						if (!SpawnEvents.ContainsKey(spawnEvent.Name))
+						if (!SpawnEvents.ContainsKey(spawnEvent.ID))
 						{
-							SpawnEvents.Add(spawnEvent.Name, spawnEvent);
+							SpawnEvents.Add(spawnEvent.ID, spawnEvent);
 						}
 						break;
 					default:
@@ -139,14 +140,14 @@ public class Ability
 				HitEvent hitEvent = abilityEvent as HitEvent;
 				if (hitEvent != null)
 				{
-					HitEvents.Add(abilityEvent.name, hitEvent);
+					HitEvents.Add(abilityEvent.ID, hitEvent);
 				}
 				else
 				{
 					MoveEvent moveEvent = abilityEvent as MoveEvent;
 					if (moveEvent != null)
 					{
-						MoveEvents.Add(abilityEvent.name, moveEvent);
+						MoveEvents.Add(abilityEvent.ID, moveEvent);
 					}
 				}
 			}
@@ -183,9 +184,9 @@ public class Ability
 
 	public void RemoveAbilityEvent(AbilityEvent abilityEvent)
 	{
-		if (AbilityEvents.ContainsKey(abilityEvent.Name))
+		if (AbilityEvents.ContainsKey(abilityEvent.ID))
 		{
-			AbilityEvents.Remove(abilityEvent.Name);
+			AbilityEvents.Remove(abilityEvent.ID);
 
 			SpawnEvent spawnEvent = abilityEvent as SpawnEvent;
 			if (spawnEvent != null)
@@ -193,10 +194,10 @@ public class Ability
 				switch (spawnEvent.SpawnEventType)
 				{
 					case SpawnEventType.OnPreSpawn:
-						PreSpawnEvents.Remove(spawnEvent.Name);
+						PreSpawnEvents.Remove(spawnEvent.ID);
 						break;
 					case SpawnEventType.OnSpawn:
-						SpawnEvents.Remove(spawnEvent.Name);
+						SpawnEvents.Remove(spawnEvent.ID);
 						break;
 					default:
 						break;
@@ -207,14 +208,14 @@ public class Ability
 				HitEvent hitEvent = abilityEvent as HitEvent;
 				if (hitEvent != null)
 				{
-					HitEvents.Remove(abilityEvent.name);
+					HitEvents.Remove(abilityEvent.ID);
 				}
 				else
 				{
 					MoveEvent moveEvent = abilityEvent as MoveEvent;
 					if (moveEvent != null)
 					{
-						MoveEvents.Remove(abilityEvent.name);
+						MoveEvents.Remove(abilityEvent.ID);
 					}
 				}
 			}
@@ -255,7 +256,7 @@ public class Ability
 
 	public bool HasResource(Character character, AbilityEvent bloodResourceConversion, CharacterAttributeTemplate bloodResource)
 	{
-		if (AbilityEvents.ContainsKey(bloodResourceConversion.Name))
+		if (AbilityEvents.ContainsKey(bloodResourceConversion.ID))
 		{
 			int totalCost = TotalResourceCost;
 

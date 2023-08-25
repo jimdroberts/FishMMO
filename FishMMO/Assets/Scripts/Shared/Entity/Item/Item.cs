@@ -12,7 +12,8 @@ public class Item
 
 	public event Action OnDestroy;
 
-	public BaseItemTemplate Template { get { return BaseItemTemplate.Cache[templateID]; } }
+	private BaseItemTemplate cachedTemplate;
+	public BaseItemTemplate Template { get { return cachedTemplate; } }
 	public bool IsGenerated { get { return generator != null; } }
 	public bool IsEquippable { get { return equippable != null; } }
 	public bool IsStackable { get { return stackable != null; } }
@@ -21,6 +22,7 @@ public class Item
 	{
 		this.instanceID = instanceID;
 		this.templateID = templateID;
+		this.cachedTemplate = BaseItemTemplate.Get<BaseItemTemplate>(templateID);
 
 		Initialize();
 	}

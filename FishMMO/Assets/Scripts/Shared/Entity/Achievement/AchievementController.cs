@@ -66,7 +66,8 @@ public class AchievementController : NetworkBehaviour
 	/// </summary>
 	private void OnClientAchievementUpdateBroadcastReceived(AchievementUpdateBroadcast msg)
 	{
-		if (AchievementTemplate.Cache.TryGetValue(msg.templateID, out AchievementTemplate template) &&
+		AchievementTemplate template = AchievementTemplate.Get<AchievementTemplate>(msg.templateID);
+		if (template != null &&
 			achievements.TryGetValue(template.Name, out Achievement achievement))
 		{
 			achievement.currentValue = msg.newValue;
@@ -80,7 +81,8 @@ public class AchievementController : NetworkBehaviour
 	{
 		foreach (AchievementUpdateBroadcast subMsg in msg.achievements)
 		{
-			if (AchievementTemplate.Cache.TryGetValue(subMsg.templateID, out AchievementTemplate template) &&
+			AchievementTemplate template = AchievementTemplate.Get<AchievementTemplate>(subMsg.templateID);
+			if (template != null &&
 				achievements.TryGetValue(template.Name, out Achievement achievement))
 			{
 				achievement.currentValue = subMsg.newValue;

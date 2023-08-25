@@ -121,7 +121,8 @@ public class BuffController : NetworkBehaviour
 	/// </summary>
 	private void OnClientBuffAddBroadcastReceived(BuffAddBroadcast msg)
 	{
-		if (BuffTemplate.Cache.TryGetValue(msg.templateID, out BuffTemplate template))
+		BuffTemplate template = BuffTemplate.Get<BuffTemplate>(msg.templateID);
+		if (template != null)
 		{
 			Apply(template);
 		}
@@ -134,7 +135,8 @@ public class BuffController : NetworkBehaviour
 	{
 		foreach (BuffAddBroadcast subMsg in msg.buffs)
 		{
-			if (BuffTemplate.Cache.TryGetValue(subMsg.templateID, out BuffTemplate template))
+			BuffTemplate template = BuffTemplate.Get<BuffTemplate>(subMsg.templateID);
+			if (template != null)
 			{
 				Apply(template);
 			}
@@ -146,7 +148,8 @@ public class BuffController : NetworkBehaviour
 	/// </summary>
 	private void OnClientBuffRemoveBroadcastReceived(BuffRemoveBroadcast msg)
 	{
-		if (BuffTemplate.Cache.TryGetValue(msg.templateID, out BuffTemplate template))
+		BuffTemplate template = BuffTemplate.Get<BuffTemplate>(msg.templateID);
+		if (template != null)
 		{
 			Remove(template.Name);
 		}
@@ -159,7 +162,8 @@ public class BuffController : NetworkBehaviour
 	{
 		foreach (BuffRemoveBroadcast subMsg in msg.buffs)
 		{
-			if (BuffTemplate.Cache.TryGetValue(subMsg.templateID, out BuffTemplate template))
+			BuffTemplate template = BuffTemplate.Get<BuffTemplate>(subMsg.templateID);
+			if (template != null)
 			{
 				Remove(template.Name);
 			}

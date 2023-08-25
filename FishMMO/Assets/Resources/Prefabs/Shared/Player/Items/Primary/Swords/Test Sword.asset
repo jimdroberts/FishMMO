@@ -9,18 +9,19 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 6b04410a1cfff414a9da64bd27b1a13c, type: 3}
+  m_Script: {fileID: 11500000, guid: 8af2ae14ee4e8ac4884479b1c275296e, type: 3}
   m_Name: Test Sword
   m_EditorClassIdentifier: 
-  Slot: 5
+  ID: 0
   IsIdentifiable: 0
   MaxStackSize: 1
-  BaseValue: 35
+  Price: 0
+  IconPools: 
+  Icon: {fileID: 2800000, guid: 09996e28fa830fb4283b19f26584c9f2, type: 3}
+  Slot: 5
   MaxItemAttributes: 0
   AttributeDatabases: []
-  IconPools: 
   ModelSeed: 0
   ModelPools: 
-  Icon: {fileID: 0}
   AttackPower: {fileID: 11400000, guid: 23b76e39682ae764690280034e76f280, type: 2}
   AttackSpeed: {fileID: 11400000, guid: 8a24237090e0f5a45a5ea60c0137f86e, type: 2}

@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Linq;
 using UnityEngine;
 
 [CreateAssetMenu(fileName = "New Item Database", menuName = "Item/Database", order = 0)]

@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using UnityEngine.EventSystems;
 
 namespace FishMMO.Client
@@ -32,7 +33,7 @@ namespace FishMMO.Client
 
 			control.SetClient(_client);
 
-			UnityEngine.Debug.Log("UIManager: Registered " + control.Name);
+			UnityEngine.Debug.Log("[" + DateTime.UtcNow + "] UIManager: Registered " + control.Name);
 			controls.Add(control.Name, control);
 		}
 

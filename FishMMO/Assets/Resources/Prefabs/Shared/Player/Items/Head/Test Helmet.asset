@@ -9,17 +9,18 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 371d64a598b68094a8e6e484426adef9, type: 3}
+  m_Script: {fileID: 11500000, guid: a5556db1f536c0c48868c7772b79872d, type: 3}
   m_Name: Test Helmet
   m_EditorClassIdentifier: 
-  Slot: 0
+  ID: 0
   IsIdentifiable: 0
   MaxStackSize: 1
-  BaseValue: 15
+  Price: 0
+  IconPools: 
+  Icon: {fileID: 2800000, guid: fd12dbe3b63ae464f824b4a74c0e1766, type: 3}
+  Slot: 0
   MaxItemAttributes: 0
   AttributeDatabases: []
-  IconPools: 
   ModelSeed: 0
   ModelPools: 
-  Icon: {fileID: 0}
-  ArmorBonus: {fileID: 11400000, guid: cb16e96639b06ca4d9f2ed6c038bc1a9, type: 2}
+  ArmorBonus: {fileID: 0}

@@ -6,4 +6,5 @@
 	BuffPotion,
 	Food,
 	Mount,
+	Scroll,
 }

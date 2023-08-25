@@ -3,11 +3,13 @@
 	public int templateID;
 	public uint currentValue;
 
-	public AchievementTemplate Template { get { return AchievementTemplate.Cache[templateID]; } }
+	private AchievementTemplate cachedTemplate;
+	public AchievementTemplate Template { get { return cachedTemplate; } }
 
 	public Achievement(int templateID, uint Value)
 	{
 		this.templateID = templateID;
+		this.cachedTemplate = AchievementTemplate.Get<AchievementTemplate>(templateID);
 		this.currentValue = Value;
 	}
 }

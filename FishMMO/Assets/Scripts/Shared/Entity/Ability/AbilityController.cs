@@ -17,6 +17,7 @@ public class AbilityController : NetworkBehaviour
 	public Transform abilitySpawner;
 	public Character character;
 	public Dictionary<int, Ability> knownAbilities = new Dictionary<int, Ability>();
+	public Dictionary<int, AbilityTemplate> knownTemplates = new Dictionary<int, AbilityTemplate>();
 	public Dictionary<int, SpawnEvent> knownSpawnEvents = new Dictionary<int, SpawnEvent>();
 	public Dictionary<int, HitEvent> knownHitEvents = new Dictionary<int, HitEvent>();
 	public Dictionary<int, MoveEvent> knownMoveEvents = new Dictionary<int, MoveEvent>();
@@ -95,7 +96,7 @@ public class AbilityController : NetworkBehaviour
 					if (CanActivate(activationData, out Ability ability))
 					{
 						// consume resources
-						if (ability.AbilityEvents.ContainsKey(bloodResourceConversion.Name))
+						if (ability.AbilityEvents.ContainsKey(bloodResourceConversion.ID))
 						{
 							int totalCost = ability.TotalResourceCost;
 
@@ -161,7 +162,7 @@ public class AbilityController : NetworkBehaviour
 	{
 		if (knownAbilities.TryGetValue(referenceID, out Ability ability))
 		{
-			if (ability.AbilityEvents.ContainsKey(holdToActivate.Name))
+			if (ability.AbilityEvents.ContainsKey(holdToActivate.ID))
 			{
 				if (heldKey != KeyCode.None)
 				{
@@ -269,5 +270,15 @@ public class AbilityController : NetworkBehaviour
 	public void RemoveAbility(int referenceID)
 	{
 		knownAbilities.Remove(referenceID);
+	}
+
+	public void LearnAbilityTypes(AbilityTemplate[] abilityTemplates, AbilityEvent[] abilityEvents)
+	{
+
+	}
+
+	public void LearnAbility(Ability ability)
+	{
+
 	}
 }

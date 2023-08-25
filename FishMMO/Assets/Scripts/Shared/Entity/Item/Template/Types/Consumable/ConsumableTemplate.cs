@@ -1,6 +1,7 @@
 ﻿public abstract class ConsumableTemplate : BaseItemTemplate
 {
 	public ConsumableType ConsumableType;
+	public uint ChargeCost = 1;
 	public float Cooldown;
 
 	public bool CanConsume(Character character, Item item)
@@ -12,20 +13,30 @@
 			   !character.CooldownController.IsOnCooldown(ConsumableType.ToString());
 	}
 
-	public virtual void OnConsume(Character character, Item item)
+	public virtual bool Invoke(Character character, Item item)
 	{
 		if (CanConsume(character, item))
 		{
-			character.CooldownController.AddCooldown(ConsumableType.ToString(), new CooldownInstance(Cooldown));
-			if (item.IsStackable)
+			if (Cooldown > 0.0f)
 			{
-				//consume 1 charge
-				item.stackable.Remove(1);
+				character.CooldownController.AddCooldown(ConsumableType.ToString(), new CooldownInstance(Cooldown));
+			}
+			if (item.IsStackable && item.stackable.amount > ChargeCost)
+			{
+				//consume charges
+				item.stackable.Remove(ChargeCost);
+
+				if (item.stackable.amount < 1)
+				{
+					item.Destroy();
+				}
 			}
 			else
 			{
 				item.Destroy();
 			}
+			return true;
 		}
+		return false;
 	}
 }

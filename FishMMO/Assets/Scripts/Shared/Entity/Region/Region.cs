@@ -48,12 +48,14 @@ public class Region : MonoBehaviour
 			Gizmos.DrawWireCube(transform.position, box.size);
 			return;
 		}
-
-		SphereCollider sphere = Collider as SphereCollider;
-		if (sphere != null)
+		else
 		{
-			Gizmos.DrawWireSphere(transform.position, sphere.radius);
-			return;
+			SphereCollider sphere = Collider as SphereCollider;
+			if (sphere != null)
+			{
+				Gizmos.DrawWireSphere(transform.position, sphere.radius);
+				return;
+			}
 		}
 	}
 #endif
