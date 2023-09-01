@@ -42,27 +42,23 @@ public class AbilityController : NetworkBehaviour
 	public bool IsActivating { get { return CurrentAbilityID != NO_ABILITY; } }
 	public bool AbilityQueued { get { return QueuedAbilityID != NO_ABILITY; } }
 
-	private void Awake()
-	{
-		InstanceFinder.TimeManager.OnTick += TimeManager_OnTick;
-	}
-
-	void OnDestroy()
-	{
-		if (InstanceFinder.TimeManager != null)
-		{
-			InstanceFinder.TimeManager.OnTick -= TimeManager_OnTick;
-		}
-	}
-
 	public override void OnStartClient()
 	{
 		base.OnStartClient();
 
-		if (character == null || !base.IsOwner)
+		if (InstanceFinder.TimeManager != null)
 		{
-			enabled = false;
-			return;
+			InstanceFinder.TimeManager.OnTick += TimeManager_OnTick;
+		}
+	}
+
+	public override void OnStopClient()
+	{
+		base.OnStopClient();
+
+		if (InstanceFinder.TimeManager != null)
+		{
+			InstanceFinder.TimeManager.OnTick -= TimeManager_OnTick;
 		}
 	}
 
