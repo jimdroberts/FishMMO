@@ -8,7 +8,7 @@ namespace KinematicCharacterController
 	/// Represents the entire state of a character motor that is pertinent for simulation.
 	/// Use this to save state or revert to past state
 	/// </summary>
-	[System.Serializable]
+	[Serializable]
 	public struct KinematicCharacterMotorState : IReconcileData
 	{
 		public Vector3 Position;

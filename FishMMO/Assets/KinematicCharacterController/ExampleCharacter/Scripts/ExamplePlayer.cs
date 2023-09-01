@@ -100,7 +100,7 @@ namespace KinematicCharacterController.Examples
 				HandleCharacterInput(out ExampleCharacterInputReplicateData inputData);
 				Replicate(inputData, false);
 			}
-			if (base.IsServer)
+			else if (base.IsServer)
 			{
 				Replicate(default, true);
 				KinematicCharacterMotorState state = Character.GetState();
@@ -212,24 +212,31 @@ namespace KinematicCharacterController.Examples
 		{
 			characterInputs = default;
 
-			// always handle rotation
-			characterInputs.CameraRotation = CharacterCamera.Transform.rotation;
-
 			// we can't change input if the UI is open
 			if (!CanUpdateInput())
 			{
 				return;
 			}
 
-			// Build the CharacterInputs struct
-			characterInputs.MoveAxisForward = InputManager.GetAxis(VerticalInput);
-			characterInputs.MoveAxisRight = InputManager.GetAxis(HorizontalInput);
-			characterInputs.JumpDown = _jumpQueued;
-			characterInputs.CrouchActive = _crouchInputActive;
-			characterInputs.SprintActive = _sprintInputActive;
+			int moveFlags = 0;
+			if (_jumpQueued)
+			{
+				moveFlags.EnableBit(ExampleCharacterMoveFlags.Jump);
+				_jumpQueued = false;
+			}
+			if (_crouchInputActive)
+			{
+				moveFlags.EnableBit(ExampleCharacterMoveFlags.Crouch);
+			}
+			if (_sprintInputActive)
+			{
+				moveFlags.EnableBit(ExampleCharacterMoveFlags.Sprint);
+			}
 
-			// Reset the queued inputs
-			_jumpQueued = false;
+			characterInputs = new ExampleCharacterInputReplicateData(InputManager.GetAxis(VerticalInput),
+																	 InputManager.GetAxis(HorizontalInput),
+																	 CharacterCamera.Transform.rotation,
+																	 moveFlags);
 		}
 	}
 }

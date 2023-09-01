@@ -12,6 +12,9 @@ public class Ability
 	public AbilityResourceDictionary resources = new AbilityResourceDictionary();
 	public AbilityResourceDictionary requirements = new AbilityResourceDictionary();
 
+	// cache of the ability objects this ability has spawned
+	public Dictionary<int, AbilityObject> objects = new Dictionary<int, AbilityObject>();
+
 	// cache of all ability events
 	public Dictionary<int, AbilityEvent> AbilityEvents = new Dictionary<int, AbilityEvent>();
 	public Dictionary<int, SpawnEvent> PreSpawnEvents = new Dictionary<int, SpawnEvent>();

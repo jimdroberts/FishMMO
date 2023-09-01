@@ -1,36 +1,20 @@
 ﻿using FishNet.Object.Prediction;
+using UnityEngine;
 
-public class AbilityActivationReplicateData : IReplicateData
+public struct AbilityActivationReplicateData : IReplicateData
 {
 	public bool InterruptQueued;
-	public int AbilityID;
-	public float RemainingTime;
+	public int QueuedAbilityID;
+	public KeyCode HeldKey;
+	public Ray Ray;
 
-	public void ApplySpeedReduction(float speedReduction)
+	public AbilityActivationReplicateData(bool interruptQueued, int queuedAbilityID, KeyCode heldKey, Ray ray)
 	{
-		RemainingTime *= speedReduction;
-	}
-
-	public virtual AbilityActivationEventResult OnUpdate(Character character, float deltaTime)
-	{
-		if (InterruptQueued)
-		{
-			return AbilityActivationEventResult.Interrupted;
-		}
-
-		if (RemainingTime > 0.0f)
-		{
-			RemainingTime -= deltaTime;
-
-			return AbilityActivationEventResult.Updated;
-		}
-
-		return AbilityActivationEventResult.Finished;
-	}
-
-	public virtual void Interrupt(Character attacker)
-	{
-		InterruptQueued = true;
+		InterruptQueued = interruptQueued;
+		QueuedAbilityID = queuedAbilityID;
+		HeldKey = heldKey;
+		Ray = ray;
+		_tick = 0;
 	}
 
 	private uint _tick;

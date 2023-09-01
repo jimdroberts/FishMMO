@@ -1,8 +1,8 @@
-﻿using System.Collections.Generic;
-using UnityEngine;
+﻿using UnityEngine;
 
 public class AbilityObject : MonoBehaviour
 {
+	internal int ID = 0;
 	public Ability Ability;
 	public Character Caster;
 
@@ -46,19 +46,22 @@ public class AbilityObject : MonoBehaviour
 			}
 			if (HitCount < 1)
 			{
-				// TODO - add pooling to destroys ability objects
-				gameObject.SetActive(false);
-				Destroy(gameObject);
+				Destroy();
 			}
 		}
 		else
 		{
 			// we hit something that wasn't a player, default behaviour is to destroy the object?
-
-			// TODO - add pooling to destroys ability objects
-			gameObject.SetActive(false);
-			Destroy(gameObject);
+			Destroy();
 		}
+	}
+
+	internal void Destroy()
+	{
+		// TODO - add pooling to destroys ability objects
+		Ability.objects.Remove(ID);
+		gameObject.SetActive(false);
+		Destroy(gameObject);
 	}
 
 	/// <summary>
@@ -66,7 +69,7 @@ public class AbilityObject : MonoBehaviour
 	/// </summary>
 	/// <param name="self"></param>
 	/// <param name="targetInfo"></param>
-	public static void Spawn(Ability ability, Character self, TargetInfo targetInfo)
+	public static void Spawn(Ability ability, Character self, Transform abilitySpawner, TargetInfo targetInfo)
 	{
 		AbilityTemplate template = ability.Template;
 
@@ -78,7 +81,7 @@ public class AbilityObject : MonoBehaviour
 				go.transform.SetPositionAndRotation(self.transform.position, self.transform.rotation);
 				break;
 			case AbilitySpawnTarget.Hand:
-				go.transform.SetPositionAndRotation(self.AbilitySpawnPoint.position, self.AbilitySpawnPoint.rotation);
+				go.transform.SetPositionAndRotation(abilitySpawner.position, abilitySpawner.rotation);
 				break;
 			case AbilitySpawnTarget.Target:
 				if (targetInfo.hitPosition != null)
@@ -96,6 +99,7 @@ public class AbilityObject : MonoBehaviour
 		go.SetActive(false);
 
 		// construct initial ability object
+		int id = 0;
 		AbilityObject abilityObject = go.GetComponent<AbilityObject>();
 		if (abilityObject == null)
 		{
@@ -104,29 +108,29 @@ public class AbilityObject : MonoBehaviour
 		abilityObject.Ability = ability;
 		abilityObject.Caster = self;
 		abilityObject.HitCount = template.HitCount;
-
-		// add our initial object to list and return
-		List<AbilityObject> objects = new List<AbilityObject>
+		while (ability.objects.ContainsKey(id))
 		{
-			abilityObject
-		};
+			++id;
+		}
+		abilityObject.ID = id;
+		ability.objects.Add(abilityObject.ID, abilityObject);
 
 		// handle pre spawn events
 		foreach (SpawnEvent spawnEvent in ability.PreSpawnEvents.Values)
 		{
-			spawnEvent.Invoke(self, targetInfo, ref objects);
+			spawnEvent.Invoke(self, targetInfo, abilityObject, ref id, ref ability.objects);
 		}
 
 		// handle spawn events
 		foreach (SpawnEvent spawnEvent in ability.SpawnEvents.Values)
 		{
-			spawnEvent.Invoke(self, targetInfo, ref objects);
+			spawnEvent.Invoke(self, targetInfo, abilityObject, ref id, ref ability.objects);
 		}
 
 		// finalize
-		for (int i = 0; i < objects.Count; ++i)
+		foreach (AbilityObject obj in ability.objects.Values)
 		{
-			objects[i].gameObject.SetActive(true);
+			obj.gameObject.SetActive(true);
 		}
 	}
 }

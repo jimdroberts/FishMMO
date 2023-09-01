@@ -5,11 +5,10 @@ public sealed class MultiplyEvent : SpawnEvent
 {
 	public int SpawnCount;
 
-	public override void Invoke(Character self, TargetInfo targetInfo, ref List<AbilityObject> abilityObjects)
+	public override void Invoke(Character self, TargetInfo targetInfo, AbilityObject initialObject, ref int nextID, ref Dictionary<int, AbilityObject> abilityObjects)
 	{
 		if (abilityObjects != null && abilityObjects.Count > 0)
 		{
-			AbilityObject initialObject = abilityObjects[0]; // first object is initial object
 			for (int i = 0; i < SpawnCount; i++)
 			{
 				// create/fetch from pool
@@ -26,7 +25,12 @@ public sealed class MultiplyEvent : SpawnEvent
 				abilityObject.Ability = initialObject.Ability;
 				abilityObject.Caster = initialObject.Caster;
 				abilityObject.HitCount = initialObject.HitCount;
-				abilityObjects.Add(abilityObject);
+				while (abilityObjects.ContainsKey(nextID))
+				{
+					++nextID;
+				}
+				abilityObject.ID = nextID;
+				abilityObjects.Add(abilityObject.ID, abilityObject);
 			}
 		}
 	}

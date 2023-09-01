@@ -99,6 +99,7 @@ namespace FishMMO.Client
 			Character character = Character.localCharacter;
 			if (character != null && character.PartyController.current != null && Client.NetworkManager.IsClient)
 			{
+#if UNITY_CLIENT
 				if (character.TargetController.current.target != null)
 				{
 					Character targetCharacter = character.TargetController.current.target.GetComponent<Character>();
@@ -110,6 +111,7 @@ namespace FishMMO.Client
 						});
 					}
 				}
+#endif
 			}
 		}
 	}

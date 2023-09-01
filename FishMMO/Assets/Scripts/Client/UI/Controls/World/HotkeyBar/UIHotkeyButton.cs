@@ -48,7 +48,7 @@
 						character.EquipmentController.Activate(referenceID);
 						break;
 					case HotkeyType.Ability:
-						character.AbilityController.QueueActivation(referenceID, InputManager.GetKeyCode(keyMap));
+						character.AbilityController.Activate(referenceID, InputManager.GetKeyCode(keyMap));
 						break;
 					default:
 						return;

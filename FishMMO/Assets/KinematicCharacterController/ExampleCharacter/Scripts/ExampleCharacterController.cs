@@ -197,17 +197,17 @@ namespace KinematicCharacterController.Examples
 						}
 
 						// Jumping input
-						if (inputs.JumpDown)
+						if (inputs.MoveFlags.IsFlagged(ExampleCharacterMoveFlags.Jump))
 						{
 							_timeSinceJumpRequested = 0f;
 							_jumpRequested = true;
 						}
 
 						// Crouching input
-						_crouchInputDown = inputs.CrouchActive;
+						_crouchInputDown = inputs.MoveFlags.IsFlagged(ExampleCharacterMoveFlags.Crouch);
 
 						// Sprinting input
-						_sprintInputDown = inputs.SprintActive;
+						_sprintInputDown = inputs.MoveFlags.IsFlagged(ExampleCharacterMoveFlags.Sprint);
 
 						break;
 					}

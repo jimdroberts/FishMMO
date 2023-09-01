@@ -1,79 +1,73 @@
-﻿using FishNet.Object;
-using UnityEngine;
+﻿using UnityEngine;
 
 [RequireComponent(typeof(Character))]
-public class TargetController : NetworkBehaviour
+public class TargetController : MonoBehaviour
 {
+	public const float MAX_TARGET_DISTANCE = 50.0f;
+	public const float TARGET_UPDATE_RATE = 1.0f;
+
 	public Character character;
 	public LayerMask layerMask;
-	public float targetDistance = 50.0f;
-	public float targetUpdateRate = 1.0f;
+#if UNITY_CLIENT
 	public float nextTick = 0.0f;
+	public Ray currentRay;
+
 	public TargetInfo lastTarget;
 	public TargetInfo current;
 	//public UILabel3D targetLabel;
 
-	public override void OnStartClient()
+	void Awake()
 	{
-		base.OnStartClient();
-
-		if (character == null || !base.IsOwner)
-		{
-			enabled = false;
-			return;
-		}
-
 		//targetLabel = UILabel3D.Create("", 32, transform);
 		//targetLabel.enabled = false;
 	}
 
 	void Update()
 	{
-		// should we obtain target info from the client or just do distance checks on interactions..?
-		if (base.IsServer)
-		{
-			enabled = false;
-			return;
-		}
-
+		// update target label for the client
 		if (nextTick <= 0.0f)
 		{
-			nextTick = targetUpdateRate;
+			nextTick = TARGET_UPDATE_RATE;
 
 			lastTarget = current;
-			Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-			RaycastHit hit;
-			if (Physics.Raycast(ray, out hit, targetDistance, layerMask))
-			{
-				//Debug.DrawLine(ray.origin, hit.point, Color.red, 1);
-				//Debug.Log("hit: " + hit.transform.name + " pos: " + hit.point);
-				current = new TargetInfo(hit.transform, hit.point);
+			currentRay = Camera.main.ScreenPointToRay(Input.mousePosition);
+			//Camera.main.ScreenToWorldPoint(new Vector3(Screen.width * 0.5f, Screen.height * 0.5f, 0));
 
-				// outline?
-				if (lastTarget.target != null && current.target != null && lastTarget.target != current.target)
+			current = GetTarget(this, currentRay, MAX_TARGET_DISTANCE);
+			// outline?
+			if (lastTarget.target != null && current.target != null && lastTarget.target != current.target)
+			{
+				Outline previous = lastTarget.target.GetComponent<Outline>();
+				if (previous != null)
 				{
-					Outline previous = lastTarget.target.GetComponent<Outline>();
-					if (previous != null)
-					{
-						//targetLabel.enabled = false;
-						previous.enabled = false;
-					}
-
-					Outline nextOutline = current.target.GetComponent<Outline>();
-					if (nextOutline != null)
-					{
-						//targetLabel.SetPosition(current.target.position);
-						//targetLabel.SetText(current.target.name);
-						//targetLabel.enabled = true;
-						nextOutline.enabled = true;
-					}
+					//targetLabel.enabled = false;
+					previous.enabled = false;
 				}
-			}
-			else
-			{
-				current = new TargetInfo(null, Vector3.zero);
+
+				Outline nextOutline = current.target.GetComponent<Outline>();
+				if (nextOutline != null)
+				{
+					//targetLabel.SetPosition(current.target.position);
+					//targetLabel.SetText(current.target.name);
+					//targetLabel.enabled = true;
+					nextOutline.enabled = true;
+				}
 			}
 		}
 		nextTick -= Time.deltaTime;
+	}
+#endif
+
+	public static TargetInfo GetTarget(TargetController controller, Ray ray, float maxDistance)
+	{
+		float distance = maxDistance > MAX_TARGET_DISTANCE ? MAX_TARGET_DISTANCE : maxDistance;
+		RaycastHit hit;
+		if (Physics.Raycast(ray, out hit, distance, controller.layerMask))
+		{
+			//Debug.DrawLine(ray.origin, hit.point, Color.red, 1);
+			//Debug.Log("hit: " + hit.transform.name + " pos: " + hit.point);
+			return new TargetInfo(hit.transform, hit.point);
+		}
+		return new TargetInfo(null, ray.GetPoint(distance));
 	}
 }
