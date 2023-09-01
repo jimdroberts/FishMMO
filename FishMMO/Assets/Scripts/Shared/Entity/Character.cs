@@ -40,6 +40,9 @@ public class Character : NetworkBehaviour, IPooledResettable
 {
 	public static Character localCharacter;
 
+	public Transform Transform { get; private set; }
+
+	public ExampleCharacterController CharacterController;
 	public CharacterAttributeController AttributeController;
 	public CharacterDamageController DamageController;
 	public TargetController TargetController;
@@ -88,6 +91,9 @@ public class Character : NetworkBehaviour, IPooledResettable
 
 	void Awake()
 	{
+		Transform = transform;
+
+		CharacterController = gameObject.GetComponent<ExampleCharacterController>();
 		AttributeController = gameObject.GetComponent<CharacterAttributeController>();
 		DamageController = gameObject.GetComponent<CharacterDamageController>();
 		DamageController.character = this;

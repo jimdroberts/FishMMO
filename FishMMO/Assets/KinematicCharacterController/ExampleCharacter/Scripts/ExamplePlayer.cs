@@ -235,8 +235,9 @@ namespace KinematicCharacterController.Examples
 
 			characterInputs = new ExampleCharacterInputReplicateData(InputManager.GetAxis(VerticalInput),
 																	 InputManager.GetAxis(HorizontalInput),
-																	 CharacterCamera.Transform.rotation,
-																	 moveFlags);
+																	 moveFlags,
+																	 CharacterCamera.Transform.position,
+																	 CharacterCamera.Transform.rotation);
 		}
 	}
 }

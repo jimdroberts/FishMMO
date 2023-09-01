@@ -5,11 +5,14 @@ namespace Client
 	public sealed class Billboard : MonoBehaviour
 	{
 		private Camera Camera;
+
 		public bool PivotYAxis = true;
+
+		public Transform Transform { get; private set; }
 
 		void Awake()
 		{
-			Camera = Camera.main;
+			SetCamera(Camera.main);
 		}
 
 		void LateUpdate()
@@ -33,6 +36,7 @@ namespace Client
 		public void SetCamera(Camera target)
 		{
 			Camera = target;
+			Transform = Camera.transform;
 		}
 	}
 }

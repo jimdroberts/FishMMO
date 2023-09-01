@@ -6,7 +6,7 @@ public abstract class AbilityTemplate : CachedScriptableObject<AbilityTemplate>
 	public string Description;
 	public GameObject Prefab;
 	public AbilitySpawnTarget AbilitySpawnTarget;
-	public bool IsHoldToActivate;
+	public bool RequiresTarget;
 	public int HitCount;
 	public float ActivationTime;
 	public float Cooldown;

@@ -116,14 +116,18 @@ public class AbilityController : NetworkBehaviour
 					// channeled abilities like beam effects or a charge rush that are continuously updating or spawning objects should be handled here
 					else if (ability.HasAbilityEvent(channeled.ID))
 					{
-						// channeled abilities consume resources during activation
-						ConsumeResources(ability);
+						// generate a camera ray to use for targetting
+						Ray cameraRay = new Ray(character.CharacterController.VirtualCameraPosition, character.CharacterController.VirtualCameraRotation * Vector3.forward);
 
 						// get target info
-						TargetInfo targetInfo = TargetController.GetTarget(character.TargetController, activationData.Ray, ability.range);
+						TargetInfo targetInfo = TargetController.GetTarget(character.TargetController, cameraRay, ability.range);
 
 						// spawn the ability object
-						AbilityObject.Spawn(ability, character, abilitySpawner, targetInfo);
+						if (AbilityObject.TrySpawn(ability, character, abilitySpawner, targetInfo))
+						{
+							// channeled abilities consume resources during activation
+							ConsumeResources(ability);
+						}
 					}
 				}
 				return;
@@ -140,17 +144,21 @@ public class AbilityController : NetworkBehaviour
 			// complete the final activation of the ability
 			if (CanActivate(ability))
 			{
-				// consume resources
-				ConsumeResources(ability);
-
-				// add ability to cooldowns
-				AddCooldown(ability);
+				// generate a camera ray to use for targetting
+				Ray cameraRay = new Ray(character.CharacterController.VirtualCameraPosition, character.CharacterController.VirtualCameraRotation * Vector3.forward);
 
 				// get target info
-				TargetInfo targetInfo = TargetController.GetTarget(character.TargetController, activationData.Ray, ability.range);
+				TargetInfo targetInfo = TargetController.GetTarget(character.TargetController, cameraRay, ability.range);
 
 				// spawn the ability object
-				AbilityObject.Spawn(ability, character, abilitySpawner, targetInfo);
+				if (AbilityObject.TrySpawn(ability, character, abilitySpawner, targetInfo))
+				{
+					// consume resources
+					ConsumeResources(ability);
+
+					// add ability to cooldowns
+					AddCooldown(ability);
+				}
 			}
 			// reset ability data
 			Cancel();
@@ -221,13 +229,7 @@ public class AbilityController : NetworkBehaviour
 	{
 		activationEventData = new AbilityActivationReplicateData(InterruptQueued,
 																 QueuedAbilityID,
-																 HeldKey,
-#if UNITY_CLIENT
-																 character.TargetController.currentRay);
-#else
-																 default);
-#endif
-
+																 HeldKey);
 		InterruptQueued = false;
 		QueuedAbilityID = NO_ABILITY;
 	}

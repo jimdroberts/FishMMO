@@ -74,9 +74,8 @@ namespace FishMMO.Server.Services
 			}
 
 			// store these into vars so we don't have to access them a bunch of times
-			var charTransform = character.transform;
-			var charPosition = charTransform.position;
-			var rotation = charTransform.rotation;
+			var charPosition = character.Transform.position;
+			var rotation = character.Transform.rotation;
 
 			// copy over the new values into the existing entity
 			existingCharacter.Name = character.characterName;

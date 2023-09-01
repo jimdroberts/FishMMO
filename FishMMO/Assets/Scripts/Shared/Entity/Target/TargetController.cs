@@ -60,7 +60,7 @@ public class TargetController : MonoBehaviour
 
 	public static TargetInfo GetTarget(TargetController controller, Ray ray, float maxDistance)
 	{
-		float distance = maxDistance > MAX_TARGET_DISTANCE ? MAX_TARGET_DISTANCE : maxDistance;
+		float distance = maxDistance.Clamp(0.0f, MAX_TARGET_DISTANCE);
 		RaycastHit hit;
 		if (Physics.Raycast(ray, out hit, distance, controller.layerMask))
 		{

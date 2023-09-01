@@ -7,15 +7,17 @@ namespace KinematicCharacterController.Examples
 	{
 		public float MoveAxisForward;
 		public float MoveAxisRight;
-		public Quaternion CameraRotation;
 		public int MoveFlags;
+		public Vector3 CameraPosition;
+		public Quaternion CameraRotation;
 
-		public ExampleCharacterInputReplicateData(float moveAxisForward, float moveAxisRight, Quaternion cameraRotation, int moveFlags)
+		public ExampleCharacterInputReplicateData(float moveAxisForward, float moveAxisRight, int moveFlags, Vector3 cameraPosition, Quaternion cameraRotation)
 		{
 			MoveAxisForward = moveAxisForward;
 			MoveAxisRight = moveAxisRight;
-			CameraRotation = cameraRotation;
 			MoveFlags = moveFlags;
+			CameraPosition = cameraPosition;
+			CameraRotation = cameraRotation;
 
 			_tick = 0;
 		}

@@ -83,6 +83,8 @@ namespace KinematicCharacterController.Examples
 		private float _timeSinceLastAbleToJump = 0f;
 		private bool _isCrouching = false;
 
+		public Vector3 VirtualCameraPosition { get; private set; }
+		public Quaternion VirtualCameraRotation { get; private set; }
 		public bool IsJumping { get; private set; }
 
 		private void Awake()
@@ -168,6 +170,9 @@ namespace KinematicCharacterController.Examples
 		/// </summary>
 		public void SetInputs(ref ExampleCharacterInputReplicateData inputs)
 		{
+			VirtualCameraPosition = inputs.CameraPosition;
+			VirtualCameraRotation = inputs.CameraRotation;
+
 			// Clamp input
 			Vector3 moveInputVector = Vector3.ClampMagnitude(new Vector3(inputs.MoveAxisRight, 0f, inputs.MoveAxisForward), 1f);
 

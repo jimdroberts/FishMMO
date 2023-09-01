@@ -65,32 +65,38 @@ public class AbilityObject : MonoBehaviour
 	}
 
 	/// <summary>
-	/// Handles primary spawn functionality for all ability objects.
+	/// Handles primary spawn functionality for all ability objects. Returns true if successful.
 	/// </summary>
 	/// <param name="self"></param>
 	/// <param name="targetInfo"></param>
-	public static void Spawn(Ability ability, Character self, Transform abilitySpawner, TargetInfo targetInfo)
+	public static bool TrySpawn(Ability ability, Character self, Transform abilitySpawner, TargetInfo targetInfo)
 	{
 		AbilityTemplate template = ability.Template;
 
+		if (template.RequiresTarget && targetInfo.target == null)
+		{
+			return false;
+		}
+
 		// TODO create/fetch from pool
 		GameObject go = Instantiate(template.Prefab);
+		Transform t = go.transform;
 		switch (template.AbilitySpawnTarget)
 		{
 			case AbilitySpawnTarget.Self:
-				go.transform.SetPositionAndRotation(self.transform.position, self.transform.rotation);
+				t.SetPositionAndRotation(self.Transform.position, self.Transform.rotation);
 				break;
 			case AbilitySpawnTarget.Hand:
-				go.transform.SetPositionAndRotation(abilitySpawner.position, abilitySpawner.rotation);
+				t.SetPositionAndRotation(abilitySpawner.position, abilitySpawner.rotation);
 				break;
 			case AbilitySpawnTarget.Target:
 				if (targetInfo.hitPosition != null)
 				{
-					go.transform.SetPositionAndRotation(targetInfo.hitPosition, self.transform.rotation);
+					t.SetPositionAndRotation(targetInfo.hitPosition, self.Transform.rotation);
 				}
 				else
 				{
-					go.transform.SetPositionAndRotation(targetInfo.target.position, self.transform.rotation);
+					t.SetPositionAndRotation(targetInfo.target.position, self.Transform.rotation);
 				}
 				break;
 			default:
@@ -132,5 +138,7 @@ public class AbilityObject : MonoBehaviour
 		{
 			obj.gameObject.SetActive(true);
 		}
+
+		return true;
 	}
 }

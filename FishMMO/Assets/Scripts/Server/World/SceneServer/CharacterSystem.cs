@@ -68,10 +68,10 @@ namespace FishMMO.Server
 						{
 							// Check if they are within some bounds, if not we need to move them to a respawn location!
 							// TODO: Try to prevent combat escape, maybe this needs to be handled on the game design level?
-							if(details.boundaries.PointContainedInBoundaries(character.transform.position) == false)
+							if(details.boundaries.PointContainedInBoundaries(character.Transform.position) == false)
 							{
 								Vector3 spawnPoint = GetRandomRespawnPoint(details.respawnPositions);
-								character.Motor.SetPositionAndRotationAndVelocity(spawnPoint, character.transform.rotation, Vector3.zero);
+								character.Motor.SetPositionAndRotationAndVelocity(spawnPoint, character.Transform.rotation, Vector3.zero);
 							}
 						}
 					}
@@ -177,7 +177,7 @@ namespace FishMMO.Server
 					CharacterService.SaveCharacter(dbContext, character, false);
 					dbContext.SaveChanges();
 
-					Debug.Log("[" + DateTime.UtcNow + "] " + character.characterName + " has been saved at: " + character.transform.position.ToString());
+					Debug.Log("[" + DateTime.UtcNow + "] " + character.characterName + " has been saved at: " + character.Transform.position.ToString());
 
 					// immediately log out for now.. we could add a timeout later on..?
 					if (character.NetworkObject.IsSpawned)
@@ -312,7 +312,7 @@ namespace FishMMO.Server
 					});
 				}
 
-				Debug.Log("[" + DateTime.UtcNow + "] " + character.characterName + " has been spawned at: " + character.sceneName + " " + character.transform.position.ToString());
+				Debug.Log("[" + DateTime.UtcNow + "] " + character.characterName + " has been spawned at: " + character.sceneName + " " + character.Transform.position.ToString());
 			}
 			else
 			{
