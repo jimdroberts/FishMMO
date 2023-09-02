@@ -325,6 +325,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5200512103453460944, guid: 6379611c1b00cef4b96162c929c504ef,
         type: 3}
+      propertyPath: RelayPort
+      value: 7780
+      objectReference: {fileID: 0}
+    - target: {fileID: 5200512103453460944, guid: 6379611c1b00cef4b96162c929c504ef,
+        type: 3}
       propertyPath: configurationFileName
       value: WorldServer.cfg
       objectReference: {fileID: 0}

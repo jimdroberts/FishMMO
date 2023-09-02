@@ -48,8 +48,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 03313be06094e964aa4ef9f757c6f674, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  relayIp: 
-  relayPort: 0
+  ConfigurationFileName: 
+  Address: 
+  Port: 0
+  RelayAddress: 
+  RelayPort: 0
 --- !u!114 &4059034741344880446
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -62,9 +65,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2d4ee952c5a180845abb775163401c3d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  windowTitle: LoginServer
-  updateRate: 2
-  nextUpdate: 0
+  WorldSceneSystem: {fileID: 0}
+  Title: 
+  UpdateRate: 2
+  NextUpdate: 0
 --- !u!114 &2508430958062098396
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -89,7 +93,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a5d90391dac489b4bb53d2e7806ee224, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  initialSpawnPositions: {fileID: 11400000, guid: 29319c68a3e415b448b29901b5ec66ff,
+  WorldSceneDetailsCache: {fileID: 11400000, guid: ee8f2ab36344dae4c8c59b28985d5338,
     type: 2}
 --- !u!114 &4059034741344880447
 MonoBehaviour:

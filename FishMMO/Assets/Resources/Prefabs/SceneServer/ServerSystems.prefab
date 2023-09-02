@@ -51,11 +51,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 03313be06094e964aa4ef9f757c6f674, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  configurationFileName: 
-  address: 
-  port: 0
-  relayAddress: 
-  relayPort: 7780
+  ConfigurationFileName: 
+  Address: 
+  Port: 0
+  RelayAddress: 
+  RelayPort: 0
 --- !u!114 &6747751012235542384
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -69,9 +69,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   SceneManager: {fileID: 0}
-  worldSceneDetailsCache: {fileID: 0}
-  locked: 0
-  pulseRate: 10
+  WorldSceneDetailsCache: {fileID: 11400000, guid: ee8f2ab36344dae4c8c59b28985d5338,
+    type: 2}
 --- !u!114 &3610206149135137523
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -85,9 +84,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   WorldSceneSystem: {fileID: 0}
-  windowTitle: ZoneServer
-  updateRate: 2
-  nextUpdate: 0
+  Title: 
+  UpdateRate: 2
+  NextUpdate: 0
 --- !u!114 &4133482352268162714
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -101,10 +100,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   SceneServerSystem: {fileID: 0}
-  saveRate: 60
-  characterPrefabs:
-  - {fileID: 784751938054981284, guid: 67671c10327f3b144a21191076a7af5b, type: 3}
-  worldSceneDetailsCache: {fileID: 0}
+  SaveRate: 60
+  OutOfBoundsCheckRate: 5
 --- !u!114 &7212380580702704947
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -130,6 +127,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   SceneManager: {fileID: 0}
+  CharacterSystem: {fileID: 0}
+  AllowRepeatMessages: 0
+  MessageRateLimit: 0
 --- !u!114 &3610206149135137527
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -142,6 +142,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d701440aea9074a4d85f9b2474c1793b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  CharacterSystem: {fileID: 0}
   nextGuildId: 0
 --- !u!114 &3610206149135137524
 MonoBehaviour:
@@ -155,4 +156,5 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1df2e174834e90e478fdcded1626e5a4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  CharacterSystem: {fileID: 0}
   nextPartyId: 0

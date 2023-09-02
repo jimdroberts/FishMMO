@@ -265,6 +265,12 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 403044114284278985, guid: 8e0fbf828e74525449caf94aea6e8d22,
         type: 3}
+      propertyPath: WorldSceneDetailsCache
+      value: 
+      objectReference: {fileID: 11400000, guid: ee8f2ab36344dae4c8c59b28985d5338,
+        type: 2}
+    - target: {fileID: 403044114284278985, guid: 8e0fbf828e74525449caf94aea6e8d22,
+        type: 3}
       propertyPath: worldSceneDetailsCache
       value: 
       objectReference: {fileID: 11400000, guid: ee8f2ab36344dae4c8c59b28985d5338,
@@ -328,6 +334,11 @@ PrefabInstance:
         type: 3}
       propertyPath: m_Name
       value: ServerSystems
+      objectReference: {fileID: 0}
+    - target: {fileID: 5849347582015469635, guid: 8e0fbf828e74525449caf94aea6e8d22,
+        type: 3}
+      propertyPath: RelayPort
+      value: 7770
       objectReference: {fileID: 0}
     - target: {fileID: 5849347582015469635, guid: 8e0fbf828e74525449caf94aea6e8d22,
         type: 3}
