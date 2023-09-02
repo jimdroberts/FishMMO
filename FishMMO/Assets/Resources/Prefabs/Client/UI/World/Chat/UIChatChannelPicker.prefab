@@ -133,13 +133,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 19e79cb7b88458a47aaa9216dd74d16a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  mainPanel: {fileID: 2511941743767674322}
-  inputField: {fileID: 0}
-  startOpen: 0
-  isAlwaysOpen: 0
-  hasFocus: 0
-  canDrag: 0
-  clampToScreen: 0
+  MainPanel: {fileID: 2511941743767674322}
+  InputField: {fileID: 0}
+  StartOpen: 0
+  IsAlwaysOpen: 0
+  HasFocus: 0
+  CanDrag: 0
+  ClampToScreen: 0
   input: {fileID: 4298345841828681216}
   channelTogglePrefab: {fileID: 4298345841241831458}
   toggles: []

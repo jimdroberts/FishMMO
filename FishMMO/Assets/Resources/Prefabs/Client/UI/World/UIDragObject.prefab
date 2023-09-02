@@ -88,7 +88,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   MainPanel: {fileID: 8699455903881863041}
   InputField: {fileID: 0}
-  StartOpen: 1
+  StartOpen: 0
   IsAlwaysOpen: 0
   HasFocus: 0
   CanDrag: 0
