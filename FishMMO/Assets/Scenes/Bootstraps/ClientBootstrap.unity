@@ -991,7 +991,7 @@ PrefabInstance:
     - target: {fileID: 1419794991950549949, guid: 72a8e16445661d84d91a7386257b5e8e,
         type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: -0.000061035156
+      value: -0.000030517578
       objectReference: {fileID: 0}
     - target: {fileID: 1419794992118969624, guid: 72a8e16445661d84d91a7386257b5e8e,
         type: 3}
@@ -1399,7 +1399,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   LoginServerAddresses:
-  - address: 192.168.0.1
+  - address: 127.0.0.1
     port: 7770
 --- !u!4 &1045518713
 Transform:
