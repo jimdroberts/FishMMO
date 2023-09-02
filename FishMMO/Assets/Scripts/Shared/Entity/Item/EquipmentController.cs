@@ -67,9 +67,9 @@ public class EquipmentController : ItemContainer
 	{
 		if (item == null || !CanManipulate()) return false;
 
-		EquippableItemTemplate equippable = item.Template as EquippableItemTemplate;
+		EquippableItemTemplate Equippable = item.Template as EquippableItemTemplate;
 		// make sure the slot type matches so we aren't equipping things in weird places
-		if (equippable == null || slot != equippable.Slot)
+		if (Equippable == null || slot != Equippable.Slot)
 		{
 			return false;
 		}
@@ -78,10 +78,10 @@ public class EquipmentController : ItemContainer
 		Item prevItem = items[slotIndex];
 		if (prevItem != null &&
 			prevItem.IsStackable &&
-			prevItem.stackable.amount > 0 &&
-			prevItem.equippable != null)
+			prevItem.Stackable.Amount > 0 &&
+			prevItem.Equippable != null)
 		{
-			prevItem.equippable.Unequip();
+			prevItem.Equippable.Unequip();
 
 			// swap the items
 			if (Character.InventoryController != null)
@@ -105,9 +105,9 @@ public class EquipmentController : ItemContainer
 		}
 
 		// equip the item to the character (adds attributes.. etc..)
-		if (item.equippable != null)
+		if (item.Equippable != null)
 		{
-			item.equippable.Equip(Character);
+			item.Equippable.Equip(Character);
 		}
 		return true;
 	}
@@ -133,9 +133,9 @@ public class EquipmentController : ItemContainer
 		SetItemSlot(null, slot);
 
 		// unequip the item
-		if (item.equippable != null)
+		if (item.Equippable != null)
 		{
-			item.equippable.Unequip();
+			item.Equippable.Unequip();
 		}
 
 		// try to add the item back to the inventory

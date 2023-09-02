@@ -3,10 +3,10 @@ using UnityEngine;
 
 public class Region : MonoBehaviour
 {
-    public string regionName;
+    public string RegionName;
     public Collider Collider;
 	[Tooltip("Add a terrain if you would like the region to span the entire map. (Requires BoxCollider)")]
-	public Terrain terrain;
+	public Terrain Terrain;
 
 	public List<RegionAction> OnUpdate = new List<RegionAction>();
 	public List<RegionAction> OnRegionEnter = new List<RegionAction>();
@@ -18,19 +18,19 @@ public class Region : MonoBehaviour
 		Collider = gameObject.GetComponent<Collider>();
 		if (Collider == null)
 		{
-			Debug.Log(regionName + " collider is null and will not function properly.");
+			Debug.Log(RegionName + " collider is null and will not function properly.");
 			return;
 		}
 		// set the collider to trigger just incase we forgot to set it in the inspector
 		Collider.isTrigger = true;
 		
 		// terrain bounds override the collider
-		if (terrain != null)
+		if (Terrain != null)
 		{
 			BoxCollider box = Collider as BoxCollider;
 			if (box != null)
 			{
-				box.size = terrain.terrainData.size;
+				box.size = Terrain.terrainData.size;
 			}
 		}
 	}

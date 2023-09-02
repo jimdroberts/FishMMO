@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using FishNet.Object;
 
 public abstract class ItemContainer : NetworkBehaviour
@@ -108,7 +107,7 @@ public abstract class ItemContainer : NetworkBehaviour
 		// we can't add an item with a stack size of 0.. a 0 stack size means the item doesn't exist!
 		if (item == null) return false;
 
-		uint amountRemaining = item.IsStackable ? item.stackable.amount : 1;
+		uint amountRemaining = item.IsStackable ? item.Stackable.Amount : 1;
 		for (int i = 0; i < items.Count; ++i)
 		{
 			// if we find an empty slot we return instantly
@@ -119,10 +118,10 @@ public abstract class ItemContainer : NetworkBehaviour
 
 			// if we find another item of the same type and it's stack is not full
 			if (items[i].IsStackable &&
-				!items[i].stackable.IsStackFull &&
+				!items[i].Stackable.IsStackFull &&
 				items[i].IsMatch(item))
 			{
-				uint remainingCapacity = items[i].Template.MaxStackSize - items[i].stackable.amount;
+				uint remainingCapacity = items[i].Template.MaxStackSize - items[i].Stackable.Amount;
 
 				amountRemaining = remainingCapacity.AbsoluteSubtract(amountRemaining);
 			}
@@ -146,16 +145,16 @@ public abstract class ItemContainer : NetworkBehaviour
 			return false;
 		}
 
-		uint amount = item.IsStackable ? item.stackable.amount : 1;
+		uint amount = item.IsStackable ? item.Stackable.Amount : 1;
 		for (int i = 0; i < items.Count; ++i)
 		{
 			// add the item to the current slot
 			if (items[i] != null &&
 				items[i].IsStackable &&
-				items[i].stackable.AddToStack(item))
+				items[i].Stackable.AddToStack(item))
 			{
 				// set the remaining amount to the items stack size
-				amount = item.stackable.amount;
+				amount = item.Stackable.Amount;
 
 				// add the modified items to the list
 				modifiedItems.Add(items[i]);

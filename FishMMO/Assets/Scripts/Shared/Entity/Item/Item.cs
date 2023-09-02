@@ -6,17 +6,17 @@ public class Item
 	public int templateID;
 	public ulong instanceID;
 
-	public ItemGenerator generator;
-	public ItemEquippable equippable;
-	public ItemStackable stackable;
+	public ItemGenerator Generator;
+	public ItemEquippable Equippable;
+	public ItemStackable Stackable;
 
 	public event Action OnDestroy;
 
 	private BaseItemTemplate cachedTemplate;
 	public BaseItemTemplate Template { get { return cachedTemplate; } }
-	public bool IsGenerated { get { return generator != null; } }
-	public bool IsEquippable { get { return equippable != null; } }
-	public bool IsStackable { get { return stackable != null; } }
+	public bool IsGenerated { get { return Generator != null; } }
+	public bool IsEquippable { get { return Equippable != null; } }
+	public bool IsStackable { get { return Stackable != null; } }
 
 	public Item(ulong instanceID, int templateID)
 	{
@@ -53,34 +53,34 @@ public class Item
 	{
 		if (Template.MaxStackSize > 1)
 		{
-			this.stackable = new ItemStackable();
-			this.stackable.Initialize(this, amount.Clamp(1, Template.MaxStackSize));
+			this.Stackable = new ItemStackable();
+			this.Stackable.Initialize(this, amount.Clamp(1, Template.MaxStackSize));
 		}
 		if (generate)
 		{
-			generator = new ItemGenerator();
+			Generator = new ItemGenerator();
 		}
 		if (Template as EquippableItemTemplate != null)
 		{
-			equippable = new ItemEquippable();
-			equippable.Initialize(this);
+			Equippable = new ItemEquippable();
+			Equippable.Initialize(this);
 		}
-		generator?.Initialize(this, seed);
+		Generator?.Initialize(this, seed);
 	}
 
 	public void Destroy()
 	{
-		if (generator != null)
+		if (Generator != null)
 		{
-			generator.Destroy();
+			Generator.Destroy();
 		}
-		if (equippable != null)
+		if (Equippable != null)
 		{
-			equippable.Destroy();
+			Equippable.Destroy();
 		}
-		/*if (stackable != null)
+		/*if (Stackable != null)
 		{
-			stackable.OnDestroy();
+			Stackable.OnDestroy();
 		}*/
 		OnDestroy?.Invoke();
 	}
@@ -88,7 +88,7 @@ public class Item
 	public bool IsMatch(Item other)
 	{
 		return templateID == other.templateID &&
-				(IsGenerated && other.IsGenerated && generator.Seed == other.generator.Seed ||
+				(IsGenerated && other.IsGenerated && Generator.Seed == other.Generator.Seed ||
 				!IsGenerated && !other.IsGenerated);
 	}
 
@@ -103,7 +103,7 @@ public class Item
 		sb.Append(instanceID);
 		sb.Append("</color>");
 
-		generator?.Tooltip(sb);
+		Generator?.Tooltip(sb);
 		return sb.ToString();
 	}
 }

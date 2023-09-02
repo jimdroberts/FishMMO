@@ -9,7 +9,7 @@
 		return character != null &&
 			   item != null &&
 			   item.IsStackable &&
-			   item.stackable.amount > 1 &&
+			   item.Stackable.Amount > 1 &&
 			   !character.CooldownController.IsOnCooldown(ConsumableType.ToString());
 	}
 
@@ -21,12 +21,12 @@
 			{
 				character.CooldownController.AddCooldown(ConsumableType.ToString(), new CooldownInstance(Cooldown));
 			}
-			if (item.IsStackable && item.stackable.amount > ChargeCost)
+			if (item.IsStackable && item.Stackable.Amount > ChargeCost)
 			{
 				//consume charges
-				item.stackable.Remove(ChargeCost);
+				item.Stackable.Remove(ChargeCost);
 
-				if (item.stackable.amount < 1)
+				if (item.Stackable.Amount < 1)
 				{
 					item.Destroy();
 				}

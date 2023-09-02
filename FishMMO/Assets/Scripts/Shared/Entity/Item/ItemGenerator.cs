@@ -7,7 +7,7 @@ public class ItemGenerator : BaseRNGenerator
 {
 	private Dictionary<string, ItemAttribute> attributes = new Dictionary<string, ItemAttribute>();
 
-	public Item item;
+	private Item item;
 	public event Action<ItemAttribute, int, int> OnSetAttribute;
 
 	public void Initialize(Item item, int seed)
@@ -15,20 +15,21 @@ public class ItemGenerator : BaseRNGenerator
 		this.item = item;
 		Seed = seed;
 
-		if (item.equippable != null)
+		if (item.Equippable != null)
 		{
-			item.equippable.OnEquip += ItemEquippable_OnEquip;
-			item.equippable.OnUnequip += ItemEquippable_OnUnequip;
+			item.Equippable.OnEquip += ItemEquippable_OnEquip;
+			item.Equippable.OnUnequip += ItemEquippable_OnUnequip;
 		}
 	}
 
 	public void Destroy()
 	{
-		if (item.equippable != null)
+		if (item.Equippable != null)
 		{
-			item.equippable.OnEquip -= ItemEquippable_OnEquip;
-			item.equippable.OnUnequip -= ItemEquippable_OnUnequip;
+			item.Equippable.OnEquip -= ItemEquippable_OnEquip;
+			item.Equippable.OnUnequip -= ItemEquippable_OnUnequip;
 		}
+		item = null;
 	}
 
 	public string Tooltip()
@@ -65,8 +66,8 @@ public class ItemGenerator : BaseRNGenerator
 				attributes.Clear();
 				attributes = new Dictionary<string, ItemAttribute>();
 
-				EquippableItemTemplate equippable = item.Template as EquippableItemTemplate;
-				if (equippable == null)
+				EquippableItemTemplate Equippable = item.Template as EquippableItemTemplate;
+				if (Equippable == null)
 					return;
 
 				WeaponTemplate weapon = item.Template as WeaponTemplate;
@@ -84,13 +85,13 @@ public class ItemGenerator : BaseRNGenerator
 					}
 				}
 
-				if (equippable.AttributeDatabases != null && equippable.AttributeDatabases.Length > 0)
+				if (Equippable.AttributeDatabases != null && Equippable.AttributeDatabases.Length > 0)
 				{
-					int attributeCount = random.Next(0, equippable.MaxItemAttributes);
+					int attributeCount = random.Next(0, Equippable.MaxItemAttributes);
 					for (int i = 0, rng; i < attributeCount; ++i)
 					{
-						rng = random.Next(0, equippable.AttributeDatabases.Length);
-						ItemAttributeTemplateDatabase db = equippable.AttributeDatabases[rng];
+						rng = random.Next(0, Equippable.AttributeDatabases.Length);
+						ItemAttributeTemplateDatabase db = Equippable.AttributeDatabases[rng];
 						rng = random.Next(0, db.Attributes.Count);
 						ItemAttributeTemplate attributeTemplate = Enumerable.ToList(db.Attributes.Values)[rng];
 						attributes.Add(attributeTemplate.Name, new ItemAttribute(attributeTemplate.ID, random.Next(attributeTemplate.MinValue, attributeTemplate.MaxValue)));

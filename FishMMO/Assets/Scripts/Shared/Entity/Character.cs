@@ -125,6 +125,11 @@ public class Character : NetworkBehaviour, IPooledResettable
 
 #if !UNITY_SERVER || UNITY_EDITOR
 			LocalInputController = gameObject.AddComponent<LocalInputController>();
+			if (UIManager.TryGet<UICastBar>("UICastBar", out UICastBar uiCastBar))
+			{
+				AbilityController.OnUpdate += uiCastBar.OnUpdate;
+				AbilityController.OnCancel += uiCastBar.OnCancel;
+			}
 #endif
 		}
 	}
@@ -139,6 +144,11 @@ public class Character : NetworkBehaviour, IPooledResettable
 			if (LocalInputController != null)
 			{
 				Destroy(LocalInputController);
+			}
+			if (UIManager.TryGet<UICastBar>("UICastBar", out UICastBar uiCastBar))
+			{
+				AbilityController.OnUpdate -= uiCastBar.OnUpdate;
+				AbilityController.OnCancel -= uiCastBar.OnCancel;
 			}
 #endif
 		}

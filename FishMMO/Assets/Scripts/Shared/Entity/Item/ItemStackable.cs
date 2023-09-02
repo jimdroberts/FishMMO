@@ -1,20 +1,20 @@
 ﻿public class ItemStackable : IStackable<Item>
 {
-	public Item item;
-	public uint amount;
+	private Item item;
+	public uint Amount;
 
-	public bool IsStackFull { get { return amount == item.Template.MaxStackSize; } }
+	public bool IsStackFull { get { return Amount == item.Template.MaxStackSize; } }
 
 	public void Initialize(Item item, uint amount)
 	{
 		this.item = item;
-		this.amount = amount;
+		Amount = amount;
 	}
 
 	public void Remove(uint amount)
 	{
-		this.amount -= amount;
-		if (this.amount == 0)
+		Amount -= amount;
+		if (Amount == 0)
 		{
 			item.Destroy();
 		}
@@ -27,7 +27,7 @@
 	{
 		if (other == null) return false;
 
-		if (amount < 1) return false; // item no longer exists?
+		if (Amount < 1) return false; // item no longer exists?
 
 		if (item.templateID != other.templateID) return false;
 
@@ -38,11 +38,11 @@
 		}
 
 		// if either stack is full we can't add any more
-		if (IsStackFull || other.stackable != null || other.stackable.IsStackFull) return false;
+		if (IsStackFull || other.Stackable != null || other.Stackable.IsStackFull) return false;
 
-		uint remainingCapacity = item.Template.MaxStackSize - amount;
+		uint remainingCapacity = item.Template.MaxStackSize - Amount;
 
-		uint remainingAmount = remainingCapacity.AbsoluteSubtract(other.stackable.amount);
+		uint remainingAmount = remainingCapacity.AbsoluteSubtract(other.Stackable.Amount);
 		// if we can't add the full amount there will be a remainder
 		if (remainingAmount > 0) return false;
 
@@ -56,7 +56,7 @@
 	{
 		if (other == null) return false;
 
-		if (amount < 1) return false; // this should have been an empty slot!
+		if (Amount < 1) return false; // this should have been an empty slot!
 
 		if (item.templateID != other.templateID) return false;
 
@@ -66,11 +66,11 @@
 			return false;
 		}
 
-		if (IsStackFull || other.stackable != null || other.stackable.IsStackFull) return false;
+		if (IsStackFull || other.Stackable != null || other.Stackable.IsStackFull) return false;
 
-		uint remainingCapacity = item.Template.MaxStackSize - amount;
-		uint remainingAmount = remainingCapacity.AbsoluteSubtract(other.stackable.amount);
-		other.stackable.amount = remainingAmount;
+		uint remainingCapacity = item.Template.MaxStackSize - Amount;
+		uint remainingAmount = remainingCapacity.AbsoluteSubtract(other.Stackable.Amount);
+		other.Stackable.Amount = remainingAmount;
 
 		return true;
 	}
@@ -86,12 +86,12 @@
 			return false;
 		}
 
-		if (amount >= this.amount)
+		if (amount >= Amount)
 		{
 			instance = this.item;
 			return true;
 		}
-		this.amount -= amount;
+		Amount -= amount;
 		instance = null;
 		//instance = new Item(templateID, amount, seed);
 		return true;

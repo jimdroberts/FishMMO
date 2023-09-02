@@ -12,17 +12,17 @@ public class ItemEquippable : IEquippable<Character>
 	public void Initialize(Item item)
 	{
 		this.item = item;
-		if (item.generator != null)
+		if (item.Generator != null)
 		{
-			item.generator.OnSetAttribute += ItemGenerator_OnSetAttribute;
+			item.Generator.OnSetAttribute += ItemGenerator_OnSetAttribute;
 		}
 	}
 
 	public void Destroy()
 	{
-		if (item.generator != null)
+		if (item.Generator != null)
 		{
-			item.generator.OnSetAttribute -= ItemGenerator_OnSetAttribute;
+			item.Generator.OnSetAttribute -= ItemGenerator_OnSetAttribute;
 		}
 
 		Unequip();

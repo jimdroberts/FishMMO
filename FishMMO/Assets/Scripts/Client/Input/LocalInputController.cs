@@ -52,7 +52,7 @@ namespace FishMMO.Client
 				Character character = Character.localCharacter;
 				if (character != null)
 				{
-					Transform target = character.TargetController.current.target;
+					Transform target = character.TargetController.Current.target;
 					if (target != null)
 					{
 						IInteractable interactable = target.GetComponent<IInteractable>();
