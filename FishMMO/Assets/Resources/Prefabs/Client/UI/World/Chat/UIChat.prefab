@@ -806,13 +806,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a662396f56e402847bf1b2b914c9ed7b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  mainPanel: {fileID: 877165945724084341}
-  inputField: {fileID: 877165946469741079}
-  startOpen: 0
-  isAlwaysOpen: 0
-  hasFocus: 0
-  canDrag: 1
-  clampToScreen: 1
+  MainPanel: {fileID: 877165945724084341}
+  InputField: {fileID: 0}
+  StartOpen: 1
+  IsAlwaysOpen: 0
+  HasFocus: 0
+  CanDrag: 0
+  ClampToScreen: 0
   chatViewParent: {fileID: 877165946126966488}
   chatMessagePrefab: {fileID: -6438489236917851121, guid: 1bbbcf2f88a3fd3479ebe37d4cf823cb,
     type: 3}
@@ -822,6 +822,8 @@ MonoBehaviour:
   - {fileID: 877165945576539420}
   currentTab: 
   messages: []
+  AllowRepeatMessages: 0
+  MessageRateLimit: 0
 --- !u!1 &877165945793937789
 GameObject:
   m_ObjectHideFlags: 0

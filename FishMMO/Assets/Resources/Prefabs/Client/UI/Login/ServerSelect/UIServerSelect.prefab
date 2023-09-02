@@ -1334,18 +1334,19 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6adc96a36d03cc0488bf0047c8ecdc8c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  mainPanel: {fileID: 7169268987045006985}
-  inputField: {fileID: 0}
-  startOpen: 0
-  isAlwaysOpen: 0
-  hasFocus: 0
-  canDrag: 0
-  clampToScreen: 0
+  MainPanel: {fileID: 7169268987045006985}
+  InputField: {fileID: 0}
+  StartOpen: 1
+  IsAlwaysOpen: 0
+  HasFocus: 0
+  CanDrag: 0
+  ClampToScreen: 0
   connectToServerButton: {fileID: 7169268986304728264}
   refreshButton: {fileID: 488913270}
   serverParent: {fileID: 7169268987258923770}
   serverButtonPrefab: {fileID: 6014688881168360534, guid: e072185d1589c204c93cf591472514e9,
     type: 3}
+  RefreshRate: 5
 --- !u!1 &7169268987063242377
 GameObject:
   m_ObjectHideFlags: 0

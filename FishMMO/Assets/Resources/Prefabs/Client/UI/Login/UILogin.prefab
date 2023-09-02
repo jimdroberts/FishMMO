@@ -1125,13 +1125,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 89d055f22b6fa6b418479f2049640a47, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  mainPanel: {fileID: 6975439588524082749}
-  inputField: {fileID: 0}
-  startOpen: 1
-  isAlwaysOpen: 0
-  hasFocus: 0
-  canDrag: 0
-  clampToScreen: 1
+  MainPanel: {fileID: 6975439588524082749}
+  InputField: {fileID: 0}
+  StartOpen: 1
+  IsAlwaysOpen: 0
+  HasFocus: 0
+  CanDrag: 0
+  ClampToScreen: 0
   username: {fileID: 6975439588320551634}
   password: {fileID: 6975439589751287332}
   signInButton: {fileID: 6975439589089250740}

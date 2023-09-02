@@ -263,13 +263,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d914c3e3eb034d84181b32c40d369c31, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  mainPanel: {fileID: 3205336543945873646}
-  inputField: {fileID: 0}
-  startOpen: 0
-  isAlwaysOpen: 0
-  hasFocus: 0
-  canDrag: 0
-  clampToScreen: 0
+  MainPanel: {fileID: 3205336543945873646}
+  InputField: {fileID: 0}
+  StartOpen: 1
+  IsAlwaysOpen: 0
+  HasFocus: 0
+  CanDrag: 0
+  ClampToScreen: 0
   CancelButton: {fileID: 3205336545372918306}
   CancelButtonText: {fileID: 3205336544703801183}
   AttemptCounterText: {fileID: 3205336543414230891}

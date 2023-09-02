@@ -1142,13 +1142,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c026d54ba86929545a3b841da46d2f4d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  mainPanel: {fileID: 8900509986432490463}
-  inputField: {fileID: 0}
-  startOpen: 0
-  isAlwaysOpen: 0
-  hasFocus: 0
-  canDrag: 1
-  clampToScreen: 1
+  MainPanel: {fileID: 8900509986432490463}
+  InputField: {fileID: 0}
+  StartOpen: 1
+  IsAlwaysOpen: 0
+  HasFocus: 0
+  CanDrag: 0
+  ClampToScreen: 0
   partyMemberParent: {fileID: 8900509986437605610}
   partyMemberPrefab: {fileID: 2167118092381648120, guid: 1ebd030bedd4eac4aaf1ab1946ff059f,
     type: 3}

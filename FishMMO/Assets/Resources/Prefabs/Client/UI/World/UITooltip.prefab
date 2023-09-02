@@ -228,13 +228,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 209d084b607a4314e896a6e65da32a8c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  mainPanel: {fileID: 5890719095073740554}
-  inputField: {fileID: 0}
-  startOpen: 0
-  isAlwaysOpen: 0
-  hasFocus: 0
-  canDrag: 0
-  clampToScreen: 0
+  MainPanel: {fileID: 5890719095073740554}
+  InputField: {fileID: 0}
+  StartOpen: 1
+  IsAlwaysOpen: 0
+  HasFocus: 0
+  CanDrag: 0
+  ClampToScreen: 0
   text: {fileID: 5890719095035366530}
   background: {fileID: 5890719095073740554}
 --- !u!114 &8648312449845056101

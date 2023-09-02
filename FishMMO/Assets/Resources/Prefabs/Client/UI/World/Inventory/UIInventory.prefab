@@ -983,13 +983,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ef2067b1d0fda304dbba81731062bb8d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  mainPanel: {fileID: 9001324435181979110}
-  inputField: {fileID: 0}
-  startOpen: 0
-  isAlwaysOpen: 0
-  hasFocus: 0
-  canDrag: 1
-  clampToScreen: 1
+  MainPanel: {fileID: 9001324435181979110}
+  InputField: {fileID: 0}
+  StartOpen: 1
+  IsAlwaysOpen: 0
+  HasFocus: 0
+  CanDrag: 0
+  ClampToScreen: 0
   content: {fileID: 1994176931}
   buttonPrefab: {fileID: -5946272345820923739, guid: dae94fce4f011404ba25ff32945feab3,
     type: 3}

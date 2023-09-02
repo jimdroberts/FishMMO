@@ -268,13 +268,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c6aab2a62f1729245adc63db78a7aeeb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  mainPanel: {fileID: 3017031836945612658}
-  inputField: {fileID: 0}
-  startOpen: 0
-  isAlwaysOpen: 0
-  hasFocus: 0
-  canDrag: 1
-  clampToScreen: 1
+  MainPanel: {fileID: 3017031836945612658}
+  InputField: {fileID: 0}
+  StartOpen: 1
+  IsAlwaysOpen: 0
+  HasFocus: 0
+  CanDrag: 0
+  ClampToScreen: 0
   dialogueLabel: {fileID: 3017031836915557626}
 --- !u!1 &3696914197942576368
 GameObject:

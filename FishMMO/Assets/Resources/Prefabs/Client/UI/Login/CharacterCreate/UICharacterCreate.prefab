@@ -1184,13 +1184,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0757001859f0b264eb565827b781124e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  mainPanel: {fileID: 1419794991761815502}
-  inputField: {fileID: 6920609836118685331}
-  startOpen: 0
-  isAlwaysOpen: 0
-  hasFocus: 0
-  canDrag: 0
-  clampToScreen: 0
+  MainPanel: {fileID: 1419794991761815502}
+  InputField: {fileID: 0}
+  StartOpen: 1
+  IsAlwaysOpen: 0
+  HasFocus: 0
+  CanDrag: 0
+  ClampToScreen: 0
   createButton: {fileID: 8127445010744967217}
   createResultText: {fileID: 1419794990980697740}
   startLocationDropdown: {fileID: 1199433771935391207}

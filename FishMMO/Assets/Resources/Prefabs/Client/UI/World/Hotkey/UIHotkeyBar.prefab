@@ -90,13 +90,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fd6fc38a9d129ea4284032e1ce877622, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  mainPanel: {fileID: 5241152077285006809}
-  inputField: {fileID: 0}
-  startOpen: 0
-  isAlwaysOpen: 0
-  hasFocus: 0
-  canDrag: 0
-  clampToScreen: 1
+  MainPanel: {fileID: 5241152077285006809}
+  InputField: {fileID: 0}
+  StartOpen: 1
+  IsAlwaysOpen: 0
+  HasFocus: 0
+  CanDrag: 0
+  ClampToScreen: 0
   parent: {fileID: 5241152077620068051}
   buttonPrefab: {fileID: -2753566670696080509, guid: 11b5d3c7915925f41ae20fbc55496763,
     type: 3}

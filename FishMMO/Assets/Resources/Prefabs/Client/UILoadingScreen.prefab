@@ -416,13 +416,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 432fefcdf64926148a1a9d9defe77004, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  mainPanel: {fileID: 4170189731979957681}
-  inputField: {fileID: 0}
-  startOpen: 0
-  isAlwaysOpen: 0
-  hasFocus: 0
-  canDrag: 0
-  clampToScreen: 0
+  MainPanel: {fileID: 4170189731979957681}
+  InputField: {fileID: 0}
+  StartOpen: 1
+  IsAlwaysOpen: 0
+  HasFocus: 0
+  CanDrag: 0
+  ClampToScreen: 0
   LoadingProgress: {fileID: 4170189730588255181}
   LoadingImage: {fileID: 4170189731522560780}
   Details: {fileID: 11400000, guid: ee8f2ab36344dae4c8c59b28985d5338, type: 2}

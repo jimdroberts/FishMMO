@@ -32,6 +32,11 @@ namespace FishMMO.Client
 		{
 			startPosition = transform.position;
 
+			if (MainPanel == null)
+			{
+				MainPanel = transform;
+			}
+
 			/*if (mainPanel != null)
 			{
 				EventTrigger enterTrigger = mainPanel.gameObject.GetComponent<EventTrigger>();

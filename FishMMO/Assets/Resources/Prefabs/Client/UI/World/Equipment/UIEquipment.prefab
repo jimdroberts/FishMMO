@@ -341,14 +341,14 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls: []
-  index: -1
-  referenceID: 
-  allowedHotkeyType: 1
-  hotkeyType: 3
-  icon: {fileID: 6288626548684972086}
-  cooldownText: {fileID: 0}
-  amountText: {fileID: 0}
-  itemSlotType: 2
+  Index: -1
+  ReferenceID: -1
+  AllowedHotkeyType: 1
+  HotkeyType: 0
+  Icon: {fileID: 0}
+  CooldownText: {fileID: 0}
+  AmountText: {fileID: 0}
+  ItemSlotType: 0
 --- !u!1 &7405848190647595019
 GameObject:
   m_ObjectHideFlags: 0
@@ -602,14 +602,14 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls: []
-  index: -1
-  referenceID: 
-  allowedHotkeyType: 1
-  hotkeyType: 3
-  icon: {fileID: 9034945051604958971}
-  cooldownText: {fileID: 0}
-  amountText: {fileID: 0}
-  itemSlotType: 4
+  Index: -1
+  ReferenceID: -1
+  AllowedHotkeyType: 1
+  HotkeyType: 0
+  Icon: {fileID: 0}
+  CooldownText: {fileID: 0}
+  AmountText: {fileID: 0}
+  ItemSlotType: 0
 --- !u!1 &7405848190740713873
 GameObject:
   m_ObjectHideFlags: 0
@@ -728,14 +728,14 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls: []
-  index: -1
-  referenceID: 
-  allowedHotkeyType: 1
-  hotkeyType: 3
-  icon: {fileID: 98828384559693091}
-  cooldownText: {fileID: 0}
-  amountText: {fileID: 0}
-  itemSlotType: 1
+  Index: -1
+  ReferenceID: -1
+  AllowedHotkeyType: 1
+  HotkeyType: 0
+  Icon: {fileID: 0}
+  CooldownText: {fileID: 0}
+  AmountText: {fileID: 0}
+  ItemSlotType: 0
 --- !u!1 &7405848190872006467
 GameObject:
   m_ObjectHideFlags: 0
@@ -854,14 +854,14 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls: []
-  index: -1
-  referenceID: 
-  allowedHotkeyType: 1
-  hotkeyType: 3
-  icon: {fileID: 8028233922222830186}
-  cooldownText: {fileID: 0}
-  amountText: {fileID: 0}
-  itemSlotType: 5
+  Index: -1
+  ReferenceID: -1
+  AllowedHotkeyType: 1
+  HotkeyType: 0
+  Icon: {fileID: 0}
+  CooldownText: {fileID: 0}
+  AmountText: {fileID: 0}
+  ItemSlotType: 0
 --- !u!1 &7405848190996944453
 GameObject:
   m_ObjectHideFlags: 0
@@ -980,14 +980,14 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls: []
-  index: -1
-  referenceID: 
-  allowedHotkeyType: 1
-  hotkeyType: 3
-  icon: {fileID: 7405848190720566723}
-  cooldownText: {fileID: 0}
-  amountText: {fileID: 0}
-  itemSlotType: 0
+  Index: -1
+  ReferenceID: -1
+  AllowedHotkeyType: 1
+  HotkeyType: 0
+  Icon: {fileID: 0}
+  CooldownText: {fileID: 0}
+  AmountText: {fileID: 0}
+  ItemSlotType: 0
 --- !u!1 &7405848191045356670
 GameObject:
   m_ObjectHideFlags: 0
@@ -1083,13 +1083,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 301679fdea0585a42bb79dbb02734b2d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  mainPanel: {fileID: 7405848191045356545}
-  inputField: {fileID: 0}
-  startOpen: 0
-  isAlwaysOpen: 0
-  hasFocus: 0
-  canDrag: 1
-  clampToScreen: 1
+  MainPanel: {fileID: 7405848191045356545}
+  InputField: {fileID: 0}
+  StartOpen: 1
+  IsAlwaysOpen: 0
+  HasFocus: 0
+  CanDrag: 0
+  ClampToScreen: 0
   content: {fileID: 7405848191483884386}
   attributePrefab: {fileID: 9166855535903402535, guid: 5ab181d2438b711458854f7422ddf6f7,
     type: 3}
@@ -1233,14 +1233,14 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls: []
-  index: -1
-  referenceID: 
-  allowedHotkeyType: 1
-  hotkeyType: 3
-  icon: {fileID: 7903921065640453450}
-  cooldownText: {fileID: 0}
-  amountText: {fileID: 0}
-  itemSlotType: 3
+  Index: -1
+  ReferenceID: -1
+  AllowedHotkeyType: 1
+  HotkeyType: 0
+  Icon: {fileID: 0}
+  CooldownText: {fileID: 0}
+  AmountText: {fileID: 0}
+  ItemSlotType: 0
 --- !u!1 &7405848191314884649
 GameObject:
   m_ObjectHideFlags: 0
@@ -2049,14 +2049,14 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls: []
-  index: -1
-  referenceID: 
-  allowedHotkeyType: 1
-  hotkeyType: 3
-  icon: {fileID: 8044211839104714343}
-  cooldownText: {fileID: 0}
-  amountText: {fileID: 0}
-  itemSlotType: 6
+  Index: -1
+  ReferenceID: -1
+  AllowedHotkeyType: 1
+  HotkeyType: 0
+  Icon: {fileID: 0}
+  CooldownText: {fileID: 0}
+  AmountText: {fileID: 0}
+  ItemSlotType: 0
 --- !u!1 &7405848192641517264
 GameObject:
   m_ObjectHideFlags: 0

@@ -16,6 +16,7 @@ GameObject:
   - component: {fileID: 5698055281298649961}
   - component: {fileID: 7266005403130128576}
   - component: {fileID: 446289968932885008}
+  - component: {fileID: 656759775}
   m_Layer: 0
   m_Name: NetworkManager
   m_TagString: Untagged
@@ -36,7 +37,7 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
-  m_RootOrder: 0
+  m_RootOrder: 1
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &7024989448064037686
 MonoBehaviour:
@@ -50,11 +51,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d2c95dfde7d73b54dbbdc23155d35d36, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  IsNode: 0
   _refreshDefaultPrefabs: 1
   _runInBackground: 1
   _dontDestroyOnLoad: 1
-  _objectPool: {fileID: 0}
+  _objectPool: {fileID: 656759775}
   _persistence: 0
   _logging: {fileID: 0}
   _spawnablePrefabs: {fileID: 11400000, guid: 4211299e9ac449a4caa5f547b75992bd, type: 2}
@@ -70,6 +70,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 68828c85278210948b9d50a8db3aab74, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _authenticator: {fileID: 7266005403130128576}
   _syncTypeRate: 0.1
   SpawnPacking:
     Position: 0
@@ -92,7 +93,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: aca43cf6f20e77c4f8fcc078fd85081f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _syncTypeRate: 0.1
   _changeFrameRate: 1
   _frameRate: 60
 --- !u!114 &7619396021155755121
@@ -163,3 +163,16 @@ MonoBehaviour:
   _updateHostVisibility: 1
   _defaultConditions:
   - {fileID: 11400000, guid: 2033f54fd2794464bae08fa5a55c8996, type: 2}
+--- !u!114 &656759775
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7024989448064037687}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1afeaa36377bbf847880613509e71d54, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _enabled: 1

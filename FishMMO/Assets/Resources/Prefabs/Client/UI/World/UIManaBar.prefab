@@ -315,16 +315,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c772d0245a08d064098b7494c63a5e74, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  mainPanel: {fileID: 5077900836491962778}
-  inputField: {fileID: 0}
-  startOpen: 0
-  isAlwaysOpen: 0
-  hasFocus: 0
-  canDrag: 0
-  clampToScreen: 0
+  MainPanel: {fileID: 5077900836491962778}
+  InputField: {fileID: 0}
+  StartOpen: 1
+  IsAlwaysOpen: 0
+  HasFocus: 0
+  CanDrag: 0
+  ClampToScreen: 0
   slider: {fileID: 5077900836043917866}
   resourceValue: {fileID: 50413193}
-  template: {fileID: 11400000, guid: f627a40e6b3ef5349b3c735f0bfd60c7, type: 2}
+  Template: {fileID: 0}
 --- !u!1 &5077900837033983171
 GameObject:
   m_ObjectHideFlags: 0

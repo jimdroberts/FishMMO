@@ -86,13 +86,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4ca52c1c457cc8e44972bb2e6ce95ca5, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  mainPanel: {fileID: 8699455903881863041}
-  inputField: {fileID: 0}
-  startOpen: 0
-  isAlwaysOpen: 0
-  hasFocus: 0
-  canDrag: 0
-  clampToScreen: 0
-  icon: {fileID: 6637928240446436463}
-  referenceID: 
-  hotkeyType: 0
+  MainPanel: {fileID: 8699455903881863041}
+  InputField: {fileID: 0}
+  StartOpen: 1
+  IsAlwaysOpen: 0
+  HasFocus: 0
+  CanDrag: 0
+  ClampToScreen: 0
+  Icon: {fileID: 0}
+  ReferenceID: -1
+  HotkeyType: 0
+  LayerMask:
+    serializedVersion: 2
+    m_Bits: 0
+  DropDistance: 5

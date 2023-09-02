@@ -1503,13 +1503,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 131d77c1bfb666841913a94fac083adc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  mainPanel: {fileID: 7758741672075751443}
-  inputField: {fileID: 0}
-  startOpen: 0
-  isAlwaysOpen: 0
-  hasFocus: 0
-  canDrag: 0
-  clampToScreen: 0
+  MainPanel: {fileID: 7758741672075751443}
+  InputField: {fileID: 0}
+  StartOpen: 1
+  IsAlwaysOpen: 0
+  HasFocus: 0
+  CanDrag: 0
+  ClampToScreen: 0
   connectButton: {fileID: 7758741670798668370}
   deleteButton: {fileID: 8951757519312055414}
   selectedCharacterParent: {fileID: 0}

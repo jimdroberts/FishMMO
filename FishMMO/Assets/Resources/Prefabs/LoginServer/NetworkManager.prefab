@@ -14,6 +14,7 @@ GameObject:
   - component: {fileID: 5279227868985997979}
   - component: {fileID: 8065263723031035267}
   - component: {fileID: 1871523007589142441}
+  - component: {fileID: 1871523007616605281}
   m_Layer: 0
   m_Name: NetworkManager
   m_TagString: Untagged
@@ -34,7 +35,7 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
-  m_RootOrder: 0
+  m_RootOrder: 1
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &4720857798151945692
 MonoBehaviour:
@@ -48,11 +49,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d2c95dfde7d73b54dbbdc23155d35d36, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  IsNode: 0
   _refreshDefaultPrefabs: 1
   _runInBackground: 1
   _dontDestroyOnLoad: 1
-  _objectPool: {fileID: 0}
+  _objectPool: {fileID: 1871523007616605281}
   _persistence: 0
   _logging: {fileID: 0}
   _spawnablePrefabs: {fileID: 11400000, guid: 4211299e9ac449a4caa5f547b75992bd, type: 2}
@@ -68,6 +68,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 68828c85278210948b9d50a8db3aab74, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _authenticator: {fileID: 1871523007589142441}
   _syncTypeRate: 0.1
   SpawnPacking:
     Position: 0
@@ -129,3 +130,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f025143e543ef7b42968141f2bf9710a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+--- !u!114 &1871523007616605281
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4720857798151945693}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1afeaa36377bbf847880613509e71d54, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _enabled: 1
