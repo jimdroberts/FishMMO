@@ -7,13 +7,13 @@ public class BuffController : NetworkBehaviour
 {
 	private Dictionary<string, Buff> buffs = new Dictionary<string, Buff>();
 
-	public Character character;
+	public Character Character;
 
 	public override void OnStartClient()
 	{
 		base.OnStartClient();
 
-		if (character == null || !base.IsOwner)
+		if (Character == null || !base.IsOwner)
 		{
 			enabled = false;
 			return;
@@ -47,7 +47,7 @@ public class BuffController : NetworkBehaviour
 			if (pair.Value.remainingTime > 0.0f)
 			{
 				pair.Value.SubtractTickTime(dt);
-				pair.Value.TryTick(character);
+				pair.Value.TryTick(Character);
 			}
 			else
 			{
@@ -58,9 +58,9 @@ public class BuffController : NetworkBehaviour
 				}*/
 				foreach (Buff stack in pair.Value.Stacks)
 				{
-					stack.RemoveStack(character);
+					stack.RemoveStack(Character);
 				}
-				pair.Value.Remove(character);
+				pair.Value.Remove(Character);
 				buffs.Remove(pair.Key);
 			}
 		}
@@ -72,13 +72,13 @@ public class BuffController : NetworkBehaviour
 		if (!buffs.TryGetValue(template.Name, out buffInstance))
 		{
 			buffInstance = new Buff(template.ID);
-			buffInstance.Apply(character);
+			buffInstance.Apply(Character);
 			buffs.Add(template.Name, buffInstance);
 		}
 		else if (template.MaxStacks > 0 && buffInstance.Stacks.Count < template.MaxStacks)
 		{
 			Buff newStack = new Buff(template.ID);
-			buffInstance.AddStack(newStack, character);
+			buffInstance.AddStack(newStack, Character);
 			buffInstance.ResetDuration();
 		}
 		else
@@ -93,9 +93,9 @@ public class BuffController : NetworkBehaviour
 		{
 			foreach (Buff stack in buffInstance.Stacks)
 			{
-				stack.RemoveStack(character);
+				stack.RemoveStack(Character);
 			}
-			buffInstance.Remove(character);
+			buffInstance.Remove(Character);
 			buffs.Remove(buffName);
 		}
 	}
@@ -108,9 +108,9 @@ public class BuffController : NetworkBehaviour
 			{
 				foreach (Buff stack in pair.Value.Stacks)
 				{
-					stack.RemoveStack(character);
+					stack.RemoveStack(Character);
 				}
-				pair.Value.Remove(character);
+				pair.Value.Remove(Character);
 				buffs.Remove(pair.Key);
 			}
 		}

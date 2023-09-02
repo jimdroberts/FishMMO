@@ -24,13 +24,13 @@ public class SceneTeleporter : MonoBehaviour
 		if (other != null && other.gameObject != null && sceneServerSystem != null)
 		{
 			Character character = other.gameObject.GetComponent<Character>();
-			if (character != null && !character.isTeleporting)
+			if (character != null && !character.IsTeleporting)
 			{
 				if (sceneServerSystem.worldSceneDetailsCache != null &&
-					sceneServerSystem.worldSceneDetailsCache.scenes.TryGetValue(character.sceneName, out WorldSceneDetails details) &&
+					sceneServerSystem.worldSceneDetailsCache.scenes.TryGetValue(character.SceneName, out WorldSceneDetails details) &&
 					details.teleporters.TryGetValue(gameObject.name, out SceneTeleporterDetails teleporter))
 				{
-					character.isTeleporting = true;
+					character.IsTeleporting = true;
 
 					// should we prevent players from moving to a different scene if they are in combat?
 					/*if (character.DamageController.Attackers.Count > 0)
@@ -41,11 +41,11 @@ public class SceneTeleporter : MonoBehaviour
 					// make the character immortal for teleport
 					if (character.DamageController != null)
 					{
-						character.DamageController.immortal = true;
+						character.DamageController.Immortal = true;
 					}
 
-					string playerScene = character.sceneName;
-					character.sceneName = teleporter.toScene;
+					string playerScene = character.SceneName;
+					character.SceneName = teleporter.toScene;
 					character.Motor.SetPositionAndRotation(teleporter.toPosition, character.Transform.rotation);// teleporter.toRotation);
 
 					// save the character with new scene and position
@@ -53,7 +53,7 @@ public class SceneTeleporter : MonoBehaviour
 					CharacterService.SaveCharacter(dbContext, character, false);
 					dbContext.SaveChanges();
 
-					Debug.Log("[" + DateTime.UtcNow + "] " + character.characterName + " has been saved at: " + character.Transform.position.ToString());
+					Debug.Log("[" + DateTime.UtcNow + "] " + character.CharacterName + " has been saved at: " + character.Transform.position.ToString());
 
 					// tell the client to reconnect to the world server for automatic re-entry
 					character.Owner.Broadcast(new SceneWorldReconnectBroadcast()
@@ -82,7 +82,7 @@ public class SceneTeleporter : MonoBehaviour
 			Character character = other.gameObject.GetComponent<Character>();
 			if (character != null)
 			{
-				character.isTeleporting = false;
+				character.IsTeleporting = false;
 			}
 		}
 	}

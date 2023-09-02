@@ -19,7 +19,7 @@ public class Guild
 	{
 		foreach (GuildController member in members)
 		{
-			if (member.character.id == memberId)
+			if (member.Character.ID == memberId)
 			{
 				members.Remove(member);
 				return member;

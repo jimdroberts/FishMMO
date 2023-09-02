@@ -40,7 +40,7 @@ namespace FishMMO.Client
 			if (character != null && partyMemberPrefab != null)
 			{
 				TMP_Text partyMember = Instantiate(partyMemberPrefab, partyMemberParent);
-				partyMember.text = character.characterName;
+				partyMember.text = character.CharacterName;
 				members.Add(partyMember);
 			}
 		}
@@ -79,7 +79,7 @@ namespace FishMMO.Client
 		public void OnButtonCreateParty()
 		{
 			Character character = Character.localCharacter;
-			if (character != null && character.PartyController.current == null && Client.NetworkManager.IsClient)
+			if (character != null && character.PartyController.Current == null && Client.NetworkManager.IsClient)
 			{
 				Client.NetworkManager.ClientManager.Broadcast(new PartyCreateBroadcast());
 			}
@@ -88,7 +88,7 @@ namespace FishMMO.Client
 		public void OnButtonLeaveParty()
 		{
 			Character character = Character.localCharacter;
-			if (character != null && character.PartyController.current != null && Client.NetworkManager.IsClient)
+			if (character != null && character.PartyController.Current != null && Client.NetworkManager.IsClient)
 			{
 				Client.NetworkManager.ClientManager.Broadcast(new PartyLeaveBroadcast());
 			}
@@ -97,12 +97,12 @@ namespace FishMMO.Client
 		public void OnButtonInviteToParty()
 		{
 			Character character = Character.localCharacter;
-			if (character != null && character.PartyController.current != null && Client.NetworkManager.IsClient)
+			if (character != null && character.PartyController.Current != null && Client.NetworkManager.IsClient)
 			{
 #if UNITY_CLIENT
-				if (character.TargetController.current.target != null)
+				if (character.TargetController.Current.target != null)
 				{
-					Character targetCharacter = character.TargetController.current.target.GetComponent<Character>();
+					Character targetCharacter = character.TargetController.Current.target.GetComponent<Character>();
 					if (targetCharacter != null)
 					{
 						Client.NetworkManager.ClientManager.Broadcast(new PartyInviteBroadcast()

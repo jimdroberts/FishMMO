@@ -70,7 +70,7 @@ namespace FishMMO.Client
 				{
 					if (UIManager.TryGet("UIInventory", out UIInventory uiInventory))
 					{
-						uiInventory.visible = !uiInventory.visible;
+						uiInventory.Visible = !uiInventory.Visible;
 					}
 				}
 
@@ -78,7 +78,7 @@ namespace FishMMO.Client
 				{
 					//if (UIManager.TryGet("UIAbilities", out UIAbilities uiAbilities))
 					//{
-					//	uiAbilities.visible = !uiAbilities.visible;
+					//	uiAbilities.Visible = !uiAbilities.Visible;
 					//}
 				}
 
@@ -86,7 +86,7 @@ namespace FishMMO.Client
 				{
 					if (UIManager.TryGet("UIEquipment", out UIEquipment uiEquipment))
 					{
-						uiEquipment.visible = !uiEquipment.visible;
+						uiEquipment.Visible = !uiEquipment.Visible;
 					}
 				}
 
@@ -94,7 +94,7 @@ namespace FishMMO.Client
 				{
 					if (UIManager.TryGet("UIParty", out UIParty uiParty))
 					{
-						uiParty.visible = !uiParty.visible;
+						uiParty.Visible = !uiParty.Visible;
 					}
 				}
 
@@ -102,7 +102,7 @@ namespace FishMMO.Client
 				{
 					//if (UIManager.TryGet("UIMenu", out UIMenu uiMenu))
 					//{
-					//	uiMenu.visible = !uiMenu.visible;
+					//	uiMenu.Visible = !uiMenu.Visible;
 					//}
 				}
 			}

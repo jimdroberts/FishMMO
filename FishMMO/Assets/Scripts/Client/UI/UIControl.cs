@@ -26,7 +26,7 @@ namespace FishMMO.Client
 
 		public Client Client { get; private set; }
 		public string Name { get { return gameObject.name; } set { gameObject.name = value; } }
-		public bool visible { get { return gameObject.activeSelf; } set { gameObject.SetActive(value); } }
+		public bool Visible { get { return gameObject.activeSelf; } set { gameObject.SetActive(value); } }
 
 		private void Awake()
 		{
@@ -50,7 +50,7 @@ namespace FishMMO.Client
 
 			OnStarting();
 
-			if (!startOpen) visible = false;
+			if (!startOpen) Visible = false;
 		}
 
 		/// <summary>
@@ -114,7 +114,7 @@ namespace FishMMO.Client
 
 		public virtual void OnShow()
 		{
-			visible = true;
+			Visible = true;
 		}
 
 		public virtual void OnHide()
@@ -129,7 +129,7 @@ namespace FishMMO.Client
 				OnShow();
 				return;
 			}
-			visible = false;
+			Visible = false;
 		}
 
 		public virtual void OnResetPosition()

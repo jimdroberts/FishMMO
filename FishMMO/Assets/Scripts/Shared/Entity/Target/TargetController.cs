@@ -6,15 +6,14 @@ public class TargetController : MonoBehaviour
 	public const float MAX_TARGET_DISTANCE = 50.0f;
 	public const float TARGET_UPDATE_RATE = 1.0f;
 
-	public Character character;
-	public LayerMask layerMask;
+	public Character Character;
+	public LayerMask LayerMask;
 #if UNITY_CLIENT
-	public float nextTick = 0.0f;
-	public Ray currentRay;
+	private float nextTick = 0.0f;
+	//private UILabel3D targetLabel;
 
-	public TargetInfo lastTarget;
-	public TargetInfo current;
-	//public UILabel3D targetLabel;
+	public TargetInfo LastTarget;
+	public TargetInfo Current;
 
 	void Awake()
 	{
@@ -29,22 +28,22 @@ public class TargetController : MonoBehaviour
 		{
 			nextTick = TARGET_UPDATE_RATE;
 
-			lastTarget = current;
-			currentRay = Camera.main.ScreenPointToRay(Input.mousePosition);
+			LastTarget = Current;
+			Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
 			//Camera.main.ScreenToWorldPoint(new Vector3(Screen.width * 0.5f, Screen.height * 0.5f, 0));
 
-			current = GetTarget(this, currentRay, MAX_TARGET_DISTANCE);
+			Current = GetTarget(this, ray, MAX_TARGET_DISTANCE);
 			// outline?
-			if (lastTarget.target != null && current.target != null && lastTarget.target != current.target)
+			if (LastTarget.target != null && Current.target != null && LastTarget.target != Current.target)
 			{
-				Outline previous = lastTarget.target.GetComponent<Outline>();
+				Outline previous = LastTarget.target.GetComponent<Outline>();
 				if (previous != null)
 				{
 					//targetLabel.enabled = false;
 					previous.enabled = false;
 				}
 
-				Outline nextOutline = current.target.GetComponent<Outline>();
+				Outline nextOutline = Current.target.GetComponent<Outline>();
 				if (nextOutline != null)
 				{
 					//targetLabel.SetPosition(current.target.position);
@@ -62,7 +61,7 @@ public class TargetController : MonoBehaviour
 	{
 		float distance = maxDistance.Clamp(0.0f, MAX_TARGET_DISTANCE);
 		RaycastHit hit;
-		if (Physics.Raycast(ray, out hit, distance, controller.layerMask))
+		if (Physics.Raycast(ray, out hit, distance, controller.LayerMask))
 		{
 			//Debug.DrawLine(ray.origin, hit.point, Color.red, 1);
 			//Debug.Log("hit: " + hit.transform.name + " pos: " + hit.point);

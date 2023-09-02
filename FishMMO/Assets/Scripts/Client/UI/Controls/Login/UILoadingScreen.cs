@@ -32,7 +32,7 @@ namespace FishMMO.Client
 
 		private void ShowLoadingScreen()
 		{
-			visible = true;
+			Visible = true;
 			LoadingProgress.value = 0;
 			LoadingImage.gameObject.SetActive(LoadingImage.sprite != null);
 		}
@@ -69,7 +69,7 @@ namespace FishMMO.Client
 
 		private void OnSceneEndLoad(SceneLoadEndEventArgs endEvent)
 		{
-			visible = false;
+			Visible = false;
 		}
 		#endregion
 	}

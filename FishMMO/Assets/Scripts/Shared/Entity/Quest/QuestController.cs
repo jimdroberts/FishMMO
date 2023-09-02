@@ -7,13 +7,13 @@ public class QuestController : NetworkBehaviour
 {
 	private Dictionary<string, QuestInstance> quests = new Dictionary<string, QuestInstance>();
 
-	public Character character;
+	public Character Character;
 
 	public override void OnStartClient()
 	{
 		base.OnStartClient();
 
-		if (character == null || !base.IsOwner)
+		if (Character == null || !base.IsOwner)
 		{
 			enabled = false;
 			return;

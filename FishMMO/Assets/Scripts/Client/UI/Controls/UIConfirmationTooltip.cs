@@ -20,7 +20,7 @@ namespace FishMMO.Client
 
 		public void Open(string text, Action onAccept, Action onCancel = null)
 		{
-			if (visible)
+			if (Visible)
 				return;
 
 			if (dialogueLabel != null)
@@ -29,19 +29,19 @@ namespace FishMMO.Client
 			}
 			OnAccept = onAccept;
 			OnCancel = onCancel;
-			visible = true;
+			Visible = true;
 		}
 
 		public void OnClick_Accept()
 		{
 			OnAccept?.Invoke();
-			visible = false;
+			Visible = false;
 		}
 
 		public void OnClick_Cancel()
 		{
 			OnCancel?.Invoke();
-			visible = false;
+			Visible = false;
 		}
 	}
 }

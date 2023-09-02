@@ -8,10 +8,10 @@ using System.Collections.Generic;
 [RequireComponent(typeof(Character))]
 public class GuildController : NetworkBehaviour
 {
-	public Character character;
+	public Character Character;
 
-	public GuildRank rank = GuildRank.None;
-	public Guild current;
+	public GuildRank Rank = GuildRank.None;
+	public Guild Current;
 
 	public delegate void GuildEvent();
 	public event GuildEvent OnGuildCreated;
@@ -28,7 +28,7 @@ public class GuildController : NetworkBehaviour
 	{
 		base.OnStartClient();
 
-		if (character == null || !base.IsOwner)
+		if (Character == null || !base.IsOwner)
 		{
 			enabled = false;
 			return;
@@ -63,8 +63,8 @@ public class GuildController : NetworkBehaviour
 	public void OnClientGuildCreateBroadcastReceived(GuildCreateBroadcast msg)
 	{
 		Guild newGuild = new Guild(msg.guildId, this);
-		current = newGuild;
-		rank = GuildRank.Leader;
+		Current = newGuild;
+		Rank = GuildRank.Leader;
 
 		OnGuildCreated?.Invoke();
 	}
@@ -104,8 +104,8 @@ public class GuildController : NetworkBehaviour
 	/// </summary>
 	public void OnClientGuildLeaveBroadcastReceived(GuildLeaveBroadcast msg)
 	{
-		rank = GuildRank.None;
-		current = null;
+		Rank = GuildRank.None;
+		Current = null;
 
 		OnLeaveGuild?.Invoke();
 	}
@@ -115,9 +115,9 @@ public class GuildController : NetworkBehaviour
 	/// </summary>
 	public void OnClientGuildRemoveBroadcastReceived(GuildRemoveBroadcast msg)
 	{
-		if (current != null)
+		if (Current != null)
 		{
-			GuildController removedMember = current.RemoveMember(msg.memberId);
+			GuildController removedMember = Current.RemoveMember(msg.memberId);
 			OnRemoveMember?.Invoke(msg.memberId, GuildRank.None);
 		}
 	}

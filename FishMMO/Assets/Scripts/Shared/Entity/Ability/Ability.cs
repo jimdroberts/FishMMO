@@ -3,34 +3,31 @@ using System.Text;
 
 public class Ability
 {
-	public int abilityID;
-	public int templateID;
-	public float activationTime = 0.0f;
-	public float cooldown = 0.0f;
-	public float range = 0.0f;
-	public float speed = 0.0f;
-	public AbilityResourceDictionary resources = new AbilityResourceDictionary();
-	public AbilityResourceDictionary requirements = new AbilityResourceDictionary();
+	public int AbilityID;
+	public int TemplateID;
+	public float ActivationTime = 0.0f;
+	public float Cooldown = 0.0f;
+	public float Range = 0.0f;
+	public float Speed = 0.0f;
 
-	// cache of the ability objects this ability has spawned
-	public Dictionary<int, AbilityObject> objects = new Dictionary<int, AbilityObject>();
-
+	public AbilityTemplate Template { get; private set; }
+	public AbilityResourceDictionary Resources { get; private set; }
+	public AbilityResourceDictionary Requirements { get; private set; }
 	// cache of all ability events
-	public Dictionary<int, AbilityEvent> AbilityEvents = new Dictionary<int, AbilityEvent>();
-	public Dictionary<int, SpawnEvent> PreSpawnEvents = new Dictionary<int, SpawnEvent>();
-	public Dictionary<int, SpawnEvent> SpawnEvents = new Dictionary<int, SpawnEvent>();
-	public Dictionary<int, MoveEvent> MoveEvents = new Dictionary<int, MoveEvent>();
-	public Dictionary<int, HitEvent> HitEvents = new Dictionary<int, HitEvent>();
-
-	private AbilityTemplate cachedTemplate;
-	public AbilityTemplate Template { get { return cachedTemplate; } }
+	public Dictionary<int, AbilityEvent> AbilityEvents { get; private set; }
+	public Dictionary<int, SpawnEvent> PreSpawnEvents { get; private set; }
+	public Dictionary<int, SpawnEvent> SpawnEvents { get; private set; }
+	public Dictionary<int, MoveEvent> MoveEvents { get; private set; }
+	public Dictionary<int, HitEvent> HitEvents { get; private set; }
+	// cache of the ability objects this ability has spawned
+	public Dictionary<int, AbilityObject> Objects { get; set; }
 
 	public int TotalResourceCost
 	{
 		get
 		{
 			int totalCost = 0;
-			foreach (int cost in resources.Values)
+			foreach (int cost in Resources.Values)
 			{
 				totalCost += cost;
 			}
@@ -44,9 +41,9 @@ public class Ability
 
 	public Ability(int abilityID, int templateID, List<AbilityEvent> events)
 	{
-		this.abilityID = abilityID;
-		this.templateID = templateID;
-		this.cachedTemplate = AbilityTemplate.Get<AbilityTemplate>(templateID);
+		AbilityID = abilityID;
+		TemplateID = templateID;
+		Template = AbilityTemplate.Get<AbilityTemplate>(templateID);
 
 		InternalAddTemplateModifiers(Template);
 
@@ -61,34 +58,34 @@ public class Ability
 
 	internal void InternalAddTemplateModifiers(AbilityTemplate template)
 	{
-		activationTime += template.ActivationTime;
-		cooldown += template.Cooldown;
-		range += template.Range;
-		speed += template.Speed;
+		ActivationTime += template.ActivationTime;
+		Cooldown += template.Cooldown;
+		Range += template.Range;
+		Speed += template.Speed;
 
 		foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in template.Resources)
 		{
-			if (!resources.ContainsKey(pair.Key))
+			if (!Resources.ContainsKey(pair.Key))
 			{
-				resources.Add(pair.Key, pair.Value);
+				Resources.Add(pair.Key, pair.Value);
 
 			}
 			else
 			{
-				resources[pair.Key] += pair.Value;
+				Resources[pair.Key] += pair.Value;
 			}
 		}
 
 		foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in template.Requirements)
 		{
-			if (!requirements.ContainsKey(pair.Key))
+			if (!Requirements.ContainsKey(pair.Key))
 			{
-				requirements.Add(pair.Key, pair.Value);
+				Requirements.Add(pair.Key, pair.Value);
 
 			}
 			else
 			{
-				requirements[pair.Key] += pair.Value;
+				Requirements[pair.Key] += pair.Value;
 			}
 		}
 	}
@@ -155,31 +152,31 @@ public class Ability
 				}
 			}
 
-			activationTime += abilityEvent.ActivationTime;
-			cooldown += abilityEvent.Cooldown;
-			range += abilityEvent.Range;
-			speed += abilityEvent.Speed;
+			ActivationTime += abilityEvent.ActivationTime;
+			Cooldown += abilityEvent.Cooldown;
+			Range += abilityEvent.Range;
+			Speed += abilityEvent.Speed;
 			foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in abilityEvent.Resources)
 			{
-				if (!resources.ContainsKey(pair.Key))
+				if (!Resources.ContainsKey(pair.Key))
 				{
-					resources.Add(pair.Key, pair.Value);
+					Resources.Add(pair.Key, pair.Value);
 
 				}
 				else
 				{
-					resources[pair.Key] += pair.Value;
+					Resources[pair.Key] += pair.Value;
 				}
 			}
 			foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in abilityEvent.Requirements)
 			{
-				if (!requirements.ContainsKey(pair.Key))
+				if (!Requirements.ContainsKey(pair.Key))
 				{
-					requirements.Add(pair.Key, pair.Value);
+					Requirements.Add(pair.Key, pair.Value);
 				}
 				else
 				{
-					requirements[pair.Key] += pair.Value;
+					Requirements[pair.Key] += pair.Value;
 				}
 			}
 		}
@@ -223,22 +220,22 @@ public class Ability
 				}
 			}
 
-			activationTime -= abilityEvent.ActivationTime;
-			cooldown -= abilityEvent.Cooldown;
-			range -= abilityEvent.Range;
-			speed -= abilityEvent.Speed;
+			ActivationTime -= abilityEvent.ActivationTime;
+			Cooldown -= abilityEvent.Cooldown;
+			Range -= abilityEvent.Range;
+			Speed -= abilityEvent.Speed;
 			foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in abilityEvent.Resources)
 			{
-				if (resources.ContainsKey(pair.Key))
+				if (Resources.ContainsKey(pair.Key))
 				{
-					resources[pair.Key] -= pair.Value;
+					Resources[pair.Key] -= pair.Value;
 				}
 			}
 			foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in abilityEvent.Requirements)
 			{
-				if (requirements.ContainsKey(pair.Key))
+				if (Requirements.ContainsKey(pair.Key))
 				{
-					requirements[pair.Key] += pair.Value;
+					Requirements[pair.Key] += pair.Value;
 				}
 			}
 		}
@@ -246,7 +243,7 @@ public class Ability
 
 	public bool MeetsRequirements(Character character)
 	{
-		foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in requirements)
+		foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in Requirements)
 		{
 			if (!character.AttributeController.TryGetResourceAttribute(pair.Key.Name, out CharacterResourceAttribute requirement) ||
 				requirement.CurrentValue < pair.Value)
@@ -272,7 +269,7 @@ public class Ability
 		}
 		else
 		{
-			foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in resources)
+			foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in Resources)
 			{
 				CharacterResourceAttribute resource;
 				if (!character.AttributeController.TryGetResourceAttribute(pair.Key.Name, out resource) ||
@@ -285,6 +282,33 @@ public class Ability
 		return true;
 	}
 
+	public void ConsumeResources(CharacterAttributeController attributeController, AbilityEvent bloodResourceConversion, CharacterAttributeTemplate bloodResource)
+	{
+		if (AbilityEvents.ContainsKey(bloodResourceConversion.ID))
+		{
+			int totalCost = TotalResourceCost;
+
+			CharacterResourceAttribute resource;
+			if (attributeController.TryGetResourceAttribute(bloodResource.Name, out resource) &&
+				resource.CurrentValue >= totalCost)
+			{
+				resource.Consume(totalCost);
+			}
+		}
+		else
+		{
+			foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in Resources)
+			{
+				CharacterResourceAttribute resource;
+				if (attributeController.TryGetResourceAttribute(pair.Key.Name, out resource) &&
+					resource.CurrentValue < pair.Value)
+				{
+					resource.Consume(pair.Value);
+				}
+			}
+		}
+	}
+
 	public string Tooltip()
 	{
 		StringBuilder sb = new StringBuilder();
@@ -293,27 +317,27 @@ public class Ability
 		sb.Append("</color></size>");
 		sb.AppendLine();
 		sb.Append("<color=#a66ef5>AbilityID: ");
-		sb.Append(abilityID);
+		sb.Append(AbilityID);
 		sb.Append("</color>");
 		sb.AppendLine();
 		sb.Append("<color=#a66ef5>TemplateID: ");
-		sb.Append(templateID);
+		sb.Append(TemplateID);
 		sb.Append("</color>");
 		sb.AppendLine();
 		sb.Append("<color=#a66ef5>Activation Time: ");
-		sb.Append(activationTime);
+		sb.Append(ActivationTime);
 		sb.Append("</color>");
 		sb.AppendLine();
 		sb.Append("<color=#a66ef5>Cooldown: ");
-		sb.Append(cooldown);
+		sb.Append(Cooldown);
 		sb.Append("</color>");
 		sb.AppendLine();
 		sb.Append("<color=#a66ef5>Range: ");
-		sb.Append(range);
+		sb.Append(Range);
 		sb.Append("</color>");
 		sb.AppendLine();
 		sb.Append("<color=#a66ef5>Speed: ");
-		sb.Append(speed);
+		sb.Append(Speed);
 		sb.Append("</color>");
 		return sb.ToString();
 	}

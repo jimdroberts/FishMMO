@@ -46,7 +46,7 @@ namespace FishMMO.Server.Services
 		public static void SaveCharacters(ServerDbContext dbContext, List<Character> characters, bool online = true)
 		{
 			// get characters by their names
-			var characterNames = characters.Select((c) => c.characterName.ToLower()).ToList();
+			var characterNames = characters.Select((c) => c.CharacterName.ToLower()).ToList();
 			var dbCharacters = dbContext.Characters.Where((c) => characterNames.Contains(c.NameLowercase)).ToList();
 			
 			//
@@ -64,13 +64,13 @@ namespace FishMMO.Server.Services
 		{
 			if (existingCharacter == null)
 			{
-				existingCharacter = dbContext.Characters.FirstOrDefault((c) => c.NameLowercase == character.characterName.ToLower());
+				existingCharacter = dbContext.Characters.FirstOrDefault((c) => c.NameLowercase == character.CharacterName.ToLower());
 			}
 			
 			// if it's still null, throw exception
 			if (existingCharacter == null)
 			{
-				throw new Exception($"Unable to fetch character with name {character.characterName}");
+				throw new Exception($"Unable to fetch character with name {character.CharacterName}");
 			}
 
 			// store these into vars so we don't have to access them a bunch of times
@@ -78,12 +78,12 @@ namespace FishMMO.Server.Services
 			var rotation = character.Transform.rotation;
 
 			// copy over the new values into the existing entity
-			existingCharacter.Name = character.characterName;
-			existingCharacter.NameLowercase = character.characterName.ToLower();
-			existingCharacter.Account = character.account;
-			existingCharacter.IsGameMaster = character.isGameMaster;
-			existingCharacter.RaceID = character.raceID;
-			existingCharacter.SceneName = character.sceneName;
+			existingCharacter.Name = character.CharacterName;
+			existingCharacter.NameLowercase = character.CharacterName.ToLower();
+			existingCharacter.Account = character.Account;
+			existingCharacter.IsGameMaster = character.IsGameMaster;
+			existingCharacter.RaceID = character.RaceID;
+			existingCharacter.SceneName = character.SceneName;
 			existingCharacter.X = charPosition.x;
 			existingCharacter.Y = charPosition.y;
 			existingCharacter.Z = charPosition.z;
@@ -248,14 +248,14 @@ namespace FishMMO.Server.Services
 						character.Motor.SetPositionAndRotationAndVelocity(new Vector3(dbCharacter.X, dbCharacter.Y, dbCharacter.Z),
 																		  new Quaternion(dbCharacter.RotX, dbCharacter.RotY, dbCharacter.RotZ, dbCharacter.RotW),
 																		  Vector3.zero);
-						character.id = dbCharacter.Id;
-						character.characterName = dbCharacter.Name;
-						character.account = dbCharacter.Account;
-						character.isGameMaster = dbCharacter.IsGameMaster;
-						character.raceID = dbCharacter.RaceID;
-						character.raceName = prefab.name;
-						character.sceneName = dbCharacter.SceneName;
-						character.isTeleporting = false;
+						character.ID = dbCharacter.Id;
+						character.CharacterName = dbCharacter.Name;
+						character.Account = dbCharacter.Account;
+						character.IsGameMaster = dbCharacter.IsGameMaster;
+						character.RaceID = dbCharacter.RaceID;
+						character.RaceName = prefab.name;
+						character.SceneName = dbCharacter.SceneName;
+						character.IsTeleporting = false;
 						return true;
 					}
 

@@ -19,7 +19,7 @@ public class Party
 	{
 		foreach (PartyController member in members)
 		{
-			if (member.character.id == memberId)
+			if (member.Character.ID == memberId)
 			{
 				members.Remove(member);
 				return member;
@@ -32,7 +32,7 @@ public class Party
 	{
 		foreach (PartyController member in members)
 		{
-			if (member.character.characterName.Equals(memberName))
+			if (member.Character.CharacterName.Equals(memberName))
 			{
 				members.Remove(member);
 				return member;

@@ -64,7 +64,7 @@ namespace FishMMO.Server
 					// which would prevent the need to do all of this lookup stuff.
 					foreach (Character character in connectionCharacters.Values)
 					{
-						if(SceneServerSystem.worldSceneDetailsCache.scenes.TryGetValue(character.sceneName, out WorldSceneDetails details))
+						if(SceneServerSystem.worldSceneDetailsCache.scenes.TryGetValue(character.SceneName, out WorldSceneDetails details))
 						{
 							// Check if they are within some bounds, if not we need to move them to a respawn location!
 							// TODO: Try to prevent combat escape, maybe this needs to be handled on the game design level?
@@ -145,13 +145,13 @@ namespace FishMMO.Server
 					}
 
 					// remove the characterId->character entry
-					charactersById.Remove(character.id);
+					charactersById.Remove(character.ID);
 					// remove the characterName->character entry
-					charactersByName.Remove(character.characterName);
+					charactersByName.Remove(character.CharacterName);
 					// remove the connection->character entry
 					connectionCharacters.Remove(conn);
 
-					if (character.isTeleporting)
+					if (character.IsTeleporting)
 					{
 						// teleporter handles the rest
 						return;
@@ -162,14 +162,14 @@ namespace FishMMO.Server
 					{
 						ClientManager.Broadcast(new SceneCharacterDisconnectedBroadcast()
 						{
-							characterId = character.id,
+							characterId = character.ID,
 						});
 					}
 
 					// character becomes immortal on disconnect and mortal when fully loaded into the scene
 					if (character.DamageController != null)
 					{
-						character.DamageController.immortal = true;
+						character.DamageController.Immortal = true;
 					}
 
 					// save the character and set online to false
@@ -177,7 +177,7 @@ namespace FishMMO.Server
 					CharacterService.SaveCharacter(dbContext, character, false);
 					dbContext.SaveChanges();
 
-					Debug.Log("[" + DateTime.UtcNow + "] " + character.characterName + " has been saved at: " + character.Transform.position.ToString());
+					Debug.Log("[" + DateTime.UtcNow + "] " + character.CharacterName + " has been saved at: " + character.Transform.position.ToString());
 
 					// immediately log out for now.. we could add a timeout later on..?
 					if (character.NetworkObject.IsSpawned)
@@ -212,18 +212,18 @@ namespace FishMMO.Server
 					waitingSceneLoadCharacters.Add(conn, character);
 
 					// check if the scene is valid, loaded, and cached properly
-					if (SceneServerSystem.TryGetValidScene(character.sceneName, out SceneInstanceDetails instance))
+					if (SceneServerSystem.TryGetValidScene(character.SceneName, out SceneInstanceDetails instance))
 					{
-						Debug.Log("[" + DateTime.UtcNow + "] " + character.characterName + " is loading Scene: " + character.sceneName);
+						Debug.Log("[" + DateTime.UtcNow + "] " + character.CharacterName + " is loading Scene: " + character.SceneName);
 
 						if (SceneServerSystem.TryLoadSceneForConnection(conn, instance))
 						{
 							// assign scene handle for later..
-							character.sceneHandle = instance.handle;
+							character.SceneHandle = instance.handle;
 						}
 						else
 						{
-							Debug.Log("[" + DateTime.UtcNow + "] " + character.characterName + " scene failed to load for connection.");
+							Debug.Log("[" + DateTime.UtcNow + "] " + character.CharacterName + " scene failed to load for connection.");
 
 							// character scene not found even after validated
 							conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
@@ -256,7 +256,7 @@ namespace FishMMO.Server
 				// character becomes immortal on disconnect and mortal when loaded into the scene
 				if (character.DamageController != null)
 				{
-					character.DamageController.immortal = false;
+					character.DamageController.Immortal = false;
 				}
 
 				// set the proper physics scene for the character, scene stacking requires separated physics
@@ -282,15 +282,15 @@ namespace FishMMO.Server
 				}
 
 				// add a characterName->character map for ease of use
-				if (charactersById.ContainsKey(character.id))
+				if (charactersById.ContainsKey(character.ID))
 				{
-					charactersById[character.id] = character;
-					charactersByName[character.characterName] = character;
+					charactersById[character.ID] = character;
+					charactersByName[character.CharacterName] = character;
 				}
 				else
 				{
-					charactersById.Add(character.id, character);
-					charactersByName.Add(character.characterName, character);
+					charactersById.Add(character.ID, character);
+					charactersByName.Add(character.CharacterName, character);
 				}
 
 				// set the character status to online
@@ -298,7 +298,7 @@ namespace FishMMO.Server
 				{
 					// doesn't contain any important functionality yet.. we just do it for fun
 					using var dbContext = Server.DbContextFactory.CreateDbContext();
-					CharacterService.TrySetCharacterOnline(dbContext, accountName, character.characterName);
+					CharacterService.TrySetCharacterOnline(dbContext, accountName, character.CharacterName);
 					dbContext.SaveChanges();
 				}
 
@@ -307,12 +307,12 @@ namespace FishMMO.Server
 				{
 					ClientManager.Broadcast(new SceneCharacterConnectedBroadcast()
 					{
-						characterId = character.id,
-						sceneName = character.sceneName,
+						characterId = character.ID,
+						sceneName = character.SceneName,
 					});
 				}
 
-				Debug.Log("[" + DateTime.UtcNow + "] " + character.characterName + " has been spawned at: " + character.sceneName + " " + character.Transform.position.ToString());
+				Debug.Log("[" + DateTime.UtcNow + "] " + character.CharacterName + " has been spawned at: " + character.SceneName + " " + character.Transform.position.ToString());
 			}
 			else
 			{

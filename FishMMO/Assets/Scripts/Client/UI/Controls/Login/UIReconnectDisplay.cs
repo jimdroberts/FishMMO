@@ -27,17 +27,17 @@ public class UIReconnectDisplay : UIControl
 	public void OnReconnectAttemptsChanged(byte attempts, byte maxAttempts)
 	{
 		AttemptCounterText.text = $"Attempt {attempts} of {maxAttempts}";
-		visible = true;
+		Visible = true;
 	}
 
 	public void OnCancelClicked()
 	{
 		Client.ReconnectCancel();
-		visible = false;
+		Visible = false;
 	}
 
 	public void OnCloseScreen()
 	{
-		visible = false;
+		Visible = false;
 	}
 }

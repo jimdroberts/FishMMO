@@ -5,9 +5,9 @@ public sealed class MultiplyEvent : SpawnEvent
 {
 	public int SpawnCount;
 
-	public override void Invoke(Character self, TargetInfo targetInfo, AbilityObject initialObject, ref int nextID, ref Dictionary<int, AbilityObject> abilityObjects)
+	public override void Invoke(Character self, TargetInfo targetInfo, AbilityObject initialObject, ref int nextID, Dictionary<int, AbilityObject> abilityObjects)
 	{
-		if (abilityObjects != null && abilityObjects.Count > 0)
+		if (abilityObjects != null)
 		{
 			for (int i = 0; i < SpawnCount; i++)
 			{

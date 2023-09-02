@@ -238,9 +238,9 @@ public class CustomBuildTool
 		}
 
 		string root = Directory.GetParent(Directory.GetCurrentDirectory()).FullName;
-		string dotNet = "mcr.microsoft.com/dotnet/sdk:7.0";
-		string projectPath = "/app/fishdb/FishMMO-DB/FishMMO-DB.csproj";
-		string startupProject = "/app/fishdb/FishMMO-DB-Migrator/FishMMO-DB-Migrator.csproj";
+		//string dotNet = "mcr.microsoft.com/dotnet/sdk:7.0";
+		//string projectPath = "/app/fishdb/FishMMO-DB/FishMMO-DB.csproj";
+		//string startupProject = "/app/fishdb/FishMMO-DB-Migrator/FishMMO-DB-Migrator.csproj";
 
 		// do we need to make an image with dotnet 7 and dotnet-ef for global use with migration?
 		//RunDockerCommand($"build -t dotnet-ef-image -f \"{root}\" .");

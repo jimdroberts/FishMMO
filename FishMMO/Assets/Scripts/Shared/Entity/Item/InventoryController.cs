@@ -3,7 +3,7 @@
 [RequireComponent(typeof(Character))]
 public class InventoryController : ItemContainer
 {
-	public Character character;
+	public Character Character;
 
 	private void Awake()
 	{
@@ -14,7 +14,7 @@ public class InventoryController : ItemContainer
 	{
 		base.OnStartClient();
 
-		if (character == null || !base.IsOwner)
+		if (Character == null || !base.IsOwner)
 		{
 			enabled = false;
 			return;
@@ -42,7 +42,7 @@ public class InventoryController : ItemContainer
 	public override bool CanManipulate()
 	{
 		if (!base.CanManipulate() ||
-			character == null)
+			Character == null)
 		{
 			return false;
 		}

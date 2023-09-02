@@ -23,7 +23,7 @@ namespace FishMMO.Client
 
 		void Update()
 		{
-			if (visible)
+			if (Visible)
 			{
 				if (icon == null || icon.texture == null || referenceID == UIReferenceButton.NULL_REFERENCE_ID)
 				{
@@ -66,12 +66,12 @@ namespace FishMMO.Client
 			Vector3 offset = new Vector3(this.icon.texture.width * 0.5f + 1.0f, this.icon.texture.height * -0.5f - 1.0f, 0.0f);
 			transform.position = Input.mousePosition + offset;
 
-			visible = true;
+			Visible = true;
 		}
 
 		public void Clear()
 		{
-			visible = false;
+			Visible = false;
 
 			icon.texture = null;
 			referenceID = UIReferenceButton.NULL_REFERENCE_ID;

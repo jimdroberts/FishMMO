@@ -4,7 +4,7 @@ using UnityEngine;
 [RequireComponent(typeof(Character))]
 public class EquipmentController : ItemContainer
 {
-	public Character character;
+	public Character Character;
 
 	private void Awake()
 	{
@@ -15,7 +15,7 @@ public class EquipmentController : ItemContainer
 	{
 		base.OnStartClient();
 
-		if (character == null || !base.IsOwner)
+		if (Character == null || !base.IsOwner)
 		{
 			enabled = false;
 			return;
@@ -39,7 +39,7 @@ public class EquipmentController : ItemContainer
 	public override bool CanManipulate()
 	{
 		if (!base.CanManipulate() ||
-			character == null)
+			Character == null)
 		{
 			return false;
 		}
@@ -84,17 +84,17 @@ public class EquipmentController : ItemContainer
 			prevItem.equippable.Unequip();
 
 			// swap the items
-			if (character.InventoryController != null)
+			if (Character.InventoryController != null)
 			{
-				character.InventoryController.SetItemSlot(prevItem, inventoryIndex);
+				Character.InventoryController.SetItemSlot(prevItem, inventoryIndex);
 			}
 		}
 		else
 		{
 			// remove the item from the inventory
-			if (character.InventoryController != null)
+			if (Character.InventoryController != null)
 			{
-				character.InventoryController.RemoveItem(inventoryIndex);
+				Character.InventoryController.RemoveItem(inventoryIndex);
 			}
 		}
 
@@ -107,7 +107,7 @@ public class EquipmentController : ItemContainer
 		// equip the item to the character (adds attributes.. etc..)
 		if (item.equippable != null)
 		{
-			item.equippable.Equip(character);
+			item.equippable.Equip(Character);
 		}
 		return true;
 	}
@@ -123,8 +123,8 @@ public class EquipmentController : ItemContainer
 		}
 
 		// see if we can add the item back to our inventory
-		if (character.InventoryController != null &&
-			!character.InventoryController.CanAddItem(item))
+		if (Character.InventoryController != null &&
+			!Character.InventoryController.CanAddItem(item))
 		{
 			return false;
 		}
@@ -139,9 +139,9 @@ public class EquipmentController : ItemContainer
 		}
 
 		// try to add the item back to the inventory
-		if (character.InventoryController != null)
+		if (Character.InventoryController != null)
 		{
-			character.InventoryController.TryAddItem(item, out List<Item> modifiedItems);
+			Character.InventoryController.TryAddItem(item, out List<Item> modifiedItems);
 		}
 
 		return true;
@@ -152,7 +152,7 @@ public class EquipmentController : ItemContainer
 	/// </summary>
 	private void OnClientEquipmentEquipItemBroadcastReceived(EquipmentEquipItemBroadcast msg)
 	{
-		InventoryController inventory = character.InventoryController;
+		InventoryController inventory = Character.InventoryController;
 		if (inventory != null)
 		{
 			if (inventory.TryGetItem(msg.inventoryIndex, out Item item))

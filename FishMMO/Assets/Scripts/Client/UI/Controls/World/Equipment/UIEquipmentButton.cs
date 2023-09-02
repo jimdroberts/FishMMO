@@ -11,7 +11,7 @@
 				Character character = Character.localCharacter;
 				if (character != null)
 				{
-					if (dragObject.visible)
+					if (dragObject.Visible)
 					{
 						// we check the hotkey type because we can only equip items from the inventory
 						if (dragObject.hotkeyType == HotkeyType.Inventory)
@@ -42,7 +42,7 @@
 		public override void OnRightClick()
 		{
 			Character character = Character.localCharacter;
-			if (UIManager.TryGet("UIDragObject", out UIDragObject dragObject) && dragObject.visible)
+			if (UIManager.TryGet("UIDragObject", out UIDragObject dragObject) && dragObject.Visible)
 			{
 				dragObject.Clear();
 			}

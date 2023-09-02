@@ -5,10 +5,10 @@ using UnityEngine;
 [RequireComponent(typeof(Character))]
 public class CharacterDamageController : NetworkBehaviour, IDamageable, IHealable
 {
-	public Character character;
+	public Character Character;
 
-	public bool immortal = false;
-	public bool showDamage = true;
+	public bool Immortal = false;
+	public bool ShowDamage = true;
 
 	[Tooltip("The resource attribute the damage will be applied to.")]
 	public CharacterAttributeTemplate ResourceAttribute;
@@ -29,9 +29,9 @@ public class CharacterDamageController : NetworkBehaviour, IDamageable, IHealabl
 	public override void OnStartClient()
 	{
 		base.OnStartClient();
-		if (character == null ||
+		if (Character == null ||
 			ResourceAttribute == null ||
-			!character.AttributeController.TryGetResourceAttribute(ResourceAttribute.Name, out this.resourceInstance))
+			!Character.AttributeController.TryGetResourceAttribute(ResourceAttribute.Name, out this.resourceInstance))
 		{
 			throw new UnityException("Character Damage Controller ResourceAttribute is missing");
 		}
@@ -59,15 +59,15 @@ public class CharacterDamageController : NetworkBehaviour, IDamageable, IHealabl
 
 	public void Damage(Character attacker, int amount, DamageAttributeTemplate damageAttribute)
 	{
-		if (immortal) return;
+		if (Immortal) return;
 
 		if (resourceInstance != null && resourceInstance.CurrentValue > 0)
 		{
-			amount = ApplyModifiers(character, amount, damageAttribute);
+			amount = ApplyModifiers(Character, amount, damageAttribute);
 			resourceInstance.Consume(amount);
 
 			// tell the client to display damage
-			if (IsClient && showDamage)
+			if (IsClient && ShowDamage)
 			{
 				//UILabel3D.Create(amount.ToString(), 24, damageAttribute.DisplayColor, true, transform);
 			}

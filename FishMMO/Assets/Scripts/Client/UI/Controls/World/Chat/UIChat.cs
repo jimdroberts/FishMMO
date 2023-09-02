@@ -130,19 +130,19 @@ namespace FishMMO.Client
 				{
 					if (messageRateLimit > 0)
 					{
-						if (character.nextChatMessageTime > DateTime.UtcNow)
+						if (character.NextChatMessageTime > DateTime.UtcNow)
 						{
 							return;
 						}
-						character.nextChatMessageTime = DateTime.UtcNow.AddMilliseconds(messageRateLimit);
+						character.NextChatMessageTime = DateTime.UtcNow.AddMilliseconds(messageRateLimit);
 					}
 					if (!allowRepeatMessages)
 					{
-						if (character.lastChatMessage.Equals(input))
+						if (character.LastChatMessage.Equals(input))
 						{
 							return;
 						}
-						character.lastChatMessage = input;
+						character.LastChatMessage = input;
 					}
 				}
 				Client.NetworkManager.ClientManager.Broadcast(new ChatBroadcast() { text = input });

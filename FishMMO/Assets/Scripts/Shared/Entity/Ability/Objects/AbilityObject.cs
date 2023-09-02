@@ -1,4 +1,5 @@
 ﻿using UnityEngine;
+using System.Collections.Generic;
 
 public class AbilityObject : MonoBehaviour
 {
@@ -59,7 +60,7 @@ public class AbilityObject : MonoBehaviour
 	internal void Destroy()
 	{
 		// TODO - add pooling to destroys ability objects
-		Ability.objects.Remove(ID);
+		Ability.Objects.Remove(ID);
 		gameObject.SetActive(false);
 		Destroy(gameObject);
 	}
@@ -114,27 +115,31 @@ public class AbilityObject : MonoBehaviour
 		abilityObject.Ability = ability;
 		abilityObject.Caster = self;
 		abilityObject.HitCount = template.HitCount;
-		while (ability.objects.ContainsKey(id))
+		while (ability.Objects.ContainsKey(id))
 		{
 			++id;
 		}
 		abilityObject.ID = id;
-		ability.objects.Add(abilityObject.ID, abilityObject);
+		if (ability.Objects == null)
+		{
+			ability.Objects = new Dictionary<int, AbilityObject>();
+		}
+		ability.Objects.Add(abilityObject.ID, abilityObject);
 
 		// handle pre spawn events
 		foreach (SpawnEvent spawnEvent in ability.PreSpawnEvents.Values)
 		{
-			spawnEvent.Invoke(self, targetInfo, abilityObject, ref id, ref ability.objects);
+			spawnEvent.Invoke(self, targetInfo, abilityObject, ref id, ability.Objects);
 		}
 
 		// handle spawn events
 		foreach (SpawnEvent spawnEvent in ability.SpawnEvents.Values)
 		{
-			spawnEvent.Invoke(self, targetInfo, abilityObject, ref id, ref ability.objects);
+			spawnEvent.Invoke(self, targetInfo, abilityObject, ref id, ability.Objects);
 		}
 
 		// finalize
-		foreach (AbilityObject obj in ability.objects.Values)
+		foreach (AbilityObject obj in ability.Objects.Values)
 		{
 			obj.gameObject.SetActive(true);
 		}

@@ -157,19 +157,19 @@ namespace FishMMO.Server
 
 			if (messageRateLimit > 0)
 			{
-				if (character.nextChatMessageTime > DateTime.UtcNow)
+				if (character.NextChatMessageTime > DateTime.UtcNow)
 				{
 					return;
 				}
-				character.nextChatMessageTime = DateTime.UtcNow.AddMilliseconds(messageRateLimit);
+				character.NextChatMessageTime = DateTime.UtcNow.AddMilliseconds(messageRateLimit);
 			}
 			if (!allowRepeatMessages)
 			{
-				if (character.lastChatMessage.Equals(msg.text))
+				if (character.LastChatMessage.Equals(msg.text))
 				{
 					return;
 				}
-				character.lastChatMessage = msg.text;
+				character.LastChatMessage = msg.text;
 			}
 
 			// parse our command or send the message to our /say channel
@@ -228,7 +228,7 @@ namespace FishMMO.Server
 				return;
 			}
 			msg.channel = ChatChannel.World;
-			msg.text = sender.characterName + ": " + msg.text;
+			msg.text = sender.CharacterName + ": " + msg.text;
 
 			// World chat is broadcast to all scene servers... forward to the World Server
 			ClientManager.Broadcast(new WorldChatBroadcast() { chatMsg = msg, });
@@ -241,10 +241,10 @@ namespace FishMMO.Server
 				return;
 			}
 			msg.channel = ChatChannel.Region;
-			msg.text = sender.characterName + ": " + msg.text;
+			msg.text = sender.CharacterName + ": " + msg.text;
 
 			// get the senders observed scene
-			UnityEngine.SceneManagement.Scene scene = UnityEngine.SceneManagement.SceneManager.GetSceneByName(sender.sceneName);
+			UnityEngine.SceneManagement.Scene scene = UnityEngine.SceneManagement.SceneManager.GetSceneByName(sender.SceneName);
 			if (scene != null)
 			{
 				if (SceneManager.SceneConnections.TryGetValue(scene, out HashSet<NetworkConnection> connections))
@@ -264,12 +264,12 @@ namespace FishMMO.Server
 				return;
 			}
 
-			if (sender.PartyController.current != null)
+			if (sender.PartyController.Current != null)
 			{
 				msg.channel = ChatChannel.Party;
-				msg.text = sender.characterName + ": " + msg.text;
+				msg.text = sender.CharacterName + ": " + msg.text;
 
-				foreach (PartyController member in sender.PartyController.current.members)
+				foreach (PartyController member in sender.PartyController.Current.members)
 				{
 					// broadcast to party member... includes sender
 					member.Owner.Broadcast(msg);
@@ -284,12 +284,12 @@ namespace FishMMO.Server
 				return;
 			}
 
-			if (sender.GuildController.current != null)
+			if (sender.GuildController.Current != null)
 			{
 				msg.channel = ChatChannel.Guild;
-				msg.text = sender.characterName + ": " + msg.text;
+				msg.text = sender.CharacterName + ": " + msg.text;
 
-				foreach (GuildController member in sender.GuildController.current.members)
+				foreach (GuildController member in sender.GuildController.Current.members)
 				{
 					// broadcast to guild member... includes sender
 					member.Owner.Broadcast(msg);
@@ -327,15 +327,15 @@ namespace FishMMO.Server
 			conn.Broadcast(msg);
 
 			// format the message to send to the target player
-			msg.text = "[From:" + sender.characterName + "]: " + text;
+			msg.text = "[From:" + sender.CharacterName + "]: " + text;
 
 			// attempt to broadcast the message to the target
-			if (!Server.CharacterSystem.SendBroadcastToCharacter(targetCharacter.id, msg))
+			if (!Server.CharacterSystem.SendBroadcastToCharacter(targetCharacter.ID, msg))
 			{
 				// attempt to find the target on the world server
 				ServerManager.Broadcast(new WorldChatTellBroadcast()
 				{
-					targetId = targetCharacter.id,
+					targetId = targetCharacter.ID,
 					chatMsg = msg,
 				});
 			}
@@ -348,7 +348,7 @@ namespace FishMMO.Server
 				return;
 			}
 			msg.channel = ChatChannel.Trade;
-			msg.text = sender.characterName + ": " + msg.text;
+			msg.text = sender.CharacterName + ": " + msg.text;
 
 			// trade chat is broadcast to all scene servers... forward to the World Server
 			// **TODO** Optimize chat channels. Make server aware of which channels we have enabled.
@@ -363,7 +363,7 @@ namespace FishMMO.Server
 			}
 
 			msg.channel = ChatChannel.Say;
-			msg.text = sender.characterName + ": " + msg.text;
+			msg.text = sender.CharacterName + ": " + msg.text;
 
 			// get the senders observed characters and send them the chat message
 			foreach (NetworkConnection obsConnection in sender.Observers)

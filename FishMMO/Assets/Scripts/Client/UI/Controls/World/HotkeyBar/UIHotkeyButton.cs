@@ -6,7 +6,7 @@
 
 		public override void OnLeftClick()
 		{
-			if (UIManager.TryGet("UIDragObject", out UIDragObject dragObject) && dragObject.visible)
+			if (UIManager.TryGet("UIDragObject", out UIDragObject dragObject) && dragObject.Visible)
 			{
 				hotkeyType = dragObject.hotkeyType;
 				referenceID = dragObject.referenceID;

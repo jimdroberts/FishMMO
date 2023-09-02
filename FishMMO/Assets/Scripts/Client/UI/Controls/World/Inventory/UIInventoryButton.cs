@@ -9,7 +9,7 @@
 				Character character = Character.localCharacter;
 				if (character != null)
 				{
-					if (dragObject.visible)
+					if (dragObject.Visible)
 					{
 						// we check the hotkey type because we can swap items in the inventory
 						if (dragObject.hotkeyType == HotkeyType.Inventory)

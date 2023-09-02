@@ -32,7 +32,7 @@ namespace FishMMO.Client
 				this.text.text = text;
 				Vector3 offset = new Vector3(0.0f, background.rect.height, 0.0f);
 				transform.position = Input.mousePosition + offset;
-				visible = show;
+				Visible = show;
 			}
 		}
 	}

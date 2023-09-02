@@ -8,10 +8,10 @@ using System.Collections.Generic;
 [RequireComponent(typeof(Character))]
 public class PartyController : NetworkBehaviour
 {
-	public Character character;
+	public Character Character;
 
-	public PartyRank rank = PartyRank.None;
-	public Party current;
+	public PartyRank Rank = PartyRank.None;
+	public Party Current;
 
 	public delegate void PartyEvent();
 	public event PartyEvent OnPartyCreated;
@@ -28,7 +28,7 @@ public class PartyController : NetworkBehaviour
 	{
 		base.OnStartClient();
 
-		if (character == null || !base.IsOwner)
+		if (Character == null || !base.IsOwner)
 		{
 			enabled = false;
 			return;
@@ -63,8 +63,8 @@ public class PartyController : NetworkBehaviour
 	public void OnClientPartyCreateBroadcastReceived(PartyCreateBroadcast msg)
 	{
 		Party newParty = new Party(msg.partyId, this);
-		current = newParty;
-		rank = PartyRank.Leader;
+		Current = newParty;
+		Rank = PartyRank.Leader;
 
 		OnPartyCreated?.Invoke();
 	}
@@ -75,7 +75,7 @@ public class PartyController : NetworkBehaviour
 	/// </summary>
 	public void OnClientPartyInviteBroadcastReceived(PartyInviteBroadcast msg)
 	{
-		if (character.id == msg.targetCharacterId)
+		if (Character.ID == msg.targetCharacterId)
 		{
 			return;
 		}
@@ -108,8 +108,8 @@ public class PartyController : NetworkBehaviour
 	/// </summary>
 	public void OnClientPartyLeaveBroadcastReceived(PartyLeaveBroadcast msg)
 	{
-		rank = PartyRank.None;
-		current = null;
+		Rank = PartyRank.None;
+		Current = null;
 
 		OnLeaveParty?.Invoke();
 	}
@@ -119,9 +119,9 @@ public class PartyController : NetworkBehaviour
 	/// </summary>
 	public void OnClientPartyRemoveBroadcastReceived(PartyRemoveBroadcast msg)
 	{
-		if (current != null)
+		if (Current != null)
 		{
-			PartyController removedMember = current.RemoveMember(msg.memberName);
+			PartyController removedMember = Current.RemoveMember(msg.memberName);
 			OnRemoveMember?.Invoke(msg.memberName, PartyRank.None);
 		}
 	}

@@ -54,7 +54,7 @@ namespace FishMMO.Client
 						}
 						break;
 					case HotkeyType.Ability:
-						if (character.AbilityController.knownAbilities.TryGetValue(referenceID, out Ability ability) && UIManager.TryGet("UITooltip", out tooltip))
+						if (character.AbilityController.KnownAbilities.TryGetValue(referenceID, out Ability ability) && UIManager.TryGet("UITooltip", out tooltip))
 						{
 							tooltip.SetText(ability.Tooltip(), true);
 						}

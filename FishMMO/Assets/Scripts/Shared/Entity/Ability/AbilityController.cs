@@ -12,35 +12,31 @@ public class AbilityController : NetworkBehaviour
 {
 	public const int NO_ABILITY = 0;
 
-	//public Random currentSeed = 12345;
+	private Ability currentAbility;
+	private bool interruptQueued;
+	private int queuedAbilityID;
+	private float remainingTime;
+	private KeyCode heldKey;
+	//private Random currentSeed = 12345;
 
-	public Transform abilitySpawner;
-	public Character character;
-	public Dictionary<int, Ability> knownAbilities = new Dictionary<int, Ability>();
-	public HashSet<int> knownTemplates = new HashSet<int>();
-	public HashSet<int> knownSpawnEvents = new HashSet<int>();
-	public HashSet<int> knownHitEvents = new HashSet<int>();
-	public HashSet<int> knownMoveEvents = new HashSet<int>();
-
-	public CharacterAttributeTemplate bloodResource = null;
-	public AbilityEvent bloodResourceConversion = null;
-	public AbilityEvent charged = null;
-	public AbilityEvent channeled = null;
-
-	public Action<float> OnUpdate;
+	public Transform AbilitySpawner;
+	public Character Character;
+	public CharacterAttributeTemplate BloodResource;
+	public AbilityEvent BloodResourceConversion;
+	public AbilityEvent Charged;
+	public AbilityEvent Channeled;
+	public Action<float, float> OnUpdate;
 	// Invoked when the current ability is Interrupted.
 	public Action OnInterrupt;
 	// Invoked when the current ability is Cancelled.
 	public Action OnCancel;
-
-	public bool InterruptQueued;
-	public int QueuedAbilityID;
-	public int CurrentAbilityID;
-	public float RemainingTime;
-	public KeyCode HeldKey;
-
-	public bool IsActivating { get { return CurrentAbilityID != NO_ABILITY; } }
-	public bool AbilityQueued { get { return QueuedAbilityID != NO_ABILITY; } }
+	public Dictionary<int, Ability> KnownAbilities { get; private set; }
+	public HashSet<int> KnownTemplates { get; private set; }
+	public HashSet<int> KnownSpawnEvents { get; private set; }
+	public HashSet<int> KnownHitEvents { get; private set; }
+	public HashSet<int> KnownMoveEvents { get; private set; }
+	public bool IsActivating { get { return currentAbility != null; } }
+	public bool AbilityQueued { get { return queuedAbilityID != NO_ABILITY; } }
 
 	public override void OnStartClient()
 	{
@@ -73,9 +69,9 @@ public class AbilityController : NetworkBehaviour
 		if (base.IsServer)
 		{
 			Replicate(default, true);
-			AbilityReconcileData state = new AbilityReconcileData(InterruptQueued,
-																  CurrentAbilityID,
-																  RemainingTime);
+			AbilityReconcileData state = new AbilityReconcileData(interruptQueued,
+																  currentAbility.AbilityID,
+																  remainingTime);
 			Reconcile(state, true);
 		}
 	}
@@ -88,41 +84,40 @@ public class AbilityController : NetworkBehaviour
 			OnInterrupt?.Invoke();
 			Cancel();
 		}
-		else if (IsActivating && knownAbilities.TryGetValue(CurrentAbilityID, out Ability ability))
+		else if (IsActivating)
 		{
-			if (RemainingTime > 0.0f)
+			if (remainingTime > 0.0f)
 			{
-				float delta = (float)base.TimeManager.TickDelta;
-				RemainingTime -= delta;
+				remainingTime -= (float)base.TimeManager.TickDelta;
 
 				// handle ability update here, display cast bar, display hitbox telegraphs, etc
-				OnUpdate?.Invoke(delta);
+				OnUpdate?.Invoke(remainingTime, currentAbility.ActivationTime * CalculateSpeedReduction(currentAbility.Template.ActivationSpeedReductionAttribute));
 
 				// handle held ability updates
-				if (HeldKey != KeyCode.None)
+				if (heldKey != KeyCode.None)
 				{
 					// a held ability hotkey was released or the character can no longer activate the ability
-					if (activationData.HeldKey == KeyCode.None || !CanActivate(ability))
+					if (activationData.HeldKey == KeyCode.None || !CanActivate(currentAbility))
 					{
 						// add ability to cooldowns
-						AddCooldown(ability);
+						AddCooldown(currentAbility);
 
 						Cancel();
 					}
 					// channeled abilities like beam effects or a charge rush that are continuously updating or spawning objects should be handled here
-					else if (ability.HasAbilityEvent(channeled.ID))
+					else if (currentAbility.HasAbilityEvent(Channeled.ID))
 					{
 						// generate a camera ray to use for targetting
-						Ray cameraRay = new Ray(character.CharacterController.VirtualCameraPosition, character.CharacterController.VirtualCameraRotation * Vector3.forward);
+						Ray cameraRay = new Ray(Character.CharacterController.VirtualCameraPosition, Character.CharacterController.VirtualCameraRotation * Vector3.forward);
 
 						// get target info
-						TargetInfo targetInfo = TargetController.GetTarget(character.TargetController, cameraRay, ability.range);
+						TargetInfo targetInfo = TargetController.GetTarget(Character.TargetController, cameraRay, currentAbility.Range);
 
 						// spawn the ability object
-						if (AbilityObject.TrySpawn(ability, character, abilitySpawner, targetInfo))
+						if (AbilityObject.TrySpawn(currentAbility, Character, AbilitySpawner, targetInfo))
 						{
 							// channeled abilities consume resources during activation
-							ConsumeResources(ability);
+							currentAbility.ConsumeResources(Character.AttributeController, BloodResourceConversion, BloodResource);
 						}
 					}
 				}
@@ -130,45 +125,45 @@ public class AbilityController : NetworkBehaviour
 			}
 
 			// this will allow for charged abilities to remain held for aiming purposes
-			if (ability.HasAbilityEvent(charged.ID) &&
-				HeldKey != KeyCode.None &&
+			if (currentAbility.HasAbilityEvent(Charged.ID) &&
+				heldKey != KeyCode.None &&
 				activationData.HeldKey != KeyCode.None)
 			{
 				return;
 			}
 
 			// complete the final activation of the ability
-			if (CanActivate(ability))
+			if (CanActivate(currentAbility))
 			{
 				// generate a camera ray to use for targetting
-				Ray cameraRay = new Ray(character.CharacterController.VirtualCameraPosition, character.CharacterController.VirtualCameraRotation * Vector3.forward);
+				Ray cameraRay = new Ray(Character.CharacterController.VirtualCameraPosition, Character.CharacterController.VirtualCameraRotation * Vector3.forward);
 
 				// get target info
-				TargetInfo targetInfo = TargetController.GetTarget(character.TargetController, cameraRay, ability.range);
+				TargetInfo targetInfo = TargetController.GetTarget(Character.TargetController, cameraRay, currentAbility.Range);
 
 				// spawn the ability object
-				if (AbilityObject.TrySpawn(ability, character, abilitySpawner, targetInfo))
+				if (AbilityObject.TrySpawn(currentAbility, Character, AbilitySpawner, targetInfo))
 				{
 					// consume resources
-					ConsumeResources(ability);
+					currentAbility.ConsumeResources(Character.AttributeController, BloodResourceConversion, BloodResource);
 
 					// add ability to cooldowns
-					AddCooldown(ability);
+					AddCooldown(currentAbility);
 				}
 			}
 			// reset ability data
 			Cancel();
 		}
 		else if (activationData.QueuedAbilityID != NO_ABILITY &&
-				 knownAbilities.TryGetValue(activationData.QueuedAbilityID, out Ability validatedAbility) &&
+				 KnownAbilities.TryGetValue(activationData.QueuedAbilityID, out Ability validatedAbility) &&
 				 CanActivate(validatedAbility))
 		{
-			InterruptQueued = false;
-			CurrentAbilityID = activationData.QueuedAbilityID;
-			RemainingTime = validatedAbility.activationTime * CalculateSpeedReduction(validatedAbility.Template.ActivationSpeedReductionAttribute);
-			if (validatedAbility.HasAbilityEvent(channeled.ID) || validatedAbility.HasAbilityEvent(charged.ID))
+			interruptQueued = false;
+			currentAbility = validatedAbility;
+			remainingTime = validatedAbility.ActivationTime * CalculateSpeedReduction(validatedAbility.Template.ActivationSpeedReductionAttribute);
+			if (validatedAbility.HasAbilityEvent(Channeled.ID) || validatedAbility.HasAbilityEvent(Charged.ID))
 			{
-				HeldKey = activationData.HeldKey;
+				heldKey = activationData.HeldKey;
 			}
 		}
 	}
@@ -176,15 +171,15 @@ public class AbilityController : NetworkBehaviour
 	[Reconcile]
 	private void Reconcile(AbilityReconcileData rd, bool asServer, Channel channel = Channel.Unreliable)
 	{
-		if (rd.Interrupt && rd.AbilityID == NO_ABILITY)
+		if (!KnownAbilities.TryGetValue(rd.AbilityID, out Ability ability) ||  rd.Interrupt && rd.AbilityID == NO_ABILITY)
 		{
 			OnInterrupt?.Invoke();
 			Cancel();
 		}
 		else
 		{
-			CurrentAbilityID = rd.AbilityID;
-			RemainingTime = rd.RemainingTime;
+			currentAbility = ability;
+			remainingTime = rd.RemainingTime;
 		}
 	}
 
@@ -193,7 +188,7 @@ public class AbilityController : NetworkBehaviour
 		if (attribute != null)
 		{
 			CharacterAttribute speedReduction;
-			if (character.AttributeController.TryGetAttribute(attribute.Name, out speedReduction))
+			if (Character.AttributeController.TryGetAttribute(attribute.Name, out speedReduction))
 			{
 				return 1.0f - ((speedReduction.FinalValue * 0.01f).Clamp(0.0f, 1.0f));
 			}
@@ -203,7 +198,7 @@ public class AbilityController : NetworkBehaviour
 
 	public void Interrupt(Character attacker)
 	{
-		InterruptQueued = true;
+		interruptQueued = true;
 	}
 
 	public void Activate(int referenceID, KeyCode heldKey)
@@ -214,20 +209,20 @@ public class AbilityController : NetworkBehaviour
 			return;
 		}
 
-		if (!IsActivating && !InterruptQueued)
+		if (!IsActivating && !interruptQueued)
 		{
-			QueuedAbilityID = referenceID;
-			HeldKey = heldKey;
+			queuedAbilityID = referenceID;
+			this.heldKey = heldKey;
 		}
 	}
 
 	private void HandleCharacterInput(out AbilityActivationReplicateData activationEventData)
 	{
-		activationEventData = new AbilityActivationReplicateData(InterruptQueued,
-																 QueuedAbilityID,
-																 HeldKey);
-		InterruptQueued = false;
-		QueuedAbilityID = NO_ABILITY;
+		activationEventData = new AbilityActivationReplicateData(interruptQueued,
+																 queuedAbilityID,
+																 heldKey);
+		interruptQueued = false;
+		queuedAbilityID = NO_ABILITY;
 	}
 
 	/// <summary>
@@ -235,70 +230,43 @@ public class AbilityController : NetworkBehaviour
 	/// </summary>
 	private bool CanActivate(Ability ability)
 	{
-		return knownAbilities.TryGetValue(ability.abilityID, out Ability knownAbility) &&
-				!character.CooldownController.IsOnCooldown(knownAbility.Template.Name) &&
-				knownAbility.MeetsRequirements(character) &&
-				knownAbility.HasResource(character, bloodResourceConversion, bloodResource);
+		return KnownAbilities.TryGetValue(ability.AbilityID, out Ability knownAbility) &&
+				!Character.CooldownController.IsOnCooldown(knownAbility.Template.Name) &&
+				knownAbility.MeetsRequirements(Character) &&
+				knownAbility.HasResource(Character, BloodResourceConversion, BloodResource);
 	}
 
 	internal void Cancel()
 	{
-		InterruptQueued = false;
-		QueuedAbilityID = NO_ABILITY;
-		CurrentAbilityID = NO_ABILITY;
-		RemainingTime = 0.0f;
-		HeldKey = KeyCode.None;
+		interruptQueued = false;
+		queuedAbilityID = NO_ABILITY;
+		currentAbility = null;
+		remainingTime = 0.0f;
+		heldKey = KeyCode.None;
 
 		OnCancel?.Invoke();
-	}
-
-	internal void ConsumeResources(Ability ability)
-	{
-		if (ability.AbilityEvents.ContainsKey(bloodResourceConversion.ID))
-		{
-			int totalCost = ability.TotalResourceCost;
-
-			CharacterResourceAttribute resource;
-			if (character.AttributeController.TryGetResourceAttribute(bloodResource.Name, out resource) &&
-				resource.CurrentValue >= totalCost)
-			{
-				resource.Consume(totalCost);
-			}
-		}
-		else
-		{
-			foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in ability.resources)
-			{
-				CharacterResourceAttribute resource;
-				if (character.AttributeController.TryGetResourceAttribute(pair.Key.Name, out resource) &&
-					resource.CurrentValue < pair.Value)
-				{
-					resource.Consume(pair.Value);
-				}
-			}
-		}
 	}
 
 	internal void AddCooldown(Ability ability)
 	{
 		AbilityTemplate currentAbilityTemplate = ability.Template;
-		if (character.CooldownController != null && ability.cooldown > 0.0f)
+		if (Character.CooldownController != null && ability.Cooldown > 0.0f)
 		{
 			float cooldownReduction = CalculateSpeedReduction(currentAbilityTemplate.CooldownReductionAttribute);
-			float cooldown = ability.cooldown * cooldownReduction;
+			float cooldown = ability.Cooldown * cooldownReduction;
 
-			character.CooldownController.AddCooldown(currentAbilityTemplate.Name, new CooldownInstance(cooldown));
+			Character.CooldownController.AddCooldown(currentAbilityTemplate.Name, new CooldownInstance(cooldown));
 		}
 	}
 
 	public void RemoveAbility(int referenceID)
 	{
-		knownAbilities.Remove(referenceID);
+		KnownAbilities.Remove(referenceID);
 	}
 
 	public bool CanManipulate()
 	{
-		if (character == null)
+		if (Character == null)
 			return false;
 
 		/*if (!character.IsSafeZone &&
@@ -316,11 +284,15 @@ public class AbilityController : NetworkBehaviour
 	{
 		if (abilityTemplates != null)
 		{
+			if (KnownTemplates == null)
+			{
+				KnownTemplates = new HashSet<int>();
+			}
 			for (int i = 0; i < abilityTemplates.Length; ++i)
 			{
-				if (!knownTemplates.Contains(abilityTemplates[i].ID))
+				if (!KnownTemplates.Contains(abilityTemplates[i].ID))
 				{
-					knownTemplates.Add(abilityTemplates[i].ID);
+					KnownTemplates.Add(abilityTemplates[i].ID);
 				}
 			}
 		}
@@ -331,23 +303,35 @@ public class AbilityController : NetworkBehaviour
 				AbilityEvent abilityEvent = abilityEvents[i];
 				if (abilityEvent is HitEvent)
 				{
-					if (!knownHitEvents.Contains(abilityEvent.ID))
+					if (KnownHitEvents == null)
 					{
-						knownHitEvents.Add(abilityEvent.ID);
+						KnownHitEvents = new HashSet<int>();
+					}
+					if (!KnownHitEvents.Contains(abilityEvent.ID))
+					{
+						KnownHitEvents.Add(abilityEvent.ID);
 					}
 				}
 				else if (abilityEvent is MoveEvent)
 				{
-					if (!knownMoveEvents.Contains(abilityEvent.ID))
+					if (KnownMoveEvents == null)
 					{
-						knownMoveEvents.Add(abilityEvent.ID);
+						KnownMoveEvents = new HashSet<int>();
+					}
+					if (!KnownMoveEvents.Contains(abilityEvent.ID))
+					{
+						KnownMoveEvents.Add(abilityEvent.ID);
 					}
 				}
 				else if (abilityEvent is SpawnEvent)
 				{
-					if (!knownSpawnEvents.Contains(abilityEvent.ID))
+					if (KnownSpawnEvents == null)
 					{
-						knownSpawnEvents.Add(abilityEvent.ID);
+						KnownSpawnEvents = new HashSet<int>();
+					}
+					if (!KnownSpawnEvents.Contains(abilityEvent.ID))
+					{
+						KnownSpawnEvents.Add(abilityEvent.ID);
 					}
 				}
 			}
@@ -356,6 +340,12 @@ public class AbilityController : NetworkBehaviour
 
 	public void LearnAbility(Ability ability)
 	{
+		if (ability == null)
+			return;
 
+		if (KnownAbilities == null)
+		{
+			KnownAbilities = new Dictionary<int, Ability>();
+		}
 	}
 }

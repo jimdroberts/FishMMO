@@ -82,7 +82,7 @@ namespace FishMMO.Client
 
 		public static void Hide(string name)
 		{
-			if (controls.TryGetValue(name, out UIControl result) && result.visible)
+			if (controls.TryGetValue(name, out UIControl result) && result.Visible)
 			{
 				result.OnHide();
 			}
@@ -112,7 +112,7 @@ namespace FishMMO.Client
 			}
 			foreach (UIControl control in controls.Values)
 			{
-				if (control.visible && control.hasFocus)
+				if (control.Visible && control.hasFocus)
 				{
 					return true;
 				}
@@ -124,7 +124,7 @@ namespace FishMMO.Client
 		{
 			foreach (UIControl control in controls.Values)
 			{
-				if (control.visible && control.inputField != null && control.inputField.isFocused)
+				if (control.Visible && control.inputField != null && control.inputField.isFocused)
 				{
 					return true;
 				}

@@ -278,7 +278,7 @@ namespace FishMMO.Server
 
 		public void AssignPhysicsScene(Character character)
 		{
-			UnityEngine.SceneManagement.Scene scene = SceneManager.GetScene(character.sceneHandle);
+			UnityEngine.SceneManagement.Scene scene = SceneManager.GetScene(character.SceneHandle);
 			if (scene != null && scene.IsValid() && scene.isLoaded)
 			{
 				UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(character.gameObject, scene);

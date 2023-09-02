@@ -38,7 +38,7 @@ namespace FishMMO.Client
 
 		private void ClientManager_OnReconnectFailed()
 		{
-			visible = true;
+			Visible = true;
 			SetSignInLocked(false);
 		}
 
@@ -66,7 +66,7 @@ namespace FishMMO.Client
 				case ClientAuthenticationResult.LoginSuccess:
 					// reset handshake message and hide the panel
 					handshakeMSG.text = "";
-					visible = false;
+					Visible = false;
 
 					// request the character list
 					CharacterRequestListBroadcast requestCharacterList = new CharacterRequestListBroadcast();

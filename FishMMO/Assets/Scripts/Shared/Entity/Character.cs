@@ -60,12 +60,14 @@ public class Character : NetworkBehaviour, IPooledResettable
 	public LocalInputController LocalInputController;
 	public TextMeshPro CharacterNameLabel;
 #endif
-
+	// accountID for reference
+	[SyncVar(Channel = Channel.Reliable)]
+	public long ID;
 	/// <summary>
 	/// The characters real name. Use this if you are referencing a character by name. Avoid character.name unless you want the name of the game object.
 	/// </summary>
 	[SyncVar(Channel = Channel.Unreliable, OnChange = nameof(OnCharacterNameChanged))]
-	public string characterName;
+	public string CharacterName;
 	private void OnCharacterNameChanged(string prev, string next, bool asServer)
 	{
 #if !UNITY_SERVER || UNITY_EDITOR
@@ -75,19 +77,15 @@ public class Character : NetworkBehaviour, IPooledResettable
 			CharacterNameLabel.text = next;
 #endif
 	}
-
-	// accountName for reference
-	[SyncVar(Channel = Channel.Reliable)]
-	public long id;
-	public string account;
-	public bool isGameMaster = false;
-	public bool isTeleporting = false;
-	public int raceID;
-	public string raceName;
-	public string sceneName;
-	public int sceneHandle;
-	public string lastChatMessage = "";
-	public DateTime nextChatMessageTime = DateTime.UtcNow;
+	public string Account;
+	public bool IsGameMaster = false;
+	public bool IsTeleporting = false;
+	public int RaceID;
+	public string RaceName;
+	public string SceneName;
+	public int SceneHandle;
+	public string LastChatMessage = "";
+	public DateTime NextChatMessageTime = DateTime.UtcNow;
 
 	void Awake()
 	{
@@ -96,25 +94,25 @@ public class Character : NetworkBehaviour, IPooledResettable
 		CharacterController = gameObject.GetComponent<ExampleCharacterController>();
 		AttributeController = gameObject.GetComponent<CharacterAttributeController>();
 		DamageController = gameObject.GetComponent<CharacterDamageController>();
-		DamageController.character = this;
+		DamageController.Character = this;
 		TargetController = gameObject.GetComponent<TargetController>();
-		TargetController.character = this;
+		TargetController.Character = this;
 		CooldownController = gameObject.GetComponent<CooldownController>();
 		InventoryController = gameObject.GetComponent<InventoryController>();
-		InventoryController.character = this;
+		InventoryController.Character = this;
 		EquipmentController = gameObject.GetComponent<EquipmentController>();
-		EquipmentController.character = this;
+		EquipmentController.Character = this;
 		AbilityController = gameObject.GetComponent<AbilityController>();
-		AbilityController.character = this;
+		AbilityController.Character = this;
 		AchievementController = gameObject.GetComponent<AchievementController>();
 		BuffController = gameObject.GetComponent<BuffController>();
-		BuffController.character = this;
+		BuffController.Character = this;
 		QuestController = gameObject.GetComponent<QuestController>();
-		QuestController.character = this;
+		QuestController.Character = this;
 		GuildController = gameObject.GetComponent<GuildController>();
-		GuildController.character = this;
+		GuildController.Character = this;
 		PartyController = gameObject.GetComponent<PartyController>();
-		PartyController.character = this;
+		PartyController.Character = this;
 		Motor = gameObject.GetComponent<KinematicCharacterMotor>();
 	}
 
@@ -151,17 +149,17 @@ public class Character : NetworkBehaviour, IPooledResettable
 	/// </summary>
 	public void OnPooledReset()
 	{
-		id = -1;
-		characterName = "";
-		account = "";
-		isGameMaster = false;
-		isTeleporting = false;
-		raceID = 0;
-		raceName = "";
-		sceneName = "";
-		sceneHandle = 0;
-		lastChatMessage = "";
-		nextChatMessageTime = DateTime.UtcNow;
+		ID = -1;
+		CharacterName = "";
+		Account = "";
+		IsGameMaster = false;
+		IsTeleporting = false;
+		RaceID = 0;
+		RaceName = "";
+		SceneName = "";
+		SceneHandle = 0;
+		LastChatMessage = "";
+		NextChatMessageTime = DateTime.UtcNow;
 		if (Motor != null)
 		{
 			Motor.SetPositionAndRotationAndVelocity(Vector3.zero, Quaternion.identity, Vector3.zero);
