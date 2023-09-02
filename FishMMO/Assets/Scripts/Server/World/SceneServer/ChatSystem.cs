@@ -17,12 +17,12 @@ namespace FishMMO.Server
 		public SceneManager SceneManager;
 		public CharacterSystem CharacterSystem;
 
-		public bool allowRepeatMessages = false;
+		public bool AllowRepeatMessages = false;
 		[Tooltip("The server chat rate limit in milliseconds. This should be equal to the clients UIChat.messageRateLimit")]
-		public float messageRateLimit = 0.0f;
+		public float MessageRateLimit = 0.0f;
 
 		public delegate void ChatCommand(NetworkConnection conn, Character character, ChatBroadcast msg);
-		public Dictionary<string, ChatCommand> commandEvents = new Dictionary<string, ChatCommand>();
+		private Dictionary<string, ChatCommand> commandEvents = new Dictionary<string, ChatCommand>();
 
 		public override void InitializeOnce()
 		{
@@ -155,15 +155,15 @@ namespace FishMMO.Server
 			//		  " last chat message[" + character.lastChatMessage + "] " +
 			//		  " current chat message[" + msg.text + "]");
 
-			if (messageRateLimit > 0)
+			if (MessageRateLimit > 0)
 			{
 				if (character.NextChatMessageTime > DateTime.UtcNow)
 				{
 					return;
 				}
-				character.NextChatMessageTime = DateTime.UtcNow.AddMilliseconds(messageRateLimit);
+				character.NextChatMessageTime = DateTime.UtcNow.AddMilliseconds(MessageRateLimit);
 			}
-			if (!allowRepeatMessages)
+			if (!AllowRepeatMessages)
 			{
 				if (character.LastChatMessage.Equals(msg.text))
 				{
@@ -269,7 +269,7 @@ namespace FishMMO.Server
 				msg.channel = ChatChannel.Party;
 				msg.text = sender.CharacterName + ": " + msg.text;
 
-				foreach (PartyController member in sender.PartyController.Current.members)
+				foreach (PartyController member in sender.PartyController.Current.Members)
 				{
 					// broadcast to party member... includes sender
 					member.Owner.Broadcast(msg);
@@ -289,7 +289,7 @@ namespace FishMMO.Server
 				msg.channel = ChatChannel.Guild;
 				msg.text = sender.CharacterName + ": " + msg.text;
 
-				foreach (GuildController member in sender.GuildController.Current.members)
+				foreach (GuildController member in sender.GuildController.Current.Members)
 				{
 					// broadcast to guild member... includes sender
 					member.Owner.Broadcast(msg);
@@ -312,7 +312,7 @@ namespace FishMMO.Server
 			}
 
 			if (CharacterSystem == null ||
-				!CharacterSystem.charactersByName.TryGetValue(targetName, out Character targetCharacter))
+				!CharacterSystem.CharactersByName.TryGetValue(targetName, out Character targetCharacter))
 			{
 				return;
 			}

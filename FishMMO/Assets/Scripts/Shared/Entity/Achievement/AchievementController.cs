@@ -70,7 +70,7 @@ public class AchievementController : NetworkBehaviour
 		if (template != null &&
 			achievements.TryGetValue(template.Name, out Achievement achievement))
 		{
-			achievement.currentValue = msg.newValue;
+			achievement.CurrentValue = msg.newValue;
 		}
 	}
 
@@ -85,7 +85,7 @@ public class AchievementController : NetworkBehaviour
 			if (template != null &&
 				achievements.TryGetValue(template.Name, out Achievement achievement))
 			{
-				achievement.currentValue = subMsg.newValue;
+				achievement.CurrentValue = subMsg.newValue;
 			}
 		}
 	}

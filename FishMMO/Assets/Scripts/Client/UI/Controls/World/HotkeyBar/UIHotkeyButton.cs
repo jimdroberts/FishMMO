@@ -2,15 +2,15 @@
 {
 	public class UIHotkeyButton : UIReferenceButton
 	{
-		public string keyMap = "";
+		public string KeyMap = "";
 
 		public override void OnLeftClick()
 		{
 			if (UIManager.TryGet("UIDragObject", out UIDragObject dragObject) && dragObject.Visible)
 			{
-				hotkeyType = dragObject.hotkeyType;
-				referenceID = dragObject.referenceID;
-				icon.texture = dragObject.icon.texture;
+				HotkeyType = dragObject.HotkeyType;
+				ReferenceID = dragObject.ReferenceID;
+				Icon.texture = dragObject.Icon.texture;
 
 				// clear the drag object no matter what
 				dragObject.Clear();
@@ -23,9 +23,9 @@
 
 		public override void OnRightClick()
 		{
-			if (UIManager.TryGet("UIDragObject", out UIDragObject dragObject) && referenceID != NULL_REFERENCE_ID)
+			if (UIManager.TryGet("UIDragObject", out UIDragObject dragObject) && ReferenceID != NULL_REFERENCE_ID)
 			{
-				dragObject.SetReference(icon.texture, referenceID, hotkeyType);
+				dragObject.SetReference(Icon.texture, ReferenceID, HotkeyType);
 				Clear();
 			}
 		}
@@ -33,22 +33,22 @@
 		public void Activate()
 		{
 			Character character = Character.localCharacter;
-			if (character != null && !string.IsNullOrWhiteSpace(keyMap))
+			if (character != null && !string.IsNullOrWhiteSpace(KeyMap))
 			{
-				switch (hotkeyType)
+				switch (HotkeyType)
 				{
 					case HotkeyType.None:
 						break;
 					case HotkeyType.Any:
 						break;
 					case HotkeyType.Inventory:
-						character.InventoryController.Activate(referenceID);
+						character.InventoryController.Activate(ReferenceID);
 						break;
 					case HotkeyType.Equipment:
-						character.EquipmentController.Activate(referenceID);
+						character.EquipmentController.Activate(ReferenceID);
 						break;
 					case HotkeyType.Ability:
-						character.AbilityController.Activate(referenceID, InputManager.GetKeyCode(keyMap));
+						character.AbilityController.Activate(ReferenceID, InputManager.GetKeyCode(KeyMap));
 						break;
 					default:
 						return;

@@ -1,4 +1,3 @@
-using FishNet.Managing;
 using FishNet.Transporting;
 using System.Collections.Generic;
 using TMPro;
@@ -29,13 +28,13 @@ namespace FishMMO.Client
 			if (startLocationDropdown != null &&
 				initialSpawnLocationNames != null &&
 				worldSceneDetailsCache != null &&
-				worldSceneDetailsCache.scenes != null)
+				worldSceneDetailsCache.Scenes != null)
 			{
-				foreach (WorldSceneDetails details in worldSceneDetailsCache.scenes.Values)
+				foreach (WorldSceneDetails details in worldSceneDetailsCache.Scenes.Values)
 				{
-					foreach (CharacterInitialSpawnPosition initialSpawnLocation in details.initialSpawnPositions.Values)
+					foreach (CharacterInitialSpawnPosition initialSpawnLocation in details.InitialSpawnPositions.Values)
 					{
-						initialSpawnLocationNames.Add(initialSpawnLocation.spawnerName);
+						initialSpawnLocationNames.Add(initialSpawnLocation.SpawnerName);
 					}
 				}
 				startLocationDropdown.ClearOptions();
@@ -93,9 +92,9 @@ namespace FishMMO.Client
 				worldSceneDetailsCache != null &&
 				selectedSpawnPosition >= 0)
 			{
-				foreach (WorldSceneDetails details in worldSceneDetailsCache.scenes.Values)
+				foreach (WorldSceneDetails details in worldSceneDetailsCache.Scenes.Values)
 				{
-					if (details.initialSpawnPositions.TryGetValue(initialSpawnLocationNames[selectedSpawnPosition], out CharacterInitialSpawnPosition spawnPosition))
+					if (details.InitialSpawnPositions.TryGetValue(initialSpawnLocationNames[selectedSpawnPosition], out CharacterInitialSpawnPosition spawnPosition))
 					{
 						// create character
 						Client.NetworkManager.ClientManager.Broadcast(new CharacterCreateBroadcast()

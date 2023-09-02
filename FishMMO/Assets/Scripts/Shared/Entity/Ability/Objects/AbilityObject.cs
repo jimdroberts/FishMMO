@@ -33,8 +33,8 @@ public class AbilityObject : MonoBehaviour
 				{
 					TargetInfo targetInfo = new TargetInfo()
 					{
-						target = other.transform,
-						hitPosition = other.GetContact(0).point,
+						Target = other.transform,
+						HitPosition = other.GetContact(0).point,
 					};
 
 					// invoke
@@ -74,7 +74,7 @@ public class AbilityObject : MonoBehaviour
 	{
 		AbilityTemplate template = ability.Template;
 
-		if (template.RequiresTarget && targetInfo.target == null)
+		if (template.RequiresTarget && targetInfo.Target == null)
 		{
 			return false;
 		}
@@ -91,13 +91,13 @@ public class AbilityObject : MonoBehaviour
 				t.SetPositionAndRotation(abilitySpawner.position, abilitySpawner.rotation);
 				break;
 			case AbilitySpawnTarget.Target:
-				if (targetInfo.hitPosition != null)
+				if (targetInfo.HitPosition != null)
 				{
-					t.SetPositionAndRotation(targetInfo.hitPosition, self.Transform.rotation);
+					t.SetPositionAndRotation(targetInfo.HitPosition, self.Transform.rotation);
 				}
 				else
 				{
-					t.SetPositionAndRotation(targetInfo.target.position, self.Transform.rotation);
+					t.SetPositionAndRotation(targetInfo.Target.position, self.Transform.rotation);
 				}
 				break;
 			default:

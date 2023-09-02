@@ -9,16 +9,16 @@ namespace FishMMO.Client
 		public Button serverButton;
 		public TMP_Text serverLabel;
 		public TMP_Text serverStatusLabel;
-		public WorldServerDetails details;
 
+		public WorldServerDetails Details;
 		public delegate void ServerSelectEvent(ServerDetailsButton button);
 		public event ServerSelectEvent OnServerSelected;
 
 		public void Initialize(WorldServerDetails details)
 		{
-			this.details = details;
-			serverLabel.text = (details.locked ? "[Locked] " : " ") + details.name;
-			serverStatusLabel.text = details.characterCount.ToString();
+			Details = details;
+			serverLabel.text = (details.Locked ? "[Locked] " : " ") + details.Name;
+			serverStatusLabel.text = details.CharacterCount.ToString();
 		}
 
 		public void OnClick_ServerButton()

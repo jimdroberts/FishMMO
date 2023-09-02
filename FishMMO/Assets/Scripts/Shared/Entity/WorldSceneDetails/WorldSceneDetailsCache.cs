@@ -13,15 +13,15 @@ public class WorldSceneDetailsCache : ScriptableObject
 	public const string WORLD_SCENE_PATH = "/WorldScene/";
 
 	[Tooltip("Apply this tag to any object in your starting scenes to turn them into initial spawn locations.")]
-	public string initialSpawnTag = "InitialSpawnPosition";
+	public string InitialSpawnTag = "InitialSpawnPosition";
 	[Tooltip("Apply this tag to any object in your scene you would like to behave as a respawn location.")]
-	public string respawnTag = "RespawnPosition";
+	public string RespawnTag = "RespawnPosition";
 	[Tooltip("Apply this tag to any object in your scene that you would like to act as a teleporter.")]
-	public string teleporterTag = "Teleporter";
+	public string TeleporterTag = "Teleporter";
 	[Tooltip("Apply this tag to any object in your scene that you would like to act as a teleporter destination.")]
-	public string teleporterDestinationTag = "TeleporterDestination";
+	public string TeleporterDestinationTag = "TeleporterDestination";
 
-	public WorldSceneDetailsDictionary scenes = new WorldSceneDetailsDictionary();
+	public WorldSceneDetailsDictionary Scenes = new WorldSceneDetailsDictionary();
 
 	public bool Rebuild()
 	{
@@ -35,11 +35,11 @@ public class WorldSceneDetailsCache : ScriptableObject
 
 		// Keep track of teleporter sprites
 		Dictionary<string, Dictionary<string, Sprite>> teleporterSpriteCache = new Dictionary<string, Dictionary<string, Sprite>>();
-		foreach (var worldSceneEntry in scenes)
+		foreach (var worldSceneEntry in Scenes)
 		{
-			foreach (var teleporterEntry in worldSceneEntry.Value.teleporters)
+			foreach (var teleporterEntry in worldSceneEntry.Value.Teleporters)
 			{
-				if (teleporterEntry.Value.sceneTransitionImage == null) continue;
+				if (teleporterEntry.Value.SceneTransitionImage == null) continue;
 				
 				if(teleporterSpriteCache.TryGetValue(worldSceneEntry.Key, out Dictionary<string, Sprite> spriteCache) == false)
 				{
@@ -47,12 +47,12 @@ public class WorldSceneDetailsCache : ScriptableObject
 					teleporterSpriteCache.Add(worldSceneEntry.Key, spriteCache);
 				}
 
-				spriteCache.Add(teleporterEntry.Key, teleporterEntry.Value.sceneTransitionImage);
+				spriteCache.Add(teleporterEntry.Key, teleporterEntry.Value.SceneTransitionImage);
 			}
 		}
 
-		scenes.Clear();
-		scenes = new WorldSceneDetailsDictionary();
+		Scenes.Clear();
+		Scenes = new WorldSceneDetailsDictionary();
 
 		Dictionary<string, Dictionary<string, SceneTeleporterDetails>> teleporterCache = new Dictionary<string, Dictionary<string, SceneTeleporterDetails>>();
 		Dictionary<string, TeleporterDestinationDetails> teleporterDestinationCache = new Dictionary<string, TeleporterDestinationDetails>();
@@ -70,36 +70,36 @@ public class WorldSceneDetailsCache : ScriptableObject
 			Scene s = EditorSceneManager.OpenScene(scene.path, OpenSceneMode.Additive);
 			if (s.IsValid())
 			{
-				if (!scenes.ContainsKey(s.name))
+				if (!Scenes.ContainsKey(s.name))
 				{
 					Debug.Log("[" + DateTime.UtcNow + "] WorldSceneDetails: Scene: [" + s.name + "] - Loaded");
 
 					// add the scene to our world scenes list
 					WorldSceneDetails sceneDetails = new WorldSceneDetails();
-					scenes.Add(s.name, sceneDetails);
+					Scenes.Add(s.name, sceneDetails);
 
 					// search for initialSpawnPositions
-					GameObject[] initialSpawns = GameObject.FindGameObjectsWithTag(initialSpawnTag);
+					GameObject[] initialSpawns = GameObject.FindGameObjectsWithTag(InitialSpawnTag);
 					foreach (GameObject obj in initialSpawns)
 					{
 						Debug.Log("[" + DateTime.UtcNow + "] WorldSceneDetails: Found new InitialSpawnPosition: [" + obj.name + " Pos:" + obj.transform.position + " Rot:" + obj.transform.rotation + "]");
 
-						sceneDetails.initialSpawnPositions.Add(obj.name, new CharacterInitialSpawnPosition()
+						sceneDetails.InitialSpawnPositions.Add(obj.name, new CharacterInitialSpawnPosition()
 						{
-							spawnerName = obj.name,
-							sceneName = s.name,
-							position = obj.transform.position,
-							rotation = obj.transform.rotation,
+							SpawnerName = obj.name,
+							SceneName = s.name,
+							Position = obj.transform.position,
+							Rotation = obj.transform.rotation,
 						});
 					}
 
 					// search for respawnPositions
-					GameObject[] respawnPositions = GameObject.FindGameObjectsWithTag(respawnTag);
+					GameObject[] respawnPositions = GameObject.FindGameObjectsWithTag(RespawnTag);
 					foreach (GameObject obj in respawnPositions)
 					{
 						Debug.Log("[" + DateTime.UtcNow + "] WorldSceneDetails: Found new RespawnPosition: [" + obj.name + " " + obj.transform.position + "]");
 
-						sceneDetails.respawnPositions.Add(obj.name, obj.transform.position);
+						sceneDetails.RespawnPositions.Add(obj.name, obj.transform.position);
 					}
 
 					// Search for world bounds (bounds activate when outside of all of them)
@@ -108,7 +108,7 @@ public class WorldSceneDetailsCache : ScriptableObject
 					{
 						Debug.Log($"[{DateTime.UtcNow}] WorldSceneDetails: Found new boundary: [Name: {obj.name}, Center: {obj.GetBoundaryOffset()}, Size: {obj.GetBoundarySize()}]");
 
-						sceneDetails.boundaries.Add(obj.name, new SceneBoundaryDetails()
+						sceneDetails.Boundaries.Add(obj.name, new SceneBoundaryDetails()
 						{
 							BoundaryOrigin = obj.GetBoundaryOffset(),
 							BoundarySize = obj.GetBoundarySize()
@@ -123,7 +123,7 @@ public class WorldSceneDetailsCache : ScriptableObject
 
 						SceneTeleporterDetails newDetails = new SceneTeleporterDetails()
 						{
-							from = obj.name, // used for validation
+							From = obj.name, // used for validation
 							// we still need to set toScene and toPosition later
 						};
 
@@ -135,7 +135,7 @@ public class WorldSceneDetailsCache : ScriptableObject
 					}
 
 					// search for teleporter destinations
-					GameObject[] teleportDestinations = GameObject.FindGameObjectsWithTag(teleporterDestinationTag);
+					GameObject[] teleportDestinations = GameObject.FindGameObjectsWithTag(TeleporterDestinationTag);
 					foreach (GameObject obj in teleportDestinations)
 					{
 						string teleporterDestinationName = obj.name.Trim();
@@ -144,8 +144,8 @@ public class WorldSceneDetailsCache : ScriptableObject
 
 						teleporterDestinationCache.Add(teleporterDestinationName, new TeleporterDestinationDetails()
 						{
-							scene = s.name,
-							position = obj.transform.position,
+							Scene = s.name,
+							Position = obj.transform.position,
 						});
 					}
 
@@ -163,25 +163,25 @@ public class WorldSceneDetailsCache : ScriptableObject
 		{
 			foreach (KeyValuePair<string, SceneTeleporterDetails> pair in teleporterDetailsPair.Value)
 			{
-				if (teleporterDestinationCache.TryGetValue("From" + pair.Value.from, out TeleporterDestinationDetails destination))
+				if (teleporterDestinationCache.TryGetValue("From" + pair.Value.From, out TeleporterDestinationDetails destination))
 				{
-					if (scenes.TryGetValue(teleporterDetailsPair.Key, out WorldSceneDetails sceneDetails))
+					if (Scenes.TryGetValue(teleporterDetailsPair.Key, out WorldSceneDetails sceneDetails))
 					{
-						pair.Value.toScene = destination.scene;
-						pair.Value.toPosition = destination.position;
-						pair.Value.sceneTransitionImage = null;
+						pair.Value.ToScene = destination.Scene;
+						pair.Value.ToPosition = destination.Position;
+						pair.Value.SceneTransitionImage = null;
 
 						if (teleporterSpriteCache.TryGetValue(teleporterDetailsPair.Key, out Dictionary<string, Sprite> spriteCache))
 						{
 							if(spriteCache.TryGetValue(pair.Key, out Sprite sprite))
 							{
-								pair.Value.sceneTransitionImage = sprite;
+								pair.Value.SceneTransitionImage = sprite;
 							}
 						}
 
-						Debug.Log("[" + DateTime.UtcNow + "] WorldSceneDetails: Teleporter [" + pair.Key + "] linked to: [Scene:" + destination.scene + " " + pair.Value.toPosition + "]");
+						Debug.Log("[" + DateTime.UtcNow + "] WorldSceneDetails: Teleporter [" + pair.Key + "] linked to: [Scene:" + destination.Scene + " " + pair.Value.ToPosition + "]");
 
-						sceneDetails.teleporters.Add(pair.Key, pair.Value);
+						sceneDetails.Teleporters.Add(pair.Key, pair.Value);
 					}
 				}
 			}

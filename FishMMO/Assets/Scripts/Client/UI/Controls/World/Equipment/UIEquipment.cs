@@ -26,7 +26,7 @@ namespace FishMMO.Client
 			Character character = Character.localCharacter;
 			if (character == null) return;
 
-			if (buttons == null || buttons.Count != character.EquipmentController.items.Count)
+			if (buttons == null || buttons.Count != character.EquipmentController.Items.Count)
 			{
 				character.EquipmentController.OnSlotUpdated -= OnEquipmentSlotUpdated;
 				UIEquipmentButton[] equipmentButtons = gameObject.GetComponentsInChildren<UIEquipmentButton>();
@@ -74,11 +74,11 @@ namespace FishMMO.Client
 			{
 				// update our button display
 				UIEquipmentButton button = buttons[equipmentSlot];
-				button.referenceID = equipmentSlot;
-				button.hotkeyType = HotkeyType.Equipment;
-				if (button.icon != null) button.icon.texture = item.Template.Icon;
+				button.ReferenceID = equipmentSlot;
+				button.HotkeyType = HotkeyType.Equipment;
+				if (button.Icon != null) button.Icon.texture = item.Template.Icon;
 				//inventorySlots[i].cooldownText = character.CooldownController.IsOnCooldown();
-				if (button.amountText != null) button.amountText.text = item.IsStackable ? item.Stackable.Amount.ToString() : "";
+				if (button.AmountText != null) button.AmountText.text = item.IsStackable ? item.Stackable.Amount.ToString() : "";
 			}
 			else
 			{

@@ -79,7 +79,7 @@ namespace FishMMO.Client
 			{
 				return KeyCode.None;
 			}
-			return keyMap.key;
+			return keyMap.Key;
 		}
 
 		public static bool GetKey(string virtualKey)

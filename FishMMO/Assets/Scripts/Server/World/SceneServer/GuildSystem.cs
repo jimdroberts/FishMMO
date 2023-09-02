@@ -12,10 +12,10 @@ namespace FishMMO.Server
 		public CharacterSystem CharacterSystem;
 
 		public ulong nextGuildId = 0;
-		public Dictionary<ulong, Guild> guilds = new Dictionary<ulong, Guild>();
+		private Dictionary<ulong, Guild> guilds = new Dictionary<ulong, Guild>();
 
 		// clientId / guildId
-		public readonly Dictionary<long, ulong> pendingInvitations = new Dictionary<long, ulong>();
+		private readonly Dictionary<long, ulong> pendingInvitations = new Dictionary<long, ulong>();
 
 		public override void InitializeOnce()
 		{
@@ -98,7 +98,7 @@ namespace FishMMO.Server
 			}
 
 			if (!pendingInvitations.ContainsKey(msg.targetCharacterId) &&
-				CharacterSystem.charactersById.TryGetValue(msg.targetCharacterId, out Character targetCharacter))
+				CharacterSystem.CharactersById.TryGetValue(msg.targetCharacterId, out Character targetCharacter))
 			{
 				GuildController targetGuildController = targetCharacter.GetComponent<GuildController>();
 
@@ -144,18 +144,18 @@ namespace FishMMO.Server
 						rank = GuildRank.Member,
 					};
 
-					for (int i = 0; i < guild.members.Count; ++i)
+					for (int i = 0; i < guild.Members.Count; ++i)
 					{
 						// tell our guild members we joined the guild
-						guild.members[i].Owner.Broadcast(newMember);
-						CurrentMembers.Add(guild.members[i].Character.ID);
+						guild.Members[i].Owner.Broadcast(newMember);
+						CurrentMembers.Add(guild.Members[i].Character.ID);
 					}
 
 					guildController.Rank = GuildRank.Member;
 					guildController.Current = guild;
 
 					// add the new guild member
-					guild.members.Add(guildController);
+					guild.Members.Add(guildController);
 
 					// tell the new member about they joined successfully
 					GuildJoinedBroadcast memberBroadcast = new GuildJoinedBroadcast()
@@ -194,9 +194,9 @@ namespace FishMMO.Server
 				if (guildController.Rank == GuildRank.Leader)
 				{
 					// can we destroy the guild?
-					if (guild.members.Count - 1 < 1)
+					if (guild.Members.Count - 1 < 1)
 					{
-						guild.members.Clear();
+						guild.Members.Clear();
 						guilds.Remove(guild.id);
 
 						guildController.Rank = GuildRank.None;
@@ -209,10 +209,10 @@ namespace FishMMO.Server
 					else
 					{
 						// next person in the guild becomes the new leader
-						guild.members[1].Rank = GuildRank.Leader;
+						guild.Members[1].Rank = GuildRank.Leader;
 
 						// remove the Current leader
-						guild.members.RemoveAt(0);
+						guild.Members.RemoveAt(0);
 
 						guildController.Rank = GuildRank.None;
 						guildController.Current = null;
@@ -228,7 +228,7 @@ namespace FishMMO.Server
 				};
 
 				// tell the remaining guild members we left the guild
-				foreach (GuildController member in guild.members)
+				foreach (GuildController member in guild.Members)
 				{
 					member.Owner.Broadcast(removeCharacterBroadcast);
 				}
@@ -267,7 +267,7 @@ namespace FishMMO.Server
 					};
 
 					// tell the remaining guild members someone was removed
-					foreach (GuildController member in guild.members)
+					foreach (GuildController member in guild.Members)
 					{
 						member.Owner.Broadcast(removeCharacterBroadcast);
 					}

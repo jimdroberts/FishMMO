@@ -1,7 +1,7 @@
 ﻿public class Achievement
 {
 	public int templateID;
-	public uint currentValue;
+	public uint CurrentValue;
 
 	private AchievementTemplate cachedTemplate;
 	public AchievementTemplate Template { get { return cachedTemplate; } }
@@ -10,6 +10,6 @@
 	{
 		this.templateID = templateID;
 		this.cachedTemplate = AchievementTemplate.Get<AchievementTemplate>(templateID);
-		this.currentValue = Value;
+		this.CurrentValue = Value;
 	}
 }

@@ -4,8 +4,8 @@ using System;
 [Serializable]
 public class CharacterInitialSpawnPosition
 {
-	public string spawnerName;
-	public string sceneName;
-	public Vector3 position;
-	public Quaternion rotation;
+	public string SpawnerName;
+	public string SceneName;
+	public Vector3 Position;
+	public Quaternion Rotation;
 }

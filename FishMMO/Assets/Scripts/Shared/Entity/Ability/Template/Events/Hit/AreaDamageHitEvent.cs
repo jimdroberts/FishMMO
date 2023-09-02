@@ -15,7 +15,7 @@ public sealed class AreaDamageHitEvent : HitEvent
 		PhysicsScene physicsScene = attacker.gameObject.scene.GetPhysicsScene();
 
 		int overlapCount = physicsScene.OverlapSphere(//Physics.OverlapCapsuleNonAlloc(
-			hitTarget.target.transform.position,
+			hitTarget.Target.transform.position,
 			Radius,
 			colliders,
 			CollidableLayers,

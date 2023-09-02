@@ -16,10 +16,10 @@ namespace FishMMO.Server
 		private SceneServerAuthenticator loginAuthenticator;
 		private LocalConnectionState serverState;
 
-		public WorldSceneDetailsCache worldSceneDetailsCache;
+		public WorldSceneDetailsCache WorldSceneDetailsCache;
 
-		public bool locked = false;
-		public float pulseRate = 10.0f;
+		private bool locked = false;
+		private float pulseRate = 10.0f;
 		private float nextPulse = 0.0f;
 
 		public event Action<string> OnSceneLoadComplete;
@@ -46,7 +46,7 @@ namespace FishMMO.Server
 
 		void LateUpdate()
 		{
-			if (serverState == LocalConnectionState.Started && Server.configuration.TryGetString("ServerName", out string name))
+			if (serverState == LocalConnectionState.Started && Server.Configuration.TryGetString("ServerName", out string name))
 			{
 				nextPulse -= Time.deltaTime;
 				if (nextPulse < 0)
@@ -139,9 +139,9 @@ namespace FishMMO.Server
 					// cache the newly loaded scene
 					handles.Add(scene.handle, new SceneInstanceDetails()
 					{
-						name = scene.name,
-						handle = scene.handle,
-						clientCount = 0,
+						Name = scene.name,
+						Handle = scene.handle,
+						ClientCount = 0,
 					});
 				}
 
@@ -172,8 +172,8 @@ namespace FishMMO.Server
 			// tell the world server our information
 			ClientManager.Broadcast(new SceneServerDetailsBroadcast()
 			{
-				address = Server.address,
-				port = Server.port,
+				address = Server.Address,
+				port = Server.Port,
 				sceneInstanceDetails = RebuildSceneInstanceDetails(),
 			});
 		}
@@ -195,8 +195,8 @@ namespace FishMMO.Server
 		/// </summary>
 		private void OnClientSceneLoadBroadcastReceived(SceneLoadBroadcast msg)
 		{
-			if (worldSceneDetailsCache == null ||
-				!worldSceneDetailsCache.scenes.Contains(msg.sceneName))
+			if (WorldSceneDetailsCache == null ||
+				!WorldSceneDetailsCache.Scenes.Contains(msg.sceneName))
 			{
 				Debug.Log("[" + DateTime.UtcNow + "] SceneServerManager: Scene is missing from the cache. Unable to load the scene.");
 				return;
@@ -249,7 +249,7 @@ namespace FishMMO.Server
 						found = true;
 						continue;
 					}
-					if (instanceDetails.clientCount > instance.clientCount)
+					if (instanceDetails.ClientCount > instance.ClientCount)
 					{
 						instanceDetails = instance;
 					}
@@ -261,10 +261,10 @@ namespace FishMMO.Server
 
 		public bool TryLoadSceneForConnection(NetworkConnection conn, SceneInstanceDetails instance)
 		{
-			UnityEngine.SceneManagement.Scene scene = SceneManager.GetScene(instance.handle);
+			UnityEngine.SceneManagement.Scene scene = SceneManager.GetScene(instance.Handle);
 			if (scene != null && scene.IsValid() && scene.isLoaded)
 			{
-				SceneLoadData sld = new SceneLoadData(instance.handle);
+				SceneLoadData sld = new SceneLoadData(instance.Handle);
 				sld.ReplaceScenes = ReplaceOption.None;
 				// will this prevent server from loading the scene again? we only want the client to load the scene here..
 				sld.Options.AllowStacking = false;

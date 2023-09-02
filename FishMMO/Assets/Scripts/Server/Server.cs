@@ -17,12 +17,12 @@ namespace FishMMO.Server
 	// Main Server class, handles configuration and starting connections.
 	public class Server : MonoBehaviour
 	{
-		public string configurationFileName;
-		public Configuration configuration = null;
-		public string address;
-		public ushort port;
-		public string relayAddress;
-		public ushort relayPort;
+		public string ConfigurationFileName;
+		public Configuration Configuration = null;
+		public string Address;
+		public ushort Port;
+		public string RelayAddress;
+		public ushort RelayPort;
 		public ServerDbContextFactory DbContextFactory;
 
 		public NetworkManager NetworkManager { get; private set; }
@@ -61,17 +61,17 @@ namespace FishMMO.Server
 #endif
 
 			// load configuration
-			configuration = new Configuration(path);
-			if (!configuration.Load(configurationFileName))
+			Configuration = new Configuration(path);
+			if (!Configuration.Load(ConfigurationFileName))
 			{
 				// if we failed to load the file.. save a new one
-				configuration.Set("ServerName", "TestName");
-				configuration.Set("MaximumClients", 4000);
-				configuration.Set("Address", "127.0.0.1");
-				configuration.Set("Port", 7770);
-				configuration.Set("RelayAddress", "");
-				configuration.Set("RelayPort", 0);
-				configuration.Save();
+				Configuration.Set("ServerName", "TestName");
+				Configuration.Set("MaximumClients", 4000);
+				Configuration.Set("Address", "127.0.0.1");
+				Configuration.Set("Port", 7770);
+				Configuration.Set("RelayAddress", "");
+				Configuration.Set("RelayPort", 0);
+				Configuration.Save();
 			}
 
 			// setup the DB context and ensure that it's been created
@@ -258,8 +258,8 @@ namespace FishMMO.Server
 			// attempt to connect to a relay server, cluster nodes handle internal systems
 			if (NetworkManager.ClientManager != null && LoadRelayServerAddress())
 			{
-				NetworkManager.ClientManager.StartConnection(relayAddress, relayPort);
-				Debug.Log(relayAddress + ":" + relayPort);
+				NetworkManager.ClientManager.StartConnection(RelayAddress, RelayPort);
+				Debug.Log(RelayAddress + ":" + RelayPort);
 			}
 
 			yield return null;
@@ -272,12 +272,12 @@ namespace FishMMO.Server
 		{
 			Transport transport = NetworkManager.TransportManager.Transport;
 			if (transport != null &&
-				configuration.TryGetString("Address", out address) &&
-				configuration.TryGetUShort("Port", out port) &&
-				configuration.TryGetInt("MaximumClients", out int maximumClients))
+				Configuration.TryGetString("Address", out Address) &&
+				Configuration.TryGetUShort("Port", out Port) &&
+				Configuration.TryGetInt("MaximumClients", out int maximumClients))
 			{
-				transport.SetServerBindAddress(address, IPAddressType.IPv4);
-				transport.SetPort(port);
+				transport.SetServerBindAddress(Address, IPAddressType.IPv4);
+				transport.SetPort(Port);
 				transport.SetMaximumClients(maximumClients);
 				return true;
 			}
@@ -289,10 +289,10 @@ namespace FishMMO.Server
 		/// </summary>
 		private bool LoadRelayServerAddress()
 		{
-			if (configuration.TryGetString("RelayAddress", out relayAddress) &&
-				relayAddress.Length > 0 &&
-				IsRelayAddressValid(relayAddress) &&
-				configuration.TryGetUShort("RelayPort", out relayPort))
+			if (Configuration.TryGetString("RelayAddress", out RelayAddress) &&
+				RelayAddress.Length > 0 &&
+				IsRelayAddressValid(RelayAddress) &&
+				Configuration.TryGetUShort("RelayPort", out RelayPort))
 			{
 				return true;
 			}

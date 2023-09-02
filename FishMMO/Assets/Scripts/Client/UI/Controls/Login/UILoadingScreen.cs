@@ -42,10 +42,10 @@ namespace FishMMO.Client
 		{
 			if (reconnect.sceneName != null &&
 				reconnect.teleporterName != null &&
-				Details.scenes.TryGetValue(reconnect.sceneName, out WorldSceneDetails details) &&
-				details.teleporters.TryGetValue(reconnect.teleporterName, out SceneTeleporterDetails teleporter))
+				Details.Scenes.TryGetValue(reconnect.sceneName, out WorldSceneDetails details) &&
+				details.Teleporters.TryGetValue(reconnect.teleporterName, out SceneTeleporterDetails teleporter))
 			{
-				LoadingImage.sprite = teleporter.sceneTransitionImage;
+				LoadingImage.sprite = teleporter.SceneTransitionImage;
 			}
 			else
 			{

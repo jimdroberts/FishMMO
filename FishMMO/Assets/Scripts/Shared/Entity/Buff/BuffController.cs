@@ -5,7 +5,7 @@ using UnityEngine;
 [RequireComponent(typeof(Character))]
 public class BuffController : NetworkBehaviour
 {
-	private Dictionary<string, Buff> buffs = new Dictionary<string, Buff>();
+	private Dictionary<int, Buff> buffs = new Dictionary<int, Buff>();
 
 	public Character Character;
 
@@ -41,10 +41,10 @@ public class BuffController : NetworkBehaviour
 	void Update()
 	{
 		float dt = Time.deltaTime;
-		foreach (KeyValuePair<string, Buff> pair in new Dictionary<string, Buff>(buffs))
+		foreach (KeyValuePair<int, Buff> pair in new Dictionary<int, Buff>(buffs))
 		{
 			pair.Value.SubtractTime(dt);
-			if (pair.Value.remainingTime > 0.0f)
+			if (pair.Value.RemainingTime > 0.0f)
 			{
 				pair.Value.SubtractTickTime(dt);
 				pair.Value.TryTick(Character);
@@ -69,11 +69,11 @@ public class BuffController : NetworkBehaviour
 	public void Apply(BuffTemplate template)
 	{
 		Buff buffInstance;
-		if (!buffs.TryGetValue(template.Name, out buffInstance))
+		if (!buffs.TryGetValue(template.ID, out buffInstance))
 		{
 			buffInstance = new Buff(template.ID);
 			buffInstance.Apply(Character);
-			buffs.Add(template.Name, buffInstance);
+			buffs.Add(template.ID, buffInstance);
 		}
 		else if (template.MaxStacks > 0 && buffInstance.Stacks.Count < template.MaxStacks)
 		{
@@ -87,22 +87,22 @@ public class BuffController : NetworkBehaviour
 		}
 	}
 
-	public void Remove(string buffName)
+	public void Remove(int buffID)
 	{
-		if (buffs.TryGetValue(buffName, out Buff buffInstance))
+		if (buffs.TryGetValue(buffID, out Buff buffInstance))
 		{
 			foreach (Buff stack in buffInstance.Stacks)
 			{
 				stack.RemoveStack(Character);
 			}
 			buffInstance.Remove(Character);
-			buffs.Remove(buffName);
+			buffs.Remove(buffID);
 		}
 	}
 
 	public void RemoveAll()
 	{
-		foreach (KeyValuePair<string, Buff> pair in new Dictionary<string, Buff>(buffs))
+		foreach (KeyValuePair<int, Buff> pair in new Dictionary<int, Buff>(buffs))
 		{
 			if (!pair.Value.Template.IsPermanent)
 			{
@@ -151,7 +151,7 @@ public class BuffController : NetworkBehaviour
 		BuffTemplate template = BuffTemplate.Get<BuffTemplate>(msg.templateID);
 		if (template != null)
 		{
-			Remove(template.Name);
+			Remove(template.ID);
 		}
 	}
 
@@ -165,7 +165,7 @@ public class BuffController : NetworkBehaviour
 			BuffTemplate template = BuffTemplate.Get<BuffTemplate>(subMsg.templateID);
 			if (template != null)
 			{
-				Remove(template.Name);
+				Remove(template.ID);
 			}
 		}
 	}

@@ -38,7 +38,7 @@ namespace FishMMO.Server.Services
 				.ToList()
 				.Select(c => new CharacterDetails()
 				{
-					characterName = c.Name
+					CharacterName = c.Name
 				})
 				.ToList();
 		}

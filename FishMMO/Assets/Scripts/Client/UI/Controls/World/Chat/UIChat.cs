@@ -14,7 +14,7 @@ namespace FishMMO.Client
 		public Transform chatTabViewParent;
 		public ChatTab chatTabPrefab;
 
-		public Dictionary<ChatChannel, Color> channelColors = new Dictionary<ChatChannel, Color>()
+		public Dictionary<ChatChannel, Color> ChannelColors = new Dictionary<ChatChannel, Color>()
 		{
 			{ ChatChannel.Say, Color.white },
 			{ ChatChannel.World, Color.red },
@@ -34,9 +34,9 @@ namespace FishMMO.Client
 		public event ChatMessageChange OnMessageAdded;
 		public event ChatMessageChange OnMessageRemoved;
 		public List<ClientChatMessage> messages = new List<ClientChatMessage>();
-		public bool allowRepeatMessages = false;
+		public bool AllowRepeatMessages = false;
 		[Tooltip("The rate at which messages can be sent in milliseconds.")]
-		public float messageRateLimit = 0.0f;
+		public float MessageRateLimit = 0.0f;
 
 		public delegate void ChatCommand(Character sender, ChatBroadcast msg);
 		public Dictionary<string, ChatCommand> commandEvents = new Dictionary<string, ChatCommand>();
@@ -101,7 +101,7 @@ namespace FishMMO.Client
 				{
 					if (message == null) continue;
 
-					if (tab.activeChannels.Contains(message.channel))
+					if (tab.activeChannels.Contains(message.Channel))
 					{
 						message.gameObject.SetActive(true);
 					}
@@ -128,15 +128,15 @@ namespace FishMMO.Client
 				Character character = Character.localCharacter;
 				if (character != null)
 				{
-					if (messageRateLimit > 0)
+					if (MessageRateLimit > 0)
 					{
 						if (character.NextChatMessageTime > DateTime.UtcNow)
 						{
 							return;
 						}
-						character.NextChatMessageTime = DateTime.UtcNow.AddMilliseconds(messageRateLimit);
+						character.NextChatMessageTime = DateTime.UtcNow.AddMilliseconds(MessageRateLimit);
 					}
-					if (!allowRepeatMessages)
+					if (!AllowRepeatMessages)
 					{
 						if (character.LastChatMessage.Equals(input))
 						{
@@ -147,7 +147,7 @@ namespace FishMMO.Client
 				}
 				Client.NetworkManager.ClientManager.Broadcast(new ChatBroadcast() { text = input });
 			}
-			inputField.text = "";
+			InputField.text = "";
 		}
 
 		public void AddTab()
@@ -228,8 +228,8 @@ namespace FishMMO.Client
 				if (tab.activeChannels.Contains(msg.channel))
 				{
 					ClientChatMessage newMessage = Instantiate(chatMessagePrefab, chatViewParent);
-					newMessage.channel = msg.channel;
-					newMessage.text.color = channelColors[msg.channel];
+					newMessage.Channel = msg.channel;
+					newMessage.text.color = ChannelColors[msg.channel];
 					newMessage.text.text = "[" + msg.channel + "] " + msg.text;
 					AddMessage(newMessage);
 				}

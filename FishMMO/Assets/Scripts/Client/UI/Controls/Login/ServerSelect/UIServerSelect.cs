@@ -18,12 +18,12 @@ namespace FishMMO.Client
 		private List<ServerDetailsButton> serverList = new List<ServerDetailsButton>();
 		private ServerDetailsButton selectedServer;
 
-		public float refreshRate = 5.0f;
+		public float RefreshRate = 5.0f;
 		private float nextRefresh = 0.0f;
 
 		public override void OnStarting()
 		{
-			nextRefresh = refreshRate;
+			nextRefresh = RefreshRate;
 
 			Client.NetworkManager.ClientManager.RegisterBroadcast<ServerListBroadcast>(OnClientServerListBroadcastReceived);
 			Client.NetworkManager.ClientManager.RegisterBroadcast<WorldSceneConnectBroadcast>(OnClientWorldSceneConnectBroadcastReceived);
@@ -140,7 +140,7 @@ namespace FishMMO.Client
 				selectedServer != null)
 			{
 				// connect to the world server
-				Client.ConnectToServer(selectedServer.details.address, selectedServer.details.port);
+				Client.ConnectToServer(selectedServer.Details.Address, selectedServer.Details.Port);
 
 				SetConnectToServerLocked(true);
 			}
@@ -151,7 +151,7 @@ namespace FishMMO.Client
 			// TODO -- there should be a timer on the server too
 			if (nextRefresh < 0)
 			{
-				nextRefresh = refreshRate;
+				nextRefresh = RefreshRate;
 
 				// request an updated server list
 				RequestServerListBroadcast requestServerList = new RequestServerListBroadcast();

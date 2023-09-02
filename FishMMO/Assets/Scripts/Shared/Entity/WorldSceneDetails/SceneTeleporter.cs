@@ -26,9 +26,9 @@ public class SceneTeleporter : MonoBehaviour
 			Character character = other.gameObject.GetComponent<Character>();
 			if (character != null && !character.IsTeleporting)
 			{
-				if (sceneServerSystem.worldSceneDetailsCache != null &&
-					sceneServerSystem.worldSceneDetailsCache.scenes.TryGetValue(character.SceneName, out WorldSceneDetails details) &&
-					details.teleporters.TryGetValue(gameObject.name, out SceneTeleporterDetails teleporter))
+				if (sceneServerSystem.WorldSceneDetailsCache != null &&
+					sceneServerSystem.WorldSceneDetailsCache.Scenes.TryGetValue(character.SceneName, out WorldSceneDetails details) &&
+					details.Teleporters.TryGetValue(gameObject.name, out SceneTeleporterDetails teleporter))
 				{
 					character.IsTeleporting = true;
 
@@ -45,8 +45,8 @@ public class SceneTeleporter : MonoBehaviour
 					}
 
 					string playerScene = character.SceneName;
-					character.SceneName = teleporter.toScene;
-					character.Motor.SetPositionAndRotation(teleporter.toPosition, character.Transform.rotation);// teleporter.toRotation);
+					character.SceneName = teleporter.ToScene;
+					character.Motor.SetPositionAndRotation(teleporter.ToPosition, character.Transform.rotation);// teleporter.toRotation);
 
 					// save the character with new scene and position
 					using var dbContext = sceneServerSystem.Server.DbContextFactory.CreateDbContext();
@@ -58,8 +58,8 @@ public class SceneTeleporter : MonoBehaviour
 					// tell the client to reconnect to the world server for automatic re-entry
 					character.Owner.Broadcast(new SceneWorldReconnectBroadcast()
 					{
-						address = sceneServerSystem.Server.relayAddress,
-						port = sceneServerSystem.Server.relayPort,
+						address = sceneServerSystem.Server.RelayAddress,
+						port = sceneServerSystem.Server.RelayPort,
 						teleporterName = gameObject.name,
 						sceneName = playerScene
 					});

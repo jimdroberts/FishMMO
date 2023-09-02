@@ -28,23 +28,23 @@ namespace FishMMO.Client
 		public string username = "";
 		public string password = "";
 
-		public const int accountNameMinLength = 3;
-		public const int accountNameMaxLength = 32;
+		public const int AccountNameMinLength = 3;
+		public const int AccountNameMaxLength = 32;
 
-		public const int accountPasswordMinLength = 3;
-		public const int accountPasswordMaxLength = 32;
+		public const int AccountPasswordMinLength = 3;
+		public const int AccountPasswordMaxLength = 32;
 
 		public virtual bool IsAllowedUsername(string accountName)
 		{
-			return accountName.Length >= accountNameMinLength &&
-				   accountName.Length <= accountNameMaxLength &&
+			return accountName.Length >= AccountNameMinLength &&
+				   accountName.Length <= AccountNameMaxLength &&
 				   Regex.IsMatch(accountName, @"^[a-zA-Z0-9_]+$");
 		}
 
 		public virtual bool IsAllowedPassword(string accountPassword)
 		{
-			return accountPassword.Length >= accountNameMinLength &&
-				   accountPassword.Length <= accountNameMaxLength &&
+			return accountPassword.Length >= AccountNameMinLength &&
+				   accountPassword.Length <= AccountNameMaxLength &&
 				   Regex.IsMatch(accountPassword, @"^[a-zA-Z0-9_]+$");
 		}
 

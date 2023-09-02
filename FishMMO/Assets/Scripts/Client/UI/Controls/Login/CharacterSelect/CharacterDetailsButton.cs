@@ -8,15 +8,16 @@ namespace FishMMO.Client
 	{
 		public Button characterButton;
 		public TMP_Text characterNameLabel;
-		public CharacterDetails details;
+
+		public CharacterDetails Details;
 
 		public delegate void CharacterSelectEvent(CharacterDetailsButton button);
 		public event CharacterSelectEvent OnCharacterSelected;
 
 		public void Initialize(CharacterDetails details)
 		{
-			this.details = details;
-			characterNameLabel.text = details.characterName;
+			Details = details;
+			characterNameLabel.text = details.CharacterName;
 		}
 
 		public void OnClick_CharacterButton()

@@ -120,7 +120,7 @@ namespace FishMMO.Client
 			CharacterDetailsButton newCharacter = Instantiate(characterButtonPrefab, characterButtonParent);
 			CharacterDetails details = new CharacterDetails()
 			{
-				characterName = msg.characterName,
+				CharacterName = msg.characterName,
 				//modelTemplateIndex = msg.raceName,
 			};
 			newCharacter.Initialize(details);
@@ -135,7 +135,7 @@ namespace FishMMO.Client
 			{
 				for (int i = 0; i < characterList.Count; ++i)
 				{
-					if (characterList[i].details.characterName == msg.characterName)
+					if (characterList[i].Details.CharacterName == msg.characterName)
 					{
 						characterList[i].OnCharacterSelected -= OnCharacterSelected;
 						characterList[i].gameObject.SetActive(false);
@@ -166,14 +166,14 @@ namespace FishMMO.Client
 		{	
 			if (Client.IsConnectionReady() &&
 				selectedCharacter != null &&
-				selectedCharacter.details != null)
+				selectedCharacter.Details != null)
 			{
 				Visible = false;
 
 				// tell the login server about our character selection
 				Client.NetworkManager.ClientManager.Broadcast(new CharacterSelectBroadcast()
 				{
-					characterName = selectedCharacter.details.characterName,
+					characterName = selectedCharacter.Details.CharacterName,
 				});
 				SetConnectButtonLocked(true);
 			}
@@ -183,7 +183,7 @@ namespace FishMMO.Client
 		{
 			if (Client.IsConnectionReady() &&
 				selectedCharacter != null &&
-				selectedCharacter.details != null)
+				selectedCharacter.Details != null)
 			{
 				if (UIManager.TryGet("UIConfirmationTooltip", out UIConfirmationTooltip tooltip))
 				{
@@ -194,7 +194,7 @@ namespace FishMMO.Client
 						// delete character
 						Client.NetworkManager.ClientManager.Broadcast(new CharacterDeleteBroadcast()
 						{
-							characterName = selectedCharacter.details.characterName,
+							characterName = selectedCharacter.Details.CharacterName,
 						});
 						SetDeleteButtonLocked(false);
 					}, () =>

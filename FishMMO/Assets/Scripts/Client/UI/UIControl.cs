@@ -10,16 +10,16 @@ namespace FishMMO.Client
 		public static readonly Color DEFAULT_COLOR = Hex.ColorNormalize(0.0f, 160.0f, 255.0f, 255.0f);
 		public static readonly Color DEFAULT_SELECTED_COLOR = Hex.ColorNormalize(0.0f, 255.0f, 255.0f, 255.0f);
 
-		public Transform mainPanel = null;
+		public Transform MainPanel = null;
 		[Tooltip("Helper field to check input field focus status in UIManager.")]
-		public TMP_InputField inputField = null;
-		public bool startOpen = true;
-		public bool isAlwaysOpen = false;
-		public bool hasFocus = false;
+		public TMP_InputField InputField = null;
+		public bool StartOpen = true;
+		public bool IsAlwaysOpen = false;
+		public bool HasFocus = false;
 
 		[Header("Drag")]
-		public bool canDrag = false;
-		public bool clampToScreen;
+		public bool CanDrag = false;
+		public bool ClampToScreen;
 		private Vector2 startPosition;
 		private Vector2 dragOffset = Vector2.zero;
 		private bool isDragging;
@@ -50,7 +50,7 @@ namespace FishMMO.Client
 
 			OnStarting();
 
-			if (!startOpen) Visible = false;
+			if (!StartOpen) Visible = false;
 		}
 
 		/// <summary>
@@ -104,12 +104,12 @@ namespace FishMMO.Client
 
 		public void OnPointerEnter(PointerEventData eventData)
 		{
-			hasFocus = true;
+			HasFocus = true;
 		}
 
 		public void OnPointerExit(PointerEventData eventData)
 		{
-			hasFocus = false;
+			HasFocus = false;
 		}
 
 		public virtual void OnShow()
@@ -119,7 +119,7 @@ namespace FishMMO.Client
 
 		public virtual void OnHide()
 		{
-			OnHide(isAlwaysOpen);
+			OnHide(IsAlwaysOpen);
 		}
 
 		public virtual void OnHide(bool overrideIsAlwaysOpen)
@@ -139,7 +139,7 @@ namespace FishMMO.Client
 
 		public void OnPointerDown(PointerEventData data)
 		{
-			if (!canDrag) return;
+			if (!CanDrag) return;
 
 			if (data != null)
 			{
@@ -157,20 +157,20 @@ namespace FishMMO.Client
 
 		public void OnPointerUp(PointerEventData data)
 		{
-			if (!canDrag) return;
+			if (!CanDrag) return;
 
 			isDragging = false;
 		}
 
 		public void OnDrag(PointerEventData data)
 		{
-			if (!canDrag) return;
+			if (!CanDrag) return;
 
 			if (isDragging)
 			{
 				float x = data.position.x - dragOffset.x;
 				float y = data.position.y - dragOffset.y;
-				if (clampToScreen)
+				if (ClampToScreen)
 				{
 					RectTransform rt = transform as RectTransform;
 					if (rt != null)

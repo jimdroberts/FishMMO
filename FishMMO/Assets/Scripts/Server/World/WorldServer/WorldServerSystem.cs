@@ -11,8 +11,8 @@ namespace FishMMO.Server
 	{
 		private LocalConnectionState serverState;
 
-		public bool locked = false;
-		public float pulseRate = 10.0f;
+		private bool locked = false;
+		private float pulseRate = 10.0f;
 		private float nextPulse = 0.0f;
 
 		public override void InitializeOnce()
@@ -38,7 +38,7 @@ namespace FishMMO.Server
 				{
 					int characterCount = ServerManager.Clients.Count;
 
-					if (Server.configuration.TryGetString("ServerName", out string name))
+					if (Server.Configuration.TryGetString("ServerName", out string name))
 					{
 						Debug.Log("Adding World Server to Database: " + name + ":" + server.address + ":" + server.port);
 						WorldServerService.AddWorldServer(dbContext, name, server.address, server.port, characterCount, locked);
@@ -48,7 +48,7 @@ namespace FishMMO.Server
 			}
 			else if (args.ConnectionState == LocalConnectionState.Stopped)
 			{
-				if (Server.configuration.TryGetString("ServerName", out string name))
+				if (Server.Configuration.TryGetString("ServerName", out string name))
 				{
 					Debug.Log("Removing World Server from Database: " + name);
 					WorldServerService.DeleteWorldServer(dbContext, name);
@@ -60,7 +60,7 @@ namespace FishMMO.Server
 		void LateUpdate()
 		{
 			if (serverState == LocalConnectionState.Started &&
-				Server.configuration.TryGetString("ServerName", out string name))
+				Server.Configuration.TryGetString("ServerName", out string name))
 			{
 				nextPulse -= Time.deltaTime;
 				if (nextPulse < 0)
@@ -79,7 +79,7 @@ namespace FishMMO.Server
 
 		private void OnApplicationQuit()
 		{
-			if (Server.configuration.TryGetString("ServerName", out string name))
+			if (Server.Configuration.TryGetString("ServerName", out string name))
 			{
 				using var dbContext = Server.DbContextFactory.CreateDbContext();
 				Debug.Log("Removing World Server: " + name);

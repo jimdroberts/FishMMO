@@ -64,12 +64,12 @@ namespace FishMMO.Server.Services
                 .ToList()
                 .Select(server => new WorldServerDetails()
                 {
-                    name = server.Name,
-                    lastPulse = server.LastPulse,
-                    address = server.Address,
-                    port = server.Port,
-                    characterCount = server.CharacterCount,
-                    locked = server.Locked,
+                    Name = server.Name,
+                    LastPulse = server.LastPulse,
+                    Address = server.Address,
+                    Port = server.Port,
+                    CharacterCount = server.CharacterCount,
+                    Locked = server.Locked,
                 })
                 .ToList();
         }

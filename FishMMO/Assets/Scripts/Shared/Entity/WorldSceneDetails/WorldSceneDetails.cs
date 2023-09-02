@@ -3,8 +3,8 @@ using System;
 [Serializable]
 public class WorldSceneDetails
 {
-	public CharacterInitialSpawnPositionDictionary initialSpawnPositions = new CharacterInitialSpawnPositionDictionary();
-	public RespawnPositionDictionary respawnPositions = new RespawnPositionDictionary();
-	public SceneTeleporterDictionary teleporters = new SceneTeleporterDictionary();
-	public SceneBoundaryDictionary boundaries = new SceneBoundaryDictionary();
+	public CharacterInitialSpawnPositionDictionary InitialSpawnPositions = new CharacterInitialSpawnPositionDictionary();
+	public RespawnPositionDictionary RespawnPositions = new RespawnPositionDictionary();
+	public SceneTeleporterDictionary Teleporters = new SceneTeleporterDictionary();
+	public SceneBoundaryDictionary Boundaries = new SceneBoundaryDictionary();
 }

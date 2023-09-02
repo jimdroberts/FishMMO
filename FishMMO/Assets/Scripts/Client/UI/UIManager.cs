@@ -112,7 +112,7 @@ namespace FishMMO.Client
 			}
 			foreach (UIControl control in controls.Values)
 			{
-				if (control.Visible && control.hasFocus)
+				if (control.Visible && control.HasFocus)
 				{
 					return true;
 				}
@@ -124,7 +124,7 @@ namespace FishMMO.Client
 		{
 			foreach (UIControl control in controls.Values)
 			{
-				if (control.Visible && control.inputField != null && control.inputField.isFocused)
+				if (control.Visible && control.InputField != null && control.InputField.isFocused)
 				{
 					return true;
 				}

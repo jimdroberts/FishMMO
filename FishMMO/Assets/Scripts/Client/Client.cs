@@ -20,7 +20,7 @@ namespace FishMMO.Client
 	{
 		private LocalConnectionState clientState = LocalConnectionState.Stopped;
 
-		public List<ServerAddress> loginServerAddresses;
+		public List<ServerAddress> LoginServerAddresses;
 
 		private Dictionary<string, Scene> serverLoadedScenes = new Dictionary<string, Scene>();
 
@@ -300,10 +300,10 @@ namespace FishMMO.Client
 
 		public bool TryGetRandomLoginServerAddress(out ServerAddress serverAddress)
 		{
-			if (loginServerAddresses != null && loginServerAddresses.Count > 0)
+			if (LoginServerAddresses != null && LoginServerAddresses.Count > 0)
 			{
 				// pick a random login server
-				serverAddress = loginServerAddresses.GetRandom();
+				serverAddress = LoginServerAddresses.GetRandom();
 				return true;
 			}
 			serverAddress = default;

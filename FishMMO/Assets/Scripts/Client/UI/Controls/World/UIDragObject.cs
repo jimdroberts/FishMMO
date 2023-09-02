@@ -6,12 +6,12 @@ namespace FishMMO.Client
 {
 	public class UIDragObject : UIControl
 	{
-		public RawImage icon;
-		public int referenceID = UIReferenceButton.NULL_REFERENCE_ID;
-		public HotkeyType hotkeyType = HotkeyType.None;
+		public RawImage Icon;
+		public int ReferenceID = UIReferenceButton.NULL_REFERENCE_ID;
+		public HotkeyType HotkeyType = HotkeyType.None;
 
-		public LayerMask layerMask;
-		public float dropDistance = 5.0f;
+		public LayerMask LayerMask;
+		public float DropDistance = 5.0f;
 
 		public override void OnStarting()
 		{
@@ -25,7 +25,7 @@ namespace FishMMO.Client
 		{
 			if (Visible)
 			{
-				if (icon == null || icon.texture == null || referenceID == UIReferenceButton.NULL_REFERENCE_ID)
+				if (Icon == null || Icon.texture == null || ReferenceID == UIReferenceButton.NULL_REFERENCE_ID)
 				{
 					Clear();
 					return;
@@ -36,11 +36,11 @@ namespace FishMMO.Client
 				if (Input.GetMouseButtonDown(0) && !EventSystem.current.IsPointerOverGameObject())
 				{
 					// we can drop items on the ground from inventory
-					if (hotkeyType == HotkeyType.Inventory)
+					if (HotkeyType == HotkeyType.Inventory)
 					{
 						Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
 						RaycastHit hit;
-						if (Physics.Raycast(ray, out hit, dropDistance, layerMask))
+						if (Physics.Raycast(ray, out hit, DropDistance, LayerMask))
 						{
 							//Drop item at position of hit
 							Debug.Log("Dropping item to ground at pos[" + hit.point + "]");
@@ -51,19 +51,19 @@ namespace FishMMO.Client
 				}
 
 				// UIDragObject always follows the mouse cursor
-				Vector3 offset = new Vector3(icon.texture.width * 0.5f + 1.0f, icon.texture.height * -0.5f - 1.0f, 0.0f);
+				Vector3 offset = new Vector3(Icon.texture.width * 0.5f + 1.0f, Icon.texture.height * -0.5f - 1.0f, 0.0f);
 				transform.position = Input.mousePosition + offset;
 			}
 		}
 
 		public void SetReference(Texture icon, int referenceID, HotkeyType hotkeyType)
 		{
-			this.icon.texture = icon;
-			this.referenceID = referenceID;
-			this.hotkeyType = hotkeyType;
+			this.Icon.texture = icon;
+			this.ReferenceID = referenceID;
+			this.HotkeyType = hotkeyType;
 
 			// set position immediately so we don't have any position glitches before Update is triggered
-			Vector3 offset = new Vector3(this.icon.texture.width * 0.5f + 1.0f, this.icon.texture.height * -0.5f - 1.0f, 0.0f);
+			Vector3 offset = new Vector3(this.Icon.texture.width * 0.5f + 1.0f, this.Icon.texture.height * -0.5f - 1.0f, 0.0f);
 			transform.position = Input.mousePosition + offset;
 
 			Visible = true;
@@ -73,9 +73,9 @@ namespace FishMMO.Client
 		{
 			Visible = false;
 
-			icon.texture = null;
-			referenceID = UIReferenceButton.NULL_REFERENCE_ID;
-			hotkeyType = HotkeyType.None;
+			Icon.texture = null;
+			ReferenceID = UIReferenceButton.NULL_REFERENCE_ID;
+			HotkeyType = HotkeyType.None;
 			//transform.position = new Vector3(-9999.0f, -9999.0f, 0.0f); // do we need to do this?
 		}
 	}

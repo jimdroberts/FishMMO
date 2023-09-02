@@ -3,33 +3,31 @@ using System.Text;
 
 public class Buff
 {
-	public int templateID;
-	public float tickTime;
-	public float remainingTime;
+	private float tickTime;
 	private List<BuffAttribute> attributeBonuses = new List<BuffAttribute>();
 	private List<Buff> stacks = new List<Buff>();
-
 	private BuffTemplate cachedTemplate;
+
+	public float RemainingTime;
 	public BuffTemplate Template { get { return cachedTemplate; } }
 	public List<BuffAttribute> AttributeBonuses { get { return attributeBonuses; } }
 	public List<Buff> Stacks { get { return stacks; } }
 
 	public Buff(int templateID)
 	{
-		this.templateID = templateID;
 		this.cachedTemplate = BuffTemplate.Get<BuffTemplate>(templateID);
 		tickTime = Template.TickRate;
-		remainingTime = Template.Duration;
+		RemainingTime = Template.Duration;
 	}
 
 	public void SubtractTime(float time)
 	{
-		remainingTime -= time;
+		RemainingTime -= time;
 	}
 
 	public void AddTime(float time)
 	{
-		remainingTime += time;
+		RemainingTime += time;
 	}
 
 	public void SubtractTickTime(float time)
@@ -53,7 +51,7 @@ public class Buff
 
 	public void ResetDuration()
 	{
-		remainingTime = Template.Duration;
+		RemainingTime = Template.Duration;
 	}
 
 	public void ResetTickTime()
@@ -101,7 +99,7 @@ public class Buff
 		sb.Append("</color></size>");
 		sb.AppendLine();
 		sb.Append("<color=#a66ef5>Remaining Time: ");
-		sb.Append(remainingTime);
+		sb.Append(RemainingTime);
 		sb.Append("</color>");
 		if (attributeBonuses != null)
 		{

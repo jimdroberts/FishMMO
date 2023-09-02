@@ -71,20 +71,20 @@ namespace FishMMO.Client
 			{
 				if (hotkeys[i] == null) continue;
 
-				switch (hotkeys[i].hotkeyType)
+				switch (hotkeys[i].HotkeyType)
 				{
 					case HotkeyType.None:
 						break;
 					case HotkeyType.Any:
 						break;
 					case HotkeyType.Inventory:
-						if (!character.InventoryController.IsValidItem(hotkeys[i].referenceID))
+						if (!character.InventoryController.IsValidItem(hotkeys[i].ReferenceID))
 						{
 							hotkeys[i].Clear();
 						}
 						break;
 					case HotkeyType.Equipment:
-						if (!character.EquipmentController.IsValidItem(hotkeys[i].referenceID))
+						if (!character.EquipmentController.IsValidItem(hotkeys[i].ReferenceID))
 						{
 							hotkeys[i].Clear();
 						}
@@ -122,11 +122,11 @@ namespace FishMMO.Client
 			for (int i = 0; i < amount && i < MAX_HOTKEYS; ++i)
 			{
 				UIHotkeyButton button = Instantiate(buttonPrefab, parent);
-				button.index = i;
-				button.keyMap = GetHotkeyIndexKeyMap(i);
-				button.referenceID = UIReferenceButton.NULL_REFERENCE_ID;
-				button.allowedHotkeyType = HotkeyType.Any;
-				button.hotkeyType = HotkeyType.None;
+				button.Index = i;
+				button.KeyMap = GetHotkeyIndexKeyMap(i);
+				button.ReferenceID = UIReferenceButton.NULL_REFERENCE_ID;
+				button.AllowedHotkeyType = HotkeyType.Any;
+				button.HotkeyType = HotkeyType.None;
 				hotkeys.Add(button);
 			}
 		}

@@ -2,12 +2,12 @@
 
 public class ItemEquippable : IEquippable<Character>
 {
-	public Item item;
-	public Character owner;
+	private Item item;
+
 	public event Action<Character> OnEquip;
 	public event Action<Character> OnUnequip;
 
-	public Character Owner { get { return Owner; } }
+	public Character Owner { get; private set; }
 
 	public void Initialize(Item item)
 	{
@@ -30,28 +30,32 @@ public class ItemEquippable : IEquippable<Character>
 
 	public void Equip(Character owner)
 	{
+		if (Owner != null)
+		{
+			Unequip();
+		}
 		if (owner != null)
 		{
-			this.owner = owner;
+			Owner = owner;
 			OnEquip?.Invoke(owner);
 		}
 	}
 
 	public void Unequip()
 	{
-		if (owner != null)
+		if (Owner != null)
 		{
-			OnUnequip?.Invoke(owner);
-			owner = null;
+			OnUnequip?.Invoke(Owner);
+			Owner = null;
 		}
 	}
 
 	public void ItemGenerator_OnSetAttribute(ItemAttribute attribute, int oldValue, int newValue)
 	{
-		if (owner != null)
+		if (Owner != null)
 		{
-			if (owner.AttributeController != null &&
-				owner.AttributeController.TryGetAttribute(attribute.Template.CharacterAttribute.Name, out CharacterAttribute characterAttribute))
+			if (Owner.AttributeController != null &&
+				Owner.AttributeController.TryGetAttribute(attribute.Template.CharacterAttribute.Name, out CharacterAttribute characterAttribute))
 			{
 				characterAttribute.AddValue(-oldValue);
 				characterAttribute.AddValue(newValue);

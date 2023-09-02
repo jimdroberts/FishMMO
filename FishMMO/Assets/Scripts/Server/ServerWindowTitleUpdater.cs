@@ -23,9 +23,9 @@ namespace FishMMO.Server
 		private static extern void setproctitle(string fmt, string str_arg);
 #endif
 
-		public string title = "";
-		public float updateRate = 2.0f;
-		public float nextUpdate = 0.0f;
+		public string Title = "";
+		public float UpdateRate = 2.0f;
+		public float NextUpdate = 0.0f;
 
 		public override void InitializeOnce()
 		{
@@ -52,10 +52,10 @@ namespace FishMMO.Server
 			if (!ServerManager.Started)
 				return;
 
-			nextUpdate -= Time.deltaTime;
-			if (nextUpdate < 0)
+			NextUpdate -= Time.deltaTime;
+			if (NextUpdate < 0)
 			{
-				nextUpdate = updateRate;
+				NextUpdate = UpdateRate;
 
 				UpdateWindowTitle();
 			}
@@ -63,21 +63,21 @@ namespace FishMMO.Server
 
 		public void UpdateWindowTitle()
 		{
-			title = BuildWindowTitle();
+			Title = BuildWindowTitle();
 
 #if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
-			SetConsoleTitle(title);
+			SetConsoleTitle(Title);
 #elif UNITY_STANDALONE_LINUX || UNITY_EDITOR_LINUX
-			prctl(PR_SET_NAME, title, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
+			prctl(PR_SET_NAME, Title, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
 #elif UNITY_STANDALONE_OSX || UNITY_EDITOR_OSX
-			setproctitle("{0}", title);
+			setproctitle("{0}", Title);
 #endif
 		}
 
 		public string BuildWindowTitle()
 		{
 			StringBuilder windowTitle = new StringBuilder();
-			if (Server.configuration.TryGetString("ServerName", out string title))
+			if (Server.Configuration.TryGetString("ServerName", out string title))
 			{
 				windowTitle.Append(title);
 			}
@@ -91,13 +91,13 @@ namespace FishMMO.Server
 				int sceneServerCount = -1;
 				if (WorldSceneSystem != null)
 				{
-					sceneServerCount = WorldSceneSystem.sceneServers.Count;
+					sceneServerCount = WorldSceneSystem.SceneServers.Count;
 					onlineCount -= sceneServerCount;
 				}
 				
-				if (Server.configuration.TryGetString("Address", out string address) &&
+				if (Server.Configuration.TryGetString("Address", out string address) &&
 					address.Length  > 0 &&
-					Server.configuration.TryGetUShort("Port", out ushort port))
+					Server.Configuration.TryGetUShort("Port", out ushort port))
 				{
 					windowTitle.Append(" [Server:");
 					windowTitle.Append(address);
@@ -117,9 +117,9 @@ namespace FishMMO.Server
 					windowTitle.Append("]");
 				}
 				
-				if (Server.configuration.TryGetString("RelayAddress", out address) &&
+				if (Server.Configuration.TryGetString("RelayAddress", out address) &&
 					address.Length > 0 &&
-					Server.configuration.TryGetUShort("RelayPort", out port))
+					Server.Configuration.TryGetUShort("RelayPort", out port))
 				{
 					windowTitle.Append(" [ConnectedToRelay:");
 					windowTitle.Append(address);

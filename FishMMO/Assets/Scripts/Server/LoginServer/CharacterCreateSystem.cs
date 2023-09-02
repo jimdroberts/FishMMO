@@ -13,18 +13,18 @@ namespace FishMMO.Server
 	/// </summary>
 	public class CharacterCreateSystem : ServerBehaviour
 	{
-		public const int characterNameMinLength = 3;
-		public const int characterNameMaxLength = 32;
+		public const int CharacterNameMinLength = 3;
+		public const int CharacterNameMaxLength = 32;
 
 		public virtual bool IsAllowedCharacterName(string characterName)
 		{
 			return !string.IsNullOrWhiteSpace(characterName) &&
-				   characterName.Length >= characterNameMinLength &&
-				   characterName.Length <= characterNameMaxLength &&
+				   characterName.Length >= CharacterNameMinLength &&
+				   characterName.Length <= CharacterNameMaxLength &&
 				   Regex.IsMatch(characterName, @"^[a-zA-Z_]+$");
 		}
 
-		public WorldSceneDetailsCache worldSceneDetailsCache;
+		public WorldSceneDetailsCache WorldSceneDetailsCache;
 
 		public override void InitializeOnce()
 		{
@@ -78,9 +78,9 @@ namespace FishMMO.Server
 					return;
 				}
 
-				if (worldSceneDetailsCache == null ||
-					worldSceneDetailsCache.scenes == null ||
-					worldSceneDetailsCache.scenes.Count < 1)
+				if (WorldSceneDetailsCache == null ||
+					WorldSceneDetailsCache.Scenes == null ||
+					WorldSceneDetailsCache.Scenes.Count < 1)
 				{
 					// failed to find spawn positions to validate with
 					conn.Broadcast(new CharacterCreateResultBroadcast()
@@ -90,10 +90,10 @@ namespace FishMMO.Server
 					return;
 				}
 				// validate spawn details
-				if (worldSceneDetailsCache.scenes.TryGetValue(msg.initialSpawnPosition.sceneName, out WorldSceneDetails details))
+				if (WorldSceneDetailsCache.Scenes.TryGetValue(msg.initialSpawnPosition.SceneName, out WorldSceneDetails details))
 				{
 					// validate spawner
-					if (details.initialSpawnPositions.TryGetValue(msg.initialSpawnPosition.spawnerName, out CharacterInitialSpawnPosition initialSpawnPosition))
+					if (details.InitialSpawnPositions.TryGetValue(msg.initialSpawnPosition.SpawnerName, out CharacterInitialSpawnPosition initialSpawnPosition))
 					{
 						// invalid race name! default to first race for now....
 						// FIXME add race selection to UICharacterCreate.cs
@@ -117,14 +117,14 @@ namespace FishMMO.Server
 								Name = msg.characterName,
 								NameLowercase = msg.characterName?.ToLower(),
 								RaceID = raceID,
-								SceneName = initialSpawnPosition.sceneName,
-								X = initialSpawnPosition.position.x,
-								Y = initialSpawnPosition.position.y,
-								Z = initialSpawnPosition.position.z,
-								RotX = initialSpawnPosition.rotation.x,
-								RotY = initialSpawnPosition.rotation.y,
-								RotZ = initialSpawnPosition.rotation.z,
-								RotW = initialSpawnPosition.rotation.w,
+								SceneName = initialSpawnPosition.SceneName,
+								X = initialSpawnPosition.Position.x,
+								Y = initialSpawnPosition.Position.y,
+								Z = initialSpawnPosition.Position.z,
+								RotX = initialSpawnPosition.Rotation.x,
+								RotY = initialSpawnPosition.Rotation.y,
+								RotZ = initialSpawnPosition.Rotation.z,
+								RotW = initialSpawnPosition.Rotation.w,
 								TimeCreated = DateTime.UtcNow,
 							};
 							dbContext.Characters.Add(newCharacter);

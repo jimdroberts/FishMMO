@@ -3,7 +3,7 @@ using FishNet.Object;
 
 public abstract class ItemContainer : NetworkBehaviour
 {
-	public readonly List<Item> items = new List<Item>();
+	public readonly List<Item> Items = new List<Item>();
 
 	public delegate void ItemslotUpdated(ItemContainer container, Item item, int slotIndex);
 	public event ItemslotUpdated OnSlotUpdated;
@@ -13,7 +13,7 @@ public abstract class ItemContainer : NetworkBehaviour
 	/// </summary>
 	public virtual bool CanManipulate()
 	{
-		return items != null;
+		return Items != null;
 	}
 
 	/// <summary>
@@ -21,9 +21,9 @@ public abstract class ItemContainer : NetworkBehaviour
 	/// </summary>
 	public bool IsValidSlot(int slot)
 	{
-		return items != null &&
+		return Items != null &&
 			  slot > -1 &&
-			  slot < items.Count;
+			  slot < Items.Count;
 	}
 
 	/// <summary>
@@ -34,7 +34,7 @@ public abstract class ItemContainer : NetworkBehaviour
 	public bool IsSlotEmpty(int slot)
 	{
 		return IsValidSlot(slot) &&
-			   items[slot] == null;
+			   Items[slot] == null;
 	}
 
 	/// <summary>
@@ -43,7 +43,7 @@ public abstract class ItemContainer : NetworkBehaviour
 	public bool IsValidItem(int slot)
 	{
 		return IsValidSlot(slot) &&
-			   items[slot] != null;
+			   Items[slot] != null;
 	}
 
 	/// <summary>
@@ -53,7 +53,7 @@ public abstract class ItemContainer : NetworkBehaviour
 	{
 		if (IsValidSlot(slot))
 		{
-			item = items[slot];
+			item = Items[slot];
 			return item != null;
 		}
 		item = null;
@@ -67,14 +67,14 @@ public abstract class ItemContainer : NetworkBehaviour
 	{
 		for (int i = 0; i < amount; ++i)
 		{
-			this.items.Add(items != null && i < items.Count ? items[i] : null);
+			this.Items.Add(items != null && i < items.Count ? items[i] : null);
 		}
 	}
 
 	public int FreeSlots()
 	{
 		int count = 0;
-		for (int i = 0; i < items.Count; ++i)
+		for (int i = 0; i < Items.Count; ++i)
 		{
 			if (IsSlotEmpty(i))
 			{
@@ -87,7 +87,7 @@ public abstract class ItemContainer : NetworkBehaviour
 	public int FilledSlots()
 	{
 		int count = 0;
-		for (int i = 0; i < items.Count; ++i)
+		for (int i = 0; i < Items.Count; ++i)
 		{
 			if (!IsSlotEmpty(i))
 			{
@@ -108,7 +108,7 @@ public abstract class ItemContainer : NetworkBehaviour
 		if (item == null) return false;
 
 		uint amountRemaining = item.IsStackable ? item.Stackable.Amount : 1;
-		for (int i = 0; i < items.Count; ++i)
+		for (int i = 0; i < Items.Count; ++i)
 		{
 			// if we find an empty slot we return instantly
 			if (IsSlotEmpty(i))
@@ -117,11 +117,11 @@ public abstract class ItemContainer : NetworkBehaviour
 			}
 
 			// if we find another item of the same type and it's stack is not full
-			if (items[i].IsStackable &&
-				!items[i].Stackable.IsStackFull &&
-				items[i].IsMatch(item))
+			if (Items[i].IsStackable &&
+				!Items[i].Stackable.IsStackFull &&
+				Items[i].IsMatch(item))
 			{
-				uint remainingCapacity = items[i].Template.MaxStackSize - items[i].Stackable.Amount;
+				uint remainingCapacity = Items[i].Template.MaxStackSize - Items[i].Stackable.Amount;
 
 				amountRemaining = remainingCapacity.AbsoluteSubtract(amountRemaining);
 			}
@@ -146,18 +146,18 @@ public abstract class ItemContainer : NetworkBehaviour
 		}
 
 		uint amount = item.IsStackable ? item.Stackable.Amount : 1;
-		for (int i = 0; i < items.Count; ++i)
+		for (int i = 0; i < Items.Count; ++i)
 		{
 			// add the item to the current slot
-			if (items[i] != null &&
-				items[i].IsStackable &&
-				items[i].Stackable.AddToStack(item))
+			if (Items[i] != null &&
+				Items[i].IsStackable &&
+				Items[i].Stackable.AddToStack(item))
 			{
 				// set the remaining amount to the items stack size
 				amount = item.Stackable.Amount;
 
 				// add the modified items to the list
-				modifiedItems.Add(items[i]);
+				modifiedItems.Add(Items[i]);
 				modifiedItems.Add(item);
 
 				OnSlotUpdated?.Invoke(this, item, i);
@@ -166,7 +166,7 @@ public abstract class ItemContainer : NetworkBehaviour
 			// we added the item to the container
 			if (amount < 1) return true;
 		}
-		for (int i = 0; i < items.Count; ++i)
+		for (int i = 0; i < Items.Count; ++i)
 		{
 			// find the first slot to put the remaining item in
 			if (IsSlotEmpty(i))
@@ -198,7 +198,7 @@ public abstract class ItemContainer : NetworkBehaviour
 			return false;
 		}
 
-		items[slot] = item;
+		Items[slot] = item;
 		OnSlotUpdated?.Invoke(this, item, slot);
 		return true;
 	}
@@ -208,15 +208,15 @@ public abstract class ItemContainer : NetworkBehaviour
 		if (!CanManipulate() ||
 			from < 0 ||
 			to < 0 ||
-			from > items.Count ||
-			to > items.Count)
+			from > Items.Count ||
+			to > Items.Count)
 		{
 			// swapping the items failed
 			return false;
 		}
 
-		Item firstItem = items[from];
-		Item secondItem = items[to];
+		Item firstItem = Items[from];
+		Item secondItem = Items[to];
 
 		if (!SetItemSlot(secondItem, from) ||
 			SetItemSlot(firstItem, to))
@@ -239,7 +239,7 @@ public abstract class ItemContainer : NetworkBehaviour
 			return null;
 		}
 
-		Item item = items[slot];
+		Item item = Items[slot];
 		SetItemSlot(null, slot);
 		return item;
 	}

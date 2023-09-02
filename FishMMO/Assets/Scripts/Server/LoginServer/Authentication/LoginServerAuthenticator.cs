@@ -20,14 +20,14 @@ namespace FishMMO.Server
 
 		public ServerDbContextFactory DBContextFactory;
 
-		public const int accountNameMinLength = 3;
-		public const int accountNameMaxLength = 32;
+		public const int AccountNameMinLength = 3;
+		public const int AccountNameMaxLength = 32;
 
 		public virtual bool IsAllowedUsername(string accountName)
 		{
 			return !string.IsNullOrWhiteSpace(accountName) && 
-				   accountName.Length >= accountNameMinLength &&
-				   accountName.Length <= accountNameMaxLength &&
+				   accountName.Length >= AccountNameMinLength &&
+				   accountName.Length <= AccountNameMaxLength &&
 				   Regex.IsMatch(accountName, @"^[a-zA-Z0-9_]+$");
 		}
 

@@ -8,7 +8,7 @@ namespace FishMMO.Client
 		public Slider slider;
 		public TMP_Text resourceValue;
 
-		public CharacterAttributeTemplate template;
+		public CharacterAttributeTemplate Template;
 
 		public override void OnStarting()
 		{
@@ -23,7 +23,7 @@ namespace FishMMO.Client
 			Character character = Character.localCharacter;
 			if (character == null) return;
 
-			if (character.AttributeController.TryGetResourceAttribute(template, out CharacterResourceAttribute resource))
+			if (character.AttributeController.TryGetResourceAttribute(Template, out CharacterResourceAttribute resource))
 			{
 				float value = resource.CurrentValue / resource.FinalValueAsFloat;
 				if (slider != null) slider.value = value;

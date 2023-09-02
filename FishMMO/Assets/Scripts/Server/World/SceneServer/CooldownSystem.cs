@@ -15,7 +15,7 @@ namespace FishMMO.Server
 
 		public Dictionary<string, InventoryController> inventories = new Dictionary<string, InventoryController>();*/
 
-		public Dictionary<long, CooldownInstance> cooldowns = new Dictionary<long, CooldownInstance>();
+		private Dictionary<long, CooldownInstance> cooldowns = new Dictionary<long, CooldownInstance>();
 
 		public override void InitializeOnce()
 		{

@@ -12,10 +12,10 @@ namespace FishMMO.Server
 		public CharacterSystem CharacterSystem;
 
 		public ulong nextPartyId = 0;
-		public Dictionary<ulong, Party> parties = new Dictionary<ulong, Party>();
+		private Dictionary<ulong, Party> parties = new Dictionary<ulong, Party>();
 
 		// clientId / partyId
-		public readonly Dictionary<long, ulong> pendingInvitations = new Dictionary<long, ulong>();
+		private readonly Dictionary<long, ulong> pendingInvitations = new Dictionary<long, ulong>();
 
 		public override void InitializeOnce()
 		{
@@ -98,7 +98,7 @@ namespace FishMMO.Server
 			}
 
 			if (!pendingInvitations.ContainsKey(msg.targetCharacterId) &&
-				CharacterSystem.charactersById.TryGetValue(msg.targetCharacterId, out Character targetCharacter))
+				CharacterSystem.CharactersById.TryGetValue(msg.targetCharacterId, out Character targetCharacter))
 			{
 				PartyController targetPartyController = targetCharacter.GetComponent<PartyController>();
 
@@ -144,18 +144,18 @@ namespace FishMMO.Server
 						rank = PartyRank.Member,
 					};
 
-					for (int i = 0; i < party.members.Count; ++i)
+					for (int i = 0; i < party.Members.Count; ++i)
 					{
 						// tell our party members we joined the party
-						party.members[i].Owner.Broadcast(newMember);
-						CurrentMembers.Add(party.members[i].Character.ID);
+						party.Members[i].Owner.Broadcast(newMember);
+						CurrentMembers.Add(party.Members[i].Character.ID);
 					}
 
 					partyController.Rank = PartyRank.Member;
 					partyController.Current = party;
 
 					// add the new party member
-					party.members.Add(partyController);
+					party.Members.Add(partyController);
 
 					// tell the new member about they joined successfully
 					PartyJoinedBroadcast memberBroadcast = new PartyJoinedBroadcast()
@@ -194,9 +194,9 @@ namespace FishMMO.Server
 				if (partyController.Rank == PartyRank.Leader)
 				{
 					// can we destroy the party?
-					if (party.members.Count - 1 < 1)
+					if (party.Members.Count - 1 < 1)
 					{
-						party.members.Clear();
+						party.Members.Clear();
 						parties.Remove(party.id);
 
 						partyController.Rank = PartyRank.None;
@@ -209,10 +209,10 @@ namespace FishMMO.Server
 					else
 					{
 						// next person in the party becomes the new leader
-						party.members[1].Rank = PartyRank.Leader;
+						party.Members[1].Rank = PartyRank.Leader;
 
 						// remove the Current leader
-						party.members.RemoveAt(0);
+						party.Members.RemoveAt(0);
 
 						partyController.Rank = PartyRank.None;
 						partyController.Current = null;
@@ -228,7 +228,7 @@ namespace FishMMO.Server
 				};
 
 				// tell the remaining party members we left the party
-				foreach (PartyController member in party.members)
+				foreach (PartyController member in party.Members)
 				{
 					member.Owner.Broadcast(removeCharacterBroadcast);
 				}
@@ -267,7 +267,7 @@ namespace FishMMO.Server
 					};
 
 					// tell the remaining party members someone was removed
-					foreach (PartyController member in party.members)
+					foreach (PartyController member in party.Members)
 					{
 						member.Owner.Broadcast(removeCharacterBroadcast);
 					}

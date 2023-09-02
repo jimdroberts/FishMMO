@@ -3,9 +3,6 @@ using System.Text;
 
 public class Item
 {
-	public int templateID;
-	public ulong instanceID;
-
 	public ItemGenerator Generator;
 	public ItemEquippable Equippable;
 	public ItemStackable Stackable;
@@ -14,29 +11,33 @@ public class Item
 
 	private BaseItemTemplate cachedTemplate;
 	public BaseItemTemplate Template { get { return cachedTemplate; } }
+	public ulong InstanceID { get; private set; }
+	public int TemplateID { get; private set; }
 	public bool IsGenerated { get { return Generator != null; } }
 	public bool IsEquippable { get { return Equippable != null; } }
 	public bool IsStackable { get { return Stackable != null; } }
 
 	public Item(ulong instanceID, int templateID)
 	{
-		this.instanceID = instanceID;
-		this.templateID = templateID;
+		InstanceID = instanceID;
+		TemplateID = templateID;
 		this.cachedTemplate = BaseItemTemplate.Get<BaseItemTemplate>(templateID);
 
 		Initialize();
 	}
 	public Item(ulong instanceID, int templateID, uint amount)
 	{
-		this.instanceID = instanceID;
-		this.templateID = templateID;
+		InstanceID = instanceID;
+		TemplateID = templateID;
+		this.cachedTemplate = BaseItemTemplate.Get<BaseItemTemplate>(templateID);
 
 		Initialize(amount);
 	}
 	public Item(ulong instanceID, int templateID, uint amount, int seed)
 	{
-		this.instanceID = instanceID;
-		this.templateID = templateID;
+		InstanceID = instanceID;
+		TemplateID = templateID;
+		this.cachedTemplate = BaseItemTemplate.Get<BaseItemTemplate>(templateID);
 
 		Initialize(amount, seed, true);
 	}
@@ -87,7 +88,7 @@ public class Item
 
 	public bool IsMatch(Item other)
 	{
-		return templateID == other.templateID &&
+		return TemplateID == other.TemplateID &&
 				(IsGenerated && other.IsGenerated && Generator.Seed == other.Generator.Seed ||
 				!IsGenerated && !other.IsGenerated);
 	}
@@ -100,7 +101,7 @@ public class Item
 		sb.Append("</color></size>");
 		sb.AppendLine();
 		sb.Append("<color=#a66ef5>InstanceID: ");
-		sb.Append(instanceID);
+		sb.Append(InstanceID);
 		sb.Append("</color>");
 
 		Generator?.Tooltip(sb);

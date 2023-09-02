@@ -5,23 +5,23 @@ public class Guild
 	public const int MAX_GUILD_SIZE = 100;
 
 	public ulong id;
-	public readonly List<GuildController> members = new List<GuildController>();
+	public readonly List<GuildController> Members = new List<GuildController>();
 
-	public bool IsFull { get { return !(members.Count < MAX_GUILD_SIZE); } }
+	public bool IsFull { get { return !(Members.Count < MAX_GUILD_SIZE); } }
 
 	public Guild(ulong guildId, GuildController leader)
 	{
 		id = guildId;
-		members.Add(leader);
+		Members.Add(leader);
 	}
 
 	public GuildController RemoveMember(long memberId)
 	{
-		foreach (GuildController member in members)
+		foreach (GuildController member in Members)
 		{
 			if (member.Character.ID == memberId)
 			{
-				members.Remove(member);
+				Members.Remove(member);
 				return member;
 			}
 		}

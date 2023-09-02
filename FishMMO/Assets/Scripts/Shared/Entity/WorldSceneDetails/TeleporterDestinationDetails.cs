@@ -4,6 +4,6 @@ using UnityEngine;
 [Serializable]
 public class TeleporterDestinationDetails
 {
-	public string scene;
-	public Vector3 position;
+	public string Scene;
+	public Vector3 Position;
 }

@@ -4,7 +4,7 @@ using System.Collections.Generic;
 [Serializable]
 public class CharacterDetails
 {
-	public string characterName;
-	public int modelTemplateIndex;
+	public string CharacterName;
+	public int ModelTemplateIndex;
 	//public List<EquippedItems>
 }

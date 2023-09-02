@@ -5,7 +5,7 @@ namespace FishMMO.Client
 {
 	public class ClientChatMessage : MonoBehaviour//, IPointerEnterHandler, IPointerExitHandler
 	{
-		public ChatChannel channel;
+		public ChatChannel Channel;
 		public TMP_Text text;
 	}
 }

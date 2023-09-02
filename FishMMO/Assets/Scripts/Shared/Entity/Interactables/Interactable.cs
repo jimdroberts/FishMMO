@@ -3,7 +3,7 @@ using UnityEngine;
 
 public class Interactable : NetworkBehaviour, IInteractable
 {
-	public float interactionDistanceSqr;
+	public float InteractionDistanceSqr;
 
 	public Transform Transform { get; private set; }
 
@@ -14,6 +14,6 @@ public class Interactable : NetworkBehaviour, IInteractable
 
 	public virtual bool OnInteract(Character character)
 	{
-		return ((character.Transform.position - Transform.position).sqrMagnitude < interactionDistanceSqr);
+		return ((character.Transform.position - Transform.position).sqrMagnitude < InteractionDistanceSqr);
 	}
 }

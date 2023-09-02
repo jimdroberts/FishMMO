@@ -27,31 +27,31 @@ namespace FishMMO.Server
 		/// <summary>
 		/// Active scene servers.
 		/// </summary>
-		public Dictionary<NetworkConnection, SceneServerDetails> sceneServers = new Dictionary<NetworkConnection, SceneServerDetails>();
+		public Dictionary<NetworkConnection, SceneServerDetails> SceneServers = new Dictionary<NetworkConnection, SceneServerDetails>();
 
 		// characterName, sceneConnection
 		/// <summary>
 		/// Active client connections.
 		/// </summary>
-		public Dictionary<long, NetworkConnection> sceneCharacters = new Dictionary<long, NetworkConnection>();
+		public Dictionary<long, NetworkConnection> SceneCharacters = new Dictionary<long, NetworkConnection>();
 
 		// sceneName, waitingConnections
 		/// <summary>
 		/// Connections waiting for a scene to finish loading.
 		/// </summary>
-		public Dictionary<string, HashSet<NetworkConnection>> waitingConnections = new Dictionary<string, HashSet<NetworkConnection>>();
+		public Dictionary<string, HashSet<NetworkConnection>> WaitingConnections = new Dictionary<string, HashSet<NetworkConnection>>();
 
 		// sceneName, waitingSceneServer
 		/// <summary>
 		/// Scenes that are waiting to be loaded fully.
 		/// </summary>
-		public Dictionary<string, SceneWaitQueueData> waitingScenes = new Dictionary<string, SceneWaitQueueData>();
+		public Dictionary<string, SceneWaitQueueData> WaitingScenes = new Dictionary<string, SceneWaitQueueData>();
 
 		public int ConnectionCount
 		{
 			get
 			{
-				return waitingConnections.Count + sceneCharacters.Count;
+				return WaitingConnections.Count + SceneCharacters.Count;
 			}
 		}
 
@@ -112,7 +112,7 @@ namespace FishMMO.Server
 			{
 				nextWaitQueueUpdate = waitQueueRate;
 
-				foreach (string sceneName in new List<string>(waitingConnections.Keys))
+				foreach (string sceneName in new List<string>(WaitingConnections.Keys))
 				{
 					TryClearWaitQueues(sceneName);
 				}
@@ -121,10 +121,10 @@ namespace FishMMO.Server
 
 		private void TryClearWaitQueues(string sceneName)
 		{
-			if (waitingScenes.TryGetValue(sceneName, out SceneWaitQueueData waitData) &&
+			if (WaitingScenes.TryGetValue(sceneName, out SceneWaitQueueData waitData) &&
 				waitData.ready)
 			{
-				if (waitingConnections.TryGetValue(sceneName, out HashSet<NetworkConnection> connections))
+				if (WaitingConnections.TryGetValue(sceneName, out HashSet<NetworkConnection> connections))
 				{
 					foreach (NetworkConnection conn in connections)
 					{
@@ -137,10 +137,10 @@ namespace FishMMO.Server
 					}
 
 					connections.Clear();
-					waitingConnections.Remove(sceneName);
+					WaitingConnections.Remove(sceneName);
 				}
 
-				waitingScenes.Remove(sceneName);
+				WaitingScenes.Remove(sceneName);
 			}
 		}
 
@@ -148,7 +148,7 @@ namespace FishMMO.Server
 		{
 			if (args.ConnectionState == RemoteConnectionState.Stopped)
 			{
-				sceneServers.Remove(conn);
+				SceneServers.Remove(conn);
 			}
 		}
 
@@ -158,11 +158,11 @@ namespace FishMMO.Server
 			if (!authenticated)
 				return;
 
-			if (!sceneServers.ContainsKey(conn))
+			if (!SceneServers.ContainsKey(conn))
 			{
-				sceneServers.Add(conn, new SceneServerDetails()
+				SceneServers.Add(conn, new SceneServerDetails()
 				{
-					locked = true,
+					Locked = true,
 				});
 			}
 		}
@@ -185,7 +185,7 @@ namespace FishMMO.Server
 			{
 				foreach (SceneInstanceDetails instance in sceneInstanceDetails)
 				{
-					newDetails.Add(instance.handle, instance);
+					newDetails.Add(instance.Handle, instance);
 				}
 			}
 			return newDetails;
@@ -199,12 +199,12 @@ namespace FishMMO.Server
 			Debug.Log("[" + DateTime.UtcNow + "] Pulse Received from " + msg.name + ":" + conn.GetAddress());
 
 			//set sceneservers last pulse time
-			if (sceneServers.TryGetValue(conn, out SceneServerDetails details))
+			if (SceneServers.TryGetValue(conn, out SceneServerDetails details))
 			{
-				details.lastPulse = DateTime.UtcNow;
-				if (details.scenes != null)
-					details.scenes.Clear();
-				details.scenes = RebuildSceneInstanceDetails(msg.sceneInstanceDetails);
+				details.LastPulse = DateTime.UtcNow;
+				if (details.Scenes != null)
+					details.Scenes.Clear();
+				details.Scenes = RebuildSceneInstanceDetails(msg.sceneInstanceDetails);
 			}
 		}
 
@@ -215,16 +215,16 @@ namespace FishMMO.Server
 		{
 			Debug.Log("[" + DateTime.UtcNow + "] SceneServer Details Received from " + msg.address + ":" + msg.port);
 
-			if (sceneServers.TryGetValue(conn, out SceneServerDetails details))
+			if (SceneServers.TryGetValue(conn, out SceneServerDetails details))
 			{
-				details.connection = conn;
-				details.lastPulse = DateTime.UtcNow;
-				details.address = msg.address;
-				details.port = msg.port;
-				if (details.scenes != null)
-					details.scenes.Clear();
-				details.scenes = RebuildSceneInstanceDetails(msg.sceneInstanceDetails);
-				details.locked = false; // scene server is now alive
+				details.Connection = conn;
+				details.LastPulse = DateTime.UtcNow;
+				details.Address = msg.address;
+				details.Port = msg.port;
+				if (details.Scenes != null)
+					details.Scenes.Clear();
+				details.Scenes = RebuildSceneInstanceDetails(msg.sceneInstanceDetails);
+				details.Locked = false; // scene server is now alive
 			}
 		}
 
@@ -233,11 +233,11 @@ namespace FishMMO.Server
 		/// </summary>
 		private void OnServerSceneListBroadcastReceived(NetworkConnection conn, SceneListBroadcast msg)
 		{
-			if (sceneServers.TryGetValue(conn, out SceneServerDetails details))
+			if (SceneServers.TryGetValue(conn, out SceneServerDetails details))
 			{
-				if (details.scenes != null)
-					details.scenes.Clear();
-				details.scenes = RebuildSceneInstanceDetails(msg.sceneInstanceDetails);
+				if (details.Scenes != null)
+					details.Scenes.Clear();
+				details.Scenes = RebuildSceneInstanceDetails(msg.sceneInstanceDetails);
 			}
 		}
 
@@ -246,20 +246,20 @@ namespace FishMMO.Server
 		/// </summary>
 		private void OnServerSceneLoadBroadcastReceived(NetworkConnection conn, SceneLoadBroadcast msg)
 		{
-			if (sceneServers.TryGetValue(conn, out SceneServerDetails details))
+			if (SceneServers.TryGetValue(conn, out SceneServerDetails details))
 			{
-				if (!details.scenes.ContainsKey(msg.handle))
+				if (!details.Scenes.ContainsKey(msg.handle))
 				{
-					details.scenes.Add(msg.handle, new SceneInstanceDetails()
+					details.Scenes.Add(msg.handle, new SceneInstanceDetails()
 					{
-						name = msg.sceneName,
-						handle = msg.handle,
-						clientCount = 0,
+						Name = msg.sceneName,
+						Handle = msg.handle,
+						ClientCount = 0,
 					});
 				}
 			}
 
-			if (waitingScenes.TryGetValue(msg.sceneName, out SceneWaitQueueData waitData))
+			if (WaitingScenes.TryGetValue(msg.sceneName, out SceneWaitQueueData waitData))
 			{
 				waitData.ready = true;
 			}
@@ -270,9 +270,9 @@ namespace FishMMO.Server
 		/// </summary>
 		private void OnServerSceneUnloadBroadcastReceived(NetworkConnection conn, SceneUnloadBroadcast msg)
 		{
-			if (sceneServers.TryGetValue(conn, out SceneServerDetails details))
+			if (SceneServers.TryGetValue(conn, out SceneServerDetails details))
 			{
-				details.scenes.Remove(msg.handle);
+				details.Scenes.Remove(msg.handle);
 			}
 		}
 
@@ -283,7 +283,7 @@ namespace FishMMO.Server
 		{
 			using var dbContext = Server.DbContextFactory.CreateDbContext();
 			// get the scene for the selected character
-			if (sceneServers.Count < 1 ||
+			if (SceneServers.Count < 1 ||
 				!AccountManager.GetAccountNameByConnection(conn, out string accountName) ||
 				!CharacterService.TryGetSelectedCharacterSceneName(dbContext, accountName, out string sceneName))
 			{
@@ -295,15 +295,15 @@ namespace FishMMO.Server
 			ushort port = 0;
 
 			// check if any scene servers are running an instance of the scene with fewer than max clients
-			foreach (SceneServerDetails details in sceneServers.Values)
+			foreach (SceneServerDetails details in SceneServers.Values)
 			{
-				foreach (SceneInstanceDetails instance in details.scenes.Values)
+				foreach (SceneInstanceDetails instance in details.Scenes.Values)
 				{
-					if (instance.name.Equals(sceneName) &&
-						instance.clientCount < MAX_CLIENTS_PER_INSTANCE)
+					if (instance.Name.Equals(sceneName) &&
+						instance.ClientCount < MAX_CLIENTS_PER_INSTANCE)
 					{
-						address = details.address;
-						port = details.port;
+						address = details.Address;
+						port = details.Port;
 						break;
 					}
 				}
@@ -323,9 +323,9 @@ namespace FishMMO.Server
 			else
 			{
 				// add the connection to the waiting list until the scene is loaded
-				if (!waitingConnections.TryGetValue(sceneName, out HashSet<NetworkConnection> connections))
+				if (!WaitingConnections.TryGetValue(sceneName, out HashSet<NetworkConnection> connections))
 				{
-					waitingConnections.Add(sceneName, connections = new HashSet<NetworkConnection>());
+					WaitingConnections.Add(sceneName, connections = new HashSet<NetworkConnection>());
 				}
 
 				if (!connections.Contains(conn))
@@ -335,7 +335,7 @@ namespace FishMMO.Server
 
 				// !!! load balance here !!!
 
-				if (waitingScenes.ContainsKey(sceneName))
+				if (WaitingScenes.ContainsKey(sceneName))
 				{
 					// we are waiting for a scene server to load the scene already!
 					return;
@@ -343,14 +343,14 @@ namespace FishMMO.Server
 
 				SceneServerDetails sceneServer = null;
 				// find the scene server with the fewest number of characters
-				foreach (SceneServerDetails sceneConn in sceneServers.Values)
+				foreach (SceneServerDetails sceneConn in SceneServers.Values)
 				{
 					if (sceneServer == null)
 					{
 						sceneServer = sceneConn;
 						continue;
 					}
-					if (sceneServer.scenes == null || sceneServer.scenes.Count < 1)
+					if (sceneServer.Scenes == null || sceneServer.Scenes.Count < 1)
 					{
 						break;
 					}
@@ -361,15 +361,15 @@ namespace FishMMO.Server
 				}
 
 				// tell the scene server to load the scene
-				sceneServer.connection.Broadcast(new SceneLoadBroadcast()
+				sceneServer.Connection.Broadcast(new SceneLoadBroadcast()
 				{
 					sceneName = sceneName,
 				});
 
-				waitingScenes.Add(sceneName, new SceneWaitQueueData()
+				WaitingScenes.Add(sceneName, new SceneWaitQueueData()
 				{
-					address = sceneServer.address,
-					port = sceneServer.port,
+					address = sceneServer.Address,
+					port = sceneServer.Port,
 					ready = false,
 				});
 			}
@@ -380,13 +380,13 @@ namespace FishMMO.Server
 		/// </summary>
 		private void OnServerSceneCharacterConnectedBroadcastReceived(NetworkConnection conn, SceneCharacterConnectedBroadcast msg)
 		{
-			if (sceneCharacters.ContainsKey(msg.characterId))
+			if (SceneCharacters.ContainsKey(msg.characterId))
 			{
-				sceneCharacters[msg.characterId] = conn;
+				SceneCharacters[msg.characterId] = conn;
 			}
 			else
 			{
-				sceneCharacters.Add(msg.characterId, conn);
+				SceneCharacters.Add(msg.characterId, conn);
 			}
 		}
 
@@ -395,12 +395,12 @@ namespace FishMMO.Server
 		/// </summary>
 		private void OnServerSceneCharacterDisconnectedBroadcastReceived(NetworkConnection conn, SceneCharacterDisconnectedBroadcast msg)
 		{
-			sceneCharacters.Remove(msg.characterId);
+			SceneCharacters.Remove(msg.characterId);
 		}
 
 		public void BroadcastToAllScenes<T>(T msg) where T : struct, IBroadcast
 		{
-			foreach (NetworkConnection serverConn in sceneServers.Keys)
+			foreach (NetworkConnection serverConn in SceneServers.Keys)
 			{
 				serverConn.Broadcast(msg);
 			}
@@ -408,7 +408,7 @@ namespace FishMMO.Server
 
 		public void BroadcastToCharacter<T>(long characterId, T msg) where T : struct, IBroadcast
 		{
-			if (sceneCharacters.TryGetValue(characterId, out NetworkConnection sceneConn))
+			if (SceneCharacters.TryGetValue(characterId, out NetworkConnection sceneConn))
 			{
 				sceneConn.Broadcast(msg);
 			}

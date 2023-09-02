@@ -4,28 +4,28 @@ namespace FishMMO.Client
 {
 	public struct KeyMap
 	{
-		public string virtualKey;
-		public KeyCode key;
+		public string VirtualKey;
+		public KeyCode Key;
 
 		public KeyMap(string virtualKey, KeyCode key)
 		{
-			this.virtualKey = virtualKey;
-			this.key = key;
+			VirtualKey = virtualKey;
+			Key = key;
 		}
 
 		public bool GetKey()
 		{
-			return Input.GetKey(key);
+			return Input.GetKey(Key);
 		}
 
 		public bool GetKeyDown()
 		{
-			return Input.GetKeyDown(key);
+			return Input.GetKeyDown(Key);
 		}
 
 		public bool GetKeyUp()
 		{
-			return Input.GetKeyUp(key);
+			return Input.GetKeyUp(Key);
 		}
 	}
 }

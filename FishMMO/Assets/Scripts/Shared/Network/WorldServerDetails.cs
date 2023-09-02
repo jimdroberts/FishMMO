@@ -3,10 +3,10 @@
 [Serializable]
 public class WorldServerDetails
 {
-	public string name;
-	public DateTime lastPulse;
-	public string address;
-	public ushort port;
-	public int characterCount;
-	public bool locked;
+	public string Name;
+	public DateTime LastPulse;
+	public string Address;
+	public ushort Port;
+	public int CharacterCount;
+	public bool Locked;
 }

@@ -2,7 +2,7 @@
 {
 	public class UIEquipmentButton : UIReferenceButton
 	{
-		public ItemSlot itemSlotType = ItemSlot.Head;
+		public ItemSlot ItemSlotType = ItemSlot.Head;
 
 		public override void OnLeftClick()
 		{
@@ -14,13 +14,13 @@
 					if (dragObject.Visible)
 					{
 						// we check the hotkey type because we can only equip items from the inventory
-						if (dragObject.hotkeyType == HotkeyType.Inventory)
+						if (dragObject.HotkeyType == HotkeyType.Inventory)
 						{
 							// get the item from the Inventory
-							Item item = character.InventoryController.items[referenceID];
+							Item item = character.InventoryController.Items[ReferenceID];
 							if (item != null)
 							{
-								character.EquipmentController.SendEquipRequest(referenceID, (byte)itemSlotType);
+								character.EquipmentController.SendEquipRequest(ReferenceID, (byte)ItemSlotType);
 								// clear the drag object if we succeed in equipping our item
 								dragObject.Clear();
 							}
@@ -31,9 +31,9 @@
 							}
 						}
 					}
-					else if (!character.EquipmentController.IsSlotEmpty((byte)itemSlotType))
+					else if (!character.EquipmentController.IsSlotEmpty((byte)ItemSlotType))
 					{
-						dragObject.SetReference(icon.texture, referenceID, hotkeyType);
+						dragObject.SetReference(Icon.texture, ReferenceID, HotkeyType);
 					}
 				}
 			}
@@ -46,19 +46,19 @@
 			{
 				dragObject.Clear();
 			}
-			if (character != null && hotkeyType == HotkeyType.Equipment)
+			if (character != null && HotkeyType == HotkeyType.Equipment)
 			{
 				Clear();
 
-				character.EquipmentController.SendUnequipRequest((byte)itemSlotType);
+				character.EquipmentController.SendUnequipRequest((byte)ItemSlotType);
 			}
 		}
 
 		public override void Clear()
 		{
-			if (icon != null) icon.texture = null;
-			if (cooldownText != null) cooldownText.text = "";
-			if (amountText != null) amountText.text = "";
+			if (Icon != null) Icon.texture = null;
+			if (CooldownText != null) CooldownText.text = "";
+			if (AmountText != null) AmountText.text = "";
 		}
 	}
 }

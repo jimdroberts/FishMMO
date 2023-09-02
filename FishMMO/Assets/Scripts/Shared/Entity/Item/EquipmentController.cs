@@ -75,7 +75,7 @@ public class EquipmentController : ItemContainer
 		}
 
 		byte slotIndex = (byte)slot;
-		Item prevItem = items[slotIndex];
+		Item prevItem = Items[slotIndex];
 		if (prevItem != null &&
 			prevItem.IsStackable &&
 			prevItem.Stackable.Amount > 0 &&
