@@ -236,7 +236,7 @@ MonoBehaviour:
   ClampToScreen: 0
   slider: {fileID: 3664550442208532397}
   resourceValue: {fileID: 1865667129}
-  Template: {fileID: 0}
+  Template: {fileID: 11400000, guid: f9116fa7190f01a4a93eb32cafac787b, type: 2}
 --- !u!1 &3664550442208532399
 GameObject:
   m_ObjectHideFlags: 0
