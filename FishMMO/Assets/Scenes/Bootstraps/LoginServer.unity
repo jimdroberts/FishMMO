@@ -342,6 +342,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5849347582015469635, guid: 8e0fbf828e74525449caf94aea6e8d22,
         type: 3}
+      propertyPath: ConfigurationFileName
+      value: LoginServer
+      objectReference: {fileID: 0}
+    - target: {fileID: 5849347582015469635, guid: 8e0fbf828e74525449caf94aea6e8d22,
+        type: 3}
       propertyPath: configurationFileName
       value: LoginServer.cfg
       objectReference: {fileID: 0}

@@ -93,7 +93,7 @@ MonoBehaviour:
   HasFocus: 0
   CanDrag: 0
   ClampToScreen: 0
-  Icon: {fileID: 0}
+  Icon: {fileID: 6637928240446436463}
   ReferenceID: -1
   HotkeyType: 0
   LayerMask:

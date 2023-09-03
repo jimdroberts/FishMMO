@@ -17,7 +17,6 @@ namespace FishMMO.Server
 	// Main Server class, handles configuration and starting connections.
 	public class Server : MonoBehaviour
 	{
-		public string ConfigurationFileName;
 		public Configuration Configuration = null;
 		public string Address;
 		public ushort Port;
@@ -51,18 +50,25 @@ namespace FishMMO.Server
 		public ServerWindowTitleUpdater ServerWindowTitleUpdater { get; private set; }
 
 		private LocalConnectionState serverState = LocalConnectionState.Stopped;
+		private string serverTypeName;
 
 		void Awake()
 		{
+			// get the server type so we know how to configure
+			string serverType = GetServerType();
+			Debug.Log(serverType + " is starting.");
+
 #if UNITY_EDITOR
 			string path = Directory.GetParent(Directory.GetParent(Application.dataPath).FullName).FullName;
 #else
 			string path = AppDomain.CurrentDomain.BaseDirectory;
 #endif
 
+			Debug.Log("Current working directory: " + path);
+
 			// load configuration
 			Configuration = new Configuration(path);
-			if (!Configuration.Load(ConfigurationFileName))
+			if (!Configuration.Load(serverTypeName + Configuration.EXTENSION))
 			{
 				// if we failed to load the file.. save a new one
 				Configuration.Set("ServerName", "TestName");
@@ -83,8 +89,6 @@ namespace FishMMO.Server
 			{
 				throw new UnityException("[" + DateTime.UtcNow + "] Server: NetworkManager could not be found! Make sure you have a NetworkManager in your scene.");
 			}
-
-			string serverType = GetServerType();
 
 			// initialize required components for our specified server type
 			InternalInitializeOnce(serverType);
@@ -112,6 +116,8 @@ namespace FishMMO.Server
 				Application.Quit();
 #endif
 			}
+
+			Debug.Log(serverType + " is running.");
 		}
 
 		private string GetServerType()
@@ -121,17 +127,17 @@ namespace FishMMO.Server
 			{
 				throw new UnityException("Active scene is not in the bootstraps folder.");
 			}
-
-			string name = scene.name.ToUpper();
-			if (name.StartsWith("LOGIN"))
+			serverTypeName = scene.name;
+			string upper = serverTypeName.ToUpper();
+			if (upper.StartsWith("LOGIN"))
 			{
 				return "LOGIN";
 			}
-			if (name.StartsWith("WORLD"))
+			if (upper.StartsWith("WORLD"))
 			{
 				return "WORLD";
 			}
-			if (name.StartsWith("SCENE"))
+			if (upper.StartsWith("SCENE"))
 			{
 				return "SCENE";
 			}

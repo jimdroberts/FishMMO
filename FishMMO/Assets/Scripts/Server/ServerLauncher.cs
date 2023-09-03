@@ -14,26 +14,38 @@ namespace FishMMO.Server
 		void Start()
 		{
 			string[] args = Environment.GetCommandLineArgs();
-			switch (args[1].ToUpper())
+			if (args == null || args.Length < 2)
 			{
-				case "LOGIN":
-					Initialize("LoginServer");
-					break;
-				case "WORLD":
-					Initialize("WorldServer");
-					break;
-				case "SCENE":
-					Initialize("SceneServer");
-					break;
-				default:
-					Debug.Log("[" + DateTime.UtcNow + "] ServerLauncher: Unknown server type. Available servers {Login, World, Scene}");
-#if UNITY_EDITOR
-					EditorApplication.ExitPlaymode();
-#else
-					Application.Quit();
-#endif
-					break;
+				Close();
 			}
+			else
+			{
+				switch (args[1].ToUpper())
+				{
+					case "LOGIN":
+						Initialize("LoginServer");
+						break;
+					case "WORLD":
+						Initialize("WorldServer");
+						break;
+					case "SCENE":
+						Initialize("SceneServer");
+						break;
+					default:
+						Close();
+						break;
+				}
+			}
+		}
+
+		private void Close()
+		{
+			Debug.Log("[" + DateTime.UtcNow + "] ServerLauncher: Unknown server type. Available servers {Login, World, Scene}");
+#if UNITY_EDITOR
+			EditorApplication.ExitPlaymode();
+#else
+			Application.Quit();
+#endif
 		}
 
 		private void Initialize(string bootstrapSceneName)

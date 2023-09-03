@@ -6,11 +6,15 @@ using System.Text;
 
 public class Configuration
 {
+	public const string DEFAULT_FILENAME = "Configuration";
+	public const string EXTENSION = ".cfg";
+	public const string FULL_NAME = DEFAULT_FILENAME + "." + EXTENSION;
+
 	private CultureInfo cultureInfo = CultureInfo.InvariantCulture;
 	private Dictionary<string, string> settings = new Dictionary<string, string>();
 
 	public string defaultFileDirectory;
-	public string fileName = "Configuration.cfg";
+	public string fileName = DEFAULT_FILENAME;
 
 	public Configuration(string defaultFileDirectory)
 	{
@@ -131,7 +135,8 @@ public class Configuration
 
 	public void Set<T>(string name, T value)
 	{
-		Set(name, value.ToString());
+		if (value != null)
+			Set(name, value.ToString());
 	}
 
 	public void Set(string name, double value)

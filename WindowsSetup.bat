@@ -83,6 +83,7 @@ if %ERRORLEVEL% EQU 0 (
     if %ERRORLEVEL% NEQ 0 (
         echo Downloading and installing dotnet v7...
         powershell.exe -ExecutionPolicy Bypass -Command "& {Invoke-WebRequest -Uri https://dot.net/v1/dotnet-install.ps1 -OutFile dotnet-install.ps1}"
+	pause
         powershell.exe -ExecutionPolicy Bypass -Command "& {.\dotnet-install.ps1 -Version 7.0.202 -InstallDir 'C:\Program Files\dotnet'}"
         pause
         goto Start
