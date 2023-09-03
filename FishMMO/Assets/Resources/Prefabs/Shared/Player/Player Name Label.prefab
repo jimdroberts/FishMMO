@@ -185,4 +185,4 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ab822550643fb454788ff0e4beacb4e0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  PivotYAxis: 1
+  PivotYAxis: 0

@@ -12,71 +12,69 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 338615fedeaa1344faabba5c756f75ab, type: 3}
   m_Name: WorldSceneDetails
   m_EditorClassIdentifier: 
-  initialSpawnTag: InitialSpawnPosition
-  respawnTag: RespawnPosition
-  teleporterTag: Teleporter
-  teleporterDestinationTag: TeleporterDestination
-  scenes:
+  InitialSpawnTag: InitialSpawnPosition
+  RespawnTag: RespawnPosition
+  TeleporterTag: Teleporter
+  TeleporterDestinationTag: TeleporterDestination
+  Scenes:
     m_keys:
     - Felwithe
     - Greater Faydark
     m_values:
-    - initialSpawnPositions:
+    - InitialSpawnPositions:
         m_keys:
         - West Felwithe
         - East Felwithe
         m_values:
-        - spawnerName: West Felwithe
-          sceneName: Felwithe
-          position: {x: 8, y: 2, z: 0}
-          rotation: {x: -0, y: -0, z: -0, w: 1}
-        - spawnerName: East Felwithe
-          sceneName: Felwithe
-          position: {x: 26.76, y: 10, z: 1.21}
-          rotation: {x: -0, y: 0.7071068, z: -0, w: 0.7071068}
-      respawnPositions:
+        - SpawnerName: West Felwithe
+          SceneName: Felwithe
+          Position: {x: 8, y: 2, z: 0}
+          Rotation: {x: -0, y: -0, z: -0, w: 1}
+        - SpawnerName: East Felwithe
+          SceneName: Felwithe
+          Position: {x: 26.76, y: 10, z: 1.21}
+          Rotation: {x: -0, y: 0.7071068, z: -0, w: 0.7071068}
+      RespawnPositions:
         m_keys:
         - Respawn 1
         m_values:
         - {x: -44.69, y: 5, z: 0}
-      teleporters:
+      Teleporters:
         m_keys:
         - FelwitheNorth
         m_values:
-        - toScene: Greater Faydark
-          toPosition: {x: -7.61, y: 0.95, z: -12.43}
-          sceneTransitionImage: {fileID: 21300000, guid: af9d2e8814f76f4498e2ed07cc8191ef,
-            type: 3}
-      boundaries:
+        - ToScene: Greater Faydark
+          ToPosition: {x: -7.61, y: 0.95, z: -12.43}
+          SceneTransitionImage: {fileID: 0}
+      Boundaries:
         m_keys:
         - Terrain
         m_values:
         - BoundaryOrigin: {x: 0, y: 75.59101, z: 0}
           BoundarySize: {x: 1000, y: 151.18202, z: 1000}
-    - initialSpawnPositions:
+    - InitialSpawnPositions:
         m_keys:
         - Spire
         m_values:
-        - spawnerName: Spire
-          sceneName: Greater Faydark
-          position: {x: -13.06, y: 5.51, z: -12.29}
-          rotation: {x: -0, y: 0.7071068, z: -0, w: 0.7071068}
-      respawnPositions:
+        - SpawnerName: Spire
+          SceneName: Greater Faydark
+          Position: {x: -13.06, y: 5.51, z: -12.29}
+          Rotation: {x: -0, y: 0.7071068, z: -0, w: 0.7071068}
+      RespawnPositions:
         m_keys:
         - Respawn 1
         - Respawn 2
         m_values:
         - {x: 0, y: 2, z: 0}
         - {x: 224.6, y: 2, z: 0}
-      teleporters:
+      Teleporters:
         m_keys:
         - GreaterFaydarkEast
         m_values:
-        - toScene: Felwithe
-          toPosition: {x: -7.23, y: 1.67, z: -12.45}
-          sceneTransitionImage: {fileID: 21300000, guid: 5c2d23be0cbdd4048a53de5b3b050809,
-            type: 3}
-      boundaries:
+        - ToScene: Felwithe
+          ToPosition: {x: -7.23, y: 1.67, z: -12.45}
+          SceneTransitionImage: {fileID: 0}
+      Boundaries:
         m_keys:
         - Primary Boundary
         m_values:

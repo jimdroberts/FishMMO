@@ -163,7 +163,6 @@ Transform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
-  - {fileID: 2817084262407755493}
   - {fileID: 3575547950957483929}
   - {fileID: 6380345929272490936}
   m_Father: {fileID: 0}
@@ -192,9 +191,7 @@ MonoBehaviour:
   - {fileID: 1643789448904715060}
   - {fileID: 5516734705847723694}
   - {fileID: 6508789489405674567}
-  - {fileID: 1966501389576177422}
   - {fileID: 218304821033608884}
-  - {fileID: 4374908933606738023}
   - {fileID: 2006277379296631602}
   - {fileID: 5933418412604522111}
   - {fileID: 1974367592072420653}
@@ -465,7 +462,7 @@ MonoBehaviour:
   _componentIndexCache: 5
   _addedNetworkObject: {fileID: 784751938054981284}
   _networkObjectCache: {fileID: 784751938054981284}
-  character: {fileID: 0}
+  Character: {fileID: 0}
 --- !u!114 &6508789489405674567
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -481,7 +478,7 @@ MonoBehaviour:
   _componentIndexCache: 6
   _addedNetworkObject: {fileID: 784751938054981284}
   _networkObjectCache: {fileID: 784751938054981284}
-  character: {fileID: 0}
+  Character: {fileID: 0}
 --- !u!114 &1966501389576177422
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -494,9 +491,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f852b64f675784b4ebdf6e98b0726660, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 7
-  _addedNetworkObject: {fileID: 784751938054981284}
-  _networkObjectCache: {fileID: 784751938054981284}
 --- !u!114 &218304821033608884
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -509,14 +503,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: eb1b972667baff74aabba2d7602c53d0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 8
+  _componentIndexCache: 7
   _addedNetworkObject: {fileID: 784751938054981284}
   _networkObjectCache: {fileID: 784751938054981284}
-  abilitySpawner: {fileID: 0}
-  character: {fileID: 0}
-  bloodResource: {fileID: 0}
-  bloodResourceConversion: {fileID: 0}
-  holdToActivate: {fileID: 0}
+  AbilitySpawner: {fileID: 0}
+  Character: {fileID: 0}
+  BloodResource: {fileID: 0}
+  BloodResourceConversion: {fileID: 0}
+  Charged: {fileID: 0}
+  Channeled: {fileID: 0}
 --- !u!114 &4374908933606738023
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -529,16 +524,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e7330d2c79dca4b428d96b86dd591417, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 9
-  _addedNetworkObject: {fileID: 784751938054981284}
-  _networkObjectCache: {fileID: 784751938054981284}
-  character: {fileID: 0}
-  layerMask:
+  Character: {fileID: 0}
+  LayerMask:
     serializedVersion: 2
-    m_Bits: 17
-  targetDistance: 50
-  targetUpdateRate: 0.1
-  nextTick: 0
+    m_Bits: 0
 --- !u!114 &2006277379296631602
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -551,10 +540,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f05a0b4c0a9733f4db3379ba51c18b84, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 10
+  _componentIndexCache: 8
   _addedNetworkObject: {fileID: 784751938054981284}
   _networkObjectCache: {fileID: 784751938054981284}
-  character: {fileID: 0}
+  Character: {fileID: 0}
 --- !u!114 &5933418412604522111
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -567,10 +556,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1a402312deeba5e4a9372615e445f44f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 11
+  _componentIndexCache: 9
   _addedNetworkObject: {fileID: 784751938054981284}
   _networkObjectCache: {fileID: 784751938054981284}
-  character: {fileID: 0}
+  Character: {fileID: 0}
 --- !u!114 &1974367592072420653
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -583,11 +572,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 73facf272d356ac42b96a3c8e10c36c6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 12
+  _componentIndexCache: 10
   _addedNetworkObject: {fileID: 784751938054981284}
   _networkObjectCache: {fileID: 784751938054981284}
-  character: {fileID: 0}
-  rank: 0
+  Character: {fileID: 0}
+  Rank: 0
 --- !u!114 &7975244870159263472
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -600,11 +589,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: dd3cedcaf7281e042bd075ca3f84fc9d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 13
+  _componentIndexCache: 11
   _addedNetworkObject: {fileID: 784751938054981284}
   _networkObjectCache: {fileID: 784751938054981284}
-  character: {fileID: 0}
-  rank: 0
+  Character: {fileID: 0}
+  Rank: 0
 --- !u!114 &4966316198463876083
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -617,12 +606,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ef74936c7389fd247bbf0437fe619b20, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 14
+  _componentIndexCache: 12
   _addedNetworkObject: {fileID: 784751938054981284}
   _networkObjectCache: {fileID: 784751938054981284}
-  character: {fileID: 0}
-  immortal: 0
-  showDamage: 1
+  Character: {fileID: 0}
+  Immortal: 0
+  ShowDamage: 1
   ResourceAttribute: {fileID: 11400000, guid: e5c10a046ee277f46a57ee2048ae5ec9, type: 2}
 --- !u!114 &6038023079570568745
 MonoBehaviour:
@@ -636,9 +625,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2d2b958cf491cbd4ea4dcfc4ecfb6721, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 15
+  _componentIndexCache: 13
   _addedNetworkObject: {fileID: 784751938054981284}
   _networkObjectCache: {fileID: 784751938054981284}
+  CharacterController: {fileID: 0}
   AttributeController: {fileID: 0}
   DamageController: {fileID: 0}
   TargetController: {fileID: 0}
@@ -652,19 +642,18 @@ MonoBehaviour:
   GuildController: {fileID: 0}
   PartyController: {fileID: 0}
   Motor: {fileID: 0}
-  AbilitySpawnPoint: {fileID: 0}
   LocalInputController: {fileID: 0}
   CharacterNameLabel: {fileID: 2817084262407755495}
-  characterName: 
-  id: 0
-  account: 
-  isGameMaster: 0
-  isTeleporting: 0
-  raceID: 0
-  raceName: 
-  sceneName: 
-  sceneHandle: 0
-  lastChatMessage: 
+  ID: 0
+  CharacterName: 
+  Account: 
+  IsGameMaster: 0
+  IsTeleporting: 0
+  RaceID: 0
+  RaceName: 
+  SceneName: 
+  SceneHandle: 0
+  LastChatMessage: 
 --- !u!136 &4053032698712144203
 CapsuleCollider:
   m_ObjectHideFlags: 8
@@ -685,7 +674,7 @@ PrefabInstance:
   serializedVersion: 2
   m_Modification:
     serializedVersion: 2
-    m_TransformParent: {fileID: 4573496687782621817}
+    m_TransformParent: {fileID: 3575547950957483929}
     m_Modifications:
     - target: {fileID: 4213452809119816545, guid: 2de080fd835ec6747b1b1ff8ed6870f6,
         type: 3}
@@ -700,7 +689,7 @@ PrefabInstance:
     - target: {fileID: 4213452809119816545, guid: 2de080fd835ec6747b1b1ff8ed6870f6,
         type: 3}
       propertyPath: m_RootOrder
-      value: 5
+      value: -1
       objectReference: {fileID: 0}
     - target: {fileID: 4213452809119816545, guid: 2de080fd835ec6747b1b1ff8ed6870f6,
         type: 3}
@@ -755,17 +744,17 @@ PrefabInstance:
     - target: {fileID: 4213452809119816545, guid: 2de080fd835ec6747b1b1ff8ed6870f6,
         type: 3}
       propertyPath: m_LocalRotation.x
-      value: 0
+      value: -0
       objectReference: {fileID: 0}
     - target: {fileID: 4213452809119816545, guid: 2de080fd835ec6747b1b1ff8ed6870f6,
         type: 3}
       propertyPath: m_LocalRotation.y
-      value: 0
+      value: -0
       objectReference: {fileID: 0}
     - target: {fileID: 4213452809119816545, guid: 2de080fd835ec6747b1b1ff8ed6870f6,
         type: 3}
       propertyPath: m_LocalRotation.z
-      value: 0
+      value: -0
       objectReference: {fileID: 0}
     - target: {fileID: 4213452809119816545, guid: 2de080fd835ec6747b1b1ff8ed6870f6,
         type: 3}
@@ -875,7 +864,11 @@ PrefabInstance:
       value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
-    m_AddedGameObjects: []
+    m_AddedGameObjects:
+    - targetCorrespondingSourceObject: {fileID: 408730, guid: 7737647c22c1fc64a88d5cd030c352ce,
+        type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 2817084262407755493}
   m_SourcePrefab: {fileID: 100100000, guid: 7737647c22c1fc64a88d5cd030c352ce, type: 3}
 --- !u!4 &3575547950957483929 stripped
 Transform:

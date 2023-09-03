@@ -7,6 +7,8 @@ using UnityEditor.Build.Reporting;
 using Debug = UnityEngine.Debug;
 using System.Diagnostics;
 using System.Net;
+using UnityEngine;
+using UnityEditor.PackageManager.UI;
 
 public class CustomBuildTool
 {
@@ -278,6 +280,20 @@ public class CustomBuildTool
 		{
 			return;
 		}
+
+		// rebuild world details cache, this includes teleporters, teleporter destinations, spawn points, and other constant scene data
+		WorldSceneDetailsCache worldDetailsCache = AssetDatabase.LoadAssetAtPath<WorldSceneDetailsCache>(WorldSceneDetailsCache.CACHE_FULL_PATH);
+		if (worldDetailsCache != null)
+		{
+			worldDetailsCache.Rebuild();
+		}
+		else
+		{
+			worldDetailsCache = ScriptableObject.CreateInstance<WorldSceneDetailsCache>();
+			worldDetailsCache.Rebuild();
+			AssetDatabase.CreateAsset(worldDetailsCache, WorldSceneDetailsCache.CACHE_FULL_PATH);
+		}
+		AssetDatabase.SaveAssets();
 
 		// just incase buildpipeline bug is still present
 		BuildTargetGroup targetGroup = BuildPipeline.GetBuildTargetGroup(buildTarget);

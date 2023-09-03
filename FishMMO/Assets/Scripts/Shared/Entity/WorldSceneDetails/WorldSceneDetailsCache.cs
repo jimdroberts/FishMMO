@@ -11,6 +11,9 @@ using UnityEngine.SceneManagement;
 public class WorldSceneDetailsCache : ScriptableObject
 {
 	public const string WORLD_SCENE_PATH = "/WorldScene/";
+	public const string CACHE_PATH = "Assets/Resources/Prefabs/Shared/";
+	public const string CACHE_FILE_NAME = "WorldSceneDetails.asset";
+	public const string CACHE_FULL_PATH = CACHE_PATH + CACHE_FILE_NAME;
 
 	[Tooltip("Apply this tag to any object in your starting scenes to turn them into initial spawn locations.")]
 	public string InitialSpawnTag = "InitialSpawnPosition";
@@ -186,7 +189,6 @@ public class WorldSceneDetailsCache : ScriptableObject
 				}
 			}
 		}
-
 		Debug.Log("[" + DateTime.UtcNow + "] WorldSceneDetails: Rebuild Complete");
 #endif
 		return true;

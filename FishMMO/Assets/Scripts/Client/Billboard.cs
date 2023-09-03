@@ -6,7 +6,7 @@ namespace Client
 	{
 		private Camera Camera;
 
-		public bool PivotYAxis = true;
+		public bool PivotYAxis = false;
 
 		public Transform Transform { get; private set; }
 
