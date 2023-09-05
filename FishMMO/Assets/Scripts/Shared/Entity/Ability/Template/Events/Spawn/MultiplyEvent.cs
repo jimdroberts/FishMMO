@@ -9,7 +9,7 @@ public sealed class MultiplyEvent : SpawnEvent
 	{
 		if (abilityObjects != null)
 		{
-			for (int i = 0; i < SpawnCount; i++)
+			for (int i = 0; i < SpawnCount; ++i)
 			{
 				// create/fetch from pool
 				GameObject go = new GameObject(initialObject.name);
@@ -22,15 +22,12 @@ public sealed class MultiplyEvent : SpawnEvent
 					abilityObject = go.AddComponent<AbilityObject>();
 				}
 				go.transform.SetPositionAndRotation(initialObject.transform.position, initialObject.transform.rotation);
+				abilityObject.ContainerID = initialObject.ContainerID;
 				abilityObject.Ability = initialObject.Ability;
 				abilityObject.Caster = initialObject.Caster;
 				abilityObject.HitCount = initialObject.HitCount;
-				while (abilityObjects.ContainsKey(nextID))
-				{
-					++nextID;
-				}
-				abilityObject.ID = nextID;
-				abilityObjects.Add(abilityObject.ID, abilityObject);
+				abilityObject.RemainingActiveTime = initialObject.RemainingActiveTime;
+				abilityObjects.Add(++nextID, abilityObject);
 			}
 		}
 	}

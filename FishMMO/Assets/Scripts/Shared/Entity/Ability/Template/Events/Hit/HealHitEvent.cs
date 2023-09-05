@@ -2,7 +2,7 @@
 
 public sealed class HealHitEvent : HitEvent
 {
-	public int Amount = 10;
+	public int Amount;
 
 	public override int Invoke(Character attacker, Character defender, TargetInfo hitTarget, GameObject abilityObject)
 	{

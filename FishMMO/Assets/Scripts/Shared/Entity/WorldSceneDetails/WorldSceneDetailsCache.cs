@@ -75,7 +75,7 @@ public class WorldSceneDetailsCache : ScriptableObject
 			{
 				if (!Scenes.ContainsKey(s.name))
 				{
-					Debug.Log("[" + DateTime.UtcNow + "] WorldSceneDetails: Scene: [" + s.name + "] - Loaded");
+					Debug.Log("[" + DateTime.UtcNow + "] WorldSceneDetails: Scene Loaded: [" + s.name + "]");
 
 					// add the scene to our world scenes list
 					WorldSceneDetails sceneDetails = new WorldSceneDetails();
@@ -152,7 +152,7 @@ public class WorldSceneDetailsCache : ScriptableObject
 						});
 					}
 
-					Debug.Log("[" + DateTime.UtcNow + "] WorldSceneDetails: Scene: [" + s.name + "] - Unloaded");
+					Debug.Log("[" + DateTime.UtcNow + "] WorldSceneDetails Scene Unloaded: [" + s.name + "]");
 				}
 			}
 			// unload the scene
@@ -182,7 +182,7 @@ public class WorldSceneDetailsCache : ScriptableObject
 							}
 						}
 
-						Debug.Log("[" + DateTime.UtcNow + "] WorldSceneDetails: Teleporter [" + pair.Key + "] linked to: [Scene:" + destination.Scene + " " + pair.Value.ToPosition + "]");
+						Debug.Log("[" + DateTime.UtcNow + "] WorldSceneDetails: Teleporter [" + pair.Key + "] connected to: [Scene:" + destination.Scene + " " + pair.Value.ToPosition + "]");
 
 						sceneDetails.Teleporters.Add(pair.Key, pair.Value);
 					}

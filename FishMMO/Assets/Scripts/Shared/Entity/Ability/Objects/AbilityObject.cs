@@ -3,21 +3,40 @@ using System.Collections.Generic;
 
 public class AbilityObject : MonoBehaviour
 {
-	internal int ID = 0;
+	internal int ContainerID;
+	internal int ID;
 	public Ability Ability;
 	public Character Caster;
 
 	// the number of remaining hits for this ability object before it disappears
-	public int HitCount = 0;
+	public int HitCount;
+	public float RemainingActiveTime;
+
+	public Transform Transform { get; private set; }
+
+	private void Awake()
+	{
+		Transform = transform;
+	}
 
 	void Update()
 	{
+		if (Ability.ActiveTime > 0.0f)
+		{
+			if (RemainingActiveTime < 0.0f)
+			{
+				Destroy();
+				return;
+			}
+			RemainingActiveTime -= Time.deltaTime;
+		}
+
 		if (Ability != null)
 		{
 			foreach (MoveEvent moveEvent in Ability.MoveEvents.Values)
 			{
 				// invoke
-				moveEvent.Invoke(gameObject);
+				moveEvent.Invoke(Ability, Transform, Time.deltaTime);
 			}
 		}
 	}
@@ -25,34 +44,24 @@ public class AbilityObject : MonoBehaviour
 	void OnCollisionEnter(Collision other)
 	{
 		Character hitCharacter = other.gameObject.GetComponent<Character>();
-		if (hitCharacter != null /* && hitCharacter.AggressorInfo.CheckEnemy(Caster)*/)
+		if (Ability != null)
 		{
-			if (Ability != null)
+			foreach (HitEvent hitEvent in Ability.HitEvents.Values)
 			{
-				foreach (HitEvent hitEvent in Ability.HitEvents.Values)
+				TargetInfo targetInfo = new TargetInfo()
 				{
-					TargetInfo targetInfo = new TargetInfo()
-					{
-						Target = other.transform,
-						HitPosition = other.GetContact(0).point,
-					};
+					Target = other.transform,
+					HitPosition = other.GetContact(0).point,
+				};
 
-					// invoke
-					int hitCount = hitEvent.Invoke(Caster, hitCharacter, targetInfo, gameObject);
-
-					// we remove one hit every time a HitEvent returns true
-					// if hit count falls below 1 the object will be destroyed after iterating all events
-					HitCount -= hitCount;
-				}
-			}
-			if (HitCount < 1)
-			{
-				Destroy();
+				// we remove hit count with the events return value
+				// if hit count falls below 1 the object will be destroyed after iterating all events at least once
+				HitCount -= hitEvent.Invoke(Caster, hitCharacter, targetInfo, gameObject);
 			}
 		}
-		else
+
+		if (hitCharacter == null || HitCount < 1)
 		{
-			// we hit something that wasn't a player, default behaviour is to destroy the object?
 			Destroy();
 		}
 	}
@@ -60,7 +69,7 @@ public class AbilityObject : MonoBehaviour
 	internal void Destroy()
 	{
 		// TODO - add pooling to destroys ability objects
-		Ability.Objects.Remove(ID);
+		Ability.RemoveAbilityObject(ContainerID, ID);
 		gameObject.SetActive(false);
 		Destroy(gameObject);
 	}
@@ -70,7 +79,7 @@ public class AbilityObject : MonoBehaviour
 	/// </summary>
 	/// <param name="self"></param>
 	/// <param name="targetInfo"></param>
-	public static bool TrySpawn(Ability ability, Character self, Transform abilitySpawner, TargetInfo targetInfo)
+	public static bool TrySpawn(Ability ability, Character self, AbilityController controller, Transform abilitySpawner, TargetInfo targetInfo)
 	{
 		AbilityTemplate template = ability.Template;
 
@@ -106,40 +115,51 @@ public class AbilityObject : MonoBehaviour
 		go.SetActive(false);
 
 		// construct initial ability object
-		int id = 0;
 		AbilityObject abilityObject = go.GetComponent<AbilityObject>();
 		if (abilityObject == null)
 		{
 			abilityObject = go.AddComponent<AbilityObject>();
 		}
+		abilityObject.ID = 0;
 		abilityObject.Ability = ability;
 		abilityObject.Caster = self;
 		abilityObject.HitCount = template.HitCount;
-		while (ability.Objects.ContainsKey(id))
-		{
-			++id;
-		}
-		abilityObject.ID = id;
+		abilityObject.RemainingActiveTime = ability.ActiveTime * controller.CalculateSpeedReduction(controller.AttackSpeedReductionTemplate);
+
+		// make sure the objects container exists
 		if (ability.Objects == null)
 		{
-			ability.Objects = new Dictionary<int, AbilityObject>();
+			ability.Objects = new Dictionary<int, Dictionary<int, AbilityObject>>();
 		}
-		ability.Objects.Add(abilityObject.ID, abilityObject);
+
+		Dictionary<int, AbilityObject> abilityObjects = new Dictionary<int, AbilityObject>();
+		// assign random object container ID for the ability object tracking
+		int id;
+		do
+		{
+			id = Random.Range(int.MinValue, int.MaxValue);
+		} while (ability.Objects.ContainsKey(id));
+
+		ability.Objects.Add(id, abilityObjects);
+		abilityObject.ContainerID = id;
+
+		// reset id for spawning
+		id = 0;
 
 		// handle pre spawn events
 		foreach (SpawnEvent spawnEvent in ability.PreSpawnEvents.Values)
 		{
-			spawnEvent.Invoke(self, targetInfo, abilityObject, ref id, ability.Objects);
+			spawnEvent.Invoke(self, targetInfo, abilityObject, ref id, abilityObjects);
 		}
 
 		// handle spawn events
 		foreach (SpawnEvent spawnEvent in ability.SpawnEvents.Values)
 		{
-			spawnEvent.Invoke(self, targetInfo, abilityObject, ref id, ability.Objects);
+			spawnEvent.Invoke(self, targetInfo, abilityObject, ref id, abilityObjects);
 		}
 
 		// finalize
-		foreach (AbilityObject obj in ability.Objects.Values)
+		foreach (AbilityObject obj in abilityObjects.Values)
 		{
 			obj.gameObject.SetActive(true);
 		}

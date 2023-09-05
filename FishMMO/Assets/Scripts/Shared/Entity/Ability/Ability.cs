@@ -5,10 +5,11 @@ public class Ability
 {
 	public int AbilityID;
 	public int TemplateID;
-	public float ActivationTime = 0.0f;
-	public float Cooldown = 0.0f;
-	public float Range = 0.0f;
-	public float Speed = 0.0f;
+	public float ActivationTime;
+	public float ActiveTime;
+	public float Cooldown;
+	public float Range;
+	public float Speed;
 
 	public AbilityTemplate Template { get; private set; }
 	public AbilityResourceDictionary Resources { get; private set; }
@@ -19,8 +20,11 @@ public class Ability
 	public Dictionary<int, SpawnEvent> SpawnEvents { get; private set; }
 	public Dictionary<int, MoveEvent> MoveEvents { get; private set; }
 	public Dictionary<int, HitEvent> HitEvents { get; private set; }
-	// cache of the ability objects this ability has spawned
-	public Dictionary<int, AbilityObject> Objects { get; set; }
+
+	/// <summary>
+	/// Cache of all active ability Objects. <ContainerID, <AbilityObjectID, AbilityObject>>
+	/// </summary>
+	public Dictionary<int, Dictionary<int, AbilityObject>> Objects { get; set; }
 
 	public int TotalResourceCost
 	{
@@ -59,6 +63,7 @@ public class Ability
 	internal void InternalAddTemplateModifiers(AbilityTemplate template)
 	{
 		ActivationTime += template.ActivationTime;
+		ActiveTime += template.ActiveTime;
 		Cooldown += template.Cooldown;
 		Range += template.Range;
 		Speed += template.Speed;
@@ -153,6 +158,7 @@ public class Ability
 			}
 
 			ActivationTime += abilityEvent.ActivationTime;
+			ActiveTime += abilityEvent.ActiveTime;
 			Cooldown += abilityEvent.Cooldown;
 			Range += abilityEvent.Range;
 			Speed += abilityEvent.Speed;
@@ -221,6 +227,7 @@ public class Ability
 			}
 
 			ActivationTime -= abilityEvent.ActivationTime;
+			ActiveTime -= abilityEvent.ActiveTime;
 			Cooldown -= abilityEvent.Cooldown;
 			Range -= abilityEvent.Range;
 			Speed -= abilityEvent.Speed;
@@ -284,12 +291,12 @@ public class Ability
 
 	public void ConsumeResources(CharacterAttributeController attributeController, AbilityEvent bloodResourceConversion, CharacterAttributeTemplate bloodResource)
 	{
-		if (AbilityEvents.ContainsKey(bloodResourceConversion.ID))
+		if (bloodResourceConversion != null && AbilityEvents.ContainsKey(bloodResourceConversion.ID))
 		{
 			int totalCost = TotalResourceCost;
 
 			CharacterResourceAttribute resource;
-			if (attributeController.TryGetResourceAttribute(bloodResource.Name, out resource) &&
+			if (bloodResource != null && attributeController.TryGetResourceAttribute(bloodResource.Name, out resource) &&
 				resource.CurrentValue >= totalCost)
 			{
 				resource.Consume(totalCost);
@@ -306,6 +313,14 @@ public class Ability
 					resource.Consume(pair.Value);
 				}
 			}
+		}
+	}
+
+	public void RemoveAbilityObject(int containerID, int objectID)
+	{
+		if (Objects.TryGetValue(containerID, out Dictionary<int, AbilityObject> container))
+		{
+			container.Remove(objectID);
 		}
 	}
 
@@ -326,6 +341,10 @@ public class Ability
 		sb.AppendLine();
 		sb.Append("<color=#a66ef5>Activation Time: ");
 		sb.Append(ActivationTime);
+		sb.Append("</color>");
+		sb.AppendLine();
+		sb.Append("<color=#a66ef5>Active Time: ");
+		sb.Append(ActiveTime);
 		sb.Append("</color>");
 		sb.AppendLine();
 		sb.Append("<color=#a66ef5>Cooldown: ");

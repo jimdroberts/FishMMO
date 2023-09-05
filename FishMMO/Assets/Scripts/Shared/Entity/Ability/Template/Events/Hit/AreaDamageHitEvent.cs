@@ -4,9 +4,9 @@ public sealed class AreaDamageHitEvent : HitEvent
 {
 	private Collider[] colliders = new Collider[100];
 
-	public int HitCount = 10;
-	public int Amount = 10;
-	public float Radius = 10.0f;
+	public int HitCount;
+	public int Amount;
+	public float Radius;
 	public DamageAttributeTemplate DamageAttributeTemplate;
 	public LayerMask CollidableLayers = -1;
 

@@ -9,6 +9,7 @@ public abstract class AbilityTemplate : CachedScriptableObject<AbilityTemplate>
 	public bool RequiresTarget;
 	public int HitCount;
 	public float ActivationTime;
+	public float ActiveTime;
 	public float Cooldown;
 	public float Range;
 	public float Speed;

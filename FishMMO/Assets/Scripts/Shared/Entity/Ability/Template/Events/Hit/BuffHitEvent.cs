@@ -2,7 +2,7 @@ using UnityEngine;
 
 public sealed class BuffHitEvent : HitEvent
 {
-	public int Stacks = 1;
+	public int Stacks;
 	public BuffTemplate BuffTemplate;
 
 	public override int Invoke(Character attacker, Character defender, TargetInfo hitTarget, GameObject abilityObject)

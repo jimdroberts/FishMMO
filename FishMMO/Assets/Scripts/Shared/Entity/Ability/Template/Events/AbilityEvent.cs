@@ -6,6 +6,7 @@ public abstract class AbilityEvent : CachedScriptableObject<AbilityEvent>
 	public Texture2D Icon;
 	public string Description;
 	public float ActivationTime;
+	public float ActiveTime;
 	public float Cooldown;
 	public float Range;
 	public float Speed;
@@ -35,6 +36,13 @@ public abstract class AbilityEvent : CachedScriptableObject<AbilityEvent>
 			sb.AppendLine();
 			sb.Append("<color=#a66ef5>Activation Time: ");
 			sb.Append(ActivationTime);
+			sb.Append("</color>");
+		}
+		if (ActiveTime > 0)
+		{
+			sb.AppendLine();
+			sb.Append("<color=#a66ef5>Active Time: ");
+			sb.Append(ActiveTime);
 			sb.Append("</color>");
 		}
 		if (Cooldown > 0)

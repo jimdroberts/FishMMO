@@ -2,7 +2,7 @@
 
 public sealed class DamageHitEvent : HitEvent
 {
-	public int Amount = 10;
+	public int Amount;
 	public DamageAttributeTemplate DamageAttributeTemplate;
 
 	public override int Invoke(Character attacker, Character defender, TargetInfo hitTarget, GameObject abilityObject)

@@ -21,15 +21,17 @@ public class AbilityController : NetworkBehaviour
 
 	public Transform AbilitySpawner;
 	public Character Character;
-	public CharacterAttributeTemplate BloodResource;
-	public AbilityEvent BloodResourceConversion;
-	public AbilityEvent Charged;
-	public AbilityEvent Channeled;
+	public CharacterAttributeTemplate BloodResourceTemplate;
+	public CharacterAttributeTemplate AttackSpeedReductionTemplate;
+	public AbilityEvent BloodResourceConversionTemplate;
+	public AbilityEvent ChargedTemplate;
+	public AbilityEvent ChanneledTemplate;
 	public Action<float, float> OnUpdate;
 	// Invoked when the current ability is Interrupted.
 	public Action OnInterrupt;
 	// Invoked when the current ability is Cancelled.
 	public Action OnCancel;
+
 	public Dictionary<int, Ability> KnownAbilities { get; private set; }
 	public HashSet<int> KnownTemplates { get; private set; }
 	public HashSet<int> KnownSpawnEvents { get; private set; }
@@ -105,7 +107,7 @@ public class AbilityController : NetworkBehaviour
 						Cancel();
 					}
 					// channeled abilities like beam effects or a charge rush that are continuously updating or spawning objects should be handled here
-					else if (currentAbility.HasAbilityEvent(Channeled.ID))
+					else if (ChanneledTemplate != null && currentAbility.HasAbilityEvent(ChanneledTemplate.ID))
 					{
 						// generate a camera ray to use for targetting
 						Ray cameraRay = new Ray(Character.CharacterController.VirtualCameraPosition, Character.CharacterController.VirtualCameraRotation * Vector3.forward);
@@ -114,10 +116,10 @@ public class AbilityController : NetworkBehaviour
 						TargetInfo targetInfo = TargetController.GetTarget(Character.TargetController, cameraRay, currentAbility.Range);
 
 						// spawn the ability object
-						if (AbilityObject.TrySpawn(currentAbility, Character, AbilitySpawner, targetInfo))
+						if (AbilityObject.TrySpawn(currentAbility, Character, this, AbilitySpawner, targetInfo))
 						{
 							// channeled abilities consume resources during activation
-							currentAbility.ConsumeResources(Character.AttributeController, BloodResourceConversion, BloodResource);
+							currentAbility.ConsumeResources(Character.AttributeController, BloodResourceConversionTemplate, BloodResourceTemplate);
 						}
 					}
 				}
@@ -125,7 +127,7 @@ public class AbilityController : NetworkBehaviour
 			}
 
 			// this will allow for charged abilities to remain held for aiming purposes
-			if (currentAbility.HasAbilityEvent(Charged.ID) &&
+			if (ChargedTemplate != null && currentAbility.HasAbilityEvent(ChargedTemplate.ID) &&
 				heldKey != KeyCode.None &&
 				activationData.HeldKey != KeyCode.None)
 			{
@@ -142,10 +144,10 @@ public class AbilityController : NetworkBehaviour
 				TargetInfo targetInfo = TargetController.GetTarget(Character.TargetController, cameraRay, currentAbility.Range);
 
 				// spawn the ability object
-				if (AbilityObject.TrySpawn(currentAbility, Character, AbilitySpawner, targetInfo))
+				if (AbilityObject.TrySpawn(currentAbility, Character, this, AbilitySpawner, targetInfo))
 				{
 					// consume resources
-					currentAbility.ConsumeResources(Character.AttributeController, BloodResourceConversion, BloodResource);
+					currentAbility.ConsumeResources(Character.AttributeController, BloodResourceConversionTemplate, BloodResourceTemplate);
 
 					// add ability to cooldowns
 					AddCooldown(currentAbility);
@@ -161,7 +163,7 @@ public class AbilityController : NetworkBehaviour
 			interruptQueued = false;
 			currentAbility = validatedAbility;
 			remainingTime = validatedAbility.ActivationTime * CalculateSpeedReduction(validatedAbility.Template.ActivationSpeedReductionAttribute);
-			if (validatedAbility.HasAbilityEvent(Channeled.ID) || validatedAbility.HasAbilityEvent(Charged.ID))
+			if (validatedAbility.HasAbilityEvent(ChanneledTemplate.ID) || validatedAbility.HasAbilityEvent(ChargedTemplate.ID))
 			{
 				heldKey = activationData.HeldKey;
 			}
@@ -183,7 +185,7 @@ public class AbilityController : NetworkBehaviour
 		}
 	}
 
-	private float CalculateSpeedReduction(CharacterAttributeTemplate attribute)
+	public float CalculateSpeedReduction(CharacterAttributeTemplate attribute)
 	{
 		if (attribute != null)
 		{
@@ -233,7 +235,7 @@ public class AbilityController : NetworkBehaviour
 		return KnownAbilities.TryGetValue(ability.AbilityID, out Ability knownAbility) &&
 				!Character.CooldownController.IsOnCooldown(knownAbility.Template.Name) &&
 				knownAbility.MeetsRequirements(Character) &&
-				knownAbility.HasResource(Character, BloodResourceConversion, BloodResource);
+				knownAbility.HasResource(Character, BloodResourceConversionTemplate, BloodResourceTemplate);
 	}
 
 	internal void Cancel()
