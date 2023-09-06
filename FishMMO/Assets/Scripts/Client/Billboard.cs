@@ -1,6 +1,6 @@
 ﻿using UnityEngine;
 
-namespace Client
+namespace FishMMO.Client
 {
 	public sealed class Billboard : MonoBehaviour
 	{

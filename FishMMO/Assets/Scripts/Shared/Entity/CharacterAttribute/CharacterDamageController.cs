@@ -8,19 +8,28 @@ public class CharacterDamageController : NetworkBehaviour, IDamageable, IHealabl
 	public Character Character;
 
 	public bool Immortal = false;
-	public bool ShowDamage = true;
 
 	[Tooltip("The resource attribute the damage will be applied to.")]
 	public CharacterAttributeTemplate ResourceAttribute;
 
 	// subscribe to this event with Quests/Achievements that should update when the character is Damaged
-	public event Action<Character, int> OnDamaged;
+	public event Action<Character, Character, int> OnDamaged;
+
+#if !UNITY_SERVER || UNITY_EDITOR
+	public bool ShowDamage = true;
+	public event Action<Vector3, Color, float, string> OnDamageDisplay;
+#endif
 
 	// subscribe to this event with Quests/Achievements that should update when the character is Killed
 	public event Action<Character> OnKilled;
 
 	// subscribe to this event with Quests/Achievements that should update when the character is Healed
 	public event Action<Character, int> OnHealed;
+
+#if !UNITY_SERVER || UNITY_EDITOR
+	public bool ShowHeals = true;
+	public event Action<Vector3, Color, float, string> OnHealedDisplay;
+#endif
 
 	//public List<Character> Attackers;
 
@@ -66,13 +75,16 @@ public class CharacterDamageController : NetworkBehaviour, IDamageable, IHealabl
 			amount = ApplyModifiers(Character, amount, damageAttribute);
 			resourceInstance.Consume(amount);
 
-			// tell the client to display damage
-			if (IsClient && ShowDamage)
-			{
-				//UILabel3D.Create(amount.ToString(), 24, damageAttribute.DisplayColor, true, transform);
-			}
+			OnDamaged?.Invoke(attacker, Character, amount);
 
-			OnDamaged?.Invoke(attacker, amount);
+#if !UNITY_SERVER || UNITY_EDITOR
+			if (ShowDamage)
+			{
+				Vector3 displayPos = Character.transform.position;
+				displayPos.y += Character.CharacterController.FullCapsuleHeight;
+				OnDamageDisplay?.Invoke(displayPos, new Color(255.0f, 128.0f, 128.0f), 10.0f, amount.ToString());
+			}
+#endif
 
 			// check if we died
 			if (resourceInstance != null && resourceInstance.CurrentValue < 1)
@@ -146,11 +158,18 @@ public class CharacterDamageController : NetworkBehaviour, IDamageable, IHealabl
 	{
 		if (resourceInstance != null && resourceInstance.CurrentValue > 0.0f)
 		{
-			//UILabel3D.Create(amount.ToString(), 24, Color.blue, true, transform);
-
 			resourceInstance.Gain(amount);
 
 			OnHealed?.Invoke(healer, amount);
+
+#if !UNITY_SERVER || UNITY_EDITOR
+			if (ShowHeals)
+			{
+				Vector3 displayPos = Character.transform.position;
+				displayPos.y += Character.CharacterController.FullCapsuleHeight;
+				OnHealedDisplay?.Invoke(displayPos, new Color(128.0f, 255.0f, 128.0f), 10.0f, amount.ToString());
+			}
+#endif
 		}
 	}
 }

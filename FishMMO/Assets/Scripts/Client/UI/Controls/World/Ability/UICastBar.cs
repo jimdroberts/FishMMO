@@ -16,7 +16,7 @@ namespace FishMMO.Client
 		{
 		}
 
-		public void OnUpdate(float remainingTime, float totalTime)
+		public void OnUpdate(string label, float remainingTime, float totalTime)
 		{
 			if (!Visible)
 			{
@@ -25,7 +25,7 @@ namespace FishMMO.Client
 
 			float value = remainingTime / totalTime;
 			if (slider != null) slider.value = value;
-			if (castText != null) castText.text = remainingTime + "/" + totalTime;
+			if (castText != null) castText.text = label;
 		}
 
 		public void OnCancel()

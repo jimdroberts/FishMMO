@@ -12,6 +12,7 @@ public class Ability
 	public float Speed;
 
 	public AbilityTemplate Template { get; private set; }
+	public string Name { get; set; }
 	public AbilityResourceDictionary Resources { get; private set; }
 	public AbilityResourceDictionary Requirements { get; private set; }
 	// cache of all ability events
@@ -48,6 +49,7 @@ public class Ability
 		AbilityID = abilityID;
 		TemplateID = templateID;
 		Template = AbilityTemplate.Get<AbilityTemplate>(templateID);
+		Name = Template.Name;
 
 		InternalAddTemplateModifiers(Template);
 

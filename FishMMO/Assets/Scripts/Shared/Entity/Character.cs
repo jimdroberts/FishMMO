@@ -59,6 +59,7 @@ public class Character : NetworkBehaviour, IPooledResettable
 #if !UNITY_SERVER || UNITY_EDITOR
 	public LocalInputController LocalInputController;
 	public TextMeshPro CharacterNameLabel;
+	public LabelMaker LabelMaker;
 #endif
 	// accountID for reference
 	[SyncVar(Channel = Channel.Reliable)]
@@ -124,7 +125,20 @@ public class Character : NetworkBehaviour, IPooledResettable
 			localCharacter = this;
 
 #if !UNITY_SERVER || UNITY_EDITOR
-			LocalInputController = gameObject.AddComponent<LocalInputController>();
+			LocalInputController = gameObject.GetComponent<LocalInputController>();
+			if (LocalInputController == null)
+			{
+				LocalInputController = gameObject.AddComponent<LocalInputController>();
+			}
+			LabelMaker = gameObject.GetComponent<LabelMaker>();
+			if (DamageController != null)
+			{
+				if (LabelMaker != null)
+				{
+					DamageController.OnDamageDisplay += LabelMaker.Display;
+					DamageController.OnHealedDisplay += LabelMaker.Display;
+				}
+			}
 			if (UIManager.TryGet("UICastBar", out UICastBar uiCastBar))
 			{
 				AbilityController.OnUpdate += uiCastBar.OnUpdate;
@@ -144,6 +158,14 @@ public class Character : NetworkBehaviour, IPooledResettable
 			if (LocalInputController != null)
 			{
 				Destroy(LocalInputController);
+			}
+			if (DamageController != null)
+			{
+				if (LabelMaker != null)
+				{
+					DamageController.OnDamageDisplay -= LabelMaker.Display;
+					DamageController.OnHealedDisplay -= LabelMaker.Display;
+				}
 			}
 			if (UIManager.TryGet("UICastBar", out UICastBar uiCastBar))
 			{

@@ -142,6 +142,7 @@ GameObject:
   - component: {fileID: 1974367592072420653}
   - component: {fileID: 7975244870159263472}
   - component: {fileID: 4966316198463876083}
+  - component: {fileID: 1909551449255578268}
   - component: {fileID: 6038023079570568745}
   - component: {fileID: 4053032698712144203}
   m_Layer: 6
@@ -508,10 +509,11 @@ MonoBehaviour:
   _networkObjectCache: {fileID: 784751938054981284}
   AbilitySpawner: {fileID: 0}
   Character: {fileID: 0}
-  BloodResource: {fileID: 0}
-  BloodResourceConversion: {fileID: 0}
-  Charged: {fileID: 0}
-  Channeled: {fileID: 0}
+  BloodResourceTemplate: {fileID: 0}
+  AttackSpeedReductionTemplate: {fileID: 0}
+  BloodResourceConversionTemplate: {fileID: 0}
+  ChargedTemplate: {fileID: 0}
+  ChanneledTemplate: {fileID: 0}
 --- !u!114 &4374908933606738023
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -612,7 +614,22 @@ MonoBehaviour:
   Character: {fileID: 0}
   Immortal: 0
   ShowDamage: 1
+  ShowHeals: 1
   ResourceAttribute: {fileID: 11400000, guid: e5c10a046ee277f46a57ee2048ae5ec9, type: 2}
+--- !u!114 &1909551449255578268
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4573496687782621821}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 48a412bb5145d6a4489eb171727d5d59, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  LabelPrefab: {fileID: 1101973805684055076, guid: 30339dbf6301676479d2c51120c3c56b,
+    type: 3}
 --- !u!114 &6038023079570568745
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -644,6 +661,7 @@ MonoBehaviour:
   Motor: {fileID: 0}
   LocalInputController: {fileID: 0}
   CharacterNameLabel: {fileID: 2817084262407755495}
+  LabelMaker: {fileID: 0}
   ID: 0
   CharacterName: 
   Account: 

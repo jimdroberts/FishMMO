@@ -26,7 +26,7 @@ public class AbilityController : NetworkBehaviour
 	public AbilityEvent BloodResourceConversionTemplate;
 	public AbilityEvent ChargedTemplate;
 	public AbilityEvent ChanneledTemplate;
-	public Action<float, float> OnUpdate;
+	public Action<string, float, float> OnUpdate;
 	// Invoked when the current ability is Interrupted.
 	public Action OnInterrupt;
 	// Invoked when the current ability is Cancelled.
@@ -93,7 +93,7 @@ public class AbilityController : NetworkBehaviour
 				remainingTime -= (float)base.TimeManager.TickDelta;
 
 				// handle ability update here, display cast bar, display hitbox telegraphs, etc
-				OnUpdate?.Invoke(remainingTime, currentAbility.ActivationTime * CalculateSpeedReduction(currentAbility.Template.ActivationSpeedReductionAttribute));
+				OnUpdate?.Invoke(currentAbility.Name, remainingTime, currentAbility.ActivationTime * CalculateSpeedReduction(currentAbility.Template.ActivationSpeedReductionAttribute));
 
 				// handle held ability updates
 				if (heldKey != KeyCode.None)
