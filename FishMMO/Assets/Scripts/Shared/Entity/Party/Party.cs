@@ -4,14 +4,14 @@ public class Party
 {
 	public const int MAX_PARTY_SIZE = 5;
 
-	public ulong id;
+	public ulong ID;
 	public readonly List<PartyController> Members = new List<PartyController>();
 
 	public bool IsFull { get { return !(Members.Count < MAX_PARTY_SIZE);  } }
 
 	public Party(ulong partyId, PartyController leader)
 	{
-		id = partyId;
+		ID = partyId;
 		Members.Add(leader);
 	}
 

@@ -6,16 +6,15 @@ public class Buff
 	private float tickTime;
 	private List<BuffAttribute> attributeBonuses = new List<BuffAttribute>();
 	private List<Buff> stacks = new List<Buff>();
-	private BuffTemplate cachedTemplate;
 
 	public float RemainingTime;
-	public BuffTemplate Template { get { return cachedTemplate; } }
+	public BuffTemplate Template { get; private set; }
 	public List<BuffAttribute> AttributeBonuses { get { return attributeBonuses; } }
 	public List<Buff> Stacks { get { return stacks; } }
 
 	public Buff(int templateID)
 	{
-		this.cachedTemplate = BuffTemplate.Get<BuffTemplate>(templateID);
+		Template = BuffTemplate.Get<BuffTemplate>(templateID);
 		tickTime = Template.TickRate;
 		RemainingTime = Template.Duration;
 	}

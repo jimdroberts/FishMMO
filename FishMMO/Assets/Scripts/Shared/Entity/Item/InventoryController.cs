@@ -14,7 +14,7 @@ public class InventoryController : ItemContainer
 	{
 		base.OnStartClient();
 
-		if (Character == null || !base.IsOwner)
+		if (!base.IsOwner)
 		{
 			enabled = false;
 			return;
@@ -41,8 +41,7 @@ public class InventoryController : ItemContainer
 
 	public override bool CanManipulate()
 	{
-		if (!base.CanManipulate() ||
-			Character == null)
+		if (!base.CanManipulate())
 		{
 			return false;
 		}

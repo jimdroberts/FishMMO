@@ -1,15 +1,21 @@
 ﻿public class Achievement
 {
-	public int templateID;
+	public byte CurrentTier;
 	public uint CurrentValue;
 
-	private AchievementTemplate cachedTemplate;
-	public AchievementTemplate Template { get { return cachedTemplate; } }
+	public AchievementTemplate Template { get; private set; }
 
-	public Achievement(int templateID, uint Value)
+	public Achievement(int templateID)
 	{
-		this.templateID = templateID;
-		this.cachedTemplate = AchievementTemplate.Get<AchievementTemplate>(templateID);
-		this.CurrentValue = Value;
+		Template = AchievementTemplate.Get<AchievementTemplate>(templateID);
+		CurrentTier = 0;
+		CurrentValue = 0;
+	}
+
+	public Achievement(int templateID, byte tier, uint value)
+	{
+		Template = AchievementTemplate.Get<AchievementTemplate>(templateID);
+		CurrentTier = tier;
+		CurrentValue = value;
 	}
 }

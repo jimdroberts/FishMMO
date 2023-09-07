@@ -3,10 +3,7 @@ using System.Collections.Generic;
 
 public class CharacterAttribute
 {
-	public int templateID;
-
-	private CharacterAttributeTemplate cachedTemplate;
-	public CharacterAttributeTemplate Template { get { return cachedTemplate; } }
+	public CharacterAttributeTemplate Template { get; private set; }
 
 	private int baseValue;
 	private int modifier;
@@ -99,8 +96,7 @@ public class CharacterAttribute
 
 	public CharacterAttribute(int templateID, int initialValue, int initialModifier)
 	{
-		this.templateID = templateID;
-		this.cachedTemplate = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(templateID);
+		Template = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(templateID);
 		baseValue = initialValue;
 		modifier = initialModifier;
 		finalValue = CalculateFinalValue();

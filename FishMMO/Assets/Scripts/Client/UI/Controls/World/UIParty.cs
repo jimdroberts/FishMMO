@@ -99,19 +99,17 @@ namespace FishMMO.Client
 			Character character = Character.localCharacter;
 			if (character != null && character.PartyController.Current != null && Client.NetworkManager.IsClient)
 			{
-#if UNITY_CLIENT
-				if (character.TargetController.Current.target != null)
+				if (character.TargetController.Current.Target != null)
 				{
-					Character targetCharacter = character.TargetController.Current.target.GetComponent<Character>();
+					Character targetCharacter = character.TargetController.Current.Target.GetComponent<Character>();
 					if (targetCharacter != null)
 					{
 						Client.NetworkManager.ClientManager.Broadcast(new PartyInviteBroadcast()
 						{
-							targetCharacterId = targetCharacter.id
+							targetCharacterId = targetCharacter.ID
 						});
 					}
 				}
-#endif
 			}
 		}
 	}

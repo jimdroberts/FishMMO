@@ -23,6 +23,7 @@ namespace FishMMO.Client
 					label = Instantiate(LabelPrefab);
 				}
 				label.Initialize(position, color, persistTime, text);
+				label.gameObject.SetActive(true);
 			}
 		}
 
@@ -35,6 +36,7 @@ namespace FishMMO.Client
 
 			if (cache != null)
 			{
+				label.gameObject.SetActive(false);
 				cache.Enqueue(label);
 			}
 			else

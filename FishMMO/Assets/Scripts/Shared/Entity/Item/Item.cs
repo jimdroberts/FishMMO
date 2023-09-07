@@ -8,11 +8,9 @@ public class Item
 	public ItemStackable Stackable;
 
 	public event Action OnDestroy;
-
-	private BaseItemTemplate cachedTemplate;
-	public BaseItemTemplate Template { get { return cachedTemplate; } }
+	public BaseItemTemplate Template { get; private set; }
 	public ulong InstanceID { get; private set; }
-	public int TemplateID { get; private set; }
+	public int Slot { get; set; }
 	public bool IsGenerated { get { return Generator != null; } }
 	public bool IsEquippable { get { return Equippable != null; } }
 	public bool IsStackable { get { return Stackable != null; } }
@@ -20,24 +18,21 @@ public class Item
 	public Item(ulong instanceID, int templateID)
 	{
 		InstanceID = instanceID;
-		TemplateID = templateID;
-		this.cachedTemplate = BaseItemTemplate.Get<BaseItemTemplate>(templateID);
+		Template = BaseItemTemplate.Get<BaseItemTemplate>(templateID);
 
 		Initialize();
 	}
 	public Item(ulong instanceID, int templateID, uint amount)
 	{
 		InstanceID = instanceID;
-		TemplateID = templateID;
-		this.cachedTemplate = BaseItemTemplate.Get<BaseItemTemplate>(templateID);
+		Template = BaseItemTemplate.Get<BaseItemTemplate>(templateID);
 
 		Initialize(amount);
 	}
 	public Item(ulong instanceID, int templateID, uint amount, int seed)
 	{
 		InstanceID = instanceID;
-		TemplateID = templateID;
-		this.cachedTemplate = BaseItemTemplate.Get<BaseItemTemplate>(templateID);
+		Template = BaseItemTemplate.Get<BaseItemTemplate>(templateID);
 
 		Initialize(amount, seed, true);
 	}
@@ -88,7 +83,7 @@ public class Item
 
 	public bool IsMatch(Item other)
 	{
-		return TemplateID == other.TemplateID &&
+		return Template.ID == other.Template.ID &&
 				(IsGenerated && other.IsGenerated && Generator.Seed == other.Generator.Seed ||
 				!IsGenerated && !other.IsGenerated);
 	}

@@ -28,7 +28,7 @@ public class PartyController : NetworkBehaviour
 	{
 		base.OnStartClient();
 
-		if (Character == null || !base.IsOwner)
+		if (!base.IsOwner)
 		{
 			enabled = false;
 			return;

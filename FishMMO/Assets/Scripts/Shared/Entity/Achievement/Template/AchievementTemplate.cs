@@ -1,14 +1,10 @@
 ﻿using System.Collections.Generic;
+using UnityEngine;
 
-public abstract class AchievementTemplate : CachedScriptableObject<AchievementTemplate>
+[CreateAssetMenu(fileName = "New Achievement", menuName = "Item/Achievement/Achievement", order = 1)]
+public sealed class AchievementTemplate : CachedScriptableObject<AchievementTemplate>
 {
-	public uint InitialValue;
-	public uint MaxValue;
-	public string Description;
 	public List<AchievementTier> Tiers;
-	//public AudioEvent OnCompleteSounds;
-	public AchievementEventTemplate OnGainValue;
-	public AchievementEventTemplate OnComplete;
 
 	public string Name { get { return this.name; } }
 }

@@ -4,14 +4,14 @@ public class Guild
 {
 	public const int MAX_GUILD_SIZE = 100;
 
-	public ulong id;
+	public ulong ID;
 	public readonly List<GuildController> Members = new List<GuildController>();
 
 	public bool IsFull { get { return !(Members.Count < MAX_GUILD_SIZE); } }
 
 	public Guild(ulong guildId, GuildController leader)
 	{
-		id = guildId;
+		ID = guildId;
 		Members.Add(leader);
 	}
 

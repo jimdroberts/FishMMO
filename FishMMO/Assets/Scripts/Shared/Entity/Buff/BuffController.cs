@@ -13,7 +13,7 @@ public class BuffController : NetworkBehaviour
 	{
 		base.OnStartClient();
 
-		if (Character == null || !base.IsOwner)
+		if (!base.IsOwner)
 		{
 			enabled = false;
 			return;
@@ -129,7 +129,7 @@ public class BuffController : NetworkBehaviour
 	}
 
 	/// <summary>
-	/// Server sent a multiple buff add broadcasts.
+	/// Server sent a multiple buff add broadcast.
 	/// </summary>
 	private void OnClientBuffAddMultipleBroadcastReceived(BuffAddMultipleBroadcast msg)
 	{
@@ -156,7 +156,7 @@ public class BuffController : NetworkBehaviour
 	}
 
 	/// <summary>
-	/// Server sent a remove multiple buff add broadcasts.
+	/// Server sent a remove multiple buff add broadcast.
 	/// </summary>
 	private void OnClientBuffRemoveMultipleBroadcastReceived(BuffRemoveMultipleBroadcast msg)
 	{

@@ -123,7 +123,7 @@ public class CharacterAttributeController : NetworkBehaviour
 	}
 
 	/// <summary>
-	/// Server sent a multiple attribute update broadcasts.
+	/// Server sent a multiple attribute update broadcast.
 	/// </summary>
 	private void OnClientCharacterAttributeUpdateMultipleBroadcastReceived(CharacterAttributeUpdateMultipleBroadcast msg)
 	{

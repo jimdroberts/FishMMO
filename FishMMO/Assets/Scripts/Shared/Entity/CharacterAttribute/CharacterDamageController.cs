@@ -12,21 +12,19 @@ public class CharacterDamageController : NetworkBehaviour, IDamageable, IHealabl
 	[Tooltip("The resource attribute the damage will be applied to.")]
 	public CharacterAttributeTemplate ResourceAttribute;
 
-	// subscribe to this event with Quests/Achievements that should update when the character is Damaged
-	public event Action<Character, Character, int> OnDamaged;
+	public AchievementTemplate DamageAchievementTemplate;
+	public AchievementTemplate DamagedAchievementTemplate;
+	public AchievementTemplate KillAchievementTemplate;
+	public AchievementTemplate KilledAchievementTemplate;
+	public AchievementTemplate HealAchievementTemplate;
+	public AchievementTemplate HealedAchievementTemplate;
+	public AchievementTemplate ResurrectAchievementTemplate;
+	public AchievementTemplate ResurrectedAchievementTemplate;
 
 #if !UNITY_SERVER || UNITY_EDITOR
 	public bool ShowDamage = true;
 	public event Action<Vector3, Color, float, string> OnDamageDisplay;
-#endif
 
-	// subscribe to this event with Quests/Achievements that should update when the character is Killed
-	public event Action<Character> OnKilled;
-
-	// subscribe to this event with Quests/Achievements that should update when the character is Healed
-	public event Action<Character, int> OnHealed;
-
-#if !UNITY_SERVER || UNITY_EDITOR
 	public bool ShowHeals = true;
 	public event Action<Vector3, Color, float, string> OnHealedDisplay;
 #endif
@@ -38,8 +36,7 @@ public class CharacterDamageController : NetworkBehaviour, IDamageable, IHealabl
 	public override void OnStartClient()
 	{
 		base.OnStartClient();
-		if (Character == null ||
-			ResourceAttribute == null ||
+		if (ResourceAttribute == null ||
 			!Character.AttributeController.TryGetResourceAttribute(ResourceAttribute.Name, out this.resourceInstance))
 		{
 			throw new UnityException("Character Damage Controller ResourceAttribute is missing");
@@ -49,6 +46,28 @@ public class CharacterDamageController : NetworkBehaviour, IDamageable, IHealabl
 			enabled = false;
 			return;
 		}
+
+
+#if !UNITY_SERVER || UNITY_EDITOR
+		if (Character.LabelMaker != null)
+		{
+			OnDamageDisplay += Character.LabelMaker.Display;
+			OnHealedDisplay += Character.LabelMaker.Display;
+		}
+#endif
+	}
+
+	public override void OnStopClient()
+	{
+		base.OnStopClient();
+
+#if !UNITY_SERVER || UNITY_EDITOR
+		if (Character.LabelMaker != null)
+		{
+			OnDamageDisplay -= Character.LabelMaker.Display;
+			OnHealedDisplay -= Character.LabelMaker.Display;
+		}
+#endif
 	}
 
 	public int ApplyModifiers(Character target, int amount, DamageAttributeTemplate damageAttribute)
@@ -73,9 +92,14 @@ public class CharacterDamageController : NetworkBehaviour, IDamageable, IHealabl
 		if (resourceInstance != null && resourceInstance.CurrentValue > 0)
 		{
 			amount = ApplyModifiers(Character, amount, damageAttribute);
+			if (amount < 1)
+			{
+				return;
+			}
 			resourceInstance.Consume(amount);
 
-			OnDamaged?.Invoke(attacker, Character, amount);
+			attacker.AchievementController.Increment(DamageAchievementTemplate, (uint)amount);
+			Character.AchievementController.Increment(DamagedAchievementTemplate, (uint)amount);
 
 #if !UNITY_SERVER || UNITY_EDITOR
 			if (ShowDamage)
@@ -96,7 +120,8 @@ public class CharacterDamageController : NetworkBehaviour, IDamageable, IHealabl
 
 	public void Kill(Character killer)
 	{
-		OnKilled?.Invoke(killer);
+		killer.AchievementController.Increment(KillAchievementTemplate, 1);
+		Character.AchievementController.Increment(KilledAchievementTemplate, 1);
 
 		//UILabel3D.Create("DEAD!", 32, Color.red, true, transform);
 
@@ -160,7 +185,8 @@ public class CharacterDamageController : NetworkBehaviour, IDamageable, IHealabl
 		{
 			resourceInstance.Gain(amount);
 
-			OnHealed?.Invoke(healer, amount);
+			healer.AchievementController.Increment(HealAchievementTemplate, (uint)amount);
+			Character.AchievementController.Increment(HealedAchievementTemplate, (uint)amount);
 
 #if !UNITY_SERVER || UNITY_EDITOR
 			if (ShowHeals)

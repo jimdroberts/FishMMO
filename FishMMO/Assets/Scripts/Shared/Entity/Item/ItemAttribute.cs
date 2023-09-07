@@ -1,16 +1,12 @@
 ﻿public class ItemAttribute
 {
-	public int templateID;
-
-	private ItemAttributeTemplate cachedTemplate;
-	public ItemAttributeTemplate Template { get { return cachedTemplate; } }
+	public ItemAttributeTemplate Template { get; private set; }
 
 	public int value;
 
 	public ItemAttribute(int templateID, int value)
 	{
-		this.templateID = templateID;
-		this.cachedTemplate = ItemAttributeTemplate.Get<ItemAttributeTemplate>(templateID);
+		Template = ItemAttributeTemplate.Get<ItemAttributeTemplate>(templateID);
 		this.value = value;
 	}
 }

@@ -6,21 +6,17 @@ public class TargetController : MonoBehaviour
 	public const float MAX_TARGET_DISTANCE = 50.0f;
 	public const float TARGET_UPDATE_RATE = 1.0f;
 
-	public Character Character;
-	public LayerMask LayerMask;
-#if UNITY_CLIENT
+#if UNITY_CLIENT && !UNITY_EDITOR
 	private float nextTick = 0.0f;
 	//private UILabel3D targetLabel;
+#endif
 
+	public Character Character;
+	public LayerMask LayerMask;
 	public TargetInfo LastTarget;
 	public TargetInfo Current;
 
-	void Awake()
-	{
-		//targetLabel = UILabel3D.Create("", 32, transform);
-		//targetLabel.enabled = false;
-	}
-
+#if UNITY_CLIENT && !UNITY_EDITOR
 	void Update()
 	{
 		// update target label for the client
@@ -34,16 +30,17 @@ public class TargetController : MonoBehaviour
 
 			Current = GetTarget(this, ray, MAX_TARGET_DISTANCE);
 			// outline?
-			if (LastTarget.target != null && Current.target != null && LastTarget.target != Current.target)
+			if (LastTarget.Target != null && Current.Target != null && LastTarget.Target != Current.Target)
 			{
-				Outline previous = LastTarget.target.GetComponent<Outline>();
+				Outline previous = LastTarget.Target.GetComponent<Outline>();
 				if (previous != null)
 				{
+
 					//targetLabel.enabled = false;
 					previous.enabled = false;
 				}
 
-				Outline nextOutline = Current.target.GetComponent<Outline>();
+				Outline nextOutline = Current.Target.GetComponent<Outline>();
 				if (nextOutline != null)
 				{
 					//targetLabel.SetPosition(current.target.position);

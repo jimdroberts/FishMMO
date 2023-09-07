@@ -15,7 +15,7 @@ public class EquipmentController : ItemContainer
 	{
 		base.OnStartClient();
 
-		if (Character == null || !base.IsOwner)
+		if (!base.IsOwner)
 		{
 			enabled = false;
 			return;
@@ -38,8 +38,7 @@ public class EquipmentController : ItemContainer
 
 	public override bool CanManipulate()
 	{
-		if (!base.CanManipulate() ||
-			Character == null)
+		if (!base.CanManipulate())
 		{
 			return false;
 		}
@@ -84,18 +83,12 @@ public class EquipmentController : ItemContainer
 			prevItem.Equippable.Unequip();
 
 			// swap the items
-			if (Character.InventoryController != null)
-			{
-				Character.InventoryController.SetItemSlot(prevItem, inventoryIndex);
-			}
+			Character.InventoryController.SetItemSlot(prevItem, inventoryIndex);
 		}
 		else
 		{
 			// remove the item from the inventory
-			if (Character.InventoryController != null)
-			{
-				Character.InventoryController.RemoveItem(inventoryIndex);
-			}
+			Character.InventoryController.RemoveItem(inventoryIndex);
 		}
 
 		// put the new item in the correct slot
@@ -123,8 +116,7 @@ public class EquipmentController : ItemContainer
 		}
 
 		// see if we can add the item back to our inventory
-		if (Character.InventoryController != null &&
-			!Character.InventoryController.CanAddItem(item))
+		if (!Character.InventoryController.CanAddItem(item))
 		{
 			return false;
 		}
@@ -139,10 +131,7 @@ public class EquipmentController : ItemContainer
 		}
 
 		// try to add the item back to the inventory
-		if (Character.InventoryController != null)
-		{
-			Character.InventoryController.TryAddItem(item, out List<Item> modifiedItems);
-		}
+		Character.InventoryController.TryAddItem(item, out List<Item> modifiedItems);
 
 		return true;
 	}
@@ -152,13 +141,9 @@ public class EquipmentController : ItemContainer
 	/// </summary>
 	private void OnClientEquipmentEquipItemBroadcastReceived(EquipmentEquipItemBroadcast msg)
 	{
-		InventoryController inventory = Character.InventoryController;
-		if (inventory != null)
+		if (Character.InventoryController.TryGetItem(msg.inventoryIndex, out Item item))
 		{
-			if (inventory.TryGetItem(msg.inventoryIndex, out Item item))
-			{
-				Equip(item, msg.inventoryIndex, (ItemSlot)msg.slot);
-			}
+			Equip(item, msg.inventoryIndex, (ItemSlot)msg.slot);
 		}
 	}
 

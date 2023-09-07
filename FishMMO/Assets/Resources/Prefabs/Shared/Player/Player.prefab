@@ -613,9 +613,9 @@ MonoBehaviour:
   _networkObjectCache: {fileID: 784751938054981284}
   Character: {fileID: 0}
   Immortal: 0
+  ResourceAttribute: {fileID: 11400000, guid: e5c10a046ee277f46a57ee2048ae5ec9, type: 2}
   ShowDamage: 1
   ShowHeals: 1
-  ResourceAttribute: {fileID: 11400000, guid: e5c10a046ee277f46a57ee2048ae5ec9, type: 2}
 --- !u!114 &1909551449255578268
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -782,7 +782,7 @@ PrefabInstance:
     - target: {fileID: 4213452809119816545, guid: 2de080fd835ec6747b1b1ff8ed6870f6,
         type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: 1.75
+      value: 2
       objectReference: {fileID: 0}
     - target: {fileID: 4213452809119816545, guid: 2de080fd835ec6747b1b1ff8ed6870f6,
         type: 3}

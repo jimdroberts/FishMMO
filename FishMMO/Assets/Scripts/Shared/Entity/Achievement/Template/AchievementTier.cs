@@ -3,7 +3,10 @@
 [Serializable]
 public class AchievementTier
 {
-	public double MaxValue;
+	public string Description;
+	public uint MaxValue;
 	public string TierCompleteMessage;
-	public BaseItemTemplate[] Rewards;
+	//public AudioEvent CompleteSound;
+	public BaseItemTemplate[] ItemRewards;
+	public BuffTemplate[] BuffRewards;
 }

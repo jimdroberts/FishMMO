@@ -48,11 +48,10 @@ namespace FishMMO.Client
 			// we can interact with things as long as the UI doesn't have focus
 			if (!UIManager.ControlHasFocus() && InputManager.GetKeyDown("Interact"))
 			{
-#if UNITY_CLIENT
 				Character character = Character.localCharacter;
 				if (character != null)
 				{
-					Transform target = character.TargetController.Current.target;
+					Transform target = character.TargetController.Current.Target;
 					if (target != null)
 					{
 						IInteractable interactable = target.GetComponent<IInteractable>();
@@ -62,7 +61,6 @@ namespace FishMMO.Client
 						}
 					}
 				}
-#endif
 			}
 			else // UI windows should be able to open/close freely
 			{

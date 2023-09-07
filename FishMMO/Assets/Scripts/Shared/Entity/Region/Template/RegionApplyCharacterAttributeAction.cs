@@ -5,7 +5,7 @@ public class RegionApplyCharacterAttributeAction : RegionAction
 
 	public override void Invoke(Character character, Region region)
 	{
-		if (attribute == null || character == null || character.AttributeController == null)
+		if (attribute == null || character == null)
 		{
 			return;
 		}

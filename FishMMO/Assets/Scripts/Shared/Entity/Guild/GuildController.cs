@@ -28,7 +28,7 @@ public class GuildController : NetworkBehaviour
 	{
 		base.OnStartClient();
 
-		if (Character == null || !base.IsOwner)
+		if (!base.IsOwner)
 		{
 			enabled = false;
 			return;

@@ -1,4 +1,6 @@
-﻿using FishMMO.Client;
+﻿#if UNITY_CLIENT
+using FishMMO.Client;
+#endif
 using FishNet;
 using FishNet.Object;
 using FishNet.Object.Prediction;
@@ -47,6 +49,14 @@ public class AbilityController : NetworkBehaviour
 		if (InstanceFinder.TimeManager != null)
 		{
 			InstanceFinder.TimeManager.OnTick += TimeManager_OnTick;
+
+#if UNITY_CLIENT
+			if (UIManager.TryGet("UICastBar", out UICastBar uiCastBar))
+			{
+				OnUpdate += uiCastBar.OnUpdate;
+				OnCancel += uiCastBar.OnCancel;
+			}
+#endif
 		}
 	}
 
@@ -57,6 +67,14 @@ public class AbilityController : NetworkBehaviour
 		if (InstanceFinder.TimeManager != null)
 		{
 			InstanceFinder.TimeManager.OnTick -= TimeManager_OnTick;
+
+#if UNITY_CLIENT
+			if (UIManager.TryGet("UICastBar", out UICastBar uiCastBar))
+			{
+				OnUpdate -= uiCastBar.OnUpdate;
+				OnCancel -= uiCastBar.OnCancel;
+			}
+#endif
 		}
 	}
 
@@ -205,11 +223,13 @@ public class AbilityController : NetworkBehaviour
 
 	public void Activate(int referenceID, KeyCode heldKey)
 	{
+#if UNITY_CLIENT
 		// validate UI controls are focused so we aren't casting spells when hovering over interfaces.
 		if (!UIManager.ControlHasFocus() && !UIManager.InputControlHasFocus() && !InputManager.MouseMode)
 		{
 			return;
 		}
+#endif
 
 		if (!IsActivating && !interruptQueued)
 		{
@@ -252,7 +272,7 @@ public class AbilityController : NetworkBehaviour
 	internal void AddCooldown(Ability ability)
 	{
 		AbilityTemplate currentAbilityTemplate = ability.Template;
-		if (Character.CooldownController != null && ability.Cooldown > 0.0f)
+		if (ability.Cooldown > 0.0f)
 		{
 			float cooldownReduction = CalculateSpeedReduction(currentAbilityTemplate.CooldownReductionAttribute);
 			float cooldown = ability.Cooldown * cooldownReduction;

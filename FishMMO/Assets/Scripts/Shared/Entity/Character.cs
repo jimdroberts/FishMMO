@@ -1,5 +1,6 @@
 ﻿#if !UNITY_SERVER || UNITY_EDITOR
 using FishMMO.Client;
+using TMPro;
 #endif
 using FishNet.Component.Prediction;
 using FishNet.Component.Transforming;
@@ -9,7 +10,6 @@ using FishNet.Transporting;
 using KinematicCharacterController;
 using KinematicCharacterController.Examples;
 using UnityEngine;
-using TMPro;
 using System;
 using Shared;
 
@@ -56,8 +56,10 @@ public class Character : NetworkBehaviour, IPooledResettable
 	public GuildController GuildController;
 	public PartyController PartyController;
 	public KinematicCharacterMotor Motor;
-#if !UNITY_SERVER || UNITY_EDITOR
+#if UNITY_CLIENT
 	public LocalInputController LocalInputController;
+#endif
+#if !UNITY_SERVER || UNITY_EDITOR
 	public TextMeshPro CharacterNameLabel;
 	public LabelMaker LabelMaker;
 #endif
@@ -71,7 +73,7 @@ public class Character : NetworkBehaviour, IPooledResettable
 	public string CharacterName;
 	private void OnCharacterNameChanged(string prev, string next, bool asServer)
 	{
-#if !UNITY_SERVER || UNITY_EDITOR
+#if UNITY_CLIENT
 		gameObject.name = next;
 
 		if (CharacterNameLabel != null)
@@ -106,6 +108,7 @@ public class Character : NetworkBehaviour, IPooledResettable
 		AbilityController = gameObject.GetComponent<AbilityController>();
 		AbilityController.Character = this;
 		AchievementController = gameObject.GetComponent<AchievementController>();
+		AchievementController.Character = this;
 		BuffController = gameObject.GetComponent<BuffController>();
 		BuffController.Character = this;
 		QuestController = gameObject.GetComponent<QuestController>();
@@ -124,26 +127,16 @@ public class Character : NetworkBehaviour, IPooledResettable
 		{
 			localCharacter = this;
 
-#if !UNITY_SERVER || UNITY_EDITOR
+#if UNITY_CLIENT
 			LocalInputController = gameObject.GetComponent<LocalInputController>();
 			if (LocalInputController == null)
 			{
 				LocalInputController = gameObject.AddComponent<LocalInputController>();
 			}
+#endif
+
+#if !UNITY_SERVER || UNITY_EDITOR
 			LabelMaker = gameObject.GetComponent<LabelMaker>();
-			if (DamageController != null)
-			{
-				if (LabelMaker != null)
-				{
-					DamageController.OnDamageDisplay += LabelMaker.Display;
-					DamageController.OnHealedDisplay += LabelMaker.Display;
-				}
-			}
-			if (UIManager.TryGet("UICastBar", out UICastBar uiCastBar))
-			{
-				AbilityController.OnUpdate += uiCastBar.OnUpdate;
-				AbilityController.OnCancel += uiCastBar.OnCancel;
-			}
 #endif
 		}
 	}
@@ -154,23 +147,11 @@ public class Character : NetworkBehaviour, IPooledResettable
 		if (base.IsOwner)
 		{
 			localCharacter = null;
-#if !UNITY_SERVER || UNITY_EDITOR
+
+#if UNITY_CLIENT
 			if (LocalInputController != null)
 			{
 				Destroy(LocalInputController);
-			}
-			if (DamageController != null)
-			{
-				if (LabelMaker != null)
-				{
-					DamageController.OnDamageDisplay -= LabelMaker.Display;
-					DamageController.OnHealedDisplay -= LabelMaker.Display;
-				}
-			}
-			if (UIManager.TryGet("UICastBar", out UICastBar uiCastBar))
-			{
-				AbilityController.OnUpdate -= uiCastBar.OnUpdate;
-				AbilityController.OnCancel -= uiCastBar.OnCancel;
 			}
 #endif
 		}
@@ -192,9 +173,6 @@ public class Character : NetworkBehaviour, IPooledResettable
 		SceneHandle = 0;
 		LastChatMessage = "";
 		NextChatMessageTime = DateTime.UtcNow;
-		if (Motor != null)
-		{
-			Motor.SetPositionAndRotationAndVelocity(Vector3.zero, Quaternion.identity, Vector3.zero);
-		}
+		Motor.SetPositionAndRotationAndVelocity(Vector3.zero, Quaternion.identity, Vector3.zero);
 	}
 }

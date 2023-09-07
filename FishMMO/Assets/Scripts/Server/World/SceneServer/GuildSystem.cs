@@ -72,12 +72,12 @@ namespace FishMMO.Server
 			}
 
 			Guild newGuild = new Guild(guildId, guildController);
-			guilds.Add(newGuild.id, newGuild);
+			guilds.Add(newGuild.ID, newGuild);
 			guildController.Rank = GuildRank.Leader;
 			guildController.Current = newGuild;
 
 			// tell the character we made their guild successfully
-			conn.Broadcast(new GuildCreateBroadcast() { guildId = newGuild.id });
+			conn.Broadcast(new GuildCreateBroadcast() { guildId = newGuild.ID });
 		}
 
 		public void OnServerGuildInviteBroadcastReceived(NetworkConnection conn, GuildInviteBroadcast msg)
@@ -110,7 +110,7 @@ namespace FishMMO.Server
 				}
 
 				// add to our list of pending invitations... used for validation when accepting/declining a guild invite
-				pendingInvitations.Add(targetCharacter.ID, leaderGuildController.Current.id);
+				pendingInvitations.Add(targetCharacter.ID, leaderGuildController.Current.ID);
 				targetCharacter.Owner.Broadcast(new GuildInviteBroadcast() { targetCharacterId = targetCharacter.ID });
 			}
 		}
@@ -189,7 +189,7 @@ namespace FishMMO.Server
 			}
 
 			// validate guild
-			if (guilds.TryGetValue(guildController.Current.id, out Guild guild))
+			if (guilds.TryGetValue(guildController.Current.ID, out Guild guild))
 			{
 				if (guildController.Rank == GuildRank.Leader)
 				{
@@ -197,7 +197,7 @@ namespace FishMMO.Server
 					if (guild.Members.Count - 1 < 1)
 					{
 						guild.Members.Clear();
-						guilds.Remove(guild.id);
+						guilds.Remove(guild.ID);
 
 						guildController.Rank = GuildRank.None;
 						guildController.Current = null;
@@ -253,7 +253,7 @@ namespace FishMMO.Server
 			}
 
 			// validate guild
-			if (guilds.TryGetValue(guildController.Current.id, out Guild guild))
+			if (guilds.TryGetValue(guildController.Current.ID, out Guild guild))
 			{
 				GuildController removedMember = guildController.Current.RemoveMember(msg.memberId);
 				if (removedMember != null)

@@ -199,6 +199,7 @@ public abstract class ItemContainer : NetworkBehaviour
 		}
 
 		Items[slot] = item;
+		item.Slot = slot;
 		OnSlotUpdated?.Invoke(this, item, slot);
 		return true;
 	}
@@ -240,6 +241,7 @@ public abstract class ItemContainer : NetworkBehaviour
 		}
 
 		Item item = Items[slot];
+		item.Slot = -1;
 		SetItemSlot(null, slot);
 		return item;
 	}

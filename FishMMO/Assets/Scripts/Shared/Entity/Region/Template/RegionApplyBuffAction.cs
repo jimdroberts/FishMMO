@@ -4,7 +4,7 @@ public class RegionApplyBuffAction : RegionAction
 
 	public override void Invoke(Character character, Region region)
 	{
-		if (buff == null || character == null || character.BuffController == null)
+		if (buff == null || character == null)
 		{
 			return;
 		}

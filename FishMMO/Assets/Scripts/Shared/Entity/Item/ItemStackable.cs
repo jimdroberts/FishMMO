@@ -29,7 +29,7 @@
 
 		if (Amount < 1) return false; // item no longer exists?
 
-		if (item.TemplateID != other.TemplateID) return false;
+		if (item.Template.ID != other.Template.ID) return false;
 
 		// the item seeds must match
 		if (!item.IsMatch(other))
@@ -58,7 +58,7 @@
 
 		if (Amount < 1) return false; // this should have been an empty slot!
 
-		if (item.TemplateID != other.TemplateID) return false;
+		if (item.Template.ID != other.Template.ID) return false;
 
 		// the item seeds must match
 		if (!item.IsMatch(other))

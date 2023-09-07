@@ -4,7 +4,6 @@ using System.Text;
 public class Ability
 {
 	public int AbilityID;
-	public int TemplateID;
 	public float ActivationTime;
 	public float ActiveTime;
 	public float Cooldown;
@@ -47,7 +46,6 @@ public class Ability
 	public Ability(int abilityID, int templateID, List<AbilityEvent> events)
 	{
 		AbilityID = abilityID;
-		TemplateID = templateID;
 		Template = AbilityTemplate.Get<AbilityTemplate>(templateID);
 		Name = Template.Name;
 
@@ -338,7 +336,7 @@ public class Ability
 		sb.Append("</color>");
 		sb.AppendLine();
 		sb.Append("<color=#a66ef5>TemplateID: ");
-		sb.Append(TemplateID);
+		sb.Append(Template.ID);
 		sb.Append("</color>");
 		sb.AppendLine();
 		sb.Append("<color=#a66ef5>Activation Time: ");
