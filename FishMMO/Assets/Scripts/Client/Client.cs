@@ -3,6 +3,7 @@ using FishNet.Transporting;
 using FishNet.Managing.Scened;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Text.RegularExpressions;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -19,11 +20,10 @@ namespace FishMMO.Client
 	public class Client : MonoBehaviour
 	{
 		private LocalConnectionState clientState = LocalConnectionState.Stopped;
-
-		public List<ServerAddress> LoginServerAddresses;
-
 		private Dictionary<string, Scene> serverLoadedScenes = new Dictionary<string, Scene>();
 
+		public List<ServerAddress> LoginServerAddresses;
+		public Configuration Configuration = null;
 		public event Action OnConnectionSuccessful;
 		public event Action<byte, byte> OnReconnectAttempt;
 		public event Action OnReconnectFailed;
@@ -66,6 +66,32 @@ namespace FishMMO.Client
 			}
 			else
 			{
+#if UNITY_EDITOR
+				string path = Directory.GetParent(Directory.GetParent(Application.dataPath).FullName).FullName;
+#else
+				string path = AppDomain.CurrentDomain.BaseDirectory;
+
+#endif
+				// load configuration
+				Configuration = new Configuration(path);
+				if (!Configuration.Load(Configuration.DEFAULT_FILENAME + Configuration.EXTENSION))
+				{
+					// if we failed to load the file.. save a new one
+					Configuration.Set("Resolution Width", 1280);
+					Configuration.Set("Resolution Height", 800);
+					Configuration.Set("Refresh Rate", 60);
+					Configuration.Set("Fullscreen", false);
+					Configuration.Save();
+				}
+
+				if (Configuration.TryGetInt("Resolution Width", out int width) &&
+					Configuration.TryGetInt("Resolution Height", out int height) &&
+					Configuration.TryGetInt("Refresh Rate", out int refreshRate) &&
+					Configuration.TryGetBool("Fullscreen", out bool fullscreen))
+				{
+					Screen.SetResolution(width, height, fullscreen ? FullScreenMode.ExclusiveFullScreen : FullScreenMode.Windowed, refreshRate);
+				}
+				
 				// do dependency injection here if needed
 				UIManager.SetClient(this);
 
