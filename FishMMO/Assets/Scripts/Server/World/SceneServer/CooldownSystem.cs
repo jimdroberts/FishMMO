@@ -41,7 +41,7 @@ namespace FishMMO.Server
 				{
 					nextSave = saveRate;
 					
-					Debug.Log("[" + DateTime.UtcNow + "] CharacterInventoryManager: Save");
+					Debug.Log("CharacterInventoryManager: Save" + "[" + DateTime.UtcNow + "]");
 
 					// all characters inventories are periodically saved
 					// TODO: create an InventoryService with a save inventories function

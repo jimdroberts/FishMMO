@@ -6,7 +6,7 @@ public class TargetController : MonoBehaviour
 	public const float MAX_TARGET_DISTANCE = 50.0f;
 	public const float TARGET_UPDATE_RATE = 1.0f;
 
-#if UNITY_CLIENT && !UNITY_EDITOR
+#if !UNITY_SERVER
 	private float nextTick = 0.0f;
 	//private UILabel3D targetLabel;
 #endif
@@ -16,7 +16,7 @@ public class TargetController : MonoBehaviour
 	public TargetInfo LastTarget;
 	public TargetInfo Current;
 
-#if UNITY_CLIENT && !UNITY_EDITOR
+#if !UNITY_SERVER
 	void Update()
 	{
 		// update target label for the client

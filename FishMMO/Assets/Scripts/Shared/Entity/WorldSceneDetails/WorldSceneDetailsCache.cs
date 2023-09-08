@@ -31,10 +31,10 @@ public class WorldSceneDetailsCache : ScriptableObject
 #if UNITY_EDITOR
 		if (EditorSceneManager.GetActiveScene().path.Contains(WORLD_SCENE_PATH))
 		{
-			Debug.Log("[" + DateTime.UtcNow + "] WorldSceneDetails: Unable to rebuild scene details while a WorldScene is open. Load a bootstrap scene instead! TODO: Automate");
+			Debug.Log("WorldSceneDetails: Unable to rebuild scene details while a WorldScene is open. Load a bootstrap scene instead! TODO: Automate");
 			return false;
 		}
-		Debug.Log("[" + DateTime.UtcNow + "] WorldSceneDetails: Rebuilding");
+		Debug.Log("WorldSceneDetails: Rebuilding");
 
 		// Keep track of teleporter sprites
 		Dictionary<string, Dictionary<string, Sprite>> teleporterSpriteCache = new Dictionary<string, Dictionary<string, Sprite>>();
@@ -75,7 +75,7 @@ public class WorldSceneDetailsCache : ScriptableObject
 			{
 				if (!Scenes.ContainsKey(s.name))
 				{
-					Debug.Log("[" + DateTime.UtcNow + "] WorldSceneDetails: Scene Loaded: [" + s.name + "]");
+					Debug.Log("WorldSceneDetails: Scene Loaded[" + s.name + "]");
 
 					// add the scene to our world scenes list
 					WorldSceneDetails sceneDetails = new WorldSceneDetails();
@@ -85,7 +85,7 @@ public class WorldSceneDetailsCache : ScriptableObject
 					GameObject[] initialSpawns = GameObject.FindGameObjectsWithTag(InitialSpawnTag);
 					foreach (GameObject obj in initialSpawns)
 					{
-						Debug.Log("[" + DateTime.UtcNow + "] WorldSceneDetails: Found new InitialSpawnPosition: [" + obj.name + " Pos:" + obj.transform.position + " Rot:" + obj.transform.rotation + "]");
+						Debug.Log("WorldSceneDetails: Found new InitialSpawnPosition[" + obj.name + " Pos:" + obj.transform.position + " Rot:" + obj.transform.rotation + "]");
 
 						sceneDetails.InitialSpawnPositions.Add(obj.name, new CharacterInitialSpawnPosition()
 						{
@@ -100,7 +100,7 @@ public class WorldSceneDetailsCache : ScriptableObject
 					GameObject[] respawnPositions = GameObject.FindGameObjectsWithTag(RespawnTag);
 					foreach (GameObject obj in respawnPositions)
 					{
-						Debug.Log("[" + DateTime.UtcNow + "] WorldSceneDetails: Found new RespawnPosition: [" + obj.name + " " + obj.transform.position + "]");
+						Debug.Log("WorldSceneDetails: Found new RespawnPosition[" + obj.name + " " + obj.transform.position + "]");
 
 						sceneDetails.RespawnPositions.Add(obj.name, obj.transform.position);
 					}
@@ -109,7 +109,7 @@ public class WorldSceneDetailsCache : ScriptableObject
 					IBoundary[] sceneBoundaries = GameObject.FindObjectsOfType<IBoundary>();
 					foreach (IBoundary obj in sceneBoundaries)
 					{
-						Debug.Log($"[{DateTime.UtcNow}] WorldSceneDetails: Found new boundary: [Name: {obj.name}, Center: {obj.GetBoundaryOffset()}, Size: {obj.GetBoundarySize()}]");
+						Debug.Log($"WorldSceneDetails: Found new Boundary[Name: {obj.name}, Center: {obj.GetBoundaryOffset()}, Size: {obj.GetBoundarySize()}]");
 
 						sceneDetails.Boundaries.Add(obj.name, new SceneBoundaryDetails()
 						{
@@ -143,7 +143,7 @@ public class WorldSceneDetailsCache : ScriptableObject
 					{
 						string teleporterDestinationName = obj.name.Trim();
 
-						Debug.Log("[" + DateTime.UtcNow + "] WorldSceneDetails: Found new TeleporterDestination: [Destination:" + teleporterDestinationName + " " + obj.transform.position + "]");
+						Debug.Log("WorldSceneDetails: Found new TeleporterDestination[Destination:" + teleporterDestinationName + " " + obj.transform.position + "]");
 
 						teleporterDestinationCache.Add(teleporterDestinationName, new TeleporterDestinationDetails()
 						{
@@ -152,14 +152,14 @@ public class WorldSceneDetailsCache : ScriptableObject
 						});
 					}
 
-					Debug.Log("[" + DateTime.UtcNow + "] WorldSceneDetails Scene Unloaded: [" + s.name + "]");
+					Debug.Log("WorldSceneDetails Scene Unloaded[" + s.name + "]");
 				}
 			}
 			// unload the scene
 			EditorSceneManager.CloseScene(s, true);
 		}
 
-		Debug.Log("[" + DateTime.UtcNow + "] WorldSceneDetails: Connecting teleporters...");
+		Debug.Log("WorldSceneDetails: Connecting teleporters...");
 
 		// assign teleporter destination positions
 		foreach (KeyValuePair<string, Dictionary<string, SceneTeleporterDetails>> teleporterDetailsPair in teleporterCache)
@@ -182,14 +182,14 @@ public class WorldSceneDetailsCache : ScriptableObject
 							}
 						}
 
-						Debug.Log("[" + DateTime.UtcNow + "] WorldSceneDetails: Teleporter [" + pair.Key + "] connected to: [Scene:" + destination.Scene + " " + pair.Value.ToPosition + "]");
+						Debug.Log("WorldSceneDetails: Teleporter[" + pair.Key + "] connected to: Scene[" + destination.Scene + " " + pair.Value.ToPosition + "]");
 
 						sceneDetails.Teleporters.Add(pair.Key, pair.Value);
 					}
 				}
 			}
 		}
-		Debug.Log("[" + DateTime.UtcNow + "] WorldSceneDetails: Rebuild Complete");
+		Debug.Log("WorldSceneDetails: Rebuild Complete");
 #endif
 		return true;
 	}

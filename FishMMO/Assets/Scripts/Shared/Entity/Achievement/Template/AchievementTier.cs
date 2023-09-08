@@ -9,4 +9,6 @@ public class AchievementTier
 	//public AudioEvent CompleteSound;
 	public BaseItemTemplate[] ItemRewards;
 	public BuffTemplate[] BuffRewards;
+	//public string[] TitleRewards;
+	//public AbilityTemplate[] AbilityRewards;
 }

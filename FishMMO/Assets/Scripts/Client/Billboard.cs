@@ -4,6 +4,7 @@ namespace FishMMO.Client
 {
 	public sealed class Billboard : MonoBehaviour
 	{
+#if !UNITY_SERVER
 		private Camera Camera;
 
 		public bool PivotYAxis = false;
@@ -38,5 +39,6 @@ namespace FishMMO.Client
 			Camera = target;
 			Transform = Camera.transform;
 		}
+#endif
 	}
 }

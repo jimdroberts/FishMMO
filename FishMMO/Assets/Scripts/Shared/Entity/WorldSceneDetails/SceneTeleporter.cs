@@ -1,14 +1,13 @@
 using FishNet.Object;
 using UnityEngine;
-using System;
-#if UNITY_SERVER || UNITY_EDITOR
+#if UNITY_SERVER
 using FishMMO.Server;
 using FishMMO.Server.Services;
 #endif
 
 public class SceneTeleporter : MonoBehaviour
 {
-#if UNITY_SERVER || UNITY_EDITOR
+#if UNITY_SERVER
 	private SceneServerSystem sceneServerSystem;
 
 	void Awake()
@@ -53,7 +52,7 @@ public class SceneTeleporter : MonoBehaviour
 					CharacterService.SaveCharacter(dbContext, character, false);
 					dbContext.SaveChanges();
 
-					Debug.Log("[" + DateTime.UtcNow + "] " + character.CharacterName + " has been saved at: " + character.Transform.position.ToString());
+					Debug.Log(character.CharacterName + " has been saved at: " + character.Transform.position.ToString());
 
 					// tell the client to reconnect to the world server for automatic re-entry
 					character.Owner.Broadcast(new SceneWorldReconnectBroadcast()

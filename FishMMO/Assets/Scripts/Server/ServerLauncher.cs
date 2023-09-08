@@ -40,7 +40,7 @@ namespace FishMMO.Server
 
 		private void Close()
 		{
-			Debug.Log("[" + DateTime.UtcNow + "] ServerLauncher: Unknown server type. Available servers {Login, World, Scene}");
+			Debug.Log("ServerLauncher: Unknown server type. Available servers {Login, World, Scene}");
 #if UNITY_EDITOR
 			EditorApplication.ExitPlaymode();
 #else

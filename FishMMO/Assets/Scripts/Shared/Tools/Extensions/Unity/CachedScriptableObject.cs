@@ -42,7 +42,7 @@ public abstract class CachedScriptableObject<T> : ScriptableObject where T : Cac
 					if (!cache.ContainsKey(resource.ID))
 					{
 						cache.Add(resource.ID, resource);
-						Debug.Log("[" + DateTime.UtcNow + "] CachedScriptableObject Loaded [" + t.Name + " " + resource.name + " ID:" + resource.ID + "]");
+						Debug.Log("CachedScriptableObject: Loaded[" + t.Name + " " + resource.name + " ID:" + resource.ID + "]");
 					}
 					else
 					{
@@ -66,7 +66,7 @@ public abstract class CachedScriptableObject<T> : ScriptableObject where T : Cac
 			{
 				if (resource != null)
 				{
-					Debug.Log("[" + DateTime.UtcNow + "] CachedScriptableObject Unloaded [" + t.Name + " " + resource.name + " ID:" + resource.ID + "]");
+					Debug.Log("CachedScriptableObject: Unloaded[" + t.Name + " " + resource.name + " ID:" + resource.ID + "]");
 					Resources.UnloadAsset(resource);
 				}
 				cache.Remove(resource.ID);

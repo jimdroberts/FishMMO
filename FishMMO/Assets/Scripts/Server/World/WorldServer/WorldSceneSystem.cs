@@ -196,7 +196,7 @@ namespace FishMMO.Server
 		/// </summary>
 		private void OnServerScenePulseBroadcastReceived(NetworkConnection conn, ScenePulseBroadcast msg)
 		{
-			Debug.Log("[" + DateTime.UtcNow + "] Pulse Received from " + msg.name + ":" + conn.GetAddress());
+			Debug.Log("Pulse Received from " + msg.name + ":" + conn.GetAddress());
 
 			//set sceneservers last pulse time
 			if (SceneServers.TryGetValue(conn, out SceneServerDetails details))
@@ -213,7 +213,7 @@ namespace FishMMO.Server
 		/// </summary>
 		private void OnServerSceneServerDetailsBroadcast(NetworkConnection conn, SceneServerDetailsBroadcast msg)
 		{
-			Debug.Log("[" + DateTime.UtcNow + "] SceneServer Details Received from " + msg.address + ":" + msg.port);
+			Debug.Log("SceneServer Details Received from " + msg.address + ":" + msg.port);
 
 			if (SceneServers.TryGetValue(conn, out SceneServerDetails details))
 			{

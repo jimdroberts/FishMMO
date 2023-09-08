@@ -212,7 +212,10 @@ namespace KinematicCharacterController.Examples
 		{
 			characterInputs = default;
 
-			// we can't change input if the UI is open
+			// always handle rotation
+			characterInputs.CameraRotation = CharacterCamera.Transform.rotation;
+
+			// we can't change input if the UI is open or if the mouse cursor is enabled
 			if (!CanUpdateInput())
 			{
 				return;

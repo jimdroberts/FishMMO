@@ -1,4 +1,4 @@
-﻿#if !UNITY_SERVER || UNITY_EDITOR
+﻿#if !UNITY_SERVER
 using FishMMO.Client;
 using TMPro;
 #endif
@@ -56,10 +56,8 @@ public class Character : NetworkBehaviour, IPooledResettable
 	public GuildController GuildController;
 	public PartyController PartyController;
 	public KinematicCharacterMotor Motor;
-#if UNITY_CLIENT
+#if !UNITY_SERVER
 	public LocalInputController LocalInputController;
-#endif
-#if !UNITY_SERVER || UNITY_EDITOR
 	public TextMeshPro CharacterNameLabel;
 	public LabelMaker LabelMaker;
 #endif
@@ -73,9 +71,9 @@ public class Character : NetworkBehaviour, IPooledResettable
 	public string CharacterName;
 	private void OnCharacterNameChanged(string prev, string next, bool asServer)
 	{
-#if UNITY_CLIENT
 		gameObject.name = next;
 
+#if !UNITY_SERVER
 		if (CharacterNameLabel != null)
 			CharacterNameLabel.text = next;
 #endif
@@ -127,15 +125,14 @@ public class Character : NetworkBehaviour, IPooledResettable
 		{
 			localCharacter = this;
 
-#if UNITY_CLIENT
+#if !UNITY_SERVER
+			InputManager.MouseMode = false;
+
 			LocalInputController = gameObject.GetComponent<LocalInputController>();
 			if (LocalInputController == null)
 			{
 				LocalInputController = gameObject.AddComponent<LocalInputController>();
 			}
-#endif
-
-#if !UNITY_SERVER || UNITY_EDITOR
 			LabelMaker = gameObject.GetComponent<LabelMaker>();
 #endif
 		}
@@ -148,7 +145,7 @@ public class Character : NetworkBehaviour, IPooledResettable
 		{
 			localCharacter = null;
 
-#if UNITY_CLIENT
+#if !UNITY_SERVER
 			if (LocalInputController != null)
 			{
 				Destroy(LocalInputController);

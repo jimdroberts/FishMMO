@@ -259,7 +259,7 @@ namespace FishMMO.Server.Services
 						return true;
 					}
 
-					Debug.Log("[" + DateTime.UtcNow + "] " + dbCharacter.Name + " has been instantiated at Pos:" +
+					Debug.Log(dbCharacter.Name + " has been instantiated at Pos:" +
 							  nob.transform.position.ToString() + " Rot:" + nob.transform.rotation.ToString());
 				}
 			}

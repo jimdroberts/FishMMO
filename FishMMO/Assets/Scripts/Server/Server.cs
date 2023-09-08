@@ -87,7 +87,7 @@ namespace FishMMO.Server
 			NetworkManager = FindObjectOfType<NetworkManager>();
 			if (NetworkManager == null)
 			{
-				throw new UnityException("[" + DateTime.UtcNow + "] Server: NetworkManager could not be found! Make sure you have a NetworkManager in your scene.");
+				throw new UnityException("Server: NetworkManager could not be found! Make sure you have a NetworkManager in your scene.");
 			}
 
 			// initialize required components for our specified server type
@@ -102,7 +102,7 @@ namespace FishMMO.Server
 				Transport transport = NetworkManager.TransportManager.Transport;
 				if (transport != null)
 				{
-					Debug.Log("[" + DateTime.UtcNow + "] Server: " + transport.GetServerBindAddress(IPAddressType.IPv4) + ":" + transport.GetPort());
+					Debug.Log("Server: " + transport.GetServerBindAddress(IPAddressType.IPv4) + ":" + transport.GetPort());
 				}
 				NetworkManager.ServerManager.OnServerConnectionState += ServerManager_OnServerConnectionState;
 

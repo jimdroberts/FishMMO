@@ -1,4 +1,4 @@
-﻿#if UNITY_CLIENT
+﻿#if !UNITY_SERVER
 using FishMMO.Client;
 #endif
 using FishNet;
@@ -50,7 +50,7 @@ public class AbilityController : NetworkBehaviour
 		{
 			InstanceFinder.TimeManager.OnTick += TimeManager_OnTick;
 
-#if UNITY_CLIENT
+#if !UNITY_SERVER
 			if (UIManager.TryGet("UICastBar", out UICastBar uiCastBar))
 			{
 				OnUpdate += uiCastBar.OnUpdate;
@@ -68,7 +68,7 @@ public class AbilityController : NetworkBehaviour
 		{
 			InstanceFinder.TimeManager.OnTick -= TimeManager_OnTick;
 
-#if UNITY_CLIENT
+#if !UNITY_SERVER
 			if (UIManager.TryGet("UICastBar", out UICastBar uiCastBar))
 			{
 				OnUpdate -= uiCastBar.OnUpdate;
@@ -223,19 +223,20 @@ public class AbilityController : NetworkBehaviour
 
 	public void Activate(int referenceID, KeyCode heldKey)
 	{
-#if UNITY_CLIENT
+#if !UNITY_SERVER
 		// validate UI controls are focused so we aren't casting spells when hovering over interfaces.
 		if (!UIManager.ControlHasFocus() && !UIManager.InputControlHasFocus() && !InputManager.MouseMode)
 		{
 			return;
 		}
-#endif
+
 
 		if (!IsActivating && !interruptQueued)
 		{
 			queuedAbilityID = referenceID;
 			this.heldKey = heldKey;
 		}
+#endif
 	}
 
 	private void HandleCharacterInput(out AbilityActivationReplicateData activationEventData)

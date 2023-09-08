@@ -80,7 +80,7 @@ namespace FishMMO.Server
 				{
 					nextSave = SaveRate;
 					
-					Debug.Log("[" + DateTime.UtcNow + "] CharacterManager: Save");
+					Debug.Log("CharacterManager: Save" + "[" + DateTime.UtcNow + "]");
 
 					// all characters are periodically saved
 					using var dbContext = Server.DbContextFactory.CreateDbContext();
@@ -176,7 +176,7 @@ namespace FishMMO.Server
 					CharacterService.SaveCharacter(dbContext, character, false);
 					dbContext.SaveChanges();
 
-					Debug.Log("[" + DateTime.UtcNow + "] " + character.CharacterName + " has been saved at: " + character.Transform.position.ToString());
+					Debug.Log(character.CharacterName + " has been saved at: " + character.Transform.position.ToString());
 
 					// immediately log out for now.. we could add a timeout later on..?
 					if (character.NetworkObject.IsSpawned)
@@ -199,7 +199,7 @@ namespace FishMMO.Server
 			{
 				if (CharactersById.ContainsKey(selectedCharacterId))
 				{
-					Debug.Log("[" + DateTime.UtcNow + "] " + selectedCharacterId + " is already loaded or loading. FIXME");
+					Debug.Log(selectedCharacterId + " is already loaded or loading. FIXME");
 
 					// character load already started or complete
 					conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
@@ -213,7 +213,7 @@ namespace FishMMO.Server
 					// check if the scene is valid, loaded, and cached properly
 					if (SceneServerSystem.TryGetValidScene(character.SceneName, out SceneInstanceDetails instance))
 					{
-						Debug.Log("[" + DateTime.UtcNow + "] " + character.CharacterName + " is loading Scene: " + character.SceneName);
+						Debug.Log(character.CharacterName + " is loading Scene: " + character.SceneName);
 
 						if (SceneServerSystem.TryLoadSceneForConnection(conn, instance))
 						{
@@ -222,7 +222,7 @@ namespace FishMMO.Server
 						}
 						else
 						{
-							Debug.Log("[" + DateTime.UtcNow + "] " + character.CharacterName + " scene failed to load for connection.");
+							Debug.Log(character.CharacterName + " scene failed to load for connection.");
 
 							// character scene not found even after validated
 							conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
@@ -311,7 +311,7 @@ namespace FishMMO.Server
 					});
 				}
 
-				Debug.Log("[" + DateTime.UtcNow + "] " + character.CharacterName + " has been spawned at: " + character.SceneName + " " + character.Transform.position.ToString());
+				Debug.Log(character.CharacterName + " has been spawned at: " + character.SceneName + " " + character.Transform.position.ToString());
 			}
 			else
 			{

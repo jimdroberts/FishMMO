@@ -69,8 +69,8 @@ namespace FishMMO.Server
 					using var dbContext = Server.DbContextFactory.CreateDbContext();
 				
 					nextPulse = pulseRate;
-					Debug.Log("[" + DateTime.UtcNow + "] " + name + ": Pulse");
-					int characterCount = ServerManager.Clients.Count;
+					Debug.Log(name + ": Pulse");
+					int characterCount = ServerManager.Clients.Count - Server.WorldSceneSystem.SceneServers.Count;
 					WorldServerService.WorldServerPulse(dbContext, name, characterCount);
 					dbContext.SaveChanges();
 				}

@@ -21,7 +21,7 @@ public class CharacterDamageController : NetworkBehaviour, IDamageable, IHealabl
 	public AchievementTemplate ResurrectAchievementTemplate;
 	public AchievementTemplate ResurrectedAchievementTemplate;
 
-#if !UNITY_SERVER || UNITY_EDITOR
+#if !UNITY_SERVER
 	public bool ShowDamage = true;
 	public event Action<Vector3, Color, float, string> OnDamageDisplay;
 
@@ -48,7 +48,7 @@ public class CharacterDamageController : NetworkBehaviour, IDamageable, IHealabl
 		}
 
 
-#if !UNITY_SERVER || UNITY_EDITOR
+#if !UNITY_SERVER
 		if (Character.LabelMaker != null)
 		{
 			OnDamageDisplay += Character.LabelMaker.Display;
@@ -61,7 +61,7 @@ public class CharacterDamageController : NetworkBehaviour, IDamageable, IHealabl
 	{
 		base.OnStopClient();
 
-#if !UNITY_SERVER || UNITY_EDITOR
+#if !UNITY_SERVER
 		if (Character.LabelMaker != null)
 		{
 			OnDamageDisplay -= Character.LabelMaker.Display;
@@ -101,7 +101,7 @@ public class CharacterDamageController : NetworkBehaviour, IDamageable, IHealabl
 			attacker.AchievementController.Increment(DamageAchievementTemplate, (uint)amount);
 			Character.AchievementController.Increment(DamagedAchievementTemplate, (uint)amount);
 
-#if !UNITY_SERVER || UNITY_EDITOR
+#if !UNITY_SERVER
 			if (ShowDamage)
 			{
 				Vector3 displayPos = Character.transform.position;
@@ -188,7 +188,7 @@ public class CharacterDamageController : NetworkBehaviour, IDamageable, IHealabl
 			healer.AchievementController.Increment(HealAchievementTemplate, (uint)amount);
 			Character.AchievementController.Increment(HealedAchievementTemplate, (uint)amount);
 
-#if !UNITY_SERVER || UNITY_EDITOR
+#if !UNITY_SERVER
 			if (ShowHeals)
 			{
 				Vector3 displayPos = Character.transform.position;

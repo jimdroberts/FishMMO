@@ -53,7 +53,7 @@ namespace FishMMO.Server
 				{
 					nextPulse = pulseRate;
 
-					//Debug.Log("[" + DateTime.UtcNow + "] " + name + ": Pulse");
+					//Debug.Log(name + ": Pulse");
 
 					// keeps the connection alive and updates character count on the world server
 					ClientManager.Broadcast(new ScenePulseBroadcast()
@@ -198,7 +198,7 @@ namespace FishMMO.Server
 			if (WorldSceneDetailsCache == null ||
 				!WorldSceneDetailsCache.Scenes.Contains(msg.sceneName))
 			{
-				Debug.Log("[" + DateTime.UtcNow + "] SceneServerManager: Scene is missing from the cache. Unable to load the scene.");
+				Debug.Log("SceneServerManager: Scene is missing from the cache. Unable to load the scene.");
 				return;
 			}
 

@@ -1,7 +1,9 @@
-﻿using FishNet;
-using FishNet.Object;
+﻿#if !UNITY_SERVER
+using FishNet;
 using UnityEngine;
 using System;
+#endif
+using FishNet.Object;
 using System.Collections.Generic;
 
 public class AchievementController : NetworkBehaviour
@@ -10,7 +12,7 @@ public class AchievementController : NetworkBehaviour
 
 	private Dictionary<int, Achievement> achievements = new Dictionary<int, Achievement>();
 
-#if !UNITY_SERVER || UNITY_EDITOR
+#if !UNITY_SERVER
 	public bool ShowAchievementCompletion = true;
 	public event Action<Vector3, Color, float, string> OnCompleteAchievement;
 #endif
@@ -25,7 +27,7 @@ public class AchievementController : NetworkBehaviour
 			return;
 		}
 
-#if !UNITY_SERVER || UNITY_EDITOR
+#if !UNITY_SERVER
 		if (Character.LabelMaker != null)
 		{
 			OnCompleteAchievement += Character.LabelMaker.Display;
@@ -42,7 +44,7 @@ public class AchievementController : NetworkBehaviour
 
 		if (base.IsOwner)
 		{
-#if !UNITY_SERVER || UNITY_EDITOR
+#if !UNITY_SERVER
 			if (Character.LabelMaker != null)
 			{
 				OnCompleteAchievement -= Character.LabelMaker.Display;
@@ -92,11 +94,11 @@ public class AchievementController : NetworkBehaviour
 				AchievementTier tier = tiers[i];
 				if (achievement.CurrentValue > tier.MaxValue)
 				{
-#if !UNITY_SERVER || UNITY_EDITOR
+#if UNITY_SERVER
 					HandleRewards(tier);
 #endif
 
-#if !UNITY_SERVER || UNITY_EDITOR
+#if !UNITY_SERVER
 					// Display a text message above the characters head showing the achievement.
 					OnCompleteAchievement?.Invoke(Character.Transform.position, Color.yellow, 10.0f, "Achievement: " + achievement.Template.Name + " " + tier.TierCompleteMessage);
 #endif

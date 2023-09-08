@@ -33,7 +33,7 @@ namespace FishMMO.Client
 
 			control.SetClient(_client);
 
-			UnityEngine.Debug.Log("[" + DateTime.UtcNow + "] UIManager Registered [" + control.Name + "]");
+			UnityEngine.Debug.Log("UIManager Registered[" + control.Name + "]");
 			controls.Add(control.Name, control);
 		}
 

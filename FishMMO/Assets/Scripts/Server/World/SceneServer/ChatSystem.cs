@@ -81,7 +81,7 @@ namespace FishMMO.Server
 		{
 			if (!commandEvents.ContainsKey(command))
 			{
-				Debug.Log("[" + DateTime.UtcNow + "] ChatSystem: Added command[" + command + "]");
+				Debug.Log("ChatSystem: Added Command[" + command + "]");
 
 				commandEvents.Add(command, commandFunction);
 			}
@@ -151,7 +151,7 @@ namespace FishMMO.Server
 			// do things here
 			string cmd = GetAndRemoveCommand(ref msg.text);
 
-			//Debug.Log("[" + DateTime.UtcNow + "] ChatSystem: " + character.characterName +
+			//Debug.Log("ChatSystem: " + character.characterName +
 			//		  " last chat message[" + character.lastChatMessage + "] " +
 			//		  " current chat message[" + msg.text + "]");
 
@@ -175,12 +175,12 @@ namespace FishMMO.Server
 			// parse our command or send the message to our /say channel
 			if (commandEvents.TryGetValue(cmd, out ChatCommand command))
 			{
-				//Debug.Log("[" + DateTime.UtcNow + "] ChatSystem: Invoking command[" + cmd + "]");
+				//Debug.Log("ChatSystem: Invoking Command[" + cmd + "]");
 				command?.Invoke(conn, character, msg);
 			}
 			else
 			{
-				//Debug.Log("[" + DateTime.UtcNow + "] ChatSystem: Default command[Say]");
+				//Debug.Log("ChatSystem: Default Command[Say]");
 				OnSayChat(conn, character, msg); // default to say chat?
 			}
 		}

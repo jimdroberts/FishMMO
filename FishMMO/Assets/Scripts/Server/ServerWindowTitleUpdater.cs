@@ -106,7 +106,7 @@ namespace FishMMO.Server
 					windowTitle.Append(" Clients:");
 					if (sceneServerCount > 0)
 					{
-						windowTitle.Append(onlineCount - sceneServerCount);
+						windowTitle.Append(onlineCount);
 						windowTitle.Append(" SceneServers:");
 						windowTitle.Append(sceneServerCount);
 					}

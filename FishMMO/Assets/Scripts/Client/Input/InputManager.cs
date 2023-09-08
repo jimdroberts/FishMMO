@@ -11,7 +11,7 @@ namespace FishMMO.Client
 			set
 			{
 				Cursor.visible = value;
-				Cursor.lockState = (value) ? CursorLockMode.None : CursorLockMode.Locked;
+				Cursor.lockState = value ? CursorLockMode.None : CursorLockMode.Locked;
 			}
 		}
 
