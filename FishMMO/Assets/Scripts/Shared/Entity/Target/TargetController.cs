@@ -1,14 +1,17 @@
-﻿using UnityEngine;
+﻿#if !UNITY_SERVER
+using FishMMO.Client;
+#endif
+using UnityEngine;
 
 [RequireComponent(typeof(Character))]
 public class TargetController : MonoBehaviour
 {
 	public const float MAX_TARGET_DISTANCE = 50.0f;
-	public const float TARGET_UPDATE_RATE = 1.0f;
+	public const float TARGET_UPDATE_RATE = 0.05f;
 
 #if !UNITY_SERVER
 	private float nextTick = 0.0f;
-	//private UILabel3D targetLabel;
+	private Cached3DLabel targetLabel;
 #endif
 
 	public Character Character;
@@ -17,10 +20,19 @@ public class TargetController : MonoBehaviour
 	public TargetInfo Current;
 
 #if !UNITY_SERVER
+	void OnDestroy()
+	{
+		Character = null;
+		LastTarget = default;
+		Current = default;
+		LabelMaker.Cache(targetLabel);
+	}
+
 	void Update()
 	{
+		nextTick -= Time.deltaTime;
 		// update target label for the client
-		if (nextTick <= 0.0f)
+		if (nextTick < 0.0f)
 		{
 			nextTick = TARGET_UPDATE_RATE;
 
@@ -29,28 +41,56 @@ public class TargetController : MonoBehaviour
 			//Camera.main.ScreenToWorldPoint(new Vector3(Screen.width * 0.5f, Screen.height * 0.5f, 0));
 
 			Current = GetTarget(this, ray, MAX_TARGET_DISTANCE);
-			// outline?
-			if (LastTarget.Target != null && Current.Target != null && LastTarget.Target != Current.Target)
-			{
-				Outline previous = LastTarget.Target.GetComponent<Outline>();
-				if (previous != null)
-				{
 
-					//targetLabel.enabled = false;
-					previous.enabled = false;
+			// same target label remains
+			if (LastTarget.Target != Current.Target)
+			{
+				if (targetLabel == null)
+				{
+					// construct the target label
+					targetLabel = Character.LabelMaker.Display("", Character.Transform.position, Color.green, 1.0f, 0.0f, true);
+					targetLabel.gameObject.SetActive(false);
 				}
 
-				Outline nextOutline = Current.Target.GetComponent<Outline>();
-				if (nextOutline != null)
+				if (LastTarget.Target != null)
 				{
-					//targetLabel.SetPosition(current.target.position);
-					//targetLabel.SetText(current.target.name);
-					//targetLabel.enabled = true;
-					nextOutline.enabled = true;
+					Outline outline = LastTarget.Target.GetComponent<Outline>();
+					if (outline != null)
+					{
+						outline.enabled = false;
+					}
+					targetLabel.gameObject.SetActive(false);
+				}
+
+				if (Current.Target != null)
+				{
+					Outline outline = Current.Target.GetComponent<Outline>();
+					if (outline != null)
+					{
+						Vector3 newPos = Current.Target.position;
+
+						Collider collider = Current.Target.GetComponent<Collider>();
+						BoxCollider box = collider as BoxCollider;
+						if (box != null)
+						{
+							newPos.y += box.bounds.size.y + 0.15f;
+						}
+						else
+						{
+							SphereCollider sphere = collider as SphereCollider;
+							if (sphere != null )
+							{
+								newPos.y += sphere.radius + 0.15f;
+							}
+						}
+						targetLabel.SetPosition(newPos);
+						targetLabel.SetText(Current.Target.name);
+						targetLabel.gameObject.SetActive(true);
+						outline.enabled = true;
+					}
 				}
 			}
 		}
-		nextTick -= Time.deltaTime;
 	}
 #endif
 

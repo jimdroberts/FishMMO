@@ -1,4 +1,7 @@
-﻿using FishNet.Object;
+﻿#if !UNITY_SERVER
+using FishMMO.Client;
+#endif
+using FishNet.Object;
 using System;
 using UnityEngine;
 
@@ -23,10 +26,10 @@ public class CharacterDamageController : NetworkBehaviour, IDamageable, IHealabl
 
 #if !UNITY_SERVER
 	public bool ShowDamage = true;
-	public event Action<Vector3, Color, float, string> OnDamageDisplay;
+	public event Func<string, Vector3, Color, float, float, bool, Cached3DLabel> OnDamageDisplay;
 
 	public bool ShowHeals = true;
-	public event Action<Vector3, Color, float, string> OnHealedDisplay;
+	public event Func<string, Vector3, Color, float, float, bool, Cached3DLabel> OnHealedDisplay;
 #endif
 
 	//public List<Character> Attackers;
@@ -106,7 +109,7 @@ public class CharacterDamageController : NetworkBehaviour, IDamageable, IHealabl
 			{
 				Vector3 displayPos = Character.transform.position;
 				displayPos.y += Character.CharacterController.FullCapsuleHeight;
-				OnDamageDisplay?.Invoke(displayPos, new Color(255.0f, 128.0f, 128.0f), 10.0f, amount.ToString());
+				OnDamageDisplay?.Invoke(amount.ToString(), displayPos, new Color(255.0f, 128.0f, 128.0f), 10.0f, 10.0f, false);
 			}
 #endif
 
@@ -193,7 +196,7 @@ public class CharacterDamageController : NetworkBehaviour, IDamageable, IHealabl
 			{
 				Vector3 displayPos = Character.transform.position;
 				displayPos.y += Character.CharacterController.FullCapsuleHeight;
-				OnHealedDisplay?.Invoke(displayPos, new Color(128.0f, 255.0f, 128.0f), 10.0f, amount.ToString());
+				OnHealedDisplay?.Invoke(amount.ToString(), displayPos, new Color(128.0f, 255.0f, 128.0f), 10.0f, 10.0f, false);
 			}
 #endif
 		}

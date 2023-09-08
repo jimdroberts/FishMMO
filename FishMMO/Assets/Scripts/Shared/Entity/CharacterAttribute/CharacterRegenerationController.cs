@@ -22,6 +22,7 @@ public class CharacterRegenerationController : NetworkBehaviour
 
 	private void OnRegenerate()
 	{
+		nextRegenTick -= Time.deltaTime;
 		if (nextRegenTick <= regenerateTickRate)
 		{
 			nextRegenTick = regenerateTickRate;
@@ -43,6 +44,5 @@ public class CharacterRegenerationController : NetworkBehaviour
 
 			//stamina regeneration is handled by the run function in the character controller
 		}
-		nextRegenTick -= Time.deltaTime;
 	}
 }

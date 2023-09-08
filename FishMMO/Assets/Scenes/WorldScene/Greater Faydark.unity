@@ -138,7 +138,7 @@ GameObject:
   - component: {fileID: 14910057}
   - component: {fileID: 14910056}
   - component: {fileID: 14910055}
-  m_Layer: 0
+  m_Layer: 8
   m_Name: Merchant
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -165,9 +165,9 @@ MonoBehaviour:
   <ParentNetworkObject>k__BackingField: {fileID: 0}
   <ChildNetworkObjects>k__BackingField: []
   SerializedTransformProperties:
-    Position: {x: 0, y: 0, z: 0}
-    Rotation: {x: 0, y: 0, z: 0, w: 0}
-    LocalScale: {x: 0, y: 0, z: 0}
+    Position: {x: 33.4, y: 9.5, z: -7.57}
+    Rotation: {x: -0, y: -0, z: -0, w: 1}
+    LocalScale: {x: 1, y: 1, z: 1}
   _isNetworked: 1
   _isGlobal: 0
   _initializeOrder: 0
@@ -180,8 +180,6 @@ MonoBehaviour:
   <AssetPathHash>k__BackingField: 0
   _sceneNetworkObjects:
   - {fileID: 14910055}
-  - {fileID: 0}
-  - {fileID: 0}
 --- !u!114 &14910056
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -215,7 +213,7 @@ MonoBehaviour:
   _componentIndexCache: 0
   _addedNetworkObject: {fileID: 14910055}
   _networkObjectCache: {fileID: 14910055}
-  interactionDistanceSqr: 10
+  InteractionDistanceSqr: 0
 --- !u!135 &14910058
 SphereCollider:
   m_ObjectHideFlags: 0
@@ -287,7 +285,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 14910054}
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 33.4, y: 10, z: -7.57}
+  m_LocalPosition: {x: 33.4, y: 9.5, z: -7.57}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []

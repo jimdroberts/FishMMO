@@ -86,8 +86,7 @@ namespace FishMMO.Client
 			if(timeTillFirstReconnectAttempt > 0)
 			{
 				timeTillFirstReconnectAttempt -= Time.deltaTime;
-
-				if(timeTillFirstReconnectAttempt <= 0)
+				if(timeTillFirstReconnectAttempt < 0)
 				{
 					reconnectActive = true;
 					OnTryReconnect();

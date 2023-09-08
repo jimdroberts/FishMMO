@@ -1,4 +1,5 @@
 ﻿#if !UNITY_SERVER
+using FishMMO.Client;
 using FishNet;
 using UnityEngine;
 using System;
@@ -14,7 +15,7 @@ public class AchievementController : NetworkBehaviour
 
 #if !UNITY_SERVER
 	public bool ShowAchievementCompletion = true;
-	public event Action<Vector3, Color, float, string> OnCompleteAchievement;
+	public event Func<string, Vector3, Color, float, float, bool, Cached3DLabel> OnCompleteAchievement;
 #endif
 
 	public override void OnStartClient()
@@ -100,7 +101,7 @@ public class AchievementController : NetworkBehaviour
 
 #if !UNITY_SERVER
 					// Display a text message above the characters head showing the achievement.
-					OnCompleteAchievement?.Invoke(Character.Transform.position, Color.yellow, 10.0f, "Achievement: " + achievement.Template.Name + " " + tier.TierCompleteMessage);
+					OnCompleteAchievement?.Invoke("Achievement: " + achievement.Template.Name + " " + tier.TierCompleteMessage, Character.Transform.position, Color.yellow, 12.0f, 10.0f, false);
 #endif
 				}
 				else
@@ -113,6 +114,7 @@ public class AchievementController : NetworkBehaviour
 		}
 	}
 
+#if UNITY_SERVER
 	private void HandleRewards(AchievementTier tier)
 	{
 		if (base.IsServer && Character.Owner != null)
@@ -151,6 +153,7 @@ public class AchievementController : NetworkBehaviour
 			}
 		}
 	}
+#endif
 
 	/// <summary>
 	/// Server sent an achievement update broadcast.

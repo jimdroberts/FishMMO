@@ -9,22 +9,20 @@ namespace FishMMO.Client
 
 		public Cached3DLabel LabelPrefab;
 
-		public void Display(Vector3 position, Color color, float persistTime, string text)
+		public Cached3DLabel Display(string text, Vector3 position, Color color, float fontSize, float persistTime, bool manualCache)
 		{
-			if (LabelPrefab == null)
-			{
-				return;
-			}
-			if (cache != null)
+			if (LabelPrefab != null && cache != null)
 			{
 				Cached3DLabel label;
 				if (!cache.TryDequeue(out label))
 				{
 					label = Instantiate(LabelPrefab);
 				}
-				label.Initialize(position, color, persistTime, text);
+				label.Initialize(text, position, color, fontSize, persistTime, manualCache);
 				label.gameObject.SetActive(true);
+				return label;
 			}
+			return null;
 		}
 
 		internal static void Cache(Cached3DLabel label)
