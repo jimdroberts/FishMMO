@@ -12,6 +12,8 @@ namespace FishMMO.Client
 			{
 				Cursor.visible = value;
 				Cursor.lockState = value ? CursorLockMode.None : CursorLockMode.Locked;
+
+				OnToggleMouseMode?.Invoke(value);
 			}
 		}
 
@@ -19,6 +21,8 @@ namespace FishMMO.Client
 		private static Dictionary<string, KeyMap> virtualKeyMaps = new Dictionary<string, KeyMap>();
 		//<CustomAxis, UnityAxis>
 		private static Dictionary<string, string> axisMaps = new Dictionary<string, string>();
+
+		public static event System.Action<bool> OnToggleMouseMode;
 
 		static InputManager()
 		{
@@ -29,6 +33,7 @@ namespace FishMMO.Client
 			AddAxis("Horizontal", "Horizontal");
 			AddAxis("Mouse X", "Mouse X");
 			AddAxis("Mouse Y", "Mouse Y");
+			AddAxis("Mouse ScrollWheel", "Mouse ScrollWheel");
 			AddKey("Hotkey 1", KeyCode.Alpha1);
 			AddKey("Hotkey 2", KeyCode.Alpha2);
 			AddKey("Hotkey 3", KeyCode.Alpha3);

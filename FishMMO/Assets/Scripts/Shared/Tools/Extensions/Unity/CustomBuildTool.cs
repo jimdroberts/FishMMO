@@ -295,7 +295,12 @@ public class CustomBuildTool
 		}
 		AssetDatabase.SaveAssets();
 
-		// just incase buildpipeline bug is still present
+		// get the original active build info
+		BuildTargetGroup originalGroup = EditorUserBuildSettings.selectedBuildTargetGroup;
+		BuildTarget originalBuildTarget = EditorUserBuildSettings.activeBuildTarget;
+		StandaloneBuildSubtarget originalBuildSubtarget = EditorUserBuildSettings.standaloneBuildSubtarget;
+
+		// switch active build target so #defines work properly
 		BuildTargetGroup targetGroup = BuildPipeline.GetBuildTargetGroup(buildTarget);
 		EditorUserBuildSettings.SwitchActiveBuildTarget(targetGroup, buildTarget);
 		EditorUserBuildSettings.standaloneBuildSubtarget = subTarget;
@@ -330,10 +335,16 @@ public class CustomBuildTool
 				if (buildTarget == BuildTarget.StandaloneWindows64)
 				{
 					FileUtil.ReplaceFile(root + "\\START.bat", buildPath + "\\START.bat");
+					FileUtil.ReplaceFile(root + "\\START_LOGINSERVER.bat", buildPath + "\\START_LOGINSERVER.bat");
+					FileUtil.ReplaceFile(root + "\\START_WORLDSERVER.bat", buildPath + "\\START_WORLDSERVER.bat");
+					FileUtil.ReplaceFile(root + "\\START_SCENESERVER.bat", buildPath + "\\START_SCENESERVER.bat");
 				}
 				else if (buildTarget == BuildTarget.StandaloneLinux64)
 				{
 					FileUtil.ReplaceFile(root + "\\START.sh", buildPath + "\\START.sh");
+					FileUtil.ReplaceFile(root + "\\START_LOGINSERVER.sh", buildPath + "\\START_LOGINSERVER.sh");
+					FileUtil.ReplaceFile(root + "\\START_WORLDSERVER.sh", buildPath + "\\START_WORLDSERVER.sh");
+					FileUtil.ReplaceFile(root + "\\START_SCENESERVER.sh", buildPath + "\\START_SCENESERVER.sh");
 				}
 
 				
@@ -359,6 +370,10 @@ public class CustomBuildTool
 		{
 			Debug.Log("Build failed: " + report.summary.result + " " + report);
 		}
+
+		// reset build target
+		EditorUserBuildSettings.SwitchActiveBuildTarget(originalGroup, originalBuildTarget);
+		EditorUserBuildSettings.standaloneBuildSubtarget = originalBuildSubtarget;
 	}
 
 	private static string[] GetBuildScenePaths(string[] requiredPaths)

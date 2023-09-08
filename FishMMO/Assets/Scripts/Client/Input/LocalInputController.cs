@@ -42,8 +42,8 @@ namespace FishMMO.Client
 			if (InputManager.GetKeyDown("Mouse Mode"))
 			{
 				InputManager.ToggleMouseMode();
-			}
 
+			}
 			
 			// we can interact with things as long as the UI doesn't have focus
 			if (!UIManager.ControlHasFocus() && InputManager.GetKeyDown("Interact"))

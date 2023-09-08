@@ -87,14 +87,6 @@ namespace FishMMO.Server
 			{
 				windowTitle.Append(transport.GetConnectionState(true) == LocalConnectionState.Started ? " [Online]" : " [Offline]");
 
-				int onlineCount = ServerManager.Clients.Count;
-				int sceneServerCount = -1;
-				if (WorldSceneSystem != null)
-				{
-					sceneServerCount = WorldSceneSystem.SceneServers.Count;
-					onlineCount -= sceneServerCount;
-				}
-				
 				if (Server.Configuration.TryGetString("Address", out string address) &&
 					address.Length  > 0 &&
 					Server.Configuration.TryGetUShort("Port", out ushort port))
@@ -104,8 +96,15 @@ namespace FishMMO.Server
 					windowTitle.Append(":");
 					windowTitle.Append(port);
 					windowTitle.Append(" Clients:");
-					if (sceneServerCount > 0)
+
+					int onlineCount = ServerManager.Clients.Count;
+					if (WorldSceneSystem != null)
 					{
+						int sceneServerCount = WorldSceneSystem != null ? WorldSceneSystem.SceneServers.Count : -1;
+						if (sceneServerCount > 0)
+						{
+							onlineCount -= sceneServerCount;
+						}
 						windowTitle.Append(onlineCount);
 						windowTitle.Append(" SceneServers:");
 						windowTitle.Append(sceneServerCount);
@@ -114,6 +113,7 @@ namespace FishMMO.Server
 					{
 						windowTitle.Append(onlineCount);
 					}
+
 					windowTitle.Append("]");
 				}
 				

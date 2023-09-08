@@ -122,7 +122,11 @@ namespace KinematicCharacterController.Examples
                 {
                     RaycastHit closestHit = new RaycastHit();
                     closestHit.distance = Mathf.Infinity;
-                    _obstructionCount = Physics.SphereCastNonAlloc(_currentFollowPosition, ObstructionCheckRadius, -Transform.forward, _obstructions, TargetDistance, ObstructionLayers, QueryTriggerInteraction.Ignore);
+
+					Vector3 playerToCameraDir = transform.position - _currentFollowPosition;
+                    playerToCameraDir.Normalize();
+
+					_obstructionCount = Physics.SphereCastNonAlloc(_currentFollowPosition, ObstructionCheckRadius, playerToCameraDir, _obstructions, TargetDistance, ObstructionLayers, QueryTriggerInteraction.Ignore);
                     for (int i = 0; i < _obstructionCount; i++)
                     {
                         bool isIgnored = false;
@@ -149,7 +153,7 @@ namespace KinematicCharacterController.Examples
                         }
                     }
 
-                    // If obstructions detecter
+                    // If obstructions detected
                     if (closestHit.distance < Mathf.Infinity)
                     {
                         _distanceIsObstructed = true;

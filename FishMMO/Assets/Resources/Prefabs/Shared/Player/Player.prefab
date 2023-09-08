@@ -26,7 +26,7 @@ RectTransform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 995763922733204262}
   m_LocalRotation: {x: 0, y: 1, z: 0, w: 0}
-  m_LocalPosition: {x: 0, y: 0, z: 3}
+  m_LocalPosition: {x: 0, y: 0, z: 2.929}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -35,7 +35,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 180, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 1.2}
   m_SizeDelta: {x: 100, y: 100}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!20 &6274733150604385851
@@ -369,7 +369,7 @@ MonoBehaviour:
   BonusOrientationSharpness: 10
   Gravity: {x: 0, y: -10, z: 0}
   MeshRoot: {fileID: 3575547950957483929}
-  CameraFollowPoint: {fileID: 3575547950957483929}
+  CameraFollowPoint: {fileID: 8755975724377161100}
   CrouchedCapsuleHeight: 0.8
   FullCapsuleHeight: 1.6
   CapsuleBaseOffset: 0.8
@@ -447,7 +447,8 @@ MonoBehaviour:
   _componentIndexCache: 4
   _addedNetworkObject: {fileID: 784751938054981284}
   _networkObjectCache: {fileID: 784751938054981284}
-  AchievementDatabase: {fileID: 0}
+  Character: {fileID: 0}
+  ShowAchievementCompletion: 1
 --- !u!114 &5516734705847723694
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -614,6 +615,14 @@ MonoBehaviour:
   Character: {fileID: 0}
   Immortal: 0
   ResourceAttribute: {fileID: 11400000, guid: e5c10a046ee277f46a57ee2048ae5ec9, type: 2}
+  DamageAchievementTemplate: {fileID: 0}
+  DamagedAchievementTemplate: {fileID: 0}
+  KillAchievementTemplate: {fileID: 0}
+  KilledAchievementTemplate: {fileID: 0}
+  HealAchievementTemplate: {fileID: 0}
+  HealedAchievementTemplate: {fileID: 0}
+  ResurrectAchievementTemplate: {fileID: 0}
+  ResurrectedAchievementTemplate: {fileID: 0}
   ShowDamage: 1
   ShowHeals: 1
 --- !u!114 &1909551449255578268
@@ -686,6 +695,37 @@ CapsuleCollider:
   m_Height: 1.6
   m_Direction: 1
   m_Center: {x: 0, y: 0.8, z: 0}
+--- !u!1 &8718706173774098268
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 8755975724377161100}
+  m_Layer: 0
+  m_Name: CameraFollowPoint
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &8755975724377161100
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8718706173774098268}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0.2, y: 1.35, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 3575547950957483929}
+  m_RootOrder: -1
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &2117107678736878980
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -782,7 +822,7 @@ PrefabInstance:
     - target: {fileID: 4213452809119816545, guid: 2de080fd835ec6747b1b1ff8ed6870f6,
         type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: 2
+      value: 1.85
       objectReference: {fileID: 0}
     - target: {fileID: 4213452809119816545, guid: 2de080fd835ec6747b1b1ff8ed6870f6,
         type: 3}
@@ -887,6 +927,10 @@ PrefabInstance:
         type: 3}
       insertIndex: -1
       addedObject: {fileID: 2817084262407755493}
+    - targetCorrespondingSourceObject: {fileID: 408730, guid: 7737647c22c1fc64a88d5cd030c352ce,
+        type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 8755975724377161100}
   m_SourcePrefab: {fileID: 100100000, guid: 7737647c22c1fc64a88d5cd030c352ce, type: 3}
 --- !u!4 &3575547950957483929 stripped
 Transform:

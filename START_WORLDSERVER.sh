@@ -1,0 +1,1 @@
+./FishMMOServer.exe World

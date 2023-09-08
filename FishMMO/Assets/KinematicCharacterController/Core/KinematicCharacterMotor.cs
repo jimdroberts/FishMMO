@@ -758,12 +758,12 @@ namespace KinematicCharacterController
         }
 
 		// scene stacking
-		private PhysicsScene _physicsScene;
+		public PhysicsScene PhysicsScene { get; private set; }
 
 		public void SetPhysicsScene(PhysicsScene physicsScene)
 		{
 			//Debug.Log($"Received physics scene for scene '{scene.name}'.");
-			_physicsScene = physicsScene;
+			PhysicsScene = physicsScene;
 		}
 
 		/// <summary>
@@ -2406,7 +2406,7 @@ namespace KinematicCharacterController
             }
 
             int nbHits = 0;
-            int nbUnfilteredHits = _physicsScene.OverlapCapsule(//Physics.OverlapCapsuleNonAlloc(
+            int nbUnfilteredHits = PhysicsScene.OverlapCapsule(//Physics.OverlapCapsuleNonAlloc(
                         bottom,
                         top,
                         Capsule.radius + inflate,
@@ -2446,7 +2446,7 @@ namespace KinematicCharacterController
             }
 
             int nbHits = 0;
-            int nbUnfilteredHits = _physicsScene.OverlapCapsule(//Physics.OverlapCapsuleNonAlloc(
+            int nbUnfilteredHits = PhysicsScene.OverlapCapsule(//Physics.OverlapCapsuleNonAlloc(
 						bottom,
                         top,
                         Capsule.radius + inflate,
@@ -2493,7 +2493,7 @@ namespace KinematicCharacterController
 
             // Capsule cast
             int nbHits = 0;
-            int nbUnfilteredHits = _physicsScene.CapsuleCast(//Physics.CapsuleCastNonAlloc(
+            int nbUnfilteredHits = PhysicsScene.CapsuleCast(//Physics.CapsuleCastNonAlloc(
                     bottom,
                     top,
                     Capsule.radius + inflate,
@@ -2555,7 +2555,7 @@ namespace KinematicCharacterController
 
             // Capsule cast
             int nbHits = 0;
-            int nbUnfilteredHits = _physicsScene.CapsuleCast(//Physics.CapsuleCastNonAlloc(
+            int nbUnfilteredHits = PhysicsScene.CapsuleCast(//Physics.CapsuleCastNonAlloc(
                 bottom,
                 top,
                 Capsule.radius + inflate,
@@ -2605,7 +2605,7 @@ namespace KinematicCharacterController
             closestHit = new RaycastHit();
 
             // Capsule cast
-            int nbUnfilteredHits = _physicsScene.CapsuleCast(//Physics.CapsuleCastNonAlloc(
+            int nbUnfilteredHits = PhysicsScene.CapsuleCast(//Physics.CapsuleCastNonAlloc(
                 position + (rotation * _characterTransformToCapsuleBottomHemi) - (direction * GroundProbingBackstepDistance),
                 position + (rotation * _characterTransformToCapsuleTopHemi) - (direction * GroundProbingBackstepDistance),
                 Capsule.radius,
@@ -2654,7 +2654,7 @@ namespace KinematicCharacterController
 
             // Raycast
             int nbHits = 0;
-            int nbUnfilteredHits = _physicsScene.Raycast(//Physics.RaycastNonAlloc(
+            int nbUnfilteredHits = PhysicsScene.Raycast(//Physics.RaycastNonAlloc(
                 position,
                 direction,
                 hits,
