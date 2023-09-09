@@ -41,7 +41,7 @@ namespace FishMMO.Client
 				character.EquipmentController.OnSlotUpdated += OnEquipmentSlotUpdated;
 			}
 
-			if (attributeLabels == null || attributeLabels.Count != character.AttributeController.attributes.Count)
+			if (attributeLabels == null || attributeLabels.Count != character.AttributeController.Attributes.Count)
 			{
 				if (attributeLabels != null)
 				{
@@ -52,7 +52,7 @@ namespace FishMMO.Client
 					attributeLabels.Clear();
 				}
 
-				foreach (CharacterAttribute attribute in character.AttributeController.attributes.Values)
+				foreach (CharacterAttribute attribute in character.AttributeController.Attributes.Values)
 				{
 					attribute.OnAttributeUpdated -= OnAttributeUpdated; // just incase..
 					TMP_Text label = Instantiate(attributePrefab, content);

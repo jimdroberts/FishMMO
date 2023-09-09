@@ -5,8 +5,8 @@ public class CharacterAttributeController : NetworkBehaviour
 {
 	public CharacterAttributeTemplateDatabase CharacterAttributeDatabase;
 
-	public readonly Dictionary<int, CharacterAttribute> attributes = new Dictionary<int, CharacterAttribute>();
-	public readonly Dictionary<int, CharacterResourceAttribute> resourceAttributes = new Dictionary<int, CharacterResourceAttribute>();
+	public readonly Dictionary<int, CharacterAttribute> Attributes = new Dictionary<int, CharacterAttribute>();
+	public readonly Dictionary<int, CharacterResourceAttribute> ResourceAttributes = new Dictionary<int, CharacterResourceAttribute>();
 
 	protected void Awake()
 	{
@@ -18,7 +18,7 @@ public class CharacterAttributeController : NetworkBehaviour
 				{
 					CharacterResourceAttribute resource = new CharacterResourceAttribute(attribute.ID, attribute.InitialValue, attribute.InitialValue, 0);
 					AddAttribute(resource);
-					resourceAttributes.Add(resource.Template.ID, resource);
+					ResourceAttributes.Add(resource.Template.ID, resource);
 				}
 				else
 				{
@@ -61,39 +61,53 @@ public class CharacterAttributeController : NetworkBehaviour
 
 	public void SetAttribute(int id, int baseValue, int modifier)
 	{
-		
+		if (Attributes.TryGetValue(id, out CharacterAttribute attribute))
+		{
+			attribute.SetValue(baseValue);
+			attribute.SetModifier(modifier);
+		}
+	}
+
+	public void SetResourceAttribute(int id, int baseValue, int modifier, int currentValue)
+	{
+		if (ResourceAttributes.TryGetValue(id, out CharacterResourceAttribute attribute))
+		{
+			attribute.SetValue(baseValue);
+			attribute.SetModifier(modifier);
+			attribute.SetCurrentValue(currentValue);
+		}
 	}
 
 	public bool TryGetAttribute(CharacterAttributeTemplate template, out CharacterAttribute attribute)
 	{
-		return attributes.TryGetValue(template.ID, out attribute);
+		return Attributes.TryGetValue(template.ID, out attribute);
 	}
 
 	public bool TryGetAttribute(int id, out CharacterAttribute attribute)
 	{
-		return attributes.TryGetValue(id, out attribute);
+		return Attributes.TryGetValue(id, out attribute);
 	}
 
 	public bool TryGetResourceAttribute(CharacterAttributeTemplate template, out CharacterResourceAttribute attribute)
 	{
-		return resourceAttributes.TryGetValue(template.ID, out attribute);
+		return ResourceAttributes.TryGetValue(template.ID, out attribute);
 	}
 
 	public bool TryGetResourceAttribute(int id, out CharacterResourceAttribute attribute)
 	{
-		return resourceAttributes.TryGetValue(id, out attribute);
+		return ResourceAttributes.TryGetValue(id, out attribute);
 	}
 
 	public void AddAttribute(CharacterAttribute instance)
 	{
-		if (!attributes.ContainsKey(instance.Template.ID))
+		if (!Attributes.ContainsKey(instance.Template.ID))
 		{
-			attributes.Add(instance.Template.ID, instance);
+			Attributes.Add(instance.Template.ID, instance);
 
 			foreach (CharacterAttributeTemplate parent in instance.Template.ParentTypes)
 			{
 				CharacterAttribute parentInstance;
-				if (attributes.TryGetValue(parent.ID, out parentInstance))
+				if (Attributes.TryGetValue(parent.ID, out parentInstance))
 				{
 					parentInstance.AddChild(instance);
 				}
@@ -102,7 +116,7 @@ public class CharacterAttributeController : NetworkBehaviour
 			foreach (CharacterAttributeTemplate child in instance.Template.ChildTypes)
 			{
 				CharacterAttribute childInstance;
-				if (attributes.TryGetValue(child.ID, out childInstance))
+				if (Attributes.TryGetValue(child.ID, out childInstance))
 				{
 					instance.AddChild(childInstance);
 				}
@@ -111,7 +125,7 @@ public class CharacterAttributeController : NetworkBehaviour
 			foreach (CharacterAttributeTemplate dependant in instance.Template.DependantTypes)
 			{
 				CharacterAttribute dependantInstance;
-				if (attributes.TryGetValue(dependant.ID, out dependantInstance))
+				if (Attributes.TryGetValue(dependant.ID, out dependantInstance))
 				{
 					instance.AddDependant(dependantInstance);
 				}
@@ -126,7 +140,7 @@ public class CharacterAttributeController : NetworkBehaviour
 	{
 		CharacterAttributeTemplate template = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(msg.templateID);
 		if (template != null &&
-			attributes.TryGetValue(template.ID, out CharacterAttribute attribute))
+			Attributes.TryGetValue(template.ID, out CharacterAttribute attribute))
 		{
 			attribute.SetFinal(msg.value);
 		}
@@ -141,7 +155,7 @@ public class CharacterAttributeController : NetworkBehaviour
 		{
 			CharacterAttributeTemplate template = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(subMsg.templateID);
 			if (template != null &&
-				attributes.TryGetValue(template.ID, out CharacterAttribute attribute))
+				Attributes.TryGetValue(template.ID, out CharacterAttribute attribute))
 			{
 				attribute.SetFinal(subMsg.value);
 			}
@@ -155,7 +169,7 @@ public class CharacterAttributeController : NetworkBehaviour
 	{
 		CharacterAttributeTemplate template = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(msg.templateID);
 		if (template != null &&
-			resourceAttributes.TryGetValue(template.ID, out CharacterResourceAttribute attribute))
+			ResourceAttributes.TryGetValue(template.ID, out CharacterResourceAttribute attribute))
 		{
 			attribute.SetCurrentValue(msg.value);
 			attribute.SetFinal(msg.max);
@@ -171,7 +185,7 @@ public class CharacterAttributeController : NetworkBehaviour
 		{
 			CharacterAttributeTemplate template = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(subMsg.templateID);
 			if (template != null &&
-				resourceAttributes.TryGetValue(template.ID, out CharacterResourceAttribute attribute))
+				ResourceAttributes.TryGetValue(template.ID, out CharacterResourceAttribute attribute))
 			{
 				attribute.SetCurrentValue(subMsg.value);
 				attribute.SetFinal(subMsg.max);

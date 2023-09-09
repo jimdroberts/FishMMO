@@ -20,8 +20,9 @@ namespace FishMMO.Server.Services
 				.Where(c => c.CharacterId == existingCharacter.ID)
 				.ToDictionary(k => k.TemplateID);
 
-			foreach (CharacterAttribute attribute in existingCharacter.AttributeController.attributes.Values)
+			foreach (CharacterAttribute attribute in existingCharacter.AttributeController.Attributes.Values)
 			{
+				// is looping resources separately faster than boxing?
 				if (attribute.Template.IsResourceAttribute)
 				{
 					continue;
@@ -39,7 +40,7 @@ namespace FishMMO.Server.Services
 				}
 			}
 			// is looping resources separately faster than boxing?
-			foreach (CharacterResourceAttribute attribute in existingCharacter.AttributeController.resourceAttributes.Values)
+			foreach (CharacterResourceAttribute attribute in existingCharacter.AttributeController.ResourceAttributes.Values)
 			{
 				if (!attributes.TryGetValue(attribute.Template.ID, out CharacterAttributeEntity dbAttribute))
 				{
@@ -68,7 +69,18 @@ namespace FishMMO.Server.Services
 			{
 				foreach (var attribute in attributes)
 				{
-					existingCharacter.AttributeController.SetAttribute(attribute.TemplateID, attribute.BaseValue, attribute.Modifier);
+					CharacterAttributeTemplate template = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(attribute.TemplateID);
+					if (template != null)
+					{
+						if (template.IsResourceAttribute)
+						{
+							existingCharacter.AttributeController.SetResourceAttribute(template.ID, attribute.BaseValue, attribute.Modifier, attribute.CurrentValue);
+						}
+						else
+						{
+							existingCharacter.AttributeController.SetAttribute(template.ID, attribute.BaseValue, attribute.Modifier);
+						}
+					}
 				}
 			}
 		}
