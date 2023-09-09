@@ -18,6 +18,8 @@ public class AchievementController : NetworkBehaviour
 	public event Func<string, Vector3, Color, float, float, bool, Cached3DLabel> OnCompleteAchievement;
 #endif
 
+	public Dictionary<int, Achievement> Achievements { get { return achievements; } }
+
 	public override void OnStartClient()
 	{
 		base.OnStartClient();
@@ -57,9 +59,22 @@ public class AchievementController : NetworkBehaviour
 		}
 	}
 
-	public List<Achievement> GetAchievements()
+	public void SetAchievement(int templateID, byte tier, uint value)
 	{
-		return new List<Achievement>(achievements.Values);
+		if (achievements != null)
+		{
+			achievements = new Dictionary<int, Achievement>();
+		}
+
+		if (achievements.TryGetValue(templateID, out Achievement achievement))
+		{
+			achievement.CurrentTier = tier;
+			achievement.CurrentValue = value;
+		}
+		else
+		{
+			achievements.Add(templateID, new Achievement(templateID, tier, value));
+		}
 	}
 
 	public bool TryGetAchievement(int templateID, out Achievement achievement)

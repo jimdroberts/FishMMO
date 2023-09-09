@@ -40,6 +40,7 @@ namespace FishMMO_DB.Entities
         
         // foreign keys
         public ICollection<CharacterAttributeEntity> Attributes { get; set; }
+        public ICollection<CharacterAchievementEntity> Achievements { get; set; }
         public ICollection<CharacterBuffEntity> Buffs { get; set; }
         public ICollection<CharacterEquipmentEntity> Equipment { get; set; }
         public CharacterGuildEntity Guild { get; set; }

@@ -27,7 +27,15 @@ namespace FishMMO.Server.Services
 				{
 					continue;
 				}
-				if (!attributes.TryGetValue(attribute.Template.ID, out CharacterAttributeEntity dbAttribute))
+				if (attributes.TryGetValue(attribute.Template.ID, out CharacterAttributeEntity dbAttribute))
+				{
+					dbAttribute.CharacterId = existingCharacter.ID;
+					dbAttribute.TemplateID = attribute.Template.ID;
+					dbAttribute.BaseValue = attribute.BaseValue;
+					dbAttribute.Modifier = attribute.Modifier;
+					dbAttribute.CurrentValue = 0;
+				}
+				else
 				{
 					dbContext.Attributes.Add(new CharacterAttributeEntity()
 					{
@@ -42,7 +50,15 @@ namespace FishMMO.Server.Services
 			// is looping resources separately faster than boxing?
 			foreach (CharacterResourceAttribute attribute in existingCharacter.AttributeController.ResourceAttributes.Values)
 			{
-				if (!attributes.TryGetValue(attribute.Template.ID, out CharacterAttributeEntity dbAttribute))
+				if (attributes.TryGetValue(attribute.Template.ID, out CharacterAttributeEntity dbAttribute))
+				{
+					dbAttribute.CharacterId = existingCharacter.ID;
+					dbAttribute.TemplateID = attribute.Template.ID;
+					dbAttribute.BaseValue = attribute.BaseValue;
+					dbAttribute.Modifier = attribute.Modifier;
+					dbAttribute.CurrentValue = attribute.CurrentValue;
+				}
+				else
 				{
 					dbContext.Attributes.Add(new CharacterAttributeEntity()
 					{

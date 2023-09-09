@@ -95,6 +95,7 @@ namespace FishMMO.Server.Services
 			existingCharacter.LastSaved = DateTime.UtcNow;
 
 			CharacterAttributeService.SaveCharacterAttributes(dbContext, character);
+			CharacterAchievementService.SaveCharacterAchievements(dbContext, character);
 		}
 
 		/// <summary>
@@ -260,6 +261,7 @@ namespace FishMMO.Server.Services
 						character.IsTeleporting = false;
 
 						CharacterAttributeService.LoadCharacterAttributes(dbContext, character);
+						CharacterAchievementService.LoadCharacterAchievements(dbContext, character);
 
 						return true;
 					}
