@@ -17,8 +17,9 @@ public class PartyController : NetworkBehaviour
 	public event PartyEvent OnPartyCreated;
 	public event PartyEvent OnLeaveParty;
 
-	public delegate void PartyMemberEvent(string partyMemberName, PartyRank rank);
+	public delegate void PartyMemberEvent(long characterID, PartyRank rank);
 	public event PartyMemberEvent OnAddMember;
+	public event PartyMemberEvent OnUpdateMember;
 	public event PartyMemberEvent OnRemoveMember;
 
 	public delegate void PartyAcceptEvent(List<long> partyMemberIds);
@@ -38,6 +39,7 @@ public class PartyController : NetworkBehaviour
 		ClientManager.RegisterBroadcast<PartyInviteBroadcast>(OnClientPartyInviteBroadcastReceived);
 		ClientManager.RegisterBroadcast<PartyJoinedBroadcast>(OnClientPartyJoinedBroadcastReceived);
 		ClientManager.RegisterBroadcast<PartyNewMemberBroadcast>(OnClientPartyNewMemberBroadcastReceived);
+		ClientManager.RegisterBroadcast<PartyUpdateMemberBroadcast>(OnClientPartyUpdateMemberBroadcastReceived);
 		ClientManager.RegisterBroadcast<PartyLeaveBroadcast>(OnClientPartyLeaveBroadcastReceived);
 		ClientManager.RegisterBroadcast<PartyRemoveBroadcast>(OnClientPartyRemoveBroadcastReceived);
 	}
@@ -52,6 +54,7 @@ public class PartyController : NetworkBehaviour
 			ClientManager.UnregisterBroadcast<PartyInviteBroadcast>(OnClientPartyInviteBroadcastReceived);
 			ClientManager.UnregisterBroadcast<PartyJoinedBroadcast>(OnClientPartyJoinedBroadcastReceived);
 			ClientManager.UnregisterBroadcast<PartyNewMemberBroadcast>(OnClientPartyNewMemberBroadcastReceived);
+			ClientManager.UnregisterBroadcast<PartyUpdateMemberBroadcast>(OnClientPartyUpdateMemberBroadcastReceived);
 			ClientManager.UnregisterBroadcast<PartyLeaveBroadcast>(OnClientPartyLeaveBroadcastReceived);
 			ClientManager.UnregisterBroadcast<PartyRemoveBroadcast>(OnClientPartyRemoveBroadcastReceived);
 		}
@@ -100,7 +103,15 @@ public class PartyController : NetworkBehaviour
 	public void OnClientPartyNewMemberBroadcastReceived(PartyNewMemberBroadcast msg)
 	{
 		// update our party list with the new party member
-		OnAddMember?.Invoke(msg.newMemberName, msg.rank);
+		OnAddMember?.Invoke(msg.memberID, msg.rank);
+	}
+
+	/// <summary>
+	/// When we need to update a party member status.
+	/// </summary>
+	public void OnClientPartyUpdateMemberBroadcastReceived(PartyUpdateMemberBroadcast msg)
+	{
+		OnUpdateMember?.Invoke(msg.memberID, msg.rank);
 	}
 
 	/// <summary>
@@ -121,8 +132,8 @@ public class PartyController : NetworkBehaviour
 	{
 		if (Current != null)
 		{
-			PartyController removedMember = Current.RemoveMember(msg.memberName);
-			OnRemoveMember?.Invoke(msg.memberName, PartyRank.None);
+			Current.Members.Remove(msg.memberID);
+			OnRemoveMember?.Invoke(msg.memberID, PartyRank.None);
 		}
 	}
 }

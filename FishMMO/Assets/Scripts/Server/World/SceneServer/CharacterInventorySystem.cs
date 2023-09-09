@@ -33,7 +33,6 @@ namespace FishMMO.Server
 		{
 			if (serverState == LocalConnectionState.Started)
 			{
-				nextSave -= Time.deltaTime;
 				if (nextSave < 0)
 				{
 					nextSave = saveRate;
@@ -44,6 +43,7 @@ namespace FishMMO.Server
 					// TODO: create an InventoryService with a save inventories function
 					//Database.Instance.SaveInventories(new List<Character>(characters.Values));
 				}
+				nextSave -= Time.deltaTime;
 			}
 		}*/
 

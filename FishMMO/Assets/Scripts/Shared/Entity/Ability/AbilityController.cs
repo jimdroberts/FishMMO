@@ -208,7 +208,7 @@ public class AbilityController : NetworkBehaviour
 		if (attribute != null)
 		{
 			CharacterAttribute speedReduction;
-			if (Character.AttributeController.TryGetAttribute(attribute.Name, out speedReduction))
+			if (Character.AttributeController.TryGetAttribute(attribute.ID, out speedReduction))
 			{
 				return 1.0f - ((speedReduction.FinalValue * 0.01f).Clamp(0.0f, 1.0f));
 			}

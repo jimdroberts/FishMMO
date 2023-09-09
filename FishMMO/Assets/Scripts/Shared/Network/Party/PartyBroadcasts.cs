@@ -25,7 +25,13 @@ public struct PartyJoinedBroadcast : IBroadcast
 
 public struct PartyNewMemberBroadcast : IBroadcast
 {
-	public string newMemberName;
+	public long memberID;
+	public PartyRank rank;
+}
+
+public struct PartyUpdateMemberBroadcast : IBroadcast
+{
+	public long memberID;
 	public PartyRank rank;
 }
 
@@ -35,5 +41,5 @@ public struct PartyLeaveBroadcast : IBroadcast
 
 public struct PartyRemoveBroadcast : IBroadcast
 {
-	public string memberName;
+	public long memberID;
 }

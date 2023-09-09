@@ -107,7 +107,6 @@ namespace FishMMO.Server
 
 		private void Update()
 		{
-			nextWaitQueueUpdate -= Time.deltaTime;
 			if (nextWaitQueueUpdate < 0)
 			{
 				nextWaitQueueUpdate = waitQueueRate;
@@ -117,6 +116,7 @@ namespace FishMMO.Server
 					TryClearWaitQueues(sceneName);
 				}
 			}
+			nextWaitQueueUpdate -= Time.deltaTime;
 		}
 
 		private void TryClearWaitQueues(string sceneName)

@@ -15,7 +15,6 @@ namespace FishMMO.Server
 		public const int MAX_LENGTH = 128;
 
 		public SceneManager SceneManager;
-		public CharacterSystem CharacterSystem;
 
 		public bool AllowRepeatMessages = false;
 		[Tooltip("The server chat rate limit in milliseconds. This should be equal to the clients UIChat.messageRateLimit")]
@@ -269,7 +268,7 @@ namespace FishMMO.Server
 				msg.channel = ChatChannel.Party;
 				msg.text = sender.CharacterName + ": " + msg.text;
 
-				foreach (PartyController member in sender.PartyController.Current.Members)
+				foreach (PartyController member in sender.PartyController.Current.Members.Values)
 				{
 					// broadcast to party member... includes sender
 					member.Owner.Broadcast(msg);
@@ -289,7 +288,7 @@ namespace FishMMO.Server
 				msg.channel = ChatChannel.Guild;
 				msg.text = sender.CharacterName + ": " + msg.text;
 
-				foreach (GuildController member in sender.GuildController.Current.Members)
+				foreach (GuildController member in sender.GuildController.Current.Members.Values)
 				{
 					// broadcast to guild member... includes sender
 					member.Owner.Broadcast(msg);
@@ -311,8 +310,8 @@ namespace FishMMO.Server
 				return;
 			}
 
-			if (CharacterSystem == null ||
-				!CharacterSystem.CharactersByName.TryGetValue(targetName, out Character targetCharacter))
+			if (Server.CharacterSystem == null ||
+				!Server.CharacterSystem.CharactersByName.TryGetValue(targetName, out Character targetCharacter))
 			{
 				return;
 			}

@@ -14,8 +14,6 @@ namespace FishMMO.Server
 	// Character manager handles the players character
 	public class CharacterSystem : ServerBehaviour
 	{
-		public SceneServerSystem SceneServerSystem;
-
 		private SceneServerAuthenticator loginAuthenticator;
 		private LocalConnectionState serverState;
 
@@ -36,7 +34,7 @@ namespace FishMMO.Server
 
 			if (ServerManager != null &&
 				ClientManager != null &&
-				SceneServerSystem != null)
+				Server.SceneServerSystem != null)
 			{
 				ServerManager.OnServerConnectionState += ServerManager_OnServerConnectionState;
 				ServerManager.OnRemoteConnectionState += ServerManager_OnRemoteConnectionState;
@@ -51,9 +49,6 @@ namespace FishMMO.Server
 		{
 			if (serverState == LocalConnectionState.Started)
 			{
-				nextSave -= Time.deltaTime;
-				nextOutOfBoundsCheck -= Time.deltaTime;
-
 				if(nextOutOfBoundsCheck < 0)
 				{
 					nextOutOfBoundsCheck = OutOfBoundsCheckRate;
@@ -63,7 +58,7 @@ namespace FishMMO.Server
 					// which would prevent the need to do all of this lookup stuff.
 					foreach (Character character in ConnectionCharacters.Values)
 					{
-						if(SceneServerSystem.WorldSceneDetailsCache.Scenes.TryGetValue(character.SceneName, out WorldSceneDetails details))
+						if(Server.SceneServerSystem.WorldSceneDetailsCache.Scenes.TryGetValue(character.SceneName, out WorldSceneDetails details))
 						{
 							// Check if they are within some bounds, if not we need to move them to a respawn location!
 							// TODO: Try to prevent combat escape, maybe this needs to be handled on the game design level?
@@ -75,6 +70,7 @@ namespace FishMMO.Server
 						}
 					}
 				}
+				nextOutOfBoundsCheck -= Time.deltaTime;
 
 				if (nextSave < 0)
 				{
@@ -87,6 +83,7 @@ namespace FishMMO.Server
 					CharacterService.SaveCharacters(dbContext, new List<Character>(CharactersById.Values));
 					dbContext.SaveChanges();
 				}
+				nextSave -= Time.deltaTime;
 			}
 		}
 
@@ -110,12 +107,12 @@ namespace FishMMO.Server
 			if (args.ConnectionState == LocalConnectionState.Started)
 			{
 				loginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
-				SceneServerSystem.SceneManager.OnClientLoadedStartScenes += SceneManager_OnClientLoadedStartScenes;
+				Server.SceneServerSystem.SceneManager.OnClientLoadedStartScenes += SceneManager_OnClientLoadedStartScenes;
 			}
 			else if (args.ConnectionState == LocalConnectionState.Stopped)
 			{
 				loginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
-				SceneServerSystem.SceneManager.OnClientLoadedStartScenes -= SceneManager_OnClientLoadedStartScenes;
+				Server.SceneServerSystem.SceneManager.OnClientLoadedStartScenes -= SceneManager_OnClientLoadedStartScenes;
 			}
 		}
 
@@ -141,6 +138,18 @@ namespace FishMMO.Server
 						// character is missing.. socket is closed but we kick just incase
 						conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
 						return;
+					}
+
+					// remove the characters pending guild invite request
+					if (Server.GuildSystem != null)
+					{
+						Server.GuildSystem.RemovePending(character.ID);
+					}
+
+					// remove the characters pending party invite request
+					if (Server.PartySystem != null)
+					{
+						Server.PartySystem.RemovePending(character.ID);
 					}
 
 					// remove the characterId->character entry
@@ -211,11 +220,11 @@ namespace FishMMO.Server
 					WaitingSceneLoadCharacters.Add(conn, character);
 
 					// check if the scene is valid, loaded, and cached properly
-					if (SceneServerSystem.TryGetValidScene(character.SceneName, out SceneInstanceDetails instance))
+					if (Server.SceneServerSystem.TryGetValidScene(character.SceneName, out SceneInstanceDetails instance))
 					{
 						Debug.Log(character.CharacterName + " is loading Scene: " + character.SceneName);
 
-						if (SceneServerSystem.TryLoadSceneForConnection(conn, instance))
+						if (Server.SceneServerSystem.TryLoadSceneForConnection(conn, instance))
 						{
 							// assign scene handle for later..
 							character.SceneHandle = instance.Handle;
@@ -261,7 +270,7 @@ namespace FishMMO.Server
 				// set the proper physics scene for the character, scene stacking requires separated physics
 				if (character.Motor != null)
 				{
-					SceneServerSystem.AssignPhysicsScene(character);
+					Server.SceneServerSystem.AssignPhysicsScene(character);
 				}
 
 				// ensure the game object is active, pooled objects are disabled
@@ -269,6 +278,18 @@ namespace FishMMO.Server
 					
 				// spawn the nob over the network
 				ServerManager.Spawn(character.NetworkObject, conn);
+
+				/* test
+				if (character.AttributeController.TryGetResourceAttribute("Health", out CharacterResourceAttribute health))
+				{
+					health.SetCurrentValue(50);
+					character.Owner.Broadcast(new CharacterResourceAttributeUpdateBroadcast()
+					{
+						templateID = health.Template.ID,
+						value = health.CurrentValue,
+						max = health.FinalValue,
+					});
+				}*/
 
 				// add a connection->character map for ease of use
 				if (ConnectionCharacters.ContainsKey(conn))

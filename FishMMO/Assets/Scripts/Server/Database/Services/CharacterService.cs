@@ -93,6 +93,8 @@ namespace FishMMO.Server.Services
 			existingCharacter.RotW = rotation.w;
 			existingCharacter.Online = online;
 			existingCharacter.LastSaved = DateTime.UtcNow;
+
+			CharacterAttributeService.SaveCharacterAttributes(dbContext, character);
 		}
 
 		/// <summary>
@@ -256,6 +258,9 @@ namespace FishMMO.Server.Services
 						character.RaceName = prefab.name;
 						character.SceneName = dbCharacter.SceneName;
 						character.IsTeleporting = false;
+
+						CharacterAttributeService.LoadCharacterAttributes(dbContext, character);
+
 						return true;
 					}
 

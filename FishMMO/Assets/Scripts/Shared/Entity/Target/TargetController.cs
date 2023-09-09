@@ -30,7 +30,6 @@ public class TargetController : MonoBehaviour
 
 	void Update()
 	{
-		nextTick -= Time.deltaTime;
 		// update target label for the client
 		if (nextTick < 0.0f)
 		{
@@ -91,6 +90,7 @@ public class TargetController : MonoBehaviour
 				}
 			}
 		}
+		nextTick -= Time.deltaTime;
 	}
 #endif
 

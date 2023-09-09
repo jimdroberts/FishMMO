@@ -124,7 +124,7 @@ public class ItemGenerator : BaseRNGenerator
 	{
 		foreach (KeyValuePair<string, ItemAttribute> pair in attributes)
 		{
-			if (character.AttributeController.TryGetAttribute(pair.Value.Template.CharacterAttribute.Name, out CharacterAttribute characterAttribute))
+			if (character.AttributeController.TryGetAttribute(pair.Value.Template.CharacterAttribute.ID, out CharacterAttribute characterAttribute))
 			{
 				characterAttribute.AddValue(pair.Value.value);
 			}
@@ -135,7 +135,7 @@ public class ItemGenerator : BaseRNGenerator
 	{
 		foreach (KeyValuePair<string, ItemAttribute> pair in attributes)
 		{
-			if (character.AttributeController.TryGetAttribute(pair.Value.Template.CharacterAttribute.Name, out CharacterAttribute characterAttribute))
+			if (character.AttributeController.TryGetAttribute(pair.Value.Template.CharacterAttribute.ID, out CharacterAttribute characterAttribute))
 			{
 				characterAttribute.AddValue(-pair.Value.value);
 			}

@@ -73,6 +73,10 @@ public class CharacterAttribute
 			finalValue = CalculateFinalValue();
 		}
 	}
+	public void SetFinal(int newValue)
+	{
+		finalValue = newValue;
+	}
 
 	public int Modifier { get { return modifier; } }
 	public int FinalValue { get { return finalValue; } }

@@ -3,27 +3,33 @@
 public class Guild
 {
 	public const int MAX_GUILD_SIZE = 100;
+	public const int MAX_GUILDNAME_LENGTH = 32;
 
-	public ulong ID;
-	public readonly List<GuildController> Members = new List<GuildController>();
+	public string ID;
+	public long LeaderID;
+	public readonly Dictionary<long, GuildController> Officers = new Dictionary<long, GuildController>();
+	public readonly Dictionary<long, GuildController> Members = new Dictionary<long, GuildController>();
 
 	public bool IsFull { get { return !(Members.Count < MAX_GUILD_SIZE); } }
 
-	public Guild(ulong guildId, GuildController leader)
+	public static bool GuildNameValid(string name)
+	{
+		return !string.IsNullOrEmpty(name) && name.Length < MAX_GUILDNAME_LENGTH;
+	}
+
+	public Guild(string guildId, GuildController leader)
 	{
 		ID = guildId;
-		Members.Add(leader);
+		LeaderID = leader.Character.ID;
+		Members.Add(LeaderID, leader);
 	}
 
 	public GuildController RemoveMember(long memberId)
 	{
-		foreach (GuildController member in Members)
+		if (Members.TryGetValue(memberId, out GuildController controller))
 		{
-			if (member.Character.ID == memberId)
-			{
-				Members.Remove(member);
-				return member;
-			}
+			Members.Remove(memberId);
+			return controller;
 		}
 		return null;
 	}

@@ -48,7 +48,6 @@ namespace FishMMO.Server
 		{
 			if (serverState == LocalConnectionState.Started && Server.Configuration.TryGetString("ServerName", out string name))
 			{
-				nextPulse -= Time.deltaTime;
 				if (nextPulse < 0)
 				{
 					nextPulse = pulseRate;
@@ -62,6 +61,7 @@ namespace FishMMO.Server
 						sceneInstanceDetails = RebuildSceneInstanceDetails(),
 					});
 				}
+				nextPulse -= Time.deltaTime;
 			}
 		}
 

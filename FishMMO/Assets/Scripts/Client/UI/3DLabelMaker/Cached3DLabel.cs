@@ -14,12 +14,12 @@ namespace FishMMO.Client
 		{
 			if (!manualCache)
 			{
-				remainingTime -= Time.deltaTime;
 				if (remainingTime < 0.0f)
 				{
 					LabelMaker.Cache(this);
 					return;
 				}
+				remainingTime -= Time.deltaTime;
 			}
 		}
 

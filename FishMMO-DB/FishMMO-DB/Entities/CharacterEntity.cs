@@ -39,6 +39,7 @@ namespace FishMMO_DB.Entities
         public bool Deleted { get; set; }
         
         // foreign keys
+        public ICollection<CharacterAttributeEntity> Attributes { get; set; }
         public ICollection<CharacterBuffEntity> Buffs { get; set; }
         public ICollection<CharacterEquipmentEntity> Equipment { get; set; }
         public CharacterGuildEntity Guild { get; set; }

@@ -8,11 +8,15 @@ namespace FishMMO_DB
 {
 	public class Configuration
 	{
+		public const string DEFAULT_FILENAME = "Configuration";
+		public const string EXTENSION = ".cfg";
+		public const string FULL_NAME = DEFAULT_FILENAME + "." + EXTENSION;
+
 		private CultureInfo cultureInfo = CultureInfo.InvariantCulture;
 		private Dictionary<string, string> settings = new Dictionary<string, string>();
 
 		public string defaultFileDirectory;
-		public string fileName = "Configuration.cfg";
+		public string fileName = DEFAULT_FILENAME;
 
 		public Configuration(string defaultFileDirectory)
 		{
@@ -159,14 +163,7 @@ namespace FishMMO_DB
 
 		public bool TryGetString(string name, out string result)
 		{
-			string test;
-			if (settings.TryGetValue(name, out test))
-			{
-				result = test;
-				return true;
-			}
-			result = test;
-			return false;
+			return settings.TryGetValue(name, out result);
 		}
 
 		public bool TryGetChar(string name, out char result)

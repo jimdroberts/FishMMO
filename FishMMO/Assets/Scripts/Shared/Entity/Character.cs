@@ -62,12 +62,12 @@ public class Character : NetworkBehaviour, IPooledResettable
 	public LabelMaker LabelMaker;
 #endif
 	// accountID for reference
-	[SyncVar(Channel = Channel.Reliable)]
+	[SyncVar(Channel = Channel.Reliable, ReadPermissions = ReadPermission.Observers, WritePermissions = WritePermission.ServerOnly)]
 	public long ID;
 	/// <summary>
 	/// The characters real name. Use this if you are referencing a character by name. Avoid character.name unless you want the name of the game object.
 	/// </summary>
-	[SyncVar(Channel = Channel.Unreliable, OnChange = nameof(OnCharacterNameChanged))]
+	[SyncVar(Channel = Channel.Unreliable, ReadPermissions = ReadPermission.Observers, WritePermissions = WritePermission.ServerOnly, OnChange = nameof(OnCharacterNameChanged))]
 	public string CharacterName;
 	private void OnCharacterNameChanged(string prev, string next, bool asServer)
 	{
@@ -82,7 +82,9 @@ public class Character : NetworkBehaviour, IPooledResettable
 	public bool IsGameMaster = false;
 	public bool IsTeleporting = false;
 	public int RaceID;
+	[SyncVar(Channel = Channel.Unreliable, ReadPermissions = ReadPermission.OwnerOnly, WritePermissions = WritePermission.ServerOnly)]
 	public string RaceName;
+	[SyncVar(Channel = Channel.Unreliable, ReadPermissions = ReadPermission.OwnerOnly, WritePermissions = WritePermission.ServerOnly)]
 	public string SceneName;
 	public int SceneHandle;
 	public string LastChatMessage = "";

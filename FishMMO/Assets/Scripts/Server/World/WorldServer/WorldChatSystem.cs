@@ -9,11 +9,10 @@ namespace FishMMO.Server
 	/// </summary>
 	public class WorldChatSystem : ServerBehaviour
 	{
-		public WorldSceneSystem WorldSceneSystem;
-
 		public override void InitializeOnce()
 		{
-			if (ServerManager != null)
+			if (ServerManager != null &&
+				Server.WorldSceneSystem != null)
 			{
 				ServerManager.OnServerConnectionState += ServerManager_OnServerConnectionState;
 			}
@@ -42,10 +41,7 @@ namespace FishMMO.Server
 		/// </summary>
 		private void OnServerWorldChatBroadcastReceived(NetworkConnection conn, WorldChatBroadcast msg)
 		{
-			if (WorldSceneSystem != null)
-			{
-				WorldSceneSystem.BroadcastToAllScenes(msg);
-			}
+			Server.WorldSceneSystem.BroadcastToAllScenes(msg);
 		}
 
 
@@ -54,10 +50,7 @@ namespace FishMMO.Server
 		/// </summary>
 		private void OnServerWorldChatTellBroadcastReceived(NetworkConnection conn, WorldChatTellBroadcast msg)
 		{
-			if (WorldSceneSystem != null)
-			{
-				WorldSceneSystem.BroadcastToCharacter(msg.targetId, msg);
-			}
+			Server.WorldSceneSystem.BroadcastToCharacter(msg.targetId, msg);
 		}
 	}
 }

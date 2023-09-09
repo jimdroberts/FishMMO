@@ -252,7 +252,7 @@ public class Ability
 	{
 		foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in Requirements)
 		{
-			if (!character.AttributeController.TryGetResourceAttribute(pair.Key.Name, out CharacterResourceAttribute requirement) ||
+			if (!character.AttributeController.TryGetResourceAttribute(pair.Key.ID, out CharacterResourceAttribute requirement) ||
 				requirement.CurrentValue < pair.Value)
 			{
 				return false;
@@ -268,7 +268,7 @@ public class Ability
 			int totalCost = TotalResourceCost;
 
 			CharacterResourceAttribute resource;
-			if (!character.AttributeController.TryGetResourceAttribute(bloodResource.Name, out resource) ||
+			if (!character.AttributeController.TryGetResourceAttribute(bloodResource.ID, out resource) ||
 				resource.CurrentValue < totalCost)
 			{
 				return false;
@@ -279,7 +279,7 @@ public class Ability
 			foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in Resources)
 			{
 				CharacterResourceAttribute resource;
-				if (!character.AttributeController.TryGetResourceAttribute(pair.Key.Name, out resource) ||
+				if (!character.AttributeController.TryGetResourceAttribute(pair.Key.ID, out resource) ||
 					resource.CurrentValue < pair.Value)
 				{
 					return false;
@@ -296,7 +296,7 @@ public class Ability
 			int totalCost = TotalResourceCost;
 
 			CharacterResourceAttribute resource;
-			if (bloodResource != null && attributeController.TryGetResourceAttribute(bloodResource.Name, out resource) &&
+			if (bloodResource != null && attributeController.TryGetResourceAttribute(bloodResource.ID, out resource) &&
 				resource.CurrentValue >= totalCost)
 			{
 				resource.Consume(totalCost);
@@ -307,7 +307,7 @@ public class Ability
 			foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in Resources)
 			{
 				CharacterResourceAttribute resource;
-				if (attributeController.TryGetResourceAttribute(pair.Key.Name, out resource) &&
+				if (attributeController.TryGetResourceAttribute(pair.Key.ID, out resource) &&
 					resource.CurrentValue < pair.Value)
 				{
 					resource.Consume(pair.Value);

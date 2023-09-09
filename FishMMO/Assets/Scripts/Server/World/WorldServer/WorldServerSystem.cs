@@ -62,7 +62,6 @@ namespace FishMMO.Server
 			if (serverState == LocalConnectionState.Started &&
 				Server.Configuration.TryGetString("ServerName", out string name))
 			{
-				nextPulse -= Time.deltaTime;
 				if (nextPulse < 0)
 				{
 					// TODO: maybe this one should exist....how expensive will this be to run on update?
@@ -74,6 +73,7 @@ namespace FishMMO.Server
 					WorldServerService.WorldServerPulse(dbContext, name, characterCount);
 					dbContext.SaveChanges();
 				}
+				nextPulse -= Time.deltaTime;
 			}
 		}
 

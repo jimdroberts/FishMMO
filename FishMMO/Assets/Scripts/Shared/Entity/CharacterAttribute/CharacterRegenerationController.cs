@@ -7,6 +7,11 @@ public class CharacterRegenerationController : NetworkBehaviour
 	public static Character localCharacter;
 	public CharacterAttributeController AttributeController;
 
+	public CharacterAttributeTemplate HealthTemplate;
+	public CharacterAttributeTemplate ManaTemplate;
+	public CharacterAttributeTemplate HealthRegenerationTemplate;
+	public CharacterAttributeTemplate ManaRegenerationTemplate;
+
 	public float nextRegenTick = 0.0f;
 	public float regenerateTickRate = 1.0f;
 
@@ -22,21 +27,20 @@ public class CharacterRegenerationController : NetworkBehaviour
 
 	private void OnRegenerate()
 	{
-		nextRegenTick -= Time.deltaTime;
-		if (nextRegenTick <= regenerateTickRate)
+		if (nextRegenTick < regenerateTickRate)
 		{
 			nextRegenTick = regenerateTickRate;
 
-			if (AttributeController.TryGetResourceAttribute("Health", out CharacterResourceAttribute health))
+			if (AttributeController.TryGetResourceAttribute(HealthTemplate, out CharacterResourceAttribute health))
 			{
-				if (AttributeController.TryGetAttribute("Health Regeneration", out CharacterAttribute healthRegeneration))
+				if (AttributeController.TryGetAttribute(HealthRegenerationTemplate, out CharacterAttribute healthRegeneration))
 				{
 					health.Gain(healthRegeneration.FinalValue);
 				}
 			}
-			if (AttributeController.TryGetResourceAttribute("Mana", out CharacterResourceAttribute mana))
+			if (AttributeController.TryGetResourceAttribute(ManaTemplate, out CharacterResourceAttribute mana))
 			{
-				if (AttributeController.TryGetAttribute("Mana Regeneration", out CharacterAttribute manaRegeneration))
+				if (AttributeController.TryGetAttribute(ManaRegenerationTemplate, out CharacterAttribute manaRegeneration))
 				{
 					mana.Gain(manaRegeneration.FinalValue);
 				}
@@ -44,5 +48,6 @@ public class CharacterRegenerationController : NetworkBehaviour
 
 			//stamina regeneration is handled by the run function in the character controller
 		}
+		nextRegenTick -= Time.deltaTime;
 	}
 }

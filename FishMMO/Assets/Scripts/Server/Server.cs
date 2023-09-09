@@ -152,7 +152,9 @@ namespace FishMMO.Server
 			// only use title updater if it has been added to the scene
 			ServerWindowTitleUpdater = GetComponent<ServerWindowTitleUpdater>();
 			if (ServerWindowTitleUpdater != null)
+			{
 				ServerWindowTitleUpdater.InternalInitializeOnce(this, NetworkManager.ServerManager);
+			}
 
 			// database factory DI
 			LoginServerAuthenticator authenticator = NetworkManager.ServerManager.GetAuthenticator() as LoginServerAuthenticator;
@@ -186,12 +188,13 @@ namespace FishMMO.Server
 					}
 
 					WorldChatSystem = GetOrCreateComponent<WorldChatSystem>();
-					WorldChatSystem.WorldSceneSystem = WorldSceneSystem;
 					WorldChatSystem.InternalInitializeOnce(this, NetworkManager.ServerManager);
 
 					// world server has special title bar that handles relay information
 					if (ServerWindowTitleUpdater != null)
+					{
 						ServerWindowTitleUpdater.WorldSceneSystem = WorldSceneSystem;
+					}
 					break;
 				case "SCENE":
 					SceneServerSystem = GetOrCreateComponent<SceneServerSystem>();
@@ -199,7 +202,6 @@ namespace FishMMO.Server
 					SceneServerSystem.InternalInitializeOnce(this, NetworkManager.ServerManager, NetworkManager.ClientManager);
 
 					CharacterSystem = GetOrCreateComponent<CharacterSystem>();
-					CharacterSystem.SceneServerSystem = SceneServerSystem;
 					CharacterSystem.InternalInitializeOnce(this, NetworkManager.ServerManager, NetworkManager.ClientManager);
 
 					CharacterInventorySystem = GetOrCreateComponent<CharacterInventorySystem>();
@@ -207,15 +209,12 @@ namespace FishMMO.Server
 
 					ChatSystem = GetOrCreateComponent<ChatSystem>();
 					ChatSystem.SceneManager = NetworkManager.SceneManager;
-					ChatSystem.CharacterSystem = CharacterSystem;
 					ChatSystem.InternalInitializeOnce(this, NetworkManager.ServerManager, NetworkManager.ClientManager);
 
 					GuildSystem = GetOrCreateComponent<GuildSystem>();
-					GuildSystem.CharacterSystem = CharacterSystem;
 					GuildSystem.InternalInitializeOnce(this, NetworkManager.ServerManager);
 
 					PartySystem = GetOrCreateComponent<PartySystem>();
-					PartySystem.CharacterSystem = CharacterSystem;
 					PartySystem.InternalInitializeOnce(this, NetworkManager.ServerManager);
 					break;
 				default:

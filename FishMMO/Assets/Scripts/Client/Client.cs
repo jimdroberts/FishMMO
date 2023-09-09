@@ -117,7 +117,6 @@ namespace FishMMO.Client
 					reconnectActive = true;
 					OnTryReconnect();
 				}
-
 				return;
 			}
 		}

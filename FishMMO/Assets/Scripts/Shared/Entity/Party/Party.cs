@@ -5,38 +5,23 @@ public class Party
 	public const int MAX_PARTY_SIZE = 5;
 
 	public ulong ID;
-	public readonly List<PartyController> Members = new List<PartyController>();
+	public long LeaderID;
+	public readonly Dictionary<long, PartyController> Members = new Dictionary<long, PartyController>();
 
 	public bool IsFull { get { return !(Members.Count < MAX_PARTY_SIZE);  } }
 
 	public Party(ulong partyId, PartyController leader)
 	{
 		ID = partyId;
-		Members.Add(leader);
+		Members.Add(leader.Character.ID, leader);
 	}
 
 	public PartyController RemoveMember(long memberId)
 	{
-		foreach (PartyController member in Members)
+		if (Members.TryGetValue(memberId, out PartyController controller))
 		{
-			if (member.Character.ID == memberId)
-			{
-				Members.Remove(member);
-				return member;
-			}
-		}
-		return null;
-	}
-
-	public PartyController RemoveMember(string memberName)
-	{
-		foreach (PartyController member in Members)
-		{
-			if (member.Character.CharacterName.Equals(memberName))
-			{
-				Members.Remove(member);
-				return member;
-			}
+			Members.Remove(memberId);
+			return controller;
 		}
 		return null;
 	}

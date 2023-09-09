@@ -6,9 +6,9 @@ namespace FishMMO.Client
 {
 	public class UIParty : UIControl
 	{
-		public RectTransform partyMemberParent;
-		public TMP_Text partyMemberPrefab;
-		public List<TMP_Text> members;
+		public RectTransform PartyMemberParent;
+		public TMP_Text PartyMemberPrefab;
+		public Dictionary<long, TMP_Text> Members;
 
 		public override void OnStarting()
 		{
@@ -18,6 +18,7 @@ namespace FishMMO.Client
 				character.PartyController.OnPartyCreated += OnPartyCreated;
 				character.PartyController.OnLeaveParty += OnLeaveParty;
 				character.PartyController.OnAddMember += OnPartyAddMember;
+				character.PartyController.OnUpdateMember += OnPartyUpdateMember;
 				character.PartyController.OnRemoveMember += OnPartyRemoveMember;
 			}
 		}
@@ -30,6 +31,7 @@ namespace FishMMO.Client
 				character.PartyController.OnPartyCreated -= OnPartyCreated;
 				character.PartyController.OnLeaveParty -= OnLeaveParty;
 				character.PartyController.OnAddMember -= OnPartyAddMember;
+				character.PartyController.OnUpdateMember -= OnPartyUpdateMember;
 				character.PartyController.OnRemoveMember -= OnPartyRemoveMember;
 			}
 		}
@@ -37,42 +39,47 @@ namespace FishMMO.Client
 		public void OnPartyCreated()
 		{
 			Character character = Character.localCharacter;
-			if (character != null && partyMemberPrefab != null)
+			if (character != null && PartyMemberParent != null)
 			{
-				TMP_Text partyMember = Instantiate(partyMemberPrefab, partyMemberParent);
+				TMP_Text partyMember = Instantiate(PartyMemberPrefab, PartyMemberParent);
 				partyMember.text = character.CharacterName;
-				members.Add(partyMember);
+				Members.Add(character.ID, partyMember);
 			}
 		}
 
 		public void OnLeaveParty()
 		{
-			foreach (TMP_Text member in members)
+			foreach (TMP_Text member in new List<TMP_Text>(Members.Values))
 			{
 				Destroy(member.gameObject);
 			}
-			members.Clear();
+			Members.Clear();
 		}
 
-		public void OnPartyAddMember(string partyMemberName, PartyRank rank)
+		public void OnPartyAddMember(long characterID, PartyRank rank)
 		{
-			if (partyMemberPrefab != null)
+			if (PartyMemberPrefab != null)
 			{
-				TMP_Text partyMember = Instantiate(partyMemberPrefab, partyMemberParent);
-				partyMember.text = partyMemberName;
-				members.Add(partyMember);
+				TMP_Text partyMember = Instantiate(PartyMemberPrefab, PartyMemberParent);
+				partyMember.text = characterID.ToString();
+				Members.Add(characterID, partyMember);
 			}
 		}
 
-		public void OnPartyRemoveMember(string partyMemberName, PartyRank rank)
+		public void OnPartyUpdateMember(long characterID, PartyRank rank)
 		{
-			foreach (TMP_Text member in members)
+			if (Members.TryGetValue(characterID, out TMP_Text text))
 			{
-				if (partyMemberName.Equals(member.name))
-				{
-					members.Remove(member);
-					return;
-				}
+
+			}
+		}
+
+		public void OnPartyRemoveMember(long characterID, PartyRank rank)
+		{
+			if (Members.TryGetValue(characterID, out TMP_Text text))
+			{
+				Members.Remove(characterID);
+				Destroy(text.gameObject);
 			}
 		}
 

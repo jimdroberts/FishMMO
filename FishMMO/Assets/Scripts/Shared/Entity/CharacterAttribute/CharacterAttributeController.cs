@@ -5,8 +5,8 @@ public class CharacterAttributeController : NetworkBehaviour
 {
 	public CharacterAttributeTemplateDatabase CharacterAttributeDatabase;
 
-	public readonly Dictionary<string, CharacterAttribute> attributes = new Dictionary<string, CharacterAttribute>();
-	public readonly Dictionary<string, CharacterResourceAttribute> resourceAttributes = new Dictionary<string, CharacterResourceAttribute>();
+	public readonly Dictionary<int, CharacterAttribute> attributes = new Dictionary<int, CharacterAttribute>();
+	public readonly Dictionary<int, CharacterResourceAttribute> resourceAttributes = new Dictionary<int, CharacterResourceAttribute>();
 
 	protected void Awake()
 	{
@@ -18,7 +18,7 @@ public class CharacterAttributeController : NetworkBehaviour
 				{
 					CharacterResourceAttribute resource = new CharacterResourceAttribute(attribute.ID, attribute.InitialValue, attribute.InitialValue, 0);
 					AddAttribute(resource);
-					resourceAttributes.Add(resource.Template.Name, resource);
+					resourceAttributes.Add(resource.Template.ID, resource);
 				}
 				else
 				{
@@ -40,6 +40,9 @@ public class CharacterAttributeController : NetworkBehaviour
 
 		ClientManager.RegisterBroadcast<CharacterAttributeUpdateBroadcast>(OnClientCharacterAttributeUpdateBroadcastReceived);
 		ClientManager.RegisterBroadcast<CharacterAttributeUpdateMultipleBroadcast>(OnClientCharacterAttributeUpdateMultipleBroadcastReceived);
+
+		ClientManager.RegisterBroadcast<CharacterResourceAttributeUpdateBroadcast>(OnClientCharacterResourceAttributeUpdateBroadcastReceived);
+		ClientManager.RegisterBroadcast<CharacterResourceAttributeUpdateMultipleBroadcast>(OnClientCharacterResourceAttributeUpdateMultipleBroadcastReceived);
 	}
 
 	public override void OnStopClient()
@@ -50,39 +53,47 @@ public class CharacterAttributeController : NetworkBehaviour
 		{
 			ClientManager.UnregisterBroadcast<CharacterAttributeUpdateBroadcast>(OnClientCharacterAttributeUpdateBroadcastReceived);
 			ClientManager.UnregisterBroadcast<CharacterAttributeUpdateMultipleBroadcast>(OnClientCharacterAttributeUpdateMultipleBroadcastReceived);
+
+			ClientManager.UnregisterBroadcast<CharacterResourceAttributeUpdateBroadcast>(OnClientCharacterResourceAttributeUpdateBroadcastReceived);
+			ClientManager.UnregisterBroadcast<CharacterResourceAttributeUpdateMultipleBroadcast>(OnClientCharacterResourceAttributeUpdateMultipleBroadcastReceived);
 		}
+	}
+
+	public void SetAttribute(int id, int baseValue, int modifier)
+	{
+		
 	}
 
 	public bool TryGetAttribute(CharacterAttributeTemplate template, out CharacterAttribute attribute)
 	{
-		return attributes.TryGetValue(template.name, out attribute);
+		return attributes.TryGetValue(template.ID, out attribute);
 	}
 
-	public bool TryGetAttribute(string name, out CharacterAttribute attribute)
+	public bool TryGetAttribute(int id, out CharacterAttribute attribute)
 	{
-		return attributes.TryGetValue(name, out attribute);
+		return attributes.TryGetValue(id, out attribute);
 	}
 
 	public bool TryGetResourceAttribute(CharacterAttributeTemplate template, out CharacterResourceAttribute attribute)
 	{
-		return resourceAttributes.TryGetValue(template.name, out attribute);
+		return resourceAttributes.TryGetValue(template.ID, out attribute);
 	}
 
-	public bool TryGetResourceAttribute(string name, out CharacterResourceAttribute attribute)
+	public bool TryGetResourceAttribute(int id, out CharacterResourceAttribute attribute)
 	{
-		return resourceAttributes.TryGetValue(name, out attribute);
+		return resourceAttributes.TryGetValue(id, out attribute);
 	}
 
 	public void AddAttribute(CharacterAttribute instance)
 	{
-		if (!attributes.ContainsKey(instance.Template.Name))
+		if (!attributes.ContainsKey(instance.Template.ID))
 		{
-			attributes.Add(instance.Template.Name, instance);
+			attributes.Add(instance.Template.ID, instance);
 
 			foreach (CharacterAttributeTemplate parent in instance.Template.ParentTypes)
 			{
 				CharacterAttribute parentInstance;
-				if (attributes.TryGetValue(parent.Name, out parentInstance))
+				if (attributes.TryGetValue(parent.ID, out parentInstance))
 				{
 					parentInstance.AddChild(instance);
 				}
@@ -91,7 +102,7 @@ public class CharacterAttributeController : NetworkBehaviour
 			foreach (CharacterAttributeTemplate child in instance.Template.ChildTypes)
 			{
 				CharacterAttribute childInstance;
-				if (attributes.TryGetValue(child.Name, out childInstance))
+				if (attributes.TryGetValue(child.ID, out childInstance))
 				{
 					instance.AddChild(childInstance);
 				}
@@ -100,7 +111,7 @@ public class CharacterAttributeController : NetworkBehaviour
 			foreach (CharacterAttributeTemplate dependant in instance.Template.DependantTypes)
 			{
 				CharacterAttribute dependantInstance;
-				if (attributes.TryGetValue(dependant.Name, out dependantInstance))
+				if (attributes.TryGetValue(dependant.ID, out dependantInstance))
 				{
 					instance.AddDependant(dependantInstance);
 				}
@@ -115,10 +126,9 @@ public class CharacterAttributeController : NetworkBehaviour
 	{
 		CharacterAttributeTemplate template = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(msg.templateID);
 		if (template != null &&
-			attributes.TryGetValue(template.Name, out CharacterAttribute attribute))
+			attributes.TryGetValue(template.ID, out CharacterAttribute attribute))
 		{
-			attribute.SetModifier(msg.modifier);
-			attribute.SetValue(msg.baseValue);
+			attribute.SetFinal(msg.value);
 		}
 	}
 
@@ -131,10 +141,40 @@ public class CharacterAttributeController : NetworkBehaviour
 		{
 			CharacterAttributeTemplate template = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(subMsg.templateID);
 			if (template != null &&
-				attributes.TryGetValue(template.Name, out CharacterAttribute attribute))
+				attributes.TryGetValue(template.ID, out CharacterAttribute attribute))
 			{
-				attribute.SetModifier(subMsg.modifier);
-				attribute.SetValue(subMsg.baseValue);
+				attribute.SetFinal(subMsg.value);
+			}
+		}
+	}
+
+	/// <summary>
+	/// Server sent a resource attribute update broadcast.
+	/// </summary>
+	private void OnClientCharacterResourceAttributeUpdateBroadcastReceived(CharacterResourceAttributeUpdateBroadcast msg)
+	{
+		CharacterAttributeTemplate template = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(msg.templateID);
+		if (template != null &&
+			resourceAttributes.TryGetValue(template.ID, out CharacterResourceAttribute attribute))
+		{
+			attribute.SetCurrentValue(msg.value);
+			attribute.SetFinal(msg.max);
+		}
+	}
+
+	/// <summary>
+	/// Server sent a multiple resource attribute update broadcast.
+	/// </summary>
+	private void OnClientCharacterResourceAttributeUpdateMultipleBroadcastReceived(CharacterResourceAttributeUpdateMultipleBroadcast msg)
+	{
+		foreach (CharacterResourceAttributeUpdateBroadcast subMsg in msg.attributes)
+		{
+			CharacterAttributeTemplate template = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(subMsg.templateID);
+			if (template != null &&
+				resourceAttributes.TryGetValue(template.ID, out CharacterResourceAttribute attribute))
+			{
+				attribute.SetCurrentValue(subMsg.value);
+				attribute.SetFinal(subMsg.max);
 			}
 		}
 	}

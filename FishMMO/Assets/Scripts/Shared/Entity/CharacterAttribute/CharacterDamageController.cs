@@ -40,7 +40,7 @@ public class CharacterDamageController : NetworkBehaviour, IDamageable, IHealabl
 	{
 		base.OnStartClient();
 		if (ResourceAttribute == null ||
-			!Character.AttributeController.TryGetResourceAttribute(ResourceAttribute.Name, out this.resourceInstance))
+			!Character.AttributeController.TryGetResourceAttribute(ResourceAttribute.ID, out this.resourceInstance))
 		{
 			throw new UnityException("Character Damage Controller ResourceAttribute is missing");
 		}
@@ -81,7 +81,7 @@ public class CharacterDamageController : NetworkBehaviour, IDamageable, IHealabl
 		if (target == null || damageAttribute == null)
 			return 0;
 
-		if (target.AttributeController.TryGetAttribute(damageAttribute.Resistance.Name, out CharacterAttribute resistance))
+		if (target.AttributeController.TryGetAttribute(damageAttribute.Resistance.ID, out CharacterAttribute resistance))
 		{
 			amount = (amount - resistance.FinalValue).Clamp(MIN_DAMAGE, MAX_DAMAGE);
 		}

@@ -55,7 +55,7 @@ public class ItemEquippable : IEquippable<Character>
 		if (Owner != null)
 		{
 			if (Owner.AttributeController != null &&
-				Owner.AttributeController.TryGetAttribute(attribute.Template.CharacterAttribute.Name, out CharacterAttribute characterAttribute))
+				Owner.AttributeController.TryGetAttribute(attribute.Template.CharacterAttribute.ID, out CharacterAttribute characterAttribute))
 			{
 				characterAttribute.AddValue(-oldValue);
 				characterAttribute.AddValue(newValue);

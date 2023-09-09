@@ -51,14 +51,14 @@ namespace FishMMO.Server
 		{
 			if (!ServerManager.Started)
 				return;
-
-			NextUpdate -= Time.deltaTime;
+			
 			if (NextUpdate < 0)
 			{
 				NextUpdate = UpdateRate;
 
 				UpdateWindowTitle();
 			}
+			NextUpdate -= Time.deltaTime;
 		}
 
 		public void UpdateWindowTitle()

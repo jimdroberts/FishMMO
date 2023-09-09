@@ -6,7 +6,7 @@
 	public bool MeetsRequirements(CharacterAttributeController characterAttributes)
 	{
 		CharacterAttribute attribute;
-		if (!characterAttributes.TryGetAttribute(template.Name, out attribute) || attribute.FinalValue < minRequiredValue)
+		if (!characterAttributes.TryGetAttribute(template.ID, out attribute) || attribute.FinalValue < minRequiredValue)
 		{
 			return false;
 		}

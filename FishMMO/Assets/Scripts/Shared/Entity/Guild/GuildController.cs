@@ -19,6 +19,7 @@ public class GuildController : NetworkBehaviour
 
 	public delegate void GuildMemberEvent(long guildMemberId, GuildRank rank);
 	public event GuildMemberEvent OnAddMember;
+	public event GuildMemberEvent OnUpdateMember;
 	public event GuildMemberEvent OnRemoveMember;
 
 	public delegate void GuildAcceptEvent(List<long> guildMemberIds);
@@ -38,6 +39,7 @@ public class GuildController : NetworkBehaviour
 		ClientManager.RegisterBroadcast<GuildInviteBroadcast>(OnClientGuildInviteBroadcastReceived);
 		ClientManager.RegisterBroadcast<GuildJoinedBroadcast>(OnClientGuildJoinedBroadcastReceived);
 		ClientManager.RegisterBroadcast<GuildNewMemberBroadcast>(OnClientGuildNewMemberBroadcastReceived);
+		ClientManager.RegisterBroadcast<GuildUpdateMemberBroadcast>(OnClientGuildUpdateMemberBroadcastReceived);
 		ClientManager.RegisterBroadcast<GuildLeaveBroadcast>(OnClientGuildLeaveBroadcastReceived);
 		ClientManager.RegisterBroadcast<GuildRemoveBroadcast>(OnClientGuildRemoveBroadcastReceived);
 	}
@@ -52,6 +54,7 @@ public class GuildController : NetworkBehaviour
 			ClientManager.UnregisterBroadcast<GuildInviteBroadcast>(OnClientGuildInviteBroadcastReceived);
 			ClientManager.UnregisterBroadcast<GuildJoinedBroadcast>(OnClientGuildJoinedBroadcastReceived);
 			ClientManager.UnregisterBroadcast<GuildNewMemberBroadcast>(OnClientGuildNewMemberBroadcastReceived);
+			ClientManager.UnregisterBroadcast<GuildUpdateMemberBroadcast>(OnClientGuildUpdateMemberBroadcastReceived);
 			ClientManager.UnregisterBroadcast<GuildLeaveBroadcast>(OnClientGuildLeaveBroadcastReceived);
 			ClientManager.UnregisterBroadcast<GuildRemoveBroadcast>(OnClientGuildRemoveBroadcastReceived);
 		}
@@ -96,7 +99,15 @@ public class GuildController : NetworkBehaviour
 	public void OnClientGuildNewMemberBroadcastReceived(GuildNewMemberBroadcast msg)
 	{
 		// update our Guild list with the new Guild member
-		OnAddMember?.Invoke(msg.newMemberCharacterId, msg.rank);
+		OnAddMember?.Invoke(msg.memberId, msg.rank);
+	}
+
+	/// <summary>
+	/// When a guild members status is updated.
+	/// </summary>
+	public void OnClientGuildUpdateMemberBroadcastReceived(GuildUpdateMemberBroadcast msg)
+	{
+		OnUpdateMember?.Invoke(msg.memberId, msg.rank);
 	}
 
 	/// <summary>
