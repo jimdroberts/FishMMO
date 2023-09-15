@@ -19,6 +19,21 @@ public class Buff
 		RemainingTime = Template.Duration;
 	}
 
+	public Buff(int templateID, float remainingTime)
+	{
+		Template = BuffTemplate.Get<BuffTemplate>(templateID);
+		tickTime = Template.TickRate;
+		RemainingTime = remainingTime;
+	}
+
+	public Buff(int templateID, float remainingTime, List<Buff> stacks)
+	{
+		Template = BuffTemplate.Get<BuffTemplate>(templateID);
+		tickTime = Template.TickRate;
+		RemainingTime = remainingTime;
+		this.stacks = stacks;
+	}
+
 	public void SubtractTime(float time)
 	{
 		RemainingTime -= time;

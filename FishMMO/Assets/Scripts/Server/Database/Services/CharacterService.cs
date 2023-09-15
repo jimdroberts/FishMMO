@@ -43,7 +43,7 @@ namespace FishMMO.Server.Services
 				.ToList();
 		}
 
-		public static void SaveCharacters(ServerDbContext dbContext, List<Character> characters, bool online = true)
+		public static void Save(ServerDbContext dbContext, List<Character> characters, bool online = true)
 		{
 			// get characters by their names
 			var characterNames = characters.Select((c) => c.CharacterName.ToLower()).ToList();
@@ -52,14 +52,14 @@ namespace FishMMO.Server.Services
 			//
 			foreach (Character character in characters)
 			{
-				SaveCharacter(dbContext, character, online);
+				Save(dbContext, character, online);
 			}
 		}
 		
 		/// <summary>
 		/// Save a character to the database. Only Scene Servers should be saving characters. A character can only be in one scene at a time.
 		/// </summary>
-		public static void SaveCharacter(ServerDbContext dbContext, Character character, bool online = true, 
+		public static void Save(ServerDbContext dbContext, Character character, bool online = true, 
 			CharacterEntity existingCharacter = null)
 		{
 			if (existingCharacter == null)
@@ -94,22 +94,34 @@ namespace FishMMO.Server.Services
 			existingCharacter.Online = online;
 			existingCharacter.LastSaved = DateTime.UtcNow;
 
-			CharacterAttributeService.SaveCharacterAttributes(dbContext, character);
-			CharacterAchievementService.SaveCharacterAchievements(dbContext, character);
+			CharacterAttributeService.Save(dbContext, character);
+			CharacterAchievementService.Save(dbContext, character);
+			CharacterBuffService.Save(dbContext, character);
 		}
 
 		/// <summary>
-		/// Don't actually delete anything. Deleted is simply set to true just incase we need to reinstate a character..
+		/// KeepData is automatically true... This means we don't actually delete anything. Deleted is simply set to true just incase we need to reinstate a character..
 		/// </summary>
-		public static void DeleteCharacter(ServerDbContext dbContext, string account, string characterName)
+		public static void Delete(ServerDbContext dbContext, string account, string characterName, bool keepData = true)
 		{
 			var character = dbContext.Characters
-				.FirstOrDefault(c => c.Account == account &&
-								c.NameLowercase == characterName.ToLower());
+							.FirstOrDefault(c => c.Account == account &&
+												 c.NameLowercase == characterName.ToLower());
 
-			if (character == null) throw new Exception($"Can't find character with name {characterName}");
-			character.TimeDeleted = DateTime.UtcNow;
-			character.Deleted = true;
+			if (character == null) return;
+
+			if (keepData)
+			{
+				character.TimeDeleted = DateTime.UtcNow;
+				character.Deleted = true;
+			}
+			else
+			{
+				CharacterAttributeService.Delete(dbContext, character.Id, keepData);
+				CharacterAchievementService.Delete(dbContext, character.Id, keepData);
+				CharacterBuffService.Delete(dbContext, character.Id, keepData);
+				dbContext.Characters.Remove(character);
+			}
 		}
 		
 		/*public static async Task<CharacterEntity> AddCharacter(ServerDbContext dbContext, CharacterEntity character)
@@ -260,8 +272,9 @@ namespace FishMMO.Server.Services
 						character.SceneName = dbCharacter.SceneName;
 						character.IsTeleporting = false;
 
-						CharacterAttributeService.LoadCharacterAttributes(dbContext, character);
-						CharacterAchievementService.LoadCharacterAchievements(dbContext, character);
+						CharacterAttributeService.Load(dbContext, character);
+						CharacterAchievementService.Load(dbContext, character);
+						CharacterBuffService.Load(dbContext, character);
 
 						return true;
 					}

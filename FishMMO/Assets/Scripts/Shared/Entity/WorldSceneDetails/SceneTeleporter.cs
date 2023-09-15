@@ -49,7 +49,7 @@ public class SceneTeleporter : MonoBehaviour
 
 					// save the character with new scene and position
 					using var dbContext = sceneServerSystem.Server.DbContextFactory.CreateDbContext();
-					CharacterService.SaveCharacter(dbContext, character, false);
+					CharacterService.Save(dbContext, character, false);
 					dbContext.SaveChanges();
 
 					Debug.Log(character.CharacterName + " has been saved at: " + character.Transform.position.ToString());

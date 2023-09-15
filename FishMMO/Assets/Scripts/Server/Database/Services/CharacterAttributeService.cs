@@ -9,18 +9,18 @@ namespace FishMMO.Server.Services
 		/// <summary>
 		/// Save a character attributes to the database.
 		/// </summary>
-		public static void SaveCharacterAttributes(ServerDbContext dbContext, Character existingCharacter)
+		public static void Save(ServerDbContext dbContext, Character character)
 		{
-			if (existingCharacter == null)
+			if (character == null)
 			{
 				return;
 			}
 
-			var attributes = dbContext.Attributes
-				.Where(c => c.CharacterId == existingCharacter.ID)
+			var attributes = dbContext.CharacterAttributes
+				.Where(c => c.CharacterId == character.ID)
 				.ToDictionary(k => k.TemplateID);
 
-			foreach (CharacterAttribute attribute in existingCharacter.AttributeController.Attributes.Values)
+			foreach (CharacterAttribute attribute in character.AttributeController.Attributes.Values)
 			{
 				// is looping resources separately faster than boxing?
 				if (attribute.Template.IsResourceAttribute)
@@ -29,7 +29,7 @@ namespace FishMMO.Server.Services
 				}
 				if (attributes.TryGetValue(attribute.Template.ID, out CharacterAttributeEntity dbAttribute))
 				{
-					dbAttribute.CharacterId = existingCharacter.ID;
+					dbAttribute.CharacterId = character.ID;
 					dbAttribute.TemplateID = attribute.Template.ID;
 					dbAttribute.BaseValue = attribute.BaseValue;
 					dbAttribute.Modifier = attribute.Modifier;
@@ -37,9 +37,9 @@ namespace FishMMO.Server.Services
 				}
 				else
 				{
-					dbContext.Attributes.Add(new CharacterAttributeEntity()
+					dbContext.CharacterAttributes.Add(new CharacterAttributeEntity()
 					{
-						CharacterId = existingCharacter.ID,
+						CharacterId = character.ID,
 						TemplateID = attribute.Template.ID,
 						BaseValue = attribute.BaseValue,
 						Modifier = attribute.Modifier,
@@ -48,11 +48,11 @@ namespace FishMMO.Server.Services
 				}
 			}
 			// is looping resources separately faster than boxing?
-			foreach (CharacterResourceAttribute attribute in existingCharacter.AttributeController.ResourceAttributes.Values)
+			foreach (CharacterResourceAttribute attribute in character.AttributeController.ResourceAttributes.Values)
 			{
 				if (attributes.TryGetValue(attribute.Template.ID, out CharacterAttributeEntity dbAttribute))
 				{
-					dbAttribute.CharacterId = existingCharacter.ID;
+					dbAttribute.CharacterId = character.ID;
 					dbAttribute.TemplateID = attribute.Template.ID;
 					dbAttribute.BaseValue = attribute.BaseValue;
 					dbAttribute.Modifier = attribute.Modifier;
@@ -60,9 +60,9 @@ namespace FishMMO.Server.Services
 				}
 				else
 				{
-					dbContext.Attributes.Add(new CharacterAttributeEntity()
+					dbContext.CharacterAttributes.Add(new CharacterAttributeEntity()
 					{
-						CharacterId = existingCharacter.ID,
+						CharacterId = character.ID,
 						TemplateID = attribute.Template.ID,
 						BaseValue = attribute.BaseValue,
 						Modifier = attribute.Modifier,
@@ -73,32 +73,45 @@ namespace FishMMO.Server.Services
 		}
 
 		/// <summary>
+		/// KeepData is automatically true... This means we don't actually delete anything. Deleted is simply set to true just incase we need to reinstate a character..
+		/// </summary>
+		public static void Delete(ServerDbContext dbContext, long characterID, bool keepData = true)
+		{
+			if (!keepData)
+			{
+				dbContext.CharacterAttributes
+				.Where(c => c.CharacterId == characterID)
+				.ToList()
+				.ForEach(attribute =>
+				{
+					dbContext.CharacterAttributes.Remove(attribute);
+				});
+			}
+		}
+
+		/// <summary>
 		/// Load character attributes from the database.
 		/// </summary>
-		public static void LoadCharacterAttributes(ServerDbContext dbContext, Character existingCharacter)
+		public static void Load(ServerDbContext dbContext, Character character)
 		{
-			var attributes = dbContext.Attributes
-				.Where(c => c.CharacterId == existingCharacter.ID)
-				.ToList();
-
-			if (attributes != null)
+			dbContext.CharacterAttributes
+			.Where(c => c.CharacterId == character.ID)
+			.ToList()
+			.ForEach(attribute =>
 			{
-				foreach (var attribute in attributes)
+				CharacterAttributeTemplate template = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(attribute.TemplateID);
+				if (template != null)
 				{
-					CharacterAttributeTemplate template = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(attribute.TemplateID);
-					if (template != null)
+					if (template.IsResourceAttribute)
 					{
-						if (template.IsResourceAttribute)
-						{
-							existingCharacter.AttributeController.SetResourceAttribute(template.ID, attribute.BaseValue, attribute.Modifier, attribute.CurrentValue);
-						}
-						else
-						{
-							existingCharacter.AttributeController.SetAttribute(template.ID, attribute.BaseValue, attribute.Modifier);
-						}
+						character.AttributeController.SetResourceAttribute(template.ID, attribute.BaseValue, attribute.Modifier, attribute.CurrentValue);
+					}
+					else
+					{
+						character.AttributeController.SetAttribute(template.ID, attribute.BaseValue, attribute.Modifier);
 					}
 				}
-			}
+			});
 		}
 	}
 }

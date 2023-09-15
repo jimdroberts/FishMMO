@@ -80,7 +80,7 @@ namespace FishMMO.Server
 
 					// all characters are periodically saved
 					using var dbContext = Server.DbContextFactory.CreateDbContext();
-					CharacterService.SaveCharacters(dbContext, new List<Character>(CharactersById.Values));
+					CharacterService.Save(dbContext, new List<Character>(CharactersById.Values));
 					dbContext.SaveChanges();
 				}
 				nextSave -= Time.deltaTime;
@@ -92,7 +92,7 @@ namespace FishMMO.Server
 			Debug.Log("Disconnecting...");
 			// save all the characters before we quit
 			using var dbContext = Server.DbContextFactory.CreateDbContext();
-			CharacterService.SaveCharacters(dbContext, new List<Character>(CharactersById.Values), false);
+			CharacterService.Save(dbContext, new List<Character>(CharactersById.Values), false);
 			dbContext.SaveChanges();
 		}
 
@@ -182,7 +182,7 @@ namespace FishMMO.Server
 
 					// save the character and set online to false
 					using var dbContext = Server.DbContextFactory.CreateDbContext();
-					CharacterService.SaveCharacter(dbContext, character, false);
+					CharacterService.Save(dbContext, character, false);
 					dbContext.SaveChanges();
 
 					Debug.Log(character.CharacterName + " has been saved at: " + character.Transform.position.ToString());
@@ -248,6 +248,16 @@ namespace FishMMO.Server
 						});
 					}
 				}
+				else
+				{
+					// loading the character failed for some reason, maybe it doesn't exist? we should never get to this point but we will kick the player anyway
+					conn.Kick(FishNet.Managing.Server.KickReason.Unset);
+				}
+			}
+			else
+			{
+				// loading the character data failed to load for some reason, maybe it doesn't exist? we should never get to this point but we will kick the player anyway
+				conn.Kick(FishNet.Managing.Server.KickReason.Unset);
 			}
 		}
 

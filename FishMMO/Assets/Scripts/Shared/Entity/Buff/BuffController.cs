@@ -9,6 +9,8 @@ public class BuffController : NetworkBehaviour
 
 	public Character Character;
 
+	public Dictionary<int, Buff> Buffs { get { return buffs; } }
+
 	public override void OnStartClient()
 	{
 		base.OnStartClient();
@@ -51,11 +53,11 @@ public class BuffController : NetworkBehaviour
 			}
 			else
 			{
-				/*if (pair.Value.Stacks.Count > 0 && pair.Value.Buff.IndependantStackTimer)
+				if (pair.Value.Stacks.Count > 0 && pair.Value.Template.IndependantStackTimer)
 				{
-					pair.Value.RemoveStack(this.gameObject);
+					pair.Value.RemoveStack(Character);
 
-				}*/
+				}
 				foreach (Buff stack in pair.Value.Stacks)
 				{
 					stack.RemoveStack(Character);
@@ -84,6 +86,14 @@ public class BuffController : NetworkBehaviour
 		else
 		{
 			buffInstance.ResetDuration();
+		}
+	}
+
+	public void Apply(Buff buff)
+	{
+		if (!buffs.ContainsKey(buff.Template.ID))
+		{
+			buffs.Add(buff.Template.ID, buff);
 		}
 	}
 

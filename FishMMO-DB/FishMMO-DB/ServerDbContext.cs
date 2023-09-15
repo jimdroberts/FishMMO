@@ -15,8 +15,8 @@ namespace FishMMO_DB
         
         // character tables
         public DbSet<CharacterEntity> Characters { get; set; }
-        public DbSet<CharacterAttributeEntity> Attributes { get; set; }
-        public DbSet<CharacterAchievementEntity> Achievements { get; set; }
+        public DbSet<CharacterAttributeEntity> CharacterAttributes { get; set; }
+        public DbSet<CharacterAchievementEntity> CharacterAchievements { get; set; }
         public DbSet<CharacterInventoryEntity> CharacterInventories { get; set; }
         public DbSet<CharacterEquipmentEntity> CharacterEquipments { get; set; }
         public DbSet<CharacterItemCooldownEntity> CharacterItemCooldowns { get; set; }

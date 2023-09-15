@@ -1,9 +1,5 @@
-﻿using FishNet.Managing;
-using FishNet.Transporting;
+﻿using FishNet.Transporting;
 using System.Collections.Generic;
-#if UNITY_EDITOR
-using UnityEditor;
-#endif
 using UnityEngine;
 using UnityEngine.UI;
 

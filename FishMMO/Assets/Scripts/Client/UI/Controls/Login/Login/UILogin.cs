@@ -1,9 +1,5 @@
 ﻿using FishNet.Transporting;
 using TMPro;
-using UnityEngine;
-#if UNITY_EDITOR
-using UnityEditor;
-#endif
 using UnityEngine.UI;
 
 namespace FishMMO.Client

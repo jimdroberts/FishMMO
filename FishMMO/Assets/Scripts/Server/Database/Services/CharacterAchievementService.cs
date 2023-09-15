@@ -9,31 +9,31 @@ namespace FishMMO.Server.Services
 		/// <summary>
 		/// Save a character Achievements to the database.
 		/// </summary>
-		public static void SaveCharacterAchievements(ServerDbContext dbContext, Character existingCharacter)
+		public static void Save(ServerDbContext dbContext, Character character)
 		{
-			if (existingCharacter == null)
+			if (character == null)
 			{
 				return;
 			}
 
-			var achievements = dbContext.Achievements
-				.Where(c => c.CharacterId == existingCharacter.ID)
+			var achievements = dbContext.CharacterAchievements
+				.Where(c => c.CharacterId == character.ID)
 				.ToDictionary(k => k.TemplateID);
 
-			foreach (Achievement achievement in existingCharacter.AchievementController.Achievements.Values)
+			foreach (Achievement achievement in character.AchievementController.Achievements.Values)
 			{
 				if (achievements.TryGetValue(achievement.Template.ID, out CharacterAchievementEntity dbAchievement))
 				{
-					dbAchievement.CharacterId = existingCharacter.ID;
+					dbAchievement.CharacterId = character.ID;
 					dbAchievement.TemplateID = achievement.Template.ID;
 					dbAchievement.Tier = achievement.CurrentTier;
 					dbAchievement.Value = achievement.CurrentValue;
 				}
 				else
 				{
-					dbContext.Achievements.Add(new CharacterAchievementEntity()
+					dbContext.CharacterAchievements.Add(new CharacterAchievementEntity()
 					{
-						CharacterId = existingCharacter.ID,
+						CharacterId = character.ID,
 						TemplateID = achievement.Template.ID,
 						Tier = achievement.CurrentTier,
 						Value = achievement.CurrentValue,
@@ -43,25 +43,34 @@ namespace FishMMO.Server.Services
 		}
 
 		/// <summary>
+		/// KeepData is automatically true... This means we don't actually delete anything. Deleted is simply set to true just incase we need to reinstate a character..
+		/// </summary>
+		public static void Delete(ServerDbContext dbContext, long characterID, bool keepData = true)
+		{
+			if (!keepData)
+			{
+				dbContext.CharacterAchievements
+				.Where(c => c.CharacterId == characterID)
+				.ToList()
+				.ForEach(achievement =>
+				{
+					dbContext.CharacterAchievements.Remove(achievement);
+				});
+			}
+		}
+
+		/// <summary>
 		/// Load character Achievements from the database.
 		/// </summary>
-		public static void LoadCharacterAchievements(ServerDbContext dbContext, Character existingCharacter)
+		public static void Load(ServerDbContext dbContext, Character character)
 		{
-			var achievements = dbContext.Achievements
-				.Where(c => c.CharacterId == existingCharacter.ID)
-				.ToList();
-
-			if (achievements != null)
+			dbContext.CharacterAchievements
+			.Where(c => c.CharacterId == character.ID)
+			.ToList()
+			.ForEach(achievement =>
 			{
-				foreach (var achievement in achievements)
-				{
-					AchievementTemplate template = AchievementTemplate.Get<AchievementTemplate>(achievement.TemplateID);
-					if (template != null)
-					{
-						existingCharacter.AchievementController.SetAchievement(template.ID, achievement.Tier, achievement.Value);
-					}
-				}
-			}
+				character.AchievementController.SetAchievement(achievement.TemplateID, achievement.Tier, achievement.Value);
+			});
 		}
 	}
 }
