@@ -41,11 +41,7 @@ namespace FishMMO.Server
 		private void Close()
 		{
 			Debug.Log("ServerLauncher: Unknown server type. Available servers {Login, World, Scene}");
-#if UNITY_EDITOR
-			EditorApplication.ExitPlaymode();
-#else
-			Application.Quit();
-#endif
+			Server.Quit();
 		}
 
 		private void Initialize(string bootstrapSceneName)

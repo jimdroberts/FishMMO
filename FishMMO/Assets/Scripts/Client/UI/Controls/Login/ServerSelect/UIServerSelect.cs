@@ -164,21 +164,13 @@ namespace FishMMO.Client
 			StopAllCoroutines();
 
 			// we should go back to login..
-#if UNITY_EDITOR
-			EditorApplication.ExitPlaymode();
-#else
-			Application.Quit();
-#endif 
+			Client.Quit();
 		}
 
 		public void OnClick_Quit()
 		{
 			StopAllCoroutines();
-#if UNITY_EDITOR
-			EditorApplication.ExitPlaymode();
-#else
-			Application.Quit();
-#endif
+			Client.Quit();
 		}
 
 		/// <summary>

@@ -114,20 +114,12 @@ namespace FishMMO.Client
 		public void OnClick_QuitToLogin()
 		{
 			// we should go back to login..
-#if UNITY_EDITOR
-			EditorApplication.ExitPlaymode();
-#else
-			Application.Quit();
-#endif
+			Client.Quit();
 		}
 
 		public void OnClick_Quit()
 		{
-#if UNITY_EDITOR
-			EditorApplication.ExitPlaymode();
-#else
-			Application.Quit();
-#endif
+			Client.Quit();
 		}
 
 		private void SetCreateButtonLocked(bool locked)

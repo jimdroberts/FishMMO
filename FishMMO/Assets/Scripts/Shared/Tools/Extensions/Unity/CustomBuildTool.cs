@@ -338,6 +338,7 @@ public class CustomBuildTool
 					FileUtil.ReplaceFile(root + "\\START_LOGINSERVER.bat", buildPath + "\\START_LOGINSERVER.bat");
 					FileUtil.ReplaceFile(root + "\\START_WORLDSERVER.bat", buildPath + "\\START_WORLDSERVER.bat");
 					FileUtil.ReplaceFile(root + "\\START_SCENESERVER.bat", buildPath + "\\START_SCENESERVER.bat");
+					FileUtil.ReplaceFile(root + "\\WindowsSetup.bat", buildPath + "\\WindowsSetup.bat");
 				}
 				else if (buildTarget == BuildTarget.StandaloneLinux64)
 				{
@@ -345,25 +346,14 @@ public class CustomBuildTool
 					FileUtil.ReplaceFile(root + "\\START_LOGINSERVER.sh", buildPath + "\\START_LOGINSERVER.sh");
 					FileUtil.ReplaceFile(root + "\\START_WORLDSERVER.sh", buildPath + "\\START_WORLDSERVER.sh");
 					FileUtil.ReplaceFile(root + "\\START_SCENESERVER.sh", buildPath + "\\START_SCENESERVER.sh");
-				}
-
-				
-				if (buildTarget == BuildTarget.StandaloneWindows64)
-				{
-					FileUtil.ReplaceFile(root + "\\WindowsSetup.bat", buildPath + "\\WindowsSetup.bat");
-				}
-				else if (buildTarget == BuildTarget.StandaloneLinux64)
-				{
 					FileUtil.ReplaceFile(root + "\\LinuxSetup.sh", buildPath + "\\LinuxSetup.sh");
 				}
-
-				// append the data folder for configuration copy
-				//buildPath += "/" + executableName + "_Data";
 
 				FileUtil.ReplaceFile(root + "\\LoginServer.cfg", buildPath + "\\LoginServer.cfg");
 				FileUtil.ReplaceFile(root + "\\WorldServer.cfg", buildPath + "\\WorldServer.cfg");
 				FileUtil.ReplaceFile(root + "\\SceneServer.cfg", buildPath + "\\SceneServer.cfg");
 				FileUtil.ReplaceFile(root + "\\Database.cfg", buildPath + "\\Database.cfg");
+				FileUtil.ReplaceDirectory(root + "\\FishMMO-DB", buildPath + "\\FishMMO-DB");
 			}
 		}
 		else if (summary.result == BuildResult.Failed)

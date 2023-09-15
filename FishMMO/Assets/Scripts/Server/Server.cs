@@ -56,14 +56,13 @@ namespace FishMMO.Server
 		{
 			// get the server type so we know how to configure
 			string serverType = GetServerType();
+			if (serverType.Equals("Invalid"))
+			{
+				Server.Quit();
+			}
 			Debug.Log(serverType + " is starting.");
 
-#if UNITY_EDITOR
-			string path = Directory.GetParent(Directory.GetParent(Application.dataPath).FullName).FullName;
-#else
-			string path = AppDomain.CurrentDomain.BaseDirectory;
-#endif
-
+			string path = Server.GetWorkingDirectory();
 			Debug.Log("Current working directory: " + path);
 
 			// load configuration
@@ -110,14 +109,28 @@ namespace FishMMO.Server
 			}
 			else
 			{
-#if UNITY_EDITOR
-				EditorApplication.ExitPlaymode();
-#else
-				Application.Quit();
-#endif
+				Server.Quit();
 			}
 
 			Debug.Log(serverType + " is running.");
+		}
+
+		public static string GetWorkingDirectory()
+		{
+#if UNITY_EDITOR
+			return Directory.GetParent(Directory.GetParent(Application.dataPath).FullName).FullName;
+#else
+			return AppDomain.CurrentDomain.BaseDirectory;
+#endif
+		}
+
+		public static void Quit()
+		{
+#if UNITY_EDITOR
+			EditorApplication.ExitPlaymode();
+#else
+			Application.Quit();
+#endif
 		}
 
 		private string GetServerType()
@@ -218,11 +231,7 @@ namespace FishMMO.Server
 					PartySystem.InternalInitializeOnce(this, NetworkManager.ServerManager);
 					break;
 				default:
-#if UNITY_EDITOR
-					EditorApplication.ExitPlaymode();
-#else
-					Application.Quit();
-#endif
+					Server.Quit();
 					return;
 			}
 		}

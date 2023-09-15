@@ -48,30 +48,18 @@ namespace FishMMO.Client
 			{
 				Debug.LogError("Client: NetworkManager not found.");
 
-#if UNITY_EDITOR
-				EditorApplication.ExitPlaymode();
-#else
-				Application.Quit();
-#endif
+				Client.Quit();
 			}
 			else if (LoginAuthenticator == null)
 			{
 				Debug.LogError("Client: LoginAuthenticator not found.");
 
-#if UNITY_EDITOR
-				EditorApplication.ExitPlaymode();
-#else
-				Application.Quit();
-#endif
+				Client.Quit();
 			}
 			else
 			{
-#if UNITY_EDITOR
-				string path = Directory.GetParent(Directory.GetParent(Application.dataPath).FullName).FullName;
-#else
-				string path = AppDomain.CurrentDomain.BaseDirectory;
+				string path = Client.GetWorkingDirectory();
 
-#endif
 				// load configuration
 				Configuration = new Configuration(path);
 				if (!Configuration.Load(Configuration.DEFAULT_FILENAME + Configuration.EXTENSION))
@@ -119,6 +107,24 @@ namespace FishMMO.Client
 				}
 				return;
 			}
+		}
+
+		public static string GetWorkingDirectory()
+		{
+#if UNITY_EDITOR
+			return Directory.GetParent(Directory.GetParent(Application.dataPath).FullName).FullName;
+#else
+			return AppDomain.CurrentDomain.BaseDirectory;
+#endif
+		}
+
+		public static void Quit()
+		{
+#if UNITY_EDITOR
+			EditorApplication.ExitPlaymode();
+#else
+			Application.Quit();
+#endif
 		}
 
 		/// <summary>

@@ -109,11 +109,7 @@ namespace FishMMO.Client
 
 		public void OnClick_Quit()
 		{
-#if UNITY_EDITOR
-			EditorApplication.ExitPlaymode();
-#else
-			Application.Quit();
-#endif
+			Client.Quit();
 		}
 
 		/// <summary>
