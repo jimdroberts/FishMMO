@@ -9,17 +9,23 @@ using UnityEngine;
 
 namespace FishMMO.Server.Services
 {
+	/// <summary>
+	/// Handles all Database<->Server Character interactions.
+	/// </summary>
 	public class CharacterService
 	{
-		public static CharacterEntity GetCharacterById(ServerDbContext dbContext, long id)
+		public static CharacterEntity GetById(ServerDbContext dbContext, long id)
 		{
 			var character = dbContext.Characters.FirstOrDefault(c => c.Id == id);
-			
-			if (character == null) throw new Exception($"Couldn't find character with id {id}");
+
+			if (character == null)
+			{
+				//throw new Exception($"Couldn't find character with id {id}");
+			}
 			return character;
 		}
 
-		public static CharacterEntity GetCharacterByName(ServerDbContext dbContext, string name)
+		public static CharacterEntity GetByName(ServerDbContext dbContext, string name)
 		{
 			var character = dbContext.Characters
 				.FirstOrDefault(c => c.NameLowercase == name.ToLower());
@@ -31,7 +37,7 @@ namespace FishMMO.Server.Services
 			return character;
 		}
 
-		public static List<CharacterDetails> GetCharacterList(ServerDbContext dbContext, string account)
+		public static List<CharacterDetails> GetDetails(ServerDbContext dbContext, string account)
 		{
 			return dbContext.Characters
 				.Where(c => c.Account == account && !c.Deleted)
@@ -70,7 +76,8 @@ namespace FishMMO.Server.Services
 			// if it's still null, throw exception
 			if (existingCharacter == null)
 			{
-				throw new Exception($"Unable to fetch character with name {character.CharacterName}");
+				//throw new Exception($"Unable to fetch character with name {character.CharacterName}");
+				return;
 			}
 
 			// store these into vars so we don't have to access them a bunch of times
@@ -102,7 +109,7 @@ namespace FishMMO.Server.Services
 		/// <summary>
 		/// KeepData is automatically true... This means we don't actually delete anything. Deleted is simply set to true just incase we need to reinstate a character..
 		/// </summary>
-		public static void Delete(ServerDbContext dbContext, string account, string characterName, bool keepData = true)
+		public static void Delete(ServerDbContext dbContext, string account, string characterName, bool keepData = false)
 		{
 			var character = dbContext.Characters
 							.FirstOrDefault(c => c.Account == account &&
@@ -138,7 +145,7 @@ namespace FishMMO.Server.Services
 			}
 		}*/
 		
-		public static bool TrySetCharacterSelected(ServerDbContext dbContext, string account, string characterName)
+		public static bool TrySetSelected(ServerDbContext dbContext, string account, string characterName)
 		{
 			// get all characters for account
 			var characters = dbContext.Characters
@@ -163,7 +170,7 @@ namespace FishMMO.Server.Services
 		/// <summary>
 		/// Returns true if we successfully get our selected character for the connections account, otherwise returns false.
 		/// </summary>
-		public static bool TryGetSelectedCharacterDetails(ServerDbContext dbContext, string account, out long characterId)
+		public static bool TryGetSelectedDetails(ServerDbContext dbContext, string account, out long characterId)
 		{
 			var character = dbContext.Characters
 				.FirstOrDefault((c) => c.Account == account && c.Selected && !c.Deleted);
@@ -179,7 +186,7 @@ namespace FishMMO.Server.Services
 		/// <summary>
 		/// Returns true if we successfully set our selected character for the connections account, otherwise returns false.
 		/// </summary>
-		public static bool TrySetCharacterOnline(ServerDbContext dbContext, string account, string characterName)
+		public static bool TrySetOnline(ServerDbContext dbContext, string account, string characterName)
 		{
 			var characters = dbContext.Characters
 				.Where((c) => c.Account == account && !c.Deleted)
@@ -202,7 +209,7 @@ namespace FishMMO.Server.Services
 		/// <summary>
 		/// Returns true if any of the accounts characters are currently online.
 		/// </summary>
-		public static bool TryGetOnlineCharacter(ServerDbContext dbContext, string account)
+		public static bool TryGetOnline(ServerDbContext dbContext, string account)
 		{
 			var characters = dbContext.Characters
 				.Where((c) => c.Account == account && !c.Deleted)
@@ -228,7 +235,7 @@ namespace FishMMO.Server.Services
 		/// <summary>
 		/// Returns true if we successfully get our selected characters scene for the connections account, otherwise returns false.
 		/// </summary>
-		public static bool TryGetSelectedCharacterSceneName(ServerDbContext dbContext, string account, out string sceneName)
+		public static bool TryGetSelectedSceneName(ServerDbContext dbContext, string account, out string sceneName)
 		{
 			var character = dbContext.Characters
 				.FirstOrDefault((c) => c.Account == account && c.Selected && !c.Deleted);
@@ -244,7 +251,7 @@ namespace FishMMO.Server.Services
 		/// <summary>
 		/// Attempts to load a character from the database. The character is loaded to the last known position/rotation and set inactive.
 		/// </summary>
-		public static bool TryLoadCharacter(ServerDbContext dbContext, long characterId, NetworkManager networkManager, out Character character)
+		public static bool TryGet(ServerDbContext dbContext, long characterId, NetworkManager networkManager, out Character character)
 		{
 			var dbCharacter =
 				dbContext.Characters.FirstOrDefault((c) => c.Id == characterId && !c.Deleted);

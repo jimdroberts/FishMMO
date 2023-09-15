@@ -49,7 +49,7 @@ namespace FishMMO.Server
 			{
 				using var dbContext = Server.DbContextFactory.CreateDbContext();
                 // load all character details for the account from database
-                List<global::CharacterDetails> characterList = CharacterService.GetCharacterList(dbContext, accountName);
+                List<global::CharacterDetails> characterList = CharacterService.GetDetails(dbContext, accountName);
 
 				// append the characters to the broadcast message
 				CharacterListBroadcast characterListMsg = new CharacterListBroadcast()
@@ -83,12 +83,12 @@ namespace FishMMO.Server
 			using var dbContext = Server.DbContextFactory.CreateDbContext();
 			if (conn.IsActive && AccountManager.GetAccountNameByConnection(conn, out string accountName))
 			{
-				var selectedCharacter = CharacterService.TrySetCharacterSelected(dbContext, accountName, msg.characterName);
+				var selectedCharacter = CharacterService.TrySetSelected(dbContext, accountName, msg.characterName);
 				dbContext.SaveChanges();
 				
 				if (selectedCharacter)
 				{
-					List<WorldServerDetails> worldServerList = WorldServerService.GetWorldServerList(dbContext);
+					List<WorldServerDetails> worldServerList = WorldServerService.GetServerList(dbContext);
 					conn.Broadcast(new ServerListBroadcast()
 					{
 						servers = worldServerList

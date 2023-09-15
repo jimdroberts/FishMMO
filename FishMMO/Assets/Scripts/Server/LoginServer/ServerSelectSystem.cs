@@ -40,7 +40,7 @@ namespace FishMMO.Server
 			
 			if (conn.IsActive)
 			{
-				List<WorldServerDetails> worldServerList = WorldServerService.GetWorldServerList(dbContext);
+				List<WorldServerDetails> worldServerList = WorldServerService.GetServerList(dbContext);
 
 				ServerListBroadcast serverListMsg = new ServerListBroadcast()
 				{

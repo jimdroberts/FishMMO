@@ -41,7 +41,7 @@ namespace FishMMO.Server
 					if (Server.Configuration.TryGetString("ServerName", out string name))
 					{
 						Debug.Log("Adding World Server to Database: " + name + ":" + server.address + ":" + server.port);
-						WorldServerService.AddWorldServer(dbContext, name, server.address, server.port, characterCount, locked);
+						WorldServerService.Add(dbContext, name, server.address, server.port, characterCount, locked);
 						dbContext.SaveChanges();
 					}
 				}
@@ -51,7 +51,7 @@ namespace FishMMO.Server
 				if (Server.Configuration.TryGetString("ServerName", out string name))
 				{
 					Debug.Log("Removing World Server from Database: " + name);
-					WorldServerService.DeleteWorldServer(dbContext, name);
+					WorldServerService.Delete(dbContext, name);
 					dbContext.SaveChanges();
 				}
 			}
@@ -70,7 +70,7 @@ namespace FishMMO.Server
 					nextPulse = pulseRate;
 					Debug.Log(name + ": Pulse");
 					int characterCount = ServerManager.Clients.Count - Server.WorldSceneSystem.SceneServers.Count;
-					WorldServerService.WorldServerPulse(dbContext, name, characterCount);
+					WorldServerService.Pulse(dbContext, name, characterCount);
 					dbContext.SaveChanges();
 				}
 				nextPulse -= Time.deltaTime;
@@ -83,7 +83,7 @@ namespace FishMMO.Server
 			{
 				using var dbContext = Server.DbContextFactory.CreateDbContext();
 				Debug.Log("Removing World Server: " + name);
-				WorldServerService.DeleteWorldServer(dbContext, name);
+				WorldServerService.Delete(dbContext, name);
 				dbContext.SaveChanges();
 			}
 		}

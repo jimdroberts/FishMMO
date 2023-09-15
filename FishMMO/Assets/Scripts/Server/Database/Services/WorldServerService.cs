@@ -9,7 +9,10 @@ namespace FishMMO.Server.Services
 {
     public class WorldServerService
     {
-        public static WorldServerEntity AddWorldServer(
+        /// <summary>
+        /// Adds a new server to the server list. The Login server will fetch this list for new clients.
+        /// </summary>
+        public static WorldServerEntity Add(
             ServerDbContext dbContext,
             string name,
             string address,
@@ -39,7 +42,7 @@ namespace FishMMO.Server.Services
             return server;
         }
 
-        public static void WorldServerPulse(ServerDbContext dbContext, string name, int characterCount)
+        public static void Pulse(ServerDbContext dbContext, string name, int characterCount)
         {
             var worldServer = dbContext.WorldServers
                 .FirstOrDefault(server => server.Name.ToLower() == name.ToLower());
@@ -49,7 +52,7 @@ namespace FishMMO.Server.Services
             worldServer.CharacterCount = characterCount;
         }
         
-        public static void DeleteWorldServer(ServerDbContext dbContext, string name) 
+        public static void Delete(ServerDbContext dbContext, string name) 
         {
             var worldServer = dbContext.WorldServers
                 .FirstOrDefault(server => server.Name.ToLower() == name.ToLower());
@@ -58,7 +61,7 @@ namespace FishMMO.Server.Services
             dbContext.WorldServers.Remove(worldServer);
         }
         
-        public static List<WorldServerDetails> GetWorldServerList(ServerDbContext dbContext)
+        public static List<WorldServerDetails> GetServerList(ServerDbContext dbContext)
         {
             return dbContext.WorldServers
                 .ToList()

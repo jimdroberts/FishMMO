@@ -285,7 +285,7 @@ namespace FishMMO.Server
 			// get the scene for the selected character
 			if (SceneServers.Count < 1 ||
 				!AccountManager.GetAccountNameByConnection(conn, out string accountName) ||
-				!CharacterService.TryGetSelectedCharacterSceneName(dbContext, accountName, out string sceneName))
+				!CharacterService.TryGetSelectedSceneName(dbContext, accountName, out string sceneName))
 			{
 				conn.Kick(KickReason.UnexpectedProblem);
 				return;

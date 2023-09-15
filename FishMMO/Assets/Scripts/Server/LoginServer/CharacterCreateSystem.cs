@@ -67,7 +67,7 @@ namespace FishMMO.Server
 				}
 
 				using var dbContext = Server.DbContextFactory.CreateDbContext();
-				var character = CharacterService.GetCharacterByName(dbContext, msg.characterName);
+				var character = CharacterService.GetByName(dbContext, msg.characterName);
 				if (character != null)
 				{
 					// character name already taken

@@ -70,7 +70,7 @@ namespace FishMMO.Server
 			if (DBContextFactory != null && IsAllowedUsername(username))
 			{
 				using ServerDbContext dbContext = DBContextFactory.CreateDbContext(new string[] { });
-				if (!CharacterService.TryGetOnlineCharacter(dbContext, username))
+				if (!CharacterService.TryGetOnline(dbContext, username))
 				{
 					result = AccountService.TryLogin(dbContext, username, password);
 				}

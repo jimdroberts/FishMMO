@@ -204,7 +204,7 @@ namespace FishMMO.Server
 			// create the db context
 			using var dbContext = Server.DbContextFactory.CreateDbContext();
 
-			if (CharacterService.TryGetSelectedCharacterDetails(dbContext, accountName, out long selectedCharacterId))
+			if (CharacterService.TryGetSelectedDetails(dbContext, accountName, out long selectedCharacterId))
 			{
 				if (CharactersById.ContainsKey(selectedCharacterId))
 				{
@@ -215,7 +215,7 @@ namespace FishMMO.Server
 					return;
 				}
 
-				if (CharacterService.TryLoadCharacter(dbContext, selectedCharacterId, Server.NetworkManager, out Character character))
+				if (CharacterService.TryGet(dbContext, selectedCharacterId, Server.NetworkManager, out Character character))
 				{
 					WaitingSceneLoadCharacters.Add(conn, character);
 
@@ -328,7 +328,7 @@ namespace FishMMO.Server
 				{
 					// doesn't contain any important functionality yet.. we just do it for fun
 					using var dbContext = Server.DbContextFactory.CreateDbContext();
-					CharacterService.TrySetCharacterOnline(dbContext, accountName, character.CharacterName);
+					CharacterService.TrySetOnline(dbContext, accountName, character.CharacterName);
 					dbContext.SaveChanges();
 				}
 
