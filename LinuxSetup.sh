@@ -190,12 +190,12 @@ display_menu() {
 	clear
 	echo "Welcome to the Installation Script"
 	echo "Choose an option:"
-	echo "1. Install .NET SDK 7.0.202"
+	echo "1. Install .NET SDK 7"
 	echo "2. Install .NET EF"
 	echo "3. Install Docker"
 	echo "4. Create a PostgreSQL Docker container"
-	echo "5. Create an initial migration and optionally update the database using Entity Framework"
-	echo "6. Create a new migration"
+	echo "5. Create an Initial Migration"
+	echo "6. Create a new Migration"
 	echo "7. Quit"
 }
 
