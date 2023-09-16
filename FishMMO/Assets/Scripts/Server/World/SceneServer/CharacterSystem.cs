@@ -185,8 +185,6 @@ namespace FishMMO.Server
 					CharacterService.Save(dbContext, character, false);
 					dbContext.SaveChanges();
 
-					Debug.Log(character.CharacterName + " has been saved at: " + character.Transform.position.ToString());
-
 					// immediately log out for now.. we could add a timeout later on..?
 					if (character.NetworkObject.IsSpawned)
 						ServerManager.Despawn(character.NetworkObject, DespawnType.Pool);
@@ -208,7 +206,7 @@ namespace FishMMO.Server
 			{
 				if (CharactersById.ContainsKey(selectedCharacterId))
 				{
-					Debug.Log(selectedCharacterId + " is already loaded or loading. FIXME");
+					//Debug.Log(selectedCharacterId + " is already loaded or loading. FIXME");
 
 					// character load already started or complete
 					conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
@@ -222,7 +220,7 @@ namespace FishMMO.Server
 					// check if the scene is valid, loaded, and cached properly
 					if (Server.SceneServerSystem.TryGetValidScene(character.SceneName, out SceneInstanceDetails instance))
 					{
-						Debug.Log(character.CharacterName + " is loading Scene: " + character.SceneName);
+						//Debug.Log(character.CharacterName + " is loading Scene: " + character.SceneName);
 
 						if (Server.SceneServerSystem.TryLoadSceneForConnection(conn, instance))
 						{
@@ -231,7 +229,7 @@ namespace FishMMO.Server
 						}
 						else
 						{
-							Debug.Log(character.CharacterName + " scene failed to load for connection.");
+							//Debug.Log(character.CharacterName + "'s scene failed to load.");
 
 							// character scene not found even after validated
 							conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
@@ -342,7 +340,7 @@ namespace FishMMO.Server
 					});
 				}
 
-				Debug.Log(character.CharacterName + " has been spawned at: " + character.SceneName + " " + character.Transform.position.ToString());
+				//Debug.Log(character.CharacterName + " has been spawned at: " + character.SceneName + " " + character.Transform.position.ToString());
 			}
 			else
 			{

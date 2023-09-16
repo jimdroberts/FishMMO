@@ -104,6 +104,8 @@ namespace FishMMO.Server.Services
 			CharacterAttributeService.Save(dbContext, character);
 			CharacterAchievementService.Save(dbContext, character);
 			CharacterBuffService.Save(dbContext, character);
+
+			//Debug.Log(character.CharacterName + " has been saved at: " + character.Transform.position.ToString());
 		}
 
 		/// <summary>

@@ -1,4 +1,7 @@
 ﻿using FishNet.Transporting;
+#if UNITY_STANDALONE_LINUX || UNITY_EDITOR_LINUX
+using System;
+#endif
 using System.Text;
 using System.Runtime.InteropServices;
 using UnityEngine;
