@@ -1,23 +1,29 @@
-#!/bin/bash
+#!/bin/sh
 
-cd "$(dirname "$0")"
-
-if [ "$EUID" -ne 0 ]; then
-    echo "Requesting administrator privileges..."
-    sudo "$0" "$@"
-    exit
-fi
-
-echo "Administrator privileges acquired."
-
-if [ "$(uname)" != "Linux" ]; then
-    echo "Error: This script must be run under Linux."
-    exit
-fi
+# Function to check if dos2unix is installed.
+install_dos2unix() {
+	if ! command -v dos2unix >/dev/null 2>&1; then
+		echo "dos2unix is not installed. Installing..."
+				
+		# Install dos2unix using apt-get (Debian/Ubuntu)
+		sudo apt-get update
+		sudo apt-get install -y dos2unix
+				
+		# Check if the installation was successful
+		if [ $? -eq 0 ]; then
+			echo "dos2unix has been installed successfully."
+		else
+			echo "Failed to install dos2unix. Please install it manually."
+			return 1
+		fi
+	else
+		echo "dos2unix is already installed."
+	fi
+}
 
 # Function to check if .NET SDK 7.0.202 is installed
 is_dotnet_installed() {
-    if dotnet --list-sdks | grep -q "7.0.202"; then
+    if dotnet --list-sdks | grep -q "7"; then
         return 0  # Return success (true)
     else
         return 1  # Return failure (false)
@@ -35,145 +41,197 @@ is_dotnet_ef_installed() {
 
 # Function to check if Docker is installed
 is_docker_installed() {
-    if command -v docker &>/dev/null; then
+    if [ -x "$(command -v docker)" ]; then
         return 0  # Return success (true)
     else
         return 1  # Return failure (false)
     fi
 }
 
-installDOTNET() {
-    if ! is_dotnet_installed; then
-        echo "Downloading and installing .NET 7.0.202..."
-        wget https://download.visualstudio.microsoft.com/download/pr/9a603243-a535-4f47-9359-089dccc1a27f/8f4c38b6f7867170f2e7d0153ea39ed5/dotnet-sdk-7.0.202-linux-x64.tar.gz
-        tar -zxvf dotnet-sdk-7.0.202-linux-x64.tar.gz -C /opt/dotnet
-        rm dotnet-sdk-7.0.202-linux-x64.tar.gz
-        export PATH=$PATH:/opt/dotnet
-        echo ".NET 7.0.202 has been installed."
-        read -p "Press enter to continue."
-        Start
-    else
-        Start
+# Function to start Docker service
+start_docker() {
+    if ! sudo systemctl is-active --quiet docker; then
+        echo "Starting Docker service..."
+        sudo systemctl start docker
     fi
 }
 
-installDOTNETEF() {
-    if ! is_dotnet_ef_installed; then
-        echo "Downloading and installing dotnet-ef..."
-        dotnet tool install --global dotnet-ef
-        echo ".NET EF has been installed."
-        read -p "Press enter to continue."
-        Start
-    else
-        Start
-    fi
+# Function to install .NET SDK 7.0
+install_dotnet() {
+	if is_dotnet_installed; then
+		echo ".Net SDK 7 is already installed."
+	else
+		echo "Installing .NET SDK 7..."
+		sudo apt-get update && sudo apt-get install -y dotnet-sdk-7.0
+	fi
 }
 
-installDocker() {
-    if ! is_docker_installed; then
-        echo "Downloading and installing docker..."
-        curl -fsSL https://get.docker.com -o get-docker.sh
-        sudo sh get-docker.sh
-        sudo usermod -aG docker $USER
-        rm get-docker.sh
-        echo "Docker has been installed."
-        read -p "Press enter to continue."
-        Start
-    else
-        Start
-    fi
+# Function to install .NET EF
+install_dotnet_ef() {
+	if is_dotnet_ef_installed; then
+		echo ".Net EF is already installed."
+	else
+		echo "Installing .NET EF..."
+		dotnet tool install --global dotnet-ef
+		export PATH=$PATH:$HOME/.dotnet/tools
+		read -p "Press Enter to continue..."
+	fi	
 }
 
-createDockerContainer() {
+# Function to install Docker on various Unix platforms
+install_docker() {
     if is_docker_installed; then
-        echo "Attempting to create a new docker container with postgresql v14..."
-        while IFS='=' read -r name value; do
-            export "$name=$value"
-        done < ./Database.cfg
-        docker run --name $DbName -e POSTGRES_USER=$DbUsername -e POSTGRES_PASSWORD=$DbPassword -p $DbAddress:$DbPort:$DbPort -d postgres:14
-        read -p "Press enter to continue"
-        Start
+        echo "Docker is already installed."
     else
-        Start
+        echo "Installing Docker..."
+        if [ -f /etc/os-release ]; then
+            # Detect the Unix platform (e.g., Ubuntu, CentOS, etc.)
+            . /etc/os-release
+            case "$ID" in
+                ubuntu|debian)
+                    # Install Docker on Debian/Ubuntu
+                    sudo apt-get update
+                    sudo apt-get install -y docker.io
+                    ;;
+                centos|rhel|fedora)
+                    # Install Docker on CentOS/RHEL/Fedora
+                    sudo yum install -y docker
+                    ;;
+                *)
+                    echo "Unsupported Unix platform: $ID"
+                    return 1
+                    ;;
+            esac
+
+            # Start and enable Docker service
+            sudo systemctl start docker
+            sudo systemctl enable docker
+
+            echo "Docker has been successfully installed."
+        else
+            echo "Unable to detect the Unix platform. Please install Docker manually."
+        fi
     fi
 }
 
-createInitialMigration() {
-    if is_docker_installed; then
-        projectPath=./FishMMO-DB/FishMMO-DB/FishMMO-DB.csproj
-        startupProject=./FishMMO-DB/FishMMO-DB-Migrator/FishMMO-DB-Migrator.csproj
-        dotnet ef migrations add Initial -p "$projectPath" -s "$startupProject"
+# Function to create a Docker container for PostgreSQL
+create_postgres_container() {
+	if is_docker_installed; then
+		start_docker
+
+		# Specify the full path to the Database.cfg file
+        config_file="./Database.cfg"
+		
+		if [ ! -f "$config_file" ]; then
+            echo "Database configuration file ($config_file) not found."
+        else
+			docker ps -a
+		
+			# Ensure that the line endings in the config file are in Unix format
+			install_dos2unix
+			dos2unix "$config_file"
+		
+			echo "Creating a PostgreSQL Docker container..."
+			. "$config_file"  # Load database info from the configuration file
+			
+			# Create the container and install postgres 14
+			docker run --name $DbName -e POSTGRES_USER=$DbUsername -e POSTGRES_PASSWORD=$DbPassword -p $DbAddress:$DbPort:$DbPort -d postgres:14
+			
+			# Ensure the container is running
+			docker start fish_mmo_postgresql
+			echo "PostgreSQL Docker container created with name: $DbName"
+		fi
+	else
+		echo "Docker needs to be installed first."
+	fi
+}
+
+# Function to create an initial migration and optionally update the database using Entity Framework
+create_initial_migration() {
+	if is_docker_installed; then
+		start_docker
+		
+		projectPath="./FishMMO-DB/FishMMO-DB/FishMMO-DB.csproj"
+        startupProject="./FishMMO-DB/FishMMO-DB-Migrator/FishMMO-DB-Migrator.csproj"
+		export PATH="$PATH:$HOME/.dotnet/tools"
+		
+		echo "Creating an initial migration..."
+		dotnet ef migrations add Initial -p "$projectPath" -s "$startupProject"
         dotnet ef database update -p "$projectPath" -s "$startupProject"
-        read -p "Press enter to continue"
-        Start
-    else
-        Start
-    fi
+		echo "Database updated."
+	else
+		echo "Docker needs to be installed first."
+	fi
 }
 
+# Function to create a new migration and update the database properly
 createNewMigration() {
     if is_docker_installed; then
-        projectPath=./FishMMO-DB/FishMMO-DB/FishMMO-DB.csproj
-        startupProject=./FishMMO-DB/FishMMO-DB-Migrator/FishMMO-DB-Migrator.csproj
-        timestamp=$(date +%F-%H-%M-%S)
-        migrationName=Migration_$timestamp
+		start_docker
+	
+        projectPath="./FishMMO-DB/FishMMO-DB/FishMMO-DB.csproj"
+        startupProject="./FishMMO-DB/FishMMO-DB-Migrator/FishMMO-DB-Migrator.csproj"
+        export PATH="$PATH:$HOME/.dotnet/tools"
+		
+        # Generate a timestamp for the migration name
+        timestamp=$(date +"%Y-%m-%d-%H-%M-%S")
+        migrationName="Migration_$timestamp"
+        
+		echo "Creating new migration..."
+        # Run the migrations and database update commands
         dotnet ef migrations add "$migrationName" -p "$projectPath" -s "$startupProject"
         dotnet ef database update -p "$projectPath" -s "$startupProject"
-        read -p "Press enter to continue"
-        Start
-    else
-        Start
+		echo "Migration applied."
     fi
 }
 
-Start() {
-    clear
-    echo $(date '+%T')
-    echo "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-"
-    echo "-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-="
-    echo "This program is designed to help install all the applications required to run"
-    echo "a FishMMO server. Please ensure all of the programs are installed."
-    echo "Type the number of the option you wish to execute, followed by the [ENTER] key"
-    echo "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-"
-    echo "-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-="
-    echo ""
-    echo "1 - Install dotnet 7"
-    echo "2 - Install dotnet-ef"
-    echo "3 - Install docker"
-    echo "4 - Create docker container"
-    echo "5 - Create initial migration"
-    echo "6 - Create new migration"
-    echo "7 - Exit"
-    
-    read -p "Enter your choice: " Choice
-
-    case $Choice in
-        1)
-            installDOTNET
-            ;;
-        2)
-            installDOTNETEF
-            ;;
-        3)
-            installDocker
-            ;;
-        4)
-            createDockerContainer
-            ;;
-        5)
-            createInitialMigration
-            ;;
-        6)
-            createNewMigration
-            ;;
-        7)
-            exit
-            ;;
-        *)
-            echo "Invalid choice. Try again."
-            Start
-            ;;
-    esac
+# Function to display menu and get user choice
+display_menu() {
+	clear
+	echo "Welcome to the Installation Script"
+	echo "Choose an option:"
+	echo "1. Install .NET SDK 7.0.202"
+	echo "2. Install .NET EF"
+	echo "3. Install Docker"
+	echo "4. Create a PostgreSQL Docker container"
+	echo "5. Create an initial migration and optionally update the database using Entity Framework"
+	echo "6. Create a new migration"
+	echo "7. Quit"
 }
 
-Start
+# Main script
+while true; do
+	display_menu
+	read -p "Enter your choice: " choice
+
+	case $choice in
+		1)
+			install_dotnet
+			;;
+		2)
+			install_dotnet_ef
+			;;
+		3)
+			install_docker
+			;;
+		4)
+			create_postgres_container
+			;;
+		5)
+			create_initial_migration
+			;;
+		6)
+			createNewMigration
+			;;
+		7)
+			break
+			;;
+		*)
+			echo "Invalid choice. Please select 1, 2, 3, 4, or 5."
+			;;
+	esac
+	
+	# Wait for user to press Enter before displaying the menu again
+    echo "Press Enter to continue..."
+    read dummy
+done
