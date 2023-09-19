@@ -300,6 +300,18 @@ public class CustomBuildTool
 		BuildTarget originalBuildTarget = EditorUserBuildSettings.activeBuildTarget;
 		StandaloneBuildSubtarget originalBuildSubtarget = EditorUserBuildSettings.standaloneBuildSubtarget;
 
+		ScriptingImplementation originalScriptingImp = PlayerSettings.GetScriptingBackend(originalGroup);
+		Il2CppCompilerConfiguration originalCompilerConf = PlayerSettings.GetIl2CppCompilerConfiguration(originalGroup);
+		UnityEditor.Build.NamedBuildTarget originalNamedBuildTargetGroup = UnityEditor.Build.NamedBuildTarget.FromBuildTargetGroup(originalGroup);
+		UnityEditor.Build.Il2CppCodeGeneration originalOptimization = PlayerSettings.GetIl2CppCodeGeneration(originalNamedBuildTargetGroup);
+
+		if (buildTarget == BuildTarget.WebGL)
+		{
+			PlayerSettings.SetScriptingBackend(EditorUserBuildSettings.selectedBuildTargetGroup, ScriptingImplementation.IL2CPP);
+			PlayerSettings.SetIl2CppCompilerConfiguration(EditorUserBuildSettings.selectedBuildTargetGroup, Il2CppCompilerConfiguration.Release);
+			PlayerSettings.SetIl2CppCodeGeneration(UnityEditor.Build.NamedBuildTarget.WebGL, UnityEditor.Build.Il2CppCodeGeneration.OptimizeSize);
+		}
+
 		// switch active build target so #defines work properly
 		BuildTargetGroup targetGroup = BuildPipeline.GetBuildTargetGroup(buildTarget);
 		EditorUserBuildSettings.SwitchActiveBuildTarget(targetGroup, buildTarget);
@@ -360,6 +372,10 @@ public class CustomBuildTool
 		{
 			Debug.Log("Build failed: " + report.summary.result + " " + report);
 		}
+
+		PlayerSettings.SetScriptingBackend(originalGroup, originalScriptingImp);
+		PlayerSettings.SetIl2CppCompilerConfiguration(originalGroup, originalCompilerConf);
+		PlayerSettings.SetIl2CppCodeGeneration(originalNamedBuildTargetGroup, originalOptimization);
 
 		// reset build target
 		EditorUserBuildSettings.SwitchActiveBuildTarget(originalGroup, originalBuildTarget);
@@ -440,6 +456,16 @@ public class CustomBuildTool
 						BuildOptions.CleanBuildCache | BuildOptions.Development | BuildOptions.ShowBuiltPlayer,
 						StandaloneBuildSubtarget.Player,
 						BuildTarget.StandaloneLinux64);
+	}
+
+	[MenuItem("FishMMO/WebGL Build")]
+	public static void BuildWebGLClient()
+	{
+		BuildExecutable(CLIENT_BUILD_NAME,
+						CLIENT_BOOTSTRAP_SCENES,
+						BuildOptions.CleanBuildCache | BuildOptions.Development | BuildOptions.ShowBuiltPlayer,
+						StandaloneBuildSubtarget.Player,
+						BuildTarget.WebGL);
 	}
 }
 #endif

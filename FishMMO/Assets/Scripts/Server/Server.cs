@@ -95,15 +95,11 @@ namespace FishMMO.Server
 			// automatically start the server
 			if (NetworkManager.ServerManager != null && LoadTransportServerDetails())
 			{
+				NetworkManager.ServerManager.OnServerConnectionState += ServerManager_OnServerConnectionState;
+
 				// start the local server connection
 				NetworkManager.ServerManager.StartConnection();
-
-				Transport transport = NetworkManager.TransportManager.Transport;
-				if (transport != null)
-				{
-					Debug.Log("Server: " + transport.GetServerBindAddress(IPAddressType.IPv4) + ":" + transport.GetPort());
-				}
-				NetworkManager.ServerManager.OnServerConnectionState += ServerManager_OnServerConnectionState;
+				
 
 				StartCoroutine(OnAwaitingConnectionReady());
 			}
@@ -250,6 +246,12 @@ namespace FishMMO.Server
 		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs obj)
 		{
 			serverState = obj.ConnectionState;
+
+			Transport transport = NetworkManager.TransportManager.Transport;
+			if (transport != null)
+			{
+				Debug.Log("Server: " + transport.GetServerBindAddress(IPAddressType.IPv4) + ":" + transport.GetPort() + " - " + serverState);
+			}
 		}
 
 		public void ReconnectToRelay()
@@ -266,6 +268,7 @@ namespace FishMMO.Server
 			// wait for the connection to the current server to start before we connect the client
 			while (serverState != LocalConnectionState.Started)
 			{
+				Debug.Log("ServerState: " + serverState);
 				yield return new WaitForSeconds(.5f);
 			}
 
@@ -273,7 +276,7 @@ namespace FishMMO.Server
 			if (NetworkManager.ClientManager != null && LoadRelayServerAddress())
 			{
 				NetworkManager.ClientManager.StartConnection(RelayAddress, RelayPort);
-				Debug.Log(RelayAddress + ":" + RelayPort);
+				Debug.Log("Connecting to Relay: " + RelayAddress + ":" + RelayPort);
 			}
 
 			yield return null;

@@ -79,13 +79,13 @@ namespace FishMMO.Server
 
 		private void OnApplicationQuit()
 		{
-			if (Server.Configuration.TryGetString("ServerName", out string name))
+			/*if (Server.Configuration.TryGetString("ServerName", out string name))
 			{
 				using var dbContext = Server.DbContextFactory.CreateDbContext();
 				Debug.Log("Removing World Server: " + name);
 				WorldServerService.Delete(dbContext, name);
 				dbContext.SaveChanges();
-			}
+			}*/
 		}
 
 		private bool TryGetServerIPv4AddressFromTransport(out ServerAddress address)
