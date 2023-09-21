@@ -10,6 +10,8 @@ namespace FishMMO.Server
 	/// </summary>
 	public class CharacterSelectSystem : ServerBehaviour
 	{
+		public bool KeepDeleteData = true;
+
 		public override void InitializeOnce()
 		{
 			if (ServerManager != null)
@@ -66,7 +68,7 @@ namespace FishMMO.Server
 			if (conn.IsActive && AccountManager.GetAccountNameByConnection(conn, out string accountName))
 			{
 				using var dbContext = Server.DbContextFactory.CreateDbContext();
-				CharacterService.Delete(dbContext, accountName, msg.characterName);
+				CharacterService.Delete(dbContext, accountName, msg.characterName, KeepDeleteData);
 				dbContext.SaveChanges();
 
 				CharacterDeleteBroadcast charDeleteMsg = new CharacterDeleteBroadcast()

@@ -16,9 +16,8 @@ namespace FishMMO.Server.Services
 				return;
 			}
 
-			var achievements = dbContext.CharacterAchievements
-				.Where(c => c.CharacterId == character.ID)
-				.ToDictionary(k => k.TemplateID);
+			var achievements = dbContext.CharacterAchievements.Where(c => c.CharacterId == character.ID)
+															  .ToDictionary(k => k.TemplateID);
 
 			foreach (Achievement achievement in character.AchievementController.Achievements.Values)
 			{
@@ -49,13 +48,8 @@ namespace FishMMO.Server.Services
 		{
 			if (!keepData)
 			{
-				dbContext.CharacterAchievements
-				.Where(c => c.CharacterId == characterID)
-				.ToList()
-				.ForEach(achievement =>
-				{
-					dbContext.CharacterAchievements.Remove(achievement);
-				});
+				var achievements = dbContext.CharacterAchievements.Where(c => c.CharacterId == characterID);
+				dbContext.CharacterAchievements.RemoveRange(achievements);
 			}
 		}
 

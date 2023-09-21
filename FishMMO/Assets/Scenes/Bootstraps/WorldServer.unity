@@ -199,18 +199,79 @@ PrefabInstance:
     m_RemovedComponents: []
     m_AddedGameObjects: []
   m_SourcePrefab: {fileID: 100100000, guid: 0b886ac5562272946adae2cfc9971678, type: 3}
+--- !u!1 &1359145389 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 6375733014718908462, guid: 0b886ac5562272946adae2cfc9971678,
+    type: 3}
+  m_PrefabInstance: {fileID: 1359145388}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1359145390 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 8508828970612705392, guid: 0b886ac5562272946adae2cfc9971678,
+    type: 3}
+  m_PrefabInstance: {fileID: 1359145388}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1359145389}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6f48f002b825cbd45a19bd96d90f9edb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!114 &1359145392 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 1359145392, guid: 0b886ac5562272946adae2cfc9971678,
     type: 3}
   m_PrefabInstance: {fileID: 1359145388}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
+  m_GameObject: {fileID: 1359145389}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 1afeaa36377bbf847880613509e71d54, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+--- !u!114 &1359145394
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1359145389}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 34e4a322dca349547989b14021da4e23, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  Transport: {fileID: 1359145390}
+  _intermediateLayer: {fileID: 0}
+  _latencySimulator:
+    _enabled: 0
+    _simulateHost: 1
+    _latency: 0
+    _outOfOrder: 0
+    _packetLoss: 0
+--- !u!114 &1359145395
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1359145389}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cbe9ebe226af76a4a943ecc44f7ff909, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  iceServers:
+  - url: stun:stun2.l.google.com:19302
+    username: 
+    credential: 
+  _mtu: 1023
+  _origin: '*'
+  _port: 7770
+  _maximumClients: 2000
+  _HTTPS: 0
+  _clientAddress: 127.0.0.1
+  _noClientPort: 0
 --- !u!1 &2093683971
 GameObject:
   m_ObjectHideFlags: 0

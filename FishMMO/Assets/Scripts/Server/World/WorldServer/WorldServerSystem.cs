@@ -36,7 +36,7 @@ namespace FishMMO.Server
 			{
 				if (TryGetServerIPv4AddressFromTransport(out ServerAddress server))
 				{
-					int characterCount = ServerManager.Clients.Count;
+					int characterCount = Server.WorldSceneSystem.ConnectionCount;
 
 					if (Server.Configuration.TryGetString("ServerName", out string name))
 					{
@@ -64,12 +64,12 @@ namespace FishMMO.Server
 			{
 				if (nextPulse < 0)
 				{
+					nextPulse = pulseRate;
+
 					// TODO: maybe this one should exist....how expensive will this be to run on update?
 					using var dbContext = Server.DbContextFactory.CreateDbContext();
-				
-					nextPulse = pulseRate;
 					Debug.Log(name + ": Pulse");
-					int characterCount = ServerManager.Clients.Count - Server.WorldSceneSystem.SceneServers.Count;
+					int characterCount = Server.WorldSceneSystem.ConnectionCount;
 					WorldServerService.Pulse(dbContext, name, characterCount);
 					dbContext.SaveChanges();
 				}
@@ -79,13 +79,14 @@ namespace FishMMO.Server
 
 		private void OnApplicationQuit()
 		{
-			/*if (Server.Configuration.TryGetString("ServerName", out string name))
+			if (serverState != LocalConnectionState.Stopped &&
+				Server.Configuration.TryGetString("ServerName", out string name))
 			{
 				using var dbContext = Server.DbContextFactory.CreateDbContext();
 				Debug.Log("Removing World Server: " + name);
 				WorldServerService.Delete(dbContext, name);
 				dbContext.SaveChanges();
-			}*/
+			}
 		}
 
 		private bool TryGetServerIPv4AddressFromTransport(out ServerAddress address)

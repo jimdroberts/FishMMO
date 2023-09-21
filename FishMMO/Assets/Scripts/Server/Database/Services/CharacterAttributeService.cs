@@ -16,9 +16,8 @@ namespace FishMMO.Server.Services
 				return;
 			}
 
-			var attributes = dbContext.CharacterAttributes
-				.Where(c => c.CharacterId == character.ID)
-				.ToDictionary(k => k.TemplateID);
+			var attributes = dbContext.CharacterAttributes.Where(c => c.CharacterId == character.ID)
+														  .ToDictionary(k => k.TemplateID);
 
 			foreach (CharacterAttribute attribute in character.AttributeController.Attributes.Values)
 			{
@@ -79,13 +78,8 @@ namespace FishMMO.Server.Services
 		{
 			if (!keepData)
 			{
-				dbContext.CharacterAttributes
-				.Where(c => c.CharacterId == characterID)
-				.ToList()
-				.ForEach(attribute =>
-				{
-					dbContext.CharacterAttributes.Remove(attribute);
-				});
+				var attributes = dbContext.CharacterAttributes.Where(c => c.CharacterId == characterID);
+				dbContext.CharacterAttributes.RemoveRange(attributes);
 			}
 		}
 

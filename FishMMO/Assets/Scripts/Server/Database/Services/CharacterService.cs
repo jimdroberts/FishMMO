@@ -17,7 +17,6 @@ namespace FishMMO.Server.Services
 		public static CharacterEntity GetById(ServerDbContext dbContext, long id)
 		{
 			var character = dbContext.Characters.FirstOrDefault(c => c.Id == id);
-
 			if (character == null)
 			{
 				//throw new Exception($"Couldn't find character with id {id}");
@@ -27,9 +26,7 @@ namespace FishMMO.Server.Services
 
 		public static CharacterEntity GetByName(ServerDbContext dbContext, string name)
 		{
-			var character = dbContext.Characters
-				.FirstOrDefault(c => c.NameLowercase == name.ToLower());
-
+			var character = dbContext.Characters.FirstOrDefault(c => c.NameLowercase == name.ToLower());
 			if (character == null)
 			{
 				// Log: $"Couldn't find character with name {name}"
@@ -39,14 +36,12 @@ namespace FishMMO.Server.Services
 
 		public static List<CharacterDetails> GetDetails(ServerDbContext dbContext, string account)
 		{
-			return dbContext.Characters
-				.Where(c => c.Account == account && !c.Deleted)
-				.ToList()
-				.Select(c => new CharacterDetails()
-				{
-					CharacterName = c.Name
-				})
-				.ToList();
+			return dbContext.Characters.Where(c => c.Account == account && !c.Deleted)
+										.Select(c => new CharacterDetails()
+										{
+											CharacterName = c.Name
+										})
+										.ToList();
 		}
 
 		public static void Save(ServerDbContext dbContext, List<Character> characters, bool online = true)
@@ -65,19 +60,18 @@ namespace FishMMO.Server.Services
 		/// <summary>
 		/// Save a character to the database. Only Scene Servers should be saving characters. A character can only be in one scene at a time.
 		/// </summary>
-		public static void Save(ServerDbContext dbContext, Character character, bool online = true, 
-			CharacterEntity existingCharacter = null)
+		public static void Save(ServerDbContext dbContext, Character character, bool online = true, CharacterEntity existingCharacter = null)
 		{
 			if (existingCharacter == null)
 			{
 				existingCharacter = dbContext.Characters.FirstOrDefault((c) => c.NameLowercase == character.CharacterName.ToLower());
-			}
-			
-			// if it's still null, throw exception
-			if (existingCharacter == null)
-			{
-				//throw new Exception($"Unable to fetch character with name {character.CharacterName}");
-				return;
+
+				// if it's still null, throw exception
+				if (existingCharacter == null)
+				{
+					//throw new Exception($"Unable to fetch character with name {character.CharacterName}");
+					return;
+				}
 			}
 
 			// store these into vars so we don't have to access them a bunch of times
@@ -111,11 +105,10 @@ namespace FishMMO.Server.Services
 		/// <summary>
 		/// KeepData is automatically true... This means we don't actually delete anything. Deleted is simply set to true just incase we need to reinstate a character..
 		/// </summary>
-		public static void Delete(ServerDbContext dbContext, string account, string characterName, bool keepData = false)
+		public static void Delete(ServerDbContext dbContext, string account, string characterName, bool keepData = true)
 		{
-			var character = dbContext.Characters
-							.FirstOrDefault(c => c.Account == account &&
-												 c.NameLowercase == characterName.ToLower());
+			var character = dbContext.Characters.FirstOrDefault(c => c.Account == account &&
+																	 c.NameLowercase == characterName.ToLower());
 
 			if (character == null) return;
 
@@ -150,10 +143,8 @@ namespace FishMMO.Server.Services
 		public static bool TrySetSelected(ServerDbContext dbContext, string account, string characterName)
 		{
 			// get all characters for account
-			var characters = dbContext.Characters
-				.Where((c) => c.Account == account && !c.Deleted)
-				.ToList();
-			
+			var characters = dbContext.Characters.Where((c) => c.Account == account && !c.Deleted);
+
 			// deselect all characters
 			foreach (var characterEntity in characters)
 			{
@@ -174,8 +165,7 @@ namespace FishMMO.Server.Services
 		/// </summary>
 		public static bool TryGetSelectedDetails(ServerDbContext dbContext, string account, out long characterId)
 		{
-			var character = dbContext.Characters
-				.FirstOrDefault((c) => c.Account == account && c.Selected && !c.Deleted);
+			var character = dbContext.Characters.FirstOrDefault((c) => c.Account == account && c.Selected && !c.Deleted);
 			if (character != null)
 			{
 				characterId = character.Id;
@@ -190,9 +180,7 @@ namespace FishMMO.Server.Services
 		/// </summary>
 		public static bool TrySetOnline(ServerDbContext dbContext, string account, string characterName)
 		{
-			var characters = dbContext.Characters
-				.Where((c) => c.Account == account && !c.Deleted)
-				.ToList();
+			var characters = dbContext.Characters.Where((c) => c.Account == account && !c.Deleted);
 			if (characters.Any((c) => c.Online))
 			{
 				// a character on this account is already online, we should disconnect them FIXME
@@ -213,9 +201,7 @@ namespace FishMMO.Server.Services
 		/// </summary>
 		public static bool TryGetOnline(ServerDbContext dbContext, string account)
 		{
-			var characters = dbContext.Characters
-				.Where((c) => c.Account == account && !c.Deleted)
-				.ToList();
+			var characters = dbContext.Characters.Where((c) => c.Account == account && !c.Deleted);
 
 			foreach (var characterEntity in characters)
 			{
@@ -239,8 +225,10 @@ namespace FishMMO.Server.Services
 		/// </summary>
 		public static bool TryGetSelectedSceneName(ServerDbContext dbContext, string account, out string sceneName)
 		{
-			var character = dbContext.Characters
-				.FirstOrDefault((c) => c.Account == account && c.Selected && !c.Deleted);
+			var character = dbContext.Characters.FirstOrDefault((c) => c.Account == account &&
+																	   c.Selected &&
+																	   !c.Deleted);
+
 			if (character != null)
 			{
 				sceneName = character.SceneName;
@@ -255,8 +243,8 @@ namespace FishMMO.Server.Services
 		/// </summary>
 		public static bool TryGet(ServerDbContext dbContext, long characterId, NetworkManager networkManager, out Character character)
 		{
-			var dbCharacter =
-				dbContext.Characters.FirstOrDefault((c) => c.Id == characterId && !c.Deleted);
+			var dbCharacter = dbContext.Characters.FirstOrDefault((c) => c.Id == characterId &&
+																		 !c.Deleted);
 			if (dbCharacter != null)
 			{
 				// find prefab

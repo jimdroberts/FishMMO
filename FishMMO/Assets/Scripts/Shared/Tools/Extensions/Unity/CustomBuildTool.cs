@@ -458,7 +458,7 @@ public class CustomBuildTool
 						BuildTarget.StandaloneLinux64);
 	}
 
-	[MenuItem("FishMMO/WebGL Build")]
+	[MenuItem("FishMMO/WebGL Client Build")]
 	public static void BuildWebGLClient()
 	{
 		BuildExecutable(CLIENT_BUILD_NAME,

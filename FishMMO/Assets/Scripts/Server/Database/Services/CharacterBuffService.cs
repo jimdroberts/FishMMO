@@ -17,9 +17,8 @@ namespace FishMMO.Server.Services
 				return;
 			}
 
-			var buffs = dbContext.CharacterBuffs
-				.Where(c => c.CharacterId == character.ID)
-				.ToDictionary(k => k.TemplateID);
+			var buffs = dbContext.CharacterBuffs.Where(c => c.CharacterId == character.ID)
+												.ToDictionary(k => k.TemplateID);
 
 			// remove dead buffs
 			foreach (CharacterBuffEntity dbBuff in new List<CharacterBuffEntity>(buffs.Values))
@@ -77,13 +76,8 @@ namespace FishMMO.Server.Services
 		{
 			if (!keepData)
 			{
-				dbContext.CharacterBuffs
-				.Where(c => c.CharacterId == characterID)
-				.ToList()
-				.ForEach(buff =>
-				{
-					dbContext.CharacterBuffs.Remove(buff);
-				});
+				var buffs = dbContext.CharacterBuffs.Where(c => c.CharacterId == characterID);
+				dbContext.CharacterBuffs.RemoveRange(buffs);
 			}
 		}
 

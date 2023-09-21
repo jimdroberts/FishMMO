@@ -158,6 +158,8 @@ namespace FishMMO.Server
 		/// </summary>
 		internal void InternalInitializeOnce(string serverType)
 		{
+			Debug.Log("Server: Initializing Components");
+
 			// only use title updater if it has been added to the scene
 			ServerWindowTitleUpdater = GetComponent<ServerWindowTitleUpdater>();
 			if (ServerWindowTitleUpdater != null)
@@ -268,7 +270,6 @@ namespace FishMMO.Server
 			// wait for the connection to the current server to start before we connect the client
 			while (serverState != LocalConnectionState.Started)
 			{
-				Debug.Log("ServerState: " + serverState);
 				yield return new WaitForSeconds(.5f);
 			}
 
