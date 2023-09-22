@@ -17,18 +17,18 @@ public class Guild
 		return !string.IsNullOrEmpty(name) && name.Length < MAX_GUILDNAME_LENGTH;
 	}
 
-	public Guild(string guildId, GuildController leader)
+	public Guild(string guildID, GuildController leader)
 	{
-		ID = guildId;
+		ID = guildID;
 		LeaderID = leader.Character.ID;
 		Members.Add(LeaderID, leader);
 	}
 
-	public GuildController RemoveMember(long memberId)
+	public GuildController RemoveMember(long memberID)
 	{
-		if (Members.TryGetValue(memberId, out GuildController controller))
+		if (Members.TryGetValue(memberID, out GuildController controller))
 		{
-			Members.Remove(memberId);
+			Members.Remove(memberID);
 			return controller;
 		}
 		return null;

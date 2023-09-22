@@ -31,7 +31,7 @@
 			<TargetDir>..\..\FishMMO\Assets\Plugins\FishMMO-DB</TargetDir>
 		</PropertyGroup>
 		<ItemGroup>
-			<SourceDir Include="bin\Release\**\*.*" />
+			<SourceDir Include="bin\Release\**\*.dll" />
 		</ItemGroup>
 		<Copy SourceFiles="@(SourceDir)" DestinationFolder="$(TargetDir)" />
 	</Target>

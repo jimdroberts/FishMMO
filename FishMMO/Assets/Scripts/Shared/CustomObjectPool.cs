@@ -36,46 +36,46 @@ namespace Shared
 		#endregion
 
 		/// <summary>
-		/// Returns an object that has been stored with a collectionId of 0. A new object will be created if no stored objects are available.
+		/// Returns an object that has been stored with a collectionID of 0. A new object will be created if no stored objects are available.
 		/// </summary>
-		/// <param name="prefabId">PrefabId of the object to return.</param>
+		/// <param name="prefabID">PrefabID of the object to return.</param>
 		/// <param name="asServer">True if being called on the server side.</param>
 		/// <returns></returns>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)] //Remove on 2024/01/01.
 #pragma warning disable CS0672 // Member overrides obsolete member
-		public override NetworkObject RetrieveObject(int prefabId, bool asServer)
+		public override NetworkObject RetrieveObject(int prefabID, bool asServer)
 #pragma warning restore CS0672 // Member overrides obsolete member
 		{
-			return RetrieveObject(prefabId, 0, asServer);
+			return RetrieveObject(prefabID, 0, asServer);
 		}
 
 		/// <summary>
 		/// Returns an object that has been stored. A new object will be created if no stored objects are available.
 		/// </summary>
 		/// <param name="prefabId">PrefabId of the object to return.</param>
-		/// <param name="collectionId">CollectionId of the prefab.</param>
+		/// <param name="collectionID">CollectionID of the prefab.</param>
 		/// <param name="asServer">True if being called on the server side.</param>
 		/// <returns></returns>
-		public override NetworkObject RetrieveObject(int prefabId, ushort collectionId, bool asServer)
+		public override NetworkObject RetrieveObject(int prefabID, ushort collectionID, bool asServer)
 		{
-			PrefabObjects po = base.NetworkManager.GetPrefabObjects<PrefabObjects>(collectionId, false);
+			PrefabObjects po = base.NetworkManager.GetPrefabObjects<PrefabObjects>(collectionID, false);
 			//Quick exit/normal retrieval when not using pooling.
 			if (!_enabled)
 			{
-				NetworkObject prefab = po.GetObject(asServer, prefabId);
+				NetworkObject prefab = po.GetObject(asServer, prefabID);
 				NetworkObject instance = Instantiate(prefab);
 				instance.gameObject.SetActive(false);
 				return instance;
 			}
 
-			Stack<NetworkObject> cache = GetOrCreateCache(collectionId, prefabId);
+			Stack<NetworkObject> cache = GetOrCreateCache(collectionID, prefabID);
 			NetworkObject nob;
 			//Iterate until nob is populated just in case cache entries have been destroyed.
 			do
 			{
 				if (cache.Count == 0)
 				{
-					NetworkObject prefab = po.GetObject(asServer, prefabId);
+					NetworkObject prefab = po.GetObject(asServer, prefabID);
 					/* A null nob should never be returned from spawnables. This means something
                      * else broke, likely unrelated to the object pool. */
 					nob = Instantiate(prefab);
@@ -155,7 +155,7 @@ namespace Shared
 		}
 
 		/// <summary>
-		/// Clears pools destroying objects for all collectionIds
+		/// Clears pools destroying objects for all collectionIDs
 		/// </summary>
 		public void ClearPool()
 		{
@@ -165,15 +165,15 @@ namespace Shared
 		}
 
 		/// <summary>
-		/// Clears a pool destroying objects for collectionId.
+		/// Clears a pool destroying objects for collectionID.
 		/// </summary>
-		/// <param name="collectionId">CollectionId to clear for.</param>
-		public void ClearPool(int collectionId)
+		/// <param name="collectionID">CollectionID to clear for.</param>
+		public void ClearPool(int collectionID)
 		{
-			if (collectionId >= _cacheCount)
+			if (collectionID >= _cacheCount)
 				return;
 
-			Dictionary<int, Stack<NetworkObject>> dict = _cache[collectionId];
+			Dictionary<int, Stack<NetworkObject>> dict = _cache[collectionID];
 			foreach (Stack<NetworkObject> item in dict.Values)
 			{
 				while (item.Count > 0)
@@ -191,28 +191,28 @@ namespace Shared
 		/// <summary>
 		/// Gets a cache for an id or creates one if does not exist.
 		/// </summary>
-		/// <param name="prefabId"></param>
+		/// <param name="prefabID"></param>
 		/// <returns></returns>
-		private Stack<NetworkObject> GetOrCreateCache(int collectionId, int prefabId)
+		private Stack<NetworkObject> GetOrCreateCache(int collectionID, int prefabID)
 		{
-			if (collectionId >= _cacheCount)
+			if (collectionID >= _cacheCount)
 			{
 				//Add more to the cache.
-				while (_cache.Count <= collectionId)
+				while (_cache.Count <= collectionID)
 				{
 					Dictionary<int, Stack<NetworkObject>> dict = new Dictionary<int, Stack<NetworkObject>>();
 					_cache.Add(dict);
 				}
-				_cacheCount = collectionId;
+				_cacheCount = collectionID;
 			}
 
-			Dictionary<int, Stack<NetworkObject>> dictionary = _cache[collectionId];
+			Dictionary<int, Stack<NetworkObject>> dictionary = _cache[collectionID];
 			Stack<NetworkObject> cache;
-			//No cache for prefabId yet, make one.
-			if (!dictionary.TryGetValueIL2CPP(prefabId, out cache))
+			//No cache for prefabID yet, make one.
+			if (!dictionary.TryGetValueIL2CPP(prefabID, out cache))
 			{
 				cache = new Stack<NetworkObject>();
-				dictionary[prefabId] = cache;
+				dictionary[prefabID] = cache;
 			}
 			return cache;
 		}

@@ -113,7 +113,7 @@ namespace FishMMO.Client
 					{
 						Client.NetworkManager.ClientManager.Broadcast(new PartyInviteBroadcast()
 						{
-							targetCharacterId = targetCharacter.ID
+							targetCharacterID = targetCharacter.ID
 						});
 					}
 				}

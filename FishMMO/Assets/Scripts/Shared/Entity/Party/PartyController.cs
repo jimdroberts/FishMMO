@@ -22,7 +22,7 @@ public class PartyController : NetworkBehaviour
 	public event PartyMemberEvent OnUpdateMember;
 	public event PartyMemberEvent OnRemoveMember;
 
-	public delegate void PartyAcceptEvent(List<long> partyMemberIds);
+	public delegate void PartyAcceptEvent(List<long> partyMemberIDs);
 	public event PartyAcceptEvent OnPartyInviteAccepted;
 
 	public override void OnStartClient()
@@ -65,7 +65,7 @@ public class PartyController : NetworkBehaviour
 	/// </summary>
 	public void OnClientPartyCreateBroadcastReceived(PartyCreateBroadcast msg)
 	{
-		Party newParty = new Party(msg.partyId, this);
+		Party newParty = new Party(msg.partyID, this);
 		Current = newParty;
 		Rank = PartyRank.Leader;
 
@@ -74,11 +74,11 @@ public class PartyController : NetworkBehaviour
 
 	/// <summary>
 	/// When the character receives an invitation to join a party.
-	/// *Note* msg.targetClientId should be our own ClientId but it doesn't matter if it changes. Server has authority.
+	/// *Note* msg.targetClientID should be our own ClientId but it doesn't matter if it changes. Server has authority.
 	/// </summary>
 	public void OnClientPartyInviteBroadcastReceived(PartyInviteBroadcast msg)
 	{
-		if (Character.ID == msg.targetCharacterId)
+		if (Character.ID == msg.targetCharacterID)
 		{
 			return;
 		}

@@ -99,35 +99,7 @@ namespace FishMMO.Server
 					windowTitle.Append(":");
 					windowTitle.Append(port);
 					windowTitle.Append(" Clients:");
-
-					int onlineCount = ServerManager.Clients.Count;
-					if (WorldSceneSystem != null)
-					{
-						int sceneServerCount = WorldSceneSystem != null ? WorldSceneSystem.SceneServers.Count : -1;
-						if (sceneServerCount > 0)
-						{
-							onlineCount -= sceneServerCount;
-						}
-						windowTitle.Append(onlineCount);
-						windowTitle.Append(" SceneServers:");
-						windowTitle.Append(sceneServerCount);
-					}
-					else
-					{
-						windowTitle.Append(onlineCount);
-					}
-
-					windowTitle.Append("]");
-				}
-				
-				if (Server.Configuration.TryGetString("RelayAddress", out address) &&
-					address.Length > 0 &&
-					Server.Configuration.TryGetUShort("RelayPort", out port))
-				{
-					windowTitle.Append(" [ConnectedToRelay:");
-					windowTitle.Append(address);
-					windowTitle.Append(":");
-					windowTitle.Append(port);
+					windowTitle.Append(ServerManager.Clients.Count);
 					windowTitle.Append("]");
 				}
 			}

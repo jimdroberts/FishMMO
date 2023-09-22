@@ -20,7 +20,7 @@ public static class MemoryAccess
 	}
 
 	[DllImport("kernel32.dll", SetLastError = true)]
-	private static extern IntPtr OpenProcess(ProcessAccessFlags dwDesiredAccess, [MarshalAs(UnmanagedType.Bool)] bool bInheritHandle, UInt32 dwProcessId);
+	private static extern IntPtr OpenProcess(ProcessAccessFlags dwDesiredAccess, [MarshalAs(UnmanagedType.Bool)] bool bInheritHandle, UInt32 dwProcessID);
 	[DllImport("kernel32.dll", SetLastError = true)]
 	private static extern Int32 CloseHandle(IntPtr hObject);
 	[DllImport("kernel32.dll", SetLastError = true)]

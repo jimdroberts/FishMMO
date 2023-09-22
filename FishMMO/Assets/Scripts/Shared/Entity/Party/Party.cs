@@ -10,17 +10,17 @@ public class Party
 
 	public bool IsFull { get { return !(Members.Count < MAX_PARTY_SIZE);  } }
 
-	public Party(ulong partyId, PartyController leader)
+	public Party(ulong partyID, PartyController leader)
 	{
-		ID = partyId;
+		ID = partyID;
 		Members.Add(leader.Character.ID, leader);
 	}
 
-	public PartyController RemoveMember(long memberId)
+	public PartyController RemoveMember(long memberID)
 	{
-		if (Members.TryGetValue(memberId, out PartyController controller))
+		if (Members.TryGetValue(memberID, out PartyController controller))
 		{
-			Members.Remove(memberId);
+			Members.Remove(memberID);
 			return controller;
 		}
 		return null;

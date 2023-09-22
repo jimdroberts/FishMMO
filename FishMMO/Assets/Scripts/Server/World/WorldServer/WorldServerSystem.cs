@@ -1,6 +1,5 @@
 ﻿using FishNet.Managing.Server;
 using FishNet.Transporting;
-using System;
 using FishMMO.Server.Services;
 using UnityEngine;
 
@@ -11,9 +10,12 @@ namespace FishMMO.Server
 	{
 		private LocalConnectionState serverState;
 
+		private int id;
 		private bool locked = false;
 		private float pulseRate = 10.0f;
 		private float nextPulse = 0.0f;
+
+		public int ID {get { return id; } }
 
 		public override void InitializeOnce()
 		{
@@ -41,8 +43,7 @@ namespace FishMMO.Server
 					if (Server.Configuration.TryGetString("ServerName", out string name))
 					{
 						Debug.Log("Adding World Server to Database: " + name + ":" + server.address + ":" + server.port);
-						WorldServerService.Add(dbContext, name, server.address, server.port, characterCount, locked);
-						dbContext.SaveChanges();
+						WorldServerService.Add(dbContext, name, server.address, server.port, characterCount, locked, out id);
 					}
 				}
 			}
@@ -51,7 +52,7 @@ namespace FishMMO.Server
 				if (Server.Configuration.TryGetString("ServerName", out string name))
 				{
 					Debug.Log("Removing World Server from Database: " + name);
-					WorldServerService.Delete(dbContext, name);
+					WorldServerService.Delete(dbContext, id);
 					dbContext.SaveChanges();
 				}
 			}
@@ -70,7 +71,7 @@ namespace FishMMO.Server
 					using var dbContext = Server.DbContextFactory.CreateDbContext();
 					Debug.Log(name + ": Pulse");
 					int characterCount = Server.WorldSceneSystem.ConnectionCount;
-					WorldServerService.Pulse(dbContext, name, characterCount);
+					WorldServerService.Pulse(dbContext, id, characterCount);
 					dbContext.SaveChanges();
 				}
 				nextPulse -= Time.deltaTime;
@@ -84,7 +85,7 @@ namespace FishMMO.Server
 			{
 				using var dbContext = Server.DbContextFactory.CreateDbContext();
 				Debug.Log("Removing World Server: " + name);
-				WorldServerService.Delete(dbContext, name);
+				WorldServerService.Delete(dbContext, id);
 				dbContext.SaveChanges();
 			}
 		}

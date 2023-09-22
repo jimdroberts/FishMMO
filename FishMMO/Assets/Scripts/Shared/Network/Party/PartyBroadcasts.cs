@@ -3,12 +3,12 @@ using System.Collections.Generic;
 
 public struct PartyCreateBroadcast : IBroadcast
 {
-	public ulong partyId;
+	public ulong partyID;
 }
 
 public struct PartyInviteBroadcast : IBroadcast
 {
-	public long targetCharacterId;
+	public long targetCharacterID;
 }
 
 public struct PartyAcceptInviteBroadcast : IBroadcast

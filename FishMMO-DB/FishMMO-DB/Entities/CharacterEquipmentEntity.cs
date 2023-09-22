@@ -4,13 +4,13 @@ using Microsoft.EntityFrameworkCore;
 namespace FishMMO_DB.Entities
 {
     [Table("character_equipment", Schema = "fish_mmo_postgresql")]
-    [Index(nameof(CharacterId))]
-    [Index(nameof(CharacterId), nameof(Slot), IsUnique = true)]
+    [Index(nameof(CharacterID))]
+    [Index(nameof(CharacterID), nameof(Slot), IsUnique = true)]
     public class CharacterEquipmentEntity
     {
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-        public long Id { get; set; }
-        public long CharacterId { get; set; }
+        public long ID { get; set; }
+        public long CharacterID { get; set; }
         public CharacterEntity Character { get; set; }
         public long InstanceID { get; set; }
         public int TemplateID { get; set; }

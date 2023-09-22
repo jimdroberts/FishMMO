@@ -4,7 +4,7 @@ using FishMMO.Server.Services;
 namespace FishMMO.Server
 {
 	// World that allows clients to connect with basic password authentication.
-	public class WorldServerAuthenticator : RelayServerAuthenticator
+	public class WorldServerAuthenticator : LoginServerAuthenticator
 	{
 		public uint MaxPlayers = 5000;
 
@@ -19,7 +19,6 @@ namespace FishMMO.Server
 
 			ClientAuthenticationResult result = ClientAuthenticationResult.InvalidUsernameOrPassword;
 
-			// if the username is valid get OR create the account for the client
 			if (DBContextFactory != null && IsAllowedUsername(username))
 			{
 				using ServerDbContext dbContext = DBContextFactory.CreateDbContext(new string[] { });
@@ -32,10 +31,13 @@ namespace FishMMO.Server
 					result = ClientAuthenticationResult.AlreadyOnline;
 				}
 
-				// make sure we have selected a character
 				if (result == ClientAuthenticationResult.LoginSuccess &&
-					CharacterService.TryGetSelectedDetails(dbContext, username, out long characterId))
+					CharacterService.GetSelected(dbContext, username))
 				{
+					// update the characters world
+					CharacterService.SetWorld(dbContext, username, WorldSceneSystem.Server.WorldServerSystem.ID);
+					dbContext.SaveChanges();
+
 					result = ClientAuthenticationResult.WorldLoginSuccess;
 				}
 			}

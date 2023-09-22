@@ -85,21 +85,24 @@ namespace FishMMO.Server
 			using var dbContext = Server.DbContextFactory.CreateDbContext();
 			if (conn.IsActive && AccountManager.GetAccountNameByConnection(conn, out string accountName))
 			{
-				var selectedCharacter = CharacterService.TrySetSelected(dbContext, accountName, msg.characterName);
-				dbContext.SaveChanges();
-				
-				if (selectedCharacter)
+				if (!CharacterService.CharacterExists(dbContext, accountName, msg.characterName))
 				{
-					List<WorldServerDetails> worldServerList = WorldServerService.GetServerList(dbContext);
-					conn.Broadcast(new ServerListBroadcast()
-					{
-						servers = worldServerList
-					});
+					// character doesn't exist for account
+					conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
 				}
 				else
 				{
-					//disconnect? failed to select character
-					conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+					if (CharacterService.TrySetSelected(dbContext, accountName, msg.characterName))
+					{
+						dbContext.SaveChanges();
+
+						// send the client the world server list
+						List<WorldServerDetails> worldServerList = WorldServerService.GetServerList(dbContext);
+						conn.Broadcast(new ServerListBroadcast()
+						{
+							servers = worldServerList
+						});
+					}
 				}
 			}
 		}

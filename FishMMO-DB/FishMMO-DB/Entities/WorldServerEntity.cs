@@ -1,13 +1,15 @@
 ﻿using System;
-using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Microsoft.EntityFrameworkCore;
 
 namespace FishMMO_DB.Entities
 {
     [Table("world_servers", Schema = "fish_mmo_postgresql")]
-    public class WorldServerEntity
+	[Index(nameof(Name))]
+	public class WorldServerEntity
     {
-        [Key]
+		[DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+		public int ID { get; set; }
         public string Name { get; set; }
         public DateTime LastPulse { get; set; }
         public string Address { get; set; }

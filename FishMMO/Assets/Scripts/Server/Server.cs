@@ -20,8 +20,6 @@ namespace FishMMO.Server
 		public Configuration Configuration = null;
 		public string Address;
 		public ushort Port;
-		public string RelayAddress;
-		public ushort RelayPort;
 		public ServerDbContextFactory DbContextFactory;
 
 		public NetworkManager NetworkManager { get; private set; }
@@ -35,7 +33,6 @@ namespace FishMMO.Server
 		#region WORLD
 		public WorldServerSystem WorldServerSystem { get; private set; }
 		public WorldSceneSystem WorldSceneSystem { get; private set; }
-		public WorldChatSystem WorldChatSystem { get; private set; }
 		#endregion
 
 		#region SCENE
@@ -74,8 +71,6 @@ namespace FishMMO.Server
 				Configuration.Set("MaximumClients", 4000);
 				Configuration.Set("Address", "127.0.0.1");
 				Configuration.Set("Port", 7770);
-				Configuration.Set("RelayAddress", "");
-				Configuration.Set("RelayPort", 0);
 				Configuration.Save();
 			}
 
@@ -198,9 +193,6 @@ namespace FishMMO.Server
 						worldAuthenticator.WorldSceneSystem = WorldSceneSystem;
 					}
 
-					WorldChatSystem = GetOrCreateComponent<WorldChatSystem>();
-					WorldChatSystem.InternalInitializeOnce(this, NetworkManager.ServerManager);
-
 					// world server has special title bar that handles relay information
 					if (ServerWindowTitleUpdater != null)
 					{
@@ -256,28 +248,12 @@ namespace FishMMO.Server
 			}
 		}
 
-		public void ReconnectToRelay()
-		{
-			// stop current connection if any
-			NetworkManager.ClientManager.StopConnection();
-
-			// connect to the server
-			StartCoroutine(OnAwaitingConnectionReady());
-		}
-
 		IEnumerator OnAwaitingConnectionReady()
 		{
 			// wait for the connection to the current server to start before we connect the client
 			while (serverState != LocalConnectionState.Started)
 			{
 				yield return new WaitForSeconds(.5f);
-			}
-
-			// attempt to connect to a relay server, cluster nodes handle internal systems
-			if (NetworkManager.ClientManager != null && LoadRelayServerAddress())
-			{
-				NetworkManager.ClientManager.StartConnection(RelayAddress, RelayPort);
-				Debug.Log("Connecting to Relay: " + RelayAddress + ":" + RelayPort);
 			}
 
 			yield return null;
@@ -300,31 +276,6 @@ namespace FishMMO.Server
 				return true;
 			}
 			return false;
-		}
-
-		/// <summary>
-		/// Loads relay server details from the configuration file.
-		/// </summary>
-		private bool LoadRelayServerAddress()
-		{
-			if (Configuration.TryGetString("RelayAddress", out RelayAddress) &&
-				RelayAddress.Length > 0 &&
-				IsRelayAddressValid(RelayAddress) &&
-				Configuration.TryGetUShort("RelayPort", out RelayPort))
-			{
-				return true;
-			}
-			return false;
-		}
-
-		/// <summary>
-		/// IPv4 Regex, can we get IPv6 support???
-		/// </summary>
-		public bool IsRelayAddressValid(string address)
-		{
-			const string ValidIpAddressRegex = "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$";
-			Match match = Regex.Match(address, ValidIpAddressRegex);
-			return match.Success;
 		}
 	}
 }

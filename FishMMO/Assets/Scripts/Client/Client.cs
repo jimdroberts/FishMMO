@@ -77,7 +77,9 @@ namespace FishMMO.Client
 					Configuration.TryGetInt("Refresh Rate", out int refreshRate) &&
 					Configuration.TryGetBool("Fullscreen", out bool fullscreen))
 				{
+#if !UNITY_WEBGL
 					Screen.SetResolution(width, height, fullscreen ? FullScreenMode.ExclusiveFullScreen : FullScreenMode.Windowed, refreshRate);
+#endif
 				}
 				
 				// do dependency injection here if needed

@@ -10,10 +10,10 @@ namespace FishMMO.Server
 	/// </summary>
 	public class PartySystem : ServerBehaviour
 	{
-		public ulong nextPartyId = 0;
+		public ulong nextPartyID = 0;
 		private Dictionary<ulong, Party> parties = new Dictionary<ulong, Party>();
 
-		// clientId / partyId
+		// clientID / partyID
 		private readonly Dictionary<long, ulong> pendingInvitations = new Dictionary<long, ulong>();
 
 		public override void InitializeOnce()
@@ -69,20 +69,20 @@ namespace FishMMO.Server
 				return;
 			}
 
-			ulong partyId = ++nextPartyId;
+			ulong partyID = ++nextPartyID;
 			// this should never happen but check it anyway so we never duplicate party ids
-			while (parties.ContainsKey(partyId))
+			while (parties.ContainsKey(partyID))
 			{
-				partyId = ++nextPartyId;
+				partyID = ++nextPartyID;
 			}
 
-			Party newParty = new Party(partyId, partyController);
+			Party newParty = new Party(partyID, partyController);
 			parties.Add(newParty.ID, newParty);
 			partyController.Rank = PartyRank.Leader;
 			partyController.Current = newParty;
 
 			// tell the Character we made their party successfully
-			conn.Broadcast(new PartyCreateBroadcast() { partyId = newParty.ID });
+			conn.Broadcast(new PartyCreateBroadcast() { partyID = newParty.ID });
 		}
 
 		public void OnServerPartyInviteBroadcastReceived(NetworkConnection conn, PartyInviteBroadcast msg)
@@ -102,8 +102,8 @@ namespace FishMMO.Server
 				return;
 			}
 
-			if (!pendingInvitations.ContainsKey(msg.targetCharacterId) &&
-				Server.CharacterSystem.CharactersById.TryGetValue(msg.targetCharacterId, out Character targetCharacter))
+			if (!pendingInvitations.ContainsKey(msg.targetCharacterID) &&
+				Server.CharacterSystem.CharactersByID.TryGetValue(msg.targetCharacterID, out Character targetCharacter))
 			{
 				PartyController targetPartyController = targetCharacter.GetComponent<PartyController>();
 
@@ -116,7 +116,7 @@ namespace FishMMO.Server
 
 				// add to our list of pending invitations... used for validation when accepting/declining a party invite
 				pendingInvitations.Add(targetCharacter.ID, leaderPartyController.Current.ID);
-				targetCharacter.Owner.Broadcast(new PartyInviteBroadcast() { targetCharacterId = leaderPartyController.Character.ID });
+				targetCharacter.Owner.Broadcast(new PartyInviteBroadcast() { targetCharacterID = leaderPartyController.Character.ID });
 			}
 		}
 
@@ -135,11 +135,11 @@ namespace FishMMO.Server
 			}
 
 			// validate party invite
-			if (pendingInvitations.TryGetValue(partyController.Character.ID, out ulong pendingPartyId))
+			if (pendingInvitations.TryGetValue(partyController.Character.ID, out ulong pendingPartyID))
 			{
 				pendingInvitations.Remove(partyController.Character.ID);
 
-				if (parties.TryGetValue(pendingPartyId, out Party party) && !party.IsFull)
+				if (parties.TryGetValue(pendingPartyID, out Party party) && !party.IsFull)
 				{
 					List<long> CurrentMembers = new List<long>();
 

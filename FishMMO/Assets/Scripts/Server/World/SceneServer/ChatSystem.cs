@@ -4,6 +4,7 @@ using FishNet.Managing.Scened;
 using UnityEngine;
 using System.Collections.Generic;
 using System;
+using FishMMO.Server.Services;
 
 namespace FishMMO.Server
 {
@@ -61,18 +62,12 @@ namespace FishMMO.Server
 				AddCommandEvent("/say", OnSayChat);
 
 				ServerManager.RegisterBroadcast<ChatBroadcast>(OnServerChatMessageReceived, true);
-					
-				ClientManager.RegisterBroadcast<WorldChatBroadcast>(OnServerWorldChatBroadcastReceived);
-				ClientManager.RegisterBroadcast<WorldChatTellBroadcast>(OnServerWorldChatTellBroadcastReceived);
 			}
 			else if (args.ConnectionState == LocalConnectionState.Stopped)
 			{
 				commandEvents.Clear();
 
 				ServerManager.UnregisterBroadcast<ChatBroadcast>(OnServerChatMessageReceived);
-					
-				ClientManager.UnregisterBroadcast<WorldChatBroadcast>(OnServerWorldChatBroadcastReceived);
-				ClientManager.UnregisterBroadcast<WorldChatTellBroadcast>(OnServerWorldChatTellBroadcastReceived);
 			}
 		}
 
@@ -111,7 +106,7 @@ namespace FishMMO.Server
 			}
 		}
 
-		/// <summary>
+		/*/// <summary>
 		/// Chat message should be parsed already when the World server replies to us with a chat message.
 		/// </summary>
 		private void OnServerWorldChatBroadcastReceived(WorldChatBroadcast msg)
@@ -132,8 +127,8 @@ namespace FishMMO.Server
 		/// </summary>
 		private void OnServerWorldChatTellBroadcastReceived(WorldChatTellBroadcast msg)
 		{
-			Server.CharacterSystem.SendBroadcastToCharacter(msg.targetId, msg);
-		}
+			Server.CharacterSystem.SendBroadcastToCharacter(msg.targetID, msg);
+		}*/
 
 		private bool ValidateMessage(ChatBroadcast msg)
 		{
@@ -229,8 +224,9 @@ namespace FishMMO.Server
 			msg.channel = ChatChannel.World;
 			msg.text = sender.CharacterName + ": " + msg.text;
 
-			// World chat is broadcast to all scene servers... forward to the World Server
-			ClientManager.Broadcast(new WorldChatBroadcast() { chatMsg = msg, });
+			using var dbContext = Server.DbContextFactory.CreateDbContext();
+			ChatService.Save(dbContext, sender.ID, sender.WorldServerID, Server.SceneServerSystem.ID, (byte)msg.channel, msg.text);
+			dbContext.SaveChanges();
 		}
 
 		private void OnRegionChat(NetworkConnection conn, Character sender, ChatBroadcast msg)
@@ -328,16 +324,20 @@ namespace FishMMO.Server
 			// format the message to send to the target player
 			msg.text = "[From:" + sender.CharacterName + "]: " + text;
 
+			/*using var dbContext = Server.DbContextFactory.CreateDbContext();
+			ChatService.Save(dbContext, sender.WorldServerID, Server.SceneServerSystem.ID, (byte)msg.channel, msg.text);
+			dbContext.SaveChanges();
+
 			// attempt to broadcast the message to the target
 			if (!Server.CharacterSystem.SendBroadcastToCharacter(targetCharacter.ID, msg))
 			{
 				// attempt to find the target on the world server
 				ServerManager.Broadcast(new WorldChatTellBroadcast()
 				{
-					targetId = targetCharacter.ID,
+					targetID = targetCharacter.ID,
 					chatMsg = msg,
 				});
-			}
+			}*/
 		}
 
 		private void OnTradeChat(NetworkConnection conn, Character sender, ChatBroadcast msg)
@@ -349,9 +349,9 @@ namespace FishMMO.Server
 			msg.channel = ChatChannel.Trade;
 			msg.text = sender.CharacterName + ": " + msg.text;
 
-			// trade chat is broadcast to all scene servers... forward to the World Server
-			// **TODO** Optimize chat channels. Make server aware of which channels we have enabled.
-			ClientManager.Broadcast(new WorldChatBroadcast() { chatMsg = msg, });
+			/*using var dbContext = Server.DbContextFactory.CreateDbContext();
+			ChatService.Save(dbContext, sender.WorldServerID, Server.SceneServerSystem.ID, (byte)msg.channel, msg.text);
+			dbContext.SaveChanges();*/
 		}
 
 		private void OnSayChat(NetworkConnection conn, Character sender, ChatBroadcast msg)

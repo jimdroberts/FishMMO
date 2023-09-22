@@ -367,11 +367,11 @@ namespace libutility
 		static ConflictState GetConflictState(SerializedProperty property)
 		{
 			ConflictState conflictState;
-			PropertyIdentity propId = new PropertyIdentity(property);
-			if (!s_conflictStateDict.TryGetValue(propId, out conflictState))
+			PropertyIdentity propID = new PropertyIdentity(property);
+			if (!s_conflictStateDict.TryGetValue(propID, out conflictState))
 			{
 				conflictState = new ConflictState();
-				s_conflictStateDict.Add(propId, conflictState);
+				s_conflictStateDict.Add(propID, conflictState);
 			}
 			return conflictState;
 		}

@@ -394,6 +394,7 @@ PrefabInstance:
       propertyPath: configurationFileName
       value: WorldServer.cfg
       objectReference: {fileID: 0}
-    m_RemovedComponents: []
+    m_RemovedComponents:
+    - {fileID: -8766259097393625810, guid: 6379611c1b00cef4b96162c929c504ef, type: 3}
     m_AddedGameObjects: []
   m_SourcePrefab: {fileID: 100100000, guid: 6379611c1b00cef4b96162c929c504ef, type: 3}

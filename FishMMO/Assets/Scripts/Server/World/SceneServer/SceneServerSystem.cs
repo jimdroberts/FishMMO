@@ -1,10 +1,11 @@
 ﻿using FishNet.Transporting;
 using FishNet.Managing.Scened;
-using FishNet.Managing.Client;
 using UnityEngine;
 using System;
 using System.Collections.Generic;
 using FishNet.Connection;
+using FishMMO.Server.Services;
+using FishMMO_DB.Entities;
 
 namespace FishMMO.Server
 {
@@ -13,35 +14,83 @@ namespace FishMMO.Server
 	{
 		public SceneManager SceneManager;
 
-		private SceneServerAuthenticator loginAuthenticator;
 		private LocalConnectionState serverState;
 
 		public WorldSceneDetailsCache WorldSceneDetailsCache;
 
+		private int id;
 		private bool locked = false;
 		private float pulseRate = 10.0f;
 		private float nextPulse = 0.0f;
 
+		public int ID { get { return id; } }
+
 		public event Action<string> OnSceneLoadComplete;
 
-		// sceneName, <sceneHandle, details>
-		public Dictionary<string, Dictionary<int, SceneInstanceDetails>> scenes = new Dictionary<string, Dictionary<int, SceneInstanceDetails>>();
+		// <worldID, <sceneName, <sceneHandle, details>>>
+		public Dictionary<int, Dictionary<string, Dictionary<int, SceneInstanceDetails>>> worldScenes = new Dictionary<int, Dictionary<string, Dictionary<int, SceneInstanceDetails>>>();
 
 		public override void InitializeOnce()
 		{
 			nextPulse = pulseRate;
 
 			if (ServerManager != null &&
-				ClientManager != null &&
 				SceneManager != null)
 			{
-				ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
-				ClientManager.OnRemoteConnectionState += ClientManager_OnRemoteConnectionState;
+				SceneManager.OnLoadEnd += SceneManager_OnLoadEnd;
+				ServerManager.OnServerConnectionState += ServerManager_OnServerConnectionState;
 			}
 			else
 			{
 				enabled = false;
 			}
+		}
+
+		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs args)
+		{
+			serverState = args.ConnectionState;
+			using var dbContext = Server.DbContextFactory.CreateDbContext();
+
+			if (args.ConnectionState == LocalConnectionState.Started)
+			{
+				if (TryGetServerIPv4AddressFromTransport(out ServerAddress server))
+				{
+					int characterCount = Server.CharacterSystem.ConnectionCharacters.Count;
+
+					if (Server.Configuration.TryGetString("ServerName", out string name))
+					{
+						Debug.Log("Adding Scene Server to Database: " + name + ":" + server.address + ":" + server.port);
+						SceneServerService.Add(dbContext, server.address, server.port, characterCount, locked, out id);
+						Debug.Log("Successfully added a new Scene Server: " + id);
+					}
+				}
+			}
+			else if (args.ConnectionState == LocalConnectionState.Stopped)
+			{
+				if (Server.Configuration.TryGetString("ServerName", out string name))
+				{
+					Debug.Log("Removing Scene Server: " + id);
+					SceneServerService.Delete(dbContext, id);
+					LoadedSceneService.Delete(dbContext, id);
+					dbContext.SaveChanges();
+				}
+			}
+		}
+
+		private bool TryGetServerIPv4AddressFromTransport(out ServerAddress address)
+		{
+			Transport transport = Server.NetworkManager.TransportManager.Transport;
+			if (transport == null)
+			{
+				address = default;
+				return false;
+			}
+			address = new ServerAddress()
+			{
+				address = transport.GetServerBindAddress(IPAddressType.IPv4),
+				port = transport.GetPort(),
+			};
+			return true;
 		}
 
 		void LateUpdate()
@@ -52,14 +101,36 @@ namespace FishMMO.Server
 				{
 					nextPulse = pulseRate;
 
-					//Debug.Log(name + ": Pulse");
+					// TODO: maybe this one should exist....how expensive will this be to run on update?
+					using var dbContext = Server.DbContextFactory.CreateDbContext();
+					Debug.Log(name + ": Pulse");
+					int characterCount = Server.CharacterSystem.ConnectionCharacters.Count;
+					SceneServerService.Pulse(dbContext, id, characterCount);
 
-					// keeps the connection alive and updates character count on the world server
-					ClientManager.Broadcast(new ScenePulseBroadcast()
+					// process loaded scene pulse update
+					if (worldScenes != null)
 					{
-						name = name,
-						sceneInstanceDetails = RebuildSceneInstanceDetails(),
-					});
+						foreach (Dictionary<string, Dictionary<int, SceneInstanceDetails>> sceneGroup in worldScenes.Values)
+						{
+							foreach (Dictionary<int, SceneInstanceDetails> scene in sceneGroup.Values)
+							{
+								foreach (KeyValuePair<int, SceneInstanceDetails> sceneDetails in scene)
+								{
+									Debug.Log(sceneDetails.Value.Name + "(" + sceneDetails.Value.WorldID + ":" + sceneDetails.Value.Handle + "): Pulse [" + sceneDetails.Value.CharacterCount + "]");
+									LoadedSceneService.Pulse(dbContext, sceneDetails.Key, sceneDetails.Value.CharacterCount);
+								}
+							}
+						}
+					}
+
+					// process pending scenes
+					PendingSceneEntity pending = PendingSceneService.Dequeue(dbContext);
+					dbContext.SaveChanges();
+					if (pending != null)
+					{
+						Debug.Log("Dequeued Pending Scene Load request World:" + pending.WorldServerID + " Scene:" + pending.SceneName);
+						ProcessSceneLoadRequest(pending.WorldServerID, pending.SceneName);
+					}
 				}
 				nextPulse -= Time.deltaTime;
 			}
@@ -67,194 +138,124 @@ namespace FishMMO.Server
 
 		private void OnApplicationQuit()
 		{
-		}
-
-		private void ClientManager_OnClientConnectionState(ClientConnectionStateArgs args)
-		{
-			loginAuthenticator = FindObjectOfType<SceneServerAuthenticator>();
-			if (loginAuthenticator == null)
-				return;
-
-			serverState = args.ConnectionState;
-
-			if (args.ConnectionState == LocalConnectionState.Started)
+			if (serverState != LocalConnectionState.Stopped &&
+				Server.Configuration.TryGetString("ServerName", out string name))
 			{
-				loginAuthenticator.OnSceneServerAuthenticationResult += Authenticator_OnSceneServerAuthenticationResult;
-
-				SceneManager.OnLoadEnd += SceneManager_OnLoadEnd;
-
-				ClientManager.RegisterBroadcast<SceneListBroadcast>(OnClientSceneListBroadcastReceived);
-				ClientManager.RegisterBroadcast<SceneLoadBroadcast>(OnClientSceneLoadBroadcastReceived);
-				ClientManager.RegisterBroadcast<SceneUnloadBroadcast>(OnClientSceneUnloadBroadcastReceived);
+				using var dbContext = Server.DbContextFactory.CreateDbContext();
+				Debug.Log("Removing Scene Server: " + id);
+				SceneServerService.Delete(dbContext, id);
+				LoadedSceneService.Delete(dbContext, id);
+				dbContext.SaveChanges();
 			}
-			else if (args.ConnectionState == LocalConnectionState.Stopped)
-			{
-				loginAuthenticator.OnSceneServerAuthenticationResult -= Authenticator_OnSceneServerAuthenticationResult;
-
-				SceneManager.OnLoadEnd -= SceneManager_OnLoadEnd;
-
-				ClientManager.UnregisterBroadcast<SceneListBroadcast>(OnClientSceneListBroadcastReceived);
-				ClientManager.UnregisterBroadcast<SceneLoadBroadcast>(OnClientSceneLoadBroadcastReceived);
-				ClientManager.UnregisterBroadcast<SceneUnloadBroadcast>(OnClientSceneUnloadBroadcastReceived);
-
-				Debug.LogWarning("Connection to relay server failed, attempting reconnect!");
-				Server.ReconnectToRelay();
-			}
-		}
-
-		public List<SceneInstanceDetails> RebuildSceneInstanceDetails()
-		{
-			List<SceneInstanceDetails> newDetails = new List<SceneInstanceDetails>();
-			if (scenes != null && scenes.Count > 0)
-			{
-				foreach (Dictionary<int, SceneInstanceDetails> instances in scenes.Values)
-				{
-					foreach (SceneInstanceDetails instance in instances.Values)
-					{
-						newDetails.Add(instance);
-					}
-				}
-			}
-			return newDetails;
-		}
-
-		// we only track scene handles here for scene stacking, the SceneManager has the real Scene reference
-		private void SceneManager_OnLoadEnd(SceneLoadEndEventArgs args)
-		{
-			foreach (UnityEngine.SceneManagement.Scene scene in args.LoadedScenes)
-			{
-				if (!scenes.TryGetValue(scene.name, out Dictionary<int, SceneInstanceDetails> handles))
-				{
-					handles = new Dictionary<int, SceneInstanceDetails>();
-					scenes.Add(scene.name, handles);
-				}
-
-				if (!handles.ContainsKey(scene.handle))
-				{
-					GameObject gob = new GameObject("PhysicsTicker");
-					PhysicsTicker physicsTicker = gob.AddComponent<PhysicsTicker>();
-					physicsTicker.InitializeOnce(scene.GetPhysicsScene());
-					UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(gob, scene);
-
-					// cache the newly loaded scene
-					handles.Add(scene.handle, new SceneInstanceDetails()
-					{
-						Name = scene.name,
-						Handle = scene.handle,
-						ClientCount = 0,
-					});
-				}
-
-				// tell the world server we loaded the scene
-				ClientManager.Broadcast(new SceneLoadBroadcast()
-				{
-					sceneName = scene.name,
-					handle = scene.handle,
-				});
-
-				// tell the clients the scene is loaded
-				OnSceneLoadComplete?.Invoke(scene.name);
-			}
-		}
-
-		private void ClientManager_OnRemoteConnectionState(RemoteConnectionStateArgs args)
-		{
-			if (args.ConnectionState == RemoteConnectionState.Stopped)
-			{
-				List<string> scenesToUnload = new List<string>(scenes.Keys);
-				SceneManager.UnloadConnectionScenes(new SceneUnloadData(scenesToUnload));
-				scenes.Clear();
-			}
-		}
-
-		private void Authenticator_OnSceneServerAuthenticationResult()
-		{
-			// tell the world server our information
-			ClientManager.Broadcast(new SceneServerDetailsBroadcast()
-			{
-				address = Server.Address,
-				port = Server.Port,
-				sceneInstanceDetails = RebuildSceneInstanceDetails(),
-			});
 		}
 
 		/// <summary>
-		/// The world server requested an updated scene list from this server.
+		/// Process a single scene load request from the database.
 		/// </summary>
-		private void OnClientSceneListBroadcastReceived(SceneListBroadcast msg)
-		{
-			// tell the world server what scenes we are hosting
-			ClientManager.Broadcast(new SceneListBroadcast()
-			{
-				sceneInstanceDetails = RebuildSceneInstanceDetails(),
-			});
-		}
-
-		/// <summary>
-		/// The world server requested to load a scene.
-		/// </summary>
-		private void OnClientSceneLoadBroadcastReceived(SceneLoadBroadcast msg)
+		private void ProcessSceneLoadRequest(int worldServerID, string sceneName)
 		{
 			if (WorldSceneDetailsCache == null ||
-				!WorldSceneDetailsCache.Scenes.Contains(msg.sceneName))
+				!WorldSceneDetailsCache.Scenes.Contains(sceneName))
 			{
 				Debug.Log("SceneServerManager: Scene is missing from the cache. Unable to load the scene.");
 				return;
 			}
 
-			SceneLoadData sld = new SceneLoadData(msg.sceneName);
+			SceneLoadData sld = new SceneLoadData(sceneName);
 			sld.ReplaceScenes = ReplaceOption.None;
 			sld.Options.AllowStacking = true;
 			sld.Options.LocalPhysics = UnityEngine.SceneManagement.LocalPhysicsMode.Physics3D;
-			// scene unloading is controlled by the server
+			// scene unloading should be controlled by the scene server
 			sld.Options.AutomaticallyUnload = false;
-
+			sld.Params.ServerParams = new object[]
+			{
+				worldServerID
+			};
 			SceneManager.LoadConnectionScenes(sld);
 		}
 
-		/// <summary>
-		/// The world server requested to unload a scene.
-		/// </summary>
-		private void OnClientSceneUnloadBroadcastReceived(SceneUnloadBroadcast msg)
+		// we only track scene handles here for scene stacking, the SceneManager has the real Scene reference
+		private void SceneManager_OnLoadEnd(SceneLoadEndEventArgs args)
 		{
-			// TODO migrate players connected to this scene to another scene instance or scene server with the scene
-
-			SceneUnloadData sud = new SceneUnloadData(new int[] { msg.handle });
-
-			// unload a scene
-			SceneManager.UnloadConnectionScenes(sud);
-
-			// remove the scene from the scene list
-			if (scenes.TryGetValue(msg.sceneName, out Dictionary<int, SceneInstanceDetails> instances))
+			if (args.LoadedScenes == null ||
+				args.LoadedScenes.Length < 1)
 			{
-				instances.Remove(msg.handle);
+				Debug.Log("No new loaded scenes");
+				return;
 			}
 
-			// tell the world server we unloaded the scene
-			ClientManager.Broadcast(msg);
+			UnityEngine.SceneManagement.Scene scene = args.LoadedScenes[0];
+
+			Debug.Log("Finished SceneLoad: " + scene.name);
+
+			// note there should only ever be one world id. we load one at a time
+			int worldServerID = -1;
+			if (args.QueueData.SceneLoadData.Params.ServerParams != null &&
+				args.QueueData.SceneLoadData.Params.ServerParams.Length > 0)
+			{
+				Debug.Log("ServerParams Length: " + args.QueueData.SceneLoadData.Params.ServerParams.Length);
+				worldServerID = (int)args.QueueData.SceneLoadData.Params.ServerParams[0];
+			}
+			Debug.Log(worldServerID);
+			if (worldServerID < 0)
+			{
+				return;
+			}
+
+			// configure the mapping for this specific world scene
+			if (!worldScenes.TryGetValue(worldServerID, out Dictionary<string, Dictionary<int, SceneInstanceDetails>> scenes))
+			{
+				worldScenes.Add(worldServerID, scenes = new Dictionary<string, Dictionary<int, SceneInstanceDetails>>());
+			}
+			if (!scenes.TryGetValue(scene.name, out Dictionary<int, SceneInstanceDetails> handles))
+			{
+				scenes.Add(scene.name, handles = new Dictionary<int, SceneInstanceDetails>());
+			}
+			if (!handles.ContainsKey(scene.handle))
+			{
+				GameObject gob = new GameObject("PhysicsTicker");
+				PhysicsTicker physicsTicker = gob.AddComponent<PhysicsTicker>();
+				physicsTicker.InitializeOnce(scene.GetPhysicsScene());
+				UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(gob, scene);
+
+				// cache the newly loaded scene
+				handles.Add(scene.handle, new SceneInstanceDetails()
+				{
+					WorldID = worldServerID,
+					Name = scene.name,
+					Handle = scene.handle,
+					CharacterCount = 0,
+				});
+
+
+				// save the loaded scene information to the database
+				using var dbContext = Server.DbContextFactory.CreateDbContext();
+				Debug.Log("Loaded Scene: " + scene.handle + ":" + scene.name);
+				LoadedSceneService.Add(dbContext, id, worldServerID, scene.name, scene.handle);
+				dbContext.SaveChanges();
+
+				// tell the clients the scene is loaded?
+				OnSceneLoadComplete?.Invoke(scene.name);
+			}
+			else
+			{
+				throw new UnityException("Duplicate scene handles");
+			}
 		}
 
-		public bool TryGetValidScene(string sceneName, out SceneInstanceDetails instanceDetails)
+		public bool TryGetSceneInstanceDetails(int worldServerID, string sceneName, int sceneHandle, out SceneInstanceDetails instanceDetails)
 		{
 			instanceDetails = default;
 
-			if (scenes.TryGetValue(sceneName, out Dictionary<int, SceneInstanceDetails> instances))
+			if (worldScenes.TryGetValue(worldServerID, out Dictionary<string, Dictionary<int, SceneInstanceDetails>> scenes))
 			{
-				bool found = false;
-				foreach (SceneInstanceDetails instance in instances.Values)
+				if (scenes.TryGetValue(sceneName, out Dictionary<int, SceneInstanceDetails> instances))
 				{
-					if (!found)
+					if (instances.TryGetValue(sceneHandle, out instanceDetails))
 					{
-						instanceDetails = instance;
-						found = true;
-						continue;
-					}
-					if (instanceDetails.ClientCount > instance.ClientCount)
-					{
-						instanceDetails = instance;
+						return true;
 					}
 				}
-				if (found) return true;
 			}
 			return false;
 		}

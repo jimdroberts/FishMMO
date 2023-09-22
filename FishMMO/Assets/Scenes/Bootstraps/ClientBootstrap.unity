@@ -997,7 +997,7 @@ PrefabInstance:
     - target: {fileID: 1419794991950549949, guid: 72a8e16445661d84d91a7386257b5e8e,
         type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: -0.000061035156
+      value: -0.000091552734
       objectReference: {fileID: 0}
     - target: {fileID: 1419794992118969624, guid: 72a8e16445661d84d91a7386257b5e8e,
         type: 3}
@@ -2322,7 +2322,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 34e4a322dca349547989b14021da4e23, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  Transport: {fileID: 2002785891}
+  Transport: {fileID: 2002785886}
   _intermediateLayer: {fileID: 0}
   _latencySimulator:
     _enabled: 0
@@ -2353,7 +2353,7 @@ MonoBehaviour:
   _HTTPS: 0
   _clientAddress: 127.0.0.1
   _noClientPort: 0
---- !u!114 &2002785891 stripped
+--- !u!114 &2002785886 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 2978259237282445286, guid: 1eea1c68ebce1604cada369f7bb62018,
     type: 3}

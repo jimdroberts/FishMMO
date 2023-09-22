@@ -1,13 +1,13 @@
 ﻿using FishNet.Broadcast;
 using FishNet.Connection;
-using FishNet.Managing.Client;
 using FishNet.Object;
 using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
-using FishMMO.Server.Services;
-using UnityEngine;
 using System.Linq;
+using FishMMO.Server.Services;
+using FishMMO_DB.Entities;
+using UnityEngine;
 
 namespace FishMMO.Server
 {
@@ -23,7 +23,7 @@ namespace FishMMO.Server
 		public float OutOfBoundsCheckRate = 5f;
 		private float nextOutOfBoundsCheck = 0.0f;
 
-		public Dictionary<long, Character> CharactersById = new Dictionary<long, Character>();
+		public Dictionary<long, Character> CharactersByID = new Dictionary<long, Character>();
 		public Dictionary<string, Character> CharactersByName = new Dictionary<string, Character>();
 		public Dictionary<NetworkConnection, Character> ConnectionCharacters = new Dictionary<NetworkConnection, Character>();
 		public Dictionary<NetworkConnection, Character> WaitingSceneLoadCharacters = new Dictionary<NetworkConnection, Character>();
@@ -33,9 +33,12 @@ namespace FishMMO.Server
 			nextSave = SaveRate;
 
 			if (ServerManager != null &&
-				ClientManager != null &&
 				Server.SceneServerSystem != null)
 			{
+				loginAuthenticator = FindObjectOfType<SceneServerAuthenticator>();
+				if (loginAuthenticator == null)
+					return;
+
 				ServerManager.OnServerConnectionState += ServerManager_OnServerConnectionState;
 				ServerManager.OnRemoteConnectionState += ServerManager_OnRemoteConnectionState;
 			}
@@ -80,7 +83,7 @@ namespace FishMMO.Server
 
 					// all characters are periodically saved
 					using var dbContext = Server.DbContextFactory.CreateDbContext();
-					CharacterService.Save(dbContext, new List<Character>(CharactersById.Values));
+					CharacterService.Save(dbContext, new List<Character>(CharactersByID.Values));
 					dbContext.SaveChanges();
 				}
 				nextSave -= Time.deltaTime;
@@ -92,16 +95,12 @@ namespace FishMMO.Server
 			Debug.Log("Disconnecting...");
 			// save all the characters before we quit
 			using var dbContext = Server.DbContextFactory.CreateDbContext();
-			CharacterService.Save(dbContext, new List<Character>(CharactersById.Values), false);
+			CharacterService.Save(dbContext, new List<Character>(CharactersByID.Values), false);
 			dbContext.SaveChanges();
 		}
 
 		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs args)
 		{
-			loginAuthenticator = FindObjectOfType<SceneServerAuthenticator>();
-			if (loginAuthenticator == null)
-				return;
-
 			serverState = args.ConnectionState;
 
 			if (args.ConnectionState == LocalConnectionState.Started)
@@ -128,11 +127,34 @@ namespace FishMMO.Server
 				{
 					Server.NetworkManager.StorePooledInstantiated(waitingSceneCharacter.NetworkObject, true);
 					WaitingSceneLoadCharacters.Remove(conn);
+
+					if (Server.SceneServerSystem.TryGetSceneInstanceDetails(waitingSceneCharacter.WorldServerID,
+																			waitingSceneCharacter.SceneName,
+																			waitingSceneCharacter.SceneHandle,
+																			out SceneInstanceDetails instance))
+					{
+						--instance.CharacterCount;
+					}
 					return;
 				}
 
 				if (ConnectionCharacters.TryGetValue(conn, out Character character))
 				{
+					// remove the characterID->character entry
+					CharactersByID.Remove(character.ID);
+					// remove the characterName->character entry
+					CharactersByName.Remove(character.CharacterName);
+					// remove the connection->character entry
+					ConnectionCharacters.Remove(conn);
+
+					if (Server.SceneServerSystem.TryGetSceneInstanceDetails(character.WorldServerID,
+																			character.SceneName,
+																			character.SceneHandle,
+																			out SceneInstanceDetails instance))
+					{
+						--instance.CharacterCount;
+					}
+
 					if (character == null)
 					{
 						// character is missing.. socket is closed but we kick just incase
@@ -152,26 +174,10 @@ namespace FishMMO.Server
 						Server.PartySystem.RemovePending(character.ID);
 					}
 
-					// remove the characterId->character entry
-					CharactersById.Remove(character.ID);
-					// remove the characterName->character entry
-					CharactersByName.Remove(character.CharacterName);
-					// remove the connection->character entry
-					ConnectionCharacters.Remove(conn);
-
 					if (character.IsTeleporting)
 					{
 						// teleporter handles the rest
 						return;
-					}
-
-					// tell the world server the character disconnected, this only happens on a full disconnect
-					if (ClientManager != null)
-					{
-						ClientManager.Broadcast(new SceneCharacterDisconnectedBroadcast()
-						{
-							characterId = character.ID,
-						});
 					}
 
 					// character becomes immortal on disconnect and mortal when fully loaded into the scene
@@ -202,60 +208,55 @@ namespace FishMMO.Server
 			// create the db context
 			using var dbContext = Server.DbContextFactory.CreateDbContext();
 
-			if (CharacterService.TryGetSelectedDetails(dbContext, accountName, out long selectedCharacterId))
+			if (CharacterService.TryGetSelectedDetails(dbContext, accountName, out long selectedCharacterID))
 			{
-				if (CharactersById.ContainsKey(selectedCharacterId))
+				if (CharactersByID.ContainsKey(selectedCharacterID))
 				{
-					//Debug.Log(selectedCharacterId + " is already loaded or loading. FIXME");
+					//Debug.Log(selectedCharacterID + " is already loaded or loading. FIXME");
 
 					// character load already started or complete
 					conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
 					return;
 				}
 
-				if (CharacterService.TryGet(dbContext, selectedCharacterId, Server.NetworkManager, out Character character))
+				if (CharacterService.TryGet(dbContext, selectedCharacterID, Server.NetworkManager, out Character character))
 				{
-					WaitingSceneLoadCharacters.Add(conn, character);
-
 					// check if the scene is valid, loaded, and cached properly
-					if (Server.SceneServerSystem.TryGetValidScene(character.SceneName, out SceneInstanceDetails instance))
+					if (Server.SceneServerSystem.TryGetSceneInstanceDetails(character.WorldServerID, character.SceneName, character.SceneHandle, out SceneInstanceDetails instance) &&
+						Server.SceneServerSystem.TryLoadSceneForConnection(conn, instance))
 					{
-						//Debug.Log(character.CharacterName + " is loading Scene: " + character.SceneName);
+						WaitingSceneLoadCharacters.Add(conn, character);
 
-						if (Server.SceneServerSystem.TryLoadSceneForConnection(conn, instance))
-						{
-							// assign scene handle for later..
-							character.SceneHandle = instance.Handle;
-						}
-						else
-						{
-							//Debug.Log(character.CharacterName + "'s scene failed to load.");
+						// update character count
+						++instance.CharacterCount;
 
-							// character scene not found even after validated
-							conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
-							return;
-						}
+						Debug.Log(character.CharacterName + " is loading Scene: " + character.SceneName + ":" + character.SceneHandle);
 					}
 					else
 					{
-						// Scene loading is the responsibility of the world server, send them over there to reconnect to a scene server
-						conn.Broadcast(new SceneWorldReconnectBroadcast()
+						// send the character back to the world server.. something went wrong
+						WorldServerEntity worldServer = WorldServerService.GetServer(dbContext, character.WorldServerID);
+						if (worldServer != null)
 						{
-							address = Server.RelayAddress,
-							port = Server.RelayPort
-						});
+							// Scene loading is the responsibility of the world server, send them over there to reconnect to a scene server
+							conn.Broadcast(new SceneWorldReconnectBroadcast()
+							{
+								address = worldServer.Address,
+								port = worldServer.Port
+							});
+						}
 					}
 				}
 				else
 				{
 					// loading the character failed for some reason, maybe it doesn't exist? we should never get to this point but we will kick the player anyway
-					conn.Kick(FishNet.Managing.Server.KickReason.Unset);
+					conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
 				}
 			}
 			else
 			{
 				// loading the character data failed to load for some reason, maybe it doesn't exist? we should never get to this point but we will kick the player anyway
-				conn.Kick(FishNet.Managing.Server.KickReason.Unset);
+				conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
 			}
 		}
 
@@ -266,6 +267,28 @@ namespace FishMMO.Server
 		{
 			if (WaitingSceneLoadCharacters.TryGetValue(conn, out Character character))
 			{
+				// add a connection->character map for ease of use
+				if (ConnectionCharacters.ContainsKey(conn))
+				{
+					ConnectionCharacters[conn] = character;
+				}
+				else
+				{
+					ConnectionCharacters.Add(conn, character);
+				}
+
+				// add a characterName->character map for ease of use
+				if (CharactersByID.ContainsKey(character.ID))
+				{
+					CharactersByID[character.ID] = character;
+					CharactersByName[character.CharacterName] = character;
+				}
+				else
+				{
+					CharactersByID.Add(character.ID, character);
+					CharactersByName.Add(character.CharacterName, character);
+				}
+
 				// remove the waiting scene load character
 				WaitingSceneLoadCharacters.Remove(conn);
 
@@ -299,45 +322,12 @@ namespace FishMMO.Server
 					});
 				}*/
 
-				// add a connection->character map for ease of use
-				if (ConnectionCharacters.ContainsKey(conn))
-				{
-					ConnectionCharacters[conn] = character;
-				}
-				else
-				{
-					ConnectionCharacters.Add(conn, character);
-				}
-
-				// add a characterName->character map for ease of use
-				if (CharactersById.ContainsKey(character.ID))
-				{
-					CharactersById[character.ID] = character;
-					CharactersByName[character.CharacterName] = character;
-				}
-				else
-				{
-					CharactersById.Add(character.ID, character);
-					CharactersByName.Add(character.CharacterName, character);
-				}
-
 				// set the character status to online
 				if (AccountManager.GetAccountNameByConnection(conn, out string accountName))
 				{
-					// doesn't contain any important functionality yet.. we just do it for fun
 					using var dbContext = Server.DbContextFactory.CreateDbContext();
-					CharacterService.TrySetOnline(dbContext, accountName, character.CharacterName);
+					CharacterService.SetOnline(dbContext, accountName, character.CharacterName);
 					dbContext.SaveChanges();
-				}
-
-				// tell the world server the character is active
-				if (ClientManager != null)
-				{
-					ClientManager.Broadcast(new SceneCharacterConnectedBroadcast()
-					{
-						characterId = character.ID,
-						sceneName = character.SceneName,
-					});
 				}
 
 				//Debug.Log(character.CharacterName + " has been spawned at: " + character.SceneName + " " + character.Transform.position.ToString());
@@ -369,9 +359,9 @@ namespace FishMMO.Server
 		/// Returns true if the broadcast was sent successfully.
 		/// False if the character could not by found.
 		/// </summary>
-		public bool SendBroadcastToCharacter<T>(long characterId, T msg) where T : struct, IBroadcast
+		public bool SendBroadcastToCharacter<T>(long characterID, T msg) where T : struct, IBroadcast
 		{
-			if (CharactersById.TryGetValue(characterId, out Character character))
+			if (CharactersByID.TryGetValue(characterID, out Character character))
 			{
 				character.Owner.Broadcast(msg);
 				return true;

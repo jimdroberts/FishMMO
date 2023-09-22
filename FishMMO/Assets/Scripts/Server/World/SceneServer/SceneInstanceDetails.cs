@@ -1,12 +1,10 @@
-﻿using System;
-
-namespace FishMMO.Server
+﻿namespace FishMMO.Server
 {
-	[Serializable]
-	public struct SceneInstanceDetails
+	public class SceneInstanceDetails
 	{
+		public int WorldID;
 		public string Name;
 		public int Handle;
-		public int ClientCount;
+		public int CharacterCount;
 	}
 }

@@ -79,6 +79,7 @@ public class Character : NetworkBehaviour, IPooledResettable
 #endif
 	}
 	public string Account;
+	public int WorldServerID;
 	public bool IsGameMaster = false;
 	public bool IsTeleporting = false;
 	public int RaceID;
@@ -164,6 +165,7 @@ public class Character : NetworkBehaviour, IPooledResettable
 		ID = -1;
 		CharacterName = "";
 		Account = "";
+		WorldServerID = 0;
 		IsGameMaster = false;
 		IsTeleporting = false;
 		RaceID = 0;

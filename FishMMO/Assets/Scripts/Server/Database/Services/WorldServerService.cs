@@ -18,7 +18,8 @@ namespace FishMMO.Server.Services
             string address,
             ushort port,
             int characterCount,
-            bool locked
+            bool locked,
+            out int id
         )
         {
             if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(address))
@@ -38,30 +39,38 @@ namespace FishMMO.Server.Services
                 Locked = locked
             };
             dbContext.WorldServers.Add(server);
+			dbContext.SaveChanges();
 
-            return server;
+            id = server.ID;
+			return server;
         }
 
-        public static void Pulse(ServerDbContext dbContext, string name, int characterCount)
+        public static void Pulse(ServerDbContext dbContext, int id, int characterCount)
         {
-            var worldServer = dbContext.WorldServers
-                .FirstOrDefault(server => server.Name.ToLower() == name.ToLower());
-            if (worldServer == null) throw new Exception($"Couldn't find world with name {name}");
+            var worldServer = dbContext.WorldServers.FirstOrDefault(c => c.ID == id);
+			if (worldServer == null) throw new Exception($"Couldn't find World Server with ID: {id}");
             
             worldServer.LastPulse = DateTime.UtcNow;
             worldServer.CharacterCount = characterCount;
         }
         
-        public static void Delete(ServerDbContext dbContext, string name) 
+        public static void Delete(ServerDbContext dbContext, int id) 
         {
-            var worldServer = dbContext.WorldServers
-                .FirstOrDefault(server => server.Name.ToLower() == name.ToLower());
-            if (worldServer == null) throw new Exception($"Couldn't find world with name {name}");
+            var worldServer = dbContext.WorldServers.FirstOrDefault(c => c.ID == id);
+			if (worldServer == null) throw new Exception($"Couldn't find World Server with ID: {id}");
 
             dbContext.WorldServers.Remove(worldServer);
         }
-        
-        public static List<WorldServerDetails> GetServerList(ServerDbContext dbContext)
+
+		public static WorldServerEntity GetServer(ServerDbContext dbContext, int worldServerID)
+		{
+			var worldServer = dbContext.WorldServers.FirstOrDefault(c => c.ID == worldServerID);
+			if (worldServer == null) throw new Exception($"Couldn't find World Server with ID: {worldServerID}");
+
+            return worldServer;
+		}
+
+		public static List<WorldServerDetails> GetServerList(ServerDbContext dbContext)
         {
             return dbContext.WorldServers
                 .ToList()

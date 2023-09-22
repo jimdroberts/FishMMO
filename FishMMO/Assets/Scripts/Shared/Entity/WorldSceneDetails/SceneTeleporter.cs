@@ -1,13 +1,14 @@
 using FishNet.Object;
 using UnityEngine;
-#if UNITY_SERVER
+//#if UNITY_SERVER
 using FishMMO.Server;
 using FishMMO.Server.Services;
-#endif
+using FishMMO_DB.Entities;
+//#endif
 
 public class SceneTeleporter : MonoBehaviour
 {
-#if UNITY_SERVER
+//#if UNITY_SERVER
 	private SceneServerSystem sceneServerSystem;
 
 	void Awake()
@@ -54,14 +55,23 @@ public class SceneTeleporter : MonoBehaviour
 
 					Debug.Log(character.CharacterName + " has been saved at: " + character.Transform.position.ToString());
 
-					// tell the client to reconnect to the world server for automatic re-entry
-					character.Owner.Broadcast(new SceneWorldReconnectBroadcast()
+					WorldServerEntity worldServer = WorldServerService.GetServer(dbContext, character.WorldServerID);
+					if (worldServer != null)
 					{
-						address = sceneServerSystem.Server.RelayAddress,
-						port = sceneServerSystem.Server.RelayPort,
-						teleporterName = gameObject.name,
-						sceneName = playerScene
-					});
+						// tell the client to reconnect to the world server for automatic re-entry
+						character.Owner.Broadcast(new SceneWorldReconnectBroadcast()
+						{
+							address = worldServer.Address,
+							port = worldServer.Port,
+							teleporterName = gameObject.name,
+							sceneName = playerScene
+						});
+					}
+					else
+					{
+						// world not found?
+						character.Owner.Kick(FishNet.Managing.Server.KickReason.UnexpectedProblem);
+					}
 
 					sceneServerSystem.ServerManager.Despawn(character.NetworkObject, DespawnType.Pool);
 				}
@@ -85,5 +95,5 @@ public class SceneTeleporter : MonoBehaviour
 			}
 		}
 	}
-#endif
+//#endif
 }

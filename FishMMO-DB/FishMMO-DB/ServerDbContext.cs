@@ -9,8 +9,14 @@ namespace FishMMO_DB
         public ServerDbContext(DbContextOptions options) : base(options)
         {
         }
-        
+
+		//protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+        //    => optionsBuilder.LogTo(Console.WriteLine);
+		
         public DbSet<WorldServerEntity> WorldServers { get; set; }
+        public DbSet<SceneServerEntity> SceneServers { get; set; }
+        public DbSet<LoadedSceneEntity> LoadedScenes { get; set; }
+        public DbSet<PendingSceneEntity> PendingScenes { get; set; }
         public DbSet<AccountEntity> Accounts { get; set; }
         
         // character tables
@@ -24,7 +30,8 @@ namespace FishMMO_DB
         public DbSet<CharacterBuffEntity> CharacterBuffs { get; set; }
         public DbSet<CharacterQuestEntity> CharacterQuests { get; set; }
         public DbSet<CharacterGuildEntity> CharacterGuilds { get; set; }
-        public DbSet<GuildInfoEntity> GuildInfos { get; set; }
+        public DbSet<GuildEntity> Guilds { get; set; }
+        public DbSet<ChatEntity> Chat { get; set; }
         
         // game data (?)
         //public DbSet<QuestEntity> Quests { get; set; }

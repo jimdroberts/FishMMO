@@ -16,14 +16,14 @@ namespace FishMMO.Server.Services
 				return;
 			}
 
-			var achievements = dbContext.CharacterAchievements.Where(c => c.CharacterId == character.ID)
+			var achievements = dbContext.CharacterAchievements.Where(c => c.CharacterID == character.ID)
 															  .ToDictionary(k => k.TemplateID);
 
 			foreach (Achievement achievement in character.AchievementController.Achievements.Values)
 			{
 				if (achievements.TryGetValue(achievement.Template.ID, out CharacterAchievementEntity dbAchievement))
 				{
-					dbAchievement.CharacterId = character.ID;
+					dbAchievement.CharacterID = character.ID;
 					dbAchievement.TemplateID = achievement.Template.ID;
 					dbAchievement.Tier = achievement.CurrentTier;
 					dbAchievement.Value = achievement.CurrentValue;
@@ -32,7 +32,7 @@ namespace FishMMO.Server.Services
 				{
 					dbContext.CharacterAchievements.Add(new CharacterAchievementEntity()
 					{
-						CharacterId = character.ID,
+						CharacterID = character.ID,
 						TemplateID = achievement.Template.ID,
 						Tier = achievement.CurrentTier,
 						Value = achievement.CurrentValue,
@@ -48,7 +48,7 @@ namespace FishMMO.Server.Services
 		{
 			if (!keepData)
 			{
-				var achievements = dbContext.CharacterAchievements.Where(c => c.CharacterId == characterID);
+				var achievements = dbContext.CharacterAchievements.Where(c => c.CharacterID == characterID);
 				dbContext.CharacterAchievements.RemoveRange(achievements);
 			}
 		}
@@ -58,13 +58,11 @@ namespace FishMMO.Server.Services
 		/// </summary>
 		public static void Load(ServerDbContext dbContext, Character character)
 		{
-			dbContext.CharacterAchievements
-			.Where(c => c.CharacterId == character.ID)
-			.ToList()
-			.ForEach(achievement =>
+			var achievements = dbContext.CharacterAchievements.Where(c => c.CharacterID == character.ID);
+			foreach (CharacterAchievementEntity achievement in  achievements)
 			{
 				character.AchievementController.SetAchievement(achievement.TemplateID, achievement.Tier, achievement.Value);
-			});
+			};
 		}
 	}
 }

@@ -16,7 +16,7 @@ namespace FishMMO.Server.Services
 				return;
 			}
 
-			var attributes = dbContext.CharacterAttributes.Where(c => c.CharacterId == character.ID)
+			var attributes = dbContext.CharacterAttributes.Where(c => c.CharacterID == character.ID)
 														  .ToDictionary(k => k.TemplateID);
 
 			foreach (CharacterAttribute attribute in character.AttributeController.Attributes.Values)
@@ -28,7 +28,7 @@ namespace FishMMO.Server.Services
 				}
 				if (attributes.TryGetValue(attribute.Template.ID, out CharacterAttributeEntity dbAttribute))
 				{
-					dbAttribute.CharacterId = character.ID;
+					dbAttribute.CharacterID = character.ID;
 					dbAttribute.TemplateID = attribute.Template.ID;
 					dbAttribute.BaseValue = attribute.BaseValue;
 					dbAttribute.Modifier = attribute.Modifier;
@@ -38,7 +38,7 @@ namespace FishMMO.Server.Services
 				{
 					dbContext.CharacterAttributes.Add(new CharacterAttributeEntity()
 					{
-						CharacterId = character.ID,
+						CharacterID = character.ID,
 						TemplateID = attribute.Template.ID,
 						BaseValue = attribute.BaseValue,
 						Modifier = attribute.Modifier,
@@ -51,7 +51,7 @@ namespace FishMMO.Server.Services
 			{
 				if (attributes.TryGetValue(attribute.Template.ID, out CharacterAttributeEntity dbAttribute))
 				{
-					dbAttribute.CharacterId = character.ID;
+					dbAttribute.CharacterID = character.ID;
 					dbAttribute.TemplateID = attribute.Template.ID;
 					dbAttribute.BaseValue = attribute.BaseValue;
 					dbAttribute.Modifier = attribute.Modifier;
@@ -61,7 +61,7 @@ namespace FishMMO.Server.Services
 				{
 					dbContext.CharacterAttributes.Add(new CharacterAttributeEntity()
 					{
-						CharacterId = character.ID,
+						CharacterID = character.ID,
 						TemplateID = attribute.Template.ID,
 						BaseValue = attribute.BaseValue,
 						Modifier = attribute.Modifier,
@@ -78,7 +78,7 @@ namespace FishMMO.Server.Services
 		{
 			if (!keepData)
 			{
-				var attributes = dbContext.CharacterAttributes.Where(c => c.CharacterId == characterID);
+				var attributes = dbContext.CharacterAttributes.Where(c => c.CharacterID == characterID);
 				dbContext.CharacterAttributes.RemoveRange(attributes);
 			}
 		}
@@ -88,10 +88,8 @@ namespace FishMMO.Server.Services
 		/// </summary>
 		public static void Load(ServerDbContext dbContext, Character character)
 		{
-			dbContext.CharacterAttributes
-			.Where(c => c.CharacterId == character.ID)
-			.ToList()
-			.ForEach(attribute =>
+			var attributes = dbContext.CharacterAttributes.Where(c => c.CharacterID == character.ID);
+			foreach (CharacterAttributeEntity attribute in attributes)
 			{
 				CharacterAttributeTemplate template = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(attribute.TemplateID);
 				if (template != null)
@@ -105,7 +103,7 @@ namespace FishMMO.Server.Services
 						character.AttributeController.SetAttribute(template.ID, attribute.BaseValue, attribute.Modifier);
 					}
 				}
-			});
+			};
 		}
 	}
 }

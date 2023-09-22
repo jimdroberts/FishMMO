@@ -17,12 +17,12 @@ public class GuildController : NetworkBehaviour
 	public event GuildEvent OnGuildCreated;
 	public event GuildEvent OnLeaveGuild;
 
-	public delegate void GuildMemberEvent(long guildMemberId, GuildRank rank);
+	public delegate void GuildMemberEvent(long guildMemberID, GuildRank rank);
 	public event GuildMemberEvent OnAddMember;
 	public event GuildMemberEvent OnUpdateMember;
 	public event GuildMemberEvent OnRemoveMember;
 
-	public delegate void GuildAcceptEvent(List<long> guildMemberIds);
+	public delegate void GuildAcceptEvent(List<long> guildMemberIDs);
 	public event GuildAcceptEvent OnGuildInviteAccepted;
 
 	public override void OnStartClient()
@@ -65,7 +65,7 @@ public class GuildController : NetworkBehaviour
 	/// </summary>
 	public void OnClientGuildCreateBroadcastReceived(GuildCreateBroadcast msg)
 	{
-		Guild newGuild = new Guild(msg.guildId, this);
+		Guild newGuild = new Guild(msg.guildID, this);
 		Current = newGuild;
 		Rank = GuildRank.Leader;
 
@@ -74,7 +74,7 @@ public class GuildController : NetworkBehaviour
 
 	/// <summary>
 	/// When the character receives an invitation to join a guild.
-	/// *Note* msg.targetClientId should be our own ClientId but it doesn't matter if it changes. Server has authority.
+	/// *Note* msg.targetClientID should be our own ClientId but it doesn't matter if it changes. Server has authority.
 	/// </summary>
 	public void OnClientGuildInviteBroadcastReceived(GuildInviteBroadcast msg)
 	{
@@ -99,7 +99,7 @@ public class GuildController : NetworkBehaviour
 	public void OnClientGuildNewMemberBroadcastReceived(GuildNewMemberBroadcast msg)
 	{
 		// update our Guild list with the new Guild member
-		OnAddMember?.Invoke(msg.memberId, msg.rank);
+		OnAddMember?.Invoke(msg.memberID, msg.rank);
 	}
 
 	/// <summary>
@@ -107,7 +107,7 @@ public class GuildController : NetworkBehaviour
 	/// </summary>
 	public void OnClientGuildUpdateMemberBroadcastReceived(GuildUpdateMemberBroadcast msg)
 	{
-		OnUpdateMember?.Invoke(msg.memberId, msg.rank);
+		OnUpdateMember?.Invoke(msg.memberID, msg.rank);
 	}
 
 	/// <summary>
@@ -128,8 +128,8 @@ public class GuildController : NetworkBehaviour
 	{
 		if (Current != null)
 		{
-			GuildController removedMember = Current.RemoveMember(msg.memberId);
-			OnRemoveMember?.Invoke(msg.memberId, GuildRank.None);
+			GuildController removedMember = Current.RemoveMember(msg.memberID);
+			OnRemoveMember?.Invoke(msg.memberID, GuildRank.None);
 		}
 	}
 }
