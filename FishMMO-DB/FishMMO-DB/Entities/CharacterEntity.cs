@@ -19,7 +19,7 @@ namespace FishMMO_DB.Entities
 		public string NameLowercase { get; set; }
         public string Account { get; set; }
         public bool Selected { get; set; }
-		public int WorldServerID { get; set; }
+		public long WorldServerID { get; set; }
         public int SceneHandle { get; set; }
         public string SceneName { get; set; }
 		public int RaceID { get; set; }

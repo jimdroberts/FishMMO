@@ -16,7 +16,7 @@ namespace FishMMO.Server.Services
 			ushort port,
 			int characterCount,
 			bool locked,
-			out int id
+			out long id
 		)
 		{
 			var server = new SceneServerEntity()
@@ -34,7 +34,7 @@ namespace FishMMO.Server.Services
 			return server;
 		}
 
-		public static void Pulse(ServerDbContext dbContext, int id, int characterCount)
+		public static void Pulse(ServerDbContext dbContext, long id, int characterCount)
 		{
 			var sceneServer = dbContext.SceneServers.FirstOrDefault(c => c.ID == id);
 			if (sceneServer == null) throw new Exception($"Couldn't find Scene Server with ID: {id}");
@@ -43,15 +43,13 @@ namespace FishMMO.Server.Services
 			sceneServer.CharacterCount = characterCount;
 		}
 
-		public static void Delete(ServerDbContext dbContext, int id)
+		public static void Delete(ServerDbContext dbContext, long id)
 		{
 			var sceneServer = dbContext.SceneServers.FirstOrDefault(c => c.ID == id);
-			if (sceneServer == null) throw new Exception($"Couldn't find Scene Server with ID: {id}");
-
 			dbContext.SceneServers.Remove(sceneServer);
 		}
 
-		public static SceneServerEntity GetServer(ServerDbContext dbContext, int id)
+		public static SceneServerEntity GetServer(ServerDbContext dbContext, long id)
 		{
 			var sceneServer = dbContext.SceneServers.FirstOrDefault(c => c.ID == id);
 			if (sceneServer == null) throw new Exception($"Couldn't find Scene Server with ID: {id}");

@@ -9,7 +9,7 @@ namespace FishMMO.Server.Services
 		/// <summary>
 		/// Save a character Achievements to the database.
 		/// </summary>
-		public static void Save(ServerDbContext dbContext, long characterID, int worldServerID, int sceneServerID, byte channel, string message)
+		public static void Save(ServerDbContext dbContext, long characterID, long worldServerID, long sceneServerID, byte channel, string message)
 		{
 		}
 

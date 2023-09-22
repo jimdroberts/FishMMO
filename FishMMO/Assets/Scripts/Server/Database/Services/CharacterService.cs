@@ -223,7 +223,7 @@ namespace FishMMO.Server.Services
 		/// <summary>
 		/// Set the selected characters world server id for the connections account.
 		/// </summary>
-		public static void SetWorld(ServerDbContext dbContext, string account, int worldServerID)
+		public static void SetWorld(ServerDbContext dbContext, string account, long worldServerID)
 		{
 			// get all characters for account
 			var character = dbContext.Characters.FirstOrDefault((c) => c.Account == account && c.Selected && !c.Deleted);

@@ -10,12 +10,12 @@ namespace FishMMO.Server
 	{
 		private LocalConnectionState serverState;
 
-		private int id;
+		private long id;
 		private bool locked = false;
 		private float pulseRate = 10.0f;
 		private float nextPulse = 0.0f;
 
-		public int ID {get { return id; } }
+		public long ID {get { return id; } }
 
 		public override void InitializeOnce()
 		{

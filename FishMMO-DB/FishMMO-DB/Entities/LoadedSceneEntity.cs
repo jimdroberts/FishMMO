@@ -9,9 +9,9 @@ namespace FishMMO_DB.Entities
 	public class LoadedSceneEntity
 	{
 		[DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-		public int ID { get; set; }
-		public int SceneServerID { get; set; }
-		public int WorldServerID { get; set; }
+		public long ID { get; set; }
+		public long SceneServerID { get; set; }
+		public long WorldServerID { get; set; }
 		public string SceneName { get; set; }
 		public int SceneHandle { get; set; }
 		public int CharacterCount { get; set; }

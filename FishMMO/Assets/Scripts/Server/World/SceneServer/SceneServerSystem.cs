@@ -18,17 +18,15 @@ namespace FishMMO.Server
 
 		public WorldSceneDetailsCache WorldSceneDetailsCache;
 
-		private int id;
+		private long id;
 		private bool locked = false;
 		private float pulseRate = 10.0f;
 		private float nextPulse = 0.0f;
 
-		public int ID { get { return id; } }
-
-		public event Action<string> OnSceneLoadComplete;
+		public long ID { get { return id; } }
 
 		// <worldID, <sceneName, <sceneHandle, details>>>
-		public Dictionary<int, Dictionary<string, Dictionary<int, SceneInstanceDetails>>> worldScenes = new Dictionary<int, Dictionary<string, Dictionary<int, SceneInstanceDetails>>>();
+		public Dictionary<long, Dictionary<string, Dictionary<int, SceneInstanceDetails>>> worldScenes = new Dictionary<long, Dictionary<string, Dictionary<int, SceneInstanceDetails>>>();
 
 		public override void InitializeOnce()
 		{
@@ -116,7 +114,7 @@ namespace FishMMO.Server
 							{
 								foreach (KeyValuePair<int, SceneInstanceDetails> sceneDetails in scene)
 								{
-									Debug.Log(sceneDetails.Value.Name + "(" + sceneDetails.Value.WorldID + ":" + sceneDetails.Value.Handle + "): Pulse [" + sceneDetails.Value.CharacterCount + "]");
+									Debug.Log(sceneDetails.Value.Name + "[" + sceneDetails.Value.WorldServerID + ":" + sceneDetails.Value.Handle + "]: Pulse [" + sceneDetails.Value.CharacterCount + "]");
 									LoadedSceneService.Pulse(dbContext, sceneDetails.Key, sceneDetails.Value.CharacterCount);
 								}
 							}
@@ -152,7 +150,7 @@ namespace FishMMO.Server
 		/// <summary>
 		/// Process a single scene load request from the database.
 		/// </summary>
-		private void ProcessSceneLoadRequest(int worldServerID, string sceneName)
+		private void ProcessSceneLoadRequest(long worldServerID, string sceneName)
 		{
 			if (WorldSceneDetailsCache == null ||
 				!WorldSceneDetailsCache.Scenes.Contains(sceneName))
@@ -177,26 +175,23 @@ namespace FishMMO.Server
 		// we only track scene handles here for scene stacking, the SceneManager has the real Scene reference
 		private void SceneManager_OnLoadEnd(SceneLoadEndEventArgs args)
 		{
+			// we only operate on newly loaded scenes here
 			if (args.LoadedScenes == null ||
 				args.LoadedScenes.Length < 1)
 			{
-				Debug.Log("No new loaded scenes");
 				return;
 			}
 
 			UnityEngine.SceneManagement.Scene scene = args.LoadedScenes[0];
 
-			Debug.Log("Finished SceneLoad: " + scene.name);
-
 			// note there should only ever be one world id. we load one at a time
-			int worldServerID = -1;
+			long worldServerID = -1;
 			if (args.QueueData.SceneLoadData.Params.ServerParams != null &&
 				args.QueueData.SceneLoadData.Params.ServerParams.Length > 0)
 			{
-				Debug.Log("ServerParams Length: " + args.QueueData.SceneLoadData.Params.ServerParams.Length);
-				worldServerID = (int)args.QueueData.SceneLoadData.Params.ServerParams[0];
+				worldServerID = (long)args.QueueData.SceneLoadData.Params.ServerParams[0];
 			}
-			Debug.Log(worldServerID);
+			// if the world scene is < 0 it is a local scene
 			if (worldServerID < 0)
 			{
 				return;
@@ -213,6 +208,7 @@ namespace FishMMO.Server
 			}
 			if (!handles.ContainsKey(scene.handle))
 			{
+				// configure the scene physics ticker
 				GameObject gob = new GameObject("PhysicsTicker");
 				PhysicsTicker physicsTicker = gob.AddComponent<PhysicsTicker>();
 				physicsTicker.InitializeOnce(scene.GetPhysicsScene());
@@ -221,21 +217,17 @@ namespace FishMMO.Server
 				// cache the newly loaded scene
 				handles.Add(scene.handle, new SceneInstanceDetails()
 				{
-					WorldID = worldServerID,
+					WorldServerID = worldServerID,
 					Name = scene.name,
 					Handle = scene.handle,
 					CharacterCount = 0,
 				});
 
-
 				// save the loaded scene information to the database
 				using var dbContext = Server.DbContextFactory.CreateDbContext();
-				Debug.Log("Loaded Scene: " + scene.handle + ":" + scene.name);
+				Debug.Log("Loaded Scene[" + scene.name + ":" + scene.handle + "]");
 				LoadedSceneService.Add(dbContext, id, worldServerID, scene.name, scene.handle);
 				dbContext.SaveChanges();
-
-				// tell the clients the scene is loaded?
-				OnSceneLoadComplete?.Invoke(scene.name);
 			}
 			else
 			{
@@ -243,7 +235,7 @@ namespace FishMMO.Server
 			}
 		}
 
-		public bool TryGetSceneInstanceDetails(int worldServerID, string sceneName, int sceneHandle, out SceneInstanceDetails instanceDetails)
+		public bool TryGetSceneInstanceDetails(long worldServerID, string sceneName, int sceneHandle, out SceneInstanceDetails instanceDetails)
 		{
 			instanceDetails = default;
 

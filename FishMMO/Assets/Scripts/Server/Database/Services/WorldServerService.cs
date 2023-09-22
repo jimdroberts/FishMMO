@@ -19,7 +19,7 @@ namespace FishMMO.Server.Services
             ushort port,
             int characterCount,
             bool locked,
-            out int id
+            out long id
         )
         {
             if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(address))
@@ -45,7 +45,7 @@ namespace FishMMO.Server.Services
 			return server;
         }
 
-        public static void Pulse(ServerDbContext dbContext, int id, int characterCount)
+        public static void Pulse(ServerDbContext dbContext, long id, int characterCount)
         {
             var worldServer = dbContext.WorldServers.FirstOrDefault(c => c.ID == id);
 			if (worldServer == null) throw new Exception($"Couldn't find World Server with ID: {id}");
@@ -54,7 +54,7 @@ namespace FishMMO.Server.Services
             worldServer.CharacterCount = characterCount;
         }
         
-        public static void Delete(ServerDbContext dbContext, int id) 
+        public static void Delete(ServerDbContext dbContext, long id) 
         {
             var worldServer = dbContext.WorldServers.FirstOrDefault(c => c.ID == id);
 			if (worldServer == null) throw new Exception($"Couldn't find World Server with ID: {id}");
@@ -62,7 +62,7 @@ namespace FishMMO.Server.Services
             dbContext.WorldServers.Remove(worldServer);
         }
 
-		public static WorldServerEntity GetServer(ServerDbContext dbContext, int worldServerID)
+		public static WorldServerEntity GetServer(ServerDbContext dbContext, long worldServerID)
 		{
 			var worldServer = dbContext.WorldServers.FirstOrDefault(c => c.ID == worldServerID);
 			if (worldServer == null) throw new Exception($"Couldn't find World Server with ID: {worldServerID}");

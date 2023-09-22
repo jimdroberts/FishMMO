@@ -30,6 +30,27 @@ namespace FishMMO_DB
 			return CreateDbContext(new string[] { });
 		}
 
+		/*public ServerDbContext CreateDbContext(string connectionString)
+		{
+			string basePath = string.IsNullOrWhiteSpace(this.configPath) ? AppDomain.CurrentDomain.BaseDirectory : this.configPath;
+
+			IConfigurationRoot configuration = new ConfigurationBuilder()
+				.SetBasePath(basePath)
+				.AddJsonFile("appsettings.json")
+				.Build();
+
+			DbContextOptionsBuilder optionsBuilder = new DbContextOptionsBuilder<ServerDbContext>().UseNpgsql(configuration.GetConnectionString(connectionString))
+				.UseSnakeCaseNamingConvention();
+
+			if (enableLogging)
+			{
+				optionsBuilder
+					.EnableSensitiveDataLogging(true);
+			}
+
+			return new ServerDbContext(optionsBuilder.Options);
+		}*/
+
 		public ServerDbContext CreateDbContext(string[] args)
 		{
 			Configuration configuration = GetOrCreateDatabaseConfiguration();

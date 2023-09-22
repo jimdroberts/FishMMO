@@ -349,9 +349,9 @@ namespace FishMMO.Server
 			msg.channel = ChatChannel.Trade;
 			msg.text = sender.CharacterName + ": " + msg.text;
 
-			/*using var dbContext = Server.DbContextFactory.CreateDbContext();
-			ChatService.Save(dbContext, sender.WorldServerID, Server.SceneServerSystem.ID, (byte)msg.channel, msg.text);
-			dbContext.SaveChanges();*/
+			//using var dbContext = Server.DbContextFactory.CreateDbContext();
+			//ChatService.Save(dbContext, sender.WorldServerID, Server.SceneServerSystem.ID, (byte)msg.channel, msg.text);
+			//dbContext.SaveChanges();
 		}
 
 		private void OnSayChat(NetworkConnection conn, Character sender, ChatBroadcast msg)

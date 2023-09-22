@@ -7,7 +7,7 @@ namespace FishMMO_DB.Entities
 	public class SceneServerEntity
 	{
 		[DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-		public int ID { get; set; }
+		public long ID { get; set; }
 		public DateTime LastPulse { get; set; }
 		public string Address { get; set; }
 		public ushort Port { get; set; }

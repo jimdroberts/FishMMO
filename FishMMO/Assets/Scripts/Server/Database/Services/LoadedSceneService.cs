@@ -13,8 +13,8 @@ namespace FishMMO.Server.Services
 		/// </summary>
 		public static LoadedSceneEntity Add(
 			ServerDbContext dbContext,
-			int sceneServerID,
-			int worldServerID,
+			long sceneServerID,
+			long worldServerID,
 			string sceneName,
 			int sceneHandle
 		)
@@ -39,15 +39,13 @@ namespace FishMMO.Server.Services
 			loadedScenes.CharacterCount = characterCount;
 		}
 
-		public static void Delete(ServerDbContext dbContext, int id)
+		public static void Delete(ServerDbContext dbContext, long sceneServerID)
 		{
-			var loadedScenes = dbContext.LoadedScenes.Where(c => c.ID == id);
-			if (loadedScenes == null) throw new Exception($"Couldn't find Scene Server with ID: {id}");
-
+			var loadedScenes = dbContext.LoadedScenes.Where(c => c.ID == sceneServerID);
 			dbContext.LoadedScenes.RemoveRange(loadedScenes);
 		}
 
-		public static Dictionary<string, LoadedSceneEntity> GetServerList(ServerDbContext dbContext, int worldServerID, string sceneName, int maxClients)
+		public static Dictionary<string, LoadedSceneEntity> GetServerList(ServerDbContext dbContext, long worldServerID, string sceneName, int maxClients)
 		{
 			return dbContext.LoadedScenes.Where(c => c.WorldServerID == worldServerID &&
 													 c.SceneName == sceneName &&

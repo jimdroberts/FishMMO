@@ -6,7 +6,7 @@ namespace FishMMO.Server.Services
 {
 	public class PendingSceneService
 	{
-		public static void Enqueue(ServerDbContext dbContext, int worldServerID, string sceneName)
+		public static void Enqueue(ServerDbContext dbContext, long worldServerID, string sceneName)
 		{
 			var entity = dbContext.PendingScenes.FirstOrDefault(c => c.WorldServerID == worldServerID && c.SceneName == sceneName);
 			if (entity == null)
@@ -20,7 +20,7 @@ namespace FishMMO.Server.Services
 			}
 		}
 
-		public static void Delete(ServerDbContext dbContext, int worldServerID)
+		public static void Delete(ServerDbContext dbContext, long worldServerID)
 		{
 			var pending = dbContext.PendingScenes.Where(c => c.WorldServerID == worldServerID);
 			dbContext.PendingScenes.RemoveRange(pending);

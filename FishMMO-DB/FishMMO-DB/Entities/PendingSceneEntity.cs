@@ -9,7 +9,7 @@ namespace FishMMO_DB.Entities
 	{
 		[DatabaseGenerated(DatabaseGeneratedOption.Identity)]
 		public long ID { get; set; }
-		public int WorldServerID { get; set; }
+		public long WorldServerID { get; set; }
 		public string SceneName { get; set; }
 	}
 }
