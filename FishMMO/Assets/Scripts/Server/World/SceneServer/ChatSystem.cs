@@ -182,8 +182,33 @@ namespace FishMMO.Server
 			ChatCommand command = ChatHelper.ParseChatCommand(cmd, ref msg.channel);
 			if (command != null)
 			{
-				// add the senders name
-				msg.text = sender.CharacterName + ": " + msg.text;
+				// add the guild id for parsing
+				if (msg.channel == ChatChannel.Guild)
+				{
+					if (sender.GuildController == null)
+					{
+						return;
+					}
+
+					// add the senders name and guild ID
+					msg.text = sender.CharacterName + ": " + sender.GuildController.Current.ID + " " + msg.text;
+				}
+				// add the party id for parsing
+				else if (msg.channel == ChatChannel.Party)
+				{
+					if (sender.PartyController == null)
+					{
+						return;
+					}
+
+					// add the senders name and party ID
+					msg.text = sender.CharacterName + ": " + sender.PartyController.Current.ID + " " + msg.text;
+				}
+				else
+				{
+					// add the senders name
+					msg.text = sender.CharacterName + ": " + msg.text;
+				}
 
 				command?.Invoke(sender, msg);
 

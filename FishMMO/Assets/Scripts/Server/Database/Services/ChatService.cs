@@ -44,7 +44,9 @@ namespace FishMMO.Server.Services
 							b.ID > lastPosition &&
 							// we don't process local channels, say and region are ignored here
 							b.Channel != (byte)ChatChannel.Say &&
-							b.Channel == (byte)ChatChannel.Region
+							b.Channel != (byte)ChatChannel.Region &&
+							// we don't process tell messages if the message scene server id is equal to the current scene server id
+							!(b.Channel == (byte)ChatChannel.Tell && b.SceneServerID == sceneServerID)
 							// we don't process other worlds global chat
 							//!((b.Channel == (byte)ChatChannel.World || b.Channel == (byte)ChatChannel.Trade) && b.WorldServerID != worldServerID) &&
 							)
