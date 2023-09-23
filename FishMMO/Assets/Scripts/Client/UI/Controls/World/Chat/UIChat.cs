@@ -275,12 +275,6 @@ namespace FishMMO.Client
 			{
 				// add the characters name
 				msg.text = sender.CharacterName + ": " + msg.text;
-
-				if (msg.channel == ChatChannel.Tell)
-				{
-
-				}
-
 				command?.Invoke(sender, msg);
 			}
 		}
