@@ -14,7 +14,7 @@ namespace FishMMO.Server.Services
 	/// </summary>
 	public class CharacterService
 	{
-		public static bool CharacterExists(ServerDbContext dbContext, string account, string characterName)
+		public static bool Exists(ServerDbContext dbContext, string account, string characterName)
 		{
 			return dbContext.Characters.FirstOrDefault((c) => c.Account == account &&
 															  c.NameLowercase == characterName.ToLower()) != null;
@@ -28,6 +28,16 @@ namespace FishMMO.Server.Services
 				//throw new Exception($"Couldn't find character with id {id}");
 			}
 			return character;
+		}
+
+		public static string GetNameByID(ServerDbContext dbContext, long id)
+		{
+			var character = dbContext.Characters.FirstOrDefault(c => c.ID == id);
+			if (character == null)
+			{
+				return "";
+			}
+			return character.Name;
 		}
 
 		public static CharacterEntity GetByName(ServerDbContext dbContext, string name)

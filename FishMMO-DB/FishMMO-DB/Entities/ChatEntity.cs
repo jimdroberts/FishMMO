@@ -6,6 +6,7 @@ namespace FishMMO_DB.Entities
 {
 	[Table("chat", Schema = "fish_mmo_postgresql")]
 	[Index(nameof(WorldServerID))]
+	[Index(nameof(TimeCreated))]
 	public class ChatEntity
 	{
 		[DatabaseGenerated(DatabaseGeneratedOption.Identity)]

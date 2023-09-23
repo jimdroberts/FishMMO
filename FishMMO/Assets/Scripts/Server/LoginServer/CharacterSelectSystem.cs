@@ -85,7 +85,7 @@ namespace FishMMO.Server
 			using var dbContext = Server.DbContextFactory.CreateDbContext();
 			if (conn.IsActive && AccountManager.GetAccountNameByConnection(conn, out string accountName))
 			{
-				if (!CharacterService.CharacterExists(dbContext, accountName, msg.characterName))
+				if (!CharacterService.Exists(dbContext, accountName, msg.characterName))
 				{
 					// character doesn't exist for account
 					conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);

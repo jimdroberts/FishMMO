@@ -44,7 +44,9 @@ public class TargetController : MonoBehaviour
 			// same target label remains
 			if (LastTarget.Target != Current.Target)
 			{
-				if (targetLabel == null)
+				if (targetLabel == null &&
+					Character != null &&
+					Character.LabelMaker != null)
 				{
 					// construct the target label
 					targetLabel = Character.LabelMaker.Display("", Character.Transform.position, Color.green, 1.0f, 0.0f, true);
@@ -58,7 +60,10 @@ public class TargetController : MonoBehaviour
 					{
 						outline.enabled = false;
 					}
-					targetLabel.gameObject.SetActive(false);
+					if (targetLabel != null)
+					{
+						targetLabel.gameObject.SetActive(false);
+					}
 				}
 
 				if (Current.Target != null)
@@ -82,10 +87,13 @@ public class TargetController : MonoBehaviour
 								newPos.y += sphere.radius + 0.15f;
 							}
 						}
-						targetLabel.SetPosition(newPos);
-						targetLabel.SetText(Current.Target.name);
-						targetLabel.gameObject.SetActive(true);
-						outline.enabled = true;
+						if (targetLabel != null)
+						{
+							targetLabel.SetPosition(newPos);
+							targetLabel.SetText(Current.Target.name);
+							targetLabel.gameObject.SetActive(true);
+							outline.enabled = true;
+						}
 					}
 				}
 			}

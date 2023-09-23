@@ -5,13 +5,14 @@ using UnityEngine;
 using System.Collections.Generic;
 using System;
 using FishMMO.Server.Services;
+using FishMMO_DB.Entities;
 
 namespace FishMMO.Server
 {
 	/// <summary>
 	/// Server chat system.
 	/// </summary>
-	public class ChatSystem : ServerBehaviour
+	public class ChatSystem : ServerBehaviour, IChatHelper
 	{
 		public const int MAX_LENGTH = 128;
 
@@ -20,15 +21,23 @@ namespace FishMMO.Server
 		public bool AllowRepeatMessages = false;
 		[Tooltip("The server chat rate limit in milliseconds. This should be equal to the clients UIChat.messageRateLimit")]
 		public float MessageRateLimit = 0.0f;
+		[Tooltip("The server chat message pump rate limit in seconds.")]
+		public float MessagePumpRate = 5.0f;
+		public int MessageFetchCount = 10;
 
-		public delegate void ChatCommand(NetworkConnection conn, Character character, ChatBroadcast msg);
-		private Dictionary<string, ChatCommand> commandEvents = new Dictionary<string, ChatCommand>();
+		private DateTime lastFetchTime = DateTime.UtcNow;
+		private long lastFetchPosition = 0;
+		private float nextPump = 0.0f;
+
+		private LocalConnectionState serverState;
 
 		public override void InitializeOnce()
 		{
 			if (ServerManager != null && ClientManager != null && SceneManager != null)
 			{
 				ServerManager.OnServerConnectionState += ServerManager_OnServerConnectionState;
+
+				ChatHelper.InitializeOnce(GetChannelCommand);
 			}
 			else
 			{
@@ -40,46 +49,79 @@ namespace FishMMO.Server
 		{
 			if (args.ConnectionState == LocalConnectionState.Started)
 			{
-				// server handles command parsing so add default commands here
-				AddCommandEvent("/w", OnWorldChat);
-				AddCommandEvent("/world", OnWorldChat);
-
-				AddCommandEvent("/r", OnRegionChat);
-				AddCommandEvent("/region", OnRegionChat);
-
-				AddCommandEvent("/p", OnPartyChat);
-				AddCommandEvent("/party", OnPartyChat);
-
-				AddCommandEvent("/g", OnGuildChat);
-				AddCommandEvent("/guild", OnGuildChat);
-
-				AddCommandEvent("/tell", OnTellChat);
-
-				AddCommandEvent("/t", OnTradeChat);
-				AddCommandEvent("/trade", OnTradeChat);
-
-				AddCommandEvent("/s", OnSayChat);
-				AddCommandEvent("/say", OnSayChat);
-
 				ServerManager.RegisterBroadcast<ChatBroadcast>(OnServerChatMessageReceived, true);
 			}
 			else if (args.ConnectionState == LocalConnectionState.Stopped)
 			{
-				commandEvents.Clear();
-
 				ServerManager.UnregisterBroadcast<ChatBroadcast>(OnServerChatMessageReceived);
 			}
 		}
 
-		public void AddCommandEvent(string command, ChatCommand commandFunction)
+		void LateUpdate()
 		{
-			if (!commandEvents.ContainsKey(command))
+			if (serverState == LocalConnectionState.Started)
 			{
-				Debug.Log("ChatSystem: Added Command[" + command + "]");
+				if (nextPump < 0)
+				{
+					nextPump = MessagePumpRate;
 
-				commandEvents.Add(command, commandFunction);
+					List<ChatEntity> messages = FetchChatMessages();
+					if (messages != null)
+					{
+						ProcessChatMessages(messages);
+					}
+
+				}
+				nextPump -= Time.deltaTime;
 			}
-		}	
+		}
+
+		private List<ChatEntity> FetchChatMessages()
+		{
+			using var dbContext = Server.DbContextFactory.CreateDbContext();
+
+			// fetch 10 chat messages from the database
+			List<ChatEntity> messages = ChatService.Fetch(dbContext, lastFetchTime, lastFetchPosition, MessageFetchCount, Server.SceneServerSystem.ID);
+			if (messages != null)
+			{
+				ChatEntity latest = messages[messages.Count - 1];
+				lastFetchPosition = latest.ID;
+				lastFetchTime = latest.TimeCreated;
+			}
+			return messages;
+		}
+
+		// process a message from the database
+		private void ProcessChatMessages(List<ChatEntity> messages)
+		{
+			foreach (ChatEntity message in messages)
+			{
+				ChatChannel channel = (ChatChannel)message.Channel;
+				if (ChatHelper.ChannelCommands.TryGetValue(channel, out CommandDetails sayCommand))
+				{
+					sayCommand.Func?.Invoke(null, new ChatBroadcast()
+					{
+						channel = channel,
+						text = message.Message,
+					});
+				}
+			}
+		}
+
+		public ChatCommand GetChannelCommand(ChatChannel channel)
+		{
+			switch (channel)
+			{
+				case ChatChannel.World: return OnWorldChat;
+				case ChatChannel.Region: return OnRegionChat;
+				case ChatChannel.Party: return OnPartyChat;
+				case ChatChannel.Guild: return OnGuildChat;
+				case ChatChannel.Tell: return OnTellChat;
+				case ChatChannel.Trade: return OnTradeChat;
+				case ChatChannel.Say: return OnSayChat;
+				default: return OnSayChat;
+			}
+		}
 
 		/// <summary>
 		/// Chat message received from a character.
@@ -88,16 +130,10 @@ namespace FishMMO.Server
 		{
 			if (conn.FirstObject != null)
 			{
-				Character character = conn.FirstObject.GetComponent<Character>();
-				if (character != null)
+				Character sender = conn.FirstObject.GetComponent<Character>();
+				if (sender != null)
 				{
-					if (!ValidateMessage(msg))
-					{
-						conn.Kick(FishNet.Managing.Server.KickReason.ExploitExcessiveData);
-						return;
-					}
-
-					ParseMessage(conn, character, msg);
+					ProcessNewChatMessage(conn, sender, msg);
 				}
 			}
 			else
@@ -106,138 +142,73 @@ namespace FishMMO.Server
 			}
 		}
 
-		/*/// <summary>
-		/// Chat message should be parsed already when the World server replies to us with a chat message.
-		/// </summary>
-		private void OnServerWorldChatBroadcastReceived(WorldChatBroadcast msg)
+		// parse a message received from a connection
+		private void ProcessNewChatMessage(NetworkConnection conn, Character sender, ChatBroadcast msg)
 		{
-			switch (msg.chatMsg.channel)
+			// validate message length
+			if (string.IsNullOrWhiteSpace(msg.text) || msg.text.Length > MAX_LENGTH)
 			{
-				case ChatChannel.World:
-				case ChatChannel.Trade:
-					ServerManager.Broadcast(msg.chatMsg); // broadcast to all connected clients
-					break;
-				default: // do nothing
-					break;
+				conn.Kick(FishNet.Managing.Server.KickReason.ExploitExcessiveData);
+				return;
 			}
-		}
 
-		/// <summary>
-		/// Chat message should be parsed already when the World server replies to us with a chat message.
-		/// </summary>
-		private void OnServerWorldChatTellBroadcastReceived(WorldChatTellBroadcast msg)
-		{
-			Server.CharacterSystem.SendBroadcastToCharacter(msg.targetID, msg);
-		}*/
-
-		private bool ValidateMessage(ChatBroadcast msg)
-		{
-			if (!string.IsNullOrWhiteSpace(msg.text) &&
-				msg.text.Length <= MAX_LENGTH)
-			{
-				return true;
-			}
-			return false;
-		}
-
-		private void ParseMessage(NetworkConnection conn, Character character, ChatBroadcast msg)
-		{
-			// do things here
-			string cmd = GetAndRemoveCommand(ref msg.text);
-
-			//Debug.Log("ChatSystem: " + character.characterName +
-			//		  " last chat message[" + character.lastChatMessage + "] " +
-			//		  " current chat message[" + msg.text + "]");
-
+			// we rate limit client chat, the message is ignored
 			if (MessageRateLimit > 0)
 			{
-				if (character.NextChatMessageTime > DateTime.UtcNow)
+				if (sender.NextChatMessageTime > DateTime.UtcNow)
 				{
 					return;
 				}
-				character.NextChatMessageTime = DateTime.UtcNow.AddMilliseconds(MessageRateLimit);
+				sender.NextChatMessageTime = DateTime.UtcNow.AddMilliseconds(MessageRateLimit);
 			}
+			// we spam limit client chat, the message is ignored
 			if (!AllowRepeatMessages)
 			{
-				if (character.LastChatMessage.Equals(msg.text))
+				if (sender.LastChatMessage.Equals(msg.text))
 				{
 					return;
 				}
-				character.LastChatMessage = msg.text;
+				sender.LastChatMessage = msg.text;
 			}
 
-			// parse our command or send the message to our /say channel
-			if (commandEvents.TryGetValue(cmd, out ChatCommand command))
-			{
-				//Debug.Log("ChatSystem: Invoking Command[" + cmd + "]");
-				command?.Invoke(conn, character, msg);
-			}
-			else
-			{
-				//Debug.Log("ChatSystem: Default Command[Say]");
-				OnSayChat(conn, character, msg); // default to say chat?
-			}
-		}
+			string cmd = ChatHelper.GetCommandAndTrim(ref msg.text);
 
-		/// <summary>
-		/// Attempts to get the command from the text. If no commands are found it returns an empty string.
-		/// </summary>
-		private string GetAndRemoveCommand(ref string text)
-		{
-			if (!text.StartsWith("/"))
-			{
-				return "";
-			}
-			int firstSpace = text.IndexOf(' ');
-			if (firstSpace < 0)
-			{
-				return "";
-			}
-			string cmd = text.Substring(0, firstSpace);
-
-			text = text.Substring(firstSpace, text.Length - firstSpace).Trim();
-			return cmd;
-		}
-
-		/// <summary>
-		/// Attempts to get the Tell target from the text. If no targets are found it returns an empty string.
-		/// </summary>
-		private string GetTellTargetAndTrim(ref string text)
-		{
-			int firstSpace = text.IndexOf(' ');
-			if (firstSpace < 0)
-			{
-				return "";
-			}
-			string targetName = text.Substring(0, firstSpace);
-
-			text = text.Substring(firstSpace, text.Length - firstSpace).Trim();
-			return targetName;
-		}
-
-		private void OnWorldChat(NetworkConnection conn, Character sender, ChatBroadcast msg)
-		{
+			// the text is empty
 			if (msg.text.Length < 1)
 			{
 				return;
 			}
-			msg.channel = ChatChannel.World;
-			msg.text = sender.CharacterName + ": " + msg.text;
 
-			using var dbContext = Server.DbContextFactory.CreateDbContext();
-			ChatService.Save(dbContext, sender.ID, sender.WorldServerID, Server.SceneServerSystem.ID, (byte)msg.channel, msg.text);
-			dbContext.SaveChanges();
+			ChatCommand command = ChatHelper.ParseChatCommand(cmd, ref msg.channel);
+			if (command != null)
+			{
+				// add the senders name
+				msg.text = sender.CharacterName + ": " + msg.text;
+
+				command?.Invoke(sender, msg);
+
+				// write the parsed message to the database
+				using var dbContext = Server.DbContextFactory.CreateDbContext();
+				ChatService.Save(dbContext, sender.ID, sender.WorldServerID, Server.SceneServerSystem.ID, (byte)msg.channel, msg.text);
+				dbContext.SaveChanges();
+			}
 		}
 
-		private void OnRegionChat(NetworkConnection conn, Character sender, ChatBroadcast msg)
+		public void OnWorldChat(Character sender, ChatBroadcast msg)
 		{
-			if (msg.text.Length < 1)
+			// send to all connection characters
+			foreach (NetworkConnection activeConnection in new List<NetworkConnection>(Server.CharacterSystem.ConnectionCharacters.Keys))
+			{
+				activeConnection.Broadcast(msg);
+			}
+		}
+
+		public void OnRegionChat(Character sender, ChatBroadcast msg)
+		{
+			if (sender == null)
 			{
 				return;
 			}
-			msg.channel = ChatChannel.Region;
-			msg.text = sender.CharacterName + ": " + msg.text;
-
 			// get the senders observed scene
 			UnityEngine.SceneManagement.Scene scene = UnityEngine.SceneManagement.SceneManager.GetSceneByName(sender.SceneName);
 			if (scene != null)
@@ -252,122 +223,88 @@ namespace FishMMO.Server
 			}
 		}
 
-		private void OnPartyChat(NetworkConnection conn, Character sender, ChatBroadcast msg)
+		public void OnPartyChat(Character sender, ChatBroadcast msg)
 		{
-			if (msg.text.Length < 1)
+			if (sender == null ||
+				sender.PartyController.Current == null)
 			{
 				return;
 			}
-
-			if (sender.PartyController.Current != null)
+			foreach (PartyController member in sender.PartyController.Current.Members.Values)
 			{
-				msg.channel = ChatChannel.Party;
-				msg.text = sender.CharacterName + ": " + msg.text;
+				if (member.OwnerId == sender.OwnerId)
+					continue;
 
-				foreach (PartyController member in sender.PartyController.Current.Members.Values)
-				{
-					// broadcast to party member... includes sender
-					member.Owner.Broadcast(msg);
-				}
+				// broadcast to party member... includes sender
+				member.Owner.Broadcast(msg);
 			}
 		}
 
-		private void OnGuildChat(NetworkConnection conn, Character sender, ChatBroadcast msg)
+		public void OnGuildChat(Character sender, ChatBroadcast msg)
 		{
-			if (msg.text.Length < 1)
+			if (sender == null ||
+				sender.GuildController.Current == null)
 			{
 				return;
 			}
-
-			if (sender.GuildController.Current != null)
+			foreach (GuildController member in sender.GuildController.Current.Members.Values)
 			{
-				msg.channel = ChatChannel.Guild;
-				msg.text = sender.CharacterName + ": " + msg.text;
+				if (member.OwnerId == sender.OwnerId)
+					continue;
 
-				foreach (GuildController member in sender.GuildController.Current.Members.Values)
-				{
-					// broadcast to guild member... includes sender
-					member.Owner.Broadcast(msg);
-				}
+				// broadcast to guild member... includes sender
+				member.Owner.Broadcast(msg);
 			}
 		}
 
-		private void OnTellChat(NetworkConnection conn, Character sender, ChatBroadcast msg)
+		public void OnTellChat(Character sender, ChatBroadcast msg)
 		{
-			if (msg.text.Length < 1)
+			// get the sender
+			string senderName = ChatHelper.GetWordAndTrimmed(msg.text, out string trimmed);
+			if (string.IsNullOrWhiteSpace(senderName))
 			{
+				// no sender in the tell message
 				return;
 			}
 
-			string targetName = GetTellTargetAndTrim(ref msg.text);
-
+			// get the target
+			string targetName = ChatHelper.GetWordAndTrimmed(trimmed, out trimmed);
 			if (string.IsNullOrWhiteSpace(targetName))
 			{
+				// no target in the tell message
 				return;
 			}
-
-			if (Server.CharacterSystem == null ||
-				!Server.CharacterSystem.CharactersByName.TryGetValue(targetName, out Character targetCharacter))
+ 
+			// if the target character is on this server we send them the message
+			if (Server.CharacterSystem != null &&
+				Server.CharacterSystem.CharactersByName.TryGetValue(targetName, out Character targetCharacter))
 			{
-				return;
-			}
-
-			// cache the original message
-			string text = msg.text;
-
-			msg.channel = ChatChannel.Tell;
-			msg.text = "[To:" + targetName + "]: " + text;
-
-			// send the message back to the client after we format it
-			conn.Broadcast(msg);
-
-			// format the message to send to the target player
-			msg.text = "[From:" + sender.CharacterName + "]: " + text;
-
-			/*using var dbContext = Server.DbContextFactory.CreateDbContext();
-			ChatService.Save(dbContext, sender.WorldServerID, Server.SceneServerSystem.ID, (byte)msg.channel, msg.text);
-			dbContext.SaveChanges();
-
-			// attempt to broadcast the message to the target
-			if (!Server.CharacterSystem.SendBroadcastToCharacter(targetCharacter.ID, msg))
-			{
-				// attempt to find the target on the world server
-				ServerManager.Broadcast(new WorldChatTellBroadcast()
+				targetCharacter.Owner.Broadcast(new ChatBroadcast()
 				{
-					targetID = targetCharacter.ID,
-					chatMsg = msg,
+					channel = msg.channel,
+					text = "[From:" + senderName + "]: " + trimmed,
 				});
-			}*/
+			}
 		}
 
-		private void OnTradeChat(NetworkConnection conn, Character sender, ChatBroadcast msg)
+		public void OnTradeChat(Character sender, ChatBroadcast msg)
 		{
-			if (msg.text.Length < 1)
+			// send to all connection characters
+			foreach (NetworkConnection activeConnection in new List<NetworkConnection>(Server.CharacterSystem.ConnectionCharacters.Keys))
 			{
-				return;
+				activeConnection.Broadcast(msg);
 			}
-			msg.channel = ChatChannel.Trade;
-			msg.text = sender.CharacterName + ": " + msg.text;
-
-			//using var dbContext = Server.DbContextFactory.CreateDbContext();
-			//ChatService.Save(dbContext, sender.WorldServerID, Server.SceneServerSystem.ID, (byte)msg.channel, msg.text);
-			//dbContext.SaveChanges();
 		}
 
-		private void OnSayChat(NetworkConnection conn, Character sender, ChatBroadcast msg)
+		public void OnSayChat(Character sender, ChatBroadcast msg)
 		{
-			if (msg.text.Length < 1 || sender.Observers == null)
+			if (sender != null && sender.Observers != null)
 			{
-				return;
-			}
-
-			msg.channel = ChatChannel.Say;
-			msg.text = sender.CharacterName + ": " + msg.text;
-
-			// get the senders observed characters and send them the chat message
-			foreach (NetworkConnection obsConnection in sender.Observers)
-			{
-				obsConnection.Broadcast(msg);
+				// get the senders observed characters and send them the chat message
+				foreach (NetworkConnection obsConnection in sender.Observers)
+				{
+					obsConnection.Broadcast(msg);
+				}
 			}
 		}
 

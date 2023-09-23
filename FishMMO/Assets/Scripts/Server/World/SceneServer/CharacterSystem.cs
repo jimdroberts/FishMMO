@@ -155,10 +155,9 @@ namespace FishMMO.Server
 						--instance.CharacterCount;
 					}
 
+					// no character so we can just skip the rest
 					if (character == null)
 					{
-						// character is missing.. socket is closed but we kick just incase
-						conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
 						return;
 					}
 

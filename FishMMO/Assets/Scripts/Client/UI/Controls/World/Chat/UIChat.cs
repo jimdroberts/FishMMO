@@ -5,7 +5,7 @@ using FishNet.Transporting;
 
 namespace FishMMO.Client
 {
-	public class UIChat : UIControl
+	public class UIChat : UIControl, IChatHelper
 	{
 		public const int MAX_LENGTH = 128;
 
@@ -38,11 +38,10 @@ namespace FishMMO.Client
 		[Tooltip("The rate at which messages can be sent in milliseconds.")]
 		public float MessageRateLimit = 0.0f;
 
-		public delegate void ChatCommand(Character sender, ChatBroadcast msg);
-		public Dictionary<string, ChatCommand> commandEvents = new Dictionary<string, ChatCommand>();
-
 		public override void OnStarting()
 		{
+			ChatHelper.InitializeOnce(GetChannelCommand);
+
 			if (initialTabs != null && initialTabs.Count > 0)
 			{
 				// activate the first tab
@@ -145,7 +144,11 @@ namespace FishMMO.Client
 						character.LastChatMessage = input;
 					}
 				}
-				Client.NetworkManager.ClientManager.Broadcast(new ChatBroadcast() { text = input });
+				ChatBroadcast message = new ChatBroadcast() { text = input };
+				// send the message to the server
+				Client.NetworkManager.ClientManager.Broadcast(message);
+				// display the message locally
+				ParseLocalMessage(character, message);
 			}
 			InputField.text = "";
 		}
@@ -234,6 +237,114 @@ namespace FishMMO.Client
 					AddMessage(newMessage);
 				}
 			}
+		}
+
+		public ChatCommand GetChannelCommand(ChatChannel channel)
+		{
+			switch (channel)
+			{
+				case ChatChannel.World: return OnWorldChat;
+				case ChatChannel.Region: return OnRegionChat;
+				case ChatChannel.Party: return OnPartyChat;
+				case ChatChannel.Guild: return OnGuildChat;
+				case ChatChannel.Tell: return OnTellChat;
+				case ChatChannel.Trade: return OnTradeChat;
+				case ChatChannel.Say: return OnSayChat;
+				default: return OnSayChat;
+			}
+		}
+
+		private void ParseLocalMessage(Character sender, ChatBroadcast msg)
+		{
+			// validate message length
+			if (string.IsNullOrWhiteSpace(msg.text) || msg.text.Length > MAX_LENGTH)
+			{
+				return;
+			}
+
+			string cmd = ChatHelper.GetCommandAndTrim(ref msg.text);
+
+			// the text is empty
+			if (msg.text.Length < 1)
+			{
+				return;
+			}
+
+			ChatCommand command = ChatHelper.ParseChatCommand(cmd, ref msg.channel);
+			if (command != null)
+			{
+				// add the characters name
+				msg.text = sender.CharacterName + ": " + msg.text;
+
+				if (msg.channel == ChatChannel.Tell)
+				{
+
+				}
+
+				command?.Invoke(sender, msg);
+			}
+		}
+
+		public void OnWorldChat(Character sender, ChatBroadcast msg)
+		{
+			// fake it
+			OnClientChatMessageReceived(msg);
+		}
+
+		public void OnRegionChat(Character sender, ChatBroadcast msg)
+		{
+			// fake it
+			OnClientChatMessageReceived(msg);
+		}
+
+		public void OnPartyChat(Character sender, ChatBroadcast msg)
+		{
+			// fake it
+			OnClientChatMessageReceived(msg);
+		}
+
+		public void OnGuildChat(Character sender, ChatBroadcast msg)
+		{
+			// fake it
+			OnClientChatMessageReceived(msg);
+		}
+
+		public void OnTellChat(Character sender, ChatBroadcast msg)
+		{
+			// get the sender
+			string senderName = ChatHelper.GetWordAndTrimmed(msg.text, out string trimmed);
+			if (string.IsNullOrWhiteSpace(senderName))
+			{
+				// no sender in the tell message
+				return;
+			}
+
+			// get the target
+			string targetName = ChatHelper.GetWordAndTrimmed(trimmed, out trimmed);
+			if (string.IsNullOrWhiteSpace(targetName))
+			{
+				// no target in the tell message
+				return;
+			}
+
+			// fake it
+			OnClientChatMessageReceived(new ChatBroadcast()
+			{
+				channel = msg.channel,
+				text = "[To:" + targetName + "]: " + trimmed,
+			});
+		}
+
+		public void OnTradeChat(Character sender, ChatBroadcast msg)
+		{
+			// fake it
+			OnClientChatMessageReceived(msg);
+		}
+
+		public void OnSayChat(Character sender, ChatBroadcast msg)
+		{
+			// fake it
+			OnClientChatMessageReceived(msg);
 		}
 	}
 }
