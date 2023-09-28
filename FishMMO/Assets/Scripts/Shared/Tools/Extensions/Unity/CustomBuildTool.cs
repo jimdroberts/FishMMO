@@ -683,7 +683,7 @@ start Scene.exe SCENE";
 	public static void BuildWindows64AllInOneServer()
 	{
 		RebuildWorldSceneDetailsCache();
-		BuildExecutable("FishMMO " + ALL_IN_ONE_SERVER_BUILD_NAME,
+		BuildExecutable(ALL_IN_ONE_SERVER_BUILD_NAME,
 						ALL_IN_ONE_SERVER_BOOTSTRAP_SCENES,
 						CustomBuildType.AllInOne,
 						BASE_BUILD_OPTIONS | BuildOptions.ShowBuiltPlayer,
@@ -695,7 +695,7 @@ start Scene.exe SCENE";
 	public static void BuildWindows64LoginServer()
 	{
 		RebuildWorldSceneDetailsCache();
-		BuildExecutable("FishMMO " + LOGIN_SERVER_BUILD_NAME,
+		BuildExecutable(LOGIN_SERVER_BUILD_NAME,
 						LOGIN_SERVER_BOOTSTRAP_SCENES,
 						CustomBuildType.Login,
 						BASE_BUILD_OPTIONS | BuildOptions.ShowBuiltPlayer,
@@ -707,7 +707,7 @@ start Scene.exe SCENE";
 	public static void BuildWindows64WorldServer()
 	{
 		RebuildWorldSceneDetailsCache();
-		BuildExecutable("FishMMO " + WORLD_SERVER_BUILD_NAME,
+		BuildExecutable(WORLD_SERVER_BUILD_NAME,
 						WORLD_SERVER_BOOTSTRAP_SCENES,
 						CustomBuildType.World,
 						BASE_BUILD_OPTIONS | BuildOptions.ShowBuiltPlayer,
@@ -719,7 +719,7 @@ start Scene.exe SCENE";
 	public static void BuildWindows64SceneServer()
 	{
 		RebuildWorldSceneDetailsCache();
-		BuildExecutable("FishMMO " + SCENE_SERVER_BUILD_NAME,
+		BuildExecutable(SCENE_SERVER_BUILD_NAME,
 						SCENE_SERVER_BOOTSTRAP_SCENES,
 						CustomBuildType.Scene,
 						BASE_BUILD_OPTIONS | BuildOptions.ShowBuiltPlayer,
@@ -731,7 +731,7 @@ start Scene.exe SCENE";
 	public static void BuildWindows64Client()
 	{
 		RebuildWorldSceneDetailsCache();
-		BuildExecutable("FishMMO " + CLIENT_BUILD_NAME,
+		BuildExecutable(CLIENT_BUILD_NAME,
 						CLIENT_BOOTSTRAP_SCENES,
 						CustomBuildType.Client,
 						BASE_BUILD_OPTIONS | BuildOptions.ShowBuiltPlayer,
@@ -749,7 +749,7 @@ start Scene.exe SCENE";
 	public static void BuildLinux64AllInOneServer()
 	{
 		RebuildWorldSceneDetailsCache();
-		BuildExecutable("FishMMO " + ALL_IN_ONE_SERVER_BUILD_NAME,
+		BuildExecutable(ALL_IN_ONE_SERVER_BUILD_NAME,
 						ALL_IN_ONE_SERVER_BOOTSTRAP_SCENES,
 						CustomBuildType.AllInOne,
 						BASE_BUILD_OPTIONS | BuildOptions.ShowBuiltPlayer,
@@ -761,7 +761,7 @@ start Scene.exe SCENE";
 	public static void BuildLinux64Client()
 	{
 		RebuildWorldSceneDetailsCache();
-		BuildExecutable("FishMMO " + CLIENT_BUILD_NAME,
+		BuildExecutable(CLIENT_BUILD_NAME,
 						CLIENT_BOOTSTRAP_SCENES,
 						CustomBuildType.Client,
 						BASE_BUILD_OPTIONS | BuildOptions.ShowBuiltPlayer,
@@ -773,7 +773,7 @@ start Scene.exe SCENE";
 	public static void BuildWebGLClient()
 	{
 		RebuildWorldSceneDetailsCache();
-		BuildExecutable("FishMMO " + CLIENT_BUILD_NAME,
+		BuildExecutable(CLIENT_BUILD_NAME,
 						CLIENT_BOOTSTRAP_SCENES,
 						CustomBuildType.Client,
 						BASE_BUILD_OPTIONS | BuildOptions.ShowBuiltPlayer,
