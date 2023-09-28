@@ -536,11 +536,11 @@ start Scene.exe SCENE";
 		}
 	}
 
-	private static void BuildSettingsFolder(string buildDirectoryName, string setupScriptFileName)
+	private static void BuildSetupFolder(string buildDirectoryName, string setupScriptFileName)
 	{
-		BuildSettingsFolder(null, buildDirectoryName, setupScriptFileName, true);
+		BuildSetupFolder(null, buildDirectoryName, setupScriptFileName, true);
 	}
-	private static void BuildSettingsFolder(string rootPath, string buildDirectoryName, string setupScriptFileName, bool openExplorer)
+	private static void BuildSetupFolder(string rootPath, string buildDirectoryName, string setupScriptFileName, bool openExplorer)
 	{
 		if (string.IsNullOrWhiteSpace(rootPath))
 		{
@@ -578,7 +578,7 @@ start Scene.exe SCENE";
 		string rootPath = Path.Combine(selectedPath, "FishMMO");
 		string serverRootPath = Path.Combine(selectedPath, "FishMMO" + Path.DirectorySeparatorChar + "Server");
 		RebuildWorldSceneDetailsCache();
-		BuildSettingsFolder(serverRootPath, "Server Setup", "Windows Setup.bat", false);
+		BuildSetupFolder(serverRootPath, "Server Setup", "Windows Setup.bat", false);
 		BuildExecutable(rootPath,
 						CLIENT_BUILD_NAME,
 						CLIENT_BOOTSTRAP_SCENES,
@@ -629,7 +629,7 @@ start Scene.exe SCENE";
 		string rootPath = Path.Combine(selectedPath, "FishMMO");
 		string serverRootPath = Path.Combine(selectedPath, "FishMMO" + Path.DirectorySeparatorChar + "Server");
 		RebuildWorldSceneDetailsCache();
-		BuildSettingsFolder(serverRootPath, "Server Setup", "Linux Setup.sh", false);
+		BuildSetupFolder(serverRootPath, "Server Setup", "Linux Setup.sh", false);
 		BuildExecutable(rootPath,
 						CLIENT_BUILD_NAME,
 						CLIENT_BOOTSTRAP_SCENES,
@@ -676,7 +676,7 @@ start Scene.exe SCENE";
 	[MenuItem("FishMMO Build/Server/Windows Setup")]
 	public static void BuildWindowsSetup()
 	{
-		BuildSettingsFolder("FishMMO Windows Setup", "WindowsSetup.bat");
+		BuildSetupFolder("FishMMO Windows Setup", "WindowsSetup.bat");
 	}
 
 	[MenuItem("FishMMO Build/Server/Windows x64 All-In-One")]
@@ -742,7 +742,7 @@ start Scene.exe SCENE";
 	[MenuItem("FishMMO Build/Server/Linux Setup")]
 	public static void BuildLinuxSetup()
 	{
-		BuildSettingsFolder("FishMMO Linux Setup", "LinuxSetup.sh");
+		BuildSetupFolder("FishMMO Linux Setup", "LinuxSetup.sh");
 	}
 
 	[MenuItem("FishMMO Build/Server/Linux x64 All-In-One")]
