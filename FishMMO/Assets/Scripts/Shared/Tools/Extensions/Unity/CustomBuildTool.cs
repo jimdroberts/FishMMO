@@ -1,4 +1,6 @@
-﻿#if UNITY_EDITOR
+﻿// --------- DO NOT FORMAT DOCUMENT ---------
+
+#if UNITY_EDITOR
 using UnityEditor;
 using System;
 using System.Collections.Generic;
@@ -8,20 +10,72 @@ using Debug = UnityEngine.Debug;
 using System.Diagnostics;
 using System.Net;
 using UnityEngine;
-using UnityEditor.PackageManager.UI;
 
 public class CustomBuildTool
 {
-	public const string SERVER_BUILD_NAME = "FishMMOServer";
-	public const string CLIENT_BUILD_NAME = "FishMMOClient";
+	public enum CustomBuildType : byte
+	{
+		AllInOne = 0,
+		Login,
+		World,
+		Scene,
+		Client,
+	}
 
-	public static readonly string[] SERVER_BOOTSTRAP_SCENES = new string[]
+	public const BuildOptions BASE_BUILD_OPTIONS = BuildOptions.CleanBuildCache | BuildOptions.Development;
+
+	public const string ALL_IN_ONE_SERVER_BUILD_NAME = "All-In-One";
+	public const string LOGIN_SERVER_BUILD_NAME = "Login";
+	public const string WORLD_SERVER_BUILD_NAME = "World";
+	public const string SCENE_SERVER_BUILD_NAME = "Scene";
+	public const string CLIENT_BUILD_NAME = "Client";
+
+	public static readonly string[] ALL_IN_ONE_SERVER_BOOTSTRAP_SCENES = new string[]
 	{
 		"Assets\\Scenes\\Bootstraps\\ServerLauncher.unity",
 		"Assets\\Scenes\\Bootstraps\\LoginServer.unity",
 		"Assets\\Scenes\\Bootstraps\\WorldServer.unity",
 		"Assets\\Scenes\\Bootstraps\\SceneServer.unity",
 	};
+
+	public static readonly string ALL_IN_ONE_SERVER_BAT_SCRIPT = @"@echo off
+start All-In-One.exe LOGIN
+start All-In-One.exe WORLD
+start All-In-One.exe SCENE";
+
+	public static readonly string LINUX_ALL_IN_ONE_SERVER_BAT_SCRIPT = @"./All-In-One.exe LOGIN &
+./All-In-One.exe WORLD &
+./All-In-One.exe SCENE";
+
+	public static readonly string[] LOGIN_SERVER_BOOTSTRAP_SCENES = new string[]
+	{
+		"Assets\\Scenes\\Bootstraps\\ServerLauncher.unity",
+		"Assets\\Scenes\\Bootstraps\\LoginServer.unity",
+	};
+
+	public static readonly string LOGIN_SERVER_BAT_SCRIPT = @"@echo off
+start Login.exe LOGIN";
+	public static readonly string LINUX_LOGIN_SERVER_BAT_SCRIPT = @"./Login.exe LOGIN";
+
+	public static readonly string[] WORLD_SERVER_BOOTSTRAP_SCENES = new string[]
+	{
+		"Assets\\Scenes\\Bootstraps\\ServerLauncher.unity",
+		"Assets\\Scenes\\Bootstraps\\WorldServer.unity",
+	};
+
+	public static readonly string WORLD_SERVER_BAT_SCRIPT = @"@echo off
+start World.exe WORLD";
+	public static readonly string LINUX_WORLD_SERVER_BAT_SCRIPT = @"./World.exe WORLD";
+
+	public static readonly string[] SCENE_SERVER_BOOTSTRAP_SCENES = new string[]
+	{
+		"Assets\\Scenes\\Bootstraps\\ServerLauncher.unity",
+		"Assets\\Scenes\\Bootstraps\\SceneServer.unity",
+	};
+
+	public static readonly string SCENE_SERVER_BAT_SCRIPT = @"@echo off
+start Scene.exe SCENE";
+	public static readonly string LINUX_SCENE_SERVER_BAT_SCRIPT = @"./Scene.exe SCENE";
 
 	public static readonly string[] CLIENT_BOOTSTRAP_SCENES = new string[]
 	{
@@ -215,7 +269,7 @@ public class CustomBuildTool
 		}
 	}
 
-	[MenuItem("FishMMO/Install Tools")]
+	/*[MenuItem("FishMMO/Install Tools")]
 	public static void EnsureToolkitInstallation()
 	{
 		bool virtualization = IsVirtualizationEnabled();
@@ -249,29 +303,40 @@ public class CustomBuildTool
 
 		// run initial migration
 		//RunDockerCommand($"run -d -n fishdb-tmp -v \"{root}\":/app/fishdb -w /app/fishdb {dotNet} /bin/bash -c \"dotnet tool install --global dotnet-ef --version 5.0.10 && dotnet ef migrations add InitialMigration -p {projectPath} -s {startupProject}\"");
-	}
+	}*/
 
 	public static string GetBuildTargetShortName(BuildTarget target)
 	{
 		switch (target)
 		{
 			case BuildTarget.StandaloneWindows:
-				return "_win_32";
+				return " Windows(x86)";
 			case BuildTarget.StandaloneWindows64:
-				return "_win_64";
+				return " Windows";
 			case BuildTarget.StandaloneLinux64:
-				return "_linux_64";
+				return " Linux";
+			case BuildTarget.WebGL:
+				return " WebGL";
 			default:
 				return "";
 		}
 	}
 
-	private static void BuildExecutable(string executableName, string[] bootstrapScenes, BuildOptions buildOptions, StandaloneBuildSubtarget subTarget, BuildTarget buildTarget)
+	private static void BuildExecutable(string executableName, string[] bootstrapScenes, CustomBuildType customBuildType, BuildOptions buildOptions, StandaloneBuildSubtarget subTarget, BuildTarget buildTarget)
 	{
-		string rootPath = EditorUtility.SaveFolderPanel("Pick a save directory", "", "");
+		BuildExecutable(null, executableName, bootstrapScenes, customBuildType, buildOptions, subTarget, buildTarget);
+	}
+
+	private static void BuildExecutable(string rootPath, string executableName, string[] bootstrapScenes, CustomBuildType customBuildType, BuildOptions buildOptions, StandaloneBuildSubtarget subTarget, BuildTarget buildTarget)
+	{
+		string tmpPath = rootPath;
 		if (string.IsNullOrWhiteSpace(rootPath))
 		{
-			return;
+			rootPath = EditorUtility.SaveFolderPanel("Pick a save directory", "", "");
+			if (string.IsNullOrWhiteSpace(rootPath))
+			{
+				return;
+			}
 		}
 
 		if (string.IsNullOrWhiteSpace(executableName) ||
@@ -281,30 +346,16 @@ public class CustomBuildTool
 			return;
 		}
 
-		// rebuild world details cache, this includes teleporters, teleporter destinations, spawn points, and other constant scene data
-		WorldSceneDetailsCache worldDetailsCache = AssetDatabase.LoadAssetAtPath<WorldSceneDetailsCache>(WorldSceneDetailsCache.CACHE_FULL_PATH);
-		if (worldDetailsCache != null)
-		{
-			worldDetailsCache.Rebuild();
-		}
-		else
-		{
-			worldDetailsCache = ScriptableObject.CreateInstance<WorldSceneDetailsCache>();
-			worldDetailsCache.Rebuild();
-			AssetDatabase.CreateAsset(worldDetailsCache, WorldSceneDetailsCache.CACHE_FULL_PATH);
-		}
-		AssetDatabase.SaveAssets();
-
 		// get the original active build info
 		BuildTargetGroup originalGroup = EditorUserBuildSettings.selectedBuildTargetGroup;
 		BuildTarget originalBuildTarget = EditorUserBuildSettings.activeBuildTarget;
 		StandaloneBuildSubtarget originalBuildSubtarget = EditorUserBuildSettings.standaloneBuildSubtarget;
-
 		ScriptingImplementation originalScriptingImp = PlayerSettings.GetScriptingBackend(originalGroup);
 		Il2CppCompilerConfiguration originalCompilerConf = PlayerSettings.GetIl2CppCompilerConfiguration(originalGroup);
 		UnityEditor.Build.NamedBuildTarget originalNamedBuildTargetGroup = UnityEditor.Build.NamedBuildTarget.FromBuildTargetGroup(originalGroup);
 		UnityEditor.Build.Il2CppCodeGeneration originalOptimization = PlayerSettings.GetIl2CppCodeGeneration(originalNamedBuildTargetGroup);
 
+		// enable IL2CPP for webgl
 		if (buildTarget == BuildTarget.WebGL)
 		{
 			PlayerSettings.SetScriptingBackend(EditorUserBuildSettings.selectedBuildTargetGroup, ScriptingImplementation.IL2CPP);
@@ -317,16 +368,22 @@ public class CustomBuildTool
 		EditorUserBuildSettings.SwitchActiveBuildTarget(targetGroup, buildTarget);
 		EditorUserBuildSettings.standaloneBuildSubtarget = subTarget;
 
-		// compile scenes list with bootstraps
-		string[] scenes = GetBuildScenePaths(bootstrapScenes);
+		// append world scene paths to bootstrap scene array
+		string[] scenes = customBuildType == CustomBuildType.AllInOne ||
+						  customBuildType == CustomBuildType.Scene ||
+						  customBuildType == CustomBuildType.Client ? AppendWorldScenePaths(bootstrapScenes) : bootstrapScenes;
 
-		string folderName = executableName + GetBuildTargetShortName(buildTarget);
-		string buildPath = rootPath + "\\" + folderName;
+		string folderName = executableName;
+		if (string.IsNullOrEmpty(tmpPath))
+		{
+			folderName += GetBuildTargetShortName(buildTarget);
+		}
+		string buildPath = Path.Combine(rootPath, folderName);
 
 		// build the project
 		BuildReport report = BuildPipeline.BuildPlayer(new BuildPlayerOptions()
 		{
-			locationPathName = buildPath + "\\" + executableName + ".exe",
+			locationPathName = Path.Combine(buildPath, executableName + ".exe"),
 			options = buildOptions,
 			scenes = scenes,
 			subtarget = (int)subTarget,
@@ -346,26 +403,47 @@ public class CustomBuildTool
 				string root = Directory.GetParent(Directory.GetCurrentDirectory()).FullName;
 				if (buildTarget == BuildTarget.StandaloneWindows64)
 				{
-					FileUtil.ReplaceFile(root + "\\START.bat", buildPath + "\\START.bat");
-					FileUtil.ReplaceFile(root + "\\START_LOGINSERVER.bat", buildPath + "\\START_LOGINSERVER.bat");
-					FileUtil.ReplaceFile(root + "\\START_WORLDSERVER.bat", buildPath + "\\START_WORLDSERVER.bat");
-					FileUtil.ReplaceFile(root + "\\START_SCENESERVER.bat", buildPath + "\\START_SCENESERVER.bat");
-					FileUtil.ReplaceFile(root + "\\WindowsSetup.bat", buildPath + "\\WindowsSetup.bat");
+					switch (customBuildType)
+					{
+						case CustomBuildType.AllInOne:
+							CreateScript(Path.Combine(buildPath, "Start.bat"), ALL_IN_ONE_SERVER_BAT_SCRIPT);
+							break;
+						case CustomBuildType.Login:
+							//CreateScript(Path.Combine(buildPath, "Start.bat"), LOGIN_SERVER_BAT_SCRIPT);
+							break;
+						case CustomBuildType.World:
+							//CreateScript(Path.Combine(buildPath, "Start.bat"), WORLD_SERVER_BAT_SCRIPT);
+							break;
+						case CustomBuildType.Scene:
+							//CreateScript(Path.Combine(buildPath, "Start.bat"), SCENE_SERVER_BAT_SCRIPT);
+							break;
+						case CustomBuildType.Client:
+						default:
+							break;
+					}
 				}
 				else if (buildTarget == BuildTarget.StandaloneLinux64)
 				{
-					FileUtil.ReplaceFile(root + "\\START.sh", buildPath + "\\START.sh");
-					FileUtil.ReplaceFile(root + "\\START_LOGINSERVER.sh", buildPath + "\\START_LOGINSERVER.sh");
-					FileUtil.ReplaceFile(root + "\\START_WORLDSERVER.sh", buildPath + "\\START_WORLDSERVER.sh");
-					FileUtil.ReplaceFile(root + "\\START_SCENESERVER.sh", buildPath + "\\START_SCENESERVER.sh");
-					FileUtil.ReplaceFile(root + "\\LinuxSetup.sh", buildPath + "\\LinuxSetup.sh");
+					switch (customBuildType)
+					{
+						case CustomBuildType.AllInOne:
+							CreateScript(Path.Combine(buildPath, "Start.sh"), LINUX_ALL_IN_ONE_SERVER_BAT_SCRIPT);
+							break;
+						case CustomBuildType.Login:
+							CreateScript(Path.Combine(buildPath, "Start.sh"), LINUX_LOGIN_SERVER_BAT_SCRIPT);
+							break;
+						case CustomBuildType.World:
+							CreateScript(Path.Combine(buildPath, "Start.sh"), LINUX_WORLD_SERVER_BAT_SCRIPT);
+							break;
+						case CustomBuildType.Scene:
+							CreateScript(Path.Combine(buildPath, "Start.sh"), LINUX_SCENE_SERVER_BAT_SCRIPT);
+							break;
+						case CustomBuildType.Client:
+						default:
+							break;
+					}
 				}
-
-				FileUtil.ReplaceFile(root + "\\LoginServer.cfg", buildPath + "\\LoginServer.cfg");
-				FileUtil.ReplaceFile(root + "\\WorldServer.cfg", buildPath + "\\WorldServer.cfg");
-				FileUtil.ReplaceFile(root + "\\SceneServer.cfg", buildPath + "\\SceneServer.cfg");
-				FileUtil.ReplaceFile(root + "\\Database.cfg", buildPath + "\\Database.cfg");
-				FileUtil.ReplaceDirectory(root + "\\FishMMO-DB", buildPath + "\\FishMMO-DB");
+				CopyConfigurationFiles(customBuildType, root, buildPath);
 			}
 		}
 		else if (summary.result == BuildResult.Failed)
@@ -373,16 +451,36 @@ public class CustomBuildTool
 			Debug.Log("Build failed: " + report.summary.result + " " + report);
 		}
 
-		PlayerSettings.SetScriptingBackend(originalGroup, originalScriptingImp);
-		PlayerSettings.SetIl2CppCompilerConfiguration(originalGroup, originalCompilerConf);
-		PlayerSettings.SetIl2CppCodeGeneration(originalNamedBuildTargetGroup, originalOptimization);
+		// return IL2CPP settings to original
+		if (buildTarget == BuildTarget.WebGL)
+		{
+			PlayerSettings.SetScriptingBackend(originalGroup, originalScriptingImp);
+			PlayerSettings.SetIl2CppCompilerConfiguration(originalGroup, originalCompilerConf);
+			PlayerSettings.SetIl2CppCodeGeneration(originalNamedBuildTargetGroup, originalOptimization);
+		}
 
-		// reset build target
 		EditorUserBuildSettings.SwitchActiveBuildTarget(originalGroup, originalBuildTarget);
 		EditorUserBuildSettings.standaloneBuildSubtarget = originalBuildSubtarget;
 	}
 
-	private static string[] GetBuildScenePaths(string[] requiredPaths)
+	private static void RebuildWorldSceneDetailsCache()
+	{
+		// rebuild world details cache, this includes teleporters, teleporter destinations, spawn points, and other constant scene data
+		WorldSceneDetailsCache worldDetailsCache = AssetDatabase.LoadAssetAtPath<WorldSceneDetailsCache>(WorldSceneDetailsCache.CACHE_FULL_PATH);
+		if (worldDetailsCache != null)
+		{
+			worldDetailsCache.Rebuild();
+		}
+		else
+		{
+			worldDetailsCache = ScriptableObject.CreateInstance<WorldSceneDetailsCache>();
+			worldDetailsCache.Rebuild();
+			AssetDatabase.CreateAsset(worldDetailsCache, WorldSceneDetailsCache.CACHE_FULL_PATH);
+		}
+		AssetDatabase.SaveAssets();
+	}
+
+	private static string[] AppendWorldScenePaths(string[] requiredPaths)
 	{
 		List<string> allPaths = new List<string>(requiredPaths);
 
@@ -394,76 +492,291 @@ public class CustomBuildTool
 				allPaths.Add(scene.path);
 			}
 		}
-
 		return allPaths.ToArray();
 	}
 
-	[MenuItem("FishMMO/Windows 32 Server Build")]
-	public static void BuildWindows32Server()
+	private static void CopyConfigurationFiles(CustomBuildType customBuildType, string root, string buildPath)
 	{
-		BuildExecutable(SERVER_BUILD_NAME,
-						SERVER_BOOTSTRAP_SCENES,
-						BuildOptions.CleanBuildCache | BuildOptions.Development | BuildOptions.ShowBuiltPlayer,
-						StandaloneBuildSubtarget.Server,
-						BuildTarget.StandaloneWindows);
+		switch (customBuildType)
+		{
+			case CustomBuildType.AllInOne:
+				FileUtil.ReplaceFile(Path.Combine(root, "LoginServer.cfg"), Path.Combine(buildPath, "LoginServer.cfg"));
+				FileUtil.ReplaceFile(Path.Combine(root, "WorldServer.cfg"), Path.Combine(buildPath, "WorldServer.cfg"));
+				FileUtil.ReplaceFile(Path.Combine(root, "SceneServer.cfg"), Path.Combine(buildPath, "SceneServer.cfg"));
+				break;
+			case CustomBuildType.Login:
+				FileUtil.ReplaceFile(Path.Combine(root, "LoginServer.cfg"), Path.Combine(buildPath, "LoginServer.cfg"));
+				break;
+			case CustomBuildType.World:
+				FileUtil.ReplaceFile(Path.Combine(root, "WorldServer.cfg"), Path.Combine(buildPath, "WorldServer.cfg"));
+				break;
+			case CustomBuildType.Scene:
+				FileUtil.ReplaceFile(Path.Combine(root, "SceneServer.cfg"), Path.Combine(buildPath, "SceneServer.cfg"));
+				break;
+			case CustomBuildType.Client:
+			default:
+				break;
+		}
+		FileUtil.ReplaceFile(Path.Combine(root, "Database.cfg"), Path.Combine(buildPath, "Database.cfg"));
 	}
 
-	[MenuItem("FishMMO/Windows 32 Client Build")]
-	public static void BuildWindows32Client()
+	private static void CreateScript(string filePath, string scriptContent)
 	{
-		BuildExecutable(CLIENT_BUILD_NAME,
+		// Check if the file already exists and delete it if it does
+		if (File.Exists(filePath))
+		{
+			File.Delete(filePath);
+		}
+
+		// Create the script file
+		using (StreamWriter writer = File.CreateText(filePath))
+		{
+			// Write the script content to the file
+			writer.Write(scriptContent);
+		}
+	}
+
+	private static void BuildSetupFolder(string buildDirectoryName, string setupScriptFileName)
+	{
+		BuildSetupFolder(null, buildDirectoryName, setupScriptFileName, true);
+	}
+	private static void BuildSetupFolder(string rootPath, string buildDirectoryName, string setupScriptFileName, bool openExplorer)
+	{
+		if (string.IsNullOrWhiteSpace(rootPath))
+		{
+			rootPath = EditorUtility.SaveFolderPanel("Pick a save directory", "", "");
+			if (string.IsNullOrWhiteSpace(rootPath))
+			{
+				return;
+			}
+		}
+
+		string buildPath = Path.Combine(rootPath, buildDirectoryName);
+		Directory.CreateDirectory(buildPath);
+
+		string root = Directory.GetParent(Directory.GetCurrentDirectory()).FullName;
+		FileUtil.ReplaceFile(Path.Combine(root, setupScriptFileName), Path.Combine(buildPath, setupScriptFileName));
+		FileUtil.ReplaceFile(Path.Combine(root, "Database.cfg"), Path.Combine(buildPath, "Database.cfg"));
+		FileUtil.ReplaceDirectory(Path.Combine(root, "FishMMO-DB"), Path.Combine(buildPath, "FishMMO-DB"));
+
+		if (!openExplorer)
+		{
+			return;
+		}
+
+#if UNITY_STANDALONE_LINUX || UNITY_EDITOR_LINUX
+		Process.Start("xdg-open", buildPath);
+#elif UNITY_STANDALONE_WIN
+		Process.Start(buildPath);
+#endif
+	}
+
+	[MenuItem("FishMMO Build/Build All Windows")]
+	public static void BuildWindows64AllSeparate()
+	{
+		string selectedPath = EditorUtility.SaveFolderPanel("Pick a save directory", "", "");
+		string rootPath = Path.Combine(selectedPath, "FishMMO");
+		string serverRootPath = Path.Combine(selectedPath, "FishMMO" + Path.DirectorySeparatorChar + "Server");
+		RebuildWorldSceneDetailsCache();
+		BuildSetupFolder(serverRootPath, "Server Setup", "Windows Setup.bat", false);
+		BuildExecutable(rootPath,
+						CLIENT_BUILD_NAME,
 						CLIENT_BOOTSTRAP_SCENES,
-						BuildOptions.CleanBuildCache | BuildOptions.Development | BuildOptions.ShowBuiltPlayer,
+						CustomBuildType.Client,
+						BASE_BUILD_OPTIONS,
 						StandaloneBuildSubtarget.Player,
-						BuildTarget.StandaloneWindows);
+						BuildTarget.StandaloneWindows64);
+		BuildExecutable(serverRootPath,
+						ALL_IN_ONE_SERVER_BUILD_NAME,
+						ALL_IN_ONE_SERVER_BOOTSTRAP_SCENES,
+						CustomBuildType.AllInOne,
+						BASE_BUILD_OPTIONS,
+						StandaloneBuildSubtarget.Server,
+						BuildTarget.StandaloneWindows64);
+		BuildExecutable(serverRootPath,
+						LOGIN_SERVER_BUILD_NAME,
+						LOGIN_SERVER_BOOTSTRAP_SCENES,
+						CustomBuildType.Login,
+						BASE_BUILD_OPTIONS,
+						StandaloneBuildSubtarget.Server,
+						BuildTarget.StandaloneWindows64);
+		BuildExecutable(serverRootPath,
+						WORLD_SERVER_BUILD_NAME,
+						WORLD_SERVER_BOOTSTRAP_SCENES,
+						CustomBuildType.World,
+						BASE_BUILD_OPTIONS,
+						StandaloneBuildSubtarget.Server,
+						BuildTarget.StandaloneWindows64);
+		BuildExecutable(serverRootPath,
+						SCENE_SERVER_BUILD_NAME,
+						SCENE_SERVER_BOOTSTRAP_SCENES,
+						CustomBuildType.Scene,
+						BASE_BUILD_OPTIONS,
+						StandaloneBuildSubtarget.Server,
+						BuildTarget.StandaloneWindows64);
+
+#if UNITY_STANDALONE_LINUX || UNITY_EDITOR_LINUX
+		Process.Start("xdg-open", rootPath);
+#elif UNITY_STANDALONE_WIN
+		Process.Start(rootPath);
+#endif
 	}
 
-	[MenuItem("FishMMO/Windows 64 Server Build")]
-	public static void BuildWindows64Server()
+	[MenuItem("FishMMO Build/Build All Linux")]
+	public static void BuildAllLinux()
 	{
-		BuildExecutable(SERVER_BUILD_NAME,
-						SERVER_BOOTSTRAP_SCENES,
-						BuildOptions.CleanBuildCache | BuildOptions.Development | BuildOptions.ShowBuiltPlayer,
+		string selectedPath = EditorUtility.SaveFolderPanel("Pick a save directory", "", "");
+		string rootPath = Path.Combine(selectedPath, "FishMMO");
+		string serverRootPath = Path.Combine(selectedPath, "FishMMO" + Path.DirectorySeparatorChar + "Server");
+		RebuildWorldSceneDetailsCache();
+		BuildSetupFolder(serverRootPath, "Server Setup", "Linux Setup.sh", false);
+		BuildExecutable(rootPath,
+						CLIENT_BUILD_NAME,
+						CLIENT_BOOTSTRAP_SCENES,
+						CustomBuildType.Client,
+						BASE_BUILD_OPTIONS,
+						StandaloneBuildSubtarget.Player,
+						BuildTarget.StandaloneLinux64);
+		BuildExecutable(serverRootPath,
+						ALL_IN_ONE_SERVER_BUILD_NAME,
+						ALL_IN_ONE_SERVER_BOOTSTRAP_SCENES,
+						CustomBuildType.AllInOne,
+						BASE_BUILD_OPTIONS,
+						StandaloneBuildSubtarget.Server,
+						BuildTarget.StandaloneLinux64);
+		BuildExecutable(serverRootPath,
+						LOGIN_SERVER_BUILD_NAME,
+						LOGIN_SERVER_BOOTSTRAP_SCENES,
+						CustomBuildType.Login,
+						BASE_BUILD_OPTIONS,
+						StandaloneBuildSubtarget.Server,
+						BuildTarget.StandaloneLinux64);
+		BuildExecutable(serverRootPath,
+						WORLD_SERVER_BUILD_NAME,
+						WORLD_SERVER_BOOTSTRAP_SCENES,
+						CustomBuildType.World,
+						BASE_BUILD_OPTIONS,
+						StandaloneBuildSubtarget.Server,
+						BuildTarget.StandaloneLinux64);
+		BuildExecutable(serverRootPath,
+						SCENE_SERVER_BUILD_NAME,
+						SCENE_SERVER_BOOTSTRAP_SCENES,
+						CustomBuildType.Scene,
+						BASE_BUILD_OPTIONS,
+						StandaloneBuildSubtarget.Server,
+						BuildTarget.StandaloneLinux64);
+
+#if UNITY_STANDALONE_LINUX || UNITY_EDITOR_LINUX
+		Process.Start("xdg-open", rootPath);
+#elif UNITY_STANDALONE_WIN
+		Process.Start(rootPath);
+#endif
+	}
+
+	[MenuItem("FishMMO Build/Server/Windows Setup")]
+	public static void BuildWindowsSetup()
+	{
+		BuildSetupFolder("FishMMO Windows Setup", "WindowsSetup.bat");
+	}
+
+	[MenuItem("FishMMO Build/Server/Windows x64 All-In-One")]
+	public static void BuildWindows64AllInOneServer()
+	{
+		RebuildWorldSceneDetailsCache();
+		BuildExecutable(ALL_IN_ONE_SERVER_BUILD_NAME,
+						ALL_IN_ONE_SERVER_BOOTSTRAP_SCENES,
+						CustomBuildType.AllInOne,
+						BASE_BUILD_OPTIONS | BuildOptions.ShowBuiltPlayer,
 						StandaloneBuildSubtarget.Server,
 						BuildTarget.StandaloneWindows64);
 	}
 
-	[MenuItem("FishMMO/Windows 64 Client Build")]
+	[MenuItem("FishMMO Build/Server/Windows x64 Login")]
+	public static void BuildWindows64LoginServer()
+	{
+		RebuildWorldSceneDetailsCache();
+		BuildExecutable(LOGIN_SERVER_BUILD_NAME,
+						LOGIN_SERVER_BOOTSTRAP_SCENES,
+						CustomBuildType.Login,
+						BASE_BUILD_OPTIONS | BuildOptions.ShowBuiltPlayer,
+						StandaloneBuildSubtarget.Server,
+						BuildTarget.StandaloneWindows64);
+	}
+
+	[MenuItem("FishMMO Build/Server/Windows x64 World")]
+	public static void BuildWindows64WorldServer()
+	{
+		RebuildWorldSceneDetailsCache();
+		BuildExecutable(WORLD_SERVER_BUILD_NAME,
+						WORLD_SERVER_BOOTSTRAP_SCENES,
+						CustomBuildType.World,
+						BASE_BUILD_OPTIONS | BuildOptions.ShowBuiltPlayer,
+						StandaloneBuildSubtarget.Server,
+						BuildTarget.StandaloneWindows64);
+	}
+
+	[MenuItem("FishMMO Build/Server/Windows x64 Scene")]
+	public static void BuildWindows64SceneServer()
+	{
+		RebuildWorldSceneDetailsCache();
+		BuildExecutable(SCENE_SERVER_BUILD_NAME,
+						SCENE_SERVER_BOOTSTRAP_SCENES,
+						CustomBuildType.Scene,
+						BASE_BUILD_OPTIONS | BuildOptions.ShowBuiltPlayer,
+						StandaloneBuildSubtarget.Server,
+						BuildTarget.StandaloneWindows64);
+	}
+
+	[MenuItem("FishMMO Build/Client/Windows x64")]
 	public static void BuildWindows64Client()
 	{
+		RebuildWorldSceneDetailsCache();
 		BuildExecutable(CLIENT_BUILD_NAME,
 						CLIENT_BOOTSTRAP_SCENES,
-						BuildOptions.CleanBuildCache | BuildOptions.Development | BuildOptions.ShowBuiltPlayer,
+						CustomBuildType.Client,
+						BASE_BUILD_OPTIONS | BuildOptions.ShowBuiltPlayer,
 						StandaloneBuildSubtarget.Player,
 						BuildTarget.StandaloneWindows64);
 	}
 
-	[MenuItem("FishMMO/Linux 64 Server Build")]
-	public static void BuildLinux64Server()
+	[MenuItem("FishMMO Build/Server/Linux Setup")]
+	public static void BuildLinuxSetup()
 	{
-		BuildExecutable(SERVER_BUILD_NAME,
-						SERVER_BOOTSTRAP_SCENES,
-						BuildOptions.CleanBuildCache | BuildOptions.Development | BuildOptions.ShowBuiltPlayer,
+		BuildSetupFolder("FishMMO Linux Setup", "LinuxSetup.sh");
+	}
+
+	[MenuItem("FishMMO Build/Server/Linux x64 All-In-One")]
+	public static void BuildLinux64AllInOneServer()
+	{
+		RebuildWorldSceneDetailsCache();
+		BuildExecutable(ALL_IN_ONE_SERVER_BUILD_NAME,
+						ALL_IN_ONE_SERVER_BOOTSTRAP_SCENES,
+						CustomBuildType.AllInOne,
+						BASE_BUILD_OPTIONS | BuildOptions.ShowBuiltPlayer,
 						StandaloneBuildSubtarget.Server,
 						BuildTarget.StandaloneLinux64);
 	}
 
-	[MenuItem("FishMMO/Linux 64 Client Build")]
+	[MenuItem("FishMMO Build/Client/Linux x64")]
 	public static void BuildLinux64Client()
 	{
+		RebuildWorldSceneDetailsCache();
 		BuildExecutable(CLIENT_BUILD_NAME,
 						CLIENT_BOOTSTRAP_SCENES,
-						BuildOptions.CleanBuildCache | BuildOptions.Development | BuildOptions.ShowBuiltPlayer,
+						CustomBuildType.Client,
+						BASE_BUILD_OPTIONS | BuildOptions.ShowBuiltPlayer,
 						StandaloneBuildSubtarget.Player,
 						BuildTarget.StandaloneLinux64);
 	}
 
-	[MenuItem("FishMMO/WebGL Client Build")]
+	[MenuItem("FishMMO Build/Client/WebGL")]
 	public static void BuildWebGLClient()
 	{
+		RebuildWorldSceneDetailsCache();
 		BuildExecutable(CLIENT_BUILD_NAME,
 						CLIENT_BOOTSTRAP_SCENES,
-						BuildOptions.CleanBuildCache | BuildOptions.Development | BuildOptions.ShowBuiltPlayer,
+						CustomBuildType.Client,
+						BASE_BUILD_OPTIONS | BuildOptions.ShowBuiltPlayer,
 						StandaloneBuildSubtarget.Player,
 						BuildTarget.WebGL);
 	}
