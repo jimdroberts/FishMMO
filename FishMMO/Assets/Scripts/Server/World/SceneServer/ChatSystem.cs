@@ -22,8 +22,8 @@ namespace FishMMO.Server
 		[Tooltip("The server chat rate limit in milliseconds. This should be equal to the clients UIChat.messageRateLimit")]
 		public float MessageRateLimit = 0.0f;
 		[Tooltip("The server chat message pump rate limit in seconds.")]
-		public float MessagePumpRate = 5.0f;
-		public int MessageFetchCount = 10;
+		public float MessagePumpRate = 2.0f;
+		public int MessageFetchCount = 20;
 
 		private DateTime lastFetchTime = DateTime.UtcNow;
 		private long lastFetchPosition = 0;
@@ -97,7 +97,7 @@ namespace FishMMO.Server
 			foreach (ChatEntity message in messages)
 			{
 				ChatChannel channel = (ChatChannel)message.Channel;
-				if (ChatHelper.ChannelCommands.TryGetValue(channel, out CommandDetails sayCommand))
+				if (ChatHelper.ChannelCommands.TryGetValue(channel, out ChatCommandDetails sayCommand))
 				{
 					sayCommand.Func?.Invoke(null, new ChatBroadcast()
 					{

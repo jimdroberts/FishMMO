@@ -13,7 +13,6 @@ GameObject:
   - component: {fileID: 1043176158297817164}
   - component: {fileID: -8801744153674588545}
   - component: {fileID: 5583631206216370463}
-  - component: {fileID: -8766259097393625810}
   m_Layer: 0
   m_Name: ServerSystems
   m_TagString: Untagged
@@ -34,7 +33,7 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
-  m_RootOrder: 2
+  m_RootOrder: 0
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &5200512103453460944
 MonoBehaviour:
@@ -48,8 +47,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 03313be06094e964aa4ef9f757c6f674, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  relayIp: 
-  relayPort: 0
+  Address: 
+  Port: 0
 --- !u!114 &1043176158297817164
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -62,9 +61,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2d4ee952c5a180845abb775163401c3d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  windowTitle: WorldServer
-  updateRate: 2
-  nextUpdate: 0
+  WorldSceneSystem: {fileID: 0}
+  Title: 
+  UpdateRate: 2
+  NextUpdate: 0
 --- !u!114 &-8801744153674588545
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -77,8 +77,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fa6f1f6fbcb46fc4e863718e94eb7a99, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  locked: 0
-  pulseRate: 10
 --- !u!114 &5583631206216370463
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -89,17 +87,5 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 3fc59b50d486f3946b1a9625bb84bb31, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
---- !u!114 &-8766259097393625810
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1043176158297817271}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0210471db6339444cbbf793d8dea8b47, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 

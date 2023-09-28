@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 
 public delegate void ChatCommand(Character character, ChatBroadcast msg);
-public struct CommandDetails
+public struct ChatCommandDetails
 {
 	public ChatChannel Channel;
 	public ChatCommand Func;
@@ -13,8 +13,8 @@ public static class ChatHelper
 {
 	private static bool initialized = false;
 
-	public static Dictionary<string, CommandDetails> Commands { get; private set; }
-	public static Dictionary<ChatChannel, CommandDetails> ChannelCommands { get; private set; }
+	public static Dictionary<string, ChatCommandDetails> Commands { get; private set; }
+	public static Dictionary<ChatChannel, ChatCommandDetails> ChannelCommands { get; private set; }
 
 	public static Dictionary<ChatChannel, List<string>> ChannelCommandMap = new Dictionary<ChatChannel, List<string>>()
 	{
@@ -32,12 +32,12 @@ public static class ChatHelper
 		if (initialized) return;
 		initialized = true;
 
-		Commands = new Dictionary<string, CommandDetails>();
-		ChannelCommands = new Dictionary<ChatChannel, CommandDetails>();
+		Commands = new Dictionary<string, ChatCommandDetails>();
+		ChannelCommands = new Dictionary<ChatChannel, ChatCommandDetails>();
 
 		foreach (KeyValuePair<ChatChannel, List<string>> pair in ChatHelper.ChannelCommandMap)
 		{
-			AddCommandDetails(pair.Value, new CommandDetails()
+			AddChatCommandDetails(pair.Value, new ChatCommandDetails()
 			{
 				Channel = pair.Key,
 				Func = onGetChannelCommand?.Invoke(pair.Key),
@@ -45,7 +45,7 @@ public static class ChatHelper
 		}
 	}
 
-	internal static void AddCommandDetails(List<string> commands, CommandDetails details)
+	internal static void AddChatCommandDetails(List<string> commands, ChatCommandDetails details)
 	{
 		foreach (string command in commands)
 		{
@@ -66,13 +66,13 @@ public static class ChatHelper
 	{
 		ChatCommand command = null;
 		// parse our command or send the message to our /say channel
-		if (ChatHelper.Commands.TryGetValue(cmd, out CommandDetails commandDetails))
+		if (ChatHelper.Commands.TryGetValue(cmd, out ChatCommandDetails commandDetails))
 		{
 			channel = commandDetails.Channel;
 			command = commandDetails.Func;
 		}
 		// default is say chat, if we have no command the text goes to say
-		else if (ChatHelper.ChannelCommands.TryGetValue(ChatChannel.Say, out CommandDetails sayCommand))
+		else if (ChatHelper.ChannelCommands.TryGetValue(ChatChannel.Say, out ChatCommandDetails sayCommand))
 		{
 			channel = sayCommand.Channel;
 			command = sayCommand.Func;

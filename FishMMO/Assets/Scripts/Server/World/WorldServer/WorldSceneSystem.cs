@@ -145,8 +145,6 @@ namespace FishMMO.Server
 
 		private void Authenticator_OnClientAuthenticationResult(NetworkConnection conn, bool authenticated)
 		{
-			Debug.Log(conn.ClientId + " authentiated: " + authenticated);
-
 			if (!authenticated)
 				return;
 
@@ -174,7 +172,6 @@ namespace FishMMO.Server
 			LoadedSceneEntity selectedScene = null;
 			if (loadedScenes != null && loadedScenes.Count > 0)
 			{
-				Debug.Log("Scene Instance found: " + sceneName);
 				foreach (LoadedSceneEntity sceneEntity in loadedScenes.Values)
 				{
 					selectedScene = sceneEntity;
@@ -184,7 +181,6 @@ namespace FishMMO.Server
 			// if we found a valid scene server
 			if (selectedScene != null)
 			{
-				Debug.Log("Scene found: " + sceneName);
 				SceneServerEntity sceneServer = SceneServerService.GetServer(dbContext, selectedScene.SceneServerID);
 
 				// successfully found a scene to connect to
@@ -200,7 +196,7 @@ namespace FishMMO.Server
 			}
 			else
 			{
-				Debug.Log("Scene not found: " + sceneName + " adding " + conn.ClientId + " to wait queue and adding pending scene.");
+				//Debug.Log("Scene not found: " + sceneName + " adding Client[" + conn.ClientId + "] to wait queue and adding pending scene.");
 				// add the client to the wait queue, when a scene server loads the scene the client will be connected when it's ready
 				if (!WaitingConnections.TryGetValue(sceneName, out HashSet<NetworkConnection> connections))
 				{

@@ -1,1 +1,0 @@
-./FishMMOServer.exe Scene
