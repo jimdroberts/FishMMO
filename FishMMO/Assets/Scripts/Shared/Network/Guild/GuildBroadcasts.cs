@@ -3,7 +3,8 @@ using System.Collections.Generic;
 
 public struct GuildCreateBroadcast : IBroadcast
 {
-	public string guildID;
+	public long ID;
+	public string guildName;
 }
 
 public struct GuildInviteBroadcast : IBroadcast
@@ -16,11 +17,6 @@ public struct GuildAcceptInviteBroadcast : IBroadcast
 }
 public struct GuildDeclineInviteBroadcast : IBroadcast
 {
-}
-
-public struct GuildJoinedBroadcast : IBroadcast
-{
-	public List<long> members;
 }
 
 public struct GuildNewMemberBroadcast : IBroadcast
@@ -39,7 +35,12 @@ public struct GuildLeaveBroadcast : IBroadcast
 {
 }
 
+public struct GuildAddBroadcast : IBroadcast
+{
+	public List<GuildNewMemberBroadcast> members;
+
+}
 public struct GuildRemoveBroadcast : IBroadcast
 {
-	public long memberID;
+	public List<long> members;
 }

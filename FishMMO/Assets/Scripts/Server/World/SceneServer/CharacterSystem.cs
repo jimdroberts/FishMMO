@@ -23,6 +23,15 @@ namespace FishMMO.Server
 		public float OutOfBoundsCheckRate = 5f;
 		private float nextOutOfBoundsCheck = 0.0f;
 
+		/// <summary>
+		/// Triggered before a character is loaded from the database. <conn, CharacterID>
+		/// </summary>
+		public event Action<NetworkConnection, long> OnBeforeLoadCharacter;
+		/// <summary>
+		/// Triggered after a character is loaded from the database. <conn, Character>
+		/// </summary>
+		public event Action<NetworkConnection, Character> OnAfterLoadCharacter;
+
 		public Dictionary<long, Character> CharactersByID = new Dictionary<long, Character>();
 		public Dictionary<string, Character> CharactersByName = new Dictionary<string, Character>();
 		public Dictionary<NetworkConnection, Character> ConnectionCharacters = new Dictionary<NetworkConnection, Character>();
@@ -92,11 +101,13 @@ namespace FishMMO.Server
 
 		private void OnApplicationQuit()
 		{
-			Debug.Log("Disconnecting...");
-			// save all the characters before we quit
-			using var dbContext = Server.DbContextFactory.CreateDbContext();
-			CharacterService.Save(dbContext, new List<Character>(CharactersByID.Values), false);
-			dbContext.SaveChanges();
+			if (Server != null && Server.DbContextFactory != null)
+			{
+				// save all the characters before we quit
+				using var dbContext = Server.DbContextFactory.CreateDbContext();
+				CharacterService.Save(dbContext, new List<Character>(CharactersByID.Values), false);
+				dbContext.SaveChanges();
+			}
 		}
 
 		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs args)
@@ -218,12 +229,15 @@ namespace FishMMO.Server
 					return;
 				}
 
+				OnBeforeLoadCharacter?.Invoke(conn, selectedCharacterID);
 				if (CharacterService.TryGet(dbContext, selectedCharacterID, Server.NetworkManager, out Character character))
 				{
 					// check if the scene is valid, loaded, and cached properly
 					if (Server.SceneServerSystem.TryGetSceneInstanceDetails(character.WorldServerID, character.SceneName, character.SceneHandle, out SceneInstanceDetails instance) &&
 						Server.SceneServerSystem.TryLoadSceneForConnection(conn, instance))
 					{
+						OnAfterLoadCharacter?.Invoke(conn, character);
+
 						WaitingSceneLoadCharacters.Add(conn, character);
 
 						// update character count

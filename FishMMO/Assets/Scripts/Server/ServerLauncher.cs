@@ -9,6 +9,14 @@ namespace FishMMO.Server
 {
 	public class ServerLauncher : MonoBehaviour
 	{
+		public string[] BootList = new string[]
+		{
+			"LoginServer",
+			"WorldServer",
+			"SceneServer",
+			"ClientBootstrap"
+		};
+
 		public Server Server { get; private set; }
 
 		void Start()
@@ -18,7 +26,7 @@ namespace FishMMO.Server
 			if (args == null || args.Length < 2)
 			{
 #endif
-				bool tryInit = Initialize(new string[] { "LoginServer", "WorldServer", "SceneServer", });
+				bool tryInit = Initialize(BootList);
 				if (!tryInit)
 				{
 					// otherwise we close the application
@@ -63,6 +71,7 @@ namespace FishMMO.Server
 
 		private bool Initialize(string[] bootstrapSceneNames)
 		{
+			bool loaded = false;
 #if UNITY_EDITOR
 			EditorBuildSettingsScene[] scenes = EditorBuildSettings.scenes;
 			foreach (string boostrapSceneName in bootstrapSceneNames)
@@ -72,8 +81,8 @@ namespace FishMMO.Server
 					if (scene.enabled &&
 						scene.path.Contains(boostrapSceneName))
 					{
-						UnityEditor.SceneManagement.EditorSceneManager.LoadScene(scene.path, LoadSceneMode.Single);
-						return true;
+						UnityEditor.SceneManagement.EditorSceneManager.LoadScene(scene.path, LoadSceneMode.Additive);
+						loaded = true;
 					}
 				}
 			}
@@ -85,12 +94,12 @@ namespace FishMMO.Server
 				{
 					Application.SetStackTraceLogType(LogType.Log, StackTraceLogType.None);
 
-					SceneManager.LoadScene(bootstrapSceneName, LoadSceneMode.Single);
-					return true;
+					SceneManager.LoadScene(bootstrapSceneName, LoadSceneMode.Additive);
+					loaded = true;
 				}
 			}
 #endif
-			return false;
+			return loaded;
 		}
 	}
 }

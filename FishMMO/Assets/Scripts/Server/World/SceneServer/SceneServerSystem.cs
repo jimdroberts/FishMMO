@@ -136,7 +136,8 @@ namespace FishMMO.Server
 
 		private void OnApplicationQuit()
 		{
-			if (serverState != LocalConnectionState.Stopped &&
+			if (Server != null && Server.DbContextFactory != null &&
+				serverState != LocalConnectionState.Stopped &&
 				Server.Configuration.TryGetString("ServerName", out string name))
 			{
 				using var dbContext = Server.DbContextFactory.CreateDbContext();
@@ -211,7 +212,7 @@ namespace FishMMO.Server
 				// configure the scene physics ticker
 				GameObject gob = new GameObject("PhysicsTicker");
 				PhysicsTicker physicsTicker = gob.AddComponent<PhysicsTicker>();
-				physicsTicker.InitializeOnce(scene.GetPhysicsScene());
+				physicsTicker.InitializeOnce(scene.GetPhysicsScene(), Server.NetworkManager.TimeManager);
 				UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(gob, scene);
 
 				// cache the newly loaded scene

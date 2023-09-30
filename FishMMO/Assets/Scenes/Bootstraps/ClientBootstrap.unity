@@ -1409,6 +1409,8 @@ MonoBehaviour:
   LoginServerAddresses:
   - address: 127.0.0.1
     port: 7770
+  NetworkManager: {fileID: 2002785888}
+  LoginAuthenticator: {fileID: 2002785887}
 --- !u!4 &1045518713
 Transform:
   m_ObjectHideFlags: 0
@@ -2236,6 +2238,11 @@ PrefabInstance:
       propertyPath: _objectPool
       value: 
       objectReference: {fileID: 1810158744}
+    - target: {fileID: 520921427698759609, guid: 1eea1c68ebce1604cada369f7bb62018,
+        type: 3}
+      propertyPath: _persistence
+      value: 2
+      objectReference: {fileID: 0}
     - target: {fileID: 520921427698759610, guid: 1eea1c68ebce1604cada369f7bb62018,
         type: 3}
       propertyPath: m_RootOrder
@@ -2290,6 +2297,11 @@ PrefabInstance:
         type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2978259237282445286, guid: 1eea1c68ebce1604cada369f7bb62018,
+        type: 3}
+      propertyPath: _port
+      value: 7769
       objectReference: {fileID: 0}
     - target: {fileID: 2978259237282445286, guid: 1eea1c68ebce1604cada369f7bb62018,
         type: 3}
@@ -2363,6 +2375,30 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 6f48f002b825cbd45a19bd96d90f9edb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!114 &2002785887 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 557371562, guid: 1eea1c68ebce1604cada369f7bb62018,
+    type: 3}
+  m_PrefabInstance: {fileID: 2002785882}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2002785883}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4a2168632fc50754d944ddb618aca14e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!114 &2002785888 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 520921427698759609, guid: 1eea1c68ebce1604cada369f7bb62018,
+    type: 3}
+  m_PrefabInstance: {fileID: 2002785882}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2002785883}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d2c95dfde7d73b54dbbdc23155d35d36, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
 --- !u!1001 &2037300628

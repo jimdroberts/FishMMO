@@ -36,7 +36,6 @@ namespace FishMMO.Server.Services
 		/// </summary>
 		public static List<ChatEntity> Fetch(ServerDbContext dbContext, DateTime lastFetch, long lastPosition, int amount, /*long worldServerID,*/ long sceneServerID)
 		{
-			var newQueryTime = DateTime.UtcNow;
 			var nextPage = dbContext.Chat
 				.OrderBy(b => b.TimeCreated)
 				.ThenBy(b => b.ID)
@@ -45,8 +44,8 @@ namespace FishMMO.Server.Services
 							// we don't process local channels, say and region are ignored here
 							b.Channel != (byte)ChatChannel.Say &&
 							b.Channel != (byte)ChatChannel.Region &&
-							// we don't process tell messages if the message scene server id is equal to the current scene server id
-							!(b.Channel == (byte)ChatChannel.Tell && b.SceneServerID == sceneServerID)
+							// we don't process local tell, guild, and party messages
+							!((b.Channel == (byte)ChatChannel.Tell || b.Channel == (byte)ChatChannel.Guild || b.Channel == (byte)ChatChannel.Party) && b.SceneServerID == sceneServerID)
 							// we don't process other worlds global chat
 							//!((b.Channel == (byte)ChatChannel.World || b.Channel == (byte)ChatChannel.Trade) && b.WorldServerID != worldServerID) &&
 							)

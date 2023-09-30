@@ -21,8 +21,7 @@ namespace FishMMO.Server
 		public string Address;
 		public ushort Port;
 		public ServerDbContextFactory DbContextFactory;
-
-		public NetworkManager NetworkManager { get; private set; }
+		public NetworkManager NetworkManager;
 
 		#region LOGIN
 		public CharacterSelectSystem CharacterSelectSystem { get; private set; }
@@ -78,10 +77,15 @@ namespace FishMMO.Server
 			DbContextFactory = new ServerDbContextFactory(path, false);
 
 			// ensure our NetworkManager exists in the scene
-			NetworkManager = FindObjectOfType<NetworkManager>();
+			
 			if (NetworkManager == null)
 			{
-				throw new UnityException("Server: NetworkManager could not be found! Make sure you have a NetworkManager in your scene.");
+				NetworkManager = FindObjectOfType<NetworkManager>();
+
+				if (NetworkManager == null)
+				{
+					throw new UnityException("Server: NetworkManager could not be found! Make sure you have a NetworkManager in your scene.");
+				}
 			}
 
 			// initialize required components for our specified server type
@@ -126,7 +130,7 @@ namespace FishMMO.Server
 
 		private string GetServerType()
 		{
-			Scene scene = SceneManager.GetActiveScene();
+			Scene scene = gameObject.scene;
 			if (!scene.path.Contains("Bootstraps"))
 			{
 				throw new UnityException("Active scene is not in the bootstraps folder.");
@@ -244,7 +248,7 @@ namespace FishMMO.Server
 			Transport transport = NetworkManager.TransportManager.Transport;
 			if (transport != null)
 			{
-				Debug.Log("Server: " + transport.GetServerBindAddress(IPAddressType.IPv4) + ":" + transport.GetPort() + " - " + serverState);
+				Debug.Log(serverTypeName + transport.GetServerBindAddress(IPAddressType.IPv4) + ":" + transport.GetPort() + " - " + serverState);
 			}
 		}
 

@@ -30,6 +30,11 @@ public class TargetController : MonoBehaviour
 
 	void Update()
 	{
+		if (Camera.main == null)
+		{
+			return;
+		}
+
 		// update target label for the client
 		if (nextTick < 0.0f)
 		{

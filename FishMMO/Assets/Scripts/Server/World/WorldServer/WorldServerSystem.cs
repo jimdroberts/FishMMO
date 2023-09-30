@@ -80,7 +80,8 @@ namespace FishMMO.Server
 
 		private void OnApplicationQuit()
 		{
-			if (serverState != LocalConnectionState.Stopped &&
+			if (Server != null && Server.DbContextFactory != null &&
+				serverState != LocalConnectionState.Stopped &&
 				Server.Configuration.TryGetString("ServerName", out string name))
 			{
 				using var dbContext = Server.DbContextFactory.CreateDbContext();

@@ -64,9 +64,12 @@ namespace FishMMO.Server
 
 		private void OnApplicationQuit()
 		{
-			using var dbContext = Server.DbContextFactory.CreateDbContext();
-			PendingSceneService.Delete(dbContext, Server.WorldServerSystem.ID);
-			dbContext.SaveChanges();
+			if (Server != null && Server.DbContextFactory != null)
+			{
+				using var dbContext = Server.DbContextFactory.CreateDbContext();
+				PendingSceneService.Delete(dbContext, Server.WorldServerSystem.ID);
+				dbContext.SaveChanges();
+			}
 		}
 
 		private void LateUpdate()
@@ -75,12 +78,15 @@ namespace FishMMO.Server
 			{
 				nextWaitQueueUpdate = waitQueueRate;
 
-				using var dbContext = Server.DbContextFactory.CreateDbContext();
-				foreach (string sceneName in new List<string>(WaitingConnections.Keys))
+				if (Server != null && Server.DbContextFactory != null)
 				{
-					TryClearWaitQueues(dbContext, sceneName);
+					using var dbContext = Server.DbContextFactory.CreateDbContext();
+					foreach (string sceneName in new List<string>(WaitingConnections.Keys))
+					{
+						TryClearWaitQueues(dbContext, sceneName);
+					}
+					dbContext.SaveChanges();
 				}
-				dbContext.SaveChanges();
 			}
 			nextWaitQueueUpdate -= Time.deltaTime;
 		}

@@ -37,7 +37,7 @@ namespace FishMMO.Client
 		public void SetCamera(Camera target)
 		{
 			Camera = target;
-			Transform = Camera.transform;
+			Transform = Camera == null ? null : Camera.transform;
 		}
 #endif
 	}

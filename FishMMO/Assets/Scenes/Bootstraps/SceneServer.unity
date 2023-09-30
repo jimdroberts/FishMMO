@@ -191,6 +191,11 @@ PrefabInstance:
       propertyPath: _objectPool
       value: 
       objectReference: {fileID: 656759775}
+    - target: {fileID: 7024989448064037686, guid: b68dfa443648caf40abf8e919357a0ac,
+        type: 3}
+      propertyPath: _persistence
+      value: 2
+      objectReference: {fileID: 0}
     - target: {fileID: 7024989448064037687, guid: b68dfa443648caf40abf8e919357a0ac,
         type: 3}
       propertyPath: m_Name
@@ -272,6 +277,18 @@ MonoBehaviour:
   _HTTPS: 0
   _clientAddress: 127.0.0.1
   _noClientPort: 0
+--- !u!114 &1035984210 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 7024989448064037686, guid: b68dfa443648caf40abf8e919357a0ac,
+    type: 3}
+  m_PrefabInstance: {fileID: 656759773}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 656759774}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d2c95dfde7d73b54dbbdc23155d35d36, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &2093683971
 GameObject:
   m_ObjectHideFlags: 0
@@ -404,6 +421,11 @@ PrefabInstance:
         type: 2}
     - target: {fileID: 8380057997533541231, guid: 61bd2fa6be216094ebfc45c391a32de0,
         type: 3}
+      propertyPath: Port
+      value: 7781
+      objectReference: {fileID: 0}
+    - target: {fileID: 8380057997533541231, guid: 61bd2fa6be216094ebfc45c391a32de0,
+        type: 3}
       propertyPath: RelayPort
       value: 7780
       objectReference: {fileID: 0}
@@ -412,6 +434,11 @@ PrefabInstance:
       propertyPath: RelayAddress
       value: 127.0.0.1
       objectReference: {fileID: 0}
+    - target: {fileID: 8380057997533541231, guid: 61bd2fa6be216094ebfc45c391a32de0,
+        type: 3}
+      propertyPath: NetworkManager
+      value: 
+      objectReference: {fileID: 1035984210}
     - target: {fileID: 8380057997533541231, guid: 61bd2fa6be216094ebfc45c391a32de0,
         type: 3}
       propertyPath: configurationFileName

@@ -47,11 +47,12 @@ namespace FishMMO.Server
 
 		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs args)
 		{
-			if (args.ConnectionState == LocalConnectionState.Started)
+			serverState = args.ConnectionState;
+			if (serverState == LocalConnectionState.Started)
 			{
 				ServerManager.RegisterBroadcast<ChatBroadcast>(OnServerChatMessageReceived, true);
 			}
-			else if (args.ConnectionState == LocalConnectionState.Stopped)
+			else if (serverState == LocalConnectionState.Stopped)
 			{
 				ServerManager.UnregisterBroadcast<ChatBroadcast>(OnServerChatMessageReceived);
 			}
@@ -80,7 +81,7 @@ namespace FishMMO.Server
 		{
 			using var dbContext = Server.DbContextFactory.CreateDbContext();
 
-			// fetch 10 chat messages from the database
+			// fetch chat messages from the database
 			List<ChatEntity> messages = ChatService.Fetch(dbContext, lastFetchTime, lastFetchPosition, MessageFetchCount, Server.SceneServerSystem.ID);
 			if (messages != null)
 			{
@@ -91,7 +92,7 @@ namespace FishMMO.Server
 			return messages;
 		}
 
-		// process a message from the database
+		// process chat messages from the database
 		private void ProcessChatMessages(List<ChatEntity> messages)
 		{
 			foreach (ChatEntity message in messages)
@@ -191,7 +192,7 @@ namespace FishMMO.Server
 					}
 
 					// add the senders name and guild ID
-					msg.text = sender.CharacterName + ": " + sender.GuildController.Current.ID + " " + msg.text;
+					msg.text = sender.CharacterName + ": " + sender.GuildController.ID + " " + msg.text;
 				}
 				// add the party id for parsing
 				else if (msg.channel == ChatChannel.Party)
@@ -268,17 +269,20 @@ namespace FishMMO.Server
 		public void OnGuildChat(Character sender, ChatBroadcast msg)
 		{
 			if (sender == null ||
-				sender.GuildController.Current == null)
+				sender.GuildController.ID > 0)
 			{
 				return;
 			}
-			foreach (GuildController member in sender.GuildController.Current.Members.Values)
+			foreach (long member in sender.GuildController.Members)
 			{
-				if (member.OwnerId == sender.OwnerId)
+				if (member == sender.OwnerId)
 					continue;
 
-				// broadcast to guild member... includes sender
-				member.Owner.Broadcast(msg);
+				if (Server.CharacterSystem.CharactersByID.TryGetValue(member, out Character character))
+				{
+					// broadcast to guild member...
+					character.Owner.Broadcast(msg);
+				}
 			}
 		}
 
