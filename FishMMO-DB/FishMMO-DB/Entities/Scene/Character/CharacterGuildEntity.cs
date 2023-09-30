@@ -16,6 +16,6 @@ namespace FishMMO_DB.Entities
         public CharacterEntity Character { get; set; }
         public long GuildID { get; set; }
         public GuildEntity Guild { get; set; }
-        public int Rank { get; set; }
+        public byte Rank { get; set; }
     }
 }

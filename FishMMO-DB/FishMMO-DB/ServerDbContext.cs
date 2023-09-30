@@ -31,6 +31,7 @@ namespace FishMMO_DB
         public DbSet<CharacterQuestEntity> CharacterQuests { get; set; }
         public DbSet<CharacterGuildEntity> CharacterGuilds { get; set; }
         public DbSet<GuildEntity> Guilds { get; set; }
+        public DbSet<GuildUpdateEntity> GuildUpdates { get; set; }
         public DbSet<ChatEntity> Chat { get; set; }
         
         // game data (?)
