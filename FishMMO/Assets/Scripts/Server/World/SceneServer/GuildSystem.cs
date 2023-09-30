@@ -113,7 +113,7 @@ namespace FishMMO.Server
 			using var dbContext = Server.DbContextFactory.CreateDbContext();
 			foreach (GuildUpdateEntity update in updates)
 			{
-				// check if we already updated the guild this time around
+				// check if we have already updated this guild
 				if (updatedGuilds.Contains(update.GuildID))
 				{
 					continue;
@@ -124,7 +124,7 @@ namespace FishMMO.Server
 				// get the current guild members from the database
 				List<CharacterGuildEntity> dbMembers = CharacterGuildService.Members(dbContext, update.GuildID);
 
-				// get the cached guild members from our local cache
+				// get the locally cached guild members
 				if (!guildMemberCache.TryGetValue(update.GuildID, out HashSet<long> members))
 				{
 					guildMemberCache.Add(update.GuildID, members = new HashSet<long>());
@@ -350,7 +350,7 @@ namespace FishMMO.Server
 			GuildController guildController = conn.FirstObject.GetComponent<GuildController>();
 
 			// validate character
-			if (guildController == null || guildController.ID > 0)
+			if (guildController == null || guildController.ID < 1)
 			{
 				// not in a guild..
 				return;
