@@ -88,6 +88,14 @@ namespace FishMMO.Client
 					}
 				}
 
+				if (InputManager.GetKeyDown("Guild"))
+				{
+					if (UIManager.TryGet("UIGuild", out UIGuild uiGuild))
+					{
+						uiGuild.Visible = !uiGuild.Visible;
+					}
+				}
+
 				if (InputManager.GetKeyDown("Party"))
 				{
 					if (UIManager.TryGet("UIParty", out UIParty uiParty))

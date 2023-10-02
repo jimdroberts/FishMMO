@@ -20,7 +20,7 @@ namespace FishMMO.Server.Services
 		/// <summary>
 		/// Saves a CharacterGuildEntity to the database.
 		/// </summary>
-		public static bool Save(ServerDbContext dbContext, long characterID, long guildID, GuildRank rank)
+		public static bool Save(ServerDbContext dbContext, long characterID, long guildID, GuildRank rank, string location)
 		{
 			var characterGuildEntity = dbContext.CharacterGuilds.FirstOrDefault(a => a.CharacterID == characterID);
 			if (characterGuildEntity == null)
@@ -30,6 +30,7 @@ namespace FishMMO.Server.Services
 					CharacterID = characterID,
 					GuildID = guildID,
 					Rank = (byte)rank,
+					Location = location,
 				};
 				dbContext.CharacterGuilds.Add(characterGuildEntity);
 				return true;
@@ -39,6 +40,7 @@ namespace FishMMO.Server.Services
 				characterGuildEntity.CharacterID = characterID;
 				characterGuildEntity.GuildID = guildID;
 				characterGuildEntity.Rank = (byte)rank;
+				characterGuildEntity.Location = location;
 			}
 			return false;
 		}
@@ -56,6 +58,7 @@ namespace FishMMO.Server.Services
 					CharacterID = character.ID,
 					GuildID = character.GuildController.ID,
 					Rank = (byte)character.GuildController.Rank,
+					Location = character.gameObject.scene.name,
 				};
 				dbContext.CharacterGuilds.Add(characterGuildEntity);
 				return true;
@@ -65,6 +68,7 @@ namespace FishMMO.Server.Services
 				characterGuildEntity.CharacterID = character.ID;
 				characterGuildEntity.GuildID = character.GuildController.ID;
 				characterGuildEntity.Rank = (byte)character.GuildController.Rank;
+				characterGuildEntity.Location = character.gameObject.scene.name;
 			}
 			return false;
 		}
@@ -85,6 +89,7 @@ namespace FishMMO.Server.Services
 				{
 					characterGuildEntity.GuildID = 0;
 					characterGuildEntity.Rank = (byte)GuildRank.None;
+					characterGuildEntity.Location = "";
 				}
 				return true;
 			}

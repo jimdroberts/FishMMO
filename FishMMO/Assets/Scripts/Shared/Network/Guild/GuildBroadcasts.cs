@@ -23,6 +23,7 @@ public struct GuildNewMemberBroadcast : IBroadcast
 {
 	public long memberID;
 	public GuildRank rank;
+	public string location;
 }
 
 public struct GuildUpdateMemberBroadcast : IBroadcast

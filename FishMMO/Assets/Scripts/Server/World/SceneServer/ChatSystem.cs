@@ -2,8 +2,9 @@
 using FishNet.Transporting;
 using FishNet.Managing.Scened;
 using UnityEngine;
-using System.Collections.Generic;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using FishMMO.Server.Services;
 using FishMMO_DB.Entities;
 
@@ -85,9 +86,12 @@ namespace FishMMO.Server
 			List<ChatEntity> messages = ChatService.Fetch(dbContext, lastFetchTime, lastFetchPosition, MessageFetchCount, Server.SceneServerSystem.ID);
 			if (messages != null)
 			{
-				ChatEntity latest = messages[messages.Count - 1];
-				lastFetchPosition = latest.ID;
-				lastFetchTime = latest.TimeCreated;
+				ChatEntity latest = messages.LastOrDefault();
+				if (latest != null)
+				{
+					lastFetchPosition = latest.ID;
+					lastFetchTime = latest.TimeCreated;
+				}
 			}
 			return messages;
 		}

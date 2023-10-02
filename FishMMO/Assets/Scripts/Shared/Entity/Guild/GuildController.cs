@@ -20,7 +20,7 @@ public class GuildController : NetworkBehaviour
 	public event Action OnGuildCreated;
 	public event Action OnLeaveGuild;
 
-	public event Action<long, GuildRank> OnAddMember;
+	public event Action<long, GuildRank, string> OnAddMember;
 	public event Action<long, GuildRank> OnUpdateMember;
 	public event Action<long> OnRemoveMember;
 
@@ -86,7 +86,7 @@ public class GuildController : NetworkBehaviour
 	public void OnClientGuildNewMemberBroadcastReceived(GuildNewMemberBroadcast msg)
 	{
 		// update our Guild list with the new Guild member
-		OnAddMember?.Invoke(msg.memberID, msg.rank);
+		OnAddMember?.Invoke(msg.memberID, msg.rank, msg.location);
 	}
 
 	/// <summary>
@@ -120,7 +120,7 @@ public class GuildController : NetworkBehaviour
 			if (!Members.Contains(member.memberID))
 			{
 				Members.Add(member.memberID);
-				OnAddMember?.Invoke(member.memberID, member.rank);
+				OnAddMember?.Invoke(member.memberID, member.rank, member.location);
 			}
 			if (member.rank == GuildRank.Officer &&
 				!Officers.Contains(member.memberID))

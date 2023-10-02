@@ -92,9 +92,12 @@ namespace FishMMO.Server
 			List<GuildUpdateEntity> updates = GuildUpdateService.Fetch(dbContext, lastFetchTime, lastPosition, UpdateFetchCount);
 			if (updates != null)
 			{
-				GuildUpdateEntity latest = updates[updates.Count - 1];
-				lastFetchTime = latest.TimeCreated;
-				lastPosition = latest.ID;
+				GuildUpdateEntity latest = updates.LastOrDefault();
+				if (latest != null)
+				{
+					lastFetchTime = latest.TimeCreated;
+					lastPosition = latest.ID;
+				}
 			}
 			return updates;
 		}
@@ -160,7 +163,8 @@ namespace FishMMO.Server
 					var addBroadcasts = addResults.Select(x => new GuildNewMemberBroadcast()
 					{
 						memberID = x.CharacterID,
-						rank = (GuildRank)x.Rank
+						rank = (GuildRank)x.Rank,
+						location = x.Location,
 					}).ToList();
 
 					GuildAddBroadcast guildAddBroadcast = new GuildAddBroadcast()
@@ -323,6 +327,7 @@ namespace FishMMO.Server
 					{
 						memberID = guildController.Character.ID,
 						rank = GuildRank.Member,
+						location = guildController.gameObject.scene.name,
 					});
 				}
 			}
@@ -399,7 +404,7 @@ namespace FishMMO.Server
 						// update the guild leader status in the database
 						if (newLeader != null)
 						{
-							CharacterGuildService.Save(dbContext, newLeader.CharacterID, newLeader.GuildID, GuildRank.Leader);
+							CharacterGuildService.Save(dbContext, newLeader.CharacterID, newLeader.GuildID, GuildRank.Leader, newLeader.Location);
 						}
 					}
 				}
