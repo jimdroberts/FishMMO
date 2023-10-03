@@ -33,16 +33,13 @@ namespace FishMMO.Server.Services
 			return false;
 		}
 
-		/// <summary>
-		/// KeepData is automatically true... This means we don't actually delete anything. Deleted is simply set to true just incase we need to reinstate a character..
-		/// </summary>
-		public static void Delete(ServerDbContext dbContext, long characterID, bool keepData = true)
+		public static void Delete(ServerDbContext dbContext, long guildID)
 		{
-			/*if (!keepData)
+			var guildEntity = dbContext.Guilds.FirstOrDefault(a => a.ID == guildID);
+			if (guildEntity != null)
 			{
-				var achievements = dbContext.CharacterAchievements.Where(c => c.CharacterID == characterID);
-				dbContext.CharacterAchievements.RemoveRange(achievements);
-			}*/
+				dbContext.Guilds.Remove(guildEntity);
+			}
 		}
 
 		/// <summary>

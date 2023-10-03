@@ -1,59 +1,53 @@
 ﻿using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 
 namespace FishMMO.Client
 {
 	public class UIGuild : UIControl
 	{
+		public TMP_Text GuildLabel;
 		public RectTransform GuildMemberParent;
 		public UIGuildMember GuildMemberPrefab;
-		public Dictionary<long, UIGuildMember> Members;
+		public Dictionary<long, UIGuildMember> Members = new Dictionary<long, UIGuildMember>();
 
 		public override void OnStarting()
 		{
-			Character character = Character.localCharacter;
-			if (character != null)
-			{
-				character.GuildController.OnGuildCreated += OnGuildCreated;
-				character.GuildController.OnLeaveGuild += OnLeaveGuild;
-				character.GuildController.OnAddMember += OnGuildAddMember;
-				character.GuildController.OnRemoveMember += OnGuildRemoveMember;
-			}
 		}
 
 		public override void OnDestroying()
 		{
-			Character character = Character.localCharacter;
-			if (character != null)
-			{
-				character.GuildController.OnGuildCreated -= OnGuildCreated;
-				character.GuildController.OnLeaveGuild -= OnLeaveGuild;
-				character.GuildController.OnAddMember -= OnGuildAddMember;
-				character.GuildController.OnRemoveMember -= OnGuildRemoveMember;
-			}
 		}
 
-		public void OnGuildCreated()
+		public void OnGuildCreated(string location)
 		{
 			Character character = Character.localCharacter;
 			if (character != null && GuildMemberPrefab != null && GuildMemberParent != null)
 			{
-				UIGuildMember partyMember = Instantiate(GuildMemberPrefab, GuildMemberParent);
-				if (partyMember != null)
+				if (GuildLabel != null)
 				{
-					if (partyMember.Name != null)
-						partyMember.Name.text = character.CharacterName;
-					if (partyMember.Rank != null)
-						partyMember.Rank.text = "Rank: " + GuildRank.Leader.ToString();
-					if (partyMember.Location != null)
-						partyMember.Location.text = "Location: " + character.gameObject.scene.name;
-					Members.Add(character.ID, partyMember);
+					GuildLabel.text = character.GuildController.Name;
+				}
+				UIGuildMember member = Instantiate(GuildMemberPrefab, GuildMemberParent);
+				if (member != null)
+				{
+					if (member.Name != null)
+						member.Name.text = "Name: " + character.CharacterName;
+					if (member.Rank != null)
+						member.Rank.text = "Rank: " + character.GuildController.Rank.ToString();
+					if (member.Location != null)
+						member.Location.text = "Location: " + location;
+					Members.Add(character.ID, member);
 				}
 			}
 		}
 
 		public void OnLeaveGuild()
 		{
+			if (GuildLabel != null)
+			{
+				GuildLabel.text = "Guild";
+			}
 			foreach (UIGuildMember member in new List<UIGuildMember>(Members.Values))
 			{
 				Destroy(member.gameObject);
@@ -65,16 +59,28 @@ namespace FishMMO.Client
 		{
 			if (GuildMemberPrefab != null && GuildMemberParent != null)
 			{
-				UIGuildMember partyMember = Instantiate(GuildMemberPrefab, GuildMemberParent);
-				if (partyMember != null)
+				if (Members.TryGetValue(characterID, out UIGuildMember guildMember))
 				{
-					if (partyMember.Name != null)
-						partyMember.Name.text = characterID.ToString();
-					if (partyMember.Rank != null)
-						partyMember.Rank.text = "Rank: " + rank.ToString();
-					if (partyMember.Location != null)
-						partyMember.Location.text = "Location: " + location;
-					Members.Add(characterID, partyMember);
+					if (guildMember.Name != null)
+						guildMember.Name.text = characterID.ToString();
+					if (guildMember.Rank != null)
+						guildMember.Rank.text = "Rank: " + rank.ToString();
+					if (guildMember.Location != null)
+						guildMember.Location.text = "Location: " + location;
+				}
+				else
+				{
+					UIGuildMember member = Instantiate(GuildMemberPrefab, GuildMemberParent);
+					if (member != null)
+					{
+						if (member.Name != null)
+							member.Name.text = characterID.ToString();
+						if (member.Rank != null)
+							member.Rank.text = "Rank: " + rank.ToString();
+						if (member.Location != null)
+							member.Location.text = "Location: " + location;
+						Members.Add(characterID, member);
+					}
 				}
 			}
 		}
@@ -91,7 +97,7 @@ namespace FishMMO.Client
 		public void OnButtonCreateGuild()
 		{
 			Character character = Character.localCharacter;
-			if (character != null && character.PartyController.Current == null && Client.NetworkManager.IsClient)
+			if (character != null && character.GuildController.ID < 1 && Client.NetworkManager.IsClient)
 			{
 				if (UIManager.TryGet("UIInputConfirmationTooltip", out UIInputConfirmationTooltip tooltip))
 				{
@@ -109,7 +115,7 @@ namespace FishMMO.Client
 		public void OnButtonLeaveGuild()
 		{
 			Character character = Character.localCharacter;
-			if (character != null && character.PartyController.Current != null && Client.NetworkManager.IsClient)
+			if (character != null && character.GuildController.ID > 0 && Client.NetworkManager.IsClient)
 			{
 				if (UIManager.TryGet("UIConfirmationTooltip", out UIConfirmationTooltip tooltip))
 				{
@@ -118,14 +124,13 @@ namespace FishMMO.Client
 						Client.NetworkManager.ClientManager.Broadcast(new GuildLeaveBroadcast());
 					}, null);
 				}
-				
 			}
 		}
 
 		public void OnButtonInviteToGuild()
 		{
 			Character character = Character.localCharacter;
-			if (character != null && character.PartyController.Current != null && Client.NetworkManager.IsClient)
+			if (character != null && character.GuildController.ID > 0 && Client.NetworkManager.IsClient)
 			{
 				if (character.TargetController.Current.Target != null)
 				{

@@ -1,7 +1,9 @@
 ﻿using UnityEngine;
 using FishNet.Object;
-using System;
 using System.Collections.Generic;
+#if !UNITY_SERVER
+using FishMMO.Client;
+#endif
 
 /// <summary>
 /// Character guild controller.
@@ -16,13 +18,6 @@ public class GuildController : NetworkBehaviour
 	public GuildRank Rank = GuildRank.None;
 	public readonly HashSet<long> Officers = new HashSet<long>();
 	public readonly HashSet<long> Members = new HashSet<long>();
-
-	public event Action OnGuildCreated;
-	public event Action OnLeaveGuild;
-
-	public event Action<long, GuildRank, string> OnAddMember;
-	public event Action<long, GuildRank> OnUpdateMember;
-	public event Action<long> OnRemoveMember;
 
 	public override void OnStartClient()
 	{
@@ -65,7 +60,13 @@ public class GuildController : NetworkBehaviour
 		ID = msg.ID;
 		Name = msg.guildName;
 		Rank = GuildRank.Leader;
-		OnGuildCreated?.Invoke();
+
+#if !UNITY_SERVER
+		if (UIManager.TryGet("UIGuild", out UIGuild uiGuild))
+		{
+			uiGuild.OnGuildCreated(msg.location);
+		}
+#endif
 	}
 
 	/// <summary>
@@ -86,7 +87,12 @@ public class GuildController : NetworkBehaviour
 	public void OnClientGuildNewMemberBroadcastReceived(GuildNewMemberBroadcast msg)
 	{
 		// update our Guild list with the new Guild member
-		OnAddMember?.Invoke(msg.memberID, msg.rank, msg.location);
+#if !UNITY_SERVER
+		if (UIManager.TryGet("UIGuild", out UIGuild uiGuild))
+		{
+			uiGuild.OnGuildAddMember(msg.memberID, msg.rank, msg.location);
+		}
+#endif
 	}
 
 	/// <summary>
@@ -94,7 +100,12 @@ public class GuildController : NetworkBehaviour
 	/// </summary>
 	public void OnClientGuildUpdateMemberBroadcastReceived(GuildUpdateMemberBroadcast msg)
 	{
-		OnUpdateMember?.Invoke(msg.memberID, msg.rank);
+#if !UNITY_SERVER
+		if (UIManager.TryGet("UIGuild", out UIGuild uiGuild))
+		{
+			uiGuild.OnGuildAddMember(msg.memberID, msg.rank, msg.location);
+		}
+#endif
 	}
 
 	/// <summary>
@@ -107,7 +118,12 @@ public class GuildController : NetworkBehaviour
 		Rank = GuildRank.None;
 		Officers.Clear();
 		Members.Clear();
-		OnLeaveGuild?.Invoke();
+#if !UNITY_SERVER
+		if (UIManager.TryGet("UIGuild", out UIGuild uiGuild))
+		{
+			uiGuild.OnLeaveGuild();
+		}
+#endif
 	}
 
 	/// <summary>
@@ -120,7 +136,12 @@ public class GuildController : NetworkBehaviour
 			if (!Members.Contains(member.memberID))
 			{
 				Members.Add(member.memberID);
-				OnAddMember?.Invoke(member.memberID, member.rank, member.location);
+#if !UNITY_SERVER
+				if (UIManager.TryGet("UIGuild", out UIGuild uiGuild))
+				{
+					uiGuild.OnGuildAddMember(member.memberID, member.rank, member.location);
+				}
+#endif
 			}
 			if (member.rank == GuildRank.Officer &&
 				!Officers.Contains(member.memberID))
@@ -140,7 +161,12 @@ public class GuildController : NetworkBehaviour
 			if (Members.Contains(memberID))
 			{
 				Members.Remove(memberID);
-				OnRemoveMember?.Invoke(memberID);
+#if !UNITY_SERVER
+				if (UIManager.TryGet("UIGuild", out UIGuild uiGuild))
+				{
+					uiGuild.OnGuildRemoveMember(memberID);
+				}
+#endif
 			}
 			Officers.Remove(memberID);
 		}

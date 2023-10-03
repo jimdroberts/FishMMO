@@ -39,7 +39,7 @@ namespace FishMMO.Client
 		public void OnClick_Accept()
 		{
 			if (InputField != null &&
-				string.IsNullOrWhiteSpace(InputField.text))
+				!string.IsNullOrWhiteSpace(InputField.text))
 			{
 				OnAccept?.Invoke(InputField.text);
 			}

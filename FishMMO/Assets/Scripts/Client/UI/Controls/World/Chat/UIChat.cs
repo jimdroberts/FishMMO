@@ -1,7 +1,7 @@
-﻿using UnityEngine;
+﻿using FishNet.Transporting;
+using UnityEngine;
 using System;
 using System.Collections.Generic;
-using FishNet.Transporting;
 
 namespace FishMMO.Client
 {

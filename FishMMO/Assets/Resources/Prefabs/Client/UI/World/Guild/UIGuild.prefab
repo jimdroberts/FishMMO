@@ -973,6 +973,7 @@ MonoBehaviour:
   HasFocus: 0
   CanDrag: 1
   ClampToScreen: 1
+  GuildLabel: {fileID: 217768865650127032}
   GuildMemberParent: {fileID: 3273730304643434056}
   GuildMemberPrefab: {fileID: -6152214197743031848, guid: 4587f23e1ee927844ba6de2d53b731c2,
     type: 3}
@@ -1870,7 +1871,7 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 5182339464182556754}
   m_HandleRect: {fileID: 8798607900557553766}
   m_Direction: 0
-  m_Value: 1
+  m_Value: 0
   m_Size: 1
   m_NumberOfSteps: 0
   m_OnValueChanged:

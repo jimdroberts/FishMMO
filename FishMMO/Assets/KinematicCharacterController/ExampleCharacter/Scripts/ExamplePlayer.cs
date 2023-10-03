@@ -36,12 +36,23 @@ namespace KinematicCharacterController.Examples
 			KinematicCharacterSystem.Settings.AutoSimulation = false;
 
 			//Quang: Subscribe to tick event, this will replace FixedUpdate
-			InstanceFinder.TimeManager.OnTick += TimeManager_OnTick;
+			if (Client.TimeManager != null)
+			{
+				Client.TimeManager.OnTick += TimeManager_OnTick;
+			}
+			else if(InstanceFinder.TimeManager != null)
+			{
+				InstanceFinder.TimeManager.OnTick += TimeManager_OnTick;
+			}
 		}
 
 		void OnDestroy()
 		{
-			if (InstanceFinder.TimeManager != null)
+			if (Client.TimeManager != null)
+			{
+				Client.TimeManager.OnTick -= TimeManager_OnTick;
+			}
+			else if (InstanceFinder.TimeManager != null)
 			{
 				InstanceFinder.TimeManager.OnTick -= TimeManager_OnTick;
 			}

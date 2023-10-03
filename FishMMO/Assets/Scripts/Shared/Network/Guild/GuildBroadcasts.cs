@@ -5,6 +5,7 @@ public struct GuildCreateBroadcast : IBroadcast
 {
 	public long ID;
 	public string guildName;
+	public string location;
 }
 
 public struct GuildInviteBroadcast : IBroadcast
@@ -30,6 +31,7 @@ public struct GuildUpdateMemberBroadcast : IBroadcast
 {
 	public long memberID;
 	public GuildRank rank;
+	public string location;
 }
 
 public struct GuildLeaveBroadcast : IBroadcast

@@ -20,7 +20,7 @@ namespace FishMMO.Server
 		private float nextPump = 0.0f;
 
 		public int MaxGuildSize = 100;
-		public int MaxGuildNameLength = 32;
+		public int MaxGuildNameLength = 64;
 		[Tooltip("The server guild update pump rate limit in seconds.")]
 		public float UpdatePumpRate = 5.0f;
 		public int UpdateFetchCount = 100;
@@ -215,6 +215,9 @@ namespace FishMMO.Server
 				return;
 			}
 
+			// remove white space
+			msg.guildName = msg.guildName.Trim();
+
 			if (!GuildNameValid(msg.guildName))
 			{
 				// we should tell the player the guild name is not valid
@@ -240,6 +243,7 @@ namespace FishMMO.Server
 				{
 					ID = newGuild.ID,
 					guildName = newGuild.Name,
+					location = guildController.gameObject.scene.name,
 				});
 			}
 		}
@@ -368,11 +372,13 @@ namespace FishMMO.Server
 			if (members != null &&
 				members.Count > 0)
 			{
+				int remainingCount = members.Count - 1;
+
 				List<CharacterGuildEntity> remainingMembers = new List<CharacterGuildEntity>();
 				if (guildController.Rank == GuildRank.Leader)
 				{
 					// are there any other members in the guild? if so we transfer leadership to officers first and then members
-					if (members.Count - 1 > 0)
+					if (remainingCount > 0)
 					{
 						List<CharacterGuildEntity> officers = new List<CharacterGuildEntity>();
 
@@ -387,18 +393,22 @@ namespace FishMMO.Server
 							{
 								officers.Add(member);
 							}
+							else
+							{
+								remainingMembers.Add(member);
+							}
 						}
 
 						CharacterGuildEntity newLeader = null;
-						if (officers.Count < 1)
-						{
-							// pick a random member
-							newLeader = remainingMembers[UnityEngine.Random.Range(0, remainingMembers.Count)];
-						}
-						else
+						if (officers.Count > 0)
 						{
 							// pick a random officer
 							newLeader = officers[UnityEngine.Random.Range(0, officers.Count)];
+						}
+						else
+						{
+							// pick a random member
+							newLeader = remainingMembers[UnityEngine.Random.Range(0, remainingMembers.Count)];
 						}
 
 						// update the guild leader status in the database
@@ -409,17 +419,22 @@ namespace FishMMO.Server
 					}
 				}
 
-				long removeID = guildController.ID;
+				if (remainingCount < 1)
+				{
+					// delete the guild
+					GuildService.Delete(dbContext, guildController.ID);
+				}
+				else
+				{
+					// tell the other servers to update their guild lists
+					GuildUpdateService.Save(dbContext, guildController.ID);
+				}
 
 				// remove the guild member
 				guildController.ID = 0;
 				guildController.Name = "";
 				guildController.Rank = GuildRank.None;
-
-				// tell the other servers to update their guild lists
-				GuildUpdateService.Save(dbContext, removeID);
-
-				CharacterGuildService.Save(dbContext, guildController.Character);
+				CharacterGuildService.Delete(dbContext, guildController.ID, guildController.Character.ID);
 				dbContext.SaveChanges();
 
 				// tell character that they left the guild immediately, other clients will catch up with the GuildUpdate pass

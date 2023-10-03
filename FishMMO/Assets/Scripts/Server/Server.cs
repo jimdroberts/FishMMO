@@ -248,7 +248,7 @@ namespace FishMMO.Server
 			Transport transport = NetworkManager.TransportManager.Transport;
 			if (transport != null)
 			{
-				Debug.Log(serverTypeName + transport.GetServerBindAddress(IPAddressType.IPv4) + ":" + transport.GetPort() + " - " + serverState);
+				Debug.Log(serverTypeName + " " + transport.GetServerBindAddress(IPAddressType.IPv4) + ":" + transport.GetPort() + " - " + serverState);
 			}
 		}
 

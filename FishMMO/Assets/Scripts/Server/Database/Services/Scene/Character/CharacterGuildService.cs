@@ -20,7 +20,7 @@ namespace FishMMO.Server.Services
 		/// <summary>
 		/// Saves a CharacterGuildEntity to the database.
 		/// </summary>
-		public static bool Save(ServerDbContext dbContext, long characterID, long guildID, GuildRank rank, string location)
+		public static void Save(ServerDbContext dbContext, long characterID, long guildID, GuildRank rank, string location)
 		{
 			var characterGuildEntity = dbContext.CharacterGuilds.FirstOrDefault(a => a.CharacterID == characterID);
 			if (characterGuildEntity == null)
@@ -33,22 +33,19 @@ namespace FishMMO.Server.Services
 					Location = location,
 				};
 				dbContext.CharacterGuilds.Add(characterGuildEntity);
-				return true;
 			}
 			else
 			{
-				characterGuildEntity.CharacterID = characterID;
 				characterGuildEntity.GuildID = guildID;
 				characterGuildEntity.Rank = (byte)rank;
 				characterGuildEntity.Location = location;
 			}
-			return false;
 		}
 
 		/// <summary>
 		/// Saves a CharacterGuildEntity to the database.
 		/// </summary>
-		public static bool Save(ServerDbContext dbContext, Character character)
+		public static void Save(ServerDbContext dbContext, Character character)
 		{
 			var characterGuildEntity = dbContext.CharacterGuilds.FirstOrDefault(a => a.CharacterID == character.ID);
 			if (characterGuildEntity == null)
@@ -61,14 +58,25 @@ namespace FishMMO.Server.Services
 					Location = character.gameObject.scene.name,
 				};
 				dbContext.CharacterGuilds.Add(characterGuildEntity);
-				return true;
 			}
 			else
 			{
-				characterGuildEntity.CharacterID = character.ID;
 				characterGuildEntity.GuildID = character.GuildController.ID;
 				characterGuildEntity.Rank = (byte)character.GuildController.Rank;
 				characterGuildEntity.Location = character.gameObject.scene.name;
+			}
+		}
+
+		/// <summary>
+		/// Removes a character from their guild.
+		/// </summary>
+		public static bool Delete(ServerDbContext dbContext, GuildRank kickerRank, long guildID, long memberID)
+		{
+			var characterGuildEntity = dbContext.CharacterGuilds.FirstOrDefault(a => a.GuildID == guildID && a.CharacterID == memberID && a.Rank < (byte)kickerRank);
+			if (characterGuildEntity != null)
+			{
+				dbContext.CharacterGuilds.Remove(characterGuildEntity);
+				return true;
 			}
 			return false;
 		}
@@ -76,21 +84,12 @@ namespace FishMMO.Server.Services
 		/// <summary>
 		/// Removes a character from their guild.
 		/// </summary>
-		public static bool Delete(ServerDbContext dbContext, GuildRank kickerRank, long guildID, long memberID, bool keepData = true)
+		public static bool Delete(ServerDbContext dbContext, long guildID, long memberID)
 		{
-			var characterGuildEntity = dbContext.CharacterGuilds.FirstOrDefault(a => a.GuildID == guildID && a.CharacterID == memberID && a.Rank < (byte)kickerRank);
+			var characterGuildEntity = dbContext.CharacterGuilds.FirstOrDefault(a => a.GuildID == guildID && a.CharacterID == memberID);
 			if (characterGuildEntity != null)
 			{
-				if (!keepData)
-				{
-					dbContext.CharacterGuilds.Remove(characterGuildEntity);
-				}
-				else
-				{
-					characterGuildEntity.GuildID = 0;
-					characterGuildEntity.Rank = (byte)GuildRank.None;
-					characterGuildEntity.Location = "";
-				}
+				dbContext.CharacterGuilds.Remove(characterGuildEntity);
 				return true;
 			}
 			return false;
