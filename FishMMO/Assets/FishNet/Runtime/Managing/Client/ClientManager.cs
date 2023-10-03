@@ -512,9 +512,9 @@ namespace FishNet.Managing.Client
                 }
                 else
                 {
-                    // Intended behaviour in FishMMO.
-                    //networkManager.LogError($"Unable to lookup LocalConnection for {connectionId} as host.");
-                    Connection = new NetworkConnection(networkManager, connectionId, GetTransportIndex(), false);
+					// ----------Intended behaviour in FishMMO----------
+					//networkManager.LogError($"Unable to lookup LocalConnection for {connectionId} as host.");
+					Connection = new NetworkConnection(networkManager, connectionId, GetTransportIndex(), false);
                 }
             }
 
