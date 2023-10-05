@@ -9,17 +9,22 @@ namespace FishMMO.Server.Services
 	public class ChatService
 	{
 		/// <summary>
-		/// Save a character Achievements to the database.
+		/// Save a  chat message to the database.
 		/// </summary>
-		public static void Save(ServerDbContext dbContext, long characterID, long worldServerID, long sceneServerID, byte channel, string message)
+		public static void Save(ServerDbContext dbContext, long characterID, long worldServerID, long sceneServerID, ChatChannel channel, string message)
 		{
+			// we don't process local channels, say and region are ignored here
+			if (channel == ChatChannel.Say ||
+				channel == ChatChannel.Region)
+				return;
+
 			dbContext.Chat.Add(new ChatEntity()
 			{
 				CharacterID = characterID,
 				WorldServerID = worldServerID,
 				SceneServerID = sceneServerID,
 				TimeCreated = DateTime.UtcNow,
-				Channel = channel,
+				Channel = (byte)channel,
 				Message = message,
 			});
 		}
@@ -32,7 +37,7 @@ namespace FishMMO.Server.Services
 		}
 
 		/// <summary>
-		/// Load character chat messages from the database.
+		/// Load chat messages from the database.
 		/// </summary>
 		public static List<ChatEntity> Fetch(ServerDbContext dbContext, DateTime lastFetch, long lastPosition, int amount, /*long worldServerID,*/ long sceneServerID)
 		{
@@ -41,9 +46,6 @@ namespace FishMMO.Server.Services
 				.ThenBy(b => b.ID)
 				.Where(b => b.TimeCreated >= lastFetch &&
 							b.ID > lastPosition &&
-							// we don't process local channels, say and region are ignored here
-							b.Channel != (byte)ChatChannel.Say &&
-							b.Channel != (byte)ChatChannel.Region &&
 							// we don't process local tell, guild, and party messages
 							!((b.Channel == (byte)ChatChannel.Tell || b.Channel == (byte)ChatChannel.Guild || b.Channel == (byte)ChatChannel.Party) && b.SceneServerID == sceneServerID)
 							// we don't process other worlds global chat

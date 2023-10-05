@@ -3,6 +3,7 @@ using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using UnityEngine;
 using FishMMO.Server.Services;
 using FishMMO_DB.Entities;
@@ -187,9 +188,11 @@ namespace FishMMO.Server
 			}
 		}
 
-		public bool GuildNameValid(string name)
+		public virtual bool IsAllowedGuildName(string guildName)
 		{
-			return !string.IsNullOrEmpty(name) && name.Length < MaxGuildNameLength;
+			return !string.IsNullOrWhiteSpace(guildName) &&
+				   guildName.Length <= MaxGuildNameLength &&
+				   Regex.IsMatch(guildName, @"[^a-zA-Z\s]");
 		}
 
 		public void RemovePending(long id)
@@ -218,7 +221,7 @@ namespace FishMMO.Server
 			// remove white space
 			msg.guildName = msg.guildName.Trim();
 
-			if (!GuildNameValid(msg.guildName))
+			if (!IsAllowedGuildName(msg.guildName))
 			{
 				// we should tell the player the guild name is not valid
 				return;

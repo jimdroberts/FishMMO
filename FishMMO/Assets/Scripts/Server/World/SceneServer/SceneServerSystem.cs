@@ -1,7 +1,6 @@
 ﻿using FishNet.Transporting;
 using FishNet.Managing.Scened;
 using UnityEngine;
-using System;
 using System.Collections.Generic;
 using FishNet.Connection;
 using FishMMO.Server.Services;
@@ -51,7 +50,7 @@ namespace FishMMO.Server
 
 			if (args.ConnectionState == LocalConnectionState.Started)
 			{
-				if (TryGetServerIPv4AddressFromTransport(out ServerAddress server))
+				if (Server.TryGetServerIPAddress(out ServerAddress server))
 				{
 					int characterCount = Server.CharacterSystem.ConnectionCharacters.Count;
 
@@ -73,22 +72,6 @@ namespace FishMMO.Server
 					dbContext.SaveChanges();
 				}
 			}
-		}
-
-		private bool TryGetServerIPv4AddressFromTransport(out ServerAddress address)
-		{
-			Transport transport = Server.NetworkManager.TransportManager.Transport;
-			if (transport == null)
-			{
-				address = default;
-				return false;
-			}
-			address = new ServerAddress()
-			{
-				address = transport.GetServerBindAddress(IPAddressType.IPv4),
-				port = transport.GetPort(),
-			};
-			return true;
 		}
 
 		void LateUpdate()

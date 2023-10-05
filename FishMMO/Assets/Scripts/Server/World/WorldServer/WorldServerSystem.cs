@@ -36,7 +36,7 @@ namespace FishMMO.Server
 
 			if (args.ConnectionState == LocalConnectionState.Started)
 			{
-				if (TryGetServerIPv4AddressFromTransport(out ServerAddress server))
+				if (Server.TryGetServerIPAddress(out ServerAddress server))
 				{
 					int characterCount = Server.WorldSceneSystem.ConnectionCount;
 
@@ -89,38 +89,6 @@ namespace FishMMO.Server
 				WorldServerService.Delete(dbContext, id);
 				dbContext.SaveChanges();
 			}
-		}
-
-		private bool TryGetServerIPv4AddressFromTransport(out ServerAddress address)
-		{
-			Transport transport = Server.NetworkManager.TransportManager.Transport;
-			if (transport == null)
-			{
-				address = default;
-				return false;
-			}
-			address = new ServerAddress()
-			{
-				address = transport.GetServerBindAddress(IPAddressType.IPv4),
-				port = transport.GetPort(),
-			};
-			return true;
-		}
-
-		private bool TryGetServerIPv6AddressFromTransport(out ServerAddress address)
-		{
-			Transport transport = Server.NetworkManager.TransportManager.Transport;
-			if (transport == null)
-			{
-				address = default;
-				return false;
-			}
-			address = new ServerAddress()
-			{
-				address = transport.GetServerBindAddress(IPAddressType.IPv6),
-				port = transport.GetPort(),
-			};
-			return true;
 		}
 	}
 }

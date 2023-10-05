@@ -147,7 +147,7 @@ namespace FishMMO.Client
 				ChatBroadcast message = new ChatBroadcast() { text = input };
 				// send the message to the server
 				Client.NetworkManager.ClientManager.Broadcast(message);
-				// display the message locally
+				// display the message locally - this can duplicate your message if you're not careful!
 				ParseLocalMessage(character, message);
 			}
 			InputField.text = "";
@@ -281,26 +281,18 @@ namespace FishMMO.Client
 
 		public void OnWorldChat(Character sender, ChatBroadcast msg)
 		{
-			// fake it
-			OnClientChatMessageReceived(msg);
 		}
 
 		public void OnRegionChat(Character sender, ChatBroadcast msg)
 		{
-			// fake it
-			OnClientChatMessageReceived(msg);
 		}
 
 		public void OnPartyChat(Character sender, ChatBroadcast msg)
 		{
-			// fake it
-			OnClientChatMessageReceived(msg);
 		}
 
 		public void OnGuildChat(Character sender, ChatBroadcast msg)
 		{
-			// fake it
-			OnClientChatMessageReceived(msg);
 		}
 
 		public void OnTellChat(Character sender, ChatBroadcast msg)
@@ -331,14 +323,10 @@ namespace FishMMO.Client
 
 		public void OnTradeChat(Character sender, ChatBroadcast msg)
 		{
-			// fake it
-			OnClientChatMessageReceived(msg);
 		}
 
 		public void OnSayChat(Character sender, ChatBroadcast msg)
 		{
-			// fake it
-			OnClientChatMessageReceived(msg);
 		}
 	}
 }
