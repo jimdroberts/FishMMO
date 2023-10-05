@@ -188,57 +188,87 @@ namespace FishMMO.Server
 			ChatCommand command = ChatHelper.ParseChatCommand(cmd, ref msg.channel);
 			if (command != null)
 			{
-				// add the guild id for parsing
-				if (msg.channel == ChatChannel.Guild)
+				switch (msg.channel)
 				{
-					if (sender.GuildController == null)
-					{
-						return;
-					}
+					case ChatChannel.Guild:
+						if (sender.GuildController == null || sender.GuildController.ID < 1)
+						{
+							return;
+						}
 
-					// add the senders name and guild ID
-					msg.text = sender.CharacterName + ": " + sender.GuildController.ID + " " + msg.text;
+						// add the senders name and guild ID
+						msg.text = sender.CharacterName + ": " + sender.GuildController.ID + " " + msg.text;
+						break;
+					case ChatChannel.Party:
+						if (sender.PartyController == null || sender.PartyController.Current.ID < 1)
+						{
+							return;
+						}
+
+						// add the senders name and party ID
+						msg.text = sender.CharacterName + ": " + sender.PartyController.Current.ID + " " + msg.text;
+						break;
+					case ChatChannel.Trade:
+					case ChatChannel.World:
+						// add the senders world id
+						msg.text = sender.CharacterName + ": " + sender.WorldServerID + " " + msg.text;
+						break;
+					default:
+						// add the senders name
+						msg.text = sender.CharacterName + ": " + msg.text;
+						break;
 				}
-				// add the party id for parsing
-				else if (msg.channel == ChatChannel.Party)
+
+				if (command.Invoke(sender, msg))
 				{
-					if (sender.PartyController == null)
-					{
-						return;
-					}
-
-					// add the senders name and party ID
-					msg.text = sender.CharacterName + ": " + sender.PartyController.Current.ID + " " + msg.text;
+					// write the parsed message to the database
+					using var dbContext = Server.DbContextFactory.CreateDbContext();
+					ChatService.Save(dbContext, sender.ID, sender.WorldServerID, Server.SceneServerSystem.ID, msg.channel, msg.text);
+					dbContext.SaveChanges();
 				}
-				else
-				{
-					// add the senders name
-					msg.text = sender.CharacterName + ": " + msg.text;
-				}
-
-				command?.Invoke(sender, msg);
-
-				// write the parsed message to the database
-				using var dbContext = Server.DbContextFactory.CreateDbContext();
-				ChatService.Save(dbContext, sender.ID, sender.WorldServerID, Server.SceneServerSystem.ID, msg.channel, msg.text);
-				dbContext.SaveChanges();
 			}
 		}
 
-		public void OnWorldChat(Character sender, ChatBroadcast msg)
+		public bool OnWorldChat(Character sender, ChatBroadcast msg)
 		{
-			// send to all connection characters
-			foreach (NetworkConnection activeConnection in new List<NetworkConnection>(Server.CharacterSystem.ConnectionCharacters.Keys))
+			// get the sender
+			string senderName = ChatHelper.GetWordAndTrimmed(msg.text, out string trimmed);
+			if (string.IsNullOrWhiteSpace(senderName))
 			{
-				activeConnection.Broadcast(msg);
+				// no sender in the tell message
+				return false;
 			}
+
+			// get the world ID
+			string wid = ChatHelper.GetWordAndTrimmed(trimmed, out trimmed);
+			if (string.IsNullOrWhiteSpace(wid) || !long.TryParse(wid, out long worldID))
+			{
+				// no worldID in the message
+				return false;
+			}
+
+			ChatBroadcast newMsg = new ChatBroadcast()
+			{
+				channel = msg.channel,
+				text = senderName + " " + trimmed,
+			};
+			if (Server.CharacterSystem != null &&
+				Server.CharacterSystem.CharactersByWorld.TryGetValue(worldID, out Dictionary<long, Character> characters))
+			{
+				// send to all world characters
+				foreach (Character character in new List<Character>(characters.Values))
+				{
+					character.Owner.Broadcast(newMsg);
+				}
+			}
+			return true;
 		}
 
-		public void OnRegionChat(Character sender, ChatBroadcast msg)
+		public bool OnRegionChat(Character sender, ChatBroadcast msg)
 		{
 			if (sender == null)
 			{
-				return;
+				return false;
 			}
 			// get the senders observed scene
 			UnityEngine.SceneManagement.Scene scene = UnityEngine.SceneManagement.SceneManager.GetSceneByName(sender.SceneName);
@@ -252,9 +282,10 @@ namespace FishMMO.Server
 					}
 				}
 			}
+			return false; // we return false here so the message is not written to the database
 		}
 
-		public void OnPartyChat(Character sender, ChatBroadcast msg)
+		public bool OnPartyChat(Character sender, ChatBroadcast msg)
 		{
 			/*if (Server.DbContextFactory == null)
 			{
@@ -292,13 +323,14 @@ namespace FishMMO.Server
 					});
 				}
 			}*/
+			return true;
 		}
 
-		public void OnGuildChat(Character sender, ChatBroadcast msg)
+		public bool OnGuildChat(Character sender, ChatBroadcast msg)
 		{
 			if (Server.DbContextFactory == null)
 			{
-				return;
+				return false;
 			}
 
 			// get the sender
@@ -306,7 +338,7 @@ namespace FishMMO.Server
 			if (string.IsNullOrWhiteSpace(senderName))
 			{
 				// no sender in the tell message
-				return;
+				return false;
 			}
 
 			// get the guild ID
@@ -314,28 +346,30 @@ namespace FishMMO.Server
 			if (string.IsNullOrWhiteSpace(gid) || !long.TryParse(gid, out long guildID))
 			{
 				// no guildID in the message
-				return;
+				return false;
 			}
 
 			// get all the member data so we can broadcast
 			using var dbContext = Server.DbContextFactory.CreateDbContext();
 			List<CharacterGuildEntity> dbMembers = CharacterGuildService.Members(dbContext, guildID);
 
+			ChatBroadcast newMsg = new ChatBroadcast()
+			{
+				channel = msg.channel,
+				text = senderName + " " + trimmed,
+			};
 			foreach (CharacterGuildEntity member in dbMembers)
 			{
 				if (Server.CharacterSystem.CharactersByID.TryGetValue(member.CharacterID, out Character character))
 				{
 					// broadcast to guild member...
-					character.Owner.Broadcast(new ChatBroadcast()
-					{
-						channel = msg.channel,
-						text = senderName + trimmed,
-					});
+					character.Owner.Broadcast(newMsg);
 				}
 			}
+			return true;
 		}
 
-		public void OnTellChat(Character sender, ChatBroadcast msg)
+		public bool OnTellChat(Character sender, ChatBroadcast msg)
 		{
 			// get the sender
 			string senderName = ChatHelper.GetWordAndTrimmed(msg.text, out string trimmed);
@@ -344,7 +378,7 @@ namespace FishMMO.Server
 			if (string.IsNullOrWhiteSpace(senderName))
 			{
 				// no sender in the tell message
-				return;
+				return false;
 			}
 			string senderLower = senderName.ToLower();
 
@@ -353,7 +387,7 @@ namespace FishMMO.Server
 			if (string.IsNullOrWhiteSpace(targetName))
 			{
 				// no target in the tell message
-				return;
+				return false;
 			}
 			string targetLower = targetName.ToLower();
 
@@ -366,7 +400,7 @@ namespace FishMMO.Server
 					channel = msg.channel,
 					text = ChatHelper.ERROR_MESSAGE_SELF + " ",
 				});
-				return;
+				return false;
 			}
 
 			// if the sender exists then we can send a return message if the character is valid
@@ -390,7 +424,7 @@ namespace FishMMO.Server
 						channel = msg.channel,
 						text = ChatHelper.ERROR_TARGET_OFFLINE + " " + targetName,
 					});
-					return;
+					return false;
 				}
 			}
  
@@ -404,18 +438,45 @@ namespace FishMMO.Server
 					text = "[From:" + senderName + "]: " + trimmed,
 				});
 			}
+			return true;
 		}
 
-		public void OnTradeChat(Character sender, ChatBroadcast msg)
+		public bool OnTradeChat(Character sender, ChatBroadcast msg)
 		{
-			// send to all connected characters
-			foreach (NetworkConnection activeConnection in new List<NetworkConnection>(Server.CharacterSystem.ConnectionCharacters.Keys))
+			// get the sender
+			string senderName = ChatHelper.GetWordAndTrimmed(msg.text, out string trimmed);
+			if (string.IsNullOrWhiteSpace(senderName))
 			{
-				activeConnection.Broadcast(msg);
+				// no sender in the tell message
+				return false;
 			}
+
+			// get the world ID
+			string wid = ChatHelper.GetWordAndTrimmed(trimmed, out trimmed);
+			if (string.IsNullOrWhiteSpace(wid) || !long.TryParse(wid, out long worldID))
+			{
+				// no worldID in the message
+				return false;
+			}
+
+			ChatBroadcast newMsg = new ChatBroadcast()
+			{
+				channel = msg.channel,
+				text = senderName + " " + trimmed,
+			};
+			if (Server.CharacterSystem != null &&
+				Server.CharacterSystem.CharactersByWorld.TryGetValue(worldID, out Dictionary<long, Character> characters))
+			{
+				// send to all world characters
+				foreach (Character character in new List<Character>(characters.Values))
+				{
+					character.Owner.Broadcast(newMsg);
+				}
+			}
+			return true;
 		}
 
-		public void OnSayChat(Character sender, ChatBroadcast msg)
+		public bool OnSayChat(Character sender, ChatBroadcast msg)
 		{
 			if (sender != null && sender.Observers != null)
 			{
@@ -425,6 +486,7 @@ namespace FishMMO.Server
 					obsConnection.Broadcast(msg);
 				}
 			}
+			return false; // we return false here so the message is not written to the database
 		}
 
 		/// <summary>

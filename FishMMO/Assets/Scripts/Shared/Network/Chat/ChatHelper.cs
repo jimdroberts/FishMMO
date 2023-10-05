@@ -2,7 +2,10 @@
 using System;
 using System.Collections.Generic;
 
-public delegate void ChatCommand(Character character, ChatBroadcast msg);
+/// <summary>
+/// Return true if it should write the chat message to the database.
+/// </summary>
+public delegate bool ChatCommand(Character character, ChatBroadcast msg);
 public struct ChatCommandDetails
 {
 	public ChatChannel Channel;

@@ -34,6 +34,7 @@ namespace FishMMO.Server
 
 		public Dictionary<long, Character> CharactersByID = new Dictionary<long, Character>();
 		public Dictionary<string, Character> CharactersByLowerCaseName = new Dictionary<string, Character>();
+		public Dictionary<long, Dictionary<long, Character>> CharactersByWorld = new Dictionary<long, Dictionary<long, Character>>();
 		public Dictionary<NetworkConnection, Character> ConnectionCharacters = new Dictionary<NetworkConnection, Character>();
 		public Dictionary<NetworkConnection, Character> WaitingSceneLoadCharacters = new Dictionary<NetworkConnection, Character>();
 
@@ -155,6 +156,11 @@ namespace FishMMO.Server
 					CharactersByID.Remove(character.ID);
 					// remove the characterName->character entry
 					CharactersByLowerCaseName.Remove(character.CharacterNameLower);
+					// remove the worldid<characterID->character> entry
+					if (CharactersByWorld.TryGetValue(character.WorldServerID, out Dictionary<long, Character> characters))
+					{
+						characters.Remove(character.ID);
+					}
 					// remove the connection->character entry
 					ConnectionCharacters.Remove(conn);
 
@@ -300,6 +306,20 @@ namespace FishMMO.Server
 				{
 					CharactersByID.Add(character.ID, character);
 					CharactersByLowerCaseName.Add(character.CharacterNameLower, character);
+				}
+
+				// add a worldID<characterID->character> map for ease of use
+				if (!CharactersByWorld.TryGetValue(character.WorldServerID, out Dictionary<long, Character> characters))
+				{
+					CharactersByWorld.Add(character.WorldServerID, characters = new Dictionary<long, Character>());
+				}
+				if (characters.ContainsKey(character.ID))
+				{
+					characters[character.ID] = character;
+				}
+				else
+				{
+					characters.Add(character.ID, character);
 				}
 
 				// remove the waiting scene load character

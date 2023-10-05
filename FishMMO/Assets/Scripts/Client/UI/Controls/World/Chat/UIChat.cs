@@ -280,27 +280,31 @@ namespace FishMMO.Client
 			}
 		}
 
-		public void OnWorldChat(Character localCharacter, ChatBroadcast msg)
+		public bool OnWorldChat(Character localCharacter, ChatBroadcast msg)
 		{
 			InstantiateChatMessage(msg.channel, msg.text);
+			return true;
 		}
 
-		public void OnRegionChat(Character localCharacter, ChatBroadcast msg)
+		public bool OnRegionChat(Character localCharacter, ChatBroadcast msg)
 		{
 			InstantiateChatMessage(msg.channel, msg.text);
+			return true;
 		}
 
-		public void OnPartyChat(Character localCharacter, ChatBroadcast msg)
+		public bool OnPartyChat(Character localCharacter, ChatBroadcast msg)
 		{
 			InstantiateChatMessage(msg.channel, msg.text);
+			return true;
 		}
 
-		public void OnGuildChat(Character localCharacter, ChatBroadcast msg)
+		public bool OnGuildChat(Character localCharacter, ChatBroadcast msg)
 		{
 			InstantiateChatMessage(msg.channel, msg.text);
+			return true;
 		}
 
-		public void OnTellChat(Character localCharacter, ChatBroadcast msg)
+		public bool OnTellChat(Character localCharacter, ChatBroadcast msg)
 		{
 			string cmd = ChatHelper.GetWordAndTrimmed(msg.text, out string trimmed);
 
@@ -323,21 +327,25 @@ namespace FishMMO.Client
 				}
 			}
 			InstantiateChatMessage(msg.channel, msg.text);
+			return true;
 		}
 
-		public void OnTradeChat(Character localCharacter, ChatBroadcast msg)
+		public bool OnTradeChat(Character localCharacter, ChatBroadcast msg)
 		{
 			InstantiateChatMessage(msg.channel, msg.text);
+			return true;
 		}
 
-		public void OnSayChat(Character localCharacter, ChatBroadcast msg)
+		public bool OnSayChat(Character localCharacter, ChatBroadcast msg)
 		{
 			InstantiateChatMessage(msg.channel, msg.text);
+			return true;
 		}
 
-		public void OnSystemChat(Character localCharacter, ChatBroadcast msg)
+		public bool OnSystemChat(Character localCharacter, ChatBroadcast msg)
 		{
 			InstantiateChatMessage(msg.channel, msg.text);
+			return true;
 		}
 	}
 }
