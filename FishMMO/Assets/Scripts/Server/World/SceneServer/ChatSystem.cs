@@ -124,6 +124,7 @@ namespace FishMMO.Server
 				case ChatChannel.Tell: return OnTellChat;
 				case ChatChannel.Trade: return OnTradeChat;
 				case ChatChannel.Say: return OnSayChat;
+				// ChatChannel.System is Server->Client only. We never parse system messages locally.
 				default: return OnSayChat;
 			}
 		}
@@ -338,11 +339,14 @@ namespace FishMMO.Server
 		{
 			// get the sender
 			string senderName = ChatHelper.GetWordAndTrimmed(msg.text, out string trimmed);
+			// trim the :
+			senderName = senderName.Substring(0, senderName.Length - 1);
 			if (string.IsNullOrWhiteSpace(senderName))
 			{
 				// no sender in the tell message
 				return;
 			}
+			string senderLower = senderName.ToLower();
 
 			// get the target
 			string targetName = ChatHelper.GetWordAndTrimmed(trimmed, out trimmed);
@@ -351,10 +355,48 @@ namespace FishMMO.Server
 				// no target in the tell message
 				return;
 			}
+			string targetLower = targetName.ToLower();
+
+			// are we messaging ourself?
+			if (sender != null &&
+				senderLower.Equals(targetLower))
+			{
+				sender.Owner.Broadcast(new ChatBroadcast()
+				{
+					channel = msg.channel,
+					text = ChatHelper.ERROR_MESSAGE_SELF + " ",
+				});
+				return;
+			}
+
+			// if the sender exists then we can send a return message if the character is valid
+			if (sender != null &&
+				Server.DbContextFactory != null)
+			{
+				using var dbContext = Server.DbContextFactory.CreateDbContext();
+				if (CharacterService.ExistsAndOnline(dbContext, targetLower))
+				{
+					sender.Owner.Broadcast(new ChatBroadcast()
+					{
+						channel = msg.channel,
+						text = "[To:" + targetName + "]: " + trimmed,
+					});
+				}
+				else
+				{
+					// if the target character is not online
+					sender.Owner.Broadcast(new ChatBroadcast()
+					{
+						channel = msg.channel,
+						text = ChatHelper.ERROR_TARGET_OFFLINE + " " + targetName,
+					});
+					return;
+				}
+			}
  
 			// if the target character is on this server we send them the message
 			if (Server.CharacterSystem != null &&
-				Server.CharacterSystem.CharactersByName.TryGetValue(targetName, out Character targetCharacter))
+				Server.CharacterSystem.CharactersByLowerCaseName.TryGetValue(targetLower, out Character targetCharacter))
 			{
 				targetCharacter.Owner.Broadcast(new ChatBroadcast()
 				{

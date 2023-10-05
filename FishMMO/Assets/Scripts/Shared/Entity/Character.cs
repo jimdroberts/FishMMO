@@ -69,9 +69,11 @@ public class Character : NetworkBehaviour, IPooledResettable
 	/// </summary>
 	[SyncVar(Channel = Channel.Unreliable, ReadPermissions = ReadPermission.Observers, WritePermissions = WritePermission.ServerOnly, OnChange = nameof(OnCharacterNameChanged))]
 	public string CharacterName;
+	public string CharacterNameLower;
 	private void OnCharacterNameChanged(string prev, string next, bool asServer)
 	{
 		gameObject.name = next;
+		CharacterNameLower = next.ToLower();
 
 #if !UNITY_SERVER
 		if (CharacterNameLabel != null)

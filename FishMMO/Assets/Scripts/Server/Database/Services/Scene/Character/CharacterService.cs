@@ -14,6 +14,12 @@ namespace FishMMO.Server.Services
 	/// </summary>
 	public class CharacterService
 	{
+		public static bool ExistsAndOnline(ServerDbContext dbContext, string characterName)
+		{
+			return dbContext.Characters.FirstOrDefault((c) => c.NameLowercase == characterName.ToLower() &&
+															  c.Online) != null;
+		}
+
 		public static bool Exists(ServerDbContext dbContext, string account, string characterName)
 		{
 			return dbContext.Characters.FirstOrDefault((c) => c.Account == account &&
@@ -280,6 +286,7 @@ namespace FishMMO.Server.Services
 																		  Vector3.zero);
 						character.ID = dbCharacter.ID;
 						character.CharacterName = dbCharacter.Name;
+						character.CharacterNameLower = dbCharacter.NameLowercase;
 						character.Account = dbCharacter.Account;
 						character.WorldServerID = dbCharacter.WorldServerID;
 						character.IsGameMaster = dbCharacter.IsGameMaster;

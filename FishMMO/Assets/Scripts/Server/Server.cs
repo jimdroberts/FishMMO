@@ -5,7 +5,6 @@ using UnityEngine.SceneManagement;
 using System;
 using System.Collections;
 using System.IO;
-using System.Text.RegularExpressions;
 using FishMMO_DB;
 
 #if UNITY_EDITOR
@@ -17,12 +16,12 @@ namespace FishMMO.Server
 	// Main Server class, handles configuration and starting connections.
 	public class Server : MonoBehaviour
 	{
-		public Configuration Configuration = null;
-		public string Address;
-		public string RemoteAddress;
-		public ushort Port;
-		public ServerDbContextFactory DbContextFactory;
-		public NetworkManager NetworkManager;
+		public Configuration Configuration { get; private set; }
+		public ServerDbContextFactory DbContextFactory { get; private set; }
+		public NetworkManager NetworkManager { get; private set; }
+		public string RemoteAddress { get; private set; }
+		public string Address { get; private set; }
+		public ushort Port { get; private set; }
 
 		#region LOGIN
 		public CharacterSelectSystem CharacterSelectSystem { get; private set; }
@@ -280,10 +279,13 @@ namespace FishMMO.Server
 		{
 			Transport transport = NetworkManager.TransportManager.Transport;
 			if (transport != null &&
-				Configuration.TryGetString("Address", out Address) &&
-				Configuration.TryGetUShort("Port", out Port) &&
+				Configuration.TryGetString("Address", out string address) &&
+				Configuration.TryGetUShort("Port", out ushort port) &&
 				Configuration.TryGetInt("MaximumClients", out int maximumClients))
 			{
+				Address = address;
+				Port = port;
+
 				transport.SetServerBindAddress(Address, IPAddressType.IPv4);
 				transport.SetPort(Port);
 				transport.SetMaximumClients(maximumClients);

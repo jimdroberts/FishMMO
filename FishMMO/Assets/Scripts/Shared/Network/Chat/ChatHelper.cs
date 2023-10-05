@@ -11,6 +11,9 @@ public struct ChatCommandDetails
 
 public static class ChatHelper
 {
+	public const string ERROR_TARGET_OFFLINE = "$_";
+	public const string ERROR_MESSAGE_SELF = "$<";
+
 	private static bool initialized = false;
 
 	public static Dictionary<string, ChatCommandDetails> Commands { get; private set; }
@@ -62,6 +65,16 @@ public static class ChatHelper
 		}
 	}
 
+	public static ChatCommand ParseChatChannel(ChatChannel channel)
+	{
+		ChatCommand command = null;
+		if (ChatHelper.ChannelCommands.TryGetValue(channel, out ChatCommandDetails sayCommand))
+		{
+			command = sayCommand.Func;
+		}
+		return command;
+	}
+
 	public static ChatCommand ParseChatCommand(string cmd, ref ChatChannel channel)
 	{
 		ChatCommand command = null;
@@ -111,8 +124,8 @@ public static class ChatHelper
 			trimmed = text;
 			return "";
 		}
-		string targetName = text.Substring(0, firstSpace);
+		string word = text.Substring(0, firstSpace);
 		trimmed = text.Substring(firstSpace, text.Length - firstSpace).Trim();
-		return targetName;
+		return word;
 	}
 }

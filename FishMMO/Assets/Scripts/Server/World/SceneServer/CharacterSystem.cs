@@ -33,7 +33,7 @@ namespace FishMMO.Server
 		public event Action<NetworkConnection, Character> OnAfterLoadCharacter;
 
 		public Dictionary<long, Character> CharactersByID = new Dictionary<long, Character>();
-		public Dictionary<string, Character> CharactersByName = new Dictionary<string, Character>();
+		public Dictionary<string, Character> CharactersByLowerCaseName = new Dictionary<string, Character>();
 		public Dictionary<NetworkConnection, Character> ConnectionCharacters = new Dictionary<NetworkConnection, Character>();
 		public Dictionary<NetworkConnection, Character> WaitingSceneLoadCharacters = new Dictionary<NetworkConnection, Character>();
 
@@ -154,7 +154,7 @@ namespace FishMMO.Server
 					// remove the characterID->character entry
 					CharactersByID.Remove(character.ID);
 					// remove the characterName->character entry
-					CharactersByName.Remove(character.CharacterName);
+					CharactersByLowerCaseName.Remove(character.CharacterNameLower);
 					// remove the connection->character entry
 					ConnectionCharacters.Remove(conn);
 
@@ -294,12 +294,12 @@ namespace FishMMO.Server
 				if (CharactersByID.ContainsKey(character.ID))
 				{
 					CharactersByID[character.ID] = character;
-					CharactersByName[character.CharacterName] = character;
+					CharactersByLowerCaseName[character.CharacterNameLower] = character;
 				}
 				else
 				{
 					CharactersByID.Add(character.ID, character);
-					CharactersByName.Add(character.CharacterName, character);
+					CharactersByLowerCaseName.Add(character.CharacterNameLower, character);
 				}
 
 				// remove the waiting scene load character
@@ -359,7 +359,7 @@ namespace FishMMO.Server
 		/// </summary>
 		public bool SendBroadcastToCharacter<T>(string characterName, T msg) where T : struct, IBroadcast
 		{
-			if (CharactersByName.TryGetValue(characterName, out Character character))
+			if (CharactersByLowerCaseName.TryGetValue(characterName.ToLower(), out Character character))
 			{
 				character.Owner.Broadcast(msg);
 				return true;

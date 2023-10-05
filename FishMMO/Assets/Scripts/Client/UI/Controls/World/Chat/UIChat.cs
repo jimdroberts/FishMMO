@@ -14,6 +14,12 @@ namespace FishMMO.Client
 		public Transform chatTabViewParent;
 		public ChatTab chatTabPrefab;
 
+		public Dictionary<string, string> ErrorCodes = new Dictionary<string, string>()
+		{
+			{ ChatHelper.ERROR_TARGET_OFFLINE, " is not online." },
+			{ ChatHelper.ERROR_MESSAGE_SELF, "Are you messaging yourself again?" },
+		};
+
 		public Dictionary<ChatChannel, Color> ChannelColors = new Dictionary<ChatChannel, Color>()
 		{
 			{ ChatChannel.Say, Color.white },
@@ -147,8 +153,6 @@ namespace FishMMO.Client
 				ChatBroadcast message = new ChatBroadcast() { text = input };
 				// send the message to the server
 				Client.NetworkManager.ClientManager.Broadcast(message);
-				// display the message locally - this can duplicate your message if you're not careful!
-				ParseLocalMessage(character, message);
 			}
 			InputField.text = "";
 		}
@@ -224,19 +228,13 @@ namespace FishMMO.Client
 			}
 		}
 
-		private void OnClientChatMessageReceived(ChatBroadcast msg)
+		private void InstantiateChatMessage(ChatChannel channel, string message)
 		{
-			if (!string.IsNullOrWhiteSpace(currentTab) && tabs.TryGetValue(currentTab, out ChatTab tab))
-			{
-				if (tab.activeChannels.Contains(msg.channel))
-				{
-					ClientChatMessage newMessage = Instantiate(chatMessagePrefab, chatViewParent);
-					newMessage.Channel = msg.channel;
-					newMessage.text.color = ChannelColors[msg.channel];
-					newMessage.text.text = "[" + msg.channel + "] " + msg.text;
-					AddMessage(newMessage);
-				}
-			}
+			ClientChatMessage newMessage = Instantiate(chatMessagePrefab, chatViewParent);
+			newMessage.Channel = channel;
+			newMessage.text.color = ChannelColors[channel];
+			newMessage.text.text = "[" + channel + "] " + message;
+			AddMessage(newMessage);
 		}
 
 		public ChatCommand GetChannelCommand(ChatChannel channel)
@@ -250,11 +248,24 @@ namespace FishMMO.Client
 				case ChatChannel.Tell: return OnTellChat;
 				case ChatChannel.Trade: return OnTradeChat;
 				case ChatChannel.Say: return OnSayChat;
+				case ChatChannel.System: return OnSystemChat;
 				default: return OnSayChat;
 			}
 		}
 
-		private void ParseLocalMessage(Character sender, ChatBroadcast msg)
+		private void OnClientChatMessageReceived(ChatBroadcast msg)
+		{
+			if (!string.IsNullOrWhiteSpace(currentTab) && tabs.TryGetValue(currentTab, out ChatTab tab))
+			{
+				if (tab.activeChannels.Contains(msg.channel))
+				{
+					// parse the local message
+					ParseLocalMessage(Character.localCharacter, msg);
+				}
+			}
+		}
+
+		private void ParseLocalMessage(Character localCharacter, ChatBroadcast msg)
 		{
 			// validate message length
 			if (string.IsNullOrWhiteSpace(msg.text) || msg.text.Length > MAX_LENGTH)
@@ -262,71 +273,71 @@ namespace FishMMO.Client
 				return;
 			}
 
-			string cmd = ChatHelper.GetCommandAndTrim(ref msg.text);
-
-			// the text is empty
-			if (msg.text.Length < 1)
-			{
-				return;
-			}
-
-			ChatCommand command = ChatHelper.ParseChatCommand(cmd, ref msg.channel);
+			ChatCommand command = ChatHelper.ParseChatChannel(msg.channel);
 			if (command != null)
 			{
-				// add the characters name
-				msg.text = sender.CharacterName + ": " + msg.text;
-				command?.Invoke(sender, msg);
+				command?.Invoke(localCharacter, msg);
 			}
 		}
 
-		public void OnWorldChat(Character sender, ChatBroadcast msg)
+		public void OnWorldChat(Character localCharacter, ChatBroadcast msg)
 		{
+			InstantiateChatMessage(msg.channel, msg.text);
 		}
 
-		public void OnRegionChat(Character sender, ChatBroadcast msg)
+		public void OnRegionChat(Character localCharacter, ChatBroadcast msg)
 		{
+			InstantiateChatMessage(msg.channel, msg.text);
 		}
 
-		public void OnPartyChat(Character sender, ChatBroadcast msg)
+		public void OnPartyChat(Character localCharacter, ChatBroadcast msg)
 		{
+			InstantiateChatMessage(msg.channel, msg.text);
 		}
 
-		public void OnGuildChat(Character sender, ChatBroadcast msg)
+		public void OnGuildChat(Character localCharacter, ChatBroadcast msg)
 		{
+			InstantiateChatMessage(msg.channel, msg.text);
 		}
 
-		public void OnTellChat(Character sender, ChatBroadcast msg)
+		public void OnTellChat(Character localCharacter, ChatBroadcast msg)
 		{
-			// get the sender
-			string senderName = ChatHelper.GetWordAndTrimmed(msg.text, out string trimmed);
-			if (string.IsNullOrWhiteSpace(senderName))
+			string cmd = ChatHelper.GetWordAndTrimmed(msg.text, out string trimmed);
+
+			// check if we have any special messages
+			if (!string.IsNullOrWhiteSpace(cmd))
 			{
-				// no sender in the tell message
-				return;
+				if (cmd.Equals(ChatHelper.ERROR_TARGET_OFFLINE) &&
+					ErrorCodes.TryGetValue(ChatHelper.ERROR_TARGET_OFFLINE, out string offlineMsg))
+				{
+					ChatHelper.GetWordAndTrimmed(trimmed, out string targetName);
+					if (!string.IsNullOrWhiteSpace(targetName))
+					{
+						msg.text = targetName + offlineMsg;
+					}
+				}
+				else if (cmd.Equals(ChatHelper.ERROR_MESSAGE_SELF) &&
+						 ErrorCodes.TryGetValue(ChatHelper.ERROR_MESSAGE_SELF, out string errorMsg))
+				{
+					msg.text = errorMsg;
+				}
 			}
-
-			// get the target
-			string targetName = ChatHelper.GetWordAndTrimmed(trimmed, out trimmed);
-			if (string.IsNullOrWhiteSpace(targetName))
-			{
-				// no target in the tell message
-				return;
-			}
-
-			// fake it
-			OnClientChatMessageReceived(new ChatBroadcast()
-			{
-				channel = msg.channel,
-				text = "[To:" + targetName + "]: " + trimmed,
-			});
+			InstantiateChatMessage(msg.channel, msg.text);
 		}
 
-		public void OnTradeChat(Character sender, ChatBroadcast msg)
+		public void OnTradeChat(Character localCharacter, ChatBroadcast msg)
 		{
+			InstantiateChatMessage(msg.channel, msg.text);
 		}
 
-		public void OnSayChat(Character sender, ChatBroadcast msg)
+		public void OnSayChat(Character localCharacter, ChatBroadcast msg)
 		{
+			InstantiateChatMessage(msg.channel, msg.text);
+		}
+
+		public void OnSystemChat(Character localCharacter, ChatBroadcast msg)
+		{
+			InstantiateChatMessage(msg.channel, msg.text);
 		}
 	}
 }
