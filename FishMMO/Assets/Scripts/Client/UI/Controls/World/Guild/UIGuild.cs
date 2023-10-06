@@ -107,7 +107,7 @@ namespace FishMMO.Client
 					{
 						if (!string.IsNullOrWhiteSpace(s) &&
 							s.Length <= MaxGuildNameLength &&
-							Regex.IsMatch(s, @"[^a-zA-Z\s]"))
+							Regex.IsMatch(s, @"^[A-Za-z]+(?: [A-Za-z]+){0,2}$"))
 						{
 							Client.NetworkManager.ClientManager.Broadcast(new GuildCreateBroadcast()
 							{

@@ -1150,7 +1150,7 @@ MonoBehaviour:
   CanDrag: 1
   ClampToScreen: 1
   PartyMemberParent: {fileID: 8900509986437605610}
-  PartyMemberPrefab: {fileID: 2167118092381648120, guid: 1ebd030bedd4eac4aaf1ab1946ff059f,
+  PartyMemberPrefab: {fileID: 6343557740153751929, guid: 1ebd030bedd4eac4aaf1ab1946ff059f,
     type: 3}
 --- !u!1 &8900509986437605613
 GameObject:

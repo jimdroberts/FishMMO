@@ -200,13 +200,13 @@ namespace FishMMO.Server
 						msg.text = sender.CharacterName + ": " + sender.GuildController.ID + " " + msg.text;
 						break;
 					case ChatChannel.Party:
-						if (sender.PartyController == null || sender.PartyController.Current.ID < 1)
+						if (sender.PartyController == null || sender.PartyController.ID < 1)
 						{
 							return;
 						}
 
 						// add the senders name and party ID
-						msg.text = sender.CharacterName + ": " + sender.PartyController.Current.ID + " " + msg.text;
+						msg.text = sender.CharacterName + ": " + sender.PartyController.ID + " " + msg.text;
 						break;
 					case ChatChannel.Trade:
 					case ChatChannel.World:
@@ -287,9 +287,9 @@ namespace FishMMO.Server
 
 		public bool OnPartyChat(Character sender, ChatBroadcast msg)
 		{
-			/*if (Server.DbContextFactory == null)
+			if (Server.DbContextFactory == null)
 			{
-				return;
+				return false;
 			}
 
 			// get the sender
@@ -297,32 +297,34 @@ namespace FishMMO.Server
 			if (string.IsNullOrWhiteSpace(senderName))
 			{
 				// no sender in the tell message
-				return;
+				return false;
 			}
 
 			// get the party ID
-			string pid = ChatHelper.GetWordAndTrimmed(trimmed, out trimmed);
-			if (string.IsNullOrWhiteSpace(pid) || !long.TryParse(pid, out long partyID))
+			string gid = ChatHelper.GetWordAndTrimmed(trimmed, out trimmed);
+			if (string.IsNullOrWhiteSpace(gid) || !long.TryParse(gid, out long partyID))
 			{
-				// no guildID in the message
-				return;
+				// no partyID in the message
+				return false;
 			}
 
+			// get all the member data so we can broadcast
 			using var dbContext = Server.DbContextFactory.CreateDbContext();
-			List<CharacterPartyEntity> dbMembers = PartyService.Members(dbContext, partyID);
+			List<CharacterPartyEntity> dbMembers = CharacterPartyService.Members(dbContext, partyID);
 
+			ChatBroadcast newMsg = new ChatBroadcast()
+			{
+				channel = msg.channel,
+				text = senderName + " " + trimmed,
+			};
 			foreach (CharacterPartyEntity member in dbMembers)
 			{
 				if (Server.CharacterSystem.CharactersByID.TryGetValue(member.CharacterID, out Character character))
 				{
-					// broadcast to guild member...
-					character.Owner.Broadcast(new ChatBroadcast()
-					{
-						channel = msg.channel,
-						text = senderName + trimmed,
-					});
+					// broadcast to party member...
+					character.Owner.Broadcast(newMsg);
 				}
-			}*/
+			}
 			return true;
 		}
 

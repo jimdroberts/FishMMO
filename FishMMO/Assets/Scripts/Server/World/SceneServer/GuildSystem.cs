@@ -192,7 +192,7 @@ namespace FishMMO.Server
 		{
 			return !string.IsNullOrWhiteSpace(guildName) &&
 				   guildName.Length <= MaxGuildNameLength &&
-				   Regex.IsMatch(guildName, @"[^a-zA-Z\s]");
+				   Regex.IsMatch(guildName, @"^[A-Za-z]+(?: [A-Za-z]+){0,2}$");
 		}
 
 		public void RemovePending(long id)
@@ -408,7 +408,7 @@ namespace FishMMO.Server
 							// pick a random officer
 							newLeader = officers[UnityEngine.Random.Range(0, officers.Count)];
 						}
-						else
+						else if (remainingMembers.Count > 0)
 						{
 							// pick a random member
 							newLeader = remainingMembers[UnityEngine.Random.Range(0, remainingMembers.Count)];

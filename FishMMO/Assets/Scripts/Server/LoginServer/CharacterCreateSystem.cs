@@ -21,7 +21,7 @@ namespace FishMMO.Server
 			return !string.IsNullOrWhiteSpace(characterName) &&
 				   characterName.Length >= CharacterNameMinLength &&
 				   characterName.Length <= CharacterNameMaxLength &&
-				   Regex.IsMatch(characterName, @"^[a-zA-Z_]+$");
+				   Regex.IsMatch(characterName, @"^[A-Za-z]+(?: [A-Za-z]+){0,2}$");
 		}
 
 		public WorldSceneDetailsCache WorldSceneDetailsCache;

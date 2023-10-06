@@ -1,5 +1,4 @@
 ﻿using System.Collections.Generic;
-using TMPro;
 using UnityEngine;
 
 namespace FishMMO.Client
@@ -7,86 +6,88 @@ namespace FishMMO.Client
 	public class UIParty : UIControl
 	{
 		public RectTransform PartyMemberParent;
-		public TMP_Text PartyMemberPrefab;
-		public Dictionary<long, TMP_Text> Members;
+		public UIPartyMember PartyMemberPrefab;
+		public Dictionary<long, UIPartyMember> Members = new Dictionary<long, UIPartyMember>();
 
 		public override void OnStarting()
 		{
-			Character character = Character.localCharacter;
-			if (character != null)
-			{
-				character.PartyController.OnPartyCreated += OnPartyCreated;
-				character.PartyController.OnLeaveParty += OnLeaveParty;
-				character.PartyController.OnAddMember += OnPartyAddMember;
-				character.PartyController.OnUpdateMember += OnPartyUpdateMember;
-				character.PartyController.OnRemoveMember += OnPartyRemoveMember;
-			}
 		}
 
 		public override void OnDestroying()
 		{
-			Character character = Character.localCharacter;
-			if (character != null)
-			{
-				character.PartyController.OnPartyCreated -= OnPartyCreated;
-				character.PartyController.OnLeaveParty -= OnLeaveParty;
-				character.PartyController.OnAddMember -= OnPartyAddMember;
-				character.PartyController.OnUpdateMember -= OnPartyUpdateMember;
-				character.PartyController.OnRemoveMember -= OnPartyRemoveMember;
-			}
 		}
 
-		public void OnPartyCreated()
+		public void OnPartyCreated(string location)
 		{
 			Character character = Character.localCharacter;
-			if (character != null && PartyMemberParent != null)
+			if (character != null && PartyMemberPrefab != null && PartyMemberParent != null)
 			{
-				TMP_Text partyMember = Instantiate(PartyMemberPrefab, PartyMemberParent);
-				partyMember.text = character.CharacterName;
-				Members.Add(character.ID, partyMember);
+				UIPartyMember member = Instantiate(PartyMemberPrefab, PartyMemberParent);
+				if (member != null)
+				{
+					if (member.Name != null)
+						member.Name.text = "Name: " + character.CharacterName;
+					if (member.Rank != null)
+						member.Rank.text = "Rank: " + character.PartyController.Rank.ToString();
+					if (member.Location != null)
+						member.Location.text = "Location: " + location;
+					Members.Add(character.ID, member);
+				}
 			}
 		}
 
 		public void OnLeaveParty()
 		{
-			foreach (TMP_Text member in new List<TMP_Text>(Members.Values))
+			foreach (UIPartyMember member in new List<UIPartyMember>(Members.Values))
 			{
 				Destroy(member.gameObject);
 			}
 			Members.Clear();
 		}
 
-		public void OnPartyAddMember(long characterID, PartyRank rank)
+		public void OnPartyAddMember(long characterID, PartyRank rank, string location)
 		{
-			if (PartyMemberPrefab != null)
+			if (PartyMemberPrefab != null && PartyMemberParent != null)
 			{
-				TMP_Text partyMember = Instantiate(PartyMemberPrefab, PartyMemberParent);
-				partyMember.text = characterID.ToString();
-				Members.Add(characterID, partyMember);
+				if (Members.TryGetValue(characterID, out UIPartyMember partyMember))
+				{
+					if (partyMember.Name != null)
+						partyMember.Name.text = characterID.ToString();
+					if (partyMember.Rank != null)
+						partyMember.Rank.text = "Rank: " + rank.ToString();
+					if (partyMember.Location != null)
+						partyMember.Location.text = "Location: " + location;
+				}
+				else
+				{
+					UIPartyMember member = Instantiate(PartyMemberPrefab, PartyMemberParent);
+					if (member != null)
+					{
+						if (member.Name != null)
+							member.Name.text = characterID.ToString();
+						if (member.Rank != null)
+							member.Rank.text = "Rank: " + rank.ToString();
+						if (member.Location != null)
+							member.Location.text = "Location: " + location;
+						Members.Add(characterID, member);
+					}
+				}
 			}
 		}
 
-		public void OnPartyUpdateMember(long characterID, PartyRank rank)
+		public void OnPartyRemoveMember(long characterID)
 		{
-			if (Members.TryGetValue(characterID, out TMP_Text text))
-			{
-
-			}
-		}
-
-		public void OnPartyRemoveMember(long characterID, PartyRank rank)
-		{
-			if (Members.TryGetValue(characterID, out TMP_Text text))
+			if (Members.TryGetValue(characterID, out UIPartyMember member))
 			{
 				Members.Remove(characterID);
-				Destroy(text.gameObject);
+				Destroy(member.gameObject);
 			}
 		}
 
 		public void OnButtonCreateParty()
 		{
 			Character character = Character.localCharacter;
-			if (character != null && character.PartyController.Current == null && Client.NetworkManager.IsClient)
+			if (character != null && character.PartyController.ID < 1 && Client.NetworkManager.IsClient)
 			{
 				Client.NetworkManager.ClientManager.Broadcast(new PartyCreateBroadcast());
 			}
@@ -95,16 +96,22 @@ namespace FishMMO.Client
 		public void OnButtonLeaveParty()
 		{
 			Character character = Character.localCharacter;
-			if (character != null && character.PartyController.Current != null && Client.NetworkManager.IsClient)
+			if (character != null && character.PartyController.ID > 0 && Client.NetworkManager.IsClient)
 			{
-				Client.NetworkManager.ClientManager.Broadcast(new PartyLeaveBroadcast());
+				if (UIManager.TryGet("UIConfirmationTooltip", out UIConfirmationTooltip tooltip))
+				{
+					tooltip.Open("Are you sure you want to leave your party?", () =>
+					{
+						Client.NetworkManager.ClientManager.Broadcast(new PartyLeaveBroadcast());
+					}, null);
+				}
 			}
 		}
 
 		public void OnButtonInviteToParty()
 		{
 			Character character = Character.localCharacter;
-			if (character != null && character.PartyController.Current != null && Client.NetworkManager.IsClient)
+			if (character != null && character.PartyController.ID > 0 && Client.NetworkManager.IsClient)
 			{
 				if (character.TargetController.Current.Target != null)
 				{

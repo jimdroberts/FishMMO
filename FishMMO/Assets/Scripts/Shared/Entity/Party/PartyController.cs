@@ -1,6 +1,9 @@
 ﻿using UnityEngine;
 using FishNet.Object;
 using System.Collections.Generic;
+#if !UNITY_SERVER
+using FishMMO.Client;
+#endif
 
 /// <summary>
 /// Character party controller.
@@ -10,20 +13,9 @@ public class PartyController : NetworkBehaviour
 {
 	public Character Character;
 
+	public long ID;
 	public PartyRank Rank = PartyRank.None;
-	public Party Current;
-
-	public delegate void PartyEvent();
-	public event PartyEvent OnPartyCreated;
-	public event PartyEvent OnLeaveParty;
-
-	public delegate void PartyMemberEvent(long characterID, PartyRank rank);
-	public event PartyMemberEvent OnAddMember;
-	public event PartyMemberEvent OnUpdateMember;
-	public event PartyMemberEvent OnRemoveMember;
-
-	public delegate void PartyAcceptEvent(List<long> partyMemberIDs);
-	public event PartyAcceptEvent OnPartyInviteAccepted;
+	public readonly HashSet<long> Members = new HashSet<long>();
 
 	public override void OnStartClient()
 	{
@@ -37,10 +29,9 @@ public class PartyController : NetworkBehaviour
 
 		ClientManager.RegisterBroadcast<PartyCreateBroadcast>(OnClientPartyCreateBroadcastReceived);
 		ClientManager.RegisterBroadcast<PartyInviteBroadcast>(OnClientPartyInviteBroadcastReceived);
-		ClientManager.RegisterBroadcast<PartyJoinedBroadcast>(OnClientPartyJoinedBroadcastReceived);
 		ClientManager.RegisterBroadcast<PartyNewMemberBroadcast>(OnClientPartyNewMemberBroadcastReceived);
-		ClientManager.RegisterBroadcast<PartyUpdateMemberBroadcast>(OnClientPartyUpdateMemberBroadcastReceived);
 		ClientManager.RegisterBroadcast<PartyLeaveBroadcast>(OnClientPartyLeaveBroadcastReceived);
+		ClientManager.RegisterBroadcast<PartyAddBroadcast>(OnClientPartyAddBroadcastReceived);
 		ClientManager.RegisterBroadcast<PartyRemoveBroadcast>(OnClientPartyRemoveBroadcastReceived);
 	}
 
@@ -52,10 +43,9 @@ public class PartyController : NetworkBehaviour
 		{
 			ClientManager.UnregisterBroadcast<PartyCreateBroadcast>(OnClientPartyCreateBroadcastReceived);
 			ClientManager.UnregisterBroadcast<PartyInviteBroadcast>(OnClientPartyInviteBroadcastReceived);
-			ClientManager.UnregisterBroadcast<PartyJoinedBroadcast>(OnClientPartyJoinedBroadcastReceived);
 			ClientManager.UnregisterBroadcast<PartyNewMemberBroadcast>(OnClientPartyNewMemberBroadcastReceived);
-			ClientManager.UnregisterBroadcast<PartyUpdateMemberBroadcast>(OnClientPartyUpdateMemberBroadcastReceived);
 			ClientManager.UnregisterBroadcast<PartyLeaveBroadcast>(OnClientPartyLeaveBroadcastReceived);
+			ClientManager.UnregisterBroadcast<PartyAddBroadcast>(OnClientPartyAddBroadcastReceived);
 			ClientManager.UnregisterBroadcast<PartyRemoveBroadcast>(OnClientPartyRemoveBroadcastReceived);
 		}
 	}
@@ -65,11 +55,15 @@ public class PartyController : NetworkBehaviour
 	/// </summary>
 	public void OnClientPartyCreateBroadcastReceived(PartyCreateBroadcast msg)
 	{
-		Party newParty = new Party(msg.partyID, this);
-		Current = newParty;
+		ID = msg.ID;
 		Rank = PartyRank.Leader;
 
-		OnPartyCreated?.Invoke();
+#if !UNITY_SERVER
+		if (UIManager.TryGet("UIParty", out UIParty uiParty))
+		{
+			uiParty.OnPartyCreated(msg.location);
+		}
+#endif
 	}
 
 	/// <summary>
@@ -78,23 +72,10 @@ public class PartyController : NetworkBehaviour
 	/// </summary>
 	public void OnClientPartyInviteBroadcastReceived(PartyInviteBroadcast msg)
 	{
-		if (Character.ID == msg.targetCharacterID)
-		{
-			return;
-		}
-		ClientManager.Broadcast(new PartyAcceptInviteBroadcast());// instant party accept, temp for testing
-		//ClientManager.Broadcast(new PartyDeclineInviteBroadcast());// instant decline invite, temp for testing
+		ClientManager.Broadcast(new PartyAcceptInviteBroadcast());// instant Party accept, temp for testing
+																  //ClientManager.Broadcast(new PartyDeclineInviteBroadcast());// instant decline invite, temp for testing
 
 		// display invitation popup
-	}
-
-	/// <summary>
-	/// When the character successfully joins a party.
-	/// </summary>
-	public void OnClientPartyJoinedBroadcastReceived(PartyJoinedBroadcast msg)
-	{
-		// update our party list with the party!
-		OnPartyInviteAccepted?.Invoke(msg.members);
 	}
 
 	/// <summary>
@@ -102,16 +83,26 @@ public class PartyController : NetworkBehaviour
 	/// </summary>
 	public void OnClientPartyNewMemberBroadcastReceived(PartyNewMemberBroadcast msg)
 	{
-		// update our party list with the new party member
-		OnAddMember?.Invoke(msg.memberID, msg.rank);
+		// update our Party list with the new Party member
+#if !UNITY_SERVER
+		if (UIManager.TryGet("UIParty", out UIParty uiParty))
+		{
+			uiParty.OnPartyAddMember(msg.memberID, msg.rank, msg.location);
+		}
+#endif
 	}
 
 	/// <summary>
-	/// When we need to update a party member status.
+	/// When a party members status is updated.
 	/// </summary>
 	public void OnClientPartyUpdateMemberBroadcastReceived(PartyUpdateMemberBroadcast msg)
 	{
-		OnUpdateMember?.Invoke(msg.memberID, msg.rank);
+#if !UNITY_SERVER
+		if (UIManager.TryGet("UIParty", out UIParty uiParty))
+		{
+			uiParty.OnPartyAddMember(msg.memberID, msg.rank, msg.location);
+		}
+#endif
 	}
 
 	/// <summary>
@@ -119,21 +110,54 @@ public class PartyController : NetworkBehaviour
 	/// </summary>
 	public void OnClientPartyLeaveBroadcastReceived(PartyLeaveBroadcast msg)
 	{
+		ID = 0;
 		Rank = PartyRank.None;
-		Current = null;
-
-		OnLeaveParty?.Invoke();
+		Members.Clear();
+#if !UNITY_SERVER
+		if (UIManager.TryGet("UIParty", out UIParty uiParty))
+		{
+			uiParty.OnLeaveParty();
+		}
+#endif
 	}
 
 	/// <summary>
-	/// When we need to remove a party member.
+	/// When we need to add party members.
+	/// </summary>
+	public void OnClientPartyAddBroadcastReceived(PartyAddBroadcast msg)
+	{
+		foreach (PartyNewMemberBroadcast member in msg.members)
+		{
+			if (!Members.Contains(member.memberID))
+			{
+				Members.Add(member.memberID);
+#if !UNITY_SERVER
+				if (UIManager.TryGet("UIParty", out UIParty uiParty))
+				{
+					uiParty.OnPartyAddMember(member.memberID, member.rank, member.location);
+				}
+#endif
+			}
+		}
+	}
+
+	/// <summary>
+	/// When we need to remove party members.
 	/// </summary>
 	public void OnClientPartyRemoveBroadcastReceived(PartyRemoveBroadcast msg)
 	{
-		if (Current != null)
+		foreach (long memberID in msg.members)
 		{
-			Current.Members.Remove(msg.memberID);
-			OnRemoveMember?.Invoke(msg.memberID, PartyRank.None);
+			if (Members.Contains(memberID))
+			{
+				Members.Remove(memberID);
+#if !UNITY_SERVER
+				if (UIManager.TryGet("UIParty", out UIParty uiParty))
+				{
+					uiParty.OnPartyRemoveMember(memberID);
+				}
+#endif
+			}
 		}
 	}
 }
