@@ -104,6 +104,10 @@ public class PartyController : NetworkBehaviour
 			ID = msg.partyID;
 			Rank = msg.rank;
 		}
+		if (!Members.Contains(msg.characterID))
+		{
+			Members.Add(msg.characterID);
+		}
 		// try to add the member to the list
 		if (UIManager.TryGet("UIParty", out UIParty uiParty))
 		{
@@ -136,31 +140,30 @@ public class PartyController : NetworkBehaviour
 	public void OnClientPartyAddBroadcastReceived(PartyAddBroadcast msg)
 	{
 #if !UNITY_SERVER
-		var newIds = msg.members.Select(x => x.characterID).ToHashSet();
-		var removeIds = Members.Where(x => !newIds.Contains(x));
-		foreach (long id in removeIds)
+		if (UIManager.TryGet("UIParty", out UIParty uiParty))
 		{
-			Members.Remove(id);
-			if (UIManager.TryGet("UIParty", out UIParty uiParty))
+			var newIds = msg.members.Select(x => x.characterID).ToHashSet();
+			foreach (long id in new List<long>(Members))
 			{
-				uiParty.OnPartyRemoveMember(id);
-			}
-		}
-		foreach (PartyNewMemberBroadcast member in msg.members)
-		{
-			if (!Members.Contains(member.characterID))
-			{
-				Members.Add(member.characterID);
-
-				// if this is our own id
-				if (Character != null && member.characterID == Character.ID)
+				if (!newIds.Contains(id))
 				{
-					ID = member.partyID;
-					Rank = member.rank;
+					Members.Remove(id);
+					uiParty.OnPartyRemoveMember(id);
 				}
-				// try to add the member to the list
-				if (UIManager.TryGet("UIParty", out UIParty uiParty))
+			}
+			foreach (PartyNewMemberBroadcast member in msg.members)
+			{
+				if (!Members.Contains(member.characterID))
 				{
+					Members.Add(member.characterID);
+
+					// if this is our own id
+					if (Character != null && member.characterID == Character.ID)
+					{
+						ID = member.partyID;
+						Rank = member.rank;
+					}
+					// try to add the member to the list
 					uiParty.OnPartyAddMember(member.characterID, member.rank, member.healthPCT);
 				}
 			}

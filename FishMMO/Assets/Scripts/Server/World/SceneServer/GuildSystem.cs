@@ -403,21 +403,23 @@ namespace FishMMO.Server
 					}
 				}
 
+				// remove the guild member
+				CharacterGuildService.Delete(dbContext, guildController.ID, guildController.Character.ID);
+				dbContext.SaveChanges();
+
 				if (remainingMembers.Count < 1)
 				{
 					// delete the guild
 					GuildService.Delete(dbContext, guildController.ID);
 					GuildUpdateService.Delete(dbContext, guildController.ID);
+					dbContext.SaveChanges();
 				}
 				else
 				{
 					// tell the other servers to update their guild lists
 					GuildUpdateService.Save(dbContext, guildController.ID);
+					dbContext.SaveChanges();
 				}
-
-				// remove the guild member
-				CharacterGuildService.Delete(dbContext, guildController.ID, guildController.Character.ID);
-				dbContext.SaveChanges();
 				
 				guildController.ID = 0;
 				guildController.Name = "";

@@ -128,7 +128,7 @@ namespace FishMMO.Server
 				return;
 			}
 
-			// partys that have previously been updated, we do this so we aren't updating partys multiple times
+			// parties that have previously been updated, we do this so we aren't updating partys multiple times
 			HashSet<long> updatedParties = new HashSet<long>();
 
 			using var dbContext = Server.DbContextFactory.CreateDbContext();
@@ -376,21 +376,23 @@ namespace FishMMO.Server
 					}
 				}
 
+				// remove the party member
+				CharacterPartyService.Delete(dbContext, partyController.ID, partyController.Character.ID);
+				dbContext.SaveChanges();
+
 				if (remainingMembers.Count < 1)
 				{
 					// delete the party
 					PartyService.Delete(dbContext, partyController.ID);
 					PartyUpdateService.Delete(dbContext, partyController.ID);
+					dbContext.SaveChanges();
 				}
 				else
 				{
 					// tell the other servers to update their party lists
 					PartyUpdateService.Save(dbContext, partyController.ID);
+					dbContext.SaveChanges();
 				}
-
-				// remove the party member
-				CharacterPartyService.Delete(dbContext, partyController.ID, partyController.Character.ID);
-				dbContext.SaveChanges();
 
 				partyController.ID = 0;
 				partyController.Rank = PartyRank.None;

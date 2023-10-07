@@ -108,6 +108,10 @@ public class GuildController : NetworkBehaviour
 			ID = msg.guildID;
 			Rank = msg.rank;
 		}
+		if (!Members.Contains(msg.characterID))
+		{
+			Members.Add(msg.characterID);
+		}
 		if (UIManager.TryGet("UIGuild", out UIGuild uiGuild))
 		{
 			uiGuild.OnGuildAddMember(msg.characterID, msg.rank, msg.location);
@@ -140,39 +144,38 @@ public class GuildController : NetworkBehaviour
 	public void OnClientGuildAddBroadcastReceived(GuildAddBroadcast msg)
 	{
 #if !UNITY_SERVER
-		var newIds = msg.members.Select(x => x.characterID).ToHashSet();
-		var removeIds = Members.Where(x => !newIds.Contains(x));
-		foreach (long id in removeIds)
+		if (UIManager.TryGet("UIGuild", out UIGuild uiGuild))
 		{
-			Members.Remove(id);
-			if (UIManager.TryGet("UIGuild", out UIGuild uiGuild))
+			var newIds = msg.members.Select(x => x.characterID).ToHashSet();
+			foreach (long id in new HashSet<long>(Members))
 			{
-				uiGuild.OnGuildRemoveMember(id);
-			}
-		}
-		foreach (GuildNewMemberBroadcast member in msg.members)
-		{
-			if (!Members.Contains(member.characterID))
-			{
-				Members.Add(member.characterID);
-
-				// if this is our own id
-				if (Character != null && member.characterID == Character.ID)
+				if (!newIds.Contains(id))
 				{
-					ID = member.guildID;
-					Rank = member.rank;
+					Members.Remove(id);
+					uiGuild.OnGuildRemoveMember(id);
 				}
-				// try to add the member to the list
-				if (UIManager.TryGet("UIGuild", out UIGuild uiGuild))
+			}
+			foreach (GuildNewMemberBroadcast member in msg.members)
+			{
+				if (!Members.Contains(member.characterID))
 				{
+					Members.Add(member.characterID);
+
+					// if this is our own id
+					if (Character != null && member.characterID == Character.ID)
+					{
+						ID = member.guildID;
+						Rank = member.rank;
+					}
+					// try to add the member to the list
 					uiGuild.OnGuildAddMember(member.characterID, member.rank, member.location);
-				}
 
-			}
-			if (member.rank == GuildRank.Officer &&
-				!Officers.Contains(member.characterID))
-			{
-				Officers.Add(member.characterID);
+				}
+				if (member.rank == GuildRank.Officer &&
+					!Officers.Contains(member.characterID))
+				{
+					Officers.Add(member.characterID);
+				}
 			}
 		}
 #endif
