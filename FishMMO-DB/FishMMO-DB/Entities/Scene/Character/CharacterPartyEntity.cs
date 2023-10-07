@@ -17,6 +17,6 @@ namespace FishMMO_DB.Entities
 		public long PartyID { get; set; }
 		public PartyEntity Party { get; set; }
 		public byte Rank { get; set; }
-		public string Location { get; set; }
+		public float HealthPCT { get; set; }
 	}
 }

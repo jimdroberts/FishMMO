@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FishMMO_DB.Entities
 {
-	[Table("Party_updates", Schema = "fish_mmo_postgresql")]
+	[Table("party_updates", Schema = "fish_mmo_postgresql")]
 	[Index(nameof(PartyID))]
 	public class PartyUpdateEntity
 	{
