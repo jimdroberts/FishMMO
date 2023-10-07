@@ -85,11 +85,11 @@ namespace FishMMO.Client
 		{
 			if (args.ConnectionState == LocalConnectionState.Started)
 			{
-				Client.NetworkManager.ClientManager.RegisterBroadcast<ChatBroadcast>(OnClientChatMessageReceived);
+				Client.NetworkManager.ClientManager.RegisterBroadcast<ChatBroadcast>(OnClientChatBroadcastReceived);
 			}
 			else if (args.ConnectionState == LocalConnectionState.Stopped)
 			{
-				Client.NetworkManager.ClientManager.UnregisterBroadcast<ChatBroadcast>(OnClientChatMessageReceived);
+				Client.NetworkManager.ClientManager.UnregisterBroadcast<ChatBroadcast>(OnClientChatBroadcastReceived);
 			}
 		}
 
@@ -253,7 +253,7 @@ namespace FishMMO.Client
 			}
 		}
 
-		private void OnClientChatMessageReceived(ChatBroadcast msg)
+		private void OnClientChatBroadcastReceived(ChatBroadcast msg)
 		{
 			if (!string.IsNullOrWhiteSpace(currentTab) && tabs.TryGetValue(currentTab, out ChatTab tab))
 			{

@@ -380,7 +380,7 @@ namespace FishMMO.Server
 				CharacterPartyService.Delete(dbContext, partyController.ID, partyController.Character.ID);
 				dbContext.SaveChanges();
 
-				if (remainingMembers.Count < 1)
+				if (remainingCount < 1)
 				{
 					// delete the party
 					PartyService.Delete(dbContext, partyController.ID);

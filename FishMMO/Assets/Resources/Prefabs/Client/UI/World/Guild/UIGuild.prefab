@@ -973,9 +973,10 @@ MonoBehaviour:
   HasFocus: 0
   CanDrag: 1
   ClampToScreen: 1
+  MaxGuildNameLength: 64
   GuildLabel: {fileID: 217768865650127032}
   GuildMemberParent: {fileID: 3273730304643434056}
-  GuildMemberPrefab: {fileID: -6152214197743031848, guid: 4587f23e1ee927844ba6de2d53b731c2,
+  GuildMemberPrefab: {fileID: 8846303990962036343, guid: 4587f23e1ee927844ba6de2d53b731c2,
     type: 3}
 --- !u!1 &217768867077782665
 GameObject:
