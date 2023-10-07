@@ -290,10 +290,10 @@ namespace FishMMO.Server
 					partyController.Rank = PartyRank.Member;
 
 					CharacterPartyService.Save(dbContext,
-										   partyController.Character.ID,
-										   partyController.ID,
-										   partyController.Rank,
-										   partyController.Character.AttributeController.GetResourceAttributeCurrentPercentage(HealthTemplate));
+											   partyController.Character.ID,
+											   partyController.ID,
+											   partyController.Rank,
+											   partyController.Character.AttributeController.GetResourceAttributeCurrentPercentage(HealthTemplate));
 
 					// tell the other servers to update their party lists
 					PartyUpdateService.Save(dbContext, pendingPartyID);

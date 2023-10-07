@@ -19,10 +19,10 @@ namespace FishMMO.Server.Services
 
 		public static void Delete(ServerDbContext dbContext, long guildID)
 		{
-			var guildEntity = dbContext.GuildUpdates.FirstOrDefault(a => a.GuildID == guildID);
+			var guildEntity = dbContext.GuildUpdates.Where(a => a.GuildID == guildID);
 			if (guildEntity != null)
 			{
-				dbContext.GuildUpdates.Remove(guildEntity);
+				dbContext.GuildUpdates.RemoveRange(guildEntity);
 			}
 		}
 

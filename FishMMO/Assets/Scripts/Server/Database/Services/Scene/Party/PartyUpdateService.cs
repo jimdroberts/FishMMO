@@ -19,10 +19,10 @@ namespace FishMMO.Server.Services
 
 		public static void Delete(ServerDbContext dbContext, long partyID)
 		{
-			var partyEntity = dbContext.PartyUpdates.FirstOrDefault(a => a.PartyID == partyID);
+			var partyEntity = dbContext.PartyUpdates.Where(a => a.PartyID == partyID);
 			if (partyEntity != null)
 			{
-				dbContext.PartyUpdates.Remove(partyEntity);
+				dbContext.PartyUpdates.RemoveRange(partyEntity);
 			}
 		}
 
