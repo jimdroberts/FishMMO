@@ -89,7 +89,7 @@ namespace FishMMO.Server
 				{
 					nextSave = SaveRate;
 					
-					Debug.Log("CharacterManager: Save" + "[" + DateTime.UtcNow + "]");
+					Debug.Log("Character System: Save" + "[" + DateTime.UtcNow + "]");
 
 					// all characters are periodically saved
 					using var dbContext = Server.DbContextFactory.CreateDbContext();
@@ -249,7 +249,7 @@ namespace FishMMO.Server
 						// update character count
 						++instance.CharacterCount;
 
-						Debug.Log(character.CharacterName + " is loading Scene: " + character.SceneName + ":" + character.SceneHandle);
+						Debug.Log("Character System: " + character.CharacterName + " is loading Scene: " + character.SceneName + ":" + character.SceneHandle);
 					}
 					else
 					{

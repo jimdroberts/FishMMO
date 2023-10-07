@@ -7,8 +7,8 @@ namespace FishMMO.Client
 	{
 		internal static Client Client;
 
-		private static Dictionary<long, string> names = new Dictionary<long, string>();
-		private static Dictionary<long, Action<string>> pendingNameRequests = new Dictionary<long, Action<string>>();
+		private static Dictionary<NamingSystemType, Dictionary<long, string>> names = new Dictionary<NamingSystemType, Dictionary<long, string>>();
+		private static Dictionary<NamingSystemType, Dictionary<long, Action<string>>> pendingNameRequests = new Dictionary<NamingSystemType, Dictionary<long, Action<string>>>();
 
 		public static void InitializeOnce(Client client)
 		{
@@ -23,15 +23,23 @@ namespace FishMMO.Client
 
 		public static void SetName(NamingSystemType type, long id, Action<string> action)
 		{
-			if (names.TryGetValue(id, out string name))
+			if (!names.TryGetValue(type, out Dictionary<long, string> typeNames))
+			{
+				names.Add(type, typeNames = new Dictionary<long, string>());
+			}
+			if (typeNames.TryGetValue(id, out string name))
 			{
 				action?.Invoke(name);
 			}
 			else if (Client != null)
 			{
-				if (!pendingNameRequests.TryGetValue(id, out Action<string> pendingAction))
+				if (!pendingNameRequests.TryGetValue(type, out Dictionary<long, Action<string>> pendingActions))
 				{
-					pendingNameRequests.Add(id, action);
+					pendingNameRequests.Add(type, pendingActions = new Dictionary<long, Action<string>>());
+				}
+				if (!pendingActions.TryGetValue(id, out Action<string> pendingAction))
+				{
+					pendingActions.Add(id, action);
 
 					// send the request to the server to get a name
 					Client.NetworkManager.ClientManager.Broadcast(new NamingBroadcast()
@@ -50,13 +58,20 @@ namespace FishMMO.Client
 
 		private static void OnClientNamingBroadcastReceived(NamingBroadcast msg)
 		{
-			if (pendingNameRequests.TryGetValue(msg.id, out Action<string> pendingActions))
+			if (pendingNameRequests.TryGetValue(msg.type, out Dictionary<long, Action<string>> pendingRequests))
 			{
-				pendingActions?.Invoke(msg.name);
-				pendingActions = null;
-				pendingNameRequests.Remove(msg.id);
+				if (pendingRequests.TryGetValue(msg.id, out Action<string> pendingActions))
+				{
+					pendingActions?.Invoke(msg.name);
+					pendingActions = null;
+					pendingRequests.Remove(msg.id);
+				}
 			}
-			names[msg.id] = msg.name;
+			if (!names.TryGetValue(msg.type, out Dictionary<long, string> knownNames))
+			{
+				names.Add(msg.type, knownNames = new Dictionary<long, string>());
+			}
+			knownNames[msg.id] = msg.name;
 		}
 	}
 }

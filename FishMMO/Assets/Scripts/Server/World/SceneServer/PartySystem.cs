@@ -145,7 +145,7 @@ namespace FishMMO.Server
 				// get the current party members from the database
 				List<CharacterPartyEntity> dbMembers = CharacterPartyService.Members(dbContext, update.PartyID);
 
-				var addBroadcasts = dbMembers.Select(x => new PartyNewMemberBroadcast()
+				var addBroadcasts = dbMembers.Select(x => new PartyMemberUpdateBroadcast()
 				{
 					partyID = x.PartyID,
 					characterID = x.CharacterID,
@@ -300,7 +300,7 @@ namespace FishMMO.Server
 					dbContext.SaveChanges();
 
 					// tell the new member they joined immediately, other clients will catch up with the PartyUpdate pass
-					conn.Broadcast(new PartyNewMemberBroadcast()
+					conn.Broadcast(new PartyMemberUpdateBroadcast()
 					{
 						partyID = pendingPartyID,
 						characterID = partyController.Character.ID,

@@ -145,7 +145,7 @@ namespace FishMMO.Server
 				// get the current guild members from the database
 				List<CharacterGuildEntity> dbMembers = CharacterGuildService.Members(dbContext, update.GuildID);
 
-				var addBroadcasts = dbMembers.Select(x => new GuildNewMemberBroadcast()
+				var addBroadcasts = dbMembers.Select(x => new GuildMemberUpdateBroadcast()
 				{
 					guildID = x.GuildID,
 					characterID = x.CharacterID,
@@ -226,7 +226,6 @@ namespace FishMMO.Server
 				conn.Broadcast(new GuildCreateBroadcast()
 				{
 					guildID = newGuild.ID,
-					guildName = newGuild.Name,
 					location = guildController.gameObject.scene.name,
 				});
 			}
@@ -248,8 +247,7 @@ namespace FishMMO.Server
 			// validate guild leader or officer is inviting
 			if (inviter == null ||
 				inviter.ID < 1 ||
-				inviter.Rank != GuildRank.Leader ||
-				inviter.Rank != GuildRank.Officer ||
+				!(inviter.Rank != GuildRank.Leader || inviter.Rank != GuildRank.Officer) ||
 				!CharacterGuildService.ExistsNotFull(dbContext, inviter.ID, MaxGuildSize))
 			{
 				return;
@@ -315,9 +313,9 @@ namespace FishMMO.Server
 					dbContext.SaveChanges();
 
 					// tell the new member they joined immediately, other clients will catch up with the GuildUpdate pass
-					conn.Broadcast(new GuildNewMemberBroadcast()
+					conn.Broadcast(new GuildMemberUpdateBroadcast()
 					{
-						guildID = pendingGuildID,
+						guildID = guildController.ID,
 						characterID = guildController.Character.ID,
 						rank = GuildRank.Member,
 						location = guildController.gameObject.scene.name,

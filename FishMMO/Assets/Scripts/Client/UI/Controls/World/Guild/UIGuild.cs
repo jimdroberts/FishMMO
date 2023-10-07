@@ -26,19 +26,23 @@ namespace FishMMO.Client
 			Character character = Character.localCharacter;
 			if (character != null && GuildMemberPrefab != null && GuildMemberParent != null)
 			{
-				if (GuildLabel != null)
+				ClientNamingSystem.SetName(NamingSystemType.GuildName, character.GuildController.ID, (s) =>
 				{
-					GuildLabel.text = character.GuildController.Name;
-				}
+					if (GuildLabel != null)
+					{
+						GuildLabel.text = s;
+					}
+				});
+				
 				UIGuildMember member = Instantiate(GuildMemberPrefab, GuildMemberParent);
 				if (member != null)
 				{
 					if (member.Name != null)
-						member.Name.text = "Name: " + character.CharacterName;
+						member.Name.text = character.CharacterName;
 					if (member.Rank != null)
-						member.Rank.text = "Rank: " + character.GuildController.Rank.ToString();
+						member.Rank.text = character.GuildController.Rank.ToString();
 					if (member.Location != null)
-						member.Location.text = "Location: " + location;
+						member.Location.text = location;
 					Members.Add(character.ID, member);
 				}
 			}
@@ -73,9 +77,9 @@ namespace FishMMO.Client
 					});
 				}
 				if (guildMember.Rank != null)
-					guildMember.Rank.text = "Rank: " + rank.ToString();
+					guildMember.Rank.text = rank.ToString();
 				if (guildMember.Location != null)
-					guildMember.Location.text = "Location: " + location;
+					guildMember.Location.text = location;
 			}
 		}
 

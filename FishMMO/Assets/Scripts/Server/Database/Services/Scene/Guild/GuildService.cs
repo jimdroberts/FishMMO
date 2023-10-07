@@ -12,6 +12,16 @@ namespace FishMMO.Server.Services
 			return dbContext.Guilds.FirstOrDefault(a => a.Name.ToUpper() == name.ToUpper()) != null;
 		}
 
+		public static string GetNameByID(ServerDbContext dbContext, long guildID)
+		{
+			var guild = dbContext.Guilds.FirstOrDefault(a => a.ID == guildID);
+			if (guild == null)
+			{
+				return "";
+			}
+			return guild.Name;
+		}
+
 		/// <summary>
 		/// Saves a Guild to the database if it doesn't exist.
 		/// </summary>

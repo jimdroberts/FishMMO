@@ -6,6 +6,11 @@ namespace FishMMO.Server.Services
 {
 	public class PendingSceneService
 	{
+		public static bool Exists(ServerDbContext dbContext, long worldServerID, string sceneName)
+		{
+			return dbContext.PendingScenes.FirstOrDefault(c => c.WorldServerID == worldServerID && c.SceneName == sceneName) != null;
+		}
+
 		public static void Enqueue(ServerDbContext dbContext, long worldServerID, string sceneName)
 		{
 			var entity = dbContext.PendingScenes.FirstOrDefault(c => c.WorldServerID == worldServerID && c.SceneName == sceneName);

@@ -30,7 +30,7 @@ public class PartyController : NetworkBehaviour
 
 		ClientManager.RegisterBroadcast<PartyCreateBroadcast>(OnClientPartyCreateBroadcastReceived);
 		ClientManager.RegisterBroadcast<PartyInviteBroadcast>(OnClientPartyInviteBroadcastReceived);
-		ClientManager.RegisterBroadcast<PartyNewMemberBroadcast>(OnClientPartyNewMemberBroadcastReceived);
+		ClientManager.RegisterBroadcast<PartyMemberUpdateBroadcast>(OnClientPartyMemberUpdateBroadcastReceived);
 		ClientManager.RegisterBroadcast<PartyLeaveBroadcast>(OnClientPartyLeaveBroadcastReceived);
 		ClientManager.RegisterBroadcast<PartyAddBroadcast>(OnClientPartyAddBroadcastReceived);
 		ClientManager.RegisterBroadcast<PartyRemoveBroadcast>(OnClientPartyRemoveBroadcastReceived);
@@ -44,7 +44,7 @@ public class PartyController : NetworkBehaviour
 		{
 			ClientManager.UnregisterBroadcast<PartyCreateBroadcast>(OnClientPartyCreateBroadcastReceived);
 			ClientManager.UnregisterBroadcast<PartyInviteBroadcast>(OnClientPartyInviteBroadcastReceived);
-			ClientManager.UnregisterBroadcast<PartyNewMemberBroadcast>(OnClientPartyNewMemberBroadcastReceived);
+			ClientManager.UnregisterBroadcast<PartyMemberUpdateBroadcast>(OnClientPartyMemberUpdateBroadcastReceived);
 			ClientManager.UnregisterBroadcast<PartyLeaveBroadcast>(OnClientPartyLeaveBroadcastReceived);
 			ClientManager.UnregisterBroadcast<PartyAddBroadcast>(OnClientPartyAddBroadcastReceived);
 			ClientManager.UnregisterBroadcast<PartyRemoveBroadcast>(OnClientPartyRemoveBroadcastReceived);
@@ -94,7 +94,7 @@ public class PartyController : NetworkBehaviour
 	/// <summary>
 	/// When we add a new party member to the party.
 	/// </summary>
-	public void OnClientPartyNewMemberBroadcastReceived(PartyNewMemberBroadcast msg)
+	public void OnClientPartyMemberUpdateBroadcastReceived(PartyMemberUpdateBroadcast msg)
 	{
 		// update our Party list with the new Party member
 #if !UNITY_SERVER
@@ -151,7 +151,7 @@ public class PartyController : NetworkBehaviour
 					uiParty.OnPartyRemoveMember(id);
 				}
 			}
-			foreach (PartyNewMemberBroadcast member in msg.members)
+			foreach (PartyMemberUpdateBroadcast member in msg.members)
 			{
 				if (!Members.Contains(member.characterID))
 				{

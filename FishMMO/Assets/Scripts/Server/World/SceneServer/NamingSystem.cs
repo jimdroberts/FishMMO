@@ -1,11 +1,11 @@
 ﻿using FishNet.Connection;
 using FishNet.Transporting;
 using FishMMO.Server.Services;
-using UnityEngine;
 
 public enum NamingSystemType : byte
 {
 	CharacterName,
+	GuildName,
 }
 
 namespace FishMMO.Server
@@ -61,6 +61,18 @@ namespace FishMMO.Server
 						if (!string.IsNullOrWhiteSpace(name))
 						{
 							SendNamingBroadcast(conn, NamingSystemType.CharacterName, msg.id, name);
+						}
+					}
+					break;
+				case NamingSystemType.GuildName:
+					// get the name from the database
+					if (Server.DbContextFactory != null)
+					{
+						using var dbContext = Server.DbContextFactory.CreateDbContext();
+						string name = GuildService.GetNameByID(dbContext, msg.id);
+						if (!string.IsNullOrWhiteSpace(name))
+						{
+							SendNamingBroadcast(conn, NamingSystemType.GuildName, msg.id, name);
 						}
 					}
 					break;

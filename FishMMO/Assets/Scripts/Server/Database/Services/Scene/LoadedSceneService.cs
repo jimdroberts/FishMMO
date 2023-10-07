@@ -16,8 +16,7 @@ namespace FishMMO.Server.Services
 			long sceneServerID,
 			long worldServerID,
 			string sceneName,
-			int sceneHandle
-		)
+			int sceneHandle)
 		{
 			var server = new LoadedSceneEntity()
 			{
@@ -45,12 +44,12 @@ namespace FishMMO.Server.Services
 			dbContext.LoadedScenes.RemoveRange(loadedScenes);
 		}
 
-		public static Dictionary<string, LoadedSceneEntity> GetServerList(ServerDbContext dbContext, long worldServerID, string sceneName, int maxClients)
+		public static List<LoadedSceneEntity> GetServerList(ServerDbContext dbContext, long worldServerID, string sceneName, int maxClients)
 		{
 			return dbContext.LoadedScenes.Where(c => c.WorldServerID == worldServerID &&
 													 c.SceneName == sceneName &&
 													 c.CharacterCount < maxClients)
-										 .ToDictionary(k => k.SceneName);
+										 .ToList();
 		}
 	}
 }

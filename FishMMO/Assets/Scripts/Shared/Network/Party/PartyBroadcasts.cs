@@ -20,7 +20,7 @@ public struct PartyDeclineInviteBroadcast : IBroadcast
 {
 }
 
-public struct PartyNewMemberBroadcast : IBroadcast
+public struct PartyMemberUpdateBroadcast : IBroadcast
 {
 	public long partyID;
 	public long characterID;
@@ -34,7 +34,7 @@ public struct PartyLeaveBroadcast : IBroadcast
 
 public struct PartyAddBroadcast : IBroadcast
 {
-	public List<PartyNewMemberBroadcast> members;
+	public List<PartyMemberUpdateBroadcast> members;
 
 }
 public struct PartyRemoveBroadcast : IBroadcast

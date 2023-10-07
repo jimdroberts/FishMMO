@@ -19,7 +19,7 @@ namespace FishMMO.Server
 
 		private long id;
 		private bool locked = false;
-		private float pulseRate = 10.0f;
+		private float pulseRate = 5.0f;
 		private float nextPulse = 0.0f;
 
 		public long ID { get { return id; } }
@@ -29,8 +29,6 @@ namespace FishMMO.Server
 
 		public override void InitializeOnce()
 		{
-			nextPulse = pulseRate;
-
 			if (ServerManager != null &&
 				SceneManager != null)
 			{
@@ -56,9 +54,9 @@ namespace FishMMO.Server
 
 					if (Server.Configuration.TryGetString("ServerName", out string name))
 					{
-						Debug.Log("Adding Scene Server to Database: " + name + ":" + server.address + ":" + server.port);
+						Debug.Log("Scene Server System: Adding Scene Server to Database: " + name + ":" + server.address + ":" + server.port);
 						SceneServerService.Add(dbContext, server.address, server.port, characterCount, locked, out id);
-						Debug.Log("Successfully added a new Scene Server: " + id);
+						Debug.Log("Scene Server System: Successfully added a new Scene Server: " + id);
 					}
 				}
 			}
@@ -66,7 +64,7 @@ namespace FishMMO.Server
 			{
 				if (Server.Configuration.TryGetString("ServerName", out string name))
 				{
-					Debug.Log("Removing Scene Server: " + id);
+					Debug.Log("Scene Server System: Removing Scene Server: " + id);
 					SceneServerService.Delete(dbContext, id);
 					LoadedSceneService.Delete(dbContext, id);
 					dbContext.SaveChanges();
@@ -76,7 +74,7 @@ namespace FishMMO.Server
 
 		void LateUpdate()
 		{
-			if (serverState == LocalConnectionState.Started && Server.Configuration.TryGetString("ServerName", out string name))
+			if (serverState == LocalConnectionState.Started)
 			{
 				if (nextPulse < 0)
 				{
@@ -84,7 +82,7 @@ namespace FishMMO.Server
 
 					// TODO: maybe this one should exist....how expensive will this be to run on update?
 					using var dbContext = Server.DbContextFactory.CreateDbContext();
-					Debug.Log(name + ": Pulse");
+					Debug.Log("Scene Server System: Pulse");
 					int characterCount = Server.CharacterSystem.ConnectionCharacters.Count;
 					SceneServerService.Pulse(dbContext, id, characterCount);
 
@@ -97,7 +95,7 @@ namespace FishMMO.Server
 							{
 								foreach (KeyValuePair<int, SceneInstanceDetails> sceneDetails in scene)
 								{
-									Debug.Log(sceneDetails.Value.Name + "[" + sceneDetails.Value.WorldServerID + ":" + sceneDetails.Value.Handle + "]: Pulse [" + sceneDetails.Value.CharacterCount + "]");
+									Debug.Log("Scene Server System: " + sceneDetails.Value.Name + ":" + sceneDetails.Value.WorldServerID + ":" + sceneDetails.Value.Handle + " Pulse");
 									LoadedSceneService.Pulse(dbContext, sceneDetails.Key, sceneDetails.Value.CharacterCount);
 								}
 							}
@@ -106,10 +104,10 @@ namespace FishMMO.Server
 
 					// process pending scenes
 					PendingSceneEntity pending = PendingSceneService.Dequeue(dbContext);
-					dbContext.SaveChanges();
 					if (pending != null)
 					{
-						Debug.Log("Dequeued Pending Scene Load request World:" + pending.WorldServerID + " Scene:" + pending.SceneName);
+						dbContext.SaveChanges();
+						Debug.Log("Scene Server System: Dequeued Pending Scene Load request World:" + pending.WorldServerID + " Scene:" + pending.SceneName);
 						ProcessSceneLoadRequest(pending.WorldServerID, pending.SceneName);
 					}
 				}
@@ -120,11 +118,10 @@ namespace FishMMO.Server
 		private void OnApplicationQuit()
 		{
 			if (Server != null && Server.DbContextFactory != null &&
-				serverState != LocalConnectionState.Stopped &&
-				Server.Configuration.TryGetString("ServerName", out string name))
+				serverState != LocalConnectionState.Stopped)
 			{
 				using var dbContext = Server.DbContextFactory.CreateDbContext();
-				Debug.Log("Removing Scene Server: " + id);
+				Debug.Log("Scene Server System: Removing Scene Server: " + id);
 				SceneServerService.Delete(dbContext, id);
 				LoadedSceneService.Delete(dbContext, id);
 				dbContext.SaveChanges();
@@ -139,7 +136,7 @@ namespace FishMMO.Server
 			if (WorldSceneDetailsCache == null ||
 				!WorldSceneDetailsCache.Scenes.Contains(sceneName))
 			{
-				Debug.Log("SceneServerManager: Scene is missing from the cache. Unable to load the scene.");
+				Debug.Log("Scene Server System: Scene is missing from the cache. Unable to load the scene.");
 				return;
 			}
 
@@ -209,13 +206,13 @@ namespace FishMMO.Server
 
 				// save the loaded scene information to the database
 				using var dbContext = Server.DbContextFactory.CreateDbContext();
-				Debug.Log("Loaded Scene[" + scene.name + ":" + scene.handle + "]");
+				Debug.Log("Scene Server System: Loaded Scene " + scene.name + ":" + scene.handle);
 				LoadedSceneService.Add(dbContext, id, worldServerID, scene.name, scene.handle);
 				dbContext.SaveChanges();
 			}
 			else
 			{
-				throw new UnityException("Duplicate scene handles");
+				throw new UnityException("Scene Server System: Duplicate scene handles!!");
 			}
 		}
 

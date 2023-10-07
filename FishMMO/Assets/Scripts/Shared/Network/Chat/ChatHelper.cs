@@ -62,6 +62,8 @@ public static class ChatHelper
 		{
 			if (!DirectCommands.ContainsKey(pair.Key))
 			{
+				Debug.Log("ChatSystem: Added Direct Command[" + pair.Key + "]");
+
 				DirectCommands.Add(pair.Key, pair.Value);
 			}
 		}
