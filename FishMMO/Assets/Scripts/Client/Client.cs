@@ -56,6 +56,9 @@ namespace FishMMO.Client
 			}
 			else
 			{
+				// initialize naming service
+				ClientNamingSystem.InitializeOnce(this);
+
 				// assign the clients TimeManager
 				TimeManager = NetworkManager.TimeManager;
 
@@ -124,6 +127,8 @@ namespace FishMMO.Client
 
 		public static void Quit()
 		{
+			ClientNamingSystem.Destroy();
+
 #if UNITY_EDITOR
 			EditorApplication.ExitPlaymode();
 #else

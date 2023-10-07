@@ -51,11 +51,11 @@ namespace FishMMO.Server
 			serverState = args.ConnectionState;
 			if (serverState == LocalConnectionState.Started)
 			{
-				ServerManager.RegisterBroadcast<ChatBroadcast>(OnServerChatMessageReceived, true);
+				ServerManager.RegisterBroadcast<ChatBroadcast>(OnServerChatBroadcastReceived, true);
 			}
 			else if (serverState == LocalConnectionState.Stopped)
 			{
-				ServerManager.UnregisterBroadcast<ChatBroadcast>(OnServerChatMessageReceived);
+				ServerManager.UnregisterBroadcast<ChatBroadcast>(OnServerChatBroadcastReceived);
 			}
 		}
 
@@ -68,10 +68,7 @@ namespace FishMMO.Server
 					nextPump = MessagePumpRate;
 
 					List<ChatEntity> messages = FetchChatMessages();
-					if (messages != null)
-					{
-						ProcessChatMessages(messages);
-					}
+					ProcessChatMessages(messages);
 
 				}
 				nextPump -= Time.deltaTime;
@@ -99,6 +96,10 @@ namespace FishMMO.Server
 		// process chat messages from the database
 		private void ProcessChatMessages(List<ChatEntity> messages)
 		{
+			if (messages == null || messages.Count < 1)
+			{
+				return;
+			}
 			foreach (ChatEntity message in messages)
 			{
 				ChatChannel channel = (ChatChannel)message.Channel;
@@ -132,7 +133,7 @@ namespace FishMMO.Server
 		/// <summary>
 		/// Chat message received from a character.
 		/// </summary>
-		private void OnServerChatMessageReceived(NetworkConnection conn, ChatBroadcast msg)
+		private void OnServerChatBroadcastReceived(NetworkConnection conn, ChatBroadcast msg)
 		{
 			if (conn.FirstObject != null)
 			{
@@ -178,6 +179,12 @@ namespace FishMMO.Server
 			}
 
 			string cmd = ChatHelper.GetCommandAndTrim(ref msg.text);
+
+			// direct commands are handled differently
+			if (ChatHelper.TryParseDirectCommand(cmd, sender, msg))
+			{
+				return;
+			}
 
 			// the text is empty
 			if (msg.text.Length < 1)

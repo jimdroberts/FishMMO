@@ -17,6 +17,7 @@ GameObject:
   - component: {fileID: 3610206149135137526}
   - component: {fileID: 3610206149135137527}
   - component: {fileID: 3610206149135137524}
+  - component: {fileID: 3610206149269882745}
   m_Layer: 0
   m_Name: ServerSystems
   m_TagString: Untagged
@@ -37,7 +38,7 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
-  m_RootOrder: 0
+  m_RootOrder: 2
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &8380057997533541231
 MonoBehaviour:
@@ -51,11 +52,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 03313be06094e964aa4ef9f757c6f674, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  ConfigurationFileName: 
-  Address: 
-  Port: 0
-  RelayAddress: 
-  RelayPort: 0
 --- !u!114 &6747751012235542384
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -99,7 +95,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d16ca289fbc0b714991cc46f1cfe19a8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  SceneServerSystem: {fileID: 0}
   SaveRate: 60
   OutOfBoundsCheckRate: 5
 --- !u!114 &7212380580702704947
@@ -127,9 +122,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   SceneManager: {fileID: 0}
-  CharacterSystem: {fileID: 0}
   AllowRepeatMessages: 0
   MessageRateLimit: 0
+  MessagePumpRate: 2
+  MessageFetchCount: 20
 --- !u!114 &3610206149135137527
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -142,8 +138,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d701440aea9074a4d85f9b2474c1793b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  CharacterSystem: {fileID: 0}
-  nextGuildId: 0
+  MaxGuildSize: 100
+  MaxGuildNameLength: 64
+  UpdatePumpRate: 1
+  UpdateFetchCount: 100
 --- !u!114 &3610206149135137524
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -156,5 +154,19 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1df2e174834e90e478fdcded1626e5a4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  CharacterSystem: {fileID: 0}
-  nextPartyId: 0
+  HealthTemplate: {fileID: 11400000, guid: e5c10a046ee277f46a57ee2048ae5ec9, type: 2}
+  MaxPartySize: 6
+  UpdatePumpRate: 1
+  UpdateFetchCount: 100
+--- !u!114 &3610206149269882745
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3610206149135137288}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5080401287e09e84db8f9b8809bebf34, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 

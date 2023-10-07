@@ -19,6 +19,7 @@ public static class ChatHelper
 
 	private static bool initialized = false;
 
+	public static Dictionary<string, ChatCommand> DirectCommands { get; private set; }
 	public static Dictionary<string, ChatCommandDetails> Commands { get; private set; }
 	public static Dictionary<ChatChannel, ChatCommandDetails> ChannelCommands { get; private set; }
 
@@ -38,6 +39,7 @@ public static class ChatHelper
 		if (initialized) return;
 		initialized = true;
 
+		DirectCommands = new Dictionary<string, ChatCommand>();
 		Commands = new Dictionary<string, ChatCommandDetails>();
 		ChannelCommands = new Dictionary<ChatChannel, ChatCommandDetails>();
 
@@ -48,6 +50,20 @@ public static class ChatHelper
 				Channel = pair.Key,
 				Func = onGetChannelCommand?.Invoke(pair.Key),
 			});
+		}
+	}
+
+	public static void AddDirectCommands(Dictionary<string, ChatCommand> commands)
+	{
+		if (commands == null)
+			return;
+
+		foreach (KeyValuePair<string, ChatCommand> pair in commands)
+		{
+			if (!DirectCommands.ContainsKey(pair.Key))
+			{
+				DirectCommands.Add(pair.Key, pair.Value);
+			}
 		}
 	}
 
@@ -76,6 +92,17 @@ public static class ChatHelper
 			command = sayCommand.Func;
 		}
 		return command;
+	}
+
+	public static bool TryParseDirectCommand(string cmd, Character sender, ChatBroadcast msg)
+	{
+		// try to find the command
+		if (ChatHelper.DirectCommands.TryGetValue(cmd, out ChatCommand command))
+		{
+			command?.Invoke(sender, msg);
+			return true;
+		}
+		return false;
 	}
 
 	public static ChatCommand ParseChatCommand(string cmd, ref ChatChannel channel)

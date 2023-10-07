@@ -10,7 +10,7 @@ namespace FishMMO.Server.Services
 		public static bool ExistsNotFull(ServerDbContext dbContext, long partyID, int max)
 		{
 			var partyCharacters = dbContext.CharacterParties.Where(a => a.PartyID == partyID);
-			if (partyCharacters != null && partyCharacters.Count() < max)
+			if (partyCharacters != null && partyCharacters.Count() <= max)
 			{
 				return true;
 			}
@@ -20,7 +20,7 @@ namespace FishMMO.Server.Services
 		/// <summary>
 		/// Saves a CharacterPartyEntity to the database.
 		/// </summary>
-		public static void Save(ServerDbContext dbContext, long characterID, long partyID, PartyRank rank, string location)
+		public static void Save(ServerDbContext dbContext, long characterID, long partyID, PartyRank rank, float healthPCT)
 		{
 			var characterPartyEntity = dbContext.CharacterParties.FirstOrDefault(a => a.CharacterID == characterID);
 			if (characterPartyEntity == null)
@@ -30,7 +30,7 @@ namespace FishMMO.Server.Services
 					CharacterID = characterID,
 					PartyID = partyID,
 					Rank = (byte)rank,
-					Location = location,
+					HealthPCT = healthPCT,
 				};
 				dbContext.CharacterParties.Add(characterPartyEntity);
 			}
@@ -38,32 +38,7 @@ namespace FishMMO.Server.Services
 			{
 				characterPartyEntity.PartyID = partyID;
 				characterPartyEntity.Rank = (byte)rank;
-				characterPartyEntity.Location = location;
-			}
-		}
-
-		/// <summary>
-		/// Saves a CharacterPartyEntity to the database.
-		/// </summary>
-		public static void Save(ServerDbContext dbContext, Character character)
-		{
-			var characterPartyEntity = dbContext.CharacterParties.FirstOrDefault(a => a.CharacterID == character.ID);
-			if (characterPartyEntity == null)
-			{
-				characterPartyEntity = new CharacterPartyEntity()
-				{
-					CharacterID = character.ID,
-					PartyID = character.PartyController.ID,
-					Rank = (byte)character.PartyController.Rank,
-					Location = character.gameObject.scene.name,
-				};
-				dbContext.CharacterParties.Add(characterPartyEntity);
-			}
-			else
-			{
-				characterPartyEntity.PartyID = character.PartyController.ID;
-				characterPartyEntity.Rank = (byte)character.PartyController.Rank;
-				characterPartyEntity.Location = character.gameObject.scene.name;
+				characterPartyEntity.HealthPCT = healthPCT;
 			}
 		}
 
@@ -84,15 +59,13 @@ namespace FishMMO.Server.Services
 		/// <summary>
 		/// Removes a character from their party.
 		/// </summary>
-		public static bool Delete(ServerDbContext dbContext, long partyID, long memberID)
+		public static void Delete(ServerDbContext dbContext, long partyID, long memberID)
 		{
 			var characterPartyEntity = dbContext.CharacterParties.FirstOrDefault(a => a.PartyID == partyID && a.CharacterID == memberID);
 			if (characterPartyEntity != null)
 			{
 				dbContext.CharacterParties.Remove(characterPartyEntity);
-				return true;
 			}
-			return false;
 		}
 
 		/// <summary>

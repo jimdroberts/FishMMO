@@ -15,25 +15,46 @@ namespace FishMMO.Server
 	/// </summary>
 	public class PartySystem : ServerBehaviour
 	{
+		public CharacterAttributeTemplate HealthTemplate;
+		public int MaxPartySize = 6;
+		[Tooltip("The server party update pump rate limit in seconds.")]
+		public float UpdatePumpRate = 1.0f;
+		public int UpdateFetchCount = 100;
+
 		private LocalConnectionState serverState;
 		private DateTime lastFetchTime = DateTime.UtcNow;
 		private long lastPosition = 0;
 		private float nextPump = 0.0f;
-
-		public int MaxPartySize = 6;
-		[Tooltip("The server party update pump rate limit in seconds.")]
-		public float UpdatePumpRate = 5.0f;
-		public int UpdateFetchCount = 100;
-
 		// clientID / partyID
 		private readonly Dictionary<long, long> pendingInvitations = new Dictionary<long, long>();
-		private readonly Dictionary<long, HashSet<long>> partyMemberCache = new Dictionary<long, HashSet<long>>();
+
+		private Dictionary<string, ChatCommand> partyChatCommands;
+		public bool OnPartyInvite(Character sender, ChatBroadcast msg)
+		{
+			string targetName = msg.text.Trim().ToLower();
+			if (Server.CharacterSystem.CharactersByLowerCaseName.TryGetValue(targetName, out Character character))
+			{
+				OnServerPartyInviteBroadcastReceived(sender.Owner, new PartyInviteBroadcast()
+				{
+					targetCharacterID = character.ID
+				});
+				return true;
+			}
+			return false;
+		}
 
 		public override void InitializeOnce()
 		{
 			if (ServerManager != null &&
 				Server.CharacterSystem != null)
 			{
+				partyChatCommands = new Dictionary<string, ChatCommand>()
+				{
+					{ "/pi", OnPartyInvite },
+					{ "/invite", OnPartyInvite },
+				};
+				ChatHelper.AddDirectCommands(partyChatCommands);
+
 				ServerManager.OnServerConnectionState += ServerManager_OnServerConnectionState;
 			}
 			else
@@ -73,11 +94,8 @@ namespace FishMMO.Server
 				{
 					nextPump = UpdatePumpRate;
 
-					List<PartyUpdateEntity> messages = FetchPartyUpdates();
-					if (messages != null)
-					{
-						ProcessPartyUpdates(messages);
-					}
+					List<PartyUpdateEntity> updates = FetchPartyUpdates();
+					ProcessPartyUpdates(updates);
 
 				}
 				nextPump -= Time.deltaTime;
@@ -90,9 +108,9 @@ namespace FishMMO.Server
 
 			// fetch party updates from the database
 			List<PartyUpdateEntity> updates = PartyUpdateService.Fetch(dbContext, lastFetchTime, lastPosition, UpdateFetchCount);
-			if (updates != null)
+			if (updates != null && updates.Count > 0)
 			{
-				PartyUpdateEntity latest = updates.LastOrDefault();
+				PartyUpdateEntity latest = updates[updates.Count - 1];
 				if (latest != null)
 				{
 					lastFetchTime = latest.TimeCreated;
@@ -105,7 +123,7 @@ namespace FishMMO.Server
 		// process updates from the database
 		private void ProcessPartyUpdates(List<PartyUpdateEntity> updates)
 		{
-			if (Server == null || Server.DbContextFactory == null || updates == null)
+			if (Server == null || Server.DbContextFactory == null || updates == null || updates.Count < 1)
 			{
 				return;
 			}
@@ -127,63 +145,27 @@ namespace FishMMO.Server
 				// get the current party members from the database
 				List<CharacterPartyEntity> dbMembers = CharacterPartyService.Members(dbContext, update.PartyID);
 
-				// get the locally cached party members
-				if (!partyMemberCache.TryGetValue(update.PartyID, out HashSet<long> members))
+				var addBroadcasts = dbMembers.Select(x => new PartyNewMemberBroadcast()
 				{
-					partyMemberCache.Add(update.PartyID, members = new HashSet<long>());
-				}
+					partyID = x.PartyID,
+					characterID = x.CharacterID,
+					rank = (PartyRank)x.Rank,
+					healthPCT = x.HealthPCT,
+				}).ToList();
 
-				// compile new id set
-				HashSet<long> newIDs = new HashSet<long>(dbMembers.Select(s => s.CharacterID));
-
-				// get our differences for removal
-				var removeResults = members.Where(m => !newIDs.Contains(m)).ToList();
-				if (removeResults != null && removeResults.Count > 0)
+				PartyAddBroadcast partyAddBroadcast = new PartyAddBroadcast()
 				{
-					// prepare broadcasts for clients
-					PartyRemoveBroadcast partyRemoveBroadcast = new PartyRemoveBroadcast()
-					{
-						members = removeResults,
-					};
+					members = addBroadcasts,
+				};
 
-					// tell all of the local party members to update their party member lists
-					foreach (CharacterPartyEntity entity in dbMembers)
+				// tell all of the local party members to update their party member lists
+				foreach (CharacterPartyEntity entity in dbMembers)
+				{
+					if (Server.CharacterSystem.CharactersByID.TryGetValue(entity.CharacterID, out Character character))
 					{
-						if (Server.CharacterSystem.CharactersByID.TryGetValue(entity.CharacterID, out Character character))
-						{
-							character.Owner.Broadcast(partyRemoveBroadcast, true, Channel.Unreliable);
-						}
+						character.Owner.Broadcast(partyAddBroadcast);
 					}
 				}
-
-				// get our differences for addition
-				var addResults = dbMembers.Where(m => !members.Contains(m.CharacterID)).ToList();
-				if (addResults != null && addResults.Count > 0)
-				{
-					var addBroadcasts = addResults.Select(x => new PartyNewMemberBroadcast()
-					{
-						memberID = x.CharacterID,
-						rank = (PartyRank)x.Rank,
-						location = x.Location,
-					}).ToList();
-
-					PartyAddBroadcast partyAddBroadcast = new PartyAddBroadcast()
-					{
-						members = addBroadcasts,
-					};
-
-					// tell all of the local party members to update their party member lists
-					foreach (CharacterPartyEntity entity in dbMembers)
-					{
-						if (Server.CharacterSystem.CharactersByID.TryGetValue(entity.CharacterID, out Character character))
-						{
-							character.Owner.Broadcast(partyAddBroadcast, true, Channel.Unreliable);
-						}
-					}
-				}
-
-				// update party member cache
-				partyMemberCache[update.PartyID] = newIDs;
 			}
 		}
 
@@ -215,13 +197,17 @@ namespace FishMMO.Server
 			{
 				partyController.ID = newParty.ID;
 				partyController.Rank = PartyRank.Leader;
-				CharacterPartyService.Save(dbContext, partyController.Character);
+				CharacterPartyService.Save(dbContext,
+										   partyController.Character.ID,
+										   partyController.ID,
+										   partyController.Rank,
+										   partyController.Character.AttributeController.GetResourceAttributeCurrentPercentage(HealthTemplate));
 				dbContext.SaveChanges();
 
 				// tell the character we made their party successfully
 				conn.Broadcast(new PartyCreateBroadcast()
 				{
-					ID = newParty.ID,
+					partyID = newParty.ID,
 					location = partyController.gameObject.scene.name,
 				});
 			}
@@ -264,7 +250,11 @@ namespace FishMMO.Server
 
 				// add to our list of pending invitations... used for validation when accepting/declining a party invite
 				pendingInvitations.Add(targetCharacter.ID, inviter.ID);
-				targetCharacter.Owner.Broadcast(new PartyInviteBroadcast() { targetCharacterID = targetCharacter.ID });
+				targetCharacter.Owner.Broadcast(new PartyInviteBroadcast()
+				{
+					inviterCharacterID = inviter.ID,
+					targetCharacterID = targetCharacter.ID
+				});
 			}
 		}
 
@@ -277,7 +267,7 @@ namespace FishMMO.Server
 			PartyController partyController = conn.FirstObject.GetComponent<PartyController>();
 
 			// validate character
-			if (partyController == null)
+			if (partyController == null || partyController.ID > 0)
 			{
 				return;
 			}
@@ -294,12 +284,17 @@ namespace FishMMO.Server
 				using var dbContext = Server.DbContextFactory.CreateDbContext();
 				List<CharacterPartyEntity> members = CharacterPartyService.Members(dbContext, pendingPartyID);
 				if (members != null &&
-					members.Count > 0 &&
 					members.Count < MaxPartySize)
 				{
-					partyController.Rank = PartyRank.Member;
 					partyController.ID = pendingPartyID;
-					CharacterPartyService.Save(dbContext, partyController.Character);
+					partyController.Rank = PartyRank.Member;
+
+					CharacterPartyService.Save(dbContext,
+										   partyController.Character.ID,
+										   partyController.ID,
+										   partyController.Rank,
+										   partyController.Character.AttributeController.GetResourceAttributeCurrentPercentage(HealthTemplate));
+
 					// tell the other servers to update their party lists
 					PartyUpdateService.Save(dbContext, pendingPartyID);
 					dbContext.SaveChanges();
@@ -307,9 +302,10 @@ namespace FishMMO.Server
 					// tell the new member they joined immediately, other clients will catch up with the PartyUpdate pass
 					conn.Broadcast(new PartyNewMemberBroadcast()
 					{
-						memberID = partyController.Character.ID,
+						partyID = pendingPartyID,
+						characterID = partyController.Character.ID,
 						rank = PartyRank.Member,
-						location = partyController.gameObject.scene.name,
+						healthPCT = partyController.Character.AttributeController.GetResourceAttributeCurrentPercentage(HealthTemplate),
 					});
 				}
 			}
@@ -353,41 +349,38 @@ namespace FishMMO.Server
 				int remainingCount = members.Count - 1;
 
 				List<CharacterPartyEntity> remainingMembers = new List<CharacterPartyEntity>();
-				if (partyController.Rank == PartyRank.Leader)
+
+				// are there any other members in the party? if so we transfer leadership
+				if (partyController.Rank == PartyRank.Leader && remainingCount > 0)
 				{
-					// are there any other members in the party? if so we transfer leadership to officers first and then members
-					if (remainingCount > 0)
+					foreach (CharacterPartyEntity member in members)
 					{
-						List<CharacterPartyEntity> officers = new List<CharacterPartyEntity>();
-
-						foreach (CharacterPartyEntity member in members)
+						if (member.CharacterID == partyController.Character.ID)
 						{
-							if (member.CharacterID == partyController.Character.ID)
-							{
-								continue;
-							}
-							remainingMembers.Add(member);
+							continue;
 						}
+						remainingMembers.Add(member);
+					}
 
-						CharacterPartyEntity newLeader = null;
-						if (remainingMembers.Count > 0)
-						{
-							// pick a random member
-							newLeader = remainingMembers[UnityEngine.Random.Range(0, remainingMembers.Count)];
-						}
+					CharacterPartyEntity newLeader = null;
+					if (remainingMembers.Count > 0)
+					{
+						// pick a random member
+						newLeader = remainingMembers[UnityEngine.Random.Range(0, remainingMembers.Count)];
+					}
 
-						// update the party leader status in the database
-						if (newLeader != null)
-						{
-							CharacterPartyService.Save(dbContext, newLeader.CharacterID, newLeader.PartyID, PartyRank.Leader, newLeader.Location);
-						}
+					// update the party leader status in the database
+					if (newLeader != null)
+					{
+						CharacterPartyService.Save(dbContext, newLeader.CharacterID, newLeader.PartyID, PartyRank.Leader, newLeader.HealthPCT);
 					}
 				}
 
-				if (remainingCount < 1)
+				if (remainingMembers.Count < 1)
 				{
 					// delete the party
 					PartyService.Delete(dbContext, partyController.ID);
+					PartyUpdateService.Delete(dbContext, partyController.ID);
 				}
 				else
 				{
@@ -396,10 +389,11 @@ namespace FishMMO.Server
 				}
 
 				// remove the party member
-				partyController.ID = 0;
-				partyController.Rank = PartyRank.None;
 				CharacterPartyService.Delete(dbContext, partyController.ID, partyController.Character.ID);
 				dbContext.SaveChanges();
+
+				partyController.ID = 0;
+				partyController.Rank = PartyRank.None;
 
 				// tell character that they left the party immediately, other clients will catch up with the PartyUpdate pass
 				conn.Broadcast(new PartyLeaveBroadcast());

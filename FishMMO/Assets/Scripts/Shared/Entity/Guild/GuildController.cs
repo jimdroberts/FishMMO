@@ -1,6 +1,7 @@
 ﻿using UnityEngine;
 using FishNet.Object;
 using System.Collections.Generic;
+using System.Linq;
 #if !UNITY_SERVER
 using FishMMO.Client;
 #endif
@@ -57,11 +58,12 @@ public class GuildController : NetworkBehaviour
 	/// </summary>
 	public void OnClientGuildCreateBroadcastReceived(GuildCreateBroadcast msg)
 	{
-		ID = msg.ID;
+#if !UNITY_SERVER
+		ID = msg.guildID;
 		Name = msg.guildName;
 		Rank = GuildRank.Leader;
 
-#if !UNITY_SERVER
+
 		if (UIManager.TryGet("UIGuild", out UIGuild uiGuild))
 		{
 			uiGuild.OnGuildCreated(msg.location);
@@ -75,10 +77,23 @@ public class GuildController : NetworkBehaviour
 	/// </summary>
 	public void OnClientGuildInviteBroadcastReceived(GuildInviteBroadcast msg)
 	{
-		ClientManager.Broadcast(new GuildAcceptInviteBroadcast());// instant Guild accept, temp for testing
-		//ClientManager.Broadcast(new GuildDeclineInviteBroadcast());// instant decline invite, temp for testing
-
-		// display invitation popup
+#if !UNITY_SERVER
+		ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.inviterCharacterID, (n) =>
+		{
+			if (UIManager.TryGet("UIConfirmationTooltip", out UIConfirmationTooltip uiTooltip))
+			{
+				uiTooltip.Open("You have been invited to join " + n + "'s guild. Would you like to join?",
+				() =>
+				{
+					ClientManager.Broadcast(new GuildAcceptInviteBroadcast());
+				},
+				() =>
+				{
+					ClientManager.Broadcast(new GuildDeclineInviteBroadcast());
+				});
+			}
+		});
+#endif
 	}
 
 	/// <summary>
@@ -88,22 +103,14 @@ public class GuildController : NetworkBehaviour
 	{
 		// update our Guild list with the new Guild member
 #if !UNITY_SERVER
-		if (UIManager.TryGet("UIGuild", out UIGuild uiGuild))
+		if (Character != null && msg.characterID == Character.ID)
 		{
-			uiGuild.OnGuildAddMember(msg.memberID, msg.rank, msg.location);
+			ID = msg.guildID;
+			Rank = msg.rank;
 		}
-#endif
-	}
-
-	/// <summary>
-	/// When a guild members status is updated.
-	/// </summary>
-	public void OnClientGuildUpdateMemberBroadcastReceived(GuildUpdateMemberBroadcast msg)
-	{
-#if !UNITY_SERVER
 		if (UIManager.TryGet("UIGuild", out UIGuild uiGuild))
 		{
-			uiGuild.OnGuildAddMember(msg.memberID, msg.rank, msg.location);
+			uiGuild.OnGuildAddMember(msg.characterID, msg.rank, msg.location);
 		}
 #endif
 	}
@@ -113,12 +120,13 @@ public class GuildController : NetworkBehaviour
 	/// </summary>
 	public void OnClientGuildLeaveBroadcastReceived(GuildLeaveBroadcast msg)
 	{
+#if !UNITY_SERVER
 		ID = 0;
 		Name = "";
 		Rank = GuildRank.None;
 		Officers.Clear();
 		Members.Clear();
-#if !UNITY_SERVER
+
 		if (UIManager.TryGet("UIGuild", out UIGuild uiGuild))
 		{
 			uiGuild.OnLeaveGuild();
@@ -131,24 +139,43 @@ public class GuildController : NetworkBehaviour
 	/// </summary>
 	public void OnClientGuildAddBroadcastReceived(GuildAddBroadcast msg)
 	{
-		foreach (GuildNewMemberBroadcast member in msg.members)
-		{
-			if (!Members.Contains(member.memberID))
-			{
-				Members.Add(member.memberID);
 #if !UNITY_SERVER
-				if (UIManager.TryGet("UIGuild", out UIGuild uiGuild))
-				{
-					uiGuild.OnGuildAddMember(member.memberID, member.rank, member.location);
-				}
-#endif
-			}
-			if (member.rank == GuildRank.Officer &&
-				!Officers.Contains(member.memberID))
+		var newIds = msg.members.Select(x => x.characterID).ToHashSet();
+		var removeIds = Members.Where(x => !newIds.Contains(x));
+		foreach (long id in removeIds)
+		{
+			Members.Remove(id);
+			if (UIManager.TryGet("UIGuild", out UIGuild uiGuild))
 			{
-				Officers.Add(member.memberID);
+				uiGuild.OnGuildRemoveMember(id);
 			}
 		}
+		foreach (GuildNewMemberBroadcast member in msg.members)
+		{
+			if (!Members.Contains(member.characterID))
+			{
+				Members.Add(member.characterID);
+
+				// if this is our own id
+				if (Character != null && member.characterID == Character.ID)
+				{
+					ID = member.guildID;
+					Rank = member.rank;
+				}
+				// try to add the member to the list
+				if (UIManager.TryGet("UIGuild", out UIGuild uiGuild))
+				{
+					uiGuild.OnGuildAddMember(member.characterID, member.rank, member.location);
+				}
+
+			}
+			if (member.rank == GuildRank.Officer &&
+				!Officers.Contains(member.characterID))
+			{
+				Officers.Add(member.characterID);
+			}
+		}
+#endif
 	}
 
 	/// <summary>
@@ -156,19 +183,20 @@ public class GuildController : NetworkBehaviour
 	/// </summary>
 	public void OnClientGuildRemoveBroadcastReceived(GuildRemoveBroadcast msg)
 	{
-		foreach (long memberID in msg.members)
-		{
-			if (Members.Contains(memberID))
-			{
-				Members.Remove(memberID);
 #if !UNITY_SERVER
+		foreach (long characterID in msg.members)
+		{
+			if (Members.Contains(characterID))
+			{
+				Members.Remove(characterID);
+
 				if (UIManager.TryGet("UIGuild", out UIGuild uiGuild))
 				{
-					uiGuild.OnGuildRemoveMember(memberID);
+					uiGuild.OnGuildRemoveMember(characterID);
 				}
-#endif
 			}
-			Officers.Remove(memberID);
+			Officers.Remove(characterID);
 		}
+#endif
 	}
 }

@@ -10,7 +10,7 @@ namespace FishMMO.Server.Services
 		public static bool ExistsNotFull(ServerDbContext dbContext, long guildID, int max)
 		{
 			var guildCharacters = dbContext.CharacterGuilds.Where(a => a.GuildID == guildID);
-			if (guildCharacters != null && guildCharacters.Count() < max)
+			if (guildCharacters != null && guildCharacters.Count() <= max)
 			{
 				return true;
 			}

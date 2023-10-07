@@ -12,7 +12,7 @@ GameObject:
   - component: {fileID: 5227913174519564494}
   - component: {fileID: -6152214197743031848}
   m_Layer: 5
-  m_Name: GuildMemberPrefab
+  m_Name: UIGuildMember
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

@@ -41,6 +41,7 @@ namespace FishMMO.Server
 		public ChatSystem ChatSystem { get; private set; }
 		public GuildSystem GuildSystem { get; private set; }
 		public PartySystem PartySystem { get; private set; }
+		public NamingSystem NamingSystem { get; private set; }
 		#endregion
 
 		public ServerWindowTitleUpdater ServerWindowTitleUpdater { get; private set; }
@@ -229,6 +230,9 @@ namespace FishMMO.Server
 
 					PartySystem = GetOrCreateComponent<PartySystem>();
 					PartySystem.InternalInitializeOnce(this, NetworkManager.ServerManager);
+
+					NamingSystem = GetOrCreateComponent<NamingSystem>();
+					NamingSystem.InternalInitializeOnce(this, NetworkManager.ServerManager);
 					break;
 				default:
 					Server.Quit();

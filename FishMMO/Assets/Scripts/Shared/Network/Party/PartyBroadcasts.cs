@@ -3,12 +3,13 @@ using System.Collections.Generic;
 
 public struct PartyCreateBroadcast : IBroadcast
 {
-	public long ID;
+	public long partyID;
 	public string location;
 }
 
 public struct PartyInviteBroadcast : IBroadcast
 {
+	public long inviterCharacterID;
 	public long targetCharacterID;
 }
 
@@ -21,16 +22,10 @@ public struct PartyDeclineInviteBroadcast : IBroadcast
 
 public struct PartyNewMemberBroadcast : IBroadcast
 {
-	public long memberID;
+	public long partyID;
+	public long characterID;
 	public PartyRank rank;
-	public string location;
-}
-
-public struct PartyUpdateMemberBroadcast : IBroadcast
-{
-	public long memberID;
-	public PartyRank rank;
-	public string location;
+	public float healthPCT;
 }
 
 public struct PartyLeaveBroadcast : IBroadcast

@@ -13,12 +13,17 @@ namespace FishMMO.Server.Services
 			dbContext.GuildUpdates.Add(new GuildUpdateEntity()
 			{
 				GuildID = guildID,
-				TimeCreated = DateTime.Now,
+				TimeCreated = DateTime.UtcNow,
 			});
 		}
 
 		public static void Delete(ServerDbContext dbContext, long guildID)
 		{
+			var guildEntity = dbContext.GuildUpdates.FirstOrDefault(a => a.GuildID == guildID);
+			if (guildEntity != null)
+			{
+				dbContext.GuildUpdates.Remove(guildEntity);
+			}
 		}
 
 		public static List<GuildUpdateEntity> Fetch(ServerDbContext dbContext, DateTime lastFetch, long lastPosition, int amount)

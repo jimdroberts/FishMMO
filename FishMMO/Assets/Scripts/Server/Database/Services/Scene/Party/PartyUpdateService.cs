@@ -13,12 +13,17 @@ namespace FishMMO.Server.Services
 			dbContext.PartyUpdates.Add(new PartyUpdateEntity()
 			{
 				PartyID = partyID,
-				TimeCreated = DateTime.Now,
+				TimeCreated = DateTime.UtcNow,
 			});
 		}
 
 		public static void Delete(ServerDbContext dbContext, long partyID)
 		{
+			var partyEntity = dbContext.PartyUpdates.FirstOrDefault(a => a.PartyID == partyID);
+			if (partyEntity != null)
+			{
+				dbContext.PartyUpdates.Remove(partyEntity);
+			}
 		}
 
 		public static List<PartyUpdateEntity> Fetch(ServerDbContext dbContext, DateTime lastFetch, long lastPosition, int amount)

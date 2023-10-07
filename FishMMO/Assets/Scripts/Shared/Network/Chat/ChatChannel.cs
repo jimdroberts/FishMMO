@@ -9,4 +9,5 @@ public enum ChatChannel : byte
 	Tell,
 	Trade,
 	System,
+	Command,
 }
