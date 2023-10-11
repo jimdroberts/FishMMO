@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 
 namespace FishMMO.Client
 {
@@ -14,11 +15,25 @@ namespace FishMMO.Client
 		{
 			Client = client;
 			if (Client != null) Client.NetworkManager.ClientManager.RegisterBroadcast<NamingBroadcast>(OnClientNamingBroadcastReceived);
+
+			foreach (NamingSystemType type in EnumExtensions.ToArray<NamingSystemType>())
+			{
+				if (!names.TryGetValue(type, out Dictionary<long, string> map))
+				{
+					map = new Dictionary<long, string>();
+				}
+				DictionaryExtensions.ReadCompressedFromFile(map, Path.Combine(Client.GetWorkingDirectory(), type.ToString() + ".bin"));
+			}
 		}
 
 		public static void Destroy()
 		{
 			if (Client != null) Client.NetworkManager.ClientManager.UnregisterBroadcast<NamingBroadcast>(OnClientNamingBroadcastReceived);
+
+			foreach (KeyValuePair<NamingSystemType, Dictionary<long, string>> pair in names)
+			{
+				pair.Value.WriteCompressedToFile(Path.Combine(Client.GetWorkingDirectory(), pair.Key.ToString() + ".bin"));
+			}
 		}
 
 		public static void SetName(NamingSystemType type, long id, Action<string> action)
