@@ -25,9 +25,11 @@ namespace FishMMO.Client
 
 		public List<ServerAddress> LoginServerAddresses;
 		public Configuration Configuration = null;
+
 		public event Action OnConnectionSuccessful;
 		public event Action<byte, byte> OnReconnectAttempt;
 		public event Action OnReconnectFailed;
+		public event Action OnQuitToLogin;
 
 		private const byte reconnectAttempts = 10;
 		private const float firstReconnectAttemptWaitTime = 10f;
@@ -47,12 +49,12 @@ namespace FishMMO.Client
 			if (NetworkManager == null)
 			{
 				Debug.LogError("Client: NetworkManager not found.");
-				Client.Quit();
+				Quit();
 			}
 			else if (LoginAuthenticator == null)
 			{
 				Debug.LogError("Client: LoginAuthenticator not found.");
-				Client.Quit();
+				Quit();
 			}
 			else
 			{
@@ -61,6 +63,9 @@ namespace FishMMO.Client
 
 				// assign the clients TimeManager
 				TimeManager = NetworkManager.TimeManager;
+
+				// assign the client to the Login Authenticator
+				LoginAuthenticator.SetClient(this);
 
 				string path = Client.GetWorkingDirectory();
 
@@ -125,7 +130,7 @@ namespace FishMMO.Client
 #endif
 		}
 
-		public static void Quit()
+		public void Quit()
 		{
 			ClientNamingSystem.Destroy();
 
@@ -134,6 +139,11 @@ namespace FishMMO.Client
 #else
 			Application.Quit();
 #endif
+		}
+
+		public void QuitToLogin()
+		{
+			OnQuitToLogin?.Invoke();
 		}
 
 		/// <summary>
@@ -267,6 +277,8 @@ namespace FishMMO.Client
 		{
 			switch (result)
 			{
+				case ClientAuthenticationResult.AccountCreated:
+					break;
 				case ClientAuthenticationResult.InvalidUsernameOrPassword:
 					break;
 				case ClientAuthenticationResult.AlreadyOnline:

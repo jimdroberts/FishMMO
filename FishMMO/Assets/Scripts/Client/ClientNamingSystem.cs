@@ -16,13 +16,14 @@ namespace FishMMO.Client
 			Client = client;
 			if (Client != null) Client.NetworkManager.ClientManager.RegisterBroadcast<NamingBroadcast>(OnClientNamingBroadcastReceived);
 
+			string workingDirectory = Client.GetWorkingDirectory();
 			foreach (NamingSystemType type in EnumExtensions.ToArray<NamingSystemType>())
 			{
 				if (!names.TryGetValue(type, out Dictionary<long, string> map))
 				{
 					map = new Dictionary<long, string>();
 				}
-				DictionaryExtensions.ReadCompressedFromFile(map, Path.Combine(Client.GetWorkingDirectory(), type.ToString() + ".bin"));
+				DictionaryExtensions.ReadCompressedFromFile(map, Path.Combine(workingDirectory, type.ToString() + ".bin"));
 			}
 		}
 
@@ -30,9 +31,10 @@ namespace FishMMO.Client
 		{
 			if (Client != null) Client.NetworkManager.ClientManager.UnregisterBroadcast<NamingBroadcast>(OnClientNamingBroadcastReceived);
 
+			string workingDirectory = Client.GetWorkingDirectory();
 			foreach (KeyValuePair<NamingSystemType, Dictionary<long, string>> pair in names)
 			{
-				pair.Value.WriteCompressedToFile(Path.Combine(Client.GetWorkingDirectory(), pair.Key.ToString() + ".bin"));
+				pair.Value.WriteCompressedToFile(Path.Combine(workingDirectory, pair.Key.ToString() + ".bin"));
 			}
 		}
 

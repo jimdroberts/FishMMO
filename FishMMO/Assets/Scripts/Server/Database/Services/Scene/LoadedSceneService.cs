@@ -51,5 +51,11 @@ namespace FishMMO.Server.Services
 													 c.CharacterCount < maxClients)
 										 .ToList();
 		}
+
+		public static List<LoadedSceneEntity> GetServerList(ServerDbContext dbContext, long worldServerID)
+		{
+			return dbContext.LoadedScenes.Where(c => c.WorldServerID == worldServerID)
+										 .ToList();
+		}
 	}
 }

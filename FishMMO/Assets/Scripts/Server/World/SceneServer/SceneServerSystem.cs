@@ -54,9 +54,8 @@ namespace FishMMO.Server
 
 					if (Server.Configuration.TryGetString("ServerName", out string name))
 					{
-						Debug.Log("Scene Server System: Adding Scene Server to Database: " + name + ":" + server.address + ":" + server.port);
 						SceneServerService.Add(dbContext, server.address, server.port, characterCount, locked, out id);
-						Debug.Log("Scene Server System: Successfully added a new Scene Server: " + id);
+						Debug.Log("Scene Server System: Added Scene Server to Database: [" + id + "] " + name + ":" + server.address + ":" + server.port);
 					}
 				}
 			}

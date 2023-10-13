@@ -24,6 +24,7 @@ namespace FishMMO.Server
 		public ushort Port { get; private set; }
 
 		#region LOGIN
+		public AccountCreationSystem AccountCreationSystem { get; private set; }
 		public CharacterSelectSystem CharacterSelectSystem { get; private set; }
 		public CharacterCreateSystem CharacterCreateSystem { get; private set; }
 		public ServerSelectSystem ServerSelectSystem { get; private set; }
@@ -183,6 +184,9 @@ namespace FishMMO.Server
 			switch (serverType)
 			{
 				case "LOGIN":
+					AccountCreationSystem = GetOrCreateComponent<AccountCreationSystem>();
+					AccountCreationSystem.InternalInitializeOnce(this, NetworkManager.ServerManager);
+
 					CharacterSelectSystem = GetOrCreateComponent<CharacterSelectSystem>();
 					CharacterSelectSystem.InternalInitializeOnce(this, NetworkManager.ServerManager);
 

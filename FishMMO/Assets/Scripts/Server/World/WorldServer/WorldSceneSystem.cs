@@ -23,13 +23,7 @@ namespace FishMMO.Server
 		public Dictionary<string, HashSet<NetworkConnection>> WaitingConnections = new Dictionary<string, HashSet<NetworkConnection>>();
 		public Dictionary<NetworkConnection, string> WaitingConnectionsScenes = new Dictionary<NetworkConnection, string>();
 
-		public int ConnectionCount
-		{
-			get
-			{
-				return WaitingConnections.Count;
-			}
-		}
+		public int ConnectionCount { get; private set; }
 
 		private float waitQueueRate = 2.0f;
 		private float nextWaitQueueUpdate = 0.0f;
@@ -106,6 +100,8 @@ namespace FishMMO.Server
 					{
 						TryClearWaitQueues(dbContext, sceneName);
 					}
+
+					UpdateConnectionCount(dbContext);
 				}
 			}
 			nextWaitQueueUpdate -= Time.deltaTime;
@@ -183,6 +179,25 @@ namespace FishMMO.Server
 					PendingSceneService.Enqueue(dbContext, Server.WorldServerSystem.ID, sceneName);
 					dbContext.SaveChanges();
 				}
+			}
+		}
+
+		private void UpdateConnectionCount(ServerDbContext dbContext)
+		{
+			if (dbContext == null ||
+				Server.WorldServerSystem == null)
+			{
+				return;
+			}
+
+			// get the scene data for each of our worlds scenes
+			List<LoadedSceneEntity> sceneServerCount = LoadedSceneService.GetServerList(dbContext, Server.WorldServerSystem.ID);
+
+			// count the total
+			ConnectionCount = WaitingConnections != null ? WaitingConnections.Count : 0;
+			foreach (LoadedSceneEntity scene in sceneServerCount)
+			{
+				ConnectionCount += scene.CharacterCount;
 			}
 		}
 

@@ -38,13 +38,15 @@ namespace FishMMO.Server
 			networkManager.ServerManager.OnRemoteConnectionState += ServerManager_OnRemoteConnectionState;
 
 			// Listen for broadcast from clients.
-			networkManager.ServerManager.RegisterBroadcast<BeginClientAuthBroadcast>(OnServerBeginClientAuthBroadcastReceived, false);
+			networkManager.ServerManager.RegisterBroadcast<SRPVerifyBroadcast>(OnServerSRPVerifyBroadcastReceived, false);
+			networkManager.ServerManager.RegisterBroadcast<SRPProofBroadcast>(OnServerSRPProofBroadcastReceived, false);
+			networkManager.ServerManager.RegisterBroadcast<SRPSuccess>(OnServerSRPSuccessBroadcastReceived, false);
 		}
 
 		/// <summary>
-		/// Received on server when a Client sends the password broadcast message.
+		/// Received on server when a Client sends the SRPVerify broadcast message.
 		/// </summary>
-		internal void OnServerBeginClientAuthBroadcastReceived(NetworkConnection conn, BeginClientAuthBroadcast msg)
+		internal void OnServerSRPVerifyBroadcastReceived(NetworkConnection conn, SRPVerifyBroadcast msg)
 		{
 			/* If client is already authenticated this could be an attack. Connections
 			 * are removed when a client disconnects so there is no reason they should
@@ -54,24 +56,109 @@ namespace FishMMO.Server
 				conn.Disconnect(true);
 				return;
 			}
+			ClientAuthenticationResult result;
 
-			// attempt login authentication and return a result broadcast
-			ClientAuthResultBroadcast rb = TryLogin(msg.username, msg.password);
+			// if the database is unavailable
+			if (DBContextFactory == null)
+			{
+				result = ClientAuthenticationResult.ServerFull;
+			}
+			else
+			{
+				using var dbContext = DBContextFactory.CreateDbContext();
 
-			bool authenticated = rb.result != ClientAuthenticationResult.InvalidUsernameOrPassword &&
-								 rb.result != ClientAuthenticationResult.Banned;
+				// check if any characters are online already
+				if (CharacterService.TryGetOnline(dbContext, msg.s))
+				{
+					result = ClientAuthenticationResult.AlreadyOnline;
+				}
+				else
+				{
+					// get account salt and verifier if no one is online
+					result = AccountService.Get(dbContext, msg.s, out string salt, out string verifier);
+					if (result == ClientAuthenticationResult.SrpVerify)
+					{
+						// prepare account
+						AccountManager.AddConnectionAccount(conn, msg.s, msg.publicEphemeral, salt, verifier);
 
-			// add the connection and account to the AccountManager
-			if (authenticated)
-				AccountManager.AddConnectionAccount(conn, msg.username);
+						// get and send srp verification data
+						if (AccountManager.GetConnectionSRPData(conn, out ServerSrpData srpData))
+						{
+							SRPVerifyBroadcast srpVerify = new SRPVerifyBroadcast()
+							{
+								s = srpData.Salt,
+								publicEphemeral = srpData.ServerEphemeral.Public,
+							};
+							conn.Broadcast(srpVerify, false);
+							return;
+						}
+					}
+				}
+			}
+			ClientAuthResultBroadcast authResult = new ClientAuthResultBroadcast()
+			{
+				result = result,
+			};
+			conn.Broadcast(authResult, false);
+		}
+
+		/// <summary>
+		/// Received on server when a Client sends the SRPProof broadcast message.
+		/// </summary>
+		internal void OnServerSRPProofBroadcastReceived(NetworkConnection conn, SRPProofBroadcast msg)
+		{
+			/* If client is already authenticated this could be an attack. Connections
+			 * are removed when a client disconnects so there is no reason they should
+			 * already be considered authenticated. */
+			if (conn.Authenticated ||
+				!AccountManager.GetConnectionSRPData(conn, out ServerSrpData srpData))
+			{
+				conn.Disconnect(true);
+				return;
+			}
+
+			if (srpData.GetProof(msg.proof, out string serverProof))
+			{
+				SRPProofBroadcast msg2 = new SRPProofBroadcast()
+				{
+					proof = serverProof,
+				};
+				conn.Broadcast(msg2, false);
+			}
+			//UnityEngine.Debug.Log("SRP: " + serverProof);
+		}
+
+		/// <summary>
+		/// Received on server when a Client sends the SRPSuccess broadcast message.
+		/// </summary>
+		internal void OnServerSRPSuccessBroadcastReceived(NetworkConnection conn, SRPSuccess msg)
+		{
+			/* If client is already authenticated this could be an attack. Connections
+			 * are removed when a client disconnects so there is no reason they should
+			 * already be considered authenticated. */
+			if (conn.Authenticated ||
+				!AccountManager.GetAccountNameByConnection(conn, out string accountName))
+			{
+				conn.Disconnect(true);
+				return;
+			}
+			using var dbContext = DBContextFactory.CreateDbContext();
+			// attempt to complete login authentication and return a result broadcast
+			ClientAuthenticationResult result = TryLogin(dbContext, ClientAuthenticationResult.LoginSuccess, accountName);
+
+			bool authenticated = result != ClientAuthenticationResult.InvalidUsernameOrPassword &&
+								 result != ClientAuthenticationResult.ServerFull;
 
 			// tell the connecting client the result of the authentication
-			base.NetworkManager.ServerManager.Broadcast(conn, rb, false);
+			ClientAuthResultBroadcast authResult = new ClientAuthResultBroadcast()
+			{
+				result = result,
+			};
+			conn.Broadcast(authResult, false);
 
 			/* Invoke result. This is handled internally to complete the connection authentication or kick client.
 			 * It's important to call this after sending the broadcast so that the broadcast
 			 * makes it out to the client before the kick. */
-
 			OnAuthentication(conn, authenticated);
 			OnClientAuthenticationResult?.Invoke(conn, authenticated);
 		}
@@ -84,25 +171,9 @@ namespace FishMMO.Server
 		/// <summary>
 		/// Login Server TryLogin function.
 		/// </summary>
-		internal virtual ClientAuthResultBroadcast TryLogin(string username, string password)
+		internal virtual ClientAuthenticationResult TryLogin(ServerDbContext dbContext, ClientAuthenticationResult result, string username)
 		{
-			ClientAuthenticationResult result = ClientAuthenticationResult.InvalidUsernameOrPassword;
-
-			// if the username is valid get OR create the account for the client
-			if (DBContextFactory != null && IsAllowedUsername(username))
-			{
-				using ServerDbContext dbContext = DBContextFactory.CreateDbContext(new string[] {});
-				if (!CharacterService.TryGetOnline(dbContext, username))
-				{
-					result = AccountService.TryLogin(dbContext, username, password, true);
-				}
-				else
-				{
-					result = ClientAuthenticationResult.AlreadyOnline;
-				}
-			}
-
-			return new ClientAuthResultBroadcast() { result = result, };
+			return ClientAuthenticationResult.LoginSuccess;
 		}
 
 		// remove the connection from the AccountManager

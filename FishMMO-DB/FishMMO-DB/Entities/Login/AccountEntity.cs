@@ -9,7 +9,8 @@ namespace FishMMO_DB.Entities
     {
         [Key]
         public string Name { get; set; }
-        public string Password { get; set; }
+        public string Salt { get; set; }
+        public string Verifier { get; set; }
         public DateTime Created { get; set; }
         public DateTime Lastlogin { get; set; }
         public bool Banned { get; set; }

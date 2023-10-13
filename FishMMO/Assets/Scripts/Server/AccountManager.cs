@@ -10,9 +10,14 @@ namespace FishMMO.Server
 	{
 		public static Dictionary<NetworkConnection, string> ConnectionAccounts = new Dictionary<NetworkConnection, string>();
 		public static Dictionary<string, NetworkConnection> AccountConnections = new Dictionary<string, NetworkConnection>();
+		public static Dictionary<NetworkConnection, ServerSrpData> ConnectionSRPData = new Dictionary<NetworkConnection, ServerSrpData>();
 
-		public static void AddConnectionAccount(NetworkConnection connection, string accountName)
+		public static void AddConnectionAccount(NetworkConnection connection, string accountName, string publicClientEphemeral, string salt, string verifier)
 		{
+			ConnectionSRPData.Remove(connection);
+
+			ConnectionSRPData.Add(connection, new ServerSrpData(accountName, publicClientEphemeral, salt, verifier));
+
 			ConnectionAccounts.Remove(connection);
 
 			ConnectionAccounts.Add(connection, accountName);
@@ -26,6 +31,7 @@ namespace FishMMO.Server
 		{
 			if (ConnectionAccounts.TryGetValue(connection, out string accountName))
 			{
+				ConnectionSRPData.Remove(connection);
 				ConnectionAccounts.Remove(connection);
 				AccountConnections.Remove(accountName);
 			}
@@ -35,9 +41,15 @@ namespace FishMMO.Server
 		{
 			if (AccountConnections.TryGetValue(accountName, out NetworkConnection connection))
 			{
+				ConnectionSRPData.Remove(connection);
 				ConnectionAccounts.Remove(connection);
 				AccountConnections.Remove(accountName);
 			}
+		}
+
+		public static bool GetConnectionSRPData(NetworkConnection connection, out ServerSrpData srpData)
+		{
+			return ConnectionSRPData.TryGetValue(connection, out srpData);
 		}
 
 		public static bool GetAccountNameByConnection(NetworkConnection connection, out string accountName)

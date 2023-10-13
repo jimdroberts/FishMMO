@@ -160,7 +160,7 @@ namespace FishMMO.Client
 			StopAllCoroutines();
 
 			// we should go back to login..
-			Client.Quit();
+			Client.QuitToLogin();
 		}
 
 		public void OnClick_Quit()

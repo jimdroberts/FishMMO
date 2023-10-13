@@ -10,39 +10,26 @@ namespace FishMMO.Server
 
 		public WorldSceneSystem WorldSceneSystem { get; set; }
 
-		internal override ClientAuthResultBroadcast TryLogin(string username, string password)
+		internal override ClientAuthenticationResult TryLogin(ServerDbContext dbContext, ClientAuthenticationResult result, string username)
 		{
 			if (WorldSceneSystem != null && WorldSceneSystem.ConnectionCount >= MaxPlayers)
 			{
-				return new ClientAuthResultBroadcast() { result = ClientAuthenticationResult.ServerFull, };
+				return ClientAuthenticationResult.ServerFull;
 			}
-
-			ClientAuthenticationResult result = ClientAuthenticationResult.InvalidUsernameOrPassword;
-
-			if (DBContextFactory != null && IsAllowedUsername(username))
+			else if (dbContext == null)
 			{
-				using ServerDbContext dbContext = DBContextFactory.CreateDbContext(new string[] { });
-				if (!CharacterService.TryGetOnline(dbContext, username))
-				{
-					result = AccountService.TryLogin(dbContext, username, password);
-				}
-				else
-				{
-					result = ClientAuthenticationResult.AlreadyOnline;
-				}
-
-				if (result == ClientAuthenticationResult.LoginSuccess &&
-					CharacterService.GetSelected(dbContext, username))
-				{
-					// update the characters world
-					CharacterService.SetWorld(dbContext, username, WorldSceneSystem.Server.WorldServerSystem.ID);
-					dbContext.SaveChanges();
-
-					result = ClientAuthenticationResult.WorldLoginSuccess;
-				}
+				return ClientAuthenticationResult.InvalidUsernameOrPassword;
 			}
+			else if (result == ClientAuthenticationResult.LoginSuccess &&
+					 CharacterService.GetSelected(dbContext, username))
+			{
+				// update the characters world
+				CharacterService.SetWorld(dbContext, username, WorldSceneSystem.Server.WorldServerSystem.ID);
+				dbContext.SaveChanges();
 
-			return new ClientAuthResultBroadcast() { result = result, };
+				return ClientAuthenticationResult.WorldLoginSuccess;
+			}
+			return result;
 		}
 	}
 }

@@ -278,18 +278,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6f48f002b825cbd45a19bd96d90f9edb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
---- !u!114 &1871523007616605283 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 4720857798151945692, guid: f04e72f7162977e4494fd4ecd2984f2e,
-    type: 3}
-  m_PrefabInstance: {fileID: 1871523007616605279}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1871523007616605280}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d2c95dfde7d73b54dbbdc23155d35d36, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
 --- !u!114 &1871523007616605288
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -341,18 +329,6 @@ PrefabInstance:
     serializedVersion: 2
     m_TransformParent: {fileID: 0}
     m_Modifications:
-    - target: {fileID: 403044114284278985, guid: 8e0fbf828e74525449caf94aea6e8d22,
-        type: 3}
-      propertyPath: WorldSceneDetailsCache
-      value: 
-      objectReference: {fileID: 11400000, guid: ee8f2ab36344dae4c8c59b28985d5338,
-        type: 2}
-    - target: {fileID: 403044114284278985, guid: 8e0fbf828e74525449caf94aea6e8d22,
-        type: 3}
-      propertyPath: worldSceneDetailsCache
-      value: 
-      objectReference: {fileID: 11400000, guid: ee8f2ab36344dae4c8c59b28985d5338,
-        type: 2}
     - target: {fileID: 4059034741344880441, guid: 8e0fbf828e74525449caf94aea6e8d22,
         type: 3}
       propertyPath: m_RootOrder
@@ -412,26 +388,6 @@ PrefabInstance:
         type: 3}
       propertyPath: m_Name
       value: ServerSystems
-      objectReference: {fileID: 0}
-    - target: {fileID: 5849347582015469635, guid: 8e0fbf828e74525449caf94aea6e8d22,
-        type: 3}
-      propertyPath: RelayPort
-      value: 7770
-      objectReference: {fileID: 0}
-    - target: {fileID: 5849347582015469635, guid: 8e0fbf828e74525449caf94aea6e8d22,
-        type: 3}
-      propertyPath: NetworkManager
-      value: 
-      objectReference: {fileID: 1871523007616605283}
-    - target: {fileID: 5849347582015469635, guid: 8e0fbf828e74525449caf94aea6e8d22,
-        type: 3}
-      propertyPath: ConfigurationFileName
-      value: LoginServer
-      objectReference: {fileID: 0}
-    - target: {fileID: 5849347582015469635, guid: 8e0fbf828e74525449caf94aea6e8d22,
-        type: 3}
-      propertyPath: configurationFileName
-      value: LoginServer.cfg
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_AddedGameObjects: []
