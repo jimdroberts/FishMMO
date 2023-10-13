@@ -28,11 +28,11 @@ namespace FishMMO.Server
 			try
 			{
 				Session = SrpServer.DeriveSession(ServerEphemeral.Secret,
-											  PublicClientEphemeral,
-											  Salt,
-											  UserName,
-											  Verifier,
-											  proof);
+												  PublicClientEphemeral,
+												  Salt,
+												  UserName,
+												  Verifier,
+												  proof);
 				serverProof = Session.Proof;
 				return true;
 			}

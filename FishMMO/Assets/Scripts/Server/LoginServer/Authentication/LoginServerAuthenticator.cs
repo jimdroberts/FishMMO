@@ -125,6 +125,11 @@ namespace FishMMO.Server
 				};
 				conn.Broadcast(msg2, false);
 			}
+			else
+			{
+				// failed
+				conn.Disconnect(true);
+			}
 			//UnityEngine.Debug.Log("SRP: " + serverProof);
 		}
 
