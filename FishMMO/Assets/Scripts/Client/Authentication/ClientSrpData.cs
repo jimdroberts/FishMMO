@@ -9,9 +9,9 @@ namespace FishMMO.Client
 		public SrpEphemeral ClientEphemeral { get; private set; }
 		public SrpSession Session { get; private set; }
 
-		public ClientSrpData()
+		public ClientSrpData(SrpParameters parameters)
 		{
-			SrpClient = new SrpClient();
+			SrpClient = new SrpClient(parameters);
 			ClientEphemeral = SrpClient.GenerateEphemeral();
 		}
 

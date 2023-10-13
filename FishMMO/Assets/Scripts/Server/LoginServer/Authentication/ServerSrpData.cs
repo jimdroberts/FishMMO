@@ -13,11 +13,11 @@ namespace FishMMO.Server
 		public SrpEphemeral ServerEphemeral { get; private set; }
 		public SrpSession Session { get; private set; }
 
-		public ServerSrpData(string username, string publicClientEphemeral, string salt, string verifier)
+		public ServerSrpData(SrpParameters parameters, string username, string publicClientEphemeral, string salt, string verifier)
 		{
 			UserName = username;
 			PublicClientEphemeral = publicClientEphemeral;
-			SrpServer = new SrpServer();
+			SrpServer = new SrpServer(parameters);
 			this.Salt = salt;
 			this.Verifier = verifier;
 			ServerEphemeral = SrpServer.GenerateEphemeral(this.Verifier);

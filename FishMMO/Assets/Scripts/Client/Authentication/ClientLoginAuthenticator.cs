@@ -5,7 +5,9 @@ using FishNet.Managing;
 using FishNet.Transporting;
 using System;
 using System.Text.RegularExpressions;
+using System.Security.Cryptography;
 using UnityEngine;
+using SecureRemotePassword;
 
 namespace FishMMO.Client
 {
@@ -89,7 +91,7 @@ namespace FishMMO.Client
 			if (args.ConnectionState != LocalConnectionState.Started)
 				return;
 
-			SrpData = new ClientSrpData();
+			SrpData = new ClientSrpData(SrpParameters.Create4096<SHA512>());
 
 			// register a new account?
 			if (register)

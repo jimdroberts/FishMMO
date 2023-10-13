@@ -1,5 +1,7 @@
 ﻿using FishNet.Connection;
 using System.Collections.Generic;
+using System.Security.Cryptography;
+using SecureRemotePassword;
 
 namespace FishMMO.Server
 {
@@ -16,7 +18,7 @@ namespace FishMMO.Server
 		{
 			ConnectionSRPData.Remove(connection);
 
-			ConnectionSRPData.Add(connection, new ServerSrpData(accountName, publicClientEphemeral, salt, verifier));
+			ConnectionSRPData.Add(connection, new ServerSrpData(SrpParameters.Create4096<SHA512>(), accountName, publicClientEphemeral, salt, verifier));
 
 			ConnectionAccounts.Remove(connection);
 
