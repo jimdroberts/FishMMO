@@ -343,18 +343,6 @@ namespace FishMMO.Server
 				// spawn the nob over the network
 				ServerManager.Spawn(character.NetworkObject, conn);
 
-				/* test
-				if (character.AttributeController.TryGetResourceAttribute("Health", out CharacterResourceAttribute health))
-				{
-					health.SetCurrentValue(50);
-					character.Owner.Broadcast(new CharacterResourceAttributeUpdateBroadcast()
-					{
-						templateID = health.Template.ID,
-						value = health.CurrentValue,
-						max = health.FinalValue,
-					});
-				}*/
-
 				// set the character status to online
 				if (AccountManager.GetAccountNameByConnection(conn, out string accountName))
 				{
@@ -363,6 +351,9 @@ namespace FishMMO.Server
 					dbContext.SaveChanges();
 				}
 
+				// send server character data to the client
+				SendAllCharacterData(character);
+
 				//Debug.Log(character.CharacterName + " has been spawned at: " + character.SceneName + " " + character.Transform.position.ToString());
 			}
 			else
@@ -370,6 +361,140 @@ namespace FishMMO.Server
 				// couldn't find the character details for the connection.. kick the player
 				conn.Kick(FishNet.Managing.Server.KickReason.UnexpectedProblem);
 			}
+		}
+
+		/// <summary>
+		/// Sends all Server Side Character data to the owner. *Expensive*
+		/// </summary>
+		/// <param name="character"></param>
+		public void SendAllCharacterData(Character character)
+		{
+			if (Server.DbContextFactory == null)
+			{
+				return;
+			}
+
+			using var dbContext = Server.DbContextFactory.CreateDbContext();
+
+			#region Attributes
+			if (character.AttributeController != null)
+			{
+				List<CharacterAttributeUpdateBroadcast> attributes = new List<CharacterAttributeUpdateBroadcast>();
+				foreach (CharacterAttribute attribute in character.AttributeController.Attributes.Values)
+				{
+					if (attribute.Template.IsResourceAttribute)
+						continue;
+
+					attributes.Add(new CharacterAttributeUpdateBroadcast()
+					{
+						templateID = attribute.Template.ID,
+						value = attribute.FinalValue,
+					});
+				}
+				character.Owner.Broadcast(new CharacterAttributeUpdateMultipleBroadcast()
+				{
+					attributes = attributes,
+				});
+
+				List<CharacterResourceAttributeUpdateBroadcast> resourceAttributes = new List<CharacterResourceAttributeUpdateBroadcast>();
+				foreach (CharacterResourceAttribute attribute in character.AttributeController.ResourceAttributes.Values)
+				{
+					resourceAttributes.Add(new CharacterResourceAttributeUpdateBroadcast()
+					{
+						templateID = attribute.Template.ID,
+						value = attribute.CurrentValue,
+						max = attribute.FinalValue,
+					});
+				}
+				character.Owner.Broadcast(new CharacterResourceAttributeUpdateMultipleBroadcast()
+				{
+					attributes = resourceAttributes,
+				});
+			}
+			#endregion
+
+			#region Achievements
+			if (character.AchievementController != null)
+			{
+				List<AchievementUpdateBroadcast> achievements = new List<AchievementUpdateBroadcast>();
+				foreach (Achievement achievement in character.AchievementController.Achievements.Values)
+				{
+					achievements.Add(new AchievementUpdateBroadcast()
+					{
+						templateID = achievement.Template.ID,
+						newValue = achievement.CurrentValue,
+					});
+				}
+				character.Owner.Broadcast(new AchievementUpdateMultipleBroadcast()
+				{
+					achievements = achievements,
+				});
+			}
+			#endregion
+
+			#region Guild
+			if (character.GuildController != null && character.GuildController.ID > 0)
+			{
+				// get the current guild members from the database
+				List<CharacterGuildEntity> dbMembers = CharacterGuildService.Members(dbContext, character.GuildController.ID);
+
+				var addBroadcasts = dbMembers.Select(x => new GuildMemberUpdateBroadcast()
+				{
+					guildID = x.GuildID,
+					characterID = x.CharacterID,
+					rank = (GuildRank)x.Rank,
+					location = x.Location,
+				}).ToList();
+
+				GuildAddBroadcast guildAddBroadcast = new GuildAddBroadcast()
+				{
+					members = addBroadcasts,
+				};
+				character.Owner.Broadcast(guildAddBroadcast);
+			}
+			#endregion
+
+			#region Party
+			if (character.PartyController != null && character.PartyController.ID > 0)
+			{
+				// get the current party members from the database
+				List<CharacterPartyEntity> dbMembers = CharacterPartyService.Members(dbContext, character.PartyController.ID);
+
+				var addBroadcasts = dbMembers.Select(x => new PartyMemberUpdateBroadcast()
+				{
+					partyID = x.PartyID,
+					characterID = x.CharacterID,
+					rank = (PartyRank)x.Rank,
+					healthPCT = x.HealthPCT,
+				}).ToList();
+
+				PartyAddBroadcast partyAddBroadcast = new PartyAddBroadcast()
+				{
+					members = addBroadcasts,
+				};
+				character.Owner.Broadcast(partyAddBroadcast);
+			}
+			#endregion
+
+			#region Friends
+			if (character.FriendController != null)
+			{
+				List<FriendAddBroadcast> friends = new List<FriendAddBroadcast>();
+				foreach (long friendID in character.FriendController.Friends)
+				{
+					bool status = CharacterService.ExistsAndOnline(dbContext, friendID);
+					friends.Add(new FriendAddBroadcast()
+					{
+						characterID = friendID,
+						online = status,
+					});
+				}
+				character.Owner.Broadcast(new FriendAddMultipleBroadcast()
+				{
+					friends = friends,
+				});
+			}
+			#endregion
 		}
 
 		/// <summary>

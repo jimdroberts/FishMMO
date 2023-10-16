@@ -19,6 +19,15 @@ namespace FishMMO.Client
 
 		public override void OnDestroying()
 		{
+			if (GuildLabel != null)
+			{
+				GuildLabel.text = "Guild";
+			}
+			foreach (UIGuildMember member in new List<UIGuildMember>(Members.Values))
+			{
+				Destroy(member.gameObject);
+			}
+			Members.Clear();
 		}
 
 		public void OnGuildCreated(string location)

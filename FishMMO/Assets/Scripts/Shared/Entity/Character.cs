@@ -36,6 +36,7 @@ using Shared;
 [RequireComponent(typeof(CharacterDamageController))]
 [RequireComponent(typeof(GuildController))]
 [RequireComponent(typeof(PartyController))]
+[RequireComponent(typeof(FriendController))]
 public class Character : NetworkBehaviour, IPooledResettable
 {
 	public static Character localCharacter;
@@ -55,6 +56,7 @@ public class Character : NetworkBehaviour, IPooledResettable
 	public QuestController QuestController;
 	public GuildController GuildController;
 	public PartyController PartyController;
+	public FriendController FriendController;
 	public KinematicCharacterMotor Motor;
 #if !UNITY_SERVER
 	public LocalInputController LocalInputController;
@@ -120,6 +122,8 @@ public class Character : NetworkBehaviour, IPooledResettable
 		GuildController.Character = this;
 		PartyController = gameObject.GetComponent<PartyController>();
 		PartyController.Character = this;
+		FriendController = gameObject.GetComponent<FriendController>();
+		FriendController.Character = this;
 		Motor = gameObject.GetComponent<KinematicCharacterMotor>();
 	}
 

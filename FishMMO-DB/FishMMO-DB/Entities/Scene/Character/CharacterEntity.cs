@@ -46,6 +46,8 @@ namespace FishMMO_DB.Entities
         public ICollection<CharacterBuffEntity> Buffs { get; set; }
         public ICollection<CharacterEquipmentEntity> Equipment { get; set; }
         public CharacterGuildEntity Guild { get; set; }
+        public CharacterPartyEntity Party { get; set; }
+        public ICollection<CharacterFriendEntity> Friends { get; set; }
         public ICollection<CharacterInventoryEntity> Inventory { get; set; }
         public ICollection<CharacterItemCooldownEntity> ItemCooldowns { get; set; }
         public ICollection<CharacterQuestEntity> Quests { get; set; }

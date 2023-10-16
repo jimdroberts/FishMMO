@@ -811,10 +811,11 @@ MonoBehaviour:
   StartOpen: 0
   IsAlwaysOpen: 0
   HasFocus: 0
+  CloseOnQuitToMenu: 1
   CanDrag: 0
   ClampToScreen: 0
   chatViewParent: {fileID: 877165946126966488}
-  chatMessagePrefab: {fileID: -6438489236917851121, guid: 1bbbcf2f88a3fd3479ebe37d4cf823cb,
+  chatMessagePrefab: {fileID: 5043444177150772411, guid: dc951853bc8579847ac4cf5cd0080e8f,
     type: 3}
   chatTabViewParent: {fileID: 7330320135367138569}
   chatTabPrefab: {fileID: 877165945576539420}

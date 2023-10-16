@@ -84,6 +84,8 @@ namespace FishMMO.Server
 						// get and send srp verification data
 						if (AccountManager.GetConnectionSRPData(conn, out ServerSrpData srpData))
 						{
+							//UnityEngine.Debug.Log("SRPVerify");
+
 							SRPVerifyBroadcast srpVerify = new SRPVerifyBroadcast()
 							{
 								s = srpData.Salt,
@@ -119,6 +121,8 @@ namespace FishMMO.Server
 
 			if (srpData.GetProof(msg.proof, out string serverProof))
 			{
+				//UnityEngine.Debug.Log("SRPProof");
+
 				SRPProofBroadcast msg2 = new SRPProofBroadcast()
 				{
 					proof = serverProof,
@@ -160,6 +164,8 @@ namespace FishMMO.Server
 				result = result,
 			};
 			conn.Broadcast(authResult, false);
+
+			//UnityEngine.Debug.Log("Authorized: " + authResult);
 
 			/* Invoke result. This is handled internally to complete the connection authentication or kick client.
 			 * It's important to call this after sending the broadcast so that the broadcast

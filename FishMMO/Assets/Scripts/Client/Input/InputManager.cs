@@ -54,6 +54,7 @@ namespace FishMMO.Client
 			AddKey("Equipment", KeyCode.O);
 			AddKey("Guild", KeyCode.G);
 			AddKey("Party", KeyCode.P);
+			AddKey("Friends", KeyCode.J);
 			AddKey("Menu", KeyCode.Escape);
 			AddKey("ToggleFirstPerson", KeyCode.F9);
 			MouseMode = true;

@@ -17,6 +17,7 @@ GameObject:
   - component: {fileID: 3610206149135137526}
   - component: {fileID: 3610206149135137527}
   - component: {fileID: 3610206149135137524}
+  - component: {fileID: 2844926705653361466}
   - component: {fileID: 3610206149269882745}
   m_Layer: 0
   m_Name: ServerSystems
@@ -156,6 +157,22 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   HealthTemplate: {fileID: 11400000, guid: e5c10a046ee277f46a57ee2048ae5ec9, type: 2}
   MaxPartySize: 6
+  UpdatePumpRate: 1
+  UpdateFetchCount: 100
+--- !u!114 &2844926705653361466
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3610206149135137288}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a61c878103efa02459d94801be90a2be, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  HealthTemplate: {fileID: 0}
+  MaxFriendSize: 6
   UpdatePumpRate: 1
   UpdateFetchCount: 100
 --- !u!114 &3610206149269882745

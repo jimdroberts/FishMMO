@@ -104,6 +104,14 @@ namespace FishMMO.Client
 					}
 				}
 
+				if (InputManager.GetKeyDown("Friends"))
+				{
+					if (UIManager.TryGet("UIFriendList", out UIFriendList uiFriendList))
+					{
+						uiFriendList.Visible = !uiFriendList.Visible;
+					}
+
+				}
 				if (InputManager.GetKeyDown("Menu"))
 				{
 					//if (UIManager.TryGet("UIMenu", out UIMenu uiMenu))

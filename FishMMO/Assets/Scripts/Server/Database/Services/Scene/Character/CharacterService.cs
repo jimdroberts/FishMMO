@@ -14,6 +14,12 @@ namespace FishMMO.Server.Services
 	/// </summary>
 	public class CharacterService
 	{
+		public static bool ExistsAndOnline(ServerDbContext dbContext, long id)
+		{
+			return dbContext.Characters.FirstOrDefault((c) => c.ID == id &&
+															  c.Online) != null;
+		}
+
 		public static bool ExistsAndOnline(ServerDbContext dbContext, string characterName)
 		{
 			return dbContext.Characters.FirstOrDefault((c) => c.NameLowercase == characterName.ToLower() &&
@@ -34,6 +40,16 @@ namespace FishMMO.Server.Services
 				//throw new Exception($"Couldn't find character with id {id}");
 			}
 			return character;
+		}
+
+		public static long GetIdByName(ServerDbContext dbContext, string name)
+		{
+			var character = dbContext.Characters.FirstOrDefault(c => c.NameLowercase == name.ToLower());
+			if (character == null)
+			{
+				return 0;
+			}
+			return character.ID;
 		}
 
 		public static string GetNameByID(ServerDbContext dbContext, long id)
@@ -122,6 +138,7 @@ namespace FishMMO.Server.Services
 			CharacterAttributeService.Save(dbContext, character);
 			CharacterAchievementService.Save(dbContext, character);
 			CharacterBuffService.Save(dbContext, character);
+			CharacterFriendService.Save(dbContext, character);
 
 			//Debug.Log(character.CharacterName + " has been saved at: " + character.Transform.position.ToString());
 		}
@@ -146,6 +163,7 @@ namespace FishMMO.Server.Services
 				CharacterAttributeService.Delete(dbContext, character.ID, keepData);
 				CharacterAchievementService.Delete(dbContext, character.ID, keepData);
 				CharacterBuffService.Delete(dbContext, character.ID, keepData);
+				CharacterFriendService.Delete(dbContext, character.ID);
 				dbContext.Characters.Remove(character);
 			}
 		}
@@ -299,7 +317,7 @@ namespace FishMMO.Server.Services
 						CharacterAttributeService.Load(dbContext, character);
 						CharacterAchievementService.Load(dbContext, character);
 						CharacterBuffService.Load(dbContext, character);
-
+						CharacterFriendService.Load(dbContext, character);
 						return true;
 					}
 

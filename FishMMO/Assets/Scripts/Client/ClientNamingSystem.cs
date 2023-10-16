@@ -8,7 +8,7 @@ namespace FishMMO.Client
 	{
 		internal static Client Client;
 
-		private static Dictionary<NamingSystemType, Dictionary<long, string>> names = new Dictionary<NamingSystemType, Dictionary<long, string>>();
+		private static Dictionary<NamingSystemType, Dictionary<long, string>> idToName = new Dictionary<NamingSystemType, Dictionary<long, string>>();
 		private static Dictionary<NamingSystemType, Dictionary<long, Action<string>>> pendingNameRequests = new Dictionary<NamingSystemType, Dictionary<long, Action<string>>>();
 
 		public static void InitializeOnce(Client client)
@@ -19,9 +19,9 @@ namespace FishMMO.Client
 			string workingDirectory = Client.GetWorkingDirectory();
 			foreach (NamingSystemType type in EnumExtensions.ToArray<NamingSystemType>())
 			{
-				if (!names.TryGetValue(type, out Dictionary<long, string> map))
+				if (!idToName.TryGetValue(type, out Dictionary<long, string> map))
 				{
-					map = new Dictionary<long, string>();
+					idToName.Add(type, map = new Dictionary<long, string>());
 				}
 				DictionaryExtensions.ReadCompressedFromFile(map, Path.Combine(workingDirectory, type.ToString() + ".bin"));
 			}
@@ -32,17 +32,21 @@ namespace FishMMO.Client
 			if (Client != null) Client.NetworkManager.ClientManager.UnregisterBroadcast<NamingBroadcast>(OnClientNamingBroadcastReceived);
 
 			string workingDirectory = Client.GetWorkingDirectory();
-			foreach (KeyValuePair<NamingSystemType, Dictionary<long, string>> pair in names)
+			foreach (KeyValuePair<NamingSystemType, Dictionary<long, string>> pair in idToName)
 			{
 				pair.Value.WriteCompressedToFile(Path.Combine(workingDirectory, pair.Key.ToString() + ".bin"));
 			}
 		}
 
+		/// <summary>
+		/// Checks if the name matching the ID and type are known. If they are not the value will be retreived from the server and set at a later time.
+		/// Values learned this way are saved to the clients hard drive when the game closes and loaded when the game loads.
+		/// </summary>
 		public static void SetName(NamingSystemType type, long id, Action<string> action)
 		{
-			if (!names.TryGetValue(type, out Dictionary<long, string> typeNames))
+			if (!idToName.TryGetValue(type, out Dictionary<long, string> typeNames))
 			{
-				names.Add(type, typeNames = new Dictionary<long, string>());
+				idToName.Add(type, typeNames = new Dictionary<long, string>());
 			}
 			if (typeNames.TryGetValue(id, out string name))
 			{
@@ -84,9 +88,9 @@ namespace FishMMO.Client
 					pendingRequests.Remove(msg.id);
 				}
 			}
-			if (!names.TryGetValue(msg.type, out Dictionary<long, string> knownNames))
+			if (!idToName.TryGetValue(msg.type, out Dictionary<long, string> knownNames))
 			{
-				names.Add(msg.type, knownNames = new Dictionary<long, string>());
+				idToName.Add(msg.type, knownNames = new Dictionary<long, string>());
 			}
 			knownNames[msg.id] = msg.name;
 		}

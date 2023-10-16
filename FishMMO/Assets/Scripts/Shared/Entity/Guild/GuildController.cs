@@ -171,10 +171,17 @@ public class GuildController : NetworkBehaviour
 					{
 						ID = member.guildID;
 						Rank = member.rank;
+
+						ClientNamingSystem.SetName(NamingSystemType.GuildName, member.guildID, (s) =>
+						{
+							if (uiGuild.GuildLabel != null)
+							{
+								uiGuild.GuildLabel.text = s;
+							}
+						});
 					}
 					// try to add the member to the list
 					uiGuild.OnGuildAddMember(member.characterID, member.rank, member.location);
-
 				}
 				if (member.rank == GuildRank.Officer &&
 					!Officers.Contains(member.characterID))

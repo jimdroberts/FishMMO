@@ -138,10 +138,7 @@ namespace FishMMO.Server
 			if (conn.FirstObject != null)
 			{
 				Character sender = conn.FirstObject.GetComponent<Character>();
-				if (sender != null)
-				{
-					ProcessNewChatMessage(conn, sender, msg);
-				}
+				ProcessNewChatMessage(conn, sender, msg);
 			}
 			else
 			{
@@ -153,7 +150,7 @@ namespace FishMMO.Server
 		private void ProcessNewChatMessage(NetworkConnection conn, Character sender, ChatBroadcast msg)
 		{
 			// validate message length
-			if (string.IsNullOrWhiteSpace(msg.text) || msg.text.Length > MAX_LENGTH)
+			if (sender == null || string.IsNullOrWhiteSpace(msg.text) || msg.text.Length > MAX_LENGTH)
 			{
 				conn.Kick(FishNet.Managing.Server.KickReason.ExploitExcessiveData);
 				return;
@@ -195,6 +192,8 @@ namespace FishMMO.Server
 			ChatCommand command = ChatHelper.ParseChatCommand(cmd, ref msg.channel);
 			if (command != null)
 			{
+				msg.senderID = sender.ID;
+
 				switch (msg.channel)
 				{
 					case ChatChannel.Guild:
@@ -203,8 +202,8 @@ namespace FishMMO.Server
 							return;
 						}
 
-						// add the senders name and guild ID
-						msg.text = sender.CharacterName + ": " + sender.GuildController.ID + " " + msg.text;
+						// add the senders guild ID
+						msg.text = sender.GuildController.ID + " " + msg.text;
 						break;
 					case ChatChannel.Party:
 						if (sender.PartyController == null || sender.PartyController.ID < 1)
@@ -212,17 +211,15 @@ namespace FishMMO.Server
 							return;
 						}
 
-						// add the senders name and party ID
-						msg.text = sender.CharacterName + ": " + sender.PartyController.ID + " " + msg.text;
+						// add the senders party ID
+						msg.text = sender.PartyController.ID + " " + msg.text;
 						break;
 					case ChatChannel.Trade:
 					case ChatChannel.World:
 						// add the senders world id
-						msg.text = sender.CharacterName + ": " + sender.WorldServerID + " " + msg.text;
+						msg.text = sender.WorldServerID + " " + msg.text;
 						break;
 					default:
-						// add the senders name
-						msg.text = sender.CharacterName + ": " + msg.text;
 						break;
 				}
 
@@ -238,16 +235,8 @@ namespace FishMMO.Server
 
 		public bool OnWorldChat(Character sender, ChatBroadcast msg)
 		{
-			// get the sender
-			string senderName = ChatHelper.GetWordAndTrimmed(msg.text, out string trimmed);
-			if (string.IsNullOrWhiteSpace(senderName))
-			{
-				// no sender in the tell message
-				return false;
-			}
-
 			// get the world ID
-			string wid = ChatHelper.GetWordAndTrimmed(trimmed, out trimmed);
+			string wid = ChatHelper.GetWordAndTrimmed(msg.text, out string trimmed);
 			if (string.IsNullOrWhiteSpace(wid) || !long.TryParse(wid, out long worldID))
 			{
 				// no worldID in the message
@@ -257,7 +246,8 @@ namespace FishMMO.Server
 			ChatBroadcast newMsg = new ChatBroadcast()
 			{
 				channel = msg.channel,
-				text = senderName + " " + trimmed,
+				senderID = msg.senderID,
+				text = trimmed,
 			};
 			if (Server.CharacterSystem != null &&
 				Server.CharacterSystem.CharactersByWorld.TryGetValue(worldID, out Dictionary<long, Character> characters))
@@ -299,16 +289,8 @@ namespace FishMMO.Server
 				return false;
 			}
 
-			// get the sender
-			string senderName = ChatHelper.GetWordAndTrimmed(msg.text, out string trimmed);
-			if (string.IsNullOrWhiteSpace(senderName))
-			{
-				// no sender in the tell message
-				return false;
-			}
-
 			// get the party ID
-			string gid = ChatHelper.GetWordAndTrimmed(trimmed, out trimmed);
+			string gid = ChatHelper.GetWordAndTrimmed(msg.text, out string trimmed);
 			if (string.IsNullOrWhiteSpace(gid) || !long.TryParse(gid, out long partyID))
 			{
 				// no partyID in the message
@@ -322,7 +304,8 @@ namespace FishMMO.Server
 			ChatBroadcast newMsg = new ChatBroadcast()
 			{
 				channel = msg.channel,
-				text = senderName + " " + trimmed,
+				senderID = msg.senderID,
+				text = trimmed,
 			};
 			foreach (CharacterPartyEntity member in dbMembers)
 			{
@@ -342,16 +325,8 @@ namespace FishMMO.Server
 				return false;
 			}
 
-			// get the sender
-			string senderName = ChatHelper.GetWordAndTrimmed(msg.text, out string trimmed);
-			if (string.IsNullOrWhiteSpace(senderName))
-			{
-				// no sender in the tell message
-				return false;
-			}
-
 			// get the guild ID
-			string gid = ChatHelper.GetWordAndTrimmed(trimmed, out trimmed);
+			string gid = ChatHelper.GetWordAndTrimmed(msg.text, out string trimmed);
 			if (string.IsNullOrWhiteSpace(gid) || !long.TryParse(gid, out long guildID))
 			{
 				// no guildID in the message
@@ -365,7 +340,8 @@ namespace FishMMO.Server
 			ChatBroadcast newMsg = new ChatBroadcast()
 			{
 				channel = msg.channel,
-				text = senderName + " " + trimmed,
+				senderID = msg.senderID,
+				text = trimmed,
 			};
 			foreach (CharacterGuildEntity member in dbMembers)
 			{
@@ -380,19 +356,8 @@ namespace FishMMO.Server
 
 		public bool OnTellChat(Character sender, ChatBroadcast msg)
 		{
-			// get the sender
-			string senderName = ChatHelper.GetWordAndTrimmed(msg.text, out string trimmed);
-			// trim the :
-			senderName = senderName.Substring(0, senderName.Length - 1);
-			if (string.IsNullOrWhiteSpace(senderName))
-			{
-				// no sender in the tell message
-				return false;
-			}
-			string senderLower = senderName.ToLower();
-
 			// get the target
-			string targetName = ChatHelper.GetWordAndTrimmed(trimmed, out trimmed);
+			string targetName = ChatHelper.GetWordAndTrimmed(msg.text, out string trimmed);
 			if (string.IsNullOrWhiteSpace(targetName))
 			{
 				// no target in the tell message
@@ -402,27 +367,30 @@ namespace FishMMO.Server
 
 			// are we messaging ourself?
 			if (sender != null &&
-				senderLower.Equals(targetLower))
+				msg.senderID == sender.ID)
 			{
 				sender.Owner.Broadcast(new ChatBroadcast()
 				{
 					channel = msg.channel,
+					senderID = msg.senderID,
 					text = ChatHelper.ERROR_MESSAGE_SELF + " ",
 				});
 				return false;
 			}
 
-			// if the sender exists then we can send a return message if the character is valid
+			// if the sender exists then we can send a return message if the target character is valid
 			if (sender != null &&
 				Server.DbContextFactory != null)
 			{
 				using var dbContext = Server.DbContextFactory.CreateDbContext();
-				if (CharacterService.ExistsAndOnline(dbContext, targetLower))
+				long targetID = CharacterService.GetIdByName(dbContext, targetLower);
+				if (targetID > 0)
 				{
 					sender.Owner.Broadcast(new ChatBroadcast()
 					{
 						channel = msg.channel,
-						text = "[To:" + targetName + "]: " + trimmed,
+						senderID = targetID,
+						text = ChatHelper.RELAYED + " " + trimmed,
 					});
 				}
 				else
@@ -431,6 +399,7 @@ namespace FishMMO.Server
 					sender.Owner.Broadcast(new ChatBroadcast()
 					{
 						channel = msg.channel,
+						senderID = msg.senderID,
 						text = ChatHelper.ERROR_TARGET_OFFLINE + " " + targetName,
 					});
 					return false;
@@ -444,7 +413,8 @@ namespace FishMMO.Server
 				targetCharacter.Owner.Broadcast(new ChatBroadcast()
 				{
 					channel = msg.channel,
-					text = "[From:" + senderName + "]: " + trimmed,
+					senderID = msg.senderID,
+					text = trimmed,
 				});
 			}
 			return true;
@@ -452,16 +422,8 @@ namespace FishMMO.Server
 
 		public bool OnTradeChat(Character sender, ChatBroadcast msg)
 		{
-			// get the sender
-			string senderName = ChatHelper.GetWordAndTrimmed(msg.text, out string trimmed);
-			if (string.IsNullOrWhiteSpace(senderName))
-			{
-				// no sender in the tell message
-				return false;
-			}
-
 			// get the world ID
-			string wid = ChatHelper.GetWordAndTrimmed(trimmed, out trimmed);
+			string wid = ChatHelper.GetWordAndTrimmed(msg.text, out string trimmed);
 			if (string.IsNullOrWhiteSpace(wid) || !long.TryParse(wid, out long worldID))
 			{
 				// no worldID in the message
@@ -471,7 +433,8 @@ namespace FishMMO.Server
 			ChatBroadcast newMsg = new ChatBroadcast()
 			{
 				channel = msg.channel,
-				text = senderName + " " + trimmed,
+				senderID = msg.senderID,
+				text = trimmed,
 			};
 			if (Server.CharacterSystem != null &&
 				Server.CharacterSystem.CharactersByWorld.TryGetValue(worldID, out Dictionary<long, Character> characters))

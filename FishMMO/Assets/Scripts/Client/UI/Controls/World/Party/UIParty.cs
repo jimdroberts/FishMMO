@@ -16,6 +16,11 @@ namespace FishMMO.Client
 
 		public override void OnDestroying()
 		{
+			foreach (UIPartyMember member in new List<UIPartyMember>(Members.Values))
+			{
+				Destroy(member.gameObject);
+			}
+			Members.Clear();
 		}
 
 		public void OnPartyCreated(string location)

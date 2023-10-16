@@ -17,7 +17,7 @@ namespace FishMMO.Client
 		public Dictionary<string, string> ErrorCodes = new Dictionary<string, string>()
 		{
 			{ ChatHelper.ERROR_TARGET_OFFLINE, " is not online." },
-			{ ChatHelper.ERROR_MESSAGE_SELF, "Are you messaging yourself again?" },
+			{ ChatHelper.ERROR_MESSAGE_SELF, "... Are you messaging yourself again?" },
 		};
 
 		public Dictionary<ChatChannel, Color> ChannelColors = new Dictionary<ChatChannel, Color>()
@@ -228,12 +228,14 @@ namespace FishMMO.Client
 			}
 		}
 
-		private void InstantiateChatMessage(ChatChannel channel, string message)
+		private void InstantiateChatMessage(ChatChannel channel, string name, string message)
 		{
 			ClientChatMessage newMessage = Instantiate(chatMessagePrefab, chatViewParent);
 			newMessage.Channel = channel;
+			newMessage.name.color = ChannelColors[channel];
+			newMessage.name.text = "[" + channel + "] " + name;
 			newMessage.text.color = ChannelColors[channel];
-			newMessage.text.text = "[" + channel + "] " + message;
+			newMessage.text.text = message;
 			AddMessage(newMessage);
 		}
 
@@ -282,25 +284,38 @@ namespace FishMMO.Client
 
 		public bool OnWorldChat(Character localCharacter, ChatBroadcast msg)
 		{
-			InstantiateChatMessage(msg.channel, msg.text);
+			ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
+			{
+				InstantiateChatMessage(msg.channel, s, msg.text);
+			});
+			
 			return true;
 		}
 
 		public bool OnRegionChat(Character localCharacter, ChatBroadcast msg)
 		{
-			InstantiateChatMessage(msg.channel, msg.text);
+			ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
+			{
+				InstantiateChatMessage(msg.channel, s, msg.text);
+			});
 			return true;
 		}
 
 		public bool OnPartyChat(Character localCharacter, ChatBroadcast msg)
 		{
-			InstantiateChatMessage(msg.channel, msg.text);
+			ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
+			{
+				InstantiateChatMessage(msg.channel, s, msg.text);
+			});
 			return true;
 		}
 
 		public bool OnGuildChat(Character localCharacter, ChatBroadcast msg)
 		{
-			InstantiateChatMessage(msg.channel, msg.text);
+			ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
+			{
+				InstantiateChatMessage(msg.channel, s, msg.text);
+			});
 			return true;
 		}
 
@@ -311,40 +326,75 @@ namespace FishMMO.Client
 			// check if we have any special messages
 			if (!string.IsNullOrWhiteSpace(cmd))
 			{
-				if (cmd.Equals(ChatHelper.ERROR_TARGET_OFFLINE) &&
-					ErrorCodes.TryGetValue(ChatHelper.ERROR_TARGET_OFFLINE, out string offlineMsg))
+				// returned message
+				if (cmd.Equals(ChatHelper.RELAYED))
+				{
+					ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
+					{
+						InstantiateChatMessage(msg.channel, "[To: " + s + "]", msg.text);
+					});
+					return true;
+				}
+				// target offline
+				else if (cmd.Equals(ChatHelper.ERROR_TARGET_OFFLINE) &&
+						 ErrorCodes.TryGetValue(ChatHelper.ERROR_TARGET_OFFLINE, out string offlineMsg))
 				{
 					ChatHelper.GetWordAndTrimmed(trimmed, out string targetName);
 					if (!string.IsNullOrWhiteSpace(targetName))
 					{
-						msg.text = targetName + offlineMsg;
+						ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
+						{
+							InstantiateChatMessage(msg.channel, s, targetName + offlineMsg);
+						});
+						return true;
 					}
 				}
+				// messaging ourself??
 				else if (cmd.Equals(ChatHelper.ERROR_MESSAGE_SELF) &&
 						 ErrorCodes.TryGetValue(ChatHelper.ERROR_MESSAGE_SELF, out string errorMsg))
 				{
-					msg.text = errorMsg;
+					ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
+					{
+						InstantiateChatMessage(msg.channel, s, errorMsg);
+					});
+					return true;
 				}
 			}
-			InstantiateChatMessage(msg.channel, msg.text);
+			// we received a tell from someone else
+			if (msg.senderID == Character.localCharacter.ID)
+			{
+				ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
+				{
+					InstantiateChatMessage(msg.channel, "[From: " + s + "]", msg.text);
+				});
+			}
 			return true;
 		}
 
 		public bool OnTradeChat(Character localCharacter, ChatBroadcast msg)
 		{
-			InstantiateChatMessage(msg.channel, msg.text);
+			ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
+			{
+				InstantiateChatMessage(msg.channel, s, msg.text);
+			});
 			return true;
 		}
 
 		public bool OnSayChat(Character localCharacter, ChatBroadcast msg)
 		{
-			InstantiateChatMessage(msg.channel, msg.text);
+			ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
+			{
+				InstantiateChatMessage(msg.channel, s, msg.text);
+			});
 			return true;
 		}
 
 		public bool OnSystemChat(Character localCharacter, ChatBroadcast msg)
 		{
-			InstantiateChatMessage(msg.channel, msg.text);
+			ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
+			{
+				InstantiateChatMessage(msg.channel, s, msg.text);
+			});
 			return true;
 		}
 	}

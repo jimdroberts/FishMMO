@@ -14,8 +14,9 @@ public struct ChatCommandDetails
 
 public static class ChatHelper
 {
-	public const string ERROR_TARGET_OFFLINE = "$_";
-	public const string ERROR_MESSAGE_SELF = "$<";
+	public const string RELAYED = "$(|)";
+	public const string ERROR_TARGET_OFFLINE = "$(_)";
+	public const string ERROR_MESSAGE_SELF = "$(<)";
 
 	private static bool initialized = false;
 

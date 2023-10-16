@@ -18,7 +18,7 @@ namespace FishMMO.Server
 		{
 			ConnectionSRPData.Remove(connection);
 
-			ConnectionSRPData.Add(connection, new ServerSrpData(SrpParameters.Create4096<SHA512>(), accountName, publicClientEphemeral, salt, verifier));
+			ConnectionSRPData.Add(connection, new ServerSrpData(SrpParameters.Create2048<SHA512>(), accountName, publicClientEphemeral, salt, verifier));
 
 			ConnectionAccounts.Remove(connection);
 

@@ -91,7 +91,7 @@ namespace FishMMO.Client
 			if (args.ConnectionState != LocalConnectionState.Started)
 				return;
 
-			SrpData = new ClientSrpData(SrpParameters.Create4096<SHA512>());
+			SrpData = new ClientSrpData(SrpParameters.Create2048<SHA512>());
 
 			// register a new account?
 			if (register)
