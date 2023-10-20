@@ -438,7 +438,7 @@ namespace FishMMO.Server
 				// get the current guild members from the database
 				List<CharacterGuildEntity> dbMembers = CharacterGuildService.Members(dbContext, character.GuildController.ID);
 
-				var addBroadcasts = dbMembers.Select(x => new GuildMemberUpdateBroadcast()
+				var addBroadcasts = dbMembers.Select(x => new GuildAddBroadcast()
 				{
 					guildID = x.GuildID,
 					characterID = x.CharacterID,
@@ -446,7 +446,7 @@ namespace FishMMO.Server
 					location = x.Location,
 				}).ToList();
 
-				GuildAddBroadcast guildAddBroadcast = new GuildAddBroadcast()
+				GuildAddMultipleBroadcast guildAddBroadcast = new GuildAddMultipleBroadcast()
 				{
 					members = addBroadcasts,
 				};
@@ -460,7 +460,7 @@ namespace FishMMO.Server
 				// get the current party members from the database
 				List<CharacterPartyEntity> dbMembers = CharacterPartyService.Members(dbContext, character.PartyController.ID);
 
-				var addBroadcasts = dbMembers.Select(x => new PartyMemberUpdateBroadcast()
+				var addBroadcasts = dbMembers.Select(x => new PartyAddBroadcast()
 				{
 					partyID = x.PartyID,
 					characterID = x.CharacterID,
@@ -468,7 +468,7 @@ namespace FishMMO.Server
 					healthPCT = x.HealthPCT,
 				}).ToList();
 
-				PartyAddBroadcast partyAddBroadcast = new PartyAddBroadcast()
+				PartyAddMultipleBroadcast partyAddBroadcast = new PartyAddMultipleBroadcast()
 				{
 					members = addBroadcasts,
 				};

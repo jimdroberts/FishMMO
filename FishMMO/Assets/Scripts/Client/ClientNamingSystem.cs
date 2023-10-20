@@ -14,16 +14,19 @@ namespace FishMMO.Client
 		public static void InitializeOnce(Client client)
 		{
 			Client = client;
-			if (Client != null) Client.NetworkManager.ClientManager.RegisterBroadcast<NamingBroadcast>(OnClientNamingBroadcastReceived);
-
-			string workingDirectory = Client.GetWorkingDirectory();
-			foreach (NamingSystemType type in EnumExtensions.ToArray<NamingSystemType>())
+			if (Client != null)
 			{
-				if (!idToName.TryGetValue(type, out Dictionary<long, string> map))
+				Client.NetworkManager.ClientManager.RegisterBroadcast<NamingBroadcast>(OnClientNamingBroadcastReceived);
+
+				string workingDirectory = Client.GetWorkingDirectory();
+				foreach (NamingSystemType type in EnumExtensions.ToArray<NamingSystemType>())
 				{
-					idToName.Add(type, map = new Dictionary<long, string>());
+					if (!idToName.TryGetValue(type, out Dictionary<long, string> map))
+					{
+						idToName.Add(type, map = new Dictionary<long, string>());
+					}
+					DictionaryExtensions.ReadCompressedFromFile(map, Path.Combine(workingDirectory, type.ToString() + ".bin"));
 				}
-				DictionaryExtensions.ReadCompressedFromFile(map, Path.Combine(workingDirectory, type.ToString() + ".bin"));
 			}
 		}
 
@@ -50,6 +53,7 @@ namespace FishMMO.Client
 			}
 			if (typeNames.TryGetValue(id, out string name))
 			{
+				//UnityEngine.Debug.Log("Found Name for: " + id + ":" + name);
 				action?.Invoke(name);
 			}
 			else if (Client != null)
@@ -58,9 +62,11 @@ namespace FishMMO.Client
 				{
 					pendingNameRequests.Add(type, pendingActions = new Dictionary<long, Action<string>>());
 				}
-				if (!pendingActions.TryGetValue(id, out Action<string> pendingAction))
+				if (!pendingActions.ContainsKey(id))
 				{
 					pendingActions.Add(id, action);
+
+					//UnityEngine.Debug.Log("Requesting Name for: " + id);
 
 					// send the request to the server to get a name
 					Client.NetworkManager.ClientManager.Broadcast(new NamingBroadcast()
@@ -72,7 +78,8 @@ namespace FishMMO.Client
 				}
 				else
 				{
-					pendingAction += action;
+					//UnityEngine.Debug.Log("Adding pending Name for: " + id);
+					pendingActions[id] += action;
 				}
 			}
 		}
@@ -83,8 +90,10 @@ namespace FishMMO.Client
 			{
 				if (pendingRequests.TryGetValue(msg.id, out Action<string> pendingActions))
 				{
+					//UnityEngine.Debug.Log("Processing Name for: " + msg.id + ":" + msg.name);
+
 					pendingActions?.Invoke(msg.name);
-					pendingActions = null;
+					pendingRequests[msg.id] = null;
 					pendingRequests.Remove(msg.id);
 				}
 			}

@@ -74,10 +74,10 @@ namespace FishMMO.Client
 
 				if (InputManager.GetKeyDown("Abilities"))
 				{
-					//if (UIManager.TryGet("UIAbilities", out UIAbilities uiAbilities))
-					//{
-					//	uiAbilities.Visible = !uiAbilities.Visible;
-					//}
+					if (UIManager.TryGet("UIAbilities", out UIAbilities uiAbilities))
+					{
+						uiAbilities.Visible = !uiAbilities.Visible;
+					}
 				}
 
 				if (InputManager.GetKeyDown("Equipment"))

@@ -14,6 +14,11 @@ namespace FishMMO.Server.Services
 	/// </summary>
 	public class CharacterService
 	{
+		public static int GetCount(ServerDbContext dbContext, string account)
+		{
+			return dbContext.Characters.Where((c) => c.Account == account && !c.Deleted).Count();
+		}
+
 		public static bool ExistsAndOnline(ServerDbContext dbContext, long id)
 		{
 			return dbContext.Characters.FirstOrDefault((c) => c.ID == id &&

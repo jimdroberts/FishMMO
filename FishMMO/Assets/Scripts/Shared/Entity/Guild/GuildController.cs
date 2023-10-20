@@ -32,9 +32,9 @@ public class GuildController : NetworkBehaviour
 
 		ClientManager.RegisterBroadcast<GuildCreateBroadcast>(OnClientGuildCreateBroadcastReceived);
 		ClientManager.RegisterBroadcast<GuildInviteBroadcast>(OnClientGuildInviteBroadcastReceived);
-		ClientManager.RegisterBroadcast<GuildMemberUpdateBroadcast>(OnClientGuildMemberUpdateBroadcastReceived);
-		ClientManager.RegisterBroadcast<GuildLeaveBroadcast>(OnClientGuildLeaveBroadcastReceived);
 		ClientManager.RegisterBroadcast<GuildAddBroadcast>(OnClientGuildAddBroadcastReceived);
+		ClientManager.RegisterBroadcast<GuildLeaveBroadcast>(OnClientGuildLeaveBroadcastReceived);
+		ClientManager.RegisterBroadcast<GuildAddMultipleBroadcast>(OnClientGuildAddMultipleBroadcastReceived);
 		ClientManager.RegisterBroadcast<GuildRemoveBroadcast>(OnClientGuildRemoveBroadcastReceived);
 	}
 
@@ -46,9 +46,9 @@ public class GuildController : NetworkBehaviour
 		{
 			ClientManager.UnregisterBroadcast<GuildCreateBroadcast>(OnClientGuildCreateBroadcastReceived);
 			ClientManager.UnregisterBroadcast<GuildInviteBroadcast>(OnClientGuildInviteBroadcastReceived);
-			ClientManager.UnregisterBroadcast<GuildMemberUpdateBroadcast>(OnClientGuildMemberUpdateBroadcastReceived);
-			ClientManager.UnregisterBroadcast<GuildLeaveBroadcast>(OnClientGuildLeaveBroadcastReceived);
 			ClientManager.UnregisterBroadcast<GuildAddBroadcast>(OnClientGuildAddBroadcastReceived);
+			ClientManager.UnregisterBroadcast<GuildLeaveBroadcast>(OnClientGuildLeaveBroadcastReceived);
+			ClientManager.UnregisterBroadcast<GuildAddMultipleBroadcast>(OnClientGuildAddMultipleBroadcastReceived);
 			ClientManager.UnregisterBroadcast<GuildRemoveBroadcast>(OnClientGuildRemoveBroadcastReceived);
 		}
 	}
@@ -97,7 +97,7 @@ public class GuildController : NetworkBehaviour
 	/// <summary>
 	/// When we add a new guild member to the guild.
 	/// </summary>
-	public void OnClientGuildMemberUpdateBroadcastReceived(GuildMemberUpdateBroadcast msg)
+	public void OnClientGuildAddBroadcastReceived(GuildAddBroadcast msg)
 	{
 		// update our Guild list with the new Guild member
 #if !UNITY_SERVER
@@ -146,7 +146,7 @@ public class GuildController : NetworkBehaviour
 	/// <summary>
 	/// When we need to add guild members.
 	/// </summary>
-	public void OnClientGuildAddBroadcastReceived(GuildAddBroadcast msg)
+	public void OnClientGuildAddMultipleBroadcastReceived(GuildAddMultipleBroadcast msg)
 	{
 #if !UNITY_SERVER
 		if (UIManager.TryGet("UIGuild", out UIGuild uiGuild))
@@ -160,7 +160,7 @@ public class GuildController : NetworkBehaviour
 					uiGuild.OnGuildRemoveMember(id);
 				}
 			}
-			foreach (GuildMemberUpdateBroadcast member in msg.members)
+			foreach (GuildAddBroadcast member in msg.members)
 			{
 				if (!Members.Contains(member.characterID))
 				{

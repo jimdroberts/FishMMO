@@ -21,7 +21,7 @@ public struct GuildDeclineInviteBroadcast : IBroadcast
 {
 }
 
-public struct GuildMemberUpdateBroadcast : IBroadcast
+public struct GuildAddBroadcast : IBroadcast
 {
 	public long guildID;
 	public long characterID;
@@ -33,9 +33,9 @@ public struct GuildLeaveBroadcast : IBroadcast
 {
 }
 
-public struct GuildAddBroadcast : IBroadcast
+public struct GuildAddMultipleBroadcast : IBroadcast
 {
-	public List<GuildMemberUpdateBroadcast> members;
+	public List<GuildAddBroadcast> members;
 
 }
 public struct GuildRemoveBroadcast : IBroadcast

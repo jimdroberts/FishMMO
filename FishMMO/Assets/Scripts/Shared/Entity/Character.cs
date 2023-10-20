@@ -143,6 +143,13 @@ public class Character : NetworkBehaviour, IPooledResettable
 				LocalInputController = gameObject.AddComponent<LocalInputController>();
 			}
 			LabelMaker = gameObject.GetComponent<LabelMaker>();
+
+			if (TargetController != null &&
+				UIManager.TryGet("UITarget", out UITarget uiTarget))
+			{
+				TargetController.OnChangeTarget += uiTarget.OnChangeTarget;
+				TargetController.OnUpdateTarget += uiTarget.OnUpdateTarget;
+			}
 #endif
 		}
 	}
@@ -158,6 +165,13 @@ public class Character : NetworkBehaviour, IPooledResettable
 			if (LocalInputController != null)
 			{
 				Destroy(LocalInputController);
+			}
+
+			if (TargetController != null &&
+				UIManager.TryGet("UITarget", out UITarget uiTarget))
+			{
+				TargetController.OnChangeTarget -= uiTarget.OnChangeTarget;
+				TargetController.OnUpdateTarget += uiTarget.OnUpdateTarget;
 			}
 #endif
 		}
