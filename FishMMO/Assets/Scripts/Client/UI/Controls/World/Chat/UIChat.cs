@@ -10,7 +10,7 @@ namespace FishMMO.Client
 		public const int MAX_LENGTH = 128;
 
 		public Transform chatViewParent;
-		public ClientChatMessage chatMessagePrefab;
+		public UIChatMessage chatMessagePrefab;
 		public Transform chatTabViewParent;
 		public ChatTab chatTabPrefab;
 
@@ -36,10 +36,10 @@ namespace FishMMO.Client
 		public Dictionary<string, ChatTab> tabs = new Dictionary<string, ChatTab>();
 		public string currentTab = "";
 
-		public delegate void ChatMessageChange(ClientChatMessage message);
+		public delegate void ChatMessageChange(UIChatMessage message);
 		public event ChatMessageChange OnMessageAdded;
 		public event ChatMessageChange OnMessageRemoved;
-		public List<ClientChatMessage> messages = new List<ClientChatMessage>();
+		public List<UIChatMessage> messages = new List<UIChatMessage>();
 		public bool AllowRepeatMessages = false;
 		[Tooltip("The rate at which messages can be sent in milliseconds.")]
 		public float MessageRateLimit = 0.0f;
@@ -102,7 +102,7 @@ namespace FishMMO.Client
 		{
 			if (tabs.TryGetValue(currentTab, out ChatTab tab))
 			{
-				foreach (ClientChatMessage message in messages)
+				foreach (UIChatMessage message in messages)
 				{
 					if (message == null) continue;
 
@@ -210,7 +210,7 @@ namespace FishMMO.Client
 			currentTab = tab.name;
 		}
 
-		private void AddMessage(ClientChatMessage message)
+		private void AddMessage(UIChatMessage message)
 		{
 			const int MAX_MESSAGES = 128;
 
@@ -220,7 +220,7 @@ namespace FishMMO.Client
 			if (messages.Count > MAX_MESSAGES)
 			{
 				// messages are FIFO.. remove the first message when we hit our limit.
-				ClientChatMessage oldMessage = messages[0];
+				UIChatMessage oldMessage = messages[0];
 				messages.RemoveAt(0);
 				//OnWriteMessageToDisk?.Invoke(oldMessage); can we add logging to disc later?
 				OnMessageRemoved?.Invoke(oldMessage);
@@ -230,12 +230,12 @@ namespace FishMMO.Client
 
 		private void InstantiateChatMessage(ChatChannel channel, string name, string message)
 		{
-			ClientChatMessage newMessage = Instantiate(chatMessagePrefab, chatViewParent);
+			UIChatMessage newMessage = Instantiate(chatMessagePrefab, chatViewParent);
 			newMessage.Channel = channel;
-			newMessage.name.color = ChannelColors[channel];
-			newMessage.name.text = "[" + channel + "] " + name;
-			newMessage.text.color = ChannelColors[channel];
-			newMessage.text.text = message;
+			newMessage.CharacterName.color = ChannelColors[channel];
+			newMessage.CharacterName.text = "[" + channel + "] " + name;
+			newMessage.Text.color = ChannelColors[channel];
+			newMessage.Text.text = message;
 			AddMessage(newMessage);
 		}
 

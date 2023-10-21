@@ -3,6 +3,13 @@ using SecureRemotePassword;
 
 namespace FishMMO.Server
 {
+	public enum SrpState : byte
+	{
+		SRPVerify,
+		SRPProof,
+		SRPSuccess,
+	}
+
 	public class ServerSrpData
 	{
 		public string UserName { get; private set; }
@@ -12,6 +19,7 @@ namespace FishMMO.Server
 		public string Verifier { get; private set; }
 		public SrpEphemeral ServerEphemeral { get; private set; }
 		public SrpSession Session { get; private set; }
+		public SrpState State { get; set; }
 
 		public ServerSrpData(SrpParameters parameters, string username, string publicClientEphemeral, string salt, string verifier)
 		{
@@ -21,6 +29,7 @@ namespace FishMMO.Server
 			this.Salt = salt;
 			this.Verifier = verifier;
 			ServerEphemeral = SrpServer.GenerateEphemeral(this.Verifier);
+			State = SrpState.SRPVerify;
 		}
 
 		public bool GetProof(string proof, out string serverProof)

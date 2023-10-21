@@ -82,7 +82,8 @@ namespace FishMMO.Server
 						AccountManager.AddConnectionAccount(conn, msg.s, msg.publicEphemeral, salt, verifier);
 
 						// get and send srp verification data
-						if (AccountManager.GetConnectionSRPData(conn, out ServerSrpData srpData))
+						if (AccountManager.GetConnectionSRPData(conn, out ServerSrpData srpData) &&
+							srpData.State == SrpState.SRPVerify)
 						{
 							//UnityEngine.Debug.Log("SRPVerify");
 
@@ -113,7 +114,8 @@ namespace FishMMO.Server
 			 * are removed when a client disconnects so there is no reason they should
 			 * already be considered authenticated. */
 			if (conn.Authenticated ||
-				!AccountManager.GetConnectionSRPData(conn, out ServerSrpData srpData))
+				!AccountManager.GetConnectionSRPData(conn, out ServerSrpData srpData) ||
+				srpData.State != SrpState.SRPVerify)
 			{
 				conn.Disconnect(true);
 				return;
@@ -122,6 +124,9 @@ namespace FishMMO.Server
 			if (srpData.GetProof(msg.proof, out string serverProof))
 			{
 				//UnityEngine.Debug.Log("SRPProof");
+
+				// update SRP State
+				srpData.State = SrpState.SRPProof;
 
 				SRPProofBroadcast msg2 = new SRPProofBroadcast()
 				{
@@ -146,11 +151,15 @@ namespace FishMMO.Server
 			 * are removed when a client disconnects so there is no reason they should
 			 * already be considered authenticated. */
 			if (conn.Authenticated ||
-				!AccountManager.GetAccountNameByConnection(conn, out string accountName))
+				!AccountManager.GetAccountNameByConnection(conn, out string accountName) ||
+				!AccountManager.GetConnectionSRPData(conn, out ServerSrpData srpData) ||
+				srpData.State != SrpState.SRPProof)
 			{
 				conn.Disconnect(true);
 				return;
 			}
+			srpData.State = SrpState.SRPSuccess;
+
 			using var dbContext = DBContextFactory.CreateDbContext();
 			// attempt to complete login authentication and return a result broadcast
 			ClientAuthenticationResult result = TryLogin(dbContext, ClientAuthenticationResult.LoginSuccess, accountName);

@@ -348,7 +348,7 @@ GameObject:
   - component: {fileID: 5043444177150772405}
   - component: {fileID: 5043444177150772404}
   m_Layer: 5
-  m_Name: ClientChatMessage
+  m_Name: UIChatMessage
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -388,8 +388,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   Channel: 0
-  name: {fileID: 5043444176622529937}
-  text: {fileID: 5043444176665444999}
+  CharacterName: {fileID: 5043444176622529937}
+  Text: {fileID: 5043444176665444999}
 --- !u!114 &5043444177150772405
 MonoBehaviour:
   m_ObjectHideFlags: 0
