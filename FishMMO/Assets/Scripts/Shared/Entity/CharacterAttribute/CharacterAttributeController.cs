@@ -93,6 +93,15 @@ public class CharacterAttributeController : NetworkBehaviour
 		return ResourceAttributes.TryGetValue(template.ID, out attribute);
 	}
 
+	public float GetResourceAttributeCurrentPercentage(CharacterAttributeTemplate template)
+	{
+		if (ResourceAttributes.TryGetValue(template.ID, out CharacterResourceAttribute attribute))
+		{
+			return attribute.FinalValue / attribute.CurrentValue;
+		}
+		return 0.0f;
+	}
+
 	public bool TryGetResourceAttribute(int id, out CharacterResourceAttribute attribute)
 	{
 		return ResourceAttributes.TryGetValue(id, out attribute);

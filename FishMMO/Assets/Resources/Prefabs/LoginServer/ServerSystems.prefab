@@ -14,6 +14,7 @@ GameObject:
   - component: {fileID: 2508430958062098396}
   - component: {fileID: 403044114284278985}
   - component: {fileID: 4059034741344880447}
+  - component: {fileID: 4059034741211151037}
   m_Layer: 0
   m_Name: ServerSystems
   m_TagString: Untagged
@@ -48,11 +49,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 03313be06094e964aa4ef9f757c6f674, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  ConfigurationFileName: 
-  Address: 
-  Port: 0
-  RelayAddress: 
-  RelayPort: 0
 --- !u!114 &4059034741344880446
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -81,6 +77,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 23ccd5305ea4557499d55b591a41c9c8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  KeepDeleteData: 1
 --- !u!114 &403044114284278985
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -105,5 +102,17 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: f089fd8e7e37de246b07a3e0cc28b106, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!114 &4059034741211151037
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4059034741344880580}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 10185ce7ae478884e9e2b64b34b0db03, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 

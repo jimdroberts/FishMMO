@@ -325,9 +325,9 @@ RectTransform:
   m_Father: {fileID: 7330320135367138569}
   m_RootOrder: -1
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 0, y: 0}
+  m_AnchorMin: {x: 0, y: 1}
+  m_AnchorMax: {x: 0, y: 1}
+  m_AnchoredPosition: {x: 73, y: -13}
   m_SizeDelta: {x: 96, y: 24}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &877165945576539423
@@ -737,7 +737,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 0.14901961}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -811,10 +811,11 @@ MonoBehaviour:
   StartOpen: 0
   IsAlwaysOpen: 0
   HasFocus: 0
-  CanDrag: 0
-  ClampToScreen: 0
+  CloseOnQuitToMenu: 1
+  CanDrag: 1
+  ClampToScreen: 1
   chatViewParent: {fileID: 877165946126966488}
-  chatMessagePrefab: {fileID: -6438489236917851121, guid: 1bbbcf2f88a3fd3479ebe37d4cf823cb,
+  chatMessagePrefab: {fileID: 5043444177150772411, guid: dc951853bc8579847ac4cf5cd0080e8f,
     type: 3}
   chatTabViewParent: {fileID: 7330320135367138569}
   chatTabPrefab: {fileID: 877165945576539420}
@@ -859,10 +860,10 @@ RectTransform:
   m_Father: {fileID: 877165945576539411}
   m_RootOrder: -1
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: 24}
+  m_AnchorMin: {x: 0, y: 1}
+  m_AnchorMax: {x: 0, y: 1}
+  m_AnchoredPosition: {x: 83.99501, y: -12}
+  m_SizeDelta: {x: 24.010002, y: 24}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &877165945793937785
 CanvasRenderer:
@@ -1098,7 +1099,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 0, g: 0, b: 0, a: 0.392}
+  m_Color: {r: 0, g: 0, b: 0, a: 0.54901963}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -1406,10 +1407,10 @@ RectTransform:
   m_Father: {fileID: 877165945576539411}
   m_RootOrder: -1
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: 24}
+  m_AnchorMin: {x: 0, y: 1}
+  m_AnchorMax: {x: 0, y: 1}
+  m_AnchoredPosition: {x: 39.995003, y: -12}
+  m_SizeDelta: {x: 63.99, y: 24}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &877165946333499736
 CanvasRenderer:
@@ -1854,7 +1855,7 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 877165944774009704}
   m_HandleRect: {fileID: 877165944774009707}
   m_Direction: 2
-  m_Value: 0
+  m_Value: 1
   m_Size: 1
   m_NumberOfSteps: 0
   m_OnValueChanged:
@@ -2127,7 +2128,7 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 2570324046792451486}
   m_HandleRect: {fileID: 3947521462771818380}
   m_Direction: 0
-  m_Value: 0
+  m_Value: 1
   m_Size: 1
   m_NumberOfSteps: 0
   m_OnValueChanged:
@@ -2474,9 +2475,9 @@ RectTransform:
   m_Father: {fileID: 7330320135367138569}
   m_RootOrder: -1
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 0, y: 0}
+  m_AnchorMin: {x: 0, y: 1}
+  m_AnchorMax: {x: 0, y: 1}
+  m_AnchoredPosition: {x: 13, y: -13}
   m_SizeDelta: {x: 24, y: 24}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &8072329700379134415

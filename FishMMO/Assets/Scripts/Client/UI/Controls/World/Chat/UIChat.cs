@@ -1,7 +1,7 @@
-﻿using UnityEngine;
+﻿using FishNet.Transporting;
+using UnityEngine;
 using System;
 using System.Collections.Generic;
-using FishNet.Transporting;
 
 namespace FishMMO.Client
 {
@@ -10,9 +10,15 @@ namespace FishMMO.Client
 		public const int MAX_LENGTH = 128;
 
 		public Transform chatViewParent;
-		public ClientChatMessage chatMessagePrefab;
+		public UIChatMessage chatMessagePrefab;
 		public Transform chatTabViewParent;
 		public ChatTab chatTabPrefab;
+
+		public Dictionary<string, string> ErrorCodes = new Dictionary<string, string>()
+		{
+			{ ChatHelper.ERROR_TARGET_OFFLINE, " is not online." },
+			{ ChatHelper.ERROR_MESSAGE_SELF, "... Are you messaging yourself again?" },
+		};
 
 		public Dictionary<ChatChannel, Color> ChannelColors = new Dictionary<ChatChannel, Color>()
 		{
@@ -30,10 +36,10 @@ namespace FishMMO.Client
 		public Dictionary<string, ChatTab> tabs = new Dictionary<string, ChatTab>();
 		public string currentTab = "";
 
-		public delegate void ChatMessageChange(ClientChatMessage message);
+		public delegate void ChatMessageChange(UIChatMessage message);
 		public event ChatMessageChange OnMessageAdded;
 		public event ChatMessageChange OnMessageRemoved;
-		public List<ClientChatMessage> messages = new List<ClientChatMessage>();
+		public List<UIChatMessage> messages = new List<UIChatMessage>();
 		public bool AllowRepeatMessages = false;
 		[Tooltip("The rate at which messages can be sent in milliseconds.")]
 		public float MessageRateLimit = 0.0f;
@@ -79,11 +85,11 @@ namespace FishMMO.Client
 		{
 			if (args.ConnectionState == LocalConnectionState.Started)
 			{
-				Client.NetworkManager.ClientManager.RegisterBroadcast<ChatBroadcast>(OnClientChatMessageReceived);
+				Client.NetworkManager.ClientManager.RegisterBroadcast<ChatBroadcast>(OnClientChatBroadcastReceived);
 			}
 			else if (args.ConnectionState == LocalConnectionState.Stopped)
 			{
-				Client.NetworkManager.ClientManager.UnregisterBroadcast<ChatBroadcast>(OnClientChatMessageReceived);
+				Client.NetworkManager.ClientManager.UnregisterBroadcast<ChatBroadcast>(OnClientChatBroadcastReceived);
 			}
 		}
 
@@ -96,7 +102,7 @@ namespace FishMMO.Client
 		{
 			if (tabs.TryGetValue(currentTab, out ChatTab tab))
 			{
-				foreach (ClientChatMessage message in messages)
+				foreach (UIChatMessage message in messages)
 				{
 					if (message == null) continue;
 
@@ -147,8 +153,6 @@ namespace FishMMO.Client
 				ChatBroadcast message = new ChatBroadcast() { text = input };
 				// send the message to the server
 				Client.NetworkManager.ClientManager.Broadcast(message);
-				// display the message locally
-				ParseLocalMessage(character, message);
 			}
 			InputField.text = "";
 		}
@@ -206,7 +210,7 @@ namespace FishMMO.Client
 			currentTab = tab.name;
 		}
 
-		private void AddMessage(ClientChatMessage message)
+		private void AddMessage(UIChatMessage message)
 		{
 			const int MAX_MESSAGES = 128;
 
@@ -216,7 +220,7 @@ namespace FishMMO.Client
 			if (messages.Count > MAX_MESSAGES)
 			{
 				// messages are FIFO.. remove the first message when we hit our limit.
-				ClientChatMessage oldMessage = messages[0];
+				UIChatMessage oldMessage = messages[0];
 				messages.RemoveAt(0);
 				//OnWriteMessageToDisk?.Invoke(oldMessage); can we add logging to disc later?
 				OnMessageRemoved?.Invoke(oldMessage);
@@ -224,19 +228,15 @@ namespace FishMMO.Client
 			}
 		}
 
-		private void OnClientChatMessageReceived(ChatBroadcast msg)
+		private void InstantiateChatMessage(ChatChannel channel, string name, string message)
 		{
-			if (!string.IsNullOrWhiteSpace(currentTab) && tabs.TryGetValue(currentTab, out ChatTab tab))
-			{
-				if (tab.activeChannels.Contains(msg.channel))
-				{
-					ClientChatMessage newMessage = Instantiate(chatMessagePrefab, chatViewParent);
-					newMessage.Channel = msg.channel;
-					newMessage.text.color = ChannelColors[msg.channel];
-					newMessage.text.text = "[" + msg.channel + "] " + msg.text;
-					AddMessage(newMessage);
-				}
-			}
+			UIChatMessage newMessage = Instantiate(chatMessagePrefab, chatViewParent);
+			newMessage.Channel = channel;
+			newMessage.CharacterName.color = ChannelColors[channel];
+			newMessage.CharacterName.text = "[" + channel + "] " + name;
+			newMessage.Text.color = ChannelColors[channel];
+			newMessage.Text.text = message;
+			AddMessage(newMessage);
 		}
 
 		public ChatCommand GetChannelCommand(ChatChannel channel)
@@ -250,11 +250,24 @@ namespace FishMMO.Client
 				case ChatChannel.Tell: return OnTellChat;
 				case ChatChannel.Trade: return OnTradeChat;
 				case ChatChannel.Say: return OnSayChat;
+				case ChatChannel.System: return OnSystemChat;
 				default: return OnSayChat;
 			}
 		}
 
-		private void ParseLocalMessage(Character sender, ChatBroadcast msg)
+		private void OnClientChatBroadcastReceived(ChatBroadcast msg)
+		{
+			if (!string.IsNullOrWhiteSpace(currentTab) && tabs.TryGetValue(currentTab, out ChatTab tab))
+			{
+				if (tab.activeChannels.Contains(msg.channel))
+				{
+					// parse the local message
+					ParseLocalMessage(Character.localCharacter, msg);
+				}
+			}
+		}
+
+		private void ParseLocalMessage(Character localCharacter, ChatBroadcast msg)
 		{
 			// validate message length
 			if (string.IsNullOrWhiteSpace(msg.text) || msg.text.Length > MAX_LENGTH)
@@ -262,83 +275,127 @@ namespace FishMMO.Client
 				return;
 			}
 
-			string cmd = ChatHelper.GetCommandAndTrim(ref msg.text);
-
-			// the text is empty
-			if (msg.text.Length < 1)
-			{
-				return;
-			}
-
-			ChatCommand command = ChatHelper.ParseChatCommand(cmd, ref msg.channel);
+			ChatCommand command = ChatHelper.ParseChatChannel(msg.channel);
 			if (command != null)
 			{
-				// add the characters name
-				msg.text = sender.CharacterName + ": " + msg.text;
-				command?.Invoke(sender, msg);
+				command?.Invoke(localCharacter, msg);
 			}
 		}
 
-		public void OnWorldChat(Character sender, ChatBroadcast msg)
+		public bool OnWorldChat(Character localCharacter, ChatBroadcast msg)
 		{
-			// fake it
-			OnClientChatMessageReceived(msg);
-		}
-
-		public void OnRegionChat(Character sender, ChatBroadcast msg)
-		{
-			// fake it
-			OnClientChatMessageReceived(msg);
-		}
-
-		public void OnPartyChat(Character sender, ChatBroadcast msg)
-		{
-			// fake it
-			OnClientChatMessageReceived(msg);
-		}
-
-		public void OnGuildChat(Character sender, ChatBroadcast msg)
-		{
-			// fake it
-			OnClientChatMessageReceived(msg);
-		}
-
-		public void OnTellChat(Character sender, ChatBroadcast msg)
-		{
-			// get the sender
-			string senderName = ChatHelper.GetWordAndTrimmed(msg.text, out string trimmed);
-			if (string.IsNullOrWhiteSpace(senderName))
+			ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
 			{
-				// no sender in the tell message
-				return;
-			}
-
-			// get the target
-			string targetName = ChatHelper.GetWordAndTrimmed(trimmed, out trimmed);
-			if (string.IsNullOrWhiteSpace(targetName))
-			{
-				// no target in the tell message
-				return;
-			}
-
-			// fake it
-			OnClientChatMessageReceived(new ChatBroadcast()
-			{
-				channel = msg.channel,
-				text = "[To:" + targetName + "]: " + trimmed,
+				InstantiateChatMessage(msg.channel, s, msg.text);
 			});
+			
+			return true;
 		}
 
-		public void OnTradeChat(Character sender, ChatBroadcast msg)
+		public bool OnRegionChat(Character localCharacter, ChatBroadcast msg)
 		{
-			// fake it
-			OnClientChatMessageReceived(msg);
+			ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
+			{
+				InstantiateChatMessage(msg.channel, s, msg.text);
+			});
+			return true;
 		}
 
-		public void OnSayChat(Character sender, ChatBroadcast msg)
+		public bool OnPartyChat(Character localCharacter, ChatBroadcast msg)
 		{
-			// fake it
-			OnClientChatMessageReceived(msg);
+			ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
+			{
+				InstantiateChatMessage(msg.channel, s, msg.text);
+			});
+			return true;
+		}
+
+		public bool OnGuildChat(Character localCharacter, ChatBroadcast msg)
+		{
+			ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
+			{
+				InstantiateChatMessage(msg.channel, s, msg.text);
+			});
+			return true;
+		}
+
+		public bool OnTellChat(Character localCharacter, ChatBroadcast msg)
+		{
+			string cmd = ChatHelper.GetWordAndTrimmed(msg.text, out string trimmed);
+
+			// check if we have any special messages
+			if (!string.IsNullOrWhiteSpace(cmd))
+			{
+				// returned message
+				if (cmd.Equals(ChatHelper.RELAYED))
+				{
+					ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
+					{
+						InstantiateChatMessage(msg.channel, "[To: " + s + "]", msg.text);
+					});
+					return true;
+				}
+				// target offline
+				else if (cmd.Equals(ChatHelper.ERROR_TARGET_OFFLINE) &&
+						 ErrorCodes.TryGetValue(ChatHelper.ERROR_TARGET_OFFLINE, out string offlineMsg))
+				{
+					ChatHelper.GetWordAndTrimmed(trimmed, out string targetName);
+					if (!string.IsNullOrWhiteSpace(targetName))
+					{
+						ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
+						{
+							InstantiateChatMessage(msg.channel, s, targetName + offlineMsg);
+						});
+						return true;
+					}
+				}
+				// messaging ourself??
+				else if (cmd.Equals(ChatHelper.ERROR_MESSAGE_SELF) &&
+						 ErrorCodes.TryGetValue(ChatHelper.ERROR_MESSAGE_SELF, out string errorMsg))
+				{
+					ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
+					{
+						InstantiateChatMessage(msg.channel, s, errorMsg);
+					});
+					return true;
+				}
+			}
+			// we received a tell from someone else
+			if (msg.senderID == Character.localCharacter.ID)
+			{
+				ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
+				{
+					InstantiateChatMessage(msg.channel, "[From: " + s + "]", msg.text);
+				});
+			}
+			return true;
+		}
+
+		public bool OnTradeChat(Character localCharacter, ChatBroadcast msg)
+		{
+			ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
+			{
+				InstantiateChatMessage(msg.channel, s, msg.text);
+			});
+			return true;
+		}
+
+		public bool OnSayChat(Character localCharacter, ChatBroadcast msg)
+		{
+			ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
+			{
+				InstantiateChatMessage(msg.channel, s, msg.text);
+			});
+			return true;
+		}
+
+		public bool OnSystemChat(Character localCharacter, ChatBroadcast msg)
+		{
+			ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
+			{
+				InstantiateChatMessage(msg.channel, s, msg.text);
+			});
+			return true;
 		}
 	}
 }

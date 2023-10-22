@@ -1,6 +1,7 @@
 ﻿using FishNet.Managing;
 using FishNet.Transporting;
 using FishNet.Managing.Scened;
+using FishNet.Managing.Timing;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
@@ -24,9 +25,11 @@ namespace FishMMO.Client
 
 		public List<ServerAddress> LoginServerAddresses;
 		public Configuration Configuration = null;
+
 		public event Action OnConnectionSuccessful;
 		public event Action<byte, byte> OnReconnectAttempt;
 		public event Action OnReconnectFailed;
+		public event Action OnQuitToLogin;
 
 		private const byte reconnectAttempts = 10;
 		private const float firstReconnectAttemptWaitTime = 10f;
@@ -37,27 +40,33 @@ namespace FishMMO.Client
 		private float timeTillFirstReconnectAttempt = 0;
 		private bool reconnectActive = false;
 
-		public NetworkManager NetworkManager { get; private set; }
-		public ClientLoginAuthenticator LoginAuthenticator { get; private set; }
+		public static TimeManager TimeManager { get; private set; }
+		public NetworkManager NetworkManager;
+		public ClientLoginAuthenticator LoginAuthenticator;
 
 		void Awake()
 		{
-			NetworkManager = FindObjectOfType<NetworkManager>();
-			LoginAuthenticator = FindObjectOfType<ClientLoginAuthenticator>();
 			if (NetworkManager == null)
 			{
 				Debug.LogError("Client: NetworkManager not found.");
-
-				Client.Quit();
+				Quit();
 			}
 			else if (LoginAuthenticator == null)
 			{
 				Debug.LogError("Client: LoginAuthenticator not found.");
-
-				Client.Quit();
+				Quit();
 			}
 			else
 			{
+				// initialize naming service
+				ClientNamingSystem.InitializeOnce(this);
+
+				// assign the clients TimeManager
+				TimeManager = NetworkManager.TimeManager;
+
+				// assign the client to the Login Authenticator
+				LoginAuthenticator.SetClient(this);
+
 				string path = Client.GetWorkingDirectory();
 
 				// load configuration
@@ -85,6 +94,8 @@ namespace FishMMO.Client
 				// do dependency injection here if needed
 				UIManager.SetClient(this);
 
+				UnityEngine.SceneManagement.SceneManager.sceneLoaded += UnitySceneManager_OnSceneLoaded;
+				UnityEngine.SceneManagement.SceneManager.sceneUnloaded += UnitySceneManager_OnSceneUnloaded;
 				NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
 				NetworkManager.SceneManager.OnLoadStart += SceneManager_OnLoadStart;
 				NetworkManager.SceneManager.OnLoadPercentChange += SceneManager_OnLoadPercentChange;
@@ -101,13 +112,12 @@ namespace FishMMO.Client
 		{
 			if(timeTillFirstReconnectAttempt > 0)
 			{
-				timeTillFirstReconnectAttempt -= Time.deltaTime;
 				if(timeTillFirstReconnectAttempt < 0)
 				{
 					reconnectActive = true;
 					OnTryReconnect();
 				}
-				return;
+				timeTillFirstReconnectAttempt -= Time.deltaTime;
 			}
 		}
 
@@ -120,13 +130,20 @@ namespace FishMMO.Client
 #endif
 		}
 
-		public static void Quit()
+		public void Quit()
 		{
+			ClientNamingSystem.Destroy();
+
 #if UNITY_EDITOR
 			EditorApplication.ExitPlaymode();
 #else
 			Application.Quit();
 #endif
+		}
+
+		public void QuitToLogin()
+		{
+			OnQuitToLogin?.Invoke();
 		}
 
 		/// <summary>
@@ -178,6 +195,19 @@ namespace FishMMO.Client
 			}
 
 			return true;
+		}
+
+		private void UnitySceneManager_OnSceneLoaded(Scene scene, UnityEngine.SceneManagement.LoadSceneMode mode)
+		{
+			// ClientBootstrap overrides active scene if it is ever loaded.
+			if (scene.name.Contains("ClientBootstrap"))
+			{
+				UnityEngine.SceneManagement.SceneManager.SetActiveScene(scene);
+			}
+		}
+
+		private void UnitySceneManager_OnSceneUnloaded(Scene scene)
+		{
 		}
 
 		private void ClientManager_OnClientConnectionState(ClientConnectionStateArgs obj)
@@ -247,6 +277,8 @@ namespace FishMMO.Client
 		{
 			switch (result)
 			{
+				case ClientAuthenticationResult.AccountCreated:
+					break;
 				case ClientAuthenticationResult.InvalidUsernameOrPassword:
 					break;
 				case ClientAuthenticationResult.AlreadyOnline:

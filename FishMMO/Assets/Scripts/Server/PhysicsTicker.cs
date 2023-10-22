@@ -1,4 +1,5 @@
 ﻿using FishNet;
+using FishNet.Managing.Timing;
 using UnityEngine;
 
 namespace FishMMO.Server
@@ -6,27 +7,29 @@ namespace FishMMO.Server
 	public class PhysicsTicker : MonoBehaviour
 	{
 		private PhysicsScene _physicsScene;
+		private TimeManager timeManager;
 
-		internal void InitializeOnce(PhysicsScene physicsScene)
+		internal void InitializeOnce(PhysicsScene physicsScene, TimeManager timeManager)
 		{
-			if (InstanceFinder.TimeManager != null)
+			if (timeManager != null)
 			{
-				InstanceFinder.TimeManager.OnTick += TimeManager_OnTick;
+				this.timeManager = timeManager;
+				this.timeManager.OnTick += TimeManager_OnTick;
 				_physicsScene = physicsScene;
 			}
 		}
 
 		void OnDestroy()
 		{
-			if (InstanceFinder.TimeManager != null)
+			if (this.timeManager != null)
 			{
-				InstanceFinder.TimeManager.OnTick -= TimeManager_OnTick;
+				this.timeManager.OnTick -= TimeManager_OnTick;
 			}
 		}
 
 		void TimeManager_OnTick()
 		{
-			_physicsScene.Simulate((float)InstanceFinder.TimeManager.TickDelta);
+			_physicsScene.Simulate((float)this.timeManager.TickDelta);
 		}
 	}
 }

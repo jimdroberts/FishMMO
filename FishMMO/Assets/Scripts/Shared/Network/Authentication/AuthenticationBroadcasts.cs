@@ -1,9 +1,25 @@
 ﻿using FishNet.Broadcast;
 
-public struct BeginClientAuthBroadcast : IBroadcast
+public struct CreateAccountBroadcast : IBroadcast
 {
 	public string username;
-	public string password;
+	public string salt;
+	public string verifier;
+}
+
+public struct SRPVerifyBroadcast : IBroadcast
+{
+	public string s;
+	public string publicEphemeral;
+}
+
+public struct SRPProofBroadcast : IBroadcast
+{
+	public string proof;
+}
+
+public struct SRPSuccess : IBroadcast
+{
 }
 
 public struct ClientAuthResultBroadcast : IBroadcast

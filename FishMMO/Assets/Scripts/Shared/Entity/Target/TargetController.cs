@@ -2,6 +2,7 @@
 using FishMMO.Client;
 #endif
 using UnityEngine;
+using System;
 
 [RequireComponent(typeof(Character))]
 public class TargetController : MonoBehaviour
@@ -19,6 +20,9 @@ public class TargetController : MonoBehaviour
 	public TargetInfo LastTarget;
 	public TargetInfo Current;
 
+	public Action<GameObject> OnChangeTarget;
+	public Action<GameObject> OnUpdateTarget;
+
 #if !UNITY_SERVER
 	void OnDestroy()
 	{
@@ -30,6 +34,11 @@ public class TargetController : MonoBehaviour
 
 	void Update()
 	{
+		if (Camera.main == null)
+		{
+			return;
+		}
+
 		// update target label for the client
 		if (nextTick < 0.0f)
 		{
@@ -44,12 +53,22 @@ public class TargetController : MonoBehaviour
 			// same target label remains
 			if (LastTarget.Target != Current.Target)
 			{
+				// invoke our change target function
+				if (Current.Target == null)
+				{
+					OnChangeTarget?.Invoke(null);
+				}
+				else
+				{
+					OnChangeTarget?.Invoke(Current.Target.gameObject);
+				}
+
 				if (targetLabel == null &&
 					Character != null &&
 					Character.LabelMaker != null)
 				{
 					// construct the target label
-					targetLabel = Character.LabelMaker.Display("", Character.Transform.position, Color.green, 1.0f, 0.0f, true);
+					targetLabel = Character.LabelMaker.Display("", Character.Transform.position, Color.grey, 1.0f, 0.0f, true);
 					targetLabel.gameObject.SetActive(false);
 				}
 
@@ -82,7 +101,7 @@ public class TargetController : MonoBehaviour
 						else
 						{
 							SphereCollider sphere = collider as SphereCollider;
-							if (sphere != null )
+							if (sphere != null)
 							{
 								newPos.y += sphere.radius + 0.15f;
 							}
@@ -95,6 +114,14 @@ public class TargetController : MonoBehaviour
 							outline.enabled = true;
 						}
 					}
+				}
+			}
+			else
+			{
+				// invoke our update function
+				if (Current.Target != null)
+				{
+					OnUpdateTarget?.Invoke(Current.Target.gameObject);
 				}
 			}
 		}

@@ -12,7 +12,7 @@ namespace FishMMO.Server
 
 		private long id;
 		private bool locked = false;
-		private float pulseRate = 10.0f;
+		private float pulseRate = 5.0f;
 		private float nextPulse = 0.0f;
 
 		public long ID {get { return id; } }
@@ -36,13 +36,13 @@ namespace FishMMO.Server
 
 			if (args.ConnectionState == LocalConnectionState.Started)
 			{
-				if (TryGetServerIPv4AddressFromTransport(out ServerAddress server))
+				if (Server.TryGetServerIPAddress(out ServerAddress server))
 				{
 					int characterCount = Server.WorldSceneSystem.ConnectionCount;
 
 					if (Server.Configuration.TryGetString("ServerName", out string name))
 					{
-						Debug.Log("Adding World Server to Database: " + name + ":" + server.address + ":" + server.port);
+						Debug.Log("World Server System: Adding World Server to Database: " + name + ":" + server.address + ":" + server.port);
 						WorldServerService.Add(dbContext, name, server.address, server.port, characterCount, locked, out id);
 					}
 				}
@@ -51,7 +51,7 @@ namespace FishMMO.Server
 			{
 				if (Server.Configuration.TryGetString("ServerName", out string name))
 				{
-					Debug.Log("Removing World Server from Database: " + name);
+					Debug.Log("World Server System: Removing World Server from Database: " + name);
 					WorldServerService.Delete(dbContext, id);
 					dbContext.SaveChanges();
 				}
@@ -60,8 +60,7 @@ namespace FishMMO.Server
 
 		void LateUpdate()
 		{
-			if (serverState == LocalConnectionState.Started &&
-				Server.Configuration.TryGetString("ServerName", out string name))
+			if (serverState == LocalConnectionState.Started)
 			{
 				if (nextPulse < 0)
 				{
@@ -69,7 +68,7 @@ namespace FishMMO.Server
 
 					// TODO: maybe this one should exist....how expensive will this be to run on update?
 					using var dbContext = Server.DbContextFactory.CreateDbContext();
-					Debug.Log(name + ": Pulse");
+					Debug.Log("World Server System: Pulse");
 					int characterCount = Server.WorldSceneSystem.ConnectionCount;
 					WorldServerService.Pulse(dbContext, id, characterCount);
 					dbContext.SaveChanges();
@@ -80,46 +79,15 @@ namespace FishMMO.Server
 
 		private void OnApplicationQuit()
 		{
-			if (serverState != LocalConnectionState.Stopped &&
+			if (Server != null && Server.DbContextFactory != null &&
+				serverState != LocalConnectionState.Stopped &&
 				Server.Configuration.TryGetString("ServerName", out string name))
 			{
 				using var dbContext = Server.DbContextFactory.CreateDbContext();
-				Debug.Log("Removing World Server: " + name);
+				Debug.Log("World Server System: Removing World Server: " + name);
 				WorldServerService.Delete(dbContext, id);
 				dbContext.SaveChanges();
 			}
-		}
-
-		private bool TryGetServerIPv4AddressFromTransport(out ServerAddress address)
-		{
-			Transport transport = Server.NetworkManager.TransportManager.Transport;
-			if (transport == null)
-			{
-				address = default;
-				return false;
-			}
-			address = new ServerAddress()
-			{
-				address = transport.GetServerBindAddress(IPAddressType.IPv4),
-				port = transport.GetPort(),
-			};
-			return true;
-		}
-
-		private bool TryGetServerIPv6AddressFromTransport(out ServerAddress address)
-		{
-			Transport transport = Server.NetworkManager.TransportManager.Transport;
-			if (transport == null)
-			{
-				address = default;
-				return false;
-			}
-			address = new ServerAddress()
-			{
-				address = transport.GetServerBindAddress(IPAddressType.IPv6),
-				port = transport.GetPort(),
-			};
-			return true;
 		}
 	}
 }

@@ -180,6 +180,11 @@ PrefabInstance:
       propertyPath: _objectPool
       value: 
       objectReference: {fileID: 1871523007616605281}
+    - target: {fileID: 4720857798151945692, guid: f04e72f7162977e4494fd4ecd2984f2e,
+        type: 3}
+      propertyPath: _persistence
+      value: 2
+      objectReference: {fileID: 0}
     - target: {fileID: 4720857798151945693, guid: f04e72f7162977e4494fd4ecd2984f2e,
         type: 3}
       propertyPath: m_Name
@@ -324,18 +329,6 @@ PrefabInstance:
     serializedVersion: 2
     m_TransformParent: {fileID: 0}
     m_Modifications:
-    - target: {fileID: 403044114284278985, guid: 8e0fbf828e74525449caf94aea6e8d22,
-        type: 3}
-      propertyPath: WorldSceneDetailsCache
-      value: 
-      objectReference: {fileID: 11400000, guid: ee8f2ab36344dae4c8c59b28985d5338,
-        type: 2}
-    - target: {fileID: 403044114284278985, guid: 8e0fbf828e74525449caf94aea6e8d22,
-        type: 3}
-      propertyPath: worldSceneDetailsCache
-      value: 
-      objectReference: {fileID: 11400000, guid: ee8f2ab36344dae4c8c59b28985d5338,
-        type: 2}
     - target: {fileID: 4059034741344880441, guid: 8e0fbf828e74525449caf94aea6e8d22,
         type: 3}
       propertyPath: m_RootOrder
@@ -395,21 +388,6 @@ PrefabInstance:
         type: 3}
       propertyPath: m_Name
       value: ServerSystems
-      objectReference: {fileID: 0}
-    - target: {fileID: 5849347582015469635, guid: 8e0fbf828e74525449caf94aea6e8d22,
-        type: 3}
-      propertyPath: RelayPort
-      value: 7770
-      objectReference: {fileID: 0}
-    - target: {fileID: 5849347582015469635, guid: 8e0fbf828e74525449caf94aea6e8d22,
-        type: 3}
-      propertyPath: ConfigurationFileName
-      value: LoginServer
-      objectReference: {fileID: 0}
-    - target: {fileID: 5849347582015469635, guid: 8e0fbf828e74525449caf94aea6e8d22,
-        type: 3}
-      propertyPath: configurationFileName
-      value: LoginServer.cfg
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_AddedGameObjects: []

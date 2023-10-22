@@ -2157,7 +2157,8 @@ namespace FishNet.Managing.Scened
         /// <returns></returns>
         private Scene GetFallbackActiveScene()
         {
-            if (string.IsNullOrEmpty(_fallbackActiveScene.name))
+			_fallbackActiveScene = UnitySceneManager.GetSceneByName("FallbackActiveScene");
+			if (!_fallbackActiveScene.IsValid() || string.IsNullOrEmpty(_fallbackActiveScene.name))
                 _fallbackActiveScene = UnitySceneManager.CreateScene("FallbackActiveScene");
 
             return _fallbackActiveScene;
@@ -2169,8 +2170,9 @@ namespace FishNet.Managing.Scened
         /// <returns></returns>
         private Scene GetMovedObjectsScene()
         {
+            _movedObjectsScene = UnitySceneManager.GetSceneByName("MovedObjectsHolder");
             //Create moved objects scene. It will probably be used eventually. If not, no harm either way.
-            if (string.IsNullOrEmpty(_movedObjectsScene.name))
+            if (!_movedObjectsScene.IsValid() || string.IsNullOrEmpty(_movedObjectsScene.name))
                 _movedObjectsScene = UnitySceneManager.CreateScene("MovedObjectsHolder");
 
             return _movedObjectsScene;
@@ -2182,8 +2184,9 @@ namespace FishNet.Managing.Scened
         /// <returns></returns>
         private Scene GetDelayedDestroyScene()
         {
-            //Create moved objects scene. It will probably be used eventually. If not, no harm either way.
-            if (string.IsNullOrEmpty(_delayedDestroyScene.name))
+			_delayedDestroyScene = UnitySceneManager.GetSceneByName("DelayedDestroy");
+			//Create moved objects scene. It will probably be used eventually. If not, no harm either way.
+			if (!_delayedDestroyScene.IsValid() || string.IsNullOrEmpty(_delayedDestroyScene.name))
                 _delayedDestroyScene = UnitySceneManager.CreateScene("DelayedDestroy");
 
             return _delayedDestroyScene;

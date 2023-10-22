@@ -36,6 +36,7 @@ using Shared;
 [RequireComponent(typeof(CharacterDamageController))]
 [RequireComponent(typeof(GuildController))]
 [RequireComponent(typeof(PartyController))]
+[RequireComponent(typeof(FriendController))]
 public class Character : NetworkBehaviour, IPooledResettable
 {
 	public static Character localCharacter;
@@ -55,6 +56,7 @@ public class Character : NetworkBehaviour, IPooledResettable
 	public QuestController QuestController;
 	public GuildController GuildController;
 	public PartyController PartyController;
+	public FriendController FriendController;
 	public KinematicCharacterMotor Motor;
 #if !UNITY_SERVER
 	public LocalInputController LocalInputController;
@@ -69,9 +71,11 @@ public class Character : NetworkBehaviour, IPooledResettable
 	/// </summary>
 	[SyncVar(Channel = Channel.Unreliable, ReadPermissions = ReadPermission.Observers, WritePermissions = WritePermission.ServerOnly, OnChange = nameof(OnCharacterNameChanged))]
 	public string CharacterName;
+	public string CharacterNameLower;
 	private void OnCharacterNameChanged(string prev, string next, bool asServer)
 	{
 		gameObject.name = next;
+		CharacterNameLower = next.ToLower();
 
 #if !UNITY_SERVER
 		if (CharacterNameLabel != null)
@@ -118,6 +122,8 @@ public class Character : NetworkBehaviour, IPooledResettable
 		GuildController.Character = this;
 		PartyController = gameObject.GetComponent<PartyController>();
 		PartyController.Character = this;
+		FriendController = gameObject.GetComponent<FriendController>();
+		FriendController.Character = this;
 		Motor = gameObject.GetComponent<KinematicCharacterMotor>();
 	}
 
@@ -137,6 +143,13 @@ public class Character : NetworkBehaviour, IPooledResettable
 				LocalInputController = gameObject.AddComponent<LocalInputController>();
 			}
 			LabelMaker = gameObject.GetComponent<LabelMaker>();
+
+			if (TargetController != null &&
+				UIManager.TryGet("UITarget", out UITarget uiTarget))
+			{
+				TargetController.OnChangeTarget += uiTarget.OnChangeTarget;
+				TargetController.OnUpdateTarget += uiTarget.OnUpdateTarget;
+			}
 #endif
 		}
 	}
@@ -152,6 +165,13 @@ public class Character : NetworkBehaviour, IPooledResettable
 			if (LocalInputController != null)
 			{
 				Destroy(LocalInputController);
+			}
+
+			if (TargetController != null &&
+				UIManager.TryGet("UITarget", out UITarget uiTarget))
+			{
+				TargetController.OnChangeTarget -= uiTarget.OnChangeTarget;
+				TargetController.OnUpdateTarget += uiTarget.OnUpdateTarget;
 			}
 #endif
 		}

@@ -8,6 +8,7 @@ namespace FishMMO.Client
 	{
 		public TMP_InputField username;
 		public TMP_InputField password;
+		public Button registerButton;
 		public Button signInButton;
 		public TMP_Text handshakeMSG;
 
@@ -28,6 +29,12 @@ namespace FishMMO.Client
 			Client.OnReconnectFailed -= ClientManager_OnReconnectFailed;
 		}
 
+		public override void OnQuitToLogin()
+		{
+			Visible = true;// override setting, this is our main menu
+			SetSignInLocked(false);
+		}
+
 		private void ClientManager_OnClientConnectionState(ClientConnectionStateArgs obj)
 		{
 			//handshakeMSG.text = obj.ConnectionState.ToString();
@@ -43,6 +50,11 @@ namespace FishMMO.Client
 		{
 			switch (result)
 			{
+				case ClientAuthenticationResult.AccountCreated:
+					handshakeMSG.text = "Account created successfully.";
+					Client.ForceDisconnect();
+					SetSignInLocked(false);
+					break;
 				case ClientAuthenticationResult.InvalidUsernameOrPassword:
 					// update the handshake message
 					handshakeMSG.text = "Invalid Username or Password.";
@@ -79,6 +91,21 @@ namespace FishMMO.Client
 			SetSignInLocked(false);
 		}
 
+		public void OnClick_OnRegister()
+		{
+			if (Client.IsConnectionReady(LocalConnectionState.Stopped) &&
+				Client.LoginAuthenticator.IsAllowedUsername(username.text) &&
+				Client.LoginAuthenticator.IsAllowedPassword(password.text))
+			{
+				// set username and password in the authenticator
+				Client.LoginAuthenticator.SetLoginCredentials(username.text, password.text, true);
+
+				handshakeMSG.text = "Creating account.";
+
+				Connect();
+			}
+		}
+
 		public void OnClick_Login()
 		{
 			if (Client.IsConnectionReady(LocalConnectionState.Stopped) &&
@@ -88,18 +115,24 @@ namespace FishMMO.Client
 				// set username and password in the authenticator
 				Client.LoginAuthenticator.SetLoginCredentials(username.text, password.text);
 
-				handshakeMSG.text = "";
+				handshakeMSG.text = "Connecting...";
 
-				if (Client.TryGetRandomLoginServerAddress(out ServerAddress serverAddress))
-				{
-					Client.ConnectToServer(serverAddress.address, serverAddress.port);
+				Connect();
+			}
+		}
 
-					SetSignInLocked(true);
-				}
-				else
-				{
-					handshakeMSG.text = "Failed to get a login server!";
-				}
+		private void Connect()
+		{
+			if (Client.TryGetRandomLoginServerAddress(out ServerAddress serverAddress))
+			{
+				Client.ConnectToServer(serverAddress.address, serverAddress.port);
+
+				SetSignInLocked(true);
+			}
+			else
+			{
+				handshakeMSG.text = "Failed to get a login server!";
+				SetSignInLocked(false);
 			}
 		}
 
@@ -113,6 +146,7 @@ namespace FishMMO.Client
 		/// </summary>
 		public void SetSignInLocked(bool locked)
 		{
+			registerButton.interactable = !locked;
 			signInButton.interactable = !locked;
 			username.enabled = !locked;
 			password.enabled = !locked;

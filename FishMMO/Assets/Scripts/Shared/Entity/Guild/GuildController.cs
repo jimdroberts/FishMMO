@@ -1,6 +1,10 @@
 ﻿using UnityEngine;
 using FishNet.Object;
 using System.Collections.Generic;
+using System.Linq;
+#if !UNITY_SERVER
+using FishMMO.Client;
+#endif
 
 /// <summary>
 /// Character guild controller.
@@ -10,20 +14,11 @@ public class GuildController : NetworkBehaviour
 {
 	public Character Character;
 
+	public long ID;
+	public string Name;
 	public GuildRank Rank = GuildRank.None;
-	public Guild Current;
-
-	public delegate void GuildEvent();
-	public event GuildEvent OnGuildCreated;
-	public event GuildEvent OnLeaveGuild;
-
-	public delegate void GuildMemberEvent(long guildMemberID, GuildRank rank);
-	public event GuildMemberEvent OnAddMember;
-	public event GuildMemberEvent OnUpdateMember;
-	public event GuildMemberEvent OnRemoveMember;
-
-	public delegate void GuildAcceptEvent(List<long> guildMemberIDs);
-	public event GuildAcceptEvent OnGuildInviteAccepted;
+	public readonly HashSet<long> Officers = new HashSet<long>();
+	public readonly HashSet<long> Members = new HashSet<long>();
 
 	public override void OnStartClient()
 	{
@@ -37,10 +32,9 @@ public class GuildController : NetworkBehaviour
 
 		ClientManager.RegisterBroadcast<GuildCreateBroadcast>(OnClientGuildCreateBroadcastReceived);
 		ClientManager.RegisterBroadcast<GuildInviteBroadcast>(OnClientGuildInviteBroadcastReceived);
-		ClientManager.RegisterBroadcast<GuildJoinedBroadcast>(OnClientGuildJoinedBroadcastReceived);
-		ClientManager.RegisterBroadcast<GuildNewMemberBroadcast>(OnClientGuildNewMemberBroadcastReceived);
-		ClientManager.RegisterBroadcast<GuildUpdateMemberBroadcast>(OnClientGuildUpdateMemberBroadcastReceived);
+		ClientManager.RegisterBroadcast<GuildAddBroadcast>(OnClientGuildAddBroadcastReceived);
 		ClientManager.RegisterBroadcast<GuildLeaveBroadcast>(OnClientGuildLeaveBroadcastReceived);
+		ClientManager.RegisterBroadcast<GuildAddMultipleBroadcast>(OnClientGuildAddMultipleBroadcastReceived);
 		ClientManager.RegisterBroadcast<GuildRemoveBroadcast>(OnClientGuildRemoveBroadcastReceived);
 	}
 
@@ -52,10 +46,9 @@ public class GuildController : NetworkBehaviour
 		{
 			ClientManager.UnregisterBroadcast<GuildCreateBroadcast>(OnClientGuildCreateBroadcastReceived);
 			ClientManager.UnregisterBroadcast<GuildInviteBroadcast>(OnClientGuildInviteBroadcastReceived);
-			ClientManager.UnregisterBroadcast<GuildJoinedBroadcast>(OnClientGuildJoinedBroadcastReceived);
-			ClientManager.UnregisterBroadcast<GuildNewMemberBroadcast>(OnClientGuildNewMemberBroadcastReceived);
-			ClientManager.UnregisterBroadcast<GuildUpdateMemberBroadcast>(OnClientGuildUpdateMemberBroadcastReceived);
+			ClientManager.UnregisterBroadcast<GuildAddBroadcast>(OnClientGuildAddBroadcastReceived);
 			ClientManager.UnregisterBroadcast<GuildLeaveBroadcast>(OnClientGuildLeaveBroadcastReceived);
+			ClientManager.UnregisterBroadcast<GuildAddMultipleBroadcast>(OnClientGuildAddMultipleBroadcastReceived);
 			ClientManager.UnregisterBroadcast<GuildRemoveBroadcast>(OnClientGuildRemoveBroadcastReceived);
 		}
 	}
@@ -65,11 +58,15 @@ public class GuildController : NetworkBehaviour
 	/// </summary>
 	public void OnClientGuildCreateBroadcastReceived(GuildCreateBroadcast msg)
 	{
-		Guild newGuild = new Guild(msg.guildID, this);
-		Current = newGuild;
+#if !UNITY_SERVER
+		ID = msg.guildID;
 		Rank = GuildRank.Leader;
 
-		OnGuildCreated?.Invoke();
+		if (UIManager.TryGet("UIGuild", out UIGuild uiGuild))
+		{
+			uiGuild.OnGuildCreated(msg.location);
+		}
+#endif
 	}
 
 	/// <summary>
@@ -78,36 +75,53 @@ public class GuildController : NetworkBehaviour
 	/// </summary>
 	public void OnClientGuildInviteBroadcastReceived(GuildInviteBroadcast msg)
 	{
-		ClientManager.Broadcast(new GuildAcceptInviteBroadcast());// instant Guild accept, temp for testing
-		//ClientManager.Broadcast(new GuildDeclineInviteBroadcast());// instant decline invite, temp for testing
-
-		// display invitation popup
-	}
-
-	/// <summary>
-	/// When the character successfully joins a guild.
-	/// </summary>
-	public void OnClientGuildJoinedBroadcastReceived(GuildJoinedBroadcast msg)
-	{
-		// update our guild list with the guild!
-		OnGuildInviteAccepted?.Invoke(msg.members);
+#if !UNITY_SERVER
+		ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.inviterCharacterID, (n) =>
+		{
+			if (UIManager.TryGet("UIConfirmationTooltip", out UIConfirmationTooltip uiTooltip))
+			{
+				uiTooltip.Open("You have been invited to join " + n + "'s guild. Would you like to join?",
+				() =>
+				{
+					ClientManager.Broadcast(new GuildAcceptInviteBroadcast());
+				},
+				() =>
+				{
+					ClientManager.Broadcast(new GuildDeclineInviteBroadcast());
+				});
+			}
+		});
+#endif
 	}
 
 	/// <summary>
 	/// When we add a new guild member to the guild.
 	/// </summary>
-	public void OnClientGuildNewMemberBroadcastReceived(GuildNewMemberBroadcast msg)
+	public void OnClientGuildAddBroadcastReceived(GuildAddBroadcast msg)
 	{
 		// update our Guild list with the new Guild member
-		OnAddMember?.Invoke(msg.memberID, msg.rank);
-	}
-
-	/// <summary>
-	/// When a guild members status is updated.
-	/// </summary>
-	public void OnClientGuildUpdateMemberBroadcastReceived(GuildUpdateMemberBroadcast msg)
-	{
-		OnUpdateMember?.Invoke(msg.memberID, msg.rank);
+#if !UNITY_SERVER
+		if (Character != null && msg.characterID == Character.ID)
+		{
+			ID = msg.guildID;
+			Rank = msg.rank;
+		}
+		if (!Members.Contains(msg.characterID))
+		{
+			Members.Add(msg.characterID);
+		}
+		if (UIManager.TryGet("UIGuild", out UIGuild uiGuild))
+		{
+			ClientNamingSystem.SetName(NamingSystemType.GuildName, msg.guildID, (s) =>
+			{
+				if (uiGuild.GuildLabel != null)
+				{
+					uiGuild.GuildLabel.text = s;
+				}
+			});
+			uiGuild.OnGuildAddMember(msg.characterID, msg.rank, msg.location);
+		}
+#endif
 	}
 
 	/// <summary>
@@ -115,21 +129,89 @@ public class GuildController : NetworkBehaviour
 	/// </summary>
 	public void OnClientGuildLeaveBroadcastReceived(GuildLeaveBroadcast msg)
 	{
+#if !UNITY_SERVER
+		ID = 0;
+		Name = "";
 		Rank = GuildRank.None;
-		Current = null;
+		Officers.Clear();
+		Members.Clear();
 
-		OnLeaveGuild?.Invoke();
+		if (UIManager.TryGet("UIGuild", out UIGuild uiGuild))
+		{
+			uiGuild.OnLeaveGuild();
+		}
+#endif
 	}
 
 	/// <summary>
-	/// When we need to remove a guild member.
+	/// When we need to add guild members.
+	/// </summary>
+	public void OnClientGuildAddMultipleBroadcastReceived(GuildAddMultipleBroadcast msg)
+	{
+#if !UNITY_SERVER
+		if (UIManager.TryGet("UIGuild", out UIGuild uiGuild))
+		{
+			var newIds = msg.members.Select(x => x.characterID).ToHashSet();
+			foreach (long id in new HashSet<long>(Members))
+			{
+				if (!newIds.Contains(id))
+				{
+					Members.Remove(id);
+					uiGuild.OnGuildRemoveMember(id);
+				}
+			}
+			foreach (GuildAddBroadcast member in msg.members)
+			{
+				if (!Members.Contains(member.characterID))
+				{
+					Members.Add(member.characterID);
+
+					// if this is our own id
+					if (Character != null && member.characterID == Character.ID)
+					{
+						ID = member.guildID;
+						Rank = member.rank;
+
+						ClientNamingSystem.SetName(NamingSystemType.GuildName, member.guildID, (s) =>
+						{
+							if (uiGuild.GuildLabel != null)
+							{
+								uiGuild.GuildLabel.text = s;
+							}
+						});
+					}
+					// try to add the member to the list
+					uiGuild.OnGuildAddMember(member.characterID, member.rank, member.location);
+				}
+				if (member.rank == GuildRank.Officer &&
+					!Officers.Contains(member.characterID))
+				{
+					Officers.Add(member.characterID);
+				}
+			}
+		}
+#endif
+	}
+
+	/// <summary>
+	/// When we need to remove guild members.
 	/// </summary>
 	public void OnClientGuildRemoveBroadcastReceived(GuildRemoveBroadcast msg)
 	{
-		if (Current != null)
+#if !UNITY_SERVER
+		foreach (long characterID in msg.members)
 		{
-			GuildController removedMember = Current.RemoveMember(msg.memberID);
-			OnRemoveMember?.Invoke(msg.memberID, GuildRank.None);
+			if (Members.Contains(characterID))
+			{
+				Members.Remove(characterID);
+
+				if (UIManager.TryGet("UIGuild", out UIGuild uiGuild))
+				{
+					uiGuild.OnGuildRemoveMember(characterID);
+				}
+			}
+			Officers.Remove(characterID);
 		}
+#endif
 	}
 }

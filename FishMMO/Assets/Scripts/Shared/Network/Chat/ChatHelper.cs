@@ -2,7 +2,10 @@
 using System;
 using System.Collections.Generic;
 
-public delegate void ChatCommand(Character character, ChatBroadcast msg);
+/// <summary>
+/// Return true if it should write the chat message to the database.
+/// </summary>
+public delegate bool ChatCommand(Character character, ChatBroadcast msg);
 public struct ChatCommandDetails
 {
 	public ChatChannel Channel;
@@ -11,8 +14,13 @@ public struct ChatCommandDetails
 
 public static class ChatHelper
 {
+	public const string RELAYED = "$(|)";
+	public const string ERROR_TARGET_OFFLINE = "$(_)";
+	public const string ERROR_MESSAGE_SELF = "$(<)";
+
 	private static bool initialized = false;
 
+	public static Dictionary<string, ChatCommand> DirectCommands { get; private set; }
 	public static Dictionary<string, ChatCommandDetails> Commands { get; private set; }
 	public static Dictionary<ChatChannel, ChatCommandDetails> ChannelCommands { get; private set; }
 
@@ -32,6 +40,7 @@ public static class ChatHelper
 		if (initialized) return;
 		initialized = true;
 
+		DirectCommands = new Dictionary<string, ChatCommand>();
 		Commands = new Dictionary<string, ChatCommandDetails>();
 		ChannelCommands = new Dictionary<ChatChannel, ChatCommandDetails>();
 
@@ -42,6 +51,22 @@ public static class ChatHelper
 				Channel = pair.Key,
 				Func = onGetChannelCommand?.Invoke(pair.Key),
 			});
+		}
+	}
+
+	public static void AddDirectCommands(Dictionary<string, ChatCommand> commands)
+	{
+		if (commands == null)
+			return;
+
+		foreach (KeyValuePair<string, ChatCommand> pair in commands)
+		{
+			if (!DirectCommands.ContainsKey(pair.Key))
+			{
+				Debug.Log("ChatSystem: Added Direct Command[" + pair.Key + "]");
+
+				DirectCommands.Add(pair.Key, pair.Value);
+			}
 		}
 	}
 
@@ -60,6 +85,27 @@ public static class ChatHelper
 				ChannelCommands.Add(details.Channel, details);
 			}
 		}
+	}
+
+	public static ChatCommand ParseChatChannel(ChatChannel channel)
+	{
+		ChatCommand command = null;
+		if (ChatHelper.ChannelCommands.TryGetValue(channel, out ChatCommandDetails sayCommand))
+		{
+			command = sayCommand.Func;
+		}
+		return command;
+	}
+
+	public static bool TryParseDirectCommand(string cmd, Character sender, ChatBroadcast msg)
+	{
+		// try to find the command
+		if (ChatHelper.DirectCommands.TryGetValue(cmd, out ChatCommand command))
+		{
+			command?.Invoke(sender, msg);
+			return true;
+		}
+		return false;
 	}
 
 	public static ChatCommand ParseChatCommand(string cmd, ref ChatChannel channel)
@@ -111,8 +157,8 @@ public static class ChatHelper
 			trimmed = text;
 			return "";
 		}
-		string targetName = text.Substring(0, firstSpace);
+		string word = text.Substring(0, firstSpace);
 		trimmed = text.Substring(firstSpace, text.Length - firstSpace).Trim();
-		return targetName;
+		return word;
 	}
 }

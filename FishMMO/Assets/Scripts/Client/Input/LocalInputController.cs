@@ -74,10 +74,10 @@ namespace FishMMO.Client
 
 				if (InputManager.GetKeyDown("Abilities"))
 				{
-					//if (UIManager.TryGet("UIAbilities", out UIAbilities uiAbilities))
-					//{
-					//	uiAbilities.Visible = !uiAbilities.Visible;
-					//}
+					if (UIManager.TryGet("UIAbilities", out UIAbilities uiAbilities))
+					{
+						uiAbilities.Visible = !uiAbilities.Visible;
+					}
 				}
 
 				if (InputManager.GetKeyDown("Equipment"))
@@ -85,6 +85,14 @@ namespace FishMMO.Client
 					if (UIManager.TryGet("UIEquipment", out UIEquipment uiEquipment))
 					{
 						uiEquipment.Visible = !uiEquipment.Visible;
+					}
+				}
+
+				if (InputManager.GetKeyDown("Guild"))
+				{
+					if (UIManager.TryGet("UIGuild", out UIGuild uiGuild))
+					{
+						uiGuild.Visible = !uiGuild.Visible;
 					}
 				}
 
@@ -96,6 +104,14 @@ namespace FishMMO.Client
 					}
 				}
 
+				if (InputManager.GetKeyDown("Friends"))
+				{
+					if (UIManager.TryGet("UIFriendList", out UIFriendList uiFriendList))
+					{
+						uiFriendList.Visible = !uiFriendList.Visible;
+					}
+
+				}
 				if (InputManager.GetKeyDown("Menu"))
 				{
 					//if (UIManager.TryGet("UIMenu", out UIMenu uiMenu))

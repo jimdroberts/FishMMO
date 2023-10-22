@@ -141,6 +141,7 @@ GameObject:
   - component: {fileID: 5933418412604522111}
   - component: {fileID: 1974367592072420653}
   - component: {fileID: 7975244870159263472}
+  - component: {fileID: 3124264775330692708}
   - component: {fileID: 4966316198463876083}
   - component: {fileID: 1909551449255578268}
   - component: {fileID: 6038023079570568745}
@@ -199,6 +200,7 @@ MonoBehaviour:
   - {fileID: 7975244870159263472}
   - {fileID: 4966316198463876083}
   - {fileID: 6038023079570568745}
+  - {fileID: 3124264775330692708}
   <ParentNetworkObject>k__BackingField: {fileID: 0}
   <ChildNetworkObjects>k__BackingField: []
   SerializedTransformProperties:
@@ -579,6 +581,8 @@ MonoBehaviour:
   _addedNetworkObject: {fileID: 784751938054981284}
   _networkObjectCache: {fileID: 784751938054981284}
   Character: {fileID: 0}
+  ID: 0
+  Name: 
   Rank: 0
 --- !u!114 &7975244870159263472
 MonoBehaviour:
@@ -596,7 +600,24 @@ MonoBehaviour:
   _addedNetworkObject: {fileID: 784751938054981284}
   _networkObjectCache: {fileID: 784751938054981284}
   Character: {fileID: 0}
+  ID: 0
   Rank: 0
+--- !u!114 &3124264775330692708
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4573496687782621821}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3327546bbfe5c2a4cbb267dc49f40f6c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _componentIndexCache: 14
+  _addedNetworkObject: {fileID: 784751938054981284}
+  _networkObjectCache: {fileID: 784751938054981284}
+  Character: {fileID: 0}
 --- !u!114 &4966316198463876083
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -667,13 +688,16 @@ MonoBehaviour:
   QuestController: {fileID: 0}
   GuildController: {fileID: 0}
   PartyController: {fileID: 0}
+  FriendController: {fileID: 0}
   Motor: {fileID: 0}
   LocalInputController: {fileID: 0}
   CharacterNameLabel: {fileID: 2817084262407755495}
   LabelMaker: {fileID: 0}
   ID: 0
   CharacterName: 
+  CharacterNameLower: 
   Account: 
+  WorldServerID: 0
   IsGameMaster: 0
   IsTeleporting: 0
   RaceID: 0

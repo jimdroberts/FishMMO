@@ -23,8 +23,18 @@ namespace FishMMO.Server
 		public float OutOfBoundsCheckRate = 5f;
 		private float nextOutOfBoundsCheck = 0.0f;
 
+		/// <summary>
+		/// Triggered before a character is loaded from the database. <conn, CharacterID>
+		/// </summary>
+		public event Action<NetworkConnection, long> OnBeforeLoadCharacter;
+		/// <summary>
+		/// Triggered after a character is loaded from the database. <conn, Character>
+		/// </summary>
+		public event Action<NetworkConnection, Character> OnAfterLoadCharacter;
+
 		public Dictionary<long, Character> CharactersByID = new Dictionary<long, Character>();
-		public Dictionary<string, Character> CharactersByName = new Dictionary<string, Character>();
+		public Dictionary<string, Character> CharactersByLowerCaseName = new Dictionary<string, Character>();
+		public Dictionary<long, Dictionary<long, Character>> CharactersByWorld = new Dictionary<long, Dictionary<long, Character>>();
 		public Dictionary<NetworkConnection, Character> ConnectionCharacters = new Dictionary<NetworkConnection, Character>();
 		public Dictionary<NetworkConnection, Character> WaitingSceneLoadCharacters = new Dictionary<NetworkConnection, Character>();
 
@@ -79,7 +89,7 @@ namespace FishMMO.Server
 				{
 					nextSave = SaveRate;
 					
-					Debug.Log("CharacterManager: Save" + "[" + DateTime.UtcNow + "]");
+					Debug.Log("Character System: Save" + "[" + DateTime.UtcNow + "]");
 
 					// all characters are periodically saved
 					using var dbContext = Server.DbContextFactory.CreateDbContext();
@@ -92,11 +102,13 @@ namespace FishMMO.Server
 
 		private void OnApplicationQuit()
 		{
-			Debug.Log("Disconnecting...");
-			// save all the characters before we quit
-			using var dbContext = Server.DbContextFactory.CreateDbContext();
-			CharacterService.Save(dbContext, new List<Character>(CharactersByID.Values), false);
-			dbContext.SaveChanges();
+			if (Server != null && Server.DbContextFactory != null)
+			{
+				// save all the characters before we quit
+				using var dbContext = Server.DbContextFactory.CreateDbContext();
+				CharacterService.Save(dbContext, new List<Character>(CharactersByID.Values), false);
+				dbContext.SaveChanges();
+			}
 		}
 
 		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs args)
@@ -143,7 +155,12 @@ namespace FishMMO.Server
 					// remove the characterID->character entry
 					CharactersByID.Remove(character.ID);
 					// remove the characterName->character entry
-					CharactersByName.Remove(character.CharacterName);
+					CharactersByLowerCaseName.Remove(character.CharacterNameLower);
+					// remove the worldid<characterID->character> entry
+					if (CharactersByWorld.TryGetValue(character.WorldServerID, out Dictionary<long, Character> characters))
+					{
+						characters.Remove(character.ID);
+					}
 					// remove the connection->character entry
 					ConnectionCharacters.Remove(conn);
 
@@ -218,18 +235,21 @@ namespace FishMMO.Server
 					return;
 				}
 
+				OnBeforeLoadCharacter?.Invoke(conn, selectedCharacterID);
 				if (CharacterService.TryGet(dbContext, selectedCharacterID, Server.NetworkManager, out Character character))
 				{
 					// check if the scene is valid, loaded, and cached properly
 					if (Server.SceneServerSystem.TryGetSceneInstanceDetails(character.WorldServerID, character.SceneName, character.SceneHandle, out SceneInstanceDetails instance) &&
 						Server.SceneServerSystem.TryLoadSceneForConnection(conn, instance))
 					{
+						OnAfterLoadCharacter?.Invoke(conn, character);
+
 						WaitingSceneLoadCharacters.Add(conn, character);
 
 						// update character count
 						++instance.CharacterCount;
 
-						Debug.Log(character.CharacterName + " is loading Scene: " + character.SceneName + ":" + character.SceneHandle);
+						Debug.Log("Character System: " + character.CharacterName + " is loading Scene: " + character.SceneName + ":" + character.SceneHandle);
 					}
 					else
 					{
@@ -280,12 +300,26 @@ namespace FishMMO.Server
 				if (CharactersByID.ContainsKey(character.ID))
 				{
 					CharactersByID[character.ID] = character;
-					CharactersByName[character.CharacterName] = character;
+					CharactersByLowerCaseName[character.CharacterNameLower] = character;
 				}
 				else
 				{
 					CharactersByID.Add(character.ID, character);
-					CharactersByName.Add(character.CharacterName, character);
+					CharactersByLowerCaseName.Add(character.CharacterNameLower, character);
+				}
+
+				// add a worldID<characterID->character> map for ease of use
+				if (!CharactersByWorld.TryGetValue(character.WorldServerID, out Dictionary<long, Character> characters))
+				{
+					CharactersByWorld.Add(character.WorldServerID, characters = new Dictionary<long, Character>());
+				}
+				if (characters.ContainsKey(character.ID))
+				{
+					characters[character.ID] = character;
+				}
+				else
+				{
+					characters.Add(character.ID, character);
 				}
 
 				// remove the waiting scene load character
@@ -309,18 +343,6 @@ namespace FishMMO.Server
 				// spawn the nob over the network
 				ServerManager.Spawn(character.NetworkObject, conn);
 
-				/* test
-				if (character.AttributeController.TryGetResourceAttribute("Health", out CharacterResourceAttribute health))
-				{
-					health.SetCurrentValue(50);
-					character.Owner.Broadcast(new CharacterResourceAttributeUpdateBroadcast()
-					{
-						templateID = health.Template.ID,
-						value = health.CurrentValue,
-						max = health.FinalValue,
-					});
-				}*/
-
 				// set the character status to online
 				if (AccountManager.GetAccountNameByConnection(conn, out string accountName))
 				{
@@ -328,6 +350,9 @@ namespace FishMMO.Server
 					CharacterService.SetOnline(dbContext, accountName, character.CharacterName);
 					dbContext.SaveChanges();
 				}
+
+				// send server character data to the client
+				SendAllCharacterData(character);
 
 				//Debug.Log(character.CharacterName + " has been spawned at: " + character.SceneName + " " + character.Transform.position.ToString());
 			}
@@ -339,13 +364,147 @@ namespace FishMMO.Server
 		}
 
 		/// <summary>
+		/// Sends all Server Side Character data to the owner. *Expensive*
+		/// </summary>
+		/// <param name="character"></param>
+		public void SendAllCharacterData(Character character)
+		{
+			if (Server.DbContextFactory == null)
+			{
+				return;
+			}
+
+			using var dbContext = Server.DbContextFactory.CreateDbContext();
+
+			#region Attributes
+			if (character.AttributeController != null)
+			{
+				List<CharacterAttributeUpdateBroadcast> attributes = new List<CharacterAttributeUpdateBroadcast>();
+				foreach (CharacterAttribute attribute in character.AttributeController.Attributes.Values)
+				{
+					if (attribute.Template.IsResourceAttribute)
+						continue;
+
+					attributes.Add(new CharacterAttributeUpdateBroadcast()
+					{
+						templateID = attribute.Template.ID,
+						value = attribute.FinalValue,
+					});
+				}
+				character.Owner.Broadcast(new CharacterAttributeUpdateMultipleBroadcast()
+				{
+					attributes = attributes,
+				});
+
+				List<CharacterResourceAttributeUpdateBroadcast> resourceAttributes = new List<CharacterResourceAttributeUpdateBroadcast>();
+				foreach (CharacterResourceAttribute attribute in character.AttributeController.ResourceAttributes.Values)
+				{
+					resourceAttributes.Add(new CharacterResourceAttributeUpdateBroadcast()
+					{
+						templateID = attribute.Template.ID,
+						value = attribute.CurrentValue,
+						max = attribute.FinalValue,
+					});
+				}
+				character.Owner.Broadcast(new CharacterResourceAttributeUpdateMultipleBroadcast()
+				{
+					attributes = resourceAttributes,
+				});
+			}
+			#endregion
+
+			#region Achievements
+			if (character.AchievementController != null)
+			{
+				List<AchievementUpdateBroadcast> achievements = new List<AchievementUpdateBroadcast>();
+				foreach (Achievement achievement in character.AchievementController.Achievements.Values)
+				{
+					achievements.Add(new AchievementUpdateBroadcast()
+					{
+						templateID = achievement.Template.ID,
+						newValue = achievement.CurrentValue,
+					});
+				}
+				character.Owner.Broadcast(new AchievementUpdateMultipleBroadcast()
+				{
+					achievements = achievements,
+				});
+			}
+			#endregion
+
+			#region Guild
+			if (character.GuildController != null && character.GuildController.ID > 0)
+			{
+				// get the current guild members from the database
+				List<CharacterGuildEntity> dbMembers = CharacterGuildService.Members(dbContext, character.GuildController.ID);
+
+				var addBroadcasts = dbMembers.Select(x => new GuildAddBroadcast()
+				{
+					guildID = x.GuildID,
+					characterID = x.CharacterID,
+					rank = (GuildRank)x.Rank,
+					location = x.Location,
+				}).ToList();
+
+				GuildAddMultipleBroadcast guildAddBroadcast = new GuildAddMultipleBroadcast()
+				{
+					members = addBroadcasts,
+				};
+				character.Owner.Broadcast(guildAddBroadcast);
+			}
+			#endregion
+
+			#region Party
+			if (character.PartyController != null && character.PartyController.ID > 0)
+			{
+				// get the current party members from the database
+				List<CharacterPartyEntity> dbMembers = CharacterPartyService.Members(dbContext, character.PartyController.ID);
+
+				var addBroadcasts = dbMembers.Select(x => new PartyAddBroadcast()
+				{
+					partyID = x.PartyID,
+					characterID = x.CharacterID,
+					rank = (PartyRank)x.Rank,
+					healthPCT = x.HealthPCT,
+				}).ToList();
+
+				PartyAddMultipleBroadcast partyAddBroadcast = new PartyAddMultipleBroadcast()
+				{
+					members = addBroadcasts,
+				};
+				character.Owner.Broadcast(partyAddBroadcast);
+			}
+			#endregion
+
+			#region Friends
+			if (character.FriendController != null)
+			{
+				List<FriendAddBroadcast> friends = new List<FriendAddBroadcast>();
+				foreach (long friendID in character.FriendController.Friends)
+				{
+					bool status = CharacterService.ExistsAndOnline(dbContext, friendID);
+					friends.Add(new FriendAddBroadcast()
+					{
+						characterID = friendID,
+						online = status,
+					});
+				}
+				character.Owner.Broadcast(new FriendAddMultipleBroadcast()
+				{
+					friends = friends,
+				});
+			}
+			#endregion
+		}
+
+		/// <summary>
 		/// Allows sending a broadcast to a specific character by their character name.
 		/// Returns true if the broadcast was sent successfully.
 		/// False if the character could not by found.
 		/// </summary>
 		public bool SendBroadcastToCharacter<T>(string characterName, T msg) where T : struct, IBroadcast
 		{
-			if (CharactersByName.TryGetValue(characterName, out Character character))
+			if (CharactersByLowerCaseName.TryGetValue(characterName.ToLower(), out Character character))
 			{
 				character.Owner.Broadcast(msg);
 				return true;

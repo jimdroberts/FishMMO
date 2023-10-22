@@ -676,7 +676,7 @@ start Scene.exe SCENE";
 	[MenuItem("FishMMO Build/Server/Windows Setup")]
 	public static void BuildWindowsSetup()
 	{
-		BuildSetupFolder("FishMMO Windows Setup", "WindowsSetup.bat");
+		BuildSetupFolder("FishMMO Windows Setup", "Windows Setup.bat");
 	}
 
 	[MenuItem("FishMMO Build/Server/Windows x64 All-In-One")]
@@ -742,7 +742,7 @@ start Scene.exe SCENE";
 	[MenuItem("FishMMO Build/Server/Linux Setup")]
 	public static void BuildLinuxSetup()
 	{
-		BuildSetupFolder("FishMMO Linux Setup", "LinuxSetup.sh");
+		BuildSetupFolder("FishMMO Linux Setup", "Linux Setup.sh");
 	}
 
 	[MenuItem("FishMMO Build/Server/Linux x64 All-In-One")]

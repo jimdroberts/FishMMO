@@ -167,3 +167,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b8bf16a10c6164a419ff8e5aa4365b7a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  BootList:
+  - LoginServer
+  - WorldServer
+  - SceneServer

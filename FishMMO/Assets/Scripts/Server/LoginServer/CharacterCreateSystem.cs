@@ -15,13 +15,14 @@ namespace FishMMO.Server
 	{
 		public const int CharacterNameMinLength = 3;
 		public const int CharacterNameMaxLength = 32;
+		public int MaxCharacters = 8;
 
 		public virtual bool IsAllowedCharacterName(string characterName)
 		{
 			return !string.IsNullOrWhiteSpace(characterName) &&
 				   characterName.Length >= CharacterNameMinLength &&
 				   characterName.Length <= CharacterNameMaxLength &&
-				   Regex.IsMatch(characterName, @"^[a-zA-Z_]+$");
+				   Regex.IsMatch(characterName, @"^[A-Za-z]+(?: [A-Za-z]+){0,2}$");
 		}
 
 		public WorldSceneDetailsCache WorldSceneDetailsCache;
@@ -67,6 +68,22 @@ namespace FishMMO.Server
 				}
 
 				using var dbContext = Server.DbContextFactory.CreateDbContext();
+				if (!AccountManager.GetAccountNameByConnection(conn, out string accountName))
+				{
+					// account not found??
+					conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+					return;
+				}
+				int characterCount = CharacterService.GetCount(dbContext, accountName);
+				if (characterCount >= MaxCharacters)
+				{
+					// character name already taken
+					conn.Broadcast(new CharacterCreateResultBroadcast()
+					{
+						result = CharacterCreateResult.TooMany,
+					});
+					return;
+				}
 				var character = CharacterService.GetByName(dbContext, msg.characterName);
 				if (character != null)
 				{
@@ -108,37 +125,33 @@ namespace FishMMO.Server
 								break;
 							}
 						}
-						if (AccountManager.GetAccountNameByConnection(conn, out string accountName))
+						var newCharacter = new CharacterEntity()
 						{
-							// add the new character to the database
-							var newCharacter = new CharacterEntity()
-							{
-								Account = accountName,
-								Name = msg.characterName,
-								NameLowercase = msg.characterName?.ToLower(),
-								RaceID = raceID,
-								SceneName = initialSpawnPosition.SceneName,
-								X = initialSpawnPosition.Position.x,
-								Y = initialSpawnPosition.Position.y,
-								Z = initialSpawnPosition.Position.z,
-								RotX = initialSpawnPosition.Rotation.x,
-								RotY = initialSpawnPosition.Rotation.y,
-								RotZ = initialSpawnPosition.Rotation.z,
-								RotW = initialSpawnPosition.Rotation.w,
-								TimeCreated = DateTime.UtcNow,
-							};
-							dbContext.Characters.Add(newCharacter);
-							dbContext.SaveChanges();
-							
-							// send success to the client
-							conn.Broadcast(new CharacterCreateResultBroadcast()
-							{
-								result = CharacterCreateResult.Success,
-							});
+							Account = accountName,
+							Name = msg.characterName,
+							NameLowercase = msg.characterName?.ToLower(),
+							RaceID = raceID,
+							SceneName = initialSpawnPosition.SceneName,
+							X = initialSpawnPosition.Position.x,
+							Y = initialSpawnPosition.Position.y,
+							Z = initialSpawnPosition.Position.z,
+							RotX = initialSpawnPosition.Rotation.x,
+							RotY = initialSpawnPosition.Rotation.y,
+							RotZ = initialSpawnPosition.Rotation.z,
+							RotW = initialSpawnPosition.Rotation.w,
+							TimeCreated = DateTime.UtcNow,
+						};
+						dbContext.Characters.Add(newCharacter);
+						dbContext.SaveChanges();
 
-							// send the create broadcast back to the client
-							conn.Broadcast(msg);
-						}
+						// send success to the client
+						conn.Broadcast(new CharacterCreateResultBroadcast()
+						{
+							result = CharacterCreateResult.Success,
+						});
+
+						// send the create broadcast back to the client
+						conn.Broadcast(msg);
 					}
 				}
 			}

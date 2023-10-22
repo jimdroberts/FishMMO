@@ -16,6 +16,7 @@ namespace FishMMO.Client
 		public bool StartOpen = true;
 		public bool IsAlwaysOpen = false;
 		public bool HasFocus = false;
+		public bool CloseOnQuitToMenu = true;
 
 		[Header("Drag")]
 		public bool CanDrag = false;
@@ -58,12 +59,23 @@ namespace FishMMO.Client
 			if (!StartOpen) Visible = false;
 		}
 
+		public virtual void OnQuitToLogin()
+		{
+		}
+
+		private void Client_OnQuitToLogin()
+		{
+			Visible = !CloseOnQuitToMenu;
+			OnQuitToLogin();
+		}
+
 		/// <summary>
 		/// Dependency injection for the Client.
 		/// </summary>
 		public void SetClient(Client client)
 		{
 			Client = client;
+			Client.OnQuitToLogin += Client_OnQuitToLogin;
 		}
 
 		/// <summary>
@@ -73,6 +85,7 @@ namespace FishMMO.Client
 
 		private void OnDestroy()
 		{
+			Client.OnQuitToLogin -= Client_OnQuitToLogin;
 			OnDestroying();
 
 			UIManager.Unregister(this);

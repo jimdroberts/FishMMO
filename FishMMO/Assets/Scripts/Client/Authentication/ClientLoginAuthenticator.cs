@@ -4,13 +4,20 @@ using FishNet.Managing.Logging;
 using FishNet.Managing;
 using FishNet.Transporting;
 using System;
-using UnityEngine;
 using System.Text.RegularExpressions;
+using System.Security.Cryptography;
+using UnityEngine;
+using SecureRemotePassword;
 
 namespace FishMMO.Client
 {
 	public class ClientLoginAuthenticator : Authenticator
 	{
+		private string username = "";
+		private string password = "";
+		private bool register;
+		private ClientSrpData SrpData;
+
 		/// <summary>
 		/// Client authentication event. Subscribe to this if you want something to happen after receiving authentication result from the server.
 		/// </summary>
@@ -23,10 +30,7 @@ namespace FishMMO.Client
 		public override event Action<NetworkConnection, bool> OnAuthenticationResult;
 #pragma warning restore CS0067
 
-
-		[Header("Account")]
-		public string username = "";
-		public string password = "";
+		public Client Client { get; private set; }
 
 		public const int AccountNameMinLength = 3;
 		public const int AccountNameMaxLength = 32;
@@ -53,16 +57,24 @@ namespace FishMMO.Client
 			base.InitializeOnce(networkManager);
 
 			base.NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
-			base.NetworkManager.ClientManager.RegisterBroadcast<ClientAuthResultBroadcast>(OnClientAuthResultBroadcast);
+			base.NetworkManager.ClientManager.RegisterBroadcast<SRPVerifyBroadcast>(OnClientSRPVerifyBroadcastReceived);
+			base.NetworkManager.ClientManager.RegisterBroadcast<SRPProofBroadcast>(OnClientSRPProofBroadcastReceived);
+			base.NetworkManager.ClientManager.RegisterBroadcast<ClientAuthResultBroadcast>(OnClientAuthResultBroadcastReceived);
+		}
+
+		public void SetClient(Client client)
+		{
+			Client = client;
 		}
 
 		/// <summary>
 		/// Initial sign in to the login server.
 		/// </summary>
-		public void SetLoginCredentials(string username, string password)
+		public void SetLoginCredentials(string username, string password, bool register = false)
 		{
 			this.username = username;
 			this.password = password;
+			this.register = register;
 		}
 
 		/// <summary>
@@ -79,19 +91,74 @@ namespace FishMMO.Client
 			if (args.ConnectionState != LocalConnectionState.Started)
 				return;
 
-			BeginClientAuthBroadcast msg = new BeginClientAuthBroadcast()
-			{
-				username = this.username,
-				password = this.password,
-			};
+			SrpData = new ClientSrpData(SrpParameters.Create2048<SHA512>());
 
-			base.NetworkManager.ClientManager.Broadcast(msg);
+			// register a new account?
+			if (register)
+			{
+				SrpData.GetSaltAndVerifier(username, password, out string salt, out string verifier);
+				CreateAccountBroadcast msg = new CreateAccountBroadcast()
+				{
+					username = this.username,
+					salt = salt,
+					verifier = verifier,
+				};
+				base.NetworkManager.ClientManager.Broadcast(msg);
+			}
+			else
+			{
+				SRPVerifyBroadcast msg = new SRPVerifyBroadcast()
+				{
+					s = this.username,
+					publicEphemeral = SrpData.ClientEphemeral.Public,
+				};
+				base.NetworkManager.ClientManager.Broadcast(msg);
+			}
+		}
+
+		private void OnClientSRPVerifyBroadcastReceived(SRPVerifyBroadcast msg)
+		{
+			if (SrpData == null)
+			{
+				return;
+			}
+
+			if (SrpData.GetProof(this.username, this.password, msg.s, msg.publicEphemeral, out string proof))
+			{
+				base.NetworkManager.ClientManager.Broadcast(new SRPProofBroadcast()
+				{
+					proof = proof,
+				});
+			}
+			else
+			{
+				Client.ForceDisconnect();
+			}
+			//Debug.Log("SRP: " + proof);
+		}
+
+		private void OnClientSRPProofBroadcastReceived(SRPProofBroadcast msg)
+		{
+			if (SrpData == null)
+			{
+				return;
+			}
+
+			if (SrpData.Verify(msg.proof, out string result))
+			{
+				base.NetworkManager.ClientManager.Broadcast(new SRPSuccess());
+			}
+			else
+			{
+				Client.ForceDisconnect();
+			}
+			//Debug.Log("SRP: " + result);
 		}
 
 		/// <summary>
 		/// Received on client after server sends an authentication response.
 		/// </summary>
-		private void OnClientAuthResultBroadcast(ClientAuthResultBroadcast msg)
+		private void OnClientAuthResultBroadcastReceived(ClientAuthResultBroadcast msg)
 		{
 			// invoke result on the client
 			OnClientAuthenticationResult(msg.result);

@@ -90,12 +90,10 @@ namespace FishMMO.Server
 			{
 				windowTitle.Append(transport.GetConnectionState(true) == LocalConnectionState.Started ? " [Online]" : " [Offline]");
 
-				if (Server.Configuration.TryGetString("Address", out string address) &&
-					address.Length  > 0 &&
-					Server.Configuration.TryGetUShort("Port", out ushort port))
+				if (Server.Configuration.TryGetUShort("Port", out ushort port))
 				{
 					windowTitle.Append(" [Server:");
-					windowTitle.Append(address);
+					windowTitle.Append(Server.RemoteAddress);
 					windowTitle.Append(":");
 					windowTitle.Append(port);
 					windowTitle.Append(" Clients:");

@@ -46,36 +46,48 @@ public class AbilityController : NetworkBehaviour
 	{
 		base.OnStartClient();
 
-		if (InstanceFinder.TimeManager != null)
-		{
-			InstanceFinder.TimeManager.OnTick += TimeManager_OnTick;
-
 #if !UNITY_SERVER
+		if (Client.TimeManager != null)
+		{
+			Client.TimeManager.OnTick += TimeManager_OnTick;
+
 			if (UIManager.TryGet("UICastBar", out UICastBar uiCastBar))
 			{
 				OnUpdate += uiCastBar.OnUpdate;
 				OnCancel += uiCastBar.OnCancel;
 			}
-#endif
+
 		}
+#else
+		if (InstanceFinder.TimeManager != null)
+		{
+			InstanceFinder.TimeManager.OnTick += TimeManager_OnTick;
+		}
+#endif
 	}
 
 	public override void OnStopClient()
 	{
 		base.OnStopClient();
 
-		if (InstanceFinder.TimeManager != null)
-		{
-			InstanceFinder.TimeManager.OnTick -= TimeManager_OnTick;
-
 #if !UNITY_SERVER
+		if (Client.TimeManager != null)
+		{
+			Client.TimeManager.OnTick -= TimeManager_OnTick;
+
 			if (UIManager.TryGet("UICastBar", out UICastBar uiCastBar))
 			{
 				OnUpdate -= uiCastBar.OnUpdate;
 				OnCancel -= uiCastBar.OnCancel;
 			}
-#endif
+
 		}
+#else
+		if (InstanceFinder.TimeManager != null)
+		{
+			InstanceFinder.TimeManager.OnTick -= TimeManager_OnTick;
+		}
+#endif
 	}
 
 	private void TimeManager_OnTick()

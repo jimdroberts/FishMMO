@@ -5,7 +5,6 @@ using UnityEngine.SceneManagement;
 using System;
 using System.Collections;
 using System.IO;
-using System.Text.RegularExpressions;
 using FishMMO_DB;
 
 #if UNITY_EDITOR
@@ -17,14 +16,15 @@ namespace FishMMO.Server
 	// Main Server class, handles configuration and starting connections.
 	public class Server : MonoBehaviour
 	{
-		public Configuration Configuration = null;
-		public string Address;
-		public ushort Port;
-		public ServerDbContextFactory DbContextFactory;
-
+		public Configuration Configuration { get; private set; }
+		public ServerDbContextFactory DbContextFactory { get; private set; }
 		public NetworkManager NetworkManager { get; private set; }
+		public string RemoteAddress { get; private set; }
+		public string Address { get; private set; }
+		public ushort Port { get; private set; }
 
 		#region LOGIN
+		public AccountCreationSystem AccountCreationSystem { get; private set; }
 		public CharacterSelectSystem CharacterSelectSystem { get; private set; }
 		public CharacterCreateSystem CharacterCreateSystem { get; private set; }
 		public ServerSelectSystem ServerSelectSystem { get; private set; }
@@ -42,6 +42,8 @@ namespace FishMMO.Server
 		public ChatSystem ChatSystem { get; private set; }
 		public GuildSystem GuildSystem { get; private set; }
 		public PartySystem PartySystem { get; private set; }
+		public FriendSystem FriendSystem { get; private set; }
+		public NamingSystem NamingSystem { get; private set; }
 		#endregion
 
 		public ServerWindowTitleUpdater ServerWindowTitleUpdater { get; private set; }
@@ -57,10 +59,10 @@ namespace FishMMO.Server
 			{
 				Server.Quit();
 			}
-			Debug.Log(serverType + " is starting.");
+			Debug.Log("Server: " + serverType + " is starting.");
 
 			string path = Server.GetWorkingDirectory();
-			Debug.Log("Current working directory: " + path);
+			Debug.Log("Server: Current working directory: " + path);
 
 			// load configuration
 			Configuration = new Configuration(path);
@@ -69,7 +71,7 @@ namespace FishMMO.Server
 				// if we failed to load the file.. save a new one
 				Configuration.Set("ServerName", "TestName");
 				Configuration.Set("MaximumClients", 4000);
-				Configuration.Set("Address", "127.0.0.1");
+				Configuration.Set("Address", "0.0.0.0");
 				Configuration.Set("Port", 7770);
 				Configuration.Save();
 			}
@@ -78,10 +80,14 @@ namespace FishMMO.Server
 			DbContextFactory = new ServerDbContextFactory(path, false);
 
 			// ensure our NetworkManager exists in the scene
-			NetworkManager = FindObjectOfType<NetworkManager>();
 			if (NetworkManager == null)
 			{
-				throw new UnityException("Server: NetworkManager could not be found! Make sure you have a NetworkManager in your scene.");
+				NetworkManager = FindObjectOfType<NetworkManager>();
+
+				if (NetworkManager == null)
+				{
+					throw new UnityException("Server: NetworkManager could not be found! Make sure you have a NetworkManager in your scene.");
+				}
 			}
 
 			// initialize required components for our specified server type
@@ -103,7 +109,7 @@ namespace FishMMO.Server
 				Server.Quit();
 			}
 
-			Debug.Log(serverType + " is running.");
+			Debug.Log("Server: " + serverType + " is running.");
 		}
 
 		public static string GetWorkingDirectory()
@@ -126,10 +132,10 @@ namespace FishMMO.Server
 
 		private string GetServerType()
 		{
-			Scene scene = SceneManager.GetActiveScene();
+			Scene scene = gameObject.scene;
 			if (!scene.path.Contains("Bootstraps"))
 			{
-				throw new UnityException("Active scene is not in the bootstraps folder.");
+				throw new UnityException("Server: Active scene is not in the bootstraps folder.");
 			}
 			serverTypeName = scene.name;
 			string upper = serverTypeName.ToUpper();
@@ -155,6 +161,13 @@ namespace FishMMO.Server
 		{
 			Debug.Log("Server: Initializing Components");
 
+			Debug.Log("Server: Fetching Remote IP Address.");
+			RemoteAddress = NetHelper.GetExternalIPAddress().ToString();
+			if (string.IsNullOrWhiteSpace(RemoteAddress))
+			{
+				throw new UnityException("Server: Failed to retrieve Remote IP Address");
+			}
+
 			// only use title updater if it has been added to the scene
 			ServerWindowTitleUpdater = GetComponent<ServerWindowTitleUpdater>();
 			if (ServerWindowTitleUpdater != null)
@@ -172,6 +185,9 @@ namespace FishMMO.Server
 			switch (serverType)
 			{
 				case "LOGIN":
+					AccountCreationSystem = GetOrCreateComponent<AccountCreationSystem>();
+					AccountCreationSystem.InternalInitializeOnce(this, NetworkManager.ServerManager);
+
 					CharacterSelectSystem = GetOrCreateComponent<CharacterSelectSystem>();
 					CharacterSelectSystem.InternalInitializeOnce(this, NetworkManager.ServerManager);
 
@@ -219,6 +235,12 @@ namespace FishMMO.Server
 
 					PartySystem = GetOrCreateComponent<PartySystem>();
 					PartySystem.InternalInitializeOnce(this, NetworkManager.ServerManager);
+
+					FriendSystem = GetOrCreateComponent<FriendSystem>();
+					FriendSystem.InternalInitializeOnce(this, NetworkManager.ServerManager);
+
+					NamingSystem = GetOrCreateComponent<NamingSystem>();
+					NamingSystem.InternalInitializeOnce(this, NetworkManager.ServerManager);
 					break;
 				default:
 					Server.Quit();
@@ -244,7 +266,10 @@ namespace FishMMO.Server
 			Transport transport = NetworkManager.TransportManager.Transport;
 			if (transport != null)
 			{
-				Debug.Log("Server: " + transport.GetServerBindAddress(IPAddressType.IPv4) + ":" + transport.GetPort() + " - " + serverState);
+				Debug.Log("Server: " + serverTypeName +
+						  " Local:" + transport.GetServerBindAddress(IPAddressType.IPv4) + ":" + transport.GetPort() +
+						  " Remote:" + RemoteAddress + ":" + transport.GetPort() + 
+						  " - " + serverState);
 			}
 		}
 
@@ -266,15 +291,66 @@ namespace FishMMO.Server
 		{
 			Transport transport = NetworkManager.TransportManager.Transport;
 			if (transport != null &&
-				Configuration.TryGetString("Address", out Address) &&
-				Configuration.TryGetUShort("Port", out Port) &&
+				Configuration.TryGetString("Address", out string address) &&
+				Configuration.TryGetUShort("Port", out ushort port) &&
 				Configuration.TryGetInt("MaximumClients", out int maximumClients))
 			{
+				Address = address;
+				Port = port;
+
 				transport.SetServerBindAddress(Address, IPAddressType.IPv4);
 				transport.SetPort(Port);
 				transport.SetMaximumClients(maximumClients);
 				return true;
 			}
+			return false;
+		}
+
+		public bool TryGetServerIPv4AddressFromTransport(out ServerAddress address)
+		{
+			Transport transport = NetworkManager.TransportManager.Transport;
+			if (transport != null)
+			{
+				address = new ServerAddress()
+				{
+					address = transport.GetServerBindAddress(IPAddressType.IPv4),
+					port = transport.GetPort(),
+				};
+				return true;
+			}
+			address = default;
+			return false;
+		}
+
+		public bool TryGetServerIPv6AddressFromTransport(out ServerAddress address)
+		{
+			Transport transport = NetworkManager.TransportManager.Transport;
+			if (transport != null)
+			{
+				address = new ServerAddress()
+				{
+					address = transport.GetServerBindAddress(IPAddressType.IPv6),
+					port = transport.GetPort(),
+				};
+				return true;
+			}
+			address = default;
+			return false;
+		}
+
+		public bool TryGetServerIPAddress(out ServerAddress address)
+		{
+			Transport transport = NetworkManager.TransportManager.Transport;
+			if (transport != null && !string.IsNullOrWhiteSpace(RemoteAddress))
+			{
+				address = new ServerAddress()
+				{
+					address = RemoteAddress,
+					port = transport.GetPort(),
+				};
+				return true;
+			}
+			address = default;
 			return false;
 		}
 	}
