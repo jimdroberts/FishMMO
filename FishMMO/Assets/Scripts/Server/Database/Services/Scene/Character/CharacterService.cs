@@ -143,7 +143,11 @@ namespace FishMMO.Server.Services
 			CharacterAttributeService.Save(dbContext, character);
 			CharacterAchievementService.Save(dbContext, character);
 			CharacterBuffService.Save(dbContext, character);
-			CharacterFriendService.Save(dbContext, character);
+
+			// the following are written to the database in their respective systems, no need to save them again
+			//CharacterGuildService.Save(dbContext, character);
+			//CharacterPartyService.Save(dbContext, character);
+			//CharacterFriendService.Save(dbContext, character);
 
 			//Debug.Log(character.CharacterName + " has been saved at: " + character.Transform.position.ToString());
 		}
@@ -168,7 +172,9 @@ namespace FishMMO.Server.Services
 				CharacterAttributeService.Delete(dbContext, character.ID, keepData);
 				CharacterAchievementService.Delete(dbContext, character.ID, keepData);
 				CharacterBuffService.Delete(dbContext, character.ID, keepData);
-				CharacterFriendService.Delete(dbContext, character.ID);
+				CharacterGuildService.Delete(dbContext, character.ID, keepData);
+				CharacterPartyService.Delete(dbContext, character.ID, keepData);
+				CharacterFriendService.Delete(dbContext, character.ID, keepData);
 				dbContext.Characters.Remove(character);
 			}
 		}
@@ -322,6 +328,8 @@ namespace FishMMO.Server.Services
 						CharacterAttributeService.Load(dbContext, character);
 						CharacterAchievementService.Load(dbContext, character);
 						CharacterBuffService.Load(dbContext, character);
+						CharacterGuildService.Load(dbContext, character);
+						CharacterPartyService.Load(dbContext, character);
 						CharacterFriendService.Load(dbContext, character);
 						return true;
 					}

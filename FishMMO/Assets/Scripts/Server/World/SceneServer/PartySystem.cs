@@ -377,7 +377,7 @@ namespace FishMMO.Server
 				}
 
 				// remove the party member
-				CharacterPartyService.Delete(dbContext, partyController.ID, partyController.Character.ID);
+				CharacterPartyService.Delete(dbContext, partyController.Character.ID);
 				dbContext.SaveChanges();
 
 				if (remainingCount < 1)

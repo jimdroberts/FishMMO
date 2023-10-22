@@ -59,21 +59,32 @@ namespace FishMMO.Server.Services
 		/// <summary>
 		/// Removes a character from their party.
 		/// </summary>
-		public static void Delete(ServerDbContext dbContext, long partyID, long memberID)
+		public static void Delete(ServerDbContext dbContext, long memberID, bool keepData = false)
 		{
-			var characterPartyEntity = dbContext.CharacterParties.FirstOrDefault(a => a.PartyID == partyID && a.CharacterID == memberID);
-			if (characterPartyEntity != null)
+			if (!keepData)
 			{
-				dbContext.CharacterParties.Remove(characterPartyEntity);
+				var characterPartyEntity = dbContext.CharacterParties.FirstOrDefault(a => a.CharacterID == memberID);
+				if (characterPartyEntity != null)
+				{
+					dbContext.CharacterParties.Remove(characterPartyEntity);
+				}
 			}
 		}
 
 		/// <summary>
 		/// Load a CharacterPartyEntity from the database.
 		/// </summary>
-		public static CharacterPartyEntity Load(ServerDbContext dbContext, Character character)
+		public static void Load(ServerDbContext dbContext, Character character)
 		{
-			return dbContext.CharacterParties.FirstOrDefault(a => a.CharacterID == character.ID);
+			var characterPartyEntity = dbContext.CharacterParties.FirstOrDefault(a => a.CharacterID == character.ID);
+			if (characterPartyEntity != null)
+			{
+				if (character.PartyController != null)
+				{
+					character.PartyController.ID = characterPartyEntity.PartyID;
+					character.PartyController.Rank = (PartyRank)characterPartyEntity.Rank;
+				}
+			}
 		}
 
 		public static List<CharacterPartyEntity> Members(ServerDbContext dbContext, long partyID)

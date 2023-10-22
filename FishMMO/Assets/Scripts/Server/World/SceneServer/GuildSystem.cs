@@ -402,7 +402,7 @@ namespace FishMMO.Server
 				}
 
 				// remove the guild member
-				CharacterGuildService.Delete(dbContext, guildController.ID, guildController.Character.ID);
+				CharacterGuildService.Delete(dbContext, guildController.Character.ID);
 				dbContext.SaveChanges();
 
 				if (remainingCount < 1)

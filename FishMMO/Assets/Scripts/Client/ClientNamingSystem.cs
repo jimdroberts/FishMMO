@@ -13,20 +13,23 @@ namespace FishMMO.Client
 
 		public static void InitializeOnce(Client client)
 		{
-			Client = client;
-			if (Client != null)
+			if (client == null)
 			{
-				Client.NetworkManager.ClientManager.RegisterBroadcast<NamingBroadcast>(OnClientNamingBroadcastReceived);
+				return;
+			}
 
-				string workingDirectory = Client.GetWorkingDirectory();
-				foreach (NamingSystemType type in EnumExtensions.ToArray<NamingSystemType>())
+			Client = client;
+
+			Client.NetworkManager.ClientManager.RegisterBroadcast<NamingBroadcast>(OnClientNamingBroadcastReceived);
+
+			string workingDirectory = Client.GetWorkingDirectory();
+			foreach (NamingSystemType type in EnumExtensions.ToArray<NamingSystemType>())
+			{
+				if (!idToName.TryGetValue(type, out Dictionary<long, string> map))
 				{
-					if (!idToName.TryGetValue(type, out Dictionary<long, string> map))
-					{
-						idToName.Add(type, map = new Dictionary<long, string>());
-					}
-					DictionaryExtensions.ReadCompressedFromFile(map, Path.Combine(workingDirectory, type.ToString() + ".bin"));
+					idToName.Add(type, map = new Dictionary<long, string>());
 				}
+				DictionaryExtensions.ReadCompressedFromFile(map, Path.Combine(workingDirectory, type.ToString() + ".bin"));
 			}
 		}
 
@@ -66,7 +69,7 @@ namespace FishMMO.Client
 				{
 					pendingActions.Add(id, action);
 
-					//UnityEngine.Debug.Log("Requesting Name for: " + id);
+					UnityEngine.Debug.Log("Requesting Name for: " + id);
 
 					// send the request to the server to get a name
 					Client.NetworkManager.ClientManager.Broadcast(new NamingBroadcast()
@@ -78,7 +81,7 @@ namespace FishMMO.Client
 				}
 				else
 				{
-					//UnityEngine.Debug.Log("Adding pending Name for: " + id);
+					UnityEngine.Debug.Log("Adding pending Name for: " + id);
 					pendingActions[id] += action;
 				}
 			}
@@ -90,7 +93,7 @@ namespace FishMMO.Client
 			{
 				if (pendingRequests.TryGetValue(msg.id, out Action<string> pendingActions))
 				{
-					//UnityEngine.Debug.Log("Processing Name for: " + msg.id + ":" + msg.name);
+					UnityEngine.Debug.Log("Processing Name for: " + msg.id + ":" + msg.name);
 
 					pendingActions?.Invoke(msg.name);
 					pendingRequests[msg.id] = null;

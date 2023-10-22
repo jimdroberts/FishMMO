@@ -68,7 +68,22 @@ namespace FishMMO.Server.Services
 		}
 
 		/// <summary>
-		/// Removes a character from their guild.
+		/// Removes a specific character from their guild.
+		/// </summary>
+		public static void Delete(ServerDbContext dbContext, long characterID, bool keepData = true)
+		{
+			if (!keepData)
+			{
+				var characterGuildEntity = dbContext.CharacterGuilds.FirstOrDefault(a => a.CharacterID == characterID);
+				if (characterGuildEntity != null)
+				{
+					dbContext.CharacterGuilds.Remove(characterGuildEntity);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Removes a character from their guild if they have a higher rank and the guild id matches the kickers guild id.
 		/// </summary>
 		public static bool Delete(ServerDbContext dbContext, GuildRank kickerRank, long guildID, long memberID)
 		{
@@ -82,25 +97,19 @@ namespace FishMMO.Server.Services
 		}
 
 		/// <summary>
-		/// Removes a character from their guild.
-		/// </summary>
-		public static bool Delete(ServerDbContext dbContext, long guildID, long memberID)
-		{
-			var characterGuildEntity = dbContext.CharacterGuilds.FirstOrDefault(a => a.GuildID == guildID && a.CharacterID == memberID);
-			if (characterGuildEntity != null)
-			{
-				dbContext.CharacterGuilds.Remove(characterGuildEntity);
-				return true;
-			}
-			return false;
-		}
-
-		/// <summary>
 		/// Load a CharacterGuildEntity from the database.
 		/// </summary>
-		public static CharacterGuildEntity Load(ServerDbContext dbContext, Character character)
+		public static void Load(ServerDbContext dbContext, Character character)
 		{
-			return dbContext.CharacterGuilds.FirstOrDefault(a => a.CharacterID == character.ID);
+			var characterGuildEntity = dbContext.CharacterGuilds.FirstOrDefault(a => a.CharacterID == character.ID);
+			if (characterGuildEntity != null)
+			{
+				if (character.GuildController != null)
+				{
+					character.GuildController.ID = characterGuildEntity.GuildID;
+					character.GuildController.Rank = (GuildRank)characterGuildEntity.Rank;
+				}
+			}
 		}
 
 		public static List<CharacterGuildEntity> Members(ServerDbContext dbContext, long guildID)
