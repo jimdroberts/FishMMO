@@ -130,10 +130,13 @@ namespace FishMMO.Client
 #endif
 		}
 
-		public void Quit()
+		public void OnDestroy()
 		{
 			ClientNamingSystem.Destroy();
+		}
 
+		public void Quit()
+		{
 #if UNITY_EDITOR
 			EditorApplication.ExitPlaymode();
 #else
