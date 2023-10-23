@@ -42,5 +42,4 @@ namespace FishMMO.Client
 			Visible = false;
 		}
 	}
-
 }

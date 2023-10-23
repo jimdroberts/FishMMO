@@ -110,7 +110,7 @@ namespace FishMMO.Client
 
 		private void Update()
 		{
-			if(timeTillFirstReconnectAttempt > 0)
+			if(!forceDisconnect && timeTillFirstReconnectAttempt > 0)
 			{
 				if(timeTillFirstReconnectAttempt < 0)
 				{
@@ -147,6 +147,10 @@ namespace FishMMO.Client
 		public void QuitToLogin()
 		{
 			OnQuitToLogin?.Invoke();
+
+			ForceDisconnect();
+
+			UnloadServerLoadedScenes();
 		}
 
 		/// <summary>
@@ -200,7 +204,7 @@ namespace FishMMO.Client
 			return true;
 		}
 
-		private void UnitySceneManager_OnSceneLoaded(Scene scene, UnityEngine.SceneManagement.LoadSceneMode mode)
+		private void UnitySceneManager_OnSceneLoaded(Scene scene, LoadSceneMode mode)
 		{
 			// ClientBootstrap overrides active scene if it is ever loaded.
 			if (scene.name.Contains("ClientBootstrap"))
@@ -224,7 +228,7 @@ namespace FishMMO.Client
 					{
 						OnTryReconnect();
 					}
-					else if(!forceDisconnect)
+					else if (!forceDisconnect)
 					{
 						timeTillFirstReconnectAttempt = firstReconnectAttemptWaitTime;
 					}
@@ -235,6 +239,7 @@ namespace FishMMO.Client
 					reconnectsAttempted = 0;
 					timeTillFirstReconnectAttempt = -1;
 					reconnectActive = false;
+					forceDisconnect = false;
 					break;
 			}
 		}
@@ -242,6 +247,11 @@ namespace FishMMO.Client
 		private void SceneManager_OnLoadStart(SceneLoadStartEventArgs args)
 		{
 			// unload previous scene
+			UnloadServerLoadedScenes();
+		}
+
+		private void UnloadServerLoadedScenes()
+		{
 			foreach (Scene scene in serverLoadedScenes.Values)
 			{
 				UnityEngine.SceneManagement.SceneManager.UnloadSceneAsync(scene);

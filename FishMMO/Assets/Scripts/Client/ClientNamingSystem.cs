@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+#if !UNITY_EDITOR
 using System.IO;
+#endif
 
 namespace FishMMO.Client
 {
@@ -22,11 +24,13 @@ namespace FishMMO.Client
 
 			Client.NetworkManager.ClientManager.RegisterBroadcast<NamingBroadcast>(OnClientNamingBroadcastReceived);
 
+#if !UNITY_EDITOR
 			string workingDirectory = Client.GetWorkingDirectory();
 			foreach (NamingSystemType type in EnumExtensions.ToArray<NamingSystemType>())
 			{
 				idToName[type] = DictionaryExtensions.ReadFromGZipFile(Path.Combine(workingDirectory, type.ToString() + ".bin"));
 			}
+#endif
 		}
 
 		public static void Destroy()
@@ -36,11 +40,13 @@ namespace FishMMO.Client
 				Client.NetworkManager.ClientManager.UnregisterBroadcast<NamingBroadcast>(OnClientNamingBroadcastReceived);
 			}
 
+#if !UNITY_EDITOR
 			string workingDirectory = Client.GetWorkingDirectory();
 			foreach (KeyValuePair<NamingSystemType, Dictionary<long, string>> pair in idToName)
 			{
 				pair.Value.WriteToGZipFile(Path.Combine(workingDirectory, pair.Key.ToString() + ".bin"));
 			}
+#endif
 		}
 
 		/// <summary>

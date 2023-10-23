@@ -114,10 +114,10 @@ namespace FishMMO.Client
 				}
 				if (InputManager.GetKeyDown("Menu"))
 				{
-					//if (UIManager.TryGet("UIMenu", out UIMenu uiMenu))
-					//{
-					//	uiMenu.Visible = !uiMenu.Visible;
-					//}
+					if (UIManager.TryGet("UIMenu", out UIMenu uiMenu))
+					{
+						uiMenu.Visible = !uiMenu.Visible;
+					}
 				}
 			}
 		}
