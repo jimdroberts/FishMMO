@@ -14,10 +14,14 @@ INITIAL SETUP INSTRUCTIONS
 6) Repeat step 5 for FishMMO-Utils.
 
 #### Note
-If you want to use a different directory name than FishMMO please adjust FishMMO-DB.csproj and FishMMO-Utils.csproj.
-               Modify <TargetDir>....\FishMMO\Assets\Plugins\Database</TargetDir> to fit your directory structure
+If you want to use a different directory name than **FishMMO** please adjust FishMMO-DB.csproj and FishMMO-Utils.csproj.
+
+     ...\FishMMO\Assets\Plugins\(FishMMO-DB or FishMMO-Utils)
+
+You can rename the folder path to fit your directory structure.
 
 ### FishMMO (Unity)
+
 FishMMO will build your project for you.
 Click any of the Server or Client build types and select the output folder.
 All configuration files will be copied over automatically from the root project directory.
