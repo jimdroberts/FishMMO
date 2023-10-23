@@ -18,7 +18,7 @@ namespace FishMMO.Client
 			Client.NetworkManager.SceneManager.OnLoadPercentChange += OnSceneProgressUpdate;
 			Client.NetworkManager.SceneManager.OnLoadEnd += OnSceneEndLoad;
 
-			Client.NetworkManager.ClientManager.RegisterBroadcast<SceneWorldReconnectBroadcast>(OnServerChange);
+			Client.NetworkManager.ClientManager.RegisterBroadcast<SceneWorldReconnectBroadcast>(OnClientSceneWorldReconnectBroadcastReceived);
 		}
 
 		public override void OnDestroying()
@@ -27,7 +27,7 @@ namespace FishMMO.Client
 			Client.NetworkManager.SceneManager.OnLoadPercentChange -= OnSceneProgressUpdate;
 			Client.NetworkManager.SceneManager.OnLoadEnd -= OnSceneEndLoad;
 
-			Client.NetworkManager.ClientManager.UnregisterBroadcast<SceneWorldReconnectBroadcast>(OnServerChange);
+			Client.NetworkManager.ClientManager.UnregisterBroadcast<SceneWorldReconnectBroadcast>(OnClientSceneWorldReconnectBroadcastReceived);
 		}
 
 		private void ShowLoadingScreen()
@@ -38,7 +38,7 @@ namespace FishMMO.Client
 		}
 
 		#region Network Events
-		public void OnServerChange(SceneWorldReconnectBroadcast reconnect)
+		public void OnClientSceneWorldReconnectBroadcastReceived(SceneWorldReconnectBroadcast reconnect)
 		{
 			if (reconnect.sceneName != null &&
 				reconnect.teleporterName != null &&

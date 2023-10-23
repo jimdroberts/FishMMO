@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>netstandard2.1</TargetFramework>
@@ -31,7 +31,7 @@
 			<TargetDir>..\..\FishMMO\Assets\Plugins\FishMMO-DB</TargetDir>
 		</PropertyGroup>
 		<ItemGroup>
-			<SourceDir Include="bin\Release\**\*.dll" />
+			<SourceDir Include="bin\Release\**\FishMMO-DB.dll" />
 		</ItemGroup>
 		<Copy SourceFiles="@(SourceDir)" DestinationFolder="$(TargetDir)" />
 	</Target>

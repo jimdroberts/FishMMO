@@ -1,74 +1,36 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Collections.Concurrent;
+﻿using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
-using System.Threading.Tasks;
+using System.Runtime.Serialization.Formatters.Binary;
 
 public static class DictionaryExtensions
 {
-	public static void WriteCompressedToFile(this Dictionary<long, string> dictionary, string filePath)
+	public static void WriteToGZipFile(this Dictionary<long, string> dictionary, string filePath)
 	{
-		try
+		using (var fileStream = File.Create(filePath))
+		using (var gzipStream = new GZipStream(fileStream, CompressionMode.Compress))
 		{
-			using (MemoryStream memoryStream = new MemoryStream())
-			{
-				using (GZipStream gzipStream = new GZipStream(memoryStream, CompressionMode.Compress, true))
-				using (BinaryWriter writer = new BinaryWriter(gzipStream))
-				{
-					Parallel.ForEach(dictionary, kvp =>
-					{
-						writer.Write(kvp.Key);
-						writer.Write(kvp.Value);
-					});
-				}
-
-				File.WriteAllBytes(filePath, memoryStream.ToArray());
-			}
-		}
-		catch (Exception ex)
-		{
-			throw new Exception("Error writing compressed dictionary to file: " + ex.Message, ex);
+			var formatter = new BinaryFormatter();
+			formatter.Serialize(gzipStream, dictionary);
 		}
 	}
 
-	public static void ReadCompressedFromFile(Dictionary<long, string> dictionary, string filePath)
+	public static Dictionary<long, string> ReadFromGZipFile(string filePath)
 	{
-		try
+		if (File.Exists(filePath))
 		{
-			if (File.Exists(filePath))
+			using (var fileStream = File.OpenRead(filePath))
 			{
-				using (FileStream fileStream = File.OpenRead(filePath))
-				using (GZipStream gzipStream = new GZipStream(fileStream, CompressionMode.Decompress))
-				using (BinaryReader reader = new BinaryReader(gzipStream))
+				if (fileStream.Length > 0)
 				{
-					var locker = new object(); // Used for synchronization
-
-					Parallel.ForEach(
-						Partitioner.Create(0, (int)gzipStream.Length),
-						range =>
-						{
-							while (range.Item1 < range.Item2)
-							{
-								long key = reader.ReadInt64();
-								string value = reader.ReadString();
-
-								lock (locker)
-								{
-									dictionary[key] = value;
-								}
-							}
-						});
+					using (var gzipStream = new GZipStream(fileStream, CompressionMode.Decompress))
+					{
+						var formatter = new BinaryFormatter();
+						return (Dictionary<long, string>)formatter.Deserialize(gzipStream);
+					}
 				}
 			}
-			else
-			{
-				return;
-			}
 		}
-		catch (Exception ex)
-		{
-			throw new Exception("Error reading compressed dictionary from file: " + ex.Message, ex);
-		}
+		return new Dictionary<long, string>();
 	}
 }
