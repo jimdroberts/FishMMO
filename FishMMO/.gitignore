@@ -76,8 +76,7 @@ crashlytics-build.properties
 /[Aa]ssets/[Ll][Oo][Cc][Aa][Ll]*
 
 # Special ignore directory, anything here will be ignored
-/[Aa]ssets/[Pp]lugins/FishMMO-DB*
-/[Aa]ssets/[Pp]lugins/FishMMO-Utils*
+/[Aa]ssets/[Dd]ependencies*
 
 # FishNet specific directory ignores, we don't want to include examples, demos, or upgrading
 /[Aa]ssets/[Ff]ish[Nn]et/[Dd]emos*
