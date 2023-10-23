@@ -23,14 +23,6 @@ namespace FishMMO.Client
 		private LocalConnectionState clientState = LocalConnectionState.Stopped;
 		private Dictionary<string, Scene> serverLoadedScenes = new Dictionary<string, Scene>();
 
-		public List<ServerAddress> LoginServerAddresses;
-		public Configuration Configuration = null;
-
-		public event Action OnConnectionSuccessful;
-		public event Action<byte, byte> OnReconnectAttempt;
-		public event Action OnReconnectFailed;
-		public event Action OnQuitToLogin;
-
 		private const byte reconnectAttempts = 10;
 		private const float firstReconnectAttemptWaitTime = 10f;
 		private byte reconnectsAttempted = 0;
@@ -39,6 +31,14 @@ namespace FishMMO.Client
 		private ushort lastPort = 0;
 		private float timeTillFirstReconnectAttempt = 0;
 		private bool reconnectActive = false;
+
+		public List<ServerAddress> LoginServerAddresses;
+		public Configuration Configuration = null;
+
+		public event Action OnConnectionSuccessful;
+		public event Action<byte, byte> OnReconnectAttempt;
+		public event Action OnReconnectFailed;
+		public event Action OnQuitToLogin;
 
 		public static TimeManager TimeManager { get; private set; }
 		public NetworkManager NetworkManager;
@@ -110,14 +110,17 @@ namespace FishMMO.Client
 
 		private void Update()
 		{
-			if(!forceDisconnect && timeTillFirstReconnectAttempt > 0)
+			if(!forceDisconnect &&
+				clientState == LocalConnectionState.Stopped &&
+				timeTillFirstReconnectAttempt > 0)
 			{
-				if(timeTillFirstReconnectAttempt < 0)
+				timeTillFirstReconnectAttempt -= Time.deltaTime;
+
+				if (timeTillFirstReconnectAttempt < 0)
 				{
 					reconnectActive = true;
 					OnTryReconnect();
 				}
-				timeTillFirstReconnectAttempt -= Time.deltaTime;
 			}
 		}
 
@@ -204,19 +207,6 @@ namespace FishMMO.Client
 			return true;
 		}
 
-		private void UnitySceneManager_OnSceneLoaded(Scene scene, LoadSceneMode mode)
-		{
-			// ClientBootstrap overrides active scene if it is ever loaded.
-			if (scene.name.Contains("ClientBootstrap"))
-			{
-				UnityEngine.SceneManagement.SceneManager.SetActiveScene(scene);
-			}
-		}
-
-		private void UnitySceneManager_OnSceneUnloaded(Scene scene)
-		{
-		}
-
 		private void ClientManager_OnClientConnectionState(ClientConnectionStateArgs obj)
 		{
 			clientState = obj.ConnectionState;
@@ -242,48 +232,6 @@ namespace FishMMO.Client
 					forceDisconnect = false;
 					break;
 			}
-		}
-
-		private void SceneManager_OnLoadStart(SceneLoadStartEventArgs args)
-		{
-			// unload previous scene
-			UnloadServerLoadedScenes();
-		}
-
-		private void UnloadServerLoadedScenes()
-		{
-			foreach (Scene scene in serverLoadedScenes.Values)
-			{
-				UnityEngine.SceneManagement.SceneManager.UnloadSceneAsync(scene);
-			}
-			serverLoadedScenes.Clear();
-		}
-
-		private void SceneManager_OnLoadPercentChange(SceneLoadPercentEventArgs args)
-		{
-		}
-
-		private void SceneManager_OnLoadEnd(SceneLoadEndEventArgs args)
-		{
-			// add loaded scenes to list
-			if (args.LoadedScenes != null)
-			{
-				foreach (Scene scene in args.LoadedScenes)
-				{
-					if (!serverLoadedScenes.ContainsKey(scene.name))
-					{
-						serverLoadedScenes.Add(scene.name, scene);
-					}
-				}
-			}
-		}
-
-		private void SceneManager_OnUnloadStart(SceneUnloadStartEventArgs args)
-		{
-		}
-
-		private void SceneManager_OnUnloadEnd(SceneUnloadEndEventArgs args)
-		{
 		}
 
 		private void Authenticator_OnClientAuthenticationResult(ClientAuthenticationResult result)
@@ -395,6 +343,61 @@ namespace FishMMO.Client
 			const string ValidIpAddressRegex = "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$";
 			Match match = Regex.Match(address, ValidIpAddressRegex);
 			return match.Success;
+		}
+
+		private void UnitySceneManager_OnSceneLoaded(Scene scene, LoadSceneMode mode)
+		{
+			// ClientBootstrap overrides active scene if it is ever loaded.
+			if (scene.name.Contains("ClientBootstrap"))
+			{
+				UnityEngine.SceneManagement.SceneManager.SetActiveScene(scene);
+			}
+		}
+
+		private void UnitySceneManager_OnSceneUnloaded(Scene scene)
+		{
+		}
+
+		private void SceneManager_OnLoadStart(SceneLoadStartEventArgs args)
+		{
+			// unload previous scene
+			UnloadServerLoadedScenes();
+		}
+
+		private void UnloadServerLoadedScenes()
+		{
+			foreach (Scene scene in serverLoadedScenes.Values)
+			{
+				UnityEngine.SceneManagement.SceneManager.UnloadSceneAsync(scene);
+			}
+			serverLoadedScenes.Clear();
+		}
+
+		private void SceneManager_OnLoadPercentChange(SceneLoadPercentEventArgs args)
+		{
+		}
+
+		private void SceneManager_OnLoadEnd(SceneLoadEndEventArgs args)
+		{
+			// add loaded scenes to list
+			if (args.LoadedScenes != null)
+			{
+				foreach (Scene scene in args.LoadedScenes)
+				{
+					if (!serverLoadedScenes.ContainsKey(scene.name))
+					{
+						serverLoadedScenes.Add(scene.name, scene);
+					}
+				}
+			}
+		}
+
+		private void SceneManager_OnUnloadStart(SceneUnloadStartEventArgs args)
+		{
+		}
+
+		private void SceneManager_OnUnloadEnd(SceneUnloadEndEventArgs args)
+		{
 		}
 	}
 }
