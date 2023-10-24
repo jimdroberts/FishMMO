@@ -571,7 +571,7 @@ start Scene.exe SCENE";
 #endif
 	}
 
-	[MenuItem("FishMMO Build/Build All Windows")]
+	[MenuItem("FishMMO/Build/Build All Windows")]
 	public static void BuildWindows64AllSeparate()
 	{
 		string selectedPath = EditorUtility.SaveFolderPanel("Pick a save directory", "", "");
@@ -622,7 +622,7 @@ start Scene.exe SCENE";
 #endif
 	}
 
-	[MenuItem("FishMMO Build/Build All Linux")]
+	[MenuItem("FishMMO/Build/Build All Linux")]
 	public static void BuildAllLinux()
 	{
 		string selectedPath = EditorUtility.SaveFolderPanel("Pick a save directory", "", "");
@@ -673,13 +673,13 @@ start Scene.exe SCENE";
 #endif
 	}
 
-	[MenuItem("FishMMO Build/Server/Windows Setup")]
+	[MenuItem("FishMMO/Build/Server/Windows Setup")]
 	public static void BuildWindowsSetup()
 	{
 		BuildSetupFolder("FishMMO Windows Setup", "Windows Setup.bat");
 	}
 
-	[MenuItem("FishMMO Build/Server/Windows x64 All-In-One")]
+	[MenuItem("FishMMO/Build/Server/Windows x64 All-In-One")]
 	public static void BuildWindows64AllInOneServer()
 	{
 		RebuildWorldSceneDetailsCache();
@@ -691,7 +691,7 @@ start Scene.exe SCENE";
 						BuildTarget.StandaloneWindows64);
 	}
 
-	[MenuItem("FishMMO Build/Server/Windows x64 Login")]
+	[MenuItem("FishMMO/Build/Server/Windows x64 Login")]
 	public static void BuildWindows64LoginServer()
 	{
 		RebuildWorldSceneDetailsCache();
@@ -703,7 +703,7 @@ start Scene.exe SCENE";
 						BuildTarget.StandaloneWindows64);
 	}
 
-	[MenuItem("FishMMO Build/Server/Windows x64 World")]
+	[MenuItem("FishMMO/Build/Server/Windows x64 World")]
 	public static void BuildWindows64WorldServer()
 	{
 		RebuildWorldSceneDetailsCache();
@@ -715,7 +715,7 @@ start Scene.exe SCENE";
 						BuildTarget.StandaloneWindows64);
 	}
 
-	[MenuItem("FishMMO Build/Server/Windows x64 Scene")]
+	[MenuItem("FishMMO/Build/Server/Windows x64 Scene")]
 	public static void BuildWindows64SceneServer()
 	{
 		RebuildWorldSceneDetailsCache();
@@ -727,7 +727,7 @@ start Scene.exe SCENE";
 						BuildTarget.StandaloneWindows64);
 	}
 
-	[MenuItem("FishMMO Build/Client/Windows x64")]
+	[MenuItem("FishMMO/Build/Client/Windows x64")]
 	public static void BuildWindows64Client()
 	{
 		RebuildWorldSceneDetailsCache();
@@ -739,13 +739,13 @@ start Scene.exe SCENE";
 						BuildTarget.StandaloneWindows64);
 	}
 
-	[MenuItem("FishMMO Build/Server/Linux Setup")]
+	[MenuItem("FishMMO/Build/Server/Linux Setup")]
 	public static void BuildLinuxSetup()
 	{
 		BuildSetupFolder("FishMMO Linux Setup", "Linux Setup.sh");
 	}
 
-	[MenuItem("FishMMO Build/Server/Linux x64 All-In-One")]
+	[MenuItem("FishMMO/Build/Server/Linux x64 All-In-One")]
 	public static void BuildLinux64AllInOneServer()
 	{
 		RebuildWorldSceneDetailsCache();
@@ -757,7 +757,7 @@ start Scene.exe SCENE";
 						BuildTarget.StandaloneLinux64);
 	}
 
-	[MenuItem("FishMMO Build/Client/Linux x64")]
+	[MenuItem("FishMMO/Build/Client/Linux x64")]
 	public static void BuildLinux64Client()
 	{
 		RebuildWorldSceneDetailsCache();
@@ -769,7 +769,7 @@ start Scene.exe SCENE";
 						BuildTarget.StandaloneLinux64);
 	}
 
-	[MenuItem("FishMMO Build/Client/WebGL")]
+	[MenuItem("FishMMO/Build/Client/WebGL")]
 	public static void BuildWebGLClient()
 	{
 		RebuildWorldSceneDetailsCache();
