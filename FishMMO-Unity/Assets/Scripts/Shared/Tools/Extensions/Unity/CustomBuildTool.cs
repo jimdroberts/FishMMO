@@ -5,6 +5,9 @@ using UnityEditor;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Reflection;
+using System.Xml;
 using UnityEditor.Build.Reporting;
 using Debug = UnityEngine.Debug;
 using System.Diagnostics;
@@ -324,6 +327,56 @@ start Scene.exe SCENE";
 			}
 		}
 
+		public static void UpdateLinker(string rootPath, string directoryPath)
+		{
+			string linkerPath = Path.Combine(rootPath, "link.xml");
+
+			try
+			{
+				// Create a new XML document
+				XmlDocument xmlDoc = new XmlDocument();
+
+				// Create the root element named "linker"
+				XmlElement rootElement = xmlDoc.CreateElement("linker");
+				xmlDoc.AppendChild(rootElement);
+
+				HashSet<string> nameSpaces = new HashSet<string>();
+
+				Assembly[] assemblies = AppDomain.CurrentDomain.GetAssemblies();
+				foreach (Assembly assembly in assemblies)
+				{
+					XmlElement assemblyElement = xmlDoc.CreateElement("assembly");
+					assemblyElement.SetAttribute("fullname", assembly.FullName);
+					rootElement.AppendChild(assemblyElement);
+
+					var assemblyNameSpaces = assembly.GetTypes()
+											 .Select(type => type.Namespace)
+											 .Where(n => !string.IsNullOrEmpty(n) && !nameSpaces.Contains(n))
+											 .Distinct()
+											 .OrderBy(n => n);
+
+					foreach (string nameSpace in assemblyNameSpaces)
+					{
+						nameSpaces.Add(nameSpace);
+
+						XmlElement typeElement = xmlDoc.CreateElement("type");
+						typeElement.SetAttribute("fullname", nameSpace);
+						typeElement.SetAttribute("preserve", "all");
+						assemblyElement.AppendChild(typeElement);
+					}
+				}
+
+				// Save the XML document to the specified file
+				xmlDoc.Save(linkerPath);
+
+				Debug.Log($"XML file '{rootPath}' has been generated successfully.");
+			}
+			catch (Exception ex)
+			{
+				Debug.Log($"An error occurred: {ex.Message}");
+			}
+		}
+
 		private static void BuildExecutable(string executableName, string[] bootstrapScenes, CustomBuildType customBuildType, BuildOptions buildOptions, StandaloneBuildSubtarget subTarget, BuildTarget buildTarget)
 		{
 			BuildExecutable(null, executableName, bootstrapScenes, customBuildType, buildOptions, subTarget, buildTarget);
@@ -557,9 +610,9 @@ start Scene.exe SCENE";
 			Directory.CreateDirectory(buildPath);
 
 			string root = Directory.GetParent(Directory.GetCurrentDirectory()).FullName;
-			FileUtil.ReplaceFile(Path.Combine(root, setupScriptFileName), Path.Combine(buildPath, setupScriptFileName));
-			FileUtil.ReplaceFile(Path.Combine(root, "Database.cfg"), Path.Combine(buildPath, "Database.cfg"));
-			FileUtil.ReplaceDirectory(Path.Combine(root, "FishMMO-DB"), Path.Combine(buildPath, "FishMMO-DB"));
+			FileUtil.ReplaceFile(Path.Combine(Path.Combine(root, "FishMMO-Setup"), setupScriptFileName), Path.Combine(buildPath, setupScriptFileName));
+			FileUtil.ReplaceFile(Path.Combine(Path.Combine(root, "FishMMO-Setup"), "Database.cfg"), Path.Combine(buildPath, "Database.cfg"));
+			FileUtil.ReplaceDirectory(Path.Combine(root, "FishMMO-Database"), Path.Combine(buildPath, "FishMMO-Database"));
 
 			if (!openExplorer)
 			{
@@ -571,6 +624,14 @@ start Scene.exe SCENE";
 #elif UNITY_STANDALONE_WIN
 			Process.Start(buildPath);
 #endif
+		}
+
+		[MenuItem("FishMMO/Build/Update Linker")]
+		public static void UpdateLinker()
+		{
+			string current = Directory.GetCurrentDirectory();
+			string assets = Path.Combine(current, "Assets");
+			UpdateLinker(assets, Path.Combine(assets, "Dependencies"));
 		}
 
 		[MenuItem("FishMMO/Build/Build All Windows")]

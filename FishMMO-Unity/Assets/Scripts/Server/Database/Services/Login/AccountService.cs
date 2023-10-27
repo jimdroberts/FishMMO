@@ -22,7 +22,7 @@ namespace FishMMO.Server.DatabaseServices
 						Verifier = verifier,
 						Created = DateTime.UtcNow,
 						Lastlogin = DateTime.UtcNow,
-						Banned = false
+						AccessLevel = (byte)AccessLevel.Player,
 					});
 					dbContext.SaveChanges();
 					return ClientAuthenticationResult.AccountCreated;
@@ -32,10 +32,12 @@ namespace FishMMO.Server.DatabaseServices
 			return ClientAuthenticationResult.InvalidUsernameOrPassword;
 		}
 
-        public static ClientAuthenticationResult Get(ServerDbContext dbContext, string accountName, out string salt, out string verifier)
+        public static ClientAuthenticationResult Get(ServerDbContext dbContext, string accountName, out string salt, out string verifier, out AccessLevel accessLevel)
         {
 			salt = "";
 			verifier = "";
+			accessLevel = AccessLevel.Banned;
+
 			if (!string.IsNullOrWhiteSpace(accountName))
             {
                 var accountEntity = dbContext.Accounts.FirstOrDefault(a => a.Name == accountName);
@@ -43,7 +45,7 @@ namespace FishMMO.Server.DatabaseServices
                 {
 					return ClientAuthenticationResult.InvalidUsernameOrPassword;
                 }
-				else if (accountEntity.Banned)
+				else if ((AccessLevel)accountEntity.AccessLevel == AccessLevel.Banned)
 				{
 					return ClientAuthenticationResult.Banned;
 				}
@@ -51,7 +53,7 @@ namespace FishMMO.Server.DatabaseServices
 				{
 					salt = accountEntity.Salt;
 					verifier = accountEntity.Verifier;
-
+					accessLevel = (AccessLevel)accountEntity.AccessLevel;
 					accountEntity.Lastlogin = DateTime.UtcNow;
 					dbContext.SaveChanges();
 

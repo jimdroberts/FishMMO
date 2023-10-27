@@ -151,8 +151,8 @@ create_initial_migration() {
 	if is_docker_installed; then
 		start_docker
 		
-		projectPath="./FishMMO-Database/FishMMO-Database/FishMMO-Database.csproj"
-        startupProject="./FishMMO-Database/FishMMO-Database-Migrator/FishMMO-Database-Migrator.csproj"
+		projectPath="./FishMMO-Database/FishMMO-DB/FishMMO-DB.csproj"
+        startupProject="./FishMMO-Database/FishMMO-DB-Migrator/FishMMO-DB-Migrator.csproj"
 		export PATH="$PATH:$HOME/.dotnet/tools"
 		
 		echo "Creating an initial migration..."
@@ -169,8 +169,8 @@ createNewMigration() {
     if is_docker_installed; then
 		start_docker
 	
-        projectPath="./FishMMO-Database/FishMMO-Database/FishMMO-Database.csproj"
-        startupProject="./FishMMO-Database/FishMMO-Database-Migrator/FishMMO-Database-Migrator.csproj"
+        projectPath="./FishMMO-Database/FishMMO-DB/FishMMO-DB.csproj"
+        startupProject="./FishMMO-Database/FishMMO-DB-Migrator/FishMMO-DB-Migrator.csproj"
         export PATH="$PATH:$HOME/.dotnet/tools"
 		
         # Generate a timestamp for the migration name

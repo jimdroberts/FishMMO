@@ -76,11 +76,11 @@ namespace FishMMO.Server
 				else
 				{
 					// get account salt and verifier if no one is online
-					result = AccountService.Get(dbContext, msg.s, out string salt, out string verifier);
+					result = AccountService.Get(dbContext, msg.s, out string salt, out string verifier, out AccessLevel accessLevel);
 					if (result == ClientAuthenticationResult.SrpVerify)
 					{
 						// prepare account
-						AccountManager.AddConnectionAccount(conn, msg.s, msg.publicEphemeral, salt, verifier);
+						AccountManager.AddConnectionAccount(conn, msg.s, msg.publicEphemeral, salt, verifier, accessLevel);
 
 						// get and send srp verification data
 						if (AccountManager.GetConnectionSRPData(conn, out ServerSrpData srpData) &&

@@ -50,7 +50,7 @@
 			<TargetDir>..\FishMMO-Unity\Assets\Dependencies</TargetDir>
 		</PropertyGroup>
 		<ItemGroup>
-			<SourceDir Include="bin\Release\**\*.dll" Exclude="bin\Release\**\Microsoft.CSharp.dll;bin\Release\**\System.Linq.dll"/>
+			<SourceDir Include="bin\Release\**\*.dll" Exclude="bin\Release\**\Microsoft.CSharp.dll;bin\Release\**\System.Linq.dll;bin\Release\**\System.Text.RegularExpressions.dll"/>
 		</ItemGroup>
 		<Copy SourceFiles="@(SourceDir)" DestinationFolder="$(TargetDir)" />
 	</Target>

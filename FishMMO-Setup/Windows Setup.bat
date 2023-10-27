@@ -141,8 +141,8 @@ if %ERRORLEVEL% EQU 0 (
 where /q docker
 if %ERRORLEVEL% EQU 0 (
     setlocal enabledelayedexpansion
-    set "projectPath=./FishMMO-Database/FishMMO-Database/FishMMO-Database.csproj"
-    set "startupProject=./FishMMO-Database/FishMMO-Database-Migrator/FishMMO-Database-Migrator.csproj"
+    set "projectPath=./FishMMO-Database/FishMMO-DB/FishMMO-DB.csproj"
+    set "startupProject=./FishMMO-Database/FishMMO-DB-Migrator/FishMMO-DB-Migrator.csproj"
     dotnet ef migrations add Initial -p "!projectPath!" -s "!startupProject!"
     dotnet ef database update -p "!projectPath!" -s "!startupProject!"
     pause
@@ -155,8 +155,8 @@ if %ERRORLEVEL% EQU 0 (
 where /q docker
 if %ERRORLEVEL% EQU 0 (
     setlocal enabledelayedexpansion
-    set "projectPath=./FishMMO-Database/FishMMO-Database/FishMMO-Database.csproj"
-    set "startupProject=./FishMMO-Database/FishMMO-Database-Migrator/FishMMO-Database-Migrator.csproj"
+    set "projectPath=./FishMMO-Database/FishMMO-DB/FishMMO-DB.csproj"
+    set "startupProject=./FishMMO-Database/FishMMO-DB-Migrator/FishMMO-DB-Migrator.csproj"
     set "timestamp=%DATE:/=-%%TIME::=-%"
     set "timestamp=!timestamp:.=-!"
     set "migrationName=Migration_!timestamp!"

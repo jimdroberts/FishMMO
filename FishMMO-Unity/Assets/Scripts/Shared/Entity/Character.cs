@@ -84,7 +84,7 @@ namespace FishMMO.Shared
 		}
 		public string Account;
 		public long WorldServerID;
-		public bool IsGameMaster = false;
+		public AccessLevel AccessLevel = AccessLevel.Player;
 		public bool IsTeleporting = false;
 		public int RaceID;
 		[SyncVar(Channel = Channel.Unreliable, ReadPermissions = ReadPermission.OwnerOnly, WritePermissions = WritePermission.ServerOnly)]
@@ -186,7 +186,7 @@ namespace FishMMO.Shared
 			CharacterName = "";
 			Account = "";
 			WorldServerID = 0;
-			IsGameMaster = false;
+			AccessLevel = AccessLevel.Player;
 			IsTeleporting = false;
 			RaceID = 0;
 			RaceName = "";

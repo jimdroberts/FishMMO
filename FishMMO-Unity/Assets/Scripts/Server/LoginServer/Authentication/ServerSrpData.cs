@@ -1,5 +1,6 @@
 ﻿using System.Security;
 using SecureRemotePassword;
+using FishMMO.Shared;
 
 namespace FishMMO.Server
 {
@@ -20,8 +21,9 @@ namespace FishMMO.Server
 		public SrpEphemeral ServerEphemeral { get; private set; }
 		public SrpSession Session { get; private set; }
 		public SrpState State { get; set; }
+		public AccessLevel AccessLevel { get; private set; }
 
-		public ServerSrpData(SrpParameters parameters, string username, string publicClientEphemeral, string salt, string verifier)
+		public ServerSrpData(SrpParameters parameters, string username, string publicClientEphemeral, string salt, string verifier, AccessLevel accessLevel)
 		{
 			UserName = username;
 			PublicClientEphemeral = publicClientEphemeral;
@@ -30,6 +32,7 @@ namespace FishMMO.Server
 			this.Verifier = verifier;
 			ServerEphemeral = SrpServer.GenerateEphemeral(this.Verifier);
 			State = SrpState.SRPVerify;
+			AccessLevel = accessLevel;
 		}
 
 		public bool GetProof(string proof, out string serverProof)

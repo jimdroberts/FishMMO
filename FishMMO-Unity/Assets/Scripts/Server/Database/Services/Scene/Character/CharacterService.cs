@@ -127,7 +127,7 @@ namespace FishMMO.Server.DatabaseServices
 			existingCharacter.NameLowercase = character.CharacterName.ToLower();
 			existingCharacter.Account = character.Account;
 			existingCharacter.WorldServerID = character.WorldServerID;
-			existingCharacter.IsGameMaster = character.IsGameMaster;
+			existingCharacter.AccessLevel = (byte)character.AccessLevel;
 			existingCharacter.RaceID = character.RaceID;
 			existingCharacter.SceneHandle = character.SceneHandle;
 			existingCharacter.SceneName = character.SceneName;
@@ -319,7 +319,7 @@ namespace FishMMO.Server.DatabaseServices
 						character.CharacterNameLower = dbCharacter.NameLowercase;
 						character.Account = dbCharacter.Account;
 						character.WorldServerID = dbCharacter.WorldServerID;
-						character.IsGameMaster = dbCharacter.IsGameMaster;
+						character.AccessLevel = (AccessLevel)dbCharacter.AccessLevel;
 						character.RaceID = dbCharacter.RaceID;
 						character.RaceName = prefab.name;
 						character.SceneHandle = dbCharacter.SceneHandle;

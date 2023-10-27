@@ -30,7 +30,7 @@ namespace FishMMO.Database.Entities
         public float RotY { get; set; }
         public float RotZ { get; set; }
         public float RotW { get; set; }
-        public bool IsGameMaster { get; set; }
+        public byte AccessLevel { get; set; }
         // online status can be checked from external programs with either just
         // just 'online', or 'online && (DateTime.UtcNow - lastsaved) <= 1min)
         // which is robust to server crashes too.

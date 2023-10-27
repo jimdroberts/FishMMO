@@ -11,8 +11,8 @@ namespace FishMMO.Database.Entities
         public string Name { get; set; }
         public string Salt { get; set; }
         public string Verifier { get; set; }
-        public DateTime Created { get; set; }
+		public byte AccessLevel { get; set; }
+		public DateTime Created { get; set; }
         public DateTime Lastlogin { get; set; }
-        public bool Banned { get; set; }
     }
 }

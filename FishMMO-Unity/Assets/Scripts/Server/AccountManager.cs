@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Security.Cryptography;
 using SecureRemotePassword;
+using FishMMO.Shared;
 
 namespace FishMMO.Server
 {
@@ -10,15 +11,15 @@ namespace FishMMO.Server
 	/// </summary>
 	public static class AccountManager
 	{
-		public static Dictionary<NetworkConnection, string> ConnectionAccounts = new Dictionary<NetworkConnection, string>();
-		public static Dictionary<string, NetworkConnection> AccountConnections = new Dictionary<string, NetworkConnection>();
-		public static Dictionary<NetworkConnection, ServerSrpData> ConnectionSRPData = new Dictionary<NetworkConnection, ServerSrpData>();
+		public readonly static Dictionary<NetworkConnection, string> ConnectionAccounts = new Dictionary<NetworkConnection, string>();
+		public readonly static Dictionary<string, NetworkConnection> AccountConnections = new Dictionary<string, NetworkConnection>();
+		public readonly static Dictionary<NetworkConnection, ServerSrpData> ConnectionSRPData = new Dictionary<NetworkConnection, ServerSrpData>();
 
-		public static void AddConnectionAccount(NetworkConnection connection, string accountName, string publicClientEphemeral, string salt, string verifier)
+		public static void AddConnectionAccount(NetworkConnection connection, string accountName, string publicClientEphemeral, string salt, string verifier, AccessLevel accessLevel)
 		{
 			ConnectionSRPData.Remove(connection);
 
-			ConnectionSRPData.Add(connection, new ServerSrpData(SrpParameters.Create2048<SHA512>(), accountName, publicClientEphemeral, salt, verifier));
+			ConnectionSRPData.Add(connection, new ServerSrpData(SrpParameters.Create2048<SHA512>(), accountName, publicClientEphemeral, salt, verifier, accessLevel));
 
 			ConnectionAccounts.Remove(connection);
 
