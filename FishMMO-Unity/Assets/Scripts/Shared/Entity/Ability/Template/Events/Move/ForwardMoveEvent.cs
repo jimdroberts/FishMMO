@@ -1,9 +1,12 @@
 ﻿using UnityEngine;
 
-public sealed class ForwardMoveEvent : MoveEvent
+namespace FishMMO.Shared
 {
-	public override void Invoke(Ability ability, Transform abilityObject, float deltaTime)
+	public sealed class ForwardMoveEvent : MoveEvent
 	{
-		abilityObject.position += abilityObject.forward * ability.Speed * deltaTime;
+		public override void Invoke(Ability ability, Transform abilityObject, float deltaTime)
+		{
+			abilityObject.position += abilityObject.forward * ability.Speed * deltaTime;
+		}
 	}
 }

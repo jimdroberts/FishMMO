@@ -1,4 +1,7 @@
-﻿public class QuestMapMarker
+﻿namespace FishMMO.Shared
 {
+	public class QuestMapMarker
+	{
 
+	}
 }

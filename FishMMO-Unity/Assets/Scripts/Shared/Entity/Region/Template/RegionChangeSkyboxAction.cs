@@ -1,12 +1,15 @@
 using UnityEngine;
 
-public class RegionChangeSkyboxAction : RegionAction
+namespace FishMMO.Shared
 {
-	public Material material;
-
-	public override void Invoke(Character character, Region region)
+	public class RegionChangeSkyboxAction : RegionAction
 	{
-		if (material != null)
-			RenderSettings.skybox = material;
+		public Material material;
+
+		public override void Invoke(Character character, Region region)
+		{
+			if (material != null)
+				RenderSettings.skybox = material;
+		}
 	}
 }

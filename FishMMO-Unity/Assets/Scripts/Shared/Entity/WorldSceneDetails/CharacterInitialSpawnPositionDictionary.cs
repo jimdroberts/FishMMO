@@ -1,4 +1,7 @@
 using System;
 
-[Serializable]
-public class CharacterInitialSpawnPositionDictionary : SerializableDictionary<string, CharacterInitialSpawnPosition> { }
+namespace FishMMO.Shared
+{
+	[Serializable]
+	public class CharacterInitialSpawnPositionDictionary : SerializableDictionary<string, CharacterInitialSpawnPosition> { }
+}

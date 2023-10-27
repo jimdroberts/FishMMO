@@ -1,11 +1,14 @@
-﻿public class QuestObjectiveInstance
+﻿namespace FishMMO.Shared
 {
-	public QuestObjective template;
-
-	private long value;
-
-	public bool IsComplete()
+	public class QuestObjectiveInstance
 	{
-		return template != null && this.value >= template.RequiredValue;
+		public QuestObjective template;
+
+		private long value;
+
+		public bool IsComplete()
+		{
+			return template != null && this.value >= template.RequiredValue;
+		}
 	}
 }

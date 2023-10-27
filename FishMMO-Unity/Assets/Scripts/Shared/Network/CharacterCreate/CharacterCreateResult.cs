@@ -1,8 +1,11 @@
-﻿public enum CharacterCreateResult : byte
+﻿namespace FishMMO.Shared
 {
-	Success = 0,
-	TooMany = 1,
-	InvalidCharacterName,
-	CharacterNameTaken,
-	InvalidSpawn,
+	public enum CharacterCreateResult : byte
+	{
+		Success = 0,
+		TooMany = 1,
+		InvalidCharacterName,
+		CharacterNameTaken,
+		InvalidSpawn,
+	}
 }

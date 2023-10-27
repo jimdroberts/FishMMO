@@ -1,16 +1,19 @@
 ﻿using UnityEngine;
 
-public sealed class DamageHitEvent : HitEvent
+namespace FishMMO.Shared
 {
-	public int Amount;
-	public DamageAttributeTemplate DamageAttributeTemplate;
-
-	public override int Invoke(Character attacker, Character defender, TargetInfo hitTarget, GameObject abilityObject)
+	public sealed class DamageHitEvent : HitEvent
 	{
-		if (defender != null && defender.DamageController != null)
+		public int Amount;
+		public DamageAttributeTemplate DamageAttributeTemplate;
+
+		public override int Invoke(Character attacker, Character defender, TargetInfo hitTarget, GameObject abilityObject)
 		{
-			defender.DamageController.Damage(attacker, Amount, DamageAttributeTemplate);
+			if (defender != null && defender.DamageController != null)
+			{
+				defender.DamageController.Damage(attacker, Amount, DamageAttributeTemplate);
+			}
+			return 1;
 		}
-		return 1;
 	}
 }

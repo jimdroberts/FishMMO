@@ -3,34 +3,37 @@ using System.IO;
 using System.IO.Compression;
 using System.Runtime.Serialization.Formatters.Binary;
 
-public static class DictionaryExtensions
+namespace FishMMO.Shared
 {
-	public static void WriteToGZipFile(this Dictionary<long, string> dictionary, string filePath)
+	public static class DictionaryExtensions
 	{
-		using (var fileStream = File.Create(filePath))
-		using (var gzipStream = new GZipStream(fileStream, CompressionMode.Compress))
+		public static void WriteToGZipFile(this Dictionary<long, string> dictionary, string filePath)
 		{
-			var formatter = new BinaryFormatter();
-			formatter.Serialize(gzipStream, dictionary);
-		}
-	}
-
-	public static Dictionary<long, string> ReadFromGZipFile(string filePath)
-	{
-		if (File.Exists(filePath))
-		{
-			using (var fileStream = File.OpenRead(filePath))
+			using (var fileStream = File.Create(filePath))
+			using (var gzipStream = new GZipStream(fileStream, CompressionMode.Compress))
 			{
-				if (fileStream.Length > 0)
+				var formatter = new BinaryFormatter();
+				formatter.Serialize(gzipStream, dictionary);
+			}
+		}
+
+		public static Dictionary<long, string> ReadFromGZipFile(string filePath)
+		{
+			if (File.Exists(filePath))
+			{
+				using (var fileStream = File.OpenRead(filePath))
 				{
-					using (var gzipStream = new GZipStream(fileStream, CompressionMode.Decompress))
+					if (fileStream.Length > 0)
 					{
-						var formatter = new BinaryFormatter();
-						return (Dictionary<long, string>)formatter.Deserialize(gzipStream);
+						using (var gzipStream = new GZipStream(fileStream, CompressionMode.Decompress))
+						{
+							var formatter = new BinaryFormatter();
+							return (Dictionary<long, string>)formatter.Deserialize(gzipStream);
+						}
 					}
 				}
 			}
+			return new Dictionary<long, string>();
 		}
-		return new Dictionary<long, string>();
 	}
 }

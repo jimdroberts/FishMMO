@@ -1,13 +1,16 @@
 ﻿using UnityEngine;
 
-public struct TargetInfo
+namespace FishMMO.Shared
 {
-	public Transform Target;
-	public Vector3 HitPosition;
-
-	public TargetInfo(Transform target, Vector3 hitPosition)
+	public struct TargetInfo
 	{
-		Target = target;
-		HitPosition = hitPosition;
+		public Transform Target;
+		public Vector3 HitPosition;
+
+		public TargetInfo(Transform target, Vector3 hitPosition)
+		{
+			Target = target;
+			HitPosition = hitPosition;
+		}
 	}
 }

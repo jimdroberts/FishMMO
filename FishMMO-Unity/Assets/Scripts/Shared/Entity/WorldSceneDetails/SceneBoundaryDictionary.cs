@@ -1,19 +1,22 @@
 using System;
 using UnityEngine;
 
-[Serializable]
-public class SceneBoundaryDictionary : SerializableDictionary<string, SceneBoundaryDetails>
+namespace FishMMO.Shared
 {
-	public bool PointContainedInBoundaries(Vector3 point)
+	[Serializable]
+	public class SceneBoundaryDictionary : SerializableDictionary<string, SceneBoundaryDetails>
 	{
-		// In the event we don't have any boundaries, best not to try and enforce them
-		if (Count == 0) return true;
-
-		foreach (SceneBoundaryDetails details in Values)
+		public bool PointContainedInBoundaries(Vector3 point)
 		{
-			if (details.ContainsPoint(point)) return true;
-		}
+			// In the event we don't have any boundaries, best not to try and enforce them
+			if (Count == 0) return true;
 
-		return false;
+			foreach (SceneBoundaryDetails details in Values)
+			{
+				if (details.ContainsPoint(point)) return true;
+			}
+
+			return false;
+		}
 	}
 }

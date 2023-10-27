@@ -1,25 +1,28 @@
 using System;
 using System.Reflection;
 
-/// <summary>
-/// This simple script that can give you version control over your server and client.
-/// *IMPORTANT* This is not a secure method of verifying your client version with the server..
-/// A production level game should instead create checksums for all game files and check them
-/// against the servers game file checksums.
-/// </summary>
-public class AssemblyVersionTool
+namespace FishMMO.Shared
 {
-	private static Version version;
-
-	public static Version Version
+	/// <summary>
+	/// This simple script that can give you version control over your server and client.
+	/// *IMPORTANT* This is not a secure method of verifying your client version with the server..
+	/// A production level game should instead create checksums for all game files and check them
+	/// against the servers game file checksums.
+	/// </summary>
+	public class AssemblyVersionTool
 	{
-		get
+		private static Version version;
+
+		public static Version Version
 		{
-			if (version == null)
+			get
 			{
-				version = Assembly.GetExecutingAssembly().GetName().Version;
+				if (version == null)
+				{
+					version = Assembly.GetExecutingAssembly().GetName().Version;
+				}
+				return version;
 			}
-			return version;
 		}
 	}
 }

@@ -1,4 +1,7 @@
 using System;
 
-[Serializable]
-public class SceneTeleporterDictionary : SerializableDictionary<string, SceneTeleporterDetails> { }
+namespace FishMMO.Shared
+{
+	[Serializable]
+	public class SceneTeleporterDictionary : SerializableDictionary<string, SceneTeleporterDetails> { }
+}

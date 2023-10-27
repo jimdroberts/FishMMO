@@ -1,5 +1,6 @@
 ﻿using FishNet.Connection;
 using FishNet.Transporting;
+using FishMMO.Shared;
 
 namespace FishMMO.Server
 {

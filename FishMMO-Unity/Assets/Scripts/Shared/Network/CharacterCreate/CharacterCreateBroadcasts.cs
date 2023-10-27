@@ -1,13 +1,16 @@
 ﻿using FishNet.Broadcast;
 
-public struct CharacterCreateBroadcast : IBroadcast
+namespace FishMMO.Shared
 {
-	public string characterName;
-	public string raceName;
-	public CharacterInitialSpawnPosition initialSpawnPosition;
-}
+	public struct CharacterCreateBroadcast : IBroadcast
+	{
+		public string characterName;
+		public string raceName;
+		public CharacterInitialSpawnPosition initialSpawnPosition;
+	}
 
-public struct CharacterCreateResultBroadcast : IBroadcast
-{
-	public CharacterCreateResult result;
+	public struct CharacterCreateResultBroadcast : IBroadcast
+	{
+		public CharacterCreateResult result;
+	}
 }

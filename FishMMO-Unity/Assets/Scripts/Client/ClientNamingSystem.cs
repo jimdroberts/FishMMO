@@ -3,6 +3,7 @@ using System.Collections.Generic;
 #if !UNITY_EDITOR
 using System.IO;
 #endif
+using FishMMO.Shared;
 
 namespace FishMMO.Client
 {

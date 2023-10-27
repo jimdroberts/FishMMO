@@ -1,15 +1,18 @@
 ﻿using UnityEngine;
 
-public sealed class HealHitEvent : HitEvent
+namespace FishMMO.Shared
 {
-	public int Amount;
-
-	public override int Invoke(Character attacker, Character defender, TargetInfo hitTarget, GameObject abilityObject)
+	public sealed class HealHitEvent : HitEvent
 	{
-		if (defender != null && defender.DamageController != null)
+		public int Amount;
+
+		public override int Invoke(Character attacker, Character defender, TargetInfo hitTarget, GameObject abilityObject)
 		{
-			defender.DamageController.Heal(attacker, Amount);
+			if (defender != null && defender.DamageController != null)
+			{
+				defender.DamageController.Heal(attacker, Amount);
+			}
+			return 1;
 		}
-		return 1;
 	}
 }

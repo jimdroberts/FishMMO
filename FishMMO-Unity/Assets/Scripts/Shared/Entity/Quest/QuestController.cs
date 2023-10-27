@@ -2,43 +2,46 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-[RequireComponent(typeof(Character))]
-public class QuestController : NetworkBehaviour
+namespace FishMMO.Shared
 {
-	private Dictionary<string, QuestInstance> quests = new Dictionary<string, QuestInstance>();
-
-	public Character Character;
-
-	public override void OnStartClient()
+	[RequireComponent(typeof(Character))]
+	public class QuestController : NetworkBehaviour
 	{
-		base.OnStartClient();
+		private Dictionary<string, QuestInstance> quests = new Dictionary<string, QuestInstance>();
 
-		if (!base.IsOwner)
+		public Character Character;
+
+		public override void OnStartClient()
 		{
-			enabled = false;
-			return;
-		}
-	}
+			base.OnStartClient();
 
-	public Dictionary<string, QuestInstance> Quests
-	{
-		get
+			if (!base.IsOwner)
+			{
+				enabled = false;
+				return;
+			}
+		}
+
+		public Dictionary<string, QuestInstance> Quests
 		{
-			return this.quests;
+			get
+			{
+				return this.quests;
+			}
 		}
-	}
 
-	public bool TryGetQuest(string name, out QuestInstance quest)
-	{
-		return this.quests.TryGetValue(name, out quest);
-	}
+		public bool TryGetQuest(string name, out QuestInstance quest)
+		{
+			return this.quests.TryGetValue(name, out quest);
+		}
 
-	void Update()
-	{
-	}
+		void Update()
+		{
+		}
 
-	public void Acquire(QuestTemplate quest)
-	{
+		public void Acquire(QuestTemplate quest)
+		{
 
+		}
 	}
 }

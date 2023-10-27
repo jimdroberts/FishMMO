@@ -2,6 +2,7 @@
 using FishNet.Transporting;
 using FishMMO.Server.Services;
 using UnityEngine;
+using FishMMO.Shared;
 
 namespace FishMMO.Server
 {

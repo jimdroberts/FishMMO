@@ -1,14 +1,17 @@
 ﻿using UnityEngine;
 
-public abstract class BaseItemTemplate : CachedScriptableObject<BaseItemTemplate>
+namespace FishMMO.Shared
 {
-	public bool IsIdentifiable;
-	public uint MaxStackSize = 1;
-	public float Price;
-	//use this for item generation
-	public int[] IconPools;
-	public Texture2D Icon;
+	public abstract class BaseItemTemplate : CachedScriptableObject<BaseItemTemplate>
+	{
+		public bool IsIdentifiable;
+		public uint MaxStackSize = 1;
+		public float Price;
+		//use this for item generation
+		public int[] IconPools;
+		public Texture2D Icon;
 
-	public string Name { get { return this.name; } }
-	public bool IsStackable { get { return MaxStackSize > 1; } }
+		public string Name { get { return this.name; } }
+		public bool IsStackable { get { return MaxStackSize > 1; } }
+	}
 }

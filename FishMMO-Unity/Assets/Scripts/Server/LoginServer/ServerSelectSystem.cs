@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using FishNet.Transporting;
 using FishMMO.Server.Services;
+using FishMMO.Shared;
 
 namespace FishMMO.Server
 {

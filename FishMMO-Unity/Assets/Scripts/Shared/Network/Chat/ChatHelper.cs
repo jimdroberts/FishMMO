@@ -2,29 +2,31 @@
 using System;
 using System.Collections.Generic;
 
-/// <summary>
-/// Return true if it should write the chat message to the database.
-/// </summary>
-public delegate bool ChatCommand(Character character, ChatBroadcast msg);
-public struct ChatCommandDetails
+namespace FishMMO.Shared
 {
-	public ChatChannel Channel;
-	public ChatCommand Func;
-}
+	/// <summary>
+	/// Return true if it should write the chat message to the database.
+	/// </summary>
+	public delegate bool ChatCommand(Character character, ChatBroadcast msg);
+	public struct ChatCommandDetails
+	{
+		public ChatChannel Channel;
+		public ChatCommand Func;
+	}
 
-public static class ChatHelper
-{
-	public const string RELAYED = "$(|)";
-	public const string ERROR_TARGET_OFFLINE = "$(_)";
-	public const string ERROR_MESSAGE_SELF = "$(<)";
+	public static class ChatHelper
+	{
+		public const string RELAYED = "$(|)";
+		public const string ERROR_TARGET_OFFLINE = "$(_)";
+		public const string ERROR_MESSAGE_SELF = "$(<)";
 
-	private static bool initialized = false;
+		private static bool initialized = false;
 
-	public static Dictionary<string, ChatCommand> DirectCommands { get; private set; }
-	public static Dictionary<string, ChatCommandDetails> Commands { get; private set; }
-	public static Dictionary<ChatChannel, ChatCommandDetails> ChannelCommands { get; private set; }
+		public static Dictionary<string, ChatCommand> DirectCommands { get; private set; }
+		public static Dictionary<string, ChatCommandDetails> Commands { get; private set; }
+		public static Dictionary<ChatChannel, ChatCommandDetails> ChannelCommands { get; private set; }
 
-	public static Dictionary<ChatChannel, List<string>> ChannelCommandMap = new Dictionary<ChatChannel, List<string>>()
+		public static Dictionary<ChatChannel, List<string>> ChannelCommandMap = new Dictionary<ChatChannel, List<string>>()
 	{
 		{ ChatChannel.World, new List<string>() { "/w", "/world", } },
 		{ ChatChannel.Region, new List<string>() { "/r", "/region", } },
@@ -35,130 +37,131 @@ public static class ChatHelper
 		{ ChatChannel.Say, new List<string>() { "/s", "/say", } },
 	};
 
-	public static void InitializeOnce(Func<ChatChannel, ChatCommand> onGetChannelCommand)
-	{
-		if (initialized) return;
-		initialized = true;
-
-		DirectCommands = new Dictionary<string, ChatCommand>();
-		Commands = new Dictionary<string, ChatCommandDetails>();
-		ChannelCommands = new Dictionary<ChatChannel, ChatCommandDetails>();
-
-		foreach (KeyValuePair<ChatChannel, List<string>> pair in ChatHelper.ChannelCommandMap)
+		public static void InitializeOnce(Func<ChatChannel, ChatCommand> onGetChannelCommand)
 		{
-			AddChatCommandDetails(pair.Value, new ChatCommandDetails()
+			if (initialized) return;
+			initialized = true;
+
+			DirectCommands = new Dictionary<string, ChatCommand>();
+			Commands = new Dictionary<string, ChatCommandDetails>();
+			ChannelCommands = new Dictionary<ChatChannel, ChatCommandDetails>();
+
+			foreach (KeyValuePair<ChatChannel, List<string>> pair in ChatHelper.ChannelCommandMap)
 			{
-				Channel = pair.Key,
-				Func = onGetChannelCommand?.Invoke(pair.Key),
-			});
-		}
-	}
-
-	public static void AddDirectCommands(Dictionary<string, ChatCommand> commands)
-	{
-		if (commands == null)
-			return;
-
-		foreach (KeyValuePair<string, ChatCommand> pair in commands)
-		{
-			if (!DirectCommands.ContainsKey(pair.Key))
-			{
-				Debug.Log("ChatSystem: Added Direct Command[" + pair.Key + "]");
-
-				DirectCommands.Add(pair.Key, pair.Value);
+				AddChatCommandDetails(pair.Value, new ChatCommandDetails()
+				{
+					Channel = pair.Key,
+					Func = onGetChannelCommand?.Invoke(pair.Key),
+				});
 			}
 		}
-	}
 
-	internal static void AddChatCommandDetails(List<string> commands, ChatCommandDetails details)
-	{
-		foreach (string command in commands)
+		public static void AddDirectCommands(Dictionary<string, ChatCommand> commands)
 		{
-			if (!Commands.ContainsKey(command))
+			if (commands == null)
+				return;
+
+			foreach (KeyValuePair<string, ChatCommand> pair in commands)
 			{
-				Debug.Log("ChatSystem: Added Command[" + command + "]");
+				if (!DirectCommands.ContainsKey(pair.Key))
+				{
+					Debug.Log("ChatSystem: Added Direct Command[" + pair.Key + "]");
 
-				Commands.Add(command, details);
+					DirectCommands.Add(pair.Key, pair.Value);
+				}
 			}
-			if (!ChannelCommands.ContainsKey(details.Channel))
+		}
+
+		internal static void AddChatCommandDetails(List<string> commands, ChatCommandDetails details)
+		{
+			foreach (string command in commands)
 			{
-				ChannelCommands.Add(details.Channel, details);
+				if (!Commands.ContainsKey(command))
+				{
+					Debug.Log("ChatSystem: Added Command[" + command + "]");
+
+					Commands.Add(command, details);
+				}
+				if (!ChannelCommands.ContainsKey(details.Channel))
+				{
+					ChannelCommands.Add(details.Channel, details);
+				}
 			}
 		}
-	}
 
-	public static ChatCommand ParseChatChannel(ChatChannel channel)
-	{
-		ChatCommand command = null;
-		if (ChatHelper.ChannelCommands.TryGetValue(channel, out ChatCommandDetails sayCommand))
+		public static ChatCommand ParseChatChannel(ChatChannel channel)
 		{
-			command = sayCommand.Func;
+			ChatCommand command = null;
+			if (ChatHelper.ChannelCommands.TryGetValue(channel, out ChatCommandDetails sayCommand))
+			{
+				command = sayCommand.Func;
+			}
+			return command;
 		}
-		return command;
-	}
 
-	public static bool TryParseDirectCommand(string cmd, Character sender, ChatBroadcast msg)
-	{
-		// try to find the command
-		if (ChatHelper.DirectCommands.TryGetValue(cmd, out ChatCommand command))
+		public static bool TryParseDirectCommand(string cmd, Character sender, ChatBroadcast msg)
 		{
-			command?.Invoke(sender, msg);
-			return true;
+			// try to find the command
+			if (ChatHelper.DirectCommands.TryGetValue(cmd, out ChatCommand command))
+			{
+				command?.Invoke(sender, msg);
+				return true;
+			}
+			return false;
 		}
-		return false;
-	}
 
-	public static ChatCommand ParseChatCommand(string cmd, ref ChatChannel channel)
-	{
-		ChatCommand command = null;
-		// parse our command or send the message to our /say channel
-		if (ChatHelper.Commands.TryGetValue(cmd, out ChatCommandDetails commandDetails))
+		public static ChatCommand ParseChatCommand(string cmd, ref ChatChannel channel)
 		{
-			channel = commandDetails.Channel;
-			command = commandDetails.Func;
+			ChatCommand command = null;
+			// parse our command or send the message to our /say channel
+			if (ChatHelper.Commands.TryGetValue(cmd, out ChatCommandDetails commandDetails))
+			{
+				channel = commandDetails.Channel;
+				command = commandDetails.Func;
+			}
+			// default is say chat, if we have no command the text goes to say
+			else if (ChatHelper.ChannelCommands.TryGetValue(ChatChannel.Say, out ChatCommandDetails sayCommand))
+			{
+				channel = sayCommand.Channel;
+				command = sayCommand.Func;
+			}
+			return command;
 		}
-		// default is say chat, if we have no command the text goes to say
-		else if (ChatHelper.ChannelCommands.TryGetValue(ChatChannel.Say, out ChatCommandDetails sayCommand))
-		{
-			channel = sayCommand.Channel;
-			command = sayCommand.Func;
-		}
-		return command;
-	}
 
-	/// <summary>
-	/// Attempts to get the command from the text. If no commands are found it returns an empty string.
-	/// </summary>
-	public static string GetCommandAndTrim(ref string text)
-	{
-		if (!text.StartsWith("/"))
+		/// <summary>
+		/// Attempts to get the command from the text. If no commands are found it returns an empty string.
+		/// </summary>
+		public static string GetCommandAndTrim(ref string text)
 		{
-			return "";
+			if (!text.StartsWith("/"))
+			{
+				return "";
+			}
+			int firstSpace = text.IndexOf(' ');
+			if (firstSpace < 0)
+			{
+				return "";
+			}
+			string cmd = text.Substring(0, firstSpace);
+			text = text.Substring(firstSpace, text.Length - firstSpace).Trim();
+			return cmd;
 		}
-		int firstSpace = text.IndexOf(' ');
-		if (firstSpace < 0)
-		{
-			return "";
-		}
-		string cmd = text.Substring(0, firstSpace);
-		text = text.Substring(firstSpace, text.Length - firstSpace).Trim();
-		return cmd;
-	}
 
-	/// <summary>
-	/// Attempts to get and remove the first single space separated word from the rest of the text. If no targets are found it returns an empty string.
-	/// </summary>
-	public static string GetWordAndTrimmed(string text, out string trimmed)
-	{
-		int firstSpace = text.IndexOf(' ');
-		if (firstSpace < 0)
+		/// <summary>
+		/// Attempts to get and remove the first single space separated word from the rest of the text. If no targets are found it returns an empty string.
+		/// </summary>
+		public static string GetWordAndTrimmed(string text, out string trimmed)
 		{
-			// no target?
-			trimmed = text;
-			return "";
+			int firstSpace = text.IndexOf(' ');
+			if (firstSpace < 0)
+			{
+				// no target?
+				trimmed = text;
+				return "";
+			}
+			string word = text.Substring(0, firstSpace);
+			trimmed = text.Substring(firstSpace, text.Length - firstSpace).Trim();
+			return word;
 		}
-		string word = text.Substring(0, firstSpace);
-		trimmed = text.Substring(firstSpace, text.Length - firstSpace).Trim();
-		return word;
 	}
 }

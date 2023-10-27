@@ -5,6 +5,7 @@ using FishNet.Managing;
 using FishNet.Object;
 using FishMMO.Database;
 using FishMMO.Database.Entities;
+using FishMMO.Shared;
 using UnityEngine;
 
 namespace FishMMO.Server.Services

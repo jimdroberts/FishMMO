@@ -6,6 +6,7 @@ using FishMMO.Database;
 using System;
 using System.Text.RegularExpressions;
 using FishMMO.Server.Services;
+using FishMMO.Shared;
 
 namespace FishMMO.Server
 {

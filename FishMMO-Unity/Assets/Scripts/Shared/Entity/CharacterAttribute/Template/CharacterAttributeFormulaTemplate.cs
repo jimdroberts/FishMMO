@@ -1,6 +1,9 @@
 ﻿using UnityEngine;
 
-public abstract class CharacterAttributeFormulaTemplate : ScriptableObject
+namespace FishMMO.Shared
 {
-	public abstract int CalculateBonus(CharacterAttribute self, CharacterAttribute bonusAttribute);
+	public abstract class CharacterAttributeFormulaTemplate : ScriptableObject
+	{
+		public abstract int CalculateBonus(CharacterAttribute self, CharacterAttribute bonusAttribute);
+	}
 }

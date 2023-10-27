@@ -1,12 +1,15 @@
-﻿public class ItemAttribute
+﻿namespace FishMMO.Shared
 {
-	public ItemAttributeTemplate Template { get; private set; }
-
-	public int value;
-
-	public ItemAttribute(int templateID, int value)
+	public class ItemAttribute
 	{
-		Template = ItemAttributeTemplate.Get<ItemAttributeTemplate>(templateID);
-		this.value = value;
+		public ItemAttributeTemplate Template { get; private set; }
+
+		public int value;
+
+		public ItemAttribute(int templateID, int value)
+		{
+			Template = ItemAttributeTemplate.Get<ItemAttributeTemplate>(templateID);
+			this.value = value;
+		}
 	}
 }

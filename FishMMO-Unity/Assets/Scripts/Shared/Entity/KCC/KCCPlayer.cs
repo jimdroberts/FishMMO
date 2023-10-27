@@ -7,7 +7,9 @@ using UnityEngine;
 using FishMMO.Client;
 using KinematicCharacterController;
 
-public class KCCPlayer : NetworkBehaviour
+namespace FishMMO.Shared
+{
+	public class KCCPlayer : NetworkBehaviour
 	{
 		public KCCController Character;
 		public KCCCamera CharacterCamera;
@@ -34,12 +36,15 @@ public class KCCPlayer : NetworkBehaviour
 			//Quang: Using manual simultion instead of KCC auto simulation
 			KinematicCharacterSystem.Settings.AutoSimulation = false;
 
+#if !UNITY_SERVER
 			//Quang: Subscribe to tick event, this will replace FixedUpdate
-			if (Client.TimeManager != null)
+			if (FishMMO.Client.Client.TimeManager != null)
 			{
-				Client.TimeManager.OnTick += TimeManager_OnTick;
+				FishMMO.Client.Client.TimeManager.OnTick += TimeManager_OnTick;
 			}
-			else if (InstanceFinder.TimeManager != null)
+			else
+#endif
+			if (InstanceFinder.TimeManager != null)
 			{
 				InstanceFinder.TimeManager.OnTick += TimeManager_OnTick;
 			}
@@ -47,11 +52,14 @@ public class KCCPlayer : NetworkBehaviour
 
 		void OnDestroy()
 		{
-			if (Client.TimeManager != null)
+#if !UNITY_SERVER
+			if (FishMMO.Client.Client.TimeManager != null)
 			{
-				Client.TimeManager.OnTick -= TimeManager_OnTick;
+				FishMMO.Client.Client.TimeManager.OnTick -= TimeManager_OnTick;
 			}
-			else if (InstanceFinder.TimeManager != null)
+			else
+#endif
+			if (InstanceFinder.TimeManager != null)
 			{
 				InstanceFinder.TimeManager.OnTick -= TimeManager_OnTick;
 			}
@@ -256,3 +264,4 @@ public class KCCPlayer : NetworkBehaviour
 																	 CharacterCamera.Transform.rotation);
 		}
 	}
+}

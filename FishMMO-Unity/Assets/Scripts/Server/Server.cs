@@ -6,7 +6,7 @@ using System;
 using System.Collections;
 using System.IO;
 using FishMMO.Database;
-
+using FishMMO.Shared;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -16,7 +16,7 @@ namespace FishMMO.Server
 	// Main Server class, handles configuration and starting connections.
 	public class Server : MonoBehaviour
 	{
-		public Configuration Configuration { get; private set; }
+		public FishMMO.Shared.Configuration Configuration { get; private set; }
 		public ServerDbContextFactory DbContextFactory { get; private set; }
 		public NetworkManager NetworkManager { get; private set; }
 		public string RemoteAddress { get; private set; }
@@ -65,8 +65,8 @@ namespace FishMMO.Server
 			Debug.Log("Server: Current working directory: " + path);
 
 			// load configuration
-			Configuration = new Configuration(path);
-			if (!Configuration.Load(serverTypeName + Configuration.EXTENSION))
+			Configuration = new FishMMO.Shared.Configuration(path);
+			if (!Configuration.Load(serverTypeName + FishMMO.Shared.Configuration.EXTENSION))
 			{
 				// if we failed to load the file.. save a new one
 				Configuration.Set("ServerName", "TestName");

@@ -1,28 +1,31 @@
 ﻿using System.Text;
 
-public class BuffAttribute
+namespace FishMMO.Shared
 {
-	public int value;
-	public CharacterAttributeTemplate template;
-
-	public BuffAttribute(int value, CharacterAttributeTemplate template)
+	public class BuffAttribute
 	{
-		this.value = value;
-		this.template = template;
-	}
+		public int value;
+		public CharacterAttributeTemplate template;
 
-	public string Tooltip()
-	{
-		StringBuilder sb = new StringBuilder();
-		sb.Append("<color=#a66ef5>");
-		sb.Append(template.Name);
-		if (template != null)
+		public BuffAttribute(int value, CharacterAttributeTemplate template)
 		{
-			sb.Append(template.name);
-			sb.Append(": ");
-			sb.Append(value);
+			this.value = value;
+			this.template = template;
 		}
-		sb.Append("</color>");
-		return sb.ToString();
+
+		public string Tooltip()
+		{
+			StringBuilder sb = new StringBuilder();
+			sb.Append("<color=#a66ef5>");
+			sb.Append(template.Name);
+			if (template != null)
+			{
+				sb.Append(template.name);
+				sb.Append(": ");
+				sb.Append(value);
+			}
+			sb.Append("</color>");
+			return sb.ToString();
+		}
 	}
 }

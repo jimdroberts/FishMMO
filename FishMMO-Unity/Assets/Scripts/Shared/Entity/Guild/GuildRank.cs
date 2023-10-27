@@ -1,7 +1,10 @@
-﻿public enum GuildRank : byte
+﻿namespace FishMMO.Shared
 {
-	None = 0,
-	Leader,
-	Officer,
-	Member,
+	public enum GuildRank : byte
+	{
+		None = 0,
+		Leader,
+		Officer,
+		Member,
+	}
 }

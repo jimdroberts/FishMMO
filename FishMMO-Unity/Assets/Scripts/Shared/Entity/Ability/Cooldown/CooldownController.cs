@@ -1,37 +1,40 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
 
-public class CooldownController : MonoBehaviour
+namespace FishMMO.Shared
 {
-	private Dictionary<string, CooldownInstance> cooldowns = new Dictionary<string, CooldownInstance>();
-
-	void Update()
+	public class CooldownController : MonoBehaviour
 	{
-		foreach (KeyValuePair<string, CooldownInstance> pair in new Dictionary<string, CooldownInstance>(cooldowns))
+		private Dictionary<string, CooldownInstance> cooldowns = new Dictionary<string, CooldownInstance>();
+
+		void Update()
 		{
-			pair.Value.SubtractTime(Time.deltaTime);
-			if (!pair.Value.IsOnCooldown)
+			foreach (KeyValuePair<string, CooldownInstance> pair in new Dictionary<string, CooldownInstance>(cooldowns))
 			{
-				cooldowns.Remove(pair.Key);
+				pair.Value.SubtractTime(Time.deltaTime);
+				if (!pair.Value.IsOnCooldown)
+				{
+					cooldowns.Remove(pair.Key);
+				}
 			}
 		}
-	}
 
-	public bool IsOnCooldown(string name)
-	{
-		return cooldowns.ContainsKey(name);
-	}
-
-	public void AddCooldown(string name, CooldownInstance cooldown)
-	{
-		if (!cooldowns.ContainsKey(name))
+		public bool IsOnCooldown(string name)
 		{
-			cooldowns.Add(name, cooldown);
+			return cooldowns.ContainsKey(name);
 		}
-	}
 
-	public void RemoveCooldown(string name)
-	{
-		cooldowns.Remove(name);
+		public void AddCooldown(string name, CooldownInstance cooldown)
+		{
+			if (!cooldowns.ContainsKey(name))
+			{
+				cooldowns.Add(name, cooldown);
+			}
+		}
+
+		public void RemoveCooldown(string name)
+		{
+			cooldowns.Remove(name);
+		}
 	}
 }

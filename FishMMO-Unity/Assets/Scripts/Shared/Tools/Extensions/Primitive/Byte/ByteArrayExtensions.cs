@@ -1,10 +1,13 @@
-﻿public static class ByteArrayExtensions
+﻿namespace FishMMO.Shared
 {
-	public static bool Compare(this byte[] first, byte[] second)
+	public static class ByteArrayExtensions
 	{
-		if (first.Length != second.Length) return false;
-		int length = first.Length;
-		for (int index = 0; index < length; ++index) if (first[index] != second[index]) return false;
-		return true;
+		public static bool Compare(this byte[] first, byte[] second)
+		{
+			if (first.Length != second.Length) return false;
+			int length = first.Length;
+			for (int index = 0; index < length; ++index) if (first[index] != second[index]) return false;
+			return true;
+		}
 	}
 }

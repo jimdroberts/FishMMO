@@ -1,15 +1,18 @@
-﻿public class QuestAttributeRequirement
+﻿namespace FishMMO.Shared
 {
-	public CharacterAttributeTemplate template;
-	public long minRequiredValue;
-
-	public bool MeetsRequirements(CharacterAttributeController characterAttributes)
+	public class QuestAttributeRequirement
 	{
-		CharacterAttribute attribute;
-		if (!characterAttributes.TryGetAttribute(template.ID, out attribute) || attribute.FinalValue < minRequiredValue)
+		public CharacterAttributeTemplate template;
+		public long minRequiredValue;
+
+		public bool MeetsRequirements(CharacterAttributeController characterAttributes)
 		{
-			return false;
+			CharacterAttribute attribute;
+			if (!characterAttributes.TryGetAttribute(template.ID, out attribute) || attribute.FinalValue < minRequiredValue)
+			{
+				return false;
+			}
+			return true;
 		}
-		return true;
 	}
 }

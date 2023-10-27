@@ -1,13 +1,16 @@
-﻿public enum CharacterState : byte
+﻿namespace FishMMO.Shared
 {
-	Idle = 0,
-	IsMoving,
-	IsRunning,
-	IsCrouching,
-	IsSwimming,
-	IsTeleporting,
-	IsFrozen,
-	IsStunned,
-	IsMesmerized,
-	IsGameMaster,
+	public enum CharacterState : byte
+	{
+		Idle = 0,
+		IsMoving,
+		IsRunning,
+		IsCrouching,
+		IsSwimming,
+		IsTeleporting,
+		IsFrozen,
+		IsStunned,
+		IsMesmerized,
+		IsGameMaster,
+	}
 }

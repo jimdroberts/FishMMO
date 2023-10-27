@@ -1,5 +1,8 @@
-﻿public enum SpawnEventType : byte
+﻿namespace FishMMO.Shared
 {
-	OnPreSpawn,
-	OnSpawn,
+	public enum SpawnEventType : byte
+	{
+		OnPreSpawn,
+		OnSpawn,
+	}
 }

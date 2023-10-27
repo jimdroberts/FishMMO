@@ -1,6 +1,9 @@
 ﻿using UnityEngine;
 
-public abstract class MoveEvent : AbilityEvent
+namespace FishMMO.Shared
 {
-	public abstract void Invoke(Ability ability, Transform abilityObject, float deltaTime);
+	public abstract class MoveEvent : AbilityEvent
+	{
+		public abstract void Invoke(Ability ability, Transform abilityObject, float deltaTime);
+	}
 }

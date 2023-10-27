@@ -1,64 +1,67 @@
 ﻿using System;
 
-public class ItemEquippable : IEquippable<Character>
+namespace FishMMO.Shared
 {
-	private Item item;
-
-	public event Action<Character> OnEquip;
-	public event Action<Character> OnUnequip;
-
-	public Character Owner { get; private set; }
-
-	public void Initialize(Item item)
+	public class ItemEquippable : IEquippable<Character>
 	{
-		this.item = item;
-		if (item.Generator != null)
-		{
-			item.Generator.OnSetAttribute += ItemGenerator_OnSetAttribute;
-		}
-	}
+		private Item item;
 
-	public void Destroy()
-	{
-		if (item.Generator != null)
+		public event Action<Character> OnEquip;
+		public event Action<Character> OnUnequip;
+
+		public Character Owner { get; private set; }
+
+		public void Initialize(Item item)
 		{
-			item.Generator.OnSetAttribute -= ItemGenerator_OnSetAttribute;
+			this.item = item;
+			if (item.Generator != null)
+			{
+				item.Generator.OnSetAttribute += ItemGenerator_OnSetAttribute;
+			}
 		}
 
-		Unequip();
-	}
-
-	public void Equip(Character owner)
-	{
-		if (Owner != null)
+		public void Destroy()
 		{
+			if (item.Generator != null)
+			{
+				item.Generator.OnSetAttribute -= ItemGenerator_OnSetAttribute;
+			}
+
 			Unequip();
 		}
-		if (owner != null)
-		{
-			Owner = owner;
-			OnEquip?.Invoke(owner);
-		}
-	}
 
-	public void Unequip()
-	{
-		if (Owner != null)
+		public void Equip(Character owner)
 		{
-			OnUnequip?.Invoke(Owner);
-			Owner = null;
-		}
-	}
-
-	public void ItemGenerator_OnSetAttribute(ItemAttribute attribute, int oldValue, int newValue)
-	{
-		if (Owner != null)
-		{
-			if (Owner.AttributeController != null &&
-				Owner.AttributeController.TryGetAttribute(attribute.Template.CharacterAttribute.ID, out CharacterAttribute characterAttribute))
+			if (Owner != null)
 			{
-				characterAttribute.AddValue(-oldValue);
-				characterAttribute.AddValue(newValue);
+				Unequip();
+			}
+			if (owner != null)
+			{
+				Owner = owner;
+				OnEquip?.Invoke(owner);
+			}
+		}
+
+		public void Unequip()
+		{
+			if (Owner != null)
+			{
+				OnUnequip?.Invoke(Owner);
+				Owner = null;
+			}
+		}
+
+		public void ItemGenerator_OnSetAttribute(ItemAttribute attribute, int oldValue, int newValue)
+		{
+			if (Owner != null)
+			{
+				if (Owner.AttributeController != null &&
+					Owner.AttributeController.TryGetAttribute(attribute.Template.CharacterAttribute.ID, out CharacterAttribute characterAttribute))
+				{
+					characterAttribute.AddValue(-oldValue);
+					characterAttribute.AddValue(newValue);
+				}
 			}
 		}
 	}

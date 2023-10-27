@@ -1,28 +1,31 @@
 ﻿using FishNet.Broadcast;
 
-public struct CreateAccountBroadcast : IBroadcast
+namespace FishMMO.Shared
 {
-	public string username;
-	public string salt;
-	public string verifier;
-}
+	public struct CreateAccountBroadcast : IBroadcast
+	{
+		public string username;
+		public string salt;
+		public string verifier;
+	}
 
-public struct SRPVerifyBroadcast : IBroadcast
-{
-	public string s;
-	public string publicEphemeral;
-}
+	public struct SRPVerifyBroadcast : IBroadcast
+	{
+		public string s;
+		public string publicEphemeral;
+	}
 
-public struct SRPProofBroadcast : IBroadcast
-{
-	public string proof;
-}
+	public struct SRPProofBroadcast : IBroadcast
+	{
+		public string proof;
+	}
 
-public struct SRPSuccess : IBroadcast
-{
-}
+	public struct SRPSuccess : IBroadcast
+	{
+	}
 
-public struct ClientAuthResultBroadcast : IBroadcast
-{
-	public ClientAuthenticationResult result;
+	public struct ClientAuthResultBroadcast : IBroadcast
+	{
+		public ClientAuthenticationResult result;
+	}
 }

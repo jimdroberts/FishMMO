@@ -1,7 +1,7 @@
 using UnityEditor;
 using UnityEngine;
 
-namespace FishMMO.Editor
+namespace FishMMO.Shared
 {
 	[CustomPropertyDrawer(typeof(ShowReadonlyAttribute))]
 	public class ReadOnlyDrawer : PropertyDrawer

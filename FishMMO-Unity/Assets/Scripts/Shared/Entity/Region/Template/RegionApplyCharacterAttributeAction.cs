@@ -1,21 +1,24 @@
-public class RegionApplyCharacterAttributeAction : RegionAction
+namespace FishMMO.Shared
 {
-	public CharacterAttributeTemplate attribute;
-	public int value;
-
-	public override void Invoke(Character character, Region region)
+	public class RegionApplyCharacterAttributeAction : RegionAction
 	{
-		if (attribute == null || character == null)
+		public CharacterAttributeTemplate attribute;
+		public int value;
+
+		public override void Invoke(Character character, Region region)
 		{
-			return;
-		}
-		if (character.AttributeController.TryGetResourceAttribute(attribute, out CharacterResourceAttribute r))
-		{
-			r.AddToCurrentValue(value);
-		}
-		else if (character.AttributeController.TryGetAttribute(attribute, out CharacterAttribute c))
-		{
-			c.AddModifier(value);
+			if (attribute == null || character == null)
+			{
+				return;
+			}
+			if (character.AttributeController.TryGetResourceAttribute(attribute, out CharacterResourceAttribute r))
+			{
+				r.AddToCurrentValue(value);
+			}
+			else if (character.AttributeController.TryGetAttribute(attribute, out CharacterAttribute c))
+			{
+				c.AddModifier(value);
+			}
 		}
 	}
 }

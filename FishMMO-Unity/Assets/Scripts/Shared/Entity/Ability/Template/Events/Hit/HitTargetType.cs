@@ -1,7 +1,10 @@
-﻿public enum HitTargetType : byte
+﻿namespace FishMMO.Shared
 {
-	Self,
-	Group,
-	Ally,
-	Enemy,
+	public enum HitTargetType : byte
+	{
+		Self,
+		Group,
+		Ally,
+		Enemy,
+	}
 }

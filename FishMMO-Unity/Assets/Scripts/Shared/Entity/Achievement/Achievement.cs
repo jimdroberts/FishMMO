@@ -1,21 +1,24 @@
-﻿public class Achievement
+﻿namespace FishMMO.Shared
 {
-	public byte CurrentTier;
-	public uint CurrentValue;
-
-	public AchievementTemplate Template { get; private set; }
-
-	public Achievement(int templateID)
+	public class Achievement
 	{
-		Template = AchievementTemplate.Get<AchievementTemplate>(templateID);
-		CurrentTier = 0;
-		CurrentValue = 0;
-	}
+		public byte CurrentTier;
+		public uint CurrentValue;
 
-	public Achievement(int templateID, byte tier, uint value)
-	{
-		Template = AchievementTemplate.Get<AchievementTemplate>(templateID);
-		CurrentTier = tier;
-		CurrentValue = value;
+		public AchievementTemplate Template { get; private set; }
+
+		public Achievement(int templateID)
+		{
+			Template = AchievementTemplate.Get<AchievementTemplate>(templateID);
+			CurrentTier = 0;
+			CurrentValue = 0;
+		}
+
+		public Achievement(int templateID, byte tier, uint value)
+		{
+			Template = AchievementTemplate.Get<AchievementTemplate>(templateID);
+			CurrentTier = tier;
+			CurrentValue = value;
+		}
 	}
 }

@@ -1,18 +1,21 @@
 ﻿using System.Net;
 
-public static class NetHelper
+namespace FishMMO.Shared
 {
-	public static IPAddress GetExternalIPAddress(string serviceUrl = "https://checkip.amazonaws.com/")
+	public static class NetHelper
 	{
-		string ipAddress = null;
-		using (WebClient client = new WebClient())
+		public static IPAddress GetExternalIPAddress(string serviceUrl = "https://checkip.amazonaws.com/")
 		{
-			ipAddress = client.DownloadString(serviceUrl).Replace("\\r\\n", "").Replace("\\n", "").Trim();
+			string ipAddress = null;
+			using (WebClient client = new WebClient())
+			{
+				ipAddress = client.DownloadString(serviceUrl).Replace("\\r\\n", "").Replace("\\n", "").Trim();
+			}
+			if (IPAddress.TryParse(ipAddress, out IPAddress address))
+			{
+				return address;
+			}
+			return null;
 		}
-		if (IPAddress.TryParse(ipAddress, out IPAddress address))
-		{
-			return address;
-		}
-		return null;
 	}
 }

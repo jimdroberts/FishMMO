@@ -1,4 +1,7 @@
-﻿public interface IInteractable 
+﻿namespace FishMMO.Shared
 {
-	public bool OnInteract(Character character);
+	public interface IInteractable
+	{
+		public bool OnInteract(Character character);
+	}
 }

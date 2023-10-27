@@ -1,6 +1,9 @@
 using UnityEngine;
 
-public abstract class RegionAction : ScriptableObject
+namespace FishMMO.Shared
 {
-	public abstract void Invoke(Character character, Region region);
+	public abstract class RegionAction : ScriptableObject
+	{
+		public abstract void Invoke(Character character, Region region);
+	}
 }

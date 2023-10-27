@@ -1,9 +1,12 @@
 ﻿using UnityEngine;
 
-public sealed class PierceHitEvent : HitEvent
+namespace FishMMO.Shared
 {
-	public override int Invoke(Character attacker, Character defender, TargetInfo hitTarget, GameObject abilityObject)
+	public sealed class PierceHitEvent : HitEvent
 	{
-		return 1;
+		public override int Invoke(Character attacker, Character defender, TargetInfo hitTarget, GameObject abilityObject)
+		{
+			return 1;
+		}
 	}
 }

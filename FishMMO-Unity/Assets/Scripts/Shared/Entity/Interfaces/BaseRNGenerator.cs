@@ -1,27 +1,30 @@
-﻿public abstract class BaseRNGenerator
+﻿namespace FishMMO.Shared
 {
-	protected int seed;
-
-	public int Seed
+	public abstract class BaseRNGenerator
 	{
-		get
+		protected int seed;
+
+		public int Seed
 		{
-			return seed;
-		}
-		set
-		{
-			if (seed != value)
+			get
 			{
-				seed = value;
-				Generate();
+				return seed;
+			}
+			set
+			{
+				if (seed != value)
+				{
+					seed = value;
+					Generate();
+				}
 			}
 		}
-	}
 
-	public void Generate()
-	{
-		Generate(seed);
-	}
+		public void Generate()
+		{
+			Generate(seed);
+		}
 
-	public abstract void Generate(int seed);
+		public abstract void Generate(int seed);
+	}
 }

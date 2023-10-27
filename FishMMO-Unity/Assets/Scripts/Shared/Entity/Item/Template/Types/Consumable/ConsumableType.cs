@@ -1,10 +1,13 @@
-﻿public enum ConsumableType : byte
+﻿namespace FishMMO.Shared
 {
-	HealthPotion,
-	ManaPotion,
-	StaminaPotion,
-	BuffPotion,
-	Food,
-	Mount,
-	Scroll,
+	public enum ConsumableType : byte
+	{
+		HealthPotion,
+		ManaPotion,
+		StaminaPotion,
+		BuffPotion,
+		Food,
+		Mount,
+		Scroll,
+	}
 }

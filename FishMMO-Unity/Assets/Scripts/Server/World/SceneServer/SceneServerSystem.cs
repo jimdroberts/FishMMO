@@ -4,6 +4,7 @@ using UnityEngine;
 using System.Collections.Generic;
 using FishNet.Connection;
 using FishMMO.Server.Services;
+using FishMMO.Shared;
 using FishMMO.Database.Entities;
 
 namespace FishMMO.Server

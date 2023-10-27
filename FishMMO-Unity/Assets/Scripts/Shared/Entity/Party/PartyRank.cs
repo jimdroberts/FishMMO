@@ -1,6 +1,9 @@
-﻿public enum PartyRank : byte
+﻿namespace FishMMO.Shared
 {
-	None = 0,
-	Leader,
-	Member,
+	public enum PartyRank : byte
+	{
+		None = 0,
+		Leader,
+		Member,
+	}
 }

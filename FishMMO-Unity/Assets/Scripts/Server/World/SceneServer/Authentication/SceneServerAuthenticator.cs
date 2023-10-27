@@ -1,4 +1,5 @@
 ﻿using FishMMO.Database;
+using FishMMO.Shared;
 
 namespace FishMMO.Server
 {

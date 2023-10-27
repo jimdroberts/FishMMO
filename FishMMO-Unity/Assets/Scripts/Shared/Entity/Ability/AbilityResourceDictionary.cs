@@ -1,4 +1,7 @@
 ﻿using System;
 
-[Serializable]
-public class AbilityResourceDictionary : SerializableDictionary<CharacterAttributeTemplate, int> { }
+namespace FishMMO.Shared
+{
+	[Serializable]
+	public class AbilityResourceDictionary : SerializableDictionary<CharacterAttributeTemplate, int> { }
+}

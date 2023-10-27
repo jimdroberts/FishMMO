@@ -1,4 +1,7 @@
 using System;
 
-[Serializable]
-public class WorldSceneDetailsDictionary : SerializableDictionary<string, WorldSceneDetails> { }
+namespace FishMMO.Shared
+{
+	[Serializable]
+	public class WorldSceneDetailsDictionary : SerializableDictionary<string, WorldSceneDetails> { }
+}

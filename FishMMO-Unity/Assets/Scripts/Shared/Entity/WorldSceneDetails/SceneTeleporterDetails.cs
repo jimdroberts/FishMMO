@@ -1,11 +1,14 @@
 using System;
 using UnityEngine;
 
-[Serializable]
-public class SceneTeleporterDetails
+namespace FishMMO.Shared
 {
-	internal string From;
-	public string ToScene;
-	public Vector3 ToPosition;
-	public Sprite SceneTransitionImage;
+	[Serializable]
+	public class SceneTeleporterDetails
+	{
+		internal string From;
+		public string ToScene;
+		public Vector3 ToPosition;
+		public Sprite SceneTransitionImage;
+	}
 }

@@ -2,6 +2,7 @@
 using FishNet.Transporting;
 using System.Collections.Generic;
 using FishMMO.Server.Services;
+using FishMMO.Shared;
 
 namespace FishMMO.Server
 {
@@ -51,7 +52,7 @@ namespace FishMMO.Server
 			{
 				using var dbContext = Server.DbContextFactory.CreateDbContext();
                 // load all character details for the account from database
-                List<global::CharacterDetails> characterList = CharacterService.GetDetails(dbContext, accountName);
+                List<CharacterDetails> characterList = CharacterService.GetDetails(dbContext, accountName);
 
 				// append the characters to the broadcast message
 				CharacterListBroadcast characterListMsg = new CharacterListBroadcast()

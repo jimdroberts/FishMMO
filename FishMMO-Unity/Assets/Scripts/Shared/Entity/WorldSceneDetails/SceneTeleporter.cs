@@ -6,94 +6,97 @@ using FishMMO.Server.Services;
 using FishMMO.Database.Entities;
 //#endif
 
-public class SceneTeleporter : MonoBehaviour
+namespace FishMMO.Shared
 {
-//#if UNITY_SERVER
-	private SceneServerSystem sceneServerSystem;
-
-	void Awake()
+	public class SceneTeleporter : MonoBehaviour
 	{
-		if (sceneServerSystem == null)
-		{
-			sceneServerSystem = ServerBehaviour.Get<SceneServerSystem>();
-		}
-	}
+		//#if UNITY_SERVER
+		private SceneServerSystem sceneServerSystem;
 
-	void OnTriggerEnter(Collider other)
-	{
-		if (other != null && other.gameObject != null && sceneServerSystem != null)
+		void Awake()
 		{
-			Character character = other.gameObject.GetComponent<Character>();
-			if (character != null && !character.IsTeleporting)
+			if (sceneServerSystem == null)
 			{
-				if (sceneServerSystem.WorldSceneDetailsCache != null &&
-					sceneServerSystem.WorldSceneDetailsCache.Scenes.TryGetValue(character.SceneName, out WorldSceneDetails details) &&
-					details.Teleporters.TryGetValue(gameObject.name, out SceneTeleporterDetails teleporter))
+				sceneServerSystem = ServerBehaviour.Get<SceneServerSystem>();
+			}
+		}
+
+		void OnTriggerEnter(Collider other)
+		{
+			if (other != null && other.gameObject != null && sceneServerSystem != null)
+			{
+				Character character = other.gameObject.GetComponent<Character>();
+				if (character != null && !character.IsTeleporting)
 				{
-					character.IsTeleporting = true;
-
-					// should we prevent players from moving to a different scene if they are in combat?
-					/*if (character.DamageController.Attackers.Count > 0)
+					if (sceneServerSystem.WorldSceneDetailsCache != null &&
+						sceneServerSystem.WorldSceneDetailsCache.Scenes.TryGetValue(character.SceneName, out WorldSceneDetails details) &&
+						details.Teleporters.TryGetValue(gameObject.name, out SceneTeleporterDetails teleporter))
 					{
-						return;
-					}*/
+						character.IsTeleporting = true;
 
-					// make the character immortal for teleport
-					if (character.DamageController != null)
-					{
-						character.DamageController.Immortal = true;
-					}
-
-					string playerScene = character.SceneName;
-					character.SceneName = teleporter.ToScene;
-					character.Motor.SetPositionAndRotation(teleporter.ToPosition, character.Transform.rotation);// teleporter.toRotation);
-
-					// save the character with new scene and position
-					using var dbContext = sceneServerSystem.Server.DbContextFactory.CreateDbContext();
-					CharacterService.Save(dbContext, character, false);
-					dbContext.SaveChanges();
-
-					Debug.Log(character.CharacterName + " has been saved at: " + character.Transform.position.ToString());
-
-					WorldServerEntity worldServer = WorldServerService.GetServer(dbContext, character.WorldServerID);
-					if (worldServer != null)
-					{
-						// tell the client to reconnect to the world server for automatic re-entry
-						character.Owner.Broadcast(new SceneWorldReconnectBroadcast()
+						// should we prevent players from moving to a different scene if they are in combat?
+						/*if (character.DamageController.Attackers.Count > 0)
 						{
-							address = worldServer.Address,
-							port = worldServer.Port,
-							teleporterName = gameObject.name,
-							sceneName = playerScene
-						});
+							return;
+						}*/
+
+						// make the character immortal for teleport
+						if (character.DamageController != null)
+						{
+							character.DamageController.Immortal = true;
+						}
+
+						string playerScene = character.SceneName;
+						character.SceneName = teleporter.ToScene;
+						character.Motor.SetPositionAndRotation(teleporter.ToPosition, character.Transform.rotation);// teleporter.toRotation);
+
+						// save the character with new scene and position
+						using var dbContext = sceneServerSystem.Server.DbContextFactory.CreateDbContext();
+						CharacterService.Save(dbContext, character, false);
+						dbContext.SaveChanges();
+
+						Debug.Log(character.CharacterName + " has been saved at: " + character.Transform.position.ToString());
+
+						WorldServerEntity worldServer = WorldServerService.GetServer(dbContext, character.WorldServerID);
+						if (worldServer != null)
+						{
+							// tell the client to reconnect to the world server for automatic re-entry
+							character.Owner.Broadcast(new SceneWorldReconnectBroadcast()
+							{
+								address = worldServer.Address,
+								port = worldServer.Port,
+								teleporterName = gameObject.name,
+								sceneName = playerScene
+							});
+						}
+						else
+						{
+							// world not found?
+							character.Owner.Kick(FishNet.Managing.Server.KickReason.UnexpectedProblem);
+						}
+
+						sceneServerSystem.ServerManager.Despawn(character.NetworkObject, DespawnType.Pool);
 					}
 					else
 					{
-						// world not found?
-						character.Owner.Kick(FishNet.Managing.Server.KickReason.UnexpectedProblem);
+						// destination not found
+						return;
 					}
-
-					sceneServerSystem.ServerManager.Despawn(character.NetworkObject, DespawnType.Pool);
-				}
-				else
-				{
-					// destination not found
-					return;
 				}
 			}
 		}
-	}
 
-	void OnTriggerExit(Collider other)
-	{
-		if (other != null && other.gameObject != null)
+		void OnTriggerExit(Collider other)
 		{
-			Character character = other.gameObject.GetComponent<Character>();
-			if (character != null)
+			if (other != null && other.gameObject != null)
 			{
-				character.IsTeleporting = false;
+				Character character = other.gameObject.GetComponent<Character>();
+				if (character != null)
+				{
+					character.IsTeleporting = false;
+				}
 			}
 		}
+		//#endif
 	}
-//#endif
 }

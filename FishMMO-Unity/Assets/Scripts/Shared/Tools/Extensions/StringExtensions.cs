@@ -1,16 +1,19 @@
-﻿public static class StringExtensions
+﻿namespace FishMMO.Shared
 {
-	//Taken from https://stackoverflow.com/questions/5154970/how-do-i-create-a-hashcode-in-net-c-for-a-string-that-is-safe-to-store-in-a
-	public static int GetDeterministicHashCode(this string text)
+	public static class StringExtensions
 	{
-		unchecked
+		//Taken from https://stackoverflow.com/questions/5154970/how-do-i-create-a-hashcode-in-net-c-for-a-string-that-is-safe-to-store-in-a
+		public static int GetDeterministicHashCode(this string text)
 		{
-			int hash = 23;
-			foreach (char c in text)
+			unchecked
 			{
-				hash = hash * 31 + c;
+				int hash = 23;
+				foreach (char c in text)
+				{
+					hash = hash * 31 + c;
+				}
+				return hash;
 			}
-			return hash;
 		}
 	}
 }

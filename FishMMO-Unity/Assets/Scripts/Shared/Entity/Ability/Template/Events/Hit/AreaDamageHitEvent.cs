@@ -1,39 +1,42 @@
 ﻿using UnityEngine;
 
-public sealed class AreaDamageHitEvent : HitEvent
+namespace FishMMO.Shared
 {
-	private Collider[] colliders = new Collider[100];
-
-	public int HitCount;
-	public int Amount;
-	public float Radius;
-	public DamageAttributeTemplate DamageAttributeTemplate;
-	public LayerMask CollidableLayers = -1;
-
-	public override int Invoke(Character attacker, Character defender, TargetInfo hitTarget, GameObject abilityObject)
+	public sealed class AreaDamageHitEvent : HitEvent
 	{
-		PhysicsScene physicsScene = attacker.gameObject.scene.GetPhysicsScene();
+		private Collider[] colliders = new Collider[100];
 
-		int overlapCount = physicsScene.OverlapSphere(//Physics.OverlapCapsuleNonAlloc(
-			hitTarget.Target.transform.position,
-			Radius,
-			colliders,
-			CollidableLayers,
-			QueryTriggerInteraction.Ignore);
+		public int HitCount;
+		public int Amount;
+		public float Radius;
+		public DamageAttributeTemplate DamageAttributeTemplate;
+		public LayerMask CollidableLayers = -1;
 
-		int hits = 0;
-		for (int i = 0; i < overlapCount && hits < HitCount; ++i)
+		public override int Invoke(Character attacker, Character defender, TargetInfo hitTarget, GameObject abilityObject)
 		{
-			if (colliders[i] != attacker.Motor.Capsule)
+			PhysicsScene physicsScene = attacker.gameObject.scene.GetPhysicsScene();
+
+			int overlapCount = physicsScene.OverlapSphere(//Physics.OverlapCapsuleNonAlloc(
+				hitTarget.Target.transform.position,
+				Radius,
+				colliders,
+				CollidableLayers,
+				QueryTriggerInteraction.Ignore);
+
+			int hits = 0;
+			for (int i = 0; i < overlapCount && hits < HitCount; ++i)
 			{
-				Character def = colliders[i].gameObject.GetComponent<Character>();
-				if (def != null && def.DamageController != null)
+				if (colliders[i] != attacker.Motor.Capsule)
 				{
-					def.DamageController.Damage(attacker, Amount, DamageAttributeTemplate);
-					++hits;
+					Character def = colliders[i].gameObject.GetComponent<Character>();
+					if (def != null && def.DamageController != null)
+					{
+						def.DamageController.Damage(attacker, Amount, DamageAttributeTemplate);
+						++hits;
+					}
 				}
 			}
+			return hits;
 		}
-		return hits;
 	}
 }

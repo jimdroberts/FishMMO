@@ -1,12 +1,15 @@
 ﻿using FishNet.Broadcast;
 
-public struct EquipmentEquipItemBroadcast : IBroadcast
+namespace FishMMO.Shared
 {
-	public int inventoryIndex;
-	public byte slot;
-}
+	public struct EquipmentEquipItemBroadcast : IBroadcast
+	{
+		public int inventoryIndex;
+		public byte slot;
+	}
 
-public struct EquipmentUnequipItemBroadcast : IBroadcast
-{
-	public byte slot;
+	public struct EquipmentUnequipItemBroadcast : IBroadcast
+	{
+		public byte slot;
+	}
 }

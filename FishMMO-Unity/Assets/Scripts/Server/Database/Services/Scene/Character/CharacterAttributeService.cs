@@ -1,6 +1,7 @@
 ﻿using System.Linq;
 using FishMMO.Database;
 using FishMMO.Database.Entities;
+using FishMMO.Shared;
 
 namespace FishMMO.Server.Services
 {

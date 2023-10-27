@@ -1,7 +1,10 @@
 ﻿using UnityEngine;
 
-[CreateAssetMenu(fileName = "New Armor", menuName = "Item/Armor", order = 0)]
-public class ArmorTemplate : EquippableItemTemplate
+namespace FishMMO.Shared
 {
-	public ItemAttributeTemplate ArmorBonus;
+	[CreateAssetMenu(fileName = "New Armor", menuName = "Item/Armor", order = 0)]
+	public class ArmorTemplate : EquippableItemTemplate
+	{
+		public ItemAttributeTemplate ArmorBonus;
+	}
 }

@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace FishMMO.Server
+namespace FishMMO.Shared
 {
 	[RequireComponent(typeof(Terrain))]
 	public class TerrainBoundary : IBoundary

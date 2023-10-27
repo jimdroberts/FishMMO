@@ -1,8 +1,11 @@
 ﻿using UnityEngine;
 
-[CreateAssetMenu(fileName = "New Weapon", menuName = "Item/Weapon", order = 0)]
-public class WeaponTemplate : EquippableItemTemplate
+namespace FishMMO.Shared
 {
-	public ItemAttributeTemplate AttackPower;
-	public ItemAttributeTemplate AttackSpeed;
+	[CreateAssetMenu(fileName = "New Weapon", menuName = "Item/Weapon", order = 0)]
+	public class WeaponTemplate : EquippableItemTemplate
+	{
+		public ItemAttributeTemplate AttackPower;
+		public ItemAttributeTemplate AttackSpeed;
+	}
 }

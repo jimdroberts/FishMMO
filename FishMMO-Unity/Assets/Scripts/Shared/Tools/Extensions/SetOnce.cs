@@ -1,34 +1,37 @@
-public class SetOnce<T>
+namespace FishMMO.Shared
 {
-	private readonly object lockObj = new object();
-	private bool isSet = false;
-	private T value;
-
-	public T Value
+	public class SetOnce<T>
 	{
-		get
+		private readonly object lockObj = new object();
+		private bool isSet = false;
+		private T value;
+
+		public T Value
 		{
-			lock (this.lockObj)
+			get
 			{
-				return this.value;
-			}
-		}
-		set
-		{
-			lock (this.lockObj)
-			{
-				if (this.isSet)
+				lock (this.lockObj)
 				{
-					return;
+					return this.value;
 				}
-				this.isSet = true;
-				this.value = value;
+			}
+			set
+			{
+				lock (this.lockObj)
+				{
+					if (this.isSet)
+					{
+						return;
+					}
+					this.isSet = true;
+					this.value = value;
+				}
 			}
 		}
-	}
 
-	public static implicit operator T(SetOnce<T> convert)
-	{
-		return convert.Value;
+		public static implicit operator T(SetOnce<T> convert)
+		{
+			return convert.Value;
+		}
 	}
 }

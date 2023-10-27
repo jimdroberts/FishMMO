@@ -4,6 +4,7 @@ using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using FishMMO.Database;
 using FishMMO.Database.Entities;
+using FishMMO.Shared;
 
 namespace FishMMO.Server.Services
 {

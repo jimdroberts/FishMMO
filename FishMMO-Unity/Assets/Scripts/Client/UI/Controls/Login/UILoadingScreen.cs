@@ -1,6 +1,7 @@
 using FishNet.Managing.Scened;
 using UnityEngine;
 using UnityEngine.UI;
+using FishMMO.Shared;
 
 namespace FishMMO.Client
 {

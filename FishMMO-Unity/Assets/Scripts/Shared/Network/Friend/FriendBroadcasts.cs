@@ -1,23 +1,26 @@
 ﻿using FishNet.Broadcast;
 using System.Collections.Generic;
 
-public struct FriendAddNewBroadcast : IBroadcast
+namespace FishMMO.Shared
 {
-	public string characterName;
-}
+	public struct FriendAddNewBroadcast : IBroadcast
+	{
+		public string characterName;
+	}
 
-public struct FriendAddBroadcast : IBroadcast
-{
-	public long characterID;
-	public bool online;
-}
+	public struct FriendAddBroadcast : IBroadcast
+	{
+		public long characterID;
+		public bool online;
+	}
 
-public struct FriendAddMultipleBroadcast : IBroadcast
-{
-	public List<FriendAddBroadcast> friends;
-}
+	public struct FriendAddMultipleBroadcast : IBroadcast
+	{
+		public List<FriendAddBroadcast> friends;
+	}
 
-public struct FriendRemoveBroadcast : IBroadcast
-{
-	public long characterID;
+	public struct FriendRemoveBroadcast : IBroadcast
+	{
+		public long characterID;
+	}
 }

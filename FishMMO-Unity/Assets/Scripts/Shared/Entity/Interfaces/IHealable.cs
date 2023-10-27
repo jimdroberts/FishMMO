@@ -1,4 +1,7 @@
-﻿public interface IHealable
+﻿namespace FishMMO.Shared
 {
-	public void Heal(Character healer, int amount);
+	public interface IHealable
+	{
+		public void Heal(Character healer, int amount);
+	}
 }

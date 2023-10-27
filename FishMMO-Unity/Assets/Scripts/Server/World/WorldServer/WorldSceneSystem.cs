@@ -3,6 +3,7 @@ using FishNet.Managing.Server;
 using FishNet.Transporting;
 using System.Collections.Generic;
 using FishMMO.Server.Services;
+using FishMMO.Shared;
 using FishMMO.Database;
 using FishMMO.Database.Entities;
 using UnityEngine;

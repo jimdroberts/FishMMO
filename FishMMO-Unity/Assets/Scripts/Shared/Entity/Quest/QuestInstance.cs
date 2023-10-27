@@ -1,18 +1,21 @@
 ﻿using System.Collections.Generic;
 
-public class QuestInstance
+namespace FishMMO.Shared
 {
-	public QuestTemplate template;
-
-	public List<QuestObjective> Objectives;
-
-	private QuestStatus status = QuestStatus.Inactive;
-
-	public QuestStatus Status
+	public class QuestInstance
 	{
-		get
+		public QuestTemplate template;
+
+		public List<QuestObjective> Objectives;
+
+		private QuestStatus status = QuestStatus.Inactive;
+
+		public QuestStatus Status
 		{
-			return this.status;
+			get
+			{
+				return this.status;
+			}
 		}
 	}
 }

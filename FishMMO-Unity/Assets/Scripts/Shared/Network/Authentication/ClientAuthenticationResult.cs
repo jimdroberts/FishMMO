@@ -1,13 +1,16 @@
-﻿public enum ClientAuthenticationResult : byte
+﻿namespace FishMMO.Shared
 {
-	AccountCreated,
-	SrpVerify,
-	SrpProof,
-	InvalidUsernameOrPassword,
-	AlreadyOnline,
-	Banned,
-	LoginSuccess,
-	WorldLoginSuccess,
-	SceneLoginSuccess,
-	ServerFull,
+	public enum ClientAuthenticationResult : byte
+	{
+		AccountCreated,
+		SrpVerify,
+		SrpProof,
+		InvalidUsernameOrPassword,
+		AlreadyOnline,
+		Banned,
+		LoginSuccess,
+		WorldLoginSuccess,
+		SceneLoginSuccess,
+		ServerFull,
+	}
 }

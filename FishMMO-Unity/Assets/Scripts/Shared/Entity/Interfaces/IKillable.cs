@@ -1,4 +1,7 @@
-﻿public interface IKillable
+﻿namespace FishMMO.Shared
 {
-	public void Kill(Character killer);
+	public interface IKillable
+	{
+		public void Kill(Character killer);
+	}
 }

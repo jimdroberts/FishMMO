@@ -2,6 +2,7 @@
 using FishNet.Transporting;
 using FishNet.Managing.Scened;
 using FishNet.Managing.Timing;
+using FishMMO.Shared;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;

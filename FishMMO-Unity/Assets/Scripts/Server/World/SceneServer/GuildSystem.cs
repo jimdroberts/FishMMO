@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using UnityEngine;
 using FishMMO.Server.Services;
+using FishMMO.Shared;
 using FishMMO.Database.Entities;
 
 namespace FishMMO.Server

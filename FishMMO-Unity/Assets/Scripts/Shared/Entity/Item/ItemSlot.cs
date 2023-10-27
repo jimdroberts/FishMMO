@@ -1,10 +1,13 @@
-﻿public enum ItemSlot : byte
+﻿namespace FishMMO.Shared
 {
-	Head = 0,
-	Chest,
-	Legs,
-	Hands,
-	Feet,
-	Primary,
-	Secondary,
+	public enum ItemSlot : byte
+	{
+		Head = 0,
+		Chest,
+		Legs,
+		Hands,
+		Feet,
+		Primary,
+		Secondary,
+	}
 }

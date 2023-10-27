@@ -3,19 +3,22 @@ using UnityEditor;
 #endif
 using UnityEngine;
 
-public class Merchant : Interactable
+namespace FishMMO.Shared
 {
-	public override bool OnInteract(Character character)
+	public class Merchant : Interactable
 	{
-		if (!base.OnInteract(character))
+		public override bool OnInteract(Character character)
 		{
-			return false;
+			if (!base.OnInteract(character))
+			{
+				return false;
+			}
+
+			//Item chest = new Item(-443507152, 1);
+			//chest.GenerateAttributes();
+			//character.InventoryController.AddItem(chest);
+
+			return true;
 		}
-
-		//Item chest = new Item(-443507152, 1);
-		//chest.GenerateAttributes();
-		//character.InventoryController.AddItem(chest);
-
-		return true;
 	}
 }

@@ -1,27 +1,30 @@
 ﻿using FishNet.Broadcast;
 using System.Collections.Generic;
 
-public struct InventorySetItemBroadcast : IBroadcast
+namespace FishMMO.Shared
 {
-	public ulong instanceID;
-	public int templateID;
-	public int seed;
-	public int slot;
-	public uint stackSize;
-}
+	public struct InventorySetItemBroadcast : IBroadcast
+	{
+		public ulong instanceID;
+		public int templateID;
+		public int seed;
+		public int slot;
+		public uint stackSize;
+	}
 
-public struct InventorySetMultipleItemsBroadcast : IBroadcast
-{
-	public List<InventorySetItemBroadcast> items;
-}
+	public struct InventorySetMultipleItemsBroadcast : IBroadcast
+	{
+		public List<InventorySetItemBroadcast> items;
+	}
 
-public struct InventoryRemoveItemBroadcast : IBroadcast
-{
-	public int slot;
-}
+	public struct InventoryRemoveItemBroadcast : IBroadcast
+	{
+		public int slot;
+	}
 
-public struct InventorySwapItemSlotsBroadcast : IBroadcast
-{
-	public int from;
-	public int to;
+	public struct InventorySwapItemSlotsBroadcast : IBroadcast
+	{
+		public int from;
+		public int to;
+	}
 }

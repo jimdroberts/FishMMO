@@ -1,6 +1,9 @@
-﻿public enum QuestStatus : byte
+﻿namespace FishMMO.Shared
 {
-	Inactive = 0,
-	Active,
-	Completed,
+	public enum QuestStatus : byte
+	{
+		Inactive = 0,
+		Active,
+		Completed,
+	}
 }

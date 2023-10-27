@@ -1,18 +1,21 @@
-﻿public abstract class ScrollConsumableTemplate : ConsumableTemplate
+﻿namespace FishMMO.Shared
 {
-	public AbilityTemplate[] AbilityTemplates;
-	public AbilityEvent[] AbilityEvents;
-
-	public override bool Invoke(Character character, Item item)
+	public abstract class ScrollConsumableTemplate : ConsumableTemplate
 	{
-		if (base.Invoke(character, item))
+		public AbilityTemplate[] AbilityTemplates;
+		public AbilityEvent[] AbilityEvents;
+
+		public override bool Invoke(Character character, Item item)
 		{
-			if (character.AbilityController != null)
+			if (base.Invoke(character, item))
 			{
-				character.AbilityController.LearnAbilityTypes(AbilityTemplates, AbilityEvents);
+				if (character.AbilityController != null)
+				{
+					character.AbilityController.LearnAbilityTypes(AbilityTemplates, AbilityEvents);
+				}
+				return true;
 			}
-			return true;
+			return false;
 		}
-		return false;
 	}
 }

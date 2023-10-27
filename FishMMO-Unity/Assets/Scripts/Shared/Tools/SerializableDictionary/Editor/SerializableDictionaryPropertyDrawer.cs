@@ -4,7 +4,7 @@ using System.Reflection;
 using UnityEngine;
 using UnityEditor;
 
-namespace libutility
+namespace FishMMO.Shared
 {
 	[CustomPropertyDrawer(typeof(SerializableDictionaryBase), true)]
 	[CustomPropertyDrawer(typeof(SerializableHashSetBase), true)]

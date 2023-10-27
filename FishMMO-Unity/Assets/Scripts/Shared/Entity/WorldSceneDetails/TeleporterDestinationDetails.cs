@@ -1,9 +1,12 @@
 using System;
 using UnityEngine;
 
-[Serializable]
-public class TeleporterDestinationDetails
+namespace FishMMO.Shared
 {
-	public string Scene;
-	public Vector3 Position;
+	[Serializable]
+	public class TeleporterDestinationDetails
+	{
+		public string Scene;
+		public Vector3 Position;
+	}
 }

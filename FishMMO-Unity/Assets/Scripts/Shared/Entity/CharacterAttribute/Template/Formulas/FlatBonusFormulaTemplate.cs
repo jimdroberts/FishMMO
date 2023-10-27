@@ -1,10 +1,13 @@
 ﻿using UnityEngine;
 
-[CreateAssetMenu(fileName = "Flat Bonus Formula", menuName = "Character/Attribute/Formula/Percentage Bonus Formula", order = 1)]
-public class FlatBonusFormulaTemplate : CharacterAttributeFormulaTemplate
+namespace FishMMO.Shared
 {
-	public override int CalculateBonus(CharacterAttribute self, CharacterAttribute bonusAttribute)
+	[CreateAssetMenu(fileName = "Flat Bonus Formula", menuName = "Character/Attribute/Formula/Percentage Bonus Formula", order = 1)]
+	public class FlatBonusFormulaTemplate : CharacterAttributeFormulaTemplate
 	{
-		return bonusAttribute.FinalValue + bonusAttribute.FinalValue;
+		public override int CalculateBonus(CharacterAttribute self, CharacterAttribute bonusAttribute)
+		{
+			return bonusAttribute.FinalValue + bonusAttribute.FinalValue;
+		}
 	}
 }

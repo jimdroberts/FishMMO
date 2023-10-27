@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using FishMMO.Server.Services;
+using FishMMO.Shared;
 using FishMMO.Database.Entities;
 using UnityEngine;
 

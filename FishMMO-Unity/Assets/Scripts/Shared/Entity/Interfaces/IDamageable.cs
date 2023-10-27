@@ -1,4 +1,7 @@
-﻿public interface IDamageable
+﻿namespace FishMMO.Shared
 {
-	public void Damage(Character attacker, int amount, DamageAttributeTemplate damageAttribute);
+	public interface IDamageable
+	{
+		public void Damage(Character attacker, int amount, DamageAttributeTemplate damageAttribute);
+	}
 }

@@ -1,4 +1,6 @@
-﻿namespace FishMMO.Client
+﻿using FishMMO.Shared;
+
+namespace FishMMO.Client
 {
 	public class UIInventoryButton : UIReferenceButton
 	{

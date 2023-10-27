@@ -1,62 +1,65 @@
-﻿public class CharacterResourceAttribute : CharacterAttribute
+﻿namespace FishMMO.Shared
 {
-	private int currentValue;
-
-	public int CurrentValue { get { return currentValue; } }
-
-	public override string ToString()
+	public class CharacterResourceAttribute : CharacterAttribute
 	{
-		return Template.Name + ": " + currentValue + "/" + FinalValue;
-	}
+		private int currentValue;
 
-	public CharacterResourceAttribute(int templateID, int initialValue, int currentValue, int modifier) : base(templateID, initialValue, modifier)
-	{
-		this.currentValue = currentValue;
-	}
+		public int CurrentValue { get { return currentValue; } }
 
-	public void AddToCurrentValue(int value)
-	{
-		int tmp = currentValue;
-		currentValue += value;
-		if (currentValue == tmp)
+		public override string ToString()
 		{
-			return;
+			return Template.Name + ": " + currentValue + "/" + FinalValue;
 		}
-		if (currentValue > this.FinalValue)
+
+		public CharacterResourceAttribute(int templateID, int initialValue, int currentValue, int modifier) : base(templateID, initialValue, modifier)
 		{
-			currentValue = this.FinalValue;
+			this.currentValue = currentValue;
 		}
-		Internal_OnAttributeChanged(this);
-	}
 
-	public void SetCurrentValue(int value)
-	{
-		currentValue = value;
-		Internal_OnAttributeChanged(this);
-	}
-
-	public void Consume(int amount)
-	{
-		currentValue -= amount;
-		if (currentValue < 0)
+		public void AddToCurrentValue(int value)
 		{
-			currentValue = 0;
+			int tmp = currentValue;
+			currentValue += value;
+			if (currentValue == tmp)
+			{
+				return;
+			}
+			if (currentValue > this.FinalValue)
+			{
+				currentValue = this.FinalValue;
+			}
+			Internal_OnAttributeChanged(this);
 		}
-		Internal_OnAttributeChanged(this);
-	}
 
-	public void Gain(int amount)
-	{
-		currentValue += amount;
-		if (currentValue >= FinalValue)
+		public void SetCurrentValue(int value)
 		{
-			currentValue = FinalValue;
+			currentValue = value;
+			Internal_OnAttributeChanged(this);
 		}
-		Internal_OnAttributeChanged(this);
-	}
 
-	protected override void Internal_OnAttributeChanged(CharacterAttribute attribute)
-	{
-		base.Internal_OnAttributeChanged(attribute);
+		public void Consume(int amount)
+		{
+			currentValue -= amount;
+			if (currentValue < 0)
+			{
+				currentValue = 0;
+			}
+			Internal_OnAttributeChanged(this);
+		}
+
+		public void Gain(int amount)
+		{
+			currentValue += amount;
+			if (currentValue >= FinalValue)
+			{
+				currentValue = FinalValue;
+			}
+			Internal_OnAttributeChanged(this);
+		}
+
+		protected override void Internal_OnAttributeChanged(CharacterAttribute attribute)
+		{
+			base.Internal_OnAttributeChanged(attribute);
+		}
 	}
 }

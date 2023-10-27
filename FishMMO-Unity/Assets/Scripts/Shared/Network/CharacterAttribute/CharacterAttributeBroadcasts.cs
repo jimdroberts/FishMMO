@@ -1,25 +1,28 @@
 ﻿using System.Collections.Generic;
 using FishNet.Broadcast;
 
-public struct CharacterAttributeUpdateBroadcast : IBroadcast
+namespace FishMMO.Shared
 {
-	public int templateID;
-	public int value;
-}
+	public struct CharacterAttributeUpdateBroadcast : IBroadcast
+	{
+		public int templateID;
+		public int value;
+	}
 
-public struct CharacterResourceAttributeUpdateBroadcast : IBroadcast
-{
-	public int templateID;
-	public int value;
-	public int max;
-}
+	public struct CharacterResourceAttributeUpdateBroadcast : IBroadcast
+	{
+		public int templateID;
+		public int value;
+		public int max;
+	}
 
-public struct CharacterAttributeUpdateMultipleBroadcast : IBroadcast
-{
-	public List<CharacterAttributeUpdateBroadcast> attributes;
-}
+	public struct CharacterAttributeUpdateMultipleBroadcast : IBroadcast
+	{
+		public List<CharacterAttributeUpdateBroadcast> attributes;
+	}
 
-public struct CharacterResourceAttributeUpdateMultipleBroadcast : IBroadcast
-{
-	public List<CharacterResourceAttributeUpdateBroadcast> attributes;
+	public struct CharacterResourceAttributeUpdateMultipleBroadcast : IBroadcast
+	{
+		public List<CharacterResourceAttributeUpdateBroadcast> attributes;
+	}
 }

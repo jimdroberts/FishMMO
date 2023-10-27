@@ -1,14 +1,17 @@
 ﻿using UnityEngine;
 
-public sealed class InterruptHitEvent : HitEvent
+namespace FishMMO.Shared
 {
-	public override int Invoke(Character attacker, Character defender, TargetInfo hitTarget, GameObject abilityObject)
+	public sealed class InterruptHitEvent : HitEvent
 	{
-		if (defender != null && defender.AbilityController != null)
+		public override int Invoke(Character attacker, Character defender, TargetInfo hitTarget, GameObject abilityObject)
 		{
-			defender.AbilityController.Interrupt(attacker);
+			if (defender != null && defender.AbilityController != null)
+			{
+				defender.AbilityController.Interrupt(attacker);
+			}
+			// interrupt doesn't count as a hit
+			return 0;
 		}
-		// interrupt doesn't count as a hit
-		return 0;
 	}
 }

@@ -1,114 +1,117 @@
 ﻿using UnityEngine;
 
-[RequireComponent(typeof(Character))]
-public class InventoryController : ItemContainer
+namespace FishMMO.Shared
 {
-	public Character Character;
-
-	private void Awake()
+	[RequireComponent(typeof(Character))]
+	public class InventoryController : ItemContainer
 	{
-		AddSlots(null, 32);
-	}
+		public Character Character;
 
-	public override void OnStartClient()
-	{
-		base.OnStartClient();
-
-		if (!base.IsOwner)
+		private void Awake()
 		{
-			enabled = false;
-			return;
+			AddSlots(null, 32);
 		}
 
-		ClientManager.RegisterBroadcast<InventorySetItemBroadcast>(OnClientInventorySetItemBroadcastReceived);
-		ClientManager.RegisterBroadcast<InventorySetMultipleItemsBroadcast>(OnClientInventorySetMultipleItemsBroadcastReceived);
-		ClientManager.RegisterBroadcast<InventoryRemoveItemBroadcast>(OnClientInventoryRemoveItemBroadcastReceived);
-		ClientManager.RegisterBroadcast<InventorySwapItemSlotsBroadcast>(OnClientInventorySwapItemSlotsBroadcastReceived);
-	}
-
-	public override void OnStopClient()
-	{
-		base.OnStopClient();
-
-		if (base.IsOwner)
+		public override void OnStartClient()
 		{
-			ClientManager.UnregisterBroadcast<InventorySetItemBroadcast>(OnClientInventorySetItemBroadcastReceived);
-			ClientManager.UnregisterBroadcast<InventorySetMultipleItemsBroadcast>(OnClientInventorySetMultipleItemsBroadcastReceived);
-			ClientManager.UnregisterBroadcast<InventoryRemoveItemBroadcast>(OnClientInventoryRemoveItemBroadcastReceived);
-			ClientManager.UnregisterBroadcast<InventorySwapItemSlotsBroadcast>(OnClientInventorySwapItemSlotsBroadcastReceived);
-		}
-	}
+			base.OnStartClient();
 
-	public override bool CanManipulate()
-	{
-		if (!base.CanManipulate())
-		{
-			return false;
+			if (!base.IsOwner)
+			{
+				enabled = false;
+				return;
+			}
+
+			ClientManager.RegisterBroadcast<InventorySetItemBroadcast>(OnClientInventorySetItemBroadcastReceived);
+			ClientManager.RegisterBroadcast<InventorySetMultipleItemsBroadcast>(OnClientInventorySetMultipleItemsBroadcastReceived);
+			ClientManager.RegisterBroadcast<InventoryRemoveItemBroadcast>(OnClientInventoryRemoveItemBroadcastReceived);
+			ClientManager.RegisterBroadcast<InventorySwapItemSlotsBroadcast>(OnClientInventorySwapItemSlotsBroadcastReceived);
 		}
 
-		/*if ((character.State == CharacterState.Idle ||
-			  character.State == CharacterState.Moving) &&
-			  character.State != CharacterState.UsingObject &&
-			  character.State != CharacterState.IsFrozen &&
-			  character.State != CharacterState.IsStunned &&
-			  character.State != CharacterState.IsMesmerized) return true;
-		*/
-		return true;
-	}
-
-	public void Activate(int index)
-	{
-		if (TryGetItem(index, out Item item))
+		public override void OnStopClient()
 		{
-			Debug.Log("InventoryController: using item in slot[" + index + "]");
-			//items[index].OnUseItem();
+			base.OnStopClient();
+
+			if (base.IsOwner)
+			{
+				ClientManager.UnregisterBroadcast<InventorySetItemBroadcast>(OnClientInventorySetItemBroadcastReceived);
+				ClientManager.UnregisterBroadcast<InventorySetMultipleItemsBroadcast>(OnClientInventorySetMultipleItemsBroadcastReceived);
+				ClientManager.UnregisterBroadcast<InventoryRemoveItemBroadcast>(OnClientInventoryRemoveItemBroadcastReceived);
+				ClientManager.UnregisterBroadcast<InventorySwapItemSlotsBroadcast>(OnClientInventorySwapItemSlotsBroadcastReceived);
+			}
 		}
-	}
 
-	/// <summary>
-	/// Server sent a set item broadcast. Item slot is set to the received item details.
-	/// </summary>
-	private void OnClientInventorySetItemBroadcastReceived(InventorySetItemBroadcast msg)
-	{
-		Item newItem = new Item(msg.instanceID, msg.templateID, msg.stackSize, msg.seed);
-		SetItemSlot(newItem, msg.slot);
-	}
-
-	/// <summary>
-	/// Server sent a multiple set item broadcast. Item slot is set to the received item details.
-	/// </summary>
-	private void OnClientInventorySetMultipleItemsBroadcastReceived(InventorySetMultipleItemsBroadcast msg)
-	{
-		foreach (InventorySetItemBroadcast subMsg in msg.items)
+		public override bool CanManipulate()
 		{
-			Item newItem = new Item(subMsg.instanceID, subMsg.templateID, subMsg.stackSize, subMsg.seed);
-			SetItemSlot(newItem, subMsg.slot);
+			if (!base.CanManipulate())
+			{
+				return false;
+			}
+
+			/*if ((character.State == CharacterState.Idle ||
+				  character.State == CharacterState.Moving) &&
+				  character.State != CharacterState.UsingObject &&
+				  character.State != CharacterState.IsFrozen &&
+				  character.State != CharacterState.IsStunned &&
+				  character.State != CharacterState.IsMesmerized) return true;
+			*/
+			return true;
 		}
-	}
 
-	/// <summary>
-	/// Server sent a remove item from slot broadcast. Item is removed from the received slot with server authority.
-	/// </summary>
-	private void OnClientInventoryRemoveItemBroadcastReceived(InventoryRemoveItemBroadcast msg)
-	{
-		RemoveItem(msg.slot);
-	}
-
-	/// <summary>
-	/// Server sent a swap slot broadcast. Both slots are swapped with server authority.
-	/// </summary>
-	/// <param name="msg"></param>
-	private void OnClientInventorySwapItemSlotsBroadcastReceived(InventorySwapItemSlotsBroadcast msg)
-	{
-		SwapItemSlots(msg.from, msg.to);
-	}
-
-	public void SendSwapItemSlotsRequest(int from, int to)
-	{
-		ClientManager.Broadcast(new InventorySwapItemSlotsBroadcast()
+		public void Activate(int index)
 		{
-			from = from,
-			to = to,
-		});
+			if (TryGetItem(index, out Item item))
+			{
+				Debug.Log("InventoryController: using item in slot[" + index + "]");
+				//items[index].OnUseItem();
+			}
+		}
+
+		/// <summary>
+		/// Server sent a set item broadcast. Item slot is set to the received item details.
+		/// </summary>
+		private void OnClientInventorySetItemBroadcastReceived(InventorySetItemBroadcast msg)
+		{
+			Item newItem = new Item(msg.instanceID, msg.templateID, msg.stackSize, msg.seed);
+			SetItemSlot(newItem, msg.slot);
+		}
+
+		/// <summary>
+		/// Server sent a multiple set item broadcast. Item slot is set to the received item details.
+		/// </summary>
+		private void OnClientInventorySetMultipleItemsBroadcastReceived(InventorySetMultipleItemsBroadcast msg)
+		{
+			foreach (InventorySetItemBroadcast subMsg in msg.items)
+			{
+				Item newItem = new Item(subMsg.instanceID, subMsg.templateID, subMsg.stackSize, subMsg.seed);
+				SetItemSlot(newItem, subMsg.slot);
+			}
+		}
+
+		/// <summary>
+		/// Server sent a remove item from slot broadcast. Item is removed from the received slot with server authority.
+		/// </summary>
+		private void OnClientInventoryRemoveItemBroadcastReceived(InventoryRemoveItemBroadcast msg)
+		{
+			RemoveItem(msg.slot);
+		}
+
+		/// <summary>
+		/// Server sent a swap slot broadcast. Both slots are swapped with server authority.
+		/// </summary>
+		/// <param name="msg"></param>
+		private void OnClientInventorySwapItemSlotsBroadcastReceived(InventorySwapItemSlotsBroadcast msg)
+		{
+			SwapItemSlots(msg.from, msg.to);
+		}
+
+		public void SendSwapItemSlotsRequest(int from, int to)
+		{
+			ClientManager.Broadcast(new InventorySwapItemSlotsBroadcast()
+			{
+				from = from,
+				to = to,
+			});
+		}
 	}
 }

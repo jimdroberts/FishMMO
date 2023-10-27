@@ -1,53 +1,56 @@
 ﻿using FishNet.Object;
 using UnityEngine;
 
-[RequireComponent(typeof(CharacterAttributeController))]
-public class CharacterRegenerationController : NetworkBehaviour
+namespace FishMMO.Shared
 {
-	public static Character localCharacter;
-	public CharacterAttributeController AttributeController;
-
-	public CharacterAttributeTemplate HealthTemplate;
-	public CharacterAttributeTemplate ManaTemplate;
-	public CharacterAttributeTemplate HealthRegenerationTemplate;
-	public CharacterAttributeTemplate ManaRegenerationTemplate;
-
-	public float nextRegenTick = 0.0f;
-	public float regenerateTickRate = 1.0f;
-
-	void Awake()
+	[RequireComponent(typeof(CharacterAttributeController))]
+	public class CharacterRegenerationController : NetworkBehaviour
 	{
-		AttributeController = gameObject.GetComponent<CharacterAttributeController>();
-	}
+		public static Character localCharacter;
+		public CharacterAttributeController AttributeController;
 
-	void Update()
-	{
-		OnRegenerate();
-	}
+		public CharacterAttributeTemplate HealthTemplate;
+		public CharacterAttributeTemplate ManaTemplate;
+		public CharacterAttributeTemplate HealthRegenerationTemplate;
+		public CharacterAttributeTemplate ManaRegenerationTemplate;
 
-	private void OnRegenerate()
-	{
-		if (nextRegenTick < regenerateTickRate)
+		public float nextRegenTick = 0.0f;
+		public float regenerateTickRate = 1.0f;
+
+		void Awake()
 		{
-			nextRegenTick = regenerateTickRate;
-
-			if (AttributeController.TryGetResourceAttribute(HealthTemplate, out CharacterResourceAttribute health))
-			{
-				if (AttributeController.TryGetAttribute(HealthRegenerationTemplate, out CharacterAttribute healthRegeneration))
-				{
-					health.Gain(healthRegeneration.FinalValue);
-				}
-			}
-			if (AttributeController.TryGetResourceAttribute(ManaTemplate, out CharacterResourceAttribute mana))
-			{
-				if (AttributeController.TryGetAttribute(ManaRegenerationTemplate, out CharacterAttribute manaRegeneration))
-				{
-					mana.Gain(manaRegeneration.FinalValue);
-				}
-			}
-
-			//stamina regeneration is handled by the run function in the character controller
+			AttributeController = gameObject.GetComponent<CharacterAttributeController>();
 		}
-		nextRegenTick -= Time.deltaTime;
+
+		void Update()
+		{
+			OnRegenerate();
+		}
+
+		private void OnRegenerate()
+		{
+			if (nextRegenTick < regenerateTickRate)
+			{
+				nextRegenTick = regenerateTickRate;
+
+				if (AttributeController.TryGetResourceAttribute(HealthTemplate, out CharacterResourceAttribute health))
+				{
+					if (AttributeController.TryGetAttribute(HealthRegenerationTemplate, out CharacterAttribute healthRegeneration))
+					{
+						health.Gain(healthRegeneration.FinalValue);
+					}
+				}
+				if (AttributeController.TryGetResourceAttribute(ManaTemplate, out CharacterResourceAttribute mana))
+				{
+					if (AttributeController.TryGetAttribute(ManaRegenerationTemplate, out CharacterAttribute manaRegeneration))
+					{
+						mana.Gain(manaRegeneration.FinalValue);
+					}
+				}
+
+				//stamina regeneration is handled by the run function in the character controller
+			}
+			nextRegenTick -= Time.deltaTime;
+		}
 	}
 }

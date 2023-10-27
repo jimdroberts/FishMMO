@@ -4,6 +4,7 @@ using System;
 using System.Text.RegularExpressions;
 using FishMMO.Database.Entities;
 using FishMMO.Server.Services;
+using FishMMO.Shared;
 using FishNet.Object;
 
 namespace FishMMO.Server

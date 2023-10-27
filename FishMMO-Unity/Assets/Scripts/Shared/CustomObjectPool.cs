@@ -7,7 +7,7 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using UnityEngine;
 
-namespace Shared
+namespace FishMMO.Shared
 {
 	public class CustomObjectPool : ObjectPool
 	{

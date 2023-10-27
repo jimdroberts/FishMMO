@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace FishMMO
+namespace FishMMO.Shared
 {
 	public class ShowReadonlyAttribute : PropertyAttribute
 	{

@@ -1,33 +1,36 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
 
-public sealed class MultiplyEvent : SpawnEvent
+namespace FishMMO.Shared
 {
-	public int SpawnCount;
-
-	public override void Invoke(Character self, TargetInfo targetInfo, AbilityObject initialObject, ref int nextID, Dictionary<int, AbilityObject> abilityObjects)
+	public sealed class MultiplyEvent : SpawnEvent
 	{
-		if (abilityObjects != null)
-		{
-			for (int i = 0; i < SpawnCount; ++i)
-			{
-				// create/fetch from pool
-				GameObject go = new GameObject(initialObject.name);
-				go.SetActive(false);
+		public int SpawnCount;
 
-				// construct additional ability objects
-				AbilityObject abilityObject = go.GetComponent<AbilityObject>();
-				if (abilityObject == null)
+		public override void Invoke(Character self, TargetInfo targetInfo, AbilityObject initialObject, ref int nextID, Dictionary<int, AbilityObject> abilityObjects)
+		{
+			if (abilityObjects != null)
+			{
+				for (int i = 0; i < SpawnCount; ++i)
 				{
-					abilityObject = go.AddComponent<AbilityObject>();
+					// create/fetch from pool
+					GameObject go = new GameObject(initialObject.name);
+					go.SetActive(false);
+
+					// construct additional ability objects
+					AbilityObject abilityObject = go.GetComponent<AbilityObject>();
+					if (abilityObject == null)
+					{
+						abilityObject = go.AddComponent<AbilityObject>();
+					}
+					go.transform.SetPositionAndRotation(initialObject.transform.position, initialObject.transform.rotation);
+					abilityObject.ContainerID = initialObject.ContainerID;
+					abilityObject.Ability = initialObject.Ability;
+					abilityObject.Caster = initialObject.Caster;
+					abilityObject.HitCount = initialObject.HitCount;
+					abilityObject.RemainingActiveTime = initialObject.RemainingActiveTime;
+					abilityObjects.Add(++nextID, abilityObject);
 				}
-				go.transform.SetPositionAndRotation(initialObject.transform.position, initialObject.transform.rotation);
-				abilityObject.ContainerID = initialObject.ContainerID;
-				abilityObject.Ability = initialObject.Ability;
-				abilityObject.Caster = initialObject.Caster;
-				abilityObject.HitCount = initialObject.HitCount;
-				abilityObject.RemainingActiveTime = initialObject.RemainingActiveTime;
-				abilityObjects.Add(++nextID, abilityObject);
 			}
 		}
 	}

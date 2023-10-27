@@ -2,6 +2,7 @@
 using System.Text.RegularExpressions;
 using TMPro;
 using UnityEngine;
+using FishMMO.Shared;
 
 namespace FishMMO.Client
 {

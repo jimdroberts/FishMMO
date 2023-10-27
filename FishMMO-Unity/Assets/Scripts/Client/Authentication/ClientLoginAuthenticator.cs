@@ -8,6 +8,7 @@ using System.Text.RegularExpressions;
 using System.Security.Cryptography;
 using UnityEngine;
 using SecureRemotePassword;
+using FishMMO.Shared;
 
 namespace FishMMO.Client
 {

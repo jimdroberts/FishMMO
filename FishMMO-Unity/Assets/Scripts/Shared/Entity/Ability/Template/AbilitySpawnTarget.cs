@@ -1,6 +1,9 @@
-﻿public enum AbilitySpawnTarget : byte
+﻿namespace FishMMO.Shared
 {
-	Self,
-	Hand,
-	Target,
+	public enum AbilitySpawnTarget : byte
+	{
+		Self,
+		Hand,
+		Target,
+	}
 }

@@ -2,6 +2,7 @@
 using UnityEngine;
 //using UnityEngine.Events;
 using UnityEngine.EventSystems;
+using FishMMO.Shared;
 
 namespace FishMMO.Client
 {

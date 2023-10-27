@@ -1,15 +1,18 @@
 using UnityEngine;
 
-public class RegionDisplayNameAction : RegionAction
+namespace FishMMO.Shared
 {
-	public Color displayColor;
-
-	public override void Invoke(Character character, Region region)
+	public class RegionDisplayNameAction : RegionAction
 	{
-		if (region == null || character == null)
+		public Color displayColor;
+
+		public override void Invoke(Character character, Region region)
 		{
-			return;
+			if (region == null || character == null)
+			{
+				return;
+			}
+			//UILabel3D.Create(region.regionName, 24, displayColor, true, character.transform);
 		}
-		//UILabel3D.Create(region.regionName, 24, displayColor, true, character.transform);
 	}
 }

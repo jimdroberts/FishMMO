@@ -1,15 +1,18 @@
 using UnityEngine;
 
-public class RegionAudioTriggerAction : RegionAction
+namespace FishMMO.Shared
 {
-	public AudioClip clip;
-
-	public override void Invoke(Character character, Region region)
+	public class RegionAudioTriggerAction : RegionAction
 	{
-		if (clip == null || character == null)
+		public AudioClip clip;
+
+		public override void Invoke(Character character, Region region)
 		{
-			return;
+			if (clip == null || character == null)
+			{
+				return;
+			}
+			// play audio clip?
 		}
-		// play audio clip?
 	}
 }

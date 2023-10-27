@@ -1,14 +1,16 @@
-// do we want a combat state???
-public class RegionCombatStateAction : RegionAction
+namespace FishMMO.Shared
 {
-	public bool enableCombat;
-
-	public override void Invoke(Character character, Region region)
+	public class RegionCombatStateAction : RegionAction
 	{
-		/*if (character == null || character.CombatController == null)
+		public bool EnableCombat;
+
+		public override void Invoke(Character character, Region region)
 		{
-			return;
+			/*if (character == null || character.CombatController == null)
+			{
+				return;
+			}
+			character.CombatController.SetCombatStatus(enableCombat);*/
 		}
-		character.CombatController.SetCombatStatus(enableCombat);*/
 	}
 }

@@ -1,9 +1,12 @@
 ﻿using System;
 
-public static class EnumExtensions
+namespace FishMMO.Shared
 {
-	public static T[] ToArray<T>() where T : Enum
+	public static class EnumExtensions
 	{
-		return (T[])Enum.GetValues(typeof(T));
+		public static T[] ToArray<T>() where T : Enum
+		{
+			return (T[])Enum.GetValues(typeof(T));
+		}
 	}
 }

@@ -1,4 +1,5 @@
 ﻿using UnityEngine;
+using FishMMO.Shared;
 
 namespace FishMMO.Client
 {

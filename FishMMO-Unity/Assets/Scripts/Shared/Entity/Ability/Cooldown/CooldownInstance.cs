@@ -1,27 +1,30 @@
-﻿public class CooldownInstance
+﻿namespace FishMMO.Shared
 {
-	private float remainingTime;
-
-	public bool IsOnCooldown
+	public class CooldownInstance
 	{
-		get
+		private float remainingTime;
+
+		public bool IsOnCooldown
 		{
-			return remainingTime > 0.0f;
+			get
+			{
+				return remainingTime > 0.0f;
+			}
 		}
-	}
 
-	public CooldownInstance(float cooldown)
-	{
-		remainingTime = cooldown;
-	}
+		public CooldownInstance(float cooldown)
+		{
+			remainingTime = cooldown;
+		}
 
-	public void SubtractTime(float time)
-	{
-		remainingTime -= time;
-	}
+		public void SubtractTime(float time)
+		{
+			remainingTime -= time;
+		}
 
-	public void AddTime(float time)
-	{
-		remainingTime += time;
+		public void AddTime(float time)
+		{
+			remainingTime += time;
+		}
 	}
 }

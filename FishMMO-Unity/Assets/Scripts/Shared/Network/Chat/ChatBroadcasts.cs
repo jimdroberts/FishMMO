@@ -1,8 +1,11 @@
 ﻿using FishNet.Broadcast;
 
-public struct ChatBroadcast : IBroadcast
+namespace FishMMO.Shared
 {
-	public ChatChannel channel;
-	public long senderID;
-	public string text;
+	public struct ChatBroadcast : IBroadcast
+	{
+		public ChatChannel channel;
+		public long senderID;
+		public string text;
+	}
 }

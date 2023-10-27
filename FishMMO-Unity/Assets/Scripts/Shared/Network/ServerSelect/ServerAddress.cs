@@ -1,8 +1,11 @@
 ﻿using System;
 
-[Serializable]
-public struct ServerAddress
+namespace FishMMO.Shared
 {
-	public string address;
-	public ushort port;
+	[Serializable]
+	public struct ServerAddress
+	{
+		public string address;
+		public ushort port;
+	}
 }

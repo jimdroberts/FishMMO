@@ -1,19 +1,22 @@
 ﻿using System;
 using UnityEngine;
 
-[CreateAssetMenu(fileName = "New Item Database", menuName = "Item/Database", order = 0)]
-public class ItemTemplateDatabase : ScriptableObject
+namespace FishMMO.Shared
 {
-	[Serializable]
-	public class ItemDictionary : SerializableDictionary<string, BaseItemTemplate> { }
-
-	[SerializeField]
-	private ItemDictionary items = new ItemDictionary();
-	public ItemDictionary Items { get { return items; } }
-
-	public BaseItemTemplate GetItem(string name)
+	[CreateAssetMenu(fileName = "New Item Database", menuName = "Item/Database", order = 0)]
+	public class ItemTemplateDatabase : ScriptableObject
 	{
-		items.TryGetValue(name, out BaseItemTemplate item);
-		return item;
+		[Serializable]
+		public class ItemDictionary : SerializableDictionary<string, BaseItemTemplate> { }
+
+		[SerializeField]
+		private ItemDictionary items = new ItemDictionary();
+		public ItemDictionary Items { get { return items; } }
+
+		public BaseItemTemplate GetItem(string name)
+		{
+			items.TryGetValue(name, out BaseItemTemplate item);
+			return item;
+		}
 	}
 }

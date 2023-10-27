@@ -2,18 +2,21 @@
 using UnityEditor;
 using UnityEngine;
 
-[CustomEditor(typeof(WorldSceneDetailsCache))]
-public class WorldSceneDetailsCacheEditor : Editor
+namespace FishMMO.Shared
 {
-	public override void OnInspectorGUI()
+	[CustomEditor(typeof(WorldSceneDetailsCache))]
+	public class WorldSceneDetailsCacheEditor : Editor
 	{
-		base.OnInspectorGUI();
-		var script = (WorldSceneDetailsCache)target;
-
-		if (GUILayout.Button("Rebuild", GUILayout.Height(40)))
+		public override void OnInspectorGUI()
 		{
-			script.Rebuild();
-			EditorUtility.SetDirty(script);
+			base.OnInspectorGUI();
+			var script = (WorldSceneDetailsCache)target;
+
+			if (GUILayout.Button("Rebuild", GUILayout.Height(40)))
+			{
+				script.Rebuild();
+				EditorUtility.SetDirty(script);
+			}
 		}
 	}
 }

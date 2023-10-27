@@ -1,4 +1,4 @@
-﻿namespace Shared
+﻿namespace FishMMO.Shared
 {
 	public interface IPooledResettable
 	{

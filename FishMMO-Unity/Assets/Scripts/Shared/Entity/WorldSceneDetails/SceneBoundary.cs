@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace FishMMO.Server
+namespace FishMMO.Shared
 {
 	public class SceneBoundary : IBoundary
 	{

@@ -1,18 +1,21 @@
 using UnityEngine;
 
-public sealed class BuffHitEvent : HitEvent
+namespace FishMMO.Shared
 {
-	public int Stacks;
-	public BuffTemplate BuffTemplate;
-
-	public override int Invoke(Character attacker, Character defender, TargetInfo hitTarget, GameObject abilityObject)
+	public sealed class BuffHitEvent : HitEvent
 	{
-		if (defender != null && defender.BuffController != null)
-		{
-			defender.BuffController.Apply(BuffTemplate);
-		}
+		public int Stacks;
+		public BuffTemplate BuffTemplate;
 
-		// a buff or debuff does not count as a hit so we return 0
-		return 0;
+		public override int Invoke(Character attacker, Character defender, TargetInfo hitTarget, GameObject abilityObject)
+		{
+			if (defender != null && defender.BuffController != null)
+			{
+				defender.BuffController.Apply(BuffTemplate);
+			}
+
+			// a buff or debuff does not count as a hit so we return 0
+			return 0;
+		}
 	}
 }
