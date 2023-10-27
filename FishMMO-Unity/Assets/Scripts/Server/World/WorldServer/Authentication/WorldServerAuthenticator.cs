@@ -1,5 +1,5 @@
 using FishMMO.Database;
-using FishMMO.Server.Services;
+using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
 
 namespace FishMMO.Server

@@ -2,7 +2,7 @@
 using FishMMO.Database;
 using FishMMO.Database.Entities;
 
-namespace FishMMO.Server.Services
+namespace FishMMO.Server.DatabaseServices
 {
 	public class PendingSceneService
 	{

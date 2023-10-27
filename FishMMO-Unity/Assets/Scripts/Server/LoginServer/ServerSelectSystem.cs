@@ -1,7 +1,7 @@
 ﻿using FishNet.Connection;
 using System.Collections.Generic;
 using FishNet.Transporting;
-using FishMMO.Server.Services;
+using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
 
 namespace FishMMO.Server

@@ -5,7 +5,7 @@ using FishNet.Transporting;
 using FishMMO.Database;
 using System;
 using System.Text.RegularExpressions;
-using FishMMO.Server.Services;
+using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
 
 namespace FishMMO.Server

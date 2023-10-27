@@ -1,11 +1,10 @@
 using UnityEditor;
-using UnityEngine;
 
 // Originally from: https://support.unity.com/hc/en-us/articles/210452343-How-to-stop-automatic-assembly-compilation-from-script
 // Allowing you to toggle the various script compilation options quickly and easily
 // Since Unity can't work properly on a recompile...
 
-namespace FishMMO.Editor
+namespace FishMMO.Shared
 {
 
     [InitializeOnLoad]

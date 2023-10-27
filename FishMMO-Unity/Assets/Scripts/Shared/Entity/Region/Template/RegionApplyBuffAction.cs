@@ -2,15 +2,15 @@ namespace FishMMO.Shared
 {
 	public class RegionApplyBuffAction : RegionAction
 	{
-		public BuffTemplate buff;
+		public BuffTemplate Buff;
 
 		public override void Invoke(Character character, Region region)
 		{
-			if (buff == null || character == null)
+			if (Buff == null || character == null)
 			{
 				return;
 			}
-			character.BuffController.Apply(buff);
+			character.BuffController.Apply(Buff);
 		}
 	}
 }

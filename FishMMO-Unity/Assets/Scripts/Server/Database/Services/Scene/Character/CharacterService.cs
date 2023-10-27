@@ -8,7 +8,7 @@ using FishMMO.Database.Entities;
 using FishMMO.Shared;
 using UnityEngine;
 
-namespace FishMMO.Server.Services
+namespace FishMMO.Server.DatabaseServices
 {
 	/// <summary>
 	/// Handles all Database<->Server Character interactions.
