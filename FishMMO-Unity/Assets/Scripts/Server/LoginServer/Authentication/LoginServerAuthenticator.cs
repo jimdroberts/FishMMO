@@ -123,9 +123,6 @@ namespace FishMMO.Server
 					{
 						//UnityEngine.Debug.Log("SRPProof");
 
-						// update SRP State
-						a.SrpData.State = SrpState.SRPProof;
-
 						SRPProofBroadcast msg2 = new SRPProofBroadcast()
 						{
 							proof = serverProof,
