@@ -82,18 +82,20 @@ namespace FishMMO.Server
 						// prepare account
 						AccountManager.AddConnectionAccount(conn, msg.s, msg.publicEphemeral, salt, verifier, accessLevel);
 
-						// get and send srp verification data
-						if (AccountManager.GetConnectionSRPData(conn, out ServerSrpData srpData) &&
-							srpData.State == SrpState.SRPVerify)
-						{
-							//UnityEngine.Debug.Log("SRPVerify");
-
-							SRPVerifyBroadcast srpVerify = new SRPVerifyBroadcast()
+						// verify SrpState equals SRPVerify and then send account public data
+						if (AccountManager.TryUpdateSrpState(conn, SrpState.SRPVerify, SrpState.SRPVerify, (a) =>
 							{
-								s = srpData.Salt,
-								publicEphemeral = srpData.ServerEphemeral.Public,
-							};
-							conn.Broadcast(srpVerify, false);
+								//UnityEngine.Debug.Log("SRPVerify");
+
+								SRPVerifyBroadcast srpVerify = new SRPVerifyBroadcast()
+								{
+									s = a.SrpData.Salt,
+									publicEphemeral = a.SrpData.ServerEphemeral.Public,
+								};
+								conn.Broadcast(srpVerify, false);
+								return true;
+							}))
+						{
 							return;
 						}
 					}
@@ -115,32 +117,28 @@ namespace FishMMO.Server
 			 * are removed when a client disconnects so there is no reason they should
 			 * already be considered authenticated. */
 			if (conn.Authenticated ||
-				!AccountManager.GetConnectionSRPData(conn, out ServerSrpData srpData) ||
-				srpData.State != SrpState.SRPVerify)
+				!AccountManager.TryUpdateSrpState(conn, SrpState.SRPVerify, SrpState.SRPProof, (a) =>
+				{
+					if (a.SrpData.GetProof(msg.proof, out string serverProof))
+					{
+						//UnityEngine.Debug.Log("SRPProof");
+
+						// update SRP State
+						a.SrpData.State = SrpState.SRPProof;
+
+						SRPProofBroadcast msg2 = new SRPProofBroadcast()
+						{
+							proof = serverProof,
+						};
+						conn.Broadcast(msg2, false);
+						return true;
+					}
+					return false;
+				}))
 			{
 				conn.Disconnect(true);
 				return;
 			}
-
-			if (srpData.GetProof(msg.proof, out string serverProof))
-			{
-				//UnityEngine.Debug.Log("SRPProof");
-
-				// update SRP State
-				srpData.State = SrpState.SRPProof;
-
-				SRPProofBroadcast msg2 = new SRPProofBroadcast()
-				{
-					proof = serverProof,
-				};
-				conn.Broadcast(msg2, false);
-			}
-			else
-			{
-				// failed
-				conn.Disconnect(true);
-			}
-			//UnityEngine.Debug.Log("SRP: " + serverProof);
 		}
 
 		/// <summary>
@@ -152,36 +150,35 @@ namespace FishMMO.Server
 			 * are removed when a client disconnects so there is no reason they should
 			 * already be considered authenticated. */
 			if (conn.Authenticated ||
-				!AccountManager.GetAccountNameByConnection(conn, out string accountName) ||
-				!AccountManager.GetConnectionSRPData(conn, out ServerSrpData srpData) ||
-				srpData.State != SrpState.SRPProof)
+				!AccountManager.TryUpdateSrpState(conn, SrpState.SRPProof, SrpState.SRPSuccess, (a) =>
+				{
+					using var dbContext = DBContextFactory.CreateDbContext();
+					// attempt to complete login authentication and return a result broadcast
+					ClientAuthenticationResult result = TryLogin(dbContext, ClientAuthenticationResult.LoginSuccess, a.SrpData.UserName);
+
+					bool authenticated = result != ClientAuthenticationResult.InvalidUsernameOrPassword &&
+										 result != ClientAuthenticationResult.ServerFull;
+
+					// tell the connecting client the result of the authentication
+					ClientAuthResultBroadcast authResult = new ClientAuthResultBroadcast()
+					{
+						result = result,
+					};
+					conn.Broadcast(authResult, false);
+
+					//UnityEngine.Debug.Log("Authorized: " + authResult);
+
+					/* Invoke result. This is handled internally to complete the connection authentication or kick client.
+					 * It's important to call this after sending the broadcast so that the broadcast
+					 * makes it out to the client before the kick. */
+					OnAuthentication(conn, authenticated);
+					OnClientAuthenticationResult?.Invoke(conn, authenticated);
+					return true;
+				}))
 			{
 				conn.Disconnect(true);
 				return;
 			}
-			srpData.State = SrpState.SRPSuccess;
-
-			using var dbContext = DBContextFactory.CreateDbContext();
-			// attempt to complete login authentication and return a result broadcast
-			ClientAuthenticationResult result = TryLogin(dbContext, ClientAuthenticationResult.LoginSuccess, accountName);
-
-			bool authenticated = result != ClientAuthenticationResult.InvalidUsernameOrPassword &&
-								 result != ClientAuthenticationResult.ServerFull;
-
-			// tell the connecting client the result of the authentication
-			ClientAuthResultBroadcast authResult = new ClientAuthResultBroadcast()
-			{
-				result = result,
-			};
-			conn.Broadcast(authResult, false);
-
-			//UnityEngine.Debug.Log("Authorized: " + authResult);
-
-			/* Invoke result. This is handled internally to complete the connection authentication or kick client.
-			 * It's important to call this after sending the broadcast so that the broadcast
-			 * makes it out to the client before the kick. */
-			OnAuthentication(conn, authenticated);
-			OnClientAuthenticationResult?.Invoke(conn, authenticated);
 		}
 
 		public virtual void OnAuthentication(NetworkConnection conn, bool authenticated)
