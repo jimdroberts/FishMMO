@@ -1,4 +1,5 @@
 ﻿using FishNet.Connection;
+using System;
 using System.Collections.Generic;
 using System.Security.Cryptography;
 using SecureRemotePassword;
@@ -13,13 +14,19 @@ namespace FishMMO.Server
 	{
 		public readonly static Dictionary<NetworkConnection, string> ConnectionAccounts = new Dictionary<NetworkConnection, string>();
 		public readonly static Dictionary<string, NetworkConnection> AccountConnections = new Dictionary<string, NetworkConnection>();
-		public readonly static Dictionary<NetworkConnection, ServerSrpData> ConnectionSRPData = new Dictionary<NetworkConnection, ServerSrpData>();
+		public readonly static Dictionary<NetworkConnection, AccountData> ConnectionAccountData = new Dictionary<NetworkConnection, AccountData>();
 
 		public static void AddConnectionAccount(NetworkConnection connection, string accountName, string publicClientEphemeral, string salt, string verifier, AccessLevel accessLevel)
 		{
-			ConnectionSRPData.Remove(connection);
+			ConnectionAccountData.Remove(connection);
 
-			ConnectionSRPData.Add(connection, new ServerSrpData(SrpParameters.Create2048<SHA512>(), accountName, publicClientEphemeral, salt, verifier, accessLevel));
+			ServerSrpData srpData = new ServerSrpData(SrpParameters.Create2048<SHA512>(),
+													  accountName,
+													  publicClientEphemeral,
+													  salt,
+													  verifier);
+
+			ConnectionAccountData.Add(connection, new AccountData(accessLevel, srpData));
 
 			ConnectionAccounts.Remove(connection);
 
@@ -34,7 +41,7 @@ namespace FishMMO.Server
 		{
 			if (ConnectionAccounts.TryGetValue(connection, out string accountName))
 			{
-				ConnectionSRPData.Remove(connection);
+				ConnectionAccountData.Remove(connection);
 				ConnectionAccounts.Remove(connection);
 				AccountConnections.Remove(accountName);
 			}
@@ -44,15 +51,15 @@ namespace FishMMO.Server
 		{
 			if (AccountConnections.TryGetValue(accountName, out NetworkConnection connection))
 			{
-				ConnectionSRPData.Remove(connection);
+				ConnectionAccountData.Remove(connection);
 				ConnectionAccounts.Remove(connection);
 				AccountConnections.Remove(accountName);
 			}
 		}
 
-		public static bool GetConnectionSRPData(NetworkConnection connection, out ServerSrpData srpData)
+		public static bool GetConnectionAccountData(NetworkConnection connection, out AccountData accountData)
 		{
-			return ConnectionSRPData.TryGetValue(connection, out srpData);
+			return ConnectionAccountData.TryGetValue(connection, out accountData);
 		}
 
 		public static bool GetAccountNameByConnection(NetworkConnection connection, out string accountName)
@@ -63,6 +70,28 @@ namespace FishMMO.Server
 		public static bool GetConnectionByAccountName(string accountName, out NetworkConnection connection)
 		{
 			return AccountConnections.TryGetValue(accountName, out connection);
+		}
+
+		public static bool TryUpdateSrpState(NetworkConnection connection, SrpState requiredState, SrpState nextState)
+		{
+			return TryUpdateSrpState(connection, requiredState, nextState, null);
+		}
+		public static bool TryUpdateSrpState(NetworkConnection connection, SrpState requiredState, SrpState nextState, Func<AccountData, bool> onSuccess)
+		{
+			if (!ConnectionAccountData.TryGetValue(connection, out AccountData accountData)
+				|| accountData == null
+				|| accountData.SrpData == null
+				|| accountData.SrpData.State != requiredState)
+			{
+				return false;
+			}
+			accountData.SrpData.State = nextState;
+			if (onSuccess != null &&
+				!onSuccess.Invoke(accountData))
+			{
+				return false;
+			}
+			return true;
 		}
 	}
 }
