@@ -37,10 +37,10 @@ namespace FishMMO.Shared
 
 		public static readonly string[] ALL_IN_ONE_SERVER_BOOTSTRAP_SCENES = new string[]
 		{
-		"Assets\\Scenes\\Bootstraps\\ServerLauncher.unity",
-		"Assets\\Scenes\\Bootstraps\\LoginServer.unity",
-		"Assets\\Scenes\\Bootstraps\\WorldServer.unity",
-		"Assets\\Scenes\\Bootstraps\\SceneServer.unity",
+			"Assets\\Scenes\\Bootstraps\\ServerLauncher.unity",
+			"Assets\\Scenes\\Bootstraps\\LoginServer.unity",
+			"Assets\\Scenes\\Bootstraps\\WorldServer.unity",
+			"Assets\\Scenes\\Bootstraps\\SceneServer.unity",
 		};
 
 		public static readonly string ALL_IN_ONE_SERVER_BAT_SCRIPT = @"@echo off
@@ -64,8 +64,8 @@ start Login.exe LOGIN";
 
 		public static readonly string[] WORLD_SERVER_BOOTSTRAP_SCENES = new string[]
 		{
-		"Assets\\Scenes\\Bootstraps\\ServerLauncher.unity",
-		"Assets\\Scenes\\Bootstraps\\WorldServer.unity",
+			"Assets\\Scenes\\Bootstraps\\ServerLauncher.unity",
+			"Assets\\Scenes\\Bootstraps\\WorldServer.unity",
 		};
 
 		public static readonly string WORLD_SERVER_BAT_SCRIPT = @"@echo off
@@ -74,8 +74,8 @@ start World.exe WORLD";
 
 		public static readonly string[] SCENE_SERVER_BOOTSTRAP_SCENES = new string[]
 		{
-		"Assets\\Scenes\\Bootstraps\\ServerLauncher.unity",
-		"Assets\\Scenes\\Bootstraps\\SceneServer.unity",
+			"Assets\\Scenes\\Bootstraps\\ServerLauncher.unity",
+			"Assets\\Scenes\\Bootstraps\\SceneServer.unity",
 		};
 
 		public static readonly string SCENE_SERVER_BAT_SCRIPT = @"@echo off
@@ -84,7 +84,7 @@ start Scene.exe SCENE";
 
 		public static readonly string[] CLIENT_BOOTSTRAP_SCENES = new string[]
 		{
-		"Assets\\Scenes\\Bootstraps\\ClientBootstrap.unity",
+			"Assets\\Scenes\\Bootstraps\\ClientBootstrap.unity",
 		};
 
 #if UNITY_EDITOR_WIN
@@ -93,15 +93,15 @@ start Scene.exe SCENE";
 		public static readonly string DockerInstalledInfoA = "docker";
 		public static readonly string DockerInstalledInfoB = "--version";
 #elif UNITY_EDITOR_OSX
-	public static readonly string DockerInstallA = "brew";
-	public static readonly string DockerInstallB = "install --cask docker";
+		public static readonly string DockerInstallA = "brew";
+		public static readonly string DockerInstallB = "install --cask docker";
 #else
-	public static readonly string VirtualizationFileName = "grep";
-	public static readonly string VirtualizationArguments = "-E --color 'svm|vmx'";
-	public static readonly string DockerInstalledInfoA = "which";
-	public static readonly string DockerInstalledInfoB = "docker";
-	public static readonly string DockerInstallA = "apt-get";
-	public static readonly string DockerInstallB = "install -y docker.io";
+		public static readonly string VirtualizationFileName = "grep";
+		public static readonly string VirtualizationArguments = "-E --color 'svm|vmx'";
+		public static readonly string DockerInstalledInfoA = "which";
+		public static readonly string DockerInstalledInfoB = "docker";
+		public static readonly string DockerInstallA = "apt-get";
+		public static readonly string DockerInstallB = "install -y docker.io";
 #endif
 
 		public static bool IsVirtualizationEnabled()
@@ -214,28 +214,28 @@ start Scene.exe SCENE";
 			}
 		}
 #else
-	public static void InstallDocker()
-	{
-		using (Process process = new Process())
+		public static void InstallDocker()
 		{
-			process.StartInfo.FileName = DockerInstallA;
-			process.StartInfo.Arguments = DockerInstallB;
-			process.StartInfo.RedirectStandardOutput = true;
-			process.StartInfo.UseShellExecute = false;
-			process.StartInfo.CreateNoWindow = true;
-			process.Start();
-			process.WaitForExit();
+			using (Process process = new Process())
+			{
+				process.StartInfo.FileName = DockerInstallA;
+				process.StartInfo.Arguments = DockerInstallB;
+				process.StartInfo.RedirectStandardOutput = true;
+				process.StartInfo.UseShellExecute = false;
+				process.StartInfo.CreateNoWindow = true;
+				process.Start();
+				process.WaitForExit();
 
-			if (process.ExitCode == 0)
-			{
-				Debug.Log("Docker installed successfully.");
-			}
-			else
-			{
-				Debug.Log("Docker installation failed.");
+				if (process.ExitCode == 0)
+				{
+					Debug.Log("Docker installed successfully.");
+				}
+				else
+				{
+					Debug.Log("Docker installation failed.");
+				}
 			}
 		}
-	}
 #endif
 
 		public static void RunDockerCommand(string commandArgs)
@@ -498,7 +498,22 @@ start Scene.exe SCENE";
 								break;
 						}
 					}
-					CopyConfigurationFiles(customBuildType, Path.Combine(root, "FishMMO-Setup"), buildPath);
+					string configurationPath = "FishMMO-Setup";
+
+					// check working environment
+					WorkingEnvironmentState envState = (WorkingEnvironmentState)EditorPrefs.GetInt("FishMMOWorkingEnvironmentToggle");
+					switch (envState)
+					{
+						case WorkingEnvironmentState.Release:
+							configurationPath = Path.Combine(configurationPath, "Release");
+							break;
+						case WorkingEnvironmentState.Development:
+						default:
+							configurationPath = Path.Combine(configurationPath, "Development");
+							break;
+					}
+
+					CopyConfigurationFiles(customBuildType, Path.Combine(root, configurationPath), buildPath);
 				}
 			}
 			else if (summary.result == BuildResult.Failed)
@@ -611,7 +626,23 @@ start Scene.exe SCENE";
 
 			string root = Directory.GetParent(Directory.GetCurrentDirectory()).FullName;
 			FileUtil.ReplaceFile(Path.Combine(Path.Combine(root, "FishMMO-Setup"), setupScriptFileName), Path.Combine(buildPath, setupScriptFileName));
-			FileUtil.ReplaceFile(Path.Combine(Path.Combine(root, "FishMMO-Setup"), "Database.cfg"), Path.Combine(buildPath, "Database.cfg"));
+
+			string configurationPath = "FishMMO-Setup";
+
+			// check working environment
+			WorkingEnvironmentState envState = (WorkingEnvironmentState)EditorPrefs.GetInt("FishMMOWorkingEnvironmentToggle");
+			switch (envState)
+			{
+				case WorkingEnvironmentState.Release:
+					configurationPath = Path.Combine(configurationPath, "Release");
+					break;
+				case WorkingEnvironmentState.Development:
+				default:
+					configurationPath = Path.Combine(configurationPath, "Development");
+					break;
+			}
+
+			FileUtil.ReplaceFile(Path.Combine(Path.Combine(root, configurationPath), "Database.cfg"), Path.Combine(buildPath, "Database.cfg"));
 			FileUtil.ReplaceDirectory(Path.Combine(root, "FishMMO-Database"), Path.Combine(buildPath, "FishMMO-Database"));
 
 			if (!openExplorer)
@@ -620,13 +651,13 @@ start Scene.exe SCENE";
 			}
 
 #if UNITY_STANDALONE_LINUX || UNITY_EDITOR_LINUX
-		Process.Start("xdg-open", buildPath);
+			Process.Start("xdg-open", buildPath);
 #elif UNITY_STANDALONE_WIN
 			Process.Start(buildPath);
 #endif
 		}
 
-		[MenuItem("FishMMO/Build/Update Linker")]
+		[MenuItem("FishMMO/Build/Update Linker", priority = 12)]
 		public static void UpdateLinker()
 		{
 			string current = Directory.GetCurrentDirectory();
@@ -634,7 +665,7 @@ start Scene.exe SCENE";
 			UpdateLinker(assets, Path.Combine(assets, "Dependencies"));
 		}
 
-		[MenuItem("FishMMO/Build/Build All Windows")]
+		[MenuItem("FishMMO/Build/Build All Windows", priority = 10)]
 		public static void BuildWindows64AllSeparate()
 		{
 			string selectedPath = EditorUtility.SaveFolderPanel("Pick a save directory", "", "");
@@ -685,7 +716,7 @@ start Scene.exe SCENE";
 #endif
 		}
 
-		[MenuItem("FishMMO/Build/Build All Linux")]
+		[MenuItem("FishMMO/Build/Build All Linux", priority = 11)]
 		public static void BuildAllLinux()
 		{
 			string selectedPath = EditorUtility.SaveFolderPanel("Pick a save directory", "", "");
@@ -730,19 +761,19 @@ start Scene.exe SCENE";
 							BuildTarget.StandaloneLinux64);
 
 #if UNITY_STANDALONE_LINUX || UNITY_EDITOR_LINUX
-		Process.Start("xdg-open", rootPath);
+			Process.Start("xdg-open", rootPath);
 #elif UNITY_STANDALONE_WIN
 			Process.Start(rootPath);
 #endif
 		}
 
-		[MenuItem("FishMMO/Build/Server/Windows Setup")]
+		[MenuItem("FishMMO/Build/Server/Windows Setup", priority = 1)]
 		public static void BuildWindowsSetup()
 		{
 			BuildSetupFolder("FishMMO Windows Setup", "Windows Setup.bat");
 		}
 
-		[MenuItem("FishMMO/Build/Server/Windows x64 All-In-One")]
+		[MenuItem("FishMMO/Build/Server/Windows x64 All-In-One", priority = 2)]
 		public static void BuildWindows64AllInOneServer()
 		{
 			RebuildWorldSceneDetailsCache();
@@ -754,7 +785,7 @@ start Scene.exe SCENE";
 							BuildTarget.StandaloneWindows64);
 		}
 
-		[MenuItem("FishMMO/Build/Server/Windows x64 Login")]
+		[MenuItem("FishMMO/Build/Server/Windows x64 Login", priority = 3)]
 		public static void BuildWindows64LoginServer()
 		{
 			RebuildWorldSceneDetailsCache();
@@ -766,7 +797,7 @@ start Scene.exe SCENE";
 							BuildTarget.StandaloneWindows64);
 		}
 
-		[MenuItem("FishMMO/Build/Server/Windows x64 World")]
+		[MenuItem("FishMMO/Build/Server/Windows x64 World", priority = 4)]
 		public static void BuildWindows64WorldServer()
 		{
 			RebuildWorldSceneDetailsCache();
@@ -778,7 +809,7 @@ start Scene.exe SCENE";
 							BuildTarget.StandaloneWindows64);
 		}
 
-		[MenuItem("FishMMO/Build/Server/Windows x64 Scene")]
+		[MenuItem("FishMMO/Build/Server/Windows x64 Scene", priority = 5)]
 		public static void BuildWindows64SceneServer()
 		{
 			RebuildWorldSceneDetailsCache();
@@ -790,7 +821,7 @@ start Scene.exe SCENE";
 							BuildTarget.StandaloneWindows64);
 		}
 
-		[MenuItem("FishMMO/Build/Client/Windows x64")]
+		[MenuItem("FishMMO/Build/Client/Windows x64", priority = 1)]
 		public static void BuildWindows64Client()
 		{
 			RebuildWorldSceneDetailsCache();
@@ -802,13 +833,13 @@ start Scene.exe SCENE";
 							BuildTarget.StandaloneWindows64);
 		}
 
-		[MenuItem("FishMMO/Build/Server/Linux Setup")]
+		[MenuItem("FishMMO/Build/Server/Linux Setup", priority = 6)]
 		public static void BuildLinuxSetup()
 		{
 			BuildSetupFolder("FishMMO Linux Setup", "Linux Setup.sh");
 		}
 
-		[MenuItem("FishMMO/Build/Server/Linux x64 All-In-One")]
+		[MenuItem("FishMMO/Build/Server/Linux x64 All-In-One", priority = 7)]
 		public static void BuildLinux64AllInOneServer()
 		{
 			RebuildWorldSceneDetailsCache();
@@ -820,7 +851,7 @@ start Scene.exe SCENE";
 							BuildTarget.StandaloneLinux64);
 		}
 
-		[MenuItem("FishMMO/Build/Client/Linux x64")]
+		[MenuItem("FishMMO/Build/Client/Linux x64", priority = 2)]
 		public static void BuildLinux64Client()
 		{
 			RebuildWorldSceneDetailsCache();
@@ -832,7 +863,7 @@ start Scene.exe SCENE";
 							BuildTarget.StandaloneLinux64);
 		}
 
-		[MenuItem("FishMMO/Build/Client/WebGL")]
+		[MenuItem("FishMMO/Build/Client/WebGL", priority = 3)]
 		public static void BuildWebGLClient()
 		{
 			RebuildWorldSceneDetailsCache();

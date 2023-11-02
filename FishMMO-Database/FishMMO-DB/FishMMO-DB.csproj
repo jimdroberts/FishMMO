@@ -19,6 +19,7 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="5.0.10" />
+    <PackageReference Include="StackExchange.Redis" Version="2.7.4" />
   </ItemGroup>
 
   <ItemGroup>
@@ -32,6 +33,7 @@
 		</PropertyGroup>
 		<ItemGroup>
 			<SourceDir Include="bin\Release\**\FishMMO-DB.dll" />
+			<SourceDir Include="bin\Debug\**\FishMMO-DB.dll" />
 		</ItemGroup>
 		<Copy SourceFiles="@(SourceDir)" DestinationFolder="$(TargetDir)" />
 	</Target>

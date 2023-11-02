@@ -77,18 +77,22 @@ namespace FishMMO.Client
 					// if we failed to load the file.. save a new one
 					Configuration.Set("Resolution Width", 1280);
 					Configuration.Set("Resolution Height", 800);
-					Configuration.Set("Refresh Rate", 60);
+					Configuration.Set("Refresh Rate", (uint)60);
 					Configuration.Set("Fullscreen", false);
 					Configuration.Save();
 				}
 
 				if (Configuration.TryGetInt("Resolution Width", out int width) &&
 					Configuration.TryGetInt("Resolution Height", out int height) &&
-					Configuration.TryGetInt("Refresh Rate", out int refreshRate) &&
+					Configuration.TryGetUInt("Refresh Rate", out uint refreshRate) &&
 					Configuration.TryGetBool("Fullscreen", out bool fullscreen))
 				{
 #if !UNITY_WEBGL
-					Screen.SetResolution(width, height, fullscreen ? FullScreenMode.ExclusiveFullScreen : FullScreenMode.Windowed, refreshRate);
+					Screen.SetResolution(width, height, fullscreen ? FullScreenMode.ExclusiveFullScreen : FullScreenMode.Windowed, new RefreshRate()
+					{
+						numerator = refreshRate,
+						denominator = 1,
+					});
 #endif
 				}
 				

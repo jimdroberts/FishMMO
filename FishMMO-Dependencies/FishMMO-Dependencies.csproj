@@ -33,8 +33,8 @@
 		<PackageReference Include="Microsoft.Extensions.Primitives" Version="7.0.0" />
 		<PackageReference Include="Npgsql" Version="5.0.17" />
 		<PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="5.0.10" />
-		<PackageReference Include="NRedisStack" Version="0.9.0" />
 		<PackageReference Include="srp" Version="1.0.7" />
+		<PackageReference Include="StackExchange.Redis" Version="2.7.4" />
 		<PackageReference Include="System.Collections.Immutable" Version="7.0.0" />
 		<PackageReference Include="System.ComponentModel.Annotations" Version="5.0.0" />
 		<PackageReference Include="System.Diagnostics.DiagnosticSource" Version="7.0.2" />
@@ -50,7 +50,8 @@
 			<TargetDir>..\FishMMO-Unity\Assets\Dependencies</TargetDir>
 		</PropertyGroup>
 		<ItemGroup>
-			<SourceDir Include="bin\Release\**\*.dll" Exclude="bin\Release\**\Microsoft.CSharp.dll;bin\Release\**\System.Linq.dll;bin\Release\**\System.Text.RegularExpressions.dll"/>
+			<SourceDir Include="bin\Release\**\*.dll" Exclude="bin\Release\**\Microsoft.CSharp.dll;bin\Release\**\System.Linq.dll;bin\Release\**\System.Text.RegularExpressions.dll" />
+			<SourceDir Include="bin\Debug\**\*.dll" Exclude="bin\Debug\**\Microsoft.CSharp.dll;bin\Debug\**\System.Linq.dll;bin\Debug\**\System.Text.RegularExpressions.dll" />
 		</ItemGroup>
 		<Copy SourceFiles="@(SourceDir)" DestinationFolder="$(TargetDir)" />
 	</Target>

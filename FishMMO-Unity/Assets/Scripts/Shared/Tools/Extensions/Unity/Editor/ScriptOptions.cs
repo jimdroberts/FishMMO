@@ -6,7 +6,6 @@ using UnityEditor;
 
 namespace FishMMO.Shared
 {
-
     [InitializeOnLoad]
     public class ScriptOptions
     {
@@ -15,16 +14,16 @@ namespace FishMMO.Shared
             EditorApplication.playModeStateChanged += PlaymodeChanged;
         }
 
-        // Script Compilation During Play
+		// Script Compilation During Play
 
-        // ScriptCompilationDuringPlay has three posible values
-        // 0 = Recompile And Continue Playing
-        // 1 = Recompile After Finished Playing
-        // 2 = Stop Playing And Recompile
+		// ScriptCompilationDuringPlay has three posible values
+		// 0 = Recompile And Continue Playing
+		// 1 = Recompile After Finished Playing
+		// 2 = Stop Playing And Recompile
 
-        // The following methods assing the three possible values to ScriptCompilationDuringPlay
-        // depending on the option you selected
-        [MenuItem("FishMMO/Script Compilation/Recompile And Continue Playing")]
+		// The following methods assing the three possible values to ScriptCompilationDuringPlay
+		// depending on the option you selected
+		[MenuItem("FishMMO/Script Compilation/Recompile And Continue Playing")]
         static void ScriptCompilationToggleOption0()
         {
             EditorPrefs.SetInt("ScriptCompilationDuringPlay", 0);
