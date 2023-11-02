@@ -224,9 +224,11 @@ namespace FishMMO.Server
 				dbContext.SaveChanges();
 
 				// tell the character we made their guild successfully
-				conn.Broadcast(new GuildCreateBroadcast()
+				conn.Broadcast(new GuildAddBroadcast()
 				{
-					guildID = newGuild.ID,
+					guildID = guildController.ID,
+					characterID = guildController.Character.ID,
+					rank = guildController.Rank,
 					location = guildController.gameObject.scene.name,
 				});
 			}

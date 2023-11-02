@@ -61,6 +61,7 @@ namespace FishMMO.Shared
 #if !UNITY_SERVER
 		public LocalInputController LocalInputController;
 		public TextMeshPro CharacterNameLabel;
+		public TextMeshPro CharacterGuildLabel;
 		public LabelMaker LabelMaker;
 #endif
 		// accountID for reference
@@ -195,6 +196,16 @@ namespace FishMMO.Shared
 			LastChatMessage = "";
 			NextChatMessageTime = DateTime.UtcNow;
 			Motor.SetPositionAndRotationAndVelocity(Vector3.zero, Quaternion.identity, Vector3.zero);
+		}
+
+		public void SetGuildName(string guildName)
+		{
+#if !UNITY_SERVER
+			if (CharacterGuildLabel != null)
+			{
+				CharacterGuildLabel.text = !string.IsNullOrWhiteSpace(guildName) ? "[" + guildName + "]" : "";
+			}
+#endif
 		}
 	}
 }

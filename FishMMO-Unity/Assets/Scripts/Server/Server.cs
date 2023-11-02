@@ -73,7 +73,9 @@ namespace FishMMO.Server
 				Configuration.Set("MaximumClients", 4000);
 				Configuration.Set("Address", "0.0.0.0");
 				Configuration.Set("Port", 7770);
+#if !UNITY_EDITOR
 				Configuration.Save();
+#endif
 			}
 
 			// setup the DB context and ensure that it's been created

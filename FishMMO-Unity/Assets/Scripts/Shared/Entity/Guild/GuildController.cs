@@ -32,7 +32,6 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			ClientManager.RegisterBroadcast<GuildCreateBroadcast>(OnClientGuildCreateBroadcastReceived);
 			ClientManager.RegisterBroadcast<GuildInviteBroadcast>(OnClientGuildInviteBroadcastReceived);
 			ClientManager.RegisterBroadcast<GuildAddBroadcast>(OnClientGuildAddBroadcastReceived);
 			ClientManager.RegisterBroadcast<GuildLeaveBroadcast>(OnClientGuildLeaveBroadcastReceived);
@@ -46,29 +45,12 @@ namespace FishMMO.Shared
 
 			if (base.IsOwner)
 			{
-				ClientManager.UnregisterBroadcast<GuildCreateBroadcast>(OnClientGuildCreateBroadcastReceived);
 				ClientManager.UnregisterBroadcast<GuildInviteBroadcast>(OnClientGuildInviteBroadcastReceived);
 				ClientManager.UnregisterBroadcast<GuildAddBroadcast>(OnClientGuildAddBroadcastReceived);
 				ClientManager.UnregisterBroadcast<GuildLeaveBroadcast>(OnClientGuildLeaveBroadcastReceived);
 				ClientManager.UnregisterBroadcast<GuildAddMultipleBroadcast>(OnClientGuildAddMultipleBroadcastReceived);
 				ClientManager.UnregisterBroadcast<GuildRemoveBroadcast>(OnClientGuildRemoveBroadcastReceived);
 			}
-		}
-
-		/// <summary>
-		/// When the server successfully creates the characters guild.
-		/// </summary>
-		public void OnClientGuildCreateBroadcastReceived(GuildCreateBroadcast msg)
-		{
-#if !UNITY_SERVER
-			ID = msg.guildID;
-			Rank = GuildRank.Leader;
-
-			if (UIManager.TryGet("UIGuild", out UIGuild uiGuild))
-			{
-				uiGuild.OnGuildCreated(msg.location);
-			}
-#endif
 		}
 
 		/// <summary>
@@ -103,15 +85,29 @@ namespace FishMMO.Shared
 		{
 			// update our Guild list with the new Guild member
 #if !UNITY_SERVER
-			if (Character != null && msg.characterID == Character.ID)
+			if (Character == null || !base.IsOwner)
 			{
-				ID = msg.guildID;
-				Rank = msg.rank;
+				return;
 			}
+
 			if (!Members.Contains(msg.characterID))
 			{
 				Members.Add(msg.characterID);
 			}
+
+			// are we updating ourself?
+			if (msg.characterID == Character.ID)
+			{
+				ID = msg.guildID;
+				Rank = msg.rank;
+
+				ClientNamingSystem.SetName(NamingSystemType.GuildName, msg.guildID, (s) =>
+				{
+					Character.SetGuildName(s);
+				});
+			}
+
+			// update the UI
 			if (UIManager.TryGet("UIGuild", out UIGuild uiGuild))
 			{
 				ClientNamingSystem.SetName(NamingSystemType.GuildName, msg.guildID, (s) =>
@@ -138,6 +134,11 @@ namespace FishMMO.Shared
 			Officers.Clear();
 			Members.Clear();
 
+			if (Character != null)
+			{
+				Character.SetGuildName("");
+			}
+
 			if (UIManager.TryGet("UIGuild", out UIGuild uiGuild))
 			{
 				uiGuild.OnLeaveGuild();
@@ -151,45 +152,48 @@ namespace FishMMO.Shared
 		public void OnClientGuildAddMultipleBroadcastReceived(GuildAddMultipleBroadcast msg)
 		{
 #if !UNITY_SERVER
-			if (UIManager.TryGet("UIGuild", out UIGuild uiGuild))
+			if (!UIManager.TryGet("UIGuild", out UIGuild uiGuild))
 			{
-				var newIds = msg.members.Select(x => x.characterID).ToHashSet();
-				foreach (long id in new HashSet<long>(Members))
+				return;
+			}
+
+			var newIds = msg.members.Select(x => x.characterID).ToHashSet();
+			foreach (long id in new HashSet<long>(Members))
+			{
+				if (!newIds.Contains(id))
 				{
-					if (!newIds.Contains(id))
-					{
-						Members.Remove(id);
-						uiGuild.OnGuildRemoveMember(id);
-					}
+					Members.Remove(id);
+					uiGuild.OnGuildRemoveMember(id);
 				}
-				foreach (GuildAddBroadcast member in msg.members)
+			}
+			foreach (GuildAddBroadcast member in msg.members)
+			{
+				if (!Members.Contains(member.characterID))
 				{
-					if (!Members.Contains(member.characterID))
-					{
-						Members.Add(member.characterID);
+					Members.Add(member.characterID);
 
-						// if this is our own id
-						if (Character != null && member.characterID == Character.ID)
+					// if this is our own id
+					if (Character != null && member.characterID == Character.ID)
+					{
+						ID = member.guildID;
+						Rank = member.rank;
+
+						ClientNamingSystem.SetName(NamingSystemType.GuildName, member.guildID, (s) =>
 						{
-							ID = member.guildID;
-							Rank = member.rank;
-
-							ClientNamingSystem.SetName(NamingSystemType.GuildName, member.guildID, (s) =>
+							Character.SetGuildName(s);
+							if (uiGuild.GuildLabel != null)
 							{
-								if (uiGuild.GuildLabel != null)
-								{
-									uiGuild.GuildLabel.text = s;
-								}
-							});
-						}
-						// try to add the member to the list
-						uiGuild.OnGuildAddMember(member.characterID, member.rank, member.location);
+								uiGuild.GuildLabel.text = s;
+							}
+						});
 					}
-					if (member.rank == GuildRank.Officer &&
-						!Officers.Contains(member.characterID))
-					{
-						Officers.Add(member.characterID);
-					}
+					// try to add the member to the list
+					uiGuild.OnGuildAddMember(member.characterID, member.rank, member.location);
+				}
+				if (member.rank == GuildRank.Officer &&
+					!Officers.Contains(member.characterID))
+				{
+					Officers.Add(member.characterID);
 				}
 			}
 #endif

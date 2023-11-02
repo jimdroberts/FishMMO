@@ -5,9 +5,7 @@ namespace FishMMO.Shared
 {
 	public struct GuildCreateBroadcast : IBroadcast
 	{
-		public long guildID;
 		public string guildName;
-		public string location;
 	}
 
 	public struct GuildInviteBroadcast : IBroadcast

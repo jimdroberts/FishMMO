@@ -1,16 +1,16 @@
 using FishNet.Object;
 using UnityEngine;
-//#if UNITY_SERVER
+#if UNITY_SERVER
 using FishMMO.Server;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Database.Entities;
-//#endif
+#endif
 
 namespace FishMMO.Shared
 {
 	public class SceneTeleporter : MonoBehaviour
 	{
-		//#if UNITY_SERVER
+#if UNITY_SERVER
 		private SceneServerSystem sceneServerSystem;
 
 		void Awake()
@@ -97,6 +97,6 @@ namespace FishMMO.Shared
 				}
 			}
 		}
-		//#endif
+#endif
 	}
 }

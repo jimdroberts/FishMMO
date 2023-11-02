@@ -79,7 +79,9 @@ namespace FishMMO.Client
 					Configuration.Set("Resolution Height", 800);
 					Configuration.Set("Refresh Rate", (uint)60);
 					Configuration.Set("Fullscreen", false);
+#if !UNITY_EDITOR
 					Configuration.Save();
+#endif
 				}
 
 				if (Configuration.TryGetInt("Resolution Width", out int width) &&

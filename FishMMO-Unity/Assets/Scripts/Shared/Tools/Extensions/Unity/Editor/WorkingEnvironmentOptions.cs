@@ -1,4 +1,5 @@
-﻿using UnityEditor;
+﻿using System.IO;
+using UnityEditor;
 
 namespace FishMMO.Shared
 {
@@ -43,6 +44,20 @@ namespace FishMMO.Shared
 					break;
 			}
 			return true;
+		}
+
+		public static string AppendEnvironmentToPath(string path)
+		{
+			WorkingEnvironmentState envState = (WorkingEnvironmentState)EditorPrefs.GetInt("FishMMOWorkingEnvironmentToggle");
+			switch (envState)
+			{
+				case WorkingEnvironmentState.Release:
+					return Path.Combine(path, "Release");
+				case WorkingEnvironmentState.Development:
+					return Path.Combine(path, "Development");
+				default:
+					return path;
+			}
 		}
 	}
 }

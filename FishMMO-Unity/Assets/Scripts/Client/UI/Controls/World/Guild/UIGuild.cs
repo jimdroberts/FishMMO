@@ -20,42 +20,7 @@ namespace FishMMO.Client
 
 		public override void OnDestroying()
 		{
-			if (GuildLabel != null)
-			{
-				GuildLabel.text = "Guild";
-			}
-			foreach (UIGuildMember member in new List<UIGuildMember>(Members.Values))
-			{
-				Destroy(member.gameObject);
-			}
-			Members.Clear();
-		}
-
-		public void OnGuildCreated(string location)
-		{
-			Character character = Character.localCharacter;
-			if (character != null && GuildMemberPrefab != null && GuildMemberParent != null)
-			{
-				ClientNamingSystem.SetName(NamingSystemType.GuildName, character.GuildController.ID, (s) =>
-				{
-					if (GuildLabel != null)
-					{
-						GuildLabel.text = s;
-					}
-				});
-				
-				UIGuildMember member = Instantiate(GuildMemberPrefab, GuildMemberParent);
-				if (member != null)
-				{
-					if (member.Name != null)
-						member.Name.text = character.CharacterName;
-					if (member.Rank != null)
-						member.Rank.text = character.GuildController.Rank.ToString();
-					if (member.Location != null)
-						member.Location.text = location;
-					Members.Add(character.ID, member);
-				}
-			}
+			OnLeaveGuild();
 		}
 
 		public void OnLeaveGuild()

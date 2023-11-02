@@ -498,20 +498,9 @@ start Scene.exe SCENE";
 								break;
 						}
 					}
-					string configurationPath = "FishMMO-Setup";
 
-					// check working environment
-					WorkingEnvironmentState envState = (WorkingEnvironmentState)EditorPrefs.GetInt("FishMMOWorkingEnvironmentToggle");
-					switch (envState)
-					{
-						case WorkingEnvironmentState.Release:
-							configurationPath = Path.Combine(configurationPath, "Release");
-							break;
-						case WorkingEnvironmentState.Development:
-						default:
-							configurationPath = Path.Combine(configurationPath, "Development");
-							break;
-					}
+					string configurationPath = "FishMMO-Setup";
+					configurationPath = WorkingEnvironmentOptions.AppendEnvironmentToPath(configurationPath);
 
 					CopyConfigurationFiles(customBuildType, Path.Combine(root, configurationPath), buildPath);
 				}
@@ -628,19 +617,7 @@ start Scene.exe SCENE";
 			FileUtil.ReplaceFile(Path.Combine(Path.Combine(root, "FishMMO-Setup"), setupScriptFileName), Path.Combine(buildPath, setupScriptFileName));
 
 			string configurationPath = "FishMMO-Setup";
-
-			// check working environment
-			WorkingEnvironmentState envState = (WorkingEnvironmentState)EditorPrefs.GetInt("FishMMOWorkingEnvironmentToggle");
-			switch (envState)
-			{
-				case WorkingEnvironmentState.Release:
-					configurationPath = Path.Combine(configurationPath, "Release");
-					break;
-				case WorkingEnvironmentState.Development:
-				default:
-					configurationPath = Path.Combine(configurationPath, "Development");
-					break;
-			}
+			configurationPath = WorkingEnvironmentOptions.AppendEnvironmentToPath(configurationPath);
 
 			FileUtil.ReplaceFile(Path.Combine(Path.Combine(root, configurationPath), "Database.cfg"), Path.Combine(buildPath, "Database.cfg"));
 			FileUtil.ReplaceDirectory(Path.Combine(root, "FishMMO-Database"), Path.Combine(buildPath, "FishMMO-Database"));
