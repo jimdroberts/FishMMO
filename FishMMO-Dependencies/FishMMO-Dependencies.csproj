@@ -33,6 +33,7 @@
 		<PackageReference Include="Microsoft.Extensions.Primitives" Version="7.0.0" />
 		<PackageReference Include="Npgsql" Version="5.0.17" />
 		<PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="5.0.10" />
+		<PackageReference Include="OpenAI" Version="1.7.2" />
 		<PackageReference Include="srp" Version="1.0.7" />
 		<PackageReference Include="StackExchange.Redis" Version="2.7.4" />
 		<PackageReference Include="System.Collections.Immutable" Version="7.0.0" />
