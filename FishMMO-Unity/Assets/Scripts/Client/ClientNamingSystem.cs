@@ -1,4 +1,5 @@
-﻿using System;
+﻿using FishNet.Transporting;
+using System;
 using System.Collections.Generic;
 #if !UNITY_EDITOR
 using System.IO;
@@ -83,7 +84,7 @@ namespace FishMMO.Client
 						type = type,
 						id = id,
 						name = "",
-					});
+					}, Channel.Reliable);
 				}
 				else
 				{

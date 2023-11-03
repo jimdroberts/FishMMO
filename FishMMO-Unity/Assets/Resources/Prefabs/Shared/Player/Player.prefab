@@ -611,7 +611,6 @@ MonoBehaviour:
   _networkObjectCache: {fileID: 784751938054981284}
   Character: {fileID: 0}
   ID: 0
-  Name: 
   Rank: 0
 --- !u!114 &7975244870159263472
 MonoBehaviour:
@@ -704,25 +703,9 @@ MonoBehaviour:
   _componentIndexCache: 14
   _addedNetworkObject: {fileID: 784751938054981284}
   _networkObjectCache: {fileID: 784751938054981284}
-  CharacterController: {fileID: 0}
-  AttributeController: {fileID: 0}
-  DamageController: {fileID: 0}
-  TargetController: {fileID: 0}
-  CooldownController: {fileID: 0}
-  InventoryController: {fileID: 0}
-  EquipmentController: {fileID: 0}
-  AbilityController: {fileID: 0}
-  AchievementController: {fileID: 0}
-  BuffController: {fileID: 0}
-  QuestController: {fileID: 0}
-  GuildController: {fileID: 0}
-  PartyController: {fileID: 0}
-  FriendController: {fileID: 0}
-  Motor: {fileID: 0}
-  LocalInputController: {fileID: 0}
   CharacterNameLabel: {fileID: 2817084262407755495}
   CharacterGuildLabel: {fileID: 3362407936794280637}
-  LabelMaker: {fileID: 0}
+  LabelMaker: {fileID: 1909551449255578268}
   ID: 0
   CharacterName: 
   CharacterNameLower: 
@@ -797,6 +780,11 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 3575547950957483929}
     m_Modifications:
+    - target: {fileID: 4213452809119816544, guid: dc8cc64088072ae47872cf54e7cf6b6f,
+        type: 3}
+      propertyPath: m_Materials.Array.data[0]
+      value: 
+      objectReference: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
     - target: {fileID: 4213452809119816545, guid: dc8cc64088072ae47872cf54e7cf6b6f,
         type: 3}
       propertyPath: m_Pivot.x
@@ -914,8 +902,18 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4213452809119816547, guid: dc8cc64088072ae47872cf54e7cf6b6f,
         type: 3}
+      propertyPath: m_sharedMaterial
+      value: 
+      objectReference: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
+    - target: {fileID: 4213452809119816547, guid: dc8cc64088072ae47872cf54e7cf6b6f,
+        type: 3}
       propertyPath: m_fontColor32.rgba
       value: 4281335662
+      objectReference: {fileID: 0}
+    - target: {fileID: 4213452809119816547, guid: dc8cc64088072ae47872cf54e7cf6b6f,
+        type: 3}
+      propertyPath: m_hasFontAssetChanged
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -1057,6 +1055,11 @@ PrefabInstance:
         type: 3}
       propertyPath: m_fontSize
       value: 0.85
+      objectReference: {fileID: 0}
+    - target: {fileID: 4213452809119816547, guid: 2de080fd835ec6747b1b1ff8ed6870f6,
+        type: 3}
+      propertyPath: m_hasFontAssetChanged
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

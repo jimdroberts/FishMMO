@@ -104,7 +104,7 @@ namespace FishMMO.Client
 					salt = salt,
 					verifier = verifier,
 				};
-				base.NetworkManager.ClientManager.Broadcast(msg);
+				base.NetworkManager.ClientManager.Broadcast(msg, Channel.Reliable);
 			}
 			else
 			{
@@ -113,7 +113,7 @@ namespace FishMMO.Client
 					s = this.username,
 					publicEphemeral = SrpData.ClientEphemeral.Public,
 				};
-				base.NetworkManager.ClientManager.Broadcast(msg);
+				base.NetworkManager.ClientManager.Broadcast(msg, Channel.Reliable);
 			}
 		}
 
@@ -129,7 +129,7 @@ namespace FishMMO.Client
 				base.NetworkManager.ClientManager.Broadcast(new SRPProofBroadcast()
 				{
 					proof = proof,
-				});
+				}, Channel.Reliable);
 			}
 			else
 			{
@@ -147,7 +147,7 @@ namespace FishMMO.Client
 
 			if (SrpData.Verify(msg.proof, out string result))
 			{
-				base.NetworkManager.ClientManager.Broadcast(new SRPSuccess());
+				base.NetworkManager.ClientManager.Broadcast(new SRPSuccess(), Channel.Reliable);
 			}
 			else
 			{

@@ -1,5 +1,7 @@
 ﻿using UnityEngine;
 using FishNet.Object;
+using FishNet.Object.Synchronizing;
+using FishNet.Transporting;
 using System.Collections.Generic;
 using System.Linq;
 #if !UNITY_SERVER
@@ -16,27 +18,41 @@ namespace FishMMO.Shared
 	{
 		public Character Character;
 
+		[SyncVar(SendRate = 0.0f, Channel = Channel.Reliable, ReadPermissions = ReadPermission.Observers, WritePermissions = WritePermission.ServerOnly, OnChange = nameof(OnGuildIDChanged))]
 		public long ID;
-		public string Name;
+		private void OnGuildIDChanged(long prev, long next, bool asServer)
+		{
+#if !UNITY_SERVER
+			if (prev != next)
+			{
+				if (next == 0)
+				{
+					Character.SetGuildName("");
+				}
+				else
+				{
+					ClientNamingSystem.SetName(NamingSystemType.GuildName, next, (s) =>
+					{
+						Character.SetGuildName(s);
+					});
+				}
+			}
+#endif
+		}
 		public GuildRank Rank = GuildRank.None;
-		public readonly HashSet<long> Officers = new HashSet<long>();
-		public readonly HashSet<long> Members = new HashSet<long>();
 
 		public override void OnStartClient()
 		{
 			base.OnStartClient();
 
-			if (!base.IsOwner)
+			if (base.IsOwner)
 			{
-				enabled = false;
-				return;
+				ClientManager.RegisterBroadcast<GuildInviteBroadcast>(OnClientGuildInviteBroadcastReceived);
+				ClientManager.RegisterBroadcast<GuildAddBroadcast>(OnClientGuildAddBroadcastReceived);
+				ClientManager.RegisterBroadcast<GuildLeaveBroadcast>(OnClientGuildLeaveBroadcastReceived);
+				ClientManager.RegisterBroadcast<GuildAddMultipleBroadcast>(OnClientGuildAddMultipleBroadcastReceived);
+				ClientManager.RegisterBroadcast<GuildRemoveBroadcast>(OnClientGuildRemoveBroadcastReceived);
 			}
-
-			ClientManager.RegisterBroadcast<GuildInviteBroadcast>(OnClientGuildInviteBroadcastReceived);
-			ClientManager.RegisterBroadcast<GuildAddBroadcast>(OnClientGuildAddBroadcastReceived);
-			ClientManager.RegisterBroadcast<GuildLeaveBroadcast>(OnClientGuildLeaveBroadcastReceived);
-			ClientManager.RegisterBroadcast<GuildAddMultipleBroadcast>(OnClientGuildAddMultipleBroadcastReceived);
-			ClientManager.RegisterBroadcast<GuildRemoveBroadcast>(OnClientGuildRemoveBroadcastReceived);
 		}
 
 		public override void OnStopClient()
@@ -67,11 +83,13 @@ namespace FishMMO.Shared
 					uiTooltip.Open("You have been invited to join " + n + "'s guild. Would you like to join?",
 					() =>
 					{
-						ClientManager.Broadcast(new GuildAcceptInviteBroadcast());
+						Debug.Log("Accept");
+						ClientManager.Broadcast(new GuildAcceptInviteBroadcast(), Channel.Reliable);
 					},
 					() =>
 					{
-						ClientManager.Broadcast(new GuildDeclineInviteBroadcast());
+						Debug.Log("Decline");
+						ClientManager.Broadcast(new GuildDeclineInviteBroadcast(), Channel.Reliable);
 					});
 				}
 			});
@@ -85,40 +103,24 @@ namespace FishMMO.Shared
 		{
 			// update our Guild list with the new Guild member
 #if !UNITY_SERVER
-			if (Character == null || !base.IsOwner)
+			if (Character == null)
 			{
 				return;
 			}
 
-			if (!Members.Contains(msg.characterID))
+			if (!UIManager.TryGet("UIGuild", out UIGuild uiGuild))
 			{
-				Members.Add(msg.characterID);
+				return;
 			}
 
-			// are we updating ourself?
-			if (msg.characterID == Character.ID)
+			uiGuild.OnGuildAddMember(msg.characterID, msg.rank, msg.location);
+			ClientNamingSystem.SetName(NamingSystemType.GuildName, msg.guildID, (s) =>
 			{
-				ID = msg.guildID;
-				Rank = msg.rank;
-
-				ClientNamingSystem.SetName(NamingSystemType.GuildName, msg.guildID, (s) =>
+				if (uiGuild.GuildLabel != null)
 				{
-					Character.SetGuildName(s);
-				});
-			}
-
-			// update the UI
-			if (UIManager.TryGet("UIGuild", out UIGuild uiGuild))
-			{
-				ClientNamingSystem.SetName(NamingSystemType.GuildName, msg.guildID, (s) =>
-				{
-					if (uiGuild.GuildLabel != null)
-					{
-						uiGuild.GuildLabel.text = s;
-					}
-				});
-				uiGuild.OnGuildAddMember(msg.characterID, msg.rank, msg.location);
-			}
+					uiGuild.GuildLabel.text = s;
+				}
+			});
 #endif
 		}
 
@@ -128,17 +130,6 @@ namespace FishMMO.Shared
 		public void OnClientGuildLeaveBroadcastReceived(GuildLeaveBroadcast msg)
 		{
 #if !UNITY_SERVER
-			ID = 0;
-			Name = "";
-			Rank = GuildRank.None;
-			Officers.Clear();
-			Members.Clear();
-
-			if (Character != null)
-			{
-				Character.SetGuildName("");
-			}
-
 			if (UIManager.TryGet("UIGuild", out UIGuild uiGuild))
 			{
 				uiGuild.OnLeaveGuild();
@@ -158,43 +149,16 @@ namespace FishMMO.Shared
 			}
 
 			var newIds = msg.members.Select(x => x.characterID).ToHashSet();
-			foreach (long id in new HashSet<long>(Members))
+			foreach (long id in new HashSet<long>(uiGuild.Members.Keys))
 			{
 				if (!newIds.Contains(id))
 				{
-					Members.Remove(id);
 					uiGuild.OnGuildRemoveMember(id);
 				}
 			}
-			foreach (GuildAddBroadcast member in msg.members)
+			foreach (GuildAddBroadcast subMsg in msg.members)
 			{
-				if (!Members.Contains(member.characterID))
-				{
-					Members.Add(member.characterID);
-
-					// if this is our own id
-					if (Character != null && member.characterID == Character.ID)
-					{
-						ID = member.guildID;
-						Rank = member.rank;
-
-						ClientNamingSystem.SetName(NamingSystemType.GuildName, member.guildID, (s) =>
-						{
-							Character.SetGuildName(s);
-							if (uiGuild.GuildLabel != null)
-							{
-								uiGuild.GuildLabel.text = s;
-							}
-						});
-					}
-					// try to add the member to the list
-					uiGuild.OnGuildAddMember(member.characterID, member.rank, member.location);
-				}
-				if (member.rank == GuildRank.Officer &&
-					!Officers.Contains(member.characterID))
-				{
-					Officers.Add(member.characterID);
-				}
+				OnClientGuildAddBroadcastReceived(subMsg);
 			}
 #endif
 		}
@@ -207,16 +171,10 @@ namespace FishMMO.Shared
 #if !UNITY_SERVER
 			foreach (long characterID in msg.members)
 			{
-				if (Members.Contains(characterID))
+				if (UIManager.TryGet("UIGuild", out UIGuild uiGuild))
 				{
-					Members.Remove(characterID);
-
-					if (UIManager.TryGet("UIGuild", out UIGuild uiGuild))
-					{
-						uiGuild.OnGuildRemoveMember(characterID);
-					}
+					uiGuild.OnGuildRemoveMember(characterID);
 				}
-				Officers.Remove(characterID);
 			}
 #endif
 		}

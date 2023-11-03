@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using FishNet.Transporting;
+using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using TMPro;
 using UnityEngine;
@@ -83,7 +84,7 @@ namespace FishMMO.Client
 							Client.NetworkManager.ClientManager.Broadcast(new GuildCreateBroadcast()
 							{
 								guildName = s,
-							});
+							}, Channel.Reliable);
 						}
 					}, null);
 				}
@@ -99,7 +100,7 @@ namespace FishMMO.Client
 				{
 					tooltip.Open("Are you sure you want to leave your guild?", () =>
 					{
-						Client.NetworkManager.ClientManager.Broadcast(new GuildLeaveBroadcast());
+						Client.NetworkManager.ClientManager.Broadcast(new GuildLeaveBroadcast(), Channel.Reliable);
 					}, null);
 				}
 			}
@@ -118,7 +119,7 @@ namespace FishMMO.Client
 						Client.NetworkManager.ClientManager.Broadcast(new GuildInviteBroadcast()
 						{
 							targetCharacterID = targetCharacter.ID
-						});
+						}, Channel.Reliable);
 					}
 				}
 			}

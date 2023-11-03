@@ -64,7 +64,7 @@ namespace FishMMO.Server
 					conn.Broadcast(new CharacterCreateResultBroadcast()
 					{
 						result = CharacterCreateResult.InvalidCharacterName,
-					});
+					}, true, Channel.Reliable);
 					return;
 				}
 
@@ -82,7 +82,7 @@ namespace FishMMO.Server
 					conn.Broadcast(new CharacterCreateResultBroadcast()
 					{
 						result = CharacterCreateResult.TooMany,
-					});
+					}, true, Channel.Reliable);
 					return;
 				}
 				var character = CharacterService.GetByName(dbContext, msg.characterName);
@@ -92,7 +92,7 @@ namespace FishMMO.Server
 					conn.Broadcast(new CharacterCreateResultBroadcast()
 					{
 						result = CharacterCreateResult.CharacterNameTaken,
-					});
+					}, true, Channel.Reliable);
 					return;
 				}
 
@@ -104,7 +104,7 @@ namespace FishMMO.Server
 					conn.Broadcast(new CharacterCreateResultBroadcast()
 					{
 						result = CharacterCreateResult.InvalidSpawn,
-					});
+					}, true, Channel.Reliable);
 					return;
 				}
 				// validate spawn details
@@ -149,10 +149,10 @@ namespace FishMMO.Server
 						conn.Broadcast(new CharacterCreateResultBroadcast()
 						{
 							result = CharacterCreateResult.Success,
-						});
+						}, true, Channel.Reliable);
 
 						// send the create broadcast back to the client
-						conn.Broadcast(msg);
+						conn.Broadcast(msg, true, Channel.Reliable);
 					}
 				}
 			}

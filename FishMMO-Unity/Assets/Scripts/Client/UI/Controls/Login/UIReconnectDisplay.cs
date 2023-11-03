@@ -29,6 +29,11 @@ namespace FishMMO.Client
 		{
 			AttemptCounterText.text = $"Attempt {attempts} of {maxAttempts}";
 			Visible = true;
+
+			if (attempts >= maxAttempts)
+			{
+				Client.QuitToLogin();
+			}
 		}
 
 		public void OnCancelClicked()

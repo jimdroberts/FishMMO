@@ -92,7 +92,7 @@ namespace FishMMO.Server
 									s = a.SrpData.Salt,
 									publicEphemeral = a.SrpData.ServerEphemeral.Public,
 								};
-								conn.Broadcast(srpVerify, false);
+								conn.Broadcast(srpVerify, false, Channel.Reliable);
 								return true;
 							}))
 						{
@@ -105,7 +105,7 @@ namespace FishMMO.Server
 			{
 				result = result,
 			};
-			conn.Broadcast(authResult, false);
+			conn.Broadcast(authResult, false, Channel.Reliable);
 		}
 
 		/// <summary>
@@ -127,7 +127,7 @@ namespace FishMMO.Server
 						{
 							proof = serverProof,
 						};
-						conn.Broadcast(msg2, false);
+						conn.Broadcast(msg2, false, Channel.Reliable);
 						return true;
 					}
 					return false;
@@ -161,7 +161,7 @@ namespace FishMMO.Server
 					{
 						result = result,
 					};
-					conn.Broadcast(authResult, false);
+					conn.Broadcast(authResult, false, Channel.Reliable);
 
 					//UnityEngine.Debug.Log("Authorized: " + authResult);
 

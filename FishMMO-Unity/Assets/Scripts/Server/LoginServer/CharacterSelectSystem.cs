@@ -60,7 +60,7 @@ namespace FishMMO.Server
 					characters = characterList
 				};
 
-				conn.Broadcast(characterListMsg);
+				conn.Broadcast(characterListMsg, true, Channel.Reliable);
 			}
 		}
 
@@ -77,7 +77,7 @@ namespace FishMMO.Server
 					characterName = msg.characterName,
 				};
 
-				conn.Broadcast(charDeleteMsg);
+				conn.Broadcast(charDeleteMsg, true, Channel.Reliable);
 			}
 		}
 
@@ -102,7 +102,7 @@ namespace FishMMO.Server
 						conn.Broadcast(new ServerListBroadcast()
 						{
 							servers = worldServerList
-						});
+						}, true, Channel.Reliable);
 					}
 				}
 			}

@@ -100,7 +100,7 @@ namespace FishMMO.Client
 							characterName = characterName,
 							raceName = raceName,
 							initialSpawnPosition = spawnPosition,
-						});
+						}, Channel.Reliable);
 						SetCreateButtonLocked(true);
 						return;
 					}

@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using FishNet.Transporting;
+using System.Collections.Generic;
 using UnityEngine;
 using FishMMO.Shared;
 
@@ -73,7 +74,7 @@ namespace FishMMO.Client
 					Client.NetworkManager.ClientManager.Broadcast(new FriendRemoveBroadcast()
 					{
 						characterID = friendID,
-					});
+					}, Channel.Reliable);
 				}, null);
 			}
 		}
@@ -89,7 +90,7 @@ namespace FishMMO.Client
 						Client.NetworkManager.ClientManager.Broadcast(new FriendAddNewBroadcast()
 						{
 							characterName = s,
-						});
+						}, Channel.Reliable);
 					}, null);
 				}
 			}

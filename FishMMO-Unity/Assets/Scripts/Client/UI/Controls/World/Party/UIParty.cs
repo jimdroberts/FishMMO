@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using FishNet.Transporting;
+using System.Collections.Generic;
 using UnityEngine;
 using FishMMO.Shared;
 
@@ -88,7 +89,7 @@ namespace FishMMO.Client
 			Character character = Character.localCharacter;
 			if (character != null && character.PartyController.ID < 1)
 			{
-				Client.NetworkManager.ClientManager.Broadcast(new PartyCreateBroadcast());
+				Client.NetworkManager.ClientManager.Broadcast(new PartyCreateBroadcast(), Channel.Reliable);
 			}
 		}
 
@@ -101,7 +102,7 @@ namespace FishMMO.Client
 				{
 					tooltip.Open("Are you sure you want to leave your party?", () =>
 					{
-						Client.NetworkManager.ClientManager.Broadcast(new PartyLeaveBroadcast());
+						Client.NetworkManager.ClientManager.Broadcast(new PartyLeaveBroadcast(), Channel.Reliable);
 					}, null);
 				}
 			}
@@ -120,7 +121,7 @@ namespace FishMMO.Client
 						Client.NetworkManager.ClientManager.Broadcast(new PartyInviteBroadcast()
 						{
 							targetCharacterID = targetCharacter.ID
-						});
+						}, Channel.Reliable);
 					}
 				}
 			}

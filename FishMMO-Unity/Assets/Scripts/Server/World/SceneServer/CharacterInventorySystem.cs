@@ -91,7 +91,7 @@ namespace FishMMO.Server
 			if (inventory != null)
 			{
 				inventory.RemoveItem(msg.slot);
-				conn.Broadcast(msg);
+				conn.Broadcast(msg, true, Channel.Reliable);
 			}
 		}
 
@@ -106,7 +106,7 @@ namespace FishMMO.Server
 			if (inventory != null &&
 				inventory.SwapItemSlots(msg.from, msg.to))
 			{
-				conn.Broadcast(msg);
+				conn.Broadcast(msg, true, Channel.Reliable);
 			}
 		}
 	}

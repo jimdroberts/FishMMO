@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using FishNet.Transporting;
+using UnityEngine;
 
 namespace FishMMO.Shared
 {
@@ -111,7 +112,7 @@ namespace FishMMO.Shared
 			{
 				from = from,
 				to = to,
-			});
+			}, Channel.Reliable);
 		}
 	}
 }

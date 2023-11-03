@@ -48,7 +48,7 @@ namespace FishMMO.Server
 					result = AccountService.TryCreate(dbContext, msg.username, msg.salt, msg.verifier);
 				}
 			}
-			conn.Broadcast(new ClientAuthResultBroadcast() { result = result }, false);
+			conn.Broadcast(new ClientAuthResultBroadcast() { result = result }, false, Channel.Reliable);
 		}
 	}
 }

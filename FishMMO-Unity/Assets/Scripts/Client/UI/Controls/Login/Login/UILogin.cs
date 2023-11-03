@@ -80,7 +80,7 @@ namespace FishMMO.Client
 
 					// request the character list
 					CharacterRequestListBroadcast requestCharacterList = new CharacterRequestListBroadcast();
-					Client.NetworkManager.ClientManager.Broadcast(requestCharacterList);
+					Client.NetworkManager.ClientManager.Broadcast(requestCharacterList, Channel.Reliable);
 					break;
 				case ClientAuthenticationResult.WorldLoginSuccess:
 					break;

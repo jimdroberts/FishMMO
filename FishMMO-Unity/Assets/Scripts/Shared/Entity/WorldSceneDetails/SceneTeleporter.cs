@@ -1,4 +1,5 @@
 using FishNet.Object;
+using FishNet.Transporting;
 using UnityEngine;
 #if UNITY_SERVER
 using FishMMO.Server;
@@ -67,7 +68,7 @@ namespace FishMMO.Shared
 								port = worldServer.Port,
 								teleporterName = gameObject.name,
 								sceneName = playerScene
-							});
+							}, true, Channel.Reliable);
 						}
 						else
 						{

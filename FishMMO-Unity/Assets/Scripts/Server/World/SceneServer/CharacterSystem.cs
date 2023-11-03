@@ -263,7 +263,7 @@ namespace FishMMO.Server
 							{
 								address = worldServer.Address,
 								port = worldServer.Port
-							});
+							}, true, Channel.Reliable);
 						}
 					}
 				}
@@ -288,40 +288,16 @@ namespace FishMMO.Server
 			if (WaitingSceneLoadCharacters.TryGetValue(conn, out Character character))
 			{
 				// add a connection->character map for ease of use
-				if (ConnectionCharacters.ContainsKey(conn))
-				{
-					ConnectionCharacters[conn] = character;
-				}
-				else
-				{
-					ConnectionCharacters.Add(conn, character);
-				}
-
+				ConnectionCharacters[conn] = character;
 				// add a characterName->character map for ease of use
-				if (CharactersByID.ContainsKey(character.ID))
-				{
-					CharactersByID[character.ID] = character;
-					CharactersByLowerCaseName[character.CharacterNameLower] = character;
-				}
-				else
-				{
-					CharactersByID.Add(character.ID, character);
-					CharactersByLowerCaseName.Add(character.CharacterNameLower, character);
-				}
-
+				CharactersByID[character.ID] = character;
+				CharactersByLowerCaseName[character.CharacterNameLower] = character;
 				// add a worldID<characterID->character> map for ease of use
 				if (!CharactersByWorld.TryGetValue(character.WorldServerID, out Dictionary<long, Character> characters))
 				{
 					CharactersByWorld.Add(character.WorldServerID, characters = new Dictionary<long, Character>());
 				}
-				if (characters.ContainsKey(character.ID))
-				{
-					characters[character.ID] = character;
-				}
-				else
-				{
-					characters.Add(character.ID, character);
-				}
+				characters[character.ID] = character;
 
 				// remove the waiting scene load character
 				WaitingSceneLoadCharacters.Remove(conn);
@@ -377,6 +353,11 @@ namespace FishMMO.Server
 
 			using var dbContext = Server.DbContextFactory.CreateDbContext();
 
+			if (character == null)
+			{
+				return;
+			}
+
 			#region Attributes
 			if (character.AttributeController != null)
 			{
@@ -395,7 +376,7 @@ namespace FishMMO.Server
 				character.Owner.Broadcast(new CharacterAttributeUpdateMultipleBroadcast()
 				{
 					attributes = attributes,
-				});
+				}, true, Channel.Reliable);
 
 				List<CharacterResourceAttributeUpdateBroadcast> resourceAttributes = new List<CharacterResourceAttributeUpdateBroadcast>();
 				foreach (CharacterResourceAttribute attribute in character.AttributeController.ResourceAttributes.Values)
@@ -410,7 +391,7 @@ namespace FishMMO.Server
 				character.Owner.Broadcast(new CharacterResourceAttributeUpdateMultipleBroadcast()
 				{
 					attributes = resourceAttributes,
-				});
+				}, true, Channel.Reliable);
 			}
 			#endregion
 
@@ -429,7 +410,7 @@ namespace FishMMO.Server
 				character.Owner.Broadcast(new AchievementUpdateMultipleBroadcast()
 				{
 					achievements = achievements,
-				});
+				}, true, Channel.Reliable);
 			}
 			#endregion
 
@@ -451,7 +432,7 @@ namespace FishMMO.Server
 				{
 					members = addBroadcasts,
 				};
-				character.Owner.Broadcast(guildAddBroadcast);
+				character.Owner.Broadcast(guildAddBroadcast, true, Channel.Reliable);
 			}
 			#endregion
 
@@ -473,7 +454,7 @@ namespace FishMMO.Server
 				{
 					members = addBroadcasts,
 				};
-				character.Owner.Broadcast(partyAddBroadcast);
+				character.Owner.Broadcast(partyAddBroadcast, true, Channel.Reliable);
 			}
 			#endregion
 
@@ -493,7 +474,7 @@ namespace FishMMO.Server
 				character.Owner.Broadcast(new FriendAddMultipleBroadcast()
 				{
 					friends = friends,
-				});
+				}, true, Channel.Reliable);
 			}
 			#endregion
 		}
@@ -507,7 +488,7 @@ namespace FishMMO.Server
 		{
 			if (CharactersByLowerCaseName.TryGetValue(characterName.ToLower(), out Character character))
 			{
-				character.Owner.Broadcast(msg);
+				character.Owner.Broadcast(msg, true, Channel.Reliable);
 				return true;
 			}
 			return false;
@@ -522,7 +503,7 @@ namespace FishMMO.Server
 		{
 			if (CharactersByID.TryGetValue(characterID, out Character character))
 			{
-				character.Owner.Broadcast(msg);
+				character.Owner.Broadcast(msg, true, Channel.Reliable);
 				return true;
 			}
 			return false;

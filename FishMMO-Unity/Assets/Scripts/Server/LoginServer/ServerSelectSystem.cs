@@ -48,7 +48,7 @@ namespace FishMMO.Server
 					servers = worldServerList
 				};
 
-				conn.Broadcast(serverListMsg);
+				conn.Broadcast(serverListMsg, true, Channel.Reliable);
 			}
 		}
 	}

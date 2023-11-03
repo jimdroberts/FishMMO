@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using FishNet.Transporting;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using FishMMO.Shared;
@@ -152,7 +153,7 @@ namespace FishMMO.Client
 
 				// request an updated server list
 				RequestServerListBroadcast requestServerList = new RequestServerListBroadcast();
-				Client.NetworkManager.ClientManager.Broadcast(requestServerList);
+				Client.NetworkManager.ClientManager.Broadcast(requestServerList, Channel.Reliable);
 			}
 		}
 

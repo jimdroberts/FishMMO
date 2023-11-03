@@ -5,6 +5,7 @@ using UnityEngine;
 using System;
 #endif
 using FishNet.Object;
+using FishNet.Transporting;
 using System.Collections.Generic;
 
 namespace FishMMO.Shared
@@ -165,7 +166,7 @@ namespace FishMMO.Shared
 				}
 				if (inventorySetMultipleItemsBroadcast.items.Count > 0)
 				{
-					Character.Owner.Broadcast(inventorySetMultipleItemsBroadcast);
+					Character.Owner.Broadcast(inventorySetMultipleItemsBroadcast, true, Channel.Reliable);
 				}
 			}
 		}

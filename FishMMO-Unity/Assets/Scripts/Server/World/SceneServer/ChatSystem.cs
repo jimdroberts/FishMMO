@@ -256,7 +256,7 @@ namespace FishMMO.Server
 				// send to all world characters
 				foreach (Character character in new List<Character>(characters.Values))
 				{
-					character.Owner.Broadcast(newMsg);
+					character.Owner.Broadcast(newMsg, true, Channel.Reliable);
 				}
 			}
 			return true;
@@ -276,7 +276,7 @@ namespace FishMMO.Server
 				{
 					foreach (NetworkConnection connection in connections)
 					{
-						connection.Broadcast(msg);
+						connection.Broadcast(msg, true, Channel.Reliable);
 					}
 				}
 			}
@@ -313,7 +313,7 @@ namespace FishMMO.Server
 				if (Server.CharacterSystem.CharactersByID.TryGetValue(member.CharacterID, out Character character))
 				{
 					// broadcast to party member...
-					character.Owner.Broadcast(newMsg);
+					character.Owner.Broadcast(newMsg, true, Channel.Reliable);
 				}
 			}
 			return true;
@@ -349,7 +349,7 @@ namespace FishMMO.Server
 				if (Server.CharacterSystem.CharactersByID.TryGetValue(member.CharacterID, out Character character))
 				{
 					// broadcast to guild member...
-					character.Owner.Broadcast(newMsg);
+					character.Owner.Broadcast(newMsg, true, Channel.Reliable);
 				}
 			}
 			return true;
@@ -375,7 +375,7 @@ namespace FishMMO.Server
 					channel = msg.channel,
 					senderID = msg.senderID,
 					text = ChatHelper.ERROR_MESSAGE_SELF + " ",
-				});
+				}, true, Channel.Reliable);
 				return false;
 			}
 
@@ -392,7 +392,7 @@ namespace FishMMO.Server
 						channel = msg.channel,
 						senderID = targetID,
 						text = ChatHelper.RELAYED + " " + trimmed,
-					});
+					}, true, Channel.Reliable);
 				}
 				else
 				{
@@ -402,7 +402,7 @@ namespace FishMMO.Server
 						channel = msg.channel,
 						senderID = msg.senderID,
 						text = ChatHelper.ERROR_TARGET_OFFLINE + " " + targetName,
-					});
+					}, true, Channel.Reliable);
 					return false;
 				}
 			}
@@ -416,7 +416,7 @@ namespace FishMMO.Server
 					channel = msg.channel,
 					senderID = msg.senderID,
 					text = trimmed,
-				});
+				}, true, Channel.Reliable);
 			}
 			return true;
 		}
@@ -443,7 +443,7 @@ namespace FishMMO.Server
 				// send to all world characters
 				foreach (Character character in new List<Character>(characters.Values))
 				{
-					character.Owner.Broadcast(newMsg);
+					character.Owner.Broadcast(newMsg, true, Channel.Reliable);
 				}
 			}
 			return true;
@@ -456,7 +456,7 @@ namespace FishMMO.Server
 				// get the senders observed characters and send them the chat message
 				foreach (NetworkConnection obsConnection in sender.Observers)
 				{
-					obsConnection.Broadcast(msg);
+					obsConnection.Broadcast(msg, true, Channel.Reliable);
 				}
 			}
 			return false; // we return false here so the message is not written to the database
@@ -476,7 +476,7 @@ namespace FishMMO.Server
 				text = message,
 			};
 
-			conn.Broadcast(msg);
+			conn.Broadcast(msg, true, Channel.Reliable);
 		}
 	}
 }

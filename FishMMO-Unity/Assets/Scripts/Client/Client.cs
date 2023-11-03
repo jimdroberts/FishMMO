@@ -154,11 +154,14 @@ namespace FishMMO.Client
 #endif
 		}
 
-		public void QuitToLogin()
+		public void QuitToLogin(bool forceDisconnect = true)
 		{
 			OnQuitToLogin?.Invoke();
 
-			ForceDisconnect();
+			if (forceDisconnect)
+			{
+				ForceDisconnect();
+			}
 
 			UnloadServerLoadedScenes();
 		}
@@ -228,6 +231,10 @@ namespace FishMMO.Client
 					else if (!forceDisconnect)
 					{
 						timeTillFirstReconnectAttempt = firstReconnectAttemptWaitTime;
+					}
+					else
+					{
+						QuitToLogin();
 					}
 					forceDisconnect = false;
 					break;

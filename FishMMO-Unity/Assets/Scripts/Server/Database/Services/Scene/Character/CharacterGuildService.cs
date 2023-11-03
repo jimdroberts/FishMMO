@@ -71,7 +71,7 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// Removes a specific character from their guild.
 		/// </summary>
-		public static void Delete(ServerDbContext dbContext, long characterID, bool keepData = true)
+		public static void Delete(ServerDbContext dbContext, long characterID, bool keepData = false)
 		{
 			if (!keepData)
 			{

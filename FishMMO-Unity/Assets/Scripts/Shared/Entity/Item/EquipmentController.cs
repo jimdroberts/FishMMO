@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using FishNet.Transporting;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace FishMMO.Shared
@@ -163,7 +164,7 @@ namespace FishMMO.Shared
 			{
 				inventoryIndex = inventoryIndex,
 				slot = slot,
-			});
+			}, Channel.Reliable);
 		}
 
 		public void SendUnequipRequest(byte slot)
@@ -171,7 +172,7 @@ namespace FishMMO.Shared
 			ClientManager.Broadcast(new EquipmentUnequipItemBroadcast()
 			{
 				slot = slot,
-			});
+			}, Channel.Reliable);
 		}
 	}
 }

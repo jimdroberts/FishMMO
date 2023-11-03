@@ -43,46 +43,50 @@ namespace FishMMO.Shared
 
 		public Transform Transform { get; private set; }
 
-		public KCCController CharacterController;
-		public CharacterAttributeController AttributeController;
-		public CharacterDamageController DamageController;
-		public TargetController TargetController;
-		public CooldownController CooldownController;
-		public InventoryController InventoryController;
-		public EquipmentController EquipmentController;
-		public AbilityController AbilityController;
-		public AchievementController AchievementController;
-		public BuffController BuffController;
-		public QuestController QuestController;
-		public GuildController GuildController;
-		public PartyController PartyController;
-		public FriendController FriendController;
-		public KinematicCharacterMotor Motor;
+		public KCCController CharacterController { get; private set; }
+		public CharacterAttributeController AttributeController { get; private set; }
+		public CharacterDamageController DamageController { get; private set; }
+		public TargetController TargetController { get; private set; }
+		public CooldownController CooldownController { get; private set; }
+		public InventoryController InventoryController { get; private set; }
+		public EquipmentController EquipmentController { get; private set; }
+		public AbilityController AbilityController { get; private set; }
+		public AchievementController AchievementController { get; private set; }
+		public BuffController BuffController { get; private set; }
+		public QuestController QuestController { get; private set; }
+		public GuildController GuildController { get; private set; }
+		public PartyController PartyController { get; private set; }
+		public FriendController FriendController { get; private set; }
+		public KinematicCharacterMotor Motor { get; private set; }
 #if !UNITY_SERVER
-		public LocalInputController LocalInputController;
+		public LocalInputController LocalInputController { get; private set; }
 		public TextMeshPro CharacterNameLabel;
 		public TextMeshPro CharacterGuildLabel;
 		public LabelMaker LabelMaker;
 #endif
 		// accountID for reference
-		[SyncVar(Channel = Channel.Reliable, ReadPermissions = ReadPermission.Observers, WritePermissions = WritePermission.ServerOnly)]
+		[SyncVar(SendRate = 0.0f, Channel = Channel.Reliable, ReadPermissions = ReadPermission.Observers, WritePermissions = WritePermission.ServerOnly, OnChange = nameof(OnCharacterIDChanged))]
 		public long ID;
+		private void OnCharacterIDChanged(long prev, long next, bool asServer)
+		{
+#if !UNITY_SERVER
+			ClientNamingSystem.SetName(NamingSystemType.CharacterName, next, (n) =>
+			{
+				gameObject.name = n;
+				CharacterName = n;
+				CharacterNameLower = n.ToLower();
+
+				if (CharacterNameLabel != null)
+					CharacterNameLabel.text = n;
+			});
+#endif
+		}
+
 		/// <summary>
 		/// The characters real name. Use this if you are referencing a character by name. Avoid character.name unless you want the name of the game object.
 		/// </summary>
-		[SyncVar(Channel = Channel.Unreliable, ReadPermissions = ReadPermission.Observers, WritePermissions = WritePermission.ServerOnly, OnChange = nameof(OnCharacterNameChanged))]
 		public string CharacterName;
 		public string CharacterNameLower;
-		private void OnCharacterNameChanged(string prev, string next, bool asServer)
-		{
-			gameObject.name = next;
-			CharacterNameLower = next.ToLower();
-
-#if !UNITY_SERVER
-			if (CharacterNameLabel != null)
-				CharacterNameLabel.text = next;
-#endif
-		}
 		public string Account;
 		public long WorldServerID;
 		public AccessLevel AccessLevel = AccessLevel.Player;

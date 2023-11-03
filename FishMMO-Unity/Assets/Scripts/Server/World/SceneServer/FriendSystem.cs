@@ -74,7 +74,7 @@ namespace FishMMO.Server
 				{
 					characterID = friendEntity.ID,
 					online = friendEntity.Online,
-				});
+				}, true, Channel.Reliable);
 			}
 		}
 
@@ -110,7 +110,7 @@ namespace FishMMO.Server
 					conn.Broadcast(new FriendRemoveBroadcast()
 					{
 						characterID = msg.characterID,
-					});
+					}, true, Channel.Reliable);
 				}
 			}
 		}

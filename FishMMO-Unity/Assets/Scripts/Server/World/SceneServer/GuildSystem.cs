@@ -33,11 +33,13 @@ namespace FishMMO.Server
 		private Dictionary<string, ChatCommand> guildChatCommands;
 		public bool OnGuildInvite(Character sender, ChatBroadcast msg)
 		{
-			if (Server.CharacterSystem.CharactersByLowerCaseName.TryGetValue(msg.text.Trim().ToLower(), out Character character))
+			string characterName = msg.text.Trim().ToLower();
+			if (Server.CharacterSystem.CharactersByLowerCaseName.TryGetValue(characterName, out Character character))
 			{
 				OnServerGuildInviteBroadcastReceived(sender.Owner, new GuildInviteBroadcast()
 				{
-					targetCharacterID = character.ID
+					inviterCharacterID = sender.ID,
+					targetCharacterID = character.ID,
 				});
 				return true;
 			}
@@ -164,7 +166,13 @@ namespace FishMMO.Server
 				{
 					if (Server.CharacterSystem.CharactersByID.TryGetValue(entity.CharacterID, out Character character))
 					{
-						character.Owner.Broadcast(guildAddBroadcast);
+						if (character.GuildController.ID > 0)
+						{
+							// update server rank in the case of a membership rank change
+							character.GuildController.Rank = (GuildRank)entity.Rank;
+
+							character.Owner.Broadcast(guildAddBroadcast, true, Channel.Reliable);
+						}
 					}
 				}
 			}
@@ -218,7 +226,6 @@ namespace FishMMO.Server
 			if (GuildService.TryCreate(dbContext, msg.guildName, out GuildEntity newGuild))
 			{
 				guildController.ID = newGuild.ID;
-				guildController.Name = newGuild.Name;
 				guildController.Rank = GuildRank.Leader;
 				CharacterGuildService.Save(dbContext, guildController.Character);
 				dbContext.SaveChanges();
@@ -230,7 +237,7 @@ namespace FishMMO.Server
 					characterID = guildController.Character.ID,
 					rank = guildController.Rank,
 					location = guildController.gameObject.scene.name,
-				});
+				}, true, Channel.Reliable);
 			}
 		}
 
@@ -250,7 +257,7 @@ namespace FishMMO.Server
 			// validate guild leader or officer is inviting
 			if (inviter == null ||
 				inviter.ID < 1 ||
-				!(inviter.Rank != GuildRank.Leader || inviter.Rank != GuildRank.Officer) ||
+				!(inviter.Rank == GuildRank.Leader | inviter.Rank == GuildRank.Officer) ||
 				!CharacterGuildService.ExistsNotFull(dbContext, inviter.ID, MaxGuildSize))
 			{
 				return;
@@ -273,9 +280,9 @@ namespace FishMMO.Server
 				pendingInvitations.Add(targetCharacter.ID, inviter.ID);
 				targetCharacter.Owner.Broadcast(new GuildInviteBroadcast()
 				{
-					inviterCharacterID = inviter.ID,
+					inviterCharacterID = inviter.Character.ID,
 					targetCharacterID = targetCharacter.ID
-				});
+				}, true, Channel.Reliable);
 			}
 		}
 
@@ -322,7 +329,7 @@ namespace FishMMO.Server
 						characterID = guildController.Character.ID,
 						rank = GuildRank.Member,
 						location = guildController.gameObject.scene.name,
-					});
+					}, true, Channel.Reliable);
 				}
 			}
 		}
@@ -404,6 +411,14 @@ namespace FishMMO.Server
 					}
 				}
 
+				long guildID = guildController.ID;
+
+				guildController.ID = 0;
+				guildController.Rank = GuildRank.None;
+
+				// tell character that they left the guild immediately, other clients will catch up with the GuildUpdate pass
+				conn.Broadcast(new GuildLeaveBroadcast(), true, Channel.Reliable);
+
 				// remove the guild member
 				CharacterGuildService.Delete(dbContext, guildController.Character.ID);
 				dbContext.SaveChanges();
@@ -411,23 +426,16 @@ namespace FishMMO.Server
 				if (remainingCount < 1)
 				{
 					// delete the guild
-					GuildService.Delete(dbContext, guildController.ID);
-					GuildUpdateService.Delete(dbContext, guildController.ID);
+					GuildService.Delete(dbContext, guildID);
+					GuildUpdateService.Delete(dbContext, guildID);
 					dbContext.SaveChanges();
 				}
 				else
 				{
 					// tell the other servers to update their guild lists
-					GuildUpdateService.Save(dbContext, guildController.ID);
+					GuildUpdateService.Save(dbContext, guildID);
 					dbContext.SaveChanges();
 				}
-				
-				guildController.ID = 0;
-				guildController.Name = "";
-				guildController.Rank = GuildRank.None;
-
-				// tell character that they left the guild immediately, other clients will catch up with the GuildUpdate pass
-				conn.Broadcast(new GuildLeaveBroadcast());
 			}
 		}
 

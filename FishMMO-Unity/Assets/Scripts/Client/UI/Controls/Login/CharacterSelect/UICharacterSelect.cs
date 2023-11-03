@@ -171,7 +171,7 @@ namespace FishMMO.Client
 				Client.NetworkManager.ClientManager.Broadcast(new CharacterSelectBroadcast()
 				{
 					characterName = selectedCharacter.Details.CharacterName,
-				});
+				}, Channel.Reliable);
 				SetConnectButtonLocked(true);
 			}
 		}
@@ -192,7 +192,7 @@ namespace FishMMO.Client
 						Client.NetworkManager.ClientManager.Broadcast(new CharacterDeleteBroadcast()
 						{
 							characterName = selectedCharacter.Details.CharacterName,
-						});
+						}, Channel.Reliable);
 						SetDeleteButtonLocked(false);
 					}, () =>
 					{

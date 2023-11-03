@@ -1,5 +1,6 @@
 ﻿using UnityEngine;
 using FishNet.Object;
+using FishNet.Transporting;
 using System.Collections.Generic;
 using System.Linq;
 #if !UNITY_SERVER
@@ -82,11 +83,11 @@ namespace FishMMO.Shared
 					uiTooltip.Open("You have been invited to join " + n + "'s party. Would you like to join?",
 					() =>
 					{
-						ClientManager.Broadcast(new PartyAcceptInviteBroadcast());
+						ClientManager.Broadcast(new PartyAcceptInviteBroadcast(), Channel.Reliable);
 					},
 					() =>
 					{
-						ClientManager.Broadcast(new PartyDeclineInviteBroadcast());
+						ClientManager.Broadcast(new PartyDeclineInviteBroadcast(), Channel.Reliable);
 					});
 				}
 			});

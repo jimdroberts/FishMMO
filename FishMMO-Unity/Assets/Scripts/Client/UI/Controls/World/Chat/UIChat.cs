@@ -21,16 +21,16 @@ namespace FishMMO.Client
 			{ ChatHelper.ERROR_MESSAGE_SELF, "... Are you messaging yourself again?" },
 		};
 
-		public Dictionary<ChatChannel, Color> ChannelColors = new Dictionary<ChatChannel, Color>()
+		public UIChatChannelColorDictionary ChannelColors = new UIChatChannelColorDictionary()
 		{
-			{ ChatChannel.Say, Color.white },
-			{ ChatChannel.World, Color.red },
-			{ ChatChannel.Region, Color.yellow },
-			{ ChatChannel.Party, Color.green },
-			{ ChatChannel.Guild, Color.cyan },
-			{ ChatChannel.Tell, Color.magenta },
-			{ ChatChannel.Trade, Color.blue },
-			{ ChatChannel.System, Color.black },
+			{ ChatChannel.Say,		Color.white },
+			{ ChatChannel.World,	Color.cyan },
+			{ ChatChannel.Region,	Color.blue },
+			{ ChatChannel.Party,	Color.red },
+			{ ChatChannel.Guild,	Color.green},
+			{ ChatChannel.Tell,		Color.magenta },
+			{ ChatChannel.Trade,	Color.black },
+			{ ChatChannel.System,	Color.yellow },
 		};
 
 		public List<ChatTab> initialTabs = new List<ChatTab>();
@@ -44,6 +44,9 @@ namespace FishMMO.Client
 		public bool AllowRepeatMessages = false;
 		[Tooltip("The rate at which messages can be sent in milliseconds.")]
 		public float MessageRateLimit = 0.0f;
+
+		private ChatChannel previousChannel = ChatChannel.Command;
+		private string previousName = "";
 
 		public override void OnStarting()
 		{
@@ -61,6 +64,19 @@ namespace FishMMO.Client
 						tabs.Add(tab.name, tab);
 					}
 				}
+			}
+
+			InstantiateChatMessage(ChatChannel.System, "", "Welcome to FishMMO!\r\n" +
+														   "Chat channels are available.");
+
+			foreach (KeyValuePair<ChatChannel, List<string>> pair in ChatHelper.ChannelCommandMap)
+			{
+				string newLine = pair.Key.ToString() + ": ";
+				foreach (string command in pair.Value)
+				{
+					newLine += command + ", ";
+				}
+				InstantiateChatMessage(ChatChannel.System, "", newLine, ChannelColors[pair.Key]);
 			}
 
 			Client.NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
@@ -153,7 +169,7 @@ namespace FishMMO.Client
 				}
 				ChatBroadcast message = new ChatBroadcast() { text = input };
 				// send the message to the server
-				Client.NetworkManager.ClientManager.Broadcast(message);
+				Client.NetworkManager.ClientManager.Broadcast(message, Channel.Reliable);
 			}
 			InputField.text = "";
 		}
@@ -229,15 +245,33 @@ namespace FishMMO.Client
 			}
 		}
 
-		private void InstantiateChatMessage(ChatChannel channel, string name, string message)
+		private void InstantiateChatMessage(ChatChannel channel, string name, string message, Color? color = null)
 		{
 			UIChatMessage newMessage = Instantiate(chatMessagePrefab, chatViewParent);
 			newMessage.Channel = channel;
-			newMessage.CharacterName.color = ChannelColors[channel];
-			newMessage.CharacterName.text = "[" + channel + "] " + name;
-			newMessage.Text.color = ChannelColors[channel];
+			newMessage.CharacterName.color = color ?? ChannelColors[channel];
+			newMessage.CharacterName.text = "[" + channel.ToString() + "] ";
+			if (!string.IsNullOrWhiteSpace(name))
+			{
+				if (previousName.Equals(name) && previousChannel == channel)
+				{
+					newMessage.CharacterName.enabled = false;
+				}
+				else
+				{
+					newMessage.CharacterName.text += name;
+					previousName = name;
+				}
+			}
+			else if (previousChannel == channel && channel == ChatChannel.System)
+			{
+				newMessage.CharacterName.enabled = false;
+			}
+			newMessage.Text.color = color ?? ChannelColors[channel];
 			newMessage.Text.text = message;
 			AddMessage(newMessage);
+			
+			previousChannel = channel;
 		}
 
 		public ChatCommand GetChannelCommand(ChatChannel channel)

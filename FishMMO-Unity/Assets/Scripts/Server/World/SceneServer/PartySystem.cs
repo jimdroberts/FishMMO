@@ -37,7 +37,8 @@ namespace FishMMO.Server
 			{
 				OnServerPartyInviteBroadcastReceived(sender.Owner, new PartyInviteBroadcast()
 				{
-					targetCharacterID = character.ID
+					inviterCharacterID = sender.ID,
+					targetCharacterID = character.ID,
 				});
 				return true;
 			}
@@ -164,7 +165,7 @@ namespace FishMMO.Server
 				{
 					if (Server.CharacterSystem.CharactersByID.TryGetValue(entity.CharacterID, out Character character))
 					{
-						character.Owner.Broadcast(partyAddBroadcast);
+						character.Owner.Broadcast(partyAddBroadcast, true, Channel.Reliable);
 					}
 				}
 			}
@@ -210,7 +211,7 @@ namespace FishMMO.Server
 				{
 					partyID = newParty.ID,
 					location = partyController.gameObject.scene.name,
-				});
+				}, true, Channel.Reliable);
 			}
 		}
 
@@ -255,7 +256,7 @@ namespace FishMMO.Server
 				{
 					inviterCharacterID = inviter.ID,
 					targetCharacterID = targetCharacter.ID
-				});
+				}, true, Channel.Reliable);
 			}
 		}
 
@@ -307,7 +308,7 @@ namespace FishMMO.Server
 						characterID = partyController.Character.ID,
 						rank = PartyRank.Member,
 						healthPCT = partyController.Character.AttributeController.GetResourceAttributeCurrentPercentage(HealthTemplate),
-					});
+					}, true, Channel.Reliable);
 				}
 			}
 		}
@@ -399,7 +400,7 @@ namespace FishMMO.Server
 				partyController.Rank = PartyRank.None;
 
 				// tell character that they left the party immediately, other clients will catch up with the PartyUpdate pass
-				conn.Broadcast(new PartyLeaveBroadcast());
+				conn.Broadcast(new PartyLeaveBroadcast(), true, Channel.Reliable);
 			}
 		}
 
