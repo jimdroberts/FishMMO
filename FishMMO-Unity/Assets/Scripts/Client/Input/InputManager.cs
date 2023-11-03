@@ -70,13 +70,7 @@ namespace FishMMO.Client
 		public static void AddKey(string virtualKey, KeyCode keyCode)
 		{
 			KeyMap newMap = new KeyMap(virtualKey, keyCode);
-			if (virtualKeyMaps.ContainsKey(virtualKey))
-			{
-				virtualKeyMaps[virtualKey] = newMap;
-				return;
-			}
-			//Debug.Log("KeyMapManager: New key " + virtualKey +"->"+ keyCode);
-			virtualKeyMaps.Add(virtualKey, newMap);
+			virtualKeyMaps[virtualKey] = newMap;
 		}
 
 		public static KeyCode GetKeyCode(string virtualKey)
@@ -121,13 +115,7 @@ namespace FishMMO.Client
 
 		public static void AddAxis(string virtualAxis, string unityAxis)
 		{
-			if (axisMaps.ContainsKey(virtualAxis))
-			{
-				axisMaps[virtualAxis] = unityAxis;
-				return;
-			}
-			//Debug.Log("KeyMapManager: New axis " + virtualAxis + "->" + unityAxis);
-			axisMaps.Add(virtualAxis, unityAxis);
+			axisMaps[virtualAxis] = unityAxis;
 		}
 
 		public static float GetAxis(string virtualAxis)

@@ -82,7 +82,7 @@ namespace FishMMO.Server
 
 					// TODO: maybe this one should exist....how expensive will this be to run on update?
 					using var dbContext = Server.DbContextFactory.CreateDbContext();
-					Debug.Log("Scene Server System: Pulse");
+					//Debug.Log("Scene Server System: Pulse");
 					int characterCount = Server.CharacterSystem.ConnectionCharacters.Count;
 					SceneServerService.Pulse(dbContext, id, characterCount);
 
@@ -95,7 +95,7 @@ namespace FishMMO.Server
 							{
 								foreach (KeyValuePair<int, SceneInstanceDetails> sceneDetails in scene)
 								{
-									Debug.Log("Scene Server System: " + sceneDetails.Value.Name + ":" + sceneDetails.Value.WorldServerID + ":" + sceneDetails.Value.Handle + " Pulse");
+									//Debug.Log("Scene Server System: " + sceneDetails.Value.Name + ":" + sceneDetails.Value.WorldServerID + ":" + sceneDetails.Value.Handle + " Pulse");
 									LoadedSceneService.Pulse(dbContext, sceneDetails.Key, sceneDetails.Value.CharacterCount);
 								}
 							}

@@ -32,10 +32,7 @@ namespace FishMMO.Shared
 			{
 				foreach (KeyValuePair<string, string> pair in other.settings)
 				{
-					if (!settings.ContainsKey(pair.Key))
-					{
-						settings.Add(pair.Key, pair.Value);
-					}
+					settings[pair.Key] = pair.Value;
 				}
 			}
 		}
@@ -125,14 +122,7 @@ namespace FishMMO.Shared
 
 		public void Set(string name, string value)
 		{
-			if (settings.ContainsKey(name))
-			{
-				settings[name] = value;
-			}
-			else
-			{
-				settings.Add(name, value);
-			}
+			settings[name] = value;
 		}
 
 		public void Set<T>(string name, T value)

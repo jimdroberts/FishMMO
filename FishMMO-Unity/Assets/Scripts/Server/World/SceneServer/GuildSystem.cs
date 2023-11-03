@@ -166,13 +166,13 @@ namespace FishMMO.Server
 				{
 					if (Server.CharacterSystem.CharactersByID.TryGetValue(entity.CharacterID, out Character character))
 					{
-						if (character.GuildController.ID > 0)
+						if (character.GuildController.ID < 1)
 						{
-							// update server rank in the case of a membership rank change
-							character.GuildController.Rank = (GuildRank)entity.Rank;
-
-							character.Owner.Broadcast(guildAddBroadcast, true, Channel.Reliable);
+							continue;
 						}
+						// update server rank in the case of a membership rank change
+						character.GuildController.Rank = (GuildRank)entity.Rank;
+						character.Owner.Broadcast(guildAddBroadcast, true, Channel.Reliable);
 					}
 				}
 			}
@@ -257,6 +257,7 @@ namespace FishMMO.Server
 			// validate guild leader or officer is inviting
 			if (inviter == null ||
 				inviter.ID < 1 ||
+				inviter.Character.ID == msg.targetCharacterID || 
 				!(inviter.Rank == GuildRank.Leader | inviter.Rank == GuildRank.Officer) ||
 				!CharacterGuildService.ExistsNotFull(dbContext, inviter.ID, MaxGuildSize))
 			{

@@ -63,12 +63,8 @@ namespace FishMMO.Shared
 
 			foreach (KeyValuePair<string, ChatCommand> pair in commands)
 			{
-				if (!DirectCommands.ContainsKey(pair.Key))
-				{
-					Debug.Log("ChatSystem: Added Direct Command[" + pair.Key + "]");
-
-					DirectCommands.Add(pair.Key, pair.Value);
-				}
+				Debug.Log("ChatSystem: Added Direct Command[" + pair.Key + "]");
+				DirectCommands[pair.Key] = pair.Value;
 			}
 		}
 
@@ -76,16 +72,9 @@ namespace FishMMO.Shared
 		{
 			foreach (string command in commands)
 			{
-				if (!Commands.ContainsKey(command))
-				{
-					Debug.Log("ChatSystem: Added Command[" + command + "]");
-
-					Commands.Add(command, details);
-				}
-				if (!ChannelCommands.ContainsKey(details.Channel))
-				{
-					ChannelCommands.Add(details.Channel, details);
-				}
+				Debug.Log("ChatSystem: Added Command[" + command + "]");
+				Commands[command] = details;
+				ChannelCommands[details.Channel] = details;
 			}
 		}
 

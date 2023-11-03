@@ -165,6 +165,11 @@ namespace FishMMO.Server
 				{
 					if (Server.CharacterSystem.CharactersByID.TryGetValue(entity.CharacterID, out Character character))
 					{
+						if (character.PartyController.ID < 1)
+						{
+							continue;
+						}
+						character.PartyController.Rank = (PartyRank)entity.Rank;
 						character.Owner.Broadcast(partyAddBroadcast, true, Channel.Reliable);
 					}
 				}

@@ -398,10 +398,7 @@ namespace FishMMO.Client
 			{
 				foreach (Scene scene in args.LoadedScenes)
 				{
-					if (!serverLoadedScenes.ContainsKey(scene.name))
-					{
-						serverLoadedScenes.Add(scene.name, scene);
-					}
+					serverLoadedScenes[scene.name] = scene;
 				}
 			}
 		}

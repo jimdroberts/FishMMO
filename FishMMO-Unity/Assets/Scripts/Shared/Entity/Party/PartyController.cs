@@ -19,7 +19,6 @@ namespace FishMMO.Shared
 
 		public long ID;
 		public PartyRank Rank = PartyRank.None;
-		public readonly HashSet<long> Members = new HashSet<long>();
 
 		public override void OnStartClient()
 		{
@@ -101,21 +100,23 @@ namespace FishMMO.Shared
 		{
 			// update our Party list with the new Party member
 #if !UNITY_SERVER
+			if (Character == null)
+			{
+				return;
+			}
+
+			if (!UIManager.TryGet("UIParty", out UIParty uiParty))
+			{
+				return;
+			}
+
 			// if this is our own id
 			if (Character != null && msg.characterID == Character.ID)
 			{
 				ID = msg.partyID;
 				Rank = msg.rank;
 			}
-			if (!Members.Contains(msg.characterID))
-			{
-				Members.Add(msg.characterID);
-			}
-			// try to add the member to the list
-			if (UIManager.TryGet("UIParty", out UIParty uiParty))
-			{
-				uiParty.OnPartyAddMember(msg.characterID, msg.rank, msg.healthPCT);
-			}
+			uiParty.OnPartyAddMember(msg.characterID, msg.rank, msg.healthPCT);
 #endif
 		}
 
@@ -127,8 +128,6 @@ namespace FishMMO.Shared
 #if !UNITY_SERVER
 			ID = 0;
 			Rank = PartyRank.None;
-
-			Members.Clear();
 
 			if (UIManager.TryGet("UIParty", out UIParty uiParty))
 			{
@@ -146,29 +145,16 @@ namespace FishMMO.Shared
 			if (UIManager.TryGet("UIParty", out UIParty uiParty))
 			{
 				var newIds = msg.members.Select(x => x.characterID).ToHashSet();
-				foreach (long id in new List<long>(Members))
+				foreach (long id in new List<long>(uiParty.Members.Keys))
 				{
 					if (!newIds.Contains(id))
 					{
-						Members.Remove(id);
 						uiParty.OnPartyRemoveMember(id);
 					}
 				}
-				foreach (PartyAddBroadcast member in msg.members)
+				foreach (PartyAddBroadcast subMsg in msg.members)
 				{
-					if (!Members.Contains(member.characterID))
-					{
-						Members.Add(member.characterID);
-
-						// if this is our own id
-						if (Character != null && member.characterID == Character.ID)
-						{
-							ID = member.partyID;
-							Rank = member.rank;
-						}
-						// try to add the member to the list
-						uiParty.OnPartyAddMember(member.characterID, member.rank, member.healthPCT);
-					}
+					OnClientPartyAddBroadcastReceived(subMsg);
 				}
 			}
 #endif
@@ -180,17 +166,11 @@ namespace FishMMO.Shared
 		public void OnClientPartyRemoveBroadcastReceived(PartyRemoveBroadcast msg)
 		{
 #if !UNITY_SERVER
-			foreach (long memberID in msg.members)
+			if (UIManager.TryGet("UIParty", out UIParty uiParty))
 			{
-				if (Members.Contains(memberID))
+				foreach (long memberID in msg.members)
 				{
-					Members.Remove(memberID);
-
-					if (UIManager.TryGet("UIParty", out UIParty uiParty))
-					{
-						uiParty.OnPartyRemoveMember(memberID);
-					}
-
+					uiParty.OnPartyRemoveMember(memberID);
 				}
 			}
 #endif

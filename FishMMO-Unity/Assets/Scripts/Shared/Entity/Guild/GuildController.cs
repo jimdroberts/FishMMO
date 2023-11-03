@@ -169,9 +169,9 @@ namespace FishMMO.Shared
 		public void OnClientGuildRemoveBroadcastReceived(GuildRemoveBroadcast msg)
 		{
 #if !UNITY_SERVER
-			foreach (long characterID in msg.members)
+			if (UIManager.TryGet("UIGuild", out UIGuild uiGuild))
 			{
-				if (UIManager.TryGet("UIGuild", out UIGuild uiGuild))
+				foreach (long characterID in msg.members)
 				{
 					uiGuild.OnGuildRemoveMember(characterID);
 				}

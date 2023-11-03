@@ -72,28 +72,12 @@ namespace FishMMO.Shared
 
 			foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in template.Resources)
 			{
-				if (!Resources.ContainsKey(pair.Key))
-				{
-					Resources.Add(pair.Key, pair.Value);
-
-				}
-				else
-				{
-					Resources[pair.Key] += pair.Value;
-				}
+				Resources[pair.Key] += pair.Value;
 			}
 
 			foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in template.Requirements)
 			{
-				if (!Requirements.ContainsKey(pair.Key))
-				{
-					Requirements.Add(pair.Key, pair.Value);
-
-				}
-				else
-				{
-					Requirements[pair.Key] += pair.Value;
-				}
+				Requirements[pair.Key] += pair.Value;
 			}
 		}
 
@@ -166,26 +150,11 @@ namespace FishMMO.Shared
 				Speed += abilityEvent.Speed;
 				foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in abilityEvent.Resources)
 				{
-					if (!Resources.ContainsKey(pair.Key))
-					{
-						Resources.Add(pair.Key, pair.Value);
-
-					}
-					else
-					{
-						Resources[pair.Key] += pair.Value;
-					}
+					Resources[pair.Key] += pair.Value;
 				}
 				foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in abilityEvent.Requirements)
 				{
-					if (!Requirements.ContainsKey(pair.Key))
-					{
-						Requirements.Add(pair.Key, pair.Value);
-					}
-					else
-					{
-						Requirements[pair.Key] += pair.Value;
-					}
+					Requirements[pair.Key] += pair.Value;
 				}
 			}
 		}

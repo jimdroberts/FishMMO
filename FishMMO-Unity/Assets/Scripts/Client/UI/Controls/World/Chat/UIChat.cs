@@ -366,7 +366,7 @@ namespace FishMMO.Client
 				{
 					ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
 					{
-						InstantiateChatMessage(msg.channel, "[To: " + s + "]", msg.text);
+						InstantiateChatMessage(msg.channel, "[To: " + s + "]", trimmed);
 					});
 					return true;
 				}
@@ -396,7 +396,7 @@ namespace FishMMO.Client
 				}
 			}
 			// we received a tell from someone else
-			if (msg.senderID == Character.localCharacter.ID)
+			if (msg.senderID != Character.localCharacter.ID)
 			{
 				ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
 				{

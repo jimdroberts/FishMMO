@@ -364,37 +364,37 @@ namespace FishMMO.Server
 				// no target in the tell message
 				return false;
 			}
-			string targetLower = targetName.ToLower();
 
-			// are we messaging ourself?
-			if (sender != null &&
-				msg.senderID == sender.ID)
+			long targetID = 0;
+			bool online = false;
+			if (Server.DbContextFactory != null)
 			{
-				sender.Owner.Broadcast(new ChatBroadcast()
-				{
-					channel = msg.channel,
-					senderID = msg.senderID,
-					text = ChatHelper.ERROR_MESSAGE_SELF + " ",
-				}, true, Channel.Reliable);
+				using var dbContext = Server.DbContextFactory.CreateDbContext();
+				targetID = CharacterService.GetIdByName(dbContext, targetName);
+				online = CharacterService.ExistsAndOnline(dbContext, targetID);
+			}
+
+			// did we find the ID?
+			if (targetID < 1)
+			{
 				return false;
 			}
 
 			// if the sender exists then we can send a return message if the target character is valid
-			if (sender != null &&
-				Server.DbContextFactory != null)
+			if (sender != null)
 			{
-				using var dbContext = Server.DbContextFactory.CreateDbContext();
-				long targetID = CharacterService.GetIdByName(dbContext, targetLower);
-				if (targetID > 0)
+				// are we messaging ourself?
+				if (msg.senderID == targetID)
 				{
 					sender.Owner.Broadcast(new ChatBroadcast()
 					{
 						channel = msg.channel,
-						senderID = targetID,
-						text = ChatHelper.RELAYED + " " + trimmed,
+						senderID = msg.senderID,
+						text = ChatHelper.ERROR_MESSAGE_SELF + " ",
 					}, true, Channel.Reliable);
+					return false;
 				}
-				else
+				else if (!online)
 				{
 					// if the target character is not online
 					sender.Owner.Broadcast(new ChatBroadcast()
@@ -405,11 +405,20 @@ namespace FishMMO.Server
 					}, true, Channel.Reliable);
 					return false;
 				}
+				else if (targetID > 0)
+				{
+					sender.Owner.Broadcast(new ChatBroadcast()
+					{
+						channel = msg.channel,
+						senderID = targetID,
+						text = ChatHelper.RELAYED + " " + trimmed,
+					}, true, Channel.Reliable);
+				}
 			}
  
 			// if the target character is on this server we send them the message
 			if (Server.CharacterSystem != null &&
-				Server.CharacterSystem.CharactersByLowerCaseName.TryGetValue(targetLower, out Character targetCharacter))
+				Server.CharacterSystem.CharactersByID.TryGetValue(targetID, out Character targetCharacter))
 			{
 				targetCharacter.Owner.Broadcast(new ChatBroadcast()
 				{
