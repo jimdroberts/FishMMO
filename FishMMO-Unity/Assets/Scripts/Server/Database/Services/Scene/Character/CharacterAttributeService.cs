@@ -80,7 +80,10 @@ namespace FishMMO.Server.DatabaseServices
 			if (!keepData)
 			{
 				var attributes = dbContext.CharacterAttributes.Where(c => c.CharacterID == characterID);
-				dbContext.CharacterAttributes.RemoveRange(attributes);
+				if (attributes != null)
+				{
+					dbContext.CharacterAttributes.RemoveRange(attributes);
+				}
 			}
 		}
 

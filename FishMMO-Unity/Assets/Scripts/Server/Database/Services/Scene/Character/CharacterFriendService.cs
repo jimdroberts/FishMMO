@@ -81,15 +81,12 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// Removes all characters from a friend list.
 		/// </summary>
-		public static void Delete(ServerDbContext dbContext, long characterID, bool keepData = false)
+		public static void Delete(ServerDbContext dbContext, long characterID)
 		{
-			if (!keepData)
+			var characterFriends = dbContext.CharacterFriends.Where(a => a.CharacterID == characterID);
+			if (characterFriends != null)
 			{
-				var characterFriendEntity = dbContext.CharacterFriends.FirstOrDefault(a => a.CharacterID == characterID);
-				if (characterFriendEntity != null)
-				{
-					dbContext.CharacterFriends.Remove(characterFriendEntity);
-				}
+				dbContext.CharacterFriends.RemoveRange(characterFriends);
 			}
 		}
 

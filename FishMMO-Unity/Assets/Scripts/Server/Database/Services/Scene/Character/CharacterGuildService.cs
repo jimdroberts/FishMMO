@@ -71,15 +71,12 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// Removes a specific character from their guild.
 		/// </summary>
-		public static void Delete(ServerDbContext dbContext, long characterID, bool keepData = false)
+		public static void Delete(ServerDbContext dbContext, long characterID)
 		{
-			if (!keepData)
+			var characterGuildEntity = dbContext.CharacterGuilds.FirstOrDefault(a => a.CharacterID == characterID);
+			if (characterGuildEntity != null)
 			{
-				var characterGuildEntity = dbContext.CharacterGuilds.FirstOrDefault(a => a.CharacterID == characterID);
-				if (characterGuildEntity != null)
-				{
-					dbContext.CharacterGuilds.Remove(characterGuildEntity);
-				}
+				dbContext.CharacterGuilds.Remove(characterGuildEntity);
 			}
 		}
 
@@ -102,10 +99,10 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Load(ServerDbContext dbContext, Character character)
 		{
-			var characterGuildEntity = dbContext.CharacterGuilds.FirstOrDefault(a => a.CharacterID == character.ID);
-			if (characterGuildEntity != null)
+			if (character.GuildController != null)
 			{
-				if (character.GuildController != null)
+				var characterGuildEntity = dbContext.CharacterGuilds.FirstOrDefault(a => a.CharacterID == character.ID);
+				if (characterGuildEntity != null)
 				{
 					character.GuildController.ID = characterGuildEntity.GuildID;
 					character.GuildController.Rank = (GuildRank)characterGuildEntity.Rank;

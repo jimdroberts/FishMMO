@@ -41,7 +41,10 @@ namespace FishMMO.Server.DatabaseServices
 		public static void Delete(ServerDbContext dbContext, long sceneServerID)
 		{
 			var loadedScenes = dbContext.LoadedScenes.Where(c => c.ID == sceneServerID);
-			dbContext.LoadedScenes.RemoveRange(loadedScenes);
+			if (loadedScenes != null)
+			{
+				dbContext.LoadedScenes.RemoveRange(loadedScenes);
+			}
 		}
 
 		public static List<LoadedSceneEntity> GetServerList(ServerDbContext dbContext, long worldServerID, string sceneName, int maxClients)

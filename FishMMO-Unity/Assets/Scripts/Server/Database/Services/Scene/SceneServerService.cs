@@ -46,7 +46,10 @@ namespace FishMMO.Server.DatabaseServices
 		public static void Delete(ServerDbContext dbContext, long id)
 		{
 			var sceneServer = dbContext.SceneServers.FirstOrDefault(c => c.ID == id);
-			dbContext.SceneServers.Remove(sceneServer);
+			if (sceneServer != null)
+			{
+				dbContext.SceneServers.Remove(sceneServer);
+			}
 		}
 
 		public static SceneServerEntity GetServer(ServerDbContext dbContext, long id)

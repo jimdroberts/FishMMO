@@ -50,7 +50,10 @@ namespace FishMMO.Server.DatabaseServices
 			if (!keepData)
 			{
 				var achievements = dbContext.CharacterAchievements.Where(c => c.CharacterID == characterID);
-				dbContext.CharacterAchievements.RemoveRange(achievements);
+				if (achievements != null)
+				{
+					dbContext.CharacterAchievements.RemoveRange(achievements);
+				}
 			}
 		}
 

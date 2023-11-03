@@ -78,7 +78,10 @@ namespace FishMMO.Server.DatabaseServices
 			if (!keepData)
 			{
 				var buffs = dbContext.CharacterBuffs.Where(c => c.CharacterID == characterID);
-				dbContext.CharacterBuffs.RemoveRange(buffs);
+				if (buffs != null)
+				{
+					dbContext.CharacterBuffs.RemoveRange(buffs);
+				}
 			}
 		}
 

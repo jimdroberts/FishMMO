@@ -170,12 +170,16 @@ namespace FishMMO.Server.DatabaseServices
 			}
 			else
 			{
+				// preserved data
 				CharacterAttributeService.Delete(dbContext, character.ID, keepData);
 				CharacterAchievementService.Delete(dbContext, character.ID, keepData);
 				CharacterBuffService.Delete(dbContext, character.ID, keepData);
-				CharacterGuildService.Delete(dbContext, character.ID, keepData);
-				CharacterPartyService.Delete(dbContext, character.ID, keepData);
-				CharacterFriendService.Delete(dbContext, character.ID, keepData);
+
+				// complete deletions
+				CharacterGuildService.Delete(dbContext, character.ID);
+				CharacterPartyService.Delete(dbContext, character.ID);
+				CharacterFriendService.Delete(dbContext, character.ID);
+
 				dbContext.Characters.Remove(character);
 			}
 		}

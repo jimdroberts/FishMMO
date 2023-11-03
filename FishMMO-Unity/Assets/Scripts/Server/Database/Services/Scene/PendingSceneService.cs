@@ -28,7 +28,10 @@ namespace FishMMO.Server.DatabaseServices
 		public static void Delete(ServerDbContext dbContext, long worldServerID)
 		{
 			var pending = dbContext.PendingScenes.Where(c => c.WorldServerID == worldServerID);
-			dbContext.PendingScenes.RemoveRange(pending);
+			if (pending != null)
+			{
+				dbContext.PendingScenes.RemoveRange(pending);
+			}
 		}
 
 		public static PendingSceneEntity Dequeue(ServerDbContext dbContext)

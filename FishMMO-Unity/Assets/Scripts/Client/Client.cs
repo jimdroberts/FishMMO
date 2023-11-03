@@ -25,7 +25,7 @@ namespace FishMMO.Client
 		private Dictionary<string, Scene> serverLoadedScenes = new Dictionary<string, Scene>();
 
 		private const byte reconnectAttempts = 10;
-		private const float firstReconnectAttemptWaitTime = 10f;
+		private const float firstReconnectAttemptWaitTime = 1f;
 		private byte reconnectsAttempted = 0;
 		private bool forceDisconnect = false;
 		private string lastAddress = "";
@@ -123,7 +123,7 @@ namespace FishMMO.Client
 			{
 				timeTillFirstReconnectAttempt -= Time.deltaTime;
 
-				if (timeTillFirstReconnectAttempt < 0)
+				if (timeTillFirstReconnectAttempt <= 0)
 				{
 					reconnectActive = true;
 					OnTryReconnect();
@@ -231,10 +231,6 @@ namespace FishMMO.Client
 					else if (!forceDisconnect)
 					{
 						timeTillFirstReconnectAttempt = firstReconnectAttemptWaitTime;
-					}
-					else
-					{
-						QuitToLogin();
 					}
 					forceDisconnect = false;
 					break;

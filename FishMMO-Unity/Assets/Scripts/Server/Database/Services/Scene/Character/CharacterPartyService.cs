@@ -60,15 +60,12 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// Removes a character from their party.
 		/// </summary>
-		public static void Delete(ServerDbContext dbContext, long memberID, bool keepData = false)
+		public static void Delete(ServerDbContext dbContext, long memberID)
 		{
-			if (!keepData)
+			var characterPartyEntity = dbContext.CharacterParties.FirstOrDefault(a => a.CharacterID == memberID);
+			if (characterPartyEntity != null)
 			{
-				var characterPartyEntity = dbContext.CharacterParties.FirstOrDefault(a => a.CharacterID == memberID);
-				if (characterPartyEntity != null)
-				{
-					dbContext.CharacterParties.Remove(characterPartyEntity);
-				}
+				dbContext.CharacterParties.Remove(characterPartyEntity);
 			}
 		}
 
@@ -77,10 +74,10 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Load(ServerDbContext dbContext, Character character)
 		{
-			var characterPartyEntity = dbContext.CharacterParties.FirstOrDefault(a => a.CharacterID == character.ID);
-			if (characterPartyEntity != null)
+			if (character.PartyController != null)
 			{
-				if (character.PartyController != null)
+				var characterPartyEntity = dbContext.CharacterParties.FirstOrDefault(a => a.CharacterID == character.ID);
+				if (characterPartyEntity != null)
 				{
 					character.PartyController.ID = characterPartyEntity.PartyID;
 					character.PartyController.Rank = (PartyRank)characterPartyEntity.Rank;
