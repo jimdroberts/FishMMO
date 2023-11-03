@@ -7,7 +7,7 @@ using System.Collections.Generic;
 using System.Linq;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
-using FishMMO.Database.Entities;
+using FishMMO.Database.Npgsql.Entities;
 
 namespace FishMMO.Server
 {
@@ -78,7 +78,7 @@ namespace FishMMO.Server
 
 		private List<ChatEntity> FetchChatMessages()
 		{
-			using var dbContext = Server.DbContextFactory.CreateDbContext();
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 
 			// fetch chat messages from the database
 			List<ChatEntity> messages = ChatService.Fetch(dbContext, lastFetchTime, lastFetchPosition, MessageFetchCount, Server.SceneServerSystem.ID);
@@ -227,7 +227,7 @@ namespace FishMMO.Server
 				if (command.Invoke(sender, msg))
 				{
 					// write the parsed message to the database
-					using var dbContext = Server.DbContextFactory.CreateDbContext();
+					using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 					ChatService.Save(dbContext, sender.ID, sender.WorldServerID, Server.SceneServerSystem.ID, msg.channel, msg.text);
 					dbContext.SaveChanges();
 				}
@@ -285,7 +285,7 @@ namespace FishMMO.Server
 
 		public bool OnPartyChat(Character sender, ChatBroadcast msg)
 		{
-			if (Server.DbContextFactory == null)
+			if (Server.NpgsqlDbContextFactory == null)
 			{
 				return false;
 			}
@@ -299,7 +299,7 @@ namespace FishMMO.Server
 			}
 
 			// get all the member data so we can broadcast
-			using var dbContext = Server.DbContextFactory.CreateDbContext();
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 			List<CharacterPartyEntity> dbMembers = CharacterPartyService.Members(dbContext, partyID);
 
 			ChatBroadcast newMsg = new ChatBroadcast()
@@ -321,7 +321,7 @@ namespace FishMMO.Server
 
 		public bool OnGuildChat(Character sender, ChatBroadcast msg)
 		{
-			if (Server.DbContextFactory == null)
+			if (Server.NpgsqlDbContextFactory == null)
 			{
 				return false;
 			}
@@ -335,7 +335,7 @@ namespace FishMMO.Server
 			}
 
 			// get all the member data so we can broadcast
-			using var dbContext = Server.DbContextFactory.CreateDbContext();
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 			List<CharacterGuildEntity> dbMembers = CharacterGuildService.Members(dbContext, guildID);
 
 			ChatBroadcast newMsg = new ChatBroadcast()
@@ -367,9 +367,9 @@ namespace FishMMO.Server
 
 			long targetID = 0;
 			bool online = false;
-			if (Server.DbContextFactory != null)
+			if (Server.NpgsqlDbContextFactory != null)
 			{
-				using var dbContext = Server.DbContextFactory.CreateDbContext();
+				using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 				targetID = CharacterService.GetIdByName(dbContext, targetName);
 				online = CharacterService.ExistsAndOnline(dbContext, targetID);
 			}

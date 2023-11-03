@@ -6,7 +6,7 @@ using System.Linq;
 using UnityEngine;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
-using FishMMO.Database.Entities;
+using FishMMO.Database.Npgsql.Entities;
 
 
 namespace FishMMO.Server
@@ -106,7 +106,7 @@ namespace FishMMO.Server
 
 		private List<PartyUpdateEntity> FetchPartyUpdates()
 		{
-			using var dbContext = Server.DbContextFactory.CreateDbContext();
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 
 			// fetch party updates from the database
 			List<PartyUpdateEntity> updates = PartyUpdateService.Fetch(dbContext, lastFetchTime, lastPosition, UpdateFetchCount);
@@ -125,7 +125,7 @@ namespace FishMMO.Server
 		// process updates from the database
 		private void ProcessPartyUpdates(List<PartyUpdateEntity> updates)
 		{
-			if (Server == null || Server.DbContextFactory == null || updates == null || updates.Count < 1)
+			if (Server == null || Server.NpgsqlDbContextFactory == null || updates == null || updates.Count < 1)
 			{
 				return;
 			}
@@ -133,7 +133,7 @@ namespace FishMMO.Server
 			// parties that have previously been updated, we do this so we aren't updating partys multiple times
 			HashSet<long> updatedParties = new HashSet<long>();
 
-			using var dbContext = Server.DbContextFactory.CreateDbContext();
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 			foreach (PartyUpdateEntity update in updates)
 			{
 				// check if we have already updated this party
@@ -187,7 +187,7 @@ namespace FishMMO.Server
 			{
 				return;
 			}
-			if (Server.DbContextFactory == null)
+			if (Server.NpgsqlDbContextFactory == null)
 			{
 				return;
 			}
@@ -199,7 +199,7 @@ namespace FishMMO.Server
 				return;
 			}
 
-			using var dbContext = Server.DbContextFactory.CreateDbContext();
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 			if (PartyService.TryCreate(dbContext, out PartyEntity newParty))
 			{
 				partyController.ID = newParty.ID;
@@ -222,7 +222,7 @@ namespace FishMMO.Server
 
 		public void OnServerPartyInviteBroadcastReceived(NetworkConnection conn, PartyInviteBroadcast msg)
 		{
-			if (Server.DbContextFactory == null)
+			if (Server.NpgsqlDbContextFactory == null)
 			{
 				return;
 			}
@@ -231,7 +231,7 @@ namespace FishMMO.Server
 				return;
 			}
 			PartyController inviter = conn.FirstObject.GetComponent<PartyController>();
-			using var dbContext = Server.DbContextFactory.CreateDbContext();
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 
 			// validate party leader is inviting
 			if (inviter == null ||
@@ -284,11 +284,11 @@ namespace FishMMO.Server
 			{
 				pendingInvitations.Remove(partyController.Character.ID);
 
-				if (Server == null || Server.DbContextFactory == null)
+				if (Server == null || Server.NpgsqlDbContextFactory == null)
 				{
 					return;
 				}
-				using var dbContext = Server.DbContextFactory.CreateDbContext();
+				using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 				List<CharacterPartyEntity> members = CharacterPartyService.Members(dbContext, pendingPartyID);
 				if (members != null &&
 					members.Count < MaxPartySize)
@@ -329,7 +329,7 @@ namespace FishMMO.Server
 
 		public void OnServerPartyLeaveBroadcastReceived(NetworkConnection conn, PartyLeaveBroadcast msg)
 		{
-			if (Server.DbContextFactory == null)
+			if (Server.NpgsqlDbContextFactory == null)
 			{
 				return;
 			}
@@ -346,7 +346,7 @@ namespace FishMMO.Server
 				return;
 			}
 
-			using var dbContext = Server.DbContextFactory.CreateDbContext();
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 
 			// validate party
 			List<CharacterPartyEntity> members = CharacterPartyService.Members(dbContext, partyController.ID);
@@ -411,7 +411,7 @@ namespace FishMMO.Server
 
 		public void OnServerPartyRemoveBroadcastReceived(NetworkConnection conn, PartyRemoveBroadcast msg)
 		{
-			if (Server.DbContextFactory == null)
+			if (Server.NpgsqlDbContextFactory == null)
 			{
 				return;
 			}
@@ -444,7 +444,7 @@ namespace FishMMO.Server
 			}
 
 			// remove the character from the party in the database
-			using var dbContext = Server.DbContextFactory.CreateDbContext();
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 			bool result = CharacterPartyService.Delete(dbContext, partyController.Rank, partyController.ID, memberID);
 			if (result)
 			{

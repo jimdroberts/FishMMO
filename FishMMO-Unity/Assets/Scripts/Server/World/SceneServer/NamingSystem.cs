@@ -58,9 +58,9 @@ namespace FishMMO.Server
 						SendNamingBroadcast(conn, NamingSystemType.CharacterName, msg.id, character.CharacterName);
 					}
 					// then check the database
-					else if (Server.DbContextFactory != null)
+					else if (Server.NpgsqlDbContextFactory != null)
 					{
-						using var dbContext = Server.DbContextFactory.CreateDbContext();
+						using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 						string name = CharacterService.GetNameByID(dbContext, msg.id);
 						if (!string.IsNullOrWhiteSpace(name))
 						{
@@ -72,9 +72,9 @@ namespace FishMMO.Server
 				case NamingSystemType.GuildName:
 					//Debug.Log("NamingSystem: Searching by Guild ID: " + msg.id);
 					// get the name from the database
-					if (Server.DbContextFactory != null)
+					if (Server.NpgsqlDbContextFactory != null)
 					{
-						using var dbContext = Server.DbContextFactory.CreateDbContext();
+						using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 						string name = GuildService.GetNameByID(dbContext, msg.id);
 						if (!string.IsNullOrWhiteSpace(name))
 						{

@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using FishMMO.Database;
-using FishMMO.Database.Entities;
+using FishMMO.Database.Npgsql;
+using FishMMO.Database.Npgsql.Entities;
 using FishMMO.Shared;
 
 namespace FishMMO.Server.DatabaseServices
@@ -12,7 +12,7 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// Save a  chat message to the database.
 		/// </summary>
-		public static void Save(ServerDbContext dbContext, long characterID, long worldServerID, long sceneServerID, ChatChannel channel, string message)
+		public static void Save(NpgsqlDbContext dbContext, long characterID, long worldServerID, long sceneServerID, ChatChannel channel, string message)
 		{
 			dbContext.Chat.Add(new ChatEntity()
 			{
@@ -28,14 +28,14 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// KeepData is automatically true... This means we don't actually delete anything. Deleted is simply set to true just incase we need to reinstate a character..
 		/// </summary>
-		public static void Delete(ServerDbContext dbContext, long characterID, bool keepData = true)
+		public static void Delete(NpgsqlDbContext dbContext, long characterID, bool keepData = true)
 		{
 		}
 
 		/// <summary>
 		/// Load chat messages from the database.
 		/// </summary>
-		public static List<ChatEntity> Fetch(ServerDbContext dbContext, DateTime lastFetch, long lastPosition, int amount, long sceneServerID)
+		public static List<ChatEntity> Fetch(NpgsqlDbContext dbContext, DateTime lastFetch, long lastPosition, int amount, long sceneServerID)
 		{
 			var nextPage = dbContext.Chat
 				.OrderBy(b => b.TimeCreated)

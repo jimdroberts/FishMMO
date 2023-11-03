@@ -1,14 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using FishMMO.Database;
-using FishMMO.Database.Entities;
+using FishMMO.Database.Npgsql;
+using FishMMO.Database.Npgsql.Entities;
 
 namespace FishMMO.Server.DatabaseServices
 {
 	public class GuildUpdateService
 	{
-		public static void Save(ServerDbContext dbContext, long guildID)
+		public static void Save(NpgsqlDbContext dbContext, long guildID)
 		{
 			dbContext.GuildUpdates.Add(new GuildUpdateEntity()
 			{
@@ -17,7 +17,7 @@ namespace FishMMO.Server.DatabaseServices
 			});
 		}
 
-		public static void Delete(ServerDbContext dbContext, long guildID)
+		public static void Delete(NpgsqlDbContext dbContext, long guildID)
 		{
 			var guildEntity = dbContext.GuildUpdates.Where(a => a.GuildID == guildID);
 			if (guildEntity != null)
@@ -26,7 +26,7 @@ namespace FishMMO.Server.DatabaseServices
 			}
 		}
 
-		public static List<GuildUpdateEntity> Fetch(ServerDbContext dbContext, DateTime lastFetch, long lastPosition, int amount)
+		public static List<GuildUpdateEntity> Fetch(NpgsqlDbContext dbContext, DateTime lastFetch, long lastPosition, int amount)
 		{
 			var nextPage = dbContext.GuildUpdates
 				.OrderBy(b => b.TimeCreated)

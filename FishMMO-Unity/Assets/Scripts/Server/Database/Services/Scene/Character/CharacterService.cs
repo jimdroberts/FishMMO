@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using FishNet.Managing;
 using FishNet.Object;
-using FishMMO.Database;
-using FishMMO.Database.Entities;
+using FishMMO.Database.Npgsql;
+using FishMMO.Database.Npgsql.Entities;
 using FishMMO.Shared;
 using UnityEngine;
 
@@ -15,30 +15,30 @@ namespace FishMMO.Server.DatabaseServices
 	/// </summary>
 	public class CharacterService
 	{
-		public static int GetCount(ServerDbContext dbContext, string account)
+		public static int GetCount(NpgsqlDbContext dbContext, string account)
 		{
 			return dbContext.Characters.Where((c) => c.Account == account && !c.Deleted).Count();
 		}
 
-		public static bool ExistsAndOnline(ServerDbContext dbContext, long id)
+		public static bool ExistsAndOnline(NpgsqlDbContext dbContext, long id)
 		{
 			return dbContext.Characters.FirstOrDefault((c) => c.ID == id &&
 															  c.Online) != null;
 		}
 
-		public static bool ExistsAndOnline(ServerDbContext dbContext, string characterName)
+		public static bool ExistsAndOnline(NpgsqlDbContext dbContext, string characterName)
 		{
 			return dbContext.Characters.FirstOrDefault((c) => c.NameLowercase == characterName.ToLower() &&
 															  c.Online) != null;
 		}
 
-		public static bool Exists(ServerDbContext dbContext, string account, string characterName)
+		public static bool Exists(NpgsqlDbContext dbContext, string account, string characterName)
 		{
 			return dbContext.Characters.FirstOrDefault((c) => c.Account == account &&
 															  c.NameLowercase == characterName.ToLower()) != null;
 		}
 
-		public static CharacterEntity GetByID(ServerDbContext dbContext, long id)
+		public static CharacterEntity GetByID(NpgsqlDbContext dbContext, long id)
 		{
 			var character = dbContext.Characters.FirstOrDefault(c => c.ID == id);
 			if (character == null)
@@ -48,7 +48,7 @@ namespace FishMMO.Server.DatabaseServices
 			return character;
 		}
 
-		public static long GetIdByName(ServerDbContext dbContext, string name)
+		public static long GetIdByName(NpgsqlDbContext dbContext, string name)
 		{
 			var character = dbContext.Characters.FirstOrDefault(c => c.NameLowercase == name.ToLower());
 			if (character == null)
@@ -58,7 +58,7 @@ namespace FishMMO.Server.DatabaseServices
 			return character.ID;
 		}
 
-		public static string GetNameByID(ServerDbContext dbContext, long id)
+		public static string GetNameByID(NpgsqlDbContext dbContext, long id)
 		{
 			var character = dbContext.Characters.FirstOrDefault(c => c.ID == id);
 			if (character == null)
@@ -68,7 +68,7 @@ namespace FishMMO.Server.DatabaseServices
 			return character.Name;
 		}
 
-		public static CharacterEntity GetByName(ServerDbContext dbContext, string name)
+		public static CharacterEntity GetByName(NpgsqlDbContext dbContext, string name)
 		{
 			var character = dbContext.Characters.FirstOrDefault(c => c.NameLowercase == name.ToLower());
 			if (character == null)
@@ -78,7 +78,7 @@ namespace FishMMO.Server.DatabaseServices
 			return character;
 		}
 
-		public static List<CharacterDetails> GetDetails(ServerDbContext dbContext, string account)
+		public static List<CharacterDetails> GetDetails(NpgsqlDbContext dbContext, string account)
 		{
 			return dbContext.Characters.Where(c => c.Account == account && !c.Deleted)
 										.Select(c => new CharacterDetails()
@@ -88,7 +88,7 @@ namespace FishMMO.Server.DatabaseServices
 										.ToList();
 		}
 
-		public static void Save(ServerDbContext dbContext, List<Character> characters, bool online = true)
+		public static void Save(NpgsqlDbContext dbContext, List<Character> characters, bool online = true)
 		{
 			// get characters by their names
 			var characterNames = characters.Select((c) => c.CharacterName.ToLower()).ToList();
@@ -104,7 +104,7 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// Save a character to the database. Only Scene Servers should be saving characters. A character can only be in one scene at a time.
 		/// </summary>
-		public static void Save(ServerDbContext dbContext, Character character, bool online = true, CharacterEntity existingCharacter = null)
+		public static void Save(NpgsqlDbContext dbContext, Character character, bool online = true, CharacterEntity existingCharacter = null)
 		{
 			if (existingCharacter == null)
 			{
@@ -156,7 +156,7 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// KeepData is automatically true... This means we don't actually delete anything. Deleted is simply set to true just incase we need to reinstate a character..
 		/// </summary>
-		public static void Delete(ServerDbContext dbContext, string account, string characterName, bool keepData = true)
+		public static void Delete(NpgsqlDbContext dbContext, string account, string characterName, bool keepData = true)
 		{
 			var character = dbContext.Characters.FirstOrDefault(c => c.Account == account &&
 																	 c.NameLowercase == characterName.ToLower());
@@ -187,7 +187,7 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// Selects a character in the database. This is used for validation purposes.
 		/// </summary>
-		public static bool TrySetSelected(ServerDbContext dbContext, string account, string characterName)
+		public static bool TrySetSelected(NpgsqlDbContext dbContext, string account, string characterName)
 		{
 			// get all characters for account
 			var characters = dbContext.Characters.Where((c) => c.Account == account && !c.Deleted);
@@ -210,7 +210,7 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// Selects a character in the database. This is used for validation purposes.
 		/// </summary>
-		public static bool GetSelected(ServerDbContext dbContext, string account)
+		public static bool GetSelected(NpgsqlDbContext dbContext, string account)
 		{
 			return dbContext.Characters.Where((c) => c.Account == account && c.Selected && !c.Deleted) != null;
 		}
@@ -218,7 +218,7 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// Returns true if we successfully get our selected characters scene for the connections account, otherwise returns false.
 		/// </summary>
-		public static bool TryGetSelectedSceneName(ServerDbContext dbContext, string account, out string sceneName)
+		public static bool TryGetSelectedSceneName(NpgsqlDbContext dbContext, string account, out string sceneName)
 		{
 			var character = dbContext.Characters.FirstOrDefault((c) => c.Account == account &&
 																	   c.Selected &&
@@ -236,7 +236,7 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// Returns true if we successfully get our selected character for the connections account, otherwise returns false.
 		/// </summary>
-		public static bool TryGetSelectedDetails(ServerDbContext dbContext, string account, out long characterID)
+		public static bool TryGetSelectedDetails(NpgsqlDbContext dbContext, string account, out long characterID)
 		{
 			var character = dbContext.Characters.FirstOrDefault((c) => c.Account == account && c.Selected && !c.Deleted);
 			if (character != null)
@@ -251,7 +251,7 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// Returns true if we successfully set our selected character for the connections account, otherwise returns false.
 		/// </summary>
-		public static void SetOnline(ServerDbContext dbContext, string account, string characterName)
+		public static void SetOnline(NpgsqlDbContext dbContext, string account, string characterName)
 		{
 			var selectedCharacter = dbContext.Characters.FirstOrDefault((c) => c.Account == account &&
 																			   c.NameLowercase == characterName.ToLower());
@@ -264,7 +264,7 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// Returns true if any of the accounts characters are currently online.
 		/// </summary>
-		public static bool TryGetOnline(ServerDbContext dbContext, string account)
+		public static bool TryGetOnline(NpgsqlDbContext dbContext, string account)
 		{
 			var characters = dbContext.Characters.Where((c) => c.Account == account && c.Online == true && !c.Deleted).ToList();
 			return characters != null && characters.Count > 0;
@@ -273,7 +273,7 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// Set the selected characters world server id for the connections account.
 		/// </summary>
-		public static void SetWorld(ServerDbContext dbContext, string account, long worldServerID)
+		public static void SetWorld(NpgsqlDbContext dbContext, string account, long worldServerID)
 		{
 			// get all characters for account
 			var character = dbContext.Characters.FirstOrDefault((c) => c.Account == account && c.Selected && !c.Deleted);
@@ -286,7 +286,7 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// Set the selected characters scene handle for the connections account.
 		/// </summary>
-		public static void SetSceneHandle(ServerDbContext dbContext, string account, int sceneHandle)
+		public static void SetSceneHandle(NpgsqlDbContext dbContext, string account, int sceneHandle)
 		{
 			// get all characters for account
 			var character = dbContext.Characters.FirstOrDefault((c) => c.Account == account && c.Selected && !c.Deleted);
@@ -299,7 +299,7 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// Attempts to load a character from the database. The character is loaded to the last known position/rotation and set inactive.
 		/// </summary>
-		public static bool TryGet(ServerDbContext dbContext, long characterID, NetworkManager networkManager, out Character character)
+		public static bool TryGet(NpgsqlDbContext dbContext, long characterID, NetworkManager networkManager, out Character character)
 		{
 			var dbCharacter = dbContext.Characters.FirstOrDefault((c) => c.ID == characterID &&
 																		 !c.Deleted);

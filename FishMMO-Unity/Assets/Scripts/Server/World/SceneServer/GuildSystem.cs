@@ -7,7 +7,7 @@ using System.Text.RegularExpressions;
 using UnityEngine;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
-using FishMMO.Database.Entities;
+using FishMMO.Database.Npgsql.Entities;
 
 namespace FishMMO.Server
 {
@@ -107,7 +107,7 @@ namespace FishMMO.Server
 
 		private List<GuildUpdateEntity> FetchGuildUpdates()
 		{
-			using var dbContext = Server.DbContextFactory.CreateDbContext();
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 
 			// fetch guild updates from the database
 			List<GuildUpdateEntity> updates = GuildUpdateService.Fetch(dbContext, lastFetchTime, lastPosition, UpdateFetchCount);
@@ -126,7 +126,7 @@ namespace FishMMO.Server
 		// process updates from the database
 		private void ProcessGuildUpdates(List<GuildUpdateEntity> updates)
 		{
-			if (Server == null || Server.DbContextFactory == null || updates == null || updates.Count < 1)
+			if (Server == null || Server.NpgsqlDbContextFactory == null || updates == null || updates.Count < 1)
 			{
 				return;
 			}
@@ -134,7 +134,7 @@ namespace FishMMO.Server
 			// guilds that have previously been updated, we do this so we aren't updating guilds multiple times
 			HashSet<long> updatedGuilds = new HashSet<long>();
 
-			using var dbContext = Server.DbContextFactory.CreateDbContext();
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 			foreach (GuildUpdateEntity update in updates)
 			{
 				// check if we have already updated this guild
@@ -196,7 +196,7 @@ namespace FishMMO.Server
 			{
 				return;
 			}
-			if (Server.DbContextFactory == null)
+			if (Server.NpgsqlDbContextFactory == null)
 			{
 				return;
 			}
@@ -217,7 +217,7 @@ namespace FishMMO.Server
 				return;
 			}
 
-			using var dbContext = Server.DbContextFactory.CreateDbContext();
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 			if (GuildService.Exists(dbContext, msg.guildName))
 			{
 				// guild name is taken
@@ -243,7 +243,7 @@ namespace FishMMO.Server
 
 		public void OnServerGuildInviteBroadcastReceived(NetworkConnection conn, GuildInviteBroadcast msg)
 		{
-			if (Server.DbContextFactory == null)
+			if (Server.NpgsqlDbContextFactory == null)
 			{
 				return;
 			}
@@ -252,7 +252,7 @@ namespace FishMMO.Server
 				return;
 			}
 			GuildController inviter = conn.FirstObject.GetComponent<GuildController>();
-			using var dbContext = Server.DbContextFactory.CreateDbContext();
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 
 			// validate guild leader or officer is inviting
 			if (inviter == null ||
@@ -306,11 +306,11 @@ namespace FishMMO.Server
 			{
 				pendingInvitations.Remove(guildController.Character.ID);
 
-				if (Server == null || Server.DbContextFactory == null)
+				if (Server == null || Server.NpgsqlDbContextFactory == null)
 				{
 					return;
 				}
-				using var dbContext = Server.DbContextFactory.CreateDbContext();
+				using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 				List<CharacterGuildEntity> members = CharacterGuildService.Members(dbContext, pendingGuildID);
 				if (members != null &&
 					members.Count < MaxGuildSize)
@@ -346,7 +346,7 @@ namespace FishMMO.Server
 
 		public void OnServerGuildLeaveBroadcastReceived(NetworkConnection conn, GuildLeaveBroadcast msg)
 		{
-			if (Server.DbContextFactory == null)
+			if (Server.NpgsqlDbContextFactory == null)
 			{
 				return;
 			}
@@ -363,7 +363,7 @@ namespace FishMMO.Server
 				return;
 			}
 
-			using var dbContext = Server.DbContextFactory.CreateDbContext();
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 
 			// validate guild
 			List<CharacterGuildEntity> members = CharacterGuildService.Members(dbContext, guildController.ID);
@@ -442,7 +442,7 @@ namespace FishMMO.Server
 
 		public void OnServerGuildRemoveBroadcastReceived(NetworkConnection conn, GuildRemoveBroadcast msg)
 		{
-			if (Server.DbContextFactory == null)
+			if (Server.NpgsqlDbContextFactory == null)
 			{
 				return;
 			}
@@ -476,7 +476,7 @@ namespace FishMMO.Server
 			}
 
 			// remove the character from the guild in the database
-			using var dbContext = Server.DbContextFactory.CreateDbContext();
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 			bool result = CharacterGuildService.Delete(dbContext, guildController.Rank, guildController.ID, memberID);
 			if (result)
 			{

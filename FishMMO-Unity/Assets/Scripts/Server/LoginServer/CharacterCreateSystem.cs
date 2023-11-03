@@ -2,7 +2,7 @@
 using FishNet.Transporting;
 using System;
 using System.Text.RegularExpressions;
-using FishMMO.Database.Entities;
+using FishMMO.Database.Npgsql.Entities;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
 using FishNet.Object;
@@ -68,7 +68,7 @@ namespace FishMMO.Server
 					return;
 				}
 
-				using var dbContext = Server.DbContextFactory.CreateDbContext();
+				using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 				if (!AccountManager.GetAccountNameByConnection(conn, out string accountName))
 				{
 					// account not found??

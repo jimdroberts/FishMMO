@@ -576,7 +576,7 @@ start Scene.exe SCENE";
 				default:
 					break;
 			}
-			FileUtil.ReplaceFile(Path.Combine(configurationPath, "Database.cfg"), Path.Combine(buildPath, "Database.cfg"));
+			FileUtil.ReplaceFile(Path.Combine(configurationPath, "appsettings.json"), Path.Combine(buildPath, "appsettings.json"));
 		}
 
 		private static void CreateScript(string filePath, string scriptContent)
@@ -619,7 +619,7 @@ start Scene.exe SCENE";
 			string configurationPath = "FishMMO-Setup";
 			configurationPath = WorkingEnvironmentOptions.AppendEnvironmentToPath(configurationPath);
 
-			FileUtil.ReplaceFile(Path.Combine(Path.Combine(root, configurationPath), "Database.cfg"), Path.Combine(buildPath, "Database.cfg"));
+			FileUtil.ReplaceFile(Path.Combine(Path.Combine(root, configurationPath), "appsettings.json"), Path.Combine(buildPath, "appsettings.json"));
 			FileUtil.ReplaceDirectory(Path.Combine(root, "FishMMO-Database"), Path.Combine(buildPath, "FishMMO-Database"));
 
 			if (!openExplorer)

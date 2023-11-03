@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using FishMMO.Database;
-using FishMMO.Database.Entities;
+using FishMMO.Database.Npgsql;
+using FishMMO.Database.Npgsql.Entities;
 
 namespace FishMMO.Server.DatabaseServices
 {
@@ -12,7 +12,7 @@ namespace FishMMO.Server.DatabaseServices
 		/// Adds a new server to the server list. The Login server will fetch this list for new clients.
 		/// </summary>
 		public static LoadedSceneEntity Add(
-			ServerDbContext dbContext,
+			NpgsqlDbContext dbContext,
 			long sceneServerID,
 			long worldServerID,
 			string sceneName,
@@ -30,7 +30,7 @@ namespace FishMMO.Server.DatabaseServices
 			return server;
 		}
 
-		public static void Pulse(ServerDbContext dbContext, int handle, int characterCount)
+		public static void Pulse(NpgsqlDbContext dbContext, int handle, int characterCount)
 		{
 			var loadedScenes = dbContext.LoadedScenes.FirstOrDefault(c => c.SceneHandle == handle);
 			if (loadedScenes == null) throw new Exception($"Couldn't find Scene Server with Scene Handle: {handle}");
@@ -38,7 +38,7 @@ namespace FishMMO.Server.DatabaseServices
 			loadedScenes.CharacterCount = characterCount;
 		}
 
-		public static void Delete(ServerDbContext dbContext, long sceneServerID)
+		public static void Delete(NpgsqlDbContext dbContext, long sceneServerID)
 		{
 			var loadedScenes = dbContext.LoadedScenes.Where(c => c.ID == sceneServerID);
 			if (loadedScenes != null)
@@ -47,7 +47,7 @@ namespace FishMMO.Server.DatabaseServices
 			}
 		}
 
-		public static List<LoadedSceneEntity> GetServerList(ServerDbContext dbContext, long worldServerID, string sceneName, int maxClients)
+		public static List<LoadedSceneEntity> GetServerList(NpgsqlDbContext dbContext, long worldServerID, string sceneName, int maxClients)
 		{
 			return dbContext.LoadedScenes.Where(c => c.WorldServerID == worldServerID &&
 													 c.SceneName == sceneName &&
@@ -55,7 +55,7 @@ namespace FishMMO.Server.DatabaseServices
 										 .ToList();
 		}
 
-		public static List<LoadedSceneEntity> GetServerList(ServerDbContext dbContext, long worldServerID)
+		public static List<LoadedSceneEntity> GetServerList(NpgsqlDbContext dbContext, long worldServerID)
 		{
 			return dbContext.LoadedScenes.Where(c => c.WorldServerID == worldServerID)
 										 .ToList();

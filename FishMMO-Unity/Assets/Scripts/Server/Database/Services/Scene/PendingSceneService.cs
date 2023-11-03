@@ -1,17 +1,17 @@
 ﻿using System.Linq;
-using FishMMO.Database;
-using FishMMO.Database.Entities;
+using FishMMO.Database.Npgsql;
+using FishMMO.Database.Npgsql.Entities;
 
 namespace FishMMO.Server.DatabaseServices
 {
 	public class PendingSceneService
 	{
-		public static bool Exists(ServerDbContext dbContext, long worldServerID, string sceneName)
+		public static bool Exists(NpgsqlDbContext dbContext, long worldServerID, string sceneName)
 		{
 			return dbContext.PendingScenes.FirstOrDefault(c => c.WorldServerID == worldServerID && c.SceneName == sceneName) != null;
 		}
 
-		public static void Enqueue(ServerDbContext dbContext, long worldServerID, string sceneName)
+		public static void Enqueue(NpgsqlDbContext dbContext, long worldServerID, string sceneName)
 		{
 			var entity = dbContext.PendingScenes.FirstOrDefault(c => c.WorldServerID == worldServerID && c.SceneName == sceneName);
 			if (entity == null)
@@ -25,7 +25,7 @@ namespace FishMMO.Server.DatabaseServices
 			}
 		}
 
-		public static void Delete(ServerDbContext dbContext, long worldServerID)
+		public static void Delete(NpgsqlDbContext dbContext, long worldServerID)
 		{
 			var pending = dbContext.PendingScenes.Where(c => c.WorldServerID == worldServerID);
 			if (pending != null)
@@ -34,7 +34,7 @@ namespace FishMMO.Server.DatabaseServices
 			}
 		}
 
-		public static PendingSceneEntity Dequeue(ServerDbContext dbContext)
+		public static PendingSceneEntity Dequeue(NpgsqlDbContext dbContext)
 		{
 			PendingSceneEntity entity = dbContext.PendingScenes.FirstOrDefault();
 			if (entity != null)

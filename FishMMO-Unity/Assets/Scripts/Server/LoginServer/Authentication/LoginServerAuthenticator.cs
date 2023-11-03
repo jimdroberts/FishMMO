@@ -2,7 +2,7 @@
 using FishNet.Connection;
 using FishNet.Managing;
 using FishNet.Transporting;
-using FishMMO.Database;
+using FishMMO.Database.Npgsql;
 using System;
 using System.Text.RegularExpressions;
 using FishMMO.Server.DatabaseServices;
@@ -19,7 +19,7 @@ namespace FishMMO.Server
 		public override event Action<NetworkConnection, bool> OnAuthenticationResult;
 		public event Action<NetworkConnection, bool> OnClientAuthenticationResult;
 
-		public ServerDbContextFactory DBContextFactory;
+		public NpgsqlDbContextFactory NpgsqlDbContextFactory;
 
 		public const int AccountNameMinLength = 3;
 		public const int AccountNameMaxLength = 32;
@@ -60,13 +60,13 @@ namespace FishMMO.Server
 			ClientAuthenticationResult result;
 
 			// if the database is unavailable
-			if (DBContextFactory == null)
+			if (NpgsqlDbContextFactory == null)
 			{
 				result = ClientAuthenticationResult.ServerFull;
 			}
 			else
 			{
-				using var dbContext = DBContextFactory.CreateDbContext();
+				using var dbContext = NpgsqlDbContextFactory.CreateDbContext();
 
 				// check if any characters are online already
 				if (CharacterService.TryGetOnline(dbContext, msg.s))
@@ -149,7 +149,7 @@ namespace FishMMO.Server
 			if (conn.Authenticated ||
 				!AccountManager.TryUpdateSrpState(conn, SrpState.SRPProof, SrpState.SRPSuccess, (a) =>
 				{
-					using var dbContext = DBContextFactory.CreateDbContext();
+					using var dbContext = NpgsqlDbContextFactory.CreateDbContext();
 					// attempt to complete login authentication and return a result broadcast
 					ClientAuthenticationResult result = TryLogin(dbContext, ClientAuthenticationResult.LoginSuccess, a.SrpData.UserName);
 
@@ -186,7 +186,7 @@ namespace FishMMO.Server
 		/// <summary>
 		/// Login Server TryLogin function.
 		/// </summary>
-		internal virtual ClientAuthenticationResult TryLogin(ServerDbContext dbContext, ClientAuthenticationResult result, string username)
+		internal virtual ClientAuthenticationResult TryLogin(NpgsqlDbContext dbContext, ClientAuthenticationResult result, string username)
 		{
 			return ClientAuthenticationResult.LoginSuccess;
 		}

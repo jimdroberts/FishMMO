@@ -1,14 +1,14 @@
 ﻿using System;
 using System.Linq;
-using FishMMO.Database;
-using FishMMO.Database.Entities;
+using FishMMO.Database.Npgsql;
+using FishMMO.Database.Npgsql.Entities;
 using FishMMO.Shared;
 
 namespace FishMMO.Server.DatabaseServices
 {
     public class AccountService
     {
-        public static ClientAuthenticationResult TryCreate(ServerDbContext dbContext, string accountName, string salt, string verifier)
+        public static ClientAuthenticationResult TryCreate(NpgsqlDbContext dbContext, string accountName, string salt, string verifier)
         {
 			if (!string.IsNullOrWhiteSpace(accountName) && !string.IsNullOrWhiteSpace(salt) && !string.IsNullOrWhiteSpace(verifier))
 			{
@@ -32,7 +32,7 @@ namespace FishMMO.Server.DatabaseServices
 			return ClientAuthenticationResult.InvalidUsernameOrPassword;
 		}
 
-        public static ClientAuthenticationResult Get(ServerDbContext dbContext, string accountName, out string salt, out string verifier, out AccessLevel accessLevel)
+        public static ClientAuthenticationResult Get(NpgsqlDbContext dbContext, string accountName, out string salt, out string verifier, out AccessLevel accessLevel)
         {
 			salt = "";
 			verifier = "";

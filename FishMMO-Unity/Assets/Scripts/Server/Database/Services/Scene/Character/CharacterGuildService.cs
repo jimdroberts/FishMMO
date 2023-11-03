@@ -1,14 +1,14 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
-using FishMMO.Database;
-using FishMMO.Database.Entities;
+using FishMMO.Database.Npgsql;
+using FishMMO.Database.Npgsql.Entities;
 using FishMMO.Shared;
 
 namespace FishMMO.Server.DatabaseServices
 {
 	public class CharacterGuildService
 	{
-		public static bool ExistsNotFull(ServerDbContext dbContext, long guildID, int max)
+		public static bool ExistsNotFull(NpgsqlDbContext dbContext, long guildID, int max)
 		{
 			var guildCharacters = dbContext.CharacterGuilds.Where(a => a.GuildID == guildID);
 			if (guildCharacters != null && guildCharacters.Count() <= max)
@@ -21,7 +21,7 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// Saves a CharacterGuildEntity to the database.
 		/// </summary>
-		public static void Save(ServerDbContext dbContext, long characterID, long guildID, GuildRank rank, string location)
+		public static void Save(NpgsqlDbContext dbContext, long characterID, long guildID, GuildRank rank, string location)
 		{
 			var characterGuildEntity = dbContext.CharacterGuilds.FirstOrDefault(a => a.CharacterID == characterID);
 			if (characterGuildEntity == null)
@@ -46,7 +46,7 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// Saves a CharacterGuildEntity to the database.
 		/// </summary>
-		public static void Save(ServerDbContext dbContext, Character character)
+		public static void Save(NpgsqlDbContext dbContext, Character character)
 		{
 			var characterGuildEntity = dbContext.CharacterGuilds.FirstOrDefault(a => a.CharacterID == character.ID);
 			if (characterGuildEntity == null)
@@ -71,7 +71,7 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// Removes a specific character from their guild.
 		/// </summary>
-		public static void Delete(ServerDbContext dbContext, long characterID)
+		public static void Delete(NpgsqlDbContext dbContext, long characterID)
 		{
 			var characterGuildEntity = dbContext.CharacterGuilds.FirstOrDefault(a => a.CharacterID == characterID);
 			if (characterGuildEntity != null)
@@ -83,7 +83,7 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// Removes a character from their guild if they have a higher rank and the guild id matches the kickers guild id.
 		/// </summary>
-		public static bool Delete(ServerDbContext dbContext, GuildRank kickerRank, long guildID, long memberID)
+		public static bool Delete(NpgsqlDbContext dbContext, GuildRank kickerRank, long guildID, long memberID)
 		{
 			var characterGuildEntity = dbContext.CharacterGuilds.FirstOrDefault(a => a.GuildID == guildID && a.CharacterID == memberID && a.Rank < (byte)kickerRank);
 			if (characterGuildEntity != null)
@@ -97,7 +97,7 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// Load a CharacterGuildEntity from the database.
 		/// </summary>
-		public static void Load(ServerDbContext dbContext, Character character)
+		public static void Load(NpgsqlDbContext dbContext, Character character)
 		{
 			if (character.GuildController != null)
 			{
@@ -110,7 +110,7 @@ namespace FishMMO.Server.DatabaseServices
 			}
 		}
 
-		public static List<CharacterGuildEntity> Members(ServerDbContext dbContext, long guildID)
+		public static List<CharacterGuildEntity> Members(NpgsqlDbContext dbContext, long guildID)
 		{
 			return dbContext.CharacterGuilds.Where(a => a.GuildID == guildID).ToList();
 		}

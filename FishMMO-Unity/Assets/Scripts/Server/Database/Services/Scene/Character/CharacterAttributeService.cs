@@ -1,6 +1,6 @@
 ﻿using System.Linq;
-using FishMMO.Database;
-using FishMMO.Database.Entities;
+using FishMMO.Database.Npgsql;
+using FishMMO.Database.Npgsql.Entities;
 using FishMMO.Shared;
 
 namespace FishMMO.Server.DatabaseServices
@@ -10,7 +10,7 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// Save a character attributes to the database.
 		/// </summary>
-		public static void Save(ServerDbContext dbContext, Character character)
+		public static void Save(NpgsqlDbContext dbContext, Character character)
 		{
 			if (character == null)
 			{
@@ -75,7 +75,7 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// KeepData is automatically true... This means we don't actually delete anything. Deleted is simply set to true just incase we need to reinstate a character..
 		/// </summary>
-		public static void Delete(ServerDbContext dbContext, long characterID, bool keepData = true)
+		public static void Delete(NpgsqlDbContext dbContext, long characterID, bool keepData = true)
 		{
 			if (!keepData)
 			{
@@ -90,7 +90,7 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// Load character attributes from the database.
 		/// </summary>
-		public static void Load(ServerDbContext dbContext, Character character)
+		public static void Load(NpgsqlDbContext dbContext, Character character)
 		{
 			var attributes = dbContext.CharacterAttributes.Where(c => c.CharacterID == character.ID);
 			foreach (CharacterAttributeEntity attribute in attributes)

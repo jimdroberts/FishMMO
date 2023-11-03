@@ -33,7 +33,7 @@ namespace FishMMO.Server
 		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs args)
 		{
 			serverState = args.ConnectionState;
-			using var dbContext = Server.DbContextFactory.CreateDbContext();
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 
 			if (args.ConnectionState == LocalConnectionState.Started)
 			{
@@ -68,7 +68,7 @@ namespace FishMMO.Server
 					nextPulse = pulseRate;
 
 					// TODO: maybe this one should exist....how expensive will this be to run on update?
-					using var dbContext = Server.DbContextFactory.CreateDbContext();
+					using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 					//Debug.Log("World Server System: Pulse");
 					int characterCount = Server.WorldSceneSystem.ConnectionCount;
 					WorldServerService.Pulse(dbContext, id, characterCount);
@@ -80,11 +80,11 @@ namespace FishMMO.Server
 
 		private void OnApplicationQuit()
 		{
-			if (Server != null && Server.DbContextFactory != null &&
+			if (Server != null && Server.NpgsqlDbContextFactory != null &&
 				serverState != LocalConnectionState.Stopped &&
 				Server.Configuration.TryGetString("ServerName", out string name))
 			{
-				using var dbContext = Server.DbContextFactory.CreateDbContext();
+				using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 				Debug.Log("World Server System: Removing World Server: " + name);
 				WorldServerService.Delete(dbContext, id);
 				dbContext.SaveChanges();

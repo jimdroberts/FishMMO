@@ -7,7 +7,7 @@ using System.Collections.Generic;
 using System.Linq;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
-using FishMMO.Database.Entities;
+using FishMMO.Database.Npgsql.Entities;
 using UnityEngine;
 
 namespace FishMMO.Server
@@ -93,7 +93,7 @@ namespace FishMMO.Server
 					Debug.Log("Character System: Save" + "[" + DateTime.UtcNow + "]");
 
 					// all characters are periodically saved
-					using var dbContext = Server.DbContextFactory.CreateDbContext();
+					using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 					CharacterService.Save(dbContext, new List<Character>(CharactersByID.Values));
 					dbContext.SaveChanges();
 				}
@@ -103,10 +103,10 @@ namespace FishMMO.Server
 
 		private void OnApplicationQuit()
 		{
-			if (Server != null && Server.DbContextFactory != null)
+			if (Server != null && Server.NpgsqlDbContextFactory != null)
 			{
 				// save all the characters before we quit
-				using var dbContext = Server.DbContextFactory.CreateDbContext();
+				using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 				CharacterService.Save(dbContext, new List<Character>(CharactersByID.Values), false);
 				dbContext.SaveChanges();
 			}
@@ -204,7 +204,7 @@ namespace FishMMO.Server
 					}
 
 					// save the character and set online to false
-					using var dbContext = Server.DbContextFactory.CreateDbContext();
+					using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 					CharacterService.Save(dbContext, character, false);
 					dbContext.SaveChanges();
 
@@ -223,7 +223,7 @@ namespace FishMMO.Server
 				return;
 			}
 			// create the db context
-			using var dbContext = Server.DbContextFactory.CreateDbContext();
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 
 			if (CharacterService.TryGetSelectedDetails(dbContext, accountName, out long selectedCharacterID))
 			{
@@ -323,7 +323,7 @@ namespace FishMMO.Server
 				// set the character status to online
 				if (AccountManager.GetAccountNameByConnection(conn, out string accountName))
 				{
-					using var dbContext = Server.DbContextFactory.CreateDbContext();
+					using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 					CharacterService.SetOnline(dbContext, accountName, character.CharacterName);
 					dbContext.SaveChanges();
 				}
@@ -346,12 +346,12 @@ namespace FishMMO.Server
 		/// <param name="character"></param>
 		public void SendAllCharacterData(Character character)
 		{
-			if (Server.DbContextFactory == null)
+			if (Server.NpgsqlDbContextFactory == null)
 			{
 				return;
 			}
 
-			using var dbContext = Server.DbContextFactory.CreateDbContext();
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 
 			if (character == null)
 			{

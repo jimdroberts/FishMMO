@@ -37,7 +37,7 @@ namespace FishMMO.Server
 
 		private void OnServerRequestServerListBroadcastReceived(NetworkConnection conn, RequestServerListBroadcast msg)
 		{
-			using var dbContext = Server.DbContextFactory.CreateDbContext();
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 			
 			if (conn.IsActive)
 			{

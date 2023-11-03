@@ -40,9 +40,9 @@ namespace FishMMO.Server
 			if (!string.IsNullOrWhiteSpace(msg.username) &&
 				!string.IsNullOrWhiteSpace(msg.salt) &&
 				!string.IsNullOrWhiteSpace(msg.verifier) &&
-				Server.DbContextFactory != null)
+				Server.NpgsqlDbContextFactory != null)
 			{
-				using var dbContext = Server.DbContextFactory.CreateDbContext();
+				using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 				if (dbContext != null)
 				{
 					result = AccountService.TryCreate(dbContext, msg.username, msg.salt, msg.verifier);

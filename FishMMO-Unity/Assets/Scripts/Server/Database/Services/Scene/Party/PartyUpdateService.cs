@@ -1,14 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using FishMMO.Database;
-using FishMMO.Database.Entities;
+using FishMMO.Database.Npgsql;
+using FishMMO.Database.Npgsql.Entities;
 
 namespace FishMMO.Server.DatabaseServices
 {
 	public class PartyUpdateService
 	{
-		public static void Save(ServerDbContext dbContext, long partyID)
+		public static void Save(NpgsqlDbContext dbContext, long partyID)
 		{
 			dbContext.PartyUpdates.Add(new PartyUpdateEntity()
 			{
@@ -17,7 +17,7 @@ namespace FishMMO.Server.DatabaseServices
 			});
 		}
 
-		public static void Delete(ServerDbContext dbContext, long partyID)
+		public static void Delete(NpgsqlDbContext dbContext, long partyID)
 		{
 			var partyEntity = dbContext.PartyUpdates.Where(a => a.PartyID == partyID);
 			if (partyEntity != null)
@@ -26,7 +26,7 @@ namespace FishMMO.Server.DatabaseServices
 			}
 		}
 
-		public static List<PartyUpdateEntity> Fetch(ServerDbContext dbContext, DateTime lastFetch, long lastPosition, int amount)
+		public static List<PartyUpdateEntity> Fetch(NpgsqlDbContext dbContext, DateTime lastFetch, long lastPosition, int amount)
 		{
 			var nextPage = dbContext.PartyUpdates
 				.OrderBy(b => b.TimeCreated)

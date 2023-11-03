@@ -1,4 +1,4 @@
-using FishMMO.Database;
+using FishMMO.Database.Npgsql;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
 
@@ -11,7 +11,7 @@ namespace FishMMO.Server
 
 		public WorldSceneSystem WorldSceneSystem { get; set; }
 
-		internal override ClientAuthenticationResult TryLogin(ServerDbContext dbContext, ClientAuthenticationResult result, string username)
+		internal override ClientAuthenticationResult TryLogin(NpgsqlDbContext dbContext, ClientAuthenticationResult result, string username)
 		{
 			if (WorldSceneSystem != null && WorldSceneSystem.ConnectionCount >= MaxPlayers)
 			{

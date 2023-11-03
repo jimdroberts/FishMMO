@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using FishNet.Connection;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
-using FishMMO.Database.Entities;
+using FishMMO.Database.Npgsql.Entities;
 
 namespace FishMMO.Server
 {
@@ -45,7 +45,7 @@ namespace FishMMO.Server
 		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs args)
 		{
 			serverState = args.ConnectionState;
-			using var dbContext = Server.DbContextFactory.CreateDbContext();
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 
 			if (args.ConnectionState == LocalConnectionState.Started)
 			{
@@ -81,7 +81,7 @@ namespace FishMMO.Server
 					nextPulse = pulseRate;
 
 					// TODO: maybe this one should exist....how expensive will this be to run on update?
-					using var dbContext = Server.DbContextFactory.CreateDbContext();
+					using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 					//Debug.Log("Scene Server System: Pulse");
 					int characterCount = Server.CharacterSystem.ConnectionCharacters.Count;
 					SceneServerService.Pulse(dbContext, id, characterCount);
@@ -117,10 +117,10 @@ namespace FishMMO.Server
 
 		private void OnApplicationQuit()
 		{
-			if (Server != null && Server.DbContextFactory != null &&
+			if (Server != null && Server.NpgsqlDbContextFactory != null &&
 				serverState != LocalConnectionState.Stopped)
 			{
-				using var dbContext = Server.DbContextFactory.CreateDbContext();
+				using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 				Debug.Log("Scene Server System: Removing Scene Server: " + id);
 				SceneServerService.Delete(dbContext, id);
 				LoadedSceneService.Delete(dbContext, id);
@@ -205,7 +205,7 @@ namespace FishMMO.Server
 				});
 
 				// save the loaded scene information to the database
-				using var dbContext = Server.DbContextFactory.CreateDbContext();
+				using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 				Debug.Log("Scene Server System: Loaded Scene " + scene.name + ":" + scene.handle);
 				LoadedSceneService.Add(dbContext, id, worldServerID, scene.name, scene.handle);
 				dbContext.SaveChanges();

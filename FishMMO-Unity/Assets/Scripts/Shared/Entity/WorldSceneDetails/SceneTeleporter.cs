@@ -4,7 +4,7 @@ using UnityEngine;
 #if UNITY_SERVER
 using FishMMO.Server;
 using FishMMO.Server.DatabaseServices;
-using FishMMO.Database.Entities;
+using FishMMO.Database.Npgsql.Entities;
 #endif
 
 namespace FishMMO.Shared
@@ -52,7 +52,7 @@ namespace FishMMO.Shared
 						character.Motor.SetPositionAndRotation(teleporter.ToPosition, character.Transform.rotation);// teleporter.toRotation);
 
 						// save the character with new scene and position
-						using var dbContext = sceneServerSystem.Server.DbContextFactory.CreateDbContext();
+						using var dbContext = sceneServerSystem.Server.NpgsqlDbContextFactory.CreateDbContext();
 						CharacterService.Save(dbContext, character, false);
 						dbContext.SaveChanges();
 

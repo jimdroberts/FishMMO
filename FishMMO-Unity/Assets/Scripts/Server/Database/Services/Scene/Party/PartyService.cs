@@ -1,13 +1,13 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
-using FishMMO.Database;
-using FishMMO.Database.Entities;
+using FishMMO.Database.Npgsql;
+using FishMMO.Database.Npgsql.Entities;
 
 namespace FishMMO.Server.DatabaseServices
 {
 	public class PartyService
 	{
-		public static bool Exists(ServerDbContext dbContext, long partyID)
+		public static bool Exists(NpgsqlDbContext dbContext, long partyID)
 		{
 			return dbContext.Parties.FirstOrDefault(a => a.ID == partyID) != null;
 		}
@@ -15,7 +15,7 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// Saves a new Party to the database.
 		/// </summary>
-		public static bool TryCreate(ServerDbContext dbContext, out PartyEntity party)
+		public static bool TryCreate(NpgsqlDbContext dbContext, out PartyEntity party)
 		{
 			party = new PartyEntity()
 			{
@@ -26,7 +26,7 @@ namespace FishMMO.Server.DatabaseServices
 			return true;
 		}
 
-		public static void Delete(ServerDbContext dbContext, long partyID)
+		public static void Delete(NpgsqlDbContext dbContext, long partyID)
 		{
 			var partyEntity = dbContext.Parties.FirstOrDefault(a => a.ID == partyID);
 			if (partyEntity != null)
@@ -38,7 +38,7 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// Load a Party from the database.
 		/// </summary>
-		public static PartyEntity Load(ServerDbContext dbContext, long partyID)
+		public static PartyEntity Load(NpgsqlDbContext dbContext, long partyID)
 		{
 			return dbContext.Parties.FirstOrDefault(a => a.ID == partyID);
 		}

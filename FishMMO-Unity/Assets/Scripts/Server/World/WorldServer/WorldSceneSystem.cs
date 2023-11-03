@@ -4,8 +4,8 @@ using FishNet.Transporting;
 using System.Collections.Generic;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
-using FishMMO.Database;
-using FishMMO.Database.Entities;
+using FishMMO.Database.Npgsql;
+using FishMMO.Database.Npgsql.Entities;
 using UnityEngine;
 
 namespace FishMMO.Server
@@ -80,9 +80,9 @@ namespace FishMMO.Server
 
 		private void OnApplicationQuit()
 		{
-			if (Server != null && Server.DbContextFactory != null)
+			if (Server != null && Server.NpgsqlDbContextFactory != null)
 			{
-				using var dbContext = Server.DbContextFactory.CreateDbContext();
+				using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 				PendingSceneService.Delete(dbContext, Server.WorldServerSystem.ID);
 				dbContext.SaveChanges();
 			}
@@ -94,9 +94,9 @@ namespace FishMMO.Server
 			{
 				nextWaitQueueUpdate = waitQueueRate;
 
-				if (Server != null && Server.DbContextFactory != null)
+				if (Server != null && Server.NpgsqlDbContextFactory != null)
 				{
-					using var dbContext = Server.DbContextFactory.CreateDbContext();
+					using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 					foreach (string sceneName in new List<string>(WaitingConnections.Keys))
 					{
 						TryClearWaitQueues(dbContext, sceneName);
@@ -108,7 +108,7 @@ namespace FishMMO.Server
 			nextWaitQueueUpdate -= Time.deltaTime;
 		}
 
-		private void TryClearWaitQueues(ServerDbContext dbContext, string sceneName)
+		private void TryClearWaitQueues(NpgsqlDbContext dbContext, string sceneName)
 		{
 			if (WaitingConnections.TryGetValue(sceneName, out HashSet<NetworkConnection> connections))
 			{
@@ -183,7 +183,7 @@ namespace FishMMO.Server
 			}
 		}
 
-		private void UpdateConnectionCount(ServerDbContext dbContext)
+		private void UpdateConnectionCount(NpgsqlDbContext dbContext)
 		{
 			if (dbContext == null ||
 				Server.WorldServerSystem == null)
@@ -216,7 +216,7 @@ namespace FishMMO.Server
 		/// </summary>
 		private void TryConnectToSceneServer(NetworkConnection conn)
 		{
-			using var dbContext = Server.DbContextFactory.CreateDbContext();
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 			// get the scene for the selected character
 			if (!AccountManager.GetAccountNameByConnection(conn, out string accountName) ||
 				!CharacterService.TryGetSelectedSceneName(dbContext, accountName, out string sceneName))

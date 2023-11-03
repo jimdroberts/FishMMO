@@ -52,9 +52,11 @@ namespace FishMMO.Server
 
 		void LateUpdate()
 		{
-			if (!ServerManager.Started)
+			if (ServerManager == null ||
+				!ServerManager.Started)
+			{
 				return;
-			
+			}
 			if (NextUpdate < 0)
 			{
 				NextUpdate = UpdateRate;

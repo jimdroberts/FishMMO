@@ -2,8 +2,8 @@
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.EntityFrameworkCore;
-using FishMMO.Database;
-using FishMMO.Database.Entities;
+using FishMMO.Database.Npgsql;
+using FishMMO.Database.Npgsql.Entities;
 using FishMMO.Shared;
 
 namespace FishMMO.Server.DatabaseServices
@@ -14,7 +14,7 @@ namespace FishMMO.Server.DatabaseServices
         /// Adds a new server to the server list. The Login server will fetch this list for new clients.
         /// </summary>
         public static WorldServerEntity Add(
-            ServerDbContext dbContext,
+            NpgsqlDbContext dbContext,
             string name,
             string address,
             ushort port,
@@ -46,7 +46,7 @@ namespace FishMMO.Server.DatabaseServices
 			return server;
         }
 
-        public static void Pulse(ServerDbContext dbContext, long id, int characterCount)
+        public static void Pulse(NpgsqlDbContext dbContext, long id, int characterCount)
         {
             var worldServer = dbContext.WorldServers.FirstOrDefault(c => c.ID == id);
 			if (worldServer == null) throw new Exception($"Couldn't find World Server with ID: {id}");
@@ -55,7 +55,7 @@ namespace FishMMO.Server.DatabaseServices
             worldServer.CharacterCount = characterCount;
         }
         
-        public static void Delete(ServerDbContext dbContext, long id) 
+        public static void Delete(NpgsqlDbContext dbContext, long id) 
         {
             var worldServer = dbContext.WorldServers.FirstOrDefault(c => c.ID == id);
 			if (worldServer == null) throw new Exception($"Couldn't find World Server with ID: {id}");
@@ -63,7 +63,7 @@ namespace FishMMO.Server.DatabaseServices
             dbContext.WorldServers.Remove(worldServer);
         }
 
-		public static WorldServerEntity GetServer(ServerDbContext dbContext, long worldServerID)
+		public static WorldServerEntity GetServer(NpgsqlDbContext dbContext, long worldServerID)
 		{
 			var worldServer = dbContext.WorldServers.FirstOrDefault(c => c.ID == worldServerID);
 			if (worldServer == null) throw new Exception($"Couldn't find World Server with ID: {worldServerID}");
@@ -71,7 +71,7 @@ namespace FishMMO.Server.DatabaseServices
             return worldServer;
 		}
 
-		public static List<WorldServerDetails> GetServerList(ServerDbContext dbContext)
+		public static List<WorldServerDetails> GetServerList(NpgsqlDbContext dbContext)
         {
             return dbContext.WorldServers
                 .ToList()

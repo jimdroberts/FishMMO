@@ -2,7 +2,7 @@
 using FishNet.Transporting;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
-using FishMMO.Database.Entities;
+using FishMMO.Database.Npgsql.Entities;
 
 
 namespace FishMMO.Server
@@ -57,11 +57,11 @@ namespace FishMMO.Server
 			}
 
 			// validate friend invite
-			if (Server == null || Server.DbContextFactory == null)
+			if (Server == null || Server.NpgsqlDbContextFactory == null)
 			{
 				return;
 			}
-			using var dbContext = Server.DbContextFactory.CreateDbContext();
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 			CharacterEntity friendEntity = CharacterService.GetByName(dbContext, msg.characterName);
 			if (friendEntity != null)
 			{
@@ -80,7 +80,7 @@ namespace FishMMO.Server
 
 		public void OnServerFriendRemoveBroadcastReceived(NetworkConnection conn, FriendRemoveBroadcast msg)
 		{
-			if (Server.DbContextFactory == null)
+			if (Server.NpgsqlDbContextFactory == null)
 			{
 				return;
 			}
@@ -100,7 +100,7 @@ namespace FishMMO.Server
 			if (friendController.Friends.Contains(msg.characterID))
 			{
 				// remove the character from the friend in the database
-				using var dbContext = Server.DbContextFactory.CreateDbContext();
+				using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 				if (CharacterFriendService.Delete(dbContext, friendController.Character.ID, msg.characterID))
 				{
 					// save the deletion

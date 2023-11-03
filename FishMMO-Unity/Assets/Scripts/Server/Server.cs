@@ -5,7 +5,8 @@ using UnityEngine.SceneManagement;
 using System;
 using System.Collections;
 using System.IO;
-using FishMMO.Database;
+using FishMMO.Database.Npgsql;
+using FishMMO.Database.Redis;
 using FishMMO.Shared;
 #if UNITY_EDITOR
 using UnityEditor;
@@ -17,7 +18,8 @@ namespace FishMMO.Server
 	public class Server : MonoBehaviour
 	{
 		public FishMMO.Shared.Configuration Configuration { get; private set; }
-		public ServerDbContextFactory DbContextFactory { get; private set; }
+		public NpgsqlDbContextFactory NpgsqlDbContextFactory { get; private set; }
+		public RedisDbContextFactory RedisDbContextFactory { get; private set; }
 		public NetworkManager NetworkManager { get; private set; }
 		public string RemoteAddress { get; private set; }
 		public string Address { get; private set; }
@@ -78,8 +80,9 @@ namespace FishMMO.Server
 #endif
 			}
 
-			// setup the DB context and ensure that it's been created
-			DbContextFactory = new ServerDbContextFactory(path, false);
+			// initialize the DB contexts
+			NpgsqlDbContextFactory = new NpgsqlDbContextFactory(path, false);
+			//RedisDbContextFactory = new RedisDbContextFactory(path);
 
 			// ensure our NetworkManager exists in the scene
 			if (NetworkManager == null)
@@ -181,7 +184,7 @@ namespace FishMMO.Server
 			LoginServerAuthenticator authenticator = NetworkManager.ServerManager.GetAuthenticator() as LoginServerAuthenticator;
 			if (authenticator != null)
 			{
-				authenticator.DBContextFactory = DbContextFactory;
+				authenticator.NpgsqlDbContextFactory = NpgsqlDbContextFactory;
 			}
 
 			switch (serverType)

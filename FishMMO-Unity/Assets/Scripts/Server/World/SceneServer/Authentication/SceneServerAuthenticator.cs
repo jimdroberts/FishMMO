@@ -1,4 +1,4 @@
-﻿using FishMMO.Database;
+﻿using FishMMO.Database.Npgsql;
 using FishMMO.Shared;
 
 namespace FishMMO.Server
@@ -9,7 +9,7 @@ namespace FishMMO.Server
 		/// <summary>
 		/// Executed when a player tries to login to the Scene Server.
 		/// </summary>
-		internal override ClientAuthenticationResult TryLogin(ServerDbContext dbContext, ClientAuthenticationResult result, string username)
+		internal override ClientAuthenticationResult TryLogin(NpgsqlDbContext dbContext, ClientAuthenticationResult result, string username)
 		{
 			return ClientAuthenticationResult.SceneLoginSuccess;
 		}
