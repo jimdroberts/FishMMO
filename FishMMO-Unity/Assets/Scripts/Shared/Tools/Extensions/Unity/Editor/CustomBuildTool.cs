@@ -614,11 +614,12 @@ start Scene.exe SCENE";
 			Directory.CreateDirectory(buildPath);
 
 			string root = Directory.GetParent(Directory.GetCurrentDirectory()).FullName;
-			FileUtil.ReplaceFile(Path.Combine(Path.Combine(root, "FishMMO-Setup"), setupScriptFileName), Path.Combine(buildPath, setupScriptFileName));
+			string setup = Path.Combine(root, "FishMMO-Setup");
+			FileUtil.ReplaceFile(Path.Combine(setup, setupScriptFileName), Path.Combine(buildPath, setupScriptFileName));
+			FileUtil.ReplaceFile(Path.Combine(setup, "docker-compose.yml"), Path.Combine(buildPath, "docker-compose.yml"));
 
 			string configurationPath = "FishMMO-Setup";
 			configurationPath = WorkingEnvironmentOptions.AppendEnvironmentToPath(configurationPath);
-
 			FileUtil.ReplaceFile(Path.Combine(Path.Combine(root, configurationPath), "appsettings.json"), Path.Combine(buildPath, "appsettings.json"));
 			FileUtil.ReplaceDirectory(Path.Combine(root, "FishMMO-Database"), Path.Combine(buildPath, "FishMMO-Database"));
 

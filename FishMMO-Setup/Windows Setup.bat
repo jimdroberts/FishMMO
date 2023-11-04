@@ -125,12 +125,45 @@ if %ERRORLEVEL% NEQ 0 (
 :createDockerContainer
 where /q docker
 if %ERRORLEVEL% EQU 0 (
-    echo Attempting to create a new docker container with postgresql v14...
-    setlocal enabledelayedexpansion
-    for /f "tokens=1,* delims==" %%a in (./Database.cfg) do (
-        set "%%a=%%b"
-    )
-    docker run --name !DbName! -e POSTGRES_USER=!DbUsername! -e POSTGRES_PASSWORD=!DbPassword! -p !DbAddress!:!DbPort!:!DbPort! -d postgres:14
+    echo Attempting to create a new docker container with postgresql...
+	
+	setlocal enabledelayedexpansion
+	
+	for /f "tokens=2 delims=:" %%a in ('findstr /C:"Npgsql" appsettings.json') do (
+	  set connection_string=%%a
+	)
+
+	set "connection_string=!connection_string:~2,-2!"
+
+	set "prevKey="
+	for %%A in (!connection_string!) do (
+		set "line=%%A"
+		for %%B in (!line!) do (
+			if "!prevKey!" == "Host" (
+				set POSTGRES_HOST=%%B
+			) else if "!prevKey!" == "Port" (
+				set POSTGRES_PORT=%%B
+			) else if "!prevKey!" == "ID" (
+				set POSTGRES_USER=%%B
+			) else if "!prevKey!" == "Password" (
+				set POSTGRES_PASSWORD=%%B
+			) else if "!prevKey!" == "Database" (
+				set POSTGRES_DB=%%B
+			)
+			set "prevKey=%%B"
+		)
+	)
+	
+	:: Echo the values of PostgreSQL connection variables
+	echo User ID: !POSTGRES_USER!
+    echo Password: !POSTGRES_PASSWORD!
+    echo Host: !POSTGRES_HOST!
+    echo Port: !POSTGRES_PORT!
+    echo Database: !POSTGRES_DB!
+	
+	:: Start the docker container
+	docker-compose up -d
+
     pause
     goto Start
 ) else (
