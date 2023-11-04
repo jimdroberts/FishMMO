@@ -1,7 +1,7 @@
 version: '3.8'
 services:
   postgres:
-    container_name: fish_mmo_postgresql
+    container_name: ${POSTGRES_DB}
     image: postgres:14
     restart: always
     environment:
@@ -9,7 +9,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_DB: ${POSTGRES_DB}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_HOST}:${POSTGRES_PORT}:${POSTGRES_PORT}"
     volumes:
       - database-data:/var/lib/postgresql/data/
 
