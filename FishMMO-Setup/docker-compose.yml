@@ -19,9 +19,6 @@ services:
     restart: always
     ports:
       - "${REDIS_HOST_STRING}:6379"
-    volumes:
-      - redis-data:/var/lib/redis/data/
 
 volumes:
   postgresql-data:
-  redis-data:
