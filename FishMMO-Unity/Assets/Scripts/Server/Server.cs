@@ -345,12 +345,21 @@ namespace FishMMO.Server
 
 		public bool TryGetServerIPAddress(out ServerAddress address)
 		{
+			const string LoopBack = "127.0.0.1";
+			const string LocalHost = "localhost";
+
 			Transport transport = NetworkManager.TransportManager.Transport;
-			if (transport != null && !string.IsNullOrWhiteSpace(RemoteAddress))
+			if (transport != null)
 			{
+				// if our assigned address is localhost, use localhost
+				// otherwise try external address
+				// if remote address is null we fall back to localhost
+				string actualAddress = !string.IsNullOrWhiteSpace(Address) && (Address.Equals(LoopBack) | Address.Equals(LocalHost)) ? Address :
+										!string.IsNullOrWhiteSpace(RemoteAddress) ? RemoteAddress : LoopBack;
+
 				address = new ServerAddress()
 				{
-					address = RemoteAddress,
+					address = actualAddress,
 					port = transport.GetPort(),
 				};
 				return true;
