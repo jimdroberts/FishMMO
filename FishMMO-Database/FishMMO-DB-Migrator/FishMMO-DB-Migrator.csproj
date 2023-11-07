@@ -29,10 +29,23 @@
       <ProjectReference Include="..\FishMMO-DB\FishMMO-DB.csproj" />
     </ItemGroup>
 
-    <ItemGroup>
-      <None Update="appsettings.json">
-        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-      </None>
-    </ItemGroup>
+	<!-- Move the appsettings.json to the build directory. -->
+	<Target Name="FishMMOAppSettings" AfterTargets="Build">
+		<!-- Conditionally set the property based on the build configuration -->
+		<PropertyGroup>
+			<BuildConfiguration>Development</BuildConfiguration>
+		</PropertyGroup>
+
+		<PropertyGroup Condition="'$(Configuration)' == 'Release'">
+			<BuildConfiguration>Release</BuildConfiguration>
+		</PropertyGroup>
+
+		<!-- Define the source directory based on the build configuration -->
+		<ItemGroup>
+			<SourceDir Include="..\..\FishMMO-Setup\$(BuildConfiguration)\appsettings.json" />
+		</ItemGroup>
+
+		<Copy SourceFiles="@(SourceDir)" DestinationFolder="$(TargetDir)" />
+	</Target>
 
 </Project>

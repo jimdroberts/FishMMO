@@ -42,7 +42,7 @@ namespace FishMMO.Database.Redis
 
 			host = configuration.GetSection("Redis")["Host"] ?? "127.0.0.1";
 			port = configuration.GetSection("Redis")["Port"] ?? "6379";
-			password = configuration?.GetSection("Redis")["Password"] ?? "password";
+			password = configuration?.GetSection("Redis")["Password"] ?? "pass";
 		}
 
 		public void CloseRedis()

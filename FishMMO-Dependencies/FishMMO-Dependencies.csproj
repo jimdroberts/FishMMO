@@ -51,10 +51,16 @@
 		<!-- Move the DLL to the Unity project. -->
 		<PropertyGroup>
 			<TargetDir>..\FishMMO-Unity\Assets\Dependencies</TargetDir>
+			<BuildConfiguration>Debug</BuildConfiguration>
 		</PropertyGroup>
+
+		<!-- Conditionally set the property based on the build configuration -->
+		<PropertyGroup Condition="'$(Configuration)' == 'Release'">
+			<BuildConfiguration>Release</BuildConfiguration>
+		</PropertyGroup>
+		
 		<ItemGroup>
-			<SourceDir Include="bin\Release\**\*.dll" Exclude="bin\Release\**\Microsoft.CSharp.dll;bin\Release\**\System.Linq.dll;bin\Release\**\System.Text.RegularExpressions.dll" />
-			<SourceDir Include="bin\Debug\**\*.dll" Exclude="bin\Debug\**\Microsoft.CSharp.dll;bin\Debug\**\System.Linq.dll;bin\Debug\**\System.Text.RegularExpressions.dll" />
+			<SourceDir Include="bin\$(BuildConfiguration)\**\*.dll" Exclude="bin\$(BuildConfiguration)\**\Microsoft.CSharp.dll;bin\$(BuildConfiguration)\**\System.Linq.dll;bin\$(BuildConfiguration)\**\System.Text.RegularExpressions.dll" />
 		</ItemGroup>
 		<Copy SourceFiles="@(SourceDir)" DestinationFolder="$(TargetDir)" />
 	</Target>

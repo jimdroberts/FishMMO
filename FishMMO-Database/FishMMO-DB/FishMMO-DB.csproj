@@ -28,21 +28,43 @@
     <Folder Include="Migrations\" />
   </ItemGroup>
 
-  <ItemGroup>
-    <None Update="appsettings.json">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
-	
-	<Target Name="Test" AfterTargets="Build">
-		<!-- Move the DLL to the Unity project. -->
+	<!-- Move the appsettings.json to the build directory. -->
+	<Target Name="FishMMOAppSettings" AfterTargets="Build">
+		<!-- Conditionally set the property based on the build configuration -->
 		<PropertyGroup>
-			<TargetDir>..\..\FishMMO-Unity\Assets\Dependencies</TargetDir>
+			<BuildConfiguration>Development</BuildConfiguration>
 		</PropertyGroup>
+
+		<PropertyGroup Condition="'$(Configuration)' == 'Release'">
+			<BuildConfiguration>Release</BuildConfiguration>
+		</PropertyGroup>
+
+		<!-- Define the source directory based on the build configuration -->
 		<ItemGroup>
-			<SourceDir Include="bin\Release\**\FishMMO-DB.dll" />
-			<SourceDir Include="bin\Debug\**\FishMMO-DB.dll" />
+			<SourceDir Include="..\..\FishMMO-Setup\$(BuildConfiguration)\appsettings.json" />
 		</ItemGroup>
+		
 		<Copy SourceFiles="@(SourceDir)" DestinationFolder="$(TargetDir)" />
 	</Target>
+
+	<!-- Move the DLL to the Unity project. -->
+	<Target Name="FishMMODependencies" AfterTargets="Build">
+		<PropertyGroup>
+			<TargetDir>..\..\FishMMO-Unity\Assets\Dependencies</TargetDir>
+			<BuildConfiguration>Debug</BuildConfiguration>
+		</PropertyGroup>
+
+		<!-- Conditionally set the property based on the build configuration -->
+		<PropertyGroup Condition="'$(Configuration)' == 'Release'">
+			<BuildConfiguration>Release</BuildConfiguration>
+		</PropertyGroup>
+		
+		<ItemGroup>
+			<SourceDirWithExclusion Include="bin\$(BuildConfiguration)\**\FishMMO-DB.dll">
+				<Exclude>bin\$(BuildConfiguration)\**\appsettings.json</Exclude>
+			</SourceDirWithExclusion>
+		</ItemGroup>
+		<Copy SourceFiles="@(SourceDirWithExclusion)" DestinationFolder="$(TargetDir)" />
+	</Target>
+	
 </Project>
