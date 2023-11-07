@@ -7,7 +7,27 @@ namespace FishMMO.Database.Redis
 	public class RedisDbContextFactory
 	{
 		private string configPath = "";
-		private readonly Lazy<ConnectionMultiplexer> connectionMultiplexer;
+		private static string? host;
+		private static string? port;
+		private static string? password;
+
+		private static Lazy<ConfigurationOptions> ConfigOptions
+		= new Lazy<ConfigurationOptions>(() =>
+		{
+			var configOptions = new ConfigurationOptions();
+			configOptions.EndPoints.Add(host + ":" + port);
+			configOptions.Password = password;
+			configOptions.AbortOnConnectFail = false;
+			return configOptions;
+		});
+
+		private static Lazy<ConnectionMultiplexer> multiplexer
+		= new Lazy<ConnectionMultiplexer>(() =>
+		{
+			return ConnectionMultiplexer.Connect(ConfigOptions.Value);
+		});
+
+		public static ConnectionMultiplexer Connection { get { return multiplexer.Value; } }
 
 		public RedisDbContextFactory(string configPath)
 		{
@@ -20,22 +40,19 @@ namespace FishMMO.Database.Redis
 				.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
 				.Build();
 
-			string? connectionString = configuration.GetConnectionString("Redis");
+			host = configuration.GetSection("Redis")["Host"] ?? "127.0.0.1";
+			port = configuration.GetSection("Redis")["Port"] ?? "6379";
+			password = configuration?.GetSection("Redis")["Password"] ?? "password";
+		}
 
-			if (configuration == null || string.IsNullOrWhiteSpace(connectionString))
-			{
-				throw new InvalidOperationException("Redis configuration is missing or invalid.");
-			}
-
-			connectionMultiplexer = new Lazy<ConnectionMultiplexer>(() =>
-			{
-				return ConnectionMultiplexer.Connect(connectionString);
-			});
+		public void CloseRedis()
+		{
+			Connection.Close();
 		}
 
 		public IDatabase GetDatabase()
 		{
-			return connectionMultiplexer.Value.GetDatabase();
+			return Connection.GetDatabase();
 		}
 	}
 }

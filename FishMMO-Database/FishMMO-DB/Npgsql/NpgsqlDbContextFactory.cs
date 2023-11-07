@@ -40,7 +40,15 @@ namespace FishMMO.Database.Npgsql
 				.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
 				.Build();
 
-			DbContextOptionsBuilder optionsBuilder = new DbContextOptionsBuilder<NpgsqlDbContext>().UseNpgsql(configuration.GetConnectionString("Npgsql"))
+			string? database = configuration.GetSection("Npgsql")["Database"] ?? "fish_mmo_postgresql";
+			string? userID = configuration.GetSection("Npgsql")["Username"] ?? "user";
+			string? password = configuration.GetSection("Npgsql")["Password"] ?? "pass";
+			string? host = configuration.GetSection("Npgsql")["Host"] ?? "127.0.0.1";
+			string? port = configuration.GetSection("Npgsql")["Port"] ?? "5432";
+
+			string connectionString = $"Host={host};Port={port};Database={database};Username={userID};Password={password}";
+
+			DbContextOptionsBuilder optionsBuilder = new DbContextOptionsBuilder<NpgsqlDbContext>().UseNpgsql(connectionString)
 				.UseSnakeCaseNamingConvention();
 
 			if (enableLogging)

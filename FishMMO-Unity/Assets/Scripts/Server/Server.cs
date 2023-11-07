@@ -5,6 +5,7 @@ using UnityEngine.SceneManagement;
 using System;
 using System.Collections;
 using System.IO;
+using StackExchange.Redis;
 using FishMMO.Database.Npgsql;
 using FishMMO.Database.Redis;
 using FishMMO.Shared;
@@ -82,7 +83,7 @@ namespace FishMMO.Server
 
 			// initialize the DB contexts
 			NpgsqlDbContextFactory = new NpgsqlDbContextFactory(path, false);
-			//RedisDbContextFactory = new RedisDbContextFactory(path);
+			RedisDbContextFactory = new RedisDbContextFactory(path);
 
 			// ensure our NetworkManager exists in the scene
 			if (NetworkManager == null)
@@ -124,6 +125,11 @@ namespace FishMMO.Server
 #else
 			return AppDomain.CurrentDomain.BaseDirectory;
 #endif
+		}
+
+		public void OnDestroy()
+		{
+			RedisDbContextFactory.CloseRedis();
 		}
 
 		public static void Quit()

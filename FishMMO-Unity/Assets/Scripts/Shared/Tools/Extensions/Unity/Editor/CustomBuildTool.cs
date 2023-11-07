@@ -25,6 +25,7 @@ namespace FishMMO.Shared
 			World,
 			Scene,
 			Client,
+			Installer,
 		}
 
 		public const BuildOptions BASE_BUILD_OPTIONS = BuildOptions.CleanBuildCache | BuildOptions.Development;
@@ -86,229 +87,6 @@ start Scene.exe SCENE";
 		{
 			"Assets\\Scenes\\Bootstraps\\ClientBootstrap.unity",
 		};
-
-#if UNITY_EDITOR_WIN
-		public static readonly string VirtualizationFileName = "powershell.exe";
-		public static readonly string VirtualizationArguments = "-Command \"(Get-WmiObject -Namespace 'root\\cimv2' -Class Win32_Processor).VirtualizationFirmwareEnabled\"";
-		public static readonly string DockerInstalledInfoA = "docker";
-		public static readonly string DockerInstalledInfoB = "--version";
-#elif UNITY_EDITOR_OSX
-		public static readonly string DockerInstallA = "brew";
-		public static readonly string DockerInstallB = "install --cask docker";
-#else
-		public static readonly string VirtualizationFileName = "grep";
-		public static readonly string VirtualizationArguments = "-E --color 'svm|vmx'";
-		public static readonly string DockerInstalledInfoA = "which";
-		public static readonly string DockerInstalledInfoB = "docker";
-		public static readonly string DockerInstallA = "apt-get";
-		public static readonly string DockerInstallB = "install -y docker.io";
-#endif
-
-		public static bool IsVirtualizationEnabled()
-		{
-			using (Process process = new Process())
-			{
-				process.StartInfo.FileName = VirtualizationFileName;
-				process.StartInfo.Arguments = VirtualizationArguments;
-				process.StartInfo.UseShellExecute = false;
-				process.StartInfo.RedirectStandardOutput = true;
-				process.StartInfo.CreateNoWindow = true;
-				process.Start();
-
-				string output = process.StandardOutput.ReadToEnd();
-				process.WaitForExit();
-
-				return bool.Parse(output.Trim());
-			}
-		}
-
-		public static bool IsWSLInstalled()
-		{
-#if UNITY_EDITOR_WIN
-			using (Process process = new Process())
-			{
-				process.StartInfo.FileName = "wsl";
-				process.StartInfo.Arguments = "-l -v";
-				process.StartInfo.RedirectStandardOutput = true;
-				process.StartInfo.UseShellExecute = false;
-				process.StartInfo.CreateNoWindow = true;
-				process.Start();
-
-				string output = process.StandardOutput.ReadToEnd();
-				process.WaitForExit();
-
-				return output.Contains("2");
-			}
-#else
-		return true;
-#endif
-		}
-
-		public static void InstallWSL2()
-		{
-			using (Process process = new Process())
-			{
-				process.StartInfo.FileName = "powershell.exe";
-				process.StartInfo.Arguments = "Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux; Enable-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform";
-				process.StartInfo.Verb = "runas";  // Run PowerShell with administrator privileges
-
-				process.Start();
-				process.WaitForExit();
-			}
-		}
-
-		public static bool IsDockerInstalled()
-		{
-			using (Process process = new Process())
-			{
-				process.StartInfo.FileName = DockerInstalledInfoA;
-				process.StartInfo.Arguments = DockerInstalledInfoB;
-				process.StartInfo.RedirectStandardOutput = true;
-				process.StartInfo.UseShellExecute = false;
-				process.StartInfo.CreateNoWindow = true;
-				process.Start();
-				process.WaitForExit();
-
-				return process.ExitCode == 0;
-			}
-		}
-
-#if UNITY_EDITOR_WIN
-		public static void InstallDocker()
-		{
-			string downloadUrl = "https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe";
-			string installerPath = Path.Combine(Path.GetTempPath(), "DockerInstaller.exe");
-
-			using (WebClient client = new WebClient())
-			{
-				try
-				{
-					client.DownloadFile(downloadUrl, installerPath);
-					Debug.Log("Docker installer downloaded successfully.");
-				}
-				catch (Exception ex)
-				{
-					Debug.Log("Failed to download Docker installer: " + ex.Message);
-					return;
-				}
-			}
-
-			using (Process process = new Process())
-			{
-				process.StartInfo.FileName = installerPath;
-				process.StartInfo.Arguments = "--quiet";
-				process.StartInfo.RedirectStandardOutput = true;
-				process.StartInfo.UseShellExecute = false;
-				process.StartInfo.CreateNoWindow = true;
-				process.Start();
-				process.WaitForExit();
-
-				if (process.ExitCode == 0)
-				{
-					Debug.Log("Docker installed successfully.");
-				}
-				else
-				{
-					Debug.Log("Docker installation failed.");
-				}
-			}
-		}
-#else
-		public static void InstallDocker()
-		{
-			using (Process process = new Process())
-			{
-				process.StartInfo.FileName = DockerInstallA;
-				process.StartInfo.Arguments = DockerInstallB;
-				process.StartInfo.RedirectStandardOutput = true;
-				process.StartInfo.UseShellExecute = false;
-				process.StartInfo.CreateNoWindow = true;
-				process.Start();
-				process.WaitForExit();
-
-				if (process.ExitCode == 0)
-				{
-					Debug.Log("Docker installed successfully.");
-				}
-				else
-				{
-					Debug.Log("Docker installation failed.");
-				}
-			}
-		}
-#endif
-
-		public static void RunDockerCommand(string commandArgs)
-		{
-			// Create a new process instance
-			using (Process process = new Process())
-			{
-				// Set the start info for the process
-				process.StartInfo.FileName = "docker"; // Command to execute (e.g., docker)
-				process.StartInfo.Arguments = commandArgs; // Arguments for the command
-				process.StartInfo.RedirectStandardOutput = true; // Redirect the output to be able to read it
-				process.StartInfo.RedirectStandardError = true; // Redirect the error output to be able to read it
-				process.StartInfo.UseShellExecute = false; // Do not use the operating system shell
-				process.StartInfo.CreateNoWindow = true; // Do not create a window for the process
-
-				// Start the process
-				process.Start();
-
-				// Read the output
-				string output = process.StandardOutput.ReadToEnd();
-				string errorOutput = process.StandardError.ReadToEnd();
-
-				// Wait for the process to exit
-				process.WaitForExit();
-
-				// Display the output
-				Debug.Log(output +
-						  "\r\n" + errorOutput);
-
-				// Display the output
-				Debug.Log(output);
-
-				// Check the exit code
-				int exitCode = process.ExitCode;
-				Debug.Log("Exit Code: " + exitCode);
-			}
-		}
-
-		/*[MenuItem("FishMMO/Install Tools")]
-		public static void EnsureToolkitInstallation()
-		{
-			bool virtualization = IsVirtualizationEnabled();
-			bool wsl = IsWSLInstalled();
-			bool docker = IsDockerInstalled();
-			Debug.Log("Setup Output: " +
-					  "\r\nVirtualization: " + virtualization +
-					  "\r\nWSL2: " + wsl +
-					  "\r\nDocker: " + docker);
-
-			if (!virtualization)
-			{
-				return;
-			}
-			if (!wsl)
-			{
-				InstallWSL2();
-			}
-			if (!docker)
-			{
-				InstallDocker();
-			}
-
-			string root = Directory.GetParent(Directory.GetCurrentDirectory()).FullName;
-			//string dotNet = "mcr.microsoft.com/dotnet/sdk:7.0";
-			//string projectPath = "/app/fishdb/FishMMO-DB/FishMMO-DB.csproj";
-			//string startupProject = "/app/fishdb/FishMMO-DB-Migrator/FishMMO-DB-Migrator.csproj";
-
-			// do we need to make an image with dotnet 7 and dotnet-ef for global use with migration?
-			//RunDockerCommand($"build -t dotnet-ef-image -f \"{root}\" .");
-
-			// run initial migration
-			//RunDockerCommand($"run -d -n fishdb-tmp -v \"{root}\":/app/fishdb -w /app/fishdb {dotNet} /bin/bash -c \"dotnet tool install --global dotnet-ef --version 5.0.10 && dotnet ef migrations add InitialMigration -p {projectPath} -s {startupProject}\"");
-		}*/
 
 		public static string GetBuildTargetShortName(BuildTarget target)
 		{
@@ -452,10 +230,11 @@ start Scene.exe SCENE";
 			{
 				Debug.Log("Build succeeded: " + summary.totalSize + " bytes " + DateTime.UtcNow);
 
+				string root = Directory.GetParent(Directory.GetCurrentDirectory()).FullName;
+
 				// copy the configuration files if it's a server build
 				if (subTarget == StandaloneBuildSubtarget.Server)
 				{
-					string root = Directory.GetParent(Directory.GetCurrentDirectory()).FullName;
 					if (buildTarget == BuildTarget.StandaloneWindows64)
 					{
 						switch (customBuildType)
@@ -503,6 +282,10 @@ start Scene.exe SCENE";
 					configurationPath = WorkingEnvironmentOptions.AppendEnvironmentToPath(configurationPath);
 
 					CopyConfigurationFiles(customBuildType, Path.Combine(root, configurationPath), buildPath);
+				}
+				if (customBuildType == CustomBuildType.Installer)
+				{
+					NewBuildSetupFolder(root, buildPath);
 				}
 			}
 			else if (summary.result == BuildResult.Failed)
@@ -595,6 +378,30 @@ start Scene.exe SCENE";
 			}
 		}
 
+		[MenuItem("FishMMO/Build/Installer", priority = -1)]
+		public static void BuildWindows64Setup()
+		{
+			BuildExecutable("Installer",
+							new string[]
+							{
+								"Assets\\Scenes\\Installer.unity",
+							},
+							CustomBuildType.Installer,
+							BASE_BUILD_OPTIONS | BuildOptions.ShowBuiltPlayer,
+							StandaloneBuildSubtarget.Player,
+							BuildTarget.StandaloneWindows64);
+		}
+
+		private static void NewBuildSetupFolder(string rootPath, string buildPath)
+		{
+			string setup = Path.Combine(rootPath, "FishMMO-Setup");
+			FileUtil.ReplaceFile(Path.Combine(setup, "docker-compose.yml"), Path.Combine(buildPath, "docker-compose.yml"));
+
+			string envConfigurationPath = WorkingEnvironmentOptions.AppendEnvironmentToPath(setup);
+			FileUtil.ReplaceFile(Path.Combine(envConfigurationPath, "appsettings.json"), Path.Combine(buildPath, "appsettings.json"));
+			FileUtil.ReplaceDirectory(Path.Combine(rootPath, "FishMMO-Database"), Path.Combine(buildPath, "FishMMO-Database"));
+		}
+
 		private static void BuildSetupFolder(string buildDirectoryName, string setupScriptFileName)
 		{
 			BuildSetupFolder(null, buildDirectoryName, setupScriptFileName, true);
@@ -618,9 +425,8 @@ start Scene.exe SCENE";
 			FileUtil.ReplaceFile(Path.Combine(setup, setupScriptFileName), Path.Combine(buildPath, setupScriptFileName));
 			FileUtil.ReplaceFile(Path.Combine(setup, "docker-compose.yml"), Path.Combine(buildPath, "docker-compose.yml"));
 
-			string configurationPath = "FishMMO-Setup";
-			configurationPath = WorkingEnvironmentOptions.AppendEnvironmentToPath(configurationPath);
-			FileUtil.ReplaceFile(Path.Combine(Path.Combine(root, configurationPath), "appsettings.json"), Path.Combine(buildPath, "appsettings.json"));
+			string envConfigurationPath = WorkingEnvironmentOptions.AppendEnvironmentToPath(setup);
+			FileUtil.ReplaceFile(Path.Combine(envConfigurationPath, "appsettings.json"), Path.Combine(buildPath, "appsettings.json"));
 			FileUtil.ReplaceDirectory(Path.Combine(root, "FishMMO-Database"), Path.Combine(buildPath, "FishMMO-Database"));
 
 			if (!openExplorer)

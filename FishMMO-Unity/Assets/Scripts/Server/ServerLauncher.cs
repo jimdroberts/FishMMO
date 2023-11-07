@@ -17,8 +17,6 @@ namespace FishMMO.Server
 			"ClientBootstrap"
 		};
 
-		public Server Server { get; private set; }
-
 		void Start()
 		{
 #if !UNITY_EDITOR
