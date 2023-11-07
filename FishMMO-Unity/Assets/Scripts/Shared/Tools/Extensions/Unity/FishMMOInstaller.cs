@@ -41,7 +41,7 @@ namespace FishMMO.Shared
 			Debug.Log(message);
 			if (OutputLog != null)
 			{
-				OutputLog.text = "Output:\r\n" + message;
+				OutputLog.text += message + "\r\n";
 			}
 		}
 
@@ -263,9 +263,14 @@ namespace FishMMO.Shared
 			}
 		}
 
+#pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
 		public async Task<string> RunDotNetCommandAsync(string arguments)
+#pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
 		{
 #if !UNITY_EDITOR
+			Log("Running DotNet Command: \r\n" +
+				"dotnet " + arguments);
+
 			using (Process process = new Process())
 			{
 				process.StartInfo.FileName = "dotnet";
@@ -345,48 +350,53 @@ namespace FishMMO.Shared
 			}
 		}
 
+#pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
 		public async Task<string> RunDockerCommandAsync(string commandArgs)
+#pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
 		{
 #if !UNITY_EDITOR
-        using (Process process = new Process())
-        {
-            process.StartInfo.FileName = "docker";
-            process.StartInfo.Arguments = commandArgs;
-            process.StartInfo.RedirectStandardOutput = true;
-            process.StartInfo.RedirectStandardError = true;
-            process.StartInfo.UseShellExecute = false;
-            process.StartInfo.CreateNoWindow = true;
+			Log("Running Docker Command: \r\n" +
+				"docker " + commandArgs);
 
-            var outputBuilder = new System.Text.StringBuilder();
-            var errorOutputBuilder = new System.Text.StringBuilder();
+			using (Process process = new Process())
+			{
+				process.StartInfo.FileName = "docker";
+				process.StartInfo.Arguments = commandArgs;
+				process.StartInfo.RedirectStandardOutput = true;
+				process.StartInfo.RedirectStandardError = true;
+				process.StartInfo.UseShellExecute = false;
+				process.StartInfo.CreateNoWindow = true;
 
-            process.OutputDataReceived += (sender, e) =>
-            {
-                if (!string.IsNullOrEmpty(e.Data))
-                {
-                    outputBuilder.AppendLine(e.Data);
-                }
-            };
+				var outputBuilder = new System.Text.StringBuilder();
+				var errorOutputBuilder = new System.Text.StringBuilder();
 
-            process.ErrorDataReceived += (sender, e) =>
-            {
-                if (!string.IsNullOrEmpty(e.Data))
-                {
-                    errorOutputBuilder.AppendLine(e.Data);
-                }
-            };
+				process.OutputDataReceived += (sender, e) =>
+				{
+					if (!string.IsNullOrEmpty(e.Data))
+					{
+						outputBuilder.AppendLine(e.Data);
+					}
+				};
 
-            process.Start();
-            process.BeginOutputReadLine();
-            process.BeginErrorReadLine();
+				process.ErrorDataReceived += (sender, e) =>
+				{
+					if (!string.IsNullOrEmpty(e.Data))
+					{
+						errorOutputBuilder.AppendLine(e.Data);
+					}
+				};
 
-            await process.WaitForExitAsync();
+				process.Start();
+				process.BeginOutputReadLine();
+				process.BeginErrorReadLine();
 
-            string output = outputBuilder.ToString();
-            string errorOutput = errorOutputBuilder.ToString();
+				await process.WaitForExitAsync();
 
-            return output + "\r\n" + errorOutput;
-        }
+				string output = outputBuilder.ToString();
+				string errorOutput = errorOutputBuilder.ToString();
+
+				return output + "\r\n" + errorOutput;
+			}
 #else
 			return null;
 #endif
@@ -395,9 +405,14 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Docker-Compose commands are not available in the editor.
 		/// </summary>
+#pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
 		public async Task<string> RunDockerComposeCommandAsync(string commandArgs, Dictionary<string, string> environmentVariables = null)
+#pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
 		{
 #if !UNITY_EDITOR
+			Log("Running Docker-Compose Command: \r\n" +
+				"docker-compose " + commandArgs);
+
 			using (Process process = new Process())
 			{
 				process.StartInfo.FileName = "docker-compose";
@@ -523,7 +538,7 @@ namespace FishMMO.Shared
 				AppSettings appSettings = JsonUtility.FromJson<AppSettings>(jsonContent);
 
 				// docker-compose up
-				string output = await RunDockerComposeCommandAsync("up -d", new Dictionary<string, string>()
+				string output = await RunDockerComposeCommandAsync("-p fishmmo up -d", new Dictionary<string, string>()
 				{
 					{ "POSTGRES_DB", appSettings.Npgsql.Database },
 					{ "POSTGRES_USER", appSettings.Npgsql.Username },
@@ -573,13 +588,15 @@ namespace FishMMO.Shared
 			}
 
 			string timestamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
+			Log($"Creating a new migration {timestamp}... Please wait.");
 
 			// Run 'dotnet ef migrations add Initial' command
-			await RunDotNetCommandAsync($"ef migrations add {timestamp} -p \"{ProjectPath}\" -s \"{StartupProject}\"");
+			await RunDotNetCommandAsync($"ef migrations add {timestamp} -p {ProjectPath} -s {StartupProject}");
 
 			// Run 'dotnet ef database update' command
-			await RunDotNetCommandAsync($"ef database update -p \"{ProjectPath}\" -s \"{StartupProject}\"");
+			await RunDotNetCommandAsync($"ef database update -p {ProjectPath} -s {StartupProject}");
 
+			Log($"Migration completed...");
 			SetButtonsActive(true);
 		}
 		#endregion
@@ -591,8 +608,8 @@ namespace FishMMO.Shared
 #else
 			return AppDomain.CurrentDomain.BaseDirectory;
 #endif
-
 		}
+
 		public void Quit()
 		{
 #if UNITY_EDITOR

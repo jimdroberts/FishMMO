@@ -1489,7 +1489,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: FishMMO Installer Tool
+  m_text: FishMMO Installer
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -1498,8 +1498,8 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4294967295
-  m_fontColor: {r: 1, g: 1, b: 1, a: 1}
+    rgba: 4294937403
+  m_fontColor: {r: 0.23137255, g: 0.54509807, b: 1, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:
@@ -1986,8 +1986,8 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4288399871
-  m_fontColor: {r: 1, g: 0.78995794, b: 0.6084906, a: 1}
+    rgba: 4294937403
+  m_fontColor: {r: 0.23113209, g: 0.5463286, b: 1, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:
@@ -2275,8 +2275,8 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 2150773298
-  m_fontColor: {r: 0.19607843, g: 0.19607843, b: 0.19607843, a: 0.5}
+    rgba: 4294937403
+  m_fontColor: {r: 0.23137255, g: 0.54509807, b: 1, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:
@@ -2299,7 +2299,7 @@ MonoBehaviour:
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
   m_fontSizeMax: 72
-  m_fontStyle: 2
+  m_fontStyle: 3
   m_HorizontalAlignment: 2
   m_VerticalAlignment: 512
   m_textAlignment: 65535
@@ -2816,6 +2816,7 @@ GameObject:
   - component: {fileID: 1433866825}
   - component: {fileID: 1433866824}
   - component: {fileID: 1433866826}
+  - component: {fileID: 1433866827}
   m_Layer: 5
   m_Name: Group
   m_TagString: Untagged
@@ -2904,6 +2905,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d90f4a4492ce30c4b93de6154b438ff6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  ProjectPath: ./FishMMO-Database/FishMMO-DB/FishMMO-DB.csproj
+  StartupProject: ./FishMMO-Database/FishMMO-DB-Migrator/FishMMO-DB-Migrator.csproj
   OutputLog: {fileID: 948970279}
   CommandInput: {fileID: 1073290436}
   Buttons:
@@ -2915,6 +2918,14 @@ MonoBehaviour:
   - {fileID: 1727248712}
   - {fileID: 707525451}
   - {fileID: 61952402}
+--- !u!222 &1433866827
+CanvasRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1433866822}
+  m_CullTransparentMesh: 1
 --- !u!1 &1523412675
 GameObject:
   m_ObjectHideFlags: 0
