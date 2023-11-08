@@ -399,7 +399,15 @@ start Scene.exe SCENE";
 
 			string envConfigurationPath = WorkingEnvironmentOptions.AppendEnvironmentToPath(setup);
 			FileUtil.ReplaceFile(Path.Combine(envConfigurationPath, "appsettings.json"), Path.Combine(buildPath, "appsettings.json"));
-			FileUtil.ReplaceDirectory(Path.Combine(rootPath, "FishMMO-Database"), Path.Combine(buildPath, "FishMMO-Database"));
+
+			string dbBuildDirectory = Path.Combine(buildPath, "FishMMO-Database");
+			FileUtil.ReplaceDirectory(Path.Combine(rootPath, "FishMMO-Database"), dbBuildDirectory);
+
+			string dbBinDirectory = Path.Combine(Path.Combine(dbBuildDirectory, "FishMMO-DB"), "bin");
+			FileUtil.DeleteFileOrDirectory(dbBinDirectory);
+
+			string dbMigratorBinDirectory = Path.Combine(Path.Combine(dbBuildDirectory, "FishMMO-DB-Migrator"), "bin");
+			FileUtil.DeleteFileOrDirectory(dbMigratorBinDirectory);
 		}
 
 		private static void BuildSetupFolder(string buildDirectoryName, string setupScriptFileName)

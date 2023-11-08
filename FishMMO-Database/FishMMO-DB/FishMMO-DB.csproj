@@ -28,27 +28,17 @@
     <Folder Include="Migrations\" />
   </ItemGroup>
 
-	<!-- Move the appsettings.json to the build directory. -->
-	<Target Name="FishMMOAppSettings" AfterTargets="Build">
-		<!-- Conditionally set the property based on the build configuration -->
-		<PropertyGroup>
-			<BuildConfiguration>Development</BuildConfiguration>
-		</PropertyGroup>
-
-		<PropertyGroup Condition="'$(Configuration)' == 'Release'">
-			<BuildConfiguration>Release</BuildConfiguration>
-		</PropertyGroup>
-
-		<!-- Define the source directory based on the build configuration -->
-		<ItemGroup>
-			<SourceDir Include="..\..\FishMMO-Setup\$(BuildConfiguration)\appsettings.json" />
-		</ItemGroup>
-		
-		<Copy SourceFiles="@(SourceDir)" DestinationFolder="$(TargetDir)" />
-	</Target>
+	<!-- Define a custom property based on the existence of the marker file -->
+	<PropertyGroup>
+		<IsEFBuild>false</IsEFBuild>
+	</PropertyGroup>
+	
+	<PropertyGroup>
+		<IsEFBuild Condition="Exists('..\..\Installer.exe')">true</IsEFBuild>
+	</PropertyGroup>
 
 	<!-- Move the DLL to the Unity project. -->
-	<Target Name="FishMMODependencies" AfterTargets="Build">
+	<Target Name="FishMMODependencies" AfterTargets="Build" Condition="'$(IsEFBuild)' == 'false'">
 		<PropertyGroup>
 			<TargetDir>..\..\FishMMO-Unity\Assets\Dependencies</TargetDir>
 			<BuildConfiguration>Debug</BuildConfiguration>

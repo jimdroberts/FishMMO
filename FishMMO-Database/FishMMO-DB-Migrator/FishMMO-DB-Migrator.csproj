@@ -28,21 +28,22 @@
     <ItemGroup>
       <ProjectReference Include="..\FishMMO-DB\FishMMO-DB.csproj" />
     </ItemGroup>
-
+	
+	<!-- Define a custom property based on the existence of the marker file -->
+	<PropertyGroup>
+		<IsEFBuild>false</IsEFBuild>
+	</PropertyGroup>
+	
+	<PropertyGroup>
+		<IsEFBuild Condition="Exists('..\..\Installer.exe')">true</IsEFBuild>
+	</PropertyGroup>
+	
 	<!-- Move the appsettings.json to the build directory. -->
-	<Target Name="FishMMOAppSettings" AfterTargets="Build">
-		<!-- Conditionally set the property based on the build configuration -->
-		<PropertyGroup>
-			<BuildConfiguration>Development</BuildConfiguration>
-		</PropertyGroup>
-
-		<PropertyGroup Condition="'$(Configuration)' == 'Release'">
-			<BuildConfiguration>Release</BuildConfiguration>
-		</PropertyGroup>
+	<Target Name="FishMMOAppSettings" AfterTargets="Build" Condition="'$(IsEFBuild)' == 'true'">
 
 		<!-- Define the source directory based on the build configuration -->
 		<ItemGroup>
-			<SourceDir Include="..\..\FishMMO-Setup\$(BuildConfiguration)\appsettings.json" />
+			<SourceDir Include="..\..\appsettings.json" />
 		</ItemGroup>
 
 		<Copy SourceFiles="@(SourceDir)" DestinationFolder="$(TargetDir)" />
