@@ -38,6 +38,7 @@
 		<PackageReference Include="OpenAI" Version="1.7.2" />
 		<PackageReference Include="srp" Version="1.0.7" />
 		<PackageReference Include="StackExchange.Redis" Version="2.7.4" />
+		<PackageReference Include="StackExchange.Redis.Extensions.Core" Version="9.1.0" />
 		<PackageReference Include="System.Collections.Immutable" Version="7.0.0" />
 		<PackageReference Include="System.ComponentModel.Annotations" Version="5.0.0" />
 		<PackageReference Include="System.Diagnostics.DiagnosticSource" Version="7.0.2" />
