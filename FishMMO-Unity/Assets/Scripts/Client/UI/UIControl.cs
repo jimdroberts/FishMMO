@@ -1,6 +1,8 @@
-﻿using TMPro;
+﻿using System;
+using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.UI;
 using FishMMO.Shared;
 
 namespace FishMMO.Client
@@ -10,6 +12,7 @@ namespace FishMMO.Client
 		public static readonly Color DEFAULT_COLOR = Hex.ColorNormalize(0.0f, 160.0f, 255.0f, 255.0f);
 		public static readonly Color DEFAULT_SELECTED_COLOR = Hex.ColorNormalize(0.0f, 255.0f, 255.0f, 255.0f);
 
+		public CanvasScaler CanvasScaler;
 		public RectTransform MainPanel = null;
 		[Tooltip("Helper field to check input field focus status in UIManager.")]
 		public TMP_InputField InputField = null;
@@ -31,6 +34,8 @@ namespace FishMMO.Client
 
 		private void Awake()
 		{
+			CanvasScaler = GetComponentInParent<CanvasScaler>();
+
 			startPosition = transform.position;
 
 			if (MainPanel == null)
@@ -129,6 +134,13 @@ namespace FishMMO.Client
 			{
 				if (MainPanel != null && RectTransformUtility.ScreenPointToLocalPointInRectangle(MainPanel, data.pressPosition, data.pressEventCamera, out dragOffset))
 				{
+					if (CanvasScaler != null &&
+						CanvasScaler.uiScaleMode == CanvasScaler.ScaleMode.ScaleWithScreenSize)
+					{
+						dragOffset.x *= CanvasScaler.transform.localScale.x;
+						dragOffset.y *= CanvasScaler.transform.localScale.y;
+					}
+
 					isDragging = true;
 				}
 				else
@@ -159,6 +171,14 @@ namespace FishMMO.Client
 					{
 						float halfWidth = MainPanel.rect.width * 0.5f;
 						float halfHeight = MainPanel.rect.height * 0.5f;
+
+						if (CanvasScaler != null &&
+							CanvasScaler.uiScaleMode == CanvasScaler.ScaleMode.ScaleWithScreenSize)
+						{
+							halfWidth *= CanvasScaler.transform.localScale.x;
+							halfHeight *= CanvasScaler.transform.localScale.y;
+						}
+
 						x = Mathf.Clamp(x, halfWidth, Screen.width - halfWidth);
 						y = Mathf.Clamp(y, halfHeight, Screen.height - halfHeight);
 					}
