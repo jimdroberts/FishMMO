@@ -6,9 +6,10 @@ namespace FishMMO.Shared
 	{
 		public Texture2D Icon;
 		public string Description;
-		public GameObject Prefab;
+		public GameObject FXPrefab;
 		public AbilitySpawnTarget AbilitySpawnTarget;
 		public bool RequiresTarget;
+		public byte EventSlots;
 		public int HitCount;
 		public float ActivationTime;
 		public float ActiveTime;

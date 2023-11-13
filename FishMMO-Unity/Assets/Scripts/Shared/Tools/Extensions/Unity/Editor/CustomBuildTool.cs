@@ -11,7 +11,6 @@ using System.Xml;
 using UnityEditor.Build.Reporting;
 using Debug = UnityEngine.Debug;
 using System.Diagnostics;
-using System.Net;
 using UnityEngine;
 
 namespace FishMMO.Shared

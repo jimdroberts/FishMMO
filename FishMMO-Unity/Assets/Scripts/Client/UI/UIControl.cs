@@ -1,6 +1,5 @@
 ﻿using TMPro;
 using UnityEngine;
-//using UnityEngine.Events;
 using UnityEngine.EventSystems;
 using FishMMO.Shared;
 
@@ -11,7 +10,7 @@ namespace FishMMO.Client
 		public static readonly Color DEFAULT_COLOR = Hex.ColorNormalize(0.0f, 160.0f, 255.0f, 255.0f);
 		public static readonly Color DEFAULT_SELECTED_COLOR = Hex.ColorNormalize(0.0f, 255.0f, 255.0f, 255.0f);
 
-		public Transform MainPanel = null;
+		public RectTransform MainPanel = null;
 		[Tooltip("Helper field to check input field focus status in UIManager.")]
 		public TMP_InputField InputField = null;
 		public bool StartOpen = true;
@@ -21,7 +20,7 @@ namespace FishMMO.Client
 
 		[Header("Drag")]
 		public bool CanDrag = false;
-		public bool ClampToScreen;
+		public bool ClampToScreen = true;
 		private Vector2 startPosition;
 		private Vector2 dragOffset = Vector2.zero;
 		private bool isDragging;
@@ -36,19 +35,8 @@ namespace FishMMO.Client
 
 			if (MainPanel == null)
 			{
-				MainPanel = transform;
+				MainPanel = transform as RectTransform;
 			}
-
-			/*if (mainPanel != null)
-			{
-				EventTrigger enterTrigger = mainPanel.gameObject.GetComponent<EventTrigger>();
-				if (enterTrigger == null)
-				{
-					enterTrigger = mainPanel.gameObject.AddComponent<EventTrigger>();
-				}
-				AddEventTriggerEntry(enterTrigger, EventTriggerType.PointerEnter, OnPointerEnter);
-				AddEventTriggerEntry(enterTrigger, EventTriggerType.PointerExit, OnPointerExit);
-			}*/
 		}
 
 		private void Start()
@@ -97,30 +85,6 @@ namespace FishMMO.Client
 		/// </summary>
 		public abstract void OnDestroying();
 
-		/*internal void AddEventTriggerEntry(EventTrigger trigger, EventTriggerType triggerType, UnityAction<BaseEventData> function)
-		{
-			EventTrigger.Entry newEntry = null;
-			for (int i = 0; i < trigger.triggers.Count; ++i)
-			{
-				if (trigger.triggers[i].eventID == triggerType)
-				{
-					newEntry = trigger.triggers[i];
-					break;
-				}
-			}
-			if (newEntry != null)
-			{
-				newEntry.callback.AddListener(function);
-			}
-			else
-			{
-				newEntry = new EventTrigger.Entry();
-				newEntry.eventID = triggerType;
-				newEntry.callback.AddListener(function);
-				trigger.triggers.Add(newEntry);
-			}
-		}*/
-
 		public void OnPointerEnter(PointerEventData eventData)
 		{
 			HasFocus = true;
@@ -156,14 +120,14 @@ namespace FishMMO.Client
 			transform.position = startPosition;
 		}
 
+
 		public void OnPointerDown(PointerEventData data)
 		{
 			if (!CanDrag) return;
 
 			if (data != null)
 			{
-				RectTransform rt = transform as RectTransform;
-				if (rt != null && RectTransformUtility.ScreenPointToLocalPointInRectangle(rt, data.pressPosition, data.pressEventCamera, out dragOffset))
+				if (MainPanel != null && RectTransformUtility.ScreenPointToLocalPointInRectangle(MainPanel, data.pressPosition, data.pressEventCamera, out dragOffset))
 				{
 					isDragging = true;
 				}
@@ -191,11 +155,10 @@ namespace FishMMO.Client
 				float y = data.position.y - dragOffset.y;
 				if (ClampToScreen)
 				{
-					RectTransform rt = transform as RectTransform;
-					if (rt != null)
+					if (MainPanel != null)
 					{
-						float halfWidth = rt.rect.width * 0.5f;
-						float halfHeight = rt.rect.height * 0.5f;
+						float halfWidth = MainPanel.rect.width * 0.5f;
+						float halfHeight = MainPanel.rect.height * 0.5f;
 						x = Mathf.Clamp(x, halfWidth, Screen.width - halfWidth);
 						y = Mathf.Clamp(y, halfHeight, Screen.height - halfHeight);
 					}

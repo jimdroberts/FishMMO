@@ -91,7 +91,7 @@ namespace FishMMO.Shared
 			}
 
 			// TODO create/fetch from pool
-			GameObject go = Instantiate(template.Prefab);
+			GameObject go = Instantiate(template.FXPrefab);
 			Transform t = go.transform;
 			switch (template.AbilitySpawnTarget)
 			{
