@@ -55,10 +55,6 @@ namespace FishMMO.Client
 
 		public override void OnStarting()
 		{
-			DontDestroyOnLoad(this);
-
-			((RectTransform)transform).anchoredPosition = new Vector2(MainPanel.rect.width * 0.5f, -(MainPanel.rect.height * 0.5f));
-
 			//cache HSV sprites
 			for (int i = 0; i < NUM_HUES; ++i)
 			{

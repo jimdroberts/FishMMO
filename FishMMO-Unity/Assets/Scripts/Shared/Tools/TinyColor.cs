@@ -9,8 +9,32 @@ namespace FishMMO.Shared
 		public static readonly TinyColor white = new TinyColor(255, 255, 255, 255);
 		public static readonly TinyColor black = new TinyColor(0, 0, 0, 255);
 		public static readonly TinyColor red = new TinyColor(255, 0, 0, 255);
+		public static readonly TinyColor orange = new TinyColor(255, 165, 0, 255);
+		public static readonly TinyColor yellow = new TinyColor(255, 255, 0, 255);
 		public static readonly TinyColor green = new TinyColor(0, 255, 0, 255);
 		public static readonly TinyColor blue = new TinyColor(0, 0, 255, 255);
+		public static readonly TinyColor indigo = new TinyColor(75, 0, 130, 255);
+		public static readonly TinyColor violet = new TinyColor(148, 0, 211, 255);
+		public static readonly TinyColor skyBlue = new TinyColor(135, 206, 250, 255);
+		public static readonly TinyColor limeGreen = new TinyColor(50, 205, 50, 255);
+		public static readonly TinyColor magenta = new TinyColor(255, 0, 255, 255);
+		public static readonly TinyColor turquoise = new TinyColor(64, 224, 208, 255);
+		public static readonly TinyColor goldenrod = new TinyColor(218, 165, 32, 255);
+		public static readonly TinyColor lavender = new TinyColor(230, 230, 250, 255);
+		public static readonly TinyColor chocolate = new TinyColor(210, 105, 30, 255);
+		public static readonly TinyColor plum = new TinyColor(221, 160, 221, 255);
+		public static readonly TinyColor forestGreen = new TinyColor(34, 139, 34, 255);
+
+		// UI Colors
+		public static readonly TinyColor darkGrey = new TinyColor(64, 64, 64, 255);  // Primary
+		public static readonly TinyColor lightGrey = new TinyColor(192, 192, 192, 255);  // Text
+		public static readonly TinyColor charcoal = new TinyColor(34, 34, 34, 255);  // Secondary
+		public static readonly TinyColor bloodRed = new TinyColor(128, 0, 0, 255);  // Hightlights
+		public static readonly TinyColor maroon = new TinyColor(128, 0, 0, 255);  // Complementary to Blood Red
+		public static readonly TinyColor olive = new TinyColor(128, 128, 0, 255);  // Complementary to Blood Red
+		public static readonly TinyColor teal = new TinyColor(0, 128, 128, 255);  // Complementary to Blood Red
+		public static readonly TinyColor silver = new TinyColor(192, 192, 192, 255);  // Complementary to Charcoal
+		public static readonly TinyColor navy = new TinyColor(0, 0, 128, 255);  // Complementary to Charcoal
 
 		public readonly byte r;
 		public readonly byte g;
@@ -41,10 +65,10 @@ namespace FishMMO.Shared
 		public static Color ToUnityColor(TinyColor color)
 		{
 			Color newColor = new Color();
-			newColor.r = Mathf.Round((color.r / 255.0f) * 100.0f) / 100.0f;
-			newColor.g = Mathf.Round((color.g / 255.0f) * 100.0f) / 100.0f;
-			newColor.b = Mathf.Round((color.b / 255.0f) * 100.0f) / 100.0f;
-			newColor.a = Mathf.Round((color.a / 255.0f) * 100.0f) / 100.0f;
+			newColor.r = Mathf.Round(color.r / 255.0f);
+			newColor.g = Mathf.Round(color.g / 255.0f);
+			newColor.b = Mathf.Round(color.b / 255.0f);
+			newColor.a = Mathf.Round(color.a / 255.0f);
 			return newColor;
 		}
 
