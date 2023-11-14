@@ -1,6 +1,7 @@
 ﻿using UnityEngine;
 using System;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 
 namespace FishMMO.Shared
 {
@@ -19,6 +20,48 @@ namespace FishMMO.Shared
 		public const string RELAYED = "$(|)";
 		public const string ERROR_TARGET_OFFLINE = "$(_)";
 		public const string ERROR_MESSAGE_SELF = "$(<)";
+
+		#region Regex
+		private const string AlignPattern = @"<align=[^>]+?>|<\/align>";
+		private const string AllCapsPattern = @"<allcaps>|<\/allcaps>";
+		private const string AlphaPattern = @"<alpha=[^>]+?>|<\/alpha>";
+		private const string BoldPattern = @"<b>|<\/b>";
+		private const string BrPattern = @"<br>|<\/br>";
+		private const string ColorPattern = @"<color=[^>]+?>|<\/color>";
+		private const string CspacePattern = @"<cspace=[^>]+?>|<\/cspace>";
+		private const string FontPattern = @"<font=[^>]+?>|<\/font>";
+		private const string FontWeightPattern = @"<font-weight=[^>]+?>|<\/font-weight>";
+		private const string GradientPattern = @"<gradient=[^>]+?>|<\/gradient>";
+		private const string ItalicPattern = @"<i>|<\/i>";
+		private const string IndentPattern = @"<indent=[^>]+?>|<\/indent>";
+		private const string LineHeightPattern = @"<line-height=[^>]+?>|<\/line-height>";
+		private const string LineIndentPattern = @"<line-indent=[^>]+?>|<\/line-indent>";
+		private const string LinkPattern = @"<link=[^>]+?>|<\/link>";
+		private const string LowercasePattern = @"<lowercase>|<\/lowercase>";
+		private const string MarginPattern = @"<margin=[^>]+?>|<\/margin>";
+		private const string MarkPattern = @"<mark=[^>]+?>|<\/mark>";
+		private const string MspacePattern = @"<mspace=[^>]+?>|<\/mspace>";
+		private const string NobrPattern = @"<nobr>|<\/nobr>";
+		private const string NoparsePattern = @"<noparse>|<\/noparse>";
+		private const string PagePattern = @"<page=[^>]+?>|<\/page>";
+		private const string PosPattern = @"<pos=[^>]+?>|<\/pos>";
+		private const string RotatePattern = @"<rotate=[^>]+?>|<\/rotate>";
+		private const string SPattern = @"<s>|<\/s>";
+		private const string SizePattern = @"<size=[^>]+?>|<\/size>";
+		private const string SmallcapsPattern = @"<smallcaps>|<\/smallcaps>";
+		private const string SpacePattern = @"<space=[^>]+?>|<\/space>";
+		private const string SpritePattern = @"<sprite=[^>]+?\/>";
+		private const string StrikethroughPattern = @"<strikethrough>|<\/strikethrough>";
+		private const string StylePattern = @"<style=[^>]+?>|<\/style>";
+		private const string SubPattern = @"<sub>|<\/sub>";
+		private const string SupPattern = @"<sup>|<\/sup>";
+		private const string UPattern = @"<u>|<\/u>";
+		private const string UppercasePattern = @"<uppercase>|<\/uppercase>";
+		private const string VoffsetPattern = @"<voffset=[^>]+?>|<\/voffset>";
+		private const string WidthPattern = @"<width=[^>]+?>|<\/width>";
+
+		private static readonly string CombinedRTTPattern = $"{AlignPattern}|{AllCapsPattern}|{AlphaPattern}|{BoldPattern}|{BrPattern}|{ColorPattern}|{CspacePattern}|{FontPattern}|{FontWeightPattern}|{GradientPattern}|{ItalicPattern}|{IndentPattern}|{LineHeightPattern}|{LineIndentPattern}|{LinkPattern}|{LowercasePattern}|{MarginPattern}|{MarkPattern}|{MspacePattern}|{NobrPattern}|{NoparsePattern}|{PagePattern}|{PosPattern}|{RotatePattern}|{SPattern}|{SizePattern}|{SmallcapsPattern}|{SpacePattern}|{SpritePattern}|{StrikethroughPattern}|{StylePattern}|{SubPattern}|{SupPattern}|{UPattern}|{UppercasePattern}|{VoffsetPattern}|{WidthPattern}";
+		#endregion
 
 		private static bool initialized = false;
 
@@ -151,6 +194,16 @@ namespace FishMMO.Shared
 			string word = text.Substring(0, firstSpace);
 			trimmed = text.Substring(firstSpace, text.Length - firstSpace).Trim();
 			return word;
+		}
+
+		/// <summary>
+		/// Attempts to sanitize a chat message. This will attempt to remove any Rich Text.
+		/// </summary>
+		public static string Sanitize(string message)
+		{
+			string result = Regex.Replace(message, CombinedRTTPattern, "");
+
+			return result;
 		}
 	}
 }

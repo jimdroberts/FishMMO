@@ -59,6 +59,9 @@ namespace FishMMO.Client
 			}
 			else
 			{
+				// set the UIManager Client
+				UIManager.SetClient(this);
+
 				// initialize naming service
 				ClientNamingSystem.InitializeOnce(this);
 
@@ -97,9 +100,6 @@ namespace FishMMO.Client
 					});
 #endif
 				}
-				
-				// do dependency injection here if needed
-				UIManager.SetClient(this);
 
 				UnityEngine.SceneManagement.SceneManager.sceneLoaded += UnitySceneManager_OnSceneLoaded;
 				UnityEngine.SceneManagement.SceneManager.sceneUnloaded += UnitySceneManager_OnSceneUnloaded;

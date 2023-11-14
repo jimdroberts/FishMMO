@@ -5,7 +5,7 @@ namespace FishMMO.Shared
 {
 	public abstract class AbilityEvent : CachedScriptableObject<AbilityEvent>
 	{
-		public Texture2D Icon;
+		public Sprite Icon;
 		public string Description;
 		public float ActivationTime;
 		public float ActiveTime;

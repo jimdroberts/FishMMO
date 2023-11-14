@@ -23,14 +23,10 @@ namespace FishMMO.Client
 							if (item != null)
 							{
 								character.EquipmentController.SendEquipRequest(ReferenceID, (byte)ItemSlotType);
-								// clear the drag object if we succeed in equipping our item
-								dragObject.Clear();
 							}
-							else
-							{
-								// clear the drag object if our item is null
-								dragObject.Clear();
-							}
+
+							// clear the drag object
+							dragObject.Clear();
 						}
 					}
 					else if (!character.EquipmentController.IsSlotEmpty((byte)ItemSlotType))

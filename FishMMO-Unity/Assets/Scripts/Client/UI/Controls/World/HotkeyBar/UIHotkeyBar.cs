@@ -92,6 +92,8 @@ namespace FishMMO.Client
 						break;
 					case HotkeyType.Ability:
 						break;
+					default:
+						break;
 				}
 			}
 		}

@@ -176,6 +176,9 @@ namespace FishMMO.Server
 				sender.LastChatMessage = msg.text;
 			}
 
+			// remove Rich Text Tags if any exist
+			msg.text = ChatHelper.Sanitize(msg.text);
+
 			string cmd = ChatHelper.GetCommandAndTrim(ref msg.text);
 
 			// direct commands are handled differently

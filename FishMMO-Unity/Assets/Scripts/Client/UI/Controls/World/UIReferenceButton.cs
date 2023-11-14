@@ -8,7 +8,7 @@ namespace FishMMO.Client
 {
 	/// <summary>
 	/// Advanced button class used for the inventory, equipment, and hotkey UI.
-	/// ReferenceID is the inventory slot, equipment slot, or ability name.
+	/// ReferenceID is the inventory slot, equipment slot, or ability id.
 	/// </summary>
 	public class UIReferenceButton : Button
 	{
@@ -43,19 +43,22 @@ namespace FishMMO.Client
 					case HotkeyType.Any:
 						break;
 					case HotkeyType.Inventory:
-						if (character.InventoryController.TryGetItem(ReferenceID, out Item inventoryItem) && UIManager.TryGet("UITooltip", out tooltip))
+						if (character.InventoryController.TryGetItem(ReferenceID, out Item inventoryItem) &&
+							UIManager.TryGet("UITooltip", out tooltip))
 						{
 							tooltip.SetText(inventoryItem.Tooltip(), true);
 						}
 						break;
 					case HotkeyType.Equipment:
-						if (character.EquipmentController.TryGetItem(ReferenceID, out Item equippedItem) && UIManager.TryGet("UITooltip", out tooltip))
+						if (character.EquipmentController.TryGetItem(ReferenceID, out Item equippedItem) &&
+							UIManager.TryGet("UITooltip", out tooltip))
 						{
 							tooltip.SetText(equippedItem.Tooltip(), true);
 						}
 						break;
 					case HotkeyType.Ability:
-						if (character.AbilityController.KnownAbilities.TryGetValue(ReferenceID, out Ability ability) && UIManager.TryGet("UITooltip", out tooltip))
+						if (character.AbilityController.KnownAbilities.TryGetValue(ReferenceID, out Ability ability) &&
+							UIManager.TryGet("UITooltip", out tooltip))
 						{
 							tooltip.SetText(ability.Tooltip(), true);
 						}

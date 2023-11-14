@@ -43,12 +43,16 @@ namespace FishMMO.Client
 			{
 				OnAccept?.Invoke(InputField.text);
 			}
-			Visible = false;
+			OnClick_Cancel();
 		}
 
 		public void OnClick_Cancel()
 		{
 			OnCancel?.Invoke();
+
+			OnAccept = null;
+			OnCancel = null;
+
 			Visible = false;
 		}
 	}
