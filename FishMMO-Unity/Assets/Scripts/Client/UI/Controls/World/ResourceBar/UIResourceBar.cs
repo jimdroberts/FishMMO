@@ -4,27 +4,39 @@ using FishMMO.Shared;
 
 namespace FishMMO.Client
 {
-	public abstract class UIResourceBar : UIControl
+	public abstract class UIResourceBar : UICharacterControl
 	{
 		public Slider slider;
 		public TMP_Text resourceValue;
 
 		public CharacterAttributeTemplate Template;
 
-		public override void OnStarting()
+		public override void OnPreSetCharacter()
 		{
+			if (Character != null &&
+				Character.AttributeController != null &&
+				Character.AttributeController.TryGetResourceAttribute(Template, out CharacterResourceAttribute attribute))
+			{
+				attribute.OnAttributeUpdated -= CharacterAttribute_OnAttributeUpdated;
+			}
 		}
 
-		public override void OnDestroying()
+		public override void SetCharacter(Character character)
 		{
+			base.SetCharacter(character);
+
+			if (Character != null &&
+				Character.AttributeController != null &&
+				Character.AttributeController.TryGetResourceAttribute(Template, out CharacterResourceAttribute attribute))
+			{
+				attribute.OnAttributeUpdated += CharacterAttribute_OnAttributeUpdated;
+			}
 		}
 
-		void Update()
+		public void CharacterAttribute_OnAttributeUpdated(CharacterAttribute attribute)
 		{
-			Character character = Character.localCharacter;
-			if (character == null) return;
-
-			if (character.AttributeController.TryGetResourceAttribute(Template, out CharacterResourceAttribute resource))
+			if (Character != null &&
+				Character.AttributeController.TryGetResourceAttribute(Template, out CharacterResourceAttribute resource))
 			{
 				float value = resource.CurrentValue / resource.FinalValueAsFloat;
 				if (slider != null) slider.value = value;

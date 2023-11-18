@@ -6,7 +6,7 @@ using FishMMO.Shared;
 
 namespace FishMMO.Client
 {
-	public class UIChat : UIControl, IChatHelper
+	public class UIChat : UICharacterControl, IChatHelper
 	{
 		public const int MAX_LENGTH = 128;
 
@@ -147,24 +147,23 @@ namespace FishMMO.Client
 				{
 					input = input.Substring(0, MAX_LENGTH);
 				}
-				Character character = Character.localCharacter;
-				if (character != null)
+				if (Character != null)
 				{
 					if (MessageRateLimit > 0)
 					{
-						if (character.NextChatMessageTime > DateTime.UtcNow)
+						if (Character.NextChatMessageTime > DateTime.UtcNow)
 						{
 							return;
 						}
-						character.NextChatMessageTime = DateTime.UtcNow.AddMilliseconds(MessageRateLimit);
+						Character.NextChatMessageTime = DateTime.UtcNow.AddMilliseconds(MessageRateLimit);
 					}
 					if (!AllowRepeatMessages)
 					{
-						if (character.LastChatMessage.Equals(input))
+						if (Character.LastChatMessage.Equals(input))
 						{
 							return;
 						}
-						character.LastChatMessage = input;
+						Character.LastChatMessage = input;
 					}
 				}
 				ChatBroadcast message = new ChatBroadcast() { text = input };
@@ -297,7 +296,7 @@ namespace FishMMO.Client
 				if (tab.activeChannels.Contains(msg.channel))
 				{
 					// parse the local message
-					ParseLocalMessage(Character.localCharacter, msg);
+					ParseLocalMessage(Character, msg);
 				}
 			}
 		}
@@ -396,7 +395,7 @@ namespace FishMMO.Client
 				}
 			}
 			// we received a tell from someone else
-			if (msg.senderID != Character.localCharacter.ID)
+			if (localCharacter == null || msg.senderID != localCharacter.ID)
 			{
 				ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
 				{

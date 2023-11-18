@@ -1,19 +1,12 @@
 ﻿using UnityEngine;
 using UnityEngine.UI;
+using FishMMO.Shared;
 
 namespace FishMMO.Client
 {
-	public class UIAbilities : UIControl
+	public class UIAbilities : UICharacterControl
 	{
 		public RectTransform AbilityParent;
 		public UIAbilityEntry AbilityEntryPrefab;
-
-		public override void OnStarting()
-		{
-		}
-
-		public override void OnDestroying()
-		{
-		}
 	}
 }

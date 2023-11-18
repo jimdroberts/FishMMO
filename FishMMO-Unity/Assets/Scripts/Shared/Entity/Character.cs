@@ -20,9 +20,9 @@ namespace FishMMO.Shared
 	[RequireComponent(typeof(PredictedObject))]
 	[RequireComponent(typeof(NetworkTransform))]
 	[RequireComponent(typeof(Rigidbody))]
-	[RequireComponent(typeof(KCCPlayer))]
-	[RequireComponent(typeof(KCCController))]
 	[RequireComponent(typeof(KinematicCharacterMotor))]
+	[RequireComponent(typeof(KCCController))]
+	[RequireComponent(typeof(KCCPlayer))]
 	#endregion
 	[RequireComponent(typeof(CharacterAttributeController))]
 	[RequireComponent(typeof(TargetController))]
@@ -39,11 +39,14 @@ namespace FishMMO.Shared
 	[RequireComponent(typeof(FriendController))]
 	public class Character : NetworkBehaviour, IPooledResettable
 	{
-		public static Character localCharacter;
-
 		public Transform Transform { get; private set; }
 
+		#region KCC
+		public KinematicCharacterMotor Motor { get; private set; }
 		public KCCController CharacterController { get; private set; }
+		public KCCPlayer KCCPlayer { get; private set; }
+		#endregion
+
 		public CharacterAttributeController AttributeController { get; private set; }
 		public CharacterDamageController DamageController { get; private set; }
 		public TargetController TargetController { get; private set; }
@@ -57,7 +60,6 @@ namespace FishMMO.Shared
 		public GuildController GuildController { get; private set; }
 		public PartyController PartyController { get; private set; }
 		public FriendController FriendController { get; private set; }
-		public KinematicCharacterMotor Motor { get; private set; }
 #if !UNITY_SERVER
 		public LocalInputController LocalInputController { get; private set; }
 		public TextMeshPro CharacterNameLabel;
@@ -104,7 +106,18 @@ namespace FishMMO.Shared
 		{
 			Transform = transform;
 
+			#region KCC
+			Motor = gameObject.GetComponent<KinematicCharacterMotor>();
+
 			CharacterController = gameObject.GetComponent<KCCController>();
+			CharacterController.Motor = Motor;
+			Motor.CharacterController = CharacterController;
+
+			KCCPlayer = gameObject.GetComponent<KCCPlayer>();
+			KCCPlayer.CharacterController = CharacterController;
+			KCCPlayer.Motor = Motor;
+			#endregion
+
 			AttributeController = gameObject.GetComponent<CharacterAttributeController>();
 			DamageController = gameObject.GetComponent<CharacterDamageController>();
 			DamageController.Character = this;
@@ -129,33 +142,15 @@ namespace FishMMO.Shared
 			PartyController.Character = this;
 			FriendController = gameObject.GetComponent<FriendController>();
 			FriendController.Character = this;
-			Motor = gameObject.GetComponent<KinematicCharacterMotor>();
 		}
 
+#if !UNITY_SERVER
 		public override void OnStartClient()
 		{
 			base.OnStartClient();
 			if (base.IsOwner)
 			{
-				localCharacter = this;
-
-#if !UNITY_SERVER
-				InputManager.MouseMode = false;
-
-				LocalInputController = gameObject.GetComponent<LocalInputController>();
-				if (LocalInputController == null)
-				{
-					LocalInputController = gameObject.AddComponent<LocalInputController>();
-				}
-				LabelMaker = gameObject.GetComponent<LabelMaker>();
-
-				if (TargetController != null &&
-					UIManager.TryGet("UITarget", out UITarget uiTarget))
-				{
-					TargetController.OnChangeTarget += uiTarget.OnChangeTarget;
-					TargetController.OnUpdateTarget += uiTarget.OnUpdateTarget;
-				}
-#endif
+				InitializeLocal(true);
 			}
 		}
 
@@ -164,23 +159,53 @@ namespace FishMMO.Shared
 			base.OnStopClient();
 			if (base.IsOwner)
 			{
-				localCharacter = null;
+				InitializeLocal(false);
+			}
+		}
 
-#if !UNITY_SERVER
-				if (LocalInputController != null)
+		private void InitializeLocal(bool initializing)
+		{
+			InputManager.MouseMode = false;
+
+			LocalInputController = gameObject.GetComponent<LocalInputController>();
+			if (LocalInputController == null)
+			{
+				LocalInputController = gameObject.AddComponent<LocalInputController>();
+			}
+			LocalInputController.Initialize(this);
+
+			LabelMaker = gameObject.GetComponent<LabelMaker>();
+
+			InitializeUI(initializing);
+		}
+
+		private void InitializeUI(bool initializing)
+		{
+			if (initializing)
+			{
+				UIManager.SetCharacter(this);
+
+				if (TargetController != null &&
+					UIManager.TryGet("UITarget", out UITarget uiTarget))
 				{
-					Destroy(LocalInputController);
+					TargetController.OnChangeTarget += uiTarget.OnChangeTarget;
+					TargetController.OnUpdateTarget += uiTarget.OnUpdateTarget;
 				}
+			}
+			else
+			{
+				UIManager.SetCharacter(null);
 
 				if (TargetController != null &&
 					UIManager.TryGet("UITarget", out UITarget uiTarget))
 				{
 					TargetController.OnChangeTarget -= uiTarget.OnChangeTarget;
-					TargetController.OnUpdateTarget += uiTarget.OnUpdateTarget;
+					TargetController.OnUpdateTarget -= uiTarget.OnUpdateTarget;
 				}
-#endif
 			}
 		}
+#endif
+
 
 		/// <summary>
 		/// Resets the Character values to default for pooling.

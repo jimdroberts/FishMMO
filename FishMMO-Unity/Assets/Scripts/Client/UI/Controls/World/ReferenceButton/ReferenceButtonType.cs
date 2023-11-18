@@ -1,6 +1,6 @@
 ﻿namespace FishMMO.Client
 {
-	public enum HotkeyType : byte
+	public enum ReferenceButtonType : byte
 	{
 		None = 0,
 		Any,

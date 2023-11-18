@@ -4,7 +4,7 @@ using FishMMO.Shared;
 
 namespace FishMMO.Client
 {
-	public class UIHotkeyBar : UIControl
+	public class UIHotkeyBar : UICharacterControl
 	{
 		private const int MAX_HOTKEYS = 10;
 
@@ -18,10 +18,6 @@ namespace FishMMO.Client
 			AddHotkeys(MAX_HOTKEYS);
 		}
 
-		public override void OnDestroying()
-		{
-		}
-
 		void Update()
 		{
 			ValidateHotkeys();
@@ -29,7 +25,7 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Hack to get our hotkey virtual key. Offset by 1.
+		/// Get our hotkey virtual key code. Offset by 1.
 		/// </summary>
 		public static string GetHotkeyIndexKeyMap(int hotkeyIndex)
 		{
@@ -65,32 +61,35 @@ namespace FishMMO.Client
 		/// </summary>
 		private void ValidateHotkeys()
 		{
-			Character character = Character.localCharacter;
-			if (character == null) return;
+			if (Character == null) return;
 
 			for (int i = 0; i < hotkeys.Count; ++i)
 			{
 				if (hotkeys[i] == null) continue;
 
-				switch (hotkeys[i].HotkeyType)
+				switch (hotkeys[i].Type)
 				{
-					case HotkeyType.None:
+					case ReferenceButtonType.None:
 						break;
-					case HotkeyType.Any:
+					case ReferenceButtonType.Any:
 						break;
-					case HotkeyType.Inventory:
-						if (!character.InventoryController.IsValidItem(hotkeys[i].ReferenceID))
+					case ReferenceButtonType.Inventory:
+						if (Character.InventoryController.IsSlotEmpty(hotkeys[i].ReferenceID))
 						{
 							hotkeys[i].Clear();
 						}
 						break;
-					case HotkeyType.Equipment:
-						if (!character.EquipmentController.IsValidItem(hotkeys[i].ReferenceID))
+					case ReferenceButtonType.Equipment:
+						if (Character.EquipmentController.IsSlotEmpty(hotkeys[i].ReferenceID))
 						{
 							hotkeys[i].Clear();
 						}
 						break;
-					case HotkeyType.Ability:
+					case ReferenceButtonType.Ability:
+						if (!Character.AbilityController.KnownAbilities.ContainsKey(hotkeys[i].ReferenceID))
+						{
+							hotkeys[i].Clear();
+						}
 						break;
 					default:
 						break;
@@ -100,8 +99,7 @@ namespace FishMMO.Client
 
 		private void UpdateInput()
 		{
-			Character character = Character.localCharacter;
-			if (character == null || hotkeys == null || hotkeys.Count < 1)
+			if (Character == null || hotkeys == null || hotkeys.Count < 1)
 				return;
 
 			for (int i = 0; i < hotkeys.Count; ++i)
@@ -125,11 +123,11 @@ namespace FishMMO.Client
 			for (int i = 0; i < amount && i < MAX_HOTKEYS; ++i)
 			{
 				UIHotkeyButton button = Instantiate(buttonPrefab, parent);
-				button.Index = i;
+				button.Character = Character;
 				button.KeyMap = GetHotkeyIndexKeyMap(i);
 				button.ReferenceID = UIReferenceButton.NULL_REFERENCE_ID;
-				button.AllowedHotkeyType = HotkeyType.Any;
-				button.HotkeyType = HotkeyType.None;
+				button.AllowedType = ReferenceButtonType.Any;
+				button.Type = ReferenceButtonType.None;
 				hotkeys.Add(button);
 			}
 		}

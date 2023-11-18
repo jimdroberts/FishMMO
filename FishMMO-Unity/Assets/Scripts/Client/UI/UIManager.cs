@@ -1,6 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
+using UnityEngine;
 using UnityEngine.EventSystems;
+using FishMMO.Shared;
 
 namespace FishMMO.Client
 {
@@ -10,6 +11,7 @@ namespace FishMMO.Client
 	public static class UIManager
 	{
 		private static Dictionary<string, UIControl> controls = new Dictionary<string, UIControl>();
+		private static Dictionary<string, UICharacterControl> characterControls = new Dictionary<string, UICharacterControl>();
 		private static Client _client;
 
 		/// <summary>
@@ -18,6 +20,14 @@ namespace FishMMO.Client
 		internal static void SetClient(Client client)
 		{
 			_client = client;
+		}
+
+		internal static void SetCharacter(Character character)
+		{
+			foreach (UICharacterControl control in characterControls.Values)
+			{
+				control.SetCharacter(character);
+			}
 		}
 
 		internal static void Register(UIControl control)
@@ -31,9 +41,16 @@ namespace FishMMO.Client
 				return;
 			}
 
+			// character controls are mapped separately for ease of use
+			UICharacterControl characterControl = control as UICharacterControl;
+			if (characterControl != null)
+			{
+				characterControls.Add(characterControl.Name, characterControl);
+			}
+
 			control.SetClient(_client);
 
-			UnityEngine.Debug.Log("UIManager Registered[" + control.Name + "]");
+			Debug.Log("UIManager: Registered[" + control.Name + "]");
 			controls.Add(control.Name, control);
 		}
 
@@ -45,8 +62,9 @@ namespace FishMMO.Client
 			}
 			else
 			{
-				//Debug.Log("UIManager: Unregistered " + control.Name);
+				Debug.Log("UIManager: Unregistered[" + control.Name + "]");
 				controls.Remove(control.Name);
+				characterControls.Remove(control.Name);
 			}
 		}
 

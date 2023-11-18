@@ -7,23 +7,26 @@ using FishMMO.Shared;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// Advanced button class used for the inventory, equipment, and hotkey UI.
-	/// ReferenceID is the inventory slot, equipment slot, or ability id.
+	/// Advanced button class used by the inventory, equipment, and hotkey buttons.
 	/// </summary>
 	public class UIReferenceButton : Button
 	{
 		public const int NULL_REFERENCE_ID = -1;
 
-		public int Index = -1;
+		/// <summary>
+		/// ReferenceID is equal to the inventory slot, equipment slot, or ability id based on Reference Type.
+		/// </summary>
 		public int ReferenceID = NULL_REFERENCE_ID;
-		public HotkeyType AllowedHotkeyType = HotkeyType.Any;
-		public HotkeyType HotkeyType = HotkeyType.None;
+		public ReferenceButtonType AllowedType = ReferenceButtonType.Any;
+		public ReferenceButtonType Type = ReferenceButtonType.None;
 		[SerializeField]
 		public RawImage Icon;
 		[SerializeField]
 		public TMP_Text CooldownText;
 		[SerializeField]
 		public TMP_Text AmountText;
+
+		public Character Character;
 
 		public virtual void OnLeftClick() { }
 		public virtual void OnRightClick() { }
@@ -32,32 +35,34 @@ namespace FishMMO.Client
 		{
 			base.OnPointerEnter(eventData);
 
-			Character character = Character.localCharacter;
-			if (character != null && ReferenceID > -1)
+			if (Character != null && ReferenceID > -1)
 			{
 				UITooltip tooltip;
-				switch (HotkeyType)
+				switch (Type)
 				{
-					case HotkeyType.None:
+					case ReferenceButtonType.None:
 						break;
-					case HotkeyType.Any:
+					case ReferenceButtonType.Any:
 						break;
-					case HotkeyType.Inventory:
-						if (character.InventoryController.TryGetItem(ReferenceID, out Item inventoryItem) &&
+					case ReferenceButtonType.Inventory:
+						if (Character.InventoryController != null &&
+							Character.InventoryController.TryGetItem(ReferenceID, out Item inventoryItem) &&
 							UIManager.TryGet("UITooltip", out tooltip))
 						{
 							tooltip.SetText(inventoryItem.Tooltip(), true);
 						}
 						break;
-					case HotkeyType.Equipment:
-						if (character.EquipmentController.TryGetItem(ReferenceID, out Item equippedItem) &&
+					case ReferenceButtonType.Equipment:
+						if (Character.EquipmentController != null &&
+							Character.EquipmentController.TryGetItem(ReferenceID, out Item equippedItem) &&
 							UIManager.TryGet("UITooltip", out tooltip))
 						{
 							tooltip.SetText(equippedItem.Tooltip(), true);
 						}
 						break;
-					case HotkeyType.Ability:
-						if (character.AbilityController.KnownAbilities.TryGetValue(ReferenceID, out Ability ability) &&
+					case ReferenceButtonType.Ability:
+						if (Character.AbilityController.KnownAbilities != null &&
+							Character.AbilityController.KnownAbilities.TryGetValue(ReferenceID, out Ability ability) &&
 							UIManager.TryGet("UITooltip", out tooltip))
 						{
 							tooltip.SetText(ability.Tooltip(), true);
@@ -96,7 +101,7 @@ namespace FishMMO.Client
 		public virtual void Clear()
 		{
 			ReferenceID = NULL_REFERENCE_ID;
-			HotkeyType = HotkeyType.None;
+			Type = ReferenceButtonType.None;
 			if (Icon != null) Icon.texture = null;
 			if (CooldownText != null) CooldownText.text = "";
 			if (AmountText != null) AmountText.text = "";

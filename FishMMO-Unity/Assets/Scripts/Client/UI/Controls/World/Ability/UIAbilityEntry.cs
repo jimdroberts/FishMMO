@@ -8,39 +8,43 @@ namespace FishMMO.Client
 {
 	public class UIAbilityEntry : Button
 	{
-		public int TemplateID;
 		[SerializeField]
 		public Image Icon;
 
 		public event Action<int> OnLeft;
 		public event Action<int> OnRight;
 
-		protected void Internal_OnLeftClick(int templateID)
+		public int Index { get; private set; }
+		public AbilityTemplate Template { get; private set; }
+		public Character Character { get; private set; }
+
+		public void Initialize(Character character, int index, AbilityTemplate template)
 		{
-			OnLeft?.Invoke(templateID);
+			Index = index;
+			Template = template;
+			Character = character;
 		}
 
 		public virtual void OnLeftClick()
 		{
 			if (UIManager.TryGet("UISelector", out UISelector selector))
 			{
-				selector.Open((id) =>
+				/*selector.Open((id) =>
 				{
 					AbilityTemplate template = AbilityTemplate.Get<AbilityTemplate>(id);
 					if (template != null)
 					{
-						TemplateID = template.ID;
 						Icon.sprite = template.Icon;
 					}
 
-					Internal_OnLeftClick(id);
-				});
+					OnLeft?.Invoke(Index);
+				});*/
 			}
 		}
 
 		public virtual void OnRightClick()
 		{
-			OnRight?.Invoke(TemplateID);
+			OnRight?.Invoke(Index);
 			Clear();
 		}
 
@@ -48,14 +52,12 @@ namespace FishMMO.Client
 		{
 			base.OnPointerEnter(eventData);
 
-			Character character = Character.localCharacter;
-			if (character != null)
+			if (Character != null)
 			{
-				AbilityTemplate template = AbilityTemplate.Get<AbilityTemplate>(TemplateID);
-				if (template != null &&
+				if (Template != null &&
 					UIManager.TryGet("UITooltip", out UITooltip tooltip))
 				{
-					tooltip.SetText(template.Tooltip(), true);
+					tooltip.SetText(Template.Tooltip(), true);
 				}
 			}
 		}
@@ -86,7 +88,7 @@ namespace FishMMO.Client
 
 		public virtual void Clear()
 		{
-			TemplateID = 0;
+			Template = null;
 			if (Icon != null) Icon.sprite = null;
 			OnLeft = null;
 			OnRight = null;

@@ -10,7 +10,7 @@ namespace FishMMO.Client
 		{
 			if (UIManager.TryGet("UIDragObject", out UIDragObject dragObject) && dragObject.Visible)
 			{
-				HotkeyType = dragObject.HotkeyType;
+				Type = dragObject.Type;
 				ReferenceID = dragObject.ReferenceID;
 				Icon.texture = dragObject.Icon.texture;
 
@@ -27,30 +27,29 @@ namespace FishMMO.Client
 		{
 			if (UIManager.TryGet("UIDragObject", out UIDragObject dragObject) && ReferenceID != NULL_REFERENCE_ID)
 			{
-				dragObject.SetReference(Icon.texture, ReferenceID, HotkeyType);
+				dragObject.SetReference(Icon.texture, ReferenceID, Type);
 				Clear();
 			}
 		}
 
 		public void Activate()
 		{
-			Character character = Character.localCharacter;
-			if (character != null && !string.IsNullOrWhiteSpace(KeyMap))
+			if (Character != null && !string.IsNullOrWhiteSpace(KeyMap))
 			{
-				switch (HotkeyType)
+				switch (Type)
 				{
-					case HotkeyType.None:
+					case ReferenceButtonType.None:
 						break;
-					case HotkeyType.Any:
+					case ReferenceButtonType.Any:
 						break;
-					case HotkeyType.Inventory:
-						character.InventoryController.Activate(ReferenceID);
+					case ReferenceButtonType.Inventory:
+						Character.InventoryController.Activate(ReferenceID);
 						break;
-					case HotkeyType.Equipment:
-						character.EquipmentController.Activate(ReferenceID);
+					case ReferenceButtonType.Equipment:
+						Character.EquipmentController.Activate(ReferenceID);
 						break;
-					case HotkeyType.Ability:
-						character.AbilityController.Activate(ReferenceID, InputManager.GetKeyCode(KeyMap));
+					case ReferenceButtonType.Ability:
+						Character.AbilityController.Activate(ReferenceID, InputManager.GetKeyCode(KeyMap));
 						break;
 					default:
 						return;

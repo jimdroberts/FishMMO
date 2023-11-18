@@ -8,7 +8,7 @@ namespace FishMMO.Client
 	{
 		public RawImage Icon;
 		public int ReferenceID = UIReferenceButton.NULL_REFERENCE_ID;
-		public HotkeyType HotkeyType = HotkeyType.None;
+		public ReferenceButtonType Type = ReferenceButtonType.None;
 
 		public LayerMask LayerMask;
 		public float DropDistance = 5.0f;
@@ -36,7 +36,7 @@ namespace FishMMO.Client
 				if (Input.GetMouseButtonDown(0) && !EventSystem.current.IsPointerOverGameObject())
 				{
 					// we can drop items on the ground from inventory
-					if (HotkeyType == HotkeyType.Inventory)
+					if (Type == ReferenceButtonType.Inventory)
 					{
 						Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
 						RaycastHit hit;
@@ -56,11 +56,11 @@ namespace FishMMO.Client
 			}
 		}
 
-		public void SetReference(Texture icon, int referenceID, HotkeyType hotkeyType)
+		public void SetReference(Texture icon, int referenceID, ReferenceButtonType type)
 		{
-			this.Icon.texture = icon;
-			this.ReferenceID = referenceID;
-			this.HotkeyType = hotkeyType;
+			Icon.texture = icon;
+			ReferenceID = referenceID;
+			Type = type;
 
 			// set position immediately so we don't have any position glitches before Update is triggered
 			Vector3 offset = new Vector3(this.Icon.texture.width * 0.5f + 1.0f, this.Icon.texture.height * -0.5f - 1.0f, 0.0f);
@@ -75,7 +75,7 @@ namespace FishMMO.Client
 
 			Icon.texture = null;
 			ReferenceID = UIReferenceButton.NULL_REFERENCE_ID;
-			HotkeyType = HotkeyType.None;
+			Type = ReferenceButtonType.None;
 			//transform.position = new Vector3(-9999.0f, -9999.0f, 0.0f); // do we need to do this?
 		}
 	}

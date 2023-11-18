@@ -14,6 +14,7 @@ namespace FishMMO.Shared
 
 		public AbilityTemplate Template { get; private set; }
 		public string Name { get; set; }
+		public string CachedTooltip { get; private set; }
 		public AbilityResourceDictionary Resources { get; private set; }
 		public AbilityResourceDictionary Requirements { get; private set; }
 		// cache of all ability events
@@ -50,6 +51,7 @@ namespace FishMMO.Shared
 			AbilityID = abilityID;
 			Template = AbilityTemplate.Get<AbilityTemplate>(templateID);
 			Name = Template.Name;
+			CachedTooltip = null;
 
 			InternalAddTemplateModifiers(Template);
 
@@ -103,6 +105,8 @@ namespace FishMMO.Shared
 		{
 			if (!AbilityEvents.ContainsKey(abilityEvent.ID))
 			{
+				CachedTooltip = null;
+
 				AbilityEvents.Add(abilityEvent.ID, abilityEvent);
 
 				SpawnEvent spawnEvent = abilityEvent as SpawnEvent;
@@ -163,6 +167,8 @@ namespace FishMMO.Shared
 		{
 			if (AbilityEvents.ContainsKey(abilityEvent.ID))
 			{
+				CachedTooltip = null;
+
 				AbilityEvents.Remove(abilityEvent.ID);
 
 				SpawnEvent spawnEvent = abilityEvent as SpawnEvent;
@@ -297,6 +303,10 @@ namespace FishMMO.Shared
 
 		public string Tooltip()
 		{
+			if (CachedTooltip != null)
+			{
+				return CachedTooltip;
+			}
 			StringBuilder sb = new StringBuilder();
 			sb.Append("<size=120%><color=#f5ad6e>");
 			sb.Append(Template.Name);
@@ -329,7 +339,41 @@ namespace FishMMO.Shared
 			sb.Append("<color=#a66ef5>Speed: ");
 			sb.Append(Speed);
 			sb.Append("</color>");
-			return sb.ToString();
+			if (Resources != null && Resources.Count > 0)
+			{
+				sb.AppendLine();
+				sb.Append("<color=#a66ef5>Resources: </color>");
+
+				foreach (CharacterAttributeTemplate attribute in Resources.Keys)
+				{
+					sb.Append(attribute.Tooltip());
+				}
+			}
+			if (Requirements != null && Requirements.Count > 0)
+			{
+				sb.AppendLine();
+				sb.Append("<color=#a66ef5>Requirements: </color>");
+
+				foreach (CharacterAttributeTemplate attribute in Requirements.Keys)
+				{
+					sb.Append(attribute.Tooltip());
+				}
+			}
+			if (AbilityEvents != null && AbilityEvents.Count > 0)
+			{
+				sb.AppendLine();
+				sb.Append("<color=#a66ef5>Ability Events: </color>");
+
+				foreach (AbilityEvent abilityEvent in AbilityEvents.Values)
+				{
+					sb.AppendLine();
+					sb.Append(abilityEvent.Name);
+					sb.AppendLine();
+					sb.Append(abilityEvent.Description);
+				}
+			}
+			CachedTooltip = sb.ToString();
+			return CachedTooltip;
 		}
 	}
 }

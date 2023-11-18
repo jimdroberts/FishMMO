@@ -3,9 +3,9 @@ using UnityEngine;
 
 namespace FishMMO.Shared
 {
-	public abstract class AbilityEvent : CachedScriptableObject<AbilityEvent>
+	public abstract class AbilityEvent : CachedScriptableObject<AbilityEvent>, ITooltip
 	{
-		public Sprite Icon;
+		public Sprite icon;
 		public string Description;
 		public float ActivationTime;
 		public float ActiveTime;
@@ -16,6 +16,8 @@ namespace FishMMO.Shared
 		public AbilityResourceDictionary Requirements = new AbilityResourceDictionary();
 
 		public string Name { get { return this.name; } }
+
+		public Sprite Icon { get { return this.icon; } }
 
 		public string Tooltip()
 		{

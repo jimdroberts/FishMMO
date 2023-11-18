@@ -5,7 +5,7 @@ using FishMMO.Shared;
 
 namespace FishMMO.Client
 {
-	public class UIEquipment : UIControl
+	public class UIEquipment : UICharacterControl
 	{
 		public RectTransform content;
 		public TMP_Text attributePrefab;
@@ -16,44 +16,78 @@ namespace FishMMO.Client
 
 		public override void OnStarting()
 		{
+			UIEquipmentButton[] equipmentButtons = gameObject.GetComponentsInChildren<UIEquipmentButton>();
+			if (equipmentButtons != null)
+			{
+				buttons = new List<UIEquipmentButton>();
+				for (int i = 0; i < equipmentButtons.Length; ++i)
+				{
+					UIEquipmentButton button = equipmentButtons[i];
+					button.Type = ReferenceButtonType.Equipment;
+					button.ReferenceID = (int)button.ItemSlotType;
+					buttons.Add(button);
+				}
+			}
 		}
 
 		public override void OnDestroying()
 		{
+			DestroyAttributes();
 		}
 
-		void Update()
+		private void DestroyAttributes()
 		{
-			Character character = Character.localCharacter;
-			if (character == null) return;
-
-			if (buttons == null || buttons.Count != character.EquipmentController.Items.Count)
+			if (attributeLabels != null)
 			{
-				character.EquipmentController.OnSlotUpdated -= OnEquipmentSlotUpdated;
-				UIEquipmentButton[] equipmentButtons = gameObject.GetComponentsInChildren<UIEquipmentButton>();
-				if (equipmentButtons != null)
+				foreach (TMP_Text obj in attributeLabels.Values)
 				{
-					buttons = new List<UIEquipmentButton>();
-					for (int i = 0; i < equipmentButtons.Length; ++i)
+					Destroy(obj.gameObject);
+				}
+				attributeLabels.Clear();
+			}
+		}
+
+		public override void OnPreSetCharacter()
+		{
+			if (Character != null)
+			{
+				if (Character.AttributeController != null)
+				{
+					foreach (CharacterAttribute attribute in Character.AttributeController.Attributes.Values)
 					{
-						buttons.Add(equipmentButtons[i]);
+						attribute.OnAttributeUpdated -= OnAttributeUpdated;
 					}
 				}
-				character.EquipmentController.OnSlotUpdated += OnEquipmentSlotUpdated;
+				if (Character.EquipmentController != null)
+				{
+					Character.EquipmentController.OnSlotUpdated -= OnEquipmentSlotUpdated;
+				}
+			}
+		}
+
+		public override void SetCharacter(Character character)
+		{
+			base.SetCharacter(character);
+			DestroyAttributes();
+
+			if (buttons != null)
+			{
+				Character.EquipmentController.OnSlotUpdated -= OnEquipmentSlotUpdated;
+				foreach (UIEquipmentButton button in buttons)
+				{
+					button.Character = Character;
+					if (Character != null)
+					{
+						SetButtonSlot(Character.EquipmentController, button);
+					}
+				}
+				Character.EquipmentController.OnSlotUpdated += OnEquipmentSlotUpdated;
 			}
 
-			if (attributeLabels == null || attributeLabels.Count != character.AttributeController.Attributes.Count)
+			if (Character != null &&
+				Character.AttributeController != null)
 			{
-				if (attributeLabels != null)
-				{
-					foreach (TMP_Text obj in attributeLabels.Values)
-					{
-						Destroy(obj.gameObject);
-					}
-					attributeLabels.Clear();
-				}
-
-				foreach (CharacterAttribute attribute in character.AttributeController.Attributes.Values)
+				foreach (CharacterAttribute attribute in Character.AttributeController.Attributes.Values)
 				{
 					attribute.OnAttributeUpdated -= OnAttributeUpdated; // just incase..
 					TMP_Text label = Instantiate(attributePrefab, content);
@@ -64,19 +98,38 @@ namespace FishMMO.Client
 			}
 		}
 
-		public void OnEquipmentSlotUpdated(ItemContainer container, Item item, int equipmentSlot)
+		private void SetButtonSlot(ItemContainer container, UIEquipmentButton button)
 		{
-			if (buttons == null)
+			if (container == null || button == null)
 			{
 				return;
 			}
 
-			if (container.IsValidItem(equipmentSlot))
+			if (container.TryGetItem((int)button.ItemSlotType, out Item item))
+			{
+				// update our button display
+				if (button.Icon != null) button.Icon.texture = item.Template.Icon;
+				//inventorySlots[i].cooldownText = character.CooldownController.IsOnCooldown();
+				if (button.AmountText != null) button.AmountText.text = item.IsStackable ? item.Stackable.Amount.ToString() : "";
+			}
+			else
+			{
+				// clear the slot
+				button.Clear();
+			}
+		}
+
+		public void OnEquipmentSlotUpdated(ItemContainer container, Item item, int equipmentSlot)
+		{
+			if (container == null || buttons == null)
+			{
+				return;
+			}
+
+			if (!container.IsSlotEmpty(equipmentSlot))
 			{
 				// update our button display
 				UIEquipmentButton button = buttons[equipmentSlot];
-				button.ReferenceID = equipmentSlot;
-				button.HotkeyType = HotkeyType.Equipment;
 				if (button.Icon != null) button.Icon.texture = item.Template.Icon;
 				//inventorySlots[i].cooldownText = character.CooldownController.IsOnCooldown();
 				if (button.AmountText != null) button.AmountText.text = item.IsStackable ? item.Stackable.Amount.ToString() : "";

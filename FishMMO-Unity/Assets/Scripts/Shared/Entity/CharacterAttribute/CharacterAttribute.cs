@@ -14,8 +14,7 @@ namespace FishMMO.Shared
 		private Dictionary<string, CharacterAttribute> children = new Dictionary<string, CharacterAttribute>();
 		private Dictionary<string, CharacterAttribute> dependencies = new Dictionary<string, CharacterAttribute>();
 
-		public delegate void AttributeUpdated(CharacterAttribute item);
-		public event AttributeUpdated OnAttributeUpdated;
+		public Action<CharacterAttribute> OnAttributeUpdated;
 
 		protected virtual void Internal_OnAttributeChanged(CharacterAttribute item)
 		{

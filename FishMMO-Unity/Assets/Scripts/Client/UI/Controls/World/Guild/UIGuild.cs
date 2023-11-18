@@ -7,17 +7,13 @@ using FishMMO.Shared;
 
 namespace FishMMO.Client
 {
-	public class UIGuild : UIControl
+	public class UIGuild : UICharacterControl
 	{
 		public int MaxGuildNameLength = 64;
 		public TMP_Text GuildLabel;
 		public RectTransform GuildMemberParent;
 		public UIGuildMember GuildMemberPrefab;
 		public Dictionary<long, UIGuildMember> Members = new Dictionary<long, UIGuildMember>();
-
-		public override void OnStarting()
-		{
-		}
 
 		public override void OnDestroying()
 		{
@@ -70,8 +66,7 @@ namespace FishMMO.Client
 
 		public void OnButtonCreateGuild()
 		{
-			Character character = Character.localCharacter;
-			if (character != null && character.GuildController.ID < 1 && Client.NetworkManager.IsClient)
+			if (Character != null && Character.GuildController.ID < 1 && Client.NetworkManager.IsClient)
 			{
 				if (UIManager.TryGet("UIInputConfirmationTooltip", out UIInputConfirmationTooltip tooltip))
 				{
@@ -93,8 +88,7 @@ namespace FishMMO.Client
 
 		public void OnButtonLeaveGuild()
 		{
-			Character character = Character.localCharacter;
-			if (character != null && character.GuildController.ID > 0 && Client.NetworkManager.IsClient)
+			if (Character != null && Character.GuildController.ID > 0 && Client.NetworkManager.IsClient)
 			{
 				if (UIManager.TryGet("UIConfirmationTooltip", out UIConfirmationTooltip tooltip))
 				{
@@ -108,12 +102,11 @@ namespace FishMMO.Client
 
 		public void OnButtonInviteToGuild()
 		{
-			Character character = Character.localCharacter;
-			if (character != null && character.GuildController.ID > 0 && Client.NetworkManager.IsClient)
+			if (Character != null && Character.GuildController.ID > 0 && Client.NetworkManager.IsClient)
 			{
-				if (character.TargetController.Current.Target != null)
+				if (Character.TargetController.Current.Target != null)
 				{
-					Character targetCharacter = character.TargetController.Current.Target.GetComponent<Character>();
+					Character targetCharacter = Character.TargetController.Current.Target.GetComponent<Character>();
 					if (targetCharacter != null)
 					{
 						Client.NetworkManager.ClientManager.Broadcast(new GuildInviteBroadcast()

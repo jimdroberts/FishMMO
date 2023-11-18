@@ -4,40 +4,19 @@ using FishMMO.Shared;
 
 namespace FishMMO.Client
 {
-	public class UIInventory : UIControl
+	public class UIInventory : UICharacterControl
 	{
 		public RectTransform content;
 		public UIInventoryButton buttonPrefab;
 		public List<UIInventoryButton> inventorySlots = null;
 
-		public override void OnStarting()
-		{
-		}
-
 		public override void OnDestroying()
 		{
+			DestroySlots();
 		}
 
-		void Update()
+		private void DestroySlots()
 		{
-			Character character = Character.localCharacter;
-			if (character != null)
-			{
-				if (inventorySlots == null || inventorySlots.Count != character.InventoryController.Items.Count)
-				{
-					AddSlots(character.InventoryController);
-				}
-			}
-		}
-
-		private void AddSlots(InventoryController inventory)
-		{
-			if (content == null || buttonPrefab == null || inventory == null)
-			{
-				return;
-			}
-
-			inventory.OnSlotUpdated -= OnInventorySlotUpdated;
 			if (inventorySlots != null)
 			{
 				for (int i = 0; i < inventorySlots.Count; ++i)
@@ -46,23 +25,49 @@ namespace FishMMO.Client
 				}
 				inventorySlots.Clear();
 			}
-			inventorySlots = new List<UIInventoryButton>();
+		}
 
-			for (int i = 0; i < inventory.Items.Count; ++i)
+		public override void OnPreSetCharacter()
+		{
+			if (Character != null)
+			{
+				Character.InventoryController.OnSlotUpdated -= OnInventorySlotUpdated;
+			}
+		}
+
+		public override void SetCharacter(Character character)
+		{
+			base.SetCharacter(character);
+
+			if (Character == null ||
+				content == null ||
+				buttonPrefab == null ||
+				Character.InventoryController == null)
+			{
+				return;
+			}
+
+			// destroy the old slots
+			Character.InventoryController.OnSlotUpdated -= OnInventorySlotUpdated;
+			DestroySlots();
+
+			// generate new slots
+			inventorySlots = new List<UIInventoryButton>();
+			for (int i = 0; i < Character.InventoryController.Items.Count; ++i)
 			{
 				UIInventoryButton button = Instantiate(buttonPrefab, content);
-				button.Index = i;
-				button.ReferenceID = i; // helper for UIDragObject
-				button.AllowedHotkeyType = HotkeyType.Inventory;
-				button.HotkeyType = HotkeyType.Inventory;
-				if (inventory.TryGetItem(i, out Item item))
+				button.Character = Character;
+				button.ReferenceID = i;
+				button.AllowedType = ReferenceButtonType.Inventory;
+				button.Type = ReferenceButtonType.Inventory;
+				if (Character.InventoryController.TryGetItem(i, out Item item))
 				{
 					button.Icon.texture = item.Template.Icon;
 				}
-				inventorySlots.Add(button); // track inventory slots for easy updating
+				inventorySlots.Add(button);
 			}
 			// update our buttons when the inventory slots change
-			inventory.OnSlotUpdated += OnInventorySlotUpdated;
+			Character.InventoryController.OnSlotUpdated += OnInventorySlotUpdated;
 		}
 
 		public void OnInventorySlotUpdated(ItemContainer container, Item item, int inventoryIndex)
@@ -72,11 +77,11 @@ namespace FishMMO.Client
 				return;
 			}
 
-			if (container.IsValidItem(inventoryIndex))
+			if (!container.IsSlotEmpty(inventoryIndex))
 			{
 				// update our button display
 				UIInventoryButton button = inventorySlots[inventoryIndex];
-				button.HotkeyType = HotkeyType.Inventory;
+				button.Type = ReferenceButtonType.Inventory;
 				if (button.Icon != null) button.Icon.texture = item.Template.Icon;
 				//inventorySlots[i].cooldownText = character.CooldownController.IsOnCooldown();
 				if (button.AmountText != null) button.AmountText.text = item.IsStackable ? item.Stackable.Amount.ToString() : "";

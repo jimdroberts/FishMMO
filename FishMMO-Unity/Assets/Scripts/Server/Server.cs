@@ -51,17 +51,31 @@ namespace FishMMO.Server
 
 		public ServerWindowTitleUpdater ServerWindowTitleUpdater { get; private set; }
 
+		public bool LogToDisk = false;
+		private string logFilePath;
+		private DateTime startTime;
+
 		private LocalConnectionState serverState = LocalConnectionState.Stopped;
 		private string serverTypeName;
 
 		void Awake()
 		{
+			startTime = DateTime.UtcNow;
+
 			// get the server type so we know how to configure
 			string serverType = GetServerType();
 			if (serverType.Equals("Invalid"))
 			{
 				Server.Quit();
 			}
+
+			if (LogToDisk)
+			{
+				logFilePath = Path.Combine(GetWorkingDirectory(), "Logs", serverType + "_DebugLog_" + startTime.ToString("yyyy-MM-dd") + ".txt");
+
+				Application.logMessageReceived += this.Application_logMessageReceived;
+			}
+
 			Debug.Log("Server: " + serverType + " is starting.");
 
 			string path = Server.GetWorkingDirectory();
@@ -118,6 +132,26 @@ namespace FishMMO.Server
 			Debug.Log("Server: " + serverType + " is running.");
 		}
 
+		private void Application_logMessageReceived(string condition, string stackTrace, LogType type)
+		{
+			try
+			{
+				// Ensure the directory exists
+				string logDirectory = Path.GetDirectoryName(logFilePath);
+				if (!Directory.Exists(logDirectory))
+				{
+					Directory.CreateDirectory(logDirectory);
+				}
+
+				// Append the log to the file
+				File.AppendAllText(logFilePath, $"{type}: {condition}\r\n{stackTrace}\r\n");
+			}
+			catch (Exception e)
+			{
+				Debug.LogError($"Failed to write to log file: {e.Message}");
+			}
+		}
+
 		public static string GetWorkingDirectory()
 		{
 #if UNITY_EDITOR
@@ -129,6 +163,11 @@ namespace FishMMO.Server
 
 		public void OnDestroy()
 		{
+			if (LogToDisk)
+			{
+				Application.logMessageReceived -= this.Application_logMessageReceived;
+			}
+
 			RedisDbContextFactory.CloseRedis();
 		}
 

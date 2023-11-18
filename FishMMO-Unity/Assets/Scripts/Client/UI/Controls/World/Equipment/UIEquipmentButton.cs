@@ -10,28 +10,27 @@ namespace FishMMO.Client
 		{
 			if (UIManager.TryGet("UIDragObject", out UIDragObject dragObject))
 			{
-				Character character = Character.localCharacter;
-				if (character != null)
+				if (Character != null)
 				{
 					if (dragObject.Visible)
 					{
 						// we check the hotkey type because we can only equip items from the inventory
-						if (dragObject.HotkeyType == HotkeyType.Inventory)
+						if (dragObject.Type == ReferenceButtonType.Inventory)
 						{
 							// get the item from the Inventory
-							Item item = character.InventoryController.Items[ReferenceID];
+							Item item = Character.InventoryController.Items[ReferenceID];
 							if (item != null)
 							{
-								character.EquipmentController.SendEquipRequest(ReferenceID, (byte)ItemSlotType);
+								Character.EquipmentController.SendEquipRequest(ReferenceID, (byte)ItemSlotType);
 							}
 
 							// clear the drag object
 							dragObject.Clear();
 						}
 					}
-					else if (!character.EquipmentController.IsSlotEmpty((byte)ItemSlotType))
+					else if (!Character.EquipmentController.IsSlotEmpty((byte)ItemSlotType))
 					{
-						dragObject.SetReference(Icon.texture, ReferenceID, HotkeyType);
+						dragObject.SetReference(Icon.texture, ReferenceID, Type);
 					}
 				}
 			}
@@ -39,16 +38,15 @@ namespace FishMMO.Client
 
 		public override void OnRightClick()
 		{
-			Character character = Character.localCharacter;
 			if (UIManager.TryGet("UIDragObject", out UIDragObject dragObject) && dragObject.Visible)
 			{
 				dragObject.Clear();
 			}
-			if (character != null && HotkeyType == HotkeyType.Equipment)
+			if (Character != null && Type == ReferenceButtonType.Equipment)
 			{
 				Clear();
 
-				character.EquipmentController.SendUnequipRequest((byte)ItemSlotType);
+				Character.EquipmentController.SendUnequipRequest((byte)ItemSlotType);
 			}
 		}
 

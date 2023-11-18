@@ -11,8 +11,9 @@ namespace FishMMO.Shared
 {
 	public class KCCPlayer : NetworkBehaviour
 	{
-		public KCCController Character;
+		public KCCController CharacterController;
 		public KCCCamera CharacterCamera;
+		public KinematicCharacterMotor Motor;
 
 		//Quang: Old input system member
 		private const string MouseXInput = "Mouse X";
@@ -77,9 +78,9 @@ namespace FishMMO.Shared
 					CharacterCamera = mc.gameObject.GetComponent<KCCCamera>();
 					if (CharacterCamera != null)
 					{
-						CharacterCamera.SetFollowTransform(Character.CameraFollowPoint);
+						CharacterCamera.SetFollowTransform(CharacterController.CameraFollowPoint);
 						CharacterCamera.IgnoredColliders.Clear();
-						CharacterCamera.IgnoredColliders.AddRange(Character.GetComponentsInChildren<Collider>());
+						CharacterCamera.IgnoredColliders.AddRange(CharacterController.GetComponentsInChildren<Collider>());
 					}
 				}
 			}
@@ -121,7 +122,7 @@ namespace FishMMO.Shared
 			else if (base.IsServer)
 			{
 				Replicate(default, true);
-				KinematicCharacterMotorState state = Character.GetState();
+				KinematicCharacterMotorState state = CharacterController.GetState();
 				Reconcile(state, true);
 			}
 		}
@@ -129,7 +130,7 @@ namespace FishMMO.Shared
 		[Replicate]
 		private void Replicate(KCCInputReplicateData input, bool asServer, Channel channel = Channel.Unreliable, bool replaying = false)
 		{
-			Character.SetInputs(ref input);
+			CharacterController.SetInputs(ref input);
 
 			SimulateMotor((float)base.TimeManager.TickDelta);
 		}
@@ -139,15 +140,15 @@ namespace FishMMO.Shared
 		{
 			//Quang: Note - KCCMotorState has Rigidbody field, this component is not serialized, 
 			// and doesn't have to be reconciled, so we build a new Reconcile data that exclude Rigidbody field
-			Character.ApplyState(rd);
+			CharacterController.ApplyState(rd);
 		}
 
 		private void SimulateMotor(float deltaTime)
 		{
-			Character.Motor.UpdatePhase1(deltaTime);
-			Character.Motor.UpdatePhase2(deltaTime);
+			Motor.UpdatePhase1(deltaTime);
+			Motor.UpdatePhase2(deltaTime);
 
-			Character.Motor.Transform.SetPositionAndRotation(Character.Motor.TransientPosition, Character.Motor.TransientRotation);
+			Motor.Transform.SetPositionAndRotation(Motor.TransientPosition, Motor.TransientRotation);
 		}
 
 		private void Update()
@@ -157,7 +158,7 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			if (InputManager.GetKeyDown(JumpInput) && !Character.IsJumping)
+			if (InputManager.GetKeyDown(JumpInput) && !CharacterController.IsJumping)
 			{
 				_jumpQueued = true;
 			}
@@ -174,13 +175,13 @@ namespace FishMMO.Shared
 				return;
 			}
 			// Handle rotating the camera along with physics movers
-			if (CharacterCamera != null && CharacterCamera.RotateWithPhysicsMover && Character.Motor.AttachedRigidbody != null)
+			if (CharacterCamera != null && CharacterCamera.RotateWithPhysicsMover && Motor.AttachedRigidbody != null)
 			{
-				PhysicsMover mover = Character.Motor.AttachedRigidbody.GetComponent<PhysicsMover>();
+				PhysicsMover mover = Motor.AttachedRigidbody.GetComponent<PhysicsMover>();
 				if (mover != null)
 				{
 					CharacterCamera.PlanarDirection = mover.RotationDeltaFromInterpolation * CharacterCamera.PlanarDirection;
-					CharacterCamera.PlanarDirection = Vector3.ProjectOnPlane(CharacterCamera.PlanarDirection, Character.Motor.CharacterUp).normalized;
+					CharacterCamera.PlanarDirection = Vector3.ProjectOnPlane(CharacterCamera.PlanarDirection, Motor.CharacterUp).normalized;
 				}
 			}
 
@@ -220,13 +221,13 @@ namespace FishMMO.Shared
 				CharacterCamera.TargetDistance = (CharacterCamera.TargetDistance == 0f) ? CharacterCamera.DefaultDistance : 0f;
 			}
 
-			SetOrientationMethod(Character.OrientationMethod);
+			SetOrientationMethod(CharacterController.OrientationMethod);
 		}
 
 		[ServerRpc(RunLocally = true)]
 		private void SetOrientationMethod(OrientationMethod method)
 		{
-			Character.OrientationMethod = method;
+			CharacterController.OrientationMethod = method;
 		}
 
 		private void HandleCharacterInput(out KCCInputReplicateData characterInputs)

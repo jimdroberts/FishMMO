@@ -5,10 +5,10 @@ namespace FishMMO.Client
 {
 	public class UIConfirmationTooltip : UIControl
 	{
-		public TMP_Text dialogueLabel;
+		public TMP_Text DialogueLabel;
 
-		private Action OnAccept;
-		private Action OnCancel;
+		private Action onAccept;
+		private Action onCancel;
 
 		public override void OnStarting()
 		{
@@ -23,31 +23,31 @@ namespace FishMMO.Client
 			if (Visible)
 				return;
 
-			if (dialogueLabel != null)
+			if (DialogueLabel != null)
 			{
-				dialogueLabel.text = text;
+				DialogueLabel.text = text;
 			}
-			OnAccept = onAccept;
-			OnCancel = onCancel;
+			this.onAccept = onAccept;
+			this.onCancel = onCancel;
 			Visible = true;
 		}
 
 		public void OnClick_Accept()
 		{
-			OnAccept?.Invoke();
+			onAccept?.Invoke();
 
-			OnAccept = null;
-			OnCancel = null;
+			onAccept = null;
+			onCancel = null;
 
 			Visible = false;
 		}
 
 		public void OnClick_Cancel()
 		{
-			OnCancel?.Invoke();
+			onCancel?.Invoke();
 
-			OnAccept = null;
-			OnCancel = null;
+			onAccept = null;
+			onCancel = null;
 
 			Visible = false;
 		}

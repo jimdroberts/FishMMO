@@ -5,6 +5,13 @@ namespace FishMMO.Client
 {
 	public class LocalInputController : MonoBehaviour
 	{
+		public Character Character { get; private set; }
+
+		public void Initialize(Character character)
+		{
+			Character = character;
+		}
+
 		private void OnEnable()
 		{
 			UIManager.Show("UIHealthBar");
@@ -49,16 +56,15 @@ namespace FishMMO.Client
 			// we can interact with things as long as the UI doesn't have focus
 			if (!UIManager.ControlHasFocus() && InputManager.GetKeyDown("Interact"))
 			{
-				Character character = Character.localCharacter;
-				if (character != null)
+				if (Character != null)
 				{
-					Transform target = character.TargetController.Current.Target;
+					Transform target = Character.TargetController.Current.Target;
 					if (target != null)
 					{
 						IInteractable interactable = target.GetComponent<IInteractable>();
 						if (interactable != null)
 						{
-							interactable.OnInteract(character);
+							interactable.OnInteract(Character);
 						}
 					}
 				}

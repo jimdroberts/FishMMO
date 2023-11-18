@@ -30,11 +30,11 @@ namespace FishMMO.Shared
 		public AbilityEvent BloodResourceConversionTemplate;
 		public AbilityEvent ChargedTemplate;
 		public AbilityEvent ChanneledTemplate;
-		public Action<string, float, float> OnUpdate;
+		public event Action<string, float, float> OnUpdate;
 		// Invoked when the current ability is Interrupted.
-		public Action OnInterrupt;
+		public event Action OnInterrupt;
 		// Invoked when the current ability is Cancelled.
-		public Action OnCancel;
+		public event Action OnCancel;
 
 		public Dictionary<int, Ability> KnownAbilities { get; private set; }
 		public HashSet<int> KnownTemplates { get; private set; }
@@ -141,11 +141,8 @@ namespace FishMMO.Shared
 						// channeled abilities like beam effects or a charge rush that are continuously updating or spawning objects should be handled here
 						else if (ChanneledTemplate != null && currentAbility.HasAbilityEvent(ChanneledTemplate.ID))
 						{
-							// generate a camera ray to use for targetting
-							Ray cameraRay = new Ray(Character.CharacterController.VirtualCameraPosition, Character.CharacterController.VirtualCameraRotation * Vector3.forward);
-
 							// get target info
-							TargetInfo targetInfo = TargetController.GetTarget(Character.TargetController, cameraRay, currentAbility.Range);
+							TargetInfo targetInfo = Character.TargetController.GetTarget(Character.CharacterController.VirtualCameraPosition, Character.CharacterController.VirtualCameraRotation * Vector3.forward, currentAbility.Range);
 
 							// spawn the ability object
 							if (AbilityObject.TrySpawn(currentAbility, Character, this, AbilitySpawner, targetInfo))
@@ -169,11 +166,8 @@ namespace FishMMO.Shared
 				// complete the final activation of the ability
 				if (CanActivate(currentAbility))
 				{
-					// generate a camera ray to use for targetting
-					Ray cameraRay = new Ray(Character.CharacterController.VirtualCameraPosition, Character.CharacterController.VirtualCameraRotation * Vector3.forward);
-
 					// get target info
-					TargetInfo targetInfo = TargetController.GetTarget(Character.TargetController, cameraRay, currentAbility.Range);
+					TargetInfo targetInfo = Character.TargetController.GetTarget(Character.CharacterController.VirtualCameraPosition, Character.CharacterController.VirtualCameraRotation * Vector3.forward, currentAbility.Range);
 
 					// spawn the ability object
 					if (AbilityObject.TrySpawn(currentAbility, Character, this, AbilitySpawner, targetInfo))

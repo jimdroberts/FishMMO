@@ -7,8 +7,8 @@ namespace FishMMO.Client
 	{
 		public TMP_Text DialogueLabel;
 
-		private Action<string> OnAccept;
-		private Action OnCancel;
+		private Action<string> onAccept;
+		private Action onCancel;
 
 		public override void OnStarting()
 		{
@@ -31,8 +31,8 @@ namespace FishMMO.Client
 			{
 				InputField.text = "";
 			}
-			OnAccept = onAccept;
-			OnCancel = onCancel;
+			this.onAccept = onAccept;
+			this.onCancel = onCancel;
 			Visible = true;
 		}
 
@@ -41,21 +41,21 @@ namespace FishMMO.Client
 			if (InputField != null &&
 				!string.IsNullOrWhiteSpace(InputField.text))
 			{
-				OnAccept?.Invoke(InputField.text);
+				this.onAccept?.Invoke(InputField.text);
 			}
 
-			OnAccept = null;
-			OnCancel = null;
+			onAccept = null;
+			onCancel = null;
 
 			Visible = false;
 		}
 
 		public void OnClick_Cancel()
 		{
-			OnCancel?.Invoke();
+			onCancel?.Invoke();
 
-			OnAccept = null;
-			OnCancel = null;
+			onAccept = null;
+			onCancel = null;
 
 			Visible = false;
 		}

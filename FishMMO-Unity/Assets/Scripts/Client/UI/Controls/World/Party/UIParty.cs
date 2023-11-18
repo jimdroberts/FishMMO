@@ -5,16 +5,12 @@ using FishMMO.Shared;
 
 namespace FishMMO.Client
 {
-	public class UIParty : UIControl
+	public class UIParty : UICharacterControl
 	{
 		public CharacterAttributeTemplate HealthTemplate;
 		public RectTransform PartyMemberParent;
 		public UIPartyMember PartyMemberPrefab;
 		public Dictionary<long, UIPartyMember> Members = new Dictionary<long, UIPartyMember>();
-
-		public override void OnStarting()
-		{
-		}
 
 		public override void OnDestroying()
 		{
@@ -27,19 +23,18 @@ namespace FishMMO.Client
 
 		public void OnPartyCreated(string location)
 		{
-			Character character = Character.localCharacter;
-			if (character != null && PartyMemberPrefab != null && PartyMemberParent != null)
+			if (Character != null && PartyMemberPrefab != null && PartyMemberParent != null)
 			{
 				UIPartyMember member = Instantiate(PartyMemberPrefab, PartyMemberParent);
 				if (member != null)
 				{
 					if (member.Name != null)
-						member.Name.text = character.CharacterName;
+						member.Name.text = Character.CharacterName;
 					if (member.Rank != null)
-						member.Rank.text = "Rank: " + character.PartyController.Rank.ToString();
+						member.Rank.text = "Rank: " + Character.PartyController.Rank.ToString();
 					if (member.Health != null)
-						member.Health.value = character.AttributeController.GetResourceAttributeCurrentPercentage(HealthTemplate);
-					Members.Add(character.ID, member);
+						member.Health.value = Character.AttributeController.GetResourceAttributeCurrentPercentage(HealthTemplate);
+					Members.Add(Character.ID, member);
 				}
 			}
 		}
@@ -86,8 +81,7 @@ namespace FishMMO.Client
 
 		public void OnButtonCreateParty()
 		{
-			Character character = Character.localCharacter;
-			if (character != null && character.PartyController.ID < 1)
+			if (Character != null && Character.PartyController.ID < 1)
 			{
 				Client.NetworkManager.ClientManager.Broadcast(new PartyCreateBroadcast(), Channel.Reliable);
 			}
@@ -95,8 +89,7 @@ namespace FishMMO.Client
 
 		public void OnButtonLeaveParty()
 		{
-			Character character = Character.localCharacter;
-			if (character != null && character.PartyController.ID > 0)
+			if (Character != null && Character.PartyController.ID > 0)
 			{
 				if (UIManager.TryGet("UIConfirmationTooltip", out UIConfirmationTooltip tooltip))
 				{
@@ -110,12 +103,11 @@ namespace FishMMO.Client
 
 		public void OnButtonInviteToParty()
 		{
-			Character character = Character.localCharacter;
-			if (character != null && character.PartyController.ID > 0 && Client.NetworkManager.IsClient)
+			if (Character != null && Character.PartyController.ID > 0 && Client.NetworkManager.IsClient)
 			{
-				if (character.TargetController.Current.Target != null)
+				if (Character.TargetController.Current.Target != null)
 				{
-					Character targetCharacter = character.TargetController.Current.Target.GetComponent<Character>();
+					Character targetCharacter = Character.TargetController.Current.Target.GetComponent<Character>();
 					if (targetCharacter != null)
 					{
 						Client.NetworkManager.ClientManager.Broadcast(new PartyInviteBroadcast()

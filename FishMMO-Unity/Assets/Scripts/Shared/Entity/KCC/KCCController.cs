@@ -93,9 +93,6 @@ namespace FishMMO.Shared
 			// Handle initial state
 			TransitionToState(KCCCharacterState.Default);
 
-			// Assign the characterController to the motor
-			Motor.CharacterController = this;
-
 			_animator = GetComponentInChildren<Animator>();
 		}
 

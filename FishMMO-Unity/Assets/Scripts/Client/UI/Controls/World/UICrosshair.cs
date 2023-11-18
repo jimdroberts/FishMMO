@@ -12,6 +12,7 @@ namespace FishMMO.Client
 
 		public override void OnDestroying()
 		{
+			InputManager.OnToggleMouseMode -= OnToggleMouseMode;
 		}
 
 		public void OnToggleMouseMode(bool mouseMode)

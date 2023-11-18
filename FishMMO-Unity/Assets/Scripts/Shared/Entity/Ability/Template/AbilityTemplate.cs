@@ -3,9 +3,9 @@ using UnityEngine;
 
 namespace FishMMO.Shared
 {
-	public abstract class AbilityTemplate : CachedScriptableObject<AbilityTemplate>
+	public abstract class AbilityTemplate : CachedScriptableObject<AbilityTemplate>, ITooltip
 	{
-		public Sprite Icon;
+		public Sprite icon;
 		public string Description;
 		public GameObject FXPrefab;
 		public AbilitySpawnTarget AbilitySpawnTarget;
@@ -23,6 +23,8 @@ namespace FishMMO.Shared
 		public AbilityResourceDictionary Requirements = new AbilityResourceDictionary();
 
 		public string Name { get { return this.name; } }
+
+		public Sprite Icon { get { return this.icon; } }
 
 		public string Tooltip()
 		{

@@ -1,11 +1,14 @@
 ﻿using System;
+using System.Collections.Generic;
+using FishMMO.Shared;
 
 namespace FishMMO.Client
 {
 	public class UISelector : UIControl
 	{
-		private Action<int> OnAccept;
-		private int SelectedIndex = -1;
+		private Action<int> onAccept;
+		private int selectedIndex = -1;
+		private List<ITooltip> tooltips;
 
 		public override void OnStarting()
 		{
@@ -15,28 +18,30 @@ namespace FishMMO.Client
 		{
 		}
 
-		public void Open(Action<int> onAccept)
+		public void Open(List<ITooltip> tooltips, Action<int> onAccept)
 		{
-			if (Visible)
+			if (Visible || tooltips == null || tooltips.Count < 1)
 				return;
 
-			OnAccept = onAccept;
+
+
+			this.onAccept = onAccept;
 			Visible = true;
 		}
 
 		public void OnClick_Accept()
 		{
-			if (SelectedIndex > -1)
+			if (selectedIndex > -1)
 			{
-				OnAccept?.Invoke(SelectedIndex);
+				onAccept?.Invoke(selectedIndex);
 			}
 			OnClick_Cancel();
 		}
 
 		public void OnClick_Cancel()
 		{
-			SelectedIndex = -1;
-			OnAccept = null;
+			selectedIndex = -1;
+			onAccept = null;
 			Visible = false;
 		}
 	}

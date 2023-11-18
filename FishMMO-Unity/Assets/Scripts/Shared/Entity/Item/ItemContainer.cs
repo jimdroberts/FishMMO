@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using FishNet.Object;
 
 namespace FishMMO.Shared
@@ -7,15 +8,19 @@ namespace FishMMO.Shared
 	{
 		public readonly List<Item> Items = new List<Item>();
 
-		public delegate void ItemslotUpdated(ItemContainer container, Item item, int slotIndex);
-		public event ItemslotUpdated OnSlotUpdated;
+		public event Action<ItemContainer, Item, int> OnSlotUpdated;
+
+		void OnDestroy()
+		{
+			OnSlotUpdated = null;
+		}
 
 		/// <summary>
 		/// base.CanManipulate will check if the items list is null.
 		/// </summary>
 		public virtual bool CanManipulate()
 		{
-			return Items != null;
+			return Items.Count > 0;
 		}
 
 		/// <summary>
@@ -23,29 +28,17 @@ namespace FishMMO.Shared
 		/// </summary>
 		public bool IsValidSlot(int slot)
 		{
-			return Items != null &&
-				  slot > -1 &&
+			return slot > -1 &&
 				  slot < Items.Count;
 		}
 
 		/// <summary>
 		/// Checks if the slot is empty.
 		/// </summary>
-		/// <param name="slot"></param>
-		/// <returns></returns>
 		public bool IsSlotEmpty(int slot)
 		{
 			return IsValidSlot(slot) &&
 				   Items[slot] == null;
-		}
-
-		/// <summary>
-		/// Checks if an item exists in the slot.
-		/// </summary>
-		public bool IsValidItem(int slot)
-		{
-			return IsValidSlot(slot) &&
-				   Items[slot] != null;
 		}
 
 		/// <summary>
@@ -63,13 +56,21 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Adds items or fills empty slots.
+		/// Adds items or sets empty slots.
 		/// </summary>
 		public void AddSlots(List<Item> items, int amount)
 		{
+			if (items != null)
+			{
+				for (int i = 0; i < items.Count; ++i)
+				{
+					this.Items.Add(items[i]);
+				}
+				return;
+			}
 			for (int i = 0; i < amount; ++i)
 			{
-				this.Items.Add(items != null && i < items.Count ? items[i] : null);
+				this.Items.Add(null);
 			}
 		}
 

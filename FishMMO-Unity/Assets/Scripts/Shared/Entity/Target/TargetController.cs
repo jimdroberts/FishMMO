@@ -12,22 +12,22 @@ namespace FishMMO.Shared
 		public const float MAX_TARGET_DISTANCE = 50.0f;
 		public const float TARGET_UPDATE_RATE = 0.05f;
 
-#if !UNITY_SERVER
-		private float nextTick = 0.0f;
-		private Cached3DLabel targetLabel;
-#endif
-
 		public Character Character;
 		public LayerMask LayerMask;
 		public TargetInfo LastTarget;
 		public TargetInfo Current;
 
-		public Action<GameObject> OnChangeTarget;
-		public Action<GameObject> OnUpdateTarget;
-
 #if !UNITY_SERVER
+		private float nextTick = 0.0f;
+		private Cached3DLabel targetLabel;
+
+		public event Action<GameObject> OnChangeTarget;
+		public event Action<GameObject> OnUpdateTarget;
+
 		void OnDestroy()
 		{
+			OnChangeTarget = null;
+			OnUpdateTarget = null;
 			Character = null;
 			LastTarget = default;
 			Current = default;
@@ -50,7 +50,7 @@ namespace FishMMO.Shared
 				Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
 				//Camera.main.ScreenToWorldPoint(new Vector3(Screen.width * 0.5f, Screen.height * 0.5f, 0));
 
-				Current = GetTarget(this, ray, MAX_TARGET_DISTANCE);
+				Current = GetTarget(ray.origin, ray.direction, MAX_TARGET_DISTANCE);
 
 				// same target label remains
 				if (LastTarget.Target != Current.Target)
@@ -131,17 +131,31 @@ namespace FishMMO.Shared
 		}
 #endif
 
-		public static TargetInfo GetTarget(TargetController controller, Ray ray, float maxDistance)
+		public TargetInfo GetTarget(Vector3 origin, Vector3 direction, float maxDistance)
 		{
+			LastTarget = Current;
+
 			float distance = maxDistance.Clamp(0.0f, MAX_TARGET_DISTANCE);
 			RaycastHit hit;
-			if (Physics.Raycast(ray, out hit, distance, controller.LayerMask))
+#if !UNITY_SERVER
+			Ray ray = new Ray(origin, direction);
+			if (Physics.Raycast(ray, out hit, distance, LayerMask))
+#else
+			if (Character.Motor.PhysicsScene.Raycast(origin, direction, out hit, distance, LayerMask))
+#endif
 			{
 				//Debug.DrawLine(ray.origin, hit.point, Color.red, 1);
 				//Debug.Log("hit: " + hit.transform.name + " pos: " + hit.point);
-				return new TargetInfo(hit.transform, hit.point);
+				Current = new TargetInfo(hit.transform, hit.point);
 			}
-			return new TargetInfo(null, ray.GetPoint(distance));
+			else
+			{
+#if UNITY_SERVER
+				Ray ray = new Ray(origin, direction);
+#endif
+				Current = new TargetInfo(null, ray.GetPoint(distance));
+			}
+			return Current;
 		}
 	}
 }

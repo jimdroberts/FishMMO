@@ -36,16 +36,16 @@ namespace FishMMO.Client
 			ClearSlots();
 		}
 
-		private void MainEntry_OnLeft(int abilityID)
+		private void MainEntry_OnLeft(int index)
 		{
-			AbilityTemplate template = AbilityTemplate.Get<AbilityTemplate>(abilityID);
+			/*AbilityTemplate template = AbilityTemplate.Get<AbilityTemplate>(abilityID);
 			if (template != null)
 			{
 				SetEventSlots(template.EventSlots);
-			}
+			}*/
 		}
 
-		private void MainEntry_OnRight(int abilityID)
+		private void MainEntry_OnRight(int index)
 		{
 			ClearSlots();
 		}
