@@ -1,7 +1,6 @@
 using UnityEngine;
 using TMPro;
 using System.Collections.Generic;
-using System.Linq;
 using FishMMO.Shared;
 
 namespace FishMMO.Client
@@ -10,12 +9,12 @@ namespace FishMMO.Client
 	{
 		private const int MAX_CRAFT_EVENT_SLOTS = 10;
 
-		public UIAbilityEntry MainEntry;
+		public UITooltipButton MainEntry;
 		public TMP_Text AbilityDescription; 
 		public RectTransform AbilityEventParent;
-		public UIAbilityEntry AbilityEventPrefab;
+		public UITooltipButton AbilityEventPrefab;
 
-		private List<UIAbilityEntry> EventSlots;
+		private List<UITooltipButton> EventSlots;
 
 		public override void OnStarting()
 		{
@@ -69,7 +68,7 @@ namespace FishMMO.Client
 				Character.AbilityController != null &&
 				UIManager.TryGet("UISelector", out UISelector uiSelector))
 			{
-				List<ICachedObject> templates = AbilityEvent.Get<AbilityEvent>(Character.AbilityController.KnownTemplates);
+				List<ICachedObject> templates = AbilityEvent.Get<AbilityEvent>(Character.AbilityController.KnownEvents);
 				uiSelector.Open(templates, (i) =>
 				{
 					AbilityEvent template = AbilityEvent.Get<AbilityEvent>(i);
@@ -114,13 +113,12 @@ namespace FishMMO.Client
 		{
 			ClearSlots();
 
-			EventSlots = new List<UIAbilityEntry>();
+			EventSlots = new List<UITooltipButton>();
 
 			for (int i = 0; i < count && i < MAX_CRAFT_EVENT_SLOTS; ++i)
 			{
-				UIAbilityEntry eventButton = Instantiate(AbilityEventPrefab, AbilityEventParent);
-				eventButton.OnRightClick += EventEntry_OnRightClick;
-				eventButton.OnLeftClick -= EventEntry_OnLeftClick;
+				UITooltipButton eventButton = Instantiate(AbilityEventPrefab, AbilityEventParent);
+				eventButton.Initialize(i, EventEntry_OnLeftClick, EventEntry_OnRightClick);
 				EventSlots.Add(eventButton);
 			}
 		}

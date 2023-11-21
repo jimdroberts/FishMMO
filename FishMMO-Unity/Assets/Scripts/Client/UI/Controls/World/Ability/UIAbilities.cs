@@ -7,6 +7,6 @@ namespace FishMMO.Client
 	public class UIAbilities : UICharacterControl
 	{
 		public RectTransform AbilityParent;
-		public UIAbilityEntry AbilityEntryPrefab;
+		public UITooltipButton AbilityEntryPrefab;
 	}
 }

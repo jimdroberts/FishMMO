@@ -38,6 +38,7 @@ namespace FishMMO.Shared
 
 		public Dictionary<int, Ability> KnownAbilities { get; private set; }
 		public HashSet<int> KnownTemplates { get; private set; }
+		public HashSet<int> KnownEvents { get; private set; }
 		public HashSet<int> KnownSpawnEvents { get; private set; }
 		public HashSet<int> KnownHitEvents { get; private set; }
 		public HashSet<int> KnownMoveEvents { get; private set; }
@@ -332,6 +333,12 @@ namespace FishMMO.Shared
 				for (int i = 0; i < abilityEvents.Length; ++i)
 				{
 					AbilityEvent abilityEvent = abilityEvents[i];
+
+					if (!KnownEvents.Contains(abilityEvent.ID))
+					{
+						KnownEvents.Add(abilityEvent.ID);
+					}
+
 					if (abilityEvent is HitEvent)
 					{
 						if (KnownHitEvents == null)

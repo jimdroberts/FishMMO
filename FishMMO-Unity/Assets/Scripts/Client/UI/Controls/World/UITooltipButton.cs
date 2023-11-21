@@ -6,7 +6,7 @@ using FishMMO.Shared;
 
 namespace FishMMO.Client
 {
-	public class UIAbilityEntry : Button
+	public class UITooltipButton : Button
 	{
 		[SerializeField]
 		public Image Icon;
@@ -25,6 +25,14 @@ namespace FishMMO.Client
 			Clear();
 		}
 
+		public void Initialize(int index, Action<int> onLeftClick, Action<int> onRightClick)
+		{
+			Index = index;
+			OnLeftClick = null;
+			OnLeftClick += onLeftClick;
+			OnRightClick = null;
+			OnRightClick += onRightClick;
+		}
 		public void Initialize(Character character, int index, ITooltip tooltip)
 		{
 			Character = character;

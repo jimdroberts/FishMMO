@@ -102,6 +102,10 @@ namespace FishMMO.Client
 
 		public virtual void OnShow()
 		{
+			if (Visible)
+			{
+				return;
+			}
 			Visible = true;
 		}
 
