@@ -117,6 +117,7 @@ namespace FishMMO.Client
 				OnShow();
 				return;
 			}
+			HasFocus = false;
 			Visible = false;
 		}
 
