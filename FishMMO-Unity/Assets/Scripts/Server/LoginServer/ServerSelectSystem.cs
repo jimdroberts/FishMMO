@@ -11,6 +11,8 @@ namespace FishMMO.Server
 	/// </summary>
 	public class ServerSelectSystem : ServerBehaviour
 	{
+		public float IdleTimeout = 60;
+
 		public override void InitializeOnce()
 		{
 			if (ServerManager != null)
@@ -41,7 +43,7 @@ namespace FishMMO.Server
 			
 			if (conn.IsActive)
 			{
-				List<WorldServerDetails> worldServerList = WorldServerService.GetServerList(dbContext);
+				List<WorldServerDetails> worldServerList = WorldServerService.GetServerList(dbContext, IdleTimeout);
 
 				ServerListBroadcast serverListMsg = new ServerListBroadcast()
 				{

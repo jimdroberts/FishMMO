@@ -11,41 +11,25 @@ namespace FishMMO.Client
 		[SerializeField]
 		public Image Icon;
 
-		public event Action<int> OnLeft;
-		public event Action<int> OnRight;
+		public Action<int> OnLeftClick;
+		public Action<int> OnRightClick;
 
 		public int Index { get; private set; }
-		public AbilityTemplate Template { get; private set; }
+		public ITooltip Tooltip { get; private set; }
 		public Character Character { get; private set; }
 
-		public void Initialize(Character character, int index, AbilityTemplate template)
+		protected override void OnDestroy()
 		{
-			Index = index;
-			Template = template;
-			Character = character;
-		}
+			base.OnDestroy();
 
-		public virtual void OnLeftClick()
-		{
-			if (UIManager.TryGet("UISelector", out UISelector selector))
-			{
-				/*selector.Open((id) =>
-				{
-					AbilityTemplate template = AbilityTemplate.Get<AbilityTemplate>(id);
-					if (template != null)
-					{
-						Icon.sprite = template.Icon;
-					}
-
-					OnLeft?.Invoke(Index);
-				});*/
-			}
-		}
-
-		public virtual void OnRightClick()
-		{
-			OnRight?.Invoke(Index);
 			Clear();
+		}
+
+		public void Initialize(Character character, int index, ITooltip tooltip)
+		{
+			Character = character;
+			Index = index;
+			Tooltip = tooltip;
 		}
 
 		public override void OnPointerEnter(PointerEventData eventData)
@@ -54,10 +38,10 @@ namespace FishMMO.Client
 
 			if (Character != null)
 			{
-				if (Template != null &&
+				if (Tooltip != null &&
 					UIManager.TryGet("UITooltip", out UITooltip tooltip))
 				{
-					tooltip.SetText(Template.Tooltip(), true);
+					tooltip.SetText(Tooltip.Tooltip(), true);
 				}
 			}
 		}
@@ -78,20 +62,21 @@ namespace FishMMO.Client
 
 			if (eventData.button == PointerEventData.InputButton.Left)
 			{
-				OnLeftClick();
+				OnLeftClick?.Invoke(Index);
 			}
 			else if (eventData.button == PointerEventData.InputButton.Right)
 			{
-				OnRightClick();
+				OnRightClick?.Invoke(Index);
+				Clear();
 			}
 		}
 
 		public virtual void Clear()
 		{
-			Template = null;
+			Character = null;
+			Index = -1;
+			Tooltip = null;
 			if (Icon != null) Icon.sprite = null;
-			OnLeft = null;
-			OnRight = null;
 		}
 	}
 }

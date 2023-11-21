@@ -413,7 +413,7 @@ PrefabInstance:
     - target: {fileID: 8380057997533541231, guid: 61bd2fa6be216094ebfc45c391a32de0,
         type: 3}
       propertyPath: LogToDisk
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

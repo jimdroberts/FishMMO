@@ -2,7 +2,7 @@
 
 namespace FishMMO.Shared
 {
-	public abstract class BaseItemTemplate : CachedScriptableObject<BaseItemTemplate>
+	public abstract class BaseItemTemplate : CachedScriptableObject<BaseItemTemplate>, ICachedObject
 	{
 		public bool IsIdentifiable;
 		public uint MaxStackSize = 1;

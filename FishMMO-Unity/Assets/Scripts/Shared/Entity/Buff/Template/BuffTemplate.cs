@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace FishMMO.Shared
 {
-	public abstract class BuffTemplate : CachedScriptableObject<BuffTemplate>
+	public abstract class BuffTemplate : CachedScriptableObject<BuffTemplate>, ICachedObject
 	{
 		public string Description;
 		public Texture2D Icon;

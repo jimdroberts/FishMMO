@@ -8,7 +8,7 @@ namespace FishMMO.Client
 	{
 		private Action<int> onAccept;
 		private int selectedIndex = -1;
-		private List<ITooltip> tooltips;
+		private List<ICachedObject> cachedObjects;
 
 		public override void OnStarting()
 		{
@@ -18,12 +18,12 @@ namespace FishMMO.Client
 		{
 		}
 
-		public void Open(List<ITooltip> tooltips, Action<int> onAccept)
+		public void Open(List<ICachedObject> cachedObjects, Action<int> onAccept)
 		{
-			if (Visible || tooltips == null || tooltips.Count < 1)
+			if (Visible || cachedObjects == null || cachedObjects.Count < 1)
 				return;
 
-
+			this.cachedObjects = cachedObjects;
 
 			this.onAccept = onAccept;
 			Visible = true;
@@ -31,15 +31,18 @@ namespace FishMMO.Client
 
 		public void OnClick_Accept()
 		{
-			if (selectedIndex > -1)
+			if (selectedIndex > -1 &&
+				cachedObjects != null &&
+				cachedObjects.Count < selectedIndex)
 			{
-				onAccept?.Invoke(selectedIndex);
+				onAccept?.Invoke(cachedObjects[selectedIndex].ID);
 			}
 			OnClick_Cancel();
 		}
 
 		public void OnClick_Cancel()
 		{
+			cachedObjects = null;
 			selectedIndex = -1;
 			onAccept = null;
 			Visible = false;

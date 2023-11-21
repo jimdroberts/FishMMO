@@ -4,7 +4,7 @@ using UnityEngine;
 namespace FishMMO.Shared
 {
 	[CreateAssetMenu(fileName = "New Quest", menuName = "Character/Quest/Quest", order = 1)]
-	public class QuestTemplate : CachedScriptableObject<QuestTemplate>
+	public class QuestTemplate : CachedScriptableObject<QuestTemplate>, ICachedObject
 	{
 		public string Description;
 		public uint TimeToCompleteInSeconds;

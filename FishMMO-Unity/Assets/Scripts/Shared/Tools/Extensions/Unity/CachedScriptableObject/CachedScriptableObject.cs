@@ -1,12 +1,12 @@
-﻿using System.Collections.Generic;
-using System;
+﻿using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace FishMMO.Shared
 {
-	public abstract class CachedScriptableObject<T> : ScriptableObject where T : CachedScriptableObject<T>
+	public abstract class CachedScriptableObject<T> : ScriptableObject where T : CachedScriptableObject<T>, ICachedObject
 	{
-		public int ID;
+		public int ID { get; private set; }
 
 		private static Dictionary<Type, Dictionary<int, T>> resourceCache = new Dictionary<Type, Dictionary<int, T>>();
 
@@ -22,6 +22,26 @@ namespace FishMMO.Shared
 				return obj as U;
 			}
 			return null;
+		}
+
+		/// <summary>
+		/// Returns the cached objects as type List U or empty if nothing is found.
+		/// </summary>
+		public static List<ICachedObject> Get<U>(HashSet<int> ids) where U : T
+		{
+			List<ICachedObject> objects = new List<ICachedObject>();
+			Dictionary<int, T> cache = LoadCache<U>();
+			if (cache != null)
+			{
+				foreach (int id in ids)
+				{
+					if (cache.TryGetValue(id, out T cached))
+					{
+						objects.Add(cached as U);
+					}
+				}
+			}
+			return objects;
 		}
 
 		/// <summary>

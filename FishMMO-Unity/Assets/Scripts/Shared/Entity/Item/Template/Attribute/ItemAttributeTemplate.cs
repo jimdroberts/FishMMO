@@ -3,7 +3,7 @@
 namespace FishMMO.Shared
 {
 	[CreateAssetMenu(fileName = "New Item Attribute", menuName = "Item/Item Attribute/Attribute", order = 1)]
-	public class ItemAttributeTemplate : CachedScriptableObject<ItemAttributeTemplate>
+	public class ItemAttributeTemplate : CachedScriptableObject<ItemAttributeTemplate>, ICachedObject
 	{
 		public int MinValue;
 		public int MaxValue;

@@ -4,7 +4,7 @@ using UnityEngine;
 namespace FishMMO.Shared
 {
 	[CreateAssetMenu(fileName = "New Achievement", menuName = "Item/Achievement/Achievement", order = 1)]
-	public sealed class AchievementTemplate : CachedScriptableObject<AchievementTemplate>
+	public sealed class AchievementTemplate : CachedScriptableObject<AchievementTemplate>, ICachedObject
 	{
 		public List<AchievementTier> Tiers;
 

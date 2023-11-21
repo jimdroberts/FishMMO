@@ -71,10 +71,9 @@ namespace FishMMO.Server.DatabaseServices
             return worldServer;
 		}
 
-		public static List<WorldServerDetails> GetServerList(NpgsqlDbContext dbContext)
+		public static List<WorldServerDetails> GetServerList(NpgsqlDbContext dbContext, float idleTimeout = 60.0f /*60 second timeout*/)
         {
-            return dbContext.WorldServers
-                .ToList()
+            return dbContext.WorldServers.Where((s) => s.LastPulse.AddSeconds(idleTimeout) >= DateTime.UtcNow)
                 .Select(server => new WorldServerDetails()
                 {
                     Name = server.Name,

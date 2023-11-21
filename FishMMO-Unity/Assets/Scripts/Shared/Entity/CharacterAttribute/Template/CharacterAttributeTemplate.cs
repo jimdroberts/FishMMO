@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared
 {
 	[CreateAssetMenu(fileName = "New Character Attribute", menuName = "Character/Attribute/Character Attribute", order = 1)]
-	public class CharacterAttributeTemplate : CachedScriptableObject<CharacterAttributeTemplate>
+	public class CharacterAttributeTemplate : CachedScriptableObject<CharacterAttributeTemplate>, ICachedObject
 	{
 		[Serializable]
 		public class CharacterAttributeFormulaDictionary : SerializableDictionary<CharacterAttributeTemplate, CharacterAttributeFormulaTemplate> { }

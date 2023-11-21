@@ -14,6 +14,12 @@ namespace FishMMO.Client
 		{
 		}
 
+		public virtual void OnShow(Character character)
+		{
+			Character = character;
+			OnShow();
+		}
+
 		/// <summary>
 		/// Invoked before Character is set.
 		/// </summary>

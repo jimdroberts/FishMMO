@@ -70,7 +70,9 @@ namespace FishMMO.Client
 			base.SetCharacter(character);
 			DestroyAttributes();
 
-			if (buttons != null)
+			if (buttons != null &&
+				Character != null &&
+				Character.EquipmentController != null)
 			{
 				Character.EquipmentController.OnSlotUpdated -= OnEquipmentSlotUpdated;
 				foreach (UIEquipmentButton button in buttons)
