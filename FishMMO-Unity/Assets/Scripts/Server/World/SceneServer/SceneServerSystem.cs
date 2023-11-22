@@ -97,6 +97,7 @@ namespace FishMMO.Server
 								{
 									//Debug.Log("Scene Server System: " + sceneDetails.Value.Name + ":" + sceneDetails.Value.WorldServerID + ":" + sceneDetails.Value.Handle + " Pulse");
 									LoadedSceneService.Pulse(dbContext, sceneDetails.Key, sceneDetails.Value.CharacterCount);
+									dbContext.SaveChanges();
 								}
 							}
 						}
