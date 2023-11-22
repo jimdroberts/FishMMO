@@ -1,5 +1,5 @@
 ﻿using System;
-using System.Text;
+using Cysharp.Text;
 using UnityEngine;
 
 namespace FishMMO.Shared
@@ -28,42 +28,44 @@ namespace FishMMO.Shared
 
 		public string Tooltip()
 		{
-			StringBuilder sb = new StringBuilder();
-			if (!string.IsNullOrWhiteSpace(Name))
+			using (var sb = ZString.CreateStringBuilder())
 			{
-				sb.Append("<size=120%><color=#f5ad6e>");
-				sb.Append(Name);
-				sb.Append("</color></size>");
+				if (!string.IsNullOrWhiteSpace(Name))
+				{
+					sb.Append("<size=120%><color=#f5ad6e>");
+					sb.Append(Name);
+					sb.Append("</color></size>");
+				}
+				if (!string.IsNullOrWhiteSpace(Description))
+				{
+					sb.AppendLine();
+					sb.Append("<color=#a66ef5>Description: ");
+					sb.Append(Description);
+					sb.Append("</color>");
+				}
+				if (InitialValue > 0)
+				{
+					sb.AppendLine();
+					sb.Append("<color=#a66ef5>Initial Value: ");
+					sb.Append(InitialValue);
+					sb.Append("</color>");
+				}
+				if (MinValue > 0)
+				{
+					sb.AppendLine();
+					sb.Append("<color=#a66ef5>Min Value: ");
+					sb.Append(MinValue);
+					sb.Append("</color>");
+				}
+				if (MaxValue > 0)
+				{
+					sb.AppendLine();
+					sb.Append("<color=#a66ef5>Max Value: ");
+					sb.Append(MaxValue);
+					sb.Append("</color>");
+				}
+				return sb.ToString();
 			}
-			if (!string.IsNullOrWhiteSpace(Description))
-			{
-				sb.AppendLine();
-				sb.Append("<color=#a66ef5>Description: ");
-				sb.Append(Description);
-				sb.Append("</color>");
-			}
-			if (InitialValue > 0)
-			{
-				sb.AppendLine();
-				sb.Append("<color=#a66ef5>Initial Value: ");
-				sb.Append(InitialValue);
-				sb.Append("</color>");
-			}
-			if (MinValue > 0)
-			{
-				sb.AppendLine();
-				sb.Append("<color=#a66ef5>Min Value: ");
-				sb.Append(MinValue);
-				sb.Append("</color>");
-			}
-			if (MaxValue > 0)
-			{
-				sb.AppendLine();
-				sb.Append("<color=#a66ef5>Max Value: ");
-				sb.Append(MaxValue);
-				sb.Append("</color>");
-			}
-			return sb.ToString();
 		}
 	}
 }

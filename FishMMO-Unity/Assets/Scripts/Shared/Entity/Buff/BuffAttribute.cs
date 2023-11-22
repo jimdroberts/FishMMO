@@ -1,4 +1,4 @@
-﻿using System.Text;
+﻿using Cysharp.Text;
 
 namespace FishMMO.Shared
 {
@@ -15,17 +15,19 @@ namespace FishMMO.Shared
 
 		public string Tooltip()
 		{
-			StringBuilder sb = new StringBuilder();
-			sb.Append("<color=#a66ef5>");
-			sb.Append(template.Name);
-			if (template != null)
+			using (var sb = ZString.CreateStringBuilder())
 			{
-				sb.Append(template.name);
-				sb.Append(": ");
-				sb.Append(value);
+				sb.Append("<color=#a66ef5>");
+				sb.Append(template.Name);
+				if (template != null)
+				{
+					sb.Append(template.name);
+					sb.Append(": ");
+					sb.Append(value);
+				}
+				sb.Append("</color>");
+				return sb.ToString();
 			}
-			sb.Append("</color>");
-			return sb.ToString();
 		}
 	}
 }

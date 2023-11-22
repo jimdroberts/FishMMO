@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
-using System.Text;
+using Cysharp.Text;
 using System;
 
 namespace FishMMO.Shared
@@ -36,10 +36,13 @@ namespace FishMMO.Shared
 
 		public string Tooltip()
 		{
-			return Tooltip(new StringBuilder());
+			using (var sb = ZString.CreateStringBuilder())
+			{
+				return Tooltip(sb);
+			}
 		}
 
-		public string Tooltip(StringBuilder sb)
+		public string Tooltip(Utf16ValueStringBuilder sb)
 		{
 			sb.Append("<color=#a66ef5>Seed: ");
 			sb.Append(Seed);

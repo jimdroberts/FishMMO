@@ -1,4 +1,4 @@
-﻿using System.Text;
+﻿using Cysharp.Text;
 using UnityEngine;
 
 namespace FishMMO.Shared
@@ -16,15 +16,18 @@ namespace FishMMO.Shared
 		public override string Tooltip()
 		{
 			string tooltip = base.Tooltip();
-			StringBuilder sb = new StringBuilder(tooltip);
-			if (HitCount > 0)
+			using (var sb = ZString.CreateStringBuilder())
 			{
-				sb.AppendLine();
-				sb.Append("<color=#a66ef5>Hit Count: ");
-				sb.Append(HitCount);
-				sb.Append("</color>");
+				sb.Append(tooltip);
+				if (HitCount > 0)
+				{
+					sb.AppendLine();
+					sb.Append("<color=#a66ef5>Hit Count: ");
+					sb.Append(HitCount);
+					sb.Append("</color>");
+				}
+				return sb.ToString();
 			}
-			return sb.ToString();
 		}
 	}
 }

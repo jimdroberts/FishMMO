@@ -1,5 +1,5 @@
 ﻿using System.Collections.Generic;
-using System.Text;
+using Cysharp.Text;
 
 namespace FishMMO.Shared
 {
@@ -307,73 +307,75 @@ namespace FishMMO.Shared
 			{
 				return CachedTooltip;
 			}
-			StringBuilder sb = new StringBuilder();
-			sb.Append("<size=120%><color=#f5ad6e>");
-			sb.Append(Template.Name);
-			sb.Append("</color></size>");
-			sb.AppendLine();
-			sb.Append("<color=#a66ef5>AbilityID: ");
-			sb.Append(AbilityID);
-			sb.Append("</color>");
-			sb.AppendLine();
-			sb.Append("<color=#a66ef5>TemplateID: ");
-			sb.Append(Template.ID);
-			sb.Append("</color>");
-			sb.AppendLine();
-			sb.Append("<color=#a66ef5>Activation Time: ");
-			sb.Append(ActivationTime);
-			sb.Append("</color>");
-			sb.AppendLine();
-			sb.Append("<color=#a66ef5>Active Time: ");
-			sb.Append(ActiveTime);
-			sb.Append("</color>");
-			sb.AppendLine();
-			sb.Append("<color=#a66ef5>Cooldown: ");
-			sb.Append(Cooldown);
-			sb.Append("</color>");
-			sb.AppendLine();
-			sb.Append("<color=#a66ef5>Range: ");
-			sb.Append(Range);
-			sb.Append("</color>");
-			sb.AppendLine();
-			sb.Append("<color=#a66ef5>Speed: ");
-			sb.Append(Speed);
-			sb.Append("</color>");
-			if (Resources != null && Resources.Count > 0)
+			using (var sb = ZString.CreateStringBuilder())
 			{
+				sb.Append("<size=120%><color=#f5ad6e>");
+				sb.Append(Template.Name);
+				sb.Append("</color></size>");
 				sb.AppendLine();
-				sb.Append("<color=#a66ef5>Resources: </color>");
-
-				foreach (CharacterAttributeTemplate attribute in Resources.Keys)
-				{
-					sb.Append(attribute.Tooltip());
-				}
-			}
-			if (Requirements != null && Requirements.Count > 0)
-			{
+				sb.Append("<color=#a66ef5>AbilityID: ");
+				sb.Append(AbilityID);
+				sb.Append("</color>");
 				sb.AppendLine();
-				sb.Append("<color=#a66ef5>Requirements: </color>");
-
-				foreach (CharacterAttributeTemplate attribute in Requirements.Keys)
-				{
-					sb.Append(attribute.Tooltip());
-				}
-			}
-			if (AbilityEvents != null && AbilityEvents.Count > 0)
-			{
+				sb.Append("<color=#a66ef5>TemplateID: ");
+				sb.Append(Template.ID);
+				sb.Append("</color>");
 				sb.AppendLine();
-				sb.Append("<color=#a66ef5>Ability Events: </color>");
-
-				foreach (AbilityEvent abilityEvent in AbilityEvents.Values)
+				sb.Append("<color=#a66ef5>Activation Time: ");
+				sb.Append(ActivationTime);
+				sb.Append("</color>");
+				sb.AppendLine();
+				sb.Append("<color=#a66ef5>Active Time: ");
+				sb.Append(ActiveTime);
+				sb.Append("</color>");
+				sb.AppendLine();
+				sb.Append("<color=#a66ef5>Cooldown: ");
+				sb.Append(Cooldown);
+				sb.Append("</color>");
+				sb.AppendLine();
+				sb.Append("<color=#a66ef5>Range: ");
+				sb.Append(Range);
+				sb.Append("</color>");
+				sb.AppendLine();
+				sb.Append("<color=#a66ef5>Speed: ");
+				sb.Append(Speed);
+				sb.Append("</color>");
+				if (Resources != null && Resources.Count > 0)
 				{
 					sb.AppendLine();
-					sb.Append(abilityEvent.Name);
-					sb.AppendLine();
-					sb.Append(abilityEvent.Description);
+					sb.Append("<color=#a66ef5>Resources: </color>");
+
+					foreach (CharacterAttributeTemplate attribute in Resources.Keys)
+					{
+						sb.Append(attribute.Tooltip());
+					}
 				}
+				if (Requirements != null && Requirements.Count > 0)
+				{
+					sb.AppendLine();
+					sb.Append("<color=#a66ef5>Requirements: </color>");
+
+					foreach (CharacterAttributeTemplate attribute in Requirements.Keys)
+					{
+						sb.Append(attribute.Tooltip());
+					}
+				}
+				if (AbilityEvents != null && AbilityEvents.Count > 0)
+				{
+					sb.AppendLine();
+					sb.Append("<color=#a66ef5>Ability Events: </color>");
+
+					foreach (AbilityEvent abilityEvent in AbilityEvents.Values)
+					{
+						sb.AppendLine();
+						sb.Append(abilityEvent.Name);
+						sb.AppendLine();
+						sb.Append(abilityEvent.Description);
+					}
+				}
+				CachedTooltip = sb.ToString();
+				return CachedTooltip;
 			}
-			CachedTooltip = sb.ToString();
-			return CachedTooltip;
 		}
 	}
 }

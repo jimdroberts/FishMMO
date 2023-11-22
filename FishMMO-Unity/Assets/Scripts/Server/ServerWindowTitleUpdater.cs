@@ -2,9 +2,9 @@
 #if UNITY_STANDALONE_LINUX || UNITY_EDITOR_LINUX
 using System;
 #endif
-using System.Text;
 using System.Runtime.InteropServices;
 using UnityEngine;
+using Cysharp.Text;
 
 namespace FishMMO.Server
 {
@@ -81,29 +81,31 @@ namespace FishMMO.Server
 
 		public string BuildWindowTitle()
 		{
-			StringBuilder windowTitle = new StringBuilder();
-			if (Server.Configuration.TryGetString("ServerName", out string title))
+			using (var windowTitle = ZString.CreateStringBuilder())
 			{
-				windowTitle.Append(title);
-			}
-
-			Transport transport = Server.NetworkManager.TransportManager.Transport;
-			if (transport != null)
-			{
-				windowTitle.Append(transport.GetConnectionState(true) == LocalConnectionState.Started ? " [Online]" : " [Offline]");
-
-				if (Server.Configuration.TryGetUShort("Port", out ushort port))
+				if (Server.Configuration.TryGetString("ServerName", out string title))
 				{
-					windowTitle.Append(" [Server:");
-					windowTitle.Append(Server.RemoteAddress);
-					windowTitle.Append(":");
-					windowTitle.Append(port);
-					windowTitle.Append(" Clients:");
-					windowTitle.Append(ServerManager.Clients.Count);
-					windowTitle.Append("]");
+					windowTitle.Append(title);
 				}
+
+				Transport transport = Server.NetworkManager.TransportManager.Transport;
+				if (transport != null)
+				{
+					windowTitle.Append(transport.GetConnectionState(true) == LocalConnectionState.Started ? " [Online]" : " [Offline]");
+
+					if (Server.Configuration.TryGetUShort("Port", out ushort port))
+					{
+						windowTitle.Append(" [Server:");
+						windowTitle.Append(Server.RemoteAddress);
+						windowTitle.Append(":");
+						windowTitle.Append(port);
+						windowTitle.Append(" Clients:");
+						windowTitle.Append(ServerManager.Clients.Count);
+						windowTitle.Append("]");
+					}
+				}
+				return windowTitle.ToString();
 			}
-			return windowTitle.ToString();
 		}
 	}
 }

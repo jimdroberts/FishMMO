@@ -88,102 +88,6 @@ namespace FishMMO.Server.DatabaseServices
 										.ToList();
 		}
 
-		public static void Save(NpgsqlDbContext dbContext, List<Character> characters, bool online = true)
-		{
-			// get characters by their names
-			var characterNames = characters.Select((c) => c.CharacterName.ToLower()).ToList();
-			var dbCharacters = dbContext.Characters.Where((c) => characterNames.Contains(c.NameLowercase)).ToList();
-			
-			//
-			foreach (Character character in characters)
-			{
-				Save(dbContext, character, online);
-			}
-		}
-		
-		/// <summary>
-		/// Save a character to the database. Only Scene Servers should be saving characters. A character can only be in one scene at a time.
-		/// </summary>
-		public static void Save(NpgsqlDbContext dbContext, Character character, bool online = true, CharacterEntity existingCharacter = null)
-		{
-			if (existingCharacter == null)
-			{
-				existingCharacter = dbContext.Characters.FirstOrDefault((c) => c.NameLowercase == character.CharacterName.ToLower());
-
-				// if it's still null, throw exception
-				if (existingCharacter == null)
-				{
-					//throw new Exception($"Unable to fetch character with name {character.CharacterName}");
-					return;
-				}
-			}
-
-			// store these into vars so we don't have to access them a bunch of times
-			var charPosition = character.Transform.position;
-			var rotation = character.Transform.rotation;
-
-			// copy over the new values into the existing entity
-			existingCharacter.Name = character.CharacterName;
-			existingCharacter.NameLowercase = character.CharacterName.ToLower();
-			existingCharacter.Account = character.Account;
-			existingCharacter.WorldServerID = character.WorldServerID;
-			existingCharacter.AccessLevel = (byte)character.AccessLevel;
-			existingCharacter.RaceID = character.RaceID;
-			existingCharacter.SceneHandle = character.SceneHandle;
-			existingCharacter.SceneName = character.SceneName;
-			existingCharacter.X = charPosition.x;
-			existingCharacter.Y = charPosition.y;
-			existingCharacter.Z = charPosition.z;
-			existingCharacter.RotX = rotation.x;
-			existingCharacter.RotY = rotation.y;
-			existingCharacter.RotZ = rotation.z;
-			existingCharacter.RotW = rotation.w;
-			existingCharacter.Online = online;
-			existingCharacter.LastSaved = DateTime.UtcNow;
-
-			CharacterAttributeService.Save(dbContext, character);
-			CharacterAchievementService.Save(dbContext, character);
-			CharacterBuffService.Save(dbContext, character);
-
-			// the following are written to the database in their respective systems, no need to save them again
-			//CharacterGuildService.Save(dbContext, character);
-			//CharacterPartyService.Save(dbContext, character);
-			//CharacterFriendService.Save(dbContext, character);
-
-			//Debug.Log(character.CharacterName + " has been saved at: " + character.Transform.position.ToString());
-		}
-
-		/// <summary>
-		/// KeepData is automatically true... This means we don't actually delete anything. Deleted is simply set to true just incase we need to reinstate a character..
-		/// </summary>
-		public static void Delete(NpgsqlDbContext dbContext, string account, string characterName, bool keepData = true)
-		{
-			var character = dbContext.Characters.FirstOrDefault(c => c.Account == account &&
-																	 c.NameLowercase == characterName.ToLower());
-
-			if (character == null) return;
-
-			if (keepData)
-			{
-				character.TimeDeleted = DateTime.UtcNow;
-				character.Deleted = true;
-			}
-			else
-			{
-				// preserved data
-				CharacterAttributeService.Delete(dbContext, character.ID, keepData);
-				CharacterAchievementService.Delete(dbContext, character.ID, keepData);
-				CharacterBuffService.Delete(dbContext, character.ID, keepData);
-
-				// complete deletions
-				CharacterGuildService.Delete(dbContext, character.ID);
-				CharacterPartyService.Delete(dbContext, character.ID);
-				CharacterFriendService.Delete(dbContext, character.ID);
-
-				dbContext.Characters.Remove(character);
-			}
-		}
-
 		/// <summary>
 		/// Selects a character in the database. This is used for validation purposes.
 		/// </summary>
@@ -266,7 +170,9 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static bool TryGetOnline(NpgsqlDbContext dbContext, string account)
 		{
-			var characters = dbContext.Characters.Where((c) => c.Account == account && c.Online == true && !c.Deleted).ToList();
+			var characters = dbContext.Characters.Where((c) => c.Account == account &&
+															   c.Online == true &&
+															   !c.Deleted).ToList();
 			return characters != null && characters.Count > 0;
 		}
 
@@ -293,6 +199,97 @@ namespace FishMMO.Server.DatabaseServices
 			if (character != null)
 			{
 				character.SceneHandle = sceneHandle;
+			}
+		}
+
+		public static void Save(NpgsqlDbContext dbContext, List<Character> characters, bool online = true)
+		{
+			foreach (Character character in characters)
+			{
+				Save(dbContext, character, online);
+			}
+		}
+
+		/// <summary>
+		/// Save a character to the database. Only Scene Servers should be saving characters. A character can only be in one scene at a time.
+		/// </summary>
+		public static void Save(NpgsqlDbContext dbContext, Character character, bool online = true, CharacterEntity existingCharacter = null)
+		{
+			if (existingCharacter == null)
+			{
+				existingCharacter = dbContext.Characters.FirstOrDefault((c) => c.NameLowercase == character.CharacterName.ToLower());
+
+				// if it's still null, throw exception
+				if (existingCharacter == null)
+				{
+					//throw new Exception($"Unable to fetch character with name {character.CharacterName}");
+					return;
+				}
+			}
+
+			// store these into vars so we don't have to access them a bunch of times
+			var charPosition = character.Transform.position;
+			var rotation = character.Transform.rotation;
+
+			// copy over the new values into the existing entity
+			existingCharacter.Name = character.CharacterName;
+			existingCharacter.NameLowercase = character.CharacterName.ToLower();
+			existingCharacter.Account = character.Account;
+			existingCharacter.WorldServerID = character.WorldServerID;
+			existingCharacter.AccessLevel = (byte)character.AccessLevel;
+			existingCharacter.RaceID = character.RaceID;
+			existingCharacter.SceneHandle = character.SceneHandle;
+			existingCharacter.SceneName = character.SceneName;
+			existingCharacter.X = charPosition.x;
+			existingCharacter.Y = charPosition.y;
+			existingCharacter.Z = charPosition.z;
+			existingCharacter.RotX = rotation.x;
+			existingCharacter.RotY = rotation.y;
+			existingCharacter.RotZ = rotation.z;
+			existingCharacter.RotW = rotation.w;
+			existingCharacter.Online = online;
+			existingCharacter.LastSaved = DateTime.UtcNow;
+
+			CharacterAttributeService.Save(dbContext, character);
+			CharacterAchievementService.Save(dbContext, character);
+			CharacterBuffService.Save(dbContext, character);
+
+			// the following are written to the database in their respective systems, no need to save them again
+			//CharacterGuildService.Save(dbContext, character);
+			//CharacterPartyService.Save(dbContext, character);
+			//CharacterFriendService.Save(dbContext, character);
+
+			//Debug.Log(character.CharacterName + " has been saved at: " + character.Transform.position.ToString());
+		}
+
+		/// <summary>
+		/// KeepData is automatically true... This means we don't actually delete anything. Deleted is simply set to true just incase we need to reinstate a character..
+		/// </summary>
+		public static void Delete(NpgsqlDbContext dbContext, string account, string characterName, bool keepData = true)
+		{
+			var character = dbContext.Characters.FirstOrDefault(c => c.Account == account &&
+																	 c.NameLowercase == characterName.ToLower());
+
+			if (character == null) return;
+
+			if (keepData)
+			{
+				character.TimeDeleted = DateTime.UtcNow;
+				character.Deleted = true;
+			}
+			else
+			{
+				// preserved data
+				CharacterAttributeService.Delete(dbContext, character.ID, keepData);
+				CharacterAchievementService.Delete(dbContext, character.ID, keepData);
+				CharacterBuffService.Delete(dbContext, character.ID, keepData);
+
+				// complete deletions
+				CharacterGuildService.Delete(dbContext, character.ID);
+				CharacterPartyService.Delete(dbContext, character.ID);
+				CharacterFriendService.Delete(dbContext, character.ID);
+
+				dbContext.Characters.Remove(character);
 			}
 		}
 

@@ -85,6 +85,7 @@ namespace FishMMO.Server
 					//Debug.Log("Scene Server System: Pulse");
 					int characterCount = Server.CharacterSystem.ConnectionCharacters.Count;
 					SceneServerService.Pulse(dbContext, id, characterCount);
+					dbContext.SaveChanges();
 
 					// process loaded scene pulse update
 					if (worldScenes != null)

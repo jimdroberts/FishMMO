@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text;
+using Cysharp.Text;
 
 namespace FishMMO.Shared
 {
@@ -58,16 +59,18 @@ namespace FishMMO.Shared
 			}
 			using (BinaryWriter bw = new BinaryWriter(File.Open(fullPath, FileMode.Create)))
 			{
-				StringBuilder sb = new StringBuilder();
-				foreach (KeyValuePair<string, string> pair in settings)
+				using (var sb = ZString.CreateStringBuilder())
 				{
-					sb.Append(pair.Key);
-					sb.Append("=");
-					sb.Append(pair.Value);
-					sb.AppendLine();
+					foreach (KeyValuePair<string, string> pair in settings)
+					{
+						sb.Append(pair.Key);
+						sb.Append("=");
+						sb.Append(pair.Value);
+						sb.AppendLine();
+					}
+					byte[] bytes = Encoding.UTF8.GetBytes(sb.ToString());
+					bw.Write(bytes);
 				}
-				byte[] bytes = Encoding.UTF8.GetBytes(sb.ToString());
-				bw.Write(bytes);
 			}
 		}
 
