@@ -25,6 +25,14 @@ namespace FishMMO.Client
 			Clear();
 		}
 
+		public void Initialize(Action<int> onLeftClick, Action<int> onRightClick)
+		{
+			Index = 0;
+			OnLeftClick = null;
+			OnLeftClick += onLeftClick;
+			OnRightClick = null;
+			OnRightClick += onRightClick;
+		}
 		public void Initialize(int index, Action<int> onLeftClick, Action<int> onRightClick)
 		{
 			Index = index;

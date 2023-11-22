@@ -108,7 +108,7 @@ namespace FishMMO.Shared
 		[Client(Logging = LoggingType.Off)]
 		private bool CanUpdateInput()
 		{
-			return !UIManager.ControlHasFocus() && !UIManager.InputControlHasFocus() && !InputManager.MouseMode;
+			return !InputManager.MouseMode;
 		}
 
 		private void TimeManager_OnTick()

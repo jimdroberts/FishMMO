@@ -148,7 +148,7 @@ GameObject:
   - component: {fileID: 2576642808912956062}
   - component: {fileID: -3037094709320544904}
   m_Layer: 5
-  m_Name: UIAbilityCraftEntry
+  m_Name: UITooltipButton
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -172,7 +172,7 @@ RectTransform:
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 0, y: 0}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 547, y: 0}
+  m_SizeDelta: {x: 64, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &2576642808912956056
 MonoBehaviour:

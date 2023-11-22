@@ -234,11 +234,10 @@ namespace FishMMO.Shared
 		{
 #if !UNITY_SERVER
 			// validate UI controls are focused so we aren't casting spells when hovering over interfaces.
-			if (!UIManager.ControlHasFocus() && !UIManager.InputControlHasFocus() && !InputManager.MouseMode)
+			if (!InputManager.MouseMode)
 			{
 				return;
 			}
-
 
 			if (!IsActivating && !interruptQueued)
 			{

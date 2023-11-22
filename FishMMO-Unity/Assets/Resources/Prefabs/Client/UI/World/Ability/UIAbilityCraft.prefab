@@ -1577,7 +1577,7 @@ MonoBehaviour:
   MainEntry: {fileID: 4012656573263198302}
   AbilityDescription: {fileID: 7677919225120464007}
   AbilityEventParent: {fileID: 7863318659282826394}
-  AbilityEventPrefab: {fileID: -3037094709320544904, guid: 6d83b77ccb79c8e48a5cc9c8565f5038,
+  AbilityEventPrefab: {fileID: -3037094709320544904, guid: e8b54cf9b1655944185e00cd8b3e47ad,
     type: 3}
 --- !u!1 &8866877139593883696
 GameObject:

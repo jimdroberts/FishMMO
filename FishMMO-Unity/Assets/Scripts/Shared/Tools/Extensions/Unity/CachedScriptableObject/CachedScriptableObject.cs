@@ -31,7 +31,8 @@ namespace FishMMO.Shared
 		{
 			List<ICachedObject> objects = new List<ICachedObject>();
 			Dictionary<int, T> cache = LoadCache<U>();
-			if (cache != null)
+			if (cache != null &&
+				cache.Count > 0)
 			{
 				foreach (int id in ids)
 				{

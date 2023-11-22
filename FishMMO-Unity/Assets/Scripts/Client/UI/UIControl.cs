@@ -30,7 +30,21 @@ namespace FishMMO.Client
 
 		public Client Client { get; private set; }
 		public string Name { get { return gameObject.name; } set { gameObject.name = value; } }
-		public bool Visible { get { return gameObject.activeSelf; } set { gameObject.SetActive(value); } }
+		public bool Visible
+		{
+			get
+			{
+				return gameObject.activeSelf;
+			}
+			set
+			{
+				if (!value)
+				{
+					HasFocus = false;
+				}
+				gameObject.SetActive(value);
+			}
+		}
 
 		private void Awake()
 		{
@@ -121,7 +135,6 @@ namespace FishMMO.Client
 				OnShow();
 				return;
 			}
-			HasFocus = false;
 			Visible = false;
 		}
 
