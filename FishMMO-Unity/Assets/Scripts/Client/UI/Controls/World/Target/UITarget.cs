@@ -24,12 +24,12 @@ namespace FishMMO.Client
 			if (obj == null)
 			{
 				// hide the UI
-				Visible = false;
+				Hide();
 				return;
 			}
 
 			// make the UI visible
-			Visible = true;
+			Show();
 
 			if (NameLabel != null)
 			{
@@ -54,7 +54,7 @@ namespace FishMMO.Client
 			if (obj == null)
 			{
 				// hide the UI
-				Visible = false;
+				Hide();
 				return;
 			}
 

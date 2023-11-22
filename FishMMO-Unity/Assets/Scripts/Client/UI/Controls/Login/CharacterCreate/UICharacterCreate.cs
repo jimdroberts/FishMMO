@@ -55,7 +55,7 @@ namespace FishMMO.Client
 		{
 			if (obj.ConnectionState == LocalConnectionState.Stopped)
 			{
-				Visible = false;
+				Hide();
 			}
 		}
 
@@ -64,7 +64,7 @@ namespace FishMMO.Client
 			SetCreateButtonLocked(false);
 			if (msg.result == CharacterCreateResult.Success)
 			{
-				Visible = false;
+				Hide();
 				UIManager.Show("UICharacterSelect");
 			}
 			else if (createResultText != null)

@@ -36,13 +36,13 @@ namespace FishMMO.Client
 			{
 				return gameObject.activeSelf;
 			}
-			set
+			private set
 			{
+				gameObject.SetActive(value);
 				if (!value)
 				{
 					HasFocus = false;
 				}
-				gameObject.SetActive(value);
 			}
 		}
 
@@ -64,7 +64,10 @@ namespace FishMMO.Client
 
 			OnStarting();
 
-			if (!StartOpen) Visible = false;
+			if (!StartOpen)
+			{
+				Hide();
+			}
 		}
 
 		public virtual void OnQuitToLogin()
@@ -114,7 +117,12 @@ namespace FishMMO.Client
 			HasFocus = false;
 		}
 
-		public virtual void OnShow()
+		public virtual void ToggleVisibility()
+		{
+			Visible = !Visible;
+		}
+
+		public virtual void Show()
 		{
 			if (Visible)
 			{
@@ -123,16 +131,16 @@ namespace FishMMO.Client
 			Visible = true;
 		}
 
-		public virtual void OnHide()
+		public virtual void Hide()
 		{
-			OnHide(IsAlwaysOpen);
+			Hide(IsAlwaysOpen);
 		}
 
-		public virtual void OnHide(bool overrideIsAlwaysOpen)
+		public virtual void Hide(bool overrideIsAlwaysOpen)
 		{
 			if (overrideIsAlwaysOpen)
 			{
-				OnShow();
+				Show();
 				return;
 			}
 			Visible = false;

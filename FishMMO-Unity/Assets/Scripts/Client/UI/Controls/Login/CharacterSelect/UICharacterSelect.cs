@@ -47,7 +47,7 @@ namespace FishMMO.Client
 		{
 			if (obj.ConnectionState == LocalConnectionState.Stopped)
 			{
-				Visible = false;
+				Hide();
 			}
 		}
 
@@ -62,13 +62,13 @@ namespace FishMMO.Client
 				case ClientAuthenticationResult.Banned:
 					break;
 				case ClientAuthenticationResult.LoginSuccess:
-					Visible = true; // show the panel even if we don't get the character list.. this will let us return to login or quit
+					Show(); // show the panel even if we don't get the character list.. this will let us return to login or quit
 					break;
 				case ClientAuthenticationResult.WorldLoginSuccess:
-					Visible = false;
+					Hide();
 					break;
 				case ClientAuthenticationResult.SceneLoginSuccess:
-					Visible = false;
+					Hide();
 					break;
 				case ClientAuthenticationResult.ServerFull:
 					break;
@@ -108,7 +108,7 @@ namespace FishMMO.Client
 				}
 			}
 
-			Visible = true;
+			Show();
 		}
 
 		private void OnClientCharacterCreateBroadcastReceived(CharacterCreateBroadcast msg)
@@ -165,7 +165,7 @@ namespace FishMMO.Client
 				selectedCharacter != null &&
 				selectedCharacter.Details != null)
 			{
-				Visible = false;
+				Hide();
 
 				// tell the login server about our character selection
 				Client.NetworkManager.ClientManager.Broadcast(new CharacterSelectBroadcast()
@@ -206,8 +206,8 @@ namespace FishMMO.Client
 		{
 			if (UIManager.TryGet("UICharacterCreate", out UICharacterCreate createCharacter))
 			{
-				Visible = false;
-				createCharacter.Visible = true;
+				Hide();
+				createCharacter.Show();
 			}
 		}
 

@@ -41,7 +41,8 @@ namespace FishMMO.Client
 		private void UpdateInput()
 		{
 			// if an input has focus we should skip input otherwise things will happen while we are typing!
-			if (UIManager.InputControlHasFocus())
+			if (Character == null ||
+				UIManager.InputControlHasFocus())
 			{
 				return;
 			}
@@ -56,16 +57,13 @@ namespace FishMMO.Client
 			// we can interact with things as long as the UI doesn't have focus
 			if (!UIManager.ControlHasFocus() && InputManager.GetKeyDown("Interact"))
 			{
-				if (Character != null)
+				Transform target = Character.TargetController.Current.Target;
+				if (target != null)
 				{
-					Transform target = Character.TargetController.Current.Target;
-					if (target != null)
+					IInteractable interactable = target.GetComponent<IInteractable>();
+					if (interactable != null)
 					{
-						IInteractable interactable = target.GetComponent<IInteractable>();
-						if (interactable != null)
-						{
-							interactable.OnInteract(Character);
-						}
+						interactable.OnInteract(Character);
 					}
 				}
 			}
@@ -73,58 +71,37 @@ namespace FishMMO.Client
 			{
 				if (InputManager.GetKeyDown("Inventory"))
 				{
-					if (UIManager.TryGet("UIInventory", out UIInventory uiInventory))
-					{
-						uiInventory.Visible = !uiInventory.Visible;
-					}
+					UIManager.ToggleVisibility("UIInventory");
 				}
 
 				if (InputManager.GetKeyDown("Abilities"))
 				{
-					if (UIManager.TryGet("UIAbilities", out UIAbilities uiAbilities))
-					{
-						uiAbilities.Visible = !uiAbilities.Visible;
-					}
+					UIManager.ToggleVisibility("UIAbilities");
 				}
 
 				if (InputManager.GetKeyDown("Equipment"))
 				{
-					if (UIManager.TryGet("UIEquipment", out UIEquipment uiEquipment))
-					{
-						uiEquipment.Visible = !uiEquipment.Visible;
-					}
+					UIManager.ToggleVisibility("UIEquipment");
 				}
 
 				if (InputManager.GetKeyDown("Guild"))
 				{
-					if (UIManager.TryGet("UIGuild", out UIGuild uiGuild))
-					{
-						uiGuild.Visible = !uiGuild.Visible;
-					}
+					UIManager.ToggleVisibility("UIGuild");
 				}
 
 				if (InputManager.GetKeyDown("Party"))
 				{
-					if (UIManager.TryGet("UIParty", out UIParty uiParty))
-					{
-						uiParty.Visible = !uiParty.Visible;
-					}
+					UIManager.ToggleVisibility("UIParty");
 				}
 
 				if (InputManager.GetKeyDown("Friends"))
 				{
-					if (UIManager.TryGet("UIFriendList", out UIFriendList uiFriendList))
-					{
-						uiFriendList.Visible = !uiFriendList.Visible;
-					}
+					UIManager.ToggleVisibility("UIFriendList");
 
 				}
 				if (InputManager.GetKeyDown("Menu"))
 				{
-					if (UIManager.TryGet("UIMenu", out UIMenu uiMenu))
-					{
-						uiMenu.Visible = !uiMenu.Visible;
-					}
+					UIManager.ToggleVisibility("UIMenu");
 				}
 			}
 		}

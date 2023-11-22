@@ -33,9 +33,9 @@ namespace FishMMO.Client
 
 		private void ShowLoadingScreen()
 		{
-			Visible = true;
 			LoadingProgress.value = 0;
 			LoadingImage.gameObject.SetActive(LoadingImage.sprite != null);
+			Show();
 		}
 
 		#region Network Events
@@ -70,7 +70,7 @@ namespace FishMMO.Client
 
 		private void OnSceneEndLoad(SceneLoadEndEventArgs endEvent)
 		{
-			Visible = false;
+			Hide();
 		}
 		#endregion
 	}

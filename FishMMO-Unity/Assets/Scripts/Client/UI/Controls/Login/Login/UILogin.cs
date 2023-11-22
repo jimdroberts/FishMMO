@@ -32,7 +32,7 @@ namespace FishMMO.Client
 
 		public override void OnQuitToLogin()
 		{
-			Visible = true;// override setting, this is our main menu
+			Show();// override setting, this is our main menu
 			SetSignInLocked(false);
 		}
 
@@ -43,7 +43,7 @@ namespace FishMMO.Client
 
 		private void ClientManager_OnReconnectFailed()
 		{
-			Visible = true;
+			Show();
 			SetSignInLocked(false);
 		}
 
@@ -76,7 +76,7 @@ namespace FishMMO.Client
 				case ClientAuthenticationResult.LoginSuccess:
 					// reset handshake message and hide the panel
 					handshakeMSG.text = "";
-					Visible = false;
+					Hide();
 
 					// request the character list
 					CharacterRequestListBroadcast requestCharacterList = new CharacterRequestListBroadcast();

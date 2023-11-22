@@ -117,10 +117,5 @@ namespace FishMMO.Client
 				}
 			}
 		}
-
-		public void OnClose()
-		{
-			Visible = false;
-		}
 	}
 }

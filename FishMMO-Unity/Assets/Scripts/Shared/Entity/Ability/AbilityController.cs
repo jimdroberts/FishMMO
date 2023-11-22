@@ -143,7 +143,7 @@ namespace FishMMO.Shared
 						else if (ChanneledTemplate != null && currentAbility.HasAbilityEvent(ChanneledTemplate.ID))
 						{
 							// get target info
-							TargetInfo targetInfo = Character.TargetController.GetTarget(Character.CharacterController.VirtualCameraPosition, Character.CharacterController.VirtualCameraRotation * Vector3.forward, currentAbility.Range);
+							TargetInfo targetInfo = Character.TargetController.UpdateTarget(Character.CharacterController.VirtualCameraPosition, Character.CharacterController.VirtualCameraRotation * Vector3.forward, currentAbility.Range);
 
 							// spawn the ability object
 							if (AbilityObject.TrySpawn(currentAbility, Character, this, AbilitySpawner, targetInfo))
@@ -168,7 +168,7 @@ namespace FishMMO.Shared
 				if (CanActivate(currentAbility))
 				{
 					// get target info
-					TargetInfo targetInfo = Character.TargetController.GetTarget(Character.CharacterController.VirtualCameraPosition, Character.CharacterController.VirtualCameraRotation * Vector3.forward, currentAbility.Range);
+					TargetInfo targetInfo = Character.TargetController.UpdateTarget(Character.CharacterController.VirtualCameraPosition, Character.CharacterController.VirtualCameraRotation * Vector3.forward, currentAbility.Range);
 
 					// spawn the ability object
 					if (AbilityObject.TrySpawn(currentAbility, Character, this, AbilitySpawner, targetInfo))

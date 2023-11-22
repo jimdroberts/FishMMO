@@ -66,12 +66,12 @@ namespace FishMMO.Client
 			Vector3 offset = new Vector3(this.Icon.texture.width * 0.5f + 1.0f, this.Icon.texture.height * -0.5f - 1.0f, 0.0f);
 			transform.position = Input.mousePosition + offset;
 
-			Visible = true;
+			Show();
 		}
 
 		public void Clear()
 		{
-			Visible = false;
+			Hide();
 
 			Icon.texture = null;
 			ReferenceID = UIReferenceButton.NULL_REFERENCE_ID;

@@ -14,10 +14,10 @@ namespace FishMMO.Client
 		{
 		}
 
-		public virtual void OnShow(Character character)
+		public virtual void Show(Character character)
 		{
 			Character = character;
-			OnShow();
+			Show();
 		}
 
 		/// <summary>

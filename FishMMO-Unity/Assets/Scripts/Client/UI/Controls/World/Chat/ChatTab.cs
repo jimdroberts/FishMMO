@@ -26,7 +26,7 @@ namespace FishMMO.Client
 		{
 			if (UIManager.TryGet("UIChatChannelPicker", out UIChatChannelPicker channelPicker))
 			{
-				channelPicker.Visible = !channelPicker.Visible;
+				channelPicker.ToggleVisibility();
 				if (channelPicker.Visible)
 				{
 					channelPicker.Activate(activeChannels, name, transform.position);

@@ -90,11 +90,19 @@ namespace FishMMO.Client
 			return false;
 		}
 
+		public static void ToggleVisibility(string name)
+		{
+			if (controls.TryGetValue(name, out UIControl result))
+			{
+				result.ToggleVisibility();
+			}
+		}
+
 		public static void Show(string name)
 		{
 			if (controls.TryGetValue(name, out UIControl result))
 			{
-				result.OnShow();
+				result.Show();
 			}
 		}
 
@@ -102,7 +110,7 @@ namespace FishMMO.Client
 		{
 			if (controls.TryGetValue(name, out UIControl result) && result.Visible)
 			{
-				result.OnHide();
+				result.Hide();
 			}
 		}
 
@@ -110,7 +118,7 @@ namespace FishMMO.Client
 		{
 			foreach (KeyValuePair<string, UIControl> p in controls)
 			{
-				p.Value.OnHide();
+				p.Value.Hide();
 			}
 		}
 
@@ -118,7 +126,7 @@ namespace FishMMO.Client
 		{
 			foreach (KeyValuePair<string, UIControl> p in controls)
 			{
-				p.Value.OnShow();
+				p.Value.Show();
 			}
 		}
 

@@ -32,7 +32,7 @@ namespace FishMMO.Client
 			this.cachedObjects = cachedObjects;
 			SetEventSlots(cachedObjects.Count);
 			this.onAccept = onAccept;
-			Visible = true;
+			Show();
 		}
 
 		private void ClearSlots()
@@ -93,7 +93,7 @@ namespace FishMMO.Client
 			cachedObjects = null;
 			selectedIndex = -1;
 			onAccept = null;
-			Visible = false;
+			Hide();
 		}
 	}
 }

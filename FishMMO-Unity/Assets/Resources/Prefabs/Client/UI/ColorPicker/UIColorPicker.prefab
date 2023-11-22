@@ -2403,7 +2403,7 @@ MonoBehaviour:
       m_Calls:
       - m_Target: {fileID: 11456144}
         m_TargetAssemblyTypeName: FishMMO.Client.UIControl, Assembly-CSharp
-        m_MethodName: OnHide
+        m_MethodName: Hide
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -4795,7 +4795,7 @@ MonoBehaviour:
   CanvasScaler: {fileID: 0}
   MainPanel: {fileID: 22499534}
   InputField: {fileID: 0}
-  StartOpen: 1
+  StartOpen: 0
   IsAlwaysOpen: 0
   HasFocus: 0
   CloseOnQuitToMenu: 1

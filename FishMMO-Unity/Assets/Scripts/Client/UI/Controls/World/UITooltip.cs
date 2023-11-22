@@ -25,14 +25,14 @@ namespace FishMMO.Client
 			}
 		}
 
-		public void SetText(string text, bool show)
+		public void Open(string text)
 		{
 			if (this.text != null)
 			{
 				this.text.text = text;
 				Vector3 offset = new Vector3(0.0f, background.rect.height, 0.0f);
 				transform.position = Input.mousePosition + offset;
-				Visible = show;
+				Show();
 			}
 		}
 	}

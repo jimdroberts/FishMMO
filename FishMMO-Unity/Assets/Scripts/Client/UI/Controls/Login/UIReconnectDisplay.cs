@@ -28,7 +28,7 @@ namespace FishMMO.Client
 		public void OnReconnectAttemptsChanged(byte attempts, byte maxAttempts)
 		{
 			AttemptCounterText.text = $"Attempt {attempts} of {maxAttempts}";
-			Visible = true;
+			Show();
 
 			if (attempts >= maxAttempts)
 			{
@@ -39,12 +39,12 @@ namespace FishMMO.Client
 		public void OnCancelClicked()
 		{
 			Client.ReconnectCancel();
-			Visible = false;
+			Hide();
 		}
 
 		public void OnCloseScreen()
 		{
-			Visible = false;
+			Hide();
 		}
 	}
 }

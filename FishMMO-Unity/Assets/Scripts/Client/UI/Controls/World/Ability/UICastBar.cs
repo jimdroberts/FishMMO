@@ -20,7 +20,7 @@ namespace FishMMO.Client
 		{
 			if (!Visible)
 			{
-				Visible = true;
+				Show();
 			}
 
 			float value = remainingTime / totalTime;
@@ -30,7 +30,7 @@ namespace FishMMO.Client
 
 		public void OnCancel()
 		{
-			Visible = false;
+			Hide();
 		}
 	}
 }

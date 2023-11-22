@@ -16,7 +16,7 @@ namespace FishMMO.Shared
 
 		public virtual bool OnInteract(Character character)
 		{
-			return ((character.Transform.position - Transform.position).sqrMagnitude < InteractionDistanceSqr);
+			return (character.Transform.position - Transform.position).sqrMagnitude < InteractionDistanceSqr;
 		}
 	}
 }

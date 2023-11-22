@@ -46,11 +46,10 @@ namespace FishMMO.Shared
 			{
 				nextTick = TARGET_UPDATE_RATE;
 
-				LastTarget = Current;
 				Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-				//Camera.main.ScreenToWorldPoint(new Vector3(Screen.width * 0.5f, Screen.height * 0.5f, 0));
+				//Ray ray = Camera.main.ScreenPointToRay(new Vector3(Screen.width * 0.5f, Screen.height * 0.5f, 0));
 
-				Current = GetTarget(ray.origin, ray.direction, MAX_TARGET_DISTANCE);
+				UpdateTarget(ray.origin, ray.direction, MAX_TARGET_DISTANCE);
 
 				// same target label remains
 				if (LastTarget.Target != Current.Target)
@@ -130,8 +129,11 @@ namespace FishMMO.Shared
 			nextTick -= Time.deltaTime;
 		}
 #endif
-
-		public TargetInfo GetTarget(Vector3 origin, Vector3 direction, float maxDistance)
+		
+		/// <summary>
+		/// Updates and returns the TargetInfo for the Current target.
+		/// </summary>
+		public TargetInfo UpdateTarget(Vector3 origin, Vector3 direction, float maxDistance)
 		{
 			LastTarget = Current;
 

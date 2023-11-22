@@ -49,7 +49,7 @@ namespace FishMMO.Client
 							Character.InventoryController.TryGetItem(ReferenceID, out Item inventoryItem) &&
 							UIManager.TryGet("UITooltip", out tooltip))
 						{
-							tooltip.SetText(inventoryItem.Tooltip(), true);
+							tooltip.Open(inventoryItem.Tooltip());
 						}
 						break;
 					case ReferenceButtonType.Equipment:
@@ -57,7 +57,7 @@ namespace FishMMO.Client
 							Character.EquipmentController.TryGetItem(ReferenceID, out Item equippedItem) &&
 							UIManager.TryGet("UITooltip", out tooltip))
 						{
-							tooltip.SetText(equippedItem.Tooltip(), true);
+							tooltip.Open(equippedItem.Tooltip());
 						}
 						break;
 					case ReferenceButtonType.Ability:
@@ -65,7 +65,7 @@ namespace FishMMO.Client
 							Character.AbilityController.KnownAbilities.TryGetValue(ReferenceID, out Ability ability) &&
 							UIManager.TryGet("UITooltip", out tooltip))
 						{
-							tooltip.SetText(ability.Tooltip(), true);
+							tooltip.Open(ability.Tooltip());
 						}
 						break;
 					default:
@@ -80,7 +80,7 @@ namespace FishMMO.Client
 
 			if (UIManager.TryGet("UITooltip", out UITooltip tooltip))
 			{
-				tooltip.OnHide();
+				tooltip.Hide();
 			}
 		}
 

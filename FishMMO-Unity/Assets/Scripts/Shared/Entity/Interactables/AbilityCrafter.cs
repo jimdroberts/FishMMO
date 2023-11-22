@@ -21,7 +21,7 @@ namespace FishMMO.Shared
 #if !UNITY_SERVER
 			if (UIManager.TryGet("UIAbilityCraft", out UIAbilityCraft uiAbilityCraft))
 			{
-				uiAbilityCraft.OnShow(character);
+				uiAbilityCraft.Show(character);
 			}
 #endif
 			return true;

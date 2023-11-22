@@ -19,11 +19,11 @@ namespace FishMMO.Client
 		{
 			if (mouseMode)
 			{
-				Visible = false;
+				Hide();
 			}
 			else
 			{
-				Visible = true;
+				Show();
 			}
 		}
 	}

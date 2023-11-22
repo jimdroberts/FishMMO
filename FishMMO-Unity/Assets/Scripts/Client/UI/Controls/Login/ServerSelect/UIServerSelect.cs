@@ -64,7 +64,7 @@ namespace FishMMO.Client
 					break;
 				case ClientAuthenticationResult.SceneLoginSuccess:
 					SetConnectToServerLocked(false);
-					Visible = false;
+					Hide();
 					break;
 				case ClientAuthenticationResult.ServerFull:
 					break;
@@ -102,7 +102,7 @@ namespace FishMMO.Client
 				}
 			}
 
-			Visible = true;
+			Show();
 		}
 
 		private void OnClientWorldSceneConnectBroadcastReceived(WorldSceneConnectBroadcast msg)

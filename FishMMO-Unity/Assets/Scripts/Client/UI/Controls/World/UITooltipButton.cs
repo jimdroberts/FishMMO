@@ -57,7 +57,7 @@ namespace FishMMO.Client
 				if (Tooltip != null &&
 					UIManager.TryGet("UITooltip", out UITooltip tooltip))
 				{
-					tooltip.SetText(Tooltip.Tooltip(), true);
+					tooltip.Open(Tooltip.Tooltip());
 				}
 			}
 		}
@@ -68,7 +68,7 @@ namespace FishMMO.Client
 
 			if (UIManager.TryGet("UITooltip", out UITooltip tooltip))
 			{
-				tooltip.OnHide();
+				tooltip.Hide();
 			}
 		}
 
