@@ -39,8 +39,10 @@ namespace FishMMO.Client
 			private set
 			{
 				gameObject.SetActive(value);
-				if (!value)
+				if (!value && HasFocus)
 				{
+					EventSystem.current.SetSelectedGameObject(null);
+					EventSystem.current.sendNavigationEvents = false;
 					HasFocus = false;
 				}
 			}

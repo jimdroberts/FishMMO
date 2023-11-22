@@ -166,12 +166,12 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
-		/// Returns true if any of the accounts characters are currently online.
+		/// Returns true if any of the accounts characters are currently online. TimeOut is in seconds.
 		/// </summary>
-		public static bool TryGetOnline(NpgsqlDbContext dbContext, string account)
+		public static bool TryGetOnline(NpgsqlDbContext dbContext, string account, float timeOut = 60.0f)
 		{
 			var characters = dbContext.Characters.Where((c) => c.Account == account &&
-															   c.Online == true &&
+															   (c.LastSaved.AddSeconds(timeOut) < DateTime.UtcNow || c.Online == true) &&
 															   !c.Deleted).ToList();
 			return characters != null && characters.Count > 0;
 		}
