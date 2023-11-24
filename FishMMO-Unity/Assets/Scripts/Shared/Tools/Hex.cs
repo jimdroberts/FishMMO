@@ -57,7 +57,7 @@ namespace FishMMO.Shared
 			return ColorNormalize(r, g, b, a);
 		}
 
-		public static string ColorToHex(Color color)
+		public static string ToHex(this Color color)
 		{
 			int r = (int)(color.r * 255.0f);
 			int g = (int)(color.g * 255.0f);

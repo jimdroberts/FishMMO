@@ -1,0 +1,35 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 11222f2e61021b74dab28957b1bece4e, type: 3}
+  m_Name: Flame
+  m_EditorClassIdentifier: 
+  icon: {fileID: 21300000, guid: b3905a73a6672d9449647aaf036e23fc, type: 3}
+  Description: Creates a flame in front of the caster.
+  ActivationTime: 0.5
+  ActiveTime: 0
+  Cooldown: 1
+  Range: 0
+  Speed: 0
+  Resources:
+    m_keys:
+    - {fileID: 11400000, guid: f627a40e6b3ef5349b3c735f0bfd60c7, type: 2}
+    m_values: 05000000
+  Requirements:
+    m_keys: []
+    m_values: 
+  FXPrefab: {fileID: 0}
+  AbilitySpawnTarget: 1
+  RequiresTarget: 0
+  EventSlots: 3
+  HitCount: 1
+  ActivationSpeedReductionAttribute: {fileID: 0}
+  CooldownReductionAttribute: {fileID: 0}

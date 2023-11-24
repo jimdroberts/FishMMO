@@ -3,6 +3,7 @@ using UnityEngine;
 
 namespace FishMMO.Shared
 {
+	[CreateAssetMenu(fileName = "New Ability Multiply Event", menuName = "Character/Ability/Spawn Event/Multiply", order = 1)]
 	public sealed class MultiplyEvent : SpawnEvent
 	{
 		public int SpawnCount;
@@ -32,6 +33,11 @@ namespace FishMMO.Shared
 					abilityObjects.Add(++nextID, abilityObject);
 				}
 			}
+		}
+
+		public override string Tooltip()
+		{
+			return base.Tooltip().Replace("$SPAWNCOUNT$", SpawnCount.ToString());
 		}
 	}
 }

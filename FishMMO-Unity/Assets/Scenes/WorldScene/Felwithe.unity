@@ -180,6 +180,7 @@ MonoBehaviour:
   <AssetPathHash>k__BackingField: 0
   _sceneNetworkObjects:
   - {fileID: 14910055}
+  - {fileID: 1867334142}
 --- !u!114 &14910056
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -214,6 +215,11 @@ MonoBehaviour:
   _addedNetworkObject: {fileID: 14910055}
   _networkObjectCache: {fileID: 14910055}
   InteractionDistanceSqr: 5
+  Abilities:
+  - {fileID: 11400000, guid: 7c14874e3c902684a8d562913ed73c24, type: 2}
+  AbilityEvents:
+  - {fileID: 11400000, guid: 5a49dbc5bd95c4149a537a1a52e4f161, type: 2}
+  - {fileID: 11400000, guid: 999421753c6c67f43b2ddcafecb29459, type: 2}
 --- !u!135 &14910058
 SphereCollider:
   m_ObjectHideFlags: 0
@@ -1995,7 +2001,7 @@ MonoBehaviour:
   <ComponentIndex>k__BackingField: 0
   <PredictedSpawn>k__BackingField: {fileID: 0}
   _networkBehaviours:
-  - {fileID: 0}
+  - {fileID: 1867334149}
   <ParentNetworkObject>k__BackingField: {fileID: 0}
   <ChildNetworkObjects>k__BackingField: []
   SerializedTransformProperties:
@@ -2013,8 +2019,8 @@ MonoBehaviour:
   <SceneId>k__BackingField: 4480193994975312309
   <AssetPathHash>k__BackingField: 0
   _sceneNetworkObjects:
-  - {fileID: 1867334142}
   - {fileID: 14910055}
+  - {fileID: 1867334142}
 --- !u!114 &1867334143
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2131,9 +2137,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9bfb0fee38467204d8d4eb092e310420, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 255
+  _componentIndexCache: 0
   _addedNetworkObject: {fileID: 1867334142}
-  _networkObjectCache: {fileID: 0}
+  _networkObjectCache: {fileID: 1867334142}
   InteractionDistanceSqr: 5
 --- !u!1 &1965726575
 GameObject:

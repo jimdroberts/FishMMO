@@ -21,6 +21,7 @@ namespace FishMMO.Client
 
 		public override void OnDestroying()
 		{
+			ClearSlots();
 		}
 
 		public void Open(List<ICachedObject> cachedObjects, Action<int> onAccept)
@@ -30,7 +31,7 @@ namespace FishMMO.Client
 				return;
 			}
 			this.cachedObjects = cachedObjects;
-			SetEventSlots(cachedObjects.Count);
+			UpdateEventSlots();
 			this.onAccept = onAccept;
 			Show();
 		}
@@ -54,16 +55,26 @@ namespace FishMMO.Client
 				ButtonSlots.Clear();
 			}
 		}
-		private void SetEventSlots(int count)
+		private void UpdateEventSlots()
 		{
 			ClearSlots();
 
 			ButtonSlots = new List<UITooltipButton>();
 
-			for (int i = 0; i < count; ++i)
+			if (cachedObjects == null)
 			{
+				return;
+			}
+			for (int i = 0; i < cachedObjects.Count; ++i)
+			{
+				ITooltip cachedObject = cachedObjects[i] as ITooltip;
+				if (cachedObject == null)
+				{
+					continue;
+				}
+
 				UITooltipButton eventButton = Instantiate(ButtonPrefab, ButtonParent);
-				eventButton.Initialize(i, EventEntry_OnLeftClick, null);
+				eventButton.Initialize(i, EventEntry_OnLeftClick, null, cachedObject);
 				ButtonSlots.Add(eventButton);
 			}
 		}
@@ -80,7 +91,7 @@ namespace FishMMO.Client
 		{
 			if (selectedIndex > -1 &&
 				cachedObjects != null &&
-				cachedObjects.Count < selectedIndex)
+				selectedIndex < cachedObjects.Count)
 			{
 				onAccept?.Invoke(cachedObjects[selectedIndex].ID);
 			}

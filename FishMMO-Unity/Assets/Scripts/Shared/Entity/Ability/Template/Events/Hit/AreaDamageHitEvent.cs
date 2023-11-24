@@ -2,12 +2,13 @@
 
 namespace FishMMO.Shared
 {
+	[CreateAssetMenu(fileName = "New Area Damage Hit Event", menuName = "Character/Ability/Hit Event/Area Damage", order = 1)]
 	public sealed class AreaDamageHitEvent : HitEvent
 	{
 		private Collider[] colliders = new Collider[100];
 
 		public int HitCount;
-		public int Amount;
+		public int Damage;
 		public float Radius;
 		public DamageAttributeTemplate DamageAttributeTemplate;
 		public LayerMask CollidableLayers = -1;
@@ -31,12 +32,19 @@ namespace FishMMO.Shared
 					Character def = colliders[i].gameObject.GetComponent<Character>();
 					if (def != null && def.DamageController != null)
 					{
-						def.DamageController.Damage(attacker, Amount, DamageAttributeTemplate);
+						def.DamageController.Damage(attacker, Damage, DamageAttributeTemplate);
 						++hits;
 					}
 				}
 			}
 			return hits;
+		}
+
+		public override string Tooltip()
+		{
+			return base.Tooltip().Replace("$ELEMENT$", "<color=#" + DamageAttributeTemplate.DisplayColor.ToHex() + ">" + DamageAttributeTemplate.Name + "</color>")
+								 .Replace("$DAMAGE$", "<color=#" + DamageAttributeTemplate.DisplayColor.ToHex() + ">" + Damage + "</color>")
+								 .Replace("$RADIUS$", Radius.ToString());
 		}
 	}
 }

@@ -48,8 +48,8 @@ namespace FishMMO.Client
 					AbilityTemplate template = AbilityTemplate.Get<AbilityTemplate>(i);
 					if (template != null)
 					{
-						MainEntry.Initialize(Character, 0, template);
-						AbilityDescription.text = template.Description;
+						MainEntry.Initialize(Character, template);
+						AbilityDescription.text = template.Tooltip();
 						SetEventSlots(template.EventSlots);
 					}
 				});
@@ -58,6 +58,7 @@ namespace FishMMO.Client
 
 		private void MainEntry_OnRightClick(int index)
 		{
+			MainEntry.Clear();
 			ClearSlots();
 		}
 
@@ -74,7 +75,7 @@ namespace FishMMO.Client
 					AbilityEvent template = AbilityEvent.Get<AbilityEvent>(i);
 					if (template != null)
 					{
-						EventSlots[index].Initialize(Character, index, template);
+						EventSlots[index].Initialize(Character, template);
 					}
 				});
 			}

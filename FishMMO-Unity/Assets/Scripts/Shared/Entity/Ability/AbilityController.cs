@@ -311,7 +311,7 @@ namespace FishMMO.Shared
 			return true;
 		}
 
-		public void LearnAbilityTypes(AbilityTemplate[] abilityTemplates, AbilityEvent[] abilityEvents)
+		public void LearnAbilityTypes(List<AbilityTemplate> abilityTemplates, List<AbilityEvent> abilityEvents)
 		{
 			if (abilityTemplates != null)
 			{
@@ -319,7 +319,7 @@ namespace FishMMO.Shared
 				{
 					KnownTemplates = new HashSet<int>();
 				}
-				for (int i = 0; i < abilityTemplates.Length; ++i)
+				for (int i = 0; i < abilityTemplates.Count; ++i)
 				{
 					if (!KnownTemplates.Contains(abilityTemplates[i].ID))
 					{
@@ -329,10 +329,14 @@ namespace FishMMO.Shared
 			}
 			if (abilityEvents != null)
 			{
-				for (int i = 0; i < abilityEvents.Length; ++i)
+				for (int i = 0; i < abilityEvents.Count; ++i)
 				{
 					AbilityEvent abilityEvent = abilityEvents[i];
 
+					if (KnownEvents == null)
+					{
+						KnownEvents = new HashSet<int>();
+					}
 					if (!KnownEvents.Contains(abilityEvent.ID))
 					{
 						KnownEvents.Add(abilityEvent.ID);

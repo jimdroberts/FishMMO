@@ -12,7 +12,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a3d6f432a4e5f1049a98570f5a922123, type: 3}
   m_Name: Wind Damage
   m_EditorClassIdentifier: 
-  ID: -595191280
   Description: 
   InitialValue: 0
   MinValue: 0
@@ -29,4 +28,4 @@ MonoBehaviour:
     m_keys: []
     m_values: []
   Resistance: {fileID: 11400000, guid: c17ce5287a5cd454a8bbbc575618a1b9, type: 2}
-  DisplayColor: {r: 0.57930404, g: 0.8273765, b: 0.90800005, a: 0}
+  DisplayColor: {r: 0.57930404, g: 0.8273765, b: 0.90800005, a: 1}

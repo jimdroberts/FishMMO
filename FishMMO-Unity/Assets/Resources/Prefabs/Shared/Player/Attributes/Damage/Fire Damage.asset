@@ -12,7 +12,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a3d6f432a4e5f1049a98570f5a922123, type: 3}
   m_Name: Fire Damage
   m_EditorClassIdentifier: 
-  ID: -1303829470
   Description: 
   InitialValue: 0
   MinValue: 0
@@ -29,4 +28,4 @@ MonoBehaviour:
     m_keys: []
     m_values: []
   Resistance: {fileID: 11400000, guid: d7d701201e0782a48b10f6acf2656544, type: 2}
-  DisplayColor: {r: 0.7830189, g: 0.16620687, b: 0.16620687, a: 0}
+  DisplayColor: {r: 0.7830189, g: 0.16620687, b: 0.16620687, a: 1}

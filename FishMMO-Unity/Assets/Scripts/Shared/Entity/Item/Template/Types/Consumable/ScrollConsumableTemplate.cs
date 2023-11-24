@@ -1,9 +1,11 @@
-﻿namespace FishMMO.Shared
+﻿using System.Collections.Generic;
+
+namespace FishMMO.Shared
 {
 	public abstract class ScrollConsumableTemplate : ConsumableTemplate
 	{
-		public AbilityTemplate[] AbilityTemplates;
-		public AbilityEvent[] AbilityEvents;
+		public List<AbilityTemplate> AbilityTemplates;
+		public List<AbilityEvent> AbilityEvents;
 
 		public override bool Invoke(Character character, Item item)
 		{

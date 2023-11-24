@@ -3,6 +3,25 @@ using FishNet.Serializing;
 
 namespace FishMMO.Shared
 {
+	public static class TinyColorExtensions
+	{
+		public static Color ToUnityColor(this TinyColor color)
+		{
+			return new Color()
+			{
+				r = Mathf.Round(color.r / 255.0f),
+				g = Mathf.Round(color.g / 255.0f),
+				b = Mathf.Round(color.b / 255.0f),
+				a = Mathf.Round(color.a / 255.0f),
+			};
+		}
+
+		public static string ToHex(this TinyColor color)
+		{
+			return string.Format("{0:X2}{1:X2}{2:X2}{3:X2}", color.r, color.g, color.b, color.a);
+		}
+	}
+
 	public class TinyColor
 	{
 		public static readonly TinyColor transparent = new TinyColor(0, 0, 0, 0);
@@ -64,12 +83,13 @@ namespace FishMMO.Shared
 
 		public static Color ToUnityColor(TinyColor color)
 		{
-			Color newColor = new Color();
-			newColor.r = Mathf.Round(color.r / 255.0f);
-			newColor.g = Mathf.Round(color.g / 255.0f);
-			newColor.b = Mathf.Round(color.b / 255.0f);
-			newColor.a = Mathf.Round(color.a / 255.0f);
-			return newColor;
+			return new Color()
+			{
+				r = Mathf.Round(color.r / 255.0f),
+				g = Mathf.Round(color.g / 255.0f),
+				b = Mathf.Round(color.b / 255.0f),
+				a = Mathf.Round(color.a / 255.0f),
+			};
 		}
 
 		public override string ToString()

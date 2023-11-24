@@ -1,15 +1,19 @@
-﻿using UnityEngine;
-using System;
+﻿using System;
+using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+using TMPro;
 using FishMMO.Shared;
 
 namespace FishMMO.Client
 {
 	public class UITooltipButton : Button
 	{
-		[SerializeField]
+		private Sprite cachedSprite;
+		private string cachedLabel;
+
 		public Image Icon;
+		public TMP_Text TooltipLabel;
 
 		public Action<int> OnLeftClick;
 		public Action<int> OnRightClick;
@@ -18,6 +22,18 @@ namespace FishMMO.Client
 		public ITooltip Tooltip { get; private set; }
 		public Character Character { get; private set; }
 
+		protected override void Awake()
+		{
+			if (Icon != null)
+			{
+				cachedSprite = Icon.sprite;
+			}
+			if (TooltipLabel != null)
+			{
+				cachedLabel = TooltipLabel.text;
+			}
+		}
+
 		protected override void OnDestroy()
 		{
 			base.OnDestroy();
@@ -25,14 +41,6 @@ namespace FishMMO.Client
 			Clear();
 		}
 
-		public void Initialize(Action<int> onLeftClick, Action<int> onRightClick)
-		{
-			Index = 0;
-			OnLeftClick = null;
-			OnLeftClick += onLeftClick;
-			OnRightClick = null;
-			OnRightClick += onRightClick;
-		}
 		public void Initialize(int index, Action<int> onLeftClick, Action<int> onRightClick)
 		{
 			Index = index;
@@ -41,24 +49,45 @@ namespace FishMMO.Client
 			OnRightClick = null;
 			OnRightClick += onRightClick;
 		}
-		public void Initialize(Character character, int index, ITooltip tooltip)
+		public void Initialize(int index, Action<int> onLeftClick, Action<int> onRightClick, ITooltip tooltip)
+		{
+			Index = index;
+			OnLeftClick = null;
+			OnLeftClick += onLeftClick;
+			OnRightClick = null;
+			OnRightClick += onRightClick;
+			Tooltip = tooltip;
+			if (Icon != null)
+			{
+				Icon.sprite = tooltip.Icon;
+			}
+			if (TooltipLabel != null)
+			{
+				TooltipLabel.text = tooltip.Name;
+			}
+		}
+		public void Initialize(Character character, ITooltip tooltip)
 		{
 			Character = character;
-			Index = index;
 			Tooltip = tooltip;
+			if (Icon != null)
+			{
+				Icon.sprite = tooltip.Icon;
+			}
+			if (TooltipLabel != null)
+			{
+				TooltipLabel.text = tooltip.Name;
+			}
 		}
 
 		public override void OnPointerEnter(PointerEventData eventData)
 		{
 			base.OnPointerEnter(eventData);
 
-			if (Character != null)
+			if (Tooltip != null &&
+				UIManager.TryGet("UITooltip", out UITooltip tooltip))
 			{
-				if (Tooltip != null &&
-					UIManager.TryGet("UITooltip", out UITooltip tooltip))
-				{
-					tooltip.Open(Tooltip.Tooltip());
-				}
+				tooltip.Open(Tooltip.Tooltip());
 			}
 		}
 
@@ -83,16 +112,21 @@ namespace FishMMO.Client
 			else if (eventData.button == PointerEventData.InputButton.Right)
 			{
 				OnRightClick?.Invoke(Index);
-				Clear();
 			}
 		}
 
 		public virtual void Clear()
 		{
 			Character = null;
-			Index = -1;
 			Tooltip = null;
-			if (Icon != null) Icon.sprite = null;
+			if (Icon != null)
+			{
+				Icon.sprite = cachedSprite;
+			}
+			if (TooltipLabel != null)
+			{
+				TooltipLabel.text = cachedLabel;
+			}
 		}
 	}
 }

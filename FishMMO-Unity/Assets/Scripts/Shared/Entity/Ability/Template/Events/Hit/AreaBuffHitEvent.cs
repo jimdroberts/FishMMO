@@ -2,14 +2,15 @@
 
 namespace FishMMO.Shared
 {
-	[CreateAssetMenu(fileName = "New Area Heal Hit Event", menuName = "Character/Ability/Hit Event/Area Heal", order = 1)]
-	public sealed class AreaHealHitEvent : HitEvent
+	[CreateAssetMenu(fileName = "New Area Buff Hit Event", menuName = "Character/Ability/Hit Event/Area Buff", order = 1)]
+	public sealed class AreaBuffHitEvent : HitEvent
 	{
 		private Collider[] colliders = new Collider[100];
 
 		public int HitCount;
-		public int Heal;
+		public int Stacks;
 		public float Radius;
+		public BuffTemplate BuffTemplate;
 		public LayerMask CollidableLayers = -1;
 
 		public override int Invoke(Character attacker, Character defender, TargetInfo hitTarget, GameObject abilityObject)
@@ -31,7 +32,7 @@ namespace FishMMO.Shared
 					Character def = colliders[i].gameObject.GetComponent<Character>();
 					if (def != null && def.DamageController != null)
 					{
-						def.DamageController.Heal(attacker, Heal);
+						def.BuffController.Apply(BuffTemplate);
 						++hits;
 					}
 				}
@@ -41,7 +42,8 @@ namespace FishMMO.Shared
 
 		public override string Tooltip()
 		{
-			return base.Tooltip().Replace("$HEAL$", "<color=#" + TinyColor.skyBlue.ToHex() + ">" + Heal + "</color>")
+			return base.Tooltip().Replace("$BUFF$", BuffTemplate.Name)
+								 .Replace("$STACKS$", Stacks.ToString())
 								 .Replace("$RADIUS$", Radius.ToString());
 		}
 	}

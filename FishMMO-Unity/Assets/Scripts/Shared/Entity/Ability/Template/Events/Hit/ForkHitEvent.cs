@@ -2,6 +2,7 @@
 
 namespace FishMMO.Shared
 {
+	[CreateAssetMenu(fileName = "New Fork Hit Event", menuName = "Character/Ability/Hit Event/Fork", order = 1)]
 	public sealed class ForkHitEvent : HitEvent
 	{
 		public float Arc = 180.0f;
@@ -14,6 +15,12 @@ namespace FishMMO.Shared
 
 			// fork doesn't count as a hit
 			return 0;
+		}
+
+		public override string Tooltip()
+		{
+			return base.Tooltip().Replace("$ARC$", Arc.ToString())
+								 .Replace("$DISTANCE$", Distance.ToString());
 		}
 	}
 }

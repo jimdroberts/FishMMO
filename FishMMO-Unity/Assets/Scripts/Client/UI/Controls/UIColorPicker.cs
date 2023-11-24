@@ -135,7 +135,7 @@ namespace FishMMO.Client
 			HInputField.SetText(HSlider.value.ToString());
 			SInputField.SetText(SSlider.value.ToString());
 			VInputField.SetText(VSlider.value.ToString());
-			HexInputField.text = Hex.ColorToHex(Current.color);
+			HexInputField.text = Current.color.ToHex();
 		}
 
 		private void SetRGB(Color RGB)
@@ -146,7 +146,7 @@ namespace FishMMO.Client
 			RInputField.SetText(RSlider.value.ToString());
 			GInputField.SetText(GSlider.value.ToString());
 			BInputField.SetText(BSlider.value.ToString());
-			HexInputField.text = Hex.ColorToHex(Current.color);
+			HexInputField.text = Current.color.ToHex();
 		}
 
 		private void UpdateBackgroundSprites()

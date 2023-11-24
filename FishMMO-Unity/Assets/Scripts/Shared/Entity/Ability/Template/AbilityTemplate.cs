@@ -3,7 +3,8 @@ using UnityEngine;
 
 namespace FishMMO.Shared
 {
-	public abstract class AbilityTemplate : BaseAbilityTemplate, ITooltip
+	[CreateAssetMenu(fileName = "New Ability", menuName = "Character/Ability/Ability", order = 1)]
+	public class AbilityTemplate : BaseAbilityTemplate, ITooltip
 	{
 		public GameObject FXPrefab;
 		public AbilitySpawnTarget AbilitySpawnTarget;
@@ -12,22 +13,5 @@ namespace FishMMO.Shared
 		public int HitCount;
 		public CharacterAttributeTemplate ActivationSpeedReductionAttribute;
 		public CharacterAttributeTemplate CooldownReductionAttribute;
-
-		public override string Tooltip()
-		{
-			string tooltip = base.Tooltip();
-			using (var sb = ZString.CreateStringBuilder())
-			{
-				sb.Append(tooltip);
-				if (HitCount > 0)
-				{
-					sb.AppendLine();
-					sb.Append("<color=#a66ef5>Hit Count: ");
-					sb.Append(HitCount);
-					sb.Append("</color>");
-				}
-				return sb.ToString();
-			}
-		}
 	}
 }

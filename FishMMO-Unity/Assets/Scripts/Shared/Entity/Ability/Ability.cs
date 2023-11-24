@@ -347,7 +347,13 @@ namespace FishMMO.Shared
 
 					foreach (CharacterAttributeTemplate attribute in Resources.Keys)
 					{
-						sb.Append(attribute.Tooltip());
+						if (!string.IsNullOrWhiteSpace(attribute.Name))
+						{
+							sb.AppendLine();
+							sb.Append("<size=120%><color=#f5ad6e>");
+							sb.Append(attribute.Name);
+							sb.Append("</color></size>");
+						}
 					}
 				}
 				if (Requirements != null && Requirements.Count > 0)
@@ -357,7 +363,13 @@ namespace FishMMO.Shared
 
 					foreach (CharacterAttributeTemplate attribute in Requirements.Keys)
 					{
-						sb.Append(attribute.Tooltip());
+						if (!string.IsNullOrWhiteSpace(attribute.Name))
+						{
+							sb.AppendLine();
+							sb.Append("<size=120%><color=#f5ad6e>");
+							sb.Append(attribute.Name);
+							sb.Append("</color></size>");
+						}
 					}
 				}
 				if (AbilityEvents != null && AbilityEvents.Count > 0)

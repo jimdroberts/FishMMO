@@ -2,6 +2,7 @@
 
 namespace FishMMO.Shared
 {
+	[CreateAssetMenu(fileName = "New Interrupt Hit Event", menuName = "Character/Ability/Hit Event/Interrupt", order = 1)]
 	public sealed class InterruptHitEvent : HitEvent
 	{
 		public override int Invoke(Character attacker, Character defender, TargetInfo hitTarget, GameObject abilityObject)

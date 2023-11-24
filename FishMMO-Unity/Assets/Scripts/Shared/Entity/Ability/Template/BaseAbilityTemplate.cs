@@ -19,58 +19,102 @@ namespace FishMMO.Shared
 
 		public Sprite Icon { get { return this.icon; } }
 
+		public string Field(string valueName, float value, bool appendLine = false, string hexColor = null, string size = null)
+		{
+			if (value == 0.0f)
+			{
+				return "";
+			}
+
+			using (var sb = ZString.CreateStringBuilder())
+			{
+				if (appendLine)
+				{
+					sb.AppendLine();
+				}
+				if (!string.IsNullOrWhiteSpace(size))
+				{
+					sb.Append("<size=" + size + ">");
+				}
+				if (!string.IsNullOrWhiteSpace(hexColor))
+				{
+					sb.Append("<color=#" + hexColor + ">");
+				}
+				if (!string.IsNullOrWhiteSpace(valueName))
+				{
+					sb.Append(valueName);
+					sb.Append(": ");
+				}
+				if (value < 0)
+				{
+					sb.Append("-");
+				}
+				else if (value > 0)
+				{
+					sb.Append("+");
+				}
+				sb.Append(value);
+				if (!string.IsNullOrWhiteSpace(hexColor))
+				{
+					sb.Append("</color>");
+				}
+				if (!string.IsNullOrWhiteSpace(size))
+				{
+					sb.Append("</size>");
+				}
+				return sb.ToString();
+			}
+		}
+
+		public string Field(string value, bool appendLine = false, string hexColor = null, string size = null)
+		{
+			if (string.IsNullOrWhiteSpace(value))
+			{
+				return "";
+			}
+
+			using (var sb = ZString.CreateStringBuilder())
+			{
+				if (!string.IsNullOrWhiteSpace(value))
+				{
+					if (appendLine)
+					{
+						sb.AppendLine();
+					}
+					if (!string.IsNullOrWhiteSpace(size))
+					{
+						sb.Append("<size=" + size + ">");
+					}
+					if (!string.IsNullOrWhiteSpace(hexColor))
+					{
+						sb.Append("<color=#" + hexColor + ">");
+					}
+					sb.Append(value);
+					if (!string.IsNullOrWhiteSpace(hexColor))
+					{
+						sb.Append("</color>");
+					}
+					if (!string.IsNullOrWhiteSpace(size))
+					{
+						sb.Append("</size>");
+					}
+				}
+				return sb.ToString();
+			}
+		}
+
 		public virtual string Tooltip()
 		{
 			using (var sb = ZString.CreateStringBuilder())
 			{
-				if (!string.IsNullOrWhiteSpace(Name))
-				{
-					sb.Append("<size=120%><color=#f5ad6e>");
-					sb.Append(name);
-					sb.Append("</color></size>");
-				}
-				if (!string.IsNullOrWhiteSpace(Description))
-				{
-					sb.AppendLine();
-					sb.Append("<color=#a66ef5>Description: ");
-					sb.Append(Description);
-					sb.Append("</color>");
-				}
-				if (ActivationTime > 0)
-				{
-					sb.AppendLine();
-					sb.Append("<color=#a66ef5>Activation Time: ");
-					sb.Append(ActivationTime);
-					sb.Append("</color>");
-				}
-				if (ActiveTime > 0)
-				{
-					sb.AppendLine();
-					sb.Append("<color=#a66ef5>Active Time: ");
-					sb.Append(ActiveTime);
-					sb.Append("</color>");
-				}
-				if (Cooldown > 0)
-				{
-					sb.AppendLine();
-					sb.Append("<color=#a66ef5>Cooldown: ");
-					sb.Append(Cooldown);
-					sb.Append("</color>");
-				}
-				if (Range > 0)
-				{
-					sb.AppendLine();
-					sb.Append("<color=#a66ef5>Range: ");
-					sb.Append(Range);
-					sb.Append("</color>");
-				}
-				if (Speed > 0)
-				{
-					sb.AppendLine();
-					sb.Append("<color=#a66ef5>Speed: ");
-					sb.Append(Speed);
-					sb.Append("</color>");
-				}
+				sb.Append(Field(Name, false, "f5ad6e", "120%"));
+				sb.Append(Field(Description, true, "a66ef5FF"));
+				sb.Append(Field("Activation Time", ActivationTime, true, "a66ef5FF"));
+				sb.Append(Field("Active Time", ActiveTime, true, "a66ef5FF"));
+				sb.Append(Field("Cooldown", Cooldown, true, "a66ef5FF"));
+				sb.Append(Field("Range", Range, true, "a66ef5FF"));
+				sb.Append(Field("Speed", Speed, true, "a66ef5FF"));
+
 				if (Resources != null && Resources.Count > 0)
 				{
 					sb.AppendLine();
@@ -78,7 +122,10 @@ namespace FishMMO.Shared
 
 					foreach (CharacterAttributeTemplate attribute in Resources.Keys)
 					{
-						sb.Append(attribute.Tooltip());
+						if (!string.IsNullOrWhiteSpace(attribute.Name))
+						{
+							sb.Append(Field(attribute.Name, true, "f5ad6eFF", "120%"));
+						}
 					}
 				}
 				if (Requirements != null && Requirements.Count > 0)
@@ -88,7 +135,10 @@ namespace FishMMO.Shared
 
 					foreach (CharacterAttributeTemplate attribute in Requirements.Keys)
 					{
-						sb.Append(attribute.Tooltip());
+						if (!string.IsNullOrWhiteSpace(attribute.Name))
+						{
+							sb.Append(Field(attribute.Name, true, "f5ad6eFF", "120%"));
+						}
 					}
 				}
 				return sb.ToString();

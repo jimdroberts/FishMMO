@@ -30,6 +30,13 @@ namespace FishMMO.Shared
 		public static List<ICachedObject> Get<U>(HashSet<int> ids) where U : T
 		{
 			List<ICachedObject> objects = new List<ICachedObject>();
+
+			if (ids == null ||
+				ids.Count < 1)
+			{
+				return objects;
+			}
+			
 			Dictionary<int, T> cache = LoadCache<U>();
 			if (cache != null &&
 				cache.Count > 0)
