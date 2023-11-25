@@ -79,7 +79,7 @@ crashlytics-build.properties
 /[Aa]ssets/[Dd]ependencies*
 
 # FishNet specific directory ignores, we don't want to include examples, demos, or upgrading
-/[Aa]ssets/[Ff]ish[Nn]et/[Dd]emos*
-/[Aa]ssets/[Ff]ish[Nn]et/[Ee]xample*
-/[Aa]ssets/[Ff]ish[Nn]et/[Uu]pgrading*
+/[Aa]ssets/[Pp]lugins/[Ff]ish[Nn]et/[Dd]emos*
+/[Aa]ssets/[Pp]lugins/[Ff]ish[Nn]et/[Ee]xample*
+/[Aa]ssets/[Pp]lugins/[Ff]ish[Nn]et/[Uu]pgrading*
 /[Aa]ssets/DefaultPrefabObjects.asset
