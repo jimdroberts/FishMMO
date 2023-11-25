@@ -1,9 +1,5 @@
-﻿#if UNITY_EDITOR
-using UnityEditor;
-#endif
-using UnityEngine;
-#if !UNITY_SERVER
-using FishMMO.Client;
+﻿#if UNITY_SERVER
+using FishNet.Transporting;
 #endif
 
 namespace FishMMO.Shared
@@ -12,17 +8,16 @@ namespace FishMMO.Shared
 	{
 		public override bool OnInteract(Character character)
 		{
-			if (!base.OnInteract(character) ||
-				!character.IsOwner)
+			if (!base.OnInteract(character))
 			{
 				return false;
 			}
 
-#if !UNITY_SERVER
-			if (UIManager.TryGet("UIAbilityCraft", out UIAbilityCraft uiAbilityCraft))
+#if UNITY_SERVER
+			character.Owner.Broadcast(new AbilityCraftBroadcast()
 			{
-				uiAbilityCraft.Show(character);
-			}
+				InteractableID = ID,
+			}, true, Channel.Reliable);
 #endif
 			return true;
 		}

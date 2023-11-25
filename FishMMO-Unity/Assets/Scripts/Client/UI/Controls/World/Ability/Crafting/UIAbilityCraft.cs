@@ -1,3 +1,4 @@
+using FishNet.Transporting;
 using UnityEngine;
 using TMPro;
 using System.Collections.Generic;
@@ -18,6 +19,7 @@ namespace FishMMO.Client
 
 		public override void OnStarting()
 		{
+			Client.NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
 			if (MainEntry != null)
 			{
 				MainEntry.OnLeftClick += MainEntry_OnLeftClick;
@@ -27,6 +29,8 @@ namespace FishMMO.Client
 
 		public override void OnDestroying()
 		{
+			Client.NetworkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
+
 			if (MainEntry != null)
 			{
 				MainEntry.OnLeftClick -= MainEntry_OnLeftClick;
@@ -34,6 +38,23 @@ namespace FishMMO.Client
 			}
 
 			ClearSlots();
+		}
+
+		public void ClientManager_OnClientConnectionState(ClientConnectionStateArgs args)
+		{
+			if (args.ConnectionState == LocalConnectionState.Started)
+			{
+				Client.NetworkManager.ClientManager.RegisterBroadcast<AbilityCraftBroadcast>(OnClientAbilityCraftBroadcastReceived);
+			}
+			else if (args.ConnectionState == LocalConnectionState.Stopped)
+			{
+				Client.NetworkManager.ClientManager.UnregisterBroadcast<AbilityCraftBroadcast>(OnClientAbilityCraftBroadcastReceived);
+			}
+		}
+
+		private void OnClientAbilityCraftBroadcastReceived(AbilityCraftBroadcast msg)
+		{
+			Show();
 		}
 
 		private void MainEntry_OnLeftClick(int index)

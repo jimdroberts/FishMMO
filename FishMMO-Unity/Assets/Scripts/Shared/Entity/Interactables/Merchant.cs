@@ -1,7 +1,7 @@
-﻿#if UNITY_EDITOR
-using UnityEditor;
+﻿#if UNITY_SERVER
+using FishNet.Transporting;
+using System.Linq;
 #endif
-using UnityEngine;
 using System.Collections.Generic;
 
 namespace FishMMO.Shared
@@ -10,6 +10,7 @@ namespace FishMMO.Shared
 	{
 		public List<AbilityTemplate> Abilities;
 		public List<AbilityEvent> AbilityEvents;
+		public List<BaseItemTemplate> Items;
 
 		public override bool OnInteract(Character character)
 		{
@@ -18,20 +19,15 @@ namespace FishMMO.Shared
 				return false;
 			}
 
-			if (Abilities == null ||
-				Abilities.Count < 1 ||
-				AbilityEvents == null ||
-				AbilityEvents.Count < 1)
+#if UNITY_SERVER
+			character.Owner.Broadcast(new MerchantBroadcast()
 			{
-				return true;
-			}
-
-			character.AbilityController.LearnAbilityTypes(Abilities, AbilityEvents);
-
-			//Item chest = new Item(-443507152, 1);
-			//chest.GenerateAttributes();
-			//character.InventoryController.AddItem(chest);
-
+				InteractableID = ID,
+				Abilities = Abilities.Select(a => a.ID).ToList(),
+				AbilityEvents = AbilityEvents.Select(ae => ae.ID).ToList(),
+				Items = Items.Select(i => i.ID).ToList(),
+			}, true, Channel.Reliable);
+#endif
 			return true;
 		}
 	}

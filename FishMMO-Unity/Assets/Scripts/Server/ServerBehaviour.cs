@@ -87,6 +87,8 @@ namespace FishMMO.Server
 			ClientManager = clientManager;
 			Initialized = true;
 
+			Debug.Log("Server: Initialized[" + this.GetType().Name + "]");
+
 			InitializeOnce();
 		}
 

@@ -101,6 +101,7 @@ namespace FishMMO.Shared
 		public int SceneHandle;
 		public string LastChatMessage = "";
 		public DateTime NextChatMessageTime = DateTime.UtcNow;
+		public DateTime NextInteractTime = DateTime.UtcNow;
 
 		void Awake()
 		{
@@ -224,6 +225,7 @@ namespace FishMMO.Shared
 			SceneHandle = 0;
 			LastChatMessage = "";
 			NextChatMessageTime = DateTime.UtcNow;
+			NextInteractTime = DateTime.UtcNow;
 			Motor.SetPositionAndRotationAndVelocity(Vector3.zero, Quaternion.identity, Vector3.zero);
 		}
 

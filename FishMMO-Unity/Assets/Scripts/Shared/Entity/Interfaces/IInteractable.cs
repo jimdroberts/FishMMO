@@ -1,7 +1,11 @@
-﻿namespace FishMMO.Shared
+﻿using UnityEngine;
+
+namespace FishMMO.Shared
 {
 	public interface IInteractable
 	{
-		public bool OnInteract(Character character);
+		Transform Transform { get; }
+		bool InRange(Transform transform);
+		bool OnInteract(Character character);
 	}
 }

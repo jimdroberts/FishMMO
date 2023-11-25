@@ -42,7 +42,7 @@ namespace FishMMO.Server
 		}
 
 		/// <summary>
-		/// Chat message received from a character.
+		/// Naming request broadcast received from a character.
 		/// </summary>
 		private void OnServerNamingBroadcastReceived(NetworkConnection conn, NamingBroadcast msg)
 		{
@@ -89,7 +89,7 @@ namespace FishMMO.Server
 		}
 
 		/// <summary>
-		/// Allows the server to send system messages to the connection
+		/// Allows the server to send naming requests to the connection
 		/// </summary>
 		public void SendNamingBroadcast(NetworkConnection conn, NamingSystemType type, long id, string name)
 		{

@@ -47,6 +47,7 @@ namespace FishMMO.Server
 		public PartySystem PartySystem { get; private set; }
 		public FriendSystem FriendSystem { get; private set; }
 		public NamingSystem NamingSystem { get; private set; }
+		public InteractableSystem InteractableSystem { get; private set; }
 		#endregion
 
 		public ServerWindowTitleUpdater ServerWindowTitleUpdater { get; private set; }
@@ -76,13 +77,13 @@ namespace FishMMO.Server
 				Application.logMessageReceived += this.Application_logMessageReceived;
 			}
 
-			Debug.Log("Server: " + serverType + " is starting.");
+			Debug.Log("Server: " + serverType + " is starting[" + DateTime.UtcNow + "]");
 
-			string path = Server.GetWorkingDirectory();
-			Debug.Log("Server: Current working directory: " + path);
+			string workingDirectory = Server.GetWorkingDirectory();
+			Debug.Log("Server: Current working directory[" + workingDirectory + "]");
 
 			// load configuration
-			Configuration = new FishMMO.Shared.Configuration(path);
+			Configuration = new FishMMO.Shared.Configuration(workingDirectory);
 			if (!Configuration.Load(serverTypeName + FishMMO.Shared.Configuration.EXTENSION))
 			{
 				// if we failed to load the file.. save a new one
@@ -96,9 +97,15 @@ namespace FishMMO.Server
 			}
 
 			// initialize the DB contexts
-			NpgsqlDbContextFactory = new NpgsqlDbContextFactory(path, false);
-			RedisDbContextFactory = new RedisDbContextFactory(path);
+#if UNITY_EDITOR
+			string dbConfigurationPath = Path.Combine(Path.Combine(workingDirectory, "FishMMO-Setup"), "Development");
 
+			NpgsqlDbContextFactory = new NpgsqlDbContextFactory(dbConfigurationPath, false);
+			RedisDbContextFactory = new RedisDbContextFactory(dbConfigurationPath);
+#else
+			NpgsqlDbContextFactory = new NpgsqlDbContextFactory(workingDirectory, false);
+			RedisDbContextFactory = new RedisDbContextFactory(workingDirectory);
+#endif
 			// ensure our NetworkManager exists in the scene
 			if (NetworkManager == null)
 			{
@@ -129,7 +136,7 @@ namespace FishMMO.Server
 				Server.Quit();
 			}
 
-			Debug.Log("Server: " + serverType + " is running.");
+			Debug.Log("Server: " + serverType + " is running[" + DateTime.UtcNow + "]");
 		}
 
 		private void Application_logMessageReceived(string condition, string stackTrace, LogType type)
@@ -291,6 +298,9 @@ namespace FishMMO.Server
 
 					NamingSystem = GetOrCreateComponent<NamingSystem>();
 					NamingSystem.InternalInitializeOnce(this, NetworkManager.ServerManager);
+
+					InteractableSystem = GetOrCreateComponent<InteractableSystem>();
+					InteractableSystem.InternalInitializeOnce(this, NetworkManager.ServerManager);
 					break;
 				default:
 					Server.Quit();

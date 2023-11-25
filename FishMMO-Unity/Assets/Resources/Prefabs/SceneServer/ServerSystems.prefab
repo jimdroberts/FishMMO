@@ -19,6 +19,7 @@ GameObject:
   - component: {fileID: 3610206149135137524}
   - component: {fileID: 2844926705653361466}
   - component: {fileID: 3610206149269882745}
+  - component: {fileID: 8438934712096917615}
   m_Layer: 0
   m_Name: ServerSystems
   m_TagString: Untagged
@@ -33,13 +34,13 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 3610206149135137288}
+  serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
-  m_RootOrder: 2
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &8380057997533541231
 MonoBehaviour:
@@ -53,6 +54,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 03313be06094e964aa4ef9f757c6f674, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  LogToDisk: 0
 --- !u!114 &6747751012235542384
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -171,10 +173,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a61c878103efa02459d94801be90a2be, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  HealthTemplate: {fileID: 0}
-  MaxFriendSize: 6
-  UpdatePumpRate: 1
-  UpdateFetchCount: 100
+  MaxFriends: 100
 --- !u!114 &3610206149269882745
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -185,5 +184,17 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5080401287e09e84db8f9b8809bebf34, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!114 &8438934712096917615
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3610206149135137288}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 57d43f42a0a6f0c4898df9dc8844997d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
