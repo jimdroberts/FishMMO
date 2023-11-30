@@ -204,6 +204,10 @@ namespace FishMMO.Server.DatabaseServices
 
 		public static void Save(NpgsqlDbContext dbContext, List<Character> characters, bool online = true)
 		{
+			if (characters == null || characters.Count < 1)
+			{
+				return;
+			}
 			foreach (Character character in characters)
 			{
 				Save(dbContext, character, online);

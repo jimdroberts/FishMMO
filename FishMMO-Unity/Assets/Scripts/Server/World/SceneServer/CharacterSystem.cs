@@ -90,12 +90,15 @@ namespace FishMMO.Server
 				{
 					nextSave = SaveRate;
 					
-					Debug.Log("Character System: Save" + "[" + DateTime.UtcNow + "]");
+					if (CharactersByID.Count > 0)
+					{
+						Debug.Log("Character System: Save" + "[" + DateTime.UtcNow + "]");
 
-					// all characters are periodically saved
-					using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-					CharacterService.Save(dbContext, new List<Character>(CharactersByID.Values));
-					dbContext.SaveChanges();
+						// all characters are periodically saved
+						using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
+						CharacterService.Save(dbContext, new List<Character>(CharactersByID.Values));
+						dbContext.SaveChanges();
+					}
 				}
 				nextSave -= Time.deltaTime;
 			}
@@ -148,11 +151,19 @@ namespace FishMMO.Server
 					{
 						--instance.CharacterCount;
 					}
-					return;
 				}
 
 				if (ConnectionCharacters.TryGetValue(conn, out Character character))
 				{
+					// remove the connection->character entry
+					ConnectionCharacters.Remove(conn);
+
+					// no character so we can skip
+					if (character == null)
+					{
+						return;
+					}
+
 					// remove the characterID->character entry
 					CharactersByID.Remove(character.ID);
 					// remove the characterName->character entry
@@ -162,21 +173,14 @@ namespace FishMMO.Server
 					{
 						characters.Remove(character.ID);
 					}
-					// remove the connection->character entry
-					ConnectionCharacters.Remove(conn);
 
+					// update scene instance details
 					if (Server.SceneServerSystem.TryGetSceneInstanceDetails(character.WorldServerID,
 																			character.SceneName,
 																			character.SceneHandle,
 																			out SceneInstanceDetails instance))
 					{
 						--instance.CharacterCount;
-					}
-
-					// no character so we can just skip the rest
-					if (character == null)
-					{
-						return;
 					}
 
 					// remove the characters pending guild invite request
@@ -203,7 +207,7 @@ namespace FishMMO.Server
 						character.DamageController.Immortal = true;
 					}
 
-					// save the character and set online to false
+					// save the character and set online status to false
 					using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 					CharacterService.Save(dbContext, character, false);
 					dbContext.SaveChanges();
@@ -287,6 +291,15 @@ namespace FishMMO.Server
 		{
 			if (WaitingSceneLoadCharacters.TryGetValue(conn, out Character character))
 			{
+				// remove the waiting scene load character
+				WaitingSceneLoadCharacters.Remove(conn);
+
+				if (character == null)
+				{
+					conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
+					return;
+				}
+
 				// add a connection->character map for ease of use
 				ConnectionCharacters[conn] = character;
 				// add a characterName->character map for ease of use
@@ -298,9 +311,6 @@ namespace FishMMO.Server
 					CharactersByWorld.Add(character.WorldServerID, characters = new Dictionary<long, Character>());
 				}
 				characters[character.ID] = character;
-
-				// remove the waiting scene load character
-				WaitingSceneLoadCharacters.Remove(conn);
 
 				// character becomes immortal on disconnect and mortal when loaded into the scene
 				if (character.DamageController != null)
