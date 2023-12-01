@@ -41,7 +41,14 @@ namespace FishMMO.Client
 
 		private void OnClientMerchantBroadcastReceived(MerchantBroadcast msg)
 		{
-			Show();
+			MerchantTemplate template = MerchantTemplate.Get<MerchantTemplate>(msg.ID);
+			if (template != null)
+			{
+				// set up prefab lists
+
+				// show the UI
+				Show();
+			}
 		}
 
 		private void ItemEntry_OnLeftClick(int index)

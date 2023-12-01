@@ -1,5 +1,4 @@
-﻿using Cysharp.Text;
-using UnityEngine;
+﻿using UnityEngine;
 
 namespace FishMMO.Shared
 {

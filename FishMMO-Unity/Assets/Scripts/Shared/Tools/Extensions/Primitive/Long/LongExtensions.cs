@@ -56,5 +56,17 @@ namespace FishMMO.Shared
 			}
 			return number % BASE_TEN;
 		}
+
+		public static double Normalize(this long number)
+		{
+			return (double)number / long.MaxValue;
+		}
+
+		public static int ScaleToInt(this long number, int min = int.MinValue, int max = int.MaxValue)
+		{
+			double normalized = number.Normalize();
+
+			return (int)(normalized * (max - min) + min);
+		}
 	}
 }

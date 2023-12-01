@@ -1,20 +1,19 @@
 ﻿#if UNITY_SERVER
 using FishNet.Transporting;
-using System.Linq;
 #endif
-using System.Collections.Generic;
+using UnityEngine;
 
 namespace FishMMO.Shared
 {
+	[RequireComponent(typeof(SceneObjectNamer))]
 	public class Merchant : Interactable
 	{
-		public List<AbilityTemplate> Abilities;
-		public List<AbilityEvent> AbilityEvents;
-		public List<BaseItemTemplate> Items;
+		public MerchantTemplate Template;
 
 		public override bool OnInteract(Character character)
 		{
-			if (!base.OnInteract(character))
+			if (Template == null ||
+				!base.OnInteract(character))
 			{
 				return false;
 			}
@@ -22,10 +21,7 @@ namespace FishMMO.Shared
 #if UNITY_SERVER
 			character.Owner.Broadcast(new MerchantBroadcast()
 			{
-				InteractableID = ID,
-				Abilities = Abilities.Select(a => a.ID).ToList(),
-				AbilityEvents = AbilityEvents.Select(ae => ae.ID).ToList(),
-				Items = Items.Select(i => i.ID).ToList(),
+				ID = Template.ID,
 			}, true, Channel.Reliable);
 #endif
 			return true;

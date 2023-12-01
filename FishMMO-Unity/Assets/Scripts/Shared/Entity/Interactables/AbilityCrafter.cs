@@ -1,9 +1,11 @@
 ﻿#if UNITY_SERVER
 using FishNet.Transporting;
 #endif
+using UnityEngine;
 
 namespace FishMMO.Shared
 {
+	[RequireComponent(typeof(SceneObjectNamer))]
 	public class AbilityCrafter : Interactable
 	{
 		public override bool OnInteract(Character character)

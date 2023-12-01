@@ -14,37 +14,40 @@ namespace FishMMO.Shared
 
 		public long ID;
 
-#if !UNITY_EDITOR
 		protected void Awake()
 		{
+#if !UNITY_EDITOR
 			IDs[ID] = this;
 		}
-#endif
-
-#if UNITY_EDITOR
-		protected void Update()
-		{
-			if (ID > 0)
+#else
+			if (ID != 0 && IDs.ContainsKey(ID))
 			{
 				return;
 			}
+
 			if (string.IsNullOrWhiteSpace(gameObject.scene.name))
 			{
 				return;
 			}
+
 			do
 			{
 				ID = ++LastID;
 			}
 			while (IDs.ContainsKey(ID));
-			IDs.Add(ID, this);
+			IDs[ID] = this;
 
 			EditorUtility.SetDirty(this);
 		}
 
 		protected void OnDestroy()
 		{
-			IDs.Remove(ID);
+			// remove the ID from the list if the object was deleted
+			if (gameObject.scene.isLoaded)
+			{
+				Debug.Log("SceneObjectUID: Deleted[" + ID + "]");
+				IDs.Remove(ID);
+			}
 		}
 #endif
 	}
