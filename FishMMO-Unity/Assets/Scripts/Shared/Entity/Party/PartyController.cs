@@ -20,6 +20,7 @@ namespace FishMMO.Shared
 		public long ID;
 		public PartyRank Rank = PartyRank.None;
 
+#if !UNITY_SERVER
 		public override void OnStartClient()
 		{
 			base.OnStartClient();
@@ -58,14 +59,12 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void OnClientPartyCreateBroadcastReceived(PartyCreateBroadcast msg)
 		{
-#if !UNITY_SERVER
 			ID = msg.partyID;
 			Rank = PartyRank.Leader;
 			if (UIManager.TryGet("UIParty", out UIParty uiParty))
 			{
 				uiParty.OnPartyCreated(msg.location);
 			}
-#endif
 		}
 
 		/// <summary>
@@ -74,7 +73,6 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void OnClientPartyInviteBroadcastReceived(PartyInviteBroadcast msg)
 		{
-#if !UNITY_SERVER
 			ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.inviterCharacterID, (n) =>
 			{
 				if (UIManager.TryGet("UIConfirmationTooltip", out UIConfirmationTooltip uiTooltip))
@@ -90,7 +88,6 @@ namespace FishMMO.Shared
 					});
 				}
 			});
-#endif
 		}
 
 		/// <summary>
@@ -99,7 +96,6 @@ namespace FishMMO.Shared
 		public void OnClientPartyAddBroadcastReceived(PartyAddBroadcast msg)
 		{
 			// update our Party list with the new Party member
-#if !UNITY_SERVER
 			if (Character == null)
 			{
 				return;
@@ -117,7 +113,6 @@ namespace FishMMO.Shared
 				Rank = msg.rank;
 			}
 			uiParty.OnPartyAddMember(msg.characterID, msg.rank, msg.healthPCT);
-#endif
 		}
 
 		/// <summary>
@@ -125,7 +120,6 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void OnClientPartyLeaveBroadcastReceived(PartyLeaveBroadcast msg)
 		{
-#if !UNITY_SERVER
 			ID = 0;
 			Rank = PartyRank.None;
 
@@ -133,7 +127,6 @@ namespace FishMMO.Shared
 			{
 				uiParty.OnLeaveParty();
 			}
-#endif
 		}
 
 		/// <summary>
@@ -141,7 +134,6 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void OnClientPartyAddMultipleBroadcastReceived(PartyAddMultipleBroadcast msg)
 		{
-#if !UNITY_SERVER
 			if (UIManager.TryGet("UIParty", out UIParty uiParty))
 			{
 				var newIds = msg.members.Select(x => x.characterID).ToHashSet();
@@ -157,7 +149,6 @@ namespace FishMMO.Shared
 					OnClientPartyAddBroadcastReceived(subMsg);
 				}
 			}
-#endif
 		}
 
 		/// <summary>
@@ -165,7 +156,6 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void OnClientPartyRemoveBroadcastReceived(PartyRemoveBroadcast msg)
 		{
-#if !UNITY_SERVER
 			if (UIManager.TryGet("UIParty", out UIParty uiParty))
 			{
 				foreach (long memberID in msg.members)
@@ -173,7 +163,7 @@ namespace FishMMO.Shared
 					uiParty.OnPartyRemoveMember(memberID);
 				}
 			}
-#endif
 		}
+#endif
 	}
 }

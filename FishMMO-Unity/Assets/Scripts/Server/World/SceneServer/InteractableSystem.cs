@@ -1,7 +1,6 @@
 ﻿using FishNet.Connection;
 using FishNet.Transporting;
 using FishMMO.Shared;
-using UnityEngine;
 
 namespace FishMMO.Server
 {
@@ -45,6 +44,10 @@ namespace FishMMO.Server
 			}
 
 			// validate connection character
+			if (conn.FirstObject == null)
+			{
+				return;
+			}
 			Character character = conn.FirstObject.GetComponent<Character>();
 			if (character == null)
 			{

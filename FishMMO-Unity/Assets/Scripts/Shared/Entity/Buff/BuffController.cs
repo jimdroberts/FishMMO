@@ -13,35 +13,6 @@ namespace FishMMO.Shared
 
 		public Dictionary<int, Buff> Buffs { get { return buffs; } }
 
-		public override void OnStartClient()
-		{
-			base.OnStartClient();
-
-			if (!base.IsOwner)
-			{
-				enabled = false;
-				return;
-			}
-
-			ClientManager.RegisterBroadcast<BuffAddBroadcast>(OnClientBuffAddBroadcastReceived);
-			ClientManager.RegisterBroadcast<BuffAddMultipleBroadcast>(OnClientBuffAddMultipleBroadcastReceived);
-			ClientManager.RegisterBroadcast<BuffRemoveBroadcast>(OnClientBuffRemoveBroadcastReceived);
-			ClientManager.RegisterBroadcast<BuffRemoveMultipleBroadcast>(OnClientBuffRemoveMultipleBroadcastReceived);
-		}
-
-		public override void OnStopClient()
-		{
-			base.OnStopClient();
-
-			if (base.IsOwner)
-			{
-				ClientManager.UnregisterBroadcast<BuffAddBroadcast>(OnClientBuffAddBroadcastReceived);
-				ClientManager.UnregisterBroadcast<BuffAddMultipleBroadcast>(OnClientBuffAddMultipleBroadcastReceived);
-				ClientManager.UnregisterBroadcast<BuffRemoveBroadcast>(OnClientBuffRemoveBroadcastReceived);
-				ClientManager.UnregisterBroadcast<BuffRemoveMultipleBroadcast>(OnClientBuffRemoveMultipleBroadcastReceived);
-			}
-		}
-
 		void Update()
 		{
 			float dt = Time.deltaTime;
@@ -128,6 +99,36 @@ namespace FishMMO.Shared
 			}
 		}
 
+#if !UNITY_SERVER
+		public override void OnStartClient()
+		{
+			base.OnStartClient();
+
+			if (!base.IsOwner)
+			{
+				enabled = false;
+				return;
+			}
+
+			ClientManager.RegisterBroadcast<BuffAddBroadcast>(OnClientBuffAddBroadcastReceived);
+			ClientManager.RegisterBroadcast<BuffAddMultipleBroadcast>(OnClientBuffAddMultipleBroadcastReceived);
+			ClientManager.RegisterBroadcast<BuffRemoveBroadcast>(OnClientBuffRemoveBroadcastReceived);
+			ClientManager.RegisterBroadcast<BuffRemoveMultipleBroadcast>(OnClientBuffRemoveMultipleBroadcastReceived);
+		}
+
+		public override void OnStopClient()
+		{
+			base.OnStopClient();
+
+			if (base.IsOwner)
+			{
+				ClientManager.UnregisterBroadcast<BuffAddBroadcast>(OnClientBuffAddBroadcastReceived);
+				ClientManager.UnregisterBroadcast<BuffAddMultipleBroadcast>(OnClientBuffAddMultipleBroadcastReceived);
+				ClientManager.UnregisterBroadcast<BuffRemoveBroadcast>(OnClientBuffRemoveBroadcastReceived);
+				ClientManager.UnregisterBroadcast<BuffRemoveMultipleBroadcast>(OnClientBuffRemoveMultipleBroadcastReceived);
+			}
+		}
+
 		/// <summary>
 		/// Server sent a buff add broadcast.
 		/// </summary>
@@ -181,5 +182,6 @@ namespace FishMMO.Shared
 				}
 			}
 		}
+#endif
 	}
 }

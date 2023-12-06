@@ -16,12 +16,12 @@ namespace FishMMO.Shared
 
 		private Dictionary<int, Achievement> achievements = new Dictionary<int, Achievement>();
 
+
+		public Dictionary<int, Achievement> Achievements { get { return achievements; } }
+
 #if !UNITY_SERVER
 		public bool ShowAchievementCompletion = true;
 		public event Func<string, Vector3, Color, float, float, bool, Cached3DLabel> OnCompleteAchievement;
-#endif
-
-		public Dictionary<int, Achievement> Achievements { get { return achievements; } }
 
 		public override void OnStartClient()
 		{
@@ -33,12 +33,10 @@ namespace FishMMO.Shared
 				return;
 			}
 
-#if !UNITY_SERVER
 			if (Character.LabelMaker != null)
 			{
 				OnCompleteAchievement += Character.LabelMaker.Display;
 			}
-#endif
 
 			ClientManager.RegisterBroadcast<AchievementUpdateBroadcast>(OnClientAchievementUpdateBroadcastReceived);
 			ClientManager.RegisterBroadcast<AchievementUpdateMultipleBroadcast>(OnClientAchievementUpdateMultipleBroadcastReceived);
@@ -50,17 +48,45 @@ namespace FishMMO.Shared
 
 			if (base.IsOwner)
 			{
-#if !UNITY_SERVER
 				if (Character.LabelMaker != null)
 				{
 					OnCompleteAchievement -= Character.LabelMaker.Display;
 				}
-#endif
 
 				ClientManager.UnregisterBroadcast<AchievementUpdateBroadcast>(OnClientAchievementUpdateBroadcastReceived);
 				ClientManager.UnregisterBroadcast<AchievementUpdateMultipleBroadcast>(OnClientAchievementUpdateMultipleBroadcastReceived);
 			}
 		}
+
+		/// <summary>
+		/// Server sent an achievement update broadcast.
+		/// </summary>
+		private void OnClientAchievementUpdateBroadcastReceived(AchievementUpdateBroadcast msg)
+		{
+			AchievementTemplate template = AchievementTemplate.Get<AchievementTemplate>(msg.templateID);
+			if (template != null &&
+				achievements.TryGetValue(template.ID, out Achievement achievement))
+			{
+				achievement.CurrentValue = msg.newValue;
+			}
+		}
+
+		/// <summary>
+		/// Server sent a multiple achievement update broadcast.
+		/// </summary>
+		private void OnClientAchievementUpdateMultipleBroadcastReceived(AchievementUpdateMultipleBroadcast msg)
+		{
+			foreach (AchievementUpdateBroadcast subMsg in msg.achievements)
+			{
+				AchievementTemplate template = AchievementTemplate.Get<AchievementTemplate>(subMsg.templateID);
+				if (template != null &&
+					achievements.TryGetValue(template.ID, out Achievement achievement))
+				{
+					achievement.CurrentValue = subMsg.newValue;
+				}
+			}
+		}
+#endif
 
 		public void SetAchievement(int templateID, byte tier, uint value)
 		{
@@ -114,10 +140,8 @@ namespace FishMMO.Shared
 					if (achievement.CurrentValue > tier.MaxValue)
 					{
 #if UNITY_SERVER
-					HandleRewards(tier);
-#endif
-
-#if !UNITY_SERVER
+						HandleRewards(tier);
+#else
 						// Display a text message above the characters head showing the achievement.
 						OnCompleteAchievement?.Invoke("Achievement: " + achievement.Template.Name + " " + tier.TierCompleteMessage, Character.Transform.position, Color.yellow, 12.0f, 10.0f, false);
 #endif
@@ -172,34 +196,5 @@ namespace FishMMO.Shared
 		}
 	}
 #endif
-
-		/// <summary>
-		/// Server sent an achievement update broadcast.
-		/// </summary>
-		private void OnClientAchievementUpdateBroadcastReceived(AchievementUpdateBroadcast msg)
-		{
-			AchievementTemplate template = AchievementTemplate.Get<AchievementTemplate>(msg.templateID);
-			if (template != null &&
-				achievements.TryGetValue(template.ID, out Achievement achievement))
-			{
-				achievement.CurrentValue = msg.newValue;
-			}
-		}
-
-		/// <summary>
-		/// Server sent a multiple achievement update broadcast.
-		/// </summary>
-		private void OnClientAchievementUpdateMultipleBroadcastReceived(AchievementUpdateMultipleBroadcast msg)
-		{
-			foreach (AchievementUpdateBroadcast subMsg in msg.achievements)
-			{
-				AchievementTemplate template = AchievementTemplate.Get<AchievementTemplate>(subMsg.templateID);
-				if (template != null &&
-					achievements.TryGetValue(template.ID, out Achievement achievement))
-				{
-					achievement.CurrentValue = subMsg.newValue;
-				}
-			}
-		}
 	}
 }

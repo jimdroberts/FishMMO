@@ -41,6 +41,7 @@ namespace FishMMO.Shared
 		}
 		public GuildRank Rank = GuildRank.None;
 
+#if !UNITY_SERVER
 		public override void OnStartClient()
 		{
 			base.OnStartClient();
@@ -75,7 +76,6 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void OnClientGuildInviteBroadcastReceived(GuildInviteBroadcast msg)
 		{
-#if !UNITY_SERVER
 			ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.inviterCharacterID, (n) =>
 			{
 				if (UIManager.TryGet("UIConfirmationTooltip", out UIConfirmationTooltip uiTooltip))
@@ -93,7 +93,6 @@ namespace FishMMO.Shared
 					});
 				}
 			});
-#endif
 		}
 
 		/// <summary>
@@ -102,7 +101,6 @@ namespace FishMMO.Shared
 		public void OnClientGuildAddBroadcastReceived(GuildAddBroadcast msg)
 		{
 			// update our Guild list with the new Guild member
-#if !UNITY_SERVER
 			if (Character == null)
 			{
 				return;
@@ -121,7 +119,6 @@ namespace FishMMO.Shared
 					uiGuild.GuildLabel.text = s;
 				}
 			});
-#endif
 		}
 
 		/// <summary>
@@ -129,12 +126,10 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void OnClientGuildLeaveBroadcastReceived(GuildLeaveBroadcast msg)
 		{
-#if !UNITY_SERVER
 			if (UIManager.TryGet("UIGuild", out UIGuild uiGuild))
 			{
 				uiGuild.OnLeaveGuild();
 			}
-#endif
 		}
 
 		/// <summary>
@@ -142,7 +137,6 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void OnClientGuildAddMultipleBroadcastReceived(GuildAddMultipleBroadcast msg)
 		{
-#if !UNITY_SERVER
 			if (!UIManager.TryGet("UIGuild", out UIGuild uiGuild))
 			{
 				return;
@@ -160,7 +154,6 @@ namespace FishMMO.Shared
 			{
 				OnClientGuildAddBroadcastReceived(subMsg);
 			}
-#endif
 		}
 
 		/// <summary>
@@ -168,7 +161,6 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void OnClientGuildRemoveBroadcastReceived(GuildRemoveBroadcast msg)
 		{
-#if !UNITY_SERVER
 			if (UIManager.TryGet("UIGuild", out UIGuild uiGuild))
 			{
 				foreach (long characterID in msg.members)
@@ -176,7 +168,7 @@ namespace FishMMO.Shared
 					uiGuild.OnGuildRemoveMember(characterID);
 				}
 			}
-#endif
 		}
+#endif
 	}
 }

@@ -115,7 +115,7 @@ namespace FishMMO.Shared
 		{
 			foreach (string command in commands)
 			{
-				Debug.Log("ChatSystem: Added Command[" + command + "]");
+				Debug.Log("ChatSystem: Added Chat Command[" + command + "]");
 				Commands[command] = details;
 				ChannelCommands[details.Channel] = details;
 			}

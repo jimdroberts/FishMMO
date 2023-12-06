@@ -43,12 +43,12 @@ namespace FishMMO.Shared
 			{
 				FishMMO.Client.Client.TimeManager.OnTick += TimeManager_OnTick;
 			}
-			else
-#endif
+#else
 			if (InstanceFinder.TimeManager != null)
 			{
 				InstanceFinder.TimeManager.OnTick += TimeManager_OnTick;
 			}
+#endif
 		}
 
 		void OnDestroy()
@@ -58,12 +58,12 @@ namespace FishMMO.Shared
 			{
 				FishMMO.Client.Client.TimeManager.OnTick -= TimeManager_OnTick;
 			}
-			else
-#endif
+#else
 			if (InstanceFinder.TimeManager != null)
 			{
 				InstanceFinder.TimeManager.OnTick -= TimeManager_OnTick;
 			}
+#endif
 		}
 
 		public override void OnStartClient()

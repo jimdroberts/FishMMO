@@ -17,6 +17,15 @@ namespace FishMMO.Shared
 
 		public readonly HashSet<long> Friends = new HashSet<long>();
 
+		public void AddFriend(long friendID)
+		{
+			if (!Friends.Contains(friendID))
+			{
+				Friends.Add(friendID);
+			}
+		}
+
+#if !UNITY_SERVER
 		public override void OnStartClient()
 		{
 			base.OnStartClient();
@@ -44,20 +53,13 @@ namespace FishMMO.Shared
 			}
 		}
 
-		public void AddFriend(long friendID)
-		{
-			if (!Friends.Contains(friendID))
-			{
-				Friends.Add(friendID);
-			}
-		}
+
 
 		/// <summary>
 		/// When we need to add a single friend.
 		/// </summary>
 		public void OnClientFriendAddBroadcastReceived(FriendAddBroadcast msg)
 		{
-#if !UNITY_SERVER
 			if (UIManager.TryGet("UIFriendList", out UIFriendList uiFriendList))
 			{
 				if (!Friends.Contains(msg.characterID))
@@ -66,7 +68,6 @@ namespace FishMMO.Shared
 					uiFriendList.OnAddFriend(msg.characterID, msg.online);
 				}
 			}
-#endif
 		}
 
 		/// <summary>
@@ -74,7 +75,6 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void OnClientFriendAddMultipleBroadcastReceived(FriendAddMultipleBroadcast msg)
 		{
-#if !UNITY_SERVER
 			if (UIManager.TryGet("UIFriendList", out UIFriendList uiFriendList))
 			{
 				foreach (FriendAddBroadcast friend in msg.friends)
@@ -86,7 +86,6 @@ namespace FishMMO.Shared
 					}
 				}
 			}
-#endif
 		}
 
 		/// <summary>
@@ -94,14 +93,13 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void OnClientFriendRemoveBroadcastReceived(FriendRemoveBroadcast msg)
 		{
-#if !UNITY_SERVER
 			Friends.Remove(msg.characterID);
 
 			if (UIManager.TryGet("UIFriendList", out UIFriendList uiFriendList))
 			{
 				uiFriendList.OnRemoveFriend(msg.characterID);
 			}
-#endif
 		}
+#endif
 	}
 }

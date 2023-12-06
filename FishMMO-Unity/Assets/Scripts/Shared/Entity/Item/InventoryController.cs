@@ -13,6 +13,7 @@ namespace FishMMO.Shared
 			AddSlots(null, 32);
 		}
 
+#if !UNITY_SERVER
 		public override void OnStartClient()
 		{
 			base.OnStartClient();
@@ -39,32 +40,6 @@ namespace FishMMO.Shared
 				ClientManager.UnregisterBroadcast<InventorySetMultipleItemsBroadcast>(OnClientInventorySetMultipleItemsBroadcastReceived);
 				ClientManager.UnregisterBroadcast<InventoryRemoveItemBroadcast>(OnClientInventoryRemoveItemBroadcastReceived);
 				ClientManager.UnregisterBroadcast<InventorySwapItemSlotsBroadcast>(OnClientInventorySwapItemSlotsBroadcastReceived);
-			}
-		}
-
-		public override bool CanManipulate()
-		{
-			if (!base.CanManipulate())
-			{
-				return false;
-			}
-
-			/*if ((character.State == CharacterState.Idle ||
-				  character.State == CharacterState.Moving) &&
-				  character.State != CharacterState.UsingObject &&
-				  character.State != CharacterState.IsFrozen &&
-				  character.State != CharacterState.IsStunned &&
-				  character.State != CharacterState.IsMesmerized) return true;
-			*/
-			return true;
-		}
-
-		public void Activate(int index)
-		{
-			if (TryGetItem(index, out Item item))
-			{
-				Debug.Log("InventoryController: using item in slot[" + index + "]");
-				//items[index].OnUseItem();
 			}
 		}
 
@@ -104,6 +79,33 @@ namespace FishMMO.Shared
 		private void OnClientInventorySwapItemSlotsBroadcastReceived(InventorySwapItemSlotsBroadcast msg)
 		{
 			SwapItemSlots(msg.from, msg.to);
+		}
+#endif
+
+		public override bool CanManipulate()
+		{
+			if (!base.CanManipulate())
+			{
+				return false;
+			}
+
+			/*if ((character.State == CharacterState.Idle ||
+				  character.State == CharacterState.Moving) &&
+				  character.State != CharacterState.UsingObject &&
+				  character.State != CharacterState.IsFrozen &&
+				  character.State != CharacterState.IsStunned &&
+				  character.State != CharacterState.IsMesmerized) return true;
+			*/
+			return true;
+		}
+
+		public void Activate(int index)
+		{
+			if (TryGetItem(index, out Item item))
+			{
+				Debug.Log("InventoryController: using item in slot[" + index + "]");
+				//items[index].OnUseItem();
+			}
 		}
 
 		public void SendSwapItemSlotsRequest(int from, int to)

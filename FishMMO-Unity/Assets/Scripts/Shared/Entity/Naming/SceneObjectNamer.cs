@@ -32,7 +32,6 @@ namespace FishMMO.Shared
 
 			string surname = "";
 			Merchant merchant = gameObject.GetComponent<Merchant>();
-			IInteractable interactable = gameObject.GetComponent<IInteractable>();
 			if (merchant != null)
 			{
 				surname = "the Merchant";

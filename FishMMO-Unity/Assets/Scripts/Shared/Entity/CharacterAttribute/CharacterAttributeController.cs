@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using FishNet.Object;
 
 namespace FishMMO.Shared
@@ -28,37 +27,6 @@ namespace FishMMO.Shared
 						AddAttribute(new CharacterAttribute(attribute.ID, attribute.InitialValue, 0));
 					}
 				}
-			}
-		}
-
-		public override void OnStartClient()
-		{
-			base.OnStartClient();
-
-			if (!base.IsOwner)
-			{
-				enabled = false;
-				return;
-			}
-
-			ClientManager.RegisterBroadcast<CharacterAttributeUpdateBroadcast>(OnClientCharacterAttributeUpdateBroadcastReceived);
-			ClientManager.RegisterBroadcast<CharacterAttributeUpdateMultipleBroadcast>(OnClientCharacterAttributeUpdateMultipleBroadcastReceived);
-
-			ClientManager.RegisterBroadcast<CharacterResourceAttributeUpdateBroadcast>(OnClientCharacterResourceAttributeUpdateBroadcastReceived);
-			ClientManager.RegisterBroadcast<CharacterResourceAttributeUpdateMultipleBroadcast>(OnClientCharacterResourceAttributeUpdateMultipleBroadcastReceived);
-		}
-
-		public override void OnStopClient()
-		{
-			base.OnStopClient();
-
-			if (base.IsOwner)
-			{
-				ClientManager.UnregisterBroadcast<CharacterAttributeUpdateBroadcast>(OnClientCharacterAttributeUpdateBroadcastReceived);
-				ClientManager.UnregisterBroadcast<CharacterAttributeUpdateMultipleBroadcast>(OnClientCharacterAttributeUpdateMultipleBroadcastReceived);
-
-				ClientManager.UnregisterBroadcast<CharacterResourceAttributeUpdateBroadcast>(OnClientCharacterResourceAttributeUpdateBroadcastReceived);
-				ClientManager.UnregisterBroadcast<CharacterResourceAttributeUpdateMultipleBroadcast>(OnClientCharacterResourceAttributeUpdateMultipleBroadcastReceived);
 			}
 		}
 
@@ -145,6 +113,38 @@ namespace FishMMO.Shared
 			}
 		}
 
+#if !UNITY_SERVER
+		public override void OnStartClient()
+		{
+			base.OnStartClient();
+
+			if (!base.IsOwner)
+			{
+				enabled = false;
+				return;
+			}
+
+			ClientManager.RegisterBroadcast<CharacterAttributeUpdateBroadcast>(OnClientCharacterAttributeUpdateBroadcastReceived);
+			ClientManager.RegisterBroadcast<CharacterAttributeUpdateMultipleBroadcast>(OnClientCharacterAttributeUpdateMultipleBroadcastReceived);
+
+			ClientManager.RegisterBroadcast<CharacterResourceAttributeUpdateBroadcast>(OnClientCharacterResourceAttributeUpdateBroadcastReceived);
+			ClientManager.RegisterBroadcast<CharacterResourceAttributeUpdateMultipleBroadcast>(OnClientCharacterResourceAttributeUpdateMultipleBroadcastReceived);
+		}
+
+		public override void OnStopClient()
+		{
+			base.OnStopClient();
+
+			if (base.IsOwner)
+			{
+				ClientManager.UnregisterBroadcast<CharacterAttributeUpdateBroadcast>(OnClientCharacterAttributeUpdateBroadcastReceived);
+				ClientManager.UnregisterBroadcast<CharacterAttributeUpdateMultipleBroadcast>(OnClientCharacterAttributeUpdateMultipleBroadcastReceived);
+
+				ClientManager.UnregisterBroadcast<CharacterResourceAttributeUpdateBroadcast>(OnClientCharacterResourceAttributeUpdateBroadcastReceived);
+				ClientManager.UnregisterBroadcast<CharacterResourceAttributeUpdateMultipleBroadcast>(OnClientCharacterResourceAttributeUpdateMultipleBroadcastReceived);
+			}
+		}
+
 		/// <summary>
 		/// Server sent an attribute update broadcast.
 		/// </summary>
@@ -204,5 +204,6 @@ namespace FishMMO.Shared
 				}
 			}
 		}
+#endif
 	}
 }

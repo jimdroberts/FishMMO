@@ -45,53 +45,72 @@ namespace FishMMO.Shared
 		public bool IsActivating { get { return currentAbility != null; } }
 		public bool AbilityQueued { get { return queuedAbilityID != NO_ABILITY; } }
 
+#if !UNITY_SERVER
+		void Awake()
+		{
+			if (FishMMO.Client.Client.TimeManager != null)
+			{
+				FishMMO.Client.Client.TimeManager.OnTick += TimeManager_OnTick;
+			}
+		}
+
+		void OnDestroy()
+		{
+			if (FishMMO.Client.Client.TimeManager != null)
+			{
+				FishMMO.Client.Client.TimeManager.OnTick -= TimeManager_OnTick;
+			}
+		}
+
 		public override void OnStartClient()
 		{
 			base.OnStartClient();
 
-#if !UNITY_SERVER
-			if (FishMMO.Client.Client.TimeManager != null)
+			if (!base.IsOwner)
 			{
-				FishMMO.Client.Client.TimeManager.OnTick += TimeManager_OnTick;
-
+				this.enabled = false;
+			}
+			else
+			{
 				if (UIManager.TryGet("UICastBar", out UICastBar uiCastBar))
 				{
 					OnUpdate += uiCastBar.OnUpdate;
 					OnCancel += uiCastBar.OnCancel;
 				}
-
 			}
-#else
-		if (InstanceFinder.TimeManager != null)
-		{
-			InstanceFinder.TimeManager.OnTick += TimeManager_OnTick;
-		}
-#endif
 		}
 
 		public override void OnStopClient()
 		{
 			base.OnStopClient();
 
-#if !UNITY_SERVER
-			if (FishMMO.Client.Client.TimeManager != null)
+			if (base.IsOwner)
 			{
-				FishMMO.Client.Client.TimeManager.OnTick -= TimeManager_OnTick;
-
 				if (UIManager.TryGet("UICastBar", out UICastBar uiCastBar))
 				{
 					OnUpdate -= uiCastBar.OnUpdate;
 					OnCancel -= uiCastBar.OnCancel;
 				}
-
 			}
+		}
 #else
-		if (InstanceFinder.TimeManager != null)
+		void Awake()
 		{
-			InstanceFinder.TimeManager.OnTick -= TimeManager_OnTick;
+			if (InstanceFinder.TimeManager != null)
+			{
+				InstanceFinder.TimeManager.OnTick += TimeManager_OnTick;
+			}
 		}
+
+		void OnDestroy()
+		{
+			if (InstanceFinder.TimeManager != null)
+			{
+				InstanceFinder.TimeManager.OnTick -= TimeManager_OnTick;
+			}
+		}
+
 #endif
-		}
 
 		private void TimeManager_OnTick()
 		{
@@ -105,7 +124,7 @@ namespace FishMMO.Shared
 			{
 				Replicate(default, true);
 				AbilityReconcileData state = new AbilityReconcileData(interruptQueued,
-																	  currentAbility.AbilityID,
+																	  currentAbility == null ? NO_ABILITY : currentAbility.AbilityID,
 																	  remainingTime);
 				Reconcile(state, true);
 			}
@@ -200,6 +219,10 @@ namespace FishMMO.Shared
 		[Reconcile]
 		private void Reconcile(AbilityReconcileData rd, bool asServer, Channel channel = Channel.Unreliable)
 		{
+			if (rd.AbilityID == NO_ABILITY)
+			{
+				return;
+			}
 			if (!KnownAbilities.TryGetValue(rd.AbilityID, out Ability ability) || rd.Interrupt && rd.AbilityID == NO_ABILITY)
 			{
 				OnInterrupt?.Invoke();
@@ -229,6 +252,7 @@ namespace FishMMO.Shared
 		{
 			interruptQueued = true;
 		}
+
 
 		public void Activate(int referenceID, KeyCode heldKey)
 		{

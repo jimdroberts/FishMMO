@@ -14,6 +14,7 @@ namespace FishMMO.Shared
 			AddSlots(null, System.Enum.GetNames(typeof(ItemSlot)).Length); // equipment size = itemslot size
 		}
 
+#if !UNITY_SERVER
 		public override void OnStartClient()
 		{
 			base.OnStartClient();
@@ -37,6 +38,40 @@ namespace FishMMO.Shared
 				ClientManager.UnregisterBroadcast<EquipmentEquipItemBroadcast>(OnClientEquipmentEquipItemBroadcastReceived);
 				ClientManager.UnregisterBroadcast<EquipmentUnequipItemBroadcast>(OnClientEquipmentUnequipItemBroadcastReceived);
 			}
+		}
+
+		/// <summary>
+		/// Server sent an equip item broadcast.
+		/// </summary>
+		private void OnClientEquipmentEquipItemBroadcastReceived(EquipmentEquipItemBroadcast msg)
+		{
+			if (Character.InventoryController.TryGetItem(msg.inventoryIndex, out Item item))
+			{
+				Equip(item, msg.inventoryIndex, (ItemSlot)msg.slot);
+			}
+		}
+
+		/// <summary>
+		/// Server sent an unequip item broadcast.
+		/// </summary>
+		private void OnClientEquipmentUnequipItemBroadcastReceived(EquipmentUnequipItemBroadcast msg)
+		{
+			Unequip(msg.slot);
+		}
+#endif
+
+		public void SendEquipRequest(int inventoryIndex, byte slot)
+		{
+			ClientManager.Broadcast(new EquipmentEquipItemBroadcast()
+			{
+				inventoryIndex = inventoryIndex,
+				slot = slot,
+			}, Channel.Reliable);
+		}
+
+		public void SendUnequipRequest(byte slot)
+		{
+
 		}
 
 		public override bool CanManipulate()
@@ -137,42 +172,6 @@ namespace FishMMO.Shared
 			Character.InventoryController.TryAddItem(item, out List<Item> modifiedItems);
 
 			return true;
-		}
-
-		/// <summary>
-		/// Server sent an equip item broadcast.
-		/// </summary>
-		private void OnClientEquipmentEquipItemBroadcastReceived(EquipmentEquipItemBroadcast msg)
-		{
-			if (Character.InventoryController.TryGetItem(msg.inventoryIndex, out Item item))
-			{
-				Equip(item, msg.inventoryIndex, (ItemSlot)msg.slot);
-			}
-		}
-
-		/// <summary>
-		/// Server sent an unequip item broadcast.
-		/// </summary>
-		private void OnClientEquipmentUnequipItemBroadcastReceived(EquipmentUnequipItemBroadcast msg)
-		{
-			Unequip(msg.slot);
-		}
-
-		public void SendEquipRequest(int inventoryIndex, byte slot)
-		{
-			ClientManager.Broadcast(new EquipmentEquipItemBroadcast()
-			{
-				inventoryIndex = inventoryIndex,
-				slot = slot,
-			}, Channel.Reliable);
-		}
-
-		public void SendUnequipRequest(byte slot)
-		{
-			ClientManager.Broadcast(new EquipmentUnequipItemBroadcast()
-			{
-				slot = slot,
-			}, Channel.Reliable);
 		}
 	}
 }

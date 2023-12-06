@@ -26,17 +26,16 @@ namespace FishMMO.Shared
 		public AchievementTemplate ResurrectAchievementTemplate;
 		public AchievementTemplate ResurrectedAchievementTemplate;
 
+		//public List<Character> Attackers;
+
+		private CharacterResourceAttribute resourceInstance; // cache the resource
+
 #if !UNITY_SERVER
 		public bool ShowDamage = true;
 		public event Func<string, Vector3, Color, float, float, bool, Cached3DLabel> OnDamageDisplay;
 
 		public bool ShowHeals = true;
 		public event Func<string, Vector3, Color, float, float, bool, Cached3DLabel> OnHealedDisplay;
-#endif
-
-		//public List<Character> Attackers;
-
-		private CharacterResourceAttribute resourceInstance; // cache the resource
 
 		public override void OnStartClient()
 		{
@@ -53,27 +52,24 @@ namespace FishMMO.Shared
 			}
 
 
-#if !UNITY_SERVER
+
 			if (Character.LabelMaker != null)
 			{
 				OnDamageDisplay += Character.LabelMaker.Display;
 				OnHealedDisplay += Character.LabelMaker.Display;
 			}
-#endif
 		}
 
 		public override void OnStopClient()
 		{
 			base.OnStopClient();
-
-#if !UNITY_SERVER
 			if (Character.LabelMaker != null)
 			{
 				OnDamageDisplay -= Character.LabelMaker.Display;
 				OnHealedDisplay -= Character.LabelMaker.Display;
 			}
-#endif
 		}
+#endif
 
 		public int ApplyModifiers(Character target, int amount, DamageAttributeTemplate damageAttribute)
 		{
