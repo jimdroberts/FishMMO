@@ -46,7 +46,6 @@ namespace FishMMO.Client
 					{
 						continue;
 					}
-					ButtonSlots[i].OnLeftClick = null;
 					if (ButtonSlots[i].gameObject != null)
 					{
 						Destroy(ButtonSlots[i].gameObject);

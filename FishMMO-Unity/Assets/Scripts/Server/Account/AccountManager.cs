@@ -20,7 +20,7 @@ namespace FishMMO.Server
 		{
 			ConnectionAccountData.Remove(connection);
 
-			ServerSrpData srpData = new ServerSrpData(SrpParameters.Create2048<SHA512>(),
+			ServerSRPData srpData = new ServerSRPData(SrpParameters.Create2048<SHA512>(),
 													  accountName,
 													  publicClientEphemeral,
 													  salt,
@@ -72,11 +72,11 @@ namespace FishMMO.Server
 			return AccountConnections.TryGetValue(accountName, out connection);
 		}
 
-		public static bool TryUpdateSrpState(NetworkConnection connection, SrpState requiredState, SrpState nextState)
+		public static bool TryUpdateSrpState(NetworkConnection connection, SRPState requiredState, SRPState nextState)
 		{
 			return TryUpdateSrpState(connection, requiredState, nextState, null);
 		}
-		public static bool TryUpdateSrpState(NetworkConnection connection, SrpState requiredState, SrpState nextState, Func<AccountData, bool> onSuccess)
+		public static bool TryUpdateSrpState(NetworkConnection connection, SRPState requiredState, SRPState nextState, Func<AccountData, bool> onSuccess)
 		{
 			if (!ConnectionAccountData.TryGetValue(connection, out AccountData accountData)
 				|| accountData == null

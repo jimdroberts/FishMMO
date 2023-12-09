@@ -62,7 +62,10 @@ namespace FishMMO.Client
 				button.Type = ReferenceButtonType.Inventory;
 				if (Character.InventoryController.TryGetItem(i, out Item item))
 				{
-					button.Icon.texture = item.Template.Icon;
+					if (button.Icon != null)
+					{
+						button.Icon.sprite = item.Template.Icon;
+					}
 				}
 				inventorySlots.Add(button);
 			}
@@ -82,9 +85,15 @@ namespace FishMMO.Client
 				// update our button display
 				UIInventoryButton button = inventorySlots[inventoryIndex];
 				button.Type = ReferenceButtonType.Inventory;
-				if (button.Icon != null) button.Icon.texture = item.Template.Icon;
+				if (button.Icon != null)
+				{
+					button.Icon.sprite = item.Template.Icon;
+				}
 				//inventorySlots[i].cooldownText = character.CooldownController.IsOnCooldown();
-				if (button.AmountText != null) button.AmountText.text = item.IsStackable ? item.Stackable.Amount.ToString() : "";
+				if (button.AmountText != null)
+				{
+					button.AmountText.text = item.IsStackable ? item.Stackable.Amount.ToString() : "";
+				}
 			}
 			else
 			{

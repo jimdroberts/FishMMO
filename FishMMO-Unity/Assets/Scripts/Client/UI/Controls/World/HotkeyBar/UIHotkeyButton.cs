@@ -12,7 +12,10 @@ namespace FishMMO.Client
 			{
 				Type = dragObject.Type;
 				ReferenceID = dragObject.ReferenceID;
-				Icon.texture = dragObject.Icon.texture;
+				if (Icon != null)
+				{
+					Icon.sprite = dragObject.Icon.sprite;
+				}
 
 				// clear the drag object no matter what
 				dragObject.Clear();
@@ -27,7 +30,7 @@ namespace FishMMO.Client
 		{
 			if (UIManager.TryGet("UIDragObject", out UIDragObject dragObject) && ReferenceID != NULL_REFERENCE_ID)
 			{
-				dragObject.SetReference(Icon.texture, ReferenceID, Type);
+				dragObject.SetReference(Icon.sprite, ReferenceID, Type);
 				Clear();
 			}
 		}

@@ -19,101 +19,17 @@ namespace FishMMO.Shared
 
 		public Sprite Icon { get { return this.icon; } }
 
-		public string Field(string valueName, float value, bool appendLine = false, string hexColor = null, string size = null)
-		{
-			if (value == 0.0f)
-			{
-				return "";
-			}
-
-			using (var sb = ZString.CreateStringBuilder())
-			{
-				if (appendLine)
-				{
-					sb.AppendLine();
-				}
-				if (!string.IsNullOrWhiteSpace(size))
-				{
-					sb.Append("<size=" + size + ">");
-				}
-				if (!string.IsNullOrWhiteSpace(hexColor))
-				{
-					sb.Append("<color=#" + hexColor + ">");
-				}
-				if (!string.IsNullOrWhiteSpace(valueName))
-				{
-					sb.Append(valueName);
-					sb.Append(": ");
-				}
-				if (value < 0)
-				{
-					sb.Append("-");
-				}
-				else if (value > 0)
-				{
-					sb.Append("+");
-				}
-				sb.Append(value);
-				if (!string.IsNullOrWhiteSpace(hexColor))
-				{
-					sb.Append("</color>");
-				}
-				if (!string.IsNullOrWhiteSpace(size))
-				{
-					sb.Append("</size>");
-				}
-				return sb.ToString();
-			}
-		}
-
-		public string Field(string value, bool appendLine = false, string hexColor = null, string size = null)
-		{
-			if (string.IsNullOrWhiteSpace(value))
-			{
-				return "";
-			}
-
-			using (var sb = ZString.CreateStringBuilder())
-			{
-				if (!string.IsNullOrWhiteSpace(value))
-				{
-					if (appendLine)
-					{
-						sb.AppendLine();
-					}
-					if (!string.IsNullOrWhiteSpace(size))
-					{
-						sb.Append("<size=" + size + ">");
-					}
-					if (!string.IsNullOrWhiteSpace(hexColor))
-					{
-						sb.Append("<color=#" + hexColor + ">");
-					}
-					sb.Append(value);
-					if (!string.IsNullOrWhiteSpace(hexColor))
-					{
-						sb.Append("</color>");
-					}
-					if (!string.IsNullOrWhiteSpace(size))
-					{
-						sb.Append("</size>");
-					}
-				}
-				return sb.ToString();
-			}
-		}
-
 		public virtual string Tooltip()
 		{
 			using (var sb = ZString.CreateStringBuilder())
 			{
-				sb.Append(Field(Name, false, "f5ad6e", "120%"));
-				sb.Append(Field(Description, true, "a66ef5FF"));
-				sb.Append(Field("Activation Time", ActivationTime, true, "a66ef5FF"));
-				sb.Append(Field("Active Time", ActiveTime, true, "a66ef5FF"));
-				sb.Append(Field("Cooldown", Cooldown, true, "a66ef5FF"));
-				sb.Append(Field("Range", Range, true, "a66ef5FF"));
-				sb.Append(Field("Speed", Speed, true, "a66ef5FF"));
+				sb.Append(RichText.Format(Name, false, "f5ad6e", "120%"));
+				sb.Append(RichText.Format(Description, true, "a66ef5FF"));
+				sb.Append(RichText.Format("Activation Time", ActivationTime, true, "a66ef5FF"));
+				sb.Append(RichText.Format("Active Time", ActiveTime, true, "a66ef5FF"));
+				sb.Append(RichText.Format("Cooldown", Cooldown, true, "a66ef5FF"));
+				sb.Append(RichText.Format("Range", Range, true, "a66ef5FF"));
+				sb.Append(RichText.Format("Speed", Speed, true, "a66ef5FF"));
 
 				if (Resources != null && Resources.Count > 0)
 				{
@@ -124,7 +40,7 @@ namespace FishMMO.Shared
 					{
 						if (!string.IsNullOrWhiteSpace(attribute.Name))
 						{
-							sb.Append(Field(attribute.Name, true, "f5ad6eFF", "120%"));
+							sb.Append(RichText.Format(attribute.Name, true, "f5ad6eFF", "120%"));
 						}
 					}
 				}
@@ -137,7 +53,7 @@ namespace FishMMO.Shared
 					{
 						if (!string.IsNullOrWhiteSpace(attribute.Name))
 						{
-							sb.Append(Field(attribute.Name, true, "f5ad6eFF", "120%"));
+							sb.Append(RichText.Format(attribute.Name, true, "f5ad6eFF", "120%"));
 						}
 					}
 				}

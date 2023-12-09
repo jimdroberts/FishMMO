@@ -38,6 +38,9 @@ namespace FishMMO.Client
 		{
 			base.OnDestroy();
 
+			OnLeftClick = null;
+			OnRightClick = null;
+
 			Clear();
 		}
 

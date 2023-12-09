@@ -266,6 +266,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c6aab2a62f1729245adc63db78a7aeeb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  CanvasScaler: {fileID: 0}
   MainPanel: {fileID: 3017031836945612658}
   InputField: {fileID: 0}
   StartOpen: 0
@@ -274,7 +275,7 @@ MonoBehaviour:
   CloseOnQuitToMenu: 1
   CanDrag: 0
   ClampToScreen: 0
-  dialogueLabel: {fileID: 3017031836915557626}
+  DialogueLabel: {fileID: 3017031836915557626}
 --- !u!1 &3696914197942576368
 GameObject:
   m_ObjectHideFlags: 0

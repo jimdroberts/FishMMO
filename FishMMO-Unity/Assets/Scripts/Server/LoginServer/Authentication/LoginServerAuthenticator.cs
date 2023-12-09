@@ -82,8 +82,8 @@ namespace FishMMO.Server
 						// prepare account
 						AccountManager.AddConnectionAccount(conn, msg.s, msg.publicEphemeral, salt, verifier, accessLevel);
 
-						// verify SrpState equals SRPVerify and then send account public data
-						if (AccountManager.TryUpdateSrpState(conn, SrpState.SRPVerify, SrpState.SRPVerify, (a) =>
+						// verify SRPState equals SRPVerify and then send account public data
+						if (AccountManager.TryUpdateSrpState(conn, SRPState.SRPVerify, SRPState.SRPVerify, (a) =>
 							{
 								//UnityEngine.Debug.Log("SRPVerify");
 
@@ -117,7 +117,7 @@ namespace FishMMO.Server
 			 * are removed when a client disconnects so there is no reason they should
 			 * already be considered authenticated. */
 			if (conn.Authenticated ||
-				!AccountManager.TryUpdateSrpState(conn, SrpState.SRPVerify, SrpState.SRPProof, (a) =>
+				!AccountManager.TryUpdateSrpState(conn, SRPState.SRPVerify, SRPState.SRPProof, (a) =>
 				{
 					if (a.SrpData.GetProof(msg.proof, out string serverProof))
 					{
@@ -147,7 +147,7 @@ namespace FishMMO.Server
 			 * are removed when a client disconnects so there is no reason they should
 			 * already be considered authenticated. */
 			if (conn.Authenticated ||
-				!AccountManager.TryUpdateSrpState(conn, SrpState.SRPProof, SrpState.SRPSuccess, (a) =>
+				!AccountManager.TryUpdateSrpState(conn, SRPState.SRPProof, SRPState.SRPSuccess, (a) =>
 				{
 					using var dbContext = NpgsqlDbContextFactory.CreateDbContext();
 					// attempt to complete login authentication and return a result broadcast

@@ -6,7 +6,7 @@ namespace FishMMO.Client
 {
 	public class UIDragObject : UIControl
 	{
-		public RawImage Icon;
+		public Image Icon;
 		public int ReferenceID = UIReferenceButton.NULL_REFERENCE_ID;
 		public ReferenceButtonType Type = ReferenceButtonType.None;
 
@@ -25,7 +25,7 @@ namespace FishMMO.Client
 		{
 			if (Visible)
 			{
-				if (Icon == null || Icon.texture == null || ReferenceID == UIReferenceButton.NULL_REFERENCE_ID)
+				if (Icon == null || Icon.sprite == null || ReferenceID == UIReferenceButton.NULL_REFERENCE_ID)
 				{
 					Clear();
 					return;
@@ -51,19 +51,19 @@ namespace FishMMO.Client
 				}
 
 				// UIDragObject always follows the mouse cursor
-				Vector3 offset = new Vector3(Icon.texture.width * 0.5f + 1.0f, Icon.texture.height * -0.5f - 1.0f, 0.0f);
+				Vector3 offset = new Vector3(Icon.sprite.bounds.size.x * 0.5f + 1.0f, Icon.sprite.bounds.size.y * -0.5f - 1.0f, 0.0f);
 				transform.position = Input.mousePosition + offset;
 			}
 		}
 
-		public void SetReference(Texture icon, int referenceID, ReferenceButtonType type)
+		public void SetReference(Sprite icon, int referenceID, ReferenceButtonType type)
 		{
-			Icon.texture = icon;
+			Icon.sprite = icon;
 			ReferenceID = referenceID;
 			Type = type;
 
 			// set position immediately so we don't have any position glitches before Update is triggered
-			Vector3 offset = new Vector3(this.Icon.texture.width * 0.5f + 1.0f, this.Icon.texture.height * -0.5f - 1.0f, 0.0f);
+			Vector3 offset = new Vector3(Icon.sprite.bounds.size.x * 0.5f + 1.0f, Icon.sprite.bounds.size.y * -0.5f - 1.0f, 0.0f);
 			transform.position = Input.mousePosition + offset;
 
 			Show();
@@ -73,7 +73,7 @@ namespace FishMMO.Client
 		{
 			Hide();
 
-			Icon.texture = null;
+			Icon.sprite = null;
 			ReferenceID = UIReferenceButton.NULL_REFERENCE_ID;
 			Type = ReferenceButtonType.None;
 			//transform.position = new Vector3(-9999.0f, -9999.0f, 0.0f); // do we need to do this?

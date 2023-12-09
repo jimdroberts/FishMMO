@@ -20,7 +20,7 @@ namespace FishMMO.Client
 		public ReferenceButtonType AllowedType = ReferenceButtonType.Any;
 		public ReferenceButtonType Type = ReferenceButtonType.None;
 		[SerializeField]
-		public RawImage Icon;
+		public Image Icon;
 		[SerializeField]
 		public TMP_Text CooldownText;
 		[SerializeField]
@@ -102,7 +102,7 @@ namespace FishMMO.Client
 		{
 			ReferenceID = NULL_REFERENCE_ID;
 			Type = ReferenceButtonType.None;
-			if (Icon != null) Icon.texture = null;
+			if (Icon != null) Icon.sprite = null;
 			if (CooldownText != null) CooldownText.text = "";
 			if (AmountText != null) AmountText.text = "";
 		}

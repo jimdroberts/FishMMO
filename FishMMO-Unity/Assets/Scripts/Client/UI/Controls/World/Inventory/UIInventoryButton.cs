@@ -36,7 +36,7 @@ namespace FishMMO.Client
 					{
 						if (!Character.InventoryController.IsSlotEmpty(ReferenceID))
 						{
-							dragObject.SetReference(Icon.texture, ReferenceID, Type);
+							dragObject.SetReference(Icon.sprite, ReferenceID, Type);
 						}
 					}
 				}
@@ -53,7 +53,7 @@ namespace FishMMO.Client
 
 		public override void Clear()
 		{
-			if (Icon != null) Icon.texture = null;
+			if (Icon != null) Icon.sprite = null;
 			if (CooldownText != null) CooldownText.text = "";
 			if (AmountText != null) AmountText.text = "";
 		}

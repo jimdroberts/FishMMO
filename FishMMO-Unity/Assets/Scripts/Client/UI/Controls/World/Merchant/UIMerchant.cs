@@ -1,19 +1,23 @@
-﻿using FishNet.Transporting;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using TMPro;
-using System.Collections.Generic;
+using FishNet.Transporting;
 using FishMMO.Shared;
 
 namespace FishMMO.Client
 {
 	public class UIMerchant : UICharacterControl
 	{
-		public RectTransform ItemsParent;
-		public UITooltipButton ItemPrefab;
+		public RectTransform Parent;
+		public UITooltipButton Prefab;
 
 		private List<UITooltipButton> Abilities;
 		private List<UITooltipButton> AbilityEvents;
 		private List<UITooltipButton> Items;
+
+		private Dictionary<int, UITooltipButton> SelectedItems = new Dictionary<int, UITooltipButton>();
 
 		public override void OnStarting()
 		{
@@ -24,7 +28,7 @@ namespace FishMMO.Client
 		{
 			Client.NetworkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
 
-			ClearSlots();
+			ClearAllSlots();
 		}
 
 		public void ClientManager_OnClientConnectionState(ClientConnectionStateArgs args)
@@ -45,10 +49,89 @@ namespace FishMMO.Client
 			if (template != null)
 			{
 				// set up prefab lists
+				SetButtonSlots(template.Abilities.Select(s => s as ITooltip).ToList(), ref Abilities, AbilityEntry_OnLeftClick, AbilityEntry_OnRightClick);
+				SetButtonSlots(template.AbilityEvents.Select(s => s as ITooltip).ToList(), ref AbilityEvents, AbilityEventEntry_OnLeftClick, AbilityEventEntry_OnRightClick);
+				SetButtonSlots(template.Items.Select(s => s as ITooltip).ToList(), ref Items, ItemEntry_OnLeftClick, ItemEntry_OnRightClick);
 
 				// show the UI
 				Show();
 			}
+		}
+
+		private void ClearAllSlots()
+		{
+			ClearSlots(ref Abilities);
+			ClearSlots(ref AbilityEvents);
+			ClearSlots(ref Items);
+		}
+
+		private void ClearSlots(ref List<UITooltipButton> slots)
+		{
+			if (slots != null)
+			{
+				for (int i = 0; i < slots.Count; ++i)
+				{
+					if (slots[i] == null)
+					{
+						continue;
+					}
+					if (slots[i].gameObject != null)
+					{
+						Destroy(slots[i].gameObject);
+					}
+				}
+				slots.Clear();
+			}
+		}
+
+		private void SetButtonSlots(List<ITooltip> items, ref List<UITooltipButton> slots, Action<int> onLeftClick, Action<int> onRightClick)
+		{
+			ClearSlots(ref slots);
+
+			if (items == null ||
+				items.Count < 1)
+			{
+				return;
+			}
+
+			slots = new List<UITooltipButton>();
+
+			for (int i = 0; i < items.Count; ++i)
+			{
+				ITooltip cachedObject = items[i];
+				if (cachedObject == null)
+				{
+					continue;
+				}
+
+				UITooltipButton eventButton = Instantiate(Prefab, Parent);
+				eventButton.Initialize(i, onLeftClick, onRightClick, cachedObject);
+				slots.Add(eventButton);
+			}
+		}
+
+		private void AbilityEntry_OnLeftClick(int index)
+		{
+			if (index > -1 && index < Abilities.Count &&
+				Character != null)
+			{
+			}
+		}
+
+		private void AbilityEntry_OnRightClick(int index)
+		{
+		}
+
+		private void AbilityEventEntry_OnLeftClick(int index)
+		{
+			if (index > -1 && index < AbilityEvents.Count &&
+				Character != null)
+			{
+			}
+		}
+
+		private void AbilityEventEntry_OnRightClick(int index)
+		{
 		}
 
 		private void ItemEntry_OnLeftClick(int index)
@@ -63,44 +146,9 @@ namespace FishMMO.Client
 		{
 		}
 
-		private void ClearSlots()
-		{
-			if (Items != null)
-			{
-				for (int i = 0; i < Items.Count; ++i)
-				{
-					if (Items[i] == null)
-					{
-						continue;
-					}
-					Items[i].OnRightClick = null;
-					Items[i].OnLeftClick = null;
-					if (Items[i].gameObject != null)
-					{
-						Destroy(Items[i].gameObject);
-					}
-				}
-				Items.Clear();
-			}
-		}
-
-		private void SetEventSlots(int count)
-		{
-			ClearSlots();
-
-			Items = new List<UITooltipButton>();
-
-			for (int i = 0; i < count; ++i)
-			{
-				UITooltipButton eventButton = Instantiate(ItemPrefab, ItemsParent);
-				eventButton.Initialize(i, ItemEntry_OnLeftClick, ItemEntry_OnRightClick);
-				Items.Add(eventButton);
-			}
-		}
-
 		public void OnPurchase()
 		{
-			// craft it on the server
+			// purchase it on the server
 		}
 	}
 }

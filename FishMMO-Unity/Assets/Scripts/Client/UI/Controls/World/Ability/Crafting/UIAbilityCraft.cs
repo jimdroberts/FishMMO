@@ -120,8 +120,6 @@ namespace FishMMO.Client
 					{
 						continue;
 					}
-					EventSlots[i].OnRightClick = null;
-					EventSlots[i].OnLeftClick = null;
 					if (EventSlots[i].gameObject != null)
 					{
 						Destroy(EventSlots[i].gameObject);
