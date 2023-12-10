@@ -20,10 +20,10 @@ INITIAL SETUP INSTRUCTIONS
 11) Ensure WSL, DOTNET 7, DOTNET-EF, Docker and your Initial Migration are all installed by launching the "Installer.exe". Select "Everything Option"
 12) Configure LoginServer.cfg, WorldServer.cfg, SceneServer.cfg, and appsettings.json in the builds Data folder.
 
-//Launching Server
-Navigate to "\FishMMO\All-In-One Windows" Or where you have chosen to install your "Windows x64-All-In-One".
+### Launching the Server
 
-Launch "Start.Bat"
+1) Navigate to "\FishMMO\All-In-One Windows" Or where you have chosen to install your "Windows x64-All-In-One".
+2) Launch "Start.Bat"
 
 ### Video of Installation
 https://drive.google.com/file/d/11FFrECZSh_zW9JVKZk7lR0xUYHBwVZAR/view?usp=sharing
