@@ -40,7 +40,17 @@ namespace FishMMO.Server.DatabaseServices
 
 		public static void Delete(NpgsqlDbContext dbContext, long sceneServerID)
 		{
-			var loadedScenes = dbContext.LoadedScenes.Where(c => c.ID == sceneServerID);
+			var loadedScenes = dbContext.LoadedScenes.Where(c => c.SceneServerID == sceneServerID);
+			if (loadedScenes != null)
+			{
+				dbContext.LoadedScenes.RemoveRange(loadedScenes);
+			}
+		}
+
+		public static void Delete(NpgsqlDbContext dbContext, long sceneServerID, int sceneHandle)
+		{
+			var loadedScenes = dbContext.LoadedScenes.Where(c => c.SceneServerID == sceneServerID &&
+																 c.SceneHandle == sceneHandle);
 			if (loadedScenes != null)
 			{
 				dbContext.LoadedScenes.RemoveRange(loadedScenes);
