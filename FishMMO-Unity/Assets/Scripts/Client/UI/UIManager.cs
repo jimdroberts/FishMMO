@@ -72,7 +72,8 @@ namespace FishMMO.Client
 		{
 			if (controls.TryGetValue(name, out UIControl result))
 			{
-				if ((control = result as T) != null)
+				control = result as T;
+				if (control != null)
 				{
 					return true;
 				}

@@ -43,8 +43,7 @@ namespace FishMMO.Shared
 			{
 				return false;
 			}
-			if (transform != null &&
-			   (transform.position - Transform.position).sqrMagnitude < InteractionRangeSqr)
+			if ((transform.position - Transform.position).sqrMagnitude < InteractionRangeSqr)
 			{
 				return true;
 			}
