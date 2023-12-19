@@ -8,5 +8,6 @@ namespace FishMMO.Shared
 	{
 		public string Scene;
 		public Vector3 Position;
+		public Quaternion Rotation;
 	}
 }

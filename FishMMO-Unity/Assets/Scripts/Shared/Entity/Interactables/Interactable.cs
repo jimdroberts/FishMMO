@@ -14,7 +14,7 @@ namespace FishMMO.Shared
 
 		public float InteractionRangeSqr = 5.0f;
 
-		public long ID
+		public int ID
 		{
 			get
 			{
@@ -28,10 +28,21 @@ namespace FishMMO.Shared
 		{
 			uid = gameObject.GetComponent<SceneObjectUID>();
 			Transform = transform;
+			OnStarting();
 		}
+
+		public virtual void OnStarting() { }
 
 		public bool InRange(Transform transform)
 		{
+			if (transform == null)
+			{
+				return false;
+			}
+			if (Transform == null)
+			{
+				return false;
+			}
 			if (transform != null &&
 			   (transform.position - Transform.position).sqrMagnitude < InteractionRangeSqr)
 			{

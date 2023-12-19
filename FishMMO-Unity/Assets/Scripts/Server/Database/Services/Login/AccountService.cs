@@ -57,7 +57,7 @@ namespace FishMMO.Server.DatabaseServices
 					accountEntity.Lastlogin = DateTime.UtcNow;
 					dbContext.SaveChanges();
 
-					// proceed to SRPVerify stage
+					// proceed to SrpVerify stage
 					return ClientAuthenticationResult.SrpVerify;
 				}
             }

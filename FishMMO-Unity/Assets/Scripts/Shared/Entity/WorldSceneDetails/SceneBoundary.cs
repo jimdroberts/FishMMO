@@ -4,7 +4,7 @@ namespace FishMMO.Shared
 {
 	public class SceneBoundary : IBoundary
 	{
-		[Header("Scene Boundaries are *inclusive*, if a player is not within it, it will not apply!")]
+		[Tooltip("Scene Boundaries are *inclusive*, if a player is not within it, it will not apply!")]
 		public Vector3 BoundarySize;
 
 		public void OnDrawGizmos()

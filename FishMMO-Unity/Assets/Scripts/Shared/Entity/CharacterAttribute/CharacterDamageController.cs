@@ -88,7 +88,10 @@ namespace FishMMO.Shared
 
 		public void Damage(Character attacker, int amount, DamageAttributeTemplate damageAttribute)
 		{
-			if (Immortal) return;
+			if (Immortal)
+			{
+				return;
+			}
 
 			if (resourceInstance != null && resourceInstance.CurrentValue > 0)
 			{

@@ -404,6 +404,12 @@ PrefabInstance:
       propertyPath: LogToDisk
       value: 1
       objectReference: {fileID: 0}
+    - target: {fileID: 8438934712096917615, guid: 61bd2fa6be216094ebfc45c391a32de0,
+        type: 3}
+      propertyPath: WorldSceneDetailsCache
+      value: 
+      objectReference: {fileID: 11400000, guid: ee8f2ab36344dae4c8c59b28985d5338,
+        type: 2}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []

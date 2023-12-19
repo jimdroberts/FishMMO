@@ -26,6 +26,7 @@ namespace FishMMO.Shared
 			ConsumableTemplate.LoadCache<ConsumableTemplate>();
 			ScrollConsumableTemplate.LoadCache<ScrollConsumableTemplate>();
 			QuestTemplate.LoadCache<QuestTemplate>();
+			MerchantTemplate.LoadCache<MerchantTemplate>();
 		}
 
 		private void OnApplicationQuit()
@@ -45,6 +46,7 @@ namespace FishMMO.Shared
 			ConsumableTemplate.UnloadCache<ConsumableTemplate>();
 			ScrollConsumableTemplate.UnloadCache<ScrollConsumableTemplate>();
 			QuestTemplate.UnloadCache<QuestTemplate>();
+			MerchantTemplate.UnloadCache<MerchantTemplate>();
 		}
 	}
 }

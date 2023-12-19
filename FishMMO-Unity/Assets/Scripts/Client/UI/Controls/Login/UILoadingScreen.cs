@@ -41,8 +41,8 @@ namespace FishMMO.Client
 		#region Network Events
 		public void OnClientSceneWorldReconnectBroadcastReceived(SceneWorldReconnectBroadcast reconnect)
 		{
-			if (reconnect.sceneName != null &&
-				reconnect.teleporterName != null &&
+			if (!string.IsNullOrWhiteSpace(reconnect.sceneName) &&
+				!string.IsNullOrWhiteSpace(reconnect.teleporterName) &&
 				Details.Scenes.TryGetValue(reconnect.sceneName, out WorldSceneDetails details) &&
 				details.Teleporters.TryGetValue(reconnect.teleporterName, out SceneTeleporterDetails teleporter))
 			{

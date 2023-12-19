@@ -87,10 +87,11 @@ namespace FishMMO.Server
 				return;
 			}
 
-			InventoryController inventory = conn.FirstObject.GetComponent<InventoryController>();
-			if (inventory != null)
+			Character character = conn.FirstObject.GetComponent<Character>();
+			if (character != null &&
+				!character.IsTeleporting)
 			{
-				inventory.RemoveItem(msg.slot);
+				character.InventoryController.RemoveItem(msg.slot);
 				conn.Broadcast(msg, true, Channel.Reliable);
 			}
 		}
@@ -102,9 +103,11 @@ namespace FishMMO.Server
 				return;
 			}
 
-			InventoryController inventory = conn.FirstObject.GetComponent<InventoryController>();
-			if (inventory != null &&
-				inventory.SwapItemSlots(msg.from, msg.to))
+			Character character = conn.FirstObject.GetComponent<Character>();
+			if (character != null &&
+				!character.IsTeleporting &&
+				character.InventoryController != null &&
+				character.InventoryController.SwapItemSlots(msg.from, msg.to))
 			{
 				conn.Broadcast(msg, true, Channel.Reliable);
 			}

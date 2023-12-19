@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using UnityEngine.UI;
 using TMPro;
 using FishNet.Transporting;
 using FishMMO.Shared;
@@ -12,6 +13,10 @@ namespace FishMMO.Client
 	{
 		public RectTransform Parent;
 		public UITooltipButton Prefab;
+
+		public Button AbilitiesButton;
+		public Button AbilityEventsButton;
+		public Button ItemsButton;
 
 		private List<UITooltipButton> Abilities;
 		private List<UITooltipButton> AbilityEvents;
@@ -50,11 +55,40 @@ namespace FishMMO.Client
 			{
 				// set up prefab lists
 				SetButtonSlots(template.Abilities.Select(s => s as ITooltip).ToList(), ref Abilities, AbilityEntry_OnLeftClick, AbilityEntry_OnRightClick);
-				SetButtonSlots(template.AbilityEvents.Select(s => s as ITooltip).ToList(), ref AbilityEvents, AbilityEventEntry_OnLeftClick, AbilityEventEntry_OnRightClick);
-				SetButtonSlots(template.Items.Select(s => s as ITooltip).ToList(), ref Items, ItemEntry_OnLeftClick, ItemEntry_OnRightClick);
+				AbilitiesButton.gameObject.SetActive((Abilities == null || Abilities.Count < 1) ? false : true);
 
-				// show the UI
-				Show();
+				SetButtonSlots(template.AbilityEvents.Select(s => s as ITooltip).ToList(), ref AbilityEvents, AbilityEventEntry_OnLeftClick, AbilityEventEntry_OnRightClick);
+				AbilityEventsButton.gameObject.SetActive((AbilityEvents == null || AbilityEvents.Count < 1) ? false : true);
+
+				SetButtonSlots(template.Items.Select(s => s as ITooltip).ToList(), ref Items, ItemEntry_OnLeftClick, ItemEntry_OnRightClick);
+				ItemsButton.gameObject.SetActive((Items == null || Items.Count < 1) ? false : true);
+
+				// show the first valid tab if any otherwise hide
+				if (AbilitiesButton.gameObject.activeSelf)
+				{
+					ShowEntries(Abilities);
+					ShowEntries(AbilityEvents, false);
+					ShowEntries(Items, false);
+					Show();
+				}
+				else if (AbilityEventsButton.gameObject.activeSelf)
+				{
+					ShowEntries(Abilities, false);
+					ShowEntries(AbilityEvents);
+					ShowEntries(Items, false);
+					Show();
+				}
+				else if (ItemsButton.gameObject.activeSelf)
+				{
+					ShowEntries(Abilities, false);
+					ShowEntries(AbilityEvents, false);
+					ShowEntries(Items);
+					Show();
+				}
+				else
+				{
+					Hide();
+				}
 			}
 		}
 
@@ -105,9 +139,54 @@ namespace FishMMO.Client
 				}
 
 				UITooltipButton eventButton = Instantiate(Prefab, Parent);
-				eventButton.Initialize(i, onLeftClick, onRightClick, cachedObject);
+				eventButton.Initialize(i, onLeftClick, onRightClick, cachedObject, "\r\n\r\nCtrl+Left Mouse Button to purchase.", PurchaseEventEntry_OnCtrlClick);
 				slots.Add(eventButton);
 			}
+		}
+
+		public void Tab_OnClick(Button button)
+		{
+			switch (button.name)
+			{
+				case "ItemButton":
+					ShowEntries(Items);
+					ShowEntries(Abilities, false);
+					ShowEntries(AbilityEvents, false);
+					break;
+				case "AbilitiesButton":
+					ShowEntries(Items, false);
+					ShowEntries(Abilities);
+					ShowEntries(AbilityEvents, false);
+					break;
+				case "AbilityEventsButton":
+					ShowEntries(Items, false);
+					ShowEntries(Abilities, false);
+					ShowEntries(AbilityEvents);
+					break;
+				default: return;
+			}
+		}
+
+		private void ShowEntries(List<UITooltipButton> buttons, bool show = true)
+		{
+			if (buttons == null ||
+				buttons.Count < 1)
+			{
+				return;
+			}
+			foreach (UITooltipButton button in buttons)
+			{
+				button.gameObject.SetActive(show);
+			}
+		}
+
+		private void PurchaseEventEntry_OnCtrlClick(int index)
+		{
+			/*if (index > -1 && index < Abilities.Count &&
+				Character != null)
+			{
+			}*/
+			Debug.Log("Purchase Complete!");
 		}
 
 		private void AbilityEntry_OnLeftClick(int index)

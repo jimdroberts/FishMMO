@@ -1,7 +1,7 @@
-using FishNet.Object;
-using FishNet.Transporting;
 using UnityEngine;
 #if UNITY_SERVER
+using FishNet.Object;
+using FishNet.Transporting;
 using FishMMO.Server;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Database.Npgsql.Entities;
@@ -49,7 +49,7 @@ namespace FishMMO.Shared
 
 						string playerScene = character.SceneName;
 						character.SceneName = teleporter.ToScene;
-						character.Motor.SetPositionAndRotation(teleporter.ToPosition, character.Transform.rotation);// teleporter.toRotation);
+						character.Motor.SetPositionAndRotationAndVelocity(teleporter.ToPosition, teleporter.ToRotation, Vector3.zero);
 
 						// save the character with new scene and position
 						using var dbContext = sceneServerSystem.Server.NpgsqlDbContextFactory.CreateDbContext();

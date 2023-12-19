@@ -28,9 +28,6 @@ namespace FishMMO.Client
 				return;
 			}
 
-			// make the UI visible
-			Show();
-
 			if (NameLabel != null)
 			{
 				NameLabel.text = obj.name;
@@ -47,6 +44,9 @@ namespace FishMMO.Client
 			{
 				HealthSlider.value = 0;
 			}
+
+			// make the UI visible
+			Show();
 		}
 
 		public void OnUpdateTarget(GameObject obj)

@@ -51,8 +51,8 @@ namespace FishMMO.Shared
 
 				UpdateTarget(ray.origin, ray.direction, MAX_TARGET_DISTANCE);
 
-				// same target label remains
-				if (LastTarget.Target != Current.Target)
+				// target has changed
+				if (Current.Target != LastTarget.Target)
 				{
 					// invoke our change target function
 					if (Current.Target == null)
@@ -64,15 +64,7 @@ namespace FishMMO.Shared
 						OnChangeTarget?.Invoke(Current.Target.gameObject);
 					}
 
-					if (targetLabel == null &&
-						Character != null &&
-						Character.LabelMaker != null)
-					{
-						// construct the target label
-						targetLabel = Character.LabelMaker.Display("", Character.Transform.position, Color.grey, 1.0f, 0.0f, true);
-						targetLabel.gameObject.SetActive(false);
-					}
-
+					// disable the previous outline and target label
 					if (LastTarget.Target != null)
 					{
 						Outline outline = LastTarget.Target.GetComponent<Outline>();
@@ -82,40 +74,31 @@ namespace FishMMO.Shared
 						}
 						if (targetLabel != null)
 						{
-							targetLabel.gameObject.SetActive(false);
+							LabelMaker.Cache(targetLabel);
 						}
 					}
 
+					// construct or enable the labels and outlines
 					if (Current.Target != null)
 					{
-						Outline outline = Current.Target.GetComponent<Outline>();
-						if (outline != null)
+						if (Character != null &&
+							Character.LabelMaker != null)
 						{
 							Vector3 newPos = Current.Target.position;
 
 							Collider collider = Current.Target.GetComponent<Collider>();
-							BoxCollider box = collider as BoxCollider;
-							if (box != null)
-							{
-								newPos.y += box.bounds.size.y + 0.15f;
-							}
-							else
-							{
-								SphereCollider sphere = collider as SphereCollider;
-								if (sphere != null)
-								{
-									newPos.y += sphere.radius + 0.15f;
-								}
-							}
-							if (targetLabel != null)
-							{
-								targetLabel.SetPosition(newPos);
-								targetLabel.SetText(Current.Target.name);
-								targetLabel.gameObject.SetActive(true);
-								outline.enabled = true;
-							}
+							newPos.y += collider.bounds.extents.y + 0.15f;
+
+							targetLabel = Character.LabelMaker.Display(Current.Target.name, newPos, Color.grey, 1.0f, 0.0f, true);
+						}
+
+						Outline outline = Current.Target.GetComponent<Outline>();
+						if (outline != null)
+						{
+							outline.enabled = true;
 						}
 					}
+
 				}
 				else
 				{

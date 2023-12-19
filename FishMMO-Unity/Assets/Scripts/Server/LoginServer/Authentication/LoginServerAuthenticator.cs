@@ -39,15 +39,15 @@ namespace FishMMO.Server
 			networkManager.ServerManager.OnRemoteConnectionState += ServerManager_OnRemoteConnectionState;
 
 			// Listen for broadcast from clients.
-			networkManager.ServerManager.RegisterBroadcast<SRPVerifyBroadcast>(OnServerSRPVerifyBroadcastReceived, false);
-			networkManager.ServerManager.RegisterBroadcast<SRPProofBroadcast>(OnServerSRPProofBroadcastReceived, false);
-			networkManager.ServerManager.RegisterBroadcast<SRPSuccess>(OnServerSRPSuccessBroadcastReceived, false);
+			networkManager.ServerManager.RegisterBroadcast<SrpVerifyBroadcast>(OnServerSrpVerifyBroadcastReceived, false);
+			networkManager.ServerManager.RegisterBroadcast<SrpProofBroadcast>(OnServerSrpProofBroadcastReceived, false);
+			networkManager.ServerManager.RegisterBroadcast<SrpSuccess>(OnServerSrpSuccessBroadcastReceived, false);
 		}
 
 		/// <summary>
-		/// Received on server when a Client sends the SRPVerify broadcast message.
+		/// Received on server when a Client sends the SrpVerify broadcast message.
 		/// </summary>
-		internal void OnServerSRPVerifyBroadcastReceived(NetworkConnection conn, SRPVerifyBroadcast msg)
+		internal void OnServerSrpVerifyBroadcastReceived(NetworkConnection conn, SrpVerifyBroadcast msg)
 		{
 			/* If client is already authenticated this could be an attack. Connections
 			 * are removed when a client disconnects so there is no reason they should
@@ -82,12 +82,12 @@ namespace FishMMO.Server
 						// prepare account
 						AccountManager.AddConnectionAccount(conn, msg.s, msg.publicEphemeral, salt, verifier, accessLevel);
 
-						// verify SRPState equals SRPVerify and then send account public data
-						if (AccountManager.TryUpdateSrpState(conn, SRPState.SRPVerify, SRPState.SRPVerify, (a) =>
+						// verify SrpState equals SrpVerify and then send account public data
+						if (AccountManager.TryUpdateSrpState(conn, SrpState.SrpVerify, SrpState.SrpVerify, (a) =>
 							{
-								//UnityEngine.Debug.Log("SRPVerify");
+								//UnityEngine.Debug.Log("SrpVerify");
 
-								SRPVerifyBroadcast srpVerify = new SRPVerifyBroadcast()
+								SrpVerifyBroadcast srpVerify = new SrpVerifyBroadcast()
 								{
 									s = a.SrpData.Salt,
 									publicEphemeral = a.SrpData.ServerEphemeral.Public,
@@ -109,21 +109,21 @@ namespace FishMMO.Server
 		}
 
 		/// <summary>
-		/// Received on server when a Client sends the SRPProof broadcast message.
+		/// Received on server when a Client sends the SrpProof broadcast message.
 		/// </summary>
-		internal void OnServerSRPProofBroadcastReceived(NetworkConnection conn, SRPProofBroadcast msg)
+		internal void OnServerSrpProofBroadcastReceived(NetworkConnection conn, SrpProofBroadcast msg)
 		{
 			/* If client is already authenticated this could be an attack. Connections
 			 * are removed when a client disconnects so there is no reason they should
 			 * already be considered authenticated. */
 			if (conn.Authenticated ||
-				!AccountManager.TryUpdateSrpState(conn, SRPState.SRPVerify, SRPState.SRPProof, (a) =>
+				!AccountManager.TryUpdateSrpState(conn, SrpState.SrpVerify, SrpState.SrpProof, (a) =>
 				{
 					if (a.SrpData.GetProof(msg.proof, out string serverProof))
 					{
-						//UnityEngine.Debug.Log("SRPProof");
+						//UnityEngine.Debug.Log("SrpProof");
 
-						SRPProofBroadcast msg2 = new SRPProofBroadcast()
+						SrpProofBroadcast msg2 = new SrpProofBroadcast()
 						{
 							proof = serverProof,
 						};
@@ -139,15 +139,15 @@ namespace FishMMO.Server
 		}
 
 		/// <summary>
-		/// Received on server when a Client sends the SRPSuccess broadcast message.
+		/// Received on server when a Client sends the SrpSuccess broadcast message.
 		/// </summary>
-		internal void OnServerSRPSuccessBroadcastReceived(NetworkConnection conn, SRPSuccess msg)
+		internal void OnServerSrpSuccessBroadcastReceived(NetworkConnection conn, SrpSuccess msg)
 		{
 			/* If client is already authenticated this could be an attack. Connections
 			 * are removed when a client disconnects so there is no reason they should
 			 * already be considered authenticated. */
 			if (conn.Authenticated ||
-				!AccountManager.TryUpdateSrpState(conn, SRPState.SRPProof, SRPState.SRPSuccess, (a) =>
+				!AccountManager.TryUpdateSrpState(conn, SrpState.SrpProof, SrpState.SrpSuccess, (a) =>
 				{
 					using var dbContext = NpgsqlDbContextFactory.CreateDbContext();
 					// attempt to complete login authentication and return a result broadcast

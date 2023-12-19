@@ -25,7 +25,7 @@ namespace FishMMO.Client
 
 		public void Initialize(string text, Vector3 position, Color color, float fontSize, float persistTime, bool manualCache)
 		{
-			TMP.transform.position = position;
+			transform.position = position;
 			TMP.text = text;
 			TMP.fontSize = fontSize;
 			TMP.color = color;

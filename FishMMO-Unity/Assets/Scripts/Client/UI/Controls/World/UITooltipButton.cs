@@ -14,9 +14,11 @@ namespace FishMMO.Client
 
 		public Image Icon;
 		public TMP_Text TooltipLabel;
+		public string ExtraTooltipInfo;
 
 		public Action<int> OnLeftClick;
 		public Action<int> OnRightClick;
+		public Action<int> OnCtrlClick;
 
 		public int Index { get; private set; }
 		public ITooltip Tooltip { get; private set; }
@@ -40,33 +42,32 @@ namespace FishMMO.Client
 
 			OnLeftClick = null;
 			OnRightClick = null;
+			OnCtrlClick = null;
 
 			Clear();
 		}
 
-		public void Initialize(int index, Action<int> onLeftClick, Action<int> onRightClick)
+		public void Initialize(int index, Action<int> onLeftClick, Action<int> onRightClick, ITooltip tooltip = null, string extraTooltipInfo = "", Action<int> onCtrlClick = null)
 		{
 			Index = index;
 			OnLeftClick = null;
-			OnLeftClick += onLeftClick;
+			OnLeftClick = onLeftClick;
 			OnRightClick = null;
-			OnRightClick += onRightClick;
-		}
-		public void Initialize(int index, Action<int> onLeftClick, Action<int> onRightClick, ITooltip tooltip)
-		{
-			Index = index;
-			OnLeftClick = null;
-			OnLeftClick += onLeftClick;
-			OnRightClick = null;
-			OnRightClick += onRightClick;
-			Tooltip = tooltip;
-			if (Icon != null)
+			OnRightClick = onRightClick;
+			OnCtrlClick = null;
+			OnCtrlClick = onCtrlClick;
+			if (tooltip != null)
 			{
-				Icon.sprite = tooltip.Icon;
-			}
-			if (TooltipLabel != null)
-			{
-				TooltipLabel.text = tooltip.Name;
+				Tooltip = tooltip;
+				ExtraTooltipInfo = extraTooltipInfo;
+				if (Icon != null)
+				{
+					Icon.sprite = tooltip.Icon;
+				}
+				if (TooltipLabel != null)
+				{
+					TooltipLabel.text = tooltip.Name;
+				}
 			}
 		}
 		public void Initialize(Character character, ITooltip tooltip)
@@ -90,7 +91,7 @@ namespace FishMMO.Client
 			if (Tooltip != null &&
 				UIManager.TryGet("UITooltip", out UITooltip tooltip))
 			{
-				tooltip.Open(Tooltip.Tooltip());
+				tooltip.Open(Tooltip.Tooltip() + ExtraTooltipInfo);
 			}
 		}
 
@@ -110,11 +111,25 @@ namespace FishMMO.Client
 
 			if (eventData.button == PointerEventData.InputButton.Left)
 			{
-				OnLeftClick?.Invoke(Index);
+				if (Input.GetKey(KeyCode.LeftControl))
+				{
+					OnCtrlClick?.Invoke(Index);
+				}
+				else
+				{
+					OnLeftClick?.Invoke(Index);
+				}
 			}
 			else if (eventData.button == PointerEventData.InputButton.Right)
 			{
-				OnRightClick?.Invoke(Index);
+				if (Input.GetKey(KeyCode.LeftControl))
+				{
+					OnCtrlClick?.Invoke(Index);
+				}
+				else
+				{
+					OnRightClick?.Invoke(Index);
+				}
 			}
 		}
 

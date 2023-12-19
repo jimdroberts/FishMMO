@@ -1,9 +1,9 @@
 ﻿namespace FishMMO.Server
 {
-	public enum SRPState : byte
+	public enum SrpState : byte
 	{
-		SRPVerify,
-		SRPProof,
-		SRPSuccess,
+		SrpVerify,
+		SrpProof,
+		SrpSuccess,
 	}
 }

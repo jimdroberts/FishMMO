@@ -47,7 +47,7 @@ namespace FishMMO.Client
 			try
 			{
 				SrpClient.VerifySession(ClientEphemeral.Public, Session, serverProof);
-				result = "SRP Successfully verified session.";
+				result = "Srp Successfully verified session.";
 				return true;
 			}
 			catch (SecurityException e)

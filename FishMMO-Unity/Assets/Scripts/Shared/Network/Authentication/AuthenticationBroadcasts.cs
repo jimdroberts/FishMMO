@@ -9,18 +9,18 @@ namespace FishMMO.Shared
 		public string verifier;
 	}
 
-	public struct SRPVerifyBroadcast : IBroadcast
+	public struct SrpVerifyBroadcast : IBroadcast
 	{
 		public string s;
 		public string publicEphemeral;
 	}
 
-	public struct SRPProofBroadcast : IBroadcast
+	public struct SrpProofBroadcast : IBroadcast
 	{
 		public string proof;
 	}
 
-	public struct SRPSuccess : IBroadcast
+	public struct SrpSuccess : IBroadcast
 	{
 	}
 

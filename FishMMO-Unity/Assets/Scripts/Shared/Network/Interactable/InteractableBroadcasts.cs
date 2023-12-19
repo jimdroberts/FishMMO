@@ -7,12 +7,12 @@ namespace FishMMO.Shared
 	/// </summary>
 	public struct InteractableBroadcast : IBroadcast
 	{
-		public long InteractableID;
+		public int InteractableID;
 	}
 
 	public struct AbilityCraftBroadcast : IBroadcast
 	{
-		public long InteractableID;
+		public int InteractableID;
 	}
 
 	public struct MerchantBroadcast : IBroadcast

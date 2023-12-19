@@ -9,6 +9,8 @@ namespace FishMMO.Server
 	/// </summary>
 	public class InteractableSystem : ServerBehaviour
 	{
+		public WorldSceneDetailsCache WorldSceneDetailsCache;
+
 		public override void InitializeOnce()
 		{
 			if (ServerManager != null)
@@ -54,15 +56,22 @@ namespace FishMMO.Server
 				return;
 			}
 
-			// valid object exists
-			if (!SceneObjectUID.IDs.TryGetValue(msg.InteractableID, out SceneObjectUID sceneObject))
+			// valid scene object
+			if (!WorldSceneDetailsCache.Scenes.TryGetValue(character.SceneName, out WorldSceneDetails details))
 			{
+				UnityEngine.Debug.Log("Missing Scene:" + character.SceneName);
 				return;
 			}
-
-			// valid scene match
-			if (sceneObject.gameObject.scene.handle != character.SceneHandle)
+			if (!SceneObjectUID.IDs.TryGetValue(msg.InteractableID, out SceneObjectUID sceneObject))
 			{
+				if (sceneObject == null)
+				{
+					UnityEngine.Debug.Log("Missing SceneObject");
+				}
+				else
+				{
+					UnityEngine.Debug.Log("Missing ID:" + msg.InteractableID);
+				}
 				return;
 			}
 

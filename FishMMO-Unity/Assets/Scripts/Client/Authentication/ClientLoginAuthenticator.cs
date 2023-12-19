@@ -58,8 +58,8 @@ namespace FishMMO.Client
 			base.InitializeOnce(networkManager);
 
 			base.NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
-			base.NetworkManager.ClientManager.RegisterBroadcast<SRPVerifyBroadcast>(OnClientSRPVerifyBroadcastReceived);
-			base.NetworkManager.ClientManager.RegisterBroadcast<SRPProofBroadcast>(OnClientSRPProofBroadcastReceived);
+			base.NetworkManager.ClientManager.RegisterBroadcast<SrpVerifyBroadcast>(OnClientSrpVerifyBroadcastReceived);
+			base.NetworkManager.ClientManager.RegisterBroadcast<SrpProofBroadcast>(OnClientSrpProofBroadcastReceived);
 			base.NetworkManager.ClientManager.RegisterBroadcast<ClientAuthResultBroadcast>(OnClientAuthResultBroadcastReceived);
 		}
 
@@ -108,7 +108,7 @@ namespace FishMMO.Client
 			}
 			else
 			{
-				SRPVerifyBroadcast msg = new SRPVerifyBroadcast()
+				SrpVerifyBroadcast msg = new SrpVerifyBroadcast()
 				{
 					s = this.username,
 					publicEphemeral = SrpData.ClientEphemeral.Public,
@@ -117,7 +117,7 @@ namespace FishMMO.Client
 			}
 		}
 
-		private void OnClientSRPVerifyBroadcastReceived(SRPVerifyBroadcast msg)
+		private void OnClientSrpVerifyBroadcastReceived(SrpVerifyBroadcast msg)
 		{
 			if (SrpData == null)
 			{
@@ -126,7 +126,7 @@ namespace FishMMO.Client
 
 			if (SrpData.GetProof(this.username, this.password, msg.s, msg.publicEphemeral, out string proof))
 			{
-				base.NetworkManager.ClientManager.Broadcast(new SRPProofBroadcast()
+				base.NetworkManager.ClientManager.Broadcast(new SrpProofBroadcast()
 				{
 					proof = proof,
 				}, Channel.Reliable);
@@ -135,10 +135,10 @@ namespace FishMMO.Client
 			{
 				Client.ForceDisconnect();
 			}
-			//Debug.Log("SRP: " + proof);
+			//Debug.Log("Srp: " + proof);
 		}
 
-		private void OnClientSRPProofBroadcastReceived(SRPProofBroadcast msg)
+		private void OnClientSrpProofBroadcastReceived(SrpProofBroadcast msg)
 		{
 			if (SrpData == null)
 			{
@@ -147,13 +147,13 @@ namespace FishMMO.Client
 
 			if (SrpData.Verify(msg.proof, out string result))
 			{
-				base.NetworkManager.ClientManager.Broadcast(new SRPSuccess(), Channel.Reliable);
+				base.NetworkManager.ClientManager.Broadcast(new SrpSuccess(), Channel.Reliable);
 			}
 			else
 			{
 				Client.ForceDisconnect();
 			}
-			//Debug.Log("SRP: " + result);
+			//Debug.Log("Srp: " + result);
 		}
 
 		/// <summary>
