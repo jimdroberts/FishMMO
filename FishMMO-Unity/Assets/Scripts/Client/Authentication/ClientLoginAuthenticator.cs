@@ -4,7 +4,6 @@ using FishNet.Managing.Logging;
 using FishNet.Managing;
 using FishNet.Transporting;
 using System;
-using System.Text.RegularExpressions;
 using System.Security.Cryptography;
 using UnityEngine;
 using SecureRemotePassword;
@@ -32,26 +31,6 @@ namespace FishMMO.Client
 #pragma warning restore CS0067
 
 		public Client Client { get; private set; }
-
-		public const int AccountNameMinLength = 3;
-		public const int AccountNameMaxLength = 32;
-
-		public const int AccountPasswordMinLength = 3;
-		public const int AccountPasswordMaxLength = 32;
-
-		public virtual bool IsAllowedUsername(string accountName)
-		{
-			return accountName.Length >= AccountNameMinLength &&
-				   accountName.Length <= AccountNameMaxLength &&
-				   Regex.IsMatch(accountName, @"^[a-zA-Z0-9_]+$");
-		}
-
-		public virtual bool IsAllowedPassword(string accountPassword)
-		{
-			return accountPassword.Length >= AccountNameMinLength &&
-				   accountPassword.Length <= AccountNameMaxLength &&
-				   Regex.IsMatch(accountPassword, @"^[a-zA-Z0-9_]+$");
-		}
 
 		public override void InitializeOnce(NetworkManager networkManager)
 		{

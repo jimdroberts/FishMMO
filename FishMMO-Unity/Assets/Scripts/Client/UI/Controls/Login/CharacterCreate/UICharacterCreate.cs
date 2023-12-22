@@ -86,7 +86,7 @@ namespace FishMMO.Client
 		public void OnClick_CreateCharacter()
 		{
 			if (Client.IsConnectionReady() &&
-				!string.IsNullOrWhiteSpace(characterName) &&
+				AuthenticationHelper.IsAllowedCharacterName(characterName) &&
 				worldSceneDetailsCache != null &&
 				selectedSpawnPosition >= 0)
 			{
@@ -105,7 +105,6 @@ namespace FishMMO.Client
 						return;
 					}
 				}
-				
 			}
 		}
 

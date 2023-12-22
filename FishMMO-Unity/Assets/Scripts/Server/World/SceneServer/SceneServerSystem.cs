@@ -139,6 +139,7 @@ namespace FishMMO.Server
 				!WorldSceneDetailsCache.Scenes.Contains(sceneName))
 			{
 				Debug.Log("Scene Server System: Scene is missing from the cache. Unable to load the scene.");
+				// TODO kick players waiting for this scene otherwise they get stuck
 				return;
 			}
 

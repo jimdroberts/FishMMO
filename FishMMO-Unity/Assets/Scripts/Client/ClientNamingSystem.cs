@@ -13,6 +13,8 @@ namespace FishMMO.Client
 		internal static Client Client;
 
 		private static Dictionary<NamingSystemType, Dictionary<long, string>> idToName = new Dictionary<NamingSystemType, Dictionary<long, string>>();
+		// character names are unique so we can presume this works properly
+		private static Dictionary<string, long> nameToID = new Dictionary<string, long>();
 		private static Dictionary<NamingSystemType, Dictionary<long, Action<string>>> pendingNameRequests = new Dictionary<NamingSystemType, Dictionary<long, Action<string>>>();
 
 		public static void InitializeOnce(Client client)
@@ -31,6 +33,15 @@ namespace FishMMO.Client
 			foreach (NamingSystemType type in EnumExtensions.ToArray<NamingSystemType>())
 			{
 				idToName[type] = DictionaryExtensions.ReadFromGZipFile(Path.Combine(workingDirectory, type.ToString() + ".bin"));
+			}
+
+			Dictionary<long, string> characterNames = idToName[NamingSystemType.CharacterName];
+			if (characterNames != null && characterNames.Count > 0)
+			{
+				foreach (KeyValuePair<long, string> pair in characterNames)
+				{
+					nameToID[pair.Value] = pair.Key;
+				}
 			}
 #endif
 		}
@@ -94,6 +105,11 @@ namespace FishMMO.Client
 			}
 		}
 
+		public static bool GetCharacterID(string name, out long id)
+		{
+			return nameToID.TryGetValue(name, out id);
+		}
+
 		private static void OnClientNamingBroadcastReceived(NamingBroadcast msg)
 		{
 			if (pendingNameRequests.TryGetValue(msg.type, out Dictionary<long, Action<string>> pendingRequests))
@@ -112,6 +128,7 @@ namespace FishMMO.Client
 				idToName.Add(msg.type, knownNames = new Dictionary<long, string>());
 			}
 			knownNames[msg.id] = msg.name;
+			nameToID[msg.name] = msg.id;
 		}
 	}
 }

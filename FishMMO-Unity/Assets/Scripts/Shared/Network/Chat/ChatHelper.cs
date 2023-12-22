@@ -201,9 +201,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		public static string Sanitize(string message)
 		{
-			string result = Regex.Replace(message, CombinedRTTPattern, "");
-
-			return result;
+			return Regex.Replace(message, CombinedRTTPattern, "");
 		}
 	}
 }

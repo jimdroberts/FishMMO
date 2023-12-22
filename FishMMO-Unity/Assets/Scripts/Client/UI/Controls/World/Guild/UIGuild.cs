@@ -1,6 +1,5 @@
 ﻿using FishNet.Transporting;
 using System.Collections.Generic;
-using System.Text.RegularExpressions;
 using TMPro;
 using UnityEngine;
 using FishMMO.Shared;
@@ -9,7 +8,6 @@ namespace FishMMO.Client
 {
 	public class UIGuild : UICharacterControl
 	{
-		public int MaxGuildNameLength = 64;
 		public TMP_Text GuildLabel;
 		public RectTransform GuildMemberParent;
 		public UIGuildMember GuildMemberPrefab;
@@ -72,9 +70,7 @@ namespace FishMMO.Client
 				{
 					tooltip.Open("Please type the name of your new guild!", (s) =>
 					{
-						if (!string.IsNullOrWhiteSpace(s) &&
-							s.Length <= MaxGuildNameLength &&
-							Regex.IsMatch(s, @"^[A-Za-z]+(?: [A-Za-z]+){0,2}$"))
+						if (AuthenticationHelper.IsAllowedGuildName(s))
 						{
 							Client.NetworkManager.ClientManager.Broadcast(new GuildCreateBroadcast()
 							{

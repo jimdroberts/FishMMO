@@ -37,10 +37,7 @@ namespace FishMMO.Server
 		private void OnServerCreateAccountBroadcastReceived(NetworkConnection conn, CreateAccountBroadcast msg)
 		{
 			ClientAuthenticationResult result = ClientAuthenticationResult.InvalidUsernameOrPassword;
-			if (!string.IsNullOrWhiteSpace(msg.username) &&
-				!string.IsNullOrWhiteSpace(msg.salt) &&
-				!string.IsNullOrWhiteSpace(msg.verifier) &&
-				Server.NpgsqlDbContextFactory != null)
+			if (Server.NpgsqlDbContextFactory != null)
 			{
 				using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 				if (dbContext != null)

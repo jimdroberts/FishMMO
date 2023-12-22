@@ -1,7 +1,6 @@
 ﻿using FishNet.Connection;
 using FishNet.Transporting;
 using System;
-using System.Text.RegularExpressions;
 using FishMMO.Database.Npgsql.Entities;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
@@ -14,17 +13,7 @@ namespace FishMMO.Server
 	/// </summary>
 	public class CharacterCreateSystem : ServerBehaviour
 	{
-		public const int CharacterNameMinLength = 3;
-		public const int CharacterNameMaxLength = 32;
 		public int MaxCharacters = 8;
-
-		public virtual bool IsAllowedCharacterName(string characterName)
-		{
-			return !string.IsNullOrWhiteSpace(characterName) &&
-				   characterName.Length >= CharacterNameMinLength &&
-				   characterName.Length <= CharacterNameMaxLength &&
-				   Regex.IsMatch(characterName, @"^[A-Za-z]+(?: [A-Za-z]+){0,2}$");
-		}
 
 		public WorldSceneDetailsCache WorldSceneDetailsCache;
 
@@ -58,7 +47,7 @@ namespace FishMMO.Server
 			if (conn.IsActive)
 			{
 				// validate character creation data
-				if (!IsAllowedCharacterName(msg.characterName))
+				if (!AuthenticationHelper.IsAllowedCharacterName(msg.characterName))
 				{
 					// invalid character name
 					conn.Broadcast(new CharacterCreateResultBroadcast()
@@ -78,7 +67,7 @@ namespace FishMMO.Server
 				int characterCount = CharacterService.GetCount(dbContext, accountName);
 				if (characterCount >= MaxCharacters)
 				{
-					// character name already taken
+					// too many characters
 					conn.Broadcast(new CharacterCreateResultBroadcast()
 					{
 						result = CharacterCreateResult.TooMany,

@@ -19,8 +19,6 @@ namespace FishMMO.Client
 			Client.LoginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
 			Client.OnReconnectFailed += ClientManager_OnReconnectFailed;
 		}
-
-
 		public override void OnDestroying()
 		{
 			Client.NetworkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
@@ -95,8 +93,8 @@ namespace FishMMO.Client
 		public void OnClick_OnRegister()
 		{
 			if (Client.IsConnectionReady(LocalConnectionState.Stopped) &&
-				Client.LoginAuthenticator.IsAllowedUsername(username.text) &&
-				Client.LoginAuthenticator.IsAllowedPassword(password.text))
+				AuthenticationHelper.IsAllowedUsername(username.text) &&
+				AuthenticationHelper.IsAllowedPassword(password.text))
 			{
 				// set username and password in the authenticator
 				Client.LoginAuthenticator.SetLoginCredentials(username.text, password.text, true);
@@ -110,8 +108,8 @@ namespace FishMMO.Client
 		public void OnClick_Login()
 		{
 			if (Client.IsConnectionReady(LocalConnectionState.Stopped) &&
-				Client.LoginAuthenticator.IsAllowedUsername(username.text) &&
-				Client.LoginAuthenticator.IsAllowedPassword(password.text))
+				AuthenticationHelper.IsAllowedUsername(username.text) &&
+				AuthenticationHelper.IsAllowedPassword(password.text))
 			{
 				// set username and password in the authenticator
 				Client.LoginAuthenticator.SetLoginCredentials(username.text, password.text);

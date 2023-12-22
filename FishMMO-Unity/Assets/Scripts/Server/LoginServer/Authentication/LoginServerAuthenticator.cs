@@ -4,7 +4,6 @@ using FishNet.Managing;
 using FishNet.Transporting;
 using FishMMO.Database.Npgsql;
 using System;
-using System.Text.RegularExpressions;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
 
@@ -20,17 +19,6 @@ namespace FishMMO.Server
 		public event Action<NetworkConnection, bool> OnClientAuthenticationResult;
 
 		public NpgsqlDbContextFactory NpgsqlDbContextFactory;
-
-		public const int AccountNameMinLength = 3;
-		public const int AccountNameMaxLength = 32;
-
-		public virtual bool IsAllowedUsername(string accountName)
-		{
-			return !string.IsNullOrWhiteSpace(accountName) && 
-				   accountName.Length >= AccountNameMinLength &&
-				   accountName.Length <= AccountNameMaxLength &&
-				   Regex.IsMatch(accountName, @"^[a-zA-Z0-9_]+$");
-		}
 
 		public override void InitializeOnce(NetworkManager networkManager)
 		{

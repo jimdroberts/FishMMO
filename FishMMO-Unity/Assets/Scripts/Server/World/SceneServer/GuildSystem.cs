@@ -178,13 +178,6 @@ namespace FishMMO.Server
 			}
 		}
 
-		public virtual bool IsAllowedGuildName(string guildName)
-		{
-			return !string.IsNullOrWhiteSpace(guildName) &&
-				   guildName.Length <= MaxGuildNameLength &&
-				   Regex.IsMatch(guildName, @"^[A-Za-z]+(?: [A-Za-z]+){0,2}$");
-		}
-
 		public void RemovePending(long id)
 		{
 			pendingInvitations.Remove(id);
@@ -211,9 +204,9 @@ namespace FishMMO.Server
 			// remove white space
 			msg.guildName = msg.guildName.Trim();
 
-			if (!IsAllowedGuildName(msg.guildName))
+			if (!AuthenticationHelper.IsAllowedGuildName(msg.guildName))
 			{
-				// we should tell the player the guild name is not valid
+				// we should tell the player the guild name is not valid TODO
 				return;
 			}
 

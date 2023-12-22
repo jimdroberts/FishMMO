@@ -112,9 +112,23 @@ namespace FishMMO.Client
 					{
 						Client.NetworkManager.ClientManager.Broadcast(new PartyInviteBroadcast()
 						{
-							targetCharacterID = targetCharacter.ID
+							targetCharacterID = targetCharacter.ID,
 						}, Channel.Reliable);
 					}
+				}
+				else if (UIManager.TryGet("UIInputConfirmationTooltip", out UIInputConfirmationTooltip tooltip))
+				{
+					tooltip.Open("Please type the name of the person you wish to invite.", (s) =>
+					{
+						if (AuthenticationHelper.IsAllowedCharacterName(s) &&
+							ClientNamingSystem.GetCharacterID(s, out long id))
+						{
+							Client.NetworkManager.ClientManager.Broadcast(new PartyInviteBroadcast()
+							{
+								targetCharacterID = id,
+							}, Channel.Reliable);
+						}
+					}, null);
 				}
 			}
 		}
