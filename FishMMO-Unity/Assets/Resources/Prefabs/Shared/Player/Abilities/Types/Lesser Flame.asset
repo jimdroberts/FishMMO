@@ -10,7 +10,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 11222f2e61021b74dab28957b1bece4e, type: 3}
-  m_Name: Flame
+  m_Name: Lesser Flame
   m_EditorClassIdentifier: 
   icon: {fileID: 21300000, guid: b3905a73a6672d9449647aaf036e23fc, type: 3}
   Description: Creates a flame in front of the caster.

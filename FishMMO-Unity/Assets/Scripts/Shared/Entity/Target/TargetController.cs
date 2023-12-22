@@ -89,7 +89,20 @@ namespace FishMMO.Shared
 							Collider collider = Current.Target.GetComponent<Collider>();
 							newPos.y += collider.bounds.extents.y + 0.15f;
 
-							targetLabel = Character.LabelMaker.Display(Current.Target.name, newPos, Color.grey, 1.0f, 0.0f, true);
+							string label = Current.Target.name;
+							Color color = Color.grey;
+
+							// apply merchant description
+							Merchant merchant = Current.Target.GetComponent<Merchant>();
+							if (merchant != null &&
+								merchant.Template != null)
+							{
+								label += "\r\n" + merchant.Template.Description;
+								newPos.y += 0.15f;
+								color = Color.white;
+							}
+
+							targetLabel = Character.LabelMaker.Display(label, newPos, color, 1.0f, 0.0f, true);
 						}
 
 						Outline outline = Current.Target.GetComponent<Outline>();

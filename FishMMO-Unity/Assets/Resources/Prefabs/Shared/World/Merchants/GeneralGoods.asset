@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: GeneralGoods
   m_EditorClassIdentifier: 
   icon: {fileID: 0}
-  Description: 
+  Description: <General Goods>
   Abilities:
   - {fileID: 11400000, guid: 7c14874e3c902684a8d562913ed73c24, type: 2}
   AbilityEvents:

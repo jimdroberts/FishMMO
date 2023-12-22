@@ -128,6 +128,10 @@ namespace FishMMO.Client
 								targetCharacterID = id,
 							}, Channel.Reliable);
 						}
+						else if (UIManager.TryGet("UIChat", out UIChat chat))
+						{
+							chat.InstantiateChatMessage(ChatChannel.System, "", "A person with that name could not be found. Are you sure you have encountered them?");
+						}
 					}, null);
 				}
 			}

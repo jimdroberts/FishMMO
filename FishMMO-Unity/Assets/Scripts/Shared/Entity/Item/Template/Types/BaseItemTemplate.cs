@@ -21,6 +21,7 @@ namespace FishMMO.Shared
 			using (var sb = ZString.CreateStringBuilder())
 			{
 				sb.Append(RichText.Format(Name, false, "f5ad6e", "120%"));
+				sb.Append("\r\n______________________________\r\n");
 				sb.Append(RichText.Format("Price", Price, true, "a66ef5FF"));
 				return sb.ToString();
 			}

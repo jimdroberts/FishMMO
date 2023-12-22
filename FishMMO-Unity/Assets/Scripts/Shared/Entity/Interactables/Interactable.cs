@@ -12,7 +12,7 @@ namespace FishMMO.Shared
 
 		private SceneObjectUID uid;
 
-		public float InteractionRangeSqr = 5.0f;
+		public float InteractionRangeSqr = 7.5f;
 
 		public int ID
 		{

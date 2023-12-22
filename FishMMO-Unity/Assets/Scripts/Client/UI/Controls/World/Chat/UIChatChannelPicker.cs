@@ -19,6 +19,10 @@ namespace FishMMO.Client
 			{
 				foreach (string channel in Enum.GetNames(typeof(ChatChannel)))
 				{
+					if (channel.Equals("Command"))
+					{
+						continue;
+					}
 					Toggle toggle = Instantiate(channelTogglePrefab, transform);
 					if (toggle != null)
 					{

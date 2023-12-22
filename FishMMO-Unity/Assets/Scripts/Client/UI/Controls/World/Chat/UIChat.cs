@@ -244,7 +244,7 @@ namespace FishMMO.Client
 			}
 		}
 
-		private void InstantiateChatMessage(ChatChannel channel, string name, string message, Color? color = null)
+		public void InstantiateChatMessage(ChatChannel channel, string name, string message, Color? color = null)
 		{
 			UIChatMessage newMessage = Instantiate(chatMessagePrefab, chatViewParent);
 			newMessage.Channel = channel;
