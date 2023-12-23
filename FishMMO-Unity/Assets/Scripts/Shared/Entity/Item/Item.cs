@@ -11,34 +11,49 @@ namespace FishMMO.Shared
 
 		public event Action OnDestroy;
 		public BaseItemTemplate Template { get; private set; }
-		public long InstanceID { get; private set; }
+		public long ID { get; set; }
 		public int Slot { get; set; }
 		public bool IsGenerated { get { return Generator != null; } }
 		public bool IsEquippable { get { return Equippable != null; } }
 		public bool IsStackable { get { return Stackable != null; } }
 
-		public Item(long instanceID, BaseItemTemplate template, uint amount)
+		public Item(BaseItemTemplate template, uint amount)
 		{
-			InstanceID = instanceID;
+			Slot = -1;
 			Template = template;
-
-			Initialize(amount);
-		}
-		public Item(long instanceID, int templateID, uint amount)
-		{
-			InstanceID = instanceID;
-			Template = BaseItemTemplate.Get<BaseItemTemplate>(templateID);
-
-			Initialize(amount);
-		}
-
-		private void Initialize(uint amount)
-		{
 			if (Template.MaxStackSize > 1)
 			{
 				this.Stackable = new ItemStackable();
 				this.Stackable.Initialize(this, amount.Clamp(1, Template.MaxStackSize));
 			}
+		}
+		public Item(long id, BaseItemTemplate template, uint amount)
+		{
+			Slot = -1;
+			Template = template;
+			if (Template.MaxStackSize > 1)
+			{
+				this.Stackable = new ItemStackable();
+				this.Stackable.Initialize(this, amount.Clamp(1, Template.MaxStackSize));
+			}
+			Initialize(id);
+		}
+		public Item(long id, int templateID, uint amount)
+		{
+			Slot = -1;
+			Template = BaseItemTemplate.Get<BaseItemTemplate>(templateID);
+			if (Template.MaxStackSize > 1)
+			{
+				this.Stackable = new ItemStackable();
+				this.Stackable.Initialize(this, amount.Clamp(1, Template.MaxStackSize));
+			}
+			Initialize(id);
+		}
+
+		public void Initialize(long id)
+		{
+			ID = id;
+
 			if (Template.Generate)
 			{
 				Generator = new ItemGenerator();
@@ -49,7 +64,7 @@ namespace FishMMO.Shared
 				Equippable.Initialize(this);
 			}
 
-			var longBytes = BitConverter.GetBytes(InstanceID);
+			var longBytes = BitConverter.GetBytes(ID);
 
 			// Get integers from the first and the last 4 bytes of long
 			int[] ints = new int[] {
@@ -93,8 +108,8 @@ namespace FishMMO.Shared
 			var sb = ZString.CreateStringBuilder();
 			try
 			{
-				sb.Append("<color=#a66ef5>InstanceID: ");
-				sb.Append(InstanceID);
+				sb.Append("<color=#a66ef5>ID: ");
+				sb.Append(ID);
 				sb.Append("</color>");
 				sb.AppendLine();
 				sb.Append(Template.Tooltip());

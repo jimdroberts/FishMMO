@@ -16,7 +16,7 @@ namespace FishMMO.Client
 						if (dragObject.Type == ReferenceButtonType.Inventory)
 						{
 							// swap item slots in the inventory
-							Character.InventoryController.SendSwapItemSlotsRequest(ReferenceID, dragObject.ReferenceID);
+							Character.InventoryController.SendSwapItemSlotsRequest(dragObject.ReferenceID, ReferenceID);
 						}
 						// we can also unequip items
 						else if (dragObject.Type == ReferenceButtonType.Equipment &&

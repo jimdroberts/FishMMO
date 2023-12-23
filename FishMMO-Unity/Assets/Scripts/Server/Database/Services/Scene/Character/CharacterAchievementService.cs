@@ -43,7 +43,7 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
-		/// KeepData is automatically true... This means we don't actually delete anything. Deleted is simply set to true just incase we need to reinstate a character..
+		/// KeepData is automatically true... This means we don't actually delete anything. TODO Deleted is simply set to true just incase we need to reinstate a character..
 		/// </summary>
 		public static void Delete(NpgsqlDbContext dbContext, long characterID, bool keepData = true)
 		{

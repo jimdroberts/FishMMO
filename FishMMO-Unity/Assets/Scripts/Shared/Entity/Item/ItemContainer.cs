@@ -224,25 +224,41 @@ namespace FishMMO.Shared
 
 		public bool SwapItemSlots(int from, int to)
 		{
+			return SwapItemSlots(from, to, out Item fromItem, out Item toItem);
+		}
+
+		public bool SwapItemSlots(int from, int to, out Item fromItem, out Item toItem)
+		{
 			if (!CanManipulate() ||
 				from < 0 ||
 				to < 0 ||
 				from > Items.Count ||
 				to > Items.Count)
 			{
+				fromItem = null;
+				toItem = null;
+
 				// swapping the items failed
 				return false;
 			}
 
-			Item firstItem = Items[from];
-			Item secondItem = Items[to];
+			fromItem = Items[from];
+			toItem = Items[to];
 
-			if (!SetItemSlot(secondItem, from) ||
-				!SetItemSlot(firstItem, to))
+			Items[from] = toItem;
+			if (toItem != null)
 			{
-				// swapping the items failed
-				return false;
+				toItem.Slot = from;
 			}
+
+			Items[to] = fromItem;
+			if (fromItem != null)
+			{
+				fromItem.Slot = to;
+			}
+
+			OnSlotUpdated?.Invoke(this, toItem, from);
+			OnSlotUpdated?.Invoke(this, fromItem, to);
 			return true;
 		}
 

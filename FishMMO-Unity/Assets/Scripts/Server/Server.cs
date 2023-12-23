@@ -9,6 +9,7 @@ using StackExchange.Redis;
 using FishMMO.Database.Npgsql;
 using FishMMO.Database.Redis;
 using FishMMO.Shared;
+using Configuration = FishMMO.Shared.Configuration;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -18,7 +19,7 @@ namespace FishMMO.Server
 	// Main Server class, handles configuration and starting connections.
 	public class Server : MonoBehaviour
 	{
-		public FishMMO.Shared.Configuration Configuration { get; private set; }
+		public Configuration Configuration { get; private set; }
 		public NpgsqlDbContextFactory NpgsqlDbContextFactory { get; private set; }
 		public RedisDbContextFactory RedisDbContextFactory { get; private set; }
 		public NetworkManager NetworkManager { get; private set; }
@@ -83,8 +84,8 @@ namespace FishMMO.Server
 			Debug.Log("Server: Current working directory[" + workingDirectory + "]");
 
 			// load configuration
-			Configuration = new FishMMO.Shared.Configuration(workingDirectory);
-			if (!Configuration.Load(serverTypeName + FishMMO.Shared.Configuration.EXTENSION))
+			Configuration = new Configuration(workingDirectory);
+			if (!Configuration.Load(serverTypeName + Configuration.EXTENSION))
 			{
 				// if we failed to load the file.. save a new one
 				Configuration.Set("ServerName", "TestName");

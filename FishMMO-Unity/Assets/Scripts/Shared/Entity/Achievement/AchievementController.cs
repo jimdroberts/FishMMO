@@ -181,7 +181,7 @@ namespace FishMMO.Shared
 						{
 							modifiedItemBroadcasts.Add(new InventorySetItemBroadcast()
 							{
-								instanceID = newItem.InstanceID,
+								instanceID = newItem.ID,
 								templateID = newItem.Template.ID,
 								slot = newItem.Slot,
 								stackSize = newItem.IsStackable ? newItem.Stackable.Amount : 0,

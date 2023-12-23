@@ -25,6 +25,8 @@ namespace FishMMO.Shared
 				return;
 			}
 
+			ClientManager.RegisterBroadcast<EquipmentSetItemBroadcast>(OnClientEquipmentSetItemBroadcastReceived);
+			ClientManager.RegisterBroadcast<EquipmentSetMultipleItemsBroadcast>(OnClientEquipmentSetMultipleItemsBroadcastReceived);
 			ClientManager.RegisterBroadcast<EquipmentEquipItemBroadcast>(OnClientEquipmentEquipItemBroadcastReceived);
 			ClientManager.RegisterBroadcast<EquipmentUnequipItemBroadcast>(OnClientEquipmentUnequipItemBroadcastReceived);
 		}
@@ -35,8 +37,31 @@ namespace FishMMO.Shared
 
 			if (base.IsOwner)
 			{
+				ClientManager.UnregisterBroadcast<EquipmentSetItemBroadcast>(OnClientEquipmentSetItemBroadcastReceived);
+				ClientManager.UnregisterBroadcast<EquipmentSetMultipleItemsBroadcast>(OnClientEquipmentSetMultipleItemsBroadcastReceived);
 				ClientManager.UnregisterBroadcast<EquipmentEquipItemBroadcast>(OnClientEquipmentEquipItemBroadcastReceived);
 				ClientManager.UnregisterBroadcast<EquipmentUnequipItemBroadcast>(OnClientEquipmentUnequipItemBroadcastReceived);
+			}
+		}
+
+		/// <summary>
+		/// Server sent a set item broadcast. Item slot is set to the received item details.
+		/// </summary>
+		private void OnClientEquipmentSetItemBroadcastReceived(EquipmentSetItemBroadcast msg)
+		{
+			Item newItem = new Item(msg.instanceID, msg.templateID, msg.stackSize);
+			Equip(newItem, -1, (ItemSlot)msg.slot);
+		}
+
+		/// <summary>
+		/// Server sent a multiple set item broadcast. Item slot is set to the received item details.
+		/// </summary>
+		private void OnClientEquipmentSetMultipleItemsBroadcastReceived(EquipmentSetMultipleItemsBroadcast msg)
+		{
+			foreach (EquipmentSetItemBroadcast subMsg in msg.items)
+			{
+				Item newItem = new Item(subMsg.instanceID, subMsg.templateID, subMsg.stackSize);
+				Equip(newItem, -1, (ItemSlot)subMsg.slot);
 			}
 		}
 
@@ -60,10 +85,7 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
-			if (!Unequip(Character.InventoryController, msg.slot))
-			{
-
-			}
+			Unequip(Character.InventoryController, msg.slot);
 		}
 #endif
 
@@ -158,13 +180,9 @@ namespace FishMMO.Shared
 		/// </summary>
 		public bool Unequip(ItemContainer container, byte slot)
 		{
-			if (!CanManipulate() || !TryGetItem(slot, out Item item))
-			{
-				return false;
-			}
-
-			// see if we can add the item back to our inventory
-			if (!Character.InventoryController.CanAddItem(item))
+			if (!CanManipulate() ||
+				!TryGetItem(slot, out Item item) ||
+				!Character.InventoryController.CanAddItem(item))
 			{
 				return false;
 			}

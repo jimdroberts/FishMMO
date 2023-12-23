@@ -22,8 +22,8 @@ namespace FishMMO.Database.Npgsql
         public DbSet<CharacterEntity> Characters { get; set; }
         public DbSet<CharacterAttributeEntity> CharacterAttributes { get; set; }
         public DbSet<CharacterAchievementEntity> CharacterAchievements { get; set; }
-        public DbSet<CharacterInventoryEntity> CharacterInventories { get; set; }
-        public DbSet<CharacterEquipmentEntity> CharacterEquipments { get; set; }
+        public DbSet<CharacterInventoryEntity> CharacterInventoryItems { get; set; }
+        public DbSet<CharacterEquipmentEntity> CharacterEquippedItems { get; set; }
         public DbSet<CharacterItemCooldownEntity> CharacterItemCooldowns { get; set; }
         public DbSet<CharacterSkillEntity> CharacterSkills { get; set; }
         public DbSet<CharacterBuffEntity> CharacterBuffs { get; set; }

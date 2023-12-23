@@ -1,6 +1,7 @@
 ﻿using FishNet.Connection;
 using FishNet.Transporting;
 using FishMMO.Shared;
+using FishMMO.Server.DatabaseServices;
 using System.Collections.Generic;
 
 namespace FishMMO.Server
@@ -108,17 +109,23 @@ namespace FishMMO.Server
 				return;
 			}
 
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
+			if (dbContext == null)
+			{
+				return;
+			}
+
 			switch (msg.Type)
 			{
 				case MerchantTabType.Item:
-					BaseItemTemplate itemTemplate = merchantTemplate.Items[msg.Index];
-					if (itemTemplate == null)
+					BaseItemTemplate template = merchantTemplate.Items[msg.Index];
+					if (template == null)
 					{
 						return;
 					}
 
 					// do we have enough currency to purchase this?
-					if (character.InventoryController.Currency < itemTemplate.Price)
+					if (character.InventoryController.Currency < template.Price)
 					{
 						return;
 					}
@@ -126,12 +133,12 @@ namespace FishMMO.Server
 					if (merchantTemplate.Items != null &&
 						merchantTemplate.Items.Count >= msg.Index)
 					{
-						Item newItem = new Item(1, itemTemplate, 1);
+						Item newItem = new Item(template, 1);
 						if (newItem == null)
 						{
 							return;
 						}
-
+						
 						List<InventorySetItemBroadcast> modifiedItemBroadcasts = new List<InventorySetItemBroadcast>();
 
 						// see if we have successfully added the item
@@ -140,7 +147,7 @@ namespace FishMMO.Server
 							modifiedItems.Count > 0)
 						{
 							// remove the price from the characters currency
-							character.InventoryController.Currency -= itemTemplate.Price;
+							character.InventoryController.Currency -= template.Price;
 
 							// add slot update requests to our message
 							foreach (Item item in modifiedItems)
@@ -150,17 +157,22 @@ namespace FishMMO.Server
 								{
 									continue;
 								}
+
+								// update or add the item to the database and initialize
+								CharacterInventoryService.UpdateOrAdd(dbContext, character.ID, item);
+
+								// create the new item broadcast
 								modifiedItemBroadcasts.Add(new InventorySetItemBroadcast()
 								{
-									instanceID = item.InstanceID,
+									instanceID = item.ID,
 									templateID = item.Template.ID,
 									slot = item.Slot,
 									stackSize = item.IsStackable ? item.Stackable.Amount : 0,
 								});
 							}
+							// save changes after we write updates
+							dbContext.SaveChanges();
 						}
-
-						// save modified inventory slots to the database immediately
 
 						// tell the client they have new items
 						if (modifiedItemBroadcasts.Count > 0)

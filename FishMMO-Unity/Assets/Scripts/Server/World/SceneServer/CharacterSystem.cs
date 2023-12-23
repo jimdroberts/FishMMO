@@ -487,6 +487,72 @@ namespace FishMMO.Server
 				}, true, Channel.Reliable);
 			}
 			#endregion
+
+			#region InventoryItems
+			if (character.InventoryController != null)
+			{
+				List<InventorySetItemBroadcast> itemBroadcasts = new List<InventorySetItemBroadcast>();
+
+				foreach (Item item in character.InventoryController.Items)
+				{
+					// just in case..
+					if (item == null)
+					{
+						continue;
+					}
+					// create the new item broadcast
+					itemBroadcasts.Add(new InventorySetItemBroadcast()
+					{
+						instanceID = item.ID,
+						templateID = item.Template.ID,
+						slot = item.Slot,
+						stackSize = item.IsStackable ? item.Stackable.Amount : 0,
+					});
+				}
+
+				// tell the client they have items
+				if (itemBroadcasts.Count > 0)
+				{
+					character.Owner.Broadcast(new InventorySetMultipleItemsBroadcast()
+					{
+						items = itemBroadcasts,
+					}, true, Channel.Reliable);
+				}
+			}
+			#endregion
+
+			#region Equipment
+			if (character.EquipmentController != null)
+			{
+				List<EquipmentSetItemBroadcast> itemBroadcasts = new List<EquipmentSetItemBroadcast>();
+
+				foreach (Item item in character.EquipmentController.Items)
+				{
+					// just in case..
+					if (item == null)
+					{
+						continue;
+					}
+					// create the new item broadcast
+					itemBroadcasts.Add(new EquipmentSetItemBroadcast()
+					{
+						instanceID = item.ID,
+						templateID = item.Template.ID,
+						slot = item.Slot,
+						stackSize = item.IsStackable ? item.Stackable.Amount : 0,
+					});
+				}
+
+				// tell the client they have items
+				if (itemBroadcasts.Count > 0)
+				{
+					character.Owner.Broadcast(new EquipmentSetMultipleItemsBroadcast()
+					{
+						items = itemBroadcasts,
+					}, true, Channel.Reliable);
+				}
+			}
+			#endregion
 		}
 
 		/// <summary>
