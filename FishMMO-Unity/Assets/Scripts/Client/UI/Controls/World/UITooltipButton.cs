@@ -15,10 +15,11 @@ namespace FishMMO.Client
 		public Image Icon;
 		public TMP_Text TooltipLabel;
 		public string ExtraTooltipInfo;
+		public object[] OptionalParams;
 
-		public Action<int> OnLeftClick;
-		public Action<int> OnRightClick;
-		public Action<int> OnCtrlClick;
+		public Action<int, object[]> OnLeftClick;
+		public Action<int, object[]> OnRightClick;
+		public Action<int, object[]> OnCtrlClick;
 
 		public int Index { get; private set; }
 		public ITooltip Tooltip { get; private set; }
@@ -47,7 +48,7 @@ namespace FishMMO.Client
 			Clear();
 		}
 
-		public void Initialize(int index, Action<int> onLeftClick, Action<int> onRightClick, ITooltip tooltip = null, string extraTooltipInfo = "", Action<int> onCtrlClick = null)
+		public void Initialize(int index, Action<int, object[]> onLeftClick, Action<int, object[]> onRightClick, ITooltip tooltip = null, string extraTooltipInfo = "", Action<int, object[]> onCtrlClick = null, object[] optionalParams = null)
 		{
 			Index = index;
 			OnLeftClick = null;
@@ -69,6 +70,7 @@ namespace FishMMO.Client
 					TooltipLabel.text = tooltip.Name;
 				}
 			}
+			OptionalParams = optionalParams;
 		}
 		public void Initialize(Character character, ITooltip tooltip)
 		{
@@ -113,22 +115,22 @@ namespace FishMMO.Client
 			{
 				if (Input.GetKey(KeyCode.LeftControl))
 				{
-					OnCtrlClick?.Invoke(Index);
+					OnCtrlClick?.Invoke(Index, OptionalParams);
 				}
 				else
 				{
-					OnLeftClick?.Invoke(Index);
+					OnLeftClick?.Invoke(Index, OptionalParams);
 				}
 			}
 			else if (eventData.button == PointerEventData.InputButton.Right)
 			{
 				if (Input.GetKey(KeyCode.LeftControl))
 				{
-					OnCtrlClick?.Invoke(Index);
+					OnCtrlClick?.Invoke(Index, OptionalParams);
 				}
 				else
 				{
-					OnRightClick?.Invoke(Index);
+					OnRightClick?.Invoke(Index, OptionalParams);
 				}
 			}
 		}
@@ -145,6 +147,7 @@ namespace FishMMO.Client
 			{
 				TooltipLabel.text = cachedLabel;
 			}
+			OptionalParams = null;
 		}
 	}
 }

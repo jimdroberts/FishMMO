@@ -56,7 +56,14 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void OnClientEquipmentUnequipItemBroadcastReceived(EquipmentUnequipItemBroadcast msg)
 		{
-			Unequip(msg.slot);
+			if (Character.InventoryController == null)
+			{
+				return;
+			}
+			if (!Unequip(Character.InventoryController, msg.slot))
+			{
+
+			}
 		}
 #endif
 
@@ -71,7 +78,10 @@ namespace FishMMO.Shared
 
 		public void SendUnequipRequest(byte slot)
 		{
-
+			ClientManager.Broadcast(new EquipmentUnequipItemBroadcast()
+			{
+				slot = slot,
+			}, Channel.Reliable);
 		}
 
 		public override bool CanManipulate()
@@ -146,7 +156,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Unequips the item and puts it in the inventory.
 		/// </summary>
-		public bool Unequip(byte slot)
+		public bool Unequip(ItemContainer container, byte slot)
 		{
 			if (!CanManipulate() || !TryGetItem(slot, out Item item))
 			{
@@ -169,7 +179,7 @@ namespace FishMMO.Shared
 			}
 
 			// try to add the item back to the inventory
-			Character.InventoryController.TryAddItem(item, out List<Item> modifiedItems);
+			container.TryAddItem(item, out List<Item> modifiedItems);
 
 			return true;
 		}

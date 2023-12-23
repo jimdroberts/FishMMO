@@ -6,8 +6,9 @@ namespace FishMMO.Shared
 	public abstract class BaseItemTemplate : CachedScriptableObject<BaseItemTemplate>, ITooltip, ICachedObject
 	{
 		public bool IsIdentifiable;
+		public bool Generate;
 		public uint MaxStackSize = 1;
-		public float Price;
+		public long Price;
 		//use this for item generation
 		public int[] IconPools;
 		public Sprite icon;

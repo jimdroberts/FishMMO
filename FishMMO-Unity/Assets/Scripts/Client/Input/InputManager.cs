@@ -57,6 +57,7 @@ namespace FishMMO.Client
 			AddKey("Friends", KeyCode.J);
 			AddKey("Menu", KeyCode.Escape);
 			AddKey("ToggleFirstPerson", KeyCode.F9);
+			AddKey("Cancel", KeyCode.Escape);
 			MouseMode = true;
 
 			//InputManager.LoadConfig();

@@ -26,11 +26,8 @@ namespace FishMMO.Client
 							// unequip the item
 							Character.EquipmentController.SendUnequipRequest((byte)dragObject.ReferenceID);
 						}
-						else
-						{
-							// clear the drag object
-							dragObject.Clear();
-						}
+						// clear the drag object
+						dragObject.Clear();
 					}
 					else
 					{

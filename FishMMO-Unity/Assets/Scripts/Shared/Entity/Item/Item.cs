@@ -11,50 +11,35 @@ namespace FishMMO.Shared
 
 		public event Action OnDestroy;
 		public BaseItemTemplate Template { get; private set; }
-		public ulong InstanceID { get; private set; }
+		public long InstanceID { get; private set; }
 		public int Slot { get; set; }
 		public bool IsGenerated { get { return Generator != null; } }
 		public bool IsEquippable { get { return Equippable != null; } }
 		public bool IsStackable { get { return Stackable != null; } }
 
-		public Item(ulong instanceID, int templateID)
+		public Item(long instanceID, BaseItemTemplate template, uint amount)
 		{
 			InstanceID = instanceID;
-			Template = BaseItemTemplate.Get<BaseItemTemplate>(templateID);
+			Template = template;
 
-			Initialize();
+			Initialize(amount);
 		}
-		public Item(ulong instanceID, int templateID, uint amount)
+		public Item(long instanceID, int templateID, uint amount)
 		{
 			InstanceID = instanceID;
 			Template = BaseItemTemplate.Get<BaseItemTemplate>(templateID);
 
 			Initialize(amount);
 		}
-		public Item(ulong instanceID, int templateID, uint amount, int seed)
-		{
-			InstanceID = instanceID;
-			Template = BaseItemTemplate.Get<BaseItemTemplate>(templateID);
 
-			Initialize(amount, seed, true);
-		}
-
-		private void Initialize()
-		{
-			Initialize(0, 0, false);
-		}
 		private void Initialize(uint amount)
-		{
-			Initialize(amount, 0, false);
-		}
-		private void Initialize(uint amount, int seed, bool generate)
 		{
 			if (Template.MaxStackSize > 1)
 			{
 				this.Stackable = new ItemStackable();
 				this.Stackable.Initialize(this, amount.Clamp(1, Template.MaxStackSize));
 			}
-			if (generate)
+			if (Template.Generate)
 			{
 				Generator = new ItemGenerator();
 			}
@@ -63,7 +48,19 @@ namespace FishMMO.Shared
 				Equippable = new ItemEquippable();
 				Equippable.Initialize(this);
 			}
-			Generator?.Initialize(this, seed);
+
+			var longBytes = BitConverter.GetBytes(InstanceID);
+
+			// Get integers from the first and the last 4 bytes of long
+			int[] ints = new int[] {
+				BitConverter.ToInt32(longBytes, 0),
+				BitConverter.ToInt32(longBytes, 4)
+			};
+			if (ints != null && ints.Length > 1)
+			{
+				int seed = ints[1] > 0 ? ints[1] : ints[0];
+				Generator?.Initialize(this, seed);
+			}
 		}
 
 		public void Destroy()
@@ -92,19 +89,24 @@ namespace FishMMO.Shared
 
 		public string Tooltip()
 		{
-			using (var sb = ZString.CreateStringBuilder())
+			string tooltip = "";
+			var sb = ZString.CreateStringBuilder();
+			try
 			{
-				sb.Append("<size=120%><color=#f5ad6e>");
-				sb.Append(Template.Name);
-				sb.Append("</color></size>");
-				sb.AppendLine();
 				sb.Append("<color=#a66ef5>InstanceID: ");
 				sb.Append(InstanceID);
 				sb.Append("</color>");
-
-				Generator?.Tooltip(sb);
-				return sb.ToString();
+				sb.AppendLine();
+				sb.Append(Template.Tooltip());
+				sb.AppendLine();
+				Generator?.Tooltip(ref sb);
+				tooltip = sb.ToString();
 			}
+			finally
+			{
+				sb.Dispose();
+			}
+			return tooltip;
 		}
 	}
 }

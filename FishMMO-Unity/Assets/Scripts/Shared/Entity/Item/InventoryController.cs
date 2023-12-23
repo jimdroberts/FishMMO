@@ -8,6 +8,8 @@ namespace FishMMO.Shared
 	{
 		public Character Character;
 
+		public long Currency = 0;
+
 		private void Awake()
 		{
 			AddSlots(null, 32);
@@ -48,7 +50,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void OnClientInventorySetItemBroadcastReceived(InventorySetItemBroadcast msg)
 		{
-			Item newItem = new Item(msg.instanceID, msg.templateID, msg.stackSize, msg.seed);
+			Item newItem = new Item(msg.instanceID, msg.templateID, msg.stackSize);
 			SetItemSlot(newItem, msg.slot);
 		}
 
@@ -59,7 +61,7 @@ namespace FishMMO.Shared
 		{
 			foreach (InventorySetItemBroadcast subMsg in msg.items)
 			{
-				Item newItem = new Item(subMsg.instanceID, subMsg.templateID, subMsg.stackSize, subMsg.seed);
+				Item newItem = new Item(subMsg.instanceID, subMsg.templateID, subMsg.stackSize);
 				SetItemSlot(newItem, subMsg.slot);
 			}
 		}

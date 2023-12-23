@@ -74,6 +74,18 @@ namespace FishMMO.Shared
 			}
 		}
 
+		public bool HasFreeSlot()
+		{
+			for (int i = 0; i < Items.Count; ++i)
+			{
+				if (IsSlotEmpty(i))
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
 		public int FreeSlots()
 		{
 			int count = 0;
@@ -202,7 +214,10 @@ namespace FishMMO.Shared
 			}
 
 			Items[slot] = item;
-			item.Slot = slot;
+			if (item != null)
+			{
+				item.Slot = slot;
+			}
 			OnSlotUpdated?.Invoke(this, item, slot);
 			return true;
 		}
@@ -223,12 +238,11 @@ namespace FishMMO.Shared
 			Item secondItem = Items[to];
 
 			if (!SetItemSlot(secondItem, from) ||
-				SetItemSlot(firstItem, to))
+				!SetItemSlot(firstItem, to))
 			{
 				// swapping the items failed
 				return false;
 			}
-
 			return true;
 		}
 

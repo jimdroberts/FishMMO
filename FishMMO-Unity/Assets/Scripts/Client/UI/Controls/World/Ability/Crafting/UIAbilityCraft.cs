@@ -57,7 +57,7 @@ namespace FishMMO.Client
 			Show();
 		}
 
-		private void MainEntry_OnLeftClick(int index)
+		private void MainEntry_OnLeftClick(int index, object[] optionalParams)
 		{
 			if (Character != null &&
 				Character.AbilityController != null &&
@@ -77,13 +77,13 @@ namespace FishMMO.Client
 			}
 		}
 
-		private void MainEntry_OnRightClick(int index)
+		private void MainEntry_OnRightClick(int index, object[] optionalParams)
 		{
 			MainEntry.Clear();
 			ClearSlots();
 		}
 
-		private void EventEntry_OnLeftClick(int index)
+		private void EventEntry_OnLeftClick(int index, object[] optionalParams)
 		{
 			if (index > -1 && index < EventSlots.Count &&
 				Character != null &&
@@ -102,7 +102,7 @@ namespace FishMMO.Client
 			}
 		}
 
-		private void EventEntry_OnRightClick(int index)
+		private void EventEntry_OnRightClick(int index, object[] optionalParams)
 		{
 			if (index > -1 && index < EventSlots.Count)
 			{

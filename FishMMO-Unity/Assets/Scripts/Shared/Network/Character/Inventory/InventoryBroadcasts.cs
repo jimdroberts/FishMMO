@@ -5,9 +5,8 @@ namespace FishMMO.Shared
 {
 	public struct InventorySetItemBroadcast : IBroadcast
 	{
-		public ulong instanceID;
+		public long instanceID;
 		public int templateID;
-		public int seed;
 		public int slot;
 		public uint stackSize;
 	}

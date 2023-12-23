@@ -58,7 +58,47 @@ namespace FishMMO.Client
 			{
 				MainPanel = transform as RectTransform;
 			}
+
+			//AdjustPositionForPivotChange(MainPanel, new Vector2(0.5f, 0.5f));
+			//AdjustPositionForAnchorChange(MainPanel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
 		}
+
+		/* WIP - Pivot change works but Anchor does not.
+		public void AdjustPositionForPivotChange(RectTransform rectTransform, Vector2 newPivot)
+		{
+			// Store the original values
+			Vector3 originalPosition = rectTransform.localPosition;
+			Vector2 originalSizeDelta = rectTransform.sizeDelta;
+			Vector2 originalPivot = rectTransform.pivot;
+
+			// Change the pivot
+			rectTransform.pivot = newPivot;
+
+			// Adjust localPosition based on pivot change
+			Vector2 pivotDelta = new Vector2(newPivot.x - originalPivot.x, newPivot.y - originalPivot.y);
+			rectTransform.localPosition = originalPosition + Vector3.Scale(pivotDelta, originalSizeDelta);
+		}
+
+		public void AdjustPositionForAnchorChange(RectTransform rectTransform, Vector2 newAnchorMin, Vector2 newAnchorMax)
+		{
+			// Store the original values
+			Vector3 originalPosition = rectTransform.localPosition;
+			Vector2 originalSizeDelta = rectTransform.sizeDelta;
+			Vector2 originalAnchorMin = rectTransform.anchorMin;
+			Vector2 originalAnchorMax = rectTransform.anchorMax;
+
+			// Change the anchor
+			rectTransform.anchorMin = newAnchorMin;
+			rectTransform.anchorMax = newAnchorMax;
+
+			// Calculate the differences in anchor positions
+			Vector2 anchorMinDifference = newAnchorMin - originalAnchorMin;
+			Vector2 anchorMaxDifference = newAnchorMax - originalAnchorMax;
+
+			// Adjust localPosition based on anchor change
+			Vector3 newPosition = originalPosition - Vector3.Scale(anchorMinDifference, originalSizeDelta) - Vector3.Scale(anchorMaxDifference, originalSizeDelta);
+			rectTransform.localPosition = newPosition;
+		}*/
 
 		private void Start()
 		{

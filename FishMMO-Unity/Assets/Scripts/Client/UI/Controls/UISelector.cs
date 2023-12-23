@@ -78,7 +78,7 @@ namespace FishMMO.Client
 			}
 		}
 
-		private void EventEntry_OnLeftClick(int index)
+		private void EventEntry_OnLeftClick(int index, object[] optionalParams)
 		{
 			if (index > -1 && index < ButtonSlots.Count)
 			{

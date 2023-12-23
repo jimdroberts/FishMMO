@@ -311,11 +311,13 @@ start Scene.exe SCENE";
 			if (worldDetailsCache != null)
 			{
 				worldDetailsCache.Rebuild();
+				EditorUtility.SetDirty(worldDetailsCache);
 			}
 			else
 			{
 				worldDetailsCache = ScriptableObject.CreateInstance<WorldSceneDetailsCache>();
 				worldDetailsCache.Rebuild();
+				EditorUtility.SetDirty(worldDetailsCache);
 				AssetDatabase.CreateAsset(worldDetailsCache, WorldSceneDetailsCache.CACHE_FULL_PATH);
 			}
 			AssetDatabase.SaveAssets();

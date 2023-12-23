@@ -141,6 +141,10 @@ namespace FishMMO.Client
 			{
 				return;
 			}
+
+			// remove Rich Text Tags if any exist
+			input = ChatHelper.Sanitize(input);
+
 			if (Client.NetworkManager.IsClient)
 			{
 				if (input.Length > MAX_LENGTH)

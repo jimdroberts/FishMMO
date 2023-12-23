@@ -34,29 +34,26 @@ namespace FishMMO.Shared
 			item = null;
 		}
 
-		public string Tooltip()
-		{
-			using (var sb = ZString.CreateStringBuilder())
-			{
-				return Tooltip(sb);
-			}
-		}
-
-		public string Tooltip(Utf16ValueStringBuilder sb)
+		public void Tooltip(ref Utf16ValueStringBuilder sb)
 		{
 			sb.Append("<color=#a66ef5>Seed: ");
 			sb.Append(Seed);
 			sb.Append("</color>");
-			foreach (ItemAttribute attribute in attributes.Values)
+			if (attributes.Count > 0)
 			{
-				sb.Append("<size=110%>");
-				sb.Append(attribute.Template.Name);
-				sb.Append(": <color=#32a879>");
-				sb.Append(attribute.value);
-				sb.Append("</color></size>");
 				sb.AppendLine();
+				sb.Append("<size=125%><color=#a66ef5>Attributes:</color></size>");
+				sb.AppendLine();
+				foreach (ItemAttribute attribute in attributes.Values)
+				{
+					sb.Append("<size=110%>");
+					sb.Append(attribute.Template.Name);
+					sb.Append(": <color=#32a879>");
+					sb.Append(attribute.value);
+					sb.Append("</color></size>");
+					sb.AppendLine();
+				}
 			}
-			return sb.ToString();
 		}
 
 		public override void Generate(int seed)

@@ -18,10 +18,10 @@ namespace FishMMO.Client
 						if (dragObject.Type == ReferenceButtonType.Inventory)
 						{
 							// get the item from the Inventory
-							Item item = Character.InventoryController.Items[ReferenceID];
+							Item item = Character.InventoryController.Items[dragObject.ReferenceID];
 							if (item != null)
 							{
-								Character.EquipmentController.SendEquipRequest(ReferenceID, (byte)ItemSlotType);
+								Character.EquipmentController.SendEquipRequest(dragObject.ReferenceID, (byte)ItemSlotType);
 							}
 
 							// clear the drag object

@@ -62,6 +62,9 @@ namespace FishMMO.Server
 
 				ServerManager.RegisterBroadcast<InventoryRemoveItemBroadcast>(OnServerInventoryRemoveItemBroadcastReceived, true);
 				ServerManager.RegisterBroadcast<InventorySwapItemSlotsBroadcast>(OnServerInventorySwapItemSlotsBroadcastReceived, true);
+
+				ServerManager.RegisterBroadcast<EquipmentEquipItemBroadcast>(OnServerEquipmentItemBroadcastReceived, true);
+				ServerManager.RegisterBroadcast<EquipmentUnequipItemBroadcast>(OnServerUnequipItemBroadcastReceived, true);
 			}
 			else if (args.ConnectionState == LocalConnectionState.Stopped)
 			{
@@ -69,6 +72,9 @@ namespace FishMMO.Server
 
 				ServerManager.UnregisterBroadcast<InventoryRemoveItemBroadcast>(OnServerInventoryRemoveItemBroadcastReceived);
 				ServerManager.UnregisterBroadcast<InventorySwapItemSlotsBroadcast>(OnServerInventorySwapItemSlotsBroadcastReceived);
+
+				ServerManager.UnregisterBroadcast<EquipmentEquipItemBroadcast>(OnServerEquipmentItemBroadcastReceived);
+				ServerManager.UnregisterBroadcast<EquipmentUnequipItemBroadcast>(OnServerUnequipItemBroadcastReceived);
 			}
 		}
 
@@ -82,7 +88,8 @@ namespace FishMMO.Server
 
 		private void OnServerInventoryRemoveItemBroadcastReceived(NetworkConnection conn, InventoryRemoveItemBroadcast msg)
 		{
-			if (conn.FirstObject == null)
+			if (conn == null ||
+				conn.FirstObject == null)
 			{
 				return;
 			}
@@ -98,7 +105,8 @@ namespace FishMMO.Server
 
 		private void OnServerInventorySwapItemSlotsBroadcastReceived(NetworkConnection conn, InventorySwapItemSlotsBroadcast msg)
 		{
-			if (conn.FirstObject == null)
+			if (conn == null ||
+				conn.FirstObject == null)
 			{
 				return;
 			}
@@ -108,6 +116,53 @@ namespace FishMMO.Server
 				!character.IsTeleporting &&
 				character.InventoryController != null &&
 				character.InventoryController.SwapItemSlots(msg.from, msg.to))
+			{
+				conn.Broadcast(msg, true, Channel.Reliable);
+			}
+		}
+
+		private void OnServerEquipmentItemBroadcastReceived(NetworkConnection conn, EquipmentEquipItemBroadcast msg)
+		{
+			if (conn == null ||
+				conn.FirstObject == null)
+			{
+				return;
+			}
+
+			Character character = conn.FirstObject.GetComponent<Character>();
+			if (character == null ||
+				character.IsTeleporting ||
+				character.InventoryController == null ||
+				character.EquipmentController == null)
+			{
+				return;
+			}
+
+			if (character.InventoryController.TryGetItem(msg.inventoryIndex, out Item item) &&
+				character.EquipmentController.Equip(item, msg.inventoryIndex, (ItemSlot)msg.slot))
+			{
+				conn.Broadcast(msg, true, Channel.Reliable);
+			}
+		}
+
+		private void OnServerUnequipItemBroadcastReceived(NetworkConnection conn, EquipmentUnequipItemBroadcast msg)
+		{
+			if (conn == null ||
+				conn.FirstObject == null)
+			{
+				return;
+			}
+
+			Character character = conn.FirstObject.GetComponent<Character>();
+			if (character == null ||
+				character.IsTeleporting ||
+				character.InventoryController == null ||
+				character.EquipmentController == null)
+			{
+				return;
+			}
+
+			if (character.EquipmentController.Unequip(character.InventoryController, msg.slot))
 			{
 				conn.Broadcast(msg, true, Channel.Reliable);
 			}

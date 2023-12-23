@@ -19,4 +19,11 @@ namespace FishMMO.Shared
 	{
 		public int ID;
 	}
+
+	public struct MerchantPurchaseBroadcast : IBroadcast
+	{
+		public int ID;
+		public int Index;
+		public MerchantTabType Type;
+	}
 }

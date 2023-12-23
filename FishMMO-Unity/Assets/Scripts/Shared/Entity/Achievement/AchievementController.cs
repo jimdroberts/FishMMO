@@ -169,28 +169,32 @@ namespace FishMMO.Shared
 					items = new List<InventorySetItemBroadcast>(),
 				};
 
+				List<InventorySetItemBroadcast> modifiedItemBroadcasts = new List<InventorySetItemBroadcast>();
+
 				for (int i = 0; i < itemRewards.Length; ++i)
 				{
-					Item newItem = new Item(123, itemRewards[i].ID, 1, 123456789);
+					Item newItem = new Item(123, itemRewards[i].ID, 1);
 
 					if (Character.InventoryController.TryAddItem(newItem, out List<Item> modifiedItems))
 					{
 						foreach (Item item in modifiedItems)
 						{
-							inventorySetMultipleItemsBroadcast.items.Add(new InventorySetItemBroadcast()
+							modifiedItemBroadcasts.Add(new InventorySetItemBroadcast()
 							{
 								instanceID = newItem.InstanceID,
 								templateID = newItem.Template.ID,
-								seed = newItem.Generator.Seed,
 								slot = newItem.Slot,
-								stackSize = newItem.Stackable.Amount,
+								stackSize = newItem.IsStackable ? newItem.Stackable.Amount : 0,
 							});
 						}
 					}
 				}
-				if (inventorySetMultipleItemsBroadcast.items.Count > 0)
+				if (modifiedItemBroadcasts.Count > 0)
 				{
-					Character.Owner.Broadcast(inventorySetMultipleItemsBroadcast, true, Channel.Reliable);
+					Character.Owner.Broadcast(new InventorySetMultipleItemsBroadcast()
+					{
+						items = modifiedItemBroadcasts,
+					}, true, Channel.Reliable);
 				}
 			}
 		}

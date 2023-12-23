@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
-using TMPro;
 using FishNet.Transporting;
 using FishMMO.Shared;
 
@@ -21,8 +20,8 @@ namespace FishMMO.Client
 		private List<UITooltipButton> Abilities;
 		private List<UITooltipButton> AbilityEvents;
 		private List<UITooltipButton> Items;
-
-		private Dictionary<int, UITooltipButton> SelectedItems = new Dictionary<int, UITooltipButton>();
+		private int CurrentTemplateID = 0;
+		private MerchantTabType CurrentTab = MerchantTabType.Item;
 
 		public override void OnStarting()
 		{
@@ -50,7 +49,8 @@ namespace FishMMO.Client
 
 		private void OnClientMerchantBroadcastReceived(MerchantBroadcast msg)
 		{
-			MerchantTemplate template = MerchantTemplate.Get<MerchantTemplate>(msg.ID);
+			CurrentTemplateID = msg.ID;
+			MerchantTemplate template = MerchantTemplate.Get<MerchantTemplate>(CurrentTemplateID);
 			if (template != null)
 			{
 				// set up prefab lists
@@ -66,6 +66,7 @@ namespace FishMMO.Client
 				// show the first valid tab if any otherwise hide
 				if (AbilitiesButton.gameObject.activeSelf)
 				{
+					CurrentTab = MerchantTabType.Ability;
 					ShowEntries(Abilities);
 					ShowEntries(AbilityEvents, false);
 					ShowEntries(Items, false);
@@ -73,6 +74,7 @@ namespace FishMMO.Client
 				}
 				else if (AbilityEventsButton.gameObject.activeSelf)
 				{
+					CurrentTab = MerchantTabType.AbilityEvent;
 					ShowEntries(Abilities, false);
 					ShowEntries(AbilityEvents);
 					ShowEntries(Items, false);
@@ -80,6 +82,7 @@ namespace FishMMO.Client
 				}
 				else if (ItemsButton.gameObject.activeSelf)
 				{
+					CurrentTab = MerchantTabType.Item;
 					ShowEntries(Abilities, false);
 					ShowEntries(AbilityEvents, false);
 					ShowEntries(Items);
@@ -118,7 +121,7 @@ namespace FishMMO.Client
 			}
 		}
 
-		private void SetButtonSlots(List<ITooltip> items, ref List<UITooltipButton> slots, Action<int> onLeftClick, Action<int> onRightClick)
+		private void SetButtonSlots(List<ITooltip> items, ref List<UITooltipButton> slots, Action<int, object[]> onLeftClick, Action<int, object[]> onRightClick)
 		{
 			ClearSlots(ref slots);
 
@@ -144,21 +147,25 @@ namespace FishMMO.Client
 			}
 		}
 
-		public void Tab_OnClick(Button button)
+		public void Tab_OnClick(int type)
 		{
-			switch (button.name)
+			MerchantTabType tabType = (MerchantTabType)type;
+			switch (tabType)
 			{
-				case "ItemButton":
+				case MerchantTabType.Item:
+					CurrentTab = MerchantTabType.Item;
 					ShowEntries(Items);
 					ShowEntries(Abilities, false);
 					ShowEntries(AbilityEvents, false);
 					break;
-				case "AbilitiesButton":
+				case MerchantTabType.Ability:
+					CurrentTab = MerchantTabType.Ability;
 					ShowEntries(Items, false);
 					ShowEntries(Abilities);
 					ShowEntries(AbilityEvents, false);
 					break;
-				case "AbilityEventsButton":
+				case MerchantTabType.AbilityEvent:
+					CurrentTab = MerchantTabType.AbilityEvent;
 					ShowEntries(Items, false);
 					ShowEntries(Abilities, false);
 					ShowEntries(AbilityEvents);
@@ -180,16 +187,45 @@ namespace FishMMO.Client
 			}
 		}
 
-		private void PurchaseEventEntry_OnCtrlClick(int index)
+		private void PurchaseEventEntry_OnCtrlClick(int index, object[] optionalParams)
 		{
-			/*if (index > -1 && index < Abilities.Count &&
-				Character != null)
+			switch (CurrentTab)
 			{
-			}*/
-			Debug.Log("Purchase Complete!");
+				case MerchantTabType.Item:
+					if (Items == null
+						|| Items.Count < 1)
+					{
+						return;
+					}
+					break;
+				case MerchantTabType.Ability:
+					if (Abilities == null ||
+						Abilities.Count < 1)
+					{
+						return;
+					}
+					break;
+				case MerchantTabType.AbilityEvent:
+					if (AbilityEvents == null ||
+						AbilityEvents.Count < 1)
+					{
+						return;
+					}
+					break;
+				case MerchantTabType.None:
+				default: return;
+			}
+
+			MerchantPurchaseBroadcast message = new MerchantPurchaseBroadcast()
+			{
+				ID = CurrentTemplateID,
+				Index = index,
+				Type = CurrentTab,
+			};
+			Client.NetworkManager.ClientManager.Broadcast(message, Channel.Reliable);
 		}
 
-		private void AbilityEntry_OnLeftClick(int index)
+		private void AbilityEntry_OnLeftClick(int index, object[] optionalParams)
 		{
 			if (index > -1 && index < Abilities.Count &&
 				Character != null)
@@ -197,11 +233,11 @@ namespace FishMMO.Client
 			}
 		}
 
-		private void AbilityEntry_OnRightClick(int index)
+		private void AbilityEntry_OnRightClick(int index, object[] optionalParams)
 		{
 		}
 
-		private void AbilityEventEntry_OnLeftClick(int index)
+		private void AbilityEventEntry_OnLeftClick(int index, object[] optionalParams)
 		{
 			if (index > -1 && index < AbilityEvents.Count &&
 				Character != null)
@@ -209,11 +245,11 @@ namespace FishMMO.Client
 			}
 		}
 
-		private void AbilityEventEntry_OnRightClick(int index)
+		private void AbilityEventEntry_OnRightClick(int index, object[] optionalParams)
 		{
 		}
 
-		private void ItemEntry_OnLeftClick(int index)
+		private void ItemEntry_OnLeftClick(int index, object[] optionalParams)
 		{
 			if (index > -1 && index < Items.Count &&
 				Character != null)
@@ -221,13 +257,8 @@ namespace FishMMO.Client
 			}
 		}
 
-		private void ItemEntry_OnRightClick(int index)
+		private void ItemEntry_OnRightClick(int index, object[] optionalParams)
 		{
-		}
-
-		public void OnPurchase()
-		{
-			// purchase it on the server
 		}
 	}
 }
