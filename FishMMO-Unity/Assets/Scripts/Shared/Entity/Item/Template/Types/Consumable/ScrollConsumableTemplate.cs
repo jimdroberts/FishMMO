@@ -4,8 +4,7 @@ namespace FishMMO.Shared
 {
 	public abstract class ScrollConsumableTemplate : ConsumableTemplate
 	{
-		public List<AbilityTemplate> AbilityTemplates;
-		public List<AbilityEvent> AbilityEvents;
+		public List<BaseAbilityTemplate> AbilityTemplates;
 
 		public override bool Invoke(Character character, Item item)
 		{
@@ -13,7 +12,7 @@ namespace FishMMO.Shared
 			{
 				if (character.AbilityController != null)
 				{
-					character.AbilityController.LearnAbilityTypes(AbilityTemplates, AbilityEvents);
+					character.AbilityController.LearnAbilities(AbilityTemplates);
 				}
 				return true;
 			}

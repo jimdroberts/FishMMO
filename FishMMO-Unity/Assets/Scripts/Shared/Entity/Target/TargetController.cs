@@ -24,6 +24,12 @@ namespace FishMMO.Shared
 		public event Action<GameObject> OnChangeTarget;
 		public event Action<GameObject> OnUpdateTarget;
 
+		void OnDisable()
+		{
+			LabelMaker.Cache(targetLabel);
+			targetLabel = null;
+		}
+
 		void OnDestroy()
 		{
 			OnChangeTarget = null;
@@ -31,7 +37,6 @@ namespace FishMMO.Shared
 			Character = null;
 			LastTarget = default;
 			Current = default;
-			LabelMaker.Cache(targetLabel);
 		}
 
 		void Update()
@@ -81,8 +86,7 @@ namespace FishMMO.Shared
 					// construct or enable the labels and outlines
 					if (Current.Target != null)
 					{
-						if (Character != null &&
-							Character.LabelMaker != null)
+						if (Character != null)
 						{
 							Vector3 newPos = Current.Target.position;
 
@@ -102,7 +106,7 @@ namespace FishMMO.Shared
 								color = Color.white;
 							}
 
-							targetLabel = Character.LabelMaker.Display(label, newPos, color, 1.0f, 0.0f, true);
+							targetLabel = LabelMaker.Display(label, newPos, color, 1.0f, 0.0f, true);
 						}
 
 						Outline outline = Current.Target.GetComponent<Outline>();

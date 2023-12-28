@@ -41,14 +41,16 @@ namespace FishMMO.Database.Npgsql.Entities
         public bool Deleted { get; set; }
 
         // foreign keys
+        public ICollection<CharacterAbilityEntity> Abilities { get; set; }
+        public ICollection<CharacterKnownAbilityEntity> KnownAbilities { get; set; }
         public ICollection<CharacterAttributeEntity> Attributes { get; set; }
         public ICollection<CharacterAchievementEntity> Achievements { get; set; }
         public ICollection<CharacterBuffEntity> Buffs { get; set; }
-        public ICollection<CharacterEquipmentEntity> Equipment { get; set; }
+		public ICollection<CharacterInventoryEntity> Inventory { get; set; }
+		public ICollection<CharacterEquipmentEntity> Equipment { get; set; }
         public CharacterGuildEntity Guild { get; set; }
         public CharacterPartyEntity Party { get; set; }
         public ICollection<CharacterFriendEntity> Friends { get; set; }
-        public ICollection<CharacterInventoryEntity> Inventory { get; set; }
         public ICollection<CharacterItemCooldownEntity> ItemCooldowns { get; set; }
         public ICollection<CharacterQuestEntity> Quests { get; set; }
         public ICollection<CharacterSkillEntity> Skills { get; set; }

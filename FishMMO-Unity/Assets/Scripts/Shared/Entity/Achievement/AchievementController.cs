@@ -33,9 +33,9 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			if (Character.LabelMaker != null)
+			if (LabelMaker.Instance != null)
 			{
-				OnCompleteAchievement += Character.LabelMaker.Display;
+				OnCompleteAchievement += LabelMaker.Display;
 			}
 
 			ClientManager.RegisterBroadcast<AchievementUpdateBroadcast>(OnClientAchievementUpdateBroadcastReceived);
@@ -48,9 +48,9 @@ namespace FishMMO.Shared
 
 			if (base.IsOwner)
 			{
-				if (Character.LabelMaker != null)
+				if (LabelMaker.Instance != null)
 				{
-					OnCompleteAchievement -= Character.LabelMaker.Display;
+					OnCompleteAchievement -= LabelMaker.Display;
 				}
 
 				ClientManager.UnregisterBroadcast<AchievementUpdateBroadcast>(OnClientAchievementUpdateBroadcastReceived);

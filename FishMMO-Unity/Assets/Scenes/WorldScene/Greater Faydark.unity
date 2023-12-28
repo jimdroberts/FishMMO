@@ -402,8 +402,6 @@ MonoBehaviour:
   _networkObjectCache: {fileID: 700411446}
   InteractionRangeSqr: 5
   Target: {fileID: 1770604219}
-  SceneName: 
-  TeleporterDestinationName: 
 --- !u!4 &520637841
 Transform:
   m_ObjectHideFlags: 0
@@ -2233,7 +2231,7 @@ GameObject:
   - component: {fileID: 2026365185}
   - component: {fileID: 2026365184}
   m_Layer: 8
-  m_Name: SceneTeleporter
+  m_Name: GreaterFaydarkTeleporterA
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2271,8 +2269,6 @@ MonoBehaviour:
   _networkObjectCache: {fileID: 700411446}
   InteractionRangeSqr: 5
   Target: {fileID: 0}
-  SceneName: Felwithe
-  TeleporterDestinationName: FromGreaterFaydarkTeleporterA
 --- !u!114 &2026365185
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -284,7 +284,7 @@ start Scene.exe SCENE";
 				}
 				if (customBuildType == CustomBuildType.Installer)
 				{
-					NewBuildSetupFolder(root, buildPath);
+					BuildSetupFolder(root, buildPath);
 				}
 			}
 			else if (summary.result == BuildResult.Failed)
@@ -393,7 +393,7 @@ start Scene.exe SCENE";
 							BuildTarget.StandaloneWindows64);
 		}
 
-		private static void NewBuildSetupFolder(string rootPath, string buildPath)
+		private static void BuildSetupFolder(string rootPath, string buildPath)
 		{
 			string setup = Path.Combine(rootPath, "FishMMO-Setup");
 			FileUtil.ReplaceFile(Path.Combine(setup, "docker-compose.yml"), Path.Combine(buildPath, "docker-compose.yml"));
@@ -411,45 +411,6 @@ start Scene.exe SCENE";
 			FileUtil.DeleteFileOrDirectory(dbMigratorBinDirectory);
 		}
 
-		private static void BuildSetupFolder(string buildDirectoryName, string setupScriptFileName)
-		{
-			BuildSetupFolder(null, buildDirectoryName, setupScriptFileName, true);
-		}
-		private static void BuildSetupFolder(string rootPath, string buildDirectoryName, string setupScriptFileName, bool openExplorer)
-		{
-			if (string.IsNullOrWhiteSpace(rootPath))
-			{
-				rootPath = EditorUtility.SaveFolderPanel("Pick a save directory", "", "");
-				if (string.IsNullOrWhiteSpace(rootPath))
-				{
-					return;
-				}
-			}
-
-			string buildPath = Path.Combine(rootPath, buildDirectoryName);
-			Directory.CreateDirectory(buildPath);
-
-			string root = Directory.GetParent(Directory.GetCurrentDirectory()).FullName;
-			string setup = Path.Combine(root, "FishMMO-Setup");
-			FileUtil.ReplaceFile(Path.Combine(setup, setupScriptFileName), Path.Combine(buildPath, setupScriptFileName));
-			FileUtil.ReplaceFile(Path.Combine(setup, "docker-compose.yml"), Path.Combine(buildPath, "docker-compose.yml"));
-
-			string envConfigurationPath = WorkingEnvironmentOptions.AppendEnvironmentToPath(setup);
-			FileUtil.ReplaceFile(Path.Combine(envConfigurationPath, "appsettings.json"), Path.Combine(buildPath, "appsettings.json"));
-			FileUtil.ReplaceDirectory(Path.Combine(root, "FishMMO-Database"), Path.Combine(buildPath, "FishMMO-Database"));
-
-			if (!openExplorer)
-			{
-				return;
-			}
-
-#if UNITY_STANDALONE_LINUX || UNITY_EDITOR_LINUX
-			Process.Start("xdg-open", buildPath);
-#elif UNITY_STANDALONE_WIN
-			Process.Start(buildPath);
-#endif
-		}
-
 		[MenuItem("FishMMO/Build/Update Linker", priority = 12)]
 		public static void UpdateLinker()
 		{
@@ -465,7 +426,6 @@ start Scene.exe SCENE";
 			string rootPath = Path.Combine(selectedPath, "FishMMO");
 			string serverRootPath = Path.Combine(selectedPath, "FishMMO" + Path.DirectorySeparatorChar + "Server");
 			RebuildWorldSceneDetailsCache();
-			BuildSetupFolder(serverRootPath, "Server Setup", "Windows Setup.bat", false);
 			BuildExecutable(rootPath,
 							CLIENT_BUILD_NAME,
 							CLIENT_BOOTSTRAP_SCENES,
@@ -516,7 +476,6 @@ start Scene.exe SCENE";
 			string rootPath = Path.Combine(selectedPath, "FishMMO");
 			string serverRootPath = Path.Combine(selectedPath, "FishMMO" + Path.DirectorySeparatorChar + "Server");
 			RebuildWorldSceneDetailsCache();
-			BuildSetupFolder(serverRootPath, "Server Setup", "Linux Setup.sh", false);
 			BuildExecutable(rootPath,
 							CLIENT_BUILD_NAME,
 							CLIENT_BOOTSTRAP_SCENES,
@@ -558,12 +517,6 @@ start Scene.exe SCENE";
 #elif UNITY_STANDALONE_WIN
 			Process.Start(rootPath);
 #endif
-		}
-
-		[MenuItem("FishMMO/Build/Server/Windows Setup", priority = 1)]
-		public static void BuildWindowsSetup()
-		{
-			BuildSetupFolder("FishMMO Windows Setup", "Windows Setup.bat");
 		}
 
 		[MenuItem("FishMMO/Build/Server/Windows x64 All-In-One", priority = 2)]
@@ -624,12 +577,6 @@ start Scene.exe SCENE";
 							BASE_BUILD_OPTIONS | BuildOptions.ShowBuiltPlayer,
 							StandaloneBuildSubtarget.Player,
 							BuildTarget.StandaloneWindows64);
-		}
-
-		[MenuItem("FishMMO/Build/Server/Linux Setup", priority = 6)]
-		public static void BuildLinuxSetup()
-		{
-			BuildSetupFolder("FishMMO Linux Setup", "Linux Setup.sh");
 		}
 
 		[MenuItem("FishMMO/Build/Server/Linux x64 All-In-One", priority = 7)]

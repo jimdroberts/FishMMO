@@ -100,7 +100,7 @@ namespace FishMMO.Server
 						windowTitle.Append(":");
 						windowTitle.Append(port);
 						windowTitle.Append(" Clients:");
-						windowTitle.Append(ServerManager.Clients.Count);
+						windowTitle.Append(WorldSceneSystem != null ? WorldSceneSystem.ConnectionCount : ServerManager.Clients.Count);
 						windowTitle.Append("]");
 					}
 				}

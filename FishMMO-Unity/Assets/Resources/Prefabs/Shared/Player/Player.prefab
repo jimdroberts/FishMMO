@@ -208,7 +208,6 @@ GameObject:
   - component: {fileID: 7975244870159263472}
   - component: {fileID: 3124264775330692708}
   - component: {fileID: 4966316198463876083}
-  - component: {fileID: 1909551449255578268}
   - component: {fileID: 6038023079570568745}
   - component: {fileID: 4053032698712144203}
   m_Layer: 6
@@ -626,6 +625,7 @@ MonoBehaviour:
   _addedNetworkObject: {fileID: 784751938054981284}
   _networkObjectCache: {fileID: 784751938054981284}
   Character: {fileID: 0}
+  Currency: 0
 --- !u!114 &5933418412604522111
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -722,20 +722,6 @@ MonoBehaviour:
   ResurrectedAchievementTemplate: {fileID: 0}
   ShowDamage: 1
   ShowHeals: 1
---- !u!114 &1909551449255578268
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4573496687782621821}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 48a412bb5145d6a4489eb171727d5d59, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  LabelPrefab: {fileID: 1101973805684055076, guid: 30339dbf6301676479d2c51120c3c56b,
-    type: 3}
 --- !u!114 &6038023079570568745
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -753,7 +739,6 @@ MonoBehaviour:
   _networkObjectCache: {fileID: 784751938054981284}
   CharacterNameLabel: {fileID: 2817084262407755495}
   CharacterGuildLabel: {fileID: 3362407936794280637}
-  LabelMaker: {fileID: 1909551449255578268}
   ID: 0
   CharacterName: 
   CharacterNameLower: 

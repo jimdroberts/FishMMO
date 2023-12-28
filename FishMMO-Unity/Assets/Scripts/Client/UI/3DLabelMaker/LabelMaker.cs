@@ -5,19 +5,76 @@ namespace FishMMO.Client
 {
 	public class LabelMaker : MonoBehaviour
 	{
-		private static Queue<Cached3DLabel> cache = new Queue<Cached3DLabel>();
+		private static LabelMaker instance;
+		internal static LabelMaker Instance
+		{
+			get
+			{
+				return instance;
+			}
+		}
+		private Queue<Cached3DLabel> pool = new Queue<Cached3DLabel>();
 
 		public Cached3DLabel LabelPrefab;
 
-		public Cached3DLabel Display(string text, Vector3 position, Color color, float fontSize, float persistTime, bool manualCache)
+		void Awake()
 		{
-			if (LabelPrefab != null && cache != null)
+			if (instance != null)
 			{
-				Cached3DLabel label;
-				if (!cache.TryDequeue(out label))
+				Destroy(this.gameObject);
+				return;
+			}
+			instance = this;
+
+			gameObject.name = typeof(LabelMaker).Name;
+
+			DontDestroyOnLoad(this.gameObject);
+		}
+
+		public bool Dequeue(out Cached3DLabel label)
+		{
+			if (LabelPrefab != null && pool != null)
+			{
+				if (!pool.TryDequeue(out label))
 				{
 					label = Instantiate(LabelPrefab);
 				}
+				return true;
+			}
+			label = null;
+			return false;
+		}
+
+		public void Enqueue(Cached3DLabel label)
+		{
+			if (pool != null)
+			{
+				label.gameObject.SetActive(false);
+				pool.Enqueue(label);
+			}
+			else
+			{
+				Destroy(label.gameObject);
+			}
+		}
+
+		public void ClearCache()
+		{
+			if (pool == null ||
+				pool.Count < 1)
+			{
+				return;
+			}
+			while (pool.TryDequeue(out Cached3DLabel label))
+			{
+				Destroy(label.gameObject);
+			}
+		}
+
+		public static Cached3DLabel Display(string text, Vector3 position, Color color, float fontSize, float persistTime, bool manualCache)
+		{
+			if (LabelMaker.Instance.Dequeue(out Cached3DLabel label))
+			{
 				label.Initialize(text, position, color, fontSize, persistTime, manualCache);
 				label.gameObject.SetActive(true);
 				return label;
@@ -25,22 +82,19 @@ namespace FishMMO.Client
 			return null;
 		}
 
-		internal static void Cache(Cached3DLabel label)
+		public static void Cache(Cached3DLabel label)
 		{
 			if (label == null)
 			{
 				return;
 			}
 
-			if (cache != null)
-			{
-				label.gameObject.SetActive(false);
-				cache.Enqueue(label);
-			}
-			else
-			{
-				Destroy(label.gameObject);
-			}
+			LabelMaker.Instance.Enqueue(label);
+		}
+
+		public static void Clear()
+		{
+			LabelMaker.Instance.ClearCache();
 		}
 	}
 }

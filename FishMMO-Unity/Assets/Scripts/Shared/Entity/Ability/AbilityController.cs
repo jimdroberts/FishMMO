@@ -124,7 +124,7 @@ namespace FishMMO.Shared
 			{
 				Replicate(default, true);
 				AbilityReconcileData state = new AbilityReconcileData(interruptQueued,
-																	  currentAbility == null ? NO_ABILITY : currentAbility.AbilityID,
+																	  currentAbility == null ? NO_ABILITY : currentAbility.ID,
 																	  remainingTime);
 				Reconcile(state, true);
 			}
@@ -285,7 +285,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		private bool CanActivate(Ability ability)
 		{
-			return KnownAbilities.TryGetValue(ability.AbilityID, out Ability knownAbility) &&
+			return KnownAbilities.TryGetValue(ability.ID, out Ability knownAbility) &&
 					!Character.CooldownController.IsOnCooldown(knownAbility.Template.Name) &&
 					knownAbility.MeetsRequirements(Character) &&
 					knownAbility.HasResource(Character, BloodResourceConversionTemplate, BloodResourceTemplate);
@@ -335,28 +335,30 @@ namespace FishMMO.Shared
 			return true;
 		}
 
-		public void LearnAbilityTypes(List<AbilityTemplate> abilityTemplates, List<AbilityEvent> abilityEvents)
+		public bool KnowsAbility(int abilityID)
 		{
-			if (abilityTemplates != null)
+			if (KnownTemplates.Contains(abilityID) ||
+				KnownEvents.Contains(abilityID))
 			{
-				if (KnownTemplates == null)
-				{
-					KnownTemplates = new HashSet<int>();
-				}
-				for (int i = 0; i < abilityTemplates.Count; ++i)
-				{
-					if (!KnownTemplates.Contains(abilityTemplates[i].ID))
-					{
-						KnownTemplates.Add(abilityTemplates[i].ID);
-					}
-				}
+				return true;
 			}
-			if (abilityEvents != null)
-			{
-				for (int i = 0; i < abilityEvents.Count; ++i)
-				{
-					AbilityEvent abilityEvent = abilityEvents[i];
+			return false;
+		}
 
+		public bool LearnAbilities(List<BaseAbilityTemplate> abilityTemplates = null)
+		{
+			if (abilityTemplates == null)
+			{
+				return false;
+			}
+
+			for (int i = 0; i < abilityTemplates.Count; ++i)
+			{
+				// if the template is an ability event we add them to their mapped containers
+				AbilityEvent abilityEvent = abilityTemplates[i] as AbilityEvent;
+				if (abilityEvent != null)
+				{
+					// add the event to the global events map
 					if (KnownEvents == null)
 					{
 						KnownEvents = new HashSet<int>();
@@ -366,6 +368,7 @@ namespace FishMMO.Shared
 						KnownEvents.Add(abilityEvent.ID);
 					}
 
+					// figure out what kind of event it is and add to the respective category
 					if (abilityEvent is HitEvent)
 					{
 						if (KnownHitEvents == null)
@@ -400,13 +403,31 @@ namespace FishMMO.Shared
 						}
 					}
 				}
+				else
+				{
+					AbilityTemplate abilityTemplate = abilityTemplates[i] as AbilityTemplate;
+					if (abilityTemplate != null)
+					{
+						if (KnownTemplates == null)
+						{
+							KnownTemplates = new HashSet<int>();
+						}
+						if (!KnownTemplates.Contains(abilityTemplate.ID))
+						{
+							KnownTemplates.Add(abilityTemplate.ID);
+						}
+					}
+				}
 			}
+			return true;
 		}
 
 		public void LearnAbility(Ability ability)
 		{
 			if (ability == null)
+			{
 				return;
+			}
 
 			if (KnownAbilities == null)
 			{

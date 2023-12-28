@@ -90,7 +90,7 @@ namespace FishMMO.Shared
 						foreach (SceneObjectUID uid in sceneObjectUIDs)
 						{
 							uid.ID = ++sceneObjectUID;
-							Debug.Log("WorldSceneDetails: Found new SceneObjectUID[" + uid.gameObject.name + " New ID:" + uid.ID + "]");
+							Debug.Log("WorldSceneDetails: Found new Scene Object UID[" + uid.gameObject.name + " New ID:" + uid.ID + "]");
 							EditorSceneManager.MarkSceneDirty(s);
 						}
 
@@ -98,7 +98,7 @@ namespace FishMMO.Shared
 						GameObject[] initialSpawns = GameObject.FindGameObjectsWithTag(InitialSpawnTag);
 						foreach (GameObject obj in initialSpawns)
 						{
-							Debug.Log("WorldSceneDetails: Found new InitialSpawnPosition[" + obj.name + " Pos:" + obj.transform.position + " Rot:" + obj.transform.rotation + "]");
+							Debug.Log("WorldSceneDetails: Found new Initial Spawn Position[" + obj.name + " Pos:" + obj.transform.position + " Rot:" + obj.transform.rotation + "]");
 
 							sceneDetails.InitialSpawnPositions.Add(obj.name, new CharacterInitialSpawnPosition()
 							{
@@ -113,7 +113,7 @@ namespace FishMMO.Shared
 						GameObject[] respawnPositions = GameObject.FindGameObjectsWithTag(RespawnTag);
 						foreach (GameObject obj in respawnPositions)
 						{
-							Debug.Log("WorldSceneDetails: Found new RespawnPosition[" + obj.name + " " + obj.transform.position + "]");
+							Debug.Log("WorldSceneDetails: Found new Respawn Position[" + obj.name + " " + obj.transform.position + "]");
 
 							sceneDetails.RespawnPositions.Add(obj.name, obj.transform.position);
 						}
@@ -131,11 +131,34 @@ namespace FishMMO.Shared
 							});
 						}
 
-						// search for teleporters
+						// search for scene teleporters
 						SceneTeleporter[] teleports = GameObject.FindObjectsOfType<SceneTeleporter>();
 						foreach (SceneTeleporter obj in teleports)
 						{
 							obj.name = obj.name.Trim();
+
+							Debug.Log("WorldSceneDetails: Found new SceneTeleporter[" + obj.name + "]");
+
+							SceneTeleporterDetails newDetails = new SceneTeleporterDetails()
+							{
+								From = obj.name, // used for validation
+												 // we still need to set toScene and toPosition later
+							};
+
+							if (!teleporterCache.TryGetValue(s.name, out Dictionary<string, SceneTeleporterDetails> teleporters))
+							{
+								teleporterCache.Add(s.name, teleporters = new Dictionary<string, SceneTeleporterDetails>());
+							}
+							teleporters.Add(obj.name, newDetails);
+						}
+
+						// search for teleports
+						Teleporter[] interactableTeleporters = GameObject.FindObjectsOfType<Teleporter>();
+						foreach (Teleporter obj in interactableTeleporters)
+						{
+							obj.name = obj.name.Trim();
+
+							Debug.Log("WorldSceneDetails: Found new Teleporter[" + obj.name + "]");
 
 							SceneTeleporterDetails newDetails = new SceneTeleporterDetails()
 							{
@@ -156,7 +179,7 @@ namespace FishMMO.Shared
 						{
 							string teleporterDestinationName = obj.name.Trim();
 
-							Debug.Log("WorldSceneDetails: Found new TeleporterDestination[Destination:" + teleporterDestinationName + " " + obj.transform.position + "]");
+							Debug.Log("WorldSceneDetails: Found new Teleporter Destination[Destination:" + teleporterDestinationName + " " + obj.transform.position + "]");
 
 							teleporterDestinationCache.Add(teleporterDestinationName, new TeleporterDestinationDetails()
 							{
@@ -180,8 +203,11 @@ namespace FishMMO.Shared
 			{
 				foreach (KeyValuePair<string, SceneTeleporterDetails> pair in teleporterDetailsPair.Value)
 				{
-					if (teleporterDestinationCache.TryGetValue("From" + pair.Value.From, out TeleporterDestinationDetails destination))
+					string destinationName = "From" + pair.Value.From;
+
+					if (teleporterDestinationCache.TryGetValue(destinationName, out TeleporterDestinationDetails destination))
 					{
+						Debug.Log("WorldSceneDetails: Connecting " + teleporterDetailsPair.Key + " -> " + destinationName);
 						if (Scenes.TryGetValue(teleporterDetailsPair.Key, out WorldSceneDetails sceneDetails))
 						{
 							pair.Value.ToScene = destination.Scene;
@@ -197,7 +223,7 @@ namespace FishMMO.Shared
 								}
 							}
 
-							Debug.Log("WorldSceneDetails: Teleporter[" + pair.Key + "] connected to: Scene[" + destination.Scene + "]\r\nPosition:" + pair.Value.ToPosition + " Rotation:" + pair.Value.ToRotation.eulerAngles + "]");
+							Debug.Log("WorldSceneDetails: Teleporter[" + pair.Key + "] connected to Scene[" + destination.Scene + ": Destination:" + "From" + pair.Value.From + " Position:" + pair.Value.ToPosition + " Rotation:" + pair.Value.ToRotation.eulerAngles + "]");
 
 							sceneDetails.Teleporters.Add(pair.Key, pair.Value);
 						}

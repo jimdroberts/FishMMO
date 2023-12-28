@@ -71,10 +71,15 @@ MonoBehaviour:
       Teleporters:
         m_keys:
         - GreaterFaydarkEast
+        - GreaterFaydarkTeleporterA
         m_values:
         - ToScene: Felwithe
           ToPosition: {x: -0.52, y: 1.67, z: 6.89}
           ToRotation: {x: -0, y: 0.7071068, z: -0, w: 0.7071068}
+          SceneTransitionImage: {fileID: 0}
+        - ToScene: Felwithe
+          ToPosition: {x: -1.13, y: 5.79, z: 12.23}
+          ToRotation: {x: -0, y: 1, z: -0, w: 0}
           SceneTransitionImage: {fileID: 0}
       Boundaries:
         m_keys:

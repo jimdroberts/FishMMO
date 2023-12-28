@@ -64,7 +64,6 @@ namespace FishMMO.Shared
 		public LocalInputController LocalInputController { get; private set; }
 		public TextMeshPro CharacterNameLabel;
 		public TextMeshPro CharacterGuildLabel;
-		public LabelMaker LabelMaker;
 #endif
 		// accountID for reference
 		[SyncVar(SendRate = 0.0f, Channel = Channel.Reliable, ReadPermissions = ReadPermission.Observers, WritePermissions = WritePermission.ServerOnly, OnChange = nameof(OnCharacterIDChanged))]
@@ -174,8 +173,6 @@ namespace FishMMO.Shared
 				LocalInputController = gameObject.AddComponent<LocalInputController>();
 			}
 			LocalInputController.Initialize(this);
-
-			LabelMaker = gameObject.GetComponent<LabelMaker>();
 
 			InitializeUI(initializing);
 		}

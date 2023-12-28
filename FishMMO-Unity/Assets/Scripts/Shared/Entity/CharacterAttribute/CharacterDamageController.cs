@@ -53,20 +53,20 @@ namespace FishMMO.Shared
 
 
 
-			if (Character.LabelMaker != null)
+			if (LabelMaker.Instance != null)
 			{
-				OnDamageDisplay += Character.LabelMaker.Display;
-				OnHealedDisplay += Character.LabelMaker.Display;
+				OnDamageDisplay += LabelMaker.Display;
+				OnHealedDisplay += LabelMaker.Display;
 			}
 		}
 
 		public override void OnStopClient()
 		{
 			base.OnStopClient();
-			if (Character.LabelMaker != null)
+			if (LabelMaker.Instance != null)
 			{
-				OnDamageDisplay -= Character.LabelMaker.Display;
-				OnHealedDisplay -= Character.LabelMaker.Display;
+				OnDamageDisplay -= LabelMaker.Display;
+				OnHealedDisplay -= LabelMaker.Display;
 			}
 		}
 #endif

@@ -5,7 +5,7 @@ namespace FishMMO.Shared
 {
 	public class Ability
 	{
-		public int AbilityID;
+		public int ID;
 		public float ActivationTime;
 		public float ActiveTime;
 		public float Cooldown;
@@ -48,7 +48,7 @@ namespace FishMMO.Shared
 
 		public Ability(int abilityID, int templateID, List<AbilityEvent> events)
 		{
-			AbilityID = abilityID;
+			ID = abilityID;
 			Template = AbilityTemplate.Get<AbilityTemplate>(templateID);
 			Name = Template.Name;
 			CachedTooltip = null;
@@ -313,8 +313,8 @@ namespace FishMMO.Shared
 				sb.Append(Template.Name);
 				sb.Append("</color></size>");
 				sb.AppendLine();
-				sb.Append("<color=#a66ef5>AbilityID: ");
-				sb.Append(AbilityID);
+				sb.Append("<color=#a66ef5>ID: ");
+				sb.Append(ID);
 				sb.Append("</color>");
 				sb.AppendLine();
 				sb.Append("<color=#a66ef5>TemplateID: ");

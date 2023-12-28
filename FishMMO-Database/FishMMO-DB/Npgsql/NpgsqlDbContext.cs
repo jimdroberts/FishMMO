@@ -20,6 +20,8 @@ namespace FishMMO.Database.Npgsql
         
         // character tables
         public DbSet<CharacterEntity> Characters { get; set; }
+        public DbSet<CharacterAbilityEntity> CharacterAbilities { get; set; }
+        public DbSet<CharacterKnownAbilityEntity> CharacterKnownAbilities { get; set; }
         public DbSet<CharacterAttributeEntity> CharacterAttributes { get; set; }
         public DbSet<CharacterAchievementEntity> CharacterAchievements { get; set; }
         public DbSet<CharacterInventoryEntity> CharacterInventoryItems { get; set; }

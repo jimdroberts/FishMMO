@@ -174,15 +174,6 @@ namespace FishMMO.Server
 						characters.Remove(character.ID);
 					}
 
-					// update scene instance details
-					if (Server.SceneServerSystem.TryGetSceneInstanceDetails(character.WorldServerID,
-																			character.SceneName,
-																			character.SceneHandle,
-																			out SceneInstanceDetails instance))
-					{
-						--instance.CharacterCount;
-					}
-
 					// remove the characters pending guild invite request
 					if (Server.GuildSystem != null)
 					{
@@ -199,6 +190,15 @@ namespace FishMMO.Server
 					{
 						// teleporter handles the rest
 						return;
+					}
+
+					// update scene instance details
+					if (Server.SceneServerSystem.TryGetSceneInstanceDetails(character.WorldServerID,
+																			character.SceneName,
+																			character.SceneHandle,
+																			out SceneInstanceDetails instance))
+					{
+						--instance.CharacterCount;
 					}
 
 					// character becomes immortal on disconnect and mortal when fully loaded into the scene
