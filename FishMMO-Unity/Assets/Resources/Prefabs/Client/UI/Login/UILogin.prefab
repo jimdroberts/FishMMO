@@ -2183,7 +2183,9 @@ MonoBehaviour:
   StartOpen: 1
   IsAlwaysOpen: 0
   HasFocus: 0
+  FocusOnSelect: 0
   CloseOnQuitToMenu: 0
+  CloseOnEscape: 0
   CanDrag: 0
   ClampToScreen: 1
   username: {fileID: 5893823012155821594}

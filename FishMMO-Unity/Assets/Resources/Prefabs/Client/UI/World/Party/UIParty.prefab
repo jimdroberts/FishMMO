@@ -1139,7 +1139,9 @@ MonoBehaviour:
   StartOpen: 0
   IsAlwaysOpen: 0
   HasFocus: 0
+  FocusOnSelect: 1
   CloseOnQuitToMenu: 1
+  CloseOnEscape: 0
   CanDrag: 1
   ClampToScreen: 1
   HealthTemplate: {fileID: 11400000, guid: e5c10a046ee277f46a57ee2048ae5ec9, type: 2}

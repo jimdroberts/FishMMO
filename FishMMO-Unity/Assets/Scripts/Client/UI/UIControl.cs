@@ -12,6 +12,9 @@ namespace FishMMO.Client
 		public static readonly Color DEFAULT_COLOR = Hex.ColorNormalize(0.0f, 160.0f, 255.0f, 255.0f);
 		public static readonly Color DEFAULT_SELECTED_COLOR = Hex.ColorNormalize(0.0f, 255.0f, 255.0f, 255.0f);
 
+		private float updateRate = 3.0f;
+		private float nextPump = 0.0f;
+
 		public CanvasScaler CanvasScaler;
 		public RectTransform MainPanel = null;
 		[Tooltip("Helper field to check input field focus status in UIManager.")]
@@ -19,7 +22,11 @@ namespace FishMMO.Client
 		public bool StartOpen = true;
 		public bool IsAlwaysOpen = false;
 		public bool HasFocus = false;
+		[Tooltip("Puts the UI on top.")]
+		public bool FocusOnSelect = false;
 		public bool CloseOnQuitToMenu = true;
+		[Tooltip("Closes the UI when Esc is pressed if true.")]
+		public bool CloseOnEscape = false;
 
 		[Header("Drag")]
 		public bool CanDrag = false;
@@ -29,6 +36,7 @@ namespace FishMMO.Client
 		private bool isDragging;
 
 		public Client Client { get; private set; }
+		public Transform Transform { get; private set; }
 		public string Name { get { return gameObject.name; } set { gameObject.name = value; } }
 		public bool Visible
 		{
@@ -39,6 +47,10 @@ namespace FishMMO.Client
 			private set
 			{
 				gameObject.SetActive(value);
+				if (value && FocusOnSelect)
+				{
+					OnFocus();
+				}
 				if (!value && HasFocus)
 				{
 					EventSystem.current.SetSelectedGameObject(null);
@@ -50,6 +62,7 @@ namespace FishMMO.Client
 
 		private void Awake()
 		{
+			Transform = transform;
 			CanvasScaler = GetComponentInParent<CanvasScaler>();
 
 			startPosition = transform.position;
@@ -110,6 +123,44 @@ namespace FishMMO.Client
 			{
 				Hide();
 			}
+		}
+
+		void LateUpdate()
+		{
+			if (CloseOnEscape &&
+				Input.GetKeyDown(KeyCode.Escape))
+			{
+				Hide();
+			}
+			if (nextPump < 0)
+			{
+				nextPump = updateRate;
+
+				ClampUIToScreen(Transform.position.x, Transform.position.y);
+			}
+			nextPump -= Time.deltaTime;
+		}
+
+		public void ClampUIToScreen(float x, float y)
+		{
+			if (!ClampToScreen) return;
+
+			if (MainPanel != null)
+			{
+				float halfWidth = MainPanel.rect.width * 0.5f;
+				float halfHeight = MainPanel.rect.height * 0.5f;
+
+				if (CanvasScaler != null &&
+					CanvasScaler.uiScaleMode == CanvasScaler.ScaleMode.ScaleWithScreenSize)
+				{
+					halfWidth *= CanvasScaler.transform.localScale.x;
+					halfHeight *= CanvasScaler.transform.localScale.y;
+				}
+
+				x = Mathf.Clamp(x, halfWidth, Screen.width - halfWidth);
+				y = Mathf.Clamp(y, halfHeight, Screen.height - halfHeight);
+			}
+			Transform.position = new Vector2(x, y);
 		}
 
 		public virtual void OnQuitToLogin()
@@ -182,7 +233,6 @@ namespace FishMMO.Client
 		{
 			if (overrideIsAlwaysOpen)
 			{
-				Show();
 				return;
 			}
 			Visible = false;
@@ -190,20 +240,28 @@ namespace FishMMO.Client
 
 		public virtual void OnResetPosition()
 		{
-			transform.position = startPosition;
+			Transform.position = startPosition;
 		}
-
 
 		public void OnPointerDown(PointerEventData data)
 		{
-			if (!CanDrag) return;
-
-			if (data != null)
+			if (data == null)
 			{
-				if (MainPanel != null && RectTransformUtility.ScreenPointToLocalPointInRectangle(MainPanel, data.pressPosition, data.pressEventCamera, out dragOffset))
+				return;
+			}
+			if (MainPanel != null &&
+				RectTransformUtility.ScreenPointToLocalPointInRectangle(MainPanel, data.pressPosition, data.pressEventCamera, out dragOffset))
+			{
+				// reset parent transform, this will focus the UI Control
+				if (FocusOnSelect)
+				{
+					OnFocus();
+				}
+
+				if (CanDrag)
 				{
 					if (CanvasScaler != null &&
-						CanvasScaler.uiScaleMode == CanvasScaler.ScaleMode.ScaleWithScreenSize)
+					CanvasScaler.uiScaleMode == CanvasScaler.ScaleMode.ScaleWithScreenSize)
 					{
 						dragOffset.x *= CanvasScaler.transform.localScale.x;
 						dragOffset.y *= CanvasScaler.transform.localScale.y;
@@ -211,11 +269,20 @@ namespace FishMMO.Client
 
 					isDragging = true;
 				}
-				else
-				{
-					dragOffset = Vector2.zero;
-				}
 			}
+			else
+			{
+				dragOffset = Vector2.zero;
+			}
+		}
+
+		private void OnFocus()
+		{
+			Transform parent = Transform.parent;
+			Vector3 pos = Transform.position;
+			Transform.SetParent(null);
+			Transform.SetParent(parent);
+			Transform.position = pos;
 		}
 
 		public void OnPointerUp(PointerEventData data)
@@ -223,6 +290,7 @@ namespace FishMMO.Client
 			if (!CanDrag) return;
 
 			isDragging = false;
+			dragOffset = Vector2.zero;
 		}
 
 		public void OnDrag(PointerEventData data)
@@ -233,31 +301,14 @@ namespace FishMMO.Client
 			{
 				float x = data.position.x - dragOffset.x;
 				float y = data.position.y - dragOffset.y;
-				if (ClampToScreen)
-				{
-					if (MainPanel != null)
-					{
-						float halfWidth = MainPanel.rect.width * 0.5f;
-						float halfHeight = MainPanel.rect.height * 0.5f;
 
-						if (CanvasScaler != null &&
-							CanvasScaler.uiScaleMode == CanvasScaler.ScaleMode.ScaleWithScreenSize)
-						{
-							halfWidth *= CanvasScaler.transform.localScale.x;
-							halfHeight *= CanvasScaler.transform.localScale.y;
-						}
-
-						x = Mathf.Clamp(x, halfWidth, Screen.width - halfWidth);
-						y = Mathf.Clamp(y, halfHeight, Screen.height - halfHeight);
-					}
-				}
-				transform.position = new Vector2(x, y);
+				ClampUIToScreen(x, y);
 			}
 		}
 
 		public void ResetPosition()
 		{
-			transform.position = startPosition;
+			Transform.position = startPosition;
 			dragOffset = Vector2.zero;
 			isDragging = false;
 		}

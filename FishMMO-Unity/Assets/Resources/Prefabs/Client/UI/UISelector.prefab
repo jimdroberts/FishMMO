@@ -1178,7 +1178,9 @@ MonoBehaviour:
   StartOpen: 0
   IsAlwaysOpen: 0
   HasFocus: 0
+  FocusOnSelect: 1
   CloseOnQuitToMenu: 1
+  CloseOnEscape: 1
   CanDrag: 0
   ClampToScreen: 1
   ButtonParent: {fileID: 3051315449931385907}

@@ -40,15 +40,6 @@ namespace FishMMO.Client
 		/// </summary>
 		private void UpdateInput()
 		{
-			if (InputManager.GetKeyDown("Cancel"))
-			{
-				if (UIManager.TryGet("UIDragObject", out UIDragObject dragObject))
-				{
-					dragObject.Clear();
-					return;
-				}
-			}
-
 			// if an input has focus we should skip input otherwise things will happen while we are typing!
 			if (Character == null ||
 				UIManager.InputControlHasFocus())
@@ -60,7 +51,6 @@ namespace FishMMO.Client
 			if (InputManager.GetKeyDown("Mouse Mode"))
 			{
 				InputManager.ToggleMouseMode();
-
 			}
 			
 			// we can interact with things as long as the UI doesn't have focus

@@ -605,7 +605,9 @@ MonoBehaviour:
   StartOpen: 0
   IsAlwaysOpen: 0
   HasFocus: 0
+  FocusOnSelect: 1
   CloseOnQuitToMenu: 1
+  CloseOnEscape: 1
   CanDrag: 1
   ClampToScreen: 1
   FriendParent: {fileID: 8900509986437605610}

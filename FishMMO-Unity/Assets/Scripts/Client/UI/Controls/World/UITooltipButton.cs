@@ -11,6 +11,7 @@ namespace FishMMO.Client
 	{
 		private Sprite cachedSprite;
 		private string cachedLabel;
+		private UITooltip currentUITooltip;
 
 		public Image Icon;
 		public TMP_Text TooltipLabel;
@@ -46,6 +47,13 @@ namespace FishMMO.Client
 			OnCtrlClick = null;
 
 			Clear();
+		}
+
+		protected override void OnDisable()
+		{
+			base.OnDisable();
+
+			ClearTooltip();
 		}
 
 		public void Initialize(int index, Action<int, object[]> onLeftClick, Action<int, object[]> onRightClick, ITooltip tooltip = null, string extraTooltipInfo = "", Action<int, object[]> onCtrlClick = null, object[] optionalParams = null)
@@ -91,9 +99,9 @@ namespace FishMMO.Client
 			base.OnPointerEnter(eventData);
 
 			if (Tooltip != null &&
-				UIManager.TryGet("UITooltip", out UITooltip tooltip))
+				UIManager.TryGet("UITooltip", out currentUITooltip))
 			{
-				tooltip.Open(Tooltip.Tooltip() + ExtraTooltipInfo);
+				currentUITooltip.Open(Tooltip.Tooltip() + ExtraTooltipInfo);
 			}
 		}
 
@@ -101,10 +109,7 @@ namespace FishMMO.Client
 		{
 			base.OnPointerExit(eventData);
 
-			if (UIManager.TryGet("UITooltip", out UITooltip tooltip))
-			{
-				tooltip.Hide();
-			}
+			ClearTooltip();
 		}
 
 		public override void OnPointerClick(PointerEventData eventData)
@@ -135,6 +140,15 @@ namespace FishMMO.Client
 			}
 		}
 
+		private void ClearTooltip()
+		{
+			if (currentUITooltip != null)
+			{
+				currentUITooltip.Hide();
+				currentUITooltip = null;
+			}
+		}
+
 		public virtual void Clear()
 		{
 			Character = null;
@@ -148,6 +162,7 @@ namespace FishMMO.Client
 				TooltipLabel.text = cachedLabel;
 			}
 			OptionalParams = null;
+			ClearTooltip();
 		}
 	}
 }

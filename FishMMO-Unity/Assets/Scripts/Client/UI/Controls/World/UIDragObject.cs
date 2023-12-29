@@ -1,13 +1,14 @@
 ﻿using UnityEngine;
-using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace FishMMO.Client
 {
 	public class UIDragObject : UIControl
 	{
+		public const int NULL_REFERENCE_ID = -1;
+
 		public Image Icon;
-		public int ReferenceID = UIReferenceButton.NULL_REFERENCE_ID;
+		public int ReferenceID = NULL_REFERENCE_ID;
 		public ReferenceButtonType Type = ReferenceButtonType.None;
 
 		public LayerMask LayerMask;
@@ -25,7 +26,9 @@ namespace FishMMO.Client
 		{
 			if (Visible)
 			{
-				if (Icon == null || Icon.sprite == null || ReferenceID == UIReferenceButton.NULL_REFERENCE_ID)
+				if (Icon == null ||
+					Icon.sprite == null ||
+					ReferenceID == NULL_REFERENCE_ID)
 				{
 					Clear();
 					return;
@@ -33,7 +36,7 @@ namespace FishMMO.Client
 
 				// clear the hotkey if we are clicking anywhere that isn't the UI
 				// also we can handle dropping items to the ground here if we want
-				if (Input.GetMouseButtonDown(0) && !EventSystem.current.IsPointerOverGameObject())
+				if (Input.GetMouseButtonDown(0) && !UIManager.ControlHasFocus())
 				{
 					// we can drop items on the ground from inventory
 					if (Type == ReferenceButtonType.Inventory)
@@ -43,7 +46,7 @@ namespace FishMMO.Client
 						if (Physics.Raycast(ray, out hit, DropDistance, LayerMask))
 						{
 							//Drop item at position of hit
-							Debug.Log("Dropping item to ground at pos[" + hit.point + "]");
+							Debug.Log("Dropping item at pos[" + hit.point + "]");
 						}
 					}
 					Clear();
@@ -74,7 +77,7 @@ namespace FishMMO.Client
 			Hide();
 
 			Icon.sprite = null;
-			ReferenceID = UIReferenceButton.NULL_REFERENCE_ID;
+			ReferenceID = NULL_REFERENCE_ID;
 			Type = ReferenceButtonType.None;
 			//transform.position = new Vector3(-9999.0f, -9999.0f, 0.0f); // do we need to do this?
 		}

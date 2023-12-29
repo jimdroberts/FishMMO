@@ -47,7 +47,7 @@ namespace FishMMO.Client
 			AddKey("Run", KeyCode.LeftShift);
 			AddKey("Jump", KeyCode.Space);
 			AddKey("Crouch", KeyCode.C);
-			AddKey("Mouse Mode", KeyCode.M);
+			AddKey("Mouse Mode", KeyCode.LeftAlt);
 			AddKey("Interact", KeyCode.E);
 			AddKey("Inventory", KeyCode.I);
 			AddKey("Abilities", KeyCode.K);

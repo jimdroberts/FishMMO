@@ -13,6 +13,8 @@ namespace FishMMO.Client
 	{
 		public const int NULL_REFERENCE_ID = -1;
 
+		private UITooltip currentUITooltip;
+
 		/// <summary>
 		/// ReferenceID is equal to the inventory slot, equipment slot, or ability id based on Reference Type.
 		/// </summary>
@@ -28,6 +30,13 @@ namespace FishMMO.Client
 
 		public Character Character;
 
+		protected override void OnDisable()
+		{
+			base.OnDisable();
+
+			ClearTooltip();
+		}
+
 		public virtual void OnLeftClick() { }
 		public virtual void OnRightClick() { }
 
@@ -37,7 +46,6 @@ namespace FishMMO.Client
 
 			if (Character != null && ReferenceID > -1)
 			{
-				UITooltip tooltip;
 				switch (Type)
 				{
 					case ReferenceButtonType.None:
@@ -47,25 +55,25 @@ namespace FishMMO.Client
 					case ReferenceButtonType.Inventory:
 						if (Character.InventoryController != null &&
 							Character.InventoryController.TryGetItem(ReferenceID, out Item inventoryItem) &&
-							UIManager.TryGet("UITooltip", out tooltip))
+							UIManager.TryGet("UITooltip", out currentUITooltip))
 						{
-							tooltip.Open(inventoryItem.Tooltip());
+							currentUITooltip.Open(inventoryItem.Tooltip());
 						}
 						break;
 					case ReferenceButtonType.Equipment:
 						if (Character.EquipmentController != null &&
 							Character.EquipmentController.TryGetItem(ReferenceID, out Item equippedItem) &&
-							UIManager.TryGet("UITooltip", out tooltip))
+							UIManager.TryGet("UITooltip", out currentUITooltip))
 						{
-							tooltip.Open(equippedItem.Tooltip());
+							currentUITooltip.Open(equippedItem.Tooltip());
 						}
 						break;
 					case ReferenceButtonType.Ability:
 						if (Character.AbilityController.KnownAbilities != null &&
 							Character.AbilityController.KnownAbilities.TryGetValue(ReferenceID, out Ability ability) &&
-							UIManager.TryGet("UITooltip", out tooltip))
+							UIManager.TryGet("UITooltip", out currentUITooltip))
 						{
-							tooltip.Open(ability.Tooltip());
+							currentUITooltip.Open(ability.Tooltip());
 						}
 						break;
 					default:
@@ -78,10 +86,7 @@ namespace FishMMO.Client
 		{
 			base.OnPointerExit(eventData);
 
-			if (UIManager.TryGet("UITooltip", out UITooltip tooltip))
-			{
-				tooltip.Hide();
-			}
+			ClearTooltip();
 		}
 
 		public override void OnPointerClick(PointerEventData eventData)
@@ -98,6 +103,15 @@ namespace FishMMO.Client
 			}
 		}
 
+		private void ClearTooltip()
+		{
+			if (currentUITooltip != null)
+			{
+				currentUITooltip.Hide();
+				currentUITooltip = null;
+			}
+		}
+
 		public virtual void Clear()
 		{
 			ReferenceID = NULL_REFERENCE_ID;
@@ -105,6 +119,7 @@ namespace FishMMO.Client
 			if (Icon != null) Icon.sprite = null;
 			if (CooldownText != null) CooldownText.text = "";
 			if (AmountText != null) AmountText.text = "";
+			ClearTooltip();
 		}
 	}
 }

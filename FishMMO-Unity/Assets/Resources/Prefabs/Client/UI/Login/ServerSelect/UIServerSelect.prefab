@@ -1329,9 +1329,11 @@ MonoBehaviour:
   StartOpen: 0
   IsAlwaysOpen: 0
   HasFocus: 0
+  FocusOnSelect: 0
   CloseOnQuitToMenu: 1
+  CloseOnEscape: 0
   CanDrag: 0
-  ClampToScreen: 0
+  ClampToScreen: 1
   connectToServerButton: {fileID: 7169268986304728264}
   refreshButton: {fileID: 488913270}
   serverParent: {fileID: 7169268987258923770}
@@ -1595,7 +1597,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: 0, y: 0}
+  m_AnchoredPosition: {x: -0.00036621094, y: -0.000030517578}
   m_SizeDelta: {x: 0, y: 300}
   m_Pivot: {x: 0, y: 1}
 --- !u!114 &7169268986435580471
