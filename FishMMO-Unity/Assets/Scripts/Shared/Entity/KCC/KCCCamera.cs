@@ -104,6 +104,9 @@ namespace FishMMO.Shared
 				Quaternion verticalRot = Quaternion.Euler(_targetVerticalAngle, 0, 0);
 				Quaternion targetRotation = Quaternion.Slerp(Transform.rotation, planarRot * verticalRot, 1f - Mathf.Exp(-RotationSharpness * deltaTime));
 
+				// Get the look direction vector from the rotation
+				//Vector3 lookDirection = targetRotation * Vector3.forward;
+
 				// Apply rotation
 				Transform.rotation = targetRotation;
 

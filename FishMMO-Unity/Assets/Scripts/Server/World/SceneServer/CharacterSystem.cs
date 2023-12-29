@@ -368,6 +368,73 @@ namespace FishMMO.Server
 				return;
 			}
 
+			#region Abilities
+			if (character.AbilityController != null)
+			{
+				List<KnownAbilityAddBroadcast> knownAbilityBroadcasts = new List<KnownAbilityAddBroadcast>();
+
+				if (character.AbilityController.KnownBaseAbilities != null)
+				{
+					// get base ability templates
+					foreach (int templateID in character.AbilityController.KnownBaseAbilities)
+					{
+						// create the new item broadcast
+						knownAbilityBroadcasts.Add(new KnownAbilityAddBroadcast()
+						{
+							templateID = templateID,
+						});
+					}
+				}
+				
+				if (character.AbilityController.KnownEvents != null)
+				{
+					// and event templates
+					foreach (int templateID in character.AbilityController.KnownEvents)
+					{
+						// create the new item broadcast
+						knownAbilityBroadcasts.Add(new KnownAbilityAddBroadcast()
+						{
+							templateID = templateID,
+						});
+					}
+				}
+
+				// tell the client they have known abilities
+				if (knownAbilityBroadcasts.Count > 0)
+				{
+					character.Owner.Broadcast(new KnownAbilityAddMultipleBroadcast()
+					{
+						abilities = knownAbilityBroadcasts,
+					}, true, Channel.Reliable);
+				}
+
+				if (character.AbilityController.KnownAbilities != null)
+				{
+					List<AbilityAddBroadcast> abilityBroadcasts = new List<AbilityAddBroadcast>();
+
+					// get the actual abilities
+					foreach (Ability ability in character.AbilityController.KnownAbilities.Values)
+					{
+						abilityBroadcasts.Add(new AbilityAddBroadcast()
+						{
+							id = ability.ID,
+							templateID = ability.Template.ID,
+							events = ability.AbilityEvents.Keys.ToList(),
+						});
+					}
+
+					// tell the client the have abilities
+					if (abilityBroadcasts.Count > 0)
+					{
+						character.Owner.Broadcast(new AbilityAddMultipleBroadcast()
+						{
+							abilities = abilityBroadcasts,
+						});
+					}
+				}
+			}
+			#endregion
+
 			#region Attributes
 			if (character.AttributeController != null)
 			{

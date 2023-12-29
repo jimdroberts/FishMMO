@@ -5,10 +5,10 @@ namespace FishMMO.Shared
 	public struct AbilityReconcileData : IReconcileData
 	{
 		public bool Interrupt;
-		public int AbilityID;
+		public long AbilityID;
 		public float RemainingTime;
 
-		public AbilityReconcileData(bool interrupt, int abilityID, float remainingTime)
+		public AbilityReconcileData(bool interrupt, long abilityID, float remainingTime)
 		{
 			Interrupt = interrupt;
 			AbilityID = abilityID;

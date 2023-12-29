@@ -63,7 +63,7 @@ namespace FishMMO.Client
 				Character.AbilityController != null &&
 				UIManager.TryGet("UISelector", out UISelector uiSelector))
 			{
-				List<ICachedObject> templates = AbilityTemplate.Get<AbilityTemplate>(Character.AbilityController.KnownTemplates);
+				List<ICachedObject> templates = AbilityTemplate.Get<AbilityTemplate>(Character.AbilityController.KnownBaseAbilities);
 				uiSelector.Open(templates, (i) =>
 				{
 					AbilityTemplate template = AbilityTemplate.Get<AbilityTemplate>(i);

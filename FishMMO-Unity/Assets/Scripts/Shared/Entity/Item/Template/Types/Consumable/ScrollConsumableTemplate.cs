@@ -12,7 +12,7 @@ namespace FishMMO.Shared
 			{
 				if (character.AbilityController != null)
 				{
-					character.AbilityController.LearnAbilities(AbilityTemplates);
+					character.AbilityController.LearnBaseAbilities(AbilityTemplates);
 				}
 				return true;
 			}

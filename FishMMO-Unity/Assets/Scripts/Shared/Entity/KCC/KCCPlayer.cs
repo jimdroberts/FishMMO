@@ -51,19 +51,14 @@ namespace FishMMO.Shared
 #endif
 		}
 
+#if !UNITY_SERVER
+
 		void OnDestroy()
 		{
-#if !UNITY_SERVER
 			if (FishMMO.Client.Client.TimeManager != null)
 			{
 				FishMMO.Client.Client.TimeManager.OnTick -= TimeManager_OnTick;
 			}
-#else
-			if (InstanceFinder.TimeManager != null)
-			{
-				InstanceFinder.TimeManager.OnTick -= TimeManager_OnTick;
-			}
-#endif
 		}
 
 		public override void OnStartClient()
@@ -85,7 +80,7 @@ namespace FishMMO.Shared
 				}
 			}
 			//Quang: The remote object must not have movement related logic code, destroy it. Network transform will handle the movements
-			else if (!base.IsServer)
+			else
 			{
 				KinematicCharacterMotor motor = GetComponent<KinematicCharacterMotor>();
 				if (motor != null)
@@ -104,6 +99,15 @@ namespace FishMMO.Shared
 				}
 			}
 		}
+#else
+		void OnDestroy()
+		{
+			if (InstanceFinder.TimeManager != null)
+			{
+				InstanceFinder.TimeManager.OnTick -= TimeManager_OnTick;
+			}
+		}
+#endif
 
 		[Client(Logging = LoggingType.Off)]
 		private bool CanUpdateInput()

@@ -14,11 +14,11 @@ namespace FishMMO.Shared
 	[RequireComponent(typeof(Character))]
 	public class AbilityController : NetworkBehaviour
 	{
-		public const int NO_ABILITY = 0;
+		public const long NO_ABILITY = 0;
 
 		private Ability currentAbility;
 		private bool interruptQueued;
-		private int queuedAbilityID;
+		private long queuedAbilityID;
 		private float remainingTime;
 		private KeyCode heldKey;
 		//private Random currentSeed = 12345;
@@ -36,8 +36,8 @@ namespace FishMMO.Shared
 		// Invoked when the current ability is Cancelled.
 		public event Action OnCancel;
 
-		public Dictionary<int, Ability> KnownAbilities { get; private set; }
-		public HashSet<int> KnownTemplates { get; private set; }
+		public Dictionary<long, Ability> KnownAbilities { get; private set; }
+		public HashSet<int> KnownBaseAbilities { get; private set; }
 		public HashSet<int> KnownEvents { get; private set; }
 		public HashSet<int> KnownSpawnEvents { get; private set; }
 		public HashSet<int> KnownHitEvents { get; private set; }
@@ -72,6 +72,11 @@ namespace FishMMO.Shared
 			}
 			else
 			{
+				ClientManager.RegisterBroadcast<KnownAbilityAddBroadcast>(OnClientKnownAbilityAddBroadcastReceived);
+				ClientManager.RegisterBroadcast<KnownAbilityAddMultipleBroadcast>(OnClientKnownAbilityAddMultipleBroadcastReceived);
+				ClientManager.RegisterBroadcast<AbilityAddBroadcast>(OnClientAbilityAddBroadcastReceived);
+				ClientManager.RegisterBroadcast<AbilityAddMultipleBroadcast>(OnClientAbilityAddMultipleBroadcastReceived);
+
 				if (UIManager.TryGet("UICastBar", out UICastBar uiCastBar))
 				{
 					OnUpdate += uiCastBar.OnUpdate;
@@ -86,10 +91,71 @@ namespace FishMMO.Shared
 
 			if (base.IsOwner)
 			{
+				ClientManager.UnregisterBroadcast<KnownAbilityAddBroadcast>(OnClientKnownAbilityAddBroadcastReceived);
+				ClientManager.UnregisterBroadcast<KnownAbilityAddMultipleBroadcast>(OnClientKnownAbilityAddMultipleBroadcastReceived);
+				ClientManager.UnregisterBroadcast<AbilityAddBroadcast>(OnClientAbilityAddBroadcastReceived);
+				ClientManager.UnregisterBroadcast<AbilityAddMultipleBroadcast>(OnClientAbilityAddMultipleBroadcastReceived);
+
 				if (UIManager.TryGet("UICastBar", out UICastBar uiCastBar))
 				{
 					OnUpdate -= uiCastBar.OnUpdate;
 					OnCancel -= uiCastBar.OnCancel;
+				}
+			}
+		}
+
+		/// <summary>
+		/// Server sent an add known ability broadcast.
+		/// </summary>
+		private void OnClientKnownAbilityAddBroadcastReceived(KnownAbilityAddBroadcast msg)
+		{
+			BaseAbilityTemplate baseAbilityTemplate = BaseAbilityTemplate.Get<BaseAbilityTemplate>(msg.templateID);
+			if (baseAbilityTemplate != null)
+			{
+				LearnBaseAbilities(new List<BaseAbilityTemplate>() { baseAbilityTemplate });
+			}
+		}
+
+		/// <summary>
+		/// Server sent an add known ability broadcast.
+		/// </summary>
+		private void OnClientKnownAbilityAddMultipleBroadcastReceived(KnownAbilityAddMultipleBroadcast msg)
+		{
+			List<BaseAbilityTemplate> templates = new List<BaseAbilityTemplate>();
+			foreach (KnownAbilityAddBroadcast knownAbility in msg.abilities)
+			{
+				BaseAbilityTemplate baseAbilityTemplate = BaseAbilityTemplate.Get<BaseAbilityTemplate>(knownAbility.templateID);
+				if (baseAbilityTemplate != null)
+				{
+					templates.Add(baseAbilityTemplate);
+				}
+			}
+			LearnBaseAbilities(templates);
+		}
+
+		/// <summary>
+		/// Server sent an add ability broadcast.
+		/// </summary>
+		private void OnClientAbilityAddBroadcastReceived(AbilityAddBroadcast msg)
+		{
+			AbilityTemplate abilityTemplate = AbilityTemplate.Get<AbilityTemplate>(msg.templateID);
+			if (abilityTemplate != null)
+			{
+				LearnAbility(new Ability(msg.id, abilityTemplate, msg.events));
+			}
+		}
+
+		/// <summary>
+		/// Server sent an add multiple ability broadcast.
+		/// </summary>
+		private void OnClientAbilityAddMultipleBroadcastReceived(AbilityAddMultipleBroadcast msg)
+		{
+			foreach (AbilityAddBroadcast ability in msg.abilities)
+			{
+				AbilityTemplate abilityTemplate = AbilityTemplate.Get<AbilityTemplate>(ability.templateID);
+				if (abilityTemplate != null)
+				{
+					LearnAbility(new Ability(ability.id, abilityTemplate, ability.events));
 				}
 			}
 		}
@@ -337,15 +403,15 @@ namespace FishMMO.Shared
 
 		public bool KnowsAbility(int abilityID)
 		{
-			if (KnownTemplates.Contains(abilityID) ||
-				KnownEvents.Contains(abilityID))
+			if ((KnownBaseAbilities != null && KnownBaseAbilities.Contains(abilityID)) ||
+				(KnownEvents != null && KnownEvents.Contains(abilityID)))
 			{
 				return true;
 			}
 			return false;
 		}
 
-		public bool LearnAbilities(List<BaseAbilityTemplate> abilityTemplates = null)
+		public bool LearnBaseAbilities(List<BaseAbilityTemplate> abilityTemplates = null)
 		{
 			if (abilityTemplates == null)
 			{
@@ -408,13 +474,13 @@ namespace FishMMO.Shared
 					AbilityTemplate abilityTemplate = abilityTemplates[i] as AbilityTemplate;
 					if (abilityTemplate != null)
 					{
-						if (KnownTemplates == null)
+						if (KnownBaseAbilities == null)
 						{
-							KnownTemplates = new HashSet<int>();
+							KnownBaseAbilities = new HashSet<int>();
 						}
-						if (!KnownTemplates.Contains(abilityTemplate.ID))
+						if (!KnownBaseAbilities.Contains(abilityTemplate.ID))
 						{
-							KnownTemplates.Add(abilityTemplate.ID);
+							KnownBaseAbilities.Add(abilityTemplate.ID);
 						}
 					}
 				}
@@ -431,8 +497,9 @@ namespace FishMMO.Shared
 
 			if (KnownAbilities == null)
 			{
-				KnownAbilities = new Dictionary<int, Ability>();
+				KnownAbilities = new Dictionary<long, Ability>();
 			}
+			KnownAbilities[ability.ID] = ability;
 		}
 	}
 }

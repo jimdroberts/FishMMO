@@ -118,14 +118,14 @@ namespace FishMMO.Server
 			switch (msg.Type)
 			{
 				case MerchantTabType.Item:
-					BaseItemTemplate template = merchantTemplate.Items[msg.Index];
-					if (template == null)
+					BaseItemTemplate itemTemplate = merchantTemplate.Items[msg.Index];
+					if (itemTemplate == null)
 					{
 						return;
 					}
 
 					// do we have enough currency to purchase this?
-					if (character.InventoryController.Currency < template.Price)
+					if (character.InventoryController.Currency < itemTemplate.Price)
 					{
 						return;
 					}
@@ -133,7 +133,7 @@ namespace FishMMO.Server
 					if (merchantTemplate.Items != null &&
 						merchantTemplate.Items.Count >= msg.Index)
 					{
-						Item newItem = new Item(template, 1);
+						Item newItem = new Item(itemTemplate, 1);
 						if (newItem == null)
 						{
 							return;
@@ -147,7 +147,7 @@ namespace FishMMO.Server
 							modifiedItems.Count > 0)
 						{
 							// remove the price from the characters currency
-							character.InventoryController.Currency -= template.Price;
+							character.InventoryController.Currency -= itemTemplate.Price;
 
 							// add slot update requests to our message
 							foreach (Item item in modifiedItems)
@@ -186,16 +186,66 @@ namespace FishMMO.Server
 					break;
 				case MerchantTabType.Ability:
 					if (merchantTemplate.Abilities != null &&
-						merchantTemplate.Abilities.Count >= msg.Index)
+						merchantTemplate.Abilities.Count >= msg.Index &&
+						character.AbilityController != null)
 					{
+						AbilityTemplate abilityTemplate = merchantTemplate.Abilities[msg.Index];
+						if (abilityTemplate != null &&
+							!character.AbilityController.KnowsAbility(abilityTemplate.ID))
+						{
+							// do we have enough currency to purchase this?
+							if (character.InventoryController.Currency < abilityTemplate.Price)
+							{
+								return;
+							}
 
+							character.AbilityController.LearnBaseAbilities(new List<BaseAbilityTemplate> { abilityTemplate });
+
+							// remove the price from the characters currency
+							character.InventoryController.Currency -= abilityTemplate.Price;
+
+							// add the known ability to the database
+							CharacterKnownAbilityService.Add(dbContext, character.ID, abilityTemplate.ID);
+							dbContext.SaveChanges();
+
+							// tell the client about the new base ability
+							conn.Broadcast(new KnownAbilityAddBroadcast()
+							{
+								templateID = abilityTemplate.ID,
+							}, true, Channel.Reliable);
+						}
 					}
 					break;
 				case MerchantTabType.AbilityEvent:
 					if (merchantTemplate.AbilityEvents != null &&
-						merchantTemplate.AbilityEvents.Count >= msg.Index)
+						merchantTemplate.AbilityEvents.Count >= msg.Index &&
+						character.AbilityController != null)
 					{
+						AbilityEvent eventTemplate = merchantTemplate.AbilityEvents[msg.Index];
+						if (eventTemplate != null &&
+							!character.AbilityController.KnowsAbility(eventTemplate.ID))
+						{
+							// do we have enough currency to purchase this?
+							if (character.InventoryController.Currency < eventTemplate.Price)
+							{
+								return;
+							}
 
+							character.AbilityController.LearnBaseAbilities(new List<BaseAbilityTemplate> { eventTemplate });
+
+							// remove the price from the characters currency
+							character.InventoryController.Currency -= eventTemplate.Price;
+
+							// add the known ability to the database
+							CharacterKnownAbilityService.Add(dbContext, character.ID, eventTemplate.ID);
+							dbContext.SaveChanges();
+
+							// tell the client about the new ability event
+							conn.Broadcast(new KnownAbilityAddBroadcast()
+							{
+								templateID = eventTemplate.ID,
+							}, true, Channel.Reliable);
+						}
 					}
 					break;
 				default: return;

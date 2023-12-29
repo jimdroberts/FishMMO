@@ -6,10 +6,10 @@ namespace FishMMO.Shared
 	public struct AbilityActivationReplicateData : IReplicateData
 	{
 		public bool InterruptQueued;
-		public int QueuedAbilityID;
+		public long QueuedAbilityID;
 		public KeyCode HeldKey;
 
-		public AbilityActivationReplicateData(bool interruptQueued, int queuedAbilityID, KeyCode heldKey)
+		public AbilityActivationReplicateData(bool interruptQueued, long queuedAbilityID, KeyCode heldKey)
 		{
 			InterruptQueued = interruptQueued;
 			QueuedAbilityID = queuedAbilityID;

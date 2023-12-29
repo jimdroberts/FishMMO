@@ -5,7 +5,7 @@ namespace FishMMO.Shared
 {
 	public class Ability
 	{
-		public int ID;
+		public long ID;
 		public float ActivationTime;
 		public float ActiveTime;
 		public float Cooldown;
@@ -17,7 +17,7 @@ namespace FishMMO.Shared
 		public string CachedTooltip { get; private set; }
 		public AbilityResourceDictionary Resources { get; private set; }
 		public AbilityResourceDictionary Requirements { get; private set; }
-		// cache of all ability events
+
 		public Dictionary<int, AbilityEvent> AbilityEvents { get; private set; }
 		public Dictionary<int, SpawnEvent> PreSpawnEvents { get; private set; }
 		public Dictionary<int, SpawnEvent> SpawnEvents { get; private set; }
@@ -42,11 +42,30 @@ namespace FishMMO.Shared
 			}
 		}
 
-		public Ability(int abilityID, int templateID) : this(abilityID, templateID, null)
+		public Ability(AbilityTemplate template, List<int> abilityEvents = null)
 		{
+			ID = -1;
+			Template = template;
+			Name = Template.Name;
+			CachedTooltip = null;
+
+			InternalAddTemplateModifiers(Template);
+
+			if (abilityEvents != null)
+			{
+				for (int i = 0; i < abilityEvents.Count; ++i)
+				{
+					AbilityEvent abilityEvent = AbilityEvent.Get<AbilityEvent>(abilityEvents[i]);
+					if (abilityEvent == null)
+					{
+						continue;
+					}
+					AddAbilityEvent(abilityEvent);
+				}
+			}
 		}
 
-		public Ability(int abilityID, int templateID, List<AbilityEvent> events)
+		public Ability(long abilityID, int templateID, List<int> abilityEvents = null)
 		{
 			ID = abilityID;
 			Template = AbilityTemplate.Get<AbilityTemplate>(templateID);
@@ -55,11 +74,39 @@ namespace FishMMO.Shared
 
 			InternalAddTemplateModifiers(Template);
 
-			if (events != null)
+			if (abilityEvents != null)
 			{
-				for (int i = 0; i < events.Count; ++i)
+				for (int i = 0; i < abilityEvents.Count; ++i)
 				{
-					AddAbilityEvent(events[i]);
+					AbilityEvent abilityEvent = AbilityEvent.Get<AbilityEvent>(abilityEvents[i]);
+					if (abilityEvent == null)
+					{
+						continue;
+					}
+					AddAbilityEvent(abilityEvent);
+				}
+			}
+		}
+
+		public Ability(long abilityID, AbilityTemplate template, List<int> abilityEvents = null)
+		{
+			ID = abilityID;
+			Template = template;
+			Name = Template.Name;
+			CachedTooltip = null;
+
+			InternalAddTemplateModifiers(Template);
+
+			if (abilityEvents != null)
+			{
+				for (int i = 0; i < abilityEvents.Count; ++i)
+				{
+					AbilityEvent abilityEvent = AbilityEvent.Get<AbilityEvent>(abilityEvents[i]);
+					if (abilityEvent == null)
+					{
+						continue;
+					}
+					AddAbilityEvent(abilityEvent);
 				}
 			}
 		}
