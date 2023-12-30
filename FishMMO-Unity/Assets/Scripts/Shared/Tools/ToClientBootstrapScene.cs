@@ -10,7 +10,7 @@ public class ToClientBootstrapScene : MonoBehaviour
     public static void GoToClientBootstrapScene()
     {
         // Specify the path to the scene asset
-        string scenePath = "Assets/Scenes/Boostraps/ClientBootstrap.unity";
+        string scenePath = "Assets/Scenes/Bootstraps/ClientBootstrap.unity";
 
         // Check if the scene exists at the specified path
         if (AssetDatabase.LoadAssetAtPath<SceneAsset>(scenePath) != null)
