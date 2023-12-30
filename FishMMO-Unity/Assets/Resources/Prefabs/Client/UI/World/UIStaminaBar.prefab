@@ -334,7 +334,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 162, y: -552}
+  m_AnchoredPosition: {x: 162, y: -410}
   m_SizeDelta: {x: 160, y: 20}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &8498208750836810400
@@ -393,7 +393,9 @@ MonoBehaviour:
   StartOpen: 0
   IsAlwaysOpen: 0
   HasFocus: 0
+  FocusOnSelect: 0
   CloseOnQuitToMenu: 1
+  CloseOnEscape: 0
   CanDrag: 0
   ClampToScreen: 1
   slider: {fileID: 8882703915453793432}
