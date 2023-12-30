@@ -64,6 +64,7 @@ namespace FishMMO.Shared
 		public LocalInputController LocalInputController { get; private set; }
 		public TextMeshPro CharacterNameLabel;
 		public TextMeshPro CharacterGuildLabel;
+		public Camera EquipmentViewCamera;
 #endif
 		// accountID for reference
 		[SyncVar(SendRate = 0.0f, Channel = Channel.Reliable, ReadPermissions = ReadPermission.Observers, WritePermissions = WritePermission.ServerOnly, OnChange = nameof(OnCharacterIDChanged))]

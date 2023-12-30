@@ -146,8 +146,6 @@ namespace FishMMO.Shared
 			byte slotIndex = (byte)slot;
 			Item prevItem = Items[slotIndex];
 			if (prevItem != null &&
-				prevItem.IsStackable &&
-				prevItem.Stackable.Amount > 0 &&
 				prevItem.Equippable != null)
 			{
 				prevItem.Equippable.Unequip();

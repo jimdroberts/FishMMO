@@ -143,7 +143,7 @@ namespace FishMMO.Client
 			}
 		}
 
-		void LateUpdate()
+		/*void LateUpdate()
 		{
 			if (nextPump < 0)
 			{
@@ -152,7 +152,7 @@ namespace FishMMO.Client
 				ClampUIToScreen(Transform.position.x, Transform.position.y);
 			}
 			nextPump -= Time.deltaTime;
-		}
+		}*/
 
 		public void ClampUIToScreen(float x, float y)
 		{

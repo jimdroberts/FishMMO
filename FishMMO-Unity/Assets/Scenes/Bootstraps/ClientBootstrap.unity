@@ -1415,6 +1415,11 @@ PrefabInstance:
       propertyPath: m_Name
       value: UIMenu
       objectReference: {fileID: 0}
+    - target: {fileID: 8900509986432490462, guid: d4a89ed1d8a74d84eb94ba5602ec354f,
+        type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 8900509986432490463, guid: d4a89ed1d8a74d84eb94ba5602ec354f,
         type: 3}
       propertyPath: m_Pivot.x
@@ -3169,6 +3174,11 @@ PrefabInstance:
       propertyPath: m_Name
       value: UIStaminaBar
       objectReference: {fileID: 0}
+    - target: {fileID: 8486942662048362271, guid: 7bf3ec1f1e695ec4388372ea94998354,
+        type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -3218,6 +3228,10 @@ PrefabInstance:
       propertyPath: m_SizeDelta.y
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 1334156181, guid: c87590e7a452dcf4eac6b0921e679a50, type: 3}
+      propertyPath: m_Value
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 1994176931, guid: c87590e7a452dcf4eac6b0921e679a50, type: 3}
       propertyPath: m_SizeDelta.x
       value: 0
@@ -3260,6 +3274,11 @@ PrefabInstance:
         type: 3}
       propertyPath: m_Name
       value: UIInventory
+      objectReference: {fileID: 0}
+    - target: {fileID: 5087677180317052513, guid: c87590e7a452dcf4eac6b0921e679a50,
+        type: 3}
+      propertyPath: m_IsActive
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 9001324435181979110, guid: c87590e7a452dcf4eac6b0921e679a50,
         type: 3}
@@ -3403,6 +3422,11 @@ PrefabInstance:
         type: 3}
       propertyPath: m_Name
       value: UIMerchant
+      objectReference: {fileID: 0}
+    - target: {fileID: 3942131437439408939, guid: c06b6246e01f0704dac7990be73a36dc,
+        type: 3}
+      propertyPath: m_IsActive
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 5631056269006348638, guid: c06b6246e01f0704dac7990be73a36dc,
         type: 3}
@@ -3703,6 +3727,11 @@ PrefabInstance:
         type: 3}
       propertyPath: m_Name
       value: UIFriendList
+      objectReference: {fileID: 0}
+    - target: {fileID: 8900509986432490462, guid: 9fbc209e4bbd05d478013e9f7f69df51,
+        type: 3}
+      propertyPath: m_IsActive
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 8900509986432490463, guid: 9fbc209e4bbd05d478013e9f7f69df51,
         type: 3}
@@ -4818,6 +4847,11 @@ PrefabInstance:
       propertyPath: m_Name
       value: UIGuild
       objectReference: {fileID: 0}
+    - target: {fileID: 217768866818898516, guid: cceff7bd9488e98439d1e91f322c7b11,
+        type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 217768866818898517, guid: cceff7bd9488e98439d1e91f322c7b11,
         type: 3}
       propertyPath: m_Pivot.x
@@ -4998,6 +5032,11 @@ PrefabInstance:
       propertyPath: m_AnchorMax.y
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 6163612598010523041, guid: cceff7bd9488e98439d1e91f322c7b11,
+        type: 3}
+      propertyPath: m_Value
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 8798607900557553766, guid: cceff7bd9488e98439d1e91f322c7b11,
         type: 3}
       propertyPath: m_AnchorMax.x
@@ -5006,6 +5045,11 @@ PrefabInstance:
     - target: {fileID: 8798607900557553766, guid: cceff7bd9488e98439d1e91f322c7b11,
         type: 3}
       propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8798607900557553766, guid: cceff7bd9488e98439d1e91f322c7b11,
+        type: 3}
+      propertyPath: m_AnchorMin.x
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 8890562210631208863, guid: cceff7bd9488e98439d1e91f322c7b11,
@@ -5290,6 +5334,11 @@ PrefabInstance:
       propertyPath: m_Name
       value: UICrosshair
       objectReference: {fileID: 0}
+    - target: {fileID: 2381066969573346914, guid: e2d070b07fe9c0a4f9284d40ddc9ae55,
+        type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 2381066969573346925, guid: e2d070b07fe9c0a4f9284d40ddc9ae55,
         type: 3}
       propertyPath: m_Pivot.x
@@ -5417,6 +5466,11 @@ PrefabInstance:
         type: 3}
       propertyPath: m_Name
       value: UIHotkeyBar
+      objectReference: {fileID: 0}
+    - target: {fileID: 5213663158515125247, guid: 3dc302ff79e794e46baa4965c6205319,
+        type: 3}
+      propertyPath: m_IsActive
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 8394184592367254798, guid: 3dc302ff79e794e46baa4965c6205319,
         type: 3}
@@ -5641,6 +5695,11 @@ PrefabInstance:
         type: 3}
       propertyPath: m_Name
       value: UIHealthBar
+      objectReference: {fileID: 0}
+    - target: {fileID: 2485175404636260411, guid: c70f2fb715ee3564ba73ee221fbd3fa1,
+        type: 3}
+      propertyPath: m_IsActive
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 4083044550259261822, guid: c70f2fb715ee3564ba73ee221fbd3fa1,
         type: 3}
@@ -5969,6 +6028,11 @@ PrefabInstance:
     - target: {fileID: 4820400979642441047, guid: 72a8e16445661d84d91a7386257b5e8e,
         type: 3}
       propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4820400979642441047, guid: 72a8e16445661d84d91a7386257b5e8e,
+        type: 3}
+      propertyPath: m_AnchorMin.y
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 6449884998193257347, guid: 72a8e16445661d84d91a7386257b5e8e,
@@ -6403,6 +6467,11 @@ PrefabInstance:
       propertyPath: m_Name
       value: UIChatChannelPicker
       objectReference: {fileID: 0}
+    - target: {fileID: 1924291786827262851, guid: dd8c885cfcae89f46a5ee6c6fd50ed37,
+        type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 2895424206978015408, guid: dd8c885cfcae89f46a5ee6c6fd50ed37,
         type: 3}
       propertyPath: m_Pivot.x
@@ -6550,6 +6619,11 @@ PrefabInstance:
         type: 3}
       propertyPath: m_Name
       value: UIManaBar
+      objectReference: {fileID: 0}
+    - target: {fileID: 4626200146256145248, guid: 9eea1baa01093534bb718df166945a94,
+        type: 3}
+      propertyPath: m_IsActive
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 4691107126978048309, guid: 9eea1baa01093534bb718df166945a94,
         type: 3}
@@ -7207,6 +7281,11 @@ PrefabInstance:
       propertyPath: m_Name
       value: UIAbilityCraft
       objectReference: {fileID: 0}
+    - target: {fileID: 7803331067517108395, guid: b0d804ed653fe6541b5ec35044d3f151,
+        type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 7841476726938237288, guid: b0d804ed653fe6541b5ec35044d3f151,
         type: 3}
       propertyPath: m_SizeDelta.x
@@ -7393,6 +7472,11 @@ PrefabInstance:
     - target: {fileID: 7169268986809798814, guid: 20c90ca17f6cf944394748f2b0ece700,
         type: 3}
       propertyPath: m_AnchoredPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7169268986880600726, guid: 20c90ca17f6cf944394748f2b0ece700,
+        type: 3}
+      propertyPath: m_Value
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 7169268987045006985, guid: 20c90ca17f6cf944394748f2b0ece700,
@@ -7703,6 +7787,11 @@ PrefabInstance:
       propertyPath: m_Name
       value: UITarget
       objectReference: {fileID: 0}
+    - target: {fileID: 8864976643810562297, guid: e5f4c6327a6412448bdc0708769f0eff,
+        type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -7831,16 +7920,6 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: 8097977394483119491, guid: 81e63d12ff5eb914caa146e65417089d,
-        type: 3}
-      propertyPath: m_AnchorMax.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8097977394483119491, guid: 81e63d12ff5eb914caa146e65417089d,
-        type: 3}
-      propertyPath: m_AnchorMax.y
-      value: 0
-      objectReference: {fileID: 0}
     - target: {fileID: 9193125407607451364, guid: 81e63d12ff5eb914caa146e65417089d,
         type: 3}
       propertyPath: m_AnchorMax.x
@@ -7878,6 +7957,11 @@ PrefabInstance:
         type: 3}
       propertyPath: m_Name
       value: UIAbilities
+      objectReference: {fileID: 0}
+    - target: {fileID: 7893287530442544403, guid: 3134a991874235e4ba34b037f1ed8fc7,
+        type: 3}
+      propertyPath: m_IsActive
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 7893287530442544404, guid: 3134a991874235e4ba34b037f1ed8fc7,
         type: 3}
@@ -8133,6 +8217,11 @@ PrefabInstance:
       propertyPath: m_Name
       value: UICastbar
       objectReference: {fileID: 0}
+    - target: {fileID: 4239796519374031033, guid: a0e90ffc634b9244a9c0abe921708896,
+        type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 4239796521168025117, guid: a0e90ffc634b9244a9c0abe921708896,
         type: 3}
       propertyPath: m_AnchorMax.y
@@ -8275,6 +8364,11 @@ PrefabInstance:
         type: 3}
       propertyPath: m_Name
       value: UIParty
+      objectReference: {fileID: 0}
+    - target: {fileID: 8900509986432490462, guid: 031cdafd038e27944b985b5163d90fbb,
+        type: 3}
+      propertyPath: m_IsActive
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 8900509986432490463, guid: 031cdafd038e27944b985b5163d90fbb,
         type: 3}
@@ -8695,6 +8789,11 @@ PrefabInstance:
         type: 3}
       propertyPath: m_Name
       value: UIChat
+      objectReference: {fileID: 0}
+    - target: {fileID: 7789744945429362420, guid: 4ed5d202bf8e1f84d8278d6f2ad19d4d,
+        type: 3}
+      propertyPath: m_IsActive
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 8723973005749117971, guid: 4ed5d202bf8e1f84d8278d6f2ad19d4d,
         type: 3}

@@ -5,6 +5,7 @@ namespace FishMMO.Client
 {
 	public class LocalInputController : MonoBehaviour
 	{
+#if !UNITY_SERVER
 		public Character Character { get; private set; }
 
 		public void Initialize(Character character)
@@ -78,9 +79,11 @@ namespace FishMMO.Client
 					UIManager.ToggleVisibility("UIAbilities");
 				}
 
-				if (InputManager.GetKeyDown("Equipment"))
+				if (InputManager.GetKeyDown("Equipment") &&
+					UIManager.TryGet("UIEquipment", out UIEquipment uiEquipment))
 				{
-					UIManager.ToggleVisibility("UIEquipment");
+					uiEquipment.SetEquipmentViewCamera(Character.EquipmentViewCamera);
+					uiEquipment.ToggleVisibility();
 				}
 
 				if (InputManager.GetKeyDown("Guild"))
@@ -110,5 +113,6 @@ namespace FishMMO.Client
 				}
 			}
 		}
+#endif
 	}
 }

@@ -159,7 +159,7 @@ namespace FishMMO.Server
 								}
 
 								// update or add the item to the database and initialize
-								CharacterInventoryService.UpdateOrAdd(dbContext, character.ID, item);
+								CharacterInventoryService.SetSlot(dbContext, character.ID, item);
 
 								// create the new item broadcast
 								modifiedItemBroadcasts.Add(new InventorySetItemBroadcast()

@@ -7,12 +7,16 @@ namespace FishMMO.Client
 {
 	public class UIEquipment : UICharacterControl
 	{
+		private Camera equipmentViewCamera;
+
 		public RectTransform content;
-		public TMP_Text attributePrefab;
+		public TMP_Text UILabel;
+		public UIAttribute AttributeLabelPrefab;
 
 		public List<UIEquipmentButton> buttons = new List<UIEquipmentButton>();
 
-		public Dictionary<string, TMP_Text> attributeLabels = new Dictionary<string, TMP_Text>();
+		public List<TMP_Text> attributeCategoryLabels = new List<TMP_Text>();
+		public Dictionary<string, UIAttribute> attributeLabels = new Dictionary<string, UIAttribute>();
 
 		public override void OnStarting()
 		{
@@ -32,18 +36,57 @@ namespace FishMMO.Client
 
 		public override void OnDestroying()
 		{
+			equipmentViewCamera = null;
 			DestroyAttributes();
+		}
+
+		public override void ToggleVisibility()
+		{
+			base.ToggleVisibility();
+
+			if (equipmentViewCamera != null)
+			{
+				equipmentViewCamera.gameObject.SetActive(Visible);
+			}
+		}
+
+		public override void Show()
+		{
+			base.Show();
+
+			if (equipmentViewCamera != null)
+			{
+				equipmentViewCamera.gameObject.SetActive(true);
+			}
+		}
+
+		public override void Hide()
+		{
+			base.Hide();
+
+			if (equipmentViewCamera != null)
+			{
+				equipmentViewCamera.gameObject.SetActive(false);
+			}
 		}
 
 		private void DestroyAttributes()
 		{
 			if (attributeLabels != null)
 			{
-				foreach (TMP_Text obj in attributeLabels.Values)
+				foreach (UIAttribute obj in attributeLabels.Values)
 				{
 					Destroy(obj.gameObject);
 				}
 				attributeLabels.Clear();
+			}
+			if (attributeCategoryLabels != null)
+			{
+				foreach (TMP_Text text in attributeCategoryLabels)
+				{
+					Destroy(text.gameObject);
+				}
+				attributeCategoryLabels.Clear();
 			}
 		}
 
@@ -89,15 +132,98 @@ namespace FishMMO.Client
 			if (Character != null &&
 				Character.AttributeController != null)
 			{
+				List<CharacterAttribute> resourceAttributes = new List<CharacterAttribute>();
+				List<CharacterAttribute> damageAttributes = new List<CharacterAttribute>();
+				List<CharacterAttribute> resistanceAttributes = new List<CharacterAttribute>();
+				List<CharacterAttribute> coreAttributes = new List<CharacterAttribute>();
+
 				foreach (CharacterAttribute attribute in Character.AttributeController.Attributes.Values)
 				{
-					attribute.OnAttributeUpdated -= OnAttributeUpdated; // just incase..
-					TMP_Text label = Instantiate(attributePrefab, content);
-					label.text = attribute.ToString();
-					attributeLabels.Add(attribute.Template.Name, label);
-					attribute.OnAttributeUpdated += OnAttributeUpdated;
+					if (attribute is CharacterResourceAttribute || attribute.Template.Name.Contains("Regeneration"))
+					{
+						resourceAttributes.Add(attribute);
+					}
+					else if (attribute.Template is DamageAttributeTemplate)
+					{
+						damageAttributes.Add(attribute);
+					}
+					else if (attribute.Template is ResistanceAttributeTemplate)
+					{
+						resistanceAttributes.Add(attribute);
+					}
+					else
+					{
+						coreAttributes.Add(attribute);
+					}
+				}
+
+				TMP_Text label = Instantiate(UILabel, content);
+				label.text = "Resource";
+				label.fontSize = 16.0f;
+				label.alignment = TextAlignmentOptions.Center;
+				attributeCategoryLabels.Add(label);
+
+				foreach (CharacterAttribute core in resourceAttributes)
+				{
+					AddCharacterAttributeLabel(core);
+				}
+
+				label = Instantiate(UILabel, content);
+				label.text = "Damage";
+				label.fontSize = 16.0f;
+				label.alignment = TextAlignmentOptions.Center;
+				attributeCategoryLabels.Add(label);
+
+				foreach (CharacterAttribute damage in damageAttributes)
+				{
+					AddCharacterAttributeLabel(damage);
+				}
+
+				label = Instantiate(UILabel, content);
+				label.text = "Resistance";
+				label.fontSize = 16.0f;
+				label.alignment = TextAlignmentOptions.Center;
+				attributeCategoryLabels.Add(label);
+
+				foreach (CharacterAttribute resistance in resistanceAttributes)
+				{
+					AddCharacterAttributeLabel(resistance);
+				}
+
+				label = Instantiate(UILabel, content);
+				label.text = "Core";
+				label.fontSize = 16.0f;
+				label.alignment = TextAlignmentOptions.Center;
+				attributeCategoryLabels.Add(label);
+
+				foreach (CharacterAttribute core in coreAttributes)
+				{
+					AddCharacterAttributeLabel(core);
+				}
+
+				resourceAttributes.Clear();
+				damageAttributes.Clear();
+				resistanceAttributes.Clear();
+				coreAttributes.Clear();
+			}
+		}
+
+		private void AddCharacterAttributeLabel(CharacterAttribute attribute)
+		{
+			attribute.OnAttributeUpdated -= OnAttributeUpdated; // just in case..
+			UIAttribute label = Instantiate(AttributeLabelPrefab, content);
+			label.Name.text = attribute.Template.Name;
+			label.Value.text = attribute.FinalValue.ToString();
+			if (attribute.Template.IsResourceAttribute)
+			{
+				CharacterResourceAttribute resource = attribute as CharacterResourceAttribute;
+				if (resource != null)
+				{
+					label.Value.text += " / " + resource.FinalValue.ToString();
 				}
 			}
+			attributeLabels.Add(attribute.Template.Name, label);
+			attribute.OnAttributeUpdated += OnAttributeUpdated;
 		}
 
 		private void SetButtonSlot(ItemContainer container, UIEquipmentButton button)
@@ -145,10 +271,29 @@ namespace FishMMO.Client
 
 		public void OnAttributeUpdated(CharacterAttribute attribute)
 		{
-			if (attributeLabels.TryGetValue(attribute.Template.Name, out TMP_Text label))
+			if (attributeLabels.TryGetValue(attribute.Template.Name, out UIAttribute label))
 			{
-				label.text = attribute.ToString();
+				label.Name.text = attribute.Template.Name;
+				label.Value.text = attribute.FinalValue.ToString();
+				if (attribute.Template.IsResourceAttribute)
+				{
+					CharacterResourceAttribute resource = attribute as CharacterResourceAttribute;
+					if (resource != null)
+					{
+						label.Value.text += " / " + resource.FinalValue.ToString();
+					}
+				}
 			}
+		}
+
+		public void SetEquipmentViewCamera(Camera camera)
+		{
+			if (camera == null)
+			{
+				equipmentViewCamera = null;
+				return;
+			}
+			equipmentViewCamera = camera;
 		}
 	}
 }

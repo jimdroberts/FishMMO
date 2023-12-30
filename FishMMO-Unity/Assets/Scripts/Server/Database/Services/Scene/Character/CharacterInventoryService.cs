@@ -10,14 +10,14 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// Updates a CharacterInventoryItem slot to new values or adds a new CharacterInventoryItem and initializes the Item with the new ID.
 		/// </summary>
-		public static void UpdateOrAdd(NpgsqlDbContext dbContext, long characterID, Item item)
+		public static void SetSlot(NpgsqlDbContext dbContext, long characterID, Item item)
 		{
 			if (item == null)
 			{
 				return;
 			}
 
-			var dbItem = dbContext.CharacterInventoryItems.FirstOrDefault(c => c.CharacterID == characterID && c.ID == item.ID);
+			var dbItem = dbContext.CharacterInventoryItems.FirstOrDefault(c => c.CharacterID == characterID && c.Slot == item.Slot);
 			// update slot or add
 			if (dbItem != null)
 			{

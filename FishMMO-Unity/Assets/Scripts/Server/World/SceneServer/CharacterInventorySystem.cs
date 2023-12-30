@@ -143,8 +143,8 @@ namespace FishMMO.Server
 			if (character.InventoryController.SwapItemSlots(msg.from, msg.to, out Item fromItem, out Item toItem))
 			{
 				// save the changes to the database
-				CharacterInventoryService.UpdateOrAdd(dbContext, character.ID, fromItem);
-				CharacterInventoryService.UpdateOrAdd(dbContext, character.ID, toItem);
+				CharacterInventoryService.SetSlot(dbContext, character.ID, fromItem);
+				CharacterInventoryService.SetSlot(dbContext, character.ID, toItem);
 				dbContext.SaveChanges();
 
 				conn.Broadcast(msg, true, Channel.Reliable);
@@ -179,7 +179,7 @@ namespace FishMMO.Server
 			{
 				if (character.InventoryController.TryGetItem(msg.inventoryIndex, out Item prevItem))
 				{
-					CharacterInventoryService.UpdateOrAdd(dbContext, character.ID, prevItem);
+					CharacterInventoryService.SetSlot(dbContext, character.ID, prevItem);
 				}
 				else
 				{
@@ -220,7 +220,7 @@ namespace FishMMO.Server
 				character.EquipmentController.Unequip(character.InventoryController, msg.slot))
 			{
 				CharacterEquipmentService.Delete(dbContext, character.ID, item.ID);
-				CharacterInventoryService.UpdateOrAdd(dbContext, character.ID, item);
+				CharacterInventoryService.SetSlot(dbContext, character.ID, item);
 				dbContext.SaveChanges();
 
 				conn.Broadcast(msg, true, Channel.Reliable);

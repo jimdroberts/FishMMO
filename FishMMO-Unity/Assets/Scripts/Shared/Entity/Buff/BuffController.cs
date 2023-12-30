@@ -13,32 +13,47 @@ namespace FishMMO.Shared
 
 		public Dictionary<int, Buff> Buffs { get { return buffs; } }
 
+		private List<int> keysToRemove = new List<int>();
+
 		void Update()
 		{
 			float dt = Time.deltaTime;
-			foreach (KeyValuePair<int, Buff> pair in new Dictionary<int, Buff>(buffs))
+
+			foreach (var pair in buffs)
 			{
-				pair.Value.SubtractTime(dt);
-				if (pair.Value.RemainingTime > 0.0f)
+				var buff = pair.Value;
+				buff.SubtractTime(dt);
+
+				if (buff.RemainingTime > 0.0f)
 				{
-					pair.Value.SubtractTickTime(dt);
-					pair.Value.TryTick(Character);
+					buff.SubtractTickTime(dt);
+					buff.TryTick(Character);
 				}
 				else
 				{
-					if (pair.Value.Stacks.Count > 0 && pair.Value.Template.IndependantStackTimer)
+					if (buff.Stacks.Count > 0 && buff.Template.IndependantStackTimer)
 					{
-						pair.Value.RemoveStack(Character);
-
+						buff.RemoveStack(Character);
 					}
-					foreach (Buff stack in pair.Value.Stacks)
+
+					foreach (Buff stack in buff.Stacks)
 					{
 						stack.RemoveStack(Character);
 					}
-					pair.Value.Remove(Character);
-					buffs.Remove(pair.Key);
+
+					buff.Remove(Character);
+
+					// Add the key to the list for later removal
+					keysToRemove.Add(pair.Key);
 				}
 			}
+
+			// Remove keys outside the loop to avoid modifying the dictionary during iteration
+			foreach (var key in keysToRemove)
+			{
+				buffs.Remove(key);
+			}
+			keysToRemove.Clear();
 		}
 
 		public void Apply(BuffTemplate template)

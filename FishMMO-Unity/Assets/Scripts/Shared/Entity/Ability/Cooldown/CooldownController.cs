@@ -7,16 +7,25 @@ namespace FishMMO.Shared
 	{
 		private Dictionary<string, CooldownInstance> cooldowns = new Dictionary<string, CooldownInstance>();
 
+		private List<string> keysToRemove = new List<string>();
+
 		void Update()
 		{
-			foreach (KeyValuePair<string, CooldownInstance> pair in new Dictionary<string, CooldownInstance>(cooldowns))
+			foreach (var pair in cooldowns)
 			{
 				pair.Value.SubtractTime(Time.deltaTime);
+
 				if (!pair.Value.IsOnCooldown)
 				{
-					cooldowns.Remove(pair.Key);
+					keysToRemove.Add(pair.Key);
 				}
 			}
+
+			foreach (var key in keysToRemove)
+			{
+				cooldowns.Remove(key);
+			}
+			keysToRemove.Clear();
 		}
 
 		public bool IsOnCooldown(string name)
