@@ -47,18 +47,36 @@ namespace FishMMO.Client
 			private set
 			{
 				gameObject.SetActive(value);
-				if (value && FocusOnSelect)
+				if (value)
 				{
-					OnFocus();
+					if (CloseOnEscape)
+					{
+						UIManager.RegisterCloseOnEscapeUI(this);
+					}
+					if (FocusOnSelect)
+					{
+						OnFocus();
+					}
 				}
-				if (!value && HasFocus)
+				if (!value)
 				{
-					EventSystem.current.SetSelectedGameObject(null);
-					EventSystem.current.sendNavigationEvents = false;
-					HasFocus = false;
+					if (CloseOnEscape)
+					{
+						UIManager.UnregisterCloseOnEscapeUI(this);
+					}
+					if (HasFocus)
+					{
+						EventSystem.current.SetSelectedGameObject(null);
+						EventSystem.current.sendNavigationEvents = false;
+						HasFocus = false;
+					}
 				}
 			}
 		}
+		/// <summary>
+		/// This field is used by the UIManager's circle buffer to assist in opening/closing UI windows.
+		/// </summary>
+		internal CircularBuffer<UIControl>.Node CurrentNode { get; set; }
 
 		private void Awake()
 		{
@@ -127,11 +145,6 @@ namespace FishMMO.Client
 
 		void LateUpdate()
 		{
-			if (CloseOnEscape &&
-				Input.GetKeyDown(KeyCode.Escape))
-			{
-				Hide();
-			}
 			if (nextPump < 0)
 			{
 				nextPump = updateRate;
@@ -191,8 +204,21 @@ namespace FishMMO.Client
 		{
 			Client.OnQuitToLogin -= Client_OnQuitToLogin;
 			OnDestroying();
-
+			if (CloseOnEscape)
+			{
+				UIManager.UnregisterCloseOnEscapeUI(this);
+			}
 			UIManager.Unregister(this);
+		}
+
+		public void UIManager_OnAdd(CircularBuffer<UIControl>.Node node)
+		{
+			CurrentNode = node;
+		}
+
+		public void UIManager_OnRemove()
+		{
+			CurrentNode = null;
 		}
 
 		/// <summary>
@@ -283,6 +309,12 @@ namespace FishMMO.Client
 			Transform.SetParent(null);
 			Transform.SetParent(parent);
 			Transform.position = pos;
+
+			if (CloseOnEscape)
+			{
+				UIManager.UnregisterCloseOnEscapeUI(this);
+				UIManager.RegisterCloseOnEscapeUI(this);
+			}
 		}
 
 		public void OnPointerUp(PointerEventData data)

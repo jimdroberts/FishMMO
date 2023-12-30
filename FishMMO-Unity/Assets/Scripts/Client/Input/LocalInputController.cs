@@ -98,9 +98,15 @@ namespace FishMMO.Client
 					UIManager.ToggleVisibility("UIFriendList");
 
 				}
+
 				if (InputManager.GetKeyDown("Menu"))
 				{
 					UIManager.ToggleVisibility("UIMenu");
+				}
+
+				if (InputManager.GetKeyDown("Close Last UI"))
+				{
+					UIManager.CloseNext();
 				}
 			}
 		}

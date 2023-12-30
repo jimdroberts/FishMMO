@@ -12,6 +12,7 @@ namespace FishMMO.Client
 	{
 		private static Dictionary<string, UIControl> controls = new Dictionary<string, UIControl>();
 		private static Dictionary<string, UICharacterControl> characterControls = new Dictionary<string, UICharacterControl>();
+		private static CircularBuffer<UIControl> closeOnEscapeControls = new CircularBuffer<UIControl>();
 		private static Client _client;
 
 		/// <summary>
@@ -65,6 +66,29 @@ namespace FishMMO.Client
 				Debug.Log("UIManager: Unregistered[" + control.Name + "]");
 				controls.Remove(control.Name);
 				characterControls.Remove(control.Name);
+			}
+		}
+
+		internal static void RegisterCloseOnEscapeUI(UIControl control)
+		{
+			if (control == null)
+			{
+				return;
+			}
+			//Debug.Log("UIManager: Registered CloseOnEscapeUI[" + control.Name + "]");
+			closeOnEscapeControls.Add(control, control.UIManager_OnAdd, control.UIManager_OnRemove);
+		}
+
+		internal static void UnregisterCloseOnEscapeUI(UIControl control)
+		{
+			if (control == null)
+			{
+				return;
+			}
+			else
+			{
+				//Debug.Log("UIManager: Unregistered CloseOnEscapeUI[" + control.Name + "]");
+				closeOnEscapeControls.Remove(control.CurrentNode);
 			}
 		}
 
@@ -160,6 +184,19 @@ namespace FishMMO.Client
 				}
 			}
 			return false;
+		}
+
+		public static void CloseNext()
+		{
+			if (closeOnEscapeControls != null)
+			{
+				// get the last opened or focused UI control
+				UIControl control = closeOnEscapeControls.Pop();
+				if (control != null)
+				{
+					control.Hide();
+				}
+			}
 		}
 	}
 }
