@@ -191,8 +191,8 @@ namespace FishMMO.Shared
 					TargetController.OnUpdateTarget += uiTarget.OnUpdateTarget;
 				}
 
+				gameObject.layer = Constants.Layers.LocalEntity;
 				CharacterController.MeshRoot.gameObject.layer = Constants.Layers.LocalEntity;
-				EquipmentViewCamera.cullingMask = Constants.Layers.LocalEntity;
 			}
 			else
 			{
@@ -205,8 +205,8 @@ namespace FishMMO.Shared
 					TargetController.OnUpdateTarget -= uiTarget.OnUpdateTarget;
 				}
 
+				gameObject.layer = Constants.Layers.Default;
 				CharacterController.MeshRoot.gameObject.layer = Constants.Layers.Default;
-				EquipmentViewCamera.cullingMask = Constants.Layers.Default;
 			}
 		}
 #endif

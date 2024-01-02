@@ -92,7 +92,7 @@ MonoBehaviour:
   _timingType: 0
   _allowTickDropping: 0
   _maximumFrameTicks: 2
-  _tickRate: 30
+  _tickRate: 15
   _pingInterval: 1
   _timingInterval: 2
   _physicsMode: 1

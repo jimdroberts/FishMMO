@@ -54,7 +54,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 03313be06094e964aa4ef9f757c6f674, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  LogToDisk: 0
+  LogToDisk: 1
 --- !u!114 &6747751012235542384
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -198,3 +198,5 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 57d43f42a0a6f0c4898df9dc8844997d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  WorldSceneDetailsCache: {fileID: 11400000, guid: ee8f2ab36344dae4c8c59b28985d5338,
+    type: 2}

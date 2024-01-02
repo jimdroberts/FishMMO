@@ -17,8 +17,8 @@ namespace FishMMO.Shared
 			public static readonly string ProjectPath = "." + Path.DirectorySeparatorChar + "FishMMO-Database" + Path.DirectorySeparatorChar + "FishMMO-DB" + Path.DirectorySeparatorChar + "FishMMO-DB.csproj";
 			public static readonly string StartupProject = "." + Path.DirectorySeparatorChar + "FishMMO-Database" + Path.DirectorySeparatorChar + "FishMMO-DB-Migrator" + Path.DirectorySeparatorChar + "FishMMO-DB-Migrator.csproj";
 
-			public static readonly string BootstrapScenePath = "Assets" + Path.DirectorySeparatorChar + "Scenes" + Path.DirectorySeparatorChar + "Bootstraps" + Path.DirectorySeparatorChar;
-			public static readonly string WorldScenePath = "Assets" + Path.DirectorySeparatorChar + "Scenes" + Path.DirectorySeparatorChar + "WorldScene";
+			public static readonly string BootstrapScenePath = "Assets/Scenes/Bootstraps/";
+			public static readonly string WorldScenePath = "Assets/Scenes/WorldScene";
 		}
 
 		public static class Layers
