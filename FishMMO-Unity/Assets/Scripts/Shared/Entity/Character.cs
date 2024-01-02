@@ -190,6 +190,9 @@ namespace FishMMO.Shared
 					TargetController.OnChangeTarget += uiTarget.OnChangeTarget;
 					TargetController.OnUpdateTarget += uiTarget.OnUpdateTarget;
 				}
+
+				CharacterController.MeshRoot.gameObject.layer = Constants.Layers.LocalEntity;
+				EquipmentViewCamera.cullingMask = Constants.Layers.LocalEntity;
 			}
 			else
 			{
@@ -201,10 +204,12 @@ namespace FishMMO.Shared
 					TargetController.OnChangeTarget -= uiTarget.OnChangeTarget;
 					TargetController.OnUpdateTarget -= uiTarget.OnUpdateTarget;
 				}
+
+				CharacterController.MeshRoot.gameObject.layer = Constants.Layers.Default;
+				EquipmentViewCamera.cullingMask = Constants.Layers.Default;
 			}
 		}
 #endif
-
 
 		/// <summary>
 		/// Resets the Character values to default for pooling.

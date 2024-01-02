@@ -77,6 +77,12 @@ namespace FishMMO.Server
 				ServerManager.RegisterBroadcast<GuildDeclineInviteBroadcast>(OnServerGuildDeclineInviteBroadcastReceived, true);
 				ServerManager.RegisterBroadcast<GuildLeaveBroadcast>(OnServerGuildLeaveBroadcastReceived, true);
 				ServerManager.RegisterBroadcast<GuildRemoveBroadcast>(OnServerGuildRemoveBroadcastReceived, true);
+
+				// remove the characters pending guild invite request on disconnect
+				if (Server.CharacterSystem != null)
+				{
+					Server.CharacterSystem.OnDisconnect += RemovePending;
+				}
 			}
 			else if (serverState == LocalConnectionState.Stopped)
 			{
@@ -86,6 +92,12 @@ namespace FishMMO.Server
 				ServerManager.UnregisterBroadcast<GuildDeclineInviteBroadcast>(OnServerGuildDeclineInviteBroadcastReceived);
 				ServerManager.UnregisterBroadcast<GuildLeaveBroadcast>(OnServerGuildLeaveBroadcastReceived);
 				ServerManager.UnregisterBroadcast<GuildRemoveBroadcast>(OnServerGuildRemoveBroadcastReceived);
+
+				// remove the characters pending guild invite request on disconnect
+				if (Server.CharacterSystem != null)
+				{
+					Server.CharacterSystem.OnDisconnect -= RemovePending;
+				}
 			}
 		}
 
@@ -178,9 +190,12 @@ namespace FishMMO.Server
 			}
 		}
 
-		public void RemovePending(long id)
+		public void RemovePending(NetworkConnection conn, Character character)
 		{
-			pendingInvitations.Remove(id);
+			if (character != null)
+			{
+				pendingInvitations.Remove(character.ID);
+			}
 		}
 
 		public void OnServerGuildCreateBroadcastReceived(NetworkConnection conn, GuildCreateBroadcast msg)
@@ -204,7 +219,7 @@ namespace FishMMO.Server
 			// remove white space
 			msg.guildName = msg.guildName.Trim();
 
-			if (!AuthenticationHelper.IsAllowedGuildName(msg.guildName))
+			if (!Constants.Authentication.IsAllowedGuildName(msg.guildName))
 			{
 				// we should tell the player the guild name is not valid TODO
 				return;

@@ -50,7 +50,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void OnClientInventorySetItemBroadcastReceived(InventorySetItemBroadcast msg)
 		{
-			Item newItem = new Item(msg.instanceID, msg.templateID, msg.stackSize);
+			Item newItem = new Item(msg.instanceID, msg.seed, msg.templateID, msg.stackSize);
 			SetItemSlot(newItem, msg.slot);
 		}
 
@@ -61,7 +61,7 @@ namespace FishMMO.Shared
 		{
 			foreach (InventorySetItemBroadcast subMsg in msg.items)
 			{
-				Item newItem = new Item(subMsg.instanceID, subMsg.templateID, subMsg.stackSize);
+				Item newItem = new Item(subMsg.instanceID, subMsg.seed, subMsg.templateID, subMsg.stackSize);
 				SetItemSlot(newItem, subMsg.slot);
 			}
 		}

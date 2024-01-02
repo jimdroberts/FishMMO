@@ -47,7 +47,7 @@ namespace FishMMO.Server
 			if (conn.IsActive)
 			{
 				// validate character creation data
-				if (!AuthenticationHelper.IsAllowedCharacterName(msg.characterName))
+				if (!Constants.Authentication.IsAllowedCharacterName(msg.characterName))
 				{
 					// invalid character name
 					conn.Broadcast(new CharacterCreateResultBroadcast()

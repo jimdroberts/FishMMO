@@ -49,7 +49,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void OnClientEquipmentSetItemBroadcastReceived(EquipmentSetItemBroadcast msg)
 		{
-			Item newItem = new Item(msg.instanceID, msg.templateID, msg.stackSize);
+			Item newItem = new Item(msg.instanceID, msg.seed, msg.templateID, msg.stackSize);
 			Equip(newItem, -1, (ItemSlot)msg.slot);
 		}
 
@@ -60,7 +60,7 @@ namespace FishMMO.Shared
 		{
 			foreach (EquipmentSetItemBroadcast subMsg in msg.items)
 			{
-				Item newItem = new Item(subMsg.instanceID, subMsg.templateID, subMsg.stackSize);
+				Item newItem = new Item(subMsg.instanceID, subMsg.seed, subMsg.templateID, subMsg.stackSize);
 				Equip(newItem, -1, (ItemSlot)subMsg.slot);
 			}
 		}

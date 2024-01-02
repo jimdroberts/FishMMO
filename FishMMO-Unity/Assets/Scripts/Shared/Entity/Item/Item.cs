@@ -27,7 +27,7 @@ namespace FishMMO.Shared
 				this.Stackable.Initialize(this, amount.Clamp(1, Template.MaxStackSize));
 			}
 		}
-		public Item(long id, BaseItemTemplate template, uint amount)
+		public Item(long id, int seed, BaseItemTemplate template, uint amount)
 		{
 			Slot = -1;
 			Template = template;
@@ -36,9 +36,9 @@ namespace FishMMO.Shared
 				this.Stackable = new ItemStackable();
 				this.Stackable.Initialize(this, amount.Clamp(1, Template.MaxStackSize));
 			}
-			Initialize(id);
+			Initialize(id, seed);
 		}
-		public Item(long id, int templateID, uint amount)
+		public Item(long id, int seed, int templateID, uint amount)
 		{
 			Slot = -1;
 			Template = BaseItemTemplate.Get<BaseItemTemplate>(templateID);
@@ -47,33 +47,37 @@ namespace FishMMO.Shared
 				this.Stackable = new ItemStackable();
 				this.Stackable.Initialize(this, amount.Clamp(1, Template.MaxStackSize));
 			}
-			Initialize(id);
+			Initialize(id, seed);
 		}
 
-		public void Initialize(long id)
+		public void Initialize(long id, int seed)
 		{
 			ID = id;
 
-			if (Template.Generate)
-			{
-				Generator = new ItemGenerator();
-			}
 			if (Template as EquippableItemTemplate != null)
 			{
 				Equippable = new ItemEquippable();
 				Equippable.Initialize(this);
 			}
 
-			var longBytes = BitConverter.GetBytes(ID);
-
-			// Get integers from the first and the last 4 bytes of long
-			int[] ints = new int[] {
-				BitConverter.ToInt32(longBytes, 0),
-				BitConverter.ToInt32(longBytes, 4)
-			};
-			if (ints != null && ints.Length > 1)
+			if (Template.Generate)
 			{
-				int seed = ints[1] > 0 ? ints[1] : ints[0];
+				Generator = new ItemGenerator();
+				if (seed == 0)
+				{
+					var longBytes = BitConverter.GetBytes(ID);
+
+					// Get integers from the first and the last 4 bytes of long
+					int[] ints = new int[] {
+						BitConverter.ToInt32(longBytes, 0),
+						BitConverter.ToInt32(longBytes, 4)
+					};
+					if (ints != null && ints.Length > 1)
+					{
+						// we can use the ID of the item as a unique seed value instead of generating a seed value per item
+						seed = ints[1] > 0 ? ints[1] : ints[0];
+					}
+				}
 				Generator?.Initialize(this, seed);
 			}
 		}

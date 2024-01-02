@@ -99,7 +99,7 @@ namespace FishMMO.Server
 
 			// initialize the DB contexts
 #if UNITY_EDITOR
-			string dbConfigurationPath = Path.Combine(Path.Combine(workingDirectory, "FishMMO-Setup"), "Development");
+			string dbConfigurationPath = Path.Combine(Path.Combine(workingDirectory, Constants.Configuration.SetupDirectory), "Development");
 
 			NpgsqlDbContextFactory = new NpgsqlDbContextFactory(dbConfigurationPath, false);
 			RedisDbContextFactory = new RedisDbContextFactory(dbConfigurationPath);

@@ -10,6 +10,7 @@ namespace FishMMO.Client
 	{
 		public const int MAX_LENGTH = 128;
 
+		public string WelcomeMessage = "Welcome to " + Constants.Configuration.ProjectName + "!\r\nChat channels are available.";
 		public Transform chatViewParent;
 		public UIChatMessage chatMessagePrefab;
 		public Transform chatTabViewParent;
@@ -66,8 +67,7 @@ namespace FishMMO.Client
 				}
 			}
 
-			InstantiateChatMessage(ChatChannel.System, "", "Welcome to FishMMO!\r\n" +
-														   "Chat channels are available.");
+			InstantiateChatMessage(ChatChannel.System, "", WelcomeMessage);
 
 			foreach (KeyValuePair<ChatChannel, List<string>> pair in ChatHelper.ChannelCommandMap)
 			{

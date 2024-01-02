@@ -93,8 +93,8 @@ namespace FishMMO.Client
 		public void OnClick_OnRegister()
 		{
 			if (Client.IsConnectionReady(LocalConnectionState.Stopped) &&
-				AuthenticationHelper.IsAllowedUsername(username.text) &&
-				AuthenticationHelper.IsAllowedPassword(password.text))
+				Constants.Authentication.IsAllowedUsername(username.text) &&
+				Constants.Authentication.IsAllowedPassword(password.text))
 			{
 				// set username and password in the authenticator
 				Client.LoginAuthenticator.SetLoginCredentials(username.text, password.text, true);
@@ -108,8 +108,8 @@ namespace FishMMO.Client
 		public void OnClick_Login()
 		{
 			if (Client.IsConnectionReady(LocalConnectionState.Stopped) &&
-				AuthenticationHelper.IsAllowedUsername(username.text) &&
-				AuthenticationHelper.IsAllowedPassword(password.text))
+				Constants.Authentication.IsAllowedUsername(username.text) &&
+				Constants.Authentication.IsAllowedPassword(password.text))
 			{
 				// set username and password in the authenticator
 				Client.LoginAuthenticator.SetLoginCredentials(username.text, password.text);

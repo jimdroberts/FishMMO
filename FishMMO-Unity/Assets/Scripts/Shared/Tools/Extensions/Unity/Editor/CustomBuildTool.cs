@@ -33,14 +33,13 @@ namespace FishMMO.Shared
 		public const string LOGIN_SERVER_BUILD_NAME = "Login";
 		public const string WORLD_SERVER_BUILD_NAME = "World";
 		public const string SCENE_SERVER_BUILD_NAME = "Scene";
-		public const string CLIENT_BUILD_NAME = "Client";
 
 		public static readonly string[] ALL_IN_ONE_SERVER_BOOTSTRAP_SCENES = new string[]
 		{
-			"Assets\\Scenes\\Bootstraps\\ServerLauncher.unity",
-			"Assets\\Scenes\\Bootstraps\\LoginServer.unity",
-			"Assets\\Scenes\\Bootstraps\\WorldServer.unity",
-			"Assets\\Scenes\\Bootstraps\\SceneServer.unity",
+			Constants.Configuration.BootstrapScenePath + "ServerLauncher.unity",
+			Constants.Configuration.BootstrapScenePath + "LoginServer.unity",
+			Constants.Configuration.BootstrapScenePath + "WorldServer.unity",
+			Constants.Configuration.BootstrapScenePath + "SceneServer.unity",
 		};
 
 		public static readonly string ALL_IN_ONE_SERVER_BAT_SCRIPT = @"@echo off
@@ -54,8 +53,8 @@ start All-In-One.exe SCENE";
 
 		public static readonly string[] LOGIN_SERVER_BOOTSTRAP_SCENES = new string[]
 		{
-		"Assets\\Scenes\\Bootstraps\\ServerLauncher.unity",
-		"Assets\\Scenes\\Bootstraps\\LoginServer.unity",
+			Constants.Configuration.BootstrapScenePath + "ServerLauncher.unity",
+			Constants.Configuration.BootstrapScenePath + "LoginServer.unity",
 		};
 
 		public static readonly string LOGIN_SERVER_BAT_SCRIPT = @"@echo off
@@ -64,8 +63,8 @@ start Login.exe LOGIN";
 
 		public static readonly string[] WORLD_SERVER_BOOTSTRAP_SCENES = new string[]
 		{
-			"Assets\\Scenes\\Bootstraps\\ServerLauncher.unity",
-			"Assets\\Scenes\\Bootstraps\\WorldServer.unity",
+			Constants.Configuration.BootstrapScenePath + "ServerLauncher.unity",
+			Constants.Configuration.BootstrapScenePath + "WorldServer.unity",
 		};
 
 		public static readonly string WORLD_SERVER_BAT_SCRIPT = @"@echo off
@@ -74,8 +73,8 @@ start World.exe WORLD";
 
 		public static readonly string[] SCENE_SERVER_BOOTSTRAP_SCENES = new string[]
 		{
-			"Assets\\Scenes\\Bootstraps\\ServerLauncher.unity",
-			"Assets\\Scenes\\Bootstraps\\SceneServer.unity",
+			Constants.Configuration.BootstrapScenePath + "ServerLauncher.unity",
+			Constants.Configuration.BootstrapScenePath + "SceneServer.unity",
 		};
 
 		public static readonly string SCENE_SERVER_BAT_SCRIPT = @"@echo off
@@ -84,7 +83,7 @@ start Scene.exe SCENE";
 
 		public static readonly string[] CLIENT_BOOTSTRAP_SCENES = new string[]
 		{
-			"Assets\\Scenes\\Bootstraps\\ClientBootstrap.unity",
+			Constants.Configuration.BootstrapScenePath + "ClientBootstrap.unity",
 		};
 
 		public static string GetBuildTargetShortName(BuildTarget target)
@@ -277,8 +276,7 @@ start Scene.exe SCENE";
 						}
 					}
 
-					string configurationPath = "FishMMO-Setup";
-					configurationPath = WorkingEnvironmentOptions.AppendEnvironmentToPath(configurationPath);
+					string configurationPath = WorkingEnvironmentOptions.AppendEnvironmentToPath(Constants.Configuration.SetupDirectory);
 
 					CopyConfigurationFiles(customBuildType, Path.Combine(root, configurationPath), buildPath);
 				}
@@ -330,7 +328,7 @@ start Scene.exe SCENE";
 			// add all of the WorldScenes
 			foreach (EditorBuildSettingsScene scene in EditorBuildSettings.scenes)
 			{
-				if (scene.path.Contains(WorldSceneDetailsCache.WORLD_SCENE_PATH))
+				if (scene.path.Contains(Constants.Configuration.WorldScenePath))
 				{
 					allPaths.Add(scene.path);
 				}
@@ -385,7 +383,7 @@ start Scene.exe SCENE";
 			BuildExecutable("Installer",
 							new string[]
 							{
-								"Assets\\Scenes\\Installer.unity",
+								"Assets" + Path.DirectorySeparatorChar + "Scenes" + Path.DirectorySeparatorChar + "Installer.unity",
 							},
 							CustomBuildType.Installer,
 							BASE_BUILD_OPTIONS | BuildOptions.ShowBuiltPlayer,
@@ -395,19 +393,19 @@ start Scene.exe SCENE";
 
 		private static void BuildSetupFolder(string rootPath, string buildPath)
 		{
-			string setup = Path.Combine(rootPath, "FishMMO-Setup");
+			string setup = Path.Combine(rootPath, Constants.Configuration.SetupDirectory);
 			FileUtil.ReplaceFile(Path.Combine(setup, "docker-compose.yml"), Path.Combine(buildPath, "docker-compose.yml"));
 
 			string envConfigurationPath = WorkingEnvironmentOptions.AppendEnvironmentToPath(setup);
 			FileUtil.ReplaceFile(Path.Combine(envConfigurationPath, "appsettings.json"), Path.Combine(buildPath, "appsettings.json"));
 
-			string dbBuildDirectory = Path.Combine(buildPath, "FishMMO-Database");
-			FileUtil.ReplaceDirectory(Path.Combine(rootPath, "FishMMO-Database"), dbBuildDirectory);
+			string dbBuildDirectory = Path.Combine(buildPath, Constants.Configuration.DatabaseDirectory);
+			FileUtil.ReplaceDirectory(Path.Combine(rootPath, Constants.Configuration.DatabaseDirectory), dbBuildDirectory);
 
-			string dbBinDirectory = Path.Combine(Path.Combine(dbBuildDirectory, "FishMMO-DB"), "bin");
+			string dbBinDirectory = Path.Combine(Path.Combine(dbBuildDirectory, Constants.Configuration.DatabaseProjectDirectory), "bin");
 			FileUtil.DeleteFileOrDirectory(dbBinDirectory);
 
-			string dbMigratorBinDirectory = Path.Combine(Path.Combine(dbBuildDirectory, "FishMMO-DB-Migrator"), "bin");
+			string dbMigratorBinDirectory = Path.Combine(Path.Combine(dbBuildDirectory, Constants.Configuration.DatabaseMigratorProjectDirectory), "bin");
 			FileUtil.DeleteFileOrDirectory(dbMigratorBinDirectory);
 		}
 
@@ -423,11 +421,11 @@ start Scene.exe SCENE";
 		public static void BuildWindows64AllSeparate()
 		{
 			string selectedPath = EditorUtility.SaveFolderPanel("Pick a save directory", "", "");
-			string rootPath = Path.Combine(selectedPath, "FishMMO");
-			string serverRootPath = Path.Combine(selectedPath, "FishMMO" + Path.DirectorySeparatorChar + "Server");
+			string rootPath = Path.Combine(selectedPath, Constants.Configuration.ProjectName);
+			string serverRootPath = Path.Combine(selectedPath, Constants.Configuration.ProjectName + Path.DirectorySeparatorChar + "Server");
 			RebuildWorldSceneDetailsCache();
 			BuildExecutable(rootPath,
-							CLIENT_BUILD_NAME,
+							Constants.Configuration.ProjectName,
 							CLIENT_BOOTSTRAP_SCENES,
 							CustomBuildType.Client,
 							BASE_BUILD_OPTIONS,
@@ -473,11 +471,11 @@ start Scene.exe SCENE";
 		public static void BuildAllLinux()
 		{
 			string selectedPath = EditorUtility.SaveFolderPanel("Pick a save directory", "", "");
-			string rootPath = Path.Combine(selectedPath, "FishMMO");
-			string serverRootPath = Path.Combine(selectedPath, "FishMMO" + Path.DirectorySeparatorChar + "Server");
+			string rootPath = Path.Combine(selectedPath, Constants.Configuration.ProjectName);
+			string serverRootPath = Path.Combine(selectedPath, Constants.Configuration.ProjectName + Path.DirectorySeparatorChar + "Server");
 			RebuildWorldSceneDetailsCache();
 			BuildExecutable(rootPath,
-							CLIENT_BUILD_NAME,
+							Constants.Configuration.ProjectName,
 							CLIENT_BOOTSTRAP_SCENES,
 							CustomBuildType.Client,
 							BASE_BUILD_OPTIONS,
@@ -571,7 +569,7 @@ start Scene.exe SCENE";
 		public static void BuildWindows64Client()
 		{
 			RebuildWorldSceneDetailsCache();
-			BuildExecutable(CLIENT_BUILD_NAME,
+			BuildExecutable(Constants.Configuration.ProjectName,
 							CLIENT_BOOTSTRAP_SCENES,
 							CustomBuildType.Client,
 							BASE_BUILD_OPTIONS | BuildOptions.ShowBuiltPlayer,
@@ -595,7 +593,7 @@ start Scene.exe SCENE";
 		public static void BuildLinux64Client()
 		{
 			RebuildWorldSceneDetailsCache();
-			BuildExecutable(CLIENT_BUILD_NAME,
+			BuildExecutable(Constants.Configuration.ProjectName,
 							CLIENT_BOOTSTRAP_SCENES,
 							CustomBuildType.Client,
 							BASE_BUILD_OPTIONS | BuildOptions.ShowBuiltPlayer,
@@ -607,7 +605,7 @@ start Scene.exe SCENE";
 		public static void BuildWebGLClient()
 		{
 			RebuildWorldSceneDetailsCache();
-			BuildExecutable(CLIENT_BUILD_NAME,
+			BuildExecutable(Constants.Configuration.ProjectName,
 							CLIENT_BOOTSTRAP_SCENES,
 							CustomBuildType.Client,
 							BASE_BUILD_OPTIONS | BuildOptions.ShowBuiltPlayer,

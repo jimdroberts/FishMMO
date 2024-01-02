@@ -76,6 +76,12 @@ namespace FishMMO.Server
 				ServerManager.RegisterBroadcast<PartyDeclineInviteBroadcast>(OnServerPartyDeclineInviteBroadcastReceived, true);
 				ServerManager.RegisterBroadcast<PartyLeaveBroadcast>(OnServerPartyLeaveBroadcastReceived, true);
 				ServerManager.RegisterBroadcast<PartyRemoveBroadcast>(OnServerPartyRemoveBroadcastReceived, true);
+
+				// remove the characters pending guild invite request on disconnect
+				if (Server.CharacterSystem != null)
+				{
+					Server.CharacterSystem.OnDisconnect += RemovePending;
+				}
 			}
 			else if (args.ConnectionState == LocalConnectionState.Stopped)
 			{
@@ -85,6 +91,12 @@ namespace FishMMO.Server
 				ServerManager.UnregisterBroadcast<PartyDeclineInviteBroadcast>(OnServerPartyDeclineInviteBroadcastReceived);
 				ServerManager.UnregisterBroadcast<PartyLeaveBroadcast>(OnServerPartyLeaveBroadcastReceived);
 				ServerManager.UnregisterBroadcast<PartyRemoveBroadcast>(OnServerPartyRemoveBroadcastReceived);
+
+				// remove the characters pending guild invite request on disconnect
+				if (Server.CharacterSystem != null)
+				{
+					Server.CharacterSystem.OnDisconnect -= RemovePending;
+				}
 			}
 		}
 
@@ -176,9 +188,12 @@ namespace FishMMO.Server
 			}
 		}
 
-		public void RemovePending(long id)
+		public void RemovePending(NetworkConnection conn, Character character)
 		{
-			pendingInvitations.Remove(id);
+			if (character != null)
+			{
+				pendingInvitations.Remove(character.ID);
+			}
 		}
 
 		public void OnServerPartyCreateBroadcastReceived(NetworkConnection conn, PartyCreateBroadcast msg)

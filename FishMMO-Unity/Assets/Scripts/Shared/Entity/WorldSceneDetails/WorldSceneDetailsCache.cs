@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 #if UNITY_EDITOR
 using UnityEditor;
@@ -12,7 +11,6 @@ namespace FishMMO.Shared
 	[CreateAssetMenu(fileName = "WorldSceneDetails", menuName = "World Scene Details")]
 	public class WorldSceneDetailsCache : ScriptableObject
 	{
-		public const string WORLD_SCENE_PATH = "/WorldScene/";
 		public const string CACHE_PATH = "Assets/Resources/Prefabs/Shared/";
 		public const string CACHE_FILE_NAME = "WorldSceneDetails.asset";
 		public const string CACHE_FULL_PATH = CACHE_PATH + CACHE_FILE_NAME;
@@ -31,11 +29,9 @@ namespace FishMMO.Shared
 		public bool Rebuild()
 		{
 #if UNITY_EDITOR
-			if (EditorSceneManager.GetActiveScene().path.Contains(WORLD_SCENE_PATH))
-			{
-				Debug.Log("WorldSceneDetails: Unable to rebuild scene details while a WorldScene is open. Load a bootstrap scene instead! TODO: Automate");
-				return false;
-			}
+			// unity only uses forward slash for paths apparently
+			string worldScenePath = Constants.Configuration.WorldScenePath.Replace(@"\", @"/");
+
 			Debug.Log("WorldSceneDetails: Rebuilding");
 
 			// Keep track of teleporter sprites
@@ -64,136 +60,168 @@ namespace FishMMO.Shared
 
 			int sceneObjectUID = 0;
 
+			// get our initial scene so we can return to it..
+			Scene initialScene = EditorSceneManager.GetActiveScene();
+			string initialScenePath = initialScene.path;
+			if (initialScene.path.Contains(worldScenePath))
+			{
+				// load any other scene besides a world scene.. this is easier
+				foreach (EditorBuildSettingsScene scene in EditorBuildSettings.scenes)
+				{
+					if (!scene.path.Contains(worldScenePath))
+					{
+						Scene tmp = EditorSceneManager.OpenScene(scene.path, OpenSceneMode.Additive);
+						EditorSceneManager.CloseScene(initialScene, true);
+						initialScene = tmp;
+						break;
+					}
+				}
+			}
+
 			foreach (EditorBuildSettingsScene scene in EditorBuildSettings.scenes)
 			{
 				if (!scene.enabled)
+				{
 					continue;
+				}
 
 				// ensure the scene is a world scene
-				if (!scene.path.Contains(WORLD_SCENE_PATH))
+				if (!scene.path.Contains(worldScenePath))
+				{
 					continue;
+				}
 
 				// load the scene
-				Scene s = EditorSceneManager.OpenScene(scene.path, OpenSceneMode.Additive);
-				if (s.IsValid())
+				Scene currentScene = EditorSceneManager.OpenScene(scene.path, OpenSceneMode.Additive);
+				if (!Scenes.ContainsKey(currentScene.name) &&
+					currentScene.IsValid())
 				{
-					if (!Scenes.ContainsKey(s.name))
+					Debug.Log("WorldSceneDetails: Scene Loaded[" + currentScene.name + "]");
+
+					// add the scene to our world scenes list
+					WorldSceneDetails sceneDetails = new WorldSceneDetails();
+					Scenes.Add(currentScene.name, sceneDetails);
+
+					// search for settings
+					WorldSceneSettings worldSceneSettings = GameObject.FindObjectOfType<WorldSceneSettings>();
+					if (worldSceneSettings != null)
 					{
-						Debug.Log("WorldSceneDetails: Scene Loaded[" + s.name + "]");
+						sceneDetails.MaxClients = worldSceneSettings.MaxClients;
+					}
 
-						// add the scene to our world scenes list
-						WorldSceneDetails sceneDetails = new WorldSceneDetails();
-						Scenes.Add(s.name, sceneDetails);
+					// search for sceneObjectUIDs
+					SceneObjectUID[] sceneObjectUIDs = GameObject.FindObjectsOfType<SceneObjectUID>();
+					foreach (SceneObjectUID uid in sceneObjectUIDs)
+					{
+						uid.ID = ++sceneObjectUID;
+						Debug.Log("WorldSceneDetails: Found new Scene Object UID[" + uid.gameObject.name + " New ID:" + uid.ID + "]");
+						EditorSceneManager.MarkSceneDirty(currentScene);
+					}
 
-						// search for sceneObjectUIDs
-						SceneObjectUID[] sceneObjectUIDs = GameObject.FindObjectsOfType<SceneObjectUID>();
-						foreach (SceneObjectUID uid in sceneObjectUIDs)
+					// search for initialSpawnPositions
+					GameObject[] initialSpawns = GameObject.FindGameObjectsWithTag(InitialSpawnTag);
+					foreach (GameObject obj in initialSpawns)
+					{
+						Debug.Log("WorldSceneDetails: Found new Initial Spawn Position[" + obj.name + " Pos:" + obj.transform.position + " Rot:" + obj.transform.rotation + "]");
+
+						sceneDetails.InitialSpawnPositions.Add(obj.name, new CharacterInitialSpawnPosition()
 						{
-							uid.ID = ++sceneObjectUID;
-							Debug.Log("WorldSceneDetails: Found new Scene Object UID[" + uid.gameObject.name + " New ID:" + uid.ID + "]");
-							EditorSceneManager.MarkSceneDirty(s);
-						}
+							SpawnerName = obj.name,
+							SceneName = currentScene.name,
+							Position = obj.transform.position,
+							Rotation = obj.transform.rotation,
+						});
+					}
 
-						// search for initialSpawnPositions
-						GameObject[] initialSpawns = GameObject.FindGameObjectsWithTag(InitialSpawnTag);
-						foreach (GameObject obj in initialSpawns)
+					// search for respawnPositions
+					GameObject[] respawnPositions = GameObject.FindGameObjectsWithTag(RespawnTag);
+					foreach (GameObject obj in respawnPositions)
+					{
+						Debug.Log("WorldSceneDetails: Found new Respawn Position[" + obj.name + " " + obj.transform.position + "]");
+
+						sceneDetails.RespawnPositions.Add(obj.name, obj.transform.position);
+					}
+
+					// Search for world bounds (bounds activate when outside of all of them)
+					IBoundary[] sceneBoundaries = GameObject.FindObjectsOfType<IBoundary>();
+					foreach (IBoundary obj in sceneBoundaries)
+					{
+						Debug.Log($"WorldSceneDetails: Found new Boundary[Name: {obj.name}, Center: {obj.GetBoundaryOffset()}, Size: {obj.GetBoundarySize()}]");
+
+						sceneDetails.Boundaries.Add(obj.name, new SceneBoundaryDetails()
 						{
-							Debug.Log("WorldSceneDetails: Found new Initial Spawn Position[" + obj.name + " Pos:" + obj.transform.position + " Rot:" + obj.transform.rotation + "]");
+							BoundaryOrigin = obj.GetBoundaryOffset(),
+							BoundarySize = obj.GetBoundarySize()
+						});
+					}
 
-							sceneDetails.InitialSpawnPositions.Add(obj.name, new CharacterInitialSpawnPosition()
-							{
-								SpawnerName = obj.name,
-								SceneName = s.name,
-								Position = obj.transform.position,
-								Rotation = obj.transform.rotation,
-							});
-						}
+					// search for scene teleporters
+					SceneTeleporter[] teleports = GameObject.FindObjectsOfType<SceneTeleporter>();
+					foreach (SceneTeleporter obj in teleports)
+					{
+						obj.name = obj.name.Trim();
 
-						// search for respawnPositions
-						GameObject[] respawnPositions = GameObject.FindGameObjectsWithTag(RespawnTag);
-						foreach (GameObject obj in respawnPositions)
+						Debug.Log("WorldSceneDetails: Found new SceneTeleporter[" + obj.name + "]");
+
+						SceneTeleporterDetails newDetails = new SceneTeleporterDetails()
 						{
-							Debug.Log("WorldSceneDetails: Found new Respawn Position[" + obj.name + " " + obj.transform.position + "]");
+							From = obj.name, // used for validation
+											 // we still need to set toScene and toPosition later
+						};
 
-							sceneDetails.RespawnPositions.Add(obj.name, obj.transform.position);
-						}
-
-						// Search for world bounds (bounds activate when outside of all of them)
-						IBoundary[] sceneBoundaries = GameObject.FindObjectsOfType<IBoundary>();
-						foreach (IBoundary obj in sceneBoundaries)
+						if (!teleporterCache.TryGetValue(currentScene.name, out Dictionary<string, SceneTeleporterDetails> teleporters))
 						{
-							Debug.Log($"WorldSceneDetails: Found new Boundary[Name: {obj.name}, Center: {obj.GetBoundaryOffset()}, Size: {obj.GetBoundarySize()}]");
-
-							sceneDetails.Boundaries.Add(obj.name, new SceneBoundaryDetails()
-							{
-								BoundaryOrigin = obj.GetBoundaryOffset(),
-								BoundarySize = obj.GetBoundarySize()
-							});
+							teleporterCache.Add(currentScene.name, teleporters = new Dictionary<string, SceneTeleporterDetails>());
 						}
+						teleporters.Add(obj.name, newDetails);
+					}
 
-						// search for scene teleporters
-						SceneTeleporter[] teleports = GameObject.FindObjectsOfType<SceneTeleporter>();
-						foreach (SceneTeleporter obj in teleports)
+					// search for teleports
+					Teleporter[] interactableTeleporters = GameObject.FindObjectsOfType<Teleporter>();
+					foreach (Teleporter obj in interactableTeleporters)
+					{
+						obj.name = obj.name.Trim();
+
+						Debug.Log("WorldSceneDetails: Found new Teleporter[" + obj.name + "]");
+
+						SceneTeleporterDetails newDetails = new SceneTeleporterDetails()
 						{
-							obj.name = obj.name.Trim();
+							From = obj.name, // used for validation
+											 // we still need to set toScene and toPosition later
+						};
 
-							Debug.Log("WorldSceneDetails: Found new SceneTeleporter[" + obj.name + "]");
-
-							SceneTeleporterDetails newDetails = new SceneTeleporterDetails()
-							{
-								From = obj.name, // used for validation
-												 // we still need to set toScene and toPosition later
-							};
-
-							if (!teleporterCache.TryGetValue(s.name, out Dictionary<string, SceneTeleporterDetails> teleporters))
-							{
-								teleporterCache.Add(s.name, teleporters = new Dictionary<string, SceneTeleporterDetails>());
-							}
-							teleporters.Add(obj.name, newDetails);
-						}
-
-						// search for teleports
-						Teleporter[] interactableTeleporters = GameObject.FindObjectsOfType<Teleporter>();
-						foreach (Teleporter obj in interactableTeleporters)
+						if (!teleporterCache.TryGetValue(currentScene.name, out Dictionary<string, SceneTeleporterDetails> teleporters))
 						{
-							obj.name = obj.name.Trim();
-
-							Debug.Log("WorldSceneDetails: Found new Teleporter[" + obj.name + "]");
-
-							SceneTeleporterDetails newDetails = new SceneTeleporterDetails()
-							{
-								From = obj.name, // used for validation
-												 // we still need to set toScene and toPosition later
-							};
-
-							if (!teleporterCache.TryGetValue(s.name, out Dictionary<string, SceneTeleporterDetails> teleporters))
-							{
-								teleporterCache.Add(s.name, teleporters = new Dictionary<string, SceneTeleporterDetails>());
-							}
-							teleporters.Add(obj.name, newDetails);
+							teleporterCache.Add(currentScene.name, teleporters = new Dictionary<string, SceneTeleporterDetails>());
 						}
+						teleporters.Add(obj.name, newDetails);
+					}
 
-						// search for teleporter destinations
-						GameObject[] teleportDestinations = GameObject.FindGameObjectsWithTag(TeleporterDestinationTag);
-						foreach (GameObject obj in teleportDestinations)
+					// search for teleporter destinations
+					GameObject[] teleportDestinations = GameObject.FindGameObjectsWithTag(TeleporterDestinationTag);
+					foreach (GameObject obj in teleportDestinations)
+					{
+						string teleporterDestinationName = obj.name.Trim();
+
+						Debug.Log("WorldSceneDetails: Found new Teleporter Destination[Destination:" + teleporterDestinationName + " " + obj.transform.position + "]");
+
+						teleporterDestinationCache.Add(teleporterDestinationName, new TeleporterDestinationDetails()
 						{
-							string teleporterDestinationName = obj.name.Trim();
-
-							Debug.Log("WorldSceneDetails: Found new Teleporter Destination[Destination:" + teleporterDestinationName + " " + obj.transform.position + "]");
-
-							teleporterDestinationCache.Add(teleporterDestinationName, new TeleporterDestinationDetails()
-							{
-								Scene = s.name,
-								Position = obj.transform.position,
-								Rotation = obj.transform.rotation,
-							});
-						}
+							Scene = currentScene.name,
+							Position = obj.transform.position,
+							Rotation = obj.transform.rotation,
+						});
 					}
 				}
 				EditorSceneManager.SaveOpenScenes();
-				// unload the scene
-				Debug.Log("WorldSceneDetails Scene Unloaded[" + s.name + "]");
-				EditorSceneManager.CloseScene(s, true);
+				Debug.Log("WorldSceneDetails Scene Unloaded[" + currentScene.name + "]");
+				EditorSceneManager.CloseScene(currentScene, true);
+			}
+			
+			if (!initialScene.path.Equals(initialScenePath))
+			{
+				Scene nonWorldScene = EditorSceneManager.OpenScene(initialScenePath, OpenSceneMode.Additive);
+				EditorSceneManager.CloseScene(initialScene, true);
 			}
 
 			Debug.Log("WorldSceneDetails: Connecting teleporters...");

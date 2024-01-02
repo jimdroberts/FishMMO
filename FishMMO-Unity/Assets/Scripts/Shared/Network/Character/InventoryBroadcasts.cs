@@ -8,6 +8,7 @@ namespace FishMMO.Shared
 		public long instanceID;
 		public int templateID;
 		public int slot;
+		public int seed;
 		public uint stackSize;
 	}
 

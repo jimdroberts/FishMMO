@@ -24,6 +24,7 @@ namespace FishMMO.Server.DatabaseServices
 				dbItem.CharacterID = characterID;
 				dbItem.TemplateID = item.Template.ID;
 				dbItem.Slot = item.Slot;
+				dbItem.Seed = item.Generator != null ? item.Generator.Seed : 0;
 				dbItem.Amount = item.IsStackable ? item.Stackable.Amount : 0;
 			}
 			else
@@ -33,11 +34,12 @@ namespace FishMMO.Server.DatabaseServices
 					CharacterID = characterID,
 					TemplateID = item.Template.ID,
 					Slot = item.Slot,
+					Seed = item.Generator != null ? item.Generator.Seed : 0,
 					Amount = item.IsStackable ? item.Stackable.Amount : 0,
 				};
 				dbContext.CharacterEquippedItems.Add(dbItem);
 				dbContext.SaveChanges();
-				item.Initialize(dbItem.ID);
+				item.Initialize(dbItem.ID, dbItem.Seed);
 			}
 		}
 
@@ -84,7 +86,7 @@ namespace FishMMO.Server.DatabaseServices
 				{
 					return;
 				}
-				Item item = new Item(dbItem.ID, template, dbItem.Amount);
+				Item item = new Item(dbItem.ID, dbItem.Seed, template, dbItem.Amount);
 				if (item == null)
 				{
 					return;

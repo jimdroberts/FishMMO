@@ -17,9 +17,6 @@ namespace FishMMO.Shared
 {
 	public class FishMMOInstaller : MonoBehaviour
 	{
-		public string ProjectPath = "./FishMMO-Database/FishMMO-DB/FishMMO-DB.csproj";
-		public string StartupProject = "./FishMMO-Database/FishMMO-DB-Migrator/FishMMO-DB-Migrator.csproj";
-
 		public TMP_Text OutputLog;
 		public TMP_InputField CommandInput;
 		public List<Button> Buttons = new List<Button>();
@@ -513,7 +510,7 @@ namespace FishMMO.Shared
 			//Log(workingDirectory);
 
 #if UNITY_EDITOR
-			string setup = Path.Combine(workingDirectory, "FishMMO-Setup");
+			string setup = Path.Combine(workingDirectory, Constants.Configuration.SetupDirectory);
 			//Log(setup);
 
 			string envConfigurationPath = Path.Combine(setup, "Development");
@@ -538,7 +535,7 @@ namespace FishMMO.Shared
 				AppSettings appSettings = JsonUtility.FromJson<AppSettings>(jsonContent);
 
 				// docker-compose up
-				string output = await RunDockerComposeCommandAsync("-p fishmmo up -d", new Dictionary<string, string>()
+				string output = await RunDockerComposeCommandAsync("-p " + Constants.Configuration.ProjectName.ToLower() + " up -d", new Dictionary<string, string>()
 				{
 					{ "POSTGRES_DB", appSettings.Npgsql.Database },
 					{ "POSTGRES_USER", appSettings.Npgsql.Username },
@@ -551,10 +548,10 @@ namespace FishMMO.Shared
 				});
 
 				// Run 'dotnet ef migrations add Initial' command
-				string migrationOut = await RunDotNetCommandAsync($"ef migrations add Initial -p {ProjectPath} -s {StartupProject}");
+				string migrationOut = await RunDotNetCommandAsync($"ef migrations add Initial -p {Constants.Configuration.ProjectPath} -s {Constants.Configuration.StartupProject}");
 
 				// Run 'dotnet ef database update' command
-				string updateOut = await RunDotNetCommandAsync($"ef database update -p {ProjectPath} -s {StartupProject}");
+				string updateOut = await RunDotNetCommandAsync($"ef database update -p {Constants.Configuration.ProjectPath} -s {Constants.Configuration.StartupProject}");
 
 				Log("Redis Host: " + appSettings.Redis.Host + "\r\n" +
 					"Redis Port: " + appSettings.Redis.Port + "\r\n" +
@@ -591,10 +588,10 @@ namespace FishMMO.Shared
 			Log($"Creating a new migration {timestamp}... Please wait.");
 
 			// Run 'dotnet ef migrations add Initial' command
-			await RunDotNetCommandAsync($"ef migrations add {timestamp} -p {ProjectPath} -s {StartupProject}");
+			await RunDotNetCommandAsync($"ef migrations add {timestamp} -p {Constants.Configuration.ProjectPath} -s {Constants.Configuration.StartupProject}");
 
 			// Run 'dotnet ef database update' command
-			await RunDotNetCommandAsync($"ef database update -p {ProjectPath} -s {StartupProject}");
+			await RunDotNetCommandAsync($"ef database update -p {Constants.Configuration.ProjectPath}  -s  {Constants.Configuration.StartupProject}");
 
 			Log($"Migration completed...");
 			SetButtonsActive(true);

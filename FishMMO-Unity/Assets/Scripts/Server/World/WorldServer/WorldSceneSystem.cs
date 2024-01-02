@@ -17,6 +17,8 @@ namespace FishMMO.Server
 
 		private WorldServerAuthenticator loginAuthenticator;
 
+		public WorldSceneDetailsCache WorldSceneDetailsCache;
+
 		// sceneName, waitingConnections
 		/// <summary>
 		/// Connections waiting for a scene to finish loading.
@@ -139,8 +141,18 @@ namespace FishMMO.Server
 
 					foreach (NetworkConnection connection in new List<NetworkConnection>(connections))
 					{
+						int maxClientsPerInstance = MAX_CLIENTS_PER_INSTANCE;
+
+						// see if we can get a per scene max client count
+						if (WorldSceneDetailsCache != null &&
+							WorldSceneDetailsCache.Scenes != null &&
+							WorldSceneDetailsCache.Scenes.TryGetValue(sceneName, out WorldSceneDetails details))
+						{
+							maxClientsPerInstance = details.MaxClients;
+						}
+
 						// if we are at maximum capacity on this server move to the next one
-						if (loadedScene.CharacterCount >= MAX_CLIENTS_PER_INSTANCE)
+						if (loadedScene.CharacterCount >= maxClientsPerInstance)
 						{
 							continue;
 						}

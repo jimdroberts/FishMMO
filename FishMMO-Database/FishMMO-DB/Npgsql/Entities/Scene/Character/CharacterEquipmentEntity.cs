@@ -14,6 +14,7 @@ namespace FishMMO.Database.Npgsql.Entities
         public CharacterEntity Character { get; set; }
         public int TemplateID { get; set; }
         public int Slot { get; set; }
+        public int Seed { get; set; }
         public uint Amount { get; set; }
     }
 }

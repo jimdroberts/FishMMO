@@ -10,7 +10,7 @@ namespace FishMMO.Server.DatabaseServices
     {
         public static ClientAuthenticationResult TryCreate(NpgsqlDbContext dbContext, string accountName, string salt, string verifier)
         {
-			if (AuthenticationHelper.IsAllowedUsername(accountName) && !string.IsNullOrWhiteSpace(salt) && !string.IsNullOrWhiteSpace(verifier))
+			if (Constants.Authentication.IsAllowedUsername(accountName) && !string.IsNullOrWhiteSpace(salt) && !string.IsNullOrWhiteSpace(verifier))
 			{
 				var accountEntity = dbContext.Accounts.FirstOrDefault(a => a.Name == accountName);
 				if (accountEntity == null)
@@ -38,7 +38,7 @@ namespace FishMMO.Server.DatabaseServices
 			verifier = "";
 			accessLevel = AccessLevel.Banned;
 
-			if (AuthenticationHelper.IsAllowedUsername(accountName))
+			if (Constants.Authentication.IsAllowedUsername(accountName))
             {
                 var accountEntity = dbContext.Accounts.FirstOrDefault(a => a.Name == accountName);
                 if (accountEntity == null)

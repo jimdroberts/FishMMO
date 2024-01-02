@@ -32,6 +32,10 @@ namespace FishMMO.Server
 		/// Triggered after a character is loaded from the database. <conn, Character>
 		/// </summary>
 		public event Action<NetworkConnection, Character> OnAfterLoadCharacter;
+		/// <summary>
+		/// Triggered immediately after a character is removed from their respective cache.
+		/// </summary>
+		public event Action<NetworkConnection, Character> OnDisconnect;
 
 		public Dictionary<long, Character> CharactersByID = new Dictionary<long, Character>();
 		public Dictionary<string, Character> CharactersByLowerCaseName = new Dictionary<string, Character>();
@@ -150,6 +154,8 @@ namespace FishMMO.Server
 																			out SceneInstanceDetails instance))
 					{
 						--instance.CharacterCount;
+
+						OnDisconnect?.Invoke(conn, waitingSceneCharacter);
 					}
 				}
 
@@ -174,17 +180,7 @@ namespace FishMMO.Server
 						characters.Remove(character.ID);
 					}
 
-					// remove the characters pending guild invite request
-					if (Server.GuildSystem != null)
-					{
-						Server.GuildSystem.RemovePending(character.ID);
-					}
-
-					// remove the characters pending party invite request
-					if (Server.PartySystem != null)
-					{
-						Server.PartySystem.RemovePending(character.ID);
-					}
+					OnDisconnect?.Invoke(conn, waitingSceneCharacter);
 
 					if (character.IsTeleporting)
 					{
@@ -573,6 +569,7 @@ namespace FishMMO.Server
 						instanceID = item.ID,
 						templateID = item.Template.ID,
 						slot = item.Slot,
+						seed = item.IsGenerated ? item.Generator.Seed : 0,
 						stackSize = item.IsStackable ? item.Stackable.Amount : 0,
 					});
 				}
@@ -606,6 +603,7 @@ namespace FishMMO.Server
 						instanceID = item.ID,
 						templateID = item.Template.ID,
 						slot = item.Slot,
+						seed = item.IsGenerated ? item.Generator.Seed : 0,
 						stackSize = item.IsStackable ? item.Stackable.Amount : 0,
 					});
 				}

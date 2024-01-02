@@ -70,7 +70,7 @@ namespace FishMMO.Client
 				{
 					tooltip.Open("Please type the name of your new guild!", (s) =>
 					{
-						if (AuthenticationHelper.IsAllowedGuildName(s))
+						if (Constants.Authentication.IsAllowedGuildName(s))
 						{
 							Client.NetworkManager.ClientManager.Broadcast(new GuildCreateBroadcast()
 							{

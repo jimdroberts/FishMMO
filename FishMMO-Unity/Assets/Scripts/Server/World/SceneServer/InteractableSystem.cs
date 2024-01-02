@@ -167,6 +167,7 @@ namespace FishMMO.Server
 									instanceID = item.ID,
 									templateID = item.Template.ID,
 									slot = item.Slot,
+									seed = item.IsGenerated ? item.Generator.Seed : 0,
 									stackSize = item.IsStackable ? item.Stackable.Amount : 0,
 								});
 							}
