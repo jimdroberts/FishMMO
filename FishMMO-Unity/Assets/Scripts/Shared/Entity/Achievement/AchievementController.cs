@@ -173,7 +173,7 @@ namespace FishMMO.Shared
 
 				for (int i = 0; i < itemRewards.Length; ++i)
 				{
-					Item newItem = new Item(123, itemRewards[i].ID, 1);
+					Item newItem = new Item(123, 0, itemRewards[i].ID, 1);
 
 					if (Character.InventoryController.TryAddItem(newItem, out List<Item> modifiedItems))
 					{
@@ -184,6 +184,7 @@ namespace FishMMO.Shared
 								instanceID = newItem.ID,
 								templateID = newItem.Template.ID,
 								slot = newItem.Slot,
+								seed = newItem.IsGenerated ? newItem.Generator.Seed : 0,
 								stackSize = newItem.IsStackable ? newItem.Stackable.Amount : 0,
 							});
 						}
