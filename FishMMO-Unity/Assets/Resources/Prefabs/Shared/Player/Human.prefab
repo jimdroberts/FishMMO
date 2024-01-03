@@ -211,7 +211,7 @@ GameObject:
   - component: {fileID: 6038023079570568745}
   - component: {fileID: 4053032698712144203}
   m_Layer: 0
-  m_Name: Player
+  m_Name: Human
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -280,7 +280,7 @@ MonoBehaviour:
   <SpawnableCollectionId>k__BackingField: 0
   _scenePathHash: 0
   <SceneId>k__BackingField: 0
-  <AssetPathHash>k__BackingField: 3497472507977712975
+  <AssetPathHash>k__BackingField: 17302978974676234885
   _sceneNetworkObjects:
   - {fileID: 784751938054981284}
   - {fileID: 0}

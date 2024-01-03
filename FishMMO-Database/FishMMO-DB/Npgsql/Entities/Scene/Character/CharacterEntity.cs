@@ -23,6 +23,7 @@ namespace FishMMO.Database.Npgsql.Entities
         public int SceneHandle { get; set; }
         public string SceneName { get; set; }
         public int RaceID { get; set; }
+        public long Currency { get; set; }
         public float X { get; set; }
         public float Y { get; set; }
         public float Z { get; set; }

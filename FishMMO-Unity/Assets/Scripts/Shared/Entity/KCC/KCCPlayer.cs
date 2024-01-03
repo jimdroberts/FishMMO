@@ -79,7 +79,7 @@ namespace FishMMO.Shared
 					}
 				}
 			}
-			//Quang: The remote object must not have movement related logic code, destroy it. Network transform will handle the movements
+			//Quang: The remote client objects must not have movement related logic code, destroy it. Network transform will handle the movements
 			else
 			{
 				KinematicCharacterMotor motor = GetComponent<KinematicCharacterMotor>();
@@ -152,7 +152,7 @@ namespace FishMMO.Shared
 			Motor.UpdatePhase1(deltaTime);
 			Motor.UpdatePhase2(deltaTime);
 
-			Motor.Transform.SetPositionAndRotation(Motor.TransientPosition, Motor.TransientRotation);
+			Motor.SetPositionAndRotationAndVelocity(Motor.TransientPosition, Motor.TransientRotation, Vector3.zero);
 		}
 
 		private void Update()

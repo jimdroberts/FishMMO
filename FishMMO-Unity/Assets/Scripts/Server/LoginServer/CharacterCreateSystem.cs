@@ -99,20 +99,40 @@ namespace FishMMO.Server
 				// validate spawn details
 				if (WorldSceneDetailsCache.Scenes.TryGetValue(msg.initialSpawnPosition.SceneName, out WorldSceneDetails details))
 				{
+					int raceIndex = -1;
 					// validate spawner
 					if (details.InitialSpawnPositions.TryGetValue(msg.initialSpawnPosition.SpawnerName, out CharacterInitialSpawnPosition initialSpawnPosition))
 					{
-						// invalid race name! default to first race for now....
-						// FIXME add race selection to UICharacterCreate.cs
-						int raceID = 0;
-						for (int i = 0; i < Server.NetworkManager.SpawnablePrefabs.GetObjectCount(); ++i)
+						if (msg.raceIndex > -1 &&
+							msg.raceIndex < Server.NetworkManager.SpawnablePrefabs.GetObjectCount())
 						{
-							NetworkObject prefab = Server.NetworkManager.SpawnablePrefabs.GetObject(true, i);
-							if (prefab != null &&
-								(string.IsNullOrWhiteSpace(msg.raceName) || prefab.name == msg.raceName))
+							NetworkObject prefab = Server.NetworkManager.SpawnablePrefabs.GetObject(true, msg.raceIndex);
+							if (prefab != null)
 							{
-								raceID = i;
-								break;
+								Character prefabCharacter = prefab.gameObject.GetComponent<Character>();
+								if (prefabCharacter != null)
+								{
+									raceIndex = msg.raceIndex;
+								}
+							}
+						}
+
+						// invalid race id! fall back to first race....
+						if (raceIndex < 0)
+						{
+							for (int i = 0; i < Server.NetworkManager.SpawnablePrefabs.GetObjectCount(); ++i)
+							{
+								NetworkObject prefab = Server.NetworkManager.SpawnablePrefabs.GetObject(true, i);
+								if (prefab != null)
+								{
+									// ensure it's a Character type
+									Character prefabCharacter = prefab.gameObject.GetComponent<Character>();
+									if (prefabCharacter != null)
+									{
+										raceIndex = i;
+										break;
+									}
+								}
 							}
 						}
 						var newCharacter = new CharacterEntity()
@@ -120,7 +140,7 @@ namespace FishMMO.Server
 							Account = accountName,
 							Name = msg.characterName,
 							NameLowercase = msg.characterName?.ToLower(),
-							RaceID = raceID,
+							RaceID = raceIndex,
 							SceneName = initialSpawnPosition.SceneName,
 							X = initialSpawnPosition.Position.x,
 							Y = initialSpawnPosition.Position.y,

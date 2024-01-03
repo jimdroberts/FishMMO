@@ -93,6 +93,9 @@ namespace FishMMO.Shared
 		public long WorldServerID;
 		public AccessLevel AccessLevel = AccessLevel.Player;
 		public bool IsTeleporting = false;
+		[SyncVar(Channel = Channel.Unreliable, ReadPermissions = ReadPermission.OwnerOnly, WritePermissions = WritePermission.ServerOnly)]
+		public long Currency;
+		[SyncVar(Channel = Channel.Unreliable, ReadPermissions = ReadPermission.OwnerOnly, WritePermissions = WritePermission.ServerOnly)]
 		public int RaceID;
 		[SyncVar(Channel = Channel.Unreliable, ReadPermissions = ReadPermission.OwnerOnly, WritePermissions = WritePermission.ServerOnly)]
 		public string RaceName;
@@ -222,6 +225,7 @@ namespace FishMMO.Shared
 			WorldServerID = 0;
 			AccessLevel = AccessLevel.Player;
 			IsTeleporting = false;
+			Currency = 0;
 			RaceID = 0;
 			RaceName = "";
 			SceneName = "";

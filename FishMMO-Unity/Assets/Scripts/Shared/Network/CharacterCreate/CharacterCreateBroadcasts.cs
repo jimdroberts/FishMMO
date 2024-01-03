@@ -5,7 +5,7 @@ namespace FishMMO.Shared
 	public struct CharacterCreateBroadcast : IBroadcast
 	{
 		public string characterName;
-		public string raceName;
+		public int raceIndex;
 		public CharacterInitialSpawnPosition initialSpawnPosition;
 	}
 

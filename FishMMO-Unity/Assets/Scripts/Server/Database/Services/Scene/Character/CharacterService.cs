@@ -242,6 +242,7 @@ namespace FishMMO.Server.DatabaseServices
 			existingCharacter.WorldServerID = character.WorldServerID;
 			existingCharacter.AccessLevel = (byte)character.AccessLevel;
 			existingCharacter.RaceID = character.RaceID;
+			existingCharacter.Currency = character.Currency;
 			existingCharacter.SceneHandle = character.SceneHandle;
 			existingCharacter.SceneName = character.SceneName;
 			existingCharacter.X = charPosition.x;
@@ -325,6 +326,7 @@ namespace FishMMO.Server.DatabaseServices
 						character.WorldServerID = dbCharacter.WorldServerID;
 						character.AccessLevel = (AccessLevel)dbCharacter.AccessLevel;
 						character.RaceID = dbCharacter.RaceID;
+						character.Currency = dbCharacter.Currency;
 						character.RaceName = prefab.name;
 						character.SceneHandle = dbCharacter.SceneHandle;
 						character.SceneName = dbCharacter.SceneName;

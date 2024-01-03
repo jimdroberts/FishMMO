@@ -151,6 +151,9 @@ namespace FishMMO.Server
 							maxClientsPerInstance = details.MaxClients;
 						}
 
+						// clamp at 1 to 100
+						maxClientsPerInstance = maxClientsPerInstance.Clamp(1, MAX_CLIENTS_PER_INSTANCE);
+
 						// if we are at maximum capacity on this server move to the next one
 						if (loadedScene.CharacterCount >= maxClientsPerInstance)
 						{

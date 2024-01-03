@@ -98,6 +98,13 @@ namespace FishMMO.Shared
 				{
 					Debug.Log("WorldSceneDetails: Scene Loaded[" + currentScene.name + "]");
 
+					IBoundary boundary = GameObject.FindObjectOfType<IBoundary>();
+					if (boundary == null)
+					{
+						Debug.Log(currentScene.name + " has no IBoundary. Boundaries are required for safety purposes. Try adding a SceneBoundary!");
+						continue;
+					}
+
 					// add the scene to our world scenes list
 					WorldSceneDetails sceneDetails = new WorldSceneDetails();
 					Scenes.Add(currentScene.name, sceneDetails);
