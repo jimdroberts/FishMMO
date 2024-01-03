@@ -67,6 +67,9 @@ namespace FishMMO.Server
 
 				ServerManager.RegisterBroadcast<EquipmentEquipItemBroadcast>(OnServerEquipmentEquipItemBroadcastReceived, true);
 				ServerManager.RegisterBroadcast<EquipmentUnequipItemBroadcast>(OnServerEquipmentUnequipItemBroadcastReceived, true);
+
+				ServerManager.RegisterBroadcast<BankRemoveItemBroadcast>(OnServerBankRemoveItemBroadcastReceived, true);
+				ServerManager.RegisterBroadcast<BankSwapItemSlotsBroadcast>(OnServerBankSwapItemSlotsBroadcastReceived, true);
 			}
 			else if (args.ConnectionState == LocalConnectionState.Stopped)
 			{
@@ -77,6 +80,9 @@ namespace FishMMO.Server
 
 				ServerManager.UnregisterBroadcast<EquipmentEquipItemBroadcast>(OnServerEquipmentEquipItemBroadcastReceived);
 				ServerManager.UnregisterBroadcast<EquipmentUnequipItemBroadcast>(OnServerEquipmentUnequipItemBroadcastReceived);
+
+				ServerManager.UnregisterBroadcast<BankRemoveItemBroadcast>(OnServerBankRemoveItemBroadcastReceived);
+				ServerManager.UnregisterBroadcast<BankSwapItemSlotsBroadcast>(OnServerBankSwapItemSlotsBroadcastReceived);
 			}
 		}
 
@@ -109,7 +115,7 @@ namespace FishMMO.Server
 				Item item = character.InventoryController.RemoveItem(msg.slot);
 
 				// remove the item from the database
-				CharacterInventoryService.Delete(dbContext, character.ID, item.ID);
+				CharacterInventoryService.Delete(dbContext, character.ID, msg.slot);
 				dbContext.SaveChanges();
 
 				conn.Broadcast(msg, true, Channel.Reliable);
@@ -140,14 +146,52 @@ namespace FishMMO.Server
 				return;
 			}
 
-			if (character.InventoryController.SwapItemSlots(msg.from, msg.to, out Item fromItem, out Item toItem))
+			switch (msg.fromInventory)
 			{
-				// save the changes to the database
-				CharacterInventoryService.SetSlot(dbContext, character.ID, fromItem);
-				CharacterInventoryService.SetSlot(dbContext, character.ID, toItem);
-				dbContext.SaveChanges();
+				case InventoryType.Inventory:
+					// swap the items in the inventory
+					if (character.InventoryController.SwapItemSlots(msg.from, msg.to, out Item fromItem, out Item toItem))
+					{
+						if (toItem == null)
+						{
+							CharacterInventoryService.Delete(dbContext, character.ID, msg.from);
+						}
+						else
+						{
+							CharacterInventoryService.SetSlot(dbContext, character.ID, toItem);
+						}
+						CharacterInventoryService.SetSlot(dbContext, character.ID, fromItem);
+						dbContext.SaveChanges();
 
-				conn.Broadcast(msg, true, Channel.Reliable);
+						conn.Broadcast(msg, true, Channel.Reliable);
+					}
+					break;
+				case InventoryType.Equipment:
+					break;
+				case InventoryType.Bank:
+					if (character.BankController != null &&
+						character.BankController.TryGetItem(msg.from, out Item bankItem))
+					{
+						if (character.InventoryController.TryGetItem(msg.to, out Item inventoryItem))
+						{
+							CharacterInventoryService.SetSlot(dbContext, character.ID, inventoryItem);
+							character.BankController.SetItemSlot(inventoryItem, msg.from);
+						}
+						else
+						{
+							CharacterInventoryService.Delete(dbContext, character.ID, bankItem.Slot);
+							character.BankController.SetItemSlot(null, msg.from);
+						}
+
+						CharacterBankService.SetSlot(dbContext, character.ID, bankItem);
+						character.InventoryController.SetItemSlot(bankItem, msg.to);
+
+						dbContext.SaveChanges();
+
+						conn.Broadcast(msg, true, Channel.Reliable);
+					}
+					break;
+				default: break;
 			}
 		}
 
@@ -168,28 +212,56 @@ namespace FishMMO.Server
 			Character character = conn.FirstObject.GetComponent<Character>();
 			if (character == null ||
 				character.IsTeleporting ||
-				character.InventoryController == null ||
 				character.EquipmentController == null)
 			{
 				return;
 			}
 
-			if (character.InventoryController.TryGetItem(msg.inventoryIndex, out Item item) &&
-				character.EquipmentController.Equip(item, msg.inventoryIndex, (ItemSlot)msg.slot))
+			switch (msg.fromInventory)
 			{
-				if (character.InventoryController.TryGetItem(msg.inventoryIndex, out Item prevItem))
-				{
-					CharacterInventoryService.SetSlot(dbContext, character.ID, prevItem);
-				}
-				else
-				{
-					// remove the item from the database
-					CharacterInventoryService.Delete(dbContext, character.ID, item.ID);
-				}
-				CharacterEquipmentService.SetSlot(dbContext, character.ID, item);
-				dbContext.SaveChanges();
+				case InventoryType.Inventory:
+					if (character.InventoryController != null &&
+						character.InventoryController.TryGetItem(msg.inventoryIndex, out Item inventoryItem) &&
+						character.EquipmentController.Equip(inventoryItem, msg.inventoryIndex, character.InventoryController, (ItemSlot)msg.slot))
+					{
+						if (character.InventoryController.TryGetItem(msg.inventoryIndex, out Item prevItem))
+						{
+							CharacterInventoryService.SetSlot(dbContext, character.ID, prevItem);
+						}
+						else
+						{
+							// remove the item from the database
+							CharacterInventoryService.Delete(dbContext, character.ID, inventoryItem.Slot);
+						}
+						CharacterEquipmentService.SetSlot(dbContext, character.ID, inventoryItem);
+						dbContext.SaveChanges();
 
-				conn.Broadcast(msg, true, Channel.Reliable);
+						conn.Broadcast(msg, true, Channel.Reliable);
+					}
+					break;
+				case InventoryType.Equipment:
+					return;
+				case InventoryType.Bank:
+					if (character.BankController != null &&
+						character.BankController.TryGetItem(msg.inventoryIndex, out Item bankItem) &&
+						character.EquipmentController.Equip(bankItem, msg.inventoryIndex, character.BankController, (ItemSlot)msg.slot))
+					{
+						if (character.BankController.TryGetItem(msg.inventoryIndex, out Item prevItem))
+						{
+							CharacterBankService.SetSlot(dbContext, character.ID, prevItem);
+						}
+						else
+						{
+							// remove the item from the database
+							CharacterBankService.Delete(dbContext, character.ID, bankItem.Slot);
+						}
+						CharacterEquipmentService.SetSlot(dbContext, character.ID, bankItem);
+						dbContext.SaveChanges();
+
+						conn.Broadcast(msg, true, Channel.Reliable);
+					}
+					break;
+				default: return;
 			}
 		}
 
@@ -210,20 +282,138 @@ namespace FishMMO.Server
 			Character character = conn.FirstObject.GetComponent<Character>();
 			if (character == null ||
 				character.IsTeleporting ||
-				character.InventoryController == null ||
 				character.EquipmentController == null)
 			{
 				return;
 			}
 
-			if (character.EquipmentController.TryGetItem(msg.slot, out Item item) &&
-				character.EquipmentController.Unequip(character.InventoryController, msg.slot))
+			switch (msg.toInventory)
 			{
-				CharacterEquipmentService.Delete(dbContext, character.ID, item.ID);
-				CharacterInventoryService.SetSlot(dbContext, character.ID, item);
+				case InventoryType.Inventory:
+					if (character.EquipmentController.TryGetItem(msg.slot, out Item toInventory) &&
+						character.EquipmentController.Unequip(character.InventoryController, msg.slot))
+					{
+						CharacterEquipmentService.Delete(dbContext, character.ID, toInventory.Slot);
+						CharacterInventoryService.SetSlot(dbContext, character.ID, toInventory);
+						dbContext.SaveChanges();
+
+						conn.Broadcast(msg, true, Channel.Reliable);
+					}
+					break;
+				case InventoryType.Equipment:
+					break;
+				case InventoryType.Bank:
+					if (character.EquipmentController.TryGetItem(msg.slot, out Item toBank) &&
+						character.EquipmentController.Unequip(character.BankController, msg.slot))
+					{
+						CharacterEquipmentService.Delete(dbContext, character.ID, toBank.Slot);
+						CharacterBankService.SetSlot(dbContext, character.ID, toBank);
+						dbContext.SaveChanges();
+
+						conn.Broadcast(msg, true, Channel.Reliable);
+					}
+					break;
+				default: return;
+			}
+		}
+
+		private void OnServerBankRemoveItemBroadcastReceived(NetworkConnection conn, BankRemoveItemBroadcast msg)
+		{
+			if (conn == null ||
+				conn.FirstObject == null)
+			{
+				return;
+			}
+
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
+			if (dbContext == null)
+			{
+				return;
+			}
+
+			Character character = conn.FirstObject.GetComponent<Character>();
+			if (character != null &&
+				!character.IsTeleporting)
+			{
+				Item item = character.BankController.RemoveItem(msg.slot);
+
+				// remove the item from the database
+				CharacterBankService.Delete(dbContext, character.ID, item.Slot);
 				dbContext.SaveChanges();
 
 				conn.Broadcast(msg, true, Channel.Reliable);
+			}
+		}
+
+		private void OnServerBankSwapItemSlotsBroadcastReceived(NetworkConnection conn, BankSwapItemSlotsBroadcast msg)
+		{
+			if (conn == null ||
+				msg.to == msg.from ||
+				conn.FirstObject == null)
+			{
+				return;
+			}
+
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
+			if (dbContext == null)
+			{
+				return;
+			}
+
+			Character character = conn.FirstObject.GetComponent<Character>();
+			if (character == null ||
+				character.IsTeleporting ||
+				character.BankController == null)
+			{
+				return;
+			}
+
+			switch (msg.fromInventory)
+			{
+				case InventoryType.Inventory:
+					if (character.InventoryController != null &&
+						character.InventoryController.TryGetItem(msg.from, out Item inventoryItem))
+					{
+						if (character.BankController.TryGetItem(msg.to, out Item bankItem))
+						{
+							CharacterInventoryService.SetSlot(dbContext, character.ID, bankItem);
+							character.InventoryController.SetItemSlot(bankItem, msg.from);
+						}
+						else
+						{
+							CharacterInventoryService.Delete(dbContext, character.ID, msg.from);
+							character.InventoryController.SetItemSlot(null, msg.from);
+						}
+
+						CharacterBankService.SetSlot(dbContext, character.ID, inventoryItem);
+						character.BankController.SetItemSlot(inventoryItem, msg.to);
+
+						dbContext.SaveChanges();
+
+						conn.Broadcast(msg, true, Channel.Reliable);
+					}
+					break;
+				case InventoryType.Equipment:
+					break;
+				case InventoryType.Bank:
+					// swap the items in the bank
+					if (character.BankController.SwapItemSlots(msg.from, msg.to, out Item fromItem, out Item toItem))
+					{
+						if (toItem == null)
+						{
+							CharacterBankService.Delete(dbContext, character.ID, msg.from);
+						}
+						else
+						{
+							CharacterBankService.SetSlot(dbContext, character.ID, toItem);
+						}
+						CharacterBankService.SetSlot(dbContext, character.ID, fromItem);
+						dbContext.SaveChanges();
+
+						conn.Broadcast(msg, true, Channel.Reliable);
+					}
+					break;
+				default: break;
 			}
 		}
 	}

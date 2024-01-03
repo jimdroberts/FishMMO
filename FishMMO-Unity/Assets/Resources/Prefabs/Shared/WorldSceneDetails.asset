@@ -85,7 +85,7 @@ MonoBehaviour:
         m_values:
         - SpawnerName: Spire
           SceneName: Greater Faydark
-          Position: {x: -13.06, y: 5.51, z: -12.29}
+          Position: {x: -94.72, y: 20.89, z: 44.3}
           Rotation: {x: -0, y: 0.7071068, z: -0, w: 0.7071068}
       RespawnPositions:
         m_keys:

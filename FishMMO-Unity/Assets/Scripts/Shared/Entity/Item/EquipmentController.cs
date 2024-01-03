@@ -50,7 +50,7 @@ namespace FishMMO.Shared
 		private void OnClientEquipmentSetItemBroadcastReceived(EquipmentSetItemBroadcast msg)
 		{
 			Item newItem = new Item(msg.instanceID, msg.seed, msg.templateID, msg.stackSize);
-			Equip(newItem, -1, (ItemSlot)msg.slot);
+			Equip(newItem, -1, null, (ItemSlot)msg.slot);
 		}
 
 		/// <summary>
@@ -61,7 +61,7 @@ namespace FishMMO.Shared
 			foreach (EquipmentSetItemBroadcast subMsg in msg.items)
 			{
 				Item newItem = new Item(subMsg.instanceID, subMsg.seed, subMsg.templateID, subMsg.stackSize);
-				Equip(newItem, -1, (ItemSlot)subMsg.slot);
+				Equip(newItem, -1, null, (ItemSlot)subMsg.slot);
 			}
 		}
 
@@ -70,9 +70,23 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void OnClientEquipmentEquipItemBroadcastReceived(EquipmentEquipItemBroadcast msg)
 		{
-			if (Character.InventoryController.TryGetItem(msg.inventoryIndex, out Item item))
+			switch (msg.fromInventory)
 			{
-				Equip(item, msg.inventoryIndex, (ItemSlot)msg.slot);
+				case InventoryType.Inventory:
+					if (Character.InventoryController.TryGetItem(msg.inventoryIndex, out Item inventoryItem))
+					{
+						Equip(inventoryItem, msg.inventoryIndex, Character.InventoryController, (ItemSlot)msg.slot);
+					}
+					break;
+				case InventoryType.Equipment:
+					break;
+				case InventoryType.Bank:
+					if (Character.BankController.TryGetItem(msg.inventoryIndex, out Item bankItem))
+					{
+						Equip(bankItem, msg.inventoryIndex, Character.BankController, (ItemSlot)msg.slot);
+					}
+					break;
+				default: return;
 			}
 		}
 
@@ -81,28 +95,43 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void OnClientEquipmentUnequipItemBroadcastReceived(EquipmentUnequipItemBroadcast msg)
 		{
-			if (Character.InventoryController == null)
+			switch (msg.toInventory)
 			{
-				return;
+				case InventoryType.Inventory:
+					if (Character.InventoryController != null)
+					{
+						Unequip(Character.InventoryController, msg.slot);
+					}
+					break;
+				case InventoryType.Equipment:
+					break;
+				case InventoryType.Bank:
+					if (Character.BankController != null)
+					{
+						Unequip(Character.BankController, msg.slot);
+					}
+					break;
+				default: return;
 			}
-			Unequip(Character.InventoryController, msg.slot);
 		}
 #endif
 
-		public void SendEquipRequest(int inventoryIndex, byte slot)
+		public void SendEquipRequest(int inventoryIndex, byte slot, InventoryType fromInventory)
 		{
 			ClientManager.Broadcast(new EquipmentEquipItemBroadcast()
 			{
 				inventoryIndex = inventoryIndex,
 				slot = slot,
+				fromInventory = fromInventory,
 			}, Channel.Reliable);
 		}
 
-		public void SendUnequipRequest(byte slot)
+		public void SendUnequipRequest(byte slot, InventoryType toInventory)
 		{
 			ClientManager.Broadcast(new EquipmentUnequipItemBroadcast()
 			{
 				slot = slot,
+				toInventory = toInventory,
 			}, Channel.Reliable);
 		}
 
@@ -132,7 +161,7 @@ namespace FishMMO.Shared
 			}
 		}
 
-		public bool Equip(Item item, int inventoryIndex, ItemSlot slot)
+		public bool Equip(Item item, int inventoryIndex, ItemContainer container, ItemSlot slot)
 		{
 			if (item == null || !CanManipulate()) return false;
 
@@ -144,19 +173,23 @@ namespace FishMMO.Shared
 			}
 
 			byte slotIndex = (byte)slot;
-			Item prevItem = Items[slotIndex];
-			if (prevItem != null &&
-				prevItem.Equippable != null)
-			{
-				prevItem.Equippable.Unequip();
 
-				// swap the items
-				Character.InventoryController.SetItemSlot(prevItem, inventoryIndex);
-			}
-			else
+			if (container != null)
 			{
-				// remove the item from the inventory
-				Character.InventoryController.RemoveItem(inventoryIndex);
+				Item prevItem = Items[slotIndex];
+				if (prevItem != null &&
+					prevItem.Equippable != null)
+				{
+					prevItem.Equippable.Unequip();
+
+					// swap the items
+					container.SetItemSlot(prevItem, inventoryIndex);
+				}
+				else
+				{
+					// remove the item from the inventory
+					container.RemoveItem(inventoryIndex);
+				}
 			}
 
 			// put the new item in the correct slot
@@ -180,7 +213,8 @@ namespace FishMMO.Shared
 		{
 			if (!CanManipulate() ||
 				!TryGetItem(slot, out Item item) ||
-				!Character.InventoryController.CanAddItem(item))
+				container == null ||
+				!container.CanAddItem(item))
 			{
 				return false;
 			}

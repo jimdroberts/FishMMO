@@ -8,13 +8,17 @@ namespace FishMMO.Client
 
 		public override void OnLeftClick()
 		{
-			if (UIManager.TryGet("UIDragObject", out UIDragObject dragObject) && dragObject.Visible)
+			if (UIManager.TryGet("UIDragObject", out UIDragObject dragObject) &&
+				dragObject.Visible)
 			{
-				Type = dragObject.Type;
-				ReferenceID = dragObject.ReferenceID;
-				if (Icon != null)
+				if (dragObject.Type != ReferenceButtonType.Bank)
 				{
-					Icon.sprite = dragObject.Icon.sprite;
+					Type = dragObject.Type;
+					ReferenceID = dragObject.ReferenceID;
+					if (Icon != null)
+					{
+						Icon.sprite = dragObject.Icon.sprite;
+					}
 				}
 
 				// clear the drag object no matter what
@@ -50,6 +54,8 @@ namespace FishMMO.Client
 						break;
 					case ReferenceButtonType.Equipment:
 						Character.EquipmentController.Activate(ReferenceID);
+						break;
+					case ReferenceButtonType.Bank:
 						break;
 					case ReferenceButtonType.Ability:
 						Character.AbilityController.Activate(ReferenceID, InputManager.GetKeyCode(KeyMap));

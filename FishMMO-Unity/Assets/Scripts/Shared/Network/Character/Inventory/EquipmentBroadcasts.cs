@@ -21,10 +21,12 @@ namespace FishMMO.Shared
 	{
 		public int inventoryIndex;
 		public byte slot;
+		public InventoryType fromInventory;
 	}
 
 	public struct EquipmentUnequipItemBroadcast : IBroadcast
 	{
 		public byte slot;
+		public InventoryType toInventory;
 	}
 }

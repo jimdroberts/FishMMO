@@ -21,12 +21,22 @@ namespace FishMMO.Client
 							Item item = Character.InventoryController.Items[dragObject.ReferenceID];
 							if (item != null)
 							{
-								Character.EquipmentController.SendEquipRequest(dragObject.ReferenceID, (byte)ItemSlotType);
+								Character.EquipmentController.SendEquipRequest(dragObject.ReferenceID, (byte)ItemSlotType, InventoryType.Inventory);
 							}
-
-							// clear the drag object
-							dragObject.Clear();
 						}
+						// taking an item from the bank and putting it in this equipment slot
+						else if (dragObject.Type == ReferenceButtonType.Bank)
+						{
+							// get the item from the Inventory
+							Item item = Character.BankController.Items[dragObject.ReferenceID];
+							if (item != null)
+							{
+								Character.EquipmentController.SendEquipRequest(dragObject.ReferenceID, (byte)ItemSlotType, InventoryType.Bank);
+							}
+						}
+
+						// clear the drag object no matter what
+						dragObject.Clear();
 					}
 					else if (!Character.EquipmentController.IsSlotEmpty((byte)ItemSlotType))
 					{
@@ -46,7 +56,8 @@ namespace FishMMO.Client
 			{
 				Clear();
 
-				Character.EquipmentController.SendUnequipRequest((byte)ItemSlotType);
+				// right clicking an item will attempt to send it to the inventory
+				Character.EquipmentController.SendUnequipRequest((byte)ItemSlotType, InventoryType.Inventory);
 			}
 		}
 

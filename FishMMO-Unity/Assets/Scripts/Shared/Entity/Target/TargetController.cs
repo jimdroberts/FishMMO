@@ -105,6 +105,26 @@ namespace FishMMO.Shared
 								newPos.y += 0.15f;
 								color = Color.white;
 							}
+							else
+							{
+								Banker banker = Current.Target.GetComponent<Banker>();
+								if (banker != null)
+								{
+									label += "\r\n<Banker>";
+									newPos.y += 0.15f;
+									color = Color.white;
+								}
+								else
+								{
+									AbilityCrafter abilityCrafter = Current.Target.GetComponent<AbilityCrafter>();
+									if (abilityCrafter != null)
+									{
+										label += "\r\n<Ability Crafter>";
+										newPos.y += 0.15f;
+										color = Color.white;
+									}
+								}
+							}
 
 							targetLabel = LabelMaker.Display(label, newPos, color, 1.0f, 0.0f, true);
 						}

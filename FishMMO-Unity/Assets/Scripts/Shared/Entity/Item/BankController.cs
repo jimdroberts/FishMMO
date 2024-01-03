@@ -4,7 +4,7 @@ using UnityEngine;
 namespace FishMMO.Shared
 {
 	[RequireComponent(typeof(Character))]
-	public class InventoryController : ItemContainer
+	public class BankController : ItemContainer
 	{
 		public Character Character;
 
@@ -12,7 +12,7 @@ namespace FishMMO.Shared
 
 		private void Awake()
 		{
-			AddSlots(null, 32);
+			AddSlots(null, 100);
 		}
 
 #if !UNITY_SERVER
@@ -26,10 +26,10 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			ClientManager.RegisterBroadcast<InventorySetItemBroadcast>(OnClientInventorySetItemBroadcastReceived);
-			ClientManager.RegisterBroadcast<InventorySetMultipleItemsBroadcast>(OnClientInventorySetMultipleItemsBroadcastReceived);
-			ClientManager.RegisterBroadcast<InventoryRemoveItemBroadcast>(OnClientInventoryRemoveItemBroadcastReceived);
-			ClientManager.RegisterBroadcast<InventorySwapItemSlotsBroadcast>(OnClientInventorySwapItemSlotsBroadcastReceived);
+			ClientManager.RegisterBroadcast<BankSetItemBroadcast>(OnClientBankSetItemBroadcastReceived);
+			ClientManager.RegisterBroadcast<BankSetMultipleItemsBroadcast>(OnClientBankSetMultipleItemsBroadcastReceived);
+			ClientManager.RegisterBroadcast<BankRemoveItemBroadcast>(OnClientBankRemoveItemBroadcastReceived);
+			ClientManager.RegisterBroadcast<BankSwapItemSlotsBroadcast>(OnClientBankSwapItemSlotsBroadcastReceived);
 		}
 
 		public override void OnStopClient()
@@ -38,17 +38,17 @@ namespace FishMMO.Shared
 
 			if (base.IsOwner)
 			{
-				ClientManager.UnregisterBroadcast<InventorySetItemBroadcast>(OnClientInventorySetItemBroadcastReceived);
-				ClientManager.UnregisterBroadcast<InventorySetMultipleItemsBroadcast>(OnClientInventorySetMultipleItemsBroadcastReceived);
-				ClientManager.UnregisterBroadcast<InventoryRemoveItemBroadcast>(OnClientInventoryRemoveItemBroadcastReceived);
-				ClientManager.UnregisterBroadcast<InventorySwapItemSlotsBroadcast>(OnClientInventorySwapItemSlotsBroadcastReceived);
+				ClientManager.UnregisterBroadcast<BankSetItemBroadcast>(OnClientBankSetItemBroadcastReceived);
+				ClientManager.UnregisterBroadcast<BankSetMultipleItemsBroadcast>(OnClientBankSetMultipleItemsBroadcastReceived);
+				ClientManager.UnregisterBroadcast<BankRemoveItemBroadcast>(OnClientBankRemoveItemBroadcastReceived);
+				ClientManager.UnregisterBroadcast<BankSwapItemSlotsBroadcast>(OnClientBankSwapItemSlotsBroadcastReceived);
 			}
 		}
 
 		/// <summary>
 		/// Server sent a set item broadcast. Item slot is set to the received item details.
 		/// </summary>
-		private void OnClientInventorySetItemBroadcastReceived(InventorySetItemBroadcast msg)
+		private void OnClientBankSetItemBroadcastReceived(BankSetItemBroadcast msg)
 		{
 			Item newItem = new Item(msg.instanceID, msg.seed, msg.templateID, msg.stackSize);
 			SetItemSlot(newItem, msg.slot);
@@ -57,9 +57,9 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Server sent a multiple set item broadcast. Item slot is set to the received item details.
 		/// </summary>
-		private void OnClientInventorySetMultipleItemsBroadcastReceived(InventorySetMultipleItemsBroadcast msg)
+		private void OnClientBankSetMultipleItemsBroadcastReceived(BankSetMultipleItemsBroadcast msg)
 		{
-			foreach (InventorySetItemBroadcast subMsg in msg.items)
+			foreach (BankSetItemBroadcast subMsg in msg.items)
 			{
 				Item newItem = new Item(subMsg.instanceID, subMsg.seed, subMsg.templateID, subMsg.stackSize);
 				SetItemSlot(newItem, subMsg.slot);
@@ -69,7 +69,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Server sent a remove item from slot broadcast. Item is removed from the received slot with server authority.
 		/// </summary>
-		private void OnClientInventoryRemoveItemBroadcastReceived(InventoryRemoveItemBroadcast msg)
+		private void OnClientBankRemoveItemBroadcastReceived(BankRemoveItemBroadcast msg)
 		{
 			RemoveItem(msg.slot);
 		}
@@ -78,30 +78,30 @@ namespace FishMMO.Shared
 		/// Server sent a swap slot broadcast. Both slots are swapped with server authority.
 		/// </summary>
 		/// <param name="msg"></param>
-		private void OnClientInventorySwapItemSlotsBroadcastReceived(InventorySwapItemSlotsBroadcast msg)
+		private void OnClientBankSwapItemSlotsBroadcastReceived(BankSwapItemSlotsBroadcast msg)
 		{
 			switch (msg.fromInventory)
 			{
 				case InventoryType.Inventory:
-					SwapItemSlots(msg.from, msg.to);
+					if (Character.InventoryController != null &&
+						Character.InventoryController.TryGetItem(msg.from, out Item inventoryItem))
+					{
+						if (TryGetItem(msg.to, out Item bankItem))
+						{
+							Character.InventoryController.SetItemSlot(bankItem, msg.from);
+						}
+						else
+						{
+							Character.InventoryController.SetItemSlot(null, msg.from);
+						}
+
+						SetItemSlot(inventoryItem, msg.to);
+					}
 					break;
 				case InventoryType.Equipment:
 					break;
 				case InventoryType.Bank:
-					if (Character.BankController != null &&
-						Character.BankController.TryGetItem(msg.from, out Item bankItem))
-					{
-						if (TryGetItem(msg.to, out Item inventoryItem))
-						{
-							Character.BankController.SetItemSlot(inventoryItem, msg.from);
-						}
-						else
-						{
-							Character.BankController.SetItemSlot(null, msg.from);
-						}
-
-						SetItemSlot(bankItem, msg.to);
-					}
+					SwapItemSlots(msg.from, msg.to);
 					break;
 				default: return;
 			}
@@ -125,20 +125,11 @@ namespace FishMMO.Shared
 			return true;
 		}
 
-		public void Activate(int index)
-		{
-			if (TryGetItem(index, out Item item))
-			{
-				Debug.Log("InventoryController: using item in slot[" + index + "]");
-				//items[index].OnUseItem();
-			}
-		}
-
 		public void SendSwapItemSlotsRequest(int from, int to, InventoryType fromInventory)
 		{
 			if (from != to)
 			{
-				ClientManager.Broadcast(new InventorySwapItemSlotsBroadcast()
+				ClientManager.Broadcast(new BankSwapItemSlotsBroadcast()
 				{
 					from = from,
 					to = to,

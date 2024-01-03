@@ -29,6 +29,7 @@ namespace FishMMO.Shared
 	[RequireComponent(typeof(CooldownController))]
 	[RequireComponent(typeof(InventoryController))]
 	[RequireComponent(typeof(EquipmentController))]
+	[RequireComponent(typeof(BankController))]
 	[RequireComponent(typeof(AbilityController))]
 	[RequireComponent(typeof(AchievementController))]
 	[RequireComponent(typeof(BuffController))]
@@ -53,6 +54,7 @@ namespace FishMMO.Shared
 		public CooldownController CooldownController { get; private set; }
 		public InventoryController InventoryController { get; private set; }
 		public EquipmentController EquipmentController { get; private set; }
+		public BankController BankController { get; private set; }
 		public AbilityController AbilityController { get; private set; }
 		public AchievementController AchievementController { get; private set; }
 		public BuffController BuffController { get; private set; }
@@ -132,6 +134,8 @@ namespace FishMMO.Shared
 			InventoryController.Character = this;
 			EquipmentController = gameObject.GetComponent<EquipmentController>();
 			EquipmentController.Character = this;
+			BankController = gameObject.GetComponent<BankController>();
+			BankController.Character = this;
 			AbilityController = gameObject.GetComponent<AbilityController>();
 			AbilityController.Character = this;
 			AchievementController = gameObject.GetComponent<AchievementController>();

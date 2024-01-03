@@ -26,5 +26,6 @@ namespace FishMMO.Shared
 	{
 		public int from;
 		public int to;
+		public InventoryType fromInventory;
 	}
 }

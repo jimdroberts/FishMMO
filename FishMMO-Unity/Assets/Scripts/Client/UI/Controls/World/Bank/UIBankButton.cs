@@ -2,7 +2,7 @@
 
 namespace FishMMO.Client
 {
-	public class UIInventoryButton : UIReferenceButton
+	public class UIBankButton : UIReferenceButton
 	{
 		public override void OnLeftClick()
 		{
@@ -12,16 +12,17 @@ namespace FishMMO.Client
 				{
 					if (dragObject.Visible)
 					{
-						// we check the hotkey type because we can swap items in the inventory
-						if (dragObject.Type == ReferenceButtonType.Inventory)
+						// we check the hotkey type because we can swap items in the bank
+						if (dragObject.Type == ReferenceButtonType.Bank)
 						{
-							// swap item slots in the inventory
-							Character.InventoryController.SendSwapItemSlotsRequest(dragObject.ReferenceID, ReferenceID, InventoryType.Inventory);
+							// swap item slots in the bank
+							Character.BankController.SendSwapItemSlotsRequest(dragObject.ReferenceID, ReferenceID, InventoryType.Bank);
 						}
-						// taking an item from the bank and putting it in this inventory slot
-						else if (dragObject.Type == ReferenceButtonType.Bank)
+						// taking an item from inventory and putting it in this bank slot
+						else if (dragObject.Type == ReferenceButtonType.Inventory)
 						{
-							Character.InventoryController.SendSwapItemSlotsRequest(dragObject.ReferenceID, ReferenceID, InventoryType.Bank);
+							// swap item slots in the bank
+							Character.BankController.SendSwapItemSlotsRequest(dragObject.ReferenceID, ReferenceID, InventoryType.Inventory);
 						}
 						// we can also unequip items
 						else if (dragObject.Type == ReferenceButtonType.Equipment &&
@@ -29,7 +30,7 @@ namespace FishMMO.Client
 								 dragObject.ReferenceID <= byte.MaxValue)
 						{
 							// unequip the item
-							Character.EquipmentController.SendUnequipRequest((byte)dragObject.ReferenceID, InventoryType.Inventory);
+							Character.EquipmentController.SendUnequipRequest((byte)dragObject.ReferenceID, InventoryType.Bank);
 						}
 
 						// clear the drag object
@@ -43,14 +44,6 @@ namespace FishMMO.Client
 						}
 					}
 				}
-			}
-		}
-
-		public override void OnRightClick()
-		{
-			if (Character != null && Type == ReferenceButtonType.Inventory)
-			{
-				Character.InventoryController.Activate(ReferenceID);
 			}
 		}
 

@@ -1206,7 +1206,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3d55bce5fe5091e4680796532c5ea90b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  ID: 4
+  ID: 5
 --- !u!135 &520637843
 SphereCollider:
   m_ObjectHideFlags: 0
@@ -3142,7 +3142,7 @@ GameObject:
   - component: {fileID: 1231552095}
   - component: {fileID: 1231552094}
   m_Layer: 0
-  m_Name: Caitlin the Merchant
+  m_Name: Caitlin
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -3301,7 +3301,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3d55bce5fe5091e4680796532c5ea90b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  ID: 5
+  ID: 6
 --- !u!114 &1231552097
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -4975,7 +4975,7 @@ Transform:
   m_GameObject: {fileID: 1965726575}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0.7071068, z: 0, w: 0.7071068}
-  m_LocalPosition: {x: -13.06, y: 5.51, z: -12.29}
+  m_LocalPosition: {x: -94.72, y: 20.89, z: 44.3}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -5046,7 +5046,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3d55bce5fe5091e4680796532c5ea90b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  ID: 6
+  ID: 7
 --- !u!135 &2026365186
 SphereCollider:
   m_ObjectHideFlags: 0

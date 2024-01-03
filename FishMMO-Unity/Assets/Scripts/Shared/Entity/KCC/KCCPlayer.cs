@@ -152,7 +152,7 @@ namespace FishMMO.Shared
 			Motor.UpdatePhase1(deltaTime);
 			Motor.UpdatePhase2(deltaTime);
 
-			Motor.SetPositionAndRotationAndVelocity(Motor.TransientPosition, Motor.TransientRotation, Vector3.zero);
+			Motor.Transform.SetPositionAndRotation(Motor.TransientPosition, Motor.TransientRotation);
 		}
 
 		private void Update()

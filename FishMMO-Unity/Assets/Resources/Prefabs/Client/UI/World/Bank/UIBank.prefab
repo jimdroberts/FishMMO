@@ -38,8 +38,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0}
   m_AnchorMax: {x: 0.5, y: 0}
-  m_AnchoredPosition: {x: 0, y: 115}
-  m_SizeDelta: {x: 200, y: 200}
+  m_AnchoredPosition: {x: 0, y: 216}
+  m_SizeDelta: {x: 400, y: 400}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &158282999
 CanvasRenderer:
@@ -304,7 +304,7 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 168940361}
   m_HandleRect: {fileID: 168940360}
   m_Direction: 0
-  m_Value: 1
+  m_Value: 0
   m_Size: 1
   m_NumberOfSteps: 0
   m_OnValueChanged:
@@ -506,7 +506,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0.5}
   m_AnchorMax: {x: 1, y: 0.5}
-  m_AnchoredPosition: {x: -0.00061035156, y: 91.49998}
+  m_AnchoredPosition: {x: 0, y: 191.49997}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0, y: 1}
 --- !u!114 &1994176932
@@ -760,7 +760,7 @@ GameObject:
   - component: {fileID: 6071712590301114943}
   - component: {fileID: 5784162579067997558}
   m_Layer: 5
-  m_Name: InventoryLabel
+  m_Name: BankLabel
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -813,7 +813,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Inventory
+  m_text: Bank
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -895,7 +895,7 @@ GameObject:
   - component: {fileID: 2098985106543992418}
   - component: {fileID: 8012601512978542325}
   m_Layer: 5
-  m_Name: UIInventory
+  m_Name: UIBank
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -920,7 +920,7 @@ RectTransform:
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
   m_AnchoredPosition: {x: 725, y: 12}
-  m_SizeDelta: {x: 230, y: 250}
+  m_SizeDelta: {x: 430, y: 450}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &7345007583128245249
 CanvasRenderer:
@@ -969,7 +969,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 5087677180317052513}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: ef2067b1d0fda304dbba81731062bb8d, type: 3}
+  m_Script: {fileID: 11500000, guid: cc9e7e4ff4ec37e468bf0ce0893f94ba, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   CanvasScaler: {fileID: 0}
@@ -984,6 +984,6 @@ MonoBehaviour:
   CanDrag: 1
   ClampToScreen: 1
   content: {fileID: 1994176931}
-  buttonPrefab: {fileID: -5946272345820923739, guid: dae94fce4f011404ba25ff32945feab3,
+  buttonPrefab: {fileID: -5946272345820923739, guid: 70452997088ff2546a2852e34a09fc90,
     type: 3}
-  inventorySlots: []
+  bankSlots: []

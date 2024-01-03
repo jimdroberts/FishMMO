@@ -6,6 +6,7 @@
 		Any,
 		Inventory,
 		Equipment,
+		Bank,
 		Ability,
 	}
 }

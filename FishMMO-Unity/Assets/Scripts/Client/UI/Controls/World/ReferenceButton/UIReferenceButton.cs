@@ -68,6 +68,14 @@ namespace FishMMO.Client
 							currentUITooltip.Open(equippedItem.Tooltip());
 						}
 						break;
+					case ReferenceButtonType.Bank:
+						if (Character.BankController != null &&
+							Character.BankController.TryGetItem(ReferenceID, out Item bankItem) &&
+							UIManager.TryGet("UITooltip", out currentUITooltip))
+						{
+							currentUITooltip.Open(bankItem.Tooltip());
+						}
+						break;
 					case ReferenceButtonType.Ability:
 						if (Character.AbilityController.KnownAbilities != null &&
 							Character.AbilityController.KnownAbilities.TryGetValue(ReferenceID, out Ability ability) &&

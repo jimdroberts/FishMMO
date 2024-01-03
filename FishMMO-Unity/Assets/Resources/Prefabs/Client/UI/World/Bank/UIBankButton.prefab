@@ -13,7 +13,7 @@ GameObject:
   - component: {fileID: 1185101213546960673}
   - component: {fileID: -5946272345820923739}
   m_Layer: 5
-  m_Name: UIInventoryButton
+  m_Name: UIBankButton
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -85,7 +85,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 63699524647026409}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: bf7b9c873968504479a75598719048c7, type: 3}
+  m_Script: {fileID: 11500000, guid: 312cea4f61c30a449af9935287934ceb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   m_Navigation:
@@ -122,7 +122,7 @@ MonoBehaviour:
       m_Calls: []
   ReferenceID: -1
   AllowedType: 1
-  Type: 2
+  Type: 4
   Icon: {fileID: 1185101213546960673}
   CooldownText: {fileID: 0}
   AmountText: {fileID: 0}

@@ -99,7 +99,7 @@ namespace FishMMO.Shared
 			}
 
 			character.SceneName = teleporter.ToScene;
-			character.Motor.SetPositionAndRotationAndVelocity(teleporter.ToPosition, teleporter.ToRotation, Vector3.zero);
+			character.Motor.Transform.SetPositionAndRotation(teleporter.ToPosition, teleporter.ToRotation);
 
 			// save the character with new scene and position
 			using var dbContext = sceneServerSystem.Server.NpgsqlDbContextFactory.CreateDbContext();

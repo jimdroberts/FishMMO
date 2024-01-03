@@ -618,6 +618,40 @@ namespace FishMMO.Server
 				}
 			}
 			#endregion
+
+			#region BankItems
+			if (character.BankController != null)
+			{
+				List<BankSetItemBroadcast> itemBroadcasts = new List<BankSetItemBroadcast>();
+
+				foreach (Item item in character.BankController.Items)
+				{
+					// just in case..
+					if (item == null)
+					{
+						continue;
+					}
+					// create the new item broadcast
+					itemBroadcasts.Add(new BankSetItemBroadcast()
+					{
+						instanceID = item.ID,
+						templateID = item.Template.ID,
+						slot = item.Slot,
+						seed = item.IsGenerated ? item.Generator.Seed : 0,
+						stackSize = item.IsStackable ? item.Stackable.Amount : 0,
+					});
+				}
+
+				// tell the client they have items
+				if (itemBroadcasts.Count > 0)
+				{
+					character.Owner.Broadcast(new BankSetMultipleItemsBroadcast()
+					{
+						items = itemBroadcasts,
+					}, true, Channel.Reliable);
+				}
+			}
+			#endregion
 		}
 
 		/// <summary>

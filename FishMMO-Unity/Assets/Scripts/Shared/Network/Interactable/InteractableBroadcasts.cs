@@ -15,6 +15,11 @@ namespace FishMMO.Shared
 		public int InteractableID;
 	}
 
+	public struct BankerBroadcast : IBroadcast
+	{
+		public int InteractableID;
+	}
+
 	public struct MerchantBroadcast : IBroadcast
 	{
 		public int ID;

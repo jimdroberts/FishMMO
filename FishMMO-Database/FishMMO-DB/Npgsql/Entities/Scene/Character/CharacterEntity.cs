@@ -49,6 +49,7 @@ namespace FishMMO.Database.Npgsql.Entities
         public ICollection<CharacterBuffEntity> Buffs { get; set; }
 		public ICollection<CharacterInventoryEntity> Inventory { get; set; }
 		public ICollection<CharacterEquipmentEntity> Equipment { get; set; }
+        public ICollection<CharacterBankEntity> Bank { get; set; }
         public CharacterGuildEntity Guild { get; set; }
         public CharacterPartyEntity Party { get; set; }
         public ICollection<CharacterFriendEntity> Friends { get; set; }

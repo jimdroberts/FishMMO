@@ -61,11 +61,11 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// KeepData is automatically false... This means we delete the item. TODO Deleted field is simply set to true just incase we need to reinstate a character..
 		/// </summary>
-		public static void Delete(NpgsqlDbContext dbContext, long characterID, long itemID, bool keepData = false)
+		public static void Delete(NpgsqlDbContext dbContext, long characterID, long slot, bool keepData = false)
 		{
 			if (!keepData)
 			{
-				var dbItem = dbContext.CharacterEquippedItems.FirstOrDefault(c => c.CharacterID == characterID && c.ID == itemID);
+				var dbItem = dbContext.CharacterEquippedItems.FirstOrDefault(c => c.CharacterID == characterID && c.Slot == slot);
 				if (dbItem != null)
 				{
 					dbContext.CharacterEquippedItems.Remove(dbItem);

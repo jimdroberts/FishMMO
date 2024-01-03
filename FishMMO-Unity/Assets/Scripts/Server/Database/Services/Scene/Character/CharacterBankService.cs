@@ -5,10 +5,10 @@ using FishMMO.Shared;
 
 namespace FishMMO.Server.DatabaseServices
 {
-	public class CharacterInventoryService
+	public class CharacterBankService
 	{
 		/// <summary>
-		/// Updates a CharacterInventoryItem slot to new values or adds a new CharacterInventoryItem and initializes the Item with the new ID.
+		/// Updates a CharacterBankItem slot to new values or adds a new CharacterBankItem and initializes the Item with the new ID.
 		/// </summary>
 		public static void SetSlot(NpgsqlDbContext dbContext, long characterID, Item item)
 		{
@@ -17,7 +17,7 @@ namespace FishMMO.Server.DatabaseServices
 				return;
 			}
 
-			var dbItem = dbContext.CharacterInventoryItems.FirstOrDefault(c => c.CharacterID == characterID && c.Slot == item.Slot);
+			var dbItem = dbContext.CharacterBankItems.FirstOrDefault(c => c.CharacterID == characterID && c.Slot == item.Slot);
 			// update slot or add
 			if (dbItem != null)
 			{
@@ -29,7 +29,7 @@ namespace FishMMO.Server.DatabaseServices
 			}
 			else
 			{
-				dbItem = new CharacterInventoryEntity()
+				dbItem = new CharacterBankEntity()
 				{
 					CharacterID = characterID,
 					TemplateID = item.Template.ID,
@@ -37,7 +37,7 @@ namespace FishMMO.Server.DatabaseServices
 					Seed = item.IsGenerated ? item.Generator.Seed : 0,
 					Amount = item.IsStackable ? item.Stackable.Amount : 0,
 				};
-				dbContext.CharacterInventoryItems.Add(dbItem);
+				dbContext.CharacterBankItems.Add(dbItem);
 				dbContext.SaveChanges();
 				item.Initialize(dbItem.ID, dbItem.Seed);
 			}
@@ -53,12 +53,12 @@ namespace FishMMO.Server.DatabaseServices
 				return;
 			}
 
-			var dbInventoryItems = dbContext.CharacterInventoryItems.Where(c => c.CharacterID == character.ID)
+			var dbBankItems = dbContext.CharacterBankItems.Where(c => c.CharacterID == character.ID)
 																	.ToDictionary(k => k.Slot);
 
-			foreach (Item item in character.InventoryController.Items)
+			foreach (Item item in character.BankController.Items)
 			{
-				if (dbInventoryItems.TryGetValue(item.Slot, out CharacterInventoryEntity dbItem))
+				if (dbBankItems.TryGetValue(item.Slot, out CharacterBankEntity dbItem))
 				{
 					dbItem.CharacterID = character.ID;
 					dbItem.TemplateID = item.Template.ID;
@@ -68,7 +68,7 @@ namespace FishMMO.Server.DatabaseServices
 				}
 				else
 				{
-					dbContext.CharacterInventoryItems.Add(new CharacterInventoryEntity()
+					dbContext.CharacterBankItems.Add(new CharacterBankEntity()
 					{
 						CharacterID = character.ID,
 						TemplateID = item.Template.ID,
@@ -87,10 +87,10 @@ namespace FishMMO.Server.DatabaseServices
 		{
 			if (!keepData)
 			{
-				var dbInventoryItems = dbContext.CharacterInventoryItems.Where(c => c.CharacterID == characterID);
-				if (dbInventoryItems != null)
+				var dbBankItems = dbContext.CharacterBankItems.Where(c => c.CharacterID == characterID);
+				if (dbBankItems != null)
 				{
-					dbContext.CharacterInventoryItems.RemoveRange(dbInventoryItems);
+					dbContext.CharacterBankItems.RemoveRange(dbBankItems);
 				}
 			}
 		}
@@ -102,10 +102,10 @@ namespace FishMMO.Server.DatabaseServices
 		{
 			if (!keepData)
 			{
-				var dbItem = dbContext.CharacterInventoryItems.FirstOrDefault(c => c.CharacterID == characterID && c.Slot == slot);
+				var dbItem = dbContext.CharacterBankItems.FirstOrDefault(c => c.CharacterID == characterID && c.Slot == slot);
 				if (dbItem != null)
 				{
-					dbContext.CharacterInventoryItems.Remove(dbItem);
+					dbContext.CharacterBankItems.Remove(dbItem);
 				}
 			}
 		}
@@ -115,8 +115,8 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Load(NpgsqlDbContext dbContext, Character character)
 		{
-			var dbInventoryItems = dbContext.CharacterInventoryItems.Where(c => c.CharacterID == character.ID);
-			foreach (CharacterInventoryEntity dbItem in dbInventoryItems)
+			var dbBankItems = dbContext.CharacterBankItems.Where(c => c.CharacterID == character.ID);
+			foreach (CharacterBankEntity dbItem in dbBankItems)
 			{
 				BaseItemTemplate template = BaseItemTemplate.Get<BaseItemTemplate>(dbItem.TemplateID);
 				if (template == null)
@@ -128,7 +128,7 @@ namespace FishMMO.Server.DatabaseServices
 				{
 					return;
 				}
-				character.InventoryController.SetItemSlot(item, dbItem.Slot);
+				character.BankController.SetItemSlot(item, dbItem.Slot);
 			};
 		}
 	}

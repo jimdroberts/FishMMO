@@ -286,6 +286,7 @@ namespace FishMMO.Server.DatabaseServices
 				CharacterFriendService.Delete(dbContext, character.ID, keepData);
 				CharacterInventoryService.Delete(dbContext, character.ID, keepData);
 				CharacterEquipmentService.Delete(dbContext, character.ID, keepData);
+				CharacterBankService.Delete(dbContext, character.ID, keepData);
 				CharacterAbilityService.Delete(dbContext, character.ID, keepData);
 				CharacterKnownAbilityService.Delete(dbContext, character.ID, keepData);
 
@@ -340,6 +341,7 @@ namespace FishMMO.Server.DatabaseServices
 						CharacterFriendService.Load(dbContext, character);
 						CharacterInventoryService.Load(dbContext, character);
 						CharacterEquipmentService.Load(dbContext, character);
+						CharacterBankService.Load(dbContext, character);
 						CharacterAbilityService.Load(dbContext, character);
 						CharacterKnownAbilityService.Load(dbContext, character);
 						return true;
