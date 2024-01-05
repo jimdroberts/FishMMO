@@ -93,6 +93,10 @@ namespace FishMMO.Client
 					{
 						button.Icon.sprite = item.Template.Icon;
 					}
+					if (button.AmountText != null)
+					{
+						button.AmountText.text = item.IsStackable ? item.Stackable.Amount.ToString() : "";
+					}
 				}
 				bankSlots.Add(button);
 			}

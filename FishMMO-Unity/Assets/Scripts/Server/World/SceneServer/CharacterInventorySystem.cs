@@ -386,21 +386,23 @@ namespace FishMMO.Server
 						}
 
 						// see if we have successfully added the item
-						if (modifiedItems != null &&
-							modifiedItems.Count > 0)
+						if (modifiedItems == null ||
+							modifiedItems.Count < 1)
 						{
-							// update all of the modified slots
-							foreach (Item item in modifiedItems)
-							{
-								// just in case..
-								if (item == null)
-								{
-									continue;
-								}
+							return;
+						}
 
-								// update or add the item to the database and initialize
-								CharacterInventoryService.SetSlot(dbContext, character.ID, item);
+						// update all of the modified slots
+						foreach (Item item in modifiedItems)
+						{
+							// just in case..
+							if (item == null)
+							{
+								continue;
 							}
+
+							// update or add the item to the database and initialize
+							CharacterInventoryService.SetSlot(dbContext, character.ID, item);
 						}
 
 						// delete the item from the equipment table
@@ -424,21 +426,23 @@ namespace FishMMO.Server
 						}
 
 						// see if we have successfully added the item
-						if (modifiedItems != null &&
-							modifiedItems.Count > 0)
+						if (modifiedItems == null ||
+							modifiedItems.Count < 1)
 						{
-							// update all of the modified slots
-							foreach (Item item in modifiedItems)
-							{
-								// just in case..
-								if (item == null)
-								{
-									continue;
-								}
+							return;
+						}
 
-								// update or add the item to the database and initialize
-								CharacterBankService.SetSlot(dbContext, character.ID, item);
+						// update all of the modified slots
+						foreach (Item item in modifiedItems)
+						{
+							// just in case..
+							if (item == null)
+							{
+								continue;
 							}
+
+							// update or add the item to the database and initialize
+							CharacterBankService.SetSlot(dbContext, character.ID, item);
 						}
 
 						// delete the item from the equipment table

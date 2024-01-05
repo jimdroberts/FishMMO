@@ -1,5 +1,6 @@
 ﻿using Cysharp.Text;
 using UnityEngine;
+using System.Collections.Generic;
 
 namespace FishMMO.Shared
 {
@@ -35,30 +36,36 @@ namespace FishMMO.Shared
 				sb.Append(RichText.Format("Speed", Speed, true, "a66ef5FF"));
 				if (Resources != null && Resources.Count > 0)
 				{
-					sb.AppendLine();
+					sb.Append("\r\n______________________________\r\n");
 					sb.Append("<color=#a66ef5>Resources: </color>");
 
-					foreach (CharacterAttributeTemplate attribute in Resources.Keys)
+					foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in Resources)
 					{
-						if (!string.IsNullOrWhiteSpace(attribute.Name))
+						if (!string.IsNullOrWhiteSpace(pair.Key.Name))
 						{
-							sb.Append(RichText.Format(attribute.Name, true, "f5ad6eFF", "120%"));
+							sb.Append(RichText.Format(pair.Key.Name, pair.Value, true, "f5ad6eFF", "120%"));
 						}
 					}
 				}
 				if (Requirements != null && Requirements.Count > 0)
 				{
-					sb.AppendLine();
+					sb.Append("\r\n______________________________\r\n");
 					sb.Append("<color=#a66ef5>Requirements: </color>");
 
-					foreach (CharacterAttributeTemplate attribute in Requirements.Keys)
+					foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in Requirements)
 					{
-						if (!string.IsNullOrWhiteSpace(attribute.Name))
+						if (!string.IsNullOrWhiteSpace(pair.Key.Name))
 						{
-							sb.Append(RichText.Format(attribute.Name, true, "f5ad6eFF", "120%"));
+							sb.Append(RichText.Format(pair.Key.Name, pair.Value, true, "f5ad6eFF", "120%"));
 						}
 					}
 				}
+				if (Price > 0)
+				{
+					sb.Append("\r\n______________________________\r\n");
+					sb.Append(RichText.Format("Price", Price, true, "a66ef5FF"));
+				}
+				
 				return sb.ToString();
 			}
 		}

@@ -23,7 +23,10 @@ namespace FishMMO.Shared
 			{
 				sb.Append(RichText.Format(Name, false, "f5ad6e", "120%"));
 				sb.Append("\r\n______________________________\r\n");
-				sb.Append(RichText.Format("Price", Price, true, "a66ef5FF"));
+				if (Price > 0)
+				{
+					sb.Append(RichText.Format("Price", Price, true, "a66ef5FF"));
+				}
 				return sb.ToString();
 			}
 		}

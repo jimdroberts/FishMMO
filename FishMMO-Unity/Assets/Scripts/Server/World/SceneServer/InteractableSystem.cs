@@ -2,6 +2,7 @@
 using FishNet.Transporting;
 using FishMMO.Shared;
 using FishMMO.Server.DatabaseServices;
+using FishMMO.Database.Npgsql;
 using System.Collections.Generic;
 
 namespace FishMMO.Server
@@ -187,70 +188,49 @@ namespace FishMMO.Server
 					break;
 				case MerchantTabType.Ability:
 					if (merchantTemplate.Abilities != null &&
-						merchantTemplate.Abilities.Count >= msg.Index &&
-						character.AbilityController != null)
+						merchantTemplate.Abilities.Count >= msg.Index)
 					{
-						AbilityTemplate abilityTemplate = merchantTemplate.Abilities[msg.Index];
-						if (abilityTemplate != null &&
-							!character.AbilityController.KnowsAbility(abilityTemplate.ID))
-						{
-							// do we have enough currency to purchase this?
-							if (character.InventoryController.Currency < abilityTemplate.Price)
-							{
-								return;
-							}
-
-							character.AbilityController.LearnBaseAbilities(new List<BaseAbilityTemplate> { abilityTemplate });
-
-							// remove the price from the characters currency
-							character.InventoryController.Currency -= abilityTemplate.Price;
-
-							// add the known ability to the database
-							CharacterKnownAbilityService.Add(dbContext, character.ID, abilityTemplate.ID);
-							dbContext.SaveChanges();
-
-							// tell the client about the new base ability
-							conn.Broadcast(new KnownAbilityAddBroadcast()
-							{
-								templateID = abilityTemplate.ID,
-							}, true, Channel.Reliable);
-						}
+						LearnAbilityTemplate(dbContext, conn, character, merchantTemplate.Abilities[msg.Index]);
 					}
 					break;
 				case MerchantTabType.AbilityEvent:
 					if (merchantTemplate.AbilityEvents != null &&
-						merchantTemplate.AbilityEvents.Count >= msg.Index &&
-						character.AbilityController != null)
+						merchantTemplate.AbilityEvents.Count >= msg.Index)
 					{
-						AbilityEvent eventTemplate = merchantTemplate.AbilityEvents[msg.Index];
-						if (eventTemplate != null &&
-							!character.AbilityController.KnowsAbility(eventTemplate.ID))
-						{
-							// do we have enough currency to purchase this?
-							if (character.InventoryController.Currency < eventTemplate.Price)
-							{
-								return;
-							}
-
-							character.AbilityController.LearnBaseAbilities(new List<BaseAbilityTemplate> { eventTemplate });
-
-							// remove the price from the characters currency
-							character.InventoryController.Currency -= eventTemplate.Price;
-
-							// add the known ability to the database
-							CharacterKnownAbilityService.Add(dbContext, character.ID, eventTemplate.ID);
-							dbContext.SaveChanges();
-
-							// tell the client about the new ability event
-							conn.Broadcast(new KnownAbilityAddBroadcast()
-							{
-								templateID = eventTemplate.ID,
-							}, true, Channel.Reliable);
-						}
+						LearnAbilityTemplate(dbContext, conn, character, merchantTemplate.AbilityEvents[msg.Index]);
 					}
 					break;
 				default: return;
 			}
+		}
+
+		public void LearnAbilityTemplate<T>(NpgsqlDbContext dbContext, NetworkConnection conn, Character character, T template) where T : BaseAbilityTemplate
+		{
+			// do we already know this ability?
+			if (template == null ||
+				character == null ||
+				character.AbilityController == null ||
+				character.AbilityController.KnowsAbility(template.ID) ||
+				character.InventoryController.Currency < template.Price)
+			{
+				return;
+			}
+
+			// learn the ability
+			character.AbilityController.LearnBaseAbilities(new List<BaseAbilityTemplate> { template });
+
+			// remove the price from the characters currency
+			character.InventoryController.Currency -= template.Price;
+
+			// add the known ability to the database
+			CharacterKnownAbilityService.Add(dbContext, character.ID, template.ID);
+			dbContext.SaveChanges();
+
+			// tell the client about the new ability event
+			conn.Broadcast(new KnownAbilityAddBroadcast()
+			{
+				templateID = template.ID,
+			}, true, Channel.Reliable);
 		}
 	}
 }

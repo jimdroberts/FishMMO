@@ -114,6 +114,9 @@ namespace FishMMO.Shared
 			{
 				sb.Append("<color=#a66ef5>ID: ");
 				sb.Append(ID);
+				sb.AppendLine();
+				sb.Append("Slot: ");
+				sb.Append(Slot);
 				sb.Append("</color>");
 				sb.AppendLine();
 				sb.Append(Template.Tooltip());

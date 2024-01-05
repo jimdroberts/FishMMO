@@ -142,6 +142,10 @@ namespace FishMMO.Client
 
 		public void OnDestroy()
 		{
+#if UNITY_EDITOR
+			InputManager.MouseMode = true;
+#endif
+
 			ClientNamingSystem.Destroy();
 		}
 
@@ -158,7 +162,7 @@ namespace FishMMO.Client
 		{
 			OnQuitToLogin?.Invoke();
 
-#if !UNITY_EDITOR
+#if UNITY_EDITOR
 			InputManager.MouseMode = true;
 #endif
 

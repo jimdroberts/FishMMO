@@ -236,9 +236,15 @@ namespace FishMMO.Client
 			if (container.TryGetItem((int)button.ItemSlotType, out Item item))
 			{
 				// update our button display
-				if (button.Icon != null) button.Icon.sprite = item.Template.Icon;
+				if (button.Icon != null)
+				{
+					button.Icon.sprite = item.Template.Icon;
+				}
 				//inventorySlots[i].cooldownText = character.CooldownController.IsOnCooldown();
-				if (button.AmountText != null) button.AmountText.text = item.IsStackable ? item.Stackable.Amount.ToString() : "";
+				if (button.AmountText != null)
+				{
+					button.AmountText.text = item.IsStackable ? item.Stackable.Amount.ToString() : "";
+				}
 			}
 			else
 			{
@@ -258,9 +264,15 @@ namespace FishMMO.Client
 			{
 				// update our button display
 				UIEquipmentButton button = buttons[equipmentSlot];
-				if (button.Icon != null) button.Icon.sprite = item.Template.Icon;
+				if (button.Icon != null)
+				{
+					button.Icon.sprite = item.Template.Icon;
+				}
 				//inventorySlots[i].cooldownText = character.CooldownController.IsOnCooldown();
-				if (button.AmountText != null) button.AmountText.text = item.IsStackable ? item.Stackable.Amount.ToString() : "";
+				if (button.AmountText != null)
+				{
+					button.AmountText.text = item.IsStackable ? item.Stackable.Amount.ToString() : "";
+				}
 			}
 			else
 			{
