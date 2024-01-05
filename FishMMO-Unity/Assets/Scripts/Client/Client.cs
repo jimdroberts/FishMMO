@@ -158,6 +158,10 @@ namespace FishMMO.Client
 		{
 			OnQuitToLogin?.Invoke();
 
+#if !UNITY_EDITOR
+			InputManager.MouseMode = true;
+#endif
+
 			if (forceDisconnect)
 			{
 				ForceDisconnect();

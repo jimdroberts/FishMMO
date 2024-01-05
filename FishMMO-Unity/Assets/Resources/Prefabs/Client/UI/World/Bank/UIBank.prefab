@@ -305,7 +305,7 @@ MonoBehaviour:
   m_HandleRect: {fileID: 168940360}
   m_Direction: 0
   m_Value: 0
-  m_Size: 1
+  m_Size: 0.9973958
   m_NumberOfSteps: 0
   m_OnValueChanged:
     m_PersistentCalls:
@@ -467,7 +467,7 @@ MonoBehaviour:
   m_HandleRect: {fileID: 47324464293193976}
   m_Direction: 2
   m_Value: 0
-  m_Size: 0.5
+  m_Size: 1
   m_NumberOfSteps: 0
   m_OnValueChanged:
     m_PersistentCalls:
@@ -532,7 +532,7 @@ MonoBehaviour:
   m_CellSize: {x: 40, y: 40}
   m_Spacing: {x: 1, y: 1}
   m_Constraint: 1
-  m_ConstraintCount: 4
+  m_ConstraintCount: 9
 --- !u!114 &1994176933
 MonoBehaviour:
   m_ObjectHideFlags: 0

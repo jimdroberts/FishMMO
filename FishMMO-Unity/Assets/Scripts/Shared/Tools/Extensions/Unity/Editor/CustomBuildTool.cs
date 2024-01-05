@@ -241,13 +241,13 @@ start Scene.exe SCENE";
 								CreateScript(Path.Combine(buildPath, "Start.bat"), ALL_IN_ONE_SERVER_BAT_SCRIPT);
 								break;
 							case CustomBuildType.Login:
-								//CreateScript(Path.Combine(buildPath, "Start.bat"), LOGIN_SERVER_BAT_SCRIPT);
+								CreateScript(Path.Combine(buildPath, "Start.bat"), LOGIN_SERVER_BAT_SCRIPT);
 								break;
 							case CustomBuildType.World:
-								//CreateScript(Path.Combine(buildPath, "Start.bat"), WORLD_SERVER_BAT_SCRIPT);
+								CreateScript(Path.Combine(buildPath, "Start.bat"), WORLD_SERVER_BAT_SCRIPT);
 								break;
 							case CustomBuildType.Scene:
-								//CreateScript(Path.Combine(buildPath, "Start.bat"), SCENE_SERVER_BAT_SCRIPT);
+								CreateScript(Path.Combine(buildPath, "Start.bat"), SCENE_SERVER_BAT_SCRIPT);
 								break;
 							case CustomBuildType.Client:
 							default:
@@ -383,7 +383,7 @@ start Scene.exe SCENE";
 			BuildExecutable("Installer",
 							new string[]
 							{
-								"Assets" + Path.DirectorySeparatorChar + "Scenes" + Path.DirectorySeparatorChar + "Installer.unity",
+								Constants.Configuration.InstallerPath,
 							},
 							CustomBuildType.Installer,
 							BASE_BUILD_OPTIONS | BuildOptions.ShowBuiltPlayer,

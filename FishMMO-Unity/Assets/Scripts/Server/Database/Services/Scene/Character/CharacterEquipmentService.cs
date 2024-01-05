@@ -26,6 +26,7 @@ namespace FishMMO.Server.DatabaseServices
 				dbItem.Slot = item.Slot;
 				dbItem.Seed = item.Generator != null ? item.Generator.Seed : 0;
 				dbItem.Amount = item.IsStackable ? item.Stackable.Amount : 0;
+				dbContext.SaveChanges();
 			}
 			else
 			{
@@ -54,6 +55,7 @@ namespace FishMMO.Server.DatabaseServices
 				if (dbEquippedItems != null)
 				{
 					dbContext.CharacterEquippedItems.RemoveRange(dbEquippedItems);
+					dbContext.SaveChanges();
 				}
 			}
 		}
@@ -69,6 +71,7 @@ namespace FishMMO.Server.DatabaseServices
 				if (dbItem != null)
 				{
 					dbContext.CharacterEquippedItems.Remove(dbItem);
+					dbContext.SaveChanges();
 				}
 			}
 		}

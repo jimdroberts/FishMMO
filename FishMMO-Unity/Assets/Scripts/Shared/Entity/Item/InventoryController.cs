@@ -136,15 +136,17 @@ namespace FishMMO.Shared
 
 		public void SendSwapItemSlotsRequest(int from, int to, InventoryType fromInventory)
 		{
-			if (from != to)
+			if (fromInventory == InventoryType.Inventory &&
+				from == to)
 			{
-				ClientManager.Broadcast(new InventorySwapItemSlotsBroadcast()
-				{
-					from = from,
-					to = to,
-					fromInventory = fromInventory,
-				}, Channel.Reliable);
+				return;
 			}
+			ClientManager.Broadcast(new InventorySwapItemSlotsBroadcast()
+			{
+				from = from,
+				to = to,
+				fromInventory = fromInventory,
+			}, Channel.Reliable);
 		}
 	}
 }

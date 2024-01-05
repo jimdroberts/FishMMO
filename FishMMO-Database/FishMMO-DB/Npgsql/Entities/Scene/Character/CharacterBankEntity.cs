@@ -5,7 +5,7 @@ namespace FishMMO.Database.Npgsql.Entities
 {
 	[Table("character_bank", Schema = "fish_mmo_postgresql")]
 	[Index(nameof(CharacterID))]
-	[Index(nameof(CharacterID), nameof(Slot), IsUnique = true)]
+	[Index(nameof(CharacterID), nameof(Slot))]
 	public class CharacterBankEntity
 	{
 		[DatabaseGenerated(DatabaseGeneratedOption.Identity)]

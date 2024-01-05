@@ -161,18 +161,23 @@ namespace FishMMO.Shared
 			}
 		}
 
-		public bool Equip(Item item, int inventoryIndex, ItemContainer container, ItemSlot slot)
+		public bool Equip(Item item, int inventoryIndex, ItemContainer container, ItemSlot toSlot)
 		{
-			if (item == null || !CanManipulate()) return false;
-
-			EquippableItemTemplate Equippable = item.Template as EquippableItemTemplate;
-			// make sure the slot type matches so we aren't equipping things in weird places
-			if (Equippable == null || slot != Equippable.Slot)
+			if (item == null ||
+				!item.IsEquippable ||
+				!CanManipulate())
 			{
 				return false;
 			}
 
-			byte slotIndex = (byte)slot;
+			EquippableItemTemplate Equippable = item.Template as EquippableItemTemplate;
+			// make sure the slot type matches so we aren't equipping things in weird places
+			if (Equippable == null || toSlot != Equippable.Slot)
+			{
+				return false;
+			}
+
+			byte slotIndex = (byte)toSlot;
 
 			if (container != null)
 			{
@@ -183,7 +188,10 @@ namespace FishMMO.Shared
 					prevItem.Equippable.Unequip();
 
 					// swap the items
-					container.SetItemSlot(prevItem, inventoryIndex);
+					if (!container.SetItemSlot(prevItem, inventoryIndex))
+					{
+						return false;
+					}
 				}
 				else
 				{
@@ -219,6 +227,12 @@ namespace FishMMO.Shared
 				return false;
 			}
 
+			// try to add the item back to the inventory before we remove it from the slot
+			if (!container.TryAddItem(item, out List<Item> modifiedItems))
+			{
+				return false;
+			}
+
 			// remove the equipped item
 			SetItemSlot(null, slot);
 
@@ -227,10 +241,6 @@ namespace FishMMO.Shared
 			{
 				item.Equippable.Unequip();
 			}
-
-			// try to add the item back to the inventory
-			container.TryAddItem(item, out List<Item> modifiedItems);
-
 			return true;
 		}
 	}

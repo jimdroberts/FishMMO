@@ -38,7 +38,7 @@ namespace FishMMO.Client
 					}
 					else
 					{
-						if (!Character.InventoryController.IsSlotEmpty(ReferenceID))
+						if (!Character.BankController.IsSlotEmpty(ReferenceID))
 						{
 							dragObject.SetReference(Icon.sprite, ReferenceID, Type);
 						}

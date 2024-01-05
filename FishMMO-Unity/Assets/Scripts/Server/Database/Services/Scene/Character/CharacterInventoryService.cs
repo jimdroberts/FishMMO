@@ -8,6 +8,29 @@ namespace FishMMO.Server.DatabaseServices
 	public class CharacterInventoryService
 	{
 		/// <summary>
+		/// Updates an existing item by ID.
+		/// </summary>
+		public static void Update(NpgsqlDbContext dbContext, long characterID, Item item)
+		{
+			if (item == null)
+			{
+				return;
+			}
+
+			var dbItem = dbContext.CharacterInventoryItems.FirstOrDefault(c => c.CharacterID == characterID && c.ID == item.ID);
+			// update slot
+			if (dbItem != null)
+			{
+				dbItem.CharacterID = characterID;
+				dbItem.TemplateID = item.Template.ID;
+				dbItem.Slot = item.Slot;
+				dbItem.Seed = item.IsGenerated ? item.Generator.Seed : 0;
+				dbItem.Amount = item.IsStackable ? item.Stackable.Amount : 0;
+				dbContext.SaveChanges();
+			}
+		}
+
+		/// <summary>
 		/// Updates a CharacterInventoryItem slot to new values or adds a new CharacterInventoryItem and initializes the Item with the new ID.
 		/// </summary>
 		public static void SetSlot(NpgsqlDbContext dbContext, long characterID, Item item)
@@ -26,6 +49,7 @@ namespace FishMMO.Server.DatabaseServices
 				dbItem.Slot = item.Slot;
 				dbItem.Seed = item.IsGenerated ? item.Generator.Seed : 0;
 				dbItem.Amount = item.IsStackable ? item.Stackable.Amount : 0;
+				dbContext.SaveChanges();
 			}
 			else
 			{
@@ -65,6 +89,7 @@ namespace FishMMO.Server.DatabaseServices
 					dbItem.Slot = item.Slot;
 					dbItem.Seed = item.IsGenerated ? item.Generator.Seed : 0;
 					dbItem.Amount = item.IsStackable ? item.Stackable.Amount : 0;
+					dbContext.SaveChanges();
 				}
 				else
 				{
@@ -76,6 +101,7 @@ namespace FishMMO.Server.DatabaseServices
 						Seed = item.IsGenerated ? item.Generator.Seed : 0,
 						Amount = item.IsStackable ? item.Stackable.Amount : 0,
 					});
+					dbContext.SaveChanges();
 				}
 			}
 		}
@@ -91,6 +117,7 @@ namespace FishMMO.Server.DatabaseServices
 				if (dbInventoryItems != null)
 				{
 					dbContext.CharacterInventoryItems.RemoveRange(dbInventoryItems);
+					dbContext.SaveChanges();
 				}
 			}
 		}
@@ -106,6 +133,7 @@ namespace FishMMO.Server.DatabaseServices
 				if (dbItem != null)
 				{
 					dbContext.CharacterInventoryItems.Remove(dbItem);
+					dbContext.SaveChanges();
 				}
 			}
 		}
