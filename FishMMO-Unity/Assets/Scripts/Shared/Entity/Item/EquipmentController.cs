@@ -100,7 +100,7 @@ namespace FishMMO.Shared
 				case InventoryType.Inventory:
 					if (Character.InventoryController != null)
 					{
-						Unequip(Character.InventoryController, msg.slot);
+						Unequip(Character.InventoryController, msg.slot, out List<Item> modifiedItems);
 					}
 					break;
 				case InventoryType.Equipment:
@@ -108,7 +108,7 @@ namespace FishMMO.Shared
 				case InventoryType.Bank:
 					if (Character.BankController != null)
 					{
-						Unequip(Character.BankController, msg.slot);
+						Unequip(Character.BankController, msg.slot, out List<Item> modifiedItems);
 					}
 					break;
 				default: return;
@@ -217,18 +217,19 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Unequips the item and puts it in the inventory.
 		/// </summary>
-		public bool Unequip(ItemContainer container, byte slot)
+		public bool Unequip(ItemContainer container, byte slot, out List<Item> modifiedItems)
 		{
 			if (!CanManipulate() ||
 				!TryGetItem(slot, out Item item) ||
 				container == null ||
 				!container.CanAddItem(item))
 			{
+				modifiedItems = null;
 				return false;
 			}
 
 			// try to add the item back to the inventory before we remove it from the slot
-			if (!container.TryAddItem(item, out List<Item> modifiedItems))
+			if (!container.TryAddItem(item, out modifiedItems))
 			{
 				return false;
 			}

@@ -4,6 +4,7 @@ using FishMMO.Shared;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Database.Npgsql;
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace FishMMO.Server
@@ -379,16 +380,31 @@ namespace FishMMO.Server
 						int oldSlot = toInventory.Slot;
 
 						// if we found the item we should unequip it
-						if (!character.EquipmentController.Unequip(character.InventoryController, msg.slot))
+						if (!character.EquipmentController.Unequip(character.InventoryController, msg.slot, out List<Item> modifiedItems))
 						{
 							return;
 						}
 
+						// see if we have successfully added the item
+						if (modifiedItems != null &&
+							modifiedItems.Count > 0)
+						{
+							// update all of the modified slots
+							foreach (Item item in modifiedItems)
+							{
+								// just in case..
+								if (item == null)
+								{
+									continue;
+								}
+
+								// update or add the item to the database and initialize
+								CharacterInventoryService.SetSlot(dbContext, character.ID, item);
+							}
+						}
+
 						// delete the item from the equipment table
 						CharacterEquipmentService.Delete(dbContext, character.ID, oldSlot);
-
-						// set the inventory slot
-						CharacterInventoryService.SetSlot(dbContext, character.ID, toInventory);
 
 						dbTransaction.Commit();
 
@@ -402,16 +418,31 @@ namespace FishMMO.Server
 					{
 						int oldSlot = toBank.Slot;
 
-						if (!character.EquipmentController.Unequip(character.BankController, msg.slot))
+						if (!character.EquipmentController.Unequip(character.BankController, msg.slot, out List<Item> modifiedItems))
 						{
 							return;
 						}
 
+						// see if we have successfully added the item
+						if (modifiedItems != null &&
+							modifiedItems.Count > 0)
+						{
+							// update all of the modified slots
+							foreach (Item item in modifiedItems)
+							{
+								// just in case..
+								if (item == null)
+								{
+									continue;
+								}
+
+								// update or add the item to the database and initialize
+								CharacterBankService.SetSlot(dbContext, character.ID, item);
+							}
+						}
+
 						// delete the item from the equipment table
 						CharacterEquipmentService.Delete(dbContext, character.ID, oldSlot);
-
-						// set the bank slot
-						CharacterBankService.SetSlot(dbContext, character.ID, toBank);
 
 						dbTransaction.Commit();
 
