@@ -200,5 +200,15 @@ namespace FishMMO.Client
 			}
 			return false;
 		}
+
+		public static bool ClosedAll()
+		{
+			if (closeOnEscapeControls != null &&
+				closeOnEscapeControls.Empty())
+			{
+				return true;
+			}
+			return false;
+		}
 	}
 }

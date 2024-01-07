@@ -107,9 +107,9 @@ namespace FishMMO.Client
 					UIManager.ToggleVisibility("UIMenu");
 				}
 
-				if (InputManager.GetKeyDown("Close Last UI"))
+				if (InputManager.GetKeyDown("Close Last UI") && !UIManager.CloseNext())
 				{
-					if (!UIManager.CloseNext())
+					if (InputManager.MouseMode)
 					{
 						InputManager.MouseMode = false;
 					}

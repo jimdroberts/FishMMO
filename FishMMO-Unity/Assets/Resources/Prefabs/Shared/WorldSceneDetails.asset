@@ -31,7 +31,7 @@ MonoBehaviour:
         - Respawn 1
         m_values:
         - Position: {x: -131.45001, y: 18.11, z: 23.11}
-          Rotation: {x: -0, y: -0, z: -0, w: 1}
+          Rotation: {x: -0, y: 0.7071068, z: -0, w: 0.7071068}
       Teleporters:
         m_keys:
         - CrushboneEntrance

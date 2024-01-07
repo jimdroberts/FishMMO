@@ -601,7 +601,7 @@ MonoBehaviour:
   _componentIndexCache: 0
   _addedNetworkObject: {fileID: 431527815}
   _networkObjectCache: {fileID: 431527815}
-  InteractionRangeSqr: 7.5
+  InteractionRange: 2.5
   Template: {fileID: 11400000, guid: 335c46c3e1940fa41a866740a873f64a, type: 2}
 --- !u!114 &431527817
 MonoBehaviour:
@@ -2182,7 +2182,7 @@ MonoBehaviour:
   _componentIndexCache: 0
   _addedNetworkObject: {fileID: 1642316608}
   _networkObjectCache: {fileID: 1642316608}
-  InteractionRangeSqr: 7.5
+  InteractionRange: 2.5
 --- !u!114 &1642316610
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2390,7 +2390,7 @@ MonoBehaviour:
   _componentIndexCache: 0
   _addedNetworkObject: {fileID: 1673595143}
   _networkObjectCache: {fileID: 1673595143}
-  InteractionRangeSqr: 7.5
+  InteractionRange: 2.5
 --- !u!114 &1673595145
 MonoBehaviour:
   m_ObjectHideFlags: 0

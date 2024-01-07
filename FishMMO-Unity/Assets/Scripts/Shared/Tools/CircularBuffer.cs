@@ -126,6 +126,11 @@ namespace FishMMO.Shared
 			return poppedValue;
 		}
 
+		public bool Empty()
+		{
+			return head == null || tail == null;
+		}
+
 		// Print the elements in the circular buffer
 		public void Print()
 		{
