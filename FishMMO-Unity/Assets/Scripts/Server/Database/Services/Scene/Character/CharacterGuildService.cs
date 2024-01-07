@@ -41,6 +41,7 @@ namespace FishMMO.Server.DatabaseServices
 				characterGuildEntity.Rank = (byte)rank;
 				characterGuildEntity.Location = location;
 			}
+			dbContext.SaveChanges();
 		}
 
 		/// <summary>
@@ -66,6 +67,7 @@ namespace FishMMO.Server.DatabaseServices
 				characterGuildEntity.Rank = (byte)character.GuildController.Rank;
 				characterGuildEntity.Location = character.gameObject.scene.name;
 			}
+			dbContext.SaveChanges();
 		}
 
 		/// <summary>
@@ -77,6 +79,7 @@ namespace FishMMO.Server.DatabaseServices
 			if (characterGuildEntity != null)
 			{
 				dbContext.CharacterGuilds.Remove(characterGuildEntity);
+				dbContext.SaveChanges();
 			}
 		}
 
@@ -89,6 +92,7 @@ namespace FishMMO.Server.DatabaseServices
 			if (characterGuildEntity != null)
 			{
 				dbContext.CharacterGuilds.Remove(characterGuildEntity);
+				dbContext.SaveChanges();
 				return true;
 			}
 			return false;

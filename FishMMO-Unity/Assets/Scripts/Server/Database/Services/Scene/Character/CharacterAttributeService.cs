@@ -70,6 +70,7 @@ namespace FishMMO.Server.DatabaseServices
 					});
 				}
 			}
+			dbContext.SaveChanges();
 		}
 
 		/// <summary>
@@ -83,6 +84,7 @@ namespace FishMMO.Server.DatabaseServices
 				if (attributes != null)
 				{
 					dbContext.CharacterAttributes.RemoveRange(attributes);
+					dbContext.SaveChanges();
 				}
 			}
 		}

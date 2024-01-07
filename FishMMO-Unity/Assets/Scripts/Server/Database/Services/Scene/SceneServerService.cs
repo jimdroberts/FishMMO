@@ -41,6 +41,7 @@ namespace FishMMO.Server.DatabaseServices
 
 			sceneServer.LastPulse = DateTime.UtcNow;
 			sceneServer.CharacterCount = characterCount;
+			dbContext.SaveChanges();
 		}
 
 		public static void Delete(NpgsqlDbContext dbContext, long id)
@@ -49,6 +50,7 @@ namespace FishMMO.Server.DatabaseServices
 			if (sceneServer != null)
 			{
 				dbContext.SceneServers.Remove(sceneServer);
+				dbContext.SaveChanges();
 			}
 		}
 

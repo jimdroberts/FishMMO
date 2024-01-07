@@ -70,7 +70,6 @@ namespace FishMMO.Server
 			{
 				using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 				CharacterService.Delete(dbContext, accountName, msg.characterName, KeepDeleteData);
-				dbContext.SaveChanges();
 
 				CharacterDeleteBroadcast charDeleteMsg = new CharacterDeleteBroadcast()
 				{
@@ -95,8 +94,6 @@ namespace FishMMO.Server
 				{
 					if (CharacterService.TrySetSelected(dbContext, accountName, msg.characterName))
 					{
-						dbContext.SaveChanges();
-
 						// send the client the world server list
 						List<WorldServerDetails> worldServerList = WorldServerService.GetServerList(dbContext);
 						conn.Broadcast(new ServerListBroadcast()

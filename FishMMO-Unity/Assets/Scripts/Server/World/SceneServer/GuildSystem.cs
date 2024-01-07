@@ -236,7 +236,6 @@ namespace FishMMO.Server
 				guildController.ID = newGuild.ID;
 				guildController.Rank = GuildRank.Leader;
 				CharacterGuildService.Save(dbContext, guildController.Character);
-				dbContext.SaveChanges();
 
 				// tell the character we made their guild successfully
 				conn.Broadcast(new GuildAddBroadcast()
@@ -329,7 +328,6 @@ namespace FishMMO.Server
 					CharacterGuildService.Save(dbContext, guildController.Character);
 					// tell the other servers to update their guild lists
 					GuildUpdateService.Save(dbContext, pendingGuildID);
-					dbContext.SaveChanges();
 
 					// tell the new member they joined immediately, other clients will catch up with the GuildUpdate pass
 					conn.Broadcast(new GuildAddBroadcast()
@@ -430,20 +428,17 @@ namespace FishMMO.Server
 
 				// remove the guild member
 				CharacterGuildService.Delete(dbContext, guildController.Character.ID);
-				dbContext.SaveChanges();
 
 				if (remainingCount < 1)
 				{
 					// delete the guild
 					GuildService.Delete(dbContext, guildID);
 					GuildUpdateService.Delete(dbContext, guildID);
-					dbContext.SaveChanges();
 				}
 				else
 				{
 					// tell the other servers to update their guild lists
 					GuildUpdateService.Save(dbContext, guildID);
-					dbContext.SaveChanges();
 				}
 			}
 		}
@@ -490,7 +485,6 @@ namespace FishMMO.Server
 			{
 				// tell the other servers to update their guild lists
 				GuildUpdateService.Save(dbContext, guildController.ID);
-				dbContext.SaveChanges();
 			}
 		}
 	}

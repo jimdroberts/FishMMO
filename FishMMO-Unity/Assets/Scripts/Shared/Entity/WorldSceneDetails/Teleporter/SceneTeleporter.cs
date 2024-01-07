@@ -101,7 +101,6 @@ namespace FishMMO.Shared
 			// save the character with new scene and position
 			using var dbContext = sceneServerSystem.Server.NpgsqlDbContextFactory.CreateDbContext();
 			CharacterService.Save(dbContext, character, false);
-			dbContext.SaveChanges();
 
 			NetworkConnection conn = character.Owner;
 			long worldServerId = character.WorldServerID;

@@ -22,6 +22,7 @@ namespace FishMMO.Server.DatabaseServices
 					SceneName = sceneName,
 				};
 				dbContext.PendingScenes.Add(entity);
+				dbContext.SaveChanges();
 			}
 		}
 
@@ -31,6 +32,7 @@ namespace FishMMO.Server.DatabaseServices
 			if (pending != null)
 			{
 				dbContext.PendingScenes.RemoveRange(pending);
+				dbContext.SaveChanges();
 			}
 		}
 
@@ -40,6 +42,7 @@ namespace FishMMO.Server.DatabaseServices
 			if (entity != null)
 			{
 				dbContext.PendingScenes.Remove(entity);
+				dbContext.SaveChanges();
 			}
 			return entity;
 		}

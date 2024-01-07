@@ -224,7 +224,6 @@ namespace FishMMO.Server
 										   partyController.ID,
 										   partyController.Rank,
 										   partyController.Character.AttributeController.GetResourceAttributeCurrentPercentage(HealthTemplate));
-				dbContext.SaveChanges();
 
 				// tell the character we made their party successfully
 				conn.Broadcast(new PartyCreateBroadcast()
@@ -319,7 +318,6 @@ namespace FishMMO.Server
 
 					// tell the other servers to update their party lists
 					PartyUpdateService.Save(dbContext, pendingPartyID);
-					dbContext.SaveChanges();
 
 					// tell the new member they joined immediately, other clients will catch up with the PartyUpdate pass
 					conn.Broadcast(new PartyAddBroadcast()
@@ -400,20 +398,17 @@ namespace FishMMO.Server
 
 				// remove the party member
 				CharacterPartyService.Delete(dbContext, partyController.Character.ID);
-				dbContext.SaveChanges();
 
 				if (remainingCount < 1)
 				{
 					// delete the party
 					PartyService.Delete(dbContext, partyController.ID);
 					PartyUpdateService.Delete(dbContext, partyController.ID);
-					dbContext.SaveChanges();
 				}
 				else
 				{
 					// tell the other servers to update their party lists
 					PartyUpdateService.Save(dbContext, partyController.ID);
-					dbContext.SaveChanges();
 				}
 
 				partyController.ID = 0;
@@ -465,7 +460,6 @@ namespace FishMMO.Server
 			{
 				// tell the other servers to update their party lists
 				PartyUpdateService.Save(dbContext, partyController.ID);
-				dbContext.SaveChanges();
 			}
 		}
 	}

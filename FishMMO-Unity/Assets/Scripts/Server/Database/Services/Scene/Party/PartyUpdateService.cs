@@ -15,6 +15,7 @@ namespace FishMMO.Server.DatabaseServices
 				PartyID = partyID,
 				TimeCreated = DateTime.UtcNow,
 			});
+			dbContext.SaveChanges();
 		}
 
 		public static void Delete(NpgsqlDbContext dbContext, long partyID)
@@ -23,6 +24,7 @@ namespace FishMMO.Server.DatabaseServices
 			if (partyEntity != null)
 			{
 				dbContext.PartyUpdates.RemoveRange(partyEntity);
+				dbContext.SaveChanges();
 			}
 		}
 

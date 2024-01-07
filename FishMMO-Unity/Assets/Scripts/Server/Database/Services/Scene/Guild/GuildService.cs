@@ -49,6 +49,7 @@ namespace FishMMO.Server.DatabaseServices
 			if (guildEntity != null)
 			{
 				dbContext.Guilds.Remove(guildEntity);
+				dbContext.SaveChanges();
 			}
 		}
 

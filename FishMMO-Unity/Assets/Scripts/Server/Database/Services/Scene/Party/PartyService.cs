@@ -32,6 +32,7 @@ namespace FishMMO.Server.DatabaseServices
 			if (partyEntity != null)
 			{
 				dbContext.Parties.Remove(partyEntity);
+				dbContext.SaveChanges();
 			}
 		}
 

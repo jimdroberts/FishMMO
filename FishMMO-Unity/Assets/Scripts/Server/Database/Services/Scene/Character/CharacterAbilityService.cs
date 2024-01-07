@@ -25,6 +25,7 @@ namespace FishMMO.Server.DatabaseServices
 				dbAbility.CharacterID = characterID;
 				dbAbility.TemplateID = ability.Template.ID;
 				dbAbility.AbilityEvents = ability.AbilityEvents.Keys.ToList();
+				dbContext.SaveChanges();
 			}
 			else
 			{
@@ -75,6 +76,7 @@ namespace FishMMO.Server.DatabaseServices
 					});
 				}
 			}
+			dbContext.SaveChanges();
 		}
 
 		/// <summary>
@@ -88,6 +90,7 @@ namespace FishMMO.Server.DatabaseServices
 				if (dbAbilities != null)
 				{
 					dbContext.CharacterAbilities.RemoveRange(dbAbilities);
+					dbContext.SaveChanges();
 				}
 			}
 		}
@@ -103,6 +106,7 @@ namespace FishMMO.Server.DatabaseServices
 				if (dbAbility != null)
 				{
 					dbContext.CharacterAbilities.Remove(dbAbility);
+					dbContext.SaveChanges();
 				}
 			}
 		}

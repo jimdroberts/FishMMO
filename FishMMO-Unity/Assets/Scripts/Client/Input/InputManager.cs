@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.EventSystems;
 
 namespace FishMMO.Client
 {
@@ -13,6 +14,19 @@ namespace FishMMO.Client
 				Cursor.visible = value;
 				Cursor.lockState = value ? CursorLockMode.None : CursorLockMode.Locked;
 
+				if (EventSystem.current != null)
+				{
+					EventSystem.current.SetSelectedGameObject(null);
+					EventSystem.current.sendNavigationEvents = false;
+				}
+
+#if UNITY_EDITOR
+				if (!value)
+				{
+					ForceClickMouseButtonInCenterOfGameWindow();
+				}
+#endif
+
 				OnToggleMouseMode?.Invoke(value);
 			}
 		}
@@ -23,6 +37,22 @@ namespace FishMMO.Client
 		private static Dictionary<string, string> axisMaps = new Dictionary<string, string>();
 
 		public static event System.Action<bool> OnToggleMouseMode;
+
+		public static void ForceClickMouseButtonInCenterOfGameWindow()
+		{
+#if UNITY_EDITOR
+			var game = UnityEditor.EditorWindow.GetWindow(typeof(UnityEditor.EditorWindow).Assembly.GetType("UnityEditor.GameView"));
+			Vector2 gameWindowCenter = game.rootVisualElement.contentRect.center;
+
+			Event leftClickDown = new Event();
+			leftClickDown.button = 0;
+			leftClickDown.clickCount = 1;
+			leftClickDown.type = EventType.MouseDown;
+			leftClickDown.mousePosition = gameWindowCenter;
+
+			game.SendEvent(leftClickDown);
+#endif
+		}
 
 		static InputManager()
 		{

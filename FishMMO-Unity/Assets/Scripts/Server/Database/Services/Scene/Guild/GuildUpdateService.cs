@@ -15,6 +15,7 @@ namespace FishMMO.Server.DatabaseServices
 				GuildID = guildID,
 				TimeCreated = DateTime.UtcNow,
 			});
+			dbContext.SaveChanges();
 		}
 
 		public static void Delete(NpgsqlDbContext dbContext, long guildID)
@@ -23,6 +24,7 @@ namespace FishMMO.Server.DatabaseServices
 			if (guildEntity != null)
 			{
 				dbContext.GuildUpdates.RemoveRange(guildEntity);
+				dbContext.SaveChanges();
 			}
 		}
 

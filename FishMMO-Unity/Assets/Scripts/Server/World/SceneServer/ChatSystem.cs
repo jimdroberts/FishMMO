@@ -232,7 +232,6 @@ namespace FishMMO.Server
 					// write the parsed message to the database
 					using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 					ChatService.Save(dbContext, sender.ID, sender.WorldServerID, Server.SceneServerSystem.ID, msg.channel, msg.text);
-					dbContext.SaveChanges();
 				}
 			}
 		}

@@ -172,8 +172,6 @@ namespace FishMMO.Server
 									stackSize = item.IsStackable ? item.Stackable.Amount : 0,
 								});
 							}
-							// save changes after we write updates
-							dbContext.SaveChanges();
 						}
 
 						// tell the client they have new items
@@ -224,7 +222,6 @@ namespace FishMMO.Server
 
 			// add the known ability to the database
 			CharacterKnownAbilityService.Add(dbContext, character.ID, template.ID);
-			dbContext.SaveChanges();
 
 			// tell the client about the new ability event
 			conn.Broadcast(new KnownAbilityAddBroadcast()

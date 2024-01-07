@@ -27,6 +27,7 @@ namespace FishMMO.Server.DatabaseServices
 				CharacterCount = 0,
 			};
 			dbContext.LoadedScenes.Add(server);
+			dbContext.SaveChanges();
 			return server;
 		}
 
@@ -36,6 +37,7 @@ namespace FishMMO.Server.DatabaseServices
 			if (loadedScenes == null) throw new Exception($"Couldn't find Scene Server with Scene Handle: {handle}");
 
 			loadedScenes.CharacterCount = characterCount;
+			dbContext.SaveChanges();
 		}
 
 		public static void Delete(NpgsqlDbContext dbContext, long sceneServerID)
@@ -44,6 +46,7 @@ namespace FishMMO.Server.DatabaseServices
 			if (loadedScenes != null)
 			{
 				dbContext.LoadedScenes.RemoveRange(loadedScenes);
+				dbContext.SaveChanges();
 			}
 		}
 
@@ -54,6 +57,7 @@ namespace FishMMO.Server.DatabaseServices
 			if (loadedScenes != null)
 			{
 				dbContext.LoadedScenes.RemoveRange(loadedScenes);
+				dbContext.SaveChanges();
 			}
 		}
 

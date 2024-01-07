@@ -313,6 +313,11 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 4133482352268162714, guid: 61bd2fa6be216094ebfc45c391a32de0,
+        type: 3}
+      propertyPath: OutOfBoundsCheckRate
+      value: 2.5
+      objectReference: {fileID: 0}
     - target: {fileID: 8380057997533541231, guid: 61bd2fa6be216094ebfc45c391a32de0,
         type: 3}
       propertyPath: LogToDisk

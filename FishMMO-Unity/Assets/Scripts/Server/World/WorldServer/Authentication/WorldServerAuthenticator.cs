@@ -26,7 +26,6 @@ namespace FishMMO.Server
 			{
 				// update the characters world
 				CharacterService.SetWorld(dbContext, username, WorldSceneSystem.Server.WorldServerSystem.ID);
-				dbContext.SaveChanges();
 
 				return ClientAuthenticationResult.WorldLoginSuccess;
 			}

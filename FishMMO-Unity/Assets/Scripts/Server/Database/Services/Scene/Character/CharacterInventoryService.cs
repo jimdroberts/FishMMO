@@ -89,7 +89,6 @@ namespace FishMMO.Server.DatabaseServices
 					dbItem.Slot = item.Slot;
 					dbItem.Seed = item.IsGenerated ? item.Generator.Seed : 0;
 					dbItem.Amount = item.IsStackable ? item.Stackable.Amount : 0;
-					dbContext.SaveChanges();
 				}
 				else
 				{
@@ -101,9 +100,9 @@ namespace FishMMO.Server.DatabaseServices
 						Seed = item.IsGenerated ? item.Generator.Seed : 0,
 						Amount = item.IsStackable ? item.Stackable.Amount : 0,
 					});
-					dbContext.SaveChanges();
 				}
 			}
+			dbContext.SaveChanges();
 		}
 
 		/// <summary>

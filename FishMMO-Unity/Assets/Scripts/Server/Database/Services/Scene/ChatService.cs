@@ -23,6 +23,7 @@ namespace FishMMO.Server.DatabaseServices
 				Channel = (byte)channel,
 				Message = message,
 			});
+			dbContext.SaveChanges();
 		}
 
 		/// <summary>

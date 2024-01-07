@@ -67,7 +67,6 @@ namespace FishMMO.Server
 			{
 				// add the friend to the database
 				CharacterFriendService.Save(dbContext, friendController.Character.ID, friendEntity.ID);
-				dbContext.SaveChanges();
 
 				// tell the character they added a new friend!
 				conn.Broadcast(new FriendAddBroadcast()
@@ -103,9 +102,6 @@ namespace FishMMO.Server
 				using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 				if (CharacterFriendService.Delete(dbContext, friendController.Character.ID, msg.characterID))
 				{
-					// save the deletion
-					dbContext.SaveChanges();
-
 					// tell the character they removed a friend
 					conn.Broadcast(new FriendRemoveBroadcast()
 					{

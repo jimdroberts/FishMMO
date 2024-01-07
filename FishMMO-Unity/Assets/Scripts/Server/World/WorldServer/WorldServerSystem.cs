@@ -54,7 +54,6 @@ namespace FishMMO.Server
 				{
 					Debug.Log("World Server System: Removing World Server from Database: " + name);
 					WorldServerService.Delete(dbContext, id);
-					dbContext.SaveChanges();
 				}
 			}
 		}
@@ -72,7 +71,6 @@ namespace FishMMO.Server
 					//Debug.Log("World Server System: Pulse");
 					int characterCount = Server.WorldSceneSystem.ConnectionCount;
 					WorldServerService.Pulse(dbContext, id, characterCount);
-					dbContext.SaveChanges();
 				}
 				nextPulse -= Time.deltaTime;
 			}
@@ -87,7 +85,6 @@ namespace FishMMO.Server
 				using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 				Debug.Log("World Server System: Removing World Server: " + name);
 				WorldServerService.Delete(dbContext, id);
-				dbContext.SaveChanges();
 			}
 		}
 	}

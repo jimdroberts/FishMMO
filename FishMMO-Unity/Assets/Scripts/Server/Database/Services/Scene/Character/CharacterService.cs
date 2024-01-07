@@ -101,11 +101,12 @@ namespace FishMMO.Server.DatabaseServices
 			{
 				characterEntity.Selected = false;
 			}
-
+			dbContext.SaveChanges();
 			var selectedCharacter = characters.FirstOrDefault((c) => c.Account == account && !c.Deleted && c.NameLowercase == characterName.ToLower());
 			if (selectedCharacter != null)
 			{
 				selectedCharacter.Selected = true;
+				dbContext.SaveChanges();
 				return true;
 			}
 			return false;
@@ -162,6 +163,7 @@ namespace FishMMO.Server.DatabaseServices
 			if (selectedCharacter != null)
 			{
 				selectedCharacter.Online = true;
+				dbContext.SaveChanges();
 			}
 		}
 
@@ -186,6 +188,7 @@ namespace FishMMO.Server.DatabaseServices
 			if (character != null)
 			{
 				character.WorldServerID = worldServerID;
+				dbContext.SaveChanges();
 			}
 		}
 
@@ -199,12 +202,16 @@ namespace FishMMO.Server.DatabaseServices
 			if (character != null)
 			{
 				character.SceneHandle = sceneHandle;
+				dbContext.SaveChanges();
 			}
 		}
 
 		public static void Save(NpgsqlDbContext dbContext, List<Character> characters, bool online = true)
 		{
-			if (characters == null || characters.Count < 1)
+			using var dbTransaction = dbContext.Database.BeginTransaction();
+
+			if (characters == null ||
+				characters.Count < 1)
 			{
 				return;
 			}
@@ -212,6 +219,8 @@ namespace FishMMO.Server.DatabaseServices
 			{
 				Save(dbContext, character, online);
 			}
+
+			dbTransaction.Commit();
 		}
 
 		/// <summary>
@@ -259,9 +268,11 @@ namespace FishMMO.Server.DatabaseServices
 			CharacterAchievementService.Save(dbContext, character);
 			CharacterBuffService.Save(dbContext, character);
 
-			Debug.Log(character.CharacterName + " has been saved at Pos: " +
+			dbContext.SaveChanges();
+
+			/*Debug.Log(character.CharacterName + " has been saved at Pos: " +
 					  character.Transform.position.ToString() +
-					  " Rot: " + rotation);
+					  " Rot: " + rotation);*/
 		}
 
 		/// <summary>
@@ -269,10 +280,20 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Delete(NpgsqlDbContext dbContext, string account, string characterName, bool keepData = true)
 		{
+			using var dbTransaction = dbContext.Database.BeginTransaction();
+
+			if (dbTransaction == null)
+			{
+				return;
+			}
+
 			var character = dbContext.Characters.FirstOrDefault(c => c.Account == account &&
 																	 c.NameLowercase == characterName.ToLower());
 
-			if (character == null) return;
+			if (character == null)
+			{
+				return;
+			}
 
 			if (keepData)
 			{
@@ -297,6 +318,9 @@ namespace FishMMO.Server.DatabaseServices
 				CharacterPartyService.Delete(dbContext, character.ID);
 
 				dbContext.Characters.Remove(character);
+				dbContext.SaveChanges();
+
+				dbTransaction.Commit();
 			}
 		}
 
@@ -305,9 +329,12 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static bool TryGet(NpgsqlDbContext dbContext, long characterID, NetworkManager networkManager, out Character character)
 		{
+			using var dbTransaction = dbContext.Database.BeginTransaction();
+
 			var dbCharacter = dbContext.Characters.FirstOrDefault((c) => c.ID == characterID &&
 																		 !c.Deleted);
-			if (dbCharacter != null)
+			if (dbCharacter != null &&
+				dbTransaction != null)
 			{
 				// find prefab
 				NetworkObject prefab = networkManager.SpawnablePrefabs.GetObject(true, dbCharacter.RaceID);
@@ -347,9 +374,11 @@ namespace FishMMO.Server.DatabaseServices
 						CharacterAbilityService.Load(dbContext, character);
 						CharacterKnownAbilityService.Load(dbContext, character);
 
-						Debug.Log(dbCharacter.Name + " has been loaded at Pos:" +
+						/*Debug.Log(dbCharacter.Name + " has been loaded at Pos:" +
 							  nob.transform.position.ToString() +
-							  " Rot:" + nob.transform.rotation.ToString());
+							  " Rot:" + nob.transform.rotation.ToString());*/
+
+						dbTransaction.Commit();
 
 						return true;
 					}

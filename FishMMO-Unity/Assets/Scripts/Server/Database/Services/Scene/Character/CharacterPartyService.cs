@@ -41,6 +41,7 @@ namespace FishMMO.Server.DatabaseServices
 				characterPartyEntity.Rank = (byte)rank;
 				characterPartyEntity.HealthPCT = healthPCT;
 			}
+			dbContext.SaveChanges();
 		}
 
 		/// <summary>
@@ -52,6 +53,7 @@ namespace FishMMO.Server.DatabaseServices
 			if (characterPartyEntity != null)
 			{
 				dbContext.CharacterParties.Remove(characterPartyEntity);
+				dbContext.SaveChanges();
 				return true;
 			}
 			return false;
@@ -66,6 +68,7 @@ namespace FishMMO.Server.DatabaseServices
 			if (characterPartyEntity != null)
 			{
 				dbContext.CharacterParties.Remove(characterPartyEntity);
+				dbContext.SaveChanges();
 			}
 		}
 

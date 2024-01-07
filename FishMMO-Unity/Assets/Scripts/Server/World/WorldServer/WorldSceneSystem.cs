@@ -86,7 +86,6 @@ namespace FishMMO.Server
 			{
 				using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 				PendingSceneService.Delete(dbContext, Server.WorldServerSystem.ID);
-				dbContext.SaveChanges();
 			}
 		}
 
@@ -172,7 +171,6 @@ namespace FishMMO.Server
 
 						// successfully found a scene to connect to
 						CharacterService.SetSceneHandle(dbContext, accountName, loadedScene.SceneHandle);
-						dbContext.SaveChanges();
 
 						// tell the client to connect to the scene
 						connection.Broadcast(new WorldSceneConnectBroadcast()
@@ -193,7 +191,6 @@ namespace FishMMO.Server
 				{
 					Debug.Log("World Scene System: Enqueing new PendingSceneLoadRequest: " + Server.WorldServerSystem.ID + ":" + sceneName);
 					PendingSceneService.Enqueue(dbContext, Server.WorldServerSystem.ID, sceneName);
-					dbContext.SaveChanges();
 				}
 			}
 		}
@@ -259,7 +256,6 @@ namespace FishMMO.Server
 
 				// successfully found a scene to connect to
 				CharacterService.SetSceneHandle(dbContext, accountName, selectedScene.SceneHandle);
-				dbContext.SaveChanges();
 
 				// tell the character to reconnect to the scene server
 				conn.Broadcast(new WorldSceneConnectBroadcast()
@@ -286,7 +282,6 @@ namespace FishMMO.Server
 					// enqueue the pending scene load to the database
 					Debug.Log("World Scene System: Enqueing new PendingSceneLoadRequest: " + Server.WorldServerSystem.ID + ":" + sceneName);
 					PendingSceneService.Enqueue(dbContext, Server.WorldServerSystem.ID, sceneName);
-					dbContext.SaveChanges();
 				}
 			}
 		}

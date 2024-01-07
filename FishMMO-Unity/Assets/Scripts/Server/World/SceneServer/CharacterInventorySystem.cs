@@ -175,7 +175,6 @@ namespace FishMMO.Server
 
 				// remove the item from the database
 				CharacterInventoryService.Delete(dbContext, character.ID, msg.slot);
-				dbContext.SaveChanges();
 
 				conn.Broadcast(msg, true, Channel.Reliable);
 			}
@@ -479,7 +478,6 @@ namespace FishMMO.Server
 
 				// remove the item from the database
 				CharacterBankService.Delete(dbContext, character.ID, item.Slot);
-				dbContext.SaveChanges();
 
 				conn.Broadcast(msg, true, Channel.Reliable);
 			}

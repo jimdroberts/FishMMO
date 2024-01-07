@@ -53,7 +53,8 @@ namespace FishMMO.Server.DatabaseServices
             
             worldServer.LastPulse = DateTime.UtcNow;
             worldServer.CharacterCount = characterCount;
-        }
+			dbContext.SaveChanges();
+		}
         
         public static void Delete(NpgsqlDbContext dbContext, long id) 
         {
@@ -61,7 +62,8 @@ namespace FishMMO.Server.DatabaseServices
 			if (worldServer == null) throw new Exception($"Couldn't find World Server with ID: {id}");
 
             dbContext.WorldServers.Remove(worldServer);
-        }
+			dbContext.SaveChanges();
+		}
 
 		public static WorldServerEntity GetServer(NpgsqlDbContext dbContext, long worldServerID)
 		{

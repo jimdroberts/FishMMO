@@ -23,6 +23,7 @@ namespace FishMMO.Server.DatabaseServices
 					TemplateID = templateID,
 				};
 				dbContext.CharacterKnownAbilities.Add(dbKnownAbility);
+				dbContext.SaveChanges();
 			}
 		}
 
@@ -64,6 +65,7 @@ namespace FishMMO.Server.DatabaseServices
 					});
 				}
 			}
+			dbContext.SaveChanges();
 		}
 
 		/// <summary>
@@ -77,6 +79,7 @@ namespace FishMMO.Server.DatabaseServices
 				if (dbKnownAbilities != null)
 				{
 					dbContext.CharacterKnownAbilities.RemoveRange(dbKnownAbilities);
+					dbContext.SaveChanges();
 				}
 			}
 		}
@@ -92,6 +95,7 @@ namespace FishMMO.Server.DatabaseServices
 				if (dbKnownAbility != null)
 				{
 					dbContext.CharacterKnownAbilities.Remove(dbKnownAbility);
+					dbContext.SaveChanges();
 				}
 			}
 		}

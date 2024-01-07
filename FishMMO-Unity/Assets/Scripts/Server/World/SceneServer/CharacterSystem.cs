@@ -109,7 +109,6 @@ namespace FishMMO.Server
 						// all characters are periodically saved
 						using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 						CharacterService.Save(dbContext, new List<Character>(CharactersByID.Values));
-						dbContext.SaveChanges();
 					}
 				}
 				nextSave -= Time.deltaTime;
@@ -123,7 +122,6 @@ namespace FishMMO.Server
 				// save all the characters before we quit
 				using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 				CharacterService.Save(dbContext, new List<Character>(CharactersByID.Values), false);
-				dbContext.SaveChanges();
 			}
 		}
 
@@ -214,7 +212,6 @@ namespace FishMMO.Server
 					// save the character and set online status to false
 					using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 					CharacterService.Save(dbContext, character, false);
-					dbContext.SaveChanges();
 
 					// immediately log out for now.. we could add a timeout later on..?
 					if (character.NetworkObject.IsSpawned)
@@ -339,7 +336,6 @@ namespace FishMMO.Server
 				{
 					using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 					CharacterService.SetOnline(dbContext, accountName, character.CharacterName);
-					dbContext.SaveChanges();
 				}
 
 				// send server character data to the client

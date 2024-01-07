@@ -45,6 +45,7 @@ namespace FishMMO.Server.DatabaseServices
 					});
 				}
 			}
+			dbContext.SaveChanges();
 		}
 
 		/// <summary>
@@ -61,6 +62,7 @@ namespace FishMMO.Server.DatabaseServices
 					FriendCharacterID = friendID,
 				};
 				dbContext.CharacterFriends.Add(characterFriendEntity);
+				dbContext.SaveChanges();
 			}
 		}
 
@@ -73,6 +75,7 @@ namespace FishMMO.Server.DatabaseServices
 			if (characterFriendEntity != null)
 			{
 				dbContext.CharacterFriends.Remove(characterFriendEntity);
+				dbContext.SaveChanges();
 				return true;
 			}
 			return false;
@@ -89,6 +92,7 @@ namespace FishMMO.Server.DatabaseServices
 				if (characterFriends != null)
 				{
 					dbContext.CharacterFriends.RemoveRange(characterFriends);
+					dbContext.SaveChanges();
 				}
 			}
 		}

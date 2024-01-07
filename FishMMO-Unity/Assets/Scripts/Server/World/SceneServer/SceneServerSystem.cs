@@ -67,7 +67,6 @@ namespace FishMMO.Server
 					Debug.Log("Scene Server System: Removing Scene Server: " + id);
 					SceneServerService.Delete(dbContext, id);
 					LoadedSceneService.Delete(dbContext, id);
-					dbContext.SaveChanges();
 				}
 			}
 		}
@@ -85,7 +84,6 @@ namespace FishMMO.Server
 					//Debug.Log("Scene Server System: Pulse");
 					int characterCount = Server.CharacterSystem.ConnectionCharacters.Count;
 					SceneServerService.Pulse(dbContext, id, characterCount);
-					dbContext.SaveChanges();
 
 					// process loaded scene pulse update
 					if (worldScenes != null)
@@ -98,7 +96,6 @@ namespace FishMMO.Server
 								{
 									//Debug.Log("Scene Server System: " + sceneDetails.Value.Name + ":" + sceneDetails.Value.WorldServerID + ":" + sceneDetails.Value.Handle + " Pulse");
 									LoadedSceneService.Pulse(dbContext, sceneDetails.Key, sceneDetails.Value.CharacterCount);
-									dbContext.SaveChanges();
 								}
 							}
 						}
@@ -108,7 +105,6 @@ namespace FishMMO.Server
 					PendingSceneEntity pending = PendingSceneService.Dequeue(dbContext);
 					if (pending != null)
 					{
-						dbContext.SaveChanges();
 						Debug.Log("Scene Server System: Dequeued Pending Scene Load request World:" + pending.WorldServerID + " Scene:" + pending.SceneName);
 						ProcessSceneLoadRequest(pending.WorldServerID, pending.SceneName);
 					}
@@ -126,7 +122,6 @@ namespace FishMMO.Server
 				Debug.Log("Scene Server System: Removing Scene Server: " + id);
 				SceneServerService.Delete(dbContext, id);
 				LoadedSceneService.Delete(dbContext, id);
-				dbContext.SaveChanges();
 			}
 		}
 
@@ -211,7 +206,6 @@ namespace FishMMO.Server
 				using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 				Debug.Log("Scene Server System: Loaded Scene " + scene.name + ":" + scene.handle);
 				LoadedSceneService.Add(dbContext, id, worldServerID, scene.name, scene.handle);
-				dbContext.SaveChanges();
 			}
 			else
 			{
