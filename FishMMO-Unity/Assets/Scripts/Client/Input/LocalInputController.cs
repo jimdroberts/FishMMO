@@ -109,7 +109,10 @@ namespace FishMMO.Client
 
 				if (InputManager.GetKeyDown("Close Last UI"))
 				{
-					UIManager.CloseNext();
+					if (!UIManager.CloseNext())
+					{
+						InputManager.MouseMode = false;
+					}
 				}
 			}
 		}

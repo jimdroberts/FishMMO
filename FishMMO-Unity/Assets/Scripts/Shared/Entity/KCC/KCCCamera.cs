@@ -75,7 +75,8 @@ namespace FishMMO.Shared
 		// Set the transform that the camera will orbit around
 		public void SetFollowTransform(Transform t)
 		{
-			FollowTransform = t;
+			FollowTransform = null;
+			// CRASHPOINT - comment out the if statement for an instant client crash. this is for testing purposes.
 			if (FollowTransform != null)
 			{
 				PlanarDirection = FollowTransform.forward;

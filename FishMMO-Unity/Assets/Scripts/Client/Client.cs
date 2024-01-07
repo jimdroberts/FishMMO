@@ -59,6 +59,8 @@ namespace FishMMO.Client
 			}
 			else
 			{
+				Application.logMessageReceived += this.Application_logMessageReceived;
+
 				// set the UIManager Client
 				UIManager.SetClient(this);
 
@@ -131,6 +133,16 @@ namespace FishMMO.Client
 			}
 		}
 
+		private void Application_logMessageReceived(string condition, string stackTrace, LogType type)
+		{
+			if (type == LogType.Exception)
+			{
+				Debug.LogError($"{stackTrace}");
+
+				ForceDisconnect();
+			}
+		}
+
 		public static string GetWorkingDirectory()
 		{
 #if UNITY_EDITOR
@@ -147,6 +159,8 @@ namespace FishMMO.Client
 #endif
 
 			ClientNamingSystem.Destroy();
+
+			Application.logMessageReceived -= this.Application_logMessageReceived;
 		}
 
 		public void Quit()

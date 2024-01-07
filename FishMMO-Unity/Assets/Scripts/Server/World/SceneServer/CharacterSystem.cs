@@ -21,7 +21,7 @@ namespace FishMMO.Server
 		public float SaveRate = 60.0f;
 		private float nextSave = 0.0f;
 
-		public float OutOfBoundsCheckRate = 2f;
+		public float OutOfBoundsCheckRate = 2.5f;
 		private float nextOutOfBoundsCheck = 0.0f;
 
 		/// <summary>
@@ -80,9 +80,17 @@ namespace FishMMO.Server
 						{
 							// Check if they are within some bounds, if not we need to move them to a respawn location!
 							// TODO: Try to prevent combat escape, maybe this needs to be handled on the game design level?
-							if(details.Boundaries.PointContainedInBoundaries(character.Transform.position) == false)
+							if(!details.Boundaries.PointContainedInBoundaries(character.Transform.position))
 							{
 								RespawnPosition spawnPoint = GetRandomRespawnPoint(details.RespawnPositions);
+
+								if (spawnPoint == null ||
+									character == null ||
+									character.Motor == null)
+								{
+									continue;
+								}
+
 								character.Motor.SetPositionAndRotationAndVelocity(spawnPoint.Position, spawnPoint.Rotation, Vector3.zero);
 							}
 						}
@@ -690,7 +698,9 @@ namespace FishMMO.Server
 
 			if (spawnPoints.Length == 0) throw new IndexOutOfRangeException("Failed to get a respawn point! Please ensure you have rebuilt your world scene cache and have respawn points in your scene!");
 
-			return spawnPoints[UnityEngine.Random.Range(0, spawnPoints.Length)];
+			int index = UnityEngine.Random.Range(0, spawnPoints.Length);
+
+			return spawnPoints[index];
 		}
 	}
 }

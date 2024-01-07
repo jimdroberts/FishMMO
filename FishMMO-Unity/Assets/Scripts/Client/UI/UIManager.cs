@@ -186,7 +186,7 @@ namespace FishMMO.Client
 			return false;
 		}
 
-		public static void CloseNext()
+		public static bool CloseNext()
 		{
 			if (closeOnEscapeControls != null)
 			{
@@ -195,8 +195,10 @@ namespace FishMMO.Client
 				if (control != null)
 				{
 					control.Hide();
+					return true;
 				}
 			}
+			return false;
 		}
 	}
 }
