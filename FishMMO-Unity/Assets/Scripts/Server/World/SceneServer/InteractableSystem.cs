@@ -303,21 +303,20 @@ namespace FishMMO.Server
 				return;
 			}
 
-			if (CharacterAbilityService.TryAdd(dbContext, character.ID, newAbility))
+			CharacterAbilityService.UpdateOrAdd(dbContext, character.ID, newAbility);
+
+			character.AbilityController.LearnAbility(newAbility);
+
+			character.Currency -= price;
+
+			AbilityAddBroadcast abilityAddBroadcast = new AbilityAddBroadcast()
 			{
-				character.AbilityController.LearnAbility(newAbility);
+				id = newAbility.ID,
+				templateID = newAbility.Template.ID,
+				events = msg.events,
+			};
 
-				character.Currency -= price;
-
-				AbilityAddBroadcast abilityAddBroadcast = new AbilityAddBroadcast()
-				{
-					id = newAbility.ID,
-					templateID = newAbility.Template.ID,
-					events = msg.events,
-				};
-
-				conn.Broadcast(abilityAddBroadcast, true, Channel.Reliable);
-			}
+			conn.Broadcast(abilityAddBroadcast, true, Channel.Reliable);
 		}
 	}
 }
