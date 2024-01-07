@@ -10,10 +10,10 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: bd705ccd005d95b43b3fee5021a4de1d, type: 3}
-  m_Name: Jump Speed
+  m_Name: Fast Fall Speed
   m_EditorClassIdentifier: 
-  Description: Jump speed.
-  InitialValue: 100
+  Description: Increased fall speed while crouching in the air.
+  InitialValue: 50
   MinValue: 0
   MaxValue: 0
   IsPercentage: 1

@@ -210,6 +210,7 @@ GameObject:
   - component: {fileID: 4966316198463876083}
   - component: {fileID: 6038023079570568745}
   - component: {fileID: 4053032698712144203}
+  - component: {fileID: -3801138672182141599}
   m_Layer: 0
   m_Name: Elf
   m_TagString: Untagged
@@ -289,7 +290,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _componentIndexCache: 1
-  _addedNetworkObject: {fileID: 0}
+  _addedNetworkObject: {fileID: -3801138672182141599}
   _networkObjectCache: {fileID: 0}
   _componentConfiguration: 1
   _synchronizeParent: 0
@@ -360,7 +361,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _componentIndexCache: 2
-  _addedNetworkObject: {fileID: 0}
+  _addedNetworkObject: {fileID: -3801138672182141599}
   _networkObjectCache: {fileID: 0}
   CharacterController: {fileID: 0}
   CharacterCamera: {fileID: 0}
@@ -377,10 +378,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3368a63bfc268804ebd6f9883efdc07d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  Character: {fileID: 0}
   Motor: {fileID: 961999050755331747}
-  MaxStableSprintSpeed: 6
-  MaxStableMoveSpeed: 4
-  MaxStableCrouchSpeed: 2
   StableMovementSharpness: 20
   OrientationSharpness: 10
   OrientationMethod: 0
@@ -388,19 +387,24 @@ MonoBehaviour:
   AirAccelerationSpeed: 2.5
   Drag: 0.1
   AllowJumpingWhenSliding: 1
-  JumpUpSpeed: 6.5
   JumpScalableForwardSpeed: 0
   JumpPreGroundingGraceTime: 0.1
   JumpPostGroundingGraceTime: 0.1
   IgnoredColliders: []
   BonusOrientationMethod: 0
   BonusOrientationSharpness: 10
-  Gravity: {x: 0, y: -18, z: 0}
   MeshRoot: {fileID: 3575547950957483929}
   CameraFollowPoint: {fileID: 8755975724377161100}
   CrouchedCapsuleHeight: 0.8
   FullCapsuleHeight: 1.6
   CapsuleBaseOffset: 0.8
+  MoveSpeedTemplate: {fileID: 11400000, guid: 561336c510b90b546b2650ffa83a09dc, type: 2}
+  RunSpeedTemplate: {fileID: 11400000, guid: 27c4f240152242b4fb7dec2f5368445c, type: 2}
+  JumpSpeedTemplate: {fileID: 11400000, guid: e32341894cca80f44988cbf96cd9a709, type: 2}
+  SwimSpeedTemplate: {fileID: 11400000, guid: afefadf23d30db24e98774bcd84d31c3, type: 2}
+  FastFallSpeedTemplate: {fileID: 11400000, guid: 3d34315a07aca4243adfc96a4d3479c8,
+    type: 2}
+  GravityTemplate: {fileID: 11400000, guid: d057742d4e36f464fb2f1dde1d2fe707, type: 2}
 --- !u!114 &961999050755331747
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -456,7 +460,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _componentIndexCache: 3
-  _addedNetworkObject: {fileID: 0}
+  _addedNetworkObject: {fileID: -3801138672182141599}
   _networkObjectCache: {fileID: 0}
   CharacterAttributeDatabase: {fileID: 11400000, guid: 8fe93c66f5bc53c45a7b0f8334be9016,
     type: 2}
@@ -473,7 +477,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _componentIndexCache: 4
-  _addedNetworkObject: {fileID: 0}
+  _addedNetworkObject: {fileID: -3801138672182141599}
   _networkObjectCache: {fileID: 0}
   Character: {fileID: 0}
   ShowAchievementCompletion: 1
@@ -490,7 +494,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _componentIndexCache: 5
-  _addedNetworkObject: {fileID: 0}
+  _addedNetworkObject: {fileID: -3801138672182141599}
   _networkObjectCache: {fileID: 0}
   Character: {fileID: 0}
 --- !u!114 &6508789489405674567
@@ -506,7 +510,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _componentIndexCache: 6
-  _addedNetworkObject: {fileID: 0}
+  _addedNetworkObject: {fileID: -3801138672182141599}
   _networkObjectCache: {fileID: 0}
   Character: {fileID: 0}
 --- !u!114 &1966501389576177422
@@ -534,7 +538,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _componentIndexCache: 7
-  _addedNetworkObject: {fileID: 0}
+  _addedNetworkObject: {fileID: -3801138672182141599}
   _networkObjectCache: {fileID: 0}
   AbilitySpawner: {fileID: 0}
   Character: {fileID: 0}
@@ -572,7 +576,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _componentIndexCache: 8
-  _addedNetworkObject: {fileID: 0}
+  _addedNetworkObject: {fileID: -3801138672182141599}
   _networkObjectCache: {fileID: 0}
   Character: {fileID: 0}
   Currency: 0
@@ -589,7 +593,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _componentIndexCache: 9
-  _addedNetworkObject: {fileID: 0}
+  _addedNetworkObject: {fileID: -3801138672182141599}
   _networkObjectCache: {fileID: 0}
   Character: {fileID: 0}
 --- !u!114 &1622431159197640858
@@ -605,7 +609,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _componentIndexCache: 10
-  _addedNetworkObject: {fileID: 0}
+  _addedNetworkObject: {fileID: -3801138672182141599}
   _networkObjectCache: {fileID: 0}
   Character: {fileID: 0}
   Currency: 0
@@ -622,7 +626,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _componentIndexCache: 11
-  _addedNetworkObject: {fileID: 0}
+  _addedNetworkObject: {fileID: -3801138672182141599}
   _networkObjectCache: {fileID: 0}
   Character: {fileID: 0}
   ID: 0
@@ -640,7 +644,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _componentIndexCache: 12
-  _addedNetworkObject: {fileID: 0}
+  _addedNetworkObject: {fileID: -3801138672182141599}
   _networkObjectCache: {fileID: 0}
   Character: {fileID: 0}
   ID: 0
@@ -658,7 +662,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _componentIndexCache: 13
-  _addedNetworkObject: {fileID: 0}
+  _addedNetworkObject: {fileID: -3801138672182141599}
   _networkObjectCache: {fileID: 0}
   Character: {fileID: 0}
 --- !u!114 &4966316198463876083
@@ -674,7 +678,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _componentIndexCache: 14
-  _addedNetworkObject: {fileID: 0}
+  _addedNetworkObject: {fileID: -3801138672182141599}
   _networkObjectCache: {fileID: 0}
   Character: {fileID: 0}
   Immortal: 0
@@ -702,7 +706,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _componentIndexCache: 15
-  _addedNetworkObject: {fileID: 0}
+  _addedNetworkObject: {fileID: -3801138672182141599}
   _networkObjectCache: {fileID: 0}
   CharacterNameLabel: {fileID: 2817084262407755495}
   CharacterGuildLabel: {fileID: 3362407936794280637}
@@ -743,6 +747,39 @@ CapsuleCollider:
   m_Height: 1.6
   m_Direction: 1
   m_Center: {x: 0, y: 0.8, z: 0}
+--- !u!114 &-3801138672182141599
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4573496687782621821}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 26b716c41e9b56b4baafaf13a523ba2e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  <IsNested>k__BackingField: 0
+  <ComponentIndex>k__BackingField: 0
+  <PredictedSpawn>k__BackingField: {fileID: 0}
+  _networkBehaviours: []
+  <ParentNetworkObject>k__BackingField: {fileID: 0}
+  <ChildNetworkObjects>k__BackingField: []
+  SerializedTransformProperties:
+    Position: {x: 0, y: 0, z: 0}
+    Rotation: {x: 0, y: 0, z: 0, w: 0}
+    LocalScale: {x: 0, y: 0, z: 0}
+  _isNetworked: 1
+  _isGlobal: 0
+  _initializeOrder: 0
+  _defaultDespawnType: 0
+  NetworkObserver: {fileID: 0}
+  <PrefabId>k__BackingField: 0
+  <SpawnableCollectionId>k__BackingField: 0
+  _scenePathHash: 0
+  <SceneId>k__BackingField: 0
+  <AssetPathHash>k__BackingField: 16768089385358015845
+  _sceneNetworkObjects: []
 --- !u!1 &8718706173774098268
 GameObject:
   m_ObjectHideFlags: 0

@@ -30,13 +30,17 @@ namespace FishMMO.Shared
 
 	public class KCCController : MonoBehaviour, ICharacterController
 	{
+		public const float StableSprintSpeedConstant = 6.0f;
+		public const float StableMoveSpeedConstant = 4.0f;
+		public const float StableCrouchSpeedConstant = 2.0f;
+		public const float StableJumpUpSpeedConstant = 6.5f;
+		public static readonly Vector3 GravityConstant = new Vector3(0, -18.0f, 0);
+
+		public Character Character;
 		public KinematicCharacterMotor Motor;
 
 		[Header("Stable Movement")]
-		public float MaxStableSprintSpeed = 10f;
-		public float MaxStableMoveSpeed = 5f;
-		public float MaxStableCrouchSpeed = 3f;
-		public float StableMovementSharpness = 15f;
+		public float StableMovementSharpness = 20f;
 		public float OrientationSharpness = 10f;
 		public OrientationMethod OrientationMethod = OrientationMethod.TowardsCamera;
 
@@ -47,7 +51,6 @@ namespace FishMMO.Shared
 
 		[Header("Jumping")]
 		public bool AllowJumpingWhenSliding = false;
-		public float JumpUpSpeed = 5f;
 		public float JumpScalableForwardSpeed = 0f;
 		public float JumpPreGroundingGraceTime = 0f;
 		public float JumpPostGroundingGraceTime = 0f;
@@ -56,17 +59,21 @@ namespace FishMMO.Shared
 		public List<Collider> IgnoredColliders = new List<Collider>();
 		public BonusOrientationMethod BonusOrientationMethod = BonusOrientationMethod.None;
 		public float BonusOrientationSharpness = 10f;
-		public Vector3 Gravity = new Vector3(0, -10.0f, 0);
 		public Transform MeshRoot;
 		public Transform CameraFollowPoint;
 		public float CrouchedCapsuleHeight = 0.5f;
 		public float FullCapsuleHeight = 2f;
 		public float CapsuleBaseOffset = 1f;
+		public CharacterAttributeTemplate MoveSpeedTemplate;
+		public CharacterAttributeTemplate RunSpeedTemplate;
+		public CharacterAttributeTemplate JumpSpeedTemplate;
+		public CharacterAttributeTemplate SwimSpeedTemplate;
+		public CharacterAttributeTemplate FastFallSpeedTemplate;
+		public CharacterAttributeTemplate GravityTemplate;
 
 		public KCCCharacterState CurrentCharacterState { get; private set; }
 
 		private Collider[] _probedColliders = new Collider[8];
-		private RaycastHit[] _probedHits = new RaycastHit[8];
 
 		private Animator _animator = null;
 
@@ -270,7 +277,7 @@ namespace FishMMO.Shared
 						if (BonusOrientationMethod == BonusOrientationMethod.TowardsGravity)
 						{
 							// Rotate from current up to invert gravity
-							Vector3 smoothedGravityDir = Vector3.Slerp(currentUp, -Gravity.normalized, 1 - Mathf.Exp(-BonusOrientationSharpness * deltaTime));
+							Vector3 smoothedGravityDir = Vector3.Slerp(currentUp, -GravityConstant.normalized, 1 - Mathf.Exp(-BonusOrientationSharpness * deltaTime));
 							currentRotation = Quaternion.FromToRotation(currentUp, smoothedGravityDir) * currentRotation;
 						}
 						else if (BonusOrientationMethod == BonusOrientationMethod.TowardsGroundSlopeAndGravity)
@@ -287,7 +294,7 @@ namespace FishMMO.Shared
 							}
 							else
 							{
-								Vector3 smoothedGravityDir = Vector3.Slerp(currentUp, -Gravity.normalized, 1 - Mathf.Exp(-BonusOrientationSharpness * deltaTime));
+								Vector3 smoothedGravityDir = Vector3.Slerp(currentUp, -GravityConstant.normalized, 1 - Mathf.Exp(-BonusOrientationSharpness * deltaTime));
 								currentRotation = Quaternion.FromToRotation(currentUp, smoothedGravityDir) * currentRotation;
 							}
 						}
@@ -326,14 +333,44 @@ namespace FishMMO.Shared
 							Vector3 inputRight = Vector3.Cross(_moveInputVector, Motor.CharacterUp);
 							Vector3 reorientedInput = Vector3.Cross(effectiveGroundNormal, inputRight).normalized * _moveInputVector.magnitude;
 
-							float targetSpeed = MaxStableMoveSpeed;
-							if (_isCrouching)
+							float targetSpeed = StableMoveSpeedConstant;
+
+							if (Character != null &&
+								Character.AttributeController != null)
 							{
-								targetSpeed = MaxStableCrouchSpeed;
+								if (_isCrouching)
+								{
+									targetSpeed = StableCrouchSpeedConstant;
+								}
+								else if (_sprintInputDown &&
+									RunSpeedTemplate != null &&
+									Character.AttributeController.TryGetAttribute(RunSpeedTemplate, out CharacterAttribute runSpeedModifier))
+								{
+									targetSpeed = StableSprintSpeedConstant * runSpeedModifier.FinalValueAsPct;
+								}
+								else if (MoveSpeedTemplate != null &&
+									Character.AttributeController.TryGetAttribute(MoveSpeedTemplate, out CharacterAttribute moveSpeedModifier))
+								{
+									targetSpeed = StableMoveSpeedConstant * moveSpeedModifier.FinalValueAsPct;
+								}
+
+								/*if (_swimming &&
+									SwimSpeedTemplate != null &&
+									Character.AttributeController.TryGetAttribute(SwimSpeedTemplate, out CharacterAttribute swimSpeed))
+								{
+
+								}*/
 							}
-							else if (_sprintInputDown)
+							else
 							{
-								targetSpeed = MaxStableSprintSpeed;
+								if (_isCrouching)
+								{
+									targetSpeed = StableCrouchSpeedConstant;
+								}
+								else if (_sprintInputDown)
+								{
+									targetSpeed = StableSprintSpeedConstant;
+								}
 							}
 
 							Vector3 targetMovementVelocity = reorientedInput * targetSpeed;
@@ -382,7 +419,23 @@ namespace FishMMO.Shared
 							}
 
 							// Gravity
-							currentVelocity += Gravity * deltaTime;
+							if (GravityTemplate != null &&
+								Character.AttributeController.TryGetAttribute(GravityTemplate, out CharacterAttribute gravityModifier))
+							{
+								currentVelocity += GravityConstant * gravityModifier.FinalValueAsPct * deltaTime;
+							}
+							else
+							{
+								currentVelocity += GravityConstant * deltaTime;
+							}
+
+							// Fast Fall
+							if (_isCrouching &&
+								FastFallSpeedTemplate != null &&
+								Character.AttributeController.TryGetAttribute(FastFallSpeedTemplate, out CharacterAttribute fastFallModifier))
+							{
+								currentVelocity.y += GravityConstant.y * fastFallModifier.FinalValueAsPct * deltaTime;
+							}
 
 							// Drag
 							currentVelocity *= (1f / (1f + (Drag * deltaTime)));
@@ -407,7 +460,13 @@ namespace FishMMO.Shared
 								Motor.ForceUnground();
 
 								// Add to the return velocity and reset jump state
-								currentVelocity += (jumpDirection * JumpUpSpeed) - Vector3.Project(currentVelocity, Motor.CharacterUp);
+								float jumpSpeed = StableJumpUpSpeedConstant;
+								if (JumpSpeedTemplate != null &&
+									Character.AttributeController.TryGetAttribute(JumpSpeedTemplate, out CharacterAttribute jumpSpeedModifier))
+								{
+									jumpSpeed *= jumpSpeedModifier.FinalValueAsPct;
+								}
+								currentVelocity += (jumpDirection * jumpSpeed) - Vector3.Project(currentVelocity, Motor.CharacterUp);
 								currentVelocity += (_moveInputVector * JumpScalableForwardSpeed);
 
 								_jumpRequested = false;

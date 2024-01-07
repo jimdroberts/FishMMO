@@ -13,9 +13,10 @@ MonoBehaviour:
   m_Name: Swim Speed
   m_EditorClassIdentifier: 
   Description: Swim speed for traversing the world of water.
-  InitialValue: 1000
+  InitialValue: 100
   MinValue: 0
   MaxValue: 0
+  IsPercentage: 1
   IsResourceAttribute: 0
   ClampFinalValue: 0
   ParentTypes:

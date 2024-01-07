@@ -17,6 +17,7 @@ namespace FishMMO.Shared
 		public int InitialValue;
 		public int MinValue;
 		public int MaxValue;
+		public bool IsPercentage;
 		public bool IsResourceAttribute;
 		public bool ClampFinalValue;
 		public CharacterAttributeSet ParentTypes = new CharacterAttributeSet();

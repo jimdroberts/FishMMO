@@ -38,6 +38,7 @@ MonoBehaviour:
     - Move Speed
     - Run Speed
     - Swim Speed
+    - Fast Fall Speed
     m_values:
     - {fileID: 11400000, guid: e5c10a046ee277f46a57ee2048ae5ec9, type: 2}
     - {fileID: 11400000, guid: f627a40e6b3ef5349b3c735f0bfd60c7, type: 2}
@@ -63,3 +64,4 @@ MonoBehaviour:
     - {fileID: 11400000, guid: 561336c510b90b546b2650ffa83a09dc, type: 2}
     - {fileID: 11400000, guid: 27c4f240152242b4fb7dec2f5368445c, type: 2}
     - {fileID: 11400000, guid: afefadf23d30db24e98774bcd84d31c3, type: 2}
+    - {fileID: 11400000, guid: 3d34315a07aca4243adfc96a4d3479c8, type: 2}

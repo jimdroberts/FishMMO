@@ -1412,7 +1412,7 @@ MonoBehaviour:
   HasFocus: 0
   FocusOnSelect: 1
   CloseOnQuitToMenu: 1
-  CloseOnEscape: 0
+  CloseOnEscape: 1
   CanDrag: 0
   ClampToScreen: 1
 --- !u!114 &816788209804180105

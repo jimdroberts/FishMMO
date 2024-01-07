@@ -52,6 +52,7 @@ namespace FishMMO.Client
 					if (CloseOnEscape)
 					{
 						UIManager.RegisterCloseOnEscapeUI(this);
+						InputManager.MouseMode = true;
 					}
 					if (FocusOnSelect)
 					{

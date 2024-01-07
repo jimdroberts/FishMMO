@@ -13,9 +13,10 @@ MonoBehaviour:
   m_Name: Move Speed
   m_EditorClassIdentifier: 
   Description: Movement speed for traversing the world.
-  InitialValue: 750
+  InitialValue: 100
   MinValue: 0
   MaxValue: 0
+  IsPercentage: 1
   IsResourceAttribute: 0
   ClampFinalValue: 0
   ParentTypes:

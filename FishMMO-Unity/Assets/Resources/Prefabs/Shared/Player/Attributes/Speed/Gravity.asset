@@ -13,9 +13,10 @@ MonoBehaviour:
   m_Name: Gravity
   m_EditorClassIdentifier: 
   Description: Gravity keeps your feet on the ground!
-  InitialValue: 2000
+  InitialValue: 100
   MinValue: 0
   MaxValue: 0
+  IsPercentage: 1
   IsResourceAttribute: 0
   ClampFinalValue: 0
   ParentTypes:

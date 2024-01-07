@@ -214,7 +214,11 @@ namespace FishMMO.Client
 			UIAttribute label = Instantiate(AttributeLabelPrefab, content);
 			label.Name.text = attribute.Template.Name;
 			label.Value.text = attribute.FinalValue.ToString();
-			if (attribute.Template.IsResourceAttribute)
+			if (attribute.Template.IsPercentage)
+			{
+				label.Value.text += "%";
+			}
+			else if (attribute.Template.IsResourceAttribute)
 			{
 				CharacterResourceAttribute resource = attribute as CharacterResourceAttribute;
 				if (resource != null)
@@ -287,7 +291,11 @@ namespace FishMMO.Client
 			{
 				label.Name.text = attribute.Template.Name;
 				label.Value.text = attribute.FinalValue.ToString();
-				if (attribute.Template.IsResourceAttribute)
+				if (attribute.Template.IsPercentage)
+				{
+					label.Value.text += "%";
+				}
+				else if (attribute.Template.IsResourceAttribute)
 				{
 					CharacterResourceAttribute resource = attribute as CharacterResourceAttribute;
 					if (resource != null)

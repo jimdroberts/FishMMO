@@ -387,7 +387,9 @@ namespace FishMMO.Shared
 
 		public bool CanManipulate()
 		{
-			if (Character == null)
+			if (Character == null ||
+				Character.IsTeleporting ||
+				!Character.IsSpawned)
 				return false;
 
 			/*if (!character.IsSafeZone &&

@@ -116,6 +116,7 @@ namespace FishMMO.Shared
 			Motor = gameObject.GetComponent<KinematicCharacterMotor>();
 
 			CharacterController = gameObject.GetComponent<KCCController>();
+			CharacterController.Character = this;
 			CharacterController.Motor = Motor;
 			Motor.CharacterController = CharacterController;
 
