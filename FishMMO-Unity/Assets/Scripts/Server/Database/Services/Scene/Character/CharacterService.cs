@@ -259,7 +259,9 @@ namespace FishMMO.Server.DatabaseServices
 			CharacterAchievementService.Save(dbContext, character);
 			CharacterBuffService.Save(dbContext, character);
 
-			//Debug.Log(character.CharacterName + " has been saved at: " + character.Transform.position.ToString());
+			Debug.Log(character.CharacterName + " has been saved at Pos: " +
+					  character.Transform.position.ToString() +
+					  " Rot: " + rotation);
 		}
 
 		/// <summary>
@@ -344,11 +346,13 @@ namespace FishMMO.Server.DatabaseServices
 						CharacterBankService.Load(dbContext, character);
 						CharacterAbilityService.Load(dbContext, character);
 						CharacterKnownAbilityService.Load(dbContext, character);
+
+						Debug.Log(dbCharacter.Name + " has been loaded at Pos:" +
+							  nob.transform.position.ToString() +
+							  " Rot:" + nob.transform.rotation.ToString());
+
 						return true;
 					}
-
-					Debug.Log(dbCharacter.Name + " has been instantiated at Pos:" +
-							  nob.transform.position.ToString() + " Rot:" + nob.transform.rotation.ToString());
 				}
 			}
 			character = null;

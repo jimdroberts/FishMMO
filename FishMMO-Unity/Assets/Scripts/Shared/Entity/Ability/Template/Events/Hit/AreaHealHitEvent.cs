@@ -39,10 +39,10 @@ namespace FishMMO.Shared
 			return hits;
 		}
 
-		public override string Tooltip()
+		public override string GetFormattedDescription()
 		{
-			return base.Tooltip().Replace("$HEAL$", "<color=#" + TinyColor.skyBlue.ToHex() + ">" + Heal + "</color>")
-								 .Replace("$RADIUS$", Radius.ToString());
+			return Description.Replace("$HEAL$", "<color=#" + TinyColor.skyBlue.ToHex() + ">" + Heal + "</color>")
+							  .Replace("$RADIUS$", Radius.ToString());
 		}
 	}
 }

@@ -1,8 +1,7 @@
 using System;
-using UnityEngine;
 
 namespace FishMMO.Shared
 {
 	[Serializable]
-	public class RespawnPositionDictionary : SerializableDictionary<string, Vector3> { }
+	public class RespawnPositionDictionary : SerializableDictionary<string, RespawnPosition> { }
 }

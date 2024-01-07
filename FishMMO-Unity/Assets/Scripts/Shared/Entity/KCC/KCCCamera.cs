@@ -76,8 +76,11 @@ namespace FishMMO.Shared
 		public void SetFollowTransform(Transform t)
 		{
 			FollowTransform = t;
-			PlanarDirection = FollowTransform.forward;
-			_currentFollowPosition = FollowTransform.position;
+			if (FollowTransform != null)
+			{
+				PlanarDirection = FollowTransform.forward;
+				_currentFollowPosition = FollowTransform.position;
+			}
 		}
 
 		public void UpdateWithInput(float deltaTime, float zoomInput, Vector3 rotationInput)

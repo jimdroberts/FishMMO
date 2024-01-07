@@ -70,8 +70,10 @@ namespace FishMMO.Client
 					if (template != null)
 					{
 						MainEntry.Initialize(Character, template);
-						AbilityDescription.text = template.Tooltip();
 						SetEventSlots(template.EventSlots);
+
+						// update the main description text
+						UpdateMainDescription();
 					}
 				});
 			}
@@ -81,6 +83,9 @@ namespace FishMMO.Client
 		{
 			MainEntry.Clear();
 			ClearSlots();
+
+			// update the main description text
+			UpdateMainDescription();
 		}
 
 		private void EventEntry_OnLeftClick(int index, object[] optionalParams)
@@ -98,6 +103,9 @@ namespace FishMMO.Client
 					{
 						EventSlots[index].Initialize(Character, template);
 					}
+
+					// update the main description text
+					UpdateMainDescription();
 				});
 			}
 		}
@@ -107,6 +115,43 @@ namespace FishMMO.Client
 			if (index > -1 && index < EventSlots.Count)
 			{
 				EventSlots[index].Clear();
+
+				// update the main description text
+				UpdateMainDescription();
+			}
+		}
+
+		private void UpdateMainDescription()
+		{
+			if (AbilityDescription == null)
+			{
+				return;
+			}
+			if (MainEntry == null)
+			{
+				AbilityDescription.text = "";
+				return;
+			}
+
+			
+
+			if (EventSlots != null &&
+				EventSlots.Count > 0)
+			{
+				List<ITooltip> tooltips = new List<ITooltip>();
+				foreach (UITooltipButton button in EventSlots)
+				{
+					if (button.Tooltip == null)
+					{
+						continue;
+					}
+					tooltips.Add(button.Tooltip);
+				}
+				AbilityDescription.text = MainEntry.Tooltip.Tooltip(tooltips);
+			}
+			else
+			{
+				AbilityDescription.text = MainEntry.Tooltip.Tooltip();
 			}
 		}
 

@@ -144,9 +144,13 @@ namespace FishMMO.Shared
 					GameObject[] respawnPositions = GameObject.FindGameObjectsWithTag(RespawnTag);
 					foreach (GameObject obj in respawnPositions)
 					{
-						Debug.Log("WorldSceneDetails: Found new Respawn Position[" + obj.name + " " + obj.transform.position + "]");
+						Debug.Log("WorldSceneDetails: Found new Respawn Position[" + obj.name + " " + obj.transform + "]");
 
-						sceneDetails.RespawnPositions.Add(obj.name, obj.transform.position);
+						sceneDetails.RespawnPositions.Add(obj.name, new RespawnPosition()
+						{
+							Position = obj.transform.position,
+							Rotation = obj.transform.rotation,
+						});
 					}
 
 					// Search for world bounds (bounds activate when outside of all of them)

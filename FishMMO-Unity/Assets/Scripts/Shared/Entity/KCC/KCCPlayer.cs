@@ -178,8 +178,12 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
+			if (CharacterCamera == null)
+			{
+				return;
+			}
 			// Handle rotating the camera along with physics movers
-			if (CharacterCamera != null && CharacterCamera.RotateWithPhysicsMover && Motor.AttachedRigidbody != null)
+			if (Motor != null && CharacterCamera.RotateWithPhysicsMover && Motor.AttachedRigidbody != null)
 			{
 				PhysicsMover mover = Motor.AttachedRigidbody.GetComponent<PhysicsMover>();
 				if (mover != null)

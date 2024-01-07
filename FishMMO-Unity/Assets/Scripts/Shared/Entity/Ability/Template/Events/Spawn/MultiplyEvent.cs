@@ -35,9 +35,9 @@ namespace FishMMO.Shared
 			}
 		}
 
-		public override string Tooltip()
+		public override string GetFormattedDescription()
 		{
-			return base.Tooltip().Replace("$SPAWNCOUNT$", SpawnCount.ToString());
+			return Description.Replace("$SPAWNCOUNT$", SpawnCount.ToString());
 		}
 	}
 }

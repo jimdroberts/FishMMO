@@ -16,9 +16,9 @@ namespace FishMMO.Shared
 			return 1;
 		}
 
-		public override string Tooltip()
+		public override string GetFormattedDescription()
 		{
-			return base.Tooltip().Replace("$HEAL$", Heal.ToString());
+			return Description.Replace("$HEAL$", Heal.ToString());
 		}
 	}
 }

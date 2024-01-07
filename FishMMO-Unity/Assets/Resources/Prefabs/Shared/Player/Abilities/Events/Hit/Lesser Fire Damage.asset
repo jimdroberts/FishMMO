@@ -19,6 +19,7 @@ MonoBehaviour:
   Cooldown: 1
   Range: 0
   Speed: 0
+  Price: 0
   Resources:
     m_keys: []
     m_values: 

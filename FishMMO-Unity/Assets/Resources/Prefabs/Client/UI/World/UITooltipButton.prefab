@@ -284,3 +284,4 @@ MonoBehaviour:
       m_Calls: []
   Icon: {fileID: 2576642808912956062}
   TooltipLabel: {fileID: 2576642808896993661}
+  ExtraTooltipInfo: 

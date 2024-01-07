@@ -4,7 +4,7 @@ namespace FishMMO.Shared
 {
 	public static class RichText
 	{
-		public static string Format(string valueName, float value, bool appendLine = false, string hexColor = null, string size = null)
+		public static string Format(string valueName, float value, bool appendLine = false, string hexColor = null, string appendPrefix = null, string appendSuffix = null, string size = null)
 		{
 			if (value == 0.0f)
 			{
@@ -30,15 +30,15 @@ namespace FishMMO.Shared
 					sb.Append(valueName);
 					sb.Append(": ");
 				}
-				if (value < 0)
+				if (!string.IsNullOrWhiteSpace(appendPrefix))
 				{
-					sb.Append("-");
-				}
-				else if (value > 0)
-				{
-					sb.Append("+");
+					sb.Append(appendPrefix);
 				}
 				sb.Append(value);
+				if (!string.IsNullOrWhiteSpace(appendSuffix))
+				{
+					sb.Append(appendSuffix);
+				}
 				if (!string.IsNullOrWhiteSpace(hexColor))
 				{
 					sb.Append("</color>");

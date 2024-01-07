@@ -302,25 +302,6 @@ start Scene.exe SCENE";
 			EditorUserBuildSettings.standaloneBuildSubtarget = originalBuildSubtarget;
 		}
 
-		private static void RebuildWorldSceneDetailsCache()
-		{
-			// rebuild world details cache, this includes teleporters, teleporter destinations, spawn points, and other constant scene data
-			WorldSceneDetailsCache worldDetailsCache = AssetDatabase.LoadAssetAtPath<WorldSceneDetailsCache>(WorldSceneDetailsCache.CACHE_FULL_PATH);
-			if (worldDetailsCache != null)
-			{
-				worldDetailsCache.Rebuild();
-				EditorUtility.SetDirty(worldDetailsCache);
-			}
-			else
-			{
-				worldDetailsCache = ScriptableObject.CreateInstance<WorldSceneDetailsCache>();
-				worldDetailsCache.Rebuild();
-				EditorUtility.SetDirty(worldDetailsCache);
-				AssetDatabase.CreateAsset(worldDetailsCache, WorldSceneDetailsCache.CACHE_FULL_PATH);
-			}
-			AssetDatabase.SaveAssets();
-		}
-
 		private static string[] AppendWorldScenePaths(string[] requiredPaths)
 		{
 			List<string> allPaths = new List<string>(requiredPaths);
@@ -377,7 +358,7 @@ start Scene.exe SCENE";
 			}
 		}
 
-		[MenuItem("FishMMO/Build/Installer", priority = -1)]
+		[MenuItem("FishMMO/Build/Installer", priority = -10)]
 		public static void BuildWindows64Setup()
 		{
 			BuildExecutable("Installer",
@@ -423,7 +404,7 @@ start Scene.exe SCENE";
 			string selectedPath = EditorUtility.SaveFolderPanel("Pick a save directory", "", "");
 			string rootPath = Path.Combine(selectedPath, Constants.Configuration.ProjectName);
 			string serverRootPath = Path.Combine(selectedPath, Constants.Configuration.ProjectName + Path.DirectorySeparatorChar + "Server");
-			RebuildWorldSceneDetailsCache();
+			WorldSceneDetailsCacheBuilder.Rebuild();
 			BuildExecutable(rootPath,
 							Constants.Configuration.ProjectName,
 							CLIENT_BOOTSTRAP_SCENES,
@@ -473,7 +454,7 @@ start Scene.exe SCENE";
 			string selectedPath = EditorUtility.SaveFolderPanel("Pick a save directory", "", "");
 			string rootPath = Path.Combine(selectedPath, Constants.Configuration.ProjectName);
 			string serverRootPath = Path.Combine(selectedPath, Constants.Configuration.ProjectName + Path.DirectorySeparatorChar + "Server");
-			RebuildWorldSceneDetailsCache();
+			WorldSceneDetailsCacheBuilder.Rebuild();
 			BuildExecutable(rootPath,
 							Constants.Configuration.ProjectName,
 							CLIENT_BOOTSTRAP_SCENES,
@@ -520,7 +501,7 @@ start Scene.exe SCENE";
 		[MenuItem("FishMMO/Build/Server/Windows x64 All-In-One", priority = 2)]
 		public static void BuildWindows64AllInOneServer()
 		{
-			RebuildWorldSceneDetailsCache();
+			WorldSceneDetailsCacheBuilder.Rebuild();
 			BuildExecutable(ALL_IN_ONE_SERVER_BUILD_NAME,
 							ALL_IN_ONE_SERVER_BOOTSTRAP_SCENES,
 							CustomBuildType.AllInOne,
@@ -532,7 +513,7 @@ start Scene.exe SCENE";
 		[MenuItem("FishMMO/Build/Server/Windows x64 Login", priority = 3)]
 		public static void BuildWindows64LoginServer()
 		{
-			RebuildWorldSceneDetailsCache();
+			WorldSceneDetailsCacheBuilder.Rebuild();
 			BuildExecutable(LOGIN_SERVER_BUILD_NAME,
 							LOGIN_SERVER_BOOTSTRAP_SCENES,
 							CustomBuildType.Login,
@@ -544,7 +525,7 @@ start Scene.exe SCENE";
 		[MenuItem("FishMMO/Build/Server/Windows x64 World", priority = 4)]
 		public static void BuildWindows64WorldServer()
 		{
-			RebuildWorldSceneDetailsCache();
+			WorldSceneDetailsCacheBuilder.Rebuild();
 			BuildExecutable(WORLD_SERVER_BUILD_NAME,
 							WORLD_SERVER_BOOTSTRAP_SCENES,
 							CustomBuildType.World,
@@ -556,7 +537,7 @@ start Scene.exe SCENE";
 		[MenuItem("FishMMO/Build/Server/Windows x64 Scene", priority = 5)]
 		public static void BuildWindows64SceneServer()
 		{
-			RebuildWorldSceneDetailsCache();
+			WorldSceneDetailsCacheBuilder.Rebuild();
 			BuildExecutable(SCENE_SERVER_BUILD_NAME,
 							SCENE_SERVER_BOOTSTRAP_SCENES,
 							CustomBuildType.Scene,
@@ -568,7 +549,7 @@ start Scene.exe SCENE";
 		[MenuItem("FishMMO/Build/Client/Windows x64", priority = 1)]
 		public static void BuildWindows64Client()
 		{
-			RebuildWorldSceneDetailsCache();
+			WorldSceneDetailsCacheBuilder.Rebuild();
 			BuildExecutable(Constants.Configuration.ProjectName,
 							CLIENT_BOOTSTRAP_SCENES,
 							CustomBuildType.Client,
@@ -580,7 +561,7 @@ start Scene.exe SCENE";
 		[MenuItem("FishMMO/Build/Server/Linux x64 All-In-One", priority = 7)]
 		public static void BuildLinux64AllInOneServer()
 		{
-			RebuildWorldSceneDetailsCache();
+			WorldSceneDetailsCacheBuilder.Rebuild();
 			BuildExecutable(ALL_IN_ONE_SERVER_BUILD_NAME,
 							ALL_IN_ONE_SERVER_BOOTSTRAP_SCENES,
 							CustomBuildType.AllInOne,
@@ -592,7 +573,7 @@ start Scene.exe SCENE";
 		[MenuItem("FishMMO/Build/Client/Linux x64", priority = 2)]
 		public static void BuildLinux64Client()
 		{
-			RebuildWorldSceneDetailsCache();
+			WorldSceneDetailsCacheBuilder.Rebuild();
 			BuildExecutable(Constants.Configuration.ProjectName,
 							CLIENT_BOOTSTRAP_SCENES,
 							CustomBuildType.Client,
@@ -604,7 +585,7 @@ start Scene.exe SCENE";
 		[MenuItem("FishMMO/Build/Client/WebGL", priority = 3)]
 		public static void BuildWebGLClient()
 		{
-			RebuildWorldSceneDetailsCache();
+			WorldSceneDetailsCacheBuilder.Rebuild();
 			BuildExecutable(Constants.Configuration.ProjectName,
 							CLIENT_BOOTSTRAP_SCENES,
 							CustomBuildType.Client,

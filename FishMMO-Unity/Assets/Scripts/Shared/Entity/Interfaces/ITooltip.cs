@@ -1,4 +1,5 @@
 ﻿using UnityEngine;
+using System.Collections.Generic;
 
 namespace FishMMO.Shared
 {
@@ -6,6 +7,8 @@ namespace FishMMO.Shared
 	{
 		Sprite Icon { get; }
 		string Name { get; }
+		string GetFormattedDescription();
 		string Tooltip();
+		string Tooltip(List<ITooltip> combineList);
 	}
 }

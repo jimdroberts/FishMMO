@@ -23,49 +23,116 @@ namespace FishMMO.Shared
 
 		public virtual string Tooltip()
 		{
+			return PrimaryTooltip(null);
+		}
+
+		public virtual string Tooltip(List<ITooltip> combineList)
+		{
+			return PrimaryTooltip(combineList);
+		}
+
+		public virtual string GetFormattedDescription()
+		{
+			return Description;
+		}
+
+		private string PrimaryTooltip(List<ITooltip> combineList)
+		{
 			using (var sb = ZString.CreateStringBuilder())
 			{
 				sb.Append(RichText.Format(Name, false, "f5ad6e", "135%"));
-				sb.Append("\r\n______________________________\r\n");
-				sb.Append(RichText.Format(Description, true, "a66ef5FF"));
-				sb.Append("\r\n______________________________\r\n");
-				sb.Append(RichText.Format("Activation Time", ActivationTime, true, "a66ef5FF"));
-				sb.Append(RichText.Format("Active Time", ActiveTime, true, "a66ef5FF"));
-				sb.Append(RichText.Format("Cooldown", Cooldown, true, "a66ef5FF"));
-				sb.Append(RichText.Format("Range", Range, true, "a66ef5FF"));
-				sb.Append(RichText.Format("Speed", Speed, true, "a66ef5FF"));
-				if (Resources != null && Resources.Count > 0)
+				if (!string.IsNullOrWhiteSpace(Description))
 				{
 					sb.Append("\r\n______________________________\r\n");
-					sb.Append("<color=#a66ef5>Resources: </color>");
+					sb.Append(RichText.Format(GetFormattedDescription(), true, "a66ef5FF"));
+				}
 
-					foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in Resources)
+				float activationTime = ActivationTime;
+				float activeTime = ActiveTime;
+				float cooldown = Cooldown;
+				float range = Range;
+				float speed = Speed;
+				float price = Price;
+
+				AbilityResourceDictionary resources = new AbilityResourceDictionary();
+				resources.CopyFrom(Resources);
+
+				AbilityResourceDictionary requirements = new AbilityResourceDictionary();
+				requirements.CopyFrom(Requirements);
+
+				if (combineList != null)
+				{
+					foreach (BaseAbilityTemplate template in combineList)
 					{
-						if (!string.IsNullOrWhiteSpace(pair.Key.Name))
+						if (template == null ||
+							string.IsNullOrWhiteSpace(template.Description))
 						{
-							sb.Append(RichText.Format(pair.Key.Name, pair.Value, true, "f5ad6eFF", "120%"));
+							continue;
+						}
+						sb.Append(RichText.Format(template.GetFormattedDescription(), true, "a66ef5FF"));
+
+						activationTime += template.ActivationTime;
+						activeTime += template.ActiveTime;
+						cooldown += template.Cooldown;
+						range += template.Range;
+						speed += template.Speed;
+						price += template.Price;
+
+						foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in template.Resources)
+						{
+							if (!string.IsNullOrWhiteSpace(pair.Key.Name))
+							{
+								resources[pair.Key] += pair.Value;
+							}
+						}
+
+						foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in template.Requirements)
+						{
+							if (!string.IsNullOrWhiteSpace(pair.Key.Name))
+							{
+								requirements[pair.Key] += pair.Value;
+							}
 						}
 					}
 				}
-				if (Requirements != null && Requirements.Count > 0)
+				sb.Append("\r\n______________________________\r\n");
+				sb.Append(RichText.Format("Activation Time", activationTime, true, "a66ef5FF", "", "s"));
+				sb.Append(RichText.Format("Active Time", activeTime, true, "a66ef5FF", "", "s"));
+				sb.Append(RichText.Format("Cooldown", cooldown, true, "a66ef5FF", "", "s"));
+				sb.Append(RichText.Format("Range", range, true, "a66ef5FF", "", "m"));
+				sb.Append(RichText.Format("Speed", speed, true, "a66ef5FF", "", "m/s"));
+
+				if (resources != null && resources.Count > 0)
+				{
+					sb.Append("\r\n______________________________\r\n");
+					sb.Append("<color=#a66ef5>Resource Cost: </color>");
+
+					foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in resources)
+					{
+						if (!string.IsNullOrWhiteSpace(pair.Key.Name))
+						{
+							sb.Append(RichText.Format(pair.Key.Name, pair.Value, true, "f5ad6eFF", "", "","120%"));
+						}
+					}
+				}
+				if (requirements != null && requirements.Count > 0)
 				{
 					sb.Append("\r\n______________________________\r\n");
 					sb.Append("<color=#a66ef5>Requirements: </color>");
 
-					foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in Requirements)
+					foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in requirements)
 					{
 						if (!string.IsNullOrWhiteSpace(pair.Key.Name))
 						{
-							sb.Append(RichText.Format(pair.Key.Name, pair.Value, true, "f5ad6eFF", "120%"));
+							sb.Append(RichText.Format(pair.Key.Name, pair.Value, true, "f5ad6eFF", "", "", "120%"));
 						}
 					}
 				}
-				if (Price > 0)
+				if (price > 0)
 				{
 					sb.Append("\r\n______________________________\r\n");
-					sb.Append(RichText.Format("Price", Price, true, "a66ef5FF"));
+					sb.Append(RichText.Format("Price", price, true, "a66ef5FF"));
 				}
-				
 				return sb.ToString();
 			}
 		}

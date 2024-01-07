@@ -17,10 +17,10 @@ namespace FishMMO.Shared
 			return 0;
 		}
 
-		public override string Tooltip()
+		public override string GetFormattedDescription()
 		{
-			return base.Tooltip().Replace("$ARC$", Arc.ToString())
-								 .Replace("$DISTANCE$", Distance.ToString());
+			return Description.Replace("$ARC$", Arc.ToString())
+							  .Replace("$DISTANCE$", Distance.ToString());
 		}
 	}
 }

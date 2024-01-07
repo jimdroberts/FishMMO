@@ -13,12 +13,13 @@ MonoBehaviour:
   m_Name: Lesser Move Forward
   m_EditorClassIdentifier: 
   icon: {fileID: 21300000, guid: a9fd8f6b461461f4a92eafc60921ee78, type: 3}
-  Description: Makes an entity move forward.
+  Description: The object moves forward.
   ActivationTime: 0.25
   ActiveTime: 0
   Cooldown: 0
   Range: 50
   Speed: 10
+  Price: 0
   Resources:
     m_keys: []
     m_values: 

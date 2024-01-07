@@ -21,7 +21,7 @@ namespace FishMMO.Server
 		public float SaveRate = 60.0f;
 		private float nextSave = 0.0f;
 
-		public float OutOfBoundsCheckRate = 5f;
+		public float OutOfBoundsCheckRate = 2f;
 		private float nextOutOfBoundsCheck = 0.0f;
 
 		/// <summary>
@@ -82,8 +82,8 @@ namespace FishMMO.Server
 							// TODO: Try to prevent combat escape, maybe this needs to be handled on the game design level?
 							if(details.Boundaries.PointContainedInBoundaries(character.Transform.position) == false)
 							{
-								Vector3 spawnPoint = GetRandomRespawnPoint(details.RespawnPositions);
-								character.Motor.SetPositionAndRotationAndVelocity(spawnPoint, character.Transform.rotation, Vector3.zero);
+								RespawnPosition spawnPoint = GetRandomRespawnPoint(details.RespawnPositions);
+								character.Motor.SetPositionAndRotationAndVelocity(spawnPoint.Position, spawnPoint.Rotation, Vector3.zero);
 							}
 						}
 					}
@@ -684,9 +684,9 @@ namespace FishMMO.Server
 			return false;
 		}
 
-		private Vector3 GetRandomRespawnPoint(RespawnPositionDictionary respawnPoints)
+		private RespawnPosition GetRandomRespawnPoint(RespawnPositionDictionary respawnPoints)
 		{
-			Vector3[] spawnPoints = respawnPoints.Values.ToArray();
+			RespawnPosition[] spawnPoints = respawnPoints.Values.ToArray();
 
 			if (spawnPoints.Length == 0) throw new IndexOutOfRangeException("Failed to get a respawn point! Please ensure you have rebuilt your world scene cache and have respawn points in your scene!");
 

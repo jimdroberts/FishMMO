@@ -658,6 +658,8 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   Icon: {fileID: 2576642808262995974}
+  TooltipLabel: {fileID: 0}
+  ExtraTooltipInfo: 
 --- !u!1 &2576642810243110396
 GameObject:
   m_ObjectHideFlags: 0

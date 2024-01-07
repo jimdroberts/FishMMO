@@ -40,11 +40,11 @@ namespace FishMMO.Shared
 			return hits;
 		}
 
-		public override string Tooltip()
+		public override string GetFormattedDescription()
 		{
-			return base.Tooltip().Replace("$BUFF$", BuffTemplate.Name)
-								 .Replace("$STACKS$", Stacks.ToString())
-								 .Replace("$RADIUS$", Radius.ToString());
+			return Description.Replace("$BUFF$", BuffTemplate.Name)
+							  .Replace("$STACKS$", Stacks.ToString())
+							  .Replace("$RADIUS$", Radius.ToString());
 		}
 	}
 }

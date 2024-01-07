@@ -30,14 +30,15 @@ MonoBehaviour:
         m_keys:
         - Respawn 1
         m_values:
-        - {x: -131.45001, y: 18.11, z: 23.11}
+        - Position: {x: -131.45001, y: 18.11, z: 23.11}
+          Rotation: {x: -0, y: -0, z: -0, w: 1}
       Teleporters:
         m_keys:
         - CrushboneEntrance
         m_values:
         - ToScene: Greater Faydark
           ToPosition: {x: -2.52, y: 5.8199997, z: 28.605}
-          ToRotation: {x: -0, y: 0.7071068, z: -0, w: 0.7071068}
+          ToRotation: {x: -0, y: 1, z: -0, w: 0}
           SceneTransitionImage: {fileID: 0}
       Boundaries:
         m_keys:
@@ -53,24 +54,25 @@ MonoBehaviour:
         m_values:
         - SpawnerName: West Felwithe
           SceneName: Felwithe
-          Position: {x: 8, y: 2, z: 0}
+          Position: {x: -12.01, y: 68.579, z: -32.379997}
           Rotation: {x: -0, y: -0, z: -0, w: 1}
         - SpawnerName: East Felwithe
           SceneName: Felwithe
-          Position: {x: 26.76, y: 10, z: 1.21}
+          Position: {x: 7.7800007, y: 76.636, z: -31.169998}
           Rotation: {x: -0, y: 0.7071068, z: -0, w: 0.7071068}
       RespawnPositions:
         m_keys:
         - Respawn 1
         m_values:
-        - {x: 21.46, y: 9.6, z: 0}
+        - Position: {x: 2.4799995, y: 77.319, z: -32.379997}
+          Rotation: {x: -0, y: -0, z: -0, w: 1}
       Teleporters:
         m_keys:
         - FelwitheNorth
         m_values:
         - ToScene: Greater Faydark
           ToPosition: {x: -149.71, y: 10.07, z: 44.7}
-          ToRotation: {x: -0, y: -0, z: -0, w: 1}
+          ToRotation: {x: -0, y: 0.7071068, z: -0, w: 0.7071068}
           SceneTransitionImage: {fileID: 0}
       Boundaries:
         m_keys:
@@ -92,8 +94,10 @@ MonoBehaviour:
         - Respawn 1
         - Respawn 2
         m_values:
-        - {x: 0, y: 2, z: 0}
-        - {x: 224.6, y: 2, z: 0}
+        - Position: {x: 0, y: 2, z: 0}
+          Rotation: {x: -0, y: -0, z: -0, w: 1}
+        - Position: {x: 224.6, y: 2, z: 0}
+          Rotation: {x: -0, y: -0, z: -0, w: 1}
       Teleporters:
         m_keys:
         - GreaterFaydarkEast
@@ -101,15 +105,15 @@ MonoBehaviour:
         - GreaterFaydarkTeleporterA
         m_values:
         - ToScene: Felwithe
-          ToPosition: {x: -0.52, y: 1.67, z: 6.89}
-          ToRotation: {x: -0, y: 0.7071068, z: -0, w: 0.7071068}
+          ToPosition: {x: -19.869999, y: 68.32201, z: -25.629997}
+          ToRotation: {x: -0, y: 1, z: -0, w: 0}
           SceneTransitionImage: {fileID: 0}
         - ToScene: Crushbone
           ToPosition: {x: -131.45001, y: 18.11, z: 23.11}
-          ToRotation: {x: -0, y: -0, z: -0, w: 1}
+          ToRotation: {x: -0, y: 0.7071068, z: -0, w: 0.7071068}
           SceneTransitionImage: {fileID: 0}
         - ToScene: Felwithe
-          ToPosition: {x: -1.13, y: 5.79, z: 12.23}
+          ToPosition: {x: -20.109999, y: 73.218, z: -20.149998}
           ToRotation: {x: -0, y: 1, z: -0, w: 0}
           SceneTransitionImage: {fileID: 0}
       Boundaries:

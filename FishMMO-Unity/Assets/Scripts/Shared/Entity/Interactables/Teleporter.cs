@@ -106,8 +106,6 @@ namespace FishMMO.Shared
 			CharacterService.Save(dbContext, character, false);
 			dbContext.SaveChanges();
 
-			Debug.Log(character.CharacterName + " has been saved at: " + character.Transform.position.ToString());
-
 			NetworkConnection conn = character.Owner;
 			long worldServerId = character.WorldServerID;
 

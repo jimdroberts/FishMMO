@@ -1,5 +1,6 @@
 ﻿using Cysharp.Text;
 using UnityEngine;
+using System.Collections.Generic;
 
 namespace FishMMO.Shared
 {
@@ -29,6 +30,16 @@ namespace FishMMO.Shared
 				}
 				return sb.ToString();
 			}
+		}
+
+		public virtual string Tooltip(List<ITooltip> combineList)
+		{
+			return Tooltip();
+		}
+
+		public virtual string GetFormattedDescription()
+		{
+			return "";
 		}
 	}
 }
