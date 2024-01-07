@@ -1,4 +1,5 @@
 ﻿using FishNet.Broadcast;
+using System.Collections.Generic;
 
 namespace FishMMO.Shared
 {
@@ -7,28 +8,34 @@ namespace FishMMO.Shared
 	/// </summary>
 	public struct InteractableBroadcast : IBroadcast
 	{
-		public int InteractableID;
+		public int interactableID;
+	}
+
+	public struct AbilityCrafterBroadcast : IBroadcast
+	{
+		public int interactableID;
 	}
 
 	public struct AbilityCraftBroadcast : IBroadcast
 	{
-		public int InteractableID;
+		public int templateID;
+		public List<int> events;
 	}
 
 	public struct BankerBroadcast : IBroadcast
 	{
-		public int InteractableID;
+		public int interactableID;
 	}
 
 	public struct MerchantBroadcast : IBroadcast
 	{
-		public int ID;
+		public int id;
 	}
 
 	public struct MerchantPurchaseBroadcast : IBroadcast
 	{
-		public int ID;
-		public int Index;
-		public MerchantTabType Type;
+		public int id;
+		public int index;
+		public MerchantTabType type;
 	}
 }

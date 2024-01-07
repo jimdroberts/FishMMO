@@ -12,7 +12,7 @@ namespace FishMMO.Shared
 
 		private SceneObjectUID uid;
 
-		public float InteractionRange = 2.5f;
+		public float InteractionRange = 3.5f;
 
 		private float interactionRangeSqr;
 
@@ -67,7 +67,7 @@ namespace FishMMO.Shared
 #if !UNITY_SERVER
 				ClientManager.Broadcast(new InteractableBroadcast()
 				{
-					InteractableID = ID,
+					interactableID = ID,
 				}, Channel.Reliable);
 #endif
 				return true;

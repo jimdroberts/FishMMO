@@ -119,14 +119,38 @@ namespace FishMMO.Shared
 			Range += template.Range;
 			Speed += template.Speed;
 
+			if (Resources == null)
+			{
+				Resources = new AbilityResourceDictionary();
+			}
+
+			if (Requirements == null)
+			{
+				Requirements = new AbilityResourceDictionary();
+			}
+
 			foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in template.Resources)
 			{
-				Resources[pair.Key] += pair.Value;
+				if (!Resources.ContainsKey(pair.Key))
+				{
+					Resources[pair.Key] = pair.Value;
+				}
+				else
+				{
+					Resources[pair.Key] += pair.Value;
+				}
 			}
 
 			foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in template.Requirements)
 			{
-				Requirements[pair.Key] += pair.Value;
+				if (!Requirements.ContainsKey(pair.Key))
+				{
+					Requirements[pair.Key] = pair.Value;
+				}
+				else
+				{
+					Requirements[pair.Key] += pair.Value;
+				}
 			}
 		}
 
@@ -150,6 +174,10 @@ namespace FishMMO.Shared
 
 		public void AddAbilityEvent(AbilityEvent abilityEvent)
 		{
+			if (AbilityEvents == null)
+			{
+				AbilityEvents = new Dictionary<int, AbilityEvent>();
+			}
 			if (!AbilityEvents.ContainsKey(abilityEvent.ID))
 			{
 				CachedTooltip = null;
@@ -159,6 +187,14 @@ namespace FishMMO.Shared
 				SpawnEvent spawnEvent = abilityEvent as SpawnEvent;
 				if (spawnEvent != null)
 				{
+					if (PreSpawnEvents == null)
+					{
+						PreSpawnEvents = new Dictionary<int, SpawnEvent>();
+					}
+					if (SpawnEvents == null)
+					{
+						SpawnEvents = new Dictionary<int, SpawnEvent>();
+					}
 					switch (spawnEvent.SpawnEventType)
 					{
 						case SpawnEventType.OnPreSpawn:
@@ -182,6 +218,10 @@ namespace FishMMO.Shared
 					HitEvent hitEvent = abilityEvent as HitEvent;
 					if (hitEvent != null)
 					{
+						if (HitEvents == null)
+						{
+							HitEvents = new Dictionary<int, HitEvent>();
+						}
 						HitEvents.Add(abilityEvent.ID, hitEvent);
 					}
 					else
@@ -189,6 +229,10 @@ namespace FishMMO.Shared
 						MoveEvent moveEvent = abilityEvent as MoveEvent;
 						if (moveEvent != null)
 						{
+							if (MoveEvents == null)
+							{
+								MoveEvents = new Dictionary<int, MoveEvent>();
+							}
 							MoveEvents.Add(abilityEvent.ID, moveEvent);
 						}
 					}
@@ -201,11 +245,25 @@ namespace FishMMO.Shared
 				Speed += abilityEvent.Speed;
 				foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in abilityEvent.Resources)
 				{
-					Resources[pair.Key] += pair.Value;
+					if (!Resources.ContainsKey(pair.Key))
+					{
+						Resources[pair.Key] = pair.Value;
+					}
+					else
+					{
+						Resources[pair.Key] += pair.Value;
+					}
 				}
 				foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in abilityEvent.Requirements)
 				{
-					Requirements[pair.Key] += pair.Value;
+					if (!Requirements.ContainsKey(pair.Key))
+					{
+						Requirements[pair.Key] = pair.Value;
+					}
+					else
+					{
+						Requirements[pair.Key] += pair.Value;
+					}
 				}
 			}
 		}

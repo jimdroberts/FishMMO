@@ -11,7 +11,8 @@ namespace FishMMO.Client
 		private const int MAX_CRAFT_EVENT_SLOTS = 10;
 
 		public UITooltipButton MainEntry;
-		public TMP_Text AbilityDescription; 
+		public TMP_Text AbilityDescription;
+		public TMP_Text CraftCost;
 		public RectTransform AbilityEventParent;
 		public UITooltipButton AbilityEventPrefab;
 
@@ -44,15 +45,15 @@ namespace FishMMO.Client
 		{
 			if (args.ConnectionState == LocalConnectionState.Started)
 			{
-				Client.NetworkManager.ClientManager.RegisterBroadcast<AbilityCraftBroadcast>(OnClientAbilityCraftBroadcastReceived);
+				Client.NetworkManager.ClientManager.RegisterBroadcast<AbilityCrafterBroadcast>(OnClientAbilityCrafterBroadcastReceived);
 			}
 			else if (args.ConnectionState == LocalConnectionState.Stopped)
 			{
-				Client.NetworkManager.ClientManager.UnregisterBroadcast<AbilityCraftBroadcast>(OnClientAbilityCraftBroadcastReceived);
+				Client.NetworkManager.ClientManager.UnregisterBroadcast<AbilityCrafterBroadcast>(OnClientAbilityCrafterBroadcastReceived);
 			}
 		}
 
-		private void OnClientAbilityCraftBroadcastReceived(AbilityCraftBroadcast msg)
+		private void OnClientAbilityCrafterBroadcastReceived(AbilityCrafterBroadcast msg)
 		{
 			Show();
 		}
@@ -127,14 +128,23 @@ namespace FishMMO.Client
 			{
 				return;
 			}
-			if (MainEntry == null)
+			if (MainEntry == null ||
+				MainEntry.Tooltip == null)
 			{
 				AbilityDescription.text = "";
+				if (CraftCost != null)
+				{
+					CraftCost.text = "Cost: ";
+				}
 				return;
 			}
 
-			
-
+			long price = 0;
+			AbilityTemplate abilityTemplate = MainEntry.Tooltip as AbilityTemplate;
+			if (abilityTemplate != null)
+			{
+				price = abilityTemplate.Price;
+			}
 			if (EventSlots != null &&
 				EventSlots.Count > 0)
 			{
@@ -146,12 +156,22 @@ namespace FishMMO.Client
 						continue;
 					}
 					tooltips.Add(button.Tooltip);
+
+					AbilityEvent eventTemplate = button.Tooltip as AbilityEvent;
+					if (eventTemplate != null)
+					{
+						price += eventTemplate.Price;
+					}
 				}
 				AbilityDescription.text = MainEntry.Tooltip.Tooltip(tooltips);
 			}
 			else
 			{
 				AbilityDescription.text = MainEntry.Tooltip.Tooltip();
+			}
+			if (CraftCost != null)
+			{
+				CraftCost.text = "Cost: " + price.ToString();
 			}
 		}
 
@@ -191,6 +211,52 @@ namespace FishMMO.Client
 		public void OnCraft()
 		{
 			// craft it on the server
+			if (MainEntry == null)
+			{
+				return;
+			}
+
+			AbilityTemplate main = MainEntry.Tooltip as AbilityTemplate;
+			if (main == null)
+			{
+				return;
+			}
+
+			long price = main.Price;
+
+			List<int> eventIds = new List<int>();
+
+			if (EventSlots != null)
+			{
+				for (int i = 0; i < EventSlots.Count; ++i)
+				{
+					AbilityEvent template = EventSlots[i].Tooltip as AbilityEvent;
+					if (template != null)
+					{
+						eventIds.Add(template.ID);
+						price += template.Price;
+					}
+				}
+			}
+
+			if (Character.Currency < price)
+			{
+				return;
+			}
+
+			AbilityCraftBroadcast abilityAddBroadcast = new AbilityCraftBroadcast()
+			{
+				templateID = main.ID,
+				events = eventIds,
+			};
+
+			Client.NetworkManager.ClientManager?.Broadcast(abilityAddBroadcast, Channel.Reliable);
+
+			MainEntry.Clear();
+			ClearSlots();
+
+			// update the main description text
+			UpdateMainDescription();
 		}
 	}
 }

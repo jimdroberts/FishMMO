@@ -16,9 +16,9 @@ namespace FishMMO.Shared
 			}
 
 #if UNITY_SERVER
-			character.Owner.Broadcast(new AbilityCraftBroadcast()
+			character.Owner.Broadcast(new AbilityCrafterBroadcast()
 			{
-				InteractableID = ID,
+				interactableID = ID,
 			}, true, Channel.Reliable);
 #endif
 			return true;

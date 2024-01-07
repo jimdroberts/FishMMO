@@ -18,7 +18,7 @@ namespace FishMMO.Shared
 #if UNITY_SERVER
 			character.Owner.Broadcast(new BankerBroadcast()
 			{
-				InteractableID = ID,
+				interactableID = ID,
 			}, true, Channel.Reliable);
 #endif
 			return true;

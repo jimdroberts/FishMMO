@@ -9,6 +9,34 @@ namespace FishMMO.Server.DatabaseServices
 	public class CharacterAbilityService
 	{
 		/// <summary>
+		/// Attempts to add the new ability to the database if the character doesn't already know this ability.
+		/// </summary>
+		public static bool TryAdd(NpgsqlDbContext dbContext, long characterID, Ability ability)
+		{
+			if (ability == null)
+			{
+				return false;
+			}
+
+			var dbAbility = dbContext.CharacterAbilities.FirstOrDefault(c => c.CharacterID == characterID && c.ID == ability.ID);
+			// update or add to known abilities
+			if (dbAbility == null)
+			{
+				dbAbility = new CharacterAbilityEntity()
+				{
+					CharacterID = characterID,
+					TemplateID = ability.Template.ID,
+					AbilityEvents = ability.AbilityEvents.Keys.ToList(),
+				};
+				dbContext.CharacterAbilities.Add(dbAbility);
+				dbContext.SaveChanges();
+				ability.ID = dbAbility.ID;
+				return true;
+			}
+			return false;
+		}
+
+		/// <summary>
 		/// Adds a known ability for a character to the database using the Ability Template ID.
 		/// </summary>
 		public static void UpdateOrAdd(NpgsqlDbContext dbContext, long characterID, Ability ability)

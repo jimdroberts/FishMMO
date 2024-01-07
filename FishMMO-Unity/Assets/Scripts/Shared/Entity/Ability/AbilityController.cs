@@ -324,7 +324,8 @@ namespace FishMMO.Shared
 		{
 #if !UNITY_SERVER
 			// validate UI controls are focused so we aren't casting spells when hovering over interfaces.
-			if (!InputManager.MouseMode)
+			if (InputManager.MouseMode ||
+				!CanManipulate())
 			{
 				return;
 			}
@@ -351,10 +352,11 @@ namespace FishMMO.Shared
 		/// </summary>
 		private bool CanActivate(Ability ability)
 		{
-			return KnownAbilities.TryGetValue(ability.ID, out Ability knownAbility) &&
-					!Character.CooldownController.IsOnCooldown(knownAbility.Template.Name) &&
-					knownAbility.MeetsRequirements(Character) &&
-					knownAbility.HasResource(Character, BloodResourceConversionTemplate, BloodResourceTemplate);
+			return CanManipulate() &&
+				   KnownAbilities.TryGetValue(ability.ID, out Ability knownAbility) &&
+				   !Character.CooldownController.IsOnCooldown(knownAbility.Template.Name) &&
+				   knownAbility.MeetsRequirements(Character) &&
+				   knownAbility.HasResource(Character, BloodResourceConversionTemplate, BloodResourceTemplate);
 		}
 
 		internal void Cancel()

@@ -32,11 +32,13 @@ namespace FishMMO.Server
 			{
 				ServerManager.RegisterBroadcast<InteractableBroadcast>(OnServerInteractableBroadcastReceived, true);
 				ServerManager.RegisterBroadcast<MerchantPurchaseBroadcast>(OnServerMerchantPurchaseBroadcastReceived, true);
+				ServerManager.RegisterBroadcast<AbilityCraftBroadcast>(OnServerAbilityCraftBroadcastReceived, true);
 			}
 			else if (args.ConnectionState == LocalConnectionState.Stopped)
 			{
 				ServerManager.UnregisterBroadcast<InteractableBroadcast>(OnServerInteractableBroadcastReceived);
 				ServerManager.UnregisterBroadcast<MerchantPurchaseBroadcast>(OnServerMerchantPurchaseBroadcastReceived);
+				ServerManager.UnregisterBroadcast<AbilityCraftBroadcast>(OnServerAbilityCraftBroadcastReceived);
 			}
 		}
 
@@ -67,7 +69,7 @@ namespace FishMMO.Server
 				UnityEngine.Debug.Log("Missing Scene:" + character.SceneName);
 				return;
 			}
-			if (!SceneObjectUID.IDs.TryGetValue(msg.InteractableID, out SceneObjectUID sceneObject))
+			if (!SceneObjectUID.IDs.TryGetValue(msg.interactableID, out SceneObjectUID sceneObject))
 			{
 				if (sceneObject == null)
 				{
@@ -75,7 +77,7 @@ namespace FishMMO.Server
 				}
 				else
 				{
-					UnityEngine.Debug.Log("Missing ID:" + msg.InteractableID);
+					UnityEngine.Debug.Log("Missing ID:" + msg.interactableID);
 				}
 				return;
 			}
@@ -104,7 +106,7 @@ namespace FishMMO.Server
 			}
 
 			// validate request
-			MerchantTemplate merchantTemplate = MerchantTemplate.Get<MerchantTemplate>(msg.ID);
+			MerchantTemplate merchantTemplate = MerchantTemplate.Get<MerchantTemplate>(msg.id);
 			if (merchantTemplate == null)
 			{
 				return;
@@ -116,10 +118,10 @@ namespace FishMMO.Server
 				return;
 			}
 
-			switch (msg.Type)
+			switch (msg.type)
 			{
 				case MerchantTabType.Item:
-					BaseItemTemplate itemTemplate = merchantTemplate.Items[msg.Index];
+					BaseItemTemplate itemTemplate = merchantTemplate.Items[msg.index];
 					if (itemTemplate == null)
 					{
 						return;
@@ -132,7 +134,7 @@ namespace FishMMO.Server
 					}
 
 					if (merchantTemplate.Items != null &&
-						merchantTemplate.Items.Count >= msg.Index)
+						merchantTemplate.Items.Count >= msg.index)
 					{
 						Item newItem = new Item(itemTemplate, 1);
 						if (newItem == null)
@@ -186,16 +188,16 @@ namespace FishMMO.Server
 					break;
 				case MerchantTabType.Ability:
 					if (merchantTemplate.Abilities != null &&
-						merchantTemplate.Abilities.Count >= msg.Index)
+						merchantTemplate.Abilities.Count >= msg.index)
 					{
-						LearnAbilityTemplate(dbContext, conn, character, merchantTemplate.Abilities[msg.Index]);
+						LearnAbilityTemplate(dbContext, conn, character, merchantTemplate.Abilities[msg.index]);
 					}
 					break;
 				case MerchantTabType.AbilityEvent:
 					if (merchantTemplate.AbilityEvents != null &&
-						merchantTemplate.AbilityEvents.Count >= msg.Index)
+						merchantTemplate.AbilityEvents.Count >= msg.index)
 					{
-						LearnAbilityTemplate(dbContext, conn, character, merchantTemplate.AbilityEvents[msg.Index]);
+						LearnAbilityTemplate(dbContext, conn, character, merchantTemplate.AbilityEvents[msg.index]);
 					}
 					break;
 				default: return;
@@ -228,6 +230,94 @@ namespace FishMMO.Server
 			{
 				templateID = template.ID,
 			}, true, Channel.Reliable);
+		}
+
+		public void OnServerAbilityCraftBroadcastReceived(NetworkConnection conn, AbilityCraftBroadcast msg)
+		{
+			if (conn == null)
+			{
+				return;
+			}
+
+			// validate connection character
+			if (conn.FirstObject == null)
+			{
+				return;
+			}
+			Character character = conn.FirstObject.GetComponent<Character>();
+			if (character == null &&
+				character.AbilityController != null)
+			{
+				return;
+			}
+
+			// validate main ability exists
+			AbilityTemplate mainAbility = AbilityTemplate.Get<AbilityTemplate>(msg.templateID);
+			if (mainAbility == null)
+			{
+				return;
+			}
+
+			// validate that the character knows the main ability
+			if (!character.AbilityController.KnowsAbility(mainAbility.ID))
+			{
+				return;
+			}
+
+			long price = mainAbility.Price;
+
+			// validate eventIds if there are any...
+			if (msg.events != null)
+			{
+				for (int i = 0; i < msg.events.Count; ++i)
+				{
+					AbilityEvent eventTemplate = AbilityEvent.Get<AbilityEvent>(msg.events[i]);
+					if (eventTemplate == null)
+					{
+						// couldn't validate this event...
+						return;
+					}
+					// validate that the character knows the ability event
+					if (!character.AbilityController.KnowsAbility(eventTemplate.ID))
+					{
+						return;
+					}
+					price += eventTemplate.Price;
+				}
+			}
+
+			if (character.Currency < price)
+			{
+				return;
+			}
+
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
+			if (dbContext == null)
+			{
+				return;
+			}
+
+			Ability newAbility = new Ability(mainAbility, msg.events);
+			if (newAbility == null)
+			{
+				return;
+			}
+
+			if (CharacterAbilityService.TryAdd(dbContext, character.ID, newAbility))
+			{
+				character.AbilityController.LearnAbility(newAbility);
+
+				character.Currency -= price;
+
+				AbilityAddBroadcast abilityAddBroadcast = new AbilityAddBroadcast()
+				{
+					id = newAbility.ID,
+					templateID = newAbility.Template.ID,
+					events = msg.events,
+				};
+
+				conn.Broadcast(abilityAddBroadcast, true, Channel.Reliable);
+			}
 		}
 	}
 }

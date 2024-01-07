@@ -29,7 +29,7 @@ namespace FishMMO.Shared
 #if UNITY_SERVER
 			character.Owner.Broadcast(new MerchantBroadcast()
 			{
-				ID = Template.ID,
+				id = Template.ID,
 			}, true, Channel.Reliable);
 #endif
 			return true;
