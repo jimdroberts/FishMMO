@@ -5,7 +5,7 @@ namespace FishMMO.Shared
 	[CreateAssetMenu(fileName = "New Area Damage Hit Event", menuName = "Character/Ability/Hit Event/Area Damage", order = 1)]
 	public sealed class AreaDamageHitEvent : HitEvent
 	{
-		private Collider[] colliders = new Collider[100];
+		private Collider[] colliders = new Collider[10];
 
 		public int HitCount;
 		public int Damage;

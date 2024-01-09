@@ -45,7 +45,13 @@ namespace FishMMO.Shared
 
 		void OnCollisionEnter(Collision other)
 		{
+			/*if (other.collider.gameObject.layer == Constants.Layers.Ground)
+			{
+				Debug.Log("Ground");
+			}*/
+
 			Character hitCharacter = other.gameObject.GetComponent<Character>();
+
 			if (Ability != null)
 			{
 				foreach (HitEvent hitEvent in Ability.HitEvents.Values)
@@ -62,7 +68,8 @@ namespace FishMMO.Shared
 				}
 			}
 
-			if (hitCharacter == null || HitCount < 1)
+			if (hitCharacter == null ||
+				HitCount < 1)
 			{
 				Destroy();
 			}
@@ -72,8 +79,8 @@ namespace FishMMO.Shared
 		{
 			// TODO - add pooling to destroys ability objects
 			Ability.RemoveAbilityObject(ContainerID, ID);
-			gameObject.SetActive(false);
 			Destroy(gameObject);
+			gameObject.SetActive(false);
 		}
 
 		/// <summary>

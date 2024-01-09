@@ -102,8 +102,15 @@ namespace FishMMO.Shared
 				}
 				resourceInstance.Consume(amount);
 
-				attacker.AchievementController.Increment(DamageAchievementTemplate, (uint)amount);
-				Character.AchievementController.Increment(DamagedAchievementTemplate, (uint)amount);
+				if (attacker.AchievementController != null)
+				{
+					attacker.AchievementController.Increment(DamageAchievementTemplate, (uint)amount);
+				}
+				
+				if (Character.AchievementController != null)
+				{
+					Character.AchievementController.Increment(DamagedAchievementTemplate, (uint)amount);
+				}
 
 #if !UNITY_SERVER
 				if (ShowDamage)

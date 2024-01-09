@@ -25,6 +25,7 @@ namespace FishMMO.Shared
 		public static class Layers
 		{
 			public static readonly LayerMask Default = LayerMask.NameToLayer("Default");
+			public static readonly LayerMask Ground = LayerMask.NameToLayer("Ground");
 			public static readonly LayerMask LocalEntity = LayerMask.NameToLayer("LocalEntity");
 		}
 
