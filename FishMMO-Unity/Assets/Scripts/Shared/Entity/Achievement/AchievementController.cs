@@ -90,7 +90,7 @@ namespace FishMMO.Shared
 
 		public void SetAchievement(int templateID, byte tier, uint value)
 		{
-			if (achievements != null)
+			if (achievements == null)
 			{
 				achievements = new Dictionary<int, Achievement>();
 			}
@@ -113,7 +113,11 @@ namespace FishMMO.Shared
 
 		public void Increment(AchievementTemplate template, uint amount)
 		{
-			if (achievements != null)
+			if (template == null)
+			{
+				return;
+			}
+			if (achievements == null)
 			{
 				achievements = new Dictionary<int, Achievement>();
 			}

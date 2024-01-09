@@ -21,6 +21,9 @@ EditorBuildSettings:
     path: Assets/Scenes/Bootstraps/SceneServer.unity
     guid: 7e1b8e5abbda71a4b9f84cee5252b68c
   - enabled: 1
+    path: Assets/Scenes/WorldScene/Crushbone.unity
+    guid: 4421ff33e86120247a8ae615ef06f2c7
+  - enabled: 1
     path: Assets/Scenes/WorldScene/Felwithe.unity
     guid: e8a5917e2e784024a83eee958f6f9689
   - enabled: 1
