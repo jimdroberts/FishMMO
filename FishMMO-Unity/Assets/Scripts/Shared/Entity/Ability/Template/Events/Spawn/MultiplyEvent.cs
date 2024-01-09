@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
+using SceneManager = UnityEngine.SceneManagement.SceneManager;
 
 namespace FishMMO.Shared
 {
@@ -16,6 +17,7 @@ namespace FishMMO.Shared
 				{
 					// create/fetch from pool
 					GameObject go = new GameObject(initialObject.name);
+					SceneManager.MoveGameObjectToScene(go, self.gameObject.scene);
 					go.SetActive(false);
 
 					// construct additional ability objects

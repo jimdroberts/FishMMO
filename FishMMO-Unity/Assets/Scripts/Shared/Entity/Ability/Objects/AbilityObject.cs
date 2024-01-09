@@ -1,4 +1,5 @@
 ﻿using UnityEngine;
+using SceneManager = UnityEngine.SceneManagement.SceneManager;
 using System.Collections.Generic;
 
 namespace FishMMO.Shared
@@ -45,7 +46,9 @@ namespace FishMMO.Shared
 
 		void OnCollisionEnter(Collision other)
 		{
-			/*if (other.collider.gameObject.layer == Constants.Layers.Ground)
+			/*Debug.Log("Hit");
+
+			if (other.collider.gameObject.layer == Constants.Layers.Ground)
 			{
 				Debug.Log("Ground");
 			}*/
@@ -77,8 +80,11 @@ namespace FishMMO.Shared
 
 		internal void Destroy()
 		{
-			// TODO - add pooling to destroys ability objects
+			//Debug.Log("Destroyed " + gameObject.name);
+			// TODO - add pooling instead of destroying ability objects
 			Ability.RemoveAbilityObject(ContainerID, ID);
+			Ability = null;
+			Caster = null;
 			Destroy(gameObject);
 			gameObject.SetActive(false);
 		}
@@ -88,7 +94,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <param name="self"></param>
 		/// <param name="targetInfo"></param>
-		public static bool TrySpawn(Ability ability, Character self, AbilityController controller, Transform abilitySpawner, TargetInfo targetInfo)
+		public static bool TrySpawn(Ability ability, Character caster, AbilityController controller, Transform abilitySpawner, TargetInfo targetInfo)
 		{
 			AbilityTemplate template = ability.Template;
 
@@ -106,11 +112,12 @@ namespace FishMMO.Shared
 
 			// TODO create/fetch from pool
 			GameObject go = Instantiate(template.FXPrefab);
+			SceneManager.MoveGameObjectToScene(go, caster.gameObject.scene);
 			Transform t = go.transform;
 			switch (template.AbilitySpawnTarget)
 			{
 				case AbilitySpawnTarget.Self:
-					t.SetPositionAndRotation(self.Transform.position, self.Transform.rotation);
+					t.SetPositionAndRotation(caster.Transform.position, caster.Transform.rotation);
 					break;
 				case AbilitySpawnTarget.Hand:
 					t.SetPositionAndRotation(abilitySpawner.position, abilitySpawner.rotation);
@@ -118,11 +125,11 @@ namespace FishMMO.Shared
 				case AbilitySpawnTarget.Target:
 					if (targetInfo.HitPosition != null)
 					{
-						t.SetPositionAndRotation(targetInfo.HitPosition, self.Transform.rotation);
+						t.SetPositionAndRotation(targetInfo.HitPosition, caster.Transform.rotation);
 					}
 					else
 					{
-						t.SetPositionAndRotation(targetInfo.Target.position, self.Transform.rotation);
+						t.SetPositionAndRotation(targetInfo.Target.position, caster.Transform.rotation);
 					}
 					break;
 				default:
@@ -138,7 +145,7 @@ namespace FishMMO.Shared
 			}
 			abilityObject.ID = 0;
 			abilityObject.Ability = ability;
-			abilityObject.Caster = self;
+			abilityObject.Caster = caster;
 			abilityObject.HitCount = template.HitCount;
 			abilityObject.RemainingActiveTime = ability.ActiveTime * controller.CalculateSpeedReduction(controller.AttackSpeedReductionTemplate);
 
@@ -167,7 +174,7 @@ namespace FishMMO.Shared
 			{
 				foreach (SpawnEvent spawnEvent in ability.PreSpawnEvents.Values)
 				{
-					spawnEvent.Invoke(self, targetInfo, abilityObject, ref id, abilityObjects);
+					spawnEvent.Invoke(caster, targetInfo, abilityObject, ref id, abilityObjects);
 				}
 			}
 
@@ -176,7 +183,7 @@ namespace FishMMO.Shared
 			{
 				foreach (SpawnEvent spawnEvent in ability.SpawnEvents.Values)
 				{
-					spawnEvent.Invoke(self, targetInfo, abilityObject, ref id, abilityObjects);
+					spawnEvent.Invoke(caster, targetInfo, abilityObject, ref id, abilityObjects);
 				}
 			}
 
@@ -186,6 +193,8 @@ namespace FishMMO.Shared
 				obj.gameObject.SetActive(true);
 			}
 			abilityObject.gameObject.SetActive(true);
+
+			//Debug.Log("Activated " + abilityObject.gameObject.name);
 
 			return true;
 		}
