@@ -113,6 +113,11 @@ namespace FishMMO.Shared
 			if (baseAbilityTemplate != null)
 			{
 				LearnBaseAbilities(new List<BaseAbilityTemplate>() { baseAbilityTemplate });
+
+				if (UIManager.TryGet("UIAbilities", out UIAbilities uiAbilities))
+				{
+					uiAbilities.AddKnownAbility(baseAbilityTemplate.ID, baseAbilityTemplate);
+				}
 			}
 		}
 
@@ -128,6 +133,11 @@ namespace FishMMO.Shared
 				if (baseAbilityTemplate != null)
 				{
 					templates.Add(baseAbilityTemplate);
+
+					if (UIManager.TryGet("UIAbilities", out UIAbilities uiAbilities))
+					{
+						uiAbilities.AddKnownAbility(baseAbilityTemplate.ID, baseAbilityTemplate);
+					}
 				}
 			}
 			LearnBaseAbilities(templates);
@@ -141,7 +151,13 @@ namespace FishMMO.Shared
 			AbilityTemplate abilityTemplate = AbilityTemplate.Get<AbilityTemplate>(msg.templateID);
 			if (abilityTemplate != null)
 			{
-				LearnAbility(new Ability(msg.id, abilityTemplate, msg.events));
+				Ability newAbility = new Ability(msg.id, abilityTemplate, msg.events);
+				LearnAbility(newAbility);
+
+				if (UIManager.TryGet("UIAbilities", out UIAbilities uiAbilities))
+				{
+					uiAbilities.AddAbility(newAbility.ID, newAbility);
+				}
 			}
 		}
 
@@ -155,7 +171,13 @@ namespace FishMMO.Shared
 				AbilityTemplate abilityTemplate = AbilityTemplate.Get<AbilityTemplate>(ability.templateID);
 				if (abilityTemplate != null)
 				{
-					LearnAbility(new Ability(ability.id, abilityTemplate, ability.events));
+					Ability newAbility = new Ability(ability.id, abilityTemplate, ability.events);
+					LearnAbility(newAbility);
+
+					if (UIManager.TryGet("UIAbilities", out UIAbilities uiAbilities))
+					{
+						uiAbilities.AddAbility(newAbility.ID, newAbility);
+					}
 				}
 			}
 		}
@@ -275,7 +297,8 @@ namespace FishMMO.Shared
 				interruptQueued = false;
 				currentAbility = validatedAbility;
 				remainingTime = validatedAbility.ActivationTime * CalculateSpeedReduction(validatedAbility.Template.ActivationSpeedReductionAttribute);
-				if (validatedAbility.HasAbilityEvent(ChanneledTemplate.ID) || validatedAbility.HasAbilityEvent(ChargedTemplate.ID))
+				if ((ChanneledTemplate != null && validatedAbility.HasAbilityEvent(ChanneledTemplate.ID)) ||
+					(ChargedTemplate != null && validatedAbility.HasAbilityEvent(ChargedTemplate.ID)))
 				{
 					heldKey = activationData.HeldKey;
 				}
@@ -320,7 +343,7 @@ namespace FishMMO.Shared
 		}
 
 
-		public void Activate(int referenceID, KeyCode heldKey)
+		public void Activate(long referenceID, KeyCode heldKey)
 		{
 #if !UNITY_SERVER
 			// validate UI controls are focused so we aren't casting spells when hovering over interfaces.

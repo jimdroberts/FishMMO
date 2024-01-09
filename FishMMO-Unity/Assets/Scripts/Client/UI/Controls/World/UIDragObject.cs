@@ -5,10 +5,10 @@ namespace FishMMO.Client
 {
 	public class UIDragObject : UIControl
 	{
-		public const int NULL_REFERENCE_ID = -1;
+		public const long NULL_REFERENCE_ID = -1;
 
 		public Image Icon;
-		public int ReferenceID = NULL_REFERENCE_ID;
+		public long ReferenceID = NULL_REFERENCE_ID;
 		public ReferenceButtonType Type = ReferenceButtonType.None;
 
 		public LayerMask LayerMask;
@@ -59,7 +59,7 @@ namespace FishMMO.Client
 			}
 		}
 
-		public void SetReference(Sprite icon, int referenceID, ReferenceButtonType type)
+		public void SetReference(Sprite icon, long referenceID, ReferenceButtonType type)
 		{
 			Icon.sprite = icon;
 			ReferenceID = referenceID;

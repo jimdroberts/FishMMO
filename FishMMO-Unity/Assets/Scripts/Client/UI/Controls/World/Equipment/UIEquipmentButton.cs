@@ -14,24 +14,26 @@ namespace FishMMO.Client
 				{
 					if (dragObject.Visible)
 					{
+						int referenceID = (int)dragObject.ReferenceID;
+
 						// we check the hotkey type because we can only equip items from the inventory
 						if (dragObject.Type == ReferenceButtonType.Inventory)
 						{
 							// get the item from the Inventory
-							Item item = Character.InventoryController.Items[dragObject.ReferenceID];
+							Item item = Character.InventoryController.Items[referenceID];
 							if (item != null)
 							{
-								Character.EquipmentController.SendEquipRequest(dragObject.ReferenceID, (byte)ItemSlotType, InventoryType.Inventory);
+								Character.EquipmentController.SendEquipRequest(referenceID, (byte)ItemSlotType, InventoryType.Inventory);
 							}
 						}
 						// taking an item from the bank and putting it in this equipment slot
 						else if (dragObject.Type == ReferenceButtonType.Bank)
 						{
 							// get the item from the Inventory
-							Item item = Character.BankController.Items[dragObject.ReferenceID];
+							Item item = Character.BankController.Items[referenceID];
 							if (item != null)
 							{
-								Character.EquipmentController.SendEquipRequest(dragObject.ReferenceID, (byte)ItemSlotType, InventoryType.Bank);
+								Character.EquipmentController.SendEquipRequest(referenceID, (byte)ItemSlotType, InventoryType.Bank);
 							}
 						}
 

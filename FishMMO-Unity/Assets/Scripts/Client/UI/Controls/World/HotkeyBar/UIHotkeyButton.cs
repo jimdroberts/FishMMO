@@ -47,13 +47,11 @@ namespace FishMMO.Client
 				{
 					case ReferenceButtonType.None:
 						break;
-					case ReferenceButtonType.Any:
-						break;
 					case ReferenceButtonType.Inventory:
-						Character.InventoryController.Activate(ReferenceID);
+						Character.InventoryController.Activate((int)ReferenceID);
 						break;
 					case ReferenceButtonType.Equipment:
-						Character.EquipmentController.Activate(ReferenceID);
+						Character.EquipmentController.Activate((int)ReferenceID);
 						break;
 					case ReferenceButtonType.Bank:
 						break;

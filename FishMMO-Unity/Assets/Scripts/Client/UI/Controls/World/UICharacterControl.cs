@@ -12,6 +12,7 @@ namespace FishMMO.Client
 
 		public override void OnDestroying()
 		{
+			Character = null;
 		}
 
 		public virtual void Show(Character character)

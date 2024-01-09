@@ -371,8 +371,7 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   ReferenceID: -1
-  AllowedType: 1
-  Type: 0
+  Type: 2
   Icon: {fileID: 2362971973797331932}
   CooldownText: {fileID: 0}
   AmountText: {fileID: 0}
@@ -571,8 +570,7 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   ReferenceID: -1
-  AllowedType: 1
-  Type: 0
+  Type: 2
   Icon: {fileID: 1907611614957482615}
   CooldownText: {fileID: 0}
   AmountText: {fileID: 0}
@@ -866,8 +864,7 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   ReferenceID: -1
-  AllowedType: 1
-  Type: 0
+  Type: 2
   Icon: {fileID: 5842664889070716263}
   CooldownText: {fileID: 0}
   AmountText: {fileID: 0}
@@ -994,8 +991,7 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   ReferenceID: -1
-  AllowedType: 1
-  Type: 0
+  Type: 2
   Icon: {fileID: 6327520701877548762}
   CooldownText: {fileID: 0}
   AmountText: {fileID: 0}
@@ -1366,8 +1362,7 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   ReferenceID: -1
-  AllowedType: 1
-  Type: 0
+  Type: 2
   Icon: {fileID: 6267693927705948555}
   CooldownText: {fileID: 0}
   AmountText: {fileID: 0}
@@ -1703,8 +1698,7 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   ReferenceID: -1
-  AllowedType: 1
-  Type: 0
+  Type: 2
   Icon: {fileID: 7212207351085391166}
   CooldownText: {fileID: 0}
   AmountText: {fileID: 0}
@@ -1831,8 +1825,7 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   ReferenceID: -1
-  AllowedType: 1
-  Type: 0
+  Type: 2
   Icon: {fileID: 7296013012832619048}
   CooldownText: {fileID: 0}
   AmountText: {fileID: 0}

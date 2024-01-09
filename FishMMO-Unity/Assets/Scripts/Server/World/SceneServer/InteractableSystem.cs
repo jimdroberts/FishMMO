@@ -13,6 +13,7 @@ namespace FishMMO.Server
 	public class InteractableSystem : ServerBehaviour
 	{
 		public WorldSceneDetailsCache WorldSceneDetailsCache;
+		public int MaxAbilityCount = 25;
 
 		public override void InitializeOnce()
 		{
@@ -294,6 +295,12 @@ namespace FishMMO.Server
 			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 			if (dbContext == null)
 			{
+				return;
+			}
+
+			if (CharacterAbilityService.GetCount(dbContext, character.ID) >= MaxAbilityCount)
+			{
+				// too many abilities! tell the player to forget a few of them first...
 				return;
 			}
 

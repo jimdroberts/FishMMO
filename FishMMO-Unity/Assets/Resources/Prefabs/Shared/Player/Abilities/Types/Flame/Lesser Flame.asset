@@ -19,6 +19,7 @@ MonoBehaviour:
   Cooldown: 1
   Range: 0
   Speed: 0
+  Price: 0
   Resources:
     m_keys:
     - {fileID: 11400000, guid: f627a40e6b3ef5349b3c735f0bfd60c7, type: 2}
@@ -26,7 +27,8 @@ MonoBehaviour:
   Requirements:
     m_keys: []
     m_values: 
-  FXPrefab: {fileID: 0}
+  FXPrefab: {fileID: 5773491593115871611, guid: 81dd6c8841df66e44ad306e2ef34aaee,
+    type: 3}
   AbilitySpawnTarget: 1
   RequiresTarget: 0
   EventSlots: 3

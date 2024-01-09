@@ -121,8 +121,7 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   ReferenceID: -1
-  AllowedType: 1
-  Type: 2
+  Type: 1
   Icon: {fileID: 1185101213546960673}
   CooldownText: {fileID: 0}
   AmountText: {fileID: 0}

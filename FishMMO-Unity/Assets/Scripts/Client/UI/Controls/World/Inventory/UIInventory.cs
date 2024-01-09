@@ -58,7 +58,6 @@ namespace FishMMO.Client
 				UIInventoryButton button = Instantiate(buttonPrefab, content);
 				button.Character = Character;
 				button.ReferenceID = i;
-				button.AllowedType = ReferenceButtonType.Any;
 				button.Type = ReferenceButtonType.Inventory;
 				if (Character.InventoryController.TryGetItem(i, out Item item))
 				{

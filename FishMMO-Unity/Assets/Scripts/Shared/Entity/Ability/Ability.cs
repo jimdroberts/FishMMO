@@ -1,5 +1,4 @@
 ﻿using System.Collections.Generic;
-using Cysharp.Text;
 
 namespace FishMMO.Shared
 {
@@ -345,7 +344,10 @@ namespace FishMMO.Shared
 
 		public bool HasResource(Character character, AbilityEvent bloodResourceConversion, CharacterAttributeTemplate bloodResource)
 		{
-			if (AbilityEvents.ContainsKey(bloodResourceConversion.ID))
+			if (AbilityEvents != null &&
+				bloodResourceConversion != null &&
+				bloodResource != null &&
+				AbilityEvents.ContainsKey(bloodResourceConversion.ID))
 			{
 				int totalCost = TotalResourceCost;
 
@@ -373,7 +375,10 @@ namespace FishMMO.Shared
 
 		public void ConsumeResources(CharacterAttributeController attributeController, AbilityEvent bloodResourceConversion, CharacterAttributeTemplate bloodResource)
 		{
-			if (bloodResourceConversion != null && AbilityEvents.ContainsKey(bloodResourceConversion.ID))
+			if (AbilityEvents != null &&
+				bloodResourceConversion != null &&
+				bloodResource != null &&
+				AbilityEvents.ContainsKey(bloodResourceConversion.ID))
 			{
 				int totalCost = TotalResourceCost;
 
@@ -408,91 +413,14 @@ namespace FishMMO.Shared
 
 		public string Tooltip()
 		{
-			if (CachedTooltip != null)
+			if (!string.IsNullOrWhiteSpace(CachedTooltip))
 			{
 				return CachedTooltip;
 			}
-			using (var sb = ZString.CreateStringBuilder())
-			{
-				sb.Append("<size=120%><color=#f5ad6e>");
-				sb.Append(Template.Name);
-				sb.Append("</color></size>");
-				sb.AppendLine();
-				sb.Append("<color=#a66ef5>ID: ");
-				sb.Append(ID);
-				sb.Append("</color>");
-				sb.AppendLine();
-				sb.Append("<color=#a66ef5>TemplateID: ");
-				sb.Append(Template.ID);
-				sb.Append("</color>");
-				sb.AppendLine();
-				sb.Append("<color=#a66ef5>Activation Time: ");
-				sb.Append(ActivationTime);
-				sb.Append("</color>");
-				sb.AppendLine();
-				sb.Append("<color=#a66ef5>Active Time: ");
-				sb.Append(ActiveTime);
-				sb.Append("</color>");
-				sb.AppendLine();
-				sb.Append("<color=#a66ef5>Cooldown: ");
-				sb.Append(Cooldown);
-				sb.Append("</color>");
-				sb.AppendLine();
-				sb.Append("<color=#a66ef5>Range: ");
-				sb.Append(Range);
-				sb.Append("</color>");
-				sb.AppendLine();
-				sb.Append("<color=#a66ef5>Speed: ");
-				sb.Append(Speed);
-				sb.Append("</color>");
-				if (Resources != null && Resources.Count > 0)
-				{
-					sb.AppendLine();
-					sb.Append("<color=#a66ef5>Resources: </color>");
 
-					foreach (CharacterAttributeTemplate attribute in Resources.Keys)
-					{
-						if (!string.IsNullOrWhiteSpace(attribute.Name))
-						{
-							sb.AppendLine();
-							sb.Append("<size=120%><color=#f5ad6e>");
-							sb.Append(attribute.Name);
-							sb.Append("</color></size>");
-						}
-					}
-				}
-				if (Requirements != null && Requirements.Count > 0)
-				{
-					sb.AppendLine();
-					sb.Append("<color=#a66ef5>Requirements: </color>");
+			CachedTooltip = Template.Tooltip(new List<ITooltip>(AbilityEvents.Values));
 
-					foreach (CharacterAttributeTemplate attribute in Requirements.Keys)
-					{
-						if (!string.IsNullOrWhiteSpace(attribute.Name))
-						{
-							sb.AppendLine();
-							sb.Append("<size=120%><color=#f5ad6e>");
-							sb.Append(attribute.Name);
-							sb.Append("</color></size>");
-						}
-					}
-				}
-				if (AbilityEvents != null && AbilityEvents.Count > 0)
-				{
-					sb.AppendLine();
-					sb.Append("<color=#a66ef5>Ability Events: </color>");
-
-					foreach (AbilityEvent abilityEvent in AbilityEvents.Values)
-					{
-						sb.AppendLine();
-						sb.Append(abilityEvent.Name);
-						sb.AppendLine();
-						sb.Append(abilityEvent.Description);
-					}
-				}
-				CachedTooltip = sb.ToString();
-				return CachedTooltip;
-			}
+			return CachedTooltip;
 		}
 	}
 }

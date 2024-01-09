@@ -85,7 +85,14 @@ namespace FishMMO.Shared
 		{
 			AbilityTemplate template = ability.Template;
 
-			if (template.RequiresTarget && targetInfo.Target == null)
+			if (template == null ||
+				template.FXPrefab == null)
+			{
+				return false;
+			}
+
+			if (template.RequiresTarget &&
+				targetInfo.Target == null)
 			{
 				return false;
 			}
@@ -149,15 +156,21 @@ namespace FishMMO.Shared
 			id = 0;
 
 			// handle pre spawn events
-			foreach (SpawnEvent spawnEvent in ability.PreSpawnEvents.Values)
+			if (ability.PreSpawnEvents != null)
 			{
-				spawnEvent.Invoke(self, targetInfo, abilityObject, ref id, abilityObjects);
+				foreach (SpawnEvent spawnEvent in ability.PreSpawnEvents.Values)
+				{
+					spawnEvent.Invoke(self, targetInfo, abilityObject, ref id, abilityObjects);
+				}
 			}
 
 			// handle spawn events
-			foreach (SpawnEvent spawnEvent in ability.SpawnEvents.Values)
+			if (ability.SpawnEvents != null)
 			{
-				spawnEvent.Invoke(self, targetInfo, abilityObject, ref id, abilityObjects);
+				foreach (SpawnEvent spawnEvent in ability.SpawnEvents.Values)
+				{
+					spawnEvent.Invoke(self, targetInfo, abilityObject, ref id, abilityObjects);
+				}
 			}
 
 			// finalize
@@ -165,6 +178,7 @@ namespace FishMMO.Shared
 			{
 				obj.gameObject.SetActive(true);
 			}
+			abilityObject.gameObject.SetActive(true);
 
 			return true;
 		}

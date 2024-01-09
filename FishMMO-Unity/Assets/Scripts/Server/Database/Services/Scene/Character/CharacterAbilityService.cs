@@ -8,6 +8,11 @@ namespace FishMMO.Server.DatabaseServices
 {
 	public class CharacterAbilityService
 	{
+		public static int GetCount(NpgsqlDbContext dbContext, long characterID)
+		{
+			return dbContext.CharacterAbilities.Where((c) => c.CharacterID == characterID).Count();
+		}
+
 		/// <summary>
 		/// Adds a known ability for a character to the database using the Ability Template ID.
 		/// </summary>

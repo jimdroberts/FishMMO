@@ -11,15 +11,14 @@ namespace FishMMO.Client
 	/// </summary>
 	public class UIReferenceButton : Button
 	{
-		public const int NULL_REFERENCE_ID = -1;
+		public const long NULL_REFERENCE_ID = -1;
 
-		private UITooltip currentUITooltip;
+		protected UITooltip currentUITooltip;
 
 		/// <summary>
 		/// ReferenceID is equal to the inventory slot, equipment slot, or ability id based on Reference Type.
 		/// </summary>
-		public int ReferenceID = NULL_REFERENCE_ID;
-		public ReferenceButtonType AllowedType = ReferenceButtonType.Any;
+		public long ReferenceID = NULL_REFERENCE_ID;
 		public ReferenceButtonType Type = ReferenceButtonType.None;
 		[SerializeField]
 		public Image Icon;
@@ -44,50 +43,55 @@ namespace FishMMO.Client
 		{
 			base.OnPointerEnter(eventData);
 
-			if (Character != null && ReferenceID > -1)
+			ShowTooltip(Character, ReferenceID);
+		}
+
+		public virtual void ShowTooltip(Character character, long referenceID)
+		{
+			if (character == null ||
+				referenceID < 0)
 			{
-				switch (Type)
-				{
-					case ReferenceButtonType.None:
-						break;
-					case ReferenceButtonType.Any:
-						break;
-					case ReferenceButtonType.Inventory:
-						if (Character.InventoryController != null &&
-							Character.InventoryController.TryGetItem(ReferenceID, out Item inventoryItem) &&
-							UIManager.TryGet("UITooltip", out currentUITooltip))
-						{
-							currentUITooltip.Open(inventoryItem.Tooltip());
-						}
-						break;
-					case ReferenceButtonType.Equipment:
-						if (Character.EquipmentController != null &&
-							Character.EquipmentController.TryGetItem(ReferenceID, out Item equippedItem) &&
-							UIManager.TryGet("UITooltip", out currentUITooltip))
-						{
-							currentUITooltip.Open(equippedItem.Tooltip());
-						}
-						break;
-					case ReferenceButtonType.Bank:
-						if (Character.BankController != null &&
-							Character.BankController.TryGetItem(ReferenceID, out Item bankItem) &&
-							UIManager.TryGet("UITooltip", out currentUITooltip))
-						{
-							currentUITooltip.Open(bankItem.Tooltip());
-						}
-						break;
-					case ReferenceButtonType.Ability:
-						if (Character.AbilityController.KnownAbilities != null &&
-							Character.AbilityController.KnownAbilities.TryGetValue(ReferenceID, out Ability ability) &&
-							UIManager.TryGet("UITooltip", out currentUITooltip))
-						{
-							currentUITooltip.Open(ability.Tooltip());
-						}
-						break;
-					default:
-						return;
-				};
+				return;
 			}
+			switch (Type)
+			{
+				case ReferenceButtonType.None:
+					break;
+				case ReferenceButtonType.Inventory:
+					if (character.InventoryController != null &&
+						character.InventoryController.TryGetItem((int)referenceID, out Item inventoryItem) &&
+						UIManager.TryGet("UITooltip", out currentUITooltip))
+					{
+						currentUITooltip.Open(inventoryItem.Tooltip());
+					}
+					break;
+				case ReferenceButtonType.Equipment:
+					if (character.EquipmentController != null &&
+						character.EquipmentController.TryGetItem((int)referenceID, out Item equippedItem) &&
+						UIManager.TryGet("UITooltip", out currentUITooltip))
+					{
+						currentUITooltip.Open(equippedItem.Tooltip());
+					}
+					break;
+				case ReferenceButtonType.Bank:
+					if (character.BankController != null &&
+						character.BankController.TryGetItem((int)referenceID, out Item bankItem) &&
+						UIManager.TryGet("UITooltip", out currentUITooltip))
+					{
+						currentUITooltip.Open(bankItem.Tooltip());
+					}
+					break;
+				case ReferenceButtonType.Ability:
+					if (character.AbilityController.KnownAbilities != null &&
+						character.AbilityController.KnownAbilities.TryGetValue(referenceID, out Ability ability) &&
+						UIManager.TryGet("UITooltip", out currentUITooltip))
+					{
+						currentUITooltip.Open(ability.Tooltip());
+					}
+					break;
+				default:
+					return;
+			};
 		}
 
 		public override void OnPointerExit(PointerEventData eventData)

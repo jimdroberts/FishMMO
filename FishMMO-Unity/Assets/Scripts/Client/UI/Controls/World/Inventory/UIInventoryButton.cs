@@ -16,12 +16,12 @@ namespace FishMMO.Client
 						if (dragObject.Type == ReferenceButtonType.Inventory)
 						{
 							// swap item slots in the inventory
-							Character.InventoryController.SendSwapItemSlotsRequest(dragObject.ReferenceID, ReferenceID, InventoryType.Inventory);
+							Character.InventoryController.SendSwapItemSlotsRequest((int)dragObject.ReferenceID, (int)ReferenceID, InventoryType.Inventory);
 						}
 						// taking an item from the bank and putting it in this inventory slot
 						else if (dragObject.Type == ReferenceButtonType.Bank)
 						{
-							Character.InventoryController.SendSwapItemSlotsRequest(dragObject.ReferenceID, ReferenceID, InventoryType.Bank);
+							Character.InventoryController.SendSwapItemSlotsRequest((int)dragObject.ReferenceID, (int)ReferenceID, InventoryType.Bank);
 						}
 						// we can also unequip items
 						else if (dragObject.Type == ReferenceButtonType.Equipment &&
@@ -37,7 +37,7 @@ namespace FishMMO.Client
 					}
 					else
 					{
-						if (!Character.InventoryController.IsSlotEmpty(ReferenceID))
+						if (!Character.InventoryController.IsSlotEmpty((int)ReferenceID))
 						{
 							dragObject.SetReference(Icon.sprite, ReferenceID, Type);
 						}
@@ -50,7 +50,7 @@ namespace FishMMO.Client
 		{
 			if (Character != null && Type == ReferenceButtonType.Inventory)
 			{
-				Character.InventoryController.Activate(ReferenceID);
+				Character.InventoryController.Activate((int)ReferenceID);
 			}
 		}
 

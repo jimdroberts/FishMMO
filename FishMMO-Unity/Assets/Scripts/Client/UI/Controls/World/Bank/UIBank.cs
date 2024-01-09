@@ -85,7 +85,6 @@ namespace FishMMO.Client
 				UIBankButton button = Instantiate(buttonPrefab, content);
 				button.Character = Character;
 				button.ReferenceID = i;
-				button.AllowedType = ReferenceButtonType.Any;
 				button.Type = ReferenceButtonType.Bank;
 				if (Character.BankController.TryGetItem(i, out Item item))
 				{
