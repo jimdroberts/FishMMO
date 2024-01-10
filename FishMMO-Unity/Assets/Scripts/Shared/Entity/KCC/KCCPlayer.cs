@@ -267,10 +267,10 @@ namespace FishMMO.Shared
 			}
 
 			characterInputs = new KCCInputReplicateData(InputManager.GetAxis(VerticalInput),
-																	 InputManager.GetAxis(HorizontalInput),
-																	 moveFlags,
-																	 CharacterCamera.Transform.position,
-																	 CharacterCamera.Transform.rotation);
+														InputManager.GetAxis(HorizontalInput),
+														moveFlags,
+														CharacterCamera.Transform.position,
+														CharacterCamera.Transform.rotation);
 		}
 	}
 }

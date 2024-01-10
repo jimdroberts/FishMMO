@@ -10,6 +10,7 @@ namespace FishMMO.Client
 	/// </summary>
 	public static class UIManager
 	{
+		// controls map <GameObject Name, Control>
 		private static Dictionary<string, UIControl> controls = new Dictionary<string, UIControl>();
 		private static Dictionary<string, UICharacterControl> characterControls = new Dictionary<string, UICharacterControl>();
 		private static CircularBuffer<UIControl> closeOnEscapeControls = new CircularBuffer<UIControl>();

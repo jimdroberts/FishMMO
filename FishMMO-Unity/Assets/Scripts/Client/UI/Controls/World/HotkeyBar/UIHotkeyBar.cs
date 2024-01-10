@@ -118,7 +118,7 @@ namespace FishMMO.Client
 				string keyMap = GetHotkeyIndexKeyMap(i);
 				if (string.IsNullOrWhiteSpace(keyMap)) return;
 
-				if (hotkeys[i] != null && InputManager.GetKeyDown(keyMap))
+				if (hotkeys[i] != null && InputManager.GetKey(keyMap))
 				{
 					hotkeys[i].Activate();
 					return;

@@ -8809,7 +8809,7 @@ PrefabInstance:
     - target: {fileID: 4239796519374031014, guid: a0e90ffc634b9244a9c0abe921708896,
         type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: -390
+      value: -370
       objectReference: {fileID: 0}
     - target: {fileID: 4239796519374031014, guid: a0e90ffc634b9244a9c0abe921708896,
         type: 3}
@@ -8829,7 +8829,7 @@ PrefabInstance:
     - target: {fileID: 4239796519374031033, guid: a0e90ffc634b9244a9c0abe921708896,
         type: 3}
       propertyPath: m_Name
-      value: UICastbar
+      value: UICastBar
       objectReference: {fileID: 0}
     - target: {fileID: 4239796519374031033, guid: a0e90ffc634b9244a9c0abe921708896,
         type: 3}

@@ -82,8 +82,11 @@ namespace FishMMO.Shared
 		{
 			//Debug.Log("Destroyed " + gameObject.name);
 			// TODO - add pooling instead of destroying ability objects
-			Ability.RemoveAbilityObject(ContainerID, ID);
-			Ability = null;
+			if (Ability != null)
+			{
+				Ability.RemoveAbilityObject(ContainerID, ID);
+				Ability = null;
+			}
 			Caster = null;
 			Destroy(gameObject);
 			gameObject.SetActive(false);

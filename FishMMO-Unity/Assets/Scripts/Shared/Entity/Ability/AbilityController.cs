@@ -30,11 +30,11 @@ namespace FishMMO.Shared
 		public AbilityEvent BloodResourceConversionTemplate;
 		public AbilityEvent ChargedTemplate;
 		public AbilityEvent ChanneledTemplate;
-		public event Action<string, float, float> OnUpdate;
+		public Action<string, float, float> OnUpdate;
 		// Invoked when the current ability is Interrupted.
-		public event Action OnInterrupt;
+		public Action OnInterrupt;
 		// Invoked when the current ability is Cancelled.
-		public event Action OnCancel;
+		public Action OnCancel;
 
 		public Dictionary<long, Ability> KnownAbilities { get; private set; }
 		public HashSet<int> KnownBaseAbilities { get; private set; }
@@ -247,10 +247,13 @@ namespace FishMMO.Shared
 							Cancel();
 						}
 						// channeled abilities like beam effects or a charge rush that are continuously updating or spawning objects should be handled here
-						else if (ChanneledTemplate != null && currentAbility.HasAbilityEvent(ChanneledTemplate.ID))
+						else if (ChanneledTemplate != null &&
+								 currentAbility.HasAbilityEvent(ChanneledTemplate.ID))
 						{
 							// get target info
-							TargetInfo targetInfo = Character.TargetController.UpdateTarget(Character.CharacterController.VirtualCameraPosition, Character.CharacterController.VirtualCameraRotation * Vector3.forward, currentAbility.Range);
+							TargetInfo targetInfo = Character.TargetController.UpdateTarget(Character.CharacterController.VirtualCameraPosition,
+																							Character.CharacterController.VirtualCameraRotation * Vector3.forward,
+																							currentAbility.Range);
 
 							// spawn the ability object
 							if (AbilityObject.TrySpawn(currentAbility, Character, this, AbilitySpawner, targetInfo))
@@ -264,7 +267,8 @@ namespace FishMMO.Shared
 				}
 
 				// this will allow for charged abilities to remain held for aiming purposes
-				if (ChargedTemplate != null && currentAbility.HasAbilityEvent(ChargedTemplate.ID) &&
+				if (ChargedTemplate != null &&
+					currentAbility.HasAbilityEvent(ChargedTemplate.ID) &&
 					heldKey != KeyCode.None &&
 					activationData.HeldKey != KeyCode.None)
 				{
@@ -275,7 +279,9 @@ namespace FishMMO.Shared
 				if (CanActivate(currentAbility))
 				{
 					// get target info
-					TargetInfo targetInfo = Character.TargetController.UpdateTarget(Character.CharacterController.VirtualCameraPosition, Character.CharacterController.VirtualCameraRotation * Vector3.forward, currentAbility.Range);
+					TargetInfo targetInfo = Character.TargetController.UpdateTarget(Character.CharacterController.VirtualCameraPosition,
+																					Character.CharacterController.VirtualCameraRotation * Vector3.forward,
+																					currentAbility.Range);
 
 					// spawn the ability object
 					if (AbilityObject.TrySpawn(currentAbility, Character, this, AbilitySpawner, targetInfo))
@@ -308,11 +314,9 @@ namespace FishMMO.Shared
 		[Reconcile]
 		private void Reconcile(AbilityReconcileData rd, bool asServer, Channel channel = Channel.Unreliable)
 		{
-			if (rd.AbilityID == NO_ABILITY)
-			{
-				return;
-			}
-			if (!KnownAbilities.TryGetValue(rd.AbilityID, out Ability ability) || rd.Interrupt && rd.AbilityID == NO_ABILITY)
+			if (rd.Interrupt ||
+				rd.AbilityID == NO_ABILITY ||
+				!KnownAbilities.TryGetValue(rd.AbilityID, out Ability ability))
 			{
 				OnInterrupt?.Invoke();
 				Cancel();
