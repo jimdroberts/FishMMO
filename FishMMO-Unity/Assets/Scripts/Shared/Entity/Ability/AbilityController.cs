@@ -233,7 +233,10 @@ namespace FishMMO.Shared
 					remainingTime -= (float)base.TimeManager.TickDelta;
 
 					// handle ability update here, display cast bar, display hitbox telegraphs, etc
-					OnUpdate?.Invoke(currentAbility.Name, remainingTime, currentAbility.ActivationTime * CalculateSpeedReduction(currentAbility.Template.ActivationSpeedReductionAttribute));
+					if (!replaying)
+					{
+						OnUpdate?.Invoke(currentAbility.Name, remainingTime, currentAbility.ActivationTime * CalculateSpeedReduction(currentAbility.Template.ActivationSpeedReductionAttribute));
+					}
 
 					// handle held ability updates
 					if (heldKey != KeyCode.None)
