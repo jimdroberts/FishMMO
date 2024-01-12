@@ -120,46 +120,6 @@ namespace FishMMO.Shared
 				case AbilitySpawnTarget.Self:
 					t.SetPositionAndRotation(caster.Motor.Transform.position, caster.Motor.Transform.rotation);
 					break;
-				case AbilitySpawnTarget.Hand:
-					// calculate collider offsets so the spawned ability object appears in front of the caster
-					float distance = 0.0f;
-					float height = 0.0f;
-					Collider collider = template.FXPrefab.GetComponent<Collider>();
-					if (collider != null)
-					{
-						Collider casterCollider = caster.gameObject.GetComponent<Collider>();
-						if (casterCollider != null)
-						{
-							distance = casterCollider.bounds.extents.z;
-							height = casterCollider.bounds.extents.y;
-						}
-						distance += collider.bounds.extents.z;
-						height += collider.bounds.extents.y;
-					}
-					Vector3 positionOffset = caster.Transform.forward * (distance + 1.0f);
-					positionOffset.y += height;
-
-					Vector3 spawnPosition = caster.Motor.Transform.position + positionOffset;
-
-					// Get the camera's forward vector
-					Vector3 cameraForward = caster.CharacterController.VirtualCameraRotation * Vector3.forward;
-
-					// Define a faraway target position in the look direction
-					const float farDistance = 25.0f;
-
-					// Get a target position far from the camera position
-					Vector3 farTargetPosition = caster.CharacterController.VirtualCameraPosition + cameraForward * farDistance;
-
-					// Calculate the look direction towards the far target position
-					Vector3 lookDirection = (farTargetPosition - spawnPosition).normalized;
-
-					// Calculate the rotation to align with the look direction
-					Quaternion spawnRotation = Quaternion.LookRotation(lookDirection);
-
-					Debug.DrawRay(spawnPosition, lookDirection * farDistance, Color.magenta);
-
-					t.SetPositionAndRotation(spawnPosition, spawnRotation);
-					break;
 				case AbilitySpawnTarget.Target:
 					if (targetInfo.HitPosition != null)
 					{
@@ -168,6 +128,77 @@ namespace FishMMO.Shared
 					else
 					{
 						t.SetPositionAndRotation(targetInfo.Target.position, caster.Transform.rotation);
+					}
+					break;
+				case AbilitySpawnTarget.Forward:
+					{
+						// calculate collider offsets so the spawned ability object appears centered in front of the caster
+						float distance = 0.0f;
+						float height = 0.0f;
+						Collider collider = template.FXPrefab.GetComponent<Collider>();
+						if (collider != null)
+						{
+							Collider casterCollider = caster.gameObject.GetComponent<Collider>();
+							if (casterCollider != null)
+							{
+								distance += casterCollider.bounds.extents.z;
+								height += casterCollider.bounds.extents.y;
+							}
+							distance += collider.bounds.extents.z;
+							height += collider.bounds.extents.y;
+						}
+						Vector3 positionOffset = caster.Transform.forward * (distance + 1.0f);
+						positionOffset.y += height;
+
+						Vector3 spawnPosition = caster.Motor.Transform.position + positionOffset;
+
+						t.SetPositionAndRotation(spawnPosition, caster.Transform.rotation);
+					}
+					break;
+				case AbilitySpawnTarget.Camera:
+					{
+						// Get the camera's forward vector
+						Vector3 cameraForward = caster.CharacterController.VirtualCameraRotation * Vector3.forward;
+
+						// TODO Should this value be adjust so it's in front of the player?
+						Vector3 spawnPosition = caster.CharacterController.VirtualCameraPosition + cameraForward;
+
+						// TODO - replace this with ability Range... that way the ability is 100% accurate up to the distance
+						const float farDistance = 50.0f;
+
+						// Get a target position far from the camera position
+						Vector3 farTargetPosition = caster.CharacterController.VirtualCameraPosition + cameraForward * farDistance;//ability.Range;
+
+						// Calculate the look direction towards the far target position
+						Vector3 lookDirection = (farTargetPosition - spawnPosition).normalized;
+
+						// Calculate the rotation to align with the look direction
+						Quaternion spawnRotation = Quaternion.LookRotation(lookDirection);
+
+						t.SetPositionAndRotation(spawnPosition, spawnRotation);
+					}
+					break;
+				case AbilitySpawnTarget.Spawner:
+					t.SetPositionAndRotation(abilitySpawner.position, abilitySpawner.rotation);
+					break;
+				case AbilitySpawnTarget.SpawnerWithCameraRotation:
+					{
+						// Get the camera's forward vector
+						Vector3 cameraForward = caster.CharacterController.VirtualCameraRotation * Vector3.forward;
+
+						// TODO - replace this with ability Range... that way the ability is 100% accurate up to the distance
+						const float farDistance = 50.0f;
+
+						// Get a target position far from the camera position
+						Vector3 farTargetPosition = caster.CharacterController.VirtualCameraPosition + cameraForward * farDistance;//ability.Range;
+
+						// Calculate the look direction towards the far target position
+						Vector3 lookDirection = (farTargetPosition - abilitySpawner.position).normalized;
+
+						// Calculate the rotation to align with the look direction
+						Quaternion spawnRotation = Quaternion.LookRotation(lookDirection);
+
+						t.SetPositionAndRotation(abilitySpawner.position, spawnRotation);
 					}
 					break;
 				default:

@@ -2,8 +2,11 @@
 {
 	public enum AbilitySpawnTarget : byte
 	{
-		Self,
-		Hand,
+		Self = 0,
 		Target,
+		Forward,
+		Camera,
+		Spawner,
+		SpawnerWithCameraRotation,
 	}
 }
