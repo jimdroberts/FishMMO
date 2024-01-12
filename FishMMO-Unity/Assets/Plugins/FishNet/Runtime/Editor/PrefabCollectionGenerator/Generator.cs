@@ -1,5 +1,4 @@
 ﻿#if UNITY_EDITOR
-
 using FishNet.Configuring;
 using FishNet.Managing.Object;
 using FishNet.Object;
@@ -200,11 +199,24 @@ namespace FishNet.Editing.PrefabCollectionGenerator
                 return string.Empty;
         }
 
+        private static bool CanAddNetworkObject(NetworkObject networkObject, PrefabGeneratorConfigurations settings)
+        {
+            return networkObject != null && (networkObject.IsSpawnable || !settings.SpawnableOnly);
+        }
+
         /// <summary>
         /// Updates prefabs by using only changed information.
         /// </summary>
         public static void GenerateChanged(string[] importedAssets, string[] deletedAssets, string[] movedAssets, string[] movedFromAssetPaths, PrefabGeneratorConfigurations settings = null)
         {
+#if PARRELSYNC
+            if (ParrelSync.ClonesManager.IsClone() && ParrelSync.Preferences.AssetModPref.Value)
+            {
+                UnityDebug.Log("Skipping prefab generation in ParrelSync clone");
+                return;
+            }
+#endif
+
             if (settings == null)
                 settings = Configuration.Configurations.PrefabGenerator;
             if (!settings.Enabled)
@@ -244,7 +256,7 @@ namespace FishNet.Editing.PrefabCollectionGenerator
                         continue;
 
                     NetworkObject nob = AssetDatabase.LoadAssetAtPath<NetworkObject>(item);
-                    if (nob != null)
+                    if (CanAddNetworkObject(nob, settings))
                     {
                         changedNobPaths.Add(item);
                         prefabCollection.AddObject(nob, true);
@@ -304,6 +316,14 @@ namespace FishNet.Editing.PrefabCollectionGenerator
         /// </summary>
         public static void GenerateFull(PrefabGeneratorConfigurations settings = null, bool forced = false)
         {
+#if PARRELSYNC
+            if (ParrelSync.ClonesManager.IsClone() && ParrelSync.Preferences.AssetModPref.Value)
+            {
+                UnityDebug.Log("Skipping prefab generation in ParrelSync clone");
+                return;
+            }
+#endif
+
             if (settings == null)
                 settings = Configuration.Configurations.PrefabGenerator;
             if (!forced && !settings.Enabled)
@@ -320,7 +340,7 @@ namespace FishNet.Editing.PrefabCollectionGenerator
                 foreach (string path in GetPrefabFiles("Assets", excludedPaths, true))
                 {
                     NetworkObject nob = AssetDatabase.LoadAssetAtPath<NetworkObject>(path);
-                    if (nob != null)
+                    if (CanAddNetworkObject(nob, settings))
                         foundNobs.Add(nob);
                 }
             }
@@ -339,7 +359,7 @@ namespace FishNet.Editing.PrefabCollectionGenerator
                     foreach (string path in GetPrefabFiles(sf.Path, excludedPaths, sf.Recursive))
                     {
                         NetworkObject nob = AssetDatabase.LoadAssetAtPath<NetworkObject>(path);
-                        if (nob != null)
+                        if (CanAddNetworkObject(nob, settings))
                             foundNobs.Add(nob);
                     }
                 }
@@ -430,7 +450,7 @@ namespace FishNet.Editing.PrefabCollectionGenerator
             //Load the prefab collection 
             string defaultPrefabsPath = settings.DefaultPrefabObjectsPath_Platform;
             string fullDefaultPrefabsPath = (defaultPrefabsPath.Length > 0) ? Path.GetFullPath(defaultPrefabsPath) : string.Empty;
-            
+
             //If cached prefabs is not the same path as assetPath.
             if (_cachedDefaultPrefabs != null)
             {
@@ -438,7 +458,7 @@ namespace FishNet.Editing.PrefabCollectionGenerator
                 string fullCachedPath = (unityAssetPath.Length > 0) ? Path.GetFullPath(unityAssetPath) : string.Empty;
                 if (fullCachedPath != fullDefaultPrefabsPath)
                     _cachedDefaultPrefabs = null;
-            } 
+            }
 
             //If cached is null try to get it.
             if (_cachedDefaultPrefabs == null)
@@ -464,22 +484,29 @@ namespace FishNet.Editing.PrefabCollectionGenerator
                 }
             }
 
-            if (_cachedDefaultPrefabs == null)
+#if PARRELSYNC
+            if (!ParrelSync.ClonesManager.IsClone() && ParrelSync.Preferences.AssetModPref.Value)
             {
-                string fullPath = Path.GetFullPath(defaultPrefabsPath);
-                UnityDebug.Log($"Creating a new DefaultPrefabsObject at {fullPath}.");
-                string directory = Path.GetDirectoryName(fullPath);
+#endif
+                if (_cachedDefaultPrefabs == null)
+                {
+                    string fullPath = Path.GetFullPath(defaultPrefabsPath);
+                    UnityDebug.Log($"Creating a new DefaultPrefabsObject at {fullPath}.");
+                    string directory = Path.GetDirectoryName(fullPath);
 
-                if (!Directory.Exists(directory))
-                { 
-                    Directory.CreateDirectory(directory);
-                    AssetDatabase.Refresh();
+                    if (!Directory.Exists(directory))
+                    {
+                        Directory.CreateDirectory(directory);
+                        AssetDatabase.Refresh();
+                    }
+
+                    _cachedDefaultPrefabs = ScriptableObject.CreateInstance<DefaultPrefabObjects>();
+                    AssetDatabase.CreateAsset(_cachedDefaultPrefabs, defaultPrefabsPath);
+                    AssetDatabase.SaveAssets();
                 }
-
-                _cachedDefaultPrefabs = ScriptableObject.CreateInstance<DefaultPrefabObjects>();
-                AssetDatabase.CreateAsset(_cachedDefaultPrefabs, defaultPrefabsPath);
-                AssetDatabase.SaveAssets();
+#if PARRELSYNC
             }
+#endif
 
             if (_cachedDefaultPrefabs != null && _retryRefreshDefaultPrefabs)
                 UnityDebug.Log("DefaultPrefabObjects found on the second iteration.");
@@ -560,7 +587,7 @@ namespace FishNet.Editing.PrefabCollectionGenerator
 
                         NetworkObject nob = AssetDatabase.LoadAssetAtPath<NetworkObject>(imported);
                         //If is a networked object.
-                        if (nob != null)
+                        if (CanAddNetworkObject(nob, settings))
                         {
                             //Already added!
                             if (prefabCollection.Prefabs.Contains(nob))

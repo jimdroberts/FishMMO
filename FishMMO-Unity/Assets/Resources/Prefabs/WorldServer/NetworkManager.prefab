@@ -17,7 +17,6 @@ GameObject:
   - component: {fileID: 1359145390}
   - component: {fileID: 1359145392}
   - component: {fileID: 8446561593904137863}
-  - component: {fileID: 7992823864570730112}
   m_Layer: 0
   m_Name: NetworkManager
   m_TagString: Untagged
@@ -72,6 +71,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _authenticator: {fileID: 3213959078885105799}
+  _remoteClientTimeout: 2
+  _remoteClientTimeoutDuration: 60
   _syncTypeRate: 0.1
   SpawnPacking:
     Position: 0
@@ -100,7 +101,6 @@ MonoBehaviour:
   _maximumFrameTicks: 2
   _tickRate: 15
   _pingInterval: 1
-  _timingInterval: 2
   _physicsMode: 1
 --- !u!114 &8508828970612705392
 MonoBehaviour:
@@ -146,7 +146,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7d331f979d46e8e4a9fc90070c596d44, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _useNetworkLod: 0
+  _enableNetworkLod: 0
   _levelOfDetailDistances: []
   _updateHostVisibility: 1
   _defaultConditions:
@@ -184,26 +184,3 @@ MonoBehaviour:
     _latency: 0
     _outOfOrder: 0
     _packetLoss: 0
---- !u!114 &7992823864570730112
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6375733014718908462}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: cbe9ebe226af76a4a943ecc44f7ff909, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  iceServers:
-  - url: stun:stun2.l.google.com:19302
-    username: 
-    credential: 
-  _mtu: 1023
-  _origin: '*'
-  _port: 7770
-  _maximumClients: 2000
-  _HTTPS: 0
-  _clientAddress: 127.0.0.1
-  _noClientPort: 0

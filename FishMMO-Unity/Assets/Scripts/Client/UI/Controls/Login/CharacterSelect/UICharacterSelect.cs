@@ -92,7 +92,7 @@ namespace FishMMO.Client
 			}
 		}
 
-		private void OnClientCharacterListBroadcastReceived(CharacterListBroadcast msg)
+		private void OnClientCharacterListBroadcastReceived(CharacterListBroadcast msg, Channel channel)
 		{
 			if (msg.characters != null)
 			{
@@ -111,7 +111,7 @@ namespace FishMMO.Client
 			Show();
 		}
 
-		private void OnClientCharacterCreateBroadcastReceived(CharacterCreateBroadcast msg)
+		private void OnClientCharacterCreateBroadcastReceived(CharacterCreateBroadcast msg, Channel channel)
 		{
 			// new characters can be constructed with basic data, they have no equipped items
 			CharacterDetailsButton newCharacter = Instantiate(characterButtonPrefab, characterButtonParent);
@@ -125,7 +125,7 @@ namespace FishMMO.Client
 			characterList.Add(newCharacter);
 		}
 
-		private void OnClientCharacterDeleteBroadcastReceived(CharacterDeleteBroadcast msg)
+		private void OnClientCharacterDeleteBroadcastReceived(CharacterDeleteBroadcast msg, Channel channel)
 		{
 			//remove the character from our characters list
 			if (characterList != null)

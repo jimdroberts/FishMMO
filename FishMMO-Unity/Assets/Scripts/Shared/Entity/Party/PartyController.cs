@@ -57,7 +57,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// When the server successfully creates the characters party.
 		/// </summary>
-		public void OnClientPartyCreateBroadcastReceived(PartyCreateBroadcast msg)
+		public void OnClientPartyCreateBroadcastReceived(PartyCreateBroadcast msg, Channel channel)
 		{
 			ID = msg.partyID;
 			Rank = PartyRank.Leader;
@@ -71,7 +71,7 @@ namespace FishMMO.Shared
 		/// When the character receives an invitation to join a party.
 		/// *Note* msg.targetClientID should be our own ClientId but it doesn't matter if it changes. Server has authority.
 		/// </summary>
-		public void OnClientPartyInviteBroadcastReceived(PartyInviteBroadcast msg)
+		public void OnClientPartyInviteBroadcastReceived(PartyInviteBroadcast msg, Channel channel)
 		{
 			ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.inviterCharacterID, (n) =>
 			{
@@ -93,7 +93,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// When we add a new party member to the party.
 		/// </summary>
-		public void OnClientPartyAddBroadcastReceived(PartyAddBroadcast msg)
+		public void OnClientPartyAddBroadcastReceived(PartyAddBroadcast msg, Channel channel)
 		{
 			// update our Party list with the new Party member
 			if (Character == null)
@@ -107,7 +107,7 @@ namespace FishMMO.Shared
 			}
 
 			// if this is our own id
-			if (Character != null && msg.characterID == Character.ID)
+			if (Character != null && msg.characterID == Character.ID.Value)
 			{
 				ID = msg.partyID;
 				Rank = msg.rank;
@@ -118,7 +118,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// When our local client leaves the party.
 		/// </summary>
-		public void OnClientPartyLeaveBroadcastReceived(PartyLeaveBroadcast msg)
+		public void OnClientPartyLeaveBroadcastReceived(PartyLeaveBroadcast msg, Channel channel)
 		{
 			ID = 0;
 			Rank = PartyRank.None;
@@ -132,7 +132,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// When we need to add party members.
 		/// </summary>
-		public void OnClientPartyAddMultipleBroadcastReceived(PartyAddMultipleBroadcast msg)
+		public void OnClientPartyAddMultipleBroadcastReceived(PartyAddMultipleBroadcast msg, Channel channel)
 		{
 			if (UIManager.TryGet("UIParty", out UIParty uiParty))
 			{
@@ -146,7 +146,7 @@ namespace FishMMO.Shared
 				}
 				foreach (PartyAddBroadcast subMsg in msg.members)
 				{
-					OnClientPartyAddBroadcastReceived(subMsg);
+					OnClientPartyAddBroadcastReceived(subMsg, channel);
 				}
 			}
 		}
@@ -154,7 +154,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// When we need to remove party members.
 		/// </summary>
-		public void OnClientPartyRemoveBroadcastReceived(PartyRemoveBroadcast msg)
+		public void OnClientPartyRemoveBroadcastReceived(PartyRemoveBroadcast msg, Channel channel)
 		{
 			if (UIManager.TryGet("UIParty", out UIParty uiParty))
 			{

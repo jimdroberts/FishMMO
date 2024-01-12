@@ -17,7 +17,7 @@ namespace FishMMO.Server.DatabaseServices
 				return;
 			}
 
-			var attributes = dbContext.CharacterAttributes.Where(c => c.CharacterID == character.ID)
+			var attributes = dbContext.CharacterAttributes.Where(c => c.CharacterID == character.ID.Value)
 														  .ToDictionary(k => k.TemplateID);
 
 			foreach (CharacterAttribute attribute in character.AttributeController.Attributes.Values)
@@ -29,7 +29,7 @@ namespace FishMMO.Server.DatabaseServices
 				}
 				if (attributes.TryGetValue(attribute.Template.ID, out CharacterAttributeEntity dbAttribute))
 				{
-					dbAttribute.CharacterID = character.ID;
+					dbAttribute.CharacterID = character.ID.Value;
 					dbAttribute.TemplateID = attribute.Template.ID;
 					dbAttribute.BaseValue = attribute.BaseValue;
 					dbAttribute.Modifier = attribute.Modifier;
@@ -39,7 +39,7 @@ namespace FishMMO.Server.DatabaseServices
 				{
 					dbContext.CharacterAttributes.Add(new CharacterAttributeEntity()
 					{
-						CharacterID = character.ID,
+						CharacterID = character.ID.Value,
 						TemplateID = attribute.Template.ID,
 						BaseValue = attribute.BaseValue,
 						Modifier = attribute.Modifier,
@@ -52,7 +52,7 @@ namespace FishMMO.Server.DatabaseServices
 			{
 				if (attributes.TryGetValue(attribute.Template.ID, out CharacterAttributeEntity dbAttribute))
 				{
-					dbAttribute.CharacterID = character.ID;
+					dbAttribute.CharacterID = character.ID.Value;
 					dbAttribute.TemplateID = attribute.Template.ID;
 					dbAttribute.BaseValue = attribute.BaseValue;
 					dbAttribute.Modifier = attribute.Modifier;
@@ -62,7 +62,7 @@ namespace FishMMO.Server.DatabaseServices
 				{
 					dbContext.CharacterAttributes.Add(new CharacterAttributeEntity()
 					{
-						CharacterID = character.ID,
+						CharacterID = character.ID.Value,
 						TemplateID = attribute.Template.ID,
 						BaseValue = attribute.BaseValue,
 						Modifier = attribute.Modifier,
@@ -94,7 +94,7 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Load(NpgsqlDbContext dbContext, Character character)
 		{
-			var attributes = dbContext.CharacterAttributes.Where(c => c.CharacterID == character.ID);
+			var attributes = dbContext.CharacterAttributes.Where(c => c.CharacterID == character.ID.Value);
 			foreach (CharacterAttributeEntity attribute in attributes)
 			{
 				CharacterAttributeTemplate template = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(attribute.TemplateID);

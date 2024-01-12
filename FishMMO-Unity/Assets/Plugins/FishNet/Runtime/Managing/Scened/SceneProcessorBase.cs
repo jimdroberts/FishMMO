@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityScene = UnityEngine.SceneManagement.Scene;
+using UnitySceneManager = UnityEngine.SceneManagement.SceneManager;
 
 namespace FishNet.Managing.Scened
 {
@@ -14,6 +15,19 @@ namespace FishNet.Managing.Scened
         /// SceneManager for this processor.
         /// </summary>
         protected SceneManager SceneManager;
+        /// <summary>
+        /// Scene used to store objects while they are being moved from one scene to another.
+        /// </summary>
+        protected Scene MovedObjectsScene;
+        /// <summary>
+        /// Scene used to store objects queued for destruction but cannot be destroyed until the clientHost gets the despawn packet.
+        /// </summary>
+        protected Scene DelayedDestroyScene;
+        /// <summary>
+        /// Scene used as the active scene when the user does not specify which scene to set active and the scenemanager cannot determine one without error.
+        /// This is primarily used so scenes with incorrect or unexpected lighting are not set as the active scene given this may disrupt visuals.
+        /// </summary>
+        protected Scene FallbackActiveScene;
         #endregion
 
         /// <summary>
@@ -87,6 +101,57 @@ namespace FishNet.Managing.Scened
         /// <returns></returns>
         public abstract IEnumerator AsyncsIsDone();
 
+        /// <summary>
+        /// Returns the MovedObjectsScene.
+        /// </summary>
+        /// <returns></returns>
+        public virtual Scene GetMovedObjectsScene()
+        {
+            //Create moved objects scene. It will probably be used eventually. If not, no harm either way.
+            if (string.IsNullOrEmpty(MovedObjectsScene.name))
+                MovedObjectsScene = FindOrCreateScene("MovedObjectsHolder");
+
+            return MovedObjectsScene;
+        }
+
+        /// <summary>
+        /// Returns the DelayedDestroyScene.
+        /// </summary>
+        /// <returns></returns>
+        public virtual Scene GetDelayedDestroyScene()
+        {
+            //Create moved objects scene. It will probably be used eventually. If not, no harm either way.
+            if (string.IsNullOrEmpty(DelayedDestroyScene.name))
+                DelayedDestroyScene = FindOrCreateScene("DelayedDestroy");
+
+            return DelayedDestroyScene;
+        }
+
+        /// <summary>
+        /// Returns the FallbackActiveScene.
+        /// </summary>
+        /// <returns></returns>
+        public virtual Scene GetFallbackActiveScene()
+        {
+            if (string.IsNullOrEmpty(FallbackActiveScene.name))
+                FallbackActiveScene = FindOrCreateScene("FallbackActiveScene");
+
+            return FallbackActiveScene;
+        }
+
+        /// <summary>
+        /// Tries to find a scene by name and if it does not exist creates an empty scene of name.
+        /// </summary>
+        /// <param name="name">Name of the scene to find or create.</param>
+        /// <returns></returns>
+        public virtual Scene FindOrCreateScene(string name)
+        {
+            Scene result = UnitySceneManager.GetSceneByName(name);
+            if (!result.IsValid())
+                result = UnitySceneManager.CreateScene(name);
+
+            return result;
+        }
     }
 
 

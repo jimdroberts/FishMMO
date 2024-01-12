@@ -1224,13 +1224,14 @@ MonoBehaviour:
   <PredictedSpawn>k__BackingField: {fileID: 0}
   _networkBehaviours:
   - {fileID: 520637840}
-  <ParentNetworkObject>k__BackingField: {fileID: 0}
-  <ChildNetworkObjects>k__BackingField: []
+  <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 0}
+  <NestedRootNetworkBehaviours>k__BackingField: []
   SerializedTransformProperties:
     Position: {x: 0, y: 0, z: -21.59}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
     LocalScale: {x: 1, y: 1, z: 1}
   _isNetworked: 1
+  _isSpawnable: 0
   _isGlobal: 0
   _initializeOrder: 0
   _defaultDespawnType: 0
@@ -1240,8 +1241,6 @@ MonoBehaviour:
   _scenePathHash: 1844441730
   <SceneId>k__BackingField: 7921816911696066310
   <AssetPathHash>k__BackingField: 0
-  _sceneNetworkObjects:
-  - {fileID: 700411446}
 --- !u!1 &820151185
 GameObject:
   m_ObjectHideFlags: 0

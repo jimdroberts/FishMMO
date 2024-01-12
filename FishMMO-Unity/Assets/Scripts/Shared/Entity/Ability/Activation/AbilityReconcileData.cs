@@ -1,4 +1,5 @@
-﻿using FishNet.Object.Prediction;
+﻿using UnityEngine;
+using FishNet.Object.Prediction;
 
 namespace FishMMO.Shared
 {
@@ -13,6 +14,7 @@ namespace FishMMO.Shared
 			Interrupt = interrupt;
 			AbilityID = abilityID;
 			RemainingTime = remainingTime;
+
 			_tick = 0;
 		}
 

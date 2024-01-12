@@ -191,7 +191,7 @@ namespace FishMMO.Client
 		/// <summary>
 		/// SceneServer told the client to reconnect to the World server
 		/// </summary>
-		private void OnClientSceneWorldReconnectBroadcastReceived(SceneWorldReconnectBroadcast msg)
+		private void OnClientSceneWorldReconnectBroadcastReceived(SceneWorldReconnectBroadcast msg, Channel channel)
 		{
 			ConnectToServer(msg.address, msg.port);
 		}

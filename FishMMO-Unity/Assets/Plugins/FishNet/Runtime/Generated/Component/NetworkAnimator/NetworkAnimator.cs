@@ -5,8 +5,8 @@ using FishNet.Managing.Logging;
 using FishNet.Managing.Server;
 using FishNet.Object;
 using FishNet.Serializing;
-using FishNet.Utility;
 using FishNet.Utility.Performance;
+using GameKit.Dependencies.Utilities;
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
@@ -53,6 +53,10 @@ namespace FishNet.Component.Animating
         private struct StateChange
         {
             /// <summary>
+            /// Frame which the state was changed.
+            /// </summary>
+            public int FrameCount;
+            /// <summary>
             /// True if a crossfade.
             /// </summary>
             public bool IsCrossfade;
@@ -77,8 +81,20 @@ namespace FishNet.Component.Animating
             /// </summary>
             public float NormalizedTransitionTime;
 
-            public StateChange(int hash, bool fixedTime, float duration, float offset, float normalizedTransition)
+            public StateChange(int frame)
             {
+                FrameCount = frame;
+                IsCrossfade = default;
+                Hash = default;
+                FixedTime = default;
+                DurationTime = default;
+                OffsetTime = default;
+                NormalizedTransitionTime = default;
+            }
+
+            public StateChange(int frame, int hash, bool fixedTime, float duration, float offset, float normalizedTransition)
+            {
+                FrameCount = frame;
                 IsCrossfade = true;
                 Hash = hash;
                 FixedTime = fixedTime;
@@ -330,14 +346,6 @@ namespace FishNet.Component.Animating
         /// Last speed.
         /// </summary>
         private float _speed;
-        ///// <summary>
-        ///// Next time client may send parameter updates.
-        ///// </summary>
-        //private float _nextClientSendTime = -1f;
-        ///// <summary>
-        ///// Next time server may send parameter updates.
-        ///// </summary>
-        //private float _nextServerSendTime = -1f;
         /// <summary>
         /// Trigger values set by using SetTrigger and ResetTrigger.
         /// </summary>
@@ -369,7 +377,7 @@ namespace FishNet.Component.Animating
             get
             {
                 //Don't smooth on server only.
-                if (!base.IsClient)
+                if (!base.IsClientStarted)
                     return false;
                 //Smoothing is disabled.
                 if (!_smoothFloats)
@@ -418,6 +426,10 @@ namespace FishNet.Component.Animating
         /// Tick when the buffer may begin to run.
         /// </summary>
         private uint _startTick = TimeManagerCls.UNSET_TICK;
+        /// <summary>
+        /// True if subscribed to TimeManager for ticks.
+        /// </summary>
+        private bool _subscribedToTicks;
         #endregion
 
         #region Const.
@@ -448,10 +460,14 @@ namespace FishNet.Component.Animating
             InitializeOnce();
         }
 
+        private void OnDestroy()
+        {
+            ChangeTickSubscription(false);
+        }
+
         [APIExclude]
         public override void OnSpawnServer(NetworkConnection connection)
         {
-            base.OnSpawnServer(connection);
             if (!_isAnimatorEnabled)
                 return;
             if (AnimatorUpdated(out ArraySegment<byte> updatedBytes, true))
@@ -460,15 +476,12 @@ namespace FishNet.Component.Animating
 
         public override void OnStartNetwork()
         {
-            base.OnStartNetwork();
-            base.TimeManager.OnPreTick += TimeManager_OnPreTick;
-            base.TimeManager.OnPostTick += TimeManager_OnPostTick;
+            ChangeTickSubscription(true);
         }
 
         [APIExclude]
         public override void OnStartServer()
         {
-            base.OnStartServer();
             //If using client authoritative then initialize clientAuthoritativeUpdates.
             if (_clientAuthoritative)
             {
@@ -485,10 +498,31 @@ namespace FishNet.Component.Animating
 
         public override void OnStopNetwork()
         {
-            base.OnStopNetwork();
-            base.TimeManager.OnPreTick -= TimeManager_OnPreTick;
-            base.TimeManager.OnPostTick -= TimeManager_OnPostTick;
+            _unsynchronizedLayerStates.Clear();
+            ChangeTickSubscription(false);
         }
+
+        /// <summary>
+        /// Tries to subscribe to TimeManager ticks.
+        /// </summary>
+        private void ChangeTickSubscription(bool subscribe)
+        {
+            if (subscribe == _subscribedToTicks || base.NetworkManager == null)
+                return;
+
+            _subscribedToTicks = subscribe;
+            if (subscribe)
+            {
+                base.NetworkManager.TimeManager.OnPreTick += TimeManager_OnPreTick;
+                base.NetworkManager.TimeManager.OnPostTick += TimeManager_OnPostTick;
+            }
+            else
+            {
+                base.NetworkManager.TimeManager.OnPreTick -= TimeManager_OnPreTick;
+                base.NetworkManager.TimeManager.OnPostTick -= TimeManager_OnPostTick;
+            }
+        }
+
 
 
         /// <summary>
@@ -533,10 +567,8 @@ namespace FishNet.Component.Animating
             if (!_isAnimatorEnabled)
                 return;
 
-            if (base.IsClient)
-                CheckSendToServer();
-            if (base.IsServer)
-                CheckSendToClients();
+            CheckSendToServer();
+            CheckSendToClients();
         }
 
         private void Update()
@@ -544,7 +576,7 @@ namespace FishNet.Component.Animating
             if (!_isAnimatorEnabled)
                 return;
 
-            if (base.IsClient)
+            if (base.IsClientStarted)
                 SmoothFloats();
         }
 
@@ -660,15 +692,11 @@ namespace FishNet.Component.Animating
         private void CheckSendToServer()
         {
             //Cannot send to server if is server or not client.
-            if (base.IsServer || !base.IsClient)
+            if (base.IsServerStarted || !base.IsClientInitialized)
                 return;
             //Cannot send to server if not client authoritative or don't have authority.
             if (!ClientAuthoritative || !base.IsOwner)
                 return;
-            ////Not enough time passed to send.
-            //if (Time.time < _nextClientSendTime)
-            //    return;
-            //_nextClientSendTime = Time.time + _synchronizeInterval;
 
             /* If there are updated parameters to send.
              * Don't really need to worry about mtu here
@@ -686,13 +714,9 @@ namespace FishNet.Component.Animating
         /// </summary>
         private void CheckSendToClients()
         {
-            //Cannot send to clients if not server.
-            if (!base.IsServer)
+            //Cannot send to clients if not server initialized.
+            if (!base.IsServerInitialized)
                 return;
-            ////Not enough time passed to send.
-            //if (Time.time < _nextServerSendTime)
-            //    return;
-            //_nextServerSendTime = Time.time + _synchronizeInterval;
 
             bool sendFromServer;
             //If client authoritative.
@@ -901,41 +925,63 @@ namespace FishNet.Component.Animating
             {
                 //Add all layers to layer states.
                 for (int i = 0; i < _animator.layerCount; i++)
-                    _unsynchronizedLayerStates[i] = new StateChange();
+                    _unsynchronizedLayerStates[i] = new StateChange(Time.frameCount);
             }
 
-            //Go through each layer which needs to be synchronized.
-            foreach (KeyValuePair<int, StateChange> item in _unsynchronizedLayerStates)
+            /* Only iterate if the collection has values. This is to avoid some
+             * unnecessary caching when collection is empty. */
+            if (_unsynchronizedLayerStates.Count > 0)
             {
-                int layerIndex = item.Key;
-                StateChange sc = item.Value;
-                //If a regular state change.
-                if (!sc.IsCrossfade)
+                int frameCount = Time.frameCount;
+                List<int> sentLayers = GameKit.Dependencies.Utilities.CollectionCaches<int>.RetrieveList();
+                //Go through each layer which needs to be synchronized.
+                foreach (KeyValuePair<int, StateChange> item in _unsynchronizedLayerStates)
                 {
-                    if (ReturnCurrentLayerState(out int stateHash, out float normalizedTime, layerIndex))
+                    /* If a frame has not passed since the state was created
+                     * then do not send it until next tick. State changes take 1 frame
+                     * to be processed by Unity, this check ensures that. */
+                    if (frameCount == item.Value.FrameCount)
+                        continue;
+
+                    //Add to layers being sent. This is so they can be removed from the collection later.
+                    sentLayers.Add(item.Key);
+                    int layerIndex = item.Key;
+                    StateChange sc = item.Value;
+                    //If a regular state change.
+                    if (!sc.IsCrossfade)
                     {
-                        _writer.WriteByte(STATE);
+                        if (ReturnCurrentLayerState(out int stateHash, out float normalizedTime, layerIndex))
+                        {
+                            _writer.WriteByte(STATE);
+                            _writer.WriteByte((byte)layerIndex);
+                            //Current hash will always be too large to compress.
+                            _writer.WriteInt32(stateHash);
+                            _writer.WriteSingle(normalizedTime, AutoPackType.Packed);
+                        }
+                    }
+                    //When it's a crossfade then send crossfade data.
+                    else
+                    {
+                        _writer.WriteByte(CROSSFADE);
                         _writer.WriteByte((byte)layerIndex);
                         //Current hash will always be too large to compress.
-                        _writer.WriteInt32(stateHash);
-                        _writer.WriteSingle(normalizedTime, AutoPackType.Packed);
+                        _writer.WriteInt32(sc.Hash);
+                        _writer.WriteBoolean(sc.FixedTime);
+                        //Times usually can be compressed.
+                        _writer.WriteSingle(sc.DurationTime, AutoPackType.Packed);
+                        _writer.WriteSingle(sc.OffsetTime, AutoPackType.Packed);
+                        _writer.WriteSingle(sc.NormalizedTransitionTime, AutoPackType.Packed);
                     }
                 }
-                //When it's a crossfade then send crossfade data.
-                else
+
+                if (sentLayers.Count > 0)
                 {
-                    _writer.WriteByte(CROSSFADE);
-                    _writer.WriteByte((byte)layerIndex);
-                    //Current hash will always be too large to compress.
-                    _writer.WriteInt32(sc.Hash);
-                    _writer.WriteBoolean(sc.FixedTime);
-                    //Times usually can be compressed.
-                    _writer.WriteSingle(sc.DurationTime, AutoPackType.Packed);
-                    _writer.WriteSingle(sc.OffsetTime, AutoPackType.Packed);
-                    _writer.WriteSingle(sc.NormalizedTransitionTime, AutoPackType.Packed);
+                    for (int i = 0; i < sentLayers.Count; i++)
+                        _unsynchronizedLayerStates.Remove(sentLayers[i]);
+					//Store cache.
+					GameKit.Dependencies.Utilities.CollectionCaches<int>.Store(sentLayers);
                 }
             }
-            _unsynchronizedLayerStates.Clear();
 
             /* Layer weights. */
             for (int layerIndex = 0; layerIndex < _layerWeights.Length; layerIndex++)
@@ -1117,23 +1163,12 @@ namespace FishNet.Component.Animating
         }
 
         /// <summary>
-        /// Forces values to send next update regardless of time remaining.
-        /// Can be useful if you have a short lasting parameter that you want to ensure goes through.
-        /// </summary>
-        public void ForceSend()
-        {
-            //_nextClientSendTime = 0f;
-            //_nextServerSendTime = 0f;
-        }
-
-        /// <summary>
         /// Immediately sends all variables and states of layers.
         /// This is a very bandwidth intensive operation.
         /// </summary>
         public void SendAll()
         {
             _forceAllOnTimed = true;
-            ForceSend();
         }
 
         #region Play.
@@ -1180,10 +1215,10 @@ namespace FishNet.Component.Animating
         {
             if (!_isAnimatorEnabled)
                 return;
-            if (_animator.HasState(layer, hash))
+            if (_animator.HasState(layer, hash) || hash == 0)
             {
                 _animator.Play(hash, layer, normalizedTime);
-                _unsynchronizedLayerStates[layer] = new StateChange();
+                _unsynchronizedLayerStates[layer] = new StateChange(Time.frameCount);
             }
         }
         /// <summary>
@@ -1215,10 +1250,10 @@ namespace FishNet.Component.Animating
         {
             if (!_isAnimatorEnabled)
                 return;
-            if (_animator.HasState(layer, hash))
+            if (_animator.HasState(layer, hash) || hash == 0)
             {
                 _animator.PlayInFixedTime(hash, layer, fixedTime);
-                _unsynchronizedLayerStates[layer] = new StateChange();
+                _unsynchronizedLayerStates[layer] = new StateChange(Time.frameCount);
             }
         }
         #endregion
@@ -1248,10 +1283,10 @@ namespace FishNet.Component.Animating
         {
             if (!_isAnimatorEnabled)
                 return;
-            if (_animator.HasState(layer, hash))
+            if (_animator.HasState(layer, hash) || hash == 0)
             {
                 _animator.CrossFade(hash, normalizedTransitionDuration, layer, normalizedTimeOffset, normalizedTransitionTime);
-                _unsynchronizedLayerStates[layer] = new StateChange(hash, false, normalizedTransitionDuration, normalizedTimeOffset, normalizedTransitionTime);
+                _unsynchronizedLayerStates[layer] = new StateChange(Time.frameCount, hash, false, normalizedTransitionDuration, normalizedTimeOffset, normalizedTransitionTime);
             }
         }
         /// <summary>
@@ -1278,10 +1313,10 @@ namespace FishNet.Component.Animating
         {
             if (!_isAnimatorEnabled)
                 return;
-            if (_animator.HasState(layer, hash))
+            if (_animator.HasState(layer, hash) || hash == 0)
             {
                 _animator.CrossFadeInFixedTime(hash, fixedTransitionDuration, layer, fixedTimeOffset, normalizedTransitionTime);
-                _unsynchronizedLayerStates[layer] = new StateChange(hash, true, fixedTransitionDuration, fixedTimeOffset, normalizedTransitionTime);
+                _unsynchronizedLayerStates[layer] = new StateChange(Time.frameCount, hash, true, fixedTransitionDuration, fixedTimeOffset, normalizedTransitionTime);
             }
         }
         #endregion
@@ -1343,7 +1378,7 @@ namespace FishNet.Component.Animating
             //There is no owner.
             else
             {
-                if (!base.IsServer)
+                if (!base.IsServerStarted)
                     return;
             }
 
@@ -1359,7 +1394,7 @@ namespace FishNet.Component.Animating
              * !ClientAuth + IsServer. */
             bool canSend = (clientAuth && base.IsOwner)
                 || (clientAuth && !base.Owner.IsValid)
-                || (!clientAuth && base.IsServer);
+                || (!clientAuth && base.IsServerStarted);
 
             //Only queue a send if proper side.
             if (canSend)
@@ -1452,4 +1487,3 @@ namespace FishNet.Component.Animating
 
     }
 }
-

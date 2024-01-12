@@ -134,7 +134,7 @@ namespace FishMMO.Server
 		/// <summary>
 		/// Chat message received from a character.
 		/// </summary>
-		private void OnServerChatBroadcastReceived(NetworkConnection conn, ChatBroadcast msg)
+		private void OnServerChatBroadcastReceived(NetworkConnection conn, ChatBroadcast msg, Channel channel)
 		{
 			if (conn.FirstObject != null)
 			{
@@ -196,18 +196,18 @@ namespace FishMMO.Server
 			ChatCommand command = ChatHelper.ParseChatCommand(cmd, ref msg.channel);
 			if (command != null)
 			{
-				msg.senderID = sender.ID;
+				msg.senderID = sender.ID.Value;
 
 				switch (msg.channel)
 				{
 					case ChatChannel.Guild:
-						if (sender.GuildController == null || sender.GuildController.ID < 1)
+						if (sender.GuildController == null || sender.GuildController.ID.Value < 1)
 						{
 							return;
 						}
 
 						// add the senders guild ID
-						msg.text = sender.GuildController.ID + " " + msg.text;
+						msg.text = sender.GuildController.ID.Value + " " + msg.text;
 						break;
 					case ChatChannel.Party:
 						if (sender.PartyController == null || sender.PartyController.ID < 1)
@@ -231,7 +231,7 @@ namespace FishMMO.Server
 				{
 					// write the parsed message to the database
 					using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-					ChatService.Save(dbContext, sender.ID, sender.WorldServerID, Server.SceneServerSystem.ID, msg.channel, msg.text);
+					ChatService.Save(dbContext, sender.ID.Value, sender.WorldServerID, Server.SceneServerSystem.ID, msg.channel, msg.text);
 				}
 			}
 		}
@@ -271,7 +271,7 @@ namespace FishMMO.Server
 				return false;
 			}
 			// get the senders observed scene
-			UnityEngine.SceneManagement.Scene scene = UnityEngine.SceneManagement.SceneManager.GetSceneByName(sender.SceneName);
+			UnityEngine.SceneManagement.Scene scene = UnityEngine.SceneManagement.SceneManager.GetSceneByName(sender.SceneName.Value);
 			if (scene != null)
 			{
 				if (SceneManager.SceneConnections.TryGetValue(scene, out HashSet<NetworkConnection> connections))

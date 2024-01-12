@@ -17,10 +17,10 @@ namespace FishNet.Connection
         /// Last tick this connection sent a ping.
         /// </summary>
         private uint _lastPingTick;
-        /// <summary>
-        /// Number of times client has excessively sent a ping.
-        /// </summary>
-        private float _excessivePingCount;
+        ///// <summary>
+        ///// Number of times client has excessively sent a ping.
+        ///// </summary>
+        //private float _excessivePingCount;
         /// <summary>
         /// Ticks expected between each ping.
         /// </summary>
@@ -33,6 +33,7 @@ namespace FishNet.Connection
         /// </summary>
         private const byte EXCESSIVE_PING_LIMIT = 10;
         #endregion
+
 #pragma warning restore CS0414
         /// <summary>
         /// Initializes for ping.
@@ -51,7 +52,7 @@ namespace FishNet.Connection
         /// </summary>
         private void ResetPingPong()
         {
-            _excessivePingCount = 0;
+            //_excessivePingCount = 0;
             _lastPingTick = 0;
         }
 
@@ -63,13 +64,15 @@ namespace FishNet.Connection
         {
             /* Only check ping conditions in build. Editors are prone to pausing which can
              * improperly kick clients. */
-#if UNITY_EDITOR
-            return true;
-#else
             TimeManager tm = (NetworkManager == null) ? InstanceFinder.TimeManager : NetworkManager.TimeManager;
-            //Server FPS is running low, timing isn't reliable enough to kick clients.
+            /* Server FPS is running low, timing isn't reliable enough to kick clients.
+             * Respond with clients ping and remove infractions just in case the
+             * client received some from other server instabilities. */
             if (tm.LowFrameRate)
-                return true;
+            {
+                //_excessivePingCount = 0f;
+                return false;
+            }
 
             uint currentTick = tm.Tick;
             uint difference = (currentTick - _lastPingTick);
@@ -78,13 +81,13 @@ namespace FishNet.Connection
             //Ping sent too quickly.
             if (difference < _requiredPingTicks)
             {
-                _excessivePingCount += 1f;
-                //Ping limit hit.
-                if (_excessivePingCount >= EXCESSIVE_PING_LIMIT)
-                {
-                    NetworkManager.LogWarning($"Kicked connectionId {ClientId} for excessive pings.");
-                    Disconnect(true);
-                }
+                //_excessivePingCount += 1f;
+                ////Ping limit hit.
+                //if (_excessivePingCount >= EXCESSIVE_PING_LIMIT)
+                //{
+                //    NetworkManager.LogWarning($"Kicked connectionId {ClientId} for excessive pings.");
+                //    Disconnect(true);
+                //}
 
                 //Return to not send pong back.
                 return false;
@@ -92,10 +95,9 @@ namespace FishNet.Connection
             //Ping isnt too fast.
             else
             {
-                _excessivePingCount = UnityEngine.Mathf.Max(0f, _excessivePingCount - 0.5f);
+                //_excessivePingCount = UnityEngine.Mathf.Max(0f, _excessivePingCount - 0.5f);
                 return true;
             }
-#endif
         }
     }
 

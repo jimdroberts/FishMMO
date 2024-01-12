@@ -69,8 +69,13 @@ namespace FishMMO.Shared
 		public Camera EquipmentViewCamera;
 #endif
 		// accountID for reference
-		[SyncVar(SendRate = 0.0f, Channel = Channel.Reliable, ReadPermissions = ReadPermission.Observers, WritePermissions = WritePermission.ServerOnly, OnChange = nameof(OnCharacterIDChanged))]
-		public long ID;
+		public readonly SyncVar<long> ID = new SyncVar<long>(new SyncTypeSetting()
+		{
+			SendRate = 0.0f,
+			Channel = Channel.Reliable,
+			ReadPermission = ReadPermission.Observers,
+			WritePermission = WritePermission.ServerOnly,
+		});
 		private void OnCharacterIDChanged(long prev, long next, bool asServer)
 		{
 #if !UNITY_SERVER
@@ -95,14 +100,34 @@ namespace FishMMO.Shared
 		public long WorldServerID;
 		public AccessLevel AccessLevel = AccessLevel.Player;
 		public bool IsTeleporting = false;
-		[SyncVar(Channel = Channel.Unreliable, ReadPermissions = ReadPermission.OwnerOnly, WritePermissions = WritePermission.ServerOnly)]
-		public long Currency;
-		[SyncVar(Channel = Channel.Unreliable, ReadPermissions = ReadPermission.OwnerOnly, WritePermissions = WritePermission.ServerOnly)]
-		public int RaceID;
-		[SyncVar(Channel = Channel.Unreliable, ReadPermissions = ReadPermission.OwnerOnly, WritePermissions = WritePermission.ServerOnly)]
-		public string RaceName;
-		[SyncVar(Channel = Channel.Unreliable, ReadPermissions = ReadPermission.OwnerOnly, WritePermissions = WritePermission.ServerOnly)]
-		public string SceneName;
+		public readonly SyncVar<long> Currency = new SyncVar<long>(new SyncTypeSetting()
+		{
+			SendRate = 0.0f,
+			Channel = Channel.Unreliable,
+			ReadPermission = ReadPermission.OwnerOnly,
+			WritePermission = WritePermission.ServerOnly,
+		});
+		public readonly SyncVar<int> RaceID = new SyncVar<int>(new SyncTypeSetting()
+		{
+			SendRate = 0.0f,
+			Channel = Channel.Unreliable,
+			ReadPermission = ReadPermission.OwnerOnly,
+			WritePermission = WritePermission.ServerOnly,
+		});
+		public readonly SyncVar<string> RaceName = new SyncVar<string>(new SyncTypeSetting()
+		{
+			SendRate = 0.0f,
+			Channel = Channel.Unreliable,
+			ReadPermission = ReadPermission.OwnerOnly,
+			WritePermission = WritePermission.ServerOnly,
+		});
+		public readonly SyncVar<string> SceneName = new SyncVar<string>(new SyncTypeSetting()
+		{
+			SendRate = 0.0f,
+			Channel = Channel.Unreliable,
+			ReadPermission = ReadPermission.OwnerOnly,
+			WritePermission = WritePermission.ServerOnly,
+		});
 		public int SceneHandle;
 		public string LastChatMessage = "";
 		public DateTime NextChatMessageTime = DateTime.UtcNow;
@@ -110,6 +135,8 @@ namespace FishMMO.Shared
 
 		void Awake()
 		{
+			ID.OnChange += OnCharacterIDChanged;
+
 			Transform = transform;
 
 			#region KCC
@@ -151,6 +178,11 @@ namespace FishMMO.Shared
 			PartyController.Character = this;
 			FriendController = gameObject.GetComponent<FriendController>();
 			FriendController.Character = this;
+		}
+
+		void OnDestroy()
+		{
+			ID.OnChange -= OnCharacterIDChanged;
 		}
 
 #if !UNITY_SERVER
@@ -224,16 +256,16 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void OnPooledReset()
 		{
-			ID = -1;
+			ID.Value = -1;
 			CharacterName = "";
 			Account = "";
 			WorldServerID = 0;
 			AccessLevel = AccessLevel.Player;
 			IsTeleporting = false;
-			Currency = 0;
-			RaceID = 0;
-			RaceName = "";
-			SceneName = "";
+			Currency.Value = 0;
+			RaceID.Value = 0;
+			RaceName.Value = "";
+			SceneName.Value = "";
 			SceneHandle = 0;
 			LastChatMessage = "";
 			NextChatMessageTime = DateTime.UtcNow;

@@ -35,7 +35,7 @@ namespace FishMMO.Server
 		/// <summary>
 		/// Received on server when a Client sends the SrpVerify broadcast message.
 		/// </summary>
-		internal void OnServerSrpVerifyBroadcastReceived(NetworkConnection conn, SrpVerifyBroadcast msg)
+		internal void OnServerSrpVerifyBroadcastReceived(NetworkConnection conn, SrpVerifyBroadcast msg, Channel channel)
 		{
 			/* If client is already authenticated this could be an attack. Connections
 			 * are removed when a client disconnects so there is no reason they should
@@ -99,7 +99,7 @@ namespace FishMMO.Server
 		/// <summary>
 		/// Received on server when a Client sends the SrpProof broadcast message.
 		/// </summary>
-		internal void OnServerSrpProofBroadcastReceived(NetworkConnection conn, SrpProofBroadcast msg)
+		internal void OnServerSrpProofBroadcastReceived(NetworkConnection conn, SrpProofBroadcast msg, Channel channel)
 		{
 			/* If client is already authenticated this could be an attack. Connections
 			 * are removed when a client disconnects so there is no reason they should
@@ -129,7 +129,7 @@ namespace FishMMO.Server
 		/// <summary>
 		/// Received on server when a Client sends the SrpSuccess broadcast message.
 		/// </summary>
-		internal void OnServerSrpSuccessBroadcastReceived(NetworkConnection conn, SrpSuccess msg)
+		internal void OnServerSrpSuccessBroadcastReceived(NetworkConnection conn, SrpSuccess msg, Channel channel)
 		{
 			/* If client is already authenticated this could be an attack. Connections
 			 * are removed when a client disconnects so there is no reason they should

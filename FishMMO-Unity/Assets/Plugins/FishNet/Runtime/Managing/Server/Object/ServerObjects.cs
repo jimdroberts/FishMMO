@@ -1,13 +1,16 @@
-﻿using FishNet.Connection;
+﻿#if UNITY_EDITOR || DEVELOPMENT_BUILD
+#define DEVELOPMENT
+#endif
+using FishNet.Connection;
 using FishNet.Managing.Logging;
 using FishNet.Managing.Object;
 using FishNet.Managing.Timing;
 using FishNet.Object;
 using FishNet.Serializing;
 using FishNet.Transporting;
-using FishNet.Utility;
 using FishNet.Utility.Extension;
-using FishNet.Utility.Performance;
+using GameKit.Dependencies.Utilities;
+using GameKit.Dependencies.Utilities.Types;
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
@@ -50,13 +53,9 @@ namespace FishNet.Managing.Server
         /// <returns></returns>
         internal Queue<int> GetObjectIdCache() => _objectIdCache;
         /// <summary>
-        /// NetworkBehaviours which have dirty SyncVars.
-        /// </summary>
-        private List<NetworkBehaviour> _dirtySyncVarBehaviours = new List<NetworkBehaviour>(20);
-        /// <summary>
         /// NetworkBehaviours which have dirty SyncObjects.
         /// </summary>
-        private List<NetworkBehaviour> _dirtySyncObjectBehaviours = new List<NetworkBehaviour>(20);
+        private List<NetworkBehaviour> _dirtySyncTypeBehaviours = new List<NetworkBehaviour>(20);
         /// <summary>
         /// Objects which need to be destroyed next tick.
         /// This is needed when running as host so host client will get any final messages for the object before they're destroyed.
@@ -93,7 +92,7 @@ namespace FishNet.Managing.Server
         /// </summary>
         private void TimeManager_OnUpdate()
         {
-            if (!base.NetworkManager.IsServer)
+            if (!base.NetworkManager.IsServerStarted)
             {
                 _scenesLoading = false;
                 _loadedScenes.Clear();
@@ -113,21 +112,16 @@ namespace FishNet.Managing.Server
         /// </summary>
         internal void WriteDirtySyncTypes()
         {
+            List<NetworkBehaviour> collection = _dirtySyncTypeBehaviours;
             /* Tells networkbehaviours to check their
              * dirty synctypes. */
-            IterateCollection(_dirtySyncVarBehaviours, false);
-            IterateCollection(_dirtySyncObjectBehaviours, true);
-
-            void IterateCollection(List<NetworkBehaviour> collection, bool isSyncObject)
+            for (int i = 0; i < collection.Count; i++)
             {
-                for (int i = 0; i < collection.Count; i++)
+                bool dirtyCleared = collection[i].WriteDirtySyncTypes();
+                if (dirtyCleared)
                 {
-                    bool dirtyCleared = collection[i].WriteDirtySyncTypes(isSyncObject);
-                    if (dirtyCleared)
-                    {
-                        collection.RemoveAt(i);
-                        i--;
-                    }
+                    collection.RemoveAt(i);
+                    i--;
                 }
             }
         }
@@ -135,12 +129,9 @@ namespace FishNet.Managing.Server
         /// Sets that a NetworkBehaviour has a dirty syncVars.
         /// </summary>
         /// <param name="nb"></param>
-        internal void SetDirtySyncType(NetworkBehaviour nb, bool isSyncObject)
+        internal void SetDirtySyncType(NetworkBehaviour nb)
         {
-            if (isSyncObject)
-                _dirtySyncObjectBehaviours.Add(nb);
-            else
-                _dirtySyncVarBehaviours.Add(nb);
+            _dirtySyncTypeBehaviours.Add(nb);
         }
         #endregion
 
@@ -170,7 +161,7 @@ namespace FishNet.Managing.Server
                 if (!base.NetworkManager.ServerManager.AnyServerStarted())
                 {
                     base.DespawnWithoutSynchronization(true);
-                    base.SceneObjects.Clear();
+                    base.SceneObjects_Internal.Clear();
                     _objectIdCache.Clear();
                     base.NetworkManager.ClearClientsCollection(base.NetworkManager.ServerManager.Clients);
                 }
@@ -348,7 +339,7 @@ namespace FishNet.Managing.Server
             for (int i = 0; i < SceneManager.sceneCount; i++)
                 SetupSceneObjects(SceneManager.GetSceneAt(i));
 
-            Scene ddolScene = DDOLFinder.GetDDOL().gameObject.scene;
+            Scene ddolScene = DDOL.GetDDOL().gameObject.scene;
             if (ddolScene.isLoaded)
                 SetupSceneObjects(ddolScene);
         }
@@ -362,14 +353,23 @@ namespace FishNet.Managing.Server
             if (!s.IsValid())
                 return;
 
-            List<NetworkObject> nobs = CollectionCaches<NetworkObject>.RetrieveList();
-            SceneFN.GetSceneNetworkObjects(s, false, ref nobs);
+            List<NetworkObject> sceneNobs = CollectionCaches<NetworkObject>.RetrieveList();
+            Scenes.GetSceneNetworkObjects(s, false, ref sceneNobs);
 
-            bool isHost = base.NetworkManager.IsHost;
-            int nobsCount = nobs.Count;
+            //Sort the nobs based on initialization order.
+            bool initializationOrderChanged = false;
+            List<NetworkObject> cache = CollectionCaches<NetworkObject>.RetrieveList();
+            foreach (NetworkObject item in sceneNobs)
+                OrderRootByInitializationOrder(item, cache, ref initializationOrderChanged);
+            OrderNestedByInitializationOrder(cache);
+            //Store sceneNobs.
+            CollectionCaches<NetworkObject>.Store(sceneNobs);
+
+            bool isHost = base.NetworkManager.IsHostStarted;
+            int nobsCount = cache.Count;
             for (int i = 0; i < nobsCount; i++)
             {
-                NetworkObject nob = nobs[i];
+                NetworkObject nob = cache[i];
                 //Only setup if a scene object and not initialzied.
                 if (nob.IsNetworked && nob.IsSceneObject && nob.IsDeinitializing)
                 {
@@ -391,7 +391,7 @@ namespace FishNet.Managing.Server
                 }
             }
 
-            CollectionCaches<NetworkObject>.Store(nobs);
+            CollectionCaches<NetworkObject>.Store(cache);
         }
 
         /// <summary>
@@ -417,7 +417,7 @@ namespace FishNet.Managing.Server
         /// Spawns an object over the network.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal void Spawn(NetworkObject networkObject, NetworkConnection ownerConnection = null)
+        internal void Spawn(NetworkObject networkObject, NetworkConnection ownerConnection = null, UnityEngine.SceneManagement.Scene scene = default)
         {
             //Default as false, will change if needed.
             bool predictedSpawn = false;
@@ -461,10 +461,25 @@ namespace FishNet.Managing.Server
                 base.NetworkManager.LogWarning($"{networkObject.name} is already spawned.");
                 return;
             }
-            if (networkObject.ParentNetworkObject != null && !networkObject.ParentNetworkObject.IsSpawned)
+            NetworkBehaviour networkBehaviourParent = networkObject.CurrentParentNetworkBehaviour;
+            if (networkBehaviourParent != null && !networkBehaviourParent.IsSpawned)
             {
-                base.NetworkManager.LogError($"{networkObject.name} cannot be spawned because it has a parent NetworkObject {networkObject.ParentNetworkObject} which is not spawned.");
+                base.NetworkManager.LogError($"{networkObject.name} cannot be spawned because it has a parent NetworkObject {networkBehaviourParent} which is not spawned.");
                 return;
+            }
+            /* If scene is specified make sure the object is root,
+             * and if not move it before network spawning. */
+            if (scene.IsValid())
+            {
+                if (networkObject.transform.parent != null)
+                {
+                    base.NetworkManager.LogError($"{networkObject.name} cannot be moved to scene name {scene.name}, handle {scene.handle} because {networkObject.name} is not root and only root objects may be moved.");
+                    return;
+                }
+                else
+                {
+                    UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(networkObject.gameObject, scene);
+                }
             }
 
             if (predictedSpawn)
@@ -486,7 +501,7 @@ namespace FishNet.Managing.Server
             _spawnCache.Add(networkObject);
             SetupWithoutSynchronization(networkObject, ownerConnection, objectId);
 
-            foreach (NetworkObject item in networkObject.ChildNetworkObjects)
+            foreach (NetworkObject item in networkObject.NestedRootNetworkBehaviours)
             {
                 /* Only spawn recursively if the nob state is unset.
                  * Unset indicates that the nob has not been */
@@ -511,7 +526,7 @@ namespace FishNet.Managing.Server
             int spawnCacheCopyCount = spawnCacheCopy.Count;
             /* If also client then we need to make sure the object renderers have correct visibility.
              * Set visibility based on if the observers contains the clientHost connection. */
-            if (NetworkManager.IsClient)
+            if (NetworkManager.IsClientStarted)
             {
                 int count = spawnCacheCopyCount;
                 for (int i = 0; i < count; i++)
@@ -554,7 +569,14 @@ namespace FishNet.Managing.Server
             if (SpawnTypeEnum.Contains(st, SpawnType.Scene))
             {
                 ulong sceneId = reader.ReadUInt64(AutoPackType.Unpacked);
+#if DEVELOPMENT
+                string sceneName = string.Empty;
+                string objectName = string.Empty;
+                CheckReadSceneObjectDetails(reader, ref sceneName, ref objectName);
+                nob = base.GetSceneNetworkObject(sceneId, sceneName, objectName);
+#else
                 nob = base.GetSceneNetworkObject(sceneId);
+#endif
                 if (!base.CanPredictedSpawn(nob, conn, owner, true))
                     return;
             }
@@ -608,12 +630,8 @@ namespace FishNet.Managing.Server
                 PooledReader syncTypeReader = ReaderPool.Retrieve(syncValues, base.NetworkManager);
                 foreach (NetworkBehaviour nb in nob.NetworkBehaviours)
                 {
-                    //SyncVars.
                     int length = syncTypeReader.ReadInt32();
-                    nb.OnSyncType(syncTypeReader, length, false, true);
-                    //SyncObjects
-                    length = syncTypeReader.ReadInt32();
-                    nb.OnSyncType(syncTypeReader, length, true, true);
+                    nb.OnSyncType(syncTypeReader, length, true);
                 }
                 syncTypeReader.Store();
             }

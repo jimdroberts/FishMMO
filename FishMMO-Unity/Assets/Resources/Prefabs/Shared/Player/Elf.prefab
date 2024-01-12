@@ -302,9 +302,10 @@ MonoBehaviour:
   _extrapolation: 3
   _enableTeleport: 0
   _teleportThreshold: 1
+  _scaleThreshold: 1
   _clientAuthoritative: 0
   _sendToOwner: 0
-  _useNetworkLod: 1
+  _enableNetworkLod: 1
   _interval: 1
   _synchronizePosition: 1
   _positionSnapping:
@@ -630,7 +631,6 @@ MonoBehaviour:
   _addedNetworkObject: {fileID: -3801138672182141599}
   _networkObjectCache: {fileID: -3801138672182141599}
   Character: {fileID: 0}
-  ID: 0
   Rank: 0
 --- !u!114 &7975244870159263472
 MonoBehaviour:
@@ -712,17 +712,12 @@ MonoBehaviour:
   CharacterNameLabel: {fileID: 2817084262407755495}
   CharacterGuildLabel: {fileID: 3362407936794280637}
   EquipmentViewCamera: {fileID: 6274733150604385851}
-  ID: 0
   CharacterName: 
   CharacterNameLower: 
   Account: 
   WorldServerID: 0
   AccessLevel: 1
   IsTeleporting: 0
-  Currency: 0
-  RaceID: 0
-  RaceName: 
-  SceneName: 
   SceneHandle: 0
   LastChatMessage: 
 --- !u!136 &4053032698712144203
@@ -780,13 +775,14 @@ MonoBehaviour:
   - {fileID: 3124264775330692708}
   - {fileID: 4966316198463876083}
   - {fileID: 6038023079570568745}
-  <ParentNetworkObject>k__BackingField: {fileID: 0}
-  <ChildNetworkObjects>k__BackingField: []
+  <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 0}
+  <NestedRootNetworkBehaviours>k__BackingField: []
   SerializedTransformProperties:
     Position: {x: 0, y: 0, z: 0}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
     LocalScale: {x: 1, y: 1, z: 1}
   _isNetworked: 1
+  _isSpawnable: 1
   _isGlobal: 0
   _initializeOrder: 0
   _defaultDespawnType: 0
@@ -796,7 +792,6 @@ MonoBehaviour:
   _scenePathHash: 0
   <SceneId>k__BackingField: 0
   <AssetPathHash>k__BackingField: 16768089385358015845
-  _sceneNetworkObjects: []
 --- !u!1 &5035121396218170946
 GameObject:
   m_ObjectHideFlags: 0

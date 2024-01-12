@@ -17,6 +17,23 @@ namespace FishNet.CodeGenerating.Extension
             return (td.Name == typeof(System.Nullable<>).Name);
         }
 
+        /// <summary>
+        /// Finds the first method by a given name.
+        /// </summary>
+        /// <param name="typeDef"></param>
+        /// <param name="methodName"></param>
+        /// <returns></returns>
+        internal static MethodDefinition GetMethod(this TypeDefinition typeDef, string methodName)
+        {
+            foreach (MethodDefinition md in typeDef.Methods)
+            {
+                if (md.Name == methodName)
+                    return md;
+            }
+
+            return null;
+        }
+
 
         public static MethodReference GetMethodReferenceInBase(this TypeDefinition td, CodegenSession session, string methodName)
         {
@@ -249,6 +266,15 @@ namespace FishNet.CodeGenerating.Extension
             return fd.CreateFieldReference(session);
         }
 
+
+        /// <summary>
+        /// Makes a GenericInstanceType.
+        /// </summary>
+        public static GenericInstanceType MakeGenericInstanceType(this TypeDefinition self, CodegenSession session)
+        {
+            TypeReference tr = session.ImportReference(self);
+            return tr.MakeGenericInstanceType();
+        }
 
 
     }

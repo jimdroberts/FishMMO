@@ -1,6 +1,6 @@
 using FishNet.Managing.Object;
 using FishNet.Object;
-using FishNet.Utility.Extension;
+using GameKit.Dependencies.Utilities;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using UnityEngine;
@@ -14,7 +14,7 @@ namespace FishNet.Utility.Performance
         #region Public.
         /// <summary>
         /// Cache for pooled NetworkObjects.
-        /// </summary>
+        /// </summary>  //Remove on 2024/01/01 Convert to IReadOnlyList.
         public IReadOnlyCollection<Dictionary<int, Stack<NetworkObject>>> Cache => _cache;
         private List<Dictionary<int, Stack<NetworkObject>>> _cache = new List<Dictionary<int, Stack<NetworkObject>>>();
         #endregion
@@ -36,19 +36,50 @@ namespace FishNet.Utility.Performance
         #endregion
 
         /// <summary>
-        /// Returns an object that has been stored with a collectionId of 0. A new object will be created if no stored objects are available.
+        /// Returns an object that has been stored. A new object will be created if no stored objects are available.
         /// </summary>
         /// <param name="prefabId">PrefabId of the object to return.</param>
+        /// <param name="collectionId">CollectionId of the prefab.</param>
+        /// <param name="position">Position for object before enabling it.</param>
+        /// <param name="rotation">Rotation for object before enabling it.</param>
         /// <param name="asServer">True if being called on the server side.</param>
         /// <returns></returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)] //Remove on 2024/01/01.
-#pragma warning disable CS0672 // Member overrides obsolete member
-        public override NetworkObject RetrieveObject(int prefabId, bool asServer)
-#pragma warning restore CS0672 // Member overrides obsolete member
+        public override NetworkObject RetrieveObject(int prefabId, ushort collectionId, Vector3 position, Quaternion rotation, bool asServer)
         {
-            return RetrieveObject(prefabId, 0, asServer);
-        }
+            PrefabObjects po = base.NetworkManager.GetPrefabObjects<PrefabObjects>(collectionId, false);
+            //Quick exit/normal retrieval when not using pooling.
+            if (!_enabled)
+            {
+                NetworkObject prefab = po.GetObject(asServer, prefabId);
+                return Instantiate(prefab, position, rotation);
+            }
 
+            Stack<NetworkObject> cache = GetOrCreateCache(collectionId, prefabId);
+            NetworkObject nob;
+            //Iterate until nob is populated just in case cache entries have been destroyed.
+            do
+            {
+                if (cache.Count == 0)
+                {
+                    NetworkObject prefab = po.GetObject(asServer, prefabId);
+                    /* A null nob should never be returned from spawnables. This means something
+                     * else broke, likely unrelated to the object pool. */
+                    nob = Instantiate(prefab, position, rotation);
+                    //Can break instantly since we know nob is not null.
+                    break;
+                }
+                else
+                {
+                    nob = cache.Pop();
+                    if (nob != null)
+                        nob.transform.SetPositionAndRotation(position, rotation);
+                }
+
+            } while (nob == null);
+
+            nob.gameObject.SetActive(true);
+            return nob;
+        }
         /// <summary>
         /// Returns an object that has been stored. A new object will be created if no stored objects are available.
         /// </summary>
@@ -107,7 +138,7 @@ namespace FishNet.Utility.Performance
             }
 
             instantiated.gameObject.SetActive(false);
-            instantiated.ResetForObjectPool();
+            instantiated.ResetState();
             Stack<NetworkObject> cache = GetOrCreateCache(instantiated.SpawnableCollectionId, instantiated.PrefabId);
             cache.Push(instantiated);
         }

@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using FishNet.Object;
+using FishNet.Transporting;
 
 namespace FishMMO.Shared
 {
@@ -148,7 +149,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Server sent an attribute update broadcast.
 		/// </summary>
-		private void OnClientCharacterAttributeUpdateBroadcastReceived(CharacterAttributeUpdateBroadcast msg)
+		private void OnClientCharacterAttributeUpdateBroadcastReceived(CharacterAttributeUpdateBroadcast msg, Channel channel)
 		{
 			CharacterAttributeTemplate template = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(msg.templateID);
 			if (template != null &&
@@ -161,7 +162,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Server sent a multiple attribute update broadcast.
 		/// </summary>
-		private void OnClientCharacterAttributeUpdateMultipleBroadcastReceived(CharacterAttributeUpdateMultipleBroadcast msg)
+		private void OnClientCharacterAttributeUpdateMultipleBroadcastReceived(CharacterAttributeUpdateMultipleBroadcast msg, Channel channel)
 		{
 			foreach (CharacterAttributeUpdateBroadcast subMsg in msg.attributes)
 			{
@@ -177,7 +178,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Server sent a resource attribute update broadcast.
 		/// </summary>
-		private void OnClientCharacterResourceAttributeUpdateBroadcastReceived(CharacterResourceAttributeUpdateBroadcast msg)
+		private void OnClientCharacterResourceAttributeUpdateBroadcastReceived(CharacterResourceAttributeUpdateBroadcast msg, Channel channel)
 		{
 			CharacterAttributeTemplate template = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(msg.templateID);
 			if (template != null &&
@@ -191,7 +192,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Server sent a multiple resource attribute update broadcast.
 		/// </summary>
-		private void OnClientCharacterResourceAttributeUpdateMultipleBroadcastReceived(CharacterResourceAttributeUpdateMultipleBroadcast msg)
+		private void OnClientCharacterResourceAttributeUpdateMultipleBroadcastReceived(CharacterResourceAttributeUpdateMultipleBroadcast msg, Channel channel)
 		{
 			foreach (CharacterResourceAttributeUpdateBroadcast subMsg in msg.attributes)
 			{

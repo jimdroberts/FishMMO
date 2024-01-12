@@ -61,7 +61,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Server sent an achievement update broadcast.
 		/// </summary>
-		private void OnClientAchievementUpdateBroadcastReceived(AchievementUpdateBroadcast msg)
+		private void OnClientAchievementUpdateBroadcastReceived(AchievementUpdateBroadcast msg, Channel channel)
 		{
 			AchievementTemplate template = AchievementTemplate.Get<AchievementTemplate>(msg.templateID);
 			if (template != null &&
@@ -74,7 +74,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Server sent a multiple achievement update broadcast.
 		/// </summary>
-		private void OnClientAchievementUpdateMultipleBroadcastReceived(AchievementUpdateMultipleBroadcast msg)
+		private void OnClientAchievementUpdateMultipleBroadcastReceived(AchievementUpdateMultipleBroadcast msg, Channel channel)
 		{
 			foreach (AchievementUpdateBroadcast subMsg in msg.achievements)
 			{
@@ -163,7 +163,7 @@ namespace FishMMO.Shared
 #if UNITY_SERVER
 	private void HandleRewards(AchievementTier tier)
 	{
-		if (base.IsServer && Character.Owner != null)
+		if (base.IsServerStarted && Character.Owner != null)
 		{
 			BaseItemTemplate[] itemRewards = tier.ItemRewards;
 			if (itemRewards != null && itemRewards.Length > 0 && Character.InventoryController.FreeSlots() >= itemRewards.Length)

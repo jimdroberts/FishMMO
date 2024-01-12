@@ -1,9 +1,7 @@
-﻿#if UNITY_2020_3_OR_NEWER && UNITY_EDITOR_WIN
-using FishNet.CodeAnalysis.Annotations;
-#endif
-using FishNet.Connection;
+﻿using FishNet.Connection;
 using FishNet.Documenting;
 using FishNet.Object.Synchronizing.Internal;
+using System.Runtime.CompilerServices;
 using UnityEngine;
 
 namespace FishNet.Object
@@ -40,9 +38,7 @@ namespace FishNet.Object
         /// </summary>
         internal void InvokeSyncTypeOnStartCallbacks(bool asServer)
         {
-            foreach (SyncBase item in _syncVars.Values)
-                item.OnStartCallback(asServer);
-            foreach (SyncBase item in _syncObjects.Values)
+            foreach (SyncBase item in _syncTypes.Values)
                 item.OnStartCallback(asServer);
         }
 
@@ -51,9 +47,7 @@ namespace FishNet.Object
         /// </summary>
         internal void InvokeSyncTypeOnStopCallbacks(bool asServer)
         {
-            foreach (SyncBase item in _syncVars.Values)
-                item.OnStopCallback(asServer);
-            foreach (SyncBase item in _syncObjects.Values)
+            foreach (SyncBase item in _syncTypes.Values)
                 item.OnStopCallback(asServer);
         }
 
@@ -68,138 +62,148 @@ namespace FishNet.Object
             {
                 if (_onStartNetworkCalled)
                     return;
-                OnStartNetwork();
+                OnStartNetwork_Internal();
             }
             else
             {
                 if (_onStopNetworkCalled)
                     return;
-                OnStopNetwork();
+                OnStopNetwork_Internal();
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void OnStartNetwork_Internal()
+        {
+            _onStartNetworkCalled = true;
+            _onStopNetworkCalled = false;
+            OnStartNetwork();
+        }
         /// <summary>
         /// Called when the network has initialized this object. May be called for server or client but will only be called once.
         /// When as host or server this method will run before OnStartServer. 
         /// When as client only the method will run before OnStartClient.
         /// </summary>
-#if UNITY_2020_3_OR_NEWER && UNITY_EDITOR_WIN
-        [OverrideMustCallBase(BaseCallMustBeFirstStatement = true)]
-#endif
-        public virtual void OnStartNetwork()
+        public virtual void OnStartNetwork() { }
+
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void OnStopNetwork_Internal()
         {
-            _onStartNetworkCalled = true;
-            _onStopNetworkCalled = false;
+            _onStopNetworkCalled = true;
+            _onStartNetworkCalled = false;
+            OnStopNetwork();
         }
         /// <summary>
         /// Called when the network is deinitializing this object. May be called for server or client but will only be called once.
         /// When as host or server this method will run after OnStopServer.
         /// When as client only this method will run after OnStopClient.
         /// </summary>
-#if UNITY_2020_3_OR_NEWER && UNITY_EDITOR_WIN
-        [OverrideMustCallBase(BaseCallMustBeFirstStatement = true)]
-#endif
-        public virtual void OnStopNetwork()
-        {
-            _onStopNetworkCalled = true;
-            _onStartNetworkCalled = false;
-        }
+        public virtual void OnStopNetwork() { }
 
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void OnStartServer_Internal()
+        {
+            OnStartServerCalled = true;
+            OnStartServer();
+        }
         /// <summary>
         /// Called on the server after initializing this object.
         /// SyncTypes modified before or during this method will be sent to clients in the spawn message.
         /// </summary> 
-#if UNITY_2020_3_OR_NEWER && UNITY_EDITOR_WIN
-        [OverrideMustCallBase(BaseCallMustBeFirstStatement = true)]
-#endif
-        public virtual void OnStartServer()
+        public virtual void OnStartServer() { }
+
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void OnStopServer_Internal()
         {
-            OnStartServerCalled = true;
+            OnStartServerCalled = false;
+            ReturnRpcLinks();
+            OnStopServer();
         }
         /// <summary>
         /// Called on the server before deinitializing this object.
         /// </summary>
-#if UNITY_2020_3_OR_NEWER && UNITY_EDITOR_WIN
-        [OverrideMustCallBase(BaseCallMustBeFirstStatement = true)]
-#endif
-        public virtual void OnStopServer()
+        public virtual void OnStopServer() { }
+
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void OnOwnershipServer_Internal(NetworkConnection prevOwner)
         {
-            OnStartServerCalled = false;
-            ReturnRpcLinks();
+            CallClearReplicateCache(true);
+            OnOwnershipServer(prevOwner);
         }
         /// <summary>
         /// Called on the server after ownership has changed.
         /// </summary>
         /// <param name="prevOwner">Previous owner of this object.</param>
-#if UNITY_2020_3_OR_NEWER && UNITY_EDITOR_WIN
-        [OverrideMustCallBase(BaseCallMustBeFirstStatement = true)]
-#endif
-        public virtual void OnOwnershipServer(NetworkConnection prevOwner)
-        {
-            //When switching ownership always clear replicate cache on server.
-#if !PREDICTION_V2
-            ClearReplicateCache_Internal(true);
-#else
-            ClearReplicateCache();
-#endif
-        }
+        public virtual void OnOwnershipServer(NetworkConnection prevOwner) { }
+
         /// <summary>
         /// Called on the server after a spawn message for this object has been sent to clients.
         /// Useful for sending remote calls or data to clients.
         /// </summary>
         /// <param name="connection">Connection the object is being spawned for.</param>
-#if UNITY_2020_3_OR_NEWER && UNITY_EDITOR_WIN
-        [OverrideMustCallBase(BaseCallMustBeFirstStatement = true)]
-#endif
         public virtual void OnSpawnServer(NetworkConnection connection) { }
         /// <summary>
         /// Called on the server before a despawn message for this object has been sent to connection.
         /// Useful for sending remote calls or actions to clients.
         /// </summary>
-#if UNITY_2020_3_OR_NEWER && UNITY_EDITOR_WIN
-        [OverrideMustCallBase(BaseCallMustBeFirstStatement = true)]
-#endif
         public virtual void OnDespawnServer(NetworkConnection connection) { }
+
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void OnStartClient_Internal()
+        {
+            OnStartClientCalled = true;
+            OnStartClient();
+        }
         /// <summary>
         /// Called on the client after initializing this object.
         /// </summary>
-#if UNITY_2020_3_OR_NEWER && UNITY_EDITOR_WIN
-        [OverrideMustCallBase(BaseCallMustBeFirstStatement = true)]
-#endif
-        public virtual void OnStartClient()
+        public virtual void OnStartClient() { }
+
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void OnStopClient_Internal()
         {
-            OnStartClientCalled = true;
+            OnStartClientCalled = false;
+            OnStopClient();
         }
         /// <summary>
         /// Called on the client before deinitializing this object.
         /// </summary>
-#if UNITY_2020_3_OR_NEWER && UNITY_EDITOR_WIN
-        [OverrideMustCallBase(BaseCallMustBeFirstStatement = true)]
-#endif
-        public virtual void OnStopClient()
+        public virtual void OnStopClient() { }
+
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void OnOwnershipClient_Internal(NetworkConnection prevOwner)
         {
-            OnStartClientCalled = false;
+            //If losing or gaining ownership then clear replicate cache.
+            if (IsOwner || prevOwner == LocalConnection)
+                CallClearReplicateCache(false);
+
+            OnOwnershipClient(prevOwner);
         }
         /// <summary>
         /// Called on the client after gaining or losing ownership.
         /// </summary>
         /// <param name="prevOwner">Previous owner of this object.</param>
-#if UNITY_2020_3_OR_NEWER && UNITY_EDITOR_WIN
-        [OverrideMustCallBase(BaseCallMustBeFirstStatement = true)]
-#endif
-        public virtual void OnOwnershipClient(NetworkConnection prevOwner)
-        {
-            //If losing or gaining ownership then clear replicate cache.
-            if (IsOwner || prevOwner == LocalConnection)
-            {
-#if !PREDICTION_V2
-                ClearReplicateCache_Internal(false);
-#else
-                ClearReplicateCache();
-#endif
-            } 
-        }
+        public virtual void OnOwnershipClient(NetworkConnection prevOwner) { }
 
+
+        /// <summary>
+        /// Calls ClearReplicateCache for prediction v1 or v2.
+        /// </summary>
+        private void CallClearReplicateCache(bool asServer)
+        {
+#if !PREDICTION_V2
+            ClearReplicateCache_Virtual(asServer);
+#else
+            ClearReplicateCache();
+#endif
+        }
     }
 
 

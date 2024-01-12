@@ -1,3 +1,4 @@
+using FishNet.Transporting;
 using FishNet.Managing.Scened;
 using UnityEngine;
 using UnityEngine.UI;
@@ -39,7 +40,7 @@ namespace FishMMO.Client
 		}
 
 		#region Network Events
-		public void OnClientSceneWorldReconnectBroadcastReceived(SceneWorldReconnectBroadcast reconnect)
+		public void OnClientSceneWorldReconnectBroadcastReceived(SceneWorldReconnectBroadcast reconnect, Channel channel)
 		{
 			if (!string.IsNullOrWhiteSpace(reconnect.sceneName) &&
 				!string.IsNullOrWhiteSpace(reconnect.teleporterName) &&

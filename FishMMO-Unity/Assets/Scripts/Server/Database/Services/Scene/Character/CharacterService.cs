@@ -250,10 +250,10 @@ namespace FishMMO.Server.DatabaseServices
 			existingCharacter.Account = character.Account;
 			existingCharacter.WorldServerID = character.WorldServerID;
 			existingCharacter.AccessLevel = (byte)character.AccessLevel;
-			existingCharacter.RaceID = character.RaceID;
-			existingCharacter.Currency = character.Currency;
+			existingCharacter.RaceID = character.RaceID.Value;
+			existingCharacter.Currency = character.Currency.Value;
 			existingCharacter.SceneHandle = character.SceneHandle;
-			existingCharacter.SceneName = character.SceneName;
+			existingCharacter.SceneName = character.SceneName.Value;
 			existingCharacter.X = charPosition.x;
 			existingCharacter.Y = charPosition.y;
 			existingCharacter.Z = charPosition.z;
@@ -341,7 +341,7 @@ namespace FishMMO.Server.DatabaseServices
 				if (prefab != null)
 				{
 					// instantiate the character object
-					NetworkObject nob = networkManager.GetPooledInstantiated(prefab, prefab.SpawnableCollectionId, true);
+					NetworkObject nob = networkManager.GetPooledInstantiated(prefab, true);
 
 					character = nob.GetComponent<Character>();
 					if (character != null)
@@ -349,17 +349,17 @@ namespace FishMMO.Server.DatabaseServices
 						character.Motor.SetPositionAndRotationAndVelocity(new Vector3(dbCharacter.X, dbCharacter.Y, dbCharacter.Z),
 																		  new Quaternion(dbCharacter.RotX, dbCharacter.RotY, dbCharacter.RotZ, dbCharacter.RotW),
 																		  Vector3.zero);
-						character.ID = dbCharacter.ID;
+						character.ID.Value = dbCharacter.ID;
 						character.CharacterName = dbCharacter.Name;
 						character.CharacterNameLower = dbCharacter.NameLowercase;
 						character.Account = dbCharacter.Account;
 						character.WorldServerID = dbCharacter.WorldServerID;
 						character.AccessLevel = (AccessLevel)dbCharacter.AccessLevel;
-						character.RaceID = dbCharacter.RaceID;
-						character.Currency = dbCharacter.Currency;
-						character.RaceName = prefab.name;
+						character.RaceID.Value = dbCharacter.RaceID;
+						character.Currency.Value = dbCharacter.Currency;
+						character.RaceName.Value = prefab.name;
 						character.SceneHandle = dbCharacter.SceneHandle;
-						character.SceneName = dbCharacter.SceneName;
+						character.SceneName.Value = dbCharacter.SceneName;
 						character.IsTeleporting = false;
 
 						CharacterAttributeService.Load(dbContext, character);

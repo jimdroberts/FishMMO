@@ -1,4 +1,7 @@
-﻿using FishNet.Component.Observing;
+﻿#if UNITY_EDITOR || DEVELOPMENT_BUILD
+#define DEVELOPMENT
+#endif
+using FishNet.Component.Observing;
 using FishNet.Connection;
 using FishNet.Managing.Logging;
 using FishNet.Managing.Utility;
@@ -6,6 +9,7 @@ using FishNet.Object;
 using FishNet.Serializing;
 using FishNet.Transporting;
 using FishNet.Utility.Extension;
+using GameKit.Dependencies.Utilities;
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
@@ -21,11 +25,6 @@ namespace FishNet.Managing.Object
         /// NetworkObjects which are currently active.
         /// </summary>
         public Dictionary<int, NetworkObject> Spawned = new Dictionary<int, NetworkObject>();
-        /// <summary>
-        /// NetworkObjects which are currently active on the local client.
-        /// //TODO Move this to ClientObjects.
-        /// </summary>
-        internal List<NetworkObject> LocalClientSpawned = new List<NetworkObject>();
         #endregion
 
         #region Protected.
@@ -40,8 +39,13 @@ namespace FishNet.Managing.Object
         /// <summary>
         /// Objects in currently loaded scenes. These objects can be active or inactive.
         /// Key is the objectId while value is the object. Key is not the same as NetworkObject.ObjectId.
+        /// </summary> 
+        protected Dictionary<ulong, NetworkObject> SceneObjects_Internal = new Dictionary<ulong, NetworkObject>();
+        /// <summary>
+        /// Objects in currently loaded scenes. These objects can be active or inactive.
+        /// Key is the objectId while value is the object. Key is not the same as NetworkObject.ObjectId.
         /// </summary>
-        protected Dictionary<ulong, NetworkObject> SceneObjects = new Dictionary<ulong, NetworkObject>();
+        public IReadOnlyDictionary<ulong, NetworkObject> SceneObjects => SceneObjects_Internal;
         #endregion
 
         #region Private.
@@ -54,7 +58,7 @@ namespace FishNet.Managing.Object
         protected virtual void Initialize(NetworkManager manager)
         {
             NetworkManager = manager;
-            _hashGrid = manager.GetInstance<HashGrid>(false);
+            manager.TryGetInstance<HashGrid>(out _hashGrid);
         }
 
         /// <summary>
@@ -91,11 +95,9 @@ namespace FishNet.Managing.Object
         /// <summary>
         /// Removes a NetworkedObject from spawned.
         /// </summary>
-        private void RemoveFromSpawned(NetworkObject nob, bool unexpectedlyDestroyed, bool asServer)
+        protected virtual void RemoveFromSpawned(NetworkObject nob, bool unexpectedlyDestroyed, bool asServer)
         {
             Spawned.Remove(nob.ObjectId);
-            if (!asServer)
-                LocalClientSpawned.Remove(nob);
             //Do the same with SceneObjects.
             if (unexpectedlyDestroyed && nob.IsSceneObject)
                 RemoveFromSceneObjects(nob);
@@ -142,7 +144,7 @@ namespace FishNet.Managing.Object
                 //Not as server.
                 else
                 {
-                    bool isServer = NetworkManager.IsServer;
+                    bool isServer = NetworkManager.IsServerStarted;
                     //Only check to destroy if not a scene object.
                     if (!nob.IsSceneObject)
                     {
@@ -180,14 +182,14 @@ namespace FishNet.Managing.Object
                 if (asServer)
                 {
                     //If not clientHost then the object can be disabled.
-                    if (!NetworkManager.IsClient)
+                    if (!NetworkManager.IsClientStarted)
                         nob.gameObject.SetActive(false);
                 }
                 //Not as server.
                 else
                 {
                     //If the server is not active then the object can be disabled.
-                    if (!NetworkManager.IsServer)
+                    if (!NetworkManager.IsServerStarted)
                     {
                         nob.gameObject.SetActive(false);
                     }
@@ -215,7 +217,7 @@ namespace FishNet.Managing.Object
                  * individual despawns for each child. */
                 if (asServer)
                 {
-                    foreach (NetworkObject childNob in nob.ChildNetworkObjects)
+                    foreach (NetworkObject childNob in nob.NestedRootNetworkBehaviours)
                     {
                         if (childNob != null && !childNob.IsDeinitializing)
                             Despawn(childNob, despawnType, asServer);
@@ -234,7 +236,7 @@ namespace FishNet.Managing.Object
         protected void UpdateNetworkBehavioursForSceneObject(NetworkObject nob, bool asServer)
         {
             //Would have already been done on server side.
-            if (!asServer && NetworkManager.IsServer)
+            if (!asServer && NetworkManager.IsServerStarted)
                 return;
 
             InitializePrefab(nob, -1);
@@ -294,7 +296,7 @@ namespace FishNet.Managing.Object
             * asServer and server isn't running. This
             * prevents objects from affecting the server
             * as host when being modified client side. */
-            if (asServer || (!asServer && !NetworkManager.IsServer))
+            if (asServer || (!asServer && !NetworkManager.IsServerStarted))
             {
                 if (removeFromSpawned)
                     RemoveFromSpawned(nob, false, asServer);
@@ -315,26 +317,17 @@ namespace FishNet.Managing.Object
         /// <summary>
         /// Adds a NetworkObject to Spawned.
         /// </summary>
-        /// <param name="nob"></param>
-        internal void AddToSpawned(NetworkObject nob, bool asServer)
+        internal virtual void AddToSpawned(NetworkObject nob, bool asServer)
         {
             Spawned[nob.ObjectId] = nob;
-            if (!asServer)
-            {
-                LocalClientSpawned.Add(nob);
-                //If being added as client and is also server.
-                if (NetworkManager.IsServer)
-                    nob.SetRenderersVisible(true);
-            }
         }
 
         /// <summary>
         /// Adds a NetworkObject to SceneObjects.
         /// </summary>
-        /// <param name="nob"></param>
         protected internal void AddToSceneObjects(NetworkObject nob)
         {
-            SceneObjects[nob.SceneId] = nob;
+            SceneObjects_Internal[nob.SceneId] = nob;
         }
 
         /// <summary>
@@ -343,7 +336,7 @@ namespace FishNet.Managing.Object
         /// <param name="nob"></param>
         protected internal void RemoveFromSceneObjects(NetworkObject nob)
         {
-            SceneObjects.Remove(nob.SceneId);
+            SceneObjects_Internal.Remove(nob.SceneId);
         }
 
         /// <summary>
@@ -352,7 +345,7 @@ namespace FishNet.Managing.Object
         /// <param name="nob"></param>
         protected internal void RemoveFromSceneObjects(ulong sceneId)
         {
-            SceneObjects.Remove(sceneId);
+            SceneObjects_Internal.Remove(sceneId);
         }
 
         /// <summary>
@@ -430,12 +423,38 @@ namespace FishNet.Managing.Object
         {
             NetworkBehaviour nb = reader.ReadNetworkBehaviour();
             int dataLength = Packets.GetPacketLength((ushort)PacketId.ServerRpc, reader, channel);
-            if (nb != null)
+            if (nb != null && nb.IsSpawned)
                 nb.OnReplicateRpc(null, reader, conn, channel);
             else
                 SkipDataLength((ushort)PacketId.ServerRpc, reader, dataLength);
         }
 
+#if DEVELOPMENT
+        /// <summary>
+        /// Checks to write a scene object's details into a writer.
+        /// </summary>
+        protected void CheckWriteSceneObjectDetails(NetworkObject nob, Writer w)
+        {
+            //Check to write additional information if a scene object.
+            if (NetworkManager.DebugManager.WriteSceneObjectDetails)
+            {
+                w.WriteString(nob.gameObject.scene.name);
+                w.WriteString(nob.gameObject.name);
+            }
+        }
+
+        /// <summary>
+        /// Checks to read a scene object's details and populates values if read was successful.
+        /// </summary>
+        protected void CheckReadSceneObjectDetails(Reader r, ref string sceneName, ref string objectName)
+        {
+            if (NetworkManager.DebugManager.WriteSceneObjectDetails)
+            {
+                sceneName = r.ReadString();
+                objectName = r.ReadString();
+            }
+        }
+#endif
 
     }
 

@@ -76,7 +76,7 @@ namespace FishMMO.Server
 					// which would prevent the need to do all of this lookup stuff.
 					foreach (Character character in ConnectionCharacters.Values)
 					{
-						if(Server.SceneServerSystem.WorldSceneDetailsCache.Scenes.TryGetValue(character.SceneName, out WorldSceneDetails details))
+						if(Server.SceneServerSystem.WorldSceneDetailsCache.Scenes.TryGetValue(character.SceneName.Value, out WorldSceneDetails details))
 						{
 							// Check if they are within some bounds, if not we need to move them to a respawn location!
 							// TODO: Try to prevent combat escape, maybe this needs to be handled on the game design level?
@@ -155,7 +155,7 @@ namespace FishMMO.Server
 					WaitingSceneLoadCharacters.Remove(conn);
 
 					if (Server.SceneServerSystem.TryGetSceneInstanceDetails(waitingSceneCharacter.WorldServerID,
-																			waitingSceneCharacter.SceneName,
+																			waitingSceneCharacter.SceneName.Value,
 																			waitingSceneCharacter.SceneHandle,
 																			out SceneInstanceDetails instance))
 					{
@@ -177,13 +177,13 @@ namespace FishMMO.Server
 					}
 
 					// remove the characterID->character entry
-					CharactersByID.Remove(character.ID);
+					CharactersByID.Remove(character.ID.Value);
 					// remove the characterName->character entry
 					CharactersByLowerCaseName.Remove(character.CharacterNameLower);
 					// remove the worldid<characterID->character> entry
 					if (CharactersByWorld.TryGetValue(character.WorldServerID, out Dictionary<long, Character> characters))
 					{
-						characters.Remove(character.ID);
+						characters.Remove(character.ID.Value);
 					}
 
 					OnDisconnect?.Invoke(conn, waitingSceneCharacter);
@@ -196,7 +196,7 @@ namespace FishMMO.Server
 
 					// update scene instance details
 					if (Server.SceneServerSystem.TryGetSceneInstanceDetails(character.WorldServerID,
-																			character.SceneName,
+																			character.SceneName.Value,
 																			character.SceneHandle,
 																			out SceneInstanceDetails instance))
 					{
@@ -245,7 +245,7 @@ namespace FishMMO.Server
 				if (CharacterService.TryGet(dbContext, selectedCharacterID, Server.NetworkManager, out Character character))
 				{
 					// check if the scene is valid, loaded, and cached properly
-					if (Server.SceneServerSystem.TryGetSceneInstanceDetails(character.WorldServerID, character.SceneName, character.SceneHandle, out SceneInstanceDetails instance) &&
+					if (Server.SceneServerSystem.TryGetSceneInstanceDetails(character.WorldServerID, character.SceneName.Value, character.SceneHandle, out SceneInstanceDetails instance) &&
 						Server.SceneServerSystem.TryLoadSceneForConnection(conn, instance))
 					{
 						OnAfterLoadCharacter?.Invoke(conn, character);
@@ -255,7 +255,7 @@ namespace FishMMO.Server
 						// update character count
 						++instance.CharacterCount;
 
-						Debug.Log("Character System: " + character.CharacterName + " is loading Scene: " + character.SceneName + ":" + character.SceneHandle);
+						Debug.Log("Character System: " + character.CharacterName + " is loading Scene: " + character.SceneName.Value + ":" + character.SceneHandle);
 					}
 					else
 					{
@@ -304,14 +304,14 @@ namespace FishMMO.Server
 				// add a connection->character map for ease of use
 				ConnectionCharacters[conn] = character;
 				// add a characterName->character map for ease of use
-				CharactersByID[character.ID] = character;
+				CharactersByID[character.ID.Value] = character;
 				CharactersByLowerCaseName[character.CharacterNameLower] = character;
 				// add a worldID<characterID->character> map for ease of use
 				if (!CharactersByWorld.TryGetValue(character.WorldServerID, out Dictionary<long, Character> characters))
 				{
 					CharactersByWorld.Add(character.WorldServerID, characters = new Dictionary<long, Character>());
 				}
-				characters[character.ID] = character;
+				characters[character.ID.Value] = character;
 
 				// character becomes immortal on disconnect and mortal when loaded into the scene
 				if (character.DamageController != null)
@@ -492,10 +492,10 @@ namespace FishMMO.Server
 			#endregion
 
 			#region Guild
-			if (character.GuildController != null && character.GuildController.ID > 0)
+			if (character.GuildController != null && character.GuildController.ID.Value > 0)
 			{
 				// get the current guild members from the database
-				List<CharacterGuildEntity> dbMembers = CharacterGuildService.Members(dbContext, character.GuildController.ID);
+				List<CharacterGuildEntity> dbMembers = CharacterGuildService.Members(dbContext, character.GuildController.ID.Value);
 
 				var addBroadcasts = dbMembers.Select(x => new GuildAddBroadcast()
 				{

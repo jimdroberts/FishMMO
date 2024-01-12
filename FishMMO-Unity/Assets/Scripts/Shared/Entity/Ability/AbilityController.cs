@@ -107,7 +107,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Server sent an add known ability broadcast.
 		/// </summary>
-		private void OnClientKnownAbilityAddBroadcastReceived(KnownAbilityAddBroadcast msg)
+		private void OnClientKnownAbilityAddBroadcastReceived(KnownAbilityAddBroadcast msg, Channel channel)
 		{
 			BaseAbilityTemplate baseAbilityTemplate = BaseAbilityTemplate.Get<BaseAbilityTemplate>(msg.templateID);
 			if (baseAbilityTemplate != null)
@@ -124,7 +124,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Server sent an add known ability broadcast.
 		/// </summary>
-		private void OnClientKnownAbilityAddMultipleBroadcastReceived(KnownAbilityAddMultipleBroadcast msg)
+		private void OnClientKnownAbilityAddMultipleBroadcastReceived(KnownAbilityAddMultipleBroadcast msg, Channel channel)
 		{
 			List<BaseAbilityTemplate> templates = new List<BaseAbilityTemplate>();
 			foreach (KnownAbilityAddBroadcast knownAbility in msg.abilities)
@@ -146,7 +146,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Server sent an add ability broadcast.
 		/// </summary>
-		private void OnClientAbilityAddBroadcastReceived(AbilityAddBroadcast msg)
+		private void OnClientAbilityAddBroadcastReceived(AbilityAddBroadcast msg, Channel channel)
 		{
 			AbilityTemplate abilityTemplate = AbilityTemplate.Get<AbilityTemplate>(msg.templateID);
 			if (abilityTemplate != null)
@@ -164,7 +164,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Server sent an add multiple ability broadcast.
 		/// </summary>
-		private void OnClientAbilityAddMultipleBroadcastReceived(AbilityAddMultipleBroadcast msg)
+		private void OnClientAbilityAddMultipleBroadcastReceived(AbilityAddMultipleBroadcast msg, Channel channel)
 		{
 			foreach (AbilityAddBroadcast ability in msg.abilities)
 			{
@@ -208,7 +208,7 @@ namespace FishMMO.Shared
 				HandleCharacterInput(out AbilityActivationReplicateData activationData);
 				Replicate(activationData, false);
 			}
-			if (base.IsServer)
+			if (base.IsServerStarted)
 			{
 				Replicate(default, true);
 				AbilityReconcileData state = new AbilityReconcileData(interruptQueued,
@@ -228,15 +228,12 @@ namespace FishMMO.Shared
 			}
 			else if (IsActivating)
 			{
+				remainingTime -= (float)base.TimeManager.TickDelta;
+
 				if (remainingTime > 0.0f)
 				{
-					remainingTime -= (float)base.TimeManager.TickDelta;
-
 					// handle ability update here, display cast bar, display hitbox telegraphs, etc
-					if (!replaying)
-					{
-						OnUpdate?.Invoke(currentAbility.Name, remainingTime, currentAbility.ActivationTime * CalculateSpeedReduction(currentAbility.Template.ActivationSpeedReductionAttribute));
-					}
+					OnUpdate?.Invoke(currentAbility.Name, remainingTime, currentAbility.ActivationTime * CalculateSpeedReduction(currentAbility.Template.ActivationSpeedReductionAttribute));
 
 					// handle held ability updates
 					if (heldKey != KeyCode.None)
@@ -306,11 +303,7 @@ namespace FishMMO.Shared
 				interruptQueued = false;
 				currentAbility = validatedAbility;
 				remainingTime = validatedAbility.ActivationTime * CalculateSpeedReduction(validatedAbility.Template.ActivationSpeedReductionAttribute);
-				if ((ChanneledTemplate != null && validatedAbility.HasAbilityEvent(ChanneledTemplate.ID)) ||
-					(ChargedTemplate != null && validatedAbility.HasAbilityEvent(ChargedTemplate.ID)))
-				{
-					heldKey = activationData.HeldKey;
-				}
+				heldKey = activationData.HeldKey;
 			}
 		}
 
@@ -338,7 +331,7 @@ namespace FishMMO.Shared
 				CharacterAttribute speedReduction;
 				if (Character.AttributeController.TryGetAttribute(attribute.ID, out speedReduction))
 				{
-					return 1.0f - ((speedReduction.FinalValue * 0.01f).Clamp(0.0f, 1.0f));
+					return 1.0f - ((speedReduction.FinalValueAsPct).Clamp(0.0f, 1.0f));
 				}
 			}
 			return 1.0f;

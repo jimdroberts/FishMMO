@@ -110,7 +110,7 @@ namespace FishMMO.Client
 			return nameToID.TryGetValue(name, out id);
 		}
 
-		private static void OnClientNamingBroadcastReceived(NamingBroadcast msg)
+		private static void OnClientNamingBroadcastReceived(NamingBroadcast msg, Channel channel)
 		{
 			if (pendingNameRequests.TryGetValue(msg.type, out Dictionary<long, Action<string>> pendingRequests))
 			{

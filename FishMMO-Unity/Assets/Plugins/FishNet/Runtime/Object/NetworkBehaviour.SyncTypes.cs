@@ -1,11 +1,16 @@
-﻿using FishNet.Connection;
+﻿using FishNet.CodeGenerating;
+using FishNet.Connection;
 using FishNet.Documenting;
 using FishNet.Managing.Transporting;
+using FishNet.Object.Delegating;
 using FishNet.Object.Synchronizing;
 using FishNet.Object.Synchronizing.Internal;
 using FishNet.Serializing;
+using FishNet.Serializing.Helping;
 using FishNet.Transporting;
 using FishNet.Utility.Extension;
+using GameKit.Dependencies.Utilities;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -57,21 +62,13 @@ namespace FishNet.Object
         /// </summary>
         private SyncTypeWriter[] _syncTypeWriters;
         /// <summary>
-        /// SyncVars within this NetworkBehaviour.
+        /// SyncTypes within this NetworkBehaviour.
         /// </summary>
-        private Dictionary<uint, SyncBase> _syncVars = new Dictionary<uint, SyncBase>();
+        private Dictionary<uint, SyncBase> _syncTypes = new Dictionary<uint, SyncBase>();
         /// <summary>
-        /// True if at least one syncVar is dirty.
+        /// True if at least one syncType is dirty.
         /// </summary>
-        private bool _syncVarDirty;
-        /// <summary>
-        /// SyncVars within this NetworkBehaviour.
-        /// </summary>
-        private Dictionary<uint, SyncBase> _syncObjects = new Dictionary<uint, SyncBase>();
-        /// <summary>
-        /// True if at least one syncObject is dirty.
-        /// </summary>
-        private bool _syncObjectDirty;
+        private bool _syncTypeDirty;
         /// <summary>
         /// All ReadPermission values.
         /// </summary>
@@ -85,19 +82,17 @@ namespace FishNet.Object
         /// <param name="index"></param>
         internal void RegisterSyncType(SyncBase sb, uint index)
         {
-            if (sb.IsSyncObject)
-                _syncObjects.Add(index, sb);
-            else
-                _syncVars.Add(index, sb);
+            if (!_syncTypes.TryAdd(index, sb))
+                FishNet.Managing.NetworkManager.StaticLogError($"SyncType key {index} has already been added for {GetType().FullName} on {gameObject.name}");
         }
         /// <summary>
         /// Sets a SyncVar as dirty.
         /// </summary>
         /// <param name="isSyncObject">True if dirtying a syncObject.</param>
         /// <returns>True if able to dirty SyncType.</returns>
-        internal bool DirtySyncType(bool isSyncObject)
+        internal bool DirtySyncType()
         {
-            if (!IsServer)
+            if (!IsServerStarted)
                 return false;
             /* No reason to dirty if there are no observers.
              * This can happen even if a client is going to see
@@ -106,14 +101,9 @@ namespace FishNet.Object
             if (_networkObjectCache.Observers.Count == 0)
                 return false;
 
-            bool alreadyDirtied = (isSyncObject) ? _syncObjectDirty : _syncVarDirty;
-            if (isSyncObject)
-                _syncObjectDirty = true;
-            else
-                _syncVarDirty = true;
-
-            if (!alreadyDirtied)
-                _networkObjectCache.NetworkManager.ServerManager.Objects.SetDirtySyncType(this, isSyncObject);
+            if (!_syncTypeDirty)
+                _networkObjectCache.NetworkManager.ServerManager.Objects.SetDirtySyncType(this);
+            _syncTypeDirty = true;
 
             return true;
         }
@@ -158,9 +148,7 @@ namespace FishNet.Object
             /* Initialize synctypes every spawn because there could be
              * callbacks which occur that the user or even we may implement
              * during the initialization. */
-            foreach (SyncBase sb in _syncVars.Values)
-                sb.PreInitialize(_networkObjectCache.NetworkManager);
-            foreach (SyncBase sb in _syncObjects.Values)
+            foreach (SyncBase sb in _syncTypes.Values)
                 sb.PreInitialize(_networkObjectCache.NetworkManager);
         }
 
@@ -169,43 +157,24 @@ namespace FishNet.Object
         /// Reads a SyncVar.
         /// </summary>
         /// <param name="reader"></param>
-        internal void OnSyncType(PooledReader reader, int length, bool isSyncObject, bool asServer = false)
+        internal void OnSyncType(PooledReader reader, int length, bool asServer = false)
         {
             int readerStart = reader.Position;
             while (reader.Position - readerStart < length)
             {
                 byte index = reader.ReadByte();
-                if (isSyncObject)
-                {
-                    if (_syncObjects.TryGetValueIL2CPP(index, out SyncBase sb))
-                        sb.Read(reader, asServer);
-                    else
-                        NetworkManager.LogWarning($"SyncObject not found for index {index} on {transform.name}. Remainder of packet may become corrupt.");
-                }
+                if (_syncTypes.TryGetValueIL2CPP(index, out SyncBase sb))
+                    sb.Read(reader, asServer);
                 else
-                {
-                    if (_syncVars.ContainsKey(index))
-                        ReadSyncVar(reader, index, asServer);
-                    else
-                        NetworkManager.LogWarning($"SyncVar not found for index {index} on {transform.name}. Remainder of packet may become corrupt.");
-                }
+                    NetworkManager.LogWarning($"SyncType not found for index {index} on {transform.name}. Remainder of packet may become corrupt.");
             }
         }
-
-        /// <summary>
-        /// Codegen overrides this method to read syncVars for each script which inherits NetworkBehaviour.
-        /// </summary>
-        /// <param name="reader"></param>
-        /// <param name="index"></param>
-        /// <param name="asServer">True if reading into SyncVars for the server, false for client. This would be true for predicted spawning if the predicted spawner sent syncvars.</param>
-        [APIExclude]
-        internal virtual bool ReadSyncVar(PooledReader reader, uint index, bool asServer) { return false; }
 
         /// <summary>
         /// Writers dirty SyncTypes if their write tick has been met.
         /// </summary>
         /// <returns>True if there are no pending dirty sync types.</returns>
-        internal bool WriteDirtySyncTypes(bool isSyncObject, bool ignoreInterval = false)
+        internal bool WriteDirtySyncTypes(bool ignoreInterval = false)
         {
             /* Can occur when a synctype is queued after
              * the object is marked for destruction. This should not
@@ -213,15 +182,13 @@ namespace FishNet.Object
              * pushed through when despawn is called. */
             if (!IsSpawned)
             {
-                ResetSyncTypes();
+                SyncTypes_ResetState();
                 return true;
             }
 
             /* If there is nothing dirty then return true, indicating no more
              * pending dirty checks. */
-            if (isSyncObject && (!_syncObjectDirty || _syncObjects.Count == 0))
-                return true;
-            else if (!isSyncObject && (!_syncVarDirty || _syncVars.Count == 0))
+            if (!_syncTypeDirty || _syncTypes.Count == 0)
                 return true;
 
             /* True if writers have been reset for this check.
@@ -233,9 +200,8 @@ namespace FishNet.Object
             bool dirtyFound = false;
             //True if data has been written and is ready to send.
             bool dataWritten = false;
-            Dictionary<uint, SyncBase> collection = (isSyncObject) ? _syncObjects : _syncVars;
 
-            foreach (SyncBase sb in collection.Values)
+            foreach (SyncBase sb in _syncTypes.Values)
             {
                 if (!sb.IsDirty)
                     continue;
@@ -286,10 +252,7 @@ namespace FishNet.Object
             //If no dirty were found.
             if (!dirtyFound)
             {
-                if (isSyncObject)
-                    _syncObjectDirty = false;
-                else
-                    _syncVarDirty = false;
+                _syncTypeDirty = false;
                 return true;
             }
             //At least one sync type was dirty.
@@ -305,27 +268,10 @@ namespace FishNet.Object
                         {
                             PooledWriter headerWriter = WriterPool.Retrieve();
                             //Write the packetId and NB information.
-                            PacketId packetId = (isSyncObject) ? PacketId.SyncObject : PacketId.SyncVar;
-                            headerWriter.WritePacketId(packetId);
+                            headerWriter.WritePacketId(PacketId.SyncType);
                             PooledWriter dataWriter = WriterPool.Retrieve();
                             dataWriter.WriteNetworkBehaviour(this);
-
-                            /* SyncVars need length written regardless because amount
-                             * of data being sent per syncvar is unknown, and the packet may have
-                             * additional data after the syncvars. Because of this we should only
-                             * read up to syncvar length then assume the remainder is another packet. 
-                             * 
-                             * Reliable always has data written as well even if syncObject. This is so
-                             * if an object does not exist for whatever reason the packet can be
-                             * recovered by skipping the data.
-                             * 
-                             * Realistically everything will be a syncvar or on the reliable channel unless
-                             * the user makes a custom syncobject that utilizes unreliable. */
-                            if (!isSyncObject || (Channel)channel == Channel.Reliable)
-                                dataWriter.WriteBytesAndSize(channelWriter.GetBuffer(), 0, channelWriter.Length);
-                            else
-                                dataWriter.WriteBytes(channelWriter.GetBuffer(), 0, channelWriter.Length);
-
+                            dataWriter.WriteBytesAndSize(channelWriter.GetBuffer(), 0, channelWriter.Length);
                             //Attach data onto packetWriter.
                             headerWriter.WriteArraySegment(dataWriter.GetArraySegment());
                             dataWriter.Store();
@@ -341,7 +287,6 @@ namespace FishNet.Object
                             {
                                 bool excludeOwner = (_syncTypeWriters[i].ReadPermission == ReadPermission.ExcludeOwner);
                                 SetNetworkConnectionCache(false, excludeOwner);
-                                NetworkConnection excludedConnection = (excludeOwner) ? _networkObjectCache.Owner : null;
                                 _networkObjectCache.NetworkManager.TransportManager.SendToClients((byte)channel, headerWriter.GetArraySegment(), _networkObjectCache.Observers, _networkConnectionCache);
 
                             }
@@ -359,80 +304,61 @@ namespace FishNet.Object
 
 
         /// <summary>
-        /// Resets all SyncTypes for this NetworkBehaviour for server and client side.
-        /// </summary>
-        internal void ResetSyncTypes()
-        {
-            foreach (SyncBase item in _syncVars.Values)
-                item.Reset();
-            foreach (SyncBase item in _syncObjects.Values)
-                item.Reset();
-
-            _syncObjectDirty = false;
-            _syncVarDirty = false;
-        }
-
-
-        /// <summary>
         /// Resets all SyncTypes for this NetworkBehaviour.
         /// </summary>
-        internal void ResetSyncTypes(bool asServer)
+        internal void SyncTypes_ResetState()
         {
-            if (asServer || (!asServer && !IsServer))
-            {
-                foreach (SyncBase item in _syncVars.Values)
-                    item.Reset();
-                foreach (SyncBase item in _syncObjects.Values)
-                    item.Reset();
-            }
+            foreach (SyncBase item in _syncTypes.Values)
+                item.ResetState();
+
+            _syncTypeDirty = false;
         }
+
+        /// <summary>
+        /// Resets all SyncVar fields for the class to the values within their SyncVar class.
+        /// EG: _mySyncVar = generated_mySyncVar.GetValue(...)
+        /// </summary>
+        [MakePublic]
+        internal virtual void ResetSyncVarFields() { }
 
         /// <summary>
         /// Writers syncVars for a spawn message.
         /// </summary>
-        internal void WriteSyncTypesForSpawn(PooledWriter writer, SyncTypeWriteType writeType)
+        /// <param name="conn">Connection SyncTypes are being written for.</param>
+        internal void WriteSyncTypesForSpawn(PooledWriter writer, NetworkConnection conn)
         {
-            //Write for owner if writing all or owner, but not observers.
-            bool ownerWrite = (writeType != SyncTypeWriteType.Observers);
-            WriteSyncType(_syncVars);
-            WriteSyncType(_syncObjects);
-
-            void WriteSyncType(Dictionary<uint, SyncBase> collection)
+            PooledWriter syncTypeWriter = WriterPool.Retrieve();
+            /* Since all values are being written everything is
+             * written in order so there's no reason to pass
+             * indexes. */
+            foreach (SyncBase sb in _syncTypes.Values)
             {
-                PooledWriter syncTypeWriter = WriterPool.Retrieve();
-                /* Since all values are being written everything is
-                 * written in order so there's no reason to pass
-                 * indexes. */
-                foreach (SyncBase sb in collection.Values)
+                /* If connection is null then write for all.
+                 * This can only occur when client is sending syncTypes
+                 * to the server. This will be removed when predicted
+                 * spawning payload is added in. */ //todo remove this after predicted spawning payload.
+                if (conn != null)
                 {
-                    //If not for owner and syncvar is owner only.
-                    if (!ownerWrite && sb.Settings.ReadPermission == ReadPermission.OwnerOnly)
-                    {
-                        //If there is an owner then skip.
-                        if (_networkObjectCache.Owner.IsValid)
-                            continue;
-                    }
-
-                    sb.WriteFull(syncTypeWriter);
+                    //True if conn is the owner of this object.
+                    bool connIsOwner = (conn == _networkObjectCache.Owner);
+                    //Read permissions for the synctype.
+                    ReadPermission rp = sb.Settings.ReadPermission;
+                    /* SyncType only allows owner to receive values and
+                     * conn is not the owner. */
+                    if (rp == ReadPermission.OwnerOnly && !connIsOwner)
+                        continue;
+                    //Write to everyone but the owner.
+                    if (rp == ReadPermission.ExcludeOwner && connIsOwner)
+                        continue;
                 }
 
-                writer.WriteBytesAndSize(syncTypeWriter.GetBuffer(), 0, syncTypeWriter.Length);
-                syncTypeWriter.Store();
+                //Anything beyond this is fine to write for everyone.
+                sb.WriteFull(syncTypeWriter);
             }
+
+            writer.WriteBytesAndSize(syncTypeWriter.GetBuffer(), 0, syncTypeWriter.Length);
+            syncTypeWriter.Store();
         }
-
-
-        /// <summary>
-        /// Manually marks a SyncType as dirty, be it SyncVar or SyncObject.
-        /// </summary>
-        /// <param name="syncType">SyncType variable to dirty.</param>
-        protected void DirtySyncType(object syncType)
-        {
-            /* This doesn't actually do anything.
-             * The codegen replaces calls to this method
-             * with a Dirty call for syncType. */
-        }
-
 
     }
 

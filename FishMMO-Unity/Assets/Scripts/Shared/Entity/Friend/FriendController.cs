@@ -1,5 +1,6 @@
 ﻿using UnityEngine;
 using FishNet.Object;
+using FishNet.Transporting;
 using System.Collections.Generic;
 #if !UNITY_SERVER
 using FishMMO.Client;
@@ -58,7 +59,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// When we need to add a single friend.
 		/// </summary>
-		public void OnClientFriendAddBroadcastReceived(FriendAddBroadcast msg)
+		public void OnClientFriendAddBroadcastReceived(FriendAddBroadcast msg, Channel channel)
 		{
 			if (UIManager.TryGet("UIFriendList", out UIFriendList uiFriendList))
 			{
@@ -73,7 +74,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// When we need to add multiple friends.
 		/// </summary>
-		public void OnClientFriendAddMultipleBroadcastReceived(FriendAddMultipleBroadcast msg)
+		public void OnClientFriendAddMultipleBroadcastReceived(FriendAddMultipleBroadcast msg, Channel channel)
 		{
 			if (UIManager.TryGet("UIFriendList", out UIFriendList uiFriendList))
 			{
@@ -91,7 +92,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// When we need to remove a friend.
 		/// </summary>
-		public void OnClientFriendRemoveBroadcastReceived(FriendRemoveBroadcast msg)
+		public void OnClientFriendRemoveBroadcastReceived(FriendRemoveBroadcast msg, Channel channel)
 		{
 			Friends.Remove(msg.characterID);
 

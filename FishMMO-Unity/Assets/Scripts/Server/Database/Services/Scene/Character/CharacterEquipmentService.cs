@@ -81,7 +81,7 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Load(NpgsqlDbContext dbContext, Character character)
 		{
-			var dbEquippedItems = dbContext.CharacterEquippedItems.Where(c => c.CharacterID == character.ID);
+			var dbEquippedItems = dbContext.CharacterEquippedItems.Where(c => c.CharacterID == character.ID.Value);
 			foreach (CharacterEquipmentEntity dbItem in dbEquippedItems)
 			{
 				BaseItemTemplate template = BaseItemTemplate.Get<BaseItemTemplate>(dbItem.TemplateID);

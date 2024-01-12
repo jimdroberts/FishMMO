@@ -10,13 +10,17 @@ namespace FishNet.Managing.Client.Editing
     [CanEditMultipleObjects]
     public class ClientManagerEditor : Editor
     {
+        private SerializedProperty _remoteServerTimeout;
+        private SerializedProperty _remoteServerTimeoutDuration;
         private SerializedProperty _changeFrameRate;
         private SerializedProperty _frameRate;
 
         protected virtual void OnEnable()
         {
-            _changeFrameRate = serializedObject.FindProperty("_changeFrameRate");
-            _frameRate = serializedObject.FindProperty("_frameRate");
+            _remoteServerTimeout = serializedObject.FindProperty(nameof(_remoteServerTimeout));
+            _remoteServerTimeoutDuration = serializedObject.FindProperty(nameof(_remoteServerTimeoutDuration));
+            _changeFrameRate = serializedObject.FindProperty(nameof(_changeFrameRate));
+            _frameRate = serializedObject.FindProperty(nameof(_frameRate));
         }
 
         public override void OnInspectorGUI()
@@ -27,6 +31,13 @@ namespace FishNet.Managing.Client.Editing
             EditorGUILayout.ObjectField("Script:", MonoScript.FromMonoBehaviour((ClientManager)target), typeof(ClientManager), false);
             GUI.enabled = true;
 
+            EditorGUILayout.PropertyField(_remoteServerTimeout);
+            if ((RemoteTimeoutType)_remoteServerTimeout.intValue != RemoteTimeoutType.Disabled)
+            {
+                EditorGUI.indentLevel++;
+                EditorGUILayout.PropertyField(_remoteServerTimeoutDuration, new GUIContent("Timeout"));
+                EditorGUI.indentLevel--;
+            }
 
             EditorGUILayout.PropertyField(_changeFrameRate);
             if (_changeFrameRate.boolValue)

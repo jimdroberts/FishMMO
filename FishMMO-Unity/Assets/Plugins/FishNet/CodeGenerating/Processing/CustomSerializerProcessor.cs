@@ -1,4 +1,5 @@
 ﻿
+using FishNet.CodeGenerating.Extension;
 using FishNet.CodeGenerating.Helping;
 using FishNet.CodeGenerating.Helping.Extension;
 using FishNet.Serializing;
@@ -36,7 +37,7 @@ namespace FishNet.CodeGenerating.Processing
                 ExtensionType extensionType = GetExtensionType(methodDef);
                 if (extensionType == ExtensionType.None)
                     continue;
-                if (base.GetClass<GeneralHelper>().CodegenExclude(methodDef))
+                if (base.GetClass<GeneralHelper>().HasNotSerializableAttribute(methodDef))
                     continue;
 
                 MethodReference methodRef = base.ImportReference(methodDef);
@@ -74,7 +75,7 @@ namespace FishNet.CodeGenerating.Processing
                 ExtensionType extensionType = GetExtensionType(methodDef);
                 if (extensionType == ExtensionType.None)
                     continue;
-                if (base.GetClass<GeneralHelper>().CodegenExclude(methodDef))
+                if (base.GetClass<GeneralHelper>().HasNotSerializableAttribute(methodDef))
                     continue;
 
                 declaredMethods.Add((methodDef, extensionType));
@@ -115,7 +116,7 @@ namespace FishNet.CodeGenerating.Processing
              * isn't made for a type when the user has already made a declared one. */
             foreach (MethodDefinition methodDef in typeDef.Methods)
             {
-                if (gh.CodegenExclude(methodDef))
+                if (gh.HasNotSerializableAttribute(methodDef))
                     continue;
                 if (!methodDef.HasCustomAttribute<CustomComparerAttribute>())
                     continue;
@@ -230,9 +231,9 @@ namespace FishNet.CodeGenerating.Processing
                 //If class and not value type check for accessible constructor.
                 if (typeDefinition.IsClass && !typeDefinition.IsValueType)
                 {
-                    MethodDefinition constructor = typeDefinition.GetMethod(".ctor");
+                    MethodDefinition constructor = typeDefinition.GetDefaultConstructor(base.Session);
                     //Constructor is inaccessible, cannot create serializer for type.
-                    if (!constructor.IsPublic)
+                    if (constructor != null && !constructor.IsPublic)
                     {
                         base.LogError($"Unable to generator serializers for {typeDefinition.FullName} because it's constructor is not public.");
                         return;
@@ -245,6 +246,7 @@ namespace FishNet.CodeGenerating.Processing
                 MethodReference createdMethodRef = (extensionType == ExtensionType.Write) ?
                     base.GetClass<WriterProcessor>().GetWriteMethodReference(parameterType) :
                     base.GetClass<ReaderProcessor>().GetReadMethodReference(parameterType);
+
                 //If a created method already exist nothing further is required.
                 if (createdMethodRef != null)
                 {

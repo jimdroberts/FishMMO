@@ -48,7 +48,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Server sent a set item broadcast. Item slot is set to the received item details.
 		/// </summary>
-		private void OnClientInventorySetItemBroadcastReceived(InventorySetItemBroadcast msg)
+		private void OnClientInventorySetItemBroadcastReceived(InventorySetItemBroadcast msg, Channel channel)
 		{
 			Item newItem = new Item(msg.instanceID, msg.seed, msg.templateID, msg.stackSize);
 			SetItemSlot(newItem, msg.slot);
@@ -57,7 +57,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Server sent a multiple set item broadcast. Item slot is set to the received item details.
 		/// </summary>
-		private void OnClientInventorySetMultipleItemsBroadcastReceived(InventorySetMultipleItemsBroadcast msg)
+		private void OnClientInventorySetMultipleItemsBroadcastReceived(InventorySetMultipleItemsBroadcast msg, Channel channel)
 		{
 			foreach (InventorySetItemBroadcast subMsg in msg.items)
 			{
@@ -69,7 +69,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Server sent a remove item from slot broadcast. Item is removed from the received slot with server authority.
 		/// </summary>
-		private void OnClientInventoryRemoveItemBroadcastReceived(InventoryRemoveItemBroadcast msg)
+		private void OnClientInventoryRemoveItemBroadcastReceived(InventoryRemoveItemBroadcast msg, Channel channel)
 		{
 			RemoveItem(msg.slot);
 		}
@@ -78,7 +78,7 @@ namespace FishMMO.Shared
 		/// Server sent a swap slot broadcast. Both slots are swapped with server authority.
 		/// </summary>
 		/// <param name="msg"></param>
-		private void OnClientInventorySwapItemSlotsBroadcastReceived(InventorySwapItemSlotsBroadcast msg)
+		private void OnClientInventorySwapItemSlotsBroadcastReceived(InventorySwapItemSlotsBroadcast msg, Channel channel)
 		{
 			switch (msg.fromInventory)
 			{

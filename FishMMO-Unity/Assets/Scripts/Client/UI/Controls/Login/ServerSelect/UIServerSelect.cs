@@ -86,7 +86,7 @@ namespace FishMMO.Client
 			}
 		}
 
-		private void OnClientServerListBroadcastReceived(ServerListBroadcast msg)
+		private void OnClientServerListBroadcastReceived(ServerListBroadcast msg, Channel channel)
 		{
 			if (msg.servers != null)
 			{
@@ -105,7 +105,7 @@ namespace FishMMO.Client
 			Show();
 		}
 
-		private void OnClientWorldSceneConnectBroadcastReceived(WorldSceneConnectBroadcast msg)
+		private void OnClientWorldSceneConnectBroadcastReceived(WorldSceneConnectBroadcast msg, Channel channel)
 		{
 			if (Client.IsConnectionReady() &&
 				selectedServer != null)

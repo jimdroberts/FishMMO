@@ -4,9 +4,7 @@ using FishNet.Managing.Logging;
 using FishNet.Managing.Server;
 using FishNet.Object;
 using FishNet.Observing;
-using FishNet.Utility.Extension;
-using FishNet.Utility.Performance;
-using System;
+using GameKit.Dependencies.Utilities;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -34,14 +32,6 @@ namespace FishNet.Component.Observing
         #endregion
 
         #region Private.
-        [Obsolete("Use GetMatchConnections(NetworkManager).")] //Remove on 2023/06/01
-        public static Dictionary<int, HashSet<NetworkConnection>> MatchConnections => GetMatchConnections();
-        [Obsolete("Use GetConnectionMatches(NetworkManager).")] //Remove on 2024/01/01.
-        public static Dictionary<NetworkConnection, HashSet<int>> ConnectionMatch => GetConnectionMatches();
-        [Obsolete("Use GetMatchObjects(NetworkManager).")] //Remove on 2024/01/01.
-        public static Dictionary<int, HashSet<NetworkObject>> MatchObject => GetMatchObjects();
-        [Obsolete("Use GetObjectMatches(NetworkManager).")] //Remove on 2024/01/01.
-        public static Dictionary<NetworkObject, HashSet<int>> ObjectMatch => GetObjectMatches();
         /// <summary>
         /// Collections for each NetworkManager instance.
         /// </summary>
@@ -60,13 +50,13 @@ namespace FishNet.Component.Observing
                 return;
 
             foreach (HashSet<int> item in cc.ObjectMatches.Values)
-                HashSets.StoreCache(item);
+                CollectionCaches<int>.Store(item);
             foreach (HashSet<NetworkConnection> item in cc.MatchConnections.Values)
-                HashSets.StoreCache(item);
+                CollectionCaches<NetworkConnection>.Store(item);
             foreach (HashSet<NetworkObject> item in cc.MatchObjects.Values)
-                HashSets.StoreCache(item);
+                CollectionCaches<NetworkObject>.Store(item);
             foreach (HashSet<int> item in cc.ConnectionMatches.Values)
-                HashSets.StoreCache(item);
+                CollectionCaches<int>.Store(item);
 
             _collections.Remove(manager);
         }
@@ -130,8 +120,6 @@ namespace FishNet.Component.Observing
         }
         #endregion
 
-        public void ConditionConstructor() { }
-
         #region Add to match NetworkConnection.
         /// <summary>
         /// Adds a connection to a match.
@@ -149,7 +137,7 @@ namespace FishNet.Component.Observing
             HashSet<NetworkConnection> matchConnValues;
             if (!matchConnections.TryGetValueIL2CPP(match, out matchConnValues))
             {
-                matchConnValues = HashSets.RetrieveNetworkConnectionCache();
+                matchConnValues = CollectionCaches<NetworkConnection>.RetrieveHashSet();
                 matchConnections.Add(match, matchConnValues);
             }
 
@@ -184,7 +172,7 @@ namespace FishNet.Component.Observing
             HashSet<int> matches;
             if (!connectionMatches.TryGetValueIL2CPP(conn, out matches))
             {
-                matches = HashSets.RetrieveIntCache();
+                matches = CollectionCaches<int>.RetrieveHashSet();
                 connectionMatches[conn] = matches;
             }
 
@@ -235,7 +223,7 @@ namespace FishNet.Component.Observing
             HashSet<NetworkObject> matchObjectsValues;
             if (!matchObjects.TryGetValueIL2CPP(match, out matchObjectsValues))
             {
-                matchObjectsValues = HashSets.RetrieveNetworkObjectCache();
+                matchObjectsValues = CollectionCaches<NetworkObject>.RetrieveHashSet();
                 matchObjects.Add(match, matchObjectsValues);
             }
             bool added = matchObjectsValues.Add(nob);
@@ -244,7 +232,7 @@ namespace FishNet.Component.Observing
             HashSet<int> objectMatchesValues;
             if (!objectMatches.TryGetValueIL2CPP(nob, out objectMatchesValues))
             {
-                objectMatchesValues = HashSets.RetrieveIntCache();
+                objectMatchesValues = CollectionCaches<int>.RetrieveHashSet();
                 objectMatches.Add(nob, objectMatchesValues);
             }
             objectMatchesValues.Add(match);
@@ -313,7 +301,7 @@ namespace FishNet.Component.Observing
             {
                 isEmpty = (value.Count == 0);
                 if (isEmpty)
-                    HashSets.StoreCache(value);
+                    CollectionCaches<NetworkObject>.Store(value);
             }
 
             if (isEmpty)
@@ -339,7 +327,7 @@ namespace FishNet.Component.Observing
             {
                 isEmpty = (value.Count == 0);
                 if (isEmpty)
-                    HashSets.StoreCache(value);
+                    CollectionCaches<int>.Store(value);
             }
 
             if (isEmpty)
@@ -365,7 +353,7 @@ namespace FishNet.Component.Observing
             {
                 isEmpty = (value.Count == 0);
                 if (isEmpty)
-                    HashSets.StoreCache(value);
+                    CollectionCaches<NetworkConnection>.Store(value);
             }
 
             if (isEmpty)
@@ -391,7 +379,7 @@ namespace FishNet.Component.Observing
             {
                 isEmpty = (value.Count == 0);
                 if (isEmpty)
-                    HashSets.StoreCache(value);
+                    CollectionCaches<int>.Store(value);
             }
 
             if (isEmpty)
@@ -704,13 +692,6 @@ namespace FishNet.Component.Observing
                 Dictionary<NetworkConnection, HashSet<int>> connectionMatches = GetConnectionMatches(base.NetworkObject.NetworkManager);
                 //Output owner matches.
                 HashSet<int> ownerMatches;
-                //bool ownerMatchesFound = connectionMatches.TryGetValueIL2CPP(owner, out ownerMatches);
-                ////Connection isn't in a match.
-                //if (!connectionMatches.TryGetValueIL2CPP(connection, out HashSet<int> connMatches))
-                //{
-                //    //If owner is also not in a match then they can see each other.
-                //    return !ownerMatchesFound;
-                //}
                 /* This objects owner is not in a match so treat it like
                  * a networkobject without an owner. Objects not in matches
                  * are visible to everyone. */
@@ -770,7 +751,6 @@ namespace FishNet.Component.Observing
             }
         }
 
-
         /// <summary>
         /// Returns which ServerObjects to rebuild observers on.
         /// </summary>
@@ -786,16 +766,5 @@ namespace FishNet.Component.Observing
         /// </summary>
         /// <returns></returns>
         public override ObserverConditionType GetConditionType() => ObserverConditionType.Normal;
-
-        /// <summary>
-        /// Clones referenced ObserverCondition. This must be populated with your conditions settings.
-        /// </summary>
-        /// <returns></returns>
-        public override ObserverCondition Clone()
-        {
-            MatchCondition copy = ScriptableObject.CreateInstance<MatchCondition>();
-            copy.ConditionConstructor();
-            return copy;
-        }
     }
 }

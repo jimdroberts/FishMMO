@@ -56,6 +56,8 @@ namespace FishNet.Component.Utility
         public void SetShowIncoming(bool value) => _showIncoming = value;
         #endregion
 
+#if UNITY_EDITOR || !UNITY_SERVER
+
         #region Private.
         /// <summary>
         /// Style for drawn ping.
@@ -91,7 +93,7 @@ namespace FishNet.Component.Utility
             if (_networkTrafficStatistics != null)
             {
                 _networkTrafficStatistics.OnClientNetworkTraffic -= NetworkTraffic_OnClientNetworkTraffic;
-                _networkTrafficStatistics.OnServerNetworkTraffic -= NetworkTraffic_OnClientNetworkTraffic;
+                _networkTrafficStatistics.OnServerNetworkTraffic -= NetworkTraffic_OnServerNetworkTraffic;
             }
         }
 
@@ -130,11 +132,6 @@ namespace FishNet.Component.Utility
 
         private void OnGUI()
         {
-            //No need to perform these actions on server.
-#if !UNITY_EDITOR && UNITY_SERVER
-            return;
-#endif
-
             _style.normal.textColor = _color;
             _style.fontSize = 15;
 
@@ -145,8 +142,8 @@ namespace FishNet.Component.Utility
             if (_showOutgoing)
                 height += 15f;
 
-            bool isClient = InstanceFinder.IsClient;
-            bool isServer = InstanceFinder.IsServer;
+            bool isClient = InstanceFinder.IsClientStarted;
+            bool isServer = InstanceFinder.IsServerStarted;
             if (!isClient)
                 _clientText = string.Empty;
             if (!isServer)
@@ -186,6 +183,8 @@ namespace FishNet.Component.Utility
 
             GUI.Label(new Rect(horizontal, vertical, width, height), (_clientText + _serverText), _style);
         }
+#endif
+
     }
 
 

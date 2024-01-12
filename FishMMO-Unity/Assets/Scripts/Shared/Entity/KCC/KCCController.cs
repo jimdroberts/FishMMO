@@ -178,6 +178,8 @@ namespace FishMMO.Shared
 			VirtualCameraPosition = inputs.CameraPosition;
 			VirtualCameraRotation = inputs.CameraRotation;
 
+			//Debug.Log("VPos:" + VirtualCameraPosition + " VRot:" + VirtualCameraRotation);
+
 			// Clamp input
 			Vector3 moveInputVector = Vector3.ClampMagnitude(new Vector3(inputs.MoveAxisRight, 0f, inputs.MoveAxisForward), 1f);
 

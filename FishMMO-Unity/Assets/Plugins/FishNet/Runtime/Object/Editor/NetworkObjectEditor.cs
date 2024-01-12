@@ -20,9 +20,10 @@ namespace FishNet.Object.Editing
         private SerializedProperty _initializeOrder;
         private SerializedProperty _defaultDespawnType;
 
-        private SerializedProperty _usePrediction;
+        private SerializedProperty _enablePrediction;
+        private SerializedProperty _predictionType;
         private SerializedProperty _graphicalObject;
-        private SerializedProperty _useStates;
+        private SerializedProperty _enableStateForwarding;
 
         private SerializedProperty _ownerInterpolation;
         private SerializedProperty _enableTeleport;
@@ -43,15 +44,15 @@ namespace FishNet.Object.Editing
             _initializeOrder = serializedObject.FindProperty(nameof(_initializeOrder));
             _defaultDespawnType = serializedObject.FindProperty(nameof(_defaultDespawnType));
 
-            _usePrediction = serializedObject.FindProperty(nameof(_usePrediction));
+            _enablePrediction = serializedObject.FindProperty(nameof(_enablePrediction));
+            _predictionType = serializedObject.FindProperty(nameof(_predictionType));
             _graphicalObject = serializedObject.FindProperty(nameof(_graphicalObject));
-            _useStates = serializedObject.FindProperty(nameof(_useStates));
+            _enableStateForwarding = serializedObject.FindProperty(nameof(_enableStateForwarding));
 
             _ownerInterpolation = serializedObject.FindProperty(nameof(_ownerInterpolation));
             _enableTeleport = serializedObject.FindProperty(nameof(_enableTeleport));
             _ownerTeleportThreshold = serializedObject.FindProperty(nameof(_ownerTeleportThreshold));
 
-            //_futurePredictionTime = serializedObject.FindProperty(nameof(_futurePredictionTime));
             _spectatorAdaptiveInterpolation = serializedObject.FindProperty(nameof(_spectatorAdaptiveInterpolation));
             _spectatorInterpolation = serializedObject.FindProperty(nameof(_spectatorInterpolation));
             _adaptiveSmoothingType = serializedObject.FindProperty(nameof(_adaptiveSmoothingType));
@@ -67,19 +68,19 @@ namespace FishNet.Object.Editing
             GUI.enabled = false;
             EditorGUILayout.ObjectField("Script:", MonoScript.FromMonoBehaviour(nob), typeof(NetworkObject), false);
             GUI.enabled = true;
-
             EditorGUILayout.PropertyField(_isNetworked);
             EditorGUILayout.PropertyField(_isGlobal);
             EditorGUILayout.PropertyField(_initializeOrder);
             EditorGUILayout.PropertyField(_defaultDespawnType);
 
-            EditorGUILayout.PropertyField(_usePrediction);
-            if (_usePrediction.boolValue == true)
+            EditorGUILayout.PropertyField(_enablePrediction);
+            if (_enablePrediction.boolValue == true)
             {
                 EditorGUI.indentLevel++;
+                EditorGUILayout.PropertyField(_predictionType);
                 EditorGUILayout.PropertyField(_graphicalObject);
                 GUI.enabled = false;
-                EditorGUILayout.PropertyField(_useStates);
+                EditorGUILayout.PropertyField(_enableStateForwarding);
                 GUI.enabled = true;
                 EditorGUILayout.LabelField("Owner", EditorStyles.boldLabel);
                 EditorGUI.indentLevel++;
@@ -96,6 +97,7 @@ namespace FishNet.Object.Editing
                 EditorGUI.indentLevel++;
                 GUI.enabled = false;
                 EditorGUILayout.PropertyField(_spectatorAdaptiveInterpolation, new GUIContent("Adaptive Interpolation"));
+                GUI.enabled = true;
                 //if (_futurePredictionTime.floatValue <= 0f)
                 if (_spectatorAdaptiveInterpolation.boolValue == false)
                 {
@@ -117,7 +119,6 @@ namespace FishNet.Object.Editing
                     }
                     EditorGUI.indentLevel--;
                 }
-                GUI.enabled = true;
 
                 EditorGUI.indentLevel--;
                 EditorGUI.indentLevel--;

@@ -44,7 +44,7 @@ namespace FishMMO.Server
 		/// <summary>
 		/// Naming request broadcast received from a character.
 		/// </summary>
-		private void OnServerNamingBroadcastReceived(NetworkConnection conn, NamingBroadcast msg)
+		private void OnServerNamingBroadcastReceived(NetworkConnection conn, NamingBroadcast msg, Channel channel)
 		{
 			switch (msg.type)
 			{

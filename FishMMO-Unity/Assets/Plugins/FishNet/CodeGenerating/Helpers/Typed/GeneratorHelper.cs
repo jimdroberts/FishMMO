@@ -50,7 +50,7 @@ namespace FishNet.CodeGenerating.Helping
             {
                 foreach (CustomAttribute item in objectTd.CustomAttributes)
                 {
-                    if (item.AttributeType.Is(typeof(CodegenExcludeAttribute)))
+                    if (item.AttributeType.Is(typeof(ExcludeSerializationAttribute)))
                         return SerializerType.Invalid;
                 }
             }
@@ -87,10 +87,6 @@ namespace FishNet.CodeGenerating.Helping
             else if (objectTd.Is(typeof(List<>)))
             {
                 return SerializerType.List;
-            }
-            else if (objectTd.Is(typeof(ListCache<>)))
-            {
-                return SerializerType.ListCache;
             }
             else if (objectTd.InheritsFrom<NetworkBehaviour>(base.Session))
             {

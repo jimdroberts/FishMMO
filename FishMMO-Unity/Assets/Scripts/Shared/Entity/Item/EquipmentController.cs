@@ -47,7 +47,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Server sent a set item broadcast. Item slot is set to the received item details.
 		/// </summary>
-		private void OnClientEquipmentSetItemBroadcastReceived(EquipmentSetItemBroadcast msg)
+		private void OnClientEquipmentSetItemBroadcastReceived(EquipmentSetItemBroadcast msg, Channel channel)
 		{
 			Item newItem = new Item(msg.instanceID, msg.seed, msg.templateID, msg.stackSize);
 			Equip(newItem, -1, null, (ItemSlot)msg.slot);
@@ -56,7 +56,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Server sent a multiple set item broadcast. Item slot is set to the received item details.
 		/// </summary>
-		private void OnClientEquipmentSetMultipleItemsBroadcastReceived(EquipmentSetMultipleItemsBroadcast msg)
+		private void OnClientEquipmentSetMultipleItemsBroadcastReceived(EquipmentSetMultipleItemsBroadcast msg, Channel channel)
 		{
 			foreach (EquipmentSetItemBroadcast subMsg in msg.items)
 			{
@@ -68,7 +68,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Server sent an equip item broadcast.
 		/// </summary>
-		private void OnClientEquipmentEquipItemBroadcastReceived(EquipmentEquipItemBroadcast msg)
+		private void OnClientEquipmentEquipItemBroadcastReceived(EquipmentEquipItemBroadcast msg, Channel channel)
 		{
 			switch (msg.fromInventory)
 			{
@@ -93,7 +93,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Server sent an unequip item broadcast.
 		/// </summary>
-		private void OnClientEquipmentUnequipItemBroadcastReceived(EquipmentUnequipItemBroadcast msg)
+		private void OnClientEquipmentUnequipItemBroadcastReceived(EquipmentUnequipItemBroadcast msg, Channel channel)
 		{
 			switch (msg.toInventory)
 			{

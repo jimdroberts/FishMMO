@@ -60,7 +60,7 @@ namespace FishMMO.Shared
 			}
 
 			// cache the current scene name
-			string playerScene = character.SceneName;
+			string playerScene = character.SceneName.Value;
 
 			if (!sceneServerSystem.WorldSceneDetailsCache.Scenes.TryGetValue(playerScene, out WorldSceneDetails details))
 			{
@@ -98,7 +98,7 @@ namespace FishMMO.Shared
 				--instance.CharacterCount;
 			}
 
-			character.SceneName = teleporter.ToScene;
+			character.SceneName.Value = teleporter.ToScene;
 			character.Motor.Transform.SetPositionAndRotation(teleporter.ToPosition, teleporter.ToRotation);
 
 			// save the character with new scene and position

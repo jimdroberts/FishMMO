@@ -1,4 +1,5 @@
-﻿using FishNet.Connection;
+﻿using FishNet.CodeGenerating;
+using FishNet.Connection;
 using FishNet.Managing;
 using FishNet.Managing.Logging;
 using FishNet.Managing.Server;
@@ -29,17 +30,33 @@ namespace FishNet.Component.Ownership
         /// True if to enable this component.
         /// </summary>
         [Tooltip("True if to enable this component.")]
-        [SyncVar(SendRate = 0f)]
         [SerializeField]
         private bool _allowTakeOwnership = true;
+        private readonly SyncVar<bool> _allowTakeOwnershipSyncVar = new SyncVar<bool>();
         /// <summary>
         /// Sets the next value for AllowTakeOwnership and synchronizes it.
         /// Only the server may use this method.
         /// </summary>
         /// <param name="value">Next value to use.</param>
         [Server]
-        public void SetAllowTakeOwnership(bool value) => _allowTakeOwnership = value;
+        public void SetAllowTakeOwnership(bool value) => _allowTakeOwnershipSyncVar.Value = value;
         #endregion
+
+        protected virtual void Awake()
+        {
+            _allowTakeOwnershipSyncVar.Value = _allowTakeOwnership;
+            _allowTakeOwnershipSyncVar.UpdateSendRate(0f);
+            _allowTakeOwnershipSyncVar.OnChange += _allowTakeOwnershipSyncVar_OnChange;
+        }
+        
+        /// <summary>
+        /// Called when SyncVar value changes for AllowTakeOwnership.
+        /// </summary>
+        private void _allowTakeOwnershipSyncVar_OnChange(bool prev, bool next, bool asServer)
+        {
+            if (asServer || (!asServer && !base.IsHostStarted))
+                _allowTakeOwnership = next;
+        }
 
         /// <summary>
         /// Called on the client after gaining or losing ownership.
@@ -47,7 +64,6 @@ namespace FishNet.Component.Ownership
         /// <param name="prevOwner">Previous owner of this object.</param>
         public override void OnOwnershipClient(NetworkConnection prevOwner)
         {
-            base.OnOwnershipClient(prevOwner);
             /* Unset taken ownership either way.
             * If the new owner it won't be used,
             * if no longer owner then another client
@@ -62,7 +78,7 @@ namespace FishNet.Component.Ownership
         [Client]
         public virtual void TakeOwnership()
         {
-            if (!_allowTakeOwnership)
+            if (!_allowTakeOwnershipSyncVar.Value)
                 return;
             //Already owner.
             if (base.IsOwner)
@@ -71,7 +87,7 @@ namespace FishNet.Component.Ownership
             NetworkConnection c = base.ClientManager.Connection;
             TakingOwnership = true;
             //If not server go through the server.
-            if (!base.IsServer)
+            if (!base.IsServerStarted)
             {
                 base.NetworkObject.SetLocalOwnership(c);
                 ServerTakeOwnership();
@@ -104,7 +120,7 @@ namespace FishNet.Component.Ownership
             if (!caller.IsActive)
                 return;
             //Feature is not enabled.
-            if (!_allowTakeOwnership)
+            if (!_allowTakeOwnershipSyncVar.Value)
                 return;
             //Already owner.
             if (caller == base.Owner)

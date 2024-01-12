@@ -79,7 +79,7 @@ namespace FishMMO.Server.DatabaseServices
 		{
 			if (character.PartyController != null)
 			{
-				var characterPartyEntity = dbContext.CharacterParties.FirstOrDefault(a => a.CharacterID == character.ID);
+				var characterPartyEntity = dbContext.CharacterParties.FirstOrDefault(a => a.CharacterID == character.ID.Value);
 				if (characterPartyEntity != null)
 				{
 					character.PartyController.ID = characterPartyEntity.PartyID;

@@ -46,7 +46,7 @@ namespace FishMMO.Client
 			}
 		}
 
-		private void OnClientBankerBroadcastReceived(BankerBroadcast msg)
+		private void OnClientBankerBroadcastReceived(BankerBroadcast msg, Channel channel)
 		{
 			if (UIManager.TryGet("UIBank", out UIBank bank))
 			{

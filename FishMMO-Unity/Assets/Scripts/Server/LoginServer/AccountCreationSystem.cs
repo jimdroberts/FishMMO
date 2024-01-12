@@ -34,7 +34,7 @@ namespace FishMMO.Server
 			}
 		}
 
-		private void OnServerCreateAccountBroadcastReceived(NetworkConnection conn, CreateAccountBroadcast msg)
+		private void OnServerCreateAccountBroadcastReceived(NetworkConnection conn, CreateAccountBroadcast msg, Channel channel)
 		{
 			ClientAuthenticationResult result = ClientAuthenticationResult.InvalidUsernameOrPassword;
 			if (Server.NpgsqlDbContextFactory != null)

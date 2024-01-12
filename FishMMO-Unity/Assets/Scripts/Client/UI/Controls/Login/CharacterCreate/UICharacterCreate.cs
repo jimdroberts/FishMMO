@@ -86,7 +86,7 @@ namespace FishMMO.Client
 			}
 		}
 
-		private void OnClientCharacterCreateResultBroadcastReceived(CharacterCreateResultBroadcast msg)
+		private void OnClientCharacterCreateResultBroadcastReceived(CharacterCreateResultBroadcast msg, Channel channel)
 		{
 			SetCreateButtonLocked(false);
 			if (msg.result == CharacterCreateResult.Success)

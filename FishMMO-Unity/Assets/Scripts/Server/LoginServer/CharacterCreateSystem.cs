@@ -42,7 +42,7 @@ namespace FishMMO.Server
 			}
 		}
 
-		private void OnServerCharacterCreateBroadcastReceived(NetworkConnection conn, CharacterCreateBroadcast msg)
+		private void OnServerCharacterCreateBroadcastReceived(NetworkConnection conn, CharacterCreateBroadcast msg, Channel channel)
 		{
 			if (conn.IsActive)
 			{

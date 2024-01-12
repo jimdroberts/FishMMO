@@ -1,4 +1,5 @@
 ﻿using FishNet.Object;
+using FishNet.Transporting;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -147,7 +148,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Server sent a buff add broadcast.
 		/// </summary>
-		private void OnClientBuffAddBroadcastReceived(BuffAddBroadcast msg)
+		private void OnClientBuffAddBroadcastReceived(BuffAddBroadcast msg, Channel channel)
 		{
 			BuffTemplate template = BuffTemplate.Get<BuffTemplate>(msg.templateID);
 			if (template != null)
@@ -159,7 +160,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Server sent a multiple buff add broadcast.
 		/// </summary>
-		private void OnClientBuffAddMultipleBroadcastReceived(BuffAddMultipleBroadcast msg)
+		private void OnClientBuffAddMultipleBroadcastReceived(BuffAddMultipleBroadcast msg, Channel channel)
 		{
 			foreach (BuffAddBroadcast subMsg in msg.buffs)
 			{
@@ -174,7 +175,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Server sent a remove buff add broadcast.
 		/// </summary>
-		private void OnClientBuffRemoveBroadcastReceived(BuffRemoveBroadcast msg)
+		private void OnClientBuffRemoveBroadcastReceived(BuffRemoveBroadcast msg, Channel channel)
 		{
 			BuffTemplate template = BuffTemplate.Get<BuffTemplate>(msg.templateID);
 			if (template != null)
@@ -186,7 +187,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Server sent a remove multiple buff add broadcast.
 		/// </summary>
-		private void OnClientBuffRemoveMultipleBroadcastReceived(BuffRemoveMultipleBroadcast msg)
+		private void OnClientBuffRemoveMultipleBroadcastReceived(BuffRemoveMultipleBroadcast msg, Channel channel)
 		{
 			foreach (BuffRemoveBroadcast subMsg in msg.buffs)
 			{

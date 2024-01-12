@@ -49,13 +49,13 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Save(NpgsqlDbContext dbContext, Character character)
 		{
-			var characterGuildEntity = dbContext.CharacterGuilds.FirstOrDefault(a => a.CharacterID == character.ID);
+			var characterGuildEntity = dbContext.CharacterGuilds.FirstOrDefault(a => a.CharacterID == character.ID.Value);
 			if (characterGuildEntity == null)
 			{
 				characterGuildEntity = new CharacterGuildEntity()
 				{
-					CharacterID = character.ID,
-					GuildID = character.GuildController.ID,
+					CharacterID = character.ID.Value,
+					GuildID = character.GuildController.ID.Value,
 					Rank = (byte)character.GuildController.Rank,
 					Location = character.gameObject.scene.name,
 				};
@@ -63,7 +63,7 @@ namespace FishMMO.Server.DatabaseServices
 			}
 			else
 			{
-				characterGuildEntity.GuildID = character.GuildController.ID;
+				characterGuildEntity.GuildID = character.GuildController.ID.Value;
 				characterGuildEntity.Rank = (byte)character.GuildController.Rank;
 				characterGuildEntity.Location = character.gameObject.scene.name;
 			}
@@ -105,10 +105,10 @@ namespace FishMMO.Server.DatabaseServices
 		{
 			if (character.GuildController != null)
 			{
-				var characterGuildEntity = dbContext.CharacterGuilds.FirstOrDefault(a => a.CharacterID == character.ID);
+				var characterGuildEntity = dbContext.CharacterGuilds.FirstOrDefault(a => a.CharacterID == character.ID.Value);
 				if (characterGuildEntity != null)
 				{
-					character.GuildController.ID = characterGuildEntity.GuildID;
+					character.GuildController.ID.Value = characterGuildEntity.GuildID;
 					character.GuildController.Rank = (GuildRank)characterGuildEntity.Rank;
 				}
 			}

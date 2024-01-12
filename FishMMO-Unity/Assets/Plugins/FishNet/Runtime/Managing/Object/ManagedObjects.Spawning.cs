@@ -1,13 +1,18 @@
-﻿using FishNet.Connection;
+﻿#if UNITY_EDITOR || DEVELOPMENT_BUILD
+#define DEVELOPMENT
+#endif
+using FishNet.Connection;
 using FishNet.Managing.Logging;
 using FishNet.Managing.Server;
 using FishNet.Object;
 using FishNet.Serializing;
 using FishNet.Transporting;
 using FishNet.Utility.Extension;
+using GameKit.Dependencies.Utilities;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using UnityEngine;
+
 
 namespace FishNet.Managing.Object
 {
@@ -40,7 +45,7 @@ namespace FishNet.Managing.Object
         /// <summary>
         /// Writes a spawn to clients.
         /// </summary>
-        internal void WriteSpawn_Server(NetworkObject nob, NetworkConnection connection, Writer everyoneWriter, Writer ownerWriter)
+        internal void WriteSpawn_Server(NetworkObject nob, NetworkConnection connection, Writer writer)
         {
             /* Using a number of writers to prevent rebuilding the
              * packets excessively for values that are owner only
@@ -66,7 +71,7 @@ namespace FishNet.Managing.Object
             else
                 headerWriter.WriteInt16(-1);
 
-            bool nested = (nob.IsNested && nob.ParentNetworkObject != null);
+            bool nested = (nob.CurrentParentNetworkBehaviour != null);
             bool sceneObject = nob.IsSceneObject;
             //Write type of spawn.
             SpawnType st = SpawnType.Unset;
@@ -84,14 +89,27 @@ namespace FishNet.Managing.Object
             //Properties on the transform which diff from serialized value.
             WriteChangedTransformProperties(nob, sceneObject, nested, headerWriter);
 
-            /* When nested the parent nob needs to be written. */
+            /* When nested the parent nb needs to be written. */
             if (nested)
-                headerWriter.WriteNetworkObjectId(nob.ParentNetworkObject);
-
+            {
+                /* Use Ids because using WriteNetworkBehaviour() will read from spawned
+                 * on the other end. This is problematic because the object which is parent
+                 * may not be spawned yet. Clients handle caching potentially not yet spawned
+                 * objects via Ids. */
+                headerWriter.WriteNetworkObjectId(nob.CurrentParentNetworkBehaviour.ObjectId);
+            }
             /* Writing a scene object. */
             if (sceneObject)
             {
                 headerWriter.WriteUInt64(nob.SceneId, AutoPackType.Unpacked);
+#if DEVELOPMENT
+                //Check to write additional information if a scene object.
+                if (NetworkManager.DebugManager.WriteSceneObjectDetails)
+                {
+                    headerWriter.WriteString(nob.gameObject.scene.name);
+                    headerWriter.WriteString(nob.gameObject.name);
+                }
+#endif
             }
             /* Writing a spawned object. */
             else
@@ -163,9 +181,7 @@ namespace FishNet.Managing.Object
             }
 
             //Write headers first.
-            everyoneWriter.WriteBytes(headerWriter.GetBuffer(), 0, headerWriter.Length);
-            if (nob.Owner.IsValid)
-                ownerWriter.WriteBytes(headerWriter.GetBuffer(), 0, headerWriter.Length);
+            writer.WriteBytes(headerWriter.GetBuffer(), 0, headerWriter.Length);
 
             /* Used to write latest data which must be sent to
              * clients, such as SyncTypes and RpcLinks. */
@@ -173,27 +189,13 @@ namespace FishNet.Managing.Object
             //Send RpcLinks first.
             foreach (NetworkBehaviour nb in nob.NetworkBehaviours)
                 nb.WriteRpcLinks(tempWriter);
-            //Add to everyone/owner.
-            everyoneWriter.WriteBytesAndSize(tempWriter.GetBuffer(), 0, tempWriter.Length);
-            if (nob.Owner.IsValid)
-                ownerWriter.WriteBytesAndSize(tempWriter.GetBuffer(), 0, tempWriter.Length);
+            //Send links to everyone.
+            writer.WriteBytesAndSize(tempWriter.GetBuffer(), 0, tempWriter.Length);
 
-            //Add most recent sync type values.
-            /* SyncTypes have to be populated for owner and everyone.
-            * The data may be unique for owner if synctypes are set
-            * to only go to owner. */
-            WriteSyncTypes(everyoneWriter, tempWriter, SyncTypeWriteType.Observers);
-            //If owner is valid then populate owner writer as well.
-            if (nob.Owner.IsValid)
-                WriteSyncTypes(ownerWriter, tempWriter, SyncTypeWriteType.Owner);
-
-            void WriteSyncTypes(Writer finalWriter, PooledWriter tWriter, SyncTypeWriteType writeType)
-            {
-                tWriter.Reset();
-                foreach (NetworkBehaviour nb in nob.NetworkBehaviours)
-                    nb.WriteSyncTypesForSpawn(tWriter, writeType);
-                finalWriter.WriteBytesAndSize(tWriter.GetBuffer(), 0, tWriter.Length);
-            }
+            tempWriter.Reset();
+            foreach (NetworkBehaviour nb in nob.NetworkBehaviours)
+                nb.WriteSyncTypesForSpawn(tempWriter, connection);
+            writer.WriteBytesAndSize(tempWriter.GetBuffer(), 0, tempWriter.Length);
 
             //Dispose of writers created in this method.
             headerWriter.Store();
@@ -256,14 +258,25 @@ namespace FishNet.Managing.Object
         /// <summary>
         /// Finds a scene NetworkObject and sets transform values.
         /// </summary>
+#if DEVELOPMENT
+        internal NetworkObject GetSceneNetworkObject(ulong sceneId, string sceneName, string objectName)
+#else
         internal NetworkObject GetSceneNetworkObject(ulong sceneId)
+#endif
         {
             NetworkObject nob;
-            SceneObjects.TryGetValueIL2CPP(sceneId, out nob);
+            SceneObjects_Internal.TryGetValueIL2CPP(sceneId, out nob);
             //If found in scene objects.
             if (nob == null)
+            {
+#if DEVELOPMENT
+                string missingObjectDetails = (sceneName == string.Empty) ? "For more information on the missing object add DebugManager to your NetworkManager and enable WriteSceneObjectDetails"
+                    : $"Scene containing the object is '{sceneName}', object name is '{objectName}";
+                NetworkManager.LogError($"SceneId of {sceneId} not found in SceneObjects. {missingObjectDetails}. This may occur if your scene differs between client and server, if client does not have the scene loaded, or if networked scene objects do not have a SceneCondition. See ObserverManager in the documentation for more on conditions.");
+#else
                 NetworkManager.LogError($"SceneId of {sceneId} not found in SceneObjects. This may occur if your scene differs between client and server, if client does not have the scene loaded, or if networked scene objects do not have a SceneCondition. See ObserverManager in the documentation for more on conditions.");
-
+#endif
+            }
             return nob;
         }
 
@@ -297,7 +310,7 @@ namespace FishNet.Managing.Object
                 return false;
             }
             //Nested nobs not yet supported.
-            if (nob.ChildNetworkObjects.Count > 0)
+            if (nob.NestedRootNetworkBehaviours.Count > 0)
             {
                 if (asServer)
                     spawner.Kick(KickReason.ExploitAttempt, LoggingType.Common, $"Connection {spawner.ClientId} tried to spawn an object {nob.name} which has nested NetworkObjects.");
@@ -348,7 +361,7 @@ namespace FishNet.Managing.Object
                 return false;
             }
             //Nested nobs not yet supported.
-            if (nob.ChildNetworkObjects.Count > 0)
+            if (nob.NestedRootNetworkBehaviours.Count > 0)
             {
                 if (asServer)
                     despawner.Kick(KickReason.ExploitAttempt, LoggingType.Common, $"Connection {despawner.ClientId} tried to despawn an object {nob.name} which has nested NetworkObjects.");

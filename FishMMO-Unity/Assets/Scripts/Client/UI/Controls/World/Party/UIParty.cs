@@ -34,7 +34,7 @@ namespace FishMMO.Client
 						member.Rank.text = "Rank: " + Character.PartyController.Rank.ToString();
 					if (member.Health != null)
 						member.Health.value = Character.AttributeController.GetResourceAttributeCurrentPercentage(HealthTemplate);
-					Members.Add(Character.ID, member);
+					Members.Add(Character.ID.Value, member);
 				}
 			}
 		}
@@ -103,7 +103,7 @@ namespace FishMMO.Client
 
 		public void OnButtonInviteToParty()
 		{
-			if (Character != null && Character.PartyController.ID > 0 && Client.NetworkManager.IsClient)
+			if (Character != null && Character.PartyController.ID > 0 && Client.NetworkManager.IsClientStarted)
 			{
 				if (Character.TargetController.Current.Target != null)
 				{
@@ -112,7 +112,7 @@ namespace FishMMO.Client
 					{
 						Client.NetworkManager.ClientManager.Broadcast(new PartyInviteBroadcast()
 						{
-							targetCharacterID = targetCharacter.ID,
+							targetCharacterID = targetCharacter.ID.Value,
 						}, Channel.Reliable);
 					}
 				}

@@ -14,24 +14,29 @@ namespace FishNet.CodeGenerating.Helping
     {
         #region Reflection references.
         //Fullnames.
-        public string SyncList_Name;
-        public string SyncDictionary_Name;
-        public string SyncHashSet_Name;
+        public string SyncVar_Name { get; private set; }
+        public string SyncList_Name { get; private set; }
+        public string SyncDictionary_Name { get; private set; }
+        public string SyncHashSet_Name { get; private set; }
         //Is checks.
-        public MethodReference InstanceFinder_IsServer_MethodRef;
-        public MethodReference InstanceFinder_IsClient_MethodRef;
+        public MethodReference InstanceFinder_IsServer_MethodRef { get; private set; }
+        public MethodReference InstanceFinder_IsClient_MethodRef { get; private set; }
         //Misc.
-        public TypeReference NetworkBehaviour_TypeRef;
-        public MethodReference NetworkConnection_IsValid_MethodRef;
-        public MethodReference NetworkConnection_IsActive_MethodRef;
-        public MethodReference Dictionary_Add_UShort_SyncBase_MethodRef;
-        public MethodReference NetworkConnection_GetIsLocalClient_MethodRef;
+        public TypeReference NetworkBehaviour_TypeRef { get; private set; }
+        public MethodReference NetworkConnection_IsValid_MethodRef { get; private set; }
+        public MethodReference NetworkConnection_IsActive_MethodRef { get; private set; }
+        public MethodReference Dictionary_Add_UShort_SyncBase_MethodRef { get; private set; }
+        public MethodReference NetworkConnection_GetIsLocalClient_MethodRef { get; private set; }
         #endregion
 
         public override bool ImportReferences()
         {
             Type tmpType;
-            /* SyncObject names. */
+            /* SyncType names */
+            //SyncVar.
+            tmpType = typeof(SyncVar<>);
+            base.ImportReference(tmpType);
+            SyncVar_Name = tmpType.Name;
             //SyncList.
             tmpType = typeof(SyncList<>);
             base.ImportReference(tmpType);
@@ -72,9 +77,9 @@ namespace FishNet.CodeGenerating.Helping
             Type instanceFinderType = typeof(InstanceFinder);
             foreach (PropertyInfo pi in instanceFinderType.GetProperties())
             {
-                if (pi.Name == nameof(InstanceFinder.IsClient))
+                if (pi.Name == nameof(InstanceFinder.IsClientStarted))
                     InstanceFinder_IsClient_MethodRef = base.ImportReference(pi.GetMethod);
-                else if (pi.Name == nameof(InstanceFinder.IsServer))
+                else if (pi.Name == nameof(InstanceFinder.IsServerStarted))
                     InstanceFinder_IsServer_MethodRef = base.ImportReference(pi.GetMethod);
             }
 

@@ -4,6 +4,7 @@ using FishNet.Managing.Logging;
 using LiteNetLib;
 using LiteNetLib.Layers;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Net;
 using System.Runtime.CompilerServices;
@@ -49,11 +50,11 @@ namespace FishNet.Transporting.Tugboat.Server
         /// <summary>
         /// Changes to the sockets local connection state.
         /// </summary>
-        private Queue<LocalConnectionState> _localConnectionStates = new Queue<LocalConnectionState>();
+        private ConcurrentQueue<LocalConnectionState> _localConnectionStates = new ConcurrentQueue<LocalConnectionState>();
         /// <summary>
         /// Inbound messages which need to be handled.
         /// </summary>
-        private Queue<Packet> _incoming = new Queue<Packet>();
+        private ConcurrentQueue<Packet> _incoming = new ConcurrentQueue<Packet>();
         /// <summary>
         /// Outbound messages which need to be handled.
         /// </summary>
@@ -61,7 +62,7 @@ namespace FishNet.Transporting.Tugboat.Server
         /// <summary>
         /// ConnectionEvents which need to be handled.
         /// </summary>
-        private Queue<RemoteConnectionEvent> _remoteConnectionEvents = new Queue<RemoteConnectionEvent>();
+        private ConcurrentQueue<RemoteConnectionEvent> _remoteConnectionEvents = new ConcurrentQueue<RemoteConnectionEvent>();
         #endregion
         /// <summary>
         /// Key required to connect.
@@ -71,10 +72,6 @@ namespace FishNet.Transporting.Tugboat.Server
         /// How long in seconds until client times from server.
         /// </summary>
         private int _timeout;
-        /// <summary>
-        /// Server socket manager.
-        /// </summary>
-        private NetManager _server;
         /// <summary>
         /// IPv4 address to bind server to.
         /// </summary>
@@ -115,9 +112,17 @@ namespace FishNet.Transporting.Tugboat.Server
         internal void UpdateTimeout(int timeout)
         {
             _timeout = timeout;
-            base.UpdateTimeout(_server, timeout);
+            base.UpdateTimeout(base.NetManager, timeout);
         }
 
+        /// <summary>
+        /// Polls the socket for new data.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void PollSocket()
+        {
+            base.PollSocket(base.NetManager);
+        }
 
         /// <summary>
         /// Threaded operation to process server actions.
@@ -131,8 +136,8 @@ namespace FishNet.Transporting.Tugboat.Server
             listener.NetworkReceiveEvent += Listener_NetworkReceiveEvent;
             listener.PeerDisconnectedEvent += Listener_PeerDisconnectedEvent;
 
-            _server = new NetManager(listener, _packetLayer);
-            _server.MtuOverride = (_mtu + NetConstants.FragmentedHeaderTotalSize);
+            base.NetManager = new NetManager(listener, _packetLayer);
+            base.NetManager.MtuOverride = (_mtu + NetConstants.FragmentedHeaderTotalSize);
 
             UpdateTimeout(_timeout);
 
@@ -184,7 +189,7 @@ namespace FishNet.Transporting.Tugboat.Server
                 return;
             }
 
-            bool startResult = _server.Start(ipv4, ipv6, _port);
+            bool startResult = base.NetManager.Start(ipv4, ipv6, _port);
             //If started succcessfully.
             if (startResult)
             {
@@ -203,15 +208,15 @@ namespace FishNet.Transporting.Tugboat.Server
         /// </summary>
         private void StopSocketOnThread()
         {
-            if (_server == null)
+            if (base.NetManager == null)
                 return;
 
             Task t = Task.Run(() =>
             {
                 lock (_stopLock)
                 {
-                    _server?.Stop();
-                    _server = null;
+                    base.NetManager?.Stop();
+                    base.NetManager = null;
                 }
 
                 //If not stopped yet also enqueue stop.
@@ -240,7 +245,7 @@ namespace FishNet.Transporting.Tugboat.Server
             NetPeer peer = GetNetPeer(connectionId, false);
             if (peer == null)
             { 
-                Transport.NetworkManager.LogWarning($"ConnectId {connectionId} returned a null NetPeer.");
+                Transport.NetworkManager.LogWarning($"Connection Id {connectionId} returned a null NetPeer.");
                 return string.Empty;
             }
 
@@ -254,9 +259,9 @@ namespace FishNet.Transporting.Tugboat.Server
         /// <returns></returns>
         private NetPeer GetNetPeer(int connectionId, bool connectedOnly)
         {
-            if (_server != null)
+            if (base.NetManager != null)
             {
-                NetPeer peer = _server.GetPeerById(connectionId);
+                NetPeer peer = base.NetManager.GetPeerById(connectionId);
                 if (connectedOnly && peer != null && peer.ConnectionState != ConnectionState.Connected)
                     peer = null;
 
@@ -295,7 +300,7 @@ namespace FishNet.Transporting.Tugboat.Server
         /// </summary>
         internal bool StopConnection()
         {
-            if (_server == null || base.GetConnectionState() == LocalConnectionState.Stopped || base.GetConnectionState() == LocalConnectionState.Stopping)
+            if (base.NetManager == null || base.GetConnectionState() == LocalConnectionState.Stopped || base.GetConnectionState() == LocalConnectionState.Stopping)
                 return false;
 
             _localConnectionStates.Enqueue(LocalConnectionState.Stopping);
@@ -310,7 +315,7 @@ namespace FishNet.Transporting.Tugboat.Server
         internal bool StopConnection(int connectionId)
         {
             //Server isn't running.
-            if (_server == null || base.GetConnectionState() != LocalConnectionState.Started)
+            if (base.NetManager == null || base.GetConnectionState() != LocalConnectionState.Started)
                 return false;
 
             NetPeer peer = GetNetPeer(connectionId, false);
@@ -336,10 +341,10 @@ namespace FishNet.Transporting.Tugboat.Server
         /// </summary>
         private void ResetQueues()
         {
-            _localConnectionStates.Clear();
+            base.ClearGenericQueue<LocalConnectionState>(ref _localConnectionStates);
             base.ClearPacketQueue(ref _incoming);
             base.ClearPacketQueue(ref _outgoing);
-            _remoteConnectionEvents.Clear();
+            base.ClearGenericQueue<RemoteConnectionEvent>(ref _remoteConnectionEvents);
         }
 
 
@@ -383,11 +388,11 @@ namespace FishNet.Transporting.Tugboat.Server
         /// </summary>
         private void Listener_ConnectionRequestEvent(ConnectionRequest request)
         {
-            if (_server == null)
+            if (base.NetManager == null)
                 return;
 
             //At maximum peers.
-            if (_server.ConnectedPeersCount >= _maximumClients)
+            if (base.NetManager.ConnectedPeersCount >= _maximumClients)
             {
                 request.Reject();
                 return;
@@ -402,7 +407,7 @@ namespace FishNet.Transporting.Tugboat.Server
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void DequeueOutgoing()
         {
-            if (base.GetConnectionState() != LocalConnectionState.Started || _server == null)
+            if (base.GetConnectionState() != LocalConnectionState.Started || base.NetManager == null)
             {
                 //Not started, clear outgoing.
                 base.ClearPacketQueue(ref _outgoing);
@@ -429,7 +434,7 @@ namespace FishNet.Transporting.Tugboat.Server
                     //Send to all clients.
                     if (connectionId == NetworkConnection.UNSET_CLIENTID_VALUE)
                     {
-                        _server.SendToAll(segment.Array, segment.Offset, segment.Count, dm);
+                        base.NetManager.SendToAll(segment.Array, segment.Offset, segment.Count, dm);
                     }
                     //Send to one client.
                     else
@@ -459,13 +464,11 @@ namespace FishNet.Transporting.Tugboat.Server
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void IterateIncoming()
         {
-            _server?.PollEvents();
-
             /* Run local connection states first so we can begin
              * to read for data at the start of the frame, as that's
              * where incoming is read. */
-            while (_localConnectionStates.Count > 0)
-                base.SetConnectionState(_localConnectionStates.Dequeue(), true);
+            while (_localConnectionStates.TryDequeue(out LocalConnectionState result))
+                base.SetConnectionState(result, true);
 
             //Not yet started.
             LocalConnectionState localState = base.GetConnectionState();
@@ -481,17 +484,15 @@ namespace FishNet.Transporting.Tugboat.Server
             }
 
             //Handle connection and disconnection events.
-            while (_remoteConnectionEvents.Count > 0)
+            while (_remoteConnectionEvents.TryDequeue(out RemoteConnectionEvent connectionEvent))
             {
-                RemoteConnectionEvent connectionEvent = _remoteConnectionEvents.Dequeue();
                 RemoteConnectionState state = (connectionEvent.Connected) ? RemoteConnectionState.Started : RemoteConnectionState.Stopped;
                 base.Transport.HandleRemoteConnectionState(new RemoteConnectionStateArgs(state, connectionEvent.ConnectionId, base.Transport.Index));
             }
 
             //Handle packets.
-            while (_incoming.Count > 0)
+            while (_incoming.TryDequeue(out Packet incoming))
             {
-                Packet incoming = _incoming.Dequeue();
                 //Make sure peer is still connected.
                 NetPeer peer = GetNetPeer(incoming.ConnectionId, true);
                 if (peer != null)

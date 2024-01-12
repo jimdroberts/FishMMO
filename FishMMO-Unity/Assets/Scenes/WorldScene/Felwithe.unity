@@ -566,13 +566,14 @@ MonoBehaviour:
   <PredictedSpawn>k__BackingField: {fileID: 0}
   _networkBehaviours:
   - {fileID: 431527816}
-  <ParentNetworkObject>k__BackingField: {fileID: 0}
-  <ChildNetworkObjects>k__BackingField: []
+  <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 0}
+  <NestedRootNetworkBehaviours>k__BackingField: []
   SerializedTransformProperties:
     Position: {x: 33.128353, y: 9.2, z: -4.5162}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
     LocalScale: {x: 1, y: 1, z: 1}
   _isNetworked: 1
+  _isSpawnable: 0
   _isGlobal: 0
   _initializeOrder: 0
   _defaultDespawnType: 0
@@ -582,10 +583,6 @@ MonoBehaviour:
   _scenePathHash: 1043126451
   <SceneId>k__BackingField: 4480193993684487882
   <AssetPathHash>k__BackingField: 0
-  _sceneNetworkObjects:
-  - {fileID: 431527815}
-  - {fileID: 1642316608}
-  - {fileID: 1673595143}
 --- !u!114 &431527816
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2147,13 +2144,14 @@ MonoBehaviour:
   <PredictedSpawn>k__BackingField: {fileID: 0}
   _networkBehaviours:
   - {fileID: 1642316609}
-  <ParentNetworkObject>k__BackingField: {fileID: 0}
-  <ChildNetworkObjects>k__BackingField: []
+  <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 0}
+  <NestedRootNetworkBehaviours>k__BackingField: []
   SerializedTransformProperties:
     Position: {x: 20.22, y: 9.2, z: -8}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
     LocalScale: {x: 1, y: 1, z: 1}
   _isNetworked: 1
+  _isSpawnable: 0
   _isGlobal: 0
   _initializeOrder: 0
   _defaultDespawnType: 0
@@ -2163,10 +2161,6 @@ MonoBehaviour:
   _scenePathHash: 1043126451
   <SceneId>k__BackingField: 4480193995921246086
   <AssetPathHash>k__BackingField: 0
-  _sceneNetworkObjects:
-  - {fileID: 431527815}
-  - {fileID: 1642316608}
-  - {fileID: 1673595143}
 --- !u!114 &1642316609
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2355,13 +2349,14 @@ MonoBehaviour:
   <PredictedSpawn>k__BackingField: {fileID: 0}
   _networkBehaviours:
   - {fileID: 1673595144}
-  <ParentNetworkObject>k__BackingField: {fileID: 0}
-  <ChildNetworkObjects>k__BackingField: []
+  <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 0}
+  <NestedRootNetworkBehaviours>k__BackingField: []
   SerializedTransformProperties:
     Position: {x: 17.9, y: 9.2, z: 8.4}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
     LocalScale: {x: 1, y: 1, z: 1}
   _isNetworked: 1
+  _isSpawnable: 0
   _isGlobal: 0
   _initializeOrder: 0
   _defaultDespawnType: 0
@@ -2371,10 +2366,6 @@ MonoBehaviour:
   _scenePathHash: 1043126451
   <SceneId>k__BackingField: 4480193993480556111
   <AssetPathHash>k__BackingField: 0
-  _sceneNetworkObjects:
-  - {fileID: 431527815}
-  - {fileID: 1642316608}
-  - {fileID: 1673595143}
 --- !u!114 &1673595144
 MonoBehaviour:
   m_ObjectHideFlags: 0

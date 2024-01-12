@@ -46,7 +46,7 @@ namespace FishMMO.Server
 		/// <summary>
 		/// Interactable broadcast received from a character.
 		/// </summary>
-		private void OnServerInteractableBroadcastReceived(NetworkConnection conn, InteractableBroadcast msg)
+		private void OnServerInteractableBroadcastReceived(NetworkConnection conn, InteractableBroadcast msg, Channel channel)
 		{
 			if (conn == null)
 			{
@@ -65,9 +65,9 @@ namespace FishMMO.Server
 			}
 
 			// valid scene object
-			if (!WorldSceneDetailsCache.Scenes.TryGetValue(character.SceneName, out WorldSceneDetails details))
+			if (!WorldSceneDetailsCache.Scenes.TryGetValue(character.SceneName.Value, out WorldSceneDetails details))
 			{
-				UnityEngine.Debug.Log("Missing Scene:" + character.SceneName);
+				UnityEngine.Debug.Log("Missing Scene:" + character.SceneName.Value);
 				return;
 			}
 			if (!SceneObjectUID.IDs.TryGetValue(msg.interactableID, out SceneObjectUID sceneObject))
@@ -87,7 +87,7 @@ namespace FishMMO.Server
 			interactable?.OnInteract(character);
 		}
 
-		private void OnServerMerchantPurchaseBroadcastReceived(NetworkConnection conn, MerchantPurchaseBroadcast msg)
+		private void OnServerMerchantPurchaseBroadcastReceived(NetworkConnection conn, MerchantPurchaseBroadcast msg, Channel channel)
 		{
 			if (conn == null)
 			{
@@ -163,7 +163,7 @@ namespace FishMMO.Server
 								}
 
 								// update or add the item to the database and initialize
-								CharacterInventoryService.SetSlot(dbContext, character.ID, item);
+								CharacterInventoryService.SetSlot(dbContext, character.ID.Value, item);
 
 								// create the new item broadcast
 								modifiedItemBroadcasts.Add(new InventorySetItemBroadcast()
@@ -224,7 +224,7 @@ namespace FishMMO.Server
 			character.InventoryController.Currency -= template.Price;
 
 			// add the known ability to the database
-			CharacterKnownAbilityService.Add(dbContext, character.ID, template.ID);
+			CharacterKnownAbilityService.Add(dbContext, character.ID.Value, template.ID);
 
 			// tell the client about the new ability event
 			conn.Broadcast(new KnownAbilityAddBroadcast()
@@ -233,7 +233,7 @@ namespace FishMMO.Server
 			}, true, Channel.Reliable);
 		}
 
-		public void OnServerAbilityCraftBroadcastReceived(NetworkConnection conn, AbilityCraftBroadcast msg)
+		public void OnServerAbilityCraftBroadcastReceived(NetworkConnection conn, AbilityCraftBroadcast msg, Channel channel)
 		{
 			if (conn == null)
 			{
@@ -287,7 +287,7 @@ namespace FishMMO.Server
 				}
 			}
 
-			if (character.Currency < price)
+			if (character.Currency.Value < price)
 			{
 				return;
 			}
@@ -298,7 +298,7 @@ namespace FishMMO.Server
 				return;
 			}
 
-			if (CharacterAbilityService.GetCount(dbContext, character.ID) >= MaxAbilityCount)
+			if (CharacterAbilityService.GetCount(dbContext, character.ID.Value) >= MaxAbilityCount)
 			{
 				// too many abilities! tell the player to forget a few of them first...
 				return;
@@ -310,11 +310,11 @@ namespace FishMMO.Server
 				return;
 			}
 
-			CharacterAbilityService.UpdateOrAdd(dbContext, character.ID, newAbility);
+			CharacterAbilityService.UpdateOrAdd(dbContext, character.ID.Value, newAbility);
 
 			character.AbilityController.LearnAbility(newAbility);
 
-			character.Currency -= price;
+			character.Currency.Value -= price;
 
 			AbilityAddBroadcast abilityAddBroadcast = new AbilityAddBroadcast()
 			{

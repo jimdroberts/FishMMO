@@ -145,7 +145,7 @@ namespace FishMMO.Client
 			// remove Rich Text Tags if any exist
 			input = ChatHelper.Sanitize(input);
 
-			if (Client.NetworkManager.IsClient)
+			if (Client.NetworkManager.IsClientStarted)
 			{
 				if (input.Length > MAX_LENGTH)
 				{
@@ -293,7 +293,7 @@ namespace FishMMO.Client
 			}
 		}
 
-		private void OnClientChatBroadcastReceived(ChatBroadcast msg)
+		private void OnClientChatBroadcastReceived(ChatBroadcast msg, Channel channel)
 		{
 			if (!string.IsNullOrWhiteSpace(currentTab) && tabs.TryGetValue(currentTab, out ChatTab tab))
 			{
@@ -399,7 +399,7 @@ namespace FishMMO.Client
 				}
 			}
 			// we received a tell from someone else
-			if (localCharacter == null || msg.senderID != localCharacter.ID)
+			if (localCharacter == null || msg.senderID != localCharacter.ID.Value)
 			{
 				ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
 				{

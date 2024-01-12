@@ -31,7 +31,7 @@ namespace FishMMO.Server.DatabaseServices
 				return;
 			}
 
-			var friends = dbContext.CharacterFriends.Where(c => c.CharacterID == character.ID)
+			var friends = dbContext.CharacterFriends.Where(c => c.CharacterID == character.ID.Value)
 													.ToDictionary(k => k.FriendCharacterID);
 
 			foreach (long friendID in character.FriendController.Friends)
@@ -40,7 +40,7 @@ namespace FishMMO.Server.DatabaseServices
 				{
 					dbContext.CharacterFriends.Add(new CharacterFriendEntity()
 					{
-						CharacterID = character.ID,
+						CharacterID = character.ID.Value,
 						FriendCharacterID = friendID,
 					});
 				}
@@ -102,7 +102,7 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Load(NpgsqlDbContext dbContext, Character character)
 		{
-			var friends = dbContext.CharacterFriends.Where(c => c.CharacterID == character.ID);
+			var friends = dbContext.CharacterFriends.Where(c => c.CharacterID == character.ID.Value);
 			foreach (CharacterFriendEntity friend in friends)
 			{
 				character.FriendController.AddFriend(friend.FriendCharacterID);

@@ -1,6 +1,5 @@
-﻿using FishNet.Object;
-using FishNet.Transporting;
-using FishNet.Utility.Extension;
+﻿using FishNet.Transporting;
+using GameKit.Dependencies.Utilities;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using UnityEngine;
@@ -415,7 +414,7 @@ namespace FishNet.Component.Prediction
         {
             if (_interpolation == 0)
                 return false;
-            if (_predictedObject.IsPredictingOwner() || _predictedObject.IsServer)
+            if (_predictedObject.IsPredictingOwner() || _predictedObject.IsServerStarted)
                 return false;
 
             return true;

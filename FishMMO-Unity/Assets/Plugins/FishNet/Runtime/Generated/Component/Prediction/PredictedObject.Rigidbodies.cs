@@ -203,7 +203,11 @@ namespace FishNet.Component.Prediction
             if (_graphicalAnimators.Length > 0)
             {
                 for (int i = 0; i < _graphicalAnimators.Length; i++)
+#if UNITY_2022_1_OR_NEWER
                     _graphicalAnimators[i].keepAnimatorStateOnDisable = true;
+#else
+                    _graphicalAnimators[i].keepAnimatorControllerStateOnDisable = true;
+#endif
 
                 /* True if at least one animator is on the graphical root. 
                 * Unity gets components in order so it's safe to assume
@@ -233,7 +237,7 @@ namespace FishNet.Component.Prediction
         {
             if (!IsRigidbodyPrediction)
                 return;
-            if (base.IsServer)
+            if (base.IsServerStarted)
                 return;
 
             bool is2D = (_predictionType == PredictionType.Rigidbody2D);
@@ -297,7 +301,6 @@ namespace FishNet.Component.Prediction
             bool is2D = (_predictionType == PredictionType.Rigidbody2D);
             uint lastNbTick = nb.GetLastReconcileTick();
             int stateIndex = GetCachedStateIndex(lastNbTick, is2D);
-
             /* If running again on the same reconcile or state is for a different
              * tick then do make RBs kinematic. Resetting to a different state
              * could cause a desync and there's no reason to run the same
@@ -790,7 +793,7 @@ namespace FishNet.Component.Prediction
         {
             if (!IsRigidbodyPrediction)
                 return false;
-            if (base.IsServer || IsPredictingOwner())
+            if (base.IsServerStarted || IsPredictingOwner())
                 return false;
             if (_spectatorPaused)
                 return false;

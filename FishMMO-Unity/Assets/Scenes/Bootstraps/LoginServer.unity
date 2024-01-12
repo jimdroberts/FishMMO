@@ -240,7 +240,13 @@ PrefabInstance:
       propertyPath: _tickRate
       value: 15
       objectReference: {fileID: 0}
-    m_RemovedComponents: []
+    - target: {fileID: 5847661121379719285, guid: f04e72f7162977e4494fd4ecd2984f2e,
+        type: 3}
+      propertyPath: _remoteClientTimeout
+      value: 2
+      objectReference: {fileID: 0}
+    m_RemovedComponents:
+    - {fileID: 5628509060347603058, guid: f04e72f7162977e4494fd4ecd2984f2e, type: 3}
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []

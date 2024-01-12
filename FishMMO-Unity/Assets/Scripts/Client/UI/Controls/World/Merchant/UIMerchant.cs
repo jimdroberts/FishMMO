@@ -47,7 +47,7 @@ namespace FishMMO.Client
 			}
 		}
 
-		private void OnClientMerchantBroadcastReceived(MerchantBroadcast msg)
+		private void OnClientMerchantBroadcastReceived(MerchantBroadcast msg, Channel channel)
 		{
 			CurrentTemplateID = msg.id;
 			MerchantTemplate template = MerchantTemplate.Get<MerchantTemplate>(CurrentTemplateID);

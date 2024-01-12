@@ -153,7 +153,7 @@ namespace FishMMO.Server
 			return false;
 		}
 
-		private void OnServerInventoryRemoveItemBroadcastReceived(NetworkConnection conn, InventoryRemoveItemBroadcast msg)
+		private void OnServerInventoryRemoveItemBroadcastReceived(NetworkConnection conn, InventoryRemoveItemBroadcast msg, Channel channel)
 		{
 			if (conn == null ||
 				conn.FirstObject == null)
@@ -174,13 +174,13 @@ namespace FishMMO.Server
 				Item item = character.InventoryController.RemoveItem(msg.slot);
 
 				// remove the item from the database
-				CharacterInventoryService.Delete(dbContext, character.ID, msg.slot);
+				CharacterInventoryService.Delete(dbContext, character.ID.Value, msg.slot);
 
 				conn.Broadcast(msg, true, Channel.Reliable);
 			}
 		}
 
-		private void OnServerInventorySwapItemSlotsBroadcastReceived(NetworkConnection conn, InventorySwapItemSlotsBroadcast msg)
+		private void OnServerInventorySwapItemSlotsBroadcastReceived(NetworkConnection conn, InventorySwapItemSlotsBroadcast msg, Channel channel)
 		{
 			if (conn == null ||
 				conn.FirstObject == null)
@@ -212,7 +212,7 @@ namespace FishMMO.Server
 				case InventoryType.Inventory:
 					// swap the items in the inventory
 					if (msg.to != msg.from &&
-						SwapContainerItems(dbContext, character.ID, character.InventoryController, msg.from, msg.to, (db, id, i) =>
+						SwapContainerItems(dbContext, character.ID.Value, character.InventoryController, msg.from, msg.to, (db, id, i) =>
 					{
 						CharacterInventoryService.Update(db, id, i);
 					}))
@@ -226,7 +226,7 @@ namespace FishMMO.Server
 				case InventoryType.Equipment:
 					break;
 				case InventoryType.Bank:
-					if (SwapContainerItems(dbContext, character.ID, character.BankController, character.InventoryController, msg.from, msg.to,
+					if (SwapContainerItems(dbContext, character.ID.Value, character.BankController, character.InventoryController, msg.from, msg.to,
 					(db, id, a) =>
 					{
 						CharacterBankService.SetSlot(db, id, a);
@@ -250,7 +250,7 @@ namespace FishMMO.Server
 			}
 		}
 
-		private void OnServerEquipmentEquipItemBroadcastReceived(NetworkConnection conn, EquipmentEquipItemBroadcast msg)
+		private void OnServerEquipmentEquipItemBroadcastReceived(NetworkConnection conn, EquipmentEquipItemBroadcast msg, Channel channel)
 		{
 			if (conn == null ||
 				conn.FirstObject == null)
@@ -292,16 +292,16 @@ namespace FishMMO.Server
 						// did we replace an already equipped item?
 						if (character.InventoryController.TryGetItem(msg.inventoryIndex, out Item prevItem))
 						{
-							CharacterInventoryService.SetSlot(dbContext, character.ID, prevItem);
+							CharacterInventoryService.SetSlot(dbContext, character.ID.Value, prevItem);
 						}
 						// remove the inventory item from the database
 						else
 						{
-							CharacterInventoryService.Delete(dbContext, character.ID, msg.inventoryIndex);
+							CharacterInventoryService.Delete(dbContext, character.ID.Value, msg.inventoryIndex);
 						}
 
 						// set the equipment slot in the database
-						CharacterEquipmentService.SetSlot(dbContext, character.ID, inventoryItem);
+						CharacterEquipmentService.SetSlot(dbContext, character.ID.Value, inventoryItem);
 
 						dbTransaction.Commit();
 
@@ -322,16 +322,16 @@ namespace FishMMO.Server
 						// did we replace an already equipped item?
 						if (character.BankController.TryGetItem(msg.inventoryIndex, out Item prevItem))
 						{
-							CharacterBankService.SetSlot(dbContext, character.ID, prevItem);
+							CharacterBankService.SetSlot(dbContext, character.ID.Value, prevItem);
 						}
 						// remove the inventory item from the database
 						else
 						{
-							CharacterBankService.Delete(dbContext, character.ID, msg.inventoryIndex);
+							CharacterBankService.Delete(dbContext, character.ID.Value, msg.inventoryIndex);
 						}
 
 						// set the equipment slot in the database
-						CharacterEquipmentService.SetSlot(dbContext, character.ID, bankItem);
+						CharacterEquipmentService.SetSlot(dbContext, character.ID.Value, bankItem);
 
 						dbTransaction.Commit();
 
@@ -342,7 +342,7 @@ namespace FishMMO.Server
 			}
 		}
 
-		private void OnServerEquipmentUnequipItemBroadcastReceived(NetworkConnection conn, EquipmentUnequipItemBroadcast msg)
+		private void OnServerEquipmentUnequipItemBroadcastReceived(NetworkConnection conn, EquipmentUnequipItemBroadcast msg, Channel channel)
 		{
 			if (conn == null ||
 				conn.FirstObject == null)
@@ -401,11 +401,11 @@ namespace FishMMO.Server
 							}
 
 							// update or add the item to the database and initialize
-							CharacterInventoryService.SetSlot(dbContext, character.ID, item);
+							CharacterInventoryService.SetSlot(dbContext, character.ID.Value, item);
 						}
 
 						// delete the item from the equipment table
-						CharacterEquipmentService.Delete(dbContext, character.ID, oldSlot);
+						CharacterEquipmentService.Delete(dbContext, character.ID.Value, oldSlot);
 
 						dbTransaction.Commit();
 
@@ -441,11 +441,11 @@ namespace FishMMO.Server
 							}
 
 							// update or add the item to the database and initialize
-							CharacterBankService.SetSlot(dbContext, character.ID, item);
+							CharacterBankService.SetSlot(dbContext, character.ID.Value, item);
 						}
 
 						// delete the item from the equipment table
-						CharacterEquipmentService.Delete(dbContext, character.ID, oldSlot);
+						CharacterEquipmentService.Delete(dbContext, character.ID.Value, oldSlot);
 
 						dbTransaction.Commit();
 
@@ -456,7 +456,7 @@ namespace FishMMO.Server
 			}
 		}
 
-		private void OnServerBankRemoveItemBroadcastReceived(NetworkConnection conn, BankRemoveItemBroadcast msg)
+		private void OnServerBankRemoveItemBroadcastReceived(NetworkConnection conn, BankRemoveItemBroadcast msg, Channel channel)
 		{
 			if (conn == null ||
 				conn.FirstObject == null)
@@ -477,13 +477,13 @@ namespace FishMMO.Server
 				Item item = character.BankController.RemoveItem(msg.slot);
 
 				// remove the item from the database
-				CharacterBankService.Delete(dbContext, character.ID, item.Slot);
+				CharacterBankService.Delete(dbContext, character.ID.Value, item.Slot);
 
 				conn.Broadcast(msg, true, Channel.Reliable);
 			}
 		}
 
-		private void OnServerBankSwapItemSlotsBroadcastReceived(NetworkConnection conn, BankSwapItemSlotsBroadcast msg)
+		private void OnServerBankSwapItemSlotsBroadcastReceived(NetworkConnection conn, BankSwapItemSlotsBroadcast msg, Channel channel)
 		{
 			if (conn == null ||
 				conn.FirstObject == null)
@@ -512,7 +512,7 @@ namespace FishMMO.Server
 			switch (msg.fromInventory)
 			{
 				case InventoryType.Inventory:
-					if (SwapContainerItems(dbContext, character.ID, character.InventoryController, character.BankController, msg.from, msg.to,
+					if (SwapContainerItems(dbContext, character.ID.Value, character.InventoryController, character.BankController, msg.from, msg.to,
 					(db, id, a) =>
 					{
 						CharacterInventoryService.SetSlot(db, id, a);
@@ -537,7 +537,7 @@ namespace FishMMO.Server
 				case InventoryType.Bank:
 					// swap the items in the bank
 					if (msg.to != msg.from &&
-						SwapContainerItems(dbContext, character.ID, character.BankController, msg.from, msg.to, (db, id, i) =>
+						SwapContainerItems(dbContext, character.ID.Value, character.BankController, msg.from, msg.to, (db, id, i) =>
 					{
 						CharacterBankService.Update(db, id, i);
 					}))

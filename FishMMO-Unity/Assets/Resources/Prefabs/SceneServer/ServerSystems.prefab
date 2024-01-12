@@ -200,3 +200,4 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   WorldSceneDetailsCache: {fileID: 11400000, guid: ee8f2ab36344dae4c8c59b28985d5338,
     type: 2}
+  MaxAbilityCount: 25

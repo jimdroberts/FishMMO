@@ -1,6 +1,4 @@
-﻿#if UNITY_2020_3_OR_NEWER && UNITY_EDITOR_WIN
-using FishNet.CodeAnalysis.Annotations;
-#endif
+﻿using FishNet.CodeAnalysis.Annotations;
 using FishNet.Component.ColliderRollback;
 using FishNet.Connection;
 using FishNet.Managing;
@@ -21,6 +19,19 @@ namespace FishNet.Object
 
     public abstract partial class NetworkBehaviour : MonoBehaviour
     {
+        #region Public.
+        #region Obsoletes
+        [Obsolete("Use IsClientOnlyInitialized. Note the difference between IsClientOnlyInitialized and IsClientOnlyStarted.")]
+        public bool IsClientOnly => IsClientOnlyInitialized;
+        [Obsolete("Use IsServerOnlyInitialized. Note the difference between IsServerOnlyInitialized and IsServerOnlyStarted.")]
+        public bool IsServerOnly => IsServerOnlyInitialized;
+        [Obsolete("Use IsHostInitialized. Note the difference between IsHostInitialized and IsHostStarted.")]
+        public bool IsHost => IsHostInitialized;
+        [Obsolete("Use IsClientInitialized. Note the difference between IsClientInitialized and IsClientStarted.")]
+        public bool IsClient => IsClientInitialized;
+        [Obsolete("Use IsServerInitialized. Note the difference between IsServerInitialized and IsServerStarted.")]
+        public bool IsServer => IsServerInitialized;
+        #endregion
         /// <summary>
         /// True if the NetworkObject for this NetworkBehaviour is deinitializing.
         /// </summary>
@@ -66,29 +77,56 @@ namespace FishNet.Object
         /// </summary>
         public NetworkObserver NetworkObserver => _networkObjectCache.NetworkObserver;
         /// <summary>
-        /// True if the client is active and authenticated.
+        /// True if this object has been initialized on the client side.
+        /// This is set true right before client start callbacks and after stop callbacks.
         /// </summary>
-        public bool IsClient => _networkObjectCache.IsClient;
+        public bool IsClientInitialized => _networkObjectCache.IsClientInitialized;
         /// <summary>
-        /// True if only the client is active and authenticated.
+        /// True if the client is started and authenticated.
         /// </summary>
-        public bool IsClientOnly => _networkObjectCache.IsClientOnly;
+        public bool IsClientStarted => _networkObjectCache.IsClientStarted;
         /// <summary>
-        /// True if server is active.
+        /// True if this object has been initialized only on the client side.
+        /// This is set true right before server start callbacks and after stop callbacks.
+        public bool IsClientOnlyInitialized => _networkObjectCache.IsClientOnlyInitialized;
+        /// <summary>
+        /// True if only the client is started and authenticated.
         /// </summary>
-        public bool IsServer => _networkObjectCache.IsServer;
+        public bool IsClientOnlyStarted => _networkObjectCache.IsClientOnlyStarted;
         /// <summary>
-        /// True if only the server is active.
+        /// True if this object has been initialized on the server side.
+        /// This is set true right before server start callbacks and after stop callbacks.
         /// </summary>
-        public bool IsServerOnly => _networkObjectCache.IsServerOnly;
+        public bool IsServerInitialized => _networkObjectCache.IsServerInitialized;
         /// <summary>
-        /// True if client and server are active.
+        /// True if server is started.
         /// </summary>
-        public bool IsHost => _networkObjectCache.IsHost;
+        public bool IsServerStarted => _networkObjectCache.IsServerStarted;
         /// <summary>
-        /// True if client nor server are active.
+        /// True if this object has been initialized only on the server side.
+        /// This is set true right before server start callbacks and after stop callbacks.
+        public bool IsServerOnlyInitialized => _networkObjectCache.IsServerOnlyInitialized;
+        /// <summary>
+        /// True if only the server is started.
+        /// </summary>
+        public bool IsServerOnlyStarted => _networkObjectCache.IsServerOnlyStarted;
+        /// <summary>
+        /// True if this object hsa been initialized on the server and client side.
+        /// </summary>
+        public bool IsHostInitialized => _networkObjectCache.IsHostInitialized;
+        /// <summary>
+        /// True if client and server are started.
+        /// </summary>
+        public bool IsHostStarted => _networkObjectCache.IsHostStarted;
+        /// <summary>
+        /// True if client nor server are started.
         /// </summary>
         public bool IsOffline => _networkObjectCache.IsOffline;
+        /// <summary>
+        /// True if the object will always initialize as a networked object. When false the object will not automatically initialize over the network. Using Spawn() on an object will always set that instance as networked.
+        /// To check if server or client has been initialized on this object use IsXYZInitialized.
+        /// </summary>
+        public bool IsNetworked => _networkObjectCache.IsNetworked;
         /// <summary>
         /// Observers for this NetworkBehaviour.
         /// </summary>
@@ -96,12 +134,10 @@ namespace FishNet.Object
         /// <summary>
         /// True if the local client is the owner of this object.
         /// </summary>
-#if UNITY_2020_3_OR_NEWER && UNITY_EDITOR_WIN
         [PreventUsageInside("global::FishNet.Object.NetworkBehaviour", "OnStartServer", "")]
         [PreventUsageInside("global::FishNet.Object.NetworkBehaviour", "OnStartNetwork", " Use base.Owner.IsLocalClient instead.")]
         [PreventUsageInside("global::FishNet.Object.NetworkBehaviour", "Awake", "")]
         [PreventUsageInside("global::FishNet.Object.NetworkBehaviour", "Start", "")]
-#endif
         public bool IsOwner => _networkObjectCache.IsOwner;
         /// <summary>
         /// Owner of this object.
@@ -129,6 +165,8 @@ namespace FishNet.Object
         /// The local connection of the client calling this method.
         /// </summary>
         public NetworkConnection LocalConnection => _networkObjectCache.LocalConnection;
+        #endregion
+
         /// <summary>
         /// Returns if a connection is the owner of this object.
         /// </summary>
@@ -174,22 +212,22 @@ namespace FishNet.Object
         /// </summary>
         /// <param name="go">GameObject instance to spawn.</param>
         /// <param name="ownerConnection">Connection to give ownership to.</param>
-        public void Spawn(GameObject go, NetworkConnection ownerConnection = null)
+        public void Spawn(GameObject go, NetworkConnection ownerConnection = null, UnityEngine.SceneManagement.Scene scene = default)
         {
             if (IsNetworkObjectNull(true))
                 return;
-            _networkObjectCache.Spawn(go, ownerConnection);
+            _networkObjectCache.Spawn(go, ownerConnection, scene);
         }
         /// <summary>
         /// Spawns an object over the network. Can only be called on the server.
         /// </summary>
         /// <param name="nob">GameObject instance to spawn.</param>
         /// <param name="ownerConnection">Connection to give ownership to.</param>
-        public void Spawn(NetworkObject nob, NetworkConnection ownerConnection = null)
+        public void Spawn(NetworkObject nob, NetworkConnection ownerConnection = null, UnityEngine.SceneManagement.Scene scene = default)
         {
             if (IsNetworkObjectNull(true))
                 return;
-            _networkObjectCache.Spawn(nob, ownerConnection);
+            _networkObjectCache.Spawn(nob, ownerConnection, scene);
         }
         /// <summary>
         /// Returns if NetworkObject is null.
@@ -246,6 +284,14 @@ namespace FishNet.Object
         /// <param name="component">Reference of the component being registered.</param>
         /// <param name="replace">True to replace existing references.</param>
         public void RegisterInstance<T>(T component, bool replace = true) where T : UnityEngine.Component => _networkObjectCache.RegisterInstance<T>(component, replace);
+        /// <summary>
+        /// Tries to registers a new component to this NetworkManager.
+        /// This will not register the instance if another already exists.
+        /// </summary>
+        /// <typeparam name="T">Type to register.</typeparam>
+        /// <param name="component">Reference of the component being registered.</param>
+        /// <returns>True if was able to register, false if an instance is already registered.</returns>
+        public bool TryRegisterInstance<T>(T component) where T : UnityEngine.Component => _networkObjectCache.TryRegisterInstance<T>(component);
         /// <summary>
         /// Unregisters a component from this NetworkManager.
         /// </summary>

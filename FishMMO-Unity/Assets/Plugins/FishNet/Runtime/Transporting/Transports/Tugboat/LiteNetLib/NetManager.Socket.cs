@@ -35,7 +35,6 @@ namespace LiteNetLib
         private Thread _threadv6;
         private IPEndPoint _bufferEndPointv4;
         private IPEndPoint _bufferEndPointv6;
-        private PausedSocketFix _pausedSocketFix;
 
 #if !LITENETLIB_UNSAFE
         [ThreadStatic] private static byte[] _sendToBuffer;
@@ -272,9 +271,6 @@ namespace LiteNetLib
                 return false;
 
             LocalPort = ((IPEndPoint)_udpSocketv4.LocalEndPoint).Port;
-
-            if (_pausedSocketFix == null)
-                _pausedSocketFix = new PausedSocketFix(this, addressIPv4, addressIPv6, port, manualMode);
 
             if (dualMode)
                 _udpSocketv6 = _udpSocketv4;

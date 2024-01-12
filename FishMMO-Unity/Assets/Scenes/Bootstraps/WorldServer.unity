@@ -131,6 +131,11 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 1702419421884921806, guid: 0b886ac5562272946adae2cfc9971678,
+        type: 3}
+      propertyPath: _remoteClientTimeout
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 5817359361813974888, guid: 0b886ac5562272946adae2cfc9971678,
         type: 3}
       propertyPath: _tickRate
@@ -196,7 +201,8 @@ PrefabInstance:
       propertyPath: _persistence
       value: 2
       objectReference: {fileID: 0}
-    m_RemovedComponents: []
+    m_RemovedComponents:
+    - {fileID: 7992823864570730112, guid: 0b886ac5562272946adae2cfc9971678, type: 3}
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []

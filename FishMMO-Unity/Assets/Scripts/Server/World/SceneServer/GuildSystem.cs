@@ -38,9 +38,9 @@ namespace FishMMO.Server
 			{
 				OnServerGuildInviteBroadcastReceived(sender.Owner, new GuildInviteBroadcast()
 				{
-					inviterCharacterID = sender.ID,
-					targetCharacterID = character.ID,
-				});
+					inviterCharacterID = sender.ID.Value,
+					targetCharacterID = character.ID.Value,
+				}, Channel.Reliable);
 				return true;
 			}
 			return false;
@@ -178,7 +178,7 @@ namespace FishMMO.Server
 				{
 					if (Server.CharacterSystem.CharactersByID.TryGetValue(entity.CharacterID, out Character character))
 					{
-						if (character.GuildController.ID < 1)
+						if (character.GuildController.ID.Value < 1)
 						{
 							continue;
 						}
@@ -194,11 +194,11 @@ namespace FishMMO.Server
 		{
 			if (character != null)
 			{
-				pendingInvitations.Remove(character.ID);
+				pendingInvitations.Remove(character.ID.Value);
 			}
 		}
 
-		public void OnServerGuildCreateBroadcastReceived(NetworkConnection conn, GuildCreateBroadcast msg)
+		public void OnServerGuildCreateBroadcastReceived(NetworkConnection conn, GuildCreateBroadcast msg, Channel channel)
 		{
 			if (conn.FirstObject == null)
 			{
@@ -210,7 +210,7 @@ namespace FishMMO.Server
 			}
 
 			GuildController guildController = conn.FirstObject.GetComponent<GuildController>();
-			if (guildController == null || guildController.ID > 0)
+			if (guildController == null || guildController.ID.Value > 0)
 			{
 				// already in a guild
 				return;
@@ -233,22 +233,22 @@ namespace FishMMO.Server
 			}
 			if (GuildService.TryCreate(dbContext, msg.guildName, out GuildEntity newGuild))
 			{
-				guildController.ID = newGuild.ID;
+				guildController.ID.Value = newGuild.ID;
 				guildController.Rank = GuildRank.Leader;
 				CharacterGuildService.Save(dbContext, guildController.Character);
 
 				// tell the character we made their guild successfully
 				conn.Broadcast(new GuildAddBroadcast()
 				{
-					guildID = guildController.ID,
-					characterID = guildController.Character.ID,
+					guildID = guildController.ID.Value,
+					characterID = guildController.Character.ID.Value,
 					rank = guildController.Rank,
 					location = guildController.gameObject.scene.name,
 				}, true, Channel.Reliable);
 			}
 		}
 
-		public void OnServerGuildInviteBroadcastReceived(NetworkConnection conn, GuildInviteBroadcast msg)
+		public void OnServerGuildInviteBroadcastReceived(NetworkConnection conn, GuildInviteBroadcast msg, Channel channel)
 		{
 			if (Server.NpgsqlDbContextFactory == null)
 			{
@@ -263,10 +263,10 @@ namespace FishMMO.Server
 
 			// validate guild leader or officer is inviting
 			if (inviter == null ||
-				inviter.ID < 1 ||
-				inviter.Character.ID == msg.targetCharacterID || 
+				inviter.ID.Value < 1 ||
+				inviter.Character.ID.Value == msg.targetCharacterID || 
 				!(inviter.Rank == GuildRank.Leader | inviter.Rank == GuildRank.Officer) ||
-				!CharacterGuildService.ExistsNotFull(dbContext, inviter.ID, MaxGuildSize))
+				!CharacterGuildService.ExistsNotFull(dbContext, inviter.ID.Value, MaxGuildSize))
 			{
 				return;
 			}
@@ -278,23 +278,23 @@ namespace FishMMO.Server
 				GuildController targetGuildController = targetCharacter.GetComponent<GuildController>();
 
 				// validate target
-				if (targetGuildController == null || targetGuildController.ID > 0)
+				if (targetGuildController == null || targetGuildController.ID.Value > 0)
 				{
 					// we should tell the inviter the target is already in a guild
 					return;
 				}
 
 				// add to our list of pending invitations... used for validation when accepting/declining a guild invite
-				pendingInvitations.Add(targetCharacter.ID, inviter.ID);
+				pendingInvitations.Add(targetCharacter.ID.Value, inviter.ID.Value);
 				targetCharacter.Owner.Broadcast(new GuildInviteBroadcast()
 				{
-					inviterCharacterID = inviter.Character.ID,
-					targetCharacterID = targetCharacter.ID
+					inviterCharacterID = inviter.Character.ID.Value,
+					targetCharacterID = targetCharacter.ID.Value
 				}, true, Channel.Reliable);
 			}
 		}
 
-		public void OnServerGuildAcceptInviteBroadcastReceived(NetworkConnection conn, GuildAcceptInviteBroadcast msg)
+		public void OnServerGuildAcceptInviteBroadcastReceived(NetworkConnection conn, GuildAcceptInviteBroadcast msg, Channel channel)
 		{
 			if (conn.FirstObject == null)
 			{
@@ -303,15 +303,15 @@ namespace FishMMO.Server
 			GuildController guildController = conn.FirstObject.GetComponent<GuildController>();
 
 			// validate character
-			if (guildController == null || guildController.ID > 0)
+			if (guildController == null || guildController.ID.Value > 0)
 			{
 				return;
 			}
 
 			// validate guild invite
-			if (pendingInvitations.TryGetValue(guildController.Character.ID, out long pendingGuildID))
+			if (pendingInvitations.TryGetValue(guildController.Character.ID.Value, out long pendingGuildID))
 			{
-				pendingInvitations.Remove(guildController.Character.ID);
+				pendingInvitations.Remove(guildController.Character.ID.Value);
 
 				if (Server == null || Server.NpgsqlDbContextFactory == null)
 				{
@@ -322,7 +322,7 @@ namespace FishMMO.Server
 				if (members != null &&
 					members.Count < MaxGuildSize)
 				{
-					guildController.ID = pendingGuildID;
+					guildController.ID.Value = pendingGuildID;
 					guildController.Rank = GuildRank.Member;
 					
 					CharacterGuildService.Save(dbContext, guildController.Character);
@@ -332,8 +332,8 @@ namespace FishMMO.Server
 					// tell the new member they joined immediately, other clients will catch up with the GuildUpdate pass
 					conn.Broadcast(new GuildAddBroadcast()
 					{
-						guildID = guildController.ID,
-						characterID = guildController.Character.ID,
+						guildID = guildController.ID.Value,
+						characterID = guildController.Character.ID.Value,
 						rank = GuildRank.Member,
 						location = guildController.gameObject.scene.name,
 					}, true, Channel.Reliable);
@@ -341,16 +341,16 @@ namespace FishMMO.Server
 			}
 		}
 
-		public void OnServerGuildDeclineInviteBroadcastReceived(NetworkConnection conn, GuildDeclineInviteBroadcast msg)
+		public void OnServerGuildDeclineInviteBroadcastReceived(NetworkConnection conn, GuildDeclineInviteBroadcast msg, Channel channel)
 		{
 			Character character = conn.FirstObject.GetComponent<Character>();
 			if (character != null)
 			{
-				pendingInvitations.Remove(character.ID);
+				pendingInvitations.Remove(character.ID.Value);
 			}
 		}
 
-		public void OnServerGuildLeaveBroadcastReceived(NetworkConnection conn, GuildLeaveBroadcast msg)
+		public void OnServerGuildLeaveBroadcastReceived(NetworkConnection conn, GuildLeaveBroadcast msg, Channel channel)
 		{
 			if (Server.NpgsqlDbContextFactory == null)
 			{
@@ -363,7 +363,7 @@ namespace FishMMO.Server
 			GuildController guildController = conn.FirstObject.GetComponent<GuildController>();
 
 			// validate character
-			if (guildController == null || guildController.ID < 1)
+			if (guildController == null || guildController.ID.Value < 1)
 			{
 				// not in a guild..
 				return;
@@ -372,7 +372,7 @@ namespace FishMMO.Server
 			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 
 			// validate guild
-			List<CharacterGuildEntity> members = CharacterGuildService.Members(dbContext, guildController.ID);
+			List<CharacterGuildEntity> members = CharacterGuildService.Members(dbContext, guildController.ID.Value);
 			if (members != null &&
 				members.Count > 0)
 			{
@@ -387,7 +387,7 @@ namespace FishMMO.Server
 
 					foreach (CharacterGuildEntity member in members)
 					{
-						if (member.CharacterID == guildController.Character.ID)
+						if (member.CharacterID == guildController.Character.ID.Value)
 						{
 							continue;
 						}
@@ -418,16 +418,16 @@ namespace FishMMO.Server
 					}
 				}
 
-				long guildID = guildController.ID;
+				long guildID = guildController.ID.Value;
 
-				guildController.ID = 0;
+				guildController.ID.Value = 0;
 				guildController.Rank = GuildRank.None;
 
 				// tell character that they left the guild immediately, other clients will catch up with the GuildUpdate pass
 				conn.Broadcast(new GuildLeaveBroadcast(), true, Channel.Reliable);
 
 				// remove the guild member
-				CharacterGuildService.Delete(dbContext, guildController.Character.ID);
+				CharacterGuildService.Delete(dbContext, guildController.Character.ID.Value);
 
 				if (remainingCount < 1)
 				{
@@ -443,7 +443,7 @@ namespace FishMMO.Server
 			}
 		}
 
-		public void OnServerGuildRemoveBroadcastReceived(NetworkConnection conn, GuildRemoveBroadcast msg)
+		public void OnServerGuildRemoveBroadcastReceived(NetworkConnection conn, GuildRemoveBroadcast msg, Channel channel)
 		{
 			if (Server.NpgsqlDbContextFactory == null)
 			{
@@ -457,7 +457,7 @@ namespace FishMMO.Server
 
 			// validate character
 			if (guildController == null ||
-				guildController.ID < 1 ||
+				guildController.ID.Value < 1 ||
 				guildController.Rank != GuildRank.Leader ||
 				guildController.Rank != GuildRank.Officer) 
 			{
@@ -473,18 +473,18 @@ namespace FishMMO.Server
 			long memberID = msg.members[0];
 
 			// we can't kick ourself
-			if (memberID == guildController.Character.ID)
+			if (memberID == guildController.Character.ID.Value)
 			{
 				return;
 			}
 
 			// remove the character from the guild in the database
 			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-			bool result = CharacterGuildService.Delete(dbContext, guildController.Rank, guildController.ID, memberID);
+			bool result = CharacterGuildService.Delete(dbContext, guildController.Rank, guildController.ID.Value, memberID);
 			if (result)
 			{
 				// tell the other servers to update their guild lists
-				GuildUpdateService.Save(dbContext, guildController.ID);
+				GuildUpdateService.Save(dbContext, guildController.ID.Value);
 			}
 		}
 	}

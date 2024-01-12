@@ -18,8 +18,13 @@ namespace FishMMO.Shared
 	{
 		public Character Character;
 
-		[SyncVar(SendRate = 0.0f, Channel = Channel.Reliable, ReadPermissions = ReadPermission.Observers, WritePermissions = WritePermission.ServerOnly, OnChange = nameof(OnGuildIDChanged))]
-		public long ID;
+		public readonly SyncVar<long> ID = new SyncVar<long>(new SyncTypeSetting()
+		{
+			SendRate = 0.0f,
+			Channel = Channel.Reliable,
+			ReadPermission = ReadPermission.Observers,
+			WritePermission = WritePermission.ServerOnly,
+		});
 		private void OnGuildIDChanged(long prev, long next, bool asServer)
 		{
 #if !UNITY_SERVER
@@ -42,6 +47,16 @@ namespace FishMMO.Shared
 		public GuildRank Rank = GuildRank.None;
 
 #if !UNITY_SERVER
+		private void Awake()
+		{
+			ID.OnChange += OnGuildIDChanged;
+		}
+
+		private void OnDestroy()
+		{
+			ID.OnChange -= OnGuildIDChanged;
+		}
+
 		public override void OnStartClient()
 		{
 			base.OnStartClient();
@@ -74,7 +89,7 @@ namespace FishMMO.Shared
 		/// When the character receives an invitation to join a guild.
 		/// *Note* msg.targetClientID should be our own ClientId but it doesn't matter if it changes. Server has authority.
 		/// </summary>
-		public void OnClientGuildInviteBroadcastReceived(GuildInviteBroadcast msg)
+		public void OnClientGuildInviteBroadcastReceived(GuildInviteBroadcast msg, Channel channel)
 		{
 			ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.inviterCharacterID, (n) =>
 			{
@@ -98,7 +113,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// When we add a new guild member to the guild.
 		/// </summary>
-		public void OnClientGuildAddBroadcastReceived(GuildAddBroadcast msg)
+		public void OnClientGuildAddBroadcastReceived(GuildAddBroadcast msg, Channel channel)
 		{
 			// update our Guild list with the new Guild member
 			if (Character == null)
@@ -124,7 +139,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// When our local client leaves the guild.
 		/// </summary>
-		public void OnClientGuildLeaveBroadcastReceived(GuildLeaveBroadcast msg)
+		public void OnClientGuildLeaveBroadcastReceived(GuildLeaveBroadcast msg, Channel channel)
 		{
 			if (UIManager.TryGet("UIGuild", out UIGuild uiGuild))
 			{
@@ -135,7 +150,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// When we need to add guild members.
 		/// </summary>
-		public void OnClientGuildAddMultipleBroadcastReceived(GuildAddMultipleBroadcast msg)
+		public void OnClientGuildAddMultipleBroadcastReceived(GuildAddMultipleBroadcast msg, Channel channel)
 		{
 			if (!UIManager.TryGet("UIGuild", out UIGuild uiGuild))
 			{
@@ -152,14 +167,14 @@ namespace FishMMO.Shared
 			}
 			foreach (GuildAddBroadcast subMsg in msg.members)
 			{
-				OnClientGuildAddBroadcastReceived(subMsg);
+				OnClientGuildAddBroadcastReceived(subMsg, channel);
 			}
 		}
 
 		/// <summary>
 		/// When we need to remove guild members.
 		/// </summary>
-		public void OnClientGuildRemoveBroadcastReceived(GuildRemoveBroadcast msg)
+		public void OnClientGuildRemoveBroadcastReceived(GuildRemoveBroadcast msg, Channel channel)
 		{
 			if (UIManager.TryGet("UIGuild", out UIGuild uiGuild))
 			{

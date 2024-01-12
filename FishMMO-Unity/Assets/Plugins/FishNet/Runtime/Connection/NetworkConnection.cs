@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using static FishNet.Managing.Timing.EstimatedTick;
 
 namespace FishNet.Connection
 {
@@ -128,12 +129,14 @@ namespace FishNet.Connection
         /// </summary>
         public object CustomData = null;
         /// <summary>
+        /// LocalTick of the server when this connection was established. This value is not set for clients.
+        /// </summary>
+        internal uint ServerConnectionTick;
+        /// <summary>
         /// Tick of the last packet received from this connection which was not out of order.
         /// This value is only available on the server.
         /// </summary>
         public EstimatedTick PacketTick;
-        [Obsolete("Use LocalTick instead.")] //Remove on 2023/06/01
-        public uint Tick => LocalTick.Value(NetworkManager.TimeManager);
         /// <summary>
         /// Approximate local tick as it is on this connection.
         /// This also contains the last set value for local and remote.
@@ -219,9 +222,16 @@ namespace FishNet.Connection
         private void Initialize(NetworkManager nm, int clientId, int transportIndex, bool asServer)
         {
             NetworkManager = nm;
+            if (asServer)
+                ServerConnectionTick = nm.TimeManager.LocalTick;
             TransportIndex = transportIndex;
             ClientId = clientId;
+            /* Set PacketTick to current values so
+            * that timeouts and other things around
+           * first packet do not occur due to an unset value. */
+            PacketTick.Update(nm.TimeManager, 0, OldTickOption.SetLastRemoteTick);
             Observers_Initialize(nm);
+            Prediction_Initialize(nm, asServer);
             //Only the server uses the ping and buffer.
             if (asServer)
             {
@@ -242,6 +252,7 @@ namespace FishNet.Connection
                 p.Dispose();
             _toClientBundles.Clear();
 
+            ServerConnectionTick = 0;
             PacketTick.Reset();
             TransportIndex = -1;
             ClientId = -1;
@@ -254,7 +265,7 @@ namespace FishNet.Connection
             Scenes.Clear();
             PredictedObjectIds.Clear();
             ResetPingPong();
-            LevelOfDetails.Clear();
+            ResetStates_Lod();
             AllowedForcedLodUpdates = 0;
             LastLevelOfDetailUpdate = 0;
             LevelOfDetailInfractions = 0;

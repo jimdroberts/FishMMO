@@ -18,7 +18,6 @@ GameObject:
   - component: {fileID: 446289968932885008}
   - component: {fileID: 656759775}
   - component: {fileID: 7264485012510910543}
-  - component: {fileID: 4974975333713755852}
   m_Layer: 0
   m_Name: NetworkManager
   m_TagString: Untagged
@@ -73,6 +72,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _authenticator: {fileID: 7266005403130128576}
+  _remoteClientTimeout: 2
+  _remoteClientTimeoutDuration: 60
   _syncTypeRate: 0.1
   SpawnPacking:
     Position: 0
@@ -95,6 +96,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: aca43cf6f20e77c4f8fcc078fd85081f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _remoteServerTimeout: 2
+  _remoteServerTimeoutDuration: 60
   _changeFrameRate: 1
   _frameRate: 60
 --- !u!114 &7619396021155755121
@@ -115,7 +118,6 @@ MonoBehaviour:
   _maximumFrameTicks: 2
   _tickRate: 15
   _pingInterval: 1
-  _timingInterval: 2
   _physicsMode: 1
 --- !u!114 &5698055281298649961
 MonoBehaviour:
@@ -160,7 +162,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7d331f979d46e8e4a9fc90070c596d44, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _useNetworkLod: 0
+  _enableNetworkLod: 0
   _levelOfDetailDistances: []
   _updateHostVisibility: 1
   _defaultConditions:
@@ -198,26 +200,3 @@ MonoBehaviour:
     _latency: 0
     _outOfOrder: 0
     _packetLoss: 0
---- !u!114 &4974975333713755852
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7024989448064037687}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: cbe9ebe226af76a4a943ecc44f7ff909, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  iceServers:
-  - url: stun:stun2.l.google.com:19302
-    username: 
-    credential: 
-  _mtu: 1023
-  _origin: '*'
-  _port: 7770
-  _maximumClients: 2000
-  _HTTPS: 0
-  _clientAddress: 127.0.0.1
-  _noClientPort: 0

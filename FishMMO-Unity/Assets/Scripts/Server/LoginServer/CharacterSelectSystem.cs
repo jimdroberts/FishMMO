@@ -41,7 +41,7 @@ namespace FishMMO.Server
 			}
 		}
 
-		private void OnServerCharacterRequestListBroadcastReceived(NetworkConnection conn, CharacterRequestListBroadcast msg)
+		private void OnServerCharacterRequestListBroadcastReceived(NetworkConnection conn, CharacterRequestListBroadcast msg, Channel channel)
 		{
 			if (!AccountManager.GetAccountNameByConnection(conn, out string accountName))
 			{
@@ -64,7 +64,7 @@ namespace FishMMO.Server
 			}
 		}
 
-		private void OnServerCharacterDeleteBroadcastReceived(NetworkConnection conn, CharacterDeleteBroadcast msg)
+		private void OnServerCharacterDeleteBroadcastReceived(NetworkConnection conn, CharacterDeleteBroadcast msg, Channel channel)
 		{
 			if (conn.IsActive && AccountManager.GetAccountNameByConnection(conn, out string accountName))
 			{
@@ -80,7 +80,7 @@ namespace FishMMO.Server
 			}
 		}
 
-		private void OnServerCharacterSelectBroadcastReceived(NetworkConnection conn, CharacterSelectBroadcast msg)
+		private void OnServerCharacterSelectBroadcastReceived(NetworkConnection conn, CharacterSelectBroadcast msg, Channel channel)
 		{
 			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 			if (conn.IsActive && AccountManager.GetAccountNameByConnection(conn, out string accountName))

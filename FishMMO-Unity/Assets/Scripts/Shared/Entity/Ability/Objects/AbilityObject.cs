@@ -95,8 +95,6 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Handles primary spawn functionality for all ability objects. Returns true if successful.
 		/// </summary>
-		/// <param name="self"></param>
-		/// <param name="targetInfo"></param>
 		public static bool TrySpawn(Ability ability, Character caster, AbilityController controller, Transform abilitySpawner, TargetInfo targetInfo)
 		{
 			AbilityTemplate template = ability.Template;
@@ -120,7 +118,24 @@ namespace FishMMO.Shared
 			switch (template.AbilitySpawnTarget)
 			{
 				case AbilitySpawnTarget.Self:
-					t.SetPositionAndRotation(caster.Transform.position, caster.Transform.rotation);
+					float distance = 0.0f;
+					float height = 0.0f;
+					Collider collider = template.FXPrefab.GetComponent<Collider>();
+					if (collider != null)
+					{
+						Collider casterCollider = caster.gameObject.GetComponent<Collider>();
+						if (casterCollider != null)
+						{
+							distance = casterCollider.bounds.extents.z;
+							height = casterCollider.bounds.extents.y;
+						}
+						distance += collider.bounds.extents.z;
+						height += collider.bounds.extents.y;
+					}
+					Vector3 positionOffset = caster.Transform.forward * (distance + 1.0f);
+					positionOffset.y += height;
+
+					t.SetPositionAndRotation(caster.Motor.Transform.position + positionOffset, caster.Motor.Transform.rotation);
 					break;
 				case AbilitySpawnTarget.Hand:
 					t.SetPositionAndRotation(abilitySpawner.position, abilitySpawner.rotation);
@@ -168,6 +183,8 @@ namespace FishMMO.Shared
 
 			ability.Objects.Add(id, abilityObjects);
 			abilityObject.ContainerID = id;
+
+			Debug.Log(caster.CharacterName + " at " + caster.Transform.position.ToString() + " Spawned Ability at: " + abilityObject.Transform.position.ToString());
 
 			// reset id for spawning
 			id = 0;

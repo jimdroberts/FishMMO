@@ -161,7 +161,7 @@ namespace FishNet.CodeGenerating.Helping
         {
             autoPackMethod = false;
 
-            if (base.GetClass<GeneralHelper>().CodegenExclude(methodInfo))
+            if (base.GetClass<GeneralHelper>().HasNotSerializableAttribute(methodInfo))
                 return true;
             //Not long enough to be a write method.
             else if (methodInfo.Name.Length < WRITE_PREFIX.Length)
@@ -257,8 +257,8 @@ namespace FishNet.CodeGenerating.Helping
         {
             Dictionary<string, MethodReference> dict = (instanced) ?
             InstancedWriterMethods : StaticWriterMethods;
-
-            dict.Remove(typeRef.FullName);
+            string fullName = typeRef.GetFullnameWithoutBrackets();
+            dict.Remove(fullName);
         }
 
         /// <summary>
@@ -768,8 +768,7 @@ namespace FishNet.CodeGenerating.Helping
                     methodRefResult = CreateEnumWriterMethodDefinition(objectTr);
                 //Dictionary, List, ListCache
                 else if (serializerType == SerializerType.Dictionary
-                    || serializerType == SerializerType.List
-                    || serializerType == SerializerType.ListCache)
+                    || serializerType == SerializerType.List)
                     methodRefResult = CreateGenericCollectionWriterMethodReference(objectTr, serializerType);
                 //NetworkBehaviour.
                 else if (serializerType == SerializerType.NetworkBehaviour)
@@ -1082,7 +1081,7 @@ namespace FishNet.CodeGenerating.Helping
             GenericInstanceType genericInstance = (GenericInstanceType)objectTr;
             base.ImportReference(genericInstance);
             TypeReference valueTr = genericInstance.GenericArguments[0];
-            
+
             List<TypeReference> genericArguments = new List<TypeReference>();
             //Make sure all arguments have writers.
             foreach (TypeReference gaTr in genericInstance.GenericArguments)
@@ -1110,8 +1109,6 @@ namespace FishNet.CodeGenerating.Helping
                 instancedWriteMr = wi.Writer_WriteDictionary_MethodRef;
             else if (st == SerializerType.List)
                 instancedWriteMr = wi.Writer_WriteList_MethodRef;
-            else if (st == SerializerType.ListCache)
-                instancedWriteMr = wi.Writer_WriteListCache_MethodRef;
             else
                 instancedWriteMr = null;
 

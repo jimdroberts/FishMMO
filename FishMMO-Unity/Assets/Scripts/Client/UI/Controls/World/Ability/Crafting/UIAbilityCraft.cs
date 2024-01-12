@@ -53,7 +53,7 @@ namespace FishMMO.Client
 			}
 		}
 
-		private void OnClientAbilityCrafterBroadcastReceived(AbilityCrafterBroadcast msg)
+		private void OnClientAbilityCrafterBroadcastReceived(AbilityCrafterBroadcast msg, Channel channel)
 		{
 			Show();
 		}
@@ -239,7 +239,7 @@ namespace FishMMO.Client
 				}
 			}
 
-			if (Character.Currency < price)
+			if (Character.Currency.Value < price)
 			{
 				return;
 			}

@@ -123,7 +123,7 @@ namespace FishMMO.Shared
 				HandleCharacterInput(out KCCInputReplicateData inputData);
 				Replicate(inputData, false);
 			}
-			else if (base.IsServer)
+			else if (base.IsServerStarted)
 			{
 				Replicate(default, true);
 				KinematicCharacterMotorState state = CharacterController.GetState();

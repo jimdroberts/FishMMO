@@ -96,7 +96,7 @@ namespace FishMMO.Client
 			}
 		}
 
-		private void OnClientSrpVerifyBroadcastReceived(SrpVerifyBroadcast msg)
+		private void OnClientSrpVerifyBroadcastReceived(SrpVerifyBroadcast msg, Channel channel)
 		{
 			if (SrpData == null)
 			{
@@ -117,7 +117,7 @@ namespace FishMMO.Client
 			//Debug.Log("Srp: " + proof);
 		}
 
-		private void OnClientSrpProofBroadcastReceived(SrpProofBroadcast msg)
+		private void OnClientSrpProofBroadcastReceived(SrpProofBroadcast msg, Channel channel)
 		{
 			if (SrpData == null)
 			{
@@ -138,7 +138,7 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Received on client after server sends an authentication response.
 		/// </summary>
-		private void OnClientAuthResultBroadcastReceived(ClientAuthResultBroadcast msg)
+		private void OnClientAuthResultBroadcastReceived(ClientAuthResultBroadcast msg, Channel channel)
 		{
 			// invoke result on the client
 			OnClientAuthenticationResult(msg.result);
