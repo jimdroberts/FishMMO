@@ -118,6 +118,10 @@ namespace FishMMO.Shared
 			switch (template.AbilitySpawnTarget)
 			{
 				case AbilitySpawnTarget.Self:
+					t.SetPositionAndRotation(caster.Motor.Transform.position, caster.Motor.Transform.rotation);
+					break;
+				case AbilitySpawnTarget.Hand:
+					// calculate collider offsets so the spawned ability object appears in front of the caster
 					float distance = 0.0f;
 					float height = 0.0f;
 					Collider collider = template.FXPrefab.GetComponent<Collider>();
@@ -135,10 +139,26 @@ namespace FishMMO.Shared
 					Vector3 positionOffset = caster.Transform.forward * (distance + 1.0f);
 					positionOffset.y += height;
 
-					t.SetPositionAndRotation(caster.Motor.Transform.position + positionOffset, caster.Motor.Transform.rotation);
-					break;
-				case AbilitySpawnTarget.Hand:
-					t.SetPositionAndRotation(abilitySpawner.position, abilitySpawner.rotation);
+					Vector3 spawnPosition = caster.Motor.Transform.position + positionOffset;
+
+					// Get the camera's forward vector
+					Vector3 cameraForward = caster.CharacterController.VirtualCameraRotation * Vector3.forward;
+
+					// Define a faraway target position in the look direction
+					const float farDistance = 25.0f;
+
+					// Get a target position far from the camera position
+					Vector3 farTargetPosition = caster.CharacterController.VirtualCameraPosition + cameraForward * farDistance;
+
+					// Calculate the look direction towards the far target position
+					Vector3 lookDirection = (farTargetPosition - spawnPosition).normalized;
+
+					// Calculate the rotation to align with the look direction
+					Quaternion spawnRotation = Quaternion.LookRotation(lookDirection);
+
+					Debug.DrawRay(spawnPosition, lookDirection * farDistance, Color.magenta);
+
+					t.SetPositionAndRotation(spawnPosition, spawnRotation);
 					break;
 				case AbilitySpawnTarget.Target:
 					if (targetInfo.HitPosition != null)
@@ -184,7 +204,7 @@ namespace FishMMO.Shared
 			ability.Objects.Add(id, abilityObjects);
 			abilityObject.ContainerID = id;
 
-			Debug.Log(caster.CharacterName + " at " + caster.Transform.position.ToString() + " Spawned Ability at: " + abilityObject.Transform.position.ToString());
+			Debug.Log(caster.CharacterName + " at " + caster.Transform.position.ToString() + " Spawned Ability at: " + abilityObject.Transform.position.ToString() + " rot: " + abilityObject.Transform.rotation.eulerAngles.ToString());
 
 			// reset id for spawning
 			id = 0;

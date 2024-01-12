@@ -38,9 +38,9 @@ namespace FishMMO.Client
 			if (Character != null &&
 				Character.AttributeController.TryGetResourceAttribute(Template, out CharacterResourceAttribute resource))
 			{
-				float value = resource.CurrentValue / resource.FinalValueAsFloat;
+				float value = resource.CurrentValue / resource.FinalValue;
 				if (slider != null) slider.value = value;
-				if (resourceValue != null) resourceValue.text = resource.CurrentValue + "/" + resource.FinalValueAsFloat;
+				if (resourceValue != null) resourceValue.text = resource.CurrentValue + "/" + resource.FinalValue;
 			}
 		}
 	}

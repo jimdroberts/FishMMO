@@ -11,6 +11,7 @@ namespace FishMMO.Shared
 	{
 		private void Awake()
 		{
+			BaseAbilityTemplate.LoadCache<BaseAbilityTemplate>();
 			AbilityTemplate.LoadCache<AbilityTemplate>();
 			AbilityEvent.LoadCache<AbilityEvent>();
 			SpawnEvent.LoadCache<SpawnEvent>();
@@ -31,6 +32,7 @@ namespace FishMMO.Shared
 
 		private void OnApplicationQuit()
 		{
+			BaseAbilityTemplate.UnloadCache<BaseAbilityTemplate>();
 			AbilityTemplate.UnloadCache<AbilityTemplate>();
 			AbilityEvent.UnloadCache<AbilityEvent>();
 			SpawnEvent.UnloadCache<SpawnEvent>();
