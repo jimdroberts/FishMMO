@@ -21,9 +21,9 @@ namespace GameKit.Dependencies.Utilities
         /// <returns>True if being added.</returns>
         public static bool AddUnique<T>(this List<T> list, T value)
         {
-            bool contains = list.Contains(value);
+            bool contains = list.Contains((T)value);
             if (!contains)
-                list.Add(value);
+                list.Add((T)value);
 
             return !contains;
         }

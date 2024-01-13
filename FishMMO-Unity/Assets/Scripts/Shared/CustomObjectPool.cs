@@ -1,7 +1,7 @@
-﻿using FishNet;
+﻿using FishNet.Managing;
 using FishNet.Managing.Object;
-using FishNet.Object;
 using FishNet.Utility.Performance;
+using FishNet.Object;
 using GameKit.Dependencies.Utilities;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
@@ -51,7 +51,7 @@ namespace FishMMO.Shared
 			if (!_enabled)
 			{
 				NetworkObject prefab = po.GetObject(asServer, prefabId);
-				NetworkObject instance = Instantiate(prefab);
+				NetworkObject instance = Instantiate(prefab, position, rotation);
 				instance.gameObject.SetActive(false);
 				return instance;
 			}
@@ -183,7 +183,7 @@ namespace FishMMO.Shared
 				return;
 			if (prefab.PrefabId == NetworkObject.UNSET_PREFABID_VALUE)
 			{
-				InstanceFinder.NetworkManager.LogError($"Pefab {prefab.name} has an invalid prefabId and cannot be cached.");
+				NetworkManagerExtensions.LogError($"Pefab {prefab.name} has an invalid prefabId and cannot be cached.");
 				return;
 			}
 

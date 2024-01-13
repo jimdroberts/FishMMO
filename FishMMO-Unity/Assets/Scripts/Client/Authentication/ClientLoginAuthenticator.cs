@@ -143,7 +143,7 @@ namespace FishMMO.Client
 			// invoke result on the client
 			OnClientAuthenticationResult(msg.result);
 
-			if (NetworkManager.CanLog(LoggingType.Common))
+			if (NetworkManagerExtensions.CanLog(LoggingType.Common))
 				Debug.Log(msg.result);
 		}
 	}

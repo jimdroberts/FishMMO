@@ -266,7 +266,7 @@ namespace FishNet.Managing.Client
         /// <param name="s"></param>
         private void RegisterAndDespawnSceneObjects(Scene s)
         {
-            List<NetworkObject> nobs = GameKit.Dependencies.Utilities.CollectionCaches<NetworkObject>.RetrieveList();
+            List<NetworkObject> nobs = CollectionCaches<NetworkObject>.RetrieveList();
             Scenes.GetSceneNetworkObjects(s, false, ref nobs);
 
             int nobsCount = nobs.Count;
@@ -286,7 +286,7 @@ namespace FishNet.Managing.Client
                 }
             }
 
-			GameKit.Dependencies.Utilities.CollectionCaches<NetworkObject>.Store(nobs);
+            CollectionCaches<NetworkObject>.Store(nobs);
         }
 
         /// <summary>

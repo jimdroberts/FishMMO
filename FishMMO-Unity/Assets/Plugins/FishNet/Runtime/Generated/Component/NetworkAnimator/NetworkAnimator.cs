@@ -5,6 +5,7 @@ using FishNet.Managing.Logging;
 using FishNet.Managing.Server;
 using FishNet.Object;
 using FishNet.Serializing;
+using FishNet.Utility;
 using FishNet.Utility.Performance;
 using GameKit.Dependencies.Utilities;
 using System;
@@ -933,7 +934,7 @@ namespace FishNet.Component.Animating
             if (_unsynchronizedLayerStates.Count > 0)
             {
                 int frameCount = Time.frameCount;
-                List<int> sentLayers = GameKit.Dependencies.Utilities.CollectionCaches<int>.RetrieveList();
+                List<int> sentLayers = CollectionCaches<int>.RetrieveList();
                 //Go through each layer which needs to be synchronized.
                 foreach (KeyValuePair<int, StateChange> item in _unsynchronizedLayerStates)
                 {
@@ -978,8 +979,8 @@ namespace FishNet.Component.Animating
                 {
                     for (int i = 0; i < sentLayers.Count; i++)
                         _unsynchronizedLayerStates.Remove(sentLayers[i]);
-					//Store cache.
-					GameKit.Dependencies.Utilities.CollectionCaches<int>.Store(sentLayers);
+                    //Store cache.
+                    CollectionCaches<int>.Store(sentLayers);
                 }
             }
 

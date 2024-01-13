@@ -159,8 +159,8 @@ namespace FishNet.Observing
                 //Clean up lists.
                 if (destroyed)
                 {
-					GameKit.Dependencies.Utilities.CollectionCaches<ObserverCondition>.Store(_timedConditions);
-					GameKit.Dependencies.Utilities.CollectionCaches<NetworkConnection>.Store(_nonTimedMet);
+                    CollectionCaches<ObserverCondition>.Store(_timedConditions);
+                    CollectionCaches<NetworkConnection>.Store(_nonTimedMet);
                 }
             }
 
@@ -203,11 +203,11 @@ namespace FishNet.Observing
                  * by simply not exiting early when a condition fails but that's going to
                  * cost hotpath performance where sorting is only done once. */
                 //Linq would be easier but less performant.
-                List<ObserverCondition> sortedConditions = GameKit.Dependencies.Utilities.CollectionCaches<ObserverCondition>.RetrieveList();
+                List<ObserverCondition> sortedConditions = CollectionCaches<ObserverCondition>.RetrieveList();
 
                 //Initialize collections.
-                _timedConditions = GameKit.Dependencies.Utilities.CollectionCaches<ObserverCondition>.RetrieveList();
-                _nonTimedMet = GameKit.Dependencies.Utilities.CollectionCaches<NetworkConnection>.RetrieveHashSet();
+                _timedConditions = CollectionCaches<ObserverCondition>.RetrieveList();
+                _nonTimedMet = CollectionCaches<NetworkConnection>.RetrieveHashSet();
 
                 //Next index a sorted condition will be inserted into.
                 int nextSortedNormalConditionIndex = 0;
@@ -247,8 +247,8 @@ namespace FishNet.Observing
                     }
                 }
 
-				//Store original collection and replace with one from cache.
-				GameKit.Dependencies.Utilities.CollectionCaches<ObserverCondition>.Store(_observerConditions);
+                //Store original collection and replace with one from cache.
+                CollectionCaches<ObserverCondition>.Store(_observerConditions);
                 _observerConditions = sortedConditions;
 
                 //No observers specified, do not need to take further action.

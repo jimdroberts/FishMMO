@@ -199,11 +199,6 @@ namespace FishNet.Editing.PrefabCollectionGenerator
                 return string.Empty;
         }
 
-        private static bool CanAddNetworkObject(NetworkObject networkObject, PrefabGeneratorConfigurations settings)
-        {
-            return networkObject != null && (networkObject.IsSpawnable || !settings.SpawnableOnly);
-        }
-
         /// <summary>
         /// Updates prefabs by using only changed information.
         /// </summary>
@@ -561,7 +556,7 @@ namespace FishNet.Editing.PrefabCollectionGenerator
                 if (totalChanges == 0)
                     return;
 
-                //normalizes path.
+                //Normalizes path.
                 string dpoPath = Path.GetFullPath(settings.DefaultPrefabObjectsPath_Platform);
                 //If total changes is 1 and the only changed file is the default prefab collection then do nothing.
                 if (totalChanges == 1)
@@ -649,6 +644,14 @@ namespace FishNet.Editing.PrefabCollectionGenerator
                 else
                     GenerateChanged(importedAssets, deletedAssets, movedAssets, movedFromAssetPaths, settings);
             }
+        }
+
+        /// <summary>
+        /// Returns true if a NetworkObject can be added to DefaultPrefabs.
+        /// </summary>
+        private static bool CanAddNetworkObject(NetworkObject networkObject, PrefabGeneratorConfigurations settings)
+        {
+            return networkObject != null && (networkObject.IsSpawnable || !settings.SpawnableOnly);
         }
     }
 }
