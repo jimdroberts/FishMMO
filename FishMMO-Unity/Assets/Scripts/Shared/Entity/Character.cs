@@ -68,14 +68,24 @@ namespace FishMMO.Shared
 		public TextMeshPro CharacterGuildLabel;
 		public Camera EquipmentViewCamera;
 #endif
-		// accountID for reference
-		public readonly SyncVar<long> ID = new SyncVar<long>(new SyncTypeSetting()
+		public void SetID(long id)
 		{
-			SendRate = 0.0f,
-			Channel = Channel.Reliable,
-			ReadPermission = ReadPermission.Observers,
-			WritePermission = WritePermission.ServerOnly,
-		});
+			if (ID != null)
+			{
+				ID.OnChange -= OnCharacterIDChanged;
+			}
+			ID = new SyncVar<long>(id, new SyncTypeSetting()
+			{
+				SendRate = 0.0f,
+				Channel = Channel.Reliable,
+				ReadPermission = ReadPermission.Observers,
+				WritePermission = WritePermission.ServerOnly,
+			});
+			ID.OnChange += OnCharacterIDChanged;
+		}
+		// accountID for reference
+		[FishNet.CodeGenerating.AllowMutableSyncType]
+		public SyncVar<long> ID;
 		private void OnCharacterIDChanged(long prev, long next, bool asServer)
 		{
 #if !UNITY_SERVER
@@ -135,8 +145,6 @@ namespace FishMMO.Shared
 
 		void Awake()
 		{
-			ID.OnChange += OnCharacterIDChanged;
-
 			Transform = transform;
 
 			#region KCC
@@ -182,7 +190,10 @@ namespace FishMMO.Shared
 
 		void OnDestroy()
 		{
-			ID.OnChange -= OnCharacterIDChanged;
+			if (ID != null)
+			{
+				ID.OnChange -= OnCharacterIDChanged;
+			}
 		}
 
 #if !UNITY_SERVER

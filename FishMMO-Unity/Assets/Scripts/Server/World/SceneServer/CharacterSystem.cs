@@ -170,12 +170,6 @@ namespace FishMMO.Server
 					// remove the connection->character entry
 					ConnectionCharacters.Remove(conn);
 
-					// no character so we can skip
-					if (character == null)
-					{
-						return;
-					}
-
 					// remove the characterID->character entry
 					CharactersByID.Remove(character.ID.Value);
 					// remove the characterName->character entry

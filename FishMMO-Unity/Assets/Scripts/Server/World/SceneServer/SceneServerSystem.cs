@@ -138,15 +138,24 @@ namespace FishMMO.Server
 				return;
 			}
 
-			SceneLoadData sld = new SceneLoadData(sceneName);
-			sld.ReplaceScenes = ReplaceOption.None;
-			sld.Options.AllowStacking = true;
-			sld.Options.LocalPhysics = UnityEngine.SceneManagement.LocalPhysicsMode.Physics3D;
-			// scene unloading should be controlled by the scene server
-			sld.Options.AutomaticallyUnload = false;
-			sld.Params.ServerParams = new object[]
+			// pre cache the scene on the server
+			SceneLookupData lookupData = new SceneLookupData(sceneName);
+			SceneLoadData sld = new SceneLoadData(lookupData)
 			{
-				worldServerID
+				ReplaceScenes = ReplaceOption.None,
+				Options = new LoadOptions
+				{
+					AllowStacking = true,
+					AutomaticallyUnload = false,
+					LocalPhysics = UnityEngine.SceneManagement.LocalPhysicsMode.Physics3D,
+				},
+				Params = new LoadParams()
+				{
+					ServerParams = new object[]
+					{
+						worldServerID
+					}
+				},
 			};
 			SceneManager.LoadConnectionScenes(sld);
 		}
@@ -217,11 +226,14 @@ namespace FishMMO.Server
 		{
 			instanceDetails = default;
 
-			if (worldScenes.TryGetValue(worldServerID, out Dictionary<string, Dictionary<int, SceneInstanceDetails>> scenes))
+			if (worldScenes != null &&
+				worldScenes.TryGetValue(worldServerID, out Dictionary<string, Dictionary<int, SceneInstanceDetails>> scenes))
 			{
-				if (scenes.TryGetValue(sceneName, out Dictionary<int, SceneInstanceDetails> instances))
+				if (scenes != null &&
+					scenes.TryGetValue(sceneName, out Dictionary<int, SceneInstanceDetails> instances))
 				{
-					if (instances.TryGetValue(sceneHandle, out instanceDetails))
+					if (instances != null &&
+						instances.TryGetValue(sceneHandle, out instanceDetails))
 					{
 						return true;
 					}
@@ -235,13 +247,18 @@ namespace FishMMO.Server
 			UnityEngine.SceneManagement.Scene scene = SceneManager.GetScene(instance.Handle);
 			if (scene != null && scene.IsValid() && scene.isLoaded)
 			{
-				SceneLoadData sld = new SceneLoadData(instance.Handle);
-				sld.ReplaceScenes = ReplaceOption.None;
-				// will this prevent server from loading the scene again? we only want the client to load the scene here..
-				sld.Options.AllowStacking = false;
-				// scene unloading is controlled by the server
-				sld.Options.AutomaticallyUnload = false;
-				SceneManager.LoadConnectionScenes(conn, new SceneLoadData(scene));
+				SceneLookupData lookupData = new SceneLookupData(instance.Handle);
+				SceneLoadData sld = new SceneLoadData(lookupData)
+				{
+					ReplaceScenes = ReplaceOption.None,
+					Options = new LoadOptions
+					{
+						AllowStacking = false,
+						AutomaticallyUnload = false,
+					},
+					PreferredActiveScene = new PreferredScene(lookupData),
+				};
+				SceneManager.LoadConnectionScenes(conn, sld);
 				return true;
 			}
 			return false;
