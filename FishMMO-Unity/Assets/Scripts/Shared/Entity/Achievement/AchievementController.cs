@@ -163,7 +163,7 @@ namespace FishMMO.Shared
 #if UNITY_SERVER
 	private void HandleRewards(AchievementTier tier)
 	{
-		if (base.IsServerStarted && Character.Owner != null)
+		if (base.IsServerInitialized && Character.Owner != null)
 		{
 			BaseItemTemplate[] itemRewards = tier.ItemRewards;
 			if (itemRewards != null && itemRewards.Length > 0 && Character.InventoryController.FreeSlots() >= itemRewards.Length)

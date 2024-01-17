@@ -205,12 +205,14 @@ namespace FishMMO.Server
 
 			// get the scene data for each of our worlds scenes
 			List<LoadedSceneEntity> sceneServerCount = LoadedSceneService.GetServerList(dbContext, Server.WorldServerSystem.ID);
-
-			// count the total
-			ConnectionCount = WaitingConnections != null ? WaitingConnections.Count : 0;
-			foreach (LoadedSceneEntity scene in sceneServerCount)
+			if (sceneServerCount != null)
 			{
-				ConnectionCount += scene.CharacterCount;
+				// count the total
+				ConnectionCount = WaitingConnections != null ? WaitingConnections.Count : 0;
+				foreach (LoadedSceneEntity scene in sceneServerCount)
+				{
+					ConnectionCount += scene.CharacterCount;
+				}
 			}
 		}
 

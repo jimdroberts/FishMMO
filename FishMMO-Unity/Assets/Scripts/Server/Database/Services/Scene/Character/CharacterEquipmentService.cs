@@ -12,6 +12,11 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void SetSlot(NpgsqlDbContext dbContext, long characterID, Item item)
 		{
+			if (characterID == 0)
+			{
+				return;
+			}
+
 			if (item == null)
 			{
 				return;
@@ -49,6 +54,11 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Delete(NpgsqlDbContext dbContext, long characterID, bool keepData = false)
 		{
+			if (characterID == 0)
+			{
+				return;
+			}
+
 			if (!keepData)
 			{
 				var dbEquippedItems = dbContext.CharacterEquippedItems.Where(c => c.CharacterID == characterID);
@@ -65,6 +75,10 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Delete(NpgsqlDbContext dbContext, long characterID, long slot, bool keepData = false)
 		{
+			if (characterID == 0)
+			{
+				return;
+			}
 			if (!keepData)
 			{
 				var dbItem = dbContext.CharacterEquippedItems.FirstOrDefault(c => c.CharacterID == characterID && c.Slot == slot);
@@ -81,6 +95,10 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Load(NpgsqlDbContext dbContext, Character character)
 		{
+			if (character == null)
+			{
+				return;
+			}
 			var dbEquippedItems = dbContext.CharacterEquippedItems.Where(c => c.CharacterID == character.ID.Value);
 			foreach (CharacterEquipmentEntity dbItem in dbEquippedItems)
 			{

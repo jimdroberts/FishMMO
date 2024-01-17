@@ -14,6 +14,11 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Save(NpgsqlDbContext dbContext, long characterID, long worldServerID, long sceneServerID, ChatChannel channel, string message)
 		{
+			if (worldServerID == 0 ||
+				sceneServerID == 0)
+			{
+				return;
+			}
 			dbContext.Chat.Add(new ChatEntity()
 			{
 				CharacterID = characterID,
@@ -31,6 +36,10 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Delete(NpgsqlDbContext dbContext, long characterID, bool keepData = true)
 		{
+			if (characterID == 0)
+			{
+				return;
+			}
 		}
 
 		/// <summary>

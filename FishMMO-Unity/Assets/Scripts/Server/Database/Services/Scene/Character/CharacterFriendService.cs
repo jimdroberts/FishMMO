@@ -13,6 +13,10 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static bool Full(NpgsqlDbContext dbContext, long characterID, int max)
 		{
+			if (characterID == 0)
+			{
+				return false;
+			}
 			var characterFriends = dbContext.CharacterFriends.Where(a => a.CharacterID == characterID);
 			if (characterFriends != null && characterFriends.Count() <= max)
 			{
@@ -53,6 +57,10 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Save(NpgsqlDbContext dbContext, long characterID, long friendID)
 		{
+			if (friendID == 0)
+			{
+				return;
+			}
 			var characterFriendEntity = dbContext.CharacterFriends.FirstOrDefault(a => a.CharacterID == characterID && a.FriendCharacterID == friendID);
 			if (characterFriendEntity == null)
 			{
@@ -71,6 +79,10 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static bool Delete(NpgsqlDbContext dbContext, long characterID, long friendID)
 		{
+			if (friendID == 0)
+			{
+				return false;
+			}
 			var characterFriendEntity = dbContext.CharacterFriends.FirstOrDefault(a => a.CharacterID == characterID && a.FriendCharacterID == friendID);
 			if (characterFriendEntity != null)
 			{
@@ -86,6 +98,10 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Delete(NpgsqlDbContext dbContext, long characterID, bool keepData = false)
 		{
+			if (characterID == 0)
+			{
+				return;
+			}
 			if (!keepData)
 			{
 				var characterFriends = dbContext.CharacterFriends.Where(a => a.CharacterID == characterID);
@@ -114,6 +130,10 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static List<CharacterFriendEntity> Friends(NpgsqlDbContext dbContext, long characterID)
 		{
+			if (characterID == 0)
+			{
+				return null;
+			}
 			return dbContext.CharacterFriends.Where(a => a.CharacterID == characterID).ToList();
 		}
 	}

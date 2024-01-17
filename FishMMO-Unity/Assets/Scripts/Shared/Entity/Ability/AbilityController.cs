@@ -45,23 +45,23 @@ namespace FishMMO.Shared
 		public bool IsActivating { get { return currentAbility != null; } }
 		public bool AbilityQueued { get { return queuedAbilityID != NO_ABILITY; } }
 
+		public override void OnStartNetwork()
+		{
+			if (base.TimeManager != null)
+			{
+				base.TimeManager.OnTick += TimeManager_OnTick;
+			}
+		}
+
+		public override void OnStopNetwork()
+		{
+			if (base.TimeManager != null)
+			{
+				base.TimeManager.OnTick -= TimeManager_OnTick;
+			}
+		}
+
 #if !UNITY_SERVER
-		void Awake()
-		{
-			if (FishMMO.Client.Client.TimeManager != null)
-			{
-				FishMMO.Client.Client.TimeManager.OnTick += TimeManager_OnTick;
-			}
-		}
-
-		void OnDestroy()
-		{
-			if (FishMMO.Client.Client.TimeManager != null)
-			{
-				FishMMO.Client.Client.TimeManager.OnTick -= TimeManager_OnTick;
-			}
-		}
-
 		public override void OnStartClient()
 		{
 			base.OnStartClient();
@@ -181,45 +181,41 @@ namespace FishMMO.Shared
 				}
 			}
 		}
-#else
-		void Awake()
-		{
-			if (InstanceFinder.TimeManager != null)
-			{
-				InstanceFinder.TimeManager.OnTick += TimeManager_OnTick;
-			}
-		}
-
-		void OnDestroy()
-		{
-			if (InstanceFinder.TimeManager != null)
-			{
-				InstanceFinder.TimeManager.OnTick -= TimeManager_OnTick;
-			}
-		}
-
 #endif
 
 		private void TimeManager_OnTick()
 		{
-			if (base.IsOwner)
-			{
-				Reconcile(default, false);
-				HandleCharacterInput(out AbilityActivationReplicateData activationData);
-				Replicate(activationData, false);
-			}
+			AbilityActivationReplicateData activationData = HandleCharacterInput();
+			Replicate(activationData);
+
 			if (base.IsServerStarted)
 			{
-				Replicate(default, true);
 				AbilityReconcileData state = new AbilityReconcileData(interruptQueued,
 																	  currentAbility == null ? NO_ABILITY : currentAbility.ID,
 																	  remainingTime);
-				Reconcile(state, true);
+				Reconcile(state);
 			}
 		}
 
-		[Replicate]
-		private void Replicate(AbilityActivationReplicateData activationData, bool asServer, Channel channel = Channel.Unreliable, bool replaying = false)
+		private AbilityActivationReplicateData HandleCharacterInput()
+		{
+			if (!base.IsOwner)
+			{
+				return default;
+			}
+
+			AbilityActivationReplicateData activationEventData = new AbilityActivationReplicateData(interruptQueued,
+																									queuedAbilityID,
+																									heldKey);
+			// clear the queued ability
+			interruptQueued = false;
+			queuedAbilityID = NO_ABILITY;
+
+			return activationEventData;
+		}
+
+		[ReplicateV2]
+		private void Replicate(AbilityActivationReplicateData activationData, ReplicateState state = ReplicateState.Invalid, Channel channel = Channel.Unreliable)
 		{
 			if (activationData.InterruptQueued)
 			{
@@ -307,8 +303,8 @@ namespace FishMMO.Shared
 			}
 		}
 
-		[Reconcile]
-		private void Reconcile(AbilityReconcileData rd, bool asServer, Channel channel = Channel.Unreliable)
+		[ReconcileV2]
+		private void Reconcile(AbilityReconcileData rd, Channel channel = Channel.Unreliable)
 		{
 			if (rd.Interrupt ||
 				rd.AbilityID == NO_ABILITY ||
@@ -359,15 +355,6 @@ namespace FishMMO.Shared
 				this.heldKey = heldKey;
 			}
 #endif
-		}
-
-		private void HandleCharacterInput(out AbilityActivationReplicateData activationEventData)
-		{
-			activationEventData = new AbilityActivationReplicateData(interruptQueued,
-																	 queuedAbilityID,
-																	 heldKey);
-			interruptQueued = false;
-			queuedAbilityID = NO_ABILITY;
 		}
 
 		/// <summary>

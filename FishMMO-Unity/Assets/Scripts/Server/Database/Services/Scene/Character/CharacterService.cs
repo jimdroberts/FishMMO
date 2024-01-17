@@ -22,6 +22,10 @@ namespace FishMMO.Server.DatabaseServices
 
 		public static bool ExistsAndOnline(NpgsqlDbContext dbContext, long id)
 		{
+			if (id == 0)
+			{
+				return false;
+			}
 			return dbContext.Characters.FirstOrDefault((c) => c.ID == id &&
 															  c.Online) != null;
 		}
@@ -40,6 +44,10 @@ namespace FishMMO.Server.DatabaseServices
 
 		public static CharacterEntity GetByID(NpgsqlDbContext dbContext, long id)
 		{
+			if (id == 0)
+			{
+				return null;
+			}
 			var character = dbContext.Characters.FirstOrDefault(c => c.ID == id);
 			if (character == null)
 			{
@@ -60,6 +68,10 @@ namespace FishMMO.Server.DatabaseServices
 
 		public static string GetNameByID(NpgsqlDbContext dbContext, long id)
 		{
+			if (id == 0)
+			{
+				return "";
+			}
 			var character = dbContext.Characters.FirstOrDefault(c => c.ID == id);
 			if (character == null)
 			{
@@ -183,6 +195,10 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void SetWorld(NpgsqlDbContext dbContext, string account, long worldServerID)
 		{
+			if (worldServerID == 0)
+			{
+				return;
+			}
 			// get all characters for account
 			var character = dbContext.Characters.FirstOrDefault((c) => c.Account == account && c.Selected && !c.Deleted);
 			if (character != null)
@@ -228,6 +244,10 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Save(NpgsqlDbContext dbContext, Character character, bool online = true, CharacterEntity existingCharacter = null)
 		{
+			if (character == null)
+			{
+				return;
+			}
 			if (existingCharacter == null)
 			{
 				existingCharacter = dbContext.Characters.FirstOrDefault((c) => c.NameLowercase == character.CharacterName.ToLower());
@@ -295,33 +315,34 @@ namespace FishMMO.Server.DatabaseServices
 				return;
 			}
 
+			// possible preserved data
+			CharacterAttributeService.Delete(dbContext, character.ID, keepData);
+			CharacterAchievementService.Delete(dbContext, character.ID, keepData);
+			CharacterBuffService.Delete(dbContext, character.ID, keepData);
+			CharacterFriendService.Delete(dbContext, character.ID, keepData);
+			CharacterInventoryService.Delete(dbContext, character.ID, keepData);
+			CharacterEquipmentService.Delete(dbContext, character.ID, keepData);
+			CharacterBankService.Delete(dbContext, character.ID, keepData);
+			CharacterAbilityService.Delete(dbContext, character.ID, keepData);
+			CharacterKnownAbilityService.Delete(dbContext, character.ID, keepData);
+
+			// complete deletions
+			CharacterGuildService.Delete(dbContext, character.ID);
+			CharacterPartyService.Delete(dbContext, character.ID);
+
 			if (keepData)
 			{
 				character.TimeDeleted = DateTime.UtcNow;
 				character.Deleted = true;
+				dbContext.SaveChanges();
 			}
 			else
 			{
-				// preserved data
-				CharacterAttributeService.Delete(dbContext, character.ID, keepData);
-				CharacterAchievementService.Delete(dbContext, character.ID, keepData);
-				CharacterBuffService.Delete(dbContext, character.ID, keepData);
-				CharacterFriendService.Delete(dbContext, character.ID, keepData);
-				CharacterInventoryService.Delete(dbContext, character.ID, keepData);
-				CharacterEquipmentService.Delete(dbContext, character.ID, keepData);
-				CharacterBankService.Delete(dbContext, character.ID, keepData);
-				CharacterAbilityService.Delete(dbContext, character.ID, keepData);
-				CharacterKnownAbilityService.Delete(dbContext, character.ID, keepData);
-
-				// complete deletions
-				CharacterGuildService.Delete(dbContext, character.ID);
-				CharacterPartyService.Delete(dbContext, character.ID);
-
 				dbContext.Characters.Remove(character);
 				dbContext.SaveChanges();
-
-				dbTransaction.Commit();
 			}
+
+			dbTransaction.Commit();
 		}
 
 		/// <summary>

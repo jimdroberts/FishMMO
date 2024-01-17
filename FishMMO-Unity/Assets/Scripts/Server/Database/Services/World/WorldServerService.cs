@@ -48,7 +48,11 @@ namespace FishMMO.Server.DatabaseServices
 
         public static void Pulse(NpgsqlDbContext dbContext, long id, int characterCount)
         {
-            var worldServer = dbContext.WorldServers.FirstOrDefault(c => c.ID == id);
+			if (id == 0)
+			{
+				return;
+			}
+			var worldServer = dbContext.WorldServers.FirstOrDefault(c => c.ID == id);
 			if (worldServer == null) throw new Exception($"Couldn't find World Server with ID: {id}");
             
             worldServer.LastPulse = DateTime.UtcNow;
@@ -58,6 +62,10 @@ namespace FishMMO.Server.DatabaseServices
         
         public static void Delete(NpgsqlDbContext dbContext, long id) 
         {
+            if (id == 0)
+            {
+                return;
+            }
             var worldServer = dbContext.WorldServers.FirstOrDefault(c => c.ID == id);
 			if (worldServer == null) throw new Exception($"Couldn't find World Server with ID: {id}");
 
@@ -67,6 +75,10 @@ namespace FishMMO.Server.DatabaseServices
 
 		public static WorldServerEntity GetServer(NpgsqlDbContext dbContext, long worldServerID)
 		{
+			if (worldServerID == 0)
+			{
+				return null;
+			}
 			var worldServer = dbContext.WorldServers.FirstOrDefault(c => c.ID == worldServerID);
 			if (worldServer == null) throw new Exception($"Couldn't find World Server with ID: {worldServerID}");
 

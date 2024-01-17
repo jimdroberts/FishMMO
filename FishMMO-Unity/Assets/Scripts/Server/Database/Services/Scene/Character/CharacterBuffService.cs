@@ -76,6 +76,10 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Delete(NpgsqlDbContext dbContext, long characterID, bool keepData = true)
 		{
+			if (characterID == 0)
+			{
+				return;
+			}
 			if (!keepData)
 			{
 				var buffs = dbContext.CharacterBuffs.Where(c => c.CharacterID == characterID);

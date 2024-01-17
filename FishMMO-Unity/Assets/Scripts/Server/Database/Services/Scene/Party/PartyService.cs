@@ -9,6 +9,10 @@ namespace FishMMO.Server.DatabaseServices
 	{
 		public static bool Exists(NpgsqlDbContext dbContext, long partyID)
 		{
+			if (partyID == 0)
+			{
+				return false;
+			}
 			return dbContext.Parties.FirstOrDefault(a => a.ID == partyID) != null;
 		}
 
@@ -28,6 +32,10 @@ namespace FishMMO.Server.DatabaseServices
 
 		public static void Delete(NpgsqlDbContext dbContext, long partyID)
 		{
+			if (partyID == 0)
+			{
+				return;
+			}
 			var partyEntity = dbContext.Parties.FirstOrDefault(a => a.ID == partyID);
 			if (partyEntity != null)
 			{
@@ -41,6 +49,10 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static PartyEntity Load(NpgsqlDbContext dbContext, long partyID)
 		{
+			if (partyID == 0)
+			{
+				return null;
+			}
 			return dbContext.Parties.FirstOrDefault(a => a.ID == partyID);
 		}
 	}

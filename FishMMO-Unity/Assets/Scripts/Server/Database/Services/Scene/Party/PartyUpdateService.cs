@@ -10,6 +10,10 @@ namespace FishMMO.Server.DatabaseServices
 	{
 		public static void Save(NpgsqlDbContext dbContext, long partyID)
 		{
+			if (partyID == 0)
+			{
+				return;
+			}
 			dbContext.PartyUpdates.Add(new PartyUpdateEntity()
 			{
 				PartyID = partyID,
@@ -20,6 +24,10 @@ namespace FishMMO.Server.DatabaseServices
 
 		public static void Delete(NpgsqlDbContext dbContext, long partyID)
 		{
+			if (partyID == 0)
+			{
+				return;
+			}
 			var partyEntity = dbContext.PartyUpdates.Where(a => a.PartyID == partyID);
 			if (partyEntity != null)
 			{

@@ -14,6 +14,10 @@ namespace FishMMO.Server.DatabaseServices
 
 		public static string GetNameByID(NpgsqlDbContext dbContext, long guildID)
 		{
+			if (guildID == 0)
+			{
+				return "";
+			}
 			var guild = dbContext.Guilds.FirstOrDefault(a => a.ID == guildID);
 			if (guild == null)
 			{
@@ -45,6 +49,10 @@ namespace FishMMO.Server.DatabaseServices
 
 		public static void Delete(NpgsqlDbContext dbContext, long guildID)
 		{
+			if (guildID == 0)
+			{
+				return;
+			}
 			var guildEntity = dbContext.Guilds.FirstOrDefault(a => a.ID == guildID);
 			if (guildEntity != null)
 			{
@@ -66,6 +74,10 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static GuildEntity Load(NpgsqlDbContext dbContext, long id)
 		{
+			if (id == 0)
+			{
+				return null;
+			}
 			return dbContext.Guilds.FirstOrDefault(a => a.ID == id);
 		}
 	}

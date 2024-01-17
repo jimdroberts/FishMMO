@@ -91,7 +91,7 @@ namespace FishMMO.Server
 				Configuration.Set("ServerName", "TestName");
 				Configuration.Set("MaximumClients", 4000);
 				Configuration.Set("Address", "0.0.0.0");
-				Configuration.Set("Port", 7770);
+				Configuration.Set("Port", 7781);
 #if !UNITY_EDITOR
 				Configuration.Save();
 #endif

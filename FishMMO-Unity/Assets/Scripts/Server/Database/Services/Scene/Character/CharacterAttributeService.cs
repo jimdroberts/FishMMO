@@ -12,7 +12,8 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Save(NpgsqlDbContext dbContext, Character character)
 		{
-			if (character == null)
+			if (character == null ||
+				character.AttributeController == null)
 			{
 				return;
 			}
@@ -78,6 +79,10 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Delete(NpgsqlDbContext dbContext, long characterID, bool keepData = true)
 		{
+			if (characterID == 0)
+			{
+				return;
+			}
 			if (!keepData)
 			{
 				var attributes = dbContext.CharacterAttributes.Where(c => c.CharacterID == characterID);

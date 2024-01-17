@@ -16,7 +16,7 @@ namespace FishMMO.Server
 		private float pulseRate = 5.0f;
 		private float nextPulse = 0.0f;
 
-		public long ID {get { return id; } }
+		public long ID { get { return id; } }
 
 		public override void InitializeOnce()
 		{

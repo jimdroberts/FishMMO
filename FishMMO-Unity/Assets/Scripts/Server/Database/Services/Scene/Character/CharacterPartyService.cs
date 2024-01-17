@@ -10,6 +10,10 @@ namespace FishMMO.Server.DatabaseServices
 	{
 		public static bool ExistsNotFull(NpgsqlDbContext dbContext, long partyID, int max)
 		{
+			if (partyID == 0)
+			{
+				return false;
+			}
 			var partyCharacters = dbContext.CharacterParties.Where(a => a.PartyID == partyID);
 			if (partyCharacters != null && partyCharacters.Count() <= max)
 			{
@@ -23,6 +27,10 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Save(NpgsqlDbContext dbContext, long characterID, long partyID, PartyRank rank, float healthPCT)
 		{
+			if (partyID == 0)
+			{
+				return;
+			}
 			var characterPartyEntity = dbContext.CharacterParties.FirstOrDefault(a => a.CharacterID == characterID);
 			if (characterPartyEntity == null)
 			{
@@ -49,6 +57,10 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static bool Delete(NpgsqlDbContext dbContext, PartyRank kickerRank, long partyID, long memberID)
 		{
+			if (partyID == 0)
+			{
+				return false;
+			}
 			var characterPartyEntity = dbContext.CharacterParties.FirstOrDefault(a => a.PartyID == partyID && a.CharacterID == memberID && a.Rank < (byte)kickerRank);
 			if (characterPartyEntity != null)
 			{
@@ -64,6 +76,10 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Delete(NpgsqlDbContext dbContext, long memberID)
 		{
+			if (memberID == 0)
+			{
+				return;
+			}
 			var characterPartyEntity = dbContext.CharacterParties.FirstOrDefault(a => a.CharacterID == memberID);
 			if (characterPartyEntity != null)
 			{
@@ -77,7 +93,8 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Load(NpgsqlDbContext dbContext, Character character)
 		{
-			if (character.PartyController != null)
+			if (character != null &&
+				character.PartyController != null)
 			{
 				var characterPartyEntity = dbContext.CharacterParties.FirstOrDefault(a => a.CharacterID == character.ID.Value);
 				if (characterPartyEntity != null)
@@ -90,6 +107,10 @@ namespace FishMMO.Server.DatabaseServices
 
 		public static List<CharacterPartyEntity> Members(NpgsqlDbContext dbContext, long partyID)
 		{
+			if (partyID == 0)
+			{
+				return null;
+			}
 			return dbContext.CharacterParties.Where(a => a.PartyID == partyID).ToList();
 		}
 	}

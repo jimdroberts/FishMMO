@@ -36,6 +36,11 @@ namespace FishMMO.Server.DatabaseServices
 
 		public static void Pulse(NpgsqlDbContext dbContext, long id, int characterCount)
 		{
+			if (id == 0)
+			{
+				return;
+			}
+
 			var sceneServer = dbContext.SceneServers.FirstOrDefault(c => c.ID == id);
 			if (sceneServer == null) throw new Exception($"Couldn't find Scene Server with ID: {id}");
 
@@ -46,6 +51,11 @@ namespace FishMMO.Server.DatabaseServices
 
 		public static void Delete(NpgsqlDbContext dbContext, long id)
 		{
+			if (id == 0)
+			{
+				return;
+			}
+
 			var sceneServer = dbContext.SceneServers.FirstOrDefault(c => c.ID == id);
 			if (sceneServer != null)
 			{
@@ -56,6 +66,11 @@ namespace FishMMO.Server.DatabaseServices
 
 		public static SceneServerEntity GetServer(NpgsqlDbContext dbContext, long id)
 		{
+			if (id == 0)
+			{
+				return null;
+			}
+
 			var sceneServer = dbContext.SceneServers.FirstOrDefault(c => c.ID == id);
 			if (sceneServer == null) throw new Exception($"Couldn't find Scene Server with ID: {id}");
 

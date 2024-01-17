@@ -2,7 +2,6 @@
 using FishMMO.Client;
 using TMPro;
 #endif
-using FishNet.Component.Prediction;
 using FishNet.Component.Transforming;
 using FishNet.Object;
 using FishNet.Object.Synchronizing;
@@ -17,8 +16,6 @@ namespace FishMMO.Shared
 	/// Character contains references to all of the controllers associated with the character.
 	/// </summary>
 	#region KCC
-	[RequireComponent(typeof(PredictedObject))]
-	[RequireComponent(typeof(NetworkTransform))]
 	[RequireComponent(typeof(Rigidbody))]
 	[RequireComponent(typeof(KinematicCharacterMotor))]
 	[RequireComponent(typeof(KCCController))]
@@ -70,10 +67,7 @@ namespace FishMMO.Shared
 #endif
 		public void SetID(long id)
 		{
-			if (ID != null)
-			{
-				ID.OnChange -= OnCharacterIDChanged;
-			}
+			ID.OnChange -= OnCharacterIDChanged;
 			ID = new SyncVar<long>(id, new SyncTypeSetting()
 			{
 				SendRate = 0.0f,
@@ -85,7 +79,13 @@ namespace FishMMO.Shared
 		}
 		// accountID for reference
 		[FishNet.CodeGenerating.AllowMutableSyncType]
-		public SyncVar<long> ID;
+		public SyncVar<long> ID = new SyncVar<long>(new SyncTypeSetting()
+		{
+			SendRate = 0.0f,
+			Channel = Channel.Reliable,
+			ReadPermission = ReadPermission.Observers,
+			WritePermission = WritePermission.ServerOnly,
+		});
 		private void OnCharacterIDChanged(long prev, long next, bool asServer)
 		{
 #if !UNITY_SERVER
@@ -190,10 +190,7 @@ namespace FishMMO.Shared
 
 		void OnDestroy()
 		{
-			if (ID != null)
-			{
-				ID.OnChange -= OnCharacterIDChanged;
-			}
+			ID.OnChange -= OnCharacterIDChanged;
 		}
 
 #if !UNITY_SERVER

@@ -42,6 +42,10 @@ namespace FishMMO.Server.DatabaseServices
 
 		public static void Delete(NpgsqlDbContext dbContext, long sceneServerID)
 		{
+			if (sceneServerID == 0)
+			{
+				return;
+			}
 			var loadedScenes = dbContext.LoadedScenes.Where(c => c.SceneServerID == sceneServerID);
 			if (loadedScenes != null)
 			{
@@ -52,6 +56,10 @@ namespace FishMMO.Server.DatabaseServices
 
 		public static void Delete(NpgsqlDbContext dbContext, long sceneServerID, int sceneHandle)
 		{
+			if (sceneServerID == 0)
+			{
+				return;
+			}
 			var loadedScenes = dbContext.LoadedScenes.Where(c => c.SceneServerID == sceneServerID &&
 																 c.SceneHandle == sceneHandle);
 			if (loadedScenes != null)
@@ -63,6 +71,10 @@ namespace FishMMO.Server.DatabaseServices
 
 		public static List<LoadedSceneEntity> GetServerList(NpgsqlDbContext dbContext, long worldServerID, string sceneName, int maxClients)
 		{
+			if (worldServerID == 0)
+			{
+				return null;
+			}
 			return dbContext.LoadedScenes.Where(c => c.WorldServerID == worldServerID &&
 													 c.SceneName == sceneName &&
 													 c.CharacterCount < maxClients)
@@ -71,6 +83,10 @@ namespace FishMMO.Server.DatabaseServices
 
 		public static List<LoadedSceneEntity> GetServerList(NpgsqlDbContext dbContext, long worldServerID)
 		{
+			if (worldServerID == 0)
+			{
+				return null;
+			}
 			return dbContext.LoadedScenes.Where(c => c.WorldServerID == worldServerID)
 										 .ToList();
 		}

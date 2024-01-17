@@ -10,6 +10,10 @@ namespace FishMMO.Server.DatabaseServices
 	{
 		public static int GetCount(NpgsqlDbContext dbContext, long characterID)
 		{
+			if (characterID == 0)
+			{
+				return 0;
+			}
 			return dbContext.CharacterAbilities.Where((c) => c.CharacterID == characterID).Count();
 		}
 
@@ -18,6 +22,11 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void UpdateOrAdd(NpgsqlDbContext dbContext, long characterID, Ability ability)
 		{
+			if (characterID == 0)
+			{
+				return;
+			}
+
 			if (ability == null)
 			{
 				return;
@@ -90,6 +99,11 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Delete(NpgsqlDbContext dbContext, long characterID, bool keepData = false)
 		{
+			if (characterID == 0)
+			{
+				return;
+			}
+
 			if (!keepData)
 			{
 				var dbAbilities = dbContext.CharacterAbilities.Where(c => c.CharacterID == characterID);
@@ -106,6 +120,12 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Delete(NpgsqlDbContext dbContext, long characterID, long id, bool keepData = false)
 		{
+			if (characterID == 0 ||
+				id == 0)
+			{
+				return;
+			}
+
 			if (!keepData)
 			{
 				var dbAbility = dbContext.CharacterAbilities.FirstOrDefault(c => c.CharacterID == characterID && c.ID == id);

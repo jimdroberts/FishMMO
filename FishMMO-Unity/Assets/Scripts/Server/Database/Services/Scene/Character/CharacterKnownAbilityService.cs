@@ -13,6 +13,10 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Add(NpgsqlDbContext dbContext, long characterID, int templateID)
 		{
+			if (characterID == 0)
+			{
+				return;
+			}
 			var dbKnownAbility = dbContext.CharacterKnownAbilities.FirstOrDefault(c => c.CharacterID == characterID && c.TemplateID == templateID);
 			// add to known abilities
 			if (dbKnownAbility == null)
@@ -73,6 +77,10 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Delete(NpgsqlDbContext dbContext, long characterID, bool keepData = false)
 		{
+			if (characterID == 0)
+			{
+				return;
+			}
 			if (!keepData)
 			{
 				var dbKnownAbilities = dbContext.CharacterKnownAbilities.Where(c => c.CharacterID == characterID);
@@ -89,6 +97,10 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Delete(NpgsqlDbContext dbContext, long characterID, long templateID, bool keepData = false)
 		{
+			if (characterID == 0)
+			{
+				return;
+			}
 			if (!keepData)
 			{
 				var dbKnownAbility = dbContext.CharacterKnownAbilities.FirstOrDefault(c => c.CharacterID == characterID && c.TemplateID == templateID);

@@ -154,14 +154,15 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public override void StoreObject(NetworkObject instantiated, bool asServer)
 		{
+			instantiated.gameObject.SetActive(false);
+
 			//Pooling is not enabled.
 			if (!_enabled)
 			{
 				Destroy(instantiated.gameObject);
 				return;
 			}
-
-			instantiated.gameObject.SetActive(false);
+			
 			instantiated.ResetState();
 			Stack<NetworkObject> cache = GetOrCreateCache(instantiated.SpawnableCollectionId, instantiated.PrefabId);
 			cache.Push(instantiated);

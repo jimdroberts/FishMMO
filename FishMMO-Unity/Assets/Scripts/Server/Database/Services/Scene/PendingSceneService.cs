@@ -8,11 +8,19 @@ namespace FishMMO.Server.DatabaseServices
 	{
 		public static bool Exists(NpgsqlDbContext dbContext, long worldServerID, string sceneName)
 		{
+			if (worldServerID == 0)
+			{
+				return false;
+			}
 			return dbContext.PendingScenes.FirstOrDefault(c => c.WorldServerID == worldServerID && c.SceneName == sceneName) != null;
 		}
 
 		public static void Enqueue(NpgsqlDbContext dbContext, long worldServerID, string sceneName)
 		{
+			if (worldServerID == 0)
+			{
+				return;
+			}
 			var entity = dbContext.PendingScenes.FirstOrDefault(c => c.WorldServerID == worldServerID && c.SceneName == sceneName);
 			if (entity == null)
 			{
@@ -28,6 +36,10 @@ namespace FishMMO.Server.DatabaseServices
 
 		public static void Delete(NpgsqlDbContext dbContext, long worldServerID)
 		{
+			if (worldServerID == 0)
+			{
+				return;
+			}
 			var pending = dbContext.PendingScenes.Where(c => c.WorldServerID == worldServerID);
 			if (pending != null)
 			{

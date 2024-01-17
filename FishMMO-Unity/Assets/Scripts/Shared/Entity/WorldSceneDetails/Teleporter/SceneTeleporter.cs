@@ -105,7 +105,7 @@ namespace FishMMO.Shared
 			NetworkConnection conn = character.Owner;
 			long worldServerId = character.WorldServerID;
 
-			sceneServerSystem.ServerManager.Despawn(character.NetworkObject, DespawnType.Pool);
+			sceneServerSystem.ServerManager.Despawn(character.NetworkObject, DespawnType.Destroy);
 
 			WorldServerEntity worldServer = WorldServerService.GetServer(dbContext, worldServerId);
 			if (worldServer != null)
