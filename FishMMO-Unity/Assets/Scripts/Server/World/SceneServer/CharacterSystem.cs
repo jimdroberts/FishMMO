@@ -362,6 +362,9 @@ namespace FishMMO.Server
 				return;
 			}
 
+			// set ID to dirty which forces it to sync to the client
+			character.ID.Dirty();
+
 			#region Abilities
 			if (character.AbilityController != null)
 			{

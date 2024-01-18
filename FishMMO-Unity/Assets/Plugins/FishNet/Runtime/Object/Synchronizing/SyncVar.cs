@@ -119,7 +119,7 @@ namespace FishNet.Object.Synchronizing
         /// Sets initial values to next.
         /// </summary>
         /// <param name="next"></param>
-        private void SetInitialValues(T next)
+        public void SetInitialValues(T next)
         {
             _initialValue = next;
             UpdateValues(next);

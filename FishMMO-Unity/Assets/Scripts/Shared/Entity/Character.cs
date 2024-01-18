@@ -2,7 +2,6 @@
 using FishMMO.Client;
 using TMPro;
 #endif
-using FishNet.Component.Transforming;
 using FishNet.Object;
 using FishNet.Object.Synchronizing;
 using FishNet.Transporting;
@@ -65,21 +64,9 @@ namespace FishMMO.Shared
 		public TextMeshPro CharacterGuildLabel;
 		public Camera EquipmentViewCamera;
 #endif
-		public void SetID(long id)
-		{
-			ID.OnChange -= OnCharacterIDChanged;
-			ID = new SyncVar<long>(id, new SyncTypeSetting()
-			{
-				SendRate = 0.0f,
-				Channel = Channel.Reliable,
-				ReadPermission = ReadPermission.Observers,
-				WritePermission = WritePermission.ServerOnly,
-			});
-			ID.OnChange += OnCharacterIDChanged;
-		}
+
 		// accountID for reference
-		[FishNet.CodeGenerating.AllowMutableSyncType]
-		public SyncVar<long> ID = new SyncVar<long>(new SyncTypeSetting()
+		public readonly SyncVar<long> ID = new SyncVar<long>(new SyncTypeSetting()
 		{
 			SendRate = 0.0f,
 			Channel = Channel.Reliable,
@@ -145,6 +132,8 @@ namespace FishMMO.Shared
 
 		void Awake()
 		{
+			ID.OnChange += OnCharacterIDChanged;
+
 			Transform = transform;
 
 			#region KCC

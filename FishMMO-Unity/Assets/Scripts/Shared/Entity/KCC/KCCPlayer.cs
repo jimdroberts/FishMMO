@@ -98,12 +98,10 @@ namespace FishMMO.Shared
 
 		private void TimeManager_OnTick()
 		{
-			KCCInputReplicateData characterInput = HandleCharacterInput();
-			Replicate(characterInput);
+			Replicate(HandleCharacterInput());
 			if (base.IsServerStarted)
 			{
-				KinematicCharacterMotorState state = CharacterController.GetState();
-				Reconcile(state);
+				Reconcile(CharacterController.GetState());
 			}
 		}
 

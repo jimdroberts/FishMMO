@@ -2457,7 +2457,7 @@ MonoBehaviour:
   _predictionType: 0
   _graphicalObject: {fileID: 5341418137953878145}
   _enableStateForwarding: 1
-  _ownerInterpolation: 2
+  _ownerInterpolation: 1
   _enableTeleport: 0
   _teleportThreshold: 1
   <PrefabId>k__BackingField: 1

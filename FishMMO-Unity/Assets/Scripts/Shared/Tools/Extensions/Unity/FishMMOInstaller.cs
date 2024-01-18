@@ -574,6 +574,26 @@ namespace FishMMO.Shared
 			SetButtonsActive(true);
 		}
 
+		public async void UpdateDatabase()
+		{
+			SetButtonsActive(false);
+
+			if (!await IsEverythingInstalled())
+			{
+				SetButtonsActive(true);
+				return;
+			}
+
+			string timestamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
+			Log($"Updating the database at {timestamp}... Please wait.");
+
+			// Run 'dotnet ef database update' command
+			await RunDotNetCommandAsync($"ef database update -p {Constants.Configuration.ProjectPath}  -s  {Constants.Configuration.StartupProject}");
+
+			Log($"Database Update completed...");
+			SetButtonsActive(true);
+		}
+
 		public async void CreateMigration()
 		{
 			SetButtonsActive(false);

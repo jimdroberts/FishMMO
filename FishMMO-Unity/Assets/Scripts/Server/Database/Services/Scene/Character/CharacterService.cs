@@ -370,7 +370,7 @@ namespace FishMMO.Server.DatabaseServices
 						character.Motor.SetPositionAndRotationAndVelocity(new Vector3(dbCharacter.X, dbCharacter.Y, dbCharacter.Z),
 																		  new Quaternion(dbCharacter.RotX, dbCharacter.RotY, dbCharacter.RotZ, dbCharacter.RotW),
 																		  Vector3.zero);
-						character.SetID(dbCharacter.ID);
+						character.ID.SetInitialValues(dbCharacter.ID);
 						character.CharacterName = dbCharacter.Name;
 						character.CharacterNameLower = dbCharacter.NameLowercase;
 						character.Account = dbCharacter.Account;
