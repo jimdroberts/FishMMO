@@ -20,6 +20,8 @@ namespace FishMMO.Client
 			Client.NetworkManager.SceneManager.OnLoadPercentChange += OnSceneProgressUpdate;
 			Client.NetworkManager.SceneManager.OnLoadEnd += OnSceneEndLoad;
 
+			Client.OnReconnectFailed += OnCloseScreen;
+
 			Client.NetworkManager.ClientManager.RegisterBroadcast<SceneWorldReconnectBroadcast>(OnClientSceneWorldReconnectBroadcastReceived);
 		}
 
@@ -49,7 +51,7 @@ namespace FishMMO.Client
 			{
 				LoadingImage.sprite = teleporter.SceneTransitionImage;
 			}
-			else
+			if (LoadingImage.sprite == null)
 			{
 				LoadingImage.sprite = DefaultLoadingScreenSprite;
 			}
@@ -74,5 +76,10 @@ namespace FishMMO.Client
 			Hide();
 		}
 		#endregion
+
+		public void OnCloseScreen()
+		{
+			Hide();
+		}
 	}
 }
