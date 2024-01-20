@@ -24,14 +24,16 @@ namespace FishMMO.Client
 		private LocalConnectionState clientState = LocalConnectionState.Stopped;
 		private Dictionary<string, Scene> serverLoadedScenes = new Dictionary<string, Scene>();
 
-		private const byte reconnectAttempts = 10;
-		private const float firstReconnectAttemptWaitTime = 1f;
 		private byte reconnectsAttempted = 0;
+		private float nextReconnect = 0;
+		private bool reconnectAllowed = false;
 		private bool forceDisconnect = false;
+
 		private string lastAddress = "";
 		private ushort lastPort = 0;
-		private float timeTillFirstReconnectAttempt = 0;
-		private bool reconnectActive = false;
+
+		public byte ReconnectAttempts = 10;
+		public float ReconnectAttemptWaitTime = 5f;
 
 		public List<ServerAddress> LoginServerAddresses;
 		public Configuration Configuration = null;
@@ -41,6 +43,7 @@ namespace FishMMO.Client
 		public event Action OnReconnectFailed;
 		public event Action OnQuitToLogin;
 
+		public bool CanReconnect { get { return reconnectAllowed; } }
 		public static TimeManager TimeManager { get; private set; }
 		public NetworkManager NetworkManager;
 		public ClientLoginAuthenticator LoginAuthenticator;
@@ -119,15 +122,19 @@ namespace FishMMO.Client
 
 		private void Update()
 		{
-			if(!forceDisconnect &&
-				clientState == LocalConnectionState.Stopped &&
-				timeTillFirstReconnectAttempt > 0)
+			if (forceDisconnect ||
+				reconnectsAttempted > ReconnectAttempts ||
+				clientState != LocalConnectionState.Stopped)
 			{
-				timeTillFirstReconnectAttempt -= Time.deltaTime;
+				return;
+			}
 
-				if (timeTillFirstReconnectAttempt <= 0)
+			if (nextReconnect > 0)
+			{
+				nextReconnect -= Time.deltaTime;
+
+				if (nextReconnect <= 0)
 				{
-					reconnectActive = true;
 					OnTryReconnect();
 				}
 			}
@@ -193,6 +200,7 @@ namespace FishMMO.Client
 		/// </summary>
 		private void OnClientSceneWorldReconnectBroadcastReceived(SceneWorldReconnectBroadcast msg, Channel channel)
 		{
+			reconnectAllowed = false;
 			ConnectToServer(msg.address, msg.port);
 		}
 
@@ -246,21 +254,16 @@ namespace FishMMO.Client
 			switch (clientState)
 			{
 				case LocalConnectionState.Stopped:
-					if (!forceDisconnect && reconnectActive)
+					if (!forceDisconnect && reconnectAllowed)
 					{
 						OnTryReconnect();
 					}
-					else if (!forceDisconnect)
-					{
-						timeTillFirstReconnectAttempt = firstReconnectAttemptWaitTime;
-					}
-					forceDisconnect = false;
+					reconnectAllowed = false;
 					break;
 				case LocalConnectionState.Started:
 					OnConnectionSuccessful?.Invoke();
 					reconnectsAttempted = 0;
-					timeTillFirstReconnectAttempt = -1;
-					reconnectActive = false;
+					nextReconnect = -1;
 					forceDisconnect = false;
 					break;
 			}
@@ -283,6 +286,8 @@ namespace FishMMO.Client
 				case ClientAuthenticationResult.WorldLoginSuccess:
 					break;
 				case ClientAuthenticationResult.SceneLoginSuccess:
+					// we only attempt scene server reconnects
+					reconnectAllowed = true;
 					break;
 				case ClientAuthenticationResult.ServerFull:
 					break;
@@ -302,12 +307,16 @@ namespace FishMMO.Client
 
 		public void OnTryReconnect()
 		{
-			if (reconnectsAttempted < reconnectAttempts)
+			if (nextReconnect < 0)
+			{
+				nextReconnect = ReconnectAttemptWaitTime;
+			}
+			if (reconnectsAttempted < ReconnectAttempts)
 			{
 				if (IsAddressValid(lastAddress) && lastPort != 0)
 				{
 					++reconnectsAttempted;
-					OnReconnectAttempt?.Invoke(reconnectsAttempted, reconnectAttempts);
+					OnReconnectAttempt?.Invoke(reconnectsAttempted, ReconnectAttempts);
 					ConnectToServer(lastAddress, lastPort);
 				}
 			}

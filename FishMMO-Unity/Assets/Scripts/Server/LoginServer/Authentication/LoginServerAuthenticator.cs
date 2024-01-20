@@ -121,8 +121,12 @@ namespace FishMMO.Server
 					return false;
 				}))
 			{
-				conn.Disconnect(true);
-				return;
+				ClientAuthResultBroadcast authResult = new ClientAuthResultBroadcast()
+				{
+					result = ClientAuthenticationResult.InvalidUsernameOrPassword,
+				};
+				conn.Broadcast(authResult, false, Channel.Unreliable);
+				conn.Disconnect(false);
 			}
 		}
 
@@ -162,7 +166,6 @@ namespace FishMMO.Server
 				}))
 			{
 				conn.Disconnect(true);
-				return;
 			}
 		}
 

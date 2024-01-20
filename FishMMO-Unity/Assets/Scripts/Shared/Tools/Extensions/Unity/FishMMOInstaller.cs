@@ -180,8 +180,8 @@ namespace FishMMO.Shared
 
 				if (!await IsDotNetEFInstalledAsync())
 				{
-					Log("Installing DotNet-EF...");
-					string output = await RunDotNetCommandAsync("tool install --global dotnet-ef");
+					Log("Installing DotNet-EF v5.0.17...");
+					string output = await RunDotNetCommandAsync("tool install --global dotnet-ef --version 5.0.17");
 					Log(output);
 				}
 				else

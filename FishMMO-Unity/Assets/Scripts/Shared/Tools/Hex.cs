@@ -1,14 +1,17 @@
-﻿using System.Globalization;
+﻿using System.Runtime.CompilerServices;
+using System.Globalization;
 using UnityEngine;
 
 namespace FishMMO.Shared
 {
 	public static class Hex
 	{
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static Color ColorNormalize(Color color)
 		{
 			return ColorNormalize(color.r, color.g, color.b, color.a);
 		}
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static Color ColorNormalize(float r, float g, float b)
 		{
 			return ColorNormalize(r, g, b, 1.0f);
@@ -28,16 +31,24 @@ namespace FishMMO.Shared
 			return new Color(r, g, b, a);
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static int ToInt(string value)
 		{
 			int result;
-			if (int.TryParse(value, NumberStyles.HexNumber, CultureInfo.CurrentCulture, out result))
+			if (int.TryParse(value, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out result))
 			{
 				return result;
 			}
 			return 0;
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static string ToHex(this int value)
+		{
+			return value.ToString("X");
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static Color ToColor(string s)
 		{
 			if (s.Length < 6)
@@ -57,6 +68,7 @@ namespace FishMMO.Shared
 			return ColorNormalize(r, g, b, a);
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static string ToHex(this Color color)
 		{
 			int r = (int)(color.r * 255.0f);

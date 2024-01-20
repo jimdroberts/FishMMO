@@ -27,10 +27,18 @@ namespace FishMMO.Client
 
 		public void OnReconnectAttemptsChanged(byte attempts, byte maxAttempts)
 		{
-			AttemptCounterText.text = $"Attempt {attempts} of {maxAttempts}";
-			Show();
+			if (attempts <= maxAttempts)
+			{
+				if (AttemptCounterText != null)
+				{
+					AttemptCounterText.text = $"Attempt {attempts} of {maxAttempts}";
+				}
 
-			if (attempts >= maxAttempts)
+				Show();
+
+				InputManager.MouseMode = true;
+			}
+			else
 			{
 				Client.QuitToLogin();
 			}

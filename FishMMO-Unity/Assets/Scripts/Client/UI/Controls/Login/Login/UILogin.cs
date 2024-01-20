@@ -36,6 +36,11 @@ namespace FishMMO.Client
 
 		private void ClientManager_OnClientConnectionState(ClientConnectionStateArgs obj)
 		{
+			if (obj.ConnectionState == LocalConnectionState.Stopped &&
+				!Client.CanReconnect)
+			{
+				SetSignInLocked(false);
+			}
 			//handshakeMSG.text = obj.ConnectionState.ToString();
 		}
 
