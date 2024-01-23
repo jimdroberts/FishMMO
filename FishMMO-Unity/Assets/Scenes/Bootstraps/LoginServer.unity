@@ -248,7 +248,7 @@ PrefabInstance:
     - target: {fileID: 5847661121379719285, guid: f04e72f7162977e4494fd4ecd2984f2e,
         type: 3}
       propertyPath: _remoteClientTimeout
-      value: 2
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents:
     - {fileID: 0}

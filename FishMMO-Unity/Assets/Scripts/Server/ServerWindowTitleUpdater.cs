@@ -10,8 +10,6 @@ namespace FishMMO.Server
 {
 	public class ServerWindowTitleUpdater : ServerBehaviour
 	{
-		public WorldSceneSystem WorldSceneSystem;
-
 #if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
 		[DllImport("kernel32.dll")]
 		private static extern bool SetConsoleTitle(string title);
@@ -100,7 +98,7 @@ namespace FishMMO.Server
 						windowTitle.Append(":");
 						windowTitle.Append(port);
 						windowTitle.Append(" Clients:");
-						windowTitle.Append(WorldSceneSystem != null ? WorldSceneSystem.ConnectionCount : ServerManager.Clients.Count);
+						windowTitle.Append(ServerBehaviour.TryGet(out WorldSceneSystem worldSceneSystem) ? worldSceneSystem.ConnectionCount : ServerManager.Clients.Count);
 						windowTitle.Append("]");
 					}
 				}

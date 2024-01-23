@@ -12,16 +12,15 @@ namespace FishMMO.Server
 	// Scene Manager handles the node services and heartbeat to World Server
 	public class SceneServerSystem : ServerBehaviour
 	{
-		public SceneManager SceneManager;
-
 		private LocalConnectionState serverState;
 
 		public WorldSceneDetailsCache WorldSceneDetailsCache;
 
 		private long id;
 		private bool locked = false;
-		private float pulseRate = 5.0f;
 		private float nextPulse = 0.0f;
+
+		public float PulseRate = 5.0f;
 
 		public long ID { get { return id; } }
 
@@ -31,9 +30,9 @@ namespace FishMMO.Server
 		public override void InitializeOnce()
 		{
 			if (ServerManager != null &&
-				SceneManager != null)
+				Server.NetworkManager.SceneManager != null)
 			{
-				SceneManager.OnLoadEnd += SceneManager_OnLoadEnd;
+				Server.NetworkManager.SceneManager.OnLoadEnd += SceneManager_OnLoadEnd;
 				ServerManager.OnServerConnectionState += ServerManager_OnServerConnectionState;
 			}
 			else
@@ -45,13 +44,19 @@ namespace FishMMO.Server
 		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs args)
 		{
 			serverState = args.ConnectionState;
+
 			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
+			if (dbContext == null)
+			{
+				return;
+			}
 
 			if (args.ConnectionState == LocalConnectionState.Started)
 			{
-				if (Server.TryGetServerIPAddress(out ServerAddress server))
+				if (Server.TryGetServerIPAddress(out ServerAddress server) &&
+					ServerBehaviour.TryGet(out CharacterSystem characterSystem))
 				{
-					int characterCount = Server.CharacterSystem.ConnectionCharacters.Count;
+					int characterCount = characterSystem.ConnectionCharacters.Count;
 
 					if (Server.Configuration.TryGetString("ServerName", out string name))
 					{
@@ -77,36 +82,39 @@ namespace FishMMO.Server
 			{
 				if (nextPulse < 0)
 				{
-					nextPulse = pulseRate;
+					nextPulse = PulseRate;
 
-					// TODO: maybe this one should exist....how expensive will this be to run on update?
-					using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-					//Debug.Log("Scene Server System: Pulse");
-					int characterCount = Server.CharacterSystem.ConnectionCharacters.Count;
-					SceneServerService.Pulse(dbContext, id, characterCount);
-
-					// process loaded scene pulse update
-					if (worldScenes != null)
+					if (ServerBehaviour.TryGet(out CharacterSystem characterSystem))
 					{
-						foreach (Dictionary<string, Dictionary<int, SceneInstanceDetails>> sceneGroup in worldScenes.Values)
+						// TODO: maybe this one should exist....how expensive will this be to run on update?
+						using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
+						//Debug.Log("Scene Server System: Pulse");
+						int characterCount = characterSystem.ConnectionCharacters.Count;
+						SceneServerService.Pulse(dbContext, id, characterCount);
+
+						// process loaded scene pulse update
+						if (worldScenes != null)
 						{
-							foreach (Dictionary<int, SceneInstanceDetails> scene in sceneGroup.Values)
+							foreach (Dictionary<string, Dictionary<int, SceneInstanceDetails>> sceneGroup in worldScenes.Values)
 							{
-								foreach (KeyValuePair<int, SceneInstanceDetails> sceneDetails in scene)
+								foreach (Dictionary<int, SceneInstanceDetails> scene in sceneGroup.Values)
 								{
-									//Debug.Log("Scene Server System: " + sceneDetails.Value.Name + ":" + sceneDetails.Value.WorldServerID + ":" + sceneDetails.Value.Handle + " Pulse");
-									LoadedSceneService.Pulse(dbContext, sceneDetails.Key, sceneDetails.Value.CharacterCount);
+									foreach (KeyValuePair<int, SceneInstanceDetails> sceneDetails in scene)
+									{
+										//Debug.Log("Scene Server System: " + sceneDetails.Value.Name + ":" + sceneDetails.Value.WorldServerID + ":" + sceneDetails.Value.Handle + " Pulse");
+										LoadedSceneService.Pulse(dbContext, sceneDetails.Key, sceneDetails.Value.CharacterCount);
+									}
 								}
 							}
 						}
-					}
 
-					// process pending scenes
-					PendingSceneEntity pending = PendingSceneService.Dequeue(dbContext);
-					if (pending != null)
-					{
-						Debug.Log("Scene Server System: Dequeued Pending Scene Load request World:" + pending.WorldServerID + " Scene:" + pending.SceneName);
-						ProcessSceneLoadRequest(pending.WorldServerID, pending.SceneName);
+						// process pending scenes
+						PendingSceneEntity pending = PendingSceneService.Dequeue(dbContext);
+						if (pending != null)
+						{
+							Debug.Log("Scene Server System: Dequeued Pending Scene Load request World:" + pending.WorldServerID + " Scene:" + pending.SceneName);
+							ProcessSceneLoadRequest(pending.WorldServerID, pending.SceneName);
+						}
 					}
 				}
 				nextPulse -= Time.deltaTime;
@@ -157,7 +165,7 @@ namespace FishMMO.Server
 					}
 				},
 			};
-			SceneManager.LoadConnectionScenes(sld);
+			Server.NetworkManager.SceneManager.LoadConnectionScenes(sld);
 		}
 
 		// we only track scene handles here for scene stacking, the SceneManager has the real Scene reference
@@ -258,7 +266,7 @@ namespace FishMMO.Server
 					},
 					PreferredActiveScene = new PreferredScene(lookupData),
 				};
-				SceneManager.LoadConnectionScenes(conn, sld);
+				Server.NetworkManager.SceneManager.LoadConnectionScenes(conn, sld);
 				return true;
 			}
 			return false;

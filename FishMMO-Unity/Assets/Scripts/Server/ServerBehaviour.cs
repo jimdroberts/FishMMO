@@ -1,4 +1,3 @@
-using FishNet.Managing.Client;
 using FishNet.Managing.Server;
 using UnityEngine;
 using System;
@@ -21,7 +20,7 @@ namespace FishMMO.Server
 			{
 				return;
 			}
-			//Debug.Log("UIManager: Registered " + control.Name);
+			Debug.Log("ServerBehaviour: Registered " + type.Name);
 			behaviours.Add(type, behaviour);
 		}
 
@@ -33,8 +32,9 @@ namespace FishMMO.Server
 			}
 			else
 			{
-				//Debug.Log("UIManager: Unregistered " + control.Name);
-				behaviours.Remove(behaviour.GetType());
+				Type type = behaviour.GetType();
+				Debug.Log("ServerBehaviour: Unregistered " + type.Name);
+				behaviours.Remove(type);
 			}
 		}
 
@@ -60,31 +60,34 @@ namespace FishMMO.Server
 			return null;
 		}
 
+		public static void InitializeOnceInternal(Server server, ServerManager serverManager)
+		{
+			if (behaviours == null ||
+				behaviours.Count == 0)
+			{
+				return;
+			}
+
+			foreach (ServerBehaviour behaviour in behaviours.Values)
+			{
+				behaviour.InternalInitializeOnce(server, serverManager);
+			}
+		}
+
 		public bool Initialized { get; private set; }
 		public Server Server { get; private set; }
 		public ServerManager ServerManager { get; private set; }
-		// ClientManager is used on the servers for Server<->Server communication. *NOTE* Check if null!
-		public ClientManager ClientManager { get; private set; }
-
-		/// <summary>
-		/// Initializes the server behaviour. Use this if your system requires only Server management.
-		/// </summary>
-		internal void InternalInitializeOnce(Server server, ServerManager serverManager)
-		{
-			InternalInitializeOnce(server, serverManager, null);
-		}
 
 		/// <summary>
 		/// Initializes the server behaviour. Use this if your system requires both Server and Client management.
 		/// </summary>
-		internal void InternalInitializeOnce(Server server, ServerManager serverManager, ClientManager clientManager)
+		internal void InternalInitializeOnce(Server server, ServerManager serverManager)
 		{
 			if (Initialized)
 				return;
 
 			Server = server;
 			ServerManager = serverManager;
-			ClientManager = clientManager;
 			Initialized = true;
 
 			Debug.Log("Server: Initialized[" + this.GetType().Name + "]");

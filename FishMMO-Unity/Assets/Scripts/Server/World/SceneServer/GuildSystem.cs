@@ -3,7 +3,6 @@ using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.RegularExpressions;
 using UnityEngine;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
@@ -34,7 +33,8 @@ namespace FishMMO.Server
 		public bool OnGuildInvite(Character sender, ChatBroadcast msg)
 		{
 			string characterName = msg.text.Trim().ToLower();
-			if (Server.CharacterSystem.CharactersByLowerCaseName.TryGetValue(characterName, out Character character))
+			if (ServerBehaviour.TryGet(out CharacterSystem characterSystem) &&
+				characterSystem.CharactersByLowerCaseName.TryGetValue(characterName, out Character character))
 			{
 				OnServerGuildInviteBroadcastReceived(sender.Owner, new GuildInviteBroadcast()
 				{
@@ -49,7 +49,8 @@ namespace FishMMO.Server
 		public override void InitializeOnce()
 		{
 			if (ServerManager != null &&
-				Server.CharacterSystem != null)
+				ServerBehaviour.TryGet(out CharacterSystem characterSystem) &&
+				characterSystem != null)
 			{
 				guildChatCommands = new Dictionary<string, ChatCommand>()
 				{
@@ -79,9 +80,9 @@ namespace FishMMO.Server
 				ServerManager.RegisterBroadcast<GuildRemoveBroadcast>(OnServerGuildRemoveBroadcastReceived, true);
 
 				// remove the characters pending guild invite request on disconnect
-				if (Server.CharacterSystem != null)
+				if (ServerBehaviour.TryGet(out CharacterSystem characterSystem))
 				{
-					Server.CharacterSystem.OnDisconnect += RemovePending;
+					characterSystem.OnDisconnect += RemovePending;
 				}
 			}
 			else if (serverState == LocalConnectionState.Stopped)
@@ -94,9 +95,9 @@ namespace FishMMO.Server
 				ServerManager.UnregisterBroadcast<GuildRemoveBroadcast>(OnServerGuildRemoveBroadcastReceived);
 
 				// remove the characters pending guild invite request on disconnect
-				if (Server.CharacterSystem != null)
+				if (ServerBehaviour.TryGet(out CharacterSystem characterSystem))
 				{
-					Server.CharacterSystem.OnDisconnect -= RemovePending;
+					characterSystem.OnDisconnect -= RemovePending;
 				}
 			}
 		}
@@ -173,18 +174,21 @@ namespace FishMMO.Server
 					members = addBroadcasts,
 				};
 
-				// tell all of the local guild members to update their guild member lists
-				foreach (CharacterGuildEntity entity in dbMembers)
+				if (ServerBehaviour.TryGet(out CharacterSystem characterSystem))
 				{
-					if (Server.CharacterSystem.CharactersByID.TryGetValue(entity.CharacterID, out Character character))
+					// tell all of the local guild members to update their guild member lists
+					foreach (CharacterGuildEntity entity in dbMembers)
 					{
-						if (character.GuildController.ID.Value < 1)
+						if (characterSystem.CharactersByID.TryGetValue(entity.CharacterID, out Character character))
 						{
-							continue;
+							if (character.GuildController.ID.Value < 1)
+							{
+								continue;
+							}
+							// update server rank in the case of a membership rank change
+							character.GuildController.Rank = (GuildRank)entity.Rank;
+							character.Owner.Broadcast(guildAddBroadcast, true, Channel.Reliable);
 						}
-						// update server rank in the case of a membership rank change
-						character.GuildController.Rank = (GuildRank)entity.Rank;
-						character.Owner.Broadcast(guildAddBroadcast, true, Channel.Reliable);
 					}
 				}
 			}
@@ -273,7 +277,8 @@ namespace FishMMO.Server
 
 			// if the target doesn't already have a pending invite
 			if (!pendingInvitations.ContainsKey(msg.targetCharacterID) &&
-				Server.CharacterSystem.CharactersByID.TryGetValue(msg.targetCharacterID, out Character targetCharacter))
+				ServerBehaviour.TryGet(out CharacterSystem characterSystem) &&
+				characterSystem.CharactersByID.TryGetValue(msg.targetCharacterID, out Character targetCharacter))
 			{
 				GuildController targetGuildController = targetCharacter.GetComponent<GuildController>();
 

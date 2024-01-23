@@ -13,6 +13,7 @@ using Configuration = FishMMO.Shared.Configuration;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
+using KinematicCharacterController;
 
 namespace FishMMO.Server
 {
@@ -27,30 +28,6 @@ namespace FishMMO.Server
 		public string Address { get; private set; }
 		public ushort Port { get; private set; }
 
-		#region LOGIN
-		public AccountCreationSystem AccountCreationSystem { get; private set; }
-		public CharacterSelectSystem CharacterSelectSystem { get; private set; }
-		public CharacterCreateSystem CharacterCreateSystem { get; private set; }
-		public ServerSelectSystem ServerSelectSystem { get; private set; }
-		#endregion
-
-		#region WORLD
-		public WorldServerSystem WorldServerSystem { get; private set; }
-		public WorldSceneSystem WorldSceneSystem { get; private set; }
-		#endregion
-
-		#region SCENE
-		public SceneServerSystem SceneServerSystem { get; private set; }
-		public CharacterSystem CharacterSystem { get; private set; }
-		public CharacterInventorySystem CharacterInventorySystem { get; private set; }
-		public ChatSystem ChatSystem { get; private set; }
-		public GuildSystem GuildSystem { get; private set; }
-		public PartySystem PartySystem { get; private set; }
-		public FriendSystem FriendSystem { get; private set; }
-		public NamingSystem NamingSystem { get; private set; }
-		public InteractableSystem InteractableSystem { get; private set; }
-		#endregion
-
 		public ServerWindowTitleUpdater ServerWindowTitleUpdater { get; private set; }
 
 		public bool LogToDisk = false;
@@ -60,7 +37,7 @@ namespace FishMMO.Server
 		private LocalConnectionState serverState = LocalConnectionState.Stopped;
 		private string serverTypeName;
 
-		void Awake()
+		void Start()
 		{
 			startTime = DateTime.UtcNow;
 
@@ -97,6 +74,11 @@ namespace FishMMO.Server
 #endif
 			}
 
+			// Ensure the KCC System is created.
+			KinematicCharacterSystem.EnsureCreation();
+			KinematicCharacterSystem.Settings.AutoSimulation = false;
+			KinematicCharacterSystem.Settings.Interpolate = false;
+
 			// initialize the DB contexts
 #if UNITY_EDITOR
 			string dbConfigurationPath = Path.Combine(Path.Combine(workingDirectory, Constants.Configuration.SetupDirectory), "Development");
@@ -118,7 +100,7 @@ namespace FishMMO.Server
 				}
 			}
 
-			// initialize required components for our specified server type
+			// initialize server behaviours
 			InternalInitializeOnce(serverType);
 
 			// automatically start the server
@@ -226,13 +208,6 @@ namespace FishMMO.Server
 				throw new UnityException("Server: Failed to retrieve Remote IP Address");
 			}
 
-			// only use title updater if it has been added to the scene
-			ServerWindowTitleUpdater = GetComponent<ServerWindowTitleUpdater>();
-			if (ServerWindowTitleUpdater != null)
-			{
-				ServerWindowTitleUpdater.InternalInitializeOnce(this, NetworkManager.ServerManager);
-			}
-
 			// database factory DI
 			LoginServerAuthenticator authenticator = NetworkManager.ServerManager.GetAuthenticator() as LoginServerAuthenticator;
 			if (authenticator != null)
@@ -240,68 +215,17 @@ namespace FishMMO.Server
 				authenticator.NpgsqlDbContextFactory = NpgsqlDbContextFactory;
 			}
 
+			// initialize our server behaviours
+			ServerBehaviour.InitializeOnceInternal(this, NetworkManager.ServerManager);
+
+			// handle any special server type functionality, if the server type is not found we quit
 			switch (serverType)
 			{
 				case "LOGIN":
-					AccountCreationSystem = GetOrCreateComponent<AccountCreationSystem>();
-					AccountCreationSystem.InternalInitializeOnce(this, NetworkManager.ServerManager);
-
-					CharacterSelectSystem = GetOrCreateComponent<CharacterSelectSystem>();
-					CharacterSelectSystem.InternalInitializeOnce(this, NetworkManager.ServerManager);
-
-					CharacterCreateSystem = GetOrCreateComponent<CharacterCreateSystem>();
-					CharacterCreateSystem.InternalInitializeOnce(this, NetworkManager.ServerManager);
-
-					ServerSelectSystem = GetOrCreateComponent<ServerSelectSystem>();
-					ServerSelectSystem.InternalInitializeOnce(this, NetworkManager.ServerManager);
 					break;
 				case "WORLD":
-					WorldServerSystem = GetOrCreateComponent<WorldServerSystem>();
-					WorldServerSystem.InternalInitializeOnce(this, NetworkManager.ServerManager);
-
-					WorldSceneSystem = GetOrCreateComponent<WorldSceneSystem>();
-					WorldSceneSystem.InternalInitializeOnce(this, NetworkManager.ServerManager);
-					WorldServerAuthenticator worldAuthenticator = NetworkManager.ServerManager.GetAuthenticator() as WorldServerAuthenticator;
-					if (worldAuthenticator != null)
-					{
-						worldAuthenticator.WorldSceneSystem = WorldSceneSystem;
-					}
-
-					// world server has special title bar that handles relay information
-					if (ServerWindowTitleUpdater != null)
-					{
-						ServerWindowTitleUpdater.WorldSceneSystem = WorldSceneSystem;
-					}
 					break;
 				case "SCENE":
-					SceneServerSystem = GetOrCreateComponent<SceneServerSystem>();
-					SceneServerSystem.SceneManager = NetworkManager.SceneManager;
-					SceneServerSystem.InternalInitializeOnce(this, NetworkManager.ServerManager, NetworkManager.ClientManager);
-
-					CharacterSystem = GetOrCreateComponent<CharacterSystem>();
-					CharacterSystem.InternalInitializeOnce(this, NetworkManager.ServerManager, NetworkManager.ClientManager);
-
-					CharacterInventorySystem = GetOrCreateComponent<CharacterInventorySystem>();
-					CharacterInventorySystem.InternalInitializeOnce(this, NetworkManager.ServerManager);
-
-					ChatSystem = GetOrCreateComponent<ChatSystem>();
-					ChatSystem.SceneManager = NetworkManager.SceneManager;
-					ChatSystem.InternalInitializeOnce(this, NetworkManager.ServerManager, NetworkManager.ClientManager);
-
-					GuildSystem = GetOrCreateComponent<GuildSystem>();
-					GuildSystem.InternalInitializeOnce(this, NetworkManager.ServerManager);
-
-					PartySystem = GetOrCreateComponent<PartySystem>();
-					PartySystem.InternalInitializeOnce(this, NetworkManager.ServerManager);
-
-					FriendSystem = GetOrCreateComponent<FriendSystem>();
-					FriendSystem.InternalInitializeOnce(this, NetworkManager.ServerManager);
-
-					NamingSystem = GetOrCreateComponent<NamingSystem>();
-					NamingSystem.InternalInitializeOnce(this, NetworkManager.ServerManager);
-
-					InteractableSystem = GetOrCreateComponent<InteractableSystem>();
-					InteractableSystem.InternalInitializeOnce(this, NetworkManager.ServerManager);
 					break;
 				default:
 					Server.Quit();

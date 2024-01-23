@@ -9,11 +9,10 @@ namespace FishMMO.Server
 	{
 		public uint MaxPlayers = 5000;
 
-		public WorldSceneSystem WorldSceneSystem { get; set; }
-
 		internal override ClientAuthenticationResult TryLogin(NpgsqlDbContext dbContext, ClientAuthenticationResult result, string username)
 		{
-			if (WorldSceneSystem != null && WorldSceneSystem.ConnectionCount >= MaxPlayers)
+			if (ServerBehaviour.TryGet(out WorldSceneSystem worldSceneSystem) &&
+				worldSceneSystem.ConnectionCount >= MaxPlayers)
 			{
 				return ClientAuthenticationResult.ServerFull;
 			}
@@ -22,10 +21,11 @@ namespace FishMMO.Server
 				return ClientAuthenticationResult.InvalidUsernameOrPassword;
 			}
 			else if (result == ClientAuthenticationResult.LoginSuccess &&
-					 CharacterService.GetSelected(dbContext, username))
+				ServerBehaviour.TryGet(out WorldServerSystem worldServerSystem) &&
+				CharacterService.GetSelected(dbContext, username))
 			{
 				// update the characters world
-				CharacterService.SetWorld(dbContext, username, WorldSceneSystem.Server.WorldServerSystem.ID);
+				CharacterService.SetWorld(dbContext, username, worldServerSystem.ID);
 
 				return ClientAuthenticationResult.WorldLoginSuccess;
 			}

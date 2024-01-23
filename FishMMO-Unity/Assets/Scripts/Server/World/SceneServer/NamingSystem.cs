@@ -51,8 +51,8 @@ namespace FishMMO.Server
 				case NamingSystemType.CharacterName:
 					//Debug.Log("NamingSystem: Searching by Character ID: " + msg.id);
 					// check our local scene server first
-					if (Server.CharacterSystem != null &&
-						Server.CharacterSystem.CharactersByID.TryGetValue(msg.id, out Character character))
+					if (ServerBehaviour.TryGet(out CharacterSystem characterSystem) &&
+						characterSystem.CharactersByID.TryGetValue(msg.id, out Character character))
 					{
 						//Debug.Log("NamingSystem: Character Local Result " + character.CharacterName);
 						SendNamingBroadcast(conn, NamingSystemType.CharacterName, msg.id, character.CharacterName);

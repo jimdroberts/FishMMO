@@ -17,7 +17,7 @@ namespace FishMMO.Server
 		public override void InitializeOnce()
 		{
 			if (ServerManager != null &&
-				Server.CharacterSystem != null)
+				ServerBehaviour.TryGet(out CharacterSystem characterSystem))
 			{
 				ServerManager.OnServerConnectionState += ServerManager_OnServerConnectionState;
 			}

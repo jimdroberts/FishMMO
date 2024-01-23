@@ -18,6 +18,7 @@ GameObject:
   - component: {fileID: 446289968932885008}
   - component: {fileID: 656759775}
   - component: {fileID: 7264485012510910543}
+  - component: {fileID: 4313658253985554357}
   m_Layer: 0
   m_Name: NetworkManager
   m_TagString: Untagged
@@ -33,7 +34,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 7024989448064037687}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -72,7 +73,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _authenticator: {fileID: 7266005403130128576}
-  _remoteClientTimeout: 2
+  _remoteClientTimeout: 0
   _remoteClientTimeoutDuration: 60
   _syncTypeRate: 0.1
   SpawnPacking:
@@ -98,7 +99,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _remoteServerTimeout: 2
   _remoteServerTimeoutDuration: 60
-  _changeFrameRate: 1
+  _changeFrameRate: 0
   _frameRate: 60
 --- !u!114 &7619396021155755121
 MonoBehaviour:
@@ -116,7 +117,7 @@ MonoBehaviour:
   _timingType: 0
   _allowTickDropping: 0
   _maximumFrameTicks: 2
-  _tickRate: 15
+  _tickRate: 30
   _pingInterval: 1
   _physicsMode: 1
 --- !u!114 &5698055281298649961
@@ -200,3 +201,19 @@ MonoBehaviour:
     _latency: 0
     _outOfOrder: 0
     _packetLoss: 0
+--- !u!114 &4313658253985554357
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7024989448064037687}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 15895a51081447d46bda466e7e830c08, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _sceneProcessor: {fileID: 0}
+  _lightProbeUpdating: 2
+  _moveClientHostObjects: 0
+  _setActiveScene: 0

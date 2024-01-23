@@ -13,6 +13,7 @@ using System;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
+using KinematicCharacterController;
 
 namespace FishMMO.Client
 {
@@ -105,6 +106,11 @@ namespace FishMMO.Client
 					});
 #endif
 				}
+
+				// Ensure the KCC System is created.
+				KinematicCharacterSystem.EnsureCreation();
+				KinematicCharacterSystem.Settings.AutoSimulation = false;
+				KinematicCharacterSystem.Settings.Interpolate = false;
 
 				UnityEngine.SceneManagement.SceneManager.sceneLoaded += UnitySceneManager_OnSceneLoaded;
 				UnityEngine.SceneManagement.SceneManager.sceneUnloaded += UnitySceneManager_OnSceneUnloaded;

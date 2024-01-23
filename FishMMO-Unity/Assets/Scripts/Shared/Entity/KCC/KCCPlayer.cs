@@ -30,16 +30,10 @@ namespace FishMMO.Shared
 		private bool _crouchInputActive = false;
 		private bool _sprintInputActive = false;
 
-		void Awake()
-		{
-			KinematicCharacterSystem.EnsureCreation();
-
-			//Quang: Using manual simultion instead of KCC auto simulation
-			KinematicCharacterSystem.Settings.AutoSimulation = false;
-		}
-
 		public override void OnStartNetwork()
 		{
+			base.OnStartNetwork();
+
 			//Quang: Subscribe to tick event, this will replace FixedUpdate
 			if (base.TimeManager != null)
 			{
@@ -49,6 +43,8 @@ namespace FishMMO.Shared
 
 		public override void OnStopNetwork()
 		{
+			base.OnStopNetwork();
+
 			if (base.TimeManager != null)
 			{
 				base.TimeManager.OnTick -= TimeManager_OnTick;
@@ -121,12 +117,11 @@ namespace FishMMO.Shared
 			// we can't change input if the UI is open or if the mouse cursor is enabled
 			if (!CanUpdateInput())
 			{
-				KCCInputReplicateData characterInputs = default;
-
-				// always handle rotation
-				characterInputs.CameraRotation = CharacterCamera.Transform.rotation;
-
-				return characterInputs;
+				return new KCCInputReplicateData(0.0f,
+												 0.0f,
+												 0,
+												 CharacterCamera.Transform.position,
+												 CharacterCamera.Transform.rotation);
 			}
 
 			int moveFlags = 0;
@@ -237,11 +232,6 @@ namespace FishMMO.Shared
 				scrollInput = -InputManager.GetAxis(MouseScrollInput);
 			}
 #endif
-
-			if (CharacterCamera == null)
-			{
-				return;
-			}
 
 			// Apply inputs to the camera
 			CharacterCamera.UpdateWithInput((float)base.TimeManager.TickDelta, scrollInput, lookInputVector);

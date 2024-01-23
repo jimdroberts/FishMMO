@@ -80,14 +80,17 @@ namespace FishMMO.Shared
 		{ ChatChannel.Say, new List<string>() { "/s", "/say", } },
 	};
 
+		static ChatHelper()
+		{
+			DirectCommands = new Dictionary<string, ChatCommand>();
+			Commands = new Dictionary<string, ChatCommandDetails>();
+			ChannelCommands = new Dictionary<ChatChannel, ChatCommandDetails>();
+		}
+
 		public static void InitializeOnce(Func<ChatChannel, ChatCommand> onGetChannelCommand)
 		{
 			if (initialized) return;
 			initialized = true;
-
-			DirectCommands = new Dictionary<string, ChatCommand>();
-			Commands = new Dictionary<string, ChatCommandDetails>();
-			ChannelCommands = new Dictionary<ChatChannel, ChatCommandDetails>();
 
 			foreach (KeyValuePair<ChatChannel, List<string>> pair in ChatHelper.ChannelCommandMap)
 			{

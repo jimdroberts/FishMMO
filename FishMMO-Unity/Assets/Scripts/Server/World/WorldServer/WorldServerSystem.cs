@@ -37,9 +37,10 @@ namespace FishMMO.Server
 
 			if (args.ConnectionState == LocalConnectionState.Started)
 			{
-				if (Server.TryGetServerIPAddress(out ServerAddress server))
+				if (Server.TryGetServerIPAddress(out ServerAddress server) &&
+					ServerBehaviour.TryGet(out WorldSceneSystem worldSceneSystem))
 				{
-					int characterCount = Server.WorldSceneSystem.ConnectionCount;
+					int characterCount = worldSceneSystem.ConnectionCount;
 
 					if (Server.Configuration.TryGetString("ServerName", out string name))
 					{
@@ -60,7 +61,8 @@ namespace FishMMO.Server
 
 		void LateUpdate()
 		{
-			if (serverState == LocalConnectionState.Started)
+			if (serverState == LocalConnectionState.Started &&
+				ServerBehaviour.TryGet(out WorldSceneSystem worldSceneSystem))
 			{
 				if (nextPulse < 0)
 				{
@@ -69,7 +71,7 @@ namespace FishMMO.Server
 					// TODO: maybe this one should exist....how expensive will this be to run on update?
 					using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 					//Debug.Log("World Server System: Pulse");
-					int characterCount = Server.WorldSceneSystem.ConnectionCount;
+					int characterCount = worldSceneSystem.ConnectionCount;
 					WorldServerService.Pulse(dbContext, id, characterCount);
 				}
 				nextPulse -= Time.deltaTime;

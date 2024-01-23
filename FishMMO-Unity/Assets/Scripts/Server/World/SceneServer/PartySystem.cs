@@ -33,7 +33,8 @@ namespace FishMMO.Server
 		public bool OnPartyInvite(Character sender, ChatBroadcast msg)
 		{
 			string targetName = msg.text.Trim().ToLower();
-			if (Server.CharacterSystem.CharactersByLowerCaseName.TryGetValue(targetName, out Character character))
+			if (ServerBehaviour.TryGet(out CharacterSystem characterSystem) &&
+				characterSystem.CharactersByLowerCaseName.TryGetValue(targetName, out Character character))
 			{
 				OnServerPartyInviteBroadcastReceived(sender.Owner, new PartyInviteBroadcast()
 				{
@@ -48,7 +49,8 @@ namespace FishMMO.Server
 		public override void InitializeOnce()
 		{
 			if (ServerManager != null &&
-				Server.CharacterSystem != null)
+				ServerBehaviour.TryGet(out CharacterSystem characterSystem) &&
+				characterSystem != null)
 			{
 				partyChatCommands = new Dictionary<string, ChatCommand>()
 				{
@@ -78,9 +80,9 @@ namespace FishMMO.Server
 				ServerManager.RegisterBroadcast<PartyRemoveBroadcast>(OnServerPartyRemoveBroadcastReceived, true);
 
 				// remove the characters pending guild invite request on disconnect
-				if (Server.CharacterSystem != null)
+				if (ServerBehaviour.TryGet(out CharacterSystem characterSystem))
 				{
-					Server.CharacterSystem.OnDisconnect += RemovePending;
+					characterSystem.OnDisconnect += RemovePending;
 				}
 			}
 			else if (args.ConnectionState == LocalConnectionState.Stopped)
@@ -93,9 +95,9 @@ namespace FishMMO.Server
 				ServerManager.UnregisterBroadcast<PartyRemoveBroadcast>(OnServerPartyRemoveBroadcastReceived);
 
 				// remove the characters pending guild invite request on disconnect
-				if (Server.CharacterSystem != null)
+				if (ServerBehaviour.TryGet(out CharacterSystem characterSystem))
 				{
-					Server.CharacterSystem.OnDisconnect -= RemovePending;
+					characterSystem.OnDisconnect -= RemovePending;
 				}
 			}
 		}
@@ -172,17 +174,20 @@ namespace FishMMO.Server
 					members = addBroadcasts,
 				};
 
-				// tell all of the local party members to update their party member lists
-				foreach (CharacterPartyEntity entity in dbMembers)
+				if (ServerBehaviour.TryGet(out CharacterSystem characterSystem))
 				{
-					if (Server.CharacterSystem.CharactersByID.TryGetValue(entity.CharacterID, out Character character))
+					// tell all of the local party members to update their party member lists
+					foreach (CharacterPartyEntity entity in dbMembers)
 					{
-						if (character.PartyController.ID < 1)
+						if (characterSystem.CharactersByID.TryGetValue(entity.CharacterID, out Character character))
 						{
-							continue;
+							if (character.PartyController.ID < 1)
+							{
+								continue;
+							}
+							character.PartyController.Rank = (PartyRank)entity.Rank;
+							character.Owner.Broadcast(partyAddBroadcast, true, Channel.Reliable);
 						}
-						character.PartyController.Rank = (PartyRank)entity.Rank;
-						character.Owner.Broadcast(partyAddBroadcast, true, Channel.Reliable);
 					}
 				}
 			}
@@ -258,7 +263,8 @@ namespace FishMMO.Server
 
 			// if the target doesn't already have a pending invite
 			if (!pendingInvitations.ContainsKey(msg.targetCharacterID) &&
-				Server.CharacterSystem.CharactersByID.TryGetValue(msg.targetCharacterID, out Character targetCharacter))
+				ServerBehaviour.TryGet(out CharacterSystem characterSystem) &&
+				characterSystem.CharactersByID.TryGetValue(msg.targetCharacterID, out Character targetCharacter))
 			{
 				PartyController targetPartyController = targetCharacter.GetComponent<PartyController>();
 

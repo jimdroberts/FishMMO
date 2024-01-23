@@ -677,8 +677,6 @@ MonoBehaviour:
   CharacterNameLabel: {fileID: 2817084262407755495}
   CharacterGuildLabel: {fileID: 3362407936794280637}
   EquipmentViewCamera: {fileID: 6274733150604385851}
-  ID:
-    _value: 0
   CharacterName: 
   CharacterNameLower: 
   Account: 

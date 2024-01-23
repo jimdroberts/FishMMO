@@ -82,10 +82,12 @@ namespace FishMMO.Server
 
 		private void OnApplicationQuit()
 		{
-			if (Server != null && Server.NpgsqlDbContextFactory != null)
+			if (Server != null &&
+				Server.NpgsqlDbContextFactory != null &&
+				ServerBehaviour.TryGet(out WorldServerSystem worldServerSystem))
 			{
 				using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-				PendingSceneService.Delete(dbContext, Server.WorldServerSystem.ID);
+				PendingSceneService.Delete(dbContext, worldServerSystem.ID);
 			}
 		}
 
@@ -113,13 +115,15 @@ namespace FishMMO.Server
 		{
 			if (WaitingConnections.TryGetValue(sceneName, out HashSet<NetworkConnection> connections))
 			{
-				if (connections == null || connections.Count < 1)
+				if (connections == null ||
+					connections.Count < 1 ||
+					!ServerBehaviour.TryGet(out WorldServerSystem worldServerSystem))
 				{
 					WaitingConnections.Remove(sceneName);
 					return;
 				}
 
-				List<LoadedSceneEntity> loadedScenes = LoadedSceneService.GetServerList(dbContext, Server.WorldServerSystem.ID, sceneName, MAX_CLIENTS_PER_INSTANCE);
+				List<LoadedSceneEntity> loadedScenes = LoadedSceneService.GetServerList(dbContext, worldServerSystem.ID, sceneName, MAX_CLIENTS_PER_INSTANCE);
 				if (loadedScenes == null || loadedScenes.Count < 1)
 				{
 					return;
@@ -187,10 +191,10 @@ namespace FishMMO.Server
 					WaitingConnections.Remove(sceneName);
 				}
 				// enqueue a new pending scene load request to the database, we need a new scene
-				else if (!PendingSceneService.Exists(dbContext, Server.WorldServerSystem.ID, sceneName))
+				else if (!PendingSceneService.Exists(dbContext, worldServerSystem.ID, sceneName))
 				{
-					Debug.Log("World Scene System: Enqueing new PendingSceneLoadRequest: " + Server.WorldServerSystem.ID + ":" + sceneName);
-					PendingSceneService.Enqueue(dbContext, Server.WorldServerSystem.ID, sceneName);
+					Debug.Log("World Scene System: Enqueing new PendingSceneLoadRequest: " + worldServerSystem.ID + ":" + sceneName);
+					PendingSceneService.Enqueue(dbContext, worldServerSystem.ID, sceneName);
 				}
 			}
 		}
@@ -198,13 +202,13 @@ namespace FishMMO.Server
 		private void UpdateConnectionCount(NpgsqlDbContext dbContext)
 		{
 			if (dbContext == null ||
-				Server.WorldServerSystem == null)
+				ServerBehaviour.TryGet(out WorldServerSystem worldServerSystem))
 			{
 				return;
 			}
 
 			// get the scene data for each of our worlds scenes
-			List<LoadedSceneEntity> sceneServerCount = LoadedSceneService.GetServerList(dbContext, Server.WorldServerSystem.ID);
+			List<LoadedSceneEntity> sceneServerCount = LoadedSceneService.GetServerList(dbContext, worldServerSystem.ID);
 			if (sceneServerCount != null)
 			{
 				// count the total
@@ -230,6 +234,12 @@ namespace FishMMO.Server
 		/// </summary>
 		private void TryConnectToSceneServer(NetworkConnection conn)
 		{
+			if (!ServerBehaviour.TryGet(out WorldServerSystem worldServerSystem))
+			{
+				Debug.Log("World Scene System: World Server System could not be found.");
+				conn.Kick(KickReason.UnexpectedProblem);
+				return;
+			}
 			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 			// get the scene for the selected character
 			if (!AccountManager.GetAccountNameByConnection(conn, out string accountName) ||
@@ -240,7 +250,7 @@ namespace FishMMO.Server
 				return;
 			}
 
-			List<LoadedSceneEntity> loadedScenes = LoadedSceneService.GetServerList(dbContext, Server.WorldServerSystem.ID, sceneName, MAX_CLIENTS_PER_INSTANCE);
+			List<LoadedSceneEntity> loadedScenes = LoadedSceneService.GetServerList(dbContext, worldServerSystem.ID, sceneName, MAX_CLIENTS_PER_INSTANCE);
 
 			LoadedSceneEntity selectedScene = null;
 			if (loadedScenes != null && loadedScenes.Count > 0)
@@ -279,11 +289,11 @@ namespace FishMMO.Server
 					connections.Add(conn);
 				}
 
-				if (!PendingSceneService.Exists(dbContext, Server.WorldServerSystem.ID, sceneName))
+				if (!PendingSceneService.Exists(dbContext, worldServerSystem.ID, sceneName))
 				{
 					// enqueue the pending scene load to the database
-					Debug.Log("World Scene System: Enqueing new PendingSceneLoadRequest: " + Server.WorldServerSystem.ID + ":" + sceneName);
-					PendingSceneService.Enqueue(dbContext, Server.WorldServerSystem.ID, sceneName);
+					Debug.Log("World Scene System: Enqueing new PendingSceneLoadRequest: " + worldServerSystem.ID + ":" + sceneName);
+					PendingSceneService.Enqueue(dbContext, worldServerSystem.ID, sceneName);
 				}
 			}
 		}
