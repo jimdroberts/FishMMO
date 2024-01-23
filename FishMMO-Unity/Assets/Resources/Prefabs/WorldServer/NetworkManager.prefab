@@ -56,7 +56,7 @@ MonoBehaviour:
   _dontDestroyOnLoad: 1
   _objectPool: {fileID: 1359145392}
   _persistence: 2
-  _logging: {fileID: 0}
+  _logging: {fileID: 11400000, guid: c66ed2b42bcd6b14194a796e70a740e0, type: 2}
   _spawnablePrefabs: {fileID: 11400000, guid: 4211299e9ac449a4caa5f547b75992bd, type: 2}
 --- !u!114 &1702419421884921806
 MonoBehaviour:
@@ -71,7 +71,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _authenticator: {fileID: 3213959078885105799}
-  _remoteClientTimeout: 2
+  _remoteClientTimeout: 0
   _remoteClientTimeoutDuration: 60
   _syncTypeRate: 0.1
   SpawnPacking:

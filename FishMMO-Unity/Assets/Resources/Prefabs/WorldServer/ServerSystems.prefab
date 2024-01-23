@@ -60,7 +60,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2d4ee952c5a180845abb775163401c3d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  WorldSceneSystem: {fileID: 5583631206216370463}
   Title: 
   UpdateRate: 2
   NextUpdate: 0

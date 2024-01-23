@@ -109,7 +109,7 @@ namespace FishMMO.Shared
 
 			foreach (KeyValuePair<string, ChatCommand> pair in commands)
 			{
-				Debug.Log("ChatSystem: Added Direct Command[" + pair.Key + "]");
+				Debug.Log("ChatHelper: Added Command[" + pair.Key + "]");
 				DirectCommands[pair.Key] = pair.Value;
 			}
 		}
@@ -118,7 +118,7 @@ namespace FishMMO.Shared
 		{
 			foreach (string command in commands)
 			{
-				Debug.Log("ChatSystem: Added Chat Command[" + command + "]");
+				Debug.Log("ChatHelper: Added Chat Command[" + command + "]");
 				Commands[command] = details;
 				ChannelCommands[details.Channel] = details;
 			}

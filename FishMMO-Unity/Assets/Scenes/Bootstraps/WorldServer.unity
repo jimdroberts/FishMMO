@@ -131,16 +131,6 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
-    - target: {fileID: 1702419421884921806, guid: 0b886ac5562272946adae2cfc9971678,
-        type: 3}
-      propertyPath: _remoteClientTimeout
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 5817359361813974888, guid: 0b886ac5562272946adae2cfc9971678,
-        type: 3}
-      propertyPath: _tickRate
-      value: 15
-      objectReference: {fileID: 0}
     - target: {fileID: 6375733014718908460, guid: 0b886ac5562272946adae2cfc9971678,
         type: 3}
       propertyPath: m_LocalPosition.x
@@ -196,34 +186,11 @@ PrefabInstance:
       propertyPath: m_Name
       value: NetworkManager
       objectReference: {fileID: 0}
-    - target: {fileID: 6375733014718908463, guid: 0b886ac5562272946adae2cfc9971678,
-        type: 3}
-      propertyPath: _objectPool
-      value: 
-      objectReference: {fileID: 1359145389}
-    - target: {fileID: 6375733014718908463, guid: 0b886ac5562272946adae2cfc9971678,
-        type: 3}
-      propertyPath: _persistence
-      value: 2
-      objectReference: {fileID: 0}
-    m_RemovedComponents:
-    - {fileID: 0}
+    m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 0b886ac5562272946adae2cfc9971678, type: 3}
---- !u!114 &1359145389 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 1359145392, guid: 0b886ac5562272946adae2cfc9971678,
-    type: 3}
-  m_PrefabInstance: {fileID: 1359145388}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 1afeaa36377bbf847880613509e71d54, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
 --- !u!1 &2093683971
 GameObject:
   m_ObjectHideFlags: 0
@@ -326,39 +293,16 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: 1043176158297817164, guid: 6379611c1b00cef4b96162c929c504ef,
-        type: 3}
-      propertyPath: WorldSceneSystem
-      value: 
-      objectReference: {fileID: 1043176158699945417}
     - target: {fileID: 1043176158297817271, guid: 6379611c1b00cef4b96162c929c504ef,
         type: 3}
       propertyPath: m_Name
       value: ServerSystems
       objectReference: {fileID: 0}
-    - target: {fileID: 5583631206216370463, guid: 6379611c1b00cef4b96162c929c504ef,
-        type: 3}
-      propertyPath: WorldSceneDetailsCache
-      value: 
-      objectReference: {fileID: 11400000, guid: ee8f2ab36344dae4c8c59b28985d5338,
-        type: 2}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 6379611c1b00cef4b96162c929c504ef, type: 3}
---- !u!114 &1043176158699945417 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 5583631206216370463, guid: 6379611c1b00cef4b96162c929c504ef,
-    type: 3}
-  m_PrefabInstance: {fileID: 1043176158699945416}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3fc59b50d486f3946b1a9625bb84bb31, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

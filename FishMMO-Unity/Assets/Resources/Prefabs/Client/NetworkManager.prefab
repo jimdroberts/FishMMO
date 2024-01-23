@@ -59,7 +59,7 @@ MonoBehaviour:
   _dontDestroyOnLoad: 1
   _objectPool: {fileID: 1810158744}
   _persistence: 2
-  _logging: {fileID: 0}
+  _logging: {fileID: 11400000, guid: c66ed2b42bcd6b14194a796e70a740e0, type: 2}
   _spawnablePrefabs: {fileID: 11400000, guid: 4211299e9ac449a4caa5f547b75992bd, type: 2}
 --- !u!114 &6425703781230952202
 MonoBehaviour:
@@ -73,7 +73,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: aca43cf6f20e77c4f8fcc078fd85081f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _remoteServerTimeout: 2
+  _remoteServerTimeout: 0
   _remoteServerTimeoutDuration: 60
   _changeFrameRate: 1
   _frameRate: 60

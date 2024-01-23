@@ -28,6 +28,10 @@ namespace FishMMO.Server
 		public string Address { get; private set; }
 		public ushort Port { get; private set; }
 
+		public Action OnLoginServerInitialized;
+		public Action OnWorldServerInitialized;
+		public Action OnSceneServerInitialized;
+
 		public ServerWindowTitleUpdater ServerWindowTitleUpdater { get; private set; }
 
 		public bool LogToDisk = false;
@@ -56,6 +60,13 @@ namespace FishMMO.Server
 			}
 
 			Debug.Log("Server: " + serverType + " is starting[" + DateTime.UtcNow + "]");
+
+			Debug.Log("Server: Fetching Remote IP Address.");
+			RemoteAddress = NetHelper.GetExternalIPAddress().ToString();
+			if (string.IsNullOrWhiteSpace(RemoteAddress))
+			{
+				throw new UnityException("Server: Failed to retrieve Remote IP Address.");
+			}
 
 			string workingDirectory = Server.GetWorkingDirectory();
 			Debug.Log("Server: Current working directory[" + workingDirectory + "]");
@@ -101,17 +112,27 @@ namespace FishMMO.Server
 			}
 
 			// initialize server behaviours
-			InternalInitializeOnce(serverType);
+			Debug.Log("Server: Initializing Components");
 
-			// automatically start the server
+			// database factory DI
+			LoginServerAuthenticator authenticator = NetworkManager.ServerManager.GetAuthenticator() as LoginServerAuthenticator;
+			if (authenticator != null)
+			{
+				authenticator.NpgsqlDbContextFactory = NpgsqlDbContextFactory;
+			}
+
+			// initialize our server behaviours
+			ServerBehaviour.InitializeOnceInternal(this, NetworkManager.ServerManager);
+
+			Debug.Log("Server: Initialization Complete");
+
+			// start the local server connection
 			if (NetworkManager.ServerManager != null && LoadTransportServerDetails())
 			{
 				NetworkManager.ServerManager.OnServerConnectionState += ServerManager_OnServerConnectionState;
 
-				// start the local server connection
 				NetworkManager.ServerManager.StartConnection();
 				
-
 				StartCoroutine(OnAwaitingConnectionReady());
 			}
 			else
@@ -192,45 +213,6 @@ namespace FishMMO.Server
 				return "SCENE";
 			}
 			return "Invalid";
-		}
-
-		/// <summary>
-		/// Order of Execution, Dependency Injection, and all other server initialization should be handled here.
-		/// </summary>
-		internal void InternalInitializeOnce(string serverType)
-		{
-			Debug.Log("Server: Initializing Components");
-
-			Debug.Log("Server: Fetching Remote IP Address.");
-			RemoteAddress = NetHelper.GetExternalIPAddress().ToString();
-			if (string.IsNullOrWhiteSpace(RemoteAddress))
-			{
-				throw new UnityException("Server: Failed to retrieve Remote IP Address");
-			}
-
-			// database factory DI
-			LoginServerAuthenticator authenticator = NetworkManager.ServerManager.GetAuthenticator() as LoginServerAuthenticator;
-			if (authenticator != null)
-			{
-				authenticator.NpgsqlDbContextFactory = NpgsqlDbContextFactory;
-			}
-
-			// initialize our server behaviours
-			ServerBehaviour.InitializeOnceInternal(this, NetworkManager.ServerManager);
-
-			// handle any special server type functionality, if the server type is not found we quit
-			switch (serverType)
-			{
-				case "LOGIN":
-					break;
-				case "WORLD":
-					break;
-				case "SCENE":
-					break;
-				default:
-					Server.Quit();
-					return;
-			}
 		}
 
 		/// <summary>

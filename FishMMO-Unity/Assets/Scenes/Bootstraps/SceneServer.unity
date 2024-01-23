@@ -186,11 +186,6 @@ PrefabInstance:
       propertyPath: m_Name
       value: NetworkManager
       objectReference: {fileID: 0}
-    - target: {fileID: 7619396021155755121, guid: b68dfa443648caf40abf8e919357a0ac,
-        type: 3}
-      propertyPath: _tickRate
-      value: 15
-      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []

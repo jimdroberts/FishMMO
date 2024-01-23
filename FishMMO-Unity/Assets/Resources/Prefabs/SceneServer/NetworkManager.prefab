@@ -58,7 +58,7 @@ MonoBehaviour:
   _dontDestroyOnLoad: 1
   _objectPool: {fileID: 656759775}
   _persistence: 2
-  _logging: {fileID: 0}
+  _logging: {fileID: 11400000, guid: c66ed2b42bcd6b14194a796e70a740e0, type: 2}
   _spawnablePrefabs: {fileID: 11400000, guid: 4211299e9ac449a4caa5f547b75992bd, type: 2}
 --- !u!114 &-1993042041214232644
 MonoBehaviour:
@@ -117,7 +117,7 @@ MonoBehaviour:
   _timingType: 0
   _allowTickDropping: 0
   _maximumFrameTicks: 2
-  _tickRate: 30
+  _tickRate: 15
   _pingInterval: 1
   _physicsMode: 1
 --- !u!114 &5698055281298649961

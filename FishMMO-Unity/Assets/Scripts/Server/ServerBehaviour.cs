@@ -68,10 +68,14 @@ namespace FishMMO.Server
 				return;
 			}
 
+			Debug.Log("ServerBehaviour: Initializing");
+
 			foreach (ServerBehaviour behaviour in behaviours.Values)
 			{
 				behaviour.InternalInitializeOnce(server, serverManager);
 			}
+
+			Debug.Log("ServerBehaviour: Complete");
 		}
 
 		public bool Initialized { get; private set; }
@@ -90,9 +94,9 @@ namespace FishMMO.Server
 			ServerManager = serverManager;
 			Initialized = true;
 
-			Debug.Log("Server: Initialized[" + this.GetType().Name + "]");
-
 			InitializeOnce();
+
+			Debug.Log("ServerBehaviour: Initialized[" + this.GetType().Name + "]");
 		}
 
 		public abstract void InitializeOnce();

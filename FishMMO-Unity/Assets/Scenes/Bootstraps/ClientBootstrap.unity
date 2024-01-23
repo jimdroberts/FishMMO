@@ -3562,11 +3562,6 @@ PrefabInstance:
       propertyPath: m_Name
       value: NetworkManager
       objectReference: {fileID: 0}
-    - target: {fileID: 520921427698759609, guid: 1eea1c68ebce1604cada369f7bb62018,
-        type: 3}
-      propertyPath: _objectPool
-      value: 
-      objectReference: {fileID: 2002785883}
     - target: {fileID: 520921427698759610, guid: 1eea1c68ebce1604cada369f7bb62018,
         type: 3}
       propertyPath: m_LocalPosition.x
@@ -3617,34 +3612,11 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: 5643328017262166496, guid: 1eea1c68ebce1604cada369f7bb62018,
-        type: 3}
-      propertyPath: _tickRate
-      value: 15
-      objectReference: {fileID: 0}
-    - target: {fileID: 6425703781230952202, guid: 1eea1c68ebce1604cada369f7bb62018,
-        type: 3}
-      propertyPath: _remoteServerTimeout
-      value: 0
-      objectReference: {fileID: 0}
-    m_RemovedComponents:
-    - {fileID: 0}
+    m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 1eea1c68ebce1604cada369f7bb62018, type: 3}
---- !u!114 &2002785883 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 1810158744, guid: 1eea1c68ebce1604cada369f7bb62018,
-    type: 3}
-  m_PrefabInstance: {fileID: 2002785882}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 1afeaa36377bbf847880613509e71d54, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
 --- !u!114 &2002785887 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 557371562, guid: 1eea1c68ebce1604cada369f7bb62018,
