@@ -169,14 +169,15 @@ namespace FishMMO.Server
 
 			Character character = conn.FirstObject.GetComponent<Character>();
 			if (character != null &&
-				!character.IsTeleporting)
+				!character.IsTeleporting &&
+				character.TryGet(out InventoryController inventoryController))
 			{
-				Item item = character.InventoryController.RemoveItem(msg.slot);
+				Item item = inventoryController.RemoveItem(msg.slot);
 
 				// remove the item from the database
 				CharacterInventoryService.Delete(dbContext, character.ID.Value, msg.slot);
 
-				conn.Broadcast(msg, true, Channel.Reliable);
+				Server.Broadcast(conn, msg, true, Channel.Reliable);
 			}
 		}
 
@@ -202,7 +203,8 @@ namespace FishMMO.Server
 
 			Character character = conn.FirstObject.GetComponent<Character>();
 			if (character == null ||
-				character.IsTeleporting)
+				character.IsTeleporting ||
+				!character.TryGet(out InventoryController inventoryController))
 			{
 				return;
 			}
@@ -212,7 +214,7 @@ namespace FishMMO.Server
 				case InventoryType.Inventory:
 					// swap the items in the inventory
 					if (msg.to != msg.from &&
-						SwapContainerItems(dbContext, character.ID.Value, character.InventoryController, msg.from, msg.to, (db, id, i) =>
+						SwapContainerItems(dbContext, character.ID.Value, inventoryController, msg.from, msg.to, (db, id, i) =>
 					{
 						CharacterInventoryService.Update(db, id, i);
 					}))
@@ -220,13 +222,14 @@ namespace FishMMO.Server
 						dbTransaction.Commit();
 
 						// tell the client we succeeded
-						conn.Broadcast(msg, true, Channel.Reliable);
+						Server.Broadcast(conn, msg, true, Channel.Reliable);
 					}
 					break;
 				case InventoryType.Equipment:
 					break;
 				case InventoryType.Bank:
-					if (SwapContainerItems(dbContext, character.ID.Value, character.BankController, character.InventoryController, msg.from, msg.to,
+					if (character.TryGet(out BankController bankController) &&
+						SwapContainerItems(dbContext, character.ID.Value, bankController, inventoryController, msg.from, msg.to,
 					(db, id, a) =>
 					{
 						CharacterBankService.SetSlot(db, id, a);
@@ -243,7 +246,7 @@ namespace FishMMO.Server
 						dbTransaction.Commit();
 
 						// tell the client
-						conn.Broadcast(msg, true, Channel.Reliable);
+						Server.Broadcast(conn, msg, true, Channel.Reliable);
 					}
 					break;
 				default: break;
@@ -273,7 +276,7 @@ namespace FishMMO.Server
 			Character character = conn.FirstObject.GetComponent<Character>();
 			if (character == null ||
 				character.IsTeleporting ||
-				character.EquipmentController == null)
+				!character.TryGet(out EquipmentController equipmentController))
 			{
 				return;
 			}
@@ -281,16 +284,16 @@ namespace FishMMO.Server
 			switch (msg.fromInventory)
 			{
 				case InventoryType.Inventory:
-					if (character.InventoryController != null &&
-						character.InventoryController.TryGetItem(msg.inventoryIndex, out Item inventoryItem))
+					if (character.TryGet(out InventoryController inventoryController) &&
+						inventoryController.TryGetItem(msg.inventoryIndex, out Item inventoryItem))
 					{
-						if (!character.EquipmentController.Equip(inventoryItem, msg.inventoryIndex, character.InventoryController, (ItemSlot)msg.slot))
+						if (!equipmentController.Equip(inventoryItem, msg.inventoryIndex, inventoryController, (ItemSlot)msg.slot))
 						{
 							return;
 						}
 
 						// did we replace an already equipped item?
-						if (character.InventoryController.TryGetItem(msg.inventoryIndex, out Item prevItem))
+						if (inventoryController.TryGetItem(msg.inventoryIndex, out Item prevItem))
 						{
 							CharacterInventoryService.SetSlot(dbContext, character.ID.Value, prevItem);
 						}
@@ -305,22 +308,22 @@ namespace FishMMO.Server
 
 						dbTransaction.Commit();
 
-						conn.Broadcast(msg, true, Channel.Reliable);
+						Server.Broadcast(conn, msg, true, Channel.Reliable);
 					}
 					break;
 				case InventoryType.Equipment:
 					return;
 				case InventoryType.Bank:
-					if (character.BankController != null &&
-						character.BankController.TryGetItem(msg.inventoryIndex, out Item bankItem))
+					if (character.TryGet(out BankController bankController) &&
+						bankController.TryGetItem(msg.inventoryIndex, out Item bankItem))
 					{
-						if (!character.EquipmentController.Equip(bankItem, msg.inventoryIndex, character.BankController, (ItemSlot)msg.slot))
+						if (!equipmentController.Equip(bankItem, msg.inventoryIndex, bankController, (ItemSlot)msg.slot))
 						{
 							return;
 						}
 
 						// did we replace an already equipped item?
-						if (character.BankController.TryGetItem(msg.inventoryIndex, out Item prevItem))
+						if (bankController.TryGetItem(msg.inventoryIndex, out Item prevItem))
 						{
 							CharacterBankService.SetSlot(dbContext, character.ID.Value, prevItem);
 						}
@@ -335,7 +338,7 @@ namespace FishMMO.Server
 
 						dbTransaction.Commit();
 
-						conn.Broadcast(msg, true, Channel.Reliable);
+						Server.Broadcast(conn, msg, true, Channel.Reliable);
 					}
 					break;
 				default: return;
@@ -365,7 +368,7 @@ namespace FishMMO.Server
 			Character character = conn.FirstObject.GetComponent<Character>();
 			if (character == null ||
 				character.IsTeleporting ||
-				character.EquipmentController == null)
+				!character.TryGet(out EquipmentController equipmentController))
 			{
 				return;
 			}
@@ -373,13 +376,14 @@ namespace FishMMO.Server
 			switch (msg.toInventory)
 			{
 				case InventoryType.Inventory:
-					if (character.EquipmentController.TryGetItem(msg.slot, out Item toInventory))
+					if (character.TryGet(out InventoryController inventoryController) &&
+						equipmentController.TryGetItem(msg.slot, out Item toInventory))
 					{
 						// save the old slot index so we can delete the item
 						int oldSlot = toInventory.Slot;
 
 						// if we found the item we should unequip it
-						if (!character.EquipmentController.Unequip(character.InventoryController, msg.slot, out List<Item> modifiedItems))
+						if (!equipmentController.Unequip(inventoryController, msg.slot, out List<Item> modifiedItems))
 						{
 							return;
 						}
@@ -409,17 +413,18 @@ namespace FishMMO.Server
 
 						dbTransaction.Commit();
 
-						conn.Broadcast(msg, true, Channel.Reliable);
+						Server.Broadcast(conn, msg, true, Channel.Reliable);
 					}
 					break;
 				case InventoryType.Equipment:
 					break;
 				case InventoryType.Bank:
-					if (character.EquipmentController.TryGetItem(msg.slot, out Item toBank))
+					if (character.TryGet(out BankController bankController) &&
+						equipmentController.TryGetItem(msg.slot, out Item toBank))
 					{
 						int oldSlot = toBank.Slot;
 
-						if (!character.EquipmentController.Unequip(character.BankController, msg.slot, out List<Item> modifiedItems))
+						if (!equipmentController.Unequip(bankController, msg.slot, out List<Item> modifiedItems))
 						{
 							return;
 						}
@@ -449,7 +454,7 @@ namespace FishMMO.Server
 
 						dbTransaction.Commit();
 
-						conn.Broadcast(msg, true, Channel.Reliable);
+						Server.Broadcast(conn, msg, true, Channel.Reliable);
 					}
 					break;
 				default: return;
@@ -472,14 +477,15 @@ namespace FishMMO.Server
 
 			Character character = conn.FirstObject.GetComponent<Character>();
 			if (character != null &&
-				!character.IsTeleporting)
+				!character.IsTeleporting &&
+				character.TryGet(out BankController bankController))
 			{
-				Item item = character.BankController.RemoveItem(msg.slot);
+				Item item = bankController.RemoveItem(msg.slot);
 
 				// remove the item from the database
 				CharacterBankService.Delete(dbContext, character.ID.Value, item.Slot);
 
-				conn.Broadcast(msg, true, Channel.Reliable);
+				Server.Broadcast(conn, msg, true, Channel.Reliable);
 			}
 		}
 
@@ -504,7 +510,8 @@ namespace FishMMO.Server
 
 			Character character = conn.FirstObject.GetComponent<Character>();
 			if (character == null ||
-				character.IsTeleporting)
+				character.IsTeleporting ||
+				!character.TryGet(out BankController bankController))
 			{
 				return;
 			}
@@ -512,7 +519,8 @@ namespace FishMMO.Server
 			switch (msg.fromInventory)
 			{
 				case InventoryType.Inventory:
-					if (SwapContainerItems(dbContext, character.ID.Value, character.InventoryController, character.BankController, msg.from, msg.to,
+					if (character.TryGet(out InventoryController inventoryController) &&
+						SwapContainerItems(dbContext, character.ID.Value, inventoryController, bankController, msg.from, msg.to,
 					(db, id, a) =>
 					{
 						CharacterInventoryService.SetSlot(db, id, a);
@@ -529,7 +537,7 @@ namespace FishMMO.Server
 						dbTransaction.Commit();
 
 						// tell the client
-						conn.Broadcast(msg, true, Channel.Reliable);
+						Server.Broadcast(conn, msg, true, Channel.Reliable);
 					}
 					break;
 				case InventoryType.Equipment:
@@ -537,7 +545,7 @@ namespace FishMMO.Server
 				case InventoryType.Bank:
 					// swap the items in the bank
 					if (msg.to != msg.from &&
-						SwapContainerItems(dbContext, character.ID.Value, character.BankController, msg.from, msg.to, (db, id, i) =>
+						SwapContainerItems(dbContext, character.ID.Value, bankController, msg.from, msg.to, (db, id, i) =>
 					{
 						CharacterBankService.Update(db, id, i);
 					}))
@@ -545,7 +553,7 @@ namespace FishMMO.Server
 						dbTransaction.Commit();
 
 						// tell the client we succeeded
-						conn.Broadcast(msg, true, Channel.Reliable);
+						Server.Broadcast(conn, msg, true, Channel.Reliable);
 					}
 					break;
 				default: break;

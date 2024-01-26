@@ -6,13 +6,11 @@ using System;
 
 namespace FishMMO.Shared
 {
-	[RequireComponent(typeof(Character))]
-	public class TargetController : MonoBehaviour
+	public class TargetController : CharacterBehaviour
 	{
 		public const float MAX_TARGET_DISTANCE = 50.0f;
 		public const float TARGET_UPDATE_RATE = 0.05f;
 
-		public Character Character;
 		public LayerMask LayerMask;
 		public TargetInfo LastTarget;
 		public TargetInfo Current;
@@ -30,7 +28,7 @@ namespace FishMMO.Shared
 			targetLabel = null;
 		}
 
-		void OnDestroy()
+		public override void OnDestroying()
 		{
 			OnChangeTarget = null;
 			OnUpdateTarget = null;

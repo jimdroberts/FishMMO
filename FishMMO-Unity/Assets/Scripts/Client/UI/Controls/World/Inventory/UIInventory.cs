@@ -29,9 +29,10 @@ namespace FishMMO.Client
 
 		public override void OnPreSetCharacter()
 		{
-			if (Character != null)
+			if (Character != null &&
+				Character.TryGet(out InventoryController inventoryController))
 			{
-				Character.InventoryController.OnSlotUpdated -= OnInventorySlotUpdated;
+				inventoryController.OnSlotUpdated -= OnInventorySlotUpdated;
 			}
 		}
 
@@ -42,24 +43,24 @@ namespace FishMMO.Client
 			if (Character == null ||
 				content == null ||
 				buttonPrefab == null ||
-				Character.InventoryController == null)
+				!Character.TryGet(out InventoryController inventoryController))
 			{
 				return;
 			}
 
 			// destroy the old slots
-			Character.InventoryController.OnSlotUpdated -= OnInventorySlotUpdated;
+			inventoryController.OnSlotUpdated -= OnInventorySlotUpdated;
 			DestroySlots();
 
 			// generate new slots
 			inventorySlots = new List<UIInventoryButton>();
-			for (int i = 0; i < Character.InventoryController.Items.Count; ++i)
+			for (int i = 0; i < inventoryController.Items.Count; ++i)
 			{
 				UIInventoryButton button = Instantiate(buttonPrefab, content);
 				button.Character = Character;
 				button.ReferenceID = i;
 				button.Type = ReferenceButtonType.Inventory;
-				if (Character.InventoryController.TryGetItem(i, out Item item))
+				if (inventoryController.TryGetItem(i, out Item item))
 				{
 					if (button.Icon != null)
 					{
@@ -73,7 +74,7 @@ namespace FishMMO.Client
 				inventorySlots.Add(button);
 			}
 			// update our buttons when the inventory slots change
-			Character.InventoryController.OnSlotUpdated += OnInventorySlotUpdated;
+			inventoryController.OnSlotUpdated += OnInventorySlotUpdated;
 		}
 
 		public void OnInventorySlotUpdated(ItemContainer container, Item item, int inventoryIndex)

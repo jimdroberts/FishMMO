@@ -14,8 +14,8 @@ namespace FishMMO.Client
 		public override void OnPreSetCharacter()
 		{
 			if (Character != null &&
-				Character.AttributeController != null &&
-				Character.AttributeController.TryGetResourceAttribute(Template, out CharacterResourceAttribute attribute))
+				Character.TryGet(out CharacterAttributeController attributeController) &&
+				attributeController.TryGetResourceAttribute(Template, out CharacterResourceAttribute attribute))
 			{
 				attribute.OnAttributeUpdated -= CharacterAttribute_OnAttributeUpdated;
 			}
@@ -26,8 +26,8 @@ namespace FishMMO.Client
 			base.SetCharacter(character);
 
 			if (Character != null &&
-				Character.AttributeController != null &&
-				Character.AttributeController.TryGetResourceAttribute(Template, out CharacterResourceAttribute attribute))
+				Character.TryGet(out CharacterAttributeController attributeController) &&
+				attributeController.TryGetResourceAttribute(Template, out CharacterResourceAttribute attribute))
 			{
 				attribute.OnAttributeUpdated += CharacterAttribute_OnAttributeUpdated;
 			}
@@ -36,7 +36,8 @@ namespace FishMMO.Client
 		public void CharacterAttribute_OnAttributeUpdated(CharacterAttribute attribute)
 		{
 			if (Character != null &&
-				Character.AttributeController.TryGetResourceAttribute(Template, out CharacterResourceAttribute resource))
+				Character.TryGet(out CharacterAttributeController attributeController) && 
+				attributeController.TryGetResourceAttribute(Template, out CharacterResourceAttribute resource))
 			{
 				float value = resource.CurrentValue / resource.FinalValue;
 				if (slider != null) slider.value = value;

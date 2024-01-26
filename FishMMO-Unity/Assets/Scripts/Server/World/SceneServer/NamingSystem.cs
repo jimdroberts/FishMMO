@@ -103,7 +103,7 @@ namespace FishMMO.Server
 				name = name,
 			};
 
-			conn.Broadcast(msg, true, Channel.Reliable);
+			Server.Broadcast(conn, msg, true, Channel.Reliable);
 		}
 	}
 }

@@ -93,15 +93,16 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Load(NpgsqlDbContext dbContext, Character character)
 		{
-			if (character != null &&
-				character.PartyController != null)
+			if (character == null ||
+				!character.TryGet(out PartyController partyController))
 			{
-				var characterPartyEntity = dbContext.CharacterParties.FirstOrDefault(a => a.CharacterID == character.ID.Value);
-				if (characterPartyEntity != null)
-				{
-					character.PartyController.ID = characterPartyEntity.PartyID;
-					character.PartyController.Rank = (PartyRank)characterPartyEntity.Rank;
-				}
+				return;
+			}
+			var characterPartyEntity = dbContext.CharacterParties.FirstOrDefault(a => a.CharacterID == character.ID.Value);
+			if (characterPartyEntity != null)
+			{
+				partyController.ID = characterPartyEntity.PartyID;
+				partyController.Rank = (PartyRank)characterPartyEntity.Rank;
 			}
 		}
 

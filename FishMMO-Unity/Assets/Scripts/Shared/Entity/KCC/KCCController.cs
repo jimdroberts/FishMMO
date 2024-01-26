@@ -338,7 +338,7 @@ namespace FishMMO.Shared
 							float targetSpeed = StableMoveSpeedConstant;
 
 							if (Character != null &&
-								Character.AttributeController != null)
+								Character.TryGet(out CharacterAttributeController attributeController))
 							{
 								if (_isCrouching)
 								{
@@ -346,19 +346,19 @@ namespace FishMMO.Shared
 								}
 								else if (_sprintInputDown &&
 									RunSpeedTemplate != null &&
-									Character.AttributeController.TryGetAttribute(RunSpeedTemplate, out CharacterAttribute runSpeedModifier))
+									attributeController.TryGetAttribute(RunSpeedTemplate, out CharacterAttribute runSpeedModifier))
 								{
 									targetSpeed = StableSprintSpeedConstant * runSpeedModifier.FinalValueAsPct;
 								}
 								else if (MoveSpeedTemplate != null &&
-									Character.AttributeController.TryGetAttribute(MoveSpeedTemplate, out CharacterAttribute moveSpeedModifier))
+									attributeController.TryGetAttribute(MoveSpeedTemplate, out CharacterAttribute moveSpeedModifier))
 								{
 									targetSpeed = StableMoveSpeedConstant * moveSpeedModifier.FinalValueAsPct;
 								}
 
 								/*if (_swimming &&
 									SwimSpeedTemplate != null &&
-									Character.AttributeController.TryGetAttribute(SwimSpeedTemplate, out CharacterAttribute swimSpeed))
+									attributeController.TryGetAttribute(SwimSpeedTemplate, out CharacterAttribute swimSpeed))
 								{
 
 								}*/
@@ -420,23 +420,27 @@ namespace FishMMO.Shared
 								currentVelocity += addedVelocity;
 							}
 
-							// Gravity
-							if (GravityTemplate != null &&
-								Character.AttributeController.TryGetAttribute(GravityTemplate, out CharacterAttribute gravityModifier))
+							if (Character.TryGet(out CharacterAttributeController attributeController))
 							{
-								currentVelocity += GravityConstant * gravityModifier.FinalValueAsPct * deltaTime;
+								// Character Independant Gravity
+								if (GravityTemplate != null &&
+									attributeController.TryGetAttribute(GravityTemplate, out CharacterAttribute gravityModifier))
+								{
+									currentVelocity += GravityConstant * gravityModifier.FinalValueAsPct * deltaTime;
+								}
+
+								// Fast Fall
+								if (_isCrouching &&
+									FastFallSpeedTemplate != null &&
+									attributeController.TryGetAttribute(FastFallSpeedTemplate, out CharacterAttribute fastFallModifier))
+								{
+									currentVelocity.y += GravityConstant.y * fastFallModifier.FinalValueAsPct * deltaTime;
+								}
 							}
 							else
 							{
+								// Default Gravity
 								currentVelocity += GravityConstant * deltaTime;
-							}
-
-							// Fast Fall
-							if (_isCrouching &&
-								FastFallSpeedTemplate != null &&
-								Character.AttributeController.TryGetAttribute(FastFallSpeedTemplate, out CharacterAttribute fastFallModifier))
-							{
-								currentVelocity.y += GravityConstant.y * fastFallModifier.FinalValueAsPct * deltaTime;
 							}
 
 							// Drag
@@ -464,7 +468,8 @@ namespace FishMMO.Shared
 								// Add to the return velocity and reset jump state
 								float jumpSpeed = StableJumpUpSpeedConstant;
 								if (JumpSpeedTemplate != null &&
-									Character.AttributeController.TryGetAttribute(JumpSpeedTemplate, out CharacterAttribute jumpSpeedModifier))
+									Character.TryGet(out CharacterAttributeController attributeController) &&
+									attributeController.TryGetAttribute(JumpSpeedTemplate, out CharacterAttribute jumpSpeedModifier))
 								{
 									jumpSpeed *= jumpSpeedModifier.FinalValueAsPct;
 								}

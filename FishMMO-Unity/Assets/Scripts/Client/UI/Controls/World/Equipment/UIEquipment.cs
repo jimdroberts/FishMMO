@@ -94,16 +94,16 @@ namespace FishMMO.Client
 		{
 			if (Character != null)
 			{
-				if (Character.AttributeController != null)
+				if (Character.TryGet(out CharacterAttributeController attributeController))
 				{
-					foreach (CharacterAttribute attribute in Character.AttributeController.Attributes.Values)
+					foreach (CharacterAttribute attribute in attributeController.Attributes.Values)
 					{
 						attribute.OnAttributeUpdated -= OnAttributeUpdated;
 					}
 				}
-				if (Character.EquipmentController != null)
+				if (Character.TryGet(out EquipmentController equipmentController))
 				{
-					Character.EquipmentController.OnSlotUpdated -= OnEquipmentSlotUpdated;
+					equipmentController.OnSlotUpdated -= OnEquipmentSlotUpdated;
 				}
 			}
 		}
@@ -115,29 +115,29 @@ namespace FishMMO.Client
 
 			if (buttons != null &&
 				Character != null &&
-				Character.EquipmentController != null)
+				Character.TryGet(out EquipmentController equipmentController))
 			{
-				Character.EquipmentController.OnSlotUpdated -= OnEquipmentSlotUpdated;
+				equipmentController.OnSlotUpdated -= OnEquipmentSlotUpdated;
 				foreach (UIEquipmentButton button in buttons)
 				{
 					button.Character = Character;
 					if (Character != null)
 					{
-						SetButtonSlot(Character.EquipmentController, button);
+						SetButtonSlot(equipmentController, button);
 					}
 				}
-				Character.EquipmentController.OnSlotUpdated += OnEquipmentSlotUpdated;
+				equipmentController.OnSlotUpdated += OnEquipmentSlotUpdated;
 			}
 
 			if (Character != null &&
-				Character.AttributeController != null)
+				Character.TryGet(out CharacterAttributeController attributeController))
 			{
 				List<CharacterAttribute> resourceAttributes = new List<CharacterAttribute>();
 				List<CharacterAttribute> damageAttributes = new List<CharacterAttribute>();
 				List<CharacterAttribute> resistanceAttributes = new List<CharacterAttribute>();
 				List<CharacterAttribute> coreAttributes = new List<CharacterAttribute>();
 
-				foreach (CharacterAttribute attribute in Character.AttributeController.Attributes.Values)
+				foreach (CharacterAttribute attribute in attributeController.Attributes.Values)
 				{
 					if (attribute is CharacterResourceAttribute || attribute.Template.Name.Contains("Regeneration"))
 					{

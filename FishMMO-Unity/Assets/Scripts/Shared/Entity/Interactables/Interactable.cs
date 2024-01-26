@@ -2,6 +2,9 @@
 using FishNet.Transporting;
 using FishNet.Object;
 using UnityEngine;
+#if !UNITY_SERVER
+using static FishMMO.Client.Client;
+#endif
 
 namespace FishMMO.Shared
 {
@@ -65,7 +68,7 @@ namespace FishMMO.Shared
 			{
 				character.NextInteractTime = DateTime.UtcNow.AddMilliseconds(INTERACT_RATE_LIMIT);
 #if !UNITY_SERVER
-				ClientManager.Broadcast(new InteractableBroadcast()
+				Broadcast(new InteractableBroadcast()
 				{
 					interactableID = ID,
 				}, Channel.Reliable);

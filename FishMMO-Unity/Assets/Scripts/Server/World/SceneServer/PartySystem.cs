@@ -181,12 +181,13 @@ namespace FishMMO.Server
 					{
 						if (characterSystem.CharactersByID.TryGetValue(entity.CharacterID, out Character character))
 						{
-							if (character.PartyController.ID < 1)
+							if (!character.TryGet(out PartyController partyController) ||
+								partyController.ID < 1)
 							{
 								continue;
 							}
-							character.PartyController.Rank = (PartyRank)entity.Rank;
-							character.Owner.Broadcast(partyAddBroadcast, true, Channel.Reliable);
+							partyController.Rank = (PartyRank)entity.Rank;
+							Server.Broadcast(character.Owner, partyAddBroadcast, true, Channel.Reliable);
 						}
 					}
 				}
@@ -228,10 +229,10 @@ namespace FishMMO.Server
 										   partyController.Character.ID.Value,
 										   partyController.ID,
 										   partyController.Rank,
-										   partyController.Character.AttributeController.GetResourceAttributeCurrentPercentage(HealthTemplate));
+										   partyController.Character.TryGet(out CharacterAttributeController attributeController) ? attributeController.GetResourceAttributeCurrentPercentage(HealthTemplate) : 0.0f);
 
 				// tell the character we made their party successfully
-				conn.Broadcast(new PartyCreateBroadcast()
+				Server.Broadcast(conn, new PartyCreateBroadcast()
 				{
 					partyID = newParty.ID,
 					location = partyController.gameObject.scene.name,
@@ -277,7 +278,7 @@ namespace FishMMO.Server
 
 				// add to our list of pending invitations... used for validation when accepting/declining a party invite
 				pendingInvitations.Add(targetCharacter.ID.Value, inviter.ID);
-				targetCharacter.Owner.Broadcast(new PartyInviteBroadcast()
+				Server.Broadcast(targetCharacter.Owner, new PartyInviteBroadcast()
 				{
 					inviterCharacterID = inviter.ID,
 					targetCharacterID = targetCharacter.ID.Value
@@ -313,6 +314,8 @@ namespace FishMMO.Server
 				if (members != null &&
 					members.Count < MaxPartySize)
 				{
+					bool attributesExist = partyController.Character.TryGet(out CharacterAttributeController attributeController);
+
 					partyController.ID = pendingPartyID;
 					partyController.Rank = PartyRank.Member;
 
@@ -320,18 +323,18 @@ namespace FishMMO.Server
 											   partyController.Character.ID.Value,
 											   partyController.ID,
 											   partyController.Rank,
-											   partyController.Character.AttributeController.GetResourceAttributeCurrentPercentage(HealthTemplate));
+											   attributesExist ? attributeController.GetResourceAttributeCurrentPercentage(HealthTemplate) : 1.0f);
 
 					// tell the other servers to update their party lists
 					PartyUpdateService.Save(dbContext, pendingPartyID);
 
 					// tell the new member they joined immediately, other clients will catch up with the PartyUpdate pass
-					conn.Broadcast(new PartyAddBroadcast()
+					Server.Broadcast(conn, new PartyAddBroadcast()
 					{
 						partyID = pendingPartyID,
 						characterID = partyController.Character.ID.Value,
 						rank = PartyRank.Member,
-						healthPCT = partyController.Character.AttributeController.GetResourceAttributeCurrentPercentage(HealthTemplate),
+						healthPCT = attributesExist ? attributeController.GetResourceAttributeCurrentPercentage(HealthTemplate) : 1.0f,
 					}, true, Channel.Reliable);
 				}
 			}
@@ -421,7 +424,7 @@ namespace FishMMO.Server
 				partyController.Rank = PartyRank.None;
 
 				// tell character that they left the party immediately, other clients will catch up with the PartyUpdate pass
-				conn.Broadcast(new PartyLeaveBroadcast(), true, Channel.Reliable);
+				Server.Broadcast(conn, new PartyLeaveBroadcast(), true, Channel.Reliable);
 			}
 		}
 

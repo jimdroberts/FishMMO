@@ -172,7 +172,7 @@ namespace FishMMO.Client
 				}
 				ChatBroadcast message = new ChatBroadcast() { text = input };
 				// send the message to the server
-				Client.NetworkManager.ClientManager.Broadcast(message, Channel.Reliable);
+				Client.Broadcast(message, Channel.Reliable);
 			}
 			InputField.text = "";
 		}

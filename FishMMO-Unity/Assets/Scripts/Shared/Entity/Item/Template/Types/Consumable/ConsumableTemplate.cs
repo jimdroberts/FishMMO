@@ -12,16 +12,18 @@
 				   item != null &&
 				   item.IsStackable &&
 				   item.Stackable.Amount > 1 &&
-				   !character.CooldownController.IsOnCooldown(ConsumableType.ToString());
+				   character.TryGet(out CooldownController cooldownController) &&
+				   !cooldownController.IsOnCooldown(ConsumableType.ToString());
 		}
 
 		public virtual bool Invoke(Character character, Item item)
 		{
-			if (CanConsume(character, item))
+			if (CanConsume(character, item) &&
+				character.TryGet(out CooldownController cooldownController))
 			{
 				if (Cooldown > 0.0f)
 				{
-					character.CooldownController.AddCooldown(ConsumableType.ToString(), new CooldownInstance(Cooldown));
+					cooldownController.AddCooldown(ConsumableType.ToString(), new CooldownInstance(Cooldown));
 				}
 				if (item.IsStackable && item.Stackable.Amount > ChargeCost)
 				{

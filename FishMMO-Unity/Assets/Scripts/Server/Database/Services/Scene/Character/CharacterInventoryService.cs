@@ -82,7 +82,8 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Save(NpgsqlDbContext dbContext, Character character)
 		{
-			if (character == null)
+			if (character == null ||
+				!character.TryGet(out InventoryController inventoryController))
 			{
 				return;
 			}
@@ -90,7 +91,7 @@ namespace FishMMO.Server.DatabaseServices
 			var dbInventoryItems = dbContext.CharacterInventoryItems.Where(c => c.CharacterID == character.ID.Value)
 																	.ToDictionary(k => k.Slot);
 
-			foreach (Item item in character.InventoryController.Items)
+			foreach (Item item in inventoryController.Items)
 			{
 				if (dbInventoryItems.TryGetValue(item.Slot, out CharacterInventoryEntity dbItem))
 				{
@@ -162,6 +163,11 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Load(NpgsqlDbContext dbContext, Character character)
 		{
+			if (character == null ||
+				!character.TryGet(out InventoryController inventoryController))
+			{
+				return;
+			}
 			var dbInventoryItems = dbContext.CharacterInventoryItems.Where(c => c.CharacterID == character.ID.Value);
 			foreach (CharacterInventoryEntity dbItem in dbInventoryItems)
 			{
@@ -175,7 +181,7 @@ namespace FishMMO.Server.DatabaseServices
 				{
 					return;
 				}
-				character.InventoryController.SetItemSlot(item, dbItem.Slot);
+				inventoryController.SetItemSlot(item, dbItem.Slot);
 			};
 		}
 	}

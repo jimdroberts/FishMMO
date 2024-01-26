@@ -128,7 +128,7 @@ namespace FishMMO.Client
 					if (details.InitialSpawnPositions.TryGetValue(initialSpawnLocationNames[selectedSpawnPosition], out CharacterInitialSpawnPosition spawnPosition))
 					{
 						// create character
-						Client.NetworkManager.ClientManager.Broadcast(new CharacterCreateBroadcast()
+						Client.Broadcast(new CharacterCreateBroadcast()
 						{
 							characterName = characterName,
 							raceIndex = raceIndex,

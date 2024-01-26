@@ -90,7 +90,7 @@ namespace FishMMO.Client
 					//UnityEngine.Debug.Log("Requesting Name for: " + id);
 
 					// send the request to the server to get a name
-					Client.NetworkManager.ClientManager.Broadcast(new NamingBroadcast()
+					Client.Broadcast(new NamingBroadcast()
 					{
 						type = type,
 						id = id,

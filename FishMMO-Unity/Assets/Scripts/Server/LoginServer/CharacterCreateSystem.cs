@@ -50,7 +50,7 @@ namespace FishMMO.Server
 				if (!Constants.Authentication.IsAllowedCharacterName(msg.characterName))
 				{
 					// invalid character name
-					conn.Broadcast(new CharacterCreateResultBroadcast()
+					Server.Broadcast(conn, new CharacterCreateResultBroadcast()
 					{
 						result = CharacterCreateResult.InvalidCharacterName,
 					}, true, Channel.Reliable);
@@ -68,7 +68,7 @@ namespace FishMMO.Server
 				if (characterCount >= MaxCharacters)
 				{
 					// too many characters
-					conn.Broadcast(new CharacterCreateResultBroadcast()
+					Server.Broadcast(conn, new CharacterCreateResultBroadcast()
 					{
 						result = CharacterCreateResult.TooMany,
 					}, true, Channel.Reliable);
@@ -78,7 +78,7 @@ namespace FishMMO.Server
 				if (character != null)
 				{
 					// character name already taken
-					conn.Broadcast(new CharacterCreateResultBroadcast()
+					Server.Broadcast(conn, new CharacterCreateResultBroadcast()
 					{
 						result = CharacterCreateResult.CharacterNameTaken,
 					}, true, Channel.Reliable);
@@ -90,7 +90,7 @@ namespace FishMMO.Server
 					WorldSceneDetailsCache.Scenes.Count < 1)
 				{
 					// failed to find spawn positions to validate with
-					conn.Broadcast(new CharacterCreateResultBroadcast()
+					Server.Broadcast(conn, new CharacterCreateResultBroadcast()
 					{
 						result = CharacterCreateResult.InvalidSpawn,
 					}, true, Channel.Reliable);
@@ -155,13 +155,13 @@ namespace FishMMO.Server
 						dbContext.SaveChanges();
 
 						// send success to the client
-						conn.Broadcast(new CharacterCreateResultBroadcast()
+						Server.Broadcast(conn, new CharacterCreateResultBroadcast()
 						{
 							result = CharacterCreateResult.Success,
 						}, true, Channel.Reliable);
 
 						// send the create broadcast back to the client
-						conn.Broadcast(msg, true, Channel.Reliable);
+						Server.Broadcast(conn, msg, true, Channel.Reliable);
 					}
 				}
 			}

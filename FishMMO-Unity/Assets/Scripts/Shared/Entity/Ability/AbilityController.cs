@@ -1,7 +1,6 @@
 ﻿#if !UNITY_SERVER
 using FishMMO.Client;
 #endif
-using FishNet;
 using FishNet.Object;
 using FishNet.Object.Prediction;
 using FishNet.Transporting;
@@ -11,8 +10,7 @@ using UnityEngine;
 
 namespace FishMMO.Shared
 {
-	[RequireComponent(typeof(Character))]
-	public class AbilityController : NetworkBehaviour
+	public class AbilityController : CharacterBehaviour
 	{
 		public const long NO_ABILITY = 0;
 
@@ -24,7 +22,6 @@ namespace FishMMO.Shared
 		//private Random currentSeed = 12345;
 
 		public Transform AbilitySpawner;
-		public Character Character;
 		public CharacterAttributeTemplate BloodResourceTemplate;
 		public CharacterAttributeTemplate AttackSpeedReductionTemplate;
 		public AbilityEvent BloodResourceConversionTemplate;
@@ -244,18 +241,22 @@ namespace FishMMO.Shared
 						}
 						// channeled abilities like beam effects or a charge rush that are continuously updating or spawning objects should be handled here
 						else if (ChanneledTemplate != null &&
-								 currentAbility.HasAbilityEvent(ChanneledTemplate.ID))
+								 currentAbility.HasAbilityEvent(ChanneledTemplate.ID) &&
+								 Character.TryGet(out TargetController t))
 						{
 							// get target info
-							TargetInfo targetInfo = Character.TargetController.UpdateTarget(Character.CharacterController.VirtualCameraPosition,
-																							Character.CharacterController.VirtualCameraRotation * Vector3.forward,
-																							currentAbility.Range);
+							TargetInfo targetInfo = t.UpdateTarget(Character.CharacterController.VirtualCameraPosition,
+																				  Character.CharacterController.VirtualCameraRotation * Vector3.forward,
+																				  currentAbility.Range);
 
 							// spawn the ability object
 							if (AbilityObject.TrySpawn(currentAbility, Character, this, AbilitySpawner, targetInfo))
 							{
-								// channeled abilities consume resources during activation
-								currentAbility.ConsumeResources(Character.AttributeController, BloodResourceConversionTemplate, BloodResourceTemplate);
+								if (Character.TryGet(out CharacterAttributeController attributeController))
+								{
+									// channeled abilities consume resources during activation
+									currentAbility.ConsumeResources(attributeController, BloodResourceConversionTemplate, BloodResourceTemplate);
+								}
 							}
 						}
 					}
@@ -272,18 +273,22 @@ namespace FishMMO.Shared
 				}
 
 				// complete the final activation of the ability
-				if (CanActivate(currentAbility))
+				if (CanActivate(currentAbility) &&
+					Character.TryGet(out TargetController tc))
 				{
 					// get target info
-					TargetInfo targetInfo = Character.TargetController.UpdateTarget(Character.CharacterController.VirtualCameraPosition,
+					TargetInfo targetInfo = tc.UpdateTarget(Character.CharacterController.VirtualCameraPosition,
 																					Character.CharacterController.VirtualCameraRotation * Vector3.forward,
 																					currentAbility.Range);
 
 					// spawn the ability object
 					if (AbilityObject.TrySpawn(currentAbility, Character, this, AbilitySpawner, targetInfo))
 					{
-						// consume resources
-						currentAbility.ConsumeResources(Character.AttributeController, BloodResourceConversionTemplate, BloodResourceTemplate);
+						if (Character.TryGet(out CharacterAttributeController attributeController))
+						{
+							// consume resources
+							currentAbility.ConsumeResources(attributeController, BloodResourceConversionTemplate, BloodResourceTemplate);
+						}
 
 						// add ability to cooldowns
 						AddCooldown(currentAbility);
@@ -322,10 +327,11 @@ namespace FishMMO.Shared
 
 		public float CalculateSpeedReduction(CharacterAttributeTemplate attribute)
 		{
-			if (attribute != null)
+			if (attribute != null &&
+				Character.TryGet(out CharacterAttributeController attributeController))
 			{
 				CharacterAttribute speedReduction;
-				if (Character.AttributeController.TryGetAttribute(attribute.ID, out speedReduction))
+				if (attributeController.TryGetAttribute(attribute.ID, out speedReduction))
 				{
 					return 1.0f - ((speedReduction.FinalValueAsPct).Clamp(0.0f, 1.0f));
 				}
@@ -364,7 +370,8 @@ namespace FishMMO.Shared
 		{
 			return CanManipulate() &&
 				   KnownAbilities.TryGetValue(ability.ID, out Ability knownAbility) &&
-				   !Character.CooldownController.IsOnCooldown(knownAbility.Template.Name) &&
+				   Character.TryGet(out CooldownController cooldownController) &&
+				   !cooldownController.IsOnCooldown(knownAbility.Template.Name) &&
 				   knownAbility.MeetsRequirements(Character) &&
 				   knownAbility.HasResource(Character, BloodResourceConversionTemplate, BloodResourceTemplate);
 		}
@@ -383,12 +390,13 @@ namespace FishMMO.Shared
 		internal void AddCooldown(Ability ability)
 		{
 			AbilityTemplate currentAbilityTemplate = ability.Template;
-			if (ability.Cooldown > 0.0f)
+			if (ability.Cooldown > 0.0f &&
+				Character.TryGet(out CooldownController cooldownController))
 			{
 				float cooldownReduction = CalculateSpeedReduction(currentAbilityTemplate.CooldownReductionAttribute);
 				float cooldown = ability.Cooldown * cooldownReduction;
 
-				Character.CooldownController.AddCooldown(currentAbilityTemplate.Name, new CooldownInstance(cooldown));
+				cooldownController.AddCooldown(currentAbilityTemplate.Name, new CooldownInstance(cooldown));
 			}
 		}
 

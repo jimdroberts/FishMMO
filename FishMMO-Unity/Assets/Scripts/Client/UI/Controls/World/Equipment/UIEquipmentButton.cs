@@ -17,30 +17,35 @@ namespace FishMMO.Client
 						int referenceID = (int)dragObject.ReferenceID;
 
 						// we check the hotkey type because we can only equip items from the inventory
-						if (dragObject.Type == ReferenceButtonType.Inventory)
+						if (dragObject.Type == ReferenceButtonType.Inventory &&
+							Character.TryGet(out InventoryController inventoryController))
 						{
 							// get the item from the Inventory
-							Item item = Character.InventoryController.Items[referenceID];
-							if (item != null)
+							Item item = inventoryController.Items[referenceID];
+							if (item != null &&
+								Character.TryGet(out EquipmentController equipmentController))
 							{
-								Character.EquipmentController.SendEquipRequest(referenceID, (byte)ItemSlotType, InventoryType.Inventory);
+								equipmentController.SendEquipRequest(referenceID, (byte)ItemSlotType, InventoryType.Inventory);
 							}
 						}
 						// taking an item from the bank and putting it in this equipment slot
-						else if (dragObject.Type == ReferenceButtonType.Bank)
+						else if (dragObject.Type == ReferenceButtonType.Bank &&
+								 Character.TryGet(out BankController bankController))
 						{
 							// get the item from the Inventory
-							Item item = Character.BankController.Items[referenceID];
-							if (item != null)
+							Item item = bankController.Items[referenceID];
+							if (item != null &&
+								Character.TryGet(out EquipmentController equipmentController))
 							{
-								Character.EquipmentController.SendEquipRequest(referenceID, (byte)ItemSlotType, InventoryType.Bank);
+								equipmentController.SendEquipRequest(referenceID, (byte)ItemSlotType, InventoryType.Bank);
 							}
 						}
 
 						// clear the drag object no matter what
 						dragObject.Clear();
 					}
-					else if (!Character.EquipmentController.IsSlotEmpty((byte)ItemSlotType))
+					else if (Character.TryGet(out EquipmentController equipmentController) &&
+							 !equipmentController.IsSlotEmpty((byte)ItemSlotType))
 					{
 						dragObject.SetReference(Icon.sprite, ReferenceID, Type);
 					}
@@ -54,12 +59,14 @@ namespace FishMMO.Client
 			{
 				dragObject.Clear();
 			}
-			if (Character != null && Type == ReferenceButtonType.Equipment)
+			if (Character != null &&
+				Type == ReferenceButtonType.Equipment &&
+				Character.TryGet(out EquipmentController equipmentController))
 			{
 				Clear();
 
 				// right clicking an item will attempt to send it to the inventory
-				Character.EquipmentController.SendUnequipRequest((byte)ItemSlotType, InventoryType.Inventory);
+				equipmentController.SendUnequipRequest((byte)ItemSlotType, InventoryType.Inventory);
 			}
 		}
 

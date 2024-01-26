@@ -69,7 +69,7 @@ namespace FishMMO.Server
 				CharacterFriendService.Save(dbContext, friendController.Character.ID.Value, friendEntity.ID);
 
 				// tell the character they added a new friend!
-				conn.Broadcast(new FriendAddBroadcast()
+				Server.Broadcast(conn, new FriendAddBroadcast()
 				{
 					characterID = friendEntity.ID,
 					online = friendEntity.Online,
@@ -103,7 +103,7 @@ namespace FishMMO.Server
 				if (CharacterFriendService.Delete(dbContext, friendController.Character.ID.Value, msg.characterID))
 				{
 					// tell the character they removed a friend
-					conn.Broadcast(new FriendRemoveBroadcast()
+					Server.Broadcast(conn, new FriendRemoveBroadcast()
 					{
 						characterID = msg.characterID,
 					}, true, Channel.Reliable);

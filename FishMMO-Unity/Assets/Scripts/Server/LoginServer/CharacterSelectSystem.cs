@@ -60,7 +60,7 @@ namespace FishMMO.Server
 					characters = characterList
 				};
 
-				conn.Broadcast(characterListMsg, true, Channel.Reliable);
+				Server.Broadcast(conn, characterListMsg, true, Channel.Reliable);
 			}
 		}
 
@@ -76,7 +76,7 @@ namespace FishMMO.Server
 					characterName = msg.characterName,
 				};
 
-				conn.Broadcast(charDeleteMsg, true, Channel.Reliable);
+				Server.Broadcast(conn, charDeleteMsg, true, Channel.Reliable);
 			}
 		}
 
@@ -96,7 +96,7 @@ namespace FishMMO.Server
 					{
 						// send the client the world server list
 						List<WorldServerDetails> worldServerList = WorldServerService.GetServerList(dbContext);
-						conn.Broadcast(new ServerListBroadcast()
+						Server.Broadcast(conn, new ServerListBroadcast()
 						{
 							servers = worldServerList
 						}, true, Channel.Reliable);

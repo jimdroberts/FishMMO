@@ -58,22 +58,27 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Save(NpgsqlDbContext dbContext, Character character)
 		{
+			if (character == null ||
+				!character.TryGet(out GuildController guildController))
+			{
+				return;
+			}
 			var characterGuildEntity = dbContext.CharacterGuilds.FirstOrDefault(a => a.CharacterID == character.ID.Value);
 			if (characterGuildEntity == null)
 			{
 				characterGuildEntity = new CharacterGuildEntity()
 				{
 					CharacterID = character.ID.Value,
-					GuildID = character.GuildController.ID.Value,
-					Rank = (byte)character.GuildController.Rank,
+					GuildID = guildController.ID.Value,
+					Rank = (byte)guildController.Rank,
 					Location = character.gameObject.scene.name,
 				};
 				dbContext.CharacterGuilds.Add(characterGuildEntity);
 			}
 			else
 			{
-				characterGuildEntity.GuildID = character.GuildController.ID.Value;
-				characterGuildEntity.Rank = (byte)character.GuildController.Rank;
+				characterGuildEntity.GuildID = guildController.ID.Value;
+				characterGuildEntity.Rank = (byte)guildController.Rank;
 				characterGuildEntity.Location = character.gameObject.scene.name;
 			}
 			dbContext.SaveChanges();
@@ -121,14 +126,16 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Load(NpgsqlDbContext dbContext, Character character)
 		{
-			if (character.GuildController != null)
+			if (character == null ||
+				!character.TryGet(out GuildController guildController))
 			{
-				var characterGuildEntity = dbContext.CharacterGuilds.FirstOrDefault(a => a.CharacterID == character.ID.Value);
-				if (characterGuildEntity != null)
-				{
-					character.GuildController.ID.Value = characterGuildEntity.GuildID;
-					character.GuildController.Rank = (GuildRank)characterGuildEntity.Rank;
-				}
+				return;
+			}
+			var characterGuildEntity = dbContext.CharacterGuilds.FirstOrDefault(a => a.CharacterID == character.ID.Value);
+			if (characterGuildEntity != null)
+			{
+				guildController.ID.Value = characterGuildEntity.GuildID;
+				guildController.Rank = (GuildRank)characterGuildEntity.Rank;
 			}
 		}
 

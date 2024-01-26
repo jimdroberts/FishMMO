@@ -1,17 +1,13 @@
 ﻿#if !UNITY_SERVER
 using FishMMO.Client;
 #endif
-using FishNet.Object;
 using System;
 using UnityEngine;
 
 namespace FishMMO.Shared
 {
-	[RequireComponent(typeof(Character))]
-	public class CharacterDamageController : NetworkBehaviour, IDamageable, IHealable
+	public class CharacterDamageController : CharacterBehaviour, IDamageable, IHealable
 	{
-		public Character Character;
-
 		public bool Immortal = false;
 
 		[Tooltip("The resource attribute the damage will be applied to.")]
@@ -41,7 +37,8 @@ namespace FishMMO.Shared
 		{
 			base.OnStartClient();
 			if (ResourceAttribute == null ||
-				!Character.AttributeController.TryGetResourceAttribute(ResourceAttribute.ID, out this.resourceInstance))
+				!Character.TryGet(out CharacterAttributeController attributeController) ||
+				!attributeController.TryGetResourceAttribute(ResourceAttribute.ID, out this.resourceInstance))
 			{
 				throw new UnityException("Character Damage Controller ResourceAttribute is missing");
 			}
@@ -76,10 +73,12 @@ namespace FishMMO.Shared
 			const int MIN_DAMAGE = 0;
 			const int MAX_DAMAGE = 999999;
 
-			if (target == null || damageAttribute == null)
+			if (target == null ||
+				!target.TryGet(out CharacterAttributeController attributeController) ||
+				damageAttribute == null)
 				return 0;
 
-			if (target.AttributeController.TryGetAttribute(damageAttribute.Resistance.ID, out CharacterAttribute resistance))
+			if (attributeController.TryGetAttribute(damageAttribute.Resistance.ID, out CharacterAttribute resistance))
 			{
 				amount = (amount - resistance.FinalValue).Clamp(MIN_DAMAGE, MAX_DAMAGE);
 			}
@@ -102,14 +101,14 @@ namespace FishMMO.Shared
 				}
 				resourceInstance.Consume(amount);
 
-				if (attacker.AchievementController != null)
+				if (attacker.TryGet(out AchievementController attackerAchievementController))
 				{
-					attacker.AchievementController.Increment(DamageAchievementTemplate, (uint)amount);
+					attackerAchievementController.Increment(DamageAchievementTemplate, (uint)amount);
 				}
 				
-				if (Character.AchievementController != null)
+				if (Character.TryGet(out AchievementController defenderAchievementController))
 				{
-					Character.AchievementController.Increment(DamagedAchievementTemplate, (uint)amount);
+					defenderAchievementController.Increment(DamagedAchievementTemplate, (uint)amount);
 				}
 
 #if !UNITY_SERVER
@@ -131,8 +130,16 @@ namespace FishMMO.Shared
 
 		public void Kill(Character killer)
 		{
-			killer.AchievementController.Increment(KillAchievementTemplate, 1);
-			Character.AchievementController.Increment(KilledAchievementTemplate, 1);
+			if (killer != null &&
+				killer.TryGet(out AchievementController killerAchievementController))
+			{
+				killerAchievementController.Increment(KillAchievementTemplate, 1);
+			}
+			if (Character != null &&
+				Character.TryGet(out AchievementController defenderAchievementController))
+			{
+				defenderAchievementController.Increment(KilledAchievementTemplate, 1);
+			}
 
 			//UILabel3D.Create("DEAD!", 32, Color.red, true, transform);
 
@@ -195,14 +202,23 @@ namespace FishMMO.Shared
 			if (resourceInstance != null && resourceInstance.CurrentValue > 0.0f)
 			{
 				resourceInstance.Gain(amount);
-
-				healer.AchievementController.Increment(HealAchievementTemplate, (uint)amount);
-				Character.AchievementController.Increment(HealedAchievementTemplate, (uint)amount);
+				
+				if (healer != null &&
+					healer.TryGet(out AchievementController healerAchievementController))
+				{
+					healerAchievementController.Increment(HealAchievementTemplate, (uint)amount);
+				}
+				if (Character != null &&
+					Character.TryGet(out AchievementController healedAchievementController)) 
+				{
+					healedAchievementController.Increment(HealedAchievementTemplate, (uint)amount);
+				}
 
 #if !UNITY_SERVER
-				if (ShowHeals)
+				if (Character != null &&
+					ShowHeals)
 				{
-					Vector3 displayPos = Character.transform.position;
+					Vector3 displayPos = Character.Transform.position;
 					displayPos.y += Character.CharacterController.FullCapsuleHeight;
 					OnHealedDisplay?.Invoke(amount.ToString(), displayPos, new Color(128.0f, 255.0f, 128.0f), 10.0f, 10.0f, false);
 				}

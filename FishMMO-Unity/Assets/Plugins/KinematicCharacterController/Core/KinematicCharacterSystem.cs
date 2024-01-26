@@ -37,7 +37,8 @@ namespace KinematicCharacterController
 
                 GameObject.DontDestroyOnLoad(systemGameObject);
             }
-        }
+			Debug.Log("KinematicCharacterSystem: Initialized");
+		}
 
         /// <summary>
         /// Gets the KinematicCharacterSystem instance if any

@@ -72,27 +72,37 @@ namespace FishMMO.Server
 				{
 					nextOutOfBoundsCheck = OutOfBoundsCheckRate;
 
-					// TODO: Should the character be doing this and more often?
-					// They'd need a cached world boundaries to check themselves against
-					// which would prevent the need to do all of this lookup stuff.
-					foreach (Character character in ConnectionCharacters.Values)
+					if (sceneServerSystem.WorldSceneDetailsCache != null &&
+						ConnectionCharacters != null)
 					{
-						if(sceneServerSystem.WorldSceneDetailsCache.Scenes.TryGetValue(character.SceneName.Value, out WorldSceneDetails details))
+						// TODO: Should the character be doing this and more often?
+						// They'd need a cached world boundaries to check themselves against
+						// which would prevent the need to do all of this lookup stuff.
+						foreach (Character character in ConnectionCharacters.Values)
 						{
-							// Check if they are within some bounds, if not we need to move them to a respawn location!
-							// TODO: Try to prevent combat escape, maybe this needs to be handled on the game design level?
-							if(!details.Boundaries.PointContainedInBoundaries(character.Transform.position))
+							if (character == null ||
+								string.IsNullOrWhiteSpace(character.SceneName.Value))
 							{
-								RespawnPosition spawnPoint = GetRandomRespawnPoint(details.RespawnPositions);
+								continue;
+							}
 
-								if (spawnPoint == null ||
-									character == null ||
-									character.Motor == null)
+							if (sceneServerSystem.WorldSceneDetailsCache.Scenes.TryGetValue(character.SceneName.Value, out WorldSceneDetails details))
+							{
+								// Check if they are within some bounds, if not we need to move them to a respawn location!
+								// TODO: Try to prevent combat escape, maybe this needs to be handled on the game design level?
+								if (!details.Boundaries.PointContainedInBoundaries(character.Transform.position))
 								{
-									continue;
-								}
+									RespawnPosition spawnPoint = GetRandomRespawnPoint(details.RespawnPositions);
 
-								character.Motor.SetPositionAndRotationAndVelocity(spawnPoint.Position, spawnPoint.Rotation, Vector3.zero);
+									if (spawnPoint == null ||
+										character == null ||
+										character.Motor == null)
+									{
+										continue;
+									}
+
+									character.Motor.SetPositionAndRotationAndVelocity(spawnPoint.Position, spawnPoint.Rotation, Vector3.zero);
+								}
 							}
 						}
 					}
@@ -200,9 +210,9 @@ namespace FishMMO.Server
 					}
 
 					// character becomes immortal on disconnect and mortal when fully loaded into the scene
-					if (character.DamageController != null)
+					if (character.TryGet(out CharacterDamageController damageController))
 					{
-						character.DamageController.Immortal = true;
+						damageController.Immortal = true;
 					}
 
 					// save the character and set online status to false
@@ -262,7 +272,7 @@ namespace FishMMO.Server
 						if (worldServer != null)
 						{
 							// Scene loading is the responsibility of the world server, send them over there to reconnect to a scene server
-							conn.Broadcast(new SceneWorldReconnectBroadcast()
+							Server.Broadcast(conn, new SceneWorldReconnectBroadcast()
 							{
 								address = worldServer.Address,
 								port = worldServer.Port
@@ -318,9 +328,9 @@ namespace FishMMO.Server
 				characters[character.ID.Value] = character;
 
 				// character becomes immortal on disconnect and mortal when loaded into the scene
-				if (character.DamageController != null)
+				if (character.TryGet(out CharacterDamageController damageController))
 				{
-					character.DamageController.Immortal = false;
+					damageController.Immortal = false;
 				}
 
 				// set the proper physics scene for the character, scene stacking requires separated physics
@@ -376,14 +386,14 @@ namespace FishMMO.Server
 			character.ID.Dirty();
 
 			#region Abilities
-			if (character.AbilityController != null)
+			if (character.TryGet(out AbilityController abilityController))
 			{
 				List<KnownAbilityAddBroadcast> knownAbilityBroadcasts = new List<KnownAbilityAddBroadcast>();
 
-				if (character.AbilityController.KnownBaseAbilities != null)
+				if (abilityController.KnownBaseAbilities != null)
 				{
 					// get base ability templates
-					foreach (int templateID in character.AbilityController.KnownBaseAbilities)
+					foreach (int templateID in abilityController.KnownBaseAbilities)
 					{
 						// create the new item broadcast
 						knownAbilityBroadcasts.Add(new KnownAbilityAddBroadcast()
@@ -393,10 +403,10 @@ namespace FishMMO.Server
 					}
 				}
 				
-				if (character.AbilityController.KnownEvents != null)
+				if (abilityController.KnownEvents != null)
 				{
 					// and event templates
-					foreach (int templateID in character.AbilityController.KnownEvents)
+					foreach (int templateID in abilityController.KnownEvents)
 					{
 						// create the new item broadcast
 						knownAbilityBroadcasts.Add(new KnownAbilityAddBroadcast()
@@ -409,18 +419,18 @@ namespace FishMMO.Server
 				// tell the client they have known abilities
 				if (knownAbilityBroadcasts.Count > 0)
 				{
-					character.Owner.Broadcast(new KnownAbilityAddMultipleBroadcast()
+					Server.Broadcast(character.Owner, new KnownAbilityAddMultipleBroadcast()
 					{
 						abilities = knownAbilityBroadcasts,
 					}, true, Channel.Reliable);
 				}
 
-				if (character.AbilityController.KnownAbilities != null)
+				if (abilityController.KnownAbilities != null)
 				{
 					List<AbilityAddBroadcast> abilityBroadcasts = new List<AbilityAddBroadcast>();
 
 					// get the actual abilities
-					foreach (Ability ability in character.AbilityController.KnownAbilities.Values)
+					foreach (Ability ability in abilityController.KnownAbilities.Values)
 					{
 						abilityBroadcasts.Add(new AbilityAddBroadcast()
 						{
@@ -433,7 +443,7 @@ namespace FishMMO.Server
 					// tell the client the have abilities
 					if (abilityBroadcasts.Count > 0)
 					{
-						character.Owner.Broadcast(new AbilityAddMultipleBroadcast()
+						Server.Broadcast(character.Owner, new AbilityAddMultipleBroadcast()
 						{
 							abilities = abilityBroadcasts,
 						});
@@ -443,10 +453,10 @@ namespace FishMMO.Server
 			#endregion
 
 			#region Attributes
-			if (character.AttributeController != null)
+			if (character.TryGet(out CharacterAttributeController attributeController))
 			{
 				List<CharacterAttributeUpdateBroadcast> attributes = new List<CharacterAttributeUpdateBroadcast>();
-				foreach (CharacterAttribute attribute in character.AttributeController.Attributes.Values)
+				foreach (CharacterAttribute attribute in attributeController.Attributes.Values)
 				{
 					if (attribute.Template.IsResourceAttribute)
 						continue;
@@ -457,13 +467,13 @@ namespace FishMMO.Server
 						value = attribute.FinalValue,
 					});
 				}
-				character.Owner.Broadcast(new CharacterAttributeUpdateMultipleBroadcast()
+				Server.Broadcast(character.Owner, new CharacterAttributeUpdateMultipleBroadcast()
 				{
 					attributes = attributes,
 				}, true, Channel.Reliable);
 
 				List<CharacterResourceAttributeUpdateBroadcast> resourceAttributes = new List<CharacterResourceAttributeUpdateBroadcast>();
-				foreach (CharacterResourceAttribute attribute in character.AttributeController.ResourceAttributes.Values)
+				foreach (CharacterResourceAttribute attribute in attributeController.ResourceAttributes.Values)
 				{
 					resourceAttributes.Add(new CharacterResourceAttributeUpdateBroadcast()
 					{
@@ -472,7 +482,7 @@ namespace FishMMO.Server
 						max = attribute.FinalValue,
 					});
 				}
-				character.Owner.Broadcast(new CharacterResourceAttributeUpdateMultipleBroadcast()
+				Server.Broadcast(character.Owner, new CharacterResourceAttributeUpdateMultipleBroadcast()
 				{
 					attributes = resourceAttributes,
 				}, true, Channel.Reliable);
@@ -480,10 +490,10 @@ namespace FishMMO.Server
 			#endregion
 
 			#region Achievements
-			if (character.AchievementController != null)
+			if (character.TryGet(out AchievementController achievementController))
 			{
 				List<AchievementUpdateBroadcast> achievements = new List<AchievementUpdateBroadcast>();
-				foreach (Achievement achievement in character.AchievementController.Achievements.Values)
+				foreach (Achievement achievement in achievementController.Achievements.Values)
 				{
 					achievements.Add(new AchievementUpdateBroadcast()
 					{
@@ -491,7 +501,7 @@ namespace FishMMO.Server
 						newValue = achievement.CurrentValue,
 					});
 				}
-				character.Owner.Broadcast(new AchievementUpdateMultipleBroadcast()
+				Server.Broadcast(character.Owner, new AchievementUpdateMultipleBroadcast()
 				{
 					achievements = achievements,
 				}, true, Channel.Reliable);
@@ -499,10 +509,11 @@ namespace FishMMO.Server
 			#endregion
 
 			#region Guild
-			if (character.GuildController != null && character.GuildController.ID.Value > 0)
+			if (character.TryGet(out GuildController guildController) &&
+				guildController.ID.Value > 0)
 			{
 				// get the current guild members from the database
-				List<CharacterGuildEntity> dbMembers = CharacterGuildService.Members(dbContext, character.GuildController.ID.Value);
+				List<CharacterGuildEntity> dbMembers = CharacterGuildService.Members(dbContext, guildController.ID.Value);
 
 				var addBroadcasts = dbMembers.Select(x => new GuildAddBroadcast()
 				{
@@ -516,15 +527,16 @@ namespace FishMMO.Server
 				{
 					members = addBroadcasts,
 				};
-				character.Owner.Broadcast(guildAddBroadcast, true, Channel.Reliable);
+				Server.Broadcast(character.Owner, guildAddBroadcast, true, Channel.Reliable);
 			}
 			#endregion
 
 			#region Party
-			if (character.PartyController != null && character.PartyController.ID > 0)
+			if (character.TryGet(out PartyController partyController) &&
+				partyController.ID > 0)
 			{
 				// get the current party members from the database
-				List<CharacterPartyEntity> dbMembers = CharacterPartyService.Members(dbContext, character.PartyController.ID);
+				List<CharacterPartyEntity> dbMembers = CharacterPartyService.Members(dbContext, partyController.ID);
 
 				var addBroadcasts = dbMembers.Select(x => new PartyAddBroadcast()
 				{
@@ -538,15 +550,15 @@ namespace FishMMO.Server
 				{
 					members = addBroadcasts,
 				};
-				character.Owner.Broadcast(partyAddBroadcast, true, Channel.Reliable);
+				Server.Broadcast(character.Owner, partyAddBroadcast, true, Channel.Reliable);
 			}
 			#endregion
 
 			#region Friends
-			if (character.FriendController != null)
+			if (character.TryGet(out FriendController friendController))
 			{
 				List<FriendAddBroadcast> friends = new List<FriendAddBroadcast>();
-				foreach (long friendID in character.FriendController.Friends)
+				foreach (long friendID in friendController.Friends)
 				{
 					bool status = CharacterService.ExistsAndOnline(dbContext, friendID);
 					friends.Add(new FriendAddBroadcast()
@@ -555,7 +567,7 @@ namespace FishMMO.Server
 						online = status,
 					});
 				}
-				character.Owner.Broadcast(new FriendAddMultipleBroadcast()
+				Server.Broadcast(character.Owner, new FriendAddMultipleBroadcast()
 				{
 					friends = friends,
 				}, true, Channel.Reliable);
@@ -563,11 +575,11 @@ namespace FishMMO.Server
 			#endregion
 
 			#region InventoryItems
-			if (character.InventoryController != null)
+			if (character.TryGet(out InventoryController inventoryController))
 			{
 				List<InventorySetItemBroadcast> itemBroadcasts = new List<InventorySetItemBroadcast>();
 
-				foreach (Item item in character.InventoryController.Items)
+				foreach (Item item in inventoryController.Items)
 				{
 					// just in case..
 					if (item == null)
@@ -588,7 +600,7 @@ namespace FishMMO.Server
 				// tell the client they have items
 				if (itemBroadcasts.Count > 0)
 				{
-					character.Owner.Broadcast(new InventorySetMultipleItemsBroadcast()
+					Server.Broadcast(character.Owner, new InventorySetMultipleItemsBroadcast()
 					{
 						items = itemBroadcasts,
 					}, true, Channel.Reliable);
@@ -597,11 +609,11 @@ namespace FishMMO.Server
 			#endregion
 
 			#region Equipment
-			if (character.EquipmentController != null)
+			if (character.TryGet(out EquipmentController equipmentController))
 			{
 				List<EquipmentSetItemBroadcast> itemBroadcasts = new List<EquipmentSetItemBroadcast>();
 
-				foreach (Item item in character.EquipmentController.Items)
+				foreach (Item item in equipmentController.Items)
 				{
 					// just in case..
 					if (item == null)
@@ -622,7 +634,7 @@ namespace FishMMO.Server
 				// tell the client they have items
 				if (itemBroadcasts.Count > 0)
 				{
-					character.Owner.Broadcast(new EquipmentSetMultipleItemsBroadcast()
+					Server.Broadcast(character.Owner, new EquipmentSetMultipleItemsBroadcast()
 					{
 						items = itemBroadcasts,
 					}, true, Channel.Reliable);
@@ -631,11 +643,11 @@ namespace FishMMO.Server
 			#endregion
 
 			#region BankItems
-			if (character.BankController != null)
+			if (character.TryGet(out BankController bankController))
 			{
 				List<BankSetItemBroadcast> itemBroadcasts = new List<BankSetItemBroadcast>();
 
-				foreach (Item item in character.BankController.Items)
+				foreach (Item item in bankController.Items)
 				{
 					// just in case..
 					if (item == null)
@@ -656,7 +668,7 @@ namespace FishMMO.Server
 				// tell the client they have items
 				if (itemBroadcasts.Count > 0)
 				{
-					character.Owner.Broadcast(new BankSetMultipleItemsBroadcast()
+					Server.Broadcast(character.Owner, new BankSetMultipleItemsBroadcast()
 					{
 						items = itemBroadcasts,
 					}, true, Channel.Reliable);
@@ -674,7 +686,7 @@ namespace FishMMO.Server
 		{
 			if (CharactersByLowerCaseName.TryGetValue(characterName.ToLower(), out Character character))
 			{
-				character.Owner.Broadcast(msg, true, Channel.Reliable);
+				Server.Broadcast(character.Owner, msg, true, Channel.Reliable);
 				return true;
 			}
 			return false;
@@ -689,7 +701,7 @@ namespace FishMMO.Server
 		{
 			if (CharactersByID.TryGetValue(characterID, out Character character))
 			{
-				character.Owner.Broadcast(msg, true, Channel.Reliable);
+				Server.Broadcast(character.Owner, msg, true, Channel.Reliable);
 				return true;
 			}
 			return false;

@@ -1,16 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
-using FishNet.Object;
 
 namespace FishMMO.Shared
 {
-	public abstract class ItemContainer : NetworkBehaviour
+	public abstract class ItemContainer : CharacterBehaviour
 	{
 		public readonly List<Item> Items = new List<Item>();
 
 		public event Action<ItemContainer, Item, int> OnSlotUpdated;
 
-		void OnDestroy()
+		public override void OnDestroying()
 		{
 			OnSlotUpdated = null;
 		}

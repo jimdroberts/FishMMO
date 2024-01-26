@@ -55,9 +55,11 @@ namespace FishMMO.Client
 			}
 			
 			// we can interact with things as long as the UI doesn't have focus
-			if (!UIManager.ControlHasFocus() && InputManager.GetKeyDown("Interact"))
+			if (!UIManager.ControlHasFocus() &&
+				InputManager.GetKeyDown("Interact") &&
+				Character.TryGet(out TargetController targetController))
 			{
-				Transform target = Character.TargetController.Current.Target;
+				Transform target = targetController.Current.Target;
 				if (target != null)
 				{
 					IInteractable interactable = target.GetComponent<IInteractable>();

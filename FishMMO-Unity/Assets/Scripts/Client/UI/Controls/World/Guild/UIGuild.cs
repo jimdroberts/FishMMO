@@ -64,7 +64,9 @@ namespace FishMMO.Client
 
 		public void OnButtonCreateGuild()
 		{
-			if (Character != null && Character.GuildController.ID.Value < 1 && Client.NetworkManager.IsClientStarted)
+			if (Character != null &&
+				Character.TryGet(out GuildController guildController) &&
+				guildController.ID.Value < 1 && Client.NetworkManager.IsClientStarted)
 			{
 				if (UIManager.TryGet("UIInputConfirmationTooltip", out UIInputConfirmationTooltip tooltip))
 				{
@@ -72,7 +74,7 @@ namespace FishMMO.Client
 					{
 						if (Constants.Authentication.IsAllowedGuildName(s))
 						{
-							Client.NetworkManager.ClientManager.Broadcast(new GuildCreateBroadcast()
+							Client.Broadcast(new GuildCreateBroadcast()
 							{
 								guildName = s,
 							}, Channel.Reliable);
@@ -84,13 +86,15 @@ namespace FishMMO.Client
 
 		public void OnButtonLeaveGuild()
 		{
-			if (Character != null && Character.GuildController.ID.Value > 0 && Client.NetworkManager.IsClientStarted)
+			if (Character != null &&
+				Character.TryGet(out GuildController guildController) &&
+				guildController.ID.Value > 0 && Client.NetworkManager.IsClientStarted)
 			{
 				if (UIManager.TryGet("UIConfirmationTooltip", out UIConfirmationTooltip tooltip))
 				{
 					tooltip.Open("Are you sure you want to leave your guild?", () =>
 					{
-						Client.NetworkManager.ClientManager.Broadcast(new GuildLeaveBroadcast(), Channel.Reliable);
+						Client.Broadcast(new GuildLeaveBroadcast(), Channel.Reliable);
 					}, null);
 				}
 			}
@@ -98,18 +102,40 @@ namespace FishMMO.Client
 
 		public void OnButtonInviteToGuild()
 		{
-			if (Character != null && Character.GuildController.ID.Value > 0 && Client.NetworkManager.IsClientStarted)
+			if (Character != null &&
+				Character.TryGet(out GuildController guildController) &&
+				guildController.ID.Value > 0 &&
+				Client.NetworkManager.IsClientStarted)
 			{
-				if (Character.TargetController.Current.Target != null)
+				if (Character.TryGet(out TargetController targetController) &&
+					targetController.Current.Target != null)
 				{
-					Character targetCharacter = Character.TargetController.Current.Target.GetComponent<Character>();
+					Character targetCharacter = targetController.Current.Target.GetComponent<Character>();
 					if (targetCharacter != null)
 					{
-						Client.NetworkManager.ClientManager.Broadcast(new GuildInviteBroadcast()
+						Client.Broadcast(new GuildInviteBroadcast()
 						{
 							targetCharacterID = targetCharacter.ID.Value
 						}, Channel.Reliable);
 					}
+				}
+				else if (UIManager.TryGet("UIInputConfirmationTooltip", out UIInputConfirmationTooltip tooltip))
+				{
+					tooltip.Open("Please type the name of the person you wish to invite.", (s) =>
+					{
+						if (Constants.Authentication.IsAllowedCharacterName(s) &&
+							ClientNamingSystem.GetCharacterID(s, out long id))
+						{
+							Client.Broadcast(new GuildInviteBroadcast()
+							{
+								targetCharacterID = id,
+							}, Channel.Reliable);
+						}
+						else if (UIManager.TryGet("UIChat", out UIChat chat))
+						{
+							chat.InstantiateChatMessage(ChatChannel.System, "", "A person with that name could not be found. Are you sure you have encountered them?");
+						}
+					}, null);
 				}
 			}
 		}

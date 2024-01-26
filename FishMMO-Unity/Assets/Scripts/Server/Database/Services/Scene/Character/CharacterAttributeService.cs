@@ -13,7 +13,7 @@ namespace FishMMO.Server.DatabaseServices
 		public static void Save(NpgsqlDbContext dbContext, Character character)
 		{
 			if (character == null ||
-				character.AttributeController == null)
+				!character.TryGet(out CharacterAttributeController attributeController))
 			{
 				return;
 			}
@@ -21,7 +21,7 @@ namespace FishMMO.Server.DatabaseServices
 			var attributes = dbContext.CharacterAttributes.Where(c => c.CharacterID == character.ID.Value)
 														  .ToDictionary(k => k.TemplateID);
 
-			foreach (CharacterAttribute attribute in character.AttributeController.Attributes.Values)
+			foreach (CharacterAttribute attribute in attributeController.Attributes.Values)
 			{
 				// is looping resources separately faster than boxing?
 				if (attribute.Template.IsResourceAttribute)
@@ -49,7 +49,7 @@ namespace FishMMO.Server.DatabaseServices
 				}
 			}
 			// is looping resources separately faster than boxing?
-			foreach (CharacterResourceAttribute attribute in character.AttributeController.ResourceAttributes.Values)
+			foreach (CharacterResourceAttribute attribute in attributeController.ResourceAttributes.Values)
 			{
 				if (attributes.TryGetValue(attribute.Template.ID, out CharacterAttributeEntity dbAttribute))
 				{
@@ -99,6 +99,12 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Load(NpgsqlDbContext dbContext, Character character)
 		{
+			if (character == null ||
+				!character.TryGet(out CharacterAttributeController attributeController))
+			{
+				return;
+			}
+
 			var attributes = dbContext.CharacterAttributes.Where(c => c.CharacterID == character.ID.Value);
 			foreach (CharacterAttributeEntity attribute in attributes)
 			{
@@ -107,11 +113,11 @@ namespace FishMMO.Server.DatabaseServices
 				{
 					if (template.IsResourceAttribute)
 					{
-						character.AttributeController.SetResourceAttribute(template.ID, attribute.BaseValue, attribute.Modifier, attribute.CurrentValue);
+						attributeController.SetResourceAttribute(template.ID, attribute.BaseValue, attribute.Modifier, attribute.CurrentValue);
 					}
 					else
 					{
-						character.AttributeController.SetAttribute(template.ID, attribute.BaseValue, attribute.Modifier);
+						attributeController.SetAttribute(template.ID, attribute.BaseValue, attribute.Modifier);
 					}
 				}
 			};

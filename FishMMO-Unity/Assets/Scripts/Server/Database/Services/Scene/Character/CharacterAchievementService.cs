@@ -12,7 +12,8 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Save(NpgsqlDbContext dbContext, Character character)
 		{
-			if (character == null)
+			if (character == null ||
+				!character.TryGet(out AchievementController achievementController))
 			{
 				return;
 			}
@@ -20,7 +21,7 @@ namespace FishMMO.Server.DatabaseServices
 			var achievements = dbContext.CharacterAchievements.Where(c => c.CharacterID == character.ID.Value)
 															  .ToDictionary(k => k.TemplateID);
 
-			foreach (Achievement achievement in character.AchievementController.Achievements.Values)
+			foreach (Achievement achievement in achievementController.Achievements.Values)
 			{
 				if (achievements.TryGetValue(achievement.Template.ID, out CharacterAchievementEntity dbAchievement))
 				{
@@ -69,10 +70,15 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Load(NpgsqlDbContext dbContext, Character character)
 		{
+			if (character == null ||
+				!character.TryGet(out AchievementController achievementController))
+			{
+				return;
+			}
 			var achievements = dbContext.CharacterAchievements.Where(c => c.CharacterID == character.ID.Value);
 			foreach (CharacterAchievementEntity achievement in  achievements)
 			{
-				character.AchievementController.SetAchievement(achievement.TemplateID, achievement.Tier, achievement.Value);
+				achievementController.SetAchievement(achievement.TemplateID, achievement.Tier, achievement.Value);
 			};
 		}
 	}

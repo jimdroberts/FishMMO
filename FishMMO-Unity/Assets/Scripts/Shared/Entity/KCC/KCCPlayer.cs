@@ -149,6 +149,9 @@ namespace FishMMO.Shared
 		[ReplicateV2]
 		private void Replicate(KCCInputReplicateData input, ReplicateState state = ReplicateState.Invalid, Channel channel = Channel.Unreliable)
 		{
+			if (state == ReplicateState.Future)
+				return;
+
 			CharacterController.SetInputs(ref input);
 
 			SimulateMotor((float)base.TimeManager.TickDelta);
@@ -189,11 +192,6 @@ namespace FishMMO.Shared
 
 		private void LateUpdate()
 		{
-			HandleCameraInput();
-		}
-
-		private void HandleCameraInput()
-		{
 			if (!base.IsOwner)
 			{
 				return;
@@ -202,6 +200,12 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
+
+			HandleCameraInput();
+		}
+
+		private void HandleCameraInput()
+		{
 			// Handle rotating the camera along with physics movers
 			if (Motor != null && CharacterCamera.RotateWithPhysicsMover && Motor.AttachedRigidbody != null)
 			{

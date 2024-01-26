@@ -153,7 +153,7 @@ namespace FishMMO.Client
 
 				// request an updated server list
 				RequestServerListBroadcast requestServerList = new RequestServerListBroadcast();
-				Client.NetworkManager.ClientManager.Broadcast(requestServerList, Channel.Reliable);
+				Client.Broadcast(requestServerList, Channel.Reliable);
 			}
 		}
 

@@ -54,14 +54,12 @@ namespace FishMMO.Shared
 
 		public void ItemGenerator_OnSetAttribute(ItemAttribute attribute, int oldValue, int newValue)
 		{
-			if (Owner != null)
+			if (Owner != null &&
+				Owner.TryGet(out CharacterAttributeController attributeController) &&
+				attributeController.TryGetAttribute(attribute.Template.CharacterAttribute.ID, out CharacterAttribute characterAttribute))
 			{
-				if (Owner.AttributeController != null &&
-					Owner.AttributeController.TryGetAttribute(attribute.Template.CharacterAttribute.ID, out CharacterAttribute characterAttribute))
-				{
-					characterAttribute.AddValue(-oldValue);
-					characterAttribute.AddValue(newValue);
-				}
+				characterAttribute.AddValue(-oldValue);
+				characterAttribute.AddValue(newValue);
 			}
 		}
 	}

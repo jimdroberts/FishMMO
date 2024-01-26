@@ -71,7 +71,7 @@ namespace FishMMO.Client
 			{
 				tooltip.Open("Are you sure you want to remove your friend?", () =>
 				{
-					Client.NetworkManager.ClientManager.Broadcast(new FriendRemoveBroadcast()
+					Client.Broadcast(new FriendRemoveBroadcast()
 					{
 						characterID = friendID,
 					}, Channel.Reliable);
@@ -87,7 +87,7 @@ namespace FishMMO.Client
 				{
 					tooltip.Open("Who would you like to add as a friend?", (s) =>
 					{
-						Client.NetworkManager.ClientManager.Broadcast(new FriendAddNewBroadcast()
+						Client.Broadcast(new FriendAddNewBroadcast()
 						{
 							characterName = s,
 						}, Channel.Reliable);

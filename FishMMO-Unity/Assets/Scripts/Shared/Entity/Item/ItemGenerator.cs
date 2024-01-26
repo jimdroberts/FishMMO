@@ -124,9 +124,13 @@ namespace FishMMO.Shared
 
 		public void ItemEquippable_OnEquip(Character character)
 		{
+			if (!character.TryGet(out CharacterAttributeController attributeController))
+			{
+				return;
+			}
 			foreach (KeyValuePair<string, ItemAttribute> pair in attributes)
 			{
-				if (character.AttributeController.TryGetAttribute(pair.Value.Template.CharacterAttribute.ID, out CharacterAttribute characterAttribute))
+				if (attributeController.TryGetAttribute(pair.Value.Template.CharacterAttribute.ID, out CharacterAttribute characterAttribute))
 				{
 					characterAttribute.AddValue(pair.Value.value);
 				}
@@ -135,9 +139,13 @@ namespace FishMMO.Shared
 
 		public void ItemEquippable_OnUnequip(Character character)
 		{
+			if (!character.TryGet(out CharacterAttributeController attributeController))
+			{
+				return;
+			}
 			foreach (KeyValuePair<string, ItemAttribute> pair in attributes)
 			{
-				if (character.AttributeController.TryGetAttribute(pair.Value.Template.CharacterAttribute.ID, out CharacterAttribute characterAttribute))
+				if (attributeController.TryGetAttribute(pair.Value.Template.CharacterAttribute.ID, out CharacterAttribute characterAttribute))
 				{
 					characterAttribute.AddValue(-pair.Value.value);
 				}

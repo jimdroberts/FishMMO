@@ -8,6 +8,7 @@ using FishNet.Transporting;
 using KinematicCharacterController;
 using UnityEngine;
 using System;
+using System.Collections.Generic;
 
 namespace FishMMO.Shared
 {
@@ -36,6 +37,8 @@ namespace FishMMO.Shared
 	[RequireComponent(typeof(FriendController))]
 	public class Character : NetworkBehaviour, IPooledResettable
 	{
+		private static Dictionary<Type, CharacterBehaviour> behaviours = new Dictionary<Type, CharacterBehaviour>();
+
 		public Transform Transform { get; private set; }
 
 		#region KCC
@@ -44,20 +47,6 @@ namespace FishMMO.Shared
 		public KCCPlayer KCCPlayer { get; private set; }
 		#endregion
 
-		public CharacterAttributeController AttributeController { get; private set; }
-		public CharacterDamageController DamageController { get; private set; }
-		public TargetController TargetController { get; private set; }
-		public CooldownController CooldownController { get; private set; }
-		public InventoryController InventoryController { get; private set; }
-		public EquipmentController EquipmentController { get; private set; }
-		public BankController BankController { get; private set; }
-		public AbilityController AbilityController { get; private set; }
-		public AchievementController AchievementController { get; private set; }
-		public BuffController BuffController { get; private set; }
-		public QuestController QuestController { get; private set; }
-		public GuildController GuildController { get; private set; }
-		public PartyController PartyController { get; private set; }
-		public FriendController FriendController { get; private set; }
 #if !UNITY_SERVER
 		public LocalInputController LocalInputController { get; private set; }
 		public TextMeshPro CharacterNameLabel;
@@ -149,32 +138,20 @@ namespace FishMMO.Shared
 			KCCPlayer.Motor = Motor;
 			#endregion
 
-			AttributeController = gameObject.GetComponent<CharacterAttributeController>();
-			DamageController = gameObject.GetComponent<CharacterDamageController>();
-			DamageController.Character = this;
-			TargetController = gameObject.GetComponent<TargetController>();
-			TargetController.Character = this;
-			CooldownController = gameObject.GetComponent<CooldownController>();
-			InventoryController = gameObject.GetComponent<InventoryController>();
-			InventoryController.Character = this;
-			EquipmentController = gameObject.GetComponent<EquipmentController>();
-			EquipmentController.Character = this;
-			BankController = gameObject.GetComponent<BankController>();
-			BankController.Character = this;
-			AbilityController = gameObject.GetComponent<AbilityController>();
-			AbilityController.Character = this;
-			AchievementController = gameObject.GetComponent<AchievementController>();
-			AchievementController.Character = this;
-			BuffController = gameObject.GetComponent<BuffController>();
-			BuffController.Character = this;
-			QuestController = gameObject.GetComponent<QuestController>();
-			QuestController.Character = this;
-			GuildController = gameObject.GetComponent<GuildController>();
-			GuildController.Character = this;
-			PartyController = gameObject.GetComponent<PartyController>();
-			PartyController.Character = this;
-			FriendController = gameObject.GetComponent<FriendController>();
-			FriendController.Character = this;
+			CharacterBehaviour[] c = gameObject.GetComponents<CharacterBehaviour>();
+			if (c != null)
+			{
+				for (int i = 0; i < c.Length; ++i)
+				{
+					CharacterBehaviour behaviour = c[i];
+					if (behaviour == null)
+					{
+						continue;
+					}
+
+					behaviour.InitializeOnce(this);
+				}
+			}
 		}
 
 		void OnDestroy()
@@ -221,11 +198,11 @@ namespace FishMMO.Shared
 			{
 				UIManager.SetCharacter(this);
 
-				if (TargetController != null &&
+				if (this.TryGet(out TargetController targetController) &&
 					UIManager.TryGet("UITarget", out UITarget uiTarget))
 				{
-					TargetController.OnChangeTarget += uiTarget.OnChangeTarget;
-					TargetController.OnUpdateTarget += uiTarget.OnUpdateTarget;
+					targetController.OnChangeTarget += uiTarget.OnChangeTarget;
+					targetController.OnUpdateTarget += uiTarget.OnUpdateTarget;
 				}
 
 				gameObject.layer = Constants.Layers.LocalEntity;
@@ -235,11 +212,11 @@ namespace FishMMO.Shared
 			{
 				UIManager.SetCharacter(null);
 
-				if (TargetController != null &&
+				if (this.TryGet(out TargetController targetController) &&
 					UIManager.TryGet("UITarget", out UITarget uiTarget))
 				{
-					TargetController.OnChangeTarget -= uiTarget.OnChangeTarget;
-					TargetController.OnUpdateTarget -= uiTarget.OnUpdateTarget;
+					targetController.OnChangeTarget -= uiTarget.OnChangeTarget;
+					targetController.OnUpdateTarget -= uiTarget.OnUpdateTarget;
 				}
 
 				gameObject.layer = Constants.Layers.Default;
@@ -247,6 +224,57 @@ namespace FishMMO.Shared
 			}
 		}
 #endif
+
+		public void RegisterCharacterBehaviour(CharacterBehaviour behaviour)
+		{
+			if (behaviour == null)
+			{
+				return;
+			}
+			Type type = behaviour.GetType();
+			if (behaviours.ContainsKey(type))
+			{
+				return;
+			}
+			Debug.Log(CharacterName + ": Registered " + type.Name);
+			behaviours.Add(type, behaviour);
+		}
+
+		public void Unregister<T>(T behaviour) where T : CharacterBehaviour
+		{
+			if (behaviour == null)
+			{
+				return;
+			}
+			else
+			{
+				Type type = behaviour.GetType();
+				Debug.Log(CharacterName + ": Unregistered " + type.Name);
+				behaviours.Remove(type);
+			}
+		}
+
+		public bool TryGet<T>(out T control) where T : CharacterBehaviour
+		{
+			if (behaviours.TryGetValue(typeof(T), out CharacterBehaviour result))
+			{
+				if ((control = result as T) != null)
+				{
+					return true;
+				}
+			}
+			control = null;
+			return false;
+		}
+
+		public T Get<T>() where T : CharacterBehaviour
+		{
+			if (behaviours.TryGetValue(typeof(T), out CharacterBehaviour result))
+			{
+				return result as T;
+			}
+			return null;
+		}
 
 		/// <summary>
 		/// Resets the Character values to default for pooling.

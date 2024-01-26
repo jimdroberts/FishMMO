@@ -61,10 +61,10 @@ namespace FishMMO.Client
 		private void MainEntry_OnLeftClick(int index, object[] optionalParams)
 		{
 			if (Character != null &&
-				Character.AbilityController != null &&
+				Character.TryGet(out AbilityController abilityController) &&
 				UIManager.TryGet("UISelector", out UISelector uiSelector))
 			{
-				List<ICachedObject> templates = AbilityTemplate.Get<AbilityTemplate>(Character.AbilityController.KnownBaseAbilities);
+				List<ICachedObject> templates = AbilityTemplate.Get<AbilityTemplate>(abilityController.KnownBaseAbilities);
 				uiSelector.Open(templates, (i) =>
 				{
 					AbilityTemplate template = AbilityTemplate.Get<AbilityTemplate>(i);
@@ -93,10 +93,10 @@ namespace FishMMO.Client
 		{
 			if (index > -1 && index < EventSlots.Count &&
 				Character != null &&
-				Character.AbilityController != null &&
+				Character.TryGet(out AbilityController abilityController) &&
 				UIManager.TryGet("UISelector", out UISelector uiSelector))
 			{
-				List<ICachedObject> templates = AbilityEvent.Get<AbilityEvent>(Character.AbilityController.KnownEvents);
+				List<ICachedObject> templates = AbilityEvent.Get<AbilityEvent>(abilityController.KnownEvents);
 				uiSelector.Open(templates, (i) =>
 				{
 					AbilityEvent template = AbilityEvent.Get<AbilityEvent>(i);
@@ -250,7 +250,7 @@ namespace FishMMO.Client
 				events = eventIds,
 			};
 
-			Client.NetworkManager.ClientManager?.Broadcast(abilityAddBroadcast, Channel.Reliable);
+			Client.Broadcast(abilityAddBroadcast, Channel.Reliable);
 
 			MainEntry.Clear();
 			ClearSlots();

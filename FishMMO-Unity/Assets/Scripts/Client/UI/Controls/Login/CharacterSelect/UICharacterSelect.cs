@@ -168,7 +168,7 @@ namespace FishMMO.Client
 				Hide();
 
 				// tell the login server about our character selection
-				Client.NetworkManager.ClientManager.Broadcast(new CharacterSelectBroadcast()
+				Client.Broadcast(new CharacterSelectBroadcast()
 				{
 					characterName = selectedCharacter.Details.CharacterName,
 				}, Channel.Reliable);
@@ -189,7 +189,7 @@ namespace FishMMO.Client
 					tooltip.Open("Are you sure you would like to delete this character?", () =>
 					{
 						// delete character
-						Client.NetworkManager.ClientManager.Broadcast(new CharacterDeleteBroadcast()
+						Client.Broadcast(new CharacterDeleteBroadcast()
 						{
 							characterName = selectedCharacter.Details.CharacterName,
 						}, Channel.Reliable);

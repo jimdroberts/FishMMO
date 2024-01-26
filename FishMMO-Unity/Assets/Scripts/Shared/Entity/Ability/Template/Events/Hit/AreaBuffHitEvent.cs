@@ -30,9 +30,13 @@ namespace FishMMO.Shared
 				if (colliders[i] != attacker.Motor.Capsule)
 				{
 					Character def = colliders[i].gameObject.GetComponent<Character>();
-					if (def != null && def.DamageController != null)
+					if (def != null &&
+						def.TryGet(out CharacterDamageController damageController))
 					{
-						def.BuffController.Apply(BuffTemplate);
+						if (def.TryGet(out BuffController buffController))
+						{
+							buffController.Apply(BuffTemplate);
+						}
 						++hits;
 					}
 				}

@@ -1,15 +1,10 @@
-﻿using FishNet.Object;
-using System.Collections.Generic;
-using UnityEngine;
+﻿using System.Collections.Generic;
 
 namespace FishMMO.Shared
 {
-	[RequireComponent(typeof(Character))]
-	public class QuestController : NetworkBehaviour
+	public class QuestController : CharacterBehaviour
 	{
 		private Dictionary<string, QuestInstance> quests = new Dictionary<string, QuestInstance>();
-
-		public Character Character;
 
 		public override void OnStartClient()
 		{

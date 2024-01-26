@@ -331,9 +331,13 @@ namespace FishMMO.Shared
 
 		public bool MeetsRequirements(Character character)
 		{
+			if (!character.TryGet(out CharacterAttributeController attributeController))
+			{
+				return false;
+			}
 			foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in Requirements)
 			{
-				if (!character.AttributeController.TryGetResourceAttribute(pair.Key.ID, out CharacterResourceAttribute requirement) ||
+				if (!attributeController.TryGetResourceAttribute(pair.Key.ID, out CharacterResourceAttribute requirement) ||
 					requirement.CurrentValue < pair.Value)
 				{
 					return false;
@@ -344,6 +348,10 @@ namespace FishMMO.Shared
 
 		public bool HasResource(Character character, AbilityEvent bloodResourceConversion, CharacterAttributeTemplate bloodResource)
 		{
+			if (!character.TryGet(out CharacterAttributeController attributeController))
+			{
+				return false;
+			}
 			if (AbilityEvents != null &&
 				bloodResourceConversion != null &&
 				bloodResource != null &&
@@ -352,7 +360,7 @@ namespace FishMMO.Shared
 				int totalCost = TotalResourceCost;
 
 				CharacterResourceAttribute resource;
-				if (!character.AttributeController.TryGetResourceAttribute(bloodResource.ID, out resource) ||
+				if (!attributeController.TryGetResourceAttribute(bloodResource.ID, out resource) ||
 					resource.CurrentValue < totalCost)
 				{
 					return false;
@@ -363,7 +371,7 @@ namespace FishMMO.Shared
 				foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in Resources)
 				{
 					CharacterResourceAttribute resource;
-					if (!character.AttributeController.TryGetResourceAttribute(pair.Key.ID, out resource) ||
+					if (!attributeController.TryGetResourceAttribute(pair.Key.ID, out resource) ||
 						resource.CurrentValue < pair.Value)
 					{
 						return false;

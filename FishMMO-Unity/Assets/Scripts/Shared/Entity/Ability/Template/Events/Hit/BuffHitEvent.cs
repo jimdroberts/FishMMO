@@ -10,9 +10,10 @@ namespace FishMMO.Shared
 
 		public override int Invoke(Character attacker, Character defender, TargetInfo hitTarget, GameObject abilityObject)
 		{
-			if (defender != null && defender.BuffController != null)
+			if (defender != null &&
+				defender.TryGet(out BuffController buffController))
 			{
-				defender.BuffController.Apply(BuffTemplate);
+				buffController.Apply(BuffTemplate);
 			}
 
 			// a buff or debuff does not count as a hit so we return 0

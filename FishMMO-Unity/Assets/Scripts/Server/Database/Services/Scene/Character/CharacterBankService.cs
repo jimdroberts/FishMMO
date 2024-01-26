@@ -82,7 +82,8 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Save(NpgsqlDbContext dbContext, Character character)
 		{
-			if (character == null)
+			if (character == null ||
+				!character.TryGet(out BankController bankController))
 			{
 				return;
 			}
@@ -90,7 +91,7 @@ namespace FishMMO.Server.DatabaseServices
 			var dbBankItems = dbContext.CharacterBankItems.Where(c => c.CharacterID == character.ID.Value)
 																	.ToDictionary(k => k.Slot);
 
-			foreach (Item item in character.BankController.Items)
+			foreach (Item item in bankController.Items)
 			{
 				if (dbBankItems.TryGetValue(item.Slot, out CharacterBankEntity dbItem))
 				{
@@ -162,6 +163,12 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Load(NpgsqlDbContext dbContext, Character character)
 		{
+			if (character == null ||
+				!character.TryGet(out BankController bankController))
+			{
+				return;
+			}
+
 			var dbBankItems = dbContext.CharacterBankItems.Where(c => c.CharacterID == character.ID.Value);
 			foreach (CharacterBankEntity dbItem in dbBankItems)
 			{
@@ -175,7 +182,7 @@ namespace FishMMO.Server.DatabaseServices
 				{
 					return;
 				}
-				character.BankController.SetItemSlot(item, dbItem.Slot);
+				bankController.SetItemSlot(item, dbItem.Slot);
 			};
 		}
 	}

@@ -1,16 +1,15 @@
 ﻿using FishNet.Transporting;
-using UnityEngine;
+#if !UNITY_SERVER
+using static FishMMO.Client.Client;
+#endif
 
 namespace FishMMO.Shared
 {
-	[RequireComponent(typeof(Character))]
 	public class BankController : ItemContainer
 	{
-		public Character Character;
-
 		public long Currency = 0;
 
-		private void Awake()
+		public override void OnAwake()
 		{
 			AddSlots(null, 100);
 		}
@@ -83,16 +82,16 @@ namespace FishMMO.Shared
 			switch (msg.fromInventory)
 			{
 				case InventoryType.Inventory:
-					if (Character.InventoryController != null &&
-						Character.InventoryController.TryGetItem(msg.from, out Item inventoryItem))
+					if (Character.TryGet(out InventoryController inventoryController) &&
+						inventoryController.TryGetItem(msg.from, out Item inventoryItem))
 					{
 						if (TryGetItem(msg.to, out Item bankItem))
 						{
-							Character.InventoryController.SetItemSlot(bankItem, msg.from);
+							inventoryController.SetItemSlot(bankItem, msg.from);
 						}
 						else
 						{
-							Character.InventoryController.SetItemSlot(null, msg.from);
+							inventoryController.SetItemSlot(null, msg.from);
 						}
 
 						SetItemSlot(inventoryItem, msg.to);
@@ -127,17 +126,19 @@ namespace FishMMO.Shared
 
 		public void SendSwapItemSlotsRequest(int from, int to, InventoryType fromInventory)
 		{
+#if !UNITY_SERVER
 			if (fromInventory == InventoryType.Bank &&
 				from == to)
 			{
 				return;
 			}
-			ClientManager.Broadcast(new BankSwapItemSlotsBroadcast()
+			Broadcast(new BankSwapItemSlotsBroadcast()
 			{
 				from = from,
 				to = to,
 				fromInventory = fromInventory,
 			}, Channel.Reliable);
+#endif
 		}
 	}
 }

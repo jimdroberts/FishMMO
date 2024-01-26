@@ -20,8 +20,6 @@ namespace KinematicCharacterController
 		public bool LastMovementIterationFoundAnyGround;
 		public CharacterTransientGroundingReport GroundingStatus;
 
-		[NonSerialized]
-		public Rigidbody AttachedRigidbody;
 		public Vector3 AttachedRigidbodyVelocity;
 		public float TimeSinceLastAbleToJump;
 		public bool IsCrouching;

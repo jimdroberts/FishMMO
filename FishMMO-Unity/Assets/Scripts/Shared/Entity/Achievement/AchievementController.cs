@@ -1,19 +1,17 @@
 ﻿#if !UNITY_SERVER
 using FishMMO.Client;
-using FishNet;
 using UnityEngine;
 using System;
+#else
+using static FishMMO.Server.Server;
 #endif
-using FishNet.Object;
 using FishNet.Transporting;
 using System.Collections.Generic;
 
 namespace FishMMO.Shared
 {
-	public class AchievementController : NetworkBehaviour
+	public class AchievementController : CharacterBehaviour
 	{
-		public Character Character;
-
 		private Dictionary<int, Achievement> achievements = new Dictionary<int, Achievement>();
 
 
@@ -163,10 +161,12 @@ namespace FishMMO.Shared
 #if UNITY_SERVER
 	private void HandleRewards(AchievementTier tier)
 	{
-		if (base.IsServerInitialized && Character.Owner != null)
+		if (base.IsServerInitialized &&
+			Character.Owner != null &&
+			Character.TryGet(out InventoryController inventoryController))
 		{
 			BaseItemTemplate[] itemRewards = tier.ItemRewards;
-			if (itemRewards != null && itemRewards.Length > 0 && Character.InventoryController.FreeSlots() >= itemRewards.Length)
+			if (itemRewards != null && itemRewards.Length > 0 && inventoryController.FreeSlots() >= itemRewards.Length)
 			{
 				InventorySetMultipleItemsBroadcast inventorySetMultipleItemsBroadcast = new InventorySetMultipleItemsBroadcast()
 				{
@@ -179,7 +179,7 @@ namespace FishMMO.Shared
 				{
 					Item newItem = new Item(123, 0, itemRewards[i].ID, 1);
 
-					if (Character.InventoryController.TryAddItem(newItem, out List<Item> modifiedItems))
+					if (inventoryController.TryAddItem(newItem, out List<Item> modifiedItems))
 					{
 						foreach (Item item in modifiedItems)
 						{
@@ -196,7 +196,7 @@ namespace FishMMO.Shared
 				}
 				if (modifiedItemBroadcasts.Count > 0)
 				{
-					Character.Owner.Broadcast(new InventorySetMultipleItemsBroadcast()
+					Broadcast(Character.Owner, new InventorySetMultipleItemsBroadcast()
 					{
 						items = modifiedItemBroadcasts,
 					}, true, Channel.Reliable);

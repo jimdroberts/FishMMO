@@ -10,9 +10,9 @@ namespace FishMMO.Shared
 		{
 			if (base.Invoke(character, item))
 			{
-				if (character.AbilityController != null)
+				if (character.TryGet(out AbilityController abilityController))
 				{
-					character.AbilityController.LearnBaseAbilities(AbilityTemplates);
+					abilityController.LearnBaseAbilities(AbilityTemplates);
 				}
 				return true;
 			}

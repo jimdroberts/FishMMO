@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace FishMMO.Shared
 {
-	public class CooldownController : MonoBehaviour
+	public class CooldownController : CharacterBehaviour
 	{
 		private Dictionary<string, CooldownInstance> cooldowns = new Dictionary<string, CooldownInstance>();
 

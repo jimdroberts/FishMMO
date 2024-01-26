@@ -222,7 +222,7 @@ namespace FishMMO.Client
 				index = index,
 				type = CurrentTab,
 			};
-			Client.NetworkManager.ClientManager.Broadcast(message, Channel.Reliable);
+			Client.Broadcast(message, Channel.Reliable);
 		}
 
 		private void AbilityEntry_OnLeftClick(int index, object[] optionalParams)

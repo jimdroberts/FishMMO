@@ -58,32 +58,33 @@ namespace FishMMO.Client
 				case ReferenceButtonType.None:
 					break;
 				case ReferenceButtonType.Inventory:
-					if (character.InventoryController != null &&
-						character.InventoryController.TryGetItem((int)referenceID, out Item inventoryItem) &&
+					if (Character.TryGet(out InventoryController inventoryController) &&
+						inventoryController.TryGetItem((int)referenceID, out Item inventoryItem) &&
 						UIManager.TryGet("UITooltip", out currentUITooltip))
 					{
 						currentUITooltip.Open(inventoryItem.Tooltip());
 					}
 					break;
 				case ReferenceButtonType.Equipment:
-					if (character.EquipmentController != null &&
-						character.EquipmentController.TryGetItem((int)referenceID, out Item equippedItem) &&
+					if (Character.TryGet(out EquipmentController equipmentController) &&
+						equipmentController.TryGetItem((int)referenceID, out Item equippedItem) &&
 						UIManager.TryGet("UITooltip", out currentUITooltip))
 					{
 						currentUITooltip.Open(equippedItem.Tooltip());
 					}
 					break;
 				case ReferenceButtonType.Bank:
-					if (character.BankController != null &&
-						character.BankController.TryGetItem((int)referenceID, out Item bankItem) &&
+					if (Character.TryGet(out BankController bankController) &&
+						bankController.TryGetItem((int)referenceID, out Item bankItem) &&
 						UIManager.TryGet("UITooltip", out currentUITooltip))
 					{
 						currentUITooltip.Open(bankItem.Tooltip());
 					}
 					break;
 				case ReferenceButtonType.Ability:
-					if (character.AbilityController.KnownAbilities != null &&
-						character.AbilityController.KnownAbilities.TryGetValue(referenceID, out Ability ability) &&
+					if (Character.TryGet(out AbilityController abilityController) &&
+						abilityController.KnownAbilities != null &&
+						abilityController.KnownAbilities.TryGetValue(referenceID, out Ability ability) &&
 						UIManager.TryGet("UITooltip", out currentUITooltip))
 					{
 						currentUITooltip.Open(ability.Tooltip());

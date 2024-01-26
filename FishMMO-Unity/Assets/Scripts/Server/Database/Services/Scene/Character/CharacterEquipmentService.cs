@@ -95,7 +95,8 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Load(NpgsqlDbContext dbContext, Character character)
 		{
-			if (character == null)
+			if (character == null ||
+				!character.TryGet(out EquipmentController equipmentController))
 			{
 				return;
 			}
@@ -112,7 +113,7 @@ namespace FishMMO.Server.DatabaseServices
 				{
 					return;
 				}
-				character.EquipmentController.SetItemSlot(item, dbItem.Slot);
+				equipmentController.SetItemSlot(item, dbItem.Slot);
 			};
 		}
 	}

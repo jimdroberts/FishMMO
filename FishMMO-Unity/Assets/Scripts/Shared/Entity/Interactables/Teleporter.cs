@@ -4,6 +4,7 @@ using FishNet.Connection;
 using FishNet.Object;
 using FishNet.Transporting;
 using FishMMO.Server;
+using static FishMMO.Server.Server;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Database.Npgsql.Entities;
 #endif
@@ -78,15 +79,16 @@ namespace FishMMO.Shared
 			character.IsTeleporting = true;
 
 			// should we prevent players from moving to a different scene if they are in combat?
-			/*if (character.DamageController.Attackers.Count > 0)
+			/*if (character.TryGet(out CharacterDamageController damageController) &&
+				  damageController.Attackers.Count > 0)
 			{
 				return;
 			}*/
 
 			// make the character immortal for teleport
-			if (character.DamageController != null)
+			if (character.TryGet(out CharacterDamageController damageController))
 			{
-				character.DamageController.Immortal = true;
+				damageController.Immortal = true;
 			}
 
 			// update scene instance details
@@ -108,13 +110,13 @@ namespace FishMMO.Shared
 			NetworkConnection conn = character.Owner;
 			long worldServerId = character.WorldServerID;
 
-			sceneServerSystem.ServerManager.Despawn(character.NetworkObject, DespawnType.Pool);
+			sceneServerSystem.ServerManager.Despawn(character.NetworkObject, DespawnType.Destroy);
 
 			WorldServerEntity worldServer = WorldServerService.GetServer(dbContext, worldServerId);
 			if (worldServer != null)
 			{
 				// tell the client to reconnect to the world server for automatic re-entry
-				conn.Broadcast(new SceneWorldReconnectBroadcast()
+				Broadcast(conn, new SceneWorldReconnectBroadcast()
 				{
 					address = worldServer.Address,
 					port = worldServer.Port,

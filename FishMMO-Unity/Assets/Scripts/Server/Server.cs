@@ -1,10 +1,13 @@
-﻿using FishNet.Managing;
+﻿using FishNet.Connection;
+using FishNet.Broadcast;
+using FishNet.Managing;
 using FishNet.Transporting;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using System;
 using System.Collections;
 using System.IO;
+using System.Runtime.CompilerServices;
 using StackExchange.Redis;
 using FishMMO.Database.Npgsql;
 using FishMMO.Database.Redis;
@@ -20,6 +23,14 @@ namespace FishMMO.Server
 	// Main Server class, handles configuration and starting connections.
 	public class Server : MonoBehaviour
 	{
+		private enum ServerType
+		{
+			Invalid = 0,
+			Login,
+			World,
+			Scene,
+		}
+
 		public Configuration Configuration { get; private set; }
 		public NpgsqlDbContextFactory NpgsqlDbContextFactory { get; private set; }
 		public RedisDbContextFactory RedisDbContextFactory { get; private set; }
@@ -45,21 +56,20 @@ namespace FishMMO.Server
 		{
 			startTime = DateTime.UtcNow;
 
-			// get the server type so we know how to configure
-			string serverType = GetServerType();
-			if (serverType.Equals("Invalid"))
+			// validate server type
+			if (GetServerType() == ServerType.Invalid)
 			{
 				Server.Quit();
 			}
 
 			if (LogToDisk)
 			{
-				logFilePath = Path.Combine(GetWorkingDirectory(), "Logs", serverType + "_DebugLog_" + startTime.ToString("yyyy-MM-dd") + ".txt");
+				logFilePath = Path.Combine(GetWorkingDirectory(), "Logs", serverTypeName + "_DebugLog_" + startTime.ToString("yyyy-MM-dd") + ".txt");
 
 				Application.logMessageReceived += this.Application_logMessageReceived;
 			}
 
-			Debug.Log("Server: " + serverType + " is starting[" + DateTime.UtcNow + "]");
+			Debug.Log("Server: " + serverTypeName + " is starting[" + DateTime.UtcNow + "]");
 
 			Debug.Log("Server: Fetching Remote IP Address.");
 			RemoteAddress = NetHelper.GetExternalIPAddress().ToString();
@@ -84,11 +94,7 @@ namespace FishMMO.Server
 				Configuration.Save();
 #endif
 			}
-
-			// Ensure the KCC System is created.
-			KinematicCharacterSystem.EnsureCreation();
-			KinematicCharacterSystem.Settings.AutoSimulation = false;
-			KinematicCharacterSystem.Settings.Interpolate = false;
+			Debug.Log(Configuration.ToString());
 
 			// initialize the DB contexts
 #if UNITY_EDITOR
@@ -113,6 +119,12 @@ namespace FishMMO.Server
 
 			// initialize server behaviours
 			Debug.Log("Server: Initializing Components");
+
+
+			// Ensure the KCC System is created.
+			KinematicCharacterSystem.EnsureCreation();
+			KinematicCharacterSystem.Settings.AutoSimulation = false;
+			KinematicCharacterSystem.Settings.Interpolate = false;
 
 			// database factory DI
 			LoginServerAuthenticator authenticator = NetworkManager.ServerManager.GetAuthenticator() as LoginServerAuthenticator;
@@ -140,7 +152,7 @@ namespace FishMMO.Server
 				Server.Quit();
 			}
 
-			Debug.Log("Server: " + serverType + " is running[" + DateTime.UtcNow + "]");
+			Debug.Log("Server: " + serverTypeName + " is running[" + DateTime.UtcNow + "]");
 		}
 
 		private void Application_logMessageReceived(string condition, string stackTrace, LogType type)
@@ -191,7 +203,7 @@ namespace FishMMO.Server
 #endif
 		}
 
-		private string GetServerType()
+		private ServerType GetServerType()
 		{
 			Scene scene = gameObject.scene;
 			if (!scene.path.Contains("Bootstraps"))
@@ -202,17 +214,17 @@ namespace FishMMO.Server
 			string upper = serverTypeName.ToUpper();
 			if (upper.StartsWith("LOGIN"))
 			{
-				return "LOGIN";
+				return ServerType.Login;
 			}
 			if (upper.StartsWith("WORLD"))
 			{
-				return "WORLD";
+				return ServerType.World;
 			}
 			if (upper.StartsWith("SCENE"))
 			{
-				return "SCENE";
+				return ServerType.Scene;
 			}
-			return "Invalid";
+			return ServerType.Invalid;
 		}
 
 		/// <summary>
@@ -249,6 +261,13 @@ namespace FishMMO.Server
 			}
 
 			yield return null;
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static void Broadcast<T>(NetworkConnection conn, T broadcast, bool requireAuthentication = true, Channel channel = Channel.Reliable) where T : struct, IBroadcast
+		{
+			Debug.Log($"[Broadcast] Sending: " + typeof(T));
+			conn.Broadcast(broadcast, requireAuthentication, channel);
 		}
 
 		/// <summary>

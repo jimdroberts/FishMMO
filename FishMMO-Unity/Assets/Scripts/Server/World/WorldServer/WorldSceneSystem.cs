@@ -177,7 +177,7 @@ namespace FishMMO.Server
 						CharacterService.SetSceneHandle(dbContext, accountName, loadedScene.SceneHandle);
 
 						// tell the client to connect to the scene
-						connection.Broadcast(new WorldSceneConnectBroadcast()
+						Server.Broadcast(connection, new WorldSceneConnectBroadcast()
 						{
 							address = sceneServer.Address,
 							port = sceneServer.Port,
@@ -270,7 +270,7 @@ namespace FishMMO.Server
 				CharacterService.SetSceneHandle(dbContext, accountName, selectedScene.SceneHandle);
 
 				// tell the character to reconnect to the scene server
-				conn.Broadcast(new WorldSceneConnectBroadcast()
+				Server.Broadcast(conn, new WorldSceneConnectBroadcast()
 				{
 					address = sceneServer.Address,
 					port = sceneServer.Port,

@@ -204,22 +204,24 @@ namespace FishMMO.Server
 				switch (msg.channel)
 				{
 					case ChatChannel.Guild:
-						if (sender.GuildController == null || sender.GuildController.ID.Value < 1)
+						if (!sender.TryGet(out GuildController guildController) ||
+							guildController.ID.Value < 1)
 						{
 							return;
 						}
 
 						// add the senders guild ID
-						msg.text = sender.GuildController.ID.Value + " " + msg.text;
+						msg.text = guildController.ID.Value + " " + msg.text;
 						break;
 					case ChatChannel.Party:
-						if (sender.PartyController == null || sender.PartyController.ID < 1)
+						if (!sender.TryGet(out PartyController partyController) ||
+							partyController.ID < 1)
 						{
 							return;
 						}
 
 						// add the senders party ID
-						msg.text = sender.PartyController.ID + " " + msg.text;
+						msg.text = partyController.ID + " " + msg.text;
 						break;
 					case ChatChannel.Trade:
 					case ChatChannel.World:
@@ -263,7 +265,7 @@ namespace FishMMO.Server
 				// send to all world characters
 				foreach (Character character in new List<Character>(characters.Values))
 				{
-					character.Owner.Broadcast(newMsg, true, Channel.Reliable);
+					Server.Broadcast(character.Owner, newMsg, true, Channel.Reliable);
 				}
 			}
 			return true;
@@ -285,7 +287,7 @@ namespace FishMMO.Server
 				{
 					foreach (NetworkConnection connection in connections)
 					{
-						connection.Broadcast(msg, true, Channel.Reliable);
+						Server.Broadcast(connection, msg, true, Channel.Reliable);
 					}
 				}
 			}
@@ -325,7 +327,7 @@ namespace FishMMO.Server
 					if (characterSystem.CharactersByID.TryGetValue(member.CharacterID, out Character character))
 					{
 						// broadcast to party member...
-						character.Owner.Broadcast(newMsg, true, Channel.Reliable);
+						Server.Broadcast(character.Owner, newMsg, true, Channel.Reliable);
 					}
 				}
 				return true;
@@ -365,7 +367,7 @@ namespace FishMMO.Server
 					if (characterSystem.CharactersByID.TryGetValue(member.CharacterID, out Character character))
 					{
 						// broadcast to guild member...
-						character.Owner.Broadcast(newMsg, true, Channel.Reliable);
+						Server.Broadcast(character.Owner, newMsg, true, Channel.Reliable);
 					}
 				}
 				return true;
@@ -404,7 +406,7 @@ namespace FishMMO.Server
 				// are we messaging ourself?
 				if (msg.senderID == targetID)
 				{
-					sender.Owner.Broadcast(new ChatBroadcast()
+					Server.Broadcast(sender.Owner, new ChatBroadcast()
 					{
 						channel = msg.channel,
 						senderID = msg.senderID,
@@ -415,7 +417,7 @@ namespace FishMMO.Server
 				else if (!online)
 				{
 					// if the target character is not online
-					sender.Owner.Broadcast(new ChatBroadcast()
+					Server.Broadcast(sender.Owner, new ChatBroadcast()
 					{
 						channel = msg.channel,
 						senderID = msg.senderID,
@@ -425,7 +427,7 @@ namespace FishMMO.Server
 				}
 				else if (targetID > 0)
 				{
-					sender.Owner.Broadcast(new ChatBroadcast()
+					Server.Broadcast(sender.Owner, new ChatBroadcast()
 					{
 						channel = msg.channel,
 						senderID = targetID,
@@ -440,7 +442,7 @@ namespace FishMMO.Server
 				if (characterSystem != null &&
 					characterSystem.CharactersByID.TryGetValue(targetID, out Character targetCharacter))
 				{
-					targetCharacter.Owner.Broadcast(new ChatBroadcast()
+					Server.Broadcast(targetCharacter.Owner, new ChatBroadcast()
 					{
 						channel = msg.channel,
 						senderID = msg.senderID,
@@ -476,7 +478,7 @@ namespace FishMMO.Server
 					// send to all world characters
 					foreach (Character character in new List<Character>(characters.Values))
 					{
-						character.Owner.Broadcast(newMsg, true, Channel.Reliable);
+						Server.Broadcast(character.Owner, newMsg, true, Channel.Reliable);
 					}
 				}
 				return true;
@@ -491,7 +493,7 @@ namespace FishMMO.Server
 				// get the senders observed characters and send them the chat message
 				foreach (NetworkConnection obsConnection in sender.Observers)
 				{
-					obsConnection.Broadcast(msg, true, Channel.Reliable);
+					Server.Broadcast(obsConnection, msg, true, Channel.Reliable);
 				}
 			}
 			return false; // we return false here so the message is not written to the database
@@ -511,7 +513,7 @@ namespace FishMMO.Server
 				text = message,
 			};
 
-			conn.Broadcast(msg, true, Channel.Reliable);
+			Server.Broadcast(conn, msg, true, Channel.Reliable);
 		}
 	}
 }

@@ -13,7 +13,8 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Save(NpgsqlDbContext dbContext, Character character)
 		{
-			if (character == null)
+			if (character == null ||
+				!character.TryGet(out BuffController buffController))
 			{
 				return;
 			}
@@ -24,14 +25,14 @@ namespace FishMMO.Server.DatabaseServices
 			// remove dead buffs
 			foreach (CharacterBuffEntity dbBuff in new List<CharacterBuffEntity>(buffs.Values))
 			{
-				if (!character.BuffController.Buffs.ContainsKey(dbBuff.TemplateID))
+				if (!buffController.Buffs.ContainsKey(dbBuff.TemplateID))
 				{
 					buffs.Remove(dbBuff.TemplateID);
 					dbContext.CharacterBuffs.Remove(dbBuff);
 				}
 			}
 
-			foreach (Buff buff in character.BuffController.Buffs.Values)
+			foreach (Buff buff in buffController.Buffs.Values)
 			{
 				if (buffs.TryGetValue(buff.Template.ID, out CharacterBuffEntity dbBuff))
 				{
@@ -96,6 +97,11 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Load(NpgsqlDbContext dbContext, Character character)
 		{
+			if (character == null ||
+				!character.TryGet(out BuffController buffController))
+			{
+				return;
+			}
 			var buffs = dbContext.CharacterBuffs.Where(c => c.CharacterID == character.ID.Value);
 			foreach (CharacterBuffEntity buff in buffs)
 			{
@@ -109,7 +115,7 @@ namespace FishMMO.Server.DatabaseServices
 					}
 				}
 				Buff newBuff = new Buff(buff.TemplateID, buff.RemainingTime, stacks);
-				character.BuffController.Apply(newBuff);
+				buffController.Apply(newBuff);
 			};
 		}
 	}

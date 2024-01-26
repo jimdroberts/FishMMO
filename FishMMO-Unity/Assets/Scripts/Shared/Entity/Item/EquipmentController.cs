@@ -1,15 +1,15 @@
 ﻿using FishNet.Transporting;
 using System.Collections.Generic;
 using UnityEngine;
+#if !UNITY_SERVER
+using static FishMMO.Client.Client;
+#endif
 
 namespace FishMMO.Shared
 {
-	[RequireComponent(typeof(Character))]
 	public class EquipmentController : ItemContainer
 	{
-		public Character Character;
-
-		private void Awake()
+		public override void OnAwake()
 		{
 			AddSlots(null, System.Enum.GetNames(typeof(ItemSlot)).Length); // equipment size = itemslot size
 		}
@@ -73,17 +73,19 @@ namespace FishMMO.Shared
 			switch (msg.fromInventory)
 			{
 				case InventoryType.Inventory:
-					if (Character.InventoryController.TryGetItem(msg.inventoryIndex, out Item inventoryItem))
+					if (Character.TryGet(out InventoryController inventoryController) &&
+						inventoryController.TryGetItem(msg.inventoryIndex, out Item inventoryItem))
 					{
-						Equip(inventoryItem, msg.inventoryIndex, Character.InventoryController, (ItemSlot)msg.slot);
+						Equip(inventoryItem, msg.inventoryIndex, inventoryController, (ItemSlot)msg.slot);
 					}
 					break;
 				case InventoryType.Equipment:
 					break;
 				case InventoryType.Bank:
-					if (Character.BankController.TryGetItem(msg.inventoryIndex, out Item bankItem))
+					if (Character.TryGet(out BankController bankController) &&
+						bankController.TryGetItem(msg.inventoryIndex, out Item bankItem))
 					{
-						Equip(bankItem, msg.inventoryIndex, Character.BankController, (ItemSlot)msg.slot);
+						Equip(bankItem, msg.inventoryIndex, bankController, (ItemSlot)msg.slot);
 					}
 					break;
 				default: return;
@@ -98,17 +100,17 @@ namespace FishMMO.Shared
 			switch (msg.toInventory)
 			{
 				case InventoryType.Inventory:
-					if (Character.InventoryController != null)
+					if (Character.TryGet(out InventoryController inventoryController))
 					{
-						Unequip(Character.InventoryController, msg.slot, out List<Item> modifiedItems);
+						Unequip(inventoryController, msg.slot, out List<Item> modifiedItems);
 					}
 					break;
 				case InventoryType.Equipment:
 					break;
 				case InventoryType.Bank:
-					if (Character.BankController != null)
+					if (Character.TryGet(out BankController bankController))
 					{
-						Unequip(Character.BankController, msg.slot, out List<Item> modifiedItems);
+						Unequip(bankController, msg.slot, out List<Item> modifiedItems);
 					}
 					break;
 				default: return;
@@ -118,21 +120,25 @@ namespace FishMMO.Shared
 
 		public void SendEquipRequest(int inventoryIndex, byte slot, InventoryType fromInventory)
 		{
-			ClientManager.Broadcast(new EquipmentEquipItemBroadcast()
+#if !UNITY_SERVER
+			Broadcast(new EquipmentEquipItemBroadcast()
 			{
 				inventoryIndex = inventoryIndex,
 				slot = slot,
 				fromInventory = fromInventory,
 			}, Channel.Reliable);
+#endif
 		}
 
 		public void SendUnequipRequest(byte slot, InventoryType toInventory)
 		{
-			ClientManager.Broadcast(new EquipmentUnequipItemBroadcast()
+#if !UNITY_SERVER
+			Broadcast(new EquipmentUnequipItemBroadcast()
 			{
 				slot = slot,
 				toInventory = toInventory,
 			}, Channel.Reliable);
+#endif
 		}
 
 		public override bool CanManipulate()

@@ -181,13 +181,14 @@ namespace FishMMO.Server
 					{
 						if (characterSystem.CharactersByID.TryGetValue(entity.CharacterID, out Character character))
 						{
-							if (character.GuildController.ID.Value < 1)
+							if (!character.TryGet(out GuildController guildController) ||
+								guildController.ID.Value < 1)
 							{
 								continue;
 							}
 							// update server rank in the case of a membership rank change
-							character.GuildController.Rank = (GuildRank)entity.Rank;
-							character.Owner.Broadcast(guildAddBroadcast, true, Channel.Reliable);
+							guildController.Rank = (GuildRank)entity.Rank;
+							Server.Broadcast(character.Owner, guildAddBroadcast, true, Channel.Reliable);
 						}
 					}
 				}
@@ -242,7 +243,7 @@ namespace FishMMO.Server
 				CharacterGuildService.Save(dbContext, guildController.Character);
 
 				// tell the character we made their guild successfully
-				conn.Broadcast(new GuildAddBroadcast()
+				Server.Broadcast(conn, new GuildAddBroadcast()
 				{
 					guildID = guildController.ID.Value,
 					characterID = guildController.Character.ID.Value,
@@ -291,7 +292,7 @@ namespace FishMMO.Server
 
 				// add to our list of pending invitations... used for validation when accepting/declining a guild invite
 				pendingInvitations.Add(targetCharacter.ID.Value, inviter.ID.Value);
-				targetCharacter.Owner.Broadcast(new GuildInviteBroadcast()
+				Server.Broadcast(targetCharacter.Owner, new GuildInviteBroadcast()
 				{
 					inviterCharacterID = inviter.Character.ID.Value,
 					targetCharacterID = targetCharacter.ID.Value
@@ -335,7 +336,7 @@ namespace FishMMO.Server
 					GuildUpdateService.Save(dbContext, pendingGuildID);
 
 					// tell the new member they joined immediately, other clients will catch up with the GuildUpdate pass
-					conn.Broadcast(new GuildAddBroadcast()
+					Server.Broadcast(conn, new GuildAddBroadcast()
 					{
 						guildID = guildController.ID.Value,
 						characterID = guildController.Character.ID.Value,
@@ -429,7 +430,7 @@ namespace FishMMO.Server
 				guildController.Rank = GuildRank.None;
 
 				// tell character that they left the guild immediately, other clients will catch up with the GuildUpdate pass
-				conn.Broadcast(new GuildLeaveBroadcast(), true, Channel.Reliable);
+				Server.Broadcast(conn, new GuildLeaveBroadcast(), true, Channel.Reliable);
 
 				// remove the guild member
 				CharacterGuildService.Delete(dbContext, guildController.Character.ID.Value);

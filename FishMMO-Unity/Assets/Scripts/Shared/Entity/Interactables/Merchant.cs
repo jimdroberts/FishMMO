@@ -1,4 +1,5 @@
 ﻿#if UNITY_SERVER
+using static FishMMO.Server.Server;
 using FishNet.Transporting;
 #endif
 using UnityEngine;
@@ -27,7 +28,7 @@ namespace FishMMO.Shared
 			}
 
 #if UNITY_SERVER
-			character.Owner.Broadcast(new MerchantBroadcast()
+			Broadcast(character.Owner, new MerchantBroadcast()
 			{
 				id = Template.ID,
 			}, true, Channel.Reliable);

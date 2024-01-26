@@ -7,9 +7,9 @@ namespace FishMMO.Shared
 	{
 		public override int Invoke(Character attacker, Character defender, TargetInfo hitTarget, GameObject abilityObject)
 		{
-			if (defender != null && defender.AbilityController != null)
+			if (defender != null && defender.TryGet(out AbilityController abilityController))
 			{
-				defender.AbilityController.Interrupt(attacker);
+				abilityController.Interrupt(attacker);
 			}
 			// interrupt doesn't count as a hit
 			return 0;

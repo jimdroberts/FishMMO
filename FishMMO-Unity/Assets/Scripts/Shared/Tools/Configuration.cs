@@ -24,6 +24,28 @@ namespace FishMMO.Shared
 			this.defaultFileDirectory = defaultFileDirectory;
 		}
 
+		public override string ToString()
+		{
+			using (var sb = ZString.CreateStringBuilder())
+			{
+				sb.Append("Configuration: ");
+				sb.Append(defaultFileDirectory);
+				sb.Append("\\");
+				sb.Append(fileName);
+				if (settings != null)
+				{
+					foreach (KeyValuePair<string, string> setting in settings)
+					{
+						sb.AppendLine();
+						sb.Append(setting.Key);
+						sb.Append(": ");
+						sb.Append(setting.Value);
+					}
+				}
+				return sb.ToString();
+			}
+		}
+
 		/// <summary>
 		/// Attempts to combine the other configuration with this configuration. If the entry already exists it will not be updated to match the other configuration.
 		/// </summary>

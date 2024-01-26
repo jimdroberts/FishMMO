@@ -1,16 +1,12 @@
-﻿using FishNet.Object;
-using FishNet.Transporting;
+﻿using FishNet.Transporting;
 using System.Collections.Generic;
 using UnityEngine;
 
 namespace FishMMO.Shared
 {
-	[RequireComponent(typeof(Character))]
-	public class BuffController : NetworkBehaviour
+	public class BuffController : CharacterBehaviour
 	{
 		private Dictionary<int, Buff> buffs = new Dictionary<int, Buff>();
-
-		public Character Character;
 
 		public Dictionary<int, Buff> Buffs { get { return buffs; } }
 

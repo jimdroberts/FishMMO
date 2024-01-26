@@ -17,7 +17,8 @@ namespace FishMMO.Client
 					{
 						dragObject.Clear();
 					}
-					else if (Character.AbilityController.KnownAbilities.ContainsKey(ReferenceID))
+					else if (Character.TryGet(out AbilityController abilityController) &&
+							 abilityController.KnownAbilities.ContainsKey(ReferenceID))
 					{
 						dragObject.SetReference(Icon.sprite, ReferenceID, Type);
 					}

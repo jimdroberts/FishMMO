@@ -1,17 +1,16 @@
 ﻿using System.Collections.Generic;
-using FishNet.Object;
 using FishNet.Transporting;
 
 namespace FishMMO.Shared
 {
-	public class CharacterAttributeController : NetworkBehaviour
+	public class CharacterAttributeController : CharacterBehaviour
 	{
 		public CharacterAttributeTemplateDatabase CharacterAttributeDatabase;
 
 		public readonly Dictionary<int, CharacterAttribute> Attributes = new Dictionary<int, CharacterAttribute>();
 		public readonly Dictionary<int, CharacterResourceAttribute> ResourceAttributes = new Dictionary<int, CharacterResourceAttribute>();
 
-		protected void Awake()
+		public override void OnAwake()
 		{
 			if (CharacterAttributeDatabase != null)
 			{

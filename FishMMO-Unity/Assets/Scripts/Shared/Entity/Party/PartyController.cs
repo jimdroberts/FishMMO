@@ -1,10 +1,10 @@
 ﻿using UnityEngine;
-using FishNet.Object;
 using FishNet.Transporting;
 using System.Collections.Generic;
 using System.Linq;
 #if !UNITY_SERVER
 using FishMMO.Client;
+using static FishMMO.Client.Client;
 #endif
 
 namespace FishMMO.Shared
@@ -13,10 +13,8 @@ namespace FishMMO.Shared
 	/// Character party controller.
 	/// </summary>
 	[RequireComponent(typeof(Character))]
-	public class PartyController : NetworkBehaviour
+	public class PartyController : CharacterBehaviour
 	{
-		public Character Character;
-
 		public long ID;
 		public PartyRank Rank = PartyRank.None;
 
@@ -80,11 +78,11 @@ namespace FishMMO.Shared
 					uiTooltip.Open("You have been invited to join " + n + "'s party. Would you like to join?",
 					() =>
 					{
-						ClientManager.Broadcast(new PartyAcceptInviteBroadcast(), Channel.Reliable);
+						Broadcast(new PartyAcceptInviteBroadcast(), Channel.Reliable);
 					},
 					() =>
 					{
-						ClientManager.Broadcast(new PartyDeclineInviteBroadcast(), Channel.Reliable);
+						Broadcast(new PartyDeclineInviteBroadcast(), Channel.Reliable);
 					});
 				}
 			});

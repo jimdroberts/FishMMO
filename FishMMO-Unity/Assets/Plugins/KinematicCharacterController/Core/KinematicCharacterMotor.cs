@@ -511,7 +511,7 @@ namespace KinematicCharacterController
 
         private void OnEnable()
         {
-            KinematicCharacterSystem.EnsureCreation();
+            //KinematicCharacterSystem.EnsureCreation();
             //KinematicCharacterSystem.RegisterCharacterMotor(this);
         }
 
@@ -627,7 +627,7 @@ namespace KinematicCharacterController
             _initialSimulationPosition = position;
             _initialSimulationRotation = rotation;
             _transientPosition = position;
-            TransientRotation = rotation;
+            _transientRotation = rotation;
 
             if (bypassInterpolation)
             {
@@ -646,7 +646,7 @@ namespace KinematicCharacterController
 			_initialSimulationRotation = rotation;
 			_transientPosition = position;
             _movePositionTarget = position;
-			TransientRotation = rotation;
+			_transientRotation = rotation;
 			BaseVelocity = velocity;
 			_attachedRigidbodyVelocity = velocity;
 
@@ -684,15 +684,12 @@ namespace KinematicCharacterController
 
             state.Position = _transientPosition;
             state.Rotation = _transientRotation;
-
             state.BaseVelocity = BaseVelocity;
             state.AttachedRigidbodyVelocity = _attachedRigidbodyVelocity;
-
             state.MustUnground = _mustUnground;
             state.MustUngroundTime = _mustUngroundTimeCounter;
             state.LastMovementIterationFoundAnyGround = LastMovementIterationFoundAnyGround;
             state.GroundingStatus.CopyFrom(GroundingStatus);
-            state.AttachedRigidbody = _attachedRigidbody;
 
             return state;
         }
@@ -706,12 +703,10 @@ namespace KinematicCharacterController
 
             BaseVelocity = state.BaseVelocity;
             _attachedRigidbodyVelocity = state.AttachedRigidbodyVelocity;
-
             _mustUnground = state.MustUnground;
             _mustUngroundTimeCounter = state.MustUngroundTime;
             LastMovementIterationFoundAnyGround = state.LastMovementIterationFoundAnyGround;
             GroundingStatus.CopyFrom(state.GroundingStatus);
-            _attachedRigidbody = state.AttachedRigidbody;
         }
 
         /// <summary>

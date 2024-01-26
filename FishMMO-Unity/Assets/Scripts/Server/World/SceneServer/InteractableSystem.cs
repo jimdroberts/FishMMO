@@ -100,8 +100,8 @@ namespace FishMMO.Server
 				return;
 			}
 			Character character = conn.FirstObject.GetComponent<Character>();
-			if (character == null &&
-				character.InventoryController != null)
+			if (character == null ||
+				!character.TryGet(out InventoryController inventoryController))
 			{
 				return;
 			}
@@ -129,7 +129,7 @@ namespace FishMMO.Server
 					}
 
 					// do we have enough currency to purchase this?
-					if (character.InventoryController.Currency < itemTemplate.Price)
+					if (inventoryController.Currency < itemTemplate.Price)
 					{
 						return;
 					}
@@ -146,12 +146,12 @@ namespace FishMMO.Server
 						List<InventorySetItemBroadcast> modifiedItemBroadcasts = new List<InventorySetItemBroadcast>();
 
 						// see if we have successfully added the item
-						if (character.InventoryController.TryAddItem(newItem, out List<Item> modifiedItems) &&
+						if (inventoryController.TryAddItem(newItem, out List<Item> modifiedItems) &&
 							modifiedItems != null &&
 							modifiedItems.Count > 0)
 						{
 							// remove the price from the characters currency
-							character.InventoryController.Currency -= itemTemplate.Price;
+							inventoryController.Currency -= itemTemplate.Price;
 
 							// add slot update requests to our message
 							foreach (Item item in modifiedItems)
@@ -180,7 +180,7 @@ namespace FishMMO.Server
 						// tell the client they have new items
 						if (modifiedItemBroadcasts.Count > 0)
 						{
-							conn.Broadcast(new InventorySetMultipleItemsBroadcast()
+							Server.Broadcast(conn, new InventorySetMultipleItemsBroadcast()
 							{
 								items = modifiedItemBroadcasts,
 							}, true, Channel.Reliable);
@@ -210,24 +210,25 @@ namespace FishMMO.Server
 			// do we already know this ability?
 			if (template == null ||
 				character == null ||
-				character.AbilityController == null ||
-				character.AbilityController.KnowsAbility(template.ID) ||
-				character.InventoryController.Currency < template.Price)
+				!character.TryGet(out AbilityController abilityController) ||
+				abilityController.KnowsAbility(template.ID) ||
+				!character.TryGet(out InventoryController inventoryController) ||
+				inventoryController.Currency < template.Price)
 			{
 				return;
 			}
 
 			// learn the ability
-			character.AbilityController.LearnBaseAbilities(new List<BaseAbilityTemplate> { template });
+			abilityController.LearnBaseAbilities(new List<BaseAbilityTemplate> { template });
 
 			// remove the price from the characters currency
-			character.InventoryController.Currency -= template.Price;
+			inventoryController.Currency -= template.Price;
 
 			// add the known ability to the database
 			CharacterKnownAbilityService.Add(dbContext, character.ID.Value, template.ID);
 
 			// tell the client about the new ability event
-			conn.Broadcast(new KnownAbilityAddBroadcast()
+			Server.Broadcast(conn, new KnownAbilityAddBroadcast()
 			{
 				templateID = template.ID,
 			}, true, Channel.Reliable);
@@ -246,8 +247,8 @@ namespace FishMMO.Server
 				return;
 			}
 			Character character = conn.FirstObject.GetComponent<Character>();
-			if (character == null &&
-				character.AbilityController != null)
+			if (character == null ||
+				!character.TryGet(out AbilityController abilityController))
 			{
 				return;
 			}
@@ -260,7 +261,7 @@ namespace FishMMO.Server
 			}
 
 			// validate that the character knows the main ability
-			if (!character.AbilityController.KnowsAbility(mainAbility.ID))
+			if (!abilityController.KnowsAbility(mainAbility.ID))
 			{
 				return;
 			}
@@ -279,7 +280,7 @@ namespace FishMMO.Server
 						return;
 					}
 					// validate that the character knows the ability event
-					if (!character.AbilityController.KnowsAbility(eventTemplate.ID))
+					if (!abilityController.KnowsAbility(eventTemplate.ID))
 					{
 						return;
 					}
@@ -312,7 +313,7 @@ namespace FishMMO.Server
 
 			CharacterAbilityService.UpdateOrAdd(dbContext, character.ID.Value, newAbility);
 
-			character.AbilityController.LearnAbility(newAbility);
+			abilityController.LearnAbility(newAbility);
 
 			character.Currency.Value -= price;
 
@@ -323,7 +324,7 @@ namespace FishMMO.Server
 				events = msg.events,
 			};
 
-			conn.Broadcast(abilityAddBroadcast, true, Channel.Reliable);
+			Server.Broadcast(conn, abilityAddBroadcast, true, Channel.Reliable);
 		}
 	}
 }

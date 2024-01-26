@@ -30,7 +30,8 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Save(NpgsqlDbContext dbContext, Character character)
 		{
-			if (character == null)
+			if (character == null ||
+				!character.TryGet(out FriendController friendController))
 			{
 				return;
 			}
@@ -38,7 +39,7 @@ namespace FishMMO.Server.DatabaseServices
 			var friends = dbContext.CharacterFriends.Where(c => c.CharacterID == character.ID.Value)
 													.ToDictionary(k => k.FriendCharacterID);
 
-			foreach (long friendID in character.FriendController.Friends)
+			foreach (long friendID in friendController.Friends)
 			{
 				if (!friends.ContainsKey(friendID))
 				{
@@ -118,10 +119,15 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Load(NpgsqlDbContext dbContext, Character character)
 		{
+			if (character == null ||
+				!character.TryGet(out FriendController friendController))
+			{
+				return;
+			}
 			var friends = dbContext.CharacterFriends.Where(c => c.CharacterID == character.ID.Value);
 			foreach (CharacterFriendEntity friend in friends)
 			{
-				character.FriendController.AddFriend(friend.FriendCharacterID);
+				friendController.AddFriend(friend.FriendCharacterID);
 			};
 		}
 

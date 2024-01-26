@@ -100,8 +100,6 @@ namespace FishNet.Managing.Server
         /// <param name="channel">Channel to send on.</param>
         public void Broadcast<T>(NetworkConnection connection, T message, bool requireAuthenticated = true, Channel channel = Channel.Reliable) where T : struct, IBroadcast
         {
-			Debug.Log($"[Broadcast] Sending: " + typeof(T));
-
 			if (!Started)
             {
                 NetworkManager.LogWarning($"Cannot send broadcast to client because server is not active.");
@@ -131,8 +129,6 @@ namespace FishNet.Managing.Server
         /// <param name="channel">Channel to send on.</param>
         public void Broadcast<T>(HashSet<NetworkConnection> connections, T message, bool requireAuthenticated = true, Channel channel = Channel.Reliable) where T : struct, IBroadcast
         {
-			Debug.Log($"[Broadcast] Sending: " + typeof(T));
-
 			if (!Started)
             {
                 NetworkManager.LogWarning($"Cannot send broadcast to client because server is not active.");
@@ -172,8 +168,6 @@ namespace FishNet.Managing.Server
         /// <param name="channel">Channel to send on.</param>
         public void BroadcastExcept<T>(HashSet<NetworkConnection> connections, NetworkConnection excludedConnection, T message, bool requireAuthenticated = true, Channel channel = Channel.Reliable) where T : struct, IBroadcast
         {
-			Debug.Log($"[Broadcast] Sending: " + typeof(T));
-
 			if (!Started)
             {
                 NetworkManager.LogWarning($"Cannot send broadcast to client because server is not active.");
@@ -203,8 +197,6 @@ namespace FishNet.Managing.Server
         /// <param name="channel">Channel to send on.</param>
         public void BroadcastExcept<T>(HashSet<NetworkConnection> connections, HashSet<NetworkConnection> excludedConnections, T message, bool requireAuthenticated = true, Channel channel = Channel.Reliable) where T : struct, IBroadcast
         {
-			Debug.Log($"[Broadcast] Sending: " + typeof(T));
-
 			if (!Started)
             {
                 NetworkManager.LogWarning($"Cannot send broadcast to client because server is not active.");
@@ -237,8 +229,6 @@ namespace FishNet.Managing.Server
         /// <param name="channel">Channel to send on.</param>
         public void BroadcastExcept<T>(NetworkConnection excludedConnection, T message, bool requireAuthenticated = true, Channel channel = Channel.Reliable) where T : struct, IBroadcast
         {
-			Debug.Log($"[Broadcast] Sending: " + typeof(T));
-
 			if (!Started)
             {
                 NetworkManager.LogWarning($"Cannot send broadcast to client because server is not active.");
@@ -273,8 +263,6 @@ namespace FishNet.Managing.Server
         /// <param name="channel">Channel to send on.</param>
         public void BroadcastExcept<T>(HashSet<NetworkConnection> excludedConnections, T message, bool requireAuthenticated = true, Channel channel = Channel.Reliable) where T : struct, IBroadcast
         {
-			Debug.Log($"[Broadcast] Sending: " + typeof(T));
-
 			if (!Started)
             {
                 NetworkManager.LogWarning($"Cannot send broadcast to client because server is not active.");
@@ -311,8 +299,6 @@ namespace FishNet.Managing.Server
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Broadcast<T>(NetworkObject networkObject, T message, bool requireAuthenticated = true, Channel channel = Channel.Reliable) where T : struct, IBroadcast
         {
-			Debug.Log($"[Broadcast] Sending: " + typeof(T));
-
 			if (networkObject == null)
             {
                 NetworkManager.LogWarning($"Cannot send broadcast because networkObject is null.");
@@ -332,8 +318,6 @@ namespace FishNet.Managing.Server
         /// <param name="channel">Channel to send on.</param>
         public void Broadcast<T>(T message, bool requireAuthenticated = true, Channel channel = Channel.Reliable) where T : struct, IBroadcast
         {
-			Debug.Log($"[Broadcast] Sending: " + typeof(T));
-
 			if (!Started)
             {
                 NetworkManager.LogWarning($"Cannot send broadcast to client because server is not active.");

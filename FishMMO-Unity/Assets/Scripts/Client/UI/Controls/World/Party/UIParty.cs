@@ -31,9 +31,9 @@ namespace FishMMO.Client
 					if (member.Name != null)
 						member.Name.text = Character.CharacterName;
 					if (member.Rank != null)
-						member.Rank.text = "Rank: " + Character.PartyController.Rank.ToString();
+						member.Rank.text = "Rank: " + (Character.TryGet(out PartyController partyController) ? partyController.Rank.ToString() : "");
 					if (member.Health != null)
-						member.Health.value = Character.AttributeController.GetResourceAttributeCurrentPercentage(HealthTemplate);
+						member.Health.value = Character.TryGet(out CharacterAttributeController attributeController) ? attributeController.GetResourceAttributeCurrentPercentage(HealthTemplate) : 0.0f;
 					Members.Add(Character.ID.Value, member);
 				}
 			}
@@ -81,21 +81,25 @@ namespace FishMMO.Client
 
 		public void OnButtonCreateParty()
 		{
-			if (Character != null && Character.PartyController.ID < 1)
+			if (Character != null &&
+				Character.TryGet(out PartyController partyController) &&
+				partyController.ID < 1)
 			{
-				Client.NetworkManager.ClientManager.Broadcast(new PartyCreateBroadcast(), Channel.Reliable);
+				Client.Broadcast(new PartyCreateBroadcast(), Channel.Reliable);
 			}
 		}
 
 		public void OnButtonLeaveParty()
 		{
-			if (Character != null && Character.PartyController.ID > 0)
+			if (Character != null &&
+				Character.TryGet(out PartyController partyController) &&
+				partyController.ID > 0)
 			{
 				if (UIManager.TryGet("UIConfirmationTooltip", out UIConfirmationTooltip tooltip))
 				{
 					tooltip.Open("Are you sure you want to leave your party?", () =>
 					{
-						Client.NetworkManager.ClientManager.Broadcast(new PartyLeaveBroadcast(), Channel.Reliable);
+						Client.Broadcast(new PartyLeaveBroadcast(), Channel.Reliable);
 					}, null);
 				}
 			}
@@ -103,14 +107,18 @@ namespace FishMMO.Client
 
 		public void OnButtonInviteToParty()
 		{
-			if (Character != null && Character.PartyController.ID > 0 && Client.NetworkManager.IsClientStarted)
+			if (Character != null &&
+				Character.TryGet(out PartyController partyController) &&
+				partyController.ID > 0 &&
+				Client.NetworkManager.IsClientStarted)
 			{
-				if (Character.TargetController.Current.Target != null)
+				if (Character.TryGet(out TargetController targetController) &&
+					targetController.Current.Target != null)
 				{
-					Character targetCharacter = Character.TargetController.Current.Target.GetComponent<Character>();
+					Character targetCharacter = targetController.Current.Target.GetComponent<Character>();
 					if (targetCharacter != null)
 					{
-						Client.NetworkManager.ClientManager.Broadcast(new PartyInviteBroadcast()
+						Client.Broadcast(new PartyInviteBroadcast()
 						{
 							targetCharacterID = targetCharacter.ID.Value,
 						}, Channel.Reliable);
@@ -123,7 +131,7 @@ namespace FishMMO.Client
 						if (Constants.Authentication.IsAllowedCharacterName(s) &&
 							ClientNamingSystem.GetCharacterID(s, out long id))
 						{
-							Client.NetworkManager.ClientManager.Broadcast(new PartyInviteBroadcast()
+							Client.Broadcast(new PartyInviteBroadcast()
 							{
 								targetCharacterID = id,
 							}, Channel.Reliable);

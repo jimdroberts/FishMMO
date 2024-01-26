@@ -36,7 +36,8 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Save(NpgsqlDbContext dbContext, Character character)
 		{
-			if (character == null)
+			if (character == null ||
+				!character.TryGet(out AbilityController abilityController))
 			{
 				return;
 			}
@@ -45,7 +46,7 @@ namespace FishMMO.Server.DatabaseServices
 																	.ToDictionary(k => k.TemplateID);
 
 			// save base abilities
-			foreach (int abilityTemplate in character.AbilityController.KnownBaseAbilities)
+			foreach (int abilityTemplate in abilityController.KnownBaseAbilities)
 			{
 				if (!dbKnownAbilities.ContainsKey(abilityTemplate))
 				{
@@ -58,7 +59,7 @@ namespace FishMMO.Server.DatabaseServices
 			}
 
 			// save event types
-			foreach (int abilityTemplate in character.AbilityController.KnownEvents)
+			foreach (int abilityTemplate in abilityController.KnownEvents)
 			{
 				if (!dbKnownAbilities.ContainsKey(abilityTemplate))
 				{
@@ -117,6 +118,12 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Load(NpgsqlDbContext dbContext, Character character)
 		{
+			if (character == null ||
+				!character.TryGet(out AbilityController abilityController))
+			{
+				return;
+			}
+
 			var dbKnownAbilities = dbContext.CharacterKnownAbilities.Where(c => c.CharacterID == character.ID.Value);
 
 			List<BaseAbilityTemplate> templates = new List<BaseAbilityTemplate>();
@@ -130,7 +137,7 @@ namespace FishMMO.Server.DatabaseServices
 				}
 			};
 
-			character.AbilityController.LearnBaseAbilities(templates);
+			abilityController.LearnBaseAbilities(templates);
 		}
 	}
 }

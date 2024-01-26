@@ -9,9 +9,10 @@ namespace FishMMO.Shared
 
 		public override int Invoke(Character attacker, Character defender, TargetInfo hitTarget, GameObject abilityObject)
 		{
-			if (defender != null && defender.DamageController != null)
+			if (defender != null &&
+				defender.TryGet(out CharacterDamageController damageController))
 			{
-				defender.DamageController.Heal(attacker, Heal);
+				damageController.Heal(attacker, Heal);
 			}
 			return 1;
 		}

@@ -1,6 +1,4 @@
-﻿using UnityEngine;
-using FishNet.Object;
-using FishNet.Transporting;
+﻿using FishNet.Transporting;
 using System.Collections.Generic;
 #if !UNITY_SERVER
 using FishMMO.Client;
@@ -11,11 +9,8 @@ namespace FishMMO.Shared
 	/// <summary>
 	/// Character guild controller.
 	/// </summary>
-	[RequireComponent(typeof(Character))]
-	public class FriendController : NetworkBehaviour
+	public class FriendController : CharacterBehaviour
 	{
-		public Character Character;
-
 		public readonly HashSet<long> Friends = new HashSet<long>();
 
 		public void AddFriend(long friendID)

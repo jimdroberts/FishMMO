@@ -56,9 +56,10 @@ namespace FishMMO.Client
 
 		public override void OnPreSetCharacter()
 		{
-			if (Character != null)
+			if (Character != null &&
+				Character.TryGet(out BankController bankController))
 			{
-				Character.BankController.OnSlotUpdated -= OnBankSlotUpdated;
+				bankController.OnSlotUpdated -= OnBankSlotUpdated;
 			}
 		}
 
@@ -69,24 +70,24 @@ namespace FishMMO.Client
 			if (Character == null ||
 				content == null ||
 				buttonPrefab == null ||
-				Character.BankController == null)
+				!Character.TryGet(out BankController bankController))
 			{
 				return;
 			}
 
 			// destroy the old slots
-			Character.BankController.OnSlotUpdated -= OnBankSlotUpdated;
+			bankController.OnSlotUpdated -= OnBankSlotUpdated;
 			DestroySlots();
 
 			// generate new slots
 			bankSlots = new List<UIBankButton>();
-			for (int i = 0; i < Character.BankController.Items.Count; ++i)
+			for (int i = 0; i < bankController.Items.Count; ++i)
 			{
 				UIBankButton button = Instantiate(buttonPrefab, content);
 				button.Character = Character;
 				button.ReferenceID = i;
 				button.Type = ReferenceButtonType.Bank;
-				if (Character.BankController.TryGetItem(i, out Item item))
+				if (bankController.TryGetItem(i, out Item item))
 				{
 					if (button.Icon != null)
 					{
@@ -100,7 +101,7 @@ namespace FishMMO.Client
 				bankSlots.Add(button);
 			}
 			// update our buttons when the bank slots change
-			Character.BankController.OnSlotUpdated += OnBankSlotUpdated;
+			bankController.OnSlotUpdated += OnBankSlotUpdated;
 		}
 
 		public void OnBankSlotUpdated(ItemContainer container, Item item, int bankIndex)

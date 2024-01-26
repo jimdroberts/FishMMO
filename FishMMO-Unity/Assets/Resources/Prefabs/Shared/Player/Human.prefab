@@ -2368,9 +2368,9 @@ GameObject:
   - component: {fileID: 6797696296312120721}
   - component: {fileID: 7248884440816270172}
   - component: {fileID: 4325918719616479958}
-  - component: {fileID: 3506080801666769887}
-  - component: {fileID: 4312700379616963274}
   - component: {fileID: 3843211821715631460}
+  - component: {fileID: 4312700379616963274}
+  - component: {fileID: 3506080801666769887}
   - component: {fileID: 5804087813792757628}
   - component: {fileID: 1847056918541276198}
   - component: {fileID: 554696067112950591}
@@ -2432,7 +2432,9 @@ MonoBehaviour:
   - {fileID: 1847056918541276198}
   - {fileID: 554696067112950591}
   - {fileID: 6861858959949476411}
+  - {fileID: 6654030480265756385}
   - {fileID: 1309032279340673784}
+  - {fileID: 5458423057004802806}
   - {fileID: 8399667084086637045}
   - {fileID: 6934114620573017969}
   - {fileID: 4581479217719699661}
@@ -2457,10 +2459,10 @@ MonoBehaviour:
   _predictionType: 0
   _graphicalObject: {fileID: 5341418137953878145}
   _enableStateForwarding: 1
-  _ownerInterpolation: 1
+  _ownerInterpolation: 2
   _enableTeleport: 0
   _teleportThreshold: 1
-  <PrefabId>k__BackingField: 1
+  <PrefabId>k__BackingField: 13
   <SpawnableCollectionId>k__BackingField: 0
   _scenePathHash: 0
   <SceneId>k__BackingField: 0
@@ -2492,63 +2494,6 @@ Rigidbody:
   m_Interpolate: 0
   m_Constraints: 0
   m_CollisionDetection: 1
---- !u!114 &3506080801666769887
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5839652419922276934}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 29009b4e14f9fe54bb03fb54dc2484c6, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  _componentIndexCache: 0
-  _addedNetworkObject: {fileID: 7248884440816270172}
-  _networkObjectCache: {fileID: 7248884440816270172}
-  CharacterController: {fileID: 0}
-  CharacterCamera: {fileID: 0}
-  Motor: {fileID: 0}
---- !u!114 &4312700379616963274
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5839652419922276934}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3368a63bfc268804ebd6f9883efdc07d, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  Character: {fileID: 0}
-  Motor: {fileID: 3843211821715631460}
-  StableMovementSharpness: 20
-  OrientationSharpness: 10
-  OrientationMethod: 0
-  MaxAirMoveSpeed: 4
-  AirAccelerationSpeed: 2.5
-  Drag: 0.1
-  AllowJumpingWhenSliding: 1
-  JumpScalableForwardSpeed: 0
-  JumpPreGroundingGraceTime: 0.1
-  JumpPostGroundingGraceTime: 0.1
-  IgnoredColliders: []
-  BonusOrientationMethod: 0
-  BonusOrientationSharpness: 10
-  MeshRoot: {fileID: 5341418137953878145}
-  CameraFollowPoint: {fileID: 2658011093927477218}
-  CrouchedCapsuleHeight: 0.8
-  FullCapsuleHeight: 1.6
-  CapsuleBaseOffset: 0.8
-  MoveSpeedTemplate: {fileID: 11400000, guid: 561336c510b90b546b2650ffa83a09dc, type: 2}
-  RunSpeedTemplate: {fileID: 11400000, guid: 27c4f240152242b4fb7dec2f5368445c, type: 2}
-  JumpSpeedTemplate: {fileID: 11400000, guid: e32341894cca80f44988cbf96cd9a709, type: 2}
-  SwimSpeedTemplate: {fileID: 11400000, guid: afefadf23d30db24e98774bcd84d31c3, type: 2}
-  FastFallSpeedTemplate: {fileID: 11400000, guid: 3d34315a07aca4243adfc96a4d3479c8,
-    type: 2}
-  GravityTemplate: {fileID: 11400000, guid: d057742d4e36f464fb2f1dde1d2fe707, type: 2}
 --- !u!114 &3843211821715631460
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2591,6 +2536,63 @@ MonoBehaviour:
   CheckMovementInitialOverlaps: 1
   KillVelocityWhenExceedMaxMovementIterations: 1
   KillRemainingMovementWhenExceedMaxMovementIterations: 1
+--- !u!114 &4312700379616963274
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5839652419922276934}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3368a63bfc268804ebd6f9883efdc07d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  Character: {fileID: 0}
+  Motor: {fileID: 3843211821715631460}
+  StableMovementSharpness: 20
+  OrientationSharpness: 10
+  OrientationMethod: 0
+  MaxAirMoveSpeed: 4
+  AirAccelerationSpeed: 2.5
+  Drag: 0.1
+  AllowJumpingWhenSliding: 1
+  JumpScalableForwardSpeed: 0
+  JumpPreGroundingGraceTime: 0.1
+  JumpPostGroundingGraceTime: 0.1
+  IgnoredColliders: []
+  BonusOrientationMethod: 0
+  BonusOrientationSharpness: 10
+  MeshRoot: {fileID: 5341418137953878145}
+  CameraFollowPoint: {fileID: 2658011093927477218}
+  CrouchedCapsuleHeight: 0.8
+  FullCapsuleHeight: 1.6
+  CapsuleBaseOffset: 0.8
+  MoveSpeedTemplate: {fileID: 11400000, guid: 561336c510b90b546b2650ffa83a09dc, type: 2}
+  RunSpeedTemplate: {fileID: 11400000, guid: 27c4f240152242b4fb7dec2f5368445c, type: 2}
+  JumpSpeedTemplate: {fileID: 11400000, guid: e32341894cca80f44988cbf96cd9a709, type: 2}
+  SwimSpeedTemplate: {fileID: 11400000, guid: afefadf23d30db24e98774bcd84d31c3, type: 2}
+  FastFallSpeedTemplate: {fileID: 11400000, guid: 3d34315a07aca4243adfc96a4d3479c8,
+    type: 2}
+  GravityTemplate: {fileID: 11400000, guid: d057742d4e36f464fb2f1dde1d2fe707, type: 2}
+--- !u!114 &3506080801666769887
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5839652419922276934}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 29009b4e14f9fe54bb03fb54dc2484c6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _componentIndexCache: 0
+  _addedNetworkObject: {fileID: 7248884440816270172}
+  _networkObjectCache: {fileID: 7248884440816270172}
+  CharacterController: {fileID: 0}
+  CharacterCamera: {fileID: 0}
+  Motor: {fileID: 0}
 --- !u!114 &5804087813792757628
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2623,7 +2625,6 @@ MonoBehaviour:
   _componentIndexCache: 2
   _addedNetworkObject: {fileID: 7248884440816270172}
   _networkObjectCache: {fileID: 7248884440816270172}
-  Character: {fileID: 0}
   ShowAchievementCompletion: 1
 --- !u!114 &554696067112950591
 MonoBehaviour:
@@ -2640,7 +2641,6 @@ MonoBehaviour:
   _componentIndexCache: 3
   _addedNetworkObject: {fileID: 7248884440816270172}
   _networkObjectCache: {fileID: 7248884440816270172}
-  Character: {fileID: 0}
 --- !u!114 &6861858959949476411
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2656,7 +2656,6 @@ MonoBehaviour:
   _componentIndexCache: 4
   _addedNetworkObject: {fileID: 7248884440816270172}
   _networkObjectCache: {fileID: 7248884440816270172}
-  Character: {fileID: 0}
 --- !u!114 &6654030480265756385
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2669,6 +2668,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f852b64f675784b4ebdf6e98b0726660, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _componentIndexCache: 5
+  _addedNetworkObject: {fileID: 7248884440816270172}
+  _networkObjectCache: {fileID: 7248884440816270172}
 --- !u!114 &1309032279340673784
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2681,11 +2683,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: eb1b972667baff74aabba2d7602c53d0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 5
+  _componentIndexCache: 6
   _addedNetworkObject: {fileID: 7248884440816270172}
   _networkObjectCache: {fileID: 7248884440816270172}
   AbilitySpawner: {fileID: 84238782928872088}
-  Character: {fileID: 0}
   BloodResourceTemplate: {fileID: 0}
   AttackSpeedReductionTemplate: {fileID: 11400000, guid: 15a71776a1f5e4245841b3301c881f80,
     type: 2}
@@ -2704,7 +2705,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e7330d2c79dca4b428d96b86dd591417, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  Character: {fileID: 0}
+  _componentIndexCache: 7
+  _addedNetworkObject: {fileID: 7248884440816270172}
+  _networkObjectCache: {fileID: 7248884440816270172}
   LayerMask:
     serializedVersion: 2
     m_Bits: 257
@@ -2720,10 +2723,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f05a0b4c0a9733f4db3379ba51c18b84, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 6
+  _componentIndexCache: 8
   _addedNetworkObject: {fileID: 7248884440816270172}
   _networkObjectCache: {fileID: 7248884440816270172}
-  Character: {fileID: 0}
   Currency: 0
 --- !u!114 &6934114620573017969
 MonoBehaviour:
@@ -2737,10 +2739,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1a402312deeba5e4a9372615e445f44f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 7
+  _componentIndexCache: 9
   _addedNetworkObject: {fileID: 7248884440816270172}
   _networkObjectCache: {fileID: 7248884440816270172}
-  Character: {fileID: 0}
 --- !u!114 &4581479217719699661
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2753,10 +2754,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: cb1bb90369a05a844b79d7695ce3681e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 8
+  _componentIndexCache: 10
   _addedNetworkObject: {fileID: 7248884440816270172}
   _networkObjectCache: {fileID: 7248884440816270172}
-  Character: {fileID: 0}
   Currency: 0
 --- !u!114 &1291915661732122704
 MonoBehaviour:
@@ -2770,10 +2770,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 73facf272d356ac42b96a3c8e10c36c6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 9
+  _componentIndexCache: 11
   _addedNetworkObject: {fileID: 7248884440816270172}
   _networkObjectCache: {fileID: 7248884440816270172}
-  Character: {fileID: 0}
   Rank: 0
 --- !u!114 &844505594164349671
 MonoBehaviour:
@@ -2787,10 +2786,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: dd3cedcaf7281e042bd075ca3f84fc9d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 10
+  _componentIndexCache: 12
   _addedNetworkObject: {fileID: 7248884440816270172}
   _networkObjectCache: {fileID: 7248884440816270172}
-  Character: {fileID: 0}
   ID: 0
   Rank: 0
 --- !u!114 &8187195704414241134
@@ -2805,10 +2803,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3327546bbfe5c2a4cbb267dc49f40f6c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 11
+  _componentIndexCache: 13
   _addedNetworkObject: {fileID: 7248884440816270172}
   _networkObjectCache: {fileID: 7248884440816270172}
-  Character: {fileID: 0}
 --- !u!114 &6704804402765680992
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2821,10 +2818,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ef74936c7389fd247bbf0437fe619b20, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 12
+  _componentIndexCache: 14
   _addedNetworkObject: {fileID: 7248884440816270172}
   _networkObjectCache: {fileID: 7248884440816270172}
-  Character: {fileID: 0}
   Immortal: 0
   ResourceAttribute: {fileID: 11400000, guid: e5c10a046ee277f46a57ee2048ae5ec9, type: 2}
   DamageAchievementTemplate: {fileID: 0}
@@ -2849,14 +2845,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2d2b958cf491cbd4ea4dcfc4ecfb6721, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 13
+  _componentIndexCache: 15
   _addedNetworkObject: {fileID: 7248884440816270172}
   _networkObjectCache: {fileID: 7248884440816270172}
   CharacterNameLabel: {fileID: 6211269303433269750}
   CharacterGuildLabel: {fileID: 7039625850129925610}
   EquipmentViewCamera: {fileID: 1346939251586913641}
-  ID:
-    _value: 0
   CharacterName: 
   CharacterNameLower: 
   Account: 

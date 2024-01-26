@@ -1,11 +1,10 @@
-﻿using UnityEngine;
-using FishNet.Object;
-using FishNet.Object.Synchronizing;
+﻿using FishNet.Object.Synchronizing;
 using FishNet.Transporting;
 using System.Collections.Generic;
 using System.Linq;
 #if !UNITY_SERVER
 using FishMMO.Client;
+using static FishMMO.Client.Client;
 #endif
 
 namespace FishMMO.Shared
@@ -13,11 +12,8 @@ namespace FishMMO.Shared
 	/// <summary>
 	/// Character guild controller.
 	/// </summary>
-	[RequireComponent(typeof(Character))]
-	public class GuildController : NetworkBehaviour
+	public class GuildController : CharacterBehaviour
 	{
-		public Character Character;
-
 		public readonly SyncVar<long> ID = new SyncVar<long>(new SyncTypeSetting()
 		{
 			SendRate = 0.0f,
@@ -47,12 +43,12 @@ namespace FishMMO.Shared
 		public GuildRank Rank = GuildRank.None;
 
 #if !UNITY_SERVER
-		private void Awake()
+		public override void OnAwake()
 		{
 			ID.OnChange += OnGuildIDChanged;
 		}
 
-		private void OnDestroy()
+		public override void OnDestroying()
 		{
 			ID.OnChange -= OnGuildIDChanged;
 		}
@@ -98,13 +94,11 @@ namespace FishMMO.Shared
 					uiTooltip.Open("You have been invited to join " + n + "'s guild. Would you like to join?",
 					() =>
 					{
-						Debug.Log("Accept");
-						ClientManager.Broadcast(new GuildAcceptInviteBroadcast(), Channel.Reliable);
+						Broadcast(new GuildAcceptInviteBroadcast(), Channel.Reliable);
 					},
 					() =>
 					{
-						Debug.Log("Decline");
-						ClientManager.Broadcast(new GuildDeclineInviteBroadcast(), Channel.Reliable);
+						Broadcast(new GuildDeclineInviteBroadcast(), Channel.Reliable);
 					});
 				}
 			});
