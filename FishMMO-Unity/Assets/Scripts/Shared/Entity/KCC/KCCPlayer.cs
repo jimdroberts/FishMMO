@@ -30,11 +30,29 @@ namespace FishMMO.Shared
 		private bool _crouchInputActive = false;
 		private bool _sprintInputActive = false;
 
+		private void Awake()
+		{
+			Motor = gameObject.GetComponent<KinematicCharacterMotor>();
+
+			CharacterController = gameObject.GetComponent<KCCController>();
+			CharacterController.Motor = Motor;
+			Motor.CharacterController = CharacterController;
+
+			KCCPlayer player = gameObject.GetComponent<KCCPlayer>();
+			player.CharacterController = CharacterController;
+			player.Motor = Motor;
+
+			Rigidbody rb = GetComponent<Rigidbody>();
+			if (rb != null)
+			{
+				rb.isKinematic = true;
+			}
+		}
+
 		public override void OnStartNetwork()
 		{
 			base.OnStartNetwork();
 
-			//Quang: Subscribe to tick event, this will replace FixedUpdate
 			if (base.TimeManager != null)
 			{
 				base.TimeManager.OnTick += TimeManager_OnTick;
@@ -70,25 +88,6 @@ namespace FishMMO.Shared
 					}
 				}
 			}
-			//Quang: The remote client objects must not have movement related logic code, destroy it. Network transform will handle the movements
-			/*else
-			{
-				KinematicCharacterMotor motor = GetComponent<KinematicCharacterMotor>();
-				if (motor != null)
-				{
-					motor.enabled = false;
-				}
-				KCCController controller = GetComponent<KCCController>();
-				if (controller != null)
-				{
-					controller.enabled = false;
-				}
-				Rigidbody rb = GetComponent<Rigidbody>();
-				if (rb != null)
-				{
-					rb.isKinematic = true;
-				}
-			}*/
 		}
 #endif
 
@@ -109,7 +108,8 @@ namespace FishMMO.Shared
 
 		private KCCInputReplicateData HandleCharacterInput()
 		{
-			if (!base.IsOwner)
+			if (!base.IsOwner ||
+				CharacterCamera == null)
 			{
 				return default;
 			}
@@ -146,7 +146,7 @@ namespace FishMMO.Shared
 											 CharacterCamera.Transform.rotation);
 		}
 
-		[ReplicateV2]
+		[Replicate]
 		private void Replicate(KCCInputReplicateData input, ReplicateState state = ReplicateState.Invalid, Channel channel = Channel.Unreliable)
 		{
 			if (state == ReplicateState.Future)
@@ -154,22 +154,17 @@ namespace FishMMO.Shared
 
 			CharacterController.SetInputs(ref input);
 
-			SimulateMotor((float)base.TimeManager.TickDelta);
-		}
+			float deltaTime = (float)base.TimeManager.TickDelta;
 
-		private void SimulateMotor(float deltaTime)
-		{
 			Motor.UpdatePhase1(deltaTime);
 			Motor.UpdatePhase2(deltaTime);
 
 			Motor.Transform.SetPositionAndRotation(Motor.TransientPosition, Motor.TransientRotation);
 		}
 
-		[ReconcileV2]
+		[Reconcile]
 		private void Reconcile(KinematicCharacterMotorState rd, Channel channel = Channel.Unreliable)
 		{
-			//Quang: Note - KCCMotorState has Rigidbody field, this component is not serialized, 
-			// and doesn't have to be reconciled, so we build a new Reconcile data that exclude Rigidbody field
 			CharacterController.ApplyState(rd);
 		}
 

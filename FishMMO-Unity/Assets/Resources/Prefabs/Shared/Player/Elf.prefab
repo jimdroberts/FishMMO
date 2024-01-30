@@ -189,7 +189,6 @@ GameObject:
   m_Component:
   - component: {fileID: 4573496687782621817}
   - component: {fileID: 4964627840297570917}
-  - component: {fileID: 6736601265633566295}
   - component: {fileID: 961999050755331747}
   - component: {fileID: 60849842760777251}
   - component: {fileID: 1390855179741347137}
@@ -208,7 +207,8 @@ GameObject:
   - component: {fileID: 3124264775330692708}
   - component: {fileID: 4966316198463876083}
   - component: {fileID: 6038023079570568745}
-  - component: {fileID: 4053032698712144203}
+  - component: {fileID: 4989737185595066850}
+  - component: {fileID: 6845158710477467009}
   m_Layer: 0
   m_Name: Elf
   m_TagString: Untagged
@@ -275,7 +275,7 @@ MonoBehaviour:
   _isSpawnable: 1
   _isGlobal: 0
   _initializeOrder: 0
-  _defaultDespawnType: 0
+  _defaultDespawnType: 1
   NetworkObserver: {fileID: 0}
   _enablePrediction: 1
   _predictionType: 0
@@ -284,38 +284,11 @@ MonoBehaviour:
   _ownerInterpolation: 2
   _enableTeleport: 0
   _teleportThreshold: 1
-  <PrefabId>k__BackingField: 11
+  <PrefabId>k__BackingField: 0
   <SpawnableCollectionId>k__BackingField: 0
   _scenePathHash: 0
   <SceneId>k__BackingField: 0
   <AssetPathHash>k__BackingField: 16768089385358015845
---- !u!54 &6736601265633566295
-Rigidbody:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4573496687782621821}
-  serializedVersion: 4
-  m_Mass: 1
-  m_Drag: 0
-  m_AngularDrag: 0.05
-  m_CenterOfMass: {x: 0, y: 0, z: 0}
-  m_InertiaTensor: {x: 1, y: 1, z: 1}
-  m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ImplicitCom: 1
-  m_ImplicitTensor: 1
-  m_UseGravity: 0
-  m_IsKinematic: 1
-  m_Interpolate: 0
-  m_Constraints: 0
-  m_CollisionDetection: 1
 --- !u!114 &961999050755331747
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -328,7 +301,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4d1bc5515e3ab954e80599c538834774, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  Capsule: {fileID: 4053032698712144203}
+  Capsule: {fileID: 4989737185595066850}
   CapsuleRadius: 0.3
   CapsuleHeight: 1.6
   CapsuleYOffset: 0.8
@@ -412,9 +385,9 @@ MonoBehaviour:
   _componentIndexCache: 0
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 4964627840297570917}
-  CharacterController: {fileID: 0}
+  CharacterController: {fileID: 60849842760777251}
   CharacterCamera: {fileID: 0}
-  Motor: {fileID: 0}
+  Motor: {fileID: 961999050755331747}
 --- !u!114 &8778311563223898511
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -681,7 +654,7 @@ MonoBehaviour:
   IsTeleporting: 0
   SceneHandle: 0
   LastChatMessage: 
---- !u!136 &4053032698712144203
+--- !u!136 &4989737185595066850
 CapsuleCollider:
   m_ObjectHideFlags: 8
   m_CorrespondingSourceObject: {fileID: 0}
@@ -704,6 +677,33 @@ CapsuleCollider:
   m_Height: 1.6
   m_Direction: 1
   m_Center: {x: 0, y: 0.8, z: 0}
+--- !u!54 &6845158710477467009
+Rigidbody:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4573496687782621821}
+  serializedVersion: 4
+  m_Mass: 1
+  m_Drag: 0
+  m_AngularDrag: 0.05
+  m_CenterOfMass: {x: 0, y: 0, z: 0}
+  m_InertiaTensor: {x: 1, y: 1, z: 1}
+  m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ImplicitCom: 1
+  m_ImplicitTensor: 1
+  m_UseGravity: 0
+  m_IsKinematic: 1
+  m_Interpolate: 0
+  m_Constraints: 0
+  m_CollisionDetection: 1
 --- !u!1 &5035121396218170946
 GameObject:
   m_ObjectHideFlags: 0

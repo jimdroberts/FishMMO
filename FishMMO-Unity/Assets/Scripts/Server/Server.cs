@@ -124,7 +124,6 @@ namespace FishMMO.Server
 			// Ensure the KCC System is created.
 			KinematicCharacterSystem.EnsureCreation();
 			KinematicCharacterSystem.Settings.AutoSimulation = false;
-			KinematicCharacterSystem.Settings.Interpolate = false;
 
 			// database factory DI
 			LoginServerAuthenticator authenticator = NetworkManager.ServerManager.GetAuthenticator() as LoginServerAuthenticator;

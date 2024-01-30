@@ -795,7 +795,7 @@ namespace KinematicCharacterController
             CharacterController.BeforeCharacterUpdate(deltaTime);
 
             _transientPosition = _transform.position;
-            TransientRotation = _transform.rotation;
+            _transientRotation = _transform.rotation;
             _initialSimulationPosition = _transientPosition;
             _initialSimulationRotation = _transientRotation;
             _rigidbodyProjectionHitCount = 0;

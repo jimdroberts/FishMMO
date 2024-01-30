@@ -211,7 +211,7 @@ namespace FishMMO.Shared
 			return activationEventData;
 		}
 
-		[ReplicateV2]
+		[Replicate]
 		private void Replicate(AbilityActivationReplicateData activationData, ReplicateState state = ReplicateState.Invalid, Channel channel = Channel.Unreliable)
 		{
 			if (activationData.InterruptQueued)
@@ -308,7 +308,7 @@ namespace FishMMO.Shared
 			}
 		}
 
-		[ReconcileV2]
+		[Reconcile]
 		private void Reconcile(AbilityReconcileData rd, Channel channel = Channel.Unreliable)
 		{
 			if (rd.Interrupt ||

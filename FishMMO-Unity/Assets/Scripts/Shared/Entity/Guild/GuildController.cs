@@ -14,7 +14,7 @@ namespace FishMMO.Shared
 	/// </summary>
 	public class GuildController : CharacterBehaviour
 	{
-		public readonly SyncVar<long> ID = new SyncVar<long>(new SyncTypeSetting()
+		public readonly SyncVar<long> ID = new SyncVar<long>(new SyncTypeSettings()
 		{
 			SendRate = 0.0f,
 			Channel = Channel.Reliable,

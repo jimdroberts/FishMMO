@@ -1,8 +1,10 @@
-﻿using FishNet.Transporting;
+﻿using FishNet.Connection;
 using FishNet.Managing.Scened;
+using SceneManager = FishNet.Managing.Scened.SceneManager;
+using FishNet.Transporting;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using System.Collections.Generic;
-using FishNet.Connection;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
 using FishMMO.Database.Npgsql.Entities;
@@ -204,11 +206,11 @@ namespace FishMMO.Server
 			}
 			if (!handles.ContainsKey(scene.handle))
 			{
-				// configure the scene physics ticker
+				// ensure the scene has a physics ticker
 				GameObject gob = new GameObject("PhysicsTicker");
+				UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(gob, scene);
 				PhysicsTicker physicsTicker = gob.AddComponent<PhysicsTicker>();
 				physicsTicker.InitializeOnce(scene.GetPhysicsScene(), Server.NetworkManager.TimeManager);
-				UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(gob, scene);
 
 				// cache the newly loaded scene
 				handles.Add(scene.handle, new SceneInstanceDetails()
@@ -252,7 +254,7 @@ namespace FishMMO.Server
 
 		public bool TryLoadSceneForConnection(NetworkConnection conn, SceneInstanceDetails instance)
 		{
-			UnityEngine.SceneManagement.Scene scene = SceneManager.GetScene(instance.Handle);
+			Scene scene = SceneManager.GetScene(instance.Handle);
 			if (scene != null && scene.IsValid() && scene.isLoaded)
 			{
 				SceneLookupData lookupData = new SceneLookupData(instance.Handle);
@@ -261,7 +263,6 @@ namespace FishMMO.Server
 					ReplaceScenes = ReplaceOption.None,
 					Options = new LoadOptions
 					{
-						AllowStacking = false,
 						AutomaticallyUnload = false,
 					},
 					PreferredActiveScene = new PreferredScene(lookupData),
@@ -270,16 +271,6 @@ namespace FishMMO.Server
 				return true;
 			}
 			return false;
-		}
-
-		public void AssignPhysicsScene(Character character)
-		{
-			UnityEngine.SceneManagement.Scene scene = SceneManager.GetScene(character.SceneHandle);
-			if (scene != null && scene.IsValid() && scene.isLoaded)
-			{
-				UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(character.gameObject, scene);
-				character.Motor.SetPhysicsScene(scene.GetPhysicsScene());
-			}
 		}
 	}
 }

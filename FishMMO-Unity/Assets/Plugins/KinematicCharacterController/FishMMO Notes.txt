@@ -1,2 +1,0 @@
-\Core\KinematicCharacterMotorState.cs has been updated to work with FishNet.
-Re-import the KCC asset from the store if you wish to use the original for any reason.

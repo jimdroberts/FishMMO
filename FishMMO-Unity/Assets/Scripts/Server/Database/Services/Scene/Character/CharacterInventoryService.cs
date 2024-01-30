@@ -73,7 +73,7 @@ namespace FishMMO.Server.DatabaseServices
 				};
 				dbContext.CharacterInventoryItems.Add(dbItem);
 				dbContext.SaveChanges();
-				item.Initialize(dbItem.ID, dbItem.Seed);
+				item.Initialize(dbItem.ID, dbItem.Amount, dbItem.Seed);
 			}
 		}
 

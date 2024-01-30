@@ -48,8 +48,6 @@ namespace FishMMO.Shared
 				return;
 			}
 
-
-
 			if (LabelMaker.Instance != null)
 			{
 				OnDamageDisplay += LabelMaker.Display;
@@ -114,7 +112,7 @@ namespace FishMMO.Shared
 #if !UNITY_SERVER
 				if (ShowDamage)
 				{
-					Vector3 displayPos = Character.transform.position;
+					Vector3 displayPos = Character.Transform.position;
 					displayPos.y += Character.CharacterController.FullCapsuleHeight;
 					OnDamageDisplay?.Invoke(amount.ToString(), displayPos, new Color(255.0f, 128.0f, 128.0f), 10.0f, 10.0f, false);
 				}

@@ -14,30 +14,31 @@ namespace FishMMO.Client
 				{
 					if (dragObject.Visible)
 					{
-						int referenceID = (int)dragObject.ReferenceID;
+						if (Character.TryGet(out EquipmentController equipmentController))
+						{
+							int referenceID = (int)dragObject.ReferenceID;
 
-						// we check the hotkey type because we can only equip items from the inventory
-						if (dragObject.Type == ReferenceButtonType.Inventory &&
-							Character.TryGet(out InventoryController inventoryController))
-						{
-							// get the item from the Inventory
-							Item item = inventoryController.Items[referenceID];
-							if (item != null &&
-								Character.TryGet(out EquipmentController equipmentController))
+							// we check the hotkey type because we can only equip items from the inventory
+							if (dragObject.Type == ReferenceButtonType.Inventory &&
+								Character.TryGet(out InventoryController inventoryController))
 							{
-								equipmentController.SendEquipRequest(referenceID, (byte)ItemSlotType, InventoryType.Inventory);
+								// get the item from the Inventory
+								Item item = inventoryController.Items[referenceID];
+								if (item != null)
+								{
+									equipmentController.SendEquipRequest(referenceID, (byte)ItemSlotType, InventoryType.Inventory);
+								}
 							}
-						}
-						// taking an item from the bank and putting it in this equipment slot
-						else if (dragObject.Type == ReferenceButtonType.Bank &&
-								 Character.TryGet(out BankController bankController))
-						{
-							// get the item from the Inventory
-							Item item = bankController.Items[referenceID];
-							if (item != null &&
-								Character.TryGet(out EquipmentController equipmentController))
+							// taking an item from the bank and putting it in this equipment slot
+							else if (dragObject.Type == ReferenceButtonType.Bank &&
+									 Character.TryGet(out BankController bankController))
 							{
-								equipmentController.SendEquipRequest(referenceID, (byte)ItemSlotType, InventoryType.Bank);
+								// get the item from the Inventory
+								Item item = bankController.Items[referenceID];
+								if (item != null)
+								{
+									equipmentController.SendEquipRequest(referenceID, (byte)ItemSlotType, InventoryType.Bank);
+								}
 							}
 						}
 

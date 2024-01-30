@@ -65,7 +65,8 @@ namespace FishMMO.Server
 				{
 					// get account salt and verifier if no one is online
 					result = AccountService.Get(dbContext, msg.s, out string salt, out string verifier, out AccessLevel accessLevel);
-					if (result == ClientAuthenticationResult.SrpVerify)
+					if (result != ClientAuthenticationResult.Banned &&
+						result == ClientAuthenticationResult.SrpVerify)
 					{
 						// prepare account
 						AccountManager.AddConnectionAccount(conn, msg.s, msg.publicEphemeral, salt, verifier, accessLevel);

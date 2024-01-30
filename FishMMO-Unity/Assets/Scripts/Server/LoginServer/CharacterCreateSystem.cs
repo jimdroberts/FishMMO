@@ -149,6 +149,7 @@ namespace FishMMO.Server
 							RotY = initialSpawnPosition.Rotation.y,
 							RotZ = initialSpawnPosition.Rotation.z,
 							RotW = initialSpawnPosition.Rotation.w,
+							AccessLevel = (byte)AccessLevel.Player,
 							TimeCreated = DateTime.UtcNow,
 						};
 						dbContext.Characters.Add(newCharacter);

@@ -82,8 +82,8 @@ namespace FishNet.Managing.Client
         /// <param name="channel">Channel to send on.</param>
         public void Broadcast<T>(T message, Channel channel = Channel.Reliable) where T : struct, IBroadcast
         {
-			//Check local connection state.
-			if (!Started)
+            //Check local connection state.
+            if (!Started)
             {
                 NetworkManager.LogWarning($"Cannot send broadcast to server because client is not active.");
                 return;

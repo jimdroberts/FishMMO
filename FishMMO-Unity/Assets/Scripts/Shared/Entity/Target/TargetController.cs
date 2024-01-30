@@ -32,7 +32,6 @@ namespace FishMMO.Shared
 		{
 			OnChangeTarget = null;
 			OnUpdateTarget = null;
-			Character = null;
 			LastTarget = default;
 			Current = default;
 		}

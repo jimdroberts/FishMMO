@@ -7,7 +7,7 @@
 
 		public bool IsStackFull { get { return Amount == item.Template.MaxStackSize; } }
 
-		public void Initialize(Item item, uint amount)
+		public ItemStackable(Item item, uint amount)
 		{
 			this.item = item;
 			Amount = amount;

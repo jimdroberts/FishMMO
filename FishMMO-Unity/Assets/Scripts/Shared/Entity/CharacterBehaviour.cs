@@ -40,6 +40,7 @@ namespace FishMMO.Shared
 			{
 				Character.Unregister(this);
 			}
+			Character = null;
 		}
 
 		public virtual void OnDestroying() { }

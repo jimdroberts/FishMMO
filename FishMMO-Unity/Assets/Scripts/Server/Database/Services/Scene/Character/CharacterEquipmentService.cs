@@ -45,7 +45,7 @@ namespace FishMMO.Server.DatabaseServices
 				};
 				dbContext.CharacterEquippedItems.Add(dbItem);
 				dbContext.SaveChanges();
-				item.Initialize(dbItem.ID, dbItem.Seed);
+				item.Initialize(dbItem.ID, dbItem.Amount, dbItem.Seed);
 			}
 		}
 
@@ -114,6 +114,10 @@ namespace FishMMO.Server.DatabaseServices
 					return;
 				}
 				equipmentController.SetItemSlot(item, dbItem.Slot);
+				if (item.IsEquippable)
+				{
+					item.Equippable.SetOwner(character);
+				}
 			};
 		}
 	}

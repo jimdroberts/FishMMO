@@ -26,27 +26,24 @@ namespace FishMMO.Client
 								// swap item slots in the bank
 								bankController.SendSwapItemSlotsRequest((int)dragObject.ReferenceID, (int)ReferenceID, InventoryType.Inventory);
 							}
-						}
-						// we can also unequip items
-						else if (dragObject.Type == ReferenceButtonType.Equipment &&
-								 dragObject.ReferenceID >= byte.MinValue && // Equipment slot index is a byte, validate here
-								 dragObject.ReferenceID <= byte.MaxValue &&
-								 Character.TryGet(out EquipmentController equipmentController))
-						{
-							// unequip the item
-							equipmentController.SendUnequipRequest((byte)dragObject.ReferenceID, InventoryType.Bank);
+							// we can also unequip items
+							else if (dragObject.Type == ReferenceButtonType.Equipment &&
+									 dragObject.ReferenceID >= byte.MinValue && // Equipment slot index is a byte, validate here
+									 dragObject.ReferenceID <= byte.MaxValue &&
+									 Character.TryGet(out EquipmentController equipmentController))
+							{
+								// unequip the item
+								equipmentController.SendUnequipRequest((byte)dragObject.ReferenceID, InventoryType.Bank);
+							}
 						}
 
 						// clear the drag object
 						dragObject.Clear();
 					}
-					else
-					{
-						if (Character.TryGet(out BankController bankController) &&
+					else if (Character.TryGet(out BankController bankController) &&
 							!bankController.IsSlotEmpty((int)ReferenceID))
-						{
-							dragObject.SetReference(Icon.sprite, ReferenceID, Type);
-						}
+					{
+						dragObject.SetReference(Icon.sprite, ReferenceID, Type);
 					}
 				}
 			}

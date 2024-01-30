@@ -21,46 +21,37 @@ namespace FishMMO.Shared
 		{
 			Slot = -1;
 			Template = template;
-			if (Template.MaxStackSize > 1)
-			{
-				this.Stackable = new ItemStackable();
-				this.Stackable.Initialize(this, amount.Clamp(1, Template.MaxStackSize));
-			}
 		}
 		public Item(long id, int seed, BaseItemTemplate template, uint amount)
 		{
+			ID = id;
 			Slot = -1;
 			Template = template;
-			if (Template.MaxStackSize > 1)
-			{
-				this.Stackable = new ItemStackable();
-				this.Stackable.Initialize(this, amount.Clamp(1, Template.MaxStackSize));
-			}
-			Initialize(id, seed);
+
+			Initialize(id, amount, seed);
 		}
 		public Item(long id, int seed, int templateID, uint amount)
 		{
+			ID = id;
 			Slot = -1;
 			Template = BaseItemTemplate.Get<BaseItemTemplate>(templateID);
-			if (Template.MaxStackSize > 1)
-			{
-				this.Stackable = new ItemStackable();
-				this.Stackable.Initialize(this, amount.Clamp(1, Template.MaxStackSize));
-			}
-			Initialize(id, seed);
+
+			Initialize(id, amount, seed);
 		}
 
-		public void Initialize(long id, int seed)
+		public void Initialize(long id, uint amount, int seed)
 		{
 			ID = id;
 
-			if (Template as EquippableItemTemplate != null)
+			if (Stackable == null &&
+				Template.MaxStackSize > 1)
 			{
-				Equippable = new ItemEquippable();
-				Equippable.Initialize(this);
+				Stackable = new ItemStackable(this, amount.Clamp(1, Template.MaxStackSize));
 			}
 
-			if (Template.Generate)
+			if (Generator == null &&
+				Template.Generate &&
+				ID != 0)
 			{
 				Generator = new ItemGenerator();
 				if (seed == 0)
@@ -79,6 +70,12 @@ namespace FishMMO.Shared
 					}
 				}
 				Generator?.Initialize(this, seed);
+			}
+
+			if (Equippable == null &&
+				Template as EquippableItemTemplate != null)
+			{
+				Equippable = new ItemEquippable(this);
 			}
 		}
 

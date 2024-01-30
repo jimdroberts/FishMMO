@@ -75,7 +75,7 @@ namespace FishMMO.Server
 				behaviour.InternalInitializeOnce(server, serverManager);
 			}
 
-			Debug.Log("ServerBehaviour: Complete");
+			Debug.Log("ServerBehaviour: Initialization Complete");
 		}
 
 		public bool Initialized { get; private set; }

@@ -1,6 +1,8 @@
 ﻿using FishNet.Broadcast;
 using FishNet.Connection;
 using FishNet.Object;
+using FishNet.Managing.Scened;
+using SceneManager = FishNet.Managing.Scened.SceneManager;
 using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
@@ -9,6 +11,7 @@ using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
 using FishMMO.Database.Npgsql.Entities;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace FishMMO.Server
 {
@@ -333,17 +336,28 @@ namespace FishMMO.Server
 					damageController.Immortal = false;
 				}
 
-				// set the proper physics scene for the character, scene stacking requires separated physics
-				if (character.Motor != null)
+				// get the characters scene
+				Scene scene = SceneManager.GetScene(character.SceneHandle);
+
+				// validate the scene
+				if (scene == null ||
+					!scene.IsValid() ||
+					!scene.isLoaded)
 				{
-					sceneServerSystem.AssignPhysicsScene(character);
+					Debug.Log("Scene is not valid.");
+					Destroy(character.gameObject);
+					conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
+					return;
 				}
+
+				// set the proper physics scene for the character, scene stacking requires separated physics
+				character.Motor.SetPhysicsScene(scene.GetPhysicsScene());
 
 				// ensure the game object is active, pooled objects are disabled
 				character.gameObject.SetActive(true);
-					
+
 				// spawn the nob over the network
-				ServerManager.Spawn(character.NetworkObject, conn);
+				ServerManager.Spawn(character.NetworkObject, conn, scene);
 
 				// set the character status to online
 				if (AccountManager.GetAccountNameByConnection(conn, out string accountName))
@@ -384,6 +398,10 @@ namespace FishMMO.Server
 
 			// set ID to dirty which forces it to sync to the client
 			character.ID.Dirty();
+			//character.Currency.Dirty();
+			//character.RaceID.Dirty();
+			//character.RaceName.Dirty();
+			//character.SceneName.Dirty();
 
 			#region Abilities
 			if (character.TryGet(out AbilityController abilityController))

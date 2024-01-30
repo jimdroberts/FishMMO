@@ -361,15 +361,15 @@ namespace FishMMO.Server.DatabaseServices
 				NetworkObject prefab = networkManager.SpawnablePrefabs.GetObject(true, dbCharacter.RaceID);
 				if (prefab != null)
 				{
-					// instantiate the character object
-					NetworkObject nob = networkManager.GetPooledInstantiated(prefab, true);
+					Vector3 dbPosition = new Vector3(dbCharacter.X, dbCharacter.Y, dbCharacter.Z);
+					Quaternion dbRotation = new Quaternion(dbCharacter.RotX, dbCharacter.RotY, dbCharacter.RotZ, dbCharacter.RotW);
 
+					// instantiate the character object
+					NetworkObject nob = networkManager.GetPooledInstantiated(prefab, dbPosition, dbRotation, true);
 					character = nob.GetComponent<Character>();
 					if (character != null)
 					{
-						character.Motor.SetPositionAndRotationAndVelocity(new Vector3(dbCharacter.X, dbCharacter.Y, dbCharacter.Z),
-																		  new Quaternion(dbCharacter.RotX, dbCharacter.RotY, dbCharacter.RotZ, dbCharacter.RotW),
-																		  Vector3.zero);
+						character.Motor.SetPositionAndRotationAndVelocity(dbPosition, dbRotation, Vector3.zero);
 						character.ID.SetInitialValues(dbCharacter.ID);
 						character.CharacterName = dbCharacter.Name;
 						character.CharacterNameLower = dbCharacter.NameLowercase;

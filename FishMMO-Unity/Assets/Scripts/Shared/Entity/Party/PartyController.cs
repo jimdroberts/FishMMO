@@ -1,5 +1,4 @@
-﻿using UnityEngine;
-using FishNet.Transporting;
+﻿using FishNet.Transporting;
 using System.Collections.Generic;
 using System.Linq;
 #if !UNITY_SERVER
@@ -12,7 +11,6 @@ namespace FishMMO.Shared
 	/// <summary>
 	/// Character party controller.
 	/// </summary>
-	[RequireComponent(typeof(Character))]
 	public class PartyController : CharacterBehaviour
 	{
 		public long ID;

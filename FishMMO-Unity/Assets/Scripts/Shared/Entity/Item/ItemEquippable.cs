@@ -9,9 +9,9 @@ namespace FishMMO.Shared
 		public event Action<Character> OnEquip;
 		public event Action<Character> OnUnequip;
 
-		public Character Owner { get; private set; }
+		public Character Character { get; private set; }
 
-		public void Initialize(Item item)
+		public ItemEquippable(Item item)
 		{
 			this.item = item;
 			if (item.Generator != null)
@@ -32,30 +32,36 @@ namespace FishMMO.Shared
 
 		public void Equip(Character owner)
 		{
-			if (Owner != null)
+			if (owner == null)
 			{
-				Unequip();
+				return;
 			}
-			if (owner != null)
-			{
-				Owner = owner;
-				OnEquip?.Invoke(owner);
-			}
+
+			Unequip();
+
+			Character = owner;
+			OnEquip?.Invoke(owner);
 		}
 
 		public void Unequip()
 		{
-			if (Owner != null)
+			if (Character != null)
 			{
-				OnUnequip?.Invoke(Owner);
-				Owner = null;
+				OnUnequip?.Invoke(Character);
+				Character = null;
 			}
+		}
+
+		public void SetOwner(Character owner)
+		{
+			Unequip();
+			Character = owner;
 		}
 
 		public void ItemGenerator_OnSetAttribute(ItemAttribute attribute, int oldValue, int newValue)
 		{
-			if (Owner != null &&
-				Owner.TryGet(out CharacterAttributeController attributeController) &&
+			if (Character != null &&
+				Character.TryGet(out CharacterAttributeController attributeController) &&
 				attributeController.TryGetAttribute(attribute.Template.CharacterAttribute.ID, out CharacterAttribute characterAttribute))
 			{
 				characterAttribute.AddValue(-oldValue);

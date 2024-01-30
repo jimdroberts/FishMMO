@@ -185,16 +185,15 @@ namespace FishMMO.Shared
 
 			byte slotIndex = (byte)toSlot;
 
-			if (container != null)
+			if (container != null &&
+				TryGetItem(slotIndex, out Item previousItem))
 			{
-				Item prevItem = Items[slotIndex];
-				if (prevItem != null &&
-					prevItem.Equippable != null)
+				if (previousItem.IsEquippable)
 				{
-					prevItem.Equippable.Unequip();
+					previousItem.Equippable.Unequip();
 
 					// swap the items
-					if (!container.SetItemSlot(prevItem, inventoryIndex))
+					if (!container.SetItemSlot(previousItem, inventoryIndex))
 					{
 						return false;
 					}
@@ -213,7 +212,7 @@ namespace FishMMO.Shared
 			}
 
 			// equip the item to the character (adds attributes.. etc..)
-			if (item.Equippable != null)
+			if (item.IsEquippable)
 			{
 				item.Equippable.Equip(Character);
 			}
@@ -240,14 +239,15 @@ namespace FishMMO.Shared
 				return false;
 			}
 
-			// remove the equipped item
-			SetItemSlot(null, slot);
-
 			// unequip the item
-			if (item.Equippable != null)
+			if (item.IsEquippable)
 			{
 				item.Equippable.Unequip();
 			}
+
+			// remove the equipped item
+			SetItemSlot(null, slot);
+			
 			return true;
 		}
 	}

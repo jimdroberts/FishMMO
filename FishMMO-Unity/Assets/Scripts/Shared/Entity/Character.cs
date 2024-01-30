@@ -12,15 +12,6 @@ using System.Collections.Generic;
 
 namespace FishMMO.Shared
 {
-	/// <summary>
-	/// Character contains references to all of the controllers associated with the character.
-	/// </summary>
-	#region KCC
-	[RequireComponent(typeof(Rigidbody))]
-	[RequireComponent(typeof(KinematicCharacterMotor))]
-	[RequireComponent(typeof(KCCController))]
-	[RequireComponent(typeof(KCCPlayer))]
-	#endregion
 	[RequireComponent(typeof(CharacterAttributeController))]
 	[RequireComponent(typeof(TargetController))]
 	[RequireComponent(typeof(CooldownController))]
@@ -37,7 +28,7 @@ namespace FishMMO.Shared
 	[RequireComponent(typeof(FriendController))]
 	public class Character : NetworkBehaviour, IPooledResettable
 	{
-		private static Dictionary<Type, CharacterBehaviour> behaviours = new Dictionary<Type, CharacterBehaviour>();
+		private Dictionary<Type, CharacterBehaviour> behaviours = new Dictionary<Type, CharacterBehaviour>();
 
 		public Transform Transform { get; private set; }
 
@@ -55,7 +46,7 @@ namespace FishMMO.Shared
 #endif
 
 		// accountID for reference
-		public readonly SyncVar<long> ID = new SyncVar<long>(new SyncTypeSetting()
+		public readonly SyncVar<long> ID = new SyncVar<long>(new SyncTypeSettings()
 		{
 			SendRate = 0.0f,
 			Channel = Channel.Reliable,
@@ -86,28 +77,31 @@ namespace FishMMO.Shared
 		public long WorldServerID;
 		public AccessLevel AccessLevel = AccessLevel.Player;
 		public bool IsTeleporting = false;
-		public readonly SyncVar<long> Currency = new SyncVar<long>(new SyncTypeSetting()
+		public readonly SyncVar<long> Currency = new SyncVar<long>(new SyncTypeSettings()
 		{
 			SendRate = 0.0f,
 			Channel = Channel.Unreliable,
 			ReadPermission = ReadPermission.OwnerOnly,
 			WritePermission = WritePermission.ServerOnly,
 		});
-		public readonly SyncVar<int> RaceID = new SyncVar<int>(new SyncTypeSetting()
+		/// <summary>
+		/// The prefab ID for the character object.
+		/// </summary>
+		public readonly SyncVar<int> RaceID = new SyncVar<int>(new SyncTypeSettings()
 		{
 			SendRate = 0.0f,
 			Channel = Channel.Unreliable,
 			ReadPermission = ReadPermission.OwnerOnly,
 			WritePermission = WritePermission.ServerOnly,
 		});
-		public readonly SyncVar<string> RaceName = new SyncVar<string>(new SyncTypeSetting()
+		public readonly SyncVar<string> RaceName = new SyncVar<string>(new SyncTypeSettings()
 		{
 			SendRate = 0.0f,
 			Channel = Channel.Unreliable,
 			ReadPermission = ReadPermission.OwnerOnly,
 			WritePermission = WritePermission.ServerOnly,
 		});
-		public readonly SyncVar<string> SceneName = new SyncVar<string>(new SyncTypeSetting()
+		public readonly SyncVar<string> SceneName = new SyncVar<string>(new SyncTypeSettings()
 		{
 			SendRate = 0.0f,
 			Channel = Channel.Unreliable,
@@ -127,15 +121,12 @@ namespace FishMMO.Shared
 
 			#region KCC
 			Motor = gameObject.GetComponent<KinematicCharacterMotor>();
-
 			CharacterController = gameObject.GetComponent<KCCController>();
-			CharacterController.Character = this;
-			CharacterController.Motor = Motor;
-			Motor.CharacterController = CharacterController;
-
+			if (CharacterController != null)
+			{
+				CharacterController.Character = this;
+			}
 			KCCPlayer = gameObject.GetComponent<KCCPlayer>();
-			KCCPlayer.CharacterController = CharacterController;
-			KCCPlayer.Motor = Motor;
 			#endregion
 
 			CharacterBehaviour[] c = gameObject.GetComponents<CharacterBehaviour>();
@@ -163,6 +154,7 @@ namespace FishMMO.Shared
 		public override void OnStartClient()
 		{
 			base.OnStartClient();
+
 			if (base.IsOwner)
 			{
 				InitializeLocal(true);
@@ -236,7 +228,7 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
-			Debug.Log(CharacterName + ": Registered " + type.Name);
+			//Debug.Log(CharacterName + ": Registered " + type.Name);
 			behaviours.Add(type, behaviour);
 		}
 
@@ -249,7 +241,7 @@ namespace FishMMO.Shared
 			else
 			{
 				Type type = behaviour.GetType();
-				Debug.Log(CharacterName + ": Unregistered " + type.Name);
+				//Debug.Log(CharacterName + ": Unregistered " + type.Name);
 				behaviours.Remove(type);
 			}
 		}
