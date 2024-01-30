@@ -185,10 +185,10 @@ namespace FishMMO.Shared
 
 			byte slotIndex = (byte)toSlot;
 
-			if (container != null &&
-				TryGetItem(slotIndex, out Item previousItem))
+			if (container != null)
 			{
-				if (previousItem.IsEquippable)
+				if (TryGetItem(slotIndex, out Item previousItem) &&
+					previousItem.IsEquippable)
 				{
 					previousItem.Equippable.Unequip();
 
