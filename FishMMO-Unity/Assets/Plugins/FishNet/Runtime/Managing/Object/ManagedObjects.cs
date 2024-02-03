@@ -183,7 +183,9 @@ namespace FishNet.Managing.Object
                 {
                     //If not clientHost then the object can be disabled.
                     if (!NetworkManager.IsClientStarted)
-                        nob.gameObject.SetActive(false);
+                    {
+						nob.gameObject.SetActive(false);
+					}
                 }
                 //Not as server.
                 else

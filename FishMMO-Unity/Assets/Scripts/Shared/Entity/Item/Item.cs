@@ -43,17 +43,28 @@ namespace FishMMO.Shared
 		{
 			ID = id;
 
+			// check if the item is stackable
 			if (Stackable == null &&
 				Template.MaxStackSize > 1)
 			{
 				Stackable = new ItemStackable(this, amount.Clamp(1, Template.MaxStackSize));
 			}
 
+			// ensure Item Equippable is created if it's an equippable item type
+			if (Equippable == null &&
+				Template as EquippableItemTemplate != null)
+			{
+				Equippable = new ItemEquippable();
+			}
+
+			// ensure Item Generator is created if the item can be generated
 			if (Generator == null &&
 				Template.Generate &&
 				ID != 0)
 			{
 				Generator = new ItemGenerator();
+
+				// get the items seed if none is provided
 				if (seed == 0)
 				{
 					var longBytes = BitConverter.GetBytes(ID);
@@ -69,14 +80,11 @@ namespace FishMMO.Shared
 						seed = ints[1] > 0 ? ints[1] : ints[0];
 					}
 				}
-				Generator?.Initialize(this, seed);
 			}
 
-			if (Equippable == null &&
-				Template as EquippableItemTemplate != null)
-			{
-				Equippable = new ItemEquippable(this);
-			}
+			// finalize initialization of components
+			Equippable?.Initialize(this);
+			Generator?.Initialize(this, seed);
 		}
 
 		public void Destroy()

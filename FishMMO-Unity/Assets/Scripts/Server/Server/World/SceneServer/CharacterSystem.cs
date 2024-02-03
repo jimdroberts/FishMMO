@@ -163,10 +163,9 @@ namespace FishMMO.Server
 			if (args.ConnectionState == RemoteConnectionState.Stopped &&
 				ServerBehaviour.TryGet(out SceneServerSystem sceneServerSystem))
 			{
-				// Remove the waiting scene load character if it exists
+				// Remove the waiting scene load character if it exists, these characters exist but are not spawned
 				if(WaitingSceneLoadCharacters.TryGetValue(conn, out Character waitingSceneCharacter))
 				{
-					Server.NetworkManager.StorePooledInstantiated(waitingSceneCharacter.NetworkObject, true);
 					WaitingSceneLoadCharacters.Remove(conn);
 
 					if (sceneServerSystem.TryGetSceneInstanceDetails(waitingSceneCharacter.WorldServerID,
@@ -178,6 +177,8 @@ namespace FishMMO.Server
 
 						OnDisconnect?.Invoke(conn, waitingSceneCharacter);
 					}
+
+					Server.NetworkManager.StorePooledInstantiated(waitingSceneCharacter.NetworkObject, true);
 				}
 
 				if (ConnectionCharacters.TryGetValue(conn, out Character character))
@@ -312,15 +313,10 @@ namespace FishMMO.Server
 					return;
 				}
 
-				if (!ServerBehaviour.TryGet(out SceneServerSystem sceneServerSystem))
-				{
-					Destroy(character.gameObject);
-					return;
-				}
-
 				// add a connection->character map for ease of use
 				ConnectionCharacters[conn] = character;
 				// add a characterName->character map for ease of use
+				Debug.Log($"Character ID 3: {character.ID.Value}");
 				CharactersByID[character.ID.Value] = character;
 				CharactersByLowerCaseName[character.CharacterNameLower] = character;
 				// add a worldID<characterID->character> map for ease of use

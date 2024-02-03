@@ -128,7 +128,7 @@ namespace FishMMO.Shared
 			}
 		}
 
-		void OnTriggerExit(Collider other)
+		/*void OnTriggerExit(Collider other)
 		{
 			if (other != null && other.gameObject != null)
 			{
@@ -138,7 +138,7 @@ namespace FishMMO.Shared
 					character.IsTeleporting = false;
 				}
 			}
-		}
+		}*/
 #endif
 	}
 }

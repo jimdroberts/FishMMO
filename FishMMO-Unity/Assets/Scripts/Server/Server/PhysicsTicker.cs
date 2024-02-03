@@ -13,7 +13,7 @@ namespace FishMMO.Server
 			if (timeManager != null)
 			{
 				this.timeManager = timeManager;
-				this.timeManager.OnTick += TimeManager_OnTick;
+				this.timeManager.OnPrePhysicsSimulation += TimeManager_OnPrePhysicsSimulation;
 				_physicsScene = physicsScene;
 			}
 		}
@@ -22,13 +22,13 @@ namespace FishMMO.Server
 		{
 			if (this.timeManager != null)
 			{
-				this.timeManager.OnTick -= TimeManager_OnTick;
+				this.timeManager.OnPrePhysicsSimulation -= TimeManager_OnPrePhysicsSimulation;
 			}
 		}
 
-		void TimeManager_OnTick()
+		void TimeManager_OnPrePhysicsSimulation(float deltaTime)
 		{
-			_physicsScene.Simulate((float)this.timeManager.TickDelta);
+			_physicsScene.Simulate(deltaTime);
 		}
 	}
 }

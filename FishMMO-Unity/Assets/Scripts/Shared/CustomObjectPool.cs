@@ -236,6 +236,4 @@ namespace FishMMO.Shared
 			return cache;
 		}
 	}
-
-
 }

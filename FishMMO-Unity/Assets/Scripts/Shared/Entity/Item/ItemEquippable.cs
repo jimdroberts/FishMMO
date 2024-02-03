@@ -11,9 +11,10 @@ namespace FishMMO.Shared
 
 		public Character Character { get; private set; }
 
-		public ItemEquippable(Item item)
+		public void Initialize(Item item)
 		{
 			this.item = item;
+
 			if (item.Generator != null)
 			{
 				item.Generator.OnSetAttribute += ItemGenerator_OnSetAttribute;

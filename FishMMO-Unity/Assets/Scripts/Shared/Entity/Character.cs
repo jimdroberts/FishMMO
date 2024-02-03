@@ -273,21 +273,9 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void OnPooledReset()
 		{
-			ID.Value = -1;
-			CharacterName = "";
-			Account = "";
-			WorldServerID = 0;
-			AccessLevel = AccessLevel.Player;
-			IsTeleporting = false;
-			Currency.Value = 0;
-			RaceID.Value = 0;
-			RaceName.Value = "";
-			SceneName.Value = "";
-			SceneHandle = 0;
 			LastChatMessage = "";
 			NextChatMessageTime = DateTime.UtcNow;
 			NextInteractTime = DateTime.UtcNow;
-			Motor.SetPositionAndRotationAndVelocity(Vector3.zero, Quaternion.identity, Vector3.zero);
 		}
 
 		public void SetGuildName(string guildName)

@@ -182,9 +182,7 @@ namespace FishMMO.Shared
 
 		private void TimeManager_OnTick()
 		{
-			AbilityActivationReplicateData activationData = HandleCharacterInput();
-			Replicate(activationData);
-
+			Replicate(HandleCharacterInput());
 			if (base.IsServerStarted)
 			{
 				AbilityReconcileData state = new AbilityReconcileData(interruptQueued,
@@ -301,6 +299,8 @@ namespace FishMMO.Shared
 					 KnownAbilities.TryGetValue(activationData.QueuedAbilityID, out Ability validatedAbility) &&
 					 CanActivate(validatedAbility))
 			{
+				//Debug.Log("New Ability Activation " +  activationData.QueuedAbilityID);
+
 				interruptQueued = false;
 				currentAbility = validatedAbility;
 				remainingTime = validatedAbility.ActivationTime * CalculateSpeedReduction(validatedAbility.Template.ActivationSpeedReductionAttribute);
@@ -315,8 +315,11 @@ namespace FishMMO.Shared
 				rd.AbilityID == NO_ABILITY ||
 				!KnownAbilities.TryGetValue(rd.AbilityID, out Ability ability))
 			{
-				OnInterrupt?.Invoke();
-				Cancel();
+				if (currentAbility != null)
+				{
+					OnInterrupt?.Invoke();
+					Cancel();
+				}
 			}
 			else
 			{
@@ -352,11 +355,13 @@ namespace FishMMO.Shared
 			if (InputManager.MouseMode ||
 				!CanManipulate())
 			{
+				//Debug.Log("Cannot activate");
 				return;
 			}
 
 			if (!IsActivating && !interruptQueued)
 			{
+				//Debug.Log("Activating " + referenceID);
 				queuedAbilityID = referenceID;
 				this.heldKey = heldKey;
 			}
@@ -378,6 +383,8 @@ namespace FishMMO.Shared
 
 		internal void Cancel()
 		{
+			//Debug.Log("Cancel");
+
 			interruptQueued = false;
 			queuedAbilityID = NO_ABILITY;
 			currentAbility = null;

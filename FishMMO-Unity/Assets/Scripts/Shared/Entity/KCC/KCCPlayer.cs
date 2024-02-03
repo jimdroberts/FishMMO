@@ -65,6 +65,7 @@ namespace FishMMO.Shared
 
 			if (base.TimeManager != null)
 			{
+				ClearReplicateCache();
 				base.TimeManager.OnTick -= TimeManager_OnTick;
 			}
 		}
@@ -108,8 +109,7 @@ namespace FishMMO.Shared
 
 		private KCCInputReplicateData HandleCharacterInput()
 		{
-			if (!base.IsOwner ||
-				CharacterCamera == null)
+			if (!base.IsOwner)
 			{
 				return default;
 			}

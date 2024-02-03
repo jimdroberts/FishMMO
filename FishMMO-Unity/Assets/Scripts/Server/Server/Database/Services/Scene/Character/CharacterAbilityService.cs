@@ -78,6 +78,7 @@ namespace FishMMO.Server.DatabaseServices
 				}
 				if (dbAbilities.TryGetValue(pair.Key, out CharacterAbilityEntity ability))
 				{
+					ability.CharacterID = character.ID.Value;
 					ability.TemplateID = pair.Value.Template.ID;
 					ability.AbilityEvents.Clear();
 					ability.AbilityEvents = pair.Value.AbilityEvents.Keys.ToList();

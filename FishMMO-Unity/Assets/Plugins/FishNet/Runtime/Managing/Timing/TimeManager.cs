@@ -717,21 +717,21 @@ namespace FishNet.Managing.Timing
                     //Tell predicted objecs to reconcile before OnTick.
                     NetworkManager.PredictionManager.ReconcileToStates();
 #endif
-                    OnTick?.Invoke();
+					OnTick?.Invoke();
 
-                    if (PhysicsMode == PhysicsMode.TimeManager)
+					if (PhysicsMode == PhysicsMode.TimeManager)
                     {
                         float tick = (float)TickDelta;
-                        OnPrePhysicsSimulation?.Invoke(tick);
+						OnPrePhysicsSimulation?.Invoke(tick);
                         Physics.Simulate(tick);
                         Physics2D.Simulate(tick);
                         OnPostPhysicsSimulation?.Invoke(tick);
-                    }
+					}
 
-                    OnPostTick?.Invoke();
+					OnPostTick?.Invoke();
 #if PREDICTION_V2
-                    //After post tick send states.
-                    NetworkManager.PredictionManager.SendStateUpdate();
+					//After post tick send states.
+					NetworkManager.PredictionManager.SendStateUpdate();
 #endif
 
                     /* If isClient this is the
