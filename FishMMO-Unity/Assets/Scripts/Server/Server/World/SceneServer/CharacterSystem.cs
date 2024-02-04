@@ -164,7 +164,7 @@ namespace FishMMO.Server
 				ServerBehaviour.TryGet(out SceneServerSystem sceneServerSystem))
 			{
 				// Remove the waiting scene load character if it exists, these characters exist but are not spawned
-				if(WaitingSceneLoadCharacters.TryGetValue(conn, out Character waitingSceneCharacter))
+				if (WaitingSceneLoadCharacters.TryGetValue(conn, out Character waitingSceneCharacter))
 				{
 					WaitingSceneLoadCharacters.Remove(conn);
 
@@ -196,13 +196,7 @@ namespace FishMMO.Server
 						characters.Remove(character.ID.Value);
 					}
 
-					OnDisconnect?.Invoke(conn, waitingSceneCharacter);
-
-					if (character.IsTeleporting)
-					{
-						// teleporter handles the rest
-						return;
-					}
+					OnDisconnect?.Invoke(conn, character);
 
 					// update scene instance details
 					if (sceneServerSystem.TryGetSceneInstanceDetails(character.WorldServerID,
@@ -211,12 +205,6 @@ namespace FishMMO.Server
 																	 out SceneInstanceDetails instance))
 					{
 						--instance.CharacterCount;
-					}
-
-					// character becomes immortal on disconnect and mortal when fully loaded into the scene
-					if (character.TryGet(out CharacterDamageController damageController))
-					{
-						damageController.Immortal = true;
 					}
 
 					// save the character and set online status to false
@@ -304,19 +292,18 @@ namespace FishMMO.Server
 		{
 			if (WaitingSceneLoadCharacters.TryGetValue(conn, out Character character))
 			{
-				// remove the waiting scene load character
-				WaitingSceneLoadCharacters.Remove(conn);
-
 				if (character == null)
 				{
 					conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
 					return;
 				}
 
+				// remove the waiting scene load character
+				WaitingSceneLoadCharacters.Remove(conn);
+
 				// add a connection->character map for ease of use
 				ConnectionCharacters[conn] = character;
 				// add a characterName->character map for ease of use
-				Debug.Log($"Character ID 3: {character.ID.Value}");
 				CharactersByID[character.ID.Value] = character;
 				CharactersByLowerCaseName[character.CharacterNameLower] = character;
 				// add a worldID<characterID->character> map for ease of use
@@ -325,12 +312,6 @@ namespace FishMMO.Server
 					CharactersByWorld.Add(character.WorldServerID, characters = new Dictionary<long, Character>());
 				}
 				characters[character.ID.Value] = character;
-
-				// character becomes immortal on disconnect and mortal when loaded into the scene
-				if (character.TryGet(out CharacterDamageController damageController))
-				{
-					damageController.Immortal = false;
-				}
 
 				// get the characters scene
 				Scene scene = SceneManager.GetScene(character.SceneHandle);
@@ -348,6 +329,12 @@ namespace FishMMO.Server
 
 				// set the proper physics scene for the character, scene stacking requires separated physics
 				character.Motor.SetPhysicsScene(scene.GetPhysicsScene());
+
+				// character becomes mortal when loaded into the scene
+				if (character.TryGet(out CharacterDamageController damageController))
+				{
+					damageController.Immortal = false;
+				}
 
 				// ensure the game object is active, pooled objects are disabled
 				character.gameObject.SetActive(true);

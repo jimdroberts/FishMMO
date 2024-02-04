@@ -73,7 +73,12 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			character.IsTeleporting = true;
+			using var dbContext = sceneServerSystem.Server.NpgsqlDbContextFactory.CreateDbContext();
+			if (dbContext == null)
+			{
+				Debug.Log("Could not get database context.");
+				return;
+			}
 
 			// should we prevent players from moving to a different scene if they are in combat?
 			/*if (character.TryGet(out CharacterDamageController damageController) &&
@@ -82,49 +87,35 @@ namespace FishMMO.Shared
 				return;
 			}*/
 
-			// make the character immortal for teleport
+			// character becomes immortal when teleporting
 			if (character.TryGet(out CharacterDamageController damageController))
 			{
 				damageController.Immortal = true;
 			}
 
-			// update scene instance details
-			if (sceneServerSystem.TryGetSceneInstanceDetails(character.WorldServerID,
-															 playerScene,
-															 character.SceneHandle,
-															 out SceneInstanceDetails instance))
-			{
-				--instance.CharacterCount;
-			}
+			character.IsTeleporting = true;
+			character.SceneName.SetInitialValues(teleporter.ToScene);
+			character.Motor.SetPositionAndRotationAndVelocity(teleporter.ToPosition, teleporter.ToRotation, Vector3.zero);
 
-			character.SceneName.Value = teleporter.ToScene;
-			character.Motor.Transform.SetPositionAndRotation(teleporter.ToPosition, teleporter.ToRotation);
-
-			// save the character with new scene and position
-			using var dbContext = sceneServerSystem.Server.NpgsqlDbContextFactory.CreateDbContext();
-			CharacterService.Save(dbContext, character, false);
-
-			NetworkConnection conn = character.Owner;
-			long worldServerId = character.WorldServerID;
-
-			sceneServerSystem.ServerManager.Despawn(character.NetworkObject, DespawnType.Pool);
-
-			WorldServerEntity worldServer = WorldServerService.GetServer(dbContext, worldServerId);
+			WorldServerEntity worldServer = WorldServerService.GetServer(dbContext, character.WorldServerID);
 			if (worldServer != null)
 			{
 				// tell the client to reconnect to the world server for automatic re-entry
-				Broadcast(conn, new SceneWorldReconnectBroadcast()
+				Broadcast(character.Owner, new SceneWorldReconnectBroadcast()
 				{
 					address = worldServer.Address,
 					port = worldServer.Port,
 					sceneName = playerScene,
 					teleporterName = gameObject.name,
 				}, true, Channel.Reliable);
+
+				// just incase we enforce a disconnect
+				character.Owner.Disconnect(false);
 			}
 			else
 			{
 				// world not found?
-				conn.Kick(FishNet.Managing.Server.KickReason.UnexpectedProblem);
+				character.Owner.Kick(FishNet.Managing.Server.KickReason.UnexpectedProblem);
 			}
 		}
 

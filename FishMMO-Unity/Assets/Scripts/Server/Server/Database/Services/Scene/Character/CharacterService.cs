@@ -376,12 +376,18 @@ namespace FishMMO.Server.DatabaseServices
 						character.Account = dbCharacter.Account;
 						character.WorldServerID = dbCharacter.WorldServerID;
 						character.AccessLevel = (AccessLevel)dbCharacter.AccessLevel;
-						character.RaceID.Value = dbCharacter.RaceID;
-						character.Currency.Value = dbCharacter.Currency;
-						character.RaceName.Value = prefab.name;
+						character.RaceID.SetInitialValues(dbCharacter.RaceID);
+						character.Currency.SetInitialValues(dbCharacter.Currency);
+						character.RaceName.SetInitialValues(prefab.name);
 						character.SceneHandle = dbCharacter.SceneHandle;
-						character.SceneName.Value = dbCharacter.SceneName;
+						character.SceneName.SetInitialValues(dbCharacter.SceneName);
 						character.IsTeleporting = false;
+
+						// character becomes immortal when loading.. just in case..
+						if (character.TryGet(out CharacterDamageController damageController))
+						{
+							damageController.Immortal = true;
+						}
 
 						CharacterAttributeService.Load(dbContext, character);
 						CharacterAchievementService.Load(dbContext, character);

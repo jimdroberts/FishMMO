@@ -983,7 +983,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1994176931, guid: baf277a15736fa043a2ae630fc0c0b6f, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: 191.49997
+      value: 191.50003
       objectReference: {fileID: 0}
     - target: {fileID: 2037370771, guid: baf277a15736fa043a2ae630fc0c0b6f, type: 3}
       propertyPath: m_AnchorMax.x
@@ -2182,6 +2182,11 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 984075723242643037, guid: 753178c3c796220468c9b3f8db9a4eaf,
+        type: 3}
+      propertyPath: _authenticator
+      value: 
+      objectReference: {fileID: 739239019}
     - target: {fileID: 984075723242643037, guid: 753178c3c796220468c9b3f8db9a4eaf,
         type: 3}
       propertyPath: _remoteClientTimeout
@@ -7150,6 +7155,11 @@ PrefabInstance:
     - target: {fileID: 8668961000802385443, guid: c507e6d548b5521459d05a6ba4ddfccd,
         type: 3}
       propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8668961000802385443, guid: c507e6d548b5521459d05a6ba4ddfccd,
+        type: 3}
+      propertyPath: m_AnchorMin.y
       value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []

@@ -1,8 +1,8 @@
 ﻿using FishNet.Managing;
 using FishNet.Managing.Object;
+using FishNet.Utility.Performance;
 using FishNet.Object;
 using FishNet.Utility.Extension;
-using FishNet.Utility.Performance;
 using GameKit.Dependencies.Utilities;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
@@ -15,8 +15,8 @@ namespace FishMMO.Shared
 		#region Public.
 		/// <summary>
 		/// Cache for pooled NetworkObjects.
-		/// </summary>  //Remove on 2024/01/01 Convert to IReadOnlyList.
-		public IReadOnlyCollection<Dictionary<int, Stack<NetworkObject>>> Cache => _cache;
+		/// </summary>
+		public IReadOnlyList<Dictionary<int, Stack<NetworkObject>>> Cache => _cache;
 		private List<Dictionary<int, Stack<NetworkObject>>> _cache = new List<Dictionary<int, Stack<NetworkObject>>>();
 		#endregion
 
@@ -34,19 +34,8 @@ namespace FishMMO.Shared
 		/// Current count of the cache collection.
 		/// </summary>
 		private int _cacheCount = 0;
-		/// <summary>
-		/// When a NetworkObject is stored it's parent is set to this object.
-		/// </summary>
-		private Transform _objectParent;
 		#endregion
 
-		public override void InitializeOnce(NetworkManager nm)
-		{
-			base.InitializeOnce(nm);
-			_objectParent = new GameObject().transform;
-			_objectParent.name = "DefaultObjectPool Parent";
-			_objectParent.transform.SetParent(nm.transform);
-		}
 
 		/// <summary>
 		/// Returns an object that has been stored. A new object will be created if no stored objects are available.
@@ -132,7 +121,7 @@ namespace FishMMO.Shared
 		public override void StoreObject(NetworkObject instantiated, bool asServer)
 		{
 			//Pooling is not enabled.
-			if (!_enabled || _objectParent == null)
+			if (!_enabled)
 			{
 				Destroy(instantiated.gameObject);
 				return;
@@ -141,7 +130,6 @@ namespace FishMMO.Shared
 			instantiated.gameObject.SetActive(false);
 			instantiated.ResetState();
 			Stack<NetworkObject> cache = GetOrCreateCache(instantiated.SpawnableCollectionId, instantiated.PrefabId);
-			instantiated.transform.SetParent(_objectParent);
 			cache.Push(instantiated);
 		}
 

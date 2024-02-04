@@ -1702,7 +1702,7 @@ namespace FishNet.Managing.Scened
             bool added = hs.Add(conn);
             if (added)
             {
-				conn.AddToScene(scene);
+                conn.AddToScene(scene);
 
                 //If not yet added to scene connections.
                 if (!inSceneConnections)

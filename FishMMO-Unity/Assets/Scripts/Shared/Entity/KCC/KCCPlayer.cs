@@ -65,7 +65,6 @@ namespace FishMMO.Shared
 
 			if (base.TimeManager != null)
 			{
-				ClearReplicateCache();
 				base.TimeManager.OnTick -= TimeManager_OnTick;
 			}
 		}
