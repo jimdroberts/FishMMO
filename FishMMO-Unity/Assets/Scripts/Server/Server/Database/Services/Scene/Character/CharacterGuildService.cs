@@ -134,7 +134,7 @@ namespace FishMMO.Server.DatabaseServices
 			var characterGuildEntity = dbContext.CharacterGuilds.FirstOrDefault(a => a.CharacterID == character.ID.Value);
 			if (characterGuildEntity != null)
 			{
-				guildController.ID.SetInitialValues(characterGuildEntity.GuildID);
+				character.SetSyncVarDatabaseValue(guildController.ID, characterGuildEntity.GuildID);
 				guildController.Rank = (GuildRank)characterGuildEntity.Rank;
 			}
 		}

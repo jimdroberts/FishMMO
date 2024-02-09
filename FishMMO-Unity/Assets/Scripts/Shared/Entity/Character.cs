@@ -217,6 +217,12 @@ namespace FishMMO.Shared
 		}
 #endif
 
+		internal void SetSyncVarDatabaseValue<T>(SyncVar<T> syncVar, T value)
+		{
+			syncVar.Value = value;
+			syncVar.SetInitialValues(value);
+		}
+
 		public void RegisterCharacterBehaviour(CharacterBehaviour behaviour)
 		{
 			if (behaviour == null)

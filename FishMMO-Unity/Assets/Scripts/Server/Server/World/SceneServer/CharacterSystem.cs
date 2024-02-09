@@ -1,7 +1,6 @@
 ﻿using FishNet.Broadcast;
 using FishNet.Connection;
 using FishNet.Object;
-using FishNet.Managing.Scened;
 using SceneManager = FishNet.Managing.Scened.SceneManager;
 using FishNet.Transporting;
 using System;
@@ -379,12 +378,12 @@ namespace FishMMO.Server
 				return;
 			}
 
-			// set ID to dirty which forces it to sync to the client
+			// set syncvars dirty which forces it to sync to the client
 			character.ID.Dirty();
-			//character.Currency.Dirty();
-			//character.RaceID.Dirty();
-			//character.RaceName.Dirty();
-			//character.SceneName.Dirty();
+			character.Currency.Dirty();
+			character.RaceID.Dirty();
+			character.RaceName.Dirty();
+			character.SceneName.Dirty();
 
 			#region Abilities
 			if (character.TryGet(out AbilityController abilityController))
@@ -513,6 +512,8 @@ namespace FishMMO.Server
 			if (character.TryGet(out GuildController guildController) &&
 				guildController.ID.Value > 0)
 			{
+				guildController.ID.Dirty();
+
 				// get the current guild members from the database
 				List<CharacterGuildEntity> dbMembers = CharacterGuildService.Members(dbContext, guildController.ID.Value);
 

@@ -42,6 +42,13 @@ namespace FishMMO.Shared
 		public bool IsActivating { get { return currentAbility != null; } }
 		public bool AbilityQueued { get { return queuedAbilityID != NO_ABILITY; } }
 
+		public override void OnAwake()
+		{
+			base.OnAwake();
+
+			KnownAbilities = new Dictionary<long, Ability>();
+		}
+
 		public override void OnStartNetwork()
 		{
 			if (base.TimeManager != null)

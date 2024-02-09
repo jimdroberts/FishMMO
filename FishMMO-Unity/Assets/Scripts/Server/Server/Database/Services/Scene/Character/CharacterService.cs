@@ -370,17 +370,17 @@ namespace FishMMO.Server.DatabaseServices
 					if (character != null)
 					{
 						character.Motor.SetPositionAndRotationAndVelocity(dbPosition, dbRotation, Vector3.zero);
-						character.ID.SetInitialValues(dbCharacter.ID);
+						character.SetSyncVarDatabaseValue(character.ID, dbCharacter.ID);
 						character.CharacterName = dbCharacter.Name;
 						character.CharacterNameLower = dbCharacter.NameLowercase;
 						character.Account = dbCharacter.Account;
 						character.WorldServerID = dbCharacter.WorldServerID;
 						character.AccessLevel = (AccessLevel)dbCharacter.AccessLevel;
-						character.RaceID.SetInitialValues(dbCharacter.RaceID);
-						character.Currency.SetInitialValues(dbCharacter.Currency);
-						character.RaceName.SetInitialValues(prefab.name);
+						character.SetSyncVarDatabaseValue(character.RaceID, dbCharacter.RaceID);
+						character.SetSyncVarDatabaseValue(character.Currency, dbCharacter.Currency);
+						character.SetSyncVarDatabaseValue(character.RaceName, prefab.name);
 						character.SceneHandle = dbCharacter.SceneHandle;
-						character.SceneName.SetInitialValues(dbCharacter.SceneName);
+						character.SetSyncVarDatabaseValue(character.SceneName, dbCharacter.SceneName);
 						character.IsTeleporting = false;
 
 						// character becomes immortal when loading.. just in case..

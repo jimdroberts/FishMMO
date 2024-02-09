@@ -142,6 +142,11 @@ PrefabInstance:
       propertyPath: m_Name
       value: NetworkManager Login
       objectReference: {fileID: 0}
+    - target: {fileID: 6327041545190108444, guid: d920d5f7e01fab84dafa106a268a7518,
+        type: 3}
+      propertyPath: _enabled
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 6353428963322486570, guid: d920d5f7e01fab84dafa106a268a7518,
         type: 3}
       propertyPath: m_LocalPosition.x
@@ -191,6 +196,16 @@ PrefabInstance:
         type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6776049994069539431, guid: d920d5f7e01fab84dafa106a268a7518,
+        type: 3}
+      propertyPath: _queuedInputs
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6776049994069539431, guid: d920d5f7e01fab84dafa106a268a7518,
+        type: 3}
+      propertyPath: _redundancyCount
+      value: 1
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
