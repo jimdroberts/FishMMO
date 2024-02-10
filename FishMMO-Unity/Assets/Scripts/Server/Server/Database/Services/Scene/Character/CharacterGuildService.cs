@@ -63,13 +63,13 @@ namespace FishMMO.Server.DatabaseServices
 			{
 				return;
 			}
-			var characterGuildEntity = dbContext.CharacterGuilds.FirstOrDefault(a => a.CharacterID == character.ID.Value);
+			var characterGuildEntity = dbContext.CharacterGuilds.FirstOrDefault(a => a.CharacterID == character.ID);
 			if (characterGuildEntity == null)
 			{
 				characterGuildEntity = new CharacterGuildEntity()
 				{
-					CharacterID = character.ID.Value,
-					GuildID = guildController.ID.Value,
+					CharacterID = character.ID,
+					GuildID = guildController.ID,
 					Rank = (byte)guildController.Rank,
 					Location = character.gameObject.scene.name,
 				};
@@ -77,7 +77,7 @@ namespace FishMMO.Server.DatabaseServices
 			}
 			else
 			{
-				characterGuildEntity.GuildID = guildController.ID.Value;
+				characterGuildEntity.GuildID = guildController.ID;
 				characterGuildEntity.Rank = (byte)guildController.Rank;
 				characterGuildEntity.Location = character.gameObject.scene.name;
 			}
@@ -131,10 +131,10 @@ namespace FishMMO.Server.DatabaseServices
 			{
 				return;
 			}
-			var characterGuildEntity = dbContext.CharacterGuilds.FirstOrDefault(a => a.CharacterID == character.ID.Value);
+			var characterGuildEntity = dbContext.CharacterGuilds.FirstOrDefault(a => a.CharacterID == character.ID);
 			if (characterGuildEntity != null)
 			{
-				character.SetSyncVarDatabaseValue(guildController.ID, characterGuildEntity.GuildID);
+				guildController.ID = characterGuildEntity.GuildID;
 				guildController.Rank = (GuildRank)characterGuildEntity.Rank;
 			}
 		}

@@ -36,7 +36,7 @@ namespace FishMMO.Server.DatabaseServices
 				return;
 			}
 
-			var friends = dbContext.CharacterFriends.Where(c => c.CharacterID == character.ID.Value)
+			var friends = dbContext.CharacterFriends.Where(c => c.CharacterID == character.ID)
 													.ToDictionary(k => k.FriendCharacterID);
 
 			foreach (long friendID in friendController.Friends)
@@ -45,7 +45,7 @@ namespace FishMMO.Server.DatabaseServices
 				{
 					dbContext.CharacterFriends.Add(new CharacterFriendEntity()
 					{
-						CharacterID = character.ID.Value,
+						CharacterID = character.ID,
 						FriendCharacterID = friendID,
 					});
 				}
@@ -124,7 +124,7 @@ namespace FishMMO.Server.DatabaseServices
 			{
 				return;
 			}
-			var friends = dbContext.CharacterFriends.Where(c => c.CharacterID == character.ID.Value);
+			var friends = dbContext.CharacterFriends.Where(c => c.CharacterID == character.ID);
 			foreach (CharacterFriendEntity friend in friends)
 			{
 				friendController.AddFriend(friend.FriendCharacterID);

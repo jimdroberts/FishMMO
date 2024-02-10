@@ -18,14 +18,14 @@ namespace FishMMO.Server.DatabaseServices
 				return;
 			}
 
-			var achievements = dbContext.CharacterAchievements.Where(c => c.CharacterID == character.ID.Value)
+			var achievements = dbContext.CharacterAchievements.Where(c => c.CharacterID == character.ID)
 															  .ToDictionary(k => k.TemplateID);
 
 			foreach (Achievement achievement in achievementController.Achievements.Values)
 			{
 				if (achievements.TryGetValue(achievement.Template.ID, out CharacterAchievementEntity dbAchievement))
 				{
-					dbAchievement.CharacterID = character.ID.Value;
+					dbAchievement.CharacterID = character.ID;
 					dbAchievement.TemplateID = achievement.Template.ID;
 					dbAchievement.Tier = achievement.CurrentTier;
 					dbAchievement.Value = achievement.CurrentValue;
@@ -34,7 +34,7 @@ namespace FishMMO.Server.DatabaseServices
 				{
 					dbContext.CharacterAchievements.Add(new CharacterAchievementEntity()
 					{
-						CharacterID = character.ID.Value,
+						CharacterID = character.ID,
 						TemplateID = achievement.Template.ID,
 						Tier = achievement.CurrentTier,
 						Value = achievement.CurrentValue,
@@ -75,7 +75,7 @@ namespace FishMMO.Server.DatabaseServices
 			{
 				return;
 			}
-			var achievements = dbContext.CharacterAchievements.Where(c => c.CharacterID == character.ID.Value);
+			var achievements = dbContext.CharacterAchievements.Where(c => c.CharacterID == character.ID);
 			foreach (CharacterAchievementEntity achievement in  achievements)
 			{
 				achievementController.SetAchievement(achievement.TemplateID, achievement.Tier, achievement.Value);

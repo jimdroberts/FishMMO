@@ -103,7 +103,7 @@ namespace FishMMO.Shared
 			}
 
 			// if this is our own id
-			if (Character != null && msg.characterID == Character.ID.Value)
+			if (Character != null && msg.characterID == Character.ID)
 			{
 				ID = msg.partyID;
 				Rank = msg.rank;

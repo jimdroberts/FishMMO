@@ -20,9 +20,44 @@ namespace FishMMO.Client
 
 		private AbilityTabType CurrentTab = AbilityTabType.Ability;
 
+		public override void OnStarting()
+		{
+			OnSetCharacter += CharacterControl_OnSetCharacter;
+		}
+
 		public override void OnDestroying()
 		{
 			ClearAllSlots();
+		}
+
+		public override void OnQuitToLogin()
+		{
+			ClearAllSlots();
+		}
+
+		private void CharacterControl_OnSetCharacter(Character character)
+		{
+			if (Abilities != null)
+			{
+				foreach (UIAbilityButton ability in Abilities)
+				{
+					ability.Character = character;
+				}
+			}
+			if (KnownAbilities != null)
+			{
+				foreach (UIAbilityButton ability in KnownAbilities)
+				{
+					ability.Character = character;
+				}
+			}
+			if (KnownAbilityEvents != null)
+			{
+				foreach (UIAbilityButton ability in KnownAbilityEvents)
+				{
+					ability.Character = character;
+				}
+			}
 		}
 
 		public void AddAbility(long id, Ability ability)
@@ -74,7 +109,7 @@ namespace FishMMO.Client
 			button.gameObject.SetActive(CurrentTab == tabType ? true : false);
 		}
 
-		private void ClearAllSlots()
+		public void ClearAllSlots()
 		{
 			ClearSlots(ref Abilities);
 			ClearSlots(ref KnownAbilities);

@@ -9,6 +9,8 @@ using KinematicCharacterController;
 using UnityEngine;
 using System;
 using System.Collections.Generic;
+using FishNet.Connection;
+using FishNet.Serializing;
 
 namespace FishMMO.Shared
 {
@@ -46,27 +48,7 @@ namespace FishMMO.Shared
 #endif
 
 		// accountID for reference
-		public readonly SyncVar<long> ID = new SyncVar<long>(new SyncTypeSettings()
-		{
-			SendRate = 0.0f,
-			Channel = Channel.Reliable,
-			ReadPermission = ReadPermission.Observers,
-			WritePermission = WritePermission.ServerOnly,
-		});
-		private void OnCharacterIDChanged(long prev, long next, bool asServer)
-		{
-#if !UNITY_SERVER
-			ClientNamingSystem.SetName(NamingSystemType.CharacterName, next, (n) =>
-			{
-				gameObject.name = n;
-				CharacterName = n;
-				CharacterNameLower = n.ToLower();
-
-				if (CharacterNameLabel != null)
-					CharacterNameLabel.text = n;
-			});
-#endif
-		}
+		public long ID;
 
 		/// <summary>
 		/// The characters real name. Use this if you are referencing a character by name. Avoid character.name unless you want the name of the game object.
@@ -115,8 +97,6 @@ namespace FishMMO.Shared
 
 		void Awake()
 		{
-			ID.OnChange += OnCharacterIDChanged;
-
 			Transform = transform;
 
 			#region KCC
@@ -145,9 +125,27 @@ namespace FishMMO.Shared
 			}
 		}
 
-		void OnDestroy()
+		public override void ReadPayload(NetworkConnection connection, Reader reader)
 		{
-			ID.OnChange -= OnCharacterIDChanged;
+			ID = reader.ReadInt64();
+
+#if !UNITY_SERVER
+			// load the characters name from disk or request it from the server
+			ClientNamingSystem.SetName(NamingSystemType.CharacterName, ID, (n) =>
+			{
+				gameObject.name = n;
+				CharacterName = n;
+				CharacterNameLower = n.ToLower();
+
+				if (CharacterNameLabel != null)
+					CharacterNameLabel.text = n;
+			});
+#endif
+		}
+
+		public override void WritePayload(NetworkConnection connection, Writer writer)
+		{
+			writer.WriteInt64(ID);
 		}
 
 #if !UNITY_SERVER

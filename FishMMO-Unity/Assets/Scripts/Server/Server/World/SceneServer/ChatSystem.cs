@@ -199,19 +199,19 @@ namespace FishMMO.Server
 			ChatCommand command = ChatHelper.ParseChatCommand(cmd, ref msg.channel);
 			if (command != null)
 			{
-				msg.senderID = sender.ID.Value;
+				msg.senderID = sender.ID;
 
 				switch (msg.channel)
 				{
 					case ChatChannel.Guild:
 						if (!sender.TryGet(out GuildController guildController) ||
-							guildController.ID.Value < 1)
+							guildController.ID < 1)
 						{
 							return;
 						}
 
 						// add the senders guild ID
-						msg.text = guildController.ID.Value + " " + msg.text;
+						msg.text = guildController.ID + " " + msg.text;
 						break;
 					case ChatChannel.Party:
 						if (!sender.TryGet(out PartyController partyController) ||
@@ -237,7 +237,7 @@ namespace FishMMO.Server
 				{
 					// write the parsed message to the database
 					using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-					ChatService.Save(dbContext, sender.ID.Value, sender.WorldServerID, sceneServerSystem.ID, msg.channel, msg.text);
+					ChatService.Save(dbContext, sender.ID, sender.WorldServerID, sceneServerSystem.ID, msg.channel, msg.text);
 				}
 			}
 		}

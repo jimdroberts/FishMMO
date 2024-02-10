@@ -163,7 +163,7 @@ namespace FishMMO.Server
 								}
 
 								// update or add the item to the database and initialize
-								CharacterInventoryService.SetSlot(dbContext, character.ID.Value, item);
+								CharacterInventoryService.SetSlot(dbContext, character.ID, item);
 
 								// create the new item broadcast
 								modifiedItemBroadcasts.Add(new InventorySetItemBroadcast()
@@ -225,7 +225,7 @@ namespace FishMMO.Server
 			inventoryController.Currency -= template.Price;
 
 			// add the known ability to the database
-			CharacterKnownAbilityService.Add(dbContext, character.ID.Value, template.ID);
+			CharacterKnownAbilityService.Add(dbContext, character.ID, template.ID);
 
 			// tell the client about the new ability event
 			Server.Broadcast(conn, new KnownAbilityAddBroadcast()
@@ -299,7 +299,7 @@ namespace FishMMO.Server
 				return;
 			}
 
-			if (CharacterAbilityService.GetCount(dbContext, character.ID.Value) >= MaxAbilityCount)
+			if (CharacterAbilityService.GetCount(dbContext, character.ID) >= MaxAbilityCount)
 			{
 				// too many abilities! tell the player to forget a few of them first...
 				return;
@@ -311,7 +311,7 @@ namespace FishMMO.Server
 				return;
 			}
 
-			CharacterAbilityService.UpdateOrAdd(dbContext, character.ID.Value, newAbility);
+			CharacterAbilityService.UpdateOrAdd(dbContext, character.ID, newAbility);
 
 			abilityController.LearnAbility(newAbility);
 

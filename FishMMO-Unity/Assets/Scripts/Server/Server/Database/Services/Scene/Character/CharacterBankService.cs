@@ -88,14 +88,14 @@ namespace FishMMO.Server.DatabaseServices
 				return;
 			}
 
-			var dbBankItems = dbContext.CharacterBankItems.Where(c => c.CharacterID == character.ID.Value)
+			var dbBankItems = dbContext.CharacterBankItems.Where(c => c.CharacterID == character.ID)
 																	.ToDictionary(k => k.Slot);
 
 			foreach (Item item in bankController.Items)
 			{
 				if (dbBankItems.TryGetValue(item.Slot, out CharacterBankEntity dbItem))
 				{
-					dbItem.CharacterID = character.ID.Value;
+					dbItem.CharacterID = character.ID;
 					dbItem.TemplateID = item.Template.ID;
 					dbItem.Slot = item.Slot;
 					dbItem.Seed = item.IsGenerated ? item.Generator.Seed : 0;
@@ -105,7 +105,7 @@ namespace FishMMO.Server.DatabaseServices
 				{
 					dbContext.CharacterBankItems.Add(new CharacterBankEntity()
 					{
-						CharacterID = character.ID.Value,
+						CharacterID = character.ID,
 						TemplateID = item.Template.ID,
 						Slot = item.Slot,
 						Seed = item.IsGenerated ? item.Generator.Seed : 0,
@@ -169,7 +169,7 @@ namespace FishMMO.Server.DatabaseServices
 				return;
 			}
 
-			var dbBankItems = dbContext.CharacterBankItems.Where(c => c.CharacterID == character.ID.Value);
+			var dbBankItems = dbContext.CharacterBankItems.Where(c => c.CharacterID == character.ID);
 			foreach (CharacterBankEntity dbItem in dbBankItems)
 			{
 				BaseItemTemplate template = BaseItemTemplate.Get<BaseItemTemplate>(dbItem.TemplateID);

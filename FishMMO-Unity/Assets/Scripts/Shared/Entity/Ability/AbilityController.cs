@@ -1,8 +1,10 @@
 ﻿#if !UNITY_SERVER
 using FishMMO.Client;
 #endif
+using FishNet.Connection;
 using FishNet.Object;
 using FishNet.Object.Prediction;
+using FishNet.Serializing;
 using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
@@ -27,6 +29,7 @@ namespace FishMMO.Shared
 		public AbilityEvent BloodResourceConversionTemplate;
 		public AbilityEvent ChargedTemplate;
 		public AbilityEvent ChanneledTemplate;
+
 		public Action<string, float, float> OnUpdate;
 		// Invoked when the current ability is Interrupted.
 		public Action OnInterrupt;
@@ -47,6 +50,11 @@ namespace FishMMO.Shared
 			base.OnAwake();
 
 			KnownAbilities = new Dictionary<long, Ability>();
+			KnownBaseAbilities = new HashSet<int>();
+			KnownEvents = new HashSet<int>();
+			KnownSpawnEvents = new HashSet<int>();
+			KnownHitEvents = new HashSet<int>();
+			KnownMoveEvents = new HashSet<int>();
 		}
 
 		public override void OnStartNetwork()
@@ -85,6 +93,19 @@ namespace FishMMO.Shared
 				{
 					OnUpdate += uiCastBar.OnUpdate;
 					OnCancel += uiCastBar.OnCancel;
+				}
+
+				if (UIManager.TryGet("UIAbilities", out UIAbilities uiAbilities))
+				{
+					uiAbilities.ClearAllSlots();
+					foreach (Ability ability in KnownAbilities.Values)
+					{
+						if (Character.IsOwner &&
+							uiAbilities != null)
+						{
+							uiAbilities.AddAbility(ability.ID, ability);
+						}
+					}
 				}
 			}
 		}
@@ -186,6 +207,48 @@ namespace FishMMO.Shared
 			}
 		}
 #endif
+
+		public override void ReadPayload(NetworkConnection connection, Reader reader)
+		{
+			int abilityCount = reader.ReadInt32();
+			if (abilityCount < 1)
+			{
+				return;
+			}
+			KnownAbilities.Clear();
+
+			for (int i = 0; i < abilityCount; ++i)
+			{
+				long abilityID = reader.ReadInt64();
+				int abilityTemplateID = reader.ReadInt32();
+
+				List<int> abilityEvents = new List<int>();
+				int abilityEventsCount = reader.ReadInt32();
+				for (int j = 0; j < abilityEventsCount; ++j)
+				{
+					abilityEvents.Add(reader.ReadInt32());
+				}
+				Ability ability = new Ability(abilityID, abilityTemplateID, abilityEvents);
+
+				LearnAbility(ability);
+			}
+		}
+
+		public override void WritePayload(NetworkConnection connection, Writer writer)
+		{
+			writer.WriteInt32(KnownAbilities.Count);
+			foreach (Ability ability in KnownAbilities.Values)
+			{
+				writer.WriteInt64(ability.ID);
+				writer.WriteInt32(ability.Template.ID);
+
+				writer.WriteInt32(ability.AbilityEvents.Count);
+				foreach (int abilityEvent in ability.AbilityEvents.Keys)
+				{
+					writer.WriteInt32(abilityEvent);
+				}
+			}
+		}
 
 		private void TimeManager_OnTick()
 		{
@@ -461,10 +524,6 @@ namespace FishMMO.Shared
 				if (abilityEvent != null)
 				{
 					// add the event to the global events map
-					if (KnownEvents == null)
-					{
-						KnownEvents = new HashSet<int>();
-					}
 					if (!KnownEvents.Contains(abilityEvent.ID))
 					{
 						KnownEvents.Add(abilityEvent.ID);
@@ -473,10 +532,6 @@ namespace FishMMO.Shared
 					// figure out what kind of event it is and add to the respective category
 					if (abilityEvent is HitEvent)
 					{
-						if (KnownHitEvents == null)
-						{
-							KnownHitEvents = new HashSet<int>();
-						}
 						if (!KnownHitEvents.Contains(abilityEvent.ID))
 						{
 							KnownHitEvents.Add(abilityEvent.ID);
@@ -484,10 +539,6 @@ namespace FishMMO.Shared
 					}
 					else if (abilityEvent is MoveEvent)
 					{
-						if (KnownMoveEvents == null)
-						{
-							KnownMoveEvents = new HashSet<int>();
-						}
 						if (!KnownMoveEvents.Contains(abilityEvent.ID))
 						{
 							KnownMoveEvents.Add(abilityEvent.ID);
@@ -495,10 +546,6 @@ namespace FishMMO.Shared
 					}
 					else if (abilityEvent is SpawnEvent)
 					{
-						if (KnownSpawnEvents == null)
-						{
-							KnownSpawnEvents = new HashSet<int>();
-						}
 						if (!KnownSpawnEvents.Contains(abilityEvent.ID))
 						{
 							KnownSpawnEvents.Add(abilityEvent.ID);
@@ -510,10 +557,6 @@ namespace FishMMO.Shared
 					AbilityTemplate abilityTemplate = abilityTemplates[i] as AbilityTemplate;
 					if (abilityTemplate != null)
 					{
-						if (KnownBaseAbilities == null)
-						{
-							KnownBaseAbilities = new HashSet<int>();
-						}
 						if (!KnownBaseAbilities.Contains(abilityTemplate.ID))
 						{
 							KnownBaseAbilities.Add(abilityTemplate.ID);
@@ -529,11 +572,6 @@ namespace FishMMO.Shared
 			if (ability == null)
 			{
 				return;
-			}
-
-			if (KnownAbilities == null)
-			{
-				KnownAbilities = new Dictionary<long, Ability>();
 			}
 			KnownAbilities[ability.ID] = ability;
 		}

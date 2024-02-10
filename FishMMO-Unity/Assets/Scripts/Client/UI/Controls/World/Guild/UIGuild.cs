@@ -66,7 +66,7 @@ namespace FishMMO.Client
 		{
 			if (Character != null &&
 				Character.TryGet(out GuildController guildController) &&
-				guildController.ID.Value < 1 && Client.NetworkManager.IsClientStarted)
+				guildController.ID < 1 && Client.NetworkManager.IsClientStarted)
 			{
 				if (UIManager.TryGet("UIInputConfirmationTooltip", out UIInputConfirmationTooltip tooltip))
 				{
@@ -88,7 +88,7 @@ namespace FishMMO.Client
 		{
 			if (Character != null &&
 				Character.TryGet(out GuildController guildController) &&
-				guildController.ID.Value > 0 && Client.NetworkManager.IsClientStarted)
+				guildController.ID > 0 && Client.NetworkManager.IsClientStarted)
 			{
 				if (UIManager.TryGet("UIConfirmationTooltip", out UIConfirmationTooltip tooltip))
 				{
@@ -104,7 +104,7 @@ namespace FishMMO.Client
 		{
 			if (Character != null &&
 				Character.TryGet(out GuildController guildController) &&
-				guildController.ID.Value > 0 &&
+				guildController.ID > 0 &&
 				Client.NetworkManager.IsClientStarted)
 			{
 				if (Character.TryGet(out TargetController targetController) &&
@@ -115,7 +115,7 @@ namespace FishMMO.Client
 					{
 						Client.Broadcast(new GuildInviteBroadcast()
 						{
-							targetCharacterID = targetCharacter.ID.Value
+							targetCharacterID = targetCharacter.ID
 						}, Channel.Reliable);
 					}
 				}

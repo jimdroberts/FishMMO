@@ -1,4 +1,5 @@
-﻿using FishNet.Object.Synchronizing;
+﻿using FishNet.Connection;
+using FishNet.Serializing;
 using FishNet.Transporting;
 using System.Collections.Generic;
 using System.Linq;
@@ -14,45 +15,32 @@ namespace FishMMO.Shared
 	/// </summary>
 	public class GuildController : CharacterBehaviour
 	{
-		public readonly SyncVar<long> ID = new SyncVar<long>(new SyncTypeSettings()
+		public long ID;
+
+		public GuildRank Rank = GuildRank.None;
+
+		public override void ReadPayload(NetworkConnection connection, Reader reader)
 		{
-			SendRate = 0.0f,
-			Channel = Channel.Reliable,
-			ReadPermission = ReadPermission.Observers,
-			WritePermission = WritePermission.ServerOnly,
-		});
-		private void OnGuildIDChanged(long prev, long next, bool asServer)
-		{
+			ID = reader.ReadInt64();
+
 #if !UNITY_SERVER
-			if (prev != next)
+			if (ID != 0)
 			{
-				if (next == 0)
+				// load the characters guild from disk or request it from the server
+				ClientNamingSystem.SetName(NamingSystemType.GuildName, ID, (s) =>
 				{
-					Character.SetGuildName("");
-				}
-				else
-				{
-					ClientNamingSystem.SetName(NamingSystemType.GuildName, next, (s) =>
-					{
-						Character.SetGuildName(s);
-					});
-				}
+					Character.SetGuildName(s);
+				});
 			}
 #endif
 		}
-		public GuildRank Rank = GuildRank.None;
+
+		public override void WritePayload(NetworkConnection connection, Writer writer)
+		{
+			writer.WriteInt64(ID);
+		}
 
 #if !UNITY_SERVER
-		public override void OnAwake()
-		{
-			ID.OnChange += OnGuildIDChanged;
-		}
-
-		public override void OnDestroying()
-		{
-			ID.OnChange -= OnGuildIDChanged;
-		}
-
 		public override void OnStartClient()
 		{
 			base.OnStartClient();

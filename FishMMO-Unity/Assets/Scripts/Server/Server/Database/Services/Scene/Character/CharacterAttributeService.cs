@@ -18,7 +18,7 @@ namespace FishMMO.Server.DatabaseServices
 				return;
 			}
 
-			var attributes = dbContext.CharacterAttributes.Where(c => c.CharacterID == character.ID.Value)
+			var attributes = dbContext.CharacterAttributes.Where(c => c.CharacterID == character.ID)
 														  .ToDictionary(k => k.TemplateID);
 
 			foreach (CharacterAttribute attribute in attributeController.Attributes.Values)
@@ -30,7 +30,7 @@ namespace FishMMO.Server.DatabaseServices
 				}
 				if (attributes.TryGetValue(attribute.Template.ID, out CharacterAttributeEntity dbAttribute))
 				{
-					dbAttribute.CharacterID = character.ID.Value;
+					dbAttribute.CharacterID = character.ID;
 					dbAttribute.TemplateID = attribute.Template.ID;
 					dbAttribute.BaseValue = attribute.BaseValue;
 					dbAttribute.Modifier = attribute.Modifier;
@@ -40,7 +40,7 @@ namespace FishMMO.Server.DatabaseServices
 				{
 					dbContext.CharacterAttributes.Add(new CharacterAttributeEntity()
 					{
-						CharacterID = character.ID.Value,
+						CharacterID = character.ID,
 						TemplateID = attribute.Template.ID,
 						BaseValue = attribute.BaseValue,
 						Modifier = attribute.Modifier,
@@ -53,7 +53,7 @@ namespace FishMMO.Server.DatabaseServices
 			{
 				if (attributes.TryGetValue(attribute.Template.ID, out CharacterAttributeEntity dbAttribute))
 				{
-					dbAttribute.CharacterID = character.ID.Value;
+					dbAttribute.CharacterID = character.ID;
 					dbAttribute.TemplateID = attribute.Template.ID;
 					dbAttribute.BaseValue = attribute.BaseValue;
 					dbAttribute.Modifier = attribute.Modifier;
@@ -63,7 +63,7 @@ namespace FishMMO.Server.DatabaseServices
 				{
 					dbContext.CharacterAttributes.Add(new CharacterAttributeEntity()
 					{
-						CharacterID = character.ID.Value,
+						CharacterID = character.ID,
 						TemplateID = attribute.Template.ID,
 						BaseValue = attribute.BaseValue,
 						Modifier = attribute.Modifier,
@@ -105,7 +105,7 @@ namespace FishMMO.Server.DatabaseServices
 				return;
 			}
 
-			var attributes = dbContext.CharacterAttributes.Where(c => c.CharacterID == character.ID.Value);
+			var attributes = dbContext.CharacterAttributes.Where(c => c.CharacterID == character.ID);
 			foreach (CharacterAttributeEntity attribute in attributes)
 			{
 				CharacterAttributeTemplate template = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(attribute.TemplateID);

@@ -42,7 +42,7 @@ namespace FishMMO.Server.DatabaseServices
 				return;
 			}
 
-			var dbKnownAbilities = dbContext.CharacterKnownAbilities.Where(c => c.CharacterID == character.ID.Value)
+			var dbKnownAbilities = dbContext.CharacterKnownAbilities.Where(c => c.CharacterID == character.ID)
 																	.ToDictionary(k => k.TemplateID);
 
 			// save base abilities
@@ -52,7 +52,7 @@ namespace FishMMO.Server.DatabaseServices
 				{
 					dbContext.CharacterKnownAbilities.Add(new CharacterKnownAbilityEntity()
 					{
-						CharacterID = character.ID.Value,
+						CharacterID = character.ID,
 						TemplateID = abilityTemplate,
 					});
 				}
@@ -65,7 +65,7 @@ namespace FishMMO.Server.DatabaseServices
 				{
 					dbContext.CharacterKnownAbilities.Add(new CharacterKnownAbilityEntity()
 					{
-						CharacterID = character.ID.Value,
+						CharacterID = character.ID,
 						TemplateID = abilityTemplate,
 					});
 				}
@@ -124,7 +124,7 @@ namespace FishMMO.Server.DatabaseServices
 				return;
 			}
 
-			var dbKnownAbilities = dbContext.CharacterKnownAbilities.Where(c => c.CharacterID == character.ID.Value);
+			var dbKnownAbilities = dbContext.CharacterKnownAbilities.Where(c => c.CharacterID == character.ID);
 
 			List<BaseAbilityTemplate> templates = new List<BaseAbilityTemplate>();
 

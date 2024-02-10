@@ -399,7 +399,7 @@ namespace FishMMO.Client
 				}
 			}
 			// we received a tell from someone else
-			if (localCharacter == null || msg.senderID != localCharacter.ID.Value)
+			if (localCharacter == null || msg.senderID != localCharacter.ID)
 			{
 				ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
 				{

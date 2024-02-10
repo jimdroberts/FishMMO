@@ -38,8 +38,8 @@ namespace FishMMO.Server
 			{
 				OnServerPartyInviteBroadcastReceived(sender.Owner, new PartyInviteBroadcast()
 				{
-					inviterCharacterID = sender.ID.Value,
-					targetCharacterID = character.ID.Value,
+					inviterCharacterID = sender.ID,
+					targetCharacterID = character.ID,
 				}, Channel.Reliable);
 				return true;
 			}
@@ -198,7 +198,7 @@ namespace FishMMO.Server
 		{
 			if (character != null)
 			{
-				pendingInvitations.Remove(character.ID.Value);
+				pendingInvitations.Remove(character.ID);
 			}
 		}
 
@@ -226,7 +226,7 @@ namespace FishMMO.Server
 				partyController.ID = newParty.ID;
 				partyController.Rank = PartyRank.Leader;
 				CharacterPartyService.Save(dbContext,
-										   partyController.Character.ID.Value,
+										   partyController.Character.ID,
 										   partyController.ID,
 										   partyController.Rank,
 										   partyController.Character.TryGet(out CharacterAttributeController attributeController) ? attributeController.GetResourceAttributeCurrentPercentage(HealthTemplate) : 0.0f);
@@ -277,11 +277,11 @@ namespace FishMMO.Server
 				}
 
 				// add to our list of pending invitations... used for validation when accepting/declining a party invite
-				pendingInvitations.Add(targetCharacter.ID.Value, inviter.ID);
+				pendingInvitations.Add(targetCharacter.ID, inviter.ID);
 				Server.Broadcast(targetCharacter.Owner, new PartyInviteBroadcast()
 				{
 					inviterCharacterID = inviter.ID,
-					targetCharacterID = targetCharacter.ID.Value
+					targetCharacterID = targetCharacter.ID
 				}, true, Channel.Reliable);
 			}
 		}
@@ -301,9 +301,9 @@ namespace FishMMO.Server
 			}
 
 			// validate party invite
-			if (pendingInvitations.TryGetValue(partyController.Character.ID.Value, out long pendingPartyID))
+			if (pendingInvitations.TryGetValue(partyController.Character.ID, out long pendingPartyID))
 			{
-				pendingInvitations.Remove(partyController.Character.ID.Value);
+				pendingInvitations.Remove(partyController.Character.ID);
 
 				if (Server == null || Server.NpgsqlDbContextFactory == null)
 				{
@@ -320,7 +320,7 @@ namespace FishMMO.Server
 					partyController.Rank = PartyRank.Member;
 
 					CharacterPartyService.Save(dbContext,
-											   partyController.Character.ID.Value,
+											   partyController.Character.ID,
 											   partyController.ID,
 											   partyController.Rank,
 											   attributesExist ? attributeController.GetResourceAttributeCurrentPercentage(HealthTemplate) : 1.0f);
@@ -332,7 +332,7 @@ namespace FishMMO.Server
 					Server.Broadcast(conn, new PartyAddBroadcast()
 					{
 						partyID = pendingPartyID,
-						characterID = partyController.Character.ID.Value,
+						characterID = partyController.Character.ID,
 						rank = PartyRank.Member,
 						healthPCT = attributesExist ? attributeController.GetResourceAttributeCurrentPercentage(HealthTemplate) : 1.0f,
 					}, true, Channel.Reliable);
@@ -345,7 +345,7 @@ namespace FishMMO.Server
 			Character character = conn.FirstObject.GetComponent<Character>();
 			if (character != null)
 			{
-				pendingInvitations.Remove(character.ID.Value);
+				pendingInvitations.Remove(character.ID);
 			}
 		}
 
@@ -384,7 +384,7 @@ namespace FishMMO.Server
 				{
 					foreach (CharacterPartyEntity member in members)
 					{
-						if (member.CharacterID == partyController.Character.ID.Value)
+						if (member.CharacterID == partyController.Character.ID)
 						{
 							continue;
 						}
@@ -406,7 +406,7 @@ namespace FishMMO.Server
 				}
 
 				// remove the party member
-				CharacterPartyService.Delete(dbContext, partyController.Character.ID.Value);
+				CharacterPartyService.Delete(dbContext, partyController.Character.ID);
 
 				if (remainingCount < 1)
 				{
@@ -457,7 +457,7 @@ namespace FishMMO.Server
 			long memberID = msg.members[0];
 
 			// we can't kick ourself
-			if (memberID == partyController.Character.ID.Value)
+			if (memberID == partyController.Character.ID)
 			{
 				return;
 			}

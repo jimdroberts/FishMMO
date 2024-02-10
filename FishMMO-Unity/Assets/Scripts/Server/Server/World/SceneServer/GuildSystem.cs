@@ -38,8 +38,8 @@ namespace FishMMO.Server
 			{
 				OnServerGuildInviteBroadcastReceived(sender.Owner, new GuildInviteBroadcast()
 				{
-					inviterCharacterID = sender.ID.Value,
-					targetCharacterID = character.ID.Value,
+					inviterCharacterID = sender.ID,
+					targetCharacterID = character.ID,
 				}, Channel.Reliable);
 				return true;
 			}
@@ -182,7 +182,7 @@ namespace FishMMO.Server
 						if (characterSystem.CharactersByID.TryGetValue(entity.CharacterID, out Character character))
 						{
 							if (!character.TryGet(out GuildController guildController) ||
-								guildController.ID.Value < 1)
+								guildController.ID < 1)
 							{
 								continue;
 							}
@@ -199,7 +199,7 @@ namespace FishMMO.Server
 		{
 			if (character != null)
 			{
-				pendingInvitations.Remove(character.ID.Value);
+				pendingInvitations.Remove(character.ID);
 			}
 		}
 
@@ -215,7 +215,7 @@ namespace FishMMO.Server
 			}
 
 			GuildController guildController = conn.FirstObject.GetComponent<GuildController>();
-			if (guildController == null || guildController.ID.Value > 0)
+			if (guildController == null || guildController.ID > 0)
 			{
 				// already in a guild
 				return;
@@ -238,15 +238,15 @@ namespace FishMMO.Server
 			}
 			if (GuildService.TryCreate(dbContext, msg.guildName, out GuildEntity newGuild))
 			{
-				guildController.ID.Value = newGuild.ID;
+				guildController.ID = newGuild.ID;
 				guildController.Rank = GuildRank.Leader;
 				CharacterGuildService.Save(dbContext, guildController.Character);
 
 				// tell the character we made their guild successfully
 				Server.Broadcast(conn, new GuildAddBroadcast()
 				{
-					guildID = guildController.ID.Value,
-					characterID = guildController.Character.ID.Value,
+					guildID = guildController.ID,
+					characterID = guildController.Character.ID,
 					rank = guildController.Rank,
 					location = guildController.gameObject.scene.name,
 				}, true, Channel.Reliable);
@@ -268,10 +268,10 @@ namespace FishMMO.Server
 
 			// validate guild leader or officer is inviting
 			if (inviter == null ||
-				inviter.ID.Value < 1 ||
-				inviter.Character.ID.Value == msg.targetCharacterID || 
+				inviter.ID < 1 ||
+				inviter.Character.ID == msg.targetCharacterID || 
 				!(inviter.Rank == GuildRank.Leader | inviter.Rank == GuildRank.Officer) ||
-				!CharacterGuildService.ExistsNotFull(dbContext, inviter.ID.Value, MaxGuildSize))
+				!CharacterGuildService.ExistsNotFull(dbContext, inviter.ID, MaxGuildSize))
 			{
 				return;
 			}
@@ -284,18 +284,18 @@ namespace FishMMO.Server
 				GuildController targetGuildController = targetCharacter.GetComponent<GuildController>();
 
 				// validate target
-				if (targetGuildController == null || targetGuildController.ID.Value > 0)
+				if (targetGuildController == null || targetGuildController.ID > 0)
 				{
 					// we should tell the inviter the target is already in a guild
 					return;
 				}
 
 				// add to our list of pending invitations... used for validation when accepting/declining a guild invite
-				pendingInvitations.Add(targetCharacter.ID.Value, inviter.ID.Value);
+				pendingInvitations.Add(targetCharacter.ID, inviter.ID);
 				Server.Broadcast(targetCharacter.Owner, new GuildInviteBroadcast()
 				{
-					inviterCharacterID = inviter.Character.ID.Value,
-					targetCharacterID = targetCharacter.ID.Value
+					inviterCharacterID = inviter.Character.ID,
+					targetCharacterID = targetCharacter.ID
 				}, true, Channel.Reliable);
 			}
 		}
@@ -309,15 +309,15 @@ namespace FishMMO.Server
 			GuildController guildController = conn.FirstObject.GetComponent<GuildController>();
 
 			// validate character
-			if (guildController == null || guildController.ID.Value > 0)
+			if (guildController == null || guildController.ID > 0)
 			{
 				return;
 			}
 
 			// validate guild invite
-			if (pendingInvitations.TryGetValue(guildController.Character.ID.Value, out long pendingGuildID))
+			if (pendingInvitations.TryGetValue(guildController.Character.ID, out long pendingGuildID))
 			{
-				pendingInvitations.Remove(guildController.Character.ID.Value);
+				pendingInvitations.Remove(guildController.Character.ID);
 
 				if (Server == null || Server.NpgsqlDbContextFactory == null)
 				{
@@ -328,7 +328,7 @@ namespace FishMMO.Server
 				if (members != null &&
 					members.Count < MaxGuildSize)
 				{
-					guildController.ID.Value = pendingGuildID;
+					guildController.ID = pendingGuildID;
 					guildController.Rank = GuildRank.Member;
 					
 					CharacterGuildService.Save(dbContext, guildController.Character);
@@ -338,8 +338,8 @@ namespace FishMMO.Server
 					// tell the new member they joined immediately, other clients will catch up with the GuildUpdate pass
 					Server.Broadcast(conn, new GuildAddBroadcast()
 					{
-						guildID = guildController.ID.Value,
-						characterID = guildController.Character.ID.Value,
+						guildID = guildController.ID,
+						characterID = guildController.Character.ID,
 						rank = GuildRank.Member,
 						location = guildController.gameObject.scene.name,
 					}, true, Channel.Reliable);
@@ -352,7 +352,7 @@ namespace FishMMO.Server
 			Character character = conn.FirstObject.GetComponent<Character>();
 			if (character != null)
 			{
-				pendingInvitations.Remove(character.ID.Value);
+				pendingInvitations.Remove(character.ID);
 			}
 		}
 
@@ -369,7 +369,7 @@ namespace FishMMO.Server
 			GuildController guildController = conn.FirstObject.GetComponent<GuildController>();
 
 			// validate character
-			if (guildController == null || guildController.ID.Value < 1)
+			if (guildController == null || guildController.ID < 1)
 			{
 				// not in a guild..
 				return;
@@ -378,7 +378,7 @@ namespace FishMMO.Server
 			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 
 			// validate guild
-			List<CharacterGuildEntity> members = CharacterGuildService.Members(dbContext, guildController.ID.Value);
+			List<CharacterGuildEntity> members = CharacterGuildService.Members(dbContext, guildController.ID);
 			if (members != null &&
 				members.Count > 0)
 			{
@@ -393,7 +393,7 @@ namespace FishMMO.Server
 
 					foreach (CharacterGuildEntity member in members)
 					{
-						if (member.CharacterID == guildController.Character.ID.Value)
+						if (member.CharacterID == guildController.Character.ID)
 						{
 							continue;
 						}
@@ -424,16 +424,16 @@ namespace FishMMO.Server
 					}
 				}
 
-				long guildID = guildController.ID.Value;
+				long guildID = guildController.ID;
 
-				guildController.ID.Value = 0;
+				guildController.ID = 0;
 				guildController.Rank = GuildRank.None;
 
 				// tell character that they left the guild immediately, other clients will catch up with the GuildUpdate pass
 				Server.Broadcast(conn, new GuildLeaveBroadcast(), true, Channel.Reliable);
 
 				// remove the guild member
-				CharacterGuildService.Delete(dbContext, guildController.Character.ID.Value);
+				CharacterGuildService.Delete(dbContext, guildController.Character.ID);
 
 				if (remainingCount < 1)
 				{
@@ -463,7 +463,7 @@ namespace FishMMO.Server
 
 			// validate character
 			if (guildController == null ||
-				guildController.ID.Value < 1 ||
+				guildController.ID < 1 ||
 				guildController.Rank != GuildRank.Leader ||
 				guildController.Rank != GuildRank.Officer) 
 			{
@@ -479,18 +479,18 @@ namespace FishMMO.Server
 			long memberID = msg.members[0];
 
 			// we can't kick ourself
-			if (memberID == guildController.Character.ID.Value)
+			if (memberID == guildController.Character.ID)
 			{
 				return;
 			}
 
 			// remove the character from the guild in the database
 			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-			bool result = CharacterGuildService.Delete(dbContext, guildController.Rank, guildController.ID.Value, memberID);
+			bool result = CharacterGuildService.Delete(dbContext, guildController.Rank, guildController.ID, memberID);
 			if (result)
 			{
 				// tell the other servers to update their guild lists
-				GuildUpdateService.Save(dbContext, guildController.ID.Value);
+				GuildUpdateService.Save(dbContext, guildController.ID);
 			}
 		}
 	}

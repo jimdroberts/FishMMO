@@ -1,9 +1,12 @@
 ﻿using FishMMO.Shared;
+using System;
 
 namespace FishMMO.Client
 {
 	public class UICharacterControl : UIControl
 	{
+		public Action<Character> OnSetCharacter;
+
 		public Character Character { get; private set; }
 
 		public override void OnStarting()
@@ -33,6 +36,8 @@ namespace FishMMO.Client
 			OnPreSetCharacter();
 
 			Character = character;
+
+			OnSetCharacter?.Invoke(character);
 		}
 	}
 }

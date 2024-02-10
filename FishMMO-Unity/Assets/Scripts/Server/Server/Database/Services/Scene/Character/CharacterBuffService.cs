@@ -19,7 +19,7 @@ namespace FishMMO.Server.DatabaseServices
 				return;
 			}
 
-			var buffs = dbContext.CharacterBuffs.Where(c => c.CharacterID == character.ID.Value)
+			var buffs = dbContext.CharacterBuffs.Where(c => c.CharacterID == character.ID)
 												.ToDictionary(k => k.TemplateID);
 
 			// remove dead buffs
@@ -36,14 +36,14 @@ namespace FishMMO.Server.DatabaseServices
 			{
 				if (buffs.TryGetValue(buff.Template.ID, out CharacterBuffEntity dbBuff))
 				{
-					dbBuff.CharacterID = character.ID.Value;
+					dbBuff.CharacterID = character.ID;
 					dbBuff.TemplateID = buff.Template.ID;
 					dbBuff.RemainingTime = buff.RemainingTime;
 					dbBuff.Stacks.Clear();
 					foreach (Buff stack in buff.Stacks)
 					{
 						CharacterBuffEntity dbStack = new CharacterBuffEntity();
-						dbStack.CharacterID = character.ID.Value;
+						dbStack.CharacterID = character.ID;
 						dbStack.TemplateID = stack.Template.ID;
 						dbStack.RemainingTime = stack.RemainingTime;
 						dbBuff.Stacks.Add(dbStack);
@@ -53,14 +53,14 @@ namespace FishMMO.Server.DatabaseServices
 				{
 					CharacterBuffEntity newBuff = new CharacterBuffEntity()
 					{
-						CharacterID = character.ID.Value,
+						CharacterID = character.ID,
 						TemplateID = buff.Template.ID,
 						RemainingTime = buff.RemainingTime,
 					};
 					foreach (Buff stack in buff.Stacks)
 					{
 						CharacterBuffEntity dbStack = new CharacterBuffEntity();
-						dbStack.CharacterID = character.ID.Value;
+						dbStack.CharacterID = character.ID;
 						dbStack.TemplateID = stack.Template.ID;
 						dbStack.RemainingTime = stack.RemainingTime;
 						newBuff.Stacks.Add(dbStack);
@@ -102,7 +102,7 @@ namespace FishMMO.Server.DatabaseServices
 			{
 				return;
 			}
-			var buffs = dbContext.CharacterBuffs.Where(c => c.CharacterID == character.ID.Value);
+			var buffs = dbContext.CharacterBuffs.Where(c => c.CharacterID == character.ID);
 			foreach (CharacterBuffEntity buff in buffs)
 			{
 				List<Buff> stacks = new List<Buff>();

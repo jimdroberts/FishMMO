@@ -88,14 +88,14 @@ namespace FishMMO.Server.DatabaseServices
 				return;
 			}
 
-			var dbInventoryItems = dbContext.CharacterInventoryItems.Where(c => c.CharacterID == character.ID.Value)
+			var dbInventoryItems = dbContext.CharacterInventoryItems.Where(c => c.CharacterID == character.ID)
 																	.ToDictionary(k => k.Slot);
 
 			foreach (Item item in inventoryController.Items)
 			{
 				if (dbInventoryItems.TryGetValue(item.Slot, out CharacterInventoryEntity dbItem))
 				{
-					dbItem.CharacterID = character.ID.Value;
+					dbItem.CharacterID = character.ID;
 					dbItem.TemplateID = item.Template.ID;
 					dbItem.Slot = item.Slot;
 					dbItem.Seed = item.IsGenerated ? item.Generator.Seed : 0;
@@ -105,7 +105,7 @@ namespace FishMMO.Server.DatabaseServices
 				{
 					dbContext.CharacterInventoryItems.Add(new CharacterInventoryEntity()
 					{
-						CharacterID = character.ID.Value,
+						CharacterID = character.ID,
 						TemplateID = item.Template.ID,
 						Slot = item.Slot,
 						Seed = item.IsGenerated ? item.Generator.Seed : 0,
@@ -168,7 +168,7 @@ namespace FishMMO.Server.DatabaseServices
 			{
 				return;
 			}
-			var dbInventoryItems = dbContext.CharacterInventoryItems.Where(c => c.CharacterID == character.ID.Value);
+			var dbInventoryItems = dbContext.CharacterInventoryItems.Where(c => c.CharacterID == character.ID);
 			foreach (CharacterInventoryEntity dbItem in dbInventoryItems)
 			{
 				BaseItemTemplate template = BaseItemTemplate.Get<BaseItemTemplate>(dbItem.TemplateID);

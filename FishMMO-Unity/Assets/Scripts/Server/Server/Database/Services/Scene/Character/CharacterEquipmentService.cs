@@ -100,7 +100,7 @@ namespace FishMMO.Server.DatabaseServices
 			{
 				return;
 			}
-			var dbEquippedItems = dbContext.CharacterEquippedItems.Where(c => c.CharacterID == character.ID.Value);
+			var dbEquippedItems = dbContext.CharacterEquippedItems.Where(c => c.CharacterID == character.ID);
 			foreach (CharacterEquipmentEntity dbItem in dbEquippedItems)
 			{
 				BaseItemTemplate template = BaseItemTemplate.Get<BaseItemTemplate>(dbItem.TemplateID);

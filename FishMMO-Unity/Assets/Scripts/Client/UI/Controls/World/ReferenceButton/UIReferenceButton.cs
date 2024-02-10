@@ -83,7 +83,6 @@ namespace FishMMO.Client
 					break;
 				case ReferenceButtonType.Ability:
 					if (Character.TryGet(out AbilityController abilityController) &&
-						abilityController.KnownAbilities != null &&
 						abilityController.KnownAbilities.TryGetValue(referenceID, out Ability ability) &&
 						UIManager.TryGet("UITooltip", out currentUITooltip))
 					{

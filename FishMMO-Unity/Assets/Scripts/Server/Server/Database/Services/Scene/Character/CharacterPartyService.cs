@@ -98,7 +98,7 @@ namespace FishMMO.Server.DatabaseServices
 			{
 				return;
 			}
-			var characterPartyEntity = dbContext.CharacterParties.FirstOrDefault(a => a.CharacterID == character.ID.Value);
+			var characterPartyEntity = dbContext.CharacterParties.FirstOrDefault(a => a.CharacterID == character.ID);
 			if (characterPartyEntity != null)
 			{
 				partyController.ID = characterPartyEntity.PartyID;

@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using FishNet.Serializing;
+using System.Collections.Generic;
 
 namespace FishMMO.Shared
 {

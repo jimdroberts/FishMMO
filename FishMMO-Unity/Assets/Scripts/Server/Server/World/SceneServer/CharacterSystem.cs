@@ -186,13 +186,13 @@ namespace FishMMO.Server
 					ConnectionCharacters.Remove(conn);
 
 					// remove the characterID->character entry
-					CharactersByID.Remove(character.ID.Value);
+					CharactersByID.Remove(character.ID);
 					// remove the characterName->character entry
 					CharactersByLowerCaseName.Remove(character.CharacterNameLower);
 					// remove the worldid<characterID->character> entry
 					if (CharactersByWorld.TryGetValue(character.WorldServerID, out Dictionary<long, Character> characters))
 					{
-						characters.Remove(character.ID.Value);
+						characters.Remove(character.ID);
 					}
 
 					OnDisconnect?.Invoke(conn, character);
@@ -303,14 +303,14 @@ namespace FishMMO.Server
 				// add a connection->character map for ease of use
 				ConnectionCharacters[conn] = character;
 				// add a characterName->character map for ease of use
-				CharactersByID[character.ID.Value] = character;
+				CharactersByID[character.ID] = character;
 				CharactersByLowerCaseName[character.CharacterNameLower] = character;
 				// add a worldID<characterID->character> map for ease of use
 				if (!CharactersByWorld.TryGetValue(character.WorldServerID, out Dictionary<long, Character> characters))
 				{
 					CharactersByWorld.Add(character.WorldServerID, characters = new Dictionary<long, Character>());
 				}
-				characters[character.ID.Value] = character;
+				characters[character.ID] = character;
 
 				// get the characters scene
 				Scene scene = SceneManager.GetScene(character.SceneHandle);
@@ -378,8 +378,7 @@ namespace FishMMO.Server
 				return;
 			}
 
-			// set syncvars dirty which forces it to sync to the client
-			character.ID.Dirty();
+			// set syncvars dirty which forces it to sync to the client	
 			character.Currency.Dirty();
 			character.RaceID.Dirty();
 			character.RaceName.Dirty();
@@ -425,7 +424,7 @@ namespace FishMMO.Server
 					}, true, Channel.Reliable);
 				}
 
-				if (abilityController.KnownAbilities != null)
+				/*if (abilityController.KnownAbilities != null)
 				{
 					List<AbilityAddBroadcast> abilityBroadcasts = new List<AbilityAddBroadcast>();
 
@@ -448,7 +447,7 @@ namespace FishMMO.Server
 							abilities = abilityBroadcasts,
 						});
 					}
-				}
+				}*/
 			}
 			#endregion
 
@@ -510,12 +509,10 @@ namespace FishMMO.Server
 
 			#region Guild
 			if (character.TryGet(out GuildController guildController) &&
-				guildController.ID.Value > 0)
+				guildController.ID > 0)
 			{
-				guildController.ID.Dirty();
-
 				// get the current guild members from the database
-				List<CharacterGuildEntity> dbMembers = CharacterGuildService.Members(dbContext, guildController.ID.Value);
+				List<CharacterGuildEntity> dbMembers = CharacterGuildService.Members(dbContext, guildController.ID);
 
 				var addBroadcasts = dbMembers.Select(x => new GuildAddBroadcast()
 				{

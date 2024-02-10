@@ -67,7 +67,7 @@ namespace FishMMO.Server.DatabaseServices
 				return;
 			}
 
-			var dbAbilities = dbContext.CharacterAbilities.Where(c => c.CharacterID == character.ID.Value)
+			var dbAbilities = dbContext.CharacterAbilities.Where(c => c.CharacterID == character.ID)
 																	.ToDictionary(k => k.ID);
 
 			foreach (KeyValuePair<long, Ability> pair in abilityController.KnownAbilities)
@@ -78,7 +78,7 @@ namespace FishMMO.Server.DatabaseServices
 				}
 				if (dbAbilities.TryGetValue(pair.Key, out CharacterAbilityEntity ability))
 				{
-					ability.CharacterID = character.ID.Value;
+					ability.CharacterID = character.ID;
 					ability.TemplateID = pair.Value.Template.ID;
 					ability.AbilityEvents.Clear();
 					ability.AbilityEvents = pair.Value.AbilityEvents.Keys.ToList();
@@ -87,7 +87,7 @@ namespace FishMMO.Server.DatabaseServices
 				{
 					dbContext.CharacterAbilities.Add(new CharacterAbilityEntity()
 					{
-						CharacterID = character.ID.Value,
+						CharacterID = character.ID,
 						TemplateID = pair.Value.Template.ID,
 						AbilityEvents = pair.Value.AbilityEvents.Keys.ToList(),
 					});
@@ -150,7 +150,7 @@ namespace FishMMO.Server.DatabaseServices
 				return;
 			}
 
-			var dbAbilities = dbContext.CharacterAbilities.Where(c => c.CharacterID == character.ID.Value);
+			var dbAbilities = dbContext.CharacterAbilities.Where(c => c.CharacterID == character.ID);
 
 			foreach (CharacterAbilityEntity dbAbility in dbAbilities)
 			{
