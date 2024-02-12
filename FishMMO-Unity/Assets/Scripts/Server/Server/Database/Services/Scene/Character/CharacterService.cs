@@ -381,7 +381,6 @@ namespace FishMMO.Server.DatabaseServices
 						character.SetSyncVarDatabaseValue(character.RaceName, prefab.name);
 						character.SceneHandle = dbCharacter.SceneHandle;
 						character.SetSyncVarDatabaseValue(character.SceneName, dbCharacter.SceneName);
-						character.IsTeleporting = false;
 
 						// character becomes immortal when loading.. just in case..
 						if (character.TryGet(out CharacterDamageController damageController))

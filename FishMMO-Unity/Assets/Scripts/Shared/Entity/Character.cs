@@ -58,7 +58,8 @@ namespace FishMMO.Shared
 		public string Account;
 		public long WorldServerID;
 		public AccessLevel AccessLevel = AccessLevel.Player;
-		public bool IsTeleporting = false;
+		public string TeleporterName = "";
+		public bool IsTeleporting { get { return !string.IsNullOrWhiteSpace(TeleporterName); } }
 		public readonly SyncVar<long> Currency = new SyncVar<long>(new SyncTypeSettings()
 		{
 			SendRate = 0.0f,
@@ -277,9 +278,20 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void OnPooledReset()
 		{
+			TeleporterName = "";
 			LastChatMessage = "";
 			NextChatMessageTime = DateTime.UtcNow;
 			NextInteractTime = DateTime.UtcNow;
+		}
+
+		public void Teleport(string teleporterName)
+		{
+			TeleporterName = teleporterName;
+
+#if UNITY_SERVER
+			// just disconnect
+			Owner.Disconnect(false);
+#endif
 		}
 
 		public void SetGuildName(string guildName)

@@ -35,6 +35,7 @@ namespace FishMMO.Server
 				Server.NetworkManager.SceneManager != null)
 			{
 				Server.NetworkManager.SceneManager.OnLoadEnd += SceneManager_OnLoadEnd;
+				//Server.NetworkManager.SceneManager.OnUnloadEnd += SceneManager_OnUnloadEnd;
 				ServerManager.OnServerConnectionState += ServerManager_OnServerConnectionState;
 			}
 			else
@@ -252,7 +253,7 @@ namespace FishMMO.Server
 			return false;
 		}
 
-		public bool TryLoadSceneForConnection(NetworkConnection conn, SceneInstanceDetails instance)
+		public bool TryLoadSceneForConnection(NetworkConnection connection, Character character, SceneInstanceDetails instance)
 		{
 			Scene scene = SceneManager.GetScene(instance.Handle);
 			if (scene != null && scene.IsValid() && scene.isLoaded)
@@ -267,7 +268,7 @@ namespace FishMMO.Server
 					},
 					PreferredActiveScene = new PreferredScene(lookupData),
 				};
-				Server.NetworkManager.SceneManager.LoadConnectionScenes(conn, sld);
+				Server.NetworkManager.SceneManager.LoadConnectionScenes(connection, sld);
 				return true;
 			}
 			return false;

@@ -10,6 +10,5 @@ namespace FishMMO.Shared
 		public string ToScene;
 		public Vector3 ToPosition;
 		public Quaternion ToRotation;
-		public Sprite SceneTransitionImage;
 	}
 }

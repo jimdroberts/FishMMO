@@ -138,7 +138,7 @@ namespace FishMMO.Client
 				selectedServer != null)
 			{
 				// connect to the world server
-				Client.ConnectToServer(selectedServer.Details.Address, selectedServer.Details.Port);
+				Client.ConnectToServer(selectedServer.Details.Address, selectedServer.Details.Port, true);
 
 				SetConnectToServerLocked(true);
 			}

@@ -20,9 +20,8 @@ namespace FishMMO.Client
 			Client.NetworkManager.SceneManager.OnLoadPercentChange += OnSceneProgressUpdate;
 			Client.NetworkManager.SceneManager.OnLoadEnd += OnSceneEndLoad;
 
-			Client.OnReconnectFailed += OnCloseScreen;
-
-			Client.NetworkManager.ClientManager.RegisterBroadcast<SceneWorldReconnectBroadcast>(OnClientSceneWorldReconnectBroadcastReceived);
+			Client.OnReconnectAttempt += Client_OnReconnectAttempt;
+			Client.OnReconnectFailed += Client_OnReconnectFailed;
 		}
 
 		public override void OnDestroying()
@@ -31,7 +30,8 @@ namespace FishMMO.Client
 			Client.NetworkManager.SceneManager.OnLoadPercentChange -= OnSceneProgressUpdate;
 			Client.NetworkManager.SceneManager.OnLoadEnd -= OnSceneEndLoad;
 
-			Client.NetworkManager.ClientManager.UnregisterBroadcast<SceneWorldReconnectBroadcast>(OnClientSceneWorldReconnectBroadcastReceived);
+			Client.OnReconnectAttempt -= Client_OnReconnectAttempt;
+			Client.OnReconnectFailed -= Client_OnReconnectFailed;
 		}
 
 		private void ShowLoadingScreen()
@@ -41,29 +41,41 @@ namespace FishMMO.Client
 			Show();
 		}
 
-		#region Network Events
-		public void OnClientSceneWorldReconnectBroadcastReceived(SceneWorldReconnectBroadcast reconnect, Channel channel)
+		public void Client_OnReconnectAttempt(byte attempts, byte maxAttempts)
 		{
-			if (!string.IsNullOrWhiteSpace(reconnect.sceneName) &&
-				!string.IsNullOrWhiteSpace(reconnect.teleporterName) &&
-				Details.Scenes.TryGetValue(reconnect.sceneName, out WorldSceneDetails details) &&
-				details.Teleporters.TryGetValue(reconnect.teleporterName, out SceneTeleporterDetails teleporter))
-			{
-				LoadingImage.sprite = teleporter.SceneTransitionImage;
-			}
-			if (LoadingImage.sprite == null)
-			{
-				LoadingImage.sprite = DefaultLoadingScreenSprite;
-			}
-
+			LoadingImage.sprite = DefaultLoadingScreenSprite;
 			ShowLoadingScreen();
 		}
-		#endregion
+
+		public void Client_OnReconnectFailed()
+		{
+			Hide();
+		}
 
 		#region Scene Events
 		private void OnSceneStartLoad(SceneLoadStartEventArgs startEvent)
 		{
 			ShowLoadingScreen();
+
+			SceneLookupData[] lookupData = startEvent.QueueData.SceneLoadData.SceneLookupDatas;
+
+			if (lookupData == null ||
+				lookupData.Length < 1)
+			{
+				return;
+			}
+
+			SceneLookupData sld = lookupData[0];
+			if (sld == null)
+			{
+				return;
+			}
+
+			if (Details.Scenes.TryGetValue(sld.Name, out WorldSceneDetails details) &&
+				details.SceneTransitionImage != null)
+			{
+				LoadingImage.sprite = details.SceneTransitionImage;
+			}
 		}
 
 		private void OnSceneProgressUpdate(SceneLoadPercentEventArgs percentEvent)
@@ -76,10 +88,5 @@ namespace FishMMO.Client
 			Hide();
 		}
 		#endregion
-
-		public void OnCloseScreen()
-		{
-			Hide();
-		}
 	}
 }

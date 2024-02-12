@@ -31,7 +31,13 @@ namespace FishMMO.Client
 			{
 				if (AttemptCounterText != null)
 				{
-					AttemptCounterText.text = $"Attempt {attempts} of {maxAttempts}";
+					AttemptCounterText.gameObject.SetActive(attempts > 1);
+					AttemptCounterText.text = $"Attempt {attempts} of {maxAttempts}...";
+				}
+
+				if (CancelButton != null)
+				{
+					CancelButton.gameObject.SetActive(attempts > 1);
 				}
 
 				Show();

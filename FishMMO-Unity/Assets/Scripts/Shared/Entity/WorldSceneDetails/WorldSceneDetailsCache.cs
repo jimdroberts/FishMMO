@@ -19,8 +19,6 @@ namespace FishMMO.Shared
 		public string InitialSpawnTag = "InitialSpawnPosition";
 		[Tooltip("Apply this tag to any object in your scene you would like to behave as a respawn location.")]
 		public string RespawnTag = "RespawnPosition";
-		[Tooltip("Apply this tag to any object in your scene that you would like to act as a teleporter.")]
-		public string TeleporterTag = "Teleporter";
 		[Tooltip("Apply this tag to any object in your scene that you would like to act as a teleporter destination.")]
 		public string TeleporterDestinationTag = "TeleporterDestination";
 
@@ -33,24 +31,6 @@ namespace FishMMO.Shared
 			string worldScenePath = Constants.Configuration.WorldScenePath.Replace(@"\", @"/");
 
 			Debug.Log("WorldSceneDetails: Rebuilding");
-
-			// Keep track of teleporter sprites
-			Dictionary<string, Dictionary<string, Sprite>> teleporterSpriteCache = new Dictionary<string, Dictionary<string, Sprite>>();
-			foreach (var worldSceneEntry in Scenes)
-			{
-				foreach (var teleporterEntry in worldSceneEntry.Value.Teleporters)
-				{
-					if (teleporterEntry.Value.SceneTransitionImage == null) continue;
-
-					if (teleporterSpriteCache.TryGetValue(worldSceneEntry.Key, out Dictionary<string, Sprite> spriteCache) == false)
-					{
-						spriteCache = new Dictionary<string, Sprite>();
-						teleporterSpriteCache.Add(worldSceneEntry.Key, spriteCache);
-					}
-
-					spriteCache.Add(teleporterEntry.Key, teleporterEntry.Value.SceneTransitionImage);
-				}
-			}
 
 			Scenes.Clear();
 			Scenes = new WorldSceneDetailsDictionary();
@@ -114,6 +94,7 @@ namespace FishMMO.Shared
 					if (worldSceneSettings != null)
 					{
 						sceneDetails.MaxClients = worldSceneSettings.MaxClients;
+						sceneDetails.SceneTransitionImage = worldSceneSettings.SceneTransitionImage;
 					}
 
 					// search for sceneObjectUIDs
@@ -252,15 +233,6 @@ namespace FishMMO.Shared
 							pair.Value.ToScene = destination.Scene;
 							pair.Value.ToPosition = destination.Position;
 							pair.Value.ToRotation = destination.Rotation;
-							pair.Value.SceneTransitionImage = null;
-
-							if (teleporterSpriteCache.TryGetValue(teleporterDetailsPair.Key, out Dictionary<string, Sprite> spriteCache))
-							{
-								if (spriteCache.TryGetValue(pair.Key, out Sprite sprite))
-								{
-									pair.Value.SceneTransitionImage = sprite;
-								}
-							}
 
 							Debug.Log("WorldSceneDetails: Teleporter[" + pair.Key + "] connected to Scene[" + destination.Scene + ": Destination:" + "From" + pair.Value.From + " Position:" + pair.Value.ToPosition + " Rotation:" + pair.Value.ToRotation.eulerAngles + "]");
 

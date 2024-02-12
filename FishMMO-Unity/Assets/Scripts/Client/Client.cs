@@ -23,17 +23,25 @@ namespace FishMMO.Client
 	/// </summary>
 	public class Client : MonoBehaviour
 	{
+		private enum ServerType : byte
+		{
+			None,
+			Login,
+			World,
+			Scene,
+		}
+
 		private LocalConnectionState clientState = LocalConnectionState.Stopped;
 		private Dictionary<string, Scene> serverLoadedScenes = new Dictionary<string, Scene>();
 
 		private byte reconnectsAttempted = 0;
 		private float nextReconnect = 0;
-		private bool reconnectAllowed = false;
 		private bool forceDisconnect = false;
 
-		private string lastAddress = "";
-		private ushort lastPort = 0;
+		private string lastWorldAddress = "";
+		private ushort lastWorldPort = 0;
 
+		private ServerType currentServerType = ServerType.None;
 		public byte ReconnectAttempts = 10;
 		public float ReconnectAttemptWaitTime = 5f;
 
@@ -45,7 +53,8 @@ namespace FishMMO.Client
 		public event Action OnReconnectFailed;
 		public event Action OnQuitToLogin;
 
-		public bool CanReconnect { get { return reconnectAllowed; } }
+		public bool CanReconnect { get { return currentServerType == ServerType.World ||
+												currentServerType == ServerType.Scene; } }
 
 		private static NetworkManager _networkManager;
 		public NetworkManager NetworkManager;
@@ -132,8 +141,6 @@ namespace FishMMO.Client
 			NetworkManager.SceneManager.OnUnloadStart += SceneManager_OnUnloadStart;
 			NetworkManager.SceneManager.OnUnloadEnd += SceneManager_OnUnloadEnd;
 			LoginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
-
-			NetworkManager.ClientManager.RegisterBroadcast<SceneWorldReconnectBroadcast>(OnClientSceneWorldReconnectBroadcastReceived);
 		}
 
 		private void Update()
@@ -197,27 +204,24 @@ namespace FishMMO.Client
 
 		public void QuitToLogin(bool forceDisconnect = true)
 		{
+			if (forceDisconnect)
+			{
+				ForceDisconnect();
+			}
+
+			reconnectsAttempted = 0;
+			nextReconnect = -1;
+			currentServerType = ServerType.None;
+			lastWorldAddress = "";
+			lastWorldPort = 0;
+
 			OnQuitToLogin?.Invoke();
 
 #if UNITY_EDITOR
 			InputManager.MouseMode = true;
 #endif
 
-			if (forceDisconnect)
-			{
-				ForceDisconnect();
-			}
-
 			UnloadServerLoadedScenes();
-		}
-
-		/// <summary>
-		/// SceneServer told the client to reconnect to the World server
-		/// </summary>
-		private void OnClientSceneWorldReconnectBroadcastReceived(SceneWorldReconnectBroadcast msg, Channel channel)
-		{
-			reconnectAllowed = false;
-			ConnectToServer(msg.address, msg.port);
 		}
 
 		/// <summary>
@@ -270,11 +274,20 @@ namespace FishMMO.Client
 			switch (clientState)
 			{
 				case LocalConnectionState.Stopped:
-					if (!forceDisconnect && reconnectAllowed)
+
+					if (!forceDisconnect)
 					{
-						OnTryReconnect();
+						// we can reconnect to the world server and scene servers
+						if (CanReconnect)
+						{
+							// wait until we can reconnect again
+							nextReconnect = ReconnectAttemptWaitTime;
+
+							// show the reconnect screen?
+							OnReconnectAttempt?.Invoke(reconnectsAttempted, ReconnectAttempts);
+						}
 					}
-					reconnectAllowed = false;
+					currentServerType = ServerType.None;
 					break;
 				case LocalConnectionState.Started:
 					OnConnectionSuccessful?.Invoke();
@@ -298,12 +311,13 @@ namespace FishMMO.Client
 				case ClientAuthenticationResult.Banned:
 					break;
 				case ClientAuthenticationResult.LoginSuccess:
+					currentServerType = ServerType.Login;
 					break;
 				case ClientAuthenticationResult.WorldLoginSuccess:
+					currentServerType = ServerType.World;
 					break;
 				case ClientAuthenticationResult.SceneLoginSuccess:
-					// we only attempt scene server reconnects
-					reconnectAllowed = true;
+					currentServerType = ServerType.Scene;
 					break;
 				case ClientAuthenticationResult.ServerFull:
 					break;
@@ -312,13 +326,13 @@ namespace FishMMO.Client
 			}
 		}
 
-		public void ConnectToServer(string address, ushort port)
+		public void ConnectToServer(string address, ushort port, bool isWorldServer = false)
 		{
 			// stop current connection if any
 			NetworkManager.ClientManager.StopConnection();
 
 			// connect to the server
-			StartCoroutine(OnAwaitingConnectionReady(address, port));
+			StartCoroutine(OnAwaitingConnectionReady(address, port, isWorldServer));
 		}
 
 		public void OnTryReconnect()
@@ -329,21 +343,22 @@ namespace FishMMO.Client
 			}
 			if (reconnectsAttempted < ReconnectAttempts)
 			{
-				if (IsAddressValid(lastAddress) && lastPort != 0)
+				if (IsAddressValid(lastWorldAddress) && lastWorldPort != 0)
 				{
 					++reconnectsAttempted;
 					OnReconnectAttempt?.Invoke(reconnectsAttempted, ReconnectAttempts);
-					ConnectToServer(lastAddress, lastPort);
+					ConnectToServer(lastWorldAddress, lastWorldPort);
 				}
 			}
 			else
 			{
 				reconnectsAttempted = 0;
+				nextReconnect = -1;
 				OnReconnectFailed?.Invoke();
 			}
 		}
 
-		IEnumerator OnAwaitingConnectionReady(string address, ushort port)
+		IEnumerator OnAwaitingConnectionReady(string address, ushort port, bool isWorldServer)
 		{
 			// wait for the connection to the current server to stop
 			while (clientState != LocalConnectionState.Stopped)
@@ -357,8 +372,11 @@ namespace FishMMO.Client
 				yield return null;
 			}
 
-			lastAddress = address;
-			lastPort = port;
+			if (isWorldServer)
+			{
+				lastWorldAddress = address;
+				lastWorldPort = port;
+			}
 
 			// connect to the next server
 			NetworkManager.ClientManager.StartConnection(address, port);

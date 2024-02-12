@@ -197,6 +197,8 @@ namespace FishMMO.Server
 
 					OnDisconnect?.Invoke(conn, character);
 
+					TryTeleport(character);
+
 					// update scene instance details
 					if (sceneServerSystem.TryGetSceneInstanceDetails(character.WorldServerID,
 																	 character.SceneName.Value,
@@ -215,6 +217,66 @@ namespace FishMMO.Server
 						ServerManager.Despawn(character.NetworkObject, DespawnType.Pool);
 				}
 			}
+		}
+
+		private void TryTeleport(Character character)
+		{
+			if (character == null)
+			{
+				Debug.Log("Character not found!");
+				return;
+			}
+
+			if (!character.IsTeleporting)
+			{
+				return;
+			}
+
+			// should we prevent players from moving to a different scene if they are in combat?
+			/*if (character.TryGet(out CharacterDamageController damageController) &&
+				  damageController.Attackers.Count > 0)
+			{
+				return;
+			}*/
+
+			if (!ServerBehaviour.TryGet(out SceneServerSystem sceneServerSystem))
+			{
+				Debug.Log("SceneServerSystem not found!");
+				return;
+			}
+
+			// cache the current scene name
+			string playerScene = character.SceneName.Value;
+
+			if (sceneServerSystem.WorldSceneDetailsCache == null ||
+				!sceneServerSystem.WorldSceneDetailsCache.Scenes.TryGetValue(playerScene, out WorldSceneDetails details))
+			{
+				Debug.Log(playerScene + " not found!");
+				return;
+			}
+
+			// check if we are a scene teleporter
+			if (!details.Teleporters.TryGetValue(character.TeleporterName, out SceneTeleporterDetails teleporter))
+			{
+				Debug.Log("Teleporter: " + character.TeleporterName + " not found!");
+				return;
+			}
+
+			using var dbContext = sceneServerSystem.Server.NpgsqlDbContextFactory.CreateDbContext();
+			if (dbContext == null)
+			{
+				Debug.Log("Could not get database context.");
+				return;
+			}
+
+			// character becomes immortal when teleporting
+			if (character.TryGet(out CharacterDamageController damageController))
+			{
+				damageController.Immortal = true;
+			}
+
+			character.SceneName.SetInitialValues(teleporter.ToScene);
+			character.Motor.SetPositionAndRotationAndVelocity(teleporter.ToPosition, teleporter.ToRotation, Vector3.zero);
 		}
 
 		private void Authenticator_OnClientAuthenticationResult(NetworkConnection conn, bool authenticated)
@@ -245,7 +307,7 @@ namespace FishMMO.Server
 				{
 					// check if the scene is valid, loaded, and cached properly
 					if (sceneServerSystem.TryGetSceneInstanceDetails(character.WorldServerID, character.SceneName.Value, character.SceneHandle, out SceneInstanceDetails instance) &&
-						sceneServerSystem.TryLoadSceneForConnection(conn, instance))
+						sceneServerSystem.TryLoadSceneForConnection(conn, character, instance))
 					{
 						OnAfterLoadCharacter?.Invoke(conn, character);
 
@@ -259,16 +321,7 @@ namespace FishMMO.Server
 					else
 					{
 						// send the character back to the world server.. something went wrong
-						WorldServerEntity worldServer = WorldServerService.GetServer(dbContext, character.WorldServerID);
-						if (worldServer != null)
-						{
-							// Scene loading is the responsibility of the world server, send them over there to reconnect to a scene server
-							Server.Broadcast(conn, new SceneWorldReconnectBroadcast()
-							{
-								address = worldServer.Address,
-								port = worldServer.Port
-							}, true, Channel.Reliable);
-						}
+						conn.Disconnect(false);
 					}
 				}
 				else

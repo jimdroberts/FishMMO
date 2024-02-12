@@ -21,15 +21,4 @@ namespace FishMMO.Shared
 		public string fromTeleporter;
 		public string teleporterName;
 	}
-
-	/// <summary>
-	/// This broadcast tells the client to reconnect to the specific world address and port. SceneName and TeleporterName are for loading screens.
-	/// </summary>
-	public struct SceneWorldReconnectBroadcast : IBroadcast
-	{
-		public string address;
-		public ushort port;
-		public string sceneName;
-		public string teleporterName;
-	}
 }

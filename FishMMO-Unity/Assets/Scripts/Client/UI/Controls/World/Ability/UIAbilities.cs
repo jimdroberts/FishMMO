@@ -27,6 +27,7 @@ namespace FishMMO.Client
 
 		public override void OnDestroying()
 		{
+			OnSetCharacter -= CharacterControl_OnSetCharacter;
 			ClearAllSlots();
 		}
 
