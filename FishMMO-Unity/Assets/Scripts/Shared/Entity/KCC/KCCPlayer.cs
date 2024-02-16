@@ -1,10 +1,8 @@
-using FishNet;
 using FishNet.Object;
 using FishNet.Object.Prediction;
-using FishNet.Managing.Logging;
 using FishNet.Transporting;
 using UnityEngine;
-using FishMMO.Client;
+using System;
 using KinematicCharacterController;
 
 namespace FishMMO.Shared
@@ -15,20 +13,7 @@ namespace FishMMO.Shared
 		public KCCCamera CharacterCamera;
 		public KinematicCharacterMotor Motor;
 
-		//Quang: Old input system member
-		private const string MouseXInput = "Mouse X";
-		private const string MouseYInput = "Mouse Y";
-		private const string MouseScrollInput = "Mouse ScrollWheel";
-		private const string HorizontalInput = "Horizontal";
-		private const string VerticalInput = "Vertical";
-		private const string JumpInput = "Jump";
-		private const string CrouchInput = "Crouch";
-		private const string RunInput = "Run";
-		private const string ToggleFirstPersonInput = "ToggleFirstPerson";
-
-		private bool _jumpQueued = false;
-		private bool _crouchInputActive = false;
-		private bool _sprintInputActive = false;
+		public Func<KCCInputReplicateData> OnHandleCharacterInput;
 
 		private void Awake()
 		{
@@ -93,56 +78,12 @@ namespace FishMMO.Shared
 
 		private void TimeManager_OnTick()
 		{
-			Replicate(HandleCharacterInput());
+			KCCInputReplicateData kCCInputReplicateData = OnHandleCharacterInput == null ? default : OnHandleCharacterInput();
+			Replicate(kCCInputReplicateData);
 			if (base.IsServerStarted)
 			{
 				Reconcile(CharacterController.GetState());
 			}
-		}
-
-		[Client(Logging = LoggingType.Off)]
-		private bool CanUpdateInput()
-		{
-			return !InputManager.MouseMode;
-		}
-
-		private KCCInputReplicateData HandleCharacterInput()
-		{
-			if (!base.IsOwner)
-			{
-				return default;
-			}
-
-			// we can't change input if the UI is open or if the mouse cursor is enabled
-			if (!CanUpdateInput())
-			{
-				return new KCCInputReplicateData(0.0f,
-												 0.0f,
-												 0,
-												 CharacterCamera.Transform.position,
-												 CharacterCamera.Transform.rotation);
-			}
-
-			int moveFlags = 0;
-			if (_jumpQueued)
-			{
-				moveFlags.EnableBit(KCCMoveFlags.Jump);
-				_jumpQueued = false;
-			}
-			if (_crouchInputActive)
-			{
-				moveFlags.EnableBit(KCCMoveFlags.Crouch);
-			}
-			if (_sprintInputActive)
-			{
-				moveFlags.EnableBit(KCCMoveFlags.Sprint);
-			}
-
-			return new KCCInputReplicateData(InputManager.GetAxis(VerticalInput),
-											 InputManager.GetAxis(HorizontalInput),
-											 moveFlags,
-											 CharacterCamera.Transform.position,
-											 CharacterCamera.Transform.rotation);
 		}
 
 		[Replicate]
@@ -167,84 +108,13 @@ namespace FishMMO.Shared
 			CharacterController.ApplyState(rd);
 		}
 
-		private void Update()
+		public void UpdateCamera(float scrollInput, Vector3 lookInputVector)
 		{
-			if (!base.IsOwner)
-			{
-				return;
-			}
-
-			if (InputManager.GetKeyDown(JumpInput) && !CharacterController.IsJumping)
-			{
-				_jumpQueued = true;
-			}
-
-			_crouchInputActive = InputManager.GetKey(CrouchInput);
-
-			_sprintInputActive = InputManager.GetKey(RunInput);
-		}
-
-		private void LateUpdate()
-		{
-			if (!base.IsOwner)
-			{
-				return;
-			}
-			if (CharacterCamera == null)
-			{
-				return;
-			}
-
-			HandleCameraInput();
-		}
-
-		private void HandleCameraInput()
-		{
-			// Handle rotating the camera along with physics movers
-			if (Motor != null && CharacterCamera.RotateWithPhysicsMover && Motor.AttachedRigidbody != null)
-			{
-				PhysicsMover mover = Motor.AttachedRigidbody.GetComponent<PhysicsMover>();
-				if (mover != null)
-				{
-					CharacterCamera.PlanarDirection = mover.RotationDeltaFromInterpolation * CharacterCamera.PlanarDirection;
-					CharacterCamera.PlanarDirection = Vector3.ProjectOnPlane(CharacterCamera.PlanarDirection, Motor.CharacterUp).normalized;
-				}
-			}
-
-			// Create the look input vector for the camera
-			float mouseLookAxisUp = InputManager.GetAxis(MouseYInput);
-			float mouseLookAxisRight = InputManager.GetAxis(MouseXInput);
-			Vector3 lookInputVector = new Vector3(mouseLookAxisRight, mouseLookAxisUp, 0f);
-
-			// Prevent moving the camera while the cursor isn't locked
-			if (Cursor.lockState != CursorLockMode.Locked)
-			{
-				lookInputVector = Vector3.zero;
-			}
-
-			float scrollInput = 0.0f;
-#if !UNITY_WEBGL
-			if (CanUpdateInput())
-			{
-				// Input for zooming the camera (disabled in WebGL because it can cause problems)
-				scrollInput = -InputManager.GetAxis(MouseScrollInput);
-			}
-#endif
-
-			// Apply inputs to the camera
 			CharacterCamera.UpdateWithInput((float)base.TimeManager.TickDelta, scrollInput, lookInputVector);
-
-			// Handle toggling zoom level
-			if (InputManager.GetKeyDown(ToggleFirstPersonInput))
-			{
-				CharacterCamera.TargetDistance = (CharacterCamera.TargetDistance == 0f) ? CharacterCamera.DefaultDistance : 0f;
-			}
-
-			SetOrientationMethod(CharacterController.OrientationMethod);
 		}
 
 		[ServerRpc(RunLocally = true)]
-		private void SetOrientationMethod(OrientationMethod method)
+		public void SetOrientationMethod(OrientationMethod method)
 		{
 			CharacterController.OrientationMethod = method;
 		}

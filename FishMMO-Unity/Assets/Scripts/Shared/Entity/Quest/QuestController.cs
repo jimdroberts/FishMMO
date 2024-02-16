@@ -6,9 +6,9 @@ namespace FishMMO.Shared
 	{
 		private Dictionary<string, QuestInstance> quests = new Dictionary<string, QuestInstance>();
 
-		public override void OnStartClient()
+		public override void OnStartCharacter()
 		{
-			base.OnStartClient();
+			base.OnStartCharacter();
 
 			if (!base.IsOwner)
 			{

@@ -6,6 +6,7 @@ namespace FishMMO.Client
 	public class UICharacterControl : UIControl
 	{
 		public Action<Character> OnSetCharacter;
+		public Action OnUnsetCharacter;
 
 		public Character Character { get; private set; }
 
@@ -16,12 +17,6 @@ namespace FishMMO.Client
 		public override void OnDestroying()
 		{
 			Character = null;
-		}
-
-		public virtual void Show(Character character)
-		{
-			Character = character;
-			Show();
 		}
 
 		/// <summary>
@@ -38,6 +33,13 @@ namespace FishMMO.Client
 			Character = character;
 
 			OnSetCharacter?.Invoke(character);
+		}
+
+		public virtual void UnsetCharacter()
+		{
+			OnUnsetCharacter?.Invoke();
+
+			Character = null;
 		}
 	}
 }

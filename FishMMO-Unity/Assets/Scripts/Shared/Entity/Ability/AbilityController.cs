@@ -1,7 +1,4 @@
-﻿#if !UNITY_SERVER
-using FishMMO.Client;
-#endif
-using FishNet.Connection;
+﻿using FishNet.Connection;
 using FishNet.Object;
 using FishNet.Object.Prediction;
 using FishNet.Serializing;
@@ -30,11 +27,18 @@ namespace FishMMO.Shared
 		public AbilityEvent ChargedTemplate;
 		public AbilityEvent ChanneledTemplate;
 
+		public Func<bool> OnCanManipulate;
+
 		public Action<string, float, float> OnUpdate;
 		// Invoked when the current ability is Interrupted.
 		public Action OnInterrupt;
 		// Invoked when the current ability is Cancelled.
 		public Action OnCancel;
+
+		// UI
+		public Action OnReset;
+		public Action<long, Ability> OnAddAbility;
+		public Action<long, BaseAbilityTemplate> OnAddKnownAbility;
 
 		public Dictionary<long, Ability> KnownAbilities { get; private set; }
 		public HashSet<int> KnownBaseAbilities { get; private set; }
@@ -74,9 +78,9 @@ namespace FishMMO.Shared
 		}
 
 #if !UNITY_SERVER
-		public override void OnStartClient()
+		public override void OnStartCharacter()
 		{
-			base.OnStartClient();
+			base.OnStartCharacter();
 
 			if (!base.IsOwner)
 			{
@@ -89,30 +93,23 @@ namespace FishMMO.Shared
 				ClientManager.RegisterBroadcast<AbilityAddBroadcast>(OnClientAbilityAddBroadcastReceived);
 				ClientManager.RegisterBroadcast<AbilityAddMultipleBroadcast>(OnClientAbilityAddMultipleBroadcastReceived);
 
-				if (UIManager.TryGet("UICastBar", out UICastBar uiCastBar))
+				// invoke client reset event
+				if (Character.IsOwner)
 				{
-					OnUpdate += uiCastBar.OnUpdate;
-					OnCancel += uiCastBar.OnCancel;
-				}
+					OnReset?.Invoke();
 
-				if (UIManager.TryGet("UIAbilities", out UIAbilities uiAbilities))
-				{
-					uiAbilities.ClearAllSlots();
 					foreach (Ability ability in KnownAbilities.Values)
 					{
-						if (Character.IsOwner &&
-							uiAbilities != null)
-						{
-							uiAbilities.AddAbility(ability.ID, ability);
-						}
+						// update our client with abilities
+						OnAddAbility?.Invoke(ability.ID, ability);
 					}
 				}
 			}
 		}
 
-		public override void OnStopClient()
+		public override void OnStopCharacter()
 		{
-			base.OnStopClient();
+			base.OnStopCharacter();
 
 			if (base.IsOwner)
 			{
@@ -120,12 +117,6 @@ namespace FishMMO.Shared
 				ClientManager.UnregisterBroadcast<KnownAbilityAddMultipleBroadcast>(OnClientKnownAbilityAddMultipleBroadcastReceived);
 				ClientManager.UnregisterBroadcast<AbilityAddBroadcast>(OnClientAbilityAddBroadcastReceived);
 				ClientManager.UnregisterBroadcast<AbilityAddMultipleBroadcast>(OnClientAbilityAddMultipleBroadcastReceived);
-
-				if (UIManager.TryGet("UICastBar", out UICastBar uiCastBar))
-				{
-					OnUpdate -= uiCastBar.OnUpdate;
-					OnCancel -= uiCastBar.OnCancel;
-				}
 			}
 		}
 
@@ -139,10 +130,7 @@ namespace FishMMO.Shared
 			{
 				LearnBaseAbilities(new List<BaseAbilityTemplate>() { baseAbilityTemplate });
 
-				if (UIManager.TryGet("UIAbilities", out UIAbilities uiAbilities))
-				{
-					uiAbilities.AddKnownAbility(baseAbilityTemplate.ID, baseAbilityTemplate);
-				}
+				OnAddKnownAbility?.Invoke(baseAbilityTemplate.ID, baseAbilityTemplate);
 			}
 		}
 
@@ -159,10 +147,7 @@ namespace FishMMO.Shared
 				{
 					templates.Add(baseAbilityTemplate);
 
-					if (UIManager.TryGet("UIAbilities", out UIAbilities uiAbilities))
-					{
-						uiAbilities.AddKnownAbility(baseAbilityTemplate.ID, baseAbilityTemplate);
-					}
+					OnAddKnownAbility?.Invoke(baseAbilityTemplate.ID, baseAbilityTemplate);
 				}
 			}
 			LearnBaseAbilities(templates);
@@ -179,10 +164,7 @@ namespace FishMMO.Shared
 				Ability newAbility = new Ability(msg.id, abilityTemplate, msg.events);
 				LearnAbility(newAbility);
 
-				if (UIManager.TryGet("UIAbilities", out UIAbilities uiAbilities))
-				{
-					uiAbilities.AddAbility(newAbility.ID, newAbility);
-				}
+				OnAddAbility?.Invoke(newAbility.ID, newAbility);
 			}
 		}
 
@@ -199,10 +181,7 @@ namespace FishMMO.Shared
 					Ability newAbility = new Ability(ability.id, abilityTemplate, ability.events);
 					LearnAbility(newAbility);
 
-					if (UIManager.TryGet("UIAbilities", out UIAbilities uiAbilities))
-					{
-						uiAbilities.AddAbility(newAbility.ID, newAbility);
-					}
+					OnAddAbility?.Invoke(newAbility.ID, newAbility);
 				}
 			}
 		}
@@ -422,7 +401,9 @@ namespace FishMMO.Shared
 		{
 #if !UNITY_SERVER
 			// validate UI controls are focused so we aren't casting spells when hovering over interfaces.
-			if (InputManager.MouseMode ||
+			bool canManipulate = OnCanManipulate == null ? true : (bool)OnCanManipulate?.Invoke();
+
+			if (!canManipulate ||
 				!CanManipulate())
 			{
 				//Debug.Log("Cannot activate");

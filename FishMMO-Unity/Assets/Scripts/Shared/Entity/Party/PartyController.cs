@@ -1,10 +1,7 @@
 ﻿using FishNet.Transporting;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-#if !UNITY_SERVER
-using FishMMO.Client;
-using static FishMMO.Client.Client;
-#endif
 
 namespace FishMMO.Shared
 {
@@ -16,10 +13,17 @@ namespace FishMMO.Shared
 		public long ID;
 		public PartyRank Rank = PartyRank.None;
 
+		public Action<string> OnPartyCreated;
+		public Action<long> OnReceivePartyInvite;
+		public Action<long, PartyRank, float> OnAddPartyMember;
+		public Action<HashSet<long>> OnValidatePartyMembers;
+		public Action<long> OnRemovePartyMember;
+		public Action OnLeaveParty;
+
 #if !UNITY_SERVER
-		public override void OnStartClient()
+		public override void OnStartCharacter()
 		{
-			base.OnStartClient();
+			base.OnStartCharacter();
 
 			if (!base.IsOwner)
 			{
@@ -35,9 +39,9 @@ namespace FishMMO.Shared
 			ClientManager.RegisterBroadcast<PartyRemoveBroadcast>(OnClientPartyRemoveBroadcastReceived);
 		}
 
-		public override void OnStopClient()
+		public override void OnStopCharacter()
 		{
-			base.OnStopClient();
+			base.OnStopCharacter();
 
 			if (base.IsOwner)
 			{
@@ -57,10 +61,8 @@ namespace FishMMO.Shared
 		{
 			ID = msg.partyID;
 			Rank = PartyRank.Leader;
-			if (UIManager.TryGet("UIParty", out UIParty uiParty))
-			{
-				uiParty.OnPartyCreated(msg.location);
-			}
+
+			OnPartyCreated?.Invoke(msg.location);
 		}
 
 		/// <summary>
@@ -69,21 +71,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void OnClientPartyInviteBroadcastReceived(PartyInviteBroadcast msg, Channel channel)
 		{
-			ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.inviterCharacterID, (n) =>
-			{
-				if (UIManager.TryGet("UIConfirmationTooltip", out UIConfirmationTooltip uiTooltip))
-				{
-					uiTooltip.Open("You have been invited to join " + n + "'s party. Would you like to join?",
-					() =>
-					{
-						Broadcast(new PartyAcceptInviteBroadcast(), Channel.Reliable);
-					},
-					() =>
-					{
-						Broadcast(new PartyDeclineInviteBroadcast(), Channel.Reliable);
-					});
-				}
-			});
+			OnReceivePartyInvite?.Invoke(msg.inviterCharacterID);
 		}
 
 		/// <summary>
@@ -97,18 +85,14 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			if (!UIManager.TryGet("UIParty", out UIParty uiParty))
-			{
-				return;
-			}
-
 			// if this is our own id
 			if (Character != null && msg.characterID == Character.ID)
 			{
 				ID = msg.partyID;
 				Rank = msg.rank;
 			}
-			uiParty.OnPartyAddMember(msg.characterID, msg.rank, msg.healthPCT);
+
+			OnAddPartyMember?.Invoke(msg.characterID, msg.rank, msg.healthPCT);
 		}
 
 		/// <summary>
@@ -119,10 +103,7 @@ namespace FishMMO.Shared
 			ID = 0;
 			Rank = PartyRank.None;
 
-			if (UIManager.TryGet("UIParty", out UIParty uiParty))
-			{
-				uiParty.OnLeaveParty();
-			}
+			OnLeaveParty?.Invoke();
 		}
 
 		/// <summary>
@@ -130,20 +111,13 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void OnClientPartyAddMultipleBroadcastReceived(PartyAddMultipleBroadcast msg, Channel channel)
 		{
-			if (UIManager.TryGet("UIParty", out UIParty uiParty))
+			var newIds = msg.members.Select(x => x.characterID).ToHashSet();
+
+			OnValidatePartyMembers?.Invoke(newIds);
+
+			foreach (PartyAddBroadcast subMsg in msg.members)
 			{
-				var newIds = msg.members.Select(x => x.characterID).ToHashSet();
-				foreach (long id in new List<long>(uiParty.Members.Keys))
-				{
-					if (!newIds.Contains(id))
-					{
-						uiParty.OnPartyRemoveMember(id);
-					}
-				}
-				foreach (PartyAddBroadcast subMsg in msg.members)
-				{
-					OnClientPartyAddBroadcastReceived(subMsg, channel);
-				}
+				OnAddPartyMember?.Invoke(subMsg.characterID, subMsg.rank, subMsg.healthPCT);
 			}
 		}
 
@@ -152,12 +126,9 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void OnClientPartyRemoveBroadcastReceived(PartyRemoveBroadcast msg, Channel channel)
 		{
-			if (UIManager.TryGet("UIParty", out UIParty uiParty))
+			foreach (long memberID in msg.members)
 			{
-				foreach (long memberID in msg.members)
-				{
-					uiParty.OnPartyRemoveMember(memberID);
-				}
+				OnRemovePartyMember?.Invoke(memberID);
 			}
 		}
 #endif

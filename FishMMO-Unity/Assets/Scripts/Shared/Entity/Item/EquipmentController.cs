@@ -1,9 +1,6 @@
 ﻿using FishNet.Transporting;
 using System.Collections.Generic;
 using UnityEngine;
-#if !UNITY_SERVER
-using static FishMMO.Client.Client;
-#endif
 
 namespace FishMMO.Shared
 {
@@ -15,9 +12,9 @@ namespace FishMMO.Shared
 		}
 
 #if !UNITY_SERVER
-		public override void OnStartClient()
+		public override void OnStartCharacter()
 		{
-			base.OnStartClient();
+			base.OnStartCharacter();
 
 			if (!base.IsOwner)
 			{
@@ -31,9 +28,9 @@ namespace FishMMO.Shared
 			ClientManager.RegisterBroadcast<EquipmentUnequipItemBroadcast>(OnClientEquipmentUnequipItemBroadcastReceived);
 		}
 
-		public override void OnStopClient()
+		public override void OnStopCharacter()
 		{
-			base.OnStopClient();
+			base.OnStopCharacter();
 
 			if (base.IsOwner)
 			{
@@ -117,29 +114,6 @@ namespace FishMMO.Shared
 			}
 		}
 #endif
-
-		public void SendEquipRequest(int inventoryIndex, byte slot, InventoryType fromInventory)
-		{
-#if !UNITY_SERVER
-			Broadcast(new EquipmentEquipItemBroadcast()
-			{
-				inventoryIndex = inventoryIndex,
-				slot = slot,
-				fromInventory = fromInventory,
-			}, Channel.Reliable);
-#endif
-		}
-
-		public void SendUnequipRequest(byte slot, InventoryType toInventory)
-		{
-#if !UNITY_SERVER
-			Broadcast(new EquipmentUnequipItemBroadcast()
-			{
-				slot = slot,
-				toInventory = toInventory,
-			}, Channel.Reliable);
-#endif
-		}
 
 		public override bool CanManipulate()
 		{

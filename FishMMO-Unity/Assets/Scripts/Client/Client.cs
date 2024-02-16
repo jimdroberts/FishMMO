@@ -141,6 +141,12 @@ namespace FishMMO.Client
 			NetworkManager.SceneManager.OnUnloadStart += SceneManager_OnUnloadStart;
 			NetworkManager.SceneManager.OnUnloadEnd += SceneManager_OnUnloadEnd;
 			LoginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
+
+#if !UNITY_SERVER
+			Character.OnReadPayload += Character_OnReadPayload;
+			Character.OnStartLocalClient += Character_OnStartLocalClient;
+			Character.OnStopLocalClient += Character_OnStopLocalClient;
+#endif
 		}
 
 		private void Update()
@@ -186,6 +192,12 @@ namespace FishMMO.Client
 		{
 #if UNITY_EDITOR
 			InputManager.MouseMode = true;
+#endif
+
+#if !UNITY_SERVER
+			Character.OnReadPayload -= Character_OnReadPayload;
+			Character.OnStartLocalClient -= Character_OnStartLocalClient;
+			Character.OnStopLocalClient -= Character_OnStopLocalClient;
 #endif
 
 			ClientNamingSystem.Destroy();
@@ -478,5 +490,61 @@ namespace FishMMO.Client
 		private void SceneManager_OnUnloadEnd(SceneUnloadEndEventArgs args)
 		{
 		}
+
+#if !UNITY_SERVER
+		/// <summary>
+		/// This function is called when the local Character reads a payload.
+		/// </summary>
+		public void Character_OnReadPayload(Character character)
+		{
+			// load the characters name from disk or request it from the server
+			ClientNamingSystem.SetName(NamingSystemType.CharacterName, character.ID, (n) =>
+			{
+				character.gameObject.name = n;
+				character.CharacterName = n;
+				character.CharacterNameLower = n.ToLower();
+
+				if (character.CharacterNameLabel != null)
+					character.CharacterNameLabel.text = n;
+			});
+		}
+
+		/// <summary>
+		/// This function is called when the local Character connection is started. This generally happens when the character is successfully spawned in the scene.
+		/// </summary>
+		public void Character_OnStartLocalClient(Character character)
+		{
+			// Assign UI Character
+			UIManager.SetCharacter(character);
+
+			LocalInputController localInputController = character.gameObject.GetComponent<LocalInputController>();
+			if (localInputController == null)
+			{
+				localInputController = character.gameObject.AddComponent<LocalInputController>();
+			}
+			localInputController.Initialize(character);
+
+			// Disable Mouse Mode by default, the character should be controllable as soon as we enter the scene.
+			InputManager.MouseMode = false;
+		}
+
+		/// <summary>
+		/// This function is called when the local Character connection is stopped. This generally happens when the character is despawned or disconnected.
+		/// </summary>
+		public void Character_OnStopLocalClient(Character character)
+		{
+			// Enable the mouse
+			InputManager.MouseMode = true;
+
+			LocalInputController localInputController = character.gameObject.GetComponent<LocalInputController>();
+			if (localInputController != null)
+			{
+				localInputController.Deinitialize();
+			}
+
+			// Clear the UI Character
+			UIManager.UnsetCharacter();
+		}
+#endif
 	}
 }

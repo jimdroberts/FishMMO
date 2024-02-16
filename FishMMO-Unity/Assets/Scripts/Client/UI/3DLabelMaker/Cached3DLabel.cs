@@ -1,9 +1,10 @@
 ﻿using UnityEngine;
 using TMPro;
+using FishMMO.Shared;
 
 namespace FishMMO.Client
 {
-	public sealed class Cached3DLabel : MonoBehaviour
+	public sealed class Cached3DLabel : MonoBehaviour, IReference
 	{
 		private bool manualCache;
 		private float remainingTime;
@@ -26,9 +27,16 @@ namespace FishMMO.Client
 		public void Initialize(string text, Vector3 position, Color color, float fontSize, float persistTime, bool manualCache)
 		{
 			transform.position = position;
-			TMP.text = text;
+			string hex = color.ToHex();
+			if (!string.IsNullOrWhiteSpace(hex))
+			{
+				TMP.text = "<color=#" + hex + ">" + text + "</color>";
+			}
+			else
+			{
+				TMP.text = text;
+			}
 			TMP.fontSize = fontSize;
-			TMP.color = color;
 			remainingTime = persistTime;
 			this.manualCache = manualCache;
 		}

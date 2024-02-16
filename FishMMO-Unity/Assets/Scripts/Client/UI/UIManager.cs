@@ -32,6 +32,14 @@ namespace FishMMO.Client
 			}
 		}
 
+		internal static void UnsetCharacter()
+		{
+			foreach (UICharacterControl control in characterControls.Values)
+			{
+				control.UnsetCharacter();
+			}
+		}
+
 		internal static void Register(UIControl control)
 		{
 			if (control == null)

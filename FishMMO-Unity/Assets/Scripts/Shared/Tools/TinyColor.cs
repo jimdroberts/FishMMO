@@ -9,10 +9,10 @@ namespace FishMMO.Shared
 		{
 			return new Color()
 			{
-				r = Mathf.Round(color.r / 255.0f),
-				g = Mathf.Round(color.g / 255.0f),
-				b = Mathf.Round(color.b / 255.0f),
-				a = Mathf.Round(color.a / 255.0f),
+				r = color.r / 255.0f,
+				g = color.g / 255.0f,
+				b = color.b / 255.0f,
+				a = color.a / 255.0f,
 			};
 		}
 

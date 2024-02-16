@@ -114,9 +114,9 @@ namespace FishMMO.Shared
 		}
 
 #if !UNITY_SERVER
-		public override void OnStartClient()
+		public override void OnStartCharacter()
 		{
-			base.OnStartClient();
+			base.OnStartCharacter();
 
 			if (!base.IsOwner)
 			{
@@ -131,9 +131,9 @@ namespace FishMMO.Shared
 			ClientManager.RegisterBroadcast<CharacterResourceAttributeUpdateMultipleBroadcast>(OnClientCharacterResourceAttributeUpdateMultipleBroadcastReceived);
 		}
 
-		public override void OnStopClient()
+		public override void OnStopCharacter()
 		{
-			base.OnStopClient();
+			base.OnStopCharacter();
 
 			if (base.IsOwner)
 			{

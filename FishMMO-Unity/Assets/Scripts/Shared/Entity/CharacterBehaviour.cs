@@ -44,5 +44,15 @@ namespace FishMMO.Shared
 		}
 
 		public virtual void OnDestroying() { }
+
+		/// <summary>
+		/// Called after Character.OnStartClient
+		/// </summary>
+		public virtual void OnStartCharacter() { }
+
+		/// <summary>
+		/// Called right before Character.OnStopClient
+		/// </summary>
+		public virtual void OnStopCharacter() { }
 	}
 }

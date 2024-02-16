@@ -1,4 +1,5 @@
-﻿using FishMMO.Shared;
+﻿using FishNet.Transporting;
+using FishMMO.Shared;
 
 namespace FishMMO.Client
 {
@@ -26,7 +27,12 @@ namespace FishMMO.Client
 								Item item = inventoryController.Items[referenceID];
 								if (item != null)
 								{
-									equipmentController.SendEquipRequest(referenceID, (byte)ItemSlotType, InventoryType.Inventory);
+									Client.Broadcast(new EquipmentEquipItemBroadcast()
+									{
+										inventoryIndex = referenceID,
+										slot = (byte)ItemSlotType,
+										fromInventory = InventoryType.Inventory,
+									}, Channel.Reliable);
 								}
 							}
 							// taking an item from the bank and putting it in this equipment slot
@@ -37,7 +43,12 @@ namespace FishMMO.Client
 								Item item = bankController.Items[referenceID];
 								if (item != null)
 								{
-									equipmentController.SendEquipRequest(referenceID, (byte)ItemSlotType, InventoryType.Bank);
+									Client.Broadcast(new EquipmentEquipItemBroadcast()
+									{
+										inventoryIndex = referenceID,
+										slot = (byte)ItemSlotType,
+										fromInventory = InventoryType.Bank,
+									}, Channel.Reliable);
 								}
 							}
 						}
@@ -67,7 +78,11 @@ namespace FishMMO.Client
 				Clear();
 
 				// right clicking an item will attempt to send it to the inventory
-				equipmentController.SendUnequipRequest((byte)ItemSlotType, InventoryType.Inventory);
+				Client.Broadcast(new EquipmentUnequipItemBroadcast()
+				{
+					slot = (byte)ItemSlotType,
+					toInventory = InventoryType.Inventory,
+				}, Channel.Reliable);
 			}
 		}
 

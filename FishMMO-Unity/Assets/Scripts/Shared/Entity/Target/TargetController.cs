@@ -1,7 +1,4 @@
-﻿#if !UNITY_SERVER
-using FishMMO.Client;
-#endif
-using UnityEngine;
+﻿using UnityEngine;
 using System;
 
 namespace FishMMO.Shared
@@ -12,27 +9,23 @@ namespace FishMMO.Shared
 		public const float TARGET_UPDATE_RATE = 0.05f;
 
 		public LayerMask LayerMask;
-		public TargetInfo LastTarget;
+		public TargetInfo Last;
 		public TargetInfo Current;
 
 #if !UNITY_SERVER
 		private float nextTick = 0.0f;
-		private Cached3DLabel targetLabel;
 
 		public event Action<GameObject> OnChangeTarget;
 		public event Action<GameObject> OnUpdateTarget;
 
-		void OnDisable()
-		{
-			LabelMaker.Cache(targetLabel);
-			targetLabel = null;
-		}
+		public Action<Transform> OnClearTarget;
+		public Action<Transform> OnNewTarget;
 
 		public override void OnDestroying()
 		{
 			OnChangeTarget = null;
 			OnUpdateTarget = null;
-			LastTarget = default;
+			Last = default;
 			Current = default;
 		}
 
@@ -54,7 +47,7 @@ namespace FishMMO.Shared
 				UpdateTarget(ray.origin, ray.direction, MAX_TARGET_DISTANCE);
 
 				// target has changed
-				if (Current.Target != LastTarget.Target)
+				if (Current.Target != Last.Target)
 				{
 					// invoke our change target function
 					if (Current.Target == null)
@@ -67,72 +60,16 @@ namespace FishMMO.Shared
 					}
 
 					// disable the previous outline and target label
-					if (LastTarget.Target != null)
+					if (Last.Target != null)
 					{
-						Outline outline = LastTarget.Target.GetComponent<Outline>();
-						if (outline != null)
-						{
-							outline.enabled = false;
-						}
-						if (targetLabel != null)
-						{
-							LabelMaker.Cache(targetLabel);
-						}
+						OnClearTarget?.Invoke(Last.Target);
 					}
 
 					// construct or enable the labels and outlines
 					if (Current.Target != null)
 					{
-						if (Character != null)
-						{
-							Vector3 newPos = Current.Target.position;
-
-							Collider collider = Current.Target.GetComponent<Collider>();
-							newPos.y += collider.bounds.extents.y + 0.15f;
-
-							string label = Current.Target.name;
-							Color color = Color.grey;
-
-							// apply merchant description
-							Merchant merchant = Current.Target.GetComponent<Merchant>();
-							if (merchant != null &&
-								merchant.Template != null)
-							{
-								label += "\r\n" + merchant.Template.Description;
-								newPos.y += 0.15f;
-								color = Color.white;
-							}
-							else
-							{
-								Banker banker = Current.Target.GetComponent<Banker>();
-								if (banker != null)
-								{
-									label += "\r\n<Banker>";
-									newPos.y += 0.15f;
-									color = Color.white;
-								}
-								else
-								{
-									AbilityCrafter abilityCrafter = Current.Target.GetComponent<AbilityCrafter>();
-									if (abilityCrafter != null)
-									{
-										label += "\r\n<Ability Crafter>";
-										newPos.y += 0.15f;
-										color = Color.white;
-									}
-								}
-							}
-
-							targetLabel = LabelMaker.Display(label, newPos, color, 1.0f, 0.0f, true);
-						}
-
-						Outline outline = Current.Target.GetComponent<Outline>();
-						if (outline != null)
-						{
-							outline.enabled = true;
-						}
+						OnNewTarget?.Invoke(Current.Target);
 					}
-
 				}
 				else
 				{
@@ -152,7 +89,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		public TargetInfo UpdateTarget(Vector3 origin, Vector3 direction, float maxDistance)
 		{
-			LastTarget = Current;
+			Last = Current;
 
 			float distance = maxDistance.Clamp(0.0f, MAX_TARGET_DISTANCE);
 			RaycastHit hit;

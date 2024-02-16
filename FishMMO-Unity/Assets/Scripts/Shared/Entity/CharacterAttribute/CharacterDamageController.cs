@@ -1,7 +1,4 @@
-﻿#if !UNITY_SERVER
-using FishMMO.Client;
-#endif
-using System;
+﻿using System;
 using UnityEngine;
 
 namespace FishMMO.Shared
@@ -28,14 +25,14 @@ namespace FishMMO.Shared
 
 #if !UNITY_SERVER
 		public bool ShowDamage = true;
-		public event Func<string, Vector3, Color, float, float, bool, Cached3DLabel> OnDamageDisplay;
+		public event Func<string, Vector3, Color, float, float, bool, IReference> OnDamageDisplay;
 
 		public bool ShowHeals = true;
-		public event Func<string, Vector3, Color, float, float, bool, Cached3DLabel> OnHealedDisplay;
+		public event Func<string, Vector3, Color, float, float, bool, IReference> OnHealedDisplay;
 
-		public override void OnStartClient()
+		public override void OnStartCharacter()
 		{
-			base.OnStartClient();
+			base.OnStartCharacter();
 			if (ResourceAttribute == null ||
 				!Character.TryGet(out CharacterAttributeController attributeController) ||
 				!attributeController.TryGetResourceAttribute(ResourceAttribute.ID, out this.resourceInstance))
@@ -46,22 +43,6 @@ namespace FishMMO.Shared
 			{
 				enabled = false;
 				return;
-			}
-
-			if (LabelMaker.Instance != null)
-			{
-				OnDamageDisplay += LabelMaker.Display;
-				OnHealedDisplay += LabelMaker.Display;
-			}
-		}
-
-		public override void OnStopClient()
-		{
-			base.OnStopClient();
-			if (LabelMaker.Instance != null)
-			{
-				OnDamageDisplay -= LabelMaker.Display;
-				OnHealedDisplay -= LabelMaker.Display;
 			}
 		}
 #endif
@@ -114,7 +95,7 @@ namespace FishMMO.Shared
 				{
 					Vector3 displayPos = Character.Transform.position;
 					displayPos.y += Character.CharacterController.FullCapsuleHeight;
-					OnDamageDisplay?.Invoke(amount.ToString(), displayPos, new Color(255.0f, 128.0f, 128.0f), 10.0f, 10.0f, false);
+					OnDamageDisplay?.Invoke(amount.ToString(), displayPos, damageAttribute.DisplayColor, 4.0f, 1.0f, false);
 				}
 #endif
 
@@ -218,7 +199,7 @@ namespace FishMMO.Shared
 				{
 					Vector3 displayPos = Character.Transform.position;
 					displayPos.y += Character.CharacterController.FullCapsuleHeight;
-					OnHealedDisplay?.Invoke(amount.ToString(), displayPos, new Color(128.0f, 255.0f, 128.0f), 10.0f, 10.0f, false);
+					OnHealedDisplay?.Invoke(amount.ToString(), displayPos, new TinyColor(64, 64, 255).ToUnityColor(), 4.0f, 1.0f, false);
 				}
 #endif
 			}

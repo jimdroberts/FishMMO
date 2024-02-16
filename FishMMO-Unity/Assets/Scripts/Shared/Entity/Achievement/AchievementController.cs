@@ -1,10 +1,5 @@
-﻿#if !UNITY_SERVER
-using FishMMO.Client;
-using UnityEngine;
+﻿using UnityEngine;
 using System;
-#else
-using static FishMMO.Server.Server;
-#endif
 using FishNet.Transporting;
 using System.Collections.Generic;
 
@@ -19,11 +14,11 @@ namespace FishMMO.Shared
 
 #if !UNITY_SERVER
 		public bool ShowAchievementCompletion = true;
-		public event Func<string, Vector3, Color, float, float, bool, Cached3DLabel> OnCompleteAchievement;
+		public event Func<string, Vector3, Color, float, float, bool, IReference> OnCompleteAchievement;
 
-		public override void OnStartClient()
+		public override void OnStartCharacter()
 		{
-			base.OnStartClient();
+			base.OnStartCharacter();
 
 			if (!base.IsOwner)
 			{
@@ -31,26 +26,16 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			if (LabelMaker.Instance != null)
-			{
-				OnCompleteAchievement += LabelMaker.Display;
-			}
-
 			ClientManager.RegisterBroadcast<AchievementUpdateBroadcast>(OnClientAchievementUpdateBroadcastReceived);
 			ClientManager.RegisterBroadcast<AchievementUpdateMultipleBroadcast>(OnClientAchievementUpdateMultipleBroadcastReceived);
 		}
 
-		public override void OnStopClient()
+		public override void OnStopCharacter()
 		{
-			base.OnStopClient();
+			base.OnStopCharacter();
 
 			if (base.IsOwner)
 			{
-				if (LabelMaker.Instance != null)
-				{
-					OnCompleteAchievement -= LabelMaker.Display;
-				}
-
 				ClientManager.UnregisterBroadcast<AchievementUpdateBroadcast>(OnClientAchievementUpdateBroadcastReceived);
 				ClientManager.UnregisterBroadcast<AchievementUpdateMultipleBroadcast>(OnClientAchievementUpdateMultipleBroadcastReceived);
 			}
@@ -196,7 +181,7 @@ namespace FishMMO.Shared
 				}
 				if (modifiedItemBroadcasts.Count > 0)
 				{
-					Broadcast(Character.Owner, new InventorySetMultipleItemsBroadcast()
+					Character.Owner.Broadcast(new InventorySetMultipleItemsBroadcast()
 					{
 						items = modifiedItemBroadcasts,
 					}, true, Channel.Reliable);

@@ -1,8 +1,6 @@
 ﻿using FishNet.Transporting;
+using System;
 using System.Collections.Generic;
-#if !UNITY_SERVER
-using FishMMO.Client;
-#endif
 
 namespace FishMMO.Shared
 {
@@ -13,6 +11,9 @@ namespace FishMMO.Shared
 	{
 		public readonly HashSet<long> Friends = new HashSet<long>();
 
+		public Action<long, bool> OnAddFriend;
+		public Action<long> OnRemoveFriend;
+
 		public void AddFriend(long friendID)
 		{
 			if (!Friends.Contains(friendID))
@@ -22,9 +23,9 @@ namespace FishMMO.Shared
 		}
 
 #if !UNITY_SERVER
-		public override void OnStartClient()
+		public override void OnStartCharacter()
 		{
-			base.OnStartClient();
+			base.OnStartCharacter();
 
 			if (!base.IsOwner)
 			{
@@ -37,9 +38,9 @@ namespace FishMMO.Shared
 			ClientManager.RegisterBroadcast<FriendRemoveBroadcast>(OnClientFriendRemoveBroadcastReceived);
 		}
 
-		public override void OnStopClient()
+		public override void OnStopCharacter()
 		{
-			base.OnStopClient();
+			base.OnStopCharacter();
 
 			if (base.IsOwner)
 			{
@@ -56,13 +57,11 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void OnClientFriendAddBroadcastReceived(FriendAddBroadcast msg, Channel channel)
 		{
-			if (UIManager.TryGet("UIFriendList", out UIFriendList uiFriendList))
+			if (!Friends.Contains(msg.characterID))
 			{
-				if (!Friends.Contains(msg.characterID))
-				{
-					Friends.Add(msg.characterID);
-					uiFriendList.OnAddFriend(msg.characterID, msg.online);
-				}
+				Friends.Add(msg.characterID);
+
+				OnAddFriend?.Invoke(msg.characterID, msg.online);
 			}
 		}
 
@@ -71,15 +70,13 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void OnClientFriendAddMultipleBroadcastReceived(FriendAddMultipleBroadcast msg, Channel channel)
 		{
-			if (UIManager.TryGet("UIFriendList", out UIFriendList uiFriendList))
+			foreach (FriendAddBroadcast friend in msg.friends)
 			{
-				foreach (FriendAddBroadcast friend in msg.friends)
+				if (!Friends.Contains(friend.characterID))
 				{
-					if (!Friends.Contains(friend.characterID))
-					{
-						Friends.Add(friend.characterID);
-						uiFriendList.OnAddFriend(friend.characterID, friend.online);
-					}
+					Friends.Add(friend.characterID);
+
+					OnAddFriend?.Invoke(friend.characterID, friend.online);
 				}
 			}
 		}
@@ -91,10 +88,7 @@ namespace FishMMO.Shared
 		{
 			Friends.Remove(msg.characterID);
 
-			if (UIManager.TryGet("UIFriendList", out UIFriendList uiFriendList))
-			{
-				uiFriendList.OnRemoveFriend(msg.characterID);
-			}
+			OnRemoveFriend?.Invoke(msg.characterID);
 		}
 #endif
 	}

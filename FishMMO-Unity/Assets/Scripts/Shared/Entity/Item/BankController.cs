@@ -1,7 +1,4 @@
 ﻿using FishNet.Transporting;
-#if !UNITY_SERVER
-using static FishMMO.Client.Client;
-#endif
 
 namespace FishMMO.Shared
 {
@@ -15,9 +12,9 @@ namespace FishMMO.Shared
 		}
 
 #if !UNITY_SERVER
-		public override void OnStartClient()
+		public override void OnStartCharacter()
 		{
-			base.OnStartClient();
+			base.OnStartCharacter();
 
 			if (!base.IsOwner)
 			{
@@ -31,7 +28,7 @@ namespace FishMMO.Shared
 			ClientManager.RegisterBroadcast<BankSwapItemSlotsBroadcast>(OnClientBankSwapItemSlotsBroadcastReceived);
 		}
 
-		public override void OnStopClient()
+		public override void OnStopCharacter()
 		{
 			base.OnStopClient();
 
@@ -124,21 +121,9 @@ namespace FishMMO.Shared
 			return true;
 		}
 
-		public void SendSwapItemSlotsRequest(int from, int to, InventoryType fromInventory)
+		public bool CanSwapItemSlots(int from, int to, InventoryType fromInventory)
 		{
-#if !UNITY_SERVER
-			if (fromInventory == InventoryType.Bank &&
-				from == to)
-			{
-				return;
-			}
-			Broadcast(new BankSwapItemSlotsBroadcast()
-			{
-				from = from,
-				to = to,
-				fromInventory = fromInventory,
-			}, Channel.Reliable);
-#endif
+			return !(fromInventory == InventoryType.Bank && from == to);
 		}
 	}
 }

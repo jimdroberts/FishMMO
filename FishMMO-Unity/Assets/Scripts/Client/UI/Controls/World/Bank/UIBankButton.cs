@@ -1,4 +1,5 @@
-﻿using FishMMO.Shared;
+﻿using FishNet.Transporting;
+using FishMMO.Shared;
 
 namespace FishMMO.Client
 {
@@ -14,26 +15,37 @@ namespace FishMMO.Client
 					{
 						if (Character.TryGet(out BankController bankController))
 						{
+							InventoryType inventoryType = dragObject.Type == ReferenceButtonType.Bank ? InventoryType.Bank :
+														  dragObject.Type == ReferenceButtonType.Inventory ? InventoryType.Inventory :
+														  InventoryType.Equipment;
+
 							// we check the hotkey type because we can swap items in the bank
-							if (dragObject.Type == ReferenceButtonType.Bank)
+							if (inventoryType != InventoryType.Equipment)
 							{
-								// swap item slots in the bank
-								bankController.SendSwapItemSlotsRequest((int)dragObject.ReferenceID, (int)ReferenceID, InventoryType.Bank);
-							}
-							// taking an item from inventory and putting it in this bank slot
-							else if (dragObject.Type == ReferenceButtonType.Inventory)
-							{
-								// swap item slots in the bank
-								bankController.SendSwapItemSlotsRequest((int)dragObject.ReferenceID, (int)ReferenceID, InventoryType.Inventory);
+								int from = (int)dragObject.ReferenceID;
+								int to = (int)ReferenceID;
+
+								if (bankController.CanSwapItemSlots(from, to, inventoryType))
+								{
+									// swap item slots in the bank
+									Client.Broadcast(new BankSwapItemSlotsBroadcast()
+									{
+										from = from,
+										to = to,
+										fromInventory = inventoryType,
+									}, Channel.Reliable);
+								}
 							}
 							// we can also unequip items
-							else if (dragObject.Type == ReferenceButtonType.Equipment &&
-									 dragObject.ReferenceID >= byte.MinValue && // Equipment slot index is a byte, validate here
-									 dragObject.ReferenceID <= byte.MaxValue &&
-									 Character.TryGet(out EquipmentController equipmentController))
+							else if (dragObject.ReferenceID >= byte.MinValue && // Equipment slot index is a byte, validate here
+									 dragObject.ReferenceID <= byte.MaxValue)
 							{
 								// unequip the item
-								equipmentController.SendUnequipRequest((byte)dragObject.ReferenceID, InventoryType.Bank);
+								Client.Broadcast(new EquipmentUnequipItemBroadcast()
+								{
+									slot = (byte)dragObject.ReferenceID,
+									toInventory = InventoryType.Bank,
+								}, Channel.Reliable);
 							}
 						}
 

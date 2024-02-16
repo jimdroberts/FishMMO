@@ -1,5 +1,4 @@
 ﻿#if !UNITY_SERVER
-using FishMMO.Client;
 using TMPro;
 #endif
 using FishNet.Object;
@@ -41,11 +40,14 @@ namespace FishMMO.Shared
 		#endregion
 
 #if !UNITY_SERVER
-		public LocalInputController LocalInputController { get; private set; }
 		public TextMeshPro CharacterNameLabel;
 		public TextMeshPro CharacterGuildLabel;
 		public Camera EquipmentViewCamera;
 #endif
+
+		public static Action<Character> OnReadPayload;
+		public static Action<Character> OnStartLocalClient;
+		public static Action<Character> OnStopLocalClient;
 
 		// accountID for reference
 		public long ID;
@@ -131,16 +133,7 @@ namespace FishMMO.Shared
 			ID = reader.ReadInt64();
 
 #if !UNITY_SERVER
-			// load the characters name from disk or request it from the server
-			ClientNamingSystem.SetName(NamingSystemType.CharacterName, ID, (n) =>
-			{
-				gameObject.name = n;
-				CharacterName = n;
-				CharacterNameLower = n.ToLower();
-
-				if (CharacterNameLabel != null)
-					CharacterNameLabel.text = n;
-			});
+			OnReadPayload?.Invoke(this);
 #endif
 		}
 
@@ -156,7 +149,15 @@ namespace FishMMO.Shared
 
 			if (base.IsOwner)
 			{
-				InitializeLocal(true);
+				Character.OnStartLocalClient?.Invoke(this);
+
+				gameObject.layer = Constants.Layers.LocalEntity;
+				CharacterController.MeshRoot.gameObject.layer = Constants.Layers.LocalEntity;
+
+				foreach (CharacterBehaviour behaviour in this.behaviours.Values)
+				{
+					behaviour.OnStartCharacter();
+				}
 			}
 		}
 
@@ -165,50 +166,12 @@ namespace FishMMO.Shared
 			base.OnStopClient();
 			if (base.IsOwner)
 			{
-				InitializeLocal(false);
-			}
-		}
-
-		private void InitializeLocal(bool initializing)
-		{
-			InputManager.MouseMode = false;
-
-			LocalInputController = gameObject.GetComponent<LocalInputController>();
-			if (LocalInputController == null)
-			{
-				LocalInputController = gameObject.AddComponent<LocalInputController>();
-			}
-			LocalInputController.Initialize(this);
-
-			InitializeUI(initializing);
-		}
-
-		private void InitializeUI(bool initializing)
-		{
-			if (initializing)
-			{
-				UIManager.SetCharacter(this);
-
-				if (this.TryGet(out TargetController targetController) &&
-					UIManager.TryGet("UITarget", out UITarget uiTarget))
+				foreach (CharacterBehaviour behaviour in this.behaviours.Values)
 				{
-					targetController.OnChangeTarget += uiTarget.OnChangeTarget;
-					targetController.OnUpdateTarget += uiTarget.OnUpdateTarget;
+					behaviour.OnStopCharacter();
 				}
 
-				gameObject.layer = Constants.Layers.LocalEntity;
-				CharacterController.MeshRoot.gameObject.layer = Constants.Layers.LocalEntity;
-			}
-			else
-			{
-				UIManager.SetCharacter(null);
-
-				if (this.TryGet(out TargetController targetController) &&
-					UIManager.TryGet("UITarget", out UITarget uiTarget))
-				{
-					targetController.OnChangeTarget -= uiTarget.OnChangeTarget;
-					targetController.OnUpdateTarget -= uiTarget.OnUpdateTarget;
-				}
+				Character.OnStopLocalClient?.Invoke(this);
 
 				gameObject.layer = Constants.Layers.Default;
 				CharacterController.MeshRoot.gameObject.layer = Constants.Layers.Default;
