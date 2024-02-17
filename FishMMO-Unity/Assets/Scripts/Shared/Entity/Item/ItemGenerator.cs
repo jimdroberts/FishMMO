@@ -16,21 +16,10 @@ namespace FishMMO.Shared
 		{
 			this.item = item;
 			Seed = seed;
-
-			if (item.Equippable != null)
-			{
-				item.Equippable.OnEquip += ItemEquippable_OnEquip;
-				item.Equippable.OnUnequip += ItemEquippable_OnUnequip;
-			}
 		}
 
 		public void Destroy()
 		{
-			if (item.Equippable != null)
-			{
-				item.Equippable.OnEquip -= ItemEquippable_OnEquip;
-				item.Equippable.OnUnequip -= ItemEquippable_OnUnequip;
-			}
 			item = null;
 		}
 
@@ -122,7 +111,7 @@ namespace FishMMO.Shared
 			}
 		}
 
-		public void ItemEquippable_OnEquip(Character character)
+		public void ApplyAttributes(Character character)
 		{
 			if (!character.TryGet(out CharacterAttributeController attributeController))
 			{
@@ -137,7 +126,7 @@ namespace FishMMO.Shared
 			}
 		}
 
-		public void ItemEquippable_OnUnequip(Character character)
+		public void RemoveAttributes(Character character)
 		{
 			if (!character.TryGet(out CharacterAttributeController attributeController))
 			{

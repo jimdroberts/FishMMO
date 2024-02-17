@@ -479,68 +479,6 @@ namespace FishMMO.Server
 						abilities = knownAbilityBroadcasts,
 					}, true, Channel.Reliable);
 				}
-
-				/*if (abilityController.KnownAbilities != null)
-				{
-					List<AbilityAddBroadcast> abilityBroadcasts = new List<AbilityAddBroadcast>();
-
-					// get the actual abilities
-					foreach (Ability ability in abilityController.KnownAbilities.Values)
-					{
-						abilityBroadcasts.Add(new AbilityAddBroadcast()
-						{
-							id = ability.ID,
-							templateID = ability.Template.ID,
-							events = ability.AbilityEvents.Keys.ToList(),
-						});
-					}
-
-					// tell the client the have abilities
-					if (abilityBroadcasts.Count > 0)
-					{
-						Server.Broadcast(character.Owner, new AbilityAddMultipleBroadcast()
-						{
-							abilities = abilityBroadcasts,
-						});
-					}
-				}*/
-			}
-			#endregion
-
-			#region Attributes
-			if (character.TryGet(out CharacterAttributeController attributeController))
-			{
-				List<CharacterAttributeUpdateBroadcast> attributes = new List<CharacterAttributeUpdateBroadcast>();
-				foreach (CharacterAttribute attribute in attributeController.Attributes.Values)
-				{
-					if (attribute.Template.IsResourceAttribute)
-						continue;
-
-					attributes.Add(new CharacterAttributeUpdateBroadcast()
-					{
-						templateID = attribute.Template.ID,
-						value = attribute.FinalValue,
-					});
-				}
-				Server.Broadcast(character.Owner, new CharacterAttributeUpdateMultipleBroadcast()
-				{
-					attributes = attributes,
-				}, true, Channel.Reliable);
-
-				List<CharacterResourceAttributeUpdateBroadcast> resourceAttributes = new List<CharacterResourceAttributeUpdateBroadcast>();
-				foreach (CharacterResourceAttribute attribute in attributeController.ResourceAttributes.Values)
-				{
-					resourceAttributes.Add(new CharacterResourceAttributeUpdateBroadcast()
-					{
-						templateID = attribute.Template.ID,
-						value = attribute.CurrentValue,
-						max = attribute.FinalValue,
-					});
-				}
-				Server.Broadcast(character.Owner, new CharacterResourceAttributeUpdateMultipleBroadcast()
-				{
-					attributes = resourceAttributes,
-				}, true, Channel.Reliable);
 			}
 			#endregion
 
@@ -656,40 +594,6 @@ namespace FishMMO.Server
 				if (itemBroadcasts.Count > 0)
 				{
 					Server.Broadcast(character.Owner, new InventorySetMultipleItemsBroadcast()
-					{
-						items = itemBroadcasts,
-					}, true, Channel.Reliable);
-				}
-			}
-			#endregion
-
-			#region Equipment
-			if (character.TryGet(out EquipmentController equipmentController))
-			{
-				List<EquipmentSetItemBroadcast> itemBroadcasts = new List<EquipmentSetItemBroadcast>();
-
-				foreach (Item item in equipmentController.Items)
-				{
-					// just in case..
-					if (item == null)
-					{
-						continue;
-					}
-					// create the new item broadcast
-					itemBroadcasts.Add(new EquipmentSetItemBroadcast()
-					{
-						instanceID = item.ID,
-						templateID = item.Template.ID,
-						slot = item.Slot,
-						seed = item.IsGenerated ? item.Generator.Seed : 0,
-						stackSize = item.IsStackable ? item.Stackable.Amount : 0,
-					});
-				}
-
-				// tell the client they have items
-				if (itemBroadcasts.Count > 0)
-				{
-					Server.Broadcast(character.Owner, new EquipmentSetMultipleItemsBroadcast()
 					{
 						items = itemBroadcasts,
 					}, true, Channel.Reliable);

@@ -1,4 +1,6 @@
 ﻿using System.Collections.Generic;
+using FishNet.Connection;
+using FishNet.Serializing;
 using FishNet.Transporting;
 
 namespace FishMMO.Shared
@@ -30,21 +32,65 @@ namespace FishMMO.Shared
 			}
 		}
 
-		public void SetAttribute(int id, int baseValue, int modifier)
+		public override void ReadPayload(NetworkConnection connection, Reader reader)
 		{
-			if (Attributes.TryGetValue(id, out CharacterAttribute attribute))
+			int attributeCount = reader.ReadInt32();
+			if (attributeCount > 0)
 			{
-				attribute.SetValue(baseValue);
-				attribute.SetModifier(modifier);
+				for (int i = 0; i < attributeCount; ++i)
+				{
+					int templateID = reader.ReadInt32();
+					int value = reader.ReadInt32();
+
+					SetAttribute(templateID, value);
+				}
+			}
+
+			int resourceAttributeCount = reader.ReadInt32();
+			if (resourceAttributeCount > 0)
+			{
+				for (int i = 0; i < resourceAttributeCount; ++i)
+				{
+					int templateID = reader.ReadInt32();
+					int value = reader.ReadInt32();
+					int currentValue = reader.ReadInt32();
+
+					SetResourceAttribute(templateID, value, currentValue);
+				}
 			}
 		}
 
-		public void SetResourceAttribute(int id, int baseValue, int modifier, int currentValue)
+		public override void WritePayload(NetworkConnection connection, Writer writer)
+		{
+			writer.WriteInt32(Attributes.Count);
+			foreach (CharacterAttribute attribute in Attributes.Values)
+			{
+				writer.WriteInt32(attribute.Template.ID);
+				writer.WriteInt32(attribute.Value);
+			}
+
+			writer.WriteInt32(ResourceAttributes.Count);
+			foreach (CharacterResourceAttribute resourceAttribute in ResourceAttributes.Values)
+			{
+				writer.WriteInt32(resourceAttribute.Template.ID);
+				writer.WriteInt32(resourceAttribute.Value);
+				writer.WriteInt32(resourceAttribute.CurrentValue);
+			}
+		}
+
+		public void SetAttribute(int id, int value)
+		{
+			if (Attributes.TryGetValue(id, out CharacterAttribute attribute))
+			{
+				attribute.SetValue(value);
+			}
+		}
+
+		public void SetResourceAttribute(int id, int value, int currentValue)
 		{
 			if (ResourceAttributes.TryGetValue(id, out CharacterResourceAttribute attribute))
 			{
-				attribute.SetValue(baseValue);
-				attribute.SetModifier(modifier);
+				attribute.SetValue(value);
 				attribute.SetCurrentValue(currentValue);
 			}
 		}
@@ -154,7 +200,7 @@ namespace FishMMO.Shared
 			if (template != null &&
 				Attributes.TryGetValue(template.ID, out CharacterAttribute attribute))
 			{
-				attribute.SetFinal(msg.value);
+				attribute.SetValue(msg.value);
 			}
 		}
 
@@ -169,7 +215,7 @@ namespace FishMMO.Shared
 				if (template != null &&
 					Attributes.TryGetValue(template.ID, out CharacterAttribute attribute))
 				{
-					attribute.SetFinal(subMsg.value);
+					attribute.SetValue(subMsg.value);
 				}
 			}
 		}
@@ -183,8 +229,8 @@ namespace FishMMO.Shared
 			if (template != null &&
 				ResourceAttributes.TryGetValue(template.ID, out CharacterResourceAttribute attribute))
 			{
-				attribute.SetCurrentValue(msg.value);
-				attribute.SetFinal(msg.max);
+				attribute.SetCurrentValue(msg.currentValue);
+				attribute.SetValue(msg.value);
 			}
 		}
 
@@ -199,8 +245,8 @@ namespace FishMMO.Shared
 				if (template != null &&
 					ResourceAttributes.TryGetValue(template.ID, out CharacterResourceAttribute attribute))
 				{
-					attribute.SetCurrentValue(subMsg.value);
-					attribute.SetFinal(subMsg.max);
+					attribute.SetCurrentValue(subMsg.currentValue);
+					attribute.SetValue(subMsg.value);
 				}
 			}
 		}

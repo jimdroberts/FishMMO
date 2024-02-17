@@ -12,8 +12,8 @@ namespace FishMMO.Shared
 	public struct CharacterResourceAttributeUpdateBroadcast : IBroadcast
 	{
 		public int templateID;
+		public int currentValue;
 		public int value;
-		public int max;
 	}
 
 	public struct CharacterAttributeUpdateMultipleBroadcast : IBroadcast

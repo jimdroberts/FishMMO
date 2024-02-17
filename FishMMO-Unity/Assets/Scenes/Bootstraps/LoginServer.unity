@@ -200,12 +200,12 @@ PrefabInstance:
     - target: {fileID: 6776049994069539431, guid: d920d5f7e01fab84dafa106a268a7518,
         type: 3}
       propertyPath: _queuedInputs
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 6776049994069539431, guid: d920d5f7e01fab84dafa106a268a7518,
         type: 3}
       propertyPath: _redundancyCount
-      value: 1
+      value: 2
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

@@ -32,8 +32,7 @@ namespace FishMMO.Server.DatabaseServices
 				{
 					dbAttribute.CharacterID = character.ID;
 					dbAttribute.TemplateID = attribute.Template.ID;
-					dbAttribute.BaseValue = attribute.BaseValue;
-					dbAttribute.Modifier = attribute.Modifier;
+					dbAttribute.Value = attribute.Value;
 					dbAttribute.CurrentValue = 0;
 				}
 				else
@@ -42,8 +41,7 @@ namespace FishMMO.Server.DatabaseServices
 					{
 						CharacterID = character.ID,
 						TemplateID = attribute.Template.ID,
-						BaseValue = attribute.BaseValue,
-						Modifier = attribute.Modifier,
+						Value = attribute.Value,
 						CurrentValue = 0,
 					});
 				}
@@ -55,8 +53,7 @@ namespace FishMMO.Server.DatabaseServices
 				{
 					dbAttribute.CharacterID = character.ID;
 					dbAttribute.TemplateID = attribute.Template.ID;
-					dbAttribute.BaseValue = attribute.BaseValue;
-					dbAttribute.Modifier = attribute.Modifier;
+					dbAttribute.Value = attribute.Value;
 					dbAttribute.CurrentValue = attribute.CurrentValue;
 				}
 				else
@@ -65,8 +62,7 @@ namespace FishMMO.Server.DatabaseServices
 					{
 						CharacterID = character.ID,
 						TemplateID = attribute.Template.ID,
-						BaseValue = attribute.BaseValue,
-						Modifier = attribute.Modifier,
+						Value = attribute.Value,
 						CurrentValue = attribute.CurrentValue,
 					});
 				}
@@ -113,11 +109,11 @@ namespace FishMMO.Server.DatabaseServices
 				{
 					if (template.IsResourceAttribute)
 					{
-						attributeController.SetResourceAttribute(template.ID, attribute.BaseValue, attribute.Modifier, attribute.CurrentValue);
+						attributeController.SetResourceAttribute(template.ID, attribute.Value, attribute.CurrentValue);
 					}
 					else
 					{
-						attributeController.SetAttribute(template.ID, attribute.BaseValue, attribute.Modifier);
+						attributeController.SetAttribute(template.ID, attribute.Value);
 					}
 				}
 			};

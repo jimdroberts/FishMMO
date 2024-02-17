@@ -1,4 +1,6 @@
-﻿using FishNet.Transporting;
+﻿using FishNet.Connection;
+using FishNet.Serializing;
+using FishNet.Transporting;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -11,10 +13,61 @@ namespace FishMMO.Shared
 			AddSlots(null, System.Enum.GetNames(typeof(ItemSlot)).Length); // equipment size = itemslot size
 		}
 
+		public override void ReadPayload(NetworkConnection connection, Reader reader)
+		{
+			int itemCount = reader.ReadInt32();
+			for (int i = 0; i < itemCount; ++i)
+			{
+				long id = reader.ReadInt64();
+				int templateID = reader.ReadInt32();
+				int slot = reader.ReadInt32();
+				int seed = reader.ReadInt32();
+				uint stackSize = reader.ReadUInt32();
+
+				Item item = new Item(id, seed, templateID, stackSize);
+
+				SetItemSlot(item, slot);
+			}
+		}
+
+		public override void WritePayload(NetworkConnection connection, Writer writer)
+		{
+			if (Items == null ||
+				Items.Count < 1)
+			{
+				writer.WriteUInt32(0);
+				return;
+			}
+
+			writer.WriteInt32(FilledSlots());
+			foreach (Item item in Items)
+			{
+				if (item == null)
+				{
+					continue;
+				}
+				writer.WriteInt64(item.ID);
+				writer.WriteInt32(item.Template.ID);
+				writer.WriteInt32(item.Slot);
+				writer.WriteInt32(item.IsGenerated ? item.Generator.Seed : 0);
+				writer.WriteUInt32(item.IsStackable ? item.Stackable.Amount : 0);
+			}
+		}
+
 #if !UNITY_SERVER
 		public override void OnStartCharacter()
 		{
 			base.OnStartCharacter();
+
+			foreach (Item item in Items)
+			{
+				if (item == null ||
+					!item.IsEquippable)
+				{
+					continue;
+				}
+				item.Equippable.SetOwner(Character);
+			}
 
 			if (!base.IsOwner)
 			{

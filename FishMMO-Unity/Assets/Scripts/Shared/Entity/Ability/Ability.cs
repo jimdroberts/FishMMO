@@ -382,8 +382,12 @@ namespace FishMMO.Shared
 			return true;
 		}
 
-		public void ConsumeResources(CharacterAttributeController attributeController, AbilityEvent bloodResourceConversion, CharacterAttributeTemplate bloodResource)
+		public void ConsumeResources(Character character, AbilityEvent bloodResourceConversion, CharacterAttributeTemplate bloodResource)
 		{
+			if (!character.TryGet(out CharacterAttributeController attributeController))
+			{
+				return;
+			}
 			if (AbilityEvents != null &&
 				bloodResourceConversion != null &&
 				bloodResource != null &&
@@ -392,7 +396,7 @@ namespace FishMMO.Shared
 				int totalCost = TotalResourceCost;
 
 				CharacterResourceAttribute resource;
-				if (bloodResource != null && attributeController.TryGetResourceAttribute(bloodResource.ID, out resource) &&
+				if (attributeController.TryGetResourceAttribute(bloodResource.ID, out resource) &&
 					resource.CurrentValue >= totalCost)
 				{
 					resource.Consume(totalCost);

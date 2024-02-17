@@ -91,10 +91,21 @@ namespace FishMMO.Shared
 			if (initializeEquippable)
 			{
 				Equippable?.Initialize(this);
+
+				if (initializeGenerator)
+				{
+					Generator.OnSetAttribute += ItemGenerator_OnSetAttribute;
+				}
 			}
 			if (initializeGenerator)
 			{
 				Generator?.Initialize(this, seed);
+
+				if (initializeEquippable)
+				{
+					Equippable.OnEquip += ItemEquippable_OnEquip;
+					Equippable.OnUnequip += ItemEquippable_OnUnequip;
+				}
 			}
 		}
 
@@ -102,10 +113,19 @@ namespace FishMMO.Shared
 		{
 			if (Generator != null)
 			{
+				if (IsEquippable)
+				{
+					Equippable.OnEquip -= ItemEquippable_OnEquip;
+					Equippable.OnUnequip -= ItemEquippable_OnUnequip;
+				}
 				Generator.Destroy();
 			}
 			if (Equippable != null)
 			{
+				if (IsGenerated)
+				{
+					Generator.OnSetAttribute -= ItemGenerator_OnSetAttribute;
+				}
 				Equippable.Destroy();
 			}
 			/*if (Stackable != null)
@@ -145,6 +165,38 @@ namespace FishMMO.Shared
 				sb.Dispose();
 			}
 			return tooltip;
+		}
+
+		public void ItemGenerator_OnSetAttribute(ItemAttribute attribute, int oldValue, int newValue)
+		{
+			if (IsEquippable)
+			{
+				Character character = Equippable.Character;
+
+				if (character != null &&
+					character.TryGet(out CharacterAttributeController attributeController) &&
+					attributeController.TryGetAttribute(attribute.Template.CharacterAttribute.ID, out CharacterAttribute characterAttribute))
+				{
+					characterAttribute.AddValue(-oldValue);
+					characterAttribute.AddValue(newValue);
+				}
+			}
+		}
+
+		public void ItemEquippable_OnEquip(Character character)
+		{
+			if (IsGenerated)
+			{
+				Generator.ApplyAttributes(character);
+			}
+		}
+
+		public void ItemEquippable_OnUnequip(Character character)
+		{
+			if (IsGenerated)
+			{
+				Generator.RemoveAttributes(character);
+			}
 		}
 	}
 }

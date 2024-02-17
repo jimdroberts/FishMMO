@@ -12,8 +12,7 @@ namespace FishMMO.Database.Npgsql.Entities
         public long CharacterID { get; set; }
         public CharacterEntity Character { get; set; }
         public int TemplateID { get; set; }
-        public int BaseValue { get; set; }
-        public int Modifier { get; set; }
+        public int Value { get; set; }
         public int CurrentValue { get; set; }
     }
 }

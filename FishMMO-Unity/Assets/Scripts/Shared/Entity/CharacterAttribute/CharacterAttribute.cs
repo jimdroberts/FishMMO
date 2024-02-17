@@ -7,7 +7,7 @@ namespace FishMMO.Shared
 	{
 		public CharacterAttributeTemplate Template { get; private set; }
 
-		private int baseValue;
+		private int value;
 		private int modifier;
 		private int finalValue;
 		private Dictionary<string, CharacterAttribute> parents = new Dictionary<string, CharacterAttribute>();
@@ -21,40 +21,26 @@ namespace FishMMO.Shared
 			OnAttributeUpdated?.Invoke(item);
 		}
 
-		public int BaseValue { get { return baseValue; } }
-		public void SetValue(int newValue)
+		public int Value { get { return value; } }
+		public void SetValue(int newValue, bool forceUpdate = false)
 		{
-			SetValue(newValue, false);
-		}
-		public void SetValue(int newValue, bool skipUpdate)
-		{
-			if (baseValue != newValue)
+			if (value != newValue)
 			{
-				baseValue = newValue;
-				if (!skipUpdate)
-				{
-					UpdateValues(true);
-				}
+				value = newValue;
+				UpdateValues(forceUpdate);
 			}
 		}
 		/// <summary>
 		/// Used to add or subtract an amount from the base value of the attribute. Addition: AddValue(123) | Subtraction: AddValue(-123)
 		/// </summary>
 		/// <param name="amount"></param>
-		public void AddValue(int amount)
+		public void AddValue(int amount, bool forceUpdate = false)
 		{
-			AddValue(amount, false);
-		}
-		public void AddValue(int amount, bool skipUpdate)
-		{
-			int tmp = baseValue + amount;
-			if (baseValue != tmp)
+			int tmp = value + amount;
+			if (value != tmp)
 			{
-				baseValue = tmp;
-				if (!skipUpdate)
-				{
-					UpdateValues(true);
-				}
+				value = tmp;
+				UpdateValues(forceUpdate);
 			}
 		}
 		public void SetModifier(int newValue)
@@ -102,7 +88,7 @@ namespace FishMMO.Shared
 		public CharacterAttribute(int templateID, int initialValue, int initialModifier)
 		{
 			Template = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(templateID);
-			baseValue = initialValue;
+			value = initialValue;
 			modifier = initialModifier;
 			finalValue = CalculateFinalValue();
 		}
@@ -157,9 +143,9 @@ namespace FishMMO.Shared
 			return result;
 		}
 
-		public int GetDependantBaseValue(string name)
+		public int GetDependantValue(string name)
 		{
-			return (!dependencies.TryGetValue(name, out CharacterAttribute attribute)) ? 0 : attribute.BaseValue;
+			return (!dependencies.TryGetValue(name, out CharacterAttribute attribute)) ? 0 : attribute.Value;
 		}
 
 		public int GetDependantMinValue(string name)
@@ -222,9 +208,9 @@ namespace FishMMO.Shared
 		{
 			if (Template.ClampFinalValue)
 			{
-				return (baseValue + modifier).Clamp(Template.MinValue, Template.MaxValue);
+				return (value + modifier).Clamp(Template.MinValue, Template.MaxValue);
 			}
-			return baseValue + modifier;
+			return value + modifier;
 		}
 	}
 }

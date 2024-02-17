@@ -210,6 +210,8 @@ namespace FishMMO.Shared
 				Ability ability = new Ability(abilityID, abilityTemplateID, abilityEvents);
 
 				LearnAbility(ability);
+
+				Debug.Log($"Learned Ability {ability.ID}");
 			}
 		}
 
@@ -268,6 +270,7 @@ namespace FishMMO.Shared
 			}
 			else if (IsActivating)
 			{
+				Debug.Log("Activating " + currentAbility.ID);
 				remainingTime -= (float)base.TimeManager.TickDelta;
 
 				if (remainingTime > 0.0f)
@@ -299,11 +302,8 @@ namespace FishMMO.Shared
 							// spawn the ability object
 							if (AbilityObject.TrySpawn(currentAbility, Character, this, AbilitySpawner, targetInfo))
 							{
-								if (Character.TryGet(out CharacterAttributeController attributeController))
-								{
-									// channeled abilities consume resources during activation
-									currentAbility.ConsumeResources(attributeController, BloodResourceConversionTemplate, BloodResourceTemplate);
-								}
+								// channeled abilities consume resources during activation
+								currentAbility.ConsumeResources(Character, BloodResourceConversionTemplate, BloodResourceTemplate);
 							}
 						}
 					}
@@ -331,11 +331,8 @@ namespace FishMMO.Shared
 					// spawn the ability object
 					if (AbilityObject.TrySpawn(currentAbility, Character, this, AbilitySpawner, targetInfo))
 					{
-						if (Character.TryGet(out CharacterAttributeController attributeController))
-						{
-							// consume resources
-							currentAbility.ConsumeResources(attributeController, BloodResourceConversionTemplate, BloodResourceTemplate);
-						}
+						// consume resources
+						currentAbility.ConsumeResources(Character, BloodResourceConversionTemplate, BloodResourceTemplate);
 
 						// add ability to cooldowns
 						AddCooldown(currentAbility);
@@ -348,12 +345,16 @@ namespace FishMMO.Shared
 					 KnownAbilities.TryGetValue(activationData.QueuedAbilityID, out Ability validatedAbility) &&
 					 CanActivate(validatedAbility))
 			{
-				Debug.Log("New Ability Activation " +  activationData.QueuedAbilityID);
+				Debug.Log("New Ability Activation " + validatedAbility.ID);
 
 				interruptQueued = false;
 				currentAbility = validatedAbility;
 				remainingTime = validatedAbility.ActivationTime * CalculateSpeedReduction(validatedAbility.Template.ActivationSpeedReductionAttribute);
 				heldKey = activationData.HeldKey;
+			}
+			else if (activationData.QueuedAbilityID != NO_ABILITY)
+			{
+				Debug.Log("Activation Failed " + activationData.QueuedAbilityID);
 			}
 		}
 
@@ -424,12 +425,29 @@ namespace FishMMO.Shared
 		/// </summary>
 		private bool CanActivate(Ability ability)
 		{
-			return CanManipulate() &&
-				   KnownAbilities.TryGetValue(ability.ID, out Ability knownAbility) &&
-				   Character.TryGet(out CooldownController cooldownController) &&
-				   !cooldownController.IsOnCooldown(knownAbility.Template.Name) &&
-				   knownAbility.MeetsRequirements(Character) &&
-				   knownAbility.HasResource(Character, BloodResourceConversionTemplate, BloodResourceTemplate);
+			if (ability == null)
+			{
+				return false;
+			}
+			if (!CanManipulate())
+			{
+				return false;
+			}
+			if (!KnownAbilities.TryGetValue(ability.ID, out Ability knownAbility))
+			{
+				return false;
+			}
+			if (!Character.TryGet(out CooldownController cooldownController) ||
+				cooldownController.IsOnCooldown(knownAbility.Template.Name))
+			{
+				return false;
+			}
+			if (!knownAbility.MeetsRequirements(Character) ||
+				!knownAbility.HasResource(Character, BloodResourceConversionTemplate, BloodResourceTemplate))
+			{
+				return false;
+			}
+			return true;
 		}
 
 		internal void Cancel()
