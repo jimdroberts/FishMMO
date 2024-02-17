@@ -268,11 +268,9 @@ namespace FishMMO.Server.DatabaseServices
 			existingCharacter.Name = character.CharacterName;
 			existingCharacter.NameLowercase = character.CharacterName.ToLower();
 			existingCharacter.Account = character.Account;
-			existingCharacter.WorldServerID = character.WorldServerID;
 			existingCharacter.AccessLevel = (byte)character.AccessLevel;
 			existingCharacter.RaceID = character.RaceID.Value;
 			existingCharacter.Currency = character.Currency.Value;
-			existingCharacter.SceneHandle = character.SceneHandle;
 			existingCharacter.SceneName = character.SceneName.Value;
 			existingCharacter.X = charPosition.x;
 			existingCharacter.Y = charPosition.y;

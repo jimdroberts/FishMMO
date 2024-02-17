@@ -83,6 +83,7 @@ namespace FishMMO.Server
 				if (ServerBehaviour.TryGet(out CharacterSystem characterSystem))
 				{
 					characterSystem.OnDisconnect += RemovePending;
+					characterSystem.OnCharacterChangedScene += CharacterSystem_OnCharacterChangedScene;
 				}
 			}
 			else if (serverState == LocalConnectionState.Stopped)
@@ -193,6 +194,37 @@ namespace FishMMO.Server
 					}
 				}
 			}
+		}
+
+		public void CharacterSystem_OnCharacterChangedScene(Character character, string sceneName)
+		{
+			if (character == null ||
+				string.IsNullOrWhiteSpace(sceneName))
+			{
+				return;
+			}
+
+			if (character.SceneName.Value == sceneName)
+			{
+				return;
+			}
+
+			if (Server.NpgsqlDbContextFactory == null)
+			{
+				return;
+			}
+			
+			if (!character.TryGet(out GuildController guildController) ||
+				guildController.ID < 1)
+			{
+				// not in a guild
+				return;
+			}
+
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
+
+			CharacterGuildService.Save(dbContext, guildController.Character);
+			GuildUpdateService.Save(dbContext, guildController.ID);
 		}
 
 		public void RemovePending(NetworkConnection conn, Character character)

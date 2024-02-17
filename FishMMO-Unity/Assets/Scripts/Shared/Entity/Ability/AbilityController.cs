@@ -348,7 +348,7 @@ namespace FishMMO.Shared
 					 KnownAbilities.TryGetValue(activationData.QueuedAbilityID, out Ability validatedAbility) &&
 					 CanActivate(validatedAbility))
 			{
-				//Debug.Log("New Ability Activation " +  activationData.QueuedAbilityID);
+				Debug.Log("New Ability Activation " +  activationData.QueuedAbilityID);
 
 				interruptQueued = false;
 				currentAbility = validatedAbility;

@@ -39,6 +39,8 @@ namespace FishMMO.Server
 		/// </summary>
 		public event Action<NetworkConnection, Character> OnDisconnect;
 
+		public event Action<Character, string> OnCharacterChangedScene;
+
 		public Dictionary<long, Character> CharactersByID = new Dictionary<long, Character>();
 		public Dictionary<string, Character> CharactersByLowerCaseName = new Dictionary<string, Character>();
 		public Dictionary<long, Dictionary<long, Character>> CharactersByWorld = new Dictionary<long, Dictionary<long, Character>>();
@@ -275,6 +277,7 @@ namespace FishMMO.Server
 				damageController.Immortal = true;
 			}
 
+			OnCharacterChangedScene?.Invoke(character, teleporter.ToScene);
 			character.SceneName.SetInitialValues(teleporter.ToScene);
 			character.Motor.SetPositionAndRotationAndVelocity(teleporter.ToPosition, teleporter.ToRotation, Vector3.zero);
 		}

@@ -146,6 +146,8 @@ namespace FishMMO.Client
 			Character.OnReadPayload += Character_OnReadPayload;
 			Character.OnStartLocalClient += Character_OnStartLocalClient;
 			Character.OnStopLocalClient += Character_OnStopLocalClient;
+
+			GuildController.OnReadPayload += GuildController_OnReadPayload;
 #endif
 		}
 
@@ -198,6 +200,8 @@ namespace FishMMO.Client
 			Character.OnReadPayload -= Character_OnReadPayload;
 			Character.OnStartLocalClient -= Character_OnStartLocalClient;
 			Character.OnStopLocalClient -= Character_OnStopLocalClient;
+
+			GuildController.OnReadPayload -= GuildController_OnReadPayload;
 #endif
 
 			ClientNamingSystem.Destroy();
@@ -544,6 +548,18 @@ namespace FishMMO.Client
 
 			// Clear the UI Character
 			UIManager.UnsetCharacter();
+		}
+
+		public static void GuildController_OnReadPayload(long ID, Character character)
+		{
+			if (ID != 0)
+			{
+				// load the characters guild from disk or request it from the server
+				ClientNamingSystem.SetName(NamingSystemType.GuildName, ID, (s) =>
+				{
+					character.SetGuildName(s);
+				});
+			}
 		}
 #endif
 	}

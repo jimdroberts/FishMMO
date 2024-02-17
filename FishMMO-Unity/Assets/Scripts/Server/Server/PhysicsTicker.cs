@@ -23,6 +23,7 @@ namespace FishMMO.Server
 			if (this.timeManager != null)
 			{
 				this.timeManager.OnPrePhysicsSimulation -= TimeManager_OnPrePhysicsSimulation;
+				this.timeManager = null;
 			}
 		}
 

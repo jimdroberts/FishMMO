@@ -24,7 +24,6 @@ namespace FishMMO.Client
 
 			if (Character.TryGet(out GuildController guildController))
 			{
-				guildController.OnReadPayload += GuildController_OnReadPayload;
 				guildController.OnReceiveGuildInvite += GuildController_OnReceiveGuildInvite;
 				guildController.OnAddGuildMember += GuildController_OnAddGuildMember;
 				guildController.OnValidateGuildMembers += GuildController_OnValidateGuildMembers;
@@ -39,24 +38,11 @@ namespace FishMMO.Client
 
 			if (Character.TryGet(out GuildController guildController))
 			{
-				guildController.OnReadPayload -= GuildController_OnReadPayload;
 				guildController.OnReceiveGuildInvite -= GuildController_OnReceiveGuildInvite;
 				guildController.OnAddGuildMember -= GuildController_OnAddGuildMember;
 				guildController.OnValidateGuildMembers -= GuildController_OnValidateGuildMembers;
 				guildController.OnRemoveGuildMember -= OnGuildRemoveMember;
 				guildController.OnLeaveGuild -= OnLeaveGuild;
-			}
-		}
-
-		public void GuildController_OnReadPayload(long ID)
-		{
-			if (ID != 0)
-			{
-				// load the characters guild from disk or request it from the server
-				ClientNamingSystem.SetName(NamingSystemType.GuildName, ID, (s) =>
-				{
-					Character.SetGuildName(s);
-				});
 			}
 		}
 
