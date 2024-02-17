@@ -21,6 +21,66 @@ namespace FishMMO.Client
 			Members.Clear();
 		}
 
+		public override void OnPostSetCharacter()
+		{
+			base.OnPostSetCharacter();
+
+			if (Character.TryGet(out PartyController partyController))
+			{
+				partyController.OnPartyCreated += OnPartyCreated;
+				partyController.OnReceivePartyInvite += PartyController_OnReceivePartyInvite;
+				partyController.OnAddPartyMember += OnPartyAddMember;
+				partyController.OnValidatePartyMembers += PartyController_OnValidatePartyMembers;
+				partyController.OnRemovePartyMember += OnPartyRemoveMember;
+				partyController.OnLeaveParty += OnLeaveParty;
+			}
+		}
+
+		public override void OnPreUnsetCharacter()
+		{
+			base.OnPreUnsetCharacter();
+
+			if (Character.TryGet(out PartyController partyController))
+			{
+				partyController.OnPartyCreated -= OnPartyCreated;
+				partyController.OnReceivePartyInvite -= PartyController_OnReceivePartyInvite;
+				partyController.OnAddPartyMember -= OnPartyAddMember;
+				partyController.OnValidatePartyMembers -= PartyController_OnValidatePartyMembers;
+				partyController.OnRemovePartyMember -= OnPartyRemoveMember;
+				partyController.OnLeaveParty -= OnLeaveParty;
+			}
+		}
+
+		public void PartyController_OnReceivePartyInvite(long inviterCharacterID)
+		{
+			ClientNamingSystem.SetName(NamingSystemType.CharacterName, inviterCharacterID, (n) =>
+			{
+				if (UIManager.TryGet("UIConfirmationTooltip", out UIConfirmationTooltip uiTooltip))
+				{
+					uiTooltip.Open("You have been invited to join " + n + "'s party. Would you like to join?",
+					() =>
+					{
+						Client.Broadcast(new PartyAcceptInviteBroadcast(), Channel.Reliable);
+					},
+					() =>
+					{
+						Client.Broadcast(new PartyDeclineInviteBroadcast(), Channel.Reliable);
+					});
+				}
+			});
+		}
+
+		public void PartyController_OnValidatePartyMembers(HashSet<long> newMembers)
+		{
+			foreach (long id in new HashSet<long>(Members.Keys))
+			{
+				if (!newMembers.Contains(id))
+				{
+					OnPartyRemoveMember(id);
+				}
+			}
+		}
+
 		public void OnPartyCreated(string location)
 		{
 			if (Character != null && PartyMemberPrefab != null && PartyMemberParent != null)

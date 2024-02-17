@@ -1,10 +1,11 @@
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using FishMMO.Shared;
 
 namespace FishMMO.Client
 {
-	public class UICastBar : UIControl
+	public class UICastBar : UICharacterControl
 	{
 		public Slider slider;
 		public TMP_Text castText;
@@ -18,6 +19,28 @@ namespace FishMMO.Client
 
 		public override void OnDestroying()
 		{
+		}
+
+		public override void OnPostSetCharacter()
+		{
+			base.OnPostSetCharacter();
+
+			if (Character.TryGet(out AbilityController abilityController))
+			{
+				abilityController.OnUpdate += OnUpdate;
+				abilityController.OnCancel += OnCancel;
+			}
+		}
+
+		public override void OnPreUnsetCharacter()
+		{
+			base.OnPreUnsetCharacter();
+
+			if (Character.TryGet(out AbilityController abilityController))
+			{
+				abilityController.OnUpdate -= OnUpdate;
+				abilityController.OnCancel -= OnCancel;
+			}
 		}
 
 		private void Update()

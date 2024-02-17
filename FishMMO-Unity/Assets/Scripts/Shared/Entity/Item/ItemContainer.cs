@@ -159,26 +159,29 @@ namespace FishMMO.Shared
 				return false;
 			}
 
-			uint amount = item.IsStackable ? item.Stackable.Amount : 1;
-			for (int i = 0; i < Items.Count; ++i)
+			if (item.IsStackable)
 			{
-				// add the item to the current slot
-				if (Items[i] != null &&
-					Items[i].IsStackable &&
-					Items[i].Stackable.AddToStack(item))
+				uint amount = item.Stackable.Amount;
+				for (int i = 0; i < Items.Count; ++i)
 				{
-					// set the remaining amount to the items stack size
-					amount = item.Stackable.Amount;
+					// search for items of the same type so we can stack it
+					if (Items[i] != null &&
+						Items[i].IsStackable &&
+						Items[i].Stackable.AddToStack(item))
+					{
+						// set the remaining amount to the items stack size
+						amount = item.Stackable.Amount;
 
-					// add the modified items to the list
-					modifiedItems.Add(Items[i]);
-					modifiedItems.Add(item);
+						// add the modified items to the list
+						modifiedItems.Add(Items[i]);
+						modifiedItems.Add(item);
 
-					OnSlotUpdated?.Invoke(this, item, i);
+						OnSlotUpdated?.Invoke(this, item, i);
+					}
+
+					// we added the item to the container
+					if (amount < 1) return true;
 				}
-
-				// we added the item to the container
-				if (amount < 1) return true;
 			}
 			for (int i = 0; i < Items.Count; ++i)
 			{

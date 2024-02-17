@@ -12,14 +12,14 @@ namespace FishMMO.Shared
 		public TargetInfo Last;
 		public TargetInfo Current;
 
-#if !UNITY_SERVER
-		private float nextTick = 0.0f;
-
 		public event Action<GameObject> OnChangeTarget;
 		public event Action<GameObject> OnUpdateTarget;
 
 		public Action<Transform> OnClearTarget;
 		public Action<Transform> OnNewTarget;
+
+#if !UNITY_SERVER
+		private float nextTick = 0.0f;
 
 		public override void OnDestroying()
 		{

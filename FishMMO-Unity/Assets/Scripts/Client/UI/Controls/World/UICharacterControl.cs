@@ -22,9 +22,12 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Invoked before Character is set.
 		/// </summary>
-		public virtual void OnPreSetCharacter()
-		{
-		}
+		public virtual void OnPreSetCharacter() { }
+
+		/// <summary>
+		/// Invoked immediately after Character is set.
+		/// </summary>
+		public virtual void OnPostSetCharacter() { }
 
 		public virtual void SetCharacter(Character character)
 		{
@@ -33,13 +36,29 @@ namespace FishMMO.Client
 			Character = character;
 
 			OnSetCharacter?.Invoke(character);
+
+			OnPostSetCharacter();
 		}
+
+		/// <summary>
+		/// Invoked before Character is unset.
+		/// </summary>
+		public virtual void OnPreUnsetCharacter() { }
+
+		/// <summary>
+		/// Invoked immediately after Character is unset.
+		/// </summary>
+		public virtual void OnPostUnsetCharacter() { }
 
 		public virtual void UnsetCharacter()
 		{
+			OnPreUnsetCharacter();
+
 			OnUnsetCharacter?.Invoke();
 
 			Character = null;
+
+			OnPostUnsetCharacter();
 		}
 	}
 }

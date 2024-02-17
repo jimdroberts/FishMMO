@@ -82,9 +82,9 @@ namespace FishMMO.Shared
 		public int Modifier { get { return modifier; } }
 		public int FinalValue { get { return finalValue; } }
 		/// <summary>
-		/// Returns the value as a float. FinalValue * 0.1f;
+		/// Returns the value as a float. (float)FinalValue;
 		/// </summary>
-		public float FinalValueAsFloat { get { return finalValue * 0.1f; } }
+		public float FinalValueAsFloat { get { return (float)finalValue; } }
 		/// <summary>
 		/// Returns the value as a percentage instead. FinalValue * 0.01f
 		/// </summary>

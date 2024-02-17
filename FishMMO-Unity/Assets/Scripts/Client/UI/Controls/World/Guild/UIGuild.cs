@@ -18,6 +18,91 @@ namespace FishMMO.Client
 			OnLeaveGuild();
 		}
 
+		public override void OnPostSetCharacter()
+		{
+			base.OnPostSetCharacter();
+
+			if (Character.TryGet(out GuildController guildController))
+			{
+				guildController.OnReadPayload += GuildController_OnReadPayload;
+				guildController.OnReceiveGuildInvite += GuildController_OnReceiveGuildInvite;
+				guildController.OnAddGuildMember += GuildController_OnAddGuildMember;
+				guildController.OnValidateGuildMembers += GuildController_OnValidateGuildMembers;
+				guildController.OnRemoveGuildMember += OnGuildRemoveMember;
+				guildController.OnLeaveGuild += OnLeaveGuild;
+			}
+		}
+
+		public override void OnPreUnsetCharacter()
+		{
+			base.OnPreUnsetCharacter();
+
+			if (Character.TryGet(out GuildController guildController))
+			{
+				guildController.OnReadPayload -= GuildController_OnReadPayload;
+				guildController.OnReceiveGuildInvite -= GuildController_OnReceiveGuildInvite;
+				guildController.OnAddGuildMember -= GuildController_OnAddGuildMember;
+				guildController.OnValidateGuildMembers -= GuildController_OnValidateGuildMembers;
+				guildController.OnRemoveGuildMember -= OnGuildRemoveMember;
+				guildController.OnLeaveGuild -= OnLeaveGuild;
+			}
+		}
+
+		public void GuildController_OnReadPayload(long ID)
+		{
+			if (ID != 0)
+			{
+				// load the characters guild from disk or request it from the server
+				ClientNamingSystem.SetName(NamingSystemType.GuildName, ID, (s) =>
+				{
+					Character.SetGuildName(s);
+				});
+			}
+		}
+
+		public void GuildController_OnReceiveGuildInvite(long inviterCharacterID)
+		{
+			ClientNamingSystem.SetName(NamingSystemType.CharacterName, inviterCharacterID, (n) =>
+			{
+				if (UIManager.TryGet("UIConfirmationTooltip", out UIConfirmationTooltip uiTooltip))
+				{
+					uiTooltip.Open("You have been invited to join " + n + "'s guild. Would you like to join?",
+					() =>
+					{
+						Client.Broadcast(new GuildAcceptInviteBroadcast(), Channel.Reliable);
+					},
+					() =>
+					{
+						Client.Broadcast(new GuildDeclineInviteBroadcast(), Channel.Reliable);
+					});
+				}
+			});
+		}
+
+		public void GuildController_OnAddGuildMember(long characterID, long guildID, GuildRank rank, string location)
+		{
+			OnGuildAddMember(characterID, rank, location);
+
+			ClientNamingSystem.SetName(NamingSystemType.GuildName, guildID, (s) =>
+			{
+				if (GuildLabel != null)
+				{
+					GuildLabel.text = s;
+				}
+			});
+		}
+
+		public void GuildController_OnValidateGuildMembers(HashSet<long> newMembers)
+		{
+			foreach (long id in new HashSet<long>(Members.Keys))
+			{
+				if (!newMembers.Contains(id))
+				{
+					OnGuildRemoveMember(id);
+				}
+			}
+		}
+
 		public void OnLeaveGuild()
 		{
 			if (GuildLabel != null)

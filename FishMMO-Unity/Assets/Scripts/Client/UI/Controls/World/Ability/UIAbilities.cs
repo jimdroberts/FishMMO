@@ -31,6 +31,30 @@ namespace FishMMO.Client
 			ClearAllSlots();
 		}
 
+		public override void OnPostSetCharacter()
+		{
+			base.OnPostSetCharacter();
+
+			if (Character.TryGet(out AbilityController abilityController))
+			{
+				abilityController.OnCanManipulate += () => { return !InputManager.MouseMode; };
+				abilityController.OnReset += ClearAllSlots;
+				abilityController.OnAddAbility += AddAbility;
+				abilityController.OnAddKnownAbility += AddKnownAbility;
+			}
+		}
+
+		public override void OnPreUnsetCharacter()
+		{
+			if (Character.TryGet(out AbilityController abilityController))
+			{
+				abilityController.OnCanManipulate -= () => { return !InputManager.MouseMode; };
+				abilityController.OnReset -= ClearAllSlots;
+				abilityController.OnAddAbility -= AddAbility;
+				abilityController.OnAddKnownAbility -= AddKnownAbility;
+			}
+		}
+
 		public override void OnQuitToLogin()
 		{
 			ClearAllSlots();

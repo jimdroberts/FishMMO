@@ -41,6 +41,7 @@ namespace FishMMO.Shared
 			if (base.TimeManager != null)
 			{
 				base.TimeManager.OnTick += TimeManager_OnTick;
+				base.TimeManager.OnPostTick += TimeManager_OnPostTick;
 			}
 		}
 
@@ -51,6 +52,7 @@ namespace FishMMO.Shared
 			if (base.TimeManager != null)
 			{
 				base.TimeManager.OnTick -= TimeManager_OnTick;
+				base.TimeManager.OnPostTick -= TimeManager_OnPostTick;
 			}
 		}
 
@@ -80,6 +82,10 @@ namespace FishMMO.Shared
 		{
 			KCCInputReplicateData kCCInputReplicateData = OnHandleCharacterInput == null ? default : OnHandleCharacterInput();
 			Replicate(kCCInputReplicateData);
+		}
+
+		private void TimeManager_OnPostTick()
+		{
 			if (base.IsServerStarted)
 			{
 				Reconcile(CharacterController.GetState());

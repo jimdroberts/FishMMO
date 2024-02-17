@@ -54,6 +54,11 @@ namespace FishMMO.Client
 			}
 
 #if !UNITY_EDITOR
+			if (idToName.Count < 1)
+			{
+				return;
+			}
+
 			string workingDirectory = Client.GetWorkingDirectory();
 			foreach (KeyValuePair<NamingSystemType, Dictionary<long, string>> pair in idToName)
 			{

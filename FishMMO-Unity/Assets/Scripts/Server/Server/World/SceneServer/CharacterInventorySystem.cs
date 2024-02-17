@@ -305,6 +305,7 @@ namespace FishMMO.Server
 
 						// set the equipment slot in the database
 						CharacterEquipmentService.SetSlot(dbContext, character.ID, inventoryItem);
+						CharacterAttributeService.Save(dbContext, character);
 
 						dbTransaction.Commit();
 
@@ -335,6 +336,7 @@ namespace FishMMO.Server
 
 						// set the equipment slot in the database
 						CharacterEquipmentService.SetSlot(dbContext, character.ID, bankItem);
+						CharacterAttributeService.Save(dbContext, character);
 
 						dbTransaction.Commit();
 
@@ -410,6 +412,7 @@ namespace FishMMO.Server
 
 						// delete the item from the equipment table
 						CharacterEquipmentService.Delete(dbContext, character.ID, oldSlot);
+						CharacterAttributeService.Save(dbContext, character);
 
 						dbTransaction.Commit();
 
@@ -451,6 +454,7 @@ namespace FishMMO.Server
 
 						// delete the item from the equipment table
 						CharacterEquipmentService.Delete(dbContext, character.ID, oldSlot);
+						CharacterAttributeService.Save(dbContext, character);
 
 						dbTransaction.Commit();
 

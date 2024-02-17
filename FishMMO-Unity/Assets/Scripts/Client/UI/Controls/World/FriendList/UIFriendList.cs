@@ -5,7 +5,7 @@ using FishMMO.Shared;
 
 namespace FishMMO.Client
 {
-	public class UIFriendList : UIControl
+	public class UIFriendList : UICharacterControl
 	{
 		public RectTransform FriendParent;
 		public UIFriend FriendPrefab;
@@ -24,6 +24,28 @@ namespace FishMMO.Client
 				Destroy(friend.gameObject);
 			}
 			Friends.Clear();
+		}
+
+		public override void OnPostSetCharacter()
+		{
+			base.OnPostSetCharacter();
+
+			if (Character.TryGet(out FriendController friendController))
+			{
+				friendController.OnAddFriend += OnAddFriend;
+				friendController.OnRemoveFriend += OnRemoveFriend;
+			}
+		}
+
+		public override void OnPreUnsetCharacter()
+		{
+			base.OnPreUnsetCharacter();
+
+			if (Character.TryGet(out FriendController friendController))
+			{
+				friendController.OnAddFriend -= OnAddFriend;
+				friendController.OnRemoveFriend -= OnRemoveFriend;
+			}
 		}
 
 		public void OnAddFriend(long friendID, bool online)

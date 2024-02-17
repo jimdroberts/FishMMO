@@ -39,7 +39,7 @@ namespace FishMMO.Client
 				Character.TryGet(out CharacterAttributeController attributeController) && 
 				attributeController.TryGetResourceAttribute(Template, out CharacterResourceAttribute resource))
 			{
-				float value = resource.CurrentValue / resource.FinalValue;
+				float value = (float)resource.CurrentValue / resource.FinalValueAsFloat;
 				if (slider != null) slider.value = value;
 				if (resourceValue != null) resourceValue.text = resource.CurrentValue + "/" + resource.FinalValue;
 			}
