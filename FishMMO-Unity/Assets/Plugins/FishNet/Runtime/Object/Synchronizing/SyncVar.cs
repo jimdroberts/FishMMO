@@ -167,7 +167,7 @@ namespace FishNet.Object.Synchronizing
             //If being set by user code.
             if (calledByUser)
             {
-				if (!base.CanNetworkSetValues(true))
+                if (!base.CanNetworkSetValues(true))
                     return;
 
                 /* We will only be this far if the network is not active yet,
@@ -201,11 +201,11 @@ namespace FishNet.Object.Synchronizing
             //Not called by user.
             else
             {
-				/* Previously clients were not allowed to set values
+                /* Previously clients were not allowed to set values
                  * but this has been changed because clients may want
                  * to update values locally while occasionally
                  * letting the syncvar adjust their side. */
-				T prev = _previousClientValue;
+                T prev = _previousClientValue;
                 if (Comparers.EqualityCompare<T>(prev, nextValue))
                     return;
 

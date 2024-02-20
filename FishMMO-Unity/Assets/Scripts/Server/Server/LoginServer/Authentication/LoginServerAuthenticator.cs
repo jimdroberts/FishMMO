@@ -40,7 +40,7 @@ namespace FishMMO.Server
 			/* If client is already authenticated this could be an attack. Connections
 			 * are removed when a client disconnects so there is no reason they should
 			 * already be considered authenticated. */
-			if (conn.Authenticated)
+			if (conn.IsAuthenticated)
 			{
 				conn.Disconnect(true);
 				return;
@@ -105,7 +105,7 @@ namespace FishMMO.Server
 			/* If client is already authenticated this could be an attack. Connections
 			 * are removed when a client disconnects so there is no reason they should
 			 * already be considered authenticated. */
-			if (conn.Authenticated ||
+			if (conn.IsAuthenticated ||
 				!AccountManager.TryUpdateSrpState(conn, SrpState.SrpVerify, SrpState.SrpProof, (a) =>
 				{
 					if (a.SrpData.GetProof(msg.proof, out string serverProof))
@@ -139,7 +139,7 @@ namespace FishMMO.Server
 			/* If client is already authenticated this could be an attack. Connections
 			 * are removed when a client disconnects so there is no reason they should
 			 * already be considered authenticated. */
-			if (conn.Authenticated ||
+			if (conn.IsAuthenticated ||
 				!AccountManager.TryUpdateSrpState(conn, SrpState.SrpProof, SrpState.SrpSuccess, (a) =>
 				{
 					using var dbContext = NpgsqlDbContextFactory.CreateDbContext();

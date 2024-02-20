@@ -275,7 +275,7 @@ namespace FishMMO.Client
 
 			if (requireAuthentication &&
 				(!NetworkManager.ClientManager.Connection.IsValid ||
-				!NetworkManager.ClientManager.Connection.Authenticated))
+				!NetworkManager.ClientManager.Connection.IsAuthenticated))
 			{
 				return false;
 			}

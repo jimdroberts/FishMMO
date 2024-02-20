@@ -92,18 +92,6 @@ namespace FishMMO.Shared
 				ClientManager.RegisterBroadcast<KnownAbilityAddMultipleBroadcast>(OnClientKnownAbilityAddMultipleBroadcastReceived);
 				ClientManager.RegisterBroadcast<AbilityAddBroadcast>(OnClientAbilityAddBroadcastReceived);
 				ClientManager.RegisterBroadcast<AbilityAddMultipleBroadcast>(OnClientAbilityAddMultipleBroadcastReceived);
-
-				// invoke client reset event
-				if (Character.IsOwner)
-				{
-					OnReset?.Invoke();
-
-					foreach (Ability ability in KnownAbilities.Values)
-					{
-						// update our client with abilities
-						OnAddAbility?.Invoke(ability.ID, ability);
-					}
-				}
 			}
 		}
 
@@ -210,8 +198,18 @@ namespace FishMMO.Shared
 				Ability ability = new Ability(abilityID, abilityTemplateID, abilityEvents);
 
 				LearnAbility(ability);
+			}
 
-				Debug.Log($"Learned Ability {ability.ID}");
+			// invoke client reset event
+			if (base.Owner.IsLocalClient)
+			{
+				OnReset?.Invoke();
+
+				foreach (Ability ability in KnownAbilities.Values)
+				{
+					// update our client with abilities
+					OnAddAbility?.Invoke(ability.ID, ability);
+				}
 			}
 		}
 
