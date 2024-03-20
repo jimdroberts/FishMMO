@@ -624,6 +624,7 @@ MonoBehaviour:
   _addedNetworkObject: {fileID: 700411446}
   _networkObjectCache: {fileID: 700411446}
   InteractionRange: 3.5
+  GizmoColor: {r: 0, g: 1, b: 0, a: 1}
   Target: {fileID: 1770604219}
 --- !u!4 &520637841
 Transform:
@@ -913,6 +914,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4a8272e41da552f4dbf9e4f8fd0dc769, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  GizmoColor: {r: 1, g: 0, b: 1, a: 1}
 --- !u!1 &658343617
 GameObject:
   m_ObjectHideFlags: 0

@@ -95,7 +95,7 @@ namespace FishMMO.Shared
 		[Replicate]
 		private void Replicate(KCCInputReplicateData input, ReplicateState state = ReplicateState.Invalid, Channel channel = Channel.Unreliable)
 		{
-			if (state == ReplicateState.Future)
+			if (state == ReplicateState.CurrentFuture)
 				return;
 
 			CharacterController.SetInputs(ref input);

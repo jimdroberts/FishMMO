@@ -34,12 +34,13 @@ namespace FishMMO.Shared
 				RemainingActiveTime -= Time.deltaTime;
 			}
 
-			if (Ability != null)
+			if (Ability != null &&
+				Ability.MoveEvents != null)
 			{
 				foreach (MoveEvent moveEvent in Ability.MoveEvents.Values)
 				{
 					// invoke
-					moveEvent.Invoke(Ability, Transform, Time.deltaTime);
+					moveEvent?.Invoke(Ability, Transform, Time.deltaTime);
 				}
 			}
 		}

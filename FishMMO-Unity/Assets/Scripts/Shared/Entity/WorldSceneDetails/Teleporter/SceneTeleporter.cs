@@ -4,6 +4,19 @@ namespace FishMMO.Shared
 {
 	public class SceneTeleporter : MonoBehaviour
 	{
+#if UNITY_EDITOR
+		public Color GizmoColor = Color.magenta;
+
+		void OnDrawGizmos()
+		{
+			Collider collider = gameObject.GetComponent<Collider>();
+			if (collider != null)
+			{
+				collider.DrawGizmo(GizmoColor);
+			}
+		}
+#endif
+
 #if UNITY_SERVER
 		void OnTriggerEnter(Collider other)
 		{

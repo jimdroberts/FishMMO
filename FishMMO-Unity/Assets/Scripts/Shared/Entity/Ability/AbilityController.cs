@@ -13,7 +13,7 @@ namespace FishMMO.Shared
 	{
 		public const long NO_ABILITY = 0;
 
-		private Ability currentAbility;
+		private long currentAbilityID;
 		private bool interruptQueued;
 		private long queuedAbilityID;
 		private float remainingTime;
@@ -46,7 +46,7 @@ namespace FishMMO.Shared
 		public HashSet<int> KnownSpawnEvents { get; private set; }
 		public HashSet<int> KnownHitEvents { get; private set; }
 		public HashSet<int> KnownMoveEvents { get; private set; }
-		public bool IsActivating { get { return currentAbility != null; } }
+		public bool IsActivating { get { return currentAbilityID != NO_ABILITY; } }
 		public bool AbilityQueued { get { return queuedAbilityID != NO_ABILITY; } }
 
 		public override void OnAwake()
@@ -235,7 +235,7 @@ namespace FishMMO.Shared
 			if (base.IsServerStarted)
 			{
 				AbilityReconcileData state = new AbilityReconcileData(interruptQueued,
-																	  currentAbility == null ? NO_ABILITY : currentAbility.ID,
+																	  currentAbilityID,
 																	  remainingTime);
 				Reconcile(state);
 			}
@@ -251,9 +251,10 @@ namespace FishMMO.Shared
 			AbilityActivationReplicateData activationEventData = new AbilityActivationReplicateData(interruptQueued,
 																									queuedAbilityID,
 																									heldKey);
-			// clear the queued ability
+			// clear the locally queued data
 			interruptQueued = false;
 			queuedAbilityID = NO_ABILITY;
+			heldKey = KeyCode.None;
 
 			return activationEventData;
 		}
@@ -266,7 +267,8 @@ namespace FishMMO.Shared
 				OnInterrupt?.Invoke();
 				Cancel();
 			}
-			else if (IsActivating)
+			else if (IsActivating &&
+					 KnownAbilities.TryGetValue(currentAbilityID, out Ability currentAbility))
 			{
 				Debug.Log("Activating " + currentAbility.ID);
 				remainingTime -= (float)base.TimeManager.TickDelta;
@@ -294,8 +296,8 @@ namespace FishMMO.Shared
 						{
 							// get target info
 							TargetInfo targetInfo = t.UpdateTarget(Character.CharacterController.VirtualCameraPosition,
-																				  Character.CharacterController.VirtualCameraRotation * Vector3.forward,
-																				  currentAbility.Range);
+																   Character.CharacterController.VirtualCameraRotation * Vector3.forward,
+																   currentAbility.Range);
 
 							// spawn the ability object
 							if (AbilityObject.TrySpawn(currentAbility, Character, this, AbilitySpawner, targetInfo))
@@ -308,7 +310,7 @@ namespace FishMMO.Shared
 					return;
 				}
 
-				// this will allow for charged abilities to remain held for aiming purposes
+				// this will allow for charged abilities to remain held
 				if (ChargedTemplate != null &&
 					currentAbility.HasAbilityEvent(ChargedTemplate.ID) &&
 					heldKey != KeyCode.None &&
@@ -323,8 +325,8 @@ namespace FishMMO.Shared
 				{
 					// get target info
 					TargetInfo targetInfo = tc.UpdateTarget(Character.CharacterController.VirtualCameraPosition,
-																					Character.CharacterController.VirtualCameraRotation * Vector3.forward,
-																					currentAbility.Range);
+															Character.CharacterController.VirtualCameraRotation * Vector3.forward,
+															currentAbility.Range);
 
 					// spawn the ability object
 					if (AbilityObject.TrySpawn(currentAbility, Character, this, AbilitySpawner, targetInfo))
@@ -346,13 +348,9 @@ namespace FishMMO.Shared
 				Debug.Log("New Ability Activation " + validatedAbility.ID);
 
 				interruptQueued = false;
-				currentAbility = validatedAbility;
+				currentAbilityID = activationData.QueuedAbilityID;
 				remainingTime = validatedAbility.ActivationTime * CalculateSpeedReduction(validatedAbility.Template.ActivationSpeedReductionAttribute);
 				heldKey = activationData.HeldKey;
-			}
-			else if (activationData.QueuedAbilityID != NO_ABILITY)
-			{
-				Debug.Log("Activation Failed " + activationData.QueuedAbilityID);
 			}
 		}
 
@@ -363,7 +361,7 @@ namespace FishMMO.Shared
 				rd.AbilityID == NO_ABILITY ||
 				!KnownAbilities.TryGetValue(rd.AbilityID, out Ability ability))
 			{
-				if (currentAbility != null)
+				if (currentAbilityID != NO_ABILITY)
 				{
 					OnInterrupt?.Invoke();
 					Cancel();
@@ -371,7 +369,7 @@ namespace FishMMO.Shared
 			}
 			else
 			{
-				currentAbility = ability;
+				currentAbilityID = rd.AbilityID;
 				remainingTime = rd.RemainingTime;
 			}
 		}
@@ -454,7 +452,7 @@ namespace FishMMO.Shared
 
 			interruptQueued = false;
 			queuedAbilityID = NO_ABILITY;
-			currentAbility = null;
+			currentAbilityID = NO_ABILITY;
 			remainingTime = 0.0f;
 			heldKey = KeyCode.None;
 

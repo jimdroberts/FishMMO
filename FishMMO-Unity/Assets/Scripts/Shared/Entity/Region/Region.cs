@@ -38,26 +38,14 @@ namespace FishMMO.Shared
 		}
 
 #if UNITY_EDITOR
-		public Color RegionColor = Color.red;
+		public Color GizmoColor = Color.cyan;
 
-		void OnDrawGizmosSelected()
+		void OnDrawGizmos()
 		{
-			Gizmos.color = RegionColor;
-
-			BoxCollider box = Collider as BoxCollider;
-			if (box != null)
+			Collider collider = gameObject.GetComponent<Collider>();
+			if (collider != null)
 			{
-				Gizmos.DrawWireCube(transform.position, box.size);
-				return;
-			}
-			else
-			{
-				SphereCollider sphere = Collider as SphereCollider;
-				if (sphere != null)
-				{
-					Gizmos.DrawWireSphere(transform.position, sphere.radius);
-					return;
-				}
+				collider.DrawGizmo(GizmoColor);
 			}
 		}
 #endif

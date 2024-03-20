@@ -74,5 +74,18 @@ namespace FishMMO.Shared
 			}
 			return false;
 		}
+
+#if UNITY_EDITOR
+		public Color GizmoColor = Color.green;
+
+		void OnDrawGizmos()
+		{
+			Collider collider = gameObject.GetComponent<Collider>();
+			if (collider != null)
+			{
+				collider.DrawGizmo(GizmoColor);
+			}
+		}
+#endif
 	}
 }

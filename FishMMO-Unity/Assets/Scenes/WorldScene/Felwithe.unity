@@ -606,6 +606,7 @@ MonoBehaviour:
   _addedNetworkObject: {fileID: 431527815}
   _networkObjectCache: {fileID: 431527815}
   InteractionRange: 3.5
+  GizmoColor: {r: 0, g: 1, b: 0, a: 1}
   Template: {fileID: 11400000, guid: 335c46c3e1940fa41a866740a873f64a, type: 2}
 --- !u!114 &431527817
 MonoBehaviour:
@@ -2193,6 +2194,7 @@ MonoBehaviour:
   _addedNetworkObject: {fileID: 1642316608}
   _networkObjectCache: {fileID: 1642316608}
   InteractionRange: 3.5
+  GizmoColor: {r: 0, g: 1, b: 0, a: 1}
 --- !u!114 &1642316610
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2405,6 +2407,7 @@ MonoBehaviour:
   _addedNetworkObject: {fileID: 1673595143}
   _networkObjectCache: {fileID: 1673595143}
   InteractionRange: 3.5
+  GizmoColor: {r: 0, g: 1, b: 0, a: 1}
 --- !u!114 &1673595145
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2959,6 +2962,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4a8272e41da552f4dbf9e4f8fd0dc769, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  GizmoColor: {r: 1, g: 0, b: 1, a: 1}
 --- !u!65 &2076367150
 BoxCollider:
   m_ObjectHideFlags: 0
