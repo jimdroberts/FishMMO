@@ -12,9 +12,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 338615fedeaa1344faabba5c756f75ab, type: 3}
   m_Name: WorldSceneDetails
   m_EditorClassIdentifier: 
-  InitialSpawnTag: InitialSpawnPosition
-  RespawnTag: RespawnPosition
-  TeleporterDestinationTag: TeleporterDestination
   Scenes:
     m_keys:
     - Crushbone

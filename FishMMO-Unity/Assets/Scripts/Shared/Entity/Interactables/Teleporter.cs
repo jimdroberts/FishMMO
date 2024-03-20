@@ -30,5 +30,19 @@ namespace FishMMO.Shared
 #endif
 			return true;
 		}
+
+#if UNITY_EDITOR
+		void OnDrawGizmos()
+		{
+			if (Target == null)
+			{
+				return;
+			}
+
+			Gizmos.color = GizmoColor;
+			Gizmos.DrawWireCube(Target.position, Vector3.one);
+			Gizmos.DrawLine(transform.position, Target.position);
+		}
+#endif
 	}
 }

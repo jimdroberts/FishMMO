@@ -250,9 +250,10 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 187680799}
+  - component: {fileID: 187680800}
   m_Layer: 0
   m_Name: FromCrushbone
-  m_TagString: TeleporterDestination
+  m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -272,6 +273,19 @@ Transform:
   m_Children: []
   m_Father: {fileID: 700411445}
   m_LocalEulerAnglesHint: {x: 0, y: 90, z: 0}
+--- !u!114 &187680800
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 187680798}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b8358a751347f9d44b83c3e9e38178bf, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  GizmoColor: {r: 0.13333334, g: 0.54509807, b: 0.13333334, a: 1}
 --- !u!1 &336808840
 GameObject:
   m_ObjectHideFlags: 0
@@ -377,6 +391,60 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 336808840}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!1 &352688521
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 352688523}
+  - component: {fileID: 352688522}
+  m_Layer: 0
+  m_Name: Orc 2
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &352688522
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 352688521}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 485e54a93f2772940b21fae791b0aa23, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  Transform: {fileID: 0}
+  RandomRespawnTime: 1
+  MinimumRespawnTime: 0
+  MaximumRespawnTime: 0
+  RandomSpawnPosition: 1
+  CheckTerrain: 1
+  BoundingBoxSize: {x: 1, y: 1, z: 1}
+  BoundingBoxExtents: {x: 1, y: 1, z: 1}
+  RandomSpawnable: 1
+  GizmoColor: {r: 1, g: 0, b: 0, a: 1}
+--- !u!4 &352688523
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 352688521}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: -101.91, y: 17.7, z: 26.68}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &412017732
 GameObject:
   m_ObjectHideFlags: 0
@@ -857,7 +925,7 @@ GameObject:
   - component: {fileID: 598504143}
   m_Layer: 0
   m_Name: CrushboneEntrance
-  m_TagString: Teleporter
+  m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -1925,6 +1993,60 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1107003353}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!1 &1149952037
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1149952039}
+  - component: {fileID: 1149952038}
+  m_Layer: 0
+  m_Name: Orc 3
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1149952038
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1149952037}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 485e54a93f2772940b21fae791b0aa23, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  Transform: {fileID: 0}
+  RandomRespawnTime: 1
+  MinimumRespawnTime: 0
+  MaximumRespawnTime: 0
+  RandomSpawnPosition: 1
+  CheckTerrain: 1
+  BoundingBoxSize: {x: 1, y: 1, z: 1}
+  BoundingBoxExtents: {x: 1, y: 1, z: 1}
+  RandomSpawnable: 1
+  GizmoColor: {r: 1, g: 0, b: 0, a: 1}
+--- !u!4 &1149952039
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1149952037}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: -93.273, y: 17.7, z: 22.58}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1162279319
 GameObject:
   m_ObjectHideFlags: 0
@@ -1934,9 +2056,10 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1162279320}
+  - component: {fileID: 1162279321}
   m_Layer: 0
   m_Name: Respawn 1
-  m_TagString: RespawnPosition
+  m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -1956,6 +2079,19 @@ Transform:
   m_Children: []
   m_Father: {fileID: 988490051}
   m_LocalEulerAnglesHint: {x: 0, y: 90, z: 0}
+--- !u!114 &1162279321
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1162279319}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9ddc406bb19dbdc4da71ea63d3fe53e8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  GizmoColor: {r: 0.8666667, g: 0.627451, b: 0.8666667, a: 1}
 --- !u!1 &1163096556
 GameObject:
   m_ObjectHideFlags: 0
@@ -2665,6 +2801,60 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1583805991
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1583805993}
+  - component: {fileID: 1583805992}
+  m_Layer: 0
+  m_Name: Orc 1
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1583805992
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1583805991}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 485e54a93f2772940b21fae791b0aa23, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  Transform: {fileID: 0}
+  RandomRespawnTime: 1
+  MinimumRespawnTime: 0
+  MaximumRespawnTime: 0
+  RandomSpawnPosition: 1
+  CheckTerrain: 1
+  BoundingBoxSize: {x: 1, y: 1, z: 1}
+  BoundingBoxExtents: {x: 1, y: 1, z: 1}
+  RandomSpawnable: 1
+  GizmoColor: {r: 1, g: 0, b: 0, a: 1}
+--- !u!4 &1583805993
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1583805991}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: -102.08, y: 17.7, z: 18.54}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1699450705
 GameObject:
   m_ObjectHideFlags: 0
@@ -3338,3 +3528,6 @@ SceneRoots:
   - {fileID: 50859204}
   - {fileID: 700411445}
   - {fileID: 1327666855}
+  - {fileID: 1583805993}
+  - {fileID: 352688523}
+  - {fileID: 1149952039}

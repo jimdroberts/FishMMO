@@ -1246,9 +1246,10 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 997468134}
+  - component: {fileID: 997468135}
   m_Layer: 0
   m_Name: FromGreaterFaydarkTeleporterA
-  m_TagString: TeleporterDestination
+  m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -1268,6 +1269,19 @@ Transform:
   m_Children: []
   m_Father: {fileID: 1464471139}
   m_LocalEulerAnglesHint: {x: 0, y: 180, z: 0}
+--- !u!114 &997468135
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 997468133}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b8358a751347f9d44b83c3e9e38178bf, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  GizmoColor: {r: 0.13333334, g: 0.54509807, b: 0.13333334, a: 1}
 --- !u!1 &1011847572
 GameObject:
   m_ObjectHideFlags: 0
@@ -1713,9 +1727,10 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1229314980}
+  - component: {fileID: 1229314981}
   m_Layer: 0
   m_Name: FromGreaterFaydarkEast
-  m_TagString: TeleporterDestination
+  m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -1735,6 +1750,19 @@ Transform:
   m_Children: []
   m_Father: {fileID: 1464471139}
   m_LocalEulerAnglesHint: {x: 0, y: 180, z: 0}
+--- !u!114 &1229314981
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1229314979}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b8358a751347f9d44b83c3e9e38178bf, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  GizmoColor: {r: 0.13333334, g: 0.54509807, b: 0.13333334, a: 1}
 --- !u!1 &1242019264
 GameObject:
   m_ObjectHideFlags: 0
@@ -2637,9 +2665,10 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1766246175}
+  - component: {fileID: 1766246176}
   m_Layer: 0
   m_Name: West Felwithe
-  m_TagString: InitialSpawnPosition
+  m_TagString: Untagged
   m_Icon: {fileID: 5132851093641282708, guid: 0000000000000000d000000000000000, type: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -2659,6 +2688,19 @@ Transform:
   m_Children: []
   m_Father: {fileID: 988490051}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1766246176
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1766246174}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 16c6443dd3a41af4abb3353c6de699e9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  GizmoColor: {r: 1, g: 0.64705884, b: 0, a: 1}
 --- !u!1 &1800908300
 GameObject:
   m_ObjectHideFlags: 0
@@ -2891,9 +2933,10 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1965726576}
+  - component: {fileID: 1965726577}
   m_Layer: 0
   m_Name: East Felwithe
-  m_TagString: InitialSpawnPosition
+  m_TagString: Untagged
   m_Icon: {fileID: 5132851093641282708, guid: 0000000000000000d000000000000000, type: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -2913,6 +2956,19 @@ Transform:
   m_Children: []
   m_Father: {fileID: 988490051}
   m_LocalEulerAnglesHint: {x: 0, y: 90, z: 0}
+--- !u!114 &1965726577
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1965726575}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 16c6443dd3a41af4abb3353c6de699e9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  GizmoColor: {r: 1, g: 0.64705884, b: 0, a: 1}
 --- !u!1 &2076367145
 GameObject:
   m_ObjectHideFlags: 0
@@ -2926,7 +2982,7 @@ GameObject:
   - component: {fileID: 2076367150}
   m_Layer: 0
   m_Name: FelwitheNorth
-  m_TagString: Teleporter
+  m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -2993,9 +3049,10 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 2101700572}
+  - component: {fileID: 2101700573}
   m_Layer: 0
   m_Name: Respawn 1
-  m_TagString: RespawnPosition
+  m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -3015,6 +3072,19 @@ Transform:
   m_Children: []
   m_Father: {fileID: 988490051}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2101700573
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2101700571}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9ddc406bb19dbdc4da71ea63d3fe53e8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  GizmoColor: {r: 0.8666667, g: 0.627451, b: 0.8666667, a: 1}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

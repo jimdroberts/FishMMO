@@ -101,7 +101,7 @@ namespace FishMMO.Server
 				{
 					int raceIndex = -1;
 					// validate spawner
-					if (details.InitialSpawnPositions.TryGetValue(msg.initialSpawnPosition.SpawnerName, out CharacterInitialSpawnPosition initialSpawnPosition))
+					if (details.InitialSpawnPositions.TryGetValue(msg.initialSpawnPosition.SpawnerName, out CharacterInitialSpawnPositionDetails initialSpawnPosition))
 					{
 						if (msg.raceIndex > -1 &&
 							msg.raceIndex < Server.NetworkManager.SpawnablePrefabs.GetObjectCount())

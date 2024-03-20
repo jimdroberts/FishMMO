@@ -96,7 +96,7 @@ namespace FishMMO.Server
 								// TODO: Try to prevent combat escape, maybe this needs to be handled on the game design level?
 								if (!details.Boundaries.PointContainedInBoundaries(character.Transform.position))
 								{
-									RespawnPosition spawnPoint = GetRandomRespawnPoint(details.RespawnPositions);
+									CharacterRespawnPositionDetails spawnPoint = GetRandomRespawnPoint(details.RespawnPositions);
 
 									if (spawnPoint == null ||
 										character == null ||
@@ -666,9 +666,9 @@ namespace FishMMO.Server
 			return false;
 		}
 
-		private RespawnPosition GetRandomRespawnPoint(RespawnPositionDictionary respawnPoints)
+		private CharacterRespawnPositionDetails GetRandomRespawnPoint(CharacterRespawnPositionDictionary respawnPoints)
 		{
-			RespawnPosition[] spawnPoints = respawnPoints.Values.ToArray();
+			CharacterRespawnPositionDetails[] spawnPoints = respawnPoints.Values.ToArray();
 
 			if (spawnPoints.Length == 0) throw new IndexOutOfRangeException("Failed to get a respawn point! Please ensure you have rebuilt your world scene cache and have respawn points in your scene!");
 

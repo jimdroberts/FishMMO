@@ -57,7 +57,7 @@ namespace FishMMO.Client
 
 				foreach (WorldSceneDetails details in worldSceneDetailsCache.Scenes.Values)
 				{
-					foreach (CharacterInitialSpawnPosition initialSpawnLocation in details.InitialSpawnPositions.Values)
+					foreach (CharacterInitialSpawnPositionDetails initialSpawnLocation in details.InitialSpawnPositions.Values)
 					{
 						initialSpawnLocationNames.Add(initialSpawnLocation.SpawnerName);
 					}
@@ -125,7 +125,7 @@ namespace FishMMO.Client
 			{
 				foreach (WorldSceneDetails details in worldSceneDetailsCache.Scenes.Values)
 				{
-					if (details.InitialSpawnPositions.TryGetValue(initialSpawnLocationNames[selectedSpawnPosition], out CharacterInitialSpawnPosition spawnPosition))
+					if (details.InitialSpawnPositions.TryGetValue(initialSpawnLocationNames[selectedSpawnPosition], out CharacterInitialSpawnPositionDetails spawnPosition))
 					{
 						// create character
 						Client.Broadcast(new CharacterCreateBroadcast()

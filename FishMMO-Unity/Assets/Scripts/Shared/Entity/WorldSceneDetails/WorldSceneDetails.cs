@@ -9,7 +9,7 @@ namespace FishMMO.Shared
 		public int MaxClients;
 		public Sprite SceneTransitionImage;
 		public CharacterInitialSpawnPositionDictionary InitialSpawnPositions = new CharacterInitialSpawnPositionDictionary();
-		public RespawnPositionDictionary RespawnPositions = new RespawnPositionDictionary();
+		public CharacterRespawnPositionDictionary RespawnPositions = new CharacterRespawnPositionDictionary();
 		public SceneTeleporterDictionary Teleporters = new SceneTeleporterDictionary();
 		public SceneBoundaryDictionary Boundaries = new SceneBoundaryDictionary();
 	}

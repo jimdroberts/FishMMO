@@ -15,13 +15,6 @@ namespace FishMMO.Shared
 		public const string CACHE_FILE_NAME = "WorldSceneDetails.asset";
 		public const string CACHE_FULL_PATH = CACHE_PATH + CACHE_FILE_NAME;
 
-		[Tooltip("Apply this tag to any object in your starting scenes to turn them into initial spawn locations.")]
-		public string InitialSpawnTag = "InitialSpawnPosition";
-		[Tooltip("Apply this tag to any object in your scene you would like to behave as a respawn location.")]
-		public string RespawnTag = "RespawnPosition";
-		[Tooltip("Apply this tag to any object in your scene that you would like to act as a teleporter destination.")]
-		public string TeleporterDestinationTag = "TeleporterDestination";
-
 		public WorldSceneDetailsDictionary Scenes = new WorldSceneDetailsDictionary();
 
 		public bool Rebuild()
@@ -107,12 +100,12 @@ namespace FishMMO.Shared
 					}
 
 					// search for initialSpawnPositions
-					GameObject[] initialSpawns = GameObject.FindGameObjectsWithTag(InitialSpawnTag);
-					foreach (GameObject obj in initialSpawns)
+					CharacterSpawnPosition[] characterSpawnPositions = GameObject.FindObjectsOfType<CharacterSpawnPosition>();
+					foreach (CharacterSpawnPosition obj in characterSpawnPositions)
 					{
 						Debug.Log("WorldSceneDetails: Found new Initial Spawn Position[" + obj.name + " Pos:" + obj.transform.position + " Rot:" + obj.transform.rotation + "]");
 
-						sceneDetails.InitialSpawnPositions.Add(obj.name, new CharacterInitialSpawnPosition()
+						sceneDetails.InitialSpawnPositions.Add(obj.name, new CharacterInitialSpawnPositionDetails()
 						{
 							SpawnerName = obj.name,
 							SceneName = currentScene.name,
@@ -122,12 +115,12 @@ namespace FishMMO.Shared
 					}
 
 					// search for respawnPositions
-					GameObject[] respawnPositions = GameObject.FindGameObjectsWithTag(RespawnTag);
-					foreach (GameObject obj in respawnPositions)
+					RespawnPosition[] respawnPositions = GameObject.FindObjectsOfType<RespawnPosition>();
+					foreach (RespawnPosition obj in respawnPositions)
 					{
 						Debug.Log("WorldSceneDetails: Found new Respawn Position[" + obj.name + " " + obj.transform + "]");
 
-						sceneDetails.RespawnPositions.Add(obj.name, new RespawnPosition()
+						sceneDetails.RespawnPositions.Add(obj.name, new CharacterRespawnPositionDetails()
 						{
 							Position = obj.transform.position,
 							Rotation = obj.transform.rotation,
@@ -190,8 +183,8 @@ namespace FishMMO.Shared
 					}
 
 					// search for teleporter destinations
-					GameObject[] teleportDestinations = GameObject.FindGameObjectsWithTag(TeleporterDestinationTag);
-					foreach (GameObject obj in teleportDestinations)
+					TeleporterDestination[] teleportDestinations = GameObject.FindObjectsOfType<TeleporterDestination>();
+					foreach (TeleporterDestination obj in teleportDestinations)
 					{
 						string teleporterDestinationName = obj.name.Trim();
 
@@ -234,7 +227,7 @@ namespace FishMMO.Shared
 							pair.Value.ToPosition = destination.Position;
 							pair.Value.ToRotation = destination.Rotation;
 
-							Debug.Log("WorldSceneDetails: Teleporter[" + pair.Key + "] connected to Scene[" + destination.Scene + ": Destination:" + "From" + pair.Value.From + " Position:" + pair.Value.ToPosition + " Rotation:" + pair.Value.ToRotation.eulerAngles + "]");
+							Debug.Log("WorldSceneDetails: Teleporter " + pair.Key + " connected to Scene[" + destination.Scene + ": Destination:" + "From" + pair.Value.From + " Position:" + pair.Value.ToPosition + " Rotation:" + pair.Value.ToRotation.eulerAngles + "]");
 
 							sceneDetails.Teleporters.Add(pair.Key, pair.Value);
 						}

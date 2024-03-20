@@ -2,10 +2,10 @@
 
 namespace FishMMO.Shared
 {
-	public class RespawnPosition : MonoBehaviour
+	public class TeleporterDestination : MonoBehaviour
 	{
 #if UNITY_EDITOR
-		public Color GizmoColor = TinyColor.plum.ToUnityColor();
+		public Color GizmoColor = TinyColor.forestGreen.ToUnityColor();
 
 		void OnDrawGizmos()
 		{
