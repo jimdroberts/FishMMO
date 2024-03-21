@@ -97,50 +97,49 @@ namespace FishMMO.Server
 					return;
 				}
 				// validate spawn details
-				if (WorldSceneDetailsCache.Scenes.TryGetValue(msg.initialSpawnPosition.SceneName, out WorldSceneDetails details))
+				if (WorldSceneDetailsCache.Scenes.TryGetValue(msg.sceneName, out WorldSceneDetails details))
 				{
-					int raceIndex = -1;
 					// validate spawner
-					if (details.InitialSpawnPositions.TryGetValue(msg.initialSpawnPosition.SpawnerName, out CharacterInitialSpawnPositionDetails initialSpawnPosition))
+					if (details.InitialSpawnPositions.TryGetValue(msg.spawnerName, out CharacterInitialSpawnPositionDetails initialSpawnPosition))
 					{
-						if (msg.raceIndex > -1 &&
-							msg.raceIndex < Server.NetworkManager.SpawnablePrefabs.GetObjectCount())
+						// validate race
+						RaceTemplate raceTemplate = RaceTemplate.Get<RaceTemplate>(msg.raceTemplateID);
+						if (raceTemplate == null ||
+							raceTemplate.Prefab == null)
 						{
-							NetworkObject prefab = Server.NetworkManager.SpawnablePrefabs.GetObject(true, msg.raceIndex);
-							if (prefab != null)
+							conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+							return;
+						}
+						bool validateAllowedRace = false;
+						foreach (RaceTemplate t in initialSpawnPosition.AllowedRaces)
+						{
+							if (t.Name == raceTemplate.Name)
 							{
-								Character prefabCharacter = prefab.gameObject.GetComponent<Character>();
-								if (prefabCharacter != null)
-								{
-									raceIndex = msg.raceIndex;
-								}
+								validateAllowedRace = true;
+								break;
 							}
+						}
+						if (!validateAllowedRace)
+						{
+							conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+							return;
 						}
 
-						// invalid race id! fall back to first race....
-						if (raceIndex < 0)
+						// validate spawnable prefab
+						Character characterPrefab = raceTemplate.Prefab.GetComponent<Character>();
+						if (characterPrefab == null ||
+							Server.NetworkManager.SpawnablePrefabs.GetObject(true, characterPrefab.NetworkObject.PrefabId) == null)
 						{
-							for (int i = 0; i < Server.NetworkManager.SpawnablePrefabs.GetObjectCount(); ++i)
-							{
-								NetworkObject prefab = Server.NetworkManager.SpawnablePrefabs.GetObject(true, i);
-								if (prefab != null)
-								{
-									// ensure it's a Character type
-									Character prefabCharacter = prefab.gameObject.GetComponent<Character>();
-									if (prefabCharacter != null)
-									{
-										raceIndex = i;
-										break;
-									}
-								}
-							}
+							conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+							return;
 						}
+
 						var newCharacter = new CharacterEntity()
 						{
 							Account = accountName,
 							Name = msg.characterName,
 							NameLowercase = msg.characterName?.ToLower(),
-							RaceID = raceIndex,
+							RaceID = msg.raceTemplateID,
 							SceneName = initialSpawnPosition.SceneName,
 							X = initialSpawnPosition.Position.x,
 							Y = initialSpawnPosition.Position.y,

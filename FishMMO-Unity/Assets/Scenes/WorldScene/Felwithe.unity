@@ -2700,6 +2700,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 16c6443dd3a41af4abb3353c6de699e9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  AllowedRaces:
+  - {fileID: 11400000, guid: 6f8938bbed1286347b54bf3f4889f32a, type: 2}
   GizmoColor: {r: 1, g: 0.64705884, b: 0, a: 1}
 --- !u!1 &1800908300
 GameObject:
@@ -2968,6 +2970,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 16c6443dd3a41af4abb3353c6de699e9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  AllowedRaces:
+  - {fileID: 11400000, guid: 6f8938bbed1286347b54bf3f4889f32a, type: 2}
   GizmoColor: {r: 1, g: 0.64705884, b: 0, a: 1}
 --- !u!1 &2076367145
 GameObject:

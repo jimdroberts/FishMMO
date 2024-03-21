@@ -55,10 +55,14 @@ MonoBehaviour:
           SceneName: Felwithe
           Position: {x: -12.01, y: 68.579, z: -32.379997}
           Rotation: {x: -0, y: -0, z: -0, w: 1}
+          AllowedRaces:
+          - {fileID: 11400000, guid: 6f8938bbed1286347b54bf3f4889f32a, type: 2}
         - SpawnerName: East Felwithe
           SceneName: Felwithe
           Position: {x: 7.7800007, y: 76.636, z: -31.169998}
           Rotation: {x: -0, y: 0.7071068, z: -0, w: 0.7071068}
+          AllowedRaces:
+          - {fileID: 11400000, guid: 6f8938bbed1286347b54bf3f4889f32a, type: 2}
       RespawnPositions:
         m_keys:
         - Respawn 1
@@ -89,6 +93,8 @@ MonoBehaviour:
           SceneName: Greater Faydark
           Position: {x: -94.72, y: 20.89, z: 44.3}
           Rotation: {x: -0, y: 0.7071068, z: -0, w: 0.7071068}
+          AllowedRaces:
+          - {fileID: 11400000, guid: 570b8e070c073834abac548a07706b47, type: 2}
       RespawnPositions:
         m_keys:
         - Respawn 1

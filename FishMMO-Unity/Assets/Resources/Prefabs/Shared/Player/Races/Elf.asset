@@ -12,8 +12,5 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
   m_Name: Elf
   m_EditorClassIdentifier: 
-  MalePrefab: {fileID: 4573496687782621821, guid: 3243c87cb242a03478e9ee038f7873ed,
-    type: 3}
-  FemalePrefab: {fileID: 4573496687782621821, guid: 3243c87cb242a03478e9ee038f7873ed,
-    type: 3}
+  Prefab: {fileID: 4573496687782621821, guid: 3243c87cb242a03478e9ee038f7873ed, type: 3}
   Description: 

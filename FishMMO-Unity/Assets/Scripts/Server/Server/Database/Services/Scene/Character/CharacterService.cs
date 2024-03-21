@@ -348,6 +348,8 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static bool TryGet(NpgsqlDbContext dbContext, long characterID, NetworkManager networkManager, out Character character)
 		{
+			character = null;
+
 			using var dbTransaction = dbContext.Database.BeginTransaction();
 
 			var dbCharacter = dbContext.Characters.FirstOrDefault((c) => c.ID == characterID &&
@@ -355,61 +357,71 @@ namespace FishMMO.Server.DatabaseServices
 			if (dbCharacter != null &&
 				dbTransaction != null)
 			{
-				// find prefab
-				NetworkObject prefab = networkManager.SpawnablePrefabs.GetObject(true, dbCharacter.RaceID);
-				if (prefab != null)
+				// validate race
+				RaceTemplate raceTemplate = RaceTemplate.Get<RaceTemplate>(dbCharacter.RaceID);
+				if (raceTemplate == null ||
+					raceTemplate.Prefab == null)
 				{
-					Vector3 dbPosition = new Vector3(dbCharacter.X, dbCharacter.Y, dbCharacter.Z);
-					Quaternion dbRotation = new Quaternion(dbCharacter.RotX, dbCharacter.RotY, dbCharacter.RotZ, dbCharacter.RotW);
-
-					// instantiate the character object
-					NetworkObject nob = networkManager.GetPooledInstantiated(prefab, dbPosition, dbRotation, true);
-					character = nob.GetComponent<Character>();
-					if (character != null)
-					{
-						character.Motor.SetPositionAndRotationAndVelocity(dbPosition, dbRotation, Vector3.zero);
-						character.ID = dbCharacter.ID;
-						character.CharacterName = dbCharacter.Name;
-						character.CharacterNameLower = dbCharacter.NameLowercase;
-						character.Account = dbCharacter.Account;
-						character.WorldServerID = dbCharacter.WorldServerID;
-						character.AccessLevel = (AccessLevel)dbCharacter.AccessLevel;
-						character.SetSyncVarDatabaseValue(character.RaceID, dbCharacter.RaceID);
-						character.SetSyncVarDatabaseValue(character.Currency, dbCharacter.Currency);
-						character.SetSyncVarDatabaseValue(character.RaceName, prefab.name);
-						character.SceneHandle = dbCharacter.SceneHandle;
-						character.SetSyncVarDatabaseValue(character.SceneName, dbCharacter.SceneName);
-
-						// character becomes immortal when loading.. just in case..
-						if (character.TryGet(out CharacterDamageController damageController))
-						{
-							damageController.Immortal = true;
-						}
-
-						CharacterAttributeService.Load(dbContext, character);
-						CharacterAchievementService.Load(dbContext, character);
-						CharacterBuffService.Load(dbContext, character);
-						CharacterGuildService.Load(dbContext, character);
-						CharacterPartyService.Load(dbContext, character);
-						CharacterFriendService.Load(dbContext, character);
-						CharacterInventoryService.Load(dbContext, character);
-						CharacterEquipmentService.Load(dbContext, character);
-						CharacterBankService.Load(dbContext, character);
-						CharacterAbilityService.Load(dbContext, character);
-						CharacterKnownAbilityService.Load(dbContext, character);
-
-						/*Debug.Log(dbCharacter.Name + " has been loaded at Pos:" +
-							  nob.transform.position.ToString() +
-							  " Rot:" + nob.transform.rotation.ToString());*/
-
-						dbTransaction.Commit();
-
-						return true;
-					}
+					return false;
 				}
+
+				// validate spawnable prefab
+				Character characterPrefab = raceTemplate.Prefab.GetComponent<Character>();
+				if (characterPrefab == null ||
+					networkManager.SpawnablePrefabs.GetObject(true, characterPrefab.NetworkObject.PrefabId) == null)
+				{
+					return false;
+				}
+
+				Vector3 dbPosition = new Vector3(dbCharacter.X, dbCharacter.Y, dbCharacter.Z);
+				Quaternion dbRotation = new Quaternion(dbCharacter.RotX, dbCharacter.RotY, dbCharacter.RotZ, dbCharacter.RotW);
+
+				// instantiate the character object
+				NetworkObject nob = networkManager.GetPooledInstantiated(characterPrefab.NetworkObject, dbPosition, dbRotation, true);
+				character = nob.GetComponent<Character>();
+				if (character == null)
+				{
+					return false;
+				}
+
+				character.Motor.SetPositionAndRotationAndVelocity(dbPosition, dbRotation, Vector3.zero);
+				character.ID = dbCharacter.ID;
+				character.CharacterName = dbCharacter.Name;
+				character.CharacterNameLower = dbCharacter.NameLowercase;
+				character.Account = dbCharacter.Account;
+				character.WorldServerID = dbCharacter.WorldServerID;
+				character.AccessLevel = (AccessLevel)dbCharacter.AccessLevel;
+				character.SetSyncVarDatabaseValue(character.RaceID, dbCharacter.RaceID);
+				character.SetSyncVarDatabaseValue(character.Currency, dbCharacter.Currency);
+				character.SetSyncVarDatabaseValue(character.RaceName, raceTemplate.Name);
+				character.SceneHandle = dbCharacter.SceneHandle;
+				character.SetSyncVarDatabaseValue(character.SceneName, dbCharacter.SceneName);
+
+				// character becomes immortal when loading.. just in case..
+				if (character.TryGet(out CharacterDamageController damageController))
+				{
+					damageController.Immortal = true;
+				}
+
+				CharacterAttributeService.Load(dbContext, character);
+				CharacterAchievementService.Load(dbContext, character);
+				CharacterBuffService.Load(dbContext, character);
+				CharacterGuildService.Load(dbContext, character);
+				CharacterPartyService.Load(dbContext, character);
+				CharacterFriendService.Load(dbContext, character);
+				CharacterInventoryService.Load(dbContext, character);
+				CharacterEquipmentService.Load(dbContext, character);
+				CharacterBankService.Load(dbContext, character);
+				CharacterAbilityService.Load(dbContext, character);
+				CharacterKnownAbilityService.Load(dbContext, character);
+
+				/*Debug.Log(dbCharacter.Name + " has been loaded at Pos:" +
+					  nob.transform.position.ToString() +
+					  " Rot:" + nob.transform.rotation.ToString());*/
+
+				dbTransaction.Commit();
 			}
-			character = null;
-			return false;
+			return true;
 		}
 	}
 }

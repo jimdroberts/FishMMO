@@ -4451,7 +4451,7 @@ Transform:
   m_GameObject: {fileID: 1770604218}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: -0.7071068, z: 0, w: 0.7071068}
-  m_LocalPosition: {x: 10.04, y: 19.76, z: 0}
+  m_LocalPosition: {x: 12.68, y: 19.76, z: 0.42}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -5052,6 +5052,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 16c6443dd3a41af4abb3353c6de699e9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  AllowedRaces:
+  - {fileID: 11400000, guid: 570b8e070c073834abac548a07706b47, type: 2}
   GizmoColor: {r: 1, g: 0.64705884, b: 0, a: 1}
 --- !u!1 &2026365182
 GameObject:

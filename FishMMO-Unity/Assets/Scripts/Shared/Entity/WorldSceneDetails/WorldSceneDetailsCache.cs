@@ -100,8 +100,8 @@ namespace FishMMO.Shared
 					}
 
 					// search for initialSpawnPositions
-					CharacterSpawnPosition[] characterSpawnPositions = GameObject.FindObjectsOfType<CharacterSpawnPosition>();
-					foreach (CharacterSpawnPosition obj in characterSpawnPositions)
+					CharacterInitialSpawnPosition[] characterSpawnPositions = GameObject.FindObjectsOfType<CharacterInitialSpawnPosition>();
+					foreach (CharacterInitialSpawnPosition obj in characterSpawnPositions)
 					{
 						Debug.Log("WorldSceneDetails: Found new Initial Spawn Position[" + obj.name + " Pos:" + obj.transform.position + " Rot:" + obj.transform.rotation + "]");
 
@@ -111,12 +111,13 @@ namespace FishMMO.Shared
 							SceneName = currentScene.name,
 							Position = obj.transform.position,
 							Rotation = obj.transform.rotation,
+							AllowedRaces = obj.AllowedRaces,
 						});
 					}
 
 					// search for respawnPositions
-					RespawnPosition[] respawnPositions = GameObject.FindObjectsOfType<RespawnPosition>();
-					foreach (RespawnPosition obj in respawnPositions)
+					CharacterRespawnPosition[] respawnPositions = GameObject.FindObjectsOfType<CharacterRespawnPosition>();
+					foreach (CharacterRespawnPosition obj in respawnPositions)
 					{
 						Debug.Log("WorldSceneDetails: Found new Respawn Position[" + obj.name + " " + obj.transform + "]");
 

@@ -23,49 +23,67 @@ namespace FishMMO.Client
 		public WorldSceneDetailsCache worldSceneDetailsCache = null;
 		public int selectedSpawnPosition = -1;
 
+		private Dictionary<string, int> raceNameMap = new Dictionary<string, int>();
+
+		private Dictionary<string, HashSet<string>> raceSpawnPositionMap = new Dictionary<string, HashSet<string>>();
+
 		public override void OnStarting()
 		{
+			// initialize race dropdown
 			if (startRaceDropdown != null &&
 				initialRaceNames != null)
 			{
+				raceNameMap.Clear();
 				initialRaceNames.Clear();
 
-				for (int i = 0; i < Client.NetworkManager.SpawnablePrefabs.GetObjectCount(); ++i)
+				Dictionary<int, RaceTemplate> raceTemplates = RaceTemplate.LoadCache<RaceTemplate>();
+				foreach (KeyValuePair<int, RaceTemplate> pair in raceTemplates)
 				{
-					NetworkObject prefab = Client.NetworkManager.SpawnablePrefabs.GetObject(true, i);
-					if (prefab != null)
+					if (pair.Value.Prefab == null)
 					{
-						Character character = prefab.gameObject.GetComponent<Character>();
-						if (character != null)
+						continue;
+					}
+					Character character = pair.Value.Prefab.GetComponent<Character>();
+					if (character == null)
+					{
+						continue;
+					}
+					if (Client.NetworkManager.SpawnablePrefabs.GetObject(false, character.NetworkObject.PrefabId) == null)
+					{
+						continue;
+					}
+					raceNameMap.Add(character.gameObject.name, pair.Key);
+					initialRaceNames.Add(character.gameObject.name);
+
+					// initialize spawn position map
+					if (!raceSpawnPositionMap.TryGetValue(pair.Value.Name, out HashSet<string> spawners))
+					{
+						raceSpawnPositionMap.Add(pair.Value.Name, spawners = new HashSet<string>());
+					}
+
+					foreach (WorldSceneDetails details in worldSceneDetailsCache.Scenes.Values)
+					{
+						foreach (CharacterInitialSpawnPositionDetails initialSpawnPosition in details.InitialSpawnPositions.Values)
 						{
-							initialRaceNames.Add(character.gameObject.name);
+							foreach (RaceTemplate raceTemplate in initialSpawnPosition.AllowedRaces)
+							{
+								if (pair.Value.Name == raceTemplate.Name &&
+									!spawners.Contains(initialSpawnPosition.SpawnerName))
+								{
+									spawners.Add(initialSpawnPosition.SpawnerName);
+								}
+							}
 						}
 					}
 				}
-
 				startRaceDropdown.ClearOptions();
 				startRaceDropdown.AddOptions(initialRaceNames);
-				raceIndex = startRaceDropdown.value;
+
+				// set initial race selection
+				raceIndex = 0;
 			}
 
-			if (startLocationDropdown != null &&
-				initialSpawnLocationNames != null &&
-				worldSceneDetailsCache != null &&
-				worldSceneDetailsCache.Scenes != null)
-			{
-				initialSpawnLocationNames.Clear();
-
-				foreach (WorldSceneDetails details in worldSceneDetailsCache.Scenes.Values)
-				{
-					foreach (CharacterInitialSpawnPositionDetails initialSpawnLocation in details.InitialSpawnPositions.Values)
-					{
-						initialSpawnLocationNames.Add(initialSpawnLocation.SpawnerName);
-					}
-				}
-				startLocationDropdown.ClearOptions();
-				startLocationDropdown.AddOptions(initialSpawnLocationNames);
-				selectedSpawnPosition = startLocationDropdown.value;
-			}
+			UpdateStartLocationDropdown();
 
 			Client.NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
 			Client.NetworkManager.ClientManager.RegisterBroadcast<CharacterCreateResultBroadcast>(OnClientCharacterCreateResultBroadcastReceived);
@@ -108,6 +126,32 @@ namespace FishMMO.Client
 		public void OnRaceDropdownValueChanged(TMP_Dropdown dropdown)
 		{
 			raceIndex = dropdown.value;
+
+			UpdateStartLocationDropdown();
+		}
+
+		private void UpdateStartLocationDropdown()
+		{
+			// update start location dropdown
+			if (startLocationDropdown != null &&
+				initialSpawnLocationNames != null)
+			{
+				initialSpawnLocationNames.Clear();
+
+				string raceName = startRaceDropdown.options[raceIndex].text;
+
+				// find all spawn locations that allow the currently selected race
+				if (raceSpawnPositionMap.TryGetValue(raceName, out HashSet<string> spawners))
+				{
+					foreach (string spawner in spawners)
+					{
+						initialSpawnLocationNames.Add(spawner);
+					}
+				}
+				startLocationDropdown.ClearOptions();
+				startLocationDropdown.AddOptions(initialSpawnLocationNames);
+				selectedSpawnPosition = 0;
+			}
 		}
 
 		public void OnSpawnLocationDropdownValueChanged(TMP_Dropdown dropdown)
@@ -125,14 +169,18 @@ namespace FishMMO.Client
 			{
 				foreach (WorldSceneDetails details in worldSceneDetailsCache.Scenes.Values)
 				{
-					if (details.InitialSpawnPositions.TryGetValue(initialSpawnLocationNames[selectedSpawnPosition], out CharacterInitialSpawnPositionDetails spawnPosition))
+					string raceName = startRaceDropdown.options[raceIndex].text;
+
+					if (details.InitialSpawnPositions.TryGetValue(initialSpawnLocationNames[selectedSpawnPosition], out CharacterInitialSpawnPositionDetails spawnPosition) &&
+						raceNameMap.TryGetValue(raceName, out int raceTemplateID))
 					{
 						// create character
 						Client.Broadcast(new CharacterCreateBroadcast()
 						{
 							characterName = characterName,
-							raceIndex = raceIndex,
-							initialSpawnPosition = spawnPosition,
+							raceTemplateID = raceTemplateID,
+							sceneName = spawnPosition.SceneName,
+							spawnerName = spawnPosition.SpawnerName,
 						}, Channel.Reliable);
 						SetCreateButtonLocked(true);
 						return;

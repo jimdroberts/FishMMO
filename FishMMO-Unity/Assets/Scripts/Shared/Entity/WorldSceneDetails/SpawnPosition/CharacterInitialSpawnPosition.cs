@@ -1,9 +1,12 @@
-﻿using UnityEngine;
+﻿using System.Collections.Generic;
+using UnityEngine;
 
 namespace FishMMO.Shared
 {
-	public class CharacterSpawnPosition : MonoBehaviour
+	public class CharacterInitialSpawnPosition : MonoBehaviour
 	{
+		public List<RaceTemplate> AllowedRaces = new List<RaceTemplate>();
+
 #if UNITY_EDITOR
 		public Color GizmoColor = TinyColor.orange.ToUnityColor();
 

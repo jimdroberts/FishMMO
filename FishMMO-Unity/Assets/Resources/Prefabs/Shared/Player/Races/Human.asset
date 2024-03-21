@@ -12,8 +12,5 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
   m_Name: Human
   m_EditorClassIdentifier: 
-  MalePrefab: {fileID: 5839652419922276934, guid: 67671c10327f3b144a21191076a7af5b,
-    type: 3}
-  FemalePrefab: {fileID: 5839652419922276934, guid: 67671c10327f3b144a21191076a7af5b,
-    type: 3}
+  Prefab: {fileID: 5839652419922276934, guid: 67671c10327f3b144a21191076a7af5b, type: 3}
   Description: 

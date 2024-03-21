@@ -2,7 +2,7 @@
 
 namespace FishMMO.Shared
 {
-	public class RespawnPosition : MonoBehaviour
+	public class CharacterRespawnPosition : MonoBehaviour
 	{
 #if UNITY_EDITOR
 		public Color GizmoColor = TinyColor.plum.ToUnityColor();

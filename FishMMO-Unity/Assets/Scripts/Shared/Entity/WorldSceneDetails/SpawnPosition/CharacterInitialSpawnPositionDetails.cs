@@ -1,5 +1,6 @@
 using UnityEngine;
 using System;
+using System.Collections.Generic;
 
 namespace FishMMO.Shared
 {
@@ -10,5 +11,6 @@ namespace FishMMO.Shared
 		public string SceneName;
 		public Vector3 Position;
 		public Quaternion Rotation;
+		public List<RaceTemplate> AllowedRaces;
 	}
 }
