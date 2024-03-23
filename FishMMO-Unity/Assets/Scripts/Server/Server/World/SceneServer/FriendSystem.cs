@@ -62,7 +62,7 @@ namespace FishMMO.Server
 				return;
 			}
 			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-			CharacterEntity friendEntity = CharacterService.GetByName(dbContext, msg.characterName);
+			CharacterEntity friendEntity = CharacterService.GetByName(dbContext, msg.characterName, true);
 			if (friendEntity != null)
 			{
 				// add the friend to the database

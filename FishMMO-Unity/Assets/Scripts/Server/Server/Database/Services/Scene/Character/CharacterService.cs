@@ -80,12 +80,14 @@ namespace FishMMO.Server.DatabaseServices
 			return character.Name;
 		}
 
-		public static CharacterEntity GetByName(NpgsqlDbContext dbContext, string name)
+		public static CharacterEntity GetByName(NpgsqlDbContext dbContext, string name, bool checkDeleted = false)
 		{
 			var character = dbContext.Characters.FirstOrDefault(c => c.NameLowercase == name.ToLower());
-			if (character == null)
+			if (character == null ||
+				checkDeleted && character.Deleted)
 			{
 				// Log: $"Couldn't find character with name {name}"
+				return null;
 			}
 			return character;
 		}
