@@ -857,9 +857,9 @@ RectTransform:
   - {fileID: 1499420520548734744}
   m_Father: {fileID: 1754990536588621836}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 1}
-  m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 73, y: -13}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 96, y: 24}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &7518649141951376870
@@ -945,12 +945,12 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls:
       - m_Target: {fileID: 3281694551894101852}
-        m_TargetAssemblyTypeName: UIChat, Assembly-CSharp
+        m_TargetAssemblyTypeName: FishMMO.Client.UIChat, Assembly-CSharp
         m_MethodName: ActivateTab
         m_Mode: 2
         m_Arguments:
           m_ObjectArgument: {fileID: 2838112934445735018}
-          m_ObjectArgumentAssemblyTypeName: ChatTab, Assembly-CSharp
+          m_ObjectArgumentAssemblyTypeName: FishMMO.Client.ChatTab, Assembly-CSharp
           m_IntArgument: 0
           m_FloatArgument: 0
           m_StringArgument: 
@@ -1192,9 +1192,9 @@ RectTransform:
   - {fileID: 3597272692433061793}
   m_Father: {fileID: 1754990536588621836}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 1}
-  m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 13, y: -13}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 24, y: 24}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &9104821881445116821
@@ -1783,10 +1783,10 @@ RectTransform:
   - {fileID: 4281843740020455793}
   m_Father: {fileID: 14192010923851952}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 1}
-  m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 83.99501, y: -12}
-  m_SizeDelta: {x: 24.010002, y: 24}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 0, y: 24}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &7706323012889427380
 CanvasRenderer:
@@ -2048,10 +2048,10 @@ RectTransform:
   m_Children: []
   m_Father: {fileID: 14192010923851952}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 1}
-  m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 39.995003, y: -12}
-  m_SizeDelta: {x: 63.99, y: 24}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 0, y: 24}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &1908651274421920793
 CanvasRenderer:
@@ -2294,6 +2294,9 @@ MonoBehaviour:
   CloseOnEscape: 0
   CanDrag: 1
   ClampToScreen: 1
+  WelcomeMessage: 'Welcome to FishMMO!
+
+    Chat channels are available.'
   chatViewParent: {fileID: 2304528507378359359}
   chatMessagePrefab: {fileID: 5043444177150772411, guid: dc951853bc8579847ac4cf5cd0080e8f,
     type: 3}
