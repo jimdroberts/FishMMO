@@ -109,10 +109,21 @@ namespace FishMMO.Client
 				{
 					tooltip.Open("Who would you like to add as a friend?", (s) =>
 					{
-						Client.Broadcast(new FriendAddNewBroadcast()
+						if (Constants.Authentication.IsAllowedCharacterName(s) &&
+							ClientNamingSystem.GetCharacterID(s, out long id))
 						{
-							characterName = s,
-						}, Channel.Reliable);
+							if (Character.ID != id)
+							{
+								Client.Broadcast(new FriendAddNewBroadcast()
+								{
+									characterName = s,
+								}, Channel.Reliable);
+							}
+						}
+						else if (UIManager.TryGet("UIChat", out UIChat chat))
+						{
+							chat.InstantiateChatMessage(ChatChannel.System, "", "A person with that name could not be found. Are you sure you have encountered them?");
+						}
 					}, null);
 				}
 			}
