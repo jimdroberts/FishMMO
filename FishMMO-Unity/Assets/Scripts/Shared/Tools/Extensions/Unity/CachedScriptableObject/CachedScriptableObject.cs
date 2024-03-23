@@ -27,6 +27,22 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Returns the cached objects as type List U or empty if nothing is found.
 		/// </summary>
+		public static U GetFirst<U>() where U : T
+		{
+			Dictionary<int, T> cache = LoadCache<U>();
+			if (cache != null)
+			{
+				foreach (T obj in cache.Values)
+				{
+					return obj as U;
+				}
+			}
+			return null;
+		}
+
+		/// <summary>
+		/// Returns the cached objects as type List U or empty if nothing is found.
+		/// </summary>
 		public static List<ICachedObject> Get<U>(HashSet<int> ids) where U : T
 		{
 			List<ICachedObject> objects = new List<ICachedObject>();

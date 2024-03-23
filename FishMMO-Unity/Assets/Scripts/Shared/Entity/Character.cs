@@ -27,6 +27,7 @@ namespace FishMMO.Shared
 	[RequireComponent(typeof(GuildController))]
 	[RequireComponent(typeof(PartyController))]
 	[RequireComponent(typeof(FriendController))]
+	[RequireComponent(typeof(FactionController))]
 	public class Character : NetworkBehaviour, IPooledResettable
 	{
 		private Dictionary<Type, CharacterBehaviour> behaviours = new Dictionary<Type, CharacterBehaviour>();
