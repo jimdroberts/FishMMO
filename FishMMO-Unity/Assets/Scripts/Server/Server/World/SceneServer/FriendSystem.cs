@@ -65,6 +65,12 @@ namespace FishMMO.Server
 			CharacterEntity friendEntity = CharacterService.GetByName(dbContext, msg.characterName, true);
 			if (friendEntity != null)
 			{
+				// are we trying to become our own friend again...
+				if (friendController.Character.ID == friendEntity.ID)
+                {
+					return;
+                }
+
 				// add the friend to the database
 				CharacterFriendService.Save(dbContext, friendController.Character.ID, friendEntity.ID);
 
