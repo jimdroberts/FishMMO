@@ -74,6 +74,9 @@ namespace FishMMO.Server
 				// add the friend to the database
 				CharacterFriendService.Save(dbContext, friendController.Character.ID, friendEntity.ID);
 
+				// add the friend to the characters friend controller
+				friendController.AddFriend(friendEntity.ID);
+
 				// tell the character they added a new friend!
 				Server.Broadcast(conn, new FriendAddBroadcast()
 				{
