@@ -42,16 +42,18 @@ namespace FishMMO.Server.DatabaseServices
 															  c.NameLowercase == characterName.ToLower()) != null;
 		}
 
-		public static CharacterEntity GetByID(NpgsqlDbContext dbContext, long id)
+		public static CharacterEntity GetByID(NpgsqlDbContext dbContext, long id, bool checkDeleted = false)
 		{
 			if (id == 0)
 			{
 				return null;
 			}
 			var character = dbContext.Characters.FirstOrDefault(c => c.ID == id);
-			if (character == null)
+			if (character == null ||
+				checkDeleted && character.Deleted)
 			{
 				//throw new Exception($"Couldn't find character with id {id}");
+				return null;
 			}
 			return character;
 		}

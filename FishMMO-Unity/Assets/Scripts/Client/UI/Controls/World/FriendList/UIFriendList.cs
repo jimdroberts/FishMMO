@@ -107,22 +107,31 @@ namespace FishMMO.Client
 			{
 				if (UIManager.TryGet("UIInputConfirmationTooltip", out UIInputConfirmationTooltip tooltip))
 				{
-					tooltip.Open("Who would you like to add as a friend?", (s) =>
+					tooltip.Open("Please type the name of the person you wish to add.", (s) =>
 					{
-						if (Constants.Authentication.IsAllowedCharacterName(s) &&
-							ClientNamingSystem.GetCharacterID(s, out long id))
-						{
-							if (Character.ID != id)
+						if (Constants.Authentication.IsAllowedCharacterName(s))
+                        {
+							ClientNamingSystem.GetCharacterID(s, (id) =>
 							{
-								Client.Broadcast(new FriendAddNewBroadcast()
+								if (id != 0)
 								{
-									characterName = s,
-								}, Channel.Reliable);
-							}
-						}
-						else if (UIManager.TryGet("UIChat", out UIChat chat))
-						{
-							chat.InstantiateChatMessage(ChatChannel.System, "", "A person with that name could not be found. Are you sure you have encountered them?");
+									if (Character.ID != id)
+									{
+										Client.Broadcast(new FriendAddNewBroadcast()
+										{
+											characterID = id
+										}, Channel.Reliable);
+									}
+									else if (UIManager.TryGet("UIChat", out UIChat chat))
+									{
+										chat.InstantiateChatMessage(ChatChannel.System, "", "You can't add yourself as a friend.");
+									}
+								}
+								else if (UIManager.TryGet("UIChat", out UIChat chat))
+								{
+									chat.InstantiateChatMessage(ChatChannel.System, "", "A person with that name could not be found.");
+								}
+							});
 						}
 					}, null);
 				}

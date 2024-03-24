@@ -188,17 +188,29 @@ namespace FishMMO.Client
 				{
 					tooltip.Open("Please type the name of the person you wish to invite.", (s) =>
 					{
-						if (Constants.Authentication.IsAllowedCharacterName(s) &&
-							ClientNamingSystem.GetCharacterID(s, out long id))
+						if (Constants.Authentication.IsAllowedCharacterName(s))
 						{
-							Client.Broadcast(new PartyInviteBroadcast()
+							ClientNamingSystem.GetCharacterID(s, (id) =>
 							{
-								targetCharacterID = id,
-							}, Channel.Reliable);
-						}
-						else if (UIManager.TryGet("UIChat", out UIChat chat))
-						{
-							chat.InstantiateChatMessage(ChatChannel.System, "", "A person with that name could not be found. Are you sure you have encountered them?");
+								if (id != 0)
+								{
+									if (Character.ID != id)
+									{
+										Client.Broadcast(new PartyInviteBroadcast()
+										{
+											targetCharacterID = id,
+										}, Channel.Reliable);
+									}
+									else if (UIManager.TryGet("UIChat", out UIChat chat))
+									{
+										chat.InstantiateChatMessage(ChatChannel.System, "", "You can't invite yourself to the party.");
+									}
+								}
+								else if (UIManager.TryGet("UIChat", out UIChat chat))
+								{
+									chat.InstantiateChatMessage(ChatChannel.System, "", "A person with that name could not be found.");
+								}
+							});
 						}
 					}, null);
 				}

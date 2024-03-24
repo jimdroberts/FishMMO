@@ -16,6 +16,7 @@ namespace FishMMO.Client
 		// character names are unique so we can presume this works properly
 		private static Dictionary<string, long> nameToID = new Dictionary<string, long>();
 		private static Dictionary<NamingSystemType, Dictionary<long, Action<string>>> pendingNameRequests = new Dictionary<NamingSystemType, Dictionary<long, Action<string>>>();
+		private static Dictionary<NamingSystemType, Dictionary<string, Action<long>>> pendingIdRequests = new Dictionary<NamingSystemType, Dictionary<string, Action<long>>>();
 
 		public static void InitializeOnce(Client client)
 		{
@@ -27,6 +28,7 @@ namespace FishMMO.Client
 			Client = client;
 
 			Client.NetworkManager.ClientManager.RegisterBroadcast<NamingBroadcast>(OnClientNamingBroadcastReceived);
+			Client.NetworkManager.ClientManager.RegisterBroadcast<ReverseNamingBroadcast>(OnClientReverseNamingBroadcastReceived);
 
 #if !UNITY_EDITOR
 			string workingDirectory = Client.GetWorkingDirectory();
@@ -51,6 +53,7 @@ namespace FishMMO.Client
 			if (Client != null)
 			{
 				Client.NetworkManager.ClientManager.UnregisterBroadcast<NamingBroadcast>(OnClientNamingBroadcastReceived);
+				Client.NetworkManager.ClientManager.UnregisterBroadcast<ReverseNamingBroadcast>(OnClientReverseNamingBroadcastReceived);
 			}
 
 #if !UNITY_EDITOR
@@ -110,9 +113,42 @@ namespace FishMMO.Client
 			}
 		}
 
-		public static bool GetCharacterID(string name, out long id)
+		public static void GetCharacterID(string name, Action<long> action)
 		{
-			return nameToID.TryGetValue(name, out id);
+			var nameLowerCase = name.ToLower();
+			if (nameToID.TryGetValue(name, out long id))
+            {
+				// if we find the name we're done
+				action?.Invoke(id);
+			}
+			else if (Client != null)
+            {
+				// request the name from the server
+				if (!pendingIdRequests.TryGetValue(NamingSystemType.CharacterName, out Dictionary<string, Action<long>> pendingActions))
+				{
+					pendingIdRequests.Add(NamingSystemType.CharacterName, pendingActions = new Dictionary<string, Action<long>>());
+				}
+				if (!pendingActions.ContainsKey(nameLowerCase))
+				{
+					pendingActions.Add(nameLowerCase, action);
+
+					//UnityEngine.Debug.Log("Requesting Id for: " + name);
+
+					// send the request to the server to get the id and correct name
+					Client.Broadcast(new ReverseNamingBroadcast()
+					{
+						type = NamingSystemType.CharacterName,
+						nameLowerCase = nameLowerCase,
+						id = 0,
+						name = "",
+					}, Channel.Reliable);
+				}
+				else
+				{
+					//UnityEngine.Debug.Log("Adding pending Id for: " + name);
+					pendingActions[nameLowerCase] += action;
+				}
+			}
 		}
 
 		private static void OnClientNamingBroadcastReceived(NamingBroadcast msg, Channel channel)
@@ -128,12 +164,37 @@ namespace FishMMO.Client
 					pendingRequests.Remove(msg.id);
 				}
 			}
-			if (!idToName.TryGetValue(msg.type, out Dictionary<long, string> knownNames))
+			UpdateKnownNames(msg.type, msg.id, msg.name);
+		}
+
+		private static void OnClientReverseNamingBroadcastReceived(ReverseNamingBroadcast msg, Channel channel)
+		{
+			if (pendingIdRequests.TryGetValue(msg.type, out Dictionary<string, Action<long>> pendingRequests))
 			{
-				idToName.Add(msg.type, knownNames = new Dictionary<long, string>());
+				if (pendingRequests.TryGetValue(msg.nameLowerCase, out Action<long> pendingActions))
+				{
+					//UnityEngine.Debug.Log("Processing Id for: " + msg.id + ":" + msg.name);
+
+					pendingActions?.Invoke(msg.id);
+					pendingRequests[msg.nameLowerCase] = null;
+					pendingRequests.Remove(msg.nameLowerCase);
+				}
 			}
-			knownNames[msg.id] = msg.name;
-			nameToID[msg.name] = msg.id;
+
+			if (msg.id != 0)
+			{
+				UpdateKnownNames(msg.type, msg.id, msg.name);
+			}
+		}
+
+		private static void UpdateKnownNames(NamingSystemType type, long id, string name)
+        {
+			if (!idToName.TryGetValue(type, out Dictionary<long, string> knownNames))
+			{
+				idToName.Add(type, knownNames = new Dictionary<long, string>());
+			}
+			knownNames[id] = name;
+			nameToID[name] = id;
 		}
 	}
 }

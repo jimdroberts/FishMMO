@@ -61,16 +61,17 @@ namespace FishMMO.Server
 			{
 				return;
 			}
+
+			// are we trying to become our own friend again...
+			if (friendController.Character.ID == msg.characterID)
+			{
+				return;
+			}
+
 			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-			CharacterEntity friendEntity = CharacterService.GetByName(dbContext, msg.characterName, true);
+			CharacterEntity friendEntity = CharacterService.GetByID(dbContext, msg.characterID, true);
 			if (friendEntity != null)
 			{
-				// are we trying to become our own friend again...
-				if (friendController.Character.ID == friendEntity.ID)
-                {
-					return;
-                }
-
 				// add the friend to the database
 				CharacterFriendService.Save(dbContext, friendController.Character.ID, friendEntity.ID);
 
