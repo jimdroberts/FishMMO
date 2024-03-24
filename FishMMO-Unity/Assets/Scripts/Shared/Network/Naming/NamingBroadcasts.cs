@@ -8,4 +8,12 @@ namespace FishMMO.Shared
 		public long id;
 		public string name;
 	}
+
+	public struct ReverseNamingBroadcast : IBroadcast
+	{
+		public NamingSystemType type;
+		public string nameLowerCase;
+		public long id;
+		public string name;
+	}
 }
