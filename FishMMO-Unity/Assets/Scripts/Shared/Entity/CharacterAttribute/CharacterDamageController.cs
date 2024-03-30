@@ -3,10 +3,8 @@ using UnityEngine;
 
 namespace FishMMO.Shared
 {
-	public class CharacterDamageController : CharacterBehaviour, IDamageable, IHealable
+	public class CharacterDamageController : CharacterBehaviour, ICharacterDamageController, IDamageable, IHealable
 	{
-		public bool Immortal = false;
-
 		[Tooltip("The resource attribute the damage will be applied to.")]
 		public CharacterAttributeTemplate ResourceAttribute;
 
@@ -19,22 +17,30 @@ namespace FishMMO.Shared
 		public AchievementTemplate ResurrectAchievementTemplate;
 		public AchievementTemplate ResurrectedAchievementTemplate;
 
+		public bool Immortal { get; set; }
+
 		//public List<Character> Attackers;
 
 		private CharacterResourceAttribute resourceInstance; // cache the resource
 
 #if !UNITY_SERVER
 		public bool ShowDamage = true;
+		/// <summary>
+		/// <text, position, color, fontSize, persistTime, manualCache>
+		/// </summary>
 		public event Func<string, Vector3, Color, float, float, bool, IReference> OnDamageDisplay;
 
 		public bool ShowHeals = true;
+		/// <summary>
+		/// <text, position, color, fontSize, persistTime, manualCache>
+		/// </summary>
 		public event Func<string, Vector3, Color, float, float, bool, IReference> OnHealedDisplay;
 
 		public override void OnStartCharacter()
 		{
 			base.OnStartCharacter();
 			if (ResourceAttribute == null ||
-				!Character.TryGet(out CharacterAttributeController attributeController) ||
+				!Character.TryGet(out ICharacterAttributeController attributeController) ||
 				!attributeController.TryGetResourceAttribute(ResourceAttribute.ID, out this.resourceInstance))
 			{
 				throw new UnityException("Character Damage Controller ResourceAttribute is missing");
@@ -53,7 +59,7 @@ namespace FishMMO.Shared
 			const int MAX_DAMAGE = 999999;
 
 			if (target == null ||
-				!target.TryGet(out CharacterAttributeController attributeController) ||
+				!target.TryGet(out ICharacterAttributeController attributeController) ||
 				damageAttribute == null)
 				return 0;
 
@@ -80,12 +86,12 @@ namespace FishMMO.Shared
 				}
 				resourceInstance.Consume(amount);
 
-				if (attacker.TryGet(out AchievementController attackerAchievementController))
+				if (attacker.TryGet(out IAchievementController attackerAchievementController))
 				{
 					attackerAchievementController.Increment(DamageAchievementTemplate, (uint)amount);
 				}
 				
-				if (Character.TryGet(out AchievementController defenderAchievementController))
+				if (Character.TryGet(out IAchievementController defenderAchievementController))
 				{
 					defenderAchievementController.Increment(DamagedAchievementTemplate, (uint)amount);
 				}
@@ -110,12 +116,12 @@ namespace FishMMO.Shared
 		public void Kill(Character killer)
 		{
 			if (killer != null &&
-				killer.TryGet(out AchievementController killerAchievementController))
+				killer.TryGet(out IAchievementController killerAchievementController))
 			{
 				killerAchievementController.Increment(KillAchievementTemplate, 1);
 			}
 			if (Character != null &&
-				Character.TryGet(out AchievementController defenderAchievementController))
+				Character.TryGet(out IAchievementController defenderAchievementController))
 			{
 				defenderAchievementController.Increment(KilledAchievementTemplate, 1);
 			}
@@ -183,12 +189,12 @@ namespace FishMMO.Shared
 				resourceInstance.Gain(amount);
 				
 				if (healer != null &&
-					healer.TryGet(out AchievementController healerAchievementController))
+					healer.TryGet(out IAchievementController healerAchievementController))
 				{
 					healerAchievementController.Increment(HealAchievementTemplate, (uint)amount);
 				}
 				if (Character != null &&
-					Character.TryGet(out AchievementController healedAchievementController)) 
+					Character.TryGet(out IAchievementController healedAchievementController)) 
 				{
 					healedAchievementController.Increment(HealedAchievementTemplate, (uint)amount);
 				}

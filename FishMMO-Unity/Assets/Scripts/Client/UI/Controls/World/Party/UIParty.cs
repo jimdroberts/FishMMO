@@ -25,7 +25,7 @@ namespace FishMMO.Client
 		{
 			base.OnPostSetCharacter();
 
-			if (Character.TryGet(out PartyController partyController))
+			if (Character.TryGet(out IPartyController partyController))
 			{
 				partyController.OnPartyCreated += OnPartyCreated;
 				partyController.OnReceivePartyInvite += PartyController_OnReceivePartyInvite;
@@ -40,7 +40,7 @@ namespace FishMMO.Client
 		{
 			base.OnPreUnsetCharacter();
 
-			if (Character.TryGet(out PartyController partyController))
+			if (Character.TryGet(out IPartyController partyController))
 			{
 				partyController.OnPartyCreated -= OnPartyCreated;
 				partyController.OnReceivePartyInvite -= PartyController_OnReceivePartyInvite;
@@ -91,9 +91,9 @@ namespace FishMMO.Client
 					if (member.Name != null)
 						member.Name.text = Character.CharacterName;
 					if (member.Rank != null)
-						member.Rank.text = "Rank: " + (Character.TryGet(out PartyController partyController) ? partyController.Rank.ToString() : "");
+						member.Rank.text = "Rank: " + (Character.TryGet(out IPartyController partyController) ? partyController.Rank.ToString() : "");
 					if (member.Health != null)
-						member.Health.value = Character.TryGet(out CharacterAttributeController attributeController) ? attributeController.GetResourceAttributeCurrentPercentage(HealthTemplate) : 0.0f;
+						member.Health.value = Character.TryGet(out ICharacterAttributeController attributeController) ? attributeController.GetResourceAttributeCurrentPercentage(HealthTemplate) : 0.0f;
 					Members.Add(Character.ID, member);
 				}
 			}
@@ -142,7 +142,7 @@ namespace FishMMO.Client
 		public void OnButtonCreateParty()
 		{
 			if (Character != null &&
-				Character.TryGet(out PartyController partyController) &&
+				Character.TryGet(out IPartyController partyController) &&
 				partyController.ID < 1)
 			{
 				Client.Broadcast(new PartyCreateBroadcast(), Channel.Reliable);
@@ -152,7 +152,7 @@ namespace FishMMO.Client
 		public void OnButtonLeaveParty()
 		{
 			if (Character != null &&
-				Character.TryGet(out PartyController partyController) &&
+				Character.TryGet(out IPartyController partyController) &&
 				partyController.ID > 0)
 			{
 				if (UIManager.TryGet("UIConfirmationTooltip", out UIConfirmationTooltip tooltip))
@@ -168,11 +168,11 @@ namespace FishMMO.Client
 		public void OnButtonInviteToParty()
 		{
 			if (Character != null &&
-				Character.TryGet(out PartyController partyController) &&
+				Character.TryGet(out IPartyController partyController) &&
 				partyController.ID > 0 &&
 				Client.NetworkManager.IsClientStarted)
 			{
-				if (Character.TryGet(out TargetController targetController) &&
+				if (Character.TryGet(out ITargetController targetController) &&
 					targetController.Current.Target != null)
 				{
 					Character targetCharacter = targetController.Current.Target.GetComponent<Character>();

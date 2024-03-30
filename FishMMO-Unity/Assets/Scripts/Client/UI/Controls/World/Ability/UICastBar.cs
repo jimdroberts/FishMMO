@@ -25,7 +25,7 @@ namespace FishMMO.Client
 		{
 			base.OnPostSetCharacter();
 
-			if (Character.TryGet(out AbilityController abilityController))
+			if (Character.TryGet(out IAbilityController abilityController))
 			{
 				abilityController.OnUpdate += OnUpdate;
 				abilityController.OnCancel += OnCancel;
@@ -36,7 +36,7 @@ namespace FishMMO.Client
 		{
 			base.OnPreUnsetCharacter();
 
-			if (Character.TryGet(out AbilityController abilityController))
+			if (Character.TryGet(out IAbilityController abilityController))
 			{
 				abilityController.OnUpdate -= OnUpdate;
 				abilityController.OnCancel -= OnCancel;

@@ -6,7 +6,6 @@ namespace FishMMO.Shared
 	[RequireComponent(typeof(CharacterAttributeController))]
 	public class CharacterRegenerationController : NetworkBehaviour
 	{
-		public static Character localCharacter;
 		public CharacterAttributeController AttributeController;
 
 		public CharacterAttributeTemplate HealthTemplate;

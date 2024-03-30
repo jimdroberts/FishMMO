@@ -10,14 +10,16 @@ namespace FishMMO.Shared
 		public int MoveFlags;
 		public Vector3 CameraPosition;
 		public Quaternion CameraRotation;
+		public bool IsActualData;
 
-		public KCCInputReplicateData(float moveAxisForward, float moveAxisRight, int moveFlags, Vector3 cameraPosition, Quaternion cameraRotation)
+		public KCCInputReplicateData(float moveAxisForward, float moveAxisRight, int moveFlags, Vector3 cameraPosition, Quaternion cameraRotation, bool isActualData)
 		{
 			MoveAxisForward = moveAxisForward;
 			MoveAxisRight = moveAxisRight;
 			MoveFlags = moveFlags;
 			CameraPosition = cameraPosition;
 			CameraRotation = cameraRotation;
+			IsActualData = isActualData;
 
 			_tick = 0;
 		}

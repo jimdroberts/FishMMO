@@ -83,7 +83,7 @@ namespace FishMMO.Server.DatabaseServices
 		public static void Save(NpgsqlDbContext dbContext, Character character)
 		{
 			if (character == null ||
-				!character.TryGet(out InventoryController inventoryController))
+				!character.TryGet(out IInventoryController inventoryController))
 			{
 				return;
 			}
@@ -164,7 +164,7 @@ namespace FishMMO.Server.DatabaseServices
 		public static void Load(NpgsqlDbContext dbContext, Character character)
 		{
 			if (character == null ||
-				!character.TryGet(out InventoryController inventoryController))
+				!character.TryGet(out IInventoryController inventoryController))
 			{
 				return;
 			}

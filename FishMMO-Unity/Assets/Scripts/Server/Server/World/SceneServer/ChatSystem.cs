@@ -204,7 +204,7 @@ namespace FishMMO.Server
 				switch (msg.channel)
 				{
 					case ChatChannel.Guild:
-						if (!sender.TryGet(out GuildController guildController) ||
+						if (!sender.TryGet(out IGuildController guildController) ||
 							guildController.ID < 1)
 						{
 							return;
@@ -214,7 +214,7 @@ namespace FishMMO.Server
 						msg.text = guildController.ID + " " + msg.text;
 						break;
 					case ChatChannel.Party:
-						if (!sender.TryGet(out PartyController partyController) ||
+						if (!sender.TryGet(out IPartyController partyController) ||
 							partyController.ID < 1)
 						{
 							return;

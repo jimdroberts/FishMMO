@@ -3,11 +3,13 @@ using System.Collections.Generic;
 
 namespace FishMMO.Shared
 {
-	public abstract class ItemContainer : CharacterBehaviour
+	public abstract class ItemContainer : CharacterBehaviour, IItemContainer
 	{
-		public readonly List<Item> Items = new List<Item>();
+		private readonly List<Item> items = new List<Item>();
 
-		public event Action<ItemContainer, Item, int> OnSlotUpdated;
+		public event Action<IItemContainer, Item, int> OnSlotUpdated;
+
+		public List<Item> Items { get { return items; } }
 
 		public override void OnDestroying()
 		{

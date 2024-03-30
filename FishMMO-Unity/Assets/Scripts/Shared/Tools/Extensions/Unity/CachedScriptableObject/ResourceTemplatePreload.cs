@@ -28,6 +28,7 @@ namespace FishMMO.Shared
 			ScrollConsumableTemplate.LoadCache<ScrollConsumableTemplate>();
 			QuestTemplate.LoadCache<QuestTemplate>();
 			MerchantTemplate.LoadCache<MerchantTemplate>();
+			FactionTemplate.LoadCache<FactionTemplate>();
 			RaceTemplate.LoadCache<RaceTemplate>();
 		}
 
@@ -50,6 +51,7 @@ namespace FishMMO.Shared
 			ScrollConsumableTemplate.UnloadCache<ScrollConsumableTemplate>();
 			QuestTemplate.UnloadCache<QuestTemplate>();
 			MerchantTemplate.UnloadCache<MerchantTemplate>();
+			FactionTemplate.UnloadCache<FactionTemplate>();
 			RaceTemplate.UnloadCache<RaceTemplate>();
 		}
 	}

@@ -338,7 +338,7 @@ namespace FishMMO.Shared
 							float targetSpeed = StableMoveSpeedConstant;
 
 							if (Character != null &&
-								Character.TryGet(out CharacterAttributeController attributeController))
+								Character.TryGet(out ICharacterAttributeController attributeController))
 							{
 								if (_isCrouching)
 								{
@@ -420,7 +420,7 @@ namespace FishMMO.Shared
 								currentVelocity += addedVelocity;
 							}
 
-							if (Character.TryGet(out CharacterAttributeController attributeController))
+							if (Character.TryGet(out ICharacterAttributeController attributeController))
 							{
 								// Character Independant Gravity
 								if (GravityTemplate != null &&
@@ -468,7 +468,7 @@ namespace FishMMO.Shared
 								// Add to the return velocity and reset jump state
 								float jumpSpeed = StableJumpUpSpeedConstant;
 								if (JumpSpeedTemplate != null &&
-									Character.TryGet(out CharacterAttributeController attributeController) &&
+									Character.TryGet(out ICharacterAttributeController attributeController) &&
 									attributeController.TryGetAttribute(JumpSpeedTemplate, out CharacterAttribute jumpSpeedModifier))
 								{
 									jumpSpeed *= jumpSpeedModifier.FinalValueAsPct;

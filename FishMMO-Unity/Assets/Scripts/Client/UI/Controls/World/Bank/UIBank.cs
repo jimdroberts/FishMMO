@@ -57,7 +57,7 @@ namespace FishMMO.Client
 		public override void OnPreSetCharacter()
 		{
 			if (Character != null &&
-				Character.TryGet(out BankController bankController))
+				Character.TryGet(out IBankController bankController))
 			{
 				bankController.OnSlotUpdated -= OnBankSlotUpdated;
 			}
@@ -70,7 +70,7 @@ namespace FishMMO.Client
 			if (Character == null ||
 				content == null ||
 				buttonPrefab == null ||
-				!Character.TryGet(out BankController bankController))
+				!Character.TryGet(out IBankController bankController))
 			{
 				return;
 			}
@@ -104,7 +104,7 @@ namespace FishMMO.Client
 			bankController.OnSlotUpdated += OnBankSlotUpdated;
 		}
 
-		public void OnBankSlotUpdated(ItemContainer container, Item item, int bankIndex)
+		public void OnBankSlotUpdated(IItemContainer container, Item item, int bankIndex)
 		{
 			if (bankSlots == null)
 			{

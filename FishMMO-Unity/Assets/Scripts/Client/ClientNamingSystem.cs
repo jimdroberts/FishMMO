@@ -115,7 +115,6 @@ namespace FishMMO.Client
 
 		public static void GetCharacterID(string name, Action<long> action)
 		{
-			var nameLowerCase = name.ToLower();
 			if (nameToID.TryGetValue(name, out long id))
             {
 				// if we find the name we're done
@@ -123,6 +122,8 @@ namespace FishMMO.Client
 			}
 			else if (Client != null)
             {
+				var nameLowerCase = name.ToLower().Trim();
+
 				// request the name from the server
 				if (!pendingIdRequests.TryGetValue(NamingSystemType.CharacterName, out Dictionary<string, Action<long>> pendingActions))
 				{
@@ -164,7 +165,10 @@ namespace FishMMO.Client
 					pendingRequests.Remove(msg.id);
 				}
 			}
-			UpdateKnownNames(msg.type, msg.id, msg.name);
+			if (msg.id != 0)
+			{
+				UpdateKnownNames(msg.type, msg.id, msg.name);
+			}
 		}
 
 		private static void OnClientReverseNamingBroadcastReceived(ReverseNamingBroadcast msg, Channel channel)

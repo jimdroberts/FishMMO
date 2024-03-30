@@ -9,6 +9,8 @@ namespace FishMMO.Shared
 		[Serializable]
 		public class FactionHashSet : SerializableHashSet<FactionTemplate> { }
 
+		public int Minimum = -10000;
+		public int Maximum = 10000;
 		public int AlliedLevel = 1000;
 		public int EnemyLevel = -1000;
 		public string Description;

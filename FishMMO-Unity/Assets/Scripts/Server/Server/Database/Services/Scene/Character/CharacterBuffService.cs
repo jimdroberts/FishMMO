@@ -14,7 +14,7 @@ namespace FishMMO.Server.DatabaseServices
 		public static void Save(NpgsqlDbContext dbContext, Character character)
 		{
 			if (character == null ||
-				!character.TryGet(out BuffController buffController))
+				!character.TryGet(out IBuffController buffController))
 			{
 				return;
 			}
@@ -98,7 +98,7 @@ namespace FishMMO.Server.DatabaseServices
 		public static void Load(NpgsqlDbContext dbContext, Character character)
 		{
 			if (character == null ||
-				!character.TryGet(out BuffController buffController))
+				!character.TryGet(out IBuffController buffController))
 			{
 				return;
 			}

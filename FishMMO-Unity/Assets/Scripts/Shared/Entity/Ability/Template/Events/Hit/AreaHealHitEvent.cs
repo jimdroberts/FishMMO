@@ -14,6 +14,13 @@ namespace FishMMO.Shared
 
 		public override int Invoke(Character attacker, Character defender, TargetInfo hitTarget, GameObject abilityObject)
 		{
+			// attacker should exist with a faction controller
+			if (attacker == null ||
+				!attacker.TryGet(out IFactionController attackerFactionController))
+			{
+				return 0;
+			}
+
 			PhysicsScene physicsScene = attacker.gameObject.scene.GetPhysicsScene();
 
 			int overlapCount = physicsScene.OverlapSphere(//Physics.OverlapCapsuleNonAlloc(
@@ -30,7 +37,9 @@ namespace FishMMO.Shared
 				{
 					Character def = colliders[i].gameObject.GetComponent<Character>();
 					if (def != null &&
-						def.TryGet(out CharacterDamageController damageController))
+						def.TryGet(out IFactionController defenderFactionController) &&
+						def.TryGet(out ICharacterDamageController damageController) &&
+						attackerFactionController.GetAllianceLevel(defenderFactionController) == FactionAllianceLevel.Ally)
 					{
 						damageController.Heal(attacker, Heal);
 						++hits;

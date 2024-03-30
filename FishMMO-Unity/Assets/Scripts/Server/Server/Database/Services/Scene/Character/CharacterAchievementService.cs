@@ -13,7 +13,7 @@ namespace FishMMO.Server.DatabaseServices
 		public static void Save(NpgsqlDbContext dbContext, Character character)
 		{
 			if (character == null ||
-				!character.TryGet(out AchievementController achievementController))
+				!character.TryGet(out IAchievementController achievementController))
 			{
 				return;
 			}
@@ -71,7 +71,7 @@ namespace FishMMO.Server.DatabaseServices
 		public static void Load(NpgsqlDbContext dbContext, Character character)
 		{
 			if (character == null ||
-				!character.TryGet(out AchievementController achievementController))
+				!character.TryGet(out IAchievementController achievementController))
 			{
 				return;
 			}

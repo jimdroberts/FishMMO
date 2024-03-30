@@ -10,8 +10,12 @@ namespace FishMMO.Shared
 
 		public override int Invoke(Character attacker, Character defender, TargetInfo hitTarget, GameObject abilityObject)
 		{
-			if (defender != null &&
-				defender.TryGet(out BuffController buffController))
+			if (attacker != null &&
+				defender != null &&
+				attacker.TryGet(out IFactionController attackerFactionController) &&
+				defender.TryGet(out IFactionController defenderFactionController) &&
+				defender.TryGet(out IBuffController buffController) &&
+				attackerFactionController.GetAllianceLevel(defenderFactionController) == FactionAllianceLevel.Ally)
 			{
 				buffController.Apply(BuffTemplate);
 			}

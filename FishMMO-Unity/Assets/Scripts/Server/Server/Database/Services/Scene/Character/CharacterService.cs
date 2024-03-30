@@ -288,6 +288,7 @@ namespace FishMMO.Server.DatabaseServices
 
 			CharacterAttributeService.Save(dbContext, character);
 			CharacterAchievementService.Save(dbContext, character);
+			CharacterFactionService.Save(dbContext, character);
 			CharacterBuffService.Save(dbContext, character);
 
 			dbContext.SaveChanges();
@@ -320,6 +321,7 @@ namespace FishMMO.Server.DatabaseServices
 			// possible preserved data
 			CharacterAttributeService.Delete(dbContext, character.ID, keepData);
 			CharacterAchievementService.Delete(dbContext, character.ID, keepData);
+			CharacterFactionService.Delete(dbContext, character.ID, keepData);
 			CharacterBuffService.Delete(dbContext, character.ID, keepData);
 			CharacterFriendService.Delete(dbContext, character.ID, keepData);
 			CharacterInventoryService.Delete(dbContext, character.ID, keepData);
@@ -402,13 +404,14 @@ namespace FishMMO.Server.DatabaseServices
 				character.SetSyncVarDatabaseValue(character.SceneName, dbCharacter.SceneName);
 
 				// character becomes immortal when loading.. just in case..
-				if (character.TryGet(out CharacterDamageController damageController))
+				if (character.TryGet(out ICharacterDamageController damageController))
 				{
 					damageController.Immortal = true;
 				}
 
 				CharacterAttributeService.Load(dbContext, character);
 				CharacterAchievementService.Load(dbContext, character);
+				CharacterFactionService.Load(dbContext, character);
 				CharacterBuffService.Load(dbContext, character);
 				CharacterGuildService.Load(dbContext, character);
 				CharacterPartyService.Load(dbContext, character);

@@ -58,7 +58,7 @@ namespace FishMMO.Client
 				case ReferenceButtonType.None:
 					break;
 				case ReferenceButtonType.Inventory:
-					if (Character.TryGet(out InventoryController inventoryController) &&
+					if (Character.TryGet(out IInventoryController inventoryController) &&
 						inventoryController.TryGetItem((int)referenceID, out Item inventoryItem) &&
 						UIManager.TryGet("UITooltip", out currentUITooltip))
 					{
@@ -66,7 +66,7 @@ namespace FishMMO.Client
 					}
 					break;
 				case ReferenceButtonType.Equipment:
-					if (Character.TryGet(out EquipmentController equipmentController) &&
+					if (Character.TryGet(out IEquipmentController equipmentController) &&
 						equipmentController.TryGetItem((int)referenceID, out Item equippedItem) &&
 						UIManager.TryGet("UITooltip", out currentUITooltip))
 					{
@@ -74,7 +74,7 @@ namespace FishMMO.Client
 					}
 					break;
 				case ReferenceButtonType.Bank:
-					if (Character.TryGet(out BankController bankController) &&
+					if (Character.TryGet(out IBankController bankController) &&
 						bankController.TryGetItem((int)referenceID, out Item bankItem) &&
 						UIManager.TryGet("UITooltip", out currentUITooltip))
 					{
@@ -82,7 +82,7 @@ namespace FishMMO.Client
 					}
 					break;
 				case ReferenceButtonType.Ability:
-					if (Character.TryGet(out AbilityController abilityController) &&
+					if (Character.TryGet(out IAbilityController abilityController) &&
 						abilityController.KnownAbilities.TryGetValue(referenceID, out Ability ability) &&
 						UIManager.TryGet("UITooltip", out currentUITooltip))
 					{

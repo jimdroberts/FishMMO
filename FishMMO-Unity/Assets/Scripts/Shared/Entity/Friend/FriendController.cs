@@ -7,12 +7,17 @@ namespace FishMMO.Shared
 	/// <summary>
 	/// Character guild controller.
 	/// </summary>
-	public class FriendController : CharacterBehaviour
+	public class FriendController : CharacterBehaviour, IFriendController
 	{
-		public readonly HashSet<long> Friends = new HashSet<long>();
+		public event Action<long, bool> OnAddFriend;
+		public event Action<long> OnRemoveFriend;
 
-		public Action<long, bool> OnAddFriend;
-		public Action<long> OnRemoveFriend;
+		public HashSet<long> Friends { get; private set; }
+
+		public override void OnAwake()
+		{
+			Friends = new HashSet<long>();
+		}
 
 		public void AddFriend(long friendID)
 		{

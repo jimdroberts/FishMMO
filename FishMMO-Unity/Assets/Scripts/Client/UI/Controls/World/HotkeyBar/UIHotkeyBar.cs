@@ -85,21 +85,21 @@ namespace FishMMO.Client
 					case ReferenceButtonType.None:
 						break;
 					case ReferenceButtonType.Inventory:
-						if (Character.TryGet(out InventoryController inventoryController) &&
+						if (Character.TryGet(out IInventoryController inventoryController) &&
 							inventoryController.IsSlotEmpty((int)hotkeys[i].ReferenceID))
 						{
 							hotkeys[i].Clear();
 						}
 						break;
 					case ReferenceButtonType.Equipment:
-						if (Character.TryGet(out EquipmentController equipmentController) &&
+						if (Character.TryGet(out IEquipmentController equipmentController) &&
 							equipmentController.IsSlotEmpty((int)hotkeys[i].ReferenceID))
 						{
 							hotkeys[i].Clear();
 						}
 						break;
 					case ReferenceButtonType.Ability:
-						if (Character.TryGet(out AbilityController abilityController) &&
+						if (Character.TryGet(out IAbilityController abilityController) &&
 							!abilityController.KnownAbilities.ContainsKey(hotkeys[i].ReferenceID))
 						{
 							hotkeys[i].Clear();

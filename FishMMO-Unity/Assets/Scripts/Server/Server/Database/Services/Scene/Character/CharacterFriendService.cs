@@ -31,7 +31,7 @@ namespace FishMMO.Server.DatabaseServices
 		public static void Save(NpgsqlDbContext dbContext, Character character)
 		{
 			if (character == null ||
-				!character.TryGet(out FriendController friendController))
+				!character.TryGet(out IFriendController friendController))
 			{
 				return;
 			}
@@ -120,7 +120,7 @@ namespace FishMMO.Server.DatabaseServices
 		public static void Load(NpgsqlDbContext dbContext, Character character)
 		{
 			if (character == null ||
-				!character.TryGet(out FriendController friendController))
+				!character.TryGet(out IFriendController friendController))
 			{
 				return;
 			}

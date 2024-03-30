@@ -7,7 +7,7 @@ namespace FishMMO.Shared
 	/// Simple NetworkBehaviour type that stores a character reference and injects itself into the Character Behaviour mapping.
 	/// </summary>
 	[RequireComponent(typeof(Character))]
-	public abstract class CharacterBehaviour : NetworkBehaviour
+	public abstract class CharacterBehaviour : NetworkBehaviour, ICharacterBehaviour
 	{
 		public Character Character { get; protected set; }
 		public bool Initialized { get; private set; }
@@ -38,7 +38,7 @@ namespace FishMMO.Shared
 			OnDestroying();
 			if (Character != null)
 			{
-				Character.Unregister(this);
+				Character.UnregisterCharacterBehaviour(this);
 			}
 			Character = null;
 		}

@@ -2,7 +2,7 @@
 
 namespace FishMMO.Shared
 {
-	public class QuestController : CharacterBehaviour
+	public class QuestController : CharacterBehaviour, IQuestController
 	{
 		private Dictionary<string, QuestInstance> quests = new Dictionary<string, QuestInstance>();
 

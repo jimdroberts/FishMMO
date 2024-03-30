@@ -10,18 +10,18 @@ namespace FishMMO.Shared
 	/// <summary>
 	/// Character guild controller.
 	/// </summary>
-	public class GuildController : CharacterBehaviour
+	public class GuildController : CharacterBehaviour, IGuildController
 	{
-		public long ID;
-		public GuildRank Rank = GuildRank.None;
-
 		public static Action<long, Character> OnReadPayload;
 
-		public Action<long> OnReceiveGuildInvite;
-		public Action<long, long, GuildRank, string> OnAddGuildMember;
-		public Action<HashSet<long>> OnValidateGuildMembers;
-		public Action<long> OnRemoveGuildMember;
-		public Action OnLeaveGuild;
+		public event Action<long> OnReceiveGuildInvite;
+		public event Action<long, long, GuildRank, string> OnAddGuildMember;
+		public event Action<HashSet<long>> OnValidateGuildMembers;
+		public event Action<long> OnRemoveGuildMember;
+		public event Action OnLeaveGuild;
+
+		public long ID { get; set; }
+		public GuildRank Rank { get; set; }
 
 		public override void ReadPayload(NetworkConnection connection, Reader reader)
 		{

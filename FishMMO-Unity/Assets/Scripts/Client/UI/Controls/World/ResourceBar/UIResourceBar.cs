@@ -14,7 +14,7 @@ namespace FishMMO.Client
 		public override void OnPreSetCharacter()
 		{
 			if (Character != null &&
-				Character.TryGet(out CharacterAttributeController attributeController) &&
+				Character.TryGet(out ICharacterAttributeController attributeController) &&
 				attributeController.TryGetResourceAttribute(Template, out CharacterResourceAttribute attribute))
 			{
 				attribute.OnAttributeUpdated -= CharacterAttribute_OnAttributeUpdated;
@@ -26,7 +26,7 @@ namespace FishMMO.Client
 			base.SetCharacter(character);
 
 			if (Character != null &&
-				Character.TryGet(out CharacterAttributeController attributeController) &&
+				Character.TryGet(out ICharacterAttributeController attributeController) &&
 				attributeController.TryGetResourceAttribute(Template, out CharacterResourceAttribute attribute))
 			{
 				attribute.OnAttributeUpdated += CharacterAttribute_OnAttributeUpdated;
@@ -36,7 +36,7 @@ namespace FishMMO.Client
 		public void CharacterAttribute_OnAttributeUpdated(CharacterAttribute attribute)
 		{
 			if (Character != null &&
-				Character.TryGet(out CharacterAttributeController attributeController) && 
+				Character.TryGet(out ICharacterAttributeController attributeController) && 
 				attributeController.TryGetResourceAttribute(Template, out CharacterResourceAttribute resource))
 			{
 				float value = (float)resource.CurrentValue / resource.FinalValueAsFloat;

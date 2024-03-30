@@ -48,13 +48,13 @@ namespace FishMMO.Client
 					case ReferenceButtonType.None:
 						break;
 					case ReferenceButtonType.Inventory:
-						if (Character.TryGet(out InventoryController inventoryController))
+						if (Character.TryGet(out IInventoryController inventoryController))
 						{
 							inventoryController.Activate((int)ReferenceID);
 						}
 						break;
 					case ReferenceButtonType.Equipment:
-						if (Character.TryGet(out EquipmentController equipmentController))
+						if (Character.TryGet(out IEquipmentController equipmentController))
 						{
 							equipmentController.Activate((int)ReferenceID);
 						}
@@ -62,7 +62,7 @@ namespace FishMMO.Client
 					case ReferenceButtonType.Bank:
 						break;
 					case ReferenceButtonType.Ability:
-						if (Character.TryGet(out AbilityController abilityController))
+						if (Character.TryGet(out IAbilityController abilityController))
 						{
 							abilityController.Activate(ReferenceID, InputManager.GetKeyCode(KeyMap));
 						}

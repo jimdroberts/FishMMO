@@ -5,7 +5,7 @@ using System.Collections.Generic;
 
 namespace FishMMO.Shared
 {
-	public class AchievementController : CharacterBehaviour
+	public class AchievementController : CharacterBehaviour, IAchievementController
 	{
 		private Dictionary<int, Achievement> achievements = new Dictionary<int, Achievement>();
 
@@ -144,7 +144,7 @@ namespace FishMMO.Shared
 		}
 
 #if UNITY_SERVER
-	private void HandleRewards(AchievementTier tier)
+	public void HandleRewards(AchievementTier tier)
 	{
 		if (base.IsServerInitialized &&
 			Character.Owner != null &&

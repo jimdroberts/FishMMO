@@ -1131,8 +1131,12 @@ namespace FishNet.Object
         /// Sends a Replicate to server or clients.
         /// </summary>
         private void Replicate_SendAuthoritative<T>(bool toServer, uint hash, int pastInputs, List<T> replicatesHistory, uint queuedTick, Channel channel) where T : IReplicateData
-        {
-            if (!IsSpawnedWithWarning())
+        {   
+            /* Do not use IsSpawnedWithWarning because the server
+             * will still call this a tick or two as clientHost when
+             * an owner disconnects. This comes from calling Replicate(default)
+             * for the server-side processing in NetworkBehaviours. */
+            if (!IsSpawned)
                 return;
 
             int historyCount = replicatesHistory.Count;

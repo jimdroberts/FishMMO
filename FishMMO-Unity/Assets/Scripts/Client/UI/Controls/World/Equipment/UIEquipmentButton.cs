@@ -15,13 +15,13 @@ namespace FishMMO.Client
 				{
 					if (dragObject.Visible)
 					{
-						if (Character.TryGet(out EquipmentController equipmentController))
+						if (Character.TryGet(out IEquipmentController equipmentController))
 						{
 							int referenceID = (int)dragObject.ReferenceID;
 
 							// we check the hotkey type because we can only equip items from the inventory
 							if (dragObject.Type == ReferenceButtonType.Inventory &&
-								Character.TryGet(out InventoryController inventoryController))
+								Character.TryGet(out IInventoryController inventoryController))
 							{
 								// get the item from the Inventory
 								Item item = inventoryController.Items[referenceID];
@@ -37,7 +37,7 @@ namespace FishMMO.Client
 							}
 							// taking an item from the bank and putting it in this equipment slot
 							else if (dragObject.Type == ReferenceButtonType.Bank &&
-									 Character.TryGet(out BankController bankController))
+									 Character.TryGet(out IBankController bankController))
 							{
 								// get the item from the Inventory
 								Item item = bankController.Items[referenceID];
@@ -56,7 +56,7 @@ namespace FishMMO.Client
 						// clear the drag object no matter what
 						dragObject.Clear();
 					}
-					else if (Character.TryGet(out EquipmentController equipmentController) &&
+					else if (Character.TryGet(out IEquipmentController equipmentController) &&
 							 !equipmentController.IsSlotEmpty((byte)ItemSlotType))
 					{
 						dragObject.SetReference(Icon.sprite, ReferenceID, Type);
@@ -73,7 +73,7 @@ namespace FishMMO.Client
 			}
 			if (Character != null &&
 				Type == ReferenceButtonType.Equipment &&
-				Character.TryGet(out EquipmentController equipmentController))
+				Character.TryGet(out IEquipmentController equipmentController))
 			{
 				Clear();
 

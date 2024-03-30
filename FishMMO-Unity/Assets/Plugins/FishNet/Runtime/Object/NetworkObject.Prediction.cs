@@ -2,6 +2,7 @@
 using FishNet.Managing;
 using FishNet.Managing.Timing;
 using FishNet.Object.Prediction;
+using GameKit.Dependencies.Utilities;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -103,19 +104,11 @@ namespace FishNet.Object
         /// <summary>
         /// Graphical smoother to use when using set for owner.
         /// </summary>
-        private PredictionTickSmoother _tickSmoother;
+        private LocalTransformTickSmoother _tickSmoother;
         /// <summary>
         /// NetworkBehaviours which use prediction.
         /// </summary>
-        private List<NetworkBehaviour> _predictionBehaviours = new List<NetworkBehaviour>();
-        ///// <summary>
-        ///// Tick when CollionStayed last called. This only has value if using prediction.
-        ///// </summary>
-        //private uint _collisionStayedTick;
-        ///// <summary>
-        ///// Local client objects this object is currently colliding with.
-        ///// </summary>
-        //private HashSet<GameObject> _localClientCollidedObjects = new HashSet<GameObject>();
+        private List<NetworkBehaviour> _predictionBehaviours = new List<NetworkBehaviour>();       
         #endregion
 
         private void Prediction_Update()
@@ -197,9 +190,10 @@ namespace FishNet.Object
             }
             else
             {
-                _tickSmoother = new PredictionTickSmoother();
+                if (_tickSmoother == null)
+                    _tickSmoother = ResettableObjectCaches<LocalTransformTickSmoother>.Retrieve();
                 float teleportT = (_enableTeleport) ? _teleportThreshold : MoveRatesCls.UNSET_VALUE;
-                _tickSmoother.InitializeOnce(_graphicalObject, teleportT, this, _ownerInterpolation);
+                _tickSmoother.InitializeOnce(_graphicalObject, teleportT, (float)TimeManager.TickDelta, _ownerInterpolation);
             }
         }
 
@@ -208,7 +202,11 @@ namespace FishNet.Object
         /// </summary>
         private void DeinitializeSmoothers()
         {
-            _tickSmoother?.Deinitialize();
+            if (_tickSmoother != null)
+            {
+                _tickSmoother.Deinitialize();
+                ResettableObjectCaches<LocalTransformTickSmoother>.StoreAndDefault(ref _tickSmoother);
+            }
         }
 
         private void PredictionManager_OnPreReconcile(uint clientReconcileTick, uint serverReconcileTick)

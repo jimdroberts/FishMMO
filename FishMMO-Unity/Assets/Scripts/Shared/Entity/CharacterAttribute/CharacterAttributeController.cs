@@ -5,12 +5,15 @@ using FishNet.Transporting;
 
 namespace FishMMO.Shared
 {
-	public class CharacterAttributeController : CharacterBehaviour
+	public class CharacterAttributeController : CharacterBehaviour, ICharacterAttributeController
 	{
 		public CharacterAttributeTemplateDatabase CharacterAttributeDatabase;
 
-		public readonly Dictionary<int, CharacterAttribute> Attributes = new Dictionary<int, CharacterAttribute>();
-		public readonly Dictionary<int, CharacterResourceAttribute> ResourceAttributes = new Dictionary<int, CharacterResourceAttribute>();
+		private readonly Dictionary<int, CharacterAttribute> attributes = new Dictionary<int, CharacterAttribute>();
+		private readonly Dictionary<int, CharacterResourceAttribute> resourceAttributes = new Dictionary<int, CharacterResourceAttribute>();
+
+		public Dictionary<int, CharacterAttribute> Attributes { get { return attributes; } }
+		public Dictionary<int, CharacterResourceAttribute> ResourceAttributes { get { return resourceAttributes; } }
 
 		public override void OnAwake()
 		{
@@ -32,7 +35,7 @@ namespace FishMMO.Shared
 			}
 		}
 
-		public override void ReadPayload(NetworkConnection connection, Reader reader)
+		public override void ReadPayload(NetworkConnection conn, Reader reader)
 		{
 			int attributeCount = reader.ReadInt32();
 			if (attributeCount > 0)
@@ -60,7 +63,7 @@ namespace FishMMO.Shared
 			}
 		}
 
-		public override void WritePayload(NetworkConnection connection, Writer writer)
+		public override void WritePayload(NetworkConnection conn, Writer writer)
 		{
 			writer.WriteInt32(Attributes.Count);
 			foreach (CharacterAttribute attribute in Attributes.Values)

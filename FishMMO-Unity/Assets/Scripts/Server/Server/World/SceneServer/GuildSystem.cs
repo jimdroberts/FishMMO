@@ -182,7 +182,7 @@ namespace FishMMO.Server
 					{
 						if (characterSystem.CharactersByID.TryGetValue(entity.CharacterID, out Character character))
 						{
-							if (!character.TryGet(out GuildController guildController) ||
+							if (!character.TryGet(out IGuildController guildController) ||
 								guildController.ID < 1)
 							{
 								continue;
@@ -214,7 +214,7 @@ namespace FishMMO.Server
 				return;
 			}
 			
-			if (!character.TryGet(out GuildController guildController) ||
+			if (!character.TryGet(out IGuildController guildController) ||
 				guildController.ID < 1)
 			{
 				// not in a guild

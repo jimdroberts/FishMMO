@@ -30,7 +30,7 @@ namespace FishMMO.Client
 		public override void OnPreSetCharacter()
 		{
 			if (Character != null &&
-				Character.TryGet(out InventoryController inventoryController))
+				Character.TryGet(out IInventoryController inventoryController))
 			{
 				inventoryController.OnSlotUpdated -= OnInventorySlotUpdated;
 			}
@@ -43,7 +43,7 @@ namespace FishMMO.Client
 			if (Character == null ||
 				content == null ||
 				buttonPrefab == null ||
-				!Character.TryGet(out InventoryController inventoryController))
+				!Character.TryGet(out IInventoryController inventoryController))
 			{
 				return;
 			}
@@ -77,7 +77,7 @@ namespace FishMMO.Client
 			inventoryController.OnSlotUpdated += OnInventorySlotUpdated;
 		}
 
-		public void OnInventorySlotUpdated(ItemContainer container, Item item, int inventoryIndex)
+		public void OnInventorySlotUpdated(IItemContainer container, Item item, int inventoryIndex)
 		{
 			if (inventorySlots == null)
 			{

@@ -13,7 +13,7 @@ namespace FishMMO.Server.DatabaseServices
 		public static void Save(NpgsqlDbContext dbContext, Character character)
 		{
 			if (character == null ||
-				!character.TryGet(out CharacterAttributeController attributeController))
+				!character.TryGet(out ICharacterAttributeController attributeController))
 			{
 				return;
 			}
@@ -96,7 +96,7 @@ namespace FishMMO.Server.DatabaseServices
 		public static void Load(NpgsqlDbContext dbContext, Character character)
 		{
 			if (character == null ||
-				!character.TryGet(out CharacterAttributeController attributeController))
+				!character.TryGet(out ICharacterAttributeController attributeController))
 			{
 				return;
 			}

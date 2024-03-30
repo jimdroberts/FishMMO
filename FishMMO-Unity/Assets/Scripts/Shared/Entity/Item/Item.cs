@@ -174,7 +174,7 @@ namespace FishMMO.Shared
 				Character character = Equippable.Character;
 
 				if (character != null &&
-					character.TryGet(out CharacterAttributeController attributeController) &&
+					character.TryGet(out ICharacterAttributeController attributeController) &&
 					attributeController.TryGetAttribute(attribute.Template.CharacterAttribute.ID, out CharacterAttribute characterAttribute))
 				{
 					characterAttribute.AddValue(-oldValue);

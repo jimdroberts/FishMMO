@@ -30,7 +30,7 @@ namespace FishMMO.Shared
 	[RequireComponent(typeof(FactionController))]
 	public class Character : NetworkBehaviour, IPooledResettable
 	{
-		private Dictionary<Type, CharacterBehaviour> behaviours = new Dictionary<Type, CharacterBehaviour>();
+		private Dictionary<Type, ICharacterBehaviour> behaviours = new Dictionary<Type, ICharacterBehaviour>();
 
 		public Transform Transform { get; private set; }
 
@@ -186,38 +186,53 @@ namespace FishMMO.Shared
 			syncVar.SetInitialValues(value);
 		}
 
-		public void RegisterCharacterBehaviour(CharacterBehaviour behaviour)
+		public void RegisterCharacterBehaviour(ICharacterBehaviour behaviour)
 		{
 			if (behaviour == null)
 			{
 				return;
 			}
-			Type type = behaviour.GetType();
-			if (behaviours.ContainsKey(type))
+			Type[] interfaces = behaviour.GetType().GetInterfaces();
+			for (int i = 0; i < interfaces.Length; ++i)
 			{
-				return;
+				Type interfaceType = interfaces[i];
+				if (interfaceType == typeof(ICharacterBehaviour) ||
+					interfaceType == typeof(IItemContainer))
+				{
+					continue;
+				}
+				if (!behaviours.ContainsKey(interfaceType))
+				{
+					Debug.Log(CharacterName + ": Registered " + interfaceType.Name);
+					behaviours.Add(interfaceType, behaviour);
+					return;
+				}
 			}
-			//Debug.Log(CharacterName + ": Registered " + type.Name);
-			behaviours.Add(type, behaviour);
 		}
 
-		public void Unregister<T>(T behaviour) where T : CharacterBehaviour
+		public void UnregisterCharacterBehaviour<T>(T behaviour) where T : ICharacterBehaviour
 		{
 			if (behaviour == null)
 			{
 				return;
 			}
-			else
+			Type[] interfaces = behaviour.GetType().GetInterfaces();
+			for (int i = 0; i < interfaces.Length; ++i)
 			{
-				Type type = behaviour.GetType();
-				//Debug.Log(CharacterName + ": Unregistered " + type.Name);
-				behaviours.Remove(type);
+				Type interfaceType = interfaces[i];
+				if (interfaceType == typeof(ICharacterBehaviour) ||
+					interfaceType == typeof(IItemContainer))
+				{
+					continue;
+				}
+				Debug.Log(CharacterName + ": Unregistered " + interfaceType.Name);
+				behaviours.Remove(interfaceType);
 			}
 		}
 
-		public bool TryGet<T>(out T control) where T : CharacterBehaviour
+		public bool TryGet<T>(out T control) where T : class, ICharacterBehaviour
 		{
-			if (behaviours.TryGetValue(typeof(T), out CharacterBehaviour result))
+			if (behaviours.TryGetValue(typeof(T), out ICharacterBehaviour result))
 			{
 				if ((control = result as T) != null)
 				{
@@ -228,9 +243,9 @@ namespace FishMMO.Shared
 			return false;
 		}
 
-		public T Get<T>() where T : CharacterBehaviour
+		public T Get<T>() where T : class, ICharacterBehaviour
 		{
-			if (behaviours.TryGetValue(typeof(T), out CharacterBehaviour result))
+			if (behaviours.TryGetValue(typeof(T), out ICharacterBehaviour result))
 			{
 				return result as T;
 			}

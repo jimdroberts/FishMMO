@@ -96,7 +96,7 @@ namespace FishMMO.Server.DatabaseServices
 		public static void Load(NpgsqlDbContext dbContext, Character character)
 		{
 			if (character == null ||
-				!character.TryGet(out EquipmentController equipmentController))
+				!character.TryGet(out IEquipmentController equipmentController))
 			{
 				return;
 			}

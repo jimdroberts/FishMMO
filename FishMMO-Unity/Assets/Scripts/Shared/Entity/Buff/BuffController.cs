@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace FishMMO.Shared
 {
-	public class BuffController : CharacterBehaviour
+	public class BuffController : CharacterBehaviour, IBuffController
 	{
 		private Dictionary<int, Buff> buffs = new Dictionary<int, Buff>();
 

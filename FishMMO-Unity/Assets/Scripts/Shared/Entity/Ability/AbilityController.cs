@@ -9,7 +9,7 @@ using UnityEngine;
 
 namespace FishMMO.Shared
 {
-	public class AbilityController : CharacterBehaviour
+	public class AbilityController : CharacterBehaviour, IAbilityController
 	{
 		public const long NO_ABILITY = 0;
 
@@ -27,18 +27,18 @@ namespace FishMMO.Shared
 		public AbilityEvent ChargedTemplate;
 		public AbilityEvent ChanneledTemplate;
 
-		public Func<bool> OnCanManipulate;
+		public event Func<bool> OnCanManipulate;
 
-		public Action<string, float, float> OnUpdate;
+		public event Action<string, float, float> OnUpdate;
 		// Invoked when the current ability is Interrupted.
-		public Action OnInterrupt;
+		public event Action OnInterrupt;
 		// Invoked when the current ability is Cancelled.
-		public Action OnCancel;
+		public event Action OnCancel;
 
 		// UI
-		public Action OnReset;
-		public Action<long, Ability> OnAddAbility;
-		public Action<long, BaseAbilityTemplate> OnAddKnownAbility;
+		public event Action OnReset;
+		public event Action<long, Ability> OnAddAbility;
+		public event Action<long, BaseAbilityTemplate> OnAddKnownAbility;
 
 		public Dictionary<long, Ability> KnownAbilities { get; private set; }
 		public HashSet<int> KnownBaseAbilities { get; private set; }
@@ -175,7 +175,7 @@ namespace FishMMO.Shared
 		}
 #endif
 
-		public override void ReadPayload(NetworkConnection connection, Reader reader)
+		public override void ReadPayload(NetworkConnection conn, Reader reader)
 		{
 			int abilityCount = reader.ReadInt32();
 			if (abilityCount < 1)
@@ -213,7 +213,7 @@ namespace FishMMO.Shared
 			}
 		}
 
-		public override void WritePayload(NetworkConnection connection, Writer writer)
+		public override void WritePayload(NetworkConnection conn, Writer writer)
 		{
 			writer.WriteInt32(KnownAbilities.Count);
 			foreach (Ability ability in KnownAbilities.Values)
@@ -292,7 +292,7 @@ namespace FishMMO.Shared
 						// channeled abilities like beam effects or a charge rush that are continuously updating or spawning objects should be handled here
 						else if (ChanneledTemplate != null &&
 								 currentAbility.HasAbilityEvent(ChanneledTemplate.ID) &&
-								 Character.TryGet(out TargetController t))
+								 Character.TryGet(out ITargetController t))
 						{
 							// get target info
 							TargetInfo targetInfo = t.UpdateTarget(Character.CharacterController.VirtualCameraPosition,
@@ -321,7 +321,7 @@ namespace FishMMO.Shared
 
 				// complete the final activation of the ability
 				if (CanActivate(currentAbility) &&
-					Character.TryGet(out TargetController tc))
+					Character.TryGet(out ITargetController tc))
 				{
 					// get target info
 					TargetInfo targetInfo = tc.UpdateTarget(Character.CharacterController.VirtualCameraPosition,
@@ -377,7 +377,7 @@ namespace FishMMO.Shared
 		public float CalculateSpeedReduction(CharacterAttributeTemplate attribute)
 		{
 			if (attribute != null &&
-				Character.TryGet(out CharacterAttributeController attributeController))
+				Character.TryGet(out ICharacterAttributeController attributeController))
 			{
 				CharacterAttribute speedReduction;
 				if (attributeController.TryGetAttribute(attribute.ID, out speedReduction))
@@ -433,7 +433,7 @@ namespace FishMMO.Shared
 			{
 				return false;
 			}
-			if (!Character.TryGet(out CooldownController cooldownController) ||
+			if (!Character.TryGet(out ICooldownController cooldownController) ||
 				cooldownController.IsOnCooldown(knownAbility.Template.Name))
 			{
 				return false;
@@ -463,7 +463,7 @@ namespace FishMMO.Shared
 		{
 			AbilityTemplate currentAbilityTemplate = ability.Template;
 			if (ability.Cooldown > 0.0f &&
-				Character.TryGet(out CooldownController cooldownController))
+				Character.TryGet(out ICooldownController cooldownController))
 			{
 				float cooldownReduction = CalculateSpeedReduction(currentAbilityTemplate.CooldownReductionAttribute);
 				float cooldown = ability.Cooldown * cooldownReduction;

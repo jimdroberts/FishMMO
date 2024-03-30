@@ -8,17 +8,17 @@ namespace FishMMO.Shared
 	/// <summary>
 	/// Character party controller.
 	/// </summary>
-	public class PartyController : CharacterBehaviour
+	public class PartyController : CharacterBehaviour, IPartyController
 	{
-		public long ID;
-		public PartyRank Rank = PartyRank.None;
+		public event Action<string> OnPartyCreated;
+		public event Action<long> OnReceivePartyInvite;
+		public event Action<long, PartyRank, float> OnAddPartyMember;
+		public event Action<HashSet<long>> OnValidatePartyMembers;
+		public event Action<long> OnRemovePartyMember;
+		public event Action OnLeaveParty;
 
-		public Action<string> OnPartyCreated;
-		public Action<long> OnReceivePartyInvite;
-		public Action<long, PartyRank, float> OnAddPartyMember;
-		public Action<HashSet<long>> OnValidatePartyMembers;
-		public Action<long> OnRemovePartyMember;
-		public Action OnLeaveParty;
+		public long ID { get; set; }
+		public PartyRank Rank { get; set; }
 
 #if !UNITY_SERVER
 		public override void OnStartCharacter()

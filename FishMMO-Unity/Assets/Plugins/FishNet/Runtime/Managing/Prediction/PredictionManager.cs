@@ -420,10 +420,10 @@ namespace FishNet.Managing.Predicting
         /// Internal use.
         /// </summary>
         [APIExclude]
-        [MakePublic] //To internal.
+        [MakePublic]
         internal void InvokeOnReconcile(NetworkBehaviour nb, bool before)
         {
-            nb.IsReconciling = before;
+            nb.IsBehaviourReconciling = before;
             if (before)
                 OnPreReconcile?.Invoke(nb);
             else
@@ -520,7 +520,9 @@ namespace FishNet.Managing.Predicting
             if (_reconcileStates.Count == 0)
                 return;
 
-            uint estimatedLastRemoteTick = _networkManager.TimeManager.LastPacketTick.Value();
+            TimeManager tm = _networkManager.TimeManager;
+            uint localTick = tm.LocalTick;
+            uint estimatedLastRemoteTick = tm.LastPacketTick.Value();
             //NOTESSTART
             /* Don't run a reconcile unless it's possible for ticks queued
              * that tick to be run already. Otherwise you are not replaying inputs
@@ -531,35 +533,78 @@ namespace FishNet.Managing.Predicting
              * A system which synchronized all current states rather than what's only needed to correct
              * the inputs would likely solve this. */
             //NOTESEND
-            if (_reconcileStates.Peek().ClientTick >= (_networkManager.TimeManager.LocalTick - QueuedInputs))
+
+            /* Only use the latest reconcile which passes the conditions to run.
+             * This will drop any excessive reconciles which built up from latency. */
+            StatePacket sp = default;
+            /* If here then 'peeked' has met conditions.
+             * Check if the next state also meets, if so then
+             * skip ahead to the next state. */
+            while (_reconcileStates.Count > 0)
+            {
+                //If next matches then set peeked to new.
+                if (ConditionsMet(_reconcileStates.Peek()))
+                {
+                    //Since this is being replaced, reset state first.
+                    if (sp.IsValid)
+                        sp.ResetState();
+                    sp = _reconcileStates.Dequeue();
+                }
+                /* Conditions are not met on the next one, exit loop.
+                 * This will use the latest peeked. */
+                else
+                { 
+                    break;
+                }
+
+                //Condition met. See if the next one matches condition, if so drop current.
+                //Returns if a state has it's conditions met.
+                bool ConditionsMet(StatePacket spChecked)
+                {
+                    return (spChecked.ServerTick <= (estimatedLastRemoteTick - QueuedInputs - RedundancyCount - 1) && spChecked.ClientTick < (localTick - QueuedInputs));
+                }
+            }
+            //If state is not valid then it was never set, thus condition is not met.
+            if (!sp.IsValid)
                 return;
 
-            uint localTick = _networkManager.TimeManager.LocalTick;
-            StatePacket sp = _reconcileStates.Dequeue();
+            //StatePacket sp = _reconcileStates.Dequeue();
             PooledReader reader = ReaderPool.Retrieve(sp.Data, _networkManager, Reader.DataSource.Server);
 
+            bool dropReconcile = false;
             uint clientTick = sp.ClientTick;
             uint serverTick = sp.ServerTick;
-
-            bool dropReconcile = false;
-            double timePassed = _networkManager.TimeManager.TicksToTime(localTick - clientTick);
-            /* If client has a massive ping or is suffering from a low frame rate
-             * then limit the number of reconciles to prevent further performance loss. */
-            if (timePassed > 1.5d || _networkManager.TimeManager.LowFrameRate)
+            uint ticksDifference = (localTick - clientTick);
+            //Target ticks are based on QueuedInputs, redundancy count, and latency. An extra 2 is added as a buffer for variance.
+            uint targetTicks = (2 + (uint)QueuedInputs + (uint)RedundancyCount + tm.TimeToTicks((double)((double)tm.RoundTripTime / 1000d), TickRounding.RoundDown));
+            long ticksOverTarget = (localTick - clientTick) - targetTicks;
+            /* If the reconcile is behind more ticks than hoped then slow
+             * down the client simulation so it ticks very slightly
+             * slower allowing fewer replays. This typically is only required after
+             * the player encounters a sudden ping drop, such as a spike in latency,
+             * then ping returns to norrmal.  */
+            if (ticksOverTarget > 0)
             {
-                /* Limit 3 drops a second. DropValue will be roughly the same
-                 * as every 330ms. */
-                int reconcileValue = Mathf.Max(1, (_networkManager.TimeManager.TickRate / 3));
-                //If cannot drop then reset dropcount.
-                if (_droppedReconcilesCount >= reconcileValue)
+                //tm.ChangeAdjustedTickDelta(false, 0.05f);
+
+                /* If client has a low frame rate
+                 * then limit the number of reconciles to prevent further performance loss. */
+                if (_networkManager.TimeManager.LowFrameRate)
                 {
-                    _droppedReconcilesCount = 0;
-                }
-                //If can drop...
-                else
-                {
-                    dropReconcile = true;
-                    _droppedReconcilesCount++;
+                    /* Limit 3 drops a second. DropValue will be roughly the same
+                     * as every 330ms. */
+                    int reconcileValue = Mathf.Max(1, (_networkManager.TimeManager.TickRate / 3));
+                    //If cannot drop then reset dropcount.
+                    if (_droppedReconcilesCount >= reconcileValue)
+                    {
+                        _droppedReconcilesCount = 0;
+                    }
+                    //If can drop...
+                    else
+                    {
+                        dropReconcile = true;
+                        _droppedReconcilesCount++;
+                    }
                 }
             }
             //No reason to believe client is struggling, allow reconcile.
@@ -582,7 +627,6 @@ namespace FishNet.Managing.Predicting
                 //Have the reader get processed.
                 _networkManager.ClientManager.ParseReader(reader, Channel.Reliable);
 
-                TimeManager tm = _networkManager.TimeManager;
                 bool timeManagerPhysics = (tm.PhysicsMode == PhysicsMode.TimeManager);
                 float tickDelta = (float)tm.TickDelta;
 
@@ -636,10 +680,6 @@ namespace FishNet.Managing.Predicting
                 ClientReplayTick = TimeManager.UNSET_TICK;
                 ServerReplayTick = TimeManager.UNSET_TICK;
                 IsReconciling = false;
-            }
-            //Intentionally left blank.
-            else
-            {
             }
 
             sp.ResetState();

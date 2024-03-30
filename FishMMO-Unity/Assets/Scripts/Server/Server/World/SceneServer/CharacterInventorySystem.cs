@@ -99,7 +99,7 @@ namespace FishMMO.Server
 
 		public bool SwapContainerItems(NpgsqlDbContext dbContext,
 									   long characterID,
-									   ItemContainer container,
+									   IItemContainer container,
 									   int fromIndex, int toIndex,
 									   Action<NpgsqlDbContext, long, Item> onDatabaseUpdateSlot)
 		{
@@ -116,7 +116,7 @@ namespace FishMMO.Server
 
 		public bool SwapContainerItems(NpgsqlDbContext dbContext,
 									   long characterID,
-									   ItemContainer from, ItemContainer to,
+									   IItemContainer from, IItemContainer to,
 									   int fromIndex, int toIndex,
 									   Action<NpgsqlDbContext, long, Item> onDatabaseSetOldSlot = null,
 									   Action<NpgsqlDbContext, long, long> onDatabaseDeleteOldSlot = null,
@@ -170,7 +170,7 @@ namespace FishMMO.Server
 			Character character = conn.FirstObject.GetComponent<Character>();
 			if (character != null &&
 				!character.IsTeleporting &&
-				character.TryGet(out InventoryController inventoryController))
+				character.TryGet(out IInventoryController inventoryController))
 			{
 				Item item = inventoryController.RemoveItem(msg.slot);
 
@@ -204,7 +204,7 @@ namespace FishMMO.Server
 			Character character = conn.FirstObject.GetComponent<Character>();
 			if (character == null ||
 				character.IsTeleporting ||
-				!character.TryGet(out InventoryController inventoryController))
+				!character.TryGet(out IInventoryController inventoryController))
 			{
 				return;
 			}
@@ -228,7 +228,7 @@ namespace FishMMO.Server
 				case InventoryType.Equipment:
 					break;
 				case InventoryType.Bank:
-					if (character.TryGet(out BankController bankController) &&
+					if (character.TryGet(out IBankController bankController) &&
 						SwapContainerItems(dbContext, character.ID, bankController, inventoryController, msg.from, msg.to,
 					(db, id, a) =>
 					{
@@ -276,7 +276,7 @@ namespace FishMMO.Server
 			Character character = conn.FirstObject.GetComponent<Character>();
 			if (character == null ||
 				character.IsTeleporting ||
-				!character.TryGet(out EquipmentController equipmentController))
+				!character.TryGet(out IEquipmentController equipmentController))
 			{
 				return;
 			}
@@ -284,7 +284,7 @@ namespace FishMMO.Server
 			switch (msg.fromInventory)
 			{
 				case InventoryType.Inventory:
-					if (character.TryGet(out InventoryController inventoryController) &&
+					if (character.TryGet(out IInventoryController inventoryController) &&
 						inventoryController.TryGetItem(msg.inventoryIndex, out Item inventoryItem))
 					{
 						if (!equipmentController.Equip(inventoryItem, msg.inventoryIndex, inventoryController, (ItemSlot)msg.slot))
@@ -315,7 +315,7 @@ namespace FishMMO.Server
 				case InventoryType.Equipment:
 					return;
 				case InventoryType.Bank:
-					if (character.TryGet(out BankController bankController) &&
+					if (character.TryGet(out IBankController bankController) &&
 						bankController.TryGetItem(msg.inventoryIndex, out Item bankItem))
 					{
 						if (!equipmentController.Equip(bankItem, msg.inventoryIndex, bankController, (ItemSlot)msg.slot))
@@ -370,7 +370,7 @@ namespace FishMMO.Server
 			Character character = conn.FirstObject.GetComponent<Character>();
 			if (character == null ||
 				character.IsTeleporting ||
-				!character.TryGet(out EquipmentController equipmentController))
+				!character.TryGet(out IEquipmentController equipmentController))
 			{
 				return;
 			}
@@ -378,7 +378,7 @@ namespace FishMMO.Server
 			switch (msg.toInventory)
 			{
 				case InventoryType.Inventory:
-					if (character.TryGet(out InventoryController inventoryController) &&
+					if (character.TryGet(out IInventoryController inventoryController) &&
 						equipmentController.TryGetItem(msg.slot, out Item toInventory))
 					{
 						// save the old slot index so we can delete the item
@@ -422,7 +422,7 @@ namespace FishMMO.Server
 				case InventoryType.Equipment:
 					break;
 				case InventoryType.Bank:
-					if (character.TryGet(out BankController bankController) &&
+					if (character.TryGet(out IBankController bankController) &&
 						equipmentController.TryGetItem(msg.slot, out Item toBank))
 					{
 						int oldSlot = toBank.Slot;
@@ -482,7 +482,7 @@ namespace FishMMO.Server
 			Character character = conn.FirstObject.GetComponent<Character>();
 			if (character != null &&
 				!character.IsTeleporting &&
-				character.TryGet(out BankController bankController))
+				character.TryGet(out IBankController bankController))
 			{
 				Item item = bankController.RemoveItem(msg.slot);
 
@@ -515,7 +515,7 @@ namespace FishMMO.Server
 			Character character = conn.FirstObject.GetComponent<Character>();
 			if (character == null ||
 				character.IsTeleporting ||
-				!character.TryGet(out BankController bankController))
+				!character.TryGet(out IBankController bankController))
 			{
 				return;
 			}
@@ -523,7 +523,7 @@ namespace FishMMO.Server
 			switch (msg.fromInventory)
 			{
 				case InventoryType.Inventory:
-					if (character.TryGet(out InventoryController inventoryController) &&
+					if (character.TryGet(out IInventoryController inventoryController) &&
 						SwapContainerItems(dbContext, character.ID, inventoryController, bankController, msg.from, msg.to,
 					(db, id, a) =>
 					{

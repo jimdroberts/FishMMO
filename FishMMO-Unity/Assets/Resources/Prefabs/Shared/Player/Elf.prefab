@@ -209,6 +209,7 @@ GameObject:
   - component: {fileID: 6038023079570568745}
   - component: {fileID: 4989737185595066850}
   - component: {fileID: 6845158710477467009}
+  - component: {fileID: 6690946415020651589}
   m_Layer: 0
   m_Name: Elf
   m_TagString: Untagged
@@ -265,6 +266,7 @@ MonoBehaviour:
   - {fileID: 3124264775330692708}
   - {fileID: 4966316198463876083}
   - {fileID: 6038023079570568745}
+  - {fileID: 6690946415020651589}
   <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 0}
   <NestedRootNetworkBehaviours>k__BackingField: []
   SerializedTransformProperties:
@@ -521,7 +523,6 @@ MonoBehaviour:
   _componentIndexCache: 8
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 4964627840297570917}
-  Currency: 0
 --- !u!114 &5933418412604522111
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -552,7 +553,6 @@ MonoBehaviour:
   _componentIndexCache: 10
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 4964627840297570917}
-  Currency: 0
 --- !u!114 &1974367592072420653
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -568,7 +568,6 @@ MonoBehaviour:
   _componentIndexCache: 11
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 4964627840297570917}
-  Rank: 0
 --- !u!114 &7975244870159263472
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -584,8 +583,6 @@ MonoBehaviour:
   _componentIndexCache: 12
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 4964627840297570917}
-  ID: 0
-  Rank: 0
 --- !u!114 &3124264775330692708
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -616,7 +613,6 @@ MonoBehaviour:
   _componentIndexCache: 14
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 4964627840297570917}
-  Immortal: 0
   ResourceAttribute: {fileID: 11400000, guid: e5c10a046ee277f46a57ee2048ae5ec9, type: 2}
   DamageAchievementTemplate: {fileID: 0}
   DamagedAchievementTemplate: {fileID: 0}
@@ -646,12 +642,13 @@ MonoBehaviour:
   CharacterNameLabel: {fileID: 2817084262407755495}
   CharacterGuildLabel: {fileID: 3362407936794280637}
   EquipmentViewCamera: {fileID: 6274733150604385851}
+  ID: 0
   CharacterName: 
   CharacterNameLower: 
   Account: 
   WorldServerID: 0
   AccessLevel: 1
-  IsTeleporting: 0
+  TeleporterName: 
   SceneHandle: 0
   LastChatMessage: 
 --- !u!136 &4989737185595066850
@@ -704,6 +701,21 @@ Rigidbody:
   m_Interpolate: 0
   m_Constraints: 0
   m_CollisionDetection: 1
+--- !u!114 &6690946415020651589
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4573496687782621821}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2d54339ff3d1e7f498b872ac6b1633a4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _componentIndexCache: 16
+  _addedNetworkObject: {fileID: 4964627840297570917}
+  _networkObjectCache: {fileID: 4964627840297570917}
 --- !u!1 &5035121396218170946
 GameObject:
   m_ObjectHideFlags: 0

@@ -13,7 +13,7 @@ namespace FishMMO.Client
 				{
 					if (dragObject.Visible)
 					{
-						if (Character.TryGet(out BankController bankController))
+						if (Character.TryGet(out IBankController bankController))
 						{
 							InventoryType inventoryType = dragObject.Type == ReferenceButtonType.Bank ? InventoryType.Bank :
 														  dragObject.Type == ReferenceButtonType.Inventory ? InventoryType.Inventory :
@@ -52,7 +52,7 @@ namespace FishMMO.Client
 						// clear the drag object
 						dragObject.Clear();
 					}
-					else if (Character.TryGet(out BankController bankController) &&
+					else if (Character.TryGet(out IBankController bankController) &&
 							!bankController.IsSlotEmpty((int)ReferenceID))
 					{
 						dragObject.SetReference(Icon.sprite, ReferenceID, Type);

@@ -37,7 +37,7 @@ namespace FishMMO.Client
 				Character.KCCPlayer.OnHandleCharacterInput += KCCPlayer_OnHandleCharacterInput;
 			}
 
-			if (Character.TryGet(out AchievementController achievementController))
+			if (Character.TryGet(out IAchievementController achievementController))
 			{
 				if (LabelMaker.Instance != null)
 				{
@@ -45,7 +45,7 @@ namespace FishMMO.Client
 				}
 			}
 
-			if (Character.TryGet(out CharacterDamageController characterDamageController))
+			if (Character.TryGet(out ICharacterDamageController characterDamageController))
 			{
 				if (LabelMaker.Instance != null)
 				{
@@ -67,7 +67,7 @@ namespace FishMMO.Client
 				Character.KCCPlayer.OnHandleCharacterInput -= KCCPlayer_OnHandleCharacterInput;
 			}
 
-			if (Character.TryGet(out AchievementController achievementController))
+			if (Character.TryGet(out IAchievementController achievementController))
 			{
 				if (LabelMaker.Instance != null)
 				{
@@ -75,7 +75,7 @@ namespace FishMMO.Client
 				}
 			}
 
-			if (Character.TryGet(out CharacterDamageController characterDamageController))
+			if (Character.TryGet(out ICharacterDamageController characterDamageController))
 			{
 				if (LabelMaker.Instance != null)
 				{
@@ -117,7 +117,8 @@ namespace FishMMO.Client
 												 0.0f,
 												 0,
 												 Character.KCCPlayer.CharacterCamera.Transform.position,
-												 Character.KCCPlayer.CharacterCamera.Transform.rotation);
+												 Character.KCCPlayer.CharacterCamera.Transform.rotation,
+												 true);
 			}
 
 			int moveFlags = 0;
@@ -139,7 +140,8 @@ namespace FishMMO.Client
 											 InputManager.GetAxis(HorizontalInput),
 											 moveFlags,
 											 Character.KCCPlayer.CharacterCamera.Transform.position,
-											 Character.KCCPlayer.CharacterCamera.Transform.rotation);
+											 Character.KCCPlayer.CharacterCamera.Transform.rotation,
+											 true);
 		}
 
 		private void Update()
@@ -170,7 +172,7 @@ namespace FishMMO.Client
 			{
 				// interact overrides movement inputs
 				if (InputManager.GetKeyDown("Interact") &&
-					Character.TryGet(out TargetController targetController))
+					Character.TryGet(out ITargetController targetController))
 				{
 					Transform target = targetController.Current.Target;
 					if (target != null)

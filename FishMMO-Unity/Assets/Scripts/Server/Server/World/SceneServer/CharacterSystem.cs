@@ -272,7 +272,7 @@ namespace FishMMO.Server
 			}
 
 			// character becomes immortal when teleporting
-			if (character.TryGet(out CharacterDamageController damageController))
+			if (character.TryGet(out ICharacterDamageController damageController))
 			{
 				damageController.Immortal = true;
 			}
@@ -386,7 +386,7 @@ namespace FishMMO.Server
 				character.Motor.SetPhysicsScene(scene.GetPhysicsScene());
 
 				// character becomes mortal when loaded into the scene
-				if (character.TryGet(out CharacterDamageController damageController))
+				if (character.TryGet(out ICharacterDamageController damageController))
 				{
 					damageController.Immortal = false;
 				}
@@ -441,7 +441,7 @@ namespace FishMMO.Server
 			character.SceneName.Dirty();
 
 			#region Abilities
-			if (character.TryGet(out AbilityController abilityController))
+			if (character.TryGet(out IAbilityController abilityController))
 			{
 				List<KnownAbilityAddBroadcast> knownAbilityBroadcasts = new List<KnownAbilityAddBroadcast>();
 
@@ -483,7 +483,7 @@ namespace FishMMO.Server
 			#endregion
 
 			#region Achievements
-			if (character.TryGet(out AchievementController achievementController))
+			if (character.TryGet(out IAchievementController achievementController))
 			{
 				List<AchievementUpdateBroadcast> achievements = new List<AchievementUpdateBroadcast>();
 				foreach (Achievement achievement in achievementController.Achievements.Values)
@@ -501,8 +501,27 @@ namespace FishMMO.Server
 			}
 			#endregion
 
+			#region Factions
+			if (character.TryGet(out IFactionController factionController))
+			{
+				List<FactionUpdateBroadcast> factions = new List<FactionUpdateBroadcast>();
+				foreach (Faction faction in factionController.Factions.Values)
+				{
+					factions.Add(new FactionUpdateBroadcast()
+					{
+						templateID = faction.Template.ID,
+						newValue = faction.Value,
+					});
+				}
+				Server.Broadcast(character.Owner, new FactionUpdateMultipleBroadcast()
+				{
+					factions = factions,
+				}, true, Channel.Reliable);
+			}
+			#endregion
+
 			#region Guild
-			if (character.TryGet(out GuildController guildController) &&
+			if (character.TryGet(out IGuildController guildController) &&
 				guildController.ID > 0)
 			{
 				// get the current guild members from the database
@@ -525,7 +544,7 @@ namespace FishMMO.Server
 			#endregion
 
 			#region Party
-			if (character.TryGet(out PartyController partyController) &&
+			if (character.TryGet(out IPartyController partyController) &&
 				partyController.ID > 0)
 			{
 				// get the current party members from the database
@@ -548,7 +567,7 @@ namespace FishMMO.Server
 			#endregion
 
 			#region Friends
-			if (character.TryGet(out FriendController friendController))
+			if (character.TryGet(out IFriendController friendController))
 			{
 				List<FriendAddBroadcast> friends = new List<FriendAddBroadcast>();
 				foreach (long friendID in friendController.Friends)
@@ -568,7 +587,7 @@ namespace FishMMO.Server
 			#endregion
 
 			#region InventoryItems
-			if (character.TryGet(out InventoryController inventoryController))
+			if (character.TryGet(out IInventoryController inventoryController))
 			{
 				List<InventorySetItemBroadcast> itemBroadcasts = new List<InventorySetItemBroadcast>();
 
@@ -602,7 +621,7 @@ namespace FishMMO.Server
 			#endregion
 
 			#region BankItems
-			if (character.TryGet(out BankController bankController))
+			if (character.TryGet(out IBankController bankController))
 			{
 				List<BankSetItemBroadcast> itemBroadcasts = new List<BankSetItemBroadcast>();
 

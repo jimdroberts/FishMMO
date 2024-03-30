@@ -1,5 +1,4 @@
-﻿using FishNet.Serializing;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 namespace FishMMO.Shared
 {
@@ -332,7 +331,7 @@ namespace FishMMO.Shared
 
 		public bool MeetsRequirements(Character character)
 		{
-			if (!character.TryGet(out CharacterAttributeController attributeController))
+			if (!character.TryGet(out ICharacterAttributeController attributeController))
 			{
 				return false;
 			}
@@ -349,7 +348,7 @@ namespace FishMMO.Shared
 
 		public bool HasResource(Character character, AbilityEvent bloodResourceConversion, CharacterAttributeTemplate bloodResource)
 		{
-			if (!character.TryGet(out CharacterAttributeController attributeController))
+			if (!character.TryGet(out ICharacterAttributeController attributeController))
 			{
 				return false;
 			}
@@ -384,7 +383,7 @@ namespace FishMMO.Shared
 
 		public void ConsumeResources(Character character, AbilityEvent bloodResourceConversion, CharacterAttributeTemplate bloodResource)
 		{
-			if (!character.TryGet(out CharacterAttributeController attributeController))
+			if (!character.TryGet(out ICharacterAttributeController attributeController))
 			{
 				return;
 			}

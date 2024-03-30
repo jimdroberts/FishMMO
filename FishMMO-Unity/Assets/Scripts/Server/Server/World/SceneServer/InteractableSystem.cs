@@ -101,7 +101,7 @@ namespace FishMMO.Server
 			}
 			Character character = conn.FirstObject.GetComponent<Character>();
 			if (character == null ||
-				!character.TryGet(out InventoryController inventoryController))
+				!character.TryGet(out IInventoryController inventoryController))
 			{
 				return;
 			}
@@ -210,9 +210,9 @@ namespace FishMMO.Server
 			// do we already know this ability?
 			if (template == null ||
 				character == null ||
-				!character.TryGet(out AbilityController abilityController) ||
+				!character.TryGet(out IAbilityController abilityController) ||
 				abilityController.KnowsAbility(template.ID) ||
-				!character.TryGet(out InventoryController inventoryController) ||
+				!character.TryGet(out IInventoryController inventoryController) ||
 				inventoryController.Currency < template.Price)
 			{
 				return;
@@ -248,7 +248,7 @@ namespace FishMMO.Server
 			}
 			Character character = conn.FirstObject.GetComponent<Character>();
 			if (character == null ||
-				!character.TryGet(out AbilityController abilityController))
+				!character.TryGet(out IAbilityController abilityController))
 			{
 				return;
 			}

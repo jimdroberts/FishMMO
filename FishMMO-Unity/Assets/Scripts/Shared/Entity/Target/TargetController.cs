@@ -3,20 +3,20 @@ using System;
 
 namespace FishMMO.Shared
 {
-	public class TargetController : CharacterBehaviour
+	public class TargetController : CharacterBehaviour, ITargetController
 	{
 		public const float MAX_TARGET_DISTANCE = 50.0f;
 		public const float TARGET_UPDATE_RATE = 0.05f;
 
 		public LayerMask LayerMask;
 		public TargetInfo Last;
-		public TargetInfo Current;
+		public TargetInfo Current { get; private set; }
 
 		public event Action<GameObject> OnChangeTarget;
 		public event Action<GameObject> OnUpdateTarget;
 
-		public Action<Transform> OnClearTarget;
-		public Action<Transform> OnNewTarget;
+		public event Action<Transform> OnClearTarget;
+		public event Action<Transform> OnNewTarget;
 
 #if !UNITY_SERVER
 		private float nextTick = 0.0f;

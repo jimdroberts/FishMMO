@@ -181,7 +181,7 @@ namespace FishMMO.Server
 					{
 						if (characterSystem.CharactersByID.TryGetValue(entity.CharacterID, out Character character))
 						{
-							if (!character.TryGet(out PartyController partyController) ||
+							if (!character.TryGet(out IPartyController partyController) ||
 								partyController.ID < 1)
 							{
 								continue;
@@ -229,7 +229,7 @@ namespace FishMMO.Server
 										   partyController.Character.ID,
 										   partyController.ID,
 										   partyController.Rank,
-										   partyController.Character.TryGet(out CharacterAttributeController attributeController) ? attributeController.GetResourceAttributeCurrentPercentage(HealthTemplate) : 0.0f);
+										   partyController.Character.TryGet(out ICharacterAttributeController attributeController) ? attributeController.GetResourceAttributeCurrentPercentage(HealthTemplate) : 0.0f);
 
 				// tell the character we made their party successfully
 				Server.Broadcast(conn, new PartyCreateBroadcast()
@@ -314,7 +314,7 @@ namespace FishMMO.Server
 				if (members != null &&
 					members.Count < MaxPartySize)
 				{
-					bool attributesExist = partyController.Character.TryGet(out CharacterAttributeController attributeController);
+					bool attributesExist = partyController.Character.TryGet(out ICharacterAttributeController attributeController);
 
 					partyController.ID = pendingPartyID;
 					partyController.Rank = PartyRank.Member;

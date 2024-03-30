@@ -8,7 +8,7 @@ namespace FishMMO.Shared
 		{
 			if (Buff == null ||
 				character == null ||
-				!character.TryGet(out BuffController buffController))
+				!character.TryGet(out IBuffController buffController))
 			{
 				return;
 			}

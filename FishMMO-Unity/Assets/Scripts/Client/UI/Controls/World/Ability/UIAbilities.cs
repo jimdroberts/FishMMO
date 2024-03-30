@@ -35,7 +35,7 @@ namespace FishMMO.Client
 		{
 			base.OnPostSetCharacter();
 
-			if (Character.TryGet(out AbilityController abilityController))
+			if (Character.TryGet(out IAbilityController abilityController))
 			{
 				abilityController.OnCanManipulate += () => { return !InputManager.MouseMode; };
 				abilityController.OnReset += ClearAllSlots;
@@ -46,7 +46,7 @@ namespace FishMMO.Client
 
 		public override void OnPreUnsetCharacter()
 		{
-			if (Character.TryGet(out AbilityController abilityController))
+			if (Character.TryGet(out IAbilityController abilityController))
 			{
 				abilityController.OnCanManipulate -= () => { return !InputManager.MouseMode; };
 				abilityController.OnReset -= ClearAllSlots;

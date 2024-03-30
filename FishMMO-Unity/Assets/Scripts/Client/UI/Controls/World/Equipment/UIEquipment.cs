@@ -94,14 +94,14 @@ namespace FishMMO.Client
 		{
 			if (Character != null)
 			{
-				if (Character.TryGet(out CharacterAttributeController attributeController))
+				if (Character.TryGet(out ICharacterAttributeController attributeController))
 				{
 					foreach (CharacterAttribute attribute in attributeController.Attributes.Values)
 					{
 						attribute.OnAttributeUpdated -= OnAttributeUpdated;
 					}
 				}
-				if (Character.TryGet(out EquipmentController equipmentController))
+				if (Character.TryGet(out IEquipmentController equipmentController))
 				{
 					equipmentController.OnSlotUpdated -= OnEquipmentSlotUpdated;
 				}
@@ -115,7 +115,7 @@ namespace FishMMO.Client
 
 			if (buttons != null &&
 				Character != null &&
-				Character.TryGet(out EquipmentController equipmentController))
+				Character.TryGet(out IEquipmentController equipmentController))
 			{
 				equipmentController.OnSlotUpdated -= OnEquipmentSlotUpdated;
 				foreach (UIEquipmentButton button in buttons)
@@ -130,7 +130,7 @@ namespace FishMMO.Client
 			}
 
 			if (Character != null &&
-				Character.TryGet(out CharacterAttributeController attributeController))
+				Character.TryGet(out ICharacterAttributeController attributeController))
 			{
 				List<CharacterAttribute> resourceAttributes = new List<CharacterAttribute>();
 				List<CharacterAttribute> damageAttributes = new List<CharacterAttribute>();
@@ -230,7 +230,7 @@ namespace FishMMO.Client
 			attribute.OnAttributeUpdated += OnAttributeUpdated;
 		}
 
-		private void SetButtonSlot(ItemContainer container, UIEquipmentButton button)
+		private void SetButtonSlot(IEquipmentController container, UIEquipmentButton button)
 		{
 			if (container == null || button == null)
 			{
@@ -257,7 +257,7 @@ namespace FishMMO.Client
 			}
 		}
 
-		public void OnEquipmentSlotUpdated(ItemContainer container, Item item, int equipmentSlot)
+		public void OnEquipmentSlotUpdated(IItemContainer container, Item item, int equipmentSlot)
 		{
 			if (container == null || buttons == null)
 			{

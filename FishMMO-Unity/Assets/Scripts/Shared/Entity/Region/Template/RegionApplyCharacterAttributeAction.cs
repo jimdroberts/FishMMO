@@ -9,7 +9,7 @@ namespace FishMMO.Shared
 		{
 			if (attribute == null ||
 				character == null ||
-				!character.TryGet(out CharacterAttributeController attributeController))
+				!character.TryGet(out ICharacterAttributeController attributeController))
 			{
 				return;
 			}

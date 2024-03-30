@@ -4,7 +4,6 @@ using System;
 using FishMMO.Database.Npgsql.Entities;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
-using FishNet.Object;
 
 namespace FishMMO.Server
 {
@@ -134,6 +133,7 @@ namespace FishMMO.Server
 							return;
 						}
 
+						// create the new character
 						var newCharacter = new CharacterEntity()
 						{
 							Account = accountName,
@@ -152,6 +152,39 @@ namespace FishMMO.Server
 							TimeCreated = DateTime.UtcNow,
 						};
 						dbContext.Characters.Add(newCharacter);
+						dbContext.SaveChanges();
+
+						// add character factions
+						foreach (FactionTemplate faction in raceTemplate.InitialFaction.Allied)
+						{
+							var newFaction = new CharacterFactionEntity()
+							{
+								CharacterID = newCharacter.ID,
+								TemplateID = faction.ID,
+								Value = faction.AlliedLevel,
+							};
+							dbContext.CharacterFactions.Add(newFaction);
+						}
+						foreach (FactionTemplate faction in raceTemplate.InitialFaction.Neutral)
+						{
+							var newFaction = new CharacterFactionEntity()
+							{
+								CharacterID = newCharacter.ID,
+								TemplateID = faction.ID,
+								Value = 0,
+							};
+							dbContext.CharacterFactions.Add(newFaction);
+						}
+						foreach (FactionTemplate faction in raceTemplate.InitialFaction.Enemies)
+						{
+							var newFaction = new CharacterFactionEntity()
+							{
+								CharacterID = newCharacter.ID,
+								TemplateID = faction.ID,
+								Value = faction.EnemyLevel,
+							};
+							dbContext.CharacterFactions.Add(newFaction);
+						}
 						dbContext.SaveChanges();
 
 						// send success to the client

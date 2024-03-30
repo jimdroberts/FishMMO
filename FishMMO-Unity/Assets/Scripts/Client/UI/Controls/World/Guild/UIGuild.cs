@@ -22,7 +22,7 @@ namespace FishMMO.Client
 		{
 			base.OnPostSetCharacter();
 
-			if (Character.TryGet(out GuildController guildController))
+			if (Character.TryGet(out IGuildController guildController))
 			{
 				guildController.OnReceiveGuildInvite += GuildController_OnReceiveGuildInvite;
 				guildController.OnAddGuildMember += GuildController_OnAddGuildMember;
@@ -36,7 +36,7 @@ namespace FishMMO.Client
 		{
 			base.OnPreUnsetCharacter();
 
-			if (Character.TryGet(out GuildController guildController))
+			if (Character.TryGet(out IGuildController guildController))
 			{
 				guildController.OnReceiveGuildInvite -= GuildController_OnReceiveGuildInvite;
 				guildController.OnAddGuildMember -= GuildController_OnAddGuildMember;
@@ -136,7 +136,7 @@ namespace FishMMO.Client
 		public void OnButtonCreateGuild()
 		{
 			if (Character != null &&
-				Character.TryGet(out GuildController guildController) &&
+				Character.TryGet(out IGuildController guildController) &&
 				guildController.ID < 1 && Client.NetworkManager.IsClientStarted)
 			{
 				if (UIManager.TryGet("UIInputConfirmationTooltip", out UIInputConfirmationTooltip tooltip))
@@ -158,7 +158,7 @@ namespace FishMMO.Client
 		public void OnButtonLeaveGuild()
 		{
 			if (Character != null &&
-				Character.TryGet(out GuildController guildController) &&
+				Character.TryGet(out IGuildController guildController) &&
 				guildController.ID > 0 && Client.NetworkManager.IsClientStarted)
 			{
 				if (UIManager.TryGet("UIConfirmationTooltip", out UIConfirmationTooltip tooltip))
@@ -174,11 +174,11 @@ namespace FishMMO.Client
 		public void OnButtonInviteToGuild()
 		{
 			if (Character != null &&
-				Character.TryGet(out GuildController guildController) &&
+				Character.TryGet(out IGuildController guildController) &&
 				guildController.ID > 0 &&
 				Client.NetworkManager.IsClientStarted)
 			{
-				if (Character.TryGet(out TargetController targetController) &&
+				if (Character.TryGet(out ITargetController targetController) &&
 					targetController.Current.Target != null)
 				{
 					Character targetCharacter = targetController.Current.Target.GetComponent<Character>();

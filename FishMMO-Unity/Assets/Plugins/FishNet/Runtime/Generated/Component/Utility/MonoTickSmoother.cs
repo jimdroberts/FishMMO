@@ -5,10 +5,11 @@ using FishNet.Object.Prediction;
 using GameKit.Dependencies.Utilities;
 using UnityEngine;
 
-namespace FishNet.Component.Utility
+namespace FishNet.Component.Transforming
 {
     /// <summary>
     /// Smoothes an object between ticks.
+    /// This can be used on objects without NetworkObject components.
     /// </summary>
     public class MonoTickSmoother : MonoBehaviour
     {
@@ -19,6 +20,25 @@ namespace FishNet.Component.Utility
         [Tooltip("True to use InstanceFinder to locate the TimeManager. When false specify which TimeManager to use by calling SetTimeManager.")]
         [SerializeField]
         private bool _useInstanceFinder = true;
+        /// <summary>
+        /// GraphicalObject you wish to smooth.
+        /// </summary>
+        [Tooltip("GraphicalObject you wish to smooth.")]
+        [SerializeField]
+        private Transform _graphicalObject;
+        /// <summary>
+        /// True to enable teleport threshhold.
+        /// </summary>
+        [Tooltip("True to enable teleport threshold.")]
+        [SerializeField]
+        private bool _enableTeleport;
+        /// <summary>
+        /// How far the object must move between ticks to teleport rather than smooth.
+        /// </summary>
+        [Tooltip("How far the object must move between ticks to teleport rather than smooth.")]
+        [Range(0f, ushort.MaxValue)]
+        [SerializeField]
+        private float _teleportThreshold;
         #endregion
 
         #region Private.
@@ -29,7 +49,7 @@ namespace FishNet.Component.Utility
         /// <summary>
         /// BasicTickSmoother for this script.
         /// </summary>
-        private TransformTickSmoother _tickSmoother;
+        private LocalTransformTickSmoother _tickSmoother;
         #endregion
 
         private void Awake()
@@ -40,7 +60,7 @@ namespace FishNet.Component.Utility
         private void OnDestroy()
         {
             ChangeSubscription(false);
-            ObjectCaches<TransformTickSmoother>.StoreAndDefault(ref _tickSmoother);
+            ObjectCaches<LocalTransformTickSmoother>.StoreAndDefault(ref _tickSmoother);
         }
 
         [Client(Logging = LoggingType.Off)]
@@ -54,7 +74,7 @@ namespace FishNet.Component.Utility
         /// </summary>
         private void InitializeOnce()
         {
-            _tickSmoother = ObjectCaches<TransformTickSmoother>.Retrieve();
+            _tickSmoother = ObjectCaches<LocalTransformTickSmoother>.Retrieve();
             if (_useInstanceFinder)
             {
                 _timeManager = InstanceFinder.TimeManager;
@@ -89,6 +109,11 @@ namespace FishNet.Component.Utility
 
             if (subscribe)
             {
+                if (_tickSmoother != null)
+                {
+                    float tDistance = (_enableTeleport) ? _teleportThreshold : MoveRatesCls.UNSET_VALUE;
+                    _tickSmoother.InitializeOnce(_graphicalObject, tDistance, (float)_timeManager.TickDelta, 1);
+                }
                 _timeManager.OnPreTick += _timeManager_OnPreTick;
                 _timeManager.OnPostTick += _timeManager_OnPostTick;
             }

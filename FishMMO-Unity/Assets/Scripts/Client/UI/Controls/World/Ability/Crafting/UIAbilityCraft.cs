@@ -61,7 +61,7 @@ namespace FishMMO.Client
 		private void MainEntry_OnLeftClick(int index, object[] optionalParams)
 		{
 			if (Character != null &&
-				Character.TryGet(out AbilityController abilityController) &&
+				Character.TryGet(out IAbilityController abilityController) &&
 				UIManager.TryGet("UISelector", out UISelector uiSelector))
 			{
 				List<ICachedObject> templates = AbilityTemplate.Get<AbilityTemplate>(abilityController.KnownBaseAbilities);
@@ -93,7 +93,7 @@ namespace FishMMO.Client
 		{
 			if (index > -1 && index < EventSlots.Count &&
 				Character != null &&
-				Character.TryGet(out AbilityController abilityController) &&
+				Character.TryGet(out IAbilityController abilityController) &&
 				UIManager.TryGet("UISelector", out UISelector uiSelector))
 			{
 				List<ICachedObject> templates = AbilityEvent.Get<AbilityEvent>(abilityController.KnownEvents);

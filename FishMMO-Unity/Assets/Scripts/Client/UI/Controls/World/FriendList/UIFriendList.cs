@@ -30,7 +30,7 @@ namespace FishMMO.Client
 		{
 			base.OnPostSetCharacter();
 
-			if (Character.TryGet(out FriendController friendController))
+			if (Character.TryGet(out IFriendController friendController))
 			{
 				friendController.OnAddFriend += OnAddFriend;
 				friendController.OnRemoveFriend += OnRemoveFriend;
@@ -41,7 +41,7 @@ namespace FishMMO.Client
 		{
 			base.OnPreUnsetCharacter();
 
-			if (Character.TryGet(out FriendController friendController))
+			if (Character.TryGet(out IFriendController friendController))
 			{
 				friendController.OnAddFriend -= OnAddFriend;
 				friendController.OnRemoveFriend -= OnRemoveFriend;

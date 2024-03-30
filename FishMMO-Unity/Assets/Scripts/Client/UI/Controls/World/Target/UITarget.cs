@@ -25,7 +25,7 @@ namespace FishMMO.Client
 		{
 			base.OnPostSetCharacter();
 
-			if (Character.TryGet(out TargetController targetController))
+			if (Character.TryGet(out ITargetController targetController))
 			{
 				targetController.OnChangeTarget += OnChangeTarget;
 				targetController.OnUpdateTarget += OnUpdateTarget;
@@ -38,7 +38,7 @@ namespace FishMMO.Client
 		{
 			base.OnPreUnsetCharacter();
 
-			if (Character.TryGet(out TargetController targetController))
+			if (Character.TryGet(out ITargetController targetController))
 			{
 				targetController.OnChangeTarget -= OnChangeTarget;
 				targetController.OnUpdateTarget -= OnUpdateTarget;
@@ -63,7 +63,7 @@ namespace FishMMO.Client
 			{
 				NameLabel.text = obj.name;
 			}
-			CharacterAttributeController characterAttributeController = obj.GetComponent<CharacterAttributeController>();
+			ICharacterAttributeController characterAttributeController = obj.GetComponent<ICharacterAttributeController>();
 			if (characterAttributeController != null)
 			{
 				if (characterAttributeController.TryGetResourceAttribute(HealthAttribute, out CharacterResourceAttribute health))
