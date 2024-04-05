@@ -6,7 +6,7 @@ namespace FishMMO.Shared
 	[RequireComponent(typeof(CharacterAttributeController))]
 	public class CharacterRegenerationController : NetworkBehaviour
 	{
-		public CharacterAttributeController AttributeController;
+		public ICharacterAttributeController AttributeController;
 
 		public CharacterAttributeTemplate HealthTemplate;
 		public CharacterAttributeTemplate ManaTemplate;
@@ -18,7 +18,7 @@ namespace FishMMO.Shared
 
 		void Awake()
 		{
-			AttributeController = gameObject.GetComponent<CharacterAttributeController>();
+			AttributeController = gameObject.GetComponent<ICharacterAttributeController>();
 		}
 
 		void Update()

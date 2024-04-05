@@ -47,7 +47,7 @@ namespace FishMMO.Server
 			{
 				return;
 			}
-			FriendController friendController = conn.FirstObject.GetComponent<FriendController>();
+			IFriendController friendController = conn.FirstObject.GetComponent<IFriendController>();
 
 			// validate character
 			if (friendController == null ||
@@ -97,7 +97,7 @@ namespace FishMMO.Server
 			{
 				return;
 			}
-			FriendController friendController = conn.FirstObject.GetComponent<FriendController>();
+			IFriendController friendController = conn.FirstObject.GetComponent<IFriendController>();
 
 			// validate character
 			if (friendController == null)

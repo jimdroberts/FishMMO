@@ -90,7 +90,7 @@ namespace FishMMO.Client
 			}
 
 			// update the health slider
-			CharacterAttributeController characterAttributeController = obj.GetComponent<CharacterAttributeController>();
+			ICharacterAttributeController characterAttributeController = obj.GetComponent<ICharacterAttributeController>();
 			if (characterAttributeController != null)
 			{
 				if (characterAttributeController.TryGetResourceAttribute(HealthAttribute, out CharacterResourceAttribute health))

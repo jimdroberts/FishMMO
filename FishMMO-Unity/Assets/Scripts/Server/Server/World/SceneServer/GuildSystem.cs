@@ -246,7 +246,7 @@ namespace FishMMO.Server
 				return;
 			}
 
-			GuildController guildController = conn.FirstObject.GetComponent<GuildController>();
+			IGuildController guildController = conn.FirstObject.GetComponent<IGuildController>();
 			if (guildController == null || guildController.ID > 0)
 			{
 				// already in a guild
@@ -280,7 +280,7 @@ namespace FishMMO.Server
 					guildID = guildController.ID,
 					characterID = guildController.Character.ID,
 					rank = guildController.Rank,
-					location = guildController.gameObject.scene.name,
+					location = conn.FirstObject.gameObject.scene.name,
 				}, true, Channel.Reliable);
 			}
 		}
@@ -295,7 +295,7 @@ namespace FishMMO.Server
 			{
 				return;
 			}
-			GuildController inviter = conn.FirstObject.GetComponent<GuildController>();
+			IGuildController inviter = conn.FirstObject.GetComponent<IGuildController>();
 			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 
 			// validate guild leader or officer is inviting
@@ -313,7 +313,7 @@ namespace FishMMO.Server
 				ServerBehaviour.TryGet(out CharacterSystem characterSystem) &&
 				characterSystem.CharactersByID.TryGetValue(msg.targetCharacterID, out Character targetCharacter))
 			{
-				GuildController targetGuildController = targetCharacter.GetComponent<GuildController>();
+				IGuildController targetGuildController = targetCharacter.GetComponent<IGuildController>();
 
 				// validate target
 				if (targetGuildController == null || targetGuildController.ID > 0)
@@ -338,7 +338,7 @@ namespace FishMMO.Server
 			{
 				return;
 			}
-			GuildController guildController = conn.FirstObject.GetComponent<GuildController>();
+			IGuildController guildController = conn.FirstObject.GetComponent<IGuildController>();
 
 			// validate character
 			if (guildController == null || guildController.ID > 0)
@@ -373,7 +373,7 @@ namespace FishMMO.Server
 						guildID = guildController.ID,
 						characterID = guildController.Character.ID,
 						rank = GuildRank.Member,
-						location = guildController.gameObject.scene.name,
+						location = conn.FirstObject.gameObject.scene.name,
 					}, true, Channel.Reliable);
 				}
 			}
@@ -398,7 +398,7 @@ namespace FishMMO.Server
 			{
 				return;
 			}
-			GuildController guildController = conn.FirstObject.GetComponent<GuildController>();
+			IGuildController guildController = conn.FirstObject.GetComponent<IGuildController>();
 
 			// validate character
 			if (guildController == null || guildController.ID < 1)
@@ -491,7 +491,7 @@ namespace FishMMO.Server
 			{
 				return;
 			}
-			GuildController guildController = conn.FirstObject.GetComponent<GuildController>();
+			IGuildController guildController = conn.FirstObject.GetComponent<IGuildController>();
 
 			// validate character
 			if (guildController == null ||

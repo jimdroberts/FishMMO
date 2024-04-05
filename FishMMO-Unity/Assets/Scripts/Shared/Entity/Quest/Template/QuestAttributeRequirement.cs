@@ -5,7 +5,7 @@
 		public CharacterAttributeTemplate template;
 		public long minRequiredValue;
 
-		public bool MeetsRequirements(CharacterAttributeController characterAttributes)
+		public bool MeetsRequirements(ICharacterAttributeController characterAttributes)
 		{
 			CharacterAttribute attribute;
 			if (!characterAttributes.TryGetAttribute(template.ID, out attribute) || attribute.FinalValue < minRequiredValue)

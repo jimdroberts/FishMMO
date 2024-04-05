@@ -213,7 +213,7 @@ namespace FishMMO.Server
 				return;
 			}
 
-			PartyController partyController = conn.FirstObject.GetComponent<PartyController>();
+			IPartyController partyController = conn.FirstObject.GetComponent<IPartyController>();
 			if (partyController == null || partyController.ID > 0)
 			{
 				// already in a party
@@ -235,7 +235,7 @@ namespace FishMMO.Server
 				Server.Broadcast(conn, new PartyCreateBroadcast()
 				{
 					partyID = newParty.ID,
-					location = partyController.gameObject.scene.name,
+					location = conn.FirstObject.gameObject.scene.name,
 				}, true, Channel.Reliable);
 			}
 		}
@@ -250,7 +250,7 @@ namespace FishMMO.Server
 			{
 				return;
 			}
-			PartyController inviter = conn.FirstObject.GetComponent<PartyController>();
+			IPartyController inviter = conn.FirstObject.GetComponent<IPartyController>();
 			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 
 			// validate party leader is inviting
@@ -267,7 +267,7 @@ namespace FishMMO.Server
 				ServerBehaviour.TryGet(out CharacterSystem characterSystem) &&
 				characterSystem.CharactersByID.TryGetValue(msg.targetCharacterID, out Character targetCharacter))
 			{
-				PartyController targetPartyController = targetCharacter.GetComponent<PartyController>();
+				IPartyController targetPartyController = targetCharacter.GetComponent<IPartyController>();
 
 				// validate target
 				if (targetPartyController == null || targetPartyController.ID > 0)
@@ -292,7 +292,7 @@ namespace FishMMO.Server
 			{
 				return;
 			}
-			PartyController partyController = conn.FirstObject.GetComponent<PartyController>();
+			IPartyController partyController = conn.FirstObject.GetComponent<IPartyController>();
 
 			// validate character
 			if (partyController == null || partyController.ID > 0)
@@ -359,7 +359,7 @@ namespace FishMMO.Server
 			{
 				return;
 			}
-			PartyController partyController = conn.FirstObject.GetComponent<PartyController>();
+			IPartyController partyController = conn.FirstObject.GetComponent<IPartyController>();
 
 			// validate character
 			if (partyController == null || partyController.ID < 1)
@@ -438,7 +438,7 @@ namespace FishMMO.Server
 			{
 				return;
 			}
-			PartyController partyController = conn.FirstObject.GetComponent<PartyController>();
+			IPartyController partyController = conn.FirstObject.GetComponent<IPartyController>();
 
 			// validate character
 			if (partyController == null ||

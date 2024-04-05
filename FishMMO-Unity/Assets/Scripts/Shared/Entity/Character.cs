@@ -113,12 +113,12 @@ namespace FishMMO.Shared
 			KCCPlayer = gameObject.GetComponent<KCCPlayer>();
 			#endregion
 
-			CharacterBehaviour[] c = gameObject.GetComponents<CharacterBehaviour>();
+			ICharacterBehaviour[] c = gameObject.GetComponents<ICharacterBehaviour>();
 			if (c != null)
 			{
 				for (int i = 0; i < c.Length; ++i)
 				{
-					CharacterBehaviour behaviour = c[i];
+					ICharacterBehaviour behaviour = c[i];
 					if (behaviour == null)
 					{
 						continue;
@@ -155,7 +155,7 @@ namespace FishMMO.Shared
 				gameObject.layer = Constants.Layers.LocalEntity;
 				CharacterController.MeshRoot.gameObject.layer = Constants.Layers.LocalEntity;
 
-				foreach (CharacterBehaviour behaviour in this.behaviours.Values)
+				foreach (ICharacterBehaviour behaviour in this.behaviours.Values)
 				{
 					behaviour.OnStartCharacter();
 				}
@@ -167,7 +167,7 @@ namespace FishMMO.Shared
 			base.OnStopClient();
 			if (base.IsOwner)
 			{
-				foreach (CharacterBehaviour behaviour in this.behaviours.Values)
+				foreach (ICharacterBehaviour behaviour in this.behaviours.Values)
 				{
 					behaviour.OnStopCharacter();
 				}
@@ -203,7 +203,7 @@ namespace FishMMO.Shared
 				}
 				if (!behaviours.ContainsKey(interfaceType))
 				{
-					Debug.Log(CharacterName + ": Registered " + interfaceType.Name);
+					//Debug.Log(CharacterName + ": Registered " + interfaceType.Name);
 					behaviours.Add(interfaceType, behaviour);
 					return;
 				}
@@ -225,7 +225,7 @@ namespace FishMMO.Shared
 				{
 					continue;
 				}
-				Debug.Log(CharacterName + ": Unregistered " + interfaceType.Name);
+				//Debug.Log(CharacterName + ": Unregistered " + interfaceType.Name);
 				behaviours.Remove(interfaceType);
 			}
 		}
