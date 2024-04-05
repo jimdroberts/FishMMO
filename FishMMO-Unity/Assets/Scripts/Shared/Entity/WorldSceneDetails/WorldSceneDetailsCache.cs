@@ -74,7 +74,7 @@ namespace FishMMO.Shared
 					IBoundary boundary = GameObject.FindObjectOfType<IBoundary>();
 					if (boundary == null)
 					{
-						Debug.Log(currentScene.name + " has no IBoundary. Boundaries are required for safety purposes. Try adding a SceneBoundary!");
+						Debug.LogError(currentScene.name + " has no IBoundary. Boundaries are required for safety purposes. Try adding a SceneBoundary!");
 						continue;
 					}
 

@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace FishMMO.Shared
 {
-	public class CharacterDamageController : CharacterBehaviour, ICharacterDamageController, IDamageable, IHealable
+	public class CharacterDamageController : CharacterBehaviour, ICharacterDamageController
 	{
 		[Tooltip("The resource attribute the damage will be applied to.")]
 		public CharacterAttributeTemplate ResourceAttribute;

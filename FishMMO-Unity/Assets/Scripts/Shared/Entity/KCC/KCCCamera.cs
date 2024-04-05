@@ -46,10 +46,8 @@ namespace FishMMO.Shared
 		private bool _distanceIsObstructed;
 		private float _currentDistance;
 		private float _targetVerticalAngle;
-		private RaycastHit _obstructionHit;
 		private int _obstructionCount;
 		private RaycastHit[] _obstructions = new RaycastHit[MaxObstructions];
-		private float _obstructionTime;
 		private Vector3 _currentFollowPosition;
 
 		private const int MaxObstructions = 32;
@@ -76,7 +74,6 @@ namespace FishMMO.Shared
 		public void SetFollowTransform(Transform t)
 		{
 			FollowTransform = t;
-			// CRASHPOINT - comment out the if statement for an instant client crash. this is for testing purposes.
 			if (FollowTransform != null)
 			{
 				PlanarDirection = FollowTransform.forward;

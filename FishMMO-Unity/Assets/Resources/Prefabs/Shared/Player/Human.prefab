@@ -2377,9 +2377,7 @@ GameObject:
   - component: {fileID: 6654030480265756385}
   - component: {fileID: 1309032279340673784}
   - component: {fileID: 5458423057004802806}
-  - component: {fileID: 8399667084086637045}
   - component: {fileID: 6934114620573017969}
-  - component: {fileID: 4581479217719699661}
   - component: {fileID: 1291915661732122704}
   - component: {fileID: 844505594164349671}
   - component: {fileID: 8187195704414241134}
@@ -2387,6 +2385,7 @@ GameObject:
   - component: {fileID: 3230041066334007737}
   - component: {fileID: 2278861360426828739}
   - component: {fileID: 598625443293639433}
+  - component: {fileID: 3713920853917057017}
   m_Layer: 0
   m_Name: Human
   m_TagString: Untagged
@@ -2435,14 +2434,13 @@ MonoBehaviour:
   - {fileID: 6654030480265756385}
   - {fileID: 1309032279340673784}
   - {fileID: 5458423057004802806}
-  - {fileID: 8399667084086637045}
   - {fileID: 6934114620573017969}
-  - {fileID: 4581479217719699661}
   - {fileID: 1291915661732122704}
   - {fileID: 844505594164349671}
   - {fileID: 8187195704414241134}
   - {fileID: 6704804402765680992}
   - {fileID: 3230041066334007737}
+  - {fileID: 3713920853917057017}
   <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 0}
   <NestedRootNetworkBehaviours>k__BackingField: []
   SerializedTransformProperties:
@@ -2459,6 +2457,7 @@ MonoBehaviour:
   _predictionType: 0
   _graphicalObject: {fileID: 5341418137953878145}
   _enableStateForwarding: 1
+  _networkTransform: {fileID: 0}
   _ownerInterpolation: 2
   _enableTeleport: 0
   _teleportThreshold: 1
@@ -2684,22 +2683,6 @@ MonoBehaviour:
   LayerMask:
     serializedVersion: 2
     m_Bits: 257
---- !u!114 &8399667084086637045
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5839652419922276934}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f05a0b4c0a9733f4db3379ba51c18b84, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  _componentIndexCache: 8
-  _addedNetworkObject: {fileID: 7248884440816270172}
-  _networkObjectCache: {fileID: 7248884440816270172}
-  Currency: 0
 --- !u!114 &6934114620573017969
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2712,25 +2695,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1a402312deeba5e4a9372615e445f44f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 9
+  _componentIndexCache: 8
   _addedNetworkObject: {fileID: 7248884440816270172}
   _networkObjectCache: {fileID: 7248884440816270172}
---- !u!114 &4581479217719699661
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5839652419922276934}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: cb1bb90369a05a844b79d7695ce3681e, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  _componentIndexCache: 10
-  _addedNetworkObject: {fileID: 7248884440816270172}
-  _networkObjectCache: {fileID: 7248884440816270172}
-  Currency: 0
 --- !u!114 &1291915661732122704
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2743,10 +2710,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 73facf272d356ac42b96a3c8e10c36c6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 11
+  _componentIndexCache: 9
   _addedNetworkObject: {fileID: 7248884440816270172}
   _networkObjectCache: {fileID: 7248884440816270172}
-  Rank: 0
 --- !u!114 &844505594164349671
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2759,11 +2725,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: dd3cedcaf7281e042bd075ca3f84fc9d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 12
+  _componentIndexCache: 10
   _addedNetworkObject: {fileID: 7248884440816270172}
   _networkObjectCache: {fileID: 7248884440816270172}
-  ID: 0
-  Rank: 0
 --- !u!114 &8187195704414241134
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2776,7 +2740,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3327546bbfe5c2a4cbb267dc49f40f6c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 13
+  _componentIndexCache: 11
   _addedNetworkObject: {fileID: 7248884440816270172}
   _networkObjectCache: {fileID: 7248884440816270172}
 --- !u!114 &6704804402765680992
@@ -2791,10 +2755,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ef74936c7389fd247bbf0437fe619b20, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 14
+  _componentIndexCache: 12
   _addedNetworkObject: {fileID: 7248884440816270172}
   _networkObjectCache: {fileID: 7248884440816270172}
-  Immortal: 0
   ResourceAttribute: {fileID: 11400000, guid: e5c10a046ee277f46a57ee2048ae5ec9, type: 2}
   DamageAchievementTemplate: {fileID: 0}
   DamagedAchievementTemplate: {fileID: 0}
@@ -2818,18 +2781,19 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2d2b958cf491cbd4ea4dcfc4ecfb6721, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 15
+  _componentIndexCache: 13
   _addedNetworkObject: {fileID: 7248884440816270172}
   _networkObjectCache: {fileID: 7248884440816270172}
   CharacterNameLabel: {fileID: 6211269303433269750}
   CharacterGuildLabel: {fileID: 7039625850129925610}
   EquipmentViewCamera: {fileID: 1346939251586913641}
+  ID: 0
   CharacterName: 
   CharacterNameLower: 
   Account: 
   WorldServerID: 0
   AccessLevel: 1
-  IsTeleporting: 0
+  TeleporterName: 
   SceneHandle: 0
   LastChatMessage: 
 --- !u!136 &2278861360426828739
@@ -2882,6 +2846,21 @@ Rigidbody:
   m_Interpolate: 0
   m_Constraints: 0
   m_CollisionDetection: 1
+--- !u!114 &3713920853917057017
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5839652419922276934}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2d54339ff3d1e7f498b872ac6b1633a4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _componentIndexCache: 14
+  _addedNetworkObject: {fileID: 7248884440816270172}
+  _networkObjectCache: {fileID: 7248884440816270172}
 --- !u!1 &5893296815098749217
 GameObject:
   m_ObjectHideFlags: 0

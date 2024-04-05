@@ -23,10 +23,11 @@ namespace FishMMO.Client
 	/// </summary>
 	public class Client : MonoBehaviour
 	{
-		private enum ServerType : byte
+		private enum ServerConnectionType : byte
 		{
 			None,
 			Login,
+			ConnectingToWorld,
 			World,
 			Scene,
 		}
@@ -41,7 +42,7 @@ namespace FishMMO.Client
 		private string lastWorldAddress = "";
 		private ushort lastWorldPort = 0;
 
-		private ServerType currentServerType = ServerType.None;
+		private ServerConnectionType currentConnectionType = ServerConnectionType.None;
 		public byte ReconnectAttempts = 10;
 		public float ReconnectAttemptWaitTime = 5f;
 
@@ -53,8 +54,8 @@ namespace FishMMO.Client
 		public event Action OnReconnectFailed;
 		public event Action OnQuitToLogin;
 
-		public bool CanReconnect { get { return currentServerType == ServerType.World ||
-												currentServerType == ServerType.Scene; } }
+		public bool CanReconnect { get { return currentConnectionType == ServerConnectionType.World ||
+												currentConnectionType == ServerConnectionType.Scene; } }
 
 		private static NetworkManager _networkManager;
 		public NetworkManager NetworkManager;
@@ -227,7 +228,7 @@ namespace FishMMO.Client
 
 			reconnectsAttempted = 0;
 			nextReconnect = -1;
-			currentServerType = ServerType.None;
+			currentConnectionType = ServerConnectionType.None;
 			lastWorldAddress = "";
 			lastWorldPort = 0;
 
@@ -290,8 +291,11 @@ namespace FishMMO.Client
 			switch (clientState)
 			{
 				case LocalConnectionState.Stopped:
-
-					if (!forceDisconnect)
+					if (currentConnectionType == ServerConnectionType.Login)
+					{
+						QuitToLogin();
+					}
+					else if (!forceDisconnect)
 					{
 						// we can reconnect to the world server and scene servers
 						if (CanReconnect)
@@ -303,7 +307,7 @@ namespace FishMMO.Client
 							OnReconnectAttempt?.Invoke(reconnectsAttempted, ReconnectAttempts);
 						}
 					}
-					currentServerType = ServerType.None;
+					currentConnectionType = ServerConnectionType.None;
 					break;
 				case LocalConnectionState.Started:
 					OnConnectionSuccessful?.Invoke();
@@ -327,13 +331,13 @@ namespace FishMMO.Client
 				case ClientAuthenticationResult.Banned:
 					break;
 				case ClientAuthenticationResult.LoginSuccess:
-					currentServerType = ServerType.Login;
+					currentConnectionType = ServerConnectionType.Login;
 					break;
 				case ClientAuthenticationResult.WorldLoginSuccess:
-					currentServerType = ServerType.World;
+					currentConnectionType = ServerConnectionType.World;
 					break;
 				case ClientAuthenticationResult.SceneLoginSuccess:
-					currentServerType = ServerType.Scene;
+					currentConnectionType = ServerConnectionType.Scene;
 					break;
 				case ClientAuthenticationResult.ServerFull:
 					break;
@@ -344,6 +348,11 @@ namespace FishMMO.Client
 
 		public void ConnectToServer(string address, ushort port, bool isWorldServer = false)
 		{
+			if (isWorldServer)
+			{
+				currentConnectionType = ServerConnectionType.ConnectingToWorld;
+			}
+
 			// stop current connection if any
 			NetworkManager.ClientManager.StopConnection();
 

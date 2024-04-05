@@ -36,13 +36,11 @@ namespace FishMMO.Client
 
 		private void ClientManager_OnClientConnectionState(ClientConnectionStateArgs obj)
 		{
-			if (obj.ConnectionState == LocalConnectionState.Stopped &&
-				!Client.CanReconnect)
+			if (obj.ConnectionState == LocalConnectionState.Stopped)
 			{
 				handshakeMSG.text = "";
 				SetSignInLocked(false);
 			}
-			//handshakeMSG.text = obj.ConnectionState.ToString();
 		}
 
 		private void ClientManager_OnReconnectFailed()
@@ -56,26 +54,45 @@ namespace FishMMO.Client
 			switch (result)
 			{
 				case ClientAuthenticationResult.AccountCreated:
-					handshakeMSG.text = "Account created successfully.";
-					Client.ForceDisconnect();
-					SetSignInLocked(false);
+					{
+						if (UIManager.TryGet("UIDialogBox", out UIDialogBox uiDialogBox))
+						{
+							uiDialogBox.Open("Your account has been created!");
+						}
+						Client.ForceDisconnect();
+						SetSignInLocked(false);
+					}
+					
 					break;
 				case ClientAuthenticationResult.InvalidUsernameOrPassword:
-					// update the handshake message
-					handshakeMSG.text = "Invalid Username or Password.";
-					Client.ForceDisconnect();
-					SetSignInLocked(false);
+					{
+						if (UIManager.TryGet("UIDialogBox", out UIDialogBox uiDialogBox))
+						{
+							uiDialogBox.Open("Invalid Username or Password.");
+						}
+						Client.ForceDisconnect();
+						SetSignInLocked(false);
+					}
 					break;
 				case ClientAuthenticationResult.AlreadyOnline:
-					handshakeMSG.text = "Account is already online.";
-					Client.ForceDisconnect();
-					SetSignInLocked(false);
+					{
+						if (UIManager.TryGet("UIDialogBox", out UIDialogBox uiDialogBox))
+						{
+							uiDialogBox.Open("Account is already online.");
+						}
+						Client.ForceDisconnect();
+						SetSignInLocked(false);
+					}
 					break;
 				case ClientAuthenticationResult.Banned:
-					// update the handshake message
-					handshakeMSG.text = "Account is banned. Please contact the system administrator.";
-					Client.ForceDisconnect();
-					SetSignInLocked(false);
+					{
+						if (UIManager.TryGet("UIDialogBox", out UIDialogBox uiDialogBox))
+						{
+							uiDialogBox.Open("Account is banned. Please contact the system administrator.");
+						}
+						Client.ForceDisconnect();
+						SetSignInLocked(false);
+					}
 					break;
 				case ClientAuthenticationResult.LoginSuccess:
 					// reset handshake message and hide the panel
@@ -102,6 +119,8 @@ namespace FishMMO.Client
 				Constants.Authentication.IsAllowedUsername(username.text) &&
 				Constants.Authentication.IsAllowedPassword(password.text))
 			{
+				SetSignInLocked(true);
+
 				// set username and password in the authenticator
 				Client.LoginAuthenticator.SetLoginCredentials(username.text, password.text, true);
 

@@ -41,7 +41,6 @@ namespace FishMMO.Shared
 			if (base.TimeManager != null)
 			{
 				base.TimeManager.OnTick += TimeManager_OnTick;
-				base.TimeManager.OnPostTick += TimeManager_OnPostTick;
 			}
 		}
 
@@ -52,7 +51,6 @@ namespace FishMMO.Shared
 			if (base.TimeManager != null)
 			{
 				base.TimeManager.OnTick -= TimeManager_OnTick;
-				base.TimeManager.OnPostTick -= TimeManager_OnPostTick;
 			}
 		}
 
@@ -80,12 +78,9 @@ namespace FishMMO.Shared
 
 		private void TimeManager_OnTick()
 		{
-			KCCInputReplicateData kCCInputReplicateData = OnHandleCharacterInput == null ? default : OnHandleCharacterInput();
+			KCCInputReplicateData kCCInputReplicateData = !base.IsOwner || OnHandleCharacterInput == null ? default : OnHandleCharacterInput();
 			Replicate(kCCInputReplicateData);
-		}
 
-		private void TimeManager_OnPostTick()
-		{
 			if (base.IsServerStarted)
 			{
 				Reconcile(CharacterController.GetState());
@@ -95,8 +90,10 @@ namespace FishMMO.Shared
 		[Replicate]
 		private void Replicate(KCCInputReplicateData input, ReplicateState state = ReplicateState.Invalid, Channel channel = Channel.Unreliable)
 		{
-			if (!input.IsActualData || state.IsFuture())
+			if (!input.MoveFlags.IsFlagged(KCCMoveFlags.IsActualData) || state.IsFuture())
+			{
 				return;
+			}
 
 			CharacterController.SetInputs(ref input);
 

@@ -110,18 +110,21 @@ namespace FishMMO.Client
 
 		public KCCInputReplicateData KCCPlayer_OnHandleCharacterInput()
 		{
+			int moveFlags = 0;
+
+			// TEMPORARY
+			moveFlags.EnableBit(KCCMoveFlags.IsActualData);
+
 			// we can't change input if the UI is open or if the mouse cursor is enabled
 			if (!CanUpdateInput())
 			{
 				return new KCCInputReplicateData(0.0f,
 												 0.0f,
-												 0,
+												 moveFlags,
 												 Character.KCCPlayer.CharacterCamera.Transform.position,
-												 Character.KCCPlayer.CharacterCamera.Transform.rotation,
-												 true);
+												 Character.KCCPlayer.CharacterCamera.Transform.rotation);
 			}
-
-			int moveFlags = 0;
+			
 			if (_jumpQueued)
 			{
 				moveFlags.EnableBit(KCCMoveFlags.Jump);
@@ -140,8 +143,7 @@ namespace FishMMO.Client
 											 InputManager.GetAxis(HorizontalInput),
 											 moveFlags,
 											 Character.KCCPlayer.CharacterCamera.Transform.position,
-											 Character.KCCPlayer.CharacterCamera.Transform.rotation,
-											 true);
+											 Character.KCCPlayer.CharacterCamera.Transform.rotation);
 		}
 
 		private void Update()
@@ -268,36 +270,32 @@ namespace FishMMO.Client
 				}
 			}
 
-			// Create the look input vector for the camera
-			float mouseLookAxisUp = InputManager.GetAxis(MouseYInput);
-			float mouseLookAxisRight = InputManager.GetAxis(MouseXInput);
-			Vector3 lookInputVector = new Vector3(mouseLookAxisRight, mouseLookAxisUp, 0f);
-
-			// Prevent moving the camera while the cursor isn't locked
-			if (Cursor.lockState != CursorLockMode.Locked)
-			{
-				lookInputVector = Vector3.zero;
-			}
-
-			float scrollInput = 0.0f;
-#if !UNITY_WEBGL
 			if (CanUpdateInput())
 			{
+				// Create the look input vector for the camera
+				float mouseLookAxisUp = InputManager.GetAxis(MouseYInput);
+				float mouseLookAxisRight = InputManager.GetAxis(MouseXInput);
+				Vector3 lookInputVector = new Vector3(mouseLookAxisRight, mouseLookAxisUp, 0f);
+
+				float scrollInput = 0.0f;
+#if !UNITY_WEBGL
 				// Input for zooming the camera (disabled in WebGL because it can cause problems)
 				scrollInput = -InputManager.GetAxis(MouseScrollInput);
-			}
 #endif
+				// Apply inputs to the camera
+				Character.KCCPlayer.UpdateCamera(scrollInput, lookInputVector);
 
-			// Apply inputs to the camera
-			Character.KCCPlayer.UpdateCamera(scrollInput, lookInputVector);
-
-			// Handle toggling zoom level
-			if (InputManager.GetKeyDown(ToggleFirstPersonInput))
-			{
-				Character.KCCPlayer.CharacterCamera.TargetDistance = (Character.KCCPlayer.CharacterCamera.TargetDistance == 0f) ? Character.KCCPlayer.CharacterCamera.DefaultDistance : 0f;
+				// Handle toggling zoom level
+				if (InputManager.GetKeyDown(ToggleFirstPersonInput))
+				{
+					Character.KCCPlayer.CharacterCamera.TargetDistance = (Character.KCCPlayer.CharacterCamera.TargetDistance == 0f) ? Character.KCCPlayer.CharacterCamera.DefaultDistance : 0f;
+				}
+				Character.KCCPlayer.SetOrientationMethod(Character.KCCPlayer.CharacterController.OrientationMethod);
 			}
-
-			Character.KCCPlayer.SetOrientationMethod(Character.KCCPlayer.CharacterController.OrientationMethod);
+			else
+			{
+				Character.KCCPlayer.UpdateCamera(0.0f, Vector3.zero);
+			}
 		}
 #endif
 	}

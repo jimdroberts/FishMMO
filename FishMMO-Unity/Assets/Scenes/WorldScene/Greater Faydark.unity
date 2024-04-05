@@ -1906,6 +1906,7 @@ MonoBehaviour:
   _predictionType: 0
   _graphicalObject: {fileID: 0}
   _enableStateForwarding: 1
+  _networkTransform: {fileID: 0}
   _ownerInterpolation: 1
   _enableTeleport: 0
   _teleportThreshold: 1
@@ -3319,6 +3320,7 @@ MonoBehaviour:
   _predictionType: 0
   _graphicalObject: {fileID: 0}
   _enableStateForwarding: 1
+  _networkTransform: {fileID: 0}
   _ownerInterpolation: 1
   _enableTeleport: 0
   _teleportThreshold: 1

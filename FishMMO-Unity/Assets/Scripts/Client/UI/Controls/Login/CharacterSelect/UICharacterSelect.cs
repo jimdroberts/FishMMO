@@ -182,7 +182,7 @@ namespace FishMMO.Client
 				selectedCharacter != null &&
 				selectedCharacter.Details != null)
 			{
-				if (UIManager.TryGet("UIConfirmationTooltip", out UIConfirmationTooltip tooltip))
+				if (UIManager.TryGet("UIDialogBox", out UIDialogBox tooltip))
 				{
 					SetDeleteButtonLocked(true);
 
@@ -209,6 +209,14 @@ namespace FishMMO.Client
 				Hide();
 				createCharacter.Show();
 			}
+		}
+
+		public override void OnQuitToLogin()
+		{
+			base.OnQuitToLogin();
+
+			SetDeleteButtonLocked(false);
+			SetConnectButtonLocked(false);
 		}
 
 		public void OnClick_QuitToLogin()

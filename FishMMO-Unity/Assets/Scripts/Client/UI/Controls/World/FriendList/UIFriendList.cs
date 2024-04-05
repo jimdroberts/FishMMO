@@ -89,7 +89,7 @@ namespace FishMMO.Client
 
 		private void OnButtonRemoveFriend(long friendID)
 		{
-			if (UIManager.TryGet("UIConfirmationTooltip", out UIConfirmationTooltip tooltip))
+			if (UIManager.TryGet("UIDialogBox", out UIDialogBox tooltip))
 			{
 				tooltip.Open("Are you sure you want to remove your friend?", () =>
 				{
@@ -105,7 +105,7 @@ namespace FishMMO.Client
 		{
 			if (FriendPrefab != null && FriendParent != null)
 			{
-				if (UIManager.TryGet("UIInputConfirmationTooltip", out UIInputConfirmationTooltip tooltip))
+				if (UIManager.TryGet("UIDialogInputBox", out UIDialogInputBox tooltip))
 				{
 					tooltip.Open("Please type the name of the person you wish to add.", (s) =>
 					{

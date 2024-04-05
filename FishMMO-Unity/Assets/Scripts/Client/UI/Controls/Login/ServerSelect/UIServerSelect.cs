@@ -157,6 +157,13 @@ namespace FishMMO.Client
 			}
 		}
 
+		public override void OnQuitToLogin()
+		{
+			base.OnQuitToLogin();
+
+			SetConnectToServerLocked(false);
+		}
+
 		public void OnClick_QuitToLogin()
 		{
 			StopAllCoroutines();

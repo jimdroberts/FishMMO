@@ -189,6 +189,13 @@ namespace FishMMO.Client
 			}
 		}
 
+		public override void OnQuitToLogin()
+		{
+			base.OnQuitToLogin();
+
+			SetCreateButtonLocked(false);
+		}
+
 		public void OnClick_QuitToLogin()
 		{
 			// we should go back to login..

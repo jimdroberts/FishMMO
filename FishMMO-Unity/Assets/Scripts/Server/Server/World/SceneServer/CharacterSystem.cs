@@ -383,7 +383,7 @@ namespace FishMMO.Server
 				}
 
 				// set the proper physics scene for the character, scene stacking requires separated physics
-				character.Motor.SetPhysicsScene(scene.GetPhysicsScene());
+				character.Motor?.SetPhysicsScene(scene.GetPhysicsScene());
 
 				// character becomes mortal when loaded into the scene
 				if (character.TryGet(out ICharacterDamageController damageController))

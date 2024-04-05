@@ -1,13 +1,14 @@
-using System;
+﻿using System;
 using TMPro;
+using UnityEngine.UI;
 
 namespace FishMMO.Client
 {
-	public class UIConfirmationTooltip : UIControl
+	public class UIDialogInputBox : UIControl
 	{
 		public TMP_Text DialogueLabel;
 
-		private Action onAccept;
+		private Action<string> onAccept;
 		private Action onCancel;
 
 		public override void OnStarting()
@@ -18,16 +19,19 @@ namespace FishMMO.Client
 		{
 		}
 
-		public void Open(string text, Action onAccept, Action onCancel = null)
+		public void Open(string text, Action<string> onAccept = null, Action onCancel = null)
 		{
 			if (Visible)
 			{
 				return;
 			}
-
 			if (DialogueLabel != null)
 			{
 				DialogueLabel.text = text;
+			}
+			if (InputField != null)
+			{
+				InputField.text = "";
 			}
 			this.onAccept = onAccept;
 			this.onCancel = onCancel;
@@ -36,7 +40,11 @@ namespace FishMMO.Client
 
 		public void OnClick_Accept()
 		{
-			onAccept?.Invoke();
+			if (InputField != null &&
+				!string.IsNullOrWhiteSpace(InputField.text))
+			{
+				this.onAccept?.Invoke(InputField.text);
+			}
 
 			onAccept = null;
 			onCancel = null;

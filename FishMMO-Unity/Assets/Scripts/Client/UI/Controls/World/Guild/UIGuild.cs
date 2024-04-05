@@ -50,7 +50,7 @@ namespace FishMMO.Client
 		{
 			ClientNamingSystem.SetName(NamingSystemType.CharacterName, inviterCharacterID, (n) =>
 			{
-				if (UIManager.TryGet("UIConfirmationTooltip", out UIConfirmationTooltip uiTooltip))
+				if (UIManager.TryGet("UIDialogBox", out UIDialogBox uiTooltip))
 				{
 					uiTooltip.Open("You have been invited to join " + n + "'s guild. Would you like to join?",
 					() =>
@@ -139,7 +139,7 @@ namespace FishMMO.Client
 				Character.TryGet(out IGuildController guildController) &&
 				guildController.ID < 1 && Client.NetworkManager.IsClientStarted)
 			{
-				if (UIManager.TryGet("UIInputConfirmationTooltip", out UIInputConfirmationTooltip tooltip))
+				if (UIManager.TryGet("UIDialogInputBox", out UIDialogInputBox tooltip))
 				{
 					tooltip.Open("Please type the name of your new guild!", (s) =>
 					{
@@ -161,7 +161,7 @@ namespace FishMMO.Client
 				Character.TryGet(out IGuildController guildController) &&
 				guildController.ID > 0 && Client.NetworkManager.IsClientStarted)
 			{
-				if (UIManager.TryGet("UIConfirmationTooltip", out UIConfirmationTooltip tooltip))
+				if (UIManager.TryGet("UIDialogBox", out UIDialogBox tooltip))
 				{
 					tooltip.Open("Are you sure you want to leave your guild?", () =>
 					{
@@ -190,7 +190,7 @@ namespace FishMMO.Client
 						}, Channel.Reliable);
 					}
 				}
-				else if (UIManager.TryGet("UIInputConfirmationTooltip", out UIInputConfirmationTooltip tooltip))
+				else if (UIManager.TryGet("UIDialogInputBox", out UIDialogInputBox tooltip))
 				{
 					tooltip.Open("Please type the name of the person you wish to invite.", (s) =>
 					{

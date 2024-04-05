@@ -20,6 +20,11 @@ namespace FishMMO.Shared
 		private void Awake()
 		{
 			Transform = transform;
+			Rigidbody rigidbody = GetComponent<Rigidbody>();
+			if (rigidbody != null)
+			{
+				rigidbody.isKinematic = true;
+			}
 		}
 
 		void Update()

@@ -266,13 +266,13 @@ namespace FishMMO.Shared
 
 							Quaternion targetQuarternion = Quaternion.Euler(0.0f, targetRotationY, 0.0f);
 
-							if (Mathf.Abs(Quaternion.Angle(transform.rotation, targetQuarternion) - 180f) <= 3f)
+							if (Mathf.Abs(Quaternion.Angle(Motor.TransientRotation, targetQuarternion) - 180f) <= 3f)
 							{
 								//Debug.Log("180 degree detected");
 								targetRotationY -= 10f;
 							}
 
-							currentRotation = Quaternion.Slerp(transform.rotation, Quaternion.Euler(0.0f, targetRotationY, 0.0f), 1 - Mathf.Exp(-OrientationSharpness * deltaTime));
+							currentRotation = Quaternion.Slerp(Motor.TransientRotation, Quaternion.Euler(0.0f, targetRotationY, 0.0f), 1 - Mathf.Exp(-OrientationSharpness * deltaTime));
 						}
 
 						Vector3 currentUp = (currentRotation * Vector3.up);

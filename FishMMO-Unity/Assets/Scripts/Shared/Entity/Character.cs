@@ -197,7 +197,7 @@ namespace FishMMO.Shared
 			{
 				Type interfaceType = interfaces[i];
 				if (interfaceType == typeof(ICharacterBehaviour) ||
-					interfaceType == typeof(IItemContainer))
+					interfaceType == typeof(IItemContainer)) // IItemContainer has multiple inheritence, this fixes any issues related to it
 				{
 					continue;
 				}
@@ -221,7 +221,7 @@ namespace FishMMO.Shared
 			{
 				Type interfaceType = interfaces[i];
 				if (interfaceType == typeof(ICharacterBehaviour) ||
-					interfaceType == typeof(IItemContainer))
+					interfaceType == typeof(IItemContainer)) // IItemContainer has multiple inheritence, this fixes any issues related to it
 				{
 					continue;
 				}

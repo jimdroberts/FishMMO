@@ -55,7 +55,7 @@ namespace FishMMO.Client
 		{
 			ClientNamingSystem.SetName(NamingSystemType.CharacterName, inviterCharacterID, (n) =>
 			{
-				if (UIManager.TryGet("UIConfirmationTooltip", out UIConfirmationTooltip uiTooltip))
+				if (UIManager.TryGet("UIDialogBox", out UIDialogBox uiTooltip))
 				{
 					uiTooltip.Open("You have been invited to join " + n + "'s party. Would you like to join?",
 					() =>
@@ -155,7 +155,7 @@ namespace FishMMO.Client
 				Character.TryGet(out IPartyController partyController) &&
 				partyController.ID > 0)
 			{
-				if (UIManager.TryGet("UIConfirmationTooltip", out UIConfirmationTooltip tooltip))
+				if (UIManager.TryGet("UIDialogBox", out UIDialogBox tooltip))
 				{
 					tooltip.Open("Are you sure you want to leave your party?", () =>
 					{
@@ -184,7 +184,7 @@ namespace FishMMO.Client
 						}, Channel.Reliable);
 					}
 				}
-				else if (UIManager.TryGet("UIInputConfirmationTooltip", out UIInputConfirmationTooltip tooltip))
+				else if (UIManager.TryGet("UIDialogInputBox", out UIDialogInputBox tooltip))
 				{
 					tooltip.Open("Please type the name of the person you wish to invite.", (s) =>
 					{
