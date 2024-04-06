@@ -3193,7 +3193,7 @@ GameObject:
   - component: {fileID: 1231552095}
   - component: {fileID: 1231552094}
   m_Layer: 0
-  m_Name: Caitlin
+  m_Name: Gracie Mystfall
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -3372,7 +3372,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 062bf3d012d45c24daab9ccf68ee2be6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  Template: {fileID: 11400000, guid: feab58756cafd3843bd5ab41652f2c56, type: 2}
+  FirstNames: {fileID: 11400000, guid: feab58756cafd3843bd5ab41652f2c56, type: 2}
+  Surnames: {fileID: 11400000, guid: 71dd0b181f700604296224b69bb18e94, type: 2}
   HasName: 1
 --- !u!1 &1332135101
 GameObject:

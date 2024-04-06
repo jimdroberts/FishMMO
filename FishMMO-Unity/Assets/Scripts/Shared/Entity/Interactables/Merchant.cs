@@ -1,8 +1,4 @@
-﻿#if UNITY_SERVER
-using static FishMMO.Server.Server;
-using FishNet.Transporting;
-#endif
-using UnityEngine;
+﻿using UnityEngine;
 
 namespace FishMMO.Shared
 {
@@ -19,20 +15,25 @@ namespace FishMMO.Shared
 	{
 		public MerchantTemplate Template;
 
-		public override bool OnInteract(Character character)
+		private string title = "Merchant";
+
+		public override string Title { get { return title; } }
+
+		void Start()
+		{
+			if (Template != null)
+			{
+				title = Template.Description;
+			}
+		}
+
+		public override bool CanInteract(Character character)
 		{
 			if (Template == null ||
-				!base.OnInteract(character))
+				!base.CanInteract(character))
 			{
 				return false;
 			}
-
-#if UNITY_SERVER
-			Broadcast(character.Owner, new MerchantBroadcast()
-			{
-				id = Template.ID,
-			}, true, Channel.Reliable);
-#endif
 			return true;
 		}
 	}

@@ -1,5 +1,4 @@
 ﻿using System;
-using FishNet.Transporting;
 using FishNet.Object;
 using UnityEngine;
 
@@ -25,6 +24,8 @@ namespace FishMMO.Shared
 		}
 
 		public Transform Transform { get; private set; }
+
+		public virtual string Title { get { return "Interactable"; } }
 
 		void Awake()
 		{
@@ -55,21 +56,13 @@ namespace FishMMO.Shared
 			return false;
 		}
 
-		public virtual bool OnInteract(Character character)
+		public virtual bool CanInteract(Character character)
 		{
-			if (character == null)
-			{
-				return false;
-			}
-			if (character.NextInteractTime < DateTime.UtcNow && InRange(character.Transform))
+			if (character != null &&
+				character.NextInteractTime < DateTime.UtcNow && InRange(character.Transform))
 			{
 				character.NextInteractTime = DateTime.UtcNow.AddMilliseconds(INTERACT_RATE_LIMIT);
-#if !UNITY_SERVER
-				character.ClientManager.Broadcast(new InteractableBroadcast()
-				{
-					interactableID = ID,
-				}, Channel.Reliable);
-#endif
+
 				return true;
 			}
 			return false;

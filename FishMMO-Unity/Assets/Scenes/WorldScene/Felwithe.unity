@@ -455,7 +455,7 @@ GameObject:
   - component: {fileID: 431527816}
   - component: {fileID: 431527815}
   m_Layer: 0
-  m_Name: Jackson
+  m_Name: Godfrey Thornshield
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -569,7 +569,7 @@ MonoBehaviour:
   <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 0}
   <NestedRootNetworkBehaviours>k__BackingField: []
   SerializedTransformProperties:
-    Position: {x: 33.128353, y: 9.2, z: -4.5162}
+    Position: {x: 14.148354, y: 77.22, z: -36.8962}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
     LocalScale: {x: 1, y: 1, z: 1}
   _isNetworked: 1
@@ -634,7 +634,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 062bf3d012d45c24daab9ccf68ee2be6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  Template: {fileID: 11400000, guid: e352d8d4481b57449bb4fea6f0b10695, type: 2}
+  FirstNames: {fileID: 11400000, guid: e352d8d4481b57449bb4fea6f0b10695, type: 2}
+  Surnames: {fileID: 11400000, guid: 71dd0b181f700604296224b69bb18e94, type: 2}
   HasName: 1
 --- !u!1 &485316008
 GameObject:
@@ -2072,7 +2073,7 @@ GameObject:
   - component: {fileID: 1642316609}
   - component: {fileID: 1642316608}
   m_Layer: 0
-  m_Name: Pauline
+  m_Name: Whitney Highpeak
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2186,7 +2187,7 @@ MonoBehaviour:
   <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 0}
   <NestedRootNetworkBehaviours>k__BackingField: []
   SerializedTransformProperties:
-    Position: {x: 20.22, y: 9.2, z: -8}
+    Position: {x: 1.2399998, y: 77.22, z: -40.379997}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
     LocalScale: {x: 1, y: 1, z: 1}
   _isNetworked: 1
@@ -2250,7 +2251,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 062bf3d012d45c24daab9ccf68ee2be6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  Template: {fileID: 11400000, guid: feab58756cafd3843bd5ab41652f2c56, type: 2}
+  FirstNames: {fileID: 11400000, guid: feab58756cafd3843bd5ab41652f2c56, type: 2}
+  Surnames: {fileID: 11400000, guid: 71dd0b181f700604296224b69bb18e94, type: 2}
   HasName: 1
 --- !u!1 &1647568257
 GameObject:
@@ -2374,7 +2376,7 @@ GameObject:
   - component: {fileID: 1673595144}
   - component: {fileID: 1673595143}
   m_Layer: 0
-  m_Name: Henrietta
+  m_Name: Amber Thunderstrike
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2400,7 +2402,7 @@ MonoBehaviour:
   <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 0}
   <NestedRootNetworkBehaviours>k__BackingField: []
   SerializedTransformProperties:
-    Position: {x: 17.9, y: 9.2, z: 8.4}
+    Position: {x: -1.08, y: 77.22, z: -23.98}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
     LocalScale: {x: 1, y: 1, z: 1}
   _isNetworked: 1
@@ -2464,7 +2466,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 062bf3d012d45c24daab9ccf68ee2be6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  Template: {fileID: 11400000, guid: feab58756cafd3843bd5ab41652f2c56, type: 2}
+  FirstNames: {fileID: 11400000, guid: feab58756cafd3843bd5ab41652f2c56, type: 2}
+  Surnames: {fileID: 11400000, guid: 71dd0b181f700604296224b69bb18e94, type: 2}
   HasName: 1
 --- !u!136 &1673595147
 CapsuleCollider:

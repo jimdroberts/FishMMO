@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using FishNet.Transporting;
+using UnityEngine;
 using FishMMO.Shared;
 using KinematicCharacterController;
 
@@ -180,9 +181,13 @@ namespace FishMMO.Client
 					if (target != null)
 					{
 						IInteractable interactable = target.GetComponent<IInteractable>();
-						if (interactable != null)
+						if (interactable != null &&
+							interactable.CanInteract(Character))
 						{
-							interactable.OnInteract(Character);
+							Client.Broadcast(new InteractableBroadcast()
+							{
+								interactableID = interactable.ID,
+							}, Channel.Reliable);
 						}
 					}
 				}

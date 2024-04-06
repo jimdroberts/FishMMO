@@ -124,41 +124,20 @@ namespace FishMMO.Client
 			Color color = Color.grey;
 
 			// apply merchant description
-			Merchant merchant = newTarget.GetComponent<Merchant>();
-			if (merchant != null &&
-				merchant.Template != null)
+			IInteractable interactable = newTarget.GetComponent<IInteractable>();
+			if (interactable != null)
 			{
-				label += "\r\n" + merchant.Template.Description;
+				label += $"\r\n<{interactable.Title}>";
 				newPos.y += 0.15f;
 				color = Color.white;
 			}
-			else
+
+			targetLabel = LabelMaker.Display(label, newPos, color, 1.0f, 0.0f, true);
+
+			Outline outline = newTarget.GetComponent<Outline>();
+			if (outline != null)
 			{
-				Banker banker = newTarget.GetComponent<Banker>();
-				if (banker != null)
-				{
-					label += "\r\n<Banker>";
-					newPos.y += 0.15f;
-					color = Color.white;
-				}
-				else
-				{
-					AbilityCrafter abilityCrafter = newTarget.GetComponent<AbilityCrafter>();
-					if (abilityCrafter != null)
-					{
-						label += "\r\n<Ability Crafter>";
-						newPos.y += 0.15f;
-						color = Color.white;
-					}
-				}
-
-				targetLabel = LabelMaker.Display(label, newPos, color, 1.0f, 0.0f, true);
-
-				Outline outline = newTarget.GetComponent<Outline>();
-				if (outline != null)
-				{
-					outline.enabled = true;
-				}
+				outline.enabled = true;
 			}
 		}
 	}

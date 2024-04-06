@@ -6,9 +6,11 @@ namespace FishMMO.Shared
 	{
 		public Transform Target;
 
-		public override bool OnInteract(Character character)
+		public override string Title { get { return "Teleporter"; } }
+
+		public override bool CanInteract(Character character)
 		{
-			if (!base.OnInteract(character))
+			if (!base.CanInteract(character))
 			{
 				return false;
 			}

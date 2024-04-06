@@ -13,7 +13,6 @@ namespace FishMMO.Shared
 
 	public struct AbilityCrafterBroadcast : IBroadcast
 	{
-		public int interactableID;
 	}
 
 	public struct AbilityCraftBroadcast : IBroadcast
@@ -24,12 +23,11 @@ namespace FishMMO.Shared
 
 	public struct BankerBroadcast : IBroadcast
 	{
-		public int interactableID;
 	}
 
 	public struct MerchantBroadcast : IBroadcast
 	{
-		public int id;
+		public int templateID;
 	}
 
 	public struct MerchantPurchaseBroadcast : IBroadcast

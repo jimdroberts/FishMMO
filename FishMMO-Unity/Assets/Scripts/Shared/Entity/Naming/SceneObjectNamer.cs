@@ -9,7 +9,8 @@ namespace FishMMO.Shared
 	public class SceneObjectNamer : MonoBehaviour
 	{
 #if UNITY_EDITOR
-		public NameCache Template;
+		public NameCache FirstNames;
+		public NameCache Surnames;
 
 		[SerializeField]
 		private bool HasName = false;
@@ -20,31 +21,26 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
-			if (Template == null ||
-				Template.Names == null ||
-				Template.Names.Count < 1)
+			if (FirstNames == null ||
+				FirstNames.Names == null ||
+				FirstNames.Names.Count < 1)
 			{
 				return;
 			}
 			System.Random r = new System.Random();
-			int j = r.Next(0, Template.Names.Count);
-			string characterName = Template.Names[j];
+			int j = r.Next(0, FirstNames.Names.Count);
+			string characterName = FirstNames.Names[j];
 
-			string surname = "";
-			Merchant merchant = gameObject.GetComponent<Merchant>();
-			if (merchant != null)
+			if (Surnames == null ||
+				Surnames.Names == null ||
+				Surnames.Names.Count < 1)
 			{
-				surname = "the Merchant";
+				return;
 			}
-			else
-			{
-				AbilityCrafter abilityCrafter = gameObject.GetComponent<AbilityCrafter>();
-				if (abilityCrafter != null)
-				{
-					surname = "the Ability Crafter";
-				}
-			}
-			this.gameObject.name = (characterName + " " + surname).Trim();
+			j = r.Next(0, Surnames.Names.Count);
+			characterName += $" {Surnames.Names[j]}";
+
+			this.gameObject.name = characterName.Trim();
 			HasName = true;
 			EditorUtility.SetDirty(this);
 		}

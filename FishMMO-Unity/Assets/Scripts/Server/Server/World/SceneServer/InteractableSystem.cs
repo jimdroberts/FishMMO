@@ -84,7 +84,29 @@ namespace FishMMO.Server
 			}
 
 			IInteractable interactable = sceneObject.GetComponent<IInteractable>();
-			interactable?.OnInteract(character);
+			if (interactable != null &&
+				interactable.CanInteract(character))
+			{
+				if (interactable is AbilityCrafter)
+				{
+					Server.Broadcast(character.Owner, new AbilityCrafterBroadcast(), true, Channel.Reliable);
+				}
+				else if (interactable is Banker)
+				{
+					Server.Broadcast(character.Owner, new BankerBroadcast(), true, Channel.Reliable);
+				}
+				else
+				{
+					Merchant merchant = interactable as Merchant;
+					if (merchant != null)
+					{
+						Server.Broadcast(character.Owner, new MerchantBroadcast()
+						{
+							templateID = merchant.Template.ID,
+						}, true, Channel.Reliable);
+					}
+				}
+			}
 		}
 
 		private void OnServerMerchantPurchaseBroadcastReceived(NetworkConnection conn, MerchantPurchaseBroadcast msg, Channel channel)

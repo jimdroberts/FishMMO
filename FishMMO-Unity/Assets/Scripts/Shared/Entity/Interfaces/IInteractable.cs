@@ -5,7 +5,9 @@ namespace FishMMO.Shared
 	public interface IInteractable
 	{
 		Transform Transform { get; }
+		int ID { get; }
+		string Title { get; }
 		bool InRange(Transform transform);
-		bool OnInteract(Character character);
+		bool CanInteract(Character character);
 	}
 }
