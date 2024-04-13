@@ -23,11 +23,6 @@ namespace FishMMO.Server.DatabaseServices
 
 			foreach (CharacterAttribute attribute in attributeController.Attributes.Values)
 			{
-				// is looping resources separately faster than boxing?
-				if (attribute.Template.IsResourceAttribute)
-				{
-					continue;
-				}
 				if (attributes.TryGetValue(attribute.Template.ID, out CharacterAttributeEntity dbAttribute))
 				{
 					dbAttribute.CharacterID = character.ID;
@@ -46,7 +41,6 @@ namespace FishMMO.Server.DatabaseServices
 					});
 				}
 			}
-			// is looping resources separately faster than boxing?
 			foreach (CharacterResourceAttribute attribute in attributeController.ResourceAttributes.Values)
 			{
 				if (attributes.TryGetValue(attribute.Template.ID, out CharacterAttributeEntity dbAttribute))

@@ -144,11 +144,11 @@ namespace FishMMO.Client
 			LoginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
 
 #if !UNITY_SERVER
-			Character.OnReadPayload += Character_OnReadPayload;
-			Character.OnStartLocalClient += Character_OnStartLocalClient;
-			Character.OnStopLocalClient += Character_OnStopLocalClient;
+			ICharacter.OnReadPayload += Character_OnReadPayload;
+			ICharacter.OnStartLocalClient += Character_OnStartLocalClient;
+			ICharacter.OnStopLocalClient += Character_OnStopLocalClient;
 
-			GuildController.OnReadPayload += GuildController_OnReadPayload;
+			IGuildController.OnReadPayload += GuildController_OnReadPayload;
 #endif
 		}
 
@@ -198,11 +198,11 @@ namespace FishMMO.Client
 #endif
 
 #if !UNITY_SERVER
-			Character.OnReadPayload -= Character_OnReadPayload;
-			Character.OnStartLocalClient -= Character_OnStartLocalClient;
-			Character.OnStopLocalClient -= Character_OnStopLocalClient;
+			ICharacter.OnReadPayload -= Character_OnReadPayload;
+			ICharacter.OnStartLocalClient -= Character_OnStartLocalClient;
+			ICharacter.OnStopLocalClient -= Character_OnStopLocalClient;
 
-			GuildController.OnReadPayload -= GuildController_OnReadPayload;
+			IGuildController.OnReadPayload -= GuildController_OnReadPayload;
 #endif
 
 			ClientNamingSystem.Destroy();

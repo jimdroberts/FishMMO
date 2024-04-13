@@ -10,6 +10,12 @@ namespace FishMMO.Shared
 
 		public override int Invoke(Character attacker, Character defender, TargetInfo hitTarget, GameObject abilityObject)
 		{
+			if (attacker == defender ||
+				attacker == null ||
+				defender == null)
+			{
+				return 0;
+			}
 			// fork - redirects towards a random direction on hit
 			abilityObject.transform.rotation = abilityObject.transform.forward.GetRandomConicalDirection(abilityObject.transform.transform.position, Arc, Distance);
 

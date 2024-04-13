@@ -1,4 +1,5 @@
 ﻿using FishNet.Component.Prediction;
+using FishNet.Component.Transforming;
 using FishNet.Managing;
 using FishNet.Managing.Timing;
 using FishNet.Object.Prediction;
@@ -8,11 +9,11 @@ using UnityEngine;
 
 namespace FishNet.Object
 {
-#if PREDICTION_V2
+#if !PREDICTION_1
     public partial class NetworkObject : MonoBehaviour
     {
         #region Types.
-#if PREDICTION_V2
+#if !PREDICTION_1
         /// <summary>
         /// Type of prediction movement being used.
         /// </summary>
@@ -27,11 +28,11 @@ namespace FishNet.Object
         #endregion
 
         #region Public.
-#if PREDICTION_V2
+#if !PREDICTION_1
         /// <summary>
         /// True if a reconcile is occuring on any NetworkBehaviour that is on or nested of this NetworkObject. Runtime NetworkBehaviours are not included, such as if you child a NetworkObject to another at runtime.
         /// </summary>
-        public bool IsObjectReconciling { get; private set; }
+        public bool IsObjectReconciling { get; internal set; }
 #endif
         /// <summary>
         /// Last tick this object replicated.
@@ -45,13 +46,14 @@ namespace FishNet.Object
 
         #region Internal.
         /// <summary>
-        /// Pauses rigidbodies for prediction.
+        /// Pauses and unpauses rigidbodies when they do not have data to reconcile to.
         /// </summary>
-        public RigidbodyPauser RigidbodyPauser { get; private set; }
+        public RigidbodyPauser RigidbodyPauser => _rigidbodyPauser;
+        private RigidbodyPauser _rigidbodyPauser;
         #endregion
 
         #region Serialized.
-#if PREDICTION_V2
+#if !PREDICTION_1
         /// <summary>
         /// True if this object uses prediciton methods.
         /// </summary>
@@ -74,9 +76,16 @@ namespace FishNet.Object
         /// <summary>
         /// True to forward replicate and reconcile states to all clients. This is ideal with games where you want all clients and server to run the same inputs. False to only use prediction on the owner, and synchronize to spectators using other means such as a NetworkTransform.
         /// </summary>
+        public bool EnableStateForwarding => (_enablePrediction && _enableStateForwarding);
         [Tooltip("True to forward replicate and reconcile states to all clients. This is ideal with games where you want all clients and server to run the same inputs. False to only use prediction on the owner, and synchronize to spectators using other means such as a NetworkTransform.")]
         [SerializeField]
         private bool _enableStateForwarding = true;
+        /// <summary>
+        /// NetworkTransform to configure for prediction. Specifying this is optional.
+        /// </summary>
+        [Tooltip("NetworkTransform to configure for prediction. Specifying this is optional.")]
+        [SerializeField]
+        private NetworkTransform _networkTransform;
         /// <summary>
         /// How many ticks to interpolate graphics on objects owned by the client. Typically low as 1 can be used to smooth over the frames between ticks.
         /// </summary>
@@ -108,7 +117,7 @@ namespace FishNet.Object
         /// <summary>
         /// NetworkBehaviours which use prediction.
         /// </summary>
-        private List<NetworkBehaviour> _predictionBehaviours = new List<NetworkBehaviour>();       
+        private List<NetworkBehaviour> _predictionBehaviours = new List<NetworkBehaviour>();
         #endregion
 
         private void Prediction_Update()
@@ -126,13 +135,15 @@ namespace FishNet.Object
         private void TimeManager_OnPostTick()
         {
             _tickSmoother?.OnPostTick();
-            //TrySetCollisionExited();
         }
 
         private void Prediction_Preinitialize(NetworkManager manager, bool asServer)
         {
             if (!_enablePrediction)
                 return;
+
+            if (!_enableStateForwarding && _networkTransform != null)
+                _networkTransform.ConfigureForPrediction(_predictionType);
 
             ReplicateTick.Initialize(manager.TimeManager);
             InitializeSmoothers();
@@ -142,7 +153,7 @@ namespace FishNet.Object
 
             if (_predictionBehaviours.Count > 0)
             {
-                manager.PredictionManager.OnPreReconcile += PredictionManager_OnPreReconcile;
+                manager.PredictionManager.OnReconcile += PredictionManager_OnReconcile;
                 manager.PredictionManager.OnReplicateReplay += PredictionManager_OnReplicateReplay;
                 manager.PredictionManager.OnPostReconcile += PredictionManager_OnPostReconcile;
                 manager.TimeManager.OnPreTick += TimeManager_OnPreTick;
@@ -161,7 +172,7 @@ namespace FishNet.Object
              * dropping their connection. */
             if (_predictionBehaviours.Count > 0 && NetworkManager != null)
             {
-                NetworkManager.PredictionManager.OnPreReconcile -= PredictionManager_OnPreReconcile;
+                NetworkManager.PredictionManager.OnReconcile -= PredictionManager_OnReconcile;
                 NetworkManager.PredictionManager.OnReplicateReplay -= PredictionManager_OnReplicateReplay;
                 NetworkManager.PredictionManager.OnPostReconcile -= PredictionManager_OnPostReconcile;
                 NetworkManager.TimeManager.OnPreTick -= TimeManager_OnPreTick;
@@ -179,14 +190,14 @@ namespace FishNet.Object
             bool usesRb2d = (_predictionType == PredictionType.Rigidbody2D);
             if (usesRb || usesRb2d)
             {
-                RigidbodyPauser = new RigidbodyPauser();
+                _rigidbodyPauser = ResettableObjectCaches<RigidbodyPauser>.Retrieve();
                 RigidbodyType rbType = (usesRb) ? RigidbodyType.Rigidbody : RigidbodyType.Rigidbody2D;
-                RigidbodyPauser.UpdateRigidbodies(transform, rbType, true);
+                _rigidbodyPauser.UpdateRigidbodies(transform, rbType, true);
             }
 
             if (_graphicalObject == null)
             {
-                Debug.Log($"GraphicalObject is null on {this.ToString()}. This may be intentional, and acceptable, if you are smoothing between ticks yourself. Otherwise consider assigning the GraphicalObject field.");
+                NetworkManagerExtensions.Log($"GraphicalObject is null on {gameObject.name}. This may be intentional, and acceptable, if you are smoothing between ticks yourself. Otherwise consider assigning the GraphicalObject field.");
             }
             else
             {
@@ -204,20 +215,23 @@ namespace FishNet.Object
         {
             if (_tickSmoother != null)
             {
-                _tickSmoother.Deinitialize();
                 ResettableObjectCaches<LocalTransformTickSmoother>.StoreAndDefault(ref _tickSmoother);
+                ResettableObjectCaches<RigidbodyPauser>.StoreAndDefault(ref _rigidbodyPauser);
             }
         }
 
-        private void PredictionManager_OnPreReconcile(uint clientReconcileTick, uint serverReconcileTick)
+        private void PredictionManager_OnReconcile(uint clientReconcileTick, uint serverReconcileTick)
         {
-            bool hasData = false;
-            for (int i = 0; i < _predictionBehaviours.Count; i++)
+            if (!IsObjectReconciling)
             {
-                hasData |= _predictionBehaviours[i].ClientHasReconcileData;
-                _predictionBehaviours[i].Reconcile_Client_Start();
+                if (_rigidbodyPauser != null)
+                    _rigidbodyPauser.Pause();
             }
-            IsObjectReconciling = hasData;
+            else
+            {
+                for (int i = 0; i < _predictionBehaviours.Count; i++)
+                    _predictionBehaviours[i].Reconcile_Client_Start();
+            }
         }
 
         private void PredictionManager_OnPostReconcile(uint clientReconcileTick, uint serverReconcileTick)
@@ -229,7 +243,8 @@ namespace FishNet.Object
              * than per NB, where the pausing occurs, because once here
              * the entire object is out of the replay cycle so there's
              * no reason to try and unpause per NB. */
-            RigidbodyPauser?.Unpause();
+            if (_rigidbodyPauser != null)
+                _rigidbodyPauser.Unpause();
             IsObjectReconciling = false;
         }
 

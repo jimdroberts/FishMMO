@@ -13,7 +13,7 @@ namespace FishNet.Component.Prediction
 
     public abstract class NetworkCollider : NetworkBehaviour
     {
-#if PREDICTION_V2
+#if !PREDICTION_1
         #region Types.
         private struct ColliderData : IResettable
         {
@@ -460,9 +460,9 @@ namespace FishNet.Component.Prediction
         /// Resets this NetworkBehaviour so that it may be added to an object pool.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public override void ResetState()
+        public override void ResetState(bool asServer)
         {
-            base.ResetState();
+            base.ResetState(asServer);
             ClearColliderDataHistory();
         }
 

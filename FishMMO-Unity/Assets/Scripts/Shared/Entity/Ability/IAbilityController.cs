@@ -6,15 +6,17 @@ namespace FishMMO.Shared
 {
 	public interface IAbilityController : ICharacterBehaviour
 	{
-		event Action<string, float, float> OnUpdate;
-		event Action OnInterrupt;
-		event Action OnCancel;
 		event Func<bool> OnCanManipulate;
 
+		event Action<string, float, float> OnUpdate;
+		// Invoked when the current ability is Interrupted.
+		event Action OnInterrupt;
+		// Invoked when the current ability is Cancelled.
+		event Action OnCancel;
 		// UI
 		event Action OnReset;
-		event Action<long, Ability> OnAddAbility;
-		event Action<long, BaseAbilityTemplate> OnAddKnownAbility;
+		event Action<Ability> OnAddAbility;
+		event Action<BaseAbilityTemplate> OnAddKnownAbility;
 
 		Dictionary<long, Ability> KnownAbilities { get; }
 		HashSet<int> KnownBaseAbilities { get; }

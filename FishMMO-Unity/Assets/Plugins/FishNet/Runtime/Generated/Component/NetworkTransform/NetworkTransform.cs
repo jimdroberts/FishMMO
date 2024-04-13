@@ -16,6 +16,7 @@ using System.Runtime.CompilerServices;
 using UnityEngine;
 using UnityEngine.Scripting;
 using UnityEngine.Serialization;
+using static FishNet.Object.NetworkObject;
 
 namespace FishNet.Component.Transforming
 {
@@ -661,6 +662,8 @@ namespace FishNet.Component.Transforming
             _intervalsRemaining = 0;
             //Reset last tick since each client sends their own ticks.
             _lastServerRpcTick = 0;
+
+            TryClearGoalDatas_OwnershipChange(prevOwner, true);
         }
 
         public override void OnOwnershipClient(NetworkConnection prevOwner)
@@ -687,17 +690,46 @@ namespace FishNet.Component.Transforming
                 if (!base.IsServerInitialized)
                     ChangeTickSubscription(false);
             }
+
+            TryClearGoalDatas_OwnershipChange(prevOwner, false);
+        }
+
+        /// <summary>
+        /// Tries to clear the GoalDatas queue during an ownership change.
+        /// </summary>
+        private void TryClearGoalDatas_OwnershipChange(NetworkConnection prevOwner, bool asServer)
+        {
+            if (_clientAuthoritative)
+            {
+                //If not server
+                if (!asServer)
+                {
+                    //If owner now then clear as the owner controls the object now and shouldnt use past datas.
+                    if (base.IsOwner)
+                        _goalDataQueue.Clear();
+                }
+                //as Server.
+                else
+                {
+                    //If new owner is valid then clear to allow new owner datas.
+                    if (base.Owner.IsValid)
+                        _goalDataQueue.Clear();
+                }
+            }
+            /* Server authoritative never clears because the
+             * clients do not control this object thus should always
+             * follow the queue. */
         }
 
         public override void OnStopNetwork()
         {
-            ResetState(false);
+            ResetState();
         }
 
         /// <summary>
         /// Deinitializes this component.
         /// </summary>
-        private void ResetState(bool destroyed)
+        private void ResetState()
         {
             ChangeTickSubscription(false);
             /* Reset server and client side since this is called from
@@ -2368,14 +2400,38 @@ namespace FishNet.Component.Transforming
             nextTransformData.Tick = base.TimeManager.LastPacketTick.LastRemoteTick;
         }
 
+#if !PREDICTION_1
         /// <summary>
         /// Configures this NetworkTransform for CSP.
         /// </summary>
-        internal void ConfigureForCSP()
+        internal void ConfigureForPrediction(PredictionType predictionType)
         {
             _clientAuthoritative = false;
-            if (base.IsServerInitialized)
-                _sendToOwner = false;
+            _sendToOwner = false;
+
+            //Do not try to change component configuration if its already specified.
+            if (_componentConfiguration != ComponentConfigurationType.Disabled)
+            {
+                if (predictionType == PredictionType.Rigidbody)
+                    _componentConfiguration = ComponentConfigurationType.Rigidbody;
+                else if (predictionType == PredictionType.Rigidbody2D)
+                    _componentConfiguration = ComponentConfigurationType.Rigidbody2D;
+                else if (predictionType == PredictionType.Other)
+                    /* If other or CC then needs to be configured.
+                     * When CC it will be configured properly, if there
+                     * is no CC then no action will be taken. */
+                    _componentConfiguration = ComponentConfigurationType.CharacterController;
+            }
+            ConfigureComponents();
+        }
+#else
+        /// <summary>
+        /// Configures this NetworkTransform for CSP.
+        /// </summary>
+        internal void ConfigureForPrediction()
+        {
+            _clientAuthoritative = false;
+            _sendToOwner = false;
 
             /* If other or CC then needs to be configured.
              * When CC it will be configured properly, if there
@@ -2383,7 +2439,7 @@ namespace FishNet.Component.Transforming
             _componentConfiguration = ComponentConfigurationType.CharacterController;
             ConfigureComponents();
         }
-
+#endif
         /// <summary>
         /// Updates which properties are synchronized.
         /// </summary>

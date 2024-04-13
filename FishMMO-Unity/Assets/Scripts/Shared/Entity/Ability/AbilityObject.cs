@@ -52,12 +52,14 @@ namespace FishMMO.Shared
 
 		void OnCollisionEnter(Collision other)
 		{
-			/*Debug.Log("Hit");
+			Debug.Log($"Collision: {other.gameObject.name}");
 
-			if (other.collider.gameObject.layer == Constants.Layers.Ground)
+			if ((Constants.Layers.Obstruction & (1 << other.collider.gameObject.layer)) != 0)
 			{
-				Debug.Log("Ground");
-			}*/
+				Debug.Log("Obstruction");
+
+				HitCount = 0;
+			}
 
 			Character hitCharacter = other.gameObject.GetComponent<Character>();
 
@@ -65,6 +67,10 @@ namespace FishMMO.Shared
 			{
 				foreach (HitEvent hitEvent in Ability.HitEvents.Values)
 				{
+					if (hitEvent == null)
+					{
+						continue;
+					}
 					TargetInfo targetInfo = new TargetInfo()
 					{
 						Target = other.transform,

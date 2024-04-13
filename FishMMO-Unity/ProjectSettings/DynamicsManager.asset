@@ -25,7 +25,7 @@ PhysicsManager:
   m_InvokeCollisionCallbacks: 1
   m_ClothInterCollisionSettingsToggle: 0
   m_ClothGravity: {x: 0, y: -9.81, z: 0}
-  m_ContactPairsMode: 0
+  m_ContactPairsMode: 3
   m_BroadphaseType: 0
   m_WorldBounds:
     m_Center: {x: 0, y: 0, z: 0}

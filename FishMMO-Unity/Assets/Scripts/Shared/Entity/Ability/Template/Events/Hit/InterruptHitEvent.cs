@@ -7,9 +7,13 @@ namespace FishMMO.Shared
 	{
 		public override int Invoke(Character attacker, Character defender, TargetInfo hitTarget, GameObject abilityObject)
 		{
-			if (attacker != null &&
-				defender != null &&
-				attacker.TryGet(out IFactionController attackerFactionController) &&
+			if (attacker == defender ||
+				attacker == null ||
+				defender == null)
+			{
+				return 0;
+			}
+			if (attacker.TryGet(out IFactionController attackerFactionController) &&
 				defender.TryGet(out IFactionController defenderFactionController) &&
 				defender.TryGet(out IAbilityController abilityController) &&
 				attackerFactionController.GetAllianceLevel(defenderFactionController) == FactionAllianceLevel.Ally)

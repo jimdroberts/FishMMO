@@ -18,18 +18,22 @@ namespace FishMMO.Client
 				attributeController.TryGetResourceAttribute(Template, out CharacterResourceAttribute attribute))
 			{
 				attribute.OnAttributeUpdated -= CharacterAttribute_OnAttributeUpdated;
+
+				CharacterAttribute_OnAttributeUpdated(attribute);
 			}
 		}
 
-		public override void SetCharacter(Character character)
+		public override void OnPostSetCharacter()
 		{
-			base.SetCharacter(character);
+			base.OnPostSetCharacter();
 
 			if (Character != null &&
 				Character.TryGet(out ICharacterAttributeController attributeController) &&
 				attributeController.TryGetResourceAttribute(Template, out CharacterResourceAttribute attribute))
 			{
 				attribute.OnAttributeUpdated += CharacterAttribute_OnAttributeUpdated;
+
+				CharacterAttribute_OnAttributeUpdated(attribute);
 			}
 		}
 

@@ -407,7 +407,7 @@ namespace FishMMO.Shared
 				{
 					CharacterResourceAttribute resource;
 					if (attributeController.TryGetResourceAttribute(pair.Key.ID, out resource) &&
-						resource.CurrentValue < pair.Value)
+						resource.CurrentValue >= pair.Value)
 					{
 						resource.Consume(pair.Value);
 					}

@@ -28,7 +28,7 @@ namespace FishMMO.Shared
 	[RequireComponent(typeof(PartyController))]
 	[RequireComponent(typeof(FriendController))]
 	[RequireComponent(typeof(FactionController))]
-	public class Character : NetworkBehaviour, IPooledResettable
+	public class Character : NetworkBehaviour, ICharacter, IPooledResettable
 	{
 		private Dictionary<Type, ICharacterBehaviour> behaviours = new Dictionary<Type, ICharacterBehaviour>();
 
@@ -45,10 +45,6 @@ namespace FishMMO.Shared
 		public TextMeshPro CharacterGuildLabel;
 		public Camera EquipmentViewCamera;
 #endif
-
-		public static Action<Character> OnReadPayload;
-		public static Action<Character> OnStartLocalClient;
-		public static Action<Character> OnStopLocalClient;
 
 		// accountID for reference
 		public long ID;
@@ -134,7 +130,7 @@ namespace FishMMO.Shared
 			ID = reader.ReadInt64();
 
 #if !UNITY_SERVER
-			OnReadPayload?.Invoke(this);
+			ICharacter.OnReadPayload?.Invoke(this);
 #endif
 		}
 
@@ -144,13 +140,14 @@ namespace FishMMO.Shared
 		}
 
 #if !UNITY_SERVER
+
 		public override void OnStartClient()
 		{
 			base.OnStartClient();
 
 			if (base.IsOwner)
 			{
-				Character.OnStartLocalClient?.Invoke(this);
+				ICharacter.OnStartLocalClient?.Invoke(this);
 
 				gameObject.layer = Constants.Layers.LocalEntity;
 				CharacterController.MeshRoot.gameObject.layer = Constants.Layers.LocalEntity;
@@ -172,7 +169,7 @@ namespace FishMMO.Shared
 					behaviour.OnStopCharacter();
 				}
 
-				Character.OnStopLocalClient?.Invoke(this);
+				ICharacter.OnStopLocalClient?.Invoke(this);
 
 				gameObject.layer = Constants.Layers.Default;
 				CharacterController.MeshRoot.gameObject.layer = Constants.Layers.Default;

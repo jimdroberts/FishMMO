@@ -38,7 +38,6 @@ namespace FishMMO.Client
 			if (Character.TryGet(out IAbilityController abilityController))
 			{
 				abilityController.OnCanManipulate += () => { return !InputManager.MouseMode; };
-				abilityController.OnReset += ClearAllSlots;
 				abilityController.OnAddAbility += AddAbility;
 				abilityController.OnAddKnownAbility += AddKnownAbility;
 			}
@@ -49,7 +48,6 @@ namespace FishMMO.Client
 			if (Character.TryGet(out IAbilityController abilityController))
 			{
 				abilityController.OnCanManipulate -= () => { return !InputManager.MouseMode; };
-				abilityController.OnReset -= ClearAllSlots;
 				abilityController.OnAddAbility -= AddAbility;
 				abilityController.OnAddKnownAbility -= AddKnownAbility;
 			}
@@ -85,29 +83,29 @@ namespace FishMMO.Client
 			}
 		}
 
-		public void AddAbility(long id, Ability ability)
+		public void AddAbility(Ability ability)
 		{
 			if (ability == null)
 			{
 				return;
 			}
 
-			InstantiateButton(id, ability.Template.Icon, ReferenceButtonType.Ability, AbilityTabType.Ability, ability.Tooltip(), ref Abilities);
+			InstantiateButton(ability.ID, ability.Template.Icon, ReferenceButtonType.Ability, AbilityTabType.Ability, ability.Tooltip(), ref Abilities);
 		}
 
-		public void AddKnownAbility(long id, BaseAbilityTemplate template)
+		public void AddKnownAbility(BaseAbilityTemplate template)
 		{
 			AbilityEvent abilityEvent = template as AbilityEvent;
 			if (abilityEvent != null)
 			{
-				InstantiateButton(id, template.Icon, ReferenceButtonType.None, AbilityTabType.KnownAbilityEvent, template.Tooltip(), ref KnownAbilityEvents);
+				InstantiateButton(template.ID, template.Icon, ReferenceButtonType.None, AbilityTabType.KnownAbilityEvent, template.Tooltip(), ref KnownAbilityEvents);
 			}
 			else
 			{
 				AbilityTemplate abilityTemplate = template as AbilityTemplate;
 				if (abilityTemplate != null)
 				{
-					InstantiateButton(id, template.Icon, ReferenceButtonType.None, AbilityTabType.KnownAbility, template.Tooltip(), ref KnownAbilities);
+					InstantiateButton(template.ID, template.Icon, ReferenceButtonType.None, AbilityTabType.KnownAbility, template.Tooltip(), ref KnownAbilities);
 				}
 			}
 		}

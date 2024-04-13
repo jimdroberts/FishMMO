@@ -141,6 +141,11 @@ PrefabInstance:
       propertyPath: m_Name
       value: NetworkManager Scene
       objectReference: {fileID: 0}
+    - target: {fileID: 5291881771867753236, guid: 7d27eb0e922652947b6de9e38d345248,
+        type: 3}
+      propertyPath: _tickRate
+      value: 30
+      objectReference: {fileID: 0}
     - target: {fileID: 6353428963322486570, guid: 7d27eb0e922652947b6de9e38d345248,
         type: 3}
       propertyPath: m_LocalPosition.x

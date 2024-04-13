@@ -29,7 +29,7 @@ namespace FishMMO.Client
 		/// </summary>
 		public virtual void OnPostSetCharacter() { }
 
-		public virtual void SetCharacter(Character character)
+		public void SetCharacter(Character character)
 		{
 			OnPreSetCharacter();
 
@@ -50,7 +50,7 @@ namespace FishMMO.Client
 		/// </summary>
 		public virtual void OnPostUnsetCharacter() { }
 
-		public virtual void UnsetCharacter()
+		public void UnsetCharacter()
 		{
 			OnPreUnsetCharacter();
 

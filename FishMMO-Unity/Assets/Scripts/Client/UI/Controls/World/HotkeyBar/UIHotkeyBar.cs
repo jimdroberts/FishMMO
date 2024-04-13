@@ -18,15 +18,15 @@ namespace FishMMO.Client
 			AddHotkeys(MAX_HOTKEYS);
 		}
 
-		public override void SetCharacter(Character character)
+		public override void OnPostSetCharacter()
 		{
-			base.SetCharacter(character);
+			base.OnPostSetCharacter();
 
 			foreach (UIHotkeyButton hotkey in hotkeys)
 			{
 				if (hotkey != null)
 				{
-					hotkey.Character = character;
+					hotkey.Character = Character;
 				}
 			}
 		}

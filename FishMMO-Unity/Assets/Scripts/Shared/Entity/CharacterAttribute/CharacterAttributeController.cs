@@ -23,9 +23,7 @@ namespace FishMMO.Shared
 				{
 					if (attribute.IsResourceAttribute)
 					{
-						CharacterResourceAttribute resource = new CharacterResourceAttribute(attribute.ID, attribute.InitialValue, attribute.InitialValue, 0);
-						AddAttribute(resource);
-						ResourceAttributes.Add(resource.Template.ID, resource);
+						AddResourceAttribute(new CharacterResourceAttribute(attribute.ID, attribute.InitialValue, attribute.InitialValue, 0));
 					}
 					else
 					{
@@ -136,7 +134,14 @@ namespace FishMMO.Shared
 				foreach (CharacterAttributeTemplate parent in instance.Template.ParentTypes)
 				{
 					CharacterAttribute parentInstance;
-					if (Attributes.TryGetValue(parent.ID, out parentInstance))
+					if (parent.IsResourceAttribute)
+					{
+						if (ResourceAttributes.TryGetValue(parent.ID, out CharacterResourceAttribute parentResourceInstance))
+						{
+							parentResourceInstance.AddChild(instance);
+						}
+					}
+					else if (Attributes.TryGetValue(parent.ID, out parentInstance))
 					{
 						parentInstance.AddChild(instance);
 					}
@@ -145,7 +150,14 @@ namespace FishMMO.Shared
 				foreach (CharacterAttributeTemplate child in instance.Template.ChildTypes)
 				{
 					CharacterAttribute childInstance;
-					if (Attributes.TryGetValue(child.ID, out childInstance))
+					if (child.IsResourceAttribute)
+					{
+						if (ResourceAttributes.TryGetValue(child.ID, out CharacterResourceAttribute childResourceInstance))
+						{
+							childResourceInstance.AddChild(instance);
+						}
+					}
+					else if (Attributes.TryGetValue(child.ID, out childInstance))
 					{
 						instance.AddChild(childInstance);
 					}
@@ -154,7 +166,70 @@ namespace FishMMO.Shared
 				foreach (CharacterAttributeTemplate dependant in instance.Template.DependantTypes)
 				{
 					CharacterAttribute dependantInstance;
-					if (Attributes.TryGetValue(dependant.ID, out dependantInstance))
+					if (dependant.IsResourceAttribute)
+					{
+						if (ResourceAttributes.TryGetValue(dependant.ID, out CharacterResourceAttribute dependantResourceInstance))
+						{
+							dependantResourceInstance.AddDependant(instance);
+						}
+					}
+					else if (Attributes.TryGetValue(dependant.ID, out dependantInstance))
+					{
+						instance.AddDependant(dependantInstance);
+					}
+				}
+			}
+		}
+
+		public void AddResourceAttribute(CharacterResourceAttribute instance)
+		{
+			if (!ResourceAttributes.ContainsKey(instance.Template.ID))
+			{
+				ResourceAttributes.Add(instance.Template.ID, instance);
+
+				foreach (CharacterAttributeTemplate parent in instance.Template.ParentTypes)
+				{
+					CharacterAttribute parentInstance;
+					if (parent.IsResourceAttribute)
+					{
+						if (ResourceAttributes.TryGetValue(parent.ID, out CharacterResourceAttribute parentResourceInstance))
+						{
+							parentResourceInstance.AddChild(instance);
+						}
+					}
+					else if (Attributes.TryGetValue(parent.ID, out parentInstance))
+					{
+						parentInstance.AddChild(instance);
+					}
+				}
+
+				foreach (CharacterAttributeTemplate child in instance.Template.ChildTypes)
+				{
+					CharacterAttribute childInstance;
+					if (child.IsResourceAttribute)
+					{
+						if (ResourceAttributes.TryGetValue(child.ID, out CharacterResourceAttribute childResourceInstance))
+						{
+							childResourceInstance.AddChild(instance);
+						}
+					}
+					else if (Attributes.TryGetValue(child.ID, out childInstance))
+					{
+						instance.AddChild(childInstance);
+					}
+				}
+
+				foreach (CharacterAttributeTemplate dependant in instance.Template.DependantTypes)
+				{
+					CharacterAttribute dependantInstance;
+					if (dependant.IsResourceAttribute)
+					{
+						if (ResourceAttributes.TryGetValue(dependant.ID, out CharacterResourceAttribute dependantResourceInstance))
+						{
+							dependantResourceInstance.AddDependant(instance);
+						}
+					}
+					else if (Attributes.TryGetValue(dependant.ID, out dependantInstance))
 					{
 						instance.AddDependant(dependantInstance);
 					}

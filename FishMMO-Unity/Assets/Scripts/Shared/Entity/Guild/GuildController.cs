@@ -12,8 +12,6 @@ namespace FishMMO.Shared
 	/// </summary>
 	public class GuildController : CharacterBehaviour, IGuildController
 	{
-		public static Action<long, Character> OnReadPayload;
-
 		public event Action<long> OnReceiveGuildInvite;
 		public event Action<long, long, GuildRank, string> OnAddGuildMember;
 		public event Action<HashSet<long>> OnValidateGuildMembers;
@@ -27,7 +25,7 @@ namespace FishMMO.Shared
 		{
 			ID = reader.ReadInt64();
 
-			GuildController.OnReadPayload?.Invoke(ID, Character);
+			IGuildController.OnReadPayload?.Invoke(ID, Character);
 		}
 
 		public override void WritePayload(NetworkConnection connection, Writer writer)
@@ -48,7 +46,7 @@ namespace FishMMO.Shared
 				ClientManager.RegisterBroadcast<GuildAddMultipleBroadcast>(OnClientGuildAddMultipleBroadcastReceived);
 				ClientManager.RegisterBroadcast<GuildRemoveBroadcast>(OnClientGuildRemoveBroadcastReceived);
 
-				GuildController.OnReadPayload?.Invoke(ID, Character);
+				IGuildController.OnReadPayload?.Invoke(ID, Character);
 			}
 		}
 
@@ -86,7 +84,7 @@ namespace FishMMO.Shared
 				ID = msg.guildID;
 				Rank = msg.rank;
 
-				GuildController.OnReadPayload?.Invoke(ID, Character);
+				IGuildController.OnReadPayload?.Invoke(ID, Character);
 			}
 
 			// update our Guild list with the new Guild member

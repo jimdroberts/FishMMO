@@ -1,4 +1,5 @@
 ﻿using FishNet.Managing;
+using GameKit.Dependencies.Utilities;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -7,7 +8,7 @@ namespace FishNet.Component.Prediction
     /// <summary>
     /// Pauses and unpauses rigidbodies. While paused rigidbodies cannot be interacted with or simulated.
     /// </summary>
-    public class RigidbodyPauser
+    public class RigidbodyPauser : IResettable
     {
         #region Types.
         /// <summary>
@@ -35,6 +36,10 @@ namespace FishNet.Component.Prediction
             /// True if the rigidbody was detecting collisions prior to being paused.
             /// </summary>
             public bool DetectCollisions;
+            /// <summary>
+            /// Detection mode of the Rigidbody.
+            /// </summary>
+            public CollisionDetectionMode CollisionDetectionMode;
 
             public RigidbodyData(Rigidbody rb)
             {
@@ -43,6 +48,7 @@ namespace FishNet.Component.Prediction
                 AngularVelocity = Vector3.zero;
                 IsKinematic = rb.isKinematic;
                 DetectCollisions = rb.detectCollisions;
+                CollisionDetectionMode = rb.collisionDetectionMode;
             }
 
             public void Update(Rigidbody rb)
@@ -51,6 +57,7 @@ namespace FishNet.Component.Prediction
                 AngularVelocity = rb.angularVelocity;
                 IsKinematic = rb.isKinematic;
                 DetectCollisions = rb.detectCollisions;
+                CollisionDetectionMode = rb.collisionDetectionMode;
             }
         }
         /// <summary>
@@ -78,6 +85,10 @@ namespace FishNet.Component.Prediction
             /// True if the rigidbody was simulated prior to being paused.
             /// </summary>
             public bool Simulated;
+            /// <summary>
+            /// Detection mode of the rigidbody.
+            /// </summary>
+            public CollisionDetectionMode2D CollisionDetectionMode;
 
             public Rigidbody2DData(Rigidbody2D rb)
             {
@@ -86,6 +97,7 @@ namespace FishNet.Component.Prediction
                 AngularVelocity = 0f;
                 Simulated = rb.simulated;
                 IsKinematic = rb.isKinematic;
+                CollisionDetectionMode = rb.collisionDetectionMode;
             }
 
             public void Update(Rigidbody2D rb)
@@ -94,6 +106,7 @@ namespace FishNet.Component.Prediction
                 AngularVelocity = rb.angularVelocity;
                 Simulated = rb.simulated;
                 IsKinematic = rb.isKinematic;
+                CollisionDetectionMode = rb.collisionDetectionMode;
             }
         }
         #endregion
@@ -230,6 +243,7 @@ namespace FishNet.Component.Prediction
 
                     rbData.Update(rb);
                     _rigidbodyDatas[index] = rbData;
+                    rb.collisionDetectionMode = CollisionDetectionMode.Discrete;
                     rb.isKinematic = true;
                     rb.detectCollisions = false;
 
@@ -258,6 +272,7 @@ namespace FishNet.Component.Prediction
 
                     rbData.Update(rb);
                     _rigidbody2dDatas[index] = rbData;
+                    rb.collisionDetectionMode = CollisionDetectionMode2D.Discrete;
                     rb.isKinematic = true;
                     rb.simulated = false;
 
@@ -299,6 +314,7 @@ namespace FishNet.Component.Prediction
 
                     rb.isKinematic = rbData.IsKinematic;
                     rb.detectCollisions = rbData.DetectCollisions;
+                    rb.collisionDetectionMode = rbData.CollisionDetectionMode;
                     if (!rb.isKinematic)
                     {
                         rb.velocity = rbData.Velocity;
@@ -329,6 +345,7 @@ namespace FishNet.Component.Prediction
 
                     rb.isKinematic = rbData.IsKinematic;
                     rb.simulated = rbData.Simulated;
+                    rb.collisionDetectionMode = rbData.CollisionDetectionMode;
                     if (!rb.isKinematic)
                     {
                         rb.velocity = rbData.Velocity;
@@ -339,7 +356,18 @@ namespace FishNet.Component.Prediction
             }
         }
 
+        public void ResetState()
+        {
+            _rigidbodyDatas.Clear();
+            _rigidbody2dDatas.Clear();
+            _getInChildren = default;
+            _transform = default;
+            _rigidbodyType = default;
+            _initialized = default;
+            Paused = default;
+        }
 
+        public void InitializeState() { }
     }
 
 

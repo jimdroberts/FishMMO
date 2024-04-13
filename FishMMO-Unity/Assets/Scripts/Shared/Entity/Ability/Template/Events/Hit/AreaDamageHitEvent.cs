@@ -15,8 +15,8 @@ namespace FishMMO.Shared
 
 		public override int Invoke(Character attacker, Character defender, TargetInfo hitTarget, GameObject abilityObject)
 		{
-			// attacker should exist with a faction controller
-			if (attacker == null ||
+			if (attacker == defender ||
+				attacker == null ||
 				!attacker.TryGet(out IFactionController attackerFactionController))
 			{
 				return 0;

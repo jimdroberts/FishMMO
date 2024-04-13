@@ -63,9 +63,9 @@ namespace FishMMO.Client
 			}
 		}
 
-		public override void SetCharacter(Character character)
+		public override void OnPostSetCharacter()
 		{
-			base.SetCharacter(character);
+			base.OnPostSetCharacter();
 
 			if (Character == null ||
 				content == null ||

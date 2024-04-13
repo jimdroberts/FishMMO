@@ -34,17 +34,14 @@ namespace FishMMO.Shared
 			int hits = 0;
 			for (int i = 0; i < overlapCount && hits < HitCount; ++i)
 			{
-				if (colliders[i] != attacker.Motor.Capsule)
+				Character def = colliders[i].gameObject.GetComponent<Character>();
+				if (def != null &&
+					def.TryGet(out IFactionController defenderFactionController) &&
+					def.TryGet(out IBuffController buffController) &&
+					attackerFactionController.GetAllianceLevel(defenderFactionController) == FactionAllianceLevel.Ally)
 				{
-					Character def = colliders[i].gameObject.GetComponent<Character>();
-					if (def != null &&
-						def.TryGet(out IFactionController defenderFactionController) &&
-						def.TryGet(out IBuffController buffController) &&
-						attackerFactionController.GetAllianceLevel(defenderFactionController) == FactionAllianceLevel.Ally)
-					{
-						buffController.Apply(BuffTemplate);
-						++hits;
-					}
+					buffController.Apply(BuffTemplate);
+					++hits;
 				}
 			}
 			return hits;

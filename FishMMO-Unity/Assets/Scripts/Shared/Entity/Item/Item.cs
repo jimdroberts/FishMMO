@@ -174,11 +174,18 @@ namespace FishMMO.Shared
 				Character character = Equippable.Character;
 
 				if (character != null &&
-					character.TryGet(out ICharacterAttributeController attributeController) &&
-					attributeController.TryGetAttribute(attribute.Template.CharacterAttribute.ID, out CharacterAttribute characterAttribute))
+					character.TryGet(out ICharacterAttributeController attributeController))
 				{
-					characterAttribute.AddValue(-oldValue);
-					characterAttribute.AddValue(newValue);
+					if (attributeController.TryGetAttribute(attribute.Template.CharacterAttribute.ID, out CharacterAttribute characterAttribute))
+					{
+						characterAttribute.AddValue(-oldValue);
+						characterAttribute.AddValue(newValue);
+					}
+					else if(attributeController.TryGetResourceAttribute(attribute.Template.CharacterAttribute.ID, out CharacterResourceAttribute characterResourceAttribute))
+					{
+						characterResourceAttribute.AddValue(-oldValue);
+						characterResourceAttribute.AddValue(newValue);
+					}
 				}
 			}
 		}

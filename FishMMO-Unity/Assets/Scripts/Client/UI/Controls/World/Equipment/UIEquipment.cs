@@ -16,7 +16,7 @@ namespace FishMMO.Client
 		public List<UIEquipmentButton> buttons = new List<UIEquipmentButton>();
 
 		public List<TMP_Text> attributeCategoryLabels = new List<TMP_Text>();
-		public Dictionary<string, UIAttribute> attributeLabels = new Dictionary<string, UIAttribute>();
+		public Dictionary<long, UIAttribute> attributeLabels = new Dictionary<long, UIAttribute>();
 
 		public override void OnStarting()
 		{
@@ -92,25 +92,16 @@ namespace FishMMO.Client
 
 		public override void OnPreSetCharacter()
 		{
-			if (Character != null)
+			if (Character != null &&
+				Character.TryGet(out IEquipmentController equipmentController))
 			{
-				if (Character.TryGet(out ICharacterAttributeController attributeController))
-				{
-					foreach (CharacterAttribute attribute in attributeController.Attributes.Values)
-					{
-						attribute.OnAttributeUpdated -= OnAttributeUpdated;
-					}
-				}
-				if (Character.TryGet(out IEquipmentController equipmentController))
-				{
-					equipmentController.OnSlotUpdated -= OnEquipmentSlotUpdated;
-				}
+				equipmentController.OnSlotUpdated -= OnEquipmentSlotUpdated;
 			}
 		}
 
-		public override void SetCharacter(Character character)
+		public override void OnPostSetCharacter()
 		{
-			base.SetCharacter(character);
+			base.OnPostSetCharacter();
 			DestroyAttributes();
 
 			if (buttons != null &&
@@ -137,9 +128,14 @@ namespace FishMMO.Client
 				List<CharacterAttribute> resistanceAttributes = new List<CharacterAttribute>();
 				List<CharacterAttribute> coreAttributes = new List<CharacterAttribute>();
 
+				foreach (CharacterResourceAttribute resourceAttribute in attributeController.ResourceAttributes.Values)
+				{
+					resourceAttributes.Add(resourceAttribute);
+				}
+
 				foreach (CharacterAttribute attribute in attributeController.Attributes.Values)
 				{
-					if (attribute is CharacterResourceAttribute || attribute.Template.Name.Contains("Regeneration"))
+					if (attribute.Template.Name.Contains("Regeneration"))
 					{
 						resourceAttributes.Add(attribute);
 					}
@@ -213,20 +209,23 @@ namespace FishMMO.Client
 			attribute.OnAttributeUpdated -= OnAttributeUpdated; // just in case..
 			UIAttribute label = Instantiate(AttributeLabelPrefab, content);
 			label.Name.text = attribute.Template.Name;
-			label.Value.text = attribute.FinalValue.ToString();
-			if (attribute.Template.IsPercentage)
-			{
-				label.Value.text += "%";
-			}
-			else if (attribute.Template.IsResourceAttribute)
+			if (attribute.Template.IsResourceAttribute)
 			{
 				CharacterResourceAttribute resource = attribute as CharacterResourceAttribute;
 				if (resource != null)
 				{
-					label.Value.text += " / " + resource.FinalValue.ToString();
+					label.Value.text = resource.CurrentValue.ToString() + " / " + resource.FinalValue.ToString();
 				}
 			}
-			attributeLabels.Add(attribute.Template.Name, label);
+			else
+			{
+				label.Value.text = attribute.FinalValue.ToString();
+				if (attribute.Template.IsPercentage)
+				{
+					label.Value.text += "%";
+				}
+			}
+			attributeLabels.Add(attribute.Template.ID, label);
 			attribute.OnAttributeUpdated += OnAttributeUpdated;
 		}
 
@@ -287,20 +286,23 @@ namespace FishMMO.Client
 
 		public void OnAttributeUpdated(CharacterAttribute attribute)
 		{
-			if (attributeLabels.TryGetValue(attribute.Template.Name, out UIAttribute label))
+			if (attributeLabels.TryGetValue(attribute.Template.ID, out UIAttribute label))
 			{
 				label.Name.text = attribute.Template.Name;
-				label.Value.text = attribute.FinalValue.ToString();
-				if (attribute.Template.IsPercentage)
-				{
-					label.Value.text += "%";
-				}
-				else if (attribute.Template.IsResourceAttribute)
+				if (attribute.Template.IsResourceAttribute)
 				{
 					CharacterResourceAttribute resource = attribute as CharacterResourceAttribute;
 					if (resource != null)
 					{
-						label.Value.text += " / " + resource.FinalValue.ToString();
+						label.Value.text = resource.CurrentValue.ToString() + " / " + resource.FinalValue.ToString();
+					}
+				}
+				else
+				{
+					label.Value.text = attribute.FinalValue.ToString();
+					if (attribute.Template.IsPercentage)
+					{
+						label.Value.text += "%";
 					}
 				}
 			}

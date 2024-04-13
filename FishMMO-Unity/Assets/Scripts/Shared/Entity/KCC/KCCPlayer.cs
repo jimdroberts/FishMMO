@@ -80,7 +80,11 @@ namespace FishMMO.Shared
 		{
 			KCCInputReplicateData kCCInputReplicateData = !base.IsOwner || OnHandleCharacterInput == null ? default : OnHandleCharacterInput();
 			Replicate(kCCInputReplicateData);
+			CreateReconcile();
+		}
 
+		public override void CreateReconcile()
+		{
 			if (base.IsServerStarted)
 			{
 				Reconcile(CharacterController.GetState());

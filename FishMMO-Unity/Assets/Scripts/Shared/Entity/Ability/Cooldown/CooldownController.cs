@@ -9,11 +9,11 @@ namespace FishMMO.Shared
 
 		private List<string> keysToRemove = new List<string>();
 
-		void Update()
+		public void OnTick(float deltaTime)
 		{
 			foreach (var pair in cooldowns)
 			{
-				pair.Value.SubtractTime(Time.deltaTime);
+				pair.Value.SubtractTime(deltaTime);
 
 				if (!pair.Value.IsOnCooldown)
 				{
@@ -23,6 +23,7 @@ namespace FishMMO.Shared
 
 			foreach (var key in keysToRemove)
 			{
+				Debug.Log($"{key} is off cooldown.");
 				cooldowns.Remove(key);
 			}
 			keysToRemove.Clear();
@@ -37,6 +38,7 @@ namespace FishMMO.Shared
 		{
 			if (!cooldowns.ContainsKey(name))
 			{
+				Debug.Log($"{name} is on cooldown.");
 				cooldowns.Add(name, cooldown);
 			}
 		}

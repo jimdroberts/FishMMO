@@ -123,6 +123,10 @@ namespace FishMMO.Shared
 				{
 					characterAttribute.AddValue(pair.Value.value);
 				}
+				else if (attributeController.TryGetResourceAttribute(pair.Value.Template.CharacterAttribute.ID, out CharacterResourceAttribute characterResourceAttribute))
+				{
+					characterResourceAttribute.AddValue(pair.Value.value);
+				}
 			}
 		}
 
@@ -137,6 +141,10 @@ namespace FishMMO.Shared
 				if (attributeController.TryGetAttribute(pair.Value.Template.CharacterAttribute.ID, out CharacterAttribute characterAttribute))
 				{
 					characterAttribute.AddValue(-pair.Value.value);
+				}
+				else if (attributeController.TryGetResourceAttribute(pair.Value.Template.CharacterAttribute.ID, out CharacterResourceAttribute characterResourceAttribute))
+				{
+					characterResourceAttribute.AddValue(-pair.Value.value);
 				}
 			}
 		}
