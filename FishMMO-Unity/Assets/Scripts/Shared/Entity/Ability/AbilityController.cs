@@ -17,6 +17,7 @@ namespace FishMMO.Shared
 		private bool interruptQueued;
 		private long queuedAbilityID;
 		private float remainingTime;
+		private float remainingCastBarTime;
 		private KeyCode heldKey;
 		//private Random currentSeed = 12345;
 
@@ -29,6 +30,7 @@ namespace FishMMO.Shared
 
 		public event Func<bool> OnCanManipulate;
 
+		// handle ability updates here, display cast bar, display hitbox telegraphs, etc
 		public event Action<string, float, float> OnUpdate;
 		// Invoked when the current ability is Interrupted.
 		public event Action OnInterrupt;
@@ -244,14 +246,23 @@ namespace FishMMO.Shared
 
 		private AbilityActivationReplicateData HandleCharacterInput()
 		{
+			float deltaTime = (float)base.TimeManager.TickDelta;
 			if (Character.TryGet(out ICooldownController cooldownController))
 			{
-				cooldownController.OnTick((float)base.TimeManager.TickDelta);
+				cooldownController.OnTick(deltaTime);
 			}
 
 			if (!base.IsOwner)
 			{
 				return default;
+			}
+
+			if (remainingCastBarTime > 0.0f &&
+				KnownAbilities.TryGetValue(currentAbilityID, out Ability validatedAbility))
+			{
+				// handle ability updates here, display cast bar, display hitbox telegraphs, etc
+				OnUpdate?.Invoke(validatedAbility.Name, remainingCastBarTime, validatedAbility.ActivationTime * CalculateSpeedReduction(validatedAbility.Template.ActivationSpeedReductionAttribute));
+				remainingCastBarTime -= deltaTime;
 			}
 
 			int activationFlags = 0;
@@ -302,12 +313,12 @@ namespace FishMMO.Shared
 					interruptQueued = false;
 					currentAbilityID = newAbility.ID;
 					remainingTime = newAbility.ActivationTime * CalculateSpeedReduction(newAbility.Template.ActivationSpeedReductionAttribute);
-					heldKey = activationData.HeldKey;
 
 					if (state == ReplicateState.CurrentCreated)
 					{
-						OnUpdate?.Invoke(newAbility.Name, remainingTime, newAbility.ActivationTime * CalculateSpeedReduction(newAbility.Template.ActivationSpeedReductionAttribute));
+						remainingCastBarTime = remainingTime;
 					}
+					heldKey = activationData.HeldKey;
 				}
 			}
 
@@ -315,12 +326,6 @@ namespace FishMMO.Shared
 			if (IsActivating &&
 				CanActivate(currentAbilityID, out Ability validatedAbility))
 			{
-				// handle ability update here, display cast bar, display hitbox telegraphs, etc
-				if (state == ReplicateState.CurrentCreated)
-				{
-					OnUpdate?.Invoke(validatedAbility.Name, remainingTime, validatedAbility.ActivationTime * CalculateSpeedReduction(validatedAbility.Template.ActivationSpeedReductionAttribute));
-				}
-
 				if (remainingTime > 0.0f)
 				{
 					//Debug.Log($"Activating {validatedAbility.ID} State: {state}");
