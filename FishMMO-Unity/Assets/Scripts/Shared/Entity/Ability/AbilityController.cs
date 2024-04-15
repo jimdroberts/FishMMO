@@ -257,8 +257,7 @@ namespace FishMMO.Shared
 				return default;
 			}
 
-			if (remainingCastBarTime > 0.0f &&
-				KnownAbilities.TryGetValue(currentAbilityID, out Ability validatedAbility))
+			if (KnownAbilities.TryGetValue(currentAbilityID, out Ability validatedAbility))
 			{
 				// handle ability updates here, display cast bar, display hitbox telegraphs, etc
 				OnUpdate?.Invoke(validatedAbility.Name, remainingCastBarTime, validatedAbility.ActivationTime * CalculateSpeedReduction(validatedAbility.Template.ActivationSpeedReductionAttribute));
@@ -283,14 +282,32 @@ namespace FishMMO.Shared
 			return activationEventData;
 		}
 
+		private AbilityActivationReplicateData lastCreatedData;
+
 		[Replicate]
 		private void Replicate(AbilityActivationReplicateData activationData, ReplicateState state = ReplicateState.Invalid, Channel channel = Channel.Unreliable)
 		{
 			// ignore default data and future data
-			if (!activationData.ActivationFlags.IsFlagged(AbilityActivationFlags.IsActualData) ||
-				state.IsFuture())
+			if (!activationData.ActivationFlags.IsFlagged(AbilityActivationFlags.IsActualData))
 			{
 				return;
+			}
+
+			if (state == ReplicateState.ReplayedFuture)
+			{
+				uint lastCreatedTick = lastCreatedData.GetTick();
+				uint thisTick = activationData.GetTick();
+				uint tickDiff = lastCreatedTick - thisTick;
+				if (tickDiff <= 1)
+				{
+					activationData = lastCreatedData;
+					activationData.SetTick(thisTick);
+				}
+			}
+			else if (state == ReplicateState.ReplayedCreated)
+			{
+				lastCreatedData.Dispose();
+				lastCreatedData = activationData;
 			}
 
 			// if we are already activating and we receive an interrupt from the client or the server triggers an interrupt
@@ -316,8 +333,11 @@ namespace FishMMO.Shared
 
 					if (state == ReplicateState.CurrentCreated)
 					{
+						Debug.Log($"Castbar Remaining Time: {remainingTime}s State: {state}");
+
 						remainingCastBarTime = remainingTime;
 					}
+
 					heldKey = activationData.HeldKey;
 				}
 			}
