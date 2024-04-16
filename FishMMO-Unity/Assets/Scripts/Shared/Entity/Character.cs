@@ -8,6 +8,7 @@ using KinematicCharacterController;
 using UnityEngine;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using FishNet.Connection;
 using FishNet.Serializing;
 
@@ -189,20 +190,20 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
-			Type[] interfaces = behaviour.GetType().GetInterfaces();
-			for (int i = 0; i < interfaces.Length; ++i)
+
+			List<Type> interfaces = behaviour.GetType()
+											 .GetInterfaces()
+											 .Where(x => x != typeof(ICharacterBehaviour) &&
+														 typeof(ICharacterBehaviour).IsAssignableFrom(x)).ToList();
+
+			for (int i = 0; i < interfaces.Count; ++i)
 			{
 				Type interfaceType = interfaces[i];
-				if (interfaceType == typeof(ICharacterBehaviour) ||
-					interfaceType == typeof(IItemContainer)) // IItemContainer has multiple inheritence, this fixes any issues related to it
-				{
-					continue;
-				}
+
 				if (!behaviours.ContainsKey(interfaceType))
 				{
 					//Debug.Log(CharacterName + ": Registered " + interfaceType.Name);
 					behaviours.Add(interfaceType, behaviour);
-					return;
 				}
 			}
 		}
@@ -213,15 +214,16 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
-			Type[] interfaces = behaviour.GetType().GetInterfaces();
-			for (int i = 0; i < interfaces.Length; ++i)
+
+			List<Type> interfaces = behaviour.GetType()
+											 .GetInterfaces()
+											 .Where(x => x != typeof(ICharacterBehaviour) &&
+														 typeof(ICharacterBehaviour).IsAssignableFrom(x)).ToList();
+
+			for (int i = 0; i < interfaces.Count; ++i)
 			{
 				Type interfaceType = interfaces[i];
-				if (interfaceType == typeof(ICharacterBehaviour) ||
-					interfaceType == typeof(IItemContainer)) // IItemContainer has multiple inheritence, this fixes any issues related to it
-				{
-					continue;
-				}
+
 				//Debug.Log(CharacterName + ": Unregistered " + interfaceType.Name);
 				behaviours.Remove(interfaceType);
 			}
