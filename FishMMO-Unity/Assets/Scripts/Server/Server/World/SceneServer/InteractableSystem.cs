@@ -4,6 +4,8 @@ using FishMMO.Shared;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Database.Npgsql;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
+using UnityEngine;
 
 namespace FishMMO.Server
 {
@@ -64,22 +66,16 @@ namespace FishMMO.Server
 				return;
 			}
 
-			// valid scene object
+			// validate scene
 			if (!WorldSceneDetailsCache.Scenes.TryGetValue(character.SceneName.Value, out WorldSceneDetails details))
 			{
-				UnityEngine.Debug.Log("Missing Scene:" + character.SceneName.Value);
+				Debug.Log("Missing Scene:" + character.SceneName.Value);
 				return;
 			}
-			if (!SceneObjectUID.IDs.TryGetValue(msg.interactableID, out SceneObjectUID sceneObject))
+
+			// validate scene object
+			if (!ValidateSceneObject(msg.interactableID, character.gameObject.scene.handle, out SceneObjectUID sceneObject))
 			{
-				if (sceneObject == null)
-				{
-					UnityEngine.Debug.Log("Missing SceneObject");
-				}
-				else
-				{
-					UnityEngine.Debug.Log("Missing ID:" + msg.interactableID);
-				}
 				return;
 			}
 
@@ -89,10 +85,16 @@ namespace FishMMO.Server
 			{
 				if (interactable is AbilityCrafter)
 				{
-					Server.Broadcast(character.Owner, new AbilityCrafterBroadcast(), true, Channel.Reliable);
+					Server.Broadcast(character.Owner, new AbilityCrafterBroadcast()
+					{
+						interactableID = sceneObject.ID,
+					}, true, Channel.Reliable);
 				}
-				else if (interactable is Banker)
+				else if (interactable is Banker &&
+						 character.TryGet(out IBankController bankController))
 				{
+					bankController.LastInteractableID = sceneObject.ID;
+
 					Server.Broadcast(character.Owner, new BankerBroadcast(), true, Channel.Reliable);
 				}
 				else
@@ -102,6 +104,7 @@ namespace FishMMO.Server
 					{
 						Server.Broadcast(character.Owner, new MerchantBroadcast()
 						{
+							interactableID = sceneObject.ID,
 							templateID = merchant.Template.ID,
 						}, true, Channel.Reliable);
 					}
@@ -128,9 +131,36 @@ namespace FishMMO.Server
 				return;
 			}
 
-			// validate request
+			// validate template exists
 			MerchantTemplate merchantTemplate = MerchantTemplate.Get<MerchantTemplate>(msg.id);
 			if (merchantTemplate == null)
+			{
+				return;
+			}
+
+			// validate scene
+			if (!WorldSceneDetailsCache.Scenes.TryGetValue(character.SceneName.Value, out WorldSceneDetails details))
+			{
+				Debug.Log("Missing Scene:" + character.SceneName.Value);
+				return;
+			}
+
+			// validate scene object
+			if (!ValidateSceneObject(msg.interactableID, character.gameObject.scene.handle, out SceneObjectUID sceneObject))
+			{
+				return;
+			}
+
+			// validate interactable
+			IInteractable interactable = sceneObject.GetComponent<IInteractable>();
+			if (interactable == null ||
+				!interactable.InRange(character.Transform))
+			{
+				return;
+			}
+			Merchant merchant = interactable as Merchant;
+			if (merchant == null ||
+				merchantTemplate.ID != merchant.Template.ID)
 			{
 				return;
 			}
@@ -282,6 +312,27 @@ namespace FishMMO.Server
 				return;
 			}
 
+			// validate scene
+			if (!WorldSceneDetailsCache.Scenes.TryGetValue(character.SceneName.Value, out WorldSceneDetails details))
+			{
+				Debug.Log("Missing Scene:" + character.SceneName.Value);
+				return;
+			}
+
+			// validate scene object
+			if (!ValidateSceneObject(msg.interactableID, character.gameObject.scene.handle, out SceneObjectUID sceneObject))
+			{
+				return;
+			}
+
+			// validate interactable
+			IInteractable interactable = sceneObject.GetComponent<IInteractable>();
+			if (interactable == null ||
+				!interactable.InRange(character.Transform))
+			{
+				return;
+			}
+
 			// validate that the character knows the main ability
 			if (!abilityController.KnowsAbility(mainAbility.ID))
 			{
@@ -347,6 +398,29 @@ namespace FishMMO.Server
 			};
 
 			Server.Broadcast(conn, abilityAddBroadcast, true, Channel.Reliable);
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		private bool ValidateSceneObject(int sceneObjectID, int characterSceneHandle, out SceneObjectUID sceneObject)
+		{
+			if (!SceneObjectUID.IDs.TryGetValue(sceneObjectID, out sceneObject))
+			{
+				if (sceneObject == null)
+				{
+					Debug.Log("Missing SceneObject");
+				}
+				else
+				{
+					Debug.Log("Missing ID:" + sceneObjectID);
+				}
+				return false;
+			}
+			if (sceneObject.gameObject.scene.handle != characterSceneHandle)
+			{
+				Debug.Log("Object scene mismatch.");
+				return false;
+			}
+			return true;
 		}
 	}
 }

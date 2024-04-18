@@ -13,10 +13,12 @@ namespace FishMMO.Shared
 
 	public struct AbilityCrafterBroadcast : IBroadcast
 	{
+		public int interactableID;
 	}
 
 	public struct AbilityCraftBroadcast : IBroadcast
 	{
+		public int interactableID;
 		public int templateID;
 		public List<int> events;
 	}
@@ -27,11 +29,13 @@ namespace FishMMO.Shared
 
 	public struct MerchantBroadcast : IBroadcast
 	{
+		public int interactableID;
 		public int templateID;
 	}
 
 	public struct MerchantPurchaseBroadcast : IBroadcast
 	{
+		public int interactableID;
 		public int id;
 		public int index;
 		public MerchantTabType type;

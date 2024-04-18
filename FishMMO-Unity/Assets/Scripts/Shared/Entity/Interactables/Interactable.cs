@@ -27,6 +27,8 @@ namespace FishMMO.Shared
 
 		public virtual string Title { get { return "Interactable"; } }
 
+		public virtual double InteractRateLimit { get { return INTERACT_RATE_LIMIT; } }
+
 		void Awake()
 		{
 			uid = gameObject.GetComponent<SceneObjectUID>();
@@ -61,7 +63,7 @@ namespace FishMMO.Shared
 			if (character != null &&
 				character.NextInteractTime < DateTime.UtcNow && InRange(character.Transform))
 			{
-				character.NextInteractTime = DateTime.UtcNow.AddMilliseconds(INTERACT_RATE_LIMIT);
+				character.NextInteractTime = DateTime.UtcNow.AddMilliseconds(InteractRateLimit);
 
 				return true;
 			}

@@ -20,8 +20,10 @@ namespace FishMMO.Client
 		private List<UITooltipButton> Abilities;
 		private List<UITooltipButton> AbilityEvents;
 		private List<UITooltipButton> Items;
-		private int CurrentTemplateID = 0;
-		private MerchantTabType CurrentTab = MerchantTabType.Item;
+
+		private int lastMerchantID = 0;
+		private int currentTemplateID = 0;
+		private MerchantTabType currentTab = MerchantTabType.Item;
 
 		public override void OnStarting()
 		{
@@ -49,8 +51,9 @@ namespace FishMMO.Client
 
 		private void OnClientMerchantBroadcastReceived(MerchantBroadcast msg, Channel channel)
 		{
-			CurrentTemplateID = msg.templateID;
-			MerchantTemplate template = MerchantTemplate.Get<MerchantTemplate>(CurrentTemplateID);
+			lastMerchantID = msg.interactableID;
+			currentTemplateID = msg.templateID;
+			MerchantTemplate template = MerchantTemplate.Get<MerchantTemplate>(currentTemplateID);
 			if (template != null)
 			{
 				// set up prefab lists
@@ -66,7 +69,7 @@ namespace FishMMO.Client
 				// show the first valid tab if any otherwise hide
 				if (AbilitiesButton.gameObject.activeSelf)
 				{
-					CurrentTab = MerchantTabType.Ability;
+					currentTab = MerchantTabType.Ability;
 					ShowEntries(Abilities);
 					ShowEntries(AbilityEvents, false);
 					ShowEntries(Items, false);
@@ -74,7 +77,7 @@ namespace FishMMO.Client
 				}
 				else if (AbilityEventsButton.gameObject.activeSelf)
 				{
-					CurrentTab = MerchantTabType.AbilityEvent;
+					currentTab = MerchantTabType.AbilityEvent;
 					ShowEntries(Abilities, false);
 					ShowEntries(AbilityEvents);
 					ShowEntries(Items, false);
@@ -82,7 +85,7 @@ namespace FishMMO.Client
 				}
 				else if (ItemsButton.gameObject.activeSelf)
 				{
-					CurrentTab = MerchantTabType.Item;
+					currentTab = MerchantTabType.Item;
 					ShowEntries(Abilities, false);
 					ShowEntries(AbilityEvents, false);
 					ShowEntries(Items);
@@ -97,6 +100,7 @@ namespace FishMMO.Client
 
 		private void ClearAllSlots()
 		{
+			lastMerchantID = 0;
 			ClearSlots(ref Abilities);
 			ClearSlots(ref AbilityEvents);
 			ClearSlots(ref Items);
@@ -153,19 +157,19 @@ namespace FishMMO.Client
 			switch (tabType)
 			{
 				case MerchantTabType.Item:
-					CurrentTab = MerchantTabType.Item;
+					currentTab = MerchantTabType.Item;
 					ShowEntries(Items);
 					ShowEntries(Abilities, false);
 					ShowEntries(AbilityEvents, false);
 					break;
 				case MerchantTabType.Ability:
-					CurrentTab = MerchantTabType.Ability;
+					currentTab = MerchantTabType.Ability;
 					ShowEntries(Items, false);
 					ShowEntries(Abilities);
 					ShowEntries(AbilityEvents, false);
 					break;
 				case MerchantTabType.AbilityEvent:
-					CurrentTab = MerchantTabType.AbilityEvent;
+					currentTab = MerchantTabType.AbilityEvent;
 					ShowEntries(Items, false);
 					ShowEntries(Abilities, false);
 					ShowEntries(AbilityEvents);
@@ -189,7 +193,7 @@ namespace FishMMO.Client
 
 		private void PurchaseEventEntry_OnCtrlClick(int index, object[] optionalParams)
 		{
-			switch (CurrentTab)
+			switch (currentTab)
 			{
 				case MerchantTabType.Item:
 					if (Items == null
@@ -218,9 +222,10 @@ namespace FishMMO.Client
 
 			MerchantPurchaseBroadcast message = new MerchantPurchaseBroadcast()
 			{
-				id = CurrentTemplateID,
+				interactableID = lastMerchantID,
+				id = currentTemplateID,
 				index = index,
-				type = CurrentTab,
+				type = currentTab,
 			};
 			Client.Broadcast(message, Channel.Reliable);
 		}

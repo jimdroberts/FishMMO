@@ -5,6 +5,7 @@ using FishMMO.Server.DatabaseServices;
 using FishMMO.Database.Npgsql;
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using UnityEngine;
 
 namespace FishMMO.Server
@@ -228,25 +229,37 @@ namespace FishMMO.Server
 				case InventoryType.Equipment:
 					break;
 				case InventoryType.Bank:
-					if (character.TryGet(out IBankController bankController) &&
-						SwapContainerItems(dbContext, character.ID, bankController, inventoryController, msg.from, msg.to,
-					(db, id, a) =>
 					{
-						CharacterBankService.SetSlot(db, id, a);
-					},
-					(db, id, s) =>
-					{
-						CharacterBankService.Delete(db, id, s);
-					},
-					(db, id, b) =>
-					{
-						CharacterInventoryService.SetSlot(db, id, b);
-					}))
-					{
-						dbTransaction.Commit();
+						if (!character.TryGet(out IBankController bankController))
+						{
+							return;
+						}
 
-						// tell the client
-						Server.Broadcast(conn, msg, true, Channel.Reliable);
+						// validate banker scene object
+						if (!ValidateBankerSceneObject(bankController.LastInteractableID, character))
+						{
+							return;
+						}
+
+						if (SwapContainerItems(dbContext, character.ID, bankController, inventoryController, msg.from, msg.to,
+							(db, id, a) =>
+							{
+								CharacterBankService.SetSlot(db, id, a);
+							},
+							(db, id, s) =>
+							{
+								CharacterBankService.Delete(db, id, s);
+							},
+							(db, id, b) =>
+							{
+								CharacterInventoryService.SetSlot(db, id, b);
+							}))
+						{
+							dbTransaction.Commit();
+
+							// tell the client
+							Server.Broadcast(conn, msg, true, Channel.Reliable);
+						}
 					}
 					break;
 				default: break;
@@ -315,32 +328,44 @@ namespace FishMMO.Server
 				case InventoryType.Equipment:
 					return;
 				case InventoryType.Bank:
-					if (character.TryGet(out IBankController bankController) &&
-						bankController.TryGetItem(msg.inventoryIndex, out Item bankItem))
 					{
-						if (!equipmentController.Equip(bankItem, msg.inventoryIndex, bankController, (ItemSlot)msg.slot))
+						if (!character.TryGet(out IBankController bankController))
 						{
 							return;
 						}
 
-						// did we replace an already equipped item?
-						if (bankController.TryGetItem(msg.inventoryIndex, out Item prevItem))
+						// validate banker scene object
+						if (!ValidateBankerSceneObject(bankController.LastInteractableID, character))
 						{
-							CharacterBankService.SetSlot(dbContext, character.ID, prevItem);
-						}
-						// remove the inventory item from the database
-						else
-						{
-							CharacterBankService.Delete(dbContext, character.ID, msg.inventoryIndex);
+							return;
 						}
 
-						// set the equipment slot in the database
-						CharacterEquipmentService.SetSlot(dbContext, character.ID, bankItem);
-						CharacterAttributeService.Save(dbContext, character);
+						if (bankController.TryGetItem(msg.inventoryIndex, out Item bankItem))
+						{
+							if (!equipmentController.Equip(bankItem, msg.inventoryIndex, bankController, (ItemSlot)msg.slot))
+							{
+								return;
+							}
 
-						dbTransaction.Commit();
+							// did we replace an already equipped item?
+							if (bankController.TryGetItem(msg.inventoryIndex, out Item prevItem))
+							{
+								CharacterBankService.SetSlot(dbContext, character.ID, prevItem);
+							}
+							// remove the inventory item from the database
+							else
+							{
+								CharacterBankService.Delete(dbContext, character.ID, msg.inventoryIndex);
+							}
 
-						Server.Broadcast(conn, msg, true, Channel.Reliable);
+							// set the equipment slot in the database
+							CharacterEquipmentService.SetSlot(dbContext, character.ID, bankItem);
+							CharacterAttributeService.Save(dbContext, character);
+
+							dbTransaction.Commit();
+
+							Server.Broadcast(conn, msg, true, Channel.Reliable);
+						}
 					}
 					break;
 				default: return;
@@ -422,43 +447,55 @@ namespace FishMMO.Server
 				case InventoryType.Equipment:
 					break;
 				case InventoryType.Bank:
-					if (character.TryGet(out IBankController bankController) &&
-						equipmentController.TryGetItem(msg.slot, out Item toBank))
 					{
-						int oldSlot = toBank.Slot;
-
-						if (!equipmentController.Unequip(bankController, msg.slot, out List<Item> modifiedItems))
+						if (!character.TryGet(out IBankController bankController))
 						{
 							return;
 						}
 
-						// see if we have successfully added the item
-						if (modifiedItems == null ||
-							modifiedItems.Count < 1)
+						// validate banker scene object
+						if (!ValidateBankerSceneObject(bankController.LastInteractableID, character))
 						{
 							return;
 						}
 
-						// update all of the modified slots
-						foreach (Item item in modifiedItems)
+						if (equipmentController.TryGetItem(msg.slot, out Item toBank))
 						{
-							// just in case..
-							if (item == null)
+							int oldSlot = toBank.Slot;
+
+							if (!equipmentController.Unequip(bankController, msg.slot, out List<Item> modifiedItems))
 							{
-								continue;
+								return;
 							}
 
-							// update or add the item to the database and initialize
-							CharacterBankService.SetSlot(dbContext, character.ID, item);
+							// see if we have successfully added the item
+							if (modifiedItems == null ||
+								modifiedItems.Count < 1)
+							{
+								return;
+							}
+
+							// update all of the modified slots
+							foreach (Item item in modifiedItems)
+							{
+								// just in case..
+								if (item == null)
+								{
+									continue;
+								}
+
+								// update or add the item to the database and initialize
+								CharacterBankService.SetSlot(dbContext, character.ID, item);
+							}
+
+							// delete the item from the equipment table
+							CharacterEquipmentService.Delete(dbContext, character.ID, oldSlot);
+							CharacterAttributeService.Save(dbContext, character);
+
+							dbTransaction.Commit();
+
+							Server.Broadcast(conn, msg, true, Channel.Reliable);
 						}
-
-						// delete the item from the equipment table
-						CharacterEquipmentService.Delete(dbContext, character.ID, oldSlot);
-						CharacterAttributeService.Save(dbContext, character);
-
-						dbTransaction.Commit();
-
-						Server.Broadcast(conn, msg, true, Channel.Reliable);
 					}
 					break;
 				default: return;
@@ -520,6 +557,12 @@ namespace FishMMO.Server
 				return;
 			}
 
+			// validate banker scene object
+			if (!ValidateBankerSceneObject(bankController.LastInteractableID, character))
+			{
+				return;
+			}
+
 			switch (msg.fromInventory)
 			{
 				case InventoryType.Inventory:
@@ -562,6 +605,40 @@ namespace FishMMO.Server
 					break;
 				default: break;
 			}
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		private bool ValidateBankerSceneObject(int sceneObjectID, Character character)
+		{
+			if (!SceneObjectUID.IDs.TryGetValue(sceneObjectID, out SceneObjectUID sceneObject))
+			{
+				if (sceneObject == null)
+				{
+					Debug.Log("Missing SceneObject");
+				}
+				else
+				{
+					Debug.Log("Missing ID:" + sceneObjectID);
+				}
+				return false;
+			}
+			if (sceneObject.gameObject.scene.handle != character.gameObject.scene.handle)
+			{
+				Debug.Log("Object scene mismatch.");
+				return false;
+			}
+			IInteractable interactable = sceneObject.GetComponent<IInteractable>();
+			if (interactable == null ||
+				!interactable.InRange(character.Transform))
+			{
+				return false;
+			}
+			Banker banker = interactable as Banker;
+			if (banker == null)
+			{
+				return false;
+			}
+			return true;
 		}
 	}
 }

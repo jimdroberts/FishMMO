@@ -16,6 +16,7 @@ namespace FishMMO.Client
 		public RectTransform AbilityEventParent;
 		public UITooltipButton AbilityEventPrefab;
 
+		private int lastInteractableID = 0;
 		private List<UITooltipButton> EventSlots;
 
 		public override void OnStarting()
@@ -55,6 +56,7 @@ namespace FishMMO.Client
 
 		private void OnClientAbilityCrafterBroadcastReceived(AbilityCrafterBroadcast msg, Channel channel)
 		{
+			lastInteractableID = msg.interactableID;
 			Show();
 		}
 
@@ -177,6 +179,7 @@ namespace FishMMO.Client
 
 		private void ClearSlots()
 		{
+			lastInteractableID = 0;
 			if (EventSlots != null)
 			{
 				for (int i = 0; i < EventSlots.Count; ++i)
@@ -246,6 +249,7 @@ namespace FishMMO.Client
 
 			AbilityCraftBroadcast abilityAddBroadcast = new AbilityCraftBroadcast()
 			{
+				interactableID = lastInteractableID,
 				templateID = main.ID,
 				events = eventIds,
 			};

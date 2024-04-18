@@ -28,7 +28,9 @@ namespace FishMMO.Client
 			{
 				for (int i = 0; i < bankSlots.Count; ++i)
 				{
-					Destroy(bankSlots[i].gameObject);
+					UIBankButton button = bankSlots[i];
+					button.Character = null;
+					Destroy(button.gameObject);
 				}
 				bankSlots.Clear();
 			}
@@ -48,6 +50,12 @@ namespace FishMMO.Client
 
 		private void OnClientBankerBroadcastReceived(BankerBroadcast msg, Channel channel)
 		{
+			if (Character == null ||
+				!Character.TryGet(out IBankController bankController))
+			{
+				Hide();
+				return;
+			}
 			if (UIManager.TryGet("UIBank", out UIBank bank))
 			{
 				bank.Show();
