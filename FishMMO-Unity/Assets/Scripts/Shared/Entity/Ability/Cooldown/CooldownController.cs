@@ -5,9 +5,9 @@ namespace FishMMO.Shared
 {
 	public class CooldownController : CharacterBehaviour, ICooldownController
 	{
-		private Dictionary<string, CooldownInstance> cooldowns = new Dictionary<string, CooldownInstance>();
+		private Dictionary<int, CooldownInstance> cooldowns = new Dictionary<int, CooldownInstance>();
 
-		private List<string> keysToRemove = new List<string>();
+		private List<int> keysToRemove = new List<int>();
 
 		public void OnTick(float deltaTime)
 		{
@@ -29,23 +29,23 @@ namespace FishMMO.Shared
 			keysToRemove.Clear();
 		}
 
-		public bool IsOnCooldown(string name)
+		public bool IsOnCooldown(int id)
 		{
-			return cooldowns.ContainsKey(name);
+			return cooldowns.ContainsKey(id);
 		}
 
-		public void AddCooldown(string name, CooldownInstance cooldown)
+		public void AddCooldown(int id, CooldownInstance cooldown)
 		{
-			if (!cooldowns.ContainsKey(name))
+			if (!cooldowns.ContainsKey(id))
 			{
-				Debug.Log($"{name} is on cooldown.");
-				cooldowns.Add(name, cooldown);
+				Debug.Log($"{id} is on cooldown.");
+				cooldowns.Add(id, cooldown);
 			}
 		}
 
-		public void RemoveCooldown(string name)
+		public void RemoveCooldown(int id)
 		{
-			cooldowns.Remove(name);
+			cooldowns.Remove(id);
 		}
 	}
 }

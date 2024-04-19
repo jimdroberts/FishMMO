@@ -22,6 +22,7 @@ namespace FishMMO.Shared
 		public Dictionary<int, SpawnEvent> SpawnEvents { get; private set; }
 		public Dictionary<int, MoveEvent> MoveEvents { get; private set; }
 		public Dictionary<int, HitEvent> HitEvents { get; private set; }
+		public AbilityTypeOverrideEventType TypeOverride { get;	private set; }
 
 		/// <summary>
 		/// Cache of all active ability Objects. <ContainerID, <AbilityObjectID, AbilityObject>>
@@ -234,6 +235,14 @@ namespace FishMMO.Shared
 							}
 							MoveEvents.Add(abilityEvent.ID, moveEvent);
 						}
+						else
+						{
+							AbilityTypeOverrideEventType overrideTypeEvent = abilityEvent as AbilityTypeOverrideEventType;
+							if (overrideTypeEvent != null)
+							{
+								TypeOverride = overrideTypeEvent;
+							}
+						}
 					}
 				}
 
@@ -303,6 +312,14 @@ namespace FishMMO.Shared
 						if (moveEvent != null)
 						{
 							MoveEvents.Remove(abilityEvent.ID);
+						}
+						else
+						{
+							AbilityTypeOverrideEventType overrideTypeEvent = abilityEvent as AbilityTypeOverrideEventType;
+							if (overrideTypeEvent != null)
+							{
+								TypeOverride = null;
+							}
 						}
 					}
 				}
@@ -431,6 +448,15 @@ namespace FishMMO.Shared
 			}
 
 			CachedTooltip = Template.Tooltip(new List<ITooltip>(AbilityEvents.Values));
+
+			if (TypeOverride != null)
+			{
+				CachedTooltip += RichText.Format($"Type: {TypeOverride.OverrideAbilityType}", true, "f5ad6eFF", "120%");
+			}
+			else
+			{
+				CachedTooltip += RichText.Format($"Type: {Template.Type}", true, "f5ad6eFF", "120%");
+			}
 
 			return CachedTooltip;
 		}

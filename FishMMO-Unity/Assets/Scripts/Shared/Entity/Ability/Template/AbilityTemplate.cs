@@ -10,7 +10,6 @@ namespace FishMMO.Shared
 		public bool RequiresTarget;
 		public byte EventSlots;
 		public int HitCount;
-		public CharacterAttributeTemplate ActivationSpeedReductionAttribute;
-		public CharacterAttributeTemplate CooldownReductionAttribute;
+		public AbilityType Type;
 	}
 }

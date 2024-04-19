@@ -17,7 +17,7 @@ namespace FishMMO.Client
 		public UITooltipButton AbilityEventPrefab;
 
 		private int lastInteractableID = 0;
-		private List<UITooltipButton> EventSlots;
+		private Dictionary<int, UITooltipButton> EventSlots;
 
 		public override void OnStarting()
 		{
@@ -67,6 +67,10 @@ namespace FishMMO.Client
 				UIManager.TryGet("UISelector", out UISelector uiSelector))
 			{
 				List<ICachedObject> templates = AbilityTemplate.Get<AbilityTemplate>(abilityController.KnownBaseAbilities);
+
+				// remove abilities we already have learned, you must forget an old ability before you can craft it again
+				templates.RemoveAll(t => abilityController.KnowsLearnedAbility(t.ID));
+
 				uiSelector.Open(templates, (i) =>
 				{
 					AbilityTemplate template = AbilityTemplate.Get<AbilityTemplate>(i);
@@ -93,12 +97,23 @@ namespace FishMMO.Client
 
 		private void EventEntry_OnLeftClick(int index, object[] optionalParams)
 		{
-			if (index > -1 && index < EventSlots.Count &&
+			if (EventSlots.ContainsKey(index) &&
 				Character != null &&
 				Character.TryGet(out IAbilityController abilityController) &&
 				UIManager.TryGet("UISelector", out UISelector uiSelector))
 			{
 				List<ICachedObject> templates = AbilityEvent.Get<AbilityEvent>(abilityController.KnownEvents);
+
+				// remove duplicate events
+				foreach (UITooltipButton button in EventSlots.Values)
+				{
+					if (button.Tooltip is AbilityTypeOverrideEventType)
+					{
+						templates.RemoveAll(t => t is AbilityTypeOverrideEventType);
+					}
+					templates.Remove(button.Tooltip);
+				}
+
 				uiSelector.Open(templates, (i) =>
 				{
 					AbilityEvent template = AbilityEvent.Get<AbilityEvent>(i);
@@ -151,7 +166,7 @@ namespace FishMMO.Client
 				EventSlots.Count > 0)
 			{
 				List<ITooltip> tooltips = new List<ITooltip>();
-				foreach (UITooltipButton button in EventSlots)
+				foreach (UITooltipButton button in EventSlots.Values)
 				{
 					if (button.Tooltip == null)
 					{
@@ -179,7 +194,6 @@ namespace FishMMO.Client
 
 		private void ClearSlots()
 		{
-			lastInteractableID = 0;
 			if (EventSlots != null)
 			{
 				for (int i = 0; i < EventSlots.Count; ++i)
@@ -201,13 +215,13 @@ namespace FishMMO.Client
 		{
 			ClearSlots();
 
-			EventSlots = new List<UITooltipButton>();
+			EventSlots = new Dictionary<int, UITooltipButton>();
 
 			for (int i = 0; i < count && i < MAX_CRAFT_EVENT_SLOTS; ++i)
 			{
 				UITooltipButton eventButton = Instantiate(AbilityEventPrefab, AbilityEventParent);
 				eventButton.Initialize(i, EventEntry_OnLeftClick, EventEntry_OnRightClick);
-				EventSlots.Add(eventButton);
+				EventSlots.Add(i, eventButton);
 			}
 		}
 

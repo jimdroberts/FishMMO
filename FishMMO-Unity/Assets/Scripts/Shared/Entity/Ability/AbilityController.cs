@@ -5,6 +5,7 @@ using FishNet.Serializing;
 using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 namespace FishMMO.Shared
@@ -24,6 +25,8 @@ namespace FishMMO.Shared
 		public Transform AbilitySpawner;
 		public CharacterAttributeTemplate BloodResourceTemplate;
 		public CharacterAttributeTemplate AttackSpeedReductionTemplate;
+		public CharacterAttributeTemplate CastSpeedReductionTemplate;
+		public CharacterAttributeTemplate CooldownReductionTemplate;
 		public AbilityEvent BloodResourceConversionTemplate;
 		public AbilityEvent ChargedTemplate;
 		public AbilityEvent ChanneledTemplate;
@@ -244,6 +247,19 @@ namespace FishMMO.Shared
 			}
 		}
 
+		public CharacterAttributeTemplate GetActivationAttributeTemplate(Ability ability)
+		{
+			AbilityType abilityType = ability.TypeOverride != null ? ability.TypeOverride.OverrideAbilityType : ability.Template.Type;
+
+			if (abilityType == AbilityType.Physical ||
+				abilityType == AbilityType.GroundedPhysical ||
+				abilityType == AbilityType.AerialPhysical)
+			{
+				return AttackSpeedReductionTemplate;
+			}
+			return CastSpeedReductionTemplate;
+		}
+
 		private AbilityActivationReplicateData HandleCharacterInput()
 		{
 			float deltaTime = (float)base.TimeManager.TickDelta;
@@ -260,7 +276,7 @@ namespace FishMMO.Shared
 			if (KnownAbilities.TryGetValue(currentAbilityID, out Ability validatedAbility))
 			{
 				// handle ability updates here, display cast bar, display hitbox telegraphs, etc
-				OnUpdate?.Invoke(validatedAbility.Name, remainingCastBarTime, validatedAbility.ActivationTime * CalculateSpeedReduction(validatedAbility.Template.ActivationSpeedReductionAttribute));
+				OnUpdate?.Invoke(validatedAbility.Name, remainingCastBarTime, validatedAbility.ActivationTime * CalculateSpeedReduction(GetActivationAttributeTemplate(validatedAbility)));
 				remainingCastBarTime -= deltaTime;
 			}
 
@@ -329,7 +345,7 @@ namespace FishMMO.Shared
 
 					interruptQueued = false;
 					currentAbilityID = newAbility.ID;
-					remainingTime = newAbility.ActivationTime * CalculateSpeedReduction(newAbility.Template.ActivationSpeedReductionAttribute);
+					remainingTime = newAbility.ActivationTime * CalculateSpeedReduction(GetActivationAttributeTemplate(newAbility));
 
 					if (state == ReplicateState.CurrentCreated)
 					{
@@ -443,7 +459,7 @@ namespace FishMMO.Shared
 				CharacterAttribute speedReduction;
 				if (attributeController.TryGetAttribute(attribute.ID, out speedReduction))
 				{
-					return 1.0f - ((speedReduction.FinalValueAsPct).Clamp(0.0f, 1.0f));
+					return 1.0f - ((attribute.InitialValue * 0.01f) - speedReduction.FinalValueAsPct.Clamp(0.0f, 0.9f));
 				}
 			}
 			return 1.0f;
@@ -495,7 +511,7 @@ namespace FishMMO.Shared
 				return false;
 			}
 			if (!Character.TryGet(out ICooldownController cooldownController) ||
-				cooldownController.IsOnCooldown(validatedAbility.Template.Name))
+				cooldownController.IsOnCooldown(validatedAbility.Template.ID))
 			{
 				return false;
 			}
@@ -525,10 +541,10 @@ namespace FishMMO.Shared
 			if (ability.Cooldown > 0.0f &&
 				Character.TryGet(out ICooldownController cooldownController))
 			{
-				float cooldownReduction = CalculateSpeedReduction(currentAbilityTemplate.CooldownReductionAttribute);
+				float cooldownReduction = CalculateSpeedReduction(CooldownReductionTemplate);
 				float cooldown = ability.Cooldown * cooldownReduction;
 
-				cooldownController.AddCooldown(currentAbilityTemplate.Name, new CooldownInstance(cooldown));
+				cooldownController.AddCooldown(currentAbilityTemplate.ID, new CooldownInstance(cooldown));
 			}
 		}
 
@@ -621,6 +637,18 @@ namespace FishMMO.Shared
 			}
 			return true;
 		}
+
+		public bool KnowsLearnedAbility(int templateID)
+		{
+			if (KnownAbilities == null)
+			{
+				return false;
+			}
+			KeyValuePair<long, Ability>? found = KnownAbilities.Where(x => x.Value.Template.ID == templateID)
+															   .Select(x => (KeyValuePair<long, Ability>?)x)
+															   .FirstOrDefault();
+			return found != null;
+		}	
 
 		public void LearnAbility(Ability ability)
 		{

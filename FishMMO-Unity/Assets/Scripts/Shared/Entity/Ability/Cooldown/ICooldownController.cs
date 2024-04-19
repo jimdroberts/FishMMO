@@ -3,8 +3,8 @@
 	public interface ICooldownController : ICharacterBehaviour
 	{
 		void OnTick(float deltaTime);
-		bool IsOnCooldown(string name);
-		void AddCooldown(string name, CooldownInstance cooldown);
-		void RemoveCooldown(string name);
+		bool IsOnCooldown(int id);
+		void AddCooldown(int id, CooldownInstance cooldown);
+		void RemoveCooldown(int id);
 	}
 }

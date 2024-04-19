@@ -4,6 +4,7 @@ using FishMMO.Shared;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Database.Npgsql;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using UnityEngine;
 
@@ -333,8 +334,10 @@ namespace FishMMO.Server
 				return;
 			}
 
-			// validate that the character knows the main ability
-			if (!abilityController.KnowsAbility(mainAbility.ID))
+			// validate the character can learn the ability
+			if (!abilityController.KnowsAbility(mainAbility.ID) ||
+				abilityController.KnowsLearnedAbility(mainAbility.ID) ||
+				abilityController.KnownAbilities.Count >= MaxAbilityCount)
 			{
 				return;
 			}
@@ -344,19 +347,39 @@ namespace FishMMO.Server
 			// validate eventIds if there are any...
 			if (msg.events != null)
 			{
+				bool hasTypeOverride = false;
+				HashSet<int> validatedEvents = new HashSet<int>();
 				for (int i = 0; i < msg.events.Count; ++i)
 				{
-					AbilityEvent eventTemplate = AbilityEvent.Get<AbilityEvent>(msg.events[i]);
-					if (eventTemplate == null)
+					int id = msg.events[i];
+					if (validatedEvents.Contains(id))
 					{
-						// couldn't validate this event...
+						// duplicate events
 						return;
 					}
+					AbilityEvent eventTemplate = AbilityEvent.Get<AbilityEvent>(id);
+					if (eventTemplate == null)
+					{
+						// unknown ability event
+						return;
+					}
+
 					// validate that the character knows the ability event
 					if (!abilityController.KnowsAbility(eventTemplate.ID))
 					{
 						return;
 					}
+
+					if (eventTemplate is AbilityTypeOverrideEventType)
+					{
+						if (hasTypeOverride)
+						{
+							// duplicate ability type override
+							return;
+						}
+						hasTypeOverride = true;
+					}
+
 					price += eventTemplate.Price;
 				}
 			}
@@ -366,20 +389,14 @@ namespace FishMMO.Server
 				return;
 			}
 
-			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-			if (dbContext == null)
-			{
-				return;
-			}
-
-			if (CharacterAbilityService.GetCount(dbContext, character.ID) >= MaxAbilityCount)
-			{
-				// too many abilities! tell the player to forget a few of them first...
-				return;
-			}
-
 			Ability newAbility = new Ability(mainAbility, msg.events);
 			if (newAbility == null)
+			{
+				return;
+			}
+
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
+			if (dbContext == null)
 			{
 				return;
 			}

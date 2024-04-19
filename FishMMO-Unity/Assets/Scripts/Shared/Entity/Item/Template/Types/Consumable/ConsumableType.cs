@@ -2,10 +2,7 @@
 {
 	public enum ConsumableType : byte
 	{
-		HealthPotion,
-		ManaPotion,
-		StaminaPotion,
-		BuffPotion,
+		Potion,
 		Food,
 		Mount,
 		Scroll,

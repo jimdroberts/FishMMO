@@ -631,11 +631,13 @@ namespace FishMMO.Server
 			if (interactable == null ||
 				!interactable.InRange(character.Transform))
 			{
+				Debug.Log($"{character.CharacterName} is not in range of {sceneObject.gameObject.name}!");
 				return false;
 			}
 			Banker banker = interactable as Banker;
 			if (banker == null)
 			{
+				Debug.Log($"{sceneObject.gameObject.name} is not a banker!");
 				return false;
 			}
 			return true;

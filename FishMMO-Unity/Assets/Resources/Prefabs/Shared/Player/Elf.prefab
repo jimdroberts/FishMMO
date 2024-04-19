@@ -208,6 +208,8 @@ GameObject:
   - component: {fileID: 4989737185595066850}
   - component: {fileID: 6845158710477467009}
   - component: {fileID: 6690946415020651589}
+  - component: {fileID: 7810264000710710752}
+  - component: {fileID: 34196052825852577}
   m_Layer: 0
   m_Name: Elf
   m_TagString: Untagged
@@ -484,6 +486,10 @@ MonoBehaviour:
   BloodResourceTemplate: {fileID: 0}
   AttackSpeedReductionTemplate: {fileID: 11400000, guid: 15a71776a1f5e4245841b3301c881f80,
     type: 2}
+  CastSpeedReductionTemplate: {fileID: 11400000, guid: a0c807381df88cc4aaa63f497753d3f1,
+    type: 2}
+  CooldownReductionTemplate: {fileID: 11400000, guid: cb59ad7dc19adac4286eff2a66fd3b7a,
+    type: 2}
   BloodResourceConversionTemplate: {fileID: 0}
   ChargedTemplate: {fileID: 0}
   ChanneledTemplate: {fileID: 0}
@@ -683,6 +689,36 @@ MonoBehaviour:
   _componentIndexCache: 14
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 4964627840297570917}
+--- !u!114 &7810264000710710752
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4573496687782621821}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f05a0b4c0a9733f4db3379ba51c18b84, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 4964627840297570917}
+  _networkObjectCache: {fileID: 0}
+--- !u!114 &34196052825852577
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4573496687782621821}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cb1bb90369a05a844b79d7695ce3681e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 4964627840297570917}
+  _networkObjectCache: {fileID: 0}
 --- !u!1 &5035121396218170946
 GameObject:
   m_ObjectHideFlags: 0

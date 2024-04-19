@@ -33,6 +33,7 @@ namespace FishMMO.Shared
 		bool CanManipulate();
 		bool KnowsAbility(int abilityID);
 		bool LearnBaseAbilities(List<BaseAbilityTemplate> abilityTemplates = null);
+		bool KnowsLearnedAbility(int templateID);
 		void LearnAbility(Ability ability);
 	}
 }
