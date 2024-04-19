@@ -228,7 +228,7 @@ namespace FishMMO.Shared
 			abilityObject.Ability = ability;
 			abilityObject.Caster = caster;
 			abilityObject.HitCount = template.HitCount;
-			abilityObject.RemainingActiveTime = ability.ActiveTime * controller.CalculateSpeedReduction(controller.GetActivationAttributeTemplate(ability));
+			abilityObject.RemainingActiveTime = ability.ActiveTime;
 
 			// make sure the objects container exists
 			if (ability.Objects == null)
