@@ -31,7 +31,7 @@ namespace FishMMO.Shared
 					abilityObject.Ability = initialObject.Ability;
 					abilityObject.Caster = initialObject.Caster;
 					abilityObject.HitCount = initialObject.HitCount;
-					abilityObject.RemainingActiveTime = initialObject.RemainingActiveTime;
+					abilityObject.RemainingLifeTime = initialObject.RemainingLifeTime;
 					abilityObjects.Add(++nextID, abilityObject);
 				}
 			}

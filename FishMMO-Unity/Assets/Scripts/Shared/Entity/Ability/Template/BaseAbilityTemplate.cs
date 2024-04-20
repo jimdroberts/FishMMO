@@ -9,7 +9,7 @@ namespace FishMMO.Shared
 		public Sprite icon;
 		public string Description;
 		public float ActivationTime;
-		public float ActiveTime;
+		public float LifeTime;
 		public float Cooldown;
 		public float Range;
 		public float Speed;
@@ -49,7 +49,7 @@ namespace FishMMO.Shared
 				}
 
 				float activationTime = ActivationTime;
-				float activeTime = ActiveTime;
+				float lifeTime = LifeTime;
 				float cooldown = Cooldown;
 				float range = Range;
 				float speed = Speed;
@@ -77,7 +77,7 @@ namespace FishMMO.Shared
 						}
 
 						activationTime += template.ActivationTime;
-						activeTime += template.ActiveTime;
+						lifeTime += template.LifeTime;
 						cooldown += template.Cooldown;
 						range += template.Range;
 						speed += template.Speed;
@@ -103,7 +103,7 @@ namespace FishMMO.Shared
 				sb.Append("\r\n______________________________\r\n");
 
 				sb.Append(RichText.Format("Activation Time", activationTime, true, "a66ef5FF", "", "s"));
-				sb.Append(RichText.Format("Active Time", activeTime, true, "a66ef5FF", "", "s"));
+				sb.Append(RichText.Format("Life Time", lifeTime, true, "a66ef5FF", "", "s"));
 				sb.Append(RichText.Format("Cooldown", cooldown, true, "a66ef5FF", "", "s"));
 				sb.Append(RichText.Format("Range", range, true, "a66ef5FF", "", "m"));
 				sb.Append(RichText.Format("Speed", speed, true, "a66ef5FF", "", "m/s"));

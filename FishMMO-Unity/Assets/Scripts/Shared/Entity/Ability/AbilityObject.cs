@@ -13,7 +13,7 @@ namespace FishMMO.Shared
 
 		// the number of remaining hits for this ability object before it disappears
 		public int HitCount;
-		public float RemainingActiveTime;
+		public float RemainingLifeTime;
 
 		public Transform Transform { get; private set; }
 
@@ -29,14 +29,14 @@ namespace FishMMO.Shared
 
 		void Update()
 		{
-			if (Ability.ActiveTime > 0.0f)
+			if (Ability.LifeTime > 0.0f)
 			{
-				if (RemainingActiveTime < 0.0f)
+				if (RemainingLifeTime < 0.0f)
 				{
 					Destroy();
 					return;
 				}
-				RemainingActiveTime -= Time.deltaTime;
+				RemainingLifeTime -= Time.deltaTime;
 			}
 
 			if (Ability != null &&
@@ -228,7 +228,7 @@ namespace FishMMO.Shared
 			abilityObject.Ability = ability;
 			abilityObject.Caster = caster;
 			abilityObject.HitCount = template.HitCount;
-			abilityObject.RemainingActiveTime = ability.ActiveTime;
+			abilityObject.RemainingLifeTime = ability.LifeTime;
 
 			// make sure the objects container exists
 			if (ability.Objects == null)

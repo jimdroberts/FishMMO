@@ -6,7 +6,7 @@ namespace FishMMO.Shared
 	{
 		public long ID;
 		public float ActivationTime;
-		public float ActiveTime;
+		public float LifeTime;
 		public float Cooldown;
 		public float Range;
 		public float Speed;
@@ -114,7 +114,7 @@ namespace FishMMO.Shared
 		internal void InternalAddTemplateModifiers(AbilityTemplate template)
 		{
 			ActivationTime += template.ActivationTime;
-			ActiveTime += template.ActiveTime;
+			LifeTime += template.LifeTime;
 			Cooldown += template.Cooldown;
 			Range += template.Range;
 			Speed += template.Speed;
@@ -247,7 +247,7 @@ namespace FishMMO.Shared
 				}
 
 				ActivationTime += abilityEvent.ActivationTime;
-				ActiveTime += abilityEvent.ActiveTime;
+				LifeTime += abilityEvent.LifeTime;
 				Cooldown += abilityEvent.Cooldown;
 				Range += abilityEvent.Range;
 				Speed += abilityEvent.Speed;
@@ -325,7 +325,7 @@ namespace FishMMO.Shared
 				}
 
 				ActivationTime -= abilityEvent.ActivationTime;
-				ActiveTime -= abilityEvent.ActiveTime;
+				LifeTime -= abilityEvent.LifeTime;
 				Cooldown -= abilityEvent.Cooldown;
 				Range -= abilityEvent.Range;
 				Speed -= abilityEvent.Speed;
