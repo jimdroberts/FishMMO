@@ -2510,6 +2510,9 @@ MonoBehaviour:
   CheckMovementInitialOverlaps: 1
   KillVelocityWhenExceedMaxMovementIterations: 1
   KillRemainingMovementWhenExceedMaxMovementIterations: 1
+  CollidableLayers:
+    serializedVersion: 2
+    m_Bits: 209
 --- !u!114 &4312700379616963274
 MonoBehaviour:
   m_ObjectHideFlags: 0

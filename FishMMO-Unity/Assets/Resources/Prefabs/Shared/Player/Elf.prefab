@@ -265,6 +265,8 @@ MonoBehaviour:
   - {fileID: 4966316198463876083}
   - {fileID: 6038023079570568745}
   - {fileID: 6690946415020651589}
+  - {fileID: 7810264000710710752}
+  - {fileID: 34196052825852577}
   <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 0}
   <NestedRootNetworkBehaviours>k__BackingField: []
   SerializedTransformProperties:
@@ -332,6 +334,9 @@ MonoBehaviour:
   CheckMovementInitialOverlaps: 1
   KillVelocityWhenExceedMaxMovementIterations: 1
   KillRemainingMovementWhenExceedMaxMovementIterations: 1
+  CollidableLayers:
+    serializedVersion: 2
+    m_Bits: 241
 --- !u!114 &60849842760777251
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -701,9 +706,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f05a0b4c0a9733f4db3379ba51c18b84, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 255
+  _componentIndexCache: 15
   _addedNetworkObject: {fileID: 4964627840297570917}
-  _networkObjectCache: {fileID: 0}
+  _networkObjectCache: {fileID: 4964627840297570917}
 --- !u!114 &34196052825852577
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -716,9 +721,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: cb1bb90369a05a844b79d7695ce3681e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 255
+  _componentIndexCache: 16
   _addedNetworkObject: {fileID: 4964627840297570917}
-  _networkObjectCache: {fileID: 0}
+  _networkObjectCache: {fileID: 4964627840297570917}
 --- !u!1 &5035121396218170946
 GameObject:
   m_ObjectHideFlags: 0

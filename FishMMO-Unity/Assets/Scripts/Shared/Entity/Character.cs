@@ -151,7 +151,6 @@ namespace FishMMO.Shared
 				ICharacter.OnStartLocalClient?.Invoke(this);
 
 				gameObject.layer = Constants.Layers.LocalEntity;
-				CharacterController.MeshRoot.gameObject.layer = Constants.Layers.LocalEntity;
 
 				foreach (ICharacterBehaviour behaviour in this.behaviours.Values)
 				{
@@ -173,7 +172,6 @@ namespace FishMMO.Shared
 				ICharacter.OnStopLocalClient?.Invoke(this);
 
 				gameObject.layer = Constants.Layers.Default;
-				CharacterController.MeshRoot.gameObject.layer = Constants.Layers.Default;
 			}
 		}
 #endif

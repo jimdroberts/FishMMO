@@ -1,22 +1,25 @@
 using UnityEditor;
 using UnityEngine;
 
-public class GoogleAnalyticsMenu
+namespace DreamTeamMobile
 {
-    private const string SettingsAssetPath = "Assets/DreamTeamMobile/GoogleAnalytics/Resources/GoogleAnalyticsSettings.asset";
-
-    [MenuItem("Window/GoogleAnalytics/Show GoogleAnalytics Settings")]
-    public static void ShowGoogleAnalyticsSettings()
+    public class GoogleAnalyticsMenu
     {
-        var asset = AssetDatabase.LoadAssetAtPath<GoogleAnalyticsSettings>(SettingsAssetPath);
-        
-        if(asset == null)
+        private const string SettingsAssetPath = "Assets/DreamTeamMobile/GoogleAnalytics/Resources/GoogleAnalyticsSettings.asset";
+
+        [MenuItem("Window/GoogleAnalytics/Show GoogleAnalytics Settings")]
+        public static void ShowGoogleAnalyticsSettings()
         {
-            asset = ScriptableObject.CreateInstance<GoogleAnalyticsSettings>();
-            AssetDatabase.CreateAsset(asset, SettingsAssetPath);
-            AssetDatabase.SaveAssets();    
-        } 
-        EditorUtility.FocusProjectWindow();
-        Selection.activeObject = asset;
+            var asset = AssetDatabase.LoadAssetAtPath<GoogleAnalyticsSettings>(SettingsAssetPath);
+
+            if (asset == null)
+            {
+                asset = ScriptableObject.CreateInstance<GoogleAnalyticsSettings>();
+                AssetDatabase.CreateAsset(asset, SettingsAssetPath);
+                AssetDatabase.SaveAssets();
+            }
+            EditorUtility.FocusProjectWindow();
+            Selection.activeObject = asset;
+        }
     }
 }

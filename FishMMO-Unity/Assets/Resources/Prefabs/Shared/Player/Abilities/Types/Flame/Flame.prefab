@@ -120,8 +120,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   Caster: {fileID: 0}
+  CachedRigidBody: {fileID: 0}
   HitCount: 0
-  RemainingActiveTime: 0
+  RemainingLifeTime: 0
 --- !u!54 &5766581551114604905
 Rigidbody:
   m_ObjectHideFlags: 0

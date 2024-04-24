@@ -459,7 +459,7 @@ namespace FishMMO.Shared
 				CharacterAttribute speedReduction;
 				if (attributeController.TryGetAttribute(attribute.ID, out speedReduction))
 				{
-					return 1.0f - ((attribute.InitialValue * 0.01f) - speedReduction.FinalValueAsPct.Clamp(0.0f, 0.9f));
+					return 1.0f - (attribute.InitialValueAsPct - speedReduction.FinalValueAsPct.Clamp(0.0f, 0.9f));
 				}
 			}
 			return 1.0f;

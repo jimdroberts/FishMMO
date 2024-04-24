@@ -10,7 +10,7 @@ namespace FishMMO.Shared
 		internal int ID;
 		public Ability Ability;
 		public Character Caster;
-
+		public Rigidbody CachedRigidBody;
 		// the number of remaining hits for this ability object before it disappears
 		public int HitCount;
 		public float RemainingLifeTime;
@@ -20,10 +20,10 @@ namespace FishMMO.Shared
 		private void Awake()
 		{
 			Transform = transform;
-			Rigidbody rigidbody = GetComponent<Rigidbody>();
-			if (rigidbody != null)
+			CachedRigidBody = GetComponent<Rigidbody>();
+			if (CachedRigidBody != null)
 			{
-				rigidbody.isKinematic = true;
+				CachedRigidBody.isKinematic = true;
 			}
 		}
 
@@ -45,7 +45,7 @@ namespace FishMMO.Shared
 				foreach (MoveEvent moveEvent in Ability.MoveEvents.Values)
 				{
 					// invoke
-					moveEvent?.Invoke(Ability, Transform, Time.deltaTime);
+					moveEvent?.Invoke(this, Time.deltaTime);
 				}
 			}
 		}

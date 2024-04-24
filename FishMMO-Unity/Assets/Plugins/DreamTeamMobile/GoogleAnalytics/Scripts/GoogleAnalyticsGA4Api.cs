@@ -21,10 +21,10 @@ namespace DreamTeamMobile
         private readonly int _defaultEngagementTimeInSec;
         private readonly string _sessionId;
 
-		[DllImport("__Internal")]
-		private static extern void GA4PostEvent(string url, string postDataString);
+        [DllImport("__Internal")]
+        private static extern void GA4PostEvent(string url, string postDataString);
 
-		public GoogleAnalyticsGA4Api(string measurementId, string apiSecret, string deviceId, int defaultEngagementTimeInSec = 100)
+        public GoogleAnalyticsGA4Api(string measurementId, string apiSecret, string deviceId, int defaultEngagementTimeInSec = 100)
         {
             if (string.IsNullOrWhiteSpace(measurementId))
                 throw new ArgumentNullException(nameof(measurementId));
@@ -39,14 +39,14 @@ namespace DreamTeamMobile
             _sessionId = Guid.NewGuid().ToString();
         }
 
-        public void TrackEvent<T>(string name, Dictionary<string, T> @params = null)
-        {
-            Track(name, @params);
-        }
+		public void TrackEvent<T>(string name, Dictionary<string, T> @params = null)
+		{
+			Track(name, @params);
+		}
 
-        private void Track<T>(string name, Dictionary<string, T> @params)
-        {
-            if (string.IsNullOrEmpty(name))
+		private void Track<T>(string name, Dictionary<string, T> @params)
+		{
+			if (string.IsNullOrEmpty(name))
                 throw new ArgumentNullException("category");
 
             try
@@ -63,10 +63,7 @@ namespace DreamTeamMobile
                         eventParams[item.Key] = item.Value;
                 }
 
-                string json = eventParams.ToJson();
-                Debug.Log(json);
-
-				var postData = new GA4Data
+                var postData = new GA4Data
                 {
                     client_id = _deviceId,
                     events = new GA4DataEvent[]
@@ -79,7 +76,7 @@ namespace DreamTeamMobile
                 };
 
                 var url = $"{GA4ApiEndpoint}?measurement_id={_measurementId}&api_secret={_apiSecret}";
-                var postDataString = JsonUtility.ToJson(postData).Replace("\"<params>\"", json);
+                var postDataString = JsonUtility.ToJson(postData).Replace("\"<params>\"", eventParams.ToJson());
 
                 //Debug.Log($"[DTM GA4] About to send POST HTTP request to: {url}, payload: {postDataString}");
 
@@ -91,32 +88,32 @@ namespace DreamTeamMobile
                         {
                             var response = t.Result;
                             if (!response.IsSuccessStatusCode)
-                                UnityEngine.Debug.Log($"[DTM GA4] Failed to submit GA event: {response.StatusCode}");
+                                Debug.Log($"[DTM GA4] Failed to submit GA event: {response.StatusCode}");
                         });
                 }
-                else // handle webgl
+                else
                 {
                     GA4PostEvent(url, postDataString);
                 }
             }
             catch (Exception ex)
             {
-                UnityEngine.Debug.Log($"[DTM GA4] Failed to track GA event: {ex}");
+                Debug.Log($"[DTM GA4] Failed to track GA event: {ex}");
             }
         }
     }
-}
 
-[Serializable]
-public class GA4Data
-{
-    public string client_id;
-    public GA4DataEvent[] events;
-}
+    [Serializable]
+    public class GA4Data
+    {
+        public string client_id;
+        public GA4DataEvent[] events;
+    }
 
-[Serializable]
-public class GA4DataEvent
-{
-    public string name;
-    public string @params = "<params>";
+    [Serializable]
+    public class GA4DataEvent
+    {
+        public string name;
+        public string @params = "<params>";
+    }
 }

@@ -315,8 +315,8 @@ namespace KinematicCharacterController
         /// <summary>
         /// Specifies the LayerMask that the character's movement algorithm can detect collisions with. By default, this uses the rigidbody's layer's collision matrix
         /// </summary>
-        [System.NonSerialized]
-        public LayerMask CollidableLayers = -1;
+        //[System.NonSerialized]
+        public LayerMask CollidableLayers = 0;
 
         /// <summary>
         /// The Transform of the character motor
@@ -740,14 +740,14 @@ namespace KinematicCharacterController
             TransientRotation = _transform.rotation;
 
             // Build CollidableLayers mask
-            CollidableLayers = 0;
+            /*CollidableLayers = 0;
             for (int i = 0; i < 32; i++)
             {
                 if (!Physics.GetIgnoreLayerCollision(this.gameObject.layer, i))
                 {
                     CollidableLayers |= (1 << i);
                 }
-            }
+            }*/
 
             SetCapsuleDimensions(CapsuleRadius, CapsuleHeight, CapsuleYOffset);
         }

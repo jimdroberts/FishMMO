@@ -26,6 +26,10 @@ namespace FishMMO.Shared
 		public CharacterAttributeFormulaDictionary Formulas = new CharacterAttributeFormulaDictionary();
 
 		public string Name { get { return this.name; } }
+		/// <summary>
+		/// Returns InitialValue * 0.01f
+		/// </summary>
+		public float InitialValueAsPct { get { return InitialValue * 0.01f; } }
 
 		public string Tooltip()
 		{
