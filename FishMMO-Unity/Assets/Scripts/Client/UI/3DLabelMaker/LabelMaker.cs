@@ -15,7 +15,7 @@ namespace FishMMO.Client
 		}
 		private Queue<Cached3DLabel> pool = new Queue<Cached3DLabel>();
 
-		public Cached3DLabel LabelPrefab;
+		public Cached3DLabel LabelPrefab3D;
 
 		void Awake()
 		{
@@ -33,11 +33,11 @@ namespace FishMMO.Client
 
 		public bool Dequeue(out Cached3DLabel label)
 		{
-			if (LabelPrefab != null && pool != null)
+			if (LabelPrefab3D != null && pool != null)
 			{
 				if (!pool.TryDequeue(out label))
 				{
-					label = Instantiate(LabelPrefab);
+					label = Instantiate(LabelPrefab3D);
 				}
 				return true;
 			}
@@ -71,7 +71,7 @@ namespace FishMMO.Client
 			}
 		}
 
-		public static Cached3DLabel Display(string text, Vector3 position, Color color, float fontSize, float persistTime, bool manualCache)
+		public static Cached3DLabel Display3D(string text, Vector3 position, Color color, float fontSize, float persistTime, bool manualCache)
 		{
 			if (LabelMaker.Instance.Dequeue(out Cached3DLabel label))
 			{

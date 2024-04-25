@@ -143,13 +143,12 @@ namespace FishMMO.Client
 			NetworkManager.SceneManager.OnUnloadEnd += SceneManager_OnUnloadEnd;
 			LoginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
 
-#if !UNITY_SERVER
 			ICharacter.OnReadPayload += Character_OnReadPayload;
 			ICharacter.OnStartLocalClient += Character_OnStartLocalClient;
 			ICharacter.OnStopLocalClient += Character_OnStopLocalClient;
-
 			IGuildController.OnReadPayload += GuildController_OnReadPayload;
-#endif
+
+			RegionDisplayNameAction.OnDisplay2DLabel += RegionDisplayNameAction_OnDisplay2DLabel;
 		}
 
 		private void Update()
@@ -197,13 +196,12 @@ namespace FishMMO.Client
 			InputManager.MouseMode = true;
 #endif
 
-#if !UNITY_SERVER
 			ICharacter.OnReadPayload -= Character_OnReadPayload;
 			ICharacter.OnStartLocalClient -= Character_OnStartLocalClient;
 			ICharacter.OnStopLocalClient -= Character_OnStopLocalClient;
-
 			IGuildController.OnReadPayload -= GuildController_OnReadPayload;
-#endif
+
+			RegionDisplayNameAction.OnDisplay2DLabel -= RegionDisplayNameAction_OnDisplay2DLabel;
 
 			ClientNamingSystem.Destroy();
 
@@ -504,7 +502,6 @@ namespace FishMMO.Client
 		{
 		}
 
-#if !UNITY_SERVER
 		/// <summary>
 		/// This function is called when the local Character reads a payload.
 		/// </summary>
@@ -570,6 +567,20 @@ namespace FishMMO.Client
 				});
 			}
 		}
-#endif
+
+		public UIAdvancedLabel RegionNameLabel = null;
+
+		public IReference RegionDisplayNameAction_OnDisplay2DLabel(string text, FontStyle style, Font font, int fontSize, Color color, float lifeTime, bool fadeColor, bool increaseY, Vector2 pixelOffset)
+		{
+			if (RegionNameLabel != null)
+			{
+				RegionNameLabel.Setup(text, style, font, fontSize, color, lifeTime, fadeColor, increaseY, pixelOffset);
+			}
+			else
+			{
+				RegionNameLabel = UIAdvancedLabel.Create(text, style, font, fontSize, color, lifeTime, fadeColor, increaseY, pixelOffset) as UIAdvancedLabel;
+			}
+			return RegionNameLabel;
+		}
 	}
 }

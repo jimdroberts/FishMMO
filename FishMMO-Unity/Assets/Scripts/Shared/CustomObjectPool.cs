@@ -61,15 +61,6 @@ namespace FishMMO.Shared
 					nob.transform.SetParent(parent);
 					nob.transform.SetLocalPositionRotationAndScale(nullableLocalPosition, nullableLocalRotation, nullableLocalScale);
 					nob.gameObject.SetActive(false);
-
-					IPooledResettable[] pooledResettables = nob.gameObject.GetComponents<IPooledResettable>();
-					if (pooledResettables != null)
-					{
-						for (int i = 0; i < pooledResettables.Length; ++i)
-						{
-							pooledResettables[i].OnPooledReset();
-						}
-					}
 					return nob;
 				}
 			}
@@ -90,15 +81,6 @@ namespace FishMMO.Shared
 					NetworkObject result = Instantiate(prefab, pos, rot, parent);
 					result.transform.localScale = scale;
 					result.gameObject.SetActive(false);
-
-					IPooledResettable[] pooledResettables = result.gameObject.GetComponents<IPooledResettable>();
-					if (pooledResettables != null)
-					{
-						for (int i = 0; i < pooledResettables.Length; ++i)
-						{
-							pooledResettables[i].OnPooledReset();
-						}
-					}
 					return result;
 				}
 			}

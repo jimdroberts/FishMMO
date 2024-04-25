@@ -42,7 +42,7 @@ namespace FishMMO.Client
 			{
 				if (LabelMaker.Instance != null)
 				{
-					achievementController.OnCompleteAchievement += LabelMaker.Display;
+					achievementController.OnCompleteAchievement += LabelMaker.Display3D;
 				}
 			}
 
@@ -50,8 +50,8 @@ namespace FishMMO.Client
 			{
 				if (LabelMaker.Instance != null)
 				{
-					characterDamageController.OnDamageDisplay += LabelMaker.Display;
-					characterDamageController.OnHealedDisplay += LabelMaker.Display;
+					characterDamageController.OnDamageDisplay += LabelMaker.Display3D;
+					characterDamageController.OnHealedDisplay += LabelMaker.Display3D;
 				}
 			}
 		}
@@ -72,7 +72,7 @@ namespace FishMMO.Client
 			{
 				if (LabelMaker.Instance != null)
 				{
-					achievementController.OnCompleteAchievement -= LabelMaker.Display;
+					achievementController.OnCompleteAchievement -= LabelMaker.Display3D;
 				}
 			}
 
@@ -80,8 +80,8 @@ namespace FishMMO.Client
 			{
 				if (LabelMaker.Instance != null)
 				{
-					characterDamageController.OnDamageDisplay -= LabelMaker.Display;
-					characterDamageController.OnHealedDisplay -= LabelMaker.Display;
+					characterDamageController.OnDamageDisplay -= LabelMaker.Display3D;
+					characterDamageController.OnHealedDisplay -= LabelMaker.Display3D;
 				}
 			}
 		}

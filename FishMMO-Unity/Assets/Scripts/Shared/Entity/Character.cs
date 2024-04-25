@@ -29,7 +29,7 @@ namespace FishMMO.Shared
 	[RequireComponent(typeof(PartyController))]
 	[RequireComponent(typeof(FriendController))]
 	[RequireComponent(typeof(FactionController))]
-	public class Character : NetworkBehaviour, ICharacter, IPooledResettable
+	public class Character : NetworkBehaviour, ICharacter
 	{
 		private Dictionary<Type, ICharacterBehaviour> behaviours = new Dictionary<Type, ICharacterBehaviour>();
 
@@ -249,11 +249,10 @@ namespace FishMMO.Shared
 			return null;
 		}
 
-		/// <summary>
-		/// Resets the Character values to default for pooling.
-		/// </summary>
-		public void OnPooledReset()
+		public override void ResetState(bool asServer)
 		{
+			base.ResetState(asServer);
+
 			TeleporterName = "";
 			LastChatMessage = "";
 			NextChatMessageTime = DateTime.UtcNow;

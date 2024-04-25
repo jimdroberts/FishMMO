@@ -13,9 +13,9 @@ MonoBehaviour:
   m_Name: Lesser Flame
   m_EditorClassIdentifier: 
   icon: {fileID: 21300000, guid: b3905a73a6672d9449647aaf036e23fc, type: 3}
-  Description: Creates a flame in front of the caster.
+  Description: Creates a flame in front of the caster for 5 seconds.
   ActivationTime: 0.5
-  ActiveTime: 0
+  LifeTime: 5
   Cooldown: 1
   Range: 0
   Speed: 0
@@ -34,7 +34,3 @@ MonoBehaviour:
   EventSlots: 3
   HitCount: 1
   Type: 2
-  ActivationSpeedReductionAttribute: {fileID: 11400000, guid: a0c807381df88cc4aaa63f497753d3f1,
-    type: 2}
-  CooldownReductionAttribute: {fileID: 11400000, guid: cb59ad7dc19adac4286eff2a66fd3b7a,
-    type: 2}

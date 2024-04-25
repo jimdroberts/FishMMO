@@ -56,7 +56,7 @@ namespace FishMMO.Shared
 
 			if ((Constants.Layers.Obstruction & (1 << other.collider.gameObject.layer)) != 0)
 			{
-				Debug.Log("Obstruction");
+				//Debug.Log("Obstruction");
 
 				HitCount = 0;
 			}
