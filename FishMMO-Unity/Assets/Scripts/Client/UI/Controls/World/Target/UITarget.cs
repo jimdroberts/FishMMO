@@ -59,11 +59,22 @@ namespace FishMMO.Client
 				return;
 			}
 
+			ICharacterAttributeController characterAttributeController = obj.GetComponent<ICharacterAttributeController>();
+			IInteractable interactable = obj.GetComponent<IInteractable>();
+			SceneTeleporter teleporter = obj.GetComponent<SceneTeleporter>();
+
+			// must be an interactable or have an attribute controller
+			if (characterAttributeController == null && interactable == null && teleporter == null)
+			{
+				// hide the UI
+				Hide();
+				return;
+			}
+
 			if (NameLabel != null)
 			{
 				NameLabel.text = obj.name;
 			}
-			ICharacterAttributeController characterAttributeController = obj.GetComponent<ICharacterAttributeController>();
 			if (characterAttributeController != null)
 			{
 				if (characterAttributeController.TryGetResourceAttribute(HealthAttribute, out CharacterResourceAttribute health))
@@ -115,6 +126,16 @@ namespace FishMMO.Client
 
 		public void TargetController_OnNewTarget(Transform newTarget)
 		{
+			ICharacterAttributeController characterAttributeController = newTarget.GetComponent<ICharacterAttributeController>();
+			IInteractable interactable = newTarget.GetComponent<IInteractable>();
+			SceneTeleporter teleporter = newTarget.GetComponent<SceneTeleporter>();
+
+			// must be an interactable or have an attribute controller
+			if (characterAttributeController == null && interactable == null && teleporter == null)
+			{
+				return;
+			}
+
 			Vector3 newPos = newTarget.position;
 
 			Collider collider = newTarget.GetComponent<Collider>();
@@ -124,7 +145,6 @@ namespace FishMMO.Client
 			Color color = Color.grey;
 
 			// apply merchant description
-			IInteractable interactable = newTarget.GetComponent<IInteractable>();
 			if (interactable != null)
 			{
 				label += $"\r\n<{interactable.Title}>";

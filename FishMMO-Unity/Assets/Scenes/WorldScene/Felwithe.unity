@@ -1006,7 +1006,7 @@ GameObject:
   - component: {fileID: 788347302}
   - component: {fileID: 788347304}
   - component: {fileID: 788347303}
-  m_Layer: 0
+  m_Layer: 2
   m_Name: Felwithe
   m_TagString: Untagged
   m_Icon: {fileID: 0}

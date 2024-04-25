@@ -3245,7 +3245,7 @@ GameObject:
   - component: {fileID: 1959955015}
   - component: {fileID: 1959955017}
   - component: {fileID: 1959955016}
-  m_Layer: 0
+  m_Layer: 2
   m_Name: Crushbone
   m_TagString: Untagged
   m_Icon: {fileID: 0}

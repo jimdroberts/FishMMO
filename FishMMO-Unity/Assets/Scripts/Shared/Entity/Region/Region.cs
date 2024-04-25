@@ -20,6 +20,8 @@ namespace FishMMO.Shared
 
 		void Awake()
 		{
+			gameObject.layer = Constants.Layers.IgnoreRaycast;
+
 			Collider = gameObject.GetComponent<Collider>();
 			if (Collider == null)
 			{

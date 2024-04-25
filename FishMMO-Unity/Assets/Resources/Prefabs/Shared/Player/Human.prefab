@@ -2443,6 +2443,8 @@ MonoBehaviour:
   - {fileID: 6704804402765680992}
   - {fileID: 3230041066334007737}
   - {fileID: 3713920853917057017}
+  - {fileID: 27999188545287999}
+  - {fileID: 2371259003259364826}
   <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 0}
   <NestedRootNetworkBehaviours>k__BackingField: []
   SerializedTransformProperties:
@@ -2691,7 +2693,7 @@ MonoBehaviour:
   _networkObjectCache: {fileID: 7248884440816270172}
   LayerMask:
     serializedVersion: 2
-    m_Bits: 257
+    m_Bits: 385
 --- !u!114 &6934114620573017969
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2882,9 +2884,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f05a0b4c0a9733f4db3379ba51c18b84, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 255
+  _componentIndexCache: 15
   _addedNetworkObject: {fileID: 7248884440816270172}
-  _networkObjectCache: {fileID: 0}
+  _networkObjectCache: {fileID: 7248884440816270172}
 --- !u!114 &2371259003259364826
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2897,9 +2899,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: cb1bb90369a05a844b79d7695ce3681e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 255
+  _componentIndexCache: 16
   _addedNetworkObject: {fileID: 7248884440816270172}
-  _networkObjectCache: {fileID: 0}
+  _networkObjectCache: {fileID: 7248884440816270172}
 --- !u!1 &5893296815098749217
 GameObject:
   m_ObjectHideFlags: 0
