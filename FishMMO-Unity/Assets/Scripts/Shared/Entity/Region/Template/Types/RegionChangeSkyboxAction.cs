@@ -6,7 +6,7 @@ namespace FishMMO.Shared
 	{
 		public Material material;
 
-		public override void Invoke(Character character, Region region)
+		public override void Invoke(IPlayerCharacter character, Region region)
 		{
 			if (material != null)
 				RenderSettings.skybox = material;

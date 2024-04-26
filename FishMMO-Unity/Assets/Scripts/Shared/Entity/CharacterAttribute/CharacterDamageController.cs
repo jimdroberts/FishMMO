@@ -53,7 +53,7 @@ namespace FishMMO.Shared
 		}
 #endif
 
-		public int ApplyModifiers(Character target, int amount, DamageAttributeTemplate damageAttribute)
+		public int ApplyModifiers(ICharacter target, int amount, DamageAttributeTemplate damageAttribute)
 		{
 			const int MIN_DAMAGE = 0;
 			const int MAX_DAMAGE = 999999;
@@ -70,7 +70,7 @@ namespace FishMMO.Shared
 			return amount;
 		}
 
-		public void Damage(Character attacker, int amount, DamageAttributeTemplate damageAttribute)
+		public void Damage(ICharacter attacker, int amount, DamageAttributeTemplate damageAttribute)
 		{
 			if (Immortal)
 			{
@@ -97,10 +97,10 @@ namespace FishMMO.Shared
 				}
 
 #if !UNITY_SERVER
-				if (ShowDamage)
+				if (PlayerCharacter != null && ShowDamage)
 				{
-					Vector3 displayPos = Character.Transform.position;
-					displayPos.y += Character.CharacterController.FullCapsuleHeight;
+					Vector3 displayPos = PlayerCharacter.Transform.position;
+					displayPos.y += PlayerCharacter.CharacterController.FullCapsuleHeight;
 					OnDamageDisplay?.Invoke(amount.ToString(), displayPos, damageAttribute.DisplayColor, 4.0f, 1.0f, false);
 				}
 #endif
@@ -113,7 +113,7 @@ namespace FishMMO.Shared
 			}
 		}
 
-		public void Kill(Character killer)
+		public void Kill(ICharacter killer)
 		{
 			if (killer != null &&
 				killer.TryGet(out IAchievementController killerAchievementController))
@@ -182,7 +182,7 @@ namespace FishMMO.Shared
 			this.gameObject.SetActive(false);*/
 		}
 
-		public void Heal(Character healer, int amount)
+		public void Heal(ICharacter healer, int amount)
 		{
 			if (resourceInstance != null && resourceInstance.CurrentValue > 0.0f)
 			{
@@ -200,11 +200,11 @@ namespace FishMMO.Shared
 				}
 
 #if !UNITY_SERVER
-				if (Character != null &&
+				if (PlayerCharacter != null &&
 					ShowHeals)
 				{
-					Vector3 displayPos = Character.Transform.position;
-					displayPos.y += Character.CharacterController.FullCapsuleHeight;
+					Vector3 displayPos = PlayerCharacter.Transform.position;
+					displayPos.y += PlayerCharacter.CharacterController.FullCapsuleHeight;
 					OnHealedDisplay?.Invoke(amount.ToString(), displayPos, new TinyColor(64, 64, 255).ToUnityColor(), 4.0f, 1.0f, false);
 				}
 #endif

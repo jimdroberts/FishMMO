@@ -22,11 +22,11 @@ namespace FishMMO.Shared
 		//public AudioEvent OnRemoveSounds;
 
 		public string Name { get { return this.name; } }
-		public abstract void OnApply(Buff instance, Character target);
-		public abstract void OnTick(Buff instance, Character target);
-		public abstract void OnRemove(Buff instance, Character target);
+		public abstract void OnApply(Buff instance, ICharacter target);
+		public abstract void OnTick(Buff instance, ICharacter target);
+		public abstract void OnRemove(Buff instance, ICharacter target);
 
-		public abstract void OnApplyStack(Buff stack, Character target);
-		public abstract void OnRemoveStack(Buff stack, Character target);
+		public abstract void OnApplyStack(Buff stack, ICharacter target);
+		public abstract void OnRemoveStack(Buff stack, ICharacter target);
 	}
 }

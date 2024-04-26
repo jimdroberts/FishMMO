@@ -9,7 +9,7 @@ namespace FishMMO.Shared
 		internal int ContainerID;
 		internal int ID;
 		public Ability Ability;
-		public Character Caster;
+		public IPlayerCharacter Caster;
 		public Rigidbody CachedRigidBody;
 		// the number of remaining hits for this ability object before it disappears
 		public int HitCount;
@@ -61,7 +61,7 @@ namespace FishMMO.Shared
 				HitCount = 0;
 			}
 
-			Character hitCharacter = other.gameObject.GetComponent<Character>();
+			ICharacter hitCharacter = other.gameObject.GetComponent<ICharacter>();
 
 			if (Ability != null)
 			{
@@ -107,7 +107,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Handles primary spawn functionality for all ability objects. Returns true if successful.
 		/// </summary>
-		public static bool TrySpawn(Ability ability, Character caster, AbilityController controller, Transform abilitySpawner, TargetInfo targetInfo)
+		public static bool TrySpawn(Ability ability, IPlayerCharacter caster, AbilityController controller, Transform abilitySpawner, TargetInfo targetInfo)
 		{
 			AbilityTemplate template = ability.Template;
 
@@ -125,7 +125,7 @@ namespace FishMMO.Shared
 
 			// TODO create/fetch from pool
 			GameObject go = Instantiate(template.FXPrefab);
-			SceneManager.MoveGameObjectToScene(go, caster.gameObject.scene);
+			SceneManager.MoveGameObjectToScene(go, caster.GameObject.scene);
 			Transform t = go.transform;
 			switch (template.AbilitySpawnTarget)
 			{
@@ -150,7 +150,7 @@ namespace FishMMO.Shared
 						Collider collider = template.FXPrefab.GetComponent<Collider>();
 						if (collider != null)
 						{
-							Collider casterCollider = caster.gameObject.GetComponent<Collider>();
+							Collider casterCollider = caster.GameObject.GetComponent<Collider>();
 							if (casterCollider != null)
 							{
 								distance += casterCollider.bounds.extents.z;
@@ -257,7 +257,7 @@ namespace FishMMO.Shared
 			{
 				foreach (SpawnEvent spawnEvent in ability.PreSpawnEvents.Values)
 				{
-					spawnEvent.Invoke(caster, targetInfo, abilityObject, ref id, abilityObjects);
+					spawnEvent?.Invoke(caster, targetInfo, abilityObject, ref id, abilityObjects);
 				}
 			}
 
@@ -266,7 +266,7 @@ namespace FishMMO.Shared
 			{
 				foreach (SpawnEvent spawnEvent in ability.SpawnEvents.Values)
 				{
-					spawnEvent.Invoke(caster, targetInfo, abilityObject, ref id, abilityObjects);
+					spawnEvent?.Invoke(caster, targetInfo, abilityObject, ref id, abilityObjects);
 				}
 			}
 

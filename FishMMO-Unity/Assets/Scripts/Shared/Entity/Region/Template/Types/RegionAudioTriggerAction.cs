@@ -6,7 +6,7 @@ namespace FishMMO.Shared
 	{
 		public AudioClip clip;
 
-		public override void Invoke(Character character, Region region)
+		public override void Invoke(IPlayerCharacter character, Region region)
 		{
 			if (clip == null || character == null)
 			{

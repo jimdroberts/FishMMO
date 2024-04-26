@@ -5,11 +5,8 @@ namespace FishMMO.Shared
 {
 	public class InventoryController : ItemContainer, IInventoryController
 	{
-		public long Currency { get; set; }
-
 		public override void OnAwake()
 		{
-			Currency = 0;
 			AddSlots(null, 32);
 		}
 

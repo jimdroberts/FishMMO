@@ -6,7 +6,7 @@ namespace FishMMO.Shared
 	public interface ICharacterDamageController : ICharacterBehaviour, IDamageable, IHealable
 	{
 		bool Immortal { get; set; }
-		void Kill(Character killer);
+		void Kill(ICharacter killer);
 
 #if !UNITY_SERVER
 		event Func<string, Vector3, Color, float, float, bool, IReference> OnDamageDisplay;

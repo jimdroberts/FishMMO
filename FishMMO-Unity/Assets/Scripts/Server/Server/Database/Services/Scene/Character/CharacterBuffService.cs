@@ -11,7 +11,7 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// Save a characters buffs to the database.
 		/// </summary>
-		public static void Save(NpgsqlDbContext dbContext, Character character)
+		public static void Save(NpgsqlDbContext dbContext, IPlayerCharacter character)
 		{
 			if (character == null ||
 				!character.TryGet(out IBuffController buffController))
@@ -95,7 +95,7 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// Load characters buffs from the database.
 		/// </summary>
-		public static void Load(NpgsqlDbContext dbContext, Character character)
+		public static void Load(NpgsqlDbContext dbContext, IPlayerCharacter character)
 		{
 			if (character == null ||
 				!character.TryGet(out IBuffController buffController))

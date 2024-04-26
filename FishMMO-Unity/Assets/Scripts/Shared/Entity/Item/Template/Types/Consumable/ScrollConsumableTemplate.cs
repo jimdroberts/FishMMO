@@ -6,7 +6,7 @@ namespace FishMMO.Shared
 	{
 		public List<BaseAbilityTemplate> AbilityTemplates;
 
-		public override bool Invoke(Character character, Item item)
+		public override bool Invoke(IPlayerCharacter character, Item item)
 		{
 			if (base.Invoke(character, item))
 			{

@@ -2,14 +2,14 @@
 
 namespace FishMMO.Shared
 {
-	public class ItemEquippable : IEquippable<Character>
+	public class ItemEquippable : IEquippable<ICharacter>
 	{
 		private Item item;
 
-		public event Action<Character> OnEquip;
-		public event Action<Character> OnUnequip;
+		public event Action<ICharacter> OnEquip;
+		public event Action<ICharacter> OnUnequip;
 
-		public Character Character { get; private set; }
+		public ICharacter Character { get; private set; }
 
 		public void Initialize(Item item)
 		{
@@ -21,7 +21,7 @@ namespace FishMMO.Shared
 			Unequip();
 		}
 
-		public void Equip(Character owner)
+		public void Equip(ICharacter owner)
 		{
 			if (owner == null)
 			{
@@ -43,7 +43,7 @@ namespace FishMMO.Shared
 			}
 		}
 
-		public void SetOwner(Character owner)
+		public void SetOwner(ICharacter owner)
 		{
 			Character = owner;
 		}

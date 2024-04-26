@@ -226,7 +226,7 @@ namespace FishMMO.Server.DatabaseServices
 			}
 		}
 
-		public static void Save(NpgsqlDbContext dbContext, List<Character> characters, bool online = true)
+		public static void Save(NpgsqlDbContext dbContext, List<IPlayerCharacter> characters, bool online = true)
 		{
 			using var dbTransaction = dbContext.Database.BeginTransaction();
 
@@ -235,7 +235,7 @@ namespace FishMMO.Server.DatabaseServices
 			{
 				return;
 			}
-			foreach (Character character in characters)
+			foreach (IPlayerCharacter character in characters)
 			{
 				Save(dbContext, character, online);
 			}
@@ -246,7 +246,7 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// Save a character to the database. Only Scene Servers should be saving characters. A character can only be in one scene at a time.
 		/// </summary>
-		public static void Save(NpgsqlDbContext dbContext, Character character, bool online = true, CharacterEntity existingCharacter = null)
+		public static void Save(NpgsqlDbContext dbContext, IPlayerCharacter character, bool online = true, CharacterEntity existingCharacter = null)
 		{
 			if (character == null)
 			{
@@ -273,9 +273,8 @@ namespace FishMMO.Server.DatabaseServices
 			existingCharacter.NameLowercase = character.CharacterName.ToLower();
 			existingCharacter.Account = character.Account;
 			existingCharacter.AccessLevel = (byte)character.AccessLevel;
-			existingCharacter.RaceID = character.RaceID.Value;
-			existingCharacter.Currency = character.Currency.Value;
-			existingCharacter.SceneName = character.SceneName.Value;
+			existingCharacter.RaceID = character.RaceID;
+			existingCharacter.SceneName = character.SceneName;
 			existingCharacter.X = charPosition.x;
 			existingCharacter.Y = charPosition.y;
 			existingCharacter.Z = charPosition.z;
@@ -352,7 +351,7 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// Attempts to load a character from the database. The character is loaded to the last known position/rotation and set inactive.
 		/// </summary>
-		public static bool TryGet(NpgsqlDbContext dbContext, long characterID, NetworkManager networkManager, out Character character)
+		public static bool TryGet(NpgsqlDbContext dbContext, long characterID, NetworkManager networkManager, out IPlayerCharacter character)
 		{
 			character = null;
 
@@ -372,7 +371,7 @@ namespace FishMMO.Server.DatabaseServices
 				}
 
 				// validate spawnable prefab
-				Character characterPrefab = raceTemplate.Prefab.GetComponent<Character>();
+				IPlayerCharacter characterPrefab = raceTemplate.Prefab.GetComponent<IPlayerCharacter>();
 				if (characterPrefab == null ||
 					networkManager.SpawnablePrefabs.GetObject(true, characterPrefab.NetworkObject.PrefabId) == null)
 				{
@@ -384,7 +383,7 @@ namespace FishMMO.Server.DatabaseServices
 
 				// instantiate the character object
 				NetworkObject nob = networkManager.GetPooledInstantiated(characterPrefab.NetworkObject, dbPosition, dbRotation, true);
-				character = nob.GetComponent<Character>();
+				character = nob.GetComponent<IPlayerCharacter>();
 				if (character == null)
 				{
 					return false;
@@ -397,11 +396,10 @@ namespace FishMMO.Server.DatabaseServices
 				character.Account = dbCharacter.Account;
 				character.WorldServerID = dbCharacter.WorldServerID;
 				character.AccessLevel = (AccessLevel)dbCharacter.AccessLevel;
-				character.SetSyncVarDatabaseValue(character.RaceID, dbCharacter.RaceID);
-				character.SetSyncVarDatabaseValue(character.Currency, dbCharacter.Currency);
-				character.SetSyncVarDatabaseValue(character.RaceName, raceTemplate.Name);
+				character.RaceID = dbCharacter.RaceID;
+				character.RaceName = raceTemplate.Name;
 				character.SceneHandle = dbCharacter.SceneHandle;
-				character.SetSyncVarDatabaseValue(character.SceneName, dbCharacter.SceneName);
+				character.SceneName = dbCharacter.SceneName;
 
 				// character becomes immortal when loading.. just in case..
 				if (character.TryGet(out ICharacterDamageController damageController))

@@ -1,24 +1,23 @@
 ﻿using FishNet.Object;
-using UnityEngine;
-
 namespace FishMMO.Shared
 {
 	/// <summary>
 	/// Simple NetworkBehaviour type that stores a character reference and injects itself into the Character Behaviour mapping.
 	/// </summary>
-	[RequireComponent(typeof(Character))]
 	public abstract class CharacterBehaviour : NetworkBehaviour, ICharacterBehaviour
 	{
-		public Character Character { get; protected set; }
+		public ICharacter Character { get; protected set; }
+		public IPlayerCharacter PlayerCharacter { get; protected set; }
 		public bool Initialized { get; private set; }
 
-		public void InitializeOnce(Character character)
+		public void InitializeOnce(ICharacter character)
 		{
 			if (Initialized || character == null)
 				return;
 
 			Initialized = true;
 			Character = character;
+			PlayerCharacter = character as IPlayerCharacter;
 			Character.RegisterCharacterBehaviour(this);
 
 			InitializeOnce();
@@ -41,6 +40,7 @@ namespace FishMMO.Shared
 				Character.UnregisterCharacterBehaviour(this);
 			}
 			Character = null;
+			PlayerCharacter = null;
 		}
 
 		public virtual void OnDestroying() { }

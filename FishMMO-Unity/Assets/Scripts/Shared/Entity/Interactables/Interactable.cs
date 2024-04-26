@@ -58,7 +58,7 @@ namespace FishMMO.Shared
 			return false;
 		}
 
-		public virtual bool CanInteract(Character character)
+		public virtual bool CanInteract(IPlayerCharacter character)
 		{
 			if (character != null &&
 				character.NextInteractTime < DateTime.UtcNow && InRange(character.Transform))

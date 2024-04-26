@@ -139,7 +139,7 @@ namespace FishMMO.Server
 		{
 			if (conn.FirstObject != null)
 			{
-				Character sender = conn.FirstObject.GetComponent<Character>();
+				IPlayerCharacter sender = conn.FirstObject.GetComponent<IPlayerCharacter>();
 				ProcessNewChatMessage(conn, sender, msg);
 			}
 			else
@@ -149,7 +149,7 @@ namespace FishMMO.Server
 		}
 
 		// parse a message received from a connection
-		private void ProcessNewChatMessage(NetworkConnection conn, Character sender, ChatBroadcast msg)
+		private void ProcessNewChatMessage(NetworkConnection conn, IPlayerCharacter sender, ChatBroadcast msg)
 		{
 			// validate message length
 			if (sender == null ||
@@ -242,7 +242,7 @@ namespace FishMMO.Server
 			}
 		}
 
-		public bool OnWorldChat(Character sender, ChatBroadcast msg)
+		public bool OnWorldChat(IPlayerCharacter sender, ChatBroadcast msg)
 		{
 			// get the world ID
 			string wid = ChatHelper.GetWordAndTrimmed(msg.text, out string trimmed);
@@ -260,10 +260,10 @@ namespace FishMMO.Server
 			};
 
 			if (ServerBehaviour.TryGet(out CharacterSystem characterSystem) &&
-				characterSystem.CharactersByWorld.TryGetValue(worldID, out Dictionary<long, Character> characters))
+				characterSystem.CharactersByWorld.TryGetValue(worldID, out Dictionary<long, IPlayerCharacter> characters))
 			{
 				// send to all world characters
-				foreach (Character character in new List<Character>(characters.Values))
+				foreach (IPlayerCharacter character in new List<IPlayerCharacter>(characters.Values))
 				{
 					Server.Broadcast(character.Owner, newMsg, true, Channel.Reliable);
 				}
@@ -271,14 +271,14 @@ namespace FishMMO.Server
 			return true;
 		}
 
-		public bool OnRegionChat(Character sender, ChatBroadcast msg)
+		public bool OnRegionChat(IPlayerCharacter sender, ChatBroadcast msg)
 		{
 			if (sender == null)
 			{
 				return false;
 			}
 			// get the senders observed scene
-			UnityEngine.SceneManagement.Scene scene = UnityEngine.SceneManagement.SceneManager.GetSceneByName(sender.SceneName.Value);
+			UnityEngine.SceneManagement.Scene scene = UnityEngine.SceneManagement.SceneManager.GetSceneByName(sender.SceneName);
 			if (scene != null &&
 				Server.NetworkManager != null &&
 				Server.NetworkManager.SceneManager != null)
@@ -294,7 +294,7 @@ namespace FishMMO.Server
 			return false; // we return false here so the message is not written to the database
 		}
 
-		public bool OnPartyChat(Character sender, ChatBroadcast msg)
+		public bool OnPartyChat(IPlayerCharacter sender, ChatBroadcast msg)
 		{
 			if (Server.NpgsqlDbContextFactory == null)
 			{
@@ -324,7 +324,7 @@ namespace FishMMO.Server
 
 				foreach (CharacterPartyEntity member in dbMembers)
 				{
-					if (characterSystem.CharactersByID.TryGetValue(member.CharacterID, out Character character))
+					if (characterSystem.CharactersByID.TryGetValue(member.CharacterID, out IPlayerCharacter character))
 					{
 						// broadcast to party member...
 						Server.Broadcast(character.Owner, newMsg, true, Channel.Reliable);
@@ -335,7 +335,7 @@ namespace FishMMO.Server
 			return false;
 		}
 
-		public bool OnGuildChat(Character sender, ChatBroadcast msg)
+		public bool OnGuildChat(IPlayerCharacter sender, ChatBroadcast msg)
 		{
 			if (Server.NpgsqlDbContextFactory == null)
 			{
@@ -364,7 +364,7 @@ namespace FishMMO.Server
 				};
 				foreach (CharacterGuildEntity member in dbMembers)
 				{
-					if (characterSystem.CharactersByID.TryGetValue(member.CharacterID, out Character character))
+					if (characterSystem.CharactersByID.TryGetValue(member.CharacterID, out IPlayerCharacter character))
 					{
 						// broadcast to guild member...
 						Server.Broadcast(character.Owner, newMsg, true, Channel.Reliable);
@@ -375,7 +375,7 @@ namespace FishMMO.Server
 			return false;
 		}
 
-		public bool OnTellChat(Character sender, ChatBroadcast msg)
+		public bool OnTellChat(IPlayerCharacter sender, ChatBroadcast msg)
 		{
 			// get the target
 			string targetName = ChatHelper.GetWordAndTrimmed(msg.text, out string trimmed);
@@ -440,7 +440,7 @@ namespace FishMMO.Server
 			{
 				// if the target character is on this server we send them the message
 				if (characterSystem != null &&
-					characterSystem.CharactersByID.TryGetValue(targetID, out Character targetCharacter))
+					characterSystem.CharactersByID.TryGetValue(targetID, out IPlayerCharacter targetCharacter))
 				{
 					Server.Broadcast(targetCharacter.Owner, new ChatBroadcast()
 					{
@@ -454,7 +454,7 @@ namespace FishMMO.Server
 			return false;
 		}
 
-		public bool OnTradeChat(Character sender, ChatBroadcast msg)
+		public bool OnTradeChat(IPlayerCharacter sender, ChatBroadcast msg)
 		{
 			// get the world ID
 			string wid = ChatHelper.GetWordAndTrimmed(msg.text, out string trimmed);
@@ -473,10 +473,10 @@ namespace FishMMO.Server
 					text = trimmed,
 				};
 				if (characterSystem != null &&
-					characterSystem.CharactersByWorld.TryGetValue(worldID, out Dictionary<long, Character> characters))
+					characterSystem.CharactersByWorld.TryGetValue(worldID, out Dictionary<long, IPlayerCharacter> characters))
 				{
 					// send to all world characters
-					foreach (Character character in new List<Character>(characters.Values))
+					foreach (IPlayerCharacter character in new List<IPlayerCharacter>(characters.Values))
 					{
 						Server.Broadcast(character.Owner, newMsg, true, Channel.Reliable);
 					}
@@ -486,7 +486,7 @@ namespace FishMMO.Server
 			return false;
 		}
 
-		public bool OnSayChat(Character sender, ChatBroadcast msg)
+		public bool OnSayChat(IPlayerCharacter sender, ChatBroadcast msg)
 		{
 			if (sender != null && sender.Observers != null)
 			{

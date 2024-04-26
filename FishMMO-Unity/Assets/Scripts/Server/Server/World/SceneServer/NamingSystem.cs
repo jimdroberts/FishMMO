@@ -55,7 +55,7 @@ namespace FishMMO.Server
 					//Debug.Log("NamingSystem: Searching by Character ID: " + msg.id);
 					// check our local scene server first
 					if (ServerBehaviour.TryGet(out CharacterSystem characterSystem) &&
-						characterSystem.CharactersByID.TryGetValue(msg.id, out Character character))
+						characterSystem.CharactersByID.TryGetValue(msg.id, out IPlayerCharacter character))
 					{
 						//Debug.Log("NamingSystem: Character Local Result " + character.CharacterName);
 						SendNamingBroadcast(conn, NamingSystemType.CharacterName, msg.id, character.CharacterName);
@@ -121,7 +121,7 @@ namespace FishMMO.Server
 					//Debug.Log("NamingSystem: Searching by Character ID: " + msg.id);
 					// check our local scene server first
 					if (ServerBehaviour.TryGet(out CharacterSystem characterSystem) &&
-						characterSystem.CharactersByLowerCaseName.TryGetValue(nameLowerCase, out Character character))
+						characterSystem.CharactersByLowerCaseName.TryGetValue(nameLowerCase, out IPlayerCharacter character))
 					{
 						//Debug.Log("NamingSystem: Character Local Result " + character.CharacterName);
 						SendReverseNamingBroadcast(conn, NamingSystemType.CharacterName, nameLowerCase, character.ID, character.CharacterName);

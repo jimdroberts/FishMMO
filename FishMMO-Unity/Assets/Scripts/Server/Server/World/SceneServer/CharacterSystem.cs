@@ -33,19 +33,19 @@ namespace FishMMO.Server
 		/// <summary>
 		/// Triggered after a character is loaded from the database. <conn, Character>
 		/// </summary>
-		public event Action<NetworkConnection, Character> OnAfterLoadCharacter;
+		public event Action<NetworkConnection, IPlayerCharacter> OnAfterLoadCharacter;
 		/// <summary>
 		/// Triggered immediately after a character is removed from their respective cache.
 		/// </summary>
-		public event Action<NetworkConnection, Character> OnDisconnect;
+		public event Action<NetworkConnection, IPlayerCharacter> OnDisconnect;
 
-		public event Action<Character, string> OnCharacterChangedScene;
+		public event Action<IPlayerCharacter, string> OnCharacterChangedScene;
 
-		public Dictionary<long, Character> CharactersByID = new Dictionary<long, Character>();
-		public Dictionary<string, Character> CharactersByLowerCaseName = new Dictionary<string, Character>();
-		public Dictionary<long, Dictionary<long, Character>> CharactersByWorld = new Dictionary<long, Dictionary<long, Character>>();
-		public Dictionary<NetworkConnection, Character> ConnectionCharacters = new Dictionary<NetworkConnection, Character>();
-		public Dictionary<NetworkConnection, Character> WaitingSceneLoadCharacters = new Dictionary<NetworkConnection, Character>();
+		public Dictionary<long, IPlayerCharacter> CharactersByID = new Dictionary<long, IPlayerCharacter>();
+		public Dictionary<string, IPlayerCharacter> CharactersByLowerCaseName = new Dictionary<string, IPlayerCharacter>();
+		public Dictionary<long, Dictionary<long, IPlayerCharacter>> CharactersByWorld = new Dictionary<long, Dictionary<long, IPlayerCharacter>>();
+		public Dictionary<NetworkConnection, IPlayerCharacter> ConnectionCharacters = new Dictionary<NetworkConnection, IPlayerCharacter>();
+		public Dictionary<NetworkConnection, IPlayerCharacter> WaitingSceneLoadCharacters = new Dictionary<NetworkConnection, IPlayerCharacter>();
 
 		public override void InitializeOnce()
 		{
@@ -82,15 +82,15 @@ namespace FishMMO.Server
 						// TODO: Should the character be doing this and more often?
 						// They'd need a cached world boundaries to check themselves against
 						// which would prevent the need to do all of this lookup stuff.
-						foreach (Character character in ConnectionCharacters.Values)
+						foreach (IPlayerCharacter character in ConnectionCharacters.Values)
 						{
 							if (character == null ||
-								string.IsNullOrWhiteSpace(character.SceneName.Value))
+								string.IsNullOrWhiteSpace(character.SceneName))
 							{
 								continue;
 							}
 
-							if (sceneServerSystem.WorldSceneDetailsCache.Scenes.TryGetValue(character.SceneName.Value, out WorldSceneDetails details))
+							if (sceneServerSystem.WorldSceneDetailsCache.Scenes.TryGetValue(character.SceneName, out WorldSceneDetails details))
 							{
 								// Check if they are within some bounds, if not we need to move them to a respawn location!
 								// TODO: Try to prevent combat escape, maybe this needs to be handled on the game design level?
@@ -123,7 +123,7 @@ namespace FishMMO.Server
 
 						// all characters are periodically saved
 						using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-						CharacterService.Save(dbContext, new List<Character>(CharactersByID.Values));
+						CharacterService.Save(dbContext, new List<IPlayerCharacter>(CharactersByID.Values));
 					}
 				}
 				nextSave -= Time.deltaTime;
@@ -136,7 +136,7 @@ namespace FishMMO.Server
 			{
 				// save all the characters before we quit
 				using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-				CharacterService.Save(dbContext, new List<Character>(CharactersByID.Values), false);
+				CharacterService.Save(dbContext, new List<IPlayerCharacter>(CharactersByID.Values), false);
 			}
 		}
 
@@ -165,12 +165,12 @@ namespace FishMMO.Server
 				ServerBehaviour.TryGet(out SceneServerSystem sceneServerSystem))
 			{
 				// Remove the waiting scene load character if it exists, these characters exist but are not spawned
-				if (WaitingSceneLoadCharacters.TryGetValue(conn, out Character waitingSceneCharacter))
+				if (WaitingSceneLoadCharacters.TryGetValue(conn, out IPlayerCharacter waitingSceneCharacter))
 				{
 					WaitingSceneLoadCharacters.Remove(conn);
 
 					if (sceneServerSystem.TryGetSceneInstanceDetails(waitingSceneCharacter.WorldServerID,
-																	 waitingSceneCharacter.SceneName.Value,
+																	 waitingSceneCharacter.SceneName,
 																	 waitingSceneCharacter.SceneHandle,
 																	 out SceneInstanceDetails instance))
 					{
@@ -182,7 +182,7 @@ namespace FishMMO.Server
 					Server.NetworkManager.StorePooledInstantiated(waitingSceneCharacter.NetworkObject, true);
 				}
 
-				if (ConnectionCharacters.TryGetValue(conn, out Character character))
+				if (ConnectionCharacters.TryGetValue(conn, out IPlayerCharacter character))
 				{
 					// remove the connection->character entry
 					ConnectionCharacters.Remove(conn);
@@ -192,7 +192,7 @@ namespace FishMMO.Server
 					// remove the characterName->character entry
 					CharactersByLowerCaseName.Remove(character.CharacterNameLower);
 					// remove the worldid<characterID->character> entry
-					if (CharactersByWorld.TryGetValue(character.WorldServerID, out Dictionary<long, Character> characters))
+					if (CharactersByWorld.TryGetValue(character.WorldServerID, out Dictionary<long, IPlayerCharacter> characters))
 					{
 						characters.Remove(character.ID);
 					}
@@ -203,7 +203,7 @@ namespace FishMMO.Server
 
 					// update scene instance details
 					if (sceneServerSystem.TryGetSceneInstanceDetails(character.WorldServerID,
-																	 character.SceneName.Value,
+																	 character.SceneName,
 																	 character.SceneHandle,
 																	 out SceneInstanceDetails instance))
 					{
@@ -221,7 +221,7 @@ namespace FishMMO.Server
 			}
 		}
 
-		private void TryTeleport(Character character)
+		private void TryTeleport(IPlayerCharacter character)
 		{
 			if (character == null)
 			{
@@ -248,7 +248,7 @@ namespace FishMMO.Server
 			}
 
 			// cache the current scene name
-			string playerScene = character.SceneName.Value;
+			string playerScene = character.SceneName;
 
 			if (sceneServerSystem.WorldSceneDetailsCache == null ||
 				!sceneServerSystem.WorldSceneDetailsCache.Scenes.TryGetValue(playerScene, out WorldSceneDetails details))
@@ -278,7 +278,7 @@ namespace FishMMO.Server
 			}
 
 			OnCharacterChangedScene?.Invoke(character, teleporter.ToScene);
-			character.SceneName.SetInitialValues(teleporter.ToScene);
+			character.SceneName = teleporter.ToScene;
 			character.Motor.SetPositionAndRotationAndVelocity(teleporter.ToPosition, teleporter.ToRotation, Vector3.zero);
 		}
 
@@ -306,10 +306,10 @@ namespace FishMMO.Server
 				}
 
 				OnBeforeLoadCharacter?.Invoke(conn, selectedCharacterID);
-				if (CharacterService.TryGet(dbContext, selectedCharacterID, Server.NetworkManager, out Character character))
+				if (CharacterService.TryGet(dbContext, selectedCharacterID, Server.NetworkManager, out IPlayerCharacter character))
 				{
 					// check if the scene is valid, loaded, and cached properly
-					if (sceneServerSystem.TryGetSceneInstanceDetails(character.WorldServerID, character.SceneName.Value, character.SceneHandle, out SceneInstanceDetails instance) &&
+					if (sceneServerSystem.TryGetSceneInstanceDetails(character.WorldServerID, character.SceneName, character.SceneHandle, out SceneInstanceDetails instance) &&
 						sceneServerSystem.TryLoadSceneForConnection(conn, character, instance))
 					{
 						OnAfterLoadCharacter?.Invoke(conn, character);
@@ -319,7 +319,7 @@ namespace FishMMO.Server
 						// update character count
 						++instance.CharacterCount;
 
-						Debug.Log("Character System: " + character.CharacterName + " is loading Scene: " + character.SceneName.Value + ":" + character.SceneHandle);
+						Debug.Log("Character System: " + character.CharacterName + " is loading Scene: " + character.SceneName + ":" + character.SceneHandle);
 					}
 					else
 					{
@@ -345,7 +345,7 @@ namespace FishMMO.Server
 		/// </summary>
 		private void SceneManager_OnClientLoadedStartScenes(NetworkConnection conn, bool asServer)
 		{
-			if (WaitingSceneLoadCharacters.TryGetValue(conn, out Character character))
+			if (WaitingSceneLoadCharacters.TryGetValue(conn, out IPlayerCharacter character))
 			{
 				if (character == null)
 				{
@@ -362,9 +362,9 @@ namespace FishMMO.Server
 				CharactersByID[character.ID] = character;
 				CharactersByLowerCaseName[character.CharacterNameLower] = character;
 				// add a worldID<characterID->character> map for ease of use
-				if (!CharactersByWorld.TryGetValue(character.WorldServerID, out Dictionary<long, Character> characters))
+				if (!CharactersByWorld.TryGetValue(character.WorldServerID, out Dictionary<long, IPlayerCharacter> characters))
 				{
-					CharactersByWorld.Add(character.WorldServerID, characters = new Dictionary<long, Character>());
+					CharactersByWorld.Add(character.WorldServerID, characters = new Dictionary<long, IPlayerCharacter>());
 				}
 				characters[character.ID] = character;
 
@@ -377,7 +377,7 @@ namespace FishMMO.Server
 					!scene.isLoaded)
 				{
 					Debug.Log("Scene is not valid.");
-					Destroy(character.gameObject);
+					Destroy(character.GameObject);
 					conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
 					return;
 				}
@@ -392,7 +392,7 @@ namespace FishMMO.Server
 				}
 
 				// ensure the game object is active, pooled objects are disabled
-				character.gameObject.SetActive(true);
+				character.GameObject.SetActive(true);
 
 				// spawn the nob over the network
 				ServerManager.Spawn(character.NetworkObject, conn, scene);
@@ -420,7 +420,7 @@ namespace FishMMO.Server
 		/// Sends all Server Side Character data to the owner. *Expensive*
 		/// </summary>
 		/// <param name="character"></param>
-		public void SendAllCharacterData(Character character)
+		public void SendAllCharacterData(IPlayerCharacter character)
 		{
 			if (Server.NpgsqlDbContextFactory == null)
 			{
@@ -433,12 +433,6 @@ namespace FishMMO.Server
 			{
 				return;
 			}
-
-			// set syncvars dirty which forces it to sync to the client	
-			character.Currency.Dirty();
-			character.RaceID.Dirty();
-			character.RaceName.Dirty();
-			character.SceneName.Dirty();
 
 			#region Abilities
 			if (character.TryGet(out IAbilityController abilityController))
@@ -662,7 +656,7 @@ namespace FishMMO.Server
 		/// </summary>
 		public bool SendBroadcastToCharacter<T>(string characterName, T msg) where T : struct, IBroadcast
 		{
-			if (CharactersByLowerCaseName.TryGetValue(characterName.ToLower(), out Character character))
+			if (CharactersByLowerCaseName.TryGetValue(characterName.ToLower(), out IPlayerCharacter character))
 			{
 				Server.Broadcast(character.Owner, msg, true, Channel.Reliable);
 				return true;
@@ -677,7 +671,7 @@ namespace FishMMO.Server
 		/// </summary>
 		public bool SendBroadcastToCharacter<T>(long characterID, T msg) where T : struct, IBroadcast
 		{
-			if (CharactersByID.TryGetValue(characterID, out Character character))
+			if (CharactersByID.TryGetValue(characterID, out IPlayerCharacter character))
 			{
 				Server.Broadcast(character.Owner, msg, true, Channel.Reliable);
 				return true;

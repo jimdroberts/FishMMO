@@ -4,7 +4,6 @@ using FishMMO.Shared;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Database.Npgsql;
 using System.Collections.Generic;
-using System.Linq;
 using System.Runtime.CompilerServices;
 using UnityEngine;
 
@@ -17,6 +16,7 @@ namespace FishMMO.Server
 	{
 		public WorldSceneDetailsCache WorldSceneDetailsCache;
 		public int MaxAbilityCount = 25;
+		public CharacterAttributeTemplate CurrencyTemplate;
 
 		public override void InitializeOnce()
 		{
@@ -61,21 +61,21 @@ namespace FishMMO.Server
 			{
 				return;
 			}
-			Character character = conn.FirstObject.GetComponent<Character>();
+			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
 			if (character == null)
 			{
 				return;
 			}
 
 			// validate scene
-			if (!WorldSceneDetailsCache.Scenes.TryGetValue(character.SceneName.Value, out WorldSceneDetails details))
+			if (!WorldSceneDetailsCache.Scenes.TryGetValue(character.SceneName, out WorldSceneDetails details))
 			{
-				Debug.Log("Missing Scene:" + character.SceneName.Value);
+				Debug.Log("Missing Scene:" + character.SceneName);
 				return;
 			}
 
 			// validate scene object
-			if (!ValidateSceneObject(msg.interactableID, character.gameObject.scene.handle, out SceneObjectUID sceneObject))
+			if (!ValidateSceneObject(msg.interactableID, character.GameObject.scene.handle, out SceneObjectUID sceneObject))
 			{
 				return;
 			}
@@ -125,7 +125,7 @@ namespace FishMMO.Server
 			{
 				return;
 			}
-			Character character = conn.FirstObject.GetComponent<Character>();
+			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
 			if (character == null ||
 				!character.TryGet(out IInventoryController inventoryController))
 			{
@@ -140,14 +140,14 @@ namespace FishMMO.Server
 			}
 
 			// validate scene
-			if (!WorldSceneDetailsCache.Scenes.TryGetValue(character.SceneName.Value, out WorldSceneDetails details))
+			if (!WorldSceneDetailsCache.Scenes.TryGetValue(character.SceneName, out WorldSceneDetails details))
 			{
-				Debug.Log("Missing Scene:" + character.SceneName.Value);
+				Debug.Log("Missing Scene:" + character.SceneName);
 				return;
 			}
 
 			// validate scene object
-			if (!ValidateSceneObject(msg.interactableID, character.gameObject.scene.handle, out SceneObjectUID sceneObject))
+			if (!ValidateSceneObject(msg.interactableID, character.GameObject.scene.handle, out SceneObjectUID sceneObject))
 			{
 				return;
 			}
@@ -182,7 +182,14 @@ namespace FishMMO.Server
 					}
 
 					// do we have enough currency to purchase this?
-					if (inventoryController.Currency < itemTemplate.Price)
+					if (CurrencyTemplate == null)
+					{
+						Debug.Log("CurrencyTemplate is null.");
+						return;
+					}
+					if (!character.TryGet(out ICharacterAttributeController attributeController) ||
+						!attributeController.TryGetAttribute(CurrencyTemplate, out CharacterAttribute currency) ||
+						currency.FinalValue < itemTemplate.Price)
 					{
 						return;
 					}
@@ -204,7 +211,7 @@ namespace FishMMO.Server
 							modifiedItems.Count > 0)
 						{
 							// remove the price from the characters currency
-							inventoryController.Currency -= itemTemplate.Price;
+							currency.AddValue(itemTemplate.Price);
 
 							// add slot update requests to our message
 							foreach (Item item in modifiedItems)
@@ -258,16 +265,28 @@ namespace FishMMO.Server
 			}
 		}
 
-		public void LearnAbilityTemplate<T>(NpgsqlDbContext dbContext, NetworkConnection conn, Character character, T template) where T : BaseAbilityTemplate
+		public void LearnAbilityTemplate<T>(NpgsqlDbContext dbContext, NetworkConnection conn, IPlayerCharacter character, T template) where T : BaseAbilityTemplate
 		{
 			// do we already know this ability?
 			if (template == null ||
 				character == null ||
 				!character.TryGet(out IAbilityController abilityController) ||
-				abilityController.KnowsAbility(template.ID) ||
-				!character.TryGet(out IInventoryController inventoryController) ||
-				inventoryController.Currency < template.Price)
+				abilityController.KnowsAbility(template.ID))
 			{
+				return;
+			}
+
+			// do we have enough currency to purchase this?
+			if (CurrencyTemplate == null)
+			{
+				Debug.Log("CurrencyTemplate is null.");
+				return;
+			}
+			if (!character.TryGet(out ICharacterAttributeController attributeController) ||
+				!attributeController.TryGetAttribute(CurrencyTemplate, out CharacterAttribute currency) ||
+				currency.FinalValue < template.Price)
+			{
+				Debug.Log("Not enough currency!");
 				return;
 			}
 
@@ -275,7 +294,7 @@ namespace FishMMO.Server
 			abilityController.LearnBaseAbilities(new List<BaseAbilityTemplate> { template });
 
 			// remove the price from the characters currency
-			inventoryController.Currency -= template.Price;
+			currency.AddValue(template.Price);
 
 			// add the known ability to the database
 			CharacterKnownAbilityService.Add(dbContext, character.ID, template.ID);
@@ -299,7 +318,7 @@ namespace FishMMO.Server
 			{
 				return;
 			}
-			Character character = conn.FirstObject.GetComponent<Character>();
+			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
 			if (character == null ||
 				!character.TryGet(out IAbilityController abilityController))
 			{
@@ -314,14 +333,14 @@ namespace FishMMO.Server
 			}
 
 			// validate scene
-			if (!WorldSceneDetailsCache.Scenes.TryGetValue(character.SceneName.Value, out WorldSceneDetails details))
+			if (!WorldSceneDetailsCache.Scenes.TryGetValue(character.SceneName, out WorldSceneDetails details))
 			{
-				Debug.Log("Missing Scene:" + character.SceneName.Value);
+				Debug.Log("Missing Scene:" + character.SceneName);
 				return;
 			}
 
 			// validate scene object
-			if (!ValidateSceneObject(msg.interactableID, character.gameObject.scene.handle, out SceneObjectUID sceneObject))
+			if (!ValidateSceneObject(msg.interactableID, character.GameObject.scene.handle, out SceneObjectUID sceneObject))
 			{
 				return;
 			}
@@ -342,7 +361,7 @@ namespace FishMMO.Server
 				return;
 			}
 
-			long price = mainAbility.Price;
+			int price = mainAbility.Price;
 
 			// validate eventIds if there are any...
 			if (msg.events != null)
@@ -384,7 +403,15 @@ namespace FishMMO.Server
 				}
 			}
 
-			if (character.Currency.Value < price)
+			// do we have enough currency to purchase this?
+			if (CurrencyTemplate == null)
+			{
+				Debug.Log("CurrencyTemplate is null.");
+				return;
+			}
+			if (!character.TryGet(out ICharacterAttributeController attributeController) ||
+				!attributeController.TryGetAttribute(CurrencyTemplate, out CharacterAttribute currency) ||
+				currency.FinalValue < price)
 			{
 				return;
 			}
@@ -405,7 +432,7 @@ namespace FishMMO.Server
 
 			abilityController.LearnAbility(newAbility);
 
-			character.Currency.Value -= price;
+			currency.AddValue(price);
 
 			AbilityAddBroadcast abilityAddBroadcast = new AbilityAddBroadcast()
 			{

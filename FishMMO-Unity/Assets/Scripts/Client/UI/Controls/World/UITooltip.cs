@@ -27,6 +27,7 @@ namespace FishMMO.Client
 
 		public void Open(string text)
 		{
+			Hide();
 			if (this.text != null)
 			{
 				this.text.text = text;

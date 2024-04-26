@@ -8,6 +8,6 @@ namespace FishMMO.Shared
 		int ID { get; }
 		string Title { get; }
 		bool InRange(Transform transform);
-		bool CanInteract(Character character);
+		bool CanInteract(IPlayerCharacter character);
 	}
 }

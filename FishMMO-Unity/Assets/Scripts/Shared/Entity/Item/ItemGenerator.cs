@@ -111,7 +111,7 @@ namespace FishMMO.Shared
 			}
 		}
 
-		public void ApplyAttributes(Character character)
+		public void ApplyAttributes(ICharacter character)
 		{
 			if (!character.TryGet(out ICharacterAttributeController attributeController))
 			{
@@ -130,7 +130,7 @@ namespace FishMMO.Shared
 			}
 		}
 
-		public void RemoveAttributes(Character character)
+		public void RemoveAttributes(ICharacter character)
 		{
 			if (!character.TryGet(out ICharacterAttributeController attributeController))
 			{

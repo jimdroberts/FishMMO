@@ -125,7 +125,7 @@ namespace FishMMO.Server
 						}
 
 						// validate spawnable prefab
-						Character characterPrefab = raceTemplate.Prefab.GetComponent<Character>();
+						IPlayerCharacter characterPrefab = raceTemplate.Prefab.GetComponent<IPlayerCharacter>();
 						if (characterPrefab == null ||
 							Server.NetworkManager.SpawnablePrefabs.GetObject(true, characterPrefab.NetworkObject.PrefabId) == null)
 						{

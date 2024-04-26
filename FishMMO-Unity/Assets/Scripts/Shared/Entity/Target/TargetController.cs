@@ -97,7 +97,8 @@ namespace FishMMO.Shared
 			Ray ray = new Ray(origin, direction);
 			if (Physics.Raycast(ray, out hit, distance, LayerMask))
 #else
-			if (Character.Motor.PhysicsScene.Raycast(origin, direction, out hit, distance, LayerMask))
+			if (PlayerCharacter != null &&
+				PlayerCharacter.Motor.PhysicsScene.Raycast(origin, direction, out hit, distance, LayerMask))
 #endif
 			{
 				//Debug.DrawLine(ray.origin, hit.point, Color.red, 1);

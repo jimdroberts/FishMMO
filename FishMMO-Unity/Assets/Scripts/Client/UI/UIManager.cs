@@ -24,7 +24,7 @@ namespace FishMMO.Client
 			_client = client;
 		}
 
-		internal static void SetCharacter(Character character)
+		internal static void SetCharacter(IPlayerCharacter character)
 		{
 			foreach (UICharacterControl control in characterControls.Values)
 			{

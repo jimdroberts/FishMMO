@@ -422,13 +422,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   Transform: {fileID: 0}
   RandomRespawnTime: 1
-  MinimumRespawnTime: 0
-  MaximumRespawnTime: 0
   RandomSpawnPosition: 1
   CheckTerrain: 1
   BoundingBoxSize: {x: 1, y: 1, z: 1}
   BoundingBoxExtents: {x: 1, y: 1, z: 1}
   RandomSpawnable: 1
+  Spawnables: []
   GizmoColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!4 &352688523
 Transform:
@@ -443,7 +442,7 @@ Transform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 0}
+  m_Father: {fileID: 570178887}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &412017732
 GameObject:
@@ -912,6 +911,40 @@ Light:
   m_UseViewFrustumForShadowCasterCull: 1
   m_ShadowRadius: 0
   m_ShadowAngle: 0
+--- !u!1 &570178886
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 570178887}
+  m_Layer: 0
+  m_Name: Spawners
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &570178887
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 570178886}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 1583805993}
+  - {fileID: 352688523}
+  - {fileID: 1149952039}
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &598504140
 GameObject:
   m_ObjectHideFlags: 0
@@ -2025,13 +2058,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   Transform: {fileID: 0}
   RandomRespawnTime: 1
-  MinimumRespawnTime: 0
-  MaximumRespawnTime: 0
   RandomSpawnPosition: 1
   CheckTerrain: 1
   BoundingBoxSize: {x: 1, y: 1, z: 1}
   BoundingBoxExtents: {x: 1, y: 1, z: 1}
   RandomSpawnable: 1
+  Spawnables: []
   GizmoColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!4 &1149952039
 Transform:
@@ -2046,7 +2078,7 @@ Transform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 0}
+  m_Father: {fileID: 570178887}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1162279319
 GameObject:
@@ -2865,13 +2897,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   Transform: {fileID: 0}
   RandomRespawnTime: 1
-  MinimumRespawnTime: 0
-  MaximumRespawnTime: 0
   RandomSpawnPosition: 1
   CheckTerrain: 1
   BoundingBoxSize: {x: 1, y: 1, z: 1}
   BoundingBoxExtents: {x: 1, y: 1, z: 1}
   RandomSpawnable: 1
+  Spawnables: []
   GizmoColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!4 &1583805993
 Transform:
@@ -2886,7 +2917,7 @@ Transform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 0}
+  m_Father: {fileID: 570178887}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1699450705
 GameObject:
@@ -3636,7 +3667,5 @@ SceneRoots:
   - {fileID: 50859204}
   - {fileID: 700411445}
   - {fileID: 1327666855}
-  - {fileID: 1583805993}
-  - {fileID: 352688523}
-  - {fileID: 1149952039}
   - {fileID: 1546672591}
+  - {fileID: 570178887}

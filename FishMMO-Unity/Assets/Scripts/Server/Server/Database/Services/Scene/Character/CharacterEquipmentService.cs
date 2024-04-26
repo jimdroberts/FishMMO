@@ -93,7 +93,7 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// Load character equipment from the database.
 		/// </summary>
-		public static void Load(NpgsqlDbContext dbContext, Character character)
+		public static void Load(NpgsqlDbContext dbContext, IPlayerCharacter character)
 		{
 			if (character == null ||
 				!character.TryGet(out IEquipmentController equipmentController))

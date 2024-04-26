@@ -9,7 +9,7 @@ namespace FishMMO.Shared
 		public bool IsIdentifiable;
 		public bool Generate;
 		public uint MaxStackSize = 1;
-		public long Price;
+		public int Price;
 		//use this for item generation
 		public int[] IconPools;
 		public Sprite icon;

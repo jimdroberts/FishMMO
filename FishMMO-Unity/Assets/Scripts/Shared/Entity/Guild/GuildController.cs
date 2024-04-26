@@ -25,7 +25,7 @@ namespace FishMMO.Shared
 		{
 			ID = reader.ReadInt64();
 
-			IGuildController.OnReadPayload?.Invoke(ID, Character);
+			IGuildController.OnReadPayload?.Invoke(ID, PlayerCharacter);
 		}
 
 		public override void WritePayload(NetworkConnection connection, Writer writer)
@@ -46,7 +46,10 @@ namespace FishMMO.Shared
 				ClientManager.RegisterBroadcast<GuildAddMultipleBroadcast>(OnClientGuildAddMultipleBroadcastReceived);
 				ClientManager.RegisterBroadcast<GuildRemoveBroadcast>(OnClientGuildRemoveBroadcastReceived);
 
-				IGuildController.OnReadPayload?.Invoke(ID, Character);
+				if (PlayerCharacter != null)
+				{
+					IGuildController.OnReadPayload?.Invoke(ID, PlayerCharacter);
+				}
 			}
 		}
 
@@ -79,12 +82,12 @@ namespace FishMMO.Shared
 		public void OnClientGuildAddBroadcastReceived(GuildAddBroadcast msg, Channel channel)
 		{
 			// if this is our own id
-			if (Character != null && msg.characterID == Character.ID)
+			if (PlayerCharacter != null && msg.characterID == Character.ID)
 			{
 				ID = msg.guildID;
 				Rank = msg.rank;
 
-				IGuildController.OnReadPayload?.Invoke(ID, Character);
+				IGuildController.OnReadPayload?.Invoke(ID, PlayerCharacter);
 			}
 
 			// update our Guild list with the new Guild member
@@ -96,7 +99,11 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void OnClientGuildLeaveBroadcastReceived(GuildLeaveBroadcast msg, Channel channel)
 		{
-			Character.SetGuildName(null);
+			if (PlayerCharacter == null)
+			{
+				return;
+			}
+			PlayerCharacter.SetGuildName(null);
 			ID = 0;
 			Rank = GuildRank.None;
 			OnLeaveGuild?.Invoke();

@@ -147,7 +147,8 @@ namespace FishMMO.Shared
 	public void HandleRewards(AchievementTier tier)
 	{
 		if (base.IsServerInitialized &&
-			Character.Owner != null &&
+			PlayerCharacter != null &&
+			PlayerCharacter.Owner != null &&
 			Character.TryGet(out InventoryController inventoryController))
 		{
 			BaseItemTemplate[] itemRewards = tier.ItemRewards;
@@ -181,7 +182,7 @@ namespace FishMMO.Shared
 				}
 				if (modifiedItemBroadcasts.Count > 0)
 				{
-					Character.Owner.Broadcast(new InventorySetMultipleItemsBroadcast()
+					PlayerCharacter.Owner.Broadcast(new InventorySetMultipleItemsBroadcast()
 					{
 						items = modifiedItemBroadcasts,
 					}, true, Channel.Reliable);

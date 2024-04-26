@@ -19,7 +19,7 @@ namespace FishMMO.Shared
 			}
 		}
 
-		public override bool CanInteract(Character character)
+		public override bool CanInteract(IPlayerCharacter character)
 		{
 			if (Template == null ||
 				!base.CanInteract(character))

@@ -382,16 +382,19 @@ namespace FishMMO.Shared
 								 validatedAbility.HasAbilityEvent(ChanneledTemplate.ID) &&
 								 Character.TryGet(out ITargetController t))
 						{
-							// get target info
-							TargetInfo targetInfo = t.UpdateTarget(Character.CharacterController.VirtualCameraPosition,
-																   Character.CharacterController.VirtualCameraRotation * Vector3.forward,
-																   validatedAbility.Range);
-
-							// spawn the ability object
-							if (AbilityObject.TrySpawn(validatedAbility, Character, this, AbilitySpawner, targetInfo))
+							if (PlayerCharacter != null)
 							{
-								// channeled abilities consume resources during activation
-								validatedAbility.ConsumeResources(Character, BloodResourceConversionTemplate, BloodResourceTemplate);
+								// get target info
+								TargetInfo targetInfo = t.UpdateTarget(PlayerCharacter.CharacterController.VirtualCameraPosition,
+																	   PlayerCharacter.CharacterController.VirtualCameraRotation * Vector3.forward,
+																	   validatedAbility.Range);
+
+								// spawn the ability object
+								if (AbilityObject.TrySpawn(validatedAbility, PlayerCharacter, this, AbilitySpawner, targetInfo))
+								{
+									// channeled abilities consume resources during activation
+									validatedAbility.ConsumeResources(Character, BloodResourceConversionTemplate, BloodResourceTemplate);
+								}
 							}
 						}
 					}
@@ -412,22 +415,25 @@ namespace FishMMO.Shared
 					// complete the final activation of the ability
 					if (Character.TryGet(out ITargetController tc))
 					{
-						// get target info
-						TargetInfo targetInfo = tc.UpdateTarget(Character.CharacterController.VirtualCameraPosition,
-																Character.CharacterController.VirtualCameraRotation * Vector3.forward,
-																validatedAbility.Range);
-
-						// spawn the ability object
-						if (AbilityObject.TrySpawn(validatedAbility, Character, this, AbilitySpawner, targetInfo))
+						if (PlayerCharacter != null)
 						{
-							// consume resources
-							validatedAbility.ConsumeResources(Character, BloodResourceConversionTemplate, BloodResourceTemplate);
+							// get target info
+							TargetInfo targetInfo = tc.UpdateTarget(PlayerCharacter.CharacterController.VirtualCameraPosition,
+																	PlayerCharacter.CharacterController.VirtualCameraRotation * Vector3.forward,
+																	validatedAbility.Range);
 
-							// add ability to cooldowns
-							AddCooldown(validatedAbility);
+							// spawn the ability object
+							if (AbilityObject.TrySpawn(validatedAbility, PlayerCharacter, this, AbilitySpawner, targetInfo))
+							{
+								// consume resources
+								validatedAbility.ConsumeResources(Character, BloodResourceConversionTemplate, BloodResourceTemplate);
 
-							// reset ability data
-							Cancel();
+								// add ability to cooldowns
+								AddCooldown(validatedAbility);
+
+								// reset ability data
+								Cancel();
+							}
 						}
 					}
 				}
@@ -465,7 +471,7 @@ namespace FishMMO.Shared
 			return 1.0f;
 		}
 
-		public void Interrupt(Character attacker)
+		public void Interrupt(ICharacter attacker)
 		{
 			interruptQueued = true;
 		}

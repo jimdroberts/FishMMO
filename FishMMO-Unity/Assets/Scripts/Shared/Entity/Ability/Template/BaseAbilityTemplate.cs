@@ -13,7 +13,7 @@ namespace FishMMO.Shared
 		public float Cooldown;
 		public float Range;
 		public float Speed;
-		public long Price;
+		public int Price;
 		public AbilityResourceDictionary Resources = new AbilityResourceDictionary();
 		public AbilityResourceDictionary Requirements = new AbilityResourceDictionary();
 

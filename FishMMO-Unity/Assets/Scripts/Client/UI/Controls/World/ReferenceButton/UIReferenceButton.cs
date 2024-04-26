@@ -27,7 +27,7 @@ namespace FishMMO.Client
 		[SerializeField]
 		public TMP_Text AmountText;
 
-		public Character Character;
+		public IPlayerCharacter Character;
 
 		protected override void OnDisable()
 		{
@@ -43,12 +43,12 @@ namespace FishMMO.Client
 		{
 			base.OnPointerEnter(eventData);
 
-			ShowTooltip(Character, ReferenceID);
+			ShowTooltip(ReferenceID);
 		}
 
-		public virtual void ShowTooltip(Character character, long referenceID)
+		public virtual void ShowTooltip(long referenceID)
 		{
-			if (character == null ||
+			if (Character == null ||
 				referenceID < 0)
 			{
 				return;

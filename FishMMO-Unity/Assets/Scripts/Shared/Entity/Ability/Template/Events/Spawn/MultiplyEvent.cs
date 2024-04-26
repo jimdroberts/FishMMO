@@ -9,7 +9,7 @@ namespace FishMMO.Shared
 	{
 		public int SpawnCount;
 
-		public override void Invoke(Character self, TargetInfo targetInfo, AbilityObject initialObject, ref int nextID, Dictionary<int, AbilityObject> abilityObjects)
+		public override void Invoke(ICharacter self, TargetInfo targetInfo, AbilityObject initialObject, ref int nextID, Dictionary<int, AbilityObject> abilityObjects)
 		{
 			if (abilityObjects != null)
 			{
@@ -17,7 +17,7 @@ namespace FishMMO.Shared
 				{
 					// create/fetch from pool
 					GameObject go = new GameObject(initialObject.name);
-					SceneManager.MoveGameObjectToScene(go, self.gameObject.scene);
+					SceneManager.MoveGameObjectToScene(go, self.GameObject.scene);
 					go.SetActive(false);
 
 					// construct additional ability objects

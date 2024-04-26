@@ -305,7 +305,7 @@ namespace FishMMO.Client
 			}
 		}
 
-		private void ParseLocalMessage(Character localCharacter, ChatBroadcast msg)
+		private void ParseLocalMessage(IPlayerCharacter localCharacter, ChatBroadcast msg)
 		{
 			// validate message length
 			if (string.IsNullOrWhiteSpace(msg.text) || msg.text.Length > MAX_LENGTH)
@@ -320,7 +320,7 @@ namespace FishMMO.Client
 			}
 		}
 
-		public bool OnWorldChat(Character localCharacter, ChatBroadcast msg)
+		public bool OnWorldChat(IPlayerCharacter localCharacter, ChatBroadcast msg)
 		{
 			ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
 			{
@@ -330,7 +330,7 @@ namespace FishMMO.Client
 			return true;
 		}
 
-		public bool OnRegionChat(Character localCharacter, ChatBroadcast msg)
+		public bool OnRegionChat(IPlayerCharacter localCharacter, ChatBroadcast msg)
 		{
 			ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
 			{
@@ -339,7 +339,7 @@ namespace FishMMO.Client
 			return true;
 		}
 
-		public bool OnPartyChat(Character localCharacter, ChatBroadcast msg)
+		public bool OnPartyChat(IPlayerCharacter localCharacter, ChatBroadcast msg)
 		{
 			ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
 			{
@@ -348,7 +348,7 @@ namespace FishMMO.Client
 			return true;
 		}
 
-		public bool OnGuildChat(Character localCharacter, ChatBroadcast msg)
+		public bool OnGuildChat(IPlayerCharacter localCharacter, ChatBroadcast msg)
 		{
 			ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
 			{
@@ -357,7 +357,7 @@ namespace FishMMO.Client
 			return true;
 		}
 
-		public bool OnTellChat(Character localCharacter, ChatBroadcast msg)
+		public bool OnTellChat(IPlayerCharacter localCharacter, ChatBroadcast msg)
 		{
 			string cmd = ChatHelper.GetWordAndTrimmed(msg.text, out string trimmed);
 
@@ -409,7 +409,7 @@ namespace FishMMO.Client
 			return true;
 		}
 
-		public bool OnTradeChat(Character localCharacter, ChatBroadcast msg)
+		public bool OnTradeChat(IPlayerCharacter localCharacter, ChatBroadcast msg)
 		{
 			ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
 			{
@@ -418,7 +418,7 @@ namespace FishMMO.Client
 			return true;
 		}
 
-		public bool OnSayChat(Character localCharacter, ChatBroadcast msg)
+		public bool OnSayChat(IPlayerCharacter localCharacter, ChatBroadcast msg)
 		{
 			ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
 			{
@@ -427,7 +427,7 @@ namespace FishMMO.Client
 			return true;
 		}
 
-		public bool OnSystemChat(Character localCharacter, ChatBroadcast msg)
+		public bool OnSystemChat(IPlayerCharacter localCharacter, ChatBroadcast msg)
 		{
 			ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
 			{

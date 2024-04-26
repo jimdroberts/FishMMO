@@ -30,11 +30,11 @@ namespace FishMMO.Server
 		private readonly Dictionary<long, long> pendingInvitations = new Dictionary<long, long>();
 
 		private Dictionary<string, ChatCommand> guildChatCommands;
-		public bool OnGuildInvite(Character sender, ChatBroadcast msg)
+		public bool OnGuildInvite(IPlayerCharacter sender, ChatBroadcast msg)
 		{
 			string characterName = msg.text.Trim().ToLower();
 			if (ServerBehaviour.TryGet(out CharacterSystem characterSystem) &&
-				characterSystem.CharactersByLowerCaseName.TryGetValue(characterName, out Character character))
+				characterSystem.CharactersByLowerCaseName.TryGetValue(characterName, out IPlayerCharacter character))
 			{
 				OnServerGuildInviteBroadcastReceived(sender.Owner, new GuildInviteBroadcast()
 				{
@@ -180,7 +180,7 @@ namespace FishMMO.Server
 					// tell all of the local guild members to update their guild member lists
 					foreach (CharacterGuildEntity entity in dbMembers)
 					{
-						if (characterSystem.CharactersByID.TryGetValue(entity.CharacterID, out Character character))
+						if (characterSystem.CharactersByID.TryGetValue(entity.CharacterID, out IPlayerCharacter character))
 						{
 							if (!character.TryGet(out IGuildController guildController) ||
 								guildController.ID < 1)
@@ -196,7 +196,7 @@ namespace FishMMO.Server
 			}
 		}
 
-		public void CharacterSystem_OnCharacterChangedScene(Character character, string sceneName)
+		public void CharacterSystem_OnCharacterChangedScene(IPlayerCharacter character, string sceneName)
 		{
 			if (character == null ||
 				string.IsNullOrWhiteSpace(sceneName))
@@ -204,7 +204,7 @@ namespace FishMMO.Server
 				return;
 			}
 
-			if (character.SceneName.Value == sceneName)
+			if (character.SceneName == sceneName)
 			{
 				return;
 			}
@@ -227,7 +227,7 @@ namespace FishMMO.Server
 			GuildUpdateService.Save(dbContext, guildController.ID);
 		}
 
-		public void RemovePending(NetworkConnection conn, Character character)
+		public void RemovePending(NetworkConnection conn, IPlayerCharacter character)
 		{
 			if (character != null)
 			{
@@ -311,12 +311,11 @@ namespace FishMMO.Server
 			// if the target doesn't already have a pending invite
 			if (!pendingInvitations.ContainsKey(msg.targetCharacterID) &&
 				ServerBehaviour.TryGet(out CharacterSystem characterSystem) &&
-				characterSystem.CharactersByID.TryGetValue(msg.targetCharacterID, out Character targetCharacter))
+				characterSystem.CharactersByID.TryGetValue(msg.targetCharacterID, out IPlayerCharacter targetCharacter) &&
+				targetCharacter.TryGet(out IGuildController targetGuildController))
 			{
-				IGuildController targetGuildController = targetCharacter.GetComponent<IGuildController>();
-
 				// validate target
-				if (targetGuildController == null || targetGuildController.ID > 0)
+				if (targetGuildController.ID > 0)
 				{
 					// we should tell the inviter the target is already in a guild
 					return;
@@ -381,7 +380,7 @@ namespace FishMMO.Server
 
 		public void OnServerGuildDeclineInviteBroadcastReceived(NetworkConnection conn, GuildDeclineInviteBroadcast msg, Channel channel)
 		{
-			Character character = conn.FirstObject.GetComponent<Character>();
+			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
 			if (character != null)
 			{
 				pendingInvitations.Remove(character.ID);

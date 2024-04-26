@@ -16,7 +16,7 @@ namespace FishMMO.Shared
 		public bool FadeColor;
 		public bool IncreaseY;
 
-		public override void Invoke(Character character, Region region)
+		public override void Invoke(IPlayerCharacter character, Region region)
 		{
 			if (region == null ||
 				character == null)
@@ -24,7 +24,7 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			OnDisplay2DLabel.Invoke(region.Name, Style, Font, FontSize, DisplayColor, LifeTime, FadeColor, IncreaseY, new Vector2(0.0f, Screen.height * 0.2f));
+			OnDisplay2DLabel?.Invoke(region.Name, Style, Font, FontSize, DisplayColor, LifeTime, FadeColor, IncreaseY, new Vector2(0.0f, Screen.height * 0.2f));
 		}
 	}
 }

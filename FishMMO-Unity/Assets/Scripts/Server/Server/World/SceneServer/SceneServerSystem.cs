@@ -253,7 +253,7 @@ namespace FishMMO.Server
 			return false;
 		}
 
-		public bool TryLoadSceneForConnection(NetworkConnection connection, Character character, SceneInstanceDetails instance)
+		public bool TryLoadSceneForConnection(NetworkConnection connection, IPlayerCharacter character, SceneInstanceDetails instance)
 		{
 			Scene scene = SceneManager.GetScene(instance.Handle);
 			if (scene != null && scene.IsValid() && scene.isLoaded)

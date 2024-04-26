@@ -10,8 +10,6 @@ namespace FishMMO.Shared
 
 		[Tooltip("If true a random number will be selected within the minimum and maximum range provided. Otherwise the maximum respawn time will be used.")]
 		public bool RandomRespawnTime = true;
-		public float MinimumRespawnTime = 0.0f;
-		public float MaximumRespawnTime = 0.0f;
 		[Tooltip("If true a random spawn position will be picked inside of the bounding box using the current position as the center.")]
 		public bool RandomSpawnPosition = true;
 		public bool CheckTerrain = true;
@@ -20,8 +18,9 @@ namespace FishMMO.Shared
 		public Vector3 BoundingBoxExtents = Vector3.one;
 		[Tooltip("If true a random Spawnable object will be selected to spawn. Otherwise the list will be spawned in order.")]
 		public bool RandomSpawnable = true;
-		public List<ISpawnable> Spawnables = new List<ISpawnable>();
+		public List<BaseSpawnable> Spawnables = new List<BaseSpawnable>();
 
+		private BaseSpawnable spawned = null;
 		private float respawnTime = 0.0f;
 		private int lastSpawnIndex = 0;
 
@@ -53,7 +52,11 @@ namespace FishMMO.Shared
 
 		public void Despawn()
 		{
-			respawnTime = RandomRespawnTime ? Random.Range(MinimumRespawnTime, respawnTime) : MaximumRespawnTime;
+			if (spawned != null)
+			{
+
+			}
+			respawnTime = RandomRespawnTime ? Random.Range(spawned.MinimumRespawnTime, respawnTime) : spawned.MaximumRespawnTime;
 		}
 
 		public void TryRespawn()
@@ -75,7 +78,7 @@ namespace FishMMO.Shared
 				spawnIndex = 0;
 			}
 
-			ISpawnable spawnable = Spawnables[spawnIndex];
+			BaseSpawnable spawnable = Spawnables[spawnIndex];
 			if (spawnable == null)
 			{
 				return;
@@ -85,6 +88,9 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
+
+			// cache the last spawned object template
+			spawned = spawnable;
 
 			Vector3 spawnPosition = Transform.position;
 

@@ -30,11 +30,11 @@ namespace FishMMO.Server
 		private readonly Dictionary<long, long> pendingInvitations = new Dictionary<long, long>();
 
 		private Dictionary<string, ChatCommand> partyChatCommands;
-		public bool OnPartyInvite(Character sender, ChatBroadcast msg)
+		public bool OnPartyInvite(IPlayerCharacter sender, ChatBroadcast msg)
 		{
 			string targetName = msg.text.Trim().ToLower();
 			if (ServerBehaviour.TryGet(out CharacterSystem characterSystem) &&
-				characterSystem.CharactersByLowerCaseName.TryGetValue(targetName, out Character character))
+				characterSystem.CharactersByLowerCaseName.TryGetValue(targetName, out IPlayerCharacter character))
 			{
 				OnServerPartyInviteBroadcastReceived(sender.Owner, new PartyInviteBroadcast()
 				{
@@ -179,7 +179,7 @@ namespace FishMMO.Server
 					// tell all of the local party members to update their party member lists
 					foreach (CharacterPartyEntity entity in dbMembers)
 					{
-						if (characterSystem.CharactersByID.TryGetValue(entity.CharacterID, out Character character))
+						if (characterSystem.CharactersByID.TryGetValue(entity.CharacterID, out IPlayerCharacter character))
 						{
 							if (!character.TryGet(out IPartyController partyController) ||
 								partyController.ID < 1)
@@ -194,7 +194,7 @@ namespace FishMMO.Server
 			}
 		}
 
-		public void RemovePending(NetworkConnection conn, Character character)
+		public void RemovePending(NetworkConnection conn, IPlayerCharacter character)
 		{
 			if (character != null)
 			{
@@ -265,12 +265,11 @@ namespace FishMMO.Server
 			// if the target doesn't already have a pending invite
 			if (!pendingInvitations.ContainsKey(msg.targetCharacterID) &&
 				ServerBehaviour.TryGet(out CharacterSystem characterSystem) &&
-				characterSystem.CharactersByID.TryGetValue(msg.targetCharacterID, out Character targetCharacter))
+				characterSystem.CharactersByID.TryGetValue(msg.targetCharacterID, out IPlayerCharacter targetCharacter) &&
+				targetCharacter.TryGet(out IPartyController targetPartyController))
 			{
-				IPartyController targetPartyController = targetCharacter.GetComponent<IPartyController>();
-
 				// validate target
-				if (targetPartyController == null || targetPartyController.ID > 0)
+				if (targetPartyController.ID > 0)
 				{
 					// we should tell the inviter the target is already in a party
 					return;
@@ -342,7 +341,7 @@ namespace FishMMO.Server
 
 		public void OnServerPartyDeclineInviteBroadcastReceived(NetworkConnection conn, PartyDeclineInviteBroadcast msg, Channel channel)
 		{
-			Character character = conn.FirstObject.GetComponent<Character>();
+			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
 			if (character != null)
 			{
 				pendingInvitations.Remove(character.ID);

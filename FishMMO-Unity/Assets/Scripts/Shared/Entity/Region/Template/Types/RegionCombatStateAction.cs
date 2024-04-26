@@ -4,7 +4,7 @@ namespace FishMMO.Shared
 	{
 		public bool EnableCombat;
 
-		public override void Invoke(Character character, Region region)
+		public override void Invoke(IPlayerCharacter character, Region region)
 		{
 			/*if (character == null || character.CombatController == null)
 			{

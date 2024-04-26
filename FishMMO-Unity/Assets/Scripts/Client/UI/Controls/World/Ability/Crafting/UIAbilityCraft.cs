@@ -15,6 +15,7 @@ namespace FishMMO.Client
 		public TMP_Text CraftCost;
 		public RectTransform AbilityEventParent;
 		public UITooltipButton AbilityEventPrefab;
+		public CharacterAttributeTemplate CurrencyTemplate;
 
 		private int lastInteractableID = 0;
 		private Dictionary<int, UITooltipButton> EventSlots;
@@ -256,7 +257,15 @@ namespace FishMMO.Client
 				}
 			}
 
-			if (Character.Currency.Value < price)
+			// do we have enough currency to purchase this?
+			if (CurrencyTemplate == null)
+			{
+				Debug.Log("CurrencyTemplate is null.");
+				return;
+			}
+			if (!Character.TryGet(out ICharacterAttributeController attributeController) ||
+				!attributeController.TryGetAttribute(CurrencyTemplate, out CharacterAttribute currency) ||
+				currency.FinalValue < price)
 			{
 				return;
 			}

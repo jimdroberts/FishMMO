@@ -26,7 +26,7 @@ namespace FishMMO.Client
 			}
 		}
 
-		public override void ShowTooltip(Character character, long referenceID)
+		public override void ShowTooltip(long referenceID)
 		{
 			// do nothing
 		}

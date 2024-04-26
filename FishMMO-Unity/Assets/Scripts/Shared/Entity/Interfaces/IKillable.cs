@@ -2,6 +2,6 @@
 {
 	public interface IKillable
 	{
-		public void Kill(Character killer);
+		public void Kill(ICharacter killer);
 	}
 }

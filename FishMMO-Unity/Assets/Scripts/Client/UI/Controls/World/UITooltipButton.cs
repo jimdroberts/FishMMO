@@ -24,7 +24,7 @@ namespace FishMMO.Client
 
 		public int Index { get; private set; }
 		public ITooltip Tooltip { get; private set; }
-		public Character Character { get; private set; }
+		public IPlayerCharacter Character { get; private set; }
 
 		protected override void Awake()
 		{
@@ -80,7 +80,7 @@ namespace FishMMO.Client
 			}
 			OptionalParams = optionalParams;
 		}
-		public void Initialize(Character character, ITooltip tooltip)
+		public void Initialize(IPlayerCharacter character, ITooltip tooltip)
 		{
 			Character = character;
 			Tooltip = tooltip;

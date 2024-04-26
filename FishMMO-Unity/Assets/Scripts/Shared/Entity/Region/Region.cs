@@ -57,7 +57,7 @@ namespace FishMMO.Shared
 
 		private void OnTriggerEnter(Collider other)
 		{
-			Character character = other.GetComponent<Character>();
+			IPlayerCharacter character = other.GetComponent<IPlayerCharacter>();
 			if (character != null &&
 				!character.PredictionManager.IsReconciling)
 			{
@@ -72,37 +72,46 @@ namespace FishMMO.Shared
 						}
 					}
 				}
-				foreach (RegionAction action in OnRegionEnter)
+				if (OnRegionEnter != null)
 				{
-					action.Invoke(character, this);
+					foreach (RegionAction action in OnRegionEnter)
+					{
+						action?.Invoke(character, this);
+					}
 				}
 			}
 		}
 
 		private void OnTriggerStay(Collider other)
 		{
-			Character character = other.GetComponent<Character>();
+			IPlayerCharacter character = other.GetComponent<IPlayerCharacter>();
 			if (character != null && !character.PredictionManager.IsReconciling)
 			{
-				foreach (RegionAction action in OnRegionStay)
+				if (OnRegionStay != null)
 				{
-					action.Invoke(character, this);
+					foreach (RegionAction action in OnRegionStay)
+					{
+						action?.Invoke(character, this);
+					}
 				}
 			}
 		}
 
 		private void OnTriggerExit(Collider other)
 		{
-			Character character = other.GetComponent<Character>();
+			IPlayerCharacter character = other.GetComponent<IPlayerCharacter>();
 			if (character != null && !character.PredictionManager.IsReconciling)
 			{
 				if (Parent != null)
 				{
 					Parent.OnTriggerEnter(other);
 				}
-				foreach (RegionAction action in OnRegionExit)
+				if (OnRegionExit != null)
 				{
-					action.Invoke(character, this);
+					foreach (RegionAction action in OnRegionExit)
+					{
+						action?.Invoke(character, this);
+					}
 				}
 			}
 		}

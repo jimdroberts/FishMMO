@@ -2,9 +2,9 @@
 {
 	public interface ICharacterBehaviour
 	{
-		Character Character { get; }
+		ICharacter Character { get; }
 		bool Initialized { get; }
-		void InitializeOnce(Character character);
+		void InitializeOnce(ICharacter character);
 		void OnStartCharacter();
 		void OnStopCharacter();
 	}

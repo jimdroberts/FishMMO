@@ -171,7 +171,7 @@ namespace FishMMO.Shared
 		{
 			if (IsEquippable)
 			{
-				Character character = Equippable.Character;
+				ICharacter character = Equippable.Character;
 
 				if (character != null &&
 					character.TryGet(out ICharacterAttributeController attributeController))
@@ -190,7 +190,7 @@ namespace FishMMO.Shared
 			}
 		}
 
-		public void ItemEquippable_OnEquip(Character character)
+		public void ItemEquippable_OnEquip(ICharacter character)
 		{
 			if (IsGenerated)
 			{
@@ -198,7 +198,7 @@ namespace FishMMO.Shared
 			}
 		}
 
-		public void ItemEquippable_OnUnequip(Character character)
+		public void ItemEquippable_OnUnequip(ICharacter character)
 		{
 			if (IsGenerated)
 			{

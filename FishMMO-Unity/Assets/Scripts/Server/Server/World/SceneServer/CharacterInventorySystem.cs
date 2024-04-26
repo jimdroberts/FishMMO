@@ -168,7 +168,7 @@ namespace FishMMO.Server
 				return;
 			}
 
-			Character character = conn.FirstObject.GetComponent<Character>();
+			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
 			if (character != null &&
 				!character.IsTeleporting &&
 				character.TryGet(out IInventoryController inventoryController))
@@ -202,7 +202,7 @@ namespace FishMMO.Server
 				return;
 			}
 
-			Character character = conn.FirstObject.GetComponent<Character>();
+			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
 			if (character == null ||
 				character.IsTeleporting ||
 				!character.TryGet(out IInventoryController inventoryController))
@@ -286,7 +286,7 @@ namespace FishMMO.Server
 				return;
 			}
 
-			Character character = conn.FirstObject.GetComponent<Character>();
+			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
 			if (character == null ||
 				character.IsTeleporting ||
 				!character.TryGet(out IEquipmentController equipmentController))
@@ -392,7 +392,7 @@ namespace FishMMO.Server
 				return;
 			}
 
-			Character character = conn.FirstObject.GetComponent<Character>();
+			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
 			if (character == null ||
 				character.IsTeleporting ||
 				!character.TryGet(out IEquipmentController equipmentController))
@@ -516,7 +516,7 @@ namespace FishMMO.Server
 				return;
 			}
 
-			Character character = conn.FirstObject.GetComponent<Character>();
+			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
 			if (character != null &&
 				!character.IsTeleporting &&
 				character.TryGet(out IBankController bankController))
@@ -549,7 +549,7 @@ namespace FishMMO.Server
 				return;
 			}
 
-			Character character = conn.FirstObject.GetComponent<Character>();
+			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
 			if (character == null ||
 				character.IsTeleporting ||
 				!character.TryGet(out IBankController bankController))
@@ -608,7 +608,7 @@ namespace FishMMO.Server
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		private bool ValidateBankerSceneObject(int sceneObjectID, Character character)
+		private bool ValidateBankerSceneObject(int sceneObjectID, IPlayerCharacter character)
 		{
 			if (!SceneObjectUID.IDs.TryGetValue(sceneObjectID, out SceneObjectUID sceneObject))
 			{
@@ -622,7 +622,7 @@ namespace FishMMO.Server
 				}
 				return false;
 			}
-			if (sceneObject.gameObject.scene.handle != character.gameObject.scene.handle)
+			if (sceneObject.gameObject.scene.handle != character.GameObject.scene.handle)
 			{
 				Debug.Log("Object scene mismatch.");
 				return false;

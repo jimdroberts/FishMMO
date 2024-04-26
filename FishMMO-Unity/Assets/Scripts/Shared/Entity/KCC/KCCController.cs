@@ -36,7 +36,7 @@ namespace FishMMO.Shared
 		public const float StableJumpUpSpeedConstant = 6.5f;
 		public static readonly Vector3 GravityConstant = new Vector3(0, -18.0f, 0);
 
-		public Character Character;
+		public IPlayerCharacter Character;
 		public KinematicCharacterMotor Motor;
 
 		[Header("Stable Movement")]

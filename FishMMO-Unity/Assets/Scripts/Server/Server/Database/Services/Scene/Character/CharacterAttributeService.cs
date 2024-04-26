@@ -10,7 +10,7 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// Save a character attributes to the database.
 		/// </summary>
-		public static void Save(NpgsqlDbContext dbContext, Character character)
+		public static void Save(NpgsqlDbContext dbContext, IPlayerCharacter character)
 		{
 			if (character == null ||
 				!character.TryGet(out ICharacterAttributeController attributeController))
@@ -87,7 +87,7 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// Load character attributes from the database.
 		/// </summary>
-		public static void Load(NpgsqlDbContext dbContext, Character character)
+		public static void Load(NpgsqlDbContext dbContext, IPlayerCharacter character)
 		{
 			if (character == null ||
 				!character.TryGet(out ICharacterAttributeController attributeController))

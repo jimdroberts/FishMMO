@@ -7,7 +7,7 @@ namespace FishMMO.Shared
 	{
 		public int Heal;
 
-		public override int Invoke(Character attacker, Character defender, TargetInfo hitTarget, GameObject abilityObject)
+		public override int Invoke(ICharacter attacker, ICharacter defender, TargetInfo hitTarget, GameObject abilityObject)
 		{
 			if (attacker == defender ||
 				attacker == null ||

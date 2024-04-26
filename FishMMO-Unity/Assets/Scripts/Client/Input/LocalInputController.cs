@@ -8,7 +8,7 @@ namespace FishMMO.Client
 	public class LocalInputController : MonoBehaviour
 	{
 #if !UNITY_SERVER
-		public Character Character { get; private set; }
+		public IPlayerCharacter Character { get; private set; }
 
 		private const string MouseXInput = "Mouse X";
 		private const string MouseYInput = "Mouse Y";
@@ -24,7 +24,7 @@ namespace FishMMO.Client
 		private bool _crouchInputActive = false;
 		private bool _sprintInputActive = false;
 
-		public void Initialize(Character character)
+		public void Initialize(IPlayerCharacter character)
 		{
 			Character = character;
 

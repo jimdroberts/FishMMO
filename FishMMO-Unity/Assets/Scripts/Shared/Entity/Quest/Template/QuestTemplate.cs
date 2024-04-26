@@ -16,11 +16,11 @@ namespace FishMMO.Shared
 
 		public string Name { get { return this.name; } }
 
-		public bool CanAcceptQuest(Character character)
+		public bool CanAcceptQuest(IPlayerCharacter character)
 		{
 			if (CharacterAttributeRequirements != null && CharacterAttributeRequirements.Count > 0)
 			{
-				ICharacterAttributeController characterAttributes = character.GetComponent<ICharacterAttributeController>();
+				ICharacterAttributeController characterAttributes = character.GameObject.GetComponent<ICharacterAttributeController>();
 				if (characterAttributes == null)
 				{
 					return false;
@@ -35,7 +35,7 @@ namespace FishMMO.Shared
 			}
 			if (CompletedQuestRequirements != null && CompletedQuestRequirements.Count > 0)
 			{
-				IQuestController questController = character.GetComponent<IQuestController>();
+				IQuestController questController = character.GameObject.GetComponent<IQuestController>();
 				if (questController == null)
 				{
 					return false;
@@ -52,9 +52,9 @@ namespace FishMMO.Shared
 			return true;
 		}
 
-		public void AcceptQuest(Character character)
+		public void AcceptQuest(IPlayerCharacter character)
 		{
-			IQuestController questController = character.GetComponent<IQuestController>();
+			IQuestController questController = character.GameObject.GetComponent<IQuestController>();
 			if (questController == null)
 			{
 				return;

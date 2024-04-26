@@ -6,6 +6,6 @@ namespace FishMMO.Shared
 	{
 		public SpawnEventType SpawnEventType = SpawnEventType.OnSpawn;
 
-		public abstract void Invoke(Character self, TargetInfo targetInfo, AbilityObject initialObject, ref int nextID, Dictionary<int, AbilityObject> abilityObjects);
+		public abstract void Invoke(ICharacter self, TargetInfo targetInfo, AbilityObject initialObject, ref int nextID, Dictionary<int, AbilityObject> abilityObjects);
 	}
 }

@@ -6,7 +6,7 @@
 		public uint ChargeCost = 1;
 		public float Cooldown;
 
-		public bool CanConsume(Character character, Item item)
+		public bool CanConsume(IPlayerCharacter character, Item item)
 		{
 			return character != null &&
 				   item != null &&
@@ -16,7 +16,7 @@
 				   !cooldownController.IsOnCooldown(ID);
 		}
 
-		public virtual bool Invoke(Character character, Item item)
+		public virtual bool Invoke(IPlayerCharacter character, Item item)
 		{
 			if (CanConsume(character, item) &&
 				character.TryGet(out ICooldownController cooldownController))

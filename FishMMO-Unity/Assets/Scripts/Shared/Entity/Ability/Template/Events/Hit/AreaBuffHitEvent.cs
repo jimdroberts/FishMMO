@@ -13,7 +13,7 @@ namespace FishMMO.Shared
 		public BuffTemplate BuffTemplate;
 		public LayerMask CollidableLayers = -1;
 
-		public override int Invoke(Character attacker, Character defender, TargetInfo hitTarget, GameObject abilityObject)
+		public override int Invoke(ICharacter attacker, ICharacter defender, TargetInfo hitTarget, GameObject abilityObject)
 		{
 			// attacker should exist with a faction controller
 			if (attacker == null ||
@@ -22,7 +22,7 @@ namespace FishMMO.Shared
 				return 0;
 			}
 
-			PhysicsScene physicsScene = attacker.gameObject.scene.GetPhysicsScene();
+			PhysicsScene physicsScene = attacker.GameObject.scene.GetPhysicsScene();
 
 			int overlapCount = physicsScene.OverlapSphere(//Physics.OverlapCapsuleNonAlloc(
 				hitTarget.Target.transform.position,
@@ -34,7 +34,7 @@ namespace FishMMO.Shared
 			int hits = 0;
 			for (int i = 0; i < overlapCount && hits < HitCount; ++i)
 			{
-				Character def = colliders[i].gameObject.GetComponent<Character>();
+				ICharacter def = colliders[i].gameObject.GetComponent<ICharacter>();
 				if (def != null &&
 					def.TryGet(out IFactionController defenderFactionController) &&
 					def.TryGet(out IBuffController buffController) &&

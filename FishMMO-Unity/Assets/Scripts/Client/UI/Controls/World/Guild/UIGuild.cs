@@ -181,7 +181,7 @@ namespace FishMMO.Client
 				if (Character.TryGet(out ITargetController targetController) &&
 					targetController.Current.Target != null)
 				{
-					Character targetCharacter = targetController.Current.Target.GetComponent<Character>();
+					IPlayerCharacter targetCharacter = targetController.Current.Target.GetComponent<IPlayerCharacter>();
 					if (targetCharacter != null)
 					{
 						Client.Broadcast(new GuildInviteBroadcast()

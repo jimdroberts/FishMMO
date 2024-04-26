@@ -43,7 +43,7 @@ namespace FishMMO.Client
 					{
 						continue;
 					}
-					Character character = pair.Value.Prefab.GetComponent<Character>();
+					IPlayerCharacter character = pair.Value.Prefab.GetComponent<IPlayerCharacter>();
 					if (character == null)
 					{
 						continue;
@@ -52,8 +52,8 @@ namespace FishMMO.Client
 					{
 						continue;
 					}
-					raceNameMap.Add(character.gameObject.name, pair.Key);
-					initialRaceNames.Add(character.gameObject.name);
+					raceNameMap.Add(character.GameObject.name, pair.Key);
+					initialRaceNames.Add(character.GameObject.name);
 
 					// initialize spawn position map
 					if (!raceSpawnPositionMap.TryGetValue(pair.Value.Name, out HashSet<string> spawners))

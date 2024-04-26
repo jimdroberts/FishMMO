@@ -26,7 +26,7 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			Character character = other.gameObject.GetComponent<Character>();
+			IPlayerCharacter character = other.gameObject.GetComponent<IPlayerCharacter>();
 			if (character == null)
 			{
 				Debug.Log("Character not found!");

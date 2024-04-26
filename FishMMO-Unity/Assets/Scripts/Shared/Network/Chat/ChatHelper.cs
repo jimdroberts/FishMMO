@@ -8,7 +8,7 @@ namespace FishMMO.Shared
 	/// <summary>
 	/// Return true if it should write the chat message to the database.
 	/// </summary>
-	public delegate bool ChatCommand(Character character, ChatBroadcast msg);
+	public delegate bool ChatCommand(IPlayerCharacter character, ChatBroadcast msg);
 	public struct ChatCommandDetails
 	{
 		public ChatChannel Channel;
@@ -134,7 +134,7 @@ namespace FishMMO.Shared
 			return command;
 		}
 
-		public static bool TryParseDirectCommand(string cmd, Character sender, ChatBroadcast msg)
+		public static bool TryParseDirectCommand(string cmd, IPlayerCharacter sender, ChatBroadcast msg)
 		{
 			// try to find the command
 			if (ChatHelper.DirectCommands.TryGetValue(cmd, out ChatCommand command))

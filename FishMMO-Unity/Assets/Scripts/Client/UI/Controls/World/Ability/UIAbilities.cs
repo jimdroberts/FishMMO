@@ -58,7 +58,7 @@ namespace FishMMO.Client
 			ClearAllSlots();
 		}
 
-		private void CharacterControl_OnSetCharacter(Character character)
+		private void CharacterControl_OnSetCharacter(IPlayerCharacter character)
 		{
 			if (Abilities != null)
 			{

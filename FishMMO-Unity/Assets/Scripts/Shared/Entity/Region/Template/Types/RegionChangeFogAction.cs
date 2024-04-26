@@ -11,7 +11,7 @@ namespace FishMMO.Shared
 		public float fogStartDistance = 0.0f;
 		public float fogEndDistance = 0.0f;
 
-		public override void Invoke(Character character, Region region)
+		public override void Invoke(IPlayerCharacter character, Region region)
 		{
 			RenderSettings.fog = fogEnabled;
 			RenderSettings.fogMode = fogMode;

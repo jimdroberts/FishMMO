@@ -346,7 +346,7 @@ namespace FishMMO.Shared
 			}
 		}
 
-		public bool MeetsRequirements(Character character)
+		public bool MeetsRequirements(ICharacter character)
 		{
 			if (!character.TryGet(out ICharacterAttributeController attributeController))
 			{
@@ -363,7 +363,7 @@ namespace FishMMO.Shared
 			return true;
 		}
 
-		public bool HasResource(Character character, AbilityEvent bloodResourceConversion, CharacterAttributeTemplate bloodResource)
+		public bool HasResource(ICharacter character, AbilityEvent bloodResourceConversion, CharacterAttributeTemplate bloodResource)
 		{
 			if (!character.TryGet(out ICharacterAttributeController attributeController))
 			{
@@ -398,7 +398,7 @@ namespace FishMMO.Shared
 			return true;
 		}
 
-		public void ConsumeResources(Character character, AbilityEvent bloodResourceConversion, CharacterAttributeTemplate bloodResource)
+		public void ConsumeResources(ICharacter character, AbilityEvent bloodResourceConversion, CharacterAttributeTemplate bloodResource)
 		{
 			if (!character.TryGet(out ICharacterAttributeController attributeController))
 			{

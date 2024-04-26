@@ -8,7 +8,7 @@ namespace FishMMO.Shared
 
 		public override string Title { get { return "Teleporter"; } }
 
-		public override bool CanInteract(Character character)
+		public override bool CanInteract(IPlayerCharacter character)
 		{
 			if (!base.CanInteract(character))
 			{

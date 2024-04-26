@@ -56,7 +56,7 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// Saves a CharacterGuildEntity to the database.
 		/// </summary>
-		public static void Save(NpgsqlDbContext dbContext, Character character)
+		public static void Save(NpgsqlDbContext dbContext, ICharacter character)
 		{
 			if (character == null ||
 				!character.TryGet(out IGuildController guildController))
@@ -71,7 +71,7 @@ namespace FishMMO.Server.DatabaseServices
 					CharacterID = character.ID,
 					GuildID = guildController.ID,
 					Rank = (byte)guildController.Rank,
-					Location = character.gameObject.scene.name,
+					Location = character.GameObject.scene.name,
 				};
 				dbContext.CharacterGuilds.Add(characterGuildEntity);
 			}
@@ -79,7 +79,7 @@ namespace FishMMO.Server.DatabaseServices
 			{
 				characterGuildEntity.GuildID = guildController.ID;
 				characterGuildEntity.Rank = (byte)guildController.Rank;
-				characterGuildEntity.Location = character.gameObject.scene.name;
+				characterGuildEntity.Location = character.GameObject.scene.name;
 			}
 			dbContext.SaveChanges();
 		}
@@ -124,7 +124,7 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// Load a CharacterGuildEntity from the database.
 		/// </summary>
-		public static void Load(NpgsqlDbContext dbContext, Character character)
+		public static void Load(NpgsqlDbContext dbContext, IPlayerCharacter character)
 		{
 			if (character == null ||
 				!character.TryGet(out IGuildController guildController))

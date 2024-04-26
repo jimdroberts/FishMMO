@@ -5,10 +5,10 @@ namespace FishMMO.Client
 {
 	public class UICharacterControl : UIControl
 	{
-		public Action<Character> OnSetCharacter;
+		public Action<IPlayerCharacter> OnSetCharacter;
 		public Action OnUnsetCharacter;
 
-		public Character Character { get; private set; }
+		public IPlayerCharacter Character { get; private set; }
 
 		public override void OnStarting()
 		{
@@ -29,7 +29,7 @@ namespace FishMMO.Client
 		/// </summary>
 		public virtual void OnPostSetCharacter() { }
 
-		public void SetCharacter(Character character)
+		public void SetCharacter(IPlayerCharacter character)
 		{
 			OnPreSetCharacter();
 

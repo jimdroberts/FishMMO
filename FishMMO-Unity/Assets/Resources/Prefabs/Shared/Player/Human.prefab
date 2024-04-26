@@ -2527,7 +2527,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3368a63bfc268804ebd6f9883efdc07d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  Character: {fileID: 0}
   Motor: {fileID: 3843211821715631460}
   StableMovementSharpness: 20
   OrientationSharpness: 10
@@ -2789,24 +2788,15 @@ MonoBehaviour:
   m_GameObject: {fileID: 5839652419922276934}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2d2b958cf491cbd4ea4dcfc4ecfb6721, type: 3}
+  m_Script: {fileID: 11500000, guid: 6a0d05cd6264eb1439b2e1f7f0112262, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   _componentIndexCache: 13
   _addedNetworkObject: {fileID: 7248884440816270172}
   _networkObjectCache: {fileID: 7248884440816270172}
-  CharacterNameLabel: {fileID: 6211269303433269750}
-  CharacterGuildLabel: {fileID: 7039625850129925610}
-  EquipmentViewCamera: {fileID: 1346939251586913641}
-  ID: 0
-  CharacterName: 
-  CharacterNameLower: 
-  Account: 
-  WorldServerID: 0
-  AccessLevel: 1
-  TeleporterName: 
-  SceneHandle: 0
-  LastChatMessage: 
+  characterNameLabel: {fileID: 6211269303433269750}
+  characterGuildLabel: {fileID: 7039625850129925610}
+  equipmentViewCamera: {fileID: 1346939251586913641}
 --- !u!136 &2278861360426828739
 CapsuleCollider:
   m_ObjectHideFlags: 8

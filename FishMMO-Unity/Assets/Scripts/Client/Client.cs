@@ -143,12 +143,14 @@ namespace FishMMO.Client
 			NetworkManager.SceneManager.OnUnloadEnd += SceneManager_OnUnloadEnd;
 			LoginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
 
-			ICharacter.OnReadPayload += Character_OnReadPayload;
-			ICharacter.OnStartLocalClient += Character_OnStartLocalClient;
-			ICharacter.OnStopLocalClient += Character_OnStopLocalClient;
+#if !UNITY_SERVER
+			IPlayerCharacter.OnReadPayload += Character_OnReadPayload;
+			IPlayerCharacter.OnStartLocalClient += Character_OnStartLocalClient;
+			IPlayerCharacter.OnStopLocalClient += Character_OnStopLocalClient;
 			IGuildController.OnReadPayload += GuildController_OnReadPayload;
 
 			RegionDisplayNameAction.OnDisplay2DLabel += RegionDisplayNameAction_OnDisplay2DLabel;
+#endif
 		}
 
 		private void Update()
@@ -196,12 +198,14 @@ namespace FishMMO.Client
 			InputManager.MouseMode = true;
 #endif
 
-			ICharacter.OnReadPayload -= Character_OnReadPayload;
-			ICharacter.OnStartLocalClient -= Character_OnStartLocalClient;
-			ICharacter.OnStopLocalClient -= Character_OnStopLocalClient;
+#if !UNITY_SERVER
+			IPlayerCharacter.OnReadPayload -= Character_OnReadPayload;
+			IPlayerCharacter.OnStartLocalClient -= Character_OnStartLocalClient;
+			IPlayerCharacter.OnStopLocalClient -= Character_OnStopLocalClient;
 			IGuildController.OnReadPayload -= GuildController_OnReadPayload;
 
 			RegionDisplayNameAction.OnDisplay2DLabel -= RegionDisplayNameAction_OnDisplay2DLabel;
+#endif
 
 			ClientNamingSystem.Destroy();
 
@@ -502,15 +506,16 @@ namespace FishMMO.Client
 		{
 		}
 
+#if !UNITY_SERVER
 		/// <summary>
 		/// This function is called when the local Character reads a payload.
 		/// </summary>
-		public void Character_OnReadPayload(Character character)
+		public void Character_OnReadPayload(IPlayerCharacter character)
 		{
 			// load the characters name from disk or request it from the server
 			ClientNamingSystem.SetName(NamingSystemType.CharacterName, character.ID, (n) =>
 			{
-				character.gameObject.name = n;
+				character.GameObject.name = n;
 				character.CharacterName = n;
 				character.CharacterNameLower = n.ToLower();
 
@@ -522,15 +527,15 @@ namespace FishMMO.Client
 		/// <summary>
 		/// This function is called when the local Character connection is started. This generally happens when the character is successfully spawned in the scene.
 		/// </summary>
-		public void Character_OnStartLocalClient(Character character)
+		public void Character_OnStartLocalClient(IPlayerCharacter character)
 		{
 			// Assign UI Character
 			UIManager.SetCharacter(character);
 
-			LocalInputController localInputController = character.gameObject.GetComponent<LocalInputController>();
+			LocalInputController localInputController = character.GameObject.GetComponent<LocalInputController>();
 			if (localInputController == null)
 			{
-				localInputController = character.gameObject.AddComponent<LocalInputController>();
+				localInputController = character.GameObject.AddComponent<LocalInputController>();
 			}
 			localInputController.Initialize(character);
 
@@ -541,12 +546,12 @@ namespace FishMMO.Client
 		/// <summary>
 		/// This function is called when the local Character connection is stopped. This generally happens when the character is despawned or disconnected.
 		/// </summary>
-		public void Character_OnStopLocalClient(Character character)
+		public void Character_OnStopLocalClient(IPlayerCharacter character)
 		{
 			// Enable the mouse
 			InputManager.MouseMode = true;
 
-			LocalInputController localInputController = character.gameObject.GetComponent<LocalInputController>();
+			LocalInputController localInputController = character.GameObject.GetComponent<LocalInputController>();
 			if (localInputController != null)
 			{
 				localInputController.Deinitialize();
@@ -556,7 +561,7 @@ namespace FishMMO.Client
 			UIManager.UnsetCharacter();
 		}
 
-		public static void GuildController_OnReadPayload(long ID, Character character)
+		public static void GuildController_OnReadPayload(long ID, IPlayerCharacter character)
 		{
 			if (ID != 0)
 			{
@@ -582,5 +587,6 @@ namespace FishMMO.Client
 			}
 			return RegionNameLabel;
 		}
+#endif
 	}
 }

@@ -3,12 +3,12 @@
 	public interface IChatHelper
 	{
 		ChatCommand GetChannelCommand(ChatChannel channel);
-		bool OnWorldChat(Character sender, ChatBroadcast msg);
-		bool OnRegionChat(Character sender, ChatBroadcast msg);
-		bool OnPartyChat(Character sender, ChatBroadcast msg);
-		bool OnGuildChat(Character sender, ChatBroadcast msg);
-		bool OnTellChat(Character sender, ChatBroadcast msg);
-		bool OnTradeChat(Character sender, ChatBroadcast msg);
-		bool OnSayChat(Character sender, ChatBroadcast msg);
+		bool OnWorldChat(IPlayerCharacter sender, ChatBroadcast msg);
+		bool OnRegionChat(IPlayerCharacter sender, ChatBroadcast msg);
+		bool OnPartyChat(IPlayerCharacter sender, ChatBroadcast msg);
+		bool OnGuildChat(IPlayerCharacter sender, ChatBroadcast msg);
+		bool OnTellChat(IPlayerCharacter sender, ChatBroadcast msg);
+		bool OnTradeChat(IPlayerCharacter sender, ChatBroadcast msg);
+		bool OnSayChat(IPlayerCharacter sender, ChatBroadcast msg);
 	}
 }

@@ -56,7 +56,7 @@ namespace FishMMO.Shared
 			tickTime += time;
 		}
 
-		public void TryTick(Character target)
+		public void TryTick(ICharacter target)
 		{
 			if (tickTime <= 0.0f)
 			{
@@ -85,24 +85,24 @@ namespace FishMMO.Shared
 			attributeBonuses.Add(buffAttributeInstance);
 		}
 
-		public void Apply(Character target)
+		public void Apply(ICharacter target)
 		{
 			Template.OnApply(this, target);
 		}
 
-		public void Remove(Character target)
+		public void Remove(ICharacter target)
 		{
 			Template.OnRemove(this, target);
 			Reset();
 		}
 
-		public void AddStack(Buff stack, Character target)
+		public void AddStack(Buff stack, ICharacter target)
 		{
 			Template.OnApplyStack(stack, target);
 			stacks.Add(stack);
 		}
 
-		public void RemoveStack(Character target)
+		public void RemoveStack(ICharacter target)
 		{
 			Template.OnRemoveStack(this, target);
 		}

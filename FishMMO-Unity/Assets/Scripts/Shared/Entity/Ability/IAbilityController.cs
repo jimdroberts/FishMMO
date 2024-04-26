@@ -27,7 +27,7 @@ namespace FishMMO.Shared
 		bool IsActivating { get; }
 		bool AbilityQueued { get; }
 
-		void Interrupt(Character attacker);
+		void Interrupt(ICharacter attacker);
 		void Activate(long referenceID, KeyCode heldKey);
 		void RemoveAbility(int referenceID);
 		bool CanManipulate();
