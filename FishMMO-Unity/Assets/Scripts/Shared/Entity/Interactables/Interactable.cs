@@ -33,7 +33,6 @@ namespace FishMMO.Shared
 		{
 			uid = gameObject.GetComponent<SceneObjectUID>();
 			Transform = transform;
-
 			interactionRangeSqr = InteractionRange * InteractionRange;
 
 			OnStarting();

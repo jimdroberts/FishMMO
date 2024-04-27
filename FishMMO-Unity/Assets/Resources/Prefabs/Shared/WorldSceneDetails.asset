@@ -80,8 +80,8 @@ MonoBehaviour:
         m_keys:
         - Terrain
         m_values:
-        - BoundaryOrigin: {x: 0, y: 75.59101, z: 0}
-          BoundarySize: {x: 1000, y: 151.18202, z: 1000}
+        - BoundaryOrigin: {x: 12, y: 48.92877, z: 12}
+          BoundarySize: {x: 1024, y: 97.85754, z: 1024}
     - MaxClients: 100
       SceneTransitionImage: {fileID: 21300000, guid: af9d2e8814f76f4498e2ed07cc8191ef,
         type: 3}

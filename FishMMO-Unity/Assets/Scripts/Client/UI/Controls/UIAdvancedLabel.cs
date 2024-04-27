@@ -15,7 +15,7 @@ namespace FishMMO.Client
 
 		//fade
 		public bool FadeColor;
-		public float FadeStartTime = 0.0f;
+		public float RemainingLife = 0.0f;
 		public float FadeTime = 2.0f;
 		public Color OldColor = Color.clear;
 		public Color ClearColor = Color.clear;
@@ -31,13 +31,19 @@ namespace FishMMO.Client
 
 		void Update()
 		{
-			if (FadeTime > 0.0f)
+			if (UIManager.TryGet("UILoadingScreen", out UILoadingScreen loadingScreen) &&
+				loadingScreen.Visible)
 			{
-				float t = Mathf.Clamp((Time.time - FadeStartTime) / FadeTime, 0.0f, 1.0f);
-				if (t >= 1.0f)
-				{
-					Destroy(this.gameObject);
-				}
+				return;
+			}
+			if (UIManager.TryGet("UIReconnectDisplay", out UIReconnectDisplay reconnectDisplay) &&
+				reconnectDisplay.Visible)
+			{
+				return;
+			}
+			if (RemainingLife > 0.0f)
+			{
+				float t = Mathf.Clamp(1.0f - (RemainingLife / FadeTime), 0.0f, 1.0f);
 				if (FadeColor)
 				{
 					Color c = Style.normal.textColor;
@@ -49,7 +55,12 @@ namespace FishMMO.Client
 				{
 					PixelOffset.y = Mathf.Lerp(OldY, YIncreaseValue, t);
 				}
+
+				RemainingLife -= Time.deltaTime;
+				return;
 			}
+			this.gameObject.SetActive(false);
+			Destroy(this.gameObject);
 		}
 
 		void OnGUI()
@@ -66,11 +77,11 @@ namespace FishMMO.Client
 		{
 			GameObject newObject = new GameObject("UIAdvancedLabel: " + text);
 			UIAdvancedLabel label = (UIAdvancedLabel)newObject.AddComponent<UIAdvancedLabel>();
-			label.Setup(text, style, font, fontSize, color, lifeTime, fadeColor, increaseY, pixelOffset);
+			label.Initialize(text, style, font, fontSize, color, lifeTime, fadeColor, increaseY, pixelOffset);
 			return label;
 		}
 
-		public void Setup(string text, FontStyle fontStyle, Font font, int fontSize, Color color, float lifeTime, bool fadeColor, bool increaseY, Vector2 pixelOffset)
+		public void Initialize(string text, FontStyle fontStyle, Font font, int fontSize, Color color, float lifeTime, bool fadeColor, bool increaseY, Vector2 pixelOffset)
 		{
 			Text = text;
 			Style.wordWrap = false;
@@ -87,11 +98,12 @@ namespace FishMMO.Client
 			PixelOffset = pixelOffset;
 			if (lifeTime > 0.0f)
 			{
+				RemainingLife = lifeTime;
+
 				if (fadeColor)
 				{
 					FadeColor = fadeColor;
 					FadeTime = lifeTime;
-					FadeStartTime = Time.time;
 					OldColor = Style.normal.textColor;
 				}
 				if (increaseY)

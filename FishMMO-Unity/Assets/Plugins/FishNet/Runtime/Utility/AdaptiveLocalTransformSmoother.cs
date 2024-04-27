@@ -8,6 +8,7 @@ using UnityEngine;
 
 namespace FishNet.Object.Prediction
 {
+
     internal class AdaptiveLocalTransformTickSmoother : IResettable
     {
         #region Types.
@@ -20,6 +21,11 @@ namespace FishNet.Object.Prediction
             {
                 Tick = tick;
                 Properties = new TransformProperties(t.localPosition, t.localRotation, t.localScale);
+            }
+            public TickTransformProperties(uint tick, Transform t, Vector3 localScale)
+            {
+                Tick = tick;
+                Properties = new TransformProperties(t.localPosition, t.localRotation, localScale);
             }
         }
         #endregion
@@ -212,7 +218,7 @@ namespace FishNet.Object.Prediction
         /// </summary>
         private void AddTransformProperties(uint tick)
         {
-            TickTransformProperties tpp = new TickTransformProperties(tick, _networkObject.transform);
+            TickTransformProperties tpp = new TickTransformProperties(tick, _networkObject.transform, _graphicalObject.localScale);
             _transformProperties.Enqueue(tpp);
             //If first entry then set move rates.
             if (_transformProperties.Count == 1)
@@ -228,11 +234,11 @@ namespace FishNet.Object.Prediction
             uint tick = clientTick;
             /*Ticks will always be added incremental by 1 so it's safe to jump ahead the difference
             * of tick and firstTick. */
-                int index = (int)(tick - firstTick);
+            int index = (int)(tick - firstTick);
             //Replace with new data.
             if (index < _transformProperties.Count)
             {
-                _transformProperties[index] = new TickTransformProperties(tick, _networkObject.transform);
+                _transformProperties[index] = new TickTransformProperties(tick, _networkObject.transform, _graphicalObject.localScale);
             }
             else
             {
@@ -352,7 +358,6 @@ namespace FishNet.Object.Prediction
 
         public void InitializeState() { }
     }
-
 
 }
 #endif

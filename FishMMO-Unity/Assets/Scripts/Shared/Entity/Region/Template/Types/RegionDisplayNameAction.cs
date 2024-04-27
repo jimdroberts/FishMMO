@@ -6,7 +6,7 @@ namespace FishMMO.Shared
 	[CreateAssetMenu(fileName = "New Region Display Name Action", menuName = "Region/Region Display Name", order = 1)]
 	public class RegionDisplayNameAction : RegionAction
 	{
-		public static event Func<string, FontStyle, Font, int, Color, float, bool, bool, Vector2, IReference> OnDisplay2DLabel;
+		public static event Action<string, FontStyle, Font, int, Color, float, bool, bool, Vector2> OnDisplay2DLabel;
 
 		public Color DisplayColor;
 		public FontStyle Style;

@@ -293,6 +293,9 @@ namespace FishMMO.Client
 			switch (clientState)
 			{
 				case LocalConnectionState.Stopped:
+					// unload previous scenes
+					UnloadServerLoadedScenes();
+
 					if (currentConnectionType == ServerConnectionType.Login)
 					{
 						QuitToLogin();
@@ -469,8 +472,6 @@ namespace FishMMO.Client
 
 		private void SceneManager_OnLoadStart(SceneLoadStartEventArgs args)
 		{
-			// unload previous scene
-			UnloadServerLoadedScenes();
 		}
 
 		private void UnloadServerLoadedScenes()
@@ -559,6 +560,9 @@ namespace FishMMO.Client
 
 			// Clear the UI Character
 			UIManager.UnsetCharacter();
+
+			// Ensure the character is destroyed
+			Destroy(character.GameObject);
 		}
 
 		public static void GuildController_OnReadPayload(long ID, IPlayerCharacter character)
@@ -575,17 +579,16 @@ namespace FishMMO.Client
 
 		public UIAdvancedLabel RegionNameLabel = null;
 
-		public IReference RegionDisplayNameAction_OnDisplay2DLabel(string text, FontStyle style, Font font, int fontSize, Color color, float lifeTime, bool fadeColor, bool increaseY, Vector2 pixelOffset)
+		public void RegionDisplayNameAction_OnDisplay2DLabel(string text, FontStyle style, Font font, int fontSize, Color color, float lifeTime, bool fadeColor, bool increaseY, Vector2 pixelOffset)
 		{
 			if (RegionNameLabel != null)
 			{
-				RegionNameLabel.Setup(text, style, font, fontSize, color, lifeTime, fadeColor, increaseY, pixelOffset);
+				RegionNameLabel.Initialize(text, style, font, fontSize, color, lifeTime, fadeColor, increaseY, pixelOffset);
 			}
 			else
 			{
 				RegionNameLabel = UIAdvancedLabel.Create(text, style, font, fontSize, color, lifeTime, fadeColor, increaseY, pixelOffset) as UIAdvancedLabel;
 			}
-			return RegionNameLabel;
 		}
 #endif
 	}

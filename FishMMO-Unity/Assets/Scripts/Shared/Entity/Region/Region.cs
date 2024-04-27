@@ -59,14 +59,14 @@ namespace FishMMO.Shared
 		{
 			IPlayerCharacter character = other.GetComponent<IPlayerCharacter>();
 			if (character != null &&
-				!character.PredictionManager.IsReconciling)
+				!character.NetworkObject.IsObjectReconciling)
 			{
 				// children take priority
 				if (Children != null)
 				{
 					foreach (Region child in Children)
 					{
-						if (child.Collider.bounds.Intersects(other.bounds))
+						if (child.Collider.bounds.Contains(character.Transform.position))
 						{
 							return;
 						}
@@ -74,6 +74,7 @@ namespace FishMMO.Shared
 				}
 				if (OnRegionEnter != null)
 				{
+					//Debug.Log($"Enter {gameObject.name}");
 					foreach (RegionAction action in OnRegionEnter)
 					{
 						action?.Invoke(character, this);
@@ -85,7 +86,8 @@ namespace FishMMO.Shared
 		private void OnTriggerStay(Collider other)
 		{
 			IPlayerCharacter character = other.GetComponent<IPlayerCharacter>();
-			if (character != null && !character.PredictionManager.IsReconciling)
+			if (character != null &&
+				!character.NetworkObject.IsObjectReconciling)
 			{
 				if (OnRegionStay != null)
 				{
@@ -100,7 +102,8 @@ namespace FishMMO.Shared
 		private void OnTriggerExit(Collider other)
 		{
 			IPlayerCharacter character = other.GetComponent<IPlayerCharacter>();
-			if (character != null && !character.PredictionManager.IsReconciling)
+			if (character != null &&
+				!character.NetworkObject.IsObjectReconciling)
 			{
 				if (Parent != null)
 				{
@@ -108,6 +111,7 @@ namespace FishMMO.Shared
 				}
 				if (OnRegionExit != null)
 				{
+					//Debug.Log($"Exit {gameObject.name}");
 					foreach (RegionAction action in OnRegionExit)
 					{
 						action?.Invoke(character, this);
