@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5bd0f0147889f4e48a04a7e968189a69, type: 3}
   m_Name: AreaOfInterestDisplayNameAction
   m_EditorClassIdentifier: 
-  DisplayColor: {r: 0.26855645, g: 0.8018868, b: 0.3948746, a: 1}
+  DisplayColor: {r: 0.30266672, g: 0.90800005, b: 0.44954914, a: 1}
   Style: 1
   Font: {fileID: 0}
   FontSize: 24

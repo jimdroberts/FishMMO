@@ -1,12 +1,18 @@
 using System.Collections.Generic;
 using UnityEngine;
+using FishNet.Object;
+using FishNet.Component.Prediction;
 
 namespace FishMMO.Shared
 {
-	public class Region : MonoBehaviour
+	[RequireComponent(typeof(NetworkObject))]
+	[RequireComponent(typeof(NetworkTrigger))]
+	public class Region : NetworkBehaviour
 	{
 		public Region Parent;
 		public List<Region> Children = new List<Region>();
+
+		public NetworkTrigger NetworkTrigger;
 
 		public string Name { get { return gameObject.name; } }
 
@@ -40,6 +46,11 @@ namespace FishMMO.Shared
 					box.size = Terrain.terrainData.size;
 				}
 			}
+
+			NetworkTrigger = gameObject.GetComponent<NetworkTrigger>();
+			NetworkTrigger.OnEnter += NetworkTrigger_OnTriggerEnter;
+			NetworkTrigger.OnStay += NetworkTrigger_OnTriggerStay;
+			NetworkTrigger.OnExit += NetworkTrigger_OnTriggerExit;
 		}
 
 #if UNITY_EDITOR
@@ -55,67 +66,75 @@ namespace FishMMO.Shared
 		}
 #endif
 
-		private void OnTriggerEnter(Collider other)
+		private bool NetworkTrigger_OnTriggerEnter(Collider other)
 		{
 			IPlayerCharacter character = other.GetComponent<IPlayerCharacter>();
-			if (character != null &&
-				!character.NetworkObject.IsObjectReconciling)
+			if (character == null ||
+				base.PredictionManager.IsReconciling ||
+				character.IsTeleporting)
 			{
-				// children take priority
-				if (Children != null)
+				return false;
+			}
+			// children take priority
+			if (Children != null)
+			{
+				foreach (Region child in Children)
 				{
-					foreach (Region child in Children)
+					// does a child of this region already contain our character?
+					if (child.Collider.bounds.Intersects(other.bounds))
 					{
-						if (child.Collider.bounds.Contains(character.Transform.position))
-						{
-							return;
-						}
+						return true;
 					}
 				}
-				if (OnRegionEnter != null)
+			}
+			if (OnRegionEnter != null)
+			{
+				Debug.Log($"{character.CharacterName} Entered {gameObject.name}");
+				foreach (RegionAction action in OnRegionEnter)
 				{
-					//Debug.Log($"Enter {gameObject.name}");
-					foreach (RegionAction action in OnRegionEnter)
-					{
-						action?.Invoke(character, this);
-					}
+					action?.Invoke(character, this);
+				}
+			}
+			return true;
+		}
+
+		private void NetworkTrigger_OnTriggerStay(Collider other)
+		{
+			IPlayerCharacter character = other.GetComponent<IPlayerCharacter>();
+			if (character == null ||
+				base.PredictionManager.IsReconciling ||
+				character.IsTeleporting)
+			{
+				return;
+			}
+			if (OnRegionStay != null)
+			{
+				foreach (RegionAction action in OnRegionStay)
+				{
+					action?.Invoke(character, this);
 				}
 			}
 		}
 
-		private void OnTriggerStay(Collider other)
+		private void NetworkTrigger_OnTriggerExit(Collider other)
 		{
 			IPlayerCharacter character = other.GetComponent<IPlayerCharacter>();
-			if (character != null &&
-				!character.NetworkObject.IsObjectReconciling)
+			if (character == null ||
+				base.PredictionManager.IsReconciling ||
+				character.IsTeleporting)
 			{
-				if (OnRegionStay != null)
-				{
-					foreach (RegionAction action in OnRegionStay)
-					{
-						action?.Invoke(character, this);
-					}
-				}
+				return;
 			}
-		}
-
-		private void OnTriggerExit(Collider other)
-		{
-			IPlayerCharacter character = other.GetComponent<IPlayerCharacter>();
-			if (character != null &&
-				!character.NetworkObject.IsObjectReconciling)
+			if (Parent != null)
 			{
-				if (Parent != null)
+				Parent.NetworkTrigger_OnTriggerEnter(other);
+			}
+			if (OnRegionExit != null)
+			{
+				Debug.Log($"{character.CharacterName} Exited {gameObject.name}");
+				foreach (RegionAction action in OnRegionExit)
 				{
-					Parent.OnTriggerEnter(other);
-				}
-				if (OnRegionExit != null)
-				{
-					//Debug.Log($"Exit {gameObject.name}");
-					foreach (RegionAction action in OnRegionExit)
-					{
-						action?.Invoke(character, this);
-					}
+					action?.Invoke(character, this);
 				}
 			}
 		}

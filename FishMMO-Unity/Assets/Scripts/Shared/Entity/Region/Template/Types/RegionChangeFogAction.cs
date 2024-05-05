@@ -2,6 +2,7 @@ using UnityEngine;
 
 namespace FishMMO.Shared
 {
+	[CreateAssetMenu(fileName = "New Region Change Fog Action", menuName = "Region/Region Change Fog", order = 1)]
 	public class RegionChangeFogAction : RegionAction
 	{
 		public bool fogEnabled = false;
@@ -13,12 +14,18 @@ namespace FishMMO.Shared
 
 		public override void Invoke(IPlayerCharacter character, Region region)
 		{
+#if !UNITY_SERVER
+			if (!character.NetworkObject.IsOwner)
+			{
+				return;
+			}
 			RenderSettings.fog = fogEnabled;
 			RenderSettings.fogMode = fogMode;
 			RenderSettings.fogColor = fogColor;
 			RenderSettings.fogDensity = fogDensity;
 			RenderSettings.fogStartDistance = fogStartDistance;
 			RenderSettings.fogEndDistance = fogEndDistance;
+#endif
 		}
 	}
 }

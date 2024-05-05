@@ -3419,6 +3419,8 @@ GameObject:
   - component: {fileID: 1305670806}
   - component: {fileID: 1305670807}
   - component: {fileID: 1305670808}
+  - component: {fileID: 1305670810}
+  - component: {fileID: 1305670809}
   m_Layer: 2
   m_Name: Crushbone Entrance
   m_TagString: Untagged
@@ -3453,12 +3455,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 213d5298be872814185dcc6651fe5f1f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _componentIndexCache: 0
+  _addedNetworkObject: {fileID: 1305670810}
+  _networkObjectCache: {fileID: 1305670810}
   Parent: {fileID: 1622681166}
   Children: []
+  NetworkTrigger: {fileID: 0}
   Collider: {fileID: 1305670808}
   Terrain: {fileID: 0}
   OnRegionEnter:
   - {fileID: 11400000, guid: 44d3914835afcff478745749b153f953, type: 2}
+  - {fileID: 11400000, guid: e34076ce9f0c6224986256c72f6258fb, type: 2}
   OnRegionStay: []
   OnRegionExit: []
   GizmoColor: {r: 0, g: 1, b: 1, a: 1}
@@ -3483,6 +3490,70 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 45, y: 25, z: 30}
   m_Center: {x: 0, y: 0, z: 0}
+--- !u!114 &1305670809
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1305670805}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3dc97a8b9e628044e83004c93095c14d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _componentIndexCache: 1
+  _addedNetworkObject: {fileID: 1305670810}
+  _networkObjectCache: {fileID: 1305670810}
+  _maximumSimultaneousHits: 16
+  _historyDuration: 0.5
+  _additionalSize: 0.1
+  _interactableLayers:
+    serializedVersion: 2
+    m_Bits: 65
+--- !u!114 &1305670810
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1305670805}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 26b716c41e9b56b4baafaf13a523ba2e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  <IsNested>k__BackingField: 0
+  <ComponentIndex>k__BackingField: 0
+  <PredictedSpawn>k__BackingField: {fileID: 0}
+  _networkBehaviours:
+  - {fileID: 1305670807}
+  - {fileID: 1305670809}
+  <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 0}
+  <NestedRootNetworkBehaviours>k__BackingField: []
+  SerializedTransformProperties:
+    Position: {x: 0, y: 0, z: 0}
+    Rotation: {x: 0, y: 0, z: 0, w: 0}
+    LocalScale: {x: 0, y: 0, z: 0}
+  _isNetworked: 1
+  _isSpawnable: 1
+  _isGlobal: 0
+  _initializeOrder: 0
+  _defaultDespawnType: 0
+  NetworkObserver: {fileID: 0}
+  _enablePrediction: 0
+  _predictionType: 0
+  _graphicalObject: {fileID: 0}
+  _enableStateForwarding: 1
+  _networkTransform: {fileID: 0}
+  _ownerInterpolation: 1
+  _enableTeleport: 0
+  _teleportThreshold: 1
+  <PrefabId>k__BackingField: 0
+  <SpawnableCollectionId>k__BackingField: 0
+  _scenePathHash: 2120580463
+  <SceneId>k__BackingField: 9107823740297206992
+  <AssetPathHash>k__BackingField: 0
 --- !u!1 &1332135101
 GameObject:
   m_ObjectHideFlags: 0
@@ -4443,6 +4514,8 @@ GameObject:
   - component: {fileID: 1622681164}
   - component: {fileID: 1622681166}
   - component: {fileID: 1622681165}
+  - component: {fileID: 1622681168}
+  - component: {fileID: 1622681167}
   m_Layer: 2
   m_Name: Greater Faydark
   m_TagString: Untagged
@@ -4498,16 +4571,85 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 213d5298be872814185dcc6651fe5f1f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _componentIndexCache: 0
+  _addedNetworkObject: {fileID: 1622681168}
+  _networkObjectCache: {fileID: 1622681168}
   Parent: {fileID: 0}
   Children:
   - {fileID: 1305670807}
+  NetworkTrigger: {fileID: 0}
   Collider: {fileID: 1622681165}
   Terrain: {fileID: 347432128}
   OnRegionEnter:
   - {fileID: 11400000, guid: 22297f79efd99de43a9e8079889ee4b4, type: 2}
+  - {fileID: 11400000, guid: e34076ce9f0c6224986256c72f6258fb, type: 2}
   OnRegionStay: []
   OnRegionExit: []
   GizmoColor: {r: 0, g: 1, b: 1, a: 1}
+--- !u!114 &1622681167
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1622681163}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3dc97a8b9e628044e83004c93095c14d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _componentIndexCache: 1
+  _addedNetworkObject: {fileID: 1622681168}
+  _networkObjectCache: {fileID: 1622681168}
+  _maximumSimultaneousHits: 16
+  _historyDuration: 0.5
+  _additionalSize: 0.1
+  _interactableLayers:
+    serializedVersion: 2
+    m_Bits: 65
+--- !u!114 &1622681168
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1622681163}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 26b716c41e9b56b4baafaf13a523ba2e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  <IsNested>k__BackingField: 0
+  <ComponentIndex>k__BackingField: 0
+  <PredictedSpawn>k__BackingField: {fileID: 0}
+  _networkBehaviours:
+  - {fileID: 1622681166}
+  - {fileID: 1622681167}
+  <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 0}
+  <NestedRootNetworkBehaviours>k__BackingField: []
+  SerializedTransformProperties:
+    Position: {x: 0, y: 0, z: 0}
+    Rotation: {x: 0, y: 0, z: 0, w: 0}
+    LocalScale: {x: 0, y: 0, z: 0}
+  _isNetworked: 1
+  _isSpawnable: 1
+  _isGlobal: 0
+  _initializeOrder: 0
+  _defaultDespawnType: 0
+  NetworkObserver: {fileID: 0}
+  _enablePrediction: 0
+  _predictionType: 0
+  _graphicalObject: {fileID: 0}
+  _enableStateForwarding: 1
+  _networkTransform: {fileID: 0}
+  _ownerInterpolation: 1
+  _enableTeleport: 0
+  _teleportThreshold: 1
+  <PrefabId>k__BackingField: 0
+  <SpawnableCollectionId>k__BackingField: 0
+  _scenePathHash: 2120580463
+  <SceneId>k__BackingField: 9107823739802487902
+  <AssetPathHash>k__BackingField: 0
 --- !u!1 &1699450705
 GameObject:
   m_ObjectHideFlags: 0

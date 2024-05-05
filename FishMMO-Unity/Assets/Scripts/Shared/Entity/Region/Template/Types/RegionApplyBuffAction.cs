@@ -1,5 +1,8 @@
+using UnityEngine;
+
 namespace FishMMO.Shared
 {
+	[CreateAssetMenu(fileName = "New Region Apply Buff Action", menuName = "Region/Region Apply Buff", order = 1)]
 	public class RegionApplyBuffAction : RegionAction
 	{
 		public BuffTemplate Buff;

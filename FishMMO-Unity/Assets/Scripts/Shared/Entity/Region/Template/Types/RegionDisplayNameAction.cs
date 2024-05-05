@@ -19,7 +19,7 @@ namespace FishMMO.Shared
 		public override void Invoke(IPlayerCharacter character, Region region)
 		{
 			if (region == null ||
-				character == null)
+				character == null || !character.NetworkObject.IsOwner)
 			{
 				return;
 			}

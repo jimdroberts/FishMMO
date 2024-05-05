@@ -561,7 +561,7 @@ namespace FishMMO.Client
 			// Clear the UI Character
 			UIManager.UnsetCharacter();
 
-			// Ensure the character is destroyed
+			// Ensure the local character is destroyed
 			Destroy(character.GameObject);
 		}
 
