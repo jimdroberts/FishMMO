@@ -23,11 +23,14 @@ namespace FishMMO.Client
 		public override void OnStarting()
 		{
 			OnSetCharacter += CharacterControl_OnSetCharacter;
+			IPlayerCharacter.OnStopLocalClient += (c) => ClearAllSlots();
 		}
 
 		public override void OnDestroying()
 		{
+			IPlayerCharacter.OnStopLocalClient -= (c) => ClearAllSlots();
 			OnSetCharacter -= CharacterControl_OnSetCharacter;
+
 			ClearAllSlots();
 		}
 
