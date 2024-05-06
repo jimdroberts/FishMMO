@@ -1,0 +1,26 @@
+{
+    "name": "SimpleWebRTC",
+    "rootNamespace": "",
+    "references": [
+        "GUID:f12aafacab75a87499e7e45c873ffab8"
+    ],
+    "includePlatforms": [
+        "Editor",
+        "LinuxStandalone64",
+        "CloudRendering",
+        "macOSStandalone",
+        "WebGL",
+        "WindowsStandalone32",
+        "WindowsStandalone64"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "ENABLE_WEBRTC"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
