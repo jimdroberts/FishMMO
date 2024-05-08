@@ -9,7 +9,7 @@ using TimeManagerCls = FishNet.Managing.Timing.TimeManager;
 
 namespace FishNet.Component.Prediction
 {
-    public abstract class NetworkCollider : NetworkBehaviour
+    public sealed class NetworkCollider : NetworkBehaviour
     {
 #if !PREDICTION_1
         #region Types.
@@ -35,14 +35,18 @@ namespace FishNet.Component.Prediction
             {
                 Tick = TimeManagerCls.UNSET_TICK;
                 CollectionCaches<Collider>.StoreAndDefault(ref Hits);
-			}
+            }
         }
         #endregion
 
         /// <summary>
+        /// Called once when another collider enters. Return true for success. False will result in another attempt to invoke in the next collision iteration.
+        /// </summary>
+        public event Func<Collider, bool> OnEnterOnce;
+        /// <summary>
         /// Called when another collider enters this collider.
         /// </summary>
-        public event Func<Collider, bool> OnEnter;
+        public event Action<Collider> OnEnter;
         /// <summary>
         /// Called when another collider stays in this collider.
         /// </summary>
@@ -51,11 +55,6 @@ namespace FishNet.Component.Prediction
         /// Called when another collider exits this collider.
         /// </summary>
         public event Action<Collider> OnExit;
-        /// <summary>
-        /// True to run collisions for colliders which are triggers, false to run collisions for colliders which are not triggers.
-        /// </summary>
-        [HideInInspector]
-        protected bool IsTrigger;
         /// <summary>
         /// Maximum number of simultaneous hits to check for. Larger values decrease performance but allow detection to work for more overlapping colliders. Typically the default value of 16 is more than sufficient.
         /// </summary>
@@ -90,7 +89,7 @@ namespace FishNet.Component.Prediction
         /// </summary>
         private ResettableRingBuffer<ColliderData> _colliderDataHistory;
         /// <summary>
-        /// The colliders that currently reside inside of the collider.
+        /// The colliders that currently reside inside of this collider.
         /// </summary>
         private HashSet<Collider> _currentlyEntered;
         /// <summary>
@@ -103,10 +102,15 @@ namespace FishNet.Component.Prediction
         /// </summary>
         private bool _useCache => (OnEnter != null || OnExit != null);
         /// <summary>
+        /// Last layer of the gameObject.
         /// Interactable layers for the layer of this gameObject.
         /// </summary>
-        [SerializeField]
-        private LayerMask _interactableLayers;
+        private int _lastGameObjectLayer = -1;
+        /// <summary>
+        /// Interactable layers for the layer of this gameObject.
+        /// The current physics scene for this gameObject.
+        /// </summary>
+        private int _interactableLayers;
         /// <summary>
         /// The current physics scene for this gameObject.
         /// </summary>
@@ -116,24 +120,19 @@ namespace FishNet.Component.Prediction
         /// </summary>
         private QueryTriggerInteraction _queryTriggerInteraction;
 
-        protected virtual void Awake()
+        void Awake()
         {
             _colliderDataHistory = ResettableCollectionCaches<ColliderData>.RetrieveRingBuffer();
             _hits = CollectionCaches<Collider>.RetrieveArray();
             if (_hits.Length < _maximumSimultaneousHits)
                 _hits = new Collider[_maximumSimultaneousHits];
-			_currentlyEntered = CollectionCaches<Collider>.RetrieveHashSet();
-			_physicsScene = gameObject.scene.GetPhysicsScene();
+            _currentlyEntered = CollectionCaches<Collider>.RetrieveHashSet();
+            _physicsScene = gameObject.scene.GetPhysicsScene();
 
-			FindColliders();
-		}
+            FindColliders();
+        }
 
-		protected void Start()
-		{
-            _queryTriggerInteraction = IsTrigger ? QueryTriggerInteraction.Collide : QueryTriggerInteraction.Ignore;
-		}
-
-		private void OnDestroy()
+        private void OnDestroy()
         {
             ResettableCollectionCaches<ColliderData>.StoreAndDefault(ref _colliderDataHistory);
             CollectionCaches<Collider>.StoreAndDefault(ref _hits, -_hits.Length);
@@ -217,7 +216,7 @@ namespace FishNet.Component.Prediction
         /// <summary>
         /// Units to extend collision traces by. This is used to prevent missed overlaps when colliders do not intersect enough.
         /// </summary>
-        public virtual float GetAdditionalSize() => _additionalSize;
+        public float GetAdditionalSize() => _additionalSize;
 
         /// <summary>
         /// Checks for any trigger changes;
@@ -251,8 +250,8 @@ namespace FishNet.Component.Prediction
                     if (previousHitsIndex != -1)
                     {
                         ColliderData previous = _colliderDataHistory[previousHitsIndex];
-						previouslyHit = previous.Hits;
-					}
+                        previouslyHit = previous.Hits;
+                    }
                 }
                 //Not replaying.
                 else
@@ -264,7 +263,7 @@ namespace FishNet.Component.Prediction
                         * use a new collection for previous. */
                         if (cd.Tick == (tick - 1))
                         {
-							previouslyHit = cd.Hits;
+                            previouslyHit = cd.Hits;
                         }
                     }
                 }
@@ -281,11 +280,20 @@ namespace FishNet.Component.Prediction
             // The rotation of the object for box colliders.
             Quaternion rotation = transform.rotation;
 
+            //If layer changed then get new interactableLayers.
+            if (_lastGameObjectLayer != gameObject.layer)
+            {
+                _lastGameObjectLayer = gameObject.layer;
+                _interactableLayers = Layers.GetInteractableLayersValue(_lastGameObjectLayer);
+            }
+
             // Check each collider for triggers.
             foreach (Collider col in _colliders)
             {
                 if (!col.enabled)
                     continue;
+
+                _queryTriggerInteraction = col.isTrigger ? QueryTriggerInteraction.Collide : QueryTriggerInteraction.UseGlobal;
                 //if (IsTrigger != col.isTrigger) // this is handled by the query trigger interaction
                 //    continue;
 
@@ -307,33 +315,32 @@ namespace FishNet.Component.Prediction
                     if (hit == null || hit == col)
                         continue;
 
-					current.Add(hit);
+                    current.Add(hit);
 
                     // Did we previously hit this collider?
                     if (previouslyHit == null || !previouslyHit.Contains(hit))
                     {
-						// If not, try to enter collider.
-						if (OnEnter != null && OnEnter.Invoke(hit))
-						{
-							_currentlyEntered.Add(hit);
-						}
-					}
-					// Did we fail to previously enter successfully?
-					else if (!_currentlyEntered.Contains(hit))
-                    {
-						// If not, try to enter collider.
-						if (OnEnter != null && OnEnter.Invoke(hit))
-						{
-							_currentlyEntered.Add(hit);
-						}
-					}
+                        // If not in previous then invoke enter and OnEnterOnce.
+                        OnEnter?.Invoke(hit);
 
-					// If the hit collider is currently inside this collider.
-					if (_currentlyEntered.Contains(hit))
-					{
-						OnStay?.Invoke(hit);
-					}
-				}
+                        if (OnEnterOnce != null && OnEnterOnce.Invoke(hit))
+                        {
+                            _currentlyEntered.Add(hit);
+                        }
+                    }
+                    // Invoke OnEnterOnce if we returned false in the last iteration.
+                    else if (!_currentlyEntered.Contains(hit))
+                    {
+                        if (OnEnterOnce != null && OnEnterOnce.Invoke(hit))
+                        {
+                            _currentlyEntered.Add(hit);
+                        }
+                    }
+
+                    // If the hit collider is currently inside this collider.
+                    //if (_currentlyEntered.Contains(hit))
+                    OnStay?.Invoke(hit);
+                }
             }
 
             if (previouslyHit != null)

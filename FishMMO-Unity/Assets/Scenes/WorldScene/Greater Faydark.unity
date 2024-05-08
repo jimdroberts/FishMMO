@@ -3420,8 +3420,8 @@ GameObject:
   - component: {fileID: 1305670807}
   - component: {fileID: 1305670808}
   - component: {fileID: 1305670810}
-  - component: {fileID: 1305670809}
-  m_Layer: 2
+  - component: {fileID: 1305670811}
+  m_Layer: 0
   m_Name: Crushbone Entrance
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -3460,7 +3460,7 @@ MonoBehaviour:
   _networkObjectCache: {fileID: 1305670810}
   Parent: {fileID: 1622681166}
   Children: []
-  NetworkTrigger: {fileID: 0}
+  NetworkCollider: {fileID: 0}
   Collider: {fileID: 1305670808}
   Terrain: {fileID: 0}
   OnRegionEnter:
@@ -3490,27 +3490,6 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 45, y: 25, z: 30}
   m_Center: {x: 0, y: 0, z: 0}
---- !u!114 &1305670809
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1305670805}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3dc97a8b9e628044e83004c93095c14d, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  _componentIndexCache: 1
-  _addedNetworkObject: {fileID: 1305670810}
-  _networkObjectCache: {fileID: 1305670810}
-  _maximumSimultaneousHits: 16
-  _historyDuration: 0.5
-  _additionalSize: 0.1
-  _interactableLayers:
-    serializedVersion: 2
-    m_Bits: 65
 --- !u!114 &1305670810
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3528,13 +3507,13 @@ MonoBehaviour:
   <PredictedSpawn>k__BackingField: {fileID: 0}
   _networkBehaviours:
   - {fileID: 1305670807}
-  - {fileID: 1305670809}
+  - {fileID: 1305670811}
   <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 0}
   <NestedRootNetworkBehaviours>k__BackingField: []
   SerializedTransformProperties:
-    Position: {x: 0, y: 0, z: 0}
-    Rotation: {x: 0, y: 0, z: 0, w: 0}
-    LocalScale: {x: 0, y: 0, z: 0}
+    Position: {x: -2.5, y: 11.9, z: 21.6}
+    Rotation: {x: 0, y: 0.7071068, z: 0, w: 0.7071068}
+    LocalScale: {x: 1, y: 1, z: 1}
   _isNetworked: 1
   _isSpawnable: 1
   _isGlobal: 0
@@ -3554,6 +3533,24 @@ MonoBehaviour:
   _scenePathHash: 2120580463
   <SceneId>k__BackingField: 9107823740297206992
   <AssetPathHash>k__BackingField: 0
+--- !u!114 &1305670811
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1305670805}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4f977181495644345a4d0d821c31579f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _componentIndexCache: 1
+  _addedNetworkObject: {fileID: 1305670810}
+  _networkObjectCache: {fileID: 1305670810}
+  _maximumSimultaneousHits: 16
+  _historyDuration: 0.5
+  _additionalSize: 0.1
 --- !u!1 &1332135101
 GameObject:
   m_ObjectHideFlags: 0
@@ -4515,8 +4512,8 @@ GameObject:
   - component: {fileID: 1622681166}
   - component: {fileID: 1622681165}
   - component: {fileID: 1622681168}
-  - component: {fileID: 1622681167}
-  m_Layer: 2
+  - component: {fileID: 1622681169}
+  m_Layer: 0
   m_Name: Greater Faydark
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -4577,7 +4574,7 @@ MonoBehaviour:
   Parent: {fileID: 0}
   Children:
   - {fileID: 1305670807}
-  NetworkTrigger: {fileID: 0}
+  NetworkCollider: {fileID: 0}
   Collider: {fileID: 1622681165}
   Terrain: {fileID: 347432128}
   OnRegionEnter:
@@ -4586,27 +4583,6 @@ MonoBehaviour:
   OnRegionStay: []
   OnRegionExit: []
   GizmoColor: {r: 0, g: 1, b: 1, a: 1}
---- !u!114 &1622681167
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1622681163}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3dc97a8b9e628044e83004c93095c14d, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  _componentIndexCache: 1
-  _addedNetworkObject: {fileID: 1622681168}
-  _networkObjectCache: {fileID: 1622681168}
-  _maximumSimultaneousHits: 16
-  _historyDuration: 0.5
-  _additionalSize: 0.1
-  _interactableLayers:
-    serializedVersion: 2
-    m_Bits: 65
 --- !u!114 &1622681168
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -4624,13 +4600,13 @@ MonoBehaviour:
   <PredictedSpawn>k__BackingField: {fileID: 0}
   _networkBehaviours:
   - {fileID: 1622681166}
-  - {fileID: 1622681167}
+  - {fileID: 1622681169}
   <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 0}
   <NestedRootNetworkBehaviours>k__BackingField: []
   SerializedTransformProperties:
-    Position: {x: 0, y: 0, z: 0}
-    Rotation: {x: 0, y: 0, z: 0, w: 0}
-    LocalScale: {x: 0, y: 0, z: 0}
+    Position: {x: 0, y: 73.09101, z: 0}
+    Rotation: {x: 0, y: 0, z: 0, w: 1}
+    LocalScale: {x: 1, y: 1, z: 1}
   _isNetworked: 1
   _isSpawnable: 1
   _isGlobal: 0
@@ -4650,6 +4626,24 @@ MonoBehaviour:
   _scenePathHash: 2120580463
   <SceneId>k__BackingField: 9107823739802487902
   <AssetPathHash>k__BackingField: 0
+--- !u!114 &1622681169
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1622681163}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4f977181495644345a4d0d821c31579f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _componentIndexCache: 1
+  _addedNetworkObject: {fileID: 1622681168}
+  _networkObjectCache: {fileID: 1622681168}
+  _maximumSimultaneousHits: 16
+  _historyDuration: 0.5
+  _additionalSize: 0.1
 --- !u!1 &1699450705
 GameObject:
   m_ObjectHideFlags: 0

@@ -114,6 +114,7 @@ namespace FishMMO.Client
 				}
 			}
 			Visible = true;
+			this.gameObject.SetActive(true);
 		}
 
 		public void SetPosition(Vector3 position)

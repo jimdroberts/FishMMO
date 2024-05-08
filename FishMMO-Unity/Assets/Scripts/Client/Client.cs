@@ -54,8 +54,14 @@ namespace FishMMO.Client
 		public event Action OnReconnectFailed;
 		public event Action OnQuitToLogin;
 
-		public bool CanReconnect { get { return currentConnectionType == ServerConnectionType.World ||
-												currentConnectionType == ServerConnectionType.Scene; } }
+		public bool CanReconnect
+		{
+			get
+			{
+				return currentConnectionType == ServerConnectionType.World ||
+												currentConnectionType == ServerConnectionType.Scene;
+			}
+		}
 
 		private static NetworkManager _networkManager;
 		public NetworkManager NetworkManager;
@@ -561,8 +567,19 @@ namespace FishMMO.Client
 			// Clear the UI Character
 			UIManager.UnsetCharacter();
 
-			// Ensure the local character is destroyed
-			Destroy(character.GameObject);
+			// Ensure the region name label is disabled.
+			if (RegionNameLabel != null &&
+				RegionNameLabel.gameObject != null)
+			{
+				RegionNameLabel.gameObject.SetActive(false);
+			}
+
+			// Ensure the local character is destroyed.
+			if (character != null &&
+				character.GameObject != null)
+			{
+				Destroy(character.GameObject);
+			}
 		}
 
 		public static void GuildController_OnReadPayload(long ID, IPlayerCharacter character)

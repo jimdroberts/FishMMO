@@ -6,13 +6,13 @@ using FishNet.Component.Prediction;
 namespace FishMMO.Shared
 {
 	[RequireComponent(typeof(NetworkObject))]
-	[RequireComponent(typeof(NetworkTrigger))]
+	[RequireComponent(typeof(NetworkCollider))]
 	public class Region : NetworkBehaviour
 	{
 		public Region Parent;
 		public List<Region> Children = new List<Region>();
 
-		public NetworkTrigger NetworkTrigger;
+		public NetworkCollider NetworkCollider;
 
 		public string Name { get { return gameObject.name; } }
 
@@ -47,10 +47,10 @@ namespace FishMMO.Shared
 				}
 			}
 
-			NetworkTrigger = gameObject.GetComponent<NetworkTrigger>();
-			NetworkTrigger.OnEnter += NetworkTrigger_OnTriggerEnter;
-			NetworkTrigger.OnStay += NetworkTrigger_OnTriggerStay;
-			NetworkTrigger.OnExit += NetworkTrigger_OnTriggerExit;
+			NetworkCollider = gameObject.GetComponent<NetworkCollider>();
+			NetworkCollider.OnEnterOnce += NetworkCollider_OnEnterOnce;
+			NetworkCollider.OnStay += NetworkCollider_OnStay;
+			NetworkCollider.OnExit += NetworkCollider_OnExit;
 		}
 
 #if UNITY_EDITOR
@@ -66,7 +66,7 @@ namespace FishMMO.Shared
 		}
 #endif
 
-		private bool NetworkTrigger_OnTriggerEnter(Collider other)
+		private bool NetworkCollider_OnEnterOnce(Collider other)
 		{
 			IPlayerCharacter character = other.GetComponent<IPlayerCharacter>();
 			if (character == null ||
@@ -98,7 +98,7 @@ namespace FishMMO.Shared
 			return true;
 		}
 
-		private void NetworkTrigger_OnTriggerStay(Collider other)
+		private void NetworkCollider_OnStay(Collider other)
 		{
 			IPlayerCharacter character = other.GetComponent<IPlayerCharacter>();
 			if (character == null ||
@@ -116,7 +116,7 @@ namespace FishMMO.Shared
 			}
 		}
 
-		private void NetworkTrigger_OnTriggerExit(Collider other)
+		private void NetworkCollider_OnExit(Collider other)
 		{
 			IPlayerCharacter character = other.GetComponent<IPlayerCharacter>();
 			if (character == null ||
@@ -127,7 +127,7 @@ namespace FishMMO.Shared
 			}
 			if (Parent != null)
 			{
-				Parent.NetworkTrigger_OnTriggerEnter(other);
+				Parent.NetworkCollider_OnEnterOnce(other);
 			}
 			if (OnRegionExit != null)
 			{
