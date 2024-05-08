@@ -40,7 +40,7 @@ namespace FishNet.Component.Prediction
         #endregion
 
         /// <summary>
-        /// Called once when another collider enters. Return true for success. False will result in another attempt to invoke in the next collision iteration.
+        /// Called once when another collider enters. Return true for success. False will result in another attempt to invoke on the collider in the next collision iteration.
         /// </summary>
         public event Func<Collider, bool> OnEnterOnce;
         /// <summary>
@@ -108,7 +108,6 @@ namespace FishNet.Component.Prediction
         private int _lastGameObjectLayer = -1;
         /// <summary>
         /// Interactable layers for the layer of this gameObject.
-        /// The current physics scene for this gameObject.
         /// </summary>
         private int _interactableLayers;
         /// <summary>
