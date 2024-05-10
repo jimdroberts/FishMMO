@@ -156,8 +156,9 @@ namespace FishMMO.Client
 			IGuildController.OnReadPayload += GuildController_OnReadPayload;
 
 			RegionDisplayNameAction.OnDisplay2DLabel += RegionDisplayNameAction_OnDisplay2DLabel;
+			RegionChangeFogAction.OnChangeFog += RegionChangeFogAction_OnChangeFog;
 #endif
-		}
+        }
 
 		private void Update()
 		{
@@ -211,9 +212,10 @@ namespace FishMMO.Client
 			IGuildController.OnReadPayload -= GuildController_OnReadPayload;
 
 			RegionDisplayNameAction.OnDisplay2DLabel -= RegionDisplayNameAction_OnDisplay2DLabel;
+            RegionChangeFogAction.OnChangeFog -= RegionChangeFogAction_OnChangeFog;
 #endif
 
-			ClientNamingSystem.Destroy();
+            ClientNamingSystem.Destroy();
 
 			Application.logMessageReceived -= this.Application_logMessageReceived;
 		}
@@ -606,6 +608,61 @@ namespace FishMMO.Client
 			{
 				RegionNameLabel = UIAdvancedLabel.Create(text, style, font, fontSize, color, lifeTime, fadeColor, increaseY, pixelOffset) as UIAdvancedLabel;
 			}
+		}
+
+		private float fogChangeRate = 0.0f;
+		private Color fogInitialColor = Color.white;
+		private Color fogFinalColor = Color.white;
+		private float fogInitialDensity = 0.0f;
+		private float fogFinalDensity = 0.0f;
+		private float fogInitialStartDistance = 0.0f;
+		private float fogFinalStartDistance = 0.0f;
+        private float fogInitialEndDistance = 0.0f;
+        private float fogFinalEndDistance = 0.0f;
+
+
+        public void RegionChangeFogAction_OnChangeFog(bool fogEnabled, float fogChangeRate, FogMode fogMode, Color fogColor, float fogDensity, float fogStartDistance, float fogEndDistance)
+		{
+			StopCoroutine(FogLerp());
+
+            RenderSettings.fog = fogEnabled;
+
+			if (!fogEnabled)
+			{
+				return;
+			}
+
+            RenderSettings.fogMode = fogMode;
+            this.fogChangeRate = fogChangeRate;
+
+			this.fogInitialColor = RenderSettings.fogColor;
+			this.fogFinalColor = fogColor;
+
+			this.fogInitialDensity = RenderSettings.fogDensity;
+			this.fogFinalDensity = fogDensity;
+
+			this.fogInitialStartDistance = RenderSettings.fogStartDistance;
+			this.fogFinalStartDistance = fogStartDistance;
+
+			this.fogInitialEndDistance = RenderSettings.fogEndDistance;
+			this.fogFinalEndDistance = fogEndDistance;
+
+			StartCoroutine(FogLerp());
+        }
+
+		IEnumerator FogLerp()
+		{
+			for (float t = 0.01f; t < fogChangeRate; t += 0.01f)
+			{
+				float lerpT = t / fogChangeRate;
+
+                RenderSettings.fogColor = Color.Lerp(fogInitialColor, fogFinalColor, lerpT);
+                RenderSettings.fogDensity = Mathf.Lerp(fogInitialDensity, fogFinalDensity, lerpT);
+                RenderSettings.fogStartDistance = Mathf.Lerp(fogInitialStartDistance, fogFinalStartDistance, lerpT);
+                RenderSettings.fogEndDistance = Mathf.Lerp(fogInitialEndDistance, fogFinalEndDistance, lerpT);
+
+				yield return null;
+            }
 		}
 #endif
 	}

@@ -100,7 +100,7 @@ namespace FishNet.Component.Prediction
         /// <summary>
         /// True to cache collision histories for comparing start and exits.
         /// </summary>
-        private bool _useCache => (OnEnter != null || OnExit != null);
+        private bool _useCache => (OnEnter != null || OnEnterOnce != null || OnExit != null);
         /// <summary>
         /// Last layer of the gameObject.
         /// Interactable layers for the layer of this gameObject.
@@ -319,9 +319,10 @@ namespace FishNet.Component.Prediction
                     // Did we previously hit this collider?
                     if (previouslyHit == null || !previouslyHit.Contains(hit))
                     {
-                        // If not in previous then invoke enter and OnEnterOnce.
+                        // If not in previous then invoke enter.
                         OnEnter?.Invoke(hit);
 
+                        // Try to invoke enter once.
                         if (OnEnterOnce != null && OnEnterOnce.Invoke(hit))
                         {
                             _currentlyEntered.Add(hit);

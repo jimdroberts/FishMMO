@@ -10,12 +10,12 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: ab0b9bcba9bd4a247bb5e760d5958dc7, type: 3}
-  m_Name: GreaterFaydarkFog
+  m_Name: CrushboneEntranceFog
   m_EditorClassIdentifier: 
   fogEnabled: 1
-  fogChangeRate: 3
+  fogChangeRate: 1
   fogMode: 3
-  fogColor: {r: 0.24705882, g: 0.38039216, b: 0.32941177, a: 1}
-  fogDensity: 0.06
-  fogStartDistance: 5500
+  fogColor: {r: 0.15499288, g: 0.254717, b: 0.21482734, a: 1}
+  fogDensity: 0.05
+  fogStartDistance: 1500
   fogEndDistance: 9999

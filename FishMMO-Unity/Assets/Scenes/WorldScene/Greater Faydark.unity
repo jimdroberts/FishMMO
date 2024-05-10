@@ -4579,7 +4579,7 @@ MonoBehaviour:
   Terrain: {fileID: 347432128}
   OnRegionEnter:
   - {fileID: 11400000, guid: 22297f79efd99de43a9e8079889ee4b4, type: 2}
-  - {fileID: 11400000, guid: e34076ce9f0c6224986256c72f6258fb, type: 2}
+  - {fileID: 11400000, guid: 67e5b419b5e646f4895935cf06fca178, type: 2}
   OnRegionStay: []
   OnRegionExit: []
   GizmoColor: {r: 0, g: 1, b: 1, a: 1}
