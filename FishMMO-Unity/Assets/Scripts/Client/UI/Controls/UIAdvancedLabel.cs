@@ -1,5 +1,6 @@
 ﻿using UnityEngine;
 using FishMMO.Shared;
+using System;
 
 namespace FishMMO.Client
 {
@@ -28,6 +29,8 @@ namespace FishMMO.Client
 		//bounce
 		public float Bounce = 0.0f;
 		public float BounceDecay = 0.1f;
+
+		public Action OnDestroyCallback;
 
 		void Update()
 		{
@@ -59,6 +62,10 @@ namespace FishMMO.Client
 				RemainingLife -= Time.deltaTime;
 				return;
 			}
+
+			OnDestroyCallback?.Invoke();
+			OnDestroyCallback = null;
+
 			this.gameObject.SetActive(false);
 			Destroy(this.gameObject);
 		}
@@ -73,15 +80,15 @@ namespace FishMMO.Client
 			GUI.Label(new Rect(Screen.width * 0.5f - PixelOffset.x - Center.x, Screen.height * 0.5f - PixelOffset.y + Center.y, Size.x, Size.y), Text, Style);
 		}
 
-		public static IReference Create(string text, FontStyle style, Font font, int fontSize, Color color, float lifeTime, bool fadeColor, bool increaseY, Vector2 pixelOffset)
+		public static IReference Create(string text, FontStyle style, Font font, int fontSize, Color color, float lifeTime, bool fadeColor, bool increaseY, Vector2 pixelOffset, Action OnDestroyCallback)
 		{
 			GameObject newObject = new GameObject("UIAdvancedLabel: " + text);
 			UIAdvancedLabel label = (UIAdvancedLabel)newObject.AddComponent<UIAdvancedLabel>();
-			label.Initialize(text, style, font, fontSize, color, lifeTime, fadeColor, increaseY, pixelOffset);
+			label.Initialize(text, style, font, fontSize, color, lifeTime, fadeColor, increaseY, pixelOffset, OnDestroyCallback);
 			return label;
 		}
 
-		public void Initialize(string text, FontStyle fontStyle, Font font, int fontSize, Color color, float lifeTime, bool fadeColor, bool increaseY, Vector2 pixelOffset)
+		public void Initialize(string text, FontStyle fontStyle, Font font, int fontSize, Color color, float lifeTime, bool fadeColor, bool increaseY, Vector2 pixelOffset, Action OnDestroyCallback)
 		{
 			Text = text;
 			Style.wordWrap = false;
@@ -113,6 +120,7 @@ namespace FishMMO.Client
 					YIncreaseValue = OldY + YIncreaseValue;
 				}
 			}
+			this.OnDestroyCallback = OnDestroyCallback;
 			Visible = true;
 			this.gameObject.SetActive(true);
 		}
