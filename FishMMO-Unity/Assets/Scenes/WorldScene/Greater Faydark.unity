@@ -2155,7 +2155,7 @@ Transform:
   m_GameObject: {fileID: 782950642}
   serializedVersion: 2
   m_LocalRotation: {x: 0.20012169, y: 0.9419027, z: 0.05606331, w: 0.2638704}
-  m_LocalPosition: {x: -6.47, y: 5.17, z: 12.41}
+  m_LocalPosition: {x: -2.95, y: 5.17, z: 6.62}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -2660,7 +2660,7 @@ Transform:
   m_GameObject: {fileID: 961621781}
   serializedVersion: 2
   m_LocalRotation: {x: -0.18146999, y: 0.57380307, z: -0.24081881, w: 0.7614624}
-  m_LocalPosition: {x: 2.919, y: 5.17, z: -3.032}
+  m_LocalPosition: {x: 1.01, y: 4.96, z: -0.73}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -3740,8 +3740,8 @@ MonoBehaviour:
   SceneTransitionImage: {fileID: 21300000, guid: af9d2e8814f76f4498e2ed07cc8191ef,
     type: 3}
   DayNightCycle: 1
-  DayCycleDuration: 60
-  NightCycleDuration: 60
+  DayCycleDuration: 3
+  NightCycleDuration: 3
   DaySkyboxMaterial: {fileID: 2100000, guid: 316068aec7de8294ba9429fc2bc910b9, type: 2}
   NightSkyBoxMaterial: {fileID: 2100000, guid: 16eb23baeafad21469a3509842b500e3, type: 2}
   RotateObjects:
@@ -3762,11 +3762,7 @@ MonoBehaviour:
   - {fileID: 8211527181822845149}
   FadeThreshold: 1
   DayFadeObjects: []
-  NightFadeObjects:
-  - {fileID: 782950642}
-  - {fileID: 961621781}
-  - {fileID: 1573858113}
-  - {fileID: 1573858113}
+  NightFadeObjects: []
   isDaytime: 1
 --- !u!4 &1334146826
 Transform:

@@ -123,6 +123,7 @@ namespace FishMMO.Shared
 
 					HandleDayNightActivations(isDaytime, DayObjects);
 					HandleDayNightActivations(!isDaytime, NightObjects);
+					HandleDayNightFading(currentGameTimeOfDay, DayFadeObjects, NightFadeObjects);
 
 					fadeTime = FadeThreshold; // Reset fade time
 				}
@@ -135,12 +136,14 @@ namespace FishMMO.Shared
 
 					HandleDayNightActivations(isDaytime, DayObjects);
 					HandleDayNightActivations(!isDaytime, NightObjects);
+					HandleDayNightFading(currentGameTimeOfDay, DayFadeObjects, NightFadeObjects);
 
 					fadeTime = FadeThreshold; // Reset fade time
 				}
 			}
 		}
 
+		private float lastRotationAngle = 0.0f;
 		/// <summary>
 		/// Rotate objects based on the current Game Time Of Day.
 		/// </summary>
@@ -152,6 +155,7 @@ namespace FishMMO.Shared
 			}
 
 			// The angle of rotation at the specific time.
+			float lerpTime;
 			float rotationAngle;
 
 			// Determine the rotation angle based on the time of day
@@ -159,14 +163,7 @@ namespace FishMMO.Shared
 			// Day Time
 			if (currentGameTimeOfDay <= DayCycleDuration)
 			{
-				if (!isDaytime)
-				{
-					isDaytime = true;
-					fadeTime = FadeThreshold; // Reset fade time
-				}
-
-				float lerpTime = currentGameTimeOfDay / DayCycleDuration;
-
+				lerpTime = currentGameTimeOfDay / DayCycleDuration;
 				rotationAngle = Mathf.Lerp(0f, 180f, lerpTime);
 
 #if !UNITY_SERVER
@@ -183,14 +180,7 @@ namespace FishMMO.Shared
 			// Night Time
 			else
 			{
-				if (isDaytime)
-				{
-					isDaytime = false;
-					fadeTime = FadeThreshold; // Reset fade time
-				}
-
-				float lerpTime = (currentGameTimeOfDay % DayCycleDuration) / NightCycleDuration;
-
+				lerpTime = (currentGameTimeOfDay % DayCycleDuration) / NightCycleDuration;
 				rotationAngle = Mathf.Lerp(180f, 360f, lerpTime);
 
 #if !UNITY_SERVER
@@ -205,11 +195,15 @@ namespace FishMMO.Shared
 #endif
 			}
 
+			float rotationDiff = rotationAngle - lastRotationAngle;
+
 			// Apply rotation to each object
 			foreach (GameObject obj in objects)
 			{
-				obj.transform.localRotation = Quaternion.Euler(rotationAngle, 0.0f, 0.0f);
+				obj.transform.rotation = obj.transform.rotation * Quaternion.AngleAxis(rotationDiff, Vector3.right);
 			}
+
+			lastRotationAngle = rotationAngle;
 		}
 
 		private void HandleDayNightActivations(bool enable, List<GameObject> objects)
