@@ -90,9 +90,8 @@ namespace FishMMO.Shared
 				float currentGameTimeOfDay = GetGameTimeOfDay(now);
 
 				UpdateDayNightState(currentGameTimeOfDay);
-
-				HandleDayNightRotation(currentGameTimeOfDay, RotateObjects);
-				HandleDayNightFading(currentGameTimeOfDay, DayFadeObjects, NightFadeObjects);
+				UpdateDayNightRotation(currentGameTimeOfDay, RotateObjects);
+				UpdateDayNightFading(currentGameTimeOfDay, DayFadeObjects, NightFadeObjects);
 			}
 		}
 
@@ -121,9 +120,8 @@ namespace FishMMO.Shared
 				{
 					isDaytime = true;
 
-					HandleDayNightActivations(isDaytime, DayObjects);
-					HandleDayNightActivations(!isDaytime, NightObjects);
-					HandleDayNightFading(currentGameTimeOfDay, DayFadeObjects, NightFadeObjects);
+					UpdateDayNightActivations(isDaytime, DayObjects);
+					UpdateDayNightActivations(!isDaytime, NightObjects);
 
 					fadeTime = FadeThreshold; // Reset fade time
 				}
@@ -134,9 +132,8 @@ namespace FishMMO.Shared
 				{
 					isDaytime = false;
 
-					HandleDayNightActivations(isDaytime, DayObjects);
-					HandleDayNightActivations(!isDaytime, NightObjects);
-					HandleDayNightFading(currentGameTimeOfDay, DayFadeObjects, NightFadeObjects);
+					UpdateDayNightActivations(isDaytime, DayObjects);
+					UpdateDayNightActivations(!isDaytime, NightObjects);
 
 					fadeTime = FadeThreshold; // Reset fade time
 				}
@@ -147,7 +144,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Rotate objects based on the current Game Time Of Day.
 		/// </summary>
-		private void HandleDayNightRotation(float currentGameTimeOfDay, List<GameObject> objects)
+		private void UpdateDayNightRotation(float currentGameTimeOfDay, List<GameObject> objects)
 		{
 			if (objects == null || objects.Count == 0)
 			{
@@ -206,7 +203,7 @@ namespace FishMMO.Shared
 			lastRotationAngle = rotationAngle;
 		}
 
-		private void HandleDayNightActivations(bool enable, List<GameObject> objects)
+		private void UpdateDayNightActivations(bool enable, List<GameObject> objects)
 		{
 			if (objects == null ||
 				objects.Count < 1)
@@ -228,7 +225,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Fade objects in or out based on day/night status.
 		/// </summary>
-		private void HandleDayNightFading(float gameTimeOfDay, List<GameObject> dayFadeObjects, List<GameObject> nightFadeObjects)
+		private void UpdateDayNightFading(float gameTimeOfDay, List<GameObject> dayFadeObjects, List<GameObject> nightFadeObjects)
 		{
 #if !UNITY_SERVER
 			float alpha = 0.0f;
