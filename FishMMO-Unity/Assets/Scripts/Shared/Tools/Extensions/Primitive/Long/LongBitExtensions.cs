@@ -1,39 +1,43 @@
-﻿using System;
+﻿using System.Runtime.CompilerServices;
 
 namespace FishMMO.Shared
 {
 	public static class LongBitExtensions
 	{
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static bool IsFlagged(this long flag, int bitPosition)
 		{
-			return ((flag >> bitPosition) & 1) == 1;
+			return (flag & (1L << bitPosition)) != 0;
 		}
 
-		public static bool IsFlagged<T>(this long flag, T bitPosition)
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static bool IsFlagged<T>(this long flag, T bitPosition) where T : struct
 		{
-			int pos = Convert.ToInt32(bitPosition);
-			return ((flag >> pos) & 1) == 1;
+			return (flag & (1L << Unsafe.As<T, int>(ref bitPosition))) != 0;
 		}
 
-		public static void DisableBit<T>(this ref long flag, T bitPosition)
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static void DisableBit<T>(this ref long flag, T bitPosition) where T : struct
 		{
-			int pos = Convert.ToInt32(bitPosition);
-			flag &= ~(1 << pos);
+			flag &= ~(1L << Unsafe.As<T, int>(ref bitPosition));
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void DisableBit(this ref long flag, int bitPosition)
 		{
-			flag &= ~(1 << bitPosition);
+			flag &= ~(1L << bitPosition);
 		}
 
-		public static void EnableBit<T>(this ref long flag, T bitPosition)
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static void EnableBit<T>(this ref long flag, T bitPosition) where T : struct
 		{
-			flag |= (long)(1 << Convert.ToInt32(bitPosition));
+			flag |= 1L << Unsafe.As<T, int>(ref bitPosition);
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void EnableBit(this ref long flag, int bitPosition)
 		{
-			flag |= (long)(1 << bitPosition);
+			flag |= 1L << bitPosition;
 		}
 	}
 }

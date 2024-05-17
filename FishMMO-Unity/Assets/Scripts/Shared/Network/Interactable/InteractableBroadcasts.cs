@@ -8,17 +8,17 @@ namespace FishMMO.Shared
 	/// </summary>
 	public struct InteractableBroadcast : IBroadcast
 	{
-		public int interactableID;
+		public long interactableID;
 	}
 
 	public struct AbilityCrafterBroadcast : IBroadcast
 	{
-		public int interactableID;
+		public long interactableID;
 	}
 
 	public struct AbilityCraftBroadcast : IBroadcast
 	{
-		public int interactableID;
+		public long interactableID;
 		public int templateID;
 		public List<int> events;
 	}
@@ -29,13 +29,13 @@ namespace FishMMO.Shared
 
 	public struct MerchantBroadcast : IBroadcast
 	{
-		public int interactableID;
+		public long interactableID;
 		public int templateID;
 	}
 
 	public struct MerchantPurchaseBroadcast : IBroadcast
 	{
-		public int interactableID;
+		public long interactableID;
 		public int id;
 		public int index;
 		public MerchantTabType type;

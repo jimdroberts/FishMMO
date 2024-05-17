@@ -17,7 +17,7 @@ namespace FishMMO.Client
 		public UITooltipButton AbilityEventPrefab;
 		public CharacterAttributeTemplate CurrencyTemplate;
 
-		private int lastInteractableID = 0;
+		private long lastInteractableID = 0;
 		private Dictionary<int, UITooltipButton> EventSlots;
 
 		public override void OnStarting()

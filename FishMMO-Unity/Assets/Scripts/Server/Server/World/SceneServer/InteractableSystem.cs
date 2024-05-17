@@ -1,4 +1,5 @@
 ﻿using FishNet.Connection;
+using FishNet.Object;
 using FishNet.Transporting;
 using FishMMO.Shared;
 using FishMMO.Server.DatabaseServices;
@@ -47,6 +48,55 @@ namespace FishMMO.Server
 		}
 
 		/// <summary>
+		/// Attempts to add items to a characters inventory controller and broadcasts the update to the client.
+		/// </summary>
+		private bool SendNewItemBroadcast(NpgsqlDbContext dbContext, NetworkConnection conn, ICharacter character, IInventoryController inventoryController, Item newItem)
+		{
+			List<InventorySetItemBroadcast> modifiedItemBroadcasts = new List<InventorySetItemBroadcast>();
+
+			// see if we have successfully added the item
+			if (inventoryController.TryAddItem(newItem, out List<Item> modifiedItems) &&
+				modifiedItems != null &&
+				modifiedItems.Count > 0)
+			{
+				// add slot update requests to our message
+				foreach (Item item in modifiedItems)
+				{
+					// just in case..
+					if (item == null)
+					{
+						continue;
+					}
+
+					// update or add the item to the database and initialize
+					CharacterInventoryService.SetSlot(dbContext, character.ID, item);
+
+					// create the new item broadcast
+					modifiedItemBroadcasts.Add(new InventorySetItemBroadcast()
+					{
+						instanceID = item.ID,
+						templateID = item.Template.ID,
+						slot = item.Slot,
+						seed = item.IsGenerated ? item.Generator.Seed : 0,
+						stackSize = item.IsStackable ? item.Stackable.Amount : 0,
+					});
+				}
+			}
+
+			// tell the client they have new items
+			if (modifiedItemBroadcasts.Count > 0)
+			{
+				Server.Broadcast(conn, new InventorySetMultipleItemsBroadcast()
+				{
+					items = modifiedItemBroadcasts,
+				}, true, Channel.Reliable);
+
+				return true;
+			}
+			return false;
+		}
+
+		/// <summary>
 		/// Interactable broadcast received from a character.
 		/// </summary>
 		private void OnServerInteractableBroadcastReceived(NetworkConnection conn, InteractableBroadcast msg, Channel channel)
@@ -75,40 +125,63 @@ namespace FishMMO.Server
 			}
 
 			// validate scene object
-			if (!ValidateSceneObject(msg.interactableID, character.GameObject.scene.handle, out SceneObjectUID sceneObject))
+			if (!ValidateSceneObject(msg.interactableID, character.GameObject.scene.handle, out ISceneObject sceneObject))
 			{
 				return;
 			}
 
-			IInteractable interactable = sceneObject.GetComponent<IInteractable>();
+			IInteractable interactable = sceneObject.GameObject.GetComponent<IInteractable>();
 			if (interactable != null &&
 				interactable.CanInteract(character))
 			{
-				if (interactable is AbilityCrafter)
+				switch (interactable)
 				{
-					Server.Broadcast(character.Owner, new AbilityCrafterBroadcast()
-					{
-						interactableID = sceneObject.ID,
-					}, true, Channel.Reliable);
-				}
-				else if (interactable is Banker &&
-						 character.TryGet(out IBankController bankController))
-				{
-					bankController.LastInteractableID = sceneObject.ID;
+					case AbilityCrafter:
+						Server.Broadcast(character.Owner, new AbilityCrafterBroadcast()
+						{
+							interactableID = sceneObject.ID,
+						}, true, Channel.Reliable);
+						break;
+					case Banker:
+						if (character.TryGet(out IBankController bankController))
+						{
+							bankController.LastInteractableID = sceneObject.ID;
 
-					Server.Broadcast(character.Owner, new BankerBroadcast(), true, Channel.Reliable);
-				}
-				else
-				{
-					Merchant merchant = interactable as Merchant;
-					if (merchant != null)
-					{
+							Server.Broadcast(character.Owner, new BankerBroadcast(), true, Channel.Reliable);
+						}
+						break;
+					case Merchant merchant:
 						Server.Broadcast(character.Owner, new MerchantBroadcast()
 						{
 							interactableID = sceneObject.ID,
 							templateID = merchant.Template.ID,
 						}, true, Channel.Reliable);
-					}
+						break;
+					case WorldItem worldItem:
+						if (worldItem.Template != null &&
+							character.TryGet(out IInventoryController inventoryController) &&
+							inventoryController.HasFreeSlot())
+						{
+							using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
+							if (dbContext == null)
+							{
+								return;
+							}
+
+							Item newItem = new Item(worldItem.Template, 1);
+							if (newItem == null)
+							{
+								return;
+							}
+
+							if (SendNewItemBroadcast(dbContext, conn, character, inventoryController, newItem))
+							{
+								worldItem.Despawn();
+							}
+						}
+						break;
+					default:
+						return;
 				}
 			}
 		}
@@ -147,13 +220,13 @@ namespace FishMMO.Server
 			}
 
 			// validate scene object
-			if (!ValidateSceneObject(msg.interactableID, character.GameObject.scene.handle, out SceneObjectUID sceneObject))
+			if (!ValidateSceneObject(msg.interactableID, character.GameObject.scene.handle, out ISceneObject sceneObject))
 			{
 				return;
 			}
 
 			// validate interactable
-			IInteractable interactable = sceneObject.GetComponent<IInteractable>();
+			IInteractable interactable = sceneObject.GameObject.GetComponent<IInteractable>();
 			if (interactable == null ||
 				!interactable.InRange(character.Transform))
 			{
@@ -202,49 +275,8 @@ namespace FishMMO.Server
 						{
 							return;
 						}
-						
-						List<InventorySetItemBroadcast> modifiedItemBroadcasts = new List<InventorySetItemBroadcast>();
 
-						// see if we have successfully added the item
-						if (inventoryController.TryAddItem(newItem, out List<Item> modifiedItems) &&
-							modifiedItems != null &&
-							modifiedItems.Count > 0)
-						{
-							// remove the price from the characters currency
-							currency.AddValue(itemTemplate.Price);
-
-							// add slot update requests to our message
-							foreach (Item item in modifiedItems)
-							{
-								// just in case..
-								if (item == null)
-								{
-									continue;
-								}
-
-								// update or add the item to the database and initialize
-								CharacterInventoryService.SetSlot(dbContext, character.ID, item);
-
-								// create the new item broadcast
-								modifiedItemBroadcasts.Add(new InventorySetItemBroadcast()
-								{
-									instanceID = item.ID,
-									templateID = item.Template.ID,
-									slot = item.Slot,
-									seed = item.IsGenerated ? item.Generator.Seed : 0,
-									stackSize = item.IsStackable ? item.Stackable.Amount : 0,
-								});
-							}
-						}
-
-						// tell the client they have new items
-						if (modifiedItemBroadcasts.Count > 0)
-						{
-							Server.Broadcast(conn, new InventorySetMultipleItemsBroadcast()
-							{
-								items = modifiedItemBroadcasts,
-							}, true, Channel.Reliable);
-						}
+						SendNewItemBroadcast(dbContext, conn, character, inventoryController, newItem);
 					}
 					break;
 				case MerchantTabType.Ability:
@@ -340,13 +372,13 @@ namespace FishMMO.Server
 			}
 
 			// validate scene object
-			if (!ValidateSceneObject(msg.interactableID, character.GameObject.scene.handle, out SceneObjectUID sceneObject))
+			if (!ValidateSceneObject(msg.interactableID, character.GameObject.scene.handle, out ISceneObject sceneObject))
 			{
 				return;
 			}
 
 			// validate interactable
-			IInteractable interactable = sceneObject.GetComponent<IInteractable>();
+			IInteractable interactable = sceneObject.GameObject.GetComponent<IInteractable>();
 			if (interactable == null ||
 				!interactable.InRange(character.Transform))
 			{
@@ -445,9 +477,9 @@ namespace FishMMO.Server
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		private bool ValidateSceneObject(int sceneObjectID, int characterSceneHandle, out SceneObjectUID sceneObject)
+		private bool ValidateSceneObject(long sceneObjectID, int characterSceneHandle, out ISceneObject sceneObject)
 		{
-			if (!SceneObjectUID.IDs.TryGetValue(sceneObjectID, out sceneObject))
+			if (!SceneObject.Objects.TryGetValue(sceneObjectID, out sceneObject))
 			{
 				if (sceneObject == null)
 				{
@@ -459,7 +491,7 @@ namespace FishMMO.Server
 				}
 				return false;
 			}
-			if (sceneObject.gameObject.scene.handle != characterSceneHandle)
+			if (sceneObject.GameObject.scene.handle != characterSceneHandle)
 			{
 				Debug.Log("Object scene mismatch.");
 				return false;

@@ -90,15 +90,6 @@ namespace FishMMO.Shared
 						sceneDetails.SceneTransitionImage = worldSceneSettings.SceneTransitionImage;
 					}
 
-					// search for sceneObjectUIDs
-					SceneObjectUID[] sceneObjectUIDs = GameObject.FindObjectsOfType<SceneObjectUID>();
-					foreach (SceneObjectUID uid in sceneObjectUIDs)
-					{
-						uid.ID = ++sceneObjectUID;
-						Debug.Log("WorldSceneDetails: Found new Scene Object UID[" + uid.gameObject.name + " New ID:" + uid.ID + "]");
-						EditorSceneManager.MarkSceneDirty(currentScene);
-					}
-
 					// search for initialSpawnPositions
 					CharacterInitialSpawnPosition[] characterSpawnPositions = GameObject.FindObjectsOfType<CharacterInitialSpawnPosition>();
 					foreach (CharacterInitialSpawnPosition obj in characterSpawnPositions)

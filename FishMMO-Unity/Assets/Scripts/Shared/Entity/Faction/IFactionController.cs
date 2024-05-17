@@ -10,7 +10,6 @@ namespace FishMMO.Shared
 		void SetFaction(int templateID, int value);
 		bool TryGetFaction(int templateID, out Faction faction);
 		void Add(FactionTemplate template, int amount = 1);
-		FactionAllianceLevel GetAllianceLevel(FactionTemplate enemyFaction);
 		FactionAllianceLevel GetAllianceLevel(IFactionController otherFactionController);
 	}
 }

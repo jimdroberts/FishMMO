@@ -283,6 +283,7 @@ GameObject:
   m_Component:
   - component: {fileID: 352688523}
   - component: {fileID: 352688522}
+  - component: {fileID: 352688524}
   m_Layer: 0
   m_Name: Orc 2
   m_TagString: Untagged
@@ -302,14 +303,20 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 485e54a93f2772940b21fae791b0aa23, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _componentIndexCache: 0
+  _addedNetworkObject: {fileID: 352688524}
+  _networkObjectCache: {fileID: 352688524}
   Transform: {fileID: 0}
+  OrConditions: []
+  TrueConditions: []
+  InitialRespawnTime: 0
   RandomRespawnTime: 1
   RandomSpawnPosition: 1
-  CheckTerrain: 1
-  BoundingBoxSize: {x: 1, y: 1, z: 1}
-  BoundingBoxExtents: {x: 1, y: 1, z: 1}
   RandomSpawnable: 1
   Spawnables: []
+  SpawnCount: 1
+  BoundingBoxSize: {x: 1, y: 1, z: 1}
+  BoundingBoxExtents: {x: 1, y: 1, z: 1}
   GizmoColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!4 &352688523
 Transform:
@@ -326,6 +333,53 @@ Transform:
   m_Children: []
   m_Father: {fileID: 570178887}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &352688524
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 352688521}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 26b716c41e9b56b4baafaf13a523ba2e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  <IsNested>k__BackingField: 0
+  <ComponentIndex>k__BackingField: 0
+  <PredictedSpawn>k__BackingField: {fileID: 0}
+  _networkBehaviours:
+  - {fileID: 352688522}
+  <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 0}
+  <NestedRootNetworkBehaviours>k__BackingField: []
+  SerializedTransformProperties:
+    Position: {x: -101.91, y: 17.7, z: 26.68}
+    Rotation: {x: -0, y: -0, z: -0, w: 1}
+    LocalScale: {x: 1, y: 1, z: 1}
+  _isNetworked: 1
+  _isSpawnable: 1
+  _isGlobal: 0
+  _initializeOrder: 0
+  _defaultDespawnType: 0
+  NetworkObserver: {fileID: 0}
+  _enablePrediction: 0
+  _predictionType: 0
+  _graphicalObject: {fileID: 0}
+  _detachGraphicalObject: 0
+  _enableStateForwarding: 1
+  _networkTransform: {fileID: 0}
+  _ownerInterpolation: 1
+  _ownerSmoothedProperties: 255
+  _adaptiveInterpolation: 3
+  _spectatorSmoothedProperties: 255
+  _spectatorInterpolation: 2
+  _enableTeleport: 0
+  _teleportThreshold: 1
+  <PrefabId>k__BackingField: 0
+  <SpawnableCollectionId>k__BackingField: 0
+  _scenePathHash: 1844441730
+  <SceneId>k__BackingField: 7921816910454355023
+  <AssetPathHash>k__BackingField: 0
 --- !u!1 &412017732
 GameObject:
   m_ObjectHideFlags: 0
@@ -550,6 +604,7 @@ GameObject:
   - component: {fileID: 520637843}
   - component: {fileID: 520637842}
   - component: {fileID: 520637840}
+  - component: {fileID: 520637846}
   m_Layer: 8
   m_Name: Teleporter
   m_TagString: Untagged
@@ -570,8 +625,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _componentIndexCache: 0
-  _addedNetworkObject: {fileID: 700411446}
-  _networkObjectCache: {fileID: 700411446}
+  _addedNetworkObject: {fileID: 520637846}
+  _networkObjectCache: {fileID: 520637846}
   InteractionRange: 3.5
   GizmoColor: {r: 0, g: 1, b: 0, a: 1}
   Target: {fileID: 1770604219}
@@ -603,7 +658,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3d55bce5fe5091e4680796532c5ea90b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  ID: 1
 --- !u!135 &520637843
 SphereCollider:
   m_ObjectHideFlags: 0
@@ -675,6 +729,53 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 520637839}
   m_Mesh: {fileID: 10207, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!114 &520637846
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 520637839}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 26b716c41e9b56b4baafaf13a523ba2e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  <IsNested>k__BackingField: 0
+  <ComponentIndex>k__BackingField: 0
+  <PredictedSpawn>k__BackingField: {fileID: 0}
+  _networkBehaviours:
+  - {fileID: 520637840}
+  <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 0}
+  <NestedRootNetworkBehaviours>k__BackingField: []
+  SerializedTransformProperties:
+    Position: {x: 0, y: 0, z: 0}
+    Rotation: {x: 0, y: 0, z: 0, w: 0}
+    LocalScale: {x: 0, y: 0, z: 0}
+  _isNetworked: 1
+  _isSpawnable: 1
+  _isGlobal: 0
+  _initializeOrder: 0
+  _defaultDespawnType: 0
+  NetworkObserver: {fileID: 0}
+  _enablePrediction: 0
+  _predictionType: 0
+  _graphicalObject: {fileID: 0}
+  _detachGraphicalObject: 0
+  _enableStateForwarding: 1
+  _networkTransform: {fileID: 0}
+  _ownerInterpolation: 1
+  _ownerSmoothedProperties: 255
+  _adaptiveInterpolation: 3
+  _spectatorSmoothedProperties: 255
+  _spectatorInterpolation: 2
+  _enableTeleport: 0
+  _teleportThreshold: 1
+  <PrefabId>k__BackingField: 0
+  <SpawnableCollectionId>k__BackingField: 0
+  _scenePathHash: 1844441730
+  <SceneId>k__BackingField: 7921816913954269079
+  <AssetPathHash>k__BackingField: 0
 --- !u!1 &560362197
 GameObject:
   m_ObjectHideFlags: 0
@@ -1166,7 +1267,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 700411445}
-  - component: {fileID: 700411446}
   m_Layer: 0
   m_Name: Teleporters
   m_TagString: Untagged
@@ -1192,53 +1292,6 @@ Transform:
   - {fileID: 520637841}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &700411446
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 700411444}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 26b716c41e9b56b4baafaf13a523ba2e, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  <IsNested>k__BackingField: 0
-  <ComponentIndex>k__BackingField: 0
-  <PredictedSpawn>k__BackingField: {fileID: 0}
-  _networkBehaviours:
-  - {fileID: 520637840}
-  <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 0}
-  <NestedRootNetworkBehaviours>k__BackingField: []
-  SerializedTransformProperties:
-    Position: {x: 0, y: 0, z: -21.59}
-    Rotation: {x: 0, y: 0, z: 0, w: 1}
-    LocalScale: {x: 1, y: 1, z: 1}
-  _isNetworked: 1
-  _isSpawnable: 0
-  _isGlobal: 0
-  _initializeOrder: 0
-  _defaultDespawnType: 0
-  NetworkObserver: {fileID: 0}
-  _enablePrediction: 0
-  _predictionType: 0
-  _graphicalObject: {fileID: 0}
-  _detachGraphicalObject: 0
-  _enableStateForwarding: 1
-  _networkTransform: {fileID: 0}
-  _ownerInterpolation: 1
-  _ownerSmoothedProperties: 255
-  _adaptiveInterpolation: 3
-  _spectatorSmoothedProperties: 255
-  _spectatorInterpolation: 2
-  _enableTeleport: 0
-  _teleportThreshold: 1
-  <PrefabId>k__BackingField: 0
-  <SpawnableCollectionId>k__BackingField: 0
-  _scenePathHash: 1844441730
-  <SceneId>k__BackingField: 7921816911696066310
-  <AssetPathHash>k__BackingField: 0
 --- !u!1 &820151185
 GameObject:
   m_ObjectHideFlags: 0
@@ -1806,6 +1859,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1149952039}
   - component: {fileID: 1149952038}
+  - component: {fileID: 1149952040}
   m_Layer: 0
   m_Name: Orc 3
   m_TagString: Untagged
@@ -1825,14 +1879,20 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 485e54a93f2772940b21fae791b0aa23, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _componentIndexCache: 0
+  _addedNetworkObject: {fileID: 1149952040}
+  _networkObjectCache: {fileID: 1149952040}
   Transform: {fileID: 0}
+  OrConditions: []
+  TrueConditions: []
+  InitialRespawnTime: 0
   RandomRespawnTime: 1
   RandomSpawnPosition: 1
-  CheckTerrain: 1
-  BoundingBoxSize: {x: 1, y: 1, z: 1}
-  BoundingBoxExtents: {x: 1, y: 1, z: 1}
   RandomSpawnable: 1
   Spawnables: []
+  SpawnCount: 1
+  BoundingBoxSize: {x: 1, y: 1, z: 1}
+  BoundingBoxExtents: {x: 1, y: 1, z: 1}
   GizmoColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!4 &1149952039
 Transform:
@@ -1849,6 +1909,53 @@ Transform:
   m_Children: []
   m_Father: {fileID: 570178887}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1149952040
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1149952037}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 26b716c41e9b56b4baafaf13a523ba2e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  <IsNested>k__BackingField: 0
+  <ComponentIndex>k__BackingField: 0
+  <PredictedSpawn>k__BackingField: {fileID: 0}
+  _networkBehaviours:
+  - {fileID: 1149952038}
+  <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 0}
+  <NestedRootNetworkBehaviours>k__BackingField: []
+  SerializedTransformProperties:
+    Position: {x: -93.273, y: 17.7, z: 22.58}
+    Rotation: {x: -0, y: -0, z: -0, w: 1}
+    LocalScale: {x: 1, y: 1, z: 1}
+  _isNetworked: 1
+  _isSpawnable: 1
+  _isGlobal: 0
+  _initializeOrder: 0
+  _defaultDespawnType: 0
+  NetworkObserver: {fileID: 0}
+  _enablePrediction: 0
+  _predictionType: 0
+  _graphicalObject: {fileID: 0}
+  _detachGraphicalObject: 0
+  _enableStateForwarding: 1
+  _networkTransform: {fileID: 0}
+  _ownerInterpolation: 1
+  _ownerSmoothedProperties: 255
+  _adaptiveInterpolation: 3
+  _spectatorSmoothedProperties: 255
+  _spectatorInterpolation: 2
+  _enableTeleport: 0
+  _teleportThreshold: 1
+  <PrefabId>k__BackingField: 0
+  <SpawnableCollectionId>k__BackingField: 0
+  _scenePathHash: 1844441730
+  <SceneId>k__BackingField: 7921816913385748020
+  <AssetPathHash>k__BackingField: 0
 --- !u!1 &1162279319
 GameObject:
   m_ObjectHideFlags: 0
@@ -2229,8 +2336,8 @@ MonoBehaviour:
   SceneTransitionImage: {fileID: 21300000, guid: 41f73c28208285445b37a7980665ead3,
     type: 3}
   DayNightCycle: 1
-  DayCycleDuration: 60
-  NightCycleDuration: 60
+  DayCycleDuration: 10800
+  NightCycleDuration: 10800
   DaySkyboxMaterial: {fileID: 2100000, guid: 316068aec7de8294ba9429fc2bc910b9, type: 2}
   NightSkyBoxMaterial: {fileID: 2100000, guid: 16eb23baeafad21469a3509842b500e3, type: 2}
   RotateObjects:
@@ -2746,6 +2853,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1583805993}
   - component: {fileID: 1583805992}
+  - component: {fileID: 1583805994}
   m_Layer: 0
   m_Name: Orc 1
   m_TagString: Untagged
@@ -2765,14 +2873,20 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 485e54a93f2772940b21fae791b0aa23, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _componentIndexCache: 0
+  _addedNetworkObject: {fileID: 1583805994}
+  _networkObjectCache: {fileID: 1583805994}
   Transform: {fileID: 0}
+  OrConditions: []
+  TrueConditions: []
+  InitialRespawnTime: 0
   RandomRespawnTime: 1
   RandomSpawnPosition: 1
-  CheckTerrain: 1
-  BoundingBoxSize: {x: 1, y: 1, z: 1}
-  BoundingBoxExtents: {x: 1, y: 1, z: 1}
   RandomSpawnable: 1
   Spawnables: []
+  SpawnCount: 1
+  BoundingBoxSize: {x: 1, y: 1, z: 1}
+  BoundingBoxExtents: {x: 1, y: 1, z: 1}
   GizmoColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!4 &1583805993
 Transform:
@@ -2789,6 +2903,53 @@ Transform:
   m_Children: []
   m_Father: {fileID: 570178887}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1583805994
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1583805991}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 26b716c41e9b56b4baafaf13a523ba2e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  <IsNested>k__BackingField: 0
+  <ComponentIndex>k__BackingField: 0
+  <PredictedSpawn>k__BackingField: {fileID: 0}
+  _networkBehaviours:
+  - {fileID: 1583805992}
+  <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 0}
+  <NestedRootNetworkBehaviours>k__BackingField: []
+  SerializedTransformProperties:
+    Position: {x: -102.08, y: 17.7, z: 18.54}
+    Rotation: {x: -0, y: -0, z: -0, w: 1}
+    LocalScale: {x: 1, y: 1, z: 1}
+  _isNetworked: 1
+  _isSpawnable: 1
+  _isGlobal: 0
+  _initializeOrder: 0
+  _defaultDespawnType: 0
+  NetworkObserver: {fileID: 0}
+  _enablePrediction: 0
+  _predictionType: 0
+  _graphicalObject: {fileID: 0}
+  _detachGraphicalObject: 0
+  _enableStateForwarding: 1
+  _networkTransform: {fileID: 0}
+  _ownerInterpolation: 1
+  _ownerSmoothedProperties: 255
+  _adaptiveInterpolation: 3
+  _spectatorSmoothedProperties: 255
+  _spectatorInterpolation: 2
+  _enableTeleport: 0
+  _teleportThreshold: 1
+  <PrefabId>k__BackingField: 0
+  <SpawnableCollectionId>k__BackingField: 0
+  _scenePathHash: 1844441730
+  <SceneId>k__BackingField: 7921816910622845748
+  <AssetPathHash>k__BackingField: 0
 --- !u!1 &1699450705
 GameObject:
   m_ObjectHideFlags: 0

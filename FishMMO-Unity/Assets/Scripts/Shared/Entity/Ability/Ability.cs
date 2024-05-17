@@ -184,66 +184,52 @@ namespace FishMMO.Shared
 
 				AbilityEvents.Add(abilityEvent.ID, abilityEvent);
 
-				SpawnEvent spawnEvent = abilityEvent as SpawnEvent;
-				if (spawnEvent != null)
+				switch (abilityEvent)
 				{
-					if (PreSpawnEvents == null)
-					{
-						PreSpawnEvents = new Dictionary<int, SpawnEvent>();
-					}
-					if (SpawnEvents == null)
-					{
-						SpawnEvents = new Dictionary<int, SpawnEvent>();
-					}
-					switch (spawnEvent.SpawnEventType)
-					{
-						case SpawnEventType.OnPreSpawn:
-							if (!PreSpawnEvents.ContainsKey(spawnEvent.ID))
-							{
-								PreSpawnEvents.Add(spawnEvent.ID, spawnEvent);
-							}
-							break;
-						case SpawnEventType.OnSpawn:
-							if (!SpawnEvents.ContainsKey(spawnEvent.ID))
-							{
-								SpawnEvents.Add(spawnEvent.ID, spawnEvent);
-							}
-							break;
-						default:
-							break;
-					}
-				}
-				else
-				{
-					HitEvent hitEvent = abilityEvent as HitEvent;
-					if (hitEvent != null)
-					{
+					case SpawnEvent spawnEvent:
+						if (PreSpawnEvents == null)
+						{
+							PreSpawnEvents = new Dictionary<int, SpawnEvent>();
+						}
+						if (SpawnEvents == null)
+						{
+							SpawnEvents = new Dictionary<int, SpawnEvent>();
+						}
+						switch (spawnEvent.SpawnEventType)
+						{
+							case SpawnEventType.OnPreSpawn:
+								if (!PreSpawnEvents.ContainsKey(spawnEvent.ID))
+								{
+									PreSpawnEvents.Add(spawnEvent.ID, spawnEvent);
+								}
+								break;
+							case SpawnEventType.OnSpawn:
+								if (!SpawnEvents.ContainsKey(spawnEvent.ID))
+								{
+									SpawnEvents.Add(spawnEvent.ID, spawnEvent);
+								}
+								break;
+							default:
+								break;
+						}
+						break;
+					case HitEvent hitEvent:
 						if (HitEvents == null)
 						{
 							HitEvents = new Dictionary<int, HitEvent>();
 						}
 						HitEvents.Add(abilityEvent.ID, hitEvent);
-					}
-					else
-					{
-						MoveEvent moveEvent = abilityEvent as MoveEvent;
-						if (moveEvent != null)
+						break;
+					case MoveEvent moveEvent:
+						if (MoveEvents == null)
 						{
-							if (MoveEvents == null)
-							{
-								MoveEvents = new Dictionary<int, MoveEvent>();
-							}
-							MoveEvents.Add(abilityEvent.ID, moveEvent);
+							MoveEvents = new Dictionary<int, MoveEvent>();
 						}
-						else
-						{
-							AbilityTypeOverrideEventType overrideTypeEvent = abilityEvent as AbilityTypeOverrideEventType;
-							if (overrideTypeEvent != null)
-							{
-								TypeOverride = overrideTypeEvent;
-							}
-						}
-					}
+						MoveEvents.Add(abilityEvent.ID, moveEvent);
+						break;
+					case AbilityTypeOverrideEventType overrideTypeEvent:
+						TypeOverride = overrideTypeEvent;
+						break;
 				}
 
 				ActivationTime += abilityEvent.ActivationTime;
@@ -284,44 +270,30 @@ namespace FishMMO.Shared
 
 				AbilityEvents.Remove(abilityEvent.ID);
 
-				SpawnEvent spawnEvent = abilityEvent as SpawnEvent;
-				if (spawnEvent != null)
+				switch (abilityEvent)
 				{
-					switch (spawnEvent.SpawnEventType)
-					{
-						case SpawnEventType.OnPreSpawn:
-							PreSpawnEvents.Remove(spawnEvent.ID);
-							break;
-						case SpawnEventType.OnSpawn:
-							SpawnEvents.Remove(spawnEvent.ID);
-							break;
-						default:
-							break;
-					}
-				}
-				else
-				{
-					HitEvent hitEvent = abilityEvent as HitEvent;
-					if (hitEvent != null)
-					{
+					case SpawnEvent spawnEvent:
+						switch (spawnEvent.SpawnEventType)
+						{
+							case SpawnEventType.OnPreSpawn:
+								PreSpawnEvents.Remove(spawnEvent.ID);
+								break;
+							case SpawnEventType.OnSpawn:
+								SpawnEvents.Remove(spawnEvent.ID);
+								break;
+							default:
+								break;
+						}
+						break;
+					case HitEvent:
 						HitEvents.Remove(abilityEvent.ID);
-					}
-					else
-					{
-						MoveEvent moveEvent = abilityEvent as MoveEvent;
-						if (moveEvent != null)
-						{
-							MoveEvents.Remove(abilityEvent.ID);
-						}
-						else
-						{
-							AbilityTypeOverrideEventType overrideTypeEvent = abilityEvent as AbilityTypeOverrideEventType;
-							if (overrideTypeEvent != null)
-							{
-								TypeOverride = null;
-							}
-						}
-					}
+						break;
+					case MoveEvent:
+						MoveEvents.Remove(abilityEvent.ID);
+						break;
+					case AbilityTypeOverrideEventType:
+						TypeOverride = null;
+						break;
 				}
 
 				ActivationTime -= abilityEvent.ActivationTime;

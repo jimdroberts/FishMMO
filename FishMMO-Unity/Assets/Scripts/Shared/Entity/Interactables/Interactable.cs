@@ -1,29 +1,28 @@
 ﻿using System;
+using FishNet.Connection;
 using FishNet.Object;
+using FishNet.Serializing;
 using UnityEngine;
 
 namespace FishMMO.Shared
 {
-	[RequireComponent(typeof(SceneObjectUID))]
-	public abstract class Interactable : NetworkBehaviour, IInteractable
+	[RequireComponent(typeof(NetworkObject))]
+	public abstract class Interactable : NetworkBehaviour, IInteractable, ISpawnable
 	{
 		private const double INTERACT_RATE_LIMIT = 60.0f;
-
-		private SceneObjectUID uid;
 
 		public float InteractionRange = 3.5f;
 
 		private float interactionRangeSqr;
 
-		public int ID
-		{
-			get
-			{
-				return uid.ID;
-			}
-		}
+		public event Action<ISpawnable> OnDespawn;
+
+		public Spawnable SpawnTemplate { get; set; }
+
+		public long ID { get; set; }
 
 		public Transform Transform { get; private set; }
+		public GameObject GameObject { get => this.gameObject; }
 
 		public virtual string Title { get { return "Interactable"; } }
 
@@ -31,14 +30,38 @@ namespace FishMMO.Shared
 
 		void Awake()
 		{
-			uid = gameObject.GetComponent<SceneObjectUID>();
 			Transform = transform;
 			interactionRangeSqr = InteractionRange * InteractionRange;
 
 			OnStarting();
+#if !UNITY_SERVER
+		}
+#else
+			SceneObject.Register(this);
+		}
+
+		void OnDestroy()
+		{
+			SceneObject.Unregister(this);
+		}
+#endif
+
+		public override void ReadPayload(NetworkConnection connection, Reader reader)
+		{
+			ID = reader.ReadInt64();
+		}
+
+		public override void WritePayload(NetworkConnection connection, Writer writer)
+		{
+			writer.WriteInt64(ID);
 		}
 
 		public virtual void OnStarting() { }
+
+		public void Despawn()
+		{
+			OnDespawn?.Invoke(this);
+		}
 
 		public bool InRange(Transform transform)
 		{

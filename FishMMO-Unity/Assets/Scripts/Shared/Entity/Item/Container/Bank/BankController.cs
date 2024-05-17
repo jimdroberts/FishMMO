@@ -4,7 +4,7 @@ namespace FishMMO.Shared
 {
 	public class BankController : ItemContainer, IBankController
 	{
-		public int LastInteractableID { get; set; }
+		public long LastInteractableID { get; set; }
 		public long Currency { get; set; }
 
 		public override void OnAwake()

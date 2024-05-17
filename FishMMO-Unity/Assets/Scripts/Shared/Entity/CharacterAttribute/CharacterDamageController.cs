@@ -19,6 +19,22 @@ namespace FishMMO.Shared
 
 		public bool Immortal { get; set; }
 
+		public bool IsAlive
+		{
+			get
+			{
+				if (resourceInstance == null)
+				{
+					return false;
+				}
+				return resourceInstance.CurrentValue > 0;
+			}
+		}
+
+		public Action<ICharacter, int> OnDamaged;
+		public Action<ICharacter> OnKilled;
+		public Action<ICharacter, int> OnHealed;
+
 		//public List<Character> Attackers;
 
 		private CharacterResourceAttribute resourceInstance; // cache the resource

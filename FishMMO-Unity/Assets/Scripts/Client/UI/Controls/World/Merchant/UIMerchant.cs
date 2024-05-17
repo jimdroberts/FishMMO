@@ -21,7 +21,7 @@ namespace FishMMO.Client
 		private List<UITooltipButton> AbilityEvents;
 		private List<UITooltipButton> Items;
 
-		private int lastMerchantID = 0;
+		private long lastMerchantID = 0;
 		private int currentTemplateID = 0;
 		private MerchantTabType currentTab = MerchantTabType.Item;
 

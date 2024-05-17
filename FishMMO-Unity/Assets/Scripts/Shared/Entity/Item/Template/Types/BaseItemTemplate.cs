@@ -13,6 +13,7 @@ namespace FishMMO.Shared
 		//use this for item generation
 		public int[] IconPools;
 		public Sprite icon;
+		public Mesh Mesh;
 
 		public string Name { get { return this.name; } }
 		public bool IsStackable { get { return MaxStackSize > 1; } }

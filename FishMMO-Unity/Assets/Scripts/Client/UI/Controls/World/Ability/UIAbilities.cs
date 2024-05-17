@@ -98,18 +98,15 @@ namespace FishMMO.Client
 
 		public void AddKnownAbility(BaseAbilityTemplate template)
 		{
-			AbilityEvent abilityEvent = template as AbilityEvent;
-			if (abilityEvent != null)
+			switch (template)
 			{
-				InstantiateButton(template.ID, template.Icon, ReferenceButtonType.None, AbilityTabType.KnownAbilityEvent, template.Tooltip(), ref KnownAbilityEvents);
-			}
-			else
-			{
-				AbilityTemplate abilityTemplate = template as AbilityTemplate;
-				if (abilityTemplate != null)
-				{
+				case AbilityEvent:
+					InstantiateButton(template.ID, template.Icon, ReferenceButtonType.None, AbilityTabType.KnownAbilityEvent, template.Tooltip(), ref KnownAbilityEvents);
+					break;
+				case AbilityTemplate:
 					InstantiateButton(template.ID, template.Icon, ReferenceButtonType.None, AbilityTabType.KnownAbility, template.Tooltip(), ref KnownAbilities);
-				}
+					break;
+				default: return;
 			}
 		}
 

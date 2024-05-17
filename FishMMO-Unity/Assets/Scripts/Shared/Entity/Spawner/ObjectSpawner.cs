@@ -1,35 +1,62 @@
-﻿using System.Collections.Generic;
+﻿using FishNet.Object;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace FishMMO.Shared
 {
-	public class ObjectSpawner : MonoBehaviour
+	[RequireComponent(typeof(NetworkObject))]
+	public class ObjectSpawner : NetworkBehaviour
 	{
 		[HideInInspector]
 		public Transform Transform;
 
+		/// <summary>
+		/// If any of these conditions return true the object will respawn. This list is iterated first.
+		/// </summary>
+		public List<BaseRespawnCondition> OrConditions = new List<BaseRespawnCondition>();
+
+		/// <summary>
+		/// All conditions must return true for the object to respawn. This list is iterated second.
+		/// </summary>
+		public List<BaseRespawnCondition> TrueConditions = new List<BaseRespawnCondition>();
+
+		public float InitialRespawnTime = 0.0f;
 		[Tooltip("If true a random number will be selected within the minimum and maximum range provided. Otherwise the maximum respawn time will be used.")]
 		public bool RandomRespawnTime = true;
+		[Tooltip("If true a random prefab will be instantiated during the next respawn.")]
+		public bool RandomSpawnable = true;
+		public List<Spawnable> Spawnables;
+		[Tooltip("The maximum number of objects that can be spawned by this spawner.")]
+		public int MaxSpawnCount = 1;
+		public Dictionary<long, ISpawnable> Spawned = new Dictionary<long, ISpawnable>();
 		[Tooltip("If true a random spawn position will be picked inside of the bounding box using the current position as the center.")]
 		public bool RandomSpawnPosition = true;
-		public bool CheckTerrain = true;
+		public float SphereRadius = 0.5f;
 		public Vector3 BoundingBoxSize = Vector3.one;
 		[HideInInspector]
 		public Vector3 BoundingBoxExtents = Vector3.one;
-		[Tooltip("If true a random Spawnable object will be selected to spawn. Otherwise the list will be spawned in order.")]
-		public bool RandomSpawnable = true;
-		public List<BaseSpawnable> Spawnables = new List<BaseSpawnable>();
 
-		private BaseSpawnable spawned = null;
 		private float respawnTime = 0.0f;
 		private int lastSpawnIndex = 0;
 
 		void Awake()
 		{
 			Transform = transform;
+			respawnTime = InitialRespawnTime;
 
 			// Extents are always half of BoundingBoxSize
 			BoundingBoxExtents = BoundingBoxSize * 0.5f;
+		}
+
+		void Update()
+		{
+			if (!base.IsServerStarted)
+			{
+				return;
+			}
+			TryRespawn();
+
+			respawnTime -= Time.deltaTime;
 		}
 
 #if UNITY_EDITOR
@@ -50,13 +77,24 @@ namespace FishMMO.Shared
 		}
 #endif
 
-		public void Despawn()
+		public void Despawn(ISpawnable spawnable)
 		{
-			if (spawned != null)
+			// ensure we spawned the object
+			if (!Spawned.ContainsKey(spawnable.ID))
 			{
-
+				return;
 			}
-			respawnTime = RandomRespawnTime ? Random.Range(spawned.MinimumRespawnTime, respawnTime) : spawned.MaximumRespawnTime;
+			// did we already set a previous respawn time?
+			if (respawnTime > 0)
+			{
+				return;
+			}
+			// set the next respawn time
+			respawnTime = RandomRespawnTime ? Random.Range(spawnable.SpawnTemplate.MinimumRespawnTime, spawnable.SpawnTemplate.MaximumRespawnTime) : InitialRespawnTime;
+
+			Spawned.Remove(spawnable.ID);
+
+			//Debug.Log($"Object despawned, next respawn at {respawnTime}.");
 		}
 
 		public void TryRespawn()
@@ -68,8 +106,58 @@ namespace FishMMO.Shared
 				return;
 			}
 
+			if (Spawned.Count >= MaxSpawnCount)
+			{
+				return;
+			}
+
+			bool shouldRespawn = false;
+
+			if (OrConditions != null &&
+				OrConditions.Count >= 1)
+			{
+				foreach (BaseRespawnCondition condition in OrConditions)
+				{
+					if (condition == null)
+					{
+						continue;
+					}
+					if (condition.OnCheckCondition(this))
+					{
+						shouldRespawn = true;
+						break;
+					}
+				}
+			}
+
+			if (!shouldRespawn &&
+				TrueConditions != null &&
+				TrueConditions.Count >= 1)
+			{
+				foreach (BaseRespawnCondition condition in TrueConditions)
+				{
+					if (condition == null)
+					{
+						continue;
+					}
+					if (!condition.OnCheckCondition(this))
+					{
+						return;
+					}
+				}
+			}
+
 			// pick a random index or increment
-			int spawnIndex = RandomSpawnable ? Random.Range(0, Spawnables.Count) : ++lastSpawnIndex;
+			int spawnIndex = 0;
+			if (RandomSpawnable)
+			{
+				spawnIndex = Random.Range(0, Spawnables.Count);
+			}
+			else
+			{
+				spawnIndex = lastSpawnIndex;
+				++lastSpawnIndex;
+			}
 
 			// if the spawn index is greater than the number of spawnables we reset to 0
 			if (spawnIndex >= Spawnables.Count)
@@ -78,65 +166,76 @@ namespace FishMMO.Shared
 				spawnIndex = 0;
 			}
 
-			BaseSpawnable spawnable = Spawnables[spawnIndex];
-			if (spawnable == null)
+			Spawnable spawnable = Spawnables[spawnIndex];
+			if (spawnable == null ||
+				spawnable.NetworkObject == null)
 			{
 				return;
 			}
 
-			if (spawnable.Prefab == null)
-			{
-				return;
-			}
-
-			// cache the last spawned object template
-			spawned = spawnable;
-
+			// calculate spawn position
 			Vector3 spawnPosition = Transform.position;
-
 			if (RandomSpawnPosition)
 			{
 				// pick a random spawn position on top of the ground within the bounding box
 				PhysicsScene physicsScene = gameObject.scene.GetPhysicsScene();
 				if (physicsScene != null)
 				{
-					Vector3 bottomPoint = transform.position + new Vector3(Random.Range(-BoundingBoxSize.x, BoundingBoxSize.x),
-																		   -BoundingBoxExtents.y,
-																		   Random.Range(-BoundingBoxSize.z, BoundingBoxSize.z));
+					// get a random point at the top of the bounding box
+					Vector3 origin = new Vector3(Random.Range(-BoundingBoxExtents.x, BoundingBoxExtents.x),
+												 BoundingBoxExtents.y,
+												 Random.Range(-BoundingBoxExtents.z, BoundingBoxExtents.z));
 
-					Vector3 topPoint = new Vector3(bottomPoint.x,
-												   BoundingBoxExtents.y,
-												   bottomPoint.z);
+					// add the spawner position
+					origin += spawnPosition;
 
-					Vector3 direction = bottomPoint - topPoint;
-
-					float distance = direction.magnitude;
-
-					direction.Normalize();
-
-					if (physicsScene.SphereCast(topPoint, 0.5f, direction, out RaycastHit hit, distance, Constants.Layers.Ground, QueryTriggerInteraction.Ignore))
+					if (physicsScene.SphereCast(origin, SphereRadius, Vector3.down, out RaycastHit hit, BoundingBoxSize.y, Constants.Layers.Obstruction, QueryTriggerInteraction.Ignore))
 					{
 						spawnPosition = hit.point;
+						spawnPosition.y += spawnable.YOffset;
 					}
 				}
 			}
 
-			/*NetworkObject prefab = networkManager.SpawnablePrefabs.GetObject(true, dbCharacter.RaceID);
-
-			if (prefab != null)
+			// spawn the object server side
+			if (base.IsServerStarted)
 			{
-				// instantiate the character object
-				NetworkObject nob = networkManager.GetPooledInstantiated(prefab, spawnPosition, Transform.rotation, true);
+				NetworkObject prefab = NetworkManager.SpawnablePrefabs.GetObject(true, spawnable.NetworkObject.PrefabId);
 
-				ServerManager.Spawn(nob, null, Transform.gameObject.scene);
-			}*/
-		}
+				if (prefab != null)
+				{
+					// instantiate the character object
+					NetworkObject nob = NetworkManager.GetPooledInstantiated(prefab, spawnPosition, Transform.rotation, true);
 
-		public Vector3 GetRandomPointInCube(Vector3 size)
-		{
-			return new Vector3(Random.Range(-size.x, size.x),
-							   Random.Range(-size.y, size.y),
-							   Random.Range(-size.z, size.z));
+					if (nob == null)
+					{
+						return;
+					}
+
+					ISpawnable nobSpawnable = nob.GetComponent<ISpawnable>();
+					if (nobSpawnable != null)
+					{
+						nobSpawnable.OnDespawn += Despawn;
+						nobSpawnable.SpawnTemplate = spawnable;
+						Spawned.Add(nobSpawnable.ID, nobSpawnable);
+
+						//Debug.Log($"ISpawnable found.");
+					}
+
+					ServerManager.Spawn(nob, null, Transform.gameObject.scene);
+
+					//Debug.Log($"Spawned Count: {Spawned.Count}");
+
+					if (Spawned.Count < MaxSpawnCount)
+					{
+						// set the next respawn time
+						respawnTime = RandomRespawnTime ? Random.Range(spawnable.MinimumRespawnTime, spawnable.MaximumRespawnTime) : InitialRespawnTime;
+
+						//Debug.Log($"Respawn time is updating, next respawn in {respawnTime}s");
+					}
+					//Debug.Log($"Spawned {nob.gameObject.name} at {System.DateTime.UtcNow}");
+				}
+			}
 		}
 	}
 }

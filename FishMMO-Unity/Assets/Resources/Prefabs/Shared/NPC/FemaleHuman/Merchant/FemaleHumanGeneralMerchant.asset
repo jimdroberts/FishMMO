@@ -9,9 +9,11 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3ad70174b079c2f4ebc7931d3dd1af6f, type: 3}
-  m_Name: DefaultPrefabObjects
+  m_Script: {fileID: 11500000, guid: b9c5263a711f0714a8ae02e2baa36340, type: 3}
+  m_Name: FemaleHumanGeneralMerchant
   m_EditorClassIdentifier: 
-  _prefabs:
-  - {fileID: 4964627840297570917, guid: 3243c87cb242a03478e9ee038f7873ed, type: 3}
-  - {fileID: 7248884440816270172, guid: 67671c10327f3b144a21191076a7af5b, type: 3}
+  NetworkObject: {fileID: 6349228138187238843, guid: 82e54404fe2ccc448bd81cbe31657e29,
+    type: 3}
+  MinimumRespawnTime: 60
+  MaximumRespawnTime: 120
+  Bounds: {x: 0, y: 0, z: 0}

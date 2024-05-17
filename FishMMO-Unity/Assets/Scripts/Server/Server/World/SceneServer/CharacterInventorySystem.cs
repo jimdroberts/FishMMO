@@ -608,9 +608,9 @@ namespace FishMMO.Server
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		private bool ValidateBankerSceneObject(int sceneObjectID, IPlayerCharacter character)
+		private bool ValidateBankerSceneObject(long sceneObjectID, IPlayerCharacter character)
 		{
-			if (!SceneObjectUID.IDs.TryGetValue(sceneObjectID, out SceneObjectUID sceneObject))
+			if (!SceneObject.Objects.TryGetValue(sceneObjectID, out ISceneObject sceneObject))
 			{
 				if (sceneObject == null)
 				{
@@ -622,22 +622,22 @@ namespace FishMMO.Server
 				}
 				return false;
 			}
-			if (sceneObject.gameObject.scene.handle != character.GameObject.scene.handle)
+			if (sceneObject.GameObject.scene.handle != character.GameObject.scene.handle)
 			{
 				Debug.Log("Object scene mismatch.");
 				return false;
 			}
-			IInteractable interactable = sceneObject.GetComponent<IInteractable>();
+			IInteractable interactable = sceneObject.GameObject.GetComponent<IInteractable>();
 			if (interactable == null ||
 				!interactable.InRange(character.Transform))
 			{
-				Debug.Log($"{character.CharacterName} is not in range of {sceneObject.gameObject.name}!");
+				Debug.Log($"{character.CharacterName} is not in range of {sceneObject.GameObject.name}!");
 				return false;
 			}
 			Banker banker = interactable as Banker;
 			if (banker == null)
 			{
-				Debug.Log($"{sceneObject.gameObject.name} is not a banker!");
+				Debug.Log($"{sceneObject.GameObject.name} is not a banker!");
 				return false;
 			}
 			return true;

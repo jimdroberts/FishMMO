@@ -606,27 +606,26 @@ namespace FishMMO.Shared
 						KnownEvents.Add(abilityEvent.ID);
 					}
 
-					// figure out what kind of event it is and add to the respective category
-					if (abilityEvent is HitEvent)
+					switch (abilityEvent)
 					{
-						if (!KnownHitEvents.Contains(abilityEvent.ID))
-						{
-							KnownHitEvents.Add(abilityEvent.ID);
-						}
-					}
-					else if (abilityEvent is MoveEvent)
-					{
-						if (!KnownMoveEvents.Contains(abilityEvent.ID))
-						{
-							KnownMoveEvents.Add(abilityEvent.ID);
-						}
-					}
-					else if (abilityEvent is SpawnEvent)
-					{
-						if (!KnownSpawnEvents.Contains(abilityEvent.ID))
-						{
-							KnownSpawnEvents.Add(abilityEvent.ID);
-						}
+						case HitEvent:
+							if (!KnownHitEvents.Contains(abilityEvent.ID))
+							{
+								KnownHitEvents.Add(abilityEvent.ID);
+							}
+							break;
+						case MoveEvent:
+							if (!KnownMoveEvents.Contains(abilityEvent.ID))
+							{
+								KnownMoveEvents.Add(abilityEvent.ID);
+							}
+							break;
+						case SpawnEvent:
+							if (!KnownSpawnEvents.Contains(abilityEvent.ID))
+							{
+								KnownSpawnEvents.Add(abilityEvent.ID);
+							}
+							break;
 					}
 				}
 				else

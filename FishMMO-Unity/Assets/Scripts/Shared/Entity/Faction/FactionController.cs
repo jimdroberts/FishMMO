@@ -10,6 +10,32 @@ namespace FishMMO.Shared
 		public bool IsAggressive { get; set; }
 		public Dictionary<int, Faction> Factions { get { return factions; } }
 
+		public FactionTemplate Template;
+
+		public override void OnAwake()
+		{
+			base.OnAwake();
+
+			if (Template != null)
+			{
+				foreach (FactionTemplate faction in Template.Allied)
+				{
+					var newFaction = new Faction(faction.ID, faction.AlliedLevel);
+					Factions.Add(newFaction.Template.ID, newFaction);
+				}
+				foreach (FactionTemplate faction in Template.Neutral)
+				{
+					var newFaction = new Faction(faction.ID, 0);
+					Factions.Add(newFaction.Template.ID, newFaction);
+				}
+				foreach (FactionTemplate faction in Template.Enemies)
+				{
+					var newFaction = new Faction(faction.ID, faction.EnemyLevel);
+					Factions.Add(newFaction.Template.ID, newFaction);
+				}
+			}
+		}
+
 #if !UNITY_SERVER
 		public override void OnStartCharacter()
 		{
@@ -111,31 +137,12 @@ namespace FishMMO.Shared
 			}
 		}
 
-		public FactionAllianceLevel GetAllianceLevel(FactionTemplate enemyFaction)
-		{
-			if (IsAggressive)
-			{
-				return FactionAllianceLevel.Enemy;
-			}
-
-			if (factions.TryGetValue(enemyFaction.ID, out Faction faction))
-			{
-				if (faction.Value >= enemyFaction.AlliedLevel)
-				{
-					return FactionAllianceLevel.Ally;
-				}
-				else if (faction.Value <= enemyFaction.EnemyLevel)
-				{
-					return FactionAllianceLevel.Enemy;
-				}
-			}
-			return FactionAllianceLevel.Neutral;
-		}
-
 		public FactionAllianceLevel GetAllianceLevel(IFactionController otherFactionController)
 		{
-			if (otherFactionController == null ||
-				otherFactionController.Factions == null)
+			// is aggression toggled on either?
+			if (IsAggressive ||
+				otherFactionController == null ||
+				otherFactionController.IsAggressive)
 			{
 				return FactionAllianceLevel.Enemy;
 			}
@@ -154,11 +161,6 @@ namespace FishMMO.Shared
 				guildController.ID == otherGuildController.ID)
 			{
 				return FactionAllianceLevel.Ally;
-			}
-
-			if (otherFactionController.IsAggressive)
-			{
-				return FactionAllianceLevel.Enemy;
 			}
 
 			int balance = 0;
