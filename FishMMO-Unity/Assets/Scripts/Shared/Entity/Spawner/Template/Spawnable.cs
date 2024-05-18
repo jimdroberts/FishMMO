@@ -18,6 +18,18 @@ namespace FishMMO.Shared
 
 		void OnValidate()
 		{
+			if (NetworkObject == null)
+			{
+				return;
+			}
+
+			if (!NetworkObject.IsSpawnable)
+			{
+				Debug.LogError($"{NetworkObject.name} is not spawnable. Mark it as spawnable and re-assign the object.");
+				NetworkObject = null;
+				return;
+			}
+
 			// get the collider height
 			Collider collider = NetworkObject.GetComponent<Collider>();
 			switch (collider)

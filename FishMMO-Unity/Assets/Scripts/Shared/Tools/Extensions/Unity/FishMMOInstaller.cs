@@ -387,6 +387,9 @@ namespace FishMMO.Shared
 						Environment.SetEnvironmentVariable("PATH", newPath);
 					}
 
+					string dotnetRoot = "/usr/share/dotnet";
+					Environment.SetEnvironmentVariable("DOTNET_ROOT", dotnetRoot);
+
 					pathSet = true;
 				}
 			}
@@ -444,6 +447,7 @@ namespace FishMMO.Shared
 				else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
 				{
 					await InstallDockerLinuxAsync();
+					await InstallPipLinuxAsync();
 				}
 				else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
 				{
@@ -497,6 +501,27 @@ namespace FishMMO.Shared
 		private async Task InstallDockerLinuxAsync()
 		{
 			string command = "curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh";
+
+			using (Process process = new Process())
+			{
+				process.StartInfo.FileName = "bash";
+				process.StartInfo.Arguments = $"-c \"{command}\"";
+				process.StartInfo.UseShellExecute = false;
+				process.StartInfo.RedirectStandardOutput = true;
+				process.StartInfo.RedirectStandardError = true;
+				process.StartInfo.CreateNoWindow = true;
+				process.Start();
+				await process.WaitForExitAsync();
+				if (process.ExitCode != 0)
+				{
+					throw new Exception($"Command '{command}' failed with exit code {process.ExitCode}");
+				}
+			}
+		}
+
+		private async Task InstallPipLinuxAsync()
+		{
+			string command = "sudo apt install -y python3-pip";
 
 			using (Process process = new Process())
 			{

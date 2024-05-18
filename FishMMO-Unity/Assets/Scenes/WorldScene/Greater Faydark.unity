@@ -2355,14 +2355,14 @@ MonoBehaviour:
   Transform: {fileID: 0}
   OrConditions: []
   TrueConditions: []
-  InitialRespawnTime: 60
+  InitialRespawnTime: 15
   RandomRespawnTime: 1
-  RandomSpawnPosition: 1
   RandomSpawnable: 1
   Spawnables:
-  - {fileID: 11400000, guid: 79c4daf0964bfcf458c686cd3902efce, type: 2}
-  - {fileID: 11400000, guid: fa15de61be30e7d42b233b96a5371856, type: 2}
-  SpawnCount: 2
+  - {fileID: 11400000, guid: 3f10125fd8889b34eb402df65a3fb355, type: 2}
+  MaxSpawnCount: 1
+  RandomSpawnPosition: 1
+  SphereRadius: 0.5
   BoundingBoxSize: {x: 10.47, y: 15.56, z: 25.5}
   BoundingBoxExtents: {x: 1, y: 1, z: 1}
   GizmoColor: {r: 1, g: 0, b: 0, a: 1}

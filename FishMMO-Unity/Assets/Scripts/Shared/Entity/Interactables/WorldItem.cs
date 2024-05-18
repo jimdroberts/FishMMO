@@ -1,14 +1,19 @@
-﻿namespace FishMMO.Shared
+﻿using UnityEngine;
+
+namespace FishMMO.Shared
 {
 	public class WorldItem : Interactable
 	{
-		public BaseItemTemplate Template { get; private set; }
+		[SerializeField]
+		private BaseItemTemplate template;
+
+		public BaseItemTemplate Template { get { return template; } }
 		public uint Amount { get; private set; }
 		public override string Title { get { return Template == null ? "Item" : Template.Name; } }
 
 		public void Initialize(BaseItemTemplate template, uint amount)
 		{
-			Template = template;
+			this.template = template;
 			Amount = amount;
 		}
 	}

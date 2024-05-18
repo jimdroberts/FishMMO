@@ -94,7 +94,12 @@ namespace FishMMO.Shared
 
 			Spawned.Remove(spawnable.ID);
 
-			//Debug.Log($"Object despawned, next respawn at {respawnTime}.");
+			// spawn the object server side
+			if (base.IsServerStarted)
+			{
+				ServerManager.Despawn(spawnable.NetworkObject, DespawnType.Pool);
+				Debug.Log($"Object despawned, next respawn at {respawnTime}.");
+			}
 		}
 
 		public void TryRespawn()
@@ -233,7 +238,7 @@ namespace FishMMO.Shared
 
 						//Debug.Log($"Respawn time is updating, next respawn in {respawnTime}s");
 					}
-					//Debug.Log($"Spawned {nob.gameObject.name} at {System.DateTime.UtcNow}");
+					Debug.Log($"Spawned {nob.gameObject.name} at {System.DateTime.UtcNow}");
 				}
 			}
 		}
