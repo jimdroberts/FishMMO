@@ -28,6 +28,7 @@ namespace FishMMO.Shared
 		}
 
 		public const BuildOptions BASE_BUILD_OPTIONS = BuildOptions.CleanBuildCache | BuildOptions.Development;
+		public const BuildOptions INSTALLER_BUILD_OPTIONS = BuildOptions.CleanBuildCache;
 
 		public const string ALL_IN_ONE_SERVER_BUILD_NAME = "All-In-One";
 		public const string LOGIN_SERVER_BUILD_NAME = "Login";
@@ -358,7 +359,7 @@ start Scene.exe SCENE";
 			}
 		}
 
-		[MenuItem("FishMMO/Build/Installer", priority = -10)]
+		[MenuItem("FishMMO/Build/Windows Server Installer", priority = -10)]
 		public static void BuildWindows64Setup()
 		{
 			BuildExecutable("Installer",
@@ -367,9 +368,23 @@ start Scene.exe SCENE";
 								Constants.Configuration.InstallerPath,
 							},
 							CustomBuildType.Installer,
-							BASE_BUILD_OPTIONS | BuildOptions.ShowBuiltPlayer,
-							StandaloneBuildSubtarget.Player,
+							INSTALLER_BUILD_OPTIONS | BuildOptions.ShowBuiltPlayer,
+							StandaloneBuildSubtarget.Server,
 							BuildTarget.StandaloneWindows64);
+		}
+
+		[MenuItem("FishMMO/Build/Linux Server Installer", priority = -9)]
+		public static void BuildLinuxSetup()
+		{
+			BuildExecutable("Installer",
+							new string[]
+							{
+								Constants.Configuration.InstallerPath,
+							},
+							CustomBuildType.Installer,
+							INSTALLER_BUILD_OPTIONS | BuildOptions.ShowBuiltPlayer,
+							StandaloneBuildSubtarget.Server,
+							BuildTarget.StandaloneLinux64);
 		}
 
 		private static void BuildSetupFolder(string rootPath, string buildPath)

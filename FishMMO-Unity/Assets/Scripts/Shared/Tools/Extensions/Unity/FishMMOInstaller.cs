@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -20,6 +21,13 @@ namespace FishMMO.Shared
 		public TMP_Text OutputLog;
 		public TMP_InputField CommandInput;
 		public List<Button> Buttons = new List<Button>();
+
+		private void Awake()
+		{
+#if !UNITY_EDITOR
+			InstallEverything();
+#endif
+		}
 
 		public void InstallEverything()
 		{
@@ -92,6 +100,11 @@ namespace FishMMO.Shared
 		#region WSL
 		public async void InstallWSL()
 		{
+			if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+			{
+				return;
+			}
+
 			SetButtonsActive(false);
 			if (await IsVirtualizationEnabledAsync())
 			{
@@ -133,6 +146,11 @@ namespace FishMMO.Shared
 
 		public async Task<bool> IsWSLInstalledAsync()
 		{
+			if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+			{
+				return true;
+			}
+
 			using (Process process = new Process())
 			{
 				process.StartInfo.FileName = "where";
@@ -194,51 +212,129 @@ namespace FishMMO.Shared
 
 		public async Task<bool> IsDotNetInstalledAsync()
 		{
+			string command;
+			string arguments = "dotnet";
+
 			if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
 			{
-				using (Process process = new Process())
-				{
-					process.StartInfo.FileName = "where";
-					process.StartInfo.Arguments = "dotnet";
-					process.StartInfo.UseShellExecute = false;
-					process.StartInfo.RedirectStandardOutput = true;
-					process.StartInfo.CreateNoWindow = true;
-
-					process.Start();
-					await process.WaitForExitAsync(); // Use asynchronous wait
-
-					return process.ExitCode == 0;
-				}
+				command = "where";
 			}
-			return false;
+			else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ||
+					 RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+			{
+				command = "which";
+			}
+			else
+			{
+				throw new PlatformNotSupportedException("Unsupported operating system");
+			}
+
+			using (Process process = new Process())
+			{
+				process.StartInfo.FileName = command;
+				process.StartInfo.Arguments = arguments;
+				process.StartInfo.UseShellExecute = false;
+				process.StartInfo.RedirectStandardOutput = true;
+				process.StartInfo.CreateNoWindow = true;
+
+				process.Start();
+				await process.WaitForExitAsync(); // Use asynchronous wait
+
+				return process.ExitCode == 0;
+			}
 		}
 
 		public async Task DownloadAndInstallDotNetAsync()
 		{
-			string downloadUrl = "https://dot.net/v1/dotnet-install.ps1";
-			string psScriptFile = "dotnet-install.ps1";
-			string installDir = "C:\\Program Files\\dotnet";
 			string version = "7.0.202";
+			string installDir;
 
-			using (Process process = new Process())
+			if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
 			{
-				process.StartInfo.FileName = "curl";
-				process.StartInfo.Arguments = $"-o {psScriptFile} {downloadUrl}";
-				process.StartInfo.UseShellExecute = false;
-				process.StartInfo.CreateNoWindow = true;
+				installDir = "C:\\Program Files\\dotnet";
+				string downloadUrl = "https://dot.net/v1/dotnet-install.ps1";
+				string psScriptFile = "dotnet-install.ps1";
 
-				process.Start();
-				await process.WaitForExitAsync(); // Use asynchronous wait
+				// Download the PowerShell script
+				using (HttpClient client = new HttpClient())
+				{
+					var scriptContent = await client.GetStringAsync(downloadUrl);
+					await File.WriteAllTextAsync(psScriptFile, scriptContent);
+				}
+
+				// Run the PowerShell script
+				using (Process process = new Process())
+				{
+					process.StartInfo.FileName = "powershell";
+					process.StartInfo.Arguments = $"-ExecutionPolicy Bypass -Command \"& .\\{psScriptFile} -Version {version} -InstallDir '{installDir}'\"";
+					process.StartInfo.CreateNoWindow = true;
+					process.StartInfo.UseShellExecute = false;
+					process.StartInfo.RedirectStandardOutput = true;
+					process.StartInfo.RedirectStandardError = true;
+
+					process.Start();
+					string output = await process.StandardOutput.ReadToEndAsync();
+					string error = await process.StandardError.ReadToEndAsync();
+					await process.WaitForExitAsync();
+
+					if (process.ExitCode != 0)
+					{
+						throw new Exception($"PowerShell script failed with exit code {process.ExitCode}: {error}");
+					}
+				}
 			}
-
-			using (Process process = new Process())
+			else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ||
+					 RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
 			{
-				process.StartInfo.FileName = "powershell";
-				process.StartInfo.Arguments = $"-ExecutionPolicy Bypass -Command \"& .\\{psScriptFile} -Version {version} -InstallDir '{installDir}'\"";
-				process.StartInfo.CreateNoWindow = true;
+				installDir = "/usr/local/share/dotnet";
+				string downloadUrl = "https://dot.net/v1/dotnet-install.sh";
+				string shScriptFile = "dotnet-install.sh";
 
-				process.Start();
-				await process.WaitForExitAsync(); // Use asynchronous wait
+				// Download the shell script
+				using (HttpClient client = new HttpClient())
+				{
+					var scriptContent = await client.GetStringAsync(downloadUrl);
+					await File.WriteAllTextAsync(shScriptFile, scriptContent);
+				}
+
+				// Make the script executable
+				using (Process chmodProcess = new Process())
+				{
+					chmodProcess.StartInfo.FileName = "chmod";
+					chmodProcess.StartInfo.Arguments = $"+x {shScriptFile}";
+					chmodProcess.StartInfo.CreateNoWindow = true;
+					chmodProcess.StartInfo.UseShellExecute = false;
+					chmodProcess.StartInfo.RedirectStandardOutput = true;
+					chmodProcess.StartInfo.RedirectStandardError = true;
+
+					chmodProcess.Start();
+					await chmodProcess.WaitForExitAsync();
+				}
+
+				// Run the shell script
+				using (Process process = new Process())
+				{
+					process.StartInfo.FileName = "/bin/bash";
+					process.StartInfo.Arguments = $"./{shScriptFile} --version {version} --install-dir {installDir}";
+					process.StartInfo.CreateNoWindow = true;
+					process.StartInfo.UseShellExecute = false;
+					process.StartInfo.RedirectStandardOutput = true;
+					process.StartInfo.RedirectStandardError = true;
+
+					process.Start();
+					string output = await process.StandardOutput.ReadToEndAsync();
+					string error = await process.StandardError.ReadToEndAsync();
+					await process.WaitForExitAsync();
+
+					if (process.ExitCode != 0)
+					{
+						throw new Exception($"Shell script failed with exit code {process.ExitCode}: {error}");
+					}
+				}
+			}
+			else
+			{
+				throw new PlatformNotSupportedException("Unsupported operating system");
 			}
 		}
 
@@ -274,11 +370,20 @@ namespace FishMMO.Shared
 				process.StartInfo.Arguments = arguments;
 				process.StartInfo.UseShellExecute = false;
 				process.StartInfo.RedirectStandardOutput = true;
+				process.StartInfo.RedirectStandardError = true;
 				process.StartInfo.CreateNoWindow = true;
 
 				process.Start();
 				string output = await process.StandardOutput.ReadToEndAsync(); // Use asynchronous read
+				string error = await process.StandardError.ReadToEndAsync();
 				await process.WaitForExitAsync(); // Use asynchronous wait
+
+				if (process.ExitCode != 0)
+				{
+					// Handle non-zero exit codes if necessary
+					Debug.Log($"DotNet command failed with exit code {process.ExitCode}.\nError: {error}");
+				}
+
 				return output;
 			}
 #else
@@ -300,50 +405,130 @@ namespace FishMMO.Shared
 
 			Log("Installing Docker... Please wait.");
 
+			try
+			{
+				if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+				{
+					await InstallDockerWindowsAsync();
+				}
+				else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+				{
+					await InstallDockerLinuxAsync();
+				}
+				else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+				{
+					await InstallDockerMacAsync();
+				}
+				else
+				{
+					throw new PlatformNotSupportedException("Unsupported operating system");
+				}
+
+				Log("Docker has been installed.");
+			}
+			catch (Exception ex)
+			{
+				Log($"Installation failed: {ex.Message}");
+			}
+
+			SetButtonsActive(true);
+		}
+
+		private async Task InstallDockerWindowsAsync()
+		{
 			using (Process process = new Process())
 			{
 				process.StartInfo.FileName = "curl";
-				process.StartInfo.Arguments = "https://download.docker.com/win/stable/Docker%20Desktop%20Installer.exe -o DockerInstaller.exe";
+				process.StartInfo.Arguments = "-L https://desktop.docker.com/win/stable/Docker%20Desktop%20Installer.exe -o DockerInstaller.exe";
 				process.StartInfo.UseShellExecute = false;
+				process.StartInfo.RedirectStandardOutput = true;
+				process.StartInfo.RedirectStandardError = true;
 				process.StartInfo.CreateNoWindow = true;
 				process.Start();
-				process.WaitForExit();
+				await process.WaitForExitAsync();
 			}
 
 			using (Process process = new Process())
 			{
-				process.StartInfo.FileName = "start";
-				process.StartInfo.Arguments = "/wait DockerInstaller.exe";
-				process.StartInfo.UseShellExecute = false;
-				process.StartInfo.CreateNoWindow = true;
+				process.StartInfo.FileName = "DockerInstaller.exe";
+				process.StartInfo.Arguments = "/quiet /install";
+				process.StartInfo.UseShellExecute = true;  // Using shell execute to allow for installer GUI if needed
 				process.Start();
 				process.WaitForExit();
 			}
-
-			Log("Docker has been installed.");
 
 			// Delete DockerInstaller.exe
 			if (File.Exists("DockerInstaller.exe"))
 			{
 				File.Delete("DockerInstaller.exe");
 			}
-			SetButtonsActive(true);
 		}
 
-		public async Task<bool> IsDockerInstalledAsync()
+		private async Task InstallDockerLinuxAsync()
+		{
+			string[] commands = new[]
+			{
+				"sudo apt-get update",
+				"sudo apt-get install -y apt-transport-https ca-certificates curl software-properties-common",
+				"curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -",
+				"sudo add-apt-repository \"deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable\"",
+				"sudo apt-get update",
+				"sudo apt-get install -y docker-ce"
+			};
+
+			foreach (var command in commands)
+			{
+				using (Process process = new Process())
+				{
+					process.StartInfo.FileName = "bash";
+					process.StartInfo.Arguments = $"-c \"{command}\"";
+					process.StartInfo.UseShellExecute = false;
+					process.StartInfo.RedirectStandardOutput = true;
+					process.StartInfo.RedirectStandardError = true;
+					process.StartInfo.CreateNoWindow = true;
+					process.Start();
+					await process.WaitForExitAsync();
+					if (process.ExitCode != 0)
+					{
+						throw new Exception($"Command '{command}' failed with exit code {process.ExitCode}");
+					}
+				}
+			}
+		}
+
+		private async Task InstallDockerMacAsync()
 		{
 			using (Process process = new Process())
 			{
-				process.StartInfo.FileName = "docker";
-				process.StartInfo.Arguments = "--version";
-				process.StartInfo.RedirectStandardOutput = true;
+				process.StartInfo.FileName = "brew";
+				process.StartInfo.Arguments = "install --cask docker";
 				process.StartInfo.UseShellExecute = false;
+				process.StartInfo.RedirectStandardOutput = true;
+				process.StartInfo.RedirectStandardError = true;
+				process.StartInfo.CreateNoWindow = true;
+				process.Start();
+				await process.WaitForExitAsync();
+			}
+		}
+
+		private async Task<bool> IsDockerInstalledAsync()
+		{
+			using (Process process = new Process())
+			{
+				process.StartInfo.FileName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "where" : "which";
+				process.StartInfo.Arguments = "docker";
+				process.StartInfo.UseShellExecute = false;
+				process.StartInfo.RedirectStandardOutput = true;
+				process.StartInfo.RedirectStandardError = true;
 				process.StartInfo.CreateNoWindow = true;
 
 				process.Start();
-				await process.WaitForExitAsync(); // Use asynchronous wait
+				await process.WaitForExitAsync();
 
-				return process.ExitCode == 0;
+				string output = await process.StandardOutput.ReadToEndAsync();
+				string error = await process.StandardError.ReadToEndAsync();
+
+				return process.ExitCode == 0 && !string.IsNullOrWhiteSpace(output);
 			}
 		}
 
@@ -464,7 +649,7 @@ namespace FishMMO.Shared
 
 		private async Task<bool> IsEverythingInstalled()
 		{
-			Log("Checking installs... Please wait.");
+			Log("Verifying installs... Please wait.");
 
 			if (!await IsWSLInstalledAsync())
 			{

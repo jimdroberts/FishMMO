@@ -14,5 +14,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   NetworkObject: {fileID: 6349228138187238843, guid: 2ce4d12b80ddd9f4ca8a389e6c91c7e3,
     type: 3}
-  MinimumRespawnTime: 30
-  MaximumRespawnTime: 60
+  MinimumRespawnTime: 15
+  MaximumRespawnTime: 30
+  YOffset: 1
