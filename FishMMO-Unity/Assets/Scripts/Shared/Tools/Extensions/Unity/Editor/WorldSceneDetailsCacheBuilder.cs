@@ -5,7 +5,7 @@ namespace FishMMO.Shared
 {
 	public class WorldSceneDetailsCacheBuilder
 	{
-		[MenuItem("FishMMO/Build/World Scene Details", priority = -9)]
+		[MenuItem("FishMMO/Build/Misc/Rebuild World Scene Details", priority = -9)]
 		public static void Rebuild()
 		{
 			// rebuild world details cache, this includes teleporters, teleporter destinations, spawn points, and other constant scene data

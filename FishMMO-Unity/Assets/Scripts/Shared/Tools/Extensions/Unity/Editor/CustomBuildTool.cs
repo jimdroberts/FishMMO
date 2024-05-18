@@ -206,10 +206,20 @@ start Scene.exe SCENE";
 							  customBuildType == CustomBuildType.Client ? AppendWorldScenePaths(bootstrapScenes) : bootstrapScenes;
 
 			string folderName = executableName;
-			if (string.IsNullOrEmpty(tmpPath))
+			if (customBuildType != CustomBuildType.Installer &&
+				customBuildType != CustomBuildType.Client)
+			{
+				folderName = Constants.Configuration.ProjectName + " " + folderName;
+			}
+			if (customBuildType == CustomBuildType.Installer)
+			{
+				folderName = Constants.Configuration.ProjectName + GetBuildTargetShortName(buildTarget) + " Database " + folderName;
+			}
+			else if (string.IsNullOrEmpty(tmpPath))
 			{
 				folderName += GetBuildTargetShortName(buildTarget);
 			}
+			folderName = folderName.Trim();
 			string buildPath = Path.Combine(rootPath, folderName);
 
 			// build the project
@@ -359,7 +369,7 @@ start Scene.exe SCENE";
 			}
 		}
 
-		[MenuItem("FishMMO/Build/Windows Server Installer", priority = -10)]
+		[MenuItem("FishMMO/Build/Database/Windows Installer", priority = -10)]
 		public static void BuildWindows64Setup()
 		{
 			BuildExecutable("Installer",
@@ -373,7 +383,7 @@ start Scene.exe SCENE";
 							BuildTarget.StandaloneWindows64);
 		}
 
-		[MenuItem("FishMMO/Build/Linux Server Installer", priority = -9)]
+		[MenuItem("FishMMO/Build/Database/Linux Installer", priority = -9)]
 		public static void BuildLinuxSetup()
 		{
 			BuildExecutable("Installer",
@@ -405,7 +415,7 @@ start Scene.exe SCENE";
 			FileUtil.DeleteFileOrDirectory(dbMigratorBinDirectory);
 		}
 
-		[MenuItem("FishMMO/Build/Update Linker", priority = 12)]
+		[MenuItem("FishMMO/Build/Misc/Update Linker", priority = 12)]
 		public static void UpdateLinker()
 		{
 			string current = Directory.GetCurrentDirectory();
