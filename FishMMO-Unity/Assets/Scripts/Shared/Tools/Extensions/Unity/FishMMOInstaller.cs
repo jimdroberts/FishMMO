@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
@@ -356,10 +357,39 @@ namespace FishMMO.Shared
 			}
 		}
 
+		private bool pathSet = false;
 #pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
 		public async Task<string> RunDotNetCommandAsync(string arguments)
 #pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
 		{
+			if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ||
+				RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+			{
+				if (!pathSet)
+				{
+					string homePath = Environment.GetEnvironmentVariable("HOME");
+					if (string.IsNullOrEmpty(homePath))
+					{
+						throw new Exception("The HOME environment variable is not set.");
+					}
+
+					string currentPath = Environment.GetEnvironmentVariable("PATH");
+					if (string.IsNullOrEmpty(currentPath))
+					{
+						throw new Exception("The PATH environment variable is not set.");
+					}
+
+					string dotnetToolsPath = Path.Combine(homePath, ".dotnet", "tools");
+
+					if (!currentPath.Split(':').Contains(dotnetToolsPath))
+					{
+						string newPath = $"{currentPath}:{dotnetToolsPath}";
+						Environment.SetEnvironmentVariable("PATH", newPath);
+					}
+
+					pathSet = true;
+				}
+			}
 #if !UNITY_EDITOR
 			Log("Running DotNet Command: \r\n" +
 				"dotnet " + arguments);
