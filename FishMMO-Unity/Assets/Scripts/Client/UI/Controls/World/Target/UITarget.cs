@@ -74,7 +74,7 @@ namespace FishMMO.Client
 
 			if (NameLabel != null)
 			{
-				NameLabel.text = obj.name;
+				NameLabel.text = obj.name.Replace("(Clone)", "");
 			}
 			if (characterAttributeController != null)
 			{
@@ -143,11 +143,12 @@ namespace FishMMO.Client
 			Collider collider = newTarget.GetComponent<Collider>();
 			newPos.y += collider.bounds.extents.y + 0.15f;
 
-			string label = newTarget.name;
+			string label = newTarget.name.Replace("(Clone)", "");
 			Color color = Color.grey;
 
-			// apply merchant description
-			if (interactable != null)
+			// apply title
+			if (interactable != null &&
+				!string.IsNullOrWhiteSpace(interactable.Title))
 			{
 				label += $"\r\n<{interactable.Title}>";
 				newPos.y += 0.15f;

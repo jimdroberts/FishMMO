@@ -10,7 +10,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: b9c5263a711f0714a8ae02e2baa36340, type: 3}
-  m_Name: Test Tunic World Item
+  m_Name: Test Tunic
   m_EditorClassIdentifier: 
   NetworkObject: {fileID: 7260598054390996014, guid: fe3425a466033e34ead49fcfc3204895,
     type: 3}

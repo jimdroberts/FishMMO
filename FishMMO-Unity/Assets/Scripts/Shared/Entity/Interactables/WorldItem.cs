@@ -9,7 +9,7 @@ namespace FishMMO.Shared
 
 		public BaseItemTemplate Template { get { return template; } }
 		public uint Amount { get; private set; }
-		public override string Title { get { return Template == null ? "Item" : Template.Name; } }
+		public override string Title { get { return ""; } }
 
 		public void Initialize(BaseItemTemplate template, uint amount)
 		{
