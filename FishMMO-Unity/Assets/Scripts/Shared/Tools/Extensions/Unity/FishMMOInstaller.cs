@@ -43,7 +43,7 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
-			Debug.Log(message);
+			Debug.Log($"{DateTime.Now}: {message}");
 			if (OutputLog != null)
 			{
 				OutputLog.text += message + "\r\n";
@@ -403,7 +403,7 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			Log("Installing Docker... Please wait.");
+			Log("Installing Docker...");
 
 			try
 			{
@@ -466,32 +466,21 @@ namespace FishMMO.Shared
 
 		private async Task InstallDockerLinuxAsync()
 		{
-			string[] commands = new[]
-			{
-				"sudo apt-get update",
-				"sudo apt-get install -y apt-transport-https ca-certificates curl software-properties-common",
-				"curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -",
-				"sudo add-apt-repository \"deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable\"",
-				"sudo apt-get update",
-				"sudo apt-get install -y docker-ce"
-			};
+			string command = "curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh";
 
-			foreach (var command in commands)
+			using (Process process = new Process())
 			{
-				using (Process process = new Process())
+				process.StartInfo.FileName = "bash";
+				process.StartInfo.Arguments = $"-c \"{command}\"";
+				process.StartInfo.UseShellExecute = false;
+				process.StartInfo.RedirectStandardOutput = true;
+				process.StartInfo.RedirectStandardError = true;
+				process.StartInfo.CreateNoWindow = true;
+				process.Start();
+				await process.WaitForExitAsync();
+				if (process.ExitCode != 0)
 				{
-					process.StartInfo.FileName = "bash";
-					process.StartInfo.Arguments = $"-c \"{command}\"";
-					process.StartInfo.UseShellExecute = false;
-					process.StartInfo.RedirectStandardOutput = true;
-					process.StartInfo.RedirectStandardError = true;
-					process.StartInfo.CreateNoWindow = true;
-					process.Start();
-					await process.WaitForExitAsync();
-					if (process.ExitCode != 0)
-					{
-						throw new Exception($"Command '{command}' failed with exit code {process.ExitCode}");
-					}
+					throw new Exception($"Command '{command}' failed with exit code {process.ExitCode}");
 				}
 			}
 		}
@@ -689,7 +678,7 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			Log("Installing database... Please wait.");
+			Log("Installing database...");
 
 			string workingDirectory = GetWorkingDirectory();
 			//Log(workingDirectory);
@@ -731,26 +720,27 @@ namespace FishMMO.Shared
 					{ "REDIS_PORT", appSettings.Redis.Port },
 					{ "REDIS_PASSWORD", appSettings.Redis.Password },
 				});
+				Log(output);
 
 				// Run 'dotnet ef migrations add Initial' command
+				Log("Creating Initial database migration...");
 				string migrationOut = await RunDotNetCommandAsync($"ef migrations add Initial -p {Constants.Configuration.ProjectPath} -s {Constants.Configuration.StartupProject}");
+				Log(migrationOut);
 
 				// Run 'dotnet ef database update' command
+				Log("Updating database...");
 				string updateOut = await RunDotNetCommandAsync($"ef database update -p {Constants.Configuration.ProjectPath} -s {Constants.Configuration.StartupProject}");
+				Log(updateOut);
 
-				Log("Redis Host: " + appSettings.Redis.Host + "\r\n" +
-					"Redis Port: " + appSettings.Redis.Port + "\r\n" +
-					"Redis Password: " + appSettings.Redis.Password + "\r\n" +
+				Log("Databases are ready:\r\n" +
 					"Npgsql Database: " + appSettings.Npgsql.Database + "\r\n" +
 					"Npgsql Username: " + appSettings.Npgsql.Username + "\r\n" +
 					"Npgsql Password: " + appSettings.Npgsql.Password + "\r\n" +
 					"Npgsql Host: " + appSettings.Npgsql.Host + "\r\n" +
 					"Npgsql Port: " + appSettings.Npgsql.Port + "\r\n" +
-					output + "\r\n" +
-					"\r\n" +
-					migrationOut + "\r\n" +
-					"\r\n" +
-					updateOut);
+					"Redis Host: " + appSettings.Redis.Host + "\r\n" +
+					"Redis Port: " + appSettings.Redis.Port + "\r\n" +
+					"Redis Password: " + appSettings.Redis.Password);
 			}
 			else
 			{
@@ -770,7 +760,7 @@ namespace FishMMO.Shared
 			}
 
 			string timestamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
-			Log($"Updating the database at {timestamp}... Please wait.");
+			Log($"Updating the database at {timestamp}...");
 
 			// Run 'dotnet ef database update' command
 			await RunDotNetCommandAsync($"ef database update -p {Constants.Configuration.ProjectPath}  -s  {Constants.Configuration.StartupProject}");
@@ -790,7 +780,7 @@ namespace FishMMO.Shared
 			}
 
 			string timestamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
-			Log($"Creating a new migration {timestamp}... Please wait.");
+			Log($"Creating a new migration {timestamp}...");
 
 			// Run 'dotnet ef migrations add Initial' command
 			await RunDotNetCommandAsync($"ef migrations add {timestamp} -p {Constants.Configuration.ProjectPath} -s {Constants.Configuration.StartupProject}");
