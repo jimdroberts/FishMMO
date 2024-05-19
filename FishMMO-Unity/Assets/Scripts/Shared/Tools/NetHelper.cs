@@ -1,4 +1,6 @@
 ﻿using System.Net;
+using System.Net.Http;
+using UnityEngine;
 
 namespace FishMMO.Shared
 {
@@ -6,14 +8,25 @@ namespace FishMMO.Shared
 	{
 		public static IPAddress GetExternalIPAddress(string serviceUrl = "https://checkip.amazonaws.com/")
 		{
-			string ipAddress = null;
-			using (WebClient client = new WebClient())
+			using (HttpClient client = new HttpClient())
 			{
-				ipAddress = client.DownloadString(serviceUrl).Replace("\\r\\n", "").Replace("\\n", "").Trim();
-			}
-			if (IPAddress.TryParse(ipAddress, out IPAddress address))
-			{
-				return address;
+				try
+				{
+					HttpResponseMessage response = client.GetAsync(serviceUrl).Result;
+					response.EnsureSuccessStatusCode();
+					string ipAddress = response.Content.ReadAsStringAsync().Result;
+					ipAddress = ipAddress.Replace("\r\n", "").Replace("\n", "").Trim();
+
+					if (IPAddress.TryParse(ipAddress, out IPAddress address))
+					{
+						Debug.Log($"External IP: {ipAddress}");
+						return address;
+					}
+				}
+				catch (HttpRequestException e)
+				{
+					Debug.Log($"Request error: {e.Message}");
+				}
 			}
 			return null;
 		}
