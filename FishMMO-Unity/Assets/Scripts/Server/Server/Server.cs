@@ -82,6 +82,8 @@ namespace FishMMO.Server
 				throw new UnityException("Server: Failed to retrieve Remote IP Address.");
 			}
 
+			RemoteAddress = remoteAddress;
+
 			string workingDirectory = Server.GetWorkingDirectory();
 			Debug.Log("Server: Current working directory[" + workingDirectory + "]");
 
