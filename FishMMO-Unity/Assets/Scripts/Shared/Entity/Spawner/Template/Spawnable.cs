@@ -41,7 +41,7 @@ namespace FishMMO.Shared
 					YOffset = box.bounds.extents.y;
 					break;
 				case SphereCollider sphere:
-					YOffset = sphere.radius * 0.5f;
+					YOffset = sphere.radius;
 					break;
 				default: break;
 			}
