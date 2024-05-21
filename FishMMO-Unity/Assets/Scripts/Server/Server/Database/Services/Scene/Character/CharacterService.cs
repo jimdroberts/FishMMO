@@ -265,6 +265,7 @@ namespace FishMMO.Server.DatabaseServices
 			}
 
 			// store these into vars so we don't have to access them a bunch of times
+			var bindPosition = character.BindPosition;
 			var charPosition = character.Transform.position;
 			var rotation = character.Transform.rotation;
 
@@ -274,6 +275,10 @@ namespace FishMMO.Server.DatabaseServices
 			existingCharacter.Account = character.Account;
 			existingCharacter.AccessLevel = (byte)character.AccessLevel;
 			existingCharacter.RaceID = character.RaceID;
+			existingCharacter.BindScene = character.BindScene;
+			existingCharacter.BindX = bindPosition.x;
+			existingCharacter.BindY = bindPosition.y;
+			existingCharacter.BindZ = bindPosition.z;
 			existingCharacter.SceneName = character.SceneName;
 			existingCharacter.X = charPosition.x;
 			existingCharacter.Y = charPosition.y;
@@ -398,6 +403,8 @@ namespace FishMMO.Server.DatabaseServices
 				character.AccessLevel = (AccessLevel)dbCharacter.AccessLevel;
 				character.RaceID = dbCharacter.RaceID;
 				character.RaceName = raceTemplate.Name;
+				character.BindScene = dbCharacter.BindScene;
+				character.BindPosition = new Vector3(dbCharacter.BindX, dbCharacter.BindY, dbCharacter.BindZ);
 				character.SceneHandle = dbCharacter.SceneHandle;
 				character.SceneName = dbCharacter.SceneName;
 

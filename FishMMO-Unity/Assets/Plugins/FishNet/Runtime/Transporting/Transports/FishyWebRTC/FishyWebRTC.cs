@@ -21,8 +21,20 @@ namespace FishNet.Transporting.FishyWebRTC
 		[Tooltip("ICE servers (STUN or TURN) to use. Use Google's server only for testing purposes!")]
 		public List<Common.ICEServer> iceServers = new List<Common.ICEServer>(){
 			new Common.ICEServer(){
+				url = "stun:stun.l.google.com:19302"
+			},
+			new Common.ICEServer(){
+				url = "stun:stun1.l.google.com:19302"
+			},
+			new Common.ICEServer(){
 				url = "stun:stun2.l.google.com:19302"
-			}
+			},
+			new Common.ICEServer(){
+				url = "stun:stun3.l.google.com:19302"
+			},
+			new Common.ICEServer(){
+				url = "stun:stun4.l.google.com:19302"
+			},
 		};
 
 		const string serverOnlyException = "Hosting as a client is not implemented!";

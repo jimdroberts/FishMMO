@@ -37,23 +37,6 @@ namespace FishMMO.Client
 			{
 				Character.KCCPlayer.OnHandleCharacterInput += KCCPlayer_OnHandleCharacterInput;
 			}
-
-			if (Character.TryGet(out IAchievementController achievementController))
-			{
-				if (LabelMaker.Instance != null)
-				{
-					achievementController.OnCompleteAchievement += LabelMaker.Display3D;
-				}
-			}
-
-			if (Character.TryGet(out ICharacterDamageController characterDamageController))
-			{
-				if (LabelMaker.Instance != null)
-				{
-					characterDamageController.OnDamageDisplay += LabelMaker.Display3D;
-					characterDamageController.OnHealedDisplay += LabelMaker.Display3D;
-				}
-			}
 		}
 
 		public void Deinitialize()
@@ -66,23 +49,6 @@ namespace FishMMO.Client
 			if (Character.KCCPlayer != null)
 			{
 				Character.KCCPlayer.OnHandleCharacterInput -= KCCPlayer_OnHandleCharacterInput;
-			}
-
-			if (Character.TryGet(out IAchievementController achievementController))
-			{
-				if (LabelMaker.Instance != null)
-				{
-					achievementController.OnCompleteAchievement -= LabelMaker.Display3D;
-				}
-			}
-
-			if (Character.TryGet(out ICharacterDamageController characterDamageController))
-			{
-				if (LabelMaker.Instance != null)
-				{
-					characterDamageController.OnDamageDisplay -= LabelMaker.Display3D;
-					characterDamageController.OnHealedDisplay -= LabelMaker.Display3D;
-				}
 			}
 		}
 

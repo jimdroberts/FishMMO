@@ -126,12 +126,9 @@ namespace FishMMO.Shared
 					AchievementTier tier = tiers[i];
 					if (achievement.CurrentValue > tier.MaxValue)
 					{
-#if UNITY_SERVER
-						HandleRewards(tier);
-#else
 						// Display a text message above the characters head showing the achievement.
-						OnCompleteAchievement?.Invoke("Achievement: " + achievement.Template.Name + " " + tier.TierCompleteMessage, Character.Transform.position, Color.yellow, 12.0f, 10.0f, false);
-#endif
+						// Provide rewards.
+						IAchievementController.OnCompleteAchievement?.Invoke(Character, achievement.Template, tier);
 					}
 					else
 					{
@@ -142,54 +139,5 @@ namespace FishMMO.Shared
 				}
 			}
 		}
-
-#if UNITY_SERVER
-	public void HandleRewards(AchievementTier tier)
-	{
-		if (base.IsServerInitialized &&
-			PlayerCharacter != null &&
-			PlayerCharacter.Owner != null &&
-			Character.TryGet(out InventoryController inventoryController))
-		{
-			BaseItemTemplate[] itemRewards = tier.ItemRewards;
-			if (itemRewards != null && itemRewards.Length > 0 && inventoryController.FreeSlots() >= itemRewards.Length)
-			{
-				InventorySetMultipleItemsBroadcast inventorySetMultipleItemsBroadcast = new InventorySetMultipleItemsBroadcast()
-				{
-					items = new List<InventorySetItemBroadcast>(),
-				};
-
-				List<InventorySetItemBroadcast> modifiedItemBroadcasts = new List<InventorySetItemBroadcast>();
-
-				for (int i = 0; i < itemRewards.Length; ++i)
-				{
-					Item newItem = new Item(123, 0, itemRewards[i].ID, 1);
-
-					if (inventoryController.TryAddItem(newItem, out List<Item> modifiedItems))
-					{
-						foreach (Item item in modifiedItems)
-						{
-							modifiedItemBroadcasts.Add(new InventorySetItemBroadcast()
-							{
-								instanceID = newItem.ID,
-								templateID = newItem.Template.ID,
-								slot = newItem.Slot,
-								seed = newItem.IsGenerated ? newItem.Generator.Seed : 0,
-								stackSize = newItem.IsStackable ? newItem.Stackable.Amount : 0,
-							});
-						}
-					}
-				}
-				if (modifiedItemBroadcasts.Count > 0)
-				{
-					PlayerCharacter.Owner.Broadcast(new InventorySetMultipleItemsBroadcast()
-					{
-						items = modifiedItemBroadcasts,
-					}, true, Channel.Reliable);
-				}
-			}
-		}
-	}
-#endif
 	}
 }

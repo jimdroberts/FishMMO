@@ -389,7 +389,7 @@ namespace FishMMO.Server
 				// if our assigned address is localhost, use localhost
 				// otherwise try external address
 				// if remote address is null we fall back to localhost
-				string actualAddress = !string.IsNullOrWhiteSpace(Address) && (Address.Equals(LoopBack) | Address.Equals(LocalHost)) ? Address :
+				string actualAddress = !string.IsNullOrWhiteSpace(Address) && (Address.Equals(LoopBack) || Address.Equals(LocalHost)) ? Address :
 										!string.IsNullOrWhiteSpace(RemoteAddress) ? RemoteAddress : LoopBack;
 
 				address = new ServerAddress()

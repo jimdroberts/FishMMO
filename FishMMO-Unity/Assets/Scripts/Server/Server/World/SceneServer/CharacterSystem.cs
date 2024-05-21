@@ -148,11 +148,17 @@ namespace FishMMO.Server
 			{
 				loginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
 				Server.NetworkManager.SceneManager.OnClientLoadedStartScenes += SceneManager_OnClientLoadedStartScenes;
+
+				ICharacterDamageController.OnKilled += OnKilled;
+				IAchievementController.OnCompleteAchievement += HandleAchievementRewards;
 			}
 			else if (args.ConnectionState == LocalConnectionState.Stopped)
 			{
 				loginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
 				Server.NetworkManager.SceneManager.OnClientLoadedStartScenes -= SceneManager_OnClientLoadedStartScenes;
+
+				ICharacterDamageController.OnKilled -= OnKilled;
+				IAchievementController.OnCompleteAchievement -= HandleAchievementRewards;
 			}
 		}
 
@@ -219,67 +225,6 @@ namespace FishMMO.Server
 						ServerManager.Despawn(character.NetworkObject, DespawnType.Pool);
 				}
 			}
-		}
-
-		private void TryTeleport(IPlayerCharacter character)
-		{
-			if (character == null)
-			{
-				Debug.Log("Character not found!");
-				return;
-			}
-
-			if (!character.IsTeleporting)
-			{
-				return;
-			}
-
-			// should we prevent players from moving to a different scene if they are in combat?
-			/*if (character.TryGet(out CharacterDamageController damageController) &&
-				  damageController.Attackers.Count > 0)
-			{
-				return;
-			}*/
-
-			if (!ServerBehaviour.TryGet(out SceneServerSystem sceneServerSystem))
-			{
-				Debug.Log("SceneServerSystem not found!");
-				return;
-			}
-
-			// cache the current scene name
-			string playerScene = character.SceneName;
-
-			if (sceneServerSystem.WorldSceneDetailsCache == null ||
-				!sceneServerSystem.WorldSceneDetailsCache.Scenes.TryGetValue(playerScene, out WorldSceneDetails details))
-			{
-				Debug.Log(playerScene + " not found!");
-				return;
-			}
-
-			// check if we are a scene teleporter
-			if (!details.Teleporters.TryGetValue(character.TeleporterName, out SceneTeleporterDetails teleporter))
-			{
-				Debug.Log("Teleporter: " + character.TeleporterName + " not found!");
-				return;
-			}
-
-			using var dbContext = sceneServerSystem.Server.NpgsqlDbContextFactory.CreateDbContext();
-			if (dbContext == null)
-			{
-				Debug.Log("Could not get database context.");
-				return;
-			}
-
-			// character becomes immortal when teleporting
-			if (character.TryGet(out ICharacterDamageController damageController))
-			{
-				damageController.Immortal = true;
-			}
-
-			OnCharacterChangedScene?.Invoke(character, teleporter.ToScene);
-			character.SceneName = teleporter.ToScene;
-			character.Motor.SetPositionAndRotationAndVelocity(teleporter.ToPosition, teleporter.ToRotation, Vector3.zero);
 		}
 
 		private void Authenticator_OnClientAuthenticationResult(NetworkConnection conn, bool authenticated)
@@ -688,6 +633,124 @@ namespace FishMMO.Server
 			int index = UnityEngine.Random.Range(0, spawnPoints.Length);
 
 			return spawnPoints[index];
+		}
+
+		private void OnKilled(ICharacter killer, ICharacter defender)
+		{
+			if (defender == null)
+			{
+				return;
+			}
+			IPlayerCharacter playerCharacter = defender as IPlayerCharacter;
+			if (playerCharacter == null)
+			{
+				return;
+			}
+			if (playerCharacter.SceneName != playerCharacter.BindScene)
+			{
+				playerCharacter.Teleport(playerCharacter.BindScene);
+			}
+		}
+
+		private void TryTeleport(IPlayerCharacter character)
+		{
+			if (character == null)
+			{
+				Debug.Log("Character not found!");
+				return;
+			}
+
+			if (!character.IsTeleporting)
+			{
+				return;
+			}
+
+			// should we prevent players from moving to a different scene if they are in combat?
+			/*if (character.TryGet(out CharacterDamageController damageController) &&
+				  damageController.Attackers.Count > 0)
+			{
+				return;
+			}*/
+
+			if (!ServerBehaviour.TryGet(out SceneServerSystem sceneServerSystem))
+			{
+				Debug.Log("SceneServerSystem not found!");
+				return;
+			}
+
+			// cache the current scene name
+			string playerScene = character.SceneName;
+
+			if (sceneServerSystem.WorldSceneDetailsCache == null ||
+				!sceneServerSystem.WorldSceneDetailsCache.Scenes.TryGetValue(playerScene, out WorldSceneDetails details))
+			{
+				Debug.Log(playerScene + " not found!");
+				return;
+			}
+
+			// check if we are a scene teleporter
+			if (details.Teleporters.TryGetValue(character.TeleporterName, out SceneTeleporterDetails teleporter))
+			{
+				Debug.Log("Teleporter: " + character.TeleporterName + " found!");
+
+				// character becomes immortal when teleporting
+				if (character.TryGet(out ICharacterDamageController damageController))
+				{
+					damageController.Immortal = true;
+				}
+
+				OnCharacterChangedScene?.Invoke(character, teleporter.ToScene);
+				character.SceneName = teleporter.ToScene;
+				character.Motor.SetPositionAndRotationAndVelocity(teleporter.ToPosition, teleporter.ToRotation, Vector3.zero);
+			}
+			// the character died
+			else
+			{
+				OnCharacterChangedScene?.Invoke(character, character.BindScene);
+				character.SceneName = character.BindScene;
+				character.Motor.SetPositionAndRotationAndVelocity(character.BindPosition, character.Motor.Transform.rotation, Vector3.zero);
+			}
+		}
+
+		private void HandleAchievementRewards(ICharacter character, AchievementTemplate template, AchievementTier tier)
+		{
+			if (character != null &&
+				character.TryGet(out InventoryController inventoryController))
+			{
+				BaseItemTemplate[] itemRewards = tier.ItemRewards;
+				if (itemRewards != null && itemRewards.Length > 0 && inventoryController.FreeSlots() >= itemRewards.Length)
+				{
+					List<InventorySetItemBroadcast> modifiedItemBroadcasts = new List<InventorySetItemBroadcast>();
+
+					for (int i = 0; i < itemRewards.Length; ++i)
+					{
+						Item newItem = new Item(123, 0, itemRewards[i].ID, 1);
+
+						if (inventoryController.TryAddItem(newItem, out List<Item> modifiedItems))
+						{
+							foreach (Item item in modifiedItems)
+							{
+								modifiedItemBroadcasts.Add(new InventorySetItemBroadcast()
+								{
+									instanceID = newItem.ID,
+									templateID = newItem.Template.ID,
+									slot = newItem.Slot,
+									seed = newItem.IsGenerated ? newItem.Generator.Seed : 0,
+									stackSize = newItem.IsStackable ? newItem.Stackable.Amount : 0,
+								});
+							}
+						}
+					}
+					if (modifiedItemBroadcasts.Count > 0)
+					{
+						IPlayerCharacter playerCharacter = character as IPlayerCharacter;
+						playerCharacter.Owner.Broadcast(new InventorySetMultipleItemsBroadcast()
+						{
+							items = modifiedItemBroadcasts,
+						}, true, Channel.Reliable);
+					}
+				}
+			}
 		}
 	}
 }

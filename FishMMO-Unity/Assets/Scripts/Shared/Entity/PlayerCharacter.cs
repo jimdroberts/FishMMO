@@ -60,6 +60,8 @@ namespace FishMMO.Shared
 		/// </summary>
 		public int RaceID { get; set; }
 		public string RaceName { get; set; }
+		public string BindScene { get; set; }
+		public Vector3 BindPosition { get; set; }
 		public string SceneName { get; set; }
 		public int SceneHandle { get; set; }
 		public string LastChatMessage { get; set; }

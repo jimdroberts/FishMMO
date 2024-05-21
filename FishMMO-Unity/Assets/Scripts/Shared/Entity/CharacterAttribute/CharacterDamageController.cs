@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace FishMMO.Shared
@@ -31,27 +32,11 @@ namespace FishMMO.Shared
 			}
 		}
 
-		public Action<ICharacter, int> OnDamaged;
-		public Action<ICharacter> OnKilled;
-		public Action<ICharacter, int> OnHealed;
-
 		//public List<Character> Attackers;
 
 		private CharacterResourceAttribute resourceInstance; // cache the resource
 
 #if !UNITY_SERVER
-		public bool ShowDamage = true;
-		/// <summary>
-		/// <text, position, color, fontSize, persistTime, manualCache>
-		/// </summary>
-		public event Func<string, Vector3, Color, float, float, bool, IReference> OnDamageDisplay;
-
-		public bool ShowHeals = true;
-		/// <summary>
-		/// <text, position, color, fontSize, persistTime, manualCache>
-		/// </summary>
-		public event Func<string, Vector3, Color, float, float, bool, IReference> OnHealedDisplay;
-
 		public override void OnStartCharacter()
 		{
 			base.OnStartCharacter();
@@ -102,27 +87,22 @@ namespace FishMMO.Shared
 				}
 				resourceInstance.Consume(amount);
 
+				ICharacterDamageController.OnDamaged?.Invoke(attacker, Character, amount, damageAttribute);
+
+				uint fullAmount = (uint)amount;
+
 				if (attacker.TryGet(out IAchievementController attackerAchievementController))
 				{
-					attackerAchievementController.Increment(DamageAchievementTemplate, (uint)amount);
+					attackerAchievementController.Increment(DamageAchievementTemplate, fullAmount);
 				}
 				
 				if (Character.TryGet(out IAchievementController defenderAchievementController))
 				{
-					defenderAchievementController.Increment(DamagedAchievementTemplate, (uint)amount);
+					defenderAchievementController.Increment(DamagedAchievementTemplate, fullAmount);
 				}
-
-#if !UNITY_SERVER
-				if (PlayerCharacter != null && ShowDamage)
-				{
-					Vector3 displayPos = PlayerCharacter.Transform.position;
-					displayPos.y += PlayerCharacter.CharacterController.FullCapsuleHeight;
-					OnDamageDisplay?.Invoke(amount.ToString(), displayPos, damageAttribute.DisplayColor, 4.0f, 1.0f, false);
-				}
-#endif
 
 				// check if we died
-				if (resourceInstance != null && resourceInstance.CurrentValue < 1)
+				if (resourceInstance.CurrentValue < 1)
 				{
 					Kill(attacker);
 				}
@@ -131,6 +111,11 @@ namespace FishMMO.Shared
 
 		public void Kill(ICharacter killer)
 		{
+			if (Immortal)
+			{
+				return;
+			}
+
 			if (killer != null &&
 				killer.TryGet(out IAchievementController killerAchievementController))
 			{
@@ -142,27 +127,27 @@ namespace FishMMO.Shared
 				defenderAchievementController.Increment(KilledAchievementTemplate, 1);
 			}
 
-			//UILabel3D.Create("DEAD!", 32, Color.red, true, transform);
+			// SELF
+			if (Character.TryGet(out IBuffController buffController))
+			{
+				buffController.RemoveAll();
+			}
 
-			//SELF
-			/*EntitySpawnTracker spawnTracker = character.GetComponent<EntitySpawnTracker>();
-			if (spawnTracker != null)
+			ICharacterDamageController.OnKilled?.Invoke(killer, Character);
+
+			//handle kill rewards
+
+			/*if (Character.TryGet(out IQuestController questController))
 			{
-				spawnTracker.OnKilled();
+				//questController.OnKill(Entity);
 			}
-			if (character.BuffController != null)
+			if (Character.TryGet(out IAchievementController achievementController) &&
+				KillAchievementTemplate != null &&
+				KilledAchievementTemplate != null)
 			{
-				character.BuffController.RemoveAll();
-			}
-			if (character.QuestController != null)
-			{
-				//QuestController.OnKill(Entity);
-			}
-			if (character.AchievementController != null && OnKilledAchievements != null && OnKilledAchievements.Count > 0)
-			{
-				foreach (AchievementTemplate achievement in OnKilledAchievements)
+				foreach (AchievementTemplate achievement in KilledAchievementTemplates)
 				{
-					achievement.OnGainValue.Invoke(character, killer, 1);
+					achievement.OnGainValue.Invoke(Character, killer, 1);
 				}
 			}
 
@@ -170,12 +155,6 @@ namespace FishMMO.Shared
 			CharacterAttributeController killerAttributes = killer.GetComponent<CharacterAttributeController>();
 			if (killerAttributes != null)
 			{
-				//handle kill rewards?
-				CharacterAttribute experienceAttribute;
-				if (killerAttributes.TryGetAttribute("Experience", out experienceAttribute))
-				{
-
-				}
 			}
 			QuestController killersQuests = killer.GetComponent<QuestController>();
 			if (killersQuests != null)
@@ -189,7 +168,7 @@ namespace FishMMO.Shared
 				{
 					foreach (AchievementTemplate achievement in OnKillAchievements)
 					{
-						achievement.OnGainValue.Invoke(killer, character, 1);
+						achievement.OnGainValue.Invoke(killer, Character, 1);
 					}
 				}
 			}
@@ -203,27 +182,21 @@ namespace FishMMO.Shared
 			if (resourceInstance != null && resourceInstance.CurrentValue > 0.0f)
 			{
 				resourceInstance.Gain(amount);
+
+				ICharacterDamageController.OnHealed?.Invoke(healer, Character, amount);
+
+				uint fullAmount = (uint)amount;
 				
 				if (healer != null &&
 					healer.TryGet(out IAchievementController healerAchievementController))
 				{
-					healerAchievementController.Increment(HealAchievementTemplate, (uint)amount);
+					healerAchievementController.Increment(HealAchievementTemplate, fullAmount);
 				}
 				if (Character != null &&
 					Character.TryGet(out IAchievementController healedAchievementController)) 
 				{
-					healedAchievementController.Increment(HealedAchievementTemplate, (uint)amount);
+					healedAchievementController.Increment(HealedAchievementTemplate, fullAmount);
 				}
-
-#if !UNITY_SERVER
-				if (PlayerCharacter != null &&
-					ShowHeals)
-				{
-					Vector3 displayPos = PlayerCharacter.Transform.position;
-					displayPos.y += PlayerCharacter.CharacterController.FullCapsuleHeight;
-					OnHealedDisplay?.Invoke(amount.ToString(), displayPos, new TinyColor(64, 64, 255).ToUnityColor(), 4.0f, 1.0f, false);
-				}
-#endif
 			}
 		}
 	}

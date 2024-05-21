@@ -29,6 +29,8 @@ namespace FishMMO.Shared
 		HashSet<NetworkConnection> Observers { get; }
 		int RaceID { get; set; }
 		string RaceName { get; set; }
+		string BindScene { get; set; }
+		Vector3 BindPosition { get; set; }
 		string SceneName { get; set; }
 		int SceneHandle { get; set; }
 

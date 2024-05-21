@@ -1,5 +1,4 @@
 ﻿using FishNet.Connection;
-using FishNet.Object;
 using FishNet.Transporting;
 using FishMMO.Shared;
 using FishMMO.Server.DatabaseServices;
@@ -38,12 +37,16 @@ namespace FishMMO.Server
 				ServerManager.RegisterBroadcast<InteractableBroadcast>(OnServerInteractableBroadcastReceived, true);
 				ServerManager.RegisterBroadcast<MerchantPurchaseBroadcast>(OnServerMerchantPurchaseBroadcastReceived, true);
 				ServerManager.RegisterBroadcast<AbilityCraftBroadcast>(OnServerAbilityCraftBroadcastReceived, true);
+
+				Bindstone.OnBind += TryBind;
 			}
 			else if (args.ConnectionState == LocalConnectionState.Stopped)
 			{
 				ServerManager.UnregisterBroadcast<InteractableBroadcast>(OnServerInteractableBroadcastReceived);
 				ServerManager.UnregisterBroadcast<MerchantPurchaseBroadcast>(OnServerMerchantPurchaseBroadcastReceived);
 				ServerManager.UnregisterBroadcast<AbilityCraftBroadcast>(OnServerAbilityCraftBroadcastReceived);
+
+				Bindstone.OnBind -= TryBind;
 			}
 		}
 
@@ -474,6 +477,38 @@ namespace FishMMO.Server
 			};
 
 			Server.Broadcast(conn, abilityAddBroadcast, true, Channel.Reliable);
+		}
+
+		private void TryBind(IPlayerCharacter character, Bindstone bindstone)
+		{
+			if (character == null)
+			{
+				Debug.Log("Character not found!");
+				return;
+			}
+
+			// Validate same scene
+			if (character.SceneName != bindstone.gameObject.scene.name)
+			{
+				Debug.Log("Character is not in the same scene as the bindstone!");
+				return;
+			}
+
+			if (!ServerBehaviour.TryGet(out SceneServerSystem sceneServerSystem))
+			{
+				Debug.Log("SceneServerSystem not found!");
+				return;
+			}
+
+			using var dbContext = sceneServerSystem.Server.NpgsqlDbContextFactory.CreateDbContext();
+			if (dbContext == null)
+			{
+				Debug.Log("Could not get database context.");
+				return;
+			}
+
+			character.BindPosition = character.Motor.Transform.position;
+			character.BindScene = character.SceneName;
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]

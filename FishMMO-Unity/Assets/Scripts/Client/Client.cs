@@ -116,6 +116,9 @@ namespace FishMMO.Client
 				Configuration.Set("Resolution Height", 800);
 				Configuration.Set("Refresh Rate", (uint)60);
 				Configuration.Set("Fullscreen", false);
+				Configuration.Set("ShowDamage", true);
+				Configuration.Set("ShowHeals", true);
+				Configuration.Set("ShowAchievementCompletion", true);
 #if !UNITY_EDITOR
 				Configuration.Save();
 #endif
@@ -154,6 +157,9 @@ namespace FishMMO.Client
 			IPlayerCharacter.OnStartLocalClient += Character_OnStartLocalClient;
 			IPlayerCharacter.OnStopLocalClient += Character_OnStopLocalClient;
 			IGuildController.OnReadPayload += GuildController_OnReadPayload;
+			ICharacterDamageController.OnDamaged += OnDisplayDamage;
+			ICharacterDamageController.OnHealed += OnDisplayHeal;
+			IAchievementController.OnCompleteAchievement += OnCompleteAchievement;
 
 			RegionDisplayNameAction.OnDisplay2DLabel += RegionDisplayNameAction_OnDisplay2DLabel;
 			RegionChangeFogAction.OnChangeFog += RegionChangeFogAction_OnChangeFog;
@@ -210,6 +216,9 @@ namespace FishMMO.Client
 			IPlayerCharacter.OnStartLocalClient -= Character_OnStartLocalClient;
 			IPlayerCharacter.OnStopLocalClient -= Character_OnStopLocalClient;
 			IGuildController.OnReadPayload -= GuildController_OnReadPayload;
+			ICharacterDamageController.OnDamaged -= OnDisplayDamage;
+			ICharacterDamageController.OnHealed -= OnDisplayHeal;
+			IAchievementController.OnCompleteAchievement -= OnCompleteAchievement;
 
 			RegionDisplayNameAction.OnDisplay2DLabel -= RegionDisplayNameAction_OnDisplay2DLabel;
 			RegionChangeFogAction.OnChangeFog -= RegionChangeFogAction_OnChangeFog;
@@ -602,6 +611,64 @@ namespace FishMMO.Client
 					character.SetGuildName(s);
 				});
 			}
+		}
+
+		public void OnDisplayDamage(ICharacter attacker, ICharacter hitCharacter, int amount, DamageAttributeTemplate damageAttribute)
+		{
+			if (hitCharacter == null)
+			{
+				return;
+			}
+			if (!Configuration.TryGetBool("ShowDamage", out bool result) || !result)
+			{
+				return;
+			}
+			Vector3 displayPos = hitCharacter.Transform.position;
+			IPlayerCharacter playerCharacter = hitCharacter as IPlayerCharacter;
+			if (playerCharacter != null)
+			{
+				displayPos.y += playerCharacter.CharacterController.FullCapsuleHeight;
+			}
+			LabelMaker.Display3D(amount.ToString(), displayPos, damageAttribute.DisplayColor, 4.0f, 1.0f, false);
+		}
+
+		public void OnDisplayHeal(ICharacter healer, ICharacter healed, int amount)
+		{
+			if (healed == null)
+			{
+				return;
+			}
+			if (!Configuration.TryGetBool("ShowHeals", out bool result) || !result)
+			{
+				return;
+			}
+			Vector3 displayPos = healed.Transform.position;
+			IPlayerCharacter playerCharacter = healed as IPlayerCharacter;
+			if (playerCharacter != null)
+			{
+				displayPos.y += playerCharacter.CharacterController.FullCapsuleHeight;
+			}
+			LabelMaker.Display3D(amount.ToString(), displayPos, new TinyColor(64, 64, 255).ToUnityColor(), 4.0f, 1.0f, false);
+		}
+
+		public void OnCompleteAchievement(ICharacter character, AchievementTemplate template, AchievementTier tier)
+		{
+			if (character == null ||
+				template == null)
+			{
+				return;
+			}
+			if (!Configuration.TryGetBool("ShowAchievementCompletion", out bool result) || !result)
+			{
+				return;
+			}
+			Vector3 displayPos = character.Transform.position;
+			IPlayerCharacter playerCharacter = character as IPlayerCharacter;
+			if (playerCharacter != null)
+			{
+				displayPos.y += playerCharacter.CharacterController.FullCapsuleHeight;
+			}
+			LabelMaker.Display3D("Achievement: " + template.Name + "\r\n" + tier.TierCompleteMessage, displayPos, Color.yellow, 12.0f, 4.0f, false);
 		}
 
 		#region RegionNameDisplay

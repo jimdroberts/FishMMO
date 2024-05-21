@@ -99,6 +99,7 @@ namespace FishMMO.Server
 				if (ServerBehaviour.TryGet(out CharacterSystem characterSystem))
 				{
 					characterSystem.OnDisconnect -= RemovePending;
+					characterSystem.OnCharacterChangedScene -= CharacterSystem_OnCharacterChangedScene;
 				}
 			}
 		}
