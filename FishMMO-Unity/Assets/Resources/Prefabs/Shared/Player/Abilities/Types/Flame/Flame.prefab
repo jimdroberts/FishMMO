@@ -119,7 +119,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a91eca329f8fbe6469d204b964d743c2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  Caster: {fileID: 0}
   CachedRigidBody: {fileID: 0}
   HitCount: 0
   RemainingLifeTime: 0

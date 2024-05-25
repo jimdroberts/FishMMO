@@ -10,9 +10,9 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 189febd0b3cff4c4f85d45dbd1e2c233, type: 3}
-  m_Name: Physical Aerial Override
+  m_Name: Magic Aerial Override
   m_EditorClassIdentifier: 
-  icon: {fileID: 10915, guid: 0000000000000000f000000000000000, type: 0}
+  icon: {fileID: 10901, guid: 0000000000000000f000000000000000, type: 0}
   Description: 
   ActivationTime: 0
   LifeTime: 0
@@ -26,4 +26,4 @@ MonoBehaviour:
   Requirements:
     m_keys: []
     m_values: 
-  OverrideAbilityType: 5
+  OverrideAbilityType: 6

@@ -247,17 +247,43 @@ namespace FishMMO.Shared
 			}
 		}
 
+		public AbilityType GetCurrentAbilityType()
+		{
+			if (currentAbilityID != NO_ABILITY &&
+				KnownAbilities.TryGetValue(currentAbilityID, out Ability currentAbility))
+			{
+				return currentAbility.TypeOverride != null ? currentAbility.TypeOverride.OverrideAbilityType : currentAbility.Template.Type;
+			}
+			return AbilityType.None;
+		}
+
+		public bool IsCurrentAbilityTypeAerial()
+		{
+			AbilityType abilityType = GetCurrentAbilityType();
+			switch (abilityType)
+			{
+				case AbilityType.AerialPhysical:
+				case AbilityType.AerialMagic:
+					return true;
+				default:
+					return false;
+			}
+		}
+
 		public CharacterAttributeTemplate GetActivationAttributeTemplate(Ability ability)
 		{
 			AbilityType abilityType = ability.TypeOverride != null ? ability.TypeOverride.OverrideAbilityType : ability.Template.Type;
 
-			if (abilityType == AbilityType.Physical ||
-				abilityType == AbilityType.GroundedPhysical ||
-				abilityType == AbilityType.AerialPhysical)
+			switch (abilityType)
 			{
-				return AttackSpeedReductionTemplate;
+				case AbilityType.None:
+				case AbilityType.Physical:
+				case AbilityType.GroundedPhysical:
+				case AbilityType.AerialPhysical:
+					return AttackSpeedReductionTemplate;
+				default:
+					return CastSpeedReductionTemplate;
 			}
-			return CastSpeedReductionTemplate;
 		}
 
 		private AbilityActivationReplicateData HandleCharacterInput()
@@ -479,6 +505,16 @@ namespace FishMMO.Shared
 
 		public void Activate(long referenceID, KeyCode heldKey)
 		{
+			if (!KnownAbilities.TryGetValue(referenceID, out Ability validatedAbility))
+			{
+				return;
+			}
+			if (!Character.TryGet(out ICooldownController cooldownController) ||
+				cooldownController.IsOnCooldown(validatedAbility.Template.ID))
+			{
+				return;
+			}
+
 #if !UNITY_SERVER
 			// validate UI controls are focused so we aren't casting spells when hovering over interfaces.
 			bool canManipulate = OnCanManipulate == null ? true : (bool)OnCanManipulate?.Invoke();

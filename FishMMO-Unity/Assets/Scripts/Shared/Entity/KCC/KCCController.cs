@@ -34,7 +34,7 @@ namespace FishMMO.Shared
 		public const float StableMoveSpeedConstant = 4.0f;
 		public const float StableCrouchSpeedConstant = 2.0f;
 		public const float StableJumpUpSpeedConstant = 6.5f;
-		public static readonly Vector3 GravityConstant = new Vector3(0, -18.0f, 0);
+		public static readonly Vector3 GravityConstant = new Vector3(0, -14.0f, 0);
 
 		public IPlayerCharacter Character;
 		public KinematicCharacterMotor Motor;
@@ -321,6 +321,14 @@ namespace FishMMO.Shared
 			{
 				case KCCCharacterState.Default:
 					{
+						AbilityType abilityType = AbilityType.None;
+
+						// Determine aerial ability state
+						if (Character.TryGet(out IAbilityController abilityController))
+						{
+							abilityType = abilityController.GetCurrentAbilityType();
+						}
+
 						// Ground movement
 						if (Motor.GroundingStatus.IsStableOnGround)
 						{
@@ -420,10 +428,13 @@ namespace FishMMO.Shared
 								currentVelocity += addedVelocity;
 							}
 
+							// Find the gravity attribute in the characters attribute controller
 							if (Character.TryGet(out ICharacterAttributeController attributeController))
 							{
-								// Character Independant Gravity
-								if (GravityTemplate != null &&
+								// Gravity is not applied while an aerial attack is activating
+								if (abilityType != AbilityType.AerialPhysical &&
+									abilityType != AbilityType.AerialMagic &&
+									GravityTemplate != null &&
 									attributeController.TryGetAttribute(GravityTemplate, out CharacterAttribute gravityModifier))
 								{
 									currentVelocity += GravityConstant * gravityModifier.FinalValueAsPct * deltaTime;
@@ -449,7 +460,9 @@ namespace FishMMO.Shared
 
 						// Handle jumping
 						_timeSinceJumpRequested += deltaTime;
-						if (_jumpRequested)
+						// If the character is not currently activating an ability.
+						if (abilityType == AbilityType.None &&
+							_jumpRequested)
 						{
 							// See if we actually are allowed to jump
 							if (((AllowJumpingWhenSliding ? Motor.GroundingStatus.FoundAnyGround : Motor.GroundingStatus.IsStableOnGround) && _timeSinceLastAbleToJump <= JumpPostGroundingGraceTime))
@@ -480,6 +493,13 @@ namespace FishMMO.Shared
 
 								IsJumping = true;
 							}
+						}
+
+						// Gravity is reset when using aerial abilities
+						if (abilityType == AbilityType.AerialPhysical ||
+							abilityType == AbilityType.AerialMagic)
+						{
+							currentVelocity.y = 0.0f;
 						}
 
 						// Take into account additive velocity

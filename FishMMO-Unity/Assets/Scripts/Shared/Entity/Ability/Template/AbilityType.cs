@@ -2,7 +2,8 @@
 {
 	public enum AbilityType : int
 	{
-		Physical = 0,
+		None = 0,
+		Physical,
 		Magic,
 		GroundedPhysical,
 		GroundedMagic,

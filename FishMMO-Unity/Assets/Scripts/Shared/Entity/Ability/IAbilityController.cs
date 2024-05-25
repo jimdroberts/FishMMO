@@ -32,6 +32,10 @@ namespace FishMMO.Shared
 		void RemoveAbility(int referenceID);
 		bool CanManipulate();
 		bool KnowsAbility(int abilityID);
+		AbilityType GetCurrentAbilityType();
+		bool IsCurrentAbilityTypeAerial();
+		CharacterAttributeTemplate GetActivationAttributeTemplate(Ability ability);
+		float CalculateSpeedReduction(CharacterAttributeTemplate attribute);
 		bool LearnBaseAbilities(List<BaseAbilityTemplate> abilityTemplates = null);
 		bool KnowsLearnedAbility(int templateID);
 		void LearnAbility(Ability ability);

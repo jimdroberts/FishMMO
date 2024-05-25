@@ -525,6 +525,7 @@ namespace FishMMO.Client
 		}
 
 #if !UNITY_SERVER
+		#region Character
 		/// <summary>
 		/// This function is called when the local Character reads a payload.
 		/// </summary>
@@ -670,6 +671,7 @@ namespace FishMMO.Client
 			}
 			LabelMaker.Display3D("Achievement: " + template.Name + "\r\n" + tier.TierCompleteMessage, displayPos, Color.yellow, 12.0f, 4.0f, false);
 		}
+		#endregion
 
 		#region RegionNameDisplay
 		public UIAdvancedLabel RegionNameLabel = null;

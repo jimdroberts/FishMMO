@@ -11,7 +11,7 @@ namespace FishMMO.Shared
 			if (NPCs == null ||
 				NPCs.Count < 1)
 			{
-				return false;
+				return true;
 			}
 
 			foreach (NPC npc in NPCs)
