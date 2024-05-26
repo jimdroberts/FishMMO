@@ -323,7 +323,7 @@ namespace FishMMO.Shared
 					{
 						AbilityType abilityType = AbilityType.None;
 
-						// Determine aerial ability state
+						// Determine ability state
 						if (Character.TryGet(out IAbilityController abilityController))
 						{
 							abilityType = abilityController.GetCurrentAbilityType();

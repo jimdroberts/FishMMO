@@ -425,7 +425,7 @@ namespace FishMMO.Shared
 						}
 					}
 
-					
+					remainingTime -= (float)base.TimeManager.TickDelta;
 				}
 				else
 				{
@@ -463,8 +463,6 @@ namespace FishMMO.Shared
 						}
 					}
 				}
-
-				remainingTime -= (float)base.TimeManager.TickDelta;
 			}
 		}
 

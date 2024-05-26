@@ -91,12 +91,32 @@ namespace FishMMO.Shared
 			}
 		}
 
+		private KCCInputReplicateData lastCreatedData;
+
 		[Replicate]
 		private void Replicate(KCCInputReplicateData input, ReplicateState state = ReplicateState.Invalid, Channel channel = Channel.Unreliable)
 		{
-			if (!input.MoveFlags.IsFlagged(KCCMoveFlags.IsActualData) || state.IsFuture())
+			// ignore default data
+			if (!input.MoveFlags.IsFlagged(AbilityActivationFlags.IsActualData))
 			{
 				return;
+			}
+
+			if (state == ReplicateState.ReplayedFuture)
+			{
+				uint lastCreatedTick = lastCreatedData.GetTick();
+				uint thisTick = input.GetTick();
+				uint tickDiff = lastCreatedTick - thisTick;
+				if (tickDiff <= 1)
+				{
+					input = lastCreatedData;
+					input.SetTick(thisTick);
+				}
+			}
+			else if (state == ReplicateState.ReplayedCreated)
+			{
+				lastCreatedData.Dispose();
+				lastCreatedData = input;
 			}
 
 			CharacterController.SetInputs(ref input);
