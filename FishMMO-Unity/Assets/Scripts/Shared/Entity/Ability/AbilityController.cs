@@ -503,27 +503,19 @@ namespace FishMMO.Shared
 
 		public void Activate(long referenceID, KeyCode heldKey)
 		{
-			if (!KnownAbilities.TryGetValue(referenceID, out Ability validatedAbility))
-			{
-				return;
-			}
-			if (!Character.TryGet(out ICooldownController cooldownController) ||
-				cooldownController.IsOnCooldown(validatedAbility.Template.ID))
+			if (!CanActivate(referenceID, out Ability validatedAbility))
 			{
 				return;
 			}
 
-#if !UNITY_SERVER
-			// validate UI controls are focused so we aren't casting spells when hovering over interfaces.
-			bool canManipulate = OnCanManipulate == null ? true : (bool)OnCanManipulate?.Invoke();
-
-			if (!canManipulate ||
-				!CanManipulate())
+			// Don't activate spells when hovering over UI controls.
+			if (!(OnCanManipulate == null ? true : (bool)OnCanManipulate?.Invoke()))
 			{
 				//Debug.Log("Cannot activate");
 				return;
 			}
 
+			// Ensure we are not already activating an ability or an interrupt is waiting to be processed
 			if (!AbilityQueued &&
 				!IsActivating &&
 				!interruptQueued)
@@ -532,7 +524,6 @@ namespace FishMMO.Shared
 				queuedAbilityID = referenceID;
 				this.heldKey = heldKey;
 			}
-#endif
 		}
 
 		/// <summary>
@@ -555,6 +546,27 @@ namespace FishMMO.Shared
 			{
 				return false;
 			}
+
+			AbilityType abilityType = validatedAbility.TypeOverride != null ? validatedAbility.TypeOverride.OverrideAbilityType : validatedAbility.Template.Type;
+			switch (abilityType)
+			{
+				case AbilityType.GroundedMagic:
+				case AbilityType.GroundedPhysical:
+					if (!PlayerCharacter.Motor.GroundingStatus.IsStableOnGround)
+					{
+						return false;
+					}
+					break;
+				case AbilityType.AerialMagic:
+				case AbilityType.AerialPhysical:
+					if (PlayerCharacter.Motor.GroundingStatus.IsStableOnGround)
+					{
+						return false;
+					}
+					break;
+				default: break;
+			}
+
 			if (!validatedAbility.MeetsRequirements(Character) ||
 				!validatedAbility.HasResource(Character, BloodResourceConversionTemplate, BloodResourceTemplate))
 			{

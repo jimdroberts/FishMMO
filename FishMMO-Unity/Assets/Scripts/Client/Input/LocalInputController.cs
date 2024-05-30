@@ -79,7 +79,6 @@ namespace FishMMO.Client
 		{
 			int moveFlags = 0;
 
-			// TEMPORARY
 			moveFlags.EnableBit(KCCMoveFlags.IsActualData);
 
 			// we can't change input if the UI is open or if the mouse cursor is enabled
@@ -159,7 +158,8 @@ namespace FishMMO.Client
 				}
 				else if (CanUpdateInput())
 				{
-					if (InputManager.GetKeyDown(JumpInput) && !Character.CharacterController.IsJumping)
+					if (InputManager.GetKeyDown(JumpInput) &&
+						!Character.CharacterController.IsJumping)
 					{
 						_jumpQueued = true;
 					}

@@ -10,7 +10,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: a29a51fb85cebf343a2fdc648be52f36, type: 3}
-  m_Name: Lesser Fire Damage
+  m_Name: Lesser Physical Damage
   m_EditorClassIdentifier: 
   icon: {fileID: 21300000, guid: 05c7216c78d4dd34ebe2bac9c1e274d7, type: 3}
   Description: Applies $DAMAGE$ $ELEMENT$ to the enemy that is hit.
@@ -28,5 +28,5 @@ MonoBehaviour:
     m_values: 
   TargetType: 3
   Damage: 5
-  DamageAttributeTemplate: {fileID: 11400000, guid: e0d004d1b5e90374fa54e7f9aec2166a,
+  DamageAttributeTemplate: {fileID: 11400000, guid: c4eb5f1a4b50f884c92f82a0e7ad26f3,
     type: 2}

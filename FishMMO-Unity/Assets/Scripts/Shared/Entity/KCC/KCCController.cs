@@ -460,12 +460,12 @@ namespace FishMMO.Shared
 
 						// Handle jumping
 						_timeSinceJumpRequested += deltaTime;
-						// If the character is not currently activating an ability.
-						if (abilityType == AbilityType.None &&
-							_jumpRequested)
+						if (_jumpRequested)
 						{
 							// See if we actually are allowed to jump
-							if (((AllowJumpingWhenSliding ? Motor.GroundingStatus.FoundAnyGround : Motor.GroundingStatus.IsStableOnGround) && _timeSinceLastAbleToJump <= JumpPostGroundingGraceTime))
+							if (abilityType == AbilityType.None &&
+								(AllowJumpingWhenSliding ? Motor.GroundingStatus.FoundAnyGround : Motor.GroundingStatus.IsStableOnGround) &&
+								_timeSinceLastAbleToJump <= JumpPostGroundingGraceTime)
 							{
 								// Calculate jump direction before ungrounding
 								Vector3 jumpDirection = Motor.CharacterUp;
