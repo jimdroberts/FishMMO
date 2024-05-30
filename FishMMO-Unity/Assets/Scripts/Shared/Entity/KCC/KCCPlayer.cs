@@ -102,15 +102,21 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			if (state == ReplicateState.ReplayedFuture)
+			if (state.IsFuture())
 			{
 				uint lastCreatedTick = lastCreatedData.GetTick();
 				uint thisTick = input.GetTick();
 				uint tickDiff = lastCreatedTick - thisTick;
 				if (tickDiff <= 1)
 				{
-					input = lastCreatedData;
-					input.SetTick(thisTick);
+					input.MoveFlags = lastCreatedData.MoveFlags;
+					// don't predict jumping, only crouch and sprint
+					input.MoveFlags.DisableBit(KCCMoveFlags.Jump);
+					input.CameraPosition = lastCreatedData.CameraPosition;
+					input.CameraRotation = lastCreatedData.CameraRotation;
+					input.MoveAxisForward = lastCreatedData.MoveAxisForward;
+					input.MoveAxisRight = lastCreatedData.MoveAxisRight;
+					//input.SetTick(thisTick);
 				}
 			}
 			else if (state == ReplicateState.ReplayedCreated)

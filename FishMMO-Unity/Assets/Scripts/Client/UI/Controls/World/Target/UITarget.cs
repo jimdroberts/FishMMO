@@ -155,6 +155,11 @@ namespace FishMMO.Client
 				color = Color.white;
 			}
 
+			if (targetLabel != null)
+			{
+				LabelMaker.Cache(targetLabel);
+			}
+
 			targetLabel = LabelMaker.Display3D(label, newPos, color, 1.0f, 0.0f, true);
 
 			Outline outline = newTarget.GetComponent<Outline>();

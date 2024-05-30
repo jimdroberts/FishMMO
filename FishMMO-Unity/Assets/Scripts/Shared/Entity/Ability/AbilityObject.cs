@@ -107,20 +107,20 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Handles primary spawn functionality for all ability objects. Returns true if successful.
 		/// </summary>
-		public static bool TrySpawn(Ability ability, IPlayerCharacter caster, AbilityController controller, Transform abilitySpawner, TargetInfo targetInfo)
+		public static void Spawn(Ability ability, IPlayerCharacter caster, AbilityController controller, Transform abilitySpawner, TargetInfo targetInfo)
 		{
 			AbilityTemplate template = ability.Template;
 
 			if (template == null ||
 				template.FXPrefab == null)
 			{
-				return false;
+				return;
 			}
 
 			if (template.RequiresTarget &&
 				targetInfo.Target == null)
 			{
-				return false;
+				return;
 			}
 
 			// TODO create/fetch from pool
@@ -190,8 +190,6 @@ namespace FishMMO.Shared
 			abilityObject.gameObject.SetActive(true);
 
 			//Debug.Log("Activated " + abilityObject.gameObject.name);
-
-			return true;
 		}
 
 		public static void SetAbilitySpawnPosition(IPlayerCharacter caster, Transform abilitySpawner, TargetInfo targetInfo, AbilityTemplate template, Transform abilityTransform)

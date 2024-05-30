@@ -16,7 +16,7 @@ MonoBehaviour:
   Description: A basic punch attack.
   ActivationTime: 0
   LifeTime: 0.05
-  Cooldown: 0.25
+  Cooldown: 1
   Range: 0
   Speed: 0
   Price: 0

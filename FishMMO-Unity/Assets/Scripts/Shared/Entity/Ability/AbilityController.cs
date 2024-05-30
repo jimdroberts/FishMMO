@@ -18,7 +18,6 @@ namespace FishMMO.Shared
 		private bool interruptQueued;
 		private long queuedAbilityID;
 		private float remainingTime;
-		private float remainingCastBarTime;
 		private KeyCode heldKey;
 		//private Random currentSeed = 12345;
 
@@ -299,13 +298,6 @@ namespace FishMMO.Shared
 				return default;
 			}
 
-			if (KnownAbilities.TryGetValue(currentAbilityID, out Ability validatedAbility))
-			{
-				// handle ability updates here, display cast bar, display hitbox telegraphs, etc
-				OnUpdate?.Invoke(validatedAbility.Name, remainingCastBarTime, validatedAbility.ActivationTime * CalculateSpeedReduction(GetActivationAttributeTemplate(validatedAbility)));
-				remainingCastBarTime -= deltaTime;
-			}
-
 			int activationFlags = 0;
 
 			activationFlags.EnableBit(AbilityActivationFlags.IsActualData);
@@ -335,15 +327,15 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			if (state == ReplicateState.ReplayedFuture)
+			if (state.IsFuture())
 			{
 				uint lastCreatedTick = lastCreatedData.GetTick();
 				uint thisTick = activationData.GetTick();
 				uint tickDiff = lastCreatedTick - thisTick;
 				if (tickDiff <= 1)
 				{
-					activationData = lastCreatedData;
-					activationData.SetTick(thisTick);
+					activationData.HeldKey = lastCreatedData.HeldKey;
+					//activationData.SetTick(thisTick);
 				}
 			}
 			else if (state == ReplicateState.ReplayedCreated)
@@ -352,9 +344,10 @@ namespace FishMMO.Shared
 				lastCreatedData = activationData;
 			}
 
-			// if we are already activating and we receive an interrupt from the client or the server triggers an interrupt
+			// If we are already activating
 			if (IsActivating)
 			{
+				// If we receive an interrupt from the client or the server triggers an interrupt
 				if (activationData.ActivationFlags.IsFlagged(AbilityActivationFlags.Interrupt) ||
 					interruptQueued)
 				{
@@ -363,106 +356,103 @@ namespace FishMMO.Shared
 					return;
 				}
 			}
+			// If we aren't activating anything
 			else
 			{
+				// Try to activate the queued ability
 				if (CanActivate(activationData.QueuedAbilityID, out Ability newAbility))
 				{
-					//Debug.Log($"New Ability Activation {newAbility.ID} State: {state}");
+					Debug.Log($"New Ability Activation {newAbility.ID} State: {state}");
 
 					interruptQueued = false;
 					currentAbilityID = newAbility.ID;
 					remainingTime = newAbility.ActivationTime * CalculateSpeedReduction(GetActivationAttributeTemplate(newAbility));
 
-					if (state == ReplicateState.CurrentCreated)
-					{
-						Debug.Log($"Castbar Remaining Time: {remainingTime}s State: {state}");
-
-						remainingCastBarTime = remainingTime;
-					}
-
 					heldKey = activationData.HeldKey;
 				}
 			}
 
-			// process activation
-			if (IsActivating &&
-				CanActivate(currentAbilityID, out Ability validatedAbility))
+			// Process ability activation
+			if (IsActivating && CanActivate(currentAbilityID, out Ability validatedAbility))
 			{
 				if (remainingTime > 0.0f)
 				{
+					float deltaTime = (float)base.TimeManager.TickDelta;
+
 					//Debug.Log($"Activating {validatedAbility.ID} State: {state}");
 
-					// handle held ability updates
+					// Handle ability updates here, display cast bar, display hitbox telegraphs, etc
+					OnUpdate?.Invoke(validatedAbility.Name, remainingTime, validatedAbility.ActivationTime * CalculateSpeedReduction(GetActivationAttributeTemplate(validatedAbility)));
+					
+
+					// Handle held ability updates
 					if (heldKey != KeyCode.None)
 					{
-						// a held ability hotkey was released or the character can no longer activate the ability
+						// The Held ability hotkey was released or the character can no longer activate the ability
 						if (activationData.HeldKey == KeyCode.None)
 						{
-							// add ability to cooldowns
+							// Add ability to cooldowns
 							AddCooldown(validatedAbility);
 
+							// Reset ability data
 							Cancel();
+							return;
 						}
-						// channeled abilities like beam effects or a charge rush that are continuously updating or spawning objects should be handled here
-						else if (ChanneledTemplate != null &&
-								 validatedAbility.HasAbilityEvent(ChanneledTemplate.ID) &&
-								 Character.TryGet(out ITargetController t))
+
+						// Channeled abilities like beam effects or a charge rush that are continuously updating or spawning objects should be handled here
+						if (ChanneledTemplate != null &&
+							validatedAbility.HasAbilityEvent(ChanneledTemplate.ID))
 						{
-							if (PlayerCharacter != null)
+							if (PlayerCharacter != null &&
+								Character.TryGet(out ITargetController t))
 							{
-								// get target info
+								// Get target info
 								TargetInfo targetInfo = t.UpdateTarget(PlayerCharacter.CharacterController.VirtualCameraPosition,
 																	   PlayerCharacter.CharacterController.VirtualCameraRotation * Vector3.forward,
 																	   validatedAbility.Range);
 
-								// spawn the ability object
-								if (AbilityObject.TrySpawn(validatedAbility, PlayerCharacter, this, AbilitySpawner, targetInfo))
-								{
-									// channeled abilities consume resources during activation
-									validatedAbility.ConsumeResources(Character, BloodResourceConversionTemplate, BloodResourceTemplate);
-								}
-							}
-						}
-					}
+								// Spawn the ability object
+								AbilityObject.Spawn(validatedAbility, PlayerCharacter, this, AbilitySpawner, targetInfo);
 
-					remainingTime -= (float)base.TimeManager.TickDelta;
-				}
-				else
-				{
-					// this will allow for charged abilities to remain held
-					if (ChargedTemplate != null &&
-						validatedAbility.HasAbilityEvent(ChargedTemplate.ID) &&
-						heldKey != KeyCode.None &&
-						activationData.HeldKey != KeyCode.None)
-					{
-						return;
-					}
-
-					// complete the final activation of the ability
-					if (Character.TryGet(out ITargetController tc))
-					{
-						if (PlayerCharacter != null)
-						{
-							// get target info
-							TargetInfo targetInfo = tc.UpdateTarget(PlayerCharacter.CharacterController.VirtualCameraPosition,
-																	PlayerCharacter.CharacterController.VirtualCameraRotation * Vector3.forward,
-																	validatedAbility.Range);
-
-							// spawn the ability object
-							if (AbilityObject.TrySpawn(validatedAbility, PlayerCharacter, this, AbilitySpawner, targetInfo))
-							{
-								// consume resources
+								// Channeled abilities consume resources during activation
 								validatedAbility.ConsumeResources(Character, BloodResourceConversionTemplate, BloodResourceTemplate);
-
-								// add ability to cooldowns
-								AddCooldown(validatedAbility);
-
-								// reset ability data
-								Cancel();
 							}
 						}
 					}
+
+					remainingTime -= deltaTime;
+					return;
 				}
+
+				// Return immediately if we are charging our attack
+				if (ChargedTemplate != null &&
+					validatedAbility.HasAbilityEvent(ChargedTemplate.ID) &&
+					heldKey != KeyCode.None &&
+					activationData.HeldKey != KeyCode.None)
+				{
+					return;
+				}
+
+				if (PlayerCharacter != null &&
+					Character.TryGet(out ITargetController tc))
+				{
+					// Get target info
+					TargetInfo targetInfo = tc.UpdateTarget(PlayerCharacter.CharacterController.VirtualCameraPosition,
+															PlayerCharacter.CharacterController.VirtualCameraRotation * Vector3.forward,
+															validatedAbility.Range);
+
+					// Spawn the ability object
+					AbilityObject.Spawn(validatedAbility, PlayerCharacter, this, AbilitySpawner, targetInfo);
+				}
+
+				// Consume resources
+				validatedAbility.ConsumeResources(Character, BloodResourceConversionTemplate, BloodResourceTemplate);
+
+				// Add ability to cooldowns
+				AddCooldown(validatedAbility);
+
+				// Reset ability data
+				Cancel();
 			}
 		}
 
@@ -474,11 +464,8 @@ namespace FishMMO.Shared
 				OnInterrupt?.Invoke();
 				Cancel();
 			}
-			else
-			{
-				currentAbilityID = rd.AbilityID;
-				remainingTime = rd.RemainingTime;
-			}
+			currentAbilityID = rd.AbilityID;
+			remainingTime = rd.RemainingTime;
 		}
 
 		public float CalculateSpeedReduction(CharacterAttributeTemplate attribute)
@@ -699,7 +686,7 @@ namespace FishMMO.Shared
 															   .Select(x => (KeyValuePair<long, Ability>?)x)
 															   .FirstOrDefault();
 			return found != null;
-		}	
+		}
 
 		public void LearnAbility(Ability ability)
 		{
