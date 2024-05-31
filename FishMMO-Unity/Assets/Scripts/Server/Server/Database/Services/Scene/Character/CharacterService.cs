@@ -256,7 +256,7 @@ namespace FishMMO.Server.DatabaseServices
 			{
 				existingCharacter = dbContext.Characters.FirstOrDefault((c) => c.NameLowercase == character.CharacterName.ToLower());
 
-				// if it's still null, throw exception
+				// if it's still null we need to create the character entity
 				if (existingCharacter == null)
 				{
 					//throw new Exception($"Unable to fetch character with name {character.CharacterName}");
@@ -399,8 +399,9 @@ namespace FishMMO.Server.DatabaseServices
 				character.CharacterName = dbCharacter.Name;
 				character.CharacterNameLower = dbCharacter.NameLowercase;
 				character.Account = dbCharacter.Account;
-				character.WorldServerID = dbCharacter.WorldServerID;
 				character.AccessLevel = (AccessLevel)dbCharacter.AccessLevel;
+				character.TimeCreated = dbCharacter.TimeCreated;
+				character.WorldServerID = dbCharacter.WorldServerID;
 				character.RaceID = dbCharacter.RaceID;
 				character.RaceName = raceTemplate.Name;
 				character.BindScene = dbCharacter.BindScene;

@@ -9,6 +9,13 @@ namespace FishMMO.Shared
 	{
 		public CharacterAttributeTemplateDatabase CharacterAttributeDatabase;
 
+		public CharacterAttributeTemplate HealthResourceTemplate;
+		public CharacterAttributeTemplate HealthRegenerationTemplate;
+		public CharacterAttributeTemplate ManaResourceTemplate;
+		public CharacterAttributeTemplate ManaRegenerationTemplate;
+		public CharacterAttributeTemplate StaminaResourceTemplate;
+		public CharacterAttributeTemplate StaminaRegenerationTemplate;
+
 		private readonly Dictionary<int, CharacterAttribute> attributes = new Dictionary<int, CharacterAttribute>();
 		private readonly Dictionary<int, CharacterResourceAttribute> resourceAttributes = new Dictionary<int, CharacterResourceAttribute>();
 
@@ -30,6 +37,9 @@ namespace FishMMO.Shared
 						AddAttribute(new CharacterAttribute(attribute.ID, attribute.InitialValue, 0));
 					}
 				}
+
+				InitializeAttributeDependents();
+				InitializeResourceAttributeDependents();
 			}
 		}
 
@@ -130,54 +140,65 @@ namespace FishMMO.Shared
 			if (!Attributes.ContainsKey(instance.Template.ID))
 			{
 				Attributes.Add(instance.Template.ID, instance);
+			}
+		}
 
-				foreach (CharacterAttributeTemplate parent in instance.Template.ParentTypes)
+		private void AddDependents(CharacterAttribute instance)
+		{
+			foreach (CharacterAttributeTemplate parent in instance.Template.ParentTypes)
+			{
+				CharacterAttribute parentInstance;
+				if (parent.IsResourceAttribute)
 				{
-					CharacterAttribute parentInstance;
-					if (parent.IsResourceAttribute)
+					if (ResourceAttributes.TryGetValue(parent.ID, out CharacterResourceAttribute parentResourceInstance))
 					{
-						if (ResourceAttributes.TryGetValue(parent.ID, out CharacterResourceAttribute parentResourceInstance))
-						{
-							parentResourceInstance.AddChild(instance);
-						}
-					}
-					else if (Attributes.TryGetValue(parent.ID, out parentInstance))
-					{
-						parentInstance.AddChild(instance);
+						instance.AddChild(parentResourceInstance);
 					}
 				}
-
-				foreach (CharacterAttributeTemplate child in instance.Template.ChildTypes)
+				else if (Attributes.TryGetValue(parent.ID, out parentInstance))
 				{
-					CharacterAttribute childInstance;
-					if (child.IsResourceAttribute)
+					instance.AddChild(parentInstance);
+				}
+			}
+
+			foreach (CharacterAttributeTemplate child in instance.Template.ChildTypes)
+			{
+				CharacterAttribute childInstance;
+				if (child.IsResourceAttribute)
+				{
+					if (ResourceAttributes.TryGetValue(child.ID, out CharacterResourceAttribute childResourceInstance))
 					{
-						if (ResourceAttributes.TryGetValue(child.ID, out CharacterResourceAttribute childResourceInstance))
-						{
-							childResourceInstance.AddChild(instance);
-						}
-					}
-					else if (Attributes.TryGetValue(child.ID, out childInstance))
-					{
-						instance.AddChild(childInstance);
+						instance.AddChild(childResourceInstance);
 					}
 				}
-
-				foreach (CharacterAttributeTemplate dependant in instance.Template.DependantTypes)
+				else if (Attributes.TryGetValue(child.ID, out childInstance))
 				{
-					CharacterAttribute dependantInstance;
-					if (dependant.IsResourceAttribute)
+					instance.AddChild(childInstance);
+				}
+			}
+
+			foreach (CharacterAttributeTemplate dependant in instance.Template.DependantTypes)
+			{
+				CharacterAttribute dependantInstance;
+				if (dependant.IsResourceAttribute)
+				{
+					if (ResourceAttributes.TryGetValue(dependant.ID, out CharacterResourceAttribute dependantResourceInstance))
 					{
-						if (ResourceAttributes.TryGetValue(dependant.ID, out CharacterResourceAttribute dependantResourceInstance))
-						{
-							dependantResourceInstance.AddDependant(instance);
-						}
-					}
-					else if (Attributes.TryGetValue(dependant.ID, out dependantInstance))
-					{
-						instance.AddDependant(dependantInstance);
+						instance.AddDependant(dependantResourceInstance);
 					}
 				}
+				else if (Attributes.TryGetValue(dependant.ID, out dependantInstance))
+				{
+					instance.AddDependant(dependantInstance);
+				}
+			}
+		}
+
+		public void InitializeAttributeDependents()
+		{
+			foreach (CharacterAttribute instance in attributes.Values)
+			{
+				AddDependents(instance);
 			}
 		}
 
@@ -186,55 +207,81 @@ namespace FishMMO.Shared
 			if (!ResourceAttributes.ContainsKey(instance.Template.ID))
 			{
 				ResourceAttributes.Add(instance.Template.ID, instance);
-
-				foreach (CharacterAttributeTemplate parent in instance.Template.ParentTypes)
-				{
-					CharacterAttribute parentInstance;
-					if (parent.IsResourceAttribute)
-					{
-						if (ResourceAttributes.TryGetValue(parent.ID, out CharacterResourceAttribute parentResourceInstance))
-						{
-							parentResourceInstance.AddChild(instance);
-						}
-					}
-					else if (Attributes.TryGetValue(parent.ID, out parentInstance))
-					{
-						parentInstance.AddChild(instance);
-					}
-				}
-
-				foreach (CharacterAttributeTemplate child in instance.Template.ChildTypes)
-				{
-					CharacterAttribute childInstance;
-					if (child.IsResourceAttribute)
-					{
-						if (ResourceAttributes.TryGetValue(child.ID, out CharacterResourceAttribute childResourceInstance))
-						{
-							childResourceInstance.AddChild(instance);
-						}
-					}
-					else if (Attributes.TryGetValue(child.ID, out childInstance))
-					{
-						instance.AddChild(childInstance);
-					}
-				}
-
-				foreach (CharacterAttributeTemplate dependant in instance.Template.DependantTypes)
-				{
-					CharacterAttribute dependantInstance;
-					if (dependant.IsResourceAttribute)
-					{
-						if (ResourceAttributes.TryGetValue(dependant.ID, out CharacterResourceAttribute dependantResourceInstance))
-						{
-							dependantResourceInstance.AddDependant(instance);
-						}
-					}
-					else if (Attributes.TryGetValue(dependant.ID, out dependantInstance))
-					{
-						instance.AddDependant(dependantInstance);
-					}
-				}
 			}
+		}
+
+		public void InitializeResourceAttributeDependents()
+		{
+			foreach (CharacterResourceAttribute instance in resourceAttributes.Values)
+			{
+				AddDependents(instance);
+			}
+		}
+
+		private float accumulatedRegenDelta = 0.0f;
+
+		public void Regenerate(float deltaTime)
+		{
+			const float REGEN_TICK_RATE = 5.0f;
+
+			accumulatedRegenDelta += deltaTime;
+
+			// Check if accumulatedDelta has reached or exceeded REGEN_TICK_RATE seconds
+			if (accumulatedRegenDelta >= REGEN_TICK_RATE)
+			{
+				// Calculate how many 5-second intervals have passed
+				int intervals = (int)(accumulatedRegenDelta / REGEN_TICK_RATE);
+
+				// Reduce accumulatedDelta by the total duration of processed intervals
+				accumulatedRegenDelta -= intervals * REGEN_TICK_RATE;
+
+				// Regenerate health, mana, and stamina
+				RegenerateResource(HealthResourceTemplate, HealthRegenerationTemplate, intervals);
+				RegenerateResource(ManaResourceTemplate, ManaRegenerationTemplate, intervals);
+				RegenerateResource(StaminaResourceTemplate, StaminaRegenerationTemplate, intervals);
+			}
+		}
+
+		private void RegenerateResource(CharacterAttributeTemplate resourceTemplate, CharacterAttributeTemplate regenerationTemplate, int intervals)
+		{
+			if (resourceTemplate != null &&
+				regenerationTemplate != null &&
+				resourceAttributes.TryGetValue(resourceTemplate.ID, out CharacterResourceAttribute resource))
+			{
+				int regenAmountPerInterval = resource.GetDependantFinalValue(regenerationTemplate.Name);
+				int totalRegenAmount = regenAmountPerInterval * intervals;
+				resource.Gain(totalRegenAmount);
+			}
+		}
+
+		public void ApplyResourceState(CharacterAttributeResourceState resourceState)
+		{
+			if (resourceAttributes.TryGetValue(HealthResourceTemplate.ID, out CharacterResourceAttribute health) &&
+				resourceAttributes.TryGetValue(ManaResourceTemplate.ID, out CharacterResourceAttribute mana) &&
+				resourceAttributes.TryGetValue(StaminaResourceTemplate.ID, out CharacterResourceAttribute stamina))
+			{
+				accumulatedRegenDelta = resourceState.RegenDelta;
+				health.SetCurrentValue(resourceState.Health);
+				mana.SetCurrentValue(resourceState.Mana);
+				stamina.SetCurrentValue(resourceState.Stamina);
+			}
+		}
+
+		public CharacterAttributeResourceState GetResourceState()
+		{
+			if (resourceAttributes.TryGetValue(HealthResourceTemplate.ID, out CharacterResourceAttribute health) &&
+				resourceAttributes.TryGetValue(ManaResourceTemplate.ID, out CharacterResourceAttribute mana) &&
+				resourceAttributes.TryGetValue(StaminaResourceTemplate.ID, out CharacterResourceAttribute stamina))
+			{
+				return new CharacterAttributeResourceState()
+				{
+					RegenDelta = accumulatedRegenDelta,
+					Health = health.CurrentValue,
+					Mana = mana.CurrentValue,
+					Stamina = stamina.CurrentValue,
+				};
+			}
+			return default;
 		}
 
 #if !UNITY_SERVER

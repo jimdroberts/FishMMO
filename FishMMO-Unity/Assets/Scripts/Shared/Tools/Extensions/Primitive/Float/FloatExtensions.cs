@@ -28,6 +28,24 @@ namespace FishMMO.Shared
 			return number;
 		}
 
+		public static float Min(this float number, float minimum)
+		{
+			if (number < minimum)
+			{
+				return minimum;
+			}
+			return number;
+		}
+
+		public static float Max(this float number, float maximum)
+		{
+			if (number > maximum)
+			{
+				return maximum;
+			}
+			return number;
+		}
+
 		/// <summary>
 		/// Returns the number of digits of the current value.
 		/// </summary>

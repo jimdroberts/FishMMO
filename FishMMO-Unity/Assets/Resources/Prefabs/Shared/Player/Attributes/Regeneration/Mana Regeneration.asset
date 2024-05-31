@@ -13,11 +13,12 @@ MonoBehaviour:
   m_Name: Mana Regeneration
   m_EditorClassIdentifier: 
   Description: 
-  InitialValue: 0
+  InitialValue: 1
   MinValue: 0
-  MaxValue: 0
+  MaxValue: 100
+  IsPercentage: 0
   IsResourceAttribute: 0
-  ClampFinalValue: 0
+  ClampFinalValue: 1
   ParentTypes:
     m_keys: []
   ChildTypes:

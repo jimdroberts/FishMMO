@@ -44,7 +44,7 @@
 			{
 				currentValue = 0;
 			}
-			UnityEngine.Debug.Log($"Consumed {amount} {Template.Name} - [{currentValue}/{FinalValue}]");
+			//UnityEngine.Debug.Log($"Consumed {amount} {Template.Name} - [{currentValue}/{FinalValue}]");
 			Internal_OnAttributeChanged(this);
 		}
 

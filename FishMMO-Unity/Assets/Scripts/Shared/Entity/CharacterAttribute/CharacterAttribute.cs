@@ -125,16 +125,15 @@ namespace FishMMO.Shared
 
 		public void AddDependant(CharacterAttribute dependency)
 		{
-			Type dependencyType = dependency.GetType();
-			if (!dependencies.ContainsKey(dependencyType.Name))
+			if (!dependencies.ContainsKey(dependency.Template.Name))
 			{
-				dependencies.Add(dependencyType.Name, dependency);
+				dependencies.Add(dependency.Template.Name, dependency);
 			}
 		}
 
 		public void RemoveDependant(CharacterAttribute dependency)
 		{
-			dependencies.Remove(dependency.GetType().Name);
+			dependencies.Remove(dependency.Template.Name);
 		}
 
 		public CharacterAttribute GetDependant(string name)
@@ -145,27 +144,27 @@ namespace FishMMO.Shared
 
 		public int GetDependantValue(string name)
 		{
-			return (!dependencies.TryGetValue(name, out CharacterAttribute attribute)) ? 0 : attribute.Value;
+			return !dependencies.TryGetValue(name, out CharacterAttribute attribute) ? 0 : attribute.Value;
 		}
 
 		public int GetDependantMinValue(string name)
 		{
-			return (!dependencies.TryGetValue(name, out CharacterAttribute attribute)) ? 0 : attribute.Template.MinValue;
+			return !dependencies.TryGetValue(name, out CharacterAttribute attribute) ? 0 : attribute.Template.MinValue;
 		}
 
 		public int GetDependantMaxValue(string name)
 		{
-			return (!dependencies.TryGetValue(name, out CharacterAttribute attribute)) ? 0 : attribute.Template.MaxValue;
+			return !dependencies.TryGetValue(name, out CharacterAttribute attribute) ? 0 : attribute.Template.MaxValue;
 		}
 
 		public int GetDependantModifier(string name)
 		{
-			return (!dependencies.TryGetValue(name, out CharacterAttribute attribute)) ? 0 : attribute.Modifier;
+			return !dependencies.TryGetValue(name, out CharacterAttribute attribute) ? 0 : attribute.Modifier;
 		}
 
 		public int GetDependantFinalValue(string name)
 		{
-			return (!dependencies.TryGetValue(name, out CharacterAttribute attribute)) ? 0 : attribute.FinalValue;
+			return !dependencies.TryGetValue(name, out CharacterAttribute attribute) ? 0 : attribute.FinalValue;
 		}
 
 		public void UpdateValues()

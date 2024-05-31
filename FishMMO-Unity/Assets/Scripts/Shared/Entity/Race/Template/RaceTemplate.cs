@@ -7,6 +7,7 @@ namespace FishMMO.Shared
 	{
 		public GameObject Prefab;
 		public string Description;
+		public CharacterAttributeTemplateDatabase InitialAttributes;
 		public FactionTemplate InitialFaction;
 		//public List<CharacterAttributeTemplate> BonusAttributes;
 

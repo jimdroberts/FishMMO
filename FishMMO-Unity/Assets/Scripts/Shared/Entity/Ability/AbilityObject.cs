@@ -52,7 +52,7 @@ namespace FishMMO.Shared
 
 		void OnCollisionEnter(Collision other)
 		{
-			Debug.Log($"Collision: {other.gameObject.name}");
+			//Debug.Log($"Collision: {other.gameObject.name}");
 
 			if ((Constants.Layers.Obstruction & (1 << other.collider.gameObject.layer)) != 0)
 			{

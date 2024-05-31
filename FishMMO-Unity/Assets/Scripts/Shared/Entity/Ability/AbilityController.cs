@@ -66,17 +66,23 @@ namespace FishMMO.Shared
 
 		public override void OnStartNetwork()
 		{
+			base.OnStartNetwork();
+
 			if (base.TimeManager != null)
 			{
+				base.TimeManager.OnTick += TimeManager_OnTick;
 				base.TimeManager.OnPostTick += TimeManager_OnPostTick;
 			}
 		}
 
 		public override void OnStopNetwork()
 		{
+			base.OnStopNetwork();
+
 			if (base.TimeManager != null)
 			{
-				base.TimeManager.OnPostTick -= TimeManager_OnPostTick;
+				base.TimeManager.OnTick -= TimeManager_OnTick;
+				base.TimeManager.OnPostTick += TimeManager_OnPostTick;
 			}
 		}
 
@@ -229,9 +235,13 @@ namespace FishMMO.Shared
 			}
 		}
 
-		private void TimeManager_OnPostTick()
+		private void TimeManager_OnTick()
 		{
 			Replicate(HandleCharacterInput());
+		}
+
+		private void TimeManager_OnPostTick()
+		{
 			CreateReconcile();
 		}
 
@@ -239,9 +249,14 @@ namespace FishMMO.Shared
 		{
 			if (base.IsServerStarted)
 			{
-				AbilityReconcileData state = new AbilityReconcileData(interruptQueued,
-																	  currentAbilityID,
-																	  remainingTime);
+				AbilityReconcileData state = default;
+				if (Character.TryGet(out ICharacterAttributeController attributeController))
+				{
+					state = new AbilityReconcileData(interruptQueued,
+													 currentAbilityID,
+													 remainingTime,
+													 attributeController.GetResourceState());
+				}
 				Reconcile(state);
 			}
 		}
@@ -344,6 +359,13 @@ namespace FishMMO.Shared
 				lastCreatedData = activationData;
 			}
 
+			float deltaTime = (float)base.TimeManager.TickDelta;
+
+			if (Character.TryGet(out ICharacterAttributeController attributeController))
+			{
+				attributeController.Regenerate(deltaTime);
+			}
+
 			// If we are already activating
 			if (IsActivating)
 			{
@@ -362,7 +384,7 @@ namespace FishMMO.Shared
 				// Try to activate the queued ability
 				if (CanActivate(activationData.QueuedAbilityID, out Ability newAbility))
 				{
-					Debug.Log($"New Ability Activation {newAbility.ID} State: {state}");
+					//Debug.Log($"New Ability Activation {newAbility.ID} State: {state}");
 
 					interruptQueued = false;
 					currentAbilityID = newAbility.ID;
@@ -377,13 +399,10 @@ namespace FishMMO.Shared
 			{
 				if (remainingTime > 0.0f)
 				{
-					float deltaTime = (float)base.TimeManager.TickDelta;
-
 					//Debug.Log($"Activating {validatedAbility.ID} State: {state}");
 
 					// Handle ability updates here, display cast bar, display hitbox telegraphs, etc
 					OnUpdate?.Invoke(validatedAbility.Name, remainingTime, validatedAbility.ActivationTime * CalculateSpeedReduction(GetActivationAttributeTemplate(validatedAbility)));
-					
 
 					// Handle held ability updates
 					if (heldKey != KeyCode.None)
@@ -466,6 +485,17 @@ namespace FishMMO.Shared
 			}
 			currentAbilityID = rd.AbilityID;
 			remainingTime = rd.RemainingTime;
+
+			if (KnownAbilities.TryGetValue(currentAbilityID, out Ability validatedAbility))
+			{
+				// Handle ability updates here, display cast bar, display hitbox telegraphs, etc
+				OnUpdate?.Invoke(validatedAbility.Name, remainingTime, validatedAbility.ActivationTime * CalculateSpeedReduction(GetActivationAttributeTemplate(validatedAbility)));
+			}
+
+			if (Character.TryGet(out ICharacterAttributeController attributeController))
+			{
+				attributeController.ApplyResourceState(rd.ResourceState);
+			}
 		}
 
 		public float CalculateSpeedReduction(CharacterAttributeTemplate attribute)

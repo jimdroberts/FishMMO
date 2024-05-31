@@ -21,6 +21,7 @@ namespace FishMMO.Shared
 		string CharacterNameLower { get; set; }
 		long WorldServerID { get; set; }
 		string Account { get; set; }
+		DateTime TimeCreated { get; set; }
 		AccessLevel AccessLevel { get; set; }
 		string TeleporterName { get; set; }
 		NetworkConnection Owner { get; }

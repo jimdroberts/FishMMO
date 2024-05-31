@@ -50,9 +50,10 @@ namespace FishMMO.Shared
 		/// </summary>
 		public string CharacterName { get; set; }
 		public string CharacterNameLower { get; set; }
-		public long WorldServerID { get; set; }
 		public string Account { get; set; }
 		public AccessLevel AccessLevel { get; set; }
+		public DateTime TimeCreated { get; set; }
+		public long WorldServerID { get; set; }
 		public string TeleporterName { get; set; }
 		public override bool IsTeleporting { get { return !string.IsNullOrWhiteSpace(TeleporterName); } }
 		/// <summary>

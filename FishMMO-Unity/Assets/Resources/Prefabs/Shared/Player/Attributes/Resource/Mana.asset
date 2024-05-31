@@ -16,6 +16,7 @@ MonoBehaviour:
   InitialValue: 100
   MinValue: 0
   MaxValue: 100
+  IsPercentage: 0
   IsResourceAttribute: 1
   ClampFinalValue: 1
   ParentTypes:
@@ -23,7 +24,8 @@ MonoBehaviour:
   ChildTypes:
     m_keys: []
   DependantTypes:
-    m_keys: []
+    m_keys:
+    - {fileID: 11400000, guid: c7cd9d02fb9bad644a058ea86d720c99, type: 2}
   Formulas:
     m_keys: []
     m_values: []

@@ -1,5 +1,4 @@
-﻿using UnityEngine;
-using FishNet.Object.Prediction;
+﻿using FishNet.Object.Prediction;
 
 namespace FishMMO.Shared
 {
@@ -8,12 +7,14 @@ namespace FishMMO.Shared
 		public bool Interrupt;
 		public long AbilityID;
 		public float RemainingTime;
+		public CharacterAttributeResourceState ResourceState;
 
-		public AbilityReconcileData(bool interrupt, long abilityID, float remainingTime)
+		public AbilityReconcileData(bool interrupt, long abilityID, float remainingTime, CharacterAttributeResourceState resourceState)
 		{
 			Interrupt = interrupt;
 			AbilityID = abilityID;
 			RemainingTime = remainingTime;
+			ResourceState = resourceState;
 
 			_tick = 0;
 		}

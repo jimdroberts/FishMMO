@@ -438,7 +438,7 @@ MonoBehaviour:
   _timingType: 0
   _allowTickDropping: 0
   _maximumFrameTicks: 2
-  _tickRate: 15
+  _tickRate: 30
   _pingInterval: 1
   _physicsMode: 1
 --- !u!4 &6353428962552500367
@@ -470,8 +470,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _dropExcessiveReplicates: 1
   _maximumServerReplicates: 15
-  _clientInterpolation: 2
-  _serverInterpolation: 1
+  _stateInterpolation: 1
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

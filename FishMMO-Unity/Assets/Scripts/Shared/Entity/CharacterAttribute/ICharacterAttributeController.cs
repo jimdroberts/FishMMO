@@ -15,5 +15,8 @@ namespace FishMMO.Shared
 		float GetResourceAttributeCurrentPercentage(CharacterAttributeTemplate template);
 		bool TryGetResourceAttribute(int id, out CharacterResourceAttribute attribute);
 		void AddAttribute(CharacterAttribute instance);
+		void Regenerate(float deltaTime);
+		void ApplyResourceState(CharacterAttributeResourceState resourceState);
+		CharacterAttributeResourceState GetResourceState();
 	}
 }

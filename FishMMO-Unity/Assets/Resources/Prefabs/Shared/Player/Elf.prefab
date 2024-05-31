@@ -292,7 +292,7 @@ MonoBehaviour:
   _spectatorInterpolation: 2
   _enableTeleport: 0
   _teleportThreshold: 1
-  <PrefabId>k__BackingField: 0
+  <PrefabId>k__BackingField: 10
   <SpawnableCollectionId>k__BackingField: 0
   _scenePathHash: 0
   <SceneId>k__BackingField: 0
@@ -415,6 +415,18 @@ MonoBehaviour:
   _networkObjectCache: {fileID: 4964627840297570917}
   CharacterAttributeDatabase: {fileID: 11400000, guid: 8fe93c66f5bc53c45a7b0f8334be9016,
     type: 2}
+  HealthResourceTemplate: {fileID: 11400000, guid: e5c10a046ee277f46a57ee2048ae5ec9,
+    type: 2}
+  HealthRegenerationTemplate: {fileID: 11400000, guid: 9e06a0ac8fc191f489439c81c899e385,
+    type: 2}
+  ManaResourceTemplate: {fileID: 11400000, guid: f627a40e6b3ef5349b3c735f0bfd60c7,
+    type: 2}
+  ManaRegenerationTemplate: {fileID: 11400000, guid: c7cd9d02fb9bad644a058ea86d720c99,
+    type: 2}
+  StaminaResourceTemplate: {fileID: 11400000, guid: f9116fa7190f01a4a93eb32cafac787b,
+    type: 2}
+  StaminaRegenerationTemplate: {fileID: 11400000, guid: 5e8db3d7ab6f25e4c9297f410ea63268,
+    type: 2}
 --- !u!114 &1643789448904715060
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -492,7 +504,8 @@ MonoBehaviour:
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 4964627840297570917}
   AbilitySpawner: {fileID: 6125569142059716731}
-  BloodResourceTemplate: {fileID: 0}
+  BloodResourceTemplate: {fileID: 11400000, guid: e5c10a046ee277f46a57ee2048ae5ec9,
+    type: 2}
   AttackSpeedReductionTemplate: {fileID: 11400000, guid: 15a71776a1f5e4245841b3301c881f80,
     type: 2}
   CastSpeedReductionTemplate: {fileID: 11400000, guid: a0c807381df88cc4aaa63f497753d3f1,
@@ -604,8 +617,6 @@ MonoBehaviour:
   HealedAchievementTemplate: {fileID: 0}
   ResurrectAchievementTemplate: {fileID: 0}
   ResurrectedAchievementTemplate: {fileID: 0}
-  ShowDamage: 1
-  ShowHeals: 1
 --- !u!114 &6038023079570568745
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -689,6 +700,7 @@ MonoBehaviour:
   _componentIndexCache: 14
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 4964627840297570917}
+  Template: {fileID: 0}
 --- !u!114 &7810264000710710752
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -1,9 +1,11 @@
 ﻿using FishNet.Connection;
+using FishNet.Object;
 using FishNet.Transporting;
 using System;
 using FishMMO.Database.Npgsql.Entities;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
+using UnityEngine;
 
 namespace FishMMO.Server
 {
@@ -158,38 +160,54 @@ namespace FishMMO.Server
 						dbContext.Characters.Add(newCharacter);
 						dbContext.SaveChanges();
 
-						// add character factions
-						foreach (FactionTemplate faction in raceTemplate.InitialFaction.Allied)
+						// add character attributes
+						if (raceTemplate.InitialAttributes != null)
 						{
-							var newFaction = new CharacterFactionEntity()
+							foreach (CharacterAttributeTemplate template in raceTemplate.InitialAttributes.Attributes.Values)
 							{
-								CharacterID = newCharacter.ID,
-								TemplateID = faction.ID,
-								Value = faction.AlliedLevel,
-							};
-							dbContext.CharacterFactions.Add(newFaction);
+								dbContext.CharacterAttributes.Add(new CharacterAttributeEntity()
+								{
+									CharacterID = newCharacter.ID,
+									TemplateID = template.ID,
+									Value = template.InitialValue,
+									CurrentValue = template.IsResourceAttribute ? template.InitialValue : 0,
+								});
+							}
+							dbContext.SaveChanges();
 						}
-						foreach (FactionTemplate faction in raceTemplate.InitialFaction.Neutral)
+
+						if (raceTemplate.InitialFaction != null)
 						{
-							var newFaction = new CharacterFactionEntity()
+							// add character factions
+							foreach (FactionTemplate faction in raceTemplate.InitialFaction.Allied)
 							{
-								CharacterID = newCharacter.ID,
-								TemplateID = faction.ID,
-								Value = 0,
-							};
-							dbContext.CharacterFactions.Add(newFaction);
-						}
-						foreach (FactionTemplate faction in raceTemplate.InitialFaction.Enemies)
-						{
-							var newFaction = new CharacterFactionEntity()
+								dbContext.CharacterFactions.Add(new CharacterFactionEntity()
+								{
+									CharacterID = newCharacter.ID,
+									TemplateID = faction.ID,
+									Value = faction.AlliedLevel,
+								});
+							}
+							foreach (FactionTemplate faction in raceTemplate.InitialFaction.Neutral)
 							{
-								CharacterID = newCharacter.ID,
-								TemplateID = faction.ID,
-								Value = faction.EnemyLevel,
-							};
-							dbContext.CharacterFactions.Add(newFaction);
+								dbContext.CharacterFactions.Add(new CharacterFactionEntity()
+								{
+									CharacterID = newCharacter.ID,
+									TemplateID = faction.ID,
+									Value = 0,
+								});
+							}
+							foreach (FactionTemplate faction in raceTemplate.InitialFaction.Enemies)
+							{
+								dbContext.CharacterFactions.Add(new CharacterFactionEntity()
+								{
+									CharacterID = newCharacter.ID,
+									TemplateID = faction.ID,
+									Value = faction.EnemyLevel,
+								});
+							}
+							dbContext.SaveChanges();
 						}
-						dbContext.SaveChanges();
 
 						// send success to the client
 						Server.Broadcast(conn, new CharacterCreateResultBroadcast()
