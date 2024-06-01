@@ -336,12 +336,6 @@ namespace FishMMO.Shared
 		[Replicate]
 		private void Replicate(AbilityActivationReplicateData activationData, ReplicateState state = ReplicateState.Invalid, Channel channel = Channel.Unreliable)
 		{
-			// ignore default data
-			if (!activationData.ActivationFlags.IsFlagged(AbilityActivationFlags.IsActualData))
-			{
-				return;
-			}
-
 			if (state.IsFuture())
 			{
 				uint lastCreatedTick = lastCreatedData.GetTick();

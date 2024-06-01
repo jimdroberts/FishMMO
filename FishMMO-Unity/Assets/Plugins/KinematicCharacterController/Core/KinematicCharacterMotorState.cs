@@ -21,8 +21,9 @@ namespace KinematicCharacterController
 		public CharacterTransientGroundingReport GroundingStatus;
 
 		public Vector3 AttachedRigidbodyVelocity;
-		public float TimeSinceLastAbleToJump;
 		public bool IsCrouching;
+		public bool JumpRequested;
+		public float TimeSinceLastAbleToJump;
 		public float TimeSinceJumpRequested;
 
 		private uint _tick;

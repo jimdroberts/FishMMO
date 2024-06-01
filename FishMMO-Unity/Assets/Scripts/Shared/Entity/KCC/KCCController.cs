@@ -151,8 +151,9 @@ namespace FishMMO.Shared
 		public void ApplyState(KinematicCharacterMotorState state)
 		{
 			// Take any state needed for the controller here
-			_timeSinceLastAbleToJump = state.TimeSinceLastAbleToJump;
 			_isCrouching = state.IsCrouching;
+			_jumpRequested = state.JumpRequested;
+			_timeSinceLastAbleToJump = state.TimeSinceLastAbleToJump;
 			_timeSinceJumpRequested = state.TimeSinceJumpRequested;
 
 			Motor.ApplyState(state);
@@ -163,8 +164,9 @@ namespace FishMMO.Shared
 			KinematicCharacterMotorState baseState = Motor.GetState();
 
 			// Apply state from controller here.
-			baseState.TimeSinceLastAbleToJump = _timeSinceLastAbleToJump;
 			baseState.IsCrouching = _isCrouching;
+			baseState.JumpRequested = _jumpRequested;
+			baseState.TimeSinceLastAbleToJump = _timeSinceLastAbleToJump;
 			baseState.TimeSinceJumpRequested = _timeSinceJumpRequested;
 
 			return baseState;
