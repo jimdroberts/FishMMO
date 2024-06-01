@@ -428,11 +428,11 @@ namespace FishMMO.Shared
 
 			if (TypeOverride != null)
 			{
-				CachedTooltip += RichText.Format($"Type: {TypeOverride.OverrideAbilityType}", true, "f5ad6eFF", "120%");
+				CachedTooltip += RichText.Format($"\r\nType: {TypeOverride.OverrideAbilityType}", true, "f5ad6eFF", "120%");
 			}
 			else
 			{
-				CachedTooltip += RichText.Format($"Type: {Template.Type}", true, "f5ad6eFF", "120%");
+				CachedTooltip += RichText.Format($"\r\nType: {Template.Type}", true, "f5ad6eFF", "120%");
 			}
 
 			return CachedTooltip;

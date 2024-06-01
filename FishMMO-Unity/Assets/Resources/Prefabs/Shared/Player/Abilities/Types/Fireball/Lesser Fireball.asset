@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Lesser Fireball
   m_EditorClassIdentifier: 
   icon: {fileID: 21300000, guid: b3905a73a6672d9449647aaf036e23fc, type: 3}
-  Description: Launches a projectile forward. The fireball persists for 5 seconds.
+  Description: Creates a large ball of flame in front of the caster for 5 seconds.
   ActivationTime: 0.5
   LifeTime: 5
   Cooldown: 1

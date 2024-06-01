@@ -19,7 +19,7 @@ namespace FishMMO.Shared
 			string tooltip = base.Tooltip(new List<ITooltip>(Events));
 			if (Type != AbilityType.None)
 			{
-				tooltip += RichText.Format($"Type: {Type}", true, "f5ad6eFF", "120%");
+				tooltip += RichText.Format($"\r\nType: {Type}", true, "f5ad6eFF", "120%");
 			}
 			return tooltip;
 		}

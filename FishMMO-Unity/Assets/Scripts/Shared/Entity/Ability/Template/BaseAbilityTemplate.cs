@@ -40,11 +40,11 @@ namespace FishMMO.Shared
 		{
 			using (var sb = ZString.CreateStringBuilder())
 			{
-				sb.Append(RichText.Format(Name, false, "f5ad6e", "135%"));
-				sb.Append("\r\n______________________________\r\n");
+				sb.Append(RichText.Format(Name, true, "f5ad6e", "140%"));
 
 				if (!string.IsNullOrWhiteSpace(Description))
 				{
+					sb.AppendLine();
 					sb.Append(RichText.Format(GetFormattedDescription(), true, "a66ef5FF"));
 				}
 
@@ -61,7 +61,8 @@ namespace FishMMO.Shared
 				AbilityResourceDictionary requirements = new AbilityResourceDictionary();
 				requirements.CopyFrom(Requirements);
 
-				if (combineList != null)
+				if (combineList != null &&
+					combineList.Count > 0)
 				{
 					foreach (BaseAbilityTemplate template in combineList)
 					{
@@ -100,18 +101,25 @@ namespace FishMMO.Shared
 						}
 					}
 				}
-				sb.Append("\r\n______________________________\r\n");
 
-				sb.Append(RichText.Format("Activation Time", activationTime, true, "a66ef5FF", "", "s"));
-				sb.Append(RichText.Format("Life Time", lifeTime, true, "a66ef5FF", "", "s"));
-				sb.Append(RichText.Format("Cooldown", cooldown, true, "a66ef5FF", "", "s"));
-				sb.Append(RichText.Format("Range", range, true, "a66ef5FF", "", "m"));
-				sb.Append(RichText.Format("Speed", speed, true, "a66ef5FF", "", "m/s"));
-				sb.Append("\r\n______________________________\r\n");
-
+				if (activationTime > 0 ||
+					lifeTime > 0 ||
+					cooldown > 0 ||
+					range > 0 ||
+					speed > 0)
+				{
+					sb.AppendLine();
+					sb.Append(RichText.Format("Activation Time", activationTime, true, "FFFFFFFF", "", "s"));
+					sb.Append(RichText.Format("Life Time", lifeTime, true, "FFFFFFFF", "", "s"));
+					sb.Append(RichText.Format("Cooldown", cooldown, true, "FFFFFFFF", "", "s"));
+					sb.Append(RichText.Format("Range", range, true, "FFFFFFFF", "", "m"));
+					sb.Append(RichText.Format("Speed", speed, true, "FFFFFFFF", "", "m/s"));
+				}
+				
 				if (resources != null && resources.Count > 0)
 				{
-					sb.Append("\r\n<color=#a66ef5>Resource Cost: </color>");
+					//sb.Append("\r\n______________________________\r\n\r\n");
+					sb.Append("\r\n\r\n<color=#a66ef5>Resource Cost: </color>");
 
 					foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in resources)
 					{
@@ -120,11 +128,10 @@ namespace FishMMO.Shared
 							sb.Append(RichText.Format(pair.Key.Name, pair.Value, true, "f5ad6eFF", "", "","120%"));
 						}
 					}
-					sb.Append("\r\n______________________________\r\n");
 				}
 				if (requirements != null && requirements.Count > 0)
 				{
-					sb.Append("<color=#a66ef5>Requirements: </color>");
+					sb.Append("\r\n\r\n<color=#a66ef5>Requirements: </color>");
 
 					foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in requirements)
 					{
@@ -133,11 +140,11 @@ namespace FishMMO.Shared
 							sb.Append(RichText.Format(pair.Key.Name, pair.Value, true, "f5ad6eFF", "", "", "120%"));
 						}
 					}
-					sb.Append("\r\n______________________________\r\n");
 				}
 				if (price > 0)
 				{
-					sb.Append(RichText.Format("Price", price, true, "a66ef5FF"));
+					sb.AppendLine();
+					sb.Append(RichText.Format("Price", price, true, "FFFFFFFF"));
 				}
 				return sb.ToString();
 			}
