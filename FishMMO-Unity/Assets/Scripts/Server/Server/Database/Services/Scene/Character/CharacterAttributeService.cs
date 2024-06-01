@@ -28,7 +28,7 @@ namespace FishMMO.Server.DatabaseServices
 					dbAttribute.CharacterID = character.ID;
 					dbAttribute.TemplateID = attribute.Template.ID;
 					dbAttribute.Value = attribute.Value;
-					dbAttribute.CurrentValue = 0;
+					dbAttribute.CurrentValue = 0.0f;
 				}
 				else
 				{
@@ -37,7 +37,7 @@ namespace FishMMO.Server.DatabaseServices
 						CharacterID = character.ID,
 						TemplateID = attribute.Template.ID,
 						Value = attribute.Value,
-						CurrentValue = 0,
+						CurrentValue = 0.0f,
 					});
 				}
 			}

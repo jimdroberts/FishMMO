@@ -2,23 +2,23 @@
 {
 	public class CharacterResourceAttribute : CharacterAttribute
 	{
-		private int currentValue;
+		private float currentValue;
 
-		public int CurrentValue { get { return currentValue; } }
+		public float CurrentValue { get { return currentValue; } }
 
 		public override string ToString()
 		{
-			return Template.Name + ": " + currentValue + "/" + FinalValue;
+			return Template.Name + ": " + (int)currentValue + "/" + FinalValue;
 		}
 
-		public CharacterResourceAttribute(int templateID, int initialValue, int currentValue, int modifier) : base(templateID, initialValue, modifier)
+		public CharacterResourceAttribute(int templateID, int initialValue, float currentValue, int modifier) : base(templateID, initialValue, modifier)
 		{
 			this.currentValue = currentValue;
 		}
 
-		public void AddToCurrentValue(int value)
+		public void AddToCurrentValue(float value)
 		{
-			int tmp = currentValue;
+			float tmp = currentValue;
 			currentValue += value;
 			if (currentValue == tmp)
 			{
@@ -31,24 +31,24 @@
 			Internal_OnAttributeChanged(this);
 		}
 
-		public void SetCurrentValue(int value)
+		public void SetCurrentValue(float value)
 		{
 			currentValue = value;
 			Internal_OnAttributeChanged(this);
 		}
 
-		public void Consume(int amount)
+		public void Consume(float amount)
 		{
 			currentValue -= amount;
-			if (currentValue < 0)
+			if (currentValue <= 0.001f)
 			{
-				currentValue = 0;
+				currentValue = 0.0f;
 			}
 			//UnityEngine.Debug.Log($"Consumed {amount} {Template.Name} - [{currentValue}/{FinalValue}]");
 			Internal_OnAttributeChanged(this);
 		}
 
-		public void Gain(int amount)
+		public void Gain(float amount)
 		{
 			currentValue += amount;
 			if (currentValue >= FinalValue)

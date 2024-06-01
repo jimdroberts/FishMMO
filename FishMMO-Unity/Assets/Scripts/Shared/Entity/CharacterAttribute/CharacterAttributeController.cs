@@ -64,7 +64,7 @@ namespace FishMMO.Shared
 				{
 					int templateID = reader.ReadInt32();
 					int value = reader.ReadInt32();
-					int currentValue = reader.ReadInt32();
+					float currentValue = reader.ReadSingle();
 
 					SetResourceAttribute(templateID, value, currentValue);
 				}
@@ -85,7 +85,7 @@ namespace FishMMO.Shared
 			{
 				writer.WriteInt32(resourceAttribute.Template.ID);
 				writer.WriteInt32(resourceAttribute.Value);
-				writer.WriteInt32(resourceAttribute.CurrentValue);
+				writer.WriteSingle(resourceAttribute.CurrentValue);
 			}
 		}
 
@@ -97,7 +97,7 @@ namespace FishMMO.Shared
 			}
 		}
 
-		public void SetResourceAttribute(int id, int value, int currentValue)
+		public void SetResourceAttribute(int id, int value, float currentValue)
 		{
 			if (ResourceAttributes.TryGetValue(id, out CharacterResourceAttribute attribute))
 			{

@@ -78,7 +78,7 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			if (resourceInstance != null && resourceInstance.CurrentValue > 0)
+			if (resourceInstance != null && resourceInstance.CurrentValue > 0.0f)
 			{
 				amount = ApplyModifiers(Character, amount, damageAttribute);
 				if (amount < 1)
@@ -102,7 +102,7 @@ namespace FishMMO.Shared
 				}
 
 				// check if we died
-				if (resourceInstance.CurrentValue < 1)
+				if (resourceInstance.CurrentValue <= 0.001f)
 				{
 					Kill(attacker);
 				}

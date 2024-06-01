@@ -8,7 +8,7 @@ namespace FishMMO.Shared
 		Dictionary<int, CharacterResourceAttribute> ResourceAttributes { get; }
 
 		void SetAttribute(int id, int value);
-		void SetResourceAttribute(int id, int value, int currentValue);
+		void SetResourceAttribute(int id, int value, float currentValue);
 		bool TryGetAttribute(CharacterAttributeTemplate template, out CharacterAttribute attribute);
 		bool TryGetAttribute(int id, out CharacterAttribute attribute);
 		bool TryGetResourceAttribute(CharacterAttributeTemplate template, out CharacterResourceAttribute attribute);

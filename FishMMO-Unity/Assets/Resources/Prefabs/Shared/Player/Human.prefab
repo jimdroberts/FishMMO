@@ -2551,6 +2551,7 @@ MonoBehaviour:
   CrouchedCapsuleHeight: 0.8
   FullCapsuleHeight: 1.6
   CapsuleBaseOffset: 0.8
+  StaminaTemplate: {fileID: 11400000, guid: f9116fa7190f01a4a93eb32cafac787b, type: 2}
   MoveSpeedTemplate: {fileID: 11400000, guid: 561336c510b90b546b2650ffa83a09dc, type: 2}
   RunSpeedTemplate: {fileID: 11400000, guid: 27c4f240152242b4fb7dec2f5368445c, type: 2}
   JumpSpeedTemplate: {fileID: 11400000, guid: e32341894cca80f44988cbf96cd9a709, type: 2}

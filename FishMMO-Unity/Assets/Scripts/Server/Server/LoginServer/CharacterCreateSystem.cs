@@ -170,7 +170,7 @@ namespace FishMMO.Server
 									CharacterID = newCharacter.ID,
 									TemplateID = template.ID,
 									Value = template.InitialValue,
-									CurrentValue = template.IsResourceAttribute ? template.InitialValue : 0,
+									CurrentValue = template.IsResourceAttribute ? template.InitialValue : 0.0f,
 								});
 							}
 							dbContext.SaveChanges();

@@ -3,8 +3,8 @@
 	public struct CharacterAttributeResourceState
 	{
 		public float RegenDelta;
-		public int Health;
-		public int Mana;
-		public int Stamina;
+		public float Health;
+		public float Mana;
+		public float Stamina;
 	}
 }

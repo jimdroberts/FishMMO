@@ -1,4 +1,5 @@
 ﻿using TMPro;
+using UnityEngine;
 using UnityEngine.UI;
 using FishMMO.Shared;
 
@@ -43,9 +44,9 @@ namespace FishMMO.Client
 				Character.TryGet(out ICharacterAttributeController attributeController) && 
 				attributeController.TryGetResourceAttribute(Template, out CharacterResourceAttribute resource))
 			{
-				float value = (float)resource.CurrentValue / resource.FinalValueAsFloat;
+				float value = resource.CurrentValue / resource.FinalValueAsFloat;
 				if (slider != null) slider.value = value;
-				if (resourceValue != null) resourceValue.text = resource.CurrentValue + "/" + resource.FinalValue;
+				if (resourceValue != null) resourceValue.text = Mathf.RoundToInt(resource.CurrentValue) + "/" + resource.FinalValue;
 			}
 		}
 	}

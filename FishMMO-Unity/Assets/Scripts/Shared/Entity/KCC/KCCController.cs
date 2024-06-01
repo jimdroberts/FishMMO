@@ -64,6 +64,7 @@ namespace FishMMO.Shared
 		public float CrouchedCapsuleHeight = 0.5f;
 		public float FullCapsuleHeight = 2f;
 		public float CapsuleBaseOffset = 1f;
+		public CharacterAttributeTemplate StaminaTemplate;
 		public CharacterAttributeTemplate MoveSpeedTemplate;
 		public CharacterAttributeTemplate RunSpeedTemplate;
 		public CharacterAttributeTemplate JumpSpeedTemplate;
@@ -319,11 +320,15 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void UpdateVelocity(ref Vector3 currentVelocity, float deltaTime)
 		{
+			const float SPRINT_STAMINA_COST = 5.0f;
+
 			switch (CurrentCharacterState)
 			{
 				case KCCCharacterState.Default:
 					{
 						AbilityType abilityType = AbilityType.None;
+
+						float moveInputMagnitude = _moveInputVector.sqrMagnitude;
 
 						// Determine ability state
 						if (Character.TryGet(out IAbilityController abilityController))
@@ -355,10 +360,17 @@ namespace FishMMO.Shared
 									targetSpeed = StableCrouchSpeedConstant;
 								}
 								else if (_sprintInputDown &&
-									RunSpeedTemplate != null &&
-									attributeController.TryGetAttribute(RunSpeedTemplate, out CharacterAttribute runSpeedModifier))
+										 RunSpeedTemplate != null &&
+										 moveInputMagnitude > 0f &&
+										 attributeController.TryGetResourceAttribute(StaminaTemplate, out CharacterResourceAttribute stamina) &&
+										 attributeController.TryGetAttribute(RunSpeedTemplate, out CharacterAttribute runSpeedModifier))
 								{
-									targetSpeed = StableSprintSpeedConstant * runSpeedModifier.FinalValueAsPct;
+									float currentStaminaCost = SPRINT_STAMINA_COST * deltaTime;
+									if (stamina.CurrentValue >= currentStaminaCost)
+									{
+										stamina.Consume(currentStaminaCost);
+										targetSpeed = StableSprintSpeedConstant * runSpeedModifier.FinalValueAsPct;
+									}
 								}
 								else if (MoveSpeedTemplate != null &&
 									attributeController.TryGetAttribute(MoveSpeedTemplate, out CharacterAttribute moveSpeedModifier))
@@ -394,7 +406,7 @@ namespace FishMMO.Shared
 						else
 						{
 							// Add move input
-							if (_moveInputVector.sqrMagnitude > 0f)
+							if (moveInputMagnitude > 0f)
 							{
 								Vector3 addedVelocity = _moveInputVector * AirAccelerationSpeed * deltaTime;
 
