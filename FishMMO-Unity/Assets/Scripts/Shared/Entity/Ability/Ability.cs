@@ -152,6 +152,11 @@ namespace FishMMO.Shared
 					Requirements[pair.Key] += pair.Value;
 				}
 			}
+
+			foreach (AbilityEvent abilityEvent in template.Events)
+			{
+				AddAbilityEvent(abilityEvent);
+			}
 		}
 
 		public bool TryGetAbilityEvent<T>(int templateID, out T modifier) where T : AbilityEvent

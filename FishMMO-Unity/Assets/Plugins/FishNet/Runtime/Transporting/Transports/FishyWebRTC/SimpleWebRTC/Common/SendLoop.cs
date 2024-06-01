@@ -59,7 +59,9 @@ namespace cakeslice.SimpleWebRTC
 
 				// null check incase disconnect while send thread is starting
 				if (client == null)
+				{
 					return;
+				}
 
 				while (client.ConnectionState == RTCPeerConnectionState.Connected)
 				{

@@ -32,7 +32,7 @@ namespace FishMMO.Shared
 
 		public event Func<bool> OnCanManipulate;
 
-		// handle ability updates here, display cast bar, display hitbox telegraphs, etc
+		// Handle ability updates here, display cast bar, display hitbox telegraphs, etc
 		public event Action<string, float, float> OnUpdate;
 		// Invoked when the current ability is Interrupted.
 		public event Action OnInterrupt;
@@ -510,7 +510,6 @@ namespace FishMMO.Shared
 			interruptQueued = true;
 		}
 
-
 		public void Activate(long referenceID, KeyCode heldKey)
 		{
 			if (!CanActivate(referenceID, out Ability validatedAbility))
@@ -656,11 +655,11 @@ namespace FishMMO.Shared
 
 			for (int i = 0; i < abilityTemplates.Count; ++i)
 			{
-				// if the template is an ability event we add them to their mapped containers
+				// If the template is an ability event we add them to their mapped containers
 				AbilityEvent abilityEvent = abilityTemplates[i] as AbilityEvent;
 				if (abilityEvent != null)
 				{
-					// add the event to the global events map
+					// Add the event to the global events map
 					if (!KnownEvents.Contains(abilityEvent.ID))
 					{
 						KnownEvents.Add(abilityEvent.ID);

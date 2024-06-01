@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using System.Collections.Generic;
+using UnityEngine;
 
 namespace FishMMO.Shared
 {
@@ -11,5 +12,16 @@ namespace FishMMO.Shared
 		public byte EventSlots;
 		public int HitCount;
 		public AbilityType Type;
+		public List<AbilityEvent> Events;
+
+		public override string Tooltip()
+		{
+			string tooltip = base.Tooltip(new List<ITooltip>(Events));
+			if (Type != AbilityType.None)
+			{
+				tooltip += RichText.Format($"Type: {Type}", true, "f5ad6eFF", "120%");
+			}
+			return tooltip;
+		}
 	}
 }
