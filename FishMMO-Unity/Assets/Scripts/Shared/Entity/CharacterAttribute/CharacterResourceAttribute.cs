@@ -31,10 +31,13 @@
 			Internal_OnAttributeChanged(this);
 		}
 
-		public void SetCurrentValue(float value)
+		public void SetCurrentValue(float value, bool updateInternal = true)
 		{
 			currentValue = value;
-			Internal_OnAttributeChanged(this);
+			if (updateInternal)
+			{
+				Internal_OnAttributeChanged(this);
+			}
 		}
 
 		public void Consume(float amount)

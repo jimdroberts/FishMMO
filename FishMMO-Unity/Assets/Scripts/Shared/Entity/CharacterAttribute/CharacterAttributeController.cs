@@ -262,7 +262,8 @@ namespace FishMMO.Shared
 			{
 				accumulatedRegenDelta = resourceState.RegenDelta;
 				health.SetCurrentValue(resourceState.Health);
-				mana.SetCurrentValue(resourceState.Mana);
+				// Skipping internal UI update here fixes an issue with Replicate/Reconcile fighting over UI updates.
+				mana.SetCurrentValue(resourceState.Mana, false);
 				stamina.SetCurrentValue(resourceState.Stamina);
 			}
 		}

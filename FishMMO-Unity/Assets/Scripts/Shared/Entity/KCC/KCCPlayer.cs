@@ -110,7 +110,6 @@ namespace FishMMO.Shared
 					input.CameraRotation = lastCreatedData.CameraRotation;
 					input.MoveAxisForward = lastCreatedData.MoveAxisForward;
 					input.MoveAxisRight = lastCreatedData.MoveAxisRight;
-					//input.SetTick(thisTick);
 				}
 			}
 			else if (state == ReplicateState.ReplayedCreated)

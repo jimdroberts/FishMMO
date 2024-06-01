@@ -9,7 +9,7 @@ namespace FishMMO.Shared
 		public float RemainingTime;
 		public CharacterAttributeResourceState ResourceState;
 
-		public AbilityReconcileData(bool interrupt, long abilityID, float remainingTime, CharacterAttributeResourceState resourceState)
+		public AbilityReconcileData(bool interrupt, long abilityID, float remainingTime, CharacterAttributeResourceState resourceState) : this()
 		{
 			Interrupt = interrupt;
 			AbilityID = abilityID;

@@ -320,6 +320,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void UpdateVelocity(ref Vector3 currentVelocity, float deltaTime)
 		{
+			const float JUMP_STAMINA_COST = 5.0f;
 			const float SPRINT_STAMINA_COST = 5.0f;
 
 			switch (CurrentCharacterState)
@@ -352,8 +353,7 @@ namespace FishMMO.Shared
 
 							float targetSpeed = StableMoveSpeedConstant;
 
-							if (Character != null &&
-								Character.TryGet(out ICharacterAttributeController attributeController))
+							if (Character.TryGet(out ICharacterAttributeController attributeController))
 							{
 								if (_isCrouching)
 								{
@@ -361,6 +361,7 @@ namespace FishMMO.Shared
 								}
 								else if (_sprintInputDown &&
 										 RunSpeedTemplate != null &&
+										 StaminaTemplate != null &&
 										 moveInputMagnitude > 0f &&
 										 attributeController.TryGetResourceAttribute(StaminaTemplate, out CharacterResourceAttribute stamina) &&
 										 attributeController.TryGetAttribute(RunSpeedTemplate, out CharacterAttribute runSpeedModifier))
@@ -477,7 +478,11 @@ namespace FishMMO.Shared
 						if (_jumpRequested)
 						{
 							// See if we actually are allowed to jump
-							if (abilityType == AbilityType.None &&
+							if (StaminaTemplate != null &&
+								Character.TryGet(out ICharacterAttributeController attributeController) &&
+								attributeController.TryGetResourceAttribute(StaminaTemplate, out CharacterResourceAttribute stamina) &&
+								stamina.CurrentValue >= JUMP_STAMINA_COST &&
+								abilityType == AbilityType.None &&
 								(AllowJumpingWhenSliding ? Motor.GroundingStatus.FoundAnyGround : Motor.GroundingStatus.IsStableOnGround) &&
 								_timeSinceLastAbleToJump <= JumpPostGroundingGraceTime)
 							{
@@ -495,13 +500,15 @@ namespace FishMMO.Shared
 								// Add to the return velocity and reset jump state
 								float jumpSpeed = StableJumpUpSpeedConstant;
 								if (JumpSpeedTemplate != null &&
-									Character.TryGet(out ICharacterAttributeController attributeController) &&
 									attributeController.TryGetAttribute(JumpSpeedTemplate, out CharacterAttribute jumpSpeedModifier))
 								{
 									jumpSpeed *= jumpSpeedModifier.FinalValueAsPct;
 								}
 								currentVelocity += (jumpDirection * jumpSpeed) - Vector3.Project(currentVelocity, Motor.CharacterUp);
 								currentVelocity += (_moveInputVector * JumpScalableForwardSpeed);
+
+								// Consume stamina when jumping
+								stamina.Consume(JUMP_STAMINA_COST);
 
 								_jumpRequested = false;
 

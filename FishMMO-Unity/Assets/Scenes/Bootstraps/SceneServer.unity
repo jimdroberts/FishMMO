@@ -456,8 +456,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _dropExcessiveReplicates: 1
   _maximumServerReplicates: 15
-  _clientInterpolation: 2
-  _serverInterpolation: 1
+  _stateInterpolation: 1
 --- !u!114 &8097462252018206291
 MonoBehaviour:
   m_ObjectHideFlags: 0

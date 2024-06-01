@@ -214,7 +214,7 @@ namespace FishMMO.Client
 				CharacterResourceAttribute resource = attribute as CharacterResourceAttribute;
 				if (resource != null)
 				{
-					label.Value.text = resource.CurrentValue.ToString() + " / " + resource.FinalValue.ToString();
+					label.Value.text = Mathf.RoundToInt(resource.CurrentValue) + " / " + resource.FinalValue;
 				}
 			}
 			else
@@ -294,7 +294,7 @@ namespace FishMMO.Client
 					CharacterResourceAttribute resource = attribute as CharacterResourceAttribute;
 					if (resource != null)
 					{
-						label.Value.text = resource.CurrentValue.ToString() + " / " + resource.FinalValue.ToString();
+						label.Value.text = Mathf.RoundToInt(resource.CurrentValue) + " / " + resource.FinalValue;
 					}
 				}
 				else

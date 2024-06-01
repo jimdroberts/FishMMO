@@ -11,7 +11,7 @@ namespace FishMMO.Shared
 		public Vector3 CameraPosition;
 		public Quaternion CameraRotation;
 
-		public KCCInputReplicateData(float moveAxisForward, float moveAxisRight, int moveFlags, Vector3 cameraPosition, Quaternion cameraRotation)
+		public KCCInputReplicateData(float moveAxisForward, float moveAxisRight, int moveFlags, Vector3 cameraPosition, Quaternion cameraRotation) : this()
 		{
 			MoveAxisForward = moveAxisForward;
 			MoveAxisRight = moveAxisRight;

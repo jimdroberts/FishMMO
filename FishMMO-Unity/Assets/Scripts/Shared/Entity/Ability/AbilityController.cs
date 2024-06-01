@@ -71,7 +71,6 @@ namespace FishMMO.Shared
 			if (base.TimeManager != null)
 			{
 				base.TimeManager.OnTick += TimeManager_OnTick;
-				base.TimeManager.OnPostTick += TimeManager_OnPostTick;
 			}
 		}
 
@@ -82,7 +81,6 @@ namespace FishMMO.Shared
 			if (base.TimeManager != null)
 			{
 				base.TimeManager.OnTick -= TimeManager_OnTick;
-				base.TimeManager.OnPostTick += TimeManager_OnPostTick;
 			}
 		}
 
@@ -238,10 +236,6 @@ namespace FishMMO.Shared
 		private void TimeManager_OnTick()
 		{
 			Replicate(HandleCharacterInput());
-		}
-
-		private void TimeManager_OnPostTick()
-		{
 			CreateReconcile();
 		}
 
@@ -324,7 +318,7 @@ namespace FishMMO.Shared
 			AbilityActivationReplicateData activationEventData = new AbilityActivationReplicateData(activationFlags,
 																									queuedAbilityID,
 																									heldKey);
-			// clear the locally queued data
+			// Clear the locally queued data
 			interruptQueued = false;
 			queuedAbilityID = NO_ABILITY;
 
@@ -336,6 +330,7 @@ namespace FishMMO.Shared
 		[Replicate]
 		private void Replicate(AbilityActivationReplicateData activationData, ReplicateState state = ReplicateState.Invalid, Channel channel = Channel.Unreliable)
 		{
+			// Predict held state
 			if (state.IsFuture())
 			{
 				uint lastCreatedTick = lastCreatedData.GetTick();
@@ -344,7 +339,6 @@ namespace FishMMO.Shared
 				if (tickDiff <= 1)
 				{
 					activationData.HeldKey = lastCreatedData.HeldKey;
-					//activationData.SetTick(thisTick);
 				}
 			}
 			else if (state == ReplicateState.ReplayedCreated)
@@ -378,13 +372,17 @@ namespace FishMMO.Shared
 				// Try to activate the queued ability
 				if (CanActivate(activationData.QueuedAbilityID, out Ability newAbility))
 				{
-					//Debug.Log($"New Ability Activation {newAbility.ID} State: {state}");
+					//Debug.Log($"New Ability Activation:{newAbility.ID} State:{state} Tick:{activationData.GetTick()}");
 
 					interruptQueued = false;
 					currentAbilityID = newAbility.ID;
 					remainingTime = newAbility.ActivationTime * CalculateSpeedReduction(GetActivationAttributeTemplate(newAbility));
 
 					heldKey = activationData.HeldKey;
+				}
+				else
+				{
+					return;
 				}
 			}
 
@@ -396,7 +394,10 @@ namespace FishMMO.Shared
 					//Debug.Log($"Activating {validatedAbility.ID} State: {state}");
 
 					// Handle ability updates here, display cast bar, display hitbox telegraphs, etc
-					OnUpdate?.Invoke(validatedAbility.Name, remainingTime, validatedAbility.ActivationTime * CalculateSpeedReduction(GetActivationAttributeTemplate(validatedAbility)));
+					if (state == ReplicateState.CurrentCreated)
+					{
+						OnUpdate?.Invoke(validatedAbility.Name, remainingTime, validatedAbility.ActivationTime * CalculateSpeedReduction(GetActivationAttributeTemplate(validatedAbility)));
+					}
 
 					// Handle held ability updates
 					if (heldKey != KeyCode.None)
@@ -428,6 +429,8 @@ namespace FishMMO.Shared
 								AbilityObject.Spawn(validatedAbility, PlayerCharacter, this, AbilitySpawner, targetInfo);
 
 								// Channeled abilities consume resources during activation
+
+								//Debug.Log($"Consumed On Tick: {activationData.GetTick()} State: {state}");
 								validatedAbility.ConsumeResources(Character, BloodResourceConversionTemplate, BloodResourceTemplate);
 							}
 						}
@@ -459,6 +462,7 @@ namespace FishMMO.Shared
 				}
 
 				// Consume resources
+				//Debug.Log($"Consumed On Tick: {activationData.GetTick()} State: {state}");
 				validatedAbility.ConsumeResources(Character, BloodResourceConversionTemplate, BloodResourceTemplate);
 
 				// Add ability to cooldowns
@@ -472,6 +476,7 @@ namespace FishMMO.Shared
 		[Reconcile]
 		private void Reconcile(AbilityReconcileData rd, Channel channel = Channel.Unreliable)
 		{
+			//Debug.Log($"Reconciled: {rd.GetTick()}");
 			if (rd.Interrupt)
 			{
 				OnInterrupt?.Invoke();
@@ -479,12 +484,6 @@ namespace FishMMO.Shared
 			}
 			currentAbilityID = rd.AbilityID;
 			remainingTime = rd.RemainingTime;
-
-			if (KnownAbilities.TryGetValue(currentAbilityID, out Ability validatedAbility))
-			{
-				// Handle ability updates here, display cast bar, display hitbox telegraphs, etc
-				OnUpdate?.Invoke(validatedAbility.Name, remainingTime, validatedAbility.ActivationTime * CalculateSpeedReduction(GetActivationAttributeTemplate(validatedAbility)));
-			}
 
 			if (Character.TryGet(out ICharacterAttributeController attributeController))
 			{
@@ -544,6 +543,10 @@ namespace FishMMO.Shared
 		{
 			validatedAbility = null;
 
+			if (abilityID == NO_ABILITY)
+			{
+				return false;
+			}
 			if (!CanManipulate())
 			{
 				return false;
