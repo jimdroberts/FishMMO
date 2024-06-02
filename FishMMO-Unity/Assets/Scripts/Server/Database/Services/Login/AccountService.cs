@@ -6,10 +6,10 @@ using FishMMO.Shared;
 
 namespace FishMMO.Server.DatabaseServices
 {
-    public class AccountService
-    {
-        public static ClientAuthenticationResult TryCreate(NpgsqlDbContext dbContext, string accountName, string salt, string verifier)
-        {
+	public class AccountService
+	{
+		public static ClientAuthenticationResult TryCreate(NpgsqlDbContext dbContext, string accountName, string salt, string verifier)
+		{
 			if (Constants.Authentication.IsAllowedUsername(accountName) && !string.IsNullOrWhiteSpace(salt) && !string.IsNullOrWhiteSpace(verifier))
 			{
 				var accountEntity = dbContext.Accounts.FirstOrDefault(a => a.Name == accountName);
@@ -32,19 +32,19 @@ namespace FishMMO.Server.DatabaseServices
 			return ClientAuthenticationResult.InvalidUsernameOrPassword;
 		}
 
-        public static ClientAuthenticationResult Get(NpgsqlDbContext dbContext, string accountName, out string salt, out string verifier, out AccessLevel accessLevel)
-        {
+		public static ClientAuthenticationResult Get(NpgsqlDbContext dbContext, string accountName, out string salt, out string verifier, out AccessLevel accessLevel)
+		{
 			salt = "";
 			verifier = "";
 			accessLevel = AccessLevel.Banned;
 
 			if (Constants.Authentication.IsAllowedUsername(accountName))
-            {
-                var accountEntity = dbContext.Accounts.FirstOrDefault(a => a.Name == accountName);
-                if (accountEntity == null)
-                {
+			{
+				var accountEntity = dbContext.Accounts.FirstOrDefault(a => a.Name == accountName);
+				if (accountEntity == null)
+				{
 					return ClientAuthenticationResult.InvalidUsernameOrPassword;
-                }
+				}
 				else if ((AccessLevel)accountEntity.AccessLevel == AccessLevel.Banned)
 				{
 					return ClientAuthenticationResult.Banned;
@@ -60,8 +60,8 @@ namespace FishMMO.Server.DatabaseServices
 					// proceed to SrpVerify stage
 					return ClientAuthenticationResult.SrpVerify;
 				}
-            }
+			}
 			return ClientAuthenticationResult.InvalidUsernameOrPassword;
-        }
-    }
+		}
+	}
 }

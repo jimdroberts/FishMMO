@@ -769,9 +769,7 @@ namespace FishMMO.Shared
 					{ "POSTGRES_DB", appSettings.Npgsql.Database },
 					{ "POSTGRES_USER", appSettings.Npgsql.Username },
 					{ "POSTGRES_PASSWORD", appSettings.Npgsql.Password },
-					{ "POSTGRES_HOST", appSettings.Npgsql.Host },
 					{ "POSTGRES_PORT", appSettings.Npgsql.Port },
-					{ "REDIS_HOST", appSettings.Redis.Host },
 					{ "REDIS_PORT", appSettings.Redis.Port },
 					{ "REDIS_PASSWORD", appSettings.Redis.Password },
 				});
@@ -787,15 +785,18 @@ namespace FishMMO.Shared
 				string updateOut = await RunDotNetCommandAsync($"ef database update -p {Constants.Configuration.ProjectPath} -s {Constants.Configuration.StartupProject}");
 				Log(updateOut);
 
-				Log("Databases are ready:\r\n" +
+				StartCoroutine(NetHelper.FetchExternalIPAddress((ip) =>
+				{
+					Log("Databases are ready:\r\n" +
 					"Npgsql Database: " + appSettings.Npgsql.Database + "\r\n" +
 					"Npgsql Username: " + appSettings.Npgsql.Username + "\r\n" +
 					"Npgsql Password: " + appSettings.Npgsql.Password + "\r\n" +
-					"Npgsql Host: " + appSettings.Npgsql.Host + "\r\n" +
+					"Npgsql Host: " + ip + "\r\n" +
 					"Npgsql Port: " + appSettings.Npgsql.Port + "\r\n" +
-					"Redis Host: " + appSettings.Redis.Host + "\r\n" +
+					"Redis Host: " + ip + "\r\n" +
 					"Redis Port: " + appSettings.Redis.Port + "\r\n" +
 					"Redis Password: " + appSettings.Redis.Password);
+				}));
 			}
 			else
 			{

@@ -3,7 +3,6 @@ using FishNet.Broadcast;
 using FishNet.Managing;
 using FishNet.Transporting;
 using UnityEngine;
-using UnityEngine.Networking;
 using UnityEngine.SceneManagement;
 using System;
 using System.Collections;
@@ -72,7 +71,7 @@ namespace FishMMO.Server
 
 			Debug.Log("Server: " + serverTypeName + " is starting[" + DateTime.UtcNow + "]");
 
-			StartCoroutine(FetchExternalIPAddress("https://checkip.amazonaws.com/", OnFinalizeSetup));
+			StartCoroutine(NetHelper.FetchExternalIPAddress(OnFinalizeSetup));
 		}
 
 		private void OnFinalizeSetup(string remoteAddress)
@@ -255,55 +254,6 @@ namespace FishMMO.Server
 						  " Remote:" + RemoteAddress + ":" + transport.GetPort() + 
 						  " - " + serverState);
 			}
-		}
-
-		public static IEnumerator FetchExternalIPAddress(string serviceUrl, Action<string> onSuccess = null, Action<string> onError = null)
-		{
-			Debug.Log($"Server: Fetching Remote IP Address from \"{serviceUrl}\"");
-			using (UnityWebRequest webRequest = UnityWebRequest.Get(serviceUrl))
-			{
-				yield return webRequest.SendWebRequest();
-
-				if (webRequest.result == UnityWebRequest.Result.ConnectionError || webRequest.result == UnityWebRequest.Result.ProtocolError)
-				{
-					Debug.Log($"Server: Request error: {webRequest.error}");
-					onError?.Invoke(webRequest.error);
-				}
-				else
-				{
-					string ipAddress = webRequest.downloadHandler.text;
-					ipAddress = ipAddress.Replace("\r\n", "").Replace("\n", "").Trim();
-
-					if (IsValidIPAddress(ipAddress))
-					{
-						Debug.Log($"Server: External IP: {ipAddress}");
-						onSuccess?.Invoke(ipAddress);
-					}
-					else
-					{
-						Debug.Log("Server: Invalid IP address format.");
-						onError?.Invoke("Server: Invalid IP address format.");
-					}
-				}
-			}
-		}
-
-		public static bool IsValidIPAddress(string ipAddress)
-		{
-			if (string.IsNullOrEmpty(ipAddress))
-				return false;
-
-			string[] splitValues = ipAddress.Split('.');
-			if (splitValues.Length != 4)
-				return false;
-
-			foreach (string item in splitValues)
-			{
-				if (!int.TryParse(item, out int num) || num < 0 || num > 255)
-					return false;
-			}
-
-			return true;
 		}
 
 		IEnumerator OnAwaitingConnectionReady()
