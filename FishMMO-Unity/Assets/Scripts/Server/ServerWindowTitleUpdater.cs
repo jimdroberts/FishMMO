@@ -25,7 +25,7 @@ namespace FishMMO.Server
 #endif
 
 		public string Title = "";
-		public float UpdateRate = 2.0f;
+		public float UpdateRate = 15.0f;
 		public float NextUpdate = 0.0f;
 
 		public override void InitializeOnce()
@@ -66,6 +66,7 @@ namespace FishMMO.Server
 
 		public void UpdateWindowTitle()
 		{
+			Title = null;
 			Title = BuildWindowTitle();
 
 #if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN

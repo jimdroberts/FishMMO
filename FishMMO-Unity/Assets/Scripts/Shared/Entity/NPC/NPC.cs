@@ -15,11 +15,12 @@ using FishNet.Serializing;
 namespace FishMMO.Shared
 {
 	[RequireComponent(typeof(AIController))]
-	[RequireComponent(typeof(CharacterAttributeController))]
 	[RequireComponent(typeof(BuffController))]
+	[RequireComponent(typeof(CharacterAttributeController))]
 	[RequireComponent(typeof(CharacterDamageController))]
 	[RequireComponent(typeof(FactionController))]
 	public class NPC : BaseCharacter
 	{
+
 	}
 }

@@ -417,6 +417,7 @@ namespace FishMMO.Shared
 						if (ChanneledTemplate != null &&
 							validatedAbility.HasAbilityEvent(ChanneledTemplate.ID))
 						{
+							// Handle PC targetting and ability spawning
 							if (PlayerCharacter != null &&
 								Character.TryGet(out ITargetController t))
 							{
@@ -432,6 +433,11 @@ namespace FishMMO.Shared
 
 								//Debug.Log($"Consumed On Tick: {activationData.GetTick()} State: {state}");
 								validatedAbility.ConsumeResources(Character, BloodResourceConversionTemplate, BloodResourceTemplate);
+							}
+							// Handle NPC targetting and ability spawning
+							else
+							{
+
 							}
 						}
 					}
@@ -449,6 +455,7 @@ namespace FishMMO.Shared
 					return;
 				}
 
+				// Handle PC targetting and ability spawning
 				if (PlayerCharacter != null &&
 					Character.TryGet(out ITargetController tc))
 				{
@@ -459,6 +466,11 @@ namespace FishMMO.Shared
 
 					// Spawn the ability object
 					AbilityObject.Spawn(validatedAbility, PlayerCharacter, this, AbilitySpawner, targetInfo);
+				}
+				// Handle NPC targetting and ability spawning
+				else
+				{
+
 				}
 
 				// Consume resources
@@ -565,14 +577,16 @@ namespace FishMMO.Shared
 			{
 				case AbilityType.GroundedMagic:
 				case AbilityType.GroundedPhysical:
-					if (!PlayerCharacter.Motor.GroundingStatus.IsStableOnGround)
+					if (PlayerCharacter != null &&
+						!PlayerCharacter.Motor.GroundingStatus.IsStableOnGround)
 					{
 						return false;
 					}
 					break;
 				case AbilityType.AerialMagic:
 				case AbilityType.AerialPhysical:
-					if (PlayerCharacter.Motor.GroundingStatus.IsStableOnGround)
+					if (PlayerCharacter != null &&
+						PlayerCharacter.Motor.GroundingStatus.IsStableOnGround)
 					{
 						return false;
 					}
