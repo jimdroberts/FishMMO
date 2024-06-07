@@ -116,5 +116,12 @@ namespace FishMMO.Server
 
 			ServerBehaviour.Unregister(this);
 		}
+
+		private void OnApplicationQuit()
+		{
+			Destroying();
+
+			ServerBehaviour.Unregister(this);
+		}
 	}
 }

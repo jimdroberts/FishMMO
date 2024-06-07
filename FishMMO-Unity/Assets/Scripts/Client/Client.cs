@@ -3,11 +3,8 @@ using FishNet.Broadcast;
 using FishNet.Managing;
 using FishNet.Managing.Transporting;
 using FishNet.Transporting.Multipass;
-#if !UNITY_WEBGL
 using FishNet.Transporting.Tugboat;
-#else
 using FishNet.Transporting.FishyWebRTC;
-#endif
 using FishNet.Managing.Scened;
 using FishMMO.Shared;
 using System.Collections;
