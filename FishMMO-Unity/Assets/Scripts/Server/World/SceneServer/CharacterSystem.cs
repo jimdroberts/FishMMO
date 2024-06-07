@@ -56,14 +56,30 @@ namespace FishMMO.Server
 			{
 				loginAuthenticator = FindObjectOfType<SceneServerAuthenticator>();
 				if (loginAuthenticator == null)
-					return;
+					throw new UnityException("SceneServerAuthenticator not found!");
 
 				ServerManager.OnServerConnectionState += ServerManager_OnServerConnectionState;
 				ServerManager.OnRemoteConnectionState += ServerManager_OnRemoteConnectionState;
+
+				loginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
+				Server.NetworkManager.SceneManager.OnClientLoadedStartScenes += SceneManager_OnClientLoadedStartScenes;
+
+				ICharacterDamageController.OnKilled += OnKilled;
 			}
 			else
 			{
 				enabled = false;
+			}
+		}
+
+		public override void Destroying()
+		{
+			if (ServerManager != null)
+			{
+				loginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
+				Server.NetworkManager.SceneManager.OnClientLoadedStartScenes -= SceneManager_OnClientLoadedStartScenes;
+
+				ICharacterDamageController.OnKilled -= OnKilled;
 			}
 		}
 
@@ -143,21 +159,6 @@ namespace FishMMO.Server
 		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs args)
 		{
 			serverState = args.ConnectionState;
-
-			if (args.ConnectionState == LocalConnectionState.Started)
-			{
-				loginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
-				Server.NetworkManager.SceneManager.OnClientLoadedStartScenes += SceneManager_OnClientLoadedStartScenes;
-
-				ICharacterDamageController.OnKilled += OnKilled;
-			}
-			else if (args.ConnectionState == LocalConnectionState.Stopped)
-			{
-				loginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
-				Server.NetworkManager.SceneManager.OnClientLoadedStartScenes -= SceneManager_OnClientLoadedStartScenes;
-
-				ICharacterDamageController.OnKilled -= OnKilled;
-			}
 		}
 
 		/// <summary>
@@ -227,6 +228,11 @@ namespace FishMMO.Server
 
 		private void Authenticator_OnClientAuthenticationResult(NetworkConnection conn, bool authenticated)
 		{
+			// Is the character already loading?
+			if (WaitingSceneLoadCharacters.ContainsKey(conn))
+			{
+				return;
+			}
 			if (!authenticated ||
 				!AccountManager.GetAccountNameByConnection(conn, out string accountName) ||
 				!ServerBehaviour.TryGet(out SceneServerSystem sceneServerSystem))
@@ -351,11 +357,6 @@ namespace FishMMO.Server
 				SendAllCharacterData(character);
 
 				//Debug.Log(character.CharacterName + " has been spawned at: " + character.SceneName + " " + character.Transform.position.ToString());
-			}
-			else
-			{
-				// couldn't find the character details for the connection.. kick the player
-				conn.Kick(FishNet.Managing.Server.KickReason.UnexpectedProblem);
 			}
 		}
 

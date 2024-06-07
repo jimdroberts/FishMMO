@@ -163,7 +163,8 @@ namespace FishMMO.Client
 					}
 					if (!AllowRepeatMessages)
 					{
-						if (Character.LastChatMessage.Equals(input))
+						if (!string.IsNullOrWhiteSpace(Character.LastChatMessage) &&
+							Character.LastChatMessage.Equals(input))
 						{
 							return;
 						}

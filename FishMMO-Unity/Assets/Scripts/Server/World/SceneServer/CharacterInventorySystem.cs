@@ -25,14 +25,43 @@ namespace FishMMO.Server
 		{
 			//nextSave = saveRate;
 
-			if (ServerManager != null)
+			if (Server != null)
 			{
-				ServerManager.OnServerConnectionState += ServerManager_OnServerConnectionState;
-				ServerManager.OnRemoteConnectionState += ServerManager_OnRemoteConnectionState;
+				loginAuthenticator = FindObjectOfType<SceneServerAuthenticator>();
+				if (loginAuthenticator == null)
+					throw new UnityException("SceneServerAuthenticator not found!");
+
+				loginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
+
+				Server.RegisterBroadcast<InventoryRemoveItemBroadcast>(OnServerInventoryRemoveItemBroadcastReceived, true);
+				Server.RegisterBroadcast<InventorySwapItemSlotsBroadcast>(OnServerInventorySwapItemSlotsBroadcastReceived, true);
+
+				Server.RegisterBroadcast<EquipmentEquipItemBroadcast>(OnServerEquipmentEquipItemBroadcastReceived, true);
+				Server.RegisterBroadcast<EquipmentUnequipItemBroadcast>(OnServerEquipmentUnequipItemBroadcastReceived, true);
+
+				Server.RegisterBroadcast<BankRemoveItemBroadcast>(OnServerBankRemoveItemBroadcastReceived, true);
+				Server.RegisterBroadcast<BankSwapItemSlotsBroadcast>(OnServerBankSwapItemSlotsBroadcastReceived, true);
 			}
 			else
 			{
 				enabled = false;
+			}
+		}
+
+		public override void Destroying()
+		{
+			if (Server != null)
+			{
+				loginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
+
+				Server.UnregisterBroadcast<InventoryRemoveItemBroadcast>(OnServerInventoryRemoveItemBroadcastReceived);
+				Server.UnregisterBroadcast<InventorySwapItemSlotsBroadcast>(OnServerInventorySwapItemSlotsBroadcastReceived);
+
+				Server.UnregisterBroadcast<EquipmentEquipItemBroadcast>(OnServerEquipmentEquipItemBroadcastReceived);
+				Server.UnregisterBroadcast<EquipmentUnequipItemBroadcast>(OnServerEquipmentUnequipItemBroadcastReceived);
+
+				Server.UnregisterBroadcast<BankRemoveItemBroadcast>(OnServerBankRemoveItemBroadcastReceived);
+				Server.UnregisterBroadcast<BankSwapItemSlotsBroadcast>(OnServerBankSwapItemSlotsBroadcastReceived);
 			}
 		}
 
@@ -53,46 +82,6 @@ namespace FishMMO.Server
 				nextSave -= Time.deltaTime;
 			}
 		}*/
-
-		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs args)
-		{
-			loginAuthenticator = FindObjectOfType<SceneServerAuthenticator>();
-			if (loginAuthenticator == null)
-				return;
-
-			serverState = args.ConnectionState;
-
-			if (args.ConnectionState == LocalConnectionState.Started)
-			{
-				loginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
-
-				ServerManager.RegisterBroadcast<InventoryRemoveItemBroadcast>(OnServerInventoryRemoveItemBroadcastReceived, true);
-				ServerManager.RegisterBroadcast<InventorySwapItemSlotsBroadcast>(OnServerInventorySwapItemSlotsBroadcastReceived, true);
-
-				ServerManager.RegisterBroadcast<EquipmentEquipItemBroadcast>(OnServerEquipmentEquipItemBroadcastReceived, true);
-				ServerManager.RegisterBroadcast<EquipmentUnequipItemBroadcast>(OnServerEquipmentUnequipItemBroadcastReceived, true);
-
-				ServerManager.RegisterBroadcast<BankRemoveItemBroadcast>(OnServerBankRemoveItemBroadcastReceived, true);
-				ServerManager.RegisterBroadcast<BankSwapItemSlotsBroadcast>(OnServerBankSwapItemSlotsBroadcastReceived, true);
-			}
-			else if (args.ConnectionState == LocalConnectionState.Stopped)
-			{
-				loginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
-
-				ServerManager.UnregisterBroadcast<InventoryRemoveItemBroadcast>(OnServerInventoryRemoveItemBroadcastReceived);
-				ServerManager.UnregisterBroadcast<InventorySwapItemSlotsBroadcast>(OnServerInventorySwapItemSlotsBroadcastReceived);
-
-				ServerManager.UnregisterBroadcast<EquipmentEquipItemBroadcast>(OnServerEquipmentEquipItemBroadcastReceived);
-				ServerManager.UnregisterBroadcast<EquipmentUnequipItemBroadcast>(OnServerEquipmentUnequipItemBroadcastReceived);
-
-				ServerManager.UnregisterBroadcast<BankRemoveItemBroadcast>(OnServerBankRemoveItemBroadcastReceived);
-				ServerManager.UnregisterBroadcast<BankSwapItemSlotsBroadcast>(OnServerBankSwapItemSlotsBroadcastReceived);
-			}
-		}
-
-		private void ServerManager_OnRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args)
-		{
-		}
 
 		private void Authenticator_OnClientAuthenticationResult(NetworkConnection conn, bool authenticated)
 		{

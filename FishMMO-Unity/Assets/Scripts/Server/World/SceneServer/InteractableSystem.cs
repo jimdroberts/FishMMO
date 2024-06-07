@@ -20,9 +20,13 @@ namespace FishMMO.Server
 
 		public override void InitializeOnce()
 		{
-			if (ServerManager != null)
+			if (Server != null)
 			{
-				ServerManager.OnServerConnectionState += ServerManager_OnServerConnectionState;
+				Server.RegisterBroadcast<InteractableBroadcast>(OnServerInteractableBroadcastReceived, true);
+				Server.RegisterBroadcast<MerchantPurchaseBroadcast>(OnServerMerchantPurchaseBroadcastReceived, true);
+				Server.RegisterBroadcast<AbilityCraftBroadcast>(OnServerAbilityCraftBroadcastReceived, true);
+
+				Bindstone.OnBind += TryBind;
 			}
 			else
 			{
@@ -30,21 +34,13 @@ namespace FishMMO.Server
 			}
 		}
 
-		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs args)
+		public override void Destroying()
 		{
-			if (args.ConnectionState == LocalConnectionState.Started)
+			if (Server != null)
 			{
-				ServerManager.RegisterBroadcast<InteractableBroadcast>(OnServerInteractableBroadcastReceived, true);
-				ServerManager.RegisterBroadcast<MerchantPurchaseBroadcast>(OnServerMerchantPurchaseBroadcastReceived, true);
-				ServerManager.RegisterBroadcast<AbilityCraftBroadcast>(OnServerAbilityCraftBroadcastReceived, true);
-
-				Bindstone.OnBind += TryBind;
-			}
-			else if (args.ConnectionState == LocalConnectionState.Stopped)
-			{
-				ServerManager.UnregisterBroadcast<InteractableBroadcast>(OnServerInteractableBroadcastReceived);
-				ServerManager.UnregisterBroadcast<MerchantPurchaseBroadcast>(OnServerMerchantPurchaseBroadcastReceived);
-				ServerManager.UnregisterBroadcast<AbilityCraftBroadcast>(OnServerAbilityCraftBroadcastReceived);
+				Server.UnregisterBroadcast<InteractableBroadcast>(OnServerInteractableBroadcastReceived);
+				Server.UnregisterBroadcast<MerchantPurchaseBroadcast>(OnServerMerchantPurchaseBroadcastReceived);
+				Server.UnregisterBroadcast<AbilityCraftBroadcast>(OnServerAbilityCraftBroadcastReceived);
 
 				Bindstone.OnBind -= TryBind;
 			}

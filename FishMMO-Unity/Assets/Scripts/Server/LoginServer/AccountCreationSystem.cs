@@ -12,9 +12,9 @@ namespace FishMMO.Server
 	{
 		public override void InitializeOnce()
 		{
-			if (ServerManager != null)
+			if (Server != null)
 			{
-				ServerManager.OnServerConnectionState += ServerManager_OnServerConnectionState;
+				Server.RegisterBroadcast<CreateAccountBroadcast>(OnServerCreateAccountBroadcastReceived, false);
 			}
 			else
 			{
@@ -22,15 +22,11 @@ namespace FishMMO.Server
 			}
 		}
 
-		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs obj)
+		public override void Destroying()
 		{
-			if (obj.ConnectionState == LocalConnectionState.Started)
+			if (Server != null)
 			{
-				ServerManager.RegisterBroadcast<CreateAccountBroadcast>(OnServerCreateAccountBroadcastReceived, false);
-			}
-			else if (obj.ConnectionState == LocalConnectionState.Stopped)
-			{
-				ServerManager.UnregisterBroadcast<CreateAccountBroadcast>(OnServerCreateAccountBroadcastReceived);
+				Server.UnregisterBroadcast<CreateAccountBroadcast>(OnServerCreateAccountBroadcastReceived);
 			}
 		}
 

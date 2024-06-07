@@ -22,14 +22,28 @@ namespace FishMMO.Server
 		{
 			//nextSave = saveRate;
 
+			loginAuthenticator = FindObjectOfType<SceneServerAuthenticator>();
+			if (loginAuthenticator == null)
+				return;
+
 			if (ServerManager != null)
 			{
 				ServerManager.OnServerConnectionState += ServerManager_OnServerConnectionState;
 				ServerManager.OnRemoteConnectionState += ServerManager_OnRemoteConnectionState;
+
+				loginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
 			}
 			else
 			{
 				enabled = false;
+			}
+		}
+
+		public override void Destroying()
+		{
+			if (ServerManager != null)
+			{
+				loginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
 			}
 		}
 
@@ -53,20 +67,7 @@ namespace FishMMO.Server
 
 		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs args)
 		{
-			loginAuthenticator = FindObjectOfType<SceneServerAuthenticator>();
-			if (loginAuthenticator == null)
-				return;
-
 			serverState = args.ConnectionState;
-
-			if (args.ConnectionState == LocalConnectionState.Started)
-			{
-				loginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
-			}
-			else if (args.ConnectionState == LocalConnectionState.Stopped)
-			{
-				loginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
-			}
 		}
 
 		private void ServerManager_OnRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args)

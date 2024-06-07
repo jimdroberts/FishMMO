@@ -20,9 +20,10 @@ namespace FishMMO.Server
 	{
 		public override void InitializeOnce()
 		{
-			if (ServerManager != null)
+			if (Server != null)
 			{
-				ServerManager.OnServerConnectionState += ServerManager_OnServerConnectionState;
+				Server.RegisterBroadcast<NamingBroadcast>(OnServerNamingBroadcastReceived, true);
+				Server.RegisterBroadcast<ReverseNamingBroadcast>(OnServerReverseNamingBroadcastReceived, true);
 			}
 			else
 			{
@@ -30,17 +31,12 @@ namespace FishMMO.Server
 			}
 		}
 
-		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs args)
+		public override void Destroying()
 		{
-			if (args.ConnectionState == LocalConnectionState.Started)
+			if (Server != null)
 			{
-				ServerManager.RegisterBroadcast<NamingBroadcast>(OnServerNamingBroadcastReceived, true);
-				ServerManager.RegisterBroadcast<ReverseNamingBroadcast>(OnServerReverseNamingBroadcastReceived, true);
-			}
-			else if (args.ConnectionState == LocalConnectionState.Stopped)
-			{
-				ServerManager.UnregisterBroadcast<NamingBroadcast>(OnServerNamingBroadcastReceived);
-				ServerManager.UnregisterBroadcast<ReverseNamingBroadcast>(OnServerReverseNamingBroadcastReceived);
+				Server.UnregisterBroadcast<NamingBroadcast>(OnServerNamingBroadcastReceived);
+				Server.UnregisterBroadcast<ReverseNamingBroadcast>(OnServerReverseNamingBroadcastReceived);
 			}
 		}
 

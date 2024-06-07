@@ -31,31 +31,20 @@ namespace FishMMO.Server
 
 		public override void InitializeOnce()
 		{
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
+			if (dbContext == null)
+			{
+				throw new UnityException("Failed to get dbContext.");
+			}
+
 			if (ServerManager != null &&
+				Server != null &&
 				Server.NetworkManager.SceneManager != null)
 			{
 				Server.NetworkManager.SceneManager.OnLoadEnd += SceneManager_OnLoadEnd;
 				//Server.NetworkManager.SceneManager.OnUnloadEnd += SceneManager_OnUnloadEnd;
 				ServerManager.OnServerConnectionState += ServerManager_OnServerConnectionState;
-			}
-			else
-			{
-				enabled = false;
-			}
-		}
 
-		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs args)
-		{
-			serverState = args.ConnectionState;
-
-			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-			if (dbContext == null)
-			{
-				return;
-			}
-
-			if (args.ConnectionState == LocalConnectionState.Started)
-			{
 				if (Server.TryGetServerIPAddress(out ServerAddress server) &&
 					ServerBehaviour.TryGet(out CharacterSystem characterSystem))
 				{
@@ -68,15 +57,35 @@ namespace FishMMO.Server
 					}
 				}
 			}
-			else if (args.ConnectionState == LocalConnectionState.Stopped)
+			else
 			{
-				if (Server.Configuration.TryGetString("ServerName", out string name))
+				enabled = false;
+			}
+		}
+
+		public override void Destroying()
+		{
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
+			if (dbContext == null)
+			{
+				throw new UnityException("Failed to get dbContext.");
+			}
+
+			if (ServerManager != null)
+			{
+				if (Server != null &&
+					Server.Configuration.TryGetString("ServerName", out string name))
 				{
 					Debug.Log("Scene Server System: Removing Scene Server: " + id);
 					SceneServerService.Delete(dbContext, id);
 					LoadedSceneService.Delete(dbContext, id);
 				}
 			}
+		}
+
+		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs args)
+		{
+			serverState = args.ConnectionState;
 		}
 
 		void LateUpdate()
@@ -121,18 +130,6 @@ namespace FishMMO.Server
 					}
 				}
 				nextPulse -= Time.deltaTime;
-			}
-		}
-
-		private void OnApplicationQuit()
-		{
-			if (Server != null && Server.NpgsqlDbContextFactory != null &&
-				serverState != LocalConnectionState.Stopped)
-			{
-				using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-				Debug.Log("Scene Server System: Removing Scene Server: " + id);
-				SceneServerService.Delete(dbContext, id);
-				LoadedSceneService.Delete(dbContext, id);
 			}
 		}
 

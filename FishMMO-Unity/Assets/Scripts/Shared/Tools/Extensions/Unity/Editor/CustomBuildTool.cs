@@ -178,7 +178,7 @@ start Scene.exe SCENE";
 				return;
 			}
 
-			// get the original active build info
+			// Get the original active build info
 			BuildTargetGroup originalGroup = EditorUserBuildSettings.selectedBuildTargetGroup;
 			BuildTarget originalBuildTarget = EditorUserBuildSettings.activeBuildTarget;
 			StandaloneBuildSubtarget originalBuildSubtarget = EditorUserBuildSettings.standaloneBuildSubtarget;
@@ -187,7 +187,7 @@ start Scene.exe SCENE";
 			UnityEditor.Build.NamedBuildTarget originalNamedBuildTargetGroup = UnityEditor.Build.NamedBuildTarget.FromBuildTargetGroup(originalGroup);
 			UnityEditor.Build.Il2CppCodeGeneration originalOptimization = PlayerSettings.GetIl2CppCodeGeneration(originalNamedBuildTargetGroup);
 
-			// enable IL2CPP for webgl
+			// Enable IL2CPP for webgl
 			if (buildTarget == BuildTarget.WebGL)
 			{
 				PlayerSettings.SetScriptingBackend(EditorUserBuildSettings.selectedBuildTargetGroup, ScriptingImplementation.IL2CPP);
@@ -195,12 +195,12 @@ start Scene.exe SCENE";
 				PlayerSettings.SetIl2CppCodeGeneration(UnityEditor.Build.NamedBuildTarget.WebGL, UnityEditor.Build.Il2CppCodeGeneration.OptimizeSize);
 			}
 
-			// switch active build target so #defines work properly
+			// Switch active build target so #defines work properly
 			BuildTargetGroup targetGroup = BuildPipeline.GetBuildTargetGroup(buildTarget);
 			EditorUserBuildSettings.SwitchActiveBuildTarget(targetGroup, buildTarget);
 			EditorUserBuildSettings.standaloneBuildSubtarget = subTarget;
 
-			// append world scene paths to bootstrap scene array
+			// Append world scene paths to bootstrap scene array
 			string[] scenes = customBuildType == CustomBuildType.AllInOne ||
 							  customBuildType == CustomBuildType.Scene ||
 							  customBuildType == CustomBuildType.Client ? AppendWorldScenePaths(bootstrapScenes) : bootstrapScenes;
@@ -222,7 +222,7 @@ start Scene.exe SCENE";
 			folderName = folderName.Trim();
 			string buildPath = Path.Combine(rootPath, folderName);
 
-			// build the project
+			// Build the project
 			BuildReport report = BuildPipeline.BuildPlayer(new BuildPlayerOptions()
 			{
 				locationPathName = Path.Combine(buildPath, executableName + ".exe"),
@@ -233,7 +233,7 @@ start Scene.exe SCENE";
 				targetGroup = targetGroup,
 			});
 
-			// check the results of the build
+			// Check the results of the build
 			BuildSummary summary = report.summary;
 			if (summary.result == BuildResult.Succeeded)
 			{
@@ -241,7 +241,7 @@ start Scene.exe SCENE";
 
 				string root = Directory.GetParent(Directory.GetCurrentDirectory()).FullName;
 
-				// copy the configuration files if it's a server build
+				// Copy the configuration files if it's a server build
 				if (subTarget == StandaloneBuildSubtarget.Server)
 				{
 					if (buildTarget == BuildTarget.StandaloneWindows64)
@@ -286,11 +286,12 @@ start Scene.exe SCENE";
 								break;
 						}
 					}
-
-					string configurationPath = WorkingEnvironmentOptions.AppendEnvironmentToPath(Constants.Configuration.SetupDirectory);
-
-					CopyConfigurationFiles(customBuildType, Path.Combine(root, configurationPath), buildPath);
 				}
+
+				// Copy configuration files
+				string configurationPath = WorkingEnvironmentOptions.AppendEnvironmentToPath(Constants.Configuration.SetupDirectory);
+				CopyConfigurationFiles(buildTarget, customBuildType, Path.Combine(root, configurationPath), buildPath);
+
 				if (customBuildType == CustomBuildType.Installer)
 				{
 					BuildSetupFolder(root, buildPath);
@@ -301,7 +302,7 @@ start Scene.exe SCENE";
 				Debug.Log("Build failed: " + report.summary.result + " " + report);
 			}
 
-			// return IL2CPP settings to original
+			// Return IL2CPP settings to original
 			if (buildTarget == BuildTarget.WebGL)
 			{
 				PlayerSettings.SetScriptingBackend(originalGroup, originalScriptingImp);
@@ -317,7 +318,7 @@ start Scene.exe SCENE";
 		{
 			List<string> allPaths = new List<string>(requiredPaths);
 
-			// add all of the WorldScenes
+			// Add all of the WorldScenes
 			foreach (EditorBuildSettingsScene scene in EditorBuildSettings.scenes)
 			{
 				if (scene.path.Contains(Constants.Configuration.WorldScenePath))
@@ -328,7 +329,7 @@ start Scene.exe SCENE";
 			return allPaths.ToArray();
 		}
 
-		private static void CopyConfigurationFiles(CustomBuildType customBuildType, string configurationPath, string buildPath)
+		private static void CopyConfigurationFiles(BuildTarget buildTarget, CustomBuildType customBuildType, string configurationPath, string buildPath)
 		{
 			switch (customBuildType)
 			{
@@ -347,10 +348,17 @@ start Scene.exe SCENE";
 					FileUtil.ReplaceFile(Path.Combine(configurationPath, "SceneServer.cfg"), Path.Combine(buildPath, "SceneServer.cfg"));
 					break;
 				case CustomBuildType.Client:
-				default:
+					if (buildTarget == BuildTarget.WebGL)
+					{
+						FileUtil.ReplaceFile(Path.Combine(configurationPath, "Launch Local Game Server.bat"), Path.Combine(buildPath, "Launch Local Game Server.bat"));
+					}
 					break;
+				default:break;
 			}
-			FileUtil.ReplaceFile(Path.Combine(configurationPath, "appsettings.json"), Path.Combine(buildPath, "appsettings.json"));
+			if (customBuildType != CustomBuildType.Client)
+			{
+				FileUtil.ReplaceFile(Path.Combine(configurationPath, "appsettings.json"), Path.Combine(buildPath, "appsettings.json"));
+			}
 		}
 
 		private static void CreateScript(string filePath, string scriptContent)

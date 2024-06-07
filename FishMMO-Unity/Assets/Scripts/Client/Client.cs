@@ -1,12 +1,20 @@
-﻿using FishNet.Broadcast;
+﻿using FishNet.Transporting;
+using FishNet.Broadcast;
 using FishNet.Managing;
-using FishNet.Transporting;
+using FishNet.Managing.Transporting;
+using FishNet.Transporting.Multipass;
+#if !UNITY_WEBGL
+using FishNet.Transporting.Tugboat;
+#else
+using FishNet.Transporting.FishyWebRTC;
+#endif
 using FishNet.Managing.Scened;
 using FishMMO.Shared;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -31,6 +39,11 @@ namespace FishMMO.Client
 			World,
 			Scene,
 		}
+
+#if UNITY_WEBGL
+		[DllImport("__Internal")]
+		private static extern void ClientWebGLQuit();
+#endif
 
 		private LocalConnectionState clientState = LocalConnectionState.Stopped;
 		private Dictionary<string, Scene> serverLoadedScenes = new Dictionary<string, Scene>();
@@ -93,6 +106,26 @@ namespace FishMMO.Client
 					return;
 				}
 			}
+
+			TransportManager transportManager = _networkManager.TransportManager;
+			if (transportManager == null)
+			{
+				Debug.LogError("Client: TransportManager not found.");
+				Quit();
+				return;
+			}
+			Multipass multipass = transportManager.GetTransport<Multipass>();
+			if (multipass == null)
+			{
+				Debug.LogError("Client: Multipass not found.");
+				Quit();
+				return;
+			}
+#if UNITY_WEBGL && !UNITY_EDITOR
+			multipass.SetClientTransport<FishyWebRTC>();
+#else
+			multipass.SetClientTransport<Tugboat>();
+#endif
 
 			Application.logMessageReceived += this.Application_logMessageReceived;
 
@@ -234,7 +267,7 @@ namespace FishMMO.Client
 #if UNITY_EDITOR
 			EditorApplication.ExitPlaymode();
 #elif UNITY_WEBGL
-			Application.OpenURL("about:blank");
+			ClientWebGLQuit();
 #else
 			Application.Quit();
 #endif
@@ -412,7 +445,7 @@ namespace FishMMO.Client
 			// wait for the connection to the current server to stop
 			while (clientState != LocalConnectionState.Stopped)
 			{
-				yield return new WaitForSeconds(0.2f);
+				yield return new WaitForSeconds(0.1f);
 			}
 
 			if (forceDisconnect)

@@ -16,10 +16,11 @@ namespace FishMMO.Server
 
 		public override void InitializeOnce()
 		{
-			if (ServerManager != null &&
+			if (Server != null &&
 				ServerBehaviour.TryGet(out CharacterSystem characterSystem))
 			{
-				ServerManager.OnServerConnectionState += ServerManager_OnServerConnectionState;
+				Server.RegisterBroadcast<FriendAddNewBroadcast>(OnServerFriendAddNewBroadcastReceived, true);
+				Server.RegisterBroadcast<FriendRemoveBroadcast>(OnServerFriendRemoveBroadcastReceived, true);
 			}
 			else
 			{
@@ -27,17 +28,12 @@ namespace FishMMO.Server
 			}
 		}
 
-		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs args)
+		public override void Destroying()
 		{
-			if (args.ConnectionState == LocalConnectionState.Started)
+			if (Server != null)
 			{
-				ServerManager.RegisterBroadcast<FriendAddNewBroadcast>(OnServerFriendAddNewBroadcastReceived, true);
-				ServerManager.RegisterBroadcast<FriendRemoveBroadcast>(OnServerFriendRemoveBroadcastReceived, true);
-			}
-			else if (args.ConnectionState == LocalConnectionState.Stopped)
-			{
-				ServerManager.UnregisterBroadcast<FriendAddNewBroadcast>(OnServerFriendAddNewBroadcastReceived);
-				ServerManager.UnregisterBroadcast<FriendRemoveBroadcast>(OnServerFriendRemoveBroadcastReceived);
+				Server.UnregisterBroadcast<FriendAddNewBroadcast>(OnServerFriendAddNewBroadcastReceived);
+				Server.UnregisterBroadcast<FriendRemoveBroadcast>(OnServerFriendRemoveBroadcastReceived);
 			}
 		}
 

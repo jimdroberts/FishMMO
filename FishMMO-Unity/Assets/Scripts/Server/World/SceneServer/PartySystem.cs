@@ -49,6 +49,7 @@ namespace FishMMO.Server
 		public override void InitializeOnce()
 		{
 			if (ServerManager != null &&
+				Server != null &&
 				ServerBehaviour.TryGet(out CharacterSystem characterSystem) &&
 				characterSystem != null)
 			{
@@ -60,6 +61,15 @@ namespace FishMMO.Server
 				ChatHelper.AddDirectCommands(partyChatCommands);
 
 				ServerManager.OnServerConnectionState += ServerManager_OnServerConnectionState;
+				Server.RegisterBroadcast<PartyCreateBroadcast>(OnServerPartyCreateBroadcastReceived, true);
+				Server.RegisterBroadcast<PartyInviteBroadcast>(OnServerPartyInviteBroadcastReceived, true);
+				Server.RegisterBroadcast<PartyAcceptInviteBroadcast>(OnServerPartyAcceptInviteBroadcastReceived, true);
+				Server.RegisterBroadcast<PartyDeclineInviteBroadcast>(OnServerPartyDeclineInviteBroadcastReceived, true);
+				Server.RegisterBroadcast<PartyLeaveBroadcast>(OnServerPartyLeaveBroadcastReceived, true);
+				Server.RegisterBroadcast<PartyRemoveBroadcast>(OnServerPartyRemoveBroadcastReceived, true);
+
+				// remove the characters pending guild invite request on disconnect
+				characterSystem.OnDisconnect += RemovePending;
 			}
 			else
 			{
@@ -67,32 +77,16 @@ namespace FishMMO.Server
 			}
 		}
 
-		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs args)
+		public override void Destroying()
 		{
-			serverState = args.ConnectionState;
-			if (args.ConnectionState == LocalConnectionState.Started)
+			if (Server != null)
 			{
-				ServerManager.RegisterBroadcast<PartyCreateBroadcast>(OnServerPartyCreateBroadcastReceived, true);
-				ServerManager.RegisterBroadcast<PartyInviteBroadcast>(OnServerPartyInviteBroadcastReceived, true);
-				ServerManager.RegisterBroadcast<PartyAcceptInviteBroadcast>(OnServerPartyAcceptInviteBroadcastReceived, true);
-				ServerManager.RegisterBroadcast<PartyDeclineInviteBroadcast>(OnServerPartyDeclineInviteBroadcastReceived, true);
-				ServerManager.RegisterBroadcast<PartyLeaveBroadcast>(OnServerPartyLeaveBroadcastReceived, true);
-				ServerManager.RegisterBroadcast<PartyRemoveBroadcast>(OnServerPartyRemoveBroadcastReceived, true);
-
-				// remove the characters pending guild invite request on disconnect
-				if (ServerBehaviour.TryGet(out CharacterSystem characterSystem))
-				{
-					characterSystem.OnDisconnect += RemovePending;
-				}
-			}
-			else if (args.ConnectionState == LocalConnectionState.Stopped)
-			{
-				ServerManager.UnregisterBroadcast<PartyCreateBroadcast>(OnServerPartyCreateBroadcastReceived);
-				ServerManager.UnregisterBroadcast<PartyInviteBroadcast>(OnServerPartyInviteBroadcastReceived);
-				ServerManager.UnregisterBroadcast<PartyAcceptInviteBroadcast>(OnServerPartyAcceptInviteBroadcastReceived);
-				ServerManager.UnregisterBroadcast<PartyDeclineInviteBroadcast>(OnServerPartyDeclineInviteBroadcastReceived);
-				ServerManager.UnregisterBroadcast<PartyLeaveBroadcast>(OnServerPartyLeaveBroadcastReceived);
-				ServerManager.UnregisterBroadcast<PartyRemoveBroadcast>(OnServerPartyRemoveBroadcastReceived);
+				Server.UnregisterBroadcast<PartyCreateBroadcast>(OnServerPartyCreateBroadcastReceived);
+				Server.UnregisterBroadcast<PartyInviteBroadcast>(OnServerPartyInviteBroadcastReceived);
+				Server.UnregisterBroadcast<PartyAcceptInviteBroadcast>(OnServerPartyAcceptInviteBroadcastReceived);
+				Server.UnregisterBroadcast<PartyDeclineInviteBroadcast>(OnServerPartyDeclineInviteBroadcastReceived);
+				Server.UnregisterBroadcast<PartyLeaveBroadcast>(OnServerPartyLeaveBroadcastReceived);
+				Server.UnregisterBroadcast<PartyRemoveBroadcast>(OnServerPartyRemoveBroadcastReceived);
 
 				// remove the characters pending guild invite request on disconnect
 				if (ServerBehaviour.TryGet(out CharacterSystem characterSystem))
@@ -100,6 +94,11 @@ namespace FishMMO.Server
 					characterSystem.OnDisconnect -= RemovePending;
 				}
 			}
+		}
+
+		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs args)
+		{
+			serverState = args.ConnectionState;
 		}
 
 		void LateUpdate()

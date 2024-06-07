@@ -1,4 +1,5 @@
 ﻿using FishNet.Transporting;
+using FishNet.Transporting.Multipass;
 #if UNITY_STANDALONE_LINUX || UNITY_EDITOR_LINUX
 using System;
 #endif
@@ -32,7 +33,7 @@ namespace FishMMO.Server
 		{
 			if (ServerManager != null)
 			{
-				ServerManager.OnServerConnectionState += ServerManager_OnServerConnectionState;
+				UpdateWindowTitle();
 			}
 			else
 			{
@@ -40,12 +41,8 @@ namespace FishMMO.Server
 			}
 		}
 
-		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs obj)
+		public override void Destroying()
 		{
-			if (obj.ConnectionState == LocalConnectionState.Started)
-			{
-				UpdateWindowTitle();
-			}
 		}
 
 		void LateUpdate()
@@ -80,6 +77,10 @@ namespace FishMMO.Server
 
 		public string BuildWindowTitle()
 		{
+			if (Server == null)
+			{
+				return "";
+			}
 			using (var windowTitle = ZString.CreateStringBuilder())
 			{
 				if (Server.Configuration.TryGetString("ServerName", out string title))
@@ -87,10 +88,29 @@ namespace FishMMO.Server
 					windowTitle.Append(title);
 				}
 
-				Transport transport = Server.NetworkManager.TransportManager.Transport;
-				if (transport != null)
+				if (Server.NetworkManager != null &&
+					Server.NetworkManager.TransportManager != null)
 				{
-					windowTitle.Append(transport.GetConnectionState(true) == LocalConnectionState.Started ? " [Online]" : " [Offline]");
+					Multipass multipass = Server.NetworkManager.TransportManager.GetTransport<Multipass>();
+					if (multipass != null)
+					{
+						for (int i = 0; i < multipass.Transports.Count; ++i)
+						{
+							Transport transport = multipass.Transports[i];
+
+							windowTitle.Append($" [{transport.GetType().Name}]");
+							windowTitle.Append(transport.GetConnectionState(true) == LocalConnectionState.Started ? "[Online]" : "[Offline]");
+						}
+					}
+					else
+					{
+						Transport transport = Server.NetworkManager.TransportManager.Transport;
+						if (transport != null)
+						{
+							windowTitle.Append($" [{transport.GetType().Name}]");
+							windowTitle.Append(transport.GetConnectionState(true) == LocalConnectionState.Started ? "[Online]" : "[Offline]");
+						}
+					}
 
 					if (Server.Configuration.TryGetUShort("Port", out ushort port))
 					{

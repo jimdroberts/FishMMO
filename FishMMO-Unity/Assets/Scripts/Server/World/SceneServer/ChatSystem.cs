@@ -32,11 +32,12 @@ namespace FishMMO.Server
 
 		public override void InitializeOnce()
 		{
-			if (ServerManager != null)
+			if (ServerManager != null &&
+				Server != null)
 			{
-				ServerManager.OnServerConnectionState += ServerManager_OnServerConnectionState;
-
 				ChatHelper.InitializeOnce(GetChannelCommand);
+				ServerManager.OnServerConnectionState += ServerManager_OnServerConnectionState;
+				Server.RegisterBroadcast<ChatBroadcast>(OnServerChatBroadcastReceived, true);
 			}
 			else
 			{
@@ -44,17 +45,19 @@ namespace FishMMO.Server
 			}
 		}
 
+		public override void Destroying()
+		{
+			if (ServerManager != null &&
+				Server != null)
+			{
+				ServerManager.OnServerConnectionState -= ServerManager_OnServerConnectionState;
+				Server.UnregisterBroadcast<ChatBroadcast>(OnServerChatBroadcastReceived);
+			}
+		}
+
 		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs args)
 		{
 			serverState = args.ConnectionState;
-			if (serverState == LocalConnectionState.Started)
-			{
-				ServerManager.RegisterBroadcast<ChatBroadcast>(OnServerChatBroadcastReceived, true);
-			}
-			else if (serverState == LocalConnectionState.Stopped)
-			{
-				ServerManager.UnregisterBroadcast<ChatBroadcast>(OnServerChatBroadcastReceived);
-			}
 		}
 
 		void LateUpdate()
@@ -172,7 +175,8 @@ namespace FishMMO.Server
 			// we spam limit client chat, the message is ignored
 			if (!AllowRepeatMessages)
 			{
-				if (sender.LastChatMessage.Equals(msg.text))
+				if (!string.IsNullOrWhiteSpace(sender.LastChatMessage) &&
+					sender.LastChatMessage.Equals(msg.text))
 				{
 					return;
 				}

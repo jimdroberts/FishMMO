@@ -49,6 +49,7 @@ namespace FishMMO.Server
 		public override void InitializeOnce()
 		{
 			if (ServerManager != null &&
+				Server != null &&
 				ServerBehaviour.TryGet(out CharacterSystem characterSystem) &&
 				characterSystem != null)
 			{
@@ -60,6 +61,16 @@ namespace FishMMO.Server
 				ChatHelper.AddDirectCommands(guildChatCommands);
 
 				ServerManager.OnServerConnectionState += ServerManager_OnServerConnectionState;
+				Server.RegisterBroadcast<GuildCreateBroadcast>(OnServerGuildCreateBroadcastReceived, true);
+				Server.RegisterBroadcast<GuildInviteBroadcast>(OnServerGuildInviteBroadcastReceived, true);
+				Server.RegisterBroadcast<GuildAcceptInviteBroadcast>(OnServerGuildAcceptInviteBroadcastReceived, true);
+				Server.RegisterBroadcast<GuildDeclineInviteBroadcast>(OnServerGuildDeclineInviteBroadcastReceived, true);
+				Server.RegisterBroadcast<GuildLeaveBroadcast>(OnServerGuildLeaveBroadcastReceived, true);
+				Server.RegisterBroadcast<GuildRemoveBroadcast>(OnServerGuildRemoveBroadcastReceived, true);
+
+				// remove the characters pending guild invite request on disconnect
+				characterSystem.OnDisconnect += RemovePending;
+				characterSystem.OnCharacterChangedScene += CharacterSystem_OnCharacterChangedScene;
 			}
 			else
 			{
@@ -67,33 +78,16 @@ namespace FishMMO.Server
 			}
 		}
 
-		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs args)
+		public override void Destroying()
 		{
-			serverState = args.ConnectionState;
-			if (serverState == LocalConnectionState.Started)
+			if (Server != null)
 			{
-				ServerManager.RegisterBroadcast<GuildCreateBroadcast>(OnServerGuildCreateBroadcastReceived, true);
-				ServerManager.RegisterBroadcast<GuildInviteBroadcast>(OnServerGuildInviteBroadcastReceived, true);
-				ServerManager.RegisterBroadcast<GuildAcceptInviteBroadcast>(OnServerGuildAcceptInviteBroadcastReceived, true);
-				ServerManager.RegisterBroadcast<GuildDeclineInviteBroadcast>(OnServerGuildDeclineInviteBroadcastReceived, true);
-				ServerManager.RegisterBroadcast<GuildLeaveBroadcast>(OnServerGuildLeaveBroadcastReceived, true);
-				ServerManager.RegisterBroadcast<GuildRemoveBroadcast>(OnServerGuildRemoveBroadcastReceived, true);
-
-				// remove the characters pending guild invite request on disconnect
-				if (ServerBehaviour.TryGet(out CharacterSystem characterSystem))
-				{
-					characterSystem.OnDisconnect += RemovePending;
-					characterSystem.OnCharacterChangedScene += CharacterSystem_OnCharacterChangedScene;
-				}
-			}
-			else if (serverState == LocalConnectionState.Stopped)
-			{
-				ServerManager.UnregisterBroadcast<GuildCreateBroadcast>(OnServerGuildCreateBroadcastReceived);
-				ServerManager.UnregisterBroadcast<GuildInviteBroadcast>(OnServerGuildInviteBroadcastReceived);
-				ServerManager.UnregisterBroadcast<GuildAcceptInviteBroadcast>(OnServerGuildAcceptInviteBroadcastReceived);
-				ServerManager.UnregisterBroadcast<GuildDeclineInviteBroadcast>(OnServerGuildDeclineInviteBroadcastReceived);
-				ServerManager.UnregisterBroadcast<GuildLeaveBroadcast>(OnServerGuildLeaveBroadcastReceived);
-				ServerManager.UnregisterBroadcast<GuildRemoveBroadcast>(OnServerGuildRemoveBroadcastReceived);
+				Server.UnregisterBroadcast<GuildCreateBroadcast>(OnServerGuildCreateBroadcastReceived);
+				Server.UnregisterBroadcast<GuildInviteBroadcast>(OnServerGuildInviteBroadcastReceived);
+				Server.UnregisterBroadcast<GuildAcceptInviteBroadcast>(OnServerGuildAcceptInviteBroadcastReceived);
+				Server.UnregisterBroadcast<GuildDeclineInviteBroadcast>(OnServerGuildDeclineInviteBroadcastReceived);
+				Server.UnregisterBroadcast<GuildLeaveBroadcast>(OnServerGuildLeaveBroadcastReceived);
+				Server.UnregisterBroadcast<GuildRemoveBroadcast>(OnServerGuildRemoveBroadcastReceived);
 
 				// remove the characters pending guild invite request on disconnect
 				if (ServerBehaviour.TryGet(out CharacterSystem characterSystem))
@@ -102,6 +96,11 @@ namespace FishMMO.Server
 					characterSystem.OnCharacterChangedScene -= CharacterSystem_OnCharacterChangedScene;
 				}
 			}
+		}
+
+		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs args)
+		{
+			serverState = args.ConnectionState;
 		}
 
 		void LateUpdate()

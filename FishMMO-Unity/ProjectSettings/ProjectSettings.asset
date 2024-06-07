@@ -44,8 +44,8 @@ PlayerSettings:
   m_HolographicTrackingLossScreen: {fileID: 0}
   defaultScreenWidth: 720
   defaultScreenHeight: 480
-  defaultScreenWidthWeb: 960
-  defaultScreenHeightWeb: 600
+  defaultScreenWidthWeb: 1024
+  defaultScreenHeightWeb: 768
   m_StereoRenderingPath: 0
   m_ActiveColorSpace: 1
   unsupportedMSAAFallback: 0
@@ -524,7 +524,8 @@ PlayerSettings:
   openGLRequireES31: 0
   openGLRequireES31AEP: 0
   openGLRequireES32: 0
-  m_TemplateCustomTags: {}
+  m_TemplateCustomTags:
+    PRODUCT_DESCRIPTION: 
   mobileMTRendering:
     Android: 1
     iPhone: 1
@@ -778,7 +779,7 @@ PlayerSettings:
   webGLDebugSymbols: 0
   webGLEmscriptenArgs: 
   webGLModulesDirectory: 
-  webGLTemplate: APPLICATION:Default
+  webGLTemplate: APPLICATION:PWA
   webGLAnalyzeBuildSize: 0
   webGLUseEmbeddedResources: 0
   webGLCompressionFormat: 0
@@ -794,14 +795,14 @@ PlayerSettings:
   webGLMemoryGeometricGrowthCap: 96
   webGLPowerPreference: 2
   scriptingDefineSymbols:
-    Server: FISHNET;FISHNET_V4;FISHNET_DISABLE_V3TOV4_HELPERS;PREDICTION_V2;ENABLE_WEBRTC
-    Standalone: FISHNET;FISHNET_V4;FISHNET_DISABLE_V3TOV4_HELPERS;PREDICTION_V2;ENABLE_WEBRTC
-    WebGL: FISHNET;FISHNET_V4;FISHNET_DISABLE_V3TOV4_HELPERS;PREDICTION_V2;ENABLE_WEBRTC
+    Server: FISHNET;FISHNET_V4;FISHNET_DISABLE_V3TOV4_HELPERS;ENABLE_WEBRTC
+    Standalone: FISHNET;FISHNET_V4;FISHNET_DISABLE_V3TOV4_HELPERS;ENABLE_WEBRTC
+    WebGL: FISHNET;FISHNET_V4;FISHNET_DISABLE_V3TOV4_HELPERS;ENABLE_WEBRTC
   additionalCompilerArguments: {}
   platformArchitecture: {}
   scriptingBackend:
     Server: 0
-    Standalone: 0
+    Standalone: 1
     WebGL: 1
   il2cppCompilerConfiguration:
     Server: 0
@@ -813,7 +814,7 @@ PlayerSettings:
     WebGL: 1
   managedStrippingLevel:
     Server: 0
-    Standalone: 0
+    Standalone: 4
   incrementalIl2cppBuild: {}
   suppressCommonWarnings: 1
   allowUnsafeCode: 0

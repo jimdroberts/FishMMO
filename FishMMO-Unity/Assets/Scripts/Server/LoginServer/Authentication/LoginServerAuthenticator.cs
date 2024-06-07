@@ -18,7 +18,7 @@ namespace FishMMO.Server
 		public override event Action<NetworkConnection, bool> OnAuthenticationResult;
 		public event Action<NetworkConnection, bool> OnClientAuthenticationResult;
 
-		public NpgsqlDbContextFactory NpgsqlDbContextFactory;
+		public NpgsqlDbContextFactory NpgsqlDbContextFactory { get; set; }
 
 		public override void InitializeOnce(NetworkManager networkManager)
 		{

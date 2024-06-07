@@ -20,7 +20,7 @@ namespace FishMMO.Server
 		{
 			if (ServerManager != null)
 			{
-				ServerManager.OnServerConnectionState += ServerManager_OnServerConnectionState;
+				IAchievementController.OnCompleteAchievement += HandleAchievementRewards;
 			}
 			else
 			{
@@ -28,13 +28,9 @@ namespace FishMMO.Server
 			}
 		}
 
-		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs args)
+		public override void Destroying()
 		{
-			if (args.ConnectionState == LocalConnectionState.Started)
-			{
-				IAchievementController.OnCompleteAchievement += HandleAchievementRewards;
-			}
-			else if (args.ConnectionState == LocalConnectionState.Stopped)
+			if (ServerManager != null)
 			{
 				IAchievementController.OnCompleteAchievement -= HandleAchievementRewards;
 			}

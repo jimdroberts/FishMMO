@@ -21,8 +21,10 @@ namespace DreamTeamMobile
         private readonly int _defaultEngagementTimeInSec;
         private readonly string _sessionId;
 
-        [DllImport("__Internal")]
+#if UNITY_WEBGL
+		[DllImport("__Internal")]
         private static extern void GA4PostEvent(string url, string postDataString);
+#endif
 
         public GoogleAnalyticsGA4Api(string measurementId, string apiSecret, string deviceId, int defaultEngagementTimeInSec = 100)
         {
@@ -80,8 +82,9 @@ namespace DreamTeamMobile
 
                 //Debug.Log($"[DTM GA4] About to send POST HTTP request to: {url}, payload: {postDataString}");
 
-                if (Application.platform != RuntimePlatform.WebGLPlayer)
-                {
+#if UNITY_WEBGL
+					GA4PostEvent(url, postDataString);
+#else
                     var stringContent = new StringContent(postDataString, Encoding.UTF8, "application/json");
                     new HttpClient().PostAsync(url, stringContent)
                         .ContinueWith(t =>
@@ -90,12 +93,8 @@ namespace DreamTeamMobile
                             if (!response.IsSuccessStatusCode)
                                 Debug.Log($"[DTM GA4] Failed to submit GA event: {response.StatusCode}");
                         });
-                }
-                else
-                {
-                    GA4PostEvent(url, postDataString);
-                }
-            }
+#endif
+			}
             catch (Exception ex)
             {
                 Debug.Log($"[DTM GA4] Failed to track GA event: {ex}");

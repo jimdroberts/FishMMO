@@ -9,6 +9,8 @@ namespace FishMMO.Server
 	{
 		private static Dictionary<Type, ServerBehaviour> behaviours = new Dictionary<Type, ServerBehaviour>();
 
+		private bool initialized = false;
+
 		internal static void Register<T>(T behaviour) where T : ServerBehaviour
 		{
 			if (behaviour == null)
@@ -101,6 +103,8 @@ namespace FishMMO.Server
 
 		public abstract void InitializeOnce();
 
+		public abstract void Destroying();
+
 		private void Awake()
 		{
 			ServerBehaviour.Register(this);
@@ -108,6 +112,8 @@ namespace FishMMO.Server
 
 		private void OnDestroy()
 		{
+			Destroying();
+
 			ServerBehaviour.Unregister(this);
 		}
 	}

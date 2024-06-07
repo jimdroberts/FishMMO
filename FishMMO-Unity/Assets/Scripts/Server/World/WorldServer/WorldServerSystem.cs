@@ -20,24 +20,18 @@ namespace FishMMO.Server
 
 		public override void InitializeOnce()
 		{
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
+			if (dbContext == null)
+			{
+				throw new UnityException("Failed to get dbContext.");
+			}
+
 			if (ServerManager != null)
 			{
 				ServerManager.OnServerConnectionState += ServerManager_OnServerConnectionState;
-			}
-			else
-			{
-				enabled = false;
-			}
-		}
 
-		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs args)
-		{
-			serverState = args.ConnectionState;
-			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-
-			if (args.ConnectionState == LocalConnectionState.Started)
-			{
-				if (Server.TryGetServerIPAddress(out ServerAddress server) &&
+				if (Server != null &&
+					Server.TryGetServerIPAddress(out ServerAddress server) &&
 					ServerBehaviour.TryGet(out WorldSceneSystem worldSceneSystem))
 				{
 					int characterCount = worldSceneSystem.ConnectionCount;
@@ -49,14 +43,34 @@ namespace FishMMO.Server
 					}
 				}
 			}
-			else if (args.ConnectionState == LocalConnectionState.Stopped)
+			else
 			{
-				if (Server.Configuration.TryGetString("ServerName", out string name))
+				enabled = false;
+			}
+		}
+
+		public override void Destroying()
+		{
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
+			if (dbContext == null)
+			{
+				throw new UnityException("Failed to get dbContext.");
+			}
+
+			if (ServerManager != null)
+			{
+				if (Server != null &&
+					Server.Configuration.TryGetString("ServerName", out string name))
 				{
 					Debug.Log("World Server System: Removing World Server from Database: " + name);
 					WorldServerService.Delete(dbContext, id);
 				}
 			}
+		}
+
+		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs args)
+		{
+			serverState = args.ConnectionState;
 		}
 
 		void LateUpdate()
@@ -75,18 +89,6 @@ namespace FishMMO.Server
 					WorldServerService.Pulse(dbContext, id, characterCount);
 				}
 				nextPulse -= Time.deltaTime;
-			}
-		}
-
-		private void OnApplicationQuit()
-		{
-			if (Server != null && Server.NpgsqlDbContextFactory != null &&
-				serverState != LocalConnectionState.Stopped &&
-				Server.Configuration.TryGetString("ServerName", out string name))
-			{
-				using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-				Debug.Log("World Server System: Removing World Server: " + name);
-				WorldServerService.Delete(dbContext, id);
 			}
 		}
 	}

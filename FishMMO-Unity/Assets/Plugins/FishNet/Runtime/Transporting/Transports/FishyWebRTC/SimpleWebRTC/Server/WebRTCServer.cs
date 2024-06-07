@@ -174,7 +174,7 @@ namespace cakeslice.SimpleWebRTC
 			}
 			catch (ThreadInterruptedException e) { Log.InfoException(e); }
 			catch (ThreadAbortException e) { Log.InfoException(e); }
-			catch (Exception e) { Log.Exception(e); }
+			catch (Exception e) { /*Log.Exception(e);*/ } // This is generally a safe failure as the thread might close or the socket could be stopped.
 		}
 
 		public void Stop()
@@ -379,7 +379,7 @@ namespace cakeslice.SimpleWebRTC
 			}
 			else
 			{
-				Log.Warn($"Cant send message to {id} because connection was not found in dictionary. Maybe it disconnected.");
+				//Log.Warn($"Cant send message to {id} because connection was not found in dictionary. Maybe it disconnected.");
 			}
 		}
 
@@ -393,7 +393,7 @@ namespace cakeslice.SimpleWebRTC
 			}
 			else
 			{
-				Log.Warn($"Failed to kick {id} because id not found");
+				//Log.Warn($"Failed to kick {id} because id not found");
 
 				return false;
 			}

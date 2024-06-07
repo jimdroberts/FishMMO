@@ -5,7 +5,7 @@ namespace FishMMO.Shared
 	[CreateAssetMenu(fileName = "New Area Damage Hit Event", menuName = "Character/Ability/Hit Event/Area Damage", order = 1)]
 	public sealed class AreaDamageHitEvent : HitEvent
 	{
-		private Collider[] colliders = new Collider[10];
+		private static Collider[] Hits = new Collider[512];
 
 		public int HitCount;
 		public int Damage;
@@ -27,16 +27,16 @@ namespace FishMMO.Shared
 			int overlapCount = physicsScene.OverlapSphere(//Physics.OverlapCapsuleNonAlloc(
 								hitTarget.Target.transform.position,
 								Radius,
-								colliders,
+								Hits,
 								CollidableLayers,
 								QueryTriggerInteraction.Ignore);
 
 			int hits = 0;
 			for (int i = 0; i < overlapCount && hits < HitCount; ++i)
 			{
-				if (colliders[i] != attacker.Collider)
+				if (Hits[i] != attacker.Collider)
 				{
-					ICharacter def = colliders[i].gameObject.GetComponent<ICharacter>();
+					ICharacter def = Hits[i].gameObject.GetComponent<ICharacter>();
 					if (def != null &&
 						def.TryGet(out IFactionController defenderFactionController) &&
 						def.TryGet(out ICharacterDamageController damageController) &&

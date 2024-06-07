@@ -34,11 +34,16 @@ namespace FishMMO.Server
 		public override void InitializeOnce()
 		{
 			loginAuthenticator = FindObjectOfType<WorldServerAuthenticator>();
+			if (loginAuthenticator == null)
+			{
+				throw new UnityException("WorldServerAuthenticator not found!");
+			}
 
 			if (ServerManager != null)
 			{
-				ServerManager.OnServerConnectionState += ServerManager_OnServerConnectionState;
 				ServerManager.OnRemoteConnectionState += ServerManager_OnRemoteConnectionState;
+
+				loginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
 			}
 			else
 			{
@@ -46,16 +51,9 @@ namespace FishMMO.Server
 			}
 		}
 
-		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs args)
+		public override void Destroying()
 		{
-			if (loginAuthenticator == null)
-				return;
-
-			if (args.ConnectionState == LocalConnectionState.Started)
-			{
-				loginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
-			}
-			else if (args.ConnectionState == LocalConnectionState.Stopped)
+			if (loginAuthenticator != null)
 			{
 				loginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
 			}

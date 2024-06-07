@@ -50,6 +50,8 @@ namespace cakeslice.SimpleWebRTC
 
 			bool dispose = false;
 
+			Exception exception = null;
+
 			// create write buffer for this thread
 			byte[] writeBuffer = new byte[bufferSize];
 			try
@@ -119,7 +121,7 @@ namespace cakeslice.SimpleWebRTC
 			if (dispose)
 			{
 				Profiler.EndThreadProfiling();
-				Log.Warn("Closing connection due to exception");
+				//Log.Warn("Closing connection due to exception");
 				conn.Dispose();
 			}
 		}
