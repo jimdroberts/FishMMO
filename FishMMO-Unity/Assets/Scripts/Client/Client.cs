@@ -57,7 +57,7 @@ namespace FishMMO.Client
 		public byte ReconnectAttempts = 10;
 		public float ReconnectAttemptWaitTime = 5f;
 
-		public string IPFetchHost = "127.0.0.1:8080";
+		public string IPFetchHost = "http://127.0.0.1:8080/";
 		public List<ServerAddress> LoginServerAddresses;
 		public Configuration Configuration = null;
 
@@ -151,7 +151,7 @@ namespace FishMMO.Client
 				Configuration.Set("ShowDamage", true);
 				Configuration.Set("ShowHeals", true);
 				Configuration.Set("ShowAchievementCompletion", true);
-				Configuration.Set("IPFetchHost", string.IsNullOrWhiteSpace(IPFetchHost) ? "127.0.0.1:8080" : IPFetchHost);
+				Configuration.Set("IPFetchHost", string.IsNullOrWhiteSpace(IPFetchHost) ? "http://127.0.0.1:8080/" : IPFetchHost);
 #if !UNITY_EDITOR
 				Configuration.Save();
 #endif
