@@ -57,6 +57,14 @@ namespace FishMMO.Server
 			{
 				loginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
 			}
+
+			if (Server != null &&
+				Server.NpgsqlDbContextFactory != null &&
+				ServerBehaviour.TryGet(out WorldServerSystem worldServerSystem))
+			{
+				using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
+				PendingSceneService.Delete(dbContext, worldServerSystem.ID);
+			}
 		}
 
 		private void ServerManager_OnRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args)
@@ -75,17 +83,6 @@ namespace FishMMO.Server
 					}
 					WaitingConnectionsScenes.Remove(conn);
 				}
-			}
-		}
-
-		private void OnApplicationQuit()
-		{
-			if (Server != null &&
-				Server.NpgsqlDbContextFactory != null &&
-				ServerBehaviour.TryGet(out WorldServerSystem worldServerSystem))
-			{
-				using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-				PendingSceneService.Delete(dbContext, worldServerSystem.ID);
 			}
 		}
 

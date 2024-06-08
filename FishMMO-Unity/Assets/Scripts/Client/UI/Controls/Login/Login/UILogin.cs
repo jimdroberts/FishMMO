@@ -1,5 +1,6 @@
 ﻿using FishNet.Transporting;
 using TMPro;
+using UnityEngine;
 using UnityEngine.UI;
 using FishMMO.Shared;
 
@@ -31,6 +32,7 @@ namespace FishMMO.Client
 		public override void OnQuitToLogin()
 		{
 			Show();// override setting, this is our main menu
+			StopAllCoroutines();
 			SetSignInLocked(false);
 		}
 
@@ -62,7 +64,7 @@ namespace FishMMO.Client
 						Client.ForceDisconnect();
 						SetSignInLocked(false);
 					}
-					
+
 					break;
 				case ClientAuthenticationResult.InvalidUsernameOrPassword:
 					{
@@ -121,12 +123,20 @@ namespace FishMMO.Client
 			{
 				SetSignInLocked(true);
 
-				// set username and password in the authenticator
-				Client.LoginAuthenticator.SetLoginCredentials(username.text, password.text, true);
+				StartCoroutine(Client.GetLoginServerList((error) =>
+				{
+					Debug.LogError(error);
+					SetSignInLocked(false);
+				},
+				(servers) =>
+				{
+					// set username and password in the authenticator
+					Client.LoginAuthenticator.SetLoginCredentials(username.text, password.text, true);
 
-				handshakeMSG.text = "Creating account.";
+					handshakeMSG.text = "Creating account.";
 
-				Connect();
+					Connect();
+				}));
 			}
 		}
 
@@ -147,21 +157,25 @@ namespace FishMMO.Client
 
 		private void Connect()
 		{
-			if (Client.TryGetRandomLoginServerAddress(out ServerAddress serverAddress))
-			{
-				Client.ConnectToServer(serverAddress.address, serverAddress.port);
+			SetSignInLocked(true);
 
-				SetSignInLocked(true);
-			}
-			else
+			StartCoroutine(Client.GetLoginServerList((error) =>
 			{
-				handshakeMSG.text = "Failed to get a login server!";
+				Debug.LogError(error);
 				SetSignInLocked(false);
-			}
+			},
+			(servers) =>
+			{
+				if (Client.TryGetRandomLoginServerAddress(out ServerAddress serverAddress))
+				{
+					Client.ConnectToServer(serverAddress.address, serverAddress.port);
+				}
+			}));
 		}
 
 		public void OnClick_Quit()
 		{
+			StopAllCoroutines();
 			Client.Quit();
 		}
 

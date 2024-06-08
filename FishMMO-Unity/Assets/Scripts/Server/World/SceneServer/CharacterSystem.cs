@@ -81,6 +81,14 @@ namespace FishMMO.Server
 
 				ICharacterDamageController.OnKilled -= OnKilled;
 			}
+
+			if (Server != null &&
+				Server.NpgsqlDbContextFactory != null)
+			{
+				// save all the characters before we quit
+				using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
+				CharacterService.Save(dbContext, new List<IPlayerCharacter>(CharactersByID.Values), false);
+			}
 		}
 
 		void LateUpdate()
@@ -146,16 +154,6 @@ namespace FishMMO.Server
 			}
 		}
 
-		private void OnApplicationQuit()
-		{
-			if (Server != null && Server.NpgsqlDbContextFactory != null)
-			{
-				// save all the characters before we quit
-				using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-				CharacterService.Save(dbContext, new List<IPlayerCharacter>(CharactersByID.Values), false);
-			}
-		}
-
 		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs args)
 		{
 			serverState = args.ConnectionState;
@@ -179,7 +177,7 @@ namespace FishMMO.Server
 																	 waitingSceneCharacter.SceneHandle,
 																	 out SceneInstanceDetails instance))
 					{
-						--instance.CharacterCount;
+						instance.AddCharacterCount(-1);
 
 						OnDisconnect?.Invoke(conn, waitingSceneCharacter);
 					}
@@ -205,15 +203,6 @@ namespace FishMMO.Server
 					OnDisconnect?.Invoke(conn, character);
 
 					TryTeleport(character);
-
-					// update scene instance details
-					if (sceneServerSystem.TryGetSceneInstanceDetails(character.WorldServerID,
-																	 character.SceneName,
-																	 character.SceneHandle,
-																	 out SceneInstanceDetails instance))
-					{
-						--instance.CharacterCount;
-					}
 
 					// save the character and set online status to false
 					using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
@@ -266,7 +255,7 @@ namespace FishMMO.Server
 						WaitingSceneLoadCharacters.Add(conn, character);
 
 						// update character count
-						++instance.CharacterCount;
+						instance.AddCharacterCount(1);
 
 						Debug.Log("Character System: " + character.CharacterName + " is loading Scene: " + character.SceneName + ":" + character.SceneHandle);
 					}

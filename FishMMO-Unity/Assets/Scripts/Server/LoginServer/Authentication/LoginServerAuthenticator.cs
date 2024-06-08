@@ -59,6 +59,7 @@ namespace FishMMO.Server
 				// check if any characters are online already
 				if (CharacterService.TryGetOnline(dbContext, msg.s))
 				{
+					KickRequestService.Save(dbContext, msg.s);
 					result = ClientAuthenticationResult.AlreadyOnline;
 				}
 				else

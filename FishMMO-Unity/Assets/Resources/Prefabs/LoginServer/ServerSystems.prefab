@@ -11,10 +11,12 @@ GameObject:
   - component: {fileID: 4059034741344880441}
   - component: {fileID: 5849347582015469635}
   - component: {fileID: 4059034741344880446}
+  - component: {fileID: 5124571959681101950}
   - component: {fileID: 2508430958062098396}
   - component: {fileID: 403044114284278985}
   - component: {fileID: 4059034741344880447}
   - component: {fileID: 4059034741211151037}
+  - component: {fileID: 8525076296717744913}
   m_Layer: 0
   m_Name: ServerSystems
   m_TagString: Untagged
@@ -65,6 +67,18 @@ MonoBehaviour:
   Title: 
   UpdateRate: 2
   NextUpdate: 0
+--- !u!114 &5124571959681101950
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4059034741344880580}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f20a63d7fac006240a2026d1037855f1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!114 &2508430958062098396
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -118,3 +132,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 10185ce7ae478884e9e2b64b34b0db03, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+--- !u!114 &8525076296717744913
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4059034741344880580}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c6265c32a755fc941923340579f96fb7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  UpdatePumpRate: 5
+  UpdateFetchCount: 100

@@ -311,10 +311,11 @@ MonoBehaviour:
   TrueConditions: []
   InitialRespawnTime: 0
   RandomRespawnTime: 1
-  RandomSpawnPosition: 1
   RandomSpawnable: 1
   Spawnables: []
-  SpawnCount: 1
+  MaxSpawnCount: 1
+  RandomSpawnPosition: 1
+  SphereRadius: 0.5
   BoundingBoxSize: {x: 1, y: 1, z: 1}
   BoundingBoxExtents: {x: 1, y: 1, z: 1}
   GizmoColor: {r: 1, g: 0, b: 0, a: 1}
@@ -1887,10 +1888,11 @@ MonoBehaviour:
   TrueConditions: []
   InitialRespawnTime: 0
   RandomRespawnTime: 1
-  RandomSpawnPosition: 1
   RandomSpawnable: 1
   Spawnables: []
-  SpawnCount: 1
+  MaxSpawnCount: 1
+  RandomSpawnPosition: 1
+  SphereRadius: 0.5
   BoundingBoxSize: {x: 1, y: 1, z: 1}
   BoundingBoxExtents: {x: 1, y: 1, z: 1}
   GizmoColor: {r: 1, g: 0, b: 0, a: 1}
@@ -2881,10 +2883,11 @@ MonoBehaviour:
   TrueConditions: []
   InitialRespawnTime: 0
   RandomRespawnTime: 1
-  RandomSpawnPosition: 1
   RandomSpawnable: 1
   Spawnables: []
-  SpawnCount: 1
+  MaxSpawnCount: 1
+  RandomSpawnPosition: 1
+  SphereRadius: 0.5
   BoundingBoxSize: {x: 1, y: 1, z: 1}
   BoundingBoxExtents: {x: 1, y: 1, z: 1}
   GizmoColor: {r: 1, g: 0, b: 0, a: 1}
@@ -3395,7 +3398,7 @@ MonoBehaviour:
   <PredictedSpawn>k__BackingField: {fileID: 0}
   _networkBehaviours:
   - {fileID: 1959955017}
-  - {fileID: 1959955020}
+  - {fileID: 0}
   <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 0}
   <NestedRootNetworkBehaviours>k__BackingField: []
   SerializedTransformProperties:

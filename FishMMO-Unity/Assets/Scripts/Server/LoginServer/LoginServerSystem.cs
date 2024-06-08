@@ -6,13 +6,12 @@ using FishMMO.Shared;
 
 namespace FishMMO.Server
 {
-	// World Server System handles the database heartbeat
-	public class WorldServerSystem : ServerBehaviour
+	// Login Server System handles the database heartbeat for Login Service
+	public class LoginServerSystem : ServerBehaviour
 	{
 		private LocalConnectionState serverState;
 
 		private long id;
-		private bool locked = false;
 		private float pulseRate = 5.0f;
 		private float nextPulse = 0.0f;
 
@@ -31,16 +30,10 @@ namespace FishMMO.Server
 				ServerManager.OnServerConnectionState += ServerManager_OnServerConnectionState;
 
 				if (Server != null &&
-					Server.TryGetServerIPAddress(out ServerAddress server) &&
-					ServerBehaviour.TryGet(out WorldSceneSystem worldSceneSystem))
+					Server.TryGetServerIPAddress(out ServerAddress server))
 				{
-					int characterCount = worldSceneSystem.ConnectionCount;
-
-					if (Server.Configuration.TryGetString("ServerName", out string name))
-					{
-						Debug.Log("World Server System: Adding World Server to Database: " + name + ":" + server.address + ":" + server.port);
-						WorldServerService.Add(dbContext, name, server.address, server.port, characterCount, locked, out id);
-					}
+					Debug.Log("Login Server System: Adding Login Server to Database: " + name + ":" + server.address + ":" + server.port);
+					LoginServerService.Add(dbContext, server.address, server.port, out id);
 				}
 			}
 			else
@@ -59,11 +52,10 @@ namespace FishMMO.Server
 
 			if (ServerManager != null)
 			{
-				if (Server != null &&
-					Server.Configuration.TryGetString("ServerName", out string name))
+				if (Server != null)
 				{
-					Debug.Log("World Server System: Removing World Server from Database: " + name);
-					WorldServerService.Delete(dbContext, id);
+					Debug.Log("Login Server System: Removing Login Server from Database: " + id);
+					LoginServerService.Delete(dbContext, id);
 				}
 			}
 		}
@@ -75,18 +67,16 @@ namespace FishMMO.Server
 
 		void LateUpdate()
 		{
-			if (serverState == LocalConnectionState.Started &&
-				ServerBehaviour.TryGet(out WorldSceneSystem worldSceneSystem))
+			if (serverState == LocalConnectionState.Started)
 			{
 				if (nextPulse < 0)
 				{
 					nextPulse = pulseRate;
 
-					// TODO: maybe this one should exist....how expensive will this be to run on update?
 					using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-					//Debug.Log("World Server System: Pulse");
-					int characterCount = worldSceneSystem.ConnectionCount;
-					WorldServerService.Pulse(dbContext, id, characterCount);
+
+					//Debug.Log("Login Server System: Pulse");
+					LoginServerService.Pulse(dbContext, id);
 				}
 				nextPulse -= Time.deltaTime;
 			}

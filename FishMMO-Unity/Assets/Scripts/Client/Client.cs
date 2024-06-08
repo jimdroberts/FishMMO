@@ -14,6 +14,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using UnityEngine;
+using UnityEngine.Networking;
 using UnityEngine.SceneManagement;
 using System;
 #if UNITY_EDITOR
@@ -56,6 +57,7 @@ namespace FishMMO.Client
 		public byte ReconnectAttempts = 10;
 		public float ReconnectAttemptWaitTime = 5f;
 
+		public string IPFetchHost = "127.0.0.1:8080";
 		public List<ServerAddress> LoginServerAddresses;
 		public Configuration Configuration = null;
 
@@ -149,6 +151,7 @@ namespace FishMMO.Client
 				Configuration.Set("ShowDamage", true);
 				Configuration.Set("ShowHeals", true);
 				Configuration.Set("ShowAchievementCompletion", true);
+				Configuration.Set("IPFetchHost", string.IsNullOrWhiteSpace(IPFetchHost) ? "127.0.0.1:8080" : IPFetchHost);
 #if !UNITY_EDITOR
 				Configuration.Save();
 #endif
@@ -506,6 +509,50 @@ namespace FishMMO.Client
 			return match.Success;
 		}
 
+		public IEnumerator GetLoginServerList(Action<string> onFetchFail, Action<List<ServerAddress>> onFetchComplete)
+		{
+			if (LoginServerAddresses != null &&
+				LoginServerAddresses.Count > 0)
+			{
+				onFetchComplete?.Invoke(LoginServerAddresses);
+			}
+			else if (Configuration.TryGetString("IPFetchHost", out IPFetchHost))
+			{
+				using (UnityWebRequest request = UnityWebRequest.Get(IPFetchHost))
+				{
+					yield return request.SendWebRequest();
+
+					if (request.result == UnityWebRequest.Result.ConnectionError ||
+						request.result == UnityWebRequest.Result.ProtocolError)
+					{
+						onFetchFail?.Invoke("Error: " + request.error);
+					}
+					else
+					{
+						// Parse JSON response
+						string jsonResponse = request.downloadHandler.text;
+						jsonResponse = "{\"addresses\":" + jsonResponse.ToString() + "}";
+						ServerAddresses result = JsonUtility.FromJson<ServerAddresses>(jsonResponse);
+
+						// Do something with the server list
+						foreach (ServerAddress server in result.addresses)
+						{
+							Debug.Log("Client: New Login Server Address:" + server.address + ", Port: " + server.port);
+						}
+
+						// Assign our LoginServerAddresses
+						LoginServerAddresses = result.addresses;
+
+						onFetchComplete?.Invoke(result.addresses);
+					}
+				}
+			}
+			else
+			{
+				onFetchFail?.Invoke("Failed to configure IPFetchHost.");
+			}
+		}
+
 		private void UnitySceneManager_OnSceneLoaded(Scene scene, LoadSceneMode mode)
 		{
 			// ClientBootstrap overrides active scene if it is ever loaded.
@@ -530,6 +577,9 @@ namespace FishMMO.Client
 				UnityEngine.SceneManagement.SceneManager.UnloadSceneAsync(scene);
 			}
 			serverLoadedScenes.Clear();
+
+			// Test
+			Resources.UnloadUnusedAssets();
 		}
 
 		private void SceneManager_OnLoadPercentChange(SceneLoadPercentEventArgs args)

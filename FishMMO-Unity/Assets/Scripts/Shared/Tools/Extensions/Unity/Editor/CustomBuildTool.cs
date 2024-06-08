@@ -329,6 +329,27 @@ start Scene.exe SCENE";
 			return allPaths.ToArray();
 		}
 
+		private static void CopyIPFetchFiles(BuildTarget buildTarget, string ipFetchPath, string configurationPath, string buildPath)
+		{
+			if (Directory.Exists(buildPath))
+			{
+				Directory.Delete(buildPath, true);
+			}
+			Directory.CreateDirectory(buildPath);
+
+			FileUtil.ReplaceFile(Path.Combine(ipFetchPath, "IPFetch.py"), Path.Combine(buildPath, "IPFetch.py"));
+			FileUtil.ReplaceFile(Path.Combine(configurationPath, "appsettings.json"), Path.Combine(buildPath, "appsettings.json"));
+
+			if (buildTarget == BuildTarget.StandaloneWindows64)
+			{
+				FileUtil.ReplaceFile(Path.Combine(ipFetchPath, "WindowsSetup.bat"), Path.Combine(buildPath, "WindowsSetup.bat"));
+			}
+			else
+			{
+				FileUtil.ReplaceFile(Path.Combine(ipFetchPath, "LinuxSetup.sh"), Path.Combine(buildPath, "LinuxSetup.sh"));
+			}
+		}
+
 		private static void CopyConfigurationFiles(BuildTarget buildTarget, CustomBuildType customBuildType, string configurationPath, string buildPath)
 		{
 			switch (customBuildType)
@@ -350,7 +371,8 @@ start Scene.exe SCENE";
 				case CustomBuildType.Client:
 					if (buildTarget == BuildTarget.WebGL)
 					{
-						FileUtil.ReplaceFile(Path.Combine(configurationPath, "Launch Local Game Server.bat"), Path.Combine(buildPath, "Launch Local Game Server.bat"));
+						string webGLBuildPath = Path.Combine(buildPath, Constants.Configuration.ProjectName + ".exe");
+						FileUtil.ReplaceFile(Path.Combine(configurationPath, "Launch WebGL Client Server.bat"), Path.Combine(webGLBuildPath, "Launch WebGL Client Server.bat"));
 					}
 					break;
 				default:break;
@@ -591,6 +613,27 @@ start Scene.exe SCENE";
 							BuildTarget.StandaloneWindows64);
 		}
 
+		[MenuItem("FishMMO/Build/Server/Windows IPFetch Server", priority = 6)]
+		public static void BuildWindowsIPFetchServer()
+		{
+			string rootPath = "";
+			if (string.IsNullOrWhiteSpace(rootPath))
+			{
+				rootPath = EditorUtility.SaveFolderPanel("Pick a save directory", "", "");
+				if (string.IsNullOrWhiteSpace(rootPath))
+				{
+					return;
+				}
+			}
+
+			string root = Directory.GetParent(Directory.GetCurrentDirectory()).FullName;
+			string configurationPath = WorkingEnvironmentOptions.AppendEnvironmentToPath(Constants.Configuration.SetupDirectory);
+			string folderName = Constants.Configuration.ProjectName + " Windows IPFetch Server";
+			string buildPath = Path.Combine(rootPath, folderName);
+
+			CopyIPFetchFiles(BuildTarget.StandaloneWindows64, Path.Combine(root, "IPFetch"), Path.Combine(root, configurationPath), buildPath);
+		}
+
 		[MenuItem("FishMMO/Build/Server/Linux x64 All-In-One", priority = 7)]
 		public static void BuildLinux64AllInOneServer()
 		{
@@ -601,6 +644,27 @@ start Scene.exe SCENE";
 							BASE_BUILD_OPTIONS | BuildOptions.ShowBuiltPlayer,
 							StandaloneBuildSubtarget.Server,
 							BuildTarget.StandaloneLinux64);
+		}
+
+		[MenuItem("FishMMO/Build/Server/Linux IPFetch Server", priority = 8)]
+		public static void BuildLinuxIPFetchServer()
+		{
+			string rootPath = "";
+			if (string.IsNullOrWhiteSpace(rootPath))
+			{
+				rootPath = EditorUtility.SaveFolderPanel("Pick a save directory", "", "");
+				if (string.IsNullOrWhiteSpace(rootPath))
+				{
+					return;
+				}
+			}
+
+			string root = Directory.GetParent(Directory.GetCurrentDirectory()).FullName;
+			string configurationPath = WorkingEnvironmentOptions.AppendEnvironmentToPath(Constants.Configuration.SetupDirectory);
+			string folderName = Constants.Configuration.ProjectName + " Linux IPFetch Server";
+			string buildPath = Path.Combine(rootPath, folderName);
+
+			CopyIPFetchFiles(BuildTarget.StandaloneLinux64, Path.Combine(root, "IPFetch"), Path.Combine(root, configurationPath), buildPath);
 		}
 
 		[MenuItem("FishMMO/Build/Client/Linux x64", priority = 2)]

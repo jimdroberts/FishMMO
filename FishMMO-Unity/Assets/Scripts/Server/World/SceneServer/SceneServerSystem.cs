@@ -4,6 +4,7 @@ using SceneManager = FishNet.Managing.Scened.SceneManager;
 using FishNet.Transporting;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using System;
 using System.Collections.Generic;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
@@ -42,7 +43,7 @@ namespace FishMMO.Server
 				Server.NetworkManager.SceneManager != null)
 			{
 				Server.NetworkManager.SceneManager.OnLoadEnd += SceneManager_OnLoadEnd;
-				//Server.NetworkManager.SceneManager.OnUnloadEnd += SceneManager_OnUnloadEnd;
+				Server.NetworkManager.SceneManager.OnUnloadEnd += SceneManager_OnUnloadEnd;
 				ServerManager.OnServerConnectionState += ServerManager_OnServerConnectionState;
 
 				if (Server.TryGetServerIPAddress(out ServerAddress server) &&
@@ -55,6 +56,8 @@ namespace FishMMO.Server
 						SceneServerService.Add(dbContext, server.address, server.port, characterCount, locked, out id);
 						Debug.Log("Scene Server System: Added Scene Server to Database: [" + id + "] " + name + ":" + server.address + ":" + server.port);
 					}
+
+					characterSystem.OnDisconnect += CharacterSystem_OnDisconnect;
 				}
 			}
 			else
@@ -88,6 +91,18 @@ namespace FishMMO.Server
 			serverState = args.ConnectionState;
 		}
 
+		private void CharacterSystem_OnDisconnect(NetworkConnection conn, IPlayerCharacter character)
+		{
+			// update scene instance details
+			if (TryGetSceneInstanceDetails(character.WorldServerID,
+											character.SceneName,
+											character.SceneHandle,
+											out SceneInstanceDetails instance))
+			{
+				instance.AddCharacterCount(-1);
+			}
+		}
+
 		void LateUpdate()
 		{
 			if (serverState == LocalConnectionState.Started)
@@ -96,7 +111,8 @@ namespace FishMMO.Server
 				{
 					nextPulse = PulseRate;
 
-					if (ServerBehaviour.TryGet(out CharacterSystem characterSystem))
+					if (Server != null &&
+						ServerBehaviour.TryGet(out CharacterSystem characterSystem))
 					{
 						// TODO: maybe this one should exist....how expensive will this be to run on update?
 						using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
@@ -111,16 +127,46 @@ namespace FishMMO.Server
 							{
 								foreach (Dictionary<int, SceneInstanceDetails> scene in sceneGroup.Values)
 								{
-									foreach (KeyValuePair<int, SceneInstanceDetails> sceneDetails in scene)
+									foreach (SceneInstanceDetails sceneDetails in new List<SceneInstanceDetails>(scene.Values))
 									{
-										//Debug.Log("Scene Server System: " + sceneDetails.Value.Name + ":" + sceneDetails.Value.WorldServerID + ":" + sceneDetails.Value.Handle + " Pulse");
-										LoadedSceneService.Pulse(dbContext, sceneDetails.Key, sceneDetails.Value.CharacterCount);
+										if (sceneDetails.CharacterCount < 1)
+										{
+											double timeSinceLastExit = DateTime.UtcNow.Subtract(sceneDetails.LastExit).TotalMinutes;
+											if (Server.Configuration.TryGetInt("StaleSceneTimeout", out int result) &&
+												timeSinceLastExit < result)
+											{
+												if (sceneDetails.StalePulse)
+												{
+													Debug.Log($"Scene Server System: {sceneDetails.Name}:{sceneDetails.WorldServerID}{sceneDetails.Handle}:{sceneDetails.CharacterCount} Stale Pulse");
+													LoadedSceneService.Pulse(dbContext, sceneDetails.Handle, sceneDetails.CharacterCount);
+													sceneDetails.StalePulse = false;
+												}
+												continue;
+											}
+
+											Debug.Log($"Scene Server System: {sceneDetails.Name}:{sceneDetails.WorldServerID}{sceneDetails.Handle}:{sceneDetails.CharacterCount} Closing Stale Scene");
+
+											// Unload the scene on the server
+											UnloadScene(sceneDetails.Handle);
+
+											// Remove the scene details
+											scene.Remove(sceneDetails.Handle);
+
+											// Remove the scene details from the database
+											LoadedSceneService.Delete(dbContext, id, sceneDetails.Handle);
+										}
+										else
+										{
+											//Debug.Log($"Scene Server System: {sceneDetails.Name}:{sceneDetails.WorldServerID}{sceneDetails.Handle}:{sceneDetails.CharacterCount} Pulse");
+											sceneDetails.StalePulse = false;
+											LoadedSceneService.Pulse(dbContext, sceneDetails.Handle, sceneDetails.CharacterCount);
+										}
 									}
 								}
 							}
 						}
 
-						// process pending scenes
+						// Process pending scenes
 						PendingSceneEntity pending = PendingSceneService.Dequeue(dbContext);
 						if (pending != null)
 						{
@@ -230,6 +276,12 @@ namespace FishMMO.Server
 			}
 		}
 
+		public void SceneManager_OnUnloadEnd(SceneUnloadEndEventArgs args)
+		{
+			// Test
+			Resources.UnloadUnusedAssets();
+		}
+
 		public bool TryGetSceneInstanceDetails(long worldServerID, string sceneName, int sceneHandle, out SceneInstanceDetails instanceDetails)
 		{
 			instanceDetails = default;
@@ -269,6 +321,18 @@ namespace FishMMO.Server
 				return true;
 			}
 			return false;
+		}
+
+		public void UnloadScene(int handle)
+		{
+			SceneUnloadData sud = new SceneUnloadData()
+			{
+				SceneLookupDatas = new SceneLookupData[]
+				{
+					new SceneLookupData(handle),
+				},
+			};
+			Server.NetworkManager.SceneManager.UnloadConnectionScenes(sud);
 		}
 	}
 }

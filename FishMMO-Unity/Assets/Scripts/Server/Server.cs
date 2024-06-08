@@ -97,6 +97,7 @@ namespace FishMMO.Server
 				Configuration.Set("MaximumClients", 4000);
 				Configuration.Set("Address", "127.0.0.1");
 				Configuration.Set("Port", serverType == ServerType.Login ? "7770" : serverType == ServerType.World ? "7780" : "7781");
+				Configuration.Set("StaleSceneTimeout", 5);
 #if !UNITY_EDITOR
 				Configuration.Save();
 #endif

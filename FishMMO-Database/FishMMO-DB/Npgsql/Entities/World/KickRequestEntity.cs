@@ -4,13 +4,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FishMMO.Database.Npgsql.Entities
 {
-	[Table("party_updates", Schema = "fish_mmo_postgresql")]
-	[Index(nameof(PartyID))]
-	public class PartyUpdateEntity
+	[Table("kick_requests", Schema = "fish_mmo_postgresql")]
+	[Index(nameof(AccountName))]
+	public class KickRequestEntity
 	{
 		[DatabaseGenerated(DatabaseGeneratedOption.Identity)]
 		public long ID { get; set; }
-		public long PartyID { get; set; }
+		public string AccountName { get; set; }
 		public DateTime TimeCreated { get; set; }
 	}
 }
