@@ -1,4 +1,5 @@
 from http.server import BaseHTTPRequestHandler, HTTPServer
+import os
 import json
 import psycopg2
 import time
@@ -21,8 +22,10 @@ class RequestHandler(BaseHTTPRequestHandler):
                     ip_list = self.cache['ip_list']
                 else:
                     print("Cache miss. Fetching data from the database.")
+                    dn = os.path.dirname(os.path.realpath(__file__))
+                    fp = os.path.join(dn, 'appsettings.json')
                     # Read database connection parameters from appsettings.json
-                    with open('appsettings.json', 'r') as config_file:
+                    with open(fp, 'r') as config_file:
                         config = json.load(config_file)
                     
                     print("Connecting to the database...")

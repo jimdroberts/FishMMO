@@ -117,60 +117,46 @@ namespace FishMMO.Client
 
 		public void OnClick_OnRegister()
 		{
-			if (Client.IsConnectionReady(LocalConnectionState.Stopped) &&
-				Constants.Authentication.IsAllowedUsername(username.text) &&
-				Constants.Authentication.IsAllowedPassword(password.text))
-			{
-				SetSignInLocked(true);
-
-				StartCoroutine(Client.GetLoginServerList((error) =>
-				{
-					Debug.LogError(error);
-					SetSignInLocked(false);
-				},
-				(servers) =>
-				{
-					// set username and password in the authenticator
-					Client.LoginAuthenticator.SetLoginCredentials(username.text, password.text, true);
-
-					handshakeMSG.text = "Creating account.";
-
-					Connect();
-				}));
-			}
-		}
-
-		public void OnClick_Login()
-		{
-			if (Client.IsConnectionReady(LocalConnectionState.Stopped) &&
-				Constants.Authentication.IsAllowedUsername(username.text) &&
-				Constants.Authentication.IsAllowedPassword(password.text))
-			{
-				// set username and password in the authenticator
-				Client.LoginAuthenticator.SetLoginCredentials(username.text, password.text);
-
-				handshakeMSG.text = "Connecting...";
-
-				Connect();
-			}
-		}
-
-		private void Connect()
-		{
 			SetSignInLocked(true);
 
-			StartCoroutine(Client.GetLoginServerList((error) =>
+			StartCoroutine(Client.GetLoginServerList((e) =>
 			{
-				Debug.LogError(error);
+				Debug.LogError(e);
 				SetSignInLocked(false);
 			},
 			(servers) =>
 			{
-				if (Client.TryGetRandomLoginServerAddress(out ServerAddress serverAddress))
-				{
-					Client.ConnectToServer(serverAddress.address, serverAddress.port);
-				}
+				Connect("Creating account.", username.text, password.text, true);
 			}));
+		}
+
+		public void OnClick_Login()
+		{
+			SetSignInLocked(true);
+
+			StartCoroutine(Client.GetLoginServerList((e) =>
+			{
+				Debug.LogError(e);
+				SetSignInLocked(false);
+			},
+			(servers) =>
+			{
+				servers.GetRandom();
+				Connect("Connecting...", username.text, password.text);
+			}));
+		}
+
+		private void Connect(string handshakeMessage, string username, string password, bool isRegistration = false, string address = null, ushort port = 0)
+		{
+			if (Client.IsConnectionReady(LocalConnectionState.Stopped) &&
+				Constants.Authentication.IsAllowedUsername(username) &&
+				Constants.Authentication.IsAllowedPassword(password) &&
+				Client.TryGetRandomLoginServerAddress(out ServerAddress serverAddress))
+			{
+				handshakeMSG.text = handshakeMessage;
+				Client.LoginAuthenticator.SetLoginCredentials(username, password, isRegistration);
+				Client.ConnectToServer(serverAddress.address, serverAddress.port);
+			}
 		}
 
 		public void OnClick_Quit()

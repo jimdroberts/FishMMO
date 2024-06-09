@@ -18,6 +18,7 @@ namespace FishMMO.Database.Npgsql
 		public DbSet<LoadedSceneEntity> LoadedScenes { get; set; }
 		public DbSet<PendingSceneEntity> PendingScenes { get; set; }
 		public DbSet<AccountEntity> Accounts { get; set; }
+		public DbSet<KickRequestEntity> KickRequests { get; set; }
 
 		// character tables
 		public DbSet<CharacterEntity> Characters { get; set; }
@@ -41,7 +42,6 @@ namespace FishMMO.Database.Npgsql
 		public DbSet<PartyEntity> Parties { get; set; }
 		public DbSet<PartyUpdateEntity> PartyUpdates { get; set; }
 		public DbSet<ChatEntity> Chat { get; set; }
-		public DbSet<KickRequestEntity> KickRequests { get; set; }
 
 		// game data (?)
 		//public DbSet<QuestEntity> Quests { get; set; }
