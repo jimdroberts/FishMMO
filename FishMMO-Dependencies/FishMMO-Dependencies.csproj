@@ -62,7 +62,7 @@
 		</PropertyGroup>
 		
 		<ItemGroup>
-			<SourceDir Include="bin\$(BuildConfiguration)\**\*.dll" Exclude="bin\$(BuildConfiguration)\**\Microsoft.CSharp.dll;bin\$(BuildConfiguration)\**\System.Linq.dll;bin\$(BuildConfiguration)\**\System.Text.RegularExpressions.dll" />
+			<SourceDir Include="bin\$(BuildConfiguration)\**\*.dll" Exclude="bin\$(BuildConfiguration)\**\Microsoft.CSharp.dll;bin\$(BuildConfiguration)\**\System.Linq.dll;bin\$(BuildConfiguration)\**\System.Text.RegularExpressions.dll;bin\$(BuildConfiguration)\**\System.Security.Cryptography.Primitives.dll" />
 		</ItemGroup>
 		<Copy SourceFiles="@(SourceDir)" DestinationFolder="$(TargetDir)" />
 	</Target>

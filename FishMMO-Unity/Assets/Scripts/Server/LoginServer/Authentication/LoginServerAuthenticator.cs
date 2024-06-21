@@ -4,6 +4,8 @@ using FishNet.Managing;
 using FishNet.Transporting;
 using FishMMO.Database.Npgsql;
 using System;
+using System.Security.Cryptography;
+using System.Text;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
 
@@ -27,9 +29,53 @@ namespace FishMMO.Server
 			networkManager.ServerManager.OnRemoteConnectionState += ServerManager_OnRemoteConnectionState;
 
 			// Listen for broadcast from clients.
+			networkManager.ServerManager.RegisterBroadcast<ClientHandshake>(OnServerClientHandshakeReceived, false);
 			networkManager.ServerManager.RegisterBroadcast<SrpVerifyBroadcast>(OnServerSrpVerifyBroadcastReceived, false);
 			networkManager.ServerManager.RegisterBroadcast<SrpProofBroadcast>(OnServerSrpProofBroadcastReceived, false);
 			networkManager.ServerManager.RegisterBroadcast<SrpSuccess>(OnServerSrpSuccessBroadcastReceived, false);
+		}
+
+		internal void OnServerClientHandshakeReceived(NetworkConnection conn, ClientHandshake msg, Channel channel)
+		{
+			/* If client is already authenticated this could be an attack. Connections
+			 * are removed when a client disconnects so there is no reason they should
+			 * already be considered authenticated. */
+			if (conn.IsAuthenticated ||
+				msg.publicKey == null)
+			{
+				conn.Disconnect(true);
+				return;
+			}
+
+			// Generate encryption keys for the connection
+			AccountManager.AddConnectionEncryptionData(conn, msg.publicKey);
+
+			// Get the encryption data
+			if (AccountManager.GetConnectionEncryptionData(conn, out ConnectionEncryptionData encryptionData))
+			{
+				using (var rsa = RSA.Create(2048))
+				{
+					// Add public key to RSA
+					CryptoHelper.ImportPublicKey(rsa, msg.publicKey);
+
+					// Encrypt symmetric key and iv with client's public key
+					byte[] encryptedSymmetricKey = rsa.Encrypt(encryptionData.SymmetricKey, RSAEncryptionPadding.Pkcs1);
+					byte[] encryptedIV = rsa.Encrypt(encryptionData.IV, RSAEncryptionPadding.Pkcs1);
+
+					// Send the encrypted symmetric key
+					ServerHandshake handshake = new ServerHandshake()
+					{
+						key = encryptedSymmetricKey,
+						iv = encryptedIV,
+					};
+					Server.Broadcast(conn, handshake, false, Channel.Reliable);
+				}
+			}
+			else
+			{
+				// Something weird happened... Adding a connection IV should not be an issue.
+				conn.Disconnect(true);
+			}
 		}
 
 		/// <summary>
@@ -47,6 +93,16 @@ namespace FishMMO.Server
 			}
 			ClientAuthenticationResult result;
 
+			if (!AccountManager.GetConnectionEncryptionData(conn, out ConnectionEncryptionData encryptionData))
+			{
+				conn.Disconnect(true);
+				return;
+			}
+
+			// Decrypt username
+			byte[] decryptedRawUsername = CryptoHelper.DecryptAES(encryptionData.SymmetricKey, encryptionData.IV, msg.s);
+			string username = Encoding.UTF8.GetString(decryptedRawUsername);
+
 			// if the database is unavailable
 			if (NpgsqlDbContextFactory == null)
 			{
@@ -57,20 +113,20 @@ namespace FishMMO.Server
 				using var dbContext = NpgsqlDbContextFactory.CreateDbContext();
 
 				// check if any characters are online already
-				if (CharacterService.TryGetOnline(dbContext, msg.s))
+				if (CharacterService.TryGetOnline(dbContext, username))
 				{
-					KickRequestService.Save(dbContext, msg.s);
+					KickRequestService.Save(dbContext, username);
 					result = ClientAuthenticationResult.AlreadyOnline;
 				}
 				else
 				{
 					// get account salt and verifier if no one is online
-					result = AccountService.Get(dbContext, msg.s, out string salt, out string verifier, out AccessLevel accessLevel);
+					result = AccountService.Get(dbContext, username, out string salt, out string verifier, out AccessLevel accessLevel);
 					if (result != ClientAuthenticationResult.Banned &&
 						result == ClientAuthenticationResult.SrpVerify)
 					{
 						// prepare account
-						AccountManager.AddConnectionAccount(conn, msg.s, msg.publicEphemeral, salt, verifier, accessLevel);
+						AccountManager.AddConnectionAccount(conn, username, msg.publicEphemeral, salt, verifier, accessLevel);
 
 						// verify SrpState equals SrpVerify and then send account public data
 						if (AccountManager.TryUpdateSrpState(conn, SrpState.SrpVerify, SrpState.SrpVerify, (a) =>
@@ -79,7 +135,7 @@ namespace FishMMO.Server
 
 								SrpVerifyBroadcast srpVerify = new SrpVerifyBroadcast()
 								{
-									s = a.SrpData.Salt,
+									s = Convert.FromBase64String(a.SrpData.Salt),
 									publicEphemeral = a.SrpData.ServerEphemeral.Public,
 								};
 								Server.Broadcast(conn, srpVerify, false, Channel.Reliable);

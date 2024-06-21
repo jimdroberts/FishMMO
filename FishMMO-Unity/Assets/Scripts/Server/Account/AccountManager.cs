@@ -12,9 +12,24 @@ namespace FishMMO.Server
 	/// </summary>
 	public static class AccountManager
 	{
+		public readonly static Dictionary<NetworkConnection, ConnectionEncryptionData> ConnectionEncryptionDatas = new Dictionary<NetworkConnection, ConnectionEncryptionData>();
 		public readonly static Dictionary<NetworkConnection, string> ConnectionAccounts = new Dictionary<NetworkConnection, string>();
 		public readonly static Dictionary<string, NetworkConnection> AccountConnections = new Dictionary<string, NetworkConnection>();
 		public readonly static Dictionary<NetworkConnection, AccountData> ConnectionAccountData = new Dictionary<NetworkConnection, AccountData>();
+
+		public static void AddConnectionEncryptionData(NetworkConnection connection, byte[] publicKey)
+		{
+			ConnectionEncryptionDatas.Remove(connection);
+
+			ConnectionEncryptionDatas.Add(connection, new ConnectionEncryptionData(publicKey,
+																					CryptoHelper.GenerateKey(32),
+																					CryptoHelper.GenerateKey(16)));
+		}
+
+		public static bool GetConnectionEncryptionData(NetworkConnection connection, out ConnectionEncryptionData encryptionData)
+		{
+			return ConnectionEncryptionDatas.TryGetValue(connection, out encryptionData);
+		}
 
 		public static void AddConnectionAccount(NetworkConnection connection, string accountName, string publicClientEphemeral, string salt, string verifier, AccessLevel accessLevel)
 		{
@@ -41,6 +56,7 @@ namespace FishMMO.Server
 		{
 			if (ConnectionAccounts.TryGetValue(connection, out string accountName))
 			{
+				ConnectionEncryptionDatas.Remove(connection);
 				ConnectionAccountData.Remove(connection);
 				ConnectionAccounts.Remove(connection);
 				AccountConnections.Remove(accountName);
@@ -51,6 +67,7 @@ namespace FishMMO.Server
 		{
 			if (AccountConnections.TryGetValue(accountName, out NetworkConnection connection))
 			{
+				ConnectionEncryptionDatas.Remove(connection);
 				ConnectionAccountData.Remove(connection);
 				ConnectionAccounts.Remove(connection);
 				AccountConnections.Remove(accountName);

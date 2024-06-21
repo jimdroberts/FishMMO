@@ -4,14 +4,25 @@ namespace FishMMO.Shared
 {
 	public struct CreateAccountBroadcast : IBroadcast
 	{
-		public string username;
-		public string salt;
-		public string verifier;
+		public byte[] username;
+		public byte[] salt;
+		public byte[] verifier;
+	}
+
+	public struct ClientHandshake : IBroadcast
+	{
+		public byte[] publicKey;
+	}
+
+	public struct ServerHandshake : IBroadcast
+	{
+		public byte[] key;
+		public byte[] iv;
 	}
 
 	public struct SrpVerifyBroadcast : IBroadcast
 	{
-		public string s;
+		public byte[] s;
 		public string publicEphemeral;
 	}
 

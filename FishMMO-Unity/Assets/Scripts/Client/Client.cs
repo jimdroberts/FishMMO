@@ -144,6 +144,7 @@ namespace FishMMO.Client
 			if (!Configuration.Load(Configuration.DEFAULT_FILENAME + Configuration.EXTENSION))
 			{
 				// if we failed to load the file.. save a new one
+				Configuration.Set("Version", Constants.Configuration.Version);
 				Configuration.Set("Resolution Width", 1280);
 				Configuration.Set("Resolution Height", 800);
 				Configuration.Set("Refresh Rate", (uint)60);
