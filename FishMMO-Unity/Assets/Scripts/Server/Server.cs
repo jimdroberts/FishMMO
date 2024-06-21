@@ -2,6 +2,9 @@
 using FishNet.Broadcast;
 using FishNet.Managing;
 using FishNet.Transporting;
+using FishNet.Transporting.Multipass;
+using FishNet.Transporting.Tugboat;
+using FishNet.Transporting.FishyWebRTC;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using System;
@@ -38,6 +41,7 @@ namespace FishMMO.Server
 		public string RemoteAddress { get; private set; }
 		public string Address { get; private set; }
 		public ushort Port { get; private set; }
+		public ushort FishyWebRTCPort { get; private set; }
 
 		public Action OnLoginServerInitialized;
 		public Action OnWorldServerInitialized;
@@ -98,6 +102,7 @@ namespace FishMMO.Server
 				Configuration.Set("Address", "127.0.0.1");
 				Configuration.Set("Port", serverType == ServerType.Login ? "7770" : serverType == ServerType.World ? "7780" : "7781");
 				Configuration.Set("StaleSceneTimeout", 5);
+				Configuration.Set("FishyWebRTCPort", 7771);
 #if !UNITY_EDITOR
 				Configuration.Save();
 #endif
@@ -294,14 +299,10 @@ namespace FishMMO.Server
 		private bool LoadTransportServerDetails()
 		{
 			Transport transport = NetworkManager.TransportManager.Transport;
-			if (transport != null &&
-				Configuration.TryGetString("Address", out string address) &&
-				Configuration.TryGetUShort("Port", out ushort port) &&
+			if (Configuration.TryGetString("Address", out string Address) &&
+				Configuration.TryGetUShort("Port", out ushort Port) &&
 				Configuration.TryGetInt("MaximumClients", out int maximumClients))
 			{
-				Address = address;
-				Port = port;
-
 				transport.SetServerBindAddress(Address, IPAddressType.IPv4);
 				transport.SetPort(Port);
 				transport.SetMaximumClients(maximumClients);

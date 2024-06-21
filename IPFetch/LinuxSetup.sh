@@ -3,6 +3,8 @@
 # Display a message
 echo "Installing required Python packages..."
 
+python -m pip install --upgrade pip
+
 # Install the psycopg2 package
 pip install psycopg2
 

@@ -378,7 +378,6 @@ MonoBehaviour:
   _teleportThreshold: 1
   <PrefabId>k__BackingField: 0
   <SpawnableCollectionId>k__BackingField: 0
-  _scenePathHash: 1844441730
   <SceneId>k__BackingField: 7921816910454355023
   <AssetPathHash>k__BackingField: 0
 --- !u!1 &412017732
@@ -774,7 +773,6 @@ MonoBehaviour:
   _teleportThreshold: 1
   <PrefabId>k__BackingField: 0
   <SpawnableCollectionId>k__BackingField: 0
-  _scenePathHash: 1844441730
   <SceneId>k__BackingField: 7921816913954269079
   <AssetPathHash>k__BackingField: 0
 --- !u!1 &560362197
@@ -1955,7 +1953,6 @@ MonoBehaviour:
   _teleportThreshold: 1
   <PrefabId>k__BackingField: 0
   <SpawnableCollectionId>k__BackingField: 0
-  _scenePathHash: 1844441730
   <SceneId>k__BackingField: 7921816913385748020
   <AssetPathHash>k__BackingField: 0
 --- !u!1 &1162279319
@@ -2950,7 +2947,6 @@ MonoBehaviour:
   _teleportThreshold: 1
   <PrefabId>k__BackingField: 0
   <SpawnableCollectionId>k__BackingField: 0
-  _scenePathHash: 1844441730
   <SceneId>k__BackingField: 7921816910622845748
   <AssetPathHash>k__BackingField: 0
 --- !u!1 &1699450705
@@ -3398,7 +3394,7 @@ MonoBehaviour:
   <PredictedSpawn>k__BackingField: {fileID: 0}
   _networkBehaviours:
   - {fileID: 1959955017}
-  - {fileID: 0}
+  - {fileID: 1959955020}
   <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 0}
   <NestedRootNetworkBehaviours>k__BackingField: []
   SerializedTransformProperties:
@@ -3426,7 +3422,6 @@ MonoBehaviour:
   _teleportThreshold: 1
   <PrefabId>k__BackingField: 0
   <SpawnableCollectionId>k__BackingField: 0
-  _scenePathHash: 1844441730
   <SceneId>k__BackingField: 7921816912420623170
   <AssetPathHash>k__BackingField: 0
 --- !u!114 &1959955020

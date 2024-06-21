@@ -217,7 +217,6 @@ MonoBehaviour:
   _teleportThreshold: 1
   <PrefabId>k__BackingField: 0
   <SpawnableCollectionId>k__BackingField: 0
-  _scenePathHash: 1043126451
   <SceneId>k__BackingField: 4480193994856052063
   <AssetPathHash>k__BackingField: 0
 --- !u!4 &70787374
@@ -1035,7 +1034,6 @@ MonoBehaviour:
   _teleportThreshold: 1
   <PrefabId>k__BackingField: 0
   <SpawnableCollectionId>k__BackingField: 0
-  _scenePathHash: 1043126451
   <SceneId>k__BackingField: 4480193996185786833
   <AssetPathHash>k__BackingField: 0
 --- !u!114 &788347307
@@ -2440,9 +2438,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fe34c93dfda96db42958b4be1b6dc39c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 255
+  _componentIndexCache: 0
   _addedNetworkObject: {fileID: 1729415598}
-  _networkObjectCache: {fileID: 0}
+  _networkObjectCache: {fileID: 1729415598}
   InteractionRange: 3.5
   GizmoColor: {r: 0, g: 1, b: 0, a: 1}
 --- !u!114 &1729415598
@@ -2460,7 +2458,8 @@ MonoBehaviour:
   <IsNested>k__BackingField: 0
   <ComponentIndex>k__BackingField: 0
   <PredictedSpawn>k__BackingField: {fileID: 0}
-  _networkBehaviours: []
+  _networkBehaviours:
+  - {fileID: 1729415597}
   <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 0}
   <NestedRootNetworkBehaviours>k__BackingField: []
   SerializedTransformProperties:
@@ -2488,7 +2487,6 @@ MonoBehaviour:
   _teleportThreshold: 1
   <PrefabId>k__BackingField: 0
   <SpawnableCollectionId>k__BackingField: 0
-  _scenePathHash: 1043126451
   <SceneId>k__BackingField: 4480193995316419033
   <AssetPathHash>k__BackingField: 0
 --- !u!65 &1729415599

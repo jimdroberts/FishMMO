@@ -249,52 +249,34 @@ MonoBehaviour:
   <IsNested>k__BackingField: 0
   <ComponentIndex>k__BackingField: 0
   <PredictedSpawn>k__BackingField: {fileID: 0}
-  _networkBehaviours:
-  - {fileID: 1390855179741347137}
-  - {fileID: 8778311563223898511}
-  - {fileID: 1643789448904715060}
-  - {fileID: 5516734705847723694}
-  - {fileID: 6508789489405674567}
-  - {fileID: 1966501389576177422}
-  - {fileID: 218304821033608884}
-  - {fileID: 4374908933606738023}
-  - {fileID: 5933418412604522111}
-  - {fileID: 1974367592072420653}
-  - {fileID: 7975244870159263472}
-  - {fileID: 3124264775330692708}
-  - {fileID: 4966316198463876083}
-  - {fileID: 6038023079570568745}
-  - {fileID: 6690946415020651589}
-  - {fileID: 7810264000710710752}
-  - {fileID: 34196052825852577}
+  _networkBehaviours: []
   <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 0}
   <NestedRootNetworkBehaviours>k__BackingField: []
   SerializedTransformProperties:
     Position: {x: 0, y: 0, z: 0}
-    Rotation: {x: 0, y: 0, z: 0, w: 1}
-    LocalScale: {x: 1, y: 1, z: 1}
+    Rotation: {x: 0, y: 0, z: 0, w: 0}
+    LocalScale: {x: 0, y: 0, z: 0}
   _isNetworked: 1
   _isSpawnable: 1
   _isGlobal: 0
   _initializeOrder: 0
-  _defaultDespawnType: 1
+  _defaultDespawnType: 0
   NetworkObserver: {fileID: 0}
-  _enablePrediction: 1
+  _enablePrediction: 0
   _predictionType: 0
-  _graphicalObject: {fileID: 3575547950957483929}
+  _graphicalObject: {fileID: 0}
   _detachGraphicalObject: 0
   _enableStateForwarding: 1
   _networkTransform: {fileID: 0}
-  _ownerInterpolation: 2
+  _ownerInterpolation: 1
   _ownerSmoothedProperties: 255
   _adaptiveInterpolation: 3
   _spectatorSmoothedProperties: 255
   _spectatorInterpolation: 2
   _enableTeleport: 0
   _teleportThreshold: 1
-  <PrefabId>k__BackingField: 10
+  <PrefabId>k__BackingField: 0
   <SpawnableCollectionId>k__BackingField: 0
-  _scenePathHash: 0
   <SceneId>k__BackingField: 0
   <AssetPathHash>k__BackingField: 17352979735900003762
 --- !u!114 &961999050755331747

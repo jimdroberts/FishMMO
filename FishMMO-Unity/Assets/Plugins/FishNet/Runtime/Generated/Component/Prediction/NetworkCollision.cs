@@ -1,8 +1,8 @@
-/*using UnityEngine;
+using UnityEngine;
 
 namespace FishNet.Component.Prediction
 {
-    public sealed class NetworkCollision : NetworkCollider
+    /*public sealed class NetworkCollision : NetworkCollider
     {
 #if !PREDICTION_1
         protected override void Awake()
@@ -12,6 +12,6 @@ namespace FishNet.Component.Prediction
         }
 #endif
 
-    }
+    }*/
 
-}*/
+}

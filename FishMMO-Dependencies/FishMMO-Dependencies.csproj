@@ -9,6 +9,7 @@
 
 	<ItemGroup>
 		<PackageReference Include="EFCore.NamingConventions" Version="5.0.2" />
+		<PackageReference Include="HtmlAgilityPack" Version="1.11.61" />
 		<PackageReference Include="Humanizer" Version="2.14.1" />
 		<PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="7.0.0" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore" Version="5.0.17" />

@@ -756,7 +756,7 @@ namespace FishMMO.Client
 		#endregion
 
 		#region RegionNameDisplay
-		public UIAdvancedLabel RegionNameLabel = null;
+		private UIAdvancedLabel RegionNameLabel = null;
 
 		public void UIAdvancedLabel_OnDestroy()
 		{

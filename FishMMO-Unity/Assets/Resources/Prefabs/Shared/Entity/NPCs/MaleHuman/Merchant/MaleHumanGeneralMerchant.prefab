@@ -202,7 +202,6 @@ MonoBehaviour:
   _teleportThreshold: 1
   <PrefabId>k__BackingField: 10
   <SpawnableCollectionId>k__BackingField: 0
-  _scenePathHash: 2120580463
   <SceneId>k__BackingField: 0
   <AssetPathHash>k__BackingField: 3773011613940906536
 --- !u!114 &4890296002639026647
@@ -220,6 +219,12 @@ MonoBehaviour:
   _componentIndexCache: 2
   _addedNetworkObject: {fileID: 689555114688187283}
   _networkObjectCache: {fileID: 689555114688187283}
+  Previous: 0
+  Current: 0
+  MinStateChangeDuration: 0
+  MaxStateChangeDuration: 0
+  RandomizeState: 0
+  AllowedStates: 
 --- !u!114 &8398088595326618500
 MonoBehaviour:
   m_ObjectHideFlags: 0

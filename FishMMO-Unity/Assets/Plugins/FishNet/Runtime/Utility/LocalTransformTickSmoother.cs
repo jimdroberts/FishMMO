@@ -62,7 +62,7 @@ namespace FishNet.Object.Prediction
             if (!CanSmooth())
                 return;
 
-            MoveToTarget();
+                MoveToTarget();
         }
 
 

@@ -8,7 +8,10 @@ namespace FishMMO.Shared
 	{
 		public static class Configuration
 		{
+			public static readonly string Version = "1.0";
 			public static readonly string ProjectName = "FishMMO";
+			public static readonly string ClientExecutable = ProjectName + ".exe";
+			public static readonly string UpdaterExecutable = "Updater.exe";
 			public static readonly string SetupDirectory = "FishMMO-Setup";
 
 			public static readonly string DatabaseDirectory = "FishMMO-Database";
@@ -18,6 +21,7 @@ namespace FishMMO.Shared
 			public static readonly string StartupProject = "." + Path.DirectorySeparatorChar + "FishMMO-Database" + Path.DirectorySeparatorChar + "FishMMO-DB-Migrator" + Path.DirectorySeparatorChar + "FishMMO-DB-Migrator.csproj";
 
 			public static readonly string InstallerPath = "Assets" + Path.DirectorySeparatorChar + "Scenes" + Path.DirectorySeparatorChar + "Installer.unity";
+			public static readonly string ScenePath = "Assets/Scenes/";
 			public static readonly string BootstrapScenePath = "Assets/Scenes/Bootstraps/";
 			public static readonly string WorldScenePath = "Assets/Scenes/WorldScene";
 		}

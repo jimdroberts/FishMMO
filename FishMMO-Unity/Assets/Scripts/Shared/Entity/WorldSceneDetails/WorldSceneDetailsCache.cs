@@ -31,8 +31,6 @@ namespace FishMMO.Shared
 			Dictionary<string, Dictionary<string, SceneTeleporterDetails>> teleporterCache = new Dictionary<string, Dictionary<string, SceneTeleporterDetails>>();
 			Dictionary<string, TeleporterDestinationDetails> teleporterDestinationCache = new Dictionary<string, TeleporterDestinationDetails>();
 
-			int sceneObjectUID = 0;
-
 			// get our initial scene so we can return to it..
 			Scene initialScene = EditorSceneManager.GetActiveScene();
 			string initialScenePath = initialScene.path;

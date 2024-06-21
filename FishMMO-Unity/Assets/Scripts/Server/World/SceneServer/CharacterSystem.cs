@@ -421,10 +421,13 @@ namespace FishMMO.Server
 						newValue = achievement.CurrentValue,
 					});
 				}
-				Server.Broadcast(character.Owner, new AchievementUpdateMultipleBroadcast()
+				if (achievements.Count > 0)
 				{
-					achievements = achievements,
-				}, true, Channel.Reliable);
+					Server.Broadcast(character.Owner, new AchievementUpdateMultipleBroadcast()
+					{
+						achievements = achievements,
+					}, true, Channel.Reliable);
+				}
 			}
 			#endregion
 
