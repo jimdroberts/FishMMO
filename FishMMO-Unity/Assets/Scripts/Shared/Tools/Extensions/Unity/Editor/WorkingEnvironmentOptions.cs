@@ -12,6 +12,13 @@ namespace FishMMO.Shared
 	[InitializeOnLoad]
 	public class WorkingEnvironmentOptions
 	{
+		[MenuItem("FishMMO/Build/Environment/Enable Local Directory")]
+		static void FishMMOUseLocalObjectsToggle()
+		{
+			EditorPrefs.SetBool("FishMMOEnableLocalDirectory", !EditorPrefs.GetBool("FishMMOEnableLocalDirectory"));
+			Menu.SetChecked("FishMMO/Build/Environment/Enable Local Directory", EditorPrefs.GetBool("FishMMOEnableLocalDirectory"));
+		}
+
 		[MenuItem("FishMMO/Build/Environment/Release")]
 		static void WorkingEnvironmentToggleOption0()
 		{

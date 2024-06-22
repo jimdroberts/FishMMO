@@ -1966,7 +1966,7 @@ GameObject:
   - component: {fileID: 1162279320}
   - component: {fileID: 1162279321}
   m_Layer: 0
-  m_Name: Respawn 1
+  m_Name: Crushbone Entrance Respawn
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2776,7 +2776,7 @@ GameObject:
   - component: {fileID: 1427581219}
   - component: {fileID: 1427581218}
   m_Layer: 0
-  m_Name: Primary Boundary
+  m_Name: Crushbone Boundary
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

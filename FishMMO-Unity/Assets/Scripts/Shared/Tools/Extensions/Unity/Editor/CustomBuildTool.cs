@@ -322,16 +322,17 @@ start Scene.exe SCENE";
 
 		private static string[] AppendWorldScenePaths(string[] requiredPaths)
 		{
-			List<string> allPaths = new List<string>(requiredPaths);
+			HashSet<string> allPaths = new HashSet<string>(requiredPaths);
 
-			// Add all of the WorldScenes
-			foreach (EditorBuildSettingsScene scene in EditorBuildSettings.scenes)
+			HashSet<string> worldScenes = DirectoryExtensions.GetAllFiles(Constants.Configuration.WorldScenePath, ".unity");
+			allPaths.UnionWith(worldScenes);
+
+			if (EditorPrefs.GetBool("FishMMOEnableLocalDirectory"))
 			{
-				if (scene.path.Contains(Constants.Configuration.WorldScenePath))
-				{
-					allPaths.Add(scene.path);
-				}
+				HashSet<string> localScenes = DirectoryExtensions.GetAllFiles(Constants.Configuration.LocalScenePath, ".unity");
+				allPaths.UnionWith(localScenes);
 			}
+
 			return allPaths.ToArray();
 		}
 

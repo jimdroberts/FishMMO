@@ -26,7 +26,7 @@ MonoBehaviour:
         m_values: []
       RespawnPositions:
         m_keys:
-        - Respawn 1
+        - Crushbone Entrance Respawn
         m_values:
         - Position: {x: -131.45001, y: 18.11, z: 23.11}
           Rotation: {x: -0, y: 0.7071068, z: -0, w: 0.7071068}
@@ -39,7 +39,7 @@ MonoBehaviour:
           ToRotation: {x: -0, y: 1, z: -0, w: 0}
       Boundaries:
         m_keys:
-        - Primary Boundary
+        - Crushbone Boundary
         m_values:
         - BoundaryOrigin: {x: 0, y: 75, z: 0}
           BoundarySize: {x: 300, y: 150, z: 200}

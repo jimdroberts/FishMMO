@@ -51,7 +51,7 @@ namespace FishMMO.Shared
 		{
 			using (var rng = new RNGCryptoServiceProvider())
 			{
-				byte[] key = new byte[length]; // 128-bit key
+				byte[] key = new byte[length];
 				rng.GetBytes(key);
 				return key;
 			}

@@ -49,21 +49,18 @@ namespace FishMMO.Shared
 				}
 			}
 
-			foreach (EditorBuildSettingsScene scene in EditorBuildSettings.scenes)
+			HashSet<string> worldScenes = DirectoryExtensions.GetAllFiles(Constants.Configuration.WorldScenePath, ".unity");
+
+			if (EditorPrefs.GetBool("FishMMOEnableLocalDirectory"))
 			{
-				if (!scene.enabled)
-				{
-					continue;
-				}
+				HashSet<string> localScenes = DirectoryExtensions.GetAllFiles(Constants.Configuration.LocalScenePath, ".unity");
+				worldScenes.UnionWith(localScenes);
+			}
 
-				// ensure the scene is a world scene
-				if (!scene.path.Contains(worldScenePath))
-				{
-					continue;
-				}
-
+			foreach (string scenePath in worldScenes)
+			{
 				// load the scene
-				Scene currentScene = EditorSceneManager.OpenScene(scene.path, OpenSceneMode.Additive);
+				Scene currentScene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Additive);
 				if (!Scenes.ContainsKey(currentScene.name) &&
 					currentScene.IsValid())
 				{

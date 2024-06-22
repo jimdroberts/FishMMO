@@ -24,6 +24,7 @@ namespace FishMMO.Shared
 			public static readonly string ScenePath = "Assets/Scenes/";
 			public static readonly string BootstrapScenePath = "Assets/Scenes/Bootstraps/";
 			public static readonly string WorldScenePath = "Assets/Scenes/WorldScene";
+			public static readonly string LocalScenePath = "Assets/LOCAL/Scenes/";
 		}
 
 		public static class Layers
