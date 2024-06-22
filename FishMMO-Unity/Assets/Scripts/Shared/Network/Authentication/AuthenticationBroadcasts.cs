@@ -23,12 +23,12 @@ namespace FishMMO.Shared
 	public struct SrpVerifyBroadcast : IBroadcast
 	{
 		public byte[] s;
-		public string publicEphemeral;
+		public byte[] publicEphemeral;
 	}
 
 	public struct SrpProofBroadcast : IBroadcast
 	{
-		public string proof;
+		public byte[] proof;
 	}
 
 	public struct SrpSuccess : IBroadcast

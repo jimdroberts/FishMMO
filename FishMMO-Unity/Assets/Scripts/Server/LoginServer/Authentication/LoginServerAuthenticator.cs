@@ -120,23 +120,29 @@ namespace FishMMO.Server
 				}
 				else
 				{
+					byte[] decryptedRawPublicEphemeral = CryptoHelper.DecryptAES(encryptionData.SymmetricKey, encryptionData.IV, msg.publicEphemeral);
+					string publicEphemeral = Encoding.UTF8.GetString(decryptedRawPublicEphemeral);
+
 					// get account salt and verifier if no one is online
 					result = AccountService.Get(dbContext, username, out string salt, out string verifier, out AccessLevel accessLevel);
 					if (result != ClientAuthenticationResult.Banned &&
 						result == ClientAuthenticationResult.SrpVerify)
 					{
 						// prepare account
-						AccountManager.AddConnectionAccount(conn, username, msg.publicEphemeral, salt, verifier, accessLevel);
+						AccountManager.AddConnectionAccount(conn, username, publicEphemeral, salt, verifier, accessLevel);
 
 						// verify SrpState equals SrpVerify and then send account public data
 						if (AccountManager.TryUpdateSrpState(conn, SrpState.SrpVerify, SrpState.SrpVerify, (a) =>
 							{
 								//UnityEngine.Debug.Log("SrpVerify");
 
+								byte[] encryptedSalt = CryptoHelper.EncryptAES(encryptionData.SymmetricKey, encryptionData.IV, Encoding.UTF8.GetBytes(a.SrpData.Salt));
+								byte[] encryptedPublicServerEphemeral = CryptoHelper.EncryptAES(encryptionData.SymmetricKey, encryptionData.IV, Encoding.UTF8.GetBytes(a.SrpData.ServerEphemeral.Public));
+
 								SrpVerifyBroadcast srpVerify = new SrpVerifyBroadcast()
 								{
-									s = Convert.FromBase64String(a.SrpData.Salt),
-									publicEphemeral = a.SrpData.ServerEphemeral.Public,
+									s = encryptedSalt,
+									publicEphemeral = encryptedPublicServerEphemeral,
 								};
 								Server.Broadcast(conn, srpVerify, false, Channel.Reliable);
 								return true;
@@ -159,21 +165,31 @@ namespace FishMMO.Server
 		/// </summary>
 		internal void OnServerSrpProofBroadcastReceived(NetworkConnection conn, SrpProofBroadcast msg, Channel channel)
 		{
+			if (!AccountManager.GetConnectionEncryptionData(conn, out ConnectionEncryptionData encryptionData))
+			{
+				conn.Disconnect(true);
+				return;
+			}
+
 			/* If client is already authenticated this could be an attack. Connections
 			 * are removed when a client disconnects so there is no reason they should
 			 * already be considered authenticated. */
 			if (conn.IsAuthenticated ||
 				!AccountManager.TryUpdateSrpState(conn, SrpState.SrpVerify, SrpState.SrpProof, (a) =>
 				{
-					if (a.SrpData.GetProof(msg.proof, out string serverProof))
+					byte[] decryptedProof = CryptoHelper.DecryptAES(encryptionData.SymmetricKey, encryptionData.IV, msg.proof);
+					string proof = Encoding.UTF8.GetString(decryptedProof);
+
+					if (a.SrpData.GetProof(proof, out string serverProof))
 					{
 						//UnityEngine.Debug.Log("SrpProof");
+						byte[] encryptedProof = CryptoHelper.EncryptAES(encryptionData.SymmetricKey, encryptionData.IV, Encoding.UTF8.GetBytes(serverProof));
 
-						SrpProofBroadcast msg2 = new SrpProofBroadcast()
+						SrpProofBroadcast proofMsg = new SrpProofBroadcast()
 						{
-							proof = serverProof,
+							proof = encryptedProof,
 						};
-						Server.Broadcast(conn, msg2, false, Channel.Reliable);
+						Server.Broadcast(conn, proofMsg, false, Channel.Reliable);
 						return true;
 					}
 					return false;

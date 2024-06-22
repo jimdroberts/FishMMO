@@ -140,10 +140,12 @@ namespace FishMMO.Client
 			// Try to login
 			else
 			{
+				byte[] encryptedClientEphemeral = CryptoHelper.EncryptAES(symmetricKey, iv, Encoding.UTF8.GetBytes(SrpData.ClientEphemeral.Public));
+
 				Client.Broadcast(new SrpVerifyBroadcast()
 				{
 					s = encryptedUsername,
-					publicEphemeral = SrpData.ClientEphemeral.Public,
+					publicEphemeral = encryptedClientEphemeral,
 				}, Channel.Reliable);
 			}
 		}
@@ -155,13 +157,19 @@ namespace FishMMO.Client
 				return;
 			}
 
-			string salt = Convert.ToBase64String(msg.s);
+			byte[] decryptedSalt = CryptoHelper.DecryptAES(symmetricKey, iv, msg.s);
+			byte[] decryptedRawPublicEphemeral = CryptoHelper.DecryptAES(symmetricKey, iv, msg.publicEphemeral);
 
-			if (SrpData.GetProof(this.username, this.password, salt, msg.publicEphemeral, out string proof))
+			string salt = Encoding.UTF8.GetString(decryptedSalt);
+			string publicServerEphemeral = Encoding.UTF8.GetString(decryptedRawPublicEphemeral);
+
+			if (SrpData.GetProof(this.username, this.password, salt, publicServerEphemeral, out string proof))
 			{
+				byte[] encryptedProof = CryptoHelper.EncryptAES(symmetricKey, iv, Encoding.UTF8.GetBytes(proof));
+
 				Client.Broadcast(new SrpProofBroadcast()
 				{
-					proof = proof,
+					proof = encryptedProof,
 				}, Channel.Reliable);
 			}
 			else
@@ -178,7 +186,11 @@ namespace FishMMO.Client
 				return;
 			}
 
-			if (SrpData.Verify(msg.proof, out string result))
+			byte[] decryptedProof = CryptoHelper.DecryptAES(symmetricKey, iv, msg.proof);
+
+			string proof = Encoding.UTF8.GetString(decryptedProof);
+
+			if (SrpData.Verify(proof, out string result))
 			{
 				Client.Broadcast(new SrpSuccess(), Channel.Reliable);
 			}
