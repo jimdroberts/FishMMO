@@ -4,7 +4,7 @@ using FishNet.Managing;
 using FishNet.Managing.Transporting;
 using FishNet.Transporting.Multipass;
 using FishNet.Transporting.Tugboat;
-using FishNet.Transporting.FishyWebRTC;
+using FishNet.Transporting.Bayou;
 using FishNet.Managing.Scened;
 using FishMMO.Shared;
 using System.Collections;
@@ -121,7 +121,7 @@ namespace FishMMO.Client
 				return;
 			}
 #if UNITY_WEBGL && !UNITY_EDITOR
-			multipass.SetClientTransport<FishyWebRTC>();
+			multipass.SetClientTransport<Bayou>();
 #else
 			multipass.SetClientTransport<Tugboat>();
 #endif

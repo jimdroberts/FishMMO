@@ -1,0 +1,14 @@
+{
+    "name": "com.james-frowen.simplewebtransport",
+    "displayName": "Simple Web Transport",
+    "version": "1.2.4",
+    "unity": "2019.4",
+    "description": "Low level transport for Unity using the websocket Protocol. Includes a Websocket server, standalone client, and a WebGL client so that both your Server and Client can be build with Unity.",
+    "author": "James Frowen",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/James-Frowen/SimpleWebTransport"
+    },
+    "dependencies": {},
+    "samples": []
+}
