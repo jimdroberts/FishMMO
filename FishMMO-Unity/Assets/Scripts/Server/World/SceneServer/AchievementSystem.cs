@@ -1,16 +1,6 @@
-﻿using FishNet.Broadcast;
-using FishNet.Connection;
-using FishNet.Object;
-using SceneManager = FishNet.Managing.Scened.SceneManager;
-using FishNet.Transporting;
-using System;
+﻿using FishNet.Transporting;
 using System.Collections.Generic;
-using System.Linq;
-using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
-using FishMMO.Database.Npgsql.Entities;
-using UnityEngine;
-using UnityEngine.SceneManagement;
 
 namespace FishMMO.Server
 {

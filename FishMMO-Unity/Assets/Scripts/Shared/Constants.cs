@@ -51,6 +51,12 @@ namespace FishMMO.Shared
 
 			public const int MaxGuildNameLength = 64;
 
+			public static bool IsAllowedEmailUsername(string email)
+			{
+				return !string.IsNullOrWhiteSpace(email) &&
+					   Regex.IsMatch(email, @"^(?=.{3,320}$)[a-zA-Z0-9](?:[a-zA-Z0-9._-]*[a-zA-Z0-9])?@[a-zA-Z0-9][a-zA-Z0-9._-]*[a-zA-Z0-9]$");
+			}
+
 			public static bool IsAllowedUsername(string accountName)
 			{
 				return !string.IsNullOrWhiteSpace(accountName) &&

@@ -17,9 +17,8 @@ namespace FishMMO.Client
 		//fade
 		public bool FadeColor;
 		public float RemainingLife = 0.0f;
-		public float FadeTime = 2.0f;
-		public Color OldColor = Color.clear;
-		public Color ClearColor = Color.clear;
+		public float FadeTime = 4.0f;
+		public Color TargetColor = Color.clear;
 
 		//increase Y
 		public bool IncreaseY;
@@ -46,11 +45,25 @@ namespace FishMMO.Client
 			}
 			if (RemainingLife > 0.0f)
 			{
-				float t = Mathf.Clamp(1.0f - (RemainingLife / FadeTime), 0.0f, 1.0f);
+				float t = Mathf.Clamp01(1.0f - (RemainingLife / FadeTime));
+
 				if (FadeColor)
 				{
 					Color c = Style.normal.textColor;
-					c.a = Mathf.Lerp(OldColor.a, ClearColor.a, t);
+
+					float alpha;
+					if (t < 0.5f)
+					{
+						// Fade from Transparent to TargetColor
+						alpha = Mathf.Lerp(Color.clear.a, TargetColor.a, t * 2);
+					}
+					else
+					{
+						// Fade from TargetColor back to Transparent
+						alpha = Mathf.Lerp(TargetColor.a, Color.clear.a, (t - 0.5f) * 2);
+					}
+
+					c.a = alpha;
 					Style.normal.textColor = c;
 				}
 				
@@ -60,14 +73,15 @@ namespace FishMMO.Client
 				}
 
 				RemainingLife -= Time.deltaTime;
-				return;
 			}
+			else
+			{
+				OnDestroyCallback?.Invoke();
+				OnDestroyCallback = null;
 
-			OnDestroyCallback?.Invoke();
-			OnDestroyCallback = null;
-
-			this.gameObject.SetActive(false);
-			Destroy(this.gameObject);
+				this.gameObject.SetActive(false);
+				Destroy(this.gameObject);
+			}
 		}
 
 		void OnGUI()
@@ -111,7 +125,7 @@ namespace FishMMO.Client
 				{
 					FadeColor = fadeColor;
 					FadeTime = lifeTime;
-					OldColor = Style.normal.textColor;
+					TargetColor = Style.normal.textColor;
 				}
 				if (increaseY)
 				{
