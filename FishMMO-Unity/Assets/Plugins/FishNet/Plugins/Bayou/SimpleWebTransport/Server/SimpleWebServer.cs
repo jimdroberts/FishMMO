@@ -52,7 +52,7 @@ namespace JamesFrowen.SimpleWeb
             }
         }
 
-        public void SendAll(List<int> connectionIds, ArraySegment<byte> source)
+        public void SendAll(HashSet<int> connectionIds, ArraySegment<byte> source)
         {
             ArrayBuffer buffer = bufferPool.Take(source.Count);
             buffer.CopyFrom(source);
@@ -60,9 +60,7 @@ namespace JamesFrowen.SimpleWeb
 
             // make copy of array before for each, data sent to each client is the same
             foreach (int id in connectionIds)
-            {
                 server.Send(id, buffer);
-            }
         }
         public void SendOne(int connectionId, ArraySegment<byte> source)
         {
@@ -82,25 +80,15 @@ namespace JamesFrowen.SimpleWeb
             return server.GetClientAddress(connectionId);
         }
 
+
         /// <summary>
-        /// Processes all new messages
+        /// Processes all messages.
         /// </summary>
         public void ProcessMessageQueue()
         {
-            ProcessMessageQueue(null);
-        }
-
-        /// <summary>
-        /// Processes all messages while <paramref name="behaviour"/> is enabled
-        /// </summary>
-        /// <param name="behaviour"></param>
-        public void ProcessMessageQueue(MonoBehaviour behaviour)
-        {
             int processedCount = 0;
-            bool skipEnabled = behaviour == null;
             // check enabled every time incase behaviour was disabled after data
-            while (
-                (skipEnabled || behaviour.enabled) &&
+            while (                
                 processedCount < maxMessagesPerTick &&
                 // Dequeue last
                 server.receiveQueue.TryDequeue(out Message next)

@@ -48,15 +48,11 @@ namespace FishNet.Transporting.Bayou.Server
         /// Ids to disconnect immediately.
         /// </summary>
         private List<int> _disconnectingNow = new List<int>();
-        /// <summary>
-        /// ConnectionEvents which need to be handled.
-        /// </summary>
-        private Queue<RemoteConnectionEvent> _remoteConnectionEvents = new Queue<RemoteConnectionEvent>();
         #endregion
         /// <summary>
         /// Currently connected clients.
         /// </summary>
-        private List<int> _clients = new List<int>();
+        private HashSet<int> _clients = new HashSet<int>();
         /// <summary>
         /// Server socket manager.
         /// </summary>
@@ -140,9 +136,14 @@ namespace FishNet.Transporting.Bayou.Server
                 return;
 
             if (_clients.Count >= _maximumClients)
+            {
                 _server.KickClient(clientId);
-            else
-                _remoteConnectionEvents.Enqueue(new RemoteConnectionEvent(true, clientId));
+                return;
+            }
+
+            _clients.Add(clientId);
+            RemoteConnectionState state = RemoteConnectionState.Started;
+            base.Transport.HandleRemoteConnectionState(new RemoteConnectionStateArgs(state, clientId, base.Transport.Index));
         }
 
         /// <summary>
@@ -234,7 +235,6 @@ namespace FishNet.Transporting.Bayou.Server
             base.ClearPacketQueue(ref _outgoing);
             _disconnectingNext.Clear();
             _disconnectingNow.Clear();
-            _remoteConnectionEvents.Clear();
         }
 
         /// <summary>
@@ -320,17 +320,8 @@ namespace FishNet.Transporting.Bayou.Server
             if (_server == null)
                 return;
 
-            //Handle connection and disconnection events.
-            while (_remoteConnectionEvents.Count > 0)
-            {
-                RemoteConnectionEvent connectionEvent = _remoteConnectionEvents.Dequeue();
-                if (connectionEvent.Connected)
-                    _clients.Add(connectionEvent.ConnectionId);
-                RemoteConnectionState state = (connectionEvent.Connected) ? RemoteConnectionState.Started : RemoteConnectionState.Stopped;
-                base.Transport.HandleRemoteConnectionState(new RemoteConnectionStateArgs(state, connectionEvent.ConnectionId, base.Transport.Index));
-            }
-
-            //Read data from clients.
+            /* Read socket messages. Can contain
+            * connect, data, disconnect, error messages. */
             _server.ProcessMessageQueue();
         }
 

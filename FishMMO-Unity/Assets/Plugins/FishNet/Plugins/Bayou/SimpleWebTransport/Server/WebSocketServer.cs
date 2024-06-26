@@ -1,3 +1,5 @@
+using FishNet.Connection;
+using FishNet.Managing;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -31,7 +33,7 @@ namespace JamesFrowen.SimpleWeb
             if (_idCache.Count == 0)
                 GrowIdCache(1000);
 
-            int result;
+            int result = NetworkConnection.UNSET_CLIENTID_VALUE;
             _idCache.TryDequeue(out result);
             return result;
         }
@@ -41,11 +43,11 @@ namespace JamesFrowen.SimpleWeb
         /// </summary>
         private void GrowIdCache(int value)
         {
-            int over = (_nextId + value) - int.MaxValue;
+            int over = (_nextId + value) - NetworkConnection.MAXIMUM_CLIENTID_VALUE;
             //Prevent overflow.
             if (over > 0)
                 value -= over;
-
+            
             for (int i = _nextId; i < value; i++)
                 _idCache.Enqueue(i);
         }
@@ -110,7 +112,7 @@ namespace JamesFrowen.SimpleWeb
                         //      this might not be a problem as HandshakeAndReceiveLoop checks for stop
                         //      and returns/disposes before sending message to queue
                         Connection conn = new Connection(client, AfterConnectionDisposed);
-                        Log.Info($"A client connected {conn}");
+                        //Log.Info($"A client connected {conn}");
 
                         // handshake needs its own thread as it needs to wait for message from client
                         Thread receiveThread = new Thread(() => HandshakeAndReceiveLoop(conn));
@@ -140,7 +142,7 @@ namespace JamesFrowen.SimpleWeb
                 bool success = sslHelper.TryCreateStream(conn);
                 if (!success)
                 {
-                    Log.Error($"Failed to create SSL Stream {conn}");
+                    //Log.Error($"Failed to create SSL Stream {conn}");
                     conn.Dispose();
                     return;
                 }
@@ -149,11 +151,11 @@ namespace JamesFrowen.SimpleWeb
 
                 if (success)
                 {
-                    Log.Info($"Sent Handshake {conn}");
+                    //Log.Info($"Sent Handshake {conn}");
                 }
                 else
                 {
-                    Log.Error($"Handshake Failed {conn}");
+                    //Log.Error($"Handshake Failed {conn}");
                     conn.Dispose();
                     return;
                 }
@@ -166,6 +168,13 @@ namespace JamesFrowen.SimpleWeb
                 }
 
                 conn.connId = GetNextId();
+                if (conn.connId == NetworkConnection.UNSET_CLIENTID_VALUE)
+                {
+                    NetworkManagerExtensions.LogWarning($"At maximum connections. A client attempting to connect to be rejected.");
+                    conn.Dispose();
+                    return;
+                }
+
                 connections.TryAdd(conn.connId, conn);
 
                 receiveQueue.Enqueue(new Message(conn.connId, EventType.Connected));

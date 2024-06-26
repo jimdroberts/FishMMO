@@ -39,7 +39,7 @@ namespace JamesFrowen.SimpleWeb
         {
             (Connection conn, int bufferSize, bool setMask) = config;
 
-            Profiler.BeginThreadProfiling("SimpleWeb", $"SendLoop {conn.connId}");
+            //Profiler.BeginThreadProfiling("SimpleWeb", $"SendLoop {conn.connId}");
 
             // create write buffer for this thread
             byte[] writeBuffer = new byte[bufferSize];
@@ -70,7 +70,11 @@ namespace JamesFrowen.SimpleWeb
                         while (conn.sendQueue.TryDequeue(out ArrayBuffer msg))
                         {
                             // check if connected before sending message
-                            if (!client.Connected) { Log.Info($"SendLoop {conn} not connected"); return; }
+                            if (!client.Connected)
+                            {
+                                //Log.Info($"SendLoop {conn} not connected");
+                                return;
+                            }
 
                             int maxLength = msg.count + Constants.HeaderSize + Constants.MaskSize;
 
@@ -95,7 +99,11 @@ namespace JamesFrowen.SimpleWeb
                         while (conn.sendQueue.TryDequeue(out ArrayBuffer msg))
                         {
                             // check if connected before sending message
-                            if (!client.Connected) { Log.Info($"SendLoop {conn} not connected"); return; }
+                            if (!client.Connected)
+                            {
+                                //Log.Info($"SendLoop {conn} not connected");
+                                return;
+                            }
 
                             int length = SendMessage(writeBuffer, 0, msg, setMask, maskHelper);
                             stream.Write(writeBuffer, 0, length);
@@ -106,8 +114,14 @@ namespace JamesFrowen.SimpleWeb
 
                 Log.Info($"{conn} Not Connected");
             }
-            catch (ThreadInterruptedException e) { Log.InfoException(e); }
-            catch (ThreadAbortException e) { Log.InfoException(e); }
+            catch (ThreadInterruptedException e)
+            {
+                Log.InfoException(e);
+            }
+            catch (ThreadAbortException e)
+            {
+                Log.InfoException(e);
+            }
             catch (Exception e)
             {
                 Log.Exception(e);
@@ -135,7 +149,7 @@ namespace JamesFrowen.SimpleWeb
             offset += msgLength;
 
             // dump before mask on
-            Log.DumpBuffer("Send", buffer, startOffset, offset);
+            //Log.DumpBuffer("Send", buffer, startOffset, offset);
 
             if (setMask)
             {

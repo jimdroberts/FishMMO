@@ -7,10 +7,9 @@ using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using UnityEngine;
-using UnityEngine.UI;
 using Debug = UnityEngine.Debug;
-using TMPro;
 using FishMMO.Database;
+using Npgsql;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -19,10 +18,6 @@ namespace FishMMO.Shared
 {
 	public class FishMMOInstaller : MonoBehaviour
 	{
-		public TMP_Text OutputLog;
-		public TMP_InputField CommandInput;
-		public List<Button> Buttons = new List<Button>();
-
 		private void Awake()
 		{
 #if !UNITY_EDITOR
@@ -30,104 +25,158 @@ namespace FishMMO.Shared
 #endif
 		}
 
-		public void InstallEverything()
+		private async void InstallEverything()
 		{
-			InstallWSL();
-			InstallDotNet();
-			InstallDocker();
-			InstallDatabase();
+			await InstallWSL();
+			await InstallDotNet();
+			await InstallPython();
+			await InstallDatabase();
 		}
 
-		private void Log(string message)
+		private string GetWorkingDirectory()
+		{
+#if UNITY_EDITOR
+			return Directory.GetParent(Directory.GetParent(Application.dataPath).FullName).FullName;
+#else
+			return AppDomain.CurrentDomain.BaseDirectory;
+#endif
+		}
+
+		private async Task RunDismCommandAsync(string arguments)
+		{
+			using (Process process = new Process())
+			{
+				process.StartInfo.FileName = "dism.exe";
+				process.StartInfo.Arguments = arguments;
+				process.StartInfo.UseShellExecute = false;
+				process.StartInfo.CreateNoWindow = true;
+
+				process.Start();
+				await process.WaitForExitAsync(); // Use asynchronous wait
+			}
+		}
+
+		private string PromptForInput(string prompt)
+		{
+			Console.Write(prompt);
+			return Console.ReadLine();
+		}
+
+		private bool PromptForYesNo(string prompt)
+		{
+			while (true)
+			{
+				Console.Write($"{prompt} (Y/N): ");
+				ConsoleKeyInfo key = Console.ReadKey();
+				Console.WriteLine();
+
+				if (key.Key == ConsoleKey.Y)
+				{
+					return true;
+				}
+				else if (key.Key == ConsoleKey.N)
+				{
+					return false;
+				}
+				else
+				{
+					Console.WriteLine("Invalid input. Please enter Y or N.");
+				}
+			}
+		}
+
+		private string PromptForPassword(string prompt)
+		{
+			Console.Write(prompt);
+			string password = "";
+			ConsoleKeyInfo key;
+
+			do
+			{
+				key = Console.ReadKey(true);
+
+				// Ignore any key other than Backspace or Enter
+				if (key.Key != ConsoleKey.Backspace && key.Key != ConsoleKey.Enter)
+				{
+					password += key.KeyChar;
+					Console.Write("*"); // Print * for each character entered
+				}
+				else if (key.Key == ConsoleKey.Backspace && password.Length > 0)
+				{
+					password = password.Substring(0, (password.Length - 1));
+					Console.Write("\b \b"); // Erase the last * from console
+				}
+			}
+			while (key.Key != ConsoleKey.Enter);
+
+			Console.WriteLine(); // Move to next line after password input
+			return password;
+		}
+
+		private void Log(string message, bool logTime = false)
 		{
 			if (string.IsNullOrWhiteSpace(message))
 			{
 				return;
 			}
-			Debug.Log($"{DateTime.Now}: {message}");
-			if (OutputLog != null)
+			if (logTime)
 			{
-				OutputLog.text += message + "\r\n";
-			}
-		}
-
-		private void SetButtonsActive(bool active)
-		{
-			if (Buttons != null)
-			{
-				foreach (Button b in Buttons)
-				{
-					b.enabled = active;
-				}
-			}
-		}
-
-		public async void OnSubmitCommand()
-		{
-			SetButtonsActive(false);
-			if (CommandInput == null)
-			{
-				SetButtonsActive(true);
-				return;
-			}
-			if (string.IsNullOrWhiteSpace(CommandInput.text))
-			{
-				SetButtonsActive(true);
-				return;
-			}
-			if (CommandInput.text.StartsWith("docker"))
-			{
-				string command = CommandInput.text.Substring(6, CommandInput.text.Length - 6).Trim();
-
-				string output = await RunDockerCommandAsync(command);
-				Log(output);
-			}
-			else if (CommandInput.text.StartsWith("dism"))
-			{
-				string command = CommandInput.text.Substring(4, CommandInput.text.Length - 4).Trim();
-
-				await RunDismCommandAsync(command);
-			}
-			else if (CommandInput.text.StartsWith("dotnet"))
-			{
-				string command = CommandInput.text.Substring(6, CommandInput.text.Length - 6).Trim();
-
-				string output = await RunDotNetCommandAsync(command);
-				Log(output);
-			}
-			SetButtonsActive(true);
-		}
-
-		#region WSL
-		public async void InstallWSL()
-		{
-			if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-			{
-				return;
-			}
-
-			SetButtonsActive(false);
-			if (await IsVirtualizationEnabledAsync())
-			{
-				if (!await IsWSLInstalledAsync())
-				{
-					Log("Installing WSL...");
-					await RunDismCommandAsync("/online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart");
-					Log("WSL has been installed.");
-				}
-				else
-				{
-					Log("WSL is already installed.");
-				}
+				Debug.Log($"{DateTime.Now}: {message}");
 			}
 			else
 			{
-				Log("Virtualization is not enabled. Please enable Virtualization in your system BIOS.");
+				Debug.Log(message);
 			}
-			SetButtonsActive(true);
 		}
 
-		public async Task<bool> IsVirtualizationEnabledAsync()
+		private async Task<string> DownloadFileAsync(string url, string fileName = "tempFileName.tmpFile")
+		{
+			try
+			{
+				string tempDir = GetWorkingDirectory();
+				string outputPath = Path.Combine(tempDir, fileName);
+
+				if (File.Exists(outputPath))
+				{
+					Log(outputPath + " already exists... Skipping download.");
+					return outputPath;
+				}
+
+				Log($"Downloading file from {url}");
+				Log("Please wait...");
+				using (HttpClient client = new HttpClient())
+				using (HttpResponseMessage response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead))
+				{
+					response.EnsureSuccessStatusCode();
+
+					if (response.Content.Headers.ContentDisposition != null)
+					{
+						fileName = response.Content.Headers.ContentDisposition.FileNameStar ?? response.Content.Headers.ContentDisposition.FileName;
+					}
+					else
+					{
+						//Log("Failed to get filename from content-disposition header.");
+					}
+
+					using (Stream streamToReadFrom = await response.Content.ReadAsStreamAsync())
+					{
+						using (Stream streamToWriteTo = File.Open(outputPath, FileMode.Create))
+						{
+							await streamToReadFrom.CopyToAsync(streamToWriteTo);
+						}
+					}
+					Log($"File successfully downloaded to {outputPath}");
+					return outputPath;
+				}
+			}
+			catch (Exception ex)
+			{
+				throw new Exception($"Error downloading file: {ex.Message}");
+			}
+		}
+
+		#region WSL
+		private async Task<bool> IsVirtualizationEnabledAsync()
 		{
 			using (Process process = new Process())
 			{
@@ -145,7 +194,7 @@ namespace FishMMO.Shared
 			}
 		}
 
-		public async Task<bool> IsWSLInstalledAsync()
+		private async Task<bool> IsWSLInstalledAsync()
 		{
 			if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
 			{
@@ -168,25 +217,194 @@ namespace FishMMO.Shared
 			}
 		}
 
-		public async Task RunDismCommandAsync(string arguments)
+		private async Task InstallWSL()
 		{
-			using (Process process = new Process())
+			if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
 			{
-				process.StartInfo.FileName = "dism.exe";
-				process.StartInfo.Arguments = arguments;
-				process.StartInfo.UseShellExecute = false;
-				process.StartInfo.CreateNoWindow = true;
+				return;
+			}
 
-				process.Start();
-				await process.WaitForExitAsync(); // Use asynchronous wait
+			if (await IsVirtualizationEnabledAsync())
+			{
+				if (!await IsWSLInstalledAsync())
+				{
+					Log("Installing WSL...");
+					await RunDismCommandAsync("/online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart");
+					Log("WSL has been installed.");
+				}
+				else
+				{
+					Log("WSL is already installed.");
+				}
+			}
+			else
+			{
+				Log("Virtualization is not enabled. Please enable Virtualization in your system BIOS.");
+			}
+		}
+		#endregion
+
+		#region Python
+		private async Task<bool> IsPythonInstalled()
+		{
+			string command;
+			string arguments;
+
+			if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+			{
+				command = "where";
+				arguments = "python";
+			}
+			else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ||
+					 RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+			{
+				command = "/bin/bash";
+				arguments = "-c \"command -v python3 || command -v python\"";
+			}
+			else
+			{
+				throw new PlatformNotSupportedException("Unsupported operating system");
+			}
+
+			try
+			{
+				using (Process process = new Process())
+				{
+					process.StartInfo.FileName = command;
+					process.StartInfo.Arguments = arguments;
+					process.StartInfo.UseShellExecute = false;
+					process.StartInfo.RedirectStandardOutput = true;
+					process.StartInfo.CreateNoWindow = true;
+
+					process.Start();
+					string output = await process.StandardOutput.ReadToEndAsync();
+					await process.WaitForExitAsync();
+
+					// Check if 'python.exe' is found in the output
+					return output.Contains("python");
+				}
+			}
+			catch (Exception ex)
+			{
+				Log($"Error checking Python installation on Windows: {ex.Message}");
+				return false; // Return false if an error occurs
+			}
+		}
+
+		private async Task InstallPython()
+		{
+			if (await IsPythonInstalled())
+			{
+				Log("Python is already installed.");
+				return;
+			}
+
+			if (!PromptForYesNo("Install Python?"))
+			{
+				return;
+			}
+
+			string command;
+			string arguments;
+
+			if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+			{
+				command = "powershell.exe";
+				arguments = "-Command \"[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest https://www.python.org/ftp/python/3.12.4/python-3.12.4-amd64.exe -OutFile python-installer.exe\"";
+			}
+			else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ||
+					 RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+			{
+				command = "/bin/bash";
+				arguments = "-c \"sudo apt-get update && sudo apt-get install -y python3\"";
+			}
+			else
+			{
+				throw new PlatformNotSupportedException("Unsupported operating system");
+			}
+
+			try
+			{
+				Log("Installing Python...");
+				using (Process process = new Process())
+				{
+					process.StartInfo.FileName = command;
+					process.StartInfo.Arguments = arguments;
+					process.StartInfo.UseShellExecute = false;
+					process.StartInfo.RedirectStandardOutput = true;
+					process.StartInfo.CreateNoWindow = true;
+
+					process.Start();
+					await process.WaitForExitAsync();
+
+					// Install Python silently on Windows
+					if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+					{
+						process.StartInfo.Arguments = "python-installer.exe /quiet InstallAllUsers=1 PrependPath=1";
+						process.Start();
+						await process.WaitForExitAsync();
+					}
+
+					await UpdatePip();
+
+					Log("Python has been installed.");
+					return; // Installation successful
+				}
+			}
+			catch (Exception ex)
+			{
+				Log($"Error installing Python: {ex.Message}");
+				return; // Return false if an error occurs
+			}
+		}
+
+		private async Task UpdatePip()
+		{
+			try
+			{
+				Log("Updating pip...");
+				using (Process process = new Process())
+				{
+					string command;
+					string arguments;
+
+					if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+					{
+						command = "python";
+						arguments = "-m pip install --upgrade pip";
+					}
+					else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) || RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+					{
+						command = "/bin/bash";
+						arguments = $"-c \"sudo python3 -m pip install --upgrade pip || sudo python -m pip install --upgrade pip\"";
+					}
+					else
+					{
+						throw new PlatformNotSupportedException("Unsupported operating system");
+					}
+
+					process.StartInfo.FileName = command;
+					process.StartInfo.Arguments = arguments;
+					process.StartInfo.UseShellExecute = false;
+					process.StartInfo.RedirectStandardOutput = true;
+					process.StartInfo.CreateNoWindow = true;
+
+					process.Start();
+					await process.WaitForExitAsync();
+
+					Log("pip updated successfully.");
+				}
+			}
+			catch (Exception ex)
+			{
+				Log($"Error updating pip: {ex.Message}");
 			}
 		}
 		#endregion
 
 		#region DotNet
-		public async void InstallDotNet()
+		private async Task InstallDotNet()
 		{
-			SetButtonsActive(false);
 			if (!await IsDotNetInstalledAsync())
 			{
 				Log("Installing DotNet...");
@@ -208,10 +426,9 @@ namespace FishMMO.Shared
 					Log("DotNet-EF is already installed.");
 				}
 			}
-			SetButtonsActive(true);
 		}
 
-		public async Task<bool> IsDotNetInstalledAsync()
+		private async Task<bool> IsDotNetInstalledAsync()
 		{
 			string command;
 			string arguments = "dotnet";
@@ -245,7 +462,7 @@ namespace FishMMO.Shared
 			}
 		}
 
-		public async Task DownloadAndInstallDotNetAsync()
+		private async Task DownloadAndInstallDotNetAsync()
 		{
 			string version = "7.0.202";
 			string installDir;
@@ -339,27 +556,40 @@ namespace FishMMO.Shared
 			}
 		}
 
-		public async Task<bool> IsDotNetEFInstalledAsync()
+		private async Task<bool> IsDotNetEFInstalledAsync()
 		{
-			using (Process process = new Process())
+			try
 			{
-				process.StartInfo.FileName = "dotnet";
-				process.StartInfo.Arguments = "tool list --global";
-				process.StartInfo.UseShellExecute = false;
-				process.StartInfo.RedirectStandardOutput = true;
-				process.StartInfo.CreateNoWindow = true;
+				using (Process process = new Process())
+				{
+					process.StartInfo.FileName = "dotnet";
+					process.StartInfo.Arguments = "tool list --global";
+					process.StartInfo.UseShellExecute = false;
+					process.StartInfo.RedirectStandardOutput = true;
+					process.StartInfo.CreateNoWindow = true;
 
-				process.Start();
-				string output = await process.StandardOutput.ReadToEndAsync(); // Use asynchronous read
-				await process.WaitForExitAsync(); // Use asynchronous wait
+					process.Start();
 
-				return output.Contains("dotnet-ef");
+					// Asynchronously read the standard output of the spawned process.
+					string output = await process.StandardOutput.ReadToEndAsync();
+
+					// Asynchronously wait for the process to exit.
+					await process.WaitForExitAsync();
+
+					// Check if 'dotnet-ef' is in the list of installed tools.
+					return output.Contains("dotnet-ef");
+				}
+			}
+			catch (Exception ex)
+			{
+				Log($"Error checking dotnet-ef tool: {ex.Message}");
+				return false; // Return false if an error occurs
 			}
 		}
 
 		private bool pathSet = false;
 #pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
-		public async Task<string> RunDotNetCommandAsync(string arguments)
+		private async Task<string> RunDotNetCommandAsync(string arguments)
 #pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
 		{
 			if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ||
@@ -426,13 +656,11 @@ namespace FishMMO.Shared
 		#endregion
 
 		#region Docker
-		public async void InstallDocker()
+		private async Task InstallDocker()
 		{
-			SetButtonsActive(false);
 			if (await IsDockerInstalledAsync())
 			{
 				Log("Docker is already installed.");
-				SetButtonsActive(true);
 				return;
 			}
 
@@ -464,8 +692,6 @@ namespace FishMMO.Shared
 			{
 				Log($"Installation failed: {ex.Message}");
 			}
-
-			SetButtonsActive(true);
 		}
 
 		private async Task InstallDockerWindowsAsync()
@@ -577,7 +803,7 @@ namespace FishMMO.Shared
 		}
 
 #pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
-		public async Task<string> RunDockerCommandAsync(string commandArgs)
+		private async Task<string> RunDockerCommandAsync(string commandArgs)
 #pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
 		{
 #if !UNITY_EDITOR
@@ -632,7 +858,7 @@ namespace FishMMO.Shared
 		/// Docker-Compose commands are not available in the editor.
 		/// </summary>
 #pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
-		public async Task<string> RunDockerComposeCommandAsync(string commandArgs, Dictionary<string, string> environmentVariables = null)
+		private async Task<string> RunDockerComposeCommandAsync(string commandArgs, Dictionary<string, string> environmentVariables = null)
 #pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
 		{
 #if !UNITY_EDITOR
@@ -691,48 +917,146 @@ namespace FishMMO.Shared
 		}
 		#endregion
 
-		private async Task<bool> IsEverythingInstalled()
+		#region Database
+		private async Task<bool> InstallPostgreSQLWindows(AppSettings appSettings)
 		{
-			Log("Verifying installs... Please wait.");
+			if (!PromptForYesNo("Install PostgreSQL?"))
+			{
+				if (PromptForYesNo("Install FishMMO Database?"))
+				{
+					string su = PromptForInput("Enter PostgreSQL Superuser Username: ");
+					string sp = PromptForPassword("Enter PostgreSQL Superuser Password: ");
 
-			if (!await IsWSLInstalledAsync())
+					if (await InstallFishMMODatabase(su, sp, appSettings))
+					{
+						return true;
+					}
+					else
+					{
+						return false;
+					}
+				}
+				else
+				{
+					return false;
+				}
+			}
+
+			Log("Installing PostgreSQL.");
+			string superUsername = PromptForInput("Enter PostgreSQL Superuser Username: ");
+			string superPassword = PromptForPassword("Enter PostgreSQL Superuser Password: ");
+
+			string installerPath = await DownloadFileAsync(@"https://sbp.enterprisedb.com/getfile.jsp?fileid=1259105", "PostgreSQLInstaller.exe");
+
+			try
 			{
-				Log("WSL needs to be installed.");
-				SetButtonsActive(true);
+				string arguments = $"--unattendedmodeui minimal " +
+								   $"--mode unattended " +
+								   $"--superaccount \"{superUsername}\" " +
+								   $"--superpassword \"{superPassword}\" " +
+								   $"--serverport {appSettings.Npgsql.Port} " +
+								   $"--disable-components pgAdmin,stackbuilder";
+
+				ProcessStartInfo startInfo = new ProcessStartInfo();
+				startInfo.FileName = installerPath;
+				startInfo.Arguments = arguments;
+				startInfo.CreateNoWindow = true;
+				startInfo.UseShellExecute = true;
+				startInfo.Verb = "runas";
+
+				Process process = Process.Start(startInfo);
+
+				await process.WaitForExitAsync();
+
+				int exitCode = process.ExitCode;
+				if (exitCode == 0)
+				{
+					Log("PostgreSQL installation successful.");
+
+					if (await InstallFishMMODatabase(superUsername, superPassword, appSettings))
+					{
+						return true;
+					}
+					else
+					{
+						return false;
+					}
+				}
+				else
+				{
+					Log($"PostgreSQL installation failed with exit code {exitCode}.");
+					return false;
+				}
+			}
+			catch (Exception ex)
+			{
+				Log($"Error installing PostgreSQL: {ex.Message}");
 				return false;
 			}
-			if (!await IsDotNetInstalledAsync())
-			{
-				Log("DotNet needs to be installed.");
-				SetButtonsActive(true);
-				return false;
-			}
-			if (!await IsDotNetEFInstalledAsync())
-			{
-				Log("DotNet-EF needs to be installed.");
-				SetButtonsActive(true);
-				return false;
-			}
-			if (!await IsDockerInstalledAsync())
-			{
-				Log("Docker needs to be installed.");
-				SetButtonsActive(true);
-				return false;
-			}
-			return true;
 		}
 
-		#region Database
-		public async void InstallDatabase()
+		public async Task<bool> InstallFishMMODatabase(string superUsername, string superPassword, AppSettings appSettings)
 		{
-			SetButtonsActive(false);
-
-			if (!await IsEverythingInstalled())
+			try
 			{
-				SetButtonsActive(true);
-				return;
-			}
+				Log($"Installing FishMMO Database {appSettings.Npgsql.Database}");
+				string connectionString = $"Host={appSettings.Npgsql.Host};Port={appSettings.Npgsql.Port};Username={superUsername};Password={superPassword};";
 
+				// Connect to PostgreSQL
+				using (var connection = new NpgsqlConnection(connectionString))
+				{
+					await connection.OpenAsync();
+
+					// Create database
+					await CreateDatabase(connection, appSettings.Npgsql.Database);
+
+					// Create user role
+					await CreateUser(connection, appSettings.Npgsql.Username, appSettings.Npgsql.Password);
+
+					// Grant privileges
+					await GrantPrivileges(connection, appSettings.Npgsql.Username, appSettings.Npgsql.Database);
+
+					Log("FishMMO Database installed.");
+					return true;
+				}
+			}
+			catch (Exception ex)
+			{
+				Log($"Error installing database: {ex.Message}");
+				return false;
+			}
+		}
+
+		private async Task CreateDatabase(NpgsqlConnection connection, string dbName)
+		{
+			using (var command = new NpgsqlCommand($"CREATE DATABASE \"{dbName}\"", connection))
+			{
+				await command.ExecuteNonQueryAsync();
+			}
+		}
+
+		private async Task CreateUser(NpgsqlConnection connection, string username, string password)
+		{
+			using (var command = new NpgsqlCommand($"CREATE ROLE \"{username}\" WITH LOGIN PASSWORD '{password}'", connection))
+			{
+				await command.ExecuteNonQueryAsync();
+			}
+		}
+
+		private async Task GrantPrivileges(NpgsqlConnection connection, string username, string dbName)
+		{
+			using (var command = new NpgsqlCommand($"GRANT ALL PRIVILEGES ON DATABASE \"{dbName}\" TO \"{username}\"", connection))
+			{
+				await command.ExecuteNonQueryAsync();
+			}
+			using (var command = new NpgsqlCommand($"ALTER DATABASE \"{dbName}\" OWNER TO \"{username}\"", connection))
+			{
+				await command.ExecuteNonQueryAsync();
+			}
+		}
+
+		private async Task InstallDatabase()
+		{
 			Log("Installing database...");
 
 			string workingDirectory = GetWorkingDirectory();
@@ -745,76 +1069,79 @@ namespace FishMMO.Shared
 			string envConfigurationPath = Path.Combine(setup, "Development");
 			//Log(envConfigurationPath);
 
-			string jsonPath = Path.Combine(envConfigurationPath, "appsettings.json");
-			//Log(jsonPath);
+			string appSettingsPath = Path.Combine(envConfigurationPath, "appsettings.json");
+			//Log(appSettingsPath);
 
-			if (File.Exists(jsonPath))
+			if (File.Exists(appSettingsPath))
 			{
 #else
-			string jsonPath = Path.Combine(workingDirectory, "appsettings.json");
-			//Log(jsonPath);
+			string appSettingsPath = Path.Combine(workingDirectory, "appsettings.json");
+			//Log(appSettingsPath);
 
-			if (File.Exists(jsonPath))
+			if (File.Exists(appSettingsPath))
 			{
 #endif
-				string jsonContent = File.ReadAllText(jsonPath);
+				string jsonContent = File.ReadAllText(appSettingsPath);
 
 				//Log(jsonContent);
 
 				AppSettings appSettings = JsonUtility.FromJson<AppSettings>(jsonContent);
 
-				// docker-compose up
-				string output = await RunDockerComposeCommandAsync("-p " + Constants.Configuration.ProjectName.ToLower() + " up -d", new Dictionary<string, string>()
+				if (PromptForYesNo("Install Docker Database?"))
 				{
-					{ "POSTGRES_DB", appSettings.Npgsql.Database },
-					{ "POSTGRES_USER", appSettings.Npgsql.Username },
-					{ "POSTGRES_PASSWORD", appSettings.Npgsql.Password },
-					{ "POSTGRES_PORT", appSettings.Npgsql.Port },
-					{ "REDIS_PORT", appSettings.Redis.Port },
-					{ "REDIS_PASSWORD", appSettings.Redis.Password },
-				});
-				Log(output);
+					await InstallDocker();
 
-				// Run 'dotnet ef migrations add Initial' command
-				Log("Creating Initial database migration...");
-				string migrationOut = await RunDotNetCommandAsync($"ef migrations add Initial -p {Constants.Configuration.ProjectPath} -s {Constants.Configuration.StartupProject}");
-				Log(migrationOut);
-
-				// Run 'dotnet ef database update' command
-				Log("Updating database...");
-				string updateOut = await RunDotNetCommandAsync($"ef database update -p {Constants.Configuration.ProjectPath} -s {Constants.Configuration.StartupProject}");
-				Log(updateOut);
-
-				StartCoroutine(NetHelper.FetchExternalIPAddress((ip) =>
+					// docker-compose up
+					string output = await RunDockerComposeCommandAsync("-p " + Constants.Configuration.ProjectName.ToLower() + " up -d", new Dictionary<string, string>()
+					{
+						{ "POSTGRES_DB", appSettings.Npgsql.Database },
+						{ "POSTGRES_USER", appSettings.Npgsql.Username },
+						{ "POSTGRES_PASSWORD", appSettings.Npgsql.Password },
+						{ "POSTGRES_PORT", appSettings.Npgsql.Port },
+						{ "REDIS_PORT", appSettings.Redis.Port },
+						{ "REDIS_PASSWORD", appSettings.Redis.Password },
+					});
+					Log(output);
+				}
+				else if (!await InstallPostgreSQLWindows(appSettings))
 				{
-					Log("Databases are ready:\r\n" +
-					"Npgsql Database: " + appSettings.Npgsql.Database + "\r\n" +
-					"Npgsql Username: " + appSettings.Npgsql.Username + "\r\n" +
-					"Npgsql Password: " + appSettings.Npgsql.Password + "\r\n" +
-					"Npgsql Host: " + ip + "\r\n" +
-					"Npgsql Port: " + appSettings.Npgsql.Port + "\r\n" +
-					"Redis Host: " + ip + "\r\n" +
-					"Redis Port: " + appSettings.Redis.Port + "\r\n" +
-					"Redis Password: " + appSettings.Redis.Password);
-				}));
+					return;
+				}
+
+				if (PromptForYesNo("Create Initial Migration?"))
+				{
+					// Run 'dotnet ef migrations add Initial' command
+					Log("Creating Initial database migration...");
+					string migrationOut = await RunDotNetCommandAsync($"ef migrations add Initial -p {Constants.Configuration.ProjectPath} -s {Constants.Configuration.StartupProject}");
+					Log(migrationOut);
+
+					// Run 'dotnet ef database update' command
+					Log("Updating database...");
+					string updateOut = await RunDotNetCommandAsync($"ef database update -p {Constants.Configuration.ProjectPath} -s {Constants.Configuration.StartupProject}");
+					Log(updateOut);
+
+					StartCoroutine(NetHelper.FetchExternalIPAddress((ip) =>
+					{
+						Log("Databases are ready:\r\n" +
+						"Npgsql Database: " + appSettings.Npgsql.Database + "\r\n" +
+						"Npgsql Username: " + appSettings.Npgsql.Username + "\r\n" +
+						"Npgsql Password: " + appSettings.Npgsql.Password + "\r\n" +
+						"Npgsql Host: " + ip + "\r\n" +
+						"Npgsql Port: " + appSettings.Npgsql.Port + "\r\n" +
+						"Redis Host: " + ip + "\r\n" +
+						"Redis Port: " + appSettings.Redis.Port + "\r\n" +
+						"Redis Password: " + appSettings.Redis.Password);
+					}));
+				}
 			}
 			else
 			{
 				Log("appsettings.json file not found.");
 			}
-			SetButtonsActive(true);
 		}
 
-		public async void UpdateDatabase()
+		private async void UpdateDatabase()
 		{
-			SetButtonsActive(false);
-
-			if (!await IsEverythingInstalled())
-			{
-				SetButtonsActive(true);
-				return;
-			}
-
 			string timestamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
 			Log($"Updating the database at {timestamp}...");
 
@@ -822,19 +1149,10 @@ namespace FishMMO.Shared
 			await RunDotNetCommandAsync($"ef database update -p {Constants.Configuration.ProjectPath}  -s  {Constants.Configuration.StartupProject}");
 
 			Log($"Database Update completed...");
-			SetButtonsActive(true);
 		}
 
-		public async void CreateMigration()
+		private async void CreateMigration()
 		{
-			SetButtonsActive(false);
-
-			if (!await IsEverythingInstalled())
-			{
-				SetButtonsActive(true);
-				return;
-			}
-
 			string timestamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
 			Log($"Creating a new migration {timestamp}...");
 
@@ -845,26 +1163,7 @@ namespace FishMMO.Shared
 			await RunDotNetCommandAsync($"ef database update -p {Constants.Configuration.ProjectPath}  -s  {Constants.Configuration.StartupProject}");
 
 			Log($"Migration completed...");
-			SetButtonsActive(true);
 		}
 		#endregion
-
-		public static string GetWorkingDirectory()
-		{
-#if UNITY_EDITOR
-			return Directory.GetParent(Directory.GetParent(Application.dataPath).FullName).FullName;
-#else
-			return AppDomain.CurrentDomain.BaseDirectory;
-#endif
-		}
-
-		public void Quit()
-		{
-#if UNITY_EDITOR
-			EditorApplication.ExitPlaymode();
-#else
-			Application.Quit();
-#endif
-		}
 	}
 }

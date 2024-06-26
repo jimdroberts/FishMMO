@@ -46,7 +46,7 @@ namespace JamesFrowen.SimpleWeb
 
                 if (!IsGet(getHeader.array))
                 {
-                    Log.Warn($"First bytes from client was not 'GET' for handshake, instead was {Log.BufferToString(getHeader.array, 0, GetSize)}");
+                    //Log.Warn($"First bytes from client was not 'GET' for handshake, instead was {Log.BufferToString(getHeader.array, 0, GetSize)}");
                     return false;
                 }
             }

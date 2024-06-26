@@ -129,7 +129,7 @@ namespace JamesFrowen.SimpleWeb
             }
             else
             {
-                Log.Verbose($"BufferBucket({arraySize}) create new");
+                //Log.Verbose($"BufferBucket({arraySize}) create new");
                 return new ArrayBuffer(this, arraySize);
             }
         }
@@ -145,13 +145,13 @@ namespace JamesFrowen.SimpleWeb
         void IncrementCreated()
         {
             int next = Interlocked.Increment(ref _current);
-            Log.Verbose($"BufferBucket({arraySize}) count:{next}");
+            //Log.Verbose($"BufferBucket({arraySize}) count:{next}");
         }
         [Conditional("DEBUG")]
         void DecrementCreated()
         {
             int next = Interlocked.Decrement(ref _current);
-            Log.Verbose($"BufferBucket({arraySize}) count:{next}");
+            //Log.Verbose($"BufferBucket({arraySize}) count:{next}");
         }
     }
 

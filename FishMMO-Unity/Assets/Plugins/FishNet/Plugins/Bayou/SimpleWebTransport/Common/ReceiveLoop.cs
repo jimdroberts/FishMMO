@@ -41,7 +41,7 @@ namespace JamesFrowen.SimpleWeb
         {
             (Connection conn, int maxMessageSize, bool expectMask, ConcurrentQueue<Message> queue, BufferPool _) = config;
 
-            Profiler.BeginThreadProfiling("SimpleWeb", $"ReceiveLoop {conn.connId}");
+            //Profiler.BeginThreadProfiling("SimpleWeb", $"ReceiveLoop {conn.connId}");
 
             byte[] readBuffer = new byte[Constants.HeaderSize + (expectMask ? Constants.MaskSize : 0) + maxMessageSize];
             try
@@ -95,7 +95,7 @@ namespace JamesFrowen.SimpleWeb
             }
             finally
             {
-                Profiler.EndThreadProfiling();
+                //Profiler.EndThreadProfiling();
 
                 conn.Dispose();
             }

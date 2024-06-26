@@ -13,13 +13,16 @@ namespace FishNet.Transporting.Bayou
     {
 
         #region Serialized.
-        [Header("Security")]
+        //Security.
         /// <summary>
         /// True to connect using WSS.
         /// </summary>
         [Tooltip("True to connect using WSS.")]
         [SerializeField]
         private bool _useWss = false;
+
+        //[SerializeField]
+       // private bool _configureFor
 #if UNITY_SERVER || UNITY_EDITOR
         /// <summary>
         /// Configuration to use for SSL.
@@ -29,7 +32,7 @@ namespace FishNet.Transporting.Bayou
         private SslConfiguration _sslConfiguration;
 #endif
 
-        [Header("Channels")]
+        //Channels.
         /// <summary>
         /// Maximum transmission unit for this transport.
         /// </summary>
@@ -38,7 +41,7 @@ namespace FishNet.Transporting.Bayou
         [SerializeField]
         private int _mtu = 1023;
 
-        [Header("Server")]
+        //Server.
         /// <summary>
         /// Port to use.
         /// </summary>
@@ -53,7 +56,7 @@ namespace FishNet.Transporting.Bayou
         [SerializeField]
         private int _maximumClients = 2000;
 
-        [Header("Client")]
+        //Client.
         /// <summary>
         /// Address to connect.
         /// </summary>
