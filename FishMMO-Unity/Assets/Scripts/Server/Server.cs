@@ -112,10 +112,10 @@ namespace FishMMO.Server
 			string dbConfigurationPath = Path.Combine(Path.Combine(workingDirectory, Constants.Configuration.SetupDirectory), "Development");
 
 			NpgsqlDbContextFactory = new NpgsqlDbContextFactory(dbConfigurationPath, false);
-			RedisDbContextFactory = new RedisDbContextFactory(dbConfigurationPath);
+			//RedisDbContextFactory = new RedisDbContextFactory(dbConfigurationPath);
 #else
 			NpgsqlDbContextFactory = new NpgsqlDbContextFactory(workingDirectory, false);
-			RedisDbContextFactory = new RedisDbContextFactory(workingDirectory);
+			//RedisDbContextFactory = new RedisDbContextFactory(workingDirectory);
 #endif
 			// ensure our NetworkManager exists in the scene
 			if (NetworkManager == null)
@@ -201,7 +201,7 @@ namespace FishMMO.Server
 				Application.logMessageReceived -= this.Application_logMessageReceived;
 			}
 
-			RedisDbContextFactory.CloseRedis();
+			//RedisDbContextFactory.CloseRedis();
 		}
 
 		public static void Quit()
