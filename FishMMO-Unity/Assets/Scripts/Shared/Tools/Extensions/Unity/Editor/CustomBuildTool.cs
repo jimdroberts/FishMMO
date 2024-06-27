@@ -194,11 +194,13 @@ start Scene.exe SCENE";
 			UnityEditor.Build.Il2CppCodeGeneration originalOptimization = PlayerSettings.GetIl2CppCodeGeneration(originalNamedBuildTargetGroup);
 
 			// Enable IL2CPP for webgl
+			WebGLCompressionFormat compressionFormat = PlayerSettings.WebGL.compressionFormat;
 			if (buildTarget == BuildTarget.WebGL)
 			{
 				PlayerSettings.SetScriptingBackend(EditorUserBuildSettings.selectedBuildTargetGroup, ScriptingImplementation.IL2CPP);
 				PlayerSettings.SetIl2CppCompilerConfiguration(EditorUserBuildSettings.selectedBuildTargetGroup, Il2CppCompilerConfiguration.Release);
 				PlayerSettings.SetIl2CppCodeGeneration(UnityEditor.Build.NamedBuildTarget.WebGL, UnityEditor.Build.Il2CppCodeGeneration.OptimizeSize);
+				PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Gzip;
 			}
 
 			// Switch active build target so #defines work properly
@@ -314,6 +316,7 @@ start Scene.exe SCENE";
 				PlayerSettings.SetScriptingBackend(originalGroup, originalScriptingImp);
 				PlayerSettings.SetIl2CppCompilerConfiguration(originalGroup, originalCompilerConf);
 				PlayerSettings.SetIl2CppCodeGeneration(originalNamedBuildTargetGroup, originalOptimization);
+				PlayerSettings.WebGL.compressionFormat = compressionFormat;
 			}
 
 			EditorUserBuildSettings.SwitchActiveBuildTarget(originalGroup, originalBuildTarget);

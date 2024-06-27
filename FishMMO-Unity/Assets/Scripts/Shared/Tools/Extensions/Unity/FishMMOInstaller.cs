@@ -10,9 +10,6 @@ using UnityEngine;
 using Debug = UnityEngine.Debug;
 using FishMMO.Database;
 using Npgsql;
-#if UNITY_EDITOR
-using UnityEditor;
-#endif
 
 namespace FishMMO.Shared
 {
@@ -35,25 +32,50 @@ namespace FishMMO.Shared
 
 		private string GetWorkingDirectory()
 		{
-#if UNITY_EDITOR
-			return Directory.GetParent(Directory.GetParent(Application.dataPath).FullName).FullName;
-#else
 			return AppDomain.CurrentDomain.BaseDirectory;
-#endif
+		}
+
+		/// <summary>
+		/// Runs a process asynchronously.
+		/// ProcessResult = ExitCode, Standard Output, Standard Error
+		/// </summary>
+		private async Task<bool> RunProcessAsync(string command, string arguments, Func<int, string, string, bool> processResult = null, Func<Process, Task> subProcess = null)
+		{
+			using (Process process = new Process())
+			{
+				process.StartInfo.FileName = command;
+				process.StartInfo.Arguments = arguments;
+				process.StartInfo.UseShellExecute = false;
+				process.StartInfo.CreateNoWindow = true;
+				process.StartInfo.RedirectStandardOutput = true;
+				process.StartInfo.RedirectStandardError = true;
+
+				process.Start();
+
+				await process.WaitForExitAsync(); // Use asynchronous wait
+
+				string output = await process.StandardOutput.ReadToEndAsync();
+				string error = await process.StandardError.ReadToEndAsync();
+
+				if (subProcess != null)
+				{
+					await subProcess.Invoke(process);
+				}
+
+				if (processResult != null)
+				{
+					return processResult.Invoke(process.ExitCode, output, error);
+				}
+				else
+				{
+					return process.ExitCode == 0;
+				}
+			}
 		}
 
 		private async Task RunDismCommandAsync(string arguments)
 		{
-			using (Process process = new Process())
-			{
-				process.StartInfo.FileName = "dism.exe";
-				process.StartInfo.Arguments = arguments;
-				process.StartInfo.UseShellExecute = false;
-				process.StartInfo.CreateNoWindow = true;
-
-				process.Start();
-				await process.WaitForExitAsync(); // Use asynchronous wait
-			}
+			await RunProcessAsync("dism.exe", arguments);
 		}
 
 		private string PromptForInput(string prompt)
@@ -178,20 +200,12 @@ namespace FishMMO.Shared
 		#region WSL
 		private async Task<bool> IsVirtualizationEnabledAsync()
 		{
-			using (Process process = new Process())
-			{
-				process.StartInfo.FileName = "powershell.exe";
-				process.StartInfo.Arguments = "-Command \"(Get-WmiObject -Namespace 'root\\cimv2' -Class Win32_Processor).VirtualizationFirmwareEnabled\"";
-				process.StartInfo.UseShellExecute = false;
-				process.StartInfo.RedirectStandardOutput = true;
-				process.StartInfo.CreateNoWindow = true;
-				process.Start();
-
-				string output = process.StandardOutput.ReadToEnd();
-				await process.WaitForExitAsync();
-
-				return bool.Parse(output.Trim());
-			}
+			return await RunProcessAsync("powershell.exe",
+										 "-Command \"(Get-WmiObject -Namespace 'root\\cimv2' -Class Win32_Processor).VirtualizationFirmwareEnabled\"",
+										 (e, o, err) =>
+										 {
+											 return bool.Parse(o.Trim());
+										 });
 		}
 
 		private async Task<bool> IsWSLInstalledAsync()
@@ -201,20 +215,12 @@ namespace FishMMO.Shared
 				return true;
 			}
 
-			using (Process process = new Process())
-			{
-				process.StartInfo.FileName = "where";
-				process.StartInfo.Arguments = "/q wsl.exe";
-				process.StartInfo.UseShellExecute = false;
-				process.StartInfo.RedirectStandardOutput = true;
-				process.StartInfo.CreateNoWindow = true;
-
-				process.Start();
-				string output = await process.StandardOutput.ReadToEndAsync();
-				await process.WaitForExitAsync();
-
-				return process.ExitCode == 0;
-			}
+			return await RunProcessAsync("where",
+										 "/q wsl.exe",
+										 (e, o, err) =>
+										 {
+											 return e == 0;
+										 });
 		}
 
 		private async Task InstallWSL()
@@ -268,21 +274,10 @@ namespace FishMMO.Shared
 
 			try
 			{
-				using (Process process = new Process())
+				return await RunProcessAsync(command, arguments, (e, o, err) =>
 				{
-					process.StartInfo.FileName = command;
-					process.StartInfo.Arguments = arguments;
-					process.StartInfo.UseShellExecute = false;
-					process.StartInfo.RedirectStandardOutput = true;
-					process.StartInfo.CreateNoWindow = true;
-
-					process.Start();
-					string output = await process.StandardOutput.ReadToEndAsync();
-					await process.WaitForExitAsync();
-
-					// Check if 'python.exe' is found in the output
-					return output.Contains("python");
-				}
+					return o.Contains("python");
+				});
 			}
 			catch (Exception ex)
 			{
@@ -326,30 +321,21 @@ namespace FishMMO.Shared
 			try
 			{
 				Log("Installing Python...");
-				using (Process process = new Process())
+
+				await RunProcessAsync(command, arguments, null, async (p) =>
 				{
-					process.StartInfo.FileName = command;
-					process.StartInfo.Arguments = arguments;
-					process.StartInfo.UseShellExecute = false;
-					process.StartInfo.RedirectStandardOutput = true;
-					process.StartInfo.CreateNoWindow = true;
-
-					process.Start();
-					await process.WaitForExitAsync();
-
 					// Install Python silently on Windows
 					if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
 					{
-						process.StartInfo.Arguments = "python-installer.exe /quiet InstallAllUsers=1 PrependPath=1";
-						process.Start();
-						await process.WaitForExitAsync();
+						p.StartInfo.Arguments = "python-installer.exe /quiet InstallAllUsers=1 PrependPath=1";
+						p.Start();
+						await p.WaitForExitAsync();
 					}
 
 					await UpdatePip();
+				});
 
-					Log("Python has been installed.");
-					return; // Installation successful
-				}
+				Log("Python has been installed.");
 			}
 			catch (Exception ex)
 			{
@@ -363,37 +349,27 @@ namespace FishMMO.Shared
 			try
 			{
 				Log("Updating pip...");
-				using (Process process = new Process())
+				string command;
+				string arguments;
+
+				if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
 				{
-					string command;
-					string arguments;
-
-					if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-					{
-						command = "python";
-						arguments = "-m pip install --upgrade pip";
-					}
-					else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) || RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-					{
-						command = "/bin/bash";
-						arguments = $"-c \"sudo python3 -m pip install --upgrade pip || sudo python -m pip install --upgrade pip\"";
-					}
-					else
-					{
-						throw new PlatformNotSupportedException("Unsupported operating system");
-					}
-
-					process.StartInfo.FileName = command;
-					process.StartInfo.Arguments = arguments;
-					process.StartInfo.UseShellExecute = false;
-					process.StartInfo.RedirectStandardOutput = true;
-					process.StartInfo.CreateNoWindow = true;
-
-					process.Start();
-					await process.WaitForExitAsync();
-
-					Log("pip updated successfully.");
+					command = "python";
+					arguments = "-m pip install --upgrade pip";
 				}
+				else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) || RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+				{
+					command = "/bin/bash";
+					arguments = $"-c \"sudo python3 -m pip install --upgrade pip || sudo python -m pip install --upgrade pip\"";
+				}
+				else
+				{
+					throw new PlatformNotSupportedException("Unsupported operating system");
+				}
+
+				await RunProcessAsync(command, arguments);
+
+				Log("pip updated successfully.");
 			}
 			catch (Exception ex)
 			{
@@ -418,8 +394,7 @@ namespace FishMMO.Shared
 				if (!await IsDotNetEFInstalledAsync())
 				{
 					Log("Installing DotNet-EF v5.0.17...");
-					string output = await RunDotNetCommandAsync("tool install --global dotnet-ef --version 5.0.17");
-					Log(output);
+					await RunDotNetCommandAsync("tool install --global dotnet-ef --version 5.0.17");
 				}
 				else
 				{
@@ -447,19 +422,10 @@ namespace FishMMO.Shared
 				throw new PlatformNotSupportedException("Unsupported operating system");
 			}
 
-			using (Process process = new Process())
+			return await RunProcessAsync(command, arguments, (e, o, err) =>
 			{
-				process.StartInfo.FileName = command;
-				process.StartInfo.Arguments = arguments;
-				process.StartInfo.UseShellExecute = false;
-				process.StartInfo.RedirectStandardOutput = true;
-				process.StartInfo.CreateNoWindow = true;
-
-				process.Start();
-				await process.WaitForExitAsync(); // Use asynchronous wait
-
-				return process.ExitCode == 0;
-			}
+				return e == 0;
+			});
 		}
 
 		private async Task DownloadAndInstallDotNetAsync()
@@ -480,26 +446,16 @@ namespace FishMMO.Shared
 					await File.WriteAllTextAsync(psScriptFile, scriptContent);
 				}
 
-				// Run the PowerShell script
-				using (Process process = new Process())
-				{
-					process.StartInfo.FileName = "powershell";
-					process.StartInfo.Arguments = $"-ExecutionPolicy Bypass -Command \"& .\\{psScriptFile} -Version {version} -InstallDir '{installDir}'\"";
-					process.StartInfo.CreateNoWindow = true;
-					process.StartInfo.UseShellExecute = false;
-					process.StartInfo.RedirectStandardOutput = true;
-					process.StartInfo.RedirectStandardError = true;
-
-					process.Start();
-					string output = await process.StandardOutput.ReadToEndAsync();
-					string error = await process.StandardError.ReadToEndAsync();
-					await process.WaitForExitAsync();
-
-					if (process.ExitCode != 0)
-					{
-						throw new Exception($"PowerShell script failed with exit code {process.ExitCode}: {error}");
-					}
-				}
+				await RunProcessAsync("powershell",
+									  $"-ExecutionPolicy Bypass -Command \"& .\\{psScriptFile} -Version {version} -InstallDir '{installDir}'\"",
+									  (e, o, err) =>
+									  {
+										  if (e != 0)
+										  {
+											  throw new Exception($"PowerShell script failed with exit code {e}: {err}");
+										  }
+										  return true;
+									  });
 			}
 			else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ||
 					 RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
@@ -516,39 +472,19 @@ namespace FishMMO.Shared
 				}
 
 				// Make the script executable
-				using (Process chmodProcess = new Process())
-				{
-					chmodProcess.StartInfo.FileName = "chmod";
-					chmodProcess.StartInfo.Arguments = $"+x {shScriptFile}";
-					chmodProcess.StartInfo.CreateNoWindow = true;
-					chmodProcess.StartInfo.UseShellExecute = false;
-					chmodProcess.StartInfo.RedirectStandardOutput = true;
-					chmodProcess.StartInfo.RedirectStandardError = true;
-
-					chmodProcess.Start();
-					await chmodProcess.WaitForExitAsync();
-				}
+				await RunProcessAsync("chmod", $"+x {shScriptFile}");
 
 				// Run the shell script
-				using (Process process = new Process())
-				{
-					process.StartInfo.FileName = "/bin/bash";
-					process.StartInfo.Arguments = $"./{shScriptFile} --version {version} --install-dir {installDir}";
-					process.StartInfo.CreateNoWindow = true;
-					process.StartInfo.UseShellExecute = false;
-					process.StartInfo.RedirectStandardOutput = true;
-					process.StartInfo.RedirectStandardError = true;
-
-					process.Start();
-					string output = await process.StandardOutput.ReadToEndAsync();
-					string error = await process.StandardError.ReadToEndAsync();
-					await process.WaitForExitAsync();
-
-					if (process.ExitCode != 0)
-					{
-						throw new Exception($"Shell script failed with exit code {process.ExitCode}: {error}");
-					}
-				}
+				await RunProcessAsync("/bin/bash",
+									  $"./{shScriptFile} --version {version} --install-dir {installDir}",
+									  (e, o, err) =>
+									  {
+										  if (e != 0)
+										  {
+											  throw new Exception($"Shell script failed with exit code {e}: {err}");
+										  }
+										  return true;
+									  });
 			}
 			else
 			{
@@ -560,25 +496,12 @@ namespace FishMMO.Shared
 		{
 			try
 			{
-				using (Process process = new Process())
-				{
-					process.StartInfo.FileName = "dotnet";
-					process.StartInfo.Arguments = "tool list --global";
-					process.StartInfo.UseShellExecute = false;
-					process.StartInfo.RedirectStandardOutput = true;
-					process.StartInfo.CreateNoWindow = true;
-
-					process.Start();
-
-					// Asynchronously read the standard output of the spawned process.
-					string output = await process.StandardOutput.ReadToEndAsync();
-
-					// Asynchronously wait for the process to exit.
-					await process.WaitForExitAsync();
-
-					// Check if 'dotnet-ef' is in the list of installed tools.
-					return output.Contains("dotnet-ef");
-				}
+				return await RunProcessAsync("dotnet",
+											 "tool list --global",
+											 (e, o, err) =>
+											 {
+												 return o.Contains("dotnet-ef");
+											 });
 			}
 			catch (Exception ex)
 			{
@@ -588,9 +511,7 @@ namespace FishMMO.Shared
 		}
 
 		private bool pathSet = false;
-#pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
-		private async Task<string> RunDotNetCommandAsync(string arguments)
-#pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
+		private async Task RunDotNetCommandAsync(string arguments)
 		{
 			if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ||
 				RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
@@ -623,35 +544,21 @@ namespace FishMMO.Shared
 					pathSet = true;
 				}
 			}
-#if !UNITY_EDITOR
+
 			Log("Running DotNet Command: \r\n" +
 				"dotnet " + arguments);
 
-			using (Process process = new Process())
-			{
-				process.StartInfo.FileName = "dotnet";
-				process.StartInfo.Arguments = arguments;
-				process.StartInfo.UseShellExecute = false;
-				process.StartInfo.RedirectStandardOutput = true;
-				process.StartInfo.RedirectStandardError = true;
-				process.StartInfo.CreateNoWindow = true;
-
-				process.Start();
-				string output = await process.StandardOutput.ReadToEndAsync(); // Use asynchronous read
-				string error = await process.StandardError.ReadToEndAsync();
-				await process.WaitForExitAsync(); // Use asynchronous wait
-
-				if (process.ExitCode != 0)
-				{
-					// Handle non-zero exit codes if necessary
-					Debug.Log($"DotNet command failed with exit code {process.ExitCode}.\nError: {error}");
-				}
-
-				return output;
-			}
-#else
-			return null;
-#endif
+			await RunProcessAsync("dotnet", arguments,
+								  (e, o, err) =>
+								  {
+									  if (e != 0)
+									  {
+										  // Handle non-zero exit codes if necessary
+										  Debug.Log($"DotNet command failed with exit code {e}.\nError: {err}");
+									  }
+									  Log(o);
+									  return true;
+								  });
 		}
 		#endregion
 
@@ -696,26 +603,8 @@ namespace FishMMO.Shared
 
 		private async Task InstallDockerWindowsAsync()
 		{
-			using (Process process = new Process())
-			{
-				process.StartInfo.FileName = "curl";
-				process.StartInfo.Arguments = "-L https://desktop.docker.com/win/stable/Docker%20Desktop%20Installer.exe -o DockerInstaller.exe";
-				process.StartInfo.UseShellExecute = false;
-				process.StartInfo.RedirectStandardOutput = true;
-				process.StartInfo.RedirectStandardError = true;
-				process.StartInfo.CreateNoWindow = true;
-				process.Start();
-				await process.WaitForExitAsync();
-			}
-
-			using (Process process = new Process())
-			{
-				process.StartInfo.FileName = "DockerInstaller.exe";
-				process.StartInfo.Arguments = "/quiet /install";
-				process.StartInfo.UseShellExecute = true;  // Using shell execute to allow for installer GUI if needed
-				process.Start();
-				process.WaitForExit();
-			}
+			await RunProcessAsync("curl", "-L https://desktop.docker.com/win/stable/Docker%20Desktop%20Installer.exe -o DockerInstaller.exe");
+			await RunProcessAsync("DockerInstaller.exe", "/quiet /install");
 
 			// Delete DockerInstaller.exe
 			if (File.Exists("DockerInstaller.exe"))
@@ -728,85 +617,50 @@ namespace FishMMO.Shared
 		{
 			string command = "curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh";
 
-			using (Process process = new Process())
-			{
-				process.StartInfo.FileName = "bash";
-				process.StartInfo.Arguments = $"-c \"{command}\"";
-				process.StartInfo.UseShellExecute = false;
-				process.StartInfo.RedirectStandardOutput = true;
-				process.StartInfo.RedirectStandardError = true;
-				process.StartInfo.CreateNoWindow = true;
-				process.Start();
-				await process.WaitForExitAsync();
-				if (process.ExitCode != 0)
-				{
-					throw new Exception($"Command '{command}' failed with exit code {process.ExitCode}");
-				}
-			}
+			await RunProcessAsync("bash",
+								  $"-c \"{command}\"",
+								  (e, o, err) =>
+								  {
+									  if (e != 0)
+									  {
+										  throw new Exception($"Command '{command}' failed with exit code {e}");
+									  }
+									  return true;
+								  });
 		}
 
 		private async Task InstallPipLinuxAsync()
 		{
 			string command = "sudo apt install -y python3-pip";
 
-			using (Process process = new Process())
-			{
-				process.StartInfo.FileName = "bash";
-				process.StartInfo.Arguments = $"-c \"{command}\"";
-				process.StartInfo.UseShellExecute = false;
-				process.StartInfo.RedirectStandardOutput = true;
-				process.StartInfo.RedirectStandardError = true;
-				process.StartInfo.CreateNoWindow = true;
-				process.Start();
-				await process.WaitForExitAsync();
-				if (process.ExitCode != 0)
-				{
-					throw new Exception($"Command '{command}' failed with exit code {process.ExitCode}");
-				}
-			}
+			await RunProcessAsync("bash",
+								  $"-c \"{command}\"",
+								  (e, o, err) =>
+								  {
+									  if (e != 0)
+									  {
+										  throw new Exception($"Command '{command}' failed with exit code {e}");
+									  }
+									  return true;
+								  });
 		}
 
 		private async Task InstallDockerMacAsync()
 		{
-			using (Process process = new Process())
-			{
-				process.StartInfo.FileName = "brew";
-				process.StartInfo.Arguments = "install --cask docker";
-				process.StartInfo.UseShellExecute = false;
-				process.StartInfo.RedirectStandardOutput = true;
-				process.StartInfo.RedirectStandardError = true;
-				process.StartInfo.CreateNoWindow = true;
-				process.Start();
-				await process.WaitForExitAsync();
-			}
+			await RunProcessAsync("brew", "install --cask docker");
 		}
 
 		private async Task<bool> IsDockerInstalledAsync()
 		{
-			using (Process process = new Process())
-			{
-				process.StartInfo.FileName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "where" : "which";
-				process.StartInfo.Arguments = "docker";
-				process.StartInfo.UseShellExecute = false;
-				process.StartInfo.RedirectStandardOutput = true;
-				process.StartInfo.RedirectStandardError = true;
-				process.StartInfo.CreateNoWindow = true;
-
-				process.Start();
-				await process.WaitForExitAsync();
-
-				string output = await process.StandardOutput.ReadToEndAsync();
-				string error = await process.StandardError.ReadToEndAsync();
-
-				return process.ExitCode == 0 && !string.IsNullOrWhiteSpace(output);
-			}
+			return await RunProcessAsync(RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "where" : "which", "docker",
+										 (e, o, err) =>
+										 {
+											 return e == 0 && !string.IsNullOrWhiteSpace(o);
+										 });
 		}
 
-#pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
 		private async Task<string> RunDockerCommandAsync(string commandArgs)
-#pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
 		{
-#if !UNITY_EDITOR
 			Log("Running Docker Command: \r\n" +
 				"docker " + commandArgs);
 
@@ -849,19 +703,13 @@ namespace FishMMO.Shared
 
 				return output + "\r\n" + errorOutput;
 			}
-#else
-			return null;
-#endif
 		}
 
 		/// <summary>
 		/// Docker-Compose commands are not available in the editor.
 		/// </summary>
-#pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
 		private async Task<string> RunDockerComposeCommandAsync(string commandArgs, Dictionary<string, string> environmentVariables = null)
-#pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
 		{
-#if !UNITY_EDITOR
 			Log("Running Docker-Compose Command: \r\n" +
 				"docker-compose " + commandArgs);
 
@@ -911,9 +759,6 @@ namespace FishMMO.Shared
 
 				return output + "\r\n" + errorOutput;
 			}
-#else
-			return null;
-#endif
 		}
 		#endregion
 
@@ -1062,25 +907,11 @@ namespace FishMMO.Shared
 			string workingDirectory = GetWorkingDirectory();
 			//Log(workingDirectory);
 
-#if UNITY_EDITOR
-			string setup = Path.Combine(workingDirectory, Constants.Configuration.SetupDirectory);
-			//Log(setup);
-
-			string envConfigurationPath = Path.Combine(setup, "Development");
-			//Log(envConfigurationPath);
-
-			string appSettingsPath = Path.Combine(envConfigurationPath, "appsettings.json");
-			//Log(appSettingsPath);
-
-			if (File.Exists(appSettingsPath))
-			{
-#else
 			string appSettingsPath = Path.Combine(workingDirectory, "appsettings.json");
 			//Log(appSettingsPath);
 
 			if (File.Exists(appSettingsPath))
 			{
-#endif
 				string jsonContent = File.ReadAllText(appSettingsPath);
 
 				//Log(jsonContent);
@@ -1112,13 +943,11 @@ namespace FishMMO.Shared
 				{
 					// Run 'dotnet ef migrations add Initial' command
 					Log("Creating Initial database migration...");
-					string migrationOut = await RunDotNetCommandAsync($"ef migrations add Initial -p {Constants.Configuration.ProjectPath} -s {Constants.Configuration.StartupProject}");
-					Log(migrationOut);
+					await RunDotNetCommandAsync($"ef migrations add Initial -p {Constants.Configuration.ProjectPath} -s {Constants.Configuration.StartupProject}");
 
 					// Run 'dotnet ef database update' command
 					Log("Updating database...");
-					string updateOut = await RunDotNetCommandAsync($"ef database update -p {Constants.Configuration.ProjectPath} -s {Constants.Configuration.StartupProject}");
-					Log(updateOut);
+					await RunDotNetCommandAsync($"ef database update -p {Constants.Configuration.ProjectPath} -s {Constants.Configuration.StartupProject}");
 
 					StartCoroutine(NetHelper.FetchExternalIPAddress((ip) =>
 					{
