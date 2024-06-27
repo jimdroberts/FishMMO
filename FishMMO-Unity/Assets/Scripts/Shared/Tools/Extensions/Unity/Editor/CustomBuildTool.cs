@@ -191,17 +191,27 @@ start Scene.exe SCENE";
 			UnityEditor.Build.Il2CppCodeGeneration originalOptimization = PlayerSettings.GetIl2CppCodeGeneration(originalNamedBuildTargetGroup);
 
 			// Enable IL2CPP for webgl
+			bool bakeCollisionMeshes = PlayerSettings.bakeCollisionMeshes;
+			bool stripUnusedMeshComponents = PlayerSettings.stripUnusedMeshComponents;
 			WebGLCompressionFormat compressionFormat = PlayerSettings.WebGL.compressionFormat;
 			bool decompressionFallback = PlayerSettings.WebGL.decompressionFallback;
+			bool dataCaching = PlayerSettings.WebGL.dataCaching;
 			if (buildTarget == BuildTarget.WebGL)
 			{
 				PlayerSettings.SetScriptingBackend(EditorUserBuildSettings.selectedBuildTargetGroup, ScriptingImplementation.IL2CPP);
 				PlayerSettings.SetIl2CppCompilerConfiguration(EditorUserBuildSettings.selectedBuildTargetGroup, Il2CppCompilerConfiguration.Release);
 				PlayerSettings.SetIl2CppCodeGeneration(UnityEditor.Build.NamedBuildTarget.WebGL, UnityEditor.Build.Il2CppCodeGeneration.OptimizeSize);
 
+				// Disable pre-baked meshes and mesh stripping in WebGL
+				PlayerSettings.bakeCollisionMeshes = false;
+				PlayerSettings.stripUnusedMeshComponents = false;
+
 				// Force Decompression Fallback and GZIP
 				PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Gzip;
 				PlayerSettings.WebGL.decompressionFallback = true;
+
+				// Enable data caching on clients so they don't redownload without clearing their cache
+				PlayerSettings.WebGL.dataCaching = true;
 			}
 
 			// Switch active build target so #defines work properly
@@ -246,7 +256,7 @@ start Scene.exe SCENE";
 			BuildSummary summary = report.summary;
 			if (summary.result == BuildResult.Succeeded)
 			{
-				Debug.Log("Build succeeded: " + summary.totalSize + " bytes " + DateTime.UtcNow);
+				Debug.Log($"Build succeeded: {summary.totalSize} bytes {DateTime.UtcNow}");
 
 				string root = Directory.GetParent(Directory.GetCurrentDirectory()).FullName;
 
@@ -305,10 +315,15 @@ start Scene.exe SCENE";
 				{
 					BuildSetupFolder(root, buildPath);
 				}
+
+				if (buildTarget == BuildTarget.WebGL)
+				{
+					Debug.Log(@"Please visit https://docs.unity3d.com/2022.3/Documentation/Manual/webgl-server-configuration-code-samples.html for further WebGL WebServer configuration.");
+				}
 			}
 			else if (summary.result == BuildResult.Failed)
 			{
-				Debug.Log("Build failed: " + report.summary.result + " " + report);
+				Debug.Log($"Build failed: {report.summary.result}\r\n{report}");
 			}
 
 			// Return IL2CPP settings to original
@@ -317,8 +332,11 @@ start Scene.exe SCENE";
 				PlayerSettings.SetScriptingBackend(originalGroup, originalScriptingImp);
 				PlayerSettings.SetIl2CppCompilerConfiguration(originalGroup, originalCompilerConf);
 				PlayerSettings.SetIl2CppCodeGeneration(originalNamedBuildTargetGroup, originalOptimization);
+				PlayerSettings.bakeCollisionMeshes = bakeCollisionMeshes;
+				PlayerSettings.stripUnusedMeshComponents = stripUnusedMeshComponents;
 				PlayerSettings.WebGL.compressionFormat = compressionFormat;
 				PlayerSettings.WebGL.decompressionFallback = decompressionFallback;
+				PlayerSettings.WebGL.dataCaching = dataCaching;
 			}
 
 			EditorUserBuildSettings.SwitchActiveBuildTarget(originalGroup, originalBuildTarget);
