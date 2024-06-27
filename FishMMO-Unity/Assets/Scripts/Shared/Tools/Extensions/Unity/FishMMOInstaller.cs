@@ -840,6 +840,131 @@ namespace FishMMO.Shared
 			}
 		}
 
+		private async Task<bool> InstallPostgreSQLLinuxMAC(AppSettings appSettings)
+		{
+			if (!PromptForYesNo("Install PostgreSQL?"))
+			{
+				if (PromptForYesNo("Install FishMMO Database?"))
+				{
+					string su = PromptForInput("Enter PostgreSQL Superuser Username: ");
+					string sp = PromptForPassword("Enter PostgreSQL Superuser Password: ");
+
+					if (await InstallFishMMODatabase(su, sp, appSettings))
+					{
+						return true;
+					}
+					else
+					{
+						return false;
+					}
+				}
+				else
+				{
+					return false;
+				}
+			}
+
+			Log("Installing PostgreSQL.");
+			string superUsername = PromptForInput("Enter PostgreSQL Superuser Username: ");
+			string superPassword = PromptForPassword("Enter PostgreSQL Superuser Password: ");
+
+			try
+			{
+				// Detect platform
+				bool isMac = RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
+
+				string updateCommand = isMac ? "brew update" : "sudo apt-get update";
+				string installCommand = isMac ? "brew install postgresql" : "sudo apt-get install -y postgresql postgresql-contrib";
+				string startCommand = isMac ? "brew services start postgresql" : "sudo systemctl start postgresql";
+				string enableCommand = isMac ? null : "sudo systemctl enable postgresql";
+				string createUserCommand = $"-c \"CREATE USER {superUsername} WITH SUPERUSER PASSWORD '{superPassword}';\"";
+
+				bool updateSuccess = await RunProcessAsync("/bin/bash", $"-c \"{updateCommand}\"",
+					(exitCode, output, error) =>
+					{
+						if (exitCode != 0)
+						{
+							Log($"Failed to update package lists. Exit code: {exitCode}\nError: {error}");
+							return false;
+						}
+						return true;
+					});
+
+				if (!updateSuccess) return false;
+
+				bool installSuccess = await RunProcessAsync("/bin/bash", $"-c \"{installCommand}\"",
+					(exitCode, output, error) =>
+					{
+						if (exitCode != 0)
+						{
+							Log($"Failed to install PostgreSQL. Exit code: {exitCode}\nError: {error}");
+							return false;
+						}
+						return true;
+					});
+
+				if (!installSuccess) return false;
+
+				bool startSuccess = await RunProcessAsync("/bin/bash", $"-c \"{startCommand}\"",
+					(exitCode, output, error) =>
+					{
+						if (exitCode != 0)
+						{
+							Log($"Failed to start PostgreSQL. Exit code: {exitCode}\nError: {error}");
+							return false;
+						}
+						return true;
+					});
+
+				if (!startSuccess) return false;
+
+				if (!isMac)
+				{
+					bool enableSuccess = await RunProcessAsync("/bin/bash", $"-c \"{enableCommand}\"",
+						(exitCode, output, error) =>
+						{
+							if (exitCode != 0)
+							{
+								Log($"Failed to enable PostgreSQL to start on boot. Exit code: {exitCode}\nError: {error}");
+								return false;
+							}
+							return true;
+						});
+
+					if (!enableSuccess) return false;
+				}
+
+				bool createUserSuccess = await RunProcessAsync("/bin/bash", $"-c \"sudo -u postgres psql {createUserCommand}\"",
+					(exitCode, output, error) =>
+					{
+						if (exitCode != 0)
+						{
+							Log($"Failed to create PostgreSQL superuser. Exit code: {exitCode}\nError: {error}");
+							return false;
+						}
+						return true;
+					});
+
+				if (!createUserSuccess) return false;
+
+				Log("PostgreSQL installation successful.");
+
+				if (await InstallFishMMODatabase(superUsername, superPassword, appSettings))
+				{
+					return true;
+				}
+				else
+				{
+					return false;
+				}
+			}
+			catch (Exception ex)
+			{
+				Log($"Error installing PostgreSQL: {ex.Message}");
+				return false;
+			}
+		}
+
 		public async Task<bool> InstallFishMMODatabase(string superUsername, string superPassword, AppSettings appSettings)
 		{
 			try
@@ -934,9 +1059,20 @@ namespace FishMMO.Shared
 					});
 					Log(output);
 				}
-				else if (!await InstallPostgreSQLWindows(appSettings))
+				else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
 				{
-					return;
+					if (!await InstallPostgreSQLWindows(appSettings))
+					{
+						return;
+					}
+				}
+				else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ||
+						 RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+				{
+					if (!await InstallPostgreSQLLinuxMAC(appSettings))
+					{
+						return;
+					}
 				}
 
 				if (PromptForYesNo("Create Initial Migration?"))

@@ -41,7 +41,6 @@ namespace FishMMO.Server
 		public string RemoteAddress { get; private set; }
 		public string Address { get; private set; }
 		public ushort Port { get; private set; }
-		public ushort BayouPort { get; private set; }
 
 		public Action OnLoginServerInitialized;
 		public Action OnWorldServerInitialized;
@@ -102,7 +101,6 @@ namespace FishMMO.Server
 				Configuration.Set("Address", "127.0.0.1");
 				Configuration.Set("Port", serverType == ServerType.Login ? "7770" : serverType == ServerType.World ? "7780" : "7781");
 				Configuration.Set("StaleSceneTimeout", 5);
-				Configuration.Set("BayouPort", 7771);
 #if !UNITY_EDITOR
 				Configuration.Save();
 #endif
