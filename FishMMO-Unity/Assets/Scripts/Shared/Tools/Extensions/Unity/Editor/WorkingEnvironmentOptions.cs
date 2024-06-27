@@ -53,6 +53,11 @@ namespace FishMMO.Shared
 			return true;
 		}
 
+		public static WorkingEnvironmentState GetWorkingEnvironmentState()
+		{
+			return (WorkingEnvironmentState)EditorPrefs.GetInt("FishMMOWorkingEnvironmentToggle");
+		}
+
 		public static string AppendEnvironmentToPath(string path)
 		{
 			WorkingEnvironmentState envState = (WorkingEnvironmentState)EditorPrefs.GetInt("FishMMOWorkingEnvironmentToggle");

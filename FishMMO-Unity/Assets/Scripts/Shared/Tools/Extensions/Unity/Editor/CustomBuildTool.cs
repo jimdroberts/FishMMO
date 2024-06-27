@@ -27,9 +27,6 @@ namespace FishMMO.Shared
 			Installer,
 		}
 
-		public const BuildOptions BASE_BUILD_OPTIONS = BuildOptions.CleanBuildCache | BuildOptions.Development;
-		public const BuildOptions INSTALLER_BUILD_OPTIONS = BuildOptions.CleanBuildCache;
-
 		public const string ALL_IN_ONE_SERVER_BUILD_NAME = "All-In-One";
 		public const string LOGIN_SERVER_BUILD_NAME = "Login";
 		public const string WORLD_SERVER_BUILD_NAME = "World";
@@ -195,12 +192,16 @@ start Scene.exe SCENE";
 
 			// Enable IL2CPP for webgl
 			WebGLCompressionFormat compressionFormat = PlayerSettings.WebGL.compressionFormat;
+			bool decompressionFallback = PlayerSettings.WebGL.decompressionFallback;
 			if (buildTarget == BuildTarget.WebGL)
 			{
 				PlayerSettings.SetScriptingBackend(EditorUserBuildSettings.selectedBuildTargetGroup, ScriptingImplementation.IL2CPP);
 				PlayerSettings.SetIl2CppCompilerConfiguration(EditorUserBuildSettings.selectedBuildTargetGroup, Il2CppCompilerConfiguration.Release);
 				PlayerSettings.SetIl2CppCodeGeneration(UnityEditor.Build.NamedBuildTarget.WebGL, UnityEditor.Build.Il2CppCodeGeneration.OptimizeSize);
+
+				// Force Decompression Fallback and GZIP
 				PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Gzip;
+				PlayerSettings.WebGL.decompressionFallback = true;
 			}
 
 			// Switch active build target so #defines work properly
@@ -317,6 +318,7 @@ start Scene.exe SCENE";
 				PlayerSettings.SetIl2CppCompilerConfiguration(originalGroup, originalCompilerConf);
 				PlayerSettings.SetIl2CppCodeGeneration(originalNamedBuildTargetGroup, originalOptimization);
 				PlayerSettings.WebGL.compressionFormat = compressionFormat;
+				PlayerSettings.WebGL.decompressionFallback = decompressionFallback;
 			}
 
 			EditorUserBuildSettings.SwitchActiveBuildTarget(originalGroup, originalBuildTarget);
@@ -418,7 +420,7 @@ start Scene.exe SCENE";
 								Constants.Configuration.InstallerPath,
 							},
 							CustomBuildType.Installer,
-							INSTALLER_BUILD_OPTIONS | BuildOptions.ShowBuiltPlayer,
+							GetBuildOptions(),
 							StandaloneBuildSubtarget.Server,
 							BuildTarget.StandaloneWindows64);
 		}
@@ -432,7 +434,7 @@ start Scene.exe SCENE";
 								Constants.Configuration.InstallerPath,
 							},
 							CustomBuildType.Installer,
-							INSTALLER_BUILD_OPTIONS | BuildOptions.ShowBuiltPlayer,
+							GetBuildOptions(),
 							StandaloneBuildSubtarget.Server,
 							BuildTarget.StandaloneLinux64);
 		}
@@ -455,6 +457,28 @@ start Scene.exe SCENE";
 			FileUtil.DeleteFileOrDirectory(dbMigratorBinDirectory);
 		}
 
+		private static BuildOptions GetBuildOptions(BuildTarget? buildTarget = null)
+		{
+			BuildOptions buildOptions = BuildOptions.CleanBuildCache | BuildOptions.ShowBuiltPlayer;
+
+			WorkingEnvironmentState workingEnvironmentState = WorkingEnvironmentOptions.GetWorkingEnvironmentState();
+			switch (workingEnvironmentState)
+			{
+				case WorkingEnvironmentState.Release:
+					break;
+				case WorkingEnvironmentState.Development:
+					if (buildTarget != null && buildTarget == BuildTarget.WebGL)
+					{
+						break;
+					}
+					buildOptions |= BuildOptions.Development;
+					break;
+				default: break;
+			}
+
+			return buildOptions;
+		}
+
 		[MenuItem("FishMMO/Build/Misc/Update Linker", priority = 12)]
 		public static void UpdateLinker()
 		{
@@ -474,35 +498,35 @@ start Scene.exe SCENE";
 							Constants.Configuration.ProjectName,
 							CLIENT_BOOTSTRAP_SCENES,
 							CustomBuildType.Client,
-							BASE_BUILD_OPTIONS,
+							GetBuildOptions(),
 							StandaloneBuildSubtarget.Player,
 							BuildTarget.StandaloneWindows64);
 			BuildExecutable(serverRootPath,
 							ALL_IN_ONE_SERVER_BUILD_NAME,
 							ALL_IN_ONE_SERVER_BOOTSTRAP_SCENES,
 							CustomBuildType.AllInOne,
-							BASE_BUILD_OPTIONS,
+							GetBuildOptions(),
 							StandaloneBuildSubtarget.Server,
 							BuildTarget.StandaloneWindows64);
 			BuildExecutable(serverRootPath,
 							LOGIN_SERVER_BUILD_NAME,
 							LOGIN_SERVER_BOOTSTRAP_SCENES,
 							CustomBuildType.Login,
-							BASE_BUILD_OPTIONS,
+							GetBuildOptions(),
 							StandaloneBuildSubtarget.Server,
 							BuildTarget.StandaloneWindows64);
 			BuildExecutable(serverRootPath,
 							WORLD_SERVER_BUILD_NAME,
 							WORLD_SERVER_BOOTSTRAP_SCENES,
 							CustomBuildType.World,
-							BASE_BUILD_OPTIONS,
+							GetBuildOptions(),
 							StandaloneBuildSubtarget.Server,
 							BuildTarget.StandaloneWindows64);
 			BuildExecutable(serverRootPath,
 							SCENE_SERVER_BUILD_NAME,
 							SCENE_SERVER_BOOTSTRAP_SCENES,
 							CustomBuildType.Scene,
-							BASE_BUILD_OPTIONS,
+							GetBuildOptions(),
 							StandaloneBuildSubtarget.Server,
 							BuildTarget.StandaloneWindows64);
 
@@ -524,35 +548,35 @@ start Scene.exe SCENE";
 							Constants.Configuration.ProjectName,
 							CLIENT_BOOTSTRAP_SCENES,
 							CustomBuildType.Client,
-							BASE_BUILD_OPTIONS,
+							GetBuildOptions(),
 							StandaloneBuildSubtarget.Player,
 							BuildTarget.StandaloneLinux64);
 			BuildExecutable(serverRootPath,
 							ALL_IN_ONE_SERVER_BUILD_NAME,
 							ALL_IN_ONE_SERVER_BOOTSTRAP_SCENES,
 							CustomBuildType.AllInOne,
-							BASE_BUILD_OPTIONS,
+							GetBuildOptions(),
 							StandaloneBuildSubtarget.Server,
 							BuildTarget.StandaloneLinux64);
 			BuildExecutable(serverRootPath,
 							LOGIN_SERVER_BUILD_NAME,
 							LOGIN_SERVER_BOOTSTRAP_SCENES,
 							CustomBuildType.Login,
-							BASE_BUILD_OPTIONS,
+							GetBuildOptions(),
 							StandaloneBuildSubtarget.Server,
 							BuildTarget.StandaloneLinux64);
 			BuildExecutable(serverRootPath,
 							WORLD_SERVER_BUILD_NAME,
 							WORLD_SERVER_BOOTSTRAP_SCENES,
 							CustomBuildType.World,
-							BASE_BUILD_OPTIONS,
+							GetBuildOptions(),
 							StandaloneBuildSubtarget.Server,
 							BuildTarget.StandaloneLinux64);
 			BuildExecutable(serverRootPath,
 							SCENE_SERVER_BUILD_NAME,
 							SCENE_SERVER_BOOTSTRAP_SCENES,
 							CustomBuildType.Scene,
-							BASE_BUILD_OPTIONS,
+							GetBuildOptions(),
 							StandaloneBuildSubtarget.Server,
 							BuildTarget.StandaloneLinux64);
 
@@ -570,7 +594,7 @@ start Scene.exe SCENE";
 			BuildExecutable(ALL_IN_ONE_SERVER_BUILD_NAME,
 							ALL_IN_ONE_SERVER_BOOTSTRAP_SCENES,
 							CustomBuildType.AllInOne,
-							BASE_BUILD_OPTIONS | BuildOptions.ShowBuiltPlayer,
+							GetBuildOptions(),
 							StandaloneBuildSubtarget.Server,
 							BuildTarget.StandaloneWindows64);
 		}
@@ -582,7 +606,7 @@ start Scene.exe SCENE";
 			BuildExecutable(LOGIN_SERVER_BUILD_NAME,
 							LOGIN_SERVER_BOOTSTRAP_SCENES,
 							CustomBuildType.Login,
-							BASE_BUILD_OPTIONS | BuildOptions.ShowBuiltPlayer,
+							GetBuildOptions(),
 							StandaloneBuildSubtarget.Server,
 							BuildTarget.StandaloneWindows64);
 		}
@@ -594,7 +618,7 @@ start Scene.exe SCENE";
 			BuildExecutable(WORLD_SERVER_BUILD_NAME,
 							WORLD_SERVER_BOOTSTRAP_SCENES,
 							CustomBuildType.World,
-							BASE_BUILD_OPTIONS | BuildOptions.ShowBuiltPlayer,
+							GetBuildOptions(),
 							StandaloneBuildSubtarget.Server,
 							BuildTarget.StandaloneWindows64);
 		}
@@ -606,7 +630,7 @@ start Scene.exe SCENE";
 			BuildExecutable(SCENE_SERVER_BUILD_NAME,
 							SCENE_SERVER_BOOTSTRAP_SCENES,
 							CustomBuildType.Scene,
-							BASE_BUILD_OPTIONS | BuildOptions.ShowBuiltPlayer,
+							GetBuildOptions(),
 							StandaloneBuildSubtarget.Server,
 							BuildTarget.StandaloneWindows64);
 		}
@@ -618,7 +642,7 @@ start Scene.exe SCENE";
 			BuildExecutable(Constants.Configuration.ProjectName,
 							CLIENT_BOOTSTRAP_SCENES,
 							CustomBuildType.Client,
-							BASE_BUILD_OPTIONS | BuildOptions.ShowBuiltPlayer,
+							GetBuildOptions(),
 							StandaloneBuildSubtarget.Player,
 							BuildTarget.StandaloneWindows64);
 		}
@@ -651,7 +675,7 @@ start Scene.exe SCENE";
 			BuildExecutable(ALL_IN_ONE_SERVER_BUILD_NAME,
 							ALL_IN_ONE_SERVER_BOOTSTRAP_SCENES,
 							CustomBuildType.AllInOne,
-							BASE_BUILD_OPTIONS | BuildOptions.ShowBuiltPlayer,
+							GetBuildOptions(),
 							StandaloneBuildSubtarget.Server,
 							BuildTarget.StandaloneLinux64);
 		}
@@ -684,7 +708,7 @@ start Scene.exe SCENE";
 			BuildExecutable(Constants.Configuration.ProjectName,
 							CLIENT_BOOTSTRAP_SCENES,
 							CustomBuildType.Client,
-							BASE_BUILD_OPTIONS | BuildOptions.ShowBuiltPlayer,
+							GetBuildOptions(),
 							StandaloneBuildSubtarget.Player,
 							BuildTarget.StandaloneLinux64);
 		}
@@ -696,7 +720,7 @@ start Scene.exe SCENE";
 			BuildExecutable(Constants.Configuration.ProjectName,
 							WEBGL_CLIENT_BOOTSTRAP_SCENES,
 							CustomBuildType.Client,
-							BASE_BUILD_OPTIONS | BuildOptions.ShowBuiltPlayer,
+							GetBuildOptions(BuildTarget.WebGL),
 							StandaloneBuildSubtarget.Player,
 							BuildTarget.WebGL);
 		}
