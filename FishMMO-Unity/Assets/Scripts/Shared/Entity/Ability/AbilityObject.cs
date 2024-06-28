@@ -15,6 +15,8 @@ namespace FishMMO.Shared
 		public int HitCount;
 		public float RemainingLifeTime;
 
+		public System.Random RNG;
+
 		public Transform Transform { get; private set; }
 
 		private void Awake()
@@ -107,7 +109,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Handles primary spawn functionality for all ability objects. Returns true if successful.
 		/// </summary>
-		public static void Spawn(Ability ability, IPlayerCharacter caster, AbilityController controller, Transform abilitySpawner, TargetInfo targetInfo)
+		public static void Spawn(Ability ability, IPlayerCharacter caster, Transform abilitySpawner, TargetInfo targetInfo, int seed)
 		{
 			AbilityTemplate template = ability.Template;
 
@@ -141,6 +143,7 @@ namespace FishMMO.Shared
 			abilityObject.Caster = caster;
 			abilityObject.HitCount = template.HitCount;
 			abilityObject.RemainingLifeTime = ability.LifeTime;
+			abilityObject.RNG = new System.Random(seed);
 
 			// make sure the objects container exists
 			if (ability.Objects == null)

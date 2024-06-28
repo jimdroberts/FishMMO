@@ -1,5 +1,4 @@
 ﻿using System.Collections.Generic;
-using UnityEngine;
 
 namespace FishMMO.Shared
 {
@@ -40,12 +39,22 @@ namespace FishMMO.Shared
 			{
 				//Debug.Log($"{id} is on cooldown.");
 				cooldowns.Add(id, cooldown);
+
+				if (base.IsOwner)
+				{
+					ICooldownController.OnAddCooldown?.Invoke(id, cooldown);
+				}
 			}
 		}
 
 		public void RemoveCooldown(int id)
 		{
 			cooldowns.Remove(id);
+
+			if (base.IsOwner)
+			{
+				ICooldownController.OnRemoveCooldown?.Invoke(id);
+			}
 		}
 	}
 }

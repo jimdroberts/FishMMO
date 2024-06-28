@@ -12,6 +12,8 @@ namespace FishMMO.Shared
 {
 	public class AbilityController : CharacterBehaviour, IAbilityController
 	{
+		private static System.Random playerSeedGenerator = new System.Random();
+
 		public const long NO_ABILITY = 0;
 
 		private long currentAbilityID;
@@ -19,7 +21,9 @@ namespace FishMMO.Shared
 		private long queuedAbilityID;
 		private float remainingTime;
 		private KeyCode heldKey;
-		//private Random currentSeed = 12345;
+
+		private System.Random abilitySeedGenerator;
+		private int currentSeed = 0;
 
 		public Transform AbilitySpawner;
 		public CharacterAttributeTemplate BloodResourceTemplate;
@@ -193,6 +197,16 @@ namespace FishMMO.Shared
 
 		public override void ReadPayload(NetworkConnection conn, Reader reader)
 		{
+			// Read the AbilitySeedGenerator seed
+			int abilitySeed = reader.ReadInt32();
+
+			// Instantiate the AbilitySeedGenerator
+			abilitySeedGenerator = new System.Random(abilitySeed);
+
+			// Set the initial seed
+			currentSeed = abilitySeedGenerator.Next();
+			//Debug.Log($"Received AbilityGenerator Seed {abilitySeed}\r\nCurrent Seed {currentSeed}");
+
 			int abilityCount = reader.ReadInt32();
 			if (abilityCount < 1)
 			{
@@ -219,6 +233,23 @@ namespace FishMMO.Shared
 
 		public override void WritePayload(NetworkConnection conn, Writer writer)
 		{
+			if (base.IsServerStarted)
+			{
+				// Generate an AbilitySeedGenerator Seed
+				int abilitySeed = playerSeedGenerator.Next();
+
+				// Instantiate the AbilitySeedGenerator on the server
+				abilitySeedGenerator = new System.Random(abilitySeed);
+
+				// Set the initial seed
+				currentSeed = abilitySeedGenerator.Next();
+
+				//Debug.Log($"Generated AbilityGenerator Seed {abilitySeed}\r\nCurrent Seed {currentSeed}");
+
+				// Write the seed for the clients
+				writer.WriteInt32(abilitySeed);
+			}
+
 			writer.WriteInt32(KnownAbilities.Count);
 			foreach (Ability ability in KnownAbilities.Values)
 			{
@@ -427,7 +458,12 @@ namespace FishMMO.Shared
 																	   validatedAbility.Range);
 
 								// Spawn the ability object
-								AbilityObject.Spawn(validatedAbility, PlayerCharacter, this, AbilitySpawner, targetInfo);
+								AbilityObject.Spawn(validatedAbility, PlayerCharacter, AbilitySpawner, targetInfo, currentSeed);
+
+								// Generate a new seed
+								currentSeed = abilitySeedGenerator.Next();
+
+								//Debug.Log($"New Ability Seed {currentSeed}");
 
 								// Channeled abilities consume resources during activation
 
@@ -465,7 +501,12 @@ namespace FishMMO.Shared
 															validatedAbility.Range);
 
 					// Spawn the ability object
-					AbilityObject.Spawn(validatedAbility, PlayerCharacter, this, AbilitySpawner, targetInfo);
+					AbilityObject.Spawn(validatedAbility, PlayerCharacter, AbilitySpawner, targetInfo, currentSeed);
+
+					// Generate a new seed
+					currentSeed = abilitySeedGenerator.Next();
+
+					//Debug.Log($"New Ability Seed {currentSeed}");
 				}
 				// Handle NPC targetting and ability spawning
 				else

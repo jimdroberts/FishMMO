@@ -16,11 +16,11 @@ namespace FishMMO.Shared
 			{
 				return 0;
 			}
-			// fork - redirects towards a random direction on hit
+			// Fork - redirects towards a random direction on hit
 			abilityObject.transform.rotation = abilityObject.transform.forward.GetRandomConicalDirection(abilityObject.transform.transform.position, Arc, Distance);
 
-			// fork doesn't count as a hit
-			return 0;
+			// Fork counts as a hit
+			return 1;
 		}
 
 		public override string GetFormattedDescription()

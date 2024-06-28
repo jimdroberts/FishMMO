@@ -5,7 +5,7 @@ namespace FishMMO.Shared
 	[CreateAssetMenu(fileName = "New Heal Hit Event", menuName = "Character/Ability/Hit Event/Heal", order = 1)]
 	public sealed class HealHitEvent : HitEvent
 	{
-		public int Heal;
+		public int HealAmount;
 
 		public override int Invoke(ICharacter attacker, ICharacter defender, TargetInfo hitTarget, GameObject abilityObject)
 		{
@@ -20,14 +20,14 @@ namespace FishMMO.Shared
 				defender.TryGet(out ICharacterDamageController damageController) &&
 				attackerFactionController.GetAllianceLevel(defenderFactionController) == FactionAllianceLevel.Ally)
 			{
-				damageController.Heal(attacker, Heal);
+				damageController.Heal(attacker, HealAmount);
 			}
 			return 1;
 		}
 
 		public override string GetFormattedDescription()
 		{
-			return Description.Replace("$HEAL$", Heal.ToString());
+			return Description.Replace("$HEALAMOUNT$", "<color=#" + TinyColor.skyBlue.ToHex() + ">" + HealAmount + "</color>");
 		}
 	}
 }

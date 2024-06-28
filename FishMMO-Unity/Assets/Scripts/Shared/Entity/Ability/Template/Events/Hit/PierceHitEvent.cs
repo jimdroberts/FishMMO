@@ -13,6 +13,7 @@ namespace FishMMO.Shared
 			{
 				return 0;
 			}
+			// Pierce counts as a hit
 			return 1;
 		}
 	}

@@ -16,7 +16,7 @@ namespace FishMMO.Shared
 			if (attacker.TryGet(out IFactionController attackerFactionController) &&
 				defender.TryGet(out IFactionController defenderFactionController) &&
 				defender.TryGet(out IAbilityController abilityController) &&
-				attackerFactionController.GetAllianceLevel(defenderFactionController) == FactionAllianceLevel.Ally)
+				attackerFactionController.GetAllianceLevel(defenderFactionController) == FactionAllianceLevel.Enemy)
 			{
 				abilityController.Interrupt(attacker);
 			}

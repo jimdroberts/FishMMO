@@ -158,19 +158,20 @@ namespace FishMMO.Client
 #endif
 			}
 
+#if !UNITY_WEBGL
 			if (Configuration.TryGetInt("Resolution Width", out int width) &&
 				Configuration.TryGetInt("Resolution Height", out int height) &&
 				Configuration.TryGetUInt("Refresh Rate", out uint refreshRate) &&
 				Configuration.TryGetBool("Fullscreen", out bool fullscreen))
 			{
-#if !UNITY_WEBGL
+
 				Screen.SetResolution(width, height, fullscreen ? FullScreenMode.ExclusiveFullScreen : FullScreenMode.Windowed, new RefreshRate()
 				{
 					numerator = refreshRate,
 					denominator = 1,
 				});
+		}
 #endif
-			}
 
 			// Ensure the KCC System is created.
 			KinematicCharacterSystem.EnsureCreation();

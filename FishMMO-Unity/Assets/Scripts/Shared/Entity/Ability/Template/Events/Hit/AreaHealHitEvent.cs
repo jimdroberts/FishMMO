@@ -8,7 +8,7 @@ namespace FishMMO.Shared
 		private static Collider[] Hits = new Collider[512];
 
 		public int HitCount;
-		public int Heal;
+		public int HealAmount;
 		public float Radius;
 		public LayerMask CollidableLayers = -1;
 
@@ -23,7 +23,7 @@ namespace FishMMO.Shared
 
 			PhysicsScene physicsScene = attacker.GameObject.scene.GetPhysicsScene();
 
-			int overlapCount = physicsScene.OverlapSphere(//Physics.OverlapCapsuleNonAlloc(
+			int overlapCount = physicsScene.OverlapSphere(
 				hitTarget.Target.transform.position,
 				Radius,
 				Hits,
@@ -39,7 +39,7 @@ namespace FishMMO.Shared
 					def.TryGet(out ICharacterDamageController damageController) &&
 					attackerFactionController.GetAllianceLevel(defenderFactionController) == FactionAllianceLevel.Ally)
 				{
-					damageController.Heal(attacker, Heal);
+					damageController.Heal(attacker, HealAmount);
 					++hits;
 				}
 			}
@@ -48,7 +48,7 @@ namespace FishMMO.Shared
 
 		public override string GetFormattedDescription()
 		{
-			return Description.Replace("$HEAL$", "<color=#" + TinyColor.skyBlue.ToHex() + ">" + Heal + "</color>")
+			return Description.Replace("$HEALAMOUNT$", "<color=#" + TinyColor.skyBlue.ToHex() + ">" + HealAmount + "</color>")
 							  .Replace("$RADIUS$", Radius.ToString());
 		}
 	}
