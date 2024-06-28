@@ -581,7 +581,7 @@ namespace FishMMO.Client
 			serverLoadedScenes.Clear();
 
 			// Test
-			Resources.UnloadUnusedAssets();
+			//Resources.UnloadUnusedAssets();
 		}
 
 		private void SceneManager_OnLoadPercentChange(SceneLoadPercentEventArgs args)

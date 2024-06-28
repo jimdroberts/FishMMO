@@ -279,7 +279,7 @@ namespace FishMMO.Server
 		public void SceneManager_OnUnloadEnd(SceneUnloadEndEventArgs args)
 		{
 			// Test
-			Resources.UnloadUnusedAssets();
+			//Resources.UnloadUnusedAssets();
 		}
 
 		public bool TryGetSceneInstanceDetails(long worldServerID, string sceneName, int sceneHandle, out SceneInstanceDetails instanceDetails)
@@ -302,7 +302,7 @@ namespace FishMMO.Server
 			return false;
 		}
 
-		public bool TryLoadSceneForConnection(NetworkConnection connection, IPlayerCharacter character, SceneInstanceDetails instance)
+		public bool TryLoadSceneForConnection(NetworkConnection connection, SceneInstanceDetails instance)
 		{
 			Scene scene = SceneManager.GetScene(instance.Handle);
 			if (scene != null && scene.IsValid() && scene.isLoaded)

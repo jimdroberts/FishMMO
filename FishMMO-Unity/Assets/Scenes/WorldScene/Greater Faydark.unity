@@ -702,7 +702,7 @@ Transform:
   m_GameObject: {fileID: 187680798}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0.7071068, z: 0, w: 0.7071068}
-  m_LocalPosition: {x: -149.71, y: 10.07, z: 44.7}
+  m_LocalPosition: {x: -150.54633, y: 9.4210825, z: 44.43602}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1261,7 +1261,7 @@ GameObject:
   - component: {fileID: 520637842}
   - component: {fileID: 520637840}
   - component: {fileID: 520637846}
-  m_Layer: 8
+  m_Layer: 0
   m_Name: Teleporter
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1405,9 +1405,9 @@ MonoBehaviour:
   <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 0}
   <NestedRootNetworkBehaviours>k__BackingField: []
   SerializedTransformProperties:
-    Position: {x: 0, y: 0, z: 0}
-    Rotation: {x: 0, y: 0, z: 0, w: 0}
-    LocalScale: {x: 0, y: 0, z: 0}
+    Position: {x: -107.76, y: 1.15, z: 49.37}
+    Rotation: {x: 0, y: 0, z: 0, w: 1}
+    LocalScale: {x: 1, y: 1, z: 1}
   _isNetworked: 1
   _isSpawnable: 1
   _isGlobal: 0
@@ -3351,7 +3351,7 @@ Transform:
   m_GameObject: {fileID: 1189941749}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 1, z: 0, w: 0}
-  m_LocalPosition: {x: -2.52, y: 5.8199997, z: 28.605}
+  m_LocalPosition: {x: -2.5910993, y: 4.9199996, z: 27.954844}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -4836,7 +4836,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1770604219}
-  m_Layer: 8
+  m_Layer: 0
   m_Name: Target
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -5471,7 +5471,7 @@ GameObject:
   - component: {fileID: 2026365185}
   - component: {fileID: 2026365184}
   - component: {fileID: 2026365189}
-  m_Layer: 8
+  m_Layer: 0
   m_Name: GreaterFaydarkTeleporterA
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -5614,9 +5614,9 @@ MonoBehaviour:
   <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 0}
   <NestedRootNetworkBehaviours>k__BackingField: []
   SerializedTransformProperties:
-    Position: {x: 0, y: 0, z: 0}
-    Rotation: {x: 0, y: 0, z: 0, w: 0}
-    LocalScale: {x: 0, y: 0, z: 0}
+    Position: {x: -107.76, y: 1.15, z: 44.43}
+    Rotation: {x: 0, y: 0, z: 0, w: 1}
+    LocalScale: {x: 1, y: 1, z: 1}
   _isNetworked: 1
   _isSpawnable: 1
   _isGlobal: 0

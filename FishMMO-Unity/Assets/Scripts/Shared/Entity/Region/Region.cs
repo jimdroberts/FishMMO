@@ -89,7 +89,7 @@ namespace FishMMO.Shared
 			}
 			if (OnRegionEnter != null)
 			{
-				Debug.Log($"{character.CharacterName} Entered {gameObject.name}");
+				//Debug.Log($"{character.CharacterName} Entered {gameObject.name}");
 				foreach (RegionAction action in OnRegionEnter)
 				{
 					action?.Invoke(character, this);
@@ -131,7 +131,7 @@ namespace FishMMO.Shared
 			}
 			if (OnRegionExit != null)
 			{
-				Debug.Log($"{character.CharacterName} Exited {gameObject.name}");
+				//Debug.Log($"{character.CharacterName} Exited {gameObject.name}");
 				foreach (RegionAction action in OnRegionExit)
 				{
 					action?.Invoke(character, this);

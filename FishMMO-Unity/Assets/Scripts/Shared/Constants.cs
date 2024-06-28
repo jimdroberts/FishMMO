@@ -34,8 +34,6 @@ namespace FishMMO.Shared
 			public static readonly LayerMask Ground = LayerMask.NameToLayer("Ground");
 			public static readonly LayerMask Obstruction = LayerMask.GetMask("Default", "Ground");
 			public static readonly LayerMask LocalEntity = LayerMask.NameToLayer("LocalEntity");
-			public static readonly LayerMask Ability = LayerMask.NameToLayer("Ability");
-			public static readonly LayerMask Interactable = LayerMask.NameToLayer("Interactable");
 		}
 
 		public static class Authentication
