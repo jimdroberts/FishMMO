@@ -2,7 +2,11 @@
 {
 	public class CooldownInstance
 	{
+		private float totalTime;
 		private float remainingTime;
+
+		public float TotalTime { get { return totalTime; } }
+		public float RemainingTime { get { return remainingTime; } }
 
 		public bool IsOnCooldown
 		{
@@ -14,6 +18,7 @@
 
 		public CooldownInstance(float cooldown)
 		{
+			totalTime = cooldown;
 			remainingTime = cooldown;
 		}
 

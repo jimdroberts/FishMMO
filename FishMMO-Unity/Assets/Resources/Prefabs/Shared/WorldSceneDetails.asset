@@ -114,7 +114,7 @@ MonoBehaviour:
           ToPosition: {x: -20.561272, y: 68.3352, z: -27.581495}
           ToRotation: {x: -0, y: 1, z: -0, w: 0}
         - ToScene: Crushbone
-          ToPosition: {x: -131.21411, y: 17.6, z: 23.03191}
+          ToPosition: {x: -130.84203, y: 17.6, z: 22.710613}
           ToRotation: {x: -0, y: 0.7071068, z: -0, w: 0.7071068}
         - ToScene: Felwithe
           ToPosition: {x: -19.762293, y: 73.12, z: -19.263304}

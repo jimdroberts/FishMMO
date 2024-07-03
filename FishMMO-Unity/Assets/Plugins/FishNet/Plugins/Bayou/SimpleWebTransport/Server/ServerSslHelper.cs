@@ -31,8 +31,23 @@ namespace JamesFrowen.SimpleWeb
         {
             config = sslConfig;
             if (config.enabled)
-                certificate = new X509Certificate2(config.certPath, config.certPassword);
-        }
+            {
+				try
+				{
+					X509Certificate2 certificate = new X509Certificate2(config.certPath, config.certPassword);
+
+					// Use the certificate as needed
+					UnityEngine.Debug.Log($"Subject: {certificate.Subject}");
+					UnityEngine.Debug.Log($"Issuer: {certificate.Issuer}");
+					UnityEngine.Debug.Log($"Valid from: {certificate.NotBefore}");
+					UnityEngine.Debug.Log($"Valid until: {certificate.NotAfter}");
+				}
+				catch (Exception ex)
+				{
+					UnityEngine.Debug.Log($"Failed to load PKCS#12 file: {ex.Message}");
+				}
+			}
+		}
 
         internal bool TryCreateStream(Connection conn)
         {

@@ -4,12 +4,13 @@ namespace FishMMO.Shared
 {
 	public interface ICooldownController : ICharacterBehaviour
 	{
-		static Action<int, CooldownInstance> OnAddCooldown;
-		static Action<int> OnRemoveCooldown;
+		static Action<long, CooldownInstance> OnAddCooldown;
+		static Action<long, CooldownInstance> OnUpdateCooldown;
+		static Action<long> OnRemoveCooldown;
 
 		void OnTick(float deltaTime);
-		bool IsOnCooldown(int id);
-		void AddCooldown(int id, CooldownInstance cooldown);
-		void RemoveCooldown(int id);
+		bool IsOnCooldown(long id);
+		void AddCooldown(long id, CooldownInstance cooldown);
+		void RemoveCooldown(long id);
 	}
 }

@@ -608,7 +608,7 @@ namespace FishMMO.Shared
 				return false;
 			}
 			if (!Character.TryGet(out ICooldownController cooldownController) ||
-				cooldownController.IsOnCooldown(validatedAbility.Template.ID))
+				cooldownController.IsOnCooldown(validatedAbility.ID))
 			{
 				return false;
 			}
@@ -657,14 +657,13 @@ namespace FishMMO.Shared
 
 		internal void AddCooldown(Ability ability)
 		{
-			AbilityTemplate currentAbilityTemplate = ability.Template;
 			if (ability.Cooldown > 0.0f &&
 				Character.TryGet(out ICooldownController cooldownController))
 			{
 				float cooldownReduction = CalculateSpeedReduction(CooldownReductionTemplate);
 				float cooldown = ability.Cooldown * cooldownReduction;
 
-				cooldownController.AddCooldown(currentAbilityTemplate.ID, new CooldownInstance(cooldown));
+				cooldownController.AddCooldown(ability.ID, new CooldownInstance(cooldown));
 			}
 		}
 

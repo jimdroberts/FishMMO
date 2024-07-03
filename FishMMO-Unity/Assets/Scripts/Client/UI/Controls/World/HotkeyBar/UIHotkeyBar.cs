@@ -9,9 +9,9 @@ namespace FishMMO.Client
 		private const int MAX_HOTKEYS = 10;
 
 		public RectTransform parent;
-		public UIHotkeyButton buttonPrefab;
+		public UIHotkeyGroup buttonPrefab;
 
-		public List<UIHotkeyButton> hotkeys = new List<UIHotkeyButton>();
+		public List<UIHotkeyGroup> hotkeys = new List<UIHotkeyGroup>();
 
 		public override void OnStarting()
 		{
@@ -22,11 +22,11 @@ namespace FishMMO.Client
 		{
 			base.OnPostSetCharacter();
 
-			foreach (UIHotkeyButton hotkey in hotkeys)
+			foreach (UIHotkeyGroup group in hotkeys)
 			{
-				if (hotkey != null)
+				if (group != null && group.Button != null)
 				{
-					hotkey.Character = Character;
+					group.Button.Character = Character;
 				}
 			}
 		}
@@ -78,31 +78,34 @@ namespace FishMMO.Client
 
 			for (int i = 0; i < hotkeys.Count; ++i)
 			{
-				if (hotkeys[i] == null) continue;
+				UIHotkeyGroup group = hotkeys[i];
+				if (group == null) continue;
 
-				switch (hotkeys[i].Type)
+				UIHotkeyButton button = group.Button;
+
+				switch (button.Type)
 				{
 					case ReferenceButtonType.None:
 						break;
 					case ReferenceButtonType.Inventory:
 						if (Character.TryGet(out IInventoryController inventoryController) &&
-							inventoryController.IsSlotEmpty((int)hotkeys[i].ReferenceID))
+							inventoryController.IsSlotEmpty((int)button.ReferenceID))
 						{
-							hotkeys[i].Clear();
+							button.Clear();
 						}
 						break;
 					case ReferenceButtonType.Equipment:
 						if (Character.TryGet(out IEquipmentController equipmentController) &&
-							equipmentController.IsSlotEmpty((int)hotkeys[i].ReferenceID))
+							equipmentController.IsSlotEmpty((int)button.ReferenceID))
 						{
-							hotkeys[i].Clear();
+							button.Clear();
 						}
 						break;
 					case ReferenceButtonType.Ability:
 						if (Character.TryGet(out IAbilityController abilityController) &&
-							!abilityController.KnownAbilities.ContainsKey(hotkeys[i].ReferenceID))
+							!abilityController.KnownAbilities.ContainsKey(button.ReferenceID))
 						{
-							hotkeys[i].Clear();
+							button.Clear();
 						}
 						break;
 					default:
@@ -118,12 +121,15 @@ namespace FishMMO.Client
 
 			for (int i = 0; i < hotkeys.Count; ++i)
 			{
+				UIHotkeyGroup group = hotkeys[i];
+				if (group == null || group.Button == null) continue;
+
 				string keyMap = GetHotkeyIndexKeyMap(i);
 				if (string.IsNullOrWhiteSpace(keyMap)) return;
 
-				if (hotkeys[i] != null && InputManager.GetKey(keyMap))
+				if (InputManager.GetKey(keyMap))
 				{
-					hotkeys[i].Activate();
+					group.Button.Activate();
 					return;
 				}
 			}
@@ -133,15 +139,17 @@ namespace FishMMO.Client
 		{
 			if (parent == null || buttonPrefab == null) return;
 
-
 			for (int i = 0; i < amount && i < MAX_HOTKEYS; ++i)
 			{
-				UIHotkeyButton button = Instantiate(buttonPrefab, parent);
-				button.Character = Character;
-				button.KeyMap = GetHotkeyIndexKeyMap(i);
-				button.ReferenceID = UIReferenceButton.NULL_REFERENCE_ID;
-				button.Type = ReferenceButtonType.None;
-				hotkeys.Add(button);
+				UIHotkeyGroup group = Instantiate(buttonPrefab, parent);
+				if (group.Button != null)
+				{
+					group.Button.Character = Character;
+					group.Button.KeyMap = GetHotkeyIndexKeyMap(i);
+					group.Button.ReferenceID = UIReferenceButton.NULL_REFERENCE_ID;
+					group.Button.Type = ReferenceButtonType.None;
+				}
+				hotkeys.Add(group);
 			}
 		}
 	}

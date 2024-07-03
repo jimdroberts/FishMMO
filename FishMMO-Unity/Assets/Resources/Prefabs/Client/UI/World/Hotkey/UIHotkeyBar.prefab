@@ -101,7 +101,7 @@ MonoBehaviour:
   CanDrag: 0
   ClampToScreen: 1
   parent: {fileID: 1962124206175928821}
-  buttonPrefab: {fileID: -2753566670696080509, guid: 11b5d3c7915925f41ae20fbc55496763,
+  buttonPrefab: {fileID: 1935434977764781093, guid: b67fa68f0d755894b8888ee0f3569a9b,
     type: 3}
   hotkeys: []
 --- !u!1 &8917047278045846326

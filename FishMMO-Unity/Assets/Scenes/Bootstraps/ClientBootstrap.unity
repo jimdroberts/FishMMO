@@ -2385,6 +2385,11 @@ PrefabInstance:
       propertyPath: m_Name
       value: UIAbilities
       objectReference: {fileID: 0}
+    - target: {fileID: 7893287530442544403, guid: 3134a991874235e4ba34b037f1ed8fc7,
+        type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 7893287530442544404, guid: 3134a991874235e4ba34b037f1ed8fc7,
         type: 3}
       propertyPath: m_Pivot.x
@@ -3919,7 +3924,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1994176931, guid: c87590e7a452dcf4eac6b0921e679a50, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: 91.5
+      value: 91.49997
       objectReference: {fileID: 0}
     - target: {fileID: 2037370771, guid: c87590e7a452dcf4eac6b0921e679a50, type: 3}
       propertyPath: m_AnchorMax.x
@@ -4422,6 +4427,11 @@ PrefabInstance:
         type: 3}
       propertyPath: m_Name
       value: UIAbilityCraft
+      objectReference: {fileID: 0}
+    - target: {fileID: 5310208002575807365, guid: b0d804ed653fe6541b5ec35044d3f151,
+        type: 3}
+      propertyPath: m_IsActive
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 5351159173949988308, guid: b0d804ed653fe6541b5ec35044d3f151,
         type: 3}
