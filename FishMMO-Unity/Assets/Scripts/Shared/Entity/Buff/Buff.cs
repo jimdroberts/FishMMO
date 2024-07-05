@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using Cysharp.Text;
 
 namespace FishMMO.Shared
@@ -36,26 +37,31 @@ namespace FishMMO.Shared
 			this.stacks = stacks;
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void SubtractTime(float time)
 		{
 			RemainingTime -= time;
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void AddTime(float time)
 		{
 			RemainingTime += time;
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void SubtractTickTime(float time)
 		{
 			tickTime -= time;
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void AddTickTime(float time)
 		{
 			tickTime += time;
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void TryTick(ICharacter target)
 		{
 			if (tickTime <= 0.0f)
@@ -65,43 +71,51 @@ namespace FishMMO.Shared
 			}
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void ResetDuration()
 		{
 			RemainingTime = Template.Duration;
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void ResetTickTime()
 		{
 			tickTime = Template.TickRate;
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private void Reset()
 		{
 			attributeBonuses.Clear();
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void AddAttributeBonus(BuffAttribute buffAttributeInstance)
 		{
 			attributeBonuses.Add(buffAttributeInstance);
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void Apply(ICharacter target)
 		{
 			Template.OnApply(this, target);
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void Remove(ICharacter target)
 		{
 			Template.OnRemove(this, target);
 			Reset();
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void AddStack(Buff stack, ICharacter target)
 		{
 			Template.OnApplyStack(stack, target);
 			stacks.Add(stack);
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void RemoveStack(ICharacter target)
 		{
 			Template.OnRemoveStack(this, target);

@@ -13,7 +13,7 @@ namespace FishMMO.Shared
 		public BuffTemplate BuffTemplate;
 		public LayerMask CollidableLayers = -1;
 
-		public override int Invoke(ICharacter attacker, ICharacter defender, TargetInfo hitTarget, GameObject abilityObject)
+		public override int Invoke(ICharacter attacker, ICharacter defender, TargetInfo hitTarget, AbilityObject abilityObject)
 		{
 			// attacker should exist with a faction controller
 			if (attacker == null ||

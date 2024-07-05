@@ -102,17 +102,20 @@ namespace FishMMO.Server
 		{
 			if (conn == null)
 			{
+				Debug.Log("No connnection");
 				return;
 			}
 
 			// validate connection character
 			if (conn.FirstObject == null)
 			{
+				Debug.Log("No first object");
 				return;
 			}
 			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
 			if (character == null)
 			{
+				Debug.Log("No character");
 				return;
 			}
 

@@ -2,6 +2,7 @@
 using UnityEngine;
 using FishMMO.Shared;
 using KinematicCharacterController;
+using System.Runtime.CompilerServices;
 
 namespace FishMMO.Client
 {
@@ -70,6 +71,7 @@ namespace FishMMO.Client
 			UIManager.Hide("UIChat");
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private bool CanUpdateInput()
 		{
 			return !InputManager.MouseMode;

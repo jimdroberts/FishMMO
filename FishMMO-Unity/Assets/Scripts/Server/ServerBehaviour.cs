@@ -2,14 +2,13 @@ using FishNet.Managing.Server;
 using UnityEngine;
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 namespace FishMMO.Server
 {
 	public abstract class ServerBehaviour : MonoBehaviour
 	{
 		private static Dictionary<Type, ServerBehaviour> behaviours = new Dictionary<Type, ServerBehaviour>();
-
-		private bool initialized = false;
 
 		internal static void Register<T>(T behaviour) where T : ServerBehaviour
 		{
@@ -40,6 +39,7 @@ namespace FishMMO.Server
 			}
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static bool TryGet<T>(out T control) where T : ServerBehaviour
 		{
 			if (behaviours.TryGetValue(typeof(T), out ServerBehaviour result))
@@ -53,6 +53,7 @@ namespace FishMMO.Server
 			return false;
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static T Get<T>() where T : ServerBehaviour
 		{
 			if (behaviours.TryGetValue(typeof(T), out ServerBehaviour result))

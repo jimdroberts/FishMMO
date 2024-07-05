@@ -231,6 +231,7 @@ namespace FishMMO.Client
 			}
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static string GetWorkingDirectory()
 		{
 #if UNITY_EDITOR
@@ -264,6 +265,7 @@ namespace FishMMO.Client
 			Application.logMessageReceived -= this.Application_logMessageReceived;
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void Quit()
 		{
 #if UNITY_EDITOR
@@ -468,12 +470,14 @@ namespace FishMMO.Client
 			yield return null;
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void ReconnectCancel()
 		{
 			OnReconnectFailed?.Invoke();
 			ForceDisconnect();
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void ForceDisconnect()
 		{
 			forceDisconnect = true;

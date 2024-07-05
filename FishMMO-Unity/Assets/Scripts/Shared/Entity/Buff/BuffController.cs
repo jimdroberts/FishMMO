@@ -1,5 +1,6 @@
 ﻿using FishNet.Transporting;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using UnityEngine;
 
 namespace FishMMO.Shared
@@ -74,6 +75,7 @@ namespace FishMMO.Shared
 			}
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void Apply(Buff buff)
 		{
 			if (!buffs.ContainsKey(buff.Template.ID))

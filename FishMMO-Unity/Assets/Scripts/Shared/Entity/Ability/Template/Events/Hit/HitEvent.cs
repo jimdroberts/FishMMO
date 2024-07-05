@@ -7,6 +7,6 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Returns the number of hits the event has issued,
 		/// </summary>
-		public abstract int Invoke(ICharacter attacker, ICharacter defender, TargetInfo hitTarget, GameObject abilityObject);
+		public abstract int Invoke(ICharacter attacker, ICharacter defender, TargetInfo hitTarget, AbilityObject abilityObject);
 	}
 }

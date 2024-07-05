@@ -13,7 +13,7 @@ namespace FishMMO.Shared
 		public DamageAttributeTemplate DamageAttributeTemplate;
 		public LayerMask CollidableLayers = -1;
 
-		public override int Invoke(ICharacter attacker, ICharacter defender, TargetInfo hitTarget, GameObject abilityObject)
+		public override int Invoke(ICharacter attacker, ICharacter defender, TargetInfo hitTarget, AbilityObject abilityObject)
 		{
 			if (attacker == defender ||
 				attacker == null ||

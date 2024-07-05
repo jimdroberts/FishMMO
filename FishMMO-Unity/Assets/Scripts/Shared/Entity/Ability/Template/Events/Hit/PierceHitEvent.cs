@@ -5,7 +5,7 @@ namespace FishMMO.Shared
 	[CreateAssetMenu(fileName = "New Pierce Hit Event", menuName = "Character/Ability/Hit Event/Pierce", order = 1)]
 	public sealed class PierceHitEvent : HitEvent
 	{
-		public override int Invoke(ICharacter attacker, ICharacter defender, TargetInfo hitTarget, GameObject abilityObject)
+		public override int Invoke(ICharacter attacker, ICharacter defender, TargetInfo hitTarget, AbilityObject abilityObject)
 		{
 			if (attacker == defender ||
 				attacker == null ||

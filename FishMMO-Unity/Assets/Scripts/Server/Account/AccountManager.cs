@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Security.Cryptography;
 using SecureRemotePassword;
 using FishMMO.Shared;
+using System.Runtime.CompilerServices;
 
 namespace FishMMO.Server
 {
@@ -26,6 +27,7 @@ namespace FishMMO.Server
 																					CryptoHelper.GenerateKey(16)));
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static bool GetConnectionEncryptionData(NetworkConnection connection, out ConnectionEncryptionData encryptionData)
 		{
 			return ConnectionEncryptionDatas.TryGetValue(connection, out encryptionData);
@@ -74,21 +76,25 @@ namespace FishMMO.Server
 			}
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static bool GetConnectionAccountData(NetworkConnection connection, out AccountData accountData)
 		{
 			return ConnectionAccountData.TryGetValue(connection, out accountData);
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static bool GetAccountNameByConnection(NetworkConnection connection, out string accountName)
 		{
 			return ConnectionAccounts.TryGetValue(connection, out accountName);
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static bool GetConnectionByAccountName(string accountName, out NetworkConnection connection)
 		{
 			return AccountConnections.TryGetValue(accountName, out connection);
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static bool TryUpdateSrpState(NetworkConnection connection, SrpState requiredState, SrpState nextState)
 		{
 			return TryUpdateSrpState(connection, requiredState, nextState, null);

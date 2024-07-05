@@ -185,6 +185,7 @@ namespace FishMMO.Server
 			}
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static string GetWorkingDirectory()
 		{
 #if UNITY_EDITOR
@@ -204,6 +205,7 @@ namespace FishMMO.Server
 			//RedisDbContextFactory.CloseRedis();
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void Quit()
 		{
 #if UNITY_EDITOR
@@ -240,6 +242,7 @@ namespace FishMMO.Server
 		/// <summary>
 		/// Gets a component, creating and adding it if it does not exist.
 		/// </summary>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private T GetOrCreateComponent<T>() where T : UnityEngine.Component
 		{
 			if (gameObject.TryGetComponent<T>(out T result))

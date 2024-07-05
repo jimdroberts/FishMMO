@@ -137,10 +137,10 @@ namespace FishMMO.Client
 			if (Client.IsConnectionReady() &&
 				selectedServer != null)
 			{
+				SetConnectToServerLocked(true);
+
 				// connect to the world server
 				Client.ConnectToServer(selectedServer.Details.Address, selectedServer.Details.Port, true);
-
-				SetConnectToServerLocked(true);
 			}
 		}
 

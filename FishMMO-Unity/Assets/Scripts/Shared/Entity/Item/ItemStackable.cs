@@ -1,4 +1,6 @@
-﻿namespace FishMMO.Shared
+﻿using System.Runtime.CompilerServices;
+
+namespace FishMMO.Shared
 {
 	public class ItemStackable : IStackable<Item>
 	{
@@ -13,6 +15,7 @@
 			Amount = amount;
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void Remove(uint amount)
 		{
 			Amount -= amount;

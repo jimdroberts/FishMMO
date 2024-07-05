@@ -8,7 +8,7 @@ namespace FishMMO.Shared
 		public float Arc = 180.0f;
 		public float Distance = 60.0f;
 
-		public override int Invoke(ICharacter attacker, ICharacter defender, TargetInfo hitTarget, GameObject abilityObject)
+		public override int Invoke(ICharacter attacker, ICharacter defender, TargetInfo hitTarget, AbilityObject abilityObject)
 		{
 			if (attacker == defender ||
 				attacker == null ||
@@ -16,8 +16,9 @@ namespace FishMMO.Shared
 			{
 				return 0;
 			}
+
 			// Fork - redirects towards a random direction on hit
-			abilityObject.transform.rotation = abilityObject.transform.forward.GetRandomConicalDirection(abilityObject.transform.transform.position, Arc, Distance);
+			abilityObject.transform.rotation = abilityObject.transform.forward.GetRandomConicalDirection(abilityObject.transform.transform.position, Arc, Distance, abilityObject.RNG);
 
 			// Fork counts as a hit
 			return 1;

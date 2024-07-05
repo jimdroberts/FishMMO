@@ -460,19 +460,28 @@ start Scene.exe SCENE";
 		private static void BuildSetupFolder(string rootPath, string buildPath)
 		{
 			string setup = Path.Combine(rootPath, Constants.Configuration.SetupDirectory);
-			FileUtil.ReplaceFile(Path.Combine(setup, "docker-compose.yml"), Path.Combine(buildPath, "docker-compose.yml"));
 
+			// Copy docker-compose to installer directory
+			string dockerComposeTarget = Path.Combine(buildPath, "docker-compose.yml");
+			FileUtil.DeleteFileOrDirectory(dockerComposeTarget);
+			FileUtil.CopyFileOrDirectory(Path.Combine(setup, "docker-compose.yml"), dockerComposeTarget);
+
+			// Copy appsettings to installer directory
 			string envConfigurationPath = WorkingEnvironmentOptions.AppendEnvironmentToPath(setup);
-			FileUtil.ReplaceFile(Path.Combine(envConfigurationPath, "appsettings.json"), Path.Combine(buildPath, "appsettings.json"));
+			string appsettingsTarget = Path.Combine(buildPath, "appsettings.json");
+			FileUtil.DeleteFileOrDirectory(appsettingsTarget);
+			FileUtil.CopyFileOrDirectory(Path.Combine(envConfigurationPath, "appsettings.json"), appsettingsTarget);
 
+			// Copy database project to installer directory
 			string dbBuildDirectory = Path.Combine(buildPath, Constants.Configuration.DatabaseDirectory);
-			FileUtil.ReplaceDirectory(Path.Combine(rootPath, Constants.Configuration.DatabaseDirectory), dbBuildDirectory);
+			FileUtil.DeleteFileOrDirectory(dbBuildDirectory);
+			FileUtil.CopyFileOrDirectory(Path.Combine(rootPath, Constants.Configuration.DatabaseDirectory), dbBuildDirectory);
 
-			string dbBinDirectory = Path.Combine(Path.Combine(dbBuildDirectory, Constants.Configuration.DatabaseProjectDirectory), "bin");
-			FileUtil.DeleteFileOrDirectory(dbBinDirectory);
+			// Delete DB/bin
+			FileUtil.DeleteFileOrDirectory(Path.Combine(Path.Combine(dbBuildDirectory, Constants.Configuration.DatabaseProjectDirectory), "bin"));
 
-			string dbMigratorBinDirectory = Path.Combine(Path.Combine(dbBuildDirectory, Constants.Configuration.DatabaseMigratorProjectDirectory), "bin");
-			FileUtil.DeleteFileOrDirectory(dbMigratorBinDirectory);
+			// Delete Migrator/bin
+			FileUtil.DeleteFileOrDirectory(Path.Combine(Path.Combine(dbBuildDirectory, Constants.Configuration.DatabaseMigratorProjectDirectory), "bin"));
 		}
 
 		private static BuildOptions GetBuildOptions(BuildTarget? buildTarget = null)

@@ -2,6 +2,7 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
 using FishMMO.Shared;
+using System.Runtime.CompilerServices;
 
 namespace FishMMO.Client
 {
@@ -115,6 +116,7 @@ namespace FishMMO.Client
 			return false;
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static bool Exists(string name)
 		{
 			if (controls.ContainsKey(name))
@@ -132,6 +134,7 @@ namespace FishMMO.Client
 			}
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void Show(string name)
 		{
 			if (controls.TryGetValue(name, out UIControl result))
@@ -140,6 +143,7 @@ namespace FishMMO.Client
 			}
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void Hide(string name)
 		{
 			if (controls.TryGetValue(name, out UIControl result) && result.Visible)
@@ -148,6 +152,7 @@ namespace FishMMO.Client
 			}
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void HideAll()
 		{
 			foreach (KeyValuePair<string, UIControl> p in controls)
@@ -156,6 +161,7 @@ namespace FishMMO.Client
 			}
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void ShowAll()
 		{
 			foreach (KeyValuePair<string, UIControl> p in controls)

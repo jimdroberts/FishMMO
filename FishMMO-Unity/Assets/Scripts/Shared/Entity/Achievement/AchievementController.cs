@@ -2,6 +2,7 @@
 using System;
 using FishNet.Transporting;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 namespace FishMMO.Shared
 {
@@ -89,6 +90,7 @@ namespace FishMMO.Shared
 			}
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public bool TryGetAchievement(int templateID, out Achievement achievement)
 		{
 			return achievements.TryGetValue(templateID, out achievement);

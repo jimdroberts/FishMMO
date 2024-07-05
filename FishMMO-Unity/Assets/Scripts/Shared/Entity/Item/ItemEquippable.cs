@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Runtime.CompilerServices;
 
 namespace FishMMO.Shared
 {
@@ -43,6 +44,7 @@ namespace FishMMO.Shared
 			}
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void SetOwner(ICharacter owner)
 		{
 			Character = owner;

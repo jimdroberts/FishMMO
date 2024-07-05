@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 namespace FishMMO.Shared
 {
@@ -172,6 +173,7 @@ namespace FishMMO.Shared
 			return false;
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public bool HasAbilityEvent(int templateID)
 		{
 			return AbilityEvents.ContainsKey(templateID);
@@ -409,6 +411,7 @@ namespace FishMMO.Shared
 			}
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void RemoveAbilityObject(int containerID, int objectID)
 		{
 			if (Objects.TryGetValue(containerID, out Dictionary<int, AbilityObject> container))

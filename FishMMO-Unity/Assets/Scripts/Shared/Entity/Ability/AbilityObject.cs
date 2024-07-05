@@ -54,12 +54,9 @@ namespace FishMMO.Shared
 
 		void OnCollisionEnter(Collision other)
 		{
-			//Debug.Log($"Collision: {other.gameObject.name}");
-
+			// Check if we hit an obstruction
 			if ((Constants.Layers.Obstruction & (1 << other.collider.gameObject.layer)) != 0)
 			{
-				//Debug.Log("Obstruction");
-
 				HitCount = 0;
 			}
 
@@ -81,7 +78,7 @@ namespace FishMMO.Shared
 
 					// we remove hit count with the events return value
 					// if hit count falls below 1 the object will be destroyed after iterating all events at least once
-					HitCount -= hitEvent.Invoke(Caster, hitCharacter, targetInfo, gameObject);
+					HitCount -= hitEvent.Invoke(Caster, hitCharacter, targetInfo, this);
 				}
 			}
 
@@ -129,7 +126,7 @@ namespace FishMMO.Shared
 			GameObject go = Instantiate(template.FXPrefab);
 			SceneManager.MoveGameObjectToScene(go, caster.GameObject.scene);
 			Transform t = go.transform;
-			SetAbilitySpawnPosition(caster, abilitySpawner, targetInfo, template, t);
+			SetAbilitySpawnPosition(caster, ability, abilitySpawner, targetInfo, t);
 			go.SetActive(false);
 
 			// construct initial ability object
@@ -195,9 +192,9 @@ namespace FishMMO.Shared
 			//Debug.Log("Activated " + abilityObject.gameObject.name);
 		}
 
-		public static void SetAbilitySpawnPosition(IPlayerCharacter caster, Transform abilitySpawner, TargetInfo targetInfo, AbilityTemplate template, Transform abilityTransform)
+		public static void SetAbilitySpawnPosition(IPlayerCharacter caster, Ability ability, Transform abilitySpawner, TargetInfo targetInfo, Transform abilityTransform)
 		{
-			switch (template.AbilitySpawnTarget)
+			switch (ability.Template.AbilitySpawnTarget)
 			{
 				case AbilitySpawnTarget.Self:
 					abilityTransform.SetPositionAndRotation(caster.Motor.Transform.position, caster.Motor.Transform.rotation);
@@ -217,7 +214,7 @@ namespace FishMMO.Shared
 						// calculate collider offsets so the spawned ability object appears centered in front of the caster
 						float distance = 0.0f;
 						float height = 0.0f;
-						Collider collider = template.FXPrefab.GetComponent<Collider>();
+						Collider collider = ability.Template.FXPrefab.GetComponent<Collider>();
 						if (collider != null)
 						{
 							Collider casterCollider = caster.GameObject.GetComponent<Collider>();
@@ -245,11 +242,8 @@ namespace FishMMO.Shared
 						// TODO Should this value be adjust so it's in front of the player?
 						Vector3 spawnPosition = caster.CharacterController.VirtualCameraPosition + cameraForward;
 
-						// TODO - replace this with ability Range... that way the ability is 100% accurate up to the distance
-						const float farDistance = 50.0f;
-
 						// Get a target position far from the camera position
-						Vector3 farTargetPosition = caster.CharacterController.VirtualCameraPosition + cameraForward * farDistance;//ability.Range;
+						Vector3 farTargetPosition = caster.CharacterController.VirtualCameraPosition + cameraForward * ability.Range;
 
 						// Calculate the look direction towards the far target position
 						Vector3 lookDirection = (farTargetPosition - spawnPosition).normalized;

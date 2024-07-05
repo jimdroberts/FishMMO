@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 namespace FishMMO.Shared
 {
@@ -33,11 +34,13 @@ namespace FishMMO.Shared
 			keysToRemove.Clear();
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public bool IsOnCooldown(long id)
 		{
 			return cooldowns.ContainsKey(id);
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void AddCooldown(long id, CooldownInstance cooldown)
 		{
 			if (!cooldowns.ContainsKey(id))
@@ -52,6 +55,7 @@ namespace FishMMO.Shared
 			}
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void RemoveCooldown(long id)
 		{
 			cooldowns.Remove(id);

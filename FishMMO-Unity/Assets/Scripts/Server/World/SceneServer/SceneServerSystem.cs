@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
 using FishMMO.Database.Npgsql.Entities;
+using System.Runtime.CompilerServices;
 
 namespace FishMMO.Server
 {
@@ -323,6 +324,7 @@ namespace FishMMO.Server
 			return false;
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void UnloadScene(int handle)
 		{
 			SceneUnloadData sud = new SceneUnloadData()

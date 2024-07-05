@@ -6,6 +6,7 @@ using System;
 using System.Runtime.InteropServices;
 using UnityEngine;
 using Cysharp.Text;
+using System.Runtime.CompilerServices;
 
 namespace FishMMO.Server
 {
@@ -61,6 +62,7 @@ namespace FishMMO.Server
 			NextUpdate -= Time.deltaTime;
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void UpdateWindowTitle()
 		{
 			Title = null;

@@ -1,4 +1,6 @@
-﻿namespace FishMMO.Shared
+﻿using System.Runtime.CompilerServices;
+
+namespace FishMMO.Shared
 {
 	public class CharacterResourceAttribute : CharacterAttribute
 	{
@@ -31,6 +33,7 @@
 			Internal_OnAttributeChanged(this);
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void SetCurrentValue(float value, bool updateInternal = true)
 		{
 			currentValue = value;

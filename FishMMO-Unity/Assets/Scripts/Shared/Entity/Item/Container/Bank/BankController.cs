@@ -1,4 +1,5 @@
 ﻿using FishNet.Transporting;
+using System.Runtime.CompilerServices;
 
 namespace FishMMO.Shared
 {
@@ -123,6 +124,7 @@ namespace FishMMO.Shared
 			return true;
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public bool CanSwapItemSlots(int from, int to, InventoryType fromInventory)
 		{
 			return !(fromInventory == InventoryType.Bank && from == to);

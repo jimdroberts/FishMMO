@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 namespace FishMMO.Shared
 {
@@ -27,6 +28,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Checks if the item slot exists.
 		/// </summary>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public bool IsValidSlot(int slot)
 		{
 			return slot > -1 &&
@@ -36,6 +38,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Checks if the slot is empty.
 		/// </summary>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public bool IsSlotEmpty(int slot)
 		{
 			return IsValidSlot(slot) &&
@@ -45,6 +48,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Validates the item slot exists and returns whatever is in the slot. Returns false if the item doesn't exist.
 		/// </summary>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public bool TryGetItem(int slot, out Item item)
 		{
 			if (IsValidSlot(slot))

@@ -1,6 +1,8 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using System;
+using System.Runtime.CompilerServices;
+
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -59,6 +61,7 @@ namespace FishMMO.Server
 			Server.Quit();
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private void Initialize(string bootstrapSceneName)
 		{
 #if UNITY_SERVER && !UNITY_EDITOR

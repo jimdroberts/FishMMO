@@ -3,6 +3,7 @@ using UnityEngine;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 namespace FishMMO.Shared
 {
@@ -88,6 +89,7 @@ namespace FishMMO.Shared
 			}
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public bool TryGet<T>(out T control) where T : class, ICharacterBehaviour
 		{
 			if (Behaviours.TryGetValue(typeof(T), out ICharacterBehaviour result))
@@ -101,6 +103,7 @@ namespace FishMMO.Shared
 			return false;
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public T Get<T>() where T : class, ICharacterBehaviour
 		{
 			if (Behaviours.TryGetValue(typeof(T), out ICharacterBehaviour result))

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 namespace FishMMO.Shared
 {
@@ -60,6 +61,7 @@ namespace FishMMO.Shared
 				finalValue = CalculateFinalValue();
 			}
 		}
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void SetFinal(int newValue)
 		{
 			finalValue = newValue;
@@ -93,6 +95,7 @@ namespace FishMMO.Shared
 			finalValue = CalculateFinalValue();
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void AddParent(CharacterAttribute parent)
 		{
 			if (!parents.ContainsKey(parent.Template.Name))
@@ -101,11 +104,13 @@ namespace FishMMO.Shared
 			}
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void RemoveParent(CharacterAttribute parent)
 		{
 			parents.Remove(parent.Template.Name);
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void AddChild(CharacterAttribute child)
 		{
 			if (!children.ContainsKey(child.Template.Name))
@@ -116,6 +121,7 @@ namespace FishMMO.Shared
 			}
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void RemoveChild(CharacterAttribute child)
 		{
 			children.Remove(child.Template.Name);
@@ -123,6 +129,7 @@ namespace FishMMO.Shared
 			UpdateValues();
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void AddDependant(CharacterAttribute dependency)
 		{
 			if (!dependencies.ContainsKey(dependency.Template.Name))
@@ -131,37 +138,44 @@ namespace FishMMO.Shared
 			}
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void RemoveDependant(CharacterAttribute dependency)
 		{
 			dependencies.Remove(dependency.Template.Name);
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public CharacterAttribute GetDependant(string name)
 		{
 			dependencies.TryGetValue(name, out CharacterAttribute result);
 			return result;
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public int GetDependantValue(string name)
 		{
 			return !dependencies.TryGetValue(name, out CharacterAttribute attribute) ? 0 : attribute.Value;
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public int GetDependantMinValue(string name)
 		{
 			return !dependencies.TryGetValue(name, out CharacterAttribute attribute) ? 0 : attribute.Template.MinValue;
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public int GetDependantMaxValue(string name)
 		{
 			return !dependencies.TryGetValue(name, out CharacterAttribute attribute) ? 0 : attribute.Template.MaxValue;
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public int GetDependantModifier(string name)
 		{
 			return !dependencies.TryGetValue(name, out CharacterAttribute attribute) ? 0 : attribute.Modifier;
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public int GetDependantFinalValue(string name)
 		{
 			return !dependencies.TryGetValue(name, out CharacterAttribute attribute) ? 0 : attribute.FinalValue;
@@ -203,6 +217,7 @@ namespace FishMMO.Shared
 			OnAttributeUpdated?.Invoke(this);
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private int CalculateFinalValue()
 		{
 			if (Template.ClampFinalValue)

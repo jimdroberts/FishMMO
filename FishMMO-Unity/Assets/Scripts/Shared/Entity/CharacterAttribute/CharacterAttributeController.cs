@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using FishNet.Connection;
 using FishNet.Serializing;
 using FishNet.Transporting;
@@ -89,6 +90,7 @@ namespace FishMMO.Shared
 			}
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void SetAttribute(int id, int value)
 		{
 			if (Attributes.TryGetValue(id, out CharacterAttribute attribute))
@@ -97,6 +99,7 @@ namespace FishMMO.Shared
 			}
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void SetResourceAttribute(int id, int value, float currentValue)
 		{
 			if (ResourceAttributes.TryGetValue(id, out CharacterResourceAttribute attribute))
@@ -106,21 +109,25 @@ namespace FishMMO.Shared
 			}
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public bool TryGetAttribute(CharacterAttributeTemplate template, out CharacterAttribute attribute)
 		{
 			return Attributes.TryGetValue(template.ID, out attribute);
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public bool TryGetAttribute(int id, out CharacterAttribute attribute)
 		{
 			return Attributes.TryGetValue(id, out attribute);
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public bool TryGetResourceAttribute(CharacterAttributeTemplate template, out CharacterResourceAttribute attribute)
 		{
 			return ResourceAttributes.TryGetValue(template.ID, out attribute);
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public float GetResourceAttributeCurrentPercentage(CharacterAttributeTemplate template)
 		{
 			if (ResourceAttributes.TryGetValue(template.ID, out CharacterResourceAttribute attribute))
@@ -130,11 +137,13 @@ namespace FishMMO.Shared
 			return 0.0f;
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public bool TryGetResourceAttribute(int id, out CharacterResourceAttribute attribute)
 		{
 			return ResourceAttributes.TryGetValue(id, out attribute);
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void AddAttribute(CharacterAttribute instance)
 		{
 			if (!Attributes.ContainsKey(instance.Template.ID))
@@ -194,6 +203,7 @@ namespace FishMMO.Shared
 			}
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void InitializeAttributeDependents()
 		{
 			foreach (CharacterAttribute instance in attributes.Values)
@@ -202,6 +212,7 @@ namespace FishMMO.Shared
 			}
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void AddResourceAttribute(CharacterResourceAttribute instance)
 		{
 			if (!ResourceAttributes.ContainsKey(instance.Template.ID))
@@ -210,6 +221,7 @@ namespace FishMMO.Shared
 			}
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void InitializeResourceAttributeDependents()
 		{
 			foreach (CharacterResourceAttribute instance in resourceAttributes.Values)

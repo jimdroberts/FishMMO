@@ -1,4 +1,6 @@
-﻿namespace FishMMO.Shared
+﻿using System.Runtime.CompilerServices;
+
+namespace FishMMO.Shared
 {
 	public class CooldownInstance
 	{
@@ -22,11 +24,13 @@
 			remainingTime = cooldown;
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void SubtractTime(float time)
 		{
 			remainingTime -= time;
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void AddTime(float time)
 		{
 			remainingTime += time;

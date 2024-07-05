@@ -7,6 +7,7 @@ using System;
 using FishNet.Connection;
 using FishNet.Object.Synchronizing;
 using FishNet.Serializing;
+using System.Runtime.CompilerServices;
 
 namespace FishMMO.Shared
 {
@@ -157,6 +158,7 @@ namespace FishMMO.Shared
 			NextInteractTime = DateTime.UtcNow;
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void Teleport(string teleporterName)
 		{
 			TeleporterName = teleporterName;
@@ -167,6 +169,7 @@ namespace FishMMO.Shared
 #endif
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void SetGuildName(string guildName)
 		{
 #if !UNITY_SERVER

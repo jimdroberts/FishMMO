@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 
 namespace FishMMO.Shared
@@ -47,6 +48,7 @@ namespace FishMMO.Shared
 			rsa.ImportParameters(rsaParameters);
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static byte[] GenerateKey(int length)
 		{
 			using (var rng = new RNGCryptoServiceProvider())

@@ -24,8 +24,11 @@ namespace FishMMO.Shared
 
 		private async void InstallEverything()
 		{
-			await InstallWSL();
-			await InstallDotNet();
+			if (!await InstallDotNet())
+			{
+				Log("DotNet 8 and DotNet-EF Tools 5.0.17 are required by FishMMO. Please install them and try again.");
+				return;
+			}
 			await InstallPython();
 			await InstallDatabase();
 		}
@@ -214,7 +217,6 @@ namespace FishMMO.Shared
 			{
 				return true;
 			}
-
 			return await RunProcessAsync("where",
 										 "/q wsl.exe",
 										 (e, o, err) =>
@@ -223,29 +225,39 @@ namespace FishMMO.Shared
 										 });
 		}
 
-		private async Task InstallWSL()
+		private async Task<bool> InstallWSL()
 		{
 			if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
 			{
-				return;
+				return true;
 			}
 
 			if (await IsVirtualizationEnabledAsync())
 			{
 				if (!await IsWSLInstalledAsync())
 				{
-					Log("Installing WSL...");
-					await RunDismCommandAsync("/online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart");
-					Log("WSL has been installed.");
+					if (PromptForYesNo("Windows Subsystem for Linux needs to be installed for Docker. Would you like to install it?"))
+					{
+						Log("Installing WSL...");
+						await RunDismCommandAsync("/online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart");
+						Log("WSL has been installed.");
+						return true;
+					}
+					else
+					{
+						return false;
+					}
 				}
 				else
 				{
 					Log("WSL is already installed.");
+					return true;
 				}
 			}
 			else
 			{
-				Log("Virtualization is not enabled. Please enable Virtualization in your system BIOS.");
+				Log("Virtualization is not enabled. Please enable Virtualization in your systems BIOS.");
+				return false;
 			}
 		}
 		#endregion
@@ -258,31 +270,64 @@ namespace FishMMO.Shared
 
 			if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
 			{
+				// Check for Python in the App Store directory
 				command = "where";
-				arguments = "python";
+				arguments = "\"%LOCALAPPDATA%\\Microsoft\\WindowsApps\\python.exe\"";
+
+				// Also check for Python in the system PATH
+				string wherePythonCommand = "where";
+				string wherePythonArguments = "python";
+
+				try
+				{
+					bool isPythonInWindowsApps = await RunProcessAsync(command, arguments, (e, o, err) =>
+					{
+						return !string.IsNullOrEmpty(o);
+					});
+
+					bool isPythonInPath = await RunProcessAsync(wherePythonCommand, wherePythonArguments, (e, o, err) =>
+					{
+						return !string.IsNullOrEmpty(o);
+					});
+
+					// Return false if Python is found in the WindowsApps directory
+					if (isPythonInWindowsApps)
+					{
+						return false;
+					}
+
+					// Return true if Python is found in the system PATH
+					return isPythonInPath;
+				}
+				catch (Exception ex)
+				{
+					Log($"Error checking Python installation on Windows: {ex.Message}");
+					return false; // Return false if an error occurs
+				}
 			}
 			else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ||
 					 RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
 			{
+				// For Linux and macOS, check for python3 or python in the system PATH
 				command = "/bin/bash";
 				arguments = "-c \"command -v python3 || command -v python\"";
+
+				try
+				{
+					return await RunProcessAsync(command, arguments, (e, o, err) =>
+					{
+						return !string.IsNullOrEmpty(o);
+					});
+				}
+				catch (Exception ex)
+				{
+					Log($"Error checking Python installation: {ex.Message}");
+					return false; // Return false if an error occurs
+				}
 			}
 			else
 			{
 				throw new PlatformNotSupportedException("Unsupported operating system");
-			}
-
-			try
-			{
-				return await RunProcessAsync(command, arguments, (e, o, err) =>
-				{
-					return o.Contains("python");
-				});
-			}
-			catch (Exception ex)
-			{
-				Log($"Error checking Python installation on Windows: {ex.Message}");
-				return false; // Return false if an error occurs
 			}
 		}
 
@@ -379,43 +424,56 @@ namespace FishMMO.Shared
 		#endregion
 
 		#region DotNet
-		private async Task InstallDotNet()
+		private async Task<bool> InstallDotNet()
 		{
 			if (!await IsDotNetInstalledAsync())
 			{
-				Log("Installing DotNet...");
-				await DownloadAndInstallDotNetAsync();
-				Log("DotNet has been installed.");
-			}
-			else
-			{
-				Log("DotNet is already installed.");
-
-				if (!await IsDotNetEFInstalledAsync())
+				if (PromptForYesNo("DotNet 8 is not installed, would you like to install it?"))
 				{
-					Log("Installing DotNet-EF v5.0.17...");
-					await RunDotNetCommandAsync("tool install --global dotnet-ef --version 5.0.17");
+					Log("Installing DotNet...");
+					await DownloadAndInstallDotNetAsync();
+					Log("DotNet has been installed.");
+					return true;
 				}
 				else
 				{
-					Log("DotNet-EF is already installed.");
+					return false;
 				}
+			}
+			Log("DotNet is already installed.");
+
+			if (!await IsDotNetEFInstalledAsync())
+			{
+				if (PromptForYesNo("DotNet-EF is not installed, would you like to install it?"))
+				{
+					Log("Installing DotNet-EF v5.0.17...");
+					await RunDotNetCommandAsync("tool install --global dotnet-ef --version 5.0.17");
+					return true;
+				}
+				return false;
+			}
+			else
+			{
+				Log("DotNet-EF is already installed.");
+				return true;
 			}
 		}
 
 		private async Task<bool> IsDotNetInstalledAsync()
 		{
 			string command;
-			string arguments = "dotnet";
+			string arguments = $"dotnet --version";
 
 			if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
 			{
-				command = "where";
+				command = "cmd.exe";
+				arguments = $"/c {arguments}";
 			}
 			else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ||
 					 RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
 			{
-				command = "which";
+				command = "/bin/bash";
+				arguments = $"-c \"{arguments}\"";
 			}
 			else
 			{
@@ -424,43 +482,48 @@ namespace FishMMO.Shared
 
 			return await RunProcessAsync(command, arguments, (e, o, err) =>
 			{
-				return e == 0;
+				return e == 0 &&
+					   o.Contains("8.0", StringComparison.OrdinalIgnoreCase);
 			});
 		}
 
 		private async Task DownloadAndInstallDotNetAsync()
 		{
-			string version = "7.0.202";
-			string installDir;
-
 			if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
 			{
-				installDir = "C:\\Program Files\\dotnet";
-				string downloadUrl = "https://dot.net/v1/dotnet-install.ps1";
-				string psScriptFile = "dotnet-install.ps1";
+				string installerPath = await DownloadFileAsync("https://download.visualstudio.microsoft.com/download/pr/b6f19ef3-52ca-40b1-b78b-0712d3c8bf4d/426bd0d376479d551ce4d5ac0ecf63a5/dotnet-sdk-8.0.302-win-x64.exe", "dotnet-sdk-8.0.302-win-x64.exe");
 
-				// Download the PowerShell script
-				using (HttpClient client = new HttpClient())
+				try
 				{
-					var scriptContent = await client.GetStringAsync(downloadUrl);
-					await File.WriteAllTextAsync(psScriptFile, scriptContent);
-				}
+					ProcessStartInfo startInfo = new ProcessStartInfo();
+					startInfo.FileName = installerPath;
+					startInfo.UseShellExecute = true;
+					startInfo.Verb = "runas";
 
-				await RunProcessAsync("powershell",
-									  $"-ExecutionPolicy Bypass -Command \"& .\\{psScriptFile} -Version {version} -InstallDir '{installDir}'\"",
-									  (e, o, err) =>
-									  {
-										  if (e != 0)
-										  {
-											  throw new Exception($"PowerShell script failed with exit code {e}: {err}");
-										  }
-										  return true;
-									  });
+					Process process = Process.Start(startInfo);
+
+					await process.WaitForExitAsync();
+
+					int exitCode = process.ExitCode;
+					if (exitCode == 0)
+					{
+						Log("DotNet installation successful.");
+					}
+					else
+					{
+						Log($"DotNet installation failed with exit code {exitCode}.");
+					}
+				}
+				catch (Exception ex)
+				{
+					Log($"Error installing DotNet: {ex.Message}");
+				}
 			}
 			else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ||
 					 RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
 			{
-				installDir = "/usr/local/share/dotnet";
+				string version = "8.0.302";
+				string installDir = "/usr/local/share/dotnet";
 				string downloadUrl = "https://dot.net/v1/dotnet-install.sh";
 				string shScriptFile = "dotnet-install.sh";
 
@@ -563,12 +626,17 @@ namespace FishMMO.Shared
 		#endregion
 
 		#region Docker
-		private async Task InstallDocker()
+		private async Task<bool> InstallDocker()
 		{
+			if (!await InstallWSL())
+			{
+				return false;
+			}
+
 			if (await IsDockerInstalledAsync())
 			{
 				Log("Docker is already installed.");
-				return;
+				return true;
 			}
 
 			Log("Installing Docker...");
@@ -594,10 +662,12 @@ namespace FishMMO.Shared
 				}
 
 				Log("Docker has been installed.");
+				return true;
 			}
 			catch (Exception ex)
 			{
 				Log($"Installation failed: {ex.Message}");
+				return false;
 			}
 		}
 
@@ -844,24 +914,7 @@ namespace FishMMO.Shared
 		{
 			if (!PromptForYesNo("Install PostgreSQL?"))
 			{
-				if (PromptForYesNo("Install FishMMO Database?"))
-				{
-					string su = PromptForInput("Enter PostgreSQL Superuser Username: ");
-					string sp = PromptForPassword("Enter PostgreSQL Superuser Password: ");
-
-					if (await InstallFishMMODatabase(su, sp, appSettings))
-					{
-						return true;
-					}
-					else
-					{
-						return false;
-					}
-				}
-				else
-				{
-					return false;
-				}
+				return false;
 			}
 
 			Log("Installing PostgreSQL.");
@@ -934,7 +987,9 @@ namespace FishMMO.Shared
 					if (!enableSuccess) return false;
 				}
 
-				bool createUserSuccess = await RunProcessAsync("/bin/bash", $"-c \"sudo -u postgres psql {createUserCommand}\"",
+				if (PromptForYesNo("Create PostgreSQL super user?"))
+				{
+					bool createUserSuccess = await RunProcessAsync("/bin/bash", $"-c \"sudo -u postgres psql {createUserCommand}\"",
 					(exitCode, output, error) =>
 					{
 						if (exitCode != 0)
@@ -945,7 +1000,8 @@ namespace FishMMO.Shared
 						return true;
 					});
 
-				if (!createUserSuccess) return false;
+					if (!createUserSuccess) return false;
+				}
 
 				Log("PostgreSQL installation successful.");
 
@@ -978,13 +1034,19 @@ namespace FishMMO.Shared
 					await connection.OpenAsync();
 
 					// Create database
-					await CreateDatabase(connection, appSettings.Npgsql.Database);
+					if (PromptForYesNo($"Create Database {appSettings.Npgsql.Database}?"))
+					{
+						await CreateDatabase(connection, appSettings.Npgsql.Database);
+					}
 
-					// Create user role
-					await CreateUser(connection, appSettings.Npgsql.Username, appSettings.Npgsql.Password);
+					if (PromptForYesNo($"Create User Role {appSettings.Npgsql.Username}?"))
+					{
+						// Create user role
+						await CreateUser(connection, appSettings.Npgsql.Username, appSettings.Npgsql.Password);
 
-					// Grant privileges
-					await GrantPrivileges(connection, appSettings.Npgsql.Username, appSettings.Npgsql.Database);
+						// Grant privileges
+						await GrantPrivileges(connection, appSettings.Npgsql.Username, appSettings.Npgsql.Database);
+					}
 
 					Log("FishMMO Database installed.");
 					return true;
@@ -1045,7 +1107,11 @@ namespace FishMMO.Shared
 
 				if (PromptForYesNo("Install Docker Database?"))
 				{
-					await InstallDocker();
+					if (!await InstallDocker())
+					{
+						Log("Failed to install Docker.");
+						return;
+					}
 
 					// docker-compose up
 					string output = await RunDockerComposeCommandAsync("-p " + Constants.Configuration.ProjectName.ToLower() + " up -d", new Dictionary<string, string>()

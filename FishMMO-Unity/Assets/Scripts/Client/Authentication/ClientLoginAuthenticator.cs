@@ -9,6 +9,7 @@ using System.Text;
 using UnityEngine;
 using SecureRemotePassword;
 using FishMMO.Shared;
+using System.Runtime.CompilerServices;
 
 namespace FishMMO.Client
 {
@@ -56,6 +57,7 @@ namespace FishMMO.Client
 			}
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void SetClient(Client client)
 		{
 			Client = client;

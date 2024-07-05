@@ -4,6 +4,7 @@ using FishNet.Transporting;
 using UnityEngine;
 using System;
 using KinematicCharacterController;
+using System.Runtime.CompilerServices;
 
 namespace FishMMO.Shared
 {
@@ -134,6 +135,7 @@ namespace FishMMO.Shared
 			CharacterController.ApplyState(rd);
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void UpdateCamera(float scrollInput, Vector3 lookInputVector)
 		{
 			CharacterCamera.UpdateWithInput((float)base.TimeManager.TickDelta, scrollInput, lookInputVector);

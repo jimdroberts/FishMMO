@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using UnityEngine;
 using UnityEngine.EventSystems;
 
@@ -94,80 +95,83 @@ namespace FishMMO.Client
 			//InputManager.LoadConfig();
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void ToggleMouseMode()
 		{
 			MouseMode = !MouseMode;
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void AddKey(string virtualKey, KeyCode keyCode)
 		{
 			KeyMap newMap = new KeyMap(virtualKey, keyCode);
 			virtualKeyMaps[virtualKey] = newMap;
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static KeyCode GetKeyCode(string virtualKey)
 		{
-			KeyMap keyMap;
-			if (!virtualKeyMaps.TryGetValue(virtualKey, out keyMap))
+			if (virtualKeyMaps.TryGetValue(virtualKey, out KeyMap keyMap))
 			{
-				return KeyCode.None;
+				return keyMap.Key;
 			}
-			return keyMap.Key;
+			return KeyCode.None;
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static bool GetKey(string virtualKey)
 		{
-			KeyMap keyMap;
-			if (!virtualKeyMaps.TryGetValue(virtualKey, out keyMap))
+			if (virtualKeyMaps.TryGetValue(virtualKey, out KeyMap keyMap))
 			{
-				return false;
+				return keyMap.GetKey();
 			}
-			return keyMap.GetKey();
+			return false;
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static bool GetKeyDown(string virtualKey)
 		{
-			KeyMap keyMap;
-			if (!virtualKeyMaps.TryGetValue(virtualKey, out keyMap))
+			if (virtualKeyMaps.TryGetValue(virtualKey, out KeyMap keyMap))
 			{
-				return false;
+				return keyMap.GetKeyDown();
 			}
-			return keyMap.GetKeyDown();
+			return false;
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static bool GetKeyUp(string virtualKey)
 		{
-			KeyMap keyMap;
-			if (!virtualKeyMaps.TryGetValue(virtualKey, out keyMap))
+			if (virtualKeyMaps.TryGetValue(virtualKey, out KeyMap keyMap))
 			{
-				return false;
+				return keyMap.GetKeyUp();
 			}
-			return keyMap.GetKeyUp();
+			return false;
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void AddAxis(string virtualAxis, string unityAxis)
 		{
 			axisMaps[virtualAxis] = unityAxis;
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static float GetAxis(string virtualAxis)
 		{
-			string unityAxis;
-			if (!axisMaps.TryGetValue(virtualAxis, out unityAxis))
+			if (axisMaps.TryGetValue(virtualAxis, out string unityAxis))
 			{
-				return 0.0f;
+				return Input.GetAxis(unityAxis);
 			}
-			return Input.GetAxis(unityAxis);
+			return 0.0f;
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static float GetAxisRaw(string virtualAxis)
 		{
-			string unityAxis;
-			if (!axisMaps.TryGetValue(virtualAxis, out unityAxis))
+			if (axisMaps.TryGetValue(virtualAxis, out string unityAxis))
 			{
-				return 0.0f;
+				return Input.GetAxisRaw(unityAxis);
 			}
-			return Input.GetAxisRaw(unityAxis);
+			return 0.0f;
 		}
 	}
 }
