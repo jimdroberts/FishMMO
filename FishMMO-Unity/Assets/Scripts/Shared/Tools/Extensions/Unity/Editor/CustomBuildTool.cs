@@ -359,7 +359,7 @@ start Scene.exe SCENE";
 			return allPaths.ToArray();
 		}
 
-		private static void CopyIPFetchFiles(BuildTarget buildTarget, string ipFetchPath, string configurationPath, string buildPath)
+		private static void CopyIPFetchFiles(BuildTarget buildTarget, string ipFetchPath, string configurationPath, string buildPath, string certificatePath = null)
 		{
 			if (Directory.Exists(buildPath))
 			{
@@ -367,7 +367,7 @@ start Scene.exe SCENE";
 			}
 			Directory.CreateDirectory(buildPath);
 
-			FileUtil.ReplaceFile(Path.Combine(ipFetchPath, "IPFetch.py"), Path.Combine(buildPath, "IPFetch.py"));
+			FileUtil.ReplaceFile(Path.Combine(ipFetchPath, "IPFetchServer.py"), Path.Combine(buildPath, "IPFetchServer.py"));
 			FileUtil.ReplaceFile(Path.Combine(configurationPath, "appsettings.json"), Path.Combine(buildPath, "appsettings.json"));
 
 			if (buildTarget == BuildTarget.StandaloneWindows64)
@@ -378,9 +378,24 @@ start Scene.exe SCENE";
 			{
 				FileUtil.ReplaceFile(Path.Combine(ipFetchPath, "LinuxSetup.sh"), Path.Combine(buildPath, "LinuxSetup.sh"));
 			}
+
+			if (!string.IsNullOrWhiteSpace(certificatePath))
+			{
+				string certPath = Path.Combine(certificatePath, "certificate.pem");
+				if (File.Exists(certPath))
+				{
+					FileUtil.ReplaceFile(certPath, Path.Combine(buildPath, "certificate.pem"));
+				}
+
+				string keyPath = Path.Combine(certificatePath, "privatekey.pem");
+				if (File.Exists(certPath))
+				{
+					FileUtil.ReplaceFile(keyPath, Path.Combine(buildPath, "privatekey.pem"));
+				}
+			}
 		}
 
-		private static void CopyPatcherFiles(string patcherPath, string buildPath)
+		private static void CopyPatcherFiles(string patcherPath, string buildPath, string certificatePath = null)
 		{
 			if (Directory.Exists(buildPath))
 			{
@@ -388,7 +403,22 @@ start Scene.exe SCENE";
 			}
 			Directory.CreateDirectory(buildPath);
 
-			FileUtil.ReplaceFile(Path.Combine(patcherPath, "patchserver.py"), Path.Combine(buildPath, "patchserver.py"));
+			FileUtil.ReplaceFile(Path.Combine(patcherPath, "PatchServer.py"), Path.Combine(buildPath, "PatchServer.py"));
+
+			if (!string.IsNullOrWhiteSpace(certificatePath))
+			{
+				string certPath = Path.Combine(certificatePath, "certificate.pem");
+				if (File.Exists(certPath))
+				{
+					FileUtil.ReplaceFile(certPath, Path.Combine(buildPath, "certificate.pem"));
+				}
+
+				string keyPath = Path.Combine(certificatePath, "privatekey.pem");
+				if (File.Exists(certPath))
+				{
+					FileUtil.ReplaceFile(keyPath, Path.Combine(buildPath, "privatekey.pem"));
+				}
+			}
 		}
 
 		private static void CopyConfigurationFiles(BuildTarget buildTarget, CustomBuildType customBuildType, string configurationPath, string buildPath)
@@ -703,7 +733,7 @@ start Scene.exe SCENE";
 			string folderName = Constants.Configuration.ProjectName + " Windows IPFetch Server";
 			string buildPath = Path.Combine(rootPath, folderName);
 
-			CopyIPFetchFiles(BuildTarget.StandaloneWindows64, Path.Combine(root, "IPFetch"), Path.Combine(root, configurationPath), buildPath);
+			CopyIPFetchFiles(BuildTarget.StandaloneWindows64, Path.Combine(root, "FishMMO-WebServers", "IPFetch"), Path.Combine(root, configurationPath), buildPath, Path.Combine(root, "FishMMO-WebServers", "CertificateGenerator"));
 		}
 
 		[MenuItem("FishMMO/Build/Server/Linux x64 All-In-One", priority = 8)]
@@ -736,7 +766,7 @@ start Scene.exe SCENE";
 			string folderName = Constants.Configuration.ProjectName + " Linux IPFetch Server";
 			string buildPath = Path.Combine(rootPath, folderName);
 
-			CopyIPFetchFiles(BuildTarget.StandaloneLinux64, Path.Combine(root, "IPFetch"), Path.Combine(root, configurationPath), buildPath);
+			CopyIPFetchFiles(BuildTarget.StandaloneLinux64, Path.Combine(root, "FishMMO-WebServers", "IPFetch"), Path.Combine(root, configurationPath), buildPath, Path.Combine(root, "FishMMO-WebServers", "CertificateGenerator"));
 		}
 
 		[MenuItem("FishMMO/Build/Server/Patch Server", priority = 10)]
@@ -756,7 +786,7 @@ start Scene.exe SCENE";
 			string folderName = Constants.Configuration.ProjectName + " Patch Server";
 			string buildPath = Path.Combine(rootPath, folderName);
 
-			CopyPatcherFiles(Path.Combine(root, "Patcher"), buildPath);
+			CopyPatcherFiles(Path.Combine(root, "FishMMO-WebServers", "Patcher"), buildPath, Path.Combine(root, "FishMMO-WebServers", "CertificateGenerator"));
 		}
 
 		[MenuItem("FishMMO/Build/Client/Linux x64", priority = 2)]

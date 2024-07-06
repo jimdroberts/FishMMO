@@ -227,6 +227,8 @@ namespace FishMMO.Client
 			}
 			using (UnityWebRequest request = UnityWebRequest.Get(patcherHost + "latest_version"))
 			{
+				request.certificateHandler = new ClientSSLCertificateHandler();
+
 				yield return request.SendWebRequest();
 
 				if (request.result == UnityWebRequest.Result.ConnectionError ||
@@ -253,6 +255,8 @@ namespace FishMMO.Client
 			}
 			using (UnityWebRequest request = UnityWebRequest.Get(patcherHost + Constants.Configuration.Version))
 			{
+				request.certificateHandler = new ClientSSLCertificateHandler();
+
 				// Define the file path to save the downloaded patch file
 				string filePath = Path.Combine(Client.GetWorkingDirectory(), "patches", $"{Constants.Configuration.Version}-{latestversion}.patch");
 

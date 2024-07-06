@@ -528,6 +528,8 @@ namespace FishMMO.Client
 			{
 				using (UnityWebRequest request = UnityWebRequest.Get(ipFetchHost))
 				{
+					request.certificateHandler = new ClientSSLCertificateHandler();
+
 					yield return request.SendWebRequest();
 
 					if (request.result == UnityWebRequest.Result.ConnectionError ||

@@ -1,8 +1,9 @@
 import os
-import re
 import logging
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
+import ssl
+from socketserver import ThreadingMixIn
 
 # Constants for directories
 PATCHES_DIR = './patches/'
@@ -33,7 +34,7 @@ def read_configuration_file_version(file_path):
         LATEST_VERSION = config.get('Version')  # Update the global 'version' variable
 
 # HTTP Request Handler class
-class DiffRequestHandler(BaseHTTPRequestHandler):
+class RequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         try:
             if self.path == "/latest_version":
@@ -83,11 +84,18 @@ class DiffRequestHandler(BaseHTTPRequestHandler):
             self.send_response(500)
             self.end_headers()
 
-# Main function to start the HTTP server
-def run(server_class=HTTPServer, handler_class=DiffRequestHandler, port=8000):
-    server_address = ('', port)
+def run(server_class=HTTPServer, handler_class=RequestHandler, port=8000, bind_address='', ssl_cert=None, ssl_key=None):
+    server_address = (bind_address, int(port))
+    
+    # Create an SSL context
+    context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+    context.load_cert_chain(certfile=ssl_cert, keyfile=ssl_key)
+
+    # Instantiate the HTTP server with SSL context
     httpd = server_class(server_address, handler_class)
-    logging.info(f"Starting HTTP server on port {port}")
+    httpd.socket = context.wrap_socket(httpd.socket, server_side=True)
+        
+    logging.info(f"Starting HTTP server on {bind_address}:{port}")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
@@ -102,4 +110,20 @@ if __name__ == '__main__':
         print(f"Version: {LATEST_VERSION}")
     else:
         print("Version not found in the configuration file.")
-    run()
+    
+    external_ip = input("Enter the external IP address to bind to (leave blank for default): ").strip()
+    if not external_ip:
+        external_ip = ''  # This will bind to all available interfaces (including external)
+        
+    port = input("Enter the port you would like to bind to (leave blank for 8000): ").strip()
+    if not port:
+        port = 8000
+        
+    # Get the current working directory
+    cwd = os.getcwd()
+    
+    # Path to your SSL certificate and key (using current working directory)
+    ssl_cert = os.path.join(cwd, 'certificate.pem')
+    ssl_key = os.path.join(cwd, 'privatekey.pem')
+    
+    run(port=port, bind_address=external_ip, ssl_cert=ssl_cert, ssl_key=ssl_key)
