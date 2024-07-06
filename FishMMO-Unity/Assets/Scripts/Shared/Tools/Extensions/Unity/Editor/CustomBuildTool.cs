@@ -380,6 +380,17 @@ start Scene.exe SCENE";
 			}
 		}
 
+		private static void CopyPatcherFiles(string patcherPath, string buildPath)
+		{
+			if (Directory.Exists(buildPath))
+			{
+				Directory.Delete(buildPath, true);
+			}
+			Directory.CreateDirectory(buildPath);
+
+			FileUtil.ReplaceFile(Path.Combine(patcherPath, "patchserver.py"), Path.Combine(buildPath, "patchserver.py"));
+		}
+
 		private static void CopyConfigurationFiles(BuildTarget buildTarget, CustomBuildType customBuildType, string configurationPath, string buildPath)
 		{
 			switch (customBuildType)
@@ -674,7 +685,7 @@ start Scene.exe SCENE";
 							BuildTarget.StandaloneWindows64);
 		}
 
-		[MenuItem("FishMMO/Build/Server/Windows IPFetch Server", priority = 6)]
+		[MenuItem("FishMMO/Build/Server/Windows IPFetch Server", priority = 7)]
 		public static void BuildWindowsIPFetchServer()
 		{
 			string rootPath = "";
@@ -695,7 +706,7 @@ start Scene.exe SCENE";
 			CopyIPFetchFiles(BuildTarget.StandaloneWindows64, Path.Combine(root, "IPFetch"), Path.Combine(root, configurationPath), buildPath);
 		}
 
-		[MenuItem("FishMMO/Build/Server/Linux x64 All-In-One", priority = 7)]
+		[MenuItem("FishMMO/Build/Server/Linux x64 All-In-One", priority = 8)]
 		public static void BuildLinux64AllInOneServer()
 		{
 			WorldSceneDetailsCacheBuilder.Rebuild();
@@ -707,7 +718,7 @@ start Scene.exe SCENE";
 							BuildTarget.StandaloneLinux64);
 		}
 
-		[MenuItem("FishMMO/Build/Server/Linux IPFetch Server", priority = 8)]
+		[MenuItem("FishMMO/Build/Server/Linux IPFetch Server", priority = 9)]
 		public static void BuildLinuxIPFetchServer()
 		{
 			string rootPath = "";
@@ -726,6 +737,26 @@ start Scene.exe SCENE";
 			string buildPath = Path.Combine(rootPath, folderName);
 
 			CopyIPFetchFiles(BuildTarget.StandaloneLinux64, Path.Combine(root, "IPFetch"), Path.Combine(root, configurationPath), buildPath);
+		}
+
+		[MenuItem("FishMMO/Build/Server/Patch Server", priority = 10)]
+		public static void BuildPatchServer()
+		{
+			string rootPath = "";
+			if (string.IsNullOrWhiteSpace(rootPath))
+			{
+				rootPath = EditorUtility.SaveFolderPanel("Pick a save directory", "", "");
+				if (string.IsNullOrWhiteSpace(rootPath))
+				{
+					return;
+				}
+			}
+
+			string root = Directory.GetParent(Directory.GetCurrentDirectory()).FullName;
+			string folderName = Constants.Configuration.ProjectName + " Patch Server";
+			string buildPath = Path.Combine(rootPath, folderName);
+
+			CopyPatcherFiles(Path.Combine(root, "Patcher"), buildPath);
 		}
 
 		[MenuItem("FishMMO/Build/Client/Linux x64", priority = 2)]

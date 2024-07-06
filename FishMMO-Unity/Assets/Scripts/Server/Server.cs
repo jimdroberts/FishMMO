@@ -34,7 +34,6 @@ namespace FishMMO.Server
 			Scene,
 		}
 
-		public Configuration Configuration { get; private set; }
 		public NpgsqlDbContextFactory NpgsqlDbContextFactory { get; private set; }
 		public RedisDbContextFactory RedisDbContextFactory { get; private set; }
 		public NetworkManager NetworkManager { get; private set; }
@@ -92,20 +91,20 @@ namespace FishMMO.Server
 			Debug.Log("Server: Current working directory[" + workingDirectory + "]");
 
 			// load configuration
-			Configuration = new Configuration(workingDirectory);
-			if (!Configuration.Load(serverTypeName + Configuration.EXTENSION))
+			Constants.Configuration.Settings = new Configuration(workingDirectory);
+			if (!Constants.Configuration.Settings.Load(serverTypeName + Configuration.EXTENSION))
 			{
 				// if we failed to load the file.. save a new one
-				Configuration.Set("ServerName", "TestName");
-				Configuration.Set("MaximumClients", 4000);
-				Configuration.Set("Address", "127.0.0.1");
-				Configuration.Set("Port", serverType == ServerType.Login ? "7770" : serverType == ServerType.World ? "7780" : "7781");
-				Configuration.Set("StaleSceneTimeout", 5);
+				Constants.Configuration.Settings.Set("ServerName", "TestName");
+				Constants.Configuration.Settings.Set("MaximumClients", 4000);
+				Constants.Configuration.Settings.Set("Address", "127.0.0.1");
+				Constants.Configuration.Settings.Set("Port", serverType == ServerType.Login ? "7770" : serverType == ServerType.World ? "7780" : "7781");
+				Constants.Configuration.Settings.Set("StaleSceneTimeout", 5);
 #if !UNITY_EDITOR
-				Configuration.Save();
+				Constants.Configuration.Settings.Save();
 #endif
 			}
-			Debug.Log(Configuration.ToString());
+			Debug.Log(Constants.Configuration.Settings.ToString());
 
 			// initialize the DB contexts
 #if UNITY_EDITOR
@@ -300,9 +299,9 @@ namespace FishMMO.Server
 		private bool LoadTransportServerDetails()
 		{
 			Transport transport = NetworkManager.TransportManager.Transport;
-			if (Configuration.TryGetString("Address", out string Address) &&
-				Configuration.TryGetUShort("Port", out ushort Port) &&
-				Configuration.TryGetInt("MaximumClients", out int maximumClients))
+			if (Constants.Configuration.Settings.TryGetString("Address", out string Address) &&
+				Constants.Configuration.Settings.TryGetUShort("Port", out ushort Port) &&
+				Constants.Configuration.Settings.TryGetInt("MaximumClients", out int maximumClients))
 			{
 				transport.SetServerBindAddress(Address, IPAddressType.IPv4);
 				transport.SetPort(Port);

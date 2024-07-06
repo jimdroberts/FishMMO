@@ -740,8 +740,6 @@ MonoBehaviour:
   QuitButton: {fileID: 772784617}
   PlayButton: {fileID: 1434612282}
   PlayButtonText: {fileID: 1342158545}
-  Host: http://127.0.0.1:8080/
-  UpdaterPath: DiffUpdater.exe
   HtmlViewURL: https://github.com/jimdroberts/FishMMO/wiki
   DivClass: markdown-body
   HtmlText: {fileID: 2101316213}

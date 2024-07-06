@@ -57,9 +57,7 @@ namespace FishMMO.Client
 		public byte ReconnectAttempts = 10;
 		public float ReconnectAttemptWaitTime = 5f;
 
-		public string IPFetchHost = "http://127.0.0.1:8080/";
 		public List<ServerAddress> LoginServerAddresses;
-		public Configuration Configuration = null;
 
 		public event Action OnConnectionSuccessful;
 		public event Action<byte, byte> OnReconnectAttempt;
@@ -140,29 +138,33 @@ namespace FishMMO.Client
 			string path = Client.GetWorkingDirectory();
 
 			// load configuration
-			Configuration = new Configuration(path);
-			if (!Configuration.Load(Configuration.DEFAULT_FILENAME + Configuration.EXTENSION))
+			if (Constants.Configuration.Settings == null)
 			{
-				// if we failed to load the file.. save a new one
-				Configuration.Set("Version", Constants.Configuration.Version);
-				Configuration.Set("Resolution Width", 1280);
-				Configuration.Set("Resolution Height", 800);
-				Configuration.Set("Refresh Rate", (uint)60);
-				Configuration.Set("Fullscreen", false);
-				Configuration.Set("ShowDamage", true);
-				Configuration.Set("ShowHeals", true);
-				Configuration.Set("ShowAchievementCompletion", true);
-				Configuration.Set("IPFetchHost", string.IsNullOrWhiteSpace(IPFetchHost) ? "http://127.0.0.1:8080/" : IPFetchHost);
+				Constants.Configuration.Settings = new Configuration(path);
+				if (!Constants.Configuration.Settings.Load(Configuration.DEFAULT_FILENAME + Configuration.EXTENSION))
+				{
+					// if we failed to load the file.. save a new one
+					Constants.Configuration.Settings.Set("Version", Constants.Configuration.Version);
+					Constants.Configuration.Settings.Set("Resolution Width", 1280);
+					Constants.Configuration.Settings.Set("Resolution Height", 800);
+					Constants.Configuration.Settings.Set("Refresh Rate", (uint)60);
+					Constants.Configuration.Settings.Set("Fullscreen", false);
+					Constants.Configuration.Settings.Set("ShowDamage", true);
+					Constants.Configuration.Settings.Set("ShowHeals", true);
+					Constants.Configuration.Settings.Set("ShowAchievementCompletion", true);
+					Constants.Configuration.Settings.Set("PatcherHost", Constants.Configuration.PatcherHost);
+					Constants.Configuration.Settings.Set("IPFetchHost", Constants.Configuration.IPFetchHost);
 #if !UNITY_EDITOR
-				Configuration.Save();
+				Constants.Configuration.Settings.Save();
 #endif
+				}
 			}
 
 #if !UNITY_WEBGL
-			if (Configuration.TryGetInt("Resolution Width", out int width) &&
-				Configuration.TryGetInt("Resolution Height", out int height) &&
-				Configuration.TryGetUInt("Refresh Rate", out uint refreshRate) &&
-				Configuration.TryGetBool("Fullscreen", out bool fullscreen))
+			if (Constants.Configuration.Settings.TryGetInt("Resolution Width", out int width) &&
+				Constants.Configuration.Settings.TryGetInt("Resolution Height", out int height) &&
+				Constants.Configuration.Settings.TryGetUInt("Refresh Rate", out uint refreshRate) &&
+				Constants.Configuration.Settings.TryGetBool("Fullscreen", out bool fullscreen))
 			{
 
 				Screen.SetResolution(width, height, fullscreen ? FullScreenMode.ExclusiveFullScreen : FullScreenMode.Windowed, new RefreshRate()
@@ -522,9 +524,9 @@ namespace FishMMO.Client
 			{
 				onFetchComplete?.Invoke(LoginServerAddresses);
 			}
-			else if (Configuration.TryGetString("IPFetchHost", out IPFetchHost))
+			else if (Constants.Configuration.Settings.TryGetString("IPFetchHost", out string ipFetchHost))
 			{
-				using (UnityWebRequest request = UnityWebRequest.Get(IPFetchHost))
+				using (UnityWebRequest request = UnityWebRequest.Get(ipFetchHost))
 				{
 					yield return request.SendWebRequest();
 
@@ -708,7 +710,7 @@ namespace FishMMO.Client
 			{
 				return;
 			}
-			if (!Configuration.TryGetBool("ShowDamage", out bool result) || !result)
+			if (!Constants.Configuration.Settings.TryGetBool("ShowDamage", out bool result) || !result)
 			{
 				return;
 			}
@@ -727,7 +729,7 @@ namespace FishMMO.Client
 			{
 				return;
 			}
-			if (!Configuration.TryGetBool("ShowHeals", out bool result) || !result)
+			if (!Constants.Configuration.Settings.TryGetBool("ShowHeals", out bool result) || !result)
 			{
 				return;
 			}
@@ -747,7 +749,7 @@ namespace FishMMO.Client
 			{
 				return;
 			}
-			if (!Configuration.TryGetBool("ShowAchievementCompletion", out bool result) || !result)
+			if (!Constants.Configuration.Settings.TryGetBool("ShowAchievementCompletion", out bool result) || !result)
 			{
 				return;
 			}

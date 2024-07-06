@@ -14,14 +14,23 @@ logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %
 
 def read_configuration_file_version(file_path):
     global LATEST_VERSION  # Access the global variable 'version'
-    config = {}
-    with open(file_path, 'r') as f:
-        for line in f:
-            line = line.strip()
-            if line and '=' in line:
-                key, value = line.split('=', 1)
-                config[key.strip()] = value.strip()
-    LATEST_VERSION = config.get('Version')  # Update the global 'version' variable
+    
+    if not os.path.exists(file_path):
+        # Trim double quotes from start or end of file_path if they exist
+        if file_path.startswith('"'):
+            file_path = file_path[1:]
+        if file_path.endswith('"'):
+            file_path = file_path[:-1]
+    
+    if os.path.exists(file_path):
+        config = {}
+        with open(file_path, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line and '=' in line:
+                    key, value = line.split('=', 1)
+                    config[key.strip()] = value.strip()
+        LATEST_VERSION = config.get('Version')  # Update the global 'version' variable
 
 # HTTP Request Handler class
 class DiffRequestHandler(BaseHTTPRequestHandler):
@@ -75,7 +84,7 @@ class DiffRequestHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
 # Main function to start the HTTP server
-def run(server_class=HTTPServer, handler_class=DiffRequestHandler, port=8080):
+def run(server_class=HTTPServer, handler_class=DiffRequestHandler, port=8000):
     server_address = ('', port)
     httpd = server_class(server_address, handler_class)
     logging.info(f"Starting HTTP server on port {port}")

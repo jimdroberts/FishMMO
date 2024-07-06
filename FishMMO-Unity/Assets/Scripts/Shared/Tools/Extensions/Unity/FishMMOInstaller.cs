@@ -42,7 +42,7 @@ namespace FishMMO.Shared
 		/// Runs a process asynchronously.
 		/// ProcessResult = ExitCode, Standard Output, Standard Error
 		/// </summary>
-		private async Task<bool> RunProcessAsync(string command, string arguments, Func<int, string, string, bool> processResult = null, Func<Process, Task> subProcess = null)
+		private async Task<bool> RunProcessAsync(string command, string arguments, Func<int, string, string, bool> processResult = null)
 		{
 			using (Process process = new Process())
 			{
@@ -59,11 +59,6 @@ namespace FishMMO.Shared
 
 				string output = await process.StandardOutput.ReadToEndAsync();
 				string error = await process.StandardError.ReadToEndAsync();
-
-				if (subProcess != null)
-				{
-					await subProcess.Invoke(process);
-				}
 
 				if (processResult != null)
 				{
@@ -217,12 +212,7 @@ namespace FishMMO.Shared
 			{
 				return true;
 			}
-			return await RunProcessAsync("where",
-										 "/q wsl.exe",
-										 (e, o, err) =>
-										 {
-											 return e == 0;
-										 });
+			return await RunProcessAsync("where", "/q wsl.exe");
 		}
 
 		private async Task<bool> InstallWSL()
@@ -270,34 +260,13 @@ namespace FishMMO.Shared
 
 			if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
 			{
-				// Check for Python in the App Store directory
-				command = "where";
-				arguments = "\"%LOCALAPPDATA%\\Microsoft\\WindowsApps\\python.exe\"";
-
-				// Also check for Python in the system PATH
-				string wherePythonCommand = "where";
-				string wherePythonArguments = "python";
+				// Check for Python install in the registry
+				command = "reg";
+				arguments = "query HKEY_LOCAL_MACHINE\\SOFTWARE\\Python\\PythonCore /s";
 
 				try
 				{
-					bool isPythonInWindowsApps = await RunProcessAsync(command, arguments, (e, o, err) =>
-					{
-						return !string.IsNullOrEmpty(o);
-					});
-
-					bool isPythonInPath = await RunProcessAsync(wherePythonCommand, wherePythonArguments, (e, o, err) =>
-					{
-						return !string.IsNullOrEmpty(o);
-					});
-
-					// Return false if Python is found in the WindowsApps directory
-					if (isPythonInWindowsApps)
-					{
-						return false;
-					}
-
-					// Return true if Python is found in the system PATH
-					return isPythonInPath;
+					return await RunProcessAsync(command, arguments);
 				}
 				catch (Exception ex)
 				{
@@ -365,27 +334,51 @@ namespace FishMMO.Shared
 
 			try
 			{
-				Log("Installing Python...");
+				Log("Downloading Python...");
 
-				await RunProcessAsync(command, arguments, null, async (p) =>
+				if (await RunProcessAsync(command, arguments, (e, o, err) =>
+								  {
+									  if (e != 0)
+									  {
+										  // Handle non-zero exit codes if necessary
+										  throw new Exception($"Python Download failed with exit code {e}.\nError: {err}");
+									  }
+									  Log(o);
+									  return true;
+								  }))
 				{
 					// Install Python silently on Windows
 					if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
 					{
-						p.StartInfo.Arguments = "python-installer.exe /quiet InstallAllUsers=1 PrependPath=1";
-						p.Start();
-						await p.WaitForExitAsync();
+						Log("Installing Python...");
+
+						if (await RunProcessAsync("python-installer.exe", "/quiet InstallAllUsers=1 PrependPath=1", (e, o, err) =>
+									{
+										if (e != 0)
+										{
+											// Handle non-zero exit codes if necessary
+											throw new Exception($"Python Install failed with exit code {e}.\nError: {err}");
+										}
+										Log(o);
+										return true;
+									}))
+						{
+							Log("Python has been installed.");
+
+							await UpdatePip();
+						}
 					}
+					else
+					{
+						Log("Python has been installed.");
 
-					await UpdatePip();
-				});
-
-				Log("Python has been installed.");
+						await UpdatePip();
+					}
+				}
 			}
 			catch (Exception ex)
 			{
 				Log($"Error installing Python: {ex.Message}");
-				return; // Return false if an error occurs
 			}
 		}
 
@@ -617,7 +610,7 @@ namespace FishMMO.Shared
 									  if (e != 0)
 									  {
 										  // Handle non-zero exit codes if necessary
-										  Debug.Log($"DotNet command failed with exit code {e}.\nError: {err}");
+										  Log($"DotNet command failed with exit code {e}.\nError: {err}");
 									  }
 									  Log(o);
 									  return true;

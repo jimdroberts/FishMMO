@@ -8,11 +8,16 @@ namespace FishMMO.Shared
 	{
 		public static class Configuration
 		{
+			public static FishMMO.Shared.Configuration Settings;
+
 			public static readonly string Version = "1.0";
 			public static readonly string ProjectName = "FishMMO";
 			public static readonly string ClientExecutable = ProjectName + ".exe";
 			public static readonly string UpdaterExecutable = "Updater.exe";
 			public static readonly string SetupDirectory = "FishMMO-Setup";
+
+			public static readonly string PatcherHost = "http://127.0.0.1:8000/";
+			public static readonly string IPFetchHost = "http://127.0.0.1:8080/";
 
 			public static readonly string DatabaseDirectory = "FishMMO-Database";
 			public static readonly string DatabaseProjectDirectory = "FishMMO-DB";

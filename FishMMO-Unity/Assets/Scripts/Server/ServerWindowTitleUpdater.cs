@@ -7,6 +7,7 @@ using System.Runtime.InteropServices;
 using UnityEngine;
 using Cysharp.Text;
 using System.Runtime.CompilerServices;
+using FishMMO.Shared;
 
 namespace FishMMO.Server
 {
@@ -85,7 +86,7 @@ namespace FishMMO.Server
 			}
 			using (var windowTitle = ZString.CreateStringBuilder())
 			{
-				if (Server.Configuration.TryGetString("ServerName", out string title))
+				if (Constants.Configuration.Settings.TryGetString("ServerName", out string title))
 				{
 					windowTitle.Append(title);
 				}
@@ -114,7 +115,7 @@ namespace FishMMO.Server
 						}
 					}
 
-					if (Server.Configuration.TryGetUShort("Port", out ushort port))
+					if (Constants.Configuration.Settings.TryGetUShort("Port", out ushort port))
 					{
 						windowTitle.Append(" [Server:");
 						windowTitle.Append(Server.RemoteAddress);

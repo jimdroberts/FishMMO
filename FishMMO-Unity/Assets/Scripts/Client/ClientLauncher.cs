@@ -33,14 +33,11 @@ namespace FishMMO.Client
 		public Button PlayButton;
 		public TMP_Text PlayButtonText;
 
-		public string Host = "http://127.0.0.1:8080/";
-
 		public string HtmlViewURL = "https://github.com/jimdroberts/FishMMO/wiki";
 		public string DivClass = "markdown-body";
 		public TMP_Text HtmlText;
 		public TMPro_TextLinkHandler HtmlTextLinkHandler;
 
-		private string version;
 		private string latestversion;
 		private string updaterPath;
 
@@ -75,28 +72,25 @@ namespace FishMMO.Client
 			updaterPath = Path.Combine(Client.GetWorkingDirectory(), Constants.Configuration.UpdaterExecutable);
 
 			// load configuration
-			Configuration configuration = new Configuration(Client.GetWorkingDirectory());
-			if (!configuration.Load(Configuration.DEFAULT_FILENAME + Configuration.EXTENSION))
+			Constants.Configuration.Settings = new Configuration(Client.GetWorkingDirectory());
+			if (!Constants.Configuration.Settings.Load(Configuration.DEFAULT_FILENAME + Configuration.EXTENSION))
 			{
 				// if we failed to load the file.. save a new one
-				configuration.Set("Version", Constants.Configuration.Version);
-				configuration.Set("Resolution Width", 1280);
-				configuration.Set("Resolution Height", 800);
-				configuration.Set("Refresh Rate", (uint)60);
-				configuration.Set("Fullscreen", false);
-				configuration.Set("ShowDamage", true);
-				configuration.Set("ShowHeals", true);
-				configuration.Set("ShowAchievementCompletion", true);
-				configuration.Set("IPFetchHost", "http://127.0.0.1:8080/");
+				Constants.Configuration.Settings.Set("Version", Constants.Configuration.Version);
+				Constants.Configuration.Settings.Set("Resolution Width", 1280);
+				Constants.Configuration.Settings.Set("Resolution Height", 800);
+				Constants.Configuration.Settings.Set("Refresh Rate", (uint)60);
+				Constants.Configuration.Settings.Set("Fullscreen", false);
+				Constants.Configuration.Settings.Set("ShowDamage", true);
+				Constants.Configuration.Settings.Set("ShowHeals", true);
+				Constants.Configuration.Settings.Set("ShowAchievementCompletion", true);
+				Constants.Configuration.Settings.Set("PatcherHost", Constants.Configuration.PatcherHost);
+				Constants.Configuration.Settings.Set("IPFetchHost", Constants.Configuration.IPFetchHost);
 #if !UNITY_EDITOR
-				configuration.Save();
+				Constants.Configuration.Settings.Save();
 #endif
 			}
 
-			if (!configuration.TryGetString("Version", out version))
-			{
-				throw new UnityException("Version could not be found in configuration!");
-			}
 
 #if !UNITY_EDITOR
 			Screen.SetResolution(1024, 768, FullScreenMode.Windowed, new RefreshRate()
@@ -107,7 +101,7 @@ namespace FishMMO.Client
 #endif
 
 			// Assign the title name
-			Title.text = Constants.Configuration.ProjectName + " v" + version;
+			Title.text = Constants.Configuration.ProjectName + " v" + Constants.Configuration.Version;
 
 			// Clear the launch button events, this is done programmatically.
 			PlayButton.onClick.RemoveAllListeners();
@@ -129,7 +123,7 @@ namespace FishMMO.Client
 				Debug.Log(latest_version);
 
 				// Compare latest_version with the current client version
-				if (latest_version.Equals(version))
+				if (latest_version.Equals(Constants.Configuration.Version))
 				{
 					// If version matches we can enable the launch button functionality to load the ClientBootstrap scene
 					PlayButton.onClick.AddListener(PlayButton_Launch);
@@ -227,7 +221,11 @@ namespace FishMMO.Client
 
 		public IEnumerator GetLatestVersion(Action<string> onFetchFail, Action<string> onFetchComplete)
 		{
-			using (UnityWebRequest request = UnityWebRequest.Get(Host + "latest_version"))
+			if (!Constants.Configuration.Settings.TryGetString("PatcherHost", out string patcherHost))
+			{
+				throw new UnityException("Patcher Host could not be found in configuration!");
+			}
+			using (UnityWebRequest request = UnityWebRequest.Get(patcherHost + "latest_version"))
 			{
 				yield return request.SendWebRequest();
 
@@ -249,10 +247,14 @@ namespace FishMMO.Client
 
 		public IEnumerator GetPatch(Action<string> onFetchFail, Action onFetchComplete, Action<float> onProgressUpdate)
 		{
-			using (UnityWebRequest request = UnityWebRequest.Get(Host + version))
+			if (!Constants.Configuration.Settings.TryGetString("PatcherHost", out string patcherHost))
+			{
+				throw new UnityException("Patcher Host could not be found in configuration!");
+			}
+			using (UnityWebRequest request = UnityWebRequest.Get(patcherHost + Constants.Configuration.Version))
 			{
 				// Define the file path to save the downloaded patch file
-				string filePath = Path.Combine(Client.GetWorkingDirectory(), "patches", $"{version}-{latestversion}.patch");
+				string filePath = Path.Combine(Client.GetWorkingDirectory(), "patches", $"{Constants.Configuration.Version}-{latestversion}.patch");
 
 				// Create the file stream
 				request.downloadHandler = new DownloadHandlerFile(filePath)

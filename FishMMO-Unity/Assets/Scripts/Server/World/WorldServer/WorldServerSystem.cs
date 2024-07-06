@@ -36,7 +36,7 @@ namespace FishMMO.Server
 				{
 					int characterCount = worldSceneSystem.ConnectionCount;
 
-					if (Server.Configuration.TryGetString("ServerName", out string name))
+					if (Constants.Configuration.Settings.TryGetString("ServerName", out string name))
 					{
 						Debug.Log("World Server System: Adding World Server to Database: " + name + ":" + server.address + ":" + server.port);
 						WorldServerService.Add(dbContext, name, server.address, server.port, characterCount, locked, out id);
@@ -60,7 +60,7 @@ namespace FishMMO.Server
 			if (ServerManager != null)
 			{
 				if (Server != null &&
-					Server.Configuration.TryGetString("ServerName", out string name))
+					Constants.Configuration.Settings.TryGetString("ServerName", out string name))
 				{
 					Debug.Log("World Server System: Removing World Server from Database: " + name);
 					WorldServerService.Delete(dbContext, id);
