@@ -12,6 +12,7 @@ using UnityEditor.Build.Reporting;
 using Debug = UnityEngine.Debug;
 using System.Diagnostics;
 using UnityEngine;
+using System.Runtime.InteropServices;
 
 namespace FishMMO.Shared
 {
@@ -734,6 +735,8 @@ start Scene.exe SCENE";
 			string buildPath = Path.Combine(rootPath, folderName);
 
 			CopyIPFetchFiles(BuildTarget.StandaloneWindows64, Path.Combine(root, "FishMMO-WebServers", "IPFetch"), Path.Combine(root, configurationPath), buildPath, Path.Combine(root, "FishMMO-WebServers", "CertificateGenerator"));
+
+			OpenDirectory(buildPath);
 		}
 
 		[MenuItem("FishMMO/Build/Server/Linux x64 All-In-One", priority = 8)]
@@ -767,6 +770,8 @@ start Scene.exe SCENE";
 			string buildPath = Path.Combine(rootPath, folderName);
 
 			CopyIPFetchFiles(BuildTarget.StandaloneLinux64, Path.Combine(root, "FishMMO-WebServers", "IPFetch"), Path.Combine(root, configurationPath), buildPath, Path.Combine(root, "FishMMO-WebServers", "CertificateGenerator"));
+
+			OpenDirectory(buildPath);
 		}
 
 		[MenuItem("FishMMO/Build/Server/Patch Server", priority = 10)]
@@ -787,6 +792,8 @@ start Scene.exe SCENE";
 			string buildPath = Path.Combine(rootPath, folderName);
 
 			CopyPatcherFiles(Path.Combine(root, "FishMMO-WebServers", "Patcher"), buildPath, Path.Combine(root, "FishMMO-WebServers", "CertificateGenerator"));
+
+			OpenDirectory(buildPath);
 		}
 
 		[MenuItem("FishMMO/Build/Client/Linux x64", priority = 2)]
@@ -811,6 +818,30 @@ start Scene.exe SCENE";
 							GetBuildOptions(BuildTarget.WebGL),
 							StandaloneBuildSubtarget.Player,
 							BuildTarget.WebGL);
+		}
+
+		private static void OpenDirectory(string directory)
+		{
+			directory = directory.Replace('/', Path.DirectorySeparatorChar);
+			directory = directory.Replace('\\', Path.DirectorySeparatorChar);
+
+			if (!Directory.Exists(directory))
+			{
+				return;
+			}
+
+			if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+			{
+				Process.Start("explorer", directory);
+			}
+			else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+			{
+				Process.Start("xdg-open", directory);
+			}
+			else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+			{
+				Process.Start("open", directory);
+			}
 		}
 	}
 }
