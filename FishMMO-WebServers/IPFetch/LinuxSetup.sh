@@ -5,8 +5,8 @@ echo "Installing required Python packages..."
 
 python -m pip install --upgrade pip
 
-# Install the psycopg2 package
-pip install psycopg2
+pip install asyncpg
+pip install aiohttp
 
 # Display completion message
 echo "Installation complete."
