@@ -396,7 +396,7 @@ start Scene.exe SCENE";
 			}
 		}
 
-		private static void CopyPatcherFiles(string patcherPath, string buildPath, string certificatePath = null)
+		private static void CopyPatcherFiles(BuildTarget buildTarget, string patcherPath, string buildPath, string certificatePath = null)
 		{
 			if (Directory.Exists(buildPath))
 			{
@@ -405,6 +405,15 @@ start Scene.exe SCENE";
 			Directory.CreateDirectory(buildPath);
 
 			FileUtil.ReplaceFile(Path.Combine(patcherPath, "PatchServer.py"), Path.Combine(buildPath, "PatchServer.py"));
+
+			if (buildTarget == BuildTarget.StandaloneWindows64)
+			{
+				FileUtil.ReplaceFile(Path.Combine(patcherPath, "WindowsSetup.bat"), Path.Combine(buildPath, "WindowsSetup.bat"));
+			}
+			else
+			{
+				FileUtil.ReplaceFile(Path.Combine(patcherPath, "LinuxSetup.sh"), Path.Combine(buildPath, "LinuxSetup.sh"));
+			}
 
 			if (!string.IsNullOrWhiteSpace(certificatePath))
 			{
@@ -774,8 +783,8 @@ start Scene.exe SCENE";
 			OpenDirectory(buildPath);
 		}
 
-		[MenuItem("FishMMO/Build/Server/Patch Server", priority = 10)]
-		public static void BuildPatchServer()
+		[MenuItem("FishMMO/Build/Server/Windows Patch Server", priority = 10)]
+		public static void BuildWindowsPatchServer()
 		{
 			string rootPath = "";
 			if (string.IsNullOrWhiteSpace(rootPath))
@@ -791,7 +800,29 @@ start Scene.exe SCENE";
 			string folderName = Constants.Configuration.ProjectName + " Patch Server";
 			string buildPath = Path.Combine(rootPath, folderName);
 
-			CopyPatcherFiles(Path.Combine(root, "FishMMO-WebServers", "Patcher"), buildPath, Path.Combine(root, "FishMMO-WebServers", "CertificateGenerator"));
+			CopyPatcherFiles(BuildTarget.StandaloneWindows64, Path.Combine(root, "FishMMO-WebServers", "Patcher"), buildPath, Path.Combine(root, "FishMMO-WebServers", "CertificateGenerator"));
+
+			OpenDirectory(buildPath);
+		}
+
+		[MenuItem("FishMMO/Build/Server/Linux Patch Server", priority = 11)]
+		public static void BuildLinuxPatchServer()
+		{
+			string rootPath = "";
+			if (string.IsNullOrWhiteSpace(rootPath))
+			{
+				rootPath = EditorUtility.SaveFolderPanel("Pick a save directory", "", "");
+				if (string.IsNullOrWhiteSpace(rootPath))
+				{
+					return;
+				}
+			}
+
+			string root = Directory.GetParent(Directory.GetCurrentDirectory()).FullName;
+			string folderName = Constants.Configuration.ProjectName + " Patch Server";
+			string buildPath = Path.Combine(rootPath, folderName);
+
+			CopyPatcherFiles(BuildTarget.StandaloneLinux64, Path.Combine(root, "FishMMO-WebServers", "Patcher"), buildPath, Path.Combine(root, "FishMMO-WebServers", "CertificateGenerator"));
 
 			OpenDirectory(buildPath);
 		}

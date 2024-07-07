@@ -52,7 +52,7 @@ certificate = x509.CertificateBuilder().subject_name(
 ).sign(private_key, hashes.SHA256(), default_backend())
 
 # Get the current working directory
-cwd = os.getcwd()
+cwd = os.path.dirname(__file__)
 
 # Write the private key to a file (PEM format)
 private_key_path = os.path.join(cwd, "privatekey.pem")

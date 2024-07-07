@@ -107,6 +107,15 @@ class RequestHandler:
             return None
 
 async def run_server():
+    # Ask the user for IP and Port
+    external_ip = input("Enter the external IP address to bind to (leave blank for default): ").strip()
+    if not external_ip:
+        external_ip = ''  # This will bind to all available interfaces (including external)
+
+    port = input("Enter the port you would like to bind to (leave blank for 8080): ").strip()
+    if not port:
+        port = 8080
+
     # Create an aiohttp.web.Application instance
     app = aiohttp.web.Application()
 
@@ -129,15 +138,6 @@ async def run_server():
     # Setup the aiohttp.web.AppRunner
     runner = aiohttp.web.AppRunner(app)
     await runner.setup()
-
-    # Ask the user for IP and Port
-    external_ip = input("Enter the external IP address to bind to (leave blank for default): ").strip()
-    if not external_ip:
-        external_ip = ''  # This will bind to all available interfaces (including external)
-
-    port = input("Enter the port you would like to bind to (leave blank for 8080): ").strip()
-    if not port:
-        port = 8080
 
     # Create the TCP site with SSL context
     site = aiohttp.web.TCPSite(runner, external_ip, port, ssl_context=ssl_context)
