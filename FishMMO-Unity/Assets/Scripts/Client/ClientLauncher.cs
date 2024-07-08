@@ -199,6 +199,13 @@ namespace FishMMO.Client
 		{
 			if (Constants.Configuration.Settings.TryGetString("IPFetchHost", out string ipFetchHost))
 			{
+				// Pick a random IPFetch Host address if available.
+				string[] ipFetchServers = ipFetchHost.Split(",");
+				if (ipFetchServers != null && ipFetchServers.Length > 1)
+				{
+					ipFetchHost = ipFetchServers.GetRandom();
+				}
+
 				using (UnityWebRequest request = UnityWebRequest.Get(ipFetchHost + "patchserver"))
 				{
 					request.certificateHandler = new ClientSSLCertificateHandler();

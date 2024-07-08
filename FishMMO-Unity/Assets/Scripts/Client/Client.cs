@@ -527,6 +527,13 @@ namespace FishMMO.Client
 			{
 				using (UnityWebRequest request = UnityWebRequest.Get(ipFetchHost + "loginserver"))
 				{
+					// Pick a random IPFetch Host address if available.
+					string[] ipFetchServers = ipFetchHost.Split(",");
+					if (ipFetchServers != null && ipFetchServers.Length > 1)
+					{
+						ipFetchHost = ipFetchServers.GetRandom();
+					}
+
 					request.certificateHandler = new ClientSSLCertificateHandler();
 
 					yield return request.SendWebRequest();
