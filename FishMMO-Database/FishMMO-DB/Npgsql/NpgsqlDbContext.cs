@@ -12,6 +12,7 @@ namespace FishMMO.Database.Npgsql
 		//protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
 		//    => optionsBuilder.LogTo(Console.WriteLine);
 
+		public DbSet<PatchServerEntity> PatchServers { get; set; }
 		public DbSet<LoginServerEntity> LoginServers { get; set; }
 		public DbSet<WorldServerEntity> WorldServers { get; set; }
 		public DbSet<SceneServerEntity> SceneServers { get; set; }
