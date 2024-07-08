@@ -42,6 +42,10 @@ namespace FishMMO.Shared
 
 		public static T GetRandom<T>(this IList<T> list)
 		{
+			if (list == null || list.Count < 1)
+			{
+				return default;
+			}
 			return list[GetNext(0, list.Count - 1)];
 		}
 	}

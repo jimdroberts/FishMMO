@@ -8,6 +8,7 @@ python -m pip install --upgrade pip
 pip install psycopg2
 pip install asyncpg
 pip install aiohttp
+pip install requests
 
 # Display completion message
 echo "Installation complete."

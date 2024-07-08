@@ -15,6 +15,7 @@ using System.IO;
 using System.Text.RegularExpressions;
 
 using HtmlAgilityPack;
+using System.Collections.Generic;
 
 namespace FishMMO.Client
 {
@@ -38,6 +39,7 @@ namespace FishMMO.Client
 		public TMP_Text HtmlText;
 		public TMPro_TextLinkHandler HtmlTextLinkHandler;
 
+		private string patcherHost;
 		private string latestversion;
 		private string updaterPath;
 
@@ -84,7 +86,6 @@ namespace FishMMO.Client
 				Constants.Configuration.Settings.Set("ShowDamage", true);
 				Constants.Configuration.Settings.Set("ShowHeals", true);
 				Constants.Configuration.Settings.Set("ShowAchievementCompletion", true);
-				Constants.Configuration.Settings.Set("PatcherHost", Constants.Configuration.PatcherHost);
 				Constants.Configuration.Settings.Set("IPFetchHost", Constants.Configuration.IPFetchHost);
 #if !UNITY_EDITOR
 				Constants.Configuration.Settings.Save();
@@ -110,33 +111,8 @@ namespace FishMMO.Client
 			ProgressBarGroup.SetActive(false);
 
 #if !UNITY_EDITOR
-			SetButtonLock(true);
-
-			// Connect to web server and GET /latest_version
-			StartCoroutine(GetLatestVersion((e) =>
-			{
-				Debug.LogError(e);
-			},
-			(latest_version) =>
-			{
-				latestversion = latest_version;
-				Debug.Log(latest_version);
-
-				// Compare latest_version with the current client version
-				if (latest_version.Equals(Constants.Configuration.Version))
-				{
-					// If version matches we can enable the launch button functionality to load the ClientBootstrap scene
-					PlayButton.onClick.AddListener(PlayButton_Launch);
-					SetButtonLock(false);
-				}
-				else
-				{
-					// If version mismatch we need to change PlayButton to Update mode, GET /clientversion, launch DiffUpdater.exe and close the launcher
-					PlayButtonText.text = "Update";
-					PlayButton.onClick.AddListener(PlayButton_Update);
-					SetButtonLock(false);
-				}
-			}));
+			PlayButtonText.text = "Connect";
+			PlayButton.onClick.AddListener(PlayButton_Connect);
 #else
 			// Editor skips update so we can enable the launch button functionality to load the ClientBootstrap scene
 			PlayButton.onClick.AddListener(PlayButton_Launch);
@@ -219,12 +195,46 @@ namespace FishMMO.Client
 			return result;
 		}
 
+		public IEnumerator GetPatchServerList(Action<string> onFetchFail, Action<List<ServerAddress>> onFetchComplete)
+		{
+			if (Constants.Configuration.Settings.TryGetString("IPFetchHost", out string ipFetchHost))
+			{
+				using (UnityWebRequest request = UnityWebRequest.Get(ipFetchHost + "patchserver"))
+				{
+					request.certificateHandler = new ClientSSLCertificateHandler();
+
+					yield return request.SendWebRequest();
+
+					if (request.result == UnityWebRequest.Result.ConnectionError ||
+						request.result == UnityWebRequest.Result.ProtocolError)
+					{
+						onFetchFail?.Invoke("Error: " + request.error);
+					}
+					else
+					{
+						// Parse JSON response
+						string jsonResponse = request.downloadHandler.text;
+						jsonResponse = "{\"addresses\":" + jsonResponse.ToString() + "}";
+						ServerAddresses result = JsonUtility.FromJson<ServerAddresses>(jsonResponse);
+
+						// Do something with the server list
+						foreach (ServerAddress server in result.addresses)
+						{
+							Debug.Log("Client: New Patch Server Address:" + server.address + ", Port: " + server.port);
+						}
+
+						onFetchComplete?.Invoke(result.addresses);
+					}
+				}
+			}
+			else
+			{
+				onFetchFail?.Invoke("Failed to configure IPFetchHost.");
+			}
+		}
+
 		public IEnumerator GetLatestVersion(Action<string> onFetchFail, Action<string> onFetchComplete)
 		{
-			if (!Constants.Configuration.Settings.TryGetString("PatcherHost", out string patcherHost))
-			{
-				throw new UnityException("Patcher Host could not be found in configuration!");
-			}
 			using (UnityWebRequest request = UnityWebRequest.Get(patcherHost + "latest_version"))
 			{
 				request.certificateHandler = new ClientSSLCertificateHandler();
@@ -249,10 +259,6 @@ namespace FishMMO.Client
 
 		public IEnumerator GetPatch(Action<string> onFetchFail, Action onFetchComplete, Action<float> onProgressUpdate)
 		{
-			if (!Constants.Configuration.Settings.TryGetString("PatcherHost", out string patcherHost))
-			{
-				throw new UnityException("Patcher Host could not be found in configuration!");
-			}
 			using (UnityWebRequest request = UnityWebRequest.Get(patcherHost + Constants.Configuration.Version))
 			{
 				request.certificateHandler = new ClientSSLCertificateHandler();
@@ -293,6 +299,53 @@ namespace FishMMO.Client
 					onFetchComplete?.Invoke();
 				}
 			}
+		}
+
+		public void PlayButton_Connect()
+		{
+			SetButtonLock(true);
+
+			StartCoroutine(GetPatchServerList((e) =>
+			{
+				SetButtonLock(false);
+
+				Debug.LogError(e);
+			},
+			(patch_servers) =>
+			{
+				// Assign a random patcher host address and port
+				ServerAddress randomServer = patch_servers.GetRandom();
+				patcherHost = randomServer.HTTPSAddress();
+
+				// Connect to patcher web server and GET /latest_version
+				StartCoroutine(GetLatestVersion((e) =>
+				{
+					SetButtonLock(false);
+
+					Debug.LogError(e);
+				},
+				(latest_version) =>
+				{
+					latestversion = latest_version;
+					Debug.Log(latest_version);
+
+					// Compare latest_version with the current client version
+					if (latest_version.Equals(Constants.Configuration.Version))
+					{
+						// If version matches we can enable the launch button functionality to load the ClientBootstrap scene
+						PlayButtonText.text = "Play";
+						PlayButton.onClick.AddListener(PlayButton_Launch);
+						SetButtonLock(false);
+					}
+					else
+					{
+						// If version mismatch we need to change PlayButton to Update mode, GET /clientversion, launch DiffUpdater.exe and close the launcher
+						PlayButtonText.text = "Update";
+						PlayButton.onClick.AddListener(PlayButton_Update);
+						SetButtonLock(false);
+					}
+				}));
+			}));
 		}
 
 		public void PlayButton_Launch()

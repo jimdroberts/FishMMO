@@ -13,6 +13,8 @@ using Debug = UnityEngine.Debug;
 using System.Diagnostics;
 using UnityEngine;
 using System.Runtime.InteropServices;
+using Microsoft.Extensions.Configuration;
+using FishNet.Configuring;
 
 namespace FishMMO.Shared
 {
@@ -396,7 +398,7 @@ start Scene.exe SCENE";
 			}
 		}
 
-		private static void CopyPatcherFiles(BuildTarget buildTarget, string patcherPath, string buildPath, string certificatePath = null)
+		private static void CopyPatcherFiles(BuildTarget buildTarget, string patcherPath, string configurationPath, string buildPath, string certificatePath = null)
 		{
 			if (Directory.Exists(buildPath))
 			{
@@ -405,6 +407,7 @@ start Scene.exe SCENE";
 			Directory.CreateDirectory(buildPath);
 
 			FileUtil.ReplaceFile(Path.Combine(patcherPath, "PatchServer.py"), Path.Combine(buildPath, "PatchServer.py"));
+			FileUtil.ReplaceFile(Path.Combine(configurationPath, "appsettings.json"), Path.Combine(buildPath, "appsettings.json"));
 
 			if (buildTarget == BuildTarget.StandaloneWindows64)
 			{
@@ -797,10 +800,11 @@ start Scene.exe SCENE";
 			}
 
 			string root = Directory.GetParent(Directory.GetCurrentDirectory()).FullName;
+			string configurationPath = WorkingEnvironmentOptions.AppendEnvironmentToPath(Constants.Configuration.SetupDirectory);
 			string folderName = Constants.Configuration.ProjectName + " Patch Server";
 			string buildPath = Path.Combine(rootPath, folderName);
 
-			CopyPatcherFiles(BuildTarget.StandaloneWindows64, Path.Combine(root, "FishMMO-WebServers", "Patcher"), buildPath, Path.Combine(root, "FishMMO-WebServers", "CertificateGenerator"));
+			CopyPatcherFiles(BuildTarget.StandaloneWindows64, Path.Combine(root, "FishMMO-WebServers", "Patcher"), Path.Combine(root, configurationPath), buildPath, Path.Combine(root, "FishMMO-WebServers", "CertificateGenerator"));
 
 			OpenDirectory(buildPath);
 		}
@@ -819,10 +823,11 @@ start Scene.exe SCENE";
 			}
 
 			string root = Directory.GetParent(Directory.GetCurrentDirectory()).FullName;
+			string configurationPath = WorkingEnvironmentOptions.AppendEnvironmentToPath(Constants.Configuration.SetupDirectory);
 			string folderName = Constants.Configuration.ProjectName + " Patch Server";
 			string buildPath = Path.Combine(rootPath, folderName);
 
-			CopyPatcherFiles(BuildTarget.StandaloneLinux64, Path.Combine(root, "FishMMO-WebServers", "Patcher"), buildPath, Path.Combine(root, "FishMMO-WebServers", "CertificateGenerator"));
+			CopyPatcherFiles(BuildTarget.StandaloneLinux64, Path.Combine(root, "FishMMO-WebServers", "Patcher"), Path.Combine(root, configurationPath), buildPath, Path.Combine(root, "FishMMO-WebServers", "CertificateGenerator"));
 
 			OpenDirectory(buildPath);
 		}

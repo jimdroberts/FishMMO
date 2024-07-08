@@ -152,7 +152,6 @@ namespace FishMMO.Client
 					Constants.Configuration.Settings.Set("ShowDamage", true);
 					Constants.Configuration.Settings.Set("ShowHeals", true);
 					Constants.Configuration.Settings.Set("ShowAchievementCompletion", true);
-					Constants.Configuration.Settings.Set("PatcherHost", Constants.Configuration.PatcherHost);
 					Constants.Configuration.Settings.Set("IPFetchHost", Constants.Configuration.IPFetchHost);
 #if !UNITY_EDITOR
 				Constants.Configuration.Settings.Save();
@@ -526,7 +525,7 @@ namespace FishMMO.Client
 			}
 			else if (Constants.Configuration.Settings.TryGetString("IPFetchHost", out string ipFetchHost))
 			{
-				using (UnityWebRequest request = UnityWebRequest.Get(ipFetchHost))
+				using (UnityWebRequest request = UnityWebRequest.Get(ipFetchHost + "loginserver"))
 				{
 					request.certificateHandler = new ClientSSLCertificateHandler();
 

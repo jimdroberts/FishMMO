@@ -14,5 +14,20 @@ namespace FishMMO.Shared
 	{
 		public string address;
 		public ushort port;
+
+		public string HTTPSAddress()
+		{
+			string fullAddress = address + ":" + port;
+			// Format the PatcherHost Address with HTTPS
+			if (!fullAddress.StartsWith("https://"))
+			{
+				fullAddress = "https://" + fullAddress;
+			}
+			if (!fullAddress.EndsWith("/"))
+			{
+				fullAddress += "/";
+			}
+			return fullAddress;
+		}
 	}
 }
