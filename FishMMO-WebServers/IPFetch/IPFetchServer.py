@@ -17,6 +17,13 @@ class RequestHandler:
         self.app = app
         self.cache = {}
         self.CACHE_TIMEOUT = 300
+        
+    async def add_cors_headers(self, request, response):
+        origin = request.headers.get('Origin', '*')
+        response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+        return response
 
     async def handle_patch_servers(self, request):
         conn = None
@@ -39,7 +46,8 @@ class RequestHandler:
                 self.cache['timestamp'] = current_time
                 logging.info("Patch server data cached.")
 
-            return aiohttp.web.json_response([dict(record) for record in patch_servers])
+            response = aiohttp.web.json_response([dict(record) for record in patch_servers])
+            return await self.add_cors_headers(request, response)
 
         except Exception as e:
             logging.error(f"Error fetching patch servers: {e}")
@@ -71,7 +79,8 @@ class RequestHandler:
                 self.cache['timestamp'] = current_time
                 logging.info("Login server data cached.")
 
-            return aiohttp.web.json_response([dict(record) for record in login_servers])
+            response = aiohttp.web.json_response([dict(record) for record in login_servers])
+            return await self.add_cors_headers(request, response)
 
         except Exception as e:
             logging.error(f"Error fetching login servers: {e}")

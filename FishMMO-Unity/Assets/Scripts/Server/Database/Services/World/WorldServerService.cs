@@ -67,10 +67,11 @@ namespace FishMMO.Server.DatabaseServices
                 return;
             }
             var worldServer = dbContext.WorldServers.FirstOrDefault(c => c.ID == id);
-			if (worldServer == null) throw new Exception($"Couldn't find World Server with ID: {id}");
-
-            dbContext.WorldServers.Remove(worldServer);
-			dbContext.SaveChanges();
+			if (worldServer != null)
+            {
+				dbContext.WorldServers.Remove(worldServer);
+				dbContext.SaveChanges();
+			}
 		}
 
 		public static WorldServerEntity GetServer(NpgsqlDbContext dbContext, long worldServerID)

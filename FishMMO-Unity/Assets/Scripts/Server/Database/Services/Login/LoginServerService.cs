@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Linq;
 using FishMMO.Database.Npgsql;
 using FishMMO.Database.Npgsql.Entities;
@@ -56,10 +57,11 @@ namespace FishMMO.Server.DatabaseServices
 				return;
 			}
 			var loginServer = dbContext.LoginServers.FirstOrDefault(c => c.ID == id);
-			if (loginServer == null) throw new Exception($"Couldn't find Login Server with ID: {id}");
-
-			dbContext.LoginServers.Remove(loginServer);
-			dbContext.SaveChanges();
+			if (loginServer != null)
+			{
+				dbContext.LoginServers.Remove(loginServer);
+				dbContext.SaveChanges();
+			}
 		}
 
 		public static LoginServerEntity GetServer(NpgsqlDbContext dbContext, long loginServerID)
