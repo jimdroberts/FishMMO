@@ -79,6 +79,7 @@ namespace FishMMO.Client
 				}
 			}
 			OptionalParams = optionalParams;
+			gameObject.SetActive(true);
 		}
 		public void Initialize(IPlayerCharacter character, ITooltip tooltip)
 		{

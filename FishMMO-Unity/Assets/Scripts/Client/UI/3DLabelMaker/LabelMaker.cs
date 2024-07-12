@@ -38,6 +38,7 @@ namespace FishMMO.Client
 				if (!pool.TryDequeue(out label))
 				{
 					label = Instantiate(LabelPrefab3D);
+					label.gameObject.SetActive(true);
 				}
 				return true;
 			}

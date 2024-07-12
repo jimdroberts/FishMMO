@@ -14,9 +14,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   Scenes:
     m_keys:
-    - Crushbone
-    - Felwithe
-    - Greater Faydark
+    - Dungeon
+    - StartScene A
+    - StartScene B
+    - Tutorial Regions
+    - Tutorial Spawners
+    - Tutorial SpawnPoints
     m_values:
     - MaxClients: 100
       SceneTransitionImage: {fileID: 21300000, guid: 41f73c28208285445b37a7980665ead3,
@@ -26,20 +29,20 @@ MonoBehaviour:
         m_values: []
       RespawnPositions:
         m_keys:
-        - Crushbone Entrance Respawn
+        - Dungeon Entrance Respawn
         m_values:
         - Position: {x: -131.24055, y: 18.1, z: 23.146694}
           Rotation: {x: -0, y: 0.7071068, z: -0, w: 0.7071068}
       Teleporters:
         m_keys:
-        - CrushboneEntrance
+        - Dungeon A 1 Entrance
         m_values:
-        - ToScene: Greater Faydark
+        - ToScene: StartScene B
           ToPosition: {x: -2.5910993, y: 4.9199996, z: 27.954844}
           ToRotation: {x: -0, y: 1, z: -0, w: 0}
       Boundaries:
         m_keys:
-        - Crushbone Boundary
+        - SceneBoundary
         m_values:
         - BoundaryOrigin: {x: 0, y: 75, z: 0}
           BoundarySize: {x: 300, y: 150, z: 200}
@@ -48,34 +51,46 @@ MonoBehaviour:
         type: 3}
       InitialSpawnPositions:
         m_keys:
-        - West Felwithe
-        - East Felwithe
+        - West A
+        - East A
         m_values:
-        - SpawnerName: West Felwithe
-          SceneName: Felwithe
-          Position: {x: -15.971643, y: 68.814125, z: -32.860104}
+        - SpawnerName: West A
+          SceneName: StartScene A
+          Position: {x: -16, y: 68.30121, z: -34.26}
           Rotation: {x: -0, y: -0, z: -0, w: 1}
           AllowedRaces:
           - {fileID: 11400000, guid: 6f8938bbed1286347b54bf3f4889f32a, type: 2}
-        - SpawnerName: East Felwithe
-          SceneName: Felwithe
-          Position: {x: 10.326195, y: 76.86, z: -31.916454}
+        - SpawnerName: East A
+          SceneName: StartScene A
+          Position: {x: -9.069405, y: 68.3158, z: -31.849997}
           Rotation: {x: -0, y: 0.7071068, z: -0, w: 0.7071068}
           AllowedRaces:
           - {fileID: 11400000, guid: 6f8938bbed1286347b54bf3f4889f32a, type: 2}
       RespawnPositions:
         m_keys:
-        - Respawn 1
+        - Respawn Point
         m_values:
-        - Position: {x: 7.8770924, y: 76.86, z: -34.847042}
+        - Position: {x: 2.290001, y: 68.27639, z: -34.844753}
           Rotation: {x: -0, y: -0, z: -0, w: 1}
       Teleporters:
         m_keys:
-        - FelwitheNorth
+        - Tutorial SpawnPoints
+        - Tutorial Spawners
+        - Start Scene B 1
+        - Tutorial Regions
         m_values:
-        - ToScene: Greater Faydark
+        - ToScene: Tutorial SpawnPoints
+          ToPosition: {x: -4.2100005, y: 0.1, z: 0}
+          ToRotation: {x: -0, y: -0, z: -0, w: 1}
+        - ToScene: Tutorial Spawners
+          ToPosition: {x: -4.2100005, y: 0.1, z: 0}
+          ToRotation: {x: -0, y: -0, z: -0, w: 1}
+        - ToScene: StartScene B
           ToPosition: {x: -150.54633, y: 9.4210825, z: 44.43602}
           ToRotation: {x: -0, y: 0.7071068, z: -0, w: 0.7071068}
+        - ToScene: Tutorial Regions
+          ToPosition: {x: -4.2100005, y: 0.1, z: 0}
+          ToRotation: {x: -0, y: -0, z: -0, w: 1}
       Boundaries:
         m_keys:
         - Terrain
@@ -90,7 +105,7 @@ MonoBehaviour:
         - Spire
         m_values:
         - SpawnerName: Spire
-          SceneName: Greater Faydark
+          SceneName: StartScene B
           Position: {x: -94.72, y: 20.89, z: 44.3}
           Rotation: {x: -0, y: 0.7071068, z: -0, w: 0.7071068}
           AllowedRaces:
@@ -106,18 +121,18 @@ MonoBehaviour:
           Rotation: {x: -0, y: -0, z: -0, w: 1}
       Teleporters:
         m_keys:
-        - GreaterFaydarkEast
-        - Crushbone
-        - GreaterFaydarkTeleporterA
+        - Start Scene A 1
+        - Dungeon A 1
+        - Start Scene A 1 Teleporter
         m_values:
-        - ToScene: Felwithe
-          ToPosition: {x: -20.561272, y: 68.3352, z: -27.581495}
+        - ToScene: StartScene A
+          ToPosition: {x: -20.561272, y: 68.3352, z: -27.581497}
           ToRotation: {x: -0, y: 1, z: -0, w: 0}
-        - ToScene: Crushbone
+        - ToScene: Dungeon
           ToPosition: {x: -130.84203, y: 17.6, z: 22.710613}
           ToRotation: {x: -0, y: 0.7071068, z: -0, w: 0.7071068}
-        - ToScene: Felwithe
-          ToPosition: {x: -19.762293, y: 73.12, z: -19.263304}
+        - ToScene: StartScene A
+          ToPosition: {x: -18.889395, y: 68.33223, z: -27.589996}
           ToRotation: {x: -0, y: 1, z: -0, w: 0}
       Boundaries:
         m_keys:
@@ -125,3 +140,111 @@ MonoBehaviour:
         m_values:
         - BoundaryOrigin: {x: 0, y: 75, z: 0}
           BoundarySize: {x: 1000, y: 175, z: 1000}
+    - MaxClients: 100
+      SceneTransitionImage: {fileID: 0}
+      InitialSpawnPositions:
+        m_keys: []
+        m_values: []
+      RespawnPositions:
+        m_keys:
+        - Respawn Position A
+        - Respawn Position B
+        m_values:
+        - Position: {x: 15, y: 1.5, z: 0}
+          Rotation: {x: -0, y: -0, z: -0, w: 1}
+        - Position: {x: -15, y: 1.5, z: 0}
+          Rotation: {x: -0, y: -0, z: -0, w: 1}
+      Teleporters:
+        m_keys:
+        - Tutorial Regions Entrance
+        m_values:
+        - ToScene: StartScene A
+          ToPosition: {x: 1.1187267, y: 68.3352, z: -27.583496}
+          ToRotation: {x: -0, y: 1, z: -0, w: 0}
+      Boundaries:
+        m_keys:
+        - WorldSceneSettings
+        m_values:
+        - BoundaryOrigin: {x: 0, y: 0, z: 0}
+          BoundarySize: {x: 180, y: 50, z: 180}
+    - MaxClients: 100
+      SceneTransitionImage: {fileID: 0}
+      InitialSpawnPositions:
+        m_keys: []
+        m_values: []
+      RespawnPositions:
+        m_keys:
+        - Respawn Position A
+        - Respawn Position B
+        m_values:
+        - Position: {x: 15, y: 1.5, z: 0}
+          Rotation: {x: -0, y: -0, z: -0, w: 1}
+        - Position: {x: -15, y: 1.5, z: 0}
+          Rotation: {x: -0, y: -0, z: -0, w: 1}
+      Teleporters:
+        m_keys:
+        - Tutorial Spawners Entrance
+        m_values:
+        - ToScene: StartScene A
+          ToPosition: {x: 7.0587273, y: 68.3352, z: -27.583496}
+          ToRotation: {x: -0, y: 1, z: -0, w: 0}
+      Boundaries:
+        m_keys:
+        - WorldSceneSettings
+        m_values:
+        - BoundaryOrigin: {x: 0, y: 0, z: 0}
+          BoundarySize: {x: 180, y: 50, z: 180}
+    - MaxClients: 100
+      SceneTransitionImage: {fileID: 0}
+      InitialSpawnPositions:
+        m_keys:
+        - Spawn Point C
+        - Spawn Point A
+        - Spawn Point D
+        - Spawn Point B
+        m_values:
+        - SpawnerName: Spawn Point C
+          SceneName: Tutorial SpawnPoints
+          Position: {x: 0, y: 1.5, z: 15}
+          Rotation: {x: -0, y: -0, z: -0, w: 1}
+          AllowedRaces: []
+        - SpawnerName: Spawn Point A
+          SceneName: Tutorial SpawnPoints
+          Position: {x: 15, y: 1.5, z: 0}
+          Rotation: {x: -0, y: -0, z: -0, w: 1}
+          AllowedRaces: []
+        - SpawnerName: Spawn Point D
+          SceneName: Tutorial SpawnPoints
+          Position: {x: 0, y: 1.5, z: -15}
+          Rotation: {x: -0, y: -0, z: -0, w: 1}
+          AllowedRaces: []
+        - SpawnerName: Spawn Point B
+          SceneName: Tutorial SpawnPoints
+          Position: {x: -15, y: 1.5, z: 0}
+          Rotation: {x: -0, y: -0, z: -0, w: 1}
+          AllowedRaces: []
+      RespawnPositions:
+        m_keys:
+        - Character Respawn Position B
+        - Character Respawn Position C
+        - Character Respawn Position A
+        m_values:
+        - Position: {x: -8, y: 1.5, z: -8}
+          Rotation: {x: -0, y: -0, z: -0, w: 1}
+        - Position: {x: -8, y: 1.5, z: 8}
+          Rotation: {x: -0, y: -0, z: -0, w: 1}
+        - Position: {x: 8, y: 1.5, z: -8}
+          Rotation: {x: -0, y: -0, z: -0, w: 1}
+      Teleporters:
+        m_keys:
+        - Tutorial SpawnPoints Entrance
+        m_values:
+        - ToScene: StartScene A
+          ToPosition: {x: -4.8112717, y: 68.3352, z: -27.583496}
+          ToRotation: {x: -0, y: 1, z: -0, w: 0}
+      Boundaries:
+        m_keys:
+        - WorldSceneSettings
+        m_values:
+        - BoundaryOrigin: {x: 0, y: 0, z: 0}
+          BoundarySize: {x: 180, y: 50, z: 180}

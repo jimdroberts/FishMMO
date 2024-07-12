@@ -106,6 +106,7 @@ namespace FishMMO.Client
 						button.AmountText.text = item.IsStackable ? item.Stackable.Amount.ToString() : "";
 					}
 				}
+				button.gameObject.SetActive(true);
 				bankSlots.Add(button);
 			}
 			// update our buttons when the bank slots change

@@ -76,10 +76,14 @@ namespace FishMMO.Shared
 				return false;
 			}
 			// children take priority
-			if (Children != null)
+			if (Children != null && other != null)
 			{
 				foreach (Region child in Children)
 				{
+					if (child == null)
+					{
+						continue;
+					}
 					// does a child of this region already contain our character?
 					if (child.Collider.bounds.Intersects(other.bounds))
 					{

@@ -318,6 +318,12 @@ namespace FishMMO.Server
 				if (targetGuildController.ID > 0)
 				{
 					// we should tell the inviter the target is already in a guild
+					Server.Broadcast(conn, new ChatBroadcast()
+					{
+						channel = ChatChannel.Guild,
+						senderID = msg.targetCharacterID,
+						text = ChatHelper.GUILD_ERROR_TARGET_IN_GUILD + " ",
+					}, true, Channel.Reliable);
 					return;
 				}
 

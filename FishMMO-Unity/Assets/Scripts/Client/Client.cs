@@ -343,9 +343,9 @@ namespace FishMMO.Client
 			return true;
 		}
 
-		private void ClientManager_OnClientConnectionState(ClientConnectionStateArgs obj)
+		private void ClientManager_OnClientConnectionState(ClientConnectionStateArgs args)
 		{
-			clientState = obj.ConnectionState;
+			clientState = args.ConnectionState;
 
 			switch (clientState)
 			{

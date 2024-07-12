@@ -196,6 +196,7 @@ async def run_server():
     finally:
         # Perform cleanup when exiting
         logging.info("Performing cleanup...")
+        await runner.cleanup()
         await cleanup_database(ids_to_remove)
 
 async def signal_handler():

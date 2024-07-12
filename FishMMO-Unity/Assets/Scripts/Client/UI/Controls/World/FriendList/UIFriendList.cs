@@ -57,6 +57,7 @@ namespace FishMMO.Client
 					uiFriend = Instantiate(FriendPrefab, FriendParent);
 					uiFriend.FriendID = friendID;
 					uiFriend.OnRemoveFriend += OnButtonRemoveFriend;
+					uiFriend.gameObject.SetActive(true);
 					Friends.Add(friendID, uiFriend);
 				}
 				if (uiFriend != null)

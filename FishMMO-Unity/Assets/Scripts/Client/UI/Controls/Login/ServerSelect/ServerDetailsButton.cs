@@ -20,6 +20,7 @@ namespace FishMMO.Client
 			Details = details;
 			serverLabel.text = (details.Locked ? "[Locked] " : " ") + details.Name;
 			serverStatusLabel.text = details.CharacterCount.ToString();
+			gameObject.SetActive(true);
 		}
 
 		public void OnClick_ServerButton()

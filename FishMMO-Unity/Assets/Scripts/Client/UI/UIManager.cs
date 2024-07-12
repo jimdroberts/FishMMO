@@ -187,10 +187,15 @@ namespace FishMMO.Client
 			return false;
 		}
 
-		public static bool InputControlHasFocus()
+		public static bool InputControlHasFocus(UIControl ignore = null)
 		{
 			foreach (UIControl control in controls.Values)
 			{
+				if (ignore != null &&
+					control.Name.Equals(ignore.Name))
+				{
+					continue;
+				}
 				if (control.Visible &&
 					control.InputField != null &&
 					control.InputField.isFocused)

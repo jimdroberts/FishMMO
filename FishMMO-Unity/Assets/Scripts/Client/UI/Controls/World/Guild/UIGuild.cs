@@ -108,7 +108,9 @@ namespace FishMMO.Client
 			{
 				if (!Members.TryGetValue(characterID, out UIGuildMember guildMember))
 				{
-					Members.Add(characterID, guildMember = Instantiate(GuildMemberPrefab, GuildMemberParent));
+					guildMember = Instantiate(GuildMemberPrefab, GuildMemberParent);
+					guildMember.gameObject.SetActive(true);
+					Members.Add(characterID, guildMember);
 				}
 				if (guildMember.Name != null)
 				{
@@ -188,9 +190,12 @@ namespace FishMMO.Client
 						{
 							targetCharacterID = targetCharacter.ID
 						}, Channel.Reliable);
+
+						return;
 					}
 				}
-				else if (UIManager.TryGet("UIDialogInputBox", out UIDialogInputBox tooltip))
+
+				if (UIManager.TryGet("UIDialogInputBox", out UIDialogInputBox tooltip))
 				{
 					tooltip.Open("Please type the name of the person you wish to invite.", (s) =>
 					{

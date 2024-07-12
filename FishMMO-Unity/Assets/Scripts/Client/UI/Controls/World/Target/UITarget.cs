@@ -61,11 +61,11 @@ namespace FishMMO.Client
 
 			ICharacterAttributeController characterAttributeController = obj.GetComponent<ICharacterAttributeController>();
 			IInteractable interactable = obj.GetComponent<IInteractable>();
-			//SceneTeleporter teleporter = obj.GetComponent<SceneTeleporter>();
+			SceneTeleporter teleporter = obj.GetComponent<SceneTeleporter>();
 			SceneObjectNamer sceneObjectNamer = obj.GetComponent<SceneObjectNamer>();
 
 			// must be an interactable or have an attribute controller
-			if (characterAttributeController == null && interactable == null && /*teleporter == null &&*/ sceneObjectNamer == null)
+			if (characterAttributeController == null && interactable == null && teleporter == null && sceneObjectNamer == null)
 			{
 				// hide the UI
 				Hide();
@@ -129,11 +129,11 @@ namespace FishMMO.Client
 		{
 			ICharacterAttributeController characterAttributeController = newTarget.GetComponent<ICharacterAttributeController>();
 			IInteractable interactable = newTarget.GetComponent<IInteractable>();
-			//SceneTeleporter teleporter = newTarget.GetComponent<SceneTeleporter>();
+			SceneTeleporter teleporter = newTarget.GetComponent<SceneTeleporter>();
 			SceneObjectNamer sceneObjectNamer = newTarget.GetComponent<SceneObjectNamer>();
 
 			// must be an interactable or have an attribute controller
-			if (characterAttributeController == null && interactable == null && /*teleporter == null &&*/ sceneObjectNamer == null)
+			if (characterAttributeController == null && interactable == null && teleporter == null && sceneObjectNamer == null)
 			{
 				return;
 			}

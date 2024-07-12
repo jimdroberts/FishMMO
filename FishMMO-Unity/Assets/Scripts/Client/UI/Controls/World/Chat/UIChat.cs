@@ -1,5 +1,6 @@
 ﻿using FishNet.Transporting;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using System;
 using System.Collections.Generic;
 using FishMMO.Shared;
@@ -18,8 +19,10 @@ namespace FishMMO.Client
 
 		public Dictionary<string, string> ErrorCodes = new Dictionary<string, string>()
 		{
-			{ ChatHelper.ERROR_TARGET_OFFLINE, " is not online." },
-			{ ChatHelper.ERROR_MESSAGE_SELF, "... Are you messaging yourself again?" },
+			{ ChatHelper.GUILD_ERROR_TARGET_IN_GUILD, " is already in a guild." },
+			{ ChatHelper.PARTY_ERROR_TARGET_IN_PARTY, " is already in a party." },
+			{ ChatHelper.TARGET_OFFLINE, " is not online." },
+			{ ChatHelper.TELL_ERROR_MESSAGE_SELF, "... Are you messaging yourself again?" },
 		};
 
 		public UIChatChannelColorDictionary ChannelColors = new UIChatChannelColorDictionary()
@@ -112,7 +115,30 @@ namespace FishMMO.Client
 
 		void Update()
 		{
+			EnableChatInput();
 			ValidateMessages();
+		}
+
+		public void EnableChatInput()
+		{
+			// if an input has focus already we should skip input otherwise things will happen while we are typing!
+			if (Character == null ||
+				UIManager.InputControlHasFocus())
+			{
+				return;
+			}
+
+			if (InputManager.GetKeyDown("Chat") ||
+				InputManager.GetKeyDown("Chat2"))
+			{
+				// enable mouse mode
+				InputManager.MouseMode = true;
+
+				InputField.OnSelect(new BaseEventData(EventSystem.current)
+				{
+					selectedObject = InputField.gameObject,
+				});
+			}
 		}
 
 		public void ValidateMessages()
@@ -137,6 +163,18 @@ namespace FishMMO.Client
 
 		public void OnSubmit(string input)
 		{
+			InputManager.MouseMode = false;
+			InputField.OnDeselect(new BaseEventData(EventSystem.current)
+			{
+				selectedObject = InputField.gameObject,
+			});
+
+			if (!InputManager.GetKeyDown("Chat") &&
+				!InputManager.GetKeyDown("Chat2"))
+			{
+				return;
+			}
+
 			if (string.IsNullOrWhiteSpace(input))
 			{
 				return;
@@ -192,6 +230,7 @@ namespace FishMMO.Client
 				newTab.label.text = newTabName + " " + i;
 			}
 			newTab.name = newTab.label.text;
+			newTab.gameObject.SetActive(true);
 			tabs.Add(newTab.label.text, newTab);
 		}
 
@@ -273,6 +312,7 @@ namespace FishMMO.Client
 			}
 			newMessage.Text.color = color ?? ChannelColors[channel];
 			newMessage.Text.text = message;
+			newMessage.gameObject.SetActive(true);
 			AddMessage(newMessage);
 			
 			previousChannel = channel;
@@ -342,19 +382,49 @@ namespace FishMMO.Client
 
 		public bool OnPartyChat(IPlayerCharacter localCharacter, ChatBroadcast msg)
 		{
-			ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
+			string cmd = ChatHelper.GetWordAndTrimmed(msg.text, out string trimmed);
+			if (!string.IsNullOrWhiteSpace(cmd))
 			{
-				InstantiateChatMessage(msg.channel, s, msg.text);
-			});
+				if (cmd.Equals(ChatHelper.PARTY_ERROR_TARGET_IN_PARTY) &&
+					ErrorCodes.TryGetValue(ChatHelper.PARTY_ERROR_TARGET_IN_PARTY, out string targetErrorMsg))
+				{
+					ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
+					{
+						InstantiateChatMessage(msg.channel, s, targetErrorMsg);
+					});
+				}
+			}
+			else
+			{
+				ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
+				{
+					InstantiateChatMessage(msg.channel, s, msg.text);
+				});
+			}
 			return true;
 		}
 
 		public bool OnGuildChat(IPlayerCharacter localCharacter, ChatBroadcast msg)
 		{
-			ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
+			string cmd = ChatHelper.GetWordAndTrimmed(msg.text, out string trimmed);
+			if (!string.IsNullOrWhiteSpace(cmd))
 			{
-				InstantiateChatMessage(msg.channel, s, msg.text);
-			});
+				if (cmd.Equals(ChatHelper.GUILD_ERROR_TARGET_IN_GUILD) &&
+					ErrorCodes.TryGetValue(ChatHelper.GUILD_ERROR_TARGET_IN_GUILD, out string targetErrorMsg))
+				{
+					ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
+					{
+						InstantiateChatMessage(msg.channel, s, targetErrorMsg);
+					});
+				}
+			}
+			else
+			{
+				ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
+				{
+					InstantiateChatMessage(msg.channel, s, msg.text);
+				});
+			}
 			return true;
 		}
 
@@ -366,7 +436,7 @@ namespace FishMMO.Client
 			if (!string.IsNullOrWhiteSpace(cmd))
 			{
 				// returned message
-				if (cmd.Equals(ChatHelper.RELAYED))
+				if (cmd.Equals(ChatHelper.TELL_RELAYED))
 				{
 					ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
 					{
@@ -375,8 +445,8 @@ namespace FishMMO.Client
 					return true;
 				}
 				// target offline
-				else if (cmd.Equals(ChatHelper.ERROR_TARGET_OFFLINE) &&
-						 ErrorCodes.TryGetValue(ChatHelper.ERROR_TARGET_OFFLINE, out string offlineMsg))
+				else if (cmd.Equals(ChatHelper.TARGET_OFFLINE) &&
+						 ErrorCodes.TryGetValue(ChatHelper.TARGET_OFFLINE, out string offlineMsg))
 				{
 					ChatHelper.GetWordAndTrimmed(trimmed, out string targetName);
 					if (!string.IsNullOrWhiteSpace(targetName))
@@ -389,8 +459,8 @@ namespace FishMMO.Client
 					}
 				}
 				// messaging ourself??
-				else if (cmd.Equals(ChatHelper.ERROR_MESSAGE_SELF) &&
-						 ErrorCodes.TryGetValue(ChatHelper.ERROR_MESSAGE_SELF, out string errorMsg))
+				else if (cmd.Equals(ChatHelper.TELL_ERROR_MESSAGE_SELF) &&
+						 ErrorCodes.TryGetValue(ChatHelper.TELL_ERROR_MESSAGE_SELF, out string errorMsg))
 				{
 					ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
 					{

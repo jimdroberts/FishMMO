@@ -188,7 +188,7 @@ namespace FishMMO.Server
 
 			string cmd = ChatHelper.GetCommandAndTrim(ref msg.text);
 
-			// direct commands are handled differently
+			// direct commands are handled separately
 			if (ChatHelper.TryParseDirectCommand(cmd, sender, msg))
 			{
 				return;
@@ -200,8 +200,7 @@ namespace FishMMO.Server
 				return;
 			}
 
-			ChatCommand command = ChatHelper.ParseChatCommand(cmd, ref msg.channel);
-			if (command != null)
+			if (ChatHelper.TryParseChatCommand(cmd, out ChatCommandDetails commandDetails))
 			{
 				msg.senderID = sender.ID;
 
@@ -236,7 +235,7 @@ namespace FishMMO.Server
 						break;
 				}
 
-				if (command.Invoke(sender, msg) &&
+				if (commandDetails.Func.Invoke(sender, msg) &&
 					ServerBehaviour.TryGet(out SceneServerSystem sceneServerSystem))
 				{
 					// write the parsed message to the database
@@ -414,7 +413,7 @@ namespace FishMMO.Server
 					{
 						channel = msg.channel,
 						senderID = msg.senderID,
-						text = ChatHelper.ERROR_MESSAGE_SELF + " ",
+						text = ChatHelper.TELL_ERROR_MESSAGE_SELF + " ",
 					}, true, Channel.Reliable);
 					return false;
 				}
@@ -425,7 +424,7 @@ namespace FishMMO.Server
 					{
 						channel = msg.channel,
 						senderID = msg.senderID,
-						text = ChatHelper.ERROR_TARGET_OFFLINE + " " + targetName,
+						text = ChatHelper.TARGET_OFFLINE + " " + targetName,
 					}, true, Channel.Reliable);
 					return false;
 				}
@@ -435,7 +434,7 @@ namespace FishMMO.Server
 					{
 						channel = msg.channel,
 						senderID = targetID,
-						text = ChatHelper.RELAYED + " " + trimmed,
+						text = ChatHelper.TELL_RELAYED + " " + trimmed,
 					}, true, Channel.Reliable);
 				}
 			}

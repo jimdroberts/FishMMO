@@ -71,6 +71,7 @@ namespace FishMMO.Client
 						button.AmountText.text = item.IsStackable ? item.Stackable.Amount.ToString() : "";
 					}
 				}
+				button.gameObject.SetActive(true);
 				inventorySlots.Add(button);
 			}
 			// update our buttons when the inventory slots change

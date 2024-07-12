@@ -149,6 +149,7 @@ namespace FishMMO.Client
 					group.Button.ReferenceID = UIReferenceButton.NULL_REFERENCE_ID;
 					group.Button.Type = ReferenceButtonType.None;
 				}
+				group.gameObject.SetActive(true);
 				hotkeys.Add(group);
 			}
 		}

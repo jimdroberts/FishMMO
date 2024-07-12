@@ -19,6 +19,7 @@ namespace FishMMO.Client
 		{
 			Details = details;
 			characterNameLabel.text = details.CharacterName;
+			gameObject.SetActive(true);
 		}
 
 		public void OnClick_CharacterButton()

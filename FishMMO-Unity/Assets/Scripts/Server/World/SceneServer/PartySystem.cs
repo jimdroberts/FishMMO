@@ -271,6 +271,12 @@ namespace FishMMO.Server
 				if (targetPartyController.ID > 0)
 				{
 					// we should tell the inviter the target is already in a party
+					Server.Broadcast(conn, new ChatBroadcast()
+					{
+						channel = ChatChannel.Party,
+						senderID = msg.targetCharacterID,
+						text = ChatHelper.PARTY_ERROR_TARGET_IN_PARTY + " ",
+					}, true, Channel.Reliable);
 					return;
 				}
 

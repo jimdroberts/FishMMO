@@ -90,6 +90,8 @@ namespace FishMMO.Client
 			AddKey("ToggleFirstPerson", KeyCode.F9);
 			AddKey("Cancel", KeyCode.Escape);
 			AddKey("Close Last UI", KeyCode.Escape);
+			AddKey("Chat", KeyCode.Return);
+			AddKey("Chat2", KeyCode.KeypadEnter);
 			MouseMode = true;
 
 			//InputManager.LoadConfig();

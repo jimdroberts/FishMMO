@@ -6,9 +6,8 @@ namespace FishMMO.Client
 	{
 		protected override bool ValidateCertificate(byte[] certificateData)
 		{
-			// Implement your custom certificate validation logic here
-			// Return true to accept the certificate, or false to reject it
-			return true;  // Example: Always accept the certificate
+			// Return true to accept the certificate, or false to reject it.
+			return true;
 		}
 	}
 }

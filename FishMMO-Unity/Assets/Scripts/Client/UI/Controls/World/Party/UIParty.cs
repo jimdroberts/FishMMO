@@ -94,6 +94,8 @@ namespace FishMMO.Client
 						member.Rank.text = "Rank: " + (Character.TryGet(out IPartyController partyController) ? partyController.Rank.ToString() : "");
 					if (member.Health != null)
 						member.Health.value = Character.TryGet(out ICharacterAttributeController attributeController) ? attributeController.GetResourceAttributeCurrentPercentage(HealthTemplate) : 0.0f;
+					
+					member.gameObject.SetActive(true);
 					Members.Add(Character.ID, member);
 				}
 			}
@@ -114,7 +116,9 @@ namespace FishMMO.Client
 			{
 				if (!Members.TryGetValue(characterID, out UIPartyMember partyMember))
 				{
-					Members.Add(characterID, partyMember = Instantiate(PartyMemberPrefab, PartyMemberParent));
+					partyMember = Instantiate(PartyMemberPrefab, PartyMemberParent);
+					partyMember.gameObject.SetActive(true);
+					Members.Add(characterID, partyMember);
 				}
 				if (partyMember.Name != null)
 				{
@@ -182,9 +186,12 @@ namespace FishMMO.Client
 						{
 							targetCharacterID = targetCharacter.ID,
 						}, Channel.Reliable);
+
+						return;
 					}
 				}
-				else if (UIManager.TryGet("UIDialogInputBox", out UIDialogInputBox tooltip))
+
+				if (UIManager.TryGet("UIDialogInputBox", out UIDialogInputBox tooltip))
 				{
 					tooltip.Open("Please type the name of the person you wish to invite.", (s) =>
 					{

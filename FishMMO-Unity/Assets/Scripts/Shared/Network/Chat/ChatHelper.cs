@@ -17,9 +17,11 @@ namespace FishMMO.Shared
 
 	public static class ChatHelper
 	{
-		public const string RELAYED = "$(|)";
-		public const string ERROR_TARGET_OFFLINE = "$(_)";
-		public const string ERROR_MESSAGE_SELF = "$(<)";
+		public const string GUILD_ERROR_TARGET_IN_GUILD = "$&(|)";
+		public const string PARTY_ERROR_TARGET_IN_PARTY = "$*(|)";
+		public const string TELL_RELAYED = "$(|)";
+		public const string TELL_ERROR_MESSAGE_SELF = "$(<)";
+		public const string TARGET_OFFLINE = "$(_)";
 
 		#region Regex
 		private const string AlignPattern = @"<align=[^>]+?>|<\/align>";
@@ -145,22 +147,15 @@ namespace FishMMO.Shared
 			return false;
 		}
 
-		public static ChatCommand ParseChatCommand(string cmd, ref ChatChannel channel)
+		public static bool TryParseChatCommand(string cmd, out ChatCommandDetails commandDetails)
 		{
-			ChatCommand command = null;
 			// parse our command or send the message to our /say channel
-			if (ChatHelper.Commands.TryGetValue(cmd, out ChatCommandDetails commandDetails))
+			if (ChatHelper.Commands.TryGetValue(cmd, out commandDetails) ||
+				ChatHelper.ChannelCommands.TryGetValue(ChatChannel.Say, out commandDetails))
 			{
-				channel = commandDetails.Channel;
-				command = commandDetails.Func;
+				return true;
 			}
-			// default is say chat, if we have no command the text goes to say
-			else if (ChatHelper.ChannelCommands.TryGetValue(ChatChannel.Say, out ChatCommandDetails sayCommand))
-			{
-				channel = sayCommand.Channel;
-				command = sayCommand.Func;
-			}
-			return command;
+			return false;
 		}
 
 		/// <summary>

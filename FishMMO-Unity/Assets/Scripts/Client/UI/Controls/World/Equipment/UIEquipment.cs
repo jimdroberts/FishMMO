@@ -192,6 +192,8 @@ namespace FishMMO.Client
 				label.alignment = TextAlignmentOptions.Center;
 				attributeCategoryLabels.Add(label);
 
+				label.gameObject.SetActive(true);
+
 				foreach (CharacterAttribute core in coreAttributes)
 				{
 					AddCharacterAttributeLabel(core);
@@ -225,6 +227,7 @@ namespace FishMMO.Client
 					label.Value.text += "%";
 				}
 			}
+			label.gameObject.SetActive(true);
 			attributeLabels.Add(attribute.Template.ID, label);
 			attribute.OnAttributeUpdated += OnAttributeUpdated;
 		}

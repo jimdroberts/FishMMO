@@ -290,7 +290,7 @@ MonoBehaviour:
   _adaptiveInterpolation: 3
   _spectatorSmoothedProperties: 3
   _spectatorInterpolation: 2
-  _enableTeleport: 1
+  _enableTeleport: 0
   _teleportThreshold: 3
   <PrefabId>k__BackingField: 6
   <SpawnableCollectionId>k__BackingField: 0
