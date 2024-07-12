@@ -135,12 +135,10 @@ namespace FishMMO.Client
 			// assign the client to the Login Authenticator
 			LoginAuthenticator.SetClient(this);
 
-			string path = Client.GetWorkingDirectory();
-
 			// load configuration
 			if (Constants.Configuration.Settings == null)
 			{
-				Constants.Configuration.Settings = new Configuration(path);
+				Constants.Configuration.Settings = new Configuration(Client.GetWorkingDirectory());
 				if (!Constants.Configuration.Settings.Load(Configuration.DEFAULT_FILENAME + Configuration.EXTENSION))
 				{
 					// if we failed to load the file.. save a new one

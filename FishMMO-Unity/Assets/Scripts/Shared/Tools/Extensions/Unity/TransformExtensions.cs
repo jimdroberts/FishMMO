@@ -52,5 +52,32 @@ namespace FishMMO.Shared
 			}
 			return bones;
 		}
+
+		public static List<GameObject> FindAllChildGameObjects(this Transform root, string prefix = null)
+		{
+			List<GameObject> foundObjects = new List<GameObject>();
+			Stack<Transform> stack = new Stack<Transform>();
+			stack.Push(root);
+
+			while (stack.Count > 0)
+			{
+				Transform current = stack.Pop();
+
+				// Check if the current object's name matches the prefix
+				if (string.IsNullOrWhiteSpace(prefix) ||
+					current.gameObject.name.StartsWith(prefix))
+				{
+					foundObjects.Add(current.gameObject);
+				}
+
+				// Push all children to the stack
+				foreach (Transform child in current)
+				{
+					stack.Push(child);
+				}
+			}
+
+			return foundObjects;
+		}
 	}
 }
