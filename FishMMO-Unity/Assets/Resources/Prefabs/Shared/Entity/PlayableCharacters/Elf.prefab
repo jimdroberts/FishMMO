@@ -354,8 +354,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   Motor: {fileID: 961999050755331747}
-  StableMovementSharpness: 20
-  OrientationSharpness: 10
+  StableMovementSharpness: 10000
+  OrientationSharpness: 10000
   OrientationMethod: 0
   MaxAirMoveSpeed: 4
   AirAccelerationSpeed: 2.5

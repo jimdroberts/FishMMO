@@ -164,7 +164,7 @@ namespace FishMMO.Client
 					tooltip.Open("Are you sure you want to leave your party?", () =>
 					{
 						Client.Broadcast(new PartyLeaveBroadcast(), Channel.Reliable);
-					}, null);
+					}, () => { });
 				}
 			}
 		}

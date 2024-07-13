@@ -42,8 +42,8 @@ namespace FishMMO.Shared
 			{
 				ClientManager.RegisterBroadcast<GuildInviteBroadcast>(OnClientGuildInviteBroadcastReceived);
 				ClientManager.RegisterBroadcast<GuildAddBroadcast>(OnClientGuildAddBroadcastReceived);
-				ClientManager.RegisterBroadcast<GuildLeaveBroadcast>(OnClientGuildLeaveBroadcastReceived);
 				ClientManager.RegisterBroadcast<GuildAddMultipleBroadcast>(OnClientGuildAddMultipleBroadcastReceived);
+				ClientManager.RegisterBroadcast<GuildLeaveBroadcast>(OnClientGuildLeaveBroadcastReceived);
 				ClientManager.RegisterBroadcast<GuildRemoveBroadcast>(OnClientGuildRemoveBroadcastReceived);
 
 				if (PlayerCharacter != null)
@@ -61,8 +61,8 @@ namespace FishMMO.Shared
 			{
 				ClientManager.UnregisterBroadcast<GuildInviteBroadcast>(OnClientGuildInviteBroadcastReceived);
 				ClientManager.UnregisterBroadcast<GuildAddBroadcast>(OnClientGuildAddBroadcastReceived);
-				ClientManager.UnregisterBroadcast<GuildLeaveBroadcast>(OnClientGuildLeaveBroadcastReceived);
 				ClientManager.UnregisterBroadcast<GuildAddMultipleBroadcast>(OnClientGuildAddMultipleBroadcastReceived);
+				ClientManager.UnregisterBroadcast<GuildLeaveBroadcast>(OnClientGuildLeaveBroadcastReceived);
 				ClientManager.UnregisterBroadcast<GuildRemoveBroadcast>(OnClientGuildRemoveBroadcastReceived);
 			}
 		}
@@ -95,6 +95,21 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// When we need to add guild members.
+		/// </summary>
+		public void OnClientGuildAddMultipleBroadcastReceived(GuildAddMultipleBroadcast msg, Channel channel)
+		{
+			var newIds = msg.members.Select(x => x.characterID).ToHashSet();
+
+			OnValidateGuildMembers?.Invoke(newIds);
+
+			foreach (GuildAddBroadcast subMsg in msg.members)
+			{
+				OnClientGuildAddBroadcastReceived(subMsg, channel);
+			}
+		}
+
+		/// <summary>
 		/// When our local client leaves the guild.
 		/// </summary>
 		public void OnClientGuildLeaveBroadcastReceived(GuildLeaveBroadcast msg, Channel channel)
@@ -107,21 +122,6 @@ namespace FishMMO.Shared
 			ID = 0;
 			Rank = GuildRank.None;
 			OnLeaveGuild?.Invoke();
-		}
-
-		/// <summary>
-		/// When we need to add guild members.
-		/// </summary>
-		public void OnClientGuildAddMultipleBroadcastReceived(GuildAddMultipleBroadcast msg, Channel channel)
-		{
-			var newIds = msg.members.Select(x => x.characterID).ToHashSet();
-
-			OnValidateGuildMembers?.Invoke(newIds);
-
-			foreach (GuildAddBroadcast subMsg in msg.members)
-			{
-				OnAddGuildMember?.Invoke(subMsg.characterID, subMsg.guildID, subMsg.rank, subMsg.location);
-			}
 		}
 
 		/// <summary>

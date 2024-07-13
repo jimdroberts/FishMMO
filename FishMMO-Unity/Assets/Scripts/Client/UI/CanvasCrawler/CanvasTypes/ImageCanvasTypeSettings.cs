@@ -17,7 +17,10 @@ namespace FishMMO.Client
 			{
 				if (image.sprite.name.Equals("Background"))
 				{
-					// Make the sprite fully bright
+					image.color = ParseColor("Primary", configuration);
+				}
+				else if (image.name.Equals("Background"))
+				{
 					image.color = ParseColor("Primary", configuration);
 				}
 				else if (image.name.Contains("UI"))
@@ -26,6 +29,7 @@ namespace FishMMO.Client
 				}
 				else
 				{
+					// Make the sprite fully bright
 					image.color = Color.white;
 				}
 			}

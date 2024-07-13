@@ -168,10 +168,20 @@ namespace FishMMO.Server.DatabaseServices
 			characterID = 0;
 			return false;
 		}
-		
-		/// <summary>
-		/// Returns true if we successfully set our selected character for the connections account, otherwise returns false.
-		/// </summary>
+
+		public static void SetOnlineState(NpgsqlDbContext dbContext, string account, bool online = true)
+		{
+			var characters = dbContext.Characters.Where((c) => c.Account == account);
+			if (characters != null)
+			{
+				foreach (var character in characters)
+				{
+					character.Online = online;
+				}
+				dbContext.SaveChanges();
+			}
+		}
+
 		public static void SetOnline(NpgsqlDbContext dbContext, string account, string characterName)
 		{
 			var selectedCharacter = dbContext.Characters.FirstOrDefault((c) => c.Account == account &&

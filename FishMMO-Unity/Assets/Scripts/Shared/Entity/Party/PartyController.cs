@@ -1,4 +1,6 @@
-﻿using FishNet.Transporting;
+﻿using FishNet.Connection;
+using FishNet.Serializing;
+using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -34,8 +36,8 @@ namespace FishMMO.Shared
 			ClientManager.RegisterBroadcast<PartyCreateBroadcast>(OnClientPartyCreateBroadcastReceived);
 			ClientManager.RegisterBroadcast<PartyInviteBroadcast>(OnClientPartyInviteBroadcastReceived);
 			ClientManager.RegisterBroadcast<PartyAddBroadcast>(OnClientPartyAddBroadcastReceived);
-			ClientManager.RegisterBroadcast<PartyLeaveBroadcast>(OnClientPartyLeaveBroadcastReceived);
 			ClientManager.RegisterBroadcast<PartyAddMultipleBroadcast>(OnClientPartyAddMultipleBroadcastReceived);
+			ClientManager.RegisterBroadcast<PartyLeaveBroadcast>(OnClientPartyLeaveBroadcastReceived);
 			ClientManager.RegisterBroadcast<PartyRemoveBroadcast>(OnClientPartyRemoveBroadcastReceived);
 		}
 
@@ -48,8 +50,8 @@ namespace FishMMO.Shared
 				ClientManager.UnregisterBroadcast<PartyCreateBroadcast>(OnClientPartyCreateBroadcastReceived);
 				ClientManager.UnregisterBroadcast<PartyInviteBroadcast>(OnClientPartyInviteBroadcastReceived);
 				ClientManager.UnregisterBroadcast<PartyAddBroadcast>(OnClientPartyAddBroadcastReceived);
-				ClientManager.UnregisterBroadcast<PartyLeaveBroadcast>(OnClientPartyLeaveBroadcastReceived);
 				ClientManager.UnregisterBroadcast<PartyAddMultipleBroadcast>(OnClientPartyAddMultipleBroadcastReceived);
+				ClientManager.UnregisterBroadcast<PartyLeaveBroadcast>(OnClientPartyLeaveBroadcastReceived);
 				ClientManager.UnregisterBroadcast<PartyRemoveBroadcast>(OnClientPartyRemoveBroadcastReceived);
 			}
 		}
@@ -79,31 +81,14 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void OnClientPartyAddBroadcastReceived(PartyAddBroadcast msg, Channel channel)
 		{
-			// update our Party list with the new Party member
-			if (Character == null)
-			{
-				return;
-			}
-
 			// if this is our own id
-			if (Character != null && msg.characterID == Character.ID)
+			if (PlayerCharacter != null && msg.characterID == Character.ID)
 			{
 				ID = msg.partyID;
 				Rank = msg.rank;
 			}
 
 			OnAddPartyMember?.Invoke(msg.characterID, msg.rank, msg.healthPCT);
-		}
-
-		/// <summary>
-		/// When our local client leaves the party.
-		/// </summary>
-		public void OnClientPartyLeaveBroadcastReceived(PartyLeaveBroadcast msg, Channel channel)
-		{
-			ID = 0;
-			Rank = PartyRank.None;
-
-			OnLeaveParty?.Invoke();
 		}
 
 		/// <summary>
@@ -117,8 +102,19 @@ namespace FishMMO.Shared
 
 			foreach (PartyAddBroadcast subMsg in msg.members)
 			{
-				OnAddPartyMember?.Invoke(subMsg.characterID, subMsg.rank, subMsg.healthPCT);
+				OnClientPartyAddBroadcastReceived(subMsg, channel);
 			}
+		}
+
+		/// <summary>
+		/// When our local client leaves the party.
+		/// </summary>
+		public void OnClientPartyLeaveBroadcastReceived(PartyLeaveBroadcast msg, Channel channel)
+		{
+			ID = 0;
+			Rank = PartyRank.None;
+
+			OnLeaveParty?.Invoke();
 		}
 
 		/// <summary>

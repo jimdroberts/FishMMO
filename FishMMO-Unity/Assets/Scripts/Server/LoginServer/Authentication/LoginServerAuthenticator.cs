@@ -117,6 +117,9 @@ namespace FishMMO.Server
 				{
 					KickRequestService.Save(dbContext, username);
 					result = ClientAuthenticationResult.AlreadyOnline;
+
+					// Immediately set all characters for the account to offline. Kick will be processed on scene servers.
+					CharacterService.SetOnlineState(dbContext, username, false);
 				}
 				else
 				{

@@ -168,7 +168,7 @@ namespace FishMMO.Client
 					tooltip.Open("Are you sure you want to leave your guild?", () =>
 					{
 						Client.Broadcast(new GuildLeaveBroadcast(), Channel.Reliable);
-					}, null);
+					}, () => { });
 				}
 			}
 		}

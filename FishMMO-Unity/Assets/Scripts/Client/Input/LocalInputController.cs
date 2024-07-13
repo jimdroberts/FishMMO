@@ -251,10 +251,10 @@ namespace FishMMO.Client
 				Vector3 lookInputVector = new Vector3(mouseLookAxisRight, mouseLookAxisUp, 0f);
 
 				float scrollInput = 0.0f;
-#if !UNITY_WEBGL
+
 				// Input for zooming the camera (disabled in WebGL because it can cause problems)
 				scrollInput = -InputManager.GetAxis(MouseScrollInput);
-#endif
+
 				// Apply inputs to the camera
 				Character.KCCPlayer.UpdateCamera(scrollInput, lookInputVector);
 

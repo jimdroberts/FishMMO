@@ -443,10 +443,13 @@ namespace FishMMO.Server
 						newValue = faction.Value,
 					});
 				}
-				Server.Broadcast(character.Owner, new FactionUpdateMultipleBroadcast()
+				if (factions.Count > 0)
 				{
-					factions = factions,
-				}, true, Channel.Reliable);
+					Server.Broadcast(character.Owner, new FactionUpdateMultipleBroadcast()
+					{
+						factions = factions,
+					}, true, Channel.Reliable);
+				}
 			}
 			#endregion
 
@@ -465,11 +468,14 @@ namespace FishMMO.Server
 					location = x.Location,
 				}).ToList();
 
-				GuildAddMultipleBroadcast guildAddBroadcast = new GuildAddMultipleBroadcast()
+				if (addBroadcasts.Count > 0)
 				{
-					members = addBroadcasts,
-				};
-				Server.Broadcast(character.Owner, guildAddBroadcast, true, Channel.Reliable);
+					GuildAddMultipleBroadcast guildAddBroadcast = new GuildAddMultipleBroadcast()
+					{
+						members = addBroadcasts,
+					};
+					Server.Broadcast(character.Owner, guildAddBroadcast, true, Channel.Reliable);
+				}
 			}
 			#endregion
 
@@ -488,11 +494,14 @@ namespace FishMMO.Server
 					healthPCT = x.HealthPCT,
 				}).ToList();
 
-				PartyAddMultipleBroadcast partyAddBroadcast = new PartyAddMultipleBroadcast()
+				if (addBroadcasts.Count > 0)
 				{
-					members = addBroadcasts,
-				};
-				Server.Broadcast(character.Owner, partyAddBroadcast, true, Channel.Reliable);
+					PartyAddMultipleBroadcast partyAddBroadcast = new PartyAddMultipleBroadcast()
+					{
+						members = addBroadcasts,
+					};
+					Server.Broadcast(character.Owner, partyAddBroadcast, true, Channel.Reliable);
+				}
 			}
 			#endregion
 
@@ -509,10 +518,13 @@ namespace FishMMO.Server
 						online = status,
 					});
 				}
-				Server.Broadcast(character.Owner, new FriendAddMultipleBroadcast()
+				if (friends.Count > 0)
 				{
-					friends = friends,
-				}, true, Channel.Reliable);
+					Server.Broadcast(character.Owner, new FriendAddMultipleBroadcast()
+					{
+						friends = friends,
+					}, true, Channel.Reliable);
+				}
 			}
 			#endregion
 

@@ -29,15 +29,15 @@ namespace FishMMO.Shared
 		public string location;
 	}
 
+	public struct GuildAddMultipleBroadcast : IBroadcast
+	{
+		public List<GuildAddBroadcast> members;
+	}
+
 	public struct GuildLeaveBroadcast : IBroadcast
 	{
 	}
 
-	public struct GuildAddMultipleBroadcast : IBroadcast
-	{
-		public List<GuildAddBroadcast> members;
-
-	}
 	public struct GuildRemoveBroadcast : IBroadcast
 	{
 		public List<long> members;

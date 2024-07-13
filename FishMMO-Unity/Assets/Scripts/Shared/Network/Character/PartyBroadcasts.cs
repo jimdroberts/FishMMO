@@ -30,15 +30,15 @@ namespace FishMMO.Shared
 		public float healthPCT;
 	}
 
+	public struct PartyAddMultipleBroadcast : IBroadcast
+	{
+		public List<PartyAddBroadcast> members;
+	}
+
 	public struct PartyLeaveBroadcast : IBroadcast
 	{
 	}
 
-	public struct PartyAddMultipleBroadcast : IBroadcast
-	{
-		public List<PartyAddBroadcast> members;
-
-	}
 	public struct PartyRemoveBroadcast : IBroadcast
 	{
 		public List<long> members;
