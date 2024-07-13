@@ -85,6 +85,11 @@ namespace FishMMO.Client
 					Configuration.Set("StaminaColorB", "59");
 					Configuration.Set("StaminaColorA", "255");
 
+					Configuration.Set("CrosshairColorR", "255");
+					Configuration.Set("CrosshairColorG", "255");
+					Configuration.Set("CrosshairColorB", "255");
+					Configuration.Set("CrosshairColorA", "255");
+
 					Configuration.Save();
 
 				}

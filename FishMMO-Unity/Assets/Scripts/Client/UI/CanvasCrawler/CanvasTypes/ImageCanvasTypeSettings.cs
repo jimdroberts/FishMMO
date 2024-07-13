@@ -23,6 +23,10 @@ namespace FishMMO.Client
 				{
 					image.color = ParseColor("Primary", configuration);
 				}
+				else if (image.name.Contains("Crosshair"))
+				{
+					image.color = ParseColor("Crosshair", configuration);
+				}
 				else if (image.name.Contains("UI"))
 				{
 					image.color = ParseColor("Primary", configuration);
@@ -35,15 +39,18 @@ namespace FishMMO.Client
 			}
 			else
 			{
-				if (image.name.Contains("Health"))
+				if (image.name.Contains("Health") &&
+					!image.name.Contains("UI"))
 				{
 					image.color = ParseColor("Health", configuration);
 				}
-				else if (image.name.Contains("Mana"))
+				else if (image.name.Contains("Mana") &&
+					!image.name.Contains("UI"))
 				{
 					image.color = ParseColor("Mana", configuration);
 				}
-				else if (image.name.Contains("Stamina"))
+				else if (image.name.Contains("Stamina") &&
+					!image.name.Contains("UI"))
 				{
 					image.color = ParseColor("Stamina", configuration);
 				}

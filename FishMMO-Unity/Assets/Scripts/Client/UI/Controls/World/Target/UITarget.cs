@@ -1,7 +1,7 @@
+using FishMMO.Shared;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
-using TMPro;
-using FishMMO.Shared;
 
 namespace FishMMO.Client
 {
@@ -127,13 +127,26 @@ namespace FishMMO.Client
 
 		public void TargetController_OnNewTarget(Transform newTarget)
 		{
+			Outline outline = newTarget.GetComponent<Outline>();
+			if (outline != null)
+			{
+				outline.enabled = true;
+			}
+			if (targetLabel != null)
+			{
+				LabelMaker.Cache(targetLabel);
+			}
+
 			ICharacterAttributeController characterAttributeController = newTarget.GetComponent<ICharacterAttributeController>();
 			IInteractable interactable = newTarget.GetComponent<IInteractable>();
 			SceneTeleporter teleporter = newTarget.GetComponent<SceneTeleporter>();
 			SceneObjectNamer sceneObjectNamer = newTarget.GetComponent<SceneObjectNamer>();
 
 			// must be an interactable or have an attribute controller
-			if (characterAttributeController == null && interactable == null && teleporter == null && sceneObjectNamer == null)
+			if ((interactable != null && sceneObjectNamer == null) ||
+				teleporter != null ||
+				characterAttributeController == null ||
+				sceneObjectNamer == null)
 			{
 				return;
 			}
@@ -141,7 +154,9 @@ namespace FishMMO.Client
 			Vector3 newPos = newTarget.position;
 
 			Collider collider = newTarget.GetComponent<Collider>();
-			newPos.y += collider.bounds.extents.y + 0.15f;
+			newPos.y += collider.bounds.size.y;
+
+			Debug.Log("Height of GameObject: " + collider.bounds.size.y);
 
 			string label = newTarget.name.Replace("(Clone)", "");
 			Color color = Color.grey;
@@ -150,23 +165,14 @@ namespace FishMMO.Client
 			if (interactable != null &&
 				!string.IsNullOrWhiteSpace(interactable.Title))
 			{
-				label += $"\r\n<{interactable.Title}>";
-				newPos.y += 0.15f;
-				color = Color.white;
-			}
-
-			if (targetLabel != null)
-			{
-				LabelMaker.Cache(targetLabel);
+				string hex = Color.green.ToHex();
+				if (!string.IsNullOrWhiteSpace(hex))
+				{
+					label += $"\r\n<<color=#{hex}>{interactable.Title}</color>>";
+				}
 			}
 
 			targetLabel = LabelMaker.Display3D(label, newPos, color, 1.0f, 0.0f, true);
-
-			Outline outline = newTarget.GetComponent<Outline>();
-			if (outline != null)
-			{
-				outline.enabled = true;
-			}
 		}
 	}
 }

@@ -121,6 +121,10 @@ namespace FishMMO.Client
 
 			StartCoroutine(Client.GetLoginServerList((e) =>
 			{
+				if (UIManager.TryGet("UIDialogBox", out UIDialogBox uiDialogBox))
+				{
+					uiDialogBox.Open(e);
+				}
 				Debug.LogError(e);
 				SetSignInLocked(false);
 			},
@@ -136,6 +140,10 @@ namespace FishMMO.Client
 
 			StartCoroutine(Client.GetLoginServerList((e) =>
 			{
+				if (UIManager.TryGet("UIDialogBox", out UIDialogBox uiDialogBox))
+				{
+					uiDialogBox.Open(e);
+				}
 				Debug.LogError(e);
 				SetSignInLocked(false);
 			},
