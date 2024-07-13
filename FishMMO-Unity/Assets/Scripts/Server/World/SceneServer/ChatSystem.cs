@@ -203,6 +203,7 @@ namespace FishMMO.Server
 			if (ChatHelper.TryParseChatCommand(cmd, out ChatCommandDetails commandDetails))
 			{
 				msg.senderID = sender.ID;
+				msg.channel = commandDetails.Channel;
 
 				switch (msg.channel)
 				{

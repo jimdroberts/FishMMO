@@ -131,13 +131,27 @@ namespace FishMMO.Client
 			if (InputManager.GetKeyDown("Chat") ||
 				InputManager.GetKeyDown("Chat2"))
 			{
-				// enable mouse mode
-				InputManager.MouseMode = true;
-
-				InputField.OnSelect(new BaseEventData(EventSystem.current)
+				if (InputManager.MouseMode)
 				{
-					selectedObject = InputField.gameObject,
-				});
+					if (!EventSystem.current.alreadySelecting)
+					{
+						InputField.OnDeselect(new BaseEventData(EventSystem.current)
+						{
+							selectedObject = InputField.gameObject,
+						});
+					}
+					InputManager.MouseMode = false;
+				}
+				else
+				{
+					InputField.OnSelect(new BaseEventData(EventSystem.current)
+					{
+						selectedObject = InputField.gameObject,
+					});
+
+					// enable mouse mode
+					InputManager.MouseMode = true;
+				}
 			}
 		}
 
@@ -163,15 +177,6 @@ namespace FishMMO.Client
 
 		public void OnSubmit(string input)
 		{
-			InputManager.MouseMode = false;
-			if (!EventSystem.current.alreadySelecting)
-			{
-				InputField.OnDeselect(new BaseEventData(EventSystem.current)
-				{
-					selectedObject = InputField.gameObject,
-				});
-			}
-
 			if (!InputManager.GetKeyDown("Chat") &&
 				!InputManager.GetKeyDown("Chat2"))
 			{

@@ -68,18 +68,20 @@ namespace FishMMO.Shared
 		private static bool initialized = false;
 
 		public static Dictionary<string, ChatCommand> Commands { get; private set; }
+
 		public static Dictionary<ChatChannel, ChatCommandDetails> ChatChannelCommands { get; private set; }
 
+		public static Dictionary<string, ChatCommandDetails> CommandChannelMap = new Dictionary<string, ChatCommandDetails>();
 		public static Dictionary<ChatChannel, List<string>> ChannelCommandMap = new Dictionary<ChatChannel, List<string>>()
-	{
-		{ ChatChannel.World, new List<string>() { "/w", "/world", } },
-		{ ChatChannel.Region, new List<string>() { "/r", "/region", } },
-		{ ChatChannel.Party, new List<string>() { "/p", "/party", } },
-		{ ChatChannel.Guild, new List<string>() { "/g", "/guild", } },
-		{ ChatChannel.Tell, new List<string>() { "/tell", } },
-		{ ChatChannel.Trade, new List<string>() { "/t", "/trade", } },
-		{ ChatChannel.Say, new List<string>() { "/s", "/say", } },
-	};
+		{
+			{ ChatChannel.World, new List<string>() { "/w", "/world", } },
+			{ ChatChannel.Region, new List<string>() { "/r", "/region", } },
+			{ ChatChannel.Party, new List<string>() { "/p", "/party", } },
+			{ ChatChannel.Guild, new List<string>() { "/g", "/guild", } },
+			{ ChatChannel.Tell, new List<string>() { "/tell", } },
+			{ ChatChannel.Trade, new List<string>() { "/t", "/trade", } },
+			{ ChatChannel.Say, new List<string>() { "/s", "/say", } },
+		};
 
 		static ChatHelper()
 		{
@@ -120,6 +122,7 @@ namespace FishMMO.Shared
 			{
 				Debug.Log("ChatHelper: Added Chat Command[" + command + "]");
 				ChatChannelCommands[details.Channel] = details;
+				CommandChannelMap.Add(command, details);
 			}
 		}
 
@@ -147,7 +150,8 @@ namespace FishMMO.Shared
 		public static bool TryParseChatCommand(string cmd, out ChatCommandDetails commandDetails)
 		{
 			// parse our command or send the message to our /say channel
-			if (ChatHelper.ChatChannelCommands.TryGetValue(ChatChannel.Say, out commandDetails))
+			if (ChatHelper.CommandChannelMap.TryGetValue(cmd, out commandDetails) ||
+				ChatHelper.ChatChannelCommands.TryGetValue(ChatChannel.Say, out commandDetails))
 			{
 				return true;
 			}

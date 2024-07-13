@@ -12,6 +12,10 @@ namespace FishMMO.Client
 			get { return Cursor.visible; }
 			set
 			{
+				if (Cursor.visible == value)
+				{
+					return;
+				}
 				Cursor.visible = value;
 				Cursor.lockState = value ? CursorLockMode.None : CursorLockMode.Locked;
 
