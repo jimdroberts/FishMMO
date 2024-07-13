@@ -108,7 +108,7 @@ namespace FishMMO.Server
 			foreach (ChatEntity message in messages)
 			{
 				ChatChannel channel = (ChatChannel)message.Channel;
-				if (ChatHelper.ChannelCommands.TryGetValue(channel, out ChatCommandDetails sayCommand))
+				if (ChatHelper.ChatChannelCommands.TryGetValue(channel, out ChatCommandDetails sayCommand))
 				{
 					sayCommand.Func?.Invoke(null, new ChatBroadcast()
 					{
@@ -188,8 +188,8 @@ namespace FishMMO.Server
 
 			string cmd = ChatHelper.GetCommandAndTrim(ref msg.text);
 
-			// direct commands are handled separately
-			if (ChatHelper.TryParseDirectCommand(cmd, sender, msg))
+			// commands are handled differently from chat commands
+			if (ChatHelper.TryParseCommand(cmd, sender, msg))
 			{
 				return;
 			}

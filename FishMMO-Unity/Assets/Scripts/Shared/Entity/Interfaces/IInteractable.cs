@@ -6,6 +6,7 @@ namespace FishMMO.Shared
 	{
 		Transform Transform { get; }
 		string Title { get; }
+		Color TitleColor { get; }
 		bool InRange(Transform transform);
 		bool CanInteract(IPlayerCharacter character);
 	}

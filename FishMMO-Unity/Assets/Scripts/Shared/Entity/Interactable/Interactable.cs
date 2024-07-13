@@ -17,6 +17,7 @@ namespace FishMMO.Shared
 
 		public event Action<ISpawnable> OnDespawn;
 
+		public ObjectSpawner ObjectSpawner { get; set; }
 		public Spawnable SpawnTemplate { get; set; }
 
 		public long ID { get; set; }
@@ -25,6 +26,7 @@ namespace FishMMO.Shared
 		public GameObject GameObject { get => this.gameObject; }
 
 		public virtual string Title { get { return "Interactable"; } }
+		public virtual Color TitleColor { get { return TinyColor.ToUnityColor(TinyColor.forestGreen); } }
 
 		public virtual double InteractRateLimit { get { return INTERACT_RATE_LIMIT; } }
 
@@ -60,7 +62,15 @@ namespace FishMMO.Shared
 
 		public void Despawn()
 		{
-			OnDespawn?.Invoke(this);
+			ObjectSpawner?.Despawn(this);
+		}
+
+		public override void ResetState(bool asServer)
+		{
+			base.ResetState(asServer);
+
+			OnDespawn = null;
+			SpawnTemplate = null;
 		}
 
 		public bool InRange(Transform transform)

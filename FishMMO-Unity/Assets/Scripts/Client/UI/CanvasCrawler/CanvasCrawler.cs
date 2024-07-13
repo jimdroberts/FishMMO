@@ -55,20 +55,25 @@ namespace FishMMO.Client
 					Configuration.Set("PrimaryColorB", "44");
 					Configuration.Set("PrimaryColorA", "235");
 
-					Configuration.Set("SecondaryColorR", "44");
-					Configuration.Set("SecondaryColorG", "44");
-					Configuration.Set("SecondaryColorB", "44");
-					Configuration.Set("SecondaryColorA", "255");
+					Configuration.Set("SecondaryColorR", "80");
+					Configuration.Set("SecondaryColorG", "80");
+					Configuration.Set("SecondaryColorB", "80");
+					Configuration.Set("SecondaryColorA", "235");
 
-					Configuration.Set("HighlightColorR", "80");
-					Configuration.Set("HighlightColorG", "80");
-					Configuration.Set("HighlightColorB", "80");
-					Configuration.Set("HighlightColorA", "255");
+					Configuration.Set("HighlightColorR", "128");
+					Configuration.Set("HighlightColorG", "128");
+					Configuration.Set("HighlightColorB", "128");
+					Configuration.Set("HighlightColorA", "250");
 
 					Configuration.Set("BackgroundColorR", "128");
 					Configuration.Set("BackgroundColorG", "128");
 					Configuration.Set("BackgroundColorB", "128");
-					Configuration.Set("BackgroundColorA", "255");
+					Configuration.Set("BackgroundColorA", "235");
+
+					Configuration.Set("TextColorR", "136");
+					Configuration.Set("TextColorG", "136");
+					Configuration.Set("TextColorB", "136");
+					Configuration.Set("TextColorA", "255");
 
 					Configuration.Set("HealthColorR", "207");
 					Configuration.Set("HealthColorG", "76");
@@ -81,7 +86,7 @@ namespace FishMMO.Client
 					Configuration.Set("ManaColorA", "255");
 
 					Configuration.Set("StaminaColorR", "83");
-					Configuration.Set("StaminaColorG", "135");
+					Configuration.Set("StaminaColorG", "176");
 					Configuration.Set("StaminaColorB", "59");
 					Configuration.Set("StaminaColorA", "255");
 

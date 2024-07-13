@@ -1,5 +1,4 @@
 ﻿using FishMMO.Shared;
-using UnityEngine;
 using TMPro;
 
 namespace FishMMO.Client
@@ -13,11 +12,15 @@ namespace FishMMO.Client
 			{
 				return;
 			}
-			Color primaryColor = ParseColor("Primary", configuration);
-			Color secondaryColor = ParseColor("Secondary", configuration);
-			Color highlightColor = ParseColor("Highlight", configuration);
 
-			text.color = highlightColor;
+			if (text.name.Contains("Placeholder"))
+			{
+				text.color = ParseColor("Primary", configuration);
+			}
+			else
+			{
+				text.color = ParseColor("Text", configuration);
+			}
 		}
 	}
 }

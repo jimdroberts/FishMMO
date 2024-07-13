@@ -1,5 +1,4 @@
 ﻿using FishMMO.Shared;
-using UnityEngine;
 using UnityEngine.UI;
 
 namespace FishMMO.Client
@@ -14,7 +13,14 @@ namespace FishMMO.Client
 				return;
 			}
 
-			text.color = ParseColor("Highlight", configuration);
+			if (text.name.Contains("Placeholder"))
+			{
+				text.color = ParseColor("Primary", configuration);
+			}
+			else
+			{
+				text.color = ParseColor("Text", configuration);
+			}
 		}
 	}
 }

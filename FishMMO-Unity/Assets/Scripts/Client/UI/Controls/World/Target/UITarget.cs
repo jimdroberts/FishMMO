@@ -142,7 +142,7 @@ namespace FishMMO.Client
 			SceneTeleporter teleporter = newTarget.GetComponent<SceneTeleporter>();
 			SceneObjectNamer sceneObjectNamer = newTarget.GetComponent<SceneObjectNamer>();
 
-			// must be an interactable or have an attribute controller
+			// must be an interactable with a scene object namer or have an attribute controller
 			if ((interactable != null && sceneObjectNamer == null) ||
 				teleporter != null ||
 				characterAttributeController == null ||
@@ -165,7 +165,7 @@ namespace FishMMO.Client
 			if (interactable != null &&
 				!string.IsNullOrWhiteSpace(interactable.Title))
 			{
-				string hex = Color.green.ToHex();
+				string hex = interactable.TitleColor.ToHex();
 				if (!string.IsNullOrWhiteSpace(hex))
 				{
 					label += $"\r\n<<color=#{hex}>{interactable.Title}</color>>";

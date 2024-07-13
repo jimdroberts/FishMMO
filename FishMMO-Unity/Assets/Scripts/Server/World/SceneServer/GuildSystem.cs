@@ -58,7 +58,7 @@ namespace FishMMO.Server
 					{ "/gi", OnGuildInvite },
 					{ "/ginvite", OnGuildInvite },
 				};
-				ChatHelper.AddDirectCommands(guildChatCommands);
+				ChatHelper.AddCommands(guildChatCommands);
 
 				ServerManager.OnServerConnectionState += ServerManager_OnServerConnectionState;
 				Server.RegisterBroadcast<GuildCreateBroadcast>(OnServerGuildCreateBroadcastReceived, true);

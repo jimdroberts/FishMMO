@@ -97,6 +97,30 @@ namespace FishMMO.Shared
 			return string.Format("RGBA(" + r + ", " + g + ", " + b + ", " + a + ")");
 		}
 
+		public static TinyColor FromString(string colorString)
+		{
+			// Example input format: "RGBA(0.5, 0.2, 0.8, 1.0)"
+
+			// Remove the "RGBA(" and ")" parts
+			string[] components = colorString.Substring(5, colorString.Length - 6).Split(',');
+
+			// Parse the components into floats
+			if (components.Length == 4 &&
+				byte.TryParse(components[0].Trim(), out byte r) &&
+				byte.TryParse(components[1].Trim(), out byte g) &&
+				byte.TryParse(components[2].Trim(), out byte b) &&
+				byte.TryParse(components[3].Trim(), out byte a))
+			{
+				return new TinyColor(r, g, b, a);
+			}
+			else
+			{
+				// Handle invalid input gracefully, e.g., by returning a default color
+				Debug.LogError("Failed to parse color string: " + colorString);
+				return TinyColor.indigo;
+			}
+		}
+
 		public static Texture2D GenerateColorSpectrum(int width, int height)
 		{
 			return GenerateColorSpectrum(1.0f, width, height);

@@ -67,9 +67,8 @@ namespace FishMMO.Shared
 
 		private static bool initialized = false;
 
-		public static Dictionary<string, ChatCommand> DirectCommands { get; private set; }
-		public static Dictionary<string, ChatCommandDetails> Commands { get; private set; }
-		public static Dictionary<ChatChannel, ChatCommandDetails> ChannelCommands { get; private set; }
+		public static Dictionary<string, ChatCommand> Commands { get; private set; }
+		public static Dictionary<ChatChannel, ChatCommandDetails> ChatChannelCommands { get; private set; }
 
 		public static Dictionary<ChatChannel, List<string>> ChannelCommandMap = new Dictionary<ChatChannel, List<string>>()
 	{
@@ -84,9 +83,8 @@ namespace FishMMO.Shared
 
 		static ChatHelper()
 		{
-			DirectCommands = new Dictionary<string, ChatCommand>();
-			Commands = new Dictionary<string, ChatCommandDetails>();
-			ChannelCommands = new Dictionary<ChatChannel, ChatCommandDetails>();
+			Commands = new Dictionary<string, ChatCommand>();
+			ChatChannelCommands = new Dictionary<ChatChannel, ChatCommandDetails>();
 		}
 
 		public static void InitializeOnce(Func<ChatChannel, ChatCommand> onGetChannelCommand)
@@ -104,7 +102,7 @@ namespace FishMMO.Shared
 			}
 		}
 
-		public static void AddDirectCommands(Dictionary<string, ChatCommand> commands)
+		public static void AddCommands(Dictionary<string, ChatCommand> commands)
 		{
 			if (commands == null)
 				return;
@@ -112,7 +110,7 @@ namespace FishMMO.Shared
 			foreach (KeyValuePair<string, ChatCommand> pair in commands)
 			{
 				Debug.Log("ChatHelper: Added Command[" + pair.Key + "]");
-				DirectCommands[pair.Key] = pair.Value;
+				Commands[pair.Key] = pair.Value;
 			}
 		}
 
@@ -121,25 +119,24 @@ namespace FishMMO.Shared
 			foreach (string command in commands)
 			{
 				Debug.Log("ChatHelper: Added Chat Command[" + command + "]");
-				Commands[command] = details;
-				ChannelCommands[details.Channel] = details;
+				ChatChannelCommands[details.Channel] = details;
 			}
 		}
 
 		public static ChatCommand ParseChatChannel(ChatChannel channel)
 		{
 			ChatCommand command = null;
-			if (ChatHelper.ChannelCommands.TryGetValue(channel, out ChatCommandDetails sayCommand))
+			if (ChatHelper.ChatChannelCommands.TryGetValue(channel, out ChatCommandDetails sayCommand))
 			{
 				command = sayCommand.Func;
 			}
 			return command;
 		}
 
-		public static bool TryParseDirectCommand(string cmd, IPlayerCharacter sender, ChatBroadcast msg)
+		public static bool TryParseCommand(string cmd, IPlayerCharacter sender, ChatBroadcast msg)
 		{
 			// try to find the command
-			if (ChatHelper.DirectCommands.TryGetValue(cmd, out ChatCommand command))
+			if (ChatHelper.Commands.TryGetValue(cmd, out ChatCommand command))
 			{
 				command?.Invoke(sender, msg);
 				return true;
@@ -150,8 +147,7 @@ namespace FishMMO.Shared
 		public static bool TryParseChatCommand(string cmd, out ChatCommandDetails commandDetails)
 		{
 			// parse our command or send the message to our /say channel
-			if (ChatHelper.Commands.TryGetValue(cmd, out commandDetails) ||
-				ChatHelper.ChannelCommands.TryGetValue(ChatChannel.Say, out commandDetails))
+			if (ChatHelper.ChatChannelCommands.TryGetValue(ChatChannel.Say, out commandDetails))
 			{
 				return true;
 			}

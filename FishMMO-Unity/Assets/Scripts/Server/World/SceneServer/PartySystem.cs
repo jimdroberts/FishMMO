@@ -58,7 +58,7 @@ namespace FishMMO.Server
 					{ "/pi", OnPartyInvite },
 					{ "/invite", OnPartyInvite },
 				};
-				ChatHelper.AddDirectCommands(partyChatCommands);
+				ChatHelper.AddCommands(partyChatCommands);
 
 				ServerManager.OnServerConnectionState += ServerManager_OnServerConnectionState;
 				Server.RegisterBroadcast<PartyCreateBroadcast>(OnServerPartyCreateBroadcastReceived, true);

@@ -164,10 +164,13 @@ namespace FishMMO.Client
 		public void OnSubmit(string input)
 		{
 			InputManager.MouseMode = false;
-			InputField.OnDeselect(new BaseEventData(EventSystem.current)
+			if (!EventSystem.current.alreadySelecting)
 			{
-				selectedObject = InputField.gameObject,
-			});
+				InputField.OnDeselect(new BaseEventData(EventSystem.current)
+				{
+					selectedObject = InputField.gameObject,
+				});
+			}
 
 			if (!InputManager.GetKeyDown("Chat") &&
 				!InputManager.GetKeyDown("Chat2"))

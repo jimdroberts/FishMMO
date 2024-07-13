@@ -17,8 +17,11 @@ namespace FishMMO.Client
 
 				if (EventSystem.current != null)
 				{
-					EventSystem.current.SetSelectedGameObject(null);
-					EventSystem.current.sendNavigationEvents = false;
+					if (!EventSystem.current.alreadySelecting)
+					{
+						EventSystem.current.SetSelectedGameObject(null);
+						EventSystem.current.sendNavigationEvents = false;
+					}
 				}
 
 #if UNITY_EDITOR

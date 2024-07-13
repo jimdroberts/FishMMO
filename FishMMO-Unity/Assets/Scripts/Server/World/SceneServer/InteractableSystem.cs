@@ -139,12 +139,14 @@ namespace FishMMO.Server
 				switch (interactable)
 				{
 					case AbilityCrafter:
+						//Debug.Log("AbilityCrafter");
 						Server.Broadcast(character.Owner, new AbilityCrafterBroadcast()
 						{
 							interactableID = sceneObject.ID,
 						}, true, Channel.Reliable);
 						break;
 					case Banker:
+						//Debug.Log("Banker");
 						if (character.TryGet(out IBankController bankController))
 						{
 							bankController.LastInteractableID = sceneObject.ID;
@@ -153,6 +155,7 @@ namespace FishMMO.Server
 						}
 						break;
 					case Merchant merchant:
+						//Debug.Log("Merchant");
 						Server.Broadcast(character.Owner, new MerchantBroadcast()
 						{
 							interactableID = sceneObject.ID,
@@ -160,24 +163,43 @@ namespace FishMMO.Server
 						}, true, Channel.Reliable);
 						break;
 					case WorldItem worldItem:
+						//Debug.Log("WorldItem");
 						if (worldItem.Template != null &&
-							character.TryGet(out IInventoryController inventoryController) &&
-							inventoryController.HasFreeSlot())
+							character.TryGet(out IInventoryController inventoryController))
 						{
-							using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-							if (dbContext == null)
+							if (worldItem.Amount > 0)
 							{
-								return;
-							}
+								//Debug.Log($"WorldItem Amount {worldItem.Amount}");
+								using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
+								if (dbContext == null)
+								{
+									return;
+								}
 
-							Item newItem = new Item(worldItem.Template, 1);
-							if (newItem == null)
-							{
-								return;
-							}
+								Item newItem = new Item(worldItem.Template, worldItem.Amount);
+								if (newItem == null)
+								{
+									return;
+								}
 
-							if (SendNewItemBroadcast(dbContext, conn, character, inventoryController, newItem))
+								if (SendNewItemBroadcast(dbContext, conn, character, inventoryController, newItem))
+								{
+									if (newItem.IsStackable &&
+										newItem.Stackable.Amount > 1)
+									{
+										//Debug.Log($"WorldItem Remaining {newItem.Stackable.Amount}");
+										worldItem.Amount = newItem.Stackable.Amount;
+									}
+									else
+									{
+										//Debug.Log($"WorldItem Despawn");
+										worldItem.Despawn();
+									}
+								}
+							}
+							else
 							{
+								//Debug.Log($"WorldItem Despawn 2");
 								worldItem.Despawn();
 							}
 						}

@@ -149,7 +149,7 @@ MonoBehaviour:
   _spectatorInterpolation: 2
   _enableTeleport: 0
   _teleportThreshold: 1
-  <PrefabId>k__BackingField: 0
+  <PrefabId>k__BackingField: 3
   <SpawnableCollectionId>k__BackingField: 0
   <SceneId>k__BackingField: 0
   <AssetPathHash>k__BackingField: 6431816246706811870
@@ -171,3 +171,4 @@ MonoBehaviour:
   InteractionRange: 3.5
   GizmoColor: {r: 0, g: 1, b: 0, a: 1}
   template: {fileID: 11400000, guid: 1cc999ebd456f0943bbcfc4c09497b1b, type: 2}
+  Amount: 1

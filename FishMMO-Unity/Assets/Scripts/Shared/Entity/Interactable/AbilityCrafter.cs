@@ -6,5 +6,6 @@ namespace FishMMO.Shared
 	public class AbilityCrafter : Interactable
 	{
 		public override string Title { get { return "Ability Crafter"; } }
+		public override Color TitleColor { get { return TinyColor.ToUnityColor(TinyColor.lavender); } }
 	}
 }

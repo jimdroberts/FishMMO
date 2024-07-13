@@ -37,23 +37,22 @@ namespace FishMMO.Client
 					image.color = Color.white;
 				}
 			}
-			else
+
+			// Overrides
+			if (image.name.Contains("Health") &&
+				!image.name.Contains("UI"))
 			{
-				if (image.name.Contains("Health") &&
-					!image.name.Contains("UI"))
-				{
-					image.color = ParseColor("Health", configuration);
-				}
-				else if (image.name.Contains("Mana") &&
-					!image.name.Contains("UI"))
-				{
-					image.color = ParseColor("Mana", configuration);
-				}
-				else if (image.name.Contains("Stamina") &&
-					!image.name.Contains("UI"))
-				{
-					image.color = ParseColor("Stamina", configuration);
-				}
+				image.color = ParseColor("Health", configuration);
+			}
+			else if (image.name.Contains("Mana") &&
+				!image.name.Contains("UI"))
+			{
+				image.color = ParseColor("Mana", configuration);
+			}
+			else if (image.name.Contains("Stamina") &&
+				!image.name.Contains("UI"))
+			{
+				image.color = ParseColor("Stamina", configuration);
 			}
 		}
 	}

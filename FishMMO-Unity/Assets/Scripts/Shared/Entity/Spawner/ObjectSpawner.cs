@@ -59,6 +59,19 @@ namespace FishMMO.Shared
 			respawnTime -= Time.deltaTime;
 		}
 
+#if !UNITY_SERVER
+		public override void OnStartClient()
+		{
+			base.OnStartClient();
+
+			if (!base.IsOwner)
+			{
+				enabled = false;
+				return;
+			}
+		}
+#endif
+
 #if UNITY_EDITOR
 		public Color GizmoColor = Color.red;
 
@@ -79,11 +92,15 @@ namespace FishMMO.Shared
 
 		public void Despawn(ISpawnable spawnable)
 		{
-			// ensure we spawned the object
-			if (!Spawned.ContainsKey(spawnable.ID))
-			{
-				return;
-			}
+			//Debug.Log($"Despawning {spawnable.NetworkObject.name}");
+
+			Spawned.Remove(spawnable.ID);
+
+			// despawn the object
+			ServerManager?.Despawn(spawnable.NetworkObject, DespawnType.Pool);
+
+			//Debug.Log($"Object despawned, next respawn at {respawnTime}.");
+
 			// did we already set a previous respawn time?
 			if (respawnTime > 0)
 			{
@@ -91,15 +108,6 @@ namespace FishMMO.Shared
 			}
 			// set the next respawn time
 			respawnTime = RandomRespawnTime ? Random.Range(spawnable.SpawnTemplate.MinimumRespawnTime, spawnable.SpawnTemplate.MaximumRespawnTime) : InitialRespawnTime;
-
-			Spawned.Remove(spawnable.ID);
-
-			// spawn the object server side
-			if (base.IsServerStarted)
-			{
-				ServerManager.Despawn(spawnable.NetworkObject, DespawnType.Pool);
-				Debug.Log($"Object despawned, next respawn at {respawnTime}.");
-			}
 		}
 
 		public void TryRespawn()
@@ -220,7 +228,7 @@ namespace FishMMO.Shared
 					ISpawnable nobSpawnable = nob.GetComponent<ISpawnable>();
 					if (nobSpawnable != null)
 					{
-						nobSpawnable.OnDespawn += Despawn;
+						nobSpawnable.ObjectSpawner = this;
 						nobSpawnable.SpawnTemplate = spawnable;
 						Spawned.Add(nobSpawnable.ID, nobSpawnable);
 
@@ -238,7 +246,7 @@ namespace FishMMO.Shared
 
 						//Debug.Log($"Respawn time is updating, next respawn in {respawnTime}s");
 					}
-					Debug.Log($"Spawned {nob.gameObject.name} at {System.DateTime.UtcNow}");
+					//Debug.Log($"Spawned {nob.gameObject.name} at {System.DateTime.UtcNow}");
 				}
 			}
 		}

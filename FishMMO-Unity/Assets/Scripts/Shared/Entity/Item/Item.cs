@@ -21,6 +21,20 @@ namespace FishMMO.Shared
 		{
 			Slot = -1;
 			Template = template;
+			if (amount > 0)
+			{
+				if (Stackable == null)
+				{
+					if (Template.MaxStackSize > 1)
+					{
+						Stackable = new ItemStackable(this, amount.Clamp(1, Template.MaxStackSize));
+					}
+				}
+				else
+				{
+					Stackable.Amount = amount;
+				}
+			}
 		}
 		public Item(long id, int seed, BaseItemTemplate template, uint amount)
 		{
@@ -47,10 +61,19 @@ namespace FishMMO.Shared
 			bool initializeGenerator = false;
 
 			// check if the item is stackable
-			if (Stackable == null &&
-				Template.MaxStackSize > 1)
+			if (amount > 0)
 			{
-				Stackable = new ItemStackable(this, amount.Clamp(1, Template.MaxStackSize));
+				if (Stackable == null)
+				{
+					if (Template.MaxStackSize > 1)
+					{
+						Stackable = new ItemStackable(this, amount.Clamp(1, Template.MaxStackSize));
+					}
+				}
+				else
+				{
+					Stackable.Amount = amount;
+				}
 			}
 
 			// ensure Item Equippable is created if it's an equippable item type

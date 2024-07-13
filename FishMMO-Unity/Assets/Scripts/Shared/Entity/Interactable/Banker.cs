@@ -6,5 +6,6 @@ namespace FishMMO.Shared
 	public class Banker : Interactable
 	{
 		public override string Title { get { return "Banker"; } }
+		public override Color TitleColor { get { return TinyColor.ToUnityColor(TinyColor.goldenrod); } }
 	}
 }
