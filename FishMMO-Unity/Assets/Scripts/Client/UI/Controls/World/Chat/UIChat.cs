@@ -123,7 +123,7 @@ namespace FishMMO.Client
 		{
 			// if an input has focus already we should skip input otherwise things will happen while we are typing!
 			if (Character == null ||
-				UIManager.InputControlHasFocus())
+				UIManager.ControlHasFocus(this))
 			{
 				return;
 			}
@@ -131,16 +131,13 @@ namespace FishMMO.Client
 			if (InputManager.GetKeyDown("Chat") ||
 				InputManager.GetKeyDown("Chat2"))
 			{
-				if (InputManager.MouseMode)
+				if (InputManager.MouseMode &&
+					!InputField.isFocused)
 				{
-					if (!EventSystem.current.alreadySelecting)
+					InputField.OnSelect(new BaseEventData(EventSystem.current)
 					{
-						InputField.OnDeselect(new BaseEventData(EventSystem.current)
-						{
-							selectedObject = InputField.gameObject,
-						});
-					}
-					InputManager.MouseMode = false;
+						selectedObject = InputField.gameObject,
+					});
 				}
 				else
 				{

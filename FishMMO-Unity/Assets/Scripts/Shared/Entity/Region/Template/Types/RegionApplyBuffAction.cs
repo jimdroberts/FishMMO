@@ -7,7 +7,7 @@ namespace FishMMO.Shared
 	{
 		public BuffTemplate Buff;
 
-		public override void Invoke(IPlayerCharacter character, Region region)
+		public override void Invoke(IPlayerCharacter character, Region region, bool isReconciling)
 		{
 			if (Buff == null ||
 				character == null ||

@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using UnityEngine;
+﻿using UnityEngine;
 
 namespace FishMMO.Shared
 {
@@ -24,25 +22,31 @@ namespace FishMMO.Shared
 		{
 			get
 			{
-				if (resourceInstance == null)
+				if (ResourceInstance == null)
 				{
 					return false;
 				}
-				return resourceInstance.CurrentValue > 0;
+				return ResourceInstance.CurrentValue > 0;
 			}
 		}
 
 		//public List<Character> Attackers;
 
-		private CharacterResourceAttribute resourceInstance; // cache the resource
+		/// <summary>
+		/// Cache the resource
+		/// </summary>
+		public CharacterResourceAttribute ResourceInstance { get; private set; }
 
 #if !UNITY_SERVER
 		public override void OnStartCharacter()
 		{
 			base.OnStartCharacter();
+
+			CharacterResourceAttribute resource;
+
 			if (ResourceAttribute == null ||
 				!Character.TryGet(out ICharacterAttributeController attributeController) ||
-				!attributeController.TryGetResourceAttribute(ResourceAttribute.ID, out this.resourceInstance))
+				!attributeController.TryGetResourceAttribute(ResourceAttribute.ID, out resource))
 			{
 				throw new UnityException("Character Damage Controller ResourceAttribute is missing");
 			}
@@ -51,6 +55,7 @@ namespace FishMMO.Shared
 				enabled = false;
 				return;
 			}
+			ResourceInstance = resource;
 		}
 #endif
 
@@ -78,14 +83,14 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			if (resourceInstance != null && resourceInstance.CurrentValue > 0.0f)
+			if (ResourceInstance != null && ResourceInstance.CurrentValue > 0.0f)
 			{
 				amount = ApplyModifiers(Character, amount, damageAttribute);
 				if (amount < 1)
 				{
 					return;
 				}
-				resourceInstance.Consume(amount);
+				ResourceInstance.Consume(amount);
 
 				ICharacterDamageController.OnDamaged?.Invoke(attacker, Character, amount, damageAttribute);
 
@@ -102,7 +107,7 @@ namespace FishMMO.Shared
 				}
 
 				// check if we died
-				if (resourceInstance.CurrentValue <= 0.001f)
+				if (ResourceInstance.CurrentValue <= 0.001f)
 				{
 					Kill(attacker);
 				}
@@ -179,9 +184,9 @@ namespace FishMMO.Shared
 
 		public void Heal(ICharacter healer, int amount)
 		{
-			if (resourceInstance != null && resourceInstance.CurrentValue > 0.0f)
+			if (ResourceInstance != null && ResourceInstance.CurrentValue > 0.0f)
 			{
-				resourceInstance.Gain(amount);
+				ResourceInstance.Gain(amount);
 
 				ICharacterDamageController.OnHealed?.Invoke(healer, Character, amount);
 
@@ -197,6 +202,15 @@ namespace FishMMO.Shared
 				{
 					healedAchievementController.Increment(HealedAchievementTemplate, fullAmount);
 				}
+			}
+		}
+
+		public void CompleteHeal()
+		{
+			if (ResourceInstance != null)
+			{
+				float toHeal = ResourceInstance.FinalValue - ResourceInstance.CurrentValue;
+				ResourceInstance.Gain(toHeal);
 			}
 		}
 	}

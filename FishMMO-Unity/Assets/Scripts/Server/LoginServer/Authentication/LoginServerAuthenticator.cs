@@ -115,11 +115,9 @@ namespace FishMMO.Server
 				// check if any characters are online already
 				if (CharacterService.TryGetOnline(dbContext, username))
 				{
+					// Add a kick request
 					KickRequestService.Save(dbContext, username);
 					result = ClientAuthenticationResult.AlreadyOnline;
-
-					// Immediately set all characters for the account to offline. Kick will be processed on scene servers.
-					CharacterService.SetOnlineState(dbContext, username, false);
 				}
 				else
 				{
@@ -127,7 +125,7 @@ namespace FishMMO.Server
 					string publicEphemeral = Encoding.UTF8.GetString(decryptedRawPublicEphemeral);
 
 					// get account salt and verifier if no one is online
-					result = AccountService.Get(dbContext, username, out string salt, out string verifier, out AccessLevel accessLevel);
+					result = AccountService.TryLogin(dbContext, username, out string salt, out string verifier, out AccessLevel accessLevel);
 					if (result != ClientAuthenticationResult.Banned &&
 						result == ClientAuthenticationResult.SrpVerify)
 					{

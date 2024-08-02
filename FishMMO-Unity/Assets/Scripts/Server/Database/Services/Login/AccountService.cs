@@ -8,6 +8,22 @@ namespace FishMMO.Server.DatabaseServices
 {
 	public class AccountService
 	{
+		public static bool TryGetLastLogin(NpgsqlDbContext dbContext, string accountName, out DateTime lastLogin)
+		{
+			lastLogin = default;
+			if (Constants.Authentication.IsAllowedUsername(accountName))
+			{
+				var accountEntity = dbContext.Accounts.FirstOrDefault(a => a.Name == accountName);
+				if (accountEntity != null)
+				{
+					lastLogin = accountEntity.Lastlogin;
+
+					return true;
+				}
+			}
+			return false;
+		}
+
 		public static ClientAuthenticationResult TryCreate(NpgsqlDbContext dbContext, string accountName, string salt, string verifier)
 		{
 			if (Constants.Authentication.IsAllowedUsername(accountName) && !string.IsNullOrWhiteSpace(salt) && !string.IsNullOrWhiteSpace(verifier))
@@ -32,7 +48,7 @@ namespace FishMMO.Server.DatabaseServices
 			return ClientAuthenticationResult.InvalidUsernameOrPassword;
 		}
 
-		public static ClientAuthenticationResult Get(NpgsqlDbContext dbContext, string accountName, out string salt, out string verifier, out AccessLevel accessLevel)
+		public static ClientAuthenticationResult TryLogin(NpgsqlDbContext dbContext, string accountName, out string salt, out string verifier, out AccessLevel accessLevel)
 		{
 			salt = "";
 			verifier = "";

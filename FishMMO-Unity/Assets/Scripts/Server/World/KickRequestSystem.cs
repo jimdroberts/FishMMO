@@ -93,10 +93,10 @@ namespace FishMMO.Server
 			return updates;
 		}
 
-		// process updates from the database
+		// Process updates from the database
 		private void ProcessKickRequests(List<KickRequestEntity> requests)
 		{
-			if (Server == null || Server.NpgsqlDbContextFactory == null || requests == null || requests.Count < 1)
+			if (requests == null || requests.Count < 1)
 			{
 				return;
 			}
@@ -104,9 +104,36 @@ namespace FishMMO.Server
 			for (int i = 0; i < requests.Count; ++i)
 			{
 				KickRequestEntity kickRequest = requests[i];
-				if (kickRequest != null &&
-					AccountManager.GetConnectionByAccountName(kickRequest.AccountName, out NetworkConnection conn))
+				if (kickRequest == null)
 				{
+					continue;
+				}
+
+				// Check if the last successful login happened after the kick request.
+				if (Server != null && Server.NpgsqlDbContextFactory != null)
+				{
+					using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
+
+					//Debug.Log($"Processing kick request for {kickRequest.AccountName}");
+
+					// Immediately set all characters for the account to offline. Kick will be processed on scene servers.
+					CharacterService.SetOnlineState(dbContext, kickRequest.AccountName, false);
+
+					if (AccountService.TryGetLastLogin(dbContext, kickRequest.AccountName, out DateTime lastLogin))
+					{
+						if (lastLogin >= kickRequest.TimeCreated)
+						{
+							//Debug.Log($"{kickRequest.AccountName} is recently connected.");
+							return;
+						}
+					}
+				}
+
+				if (AccountManager.GetConnectionByAccountName(kickRequest.AccountName, out NetworkConnection conn))
+				{
+					//Debug.Log($"Kicking {kickRequest.AccountName}");
+
+					// Kick the connection
 					conn.Kick(FishNet.Managing.Server.KickReason.UnexpectedProblem);
 				}
 			}

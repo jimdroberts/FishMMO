@@ -16,10 +16,11 @@ namespace FishMMO.Shared
 		public float fogStartDistance = 0.0f;
 		public float fogEndDistance = 0.0f;
 
-		public override void Invoke(IPlayerCharacter character, Region region)
+		public override void Invoke(IPlayerCharacter character, Region region, bool isReconciling)
 		{
 #if !UNITY_SERVER
-			if (!character.NetworkObject.IsOwner)
+			if (!character.NetworkObject.IsOwner ||
+				isReconciling)
 			{
 				return;
 			}

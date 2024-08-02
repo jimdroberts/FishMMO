@@ -7,10 +7,13 @@ namespace FishMMO.Shared
 	{
 		public AudioClip clip;
 
-		public override void Invoke(IPlayerCharacter character, Region region)
+		public override void Invoke(IPlayerCharacter character, Region region, bool isReconciling)
 		{
 #if !UNITY_SERVER
-			if (clip == null || character == null || !character.NetworkObject.IsOwner)
+			if (clip == null ||
+				character == null ||
+				!character.NetworkObject.IsOwner ||
+				isReconciling)
 			{
 				return;
 			}

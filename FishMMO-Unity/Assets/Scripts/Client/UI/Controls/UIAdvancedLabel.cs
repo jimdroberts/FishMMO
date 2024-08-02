@@ -1,14 +1,11 @@
 ﻿using UnityEngine;
 using FishMMO.Shared;
-using System;
 
 namespace FishMMO.Client
 {
 	public class UIAdvancedLabel : MonoBehaviour, IReference
 	{
 		public string Text = "";
-		public bool Visible = false;
-
 		public Vector2 Size = Vector2.zero;
 		public GUIStyle Style = new GUIStyle();
 		public Vector2 Center = Vector2.zero;
@@ -28,8 +25,6 @@ namespace FishMMO.Client
 		//bounce
 		public float Bounce = 0.0f;
 		public float BounceDecay = 0.1f;
-
-		public Action OnDestroyCallback;
 
 		void Update()
 		{
@@ -76,33 +71,28 @@ namespace FishMMO.Client
 			}
 			else
 			{
-				OnDestroyCallback?.Invoke();
-				OnDestroyCallback = null;
-
 				this.gameObject.SetActive(false);
-				Destroy(this.gameObject);
 			}
 		}
 
 		void OnGUI()
 		{
-			if (!Visible ||
-				Camera.main == null)
+			if (Camera.main == null)
 			{
 				return;
 			}
 			GUI.Label(new Rect(Screen.width * 0.5f - PixelOffset.x - Center.x, Screen.height * 0.5f - PixelOffset.y + Center.y, Size.x, Size.y), Text, Style);
 		}
 
-		public static IReference Create(string text, FontStyle style, Font font, int fontSize, Color color, float lifeTime, bool fadeColor, bool increaseY, Vector2 pixelOffset, Action OnDestroyCallback)
+		public static IReference Create(string text, FontStyle style, Font font, int fontSize, Color color, float lifeTime, bool fadeColor, bool increaseY, Vector2 pixelOffset)
 		{
 			GameObject newObject = new GameObject("UIAdvancedLabel: " + text);
 			UIAdvancedLabel label = (UIAdvancedLabel)newObject.AddComponent<UIAdvancedLabel>();
-			label.Initialize(text, style, font, fontSize, color, lifeTime, fadeColor, increaseY, pixelOffset, OnDestroyCallback);
+			label.Initialize(text, style, font, fontSize, color, lifeTime, fadeColor, increaseY, pixelOffset);
 			return label;
 		}
 
-		public void Initialize(string text, FontStyle fontStyle, Font font, int fontSize, Color color, float lifeTime, bool fadeColor, bool increaseY, Vector2 pixelOffset, Action OnDestroyCallback)
+		public void Initialize(string text, FontStyle fontStyle, Font font, int fontSize, Color color, float lifeTime, bool fadeColor, bool increaseY, Vector2 pixelOffset)
 		{
 			Text = text;
 			Style.wordWrap = false;
@@ -134,8 +124,6 @@ namespace FishMMO.Client
 					YIncreaseValue = OldY + YIncreaseValue;
 				}
 			}
-			this.OnDestroyCallback = OnDestroyCallback;
-			Visible = true;
 			this.gameObject.SetActive(true);
 		}
 

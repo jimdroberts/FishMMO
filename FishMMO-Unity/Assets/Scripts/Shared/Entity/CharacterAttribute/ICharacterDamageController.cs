@@ -11,6 +11,8 @@ namespace FishMMO.Shared
 
 		bool Immortal { get; set; }
 		bool IsAlive { get; }
+		CharacterResourceAttribute ResourceInstance { get; }
 		void Kill(ICharacter killer);
+		void CompleteHeal();
 	}
 }

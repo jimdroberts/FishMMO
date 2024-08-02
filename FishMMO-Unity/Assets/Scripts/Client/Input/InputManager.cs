@@ -19,7 +19,7 @@ namespace FishMMO.Client
 				Cursor.visible = value;
 				Cursor.lockState = value ? CursorLockMode.None : CursorLockMode.Locked;
 
-				if (EventSystem.current != null)
+				if (!value && EventSystem.current != null)
 				{
 					if (!EventSystem.current.alreadySelecting)
 					{

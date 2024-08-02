@@ -3382,7 +3382,7 @@ GameObject:
   - component: {fileID: 1305670807}
   - component: {fileID: 1305670808}
   - component: {fileID: 1305670810}
-  - component: {fileID: 1305670813}
+  - component: {fileID: 1305670814}
   m_Layer: 0
   m_Name: Dungeon Entrance
   m_TagString: Untagged
@@ -3422,7 +3422,7 @@ MonoBehaviour:
   _networkObjectCache: {fileID: 1305670810}
   Parent: {fileID: 1622681166}
   Children: []
-  NetworkCollider: {fileID: 0}
+  NetworkTrigger: {fileID: 0}
   Collider: {fileID: 0}
   Terrain: {fileID: 0}
   OnRegionEnter:
@@ -3469,7 +3469,8 @@ MonoBehaviour:
   <PredictedSpawn>k__BackingField: {fileID: 0}
   _networkBehaviours:
   - {fileID: 1305670807}
-  - {fileID: 1305670813}
+  - {fileID: 0}
+  - {fileID: 0}
   <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 0}
   <NestedRootNetworkBehaviours>k__BackingField: []
   SerializedTransformProperties:
@@ -3499,7 +3500,7 @@ MonoBehaviour:
   <SpawnableCollectionId>k__BackingField: 0
   <SceneId>k__BackingField: 9107823740297206992
   <AssetPathHash>k__BackingField: 0
---- !u!114 &1305670813
+--- !u!114 &1305670814
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -3508,15 +3509,18 @@ MonoBehaviour:
   m_GameObject: {fileID: 1305670805}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4f977181495644345a4d0d821c31579f, type: 3}
+  m_Script: {fileID: 11500000, guid: 3dc97a8b9e628044e83004c93095c14d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 1
+  _componentIndexCache: 255
   _addedNetworkObject: {fileID: 1305670810}
-  _networkObjectCache: {fileID: 1305670810}
+  _networkObjectCache: {fileID: 0}
   _maximumSimultaneousHits: 16
   _historyDuration: 0.5
   _additionalSize: 0.1
+  _layers:
+    serializedVersion: 2
+    m_Bits: 65
 --- !u!1 &1332135101
 GameObject:
   m_ObjectHideFlags: 0
@@ -4648,7 +4652,7 @@ MonoBehaviour:
   Parent: {fileID: 0}
   Children:
   - {fileID: 1305670807}
-  NetworkCollider: {fileID: 0}
+  NetworkTrigger: {fileID: 0}
   Collider: {fileID: 0}
   Terrain: {fileID: 347432128}
   OnRegionEnter:
@@ -4674,7 +4678,8 @@ MonoBehaviour:
   <PredictedSpawn>k__BackingField: {fileID: 0}
   _networkBehaviours:
   - {fileID: 1622681166}
-  - {fileID: 1622681169}
+  - {fileID: 0}
+  - {fileID: 0}
   <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 0}
   <NestedRootNetworkBehaviours>k__BackingField: []
   SerializedTransformProperties:
@@ -4713,15 +4718,18 @@ MonoBehaviour:
   m_GameObject: {fileID: 1622681163}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4f977181495644345a4d0d821c31579f, type: 3}
+  m_Script: {fileID: 11500000, guid: 3dc97a8b9e628044e83004c93095c14d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 1
+  _componentIndexCache: 255
   _addedNetworkObject: {fileID: 1622681168}
-  _networkObjectCache: {fileID: 1622681168}
+  _networkObjectCache: {fileID: 0}
   _maximumSimultaneousHits: 16
   _historyDuration: 0.5
   _additionalSize: 0.1
+  _layers:
+    serializedVersion: 2
+    m_Bits: 65
 --- !u!1 &1699450705
 GameObject:
   m_ObjectHideFlags: 0

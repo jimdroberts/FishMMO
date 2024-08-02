@@ -357,19 +357,19 @@ namespace FishMMO.Shared
 
 		public static TinyColor Read(Reader reader)
 		{
-			byte r = reader.ReadByte();
-			byte g = reader.ReadByte();
-			byte b = reader.ReadByte();
-			byte a = reader.ReadByte();
+			byte r = reader.ReadUInt8Unpacked();
+			byte g = reader.ReadUInt8Unpacked();
+			byte b = reader.ReadUInt8Unpacked();
+			byte a = reader.ReadUInt8Unpacked();
 			return new TinyColor(r, g, b, a);
 		}
 
 		public void Write(Writer writer)
 		{
-			writer.WriteByte(r);
-			writer.WriteByte(g);
-			writer.WriteByte(b);
-			writer.WriteByte(a);
+			writer.WriteUInt8Unpacked(r);
+			writer.WriteUInt8Unpacked(g);
+			writer.WriteUInt8Unpacked(b);
+			writer.WriteUInt8Unpacked(a);
 		}
 	}
 }

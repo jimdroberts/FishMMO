@@ -8,7 +8,7 @@ namespace FishMMO.Shared
 		public CharacterAttributeTemplate attribute;
 		public int value;
 
-		public override void Invoke(IPlayerCharacter character, Region region)
+		public override void Invoke(IPlayerCharacter character, Region region, bool isReconciling)
 		{
 			if (attribute == null ||
 				character == null ||

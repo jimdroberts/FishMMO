@@ -122,7 +122,7 @@ namespace FishMMO.Client
 			ServerDetailsButton prevButton = selectedServer;
 			if (prevButton != null)
 			{
-				prevButton.SetLabelColors(Color.black);
+				prevButton.ResetLabelColor();
 			}
 
 			selectedServer = button;

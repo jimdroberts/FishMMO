@@ -14,7 +14,7 @@ namespace FishNet.Editing
     public class ConfigurationEditor : EditorWindow
     {
 
-        [MenuItem("Fish-Networking/Configuration", false, 0)]
+        [MenuItem("Tools/Fish-Networking/Configuration", false, 0)]
         public static void ShowConfiguration()
         {
             SettingsService.OpenProjectSettings("Project/Fish-Networking/Configuration");
@@ -26,7 +26,6 @@ namespace FishNet.Editing
     {
         #region const.
         private const string STABLE_DEFINE = "FISHNET_STABLE_MODE";
-        private const string PREDICTION_1_DEFINE = "PREDICTION_1";
         private const string QOL_ATTRIBUTES_DEFINE = "DISABLE_QOL_ATTRIBUTES";
         private const string DEVELOPER_ONLY_WARNING = "If you are not a developer or were not instructed to do this by a developer things are likely to break. You have been warned.";
         #endregion
@@ -34,7 +33,7 @@ namespace FishNet.Editing
 
         #region Release mode.
 #if !FISHNET_STABLE_MODE
-        [MenuItem("Fish-Networking/Switch to Stable", false, -1101)]
+        [MenuItem("Tools/Fish-Networking/Switch to Stable", false, -1101)]
         private static void SwitchToStable()
         {
             bool result = RemoveOrAddDefine(STABLE_DEFINE, false);
@@ -42,7 +41,7 @@ namespace FishNet.Editing
                 Debug.LogWarning($"Fish-Networking has been switched to Stable. Please note that experimental features may not function in this mode.");
         }
 #else
-        [MenuItem("Fish-Networking/Switch to Beta", false, -1101)]
+        [MenuItem("Tools/Fish-Networking/Switch to Beta", false, -1101)]
         private static void SwitchToBeta()
         {
             bool result = RemoveOrAddDefine(STABLE_DEFINE, true);
@@ -52,33 +51,10 @@ namespace FishNet.Editing
         }
 #endif
         #endregion
-
-        #region PredictionV2.
-#if PREDICTION_1
-        [MenuItem("Fish-Networking/Utility/Prediction/Switch To Prediction 2", false, -998)]
-        private static void EnablePredictionV2()
-        {
-            bool result = RemoveOrAddDefine(PREDICTION_1_DEFINE, true);
-            if (result)
-                Debug.Log("Prediction 2 has been enabled.");
-        }
-#else
-        [MenuItem("Fish-Networking/Utility/Prediction/Switch To Prediction 1", false, -998)]
-        private static void DisablePredictionV2()
-        {
-            bool result = RemoveOrAddDefine(PREDICTION_1_DEFINE, false);
-            if (result)
-            {
-                Debug.Log("Prediction 1 has been enabled.");
-                Debug.LogWarning($"Please note that Prediction 1 is no longer supported and will be removed in FishNet 5.");
-            }
-        }
-#endif
-        #endregion
-
+    
         #region QOL Attributes
 #if DISABLE_QOL_ATTRIBUTES
-        [MenuItem("Fish-Networking/Utility/Quality of Life Attributes/Enable", false, -999)]
+        [MenuItem("Tools/Fish-Networking/Utility/Quality of Life Attributes/Enable", false, -999)]
         private static void EnableQOLAttributes()
         {
             bool result = RemoveOrAddDefine(QOL_ATTRIBUTES_DEFINE, true);
@@ -86,7 +62,7 @@ namespace FishNet.Editing
                 Debug.LogWarning($"Quality of Life Attributes have been enabled.");
         }
 #else
-        [MenuItem("Fish-Networking/Utility/Quality of Life Attributes/Disable", false, -998)]
+        [MenuItem("Tools/Fish-Networking/Utility/Quality of Life Attributes/Disable", false, -998)]
         private static void DisableQOLAttributes()
         {
             bool result = RemoveOrAddDefine(QOL_ATTRIBUTES_DEFINE, false);
@@ -133,7 +109,7 @@ namespace FishNet.Editing
         /// <summary>
         /// Rebuilds sceneIds for open scenes.
         /// </summary>
-        [MenuItem("Fish-Networking/Rebuild SceneIds", false, 20)]
+        [MenuItem("Tools/Fish-Networking/Rebuild SceneIds", false, 20)]
         public static void RebuildSceneIds()
         {
 #if PARRELSYNC
@@ -180,7 +156,7 @@ namespace FishNet.Editing
         /// <summary>
         /// Rebuilds the DefaultPrefabsCollection file.
         /// </summary>
-        [MenuItem("Fish-Networking/Refresh Default Prefabs", false, 22)]
+        [MenuItem("Tools/Fish-Networking/Refresh Default Prefabs", false, 22)]
         public static void RebuildDefaultPrefabs()
         {
 #if PARRELSYNC
@@ -202,7 +178,7 @@ namespace FishNet.Editing
         /// <summary>
         /// Iterates all network object prefabs in the project and open scenes, removing NetworkObject components which exist multiple times on a single object.
         /// </summary>
-        [MenuItem("Fish-Networking/Remove Duplicate NetworkObjects", false, 21)]
+        [MenuItem("Tools/Fish-Networking/Remove Duplicate NetworkObjects", false, 21)]
 
         public static void RemoveDuplicateNetworkObjects()
         {

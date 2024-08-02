@@ -1516,10 +1516,10 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 674862112}
-  - component: {fileID: 674862116}
-  - component: {fileID: 674862115}
+  - component: {fileID: 674862117}
   - component: {fileID: 674862114}
   - component: {fileID: 674862113}
+  - component: {fileID: 674862118}
   m_Layer: 0
   m_Name: Sub Region B
   m_TagString: Untagged
@@ -1576,11 +1576,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _componentIndexCache: 1
-  _addedNetworkObject: {fileID: 674862116}
-  _networkObjectCache: {fileID: 674862116}
+  _addedNetworkObject: {fileID: 674862118}
+  _networkObjectCache: {fileID: 674862118}
   Parent: {fileID: 1757139385}
-  Children: []
-  NetworkCollider: {fileID: 0}
   Collider: {fileID: 0}
   Terrain: {fileID: 0}
   OnRegionEnter:
@@ -1589,7 +1587,7 @@ MonoBehaviour:
   OnRegionStay: []
   OnRegionExit: []
   GizmoColor: {r: 0, g: 1, b: 1, a: 1}
---- !u!114 &674862115
+--- !u!114 &674862117
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -1598,16 +1596,19 @@ MonoBehaviour:
   m_GameObject: {fileID: 674862111}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4f977181495644345a4d0d821c31579f, type: 3}
+  m_Script: {fileID: 11500000, guid: 3dc97a8b9e628044e83004c93095c14d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   _componentIndexCache: 0
-  _addedNetworkObject: {fileID: 674862116}
-  _networkObjectCache: {fileID: 674862116}
+  _addedNetworkObject: {fileID: 674862118}
+  _networkObjectCache: {fileID: 674862118}
   _maximumSimultaneousHits: 16
   _historyDuration: 0.5
   _additionalSize: 0.1
---- !u!114 &674862116
+  _layers:
+    serializedVersion: 2
+    m_Bits: 65
+--- !u!114 &674862118
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -1623,9 +1624,9 @@ MonoBehaviour:
   <ComponentIndex>k__BackingField: 0
   <PredictedSpawn>k__BackingField: {fileID: 0}
   _networkBehaviours:
-  - {fileID: 674862115}
+  - {fileID: 674862117}
   - {fileID: 674862114}
-  <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 1757139386}
+  <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 0}
   <NestedRootNetworkBehaviours>k__BackingField: []
   SerializedTransformProperties:
     Position: {x: -50, y: 0, z: 50}
@@ -1652,7 +1653,7 @@ MonoBehaviour:
   _teleportThreshold: 1
   <PrefabId>k__BackingField: 0
   <SpawnableCollectionId>k__BackingField: 0
-  <SceneId>k__BackingField: 0
+  <SceneId>k__BackingField: 4269682446
   <AssetPathHash>k__BackingField: 0
 --- !u!1 &700258836
 GameObject:
@@ -2251,10 +2252,10 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1162634451}
-  - component: {fileID: 1162634454}
-  - component: {fileID: 1162634453}
+  - component: {fileID: 1162634456}
   - component: {fileID: 1162634452}
   - component: {fileID: 1162634455}
+  - component: {fileID: 1162634457}
   m_Layer: 0
   m_Name: Sub Region A
   m_TagString: Untagged
@@ -2290,11 +2291,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _componentIndexCache: 1
-  _addedNetworkObject: {fileID: 1162634454}
-  _networkObjectCache: {fileID: 1162634454}
+  _addedNetworkObject: {fileID: 1162634457}
+  _networkObjectCache: {fileID: 1162634457}
   Parent: {fileID: 1757139385}
-  Children: []
-  NetworkCollider: {fileID: 0}
   Collider: {fileID: 0}
   Terrain: {fileID: 0}
   OnRegionEnter:
@@ -2302,7 +2301,28 @@ MonoBehaviour:
   OnRegionStay: []
   OnRegionExit: []
   GizmoColor: {r: 0, g: 1, b: 1, a: 1}
---- !u!114 &1162634453
+--- !u!65 &1162634455
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1162634450}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 1
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 50, y: 50, z: 50}
+  m_Center: {x: 0, y: 0, z: 0}
+--- !u!114 &1162634456
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -2311,16 +2331,19 @@ MonoBehaviour:
   m_GameObject: {fileID: 1162634450}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4f977181495644345a4d0d821c31579f, type: 3}
+  m_Script: {fileID: 11500000, guid: 3dc97a8b9e628044e83004c93095c14d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   _componentIndexCache: 0
-  _addedNetworkObject: {fileID: 1162634454}
-  _networkObjectCache: {fileID: 1162634454}
+  _addedNetworkObject: {fileID: 1162634457}
+  _networkObjectCache: {fileID: 1162634457}
   _maximumSimultaneousHits: 16
   _historyDuration: 0.5
   _additionalSize: 0.1
---- !u!114 &1162634454
+  _layers:
+    serializedVersion: 2
+    m_Bits: 65
+--- !u!114 &1162634457
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -2336,9 +2359,9 @@ MonoBehaviour:
   <ComponentIndex>k__BackingField: 0
   <PredictedSpawn>k__BackingField: {fileID: 0}
   _networkBehaviours:
-  - {fileID: 1162634453}
+  - {fileID: 1162634456}
   - {fileID: 1162634452}
-  <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 1757139386}
+  <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 0}
   <NestedRootNetworkBehaviours>k__BackingField: []
   SerializedTransformProperties:
     Position: {x: 50, y: 0, z: 50}
@@ -2365,29 +2388,8 @@ MonoBehaviour:
   _teleportThreshold: 1
   <PrefabId>k__BackingField: 0
   <SpawnableCollectionId>k__BackingField: 0
-  <SceneId>k__BackingField: 0
+  <SceneId>k__BackingField: 3723988956
   <AssetPathHash>k__BackingField: 0
---- !u!65 &1162634455
-BoxCollider:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1162634450}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 1
-  m_ProvidesContacts: 0
-  m_Enabled: 1
-  serializedVersion: 3
-  m_Size: {x: 50, y: 50, z: 50}
-  m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &1204076224
 GameObject:
   m_ObjectHideFlags: 0
@@ -2788,10 +2790,10 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1580615188}
-  - component: {fileID: 1580615192}
-  - component: {fileID: 1580615191}
+  - component: {fileID: 1580615193}
   - component: {fileID: 1580615190}
   - component: {fileID: 1580615189}
+  - component: {fileID: 1580615194}
   m_Layer: 0
   m_Name: Sub Region D
   m_TagString: Untagged
@@ -2848,11 +2850,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _componentIndexCache: 1
-  _addedNetworkObject: {fileID: 1580615192}
-  _networkObjectCache: {fileID: 1580615192}
+  _addedNetworkObject: {fileID: 1580615194}
+  _networkObjectCache: {fileID: 1580615194}
   Parent: {fileID: 1757139385}
-  Children: []
-  NetworkCollider: {fileID: 0}
   Collider: {fileID: 0}
   Terrain: {fileID: 0}
   OnRegionEnter:
@@ -2860,7 +2860,7 @@ MonoBehaviour:
   OnRegionStay: []
   OnRegionExit: []
   GizmoColor: {r: 0, g: 1, b: 1, a: 1}
---- !u!114 &1580615191
+--- !u!114 &1580615193
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -2869,16 +2869,19 @@ MonoBehaviour:
   m_GameObject: {fileID: 1580615187}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4f977181495644345a4d0d821c31579f, type: 3}
+  m_Script: {fileID: 11500000, guid: 3dc97a8b9e628044e83004c93095c14d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   _componentIndexCache: 0
-  _addedNetworkObject: {fileID: 1580615192}
-  _networkObjectCache: {fileID: 1580615192}
+  _addedNetworkObject: {fileID: 1580615194}
+  _networkObjectCache: {fileID: 1580615194}
   _maximumSimultaneousHits: 16
   _historyDuration: 0.5
   _additionalSize: 0.1
---- !u!114 &1580615192
+  _layers:
+    serializedVersion: 2
+    m_Bits: 65
+--- !u!114 &1580615194
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -2894,9 +2897,9 @@ MonoBehaviour:
   <ComponentIndex>k__BackingField: 0
   <PredictedSpawn>k__BackingField: {fileID: 0}
   _networkBehaviours:
-  - {fileID: 1580615191}
+  - {fileID: 1580615193}
   - {fileID: 1580615190}
-  <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 1757139386}
+  <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 0}
   <NestedRootNetworkBehaviours>k__BackingField: []
   SerializedTransformProperties:
     Position: {x: 50, y: 0, z: -50}
@@ -2923,7 +2926,7 @@ MonoBehaviour:
   _teleportThreshold: 1
   <PrefabId>k__BackingField: 0
   <SpawnableCollectionId>k__BackingField: 0
-  <SceneId>k__BackingField: 0
+  <SceneId>k__BackingField: 3489603358
   <AssetPathHash>k__BackingField: 0
 --- !u!1 &1757139382
 GameObject:
@@ -2934,10 +2937,10 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1757139383}
-  - component: {fileID: 1757139387}
-  - component: {fileID: 1757139386}
+  - component: {fileID: 1757139388}
   - component: {fileID: 1757139385}
   - component: {fileID: 1757139384}
+  - component: {fileID: 1757139389}
   m_Layer: 0
   m_Name: Tutorial Regions
   m_TagString: Untagged
@@ -2994,15 +2997,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _componentIndexCache: 1
-  _addedNetworkObject: {fileID: 1757139387}
-  _networkObjectCache: {fileID: 1757139387}
+  _addedNetworkObject: {fileID: 1757139389}
+  _networkObjectCache: {fileID: 1757139389}
   Parent: {fileID: 0}
-  Children:
-  - {fileID: 1162634452}
-  - {fileID: 674862114}
-  - {fileID: 1856083143}
-  - {fileID: 1580615190}
-  NetworkCollider: {fileID: 0}
   Collider: {fileID: 0}
   Terrain: {fileID: 0}
   OnRegionEnter:
@@ -3011,7 +3008,7 @@ MonoBehaviour:
   OnRegionStay: []
   OnRegionExit: []
   GizmoColor: {r: 0, g: 1, b: 1, a: 1}
---- !u!114 &1757139386
+--- !u!114 &1757139388
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -3020,16 +3017,19 @@ MonoBehaviour:
   m_GameObject: {fileID: 1757139382}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4f977181495644345a4d0d821c31579f, type: 3}
+  m_Script: {fileID: 11500000, guid: 3dc97a8b9e628044e83004c93095c14d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   _componentIndexCache: 0
-  _addedNetworkObject: {fileID: 1757139387}
-  _networkObjectCache: {fileID: 1757139387}
+  _addedNetworkObject: {fileID: 1757139389}
+  _networkObjectCache: {fileID: 1757139389}
   _maximumSimultaneousHits: 16
   _historyDuration: 0.5
   _additionalSize: 0.1
---- !u!114 &1757139387
+  _layers:
+    serializedVersion: 2
+    m_Bits: 65
+--- !u!114 &1757139389
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -3045,7 +3045,7 @@ MonoBehaviour:
   <ComponentIndex>k__BackingField: 0
   <PredictedSpawn>k__BackingField: {fileID: 0}
   _networkBehaviours:
-  - {fileID: 1757139386}
+  - {fileID: 1757139388}
   - {fileID: 1757139385}
   <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 0}
   <NestedRootNetworkBehaviours>k__BackingField: []
@@ -3074,7 +3074,7 @@ MonoBehaviour:
   _teleportThreshold: 1
   <PrefabId>k__BackingField: 0
   <SpawnableCollectionId>k__BackingField: 0
-  <SceneId>k__BackingField: 0
+  <SceneId>k__BackingField: 3724475342
   <AssetPathHash>k__BackingField: 0
 --- !u!1 &1800892447
 GameObject:
@@ -3300,10 +3300,10 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1856083141}
-  - component: {fileID: 1856083145}
-  - component: {fileID: 1856083144}
+  - component: {fileID: 1856083146}
   - component: {fileID: 1856083143}
   - component: {fileID: 1856083142}
+  - component: {fileID: 1856083147}
   m_Layer: 0
   m_Name: Sub Region C
   m_TagString: Untagged
@@ -3360,11 +3360,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _componentIndexCache: 1
-  _addedNetworkObject: {fileID: 1856083145}
-  _networkObjectCache: {fileID: 1856083145}
+  _addedNetworkObject: {fileID: 1856083147}
+  _networkObjectCache: {fileID: 1856083147}
   Parent: {fileID: 1757139385}
-  Children: []
-  NetworkCollider: {fileID: 0}
   Collider: {fileID: 0}
   Terrain: {fileID: 0}
   OnRegionEnter:
@@ -3372,7 +3370,7 @@ MonoBehaviour:
   OnRegionStay: []
   OnRegionExit: []
   GizmoColor: {r: 0, g: 1, b: 1, a: 1}
---- !u!114 &1856083144
+--- !u!114 &1856083146
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -3381,16 +3379,19 @@ MonoBehaviour:
   m_GameObject: {fileID: 1856083140}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4f977181495644345a4d0d821c31579f, type: 3}
+  m_Script: {fileID: 11500000, guid: 3dc97a8b9e628044e83004c93095c14d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   _componentIndexCache: 0
-  _addedNetworkObject: {fileID: 1856083145}
-  _networkObjectCache: {fileID: 1856083145}
+  _addedNetworkObject: {fileID: 1856083147}
+  _networkObjectCache: {fileID: 1856083147}
   _maximumSimultaneousHits: 16
   _historyDuration: 0.5
   _additionalSize: 0.1
---- !u!114 &1856083145
+  _layers:
+    serializedVersion: 2
+    m_Bits: 65
+--- !u!114 &1856083147
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -3406,9 +3407,9 @@ MonoBehaviour:
   <ComponentIndex>k__BackingField: 0
   <PredictedSpawn>k__BackingField: {fileID: 0}
   _networkBehaviours:
-  - {fileID: 1856083144}
+  - {fileID: 1856083146}
   - {fileID: 1856083143}
-  <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 1757139386}
+  <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 0}
   <NestedRootNetworkBehaviours>k__BackingField: []
   SerializedTransformProperties:
     Position: {x: -50, y: 0, z: -50}
@@ -3435,7 +3436,7 @@ MonoBehaviour:
   _teleportThreshold: 1
   <PrefabId>k__BackingField: 0
   <SpawnableCollectionId>k__BackingField: 0
-  <SceneId>k__BackingField: 0
+  <SceneId>k__BackingField: 3707228093
   <AssetPathHash>k__BackingField: 0
 --- !u!1 &1915681912
 GameObject:

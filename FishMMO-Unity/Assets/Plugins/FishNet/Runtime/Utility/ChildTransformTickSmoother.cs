@@ -1,8 +1,8 @@
-﻿#if !PREDICTION_1
-using FishNet.Managing;
+﻿using FishNet.Managing;
 using FishNet.Managing.Timing;
 using FishNet.Utility.Extension;
 using GameKit.Dependencies.Utilities;
+using System;
 using System.Runtime.CompilerServices;
 using UnityEngine;
 using UnityEngine.Scripting;
@@ -111,18 +111,13 @@ namespace FishNet.Object.Prediction
         /// <summary>
         /// Amount of adaptive interpolation to use.
         /// </summary>
-        private AdaptiveInterpolationType _adaptiveInterpolation = AdaptiveInterpolationType.Low;
+        private AdaptiveInterpolationType _adaptiveInterpolation = AdaptiveInterpolationType.VeryLow;
         /// <summary>
         /// Updates the adaptiveInterpolation value.
         /// </summary>
         /// <param name="adaptiveInterpolation">New value.</param>
         public void SetAdaptiveInterpolation(AdaptiveInterpolationType adaptiveInterpolation)
         {
-            if (adaptiveInterpolation != AdaptiveInterpolationType.Off)
-            {
-                adaptiveInterpolation = AdaptiveInterpolationType.Off;
-                Debug.Log($"AdaptiveInterpolation has been changed to off at runtime while it's under development. This message may be ignored.");
-            }
             _adaptiveInterpolation = adaptiveInterpolation;
         }
         /// <summary>
@@ -165,13 +160,25 @@ namespace FishNet.Object.Prediction
         /// Last tick this was teleported on.
         /// </summary>
         private uint _teleportedTick = TimeManager.UNSET_TICK;
+        /// <summary>
+        /// Last local tick a reconcile callback was received.
+        /// </summary>
+        private uint _lastReconcileTick = TimeManager.UNSET_TICK;
+        /// <summary>
+        /// Ticks passed since the last reconcile.
+        /// </summary>
+        private uint _reconcileInterval = RECONCILE_INTERVAL_DEFAULT;
         #endregion
 
         #region Const.
         /// <summary>
+        /// Default expected interval for reconciles.
+        /// </summary>
+        private const int RECONCILE_INTERVAL_DEFAULT = 1;
+        /// <summary>
         /// Maximum allowed entries to be queued over the interpolation amount.
         /// </summary>
-        private int MAXIMUM_QUEUED_OVER_INTERPOLATION = 3;
+        private const int MAXIMUM_QUEUED_OVER_INTERPOLATION = 3;
         #endregion
 
         [Preserve]
@@ -236,32 +243,39 @@ namespace FishNet.Object.Prediction
                         //Not enough data to calculate; guestimate. This should only happen once.
                         float fRtt = (float)tm.RoundTripTime;
                         interpolation = (fRtt / 10f);
-
                     }
                     else
                     {
-                        interpolation = (tm.LocalTick - clientStateTick) + _networkObject.PredictionManager.StateInterpolation;
+                        interpolation = (tm.LocalTick - clientStateTick);
                     }
 
-                    switch (_adaptiveInterpolation)
+                    interpolation *= GetInterpolationMultiplier();
+                    interpolation = Mathf.Clamp(interpolation, 2f, (float)byte.MaxValue);
+                    _interpolation = (byte)Mathf.CeilToInt(interpolation);
+
+                    float GetInterpolationMultiplier()
                     {
-                        case AdaptiveInterpolationType.VeryLow:
-                            interpolation *= 0.25f;
-                            break;
-                        case AdaptiveInterpolationType.Low:
-                            interpolation *= 0.375f;
-                            break;
-                        case AdaptiveInterpolationType.Medium:
-                            interpolation *= 0.5f;
-                            break;
-                        case AdaptiveInterpolationType.High:
-                            interpolation *= 0.75f;
-                            break;
+                        switch (_adaptiveInterpolation)
+                        {
+                            case AdaptiveInterpolationType.ExtremelyLow:
+                                return 0.2f;
+                            case AdaptiveInterpolationType.VeryLow:
+                                return 0.45f;
+                            case AdaptiveInterpolationType.Low:
+                                return 0.8f;
+                            case AdaptiveInterpolationType.Moderate:
+                                return 1.05f;
+                            case AdaptiveInterpolationType.High:
+                                return 1.25f;
+                            case AdaptiveInterpolationType.VeryHigh:
+                                return 1.5f;
                             //Make no changes for maximum.
+                            default:
+                                _networkObject.NetworkManager.LogError($"AdaptiveInterpolationType {_adaptiveInterpolation} is unhandled.");
+                                return 1f;
+                        }
                     }
 
-                    interpolation = Mathf.Clamp(interpolation, 1f, (float)byte.MaxValue);
-                    _interpolation = (byte)Mathf.RoundToInt(interpolation);
                 }
             }
         }
@@ -294,7 +308,7 @@ namespace FishNet.Object.Prediction
             if (!CanSmooth())
                 return;
 
-            if (_useAdaptiveInterpolation)
+            if (UseAdaptiveMoveRates())
                 AdaptiveMoveToTarget(Time.deltaTime);
             else
                 BasicMoveToTarget(Time.deltaTime);
@@ -310,8 +324,7 @@ namespace FishNet.Object.Prediction
 
             _preTicked = true;
 
-            _ownerOnPretick = _networkObject.IsOwner;
-            if (_useAdaptiveInterpolation)
+            if (UseAdaptiveMoveRates())
                 DiscardExcessiveTransformPropertiesQueue();
             else
                 ClearTransformPropertiesQueue();
@@ -325,7 +338,14 @@ namespace FishNet.Object.Prediction
         /// </summary>
         public void OnPreReconcile()
         {
-            UpdateInterpolation(_networkObject.PredictionManager.ClientStateTick);
+            if (!_networkObject.IsObjectReconciling)
+                return;
+
+            uint clientStateTick = _networkObject.PredictionManager.ClientStateTick;
+            _reconcileInterval = (clientStateTick - _lastReconcileTick);
+            _lastReconcileTick = clientStateTick;
+
+            UpdateInterpolation(clientStateTick);
         }
 
         /// <summary>
@@ -334,11 +354,10 @@ namespace FishNet.Object.Prediction
         /// <param name="clientTick">Replay tick for the local client.</param>
         public void OnPostReplay(uint clientTick)
         {
+            if (!UseAdaptiveMoveRates())
+                return;
             if (_transformProperties.Count == 0)
                 return;
-            if (!_useAdaptiveInterpolation)
-                return;
-
             if (clientTick <= _teleportedTick)
                 return;
             uint firstTick = _transformProperties.Peek().Tick;
@@ -363,13 +382,15 @@ namespace FishNet.Object.Prediction
             //If preticked then previous transform values are known.
             if (_preTicked)
             {
-                if (_useAdaptiveInterpolation)
+                if (UseAdaptiveMoveRates())
                     DiscardExcessiveTransformPropertiesQueue();
                 else
                     ClearTransformPropertiesQueue();
+
                 //Only needs to be put to pretick position if not detached.
                 if (!_detach)
                     _graphicalObject.SetWorldProperties(_gfxPreSimulateWorldValues);
+
                 AddTransformProperties(clientTick);
             }
             //If did not pretick then the only thing we can do is snap to instantiated values.
@@ -416,7 +437,8 @@ namespace FishNet.Object.Prediction
                 return;
             }
 
-            int dequeueCount = (_transformProperties.Count - (_interpolation + MAXIMUM_QUEUED_OVER_INTERPOLATION));
+            int propertiesCount = _transformProperties.Count;
+            int dequeueCount = (propertiesCount - (_interpolation + MAXIMUM_QUEUED_OVER_INTERPOLATION));
             //If there are entries to dequeue.
             if (dequeueCount > 0)
             {
@@ -424,26 +446,24 @@ namespace FishNet.Object.Prediction
                 for (int i = 0; i < dequeueCount; i++)
                     tpp = _transformProperties.Dequeue();
 
-                SetAdaptiveMoveRates(tpp.Properties, _transformProperties[0].Properties);
+                SetMoveRates(tpp.Properties);
             }
         }
 
         /// <summary>
         /// Adds a new transform properties and sets move rates if needed.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void AddTransformProperties(uint tick)
         {
             TickTransformProperties tpp = new TickTransformProperties(tick, GetNetworkObjectWorldPropertiesWithOffset());
-
             _transformProperties.Enqueue(tpp);
+
             //If first entry then set move rates.
             if (_transformProperties.Count == 1)
             {
                 TransformProperties gfxWorldProperties = _graphicalObject.GetWorldProperties();
-                if (_useAdaptiveInterpolation)
-                    SetAdaptiveMoveRates(gfxWorldProperties, tpp.Properties);
-                else
-                    SetBasicMoveRates(gfxWorldProperties, tpp.Properties);
+                SetMoveRates(gfxWorldProperties);
             }
         }
 
@@ -460,7 +480,14 @@ namespace FishNet.Object.Prediction
             //Replace with new data.
             if (index < _transformProperties.Count)
             {
-                _transformProperties[index] = new TickTransformProperties(tick, _networkObject.transform, _graphicalObject.localScale);
+                if (tick != _transformProperties[index].Tick)
+                {
+                    //Should not be possible.
+                }
+                else
+                {
+                    _transformProperties[index] = new TickTransformProperties(tick, _networkObject.transform, _graphicalObject.localScale);
+                }
             }
             else
             {
@@ -487,11 +514,54 @@ namespace FishNet.Object.Prediction
         }
 
         /// <summary>
+        /// Returns if to use adaptive move rates or not. 
+        /// This is typically true when UseAdaptiveInterpolation is true, but some conditions can force basic move rates to be used.
+        /// </summary>
+        /// <returns></returns>
+        private bool UseAdaptiveMoveRates()
+        {
+            if (!_useAdaptiveInterpolation)
+                return false;
+            if (_useAdaptiveInterpolation && _reconcileInterval == 1)
+                return true;
+
+            return false;
+        }
+
+        /// <summary>
+        /// Updates move rates for adaptive or basic movement.
+        /// </summary>
+        /// <param name="prevValues"></param>
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void SetMoveRates(TransformProperties prevValues)
+        {
+            if (UseAdaptiveMoveRates())
+                SetAdaptiveMoveRates(prevValues);
+            else
+                SetBasicMoveRates(prevValues);
+        }
+
+        /// <summary>
         /// Sets Position and Rotation move rates to reach Target datas.
         /// </summary>
-        private void SetBasicMoveRates(TransformProperties prevValues, TransformProperties nextValues)
+        private void SetBasicMoveRates(TransformProperties prevValues)
         {
+            int propertiesCount = _transformProperties.Count;
+            if (propertiesCount == 0)
+            {
+                _moveRates = new MoveRates(MoveRatesCls.UNSET_VALUE);
+                return;
+            }
+
+            TransformProperties nextValues = _transformProperties[propertiesCount - 1].Properties;
+
+            /* If using adaptive interpolation then set the interpolation to half of
+             * the clients ping. Otherwise use whatever interpolation was calculated. */
             byte interpolation = _interpolation;
+            if (interpolation > 1 && _useAdaptiveInterpolation)
+                interpolation /= 2;
+
             float duration = (_tickDelta * interpolation);
             /* If interpolation is 1 then add on a tiny amount
              * of more time to compensate for frame time, so that
@@ -507,16 +577,20 @@ namespace FishNet.Object.Prediction
 
 
         /// <summary>
-        /// Sets Position and Rotation move rates to reach Target datas.
+        /// Sets new rates based on next entries in transformProperties queue, against a supplied TransformProperties.
         /// </summary>
-        private void SetAdaptiveMoveRates(TransformProperties prevValues, TransformProperties nextValues)
+        private void SetAdaptiveMoveRates(in TransformProperties prevValues)
         {
+            if (_transformProperties.Count == 0)
+            {
+                _moveRates = new MoveRates(MoveRatesCls.UNSET_VALUE);
+                return;
+            }
+
+            TransformProperties nextValues = _transformProperties.Peek().Properties;
             float duration = _tickDelta;
-            /* If interpolation is 1 then add on a tiny amount
-             * of more time to compensate for frame time, so that
-             * the smoothing does not complete before the next tick,
-             * as this would result in jitter. */
             float teleportT = _teleportThreshold;
+
             _moveRates = MoveRates.GetMoveRates(prevValues, nextValues, duration, teleportT);
             _moveRates.TimeRemaining = duration;
 
@@ -560,9 +634,24 @@ namespace FishNet.Object.Prediction
             TransformPropertiesFlag smoothedProperties = (_ownerOnPretick) ? _ownerSmoothedProperties : _spectatorSmoothedProperties;
             _moveRates.MoveWorldToTarget(_graphicalObject, ttp.Properties, smoothedProperties, delta);
 
+            float tRemaining = _moveRates.TimeRemaining;
             //if TimeLeft is <= 0f then transform should be at goal.
-            if (_moveRates.TimeRemaining <= 0f)
-                ClearTransformPropertiesQueue();
+            if (tRemaining <= 0f)
+            {
+                //If there are entries left then setup for the next.
+                if (_transformProperties.Count > 0)
+                {
+                    SetBasicMoveRates(ttp.Properties);
+                    //If delta is negative then call move again with abs.
+                    if (tRemaining < 0f)
+                        BasicMoveToTarget(Mathf.Abs(tRemaining));
+                }
+                //No remaining, set to snap.
+                else
+                {
+                    ClearTransformPropertiesQueue();
+                }
+            }
         }
 
         /// <summary>
@@ -583,6 +672,7 @@ namespace FishNet.Object.Prediction
             TickTransformProperties ttp = _transformProperties.Peek();
             TransformPropertiesFlag smoothedProperties = (_ownerOnPretick) ? _ownerSmoothedProperties : _spectatorSmoothedProperties;
             _moveRates.MoveWorldToTarget(_graphicalObject, ttp.Properties, smoothedProperties, (delta * _movementMultiplier));
+
             float tRemaining = _moveRates.TimeRemaining;
             //if TimeLeft is <= 0f then transform is at goal. Grab a new goal if possible.
             if (tRemaining <= 0f)
@@ -593,7 +683,7 @@ namespace FishNet.Object.Prediction
                 //If there are entries left then setup for the next.
                 if (_transformProperties.Count > 0)
                 {
-                    SetAdaptiveMoveRates(ttp.Properties, _transformProperties.Peek().Properties);
+                    SetAdaptiveMoveRates(ttp.Properties);
                     //If delta is negative then call move again with abs.
                     if (tRemaining < 0f)
                         AdaptiveMoveToTarget(Mathf.Abs(tRemaining));
@@ -611,7 +701,6 @@ namespace FishNet.Object.Prediction
             if (!_initialized)
                 return;
 
-            _networkObject = null;
             if (_graphicalObject != null)
             {
                 if (_networkObject != null)
@@ -627,7 +716,10 @@ namespace FishNet.Object.Prediction
                 }
             }
 
+            _networkObject = null;
             _teleportedTick = TimeManager.UNSET_TICK;
+            _lastReconcileTick = TimeManager.UNSET_TICK;
+            _reconcileInterval = RECONCILE_INTERVAL_DEFAULT;
             _movementMultiplier = 1f;
             CollectionCaches<TickTransformProperties>.StoreAndDefault(ref _transformProperties);
             _teleportThreshold = default;
@@ -643,4 +735,3 @@ namespace FishNet.Object.Prediction
     }
 
 }
-#endif

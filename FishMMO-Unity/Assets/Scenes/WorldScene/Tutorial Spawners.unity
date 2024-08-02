@@ -1557,7 +1557,7 @@ MonoBehaviour:
   <PredictedSpawn>k__BackingField: {fileID: 0}
   _networkBehaviours:
   - {fileID: 674862117}
-  <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 1757139386}
+  <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 0}
   <NestedRootNetworkBehaviours>k__BackingField: []
   SerializedTransformProperties:
     Position: {x: -50, y: 0, z: 50}
@@ -2253,7 +2253,7 @@ MonoBehaviour:
   <PredictedSpawn>k__BackingField: {fileID: 0}
   _networkBehaviours:
   - {fileID: 1162634456}
-  <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 1757139386}
+  <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 0}
   <NestedRootNetworkBehaviours>k__BackingField: []
   SerializedTransformProperties:
     Position: {x: 50, y: 0, z: 50}
@@ -2752,7 +2752,7 @@ MonoBehaviour:
   <PredictedSpawn>k__BackingField: {fileID: 0}
   _networkBehaviours:
   - {fileID: 1580615193}
-  <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 1757139386}
+  <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 0}
   <NestedRootNetworkBehaviours>k__BackingField: []
   SerializedTransformProperties:
     Position: {x: 50, y: 0, z: -50}
@@ -2820,9 +2820,9 @@ GameObject:
   m_Component:
   - component: {fileID: 1757139383}
   - component: {fileID: 1757139387}
-  - component: {fileID: 1757139386}
   - component: {fileID: 1757139385}
   - component: {fileID: 1757139384}
+  - component: {fileID: 1757139388}
   m_Layer: 0
   m_Name: Tutorial Spawners
   m_TagString: Untagged
@@ -2887,7 +2887,7 @@ MonoBehaviour:
   - {fileID: 0}
   - {fileID: 0}
   - {fileID: 0}
-  NetworkCollider: {fileID: 0}
+  NetworkTrigger: {fileID: 0}
   Collider: {fileID: 0}
   Terrain: {fileID: 0}
   OnRegionEnter:
@@ -2896,24 +2896,6 @@ MonoBehaviour:
   OnRegionStay: []
   OnRegionExit: []
   GizmoColor: {r: 0, g: 1, b: 1, a: 1}
---- !u!114 &1757139386
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1757139382}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4f977181495644345a4d0d821c31579f, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  _componentIndexCache: 0
-  _addedNetworkObject: {fileID: 1757139387}
-  _networkObjectCache: {fileID: 1757139387}
-  _maximumSimultaneousHits: 16
-  _historyDuration: 0.5
-  _additionalSize: 0.1
 --- !u!114 &1757139387
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2930,8 +2912,9 @@ MonoBehaviour:
   <ComponentIndex>k__BackingField: 0
   <PredictedSpawn>k__BackingField: {fileID: 0}
   _networkBehaviours:
-  - {fileID: 1757139386}
-  - {fileID: 1757139385}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
   <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 0}
   <NestedRootNetworkBehaviours>k__BackingField: []
   SerializedTransformProperties:
@@ -2961,6 +2944,27 @@ MonoBehaviour:
   <SpawnableCollectionId>k__BackingField: 0
   <SceneId>k__BackingField: 4174978684
   <AssetPathHash>k__BackingField: 0
+--- !u!114 &1757139388
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1757139382}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3dc97a8b9e628044e83004c93095c14d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 1757139387}
+  _networkObjectCache: {fileID: 0}
+  _maximumSimultaneousHits: 16
+  _historyDuration: 0.5
+  _additionalSize: 0.1
+  _layers:
+    serializedVersion: 2
+    m_Bits: 65
 --- !u!1 &1800892447
 GameObject:
   m_ObjectHideFlags: 0
@@ -3226,7 +3230,7 @@ MonoBehaviour:
   <PredictedSpawn>k__BackingField: {fileID: 0}
   _networkBehaviours:
   - {fileID: 1856083146}
-  <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 1757139386}
+  <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 0}
   <NestedRootNetworkBehaviours>k__BackingField: []
   SerializedTransformProperties:
     Position: {x: -50, y: 0, z: -50}

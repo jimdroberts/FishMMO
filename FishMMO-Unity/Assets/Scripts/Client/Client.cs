@@ -195,6 +195,7 @@ namespace FishMMO.Client
 			ICharacterDamageController.OnHealed += OnDisplayHeal;
 			IAchievementController.OnCompleteAchievement += OnCompleteAchievement;
 
+			RegionNameLabel = UIAdvancedLabel.Create("", FontStyle.Normal, null, 0, Color.magenta, 0, false, false, Vector2.zero) as UIAdvancedLabel;
 			RegionDisplayNameAction.OnDisplay2DLabel += RegionDisplayNameAction_OnDisplay2DLabel;
 			RegionChangeFogAction.OnChangeFog += RegionChangeFogAction_OnChangeFog;
 #endif
@@ -770,22 +771,14 @@ namespace FishMMO.Client
 		#endregion
 
 		#region RegionNameDisplay
-		private UIAdvancedLabel RegionNameLabel = null;
-
-		public void UIAdvancedLabel_OnDestroy()
-		{
-			RegionNameLabel = null;
-		}
+		private UIAdvancedLabel RegionNameLabel;
 
 		public void RegionDisplayNameAction_OnDisplay2DLabel(string text, FontStyle style, Font font, int fontSize, Color color, float lifeTime, bool fadeColor, bool increaseY, Vector2 pixelOffset)
 		{
 			if (RegionNameLabel != null)
 			{
-				RegionNameLabel.Initialize(text, style, font, fontSize, color, lifeTime, fadeColor, increaseY, pixelOffset, UIAdvancedLabel_OnDestroy);
-			}
-			else
-			{
-				RegionNameLabel = UIAdvancedLabel.Create(text, style, font, fontSize, color, lifeTime, fadeColor, increaseY, pixelOffset, UIAdvancedLabel_OnDestroy) as UIAdvancedLabel;
+				RegionNameLabel.gameObject.SetActive(true);
+				RegionNameLabel.Initialize(text, style, font, fontSize, color, lifeTime, fadeColor, increaseY, pixelOffset);
 			}
 		}
 		#endregion

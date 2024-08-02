@@ -9,7 +9,7 @@ namespace FishMMO.Shared
 		public int minSpawns = 0;
 		public int maxSpawns = 1;
 
-		public override void Invoke(IPlayerCharacter character, Region region)
+		public override void Invoke(IPlayerCharacter character, Region region, bool isReconciling)
 		{
 			// spawn things
 		}

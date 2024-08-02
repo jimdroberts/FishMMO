@@ -13,8 +13,13 @@ namespace FishMMO.Shared
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static Vector3 RandomOnUnitSphere(System.Random random)
+		public static Vector3 RandomOnUnitSphere(System.Random random = null)
 		{
+			if (random == null)
+			{
+				random = new System.Random();
+			}
+
 			// Generate random spherical coordinates
 			double theta = random.NextDouble() * 2 * Math.PI;  // azimuthal angle (0 to 2pi)
 			double phi = Math.Acos(2 * random.NextDouble() - 1);  // polar angle (0 to pi)

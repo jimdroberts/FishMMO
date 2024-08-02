@@ -17,6 +17,8 @@ namespace FishMMO.Client
 		private List<CharacterDetailsButton> characterList = new List<CharacterDetailsButton>();
 		private CharacterDetailsButton selectedCharacter;
 
+		private Color previousColor;
+
 		public override void OnStarting()
 		{
 			Client.NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
@@ -149,7 +151,7 @@ namespace FishMMO.Client
 			CharacterDetailsButton prevButton = selectedCharacter;
 			if (prevButton != null)
 			{
-				prevButton.SetLabelColors(Color.black);
+				prevButton.ResetLabelColor();
 			}
 
 			selectedCharacter = button;

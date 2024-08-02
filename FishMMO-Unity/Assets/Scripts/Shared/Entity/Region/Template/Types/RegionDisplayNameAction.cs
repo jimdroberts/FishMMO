@@ -16,15 +16,19 @@ namespace FishMMO.Shared
 		public bool FadeColor;
 		public bool IncreaseY;
 
-		public override void Invoke(IPlayerCharacter character, Region region)
+		public override void Invoke(IPlayerCharacter character, Region region, bool isReconciling)
 		{
 			if (region == null ||
-				character == null || !character.NetworkObject.IsOwner)
+				character == null ||
+				!character.NetworkObject.IsOwner)
 			{
 				return;
 			}
 
-			OnDisplay2DLabel?.Invoke(region.Name, Style, Font, FontSize, DisplayColor, LifeTime, FadeColor, IncreaseY, new Vector2(0.0f, Screen.height * 0.2f));
+			if (!isReconciling)
+			{
+				OnDisplay2DLabel?.Invoke(region.Name, Style, Font, FontSize, DisplayColor, LifeTime, FadeColor, IncreaseY, new Vector2(0.0f, Screen.height * 0.2f));
+			}
 		}
 	}
 }

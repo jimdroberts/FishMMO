@@ -22,6 +22,7 @@ namespace FishMMO.Client
 			cb.normalColor = primaryColor;
 			cb.pressedColor = secondaryColor;
 			cb.highlightedColor = highlightColor;
+			cb.selectedColor = secondaryColor;
 			inputField.colors = cb;
 		}
 	}

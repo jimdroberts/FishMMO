@@ -170,16 +170,31 @@ namespace FishMMO.Client
 			}
 		}
 
-		public static bool ControlHasFocus()
+		public static bool ControlHasFocus(UIControl ignore = null)
 		{
-			if (EventSystem.current.currentSelectedGameObject != null)
-			{
-				return true;
-			}
 			foreach (UIControl control in controls.Values)
 			{
+				if (ignore != null &&
+					control.Name.Equals(ignore.Name))
+				{
+					continue;
+				}
 				if (control.Visible &&
 					control.HasFocus)
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		public static bool InputControlHasFocus(string name)
+		{
+			if (controls.TryGetValue(name, out UIControl result))
+			{
+				if (result.Visible &&
+					result.InputField != null &&
+					result.InputField.isFocused)
 				{
 					return true;
 				}

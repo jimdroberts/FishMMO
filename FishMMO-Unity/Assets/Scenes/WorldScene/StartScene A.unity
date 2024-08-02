@@ -845,7 +845,7 @@ MonoBehaviour:
   _networkObjectCache: {fileID: 788347306}
   Parent: {fileID: 0}
   Children: []
-  NetworkCollider: {fileID: 0}
+  NetworkTrigger: {fileID: 0}
   Collider: {fileID: 0}
   Terrain: {fileID: 1011847574}
   OnRegionEnter:
@@ -871,7 +871,8 @@ MonoBehaviour:
   <PredictedSpawn>k__BackingField: {fileID: 0}
   _networkBehaviours:
   - {fileID: 788347304}
-  - {fileID: 788347307}
+  - {fileID: 0}
+  - {fileID: 0}
   <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 0}
   <NestedRootNetworkBehaviours>k__BackingField: []
   SerializedTransformProperties:
@@ -910,15 +911,18 @@ MonoBehaviour:
   m_GameObject: {fileID: 788347301}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4f977181495644345a4d0d821c31579f, type: 3}
+  m_Script: {fileID: 11500000, guid: 3dc97a8b9e628044e83004c93095c14d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 1
+  _componentIndexCache: 255
   _addedNetworkObject: {fileID: 788347306}
-  _networkObjectCache: {fileID: 788347306}
+  _networkObjectCache: {fileID: 0}
   _maximumSimultaneousHits: 16
   _historyDuration: 0.5
   _additionalSize: 0.1
+  _layers:
+    serializedVersion: 2
+    m_Bits: 65
 --- !u!1001 &799798540
 PrefabInstance:
   m_ObjectHideFlags: 0

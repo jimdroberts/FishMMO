@@ -44,7 +44,7 @@ namespace FishMMO.Shared
 		/// <param name="collectionId">CollectionId of the object to return.</param>
 		/// <param name="asServer">True if being called on the server side.</param>
 		/// <returns></returns>
-		public override NetworkObject RetrieveObject(int prefabId, ushort collectionId, Transform parent = null, Vector3? nullableLocalPosition = null, Quaternion? nullableLocalRotation = null, Vector3? nullableLocalScale = null, bool makeActive = true, bool asServer = true)
+		public override NetworkObject RetrieveObject(int prefabId, ushort collectionId, ObjectPoolRetrieveOption options, Transform parent = null, Vector3? nullableLocalPosition = null, Quaternion? nullableLocalRotation = null, Vector3? nullableLocalScale = null, bool asServer = true)
 		{
 			if (!_enabled)
 				return GetFromInstantiate();

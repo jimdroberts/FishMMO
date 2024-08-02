@@ -7,10 +7,11 @@ namespace FishMMO.Shared
 	{
 		public Material Material;
 
-		public override void Invoke(IPlayerCharacter character, Region region)
+		public override void Invoke(IPlayerCharacter character, Region region, bool isReconciling)
 		{
 #if !UNITY_SERVER
-			if (!character.NetworkObject.IsOwner)
+			if (!character.NetworkObject.IsOwner ||
+				isReconciling)
 			{
 				return;
 			}

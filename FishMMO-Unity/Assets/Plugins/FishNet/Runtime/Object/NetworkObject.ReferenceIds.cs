@@ -33,6 +33,11 @@ namespace FishNet.Object
         [field: SerializeField, HideInInspector]
         internal ulong SceneId { get; private set; }
         /// <summary>
+        /// Sets SceneId value. This is not synchronized automatically.
+        /// </summary>
+        /// <param name="sceneId"></param>
+        public void SetSceneId(ulong sceneId) => SceneId = sceneId;
+        /// <summary>
         /// Hash for the path which this asset resides. This value is set during edit time.
         /// </summary> 
         [field: SerializeField, HideInInspector]

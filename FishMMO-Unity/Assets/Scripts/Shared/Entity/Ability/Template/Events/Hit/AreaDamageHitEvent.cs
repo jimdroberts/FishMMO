@@ -25,7 +25,7 @@ namespace FishMMO.Shared
 			PhysicsScene physicsScene = attacker.GameObject.scene.GetPhysicsScene();
 
 			int overlapCount = physicsScene.OverlapSphere(
-								hitTarget.Target.transform.position,
+								hitTarget.Target.position,
 								Radius,
 								Hits,
 								CollidableLayers,
