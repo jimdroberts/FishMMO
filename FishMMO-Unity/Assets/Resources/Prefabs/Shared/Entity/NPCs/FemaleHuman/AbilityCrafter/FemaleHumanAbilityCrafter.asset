@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b9c5263a711f0714a8ae02e2baa36340, type: 3}
   m_Name: FemaleHumanAbilityCrafter
   m_EditorClassIdentifier: 
-  NetworkObject: {fileID: 6349228138187238843, guid: 2ce4d12b80ddd9f4ca8a389e6c91c7e3,
+  NetworkObject: {fileID: -4468559157413045786, guid: 2ce4d12b80ddd9f4ca8a389e6c91c7e3,
     type: 3}
   MinimumRespawnTime: 15
   MaximumRespawnTime: 30

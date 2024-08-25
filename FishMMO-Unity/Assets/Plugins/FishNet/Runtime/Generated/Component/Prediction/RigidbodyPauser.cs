@@ -53,7 +53,7 @@ namespace FishNet.Component.Prediction
 
             public void Update(Rigidbody rb)
             {
-                Velocity = rb.velocity;
+                Velocity = rb.linearVelocity;
                 AngularVelocity = rb.angularVelocity;
                 IsKinematic = rb.isKinematic;
                 DetectCollisions = rb.detectCollisions;
@@ -102,7 +102,7 @@ namespace FishNet.Component.Prediction
 
             public void Update(Rigidbody2D rb)
             {
-                Velocity = rb.velocity;
+                Velocity = rb.linearVelocity;
                 AngularVelocity = rb.angularVelocity;
                 Simulated = rb.simulated;
                 IsKinematic = rb.isKinematic;
@@ -317,7 +317,7 @@ namespace FishNet.Component.Prediction
                     rb.collisionDetectionMode = rbData.CollisionDetectionMode;
                     if (!rb.isKinematic)
                     {
-                        rb.velocity = rbData.Velocity;
+                        rb.linearVelocity = rbData.Velocity;
                         rb.angularVelocity = rbData.AngularVelocity;
                     }
                     return true;
@@ -348,7 +348,7 @@ namespace FishNet.Component.Prediction
                     rb.collisionDetectionMode = rbData.CollisionDetectionMode;
                     if (!rb.isKinematic)
                     {
-                        rb.velocity = rbData.Velocity;
+                        rb.linearVelocity = rbData.Velocity;
                         rb.angularVelocity = rbData.AngularVelocity;
                     }
                     return true;

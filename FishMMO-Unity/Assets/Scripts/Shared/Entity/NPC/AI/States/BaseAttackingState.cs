@@ -18,7 +18,7 @@ namespace FishMMO.Shared
 			controller.Target = null;
 		}
 
-		public override void Update(AIController controller)
+		public override void UpdateState(AIController controller)
 		{
 			if (controller.Target == null)
 			{

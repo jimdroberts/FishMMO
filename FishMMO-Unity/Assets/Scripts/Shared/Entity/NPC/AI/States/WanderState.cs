@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using UnityEngine.AI;
 
 namespace FishMMO.Shared
 {
@@ -18,7 +19,7 @@ namespace FishMMO.Shared
 			// Cleanup if needed
 		}
 
-		public override void Update(AIController controller)
+		public override void UpdateState(AIController controller)
 		{
 			// Check for nearby enemies
 			if (SweepForEnemies(controller, out List<ICharacter> enemies))
@@ -28,7 +29,12 @@ namespace FishMMO.Shared
 			}
 
 			// Otherwise check if we should pick a new wander destination
-			if (!controller.Agent.pathPending &&
+			if (controller.Agent.pathStatus == NavMeshPathStatus.PathInvalid)
+			{
+				// Find a new destination if the current path is invalid
+				controller.SetRandomHomeDestination(WanderRadius);
+			}
+			else if (!controller.Agent.pathPending &&
 				controller.Agent.remainingDistance < 1.0f)
 			{
 				controller.SetRandomHomeDestination(WanderRadius);

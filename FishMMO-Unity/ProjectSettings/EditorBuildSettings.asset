@@ -18,12 +18,22 @@ EditorBuildSettings:
     path: Assets/Scenes/Bootstraps/SceneServer.unity
     guid: 7e1b8e5abbda71a4b9f84cee5252b68c
   - enabled: 1
-    path: Assets/Scenes/WorldScene/Crushbone.unity
+    path: Assets/Scenes/WorldScene/Dungeon.unity
     guid: 4421ff33e86120247a8ae615ef06f2c7
   - enabled: 1
-    path: Assets/Scenes/WorldScene/Felwithe.unity
+    path: Assets/Scenes/WorldScene/StartScene A.unity
     guid: e8a5917e2e784024a83eee958f6f9689
   - enabled: 1
-    path: Assets/Scenes/WorldScene/Greater Faydark.unity
+    path: Assets/Scenes/WorldScene/StartScene B.unity
     guid: 3a3ad1e67809ba94c984635c5d313682
+  - enabled: 1
+    path: Assets/Scenes/WorldScene/Tutorial Regions.unity
+    guid: 65c498cad91e50048b976bfa2658ff29
+  - enabled: 1
+    path: Assets/Scenes/WorldScene/Tutorial Spawners.unity
+    guid: 7f7ae0a10fc88dd4a954d635460d9ca1
+  - enabled: 1
+    path: Assets/Scenes/WorldScene/Tutorial SpawnPoints.unity
+    guid: b6a7b407afcf0a14e9b034d20ed554c8
   m_configObjects: {}
+  m_UseUCBPForAssetBundles: 0

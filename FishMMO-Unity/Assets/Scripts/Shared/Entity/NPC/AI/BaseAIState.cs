@@ -21,7 +21,7 @@ namespace FishMMO.Shared
 
 		public abstract void Enter(AIController controller);
 		public abstract void Exit(AIController controller);
-		public abstract void Update(AIController controller);
+		public abstract void UpdateState(AIController controller);
 
 		/// <summary>
 		/// Implement your line of sight logic here.

@@ -14,7 +14,7 @@ namespace FishMMO.Shared
 			// Cleanup if needed
 		}
 
-		public override void Update(AIController controller)
+		public override void UpdateState(AIController controller)
 		{
 			// Check for nearby enemies
 			if (SweepForEnemies(controller, out List<ICharacter> enemies))

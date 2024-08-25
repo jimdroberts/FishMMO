@@ -1,6 +1,5 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using System;
 using System.Runtime.CompilerServices;
 
 #if UNITY_EDITOR
@@ -21,8 +20,8 @@ namespace FishMMO.Server
 
 		void Start()
 		{
-#if !UNITY_EDITOR
-			string[] args = Environment.GetCommandLineArgs();
+#if !UNITY_EDITOR && !UNITY_EDITOR_LINUX
+			string[] args = System.Environment.GetCommandLineArgs();
 			if (args == null || args.Length < 2)
 			{
 #endif

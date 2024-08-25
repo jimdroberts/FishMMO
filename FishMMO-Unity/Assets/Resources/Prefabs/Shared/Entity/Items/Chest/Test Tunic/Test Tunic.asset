@@ -17,7 +17,7 @@ MonoBehaviour:
   MaxStackSize: 1
   Price: 0
   IconPools: 
-  icon: {fileID: 21300000, guid: caa516cdb721dd143bbc8000ca78d50a, type: 3}
+  icon: {fileID: 21300000, guid: 66305a19e3614694f868c75a982e6b68, type: 3}
   Mesh: {fileID: 0}
   Slot: 1
   MaxItemAttributes: 0

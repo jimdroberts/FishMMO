@@ -6,7 +6,6 @@ using UnityEngine;
 
 namespace FishMMO.Shared
 {
-	[RequireComponent(typeof(NetworkObject))]
 	public abstract class Interactable : NetworkBehaviour, IInteractable, ISpawnable
 	{
 		private const double INTERACT_RATE_LIMIT = 60.0f;

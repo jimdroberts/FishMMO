@@ -184,6 +184,9 @@ start Scene.exe SCENE";
 				return;
 			}
 
+			// Ensure all assets are included
+        	AssetDatabase.Refresh();
+
 			// Get the original active build info
 			BuildTargetGroup originalGroup = EditorUserBuildSettings.selectedBuildTargetGroup;
 			BuildTarget originalBuildTarget = EditorUserBuildSettings.activeBuildTarget;
@@ -244,89 +247,160 @@ start Scene.exe SCENE";
 			folderName = folderName.Trim();
 			string buildPath = Path.Combine(rootPath, folderName);
 
-			// Build the project
-			BuildReport report = BuildPipeline.BuildPlayer(new BuildPlayerOptions()
+			try
 			{
-				locationPathName = Path.Combine(buildPath, executableName + ".exe"),
-				options = buildOptions,
-				scenes = scenes,
-				subtarget = (int)subTarget,
-				target = buildTarget,
-				targetGroup = targetGroup,
-			});
-
-			// Check the results of the build
-			BuildSummary summary = report.summary;
-			if (summary.result == BuildResult.Succeeded)
-			{
-				Debug.Log($"Build succeeded: {summary.totalSize} bytes {DateTime.UtcNow}");
-
-				string root = Directory.GetParent(Directory.GetCurrentDirectory()).FullName;
-
-				// Copy the configuration files if it's a server build
-				if (subTarget == StandaloneBuildSubtarget.Server)
+				BuildPlayerOptions options = new BuildPlayerOptions()
 				{
-					if (buildTarget == BuildTarget.StandaloneWindows64)
+					locationPathName = Path.Combine(buildPath, executableName + ".exe"),
+					options = buildOptions,
+					scenes = scenes,
+					subtarget = (int)subTarget,
+					target = buildTarget,
+					targetGroup = targetGroup,
+				};
+
+				// Build the project
+				BuildReport report = BuildPipeline.BuildPlayer(options);
+
+				// Check the results of the build
+				BuildSummary summary = report.summary;
+				if (summary.result == BuildResult.Succeeded)
+				{
+					Debug.Log($"Build Succeeded: {summary.totalSize} bytes {DateTime.UtcNow}");
+					Debug.Log($"Build Duration: {summary.totalTime}");
+					Debug.Log($"Scenes Included: {string.Join(", ", scenes)}");
+					Debug.Log($"Build Target: {buildTarget}");
+					Debug.Log($"Build Subtarget: {subTarget}");
+
+					// Log details about each build step
+					Debug.Log("Build Steps:");
+					int i = 0;
+					foreach (var step in report.steps)
 					{
-						switch (customBuildType)
+						Debug.Log($"Step {i}: {step.name}, Duration: {step.duration}");
+						if (step.messages.Length > 0)
 						{
-							case CustomBuildType.AllInOne:
-								CreateScript(Path.Combine(buildPath, "Start.bat"), ALL_IN_ONE_SERVER_BAT_SCRIPT);
-								break;
-							case CustomBuildType.Login:
-								CreateScript(Path.Combine(buildPath, "Start.bat"), LOGIN_SERVER_BAT_SCRIPT);
-								break;
-							case CustomBuildType.World:
-								CreateScript(Path.Combine(buildPath, "Start.bat"), WORLD_SERVER_BAT_SCRIPT);
-								break;
-							case CustomBuildType.Scene:
-								CreateScript(Path.Combine(buildPath, "Start.bat"), SCENE_SERVER_BAT_SCRIPT);
-								break;
-							case CustomBuildType.Client:
-							default:
-								break;
+							foreach (var message in step.messages)
+							{
+								if (message.type == LogType.Error)
+								{
+									Debug.LogError($"Error in step {step.name}: {message.content}");
+								}
+								else if (message.type == LogType.Warning)
+								{
+									Debug.LogWarning($"Warning in step {step.name}: {message.content}");
+								}
+								else
+								{
+									Debug.Log($"Message in step {step.name}: {message.content}");
+								}
+							}
+						}
+						++i;
+					}
+
+					string root = Directory.GetParent(Directory.GetCurrentDirectory()).FullName;
+
+					// Copy the configuration files if it's a server build
+					if (subTarget == StandaloneBuildSubtarget.Server)
+					{
+						if (buildTarget == BuildTarget.StandaloneWindows64)
+						{
+							switch (customBuildType)
+							{
+								case CustomBuildType.AllInOne:
+									CreateScript(Path.Combine(buildPath, "Start.bat"), ALL_IN_ONE_SERVER_BAT_SCRIPT);
+									break;
+								case CustomBuildType.Login:
+									CreateScript(Path.Combine(buildPath, "Start.bat"), LOGIN_SERVER_BAT_SCRIPT);
+									break;
+								case CustomBuildType.World:
+									CreateScript(Path.Combine(buildPath, "Start.bat"), WORLD_SERVER_BAT_SCRIPT);
+									break;
+								case CustomBuildType.Scene:
+									CreateScript(Path.Combine(buildPath, "Start.bat"), SCENE_SERVER_BAT_SCRIPT);
+									break;
+								case CustomBuildType.Client:
+								default:
+									break;
+							}
+						}
+						else if (buildTarget == BuildTarget.StandaloneLinux64)
+						{
+							switch (customBuildType)
+							{
+								case CustomBuildType.AllInOne:
+									CreateScript(Path.Combine(buildPath, "Start.sh"), LINUX_ALL_IN_ONE_SERVER_BAT_SCRIPT);
+									break;
+								case CustomBuildType.Login:
+									CreateScript(Path.Combine(buildPath, "Start.sh"), LINUX_LOGIN_SERVER_BAT_SCRIPT);
+									break;
+								case CustomBuildType.World:
+									CreateScript(Path.Combine(buildPath, "Start.sh"), LINUX_WORLD_SERVER_BAT_SCRIPT);
+									break;
+								case CustomBuildType.Scene:
+									CreateScript(Path.Combine(buildPath, "Start.sh"), LINUX_SCENE_SERVER_BAT_SCRIPT);
+									break;
+								case CustomBuildType.Client:
+								default:
+									break;
+							}
 						}
 					}
-					else if (buildTarget == BuildTarget.StandaloneLinux64)
+
+					// Copy configuration files
+					string configurationPath = WorkingEnvironmentOptions.AppendEnvironmentToPath(Constants.Configuration.SetupDirectory);
+					CopyConfigurationFiles(buildTarget, customBuildType, Path.Combine(root, configurationPath), buildPath);
+
+					if (customBuildType == CustomBuildType.Installer)
 					{
-						switch (customBuildType)
-						{
-							case CustomBuildType.AllInOne:
-								CreateScript(Path.Combine(buildPath, "Start.sh"), LINUX_ALL_IN_ONE_SERVER_BAT_SCRIPT);
-								break;
-							case CustomBuildType.Login:
-								CreateScript(Path.Combine(buildPath, "Start.sh"), LINUX_LOGIN_SERVER_BAT_SCRIPT);
-								break;
-							case CustomBuildType.World:
-								CreateScript(Path.Combine(buildPath, "Start.sh"), LINUX_WORLD_SERVER_BAT_SCRIPT);
-								break;
-							case CustomBuildType.Scene:
-								CreateScript(Path.Combine(buildPath, "Start.sh"), LINUX_SCENE_SERVER_BAT_SCRIPT);
-								break;
-							case CustomBuildType.Client:
-							default:
-								break;
-						}
+						BuildSetupFolder(root, buildPath);
+					}
+
+					if (buildTarget == BuildTarget.WebGL)
+					{
+						Debug.Log(@"Please visit https://docs.unity3d.com/2022.3/Documentation/Manual/webgl-server-configuration-code-samples.html for further WebGL WebServer configuration.");
 					}
 				}
-
-				// Copy configuration files
-				string configurationPath = WorkingEnvironmentOptions.AppendEnvironmentToPath(Constants.Configuration.SetupDirectory);
-				CopyConfigurationFiles(buildTarget, customBuildType, Path.Combine(root, configurationPath), buildPath);
-
-				if (customBuildType == CustomBuildType.Installer)
+				else if (summary.result == BuildResult.Failed)
 				{
-					BuildSetupFolder(root, buildPath);
-				}
+					Debug.LogError($"Build {report.summary.result}!");
+					Debug.LogError($"Total Errors: {summary.totalErrors}");
+					Debug.LogError($"Build Target: {buildTarget}");
+					Debug.LogError($"Build Subtarget: {subTarget}");
 
-				if (buildTarget == BuildTarget.WebGL)
-				{
-					Debug.Log(@"Please visit https://docs.unity3d.com/2022.3/Documentation/Manual/webgl-server-configuration-code-samples.html for further WebGL WebServer configuration.");
+					// Log details about each build step
+					Debug.Log("Build Steps:");
+					int i = 0;
+					foreach (var step in report.steps)
+					{
+						Debug.Log($"Step {i}: {step.name}, Duration: {step.duration}");
+						if (step.messages.Length > 0)
+						{
+							foreach (var message in step.messages)
+							{
+								if (message.type == LogType.Error)
+								{
+									Debug.LogError($"Error in step {step.name}: {message.content}");
+								}
+								else if (message.type == LogType.Warning)
+								{
+									Debug.LogWarning($"Warning in step {step.name}: {message.content}");
+								}
+								else
+								{
+									Debug.Log($"Message in step {step.name}: {message.content}");
+								}
+							}
+						}
+						++i;
+					}
 				}
 			}
-			else if (summary.result == BuildResult.Failed)
+			catch (Exception ex)
 			{
-				Debug.Log($"Build failed: {report.summary.result}\r\n{report}");
+				Debug.LogError($"Exception during build: {ex.Message}");
+            	Debug.LogError($"Stack trace: {ex.StackTrace}");
 			}
 
 			// Return IL2CPP settings to original

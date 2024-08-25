@@ -118,7 +118,7 @@ namespace FishMMO.Shared
 			}
 		}
 
-		protected void Initialize(Transform home, BaseAIState initialState, Vector3[] waypoints = null)
+		public void Initialize(Transform home, BaseAIState initialState, Vector3[] waypoints = null)
 		{
 			Home = home;
 			Waypoints = waypoints;
@@ -157,7 +157,7 @@ namespace FishMMO.Shared
 						}
 					}
 
-					CurrentState.Update(this);
+					CurrentState.UpdateState(this);
 					nextUpdate = CurrentState.UpdateRate;
 				}
 				nextUpdate -= Time.deltaTime;
@@ -205,7 +205,7 @@ namespace FishMMO.Shared
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		protected void TransitionToDefaultState()
+		public void TransitionToDefaultState()
 		{
 			ChangeState(IdleState, null);
 		}
@@ -289,7 +289,7 @@ namespace FishMMO.Shared
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		protected void DrawDebugCircle(Vector3 position, float radius, Color color)
+		public void DrawDebugCircle(Vector3 position, float radius, Color color)
 		{
 			Gizmos.color = color;
 			Gizmos.DrawWireSphere(position, radius);

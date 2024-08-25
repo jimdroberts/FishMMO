@@ -16,16 +16,22 @@
 
 		public override void Exit(AIController controller)
 		{
-			if (controller.Character.TryGet(out ICharacterDamageController characterDamageController))
-			{
-				characterDamageController.Immortal = false;
-			}
-			controller.TransitionToRandomMovementState();
 		}
 
-		public override void Update(AIController controller)
+		public override void UpdateState(AIController controller)
 		{
+			// Check if the AI has reached its destination
+			if (!controller.Agent.pathPending &&
+				controller.Agent.remainingDistance < 1.0f)
+			{
+				if (controller.Character.TryGet(out ICharacterDamageController characterDamageController))
+				{
+					characterDamageController.Immortal = false;
+				}
 
+				// Transition to random movement state
+				controller.TransitionToRandomMovementState();
+			}
 		}
 	}
 }
