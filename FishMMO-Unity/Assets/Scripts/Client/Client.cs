@@ -43,7 +43,7 @@ namespace FishMMO.Client
 		private static extern void ClientWebGLQuit();
 
 		[DllImport("__Internal")]
-		private static extern void AddHijackKeysListener(int keyCodesPtr, int keyCodesLength);
+		private static extern void AddHijackKeysListener(IntPtr keyCodesPtr, int keyCodesLength);
 #endif
 
 		private LocalConnectionState clientState = LocalConnectionState.Stopped;
@@ -95,7 +95,7 @@ namespace FishMMO.Client
 			GCHandle handle = GCHandle.Alloc(keyCodesArray, GCHandleType.Pinned);
 			IntPtr pointer = handle.AddrOfPinnedObject();
 
-			AddHijackKeysListener(pointer.ToInt32(), keyCodesArray.Length);
+			AddHijackKeysListener(pointer, keyCodesArray.Length);
 
 			// Release memory
 			handle.Free();
