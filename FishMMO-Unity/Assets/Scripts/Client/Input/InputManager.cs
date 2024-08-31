@@ -11,50 +11,25 @@ namespace FishMMO.Client
 		{
 			get
 			{
-				if (UIManager.TryGet("UICursor", out UICursor uiCursor))
-				{
-					return uiCursor.Visible;
-				}
-				else
-				{
-					return Cursor.visible;
-				}
+				return Cursor.visible;
 			}
 			set
 			{
-				if (UIManager.TryGet("UICursor", out UICursor uiCursor))
+				if (Cursor.visible == value)
 				{
-					if (uiCursor.Visible != value)
-					{
-						if (value)
-						{
-							uiCursor.Show();
-						}
-						else
-						{
-							uiCursor.Hide();
-						}
-					}
+					return;
 				}
-				else
-				{
-					if (Cursor.visible == value)
-					{
-						return;
-					}
-					Cursor.visible = value;
-					Cursor.lockState = value ? CursorLockMode.None : CursorLockMode.Locked;
+				Cursor.visible = value;
+				Cursor.lockState = value ? CursorLockMode.None : CursorLockMode.Locked;
 
-					if (!value && EventSystem.current != null)
+				if (!value && EventSystem.current != null)
+				{
+					if (!EventSystem.current.alreadySelecting)
 					{
-						if (!EventSystem.current.alreadySelecting)
-						{
-							EventSystem.current.SetSelectedGameObject(null);
-							EventSystem.current.sendNavigationEvents = false;
-						}
+						EventSystem.current.SetSelectedGameObject(null);
+						EventSystem.current.sendNavigationEvents = false;
 					}
 				}
-				
 
 #if UNITY_EDITOR
 				if (!value)
