@@ -95,7 +95,7 @@ namespace FishMMO.Client
 			GCHandle handle = GCHandle.Alloc(keyCodesArray, GCHandleType.Pinned);
 			IntPtr pointer = handle.AddrOfPinnedObject();
 
-			AddHijackKeysListener(pointer, keyCodesArray.Length);
+			AddHijackKeysListener(pointer.ToInt32();, keyCodesArray.Length);
 
 			// Release memory
 			handle.Free();
