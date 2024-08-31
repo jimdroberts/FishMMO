@@ -208,7 +208,7 @@ namespace FishMMO.Client
 			IPlayerCharacter.OnReadPayload += Character_OnReadPayload;
 			IPlayerCharacter.OnStartLocalClient += Character_OnStartLocalClient;
 			IPlayerCharacter.OnStopLocalClient += Character_OnStopLocalClient;
-			IGuildController.OnReadPayload += GuildController_OnReadPayload;
+			IGuildController.OnReadID += GuildController_OnReadID;
 			ICharacterDamageController.OnDamaged += OnDisplayDamage;
 			ICharacterDamageController.OnHealed += OnDisplayHeal;
 			IAchievementController.OnCompleteAchievement += OnCompleteAchievement;
@@ -269,7 +269,7 @@ namespace FishMMO.Client
 			IPlayerCharacter.OnReadPayload -= Character_OnReadPayload;
 			IPlayerCharacter.OnStartLocalClient -= Character_OnStartLocalClient;
 			IPlayerCharacter.OnStopLocalClient -= Character_OnStopLocalClient;
-			IGuildController.OnReadPayload -= GuildController_OnReadPayload;
+			IGuildController.OnReadID -= GuildController_OnReadID;
 			ICharacterDamageController.OnDamaged -= OnDisplayDamage;
 			ICharacterDamageController.OnHealed -= OnDisplayHeal;
 			IAchievementController.OnCompleteAchievement -= OnCompleteAchievement;
@@ -717,7 +717,7 @@ namespace FishMMO.Client
 			fogInitialLerpSettings = null;
 		}
 
-		public static void GuildController_OnReadPayload(long ID, IPlayerCharacter character)
+		public static void GuildController_OnReadID(long ID, IPlayerCharacter character)
 		{
 			if (ID != 0)
 			{
@@ -726,6 +726,10 @@ namespace FishMMO.Client
 				{
 					character.SetGuildName(s);
 				});
+			}
+			else
+			{
+				character.SetGuildName(null);
 			}
 		}
 

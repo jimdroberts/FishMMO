@@ -14,7 +14,9 @@ namespace FishMMO.Shared
 
 		private float interactionRangeSqr;
 
+#pragma warning disable CS0414
 		public event Action<ISpawnable> OnDespawn;
+#pragma warning restore CS0414
 
 		public ObjectSpawner ObjectSpawner { get; set; }
 		public Spawnable SpawnTemplate { get; set; }

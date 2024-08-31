@@ -5,7 +5,7 @@ namespace FishMMO.Shared
 {
 	public interface IGuildController : ICharacterBehaviour
 	{
-		static Action<long, IPlayerCharacter> OnReadPayload;
+		static Action<long, IPlayerCharacter> OnReadID;
 
 		event Action<long> OnReceiveGuildInvite;
 		event Action<long, long, GuildRank, string> OnAddGuildMember;

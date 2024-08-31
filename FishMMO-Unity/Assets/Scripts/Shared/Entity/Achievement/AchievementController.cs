@@ -15,7 +15,6 @@ namespace FishMMO.Shared
 
 #if !UNITY_SERVER
 		public bool ShowAchievementCompletion = true;
-		public event Func<string, Vector3, Color, float, float, bool, IReference> OnCompleteAchievement;
 
 		public override void OnStartCharacter()
 		{

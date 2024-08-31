@@ -1,4 +1,5 @@
 ﻿using FishNet.Connection;
+using FishNet.Object.Synchronizing;
 using FishNet.Serializing;
 using FishNet.Transporting;
 using System;
@@ -18,22 +19,37 @@ namespace FishMMO.Shared
 		public event Action<long> OnRemoveGuildMember;
 		public event Action OnLeaveGuild;
 
-		public long ID { get; set; }
+		public long ID { get { return GID.Value; } set { GID.Value = value; } }
 		public GuildRank Rank { get; set; }
 
-		public override void ReadPayload(NetworkConnection connection, Reader reader)
+		private readonly SyncVar<long> GID = new SyncVar<long>(0, new SyncTypeSettings()
 		{
-			ID = reader.ReadInt64();
-
-			IGuildController.OnReadPayload?.Invoke(ID, PlayerCharacter);
-		}
-
-		public override void WritePayload(NetworkConnection connection, Writer writer)
-		{
-			writer.WriteInt64(ID);
-		}
+			SendRate = 1.0f,
+			Channel = Channel.Unreliable,
+			ReadPermission = ReadPermission.ExcludeOwner,
+			WritePermission = WritePermission.ServerOnly,
+		});
 
 #if !UNITY_SERVER
+		public override void OnAwake()
+		{
+			base.OnAwake();
+
+			GID.OnChange += OnGuildIDChanged;
+		}
+
+		public override void OnDestroying()
+		{
+			base.OnDestroying();
+
+			GID.OnChange -= OnGuildIDChanged;
+		}
+
+		private void OnGuildIDChanged(long prev, long next, bool asServer)
+		{
+			IGuildController.OnReadID?.Invoke(next, PlayerCharacter);
+		}
+
 		public override void OnStartCharacter()
 		{
 			base.OnStartCharacter();
@@ -48,7 +64,7 @@ namespace FishMMO.Shared
 
 				if (PlayerCharacter != null)
 				{
-					IGuildController.OnReadPayload?.Invoke(ID, PlayerCharacter);
+					IGuildController.OnReadID?.Invoke(ID, PlayerCharacter);
 				}
 			}
 		}
@@ -87,7 +103,7 @@ namespace FishMMO.Shared
 				ID = msg.guildID;
 				Rank = msg.rank;
 
-				IGuildController.OnReadPayload?.Invoke(ID, PlayerCharacter);
+				IGuildController.OnReadID?.Invoke(ID, PlayerCharacter);
 			}
 
 			// update our Guild list with the new Guild member

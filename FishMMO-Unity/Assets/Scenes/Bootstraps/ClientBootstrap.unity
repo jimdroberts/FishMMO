@@ -2826,9 +2826,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   ReconnectAttempts: 5
   ReconnectAttemptWaitTime: 5
-  LoginServerAddresses:
-  - address: 167.88.168.150
-    port: 7770
+  LoginServerAddresses: []
   HijackKeyCodes: 120000001b000000700000007100000072000000730000007400000075000000760000007700000078000000
   NetworkManager: {fileID: 567623046510845244}
   LoginAuthenticator: {fileID: 2516426190219138202}
@@ -12538,7 +12536,7 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 576255705292366939}
   m_HandleRect: {fileID: 47324463555991374}
   m_Direction: 2
-  m_Value: 0
+  m_Value: 1
   m_Size: 1
   m_NumberOfSteps: 0
   m_OnValueChanged:
@@ -17467,7 +17465,7 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 685128214670113313}
   m_HandleRect: {fileID: 1068888720331819316}
   m_Direction: 2
-  m_Value: 0
+  m_Value: 1
   m_Size: 1
   m_NumberOfSteps: 0
   m_OnValueChanged:

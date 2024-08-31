@@ -12,9 +12,6 @@ namespace FishMMO.Client
 		public static readonly Color DEFAULT_COLOR = Hex.ColorNormalize(0.0f, 160.0f, 255.0f, 255.0f);
 		public static readonly Color DEFAULT_SELECTED_COLOR = Hex.ColorNormalize(0.0f, 255.0f, 255.0f, 255.0f);
 
-		private float updateRate = 3.0f;
-		private float nextPump = 0.0f;
-
 		public Canvas MainCanvas;
 		public CanvasScaler CanvasScaler;
 		public RectTransform MainPanel = null;
