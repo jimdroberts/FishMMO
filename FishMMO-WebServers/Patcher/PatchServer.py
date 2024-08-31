@@ -10,6 +10,7 @@ from aiohttp import web
 import atexit
 import signal
 import requests
+from datetime import datetime
 
 # Constants for directories
 PATCHES_DIR = './patches/'
@@ -17,7 +18,10 @@ PATCHES_DIR = './patches/'
 LATEST_VERSION = None
 
 # Configure logging
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG,
+		    format='%(asctime)s - %(levelname)s - %(message)s',
+		    filename='patch_server.log',  # File to which log messages will be written
+		    filemode='w')  # Mode to open the file: 'a' for append, 'w' for overwrite
 
 def get_external_ip():
     try:
@@ -73,8 +77,7 @@ async def handle_request(request):
         logging.error(f"An error occurred: {e}", exc_info=True)
         return aiohttp.web.Response(status=500)
 
-async def add_to_database(port):
-    ids_to_remove = []
+async def add_to_database(external_ip, port):
     try:
         # Open appsettings.json
         dn = os.path.dirname(os.path.realpath(__file__))
@@ -95,24 +98,27 @@ async def add_to_database(port):
         cursor = conn.cursor()
         logging.info("Database connection established.")
         
-        external_ip = get_external_ip()
+	# Current date and time
+        now = datetime.now()
 
-        # Insert into database and retrieve IDs
-        sql = "INSERT INTO fish_mmo_postgresql.patch_servers (address, port) VALUES (%s, %s) RETURNING id"
-        cursor.execute(sql, (external_ip, int(port)))
-        ids_to_remove = [record[0] for record in cursor.fetchall()]  # Fetch all IDs
+        # Upsert SQL statement
+        sql = """
+        INSERT INTO fish_mmo_postgresql.patch_servers (address, port, last_pulse) 
+        VALUES (%s, %s, %s)
+        ON CONFLICT (address, port) 
+        DO UPDATE SET last_pulse = EXCLUDED.last_pulse
+        """
+        cursor.execute(sql, (external_ip, int(port), now))
         conn.commit()
 
         cursor.close()
         conn.close()
-        logging.info(f"Added Patch Server {external_ip}:{port} to the database.")
+        logging.info(f"Updated Patch Server {external_ip}:{port} in the database.")
 
     except Exception as e:
         logging.error(f"Error while cleaning up database: {e}", exc_info=True)
 
-    return ids_to_remove
-
-async def cleanup_database(ids_to_remove):
+async def cleanup_database(external_ip, port):
     try:
         dn = os.path.dirname(os.path.realpath(__file__))
         fp = os.path.join(dn, 'appsettings.json')
@@ -129,18 +135,29 @@ async def cleanup_database(ids_to_remove):
         cursor = conn.cursor()
         logging.info("Database connection established.")
 
-        placeholders = ','.join(['%s'] * len(ids_to_remove))
-        sql = f"DELETE FROM fish_mmo_postgresql.patch_servers WHERE id IN ({placeholders})"
-        cursor.execute(sql, ids_to_remove)
+        sql = f"DELETE FROM fish_mmo_postgresql.patch_servers WHERE address = %s AND port = %s"
+        cursor.execute(sql, (external_ip, int(port)))
         conn.commit()
 
         cursor.close()
         conn.close()
-        logging.info(f"Removed IDs {ids_to_remove} from database.")
+        logging.info(f"Removed Server {external_ip}:{port} from database.")
 
     except Exception as e:
         logging.error(f"Error while cleaning up database: {e}", exc_info=True)
 
+async def periodic_database_update(external_ip, port, interval):
+    while True:
+        logging.debug(f"Periodic update started at {datetime.now()}.")
+        
+        try:
+            await add_to_database(external_ip, port)
+            logging.debug(f"Periodic update completed successfully at {datetime.now()}.")
+        except Exception as e:
+            logging.error(f"Error during periodic update at {datetime.now()}: {e}", exc_info=True)
+        
+        await asyncio.sleep(interval)
+        
 async def run_server():
     config_file_path = input("Enter the path to the latest configuration file: ").strip()
     read_configuration_file_version(config_file_path)
@@ -150,9 +167,11 @@ async def run_server():
         print("Version not found in the configuration file.")
 
     # Ask the user for IP and Port
-    external_ip = input("Enter the external IP address to bind to (leave blank for default): ").strip()
-    if not external_ip:
-        external_ip = ''  # This will bind to all available interfaces (including external)
+    interface_address = input("Enter the interface address to bind to (leave blank for default): ").strip()
+    if not interface_address:
+        interface_address = ''  # This will bind to all available interfaces (including external)
+
+    external_ip = get_external_ip()
 
     port = input("Enter the port you would like to bind to (leave blank for 8000): ").strip()
     if not port:
@@ -169,17 +188,17 @@ async def run_server():
     ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
     ssl_context.load_cert_chain(certfile=ssl_cert, keyfile=ssl_key)
 
-    # Add the patch server to the database
-    ids_to_remove = await add_to_database(port)
-
     app = aiohttp.web.Application()
     app.router.add_route('GET', '/{tail:.*}', handle_request)
     runner = aiohttp.web.AppRunner(app)
 
     await runner.setup()
-    site = aiohttp.web.TCPSite(runner, external_ip, port, ssl_context=ssl_context)
-    logging.info(f"Starting HTTP server on {external_ip}:{port}")
+    site = aiohttp.web.TCPSite(runner, interface_address, port, ssl_context=ssl_context)
+    logging.info(f"Starting HTTP server on {interface_address}:{port}")
     await site.start()
+
+    # Start the periodic database update task
+    periodic_task = asyncio.create_task(periodic_database_update(external_ip, port, 60))  # Update every 60 seconds
 
     try:
         # Wait for cancellation signals
@@ -197,7 +216,12 @@ async def run_server():
         # Perform cleanup when exiting
         logging.info("Performing cleanup...")
         await runner.cleanup()
-        await cleanup_database(ids_to_remove)
+        await cleanup_database(external_ip, port)
+        periodic_task.cancel()
+        try:
+            await periodic_task
+        except asyncio.CancelledError:
+            logging.info("Periodic task cancelled.")
 
 async def signal_handler():
     # Handle SIGINT and SIGTERM

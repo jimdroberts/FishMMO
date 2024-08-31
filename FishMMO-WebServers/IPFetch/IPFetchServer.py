@@ -2,6 +2,7 @@ import ssl
 import os
 import json
 import time
+from datetime import datetime, timedelta
 import logging
 import aiohttp
 from aiohttp import web
@@ -9,7 +10,10 @@ import asyncio
 import asyncpg
 
 # Configure logging
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG,
+		    format='%(asctime)s - %(levelname)s - %(message)s',
+		    filename='ipfetch_server.log',  # File to which log messages will be written
+		    filemode='w')  # Mode to open the file: 'a' for append, 'w' for overwrite)
 
 class RequestHandler:
 
@@ -37,9 +41,21 @@ class RequestHandler:
                 logging.info("Cache hit for patch servers. Returning cached data.")
                 patch_servers = self.cache['patch_servers']
             else:
+                current_time = datetime.now()
+                cutoff_time = current_time - timedelta(minutes=5)
+
+                # Convert cutoff_time to a format compatible with PostgreSQL
+                cutoff_time_str = cutoff_time.strftime('%Y-%m-%d %H:%M:%S')
+		
                 logging.info("Cache miss for patch servers. Fetching data from the database.")
                 async with conn.transaction():
-                    patch_servers = await conn.fetch("SELECT address, port FROM fish_mmo_postgresql.patch_servers;")
+                    # Filter based on last_pulse
+                    sql = """
+                    SELECT address, port, last_pulse 
+                    FROM fish_mmo_postgresql.patch_servers 
+                    WHERE last_pulse >= %s;
+                    """
+                    patch_servers = await conn.fetch(sql, cutoff_time_str)
                 logging.info("Query executed successfully. Fetched patch server data from the database.")
 
                 self.cache['patch_servers'] = patch_servers

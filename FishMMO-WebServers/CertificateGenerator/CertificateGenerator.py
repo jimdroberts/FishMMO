@@ -6,6 +6,13 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.serialization import Encoding, PrivateFormat, NoEncryption
 from datetime import datetime, timedelta, timezone
 import os
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.DEBUG,
+		    format='%(asctime)s - %(levelname)s - %(message)s',
+		    filename='certificate_generator.log',  # File to which log messages will be written
+		    filemode='w')  # Mode to open the file: 'a' for append, 'w' for overwrite)
 
 # Generate a new private key
 private_key = rsa.generate_private_key(
