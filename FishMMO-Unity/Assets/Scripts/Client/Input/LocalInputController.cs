@@ -134,7 +134,7 @@ namespace FishMMO.Client
 			// mouse mode can toggle at any time other than input focus
 			if (InputManager.GetKeyDown("Mouse Mode"))
 			{
-				InputManager.ToggleMouseMode();
+				InputManager.ToggleMouseMode(true);
 			}
 
 			// we can interact with things as long as the UI doesn't have focus
@@ -215,7 +215,15 @@ namespace FishMMO.Client
 			{
 				if (InputManager.MouseMode)
 				{
-					InputManager.MouseMode = false;
+					InputManager.ToggleMouseMode();
+				}
+			}
+
+			if (!InputManager.ForcedMouseMode && !UIManager.CloseNext(true))
+			{
+				if (InputManager.MouseMode)
+				{
+					InputManager.ToggleMouseMode();
 				}
 			}
 		}

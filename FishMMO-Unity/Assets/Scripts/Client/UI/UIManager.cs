@@ -132,6 +132,7 @@ namespace FishMMO.Client
 			{
 				result.ToggleVisibility();
 			}
+			InputManager.ResetForcedMouseMode();
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -221,16 +222,23 @@ namespace FishMMO.Client
 			return false;
 		}
 
-		public static bool CloseNext()
+		public static bool CloseNext(bool peakOnly = false)
 		{
 			if (closeOnEscapeControls != null)
 			{
-				// get the last opened or focused UI control
-				UIControl control = closeOnEscapeControls.Pop();
-				if (control != null)
+				if (peakOnly)
 				{
-					control.Hide();
-					return true;
+					return closeOnEscapeControls.Peek();
+				}
+				else
+				{
+					// get the last opened or focused UI control
+					UIControl control = closeOnEscapeControls.Pop();
+					if (control != null)
+					{
+						control.Hide();
+						return true;
+					}
 				}
 			}
 			return false;

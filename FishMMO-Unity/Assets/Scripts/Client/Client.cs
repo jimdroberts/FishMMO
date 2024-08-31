@@ -43,7 +43,7 @@ namespace FishMMO.Client
 		private static extern void ClientWebGLQuit();
 
 		[DllImport("__Internal")]
-		private static extern void AddHijackAltKeyListener();
+		private static extern void AddHijackKeysListener(int keyCodesPtr, int keyCodesLength);
 #endif
 
 		private LocalConnectionState clientState = LocalConnectionState.Stopped;
@@ -61,6 +61,7 @@ namespace FishMMO.Client
 		public float ReconnectAttemptWaitTime = 5f;
 
 		public List<ServerAddress> LoginServerAddresses;
+		public List<KeyCode> HijackKeyCodes = new List<KeyCode>();
 
 		public event Action OnConnectionSuccessful;
 		public event Action<byte, byte> OnReconnectAttempt;
@@ -83,7 +84,21 @@ namespace FishMMO.Client
 		void Awake()
 		{
 #if UNITY_WEBGL
-			AddHijackAltKeyListener();
+			// Convert List<KeyCode> to int[]
+			int[] keyCodesArray = new int[HijackKeyCodes.Count];
+			for (int i = 0; i < HijackKeyCodes.Count; i++)
+			{
+				keyCodesArray[i] = (int)HijackKeyCodes[i];
+			}
+
+			// Allocate memory and copy keyCodes array to it
+			GCHandle handle = GCHandle.Alloc(keyCodesArray, GCHandleType.Pinned);
+			IntPtr pointer = handle.AddrOfPinnedObject();
+
+			AddHijackKeyListener();
+
+			// Release memory
+			handle.Free();
 #endif
 
 			if (NetworkManager == null)

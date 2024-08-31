@@ -126,6 +126,12 @@ namespace FishMMO.Shared
 			return poppedValue;
 		}
 
+		// Peek at the last added element (without removing it)
+		public bool Peek()
+		{
+			return head != null && head.Value != null;
+		}
+
 		public bool Empty()
 		{
 			return head == null || tail == null;

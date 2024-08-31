@@ -7,6 +7,13 @@ namespace FishMMO.Client
 {
 	public static class InputManager
 	{
+		public static void ResetForcedMouseMode()
+		{
+			ForcedMouseMode = false;
+		}
+		
+		public static bool ForcedMouseMode { get; private set; }
+
 		public static bool MouseMode
 		{
 			get
@@ -108,8 +115,9 @@ namespace FishMMO.Client
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static void ToggleMouseMode()
+		public static void ToggleMouseMode(bool forceMouseMode = false)
 		{
+			ForcedMouseMode = forceMouseMode;
 			MouseMode = !MouseMode;
 		}
 

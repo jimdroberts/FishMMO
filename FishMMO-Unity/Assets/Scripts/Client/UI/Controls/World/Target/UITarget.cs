@@ -156,7 +156,7 @@ namespace FishMMO.Client
 			Collider collider = newTarget.GetComponent<Collider>();
 			newPos.y += collider.bounds.size.y;
 
-			Debug.Log("Height of GameObject: " + collider.bounds.size.y);
+			//Debug.Log("Height of GameObject: " + collider.bounds.size.y);
 
 			string label = newTarget.name.Replace("(Clone)", "");
 			Color color = Color.grey;
