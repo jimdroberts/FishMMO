@@ -54,7 +54,7 @@ namespace FishMMO.Server
 			if (ServerManager != null &&
 				ServerBehaviour.TryGet(out SceneServerSystem sceneServerSystem))
 			{
-				loginAuthenticator = FindObjectOfType<SceneServerAuthenticator>();
+				loginAuthenticator = FindFirstObjectByType<SceneServerAuthenticator>();
 				if (loginAuthenticator == null)
 					throw new UnityException("SceneServerAuthenticator not found!");
 

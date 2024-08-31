@@ -15,6 +15,7 @@ namespace FishMMO.Client
 		private float updateRate = 3.0f;
 		private float nextPump = 0.0f;
 
+		public Canvas MainCanvas;
 		public CanvasScaler CanvasScaler;
 		public RectTransform MainPanel = null;
 		[Tooltip("Helper field to check input field focus status in UIManager.")]
@@ -82,6 +83,7 @@ namespace FishMMO.Client
 		private void Awake()
 		{
 			Transform = transform;
+			MainCanvas = GetComponentInParent<Canvas>();
 			CanvasScaler = GetComponentInParent<CanvasScaler>();
 
 			startPosition = transform.position;
@@ -155,24 +157,32 @@ namespace FishMMO.Client
 			nextPump -= Time.deltaTime;
 		}*/
 
-		public void ClampUIToScreen(float x, float y)
+		public void ClampUIToScreen(float x, float y, bool ignoreDimensions = false)
 		{
 			if (!ClampToScreen) return;
 
 			if (MainPanel != null)
 			{
-				float halfWidth = MainPanel.rect.width * 0.5f;
-				float halfHeight = MainPanel.rect.height * 0.5f;
-
-				if (CanvasScaler != null &&
-					CanvasScaler.uiScaleMode == CanvasScaler.ScaleMode.ScaleWithScreenSize)
+				if (ignoreDimensions)
 				{
-					halfWidth *= CanvasScaler.transform.localScale.x;
-					halfHeight *= CanvasScaler.transform.localScale.y;
+					x = Mathf.Clamp(x, 0.0f, Screen.width);
+					y = Mathf.Clamp(y, 0.0f, Screen.height);
 				}
+				else
+				{
+					float halfWidth = MainPanel.rect.width * 0.5f;
+					float halfHeight = MainPanel.rect.height * 0.5f;
 
-				x = Mathf.Clamp(x, halfWidth, Screen.width - halfWidth);
-				y = Mathf.Clamp(y, halfHeight, Screen.height - halfHeight);
+					if (CanvasScaler != null &&
+						CanvasScaler.uiScaleMode == CanvasScaler.ScaleMode.ScaleWithScreenSize)
+					{
+						halfWidth *= CanvasScaler.transform.localScale.x;
+						halfHeight *= CanvasScaler.transform.localScale.y;
+					}
+
+					x = Mathf.Clamp(x, halfWidth, Screen.width - halfWidth);
+					y = Mathf.Clamp(y, halfHeight, Screen.height - halfHeight);
+				}
 			}
 			Transform.position = new Vector2(x, y);
 		}

@@ -41,6 +41,9 @@ namespace FishMMO.Client
 #if UNITY_WEBGL
 		[DllImport("__Internal")]
 		private static extern void ClientWebGLQuit();
+
+		[DllImport("__Internal")]
+		private static extern void AddHijackAltKeyListener();
 #endif
 
 		private LocalConnectionState clientState = LocalConnectionState.Stopped;
@@ -79,9 +82,13 @@ namespace FishMMO.Client
 
 		void Awake()
 		{
+#if UNITY_WEBGL
+			AddHijackAltKeyListener();
+#endif
+
 			if (NetworkManager == null)
 			{
-				NetworkManager = FindObjectOfType<NetworkManager>();
+				NetworkManager = FindFirstObjectByType<NetworkManager>();
 				if (NetworkManager == null)
 				{
 					Debug.LogError("Client: NetworkManager not found.");
@@ -95,7 +102,7 @@ namespace FishMMO.Client
 
 			if (LoginAuthenticator == null)
 			{
-				LoginAuthenticator = FindObjectOfType<ClientLoginAuthenticator>();
+				LoginAuthenticator = FindFirstObjectByType<ClientLoginAuthenticator>();
 				if (LoginAuthenticator == null)
 				{
 					Debug.LogError("Client: LoginAuthenticator not found.");

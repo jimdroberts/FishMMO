@@ -33,7 +33,7 @@ namespace FishMMO.Server
 
 		public override void InitializeOnce()
 		{
-			loginAuthenticator = FindObjectOfType<WorldServerAuthenticator>();
+			loginAuthenticator = FindFirstObjectByType<WorldServerAuthenticator>();
 			if (loginAuthenticator == null)
 			{
 				throw new UnityException("WorldServerAuthenticator not found!");

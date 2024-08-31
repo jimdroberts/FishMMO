@@ -15,7 +15,11 @@ namespace FishMMO.Client
 			}
 			if (image.sprite != null)
 			{
-				if (image.sprite.name.Equals("Background"))
+				if (image.name.Contains("Cursor"))
+				{
+					return;
+				}
+				else if (image.sprite.name.Equals("Background"))
 				{
 					image.color = ParseColor("Primary", configuration);
 				}

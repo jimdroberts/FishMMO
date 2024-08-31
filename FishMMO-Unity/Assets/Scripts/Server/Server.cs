@@ -119,7 +119,7 @@ namespace FishMMO.Server
 			// ensure our NetworkManager exists in the scene
 			if (NetworkManager == null)
 			{
-				NetworkManager = FindObjectOfType<NetworkManager>();
+				NetworkManager = FindFirstObjectByType<NetworkManager>();
 
 				if (NetworkManager == null)
 				{

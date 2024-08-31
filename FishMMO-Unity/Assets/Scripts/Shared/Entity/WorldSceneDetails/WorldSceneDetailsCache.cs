@@ -66,7 +66,7 @@ namespace FishMMO.Shared
 				{
 					Debug.Log("WorldSceneDetails: Scene Loaded[" + currentScene.name + "]");
 
-					IBoundary boundary = GameObject.FindObjectOfType<IBoundary>();
+					IBoundary boundary = GameObject.FindFirstObjectByType<IBoundary>();
 					if (boundary == null)
 					{
 						Debug.LogError(currentScene.name + " has no IBoundary. Boundaries are required for safety purposes. Try adding a SceneBoundary!");
@@ -78,7 +78,7 @@ namespace FishMMO.Shared
 					Scenes.Add(currentScene.name, sceneDetails);
 
 					// search for settings
-					WorldSceneSettings worldSceneSettings = GameObject.FindObjectOfType<WorldSceneSettings>();
+					WorldSceneSettings worldSceneSettings = GameObject.FindFirstObjectByType<WorldSceneSettings>();
 					if (worldSceneSettings != null)
 					{
 						sceneDetails.MaxClients = worldSceneSettings.MaxClients;
@@ -86,7 +86,7 @@ namespace FishMMO.Shared
 					}
 
 					// search for initialSpawnPositions
-					CharacterInitialSpawnPosition[] characterSpawnPositions = GameObject.FindObjectsOfType<CharacterInitialSpawnPosition>();
+					CharacterInitialSpawnPosition[] characterSpawnPositions = GameObject.FindObjectsByType<CharacterInitialSpawnPosition>(FindObjectsSortMode.None);
 					foreach (CharacterInitialSpawnPosition obj in characterSpawnPositions)
 					{
 						Debug.Log("WorldSceneDetails: Found new Initial Spawn Position[" + obj.name + " Pos:" + obj.transform.position + " Rot:" + obj.transform.rotation + "]");
@@ -102,7 +102,7 @@ namespace FishMMO.Shared
 					}
 
 					// search for respawnPositions
-					CharacterRespawnPosition[] respawnPositions = GameObject.FindObjectsOfType<CharacterRespawnPosition>();
+					CharacterRespawnPosition[] respawnPositions = GameObject.FindObjectsByType<CharacterRespawnPosition>(FindObjectsSortMode.None);
 					foreach (CharacterRespawnPosition obj in respawnPositions)
 					{
 						Debug.Log("WorldSceneDetails: Found new Respawn Position[" + obj.name + " " + obj.transform + "]");
@@ -115,7 +115,7 @@ namespace FishMMO.Shared
 					}
 
 					// Search for world bounds (bounds activate when outside of all of them)
-					IBoundary[] sceneBoundaries = GameObject.FindObjectsOfType<IBoundary>();
+					IBoundary[] sceneBoundaries = GameObject.FindObjectsByType<IBoundary>(FindObjectsSortMode.None);
 					foreach (IBoundary obj in sceneBoundaries)
 					{
 						Debug.Log($"WorldSceneDetails: Found new Boundary[Name: {obj.name}, Center: {obj.GetBoundaryOffset()}, Size: {obj.GetBoundarySize()}]");
@@ -128,7 +128,7 @@ namespace FishMMO.Shared
 					}
 
 					// search for scene teleporters
-					SceneTeleporter[] teleports = GameObject.FindObjectsOfType<SceneTeleporter>();
+					SceneTeleporter[] teleports = GameObject.FindObjectsByType<SceneTeleporter>(FindObjectsSortMode.None);
 					foreach (SceneTeleporter obj in teleports)
 					{
 						obj.name = obj.name.Trim();
@@ -149,7 +149,7 @@ namespace FishMMO.Shared
 					}
 
 					// search for teleports
-					Teleporter[] interactableTeleporters = GameObject.FindObjectsOfType<Teleporter>();
+					Teleporter[] interactableTeleporters = GameObject.FindObjectsByType<Teleporter>(FindObjectsSortMode.None);
 					foreach (Teleporter obj in interactableTeleporters)
 					{
 						obj.name = obj.name.Trim();
@@ -170,7 +170,7 @@ namespace FishMMO.Shared
 					}
 
 					// search for teleporter destinations
-					TeleporterDestination[] teleportDestinations = GameObject.FindObjectsOfType<TeleporterDestination>();
+					TeleporterDestination[] teleportDestinations = GameObject.FindObjectsByType<TeleporterDestination>(FindObjectsSortMode.None);
 					foreach (TeleporterDestination obj in teleportDestinations)
 					{
 						string teleporterDestinationName = obj.name.Trim();
