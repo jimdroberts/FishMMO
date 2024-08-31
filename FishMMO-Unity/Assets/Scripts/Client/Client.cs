@@ -61,7 +61,7 @@ namespace FishMMO.Client
 		public float ReconnectAttemptWaitTime = 5f;
 
 		public List<ServerAddress> LoginServerAddresses;
-		public List<KeyCode> HijackKeyCodes = new List<KeyCode>();
+		public int[] HijackKeyCodes;
 
 		public event Action OnConnectionSuccessful;
 		public event Action<byte, byte> OnReconnectAttempt;
@@ -84,21 +84,17 @@ namespace FishMMO.Client
 		void Awake()
 		{
 #if UNITY_WEBGL
-			// Convert List<KeyCode> to int[]
-			int[] keyCodesArray = new int[HijackKeyCodes.Count];
-			for (int i = 0; i < HijackKeyCodes.Count; i++)
+			if (HijackKeyCodes != null && HijackKeyCodes.Length > 0)
 			{
-				keyCodesArray[i] = (int)HijackKeyCodes[i];
+				// Allocate memory and copy keyCodes array to it
+				GCHandle handle = GCHandle.Alloc(HijackKeyCodes, GCHandleType.Pinned);
+				IntPtr pointer = handle.AddrOfPinnedObject();
+
+				AddHijackKeysListener(pointer, HijackKeyCodes.Length);
+
+				// Release memory
+				handle.Free();
 			}
-
-			// Allocate memory and copy keyCodes array to it
-			GCHandle handle = GCHandle.Alloc(keyCodesArray, GCHandleType.Pinned);
-			IntPtr pointer = handle.AddrOfPinnedObject();
-
-			AddHijackKeysListener(pointer, keyCodesArray.Length);
-
-			// Release memory
-			handle.Free();
 #endif
 
 			if (NetworkManager == null)
