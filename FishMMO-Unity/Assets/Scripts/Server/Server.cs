@@ -130,6 +130,11 @@ namespace FishMMO.Server
 			// initialize server behaviours
 			Debug.Log("Server: Initializing Components");
 
+			// Load Server Details
+			if (!LoadTransportServerDetails())
+			{
+				throw new UnityException("Server: Failed to load Server Details.");
+			}
 
 			// Ensure the KCC System is created.
 			KinematicCharacterSystem.EnsureCreation();
@@ -148,12 +153,12 @@ namespace FishMMO.Server
 			Debug.Log("Server: Initialization Complete");
 
 			// start the local server connection
-			if (NetworkManager.ServerManager != null && LoadTransportServerDetails())
+			if (NetworkManager.ServerManager != null)
 			{
 				NetworkManager.ServerManager.OnServerConnectionState += ServerManager_OnServerConnectionState;
 
 				NetworkManager.ServerManager.StartConnection();
-				
+
 				StartCoroutine(OnAwaitingConnectionReady());
 			}
 			else
@@ -299,10 +304,12 @@ namespace FishMMO.Server
 		private bool LoadTransportServerDetails()
 		{
 			Transport transport = NetworkManager.TransportManager.Transport;
-			if (Constants.Configuration.Settings.TryGetString("Address", out string Address) &&
-				Constants.Configuration.Settings.TryGetUShort("Port", out ushort Port) &&
+			if (Constants.Configuration.Settings.TryGetString("Address", out string address) &&
+				Constants.Configuration.Settings.TryGetUShort("Port", out ushort port) &&
 				Constants.Configuration.Settings.TryGetInt("MaximumClients", out int maximumClients))
 			{
+				Address = address;
+				Port = port;
 				transport.SetServerBindAddress(Address, IPAddressType.IPv4);
 				transport.SetPort(Port);
 				transport.SetMaximumClients(maximumClients);
@@ -351,11 +358,16 @@ namespace FishMMO.Server
 			Transport transport = NetworkManager.TransportManager.Transport;
 			if (transport != null)
 			{
-				// if our assigned address is localhost, use localhost
-				// otherwise try external address
-				// if remote address is null we fall back to localhost
-				string actualAddress = !string.IsNullOrWhiteSpace(Address) && (Address.Equals(LoopBack) || Address.Equals(LocalHost)) ? Address :
-										!string.IsNullOrWhiteSpace(RemoteAddress) ? RemoteAddress : LoopBack;
+				string actualAddress = LoopBack;
+				if (!string.IsNullOrWhiteSpace(Address) &&
+					(Address.Equals(LoopBack) || Address.Equals(LocalHost)))
+				{
+					actualAddress = Address;
+				}
+				else if (!string.IsNullOrWhiteSpace(RemoteAddress))
+				{
+					actualAddress = RemoteAddress;
+				}
 
 				address = new ServerAddress()
 				{
