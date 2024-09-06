@@ -48,9 +48,6 @@ ExportedObj/
 *.VC.db
 *.vsconfig
 
-# Unity3D Render Pipeline Settings
-*UniversalRenderPipelineGlobalSettings.asset
-
 # Unity3D generated meta files
 *.pidb.meta
 *.pdb.meta
@@ -86,3 +83,4 @@ crashlytics-build.properties
 /[Aa]ssets/[Pp]lugins/[Ff]ish[Nn]et/[Ee]xample*
 /[Aa]ssets/[Pp]lugins/[Ff]ish[Nn]et/[Uu]pgrading*
 /[Aa]ssets/DefaultPrefabObjects.asset
+/[Aa]ssets/UniversalRenderPipelineGlobalSettings.asset
