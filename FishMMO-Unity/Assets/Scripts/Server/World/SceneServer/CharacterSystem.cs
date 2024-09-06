@@ -35,11 +35,13 @@ namespace FishMMO.Server
 		/// </summary>
 		public event Action<NetworkConnection, IPlayerCharacter> OnAfterLoadCharacter;
 		/// <summary>
+		/// Triggered immediately after a character is added to their respective cache.
+		/// </summary>
+		public event Action<NetworkConnection, IPlayerCharacter> OnConnect;
+		/// <summary>
 		/// Triggered immediately after a character is removed from their respective cache.
 		/// </summary>
 		public event Action<NetworkConnection, IPlayerCharacter> OnDisconnect;
-
-		public event Action<IPlayerCharacter, string> OnCharacterChangedScene;
 
 		public Dictionary<long, IPlayerCharacter> CharactersByID = new Dictionary<long, IPlayerCharacter>();
 		public Dictionary<string, IPlayerCharacter> CharactersByLowerCaseName = new Dictionary<string, IPlayerCharacter>();
@@ -341,6 +343,8 @@ namespace FishMMO.Server
 					using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 					CharacterService.SetOnline(dbContext, accountName, character.CharacterName);
 				}
+
+				OnConnect?.Invoke(conn, character);
 
 				// send server character data to the client
 				SendAllCharacterData(character);
@@ -702,14 +706,12 @@ namespace FishMMO.Server
 					damageController.Immortal = true;
 				}
 
-				OnCharacterChangedScene?.Invoke(character, teleporter.ToScene);
 				character.SceneName = teleporter.ToScene;
 				character.Motor.SetPositionAndRotationAndVelocity(teleporter.ToPosition, teleporter.ToRotation, Vector3.zero);
 			}
 			// the character died
 			else
 			{
-				OnCharacterChangedScene?.Invoke(character, character.BindScene);
 				character.SceneName = character.BindScene;
 				character.Motor.SetPositionAndRotationAndVelocity(character.BindPosition, character.Motor.Transform.rotation, Vector3.zero);
 			}

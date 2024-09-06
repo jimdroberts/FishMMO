@@ -69,8 +69,8 @@ namespace FishMMO.Server
 				Server.RegisterBroadcast<GuildRemoveBroadcast>(OnServerGuildRemoveBroadcastReceived, true);
 
 				// remove the characters pending guild invite request on disconnect
-				characterSystem.OnDisconnect += RemovePending;
-				characterSystem.OnCharacterChangedScene += CharacterSystem_OnCharacterChangedScene;
+				characterSystem.OnConnect += CharacterSystem_OnConnect;
+				characterSystem.OnDisconnect += CharacterSystem_OnDisconnect;
 			}
 			else
 			{
@@ -92,8 +92,8 @@ namespace FishMMO.Server
 				// remove the characters pending guild invite request on disconnect
 				if (ServerBehaviour.TryGet(out CharacterSystem characterSystem))
 				{
-					characterSystem.OnDisconnect -= RemovePending;
-					characterSystem.OnCharacterChangedScene -= CharacterSystem_OnCharacterChangedScene;
+					characterSystem.OnConnect -= CharacterSystem_OnConnect;
+					characterSystem.OnDisconnect -= CharacterSystem_OnDisconnect;
 				}
 			}
 		}
@@ -196,15 +196,9 @@ namespace FishMMO.Server
 			}
 		}
 
-		public void CharacterSystem_OnCharacterChangedScene(IPlayerCharacter character, string sceneName)
+		public void CharacterSystem_OnConnect(NetworkConnection conn, IPlayerCharacter character)
 		{
-			if (character == null ||
-				string.IsNullOrWhiteSpace(sceneName))
-			{
-				return;
-			}
-
-			if (character.SceneName == sceneName)
+			if (character == null)
 			{
 				return;
 			}
@@ -213,7 +207,7 @@ namespace FishMMO.Server
 			{
 				return;
 			}
-			
+
 			if (!character.TryGet(out IGuildController guildController) ||
 				guildController.ID < 1)
 			{
@@ -222,19 +216,38 @@ namespace FishMMO.Server
 			}
 
 			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-
-			//Debug.Log($"Character {character.CharacterName} changed to scene {sceneName}.");
-
-			CharacterGuildService.Save(dbContext, guildController.Character, sceneName);
+			CharacterGuildService.Save(dbContext, guildController.Character, character.SceneName);
 			GuildUpdateService.Save(dbContext, guildController.ID);
 		}
 
-		public void RemovePending(NetworkConnection conn, IPlayerCharacter character)
+		public void CharacterSystem_OnDisconnect(NetworkConnection conn, IPlayerCharacter character)
 		{
 			if (character != null)
 			{
 				pendingInvitations.Remove(character.ID);
 			}
+
+			if (character == null ||
+				character.IsTeleporting)
+			{
+				return;
+			}
+
+			if (Server.NpgsqlDbContextFactory == null)
+			{
+				return;
+			}
+
+			if (!character.TryGet(out IGuildController guildController) ||
+				guildController.ID < 1)
+			{
+				// not in a guild
+				return;
+			}
+
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
+			CharacterGuildService.Save(dbContext, guildController.Character, "Offline");
+			GuildUpdateService.Save(dbContext, guildController.ID);
 		}
 
 		public void OnServerGuildCreateBroadcastReceived(NetworkConnection conn, GuildCreateBroadcast msg, Channel channel)

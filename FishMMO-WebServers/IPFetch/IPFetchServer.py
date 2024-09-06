@@ -86,8 +86,10 @@ class RequestHandler:
             if conn is None:
                 return aiohttp.web.Response(status=500, text="Failed to connect to the database")
 
-            current_time = time.time()
-            if 'login_servers' in self.cache and (current_time - self.cache['timestamp']) < self.CACHE_TIMEOUT:
+            current_time = datetime.now()
+            cache_expiration = timedelta(seconds=self.CACHE_TIMEOUT)
+            
+            if 'login_servers' in self.cache and (current_time - self.cache['timestamp']) < cache_expiration:
                 logging.info("Cache hit for login servers. Returning cached data.")
                 login_servers = self.cache['login_servers']
             else:
