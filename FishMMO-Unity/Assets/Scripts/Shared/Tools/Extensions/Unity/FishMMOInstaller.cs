@@ -7,6 +7,9 @@ using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using UnityEngine;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 using Debug = UnityEngine.Debug;
 using FishMMO.Database;
 using Npgsql;
@@ -15,22 +18,67 @@ namespace FishMMO.Shared
 {
 	public class FishMMOInstaller : MonoBehaviour
 	{
-		private void Awake()
+		private async void Awake()
 		{
-#if !UNITY_EDITOR
-			InstallEverything();
+			while (true)
+			{
+				Console.Clear(); // Clear the console at the beginning of each loop iteration
+				Console.WriteLine("Welcome to the FishMMO Database Tool.");
+				Console.WriteLine("Press a key (0-7):");
+				Console.WriteLine("1 : Install Everything");
+				Console.WriteLine("2 : Install DotNet");
+				Console.WriteLine("3 : Install Python");
+				Console.WriteLine("4 : Install Database");
+				Console.WriteLine("5 : Create Migration");
+				Console.WriteLine("6 : Quit");
+
+				ConsoleKeyInfo key = Console.ReadKey(true); // Read key and don't show it in the console
+
+				switch (key.Key)
+				{
+					case ConsoleKey.D1:
+						await InstallEverything();
+						break;
+					case ConsoleKey.D2:
+						await InstallDotNet();
+						break;
+					case ConsoleKey.D3:
+						await InstallPython();
+						break;
+					case ConsoleKey.D4:
+						await InstallDatabase();
+						break;
+					case ConsoleKey.D5:
+						CreateMigration();
+						break;
+					case ConsoleKey.D6:
+#if UNITY_EDITOR
+						EditorApplication.ExitPlaymode(); // Make sure to include the UnityEditor namespace if using Unity
+#else
+                				Application.Quit();
 #endif
+						return; // Exit the method
+					default:
+						Console.WriteLine("Invalid input. Please enter a valid number.");
+						break;
+				}
+
+				Console.WriteLine("Press any key to continue...");
+				Console.ReadKey(true); // Wait for user to press a key before re-displaying the menu
+			}
 		}
 
-		private async void InstallEverything()
+		private async Task<bool> InstallEverything()
 		{
 			if (!await InstallDotNet())
 			{
 				Log("DotNet 8 and DotNet-EF Tools 5.0.17 are required by FishMMO. Please install them and try again.");
-				return;
+				return false;
 			}
 			await InstallPython();
 			await InstallDatabase();
+
+			return true;
 		}
 
 		private string GetWorkingDirectory()
@@ -1103,39 +1151,76 @@ namespace FishMMO.Shared
 
 				AppSettings appSettings = JsonUtility.FromJson<AppSettings>(jsonContent);
 
-				if (PromptForYesNo("Install Docker Database? (Selecting No will prompt to install Postgresql)"))
+				bool skip = false;
+				while (!skip)
 				{
-					if (!await InstallDocker())
-					{
-						Log("Failed to install Docker.");
-						return;
-					}
+					Console.WriteLine($"1 : Install Docker Database");
+					Console.WriteLine($"2 : Install PostgreSQL");
+					Console.WriteLine($"3 : Skip");
+					Console.WriteLine($"0 : Quit");
+					ConsoleKeyInfo key = Console.ReadKey(true); // Read key and don't show it in the console
 
-					// docker-compose up
-					string output = await RunDockerComposeCommandAsync("-p " + Constants.Configuration.ProjectName.ToLower() + " up -d", new Dictionary<string, string>()
+					switch (key.Key)
 					{
-						{ "POSTGRES_DB", appSettings.Npgsql.Database },
-						{ "POSTGRES_USER", appSettings.Npgsql.Username },
-						{ "POSTGRES_PASSWORD", appSettings.Npgsql.Password },
-						{ "POSTGRES_PORT", appSettings.Npgsql.Port },
-						{ "REDIS_PORT", appSettings.Redis.Port },
-						{ "REDIS_PASSWORD", appSettings.Redis.Password },
-					});
-					Log(output);
-				}
-				else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-				{
-					if (!await InstallPostgreSQLWindows(appSettings))
-					{
-						return;
-					}
-				}
-				else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ||
-						 RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-				{
-					if (!await InstallPostgreSQLLinuxMAC(appSettings))
-					{
-						return;
+						case ConsoleKey.D1:
+							if (!await InstallDocker())
+							{
+								Log("Failed to install Docker.");
+								return;
+							}
+
+							// docker-compose up
+							string output = await RunDockerComposeCommandAsync("-p " + Constants.Configuration.ProjectName.ToLower() + " up -d", new Dictionary<string, string>()
+							{
+								{ "POSTGRES_DB", appSettings.Npgsql.Database },
+								{ "POSTGRES_USER", appSettings.Npgsql.Username },
+								{ "POSTGRES_PASSWORD", appSettings.Npgsql.Password },
+								{ "POSTGRES_PORT", appSettings.Npgsql.Port },
+								{ "REDIS_PORT", appSettings.Redis.Port },
+								{ "REDIS_PASSWORD", appSettings.Redis.Password },
+							});
+							Log(output);
+
+							skip = true;
+							break;
+						case ConsoleKey.D2:
+							if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+							{
+								if (!await InstallPostgreSQLWindows(appSettings))
+								{
+									Console.WriteLine("Press any key to continue...");
+									Console.ReadKey(true); // Wait for user to press a key before re-displaying the menu
+
+									return;
+								}
+								skip = true;
+							}
+							else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ||
+									 RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+							{
+								if (!await InstallPostgreSQLLinuxMAC(appSettings))
+								{
+									Console.WriteLine("Press any key to continue...");
+									Console.ReadKey(true); // Wait for user to press a key before re-displaying the menu
+
+									return;
+								}
+								skip = true;
+							}
+							break;
+						case ConsoleKey.D3:
+							skip = true;
+							break;
+						case ConsoleKey.D0:
+#if UNITY_EDITOR
+							EditorApplication.ExitPlaymode(); // Make sure to include the UnityEditor namespace if using Unity
+#else
+                					Application.Quit();
+#endif
+							return; // Exit the method
+						default:
+							Console.WriteLine("Invalid input. Please enter a valid number.");
+							continue;
 					}
 				}
 
@@ -1149,18 +1234,7 @@ namespace FishMMO.Shared
 					Log("Updating database...");
 					await RunDotNetCommandAsync($"ef database update -p {Constants.Configuration.ProjectPath} -s {Constants.Configuration.StartupProject}");
 
-					StartCoroutine(NetHelper.FetchExternalIPAddress((ip) =>
-					{
-						Log("Databases are ready:\r\n" +
-						"Npgsql Database: " + appSettings.Npgsql.Database + "\r\n" +
-						"Npgsql Username: " + appSettings.Npgsql.Username + "\r\n" +
-						"Npgsql Password: " + appSettings.Npgsql.Password + "\r\n" +
-						"Npgsql Host: " + ip + "\r\n" +
-						"Npgsql Port: " + appSettings.Npgsql.Port + "\r\n" +
-						"Redis Host: " + ip + "\r\n" +
-						"Redis Port: " + appSettings.Redis.Port + "\r\n" +
-						"Redis Password: " + appSettings.Redis.Password);
-					}));
+					Log($"Initial Migration completed...");
 				}
 			}
 			else
@@ -1172,6 +1246,7 @@ namespace FishMMO.Shared
 		private async void UpdateDatabase()
 		{
 			string timestamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
+			
 			Log($"Updating the database at {timestamp}...");
 
 			// Run 'dotnet ef database update' command
@@ -1183,11 +1258,14 @@ namespace FishMMO.Shared
 		private async void CreateMigration()
 		{
 			string timestamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
+
 			Log($"Creating a new migration {timestamp}...");
 
 			// Run 'dotnet ef migrations add Initial' command
 			await RunDotNetCommandAsync($"ef migrations add {timestamp} -p {Constants.Configuration.ProjectPath} -s {Constants.Configuration.StartupProject}");
 
+			Log($"Updating the database at {timestamp}...");
+			
 			// Run 'dotnet ef database update' command
 			await RunDotNetCommandAsync($"ef database update -p {Constants.Configuration.ProjectPath}  -s  {Constants.Configuration.StartupProject}");
 
