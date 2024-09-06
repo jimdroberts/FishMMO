@@ -2,6 +2,7 @@
 
 #if UNITY_EDITOR
 using UnityEditor;
+using UnityEditor.Build;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -13,8 +14,6 @@ using Debug = UnityEngine.Debug;
 using System.Diagnostics;
 using UnityEngine;
 using System.Runtime.InteropServices;
-using Microsoft.Extensions.Configuration;
-using FishNet.Configuring;
 
 namespace FishMMO.Shared
 {
@@ -185,16 +184,16 @@ start Scene.exe SCENE";
 			}
 
 			// Ensure all assets are included
-        	AssetDatabase.Refresh();
+        		AssetDatabase.Refresh();
 
 			// Get the original active build info
 			BuildTargetGroup originalGroup = EditorUserBuildSettings.selectedBuildTargetGroup;
+			NamedBuildTarget originalNamedBuildTargetGroup = NamedBuildTarget.FromBuildTargetGroup(originalGroup);
 			BuildTarget originalBuildTarget = EditorUserBuildSettings.activeBuildTarget;
 			StandaloneBuildSubtarget originalBuildSubtarget = EditorUserBuildSettings.standaloneBuildSubtarget;
-			ScriptingImplementation originalScriptingImp = PlayerSettings.GetScriptingBackend(originalGroup);
-			Il2CppCompilerConfiguration originalCompilerConf = PlayerSettings.GetIl2CppCompilerConfiguration(originalGroup);
-			UnityEditor.Build.NamedBuildTarget originalNamedBuildTargetGroup = UnityEditor.Build.NamedBuildTarget.FromBuildTargetGroup(originalGroup);
-			UnityEditor.Build.Il2CppCodeGeneration originalOptimization = PlayerSettings.GetIl2CppCodeGeneration(originalNamedBuildTargetGroup);
+			ScriptingImplementation originalScriptingImp = PlayerSettings.GetScriptingBackend(originalNamedBuildTargetGroup);
+			Il2CppCompilerConfiguration originalCompilerConf = PlayerSettings.GetIl2CppCompilerConfiguration(originalNamedBuildTargetGroup);
+			Il2CppCodeGeneration originalOptimization = PlayerSettings.GetIl2CppCodeGeneration(originalNamedBuildTargetGroup);
 
 			// Enable IL2CPP for webgl
 			bool bakeCollisionMeshes = PlayerSettings.bakeCollisionMeshes;
@@ -204,9 +203,9 @@ start Scene.exe SCENE";
 			bool dataCaching = PlayerSettings.WebGL.dataCaching;
 			if (buildTarget == BuildTarget.WebGL)
 			{
-				PlayerSettings.SetScriptingBackend(EditorUserBuildSettings.selectedBuildTargetGroup, ScriptingImplementation.IL2CPP);
-				PlayerSettings.SetIl2CppCompilerConfiguration(EditorUserBuildSettings.selectedBuildTargetGroup, Il2CppCompilerConfiguration.Release);
-				PlayerSettings.SetIl2CppCodeGeneration(UnityEditor.Build.NamedBuildTarget.WebGL, UnityEditor.Build.Il2CppCodeGeneration.OptimizeSize);
+				PlayerSettings.SetScriptingBackend(originalNamedBuildTargetGroup, ScriptingImplementation.IL2CPP);
+				PlayerSettings.SetIl2CppCompilerConfiguration(originalNamedBuildTargetGroup, Il2CppCompilerConfiguration.Release);
+				PlayerSettings.SetIl2CppCodeGeneration(NamedBuildTarget.WebGL, Il2CppCodeGeneration.OptimizeSize);
 
 				// Disable pre-baked meshes and mesh stripping in WebGL
 				PlayerSettings.bakeCollisionMeshes = false;
@@ -400,14 +399,14 @@ start Scene.exe SCENE";
 			catch (Exception ex)
 			{
 				Debug.LogError($"Exception during build: {ex.Message}");
-            	Debug.LogError($"Stack trace: {ex.StackTrace}");
+            			Debug.LogError($"Stack trace: {ex.StackTrace}");
 			}
 
 			// Return IL2CPP settings to original
 			if (buildTarget == BuildTarget.WebGL)
 			{
-				PlayerSettings.SetScriptingBackend(originalGroup, originalScriptingImp);
-				PlayerSettings.SetIl2CppCompilerConfiguration(originalGroup, originalCompilerConf);
+				PlayerSettings.SetScriptingBackend(originalNamedBuildTargetGroup, originalScriptingImp);
+				PlayerSettings.SetIl2CppCompilerConfiguration(originalNamedBuildTargetGroup, originalCompilerConf);
 				PlayerSettings.SetIl2CppCodeGeneration(originalNamedBuildTargetGroup, originalOptimization);
 				PlayerSettings.bakeCollisionMeshes = bakeCollisionMeshes;
 				PlayerSettings.stripUnusedMeshComponents = stripUnusedMeshComponents;

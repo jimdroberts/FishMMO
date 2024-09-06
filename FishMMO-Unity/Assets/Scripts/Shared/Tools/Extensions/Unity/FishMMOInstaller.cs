@@ -1098,7 +1098,7 @@ namespace FishMMO.Shared
 
 				AppSettings appSettings = JsonUtility.FromJson<AppSettings>(jsonContent);
 
-				if (PromptForYesNo("Install Docker Database?"))
+				if (PromptForYesNo("Install Docker Database? (Selecting No will prompt to install Postgresql)"))
 				{
 					if (!await InstallDocker())
 					{

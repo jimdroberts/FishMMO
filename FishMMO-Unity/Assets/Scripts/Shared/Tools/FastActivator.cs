@@ -12,7 +12,9 @@ namespace FishMMO.Shared
 	{
 		internal static object CreateDelegate(Type type, Type delegateType, Type[] argTypes)
 		{
+#pragma warning disable CS8632
 			ConstructorInfo? ctor = type.GetConstructor(argTypes);
+#pragma warning restore CS8632
 			if (ctor == null)
 			{
 				throw new MissingMethodException($"Type {type.Name} does not have any matching public constructors.");
