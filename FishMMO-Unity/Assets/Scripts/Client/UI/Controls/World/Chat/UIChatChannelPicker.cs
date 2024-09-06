@@ -14,6 +14,8 @@ namespace FishMMO.Client
 
 		public override void OnStarting()
 		{
+			OnLoseFocus += Hide;
+
 			if (ChannelTogglePrefab != null)
 			{
 				foreach (string channel in Enum.GetNames(typeof(ChatChannel)))
@@ -39,6 +41,7 @@ namespace FishMMO.Client
 
 		public override void OnDestroying()
 		{
+			OnLoseFocus -= Hide;
 		}
 
 		/// <summary>

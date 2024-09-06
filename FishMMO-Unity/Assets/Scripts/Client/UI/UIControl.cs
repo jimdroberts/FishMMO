@@ -33,6 +33,8 @@ namespace FishMMO.Client
 		private Vector2 dragOffset = Vector2.zero;
 		private bool isDragging;
 
+		public Action OnLoseFocus;
+
 		public Client Client { get; private set; }
 		public Transform Transform { get; private set; }
 		public string Name { get { return gameObject.name; } set { gameObject.name = value; } }
@@ -242,6 +244,8 @@ namespace FishMMO.Client
 		public void OnPointerExit(PointerEventData eventData)
 		{
 			HasFocus = false;
+			
+			OnLoseFocus?.Invoke();
 		}
 
 		public virtual void ToggleVisibility()
