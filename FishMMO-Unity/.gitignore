@@ -48,6 +48,10 @@ ExportedObj/
 *.VC.db
 *.vsconfig
 
+# Unity3D configuration files
+/[Aa]ssets/DefaultPrefabObjects.asset
+/[Aa]ssets/UniversalRenderPipelineGlobalSettings.asset
+
 # Unity3D generated meta files
 *.pidb.meta
 *.pdb.meta
@@ -74,6 +78,7 @@ crashlytics-build.properties
 
 # Local directory, anything here will be ignored
 /[Aa]ssets/[Ll][Oo][Cc][Aa][Ll]*
+/[Aa]ssets/Resources/Prefabs/Shared/WorldSceneDetails*
 
 # Special ignore directory, anything here will be ignored
 /[Aa]ssets/[Dd]ependencies*
@@ -82,5 +87,3 @@ crashlytics-build.properties
 /[Aa]ssets/[Pp]lugins/[Ff]ish[Nn]et/[Dd]emos*
 /[Aa]ssets/[Pp]lugins/[Ff]ish[Nn]et/[Ee]xample*
 /[Aa]ssets/[Pp]lugins/[Ff]ish[Nn]et/[Uu]pgrading*
-/[Aa]ssets/DefaultPrefabObjects.asset
-/[Aa]ssets/UniversalRenderPipelineGlobalSettings.asset
