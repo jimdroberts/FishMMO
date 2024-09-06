@@ -36,33 +36,38 @@ class RequestHandler:
             if conn is None:
                 return aiohttp.web.Response(status=500, text="Failed to connect to the database")
 
-            current_time = time.time()
-            if 'patch_servers' in self.cache and (current_time - self.cache['timestamp']) < self.CACHE_TIMEOUT:
+            current_time = datetime.now()
+            cache_expiration = timedelta(seconds=self.CACHE_TIMEOUT)
+            
+            if 'patch_servers' in self.cache and (current_time - self.cache['timestamp']) < cache_expiration:
                 logging.info("Cache hit for patch servers. Returning cached data.")
                 patch_servers = self.cache['patch_servers']
             else:
-                current_time = datetime.now()
                 cutoff_time = current_time - timedelta(minutes=5)
 
-                # Convert cutoff_time to a format compatible with PostgreSQL
-                cutoff_time_str = cutoff_time.strftime('%Y-%m-%d %H:%M:%S')
-		
                 logging.info("Cache miss for patch servers. Fetching data from the database.")
                 async with conn.transaction():
                     # Filter based on last_pulse
                     sql = """
                     SELECT address, port, last_pulse 
                     FROM fish_mmo_postgresql.patch_servers 
-                    WHERE last_pulse >= %s;
+                    WHERE last_pulse >= $1;
                     """
-                    patch_servers = await conn.fetch(sql, cutoff_time_str)
+                    patch_servers = await conn.fetch(sql, cutoff_time)
                 logging.info("Query executed successfully. Fetched patch server data from the database.")
 
+                patch_servers = [
+                        {
+                                **record,
+                                'last_pulse': record['last_pulse'].strftime('%Y-%m-%d %H:%M:%S')
+                        }
+                        for record in patch_servers
+                ]
                 self.cache['patch_servers'] = patch_servers
                 self.cache['timestamp'] = current_time
                 logging.info("Patch server data cached.")
 
-            response = aiohttp.web.json_response([dict(record) for record in patch_servers])
+            response = aiohttp.web.json_response(patch_servers)
             return await self.add_cors_headers(request, response)
 
         except Exception as e:

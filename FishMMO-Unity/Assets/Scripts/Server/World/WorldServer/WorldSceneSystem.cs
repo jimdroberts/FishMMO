@@ -13,7 +13,7 @@ namespace FishMMO.Server
 	// World scene system handles the node services
 	public class WorldSceneSystem : ServerBehaviour
 	{
-		private const int MAX_CLIENTS_PER_INSTANCE = 100;
+		private const int MAX_CLIENTS_PER_INSTANCE = 500;
 
 		private WorldServerAuthenticator loginAuthenticator;
 
@@ -141,7 +141,7 @@ namespace FishMMO.Server
 					{
 						int maxClientsPerInstance = MAX_CLIENTS_PER_INSTANCE;
 
-						// see if we can get a per scene max client count
+						// See if we can get a per scene max client count
 						if (WorldSceneDetailsCache != null &&
 							WorldSceneDetailsCache.Scenes != null &&
 							WorldSceneDetailsCache.Scenes.TryGetValue(sceneName, out WorldSceneDetails details))
@@ -149,29 +149,29 @@ namespace FishMMO.Server
 							maxClientsPerInstance = details.MaxClients;
 						}
 
-						// clamp at 1 to 100
+						// Clamp at 1 to 100
 						maxClientsPerInstance = maxClientsPerInstance.Clamp(1, MAX_CLIENTS_PER_INSTANCE);
 
-						// if we are at maximum capacity on this server move to the next one
+						// If we are at maximum capacity on this server move to the next one
 						if (loadedScene.CharacterCount >= maxClientsPerInstance)
 						{
 							continue;
 						}
 
-						// clear the connection from our wait queues
+						// Clear the connection from our wait queues
 						connections.Remove(connection);
 						WaitingConnectionsScenes.Remove(connection);
 
-						// if the connection is no longer active
+						// If the connection is no longer active
 						if (connection == null || !connection.IsActive || !AccountManager.GetAccountNameByConnection(connection, out string accountName))
 						{
 							continue;
 						}
 
-						// successfully found a scene to connect to
+						// Successfully found a scene to connect to
 						CharacterService.SetSceneHandle(dbContext, accountName, loadedScene.SceneHandle);
 
-						// tell the client to connect to the scene
+						// Tell the client to connect to the scene
 						Server.Broadcast(connection, new WorldSceneConnectBroadcast()
 						{
 							address = sceneServer.Address,
@@ -180,12 +180,12 @@ namespace FishMMO.Server
 					}
 				}
 
-				// check if we still have some players that are waiting for a scene
+				// Check if we still have some players that are waiting for a scene
 				if (connections.Count < 1)
 				{
 					WaitingConnections.Remove(sceneName);
 				}
-				// enqueue a new pending scene load request to the database, we need a new scene
+				// Enqueue a new pending scene load request to the database, we need a new scene
 				else if (!PendingSceneService.Exists(dbContext, worldServerSystem.ID, sceneName))
 				{
 					Debug.Log("World Scene System: Enqueing new PendingSceneLoadRequest: " + worldServerSystem.ID + ":" + sceneName);
@@ -196,13 +196,12 @@ namespace FishMMO.Server
 
 		private void UpdateConnectionCount(NpgsqlDbContext dbContext)
 		{
-			if (dbContext == null ||
-				ServerBehaviour.TryGet(out WorldServerSystem worldServerSystem))
+			if (dbContext == null || !ServerBehaviour.TryGet(out WorldServerSystem worldServerSystem))
 			{
 				return;
 			}
 
-			// get the scene data for each of our worlds scenes
+			// Get the scene data from each of our worlds scenes
 			List<LoadedSceneEntity> sceneServerCount = LoadedSceneService.GetServerList(dbContext, worldServerSystem.ID);
 			if (sceneServerCount != null)
 			{
@@ -220,7 +219,7 @@ namespace FishMMO.Server
 			if (!authenticated)
 				return;
 
-			// if we are authenticated try and connect the client to a scene server
+			// If we are authenticated try and connect the client to a scene server
 			TryConnectToSceneServer(conn);
 		}
 
@@ -236,7 +235,7 @@ namespace FishMMO.Server
 				return;
 			}
 			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-			// get the scene for the selected character
+			// Get the scene for the selected character
 			if (!AccountManager.GetAccountNameByConnection(conn, out string accountName) ||
 				!CharacterService.TryGetSelectedSceneName(dbContext, accountName, out string sceneName))
 			{
@@ -253,18 +252,18 @@ namespace FishMMO.Server
 				foreach (LoadedSceneEntity sceneEntity in loadedScenes)
 				{
 					selectedScene = sceneEntity;
-					break;// first scene? we could load balance here and distribute players evently across scenes
+					break;// First scene? We could load balance here and distribute players evenly across scenes.
 				}
 			}
-			// if we found a valid scene server
+			// If we found a valid scene server
 			if (selectedScene != null)
 			{
 				SceneServerEntity sceneServer = SceneServerService.GetServer(dbContext, selectedScene.SceneServerID);
 
-				// successfully found a scene to connect to
+				// Successfully found a scene to connect to
 				CharacterService.SetSceneHandle(dbContext, accountName, selectedScene.SceneHandle);
 
-				// tell the character to reconnect to the scene server
+				// Tell the character to reconnect to the scene server
 				Server.Broadcast(conn, new WorldSceneConnectBroadcast()
 				{
 					address = sceneServer.Address,
@@ -273,7 +272,7 @@ namespace FishMMO.Server
 			}
 			else
 			{
-				// add the client to the wait queue, when a scene server loads the scene the client will be connected when it's ready
+				// Add the client to the wait queue, when a scene server loads the scene the client will be connected when it's ready
 				WaitingConnectionsScenes[conn] = sceneName;
 				if (!WaitingConnections.TryGetValue(sceneName, out HashSet<NetworkConnection> connections))
 				{
@@ -286,7 +285,7 @@ namespace FishMMO.Server
 
 				if (!PendingSceneService.Exists(dbContext, worldServerSystem.ID, sceneName))
 				{
-					// enqueue the pending scene load to the database
+					// Enqueue the pending scene load to the database
 					Debug.Log("World Scene System: Enqueing new PendingSceneLoadRequest: " + worldServerSystem.ID + ":" + sceneName);
 					PendingSceneService.Enqueue(dbContext, worldServerSystem.ID, sceneName);
 				}

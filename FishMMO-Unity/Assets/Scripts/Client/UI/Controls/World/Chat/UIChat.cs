@@ -4,7 +4,6 @@ using UnityEngine.EventSystems;
 using System;
 using System.Collections.Generic;
 using FishMMO.Shared;
-using FishNet.Component.Prediction;
 
 namespace FishMMO.Client
 {

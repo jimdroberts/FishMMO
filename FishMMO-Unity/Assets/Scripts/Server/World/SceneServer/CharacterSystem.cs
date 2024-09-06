@@ -694,7 +694,7 @@ namespace FishMMO.Server
 			// check if we are a scene teleporter
 			if (details.Teleporters.TryGetValue(character.TeleporterName, out SceneTeleporterDetails teleporter))
 			{
-				//Debug.Log("Teleporter: " + character.TeleporterName + " found!");
+				//Debug.Log($"Teleporter: {character.TeleporterName} found! Teleporting {character.CharacterName} to {teleporter.ToScene}.");
 
 				// character becomes immortal when teleporting
 				if (character.TryGet(out ICharacterDamageController damageController))

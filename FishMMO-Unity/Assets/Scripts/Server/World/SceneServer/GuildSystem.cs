@@ -223,7 +223,9 @@ namespace FishMMO.Server
 
 			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 
-			CharacterGuildService.Save(dbContext, guildController.Character);
+			//Debug.Log($"Character {character.CharacterName} changed to scene {sceneName}.");
+
+			CharacterGuildService.Save(dbContext, guildController.Character, sceneName);
 			GuildUpdateService.Save(dbContext, guildController.ID);
 		}
 
@@ -526,7 +528,7 @@ namespace FishMMO.Server
 			bool result = CharacterGuildService.Delete(dbContext, guildController.Rank, guildController.ID, memberID);
 			if (result)
 			{
-				// tell the other servers to update their guild lists
+				// tell the servers to update their guild lists
 				GuildUpdateService.Save(dbContext, guildController.ID);
 			}
 		}
