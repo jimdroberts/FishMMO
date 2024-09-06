@@ -9,13 +9,12 @@ namespace FishMMO.Client
 {
 	public class UIChatChannelPicker : UIControl
 	{
-		public TMP_InputField input;
-		public Toggle channelTogglePrefab;
-		public List<Toggle> toggles = new List<Toggle>();
+		public Toggle ChannelTogglePrefab;
+		public List<Toggle> Toggles = new List<Toggle>();
 
 		public override void OnStarting()
 		{
-			if (channelTogglePrefab != null)
+			if (ChannelTogglePrefab != null)
 			{
 				foreach (string channel in Enum.GetNames(typeof(ChatChannel)))
 				{
@@ -23,7 +22,7 @@ namespace FishMMO.Client
 					{
 						continue;
 					}
-					Toggle toggle = Instantiate(channelTogglePrefab, transform);
+					Toggle toggle = Instantiate(ChannelTogglePrefab, transform);
 					if (toggle != null)
 					{
 						toggle.gameObject.SetActive(true);
@@ -32,7 +31,7 @@ namespace FishMMO.Client
 						{
 							label.text = channel;
 						}
-						toggles.Add(toggle);
+						Toggles.Add(toggle);
 					}
 				}
 			}
@@ -47,7 +46,7 @@ namespace FishMMO.Client
 		/// </summary>
 		public void Activate(HashSet<ChatChannel> activeChannels, string name, Vector3 position)
 		{
-			foreach (Toggle toggle in toggles)
+			foreach (Toggle toggle in Toggles)
 			{
 				Text label = toggle.GetComponentInChildren<Text>();
 				if (!Enum.TryParse(label.text, out ChatChannel channel) || !activeChannels.Contains(channel))
@@ -60,25 +59,25 @@ namespace FishMMO.Client
 				}
 			}
 			transform.position = position;
-			if (input != null)
+			if (InputField != null)
 			{
-				input.text = name;
+				InputField.text = name;
 			}
 		}
 
 		public void ChangeTabName()
 		{
-			if (input != null)
+			if (InputField != null)
 			{
-				if (!string.IsNullOrWhiteSpace(input.text))
+				if (!string.IsNullOrWhiteSpace(InputField.text))
 				{
 					if (UIManager.TryGet("UIChat", out UIChat chat))
 					{
-						string currentName = chat.currentTab;
-						if (!chat.RenameCurrentTab(input.text))
+						string currentName = chat.CurrentTab;
+						if (!chat.RenameCurrentTab(InputField.text))
 						{
 							// reset the input to the old name if we fail to rename the tab
-							input.text = currentName;
+							InputField.text = currentName;
 						}
 					}
 				}

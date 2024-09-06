@@ -198,12 +198,14 @@ namespace FishMMO.Shared
 		#region WSL
 		private async Task<bool> IsVirtualizationEnabledAsync()
 		{
-			return await RunProcessAsync("powershell.exe",
-										 "-Command \"(Get-WmiObject -Namespace 'root\\cimv2' -Class Win32_Processor).VirtualizationFirmwareEnabled\"",
-										 (e, o, err) =>
-										 {
-											 return bool.Parse(o.Trim());
-										 });
+			return await RunProcessAsync("systeminfo", "",
+								(e, o, err) => { return o.Contains("Virtualization Enabled In Firmware: Yes"); });
+		}
+
+		private async Task<bool> IsHyperVEnabledAsync()
+		{
+			return await RunProcessAsync("powershell.exe", "-Command \"Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V-All\"",
+								(e, o, err) => { return o.Contains("State : Enabled"); });
 		}
 
 		private async Task<bool> IsWSLInstalledAsync()
@@ -222,7 +224,10 @@ namespace FishMMO.Shared
 				return true;
 			}
 
-			if (await IsVirtualizationEnabledAsync())
+			bool virtualization = await IsVirtualizationEnabledAsync();
+			bool hyperV = await IsHyperVEnabledAsync();
+
+			if (virtualization || hyperV)
 			{
 				if (!await IsWSLInstalledAsync())
 				{

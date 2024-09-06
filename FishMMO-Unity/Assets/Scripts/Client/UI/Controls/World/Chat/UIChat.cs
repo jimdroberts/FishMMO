@@ -4,6 +4,7 @@ using UnityEngine.EventSystems;
 using System;
 using System.Collections.Generic;
 using FishMMO.Shared;
+using FishNet.Component.Prediction;
 
 namespace FishMMO.Client
 {
@@ -12,10 +13,10 @@ namespace FishMMO.Client
 		public const int MAX_LENGTH = 128;
 
 		public string WelcomeMessage = "Welcome to " + Constants.Configuration.ProjectName + "!\r\nChat channels are available.";
-		public Transform chatViewParent;
-		public UIChatMessage chatMessagePrefab;
-		public Transform chatTabViewParent;
-		public ChatTab chatTabPrefab;
+		public Transform ChatViewParent;
+		public UIChatMessage ChatMessagePrefab;
+		public Transform ChatTabViewParent;
+		public ChatTab ChatTabPrefab;
 
 		public Dictionary<string, string> ErrorCodes = new Dictionary<string, string>()
 		{
@@ -37,14 +38,13 @@ namespace FishMMO.Client
 			{ ChatChannel.System,	Color.yellow },
 		};
 
-		public List<ChatTab> initialTabs = new List<ChatTab>();
-		public Dictionary<string, ChatTab> tabs = new Dictionary<string, ChatTab>();
-		public string currentTab = "";
+		public Dictionary<string, ChatTab> Tabs = new Dictionary<string, ChatTab>();
+		public string CurrentTab = "";
 
 		public delegate void ChatMessageChange(UIChatMessage message);
 		public event ChatMessageChange OnMessageAdded;
 		public event ChatMessageChange OnMessageRemoved;
-		public List<UIChatMessage> messages = new List<UIChatMessage>();
+		public List<UIChatMessage> Messages = new List<UIChatMessage>();
 		public bool AllowRepeatMessages = false;
 		[Tooltip("The rate at which messages can be sent in milliseconds.")]
 		public float MessageRateLimit = 0.0f;
@@ -54,21 +54,20 @@ namespace FishMMO.Client
 
 		public override void OnStarting()
 		{
-			ChatHelper.InitializeOnce(GetChannelCommand);
-
-			if (initialTabs != null && initialTabs.Count > 0)
+			AddTab();
+			if (Tabs.Count > 0)
 			{
-				// activate the first tab
-				ActivateTab(initialTabs[0]);
-				// add all the tabs to our list and add our events
-				foreach (ChatTab tab in initialTabs)
+				foreach (ChatTab tab in new List<ChatTab>(Tabs.Values))
 				{
-					if (!tabs.ContainsKey(tab.name))
+					if (tab != null)
 					{
-						tabs.Add(tab.name, tab);
+						CurrentTab = tab.Label.text;
+						RenameCurrentTab("General");
 					}
 				}
 			}
+
+			ChatHelper.InitializeOnce(GetChannelCommand);
 
 			InstantiateChatMessage(ChatChannel.System, "", WelcomeMessage);
 
@@ -87,17 +86,6 @@ namespace FishMMO.Client
 
 		public override void OnDestroying()
 		{
-			if (initialTabs != null && initialTabs.Count > 0)
-			{
-				foreach (ChatTab tab in initialTabs)
-				{
-					if (!tabs.ContainsKey(tab.name))
-					{
-						tabs.Remove(tab.name);
-					}
-				}
-			}
-
 			Client.NetworkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
 		}
 
@@ -154,13 +142,13 @@ namespace FishMMO.Client
 
 		public void ValidateMessages()
 		{
-			if (tabs.TryGetValue(currentTab, out ChatTab tab))
+			if (Tabs.TryGetValue(CurrentTab, out ChatTab tab))
 			{
-				foreach (UIChatMessage message in messages)
+				foreach (UIChatMessage message in Messages)
 				{
 					if (message == null) continue;
 
-					if (tab.activeChannels.Contains(message.Channel))
+					if (tab.ActiveChannels.Contains(message.Channel))
 					{
 						message.gameObject.SetActive(true);
 					}
@@ -225,23 +213,24 @@ namespace FishMMO.Client
 		{
 			const int MAX_TABS = 12;
 
-			if (tabs.Count > MAX_TABS) return;
+			if (Tabs.Count > MAX_TABS) return;
 
-			ChatTab newTab = Instantiate(chatTabPrefab, chatTabViewParent);
+			ChatTab newTab = Instantiate(ChatTabPrefab, ChatTabViewParent);
 			string newTabName = "New Tab";
-			newTab.label.text = newTabName;
-			for (int i = 0; tabs.ContainsKey(newTab.label.text); ++i)
+			newTab.Label.text = newTabName;
+			for (int i = 0; Tabs.ContainsKey(newTab.Label.text); ++i)
 			{
-				newTab.label.text = newTabName + " " + i;
+				newTab.Label.text = newTabName + " " + i;
 			}
-			newTab.name = newTab.label.text;
+			newTab.name = newTab.Label.text;
+			newTab.OnRemoveTab += Tab_OnRemoveTab;
 			newTab.gameObject.SetActive(true);
-			tabs.Add(newTab.label.text, newTab);
+			Tabs.Add(newTab.Label.text, newTab);
 		}
 
 		public void ToggleChannel(ChatChannel channel, bool value)
 		{
-			if (tabs.TryGetValue(currentTab, out ChatTab tab))
+			if (Tabs.TryGetValue(CurrentTab, out ChatTab tab))
 			{
 				tab.ToggleActiveChannel(channel, value);
 			}
@@ -249,44 +238,58 @@ namespace FishMMO.Client
 
 		public bool RenameCurrentTab(string newName)
 		{
-			if (tabs.ContainsKey(newName))
+			if (Tabs.ContainsKey(newName))
 			{
 				return false;
 			}
-			else if (tabs.TryGetValue(currentTab, out ChatTab tab))
+			else if (Tabs.TryGetValue(CurrentTab, out ChatTab tab))
 			{
-				tabs.Remove(currentTab);
-				tab.name = newName;
-				tab.label.text = newName;
-				tabs.Add(tab.name, tab);
+				Tabs.Remove(CurrentTab);
+				tab.Label.text = newName;
+				tab.name = tab.Label.text;
+				Tabs.Add(tab.Label.text, tab);
 				ActivateTab(tab);
 				return true;
 			}
 			return false; // something went wrong
 		}
 
-		public void RemoveTab(ChatTab tab)
+		public void Tab_OnRemoveTab(ChatTab tab)
 		{
-
+			Tabs.Remove(tab.Label.text);
+			if (CurrentTab.Equals(tab.Label.text))
+			{
+				if (Tabs.Count > 0)
+				{
+					foreach (ChatTab chatTab in Tabs.Values)
+					{
+						CurrentTab = chatTab.Label.text;
+					}
+				}
+				else
+				{
+					CurrentTab = "";
+				}
+			}
 		}
 
 		public void ActivateTab(ChatTab tab)
 		{
-			currentTab = tab.name;
+			CurrentTab = tab.Label.text;
 		}
 
 		private void AddMessage(UIChatMessage message)
 		{
 			const int MAX_MESSAGES = 128;
 
-			messages.Add(message);
+			Messages.Add(message);
 			OnMessageAdded?.Invoke(message);
 
-			if (messages.Count > MAX_MESSAGES)
+			if (Messages.Count > MAX_MESSAGES)
 			{
 				// messages are FIFO.. remove the first message when we hit our limit.
-				UIChatMessage oldMessage = messages[0];
-				messages.RemoveAt(0);
+				UIChatMessage oldMessage = Messages[0];
+				Messages.RemoveAt(0);
 				//OnWriteMessageToDisk?.Invoke(oldMessage); can we add logging to disc later?
 				OnMessageRemoved?.Invoke(oldMessage);
 				Destroy(oldMessage.gameObject);
@@ -295,7 +298,7 @@ namespace FishMMO.Client
 
 		public void InstantiateChatMessage(ChatChannel channel, string name, string message, Color? color = null)
 		{
-			UIChatMessage newMessage = Instantiate(chatMessagePrefab, chatViewParent);
+			UIChatMessage newMessage = Instantiate(ChatMessagePrefab, ChatViewParent);
 			newMessage.Channel = channel;
 			newMessage.CharacterName.color = color ?? ChannelColors[channel];
 			newMessage.CharacterName.text = "[" + channel.ToString() + "] ";
@@ -341,9 +344,9 @@ namespace FishMMO.Client
 
 		private void OnClientChatBroadcastReceived(ChatBroadcast msg, Channel channel)
 		{
-			if (!string.IsNullOrWhiteSpace(currentTab) && tabs.TryGetValue(currentTab, out ChatTab tab))
+			if (!string.IsNullOrWhiteSpace(CurrentTab) && Tabs.TryGetValue(CurrentTab, out ChatTab tab))
 			{
-				if (tab.activeChannels.Contains(msg.channel))
+				if (tab.ActiveChannels.Contains(msg.channel))
 				{
 					// parse the local message
 					ParseLocalMessage(Character, msg);

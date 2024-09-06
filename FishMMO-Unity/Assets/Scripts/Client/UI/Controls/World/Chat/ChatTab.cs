@@ -2,15 +2,18 @@
 using TMPro;
 using UnityEngine;
 using FishMMO.Shared;
+using System;
 
 namespace FishMMO.Client
 {
 	public class ChatTab : MonoBehaviour
 	{
-		public TMP_Text label;
+		public Action<ChatTab> OnRemoveTab;
+
+		public TMP_Text Label;
 
 		// all tabs are active by default
-		public HashSet<ChatChannel> activeChannels = new HashSet<ChatChannel>()
+		public HashSet<ChatChannel> ActiveChannels = new HashSet<ChatChannel>()
 		{
 			ChatChannel.Say,
 			ChatChannel.World,
@@ -22,6 +25,14 @@ namespace FishMMO.Client
 			ChatChannel.System,
 		};
 
+		public void RemoveTab()
+		{
+			OnRemoveTab?.Invoke(this);
+			OnRemoveTab = null;
+			this.gameObject.SetActive(false);
+			Destroy(this.gameObject);
+		}
+
 		public void ToggleUIChatChannelPicker()
 		{
 			if (UIManager.TryGet("UIChatChannelPicker", out UIChatChannelPicker channelPicker))
@@ -29,23 +40,23 @@ namespace FishMMO.Client
 				channelPicker.ToggleVisibility();
 				if (channelPicker.Visible)
 				{
-					channelPicker.Activate(activeChannels, name, transform.position);
+					channelPicker.Activate(ActiveChannels, name, transform.position);
 				}
 			}
 		}
 
 		public void ToggleActiveChannel(ChatChannel channel, bool value)
 		{
-			if (activeChannels.Contains(channel))
+			if (ActiveChannels.Contains(channel))
 			{
 				if (!value)
 				{
-					activeChannels.Remove(channel);
+					ActiveChannels.Remove(channel);
 				}
 			}
 			else if (value)
 			{
-				activeChannels.Add(channel);
+				ActiveChannels.Add(channel);
 			}
 		}
 	}
