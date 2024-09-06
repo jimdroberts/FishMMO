@@ -54,8 +54,7 @@ namespace FishMMO.Server
 
 					if (Constants.Configuration.Settings.TryGetString("ServerName", out string name))
 					{
-						SceneServerService.Add(dbContext, server.address, server.port, characterCount, locked, out id);
-						Debug.Log("Scene Server System: Added Scene Server to Database: [" + id + "] " + name + ":" + server.address + ":" + server.port);
+						SceneServerService.Add(dbContext, name, server.address, server.port, characterCount, locked, out id);
 					}
 
 					characterSystem.OnDisconnect += CharacterSystem_OnDisconnect;
@@ -80,8 +79,7 @@ namespace FishMMO.Server
 				if (Server != null &&
 					Constants.Configuration.Settings.TryGetString("ServerName", out string name))
 				{
-					Debug.Log("Scene Server System: Removing Scene Server: " + id);
-					SceneServerService.Delete(dbContext, id);
+					Debug.Log("Scene Server System: Removing Scene Server scenes: " + id);
 					LoadedSceneService.Delete(dbContext, id);
 				}
 			}

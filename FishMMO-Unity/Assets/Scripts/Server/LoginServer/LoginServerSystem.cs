@@ -30,10 +30,10 @@ namespace FishMMO.Server
 				ServerManager.OnServerConnectionState += ServerManager_OnServerConnectionState;
 
 				if (Server != null &&
-					Server.TryGetServerIPAddress(out ServerAddress server))
+					Server.TryGetServerIPAddress(out ServerAddress server) &&
+					Constants.Configuration.Settings.TryGetString("ServerName", out string name))
 				{
-					Debug.Log("Login Server System: Adding Login Server to Database: " + name + ":" + server.address + ":" + server.port);
-					LoginServerService.Add(dbContext, server.address, server.port, out id);
+					LoginServerService.Add(dbContext, name, server.address, server.port, out id);
 				}
 			}
 			else
@@ -44,20 +44,6 @@ namespace FishMMO.Server
 
 		public override void Destroying()
 		{
-			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-			if (dbContext == null)
-			{
-				throw new UnityException("Failed to get dbContext.");
-			}
-
-			if (ServerManager != null)
-			{
-				if (Server != null)
-				{
-					Debug.Log("Login Server System: Removing Login Server from Database: " + id);
-					LoginServerService.Delete(dbContext, id);
-				}
-			}
 		}
 
 		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs args)

@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using Microsoft.EntityFrameworkCore;
 using FishMMO.Database.Npgsql;
 using FishMMO.Database.Npgsql.Entities;
 using FishMMO.Shared;
@@ -24,11 +23,27 @@ namespace FishMMO.Server.DatabaseServices
 		)
 		{
 			if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(address))
+			{
 				throw new Exception("Name or address is invalid");
+			}
 
-			if (dbContext.WorldServers
-			    .Any(server => EF.Functions.Like(server.Name, name.ToLower())))
-				throw new Exception($"World with name \"{name}\" already exists");
+			// See if a World Server exists with this name already.
+			var worldServer = dbContext.WorldServers.FirstOrDefault(c => c.Name.Equals(name));
+			if (worldServer != null)
+			{
+				UnityEngine.Debug.Log($"WorldServerService: World Server[{worldServer.ID}] with name \"{name}\" already exists. Updating information.");
+
+				worldServer.LastPulse = DateTime.UtcNow;
+				worldServer.Address = address;
+				worldServer.Port = port;
+				worldServer.CharacterCount = characterCount;
+				worldServer.Locked = locked;
+
+				dbContext.SaveChanges();
+
+				id = worldServer.ID;
+				return worldServer;
+			}
 
 			var server = new WorldServerEntity()
 			{
@@ -41,6 +56,8 @@ namespace FishMMO.Server.DatabaseServices
 			};
 			dbContext.WorldServers.Add(server);
 			dbContext.SaveChanges();
+
+			UnityEngine.Debug.Log($"WorldServerService: Added World Server to Database: [{server.ID}] {name}:{address}:{port}");
 
 			id = server.ID;
 			return server;

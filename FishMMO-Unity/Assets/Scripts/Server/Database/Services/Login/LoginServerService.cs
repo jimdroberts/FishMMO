@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Diagnostics;
 using System.Linq;
 using FishMMO.Database.Npgsql;
 using FishMMO.Database.Npgsql.Entities;
@@ -13,25 +12,43 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static LoginServerEntity Add(
 			NpgsqlDbContext dbContext,
+			string name,
 			string address,
 			ushort port,
 			out long id
 		)
 		{
-			if (string.IsNullOrWhiteSpace(address))
-				throw new Exception("Address is invalid");
+			if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(address))
+			{
+				throw new Exception("Name or Address is invalid");
+			}
 
-			var loginServer = dbContext.LoginServers.FirstOrDefault(c => c.Address == address && c.Port == port);
-			if (loginServer != null) throw new Exception($"Login Server at {address}:{port} has already been added to the database."); ;
+			var loginServer = dbContext.LoginServers.FirstOrDefault(c => c.Name == name);
+			if (loginServer != null)
+			{
+				UnityEngine.Debug.Log($"LoginServerService: Login Server[{loginServer.ID}] with name \"{name}\" already exists. Updating information.");
+
+				loginServer.LastPulse = DateTime.UtcNow;
+				loginServer.Address = address;
+				loginServer.Port = port;
+
+				dbContext.SaveChanges();
+
+				id = loginServer.ID;
+				return loginServer;
+			}
 
 			var server = new LoginServerEntity()
 			{
+				Name = name,
 				LastPulse = DateTime.UtcNow,
 				Address = address,
 				Port = port,
 			};
 			dbContext.LoginServers.Add(server);
 			dbContext.SaveChanges();
+
+			UnityEngine.Debug.Log($"LoginServerService: Added Login Server to Database: [{server.ID}] {name}:{address}:{port}");
 
 			id = server.ID;
 			return server;

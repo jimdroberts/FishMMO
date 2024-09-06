@@ -12,6 +12,7 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static SceneServerEntity Add(
 			NpgsqlDbContext dbContext,
+			string name,
 			string address,
 			ushort port,
 			int characterCount,
@@ -19,8 +20,31 @@ namespace FishMMO.Server.DatabaseServices
 			out long id
 		)
 		{
+			if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(address))
+			{
+				throw new Exception("Name or Address is invalid");
+			}
+
+			var sceneServer = dbContext.SceneServers.FirstOrDefault(c => c.Name == name);
+			if (sceneServer != null)
+			{
+				UnityEngine.Debug.Log($"ServerServerService: Scene Server[{sceneServer.ID}] with name \"{name}\" already exists. Updating information.");
+
+				sceneServer.LastPulse = DateTime.UtcNow;
+				sceneServer.Address = address;
+				sceneServer.Port = port;
+				sceneServer.CharacterCount = characterCount;
+				sceneServer.Locked = locked;
+
+				dbContext.SaveChanges();
+
+				id = sceneServer.ID;
+				return sceneServer;
+			}
+
 			var server = new SceneServerEntity()
 			{
+				Name = name,
 				LastPulse = DateTime.UtcNow,
 				Address = address,
 				Port = port,
@@ -29,6 +53,8 @@ namespace FishMMO.Server.DatabaseServices
 			};
 			dbContext.SceneServers.Add(server);
 			dbContext.SaveChanges();
+
+			UnityEngine.Debug.Log($"ServerServerService: Added Scene Server to Database: [{server.ID}] {name}:{address}:{port}");
 
 			id = server.ID;
 			return server;
