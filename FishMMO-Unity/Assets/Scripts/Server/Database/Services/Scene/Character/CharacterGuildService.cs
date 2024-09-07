@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using FishMMO.Database.Npgsql;
 using FishMMO.Database.Npgsql.Entities;
@@ -106,12 +107,14 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static bool Delete(NpgsqlDbContext dbContext, GuildRank kickerRank, long guildID, long memberID)
 		{
-			if (guildID == 0 ||
-				memberID == 0)
+			if (guildID == 0 || memberID == 0)
 			{
 				return false;
 			}
-			var characterGuildEntity = dbContext.CharacterGuilds.FirstOrDefault(a => a.GuildID == guildID && a.CharacterID == memberID && a.Rank < (byte)kickerRank);
+
+			byte rank = (byte)kickerRank;
+
+			var characterGuildEntity = dbContext.CharacterGuilds.FirstOrDefault(a => a.GuildID == guildID && a.CharacterID == memberID && a.Rank < rank);
 			if (characterGuildEntity != null)
 			{
 				dbContext.CharacterGuilds.Remove(characterGuildEntity);

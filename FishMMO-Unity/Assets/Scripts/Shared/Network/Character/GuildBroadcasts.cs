@@ -40,6 +40,16 @@ namespace FishMMO.Shared
 
 	public struct GuildRemoveBroadcast : IBroadcast
 	{
-		public List<long> members;
+		public long guildMemberID;
+	}
+
+	public struct GuildPromoteBroadcast : IBroadcast
+	{
+		public long guildMemberID;
+	}
+
+	public struct GuildDemoteBroadcast : IBroadcast
+	{
+		public long guildMemberID;
 	}
 }

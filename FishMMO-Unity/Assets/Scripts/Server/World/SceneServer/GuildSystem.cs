@@ -137,6 +137,8 @@ namespace FishMMO.Server
 			return updates;
 		}
 
+		private Dictionary<long, HashSet<long>> guildMemberTracker = new Dictionary<long, HashSet<long>>();
+
 		// process updates from the database
 		private void ProcessGuildUpdates(List<GuildUpdateEntity> updates)
 		{
@@ -161,6 +163,31 @@ namespace FishMMO.Server
 
 				// get the current guild members from the database
 				List<CharacterGuildEntity> dbMembers = CharacterGuildService.Members(dbContext, update.GuildID);
+
+				// Get the current member ids
+				var currentMemberIDs = dbMembers.Select(x => x.CharacterID).ToHashSet();
+
+				// Check if we have previously cached the guild member list
+				if (guildMemberTracker.TryGetValue(update.GuildID, out HashSet<long> previousMembers))
+				{
+					// Compute the difference: members that are in previousMembers but not in currentMemberIDs
+					List<long> difference = previousMembers.Except(currentMemberIDs).ToList();
+
+					foreach (long memberID in difference)
+					{
+						// Tell the member connection to leave their guild immediately
+						if (ServerBehaviour.TryGet(out CharacterSystem cs) &&
+							cs.CharactersByID.TryGetValue(memberID, out IPlayerCharacter character) &&
+							character != null &&
+							character.TryGet(out IGuildController targetGuildController))
+						{
+							targetGuildController.ID = 0;
+							Server.Broadcast(character.Owner, new GuildLeaveBroadcast(), true, Channel.Reliable);
+						}
+					}
+				}
+				// Cache the guild member IDs
+				guildMemberTracker[update.GuildID] = currentMemberIDs;
 
 				var addBroadcasts = dbMembers.Select(x => new GuildAddBroadcast()
 				{
@@ -516,31 +543,37 @@ namespace FishMMO.Server
 			// validate character
 			if (guildController == null ||
 				guildController.ID < 1 ||
-				guildController.Rank != GuildRank.Leader ||
-				guildController.Rank != GuildRank.Officer) 
+				guildController.Rank < GuildRank.Officer) 
 			{
 				return;
 			}
 
-			if (msg.members == null || msg.members.Count < 1)
+			if (msg.guildMemberID < 1)
 			{
 				return;
 			}
-
-			// first index only
-			long memberID = msg.members[0];
 
 			// we can't kick ourself
-			if (memberID == guildController.Character.ID)
+			if (msg.guildMemberID == guildController.Character.ID)
 			{
 				return;
 			}
 
 			// remove the character from the guild in the database
 			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-			bool result = CharacterGuildService.Delete(dbContext, guildController.Rank, guildController.ID, memberID);
+			bool result = CharacterGuildService.Delete(dbContext, guildController.Rank, guildController.ID, msg.guildMemberID);
 			if (result)
 			{
+				// Tell the local target connection to leave their guild immediately
+				/*if (ServerBehaviour.TryGet(out CharacterSystem characterSystem) &&
+					characterSystem.CharactersByID.TryGetValue(msg.guildMemberID, out IPlayerCharacter character) &&
+					character != null &&
+					character.TryGet(out IGuildController targetGuildController))
+				{
+					targetGuildController.ID = 0;
+					Server.Broadcast(character.Owner, new GuildLeaveBroadcast(), true, Channel.Reliable);
+				}*/
+
 				// tell the servers to update their guild lists
 				GuildUpdateService.Save(dbContext, guildController.ID);
 			}

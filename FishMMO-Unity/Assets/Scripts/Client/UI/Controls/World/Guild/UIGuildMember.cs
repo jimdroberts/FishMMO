@@ -1,6 +1,7 @@
 ﻿using UnityEngine;
 using TMPro;
 using FishMMO.Shared;
+using FishNet.Transporting;
 using System;
 
 namespace FishMMO.Client
@@ -15,20 +16,37 @@ namespace FishMMO.Client
 		{
 			//Debug.Log(Name.text);
 
-			if (UIManager.TryGet("UIDropdown", out UIDropdown uiDropdown))
+			if (UIManager.TryGet("UIDropdown", out UIDropdown uiDropdown) &&
+			    UIManager.TryGet("UIGuild", out UIGuild uiGuild) &&
+			    uiGuild.Character != null)
 			{
 				uiDropdown.Hide();
 
-				uiDropdown.AddButton("Message", () =>
+				ClientNamingSystem.GetCharacterID(Name.text, (id) =>
 				{
+					if (uiGuild.Character.ID == id)
+					{
+						return;
+					}
 
+					uiDropdown.AddButton("Message", () =>
+					{
+
+					});
+
+					uiDropdown.AddButton("Add Friend", () =>
+					{
+						if (uiGuild.Character.ID != id)
+						{
+							Client.Broadcast(new FriendAddNewBroadcast()
+							{
+								characterID = id
+							}, Channel.Reliable);
+						}
+					});
+
+					uiDropdown.Show();
 				});
-				uiDropdown.AddButton("Add Friend", () =>
-				{
-
-				});
-
-				uiDropdown.Show();
 			}
 		}
 
@@ -47,17 +65,26 @@ namespace FishMMO.Client
 				if (Enum.TryParse(Rank.text, out GuildRank rank) &&
 				    rank < guildController.Rank)
 				{
-					uiDropdown.AddButton("Promote", () =>
+					if (rank + 1 < guildController.Rank)
 					{
+						uiDropdown.AddButton("Promote", () =>
+						{
 
-					});
+						});
+					}
 					uiDropdown.AddButton("Demote", () =>
 					{
 
 					});
 					uiDropdown.AddButton("Kick", () =>
 					{
-
+						ClientNamingSystem.GetCharacterID(Name.text, (id) =>
+						{
+							Client.Broadcast(new GuildRemoveBroadcast()
+							{
+								guildMemberID = id,
+							}, Channel.Reliable);
+						});
 					});
 				}
 

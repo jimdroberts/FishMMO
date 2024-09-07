@@ -116,12 +116,12 @@ namespace FishMMO.Client
 		public static void GetCharacterID(string name, Action<long> action)
 		{
 			if (nameToID.TryGetValue(name, out long id))
-            {
+			{
 				// if we find the name we're done
 				action?.Invoke(id);
 			}
 			else if (Client != null)
-            {
+			{
 				var nameLowerCase = name.ToLower().Trim();
 
 				// request the name from the server
@@ -192,7 +192,7 @@ namespace FishMMO.Client
 		}
 
 		private static void UpdateKnownNames(NamingSystemType type, long id, string name)
-        {
+		{
 			if (!idToName.TryGetValue(type, out Dictionary<long, string> knownNames))
 			{
 				idToName.Add(type, knownNames = new Dictionary<long, string>());

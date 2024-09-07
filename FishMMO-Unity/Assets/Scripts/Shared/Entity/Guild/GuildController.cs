@@ -1,6 +1,4 @@
-﻿using FishNet.Connection;
-using FishNet.Object.Synchronizing;
-using FishNet.Serializing;
+﻿using FishNet.Object.Synchronizing;
 using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
@@ -47,6 +45,10 @@ namespace FishMMO.Shared
 
 		private void OnGuildIDChanged(long prev, long next, bool asServer)
 		{
+			if (next == 0)
+			{
+				Rank = GuildRank.None;
+			}
 			IGuildController.OnReadID?.Invoke(next, PlayerCharacter);
 		}
 
@@ -134,9 +136,7 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
-			PlayerCharacter.SetGuildName(null);
 			ID = 0;
-			Rank = GuildRank.None;
 			OnLeaveGuild?.Invoke();
 		}
 
@@ -145,10 +145,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void OnClientGuildRemoveBroadcastReceived(GuildRemoveBroadcast msg, Channel channel)
 		{
-			foreach (long characterID in msg.members)
-			{
-				OnRemoveGuildMember?.Invoke(characterID);
-			}
+			OnRemoveGuildMember?.Invoke(msg.guildMemberID);
 		}
 #endif
 	}
