@@ -159,6 +159,11 @@ namespace FishMMO.Client
 			}
 		}
 
+		public void SetInputText(string input)
+		{
+			InputField.text = input;
+		}
+
 		public void OnSubmit(string input)
 		{
 			if (!InputManager.GetKeyDown("Chat") &&

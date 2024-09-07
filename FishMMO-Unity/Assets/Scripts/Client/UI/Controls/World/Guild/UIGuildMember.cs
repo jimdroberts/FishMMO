@@ -31,7 +31,10 @@ namespace FishMMO.Client
 
 					uiDropdown.AddButton("Message", () =>
 					{
-
+						if (UIManager.TryGet("UIChat", out UIChat uiChat))
+						{
+							uiChat.SetInputText($"/tell {Name.text} ");
+						}
 					});
 
 					uiDropdown.AddButton("Add Friend", () =>
