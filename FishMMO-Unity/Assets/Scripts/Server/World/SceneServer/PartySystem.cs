@@ -26,6 +26,8 @@ namespace FishMMO.Server
 		private DateTime lastFetchTime = DateTime.UtcNow;
 		private long lastPosition = 0;
 		private float nextPump = 0.0f;
+		// <PartyID <MemberIDs>>
+		private Dictionary<long, HashSet<long>> partyMemberTracker = new Dictionary<long, HashSet<long>>();
 		// clientID / partyID
 		private readonly Dictionary<long, long> pendingInvitations = new Dictionary<long, long>();
 
@@ -160,6 +162,31 @@ namespace FishMMO.Server
 				// get the current party members from the database
 				List<CharacterPartyEntity> dbMembers = CharacterPartyService.Members(dbContext, update.PartyID);
 
+				// Get the current member ids
+				var currentMemberIDs = dbMembers.Select(x => x.CharacterID).ToHashSet();
+
+				// Check if we have previously cached the party member list
+				if (partyMemberTracker.TryGetValue(update.PartyID, out HashSet<long> previousMembers))
+				{
+					// Compute the difference: members that are in previousMembers but not in currentMemberIDs
+					List<long> difference = previousMembers.Except(currentMemberIDs).ToList();
+
+					foreach (long memberID in difference)
+					{
+						// Tell the member connection to leave their party immediately
+						if (ServerBehaviour.TryGet(out CharacterSystem cs) &&
+							cs.CharactersByID.TryGetValue(memberID, out IPlayerCharacter character) &&
+							character != null &&
+							character.TryGet(out IPartyController targetPartyController))
+						{
+							targetPartyController.ID = 0;
+							Server.Broadcast(character.Owner, new PartyLeaveBroadcast(), true, Channel.Reliable);
+						}
+					}
+				}
+				// Cache the guild member IDs
+				partyMemberTracker[update.PartyID] = currentMemberIDs;
+
 				var addBroadcasts = dbMembers.Select(x => new PartyAddBroadcast()
 				{
 					partyID = x.PartyID,
@@ -284,7 +311,7 @@ namespace FishMMO.Server
 				pendingInvitations.Add(targetCharacter.ID, inviter.ID);
 				Server.Broadcast(targetCharacter.Owner, new PartyInviteBroadcast()
 				{
-					inviterCharacterID = inviter.ID,
+					inviterCharacterID = inviter.Character.ID,
 					targetCharacterID = targetCharacter.ID
 				}, true, Channel.Reliable);
 			}
@@ -409,26 +436,28 @@ namespace FishMMO.Server
 					}
 				}
 
-				// remove the party member
-				CharacterPartyService.Delete(dbContext, partyController.Character.ID);
-
-				if (remainingCount < 1)
-				{
-					// delete the party
-					PartyService.Delete(dbContext, partyController.ID);
-					PartyUpdateService.Delete(dbContext, partyController.ID);
-				}
-				else
-				{
-					// tell the other servers to update their party lists
-					PartyUpdateService.Save(dbContext, partyController.ID);
-				}
+				long partyID = partyController.ID;
 
 				partyController.ID = 0;
 				partyController.Rank = PartyRank.None;
 
 				// tell character that they left the party immediately, other clients will catch up with the PartyUpdate pass
 				Server.Broadcast(conn, new PartyLeaveBroadcast(), true, Channel.Reliable);
+
+				// remove the party member
+				CharacterPartyService.Delete(dbContext, partyController.Character.ID);
+
+				if (remainingCount < 1)
+				{
+					// delete the party
+					PartyService.Delete(dbContext, partyID);
+					PartyUpdateService.Delete(dbContext, partyID);
+				}
+				else
+				{
+					// tell the other servers to update their party lists
+					PartyUpdateService.Save(dbContext, partyID);
+				}
 			}
 		}
 
@@ -452,25 +481,23 @@ namespace FishMMO.Server
 				return;
 			}
 
-			if (msg.members == null || msg.members.Count < 1)
+			if (msg.memberID < 1)
 			{
 				return;
 			}
 
-			// first index only
-			long memberID = msg.members[0];
-
 			// we can't kick ourself
-			if (memberID == partyController.Character.ID)
+			if (msg.memberID == partyController.Character.ID)
 			{
 				return;
 			}
 
 			// remove the character from the party in the database
 			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-			bool result = CharacterPartyService.Delete(dbContext, partyController.Rank, partyController.ID, memberID);
+			bool result = CharacterPartyService.Delete(dbContext, partyController.Rank, partyController.ID, msg.memberID);
 			if (result)
 			{
+				Debug.Log($"Deleted {msg.memberID} from database.");
 				// tell the other servers to update their party lists
 				PartyUpdateService.Save(dbContext, partyController.ID);
 			}

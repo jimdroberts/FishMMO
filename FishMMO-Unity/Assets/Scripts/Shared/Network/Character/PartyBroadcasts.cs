@@ -41,6 +41,11 @@ namespace FishMMO.Shared
 
 	public struct PartyRemoveBroadcast : IBroadcast
 	{
-		public List<long> members;
+		public long memberID;
+	}
+
+	public struct PartyPromoteBroadcast : IBroadcast
+	{
+		public long memberID;
 	}
 }

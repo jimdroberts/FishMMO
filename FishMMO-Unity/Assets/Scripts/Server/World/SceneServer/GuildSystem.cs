@@ -26,6 +26,8 @@ namespace FishMMO.Server
 		public float UpdatePumpRate = 1.0f;
 		public int UpdateFetchCount = 100;
 
+		// <GuildID <MemberIDs>>
+		private Dictionary<long, HashSet<long>> guildMemberTracker = new Dictionary<long, HashSet<long>>();
 		// clientID / guildID
 		private readonly Dictionary<long, long> pendingInvitations = new Dictionary<long, long>();
 
@@ -136,8 +138,6 @@ namespace FishMMO.Server
 			}
 			return updates;
 		}
-
-		private Dictionary<long, HashSet<long>> guildMemberTracker = new Dictionary<long, HashSet<long>>();
 
 		// process updates from the database
 		private void ProcessGuildUpdates(List<GuildUpdateEntity> updates)
@@ -564,16 +564,6 @@ namespace FishMMO.Server
 			bool result = CharacterGuildService.Delete(dbContext, guildController.Rank, guildController.ID, msg.guildMemberID);
 			if (result)
 			{
-				// Tell the local target connection to leave their guild immediately
-				/*if (ServerBehaviour.TryGet(out CharacterSystem characterSystem) &&
-					characterSystem.CharactersByID.TryGetValue(msg.guildMemberID, out IPlayerCharacter character) &&
-					character != null &&
-					character.TryGet(out IGuildController targetGuildController))
-				{
-					targetGuildController.ID = 0;
-					Server.Broadcast(character.Owner, new GuildLeaveBroadcast(), true, Channel.Reliable);
-				}*/
-
 				// tell the servers to update their guild lists
 				GuildUpdateService.Save(dbContext, guildController.ID);
 			}

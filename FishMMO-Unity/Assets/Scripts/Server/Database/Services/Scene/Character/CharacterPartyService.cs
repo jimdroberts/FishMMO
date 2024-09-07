@@ -61,7 +61,10 @@ namespace FishMMO.Server.DatabaseServices
 			{
 				return false;
 			}
-			var characterPartyEntity = dbContext.CharacterParties.FirstOrDefault(a => a.PartyID == partyID && a.CharacterID == memberID && a.Rank < (byte)kickerRank);
+			
+			byte rank = (byte)kickerRank;
+
+			var characterPartyEntity = dbContext.CharacterParties.FirstOrDefault(a => a.PartyID == partyID && a.CharacterID == memberID && a.Rank < rank);
 			if (characterPartyEntity != null)
 			{
 				dbContext.CharacterParties.Remove(characterPartyEntity);

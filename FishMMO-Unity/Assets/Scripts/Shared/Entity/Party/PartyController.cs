@@ -17,7 +17,7 @@ namespace FishMMO.Shared
 		public event Action<long> OnRemovePartyMember;
 		public event Action OnLeaveParty;
 
-		public long ID { get; set; }
+		public long ID { get ; set;}
 		public PartyRank Rank { get; set; }
 
 #if !UNITY_SERVER
@@ -109,9 +109,12 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void OnClientPartyLeaveBroadcastReceived(PartyLeaveBroadcast msg, Channel channel)
 		{
+			if (PlayerCharacter == null)
+			{
+				return;
+			}
 			ID = 0;
 			Rank = PartyRank.None;
-
 			OnLeaveParty?.Invoke();
 		}
 
@@ -120,10 +123,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void OnClientPartyRemoveBroadcastReceived(PartyRemoveBroadcast msg, Channel channel)
 		{
-			foreach (long memberID in msg.members)
-			{
-				OnRemovePartyMember?.Invoke(memberID);
-			}
+			OnRemovePartyMember?.Invoke(msg.memberID);
 		}
 #endif
 	}

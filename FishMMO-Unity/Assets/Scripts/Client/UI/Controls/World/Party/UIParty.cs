@@ -83,7 +83,10 @@ namespace FishMMO.Client
 
 		public void OnPartyCreated(string location)
 		{
-			if (Character != null && PartyMemberPrefab != null && PartyMemberParent != null)
+			if (Character != null &&
+				PartyMemberPrefab != null &&
+				PartyMemberParent != null &&
+				Character.TryGet(out IPartyController partyController))
 			{
 				UIPartyMember member = Instantiate(PartyMemberPrefab, PartyMemberParent);
 				if (member != null)
@@ -91,7 +94,10 @@ namespace FishMMO.Client
 					if (member.Name != null)
 						member.Name.text = Character.CharacterName;
 					if (member.Rank != null)
-						member.Rank.text = "Rank: " + (Character.TryGet(out IPartyController partyController) ? partyController.Rank.ToString() : "");
+					{
+						member.Rank.gameObject.name = partyController.Rank.ToString();
+						member.Rank.text = partyController.Rank == PartyRank.Leader ? "*" : "";
+					}
 					if (member.Health != null)
 						member.Health.value = Character.TryGet(out ICharacterAttributeController attributeController) ? attributeController.GetResourceAttributeCurrentPercentage(HealthTemplate) : 0.0f;
 					
@@ -128,7 +134,10 @@ namespace FishMMO.Client
 					});
 				}
 				if (partyMember.Rank != null)
-					partyMember.Rank.text = "Rank: " + rank.ToString();
+				{
+					partyMember.Rank.gameObject.name = rank.ToString();
+					partyMember.Rank.text = rank == PartyRank.Leader ? "*" : "";
+				}
 				if (partyMember.Health != null)
 					partyMember.Health.value = healthPCT;
 			}
