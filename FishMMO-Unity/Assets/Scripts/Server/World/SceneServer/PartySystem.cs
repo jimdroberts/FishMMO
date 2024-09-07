@@ -69,6 +69,7 @@ namespace FishMMO.Server
 				Server.RegisterBroadcast<PartyDeclineInviteBroadcast>(OnServerPartyDeclineInviteBroadcastReceived, true);
 				Server.RegisterBroadcast<PartyLeaveBroadcast>(OnServerPartyLeaveBroadcastReceived, true);
 				Server.RegisterBroadcast<PartyRemoveBroadcast>(OnServerPartyRemoveBroadcastReceived, true);
+				Server.RegisterBroadcast<PartyChangeRankBroadcast>(OnServerPartyChangeRankBroadcastReceived, true);
 
 				// remove the characters pending guild invite request on disconnect
 				characterSystem.OnDisconnect += RemovePending;
@@ -89,6 +90,7 @@ namespace FishMMO.Server
 				Server.UnregisterBroadcast<PartyDeclineInviteBroadcast>(OnServerPartyDeclineInviteBroadcastReceived);
 				Server.UnregisterBroadcast<PartyLeaveBroadcast>(OnServerPartyLeaveBroadcastReceived);
 				Server.UnregisterBroadcast<PartyRemoveBroadcast>(OnServerPartyRemoveBroadcastReceived);
+				Server.UnregisterBroadcast<PartyChangeRankBroadcast>(OnServerPartyChangeRankBroadcastReceived);
 
 				// remove the characters pending guild invite request on disconnect
 				if (ServerBehaviour.TryGet(out CharacterSystem characterSystem))
@@ -497,7 +499,47 @@ namespace FishMMO.Server
 			bool result = CharacterPartyService.Delete(dbContext, partyController.Rank, partyController.ID, msg.memberID);
 			if (result)
 			{
-				Debug.Log($"Deleted {msg.memberID} from database.");
+				// tell the other servers to update their party lists
+				PartyUpdateService.Save(dbContext, partyController.ID);
+			}
+		}
+
+		public void OnServerPartyChangeRankBroadcastReceived(NetworkConnection conn, PartyChangeRankBroadcast msg, Channel channel)
+		{
+			if (Server.NpgsqlDbContextFactory == null)
+			{
+				return;
+			}
+			if (conn.FirstObject == null)
+			{
+				return;
+			}
+			IPartyController partyController = conn.FirstObject.GetComponent<IPartyController>();
+
+			// validate character
+			if (partyController == null ||
+				partyController.ID < 1 ||
+				partyController.Rank != PartyRank.Leader)
+			{
+				return;
+			}
+
+			if (msg.memberID < 1)
+			{
+				return;
+			}
+
+			// we can't promote ourself
+			if (msg.memberID == partyController.Character.ID)
+			{
+				return;
+			}
+
+			// update the leader and target party ranks in the party in the database
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
+			if (CharacterPartyService.TrySaveRank(dbContext, partyController.Character.ID, partyController.ID, PartyRank.Member) &&
+				CharacterPartyService.TrySaveRank(dbContext, msg.memberID, partyController.ID, PartyRank.Leader))
+			{
 				// tell the other servers to update their party lists
 				PartyUpdateService.Save(dbContext, partyController.ID);
 			}

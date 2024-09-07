@@ -24,6 +24,27 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
+		/// Saves a character guild rank to the database.
+		/// </summary>
+		public static bool TrySaveRank(NpgsqlDbContext dbContext, long characterID, long guildID, GuildRank rank)
+		{
+			if (characterID == 0 ||
+				guildID == 0)
+			{
+				return false;
+			}
+			var characterGuildEntity = dbContext.CharacterGuilds.FirstOrDefault(a => a.CharacterID == characterID && a.GuildID == guildID);
+			if (characterGuildEntity != null)
+			{
+				characterGuildEntity.Rank = (byte)rank;
+				dbContext.SaveChanges();
+
+				return true;
+			}
+			return false;
+		}
+
+		/// <summary>
 		/// Saves a CharacterGuildEntity to the database.
 		/// </summary>
 		public static void Save(NpgsqlDbContext dbContext, long characterID, long guildID, GuildRank rank, string location)

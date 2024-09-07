@@ -23,6 +23,26 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
+		/// Saves a CharacterPartyEntity rank to the database.
+		/// </summary>
+		public static bool TrySaveRank(NpgsqlDbContext dbContext, long characterID, long partyID, PartyRank rank)
+		{
+			if (partyID == 0)
+			{
+				return false;
+			}
+			var characterPartyEntity = dbContext.CharacterParties.FirstOrDefault(a => a.CharacterID == characterID && a.PartyID == partyID);
+			if (characterPartyEntity != null)
+			{
+				characterPartyEntity.Rank = (byte)rank;
+				dbContext.SaveChanges();
+
+				return true;
+			}
+			return false;
+		}
+
+		/// <summary>
 		/// Saves a CharacterPartyEntity to the database.
 		/// </summary>
 		public static void Save(NpgsqlDbContext dbContext, long characterID, long partyID, PartyRank rank, float healthPCT)

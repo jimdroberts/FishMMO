@@ -69,6 +69,7 @@ namespace FishMMO.Server
 				Server.RegisterBroadcast<GuildDeclineInviteBroadcast>(OnServerGuildDeclineInviteBroadcastReceived, true);
 				Server.RegisterBroadcast<GuildLeaveBroadcast>(OnServerGuildLeaveBroadcastReceived, true);
 				Server.RegisterBroadcast<GuildRemoveBroadcast>(OnServerGuildRemoveBroadcastReceived, true);
+				Server.RegisterBroadcast<GuildChangeRankBroadcast>(OnServerGuildChangeRankBroadcastReceived, true);
 
 				// remove the characters pending guild invite request on disconnect
 				characterSystem.OnConnect += CharacterSystem_OnConnect;
@@ -90,6 +91,7 @@ namespace FishMMO.Server
 				Server.UnregisterBroadcast<GuildDeclineInviteBroadcast>(OnServerGuildDeclineInviteBroadcastReceived);
 				Server.UnregisterBroadcast<GuildLeaveBroadcast>(OnServerGuildLeaveBroadcastReceived);
 				Server.UnregisterBroadcast<GuildRemoveBroadcast>(OnServerGuildRemoveBroadcastReceived);
+				Server.UnregisterBroadcast<GuildChangeRankBroadcast>(OnServerGuildChangeRankBroadcastReceived);
 
 				// remove the characters pending guild invite request on disconnect
 				if (ServerBehaviour.TryGet(out CharacterSystem characterSystem))
@@ -563,6 +565,46 @@ namespace FishMMO.Server
 			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 			bool result = CharacterGuildService.Delete(dbContext, guildController.Rank, guildController.ID, msg.guildMemberID);
 			if (result)
+			{
+				// tell the servers to update their guild lists
+				GuildUpdateService.Save(dbContext, guildController.ID);
+			}
+		}
+
+		public void OnServerGuildChangeRankBroadcastReceived(NetworkConnection conn, GuildChangeRankBroadcast msg, Channel channel)
+		{
+			if (Server.NpgsqlDbContextFactory == null)
+			{
+				return;
+			}
+			if (conn.FirstObject == null)
+			{
+				return;
+			}
+			IGuildController guildController = conn.FirstObject.GetComponent<IGuildController>();
+
+			// validate character
+			if (guildController == null ||
+				guildController.ID < 1 ||
+				guildController.Rank != GuildRank.Leader)
+			{
+				return;
+			}
+
+			if (msg.guildMemberID < 1)
+			{
+				return;
+			}
+
+			// we can't promote ourself
+			if (msg.guildMemberID == guildController.Character.ID)
+			{
+				return;
+			}
+
+			// update the character rank in the guild in the database
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
+			if (CharacterGuildService.TrySaveRank(dbContext, msg.guildMemberID, guildController.ID, msg.rank))
 			{
 				// tell the servers to update their guild lists
 				GuildUpdateService.Save(dbContext, guildController.ID);

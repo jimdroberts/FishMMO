@@ -15,7 +15,7 @@ namespace FishMMO.Client
 
 		public void Button_OnClick()
 		{
-			Debug.Log(Name.text);
+			//Debug.Log(Name.text);
 
 			if (UIManager.TryGet("UIDropdown", out UIDropdown uiDropdown) &&
 			    UIManager.TryGet("UIParty", out UIParty uiParty) &&
@@ -54,6 +54,13 @@ namespace FishMMO.Client
 					if (Enum.TryParse(Rank.gameObject.name, out PartyRank rank) &&
 						rank < partyController.Rank)
 					{
+						uiDropdown.AddButton("Promote", () =>
+						{
+							Client.Broadcast(new PartyChangeRankBroadcast()
+							{
+								memberID = id,
+							}, Channel.Reliable);
+						});
 						uiDropdown.AddButton("Kick", () =>
 						{
 							Client.Broadcast(new PartyRemoveBroadcast()

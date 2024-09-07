@@ -64,21 +64,40 @@ namespace FishMMO.Client
 			    guildController.ID > 0)
 			{
 				uiDropdown.Hide();
-				
+
 				if (Enum.TryParse(Rank.text, out GuildRank rank) &&
 				    rank < guildController.Rank)
 				{
-					if (rank + 1 < guildController.Rank)
+					GuildRank nextRank = rank + 1;
+					GuildRank prevRank = rank - 1;
+					if (nextRank < guildController.Rank)
 					{
 						uiDropdown.AddButton("Promote", () =>
 						{
-
+							ClientNamingSystem.GetCharacterID(Name.text, (id) =>
+							{
+								Client.Broadcast(new GuildChangeRankBroadcast()
+								{
+									guildMemberID = id,
+									rank = nextRank,
+								}, Channel.Reliable);
+							});
 						});
 					}
-					uiDropdown.AddButton("Demote", () =>
+					if (prevRank > GuildRank.None)
 					{
-
-					});
+						uiDropdown.AddButton("Demote", () =>
+						{
+							ClientNamingSystem.GetCharacterID(Name.text, (id) =>
+							{
+								Client.Broadcast(new GuildChangeRankBroadcast()
+								{
+									guildMemberID = id,
+									rank = prevRank,
+								}, Channel.Reliable);
+							});
+						});
+					}
 					uiDropdown.AddButton("Kick", () =>
 					{
 						ClientNamingSystem.GetCharacterID(Name.text, (id) =>

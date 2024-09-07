@@ -43,13 +43,9 @@ namespace FishMMO.Shared
 		public long guildMemberID;
 	}
 
-	public struct GuildPromoteBroadcast : IBroadcast
+	public struct GuildChangeRankBroadcast : IBroadcast
 	{
 		public long guildMemberID;
-	}
-
-	public struct GuildDemoteBroadcast : IBroadcast
-	{
-		public long guildMemberID;
+		public GuildRank rank;
 	}
 }
