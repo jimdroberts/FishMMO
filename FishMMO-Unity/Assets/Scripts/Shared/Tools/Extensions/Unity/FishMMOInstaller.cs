@@ -247,7 +247,7 @@ namespace FishMMO.Shared
 		private async Task<bool> IsVirtualizationEnabledAsync()
 		{
 			return await RunProcessAsync("systeminfo", "",
-								(e, o, err) => { return o.Contains("Virtualization Enabled In Firmware: Yes"); });
+								(e, o, err) => { return o.Contains("Virtualization Enabled In Firmware: Yes") || o.Contains("A hypervisor has been detected."); });
 		}
 
 		private async Task<bool> IsHyperVEnabledAsync()
