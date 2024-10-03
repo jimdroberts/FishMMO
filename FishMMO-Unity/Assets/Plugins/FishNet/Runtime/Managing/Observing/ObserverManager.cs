@@ -10,6 +10,7 @@ using UnityEngine.Serialization;
 
 [assembly: InternalsVisibleTo(UtilityConstants.DEMOS_ASSEMBLY_NAME)]
 [assembly: InternalsVisibleTo(UtilityConstants.TEST_ASSEMBLY_NAME)]
+
 namespace FishNet.Managing.Observing
 {
     /// <summary>
@@ -19,36 +20,7 @@ namespace FishNet.Managing.Observing
     [AddComponentMenu("FishNet/Manager/ObserverManager")]
     public sealed class ObserverManager : MonoBehaviour
     {
-        #region Internal.
-        /// <summary>
-        /// Current index to use for level of detail based on tick.
-        /// </summary>
-        internal byte LevelOfDetailIndex { get; private set; }
-        #endregion
-
         #region Serialized.
-        /// <summary>
-        /// 
-        /// </summary>
-        [Tooltip("True to use the NetworkLOD system.")]
-        [SerializeField]
-        private bool _enableNetworkLod;
-        /// <summary>
-        /// True to use the NetworkLOD system.
-        /// </summary>
-        /// <returns></returns>
-        internal bool GetEnableNetworkLod() => _enableNetworkLod;
-        /// <summary>
-        /// Distance for each level of detal.
-        /// </summary>
-        internal List<float> GetLevelOfDetailDistances() => (_enableNetworkLod) ? _levelOfDetailDistances : _singleLevelOfDetailDistances;
-        [Tooltip("Distance for each level of detal.")]
-        [SerializeField]
-        private List<float> _levelOfDetailDistances = new List<float>();
-        /// <summary>
-        /// Returned when network LOD is off. Value contained is one level of detail with max distance.
-        /// </summary>
-        private List<float> _singleLevelOfDetailDistances = new List<float>() { float.MaxValue };
         /// <summary>
         /// True to update visibility for clientHost based on if they are an observer or not.
         /// </summary>
@@ -57,9 +29,11 @@ namespace FishNet.Managing.Observing
             get => _updateHostVisibility;
             private set => _updateHostVisibility = value;
         }
+
         [Tooltip("True to update visibility for clientHost based on if they are an observer or not.")]
         [SerializeField]
         private bool _updateHostVisibility = true;
+
         /// <summary>
         /// Maximum duration the server will take to update timed observer conditions as server load increases. Lower values will result in timed conditions being checked quicker at the cost of performance..
         /// </summary>
@@ -68,32 +42,44 @@ namespace FishNet.Managing.Observing
             get => _maximumTimedObserversDuration;
             private set => _maximumTimedObserversDuration = value;
         }
+
         [Tooltip("Maximum duration the server will take to update timed observer conditions as server load increases. Lower values will result in timed conditions being checked quicker at the cost of performance.")]
         [SerializeField]
-        [Range(0f, 20f)]
+        [Range(MINIMUM_TIMED_OBSERVERS_DURATION, MAXIMUM_TIMED_OBSERVERS_DURATION)]
         private float _maximumTimedObserversDuration = 10f;
+
         /// <summary>
         /// Sets the MaximumTimedObserversDuration value.
         /// </summary>
         /// <param name="value">New maximum duration to update timed observers over.</param>
-        public void SetMaximumTimedObserversDuration(float value) => MaximumTimedObserversDuration = value;
+        public void SetMaximumTimedObserversDuration(float value) => MaximumTimedObserversDuration = System.Math.Clamp(value, MINIMUM_TIMED_OBSERVERS_DURATION, MAXIMUM_TIMED_OBSERVERS_DURATION);
+
         /// <summary>
         /// 
         /// </summary>
         [Tooltip("Default observer conditions for networked objects.")]
         [SerializeField]
-        private List<ObserverCondition> _defaultConditions = new List<ObserverCondition>();
+        private List<ObserverCondition> _defaultConditions = new();
+
         #endregion
 
         #region Private.
+
         /// <summary>
         /// NetworkManager on object.
         /// </summary>
         private NetworkManager _networkManager;
+        #endregion
+
+        #region Consts.
         /// <summary>
-        /// Intervals for each level of detail.
+        /// Minimum time allowed for timed observers to rebuild.
         /// </summary>
-        private uint[] _levelOfDetailIntervals;
+        private const float MINIMUM_TIMED_OBSERVERS_DURATION = 0.1f;
+        /// <summary>
+        /// Maxmimum time allowed for timed observers to rebuild.
+        /// </summary>
+        private const float MAXIMUM_TIMED_OBSERVERS_DURATION = 20f;
         #endregion
 
         /// <summary>
@@ -103,7 +89,8 @@ namespace FishNet.Managing.Observing
         internal void InitializeOnce_Internal(NetworkManager manager)
         {
             _networkManager = manager;
-            ValidateLevelOfDetails();
+            //Update the current value to itself so it becomes clamped. This is just to protect against the user manually setting it outside clamp somehow.
+            SetMaximumTimedObserversDuration(MaximumTimedObserversDuration);
         }
 
         /// <summary>
@@ -153,7 +140,7 @@ namespace FishNet.Managing.Observing
             bool obsAdded;
 
             NetworkObserver result;
-            if (!nob.TryGetComponent<NetworkObserver>(out result))
+            if (!nob.TryGetComponent(out result))
             {
                 obsAdded = true;
                 result = nob.gameObject.AddComponent<NetworkObserver>();
@@ -227,41 +214,6 @@ namespace FishNet.Managing.Observing
             return result;
         }
 
-        /// <summary>
-        /// Gets the tick interval to use for a lod level.
-        /// </summary>
-        /// <param name="lodIndex"></param>
-        /// <returns></returns>
-        public static byte GetLevelOfDetailInterval(byte lodIndex)
-        {
-            //Minimum of 1 is required.
-            if (lodIndex == 0)
-                return 1;
-
-            return (byte)System.Math.Pow(2, lodIndex);
-        }
-
-        /// <summary>
-        /// Calculates and sets the current level of detail index for the tick.
-        /// </summary>
-        internal void CalculateLevelOfDetail(uint tick)
-        {
-            
-            //If here then index is 0 and interval is every tick.
-            LevelOfDetailIndex = 0;
-        }
-
-        /// <summary>
-        /// Validates that level of detail intervals are proper.
-        /// </summary>
-        private void ValidateLevelOfDetails()
-        {
-#if !FISHNET_PRO
-            _enableNetworkLod = false;
-#endif
-            
-        }
 
     }
-
 }

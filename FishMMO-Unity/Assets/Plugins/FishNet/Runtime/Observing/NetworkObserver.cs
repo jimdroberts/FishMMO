@@ -76,7 +76,7 @@ namespace FishNet.Observing
         /// </summary>
         [Tooltip("Conditions connections must met to be added as an observer. Multiple conditions may be used.")]
         [SerializeField]
-        internal List<ObserverCondition> _observerConditions = new List<ObserverCondition>();
+        internal List<ObserverCondition> _observerConditions = new();
         /// <summary>
         /// Conditions connections must met to be added as an observer. Multiple conditions may be used.
         /// </summary>
@@ -288,7 +288,7 @@ namespace FishNet.Observing
         /// Returns ObserverStateChange by comparing conditions for a connection.
         /// </summary>
         /// <returns>True if added to Observers.</returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         internal ObserverStateChange RebuildObservers(NetworkConnection connection, bool timedOnly)
         {
             bool currentlyAdded = (_networkObject.Observers.Contains(connection));

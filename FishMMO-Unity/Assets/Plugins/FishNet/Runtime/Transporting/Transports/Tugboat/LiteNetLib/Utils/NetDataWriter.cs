@@ -15,21 +15,21 @@ namespace LiteNetLib.Utils
 
         public int Capacity
         {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            
             get => _data.Length;
         }
         public byte[] Data
         {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            
             get => _data;
         }
         public int Length
         {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            
             get => _position;
         }
 
-        public static readonly ThreadLocal<UTF8Encoding> uTF8Encoding = new ThreadLocal<UTF8Encoding>(() => new UTF8Encoding(false, true));
+        public static readonly ThreadLocal<UTF8Encoding> uTF8Encoding = new(() => new(false, true));
         public const int StringBufferMaxLength = 65535;
         private readonly byte[] _stringBuffer = new byte[StringBufferMaxLength];
 
@@ -60,7 +60,7 @@ namespace LiteNetLib.Utils
                 netDataWriter.Put(bytes);
                 return netDataWriter;
             }
-            return new NetDataWriter(true, 0) {_data = bytes, _position = bytes.Length};
+            return new(true, 0) {_data = bytes, _position = bytes.Length};
         }
 
         /// <summary>
@@ -83,7 +83,7 @@ namespace LiteNetLib.Utils
             return netDataWriter;
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         public void ResizeIfNeed(int newSize)
         {
             if (_data.Length < newSize)
@@ -92,7 +92,7 @@ namespace LiteNetLib.Utils
             }
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         public void EnsureFit(int additionalSize)
         {
             if (_data.Length < _position + additionalSize)

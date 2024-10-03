@@ -20,7 +20,7 @@ namespace FishNet.Broadcast.Helping
             writer.WriteUInt16(typeof(T).FullName.GetStableHashU16());
             //Write data to a new writer.
             PooledWriter dataWriter = WriterPool.Retrieve();
-            dataWriter.Write<T>(message);
+            dataWriter.Write(message);
             //Write length of data.
             writer.WriteLength(dataWriter.Length);
             //Write data.
@@ -74,7 +74,7 @@ namespace FishNet.Broadcast.Helping
         /// <summary>
         /// Action handlers for the broadcast.
         /// </summary>
-        private List<Action<NetworkConnection, T, Channel>> _handlers = new List<Action<NetworkConnection, T, Channel>>();
+        private List<Action<NetworkConnection, T, Channel>> _handlers = new();
         /// <summary>
         /// True to require authentication for the broadcast type.
         /// </summary>
@@ -157,7 +157,7 @@ namespace FishNet.Broadcast.Helping
         /// Action handlers for the broadcast.
         /// Even though List lookups are slower this allows easy adding and removing of entries during iteration.
         /// </summary>
-        private List<Action<T, Channel>> _handlers = new List<Action<T, Channel>>();
+        private List<Action<T, Channel>> _handlers = new();
 
         /// <summary>
         /// Invokes handlers after reading broadcast.

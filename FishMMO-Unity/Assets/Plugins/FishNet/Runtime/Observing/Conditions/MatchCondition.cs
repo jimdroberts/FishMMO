@@ -24,10 +24,10 @@ namespace FishNet.Component.Observing
         /// </summary>
         public class ConditionCollections
         {
-            public Dictionary<int, HashSet<NetworkConnection>> MatchConnections = new Dictionary<int, HashSet<NetworkConnection>>();
-            public Dictionary<NetworkConnection, HashSet<int>> ConnectionMatches = new Dictionary<NetworkConnection, HashSet<int>>();
-            public Dictionary<int, HashSet<NetworkObject>> MatchObjects = new Dictionary<int, HashSet<NetworkObject>>();
-            public Dictionary<NetworkObject, HashSet<int>> ObjectMatches = new Dictionary<NetworkObject, HashSet<int>>();
+            public Dictionary<int, HashSet<NetworkConnection>> MatchConnections = new();
+            public Dictionary<NetworkConnection, HashSet<int>> ConnectionMatches = new();
+            public Dictionary<int, HashSet<NetworkObject>> MatchObjects = new();
+            public Dictionary<NetworkObject, HashSet<int>> ObjectMatches = new();
         }
         #endregion
 
@@ -35,7 +35,7 @@ namespace FishNet.Component.Observing
         /// <summary>
         /// Collections for each NetworkManager instance.
         /// </summary>
-        private static Dictionary<NetworkManager, ConditionCollections> _collections = new Dictionary<NetworkManager, ConditionCollections>();
+        private static Dictionary<NetworkManager, ConditionCollections> _collections = new();
         #endregion
 
         #region Collections.
@@ -71,7 +71,7 @@ namespace FishNet.Component.Observing
             ConditionCollections cc;
             if (!_collections.TryGetValue(manager, out cc))
             {
-                cc = new ConditionCollections();
+                cc = new();
                 _collections[manager] = cc;
             }
 
@@ -477,7 +477,7 @@ namespace FishNet.Component.Observing
         /// <param name="match">Match to remove conn from.</param>
         /// <param name="conn">Connection to remove from match.</param>
         /// <param name="manager">NetworkManager to rebuild observers on. If null InstanceFinder.NetworkManager will be used.</param>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         public static bool RemoveFromMatch(int match, NetworkConnection conn, NetworkManager manager = null)
         {
             return RemoveFromMatch(match, conn, manager, true);
@@ -488,7 +488,7 @@ namespace FishNet.Component.Observing
         /// <param name="match">Match to remove conns from.</param>
         /// <param name="conns">Connections to remove from match.</param>
         /// <param name="manager">NetworkManager to rebuild observers on. If null InstanceFinder.NetworkManager will be used.</param>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         public static void RemoveFromMatch(int match, NetworkConnection[] conns, NetworkManager manager)
         {
             RemoveFromMatch(match, conns.ToList(), manager);
@@ -499,7 +499,7 @@ namespace FishNet.Component.Observing
         /// <param name="match">Match to remove conns from.</param>
         /// <param name="conns">Connections to remove from match.</param>
         /// <param name="manager">NetworkManager to rebuild observers on. If null InstanceFinder.NetworkManager will be used.</param>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         public static void RemoveFromMatch(int match, List<NetworkConnection> conns, NetworkManager manager)
         {
             bool removed = false;
@@ -587,7 +587,7 @@ namespace FishNet.Component.Observing
         /// <param name="match">Match to remove conn from.</param>
         /// <param name="nob">NetworkObject to remove from match.</param>
         /// <param name="manager">NetworkManager to rebuild observers on. If null InstanceFinder.NetworkManager will be used.</param>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         public static void RemoveFromMatch(int match, NetworkObject nob, NetworkManager manager = null)
         {
             Dictionary<int, HashSet<NetworkObject>> matchObjects = GetMatchObjects(manager);
@@ -620,7 +620,7 @@ namespace FishNet.Component.Observing
         /// <param name="match">Match to remove conns from.</param>
         /// <param name="nobs">NetworkObjects to remove from match.</param>
         /// <param name="manager">NetworkManager to rebuild observers on. If null InstanceFinder.NetworkManager will be used.</param>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         public static void RemoveFromMatch(int match, NetworkObject[] nobs, NetworkManager manager = null)
         {
             Dictionary<int, HashSet<NetworkObject>> matchObjects = GetMatchObjects(manager);
@@ -649,7 +649,7 @@ namespace FishNet.Component.Observing
         /// <param name="match">Match to remove conns from.</param>
         /// <param name="nobs">NetworkObjects to remove from match.</param>
         /// <param name="manager">NetworkManager to rebuild observers on. If null InstanceFinder.NetworkManager will be used.</param>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         public static void RemoveFromMatch(int match, List<NetworkObject> nobs, NetworkManager manager = null)
         {
             Dictionary<int, HashSet<NetworkObject>> matchObjects = GetMatchObjects(manager);

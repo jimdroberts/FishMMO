@@ -18,7 +18,7 @@ namespace FishNet.Utility.Performance
         /// Cache for pooled NetworkObjects.
         /// </summary>
         public IReadOnlyList<Dictionary<int, Stack<NetworkObject>>> Cache => _cache;
-        private List<Dictionary<int, Stack<NetworkObject>>> _cache = new List<Dictionary<int, Stack<NetworkObject>>>();
+        private List<Dictionary<int, Stack<NetworkObject>>> _cache = new();
         #endregion
 
         #region Serialized.
@@ -37,7 +37,7 @@ namespace FishNet.Utility.Performance
         private int _cacheCount = 0;
         #endregion
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
 #pragma warning disable CS0672 // Member overrides obsolete member
         public override NetworkObject RetrieveObject(int prefabId, ushort collectionId, Transform parent = null, Vector3? nullablePosition = null, Quaternion? nullableRotation = null, Vector3? nullableScale = null, bool makeActive = true, bool asServer = true)
 #pragma warning restore CS0672 // Member overrides obsolete member
@@ -148,7 +148,7 @@ namespace FishNet.Utility.Performance
         /// <param name="instantiated">Object to store.</param>
         /// <param name="asServer">True if being called on the server side.</param>
         /// <returns></returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         public override void StoreObject(NetworkObject instantiated, bool asServer)
         {
             //Pooling is not enabled.
@@ -237,7 +237,7 @@ namespace FishNet.Utility.Performance
                 //Add more to the cache.
                 while (_cache.Count <= collectionId)
                 {
-                    Dictionary<int, Stack<NetworkObject>> dict = new Dictionary<int, Stack<NetworkObject>>();
+                    Dictionary<int, Stack<NetworkObject>> dict = new();
                     _cache.Add(dict);
                 }
                 _cacheCount = collectionId;
@@ -248,7 +248,7 @@ namespace FishNet.Utility.Performance
             //No cache for prefabId yet, make one.
             if (!dictionary.TryGetValueIL2CPP(prefabId, out cache))
             {
-                cache = new Stack<NetworkObject>();
+                cache = new();
                 dictionary[prefabId] = cache;
             }
             return cache;

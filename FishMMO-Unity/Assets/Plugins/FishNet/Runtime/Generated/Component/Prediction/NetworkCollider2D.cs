@@ -195,7 +195,7 @@ namespace FishNet.Component.Prediction
         /// <summary>
         /// Cleans history up to, while excluding tick.
         /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         private void CleanHistory(uint tick)
         {
             if (_useCache)
@@ -229,7 +229,7 @@ namespace FishNet.Component.Prediction
         /// <summary>
         /// Checks for any trigger changes;
         /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         private void CheckColliders(uint tick, bool replay)
         {
             //Should not be possible as tick always starts on 1.
@@ -390,7 +390,7 @@ namespace FishNet.Component.Prediction
                      * correct location. */
                     void AddDataToIndex(int index)
                     {
-                        Collider2DData colliderData = new Collider2DData(tick, current);
+                        Collider2DData colliderData = new(tick, current);
                         /* If insertIndex is the same tick then replace, otherwise
                          * put in front of. */
                         //Replace.
@@ -409,7 +409,7 @@ namespace FishNet.Component.Prediction
 
                 void AddToEnd()
                 {
-                    Collider2DData colliderData = new Collider2DData(tick, current);
+                    Collider2DData colliderData = new(tick, current);
                     _colliderDataHistory.Add(colliderData);
                 }
 
@@ -485,7 +485,7 @@ namespace FishNet.Component.Prediction
         /// <summary>
         /// Resets this NetworkBehaviour so that it may be added to an object pool.
         /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         public override void ResetState(bool asServer)
         {
             base.ResetState(asServer);

@@ -63,7 +63,7 @@ namespace LiteNetLib
         public const int AF_INET = 2;
         public const int AF_INET6 = 10;
 
-        private static readonly Dictionary<int, SocketError> NativeErrorToSocketError = new Dictionary<int, SocketError>
+        private static readonly Dictionary<int, SocketError> NativeErrorToSocketError = new()
         {
             { 13, SocketError.AccessDenied },               //EACCES
             { 98, SocketError.AddressAlreadyInUse },        //EADDRINUSE
@@ -122,7 +122,7 @@ namespace LiteNetLib
             }
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         public static int RecvFrom(
             IntPtr socketHandle,
             byte[] pinnedBuffer,
@@ -135,7 +135,7 @@ namespace LiteNetLib
                 : WinSock.recvfrom(socketHandle, pinnedBuffer, len, 0, socketAddress, ref socketAddressSize);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         public static unsafe int SendTo(
             IntPtr socketHandle,
             byte* pinnedBuffer,
@@ -163,12 +163,12 @@ namespace LiteNetLib
             int error = Marshal.GetLastWin32Error();
             if (UnixMode)
                 return NativeErrorToSocketError.TryGetValue(error, out var err)
-                    ? new SocketException((int)err)
+                    ? new((int)err)
                     : new SocketException((int)SocketError.SocketError);
-            return new SocketException(error);
+            return new(error);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         public static short GetNativeAddressFamily(IPEndPoint remoteEndPoint)
         {
             return UnixMode

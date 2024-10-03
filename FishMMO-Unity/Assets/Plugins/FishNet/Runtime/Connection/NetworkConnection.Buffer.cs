@@ -12,16 +12,17 @@ namespace FishNet.Connection
 {
     public partial class NetworkConnection
     {
-
         #region Private.
+
         /// <summary>
         /// PacketBundles to send to this connection. An entry will be made for each channel.
         /// </summary>
-        private List<PacketBundle> _toClientBundles = new List<PacketBundle>();
+        private List<PacketBundle> _toClientBundles = new();
         /// <summary>
         /// True if this object has been dirtied.
         /// </summary>
         private bool _serverDirtied;
+
         #endregion
 
         /// <summary>
@@ -32,7 +33,7 @@ namespace FishNet.Connection
             for (byte i = 0; i < TransportManager.CHANNEL_COUNT; i++)
             {
                 int mtu = NetworkManager.TransportManager.GetLowestMTU(i);
-                _toClientBundles.Add(new PacketBundle(NetworkManager, mtu));
+                _toClientBundles.Add(new(NetworkManager, mtu));
             }
         }
 
@@ -49,7 +50,7 @@ namespace FishNet.Connection
             if (!IsActive)
                 NetworkManager.LogError($"Connection is not valid, cannot send broadcast.");
             else
-                NetworkManager.ServerManager.Broadcast<T>(this, message, requireAuthenticated, channel);
+                NetworkManager.ServerManager.Broadcast(this, message, requireAuthenticated, channel);
         }
 
         /// <summary>
@@ -64,9 +65,10 @@ namespace FishNet.Connection
 
             if (!IsActive)
             {
-                NetworkManager?.LogWarning($"Data cannot be sent to connection {ClientId} because it is not active.");
+                NetworkManager.LogWarning($"Data cannot be sent to connection {ClientId} because it is not active.");
                 return;
             }
+
             //If channel is out of bounds then default to the first channel.
             if (channel >= _toClientBundles.Count)
                 channel = 0;
@@ -106,6 +108,4 @@ namespace FishNet.Connection
             _serverDirtied = false;
         }
     }
-
-
 }

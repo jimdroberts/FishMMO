@@ -76,7 +76,7 @@ namespace FishNet.Editing
         private static bool RemoveOrAddDefine(string define, bool removeDefine)
         {
             string currentDefines = PlayerSettings.GetScriptingDefineSymbolsForGroup(EditorUserBuildSettings.selectedBuildTargetGroup);
-            HashSet<string> definesHs = new HashSet<string>();
+            HashSet<string> definesHs = new();
             string[] currentArr = currentDefines.Split(';');
 
             //Add any define which doesn't contain MIRROR.
@@ -145,7 +145,7 @@ namespace FishNet.Editing
             }
 
             string saveText = (changedObjects > 0) ? " Please save your open scenes." : string.Empty;
-            Debug.Log($"SceneIds were generated for {changedObjects} object(s) over {checkedScenes} scene(s). {checkedObjects} object(s) were checked in total..{saveText}");
+            Debug.Log($"SceneIds were generated for {changedObjects} object(s) over {checkedScenes} scene(s). {checkedObjects} object(s) were checked in total. {saveText}");
         }
 
 
@@ -189,9 +189,9 @@ namespace FishNet.Editing
                 return;
             }
 #endif
-            List<NetworkObject> foundNobs = new List<NetworkObject>();
+            List<NetworkObject> foundNobs = new();
 
-            foreach (string path in Generator.GetPrefabFiles("Assets", new HashSet<string>(), true))
+            foreach (string path in Generator.GetPrefabFiles("Assets", new(), true))
             {
                 NetworkObject nob = AssetDatabase.LoadAssetAtPath<NetworkObject>(path);
                 if (nob != null)

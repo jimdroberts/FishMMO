@@ -66,7 +66,7 @@ namespace FishNet.Managing
         /// <summary>
         /// 
         /// </summary>
-        private Dictionary<ushort, PrefabObjects> _runtimeSpawnablePrefabs = new Dictionary<ushort, PrefabObjects>();
+        private Dictionary<ushort, PrefabObjects> _runtimeSpawnablePrefabs = new();
         /// <summary>
         /// Collection to use for spawnable objects added at runtime, such as addressables.
         /// </summary>
@@ -77,11 +77,11 @@ namespace FishNet.Managing
         /// <summary>
         /// Delegates waiting to be invoked when a component is registered.
         /// </summary>
-        private Dictionary<string, List<Action<UnityComponent>>> _pendingInvokes = new Dictionary<string, List<Action<UnityComponent>>>();
+        private Dictionary<string, List<Action<UnityComponent>>> _pendingInvokes = new();
         /// <summary>
         /// Currently registered components.
         /// </summary>
-        private Dictionary<string, UnityComponent> _registeredComponents = new Dictionary<string, UnityComponent>();
+        private Dictionary<string, UnityComponent> _registeredComponents = new();
         #endregion
 
         /// <summary>
@@ -174,13 +174,13 @@ namespace FishNet.Managing
         {
             T result;
             //If not found yet make a pending invoke.
-            if (!TryGetInstance<T>(out result))
+            if (!TryGetInstance(out result))
             {
                 string tName = GetInstanceName<T>();
                 List<Action<UnityComponent>> handlers;
                 if (!_pendingInvokes.TryGetValue(tName, out handlers))
                 {
-                    handlers = new List<Action<UnityComponent>>();
+                    handlers = new();
                     _pendingInvokes[tName] = handlers;
                 }
 
@@ -226,7 +226,7 @@ namespace FishNet.Managing
         public T GetInstance<T>() where T : UnityComponent
         {
             T result;
-            if (TryGetInstance<T>(out result))
+            if (TryGetInstance(out result))
                 return result;
             else
                 InternalLogWarning($"Component {GetInstanceName<T>()} is not registered. To avoid this warning use TryGetInstance(T).");
@@ -289,7 +289,7 @@ namespace FishNet.Managing
         /// <typeparam name="T">Type to register.</typeparam>
         /// <param name="component">Reference of the component being registered.</param>
         /// <returns>True if was able to register, false if an instance is already registered.</returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         public bool TryRegisterInstance<T>(T component) where T : UnityComponent
         {
             string tName = GetInstanceName<T>();

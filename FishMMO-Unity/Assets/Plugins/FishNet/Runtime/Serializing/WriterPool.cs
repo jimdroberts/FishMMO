@@ -2,16 +2,20 @@ using FishNet.Managing;
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using GameKit.Dependencies.Utilities;
 
 namespace FishNet.Serializing
 {
     /// <summary>
     /// Writer which is reused to save on garbage collection and performance.
     /// </summary>
-    public sealed class PooledWriter : Writer
+    public sealed class PooledWriter : Writer, IResettable
     {
         public void Store() => WriterPool.Store(this);
         public void StoreLength() => WriterPool.StoreLength(this);
+        
+        public void ResetState() => Store();
+        public void InitializeState() { }
     }
 
     /// <summary>
@@ -23,11 +27,11 @@ namespace FishNet.Serializing
         /// <summary>
         /// Pool of writers where length is the minimum and increased at runtime.
         /// </summary>
-        private static readonly Stack<PooledWriter> _pool = new Stack<PooledWriter>();
+        private static readonly Stack<PooledWriter> _pool = new();
         /// <summary>
         /// Pool of writers where length is of minimum key and may be increased at runtime.
         /// </summary>
-        private static readonly Dictionary<int, Stack<PooledWriter>> _lengthPool = new Dictionary<int, Stack<PooledWriter>>();
+        private static readonly Dictionary<int, Stack<PooledWriter>> _lengthPool = new();
         #endregion
 
         #region Const.
@@ -44,14 +48,14 @@ namespace FishNet.Serializing
         {
             PooledWriter result;
             if (!_pool.TryPop(out result))
-                result = new PooledWriter();
+                result = new();
 
             result.Reset(networkManager);
             return result;
         }
         /// Gets a writer from the pool.
         /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         public static PooledWriter Retrieve()
         {
             return Retrieve(null);
@@ -61,7 +65,7 @@ namespace FishNet.Serializing
         /// Gets the next writer in the pool of minimum length.
         /// </summary>
         /// <param name="length">Minimum length the writer buffer must be.</param>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         public static PooledWriter Retrieve(int length)
         {
             return Retrieve(null, length);
@@ -70,7 +74,7 @@ namespace FishNet.Serializing
         /// Gets the next writer in the pool of minimum length.
         /// </summary>
         /// <param name="length">Minimum length the writer buffer must be.</param>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         public static PooledWriter Retrieve(NetworkManager networkManager, int length)
         {
             /* The index returned will be for writers which have
@@ -112,7 +116,7 @@ namespace FishNet.Serializing
             Stack<PooledWriter> stack;
             if (!_lengthPool.TryGetValue(index, out stack))
             {
-                stack = new Stack<PooledWriter>();
+                stack = new();
                 _lengthPool[index] = stack;
             }
 

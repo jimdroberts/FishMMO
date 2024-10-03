@@ -22,11 +22,11 @@ namespace FishNet.Connection
         /// Approximate replicate tick on the server for this connection.
         /// This also contains the last set value for local and remote.
         /// </summary>
-        public EstimatedTick ReplicateTick { get; private set; } = new EstimatedTick();
+        public EstimatedTick ReplicateTick { get; private set; } = new();
         /// <summary>
         /// Writers for states.
         /// </summary>
-        internal List<PooledWriter> PredictionStateWriters = new List<PooledWriter>();
+        internal List<PooledWriter> PredictionStateWriters = new();
 
         internal void Prediction_Initialize(NetworkManager manager, bool asServer) { }
 
@@ -72,7 +72,7 @@ namespace FishNet.Connection
             {
                 stateWriter = WriterPool.Retrieve(mtu);
                 PredictionStateWriters.Add(stateWriter);
-                stateWriter.Reserve(PredictionManager.STATE_HEADER_RESERVE_LENGTH);
+                stateWriter.Skip(PredictionManager.STATE_HEADER_RESERVE_LENGTH);
                 /// 2 PacketId.
                 /// 4 Last replicate tick run for connection.
                 /// 4 Length unpacked.
@@ -110,7 +110,7 @@ namespace FishNet.Connection
         /// <summary>
         /// Resets NetworkConnection.
         /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         private void Prediction_Reset()
         {
             StorePredictionStateWriters();

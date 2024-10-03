@@ -84,11 +84,11 @@ namespace FishNet.Transporting.Tugboat
         /// <summary>
         /// Server socket and handler.
         /// </summary>
-        private Server.ServerSocket _server = new Server.ServerSocket();
+        private Server.ServerSocket _server = new();
         /// <summary>
         /// Client socket and handler.
         /// </summary>
-        private Client.ClientSocket _client = new Client.ClientSocket();
+        private Client.ClientSocket _client = new();
         #endregion
 
         #region Const.
@@ -257,7 +257,7 @@ namespace FishNet.Transporting.Tugboat
         /// </summary>
         /// <param name="channelId">Channel to use.</param>
         /// <param name="segment">Data to send.</param>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         public override void SendToServer(byte channelId, ArraySegment<byte> segment)
         {
             SanitizeChannel(ref channelId);
@@ -269,7 +269,7 @@ namespace FishNet.Transporting.Tugboat
         /// <param name="channelId"></param>
         /// <param name="segment"></param>
         /// <param name="connectionId"></param>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         public override void SendToClient(byte channelId, ArraySegment<byte> segment, int connectionId)
         {
             SanitizeChannel(ref channelId);

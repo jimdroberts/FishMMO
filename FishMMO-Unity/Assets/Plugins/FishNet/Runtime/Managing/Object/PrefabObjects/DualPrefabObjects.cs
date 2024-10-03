@@ -17,7 +17,7 @@ namespace FishNet.Managing.Object
         /// </summary>
         [Tooltip("Prefabs which may be spawned.")]
         [SerializeField]
-        private List<DualPrefab> _prefabs = new List<DualPrefab>();
+        private List<DualPrefab> _prefabs = new();
         /// <summary>
         /// Prefabs which may be spawned.
         /// </summary>
@@ -105,7 +105,7 @@ namespace FishNet.Managing.Object
             _prefabs.Add(dp);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         public override void InitializePrefabRange(int startIndex)
         {
             for (int i = startIndex; i < _prefabs.Count; i++)

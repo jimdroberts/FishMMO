@@ -68,7 +68,7 @@ namespace FishNet.Managing.Client
         /// <summary>
         /// All currently connected clients. This field only contains data while ServerManager.ShareIds is enabled.
         /// </summary>
-        public Dictionary<int, NetworkConnection> Clients = new Dictionary<int, NetworkConnection>();
+        public Dictionary<int, NetworkConnection> Clients = new();
         /// <summary>
         /// NetworkManager for client.
         /// </summary>
@@ -134,12 +134,12 @@ namespace FishNet.Managing.Client
         /// <summary>
         /// Used to read splits.
         /// </summary>
-        private SplitReader _splitReader = new SplitReader();
+        private SplitReader _splitReader = new();
 #if DEVELOPMENT
         /// <summary>
         /// Logs data about parser to help debug.
         /// </summary>
-        private ParseLogger _parseLogger = new ParseLogger();
+        private ParseLogger _parseLogger = new();
 #endif
         #endregion
 
@@ -156,7 +156,7 @@ namespace FishNet.Managing.Client
         internal void InitializeOnce_Internal(NetworkManager manager)
         {
             NetworkManager = manager;
-            Objects = new ClientObjects(manager);
+            Objects = new(manager);
             Objects.SubscribeToSceneLoaded(true);
             /* Unsubscribe before subscribing.
              * Shouldn't be an issue but better safe than sorry. */
@@ -175,11 +175,11 @@ namespace FishNet.Managing.Client
         private void OnClientConnectionBroadcast(ClientConnectionChangeBroadcast args, Channel channel)
         {
             //If connecting invoke after added to clients, otherwise invoke before removed.
-            RemoteConnectionStateArgs rcs = new RemoteConnectionStateArgs((args.Connected) ? RemoteConnectionState.Started : RemoteConnectionState.Stopped, args.Id, -1);
+            RemoteConnectionStateArgs rcs = new((args.Connected) ? RemoteConnectionState.Started : RemoteConnectionState.Stopped, args.Id, -1);
 
             if (args.Connected)
             {
-                Clients[args.Id] = new NetworkConnection(NetworkManager, args.Id, -1, false);
+                Clients[args.Id] = new(NetworkManager, args.Id, -1, false);
                 OnRemoteConnectionState?.Invoke(rcs);
             }
             else
@@ -205,7 +205,7 @@ namespace FishNet.Managing.Client
             //No connected clients except self.
             if (collection == null)
             {
-                collection = new List<int>();
+                collection = new();
             }
             //Other clients.
             else
@@ -214,11 +214,11 @@ namespace FishNet.Managing.Client
                 for (int i = 0; i < count; i++)
                 {
                     int id = collection[i];
-                    Clients[id] = new NetworkConnection(NetworkManager, id, -1, false);
+                    Clients[id] = new(NetworkManager, id, -1, false);
                 }
             }
 
-            OnConnectedClients?.Invoke(new ConnectedClientsArgs(collection));
+            OnConnectedClients?.Invoke(new(collection));
 
         }
 
@@ -327,7 +327,7 @@ namespace FishNet.Managing.Client
                 string socketInformation = string.Empty;
                 if (state == LocalConnectionState.Starting)
                     socketInformation = $" Server IP is {t.GetClientAddress()}, port is {t.GetPort()}.";
-                Debug.Log($"Local client is {state.ToString().ToLower()} for {tName}.{socketInformation}");
+                NetworkManager.Log($"Local client is {state.ToString().ToLower()} for {tName}.{socketInformation}");
             }
 
             NetworkManager.UpdateFramerate();
@@ -437,7 +437,7 @@ namespace FishNet.Managing.Client
                 if (spawnOrDespawn)
                 {
                     if (packetId == PacketId.ObjectSpawn)
-                        Objects.CacheSpawn(reader);
+                        Objects.ReadSpawn(reader);
                     else if (packetId == PacketId.ObjectDespawn)
                         Objects.CacheDespawn(reader);
                 }
@@ -539,8 +539,7 @@ namespace FishNet.Managing.Client
             }
             catch (Exception e)
             {
-                if (NetworkManager.CanLog(LoggingType.Error))
-                    Debug.LogError($"Client encountered an error while parsing data for packetId {packetId}. Message: {e.Message}.");
+                NetworkManagerExtensions.LogError($"Client encountered an error while parsing data for packetId {packetId}. Message: {e.Message}.");
             }
 #endif
         }
@@ -584,7 +583,7 @@ namespace FishNet.Managing.Client
                 if (Connection == null)
                 {
                     NetworkManager.LogWarning($"Client connection could not be found while parsing authenticated status. This usually occurs when the client is receiving a packet immediately before losing connection.");
-                    Connection = new NetworkConnection(networkManager, connectionId, GetTransportIndex(), false);
+                    Connection = new(networkManager, connectionId, GetTransportIndex(), false);
                 }
             }
             /* If also the server then use the servers connection
@@ -600,7 +599,7 @@ namespace FishNet.Managing.Client
                 else
                 {
                     networkManager.LogError($"Unable to lookup LocalConnection for {connectionId} as host.");
-                    Connection = new NetworkConnection(networkManager, connectionId, GetTransportIndex(), false);
+                    Connection = new(networkManager, connectionId, GetTransportIndex(), false);
                 }
             }
 

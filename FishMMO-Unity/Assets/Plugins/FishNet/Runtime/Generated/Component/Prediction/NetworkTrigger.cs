@@ -1,5 +1,3 @@
-using System.Diagnostics;
-
 namespace FishNet.Component.Prediction
 {
 
@@ -10,6 +8,7 @@ namespace FishNet.Component.Prediction
             base.IsTrigger = true;
             base.Awake();
         }
-	}
+
+    }
 
 }

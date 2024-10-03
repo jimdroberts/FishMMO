@@ -259,6 +259,7 @@ namespace FishMMO.Client
 			{
 				return;
 			}
+
 			Visible = true;
 		}
 
@@ -273,6 +274,7 @@ namespace FishMMO.Client
 			{
 				return;
 			}
+			
 			Visible = false;
 		}
 

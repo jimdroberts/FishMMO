@@ -76,7 +76,7 @@ namespace FishNet.Managing.Transporting
         /// </summary>
         [Tooltip("Latency simulation settings.")]
         [SerializeField]
-        private LatencySimulator _latencySimulator = new LatencySimulator();
+        private LatencySimulator _latencySimulator = new();
         /// <summary>
         /// Latency simulation settings.
         /// </summary>
@@ -86,7 +86,7 @@ namespace FishNet.Managing.Transporting
             {
                 //Shouldn't ever be null unless the user nullifies it.
                 if (_latencySimulator == null)
-                    _latencySimulator = new LatencySimulator();
+                    _latencySimulator = new();
                 return _latencySimulator;
             }
         }
@@ -96,11 +96,11 @@ namespace FishNet.Managing.Transporting
         /// <summary>
         /// NetworkConnections on the server which have to send data to clients.
         /// </summary>
-        private List<NetworkConnection> _dirtyToClients = new List<NetworkConnection>();
+        private List<NetworkConnection> _dirtyToClients = new();
         /// <summary>
         /// PacketBundles to send to the server.
         /// </summary>
-        private List<PacketBundle> _toServerBundles = new List<PacketBundle>();
+        private List<PacketBundle> _toServerBundles = new();
         /// <summary>
         /// NetworkManager handling this TransportManager.
         /// </summary>
@@ -108,7 +108,7 @@ namespace FishNet.Managing.Transporting
         /// <summary>
         /// Clients which are pending disconnects.
         /// </summary>
-        private List<DisconnectingClient> _disconnectingClients = new List<DisconnectingClient>();
+        private List<DisconnectingClient> _disconnectingClients = new();
         /// <summary>
         /// Lowest MTU of all transports for channels.
         /// </summary>
@@ -120,7 +120,7 @@ namespace FishNet.Managing.Transporting
         /// <summary>
         /// Used to cache NetworkConnections.
         /// </summary>
-        private HashSet<NetworkConnection> _networkConnectionHashSet = new HashSet<NetworkConnection>();
+        private HashSet<NetworkConnection> _networkConnectionHashSet = new();
         /// <summary>
         /// Custom amount to reserve on the MTU.
         /// </summary>
@@ -232,7 +232,7 @@ namespace FishNet.Managing.Transporting
         /// </summary>
         private void TryAddDefaultTransport()
         {
-            if (Transport == null && !gameObject.TryGetComponent<Transport>(out Transport))
+            if (Transport == null && !gameObject.TryGetComponent(out Transport))
                 Transport = gameObject.AddComponent<FishNet.Transporting.Tugboat.Tugboat>();
         }
 
@@ -327,7 +327,7 @@ namespace FishNet.Managing.Transporting
             for (byte i = 0; i < CHANNEL_COUNT; i++)
             {
                 int mtu = GetLowestMTU(i);
-                _toServerBundles.Add(new PacketBundle(_networkManager, mtu));
+                _toServerBundles.Add(new(_networkManager, mtu));
             }
         }
 
@@ -382,7 +382,7 @@ namespace FishNet.Managing.Transporting
         /// </summary>
         /// <param name="channel"></param>
         /// <returns></returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         public int GetLowestMTU()
         {
             SetLowestMTUs();
@@ -393,7 +393,7 @@ namespace FishNet.Managing.Transporting
         /// </summary>
         /// <param name="channel"></param>
         /// <returns></returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         public int GetLowestMTU(byte channel)
         {
             SetLowestMTUs();
@@ -419,7 +419,7 @@ namespace FishNet.Managing.Transporting
         /// <param name="transportIndex">Index of the transport to get the MTU on.</param>
         /// <param name="channel">Channel to get MTU of.</param>
         /// <returns></returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         public int GetMTU(int transportIndex, byte channel)
         {
             if (Transport is Multipass mp)
@@ -448,7 +448,7 @@ namespace FishNet.Managing.Transporting
         /// <typeparam name="T">Tyep of transport to use.</typeparam>
         /// <param name="channel">Channel to get MTU of.</param>
         /// <returns></returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         public int GetMTU<T>(byte channel) where T : Transport
         {
             Transport transport = GetTransport<T>();
@@ -469,7 +469,7 @@ namespace FishNet.Managing.Transporting
         /// <summary>
         /// Passes received to the intermediate layer.
         /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         internal ArraySegment<byte> ProcessIntermediateIncoming(ArraySegment<byte> src, bool fromServer)
         {
             return _intermediateLayer.HandleIncoming(src, fromServer);
@@ -477,7 +477,7 @@ namespace FishNet.Managing.Transporting
         /// <summary>
         /// Passes sent to the intermediate layer.
         /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         private ArraySegment<byte> ProcessIntermediateOutgoing(ArraySegment<byte> src, bool toServer)
         {
             return _intermediateLayer.HandleOutgoing(src, toServer);
@@ -490,7 +490,7 @@ namespace FishNet.Managing.Transporting
         /// <param name="segment">Data to send.</param>
         /// <param name="connection">Connection to send to. Use null for all clients.</param>
         /// <param name="splitLargeMessages">True to split large packets which exceed MTU and send them in order on the reliable channel.</param>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         internal void SendToClient(byte channelId, ArraySegment<byte> segment, NetworkConnection connection, bool splitLargeMessages = true, DataOrderType orderType = DataOrderType.Default)
         {
             SetSplitValues(channelId, segment, splitLargeMessages, out int requiredMessages, out int maxSplitMessageSize);
@@ -511,13 +511,13 @@ namespace FishNet.Managing.Transporting
         /// <summary>
         /// Sends data to observers.
         /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         internal void SendToClients(byte channelId, ArraySegment<byte> segment, HashSet<NetworkConnection> observers, HashSet<NetworkConnection> excludedConnections = null, bool splitLargeMessages = true, DataOrderType orderType = DataOrderType.Default)
         {
             SetSplitValues(channelId, segment, splitLargeMessages, out int requiredMessages, out int maxSplitMessageSize);
             SendToClients(channelId, segment, observers, excludedConnections, requiredMessages, maxSplitMessageSize, orderType);
         }
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         private void SendToClients(byte channelId, ArraySegment<byte> segment, HashSet<NetworkConnection> observers, HashSet<NetworkConnection> excludedConnections, int requiredSplitMessages, int maxSplitMessageSize, DataOrderType orderType = DataOrderType.Default)
         {
             if (excludedConnections == null || excludedConnections.Count == 0)
@@ -542,7 +542,7 @@ namespace FishNet.Managing.Transporting
         /// <param name="channelId">Channel to send on.</param>
         /// <param name="segment">Data to send.</param>
         /// <param name="splitLargeMessages">True to split large packets which exceed MTU and send them in order on the reliable channel.</param>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         internal void SendToClients(byte channelId, ArraySegment<byte> segment, bool splitLargeMessages = true)
         {
             SetSplitValues(channelId, segment, splitLargeMessages, out int requiredMessages, out int maxSplitMessageSize);
@@ -564,13 +564,13 @@ namespace FishNet.Managing.Transporting
         /// <param name="channelId">Channel to send on.</param>
         /// <param name="segment">Data to send.</param>
         /// <param name="splitLargeMessages">True to split large packets which exceed MTU and send them in order on the reliable channel.</param>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         internal void SendToServer(byte channelId, ArraySegment<byte> segment, bool splitLargeMessages = true, DataOrderType orderType = DataOrderType.Default)
         {
             SetSplitValues(channelId, segment, splitLargeMessages, out int requiredMessages, out int maxSplitMessageSize);
             SendToServer(channelId, segment, requiredMessages, maxSplitMessageSize, orderType);
         }
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         private void SendToServer(byte channelId, ArraySegment<byte> segment, int requiredMessages, int maxSplitMessageSize, DataOrderType orderType)
         {
             if (channelId >= _toServerBundles.Count)
@@ -602,7 +602,7 @@ namespace FishNet.Managing.Transporting
         /// <summary>
         /// Checks to set channel to reliable if dataLength is too long.
         /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         internal void CheckSetReliableChannel(int dataLength, ref Channel channel)
         {
             if (channel == Channel.Reliable)
@@ -627,7 +627,7 @@ namespace FishNet.Managing.Transporting
         /// </summary>
         /// <param name="channelId"></param>
         /// <param name="segmentSize"></param>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         private bool SplitRequired(byte channelId, int segmentSize, out int requiredMessages, out int maxMessageSize)
         {
             requiredMessages = GetRequiredMessageCount(channelId, segmentSize, out maxMessageSize);
@@ -671,7 +671,7 @@ namespace FishNet.Managing.Transporting
                 }
                 int chunkSize = Mathf.Min(segment.Count - writeIndex - headerReduction, maxMessageSize);
                 //Make a new array segment for the chunk that is getting split.
-                ArraySegment<byte> splitSegment = new ArraySegment<byte>(
+                ArraySegment<byte> splitSegment = new(
                     segment.Array, segment.Offset + writeIndex, chunkSize);
 
                 //If connection is specified then it's going to a client.
@@ -750,7 +750,7 @@ namespace FishNet.Managing.Transporting
                                     //Length should always be more than 0 but check to be safe.
                                     if (ppb.GetBuffer(i, out ByteBuffer bb))
                                     {
-                                        ArraySegment<byte> segment = new ArraySegment<byte>(bb.Data, 0, bb.Length);
+                                        ArraySegment<byte> segment = new(bb.Data, 0, bb.Length);
                                         if (HasIntermediateLayer)
                                             segment = ProcessIntermediateOutgoing(segment, false);
 #if DEVELOPMENT
@@ -782,7 +782,7 @@ namespace FishNet.Managing.Transporting
                          * higher chance of success that remaining
                          * data is sent. */
                         requiredTicks = Math.Max(requiredTicks, 2);
-                        _disconnectingClients.Add(new DisconnectingClient(requiredTicks + localTick, conn));
+                        _disconnectingClients.Add(new(requiredTicks + localTick, conn));
                     }
 
                     conn.ResetServerDirty();
@@ -823,7 +823,7 @@ namespace FishNet.Managing.Transporting
                             {
                                 if (ppb.GetBuffer(i, out ByteBuffer bb))
                                 {
-                                    ArraySegment<byte> segment = new ArraySegment<byte>(bb.Data, 0, bb.Length);
+                                    ArraySegment<byte> segment = new(bb.Data, 0, bb.Length);
                                     if (HasIntermediateLayer)
                                         segment = ProcessIntermediateOutgoing(segment, true);
 #if DEVELOPMENT

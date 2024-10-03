@@ -1,4 +1,5 @@
-﻿using FishNet.Documenting;
+﻿#if FISHNET_STABLE_MODE
+using FishNet.Documenting;
 using FishNet.Managing;
 using FishNet.Object.Synchronizing.Internal;
 using FishNet.Serializing;
@@ -119,9 +120,9 @@ namespace FishNet.Object.Synchronizing
         #endregion
 
         #region Constructors.
-        public SyncList(SyncTypeSettings settings = new SyncTypeSettings()) : this(CollectionCaches<T>.RetrieveList(), EqualityComparer<T>.Default, settings) { }
-        public SyncList(IEqualityComparer<T> comparer, SyncTypeSettings settings = new SyncTypeSettings()) : this(new List<T>(), (comparer == null) ? EqualityComparer<T>.Default : comparer, settings) { }
-        public SyncList(List<T> collection, IEqualityComparer<T> comparer = null, SyncTypeSettings settings = new SyncTypeSettings()) : base(settings)
+        public SyncList(SyncTypeSettings settings = new()) : this(CollectionCaches<T>.RetrieveList(), EqualityComparer<T>.Default, settings) { }
+        public SyncList(IEqualityComparer<T> comparer, SyncTypeSettings settings = new()) : this(new(), (comparer == null) ? EqualityComparer<T>.Default : comparer, settings) { }
+        public SyncList(List<T> collection, IEqualityComparer<T> comparer = null, SyncTypeSettings settings = new()) : base(settings)
         {
             _comparer = (comparer == null) ? EqualityComparer<T>.Default : comparer;
             Collection = collection;
@@ -188,7 +189,7 @@ namespace FishNet.Object.Synchronizing
         /// <param name="index"></param>
         /// <param name="prev"></param>
         /// <param name="next"></param>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         private void AddOperation(SyncListOperation operation, int index, T prev, T next)
         {
             if (!base.IsInitialized)
@@ -224,7 +225,7 @@ namespace FishNet.Object.Synchronizing
                  * collection as well the changed, which would double results. */
                 if (base.Dirty())
                 {
-                    ChangeData change = new ChangeData(operation, index, next);
+                    ChangeData change = new(operation, index, next);
                     _changed.Add(change);
                 }
             }
@@ -267,9 +268,10 @@ namespace FishNet.Object.Synchronizing
             else
             {
                 base.WriteDelta(writer, resetSyncTick);
+
                 //False for not full write.
                 writer.WriteBoolean(false);
-                WriteChangeId(writer, false);
+
                 //Number of entries expected.
                 writer.WriteInt32(_changed.Count);
 
@@ -310,7 +312,6 @@ namespace FishNet.Object.Synchronizing
             base.WriteHeader(writer, false);
             //True for full write.
             writer.WriteBoolean(true);
-            WriteChangeId(writer, true);
 
             int count = Collection.Count;
             writer.WriteInt32(count);
@@ -324,28 +325,24 @@ namespace FishNet.Object.Synchronizing
         /// <summary>
         /// Reads and sets the current values for server or client.
         /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         [APIExclude]
         internal protected override void Read(PooledReader reader, bool asServer)
         {
-            /* When !asServer don't make changes if server is running.
-            * This is because changes would have already been made on
-            * the server side and doing so again would result in duplicates
-            * and potentially overwrite data not yet sent. */
-            bool asClientAndHost = (!asServer && base.NetworkManager.IsServerStarted);
+            base.SetReadArguments(reader, asServer, out bool newChangeId, out bool asClientHost, out bool canModifyValues);
+            
             //True to warn if this object was deinitialized on the server.
-            bool deinitialized = (asClientAndHost && !base.OnStartServerCalled);
+            bool deinitialized = (asClientHost && !base.OnStartServerCalled);
             if (deinitialized)
                 base.NetworkManager.LogWarning($"SyncType {GetType().Name} received a Read but was deinitialized on the server. Client callback values may be incorrect. This is a ClientHost limitation.");
 
-            List<T> collection = (asClientAndHost) ? ClientHostCollection : Collection;
+            List<T> collection = (asClientHost) ? ClientHostCollection : Collection;
 
             //Clear collection since it's a full write.
             bool fullWrite = reader.ReadBoolean();
             if (fullWrite)
                 collection.Clear();
 
-            bool ignoreReadChanges = base.ReadChangeId(reader);
             int changes = reader.ReadInt32();
 
             for (int i = 0; i < changes; i++)
@@ -359,7 +356,8 @@ namespace FishNet.Object.Synchronizing
                 if (operation == SyncListOperation.Add)
                 {
                     next = reader.Read<T>();
-                    if (!ignoreReadChanges)
+                    
+                    if (newChangeId)
                     {
                         index = collection.Count;
                         collection.Add(next);
@@ -368,7 +366,7 @@ namespace FishNet.Object.Synchronizing
                 //Clear.
                 else if (operation == SyncListOperation.Clear)
                 {
-                    if (!ignoreReadChanges)
+                    if (newChangeId)
                         collection.Clear();
                 }
                 //Insert.
@@ -376,14 +374,16 @@ namespace FishNet.Object.Synchronizing
                 {
                     index = reader.ReadInt32();
                     next = reader.Read<T>();
-                    if (!ignoreReadChanges)
+                    
+                    if (newChangeId)
                         collection.Insert(index, next);
                 }
                 //RemoveAt.
                 else if (operation == SyncListOperation.RemoveAt)
                 {
                     index = reader.ReadInt32();
-                    if (!ignoreReadChanges)
+                    
+                    if (newChangeId)
                     {
                         prev = collection[index];
                         collection.RemoveAt(index);
@@ -394,19 +394,20 @@ namespace FishNet.Object.Synchronizing
                 {
                     index = reader.ReadInt32();
                     next = reader.Read<T>();
-                    if (!ignoreReadChanges)
+                    
+                    if (newChangeId)
                     {
                         prev = collection[index];
                         collection[index] = next;
                     }
                 }
 
-                if (!ignoreReadChanges)
+                if (newChangeId)
                     InvokeOnChange(operation, index, prev, next, false);
             }
 
             //If changes were made invoke complete after all have been read.
-            if (changes > 0)
+            if (newChangeId && changes > 0)
                 InvokeOnChange(SyncListOperation.Complete, -1, default, default, false);
         }
 
@@ -420,14 +421,14 @@ namespace FishNet.Object.Synchronizing
                 if (base.NetworkBehaviour.OnStartServerCalled)
                     OnChange?.Invoke(operation, index, prev, next, asServer);
                 else
-                    _serverOnChanges.Add(new CachedOnChange(operation, index, prev, next));
+                    _serverOnChanges.Add(new(operation, index, prev, next));
             }
             else
             {
                 if (base.NetworkBehaviour.OnStartClientCalled)
                     OnChange?.Invoke(operation, index, prev, next, asServer);
                 else
-                    _clientOnChanges.Add(new CachedOnChange(operation, index, prev, next));
+                    _clientOnChanges.Add(new(operation, index, prev, next));
             }
         }
 
@@ -570,7 +571,7 @@ namespace FishNet.Object.Synchronizing
         /// <returns></returns>
         public List<T> FindAll(Predicate<T> match)
         {
-            List<T> results = new List<T>();
+            List<T> results = new();
             for (int i = 0; i < Collection.Count; ++i)
             {
                 if (match(Collection[i]))
@@ -662,7 +663,7 @@ namespace FishNet.Object.Synchronizing
         /// <returns></returns>
         public int RemoveAll(Predicate<T> match)
         {
-            List<T> toRemove = new List<T>();
+            List<T> toRemove = new();
             for (int i = 0; i < Collection.Count; ++i)
             { 
                 if (match(Collection[i]))
@@ -771,3 +772,4 @@ namespace FishNet.Object.Synchronizing
 
     }
 }
+#endif

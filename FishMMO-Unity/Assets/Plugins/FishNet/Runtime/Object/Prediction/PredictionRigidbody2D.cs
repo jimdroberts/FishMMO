@@ -41,7 +41,7 @@ namespace FishNet.Object.Prediction
 
         public static PredictionRigidbody2D.EntryData ReadForceData(this Reader r)
         {
-            PredictionRigidbody2D.EntryData fd = new PredictionRigidbody2D.EntryData();
+            PredictionRigidbody2D.EntryData fd = new();
 
             PredictionRigidbody2D.ForceApplicationType appType = (PredictionRigidbody2D.ForceApplicationType)r.ReadUInt8Unpacked();
             fd.Type = appType;
@@ -73,14 +73,14 @@ namespace FishNet.Object.Prediction
         public static void WritePredictionRigidbody2D(this Writer w, PredictionRigidbody2D pr)
         {
             w.Write(pr.Rigidbody2D.GetState());
-            w.WriteList<PredictionRigidbody2D.EntryData>(pr.GetPendingForces());
+            w.WriteList(pr.GetPendingForces());
         }
 
         public static PredictionRigidbody2D ReadPredictionRigidbody2D(this Reader r)
         {
             List<PredictionRigidbody2D.EntryData> lst = CollectionCaches<PredictionRigidbody2D.EntryData>.RetrieveList();
             Rigidbody2DState rs = r.Read<Rigidbody2DState>();
-            r.ReadList<PredictionRigidbody2D.EntryData>(ref lst);
+            r.ReadList(ref lst);
             PredictionRigidbody2D pr = ResettableObjectCaches<PredictionRigidbody2D>.Retrieve();
 
             pr.SetReconcileData(rs, lst);
@@ -209,27 +209,27 @@ namespace FishNet.Object.Prediction
         /// </summary>
         public void AddForce(Vector3 force, ForceMode2D mode = ForceMode2D.Force)
         {
-            EntryData fd = new EntryData(ForceApplicationType.AddForce,
-                new AllForceData(force, mode));
+            EntryData fd = new(ForceApplicationType.AddForce,
+                new(force, mode));
             _pendingForces.Add(fd);
         }
         public void AddRelativeForce(Vector3 force, ForceMode2D mode = ForceMode2D.Force)
         {
-            EntryData fd = new EntryData(ForceApplicationType.AddRelativeForce,
-                new AllForceData(force, mode));
+            EntryData fd = new(ForceApplicationType.AddRelativeForce,
+                new(force, mode));
             _pendingForces.Add(fd);
 
         }
         public void AddTorque(float force, ForceMode2D mode = ForceMode2D.Force)
         {
-            EntryData fd = new EntryData(ForceApplicationType.AddTorque,
-                new AllForceData(force, mode));
+            EntryData fd = new(ForceApplicationType.AddTorque,
+                new(force, mode));
             _pendingForces.Add(fd);
         }
         public void AddForceAtPosition(Vector3 force, Vector3 position, ForceMode2D mode = ForceMode2D.Force)
         {
-            EntryData fd = new EntryData(ForceApplicationType.AddForceAtPosition,
-                new AllForceData(force, position, mode));
+            EntryData fd = new(ForceApplicationType.AddForceAtPosition,
+                new(force, position, mode));
             _pendingForces.Add(fd);
         }
 
@@ -305,7 +305,7 @@ namespace FishNet.Object.Prediction
             if (pr._pendingForces != null)
             {
                 foreach (EntryData item in pr._pendingForces)
-                    _pendingForces.Add(new EntryData(item));
+                    _pendingForces.Add(new(item));
             }
             Rigidbody2D.SetState(pr.Rigidbody2DState);
 

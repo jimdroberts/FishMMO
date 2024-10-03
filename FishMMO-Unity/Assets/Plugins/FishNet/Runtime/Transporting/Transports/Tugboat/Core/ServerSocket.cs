@@ -50,19 +50,19 @@ namespace FishNet.Transporting.Tugboat.Server
         /// <summary>
         /// Changes to the sockets local connection state.
         /// </summary>
-        private ConcurrentQueue<LocalConnectionState> _localConnectionStates = new ConcurrentQueue<LocalConnectionState>();
+        private ConcurrentQueue<LocalConnectionState> _localConnectionStates = new();
         /// <summary>
         /// Inbound messages which need to be handled.
         /// </summary>
-        private ConcurrentQueue<Packet> _incoming = new ConcurrentQueue<Packet>();
+        private ConcurrentQueue<Packet> _incoming = new();
         /// <summary>
         /// Outbound messages which need to be handled.
         /// </summary>
-        private Queue<Packet> _outgoing = new Queue<Packet>();
+        private Queue<Packet> _outgoing = new();
         /// <summary>
         /// ConnectionEvents which need to be handled.
         /// </summary>
-        private ConcurrentQueue<RemoteConnectionEvent> _remoteConnectionEvents = new ConcurrentQueue<RemoteConnectionEvent>();
+        private ConcurrentQueue<RemoteConnectionEvent> _remoteConnectionEvents = new();
         #endregion
         /// <summary>
         /// Key required to connect.
@@ -87,7 +87,7 @@ namespace FishNet.Transporting.Tugboat.Server
         /// <summary>
         /// Locks the NetManager to stop it.
         /// </summary>
-        private readonly object _stopLock = new object();
+        private readonly object _stopLock = new();
         /// <summary>
         /// IPv6 is enabled only on demand, by default LiteNetLib always listens on IPv4 AND IPv6 which causes problems
         /// if IPv6 is disabled on host. This can be the case in Linux environments
@@ -129,7 +129,7 @@ namespace FishNet.Transporting.Tugboat.Server
         /// <summary>
         /// Polls the socket for new data.
         /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         internal void PollSocket()
         {
             base.PollSocket(base.NetManager);
@@ -138,16 +138,16 @@ namespace FishNet.Transporting.Tugboat.Server
         /// <summary>
         /// Threaded operation to process server actions.
         /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         private void ThreadedSocket()
         {
-            EventBasedNetListener listener = new EventBasedNetListener();
+            EventBasedNetListener listener = new();
             listener.ConnectionRequestEvent += Listener_ConnectionRequestEvent;
             listener.PeerConnectedEvent += Listener_PeerConnectedEvent;
             listener.NetworkReceiveEvent += Listener_NetworkReceiveEvent;
             listener.PeerDisconnectedEvent += Listener_PeerDisconnectedEvent;
 
-            base.NetManager = new NetManager(listener, _packetLayer, false);
+            base.NetManager = new(listener, _packetLayer, false);
             base.NetManager.DontRoute = _dontRoute;
             base.NetManager.MtuOverride = (_mtu + NetConstants.FragmentedHeaderTotalSize);
 
@@ -352,10 +352,10 @@ namespace FishNet.Transporting.Tugboat.Server
         /// </summary>
         private void ResetQueues()
         {
-            base.ClearGenericQueue<LocalConnectionState>(ref _localConnectionStates);
+            base.ClearGenericQueue(ref _localConnectionStates);
             base.ClearPacketQueue(ref _incoming);
             base.ClearPacketQueue(ref _outgoing);
-            base.ClearGenericQueue<RemoteConnectionEvent>(ref _remoteConnectionEvents);
+            base.ClearGenericQueue(ref _remoteConnectionEvents);
         }
 
 
@@ -364,7 +364,7 @@ namespace FishNet.Transporting.Tugboat.Server
         /// </summary>
         private void Listener_PeerDisconnectedEvent(NetPeer peer, DisconnectInfo disconnectInfo)
         {
-            _remoteConnectionEvents.Enqueue(new RemoteConnectionEvent(false, peer.Id));
+            _remoteConnectionEvents.Enqueue(new(false, peer.Id));
         }
 
         /// <summary>
@@ -372,19 +372,19 @@ namespace FishNet.Transporting.Tugboat.Server
         /// </summary>
         private void Listener_PeerConnectedEvent(NetPeer peer)
         {
-            _remoteConnectionEvents.Enqueue(new RemoteConnectionEvent(true, peer.Id));
+            _remoteConnectionEvents.Enqueue(new(true, peer.Id));
         }
 
         /// <summary>
         /// Called when data is received from a peer.
         /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         private void Listener_NetworkReceiveEvent(NetPeer fromPeer, NetPacketReader reader, byte channel, DeliveryMethod deliveryMethod)
         {
             //If over the MTU.
             if (reader.AvailableBytes > _mtu)
             {
-                _remoteConnectionEvents.Enqueue(new RemoteConnectionEvent(false, fromPeer.Id));
+                _remoteConnectionEvents.Enqueue(new(false, fromPeer.Id));
                 fromPeer.Disconnect();
             }
             else
@@ -415,7 +415,7 @@ namespace FishNet.Transporting.Tugboat.Server
         /// <summary>
         /// Dequeues and processes outgoing.
         /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         private void DequeueOutgoing()
         {
             if (base.GetConnectionState() != LocalConnectionState.Started || base.NetManager == null)
@@ -464,7 +464,7 @@ namespace FishNet.Transporting.Tugboat.Server
         /// <summary>
         /// Allows for Outgoing queue to be iterated.
         /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         internal void IterateOutgoing()
         {
             DequeueOutgoing();
@@ -473,7 +473,7 @@ namespace FishNet.Transporting.Tugboat.Server
         /// <summary>
         /// Iterates the Incoming queue.
         /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         internal void IterateIncoming()
         {
             /* Run local connection states first so we can begin
@@ -499,7 +499,7 @@ namespace FishNet.Transporting.Tugboat.Server
             while (_remoteConnectionEvents.TryDequeue(out RemoteConnectionEvent connectionEvent))
             {
                 RemoteConnectionState state = (connectionEvent.Connected) ? RemoteConnectionState.Started : RemoteConnectionState.Stopped;
-                base.Transport.HandleRemoteConnectionState(new RemoteConnectionStateArgs(state, connectionEvent.ConnectionId, base.Transport.Index));
+                base.Transport.HandleRemoteConnectionState(new(state, connectionEvent.ConnectionId, base.Transport.Index));
             }
 
             //Handle packets.
@@ -509,7 +509,7 @@ namespace FishNet.Transporting.Tugboat.Server
                 NetPeer peer = GetNetPeer(incoming.ConnectionId, true);
                 if (peer != null)
                 {
-                    ServerReceivedDataArgs dataArgs = new ServerReceivedDataArgs(
+                    ServerReceivedDataArgs dataArgs = new(
                         incoming.GetArraySegment(),
                         (Channel)incoming.Channel,
                         incoming.ConnectionId,
@@ -526,7 +526,7 @@ namespace FishNet.Transporting.Tugboat.Server
         /// <summary>
         /// Sends a packet to a single, or all clients.
         /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         internal void SendToClient(byte channelId, ArraySegment<byte> segment, int connectionId)
         {
             Send(ref _outgoing, channelId, segment, connectionId, _mtu);

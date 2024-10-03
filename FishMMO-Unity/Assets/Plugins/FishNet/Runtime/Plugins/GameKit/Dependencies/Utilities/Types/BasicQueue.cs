@@ -1,4 +1,5 @@
 ﻿using System;
+using UnityEngine;
 
 namespace GameKit.Dependencies.Utilities
 {
@@ -61,8 +62,9 @@ namespace GameKit.Dependencies.Utilities
         /// Tries to dequeue the next entry.
         /// </summary>
         /// <param name="result">Dequeued entry.</param>
+        /// <param name="defaultArrayEntry">True to set the array entry as default.</param>
         /// <returns>True if an entry existed to dequeue.</returns>
-        public bool TryDequeue(out T result)
+        public bool TryDequeue(out T result, bool defaultArrayEntry = true)
         {
             if (_written == 0)
             {
@@ -70,20 +72,25 @@ namespace GameKit.Dependencies.Utilities
                 return false;
             }
 
-            result = Dequeue();
+            result = Dequeue(defaultArrayEntry);
             return true;
         }
 
         /// <summary>
         /// Dequeues the next entry.
         /// </summary>
-        /// <returns></returns>
-        public T Dequeue()
+        /// <param name="defaultArrayEntry">True to set the array entry as default.</param>
+        public T Dequeue(bool defaultArrayEntry = true)
         {
             if (_written == 0)
-                throw new Exception($"Queue of type {typeof(T).Name} is empty.");
+            {
+                Debug.LogError($"Queue of type {typeof(T).Name} is empty.");
+                return default;
+            }
 
             T result = Collection[_read];
+            if (defaultArrayEntry)
+                Collection[_read] = default;
 
             _written--;
             _read++;
@@ -117,7 +124,7 @@ namespace GameKit.Dependencies.Utilities
         public T Peek()
         {
             if (_written == 0)
-                throw new Exception($"Queue of type {typeof(T).Name} is empty.");
+                throw new($"Queue of type {typeof(T).Name} is empty.");
 
             return Collection[_read];
         }
@@ -190,8 +197,6 @@ namespace GameKit.Dependencies.Utilities
                 Collection[offset] = value;
             }
         }
-
-
 
         /// <summary>
         /// Returns the real index of the collection using a simulated index.

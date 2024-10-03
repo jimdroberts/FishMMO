@@ -44,7 +44,7 @@ namespace FishNet.Connection
         /// <summary>
         /// ObjectIds to use for predicted spawning.
         /// </summary>
-        internal Queue<int> PredictedObjectIds = new Queue<int>();
+        internal Queue<int> PredictedObjectIds = new();
         /// <summary>
         /// True if the client has sent the same version that the server is on.
         /// </summary>
@@ -116,7 +116,7 @@ namespace FishNet.Connection
         /// <summary>
         /// Objects owned by this connection. Available to this connection and server.
         /// </summary>
-        public HashSet<NetworkObject> Objects = new HashSet<NetworkObject>();
+        public HashSet<NetworkObject> Objects = new();
         /// <summary>
         /// The first object within Objects.
         /// </summary>
@@ -140,7 +140,7 @@ namespace FishNet.Connection
         /// <summary>
         /// Scenes this connection is in. Available to this connection and server.
         /// </summary>
-        public HashSet<Scene> Scenes { get; private set; } = new HashSet<Scene>();
+        public HashSet<Scene> Scenes { get; private set; } = new();
         /// <summary>
         /// True if this connection is being disconnected. Only available to server.
         /// </summary>
@@ -154,12 +154,12 @@ namespace FishNet.Connection
         /// Tick of the last packet received from this connection which was not out of order.
         /// This value is only available on the server.
         /// </summary>
-        public EstimatedTick PacketTick { get; private set; } = new EstimatedTick();
+        public EstimatedTick PacketTick { get; private set; } = new();
         /// <summary>
         /// Approximate local tick as it is on this connection.
         /// This also contains the last set value for local and remote.
         /// </summary>
-        public EstimatedTick LocalTick { get; private set; } = new EstimatedTick();
+        public EstimatedTick LocalTick { get; private set; } = new();
         #endregion
 
         #region Private.
@@ -258,7 +258,7 @@ namespace FishNet.Connection
         /// <summary>
         /// Initializes this for use.
         /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         private void Initialize(NetworkManager nm, int clientId, int transportIndex, bool asServer)
         {
             NetworkManager = nm;
@@ -349,7 +349,7 @@ namespace FishNet.Connection
         /// Adds to Objects owned by this connection.
         /// </summary>
         /// <param name="nob"></param>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         internal void AddObject(NetworkObject nob)
         {
             if (!IsValid)
@@ -367,7 +367,7 @@ namespace FishNet.Connection
         /// Removes from Objects owned by this connection.
         /// </summary>
         /// <param name="nob"></param>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         internal void RemoveObject(NetworkObject nob)
         {
             if (!IsValid)
@@ -436,7 +436,7 @@ namespace FishNet.Connection
         /// <summary>
         /// Resets all states for re-use.
         /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        
         public void ResetState()
         {
             MatchCondition.RemoveFromMatchesWithoutRebuild(this, NetworkManager);
@@ -460,10 +460,6 @@ namespace FishNet.Connection
             Scenes.Clear();
             PredictedObjectIds.Clear();
             ResetPingPong();
-            ResetStates_Lod();
-            AllowedForcedLodUpdates = 0;
-            LastLevelOfDetailUpdate = 0;
-            LevelOfDetailInfractions = 0;
             Observers_Reset();
             Prediction_Reset();
         }
