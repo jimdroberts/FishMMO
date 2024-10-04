@@ -55,7 +55,7 @@ namespace FishMMO.Shared
 #if UNITY_EDITOR
 						EditorApplication.ExitPlaymode(); // Make sure to include the UnityEditor namespace if using Unity
 #else
-                				Application.Quit();
+                		Application.Quit();
 #endif
 						return; // Exit the method
 					default:
@@ -195,6 +195,8 @@ namespace FishMMO.Shared
 			{
 				Debug.Log(message);
 			}
+			Console.WriteLine("Press any key to continue...");
+			Console.ReadKey(true); // Wait for user to press a key
 		}
 
 		private async Task<string> DownloadFileAsync(string url, string fileName = "tempFileName.tmpFile")
@@ -206,12 +208,12 @@ namespace FishMMO.Shared
 
 				if (File.Exists(outputPath))
 				{
-					Log(outputPath + " already exists... Skipping download.");
+					Console.WriteLine(outputPath + " already exists... Skipping download.");
 					return outputPath;
 				}
 
-				Log($"Downloading file from {url}");
-				Log("Please wait...");
+				Console.WriteLine($"Downloading file from {url}");
+				Console.WriteLine("Please wait...");
 				using (HttpClient client = new HttpClient())
 				using (HttpResponseMessage response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead))
 				{
@@ -233,7 +235,7 @@ namespace FishMMO.Shared
 							await streamToReadFrom.CopyToAsync(streamToWriteTo);
 						}
 					}
-					Log($"File successfully downloaded to {outputPath}");
+					Console.WriteLine($"File successfully downloaded to {outputPath}");
 					return outputPath;
 				}
 			}
@@ -281,7 +283,7 @@ namespace FishMMO.Shared
 				{
 					if (PromptForYesNo("Windows Subsystem for Linux needs to be installed for Docker. Would you like to install it?"))
 					{
-						Log("Installing WSL...");
+						Console.WriteLine("Installing WSL...");
 						await RunDismCommandAsync("/online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart");
 						Log("WSL has been installed.");
 						return true;
@@ -387,7 +389,7 @@ namespace FishMMO.Shared
 
 			try
 			{
-				Log("Downloading Python...");
+				Console.WriteLine("Downloading Python...");
 
 				if (await RunProcessAsync(command, arguments, (e, o, err) =>
 								  {
@@ -403,7 +405,7 @@ namespace FishMMO.Shared
 					// Install Python silently on Windows
 					if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
 					{
-						Log("Installing Python...");
+						Console.WriteLine("Installing Python...");
 
 						if (await RunProcessAsync("python-installer.exe", "/quiet InstallAllUsers=1 PrependPath=1", (e, o, err) =>
 									{
@@ -439,7 +441,7 @@ namespace FishMMO.Shared
 		{
 			try
 			{
-				Log("Updating pip...");
+				Console.WriteLine("Updating pip...");
 				string command;
 				string arguments;
 
@@ -476,7 +478,7 @@ namespace FishMMO.Shared
 			{
 				if (PromptForYesNo("DotNet 8 is not installed, would you like to install it?"))
 				{
-					Log("Installing DotNet...");
+					Console.WriteLine("Installing DotNet...");
 					await DownloadAndInstallDotNetAsync();
 					Log("DotNet has been installed.");
 					return true;
@@ -486,14 +488,19 @@ namespace FishMMO.Shared
 					return false;
 				}
 			}
-			Log("DotNet is already installed.");
+			else
+			{
+				Console.WriteLine("DotNet is already installed.");
+			}
 
 			if (!await IsDotNetEFInstalledAsync())
 			{
 				if (PromptForYesNo("DotNet-EF is not installed, would you like to install it?"))
 				{
-					Log("Installing DotNet-EF v5.0.17...");
+					Console.WriteLine("Installing DotNet-EF v5.0.17...");
 					await RunDotNetCommandAsync("tool install --global dotnet-ef --version 5.0.17");
+
+					Log("DotNet-EF is has been installed.");
 					return true;
 				}
 				return false;
@@ -654,7 +661,7 @@ namespace FishMMO.Shared
 				}
 			}
 
-			Log("Running DotNet Command: \r\n" +
+			Console.WriteLine("Running DotNet Command: \r\n" +
 				"dotnet " + arguments);
 
 			await RunProcessAsync("dotnet", arguments,
@@ -685,7 +692,7 @@ namespace FishMMO.Shared
 				return true;
 			}
 
-			Log("Installing Docker...");
+			Console.WriteLine("Installing Docker...");
 
 			try
 			{
@@ -777,7 +784,7 @@ namespace FishMMO.Shared
 
 		private async Task<string> RunDockerCommandAsync(string commandArgs)
 		{
-			Log("Running Docker Command: \r\n" +
+			Console.WriteLine("Running Docker Command: \r\n" +
 				"docker " + commandArgs);
 
 			using (Process process = new Process())
@@ -826,7 +833,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		private async Task<string> RunDockerComposeCommandAsync(string commandArgs, Dictionary<string, string> environmentVariables = null)
 		{
-			Log("Running Docker-Compose Command: \r\n" +
+			Console.WriteLine("Running Docker-Compose Command: \r\n" +
 				"docker-compose " + commandArgs);
 
 			using (Process process = new Process())
@@ -881,31 +888,15 @@ namespace FishMMO.Shared
 		#region Database
 		private async Task<bool> InstallPostgreSQLWindows(AppSettings appSettings)
 		{
-			if (!PromptForYesNo("Install PostgreSQL?"))
-			{
-				if (PromptForYesNo("Install FishMMO Database?"))
-				{
-					string su = PromptForInput("Enter PostgreSQL Superuser Username: ");
-					string sp = PromptForPassword("Enter PostgreSQL Superuser Password: ");
-
-					if (await InstallFishMMODatabase(su, sp, appSettings))
-					{
-						return true;
-					}
-					else
-					{
-						return false;
-					}
-				}
-				else
-				{
-					return false;
-				}
-			}
-
-			Log("Installing PostgreSQL.");
 			string superUsername = PromptForInput("Enter PostgreSQL Superuser Username: ");
 			string superPassword = PromptForPassword("Enter PostgreSQL Superuser Password: ");
+
+			if (!PromptForYesNo("Install PostgreSQL?"))
+			{
+				return false;
+			}
+
+			Console.WriteLine("Installing PostgreSQL...");
 
 			string installerPath = await DownloadFileAsync(@"https://sbp.enterprisedb.com/getfile.jsp?fileid=1259105", "PostgreSQLInstaller.exe");
 
@@ -933,15 +924,7 @@ namespace FishMMO.Shared
 				if (exitCode == 0)
 				{
 					Log("PostgreSQL installation successful.");
-
-					if (await InstallFishMMODatabase(superUsername, superPassword, appSettings))
-					{
-						return true;
-					}
-					else
-					{
-						return false;
-					}
+					return true;
 				}
 				else
 				{
@@ -956,122 +939,113 @@ namespace FishMMO.Shared
 			}
 		}
 
-		private async Task<bool> InstallPostgreSQLLinuxMAC(AppSettings appSettings)
+		private async Task<bool> InstallPostgreSQLLinuxMAC()
 		{
-			if (!PromptForYesNo("Install PostgreSQL?"))
+			if (PromptForYesNo("Install PostgreSQL?"))
 			{
-				return false;
-			}
+				Console.WriteLine("Installing PostgreSQL...");
 
-			Log("Installing PostgreSQL.");
-			string superUsername = PromptForInput("Enter PostgreSQL Superuser Username: ");
-			string superPassword = PromptForPassword("Enter PostgreSQL Superuser Password: ");
-
-			try
-			{
-				// Detect platform
-				bool isMac = RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
-
-				string updateCommand = isMac ? "brew update" : "sudo apt-get update";
-				string installCommand = isMac ? "brew install postgresql" : "sudo apt-get install -y postgresql postgresql-contrib";
-				string startCommand = isMac ? "brew services start postgresql" : "sudo systemctl start postgresql";
-				string enableCommand = isMac ? null : "sudo systemctl enable postgresql";
-				string createUserCommand = $"-c \"CREATE USER {superUsername} WITH SUPERUSER PASSWORD '{superPassword}';\"";
-
-				bool updateSuccess = await RunProcessAsync("/bin/bash", $"-c \"{updateCommand}\"",
-					(exitCode, output, error) =>
-					{
-						if (exitCode != 0)
-						{
-							Log($"Failed to update package lists. Exit code: {exitCode}\nError: {error}");
-							return false;
-						}
-						return true;
-					});
-
-				if (!updateSuccess) return false;
-
-				bool installSuccess = await RunProcessAsync("/bin/bash", $"-c \"{installCommand}\"",
-					(exitCode, output, error) =>
-					{
-						if (exitCode != 0)
-						{
-							Log($"Failed to install PostgreSQL. Exit code: {exitCode}\nError: {error}");
-							return false;
-						}
-						return true;
-					});
-
-				if (!installSuccess) return false;
-
-				bool startSuccess = await RunProcessAsync("/bin/bash", $"-c \"{startCommand}\"",
-					(exitCode, output, error) =>
-					{
-						if (exitCode != 0)
-						{
-							Log($"Failed to start PostgreSQL. Exit code: {exitCode}\nError: {error}");
-							return false;
-						}
-						return true;
-					});
-
-				if (!startSuccess) return false;
-
-				if (!isMac)
+				try
 				{
-					bool enableSuccess = await RunProcessAsync("/bin/bash", $"-c \"{enableCommand}\"",
+					// Detect platform
+					bool isMac = RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
+
+					string updateCommand = isMac ? "brew update" : "sudo apt-get update";
+					bool updateSuccess = await RunProcessAsync("/bin/bash", $"-c \"{updateCommand}\"",
 						(exitCode, output, error) =>
 						{
 							if (exitCode != 0)
 							{
-								Log($"Failed to enable PostgreSQL to start on boot. Exit code: {exitCode}\nError: {error}");
+								Log($"Failed to update package lists. Exit code: {exitCode}\nError: {error}");
 								return false;
 							}
 							return true;
 						});
 
-					if (!enableSuccess) return false;
-				}
+					if (!updateSuccess) return false;
 
-				if (PromptForYesNo("Create PostgreSQL super user?"))
-				{
-					bool createUserSuccess = await RunProcessAsync("/bin/bash", $"-c \"sudo -u postgres psql {createUserCommand}\"",
-					(exitCode, output, error) =>
-					{
-						if (exitCode != 0)
+					string installCommand = isMac ? "brew install postgresql" : "sudo apt-get install -y postgresql postgresql-contrib";
+					bool installSuccess = await RunProcessAsync("/bin/bash", $"-c \"{installCommand}\"",
+						(exitCode, output, error) =>
 						{
-							Log($"Failed to create PostgreSQL superuser. Exit code: {exitCode}\nError: {error}");
-							return false;
-						}
-						return true;
-					});
+							if (exitCode != 0)
+							{
+								Log($"Failed to install PostgreSQL. Exit code: {exitCode}\nError: {error}");
+								return false;
+							}
+							return true;
+						});
 
-					if (!createUserSuccess) return false;
+					if (!installSuccess) return false;
+
+					string startCommand = isMac ? "brew services start postgresql" : "sudo systemctl start postgresql";
+					bool startSuccess = await RunProcessAsync("/bin/bash", $"-c \"{startCommand}\"",
+						(exitCode, output, error) =>
+						{
+							if (exitCode != 0)
+							{
+								Log($"Failed to start PostgreSQL. Exit code: {exitCode}\nError: {error}");
+								return false;
+							}
+							return true;
+						});
+
+					if (!startSuccess) return false;
+
+					if (!isMac)
+					{
+						string enableCommand = isMac ? null : "sudo systemctl enable postgresql";
+
+						bool enableSuccess = await RunProcessAsync("/bin/bash", $"-c \"{enableCommand}\"",
+							(exitCode, output, error) =>
+							{
+								if (exitCode != 0)
+								{
+									Log($"Failed to enable PostgreSQL to start on boot. Exit code: {exitCode}\nError: {error}");
+									return false;
+								}
+								return true;
+							});
+
+						if (!enableSuccess) return false;
+					}
+
+					if (PromptForYesNo("Update PostgreSQL Superuser Password?"))
+					{
+						string superUsername = "postgres";
+						string superPassword = PromptForPassword("Enter PostgreSQL Superuser Password: ");
+						string updateUserCommand = $"-c \"ALTER USER {superUsername} PASSWORD '{superPassword}';\"";
+
+						bool updateUserSuccess = await RunProcessAsync("/bin/bash", $"-c \"sudo -u postgres psql {updateUserCommand}\"",
+						(exitCode, output, error) =>
+						{
+							if (exitCode != 0)
+							{
+								Log($"Failed to update PostgreSQL superuser. Exit code: {exitCode}\nError: {error}");
+								return false;
+							}
+							return true;
+						});
+
+						if (!updateUserSuccess) return false;
+					}
+
+					Log("PostgreSQL installation successful.");
 				}
-
-				Log("PostgreSQL installation successful.");
-
-				if (await InstallFishMMODatabase(superUsername, superPassword, appSettings))
+				catch (Exception ex)
 				{
-					return true;
-				}
-				else
-				{
+					Log($"Error installing PostgreSQL: {ex.Message}");
 					return false;
 				}
 			}
-			catch (Exception ex)
-			{
-				Log($"Error installing PostgreSQL: {ex.Message}");
-				return false;
-			}
+			return true;
 		}
 
 		public async Task<bool> InstallFishMMODatabase(string superUsername, string superPassword, AppSettings appSettings)
 		{
 			try
 			{
-				Log($"Installing FishMMO Database {appSettings.Npgsql.Database}");
+				Console.WriteLine($"Installing FishMMO Database {appSettings.Npgsql.Database} using appsettings.json");
 				string connectionString = $"Host={appSettings.Npgsql.Host};Port={appSettings.Npgsql.Port};Username={superUsername};Password={superPassword};";
 
 				// Connect to PostgreSQL
@@ -1135,8 +1109,6 @@ namespace FishMMO.Shared
 
 		private async Task InstallDatabase()
 		{
-			Log("Installing database...");
-
 			string workingDirectory = GetWorkingDirectory();
 			//Log(workingDirectory);
 
@@ -1156,7 +1128,8 @@ namespace FishMMO.Shared
 				{
 					Console.WriteLine($"1 : Install Docker Database");
 					Console.WriteLine($"2 : Install PostgreSQL");
-					Console.WriteLine($"3 : Skip");
+					Console.WriteLine($"3 : Install FishMMO Database");
+					Console.WriteLine($"4 : Return to Main Menu");
 					Console.WriteLine($"0 : Quit");
 					ConsoleKeyInfo key = Console.ReadKey(true); // Read key and don't show it in the console
 
@@ -1188,34 +1161,32 @@ namespace FishMMO.Shared
 							{
 								if (!await InstallPostgreSQLWindows(appSettings))
 								{
-									Console.WriteLine("Press any key to continue...");
-									Console.ReadKey(true); // Wait for user to press a key before re-displaying the menu
-
-									return;
+									continue;
 								}
-								skip = true;
 							}
 							else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ||
 									 RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
 							{
-								if (!await InstallPostgreSQLLinuxMAC(appSettings))
+								if (!await InstallPostgreSQLLinuxMAC())
 								{
-									Console.WriteLine("Press any key to continue...");
-									Console.ReadKey(true); // Wait for user to press a key before re-displaying the menu
-
-									return;
+									continue;
 								}
-								skip = true;
 							}
 							break;
 						case ConsoleKey.D3:
-							skip = true;
+							string superUsername = PromptForInput("Enter PostgreSQL Superuser Username: ");
+							string superPassword = PromptForPassword("Enter PostgreSQL Superuser Password: ");
+
+							if (!await InstallFishMMODatabase(superUsername, superPassword, appSettings))
+							{
+								continue;
+							}
 							break;
 						case ConsoleKey.D0:
 #if UNITY_EDITOR
 							EditorApplication.ExitPlaymode(); // Make sure to include the UnityEditor namespace if using Unity
 #else
-                					Application.Quit();
+                			Application.Quit();
 #endif
 							return; // Exit the method
 						default:
@@ -1247,7 +1218,7 @@ namespace FishMMO.Shared
 		{
 			string timestamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
 			
-			Log($"Updating the database at {timestamp}...");
+			Console.WriteLine($"Updating the database at {timestamp}...");
 
 			// Run 'dotnet ef database update' command
 			await RunDotNetCommandAsync($"ef database update -p {Constants.Configuration.ProjectPath}  -s  {Constants.Configuration.StartupProject}");
@@ -1259,12 +1230,12 @@ namespace FishMMO.Shared
 		{
 			string timestamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
 
-			Log($"Creating a new migration {timestamp}...");
+			Console.WriteLine($"Creating a new migration {timestamp}...");
 
 			// Run 'dotnet ef migrations add Initial' command
 			await RunDotNetCommandAsync($"ef migrations add {timestamp} -p {Constants.Configuration.ProjectPath} -s {Constants.Configuration.StartupProject}");
 
-			Log($"Updating the database at {timestamp}...");
+			Console.WriteLine($"Updating the database at {timestamp}...");
 			
 			// Run 'dotnet ef database update' command
 			await RunDotNetCommandAsync($"ef database update -p {Constants.Configuration.ProjectPath}  -s  {Constants.Configuration.StartupProject}");
