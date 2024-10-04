@@ -24,7 +24,7 @@ namespace FishMMO.Shared
 			{
 				Console.Clear(); // Clear the console at the beginning of each loop iteration
 				Console.WriteLine("Welcome to the FishMMO Database Tool.");
-				Console.WriteLine("Press a key (0-7):");
+				Console.WriteLine("Press a key (1-6):");
 				Console.WriteLine("1 : Install Everything");
 				Console.WriteLine("2 : Install DotNet");
 				Console.WriteLine("3 : Install Python");
@@ -1013,10 +1013,11 @@ namespace FishMMO.Shared
 					if (PromptForYesNo("Update PostgreSQL Superuser Password?"))
 					{
 						string superUsername = "postgres";
-						string superPassword = PromptForPassword("Enter PostgreSQL Superuser Password: ");
-						string updateUserCommand = $"-c \"ALTER USER {superUsername} PASSWORD '{superPassword}';\"";
+						string superPassword = PromptForPassword("Enter new PostgreSQL Superuser Password: ");
 
-						bool updateUserSuccess = await RunProcessAsync("/bin/bash", $"-c \"sudo -u postgres psql {updateUserCommand}\"",
+						string updateUserCommand = $"ALTER USER {superUsername} WITH PASSWORD '{superPassword}';";
+
+						bool updateUserSuccess = await RunProcessAsync("/bin/bash", $"-c \"sudo -u postgres psql -c \\\"{updateUserCommand}\\\"\"",
 						(exitCode, output, error) =>
 						{
 							if (exitCode != 0)
@@ -1109,6 +1110,9 @@ namespace FishMMO.Shared
 
 		private async Task InstallDatabase()
 		{
+			Console.Clear();
+			Console.WriteLine("Installing Database...");
+
 			string workingDirectory = GetWorkingDirectory();
 			//Log(workingDirectory);
 
@@ -1126,6 +1130,7 @@ namespace FishMMO.Shared
 				bool skip = false;
 				while (!skip)
 				{
+					Console.WriteLine("Press a key (0-4):");
 					Console.WriteLine($"1 : Install Docker Database");
 					Console.WriteLine($"2 : Install PostgreSQL");
 					Console.WriteLine($"3 : Install FishMMO Database");
@@ -1174,13 +1179,31 @@ namespace FishMMO.Shared
 							}
 							break;
 						case ConsoleKey.D3:
-							string superUsername = PromptForInput("Enter PostgreSQL Superuser Username: ");
+							string superUsername = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? PromptForInput("Enter PostgreSQL Superuser Username: ") : "postgres";
 							string superPassword = PromptForPassword("Enter PostgreSQL Superuser Password: ");
 
 							if (!await InstallFishMMODatabase(superUsername, superPassword, appSettings))
 							{
 								continue;
 							}
+							else
+							{
+								if (PromptForYesNo("Create Initial Migration?"))
+								{
+									// Run 'dotnet ef migrations add Initial' command
+									Console.WriteLine("Creating Initial database migration...");
+									await RunDotNetCommandAsync($"ef migrations add Initial -p {Constants.Configuration.ProjectPath} -s {Constants.Configuration.StartupProject}");
+
+									// Run 'dotnet ef database update' command
+									Console.WriteLine("Updating database...");
+									await RunDotNetCommandAsync($"ef database update -p {Constants.Configuration.ProjectPath} -s {Constants.Configuration.StartupProject}");
+
+									Log($"Initial Migration completed...");
+								}
+							}
+							break;
+						case ConsoleKey.D4:
+							skip = true;
 							break;
 						case ConsoleKey.D0:
 #if UNITY_EDITOR
@@ -1193,19 +1216,6 @@ namespace FishMMO.Shared
 							Console.WriteLine("Invalid input. Please enter a valid number.");
 							continue;
 					}
-				}
-
-				if (PromptForYesNo("Create Initial Migration?"))
-				{
-					// Run 'dotnet ef migrations add Initial' command
-					Log("Creating Initial database migration...");
-					await RunDotNetCommandAsync($"ef migrations add Initial -p {Constants.Configuration.ProjectPath} -s {Constants.Configuration.StartupProject}");
-
-					// Run 'dotnet ef database update' command
-					Log("Updating database...");
-					await RunDotNetCommandAsync($"ef database update -p {Constants.Configuration.ProjectPath} -s {Constants.Configuration.StartupProject}");
-
-					Log($"Initial Migration completed...");
 				}
 			}
 			else
