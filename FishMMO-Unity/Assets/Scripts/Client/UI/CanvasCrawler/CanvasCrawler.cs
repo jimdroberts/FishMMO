@@ -95,8 +95,9 @@ namespace FishMMO.Client
 					Configuration.Set("CrosshairColorB", "255");
 					Configuration.Set("CrosshairColorA", "255");
 
+#if !UNITY_EDITOR
 					Configuration.Save();
-
+#endif
 				}
 			}
 		}

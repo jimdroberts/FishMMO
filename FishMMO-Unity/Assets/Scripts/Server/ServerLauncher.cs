@@ -15,7 +15,6 @@ namespace FishMMO.Server
 			"LoginServer",
 			"WorldServer",
 			"SceneServer",
-			"ClientBootstrap"
 		};
 
 		void Start()
