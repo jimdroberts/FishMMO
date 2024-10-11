@@ -16,7 +16,9 @@ namespace FishMMO.Shared
 		public AchievementTemplate ResurrectAchievementTemplate;
 		public AchievementTemplate ResurrectedAchievementTemplate;
 
-		public bool Immortal { get; set; }
+		[SerializeField]
+		private bool immortal = false;
+		public bool Immortal { get { return this.immortal; } set { this.immortal = value; } }
 
 		public bool IsAlive
 		{

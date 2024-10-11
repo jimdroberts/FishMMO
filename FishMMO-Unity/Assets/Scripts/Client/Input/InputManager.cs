@@ -82,6 +82,8 @@ namespace FishMMO.Client
 			AddAxis("Mouse X", "Mouse X");
 			AddAxis("Mouse Y", "Mouse Y");
 			AddAxis("Mouse ScrollWheel", "Mouse ScrollWheel");
+			AddKey("Left Mouse", KeyCode.Mouse0);
+			AddKey("Right Mouse", KeyCode.Mouse1);
 			AddKey("Hotkey 1", KeyCode.Alpha1);
 			AddKey("Hotkey 2", KeyCode.Alpha2);
 			AddKey("Hotkey 3", KeyCode.Alpha3);

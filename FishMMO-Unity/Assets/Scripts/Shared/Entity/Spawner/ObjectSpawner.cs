@@ -96,11 +96,6 @@ namespace FishMMO.Shared
 
 			Spawned.Remove(spawnable.ID);
 
-			// despawn the object
-			ServerManager?.Despawn(spawnable.NetworkObject, DespawnType.Pool);
-
-			//Debug.Log($"Object despawned, next respawn at {respawnTime}.");
-
 			// did we already set a previous respawn time?
 			if (respawnTime > 0)
 			{
@@ -108,6 +103,11 @@ namespace FishMMO.Shared
 			}
 			// set the next respawn time
 			respawnTime = RandomRespawnTime ? Random.Range(spawnable.SpawnTemplate.MinimumRespawnTime, spawnable.SpawnTemplate.MaximumRespawnTime) : InitialRespawnTime;
+
+			// despawn the object
+			ServerManager?.Despawn(spawnable.NetworkObject, DespawnType.Pool);
+
+			//Debug.Log($"Object despawned, next respawn at {respawnTime}.");
 		}
 
 		public void TryRespawn()
