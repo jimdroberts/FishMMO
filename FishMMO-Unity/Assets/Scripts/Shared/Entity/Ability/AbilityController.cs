@@ -370,6 +370,13 @@ namespace FishMMO.Shared
 		[Replicate]
 		private void Replicate(AbilityActivationReplicateData activationData, ReplicateState state = ReplicateState.Invalid, Channel channel = Channel.Unreliable)
 		{
+			// Ignore default data
+			// FishNet sends default replicate data occassionally
+			if (!activationData.ActivationFlags.IsFlagged(AbilityActivationFlags.IsActualData))
+			{
+				return;
+			}
+
 			// Predict held state
 			if (state.IsFuture())
 			{
@@ -412,7 +419,7 @@ namespace FishMMO.Shared
 				// Try to activate the queued ability
 				if (CanActivate(activationData.QueuedAbilityID, out Ability newAbility))
 				{
-					Debug.Log($"New Ability Activation:{newAbility.ID} State:{state} Tick:{activationData.GetTick()}");
+					Debug.Log($"1 New Ability Activation:{newAbility.ID} State:{state} Tick:{activationData.GetTick()}");
 
 					interruptQueued = false;
 					currentAbilityID = newAbility.ID;
@@ -431,7 +438,7 @@ namespace FishMMO.Shared
 			{
 				if (remainingTime > 0.0f)
 				{
-					Debug.Log($"Activating {validatedAbility.ID} State: {state}");
+					Debug.Log($"2 Activating {validatedAbility.ID} State: {state}");
 
 					// Handle ability updates here, display cast bar, display hitbox telegraphs, etc
 					if (state == ReplicateState.CurrentCreated)
@@ -472,11 +479,11 @@ namespace FishMMO.Shared
 								// Generate a new seed
 								currentSeed = abilitySeedGenerator.Next();
 
-								Debug.Log($"New Ability Seed {currentSeed}");
+								Debug.Log($"3 New Ability Seed {currentSeed}");
 
 								// Channeled abilities consume resources during activation
 
-								Debug.Log($"Consumed On Tick: {activationData.GetTick()} State: {state}");
+								Debug.Log($"4 Consumed On Tick: {activationData.GetTick()} State: {state}");
 								validatedAbility.ConsumeResources(Character, BloodResourceConversionTemplate, BloodResourceTemplate);
 							}
 							// Handle NPC targetting and ability spawning
@@ -515,7 +522,7 @@ namespace FishMMO.Shared
 					// Generate a new seed
 					currentSeed = abilitySeedGenerator.Next();
 
-					Debug.Log($"New Ability Seed {currentSeed}");
+					Debug.Log($"5 New Ability Seed {currentSeed}");
 				}
 				// Handle NPC targetting and ability spawning
 				else
@@ -524,7 +531,7 @@ namespace FishMMO.Shared
 				}
 
 				// Consume resources
-				Debug.Log($"Consumed On Tick: {activationData.GetTick()} State: {state}");
+				Debug.Log($"6 Consumed On Tick: {activationData.GetTick()} State: {state}");
 				validatedAbility.ConsumeResources(Character, BloodResourceConversionTemplate, BloodResourceTemplate);
 
 				// Add ability to cooldowns
@@ -606,19 +613,23 @@ namespace FishMMO.Shared
 
 			if (abilityID == NO_ABILITY)
 			{
+				//Debug.Log("NO Ability.");
 				return false;
 			}
 			if (!CanManipulate())
 			{
+				//Debug.Log("Can't manipulate.");
 				return false;
 			}
 			if (!KnownAbilities.TryGetValue(abilityID, out validatedAbility))
 			{
+				//Debug.Log("Trying to activate an unknown ability.");
 				return false;
 			}
 			if (!Character.TryGet(out ICooldownController cooldownController) ||
 				cooldownController.IsOnCooldown(validatedAbility.ID))
 			{
+				//Debug.Log("Ability is cooling down.");
 				return false;
 			}
 
@@ -647,6 +658,7 @@ namespace FishMMO.Shared
 			if (!validatedAbility.MeetsRequirements(Character) ||
 				!validatedAbility.HasResource(Character, BloodResourceConversionTemplate, BloodResourceTemplate))
 			{
+				//Debug.Log("Not enough resources.");
 				return false;
 			}
 			return true;

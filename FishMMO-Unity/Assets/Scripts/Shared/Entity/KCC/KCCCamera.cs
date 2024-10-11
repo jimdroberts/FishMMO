@@ -99,7 +99,7 @@ namespace FishMMO.Shared
 				PlanarDirection = Vector3.Cross(FollowTransform.up, Vector3.Cross(PlanarDirection, FollowTransform.up));
 				Quaternion planarRot = Quaternion.LookRotation(PlanarDirection, FollowTransform.up);
 
-				_targetVerticalAngle -= (rotationInput.y * RotationSpeed);
+				_targetVerticalAngle -= rotationInput.y * RotationSpeed;
 				_targetVerticalAngle = Mathf.Clamp(_targetVerticalAngle, MinVerticalAngle, MaxVerticalAngle);
 				Quaternion verticalRot = Quaternion.Euler(_targetVerticalAngle, 0, 0);
 				Quaternion targetRotation = Quaternion.Slerp(Transform.rotation, planarRot * verticalRot, 1f - Mathf.Exp(-RotationSharpness * deltaTime));

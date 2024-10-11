@@ -97,6 +97,13 @@ namespace FishMMO.Shared
 		[Replicate]
 		private void Replicate(KCCInputReplicateData input, ReplicateState state = ReplicateState.Invalid, Channel channel = Channel.Unreliable)
 		{
+			// Ignore default data
+			// FishNet sends default replicate data occassionally
+			if (!input.MoveFlags.IsFlagged(KCCMoveFlags.IsActualData))
+			{
+				return;
+			}
+
 			if (state.IsFuture())
 			{
 				uint lastCreatedTick = lastCreatedData.GetTick();
