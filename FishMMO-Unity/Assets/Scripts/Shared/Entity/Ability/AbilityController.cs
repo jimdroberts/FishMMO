@@ -419,7 +419,7 @@ namespace FishMMO.Shared
 				// Try to activate the queued ability
 				if (CanActivate(activationData.QueuedAbilityID, out Ability newAbility))
 				{
-					Debug.Log($"1 New Ability Activation:{newAbility.ID} State:{state} Tick:{activationData.GetTick()}");
+					//Debug.Log($"1 New Ability Activation:{newAbility.ID} State:{state} Tick:{activationData.GetTick()}");
 
 					interruptQueued = false;
 					currentAbilityID = newAbility.ID;
@@ -438,7 +438,7 @@ namespace FishMMO.Shared
 			{
 				if (remainingTime > 0.0f)
 				{
-					Debug.Log($"2 Activating {validatedAbility.ID} State: {state}");
+					//Debug.Log($"2 Activating {validatedAbility.ID} State: {state}");
 
 					// Handle ability updates here, display cast bar, display hitbox telegraphs, etc
 					if (state == ReplicateState.CurrentCreated)
@@ -479,11 +479,11 @@ namespace FishMMO.Shared
 								// Generate a new seed
 								currentSeed = abilitySeedGenerator.Next();
 
-								Debug.Log($"3 New Ability Seed {currentSeed}");
+								//Debug.Log($"3 New Ability Seed {currentSeed}");
 
 								// Channeled abilities consume resources during activation
 
-								Debug.Log($"4 Consumed On Tick: {activationData.GetTick()} State: {state}");
+								//Debug.Log($"4 Consumed On Tick: {activationData.GetTick()} State: {state}");
 								validatedAbility.ConsumeResources(Character, BloodResourceConversionTemplate, BloodResourceTemplate);
 							}
 							// Handle NPC targetting and ability spawning
@@ -522,7 +522,7 @@ namespace FishMMO.Shared
 					// Generate a new seed
 					currentSeed = abilitySeedGenerator.Next();
 
-					Debug.Log($"5 New Ability Seed {currentSeed}");
+					//Debug.Log($"5 New Ability Seed {currentSeed}");
 				}
 				// Handle NPC targetting and ability spawning
 				else
@@ -531,7 +531,7 @@ namespace FishMMO.Shared
 				}
 
 				// Consume resources
-				Debug.Log($"6 Consumed On Tick: {activationData.GetTick()} State: {state}");
+				//Debug.Log($"6 Consumed On Tick: {activationData.GetTick()} State: {state}");
 				validatedAbility.ConsumeResources(Character, BloodResourceConversionTemplate, BloodResourceTemplate);
 
 				// Add ability to cooldowns

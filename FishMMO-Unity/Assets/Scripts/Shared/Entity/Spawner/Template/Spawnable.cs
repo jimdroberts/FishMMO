@@ -23,7 +23,7 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			if (!NetworkObject.IsSpawnable)
+			if (!NetworkObject.GetIsSpawnable())
 			{
 				Debug.LogError($"{NetworkObject.name} is not spawnable. Mark it as spawnable and re-assign the object.");
 				NetworkObject = null;
