@@ -187,7 +187,7 @@ namespace FishMMO.Client
 					numerator = refreshRate,
 					denominator = 1,
 				});
-		}
+			}
 #endif
 
 			// Ensure the KCC System is created.

@@ -1,4 +1,5 @@
 ﻿using FishNet.Object;
+
 namespace FishMMO.Shared
 {
 	/// <summary>

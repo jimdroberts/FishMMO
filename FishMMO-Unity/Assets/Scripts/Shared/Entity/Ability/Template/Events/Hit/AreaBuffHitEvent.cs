@@ -15,7 +15,7 @@ namespace FishMMO.Shared
 
 		public override int Invoke(ICharacter attacker, ICharacter defender, TargetInfo hitTarget, AbilityObject abilityObject)
 		{
-			// attacker should exist with a faction controller
+			// Attacker should exist with a faction controller
 			if (attacker == null ||
 				!attacker.TryGet(out IFactionController attackerFactionController))
 			{
@@ -35,10 +35,22 @@ namespace FishMMO.Shared
 			for (int i = 0; i < overlapCount && hits < HitCount; ++i)
 			{
 				ICharacter def = Hits[i].gameObject.GetComponent<ICharacter>();
-				if (def != null &&
-					def.TryGet(out IFactionController defenderFactionController) &&
-					def.TryGet(out IBuffController buffController) &&
-					attackerFactionController.GetAllianceLevel(defenderFactionController) == FactionAllianceLevel.Ally)
+				if (def == null)
+				{
+					continue;
+				}
+				// Skip Alliance check if we are targeting ourself
+				else if (def.ID == attacker.ID)
+				{
+					if (def.TryGet(out IBuffController buffController))
+					{
+						buffController.Apply(BuffTemplate);
+						++hits;
+					}
+				}
+				else if (def.TryGet(out IFactionController defenderFactionController) &&
+						 def.TryGet(out IBuffController buffController) &&
+						 attackerFactionController.GetAllianceLevel(defenderFactionController) == FactionAllianceLevel.Ally)
 				{
 					buffController.Apply(BuffTemplate);
 					++hits;

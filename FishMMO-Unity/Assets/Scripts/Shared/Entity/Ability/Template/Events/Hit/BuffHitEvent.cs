@@ -10,13 +10,21 @@ namespace FishMMO.Shared
 
 		public override int Invoke(ICharacter attacker, ICharacter defender, TargetInfo hitTarget, AbilityObject abilityObject)
 		{
-			if (attacker == defender ||
-				attacker == null ||
+			if (attacker == null ||
 				defender == null)
 			{
 				return 0;
 			}
-			if (attacker.TryGet(out IFactionController attackerFactionController) &&
+
+			// Skip Alliance check if we are targeting ourself
+			if (attacker.ID == defender.ID)
+			{
+				if (attacker.TryGet(out IBuffController buffController))
+				{
+					buffController.Apply(BuffTemplate);
+				}
+			}
+			else if (attacker.TryGet(out IFactionController attackerFactionController) &&
 				defender.TryGet(out IFactionController defenderFactionController) &&
 				defender.TryGet(out IBuffController buffController) &&
 				attackerFactionController.GetAllianceLevel(defenderFactionController) == FactionAllianceLevel.Ally)

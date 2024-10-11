@@ -15,8 +15,8 @@ namespace FishMMO.Shared
 
 		public override int Invoke(ICharacter attacker, ICharacter defender, TargetInfo hitTarget, AbilityObject abilityObject)
 		{
-			if (attacker == defender ||
-				attacker == null ||
+			// Attacker should exist with a faction controller
+			if (attacker == null ||
 				!attacker.TryGet(out IFactionController attackerFactionController))
 			{
 				return 0;
@@ -34,17 +34,21 @@ namespace FishMMO.Shared
 			int hits = 0;
 			for (int i = 0; i < overlapCount && hits < HitCount; ++i)
 			{
-				if (Hits[i] != attacker.Collider)
+				ICharacter def = Hits[i].gameObject.GetComponent<ICharacter>();
+
+				// No Self Damage
+				if (def == null ||
+					def.ID == attacker.ID )
 				{
-					ICharacter def = Hits[i].gameObject.GetComponent<ICharacter>();
-					if (def != null &&
-						def.TryGet(out IFactionController defenderFactionController) &&
-						def.TryGet(out ICharacterDamageController damageController) &&
-						attackerFactionController.GetAllianceLevel(defenderFactionController) == FactionAllianceLevel.Enemy)
-					{
-						damageController.Damage(attacker, Damage, DamageAttributeTemplate);
-						++hits;
-					}
+					continue;
+				}
+
+				if (def.TryGet(out IFactionController defenderFactionController) &&
+					def.TryGet(out ICharacterDamageController damageController) &&
+					attackerFactionController.GetAllianceLevel(defenderFactionController) == FactionAllianceLevel.Enemy)
+				{
+					damageController.Damage(attacker, Damage, DamageAttributeTemplate);
+					++hits;
 				}
 			}
 			return hits;

@@ -82,6 +82,9 @@ namespace FishMMO.Shared
 			KCCPlayer = gameObject.GetComponent<KCCPlayer>();
 			#endregion
 
+			// Override default layer settings
+			gameObject.layer = Constants.Layers.Player;
+
 			NextChatMessageTime = DateTime.UtcNow;
 			NextInteractTime = DateTime.UtcNow;
 		}
@@ -115,8 +118,6 @@ namespace FishMMO.Shared
 			if (base.IsOwner)
 			{
 				IPlayerCharacter.OnStartLocalClient?.Invoke(this);
-
-				gameObject.layer = Constants.Layers.LocalEntity;
 
 				foreach (ICharacterBehaviour behaviour in this.Behaviours.Values)
 				{
