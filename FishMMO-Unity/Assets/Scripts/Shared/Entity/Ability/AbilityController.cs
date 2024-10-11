@@ -23,6 +23,7 @@ namespace FishMMO.Shared
 		private KeyCode heldKey;
 
 		private System.Random abilitySeedGenerator;
+		private int abilitySeed = 0;
 		private int currentSeed = 0;
 
 		public Transform AbilitySpawner;
@@ -86,6 +87,8 @@ namespace FishMMO.Shared
 			{
 				base.TimeManager.OnTick -= TimeManager_OnTick;
 			}
+
+			abilitySeedGenerator = null;
 		}
 
 #if !UNITY_SERVER
@@ -205,6 +208,7 @@ namespace FishMMO.Shared
 
 			// Set the initial seed
 			currentSeed = abilitySeedGenerator.Next();
+
 			//Debug.Log($"Received AbilityGenerator Seed {abilitySeed}\r\nCurrent Seed {currentSeed}");
 
 			int abilityCount = reader.ReadInt32();
@@ -235,21 +239,26 @@ namespace FishMMO.Shared
 		{
 			if (base.IsServerStarted)
 			{
-				// Generate an AbilitySeedGenerator Seed
-				int abilitySeed = playerSeedGenerator.Next();
+				// Check if we already instantiated an RNG for this ability controller
+				if (abilitySeedGenerator == null)
+				{
+					// Generate an AbilitySeedGenerator Seed
+					abilitySeed = playerSeedGenerator.Next();
 
-				// Instantiate the AbilitySeedGenerator on the server
-				abilitySeedGenerator = new System.Random(abilitySeed);
+					// Instantiate the AbilitySeedGenerator on the server
+					abilitySeedGenerator = new System.Random(abilitySeed);
 
-				// Set the initial seed
-				currentSeed = abilitySeedGenerator.Next();
-
-				//Debug.Log($"Generated AbilityGenerator Seed {abilitySeed}\r\nCurrent Seed {currentSeed}");
-
-				// Write the seed for the clients
-				writer.WriteInt32(abilitySeed);
+					// Set the initial seed
+					currentSeed = abilitySeedGenerator.Next();
+				}
 			}
 
+			//Debug.Log($"AbilityGenerator Seed {abilitySeed}\r\nCurrent Seed {currentSeed}");
+
+			// Write the ability RNG seed for the clients
+			writer.WriteInt32(abilitySeed);
+
+			// Write the abilities for the clients
 			writer.WriteInt32(KnownAbilities.Count);
 			foreach (Ability ability in KnownAbilities.Values)
 			{
@@ -403,7 +412,7 @@ namespace FishMMO.Shared
 				// Try to activate the queued ability
 				if (CanActivate(activationData.QueuedAbilityID, out Ability newAbility))
 				{
-					//Debug.Log($"New Ability Activation:{newAbility.ID} State:{state} Tick:{activationData.GetTick()}");
+					Debug.Log($"New Ability Activation:{newAbility.ID} State:{state} Tick:{activationData.GetTick()}");
 
 					interruptQueued = false;
 					currentAbilityID = newAbility.ID;
@@ -422,7 +431,7 @@ namespace FishMMO.Shared
 			{
 				if (remainingTime > 0.0f)
 				{
-					//Debug.Log($"Activating {validatedAbility.ID} State: {state}");
+					Debug.Log($"Activating {validatedAbility.ID} State: {state}");
 
 					// Handle ability updates here, display cast bar, display hitbox telegraphs, etc
 					if (state == ReplicateState.CurrentCreated)
@@ -463,11 +472,11 @@ namespace FishMMO.Shared
 								// Generate a new seed
 								currentSeed = abilitySeedGenerator.Next();
 
-								//Debug.Log($"New Ability Seed {currentSeed}");
+								Debug.Log($"New Ability Seed {currentSeed}");
 
 								// Channeled abilities consume resources during activation
 
-								//Debug.Log($"Consumed On Tick: {activationData.GetTick()} State: {state}");
+								Debug.Log($"Consumed On Tick: {activationData.GetTick()} State: {state}");
 								validatedAbility.ConsumeResources(Character, BloodResourceConversionTemplate, BloodResourceTemplate);
 							}
 							// Handle NPC targetting and ability spawning
@@ -506,7 +515,7 @@ namespace FishMMO.Shared
 					// Generate a new seed
 					currentSeed = abilitySeedGenerator.Next();
 
-					//Debug.Log($"New Ability Seed {currentSeed}");
+					Debug.Log($"New Ability Seed {currentSeed}");
 				}
 				// Handle NPC targetting and ability spawning
 				else
@@ -515,7 +524,7 @@ namespace FishMMO.Shared
 				}
 
 				// Consume resources
-				//Debug.Log($"Consumed On Tick: {activationData.GetTick()} State: {state}");
+				Debug.Log($"Consumed On Tick: {activationData.GetTick()} State: {state}");
 				validatedAbility.ConsumeResources(Character, BloodResourceConversionTemplate, BloodResourceTemplate);
 
 				// Add ability to cooldowns
