@@ -311,7 +311,7 @@ MonoBehaviour:
   _componentIndexCache: 6
   _addedNetworkObject: {fileID: -4468559157413045786}
   _networkObjectCache: {fileID: -4468559157413045786}
-  template: {fileID: 11400000, guid: f48d7eb5d15b5104e943de8a94d65cc1, type: 2}
+  template: {fileID: 11400000, guid: 77a3fb139fbe85a43a013e72d3b303a3, type: 2}
 --- !u!114 &2590329384573566316
 MonoBehaviour:
   m_ObjectHideFlags: 0
