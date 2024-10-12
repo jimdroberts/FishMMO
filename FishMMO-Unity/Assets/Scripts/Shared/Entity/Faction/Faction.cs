@@ -9,7 +9,7 @@
 		public Faction(int templateID, int value)
 		{
 			Template = FactionTemplate.Get<FactionTemplate>(templateID);
-			Value = value.Clamp(Template.Minimum, Template.Maximum);
+			Value = value.Clamp(FactionTemplate.Minimum, FactionTemplate.Maximum);
 		}
 	}
 }

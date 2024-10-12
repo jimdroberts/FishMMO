@@ -68,6 +68,9 @@ MeshRenderer:
   m_ReflectionProbeUsage: 1
   m_RayTracingMode: 2
   m_RayTraceProcedural: 0
+  m_RayTracingAccelStructBuildFlagsOverride: 0
+  m_RayTracingAccelStructBuildFlags: 1
+  m_SmallMeshCulling: 1
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
@@ -166,21 +169,10 @@ MonoBehaviour:
   <IsNested>k__BackingField: 0
   <ComponentIndex>k__BackingField: 0
   <PredictedSpawn>k__BackingField: {fileID: 0}
-  _networkBehaviours:
-  - {fileID: 7163688216170662259}
-  - {fileID: 3683544253344154008}
-  - {fileID: 6437443601116110890}
-  - {fileID: 2119787057571980410}
-  - {fileID: 7824644601122125574}
-  - {fileID: 2150267445961412781}
-  - {fileID: 2419637757703598923}
-  - {fileID: 3332016334047483617}
-  <SerializedRootNetworkBehaviour>k__BackingField: {fileID: 0}
-  <NestedRootNetworkBehaviours>k__BackingField: []
-  SerializedTransformProperties:
-    Position: {x: 0, y: 0, z: 0}
-    Rotation: {x: 0, y: 0, z: 0, w: 1}
-    LocalScale: {x: 1, y: 1, z: 1}
+  <PredictedOwner>k__BackingField: {fileID: 0}
+  NetworkBehaviours: []
+  <InitializedParentNetworkBehaviour>k__BackingField: {fileID: 0}
+  <InitializedNestedNetworkObjects>k__BackingField: []
   _isNetworked: 1
   _isSpawnable: 1
   _isGlobal: 0
@@ -202,8 +194,12 @@ MonoBehaviour:
   _teleportThreshold: 1
   <PrefabId>k__BackingField: 4
   <SpawnableCollectionId>k__BackingField: 0
-  <SceneId>k__BackingField: 0
   <AssetPathHash>k__BackingField: 4670396347545563617
+  <SceneId>k__BackingField: 0
+  SerializedTransformProperties:
+    Position: {x: 0, y: 0, z: 0}
+    Rotation: {x: 0, y: 0, z: 0, w: 1}
+    LocalScale: {x: 1, y: 1, z: 1}
 --- !u!114 &6437443601116110890
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -219,12 +215,17 @@ MonoBehaviour:
   _componentIndexCache: 2
   _addedNetworkObject: {fileID: 6349228138187238843}
   _networkObjectCache: {fileID: 6349228138187238843}
-  Previous: 0
-  Current: 0
-  MinStateChangeDuration: 0
-  MaxStateChangeDuration: 0
-  RandomizeState: 0
-  AllowedStates: 
+  WanderState: {fileID: 0}
+  PatrolState: {fileID: 0}
+  ReturnHomeState: {fileID: 0}
+  RetreatState: {fileID: 0}
+  IdleState: {fileID: 0}
+  AttackingState: {fileID: 0}
+  DeadState: {fileID: 0}
+  MinLeashRange: 100
+  MaxLeashRange: 500
+  Waypoints: []
+  InteractionDistance: 1.5
 --- !u!114 &2119787057571980410
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -287,6 +288,7 @@ MonoBehaviour:
   HealedAchievementTemplate: {fileID: 0}
   ResurrectAchievementTemplate: {fileID: 0}
   ResurrectedAchievementTemplate: {fileID: 0}
+  immortal: 0
 --- !u!114 &2419637757703598923
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -302,7 +304,7 @@ MonoBehaviour:
   _componentIndexCache: 6
   _addedNetworkObject: {fileID: 6349228138187238843}
   _networkObjectCache: {fileID: 6349228138187238843}
-  Template: {fileID: 11400000, guid: 77a3fb139fbe85a43a013e72d3b303a3, type: 2}
+  template: {fileID: 11400000, guid: 77a3fb139fbe85a43a013e72d3b303a3, type: 2}
 --- !u!114 &3332016334047483617
 MonoBehaviour:
   m_ObjectHideFlags: 0

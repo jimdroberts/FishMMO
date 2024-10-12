@@ -1,43 +1,30 @@
 ﻿using FishNet.Transporting;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
+using UnityEngine;
 
 namespace FishMMO.Shared
 {
 	public class FactionController : CharacterBehaviour, IFactionController
 	{
 		private Dictionary<int, Faction> factions = new Dictionary<int, Faction>();
+		private Dictionary<int, Faction> allied = new Dictionary<int, Faction>();
+		private Dictionary<int, Faction> neutral = new Dictionary<int, Faction>();
+		private Dictionary<int, Faction> hostile = new Dictionary<int, Faction>();
 
 		public bool IsAggressive { get; set; }
 		public Dictionary<int, Faction> Factions { get { return factions; } }
 
-		public FactionTemplate Template;
+		public Dictionary<int, Faction> Allied { get { return allied; } }
+		public Dictionary<int, Faction> Neutral { get { return neutral; } }
+		public Dictionary<int, Faction> Hostile { get { return hostile; } }
 
-		public override void OnAwake()
-		{
-			base.OnAwake();
-
-			if (Template != null)
-			{
-				foreach (FactionTemplate faction in Template.Allied)
-				{
-					var newFaction = new Faction(faction.ID, faction.AlliedLevel);
-					Factions.Add(newFaction.Template.ID, newFaction);
-				}
-				foreach (FactionTemplate faction in Template.Neutral)
-				{
-					var newFaction = new Faction(faction.ID, 0);
-					Factions.Add(newFaction.Template.ID, newFaction);
-				}
-				foreach (FactionTemplate faction in Template.Enemies)
-				{
-					var newFaction = new Faction(faction.ID, faction.EnemyLevel);
-					Factions.Add(newFaction.Template.ID, newFaction);
-				}
-			}
-		}
+		[SerializeField]
+		private FactionTemplate template;
+		public FactionTemplate Template { get { return this.template; } set { this.template = value; } }
 
 #if !UNITY_SERVER
-		public override void OnStartCharacter()
+        public override void OnStartCharacter()
 		{
 			base.OnStartCharacter();
 
@@ -68,11 +55,10 @@ namespace FishMMO.Shared
 		private void OnClientFactionUpdateBroadcastReceived(FactionUpdateBroadcast msg, Channel channel)
 		{
 			FactionTemplate template = FactionTemplate.Get<FactionTemplate>(msg.templateID);
-			if (template != null &&
-				factions.TryGetValue(template.ID, out Faction faction))
-			{
-				faction.Value = msg.newValue;
-			}
+				if (template != null)
+				{
+					SetFaction(template.ID, msg.newValue);
+				}
 		}
 
 		/// <summary>
@@ -83,10 +69,9 @@ namespace FishMMO.Shared
 			foreach (FactionUpdateBroadcast subMsg in msg.factions)
 			{
 				FactionTemplate template = FactionTemplate.Get<FactionTemplate>(subMsg.templateID);
-				if (template != null &&
-					factions.TryGetValue(template.ID, out Faction faction))
+				if (template != null)
 				{
-					faction.Value = subMsg.newValue;
+					SetFaction(template.ID, subMsg.newValue);
 				}
 			}
 		}
@@ -94,24 +79,17 @@ namespace FishMMO.Shared
 
 		public void SetFaction(int templateID, int value)
 		{
-			if (factions == null)
-			{
-				factions = new Dictionary<int, Faction>();
-			}
-
 			if (factions.TryGetValue(templateID, out Faction faction))
 			{
+				RemoveFromAllianceGroup(faction);
+
 				faction.Value = value;
 			}
 			else
 			{
-				factions.Add(templateID, new Faction(templateID, value));
+				factions.Add(templateID, faction = new Faction(templateID, value));
 			}
-		}
-
-		public bool TryGetFaction(int templateID, out Faction faction)
-		{
-			return factions.TryGetValue(templateID, out faction);
+			InsertToAllianceGroup(faction);
 		}
 
 		public void Add(FactionTemplate template, int amount = 1)
@@ -120,36 +98,73 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
-			if (factions == null)
+			if (factions.TryGetValue(template.ID, out Faction faction))
 			{
-				factions = new Dictionary<int, Faction>();
-			}
+				RemoveFromAllianceGroup(faction);
 
-
-			if (!factions.TryGetValue(template.ID, out Faction faction))
-			{
-				factions.Add(template.ID, new Faction(template.ID, amount));
+				// update value
+				faction.Value = (faction.Value + amount).Clamp(FactionTemplate.Minimum, FactionTemplate.Maximum);
 			}
 			else
 			{
-				// update value
-				faction.Value = (faction.Value + amount).Clamp(faction.Template.Minimum, faction.Template.Maximum);
+				factions.Add(template.ID, faction = new Faction(template.ID, amount));
+			}
+			InsertToAllianceGroup(faction);
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		private void RemoveFromAllianceGroup(Faction faction)
+		{
+			if (factions == null)
+			{
+				return;
+			}
+			if (faction.Value > 0)
+			{
+				Allied.Remove(faction.Template.ID);
+			}
+			else if (faction.Value < 0)
+			{
+				Hostile.Remove(faction.Template.ID);
+			}
+			else
+			{
+				Neutral.Remove(faction.Template.ID);
+			}
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		private void InsertToAllianceGroup(Faction faction)
+		{
+			if (factions == null)
+			{
+				return;
+			}
+			if (faction.Value > 0)
+			{
+				Allied[faction.Template.ID] = faction;
+			}
+			else if (faction.Value < 0)
+			{
+				Hostile[faction.Template.ID] = faction;
+			}
+			else
+			{
+				Neutral[faction.Template.ID] = faction;
 			}
 		}
 
 		public FactionAllianceLevel GetAllianceLevel(IFactionController otherFactionController)
 		{
-			// is aggression toggled on either?
-			if (IsAggressive ||
-				otherFactionController == null ||
-				otherFactionController.IsAggressive)
+			if (otherFactionController == null)
 			{
-				return FactionAllianceLevel.Enemy;
+				return FactionAllianceLevel.Neutral;
 			}
 
 			// same party?
 			if (Character.TryGet(out IPartyController partyController) &&
 				otherFactionController.Character.TryGet(out IPartyController otherPartyController) &&
+				partyController.ID != 0 &&
 				partyController.ID == otherPartyController.ID)
 			{
 				return FactionAllianceLevel.Ally;
@@ -158,39 +173,42 @@ namespace FishMMO.Shared
 			// same guild?
 			if (Character.TryGet(out IGuildController guildController) &&
 				otherFactionController.Character.TryGet(out IGuildController otherGuildController) &&
+				guildController.ID != 0 &&
 				guildController.ID == otherGuildController.ID)
 			{
 				return FactionAllianceLevel.Ally;
 			}
 
-			int balance = 0;
-
-			foreach (Faction enemyFaction in otherFactionController.Factions.Values)
-			{
-				if (!factions.TryGetValue(enemyFaction.Template.ID, out Faction faction))
-				{
-					continue;
-				}
-				// increase balance if allied with this faction
-				if (faction.Value >= faction.Template.AlliedLevel)
-				{
-					++balance;
-				}
-				// decrease balance if allied with this faction
-				else if (faction.Value <= faction.Template.EnemyLevel)
-				{
-					--balance;
-				}
-			}
-
-			// alliance balance determines if the two controllers are allied or enemies
-			if (balance > 0)
-			{
-				return FactionAllianceLevel.Ally;
-			}
-			else if (balance < 0)
+			// is aggression toggled on either?
+			if (IsAggressive || otherFactionController.IsAggressive)
 			{
 				return FactionAllianceLevel.Enemy;
+			}
+
+			if (otherFactionController.Character as NPC != null)
+			{
+				if (Hostile.ContainsKey(otherFactionController.Template.ID))
+				{
+					//UnityEngine.Debug.Log($"{otherFactionController.Template.Name}: {otherFactionController.Character.GameObject.name} is an Enemy of {this.Character.GameObject.name}.");
+
+					return FactionAllianceLevel.Enemy;
+				}
+			}
+			else
+			{
+				foreach (Faction faction in Hostile.Values)
+				{
+					if (otherFactionController.Factions.TryGetValue(faction.Template.ID, out Faction enemyFaction))
+					{
+						//UnityEngine.Debug.Log($"{faction.Template.Name}: The target is an {(enemyFaction.Value > 0 ? "Ally" : "Enemy")} of this faction.");
+
+						// Is the enemy allied with our enemy?
+						if (enemyFaction.Value > 0)
+						{
+							return FactionAllianceLevel.Enemy;
+						}
+					}
+				}
 			}
 			return FactionAllianceLevel.Neutral;
 		}

@@ -295,6 +295,7 @@ MonoBehaviour:
   HealedAchievementTemplate: {fileID: 0}
   ResurrectAchievementTemplate: {fileID: 0}
   ResurrectedAchievementTemplate: {fileID: 0}
+  immortal: 0
 --- !u!114 &2419637757703598923
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -310,7 +311,7 @@ MonoBehaviour:
   _componentIndexCache: 6
   _addedNetworkObject: {fileID: 7250114663715075110}
   _networkObjectCache: {fileID: 7250114663715075110}
-  Template: {fileID: 11400000, guid: 77a3fb139fbe85a43a013e72d3b303a3, type: 2}
+  template: {fileID: 11400000, guid: f48d7eb5d15b5104e943de8a94d65cc1, type: 2}
 --- !u!114 &3332016334047483617
 MonoBehaviour:
   m_ObjectHideFlags: 0

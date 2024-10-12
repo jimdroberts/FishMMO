@@ -176,6 +176,8 @@ MonoBehaviour:
   - {fileID: 2119787057571980410}
   - {fileID: 7824644601122125574}
   - {fileID: 2150267445961412781}
+  - {fileID: 7970910599131371131}
+  - {fileID: 2590329384573566316}
   <InitializedParentNetworkBehaviour>k__BackingField: {fileID: 0}
   <InitializedNestedNetworkObjects>k__BackingField: []
   _isNetworked: 1
@@ -293,6 +295,7 @@ MonoBehaviour:
   HealedAchievementTemplate: {fileID: 0}
   ResurrectAchievementTemplate: {fileID: 0}
   ResurrectedAchievementTemplate: {fileID: 0}
+  immortal: 0
 --- !u!114 &7970910599131371131
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -305,10 +308,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2d54339ff3d1e7f498b872ac6b1633a4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 255
+  _componentIndexCache: 6
   _addedNetworkObject: {fileID: -4468559157413045786}
-  _networkObjectCache: {fileID: 0}
-  Template: {fileID: 11400000, guid: 77a3fb139fbe85a43a013e72d3b303a3, type: 2}
+  _networkObjectCache: {fileID: -4468559157413045786}
+  template: {fileID: 11400000, guid: f48d7eb5d15b5104e943de8a94d65cc1, type: 2}
 --- !u!114 &2590329384573566316
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -321,6 +324,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1bd75748718f5d345b7ec85b59f4ddf9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 255
+  _componentIndexCache: 7
   _addedNetworkObject: {fileID: -4468559157413045786}
-  _networkObjectCache: {fileID: 0}
+  _networkObjectCache: {fileID: -4468559157413045786}

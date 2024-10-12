@@ -9,15 +9,14 @@ namespace FishMMO.Shared
 		[Serializable]
 		public class FactionHashSet : SerializableHashSet<FactionTemplate> { }
 
-		public int Minimum = -10000;
-		public int Maximum = 10000;
-		public int AlliedLevel = 1000;
-		public int EnemyLevel = -1000;
+		public const int Minimum = -10000;
+		public const int Maximum = 10000;
+		
 		public string Description;
 
-		public FactionHashSet Allied;
-		public FactionHashSet Neutral;
-		public FactionHashSet Enemies;
+		public FactionHashSet DefaultAllied;
+		public FactionHashSet DefaultNeutral;
+		public FactionHashSet DefaultHostile;
 
 		public string Name { get { return this.name; } }
 	}

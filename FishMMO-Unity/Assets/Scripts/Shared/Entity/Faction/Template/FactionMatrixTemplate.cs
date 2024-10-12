@@ -50,9 +50,9 @@ namespace FishMMO.Shared
 
 			for (int i = 0; i < Factions.Count; ++i)
 			{
-				Factions[i].Allied.Clear();
-				Factions[i].Neutral.Clear();
-				Factions[i].Enemies.Clear();
+				Factions[i].DefaultAllied.Clear();
+				Factions[i].DefaultNeutral.Clear();
+				Factions[i].DefaultHostile.Clear();
 			}
 
 			for (int y = 0; y < Factions.Count; ++y)
@@ -64,7 +64,7 @@ namespace FishMMO.Shared
 					// same faction is always allied
 					if (x == y)
 					{
-						Factions[x].Allied.Add(Factions[y]);
+						Factions[x].DefaultAllied.Add(Factions[y]);
 						UnityEditor.EditorUtility.SetDirty(Factions[x]);
 					}
 					else
@@ -72,12 +72,12 @@ namespace FishMMO.Shared
 						FactionAllianceLevel allianceLevel = Matrix.Factions[index];
 						if (allianceLevel == FactionAllianceLevel.Neutral)
 						{
-							Factions[x].Neutral.Add(Factions[y]);
+							Factions[x].DefaultNeutral.Add(Factions[y]);
 							UnityEditor.EditorUtility.SetDirty(Factions[x]);
 						}
 						else
 						{
-							Factions[x].Enemies.Add(Factions[y]);
+							Factions[x].DefaultHostile.Add(Factions[y]);
 							UnityEditor.EditorUtility.SetDirty(Factions[x]);
 						}
 					}

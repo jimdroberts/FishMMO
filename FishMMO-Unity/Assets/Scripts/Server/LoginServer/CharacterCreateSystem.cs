@@ -172,16 +172,16 @@ namespace FishMMO.Server
 						if (raceTemplate.InitialFaction != null)
 						{
 							// add character factions
-							foreach (FactionTemplate faction in raceTemplate.InitialFaction.Allied)
+							foreach (FactionTemplate faction in raceTemplate.InitialFaction.DefaultAllied)
 							{
 								dbContext.CharacterFactions.Add(new CharacterFactionEntity()
 								{
 									CharacterID = newCharacter.ID,
 									TemplateID = faction.ID,
-									Value = faction.AlliedLevel,
+									Value = FactionTemplate.Maximum,
 								});
 							}
-							foreach (FactionTemplate faction in raceTemplate.InitialFaction.Neutral)
+							foreach (FactionTemplate faction in raceTemplate.InitialFaction.DefaultNeutral)
 							{
 								dbContext.CharacterFactions.Add(new CharacterFactionEntity()
 								{
@@ -190,13 +190,13 @@ namespace FishMMO.Server
 									Value = 0,
 								});
 							}
-							foreach (FactionTemplate faction in raceTemplate.InitialFaction.Enemies)
+							foreach (FactionTemplate faction in raceTemplate.InitialFaction.DefaultHostile)
 							{
 								dbContext.CharacterFactions.Add(new CharacterFactionEntity()
 								{
 									CharacterID = newCharacter.ID,
 									TemplateID = faction.ID,
-									Value = faction.EnemyLevel,
+									Value = FactionTemplate.Maximum,
 								});
 							}
 							dbContext.SaveChanges();

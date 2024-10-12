@@ -12,19 +12,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e0201ce6fddf76342b21998a7f81ec3c, type: 3}
   m_Name: Undead Legion
   m_EditorClassIdentifier: 
-  Minimum: -10000
-  Maximum: 10000
-  AlliedLevel: 1000
-  EnemyLevel: -1000
-  Description: 
-  Allied:
+  Description: The endless legion of undead that rule the underworld.
+  DefaultAllied:
     m_keys:
     - {fileID: 11400000}
-  Neutral:
+  DefaultNeutral:
     m_keys:
     - {fileID: 11400000, guid: e5859044195c03e44adebc73805dd570, type: 2}
     - {fileID: 11400000, guid: 531ed21f335ef6e4cab9440971452675, type: 2}
-  Enemies:
+  DefaultHostile:
     m_keys:
     - {fileID: 11400000, guid: 1ab8069820abc0b45ad5dd91bc796d4c, type: 2}
     - {fileID: 11400000, guid: 77a3fb139fbe85a43a013e72d3b303a3, type: 2}
