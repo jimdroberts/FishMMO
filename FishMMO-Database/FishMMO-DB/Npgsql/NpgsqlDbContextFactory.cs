@@ -10,28 +10,30 @@ namespace FishMMO.Database.Npgsql
 	{
 		private string configPath = "";
 		private bool enableLogging = false;
+		private DbContextOptionsBuilder optionsBuilder = null;
 
 		public NpgsqlDbContextFactory()
 		{
 			this.configPath = Directory.GetParent(AppDomain.CurrentDomain.BaseDirectory).FullName;
+
+			this.optionsBuilder = LoadDbContextOptionsBuilder();
 		}
 		public NpgsqlDbContextFactory(string configPath)
 		{
 			this.configPath = configPath;
+
+			this.optionsBuilder = LoadDbContextOptionsBuilder();
 		}
 
 		public NpgsqlDbContextFactory(string configPath, bool enableLogging)
 		{
 			this.configPath = configPath;
 			this.enableLogging = enableLogging;
+
+			this.optionsBuilder = LoadDbContextOptionsBuilder();
 		}
 
-		public NpgsqlDbContext CreateDbContext()
-		{
-			return CreateDbContext(new string[] { });
-		}
-
-		public NpgsqlDbContext CreateDbContext(string[] args)
+		internal DbContextOptionsBuilder LoadDbContextOptionsBuilder()
 		{
 			string basePath = string.IsNullOrWhiteSpace(this.configPath) ? AppDomain.CurrentDomain.BaseDirectory : this.configPath;
 
@@ -48,16 +50,43 @@ namespace FishMMO.Database.Npgsql
 
 			string connectionString = $"Host={host};Port={port};Database={database};Username={userID};Password={password}";
 
-			DbContextOptionsBuilder optionsBuilder = new DbContextOptionsBuilder<NpgsqlDbContext>().UseNpgsql(connectionString)
+			DbContextOptionsBuilder dbContextOptionsBuilder = new DbContextOptionsBuilder<NpgsqlDbContext>()
+				.UseNpgsql(connectionString)
 				.UseSnakeCaseNamingConvention();
 
-			if (enableLogging)
+			return dbContextOptionsBuilder;
+		}
+
+		public NpgsqlDbContext CreateDbContext()
+		{
+			if (this.optionsBuilder == null)
 			{
-				optionsBuilder
+				this.optionsBuilder = LoadDbContextOptionsBuilder();
+			}
+
+			if (this.enableLogging)
+			{
+				this.optionsBuilder
 					.EnableSensitiveDataLogging(true);
 			}
 
-			return new NpgsqlDbContext(optionsBuilder.Options);
+			return new NpgsqlDbContext(this.optionsBuilder.Options);
+		}
+
+		public NpgsqlDbContext CreateDbContext(string[] args)
+		{
+			if (this.optionsBuilder == null)
+			{
+				this.optionsBuilder = LoadDbContextOptionsBuilder();
+			}
+
+			if (this.enableLogging)
+			{
+				this.optionsBuilder
+					.EnableSensitiveDataLogging(true);
+			}
+
+			return new NpgsqlDbContext(this.optionsBuilder.Options);
 		}
 	}
 }
