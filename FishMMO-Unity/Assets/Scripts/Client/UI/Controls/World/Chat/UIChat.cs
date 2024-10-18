@@ -395,16 +395,14 @@ namespace FishMMO.Client
 		public bool OnPartyChat(IPlayerCharacter localCharacter, ChatBroadcast msg)
 		{
 			string cmd = ChatHelper.GetWordAndTrimmed(msg.text, out string trimmed);
-			if (!string.IsNullOrWhiteSpace(cmd))
+			if (!string.IsNullOrWhiteSpace(cmd) &&
+				 cmd.Equals(ChatHelper.PARTY_ERROR_TARGET_IN_PARTY) &&
+				 ErrorCodes.TryGetValue(ChatHelper.PARTY_ERROR_TARGET_IN_PARTY, out string targetErrorMsg))
 			{
-				if (cmd.Equals(ChatHelper.PARTY_ERROR_TARGET_IN_PARTY) &&
-					ErrorCodes.TryGetValue(ChatHelper.PARTY_ERROR_TARGET_IN_PARTY, out string targetErrorMsg))
+				ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
 				{
-					ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
-					{
-						InstantiateChatMessage(msg.channel, s, targetErrorMsg);
-					});
-				}
+					InstantiateChatMessage(msg.channel, s, targetErrorMsg);
+				});
 			}
 			else
 			{
@@ -419,16 +417,14 @@ namespace FishMMO.Client
 		public bool OnGuildChat(IPlayerCharacter localCharacter, ChatBroadcast msg)
 		{
 			string cmd = ChatHelper.GetWordAndTrimmed(msg.text, out string trimmed);
-			if (!string.IsNullOrWhiteSpace(cmd))
+			if (!string.IsNullOrWhiteSpace(cmd) &&
+				 cmd.Equals(ChatHelper.GUILD_ERROR_TARGET_IN_GUILD) &&
+				 ErrorCodes.TryGetValue(ChatHelper.GUILD_ERROR_TARGET_IN_GUILD, out string targetErrorMsg))
 			{
-				if (cmd.Equals(ChatHelper.GUILD_ERROR_TARGET_IN_GUILD) &&
-					ErrorCodes.TryGetValue(ChatHelper.GUILD_ERROR_TARGET_IN_GUILD, out string targetErrorMsg))
+				ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
 				{
-					ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
-					{
-						InstantiateChatMessage(msg.channel, s, targetErrorMsg);
-					});
-				}
+					InstantiateChatMessage(msg.channel, s, targetErrorMsg);
+				});
 			}
 			else
 			{

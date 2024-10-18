@@ -16,13 +16,19 @@ namespace FishMMO.Database.Npgsql
 		{
 			this.configPath = Directory.GetParent(AppDomain.CurrentDomain.BaseDirectory).FullName;
 
-			this.optionsBuilder = LoadDbContextOptionsBuilder();
+			if (this.optionsBuilder == null)
+			{
+				this.optionsBuilder = LoadDbContextOptionsBuilder();
+			}
 		}
 		public NpgsqlDbContextFactory(string configPath)
 		{
 			this.configPath = configPath;
 
-			this.optionsBuilder = LoadDbContextOptionsBuilder();
+			if (this.optionsBuilder == null)
+			{
+				this.optionsBuilder = LoadDbContextOptionsBuilder();
+			}
 		}
 
 		public NpgsqlDbContextFactory(string configPath, bool enableLogging)
@@ -30,7 +36,10 @@ namespace FishMMO.Database.Npgsql
 			this.configPath = configPath;
 			this.enableLogging = enableLogging;
 
-			this.optionsBuilder = LoadDbContextOptionsBuilder();
+			if (this.optionsBuilder == null)
+			{
+				this.optionsBuilder = LoadDbContextOptionsBuilder();
+			}
 		}
 
 		internal DbContextOptionsBuilder LoadDbContextOptionsBuilder()
