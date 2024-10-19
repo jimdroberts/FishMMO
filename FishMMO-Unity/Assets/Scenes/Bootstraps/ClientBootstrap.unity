@@ -7549,6 +7549,18 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d062921012c4eb3498cdefa6989373d6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  MainCanvas: {fileID: 0}
+  CanvasScaler: {fileID: 0}
+  MainPanel: {fileID: 0}
+  InputField: {fileID: 0}
+  StartOpen: 1
+  IsAlwaysOpen: 0
+  HasFocus: 0
+  FocusOnSelect: 0
+  CloseOnQuitToMenu: 1
+  CloseOnEscape: 0
+  CanDrag: 0
+  ClampToScreen: 1
   PetNameLabel: {fileID: 1078412251}
   PetHealth: {fileID: 1793488893}
   AttackButton: {fileID: 558627555}
