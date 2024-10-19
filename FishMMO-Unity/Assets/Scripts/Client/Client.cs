@@ -209,9 +209,9 @@ namespace FishMMO.Client
 			IPlayerCharacter.OnStartLocalClient += Character_OnStartLocalClient;
 			IPlayerCharacter.OnStopLocalClient += Character_OnStopLocalClient;
 			IGuildController.OnReadID += GuildController_OnReadID;
-			ICharacterDamageController.OnDamaged += OnDisplayDamage;
-			ICharacterDamageController.OnHealed += OnDisplayHeal;
-			IAchievementController.OnCompleteAchievement += OnCompleteAchievement;
+			ICharacterDamageController.OnDamaged += CharacterDamageController_OnDamaged;
+			ICharacterDamageController.OnHealed += CharacterDamageController_OnHealed;
+			IAchievementController.OnCompleteAchievement += AchievementController_OnCompleteAchievement;
 
 			RegionNameLabel = UIAdvancedLabel.Create("", FontStyle.Normal, null, 0, Color.magenta, 0, false, false, Vector2.zero) as UIAdvancedLabel;
 			RegionDisplayNameAction.OnDisplay2DLabel += RegionDisplayNameAction_OnDisplay2DLabel;
@@ -270,9 +270,9 @@ namespace FishMMO.Client
 			IPlayerCharacter.OnStartLocalClient -= Character_OnStartLocalClient;
 			IPlayerCharacter.OnStopLocalClient -= Character_OnStopLocalClient;
 			IGuildController.OnReadID -= GuildController_OnReadID;
-			ICharacterDamageController.OnDamaged -= OnDisplayDamage;
-			ICharacterDamageController.OnHealed -= OnDisplayHeal;
-			IAchievementController.OnCompleteAchievement -= OnCompleteAchievement;
+			ICharacterDamageController.OnDamaged -= CharacterDamageController_OnDamaged;
+			ICharacterDamageController.OnHealed -= CharacterDamageController_OnHealed;
+			IAchievementController.OnCompleteAchievement -= AchievementController_OnCompleteAchievement;
 
 			RegionDisplayNameAction.OnDisplay2DLabel -= RegionDisplayNameAction_OnDisplay2DLabel;
 			RegionChangeFogAction.OnChangeFog -= RegionChangeFogAction_OnChangeFog;
@@ -733,7 +733,7 @@ namespace FishMMO.Client
 			}
 		}
 
-		public void OnDisplayDamage(ICharacter attacker, ICharacter hitCharacter, int amount, DamageAttributeTemplate damageAttribute)
+		public void CharacterDamageController_OnDamaged(ICharacter attacker, ICharacter hitCharacter, int amount, DamageAttributeTemplate damageAttribute)
 		{
 			if (hitCharacter == null)
 			{
@@ -752,7 +752,7 @@ namespace FishMMO.Client
 			LabelMaker.Display3D(amount.ToString(), displayPos, damageAttribute.DisplayColor, 4.0f, 1.0f, false);
 		}
 
-		public void OnDisplayHeal(ICharacter healer, ICharacter healed, int amount)
+		public void CharacterDamageController_OnHealed(ICharacter healer, ICharacter healed, int amount)
 		{
 			if (healed == null)
 			{
@@ -771,7 +771,7 @@ namespace FishMMO.Client
 			LabelMaker.Display3D(amount.ToString(), displayPos, new TinyColor(64, 64, 255).ToUnityColor(), 4.0f, 1.0f, false);
 		}
 
-		public void OnCompleteAchievement(ICharacter character, AchievementTemplate template, AchievementTier tier)
+		public void AchievementController_OnCompleteAchievement(ICharacter character, AchievementTemplate template, AchievementTier tier)
 		{
 			if (character == null ||
 				template == null)

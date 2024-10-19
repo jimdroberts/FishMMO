@@ -421,8 +421,9 @@ namespace FishMMO.Server
 				{
 					achievements.Add(new AchievementUpdateBroadcast()
 					{
-						templateID = achievement.Template.ID,
-						newValue = achievement.CurrentValue,
+						TemplateID = achievement.Template.ID,
+						Value = achievement.CurrentValue,
+						Tier = achievement.CurrentTier,
 					});
 				}
 				if (achievements.Count > 0)

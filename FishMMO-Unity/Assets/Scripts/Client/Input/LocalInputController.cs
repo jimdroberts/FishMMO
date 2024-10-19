@@ -203,7 +203,11 @@ namespace FishMMO.Client
 			if (InputManager.GetKeyDown("Friends"))
 			{
 				UIManager.ToggleVisibility("UIFriendList");
+			}
 
+			if (InputManager.GetKeyDown("Achievements"))
+			{
+				UIManager.ToggleVisibility("UIAchievements");
 			}
 
 			if (InputManager.GetKeyDown("Menu"))

@@ -5,8 +5,9 @@ namespace FishMMO.Shared
 {
 	public struct AchievementUpdateBroadcast : IBroadcast
 	{
-		public int templateID;
-		public uint newValue;
+		public int TemplateID;
+		public uint Value;
+		public byte Tier;
 	}
 
 	public struct AchievementUpdateMultipleBroadcast : IBroadcast

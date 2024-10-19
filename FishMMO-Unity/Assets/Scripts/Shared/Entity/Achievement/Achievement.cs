@@ -7,6 +7,25 @@
 
 		public AchievementTemplate Template { get; private set; }
 
+		public uint CurrentMaxValue
+		{
+			get
+			{
+				if (Template.Tiers == null)
+				{
+					return 1;
+				}
+				if (Template.Tiers.Count < CurrentTier)
+				{
+					return 1;
+				}
+				else
+				{
+					return Template.Tiers[CurrentTier].MaxValue;
+				}
+			}
+		}
+
 		public Achievement(int templateID)
 		{
 			Template = AchievementTemplate.Get<AchievementTemplate>(templateID);

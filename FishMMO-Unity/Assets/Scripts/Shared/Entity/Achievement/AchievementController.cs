@@ -3,6 +3,7 @@ using System;
 using FishNet.Transporting;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using System.Collections.Immutable;
 
 namespace FishMMO.Shared
 {
@@ -12,6 +13,9 @@ namespace FishMMO.Shared
 
 
 		public Dictionary<int, Achievement> Achievements { get { return achievements; } }
+
+		public event Action<Achievement> OnAddAchievement;
+		public event Action<Achievement> OnUpdateAchievement;
 
 #if !UNITY_SERVER
 		public bool ShowAchievementCompletion = true;
@@ -46,11 +50,10 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void OnClientAchievementUpdateBroadcastReceived(AchievementUpdateBroadcast msg, Channel channel)
 		{
-			AchievementTemplate template = AchievementTemplate.Get<AchievementTemplate>(msg.templateID);
-			if (template != null &&
-				achievements.TryGetValue(template.ID, out Achievement achievement))
+			AchievementTemplate template = AchievementTemplate.Get<AchievementTemplate>(msg.TemplateID);
+			if (template != null)
 			{
-				achievement.CurrentValue = msg.newValue;
+				SetAchievement(template.ID, msg.Tier, msg.Value);
 			}
 		}
 
@@ -61,11 +64,11 @@ namespace FishMMO.Shared
 		{
 			foreach (AchievementUpdateBroadcast subMsg in msg.achievements)
 			{
-				AchievementTemplate template = AchievementTemplate.Get<AchievementTemplate>(subMsg.templateID);
-				if (template != null &&
-					achievements.TryGetValue(template.ID, out Achievement achievement))
+				AchievementTemplate template = AchievementTemplate.Get<AchievementTemplate>(subMsg.TemplateID);
+				
+				if (template != null)
 				{
-					achievement.CurrentValue = subMsg.newValue;
+					SetAchievement(template.ID, subMsg.Tier, subMsg.Value);
 				}
 			}
 		}
@@ -82,10 +85,12 @@ namespace FishMMO.Shared
 			{
 				achievement.CurrentTier = tier;
 				achievement.CurrentValue = value;
+				OnUpdateAchievement?.Invoke(achievement);
 			}
 			else
 			{
-				achievements.Add(templateID, new Achievement(templateID, tier, value));
+				achievements.Add(templateID, achievement = new Achievement(templateID, tier, value));
+				OnAddAchievement?.Invoke(achievement);
 			}
 		}
 
@@ -110,6 +115,7 @@ namespace FishMMO.Shared
 			if (!achievements.TryGetValue(template.ID, out achievement))
 			{
 				achievements.Add(template.ID, achievement = new Achievement(template.ID));
+				OnAddAchievement?.Invoke(achievement);
 			}
 
 			// get the old values
@@ -136,9 +142,10 @@ namespace FishMMO.Shared
 						achievement.CurrentTier = i;
 						break;
 					}
-
 				}
 			}
+
+			OnUpdateAchievement?.Invoke(achievement);
 		}
 	}
 }
