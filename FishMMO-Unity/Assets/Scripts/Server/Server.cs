@@ -91,20 +91,20 @@ namespace FishMMO.Server
 			Debug.Log("Server: Current working directory[" + workingDirectory + "]");
 
 			// load configuration
-			Constants.Configuration.Settings = new Configuration(workingDirectory);
-			if (!Constants.Configuration.Settings.Load(serverTypeName + Configuration.EXTENSION))
+			Configuration.GlobalSettings = new Configuration(workingDirectory);
+			if (!Configuration.GlobalSettings.Load(serverTypeName + Configuration.EXTENSION))
 			{
 				// if we failed to load the file.. save a new one
-				Constants.Configuration.Settings.Set("ServerName", "TestName");
-				Constants.Configuration.Settings.Set("MaximumClients", 4000);
-				Constants.Configuration.Settings.Set("Address", "127.0.0.1");
-				Constants.Configuration.Settings.Set("Port", serverType == ServerType.Login ? "7770" : serverType == ServerType.World ? "7780" : "7781");
-				Constants.Configuration.Settings.Set("StaleSceneTimeout", 5);
+				Configuration.GlobalSettings.Set("ServerName", "TestName");
+				Configuration.GlobalSettings.Set("MaximumClients", 4000);
+				Configuration.GlobalSettings.Set("Address", "127.0.0.1");
+				Configuration.GlobalSettings.Set("Port", serverType == ServerType.Login ? "7770" : serverType == ServerType.World ? "7780" : "7781");
+				Configuration.GlobalSettings.Set("StaleSceneTimeout", 5);
 #if !UNITY_EDITOR
-				Constants.Configuration.Settings.Save();
+				Configuration.GlobalSettings.Save();
 #endif
 			}
-			Debug.Log(Constants.Configuration.Settings.ToString());
+			Debug.Log(Configuration.GlobalSettings.ToString());
 
 			// initialize the DB contexts
 #if UNITY_EDITOR
@@ -304,9 +304,9 @@ namespace FishMMO.Server
 		private bool LoadTransportServerDetails()
 		{
 			Transport transport = NetworkManager.TransportManager.Transport;
-			if (Constants.Configuration.Settings.TryGetString("Address", out string address) &&
-				Constants.Configuration.Settings.TryGetUShort("Port", out ushort port) &&
-				Constants.Configuration.Settings.TryGetInt("MaximumClients", out int maximumClients))
+			if (Configuration.GlobalSettings.TryGetString("Address", out string address) &&
+				Configuration.GlobalSettings.TryGetUShort("Port", out ushort port) &&
+				Configuration.GlobalSettings.TryGetInt("MaximumClients", out int maximumClients))
 			{
 				Address = address;
 				Port = port;

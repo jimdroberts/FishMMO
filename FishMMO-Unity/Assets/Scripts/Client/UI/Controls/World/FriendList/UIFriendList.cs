@@ -32,8 +32,8 @@ namespace FishMMO.Client
 
 			if (Character.TryGet(out IFriendController friendController))
 			{
-				friendController.OnAddFriend += OnAddFriend;
-				friendController.OnRemoveFriend += OnRemoveFriend;
+				friendController.OnAddFriend += FriendController_OnAddFriend;
+				friendController.OnRemoveFriend += FriendController_OnRemoveFriend;
 			}
 		}
 
@@ -43,12 +43,12 @@ namespace FishMMO.Client
 
 			if (Character.TryGet(out IFriendController friendController))
 			{
-				friendController.OnAddFriend -= OnAddFriend;
-				friendController.OnRemoveFriend -= OnRemoveFriend;
+				friendController.OnAddFriend -= FriendController_OnAddFriend;
+				friendController.OnRemoveFriend -= FriendController_OnRemoveFriend;
 			}
 		}
 
-		public void OnAddFriend(long friendID, bool online)
+		public void FriendController_OnAddFriend(long friendID, bool online)
 		{
 			if (FriendPrefab != null && FriendParent != null)
 			{
@@ -77,7 +77,7 @@ namespace FishMMO.Client
 			}
 		}
 
-		public void OnRemoveFriend(long friendID)
+		public void FriendController_OnRemoveFriend(long friendID)
 		{
 			if (Friends.TryGetValue(friendID, out UIFriend friend))
 			{

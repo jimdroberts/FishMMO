@@ -74,21 +74,21 @@ namespace FishMMO.Client
 			updaterPath = Path.Combine(Client.GetWorkingDirectory(), Constants.Configuration.UpdaterExecutable);
 
 			// load configuration
-			Constants.Configuration.Settings = new Configuration(Client.GetWorkingDirectory());
-			if (!Constants.Configuration.Settings.Load(Configuration.DEFAULT_FILENAME + Configuration.EXTENSION))
+			Configuration.GlobalSettings = new Configuration(Client.GetWorkingDirectory());
+			if (!Configuration.GlobalSettings.Load(Configuration.DEFAULT_FILENAME + Configuration.EXTENSION))
 			{
 				// if we failed to load the file.. save a new one
-				Constants.Configuration.Settings.Set("Version", Constants.Configuration.Version);
-				Constants.Configuration.Settings.Set("Resolution Width", 1280);
-				Constants.Configuration.Settings.Set("Resolution Height", 800);
-				Constants.Configuration.Settings.Set("Refresh Rate", (uint)60);
-				Constants.Configuration.Settings.Set("Fullscreen", false);
-				Constants.Configuration.Settings.Set("ShowDamage", true);
-				Constants.Configuration.Settings.Set("ShowHeals", true);
-				Constants.Configuration.Settings.Set("ShowAchievementCompletion", true);
-				Constants.Configuration.Settings.Set("IPFetchHost", Constants.Configuration.IPFetchHost);
+				Configuration.GlobalSettings.Set("Version", Constants.Configuration.Version);
+				Configuration.GlobalSettings.Set("Resolution Width", 1280);
+				Configuration.GlobalSettings.Set("Resolution Height", 800);
+				Configuration.GlobalSettings.Set("Refresh Rate", (uint)60);
+				Configuration.GlobalSettings.Set("Fullscreen", false);
+				Configuration.GlobalSettings.Set("ShowDamage", true);
+				Configuration.GlobalSettings.Set("ShowHeals", true);
+				Configuration.GlobalSettings.Set("ShowAchievementCompletion", true);
+				Configuration.GlobalSettings.Set("IPFetchHost", Constants.Configuration.IPFetchHost);
 #if !UNITY_EDITOR
-				Constants.Configuration.Settings.Save();
+				Configuration.GlobalSettings.Save();
 #endif
 			}
 
@@ -197,7 +197,7 @@ namespace FishMMO.Client
 
 		public IEnumerator GetPatchServerList(Action<string> onFetchFail, Action<List<ServerAddress>> onFetchComplete)
 		{
-			if (Constants.Configuration.Settings.TryGetString("IPFetchHost", out string ipFetchHost))
+			if (Configuration.GlobalSettings.TryGetString("IPFetchHost", out string ipFetchHost))
 			{
 				// Pick a random IPFetch Host address if available.
 				string[] ipFetchServers = ipFetchHost.Split(",");

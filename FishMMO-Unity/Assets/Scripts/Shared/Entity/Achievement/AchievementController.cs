@@ -133,8 +133,8 @@ namespace FishMMO.Shared
 					AchievementTier tier = tiers[i];
 					if (achievement.CurrentValue > tier.MaxValue)
 					{
-						// Display a text message above the characters head showing the achievement.
-						// Provide rewards.
+						// Client: Display a text message above the characters head showing the achievement.
+						// Server: Provide rewards.
 						IAchievementController.OnCompleteAchievement?.Invoke(Character, achievement.Template, tier);
 					}
 					else

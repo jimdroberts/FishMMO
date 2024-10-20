@@ -36,7 +36,7 @@ namespace FishMMO.Server
 				{
 					int characterCount = worldSceneSystem.ConnectionCount;
 
-					if (Constants.Configuration.Settings.TryGetString("ServerName", out string name))
+					if (Configuration.GlobalSettings.TryGetString("ServerName", out string name))
 					{
 						WorldServerService.Add(dbContext, name, server.address, server.port, characterCount, locked, out id);
 					}

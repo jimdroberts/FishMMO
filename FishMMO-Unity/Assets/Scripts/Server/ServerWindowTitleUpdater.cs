@@ -86,7 +86,7 @@ namespace FishMMO.Server
 			}
 			using (var windowTitle = ZString.CreateStringBuilder())
 			{
-				if (Constants.Configuration.Settings.TryGetString("ServerName", out string title))
+				if (Configuration.GlobalSettings.TryGetString("ServerName", out string title))
 				{
 					windowTitle.Append(title);
 				}
@@ -115,7 +115,7 @@ namespace FishMMO.Server
 						}
 					}
 
-					if (Constants.Configuration.Settings.TryGetUShort("Port", out ushort port))
+					if (Configuration.GlobalSettings.TryGetUShort("Port", out ushort port))
 					{
 						windowTitle.Append(" [Server:");
 						windowTitle.Append(Server.RemoteAddress);

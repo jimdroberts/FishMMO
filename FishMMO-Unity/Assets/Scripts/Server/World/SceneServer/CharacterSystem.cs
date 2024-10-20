@@ -66,7 +66,7 @@ namespace FishMMO.Server
 				loginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
 				Server.NetworkManager.SceneManager.OnClientLoadedStartScenes += SceneManager_OnClientLoadedStartScenes;
 
-				ICharacterDamageController.OnKilled += OnKilled;
+				ICharacterDamageController.OnKilled += CharacterDamageController_OnKilled;
 			}
 			else
 			{
@@ -81,7 +81,7 @@ namespace FishMMO.Server
 				loginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
 				Server.NetworkManager.SceneManager.OnClientLoadedStartScenes -= SceneManager_OnClientLoadedStartScenes;
 
-				ICharacterDamageController.OnKilled -= OnKilled;
+				ICharacterDamageController.OnKilled -= CharacterDamageController_OnKilled;
 			}
 
 			if (Server != null &&
@@ -643,7 +643,7 @@ namespace FishMMO.Server
 			return spawnPoints[index];
 		}
 
-		private void OnKilled(ICharacter killer, ICharacter defender)
+		private void CharacterDamageController_OnKilled(ICharacter killer, ICharacter defender)
 		{
 			if (defender == null)
 			{

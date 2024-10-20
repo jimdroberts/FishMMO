@@ -13,6 +13,8 @@ namespace FishMMO.Shared
 		public const string EXTENSION = ".cfg";
 		public const string FULL_NAME = DEFAULT_FILENAME + "." + EXTENSION;
 
+		public static Configuration GlobalSettings;
+
 		private CultureInfo cultureInfo = CultureInfo.InvariantCulture;
 		private Dictionary<string, string> settings = new Dictionary<string, string>();
 

@@ -52,7 +52,7 @@ namespace FishMMO.Server
 				{
 					int characterCount = characterSystem.ConnectionCharacters.Count;
 
-					if (Constants.Configuration.Settings.TryGetString("ServerName", out string name))
+					if (Configuration.GlobalSettings.TryGetString("ServerName", out string name))
 					{
 						SceneServerService.Add(dbContext, name, server.address, server.port, characterCount, locked, out id);
 					}
@@ -77,7 +77,7 @@ namespace FishMMO.Server
 			if (ServerManager != null)
 			{
 				if (Server != null &&
-					Constants.Configuration.Settings.TryGetString("ServerName", out string name))
+					Configuration.GlobalSettings.TryGetString("ServerName", out string name))
 				{
 					Debug.Log("Scene Server System: Removing Scene Server scenes: " + id);
 					LoadedSceneService.Delete(dbContext, id);
@@ -131,7 +131,7 @@ namespace FishMMO.Server
 										if (sceneDetails.CharacterCount < 1)
 										{
 											double timeSinceLastExit = DateTime.UtcNow.Subtract(sceneDetails.LastExit).TotalMinutes;
-											if (Constants.Configuration.Settings.TryGetInt("StaleSceneTimeout", out int result) &&
+											if (Configuration.GlobalSettings.TryGetInt("StaleSceneTimeout", out int result) &&
 												timeSinceLastExit < result)
 											{
 												if (sceneDetails.StalePulse)

@@ -31,7 +31,7 @@ namespace FishMMO.Server
 
 				if (Server != null &&
 					Server.TryGetServerIPAddress(out ServerAddress server) &&
-					Constants.Configuration.Settings.TryGetString("ServerName", out string name))
+					Configuration.GlobalSettings.TryGetString("ServerName", out string name))
 				{
 					LoginServerService.Add(dbContext, name, server.address, server.port, out id);
 				}
