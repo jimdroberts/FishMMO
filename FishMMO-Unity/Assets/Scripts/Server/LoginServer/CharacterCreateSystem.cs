@@ -196,7 +196,7 @@ namespace FishMMO.Server
 								{
 									CharacterID = newCharacter.ID,
 									TemplateID = faction.ID,
-									Value = FactionTemplate.Maximum,
+									Value = FactionTemplate.Minimum,
 								});
 							}
 							dbContext.SaveChanges();

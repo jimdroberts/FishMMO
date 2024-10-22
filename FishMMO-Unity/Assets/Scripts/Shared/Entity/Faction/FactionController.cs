@@ -1,4 +1,6 @@
-﻿using FishNet.Transporting;
+﻿using FishNet.Connection;
+using FishNet.Serializing;
+using FishNet.Transporting;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using UnityEngine;
@@ -77,6 +79,39 @@ namespace FishMMO.Shared
 		}
 #endif
 
+		public override void ReadPayload(NetworkConnection conn, Reader reader)
+		{
+			Factions.Clear();
+			Allied.Clear();
+			Neutral.Clear();
+			Hostile.Clear();
+
+			int factionCount = reader.ReadInt32();
+			if (factionCount < 1)
+			{
+				return;
+			}
+
+			for (int i = 0; i < factionCount; ++i)
+			{
+				int factionID = reader.ReadInt32();
+				int value = reader.ReadInt32();
+
+				SetFaction(factionID, value);
+			}
+		}
+
+		public override void WritePayload(NetworkConnection conn, Writer writer)
+		{
+			// Write the factions for the clients
+			writer.WriteInt32(Factions.Count);
+			foreach (Faction faction in Factions.Values)
+			{
+				writer.WriteInt32(faction.Template.ID);
+				writer.WriteInt32(faction.Value);
+			}
+		}
+
 		public void SetFaction(int templateID, int value)
 		{
 			if (factions.TryGetValue(templateID, out Faction faction))
@@ -115,7 +150,8 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private void RemoveFromAllianceGroup(Faction faction)
 		{
-			if (factions == null)
+			if (faction == null ||
+				factions == null)
 			{
 				return;
 			}
@@ -136,7 +172,8 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private void InsertToAllianceGroup(Faction faction)
 		{
-			if (factions == null)
+			if (faction == null ||
+				factions == null)
 			{
 				return;
 			}

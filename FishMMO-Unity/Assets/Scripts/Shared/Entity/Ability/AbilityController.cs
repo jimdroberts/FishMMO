@@ -336,6 +336,11 @@ namespace FishMMO.Shared
 
 		private AbilityActivationReplicateData HandleCharacterInput()
 		{
+			if (Character == null)
+			{
+				return default;
+			}
+			
 			float deltaTime = (float)base.TimeManager.TickDelta;
 			if (Character.TryGet(out ICooldownController cooldownController))
 			{

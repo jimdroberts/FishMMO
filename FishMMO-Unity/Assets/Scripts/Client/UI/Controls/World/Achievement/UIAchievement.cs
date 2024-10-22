@@ -147,6 +147,10 @@ namespace FishMMO.Client
 
 		public void ClearAll()
 		{
+			if (Categories == null)
+			{
+				return;
+			}
 			foreach (KeyValuePair<AchievementCategory, Dictionary<int, UIAchievementDescription>> pair in Categories)
 			{
 				foreach (UIAchievementDescription description in pair.Value.Values)
@@ -154,7 +158,10 @@ namespace FishMMO.Client
 					Destroy(description.gameObject);
 				}
 			}
-
+			if (CategoryButtons == null)
+			{
+				return;
+			}
 			foreach (UIAchievementCategory category in CategoryButtons)
 			{
 				category.Button.onClick.RemoveAllListeners();

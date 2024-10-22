@@ -1,11 +1,12 @@
 using System;
-using UnityEngine;
 
 namespace FishMMO.Shared
 {
-    public interface IPetController
+    public interface IPetController : ICharacterBehaviour
     {
-        event Action<GameObject> OnPetSummoned;
-        event Action<GameObject> OnPetDestroyed;
+        static event Action<Pet> OnPetSummoned;
+        static event Action<Pet> OnPetDestroyed;
+
+        Pet Pet { get;}
     }
 }

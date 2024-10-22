@@ -436,28 +436,6 @@ namespace FishMMO.Server
 			}
 			#endregion
 
-			#region Factions
-			if (character.TryGet(out IFactionController factionController))
-			{
-				List<FactionUpdateBroadcast> factions = new List<FactionUpdateBroadcast>();
-				foreach (Faction faction in factionController.Factions.Values)
-				{
-					factions.Add(new FactionUpdateBroadcast()
-					{
-						templateID = faction.Template.ID,
-						newValue = faction.Value,
-					});
-				}
-				if (factions.Count > 0)
-				{
-					Server.Broadcast(character.Owner, new FactionUpdateMultipleBroadcast()
-					{
-						factions = factions,
-					}, true, Channel.Reliable);
-				}
-			}
-			#endregion
-
 			#region Guild
 			if (character.TryGet(out IGuildController guildController) &&
 				guildController.ID > 0)
