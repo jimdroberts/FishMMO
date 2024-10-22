@@ -34,32 +34,27 @@ namespace FishMMO.Shared
 
 		//public List<Character> Attackers;
 
+		private CharacterResourceAttribute resourceInstance;
 		/// <summary>
 		/// Cache the resource
 		/// </summary>
-		public CharacterResourceAttribute ResourceInstance { get; private set; }
-
-#if !UNITY_SERVER
-		public override void OnStartCharacter()
+		public CharacterResourceAttribute ResourceInstance
 		{
-			base.OnStartCharacter();
-
-			CharacterResourceAttribute resource;
-
-			if (ResourceAttribute == null ||
-				!Character.TryGet(out ICharacterAttributeController attributeController) ||
-				!attributeController.TryGetResourceAttribute(ResourceAttribute.ID, out resource))
+			get
 			{
-				throw new UnityException("Character Damage Controller ResourceAttribute is missing");
+				if (resourceInstance == null)
+				{
+					if (ResourceAttribute == null ||
+						!Character.TryGet(out ICharacterAttributeController attributeController) ||
+						!attributeController.TryGetResourceAttribute(ResourceAttribute.ID, out CharacterResourceAttribute resource))
+					{
+						throw new UnityException("Character Damage Controller ResourceAttribute is missing");
+					}
+					resourceInstance = resource;
+				}
+				return resourceInstance;
 			}
-			if (!base.IsOwner)
-			{
-				enabled = false;
-				return;
-			}
-			ResourceInstance = resource;
 		}
-#endif
 
 		public int ApplyModifiers(ICharacter target, int amount, DamageAttributeTemplate damageAttribute)
 		{
