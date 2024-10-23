@@ -627,14 +627,28 @@ namespace FishMMO.Server
 			{
 				return;
 			}
+
+			// Handle Player deaths
 			IPlayerCharacter playerCharacter = defender as IPlayerCharacter;
-			if (playerCharacter == null)
+			if (playerCharacter != null)
 			{
-				return;
+				if (playerCharacter.TryGet(out CharacterDamageController damageController))
+				{
+					// Full heal the character
+					damageController.Heal(null, 999999, true);
+				}
+				if (playerCharacter.SceneName != playerCharacter.BindScene)
+				{
+					playerCharacter.Teleport(playerCharacter.BindScene);
+				}
+				else
+				{
+					playerCharacter.Motor.SetPositionAndRotationAndVelocity(playerCharacter.BindPosition, Quaternion.identity, Vector3.zero);
+				}
 			}
-			if (playerCharacter.SceneName != playerCharacter.BindScene)
+			else
 			{
-				playerCharacter.Teleport(playerCharacter.BindScene);
+				// Handle NPC deaths
 			}
 		}
 

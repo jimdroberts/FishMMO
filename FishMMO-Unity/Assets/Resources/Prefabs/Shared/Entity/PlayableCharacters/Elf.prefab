@@ -533,7 +533,7 @@ MonoBehaviour:
   _networkObjectCache: {fileID: 4964627840297570917}
   LayerMask:
     serializedVersion: 2
-    m_Bits: 129
+    m_Bits: 193
 --- !u!114 &5933418412604522111
 MonoBehaviour:
   m_ObjectHideFlags: 0

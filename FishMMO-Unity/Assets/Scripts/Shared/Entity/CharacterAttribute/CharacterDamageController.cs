@@ -73,14 +73,14 @@ namespace FishMMO.Shared
 			return amount;
 		}
 
-		public void Damage(ICharacter attacker, int amount, DamageAttributeTemplate damageAttribute)
+		public void Damage(ICharacter attacker, int amount, DamageAttributeTemplate damageAttribute, bool ignoreAchievements = false)
 		{
 			if (Immortal)
 			{
 				return;
 			}
 
-			if (ResourceInstance != null && ResourceInstance.CurrentValue > 0.0f)
+			if (ResourceInstance != null && ResourceInstance.CurrentValue >= 0.001f)
 			{
 				amount = ApplyModifiers(Character, amount, damageAttribute);
 				if (amount < 1)
@@ -93,18 +93,21 @@ namespace FishMMO.Shared
 
 				uint fullAmount = (uint)amount;
 
-				if (attacker.TryGet(out IAchievementController attackerAchievementController))
+				if (!ignoreAchievements)
 				{
-					attackerAchievementController.Increment(DamageAchievementTemplate, fullAmount);
-				}
-				
-				if (Character.TryGet(out IAchievementController defenderAchievementController))
-				{
-					defenderAchievementController.Increment(DamagedAchievementTemplate, fullAmount);
+					if (attacker.TryGet(out IAchievementController attackerAchievementController))
+					{
+						attackerAchievementController.Increment(DamageAchievementTemplate, fullAmount);
+					}
+					
+					if (Character.TryGet(out IAchievementController defenderAchievementController))
+					{
+						defenderAchievementController.Increment(DamagedAchievementTemplate, fullAmount);
+					}
 				}
 
 				// check if we died
-				if (ResourceInstance.CurrentValue <= 0.001f)
+				if (ResourceInstance.CurrentValue < 0.001f)
 				{
 					Kill(attacker);
 				}
@@ -117,6 +120,8 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
+
+			Debug.Log("Kill?");
 
 			if (killer != null &&
 				killer.TryGet(out IAchievementController killerAchievementController))
@@ -179,7 +184,7 @@ namespace FishMMO.Shared
 			this.gameObject.SetActive(false);*/
 		}
 
-		public void Heal(ICharacter healer, int amount)
+		public void Heal(ICharacter healer, int amount, bool ignoreAchievements = false)
 		{
 			if (ResourceInstance != null && ResourceInstance.CurrentValue > 0.0f)
 			{
@@ -189,15 +194,18 @@ namespace FishMMO.Shared
 
 				uint fullAmount = (uint)amount;
 				
-				if (healer != null &&
+				if (!ignoreAchievements)
+				{
+					if (healer != null &&
 					healer.TryGet(out IAchievementController healerAchievementController))
-				{
-					healerAchievementController.Increment(HealAchievementTemplate, fullAmount);
-				}
-				if (Character != null &&
-					Character.TryGet(out IAchievementController healedAchievementController)) 
-				{
-					healedAchievementController.Increment(HealedAchievementTemplate, fullAmount);
+					{
+						healerAchievementController.Increment(HealAchievementTemplate, fullAmount);
+					}
+					if (Character != null &&
+						Character.TryGet(out IAchievementController healedAchievementController)) 
+					{
+						healedAchievementController.Increment(HealedAchievementTemplate, fullAmount);
+					}
 				}
 			}
 		}
