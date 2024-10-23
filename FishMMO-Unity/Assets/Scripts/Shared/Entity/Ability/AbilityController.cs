@@ -1,4 +1,5 @@
-﻿using FishNet.Connection;
+﻿using FishMMO.Client;
+using FishNet.Connection;
 using FishNet.Object;
 using FishNet.Object.Prediction;
 using FishNet.Serializing;
@@ -586,6 +587,11 @@ namespace FishMMO.Shared
 
 		public void Activate(long referenceID, KeyCode heldKey)
 		{
+			if (UIManager.ControlHasFocus())
+			{
+				return;
+			}
+
 			if (!CanActivate(referenceID, out Ability validatedAbility))
 			{
 				return;
@@ -629,6 +635,12 @@ namespace FishMMO.Shared
 			if (!KnownAbilities.TryGetValue(abilityID, out validatedAbility))
 			{
 				//Debug.Log("Trying to activate an unknown ability.");
+				return false;
+			}
+			if (!Character.TryGet(out ICharacterDamageController damageController) ||
+				!damageController.IsAlive)
+			{
+				//Debug.Log("Cannot activate an ability while dead.");
 				return false;
 			}
 			if (!Character.TryGet(out ICooldownController cooldownController) ||

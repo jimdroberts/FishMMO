@@ -6,7 +6,7 @@ namespace FishMMO.Client
 {
 	public class UIHotkeyBar : UICharacterControl
 	{
-		private const int MAX_HOTKEYS = 10;
+		private const int MAX_HOTKEYS = 12;
 
 		public RectTransform parent;
 		public UIHotkeyGroup buttonPrefab;
@@ -45,24 +45,28 @@ namespace FishMMO.Client
 			switch (hotkeyIndex)
 			{
 				case 0:
-					return "Hotkey 1";
+					return "Left Mouse";
 				case 1:
-					return "Hotkey 2";
+					return "Right Mouse";
 				case 2:
-					return "Hotkey 3";
+					return "Hotkey 1";
 				case 3:
-					return "Hotkey 4";
+					return "Hotkey 2";
 				case 4:
-					return "Hotkey 5";
+					return "Hotkey 3";
 				case 5:
-					return "Hotkey 6";
+					return "Hotkey 4";
 				case 6:
-					return "Hotkey 7";
+					return "Hotkey 5";
 				case 7:
-					return "Hotkey 8";
+					return "Hotkey 6";
 				case 8:
-					return "Hotkey 9";
+					return "Hotkey 7";
 				case 9:
+					return "Hotkey 8";
+				case 10:
+					return "Hotkey 9";
+				case 11:
 					return "Hotkey 0";
 				default:
 					return "";
@@ -148,6 +152,10 @@ namespace FishMMO.Client
 					group.Button.KeyMap = GetHotkeyIndexKeyMap(i);
 					group.Button.ReferenceID = UIReferenceButton.NULL_REFERENCE_ID;
 					group.Button.Type = ReferenceButtonType.None;
+					if (group.Label != null)
+					{
+						group.Label.text = group.Button.KeyMap.Replace("Hotkey ", "").Replace("Left Mouse", "LMB").Replace("Right Mouse", "RMB");
+					}
 				}
 				group.gameObject.SetActive(true);
 				hotkeys.Add(group);

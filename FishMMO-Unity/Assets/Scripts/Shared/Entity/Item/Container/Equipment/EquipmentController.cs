@@ -187,6 +187,12 @@ namespace FishMMO.Shared
 
 		public void Activate(int index)
 		{
+			if (!Character.TryGet(out ICharacterDamageController damageController) ||
+				!damageController.IsAlive)
+			{
+				//Debug.Log("Cannot activate an equipment while dead.");
+				return;
+			}
 			if (TryGetItem(index, out Item item))
 			{
 				Debug.Log("EquipmentController: using item in slot[" + index + "]");
