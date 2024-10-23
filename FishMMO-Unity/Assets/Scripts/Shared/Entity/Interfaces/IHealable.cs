@@ -2,6 +2,6 @@
 {
 	public interface IHealable
 	{
-		public void Heal(ICharacter healer, int amount, bool ignoreAchievements);
+		public void Heal(ICharacter healer, int amount, bool ignoreAchievements = false);
 	}
 }

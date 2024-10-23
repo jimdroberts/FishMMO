@@ -121,8 +121,6 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			Debug.Log("Kill?");
-
 			if (killer != null &&
 				killer.TryGet(out IAchievementController killerAchievementController))
 			{
