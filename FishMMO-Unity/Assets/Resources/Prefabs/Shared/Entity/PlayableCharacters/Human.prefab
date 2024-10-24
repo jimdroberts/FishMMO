@@ -2799,12 +2799,18 @@ MonoBehaviour:
   _addedNetworkObject: {fileID: 7248884440816270172}
   _networkObjectCache: {fileID: 7248884440816270172}
   ResourceAttribute: {fileID: 11400000, guid: e5c10a046ee277f46a57ee2048ae5ec9, type: 2}
-  DamageAchievementTemplate: {fileID: 0}
-  DamagedAchievementTemplate: {fileID: 0}
-  KillAchievementTemplate: {fileID: 0}
-  KilledAchievementTemplate: {fileID: 0}
-  HealAchievementTemplate: {fileID: 0}
-  HealedAchievementTemplate: {fileID: 0}
+  DamageAchievementTemplate: {fileID: 11400000, guid: 02a306f12237e8c4b90a2dbdccf178bb,
+    type: 2}
+  DamagedAchievementTemplate: {fileID: 11400000, guid: f23c3b7a7b856de45b336f9ba28c3059,
+    type: 2}
+  KillAchievementTemplate: {fileID: 11400000, guid: 1c632e8771fab6a408fecc11015cc6a5,
+    type: 2}
+  KilledAchievementTemplate: {fileID: 11400000, guid: 18e87e7a4d09c844fa3221b9ed8da77f,
+    type: 2}
+  HealAchievementTemplate: {fileID: 11400000, guid: 2a5692eafe24d1f48aa7f11be57a3892,
+    type: 2}
+  HealedAchievementTemplate: {fileID: 11400000, guid: 558258f511eba114fb9daedea1d4dcc9,
+    type: 2}
   ResurrectAchievementTemplate: {fileID: 0}
   ResurrectedAchievementTemplate: {fileID: 0}
   immortal: 0

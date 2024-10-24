@@ -3,8 +3,8 @@ using UnityEngine;
 
 namespace FishMMO.Shared
 {
-	[CreateAssetMenu(fileName = "New Achievement", menuName = "Item/Achievement/Achievement", order = 1)]
-	public sealed class AchievementTemplate : CachedScriptableObject<AchievementTemplate>, ICachedObject
+	[CreateAssetMenu(fileName = "New Achievement", menuName = "Character/Achievement/Achievement", order = 1)]
+	public class AchievementTemplate : CachedScriptableObject<AchievementTemplate>, ICachedObject
 	{
 		public Sprite Icon;
 		public AchievementCategory Category;

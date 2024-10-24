@@ -1,0 +1,18 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e50ec2665c219da4b99dc8b9b88aa0de, type: 3}
+  m_Name: Kills
+  m_EditorClassIdentifier: 
+  Icon: {fileID: 0}
+  Category: 2
+  Description: Total number of enemies killed.
+  Tiers: []

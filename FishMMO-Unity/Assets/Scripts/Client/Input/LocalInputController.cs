@@ -74,6 +74,13 @@ namespace FishMMO.Client
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private bool CanUpdateInput()
 		{
+			if (Character.TryGet(out ICharacterDamageController damageController))
+			{
+				if (!damageController.IsAlive)
+				{
+					return false;
+				}
+			}
 			return !InputManager.MouseMode;
 		}
 

@@ -632,7 +632,7 @@ namespace FishMMO.Server
 			IPlayerCharacter playerCharacter = defender as IPlayerCharacter;
 			if (playerCharacter != null)
 			{
-				if (playerCharacter.TryGet(out CharacterDamageController damageController))
+				if (playerCharacter.TryGet(out ICharacterDamageController damageController))
 				{
 					// Full heal the character
 					damageController.Heal(null, 999999, true);

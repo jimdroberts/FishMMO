@@ -3,7 +3,8 @@ using UnityEngine;
 
 namespace FishMMO.Shared
 {
-	public abstract class BuffTemplate : CachedScriptableObject<BuffTemplate>, ICachedObject
+	[CreateAssetMenu(fileName = "New Buff", menuName = "Character/Buff/Buff", order = 1)]
+	public class BuffTemplate : CachedScriptableObject<BuffTemplate>, ICachedObject
 	{
 		public string Description;
 		public Texture2D Icon;
@@ -17,16 +18,10 @@ namespace FishMMO.Shared
 		// do we want independant timers on buff stacks?
 		public bool IndependantStackTimer;
 		public List<BuffAttributeTemplate> BonusAttributes;
-		//public AudioEvent OnApplySounds;
-		//public AudioEvent OnTickSounds;
-		//public AudioEvent OnRemoveSounds;
+		//public AudioClip OnApplySounds;
+		//public AudioClip OnTickSounds;
+		//public AudioClip OnRemoveSounds;
 
 		public string Name { get { return this.name; } }
-		public abstract void OnApply(Buff instance, ICharacter target);
-		public abstract void OnTick(Buff instance, ICharacter target);
-		public abstract void OnRemove(Buff instance, ICharacter target);
-
-		public abstract void OnApplyStack(Buff stack, ICharacter target);
-		public abstract void OnRemoveStack(Buff stack, ICharacter target);
 	}
 }

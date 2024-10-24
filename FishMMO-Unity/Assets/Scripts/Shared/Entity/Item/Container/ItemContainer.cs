@@ -22,6 +22,13 @@ namespace FishMMO.Shared
 		/// </summary>
 		public virtual bool CanManipulate()
 		{
+			if (Character.TryGet(out ICharacterDamageController damageController))
+			{
+				if (!damageController.IsAlive)
+				{
+					return false;
+				}
+			}
 			return Items.Count > 0;
 		}
 

@@ -66,7 +66,7 @@ namespace FishMMO.Shared
 		{
 			if (tickTime <= 0.0f)
 			{
-				Template.OnTick(this, target);
+				//Template.OnTick(this, target);
 				ResetTickTime();
 			}
 		}
@@ -98,27 +98,27 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void Apply(ICharacter target)
 		{
-			Template.OnApply(this, target);
+			//Template.OnApply(this, target);
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void Remove(ICharacter target)
 		{
-			Template.OnRemove(this, target);
+			//Template.OnRemove(this, target);
 			Reset();
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void AddStack(Buff stack, ICharacter target)
 		{
-			Template.OnApplyStack(stack, target);
+			//Template.OnApplyStack(stack, target);
 			stacks.Add(stack);
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void RemoveStack(ICharacter target)
 		{
-			Template.OnRemoveStack(this, target);
+			//Template.OnRemoveStack(this, target);
 		}
 
 		public string Tooltip()
