@@ -127,6 +127,26 @@ namespace FishMMO.Shared
 			InsertToAllianceGroup(faction);
 		}
 
+		public void Add(IFactionController defenderFactionController)
+		{
+			if (defenderFactionController == null)
+			{
+				return;
+			}
+			foreach (Faction faction in defenderFactionController.Allied.Values)
+			{
+				Add(faction.Template, -Mathf.RoundToInt(faction.Value * 0.05f));
+			}
+			foreach (Faction faction in defenderFactionController.Neutral.Values)
+			{
+				Add(faction.Template, -Mathf.RoundToInt(faction.Value * 0.025f));
+			}
+			foreach (Faction faction in defenderFactionController.Hostile.Values)
+			{
+				Add(faction.Template, Mathf.RoundToInt(faction.Value * 0.05f));
+			}
+		}
+
 		public void Add(FactionTemplate template, int amount = 1)
 		{
 			if (template == null)
@@ -144,7 +164,12 @@ namespace FishMMO.Shared
 			{
 				factions.Add(template.ID, faction = new Faction(template.ID, amount));
 			}
-			InsertToAllianceGroup(faction);
+			if (faction != null)
+			{
+				IFactionController.OnAddFaction?.Invoke(faction, amount);
+
+				InsertToAllianceGroup(faction);
+			}
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]

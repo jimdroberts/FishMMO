@@ -1,9 +1,12 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 
 namespace FishMMO.Shared
 {
 	public interface IFactionController : ICharacterBehaviour
 	{
+		static Action<Faction, int> OnAddFaction;
+
 		bool IsAggressive { get; set; }
 		Dictionary<int, Faction> Factions { get; }
 		Dictionary<int, Faction> Allied { get;}
@@ -12,6 +15,7 @@ namespace FishMMO.Shared
 		FactionTemplate Template{ get; }
 
 		void SetFaction(int templateID, int value);
+		void Add(IFactionController defenderFactionController);
 		void Add(FactionTemplate template, int amount = 1);
 		FactionAllianceLevel GetAllianceLevel(IFactionController otherFactionController);
 	}

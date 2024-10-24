@@ -121,21 +121,38 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			if (killer != null &&
-				killer.TryGet(out IAchievementController killerAchievementController))
+			if (killer != null)
 			{
-				killerAchievementController.Increment(KillAchievementTemplate, 1);
+				if (Character != null)
+				{
+					// Reward the killer with faction.
+					if (killer.TryGet(out IFactionController factionController) &&
+						Character.TryGet(out IFactionController defenderFactionController))
+					{
+						factionController.Add(defenderFactionController);
+					}
+				}
+				
+				// Reward the killer with kill achievements.
+				if (killer.TryGet(out IAchievementController killerAchievementController))
+				{
+					killerAchievementController.Increment(KillAchievementTemplate, 1);
+				}
 			}
-			if (Character != null &&
-				Character.TryGet(out IAchievementController defenderAchievementController))
+			
+			if (Character != null)
 			{
-				defenderAchievementController.Increment(KilledAchievementTemplate, 1);
-			}
+				// Reward the defender with death achievements.
+				if (Character.TryGet(out IAchievementController defenderAchievementController))
+				{
+					defenderAchievementController.Increment(KilledAchievementTemplate, 1);
+				}
 
-			// SELF
-			if (Character.TryGet(out IBuffController buffController))
-			{
-				buffController.RemoveAll();
+				// Remove all buffs
+				if (Character.TryGet(out IBuffController buffController))
+				{
+					buffController.RemoveAll();
+				}
 			}
 
 			ICharacterDamageController.OnKilled?.Invoke(killer, Character);
