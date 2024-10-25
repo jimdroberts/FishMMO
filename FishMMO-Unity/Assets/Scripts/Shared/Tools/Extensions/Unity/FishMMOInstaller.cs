@@ -49,7 +49,7 @@ namespace FishMMO.Shared
 						await InstallDatabase();
 						break;
 					case ConsoleKey.D5:
-						CreateMigration();
+						await CreateMigration();
 						break;
 					case ConsoleKey.D6:
 #if UNITY_EDITOR
@@ -1236,7 +1236,7 @@ namespace FishMMO.Shared
 			Log($"Database Update completed...");
 		}
 
-		private async void CreateMigration()
+		private async Task CreateMigration()
 		{
 			string timestamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
 
@@ -1245,7 +1245,7 @@ namespace FishMMO.Shared
 			// Run 'dotnet ef migrations add Initial' command
 			await RunDotNetCommandAsync($"ef migrations add {timestamp} -p {Constants.Configuration.ProjectPath} -s {Constants.Configuration.StartupProject}");
 
-			Console.WriteLine($"Updating the database at {timestamp}...");
+			Log($"Updating the database at {timestamp}...");
 			
 			// Run 'dotnet ef database update' command
 			await RunDotNetCommandAsync($"ef database update -p {Constants.Configuration.ProjectPath}  -s  {Constants.Configuration.StartupProject}");

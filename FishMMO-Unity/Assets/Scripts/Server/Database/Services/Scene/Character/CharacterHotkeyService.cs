@@ -49,11 +49,6 @@ namespace FishMMO.Server.DatabaseServices
 				return;
 			}
 
-			if (type == 0)
-			{
-				return;
-			}
-
 			var dbHotkey = dbContext.CharacterHotkeys.FirstOrDefault(c => c.CharacterID == characterID && c.Slot == slot);
 			// Update or add to hotkeys
 			if (dbHotkey != null)
@@ -109,12 +104,13 @@ namespace FishMMO.Server.DatabaseServices
 			var dbHotkeys = dbContext.CharacterHotkeys.Where(c => c.CharacterID == character.ID);
 			foreach (CharacterHotkeyEntity dbHotkey in dbHotkeys)
 			{
-				character.Hotkeys.Add(new HotkeyData()
+				HotkeyData data = character.Hotkeys[dbHotkey.Slot];
+				if (data != null)
 				{
-					Type = dbHotkey.Type,
-					Slot = dbHotkey.Slot,
-					ReferenceID = dbHotkey.ReferenceID,
-				});
+					data.Type = dbHotkey.Type;
+					data.Slot = dbHotkey.Slot;
+					data.ReferenceID = dbHotkey.ReferenceID;
+				}
 			};
 		}
 	}

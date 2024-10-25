@@ -76,7 +76,14 @@ namespace FishMMO.Shared
 		{
 			if (Hotkeys == null)
 			{
-				Hotkeys = new List<HotkeyData>(Constants.Configuration.MaximumPlayerHotkeys);
+				Hotkeys = new List<HotkeyData>();
+				for (int i = 0; i < Constants.Configuration.MaximumPlayerHotkeys; ++i)
+				{
+					Hotkeys.Add(new HotkeyData()
+					{
+						Slot = i,
+					});
+				}
 			}
 
 			#region KCC

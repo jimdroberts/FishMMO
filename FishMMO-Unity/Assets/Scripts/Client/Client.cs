@@ -568,15 +568,15 @@ namespace FishMMO.Client
 						ServerAddresses result = JsonUtility.FromJson<ServerAddresses>(jsonResponse);
 
 						// Do something with the server list
-						foreach (ServerAddress server in result.Addresses)
+						foreach (ServerAddress server in result.addresses)
 						{
-							Debug.Log("Client: New Login Server Address:" + server.Address + ", Port: " + server.Port);
+							Debug.Log("Client: New Login Server Address:" + server.address + ", Port: " + server.port);
 						}
 
 						// Assign our LoginServerAddresses
-						LoginServerAddresses = result.Addresses;
+						LoginServerAddresses = result.addresses;
 
-						onFetchComplete?.Invoke(result.Addresses);
+						onFetchComplete?.Invoke(result.addresses);
 					}
 				}
 			}

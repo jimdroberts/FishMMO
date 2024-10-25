@@ -114,9 +114,9 @@ namespace FishMMO.Client
 				{
 					HotkeyData = new HotkeyData()
 					{
-						Type = (byte)Type,
+						Type = 0,
 						Slot = HotkeySlot,
-						ReferenceID = ReferenceID,
+						ReferenceID = UIReferenceButton.NULL_REFERENCE_ID,
 					}
 				}, Channel.Reliable);
 			}

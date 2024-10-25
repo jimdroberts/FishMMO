@@ -578,6 +578,41 @@ namespace FishMMO.Server
 				}
 			}
 			#endregion
+
+			#region Hotkeys
+			if (character.Hotkeys != null)
+			{
+				List<HotkeySetBroadcast> hotkeyBroadcasts = new List<HotkeySetBroadcast>();
+
+				foreach (HotkeyData hotkey in character.Hotkeys)
+				{
+					// just in case..
+					if (hotkey == null)
+					{
+						continue;
+					}
+					// create the new hotkey broadcast
+					hotkeyBroadcasts.Add(new HotkeySetBroadcast()
+					{
+						HotkeyData = new HotkeyData()
+						{
+							Type = hotkey.Type,
+							Slot = hotkey.Slot,
+							ReferenceID = hotkey.ReferenceID,
+						}
+					});
+				}
+
+				// tell the client they have hotkeys
+				if (hotkeyBroadcasts.Count > 0)
+				{
+					Server.Broadcast(character.Owner, new HotkeySetMultipleBroadcast()
+					{
+						Hotkeys = hotkeyBroadcasts,
+					}, true, Channel.Reliable);
+				}
+			}
+			#endregion
 		}
 
 		/// <summary>

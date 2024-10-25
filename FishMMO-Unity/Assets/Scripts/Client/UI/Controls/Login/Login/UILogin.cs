@@ -163,7 +163,7 @@ namespace FishMMO.Client
 			{
 				handshakeMSG.text = handshakeMessage;
 				Client.LoginAuthenticator.SetLoginCredentials(username, password, isRegistration);
-				Client.ConnectToServer(serverAddress.Address, serverAddress.Port);
+				Client.ConnectToServer(serverAddress.address, serverAddress.port);
 			}
 		}
 

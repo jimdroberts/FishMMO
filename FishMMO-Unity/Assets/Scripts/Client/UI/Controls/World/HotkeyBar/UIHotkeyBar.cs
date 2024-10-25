@@ -40,6 +40,10 @@ namespace FishMMO.Client
 
 		private void OnClientHotkeySetBroadcastReceived(HotkeySetBroadcast msg, Channel channel)
 		{
+			if (msg.HotkeyData.Slot < 0 || msg.HotkeyData.Slot > hotkeys.Count)
+			{
+				return;
+			}
 			UIHotkeyGroup group = hotkeys[msg.HotkeyData.Slot];
 			if (group.Button != null)
 			{

@@ -33,7 +33,7 @@ namespace FishMMO.Server
 					Server.TryGetServerIPAddress(out ServerAddress server) &&
 					Configuration.GlobalSettings.TryGetString("ServerName", out string name))
 				{
-					LoginServerService.Add(dbContext, name, server.Address, server.Port, out id);
+					LoginServerService.Add(dbContext, name, server.address, server.port, out id);
 				}
 			}
 			else

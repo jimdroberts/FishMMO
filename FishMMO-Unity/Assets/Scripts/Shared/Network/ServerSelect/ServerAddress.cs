@@ -6,18 +6,18 @@ namespace FishMMO.Shared
 	[Serializable]
 	public class ServerAddresses
 	{
-		public List<ServerAddress> Addresses;
+		public List<ServerAddress> addresses;
 	}
 
 	[Serializable]
 	public struct ServerAddress
 	{
-		public string Address;
-		public ushort Port;
+		public string address;
+		public ushort port;
 
 		public string HTTPSAddress()
 		{
-			string fullAddress = Address + ":" + Port;
+			string fullAddress = address + ":" + port;
 			// Format the PatcherHost Address with HTTPS
 			if (!fullAddress.StartsWith("https://"))
 			{

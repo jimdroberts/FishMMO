@@ -46,6 +46,18 @@ namespace FishMMO.Server
 			{
 				return;
 			}
+			// Validate the hotkey list exists
+			if (playerCharacter.Hotkeys == null)
+			{
+				playerCharacter.Hotkeys = new List<HotkeyData>();
+				for (int i = 0; i < Constants.Configuration.MaximumPlayerHotkeys; ++i)
+				{
+					playerCharacter.Hotkeys.Add(new HotkeyData()
+					{
+						Slot = i,
+					});
+				}
+			}
 			// Validate the hotkey slot
 			if (playerCharacter.Hotkeys.Count < msg.HotkeyData.Slot ||
 				msg.HotkeyData.Slot < 0)
@@ -78,11 +90,23 @@ namespace FishMMO.Server
 			}
 			foreach (HotkeySetBroadcast subMsg in msg.Hotkeys)
 			{
+				// Validate the hotkey list exists
+				if (playerCharacter.Hotkeys == null)
+				{
+					playerCharacter.Hotkeys = new List<HotkeyData>();
+					for (int i = 0; i < Constants.Configuration.MaximumPlayerHotkeys; ++i)
+					{
+						playerCharacter.Hotkeys.Add(new HotkeyData()
+						{
+							Slot = i,
+						});
+					}
+				}
 				// Validate the hotkey slot
 				if (playerCharacter.Hotkeys.Count < subMsg.HotkeyData.Slot ||
 					subMsg.HotkeyData.Slot < 0)
 				{
-					continue;
+					return;
 				}
 				HotkeyData hotkeyData = new HotkeyData()
 				{

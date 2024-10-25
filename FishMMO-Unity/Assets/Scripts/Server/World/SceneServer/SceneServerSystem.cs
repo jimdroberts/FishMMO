@@ -54,7 +54,7 @@ namespace FishMMO.Server
 
 					if (Configuration.GlobalSettings.TryGetString("ServerName", out string name))
 					{
-						SceneServerService.Add(dbContext, name, server.Address, server.Port, characterCount, locked, out id);
+						SceneServerService.Add(dbContext, name, server.address, server.port, characterCount, locked, out id);
 					}
 
 					characterSystem.OnDisconnect += CharacterSystem_OnDisconnect;
