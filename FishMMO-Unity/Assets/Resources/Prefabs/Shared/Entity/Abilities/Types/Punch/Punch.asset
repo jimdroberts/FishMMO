@@ -33,3 +33,5 @@ MonoBehaviour:
   EventSlots: 1
   HitCount: 1
   Type: 3
+  Events:
+  - {fileID: 11400000, guid: 5bfeb86111a12784ab0682fc2a1733ff, type: 2}

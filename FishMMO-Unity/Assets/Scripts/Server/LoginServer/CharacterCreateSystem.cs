@@ -4,6 +4,8 @@ using System;
 using FishMMO.Database.Npgsql.Entities;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace FishMMO.Server
 {
@@ -12,9 +14,9 @@ namespace FishMMO.Server
 	/// </summary>
 	public class CharacterCreateSystem : ServerBehaviour
 	{
-		public int MaxCharacters = 8;
-
 		public WorldSceneDetailsCache WorldSceneDetailsCache;
+		public int MaxCharacters = 8;
+		public List<AbilityTemplate> StartingAbilities = new List<AbilityTemplate>();
 
 		public override void InitializeOnce()
 		{
@@ -40,10 +42,10 @@ namespace FishMMO.Server
 		{
 			if (conn.IsActive)
 			{
-				// validate character creation data
+				// Validate character creation data
 				if (!Constants.Authentication.IsAllowedCharacterName(msg.characterName))
 				{
-					// invalid character name
+					// Invalid character name
 					Server.Broadcast(conn, new CharacterCreateResultBroadcast()
 					{
 						result = CharacterCreateResult.InvalidCharacterName,
@@ -54,14 +56,14 @@ namespace FishMMO.Server
 				using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 				if (!AccountManager.GetAccountNameByConnection(conn, out string accountName))
 				{
-					// account not found??
+					// Account not found??
 					conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
 					return;
 				}
 				int characterCount = CharacterService.GetCount(dbContext, accountName);
 				if (characterCount >= MaxCharacters)
 				{
-					// too many characters
+					// Too many characters
 					Server.Broadcast(conn, new CharacterCreateResultBroadcast()
 					{
 						result = CharacterCreateResult.TooMany,
@@ -71,7 +73,7 @@ namespace FishMMO.Server
 				var character = CharacterService.GetByName(dbContext, msg.characterName);
 				if (character != null)
 				{
-					// character name already taken
+					// Character name already taken
 					Server.Broadcast(conn, new CharacterCreateResultBroadcast()
 					{
 						result = CharacterCreateResult.CharacterNameTaken,
@@ -83,20 +85,20 @@ namespace FishMMO.Server
 					WorldSceneDetailsCache.Scenes == null ||
 					WorldSceneDetailsCache.Scenes.Count < 1)
 				{
-					// failed to find spawn positions to validate with
+					// Failed to find spawn positions to validate with
 					Server.Broadcast(conn, new CharacterCreateResultBroadcast()
 					{
 						result = CharacterCreateResult.InvalidSpawn,
 					}, true, Channel.Reliable);
 					return;
 				}
-				// validate spawn details
+				// Validate spawn details
 				if (WorldSceneDetailsCache.Scenes.TryGetValue(msg.sceneName, out WorldSceneDetails details))
 				{
-					// validate spawner
+					// Validate spawner
 					if (details.InitialSpawnPositions.TryGetValue(msg.spawnerName, out CharacterInitialSpawnPositionDetails initialSpawnPosition))
 					{
-						// validate race
+						// Validate race
 						RaceTemplate raceTemplate = RaceTemplate.Get<RaceTemplate>(msg.raceTemplateID);
 						if (raceTemplate == null ||
 							raceTemplate.Prefab == null)
@@ -119,7 +121,7 @@ namespace FishMMO.Server
 							return;
 						}
 
-						// validate spawnable prefab
+						// Validate spawnable prefab
 						IPlayerCharacter characterPrefab = raceTemplate.Prefab.GetComponent<IPlayerCharacter>();
 						if (characterPrefab == null ||
 							Server.NetworkManager.SpawnablePrefabs.GetObject(true, characterPrefab.NetworkObject.PrefabId) == null)
@@ -128,7 +130,7 @@ namespace FishMMO.Server
 							return;
 						}
 
-						// create the new character
+						// Create the new character
 						var newCharacter = new CharacterEntity()
 						{
 							Account = accountName,
@@ -153,7 +155,7 @@ namespace FishMMO.Server
 						dbContext.Characters.Add(newCharacter);
 						dbContext.SaveChanges();
 
-						// add character attributes
+						// Add character attributes
 						if (raceTemplate.InitialAttributes != null)
 						{
 							foreach (CharacterAttributeTemplate template in raceTemplate.InitialAttributes.Attributes.Values)
@@ -171,7 +173,7 @@ namespace FishMMO.Server
 
 						if (raceTemplate.InitialFaction != null)
 						{
-							// add character factions
+							// Add character factions
 							foreach (FactionTemplate faction in raceTemplate.InitialFaction.DefaultAllied)
 							{
 								dbContext.CharacterFactions.Add(new CharacterFactionEntity()
@@ -202,13 +204,29 @@ namespace FishMMO.Server
 							dbContext.SaveChanges();
 						}
 
-						// send success to the client
+						// Add starting abilities
+						if (StartingAbilities != null)
+						{
+							foreach (AbilityTemplate startingAbility in StartingAbilities)
+							{
+								var dbAbility = new CharacterAbilityEntity()
+								{
+									CharacterID = newCharacter.ID,
+									TemplateID = startingAbility.ID,
+									AbilityEvents = startingAbility.Events.Select(a => a.ID).ToList(),
+								};
+								dbContext.CharacterAbilities.Add(dbAbility);
+							}
+							dbContext.SaveChanges();
+						}
+						
+						// Send success to the client
 						Server.Broadcast(conn, new CharacterCreateResultBroadcast()
 						{
 							result = CharacterCreateResult.Success,
 						}, true, Channel.Reliable);
 
-						// send the create broadcast back to the client
+						// Send the create broadcast back to the client
 						Server.Broadcast(conn, msg, true, Channel.Reliable);
 					}
 				}
