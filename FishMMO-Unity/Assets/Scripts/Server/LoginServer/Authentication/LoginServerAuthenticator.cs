@@ -41,14 +41,14 @@ namespace FishMMO.Server
 			 * are removed when a client disconnects so there is no reason they should
 			 * already be considered authenticated. */
 			if (conn.IsAuthenticated ||
-				msg.publicKey == null)
+				msg.PublicKey == null)
 			{
 				conn.Disconnect(true);
 				return;
 			}
 
 			// Generate encryption keys for the connection
-			AccountManager.AddConnectionEncryptionData(conn, msg.publicKey);
+			AccountManager.AddConnectionEncryptionData(conn, msg.PublicKey);
 
 			// Get the encryption data
 			if (AccountManager.GetConnectionEncryptionData(conn, out ConnectionEncryptionData encryptionData))
@@ -56,7 +56,7 @@ namespace FishMMO.Server
 				using (var rsa = RSA.Create(2048))
 				{
 					// Add public key to RSA
-					CryptoHelper.ImportPublicKey(rsa, msg.publicKey);
+					CryptoHelper.ImportPublicKey(rsa, msg.PublicKey);
 
 					// Encrypt symmetric key and iv with client's public key
 					byte[] encryptedSymmetricKey = rsa.Encrypt(encryptionData.SymmetricKey, RSAEncryptionPadding.Pkcs1);
@@ -65,8 +65,8 @@ namespace FishMMO.Server
 					// Send the encrypted symmetric key
 					ServerHandshake handshake = new ServerHandshake()
 					{
-						key = encryptedSymmetricKey,
-						iv = encryptedIV,
+						Key = encryptedSymmetricKey,
+						IV = encryptedIV,
 					};
 					Server.Broadcast(conn, handshake, false, Channel.Reliable);
 				}
@@ -100,7 +100,7 @@ namespace FishMMO.Server
 			}
 
 			// Decrypt username
-			byte[] decryptedRawUsername = CryptoHelper.DecryptAES(encryptionData.SymmetricKey, encryptionData.IV, msg.s);
+			byte[] decryptedRawUsername = CryptoHelper.DecryptAES(encryptionData.SymmetricKey, encryptionData.IV, msg.S);
 			string username = Encoding.UTF8.GetString(decryptedRawUsername);
 
 			// if the database is unavailable
@@ -121,7 +121,7 @@ namespace FishMMO.Server
 				}
 				else
 				{
-					byte[] decryptedRawPublicEphemeral = CryptoHelper.DecryptAES(encryptionData.SymmetricKey, encryptionData.IV, msg.publicEphemeral);
+					byte[] decryptedRawPublicEphemeral = CryptoHelper.DecryptAES(encryptionData.SymmetricKey, encryptionData.IV, msg.PublicEphemeral);
 					string publicEphemeral = Encoding.UTF8.GetString(decryptedRawPublicEphemeral);
 
 					// get account salt and verifier if no one is online
@@ -142,8 +142,8 @@ namespace FishMMO.Server
 
 								SrpVerifyBroadcast srpVerify = new SrpVerifyBroadcast()
 								{
-									s = encryptedSalt,
-									publicEphemeral = encryptedPublicServerEphemeral,
+									S = encryptedSalt,
+									PublicEphemeral = encryptedPublicServerEphemeral,
 								};
 								Server.Broadcast(conn, srpVerify, false, Channel.Reliable);
 								return true;
@@ -156,7 +156,7 @@ namespace FishMMO.Server
 			}
 			ClientAuthResultBroadcast authResult = new ClientAuthResultBroadcast()
 			{
-				result = result,
+				Result = result,
 			};
 			Server.Broadcast(conn, authResult, false, Channel.Reliable);
 		}
@@ -178,7 +178,7 @@ namespace FishMMO.Server
 			if (conn.IsAuthenticated ||
 				!AccountManager.TryUpdateSrpState(conn, SrpState.SrpVerify, SrpState.SrpProof, (a) =>
 				{
-					byte[] decryptedProof = CryptoHelper.DecryptAES(encryptionData.SymmetricKey, encryptionData.IV, msg.proof);
+					byte[] decryptedProof = CryptoHelper.DecryptAES(encryptionData.SymmetricKey, encryptionData.IV, msg.Proof);
 					string proof = Encoding.UTF8.GetString(decryptedProof);
 
 					if (a.SrpData.GetProof(proof, out string serverProof))
@@ -188,7 +188,7 @@ namespace FishMMO.Server
 
 						SrpProofBroadcast proofMsg = new SrpProofBroadcast()
 						{
-							proof = encryptedProof,
+							Proof = encryptedProof,
 						};
 						Server.Broadcast(conn, proofMsg, false, Channel.Reliable);
 						return true;
@@ -198,7 +198,7 @@ namespace FishMMO.Server
 			{
 				ClientAuthResultBroadcast authResult = new ClientAuthResultBroadcast()
 				{
-					result = ClientAuthenticationResult.InvalidUsernameOrPassword,
+					Result = ClientAuthenticationResult.InvalidUsernameOrPassword,
 				};
 				Server.Broadcast(conn, authResult, false, Channel.Unreliable);
 				conn.Disconnect(false);
@@ -226,7 +226,7 @@ namespace FishMMO.Server
 					// tell the connecting client the result of the authentication
 					ClientAuthResultBroadcast authResult = new ClientAuthResultBroadcast()
 					{
-						result = result,
+						Result = result,
 					};
 					Server.Broadcast(conn, authResult, false, Channel.Reliable);
 

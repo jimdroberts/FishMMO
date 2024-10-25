@@ -102,21 +102,21 @@ namespace FishMMO.Client
 			// Initiate a handshake with the server
 			Client.Broadcast(new ClientHandshake()
 			{
-				publicKey = publicKey,
+				PublicKey = publicKey,
 			}, Channel.Reliable);
 		}
 
 		private void OnClientServerHandshakeBroadcastReceived(ServerHandshake msg, Channel channel)
 		{
-			if (msg.key == null ||
-				msg.iv == null)
+			if (msg.Key == null ||
+				msg.IV == null)
 			{
 				Client.ForceDisconnect();
 				return;
 			}
 
-			symmetricKey = rsa.Decrypt(msg.key, RSAEncryptionPadding.Pkcs1);
-			iv = rsa.Decrypt(msg.iv, RSAEncryptionPadding.Pkcs1);
+			symmetricKey = rsa.Decrypt(msg.Key, RSAEncryptionPadding.Pkcs1);
+			iv = rsa.Decrypt(msg.IV, RSAEncryptionPadding.Pkcs1);
 
 			SrpData = new ClientSrpData(SrpParameters.Create2048<SHA512>());
 
@@ -134,9 +134,9 @@ namespace FishMMO.Client
 
 				Client.Broadcast(new CreateAccountBroadcast()
 				{
-					username = encryptedUsername,
-					salt = encryptedSalt,
-					verifier = encryptedVerifier,
+					Username = encryptedUsername,
+					Salt = encryptedSalt,
+					Verifier = encryptedVerifier,
 				}, Channel.Reliable);
 			}
 			// Try to login
@@ -146,8 +146,8 @@ namespace FishMMO.Client
 
 				Client.Broadcast(new SrpVerifyBroadcast()
 				{
-					s = encryptedUsername,
-					publicEphemeral = encryptedClientEphemeral,
+					S = encryptedUsername,
+					PublicEphemeral = encryptedClientEphemeral,
 				}, Channel.Reliable);
 			}
 		}
@@ -159,8 +159,8 @@ namespace FishMMO.Client
 				return;
 			}
 
-			byte[] decryptedSalt = CryptoHelper.DecryptAES(symmetricKey, iv, msg.s);
-			byte[] decryptedRawPublicEphemeral = CryptoHelper.DecryptAES(symmetricKey, iv, msg.publicEphemeral);
+			byte[] decryptedSalt = CryptoHelper.DecryptAES(symmetricKey, iv, msg.S);
+			byte[] decryptedRawPublicEphemeral = CryptoHelper.DecryptAES(symmetricKey, iv, msg.PublicEphemeral);
 
 			string salt = Encoding.UTF8.GetString(decryptedSalt);
 			string publicServerEphemeral = Encoding.UTF8.GetString(decryptedRawPublicEphemeral);
@@ -171,7 +171,7 @@ namespace FishMMO.Client
 
 				Client.Broadcast(new SrpProofBroadcast()
 				{
-					proof = encryptedProof,
+					Proof = encryptedProof,
 				}, Channel.Reliable);
 			}
 			else
@@ -188,7 +188,7 @@ namespace FishMMO.Client
 				return;
 			}
 
-			byte[] decryptedProof = CryptoHelper.DecryptAES(symmetricKey, iv, msg.proof);
+			byte[] decryptedProof = CryptoHelper.DecryptAES(symmetricKey, iv, msg.Proof);
 
 			string proof = Encoding.UTF8.GetString(decryptedProof);
 
@@ -209,10 +209,10 @@ namespace FishMMO.Client
 		private void OnClientAuthResultBroadcastReceived(ClientAuthResultBroadcast msg, Channel channel)
 		{
 			// invoke result on the client
-			OnClientAuthenticationResult(msg.result);
+			OnClientAuthenticationResult(msg.Result);
 
 			if (NetworkManagerExtensions.CanLog(LoggingType.Common))
-				Debug.Log(msg.result);
+				Debug.Log(msg.Result);
 		}
 	}
 }

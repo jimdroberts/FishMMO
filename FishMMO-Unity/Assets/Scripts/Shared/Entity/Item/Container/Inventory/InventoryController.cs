@@ -46,8 +46,8 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void OnClientInventorySetItemBroadcastReceived(InventorySetItemBroadcast msg, Channel channel)
 		{
-			Item newItem = new Item(msg.instanceID, msg.seed, msg.templateID, msg.stackSize);
-			SetItemSlot(newItem, msg.slot);
+			Item newItem = new Item(msg.InstanceID, msg.Seed, msg.TemplateID, msg.StackSize);
+			SetItemSlot(newItem, msg.Slot);
 		}
 
 		/// <summary>
@@ -55,10 +55,10 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void OnClientInventorySetMultipleItemsBroadcastReceived(InventorySetMultipleItemsBroadcast msg, Channel channel)
 		{
-			foreach (InventorySetItemBroadcast subMsg in msg.items)
+			foreach (InventorySetItemBroadcast subMsg in msg.Items)
 			{
-				Item newItem = new Item(subMsg.instanceID, subMsg.seed, subMsg.templateID, subMsg.stackSize);
-				SetItemSlot(newItem, subMsg.slot);
+				Item newItem = new Item(subMsg.InstanceID, subMsg.Seed, subMsg.TemplateID, subMsg.StackSize);
+				SetItemSlot(newItem, subMsg.Slot);
 			}
 		}
 
@@ -67,7 +67,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void OnClientInventoryRemoveItemBroadcastReceived(InventoryRemoveItemBroadcast msg, Channel channel)
 		{
-			RemoveItem(msg.slot);
+			RemoveItem(msg.Slot);
 		}
 
 		/// <summary>
@@ -76,27 +76,27 @@ namespace FishMMO.Shared
 		/// <param name="msg"></param>
 		private void OnClientInventorySwapItemSlotsBroadcastReceived(InventorySwapItemSlotsBroadcast msg, Channel channel)
 		{
-			switch (msg.fromInventory)
+			switch (msg.FromInventory)
 			{
 				case InventoryType.Inventory:
-					SwapItemSlots(msg.from, msg.to);
+					SwapItemSlots(msg.From, msg.To);
 					break;
 				case InventoryType.Equipment:
 					break;
 				case InventoryType.Bank:
 					if (Character.TryGet(out IBankController bankController) &&
-						bankController.TryGetItem(msg.from, out Item bankItem))
+						bankController.TryGetItem(msg.From, out Item bankItem))
 					{
-						if (TryGetItem(msg.to, out Item inventoryItem))
+						if (TryGetItem(msg.To, out Item inventoryItem))
 						{
-							bankController.SetItemSlot(inventoryItem, msg.from);
+							bankController.SetItemSlot(inventoryItem, msg.From);
 						}
 						else
 						{
-							bankController.SetItemSlot(null, msg.from);
+							bankController.SetItemSlot(null, msg.From);
 						}
 
-						SetItemSlot(bankItem, msg.to);
+						SetItemSlot(bankItem, msg.To);
 					}
 					break;
 				default: return;

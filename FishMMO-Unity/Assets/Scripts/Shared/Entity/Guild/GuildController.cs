@@ -91,7 +91,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void OnClientGuildInviteBroadcastReceived(GuildInviteBroadcast msg, Channel channel)
 		{
-			OnReceiveGuildInvite?.Invoke(msg.inviterCharacterID);
+			OnReceiveGuildInvite?.Invoke(msg.InviterCharacterID);
 		}
 
 		/// <summary>
@@ -100,16 +100,16 @@ namespace FishMMO.Shared
 		public void OnClientGuildAddBroadcastReceived(GuildAddBroadcast msg, Channel channel)
 		{
 			// if this is our own id
-			if (PlayerCharacter != null && msg.characterID == Character.ID)
+			if (PlayerCharacter != null && msg.CharacterID == Character.ID)
 			{
-				ID = msg.guildID;
-				Rank = msg.rank;
+				ID = msg.GuildID;
+				Rank = msg.Rank;
 
 				IGuildController.OnReadID?.Invoke(ID, PlayerCharacter);
 			}
 
 			// update our Guild list with the new Guild member
-			OnAddGuildMember?.Invoke(msg.characterID, msg.guildID, msg.rank, msg.location);
+			OnAddGuildMember?.Invoke(msg.CharacterID, msg.GuildID, msg.Rank, msg.Location);
 		}
 
 		/// <summary>
@@ -117,11 +117,11 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void OnClientGuildAddMultipleBroadcastReceived(GuildAddMultipleBroadcast msg, Channel channel)
 		{
-			var newIds = msg.members.Select(x => x.characterID).ToHashSet();
+			var newIds = msg.Members.Select(x => x.CharacterID).ToHashSet();
 
 			OnValidateGuildMembers?.Invoke(newIds);
 
-			foreach (GuildAddBroadcast subMsg in msg.members)
+			foreach (GuildAddBroadcast subMsg in msg.Members)
 			{
 				OnClientGuildAddBroadcastReceived(subMsg, channel);
 			}
@@ -145,7 +145,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void OnClientGuildRemoveBroadcastReceived(GuildRemoveBroadcast msg, Channel channel)
 		{
-			OnRemoveGuildMember?.Invoke(msg.guildMemberID);
+			OnRemoveGuildMember?.Invoke(msg.GuildMemberID);
 		}
 #endif
 	}

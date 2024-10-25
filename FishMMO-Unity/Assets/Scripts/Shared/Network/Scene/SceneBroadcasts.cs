@@ -8,17 +8,17 @@ namespace FishMMO.Shared
 
 	public struct SceneLoadBroadcast : IBroadcast
 	{
-		public string sceneName;
+		public string SceneName;
 	}
 
 	public struct SceneUnloadBroadcast : IBroadcast
 	{
-		public string sceneName;
+		public string SceneName;
 	}
 
 	public struct CharacterSceneChangeRequestBroadcast : IBroadcast
 	{
-		public string fromTeleporter;
-		public string teleporterName;
+		public string FromTeleporter;
+		public string TeleporterName;
 	}
 }

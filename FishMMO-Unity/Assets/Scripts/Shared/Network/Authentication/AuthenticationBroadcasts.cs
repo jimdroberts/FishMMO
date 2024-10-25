@@ -4,31 +4,31 @@ namespace FishMMO.Shared
 {
 	public struct CreateAccountBroadcast : IBroadcast
 	{
-		public byte[] username;
-		public byte[] salt;
-		public byte[] verifier;
+		public byte[] Username;
+		public byte[] Salt;
+		public byte[] Verifier;
 	}
 
 	public struct ClientHandshake : IBroadcast
 	{
-		public byte[] publicKey;
+		public byte[] PublicKey;
 	}
 
 	public struct ServerHandshake : IBroadcast
 	{
-		public byte[] key;
-		public byte[] iv;
+		public byte[] Key;
+		public byte[] IV;
 	}
 
 	public struct SrpVerifyBroadcast : IBroadcast
 	{
-		public byte[] s;
-		public byte[] publicEphemeral;
+		public byte[] S;
+		public byte[] PublicEphemeral;
 	}
 
 	public struct SrpProofBroadcast : IBroadcast
 	{
-		public byte[] proof;
+		public byte[] Proof;
 	}
 
 	public struct SrpSuccess : IBroadcast
@@ -37,6 +37,6 @@ namespace FishMMO.Shared
 
 	public struct ClientAuthResultBroadcast : IBroadcast
 	{
-		public ClientAuthenticationResult result;
+		public ClientAuthenticationResult Result;
 	}
 }

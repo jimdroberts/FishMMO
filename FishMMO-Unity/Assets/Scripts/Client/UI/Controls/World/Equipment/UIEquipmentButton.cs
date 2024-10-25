@@ -29,9 +29,9 @@ namespace FishMMO.Client
 								{
 									Client.Broadcast(new EquipmentEquipItemBroadcast()
 									{
-										inventoryIndex = referenceID,
-										slot = (byte)ItemSlotType,
-										fromInventory = InventoryType.Inventory,
+										InventoryIndex = referenceID,
+										Slot = (byte)ItemSlotType,
+										FromInventory = InventoryType.Inventory,
 									}, Channel.Reliable);
 								}
 							}
@@ -45,9 +45,9 @@ namespace FishMMO.Client
 								{
 									Client.Broadcast(new EquipmentEquipItemBroadcast()
 									{
-										inventoryIndex = referenceID,
-										slot = (byte)ItemSlotType,
-										fromInventory = InventoryType.Bank,
+										InventoryIndex = referenceID,
+										Slot = (byte)ItemSlotType,
+										FromInventory = InventoryType.Bank,
 									}, Channel.Reliable);
 								}
 							}
@@ -80,8 +80,8 @@ namespace FishMMO.Client
 				// right clicking an item will attempt to send it to the inventory
 				Client.Broadcast(new EquipmentUnequipItemBroadcast()
 				{
-					slot = (byte)ItemSlotType,
-					toInventory = InventoryType.Inventory,
+					Slot = (byte)ItemSlotType,
+					ToInventory = InventoryType.Inventory,
 				}, Channel.Reliable);
 			}
 		}

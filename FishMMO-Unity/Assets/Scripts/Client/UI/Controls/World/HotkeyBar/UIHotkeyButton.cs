@@ -1,10 +1,12 @@
 ﻿using FishMMO.Shared;
+using FishNet.Transporting;
 using UnityEngine.UI;
 
 namespace FishMMO.Client
 {
 	public class UIHotkeyButton : UIReferenceButton
 	{
+		public int HotkeySlot;
 		public Slider CooldownMask;
 		public string KeyMap = "";
 
@@ -76,9 +78,21 @@ namespace FishMMO.Client
 					{
 						Icon.sprite = dragObject.Icon.sprite;
 					}
+
+					// Tell the server to assign this hotkey
+					Client.Broadcast(new HotkeySetBroadcast()
+					{
+						HotkeyData = new HotkeyData()
+						{
+							Type = (byte)Type,
+							Slot = HotkeySlot,
+							ReferenceID = ReferenceID,
+						}
+
+					}, Channel.Reliable);
 				}
 
-				// clear the drag object no matter what
+				// Clear the drag object no matter what
 				dragObject.Clear();
 			}
 			else
@@ -92,7 +106,19 @@ namespace FishMMO.Client
 			if (UIManager.TryGet("UIDragObject", out UIDragObject dragObject) && ReferenceID != NULL_REFERENCE_ID)
 			{
 				dragObject.SetReference(Icon.sprite, ReferenceID, Type);
+
 				Clear();
+
+				// Tell server to clear this hotkey
+				Client.Broadcast(new HotkeySetBroadcast()
+				{
+					HotkeyData = new HotkeyData()
+					{
+						Type = (byte)Type,
+						Slot = HotkeySlot,
+						ReferenceID = ReferenceID,
+					}
+				}, Channel.Reliable);
 			}
 		}
 

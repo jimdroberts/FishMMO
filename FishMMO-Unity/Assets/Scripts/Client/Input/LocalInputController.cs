@@ -160,7 +160,7 @@ namespace FishMMO.Client
 						{
 							Client.Broadcast(new InteractableBroadcast()
 							{
-								interactableID = interactable.ID,
+								InteractableID = interactable.ID,
 							}, Channel.Reliable);
 						}
 					}

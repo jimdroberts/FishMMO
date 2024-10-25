@@ -51,8 +51,8 @@ namespace FishMMO.Client
 
 		private void OnClientMerchantBroadcastReceived(MerchantBroadcast msg, Channel channel)
 		{
-			lastMerchantID = msg.interactableID;
-			currentTemplateID = msg.templateID;
+			lastMerchantID = msg.InteractableID;
+			currentTemplateID = msg.TemplateID;
 			MerchantTemplate template = MerchantTemplate.Get<MerchantTemplate>(currentTemplateID);
 			if (template != null)
 			{
@@ -222,10 +222,10 @@ namespace FishMMO.Client
 
 			MerchantPurchaseBroadcast message = new MerchantPurchaseBroadcast()
 			{
-				interactableID = lastMerchantID,
-				id = currentTemplateID,
-				index = index,
-				type = currentTab,
+				InteractableID = lastMerchantID,
+				ID = currentTemplateID,
+				Index = index,
+				Type = currentTab,
 			};
 			Client.Broadcast(message, Channel.Reliable);
 		}

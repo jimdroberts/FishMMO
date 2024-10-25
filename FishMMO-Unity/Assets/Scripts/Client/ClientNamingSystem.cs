@@ -100,9 +100,9 @@ namespace FishMMO.Client
 					// send the request to the server to get a name
 					Client.Broadcast(new NamingBroadcast()
 					{
-						type = type,
-						id = id,
-						name = "",
+						Type = type,
+						ID = id,
+						Name = "",
 					}, Channel.Reliable);
 				}
 				else
@@ -138,10 +138,10 @@ namespace FishMMO.Client
 					// send the request to the server to get the id and correct name
 					Client.Broadcast(new ReverseNamingBroadcast()
 					{
-						type = NamingSystemType.CharacterName,
-						nameLowerCase = nameLowerCase,
-						id = 0,
-						name = "",
+						Type = NamingSystemType.CharacterName,
+						NameLowerCase = nameLowerCase,
+						ID = 0,
+						Name = "",
 					}, Channel.Reliable);
 				}
 				else
@@ -154,40 +154,40 @@ namespace FishMMO.Client
 
 		private static void OnClientNamingBroadcastReceived(NamingBroadcast msg, Channel channel)
 		{
-			if (pendingNameRequests.TryGetValue(msg.type, out Dictionary<long, Action<string>> pendingRequests))
+			if (pendingNameRequests.TryGetValue(msg.Type, out Dictionary<long, Action<string>> pendingRequests))
 			{
-				if (pendingRequests.TryGetValue(msg.id, out Action<string> pendingActions))
+				if (pendingRequests.TryGetValue(msg.ID, out Action<string> pendingActions))
 				{
 					//UnityEngine.Debug.Log("Processing Name for: " + msg.id + ":" + msg.name);
 
-					pendingActions?.Invoke(msg.name);
-					pendingRequests[msg.id] = null;
-					pendingRequests.Remove(msg.id);
+					pendingActions?.Invoke(msg.Name);
+					pendingRequests[msg.ID] = null;
+					pendingRequests.Remove(msg.ID);
 				}
 			}
-			if (msg.id != 0)
+			if (msg.ID != 0)
 			{
-				UpdateKnownNames(msg.type, msg.id, msg.name);
+				UpdateKnownNames(msg.Type, msg.ID, msg.Name);
 			}
 		}
 
 		private static void OnClientReverseNamingBroadcastReceived(ReverseNamingBroadcast msg, Channel channel)
 		{
-			if (pendingIdRequests.TryGetValue(msg.type, out Dictionary<string, Action<long>> pendingRequests))
+			if (pendingIdRequests.TryGetValue(msg.Type, out Dictionary<string, Action<long>> pendingRequests))
 			{
-				if (pendingRequests.TryGetValue(msg.nameLowerCase, out Action<long> pendingActions))
+				if (pendingRequests.TryGetValue(msg.NameLowerCase, out Action<long> pendingActions))
 				{
 					//UnityEngine.Debug.Log("Processing Id for: " + msg.id + ":" + msg.name);
 
-					pendingActions?.Invoke(msg.id);
-					pendingRequests[msg.nameLowerCase] = null;
-					pendingRequests.Remove(msg.nameLowerCase);
+					pendingActions?.Invoke(msg.ID);
+					pendingRequests[msg.NameLowerCase] = null;
+					pendingRequests.Remove(msg.NameLowerCase);
 				}
 			}
 
-			if (msg.id != 0)
+			if (msg.ID != 0)
 			{
-				UpdateKnownNames(msg.type, msg.id, msg.name);
+				UpdateKnownNames(msg.Type, msg.ID, msg.Name);
 			}
 		}
 

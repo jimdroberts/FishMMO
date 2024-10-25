@@ -206,7 +206,7 @@ namespace FishMMO.Client
 						Character.LastChatMessage = input;
 					}
 				}
-				ChatBroadcast message = new ChatBroadcast() { text = input };
+				ChatBroadcast message = new ChatBroadcast() { Text = input };
 				// send the message to the server
 				Client.Broadcast(message, Channel.Reliable);
 			}
@@ -350,7 +350,7 @@ namespace FishMMO.Client
 		{
 			if (!string.IsNullOrWhiteSpace(CurrentTab) && Tabs.TryGetValue(CurrentTab, out ChatTab tab))
 			{
-				if (tab.ActiveChannels.Contains(msg.channel))
+				if (tab.ActiveChannels.Contains(msg.Channel))
 				{
 					// parse the local message
 					ParseLocalMessage(Character, msg);
@@ -361,12 +361,12 @@ namespace FishMMO.Client
 		private void ParseLocalMessage(IPlayerCharacter localCharacter, ChatBroadcast msg)
 		{
 			// validate message length
-			if (string.IsNullOrWhiteSpace(msg.text) || msg.text.Length > MAX_LENGTH)
+			if (string.IsNullOrWhiteSpace(msg.Text) || msg.Text.Length > MAX_LENGTH)
 			{
 				return;
 			}
 
-			ChatCommand command = ChatHelper.ParseChatChannel(msg.channel);
+			ChatCommand command = ChatHelper.ParseChatChannel(msg.Channel);
 			if (command != null)
 			{
 				command?.Invoke(localCharacter, msg);
@@ -375,9 +375,9 @@ namespace FishMMO.Client
 
 		public bool OnWorldChat(IPlayerCharacter localCharacter, ChatBroadcast msg)
 		{
-			ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
+			ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.SenderID, (s) =>
 			{
-				InstantiateChatMessage(msg.channel, s, msg.text);
+				InstantiateChatMessage(msg.Channel, s, msg.Text);
 			});
 			
 			return true;
@@ -385,30 +385,30 @@ namespace FishMMO.Client
 
 		public bool OnRegionChat(IPlayerCharacter localCharacter, ChatBroadcast msg)
 		{
-			ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
+			ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.SenderID, (s) =>
 			{
-				InstantiateChatMessage(msg.channel, s, msg.text);
+				InstantiateChatMessage(msg.Channel, s, msg.Text);
 			});
 			return true;
 		}
 
 		public bool OnPartyChat(IPlayerCharacter localCharacter, ChatBroadcast msg)
 		{
-			string cmd = ChatHelper.GetWordAndTrimmed(msg.text, out string trimmed);
+			string cmd = ChatHelper.GetWordAndTrimmed(msg.Text, out string trimmed);
 			if (!string.IsNullOrWhiteSpace(cmd) &&
 				 cmd.Equals(ChatHelper.PARTY_ERROR_TARGET_IN_PARTY) &&
 				 ErrorCodes.TryGetValue(ChatHelper.PARTY_ERROR_TARGET_IN_PARTY, out string targetErrorMsg))
 			{
-				ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
+				ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.SenderID, (s) =>
 				{
-					InstantiateChatMessage(msg.channel, s, targetErrorMsg);
+					InstantiateChatMessage(msg.Channel, s, targetErrorMsg);
 				});
 			}
 			else
 			{
-				ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
+				ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.SenderID, (s) =>
 				{
-					InstantiateChatMessage(msg.channel, s, msg.text);
+					InstantiateChatMessage(msg.Channel, s, msg.Text);
 				});
 			}
 			return true;
@@ -416,21 +416,21 @@ namespace FishMMO.Client
 
 		public bool OnGuildChat(IPlayerCharacter localCharacter, ChatBroadcast msg)
 		{
-			string cmd = ChatHelper.GetWordAndTrimmed(msg.text, out string trimmed);
+			string cmd = ChatHelper.GetWordAndTrimmed(msg.Text, out string trimmed);
 			if (!string.IsNullOrWhiteSpace(cmd) &&
 				 cmd.Equals(ChatHelper.GUILD_ERROR_TARGET_IN_GUILD) &&
 				 ErrorCodes.TryGetValue(ChatHelper.GUILD_ERROR_TARGET_IN_GUILD, out string targetErrorMsg))
 			{
-				ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
+				ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.SenderID, (s) =>
 				{
-					InstantiateChatMessage(msg.channel, s, targetErrorMsg);
+					InstantiateChatMessage(msg.Channel, s, targetErrorMsg);
 				});
 			}
 			else
 			{
-				ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
+				ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.SenderID, (s) =>
 				{
-					InstantiateChatMessage(msg.channel, s, msg.text);
+					InstantiateChatMessage(msg.Channel, s, msg.Text);
 				});
 			}
 			return true;
@@ -438,7 +438,7 @@ namespace FishMMO.Client
 
 		public bool OnTellChat(IPlayerCharacter localCharacter, ChatBroadcast msg)
 		{
-			string cmd = ChatHelper.GetWordAndTrimmed(msg.text, out string trimmed);
+			string cmd = ChatHelper.GetWordAndTrimmed(msg.Text, out string trimmed);
 
 			// check if we have any special messages
 			if (!string.IsNullOrWhiteSpace(cmd))
@@ -446,9 +446,9 @@ namespace FishMMO.Client
 				// returned message
 				if (cmd.Equals(ChatHelper.TELL_RELAYED))
 				{
-					ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
+					ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.SenderID, (s) =>
 					{
-						InstantiateChatMessage(msg.channel, "[To: " + s + "]", trimmed);
+						InstantiateChatMessage(msg.Channel, "[To: " + s + "]", trimmed);
 					});
 					return true;
 				}
@@ -459,9 +459,9 @@ namespace FishMMO.Client
 					ChatHelper.GetWordAndTrimmed(trimmed, out string targetName);
 					if (!string.IsNullOrWhiteSpace(targetName))
 					{
-						ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
+						ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.SenderID, (s) =>
 						{
-							InstantiateChatMessage(msg.channel, s, targetName + offlineMsg);
+							InstantiateChatMessage(msg.Channel, s, targetName + offlineMsg);
 						});
 						return true;
 					}
@@ -470,19 +470,19 @@ namespace FishMMO.Client
 				else if (cmd.Equals(ChatHelper.TELL_ERROR_MESSAGE_SELF) &&
 						 ErrorCodes.TryGetValue(ChatHelper.TELL_ERROR_MESSAGE_SELF, out string errorMsg))
 				{
-					ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
+					ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.SenderID, (s) =>
 					{
-						InstantiateChatMessage(msg.channel, s, errorMsg);
+						InstantiateChatMessage(msg.Channel, s, errorMsg);
 					});
 					return true;
 				}
 			}
 			// we received a tell from someone else
-			if (localCharacter == null || msg.senderID != localCharacter.ID)
+			if (localCharacter == null || msg.SenderID != localCharacter.ID)
 			{
-				ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
+				ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.SenderID, (s) =>
 				{
-					InstantiateChatMessage(msg.channel, "[From: " + s + "]", msg.text);
+					InstantiateChatMessage(msg.Channel, "[From: " + s + "]", msg.Text);
 				});
 			}
 			return true;
@@ -490,27 +490,27 @@ namespace FishMMO.Client
 
 		public bool OnTradeChat(IPlayerCharacter localCharacter, ChatBroadcast msg)
 		{
-			ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
+			ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.SenderID, (s) =>
 			{
-				InstantiateChatMessage(msg.channel, s, msg.text);
+				InstantiateChatMessage(msg.Channel, s, msg.Text);
 			});
 			return true;
 		}
 
 		public bool OnSayChat(IPlayerCharacter localCharacter, ChatBroadcast msg)
 		{
-			ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
+			ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.SenderID, (s) =>
 			{
-				InstantiateChatMessage(msg.channel, s, msg.text);
+				InstantiateChatMessage(msg.Channel, s, msg.Text);
 			});
 			return true;
 		}
 
 		public bool OnSystemChat(IPlayerCharacter localCharacter, ChatBroadcast msg)
 		{
-			ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.senderID, (s) =>
+			ClientNamingSystem.SetName(NamingSystemType.CharacterName, msg.SenderID, (s) =>
 			{
-				InstantiateChatMessage(msg.channel, s, msg.text);
+				InstantiateChatMessage(msg.Channel, s, msg.Text);
 			});
 			return true;
 		}

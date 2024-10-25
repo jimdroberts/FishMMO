@@ -334,11 +334,11 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void OnClientCharacterAttributeUpdateBroadcastReceived(CharacterAttributeUpdateBroadcast msg, Channel channel)
 		{
-			CharacterAttributeTemplate template = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(msg.templateID);
+			CharacterAttributeTemplate template = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(msg.TemplateID);
 			if (template != null &&
 				Attributes.TryGetValue(template.ID, out CharacterAttribute attribute))
 			{
-				attribute.SetValue(msg.value);
+				attribute.SetValue(msg.Value);
 			}
 		}
 
@@ -347,13 +347,13 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void OnClientCharacterAttributeUpdateMultipleBroadcastReceived(CharacterAttributeUpdateMultipleBroadcast msg, Channel channel)
 		{
-			foreach (CharacterAttributeUpdateBroadcast subMsg in msg.attributes)
+			foreach (CharacterAttributeUpdateBroadcast subMsg in msg.Attributes)
 			{
-				CharacterAttributeTemplate template = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(subMsg.templateID);
+				CharacterAttributeTemplate template = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(subMsg.TemplateID);
 				if (template != null &&
 					Attributes.TryGetValue(template.ID, out CharacterAttribute attribute))
 				{
-					attribute.SetValue(subMsg.value);
+					attribute.SetValue(subMsg.Value);
 				}
 			}
 		}
@@ -363,12 +363,12 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void OnClientCharacterResourceAttributeUpdateBroadcastReceived(CharacterResourceAttributeUpdateBroadcast msg, Channel channel)
 		{
-			CharacterAttributeTemplate template = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(msg.templateID);
+			CharacterAttributeTemplate template = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(msg.TemplateID);
 			if (template != null &&
 				ResourceAttributes.TryGetValue(template.ID, out CharacterResourceAttribute attribute))
 			{
-				attribute.SetCurrentValue(msg.currentValue);
-				attribute.SetValue(msg.value);
+				attribute.SetCurrentValue(msg.CurrentValue);
+				attribute.SetValue(msg.Value);
 			}
 		}
 
@@ -377,14 +377,14 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void OnClientCharacterResourceAttributeUpdateMultipleBroadcastReceived(CharacterResourceAttributeUpdateMultipleBroadcast msg, Channel channel)
 		{
-			foreach (CharacterResourceAttributeUpdateBroadcast subMsg in msg.attributes)
+			foreach (CharacterResourceAttributeUpdateBroadcast subMsg in msg.Attributes)
 			{
-				CharacterAttributeTemplate template = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(subMsg.templateID);
+				CharacterAttributeTemplate template = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(subMsg.TemplateID);
 				if (template != null &&
 					ResourceAttributes.TryGetValue(template.ID, out CharacterResourceAttribute attribute))
 				{
-					attribute.SetCurrentValue(subMsg.currentValue);
-					attribute.SetValue(subMsg.value);
+					attribute.SetCurrentValue(subMsg.CurrentValue);
+					attribute.SetValue(subMsg.Value);
 				}
 			}
 		}

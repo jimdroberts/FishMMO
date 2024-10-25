@@ -384,7 +384,7 @@ namespace FishMMO.Server
 						// create the new item broadcast
 						knownAbilityBroadcasts.Add(new KnownAbilityAddBroadcast()
 						{
-							templateID = templateID,
+							TemplateID = templateID,
 						});
 					}
 				}
@@ -397,7 +397,7 @@ namespace FishMMO.Server
 						// create the new item broadcast
 						knownAbilityBroadcasts.Add(new KnownAbilityAddBroadcast()
 						{
-							templateID = templateID,
+							TemplateID = templateID,
 						});
 					}
 				}
@@ -407,7 +407,7 @@ namespace FishMMO.Server
 				{
 					Server.Broadcast(character.Owner, new KnownAbilityAddMultipleBroadcast()
 					{
-						abilities = knownAbilityBroadcasts,
+						Abilities = knownAbilityBroadcasts,
 					}, true, Channel.Reliable);
 				}
 			}
@@ -430,7 +430,7 @@ namespace FishMMO.Server
 				{
 					Server.Broadcast(character.Owner, new AchievementUpdateMultipleBroadcast()
 					{
-						achievements = achievements,
+						Achievements = achievements,
 					}, true, Channel.Reliable);
 				}
 			}
@@ -445,17 +445,17 @@ namespace FishMMO.Server
 
 				var addBroadcasts = dbMembers.Select(x => new GuildAddBroadcast()
 				{
-					guildID = x.GuildID,
-					characterID = x.CharacterID,
-					rank = (GuildRank)x.Rank,
-					location = x.Location,
+					GuildID = x.GuildID,
+					CharacterID = x.CharacterID,
+					Rank = (GuildRank)x.Rank,
+					Location = x.Location,
 				}).ToList();
 
 				if (addBroadcasts.Count > 0)
 				{
 					GuildAddMultipleBroadcast guildAddBroadcast = new GuildAddMultipleBroadcast()
 					{
-						members = addBroadcasts,
+						Members = addBroadcasts,
 					};
 					Server.Broadcast(character.Owner, guildAddBroadcast, true, Channel.Reliable);
 				}
@@ -471,17 +471,17 @@ namespace FishMMO.Server
 
 				var addBroadcasts = dbMembers.Select(x => new PartyAddBroadcast()
 				{
-					partyID = x.PartyID,
-					characterID = x.CharacterID,
-					rank = (PartyRank)x.Rank,
-					healthPCT = x.HealthPCT,
+					PartyID = x.PartyID,
+					CharacterID = x.CharacterID,
+					Rank = (PartyRank)x.Rank,
+					HealthPCT = x.HealthPCT,
 				}).ToList();
 
 				if (addBroadcasts.Count > 0)
 				{
 					PartyAddMultipleBroadcast partyAddBroadcast = new PartyAddMultipleBroadcast()
 					{
-						members = addBroadcasts,
+						Members = addBroadcasts,
 					};
 					Server.Broadcast(character.Owner, partyAddBroadcast, true, Channel.Reliable);
 				}
@@ -497,15 +497,15 @@ namespace FishMMO.Server
 					bool status = CharacterService.ExistsAndOnline(dbContext, friendID);
 					friends.Add(new FriendAddBroadcast()
 					{
-						characterID = friendID,
-						online = status,
+						CharacterID = friendID,
+						Online = status,
 					});
 				}
 				if (friends.Count > 0)
 				{
 					Server.Broadcast(character.Owner, new FriendAddMultipleBroadcast()
 					{
-						friends = friends,
+						Friends = friends,
 					}, true, Channel.Reliable);
 				}
 			}
@@ -526,11 +526,11 @@ namespace FishMMO.Server
 					// create the new item broadcast
 					itemBroadcasts.Add(new InventorySetItemBroadcast()
 					{
-						instanceID = item.ID,
-						templateID = item.Template.ID,
-						slot = item.Slot,
-						seed = item.IsGenerated ? item.Generator.Seed : 0,
-						stackSize = item.IsStackable ? item.Stackable.Amount : 0,
+						InstanceID = item.ID,
+						TemplateID = item.Template.ID,
+						Slot = item.Slot,
+						Seed = item.IsGenerated ? item.Generator.Seed : 0,
+						StackSize = item.IsStackable ? item.Stackable.Amount : 0,
 					});
 				}
 
@@ -539,7 +539,7 @@ namespace FishMMO.Server
 				{
 					Server.Broadcast(character.Owner, new InventorySetMultipleItemsBroadcast()
 					{
-						items = itemBroadcasts,
+						Items = itemBroadcasts,
 					}, true, Channel.Reliable);
 				}
 			}
@@ -560,11 +560,11 @@ namespace FishMMO.Server
 					// create the new item broadcast
 					itemBroadcasts.Add(new BankSetItemBroadcast()
 					{
-						instanceID = item.ID,
-						templateID = item.Template.ID,
-						slot = item.Slot,
-						seed = item.IsGenerated ? item.Generator.Seed : 0,
-						stackSize = item.IsStackable ? item.Stackable.Amount : 0,
+						InstanceID = item.ID,
+						TemplateID = item.Template.ID,
+						Slot = item.Slot,
+						Seed = item.IsGenerated ? item.Generator.Seed : 0,
+						StackSize = item.IsStackable ? item.Stackable.Amount : 0,
 					});
 				}
 
@@ -573,7 +573,7 @@ namespace FishMMO.Server
 				{
 					Server.Broadcast(character.Owner, new BankSetMultipleItemsBroadcast()
 					{
-						items = itemBroadcasts,
+						Items = itemBroadcasts,
 					}, true, Channel.Reliable);
 				}
 			}

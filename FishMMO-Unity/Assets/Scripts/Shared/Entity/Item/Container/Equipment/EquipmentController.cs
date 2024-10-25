@@ -99,8 +99,8 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void OnClientEquipmentSetItemBroadcastReceived(EquipmentSetItemBroadcast msg, Channel channel)
 		{
-			Item newItem = new Item(msg.instanceID, msg.seed, msg.templateID, msg.stackSize);
-			Equip(newItem, -1, null, (ItemSlot)msg.slot);
+			Item newItem = new Item(msg.InstanceID, msg.Seed, msg.TemplateID, msg.StackSize);
+			Equip(newItem, -1, null, (ItemSlot)msg.Slot);
 		}
 
 		/// <summary>
@@ -108,10 +108,10 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void OnClientEquipmentSetMultipleItemsBroadcastReceived(EquipmentSetMultipleItemsBroadcast msg, Channel channel)
 		{
-			foreach (EquipmentSetItemBroadcast subMsg in msg.items)
+			foreach (EquipmentSetItemBroadcast subMsg in msg.Items)
 			{
-				Item newItem = new Item(subMsg.instanceID, subMsg.seed, subMsg.templateID, subMsg.stackSize);
-				Equip(newItem, -1, null, (ItemSlot)subMsg.slot);
+				Item newItem = new Item(subMsg.InstanceID, subMsg.Seed, subMsg.TemplateID, subMsg.StackSize);
+				Equip(newItem, -1, null, (ItemSlot)subMsg.Slot);
 			}
 		}
 
@@ -120,22 +120,22 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void OnClientEquipmentEquipItemBroadcastReceived(EquipmentEquipItemBroadcast msg, Channel channel)
 		{
-			switch (msg.fromInventory)
+			switch (msg.FromInventory)
 			{
 				case InventoryType.Inventory:
 					if (Character.TryGet(out IInventoryController inventoryController) &&
-						inventoryController.TryGetItem(msg.inventoryIndex, out Item inventoryItem))
+						inventoryController.TryGetItem(msg.InventoryIndex, out Item inventoryItem))
 					{
-						Equip(inventoryItem, msg.inventoryIndex, inventoryController, (ItemSlot)msg.slot);
+						Equip(inventoryItem, msg.InventoryIndex, inventoryController, (ItemSlot)msg.Slot);
 					}
 					break;
 				case InventoryType.Equipment:
 					break;
 				case InventoryType.Bank:
 					if (Character.TryGet(out IBankController bankController) &&
-						bankController.TryGetItem(msg.inventoryIndex, out Item bankItem))
+						bankController.TryGetItem(msg.InventoryIndex, out Item bankItem))
 					{
-						Equip(bankItem, msg.inventoryIndex, bankController, (ItemSlot)msg.slot);
+						Equip(bankItem, msg.InventoryIndex, bankController, (ItemSlot)msg.Slot);
 					}
 					break;
 				default: return;
@@ -147,12 +147,12 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void OnClientEquipmentUnequipItemBroadcastReceived(EquipmentUnequipItemBroadcast msg, Channel channel)
 		{
-			switch (msg.toInventory)
+			switch (msg.ToInventory)
 			{
 				case InventoryType.Inventory:
 					if (Character.TryGet(out IInventoryController inventoryController))
 					{
-						Unequip(inventoryController, msg.slot, out List<Item> modifiedItems);
+						Unequip(inventoryController, msg.Slot, out List<Item> modifiedItems);
 					}
 					break;
 				case InventoryType.Equipment:
@@ -160,7 +160,7 @@ namespace FishMMO.Shared
 				case InventoryType.Bank:
 					if (Character.TryGet(out IBankController bankController))
 					{
-						Unequip(bankController, msg.slot, out List<Item> modifiedItems);
+						Unequip(bankController, msg.Slot, out List<Item> modifiedItems);
 					}
 					break;
 				default: return;

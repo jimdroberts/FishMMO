@@ -8,6 +8,7 @@ using FishNet.Connection;
 using FishNet.Object.Synchronizing;
 using FishNet.Serializing;
 using System.Runtime.CompilerServices;
+using System.Collections.Generic;
 
 namespace FishMMO.Shared
 {
@@ -69,9 +70,15 @@ namespace FishMMO.Shared
 		public string LastChatMessage { get; set; }
 		public DateTime NextChatMessageTime { get; set; }
 		public DateTime NextInteractTime { get; set; }
+		public List<HotkeyData> Hotkeys { get; set; }
 
 		public override void OnAwake()
 		{
+			if (Hotkeys == null)
+			{
+				Hotkeys = new List<HotkeyData>(Constants.Configuration.MaximumPlayerHotkeys);
+			}
+
 			#region KCC
 			Motor = gameObject.GetComponent<KinematicCharacterMotor>();
 			CharacterController = gameObject.GetComponent<KCCController>();

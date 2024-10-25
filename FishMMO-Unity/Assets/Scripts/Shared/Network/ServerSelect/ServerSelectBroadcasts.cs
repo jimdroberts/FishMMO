@@ -9,11 +9,11 @@ namespace FishMMO.Shared
 
 	public struct ServerListBroadcast : IBroadcast
 	{
-		public List<WorldServerDetails> servers;
+		public List<WorldServerDetails> Servers;
 	}
 	public struct WorldSceneConnectBroadcast : IBroadcast
 	{
-		public string address;
-		public ushort port;
+		public string Address;
+		public ushort Port;
 	}
 }

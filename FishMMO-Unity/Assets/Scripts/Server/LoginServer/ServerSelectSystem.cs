@@ -43,7 +43,7 @@ namespace FishMMO.Server
 
 				ServerListBroadcast serverListMsg = new ServerListBroadcast()
 				{
-					servers = worldServerList
+					Servers = worldServerList
 				};
 
 				Server.Broadcast(conn, serverListMsg, true, Channel.Reliable);

@@ -58,10 +58,10 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void OnClientFactionUpdateBroadcastReceived(FactionUpdateBroadcast msg, Channel channel)
 		{
-			FactionTemplate template = FactionTemplate.Get<FactionTemplate>(msg.templateID);
+			FactionTemplate template = FactionTemplate.Get<FactionTemplate>(msg.TemplateID);
 				if (template != null)
 				{
-					SetFaction(template.ID, msg.newValue);
+					SetFaction(template.ID, msg.NewValue);
 				}
 		}
 
@@ -70,12 +70,12 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void OnClientFactionUpdateMultipleBroadcastReceived(FactionUpdateMultipleBroadcast msg, Channel channel)
 		{
-			foreach (FactionUpdateBroadcast subMsg in msg.factions)
+			foreach (FactionUpdateBroadcast subMsg in msg.Factions)
 			{
-				FactionTemplate template = FactionTemplate.Get<FactionTemplate>(subMsg.templateID);
+				FactionTemplate template = FactionTemplate.Get<FactionTemplate>(subMsg.TemplateID);
 				if (template != null)
 				{
-					SetFaction(template.ID, subMsg.newValue);
+					SetFaction(template.ID, subMsg.NewValue);
 				}
 			}
 		}
@@ -137,15 +137,11 @@ namespace FishMMO.Shared
 			}
 			foreach (Faction faction in defenderFactionController.Allied.Values)
 			{
-				Add(faction.Template, -Mathf.RoundToInt(faction.Value * 0.05f));
-			}
-			foreach (Faction faction in defenderFactionController.Neutral.Values)
-			{
-				Add(faction.Template, -Mathf.RoundToInt(faction.Value * 0.025f));
+				Add(faction.Template, -Mathf.RoundToInt(faction.Value * 0.01f));
 			}
 			foreach (Faction faction in defenderFactionController.Hostile.Values)
 			{
-				Add(faction.Template, Mathf.RoundToInt(faction.Value * 0.05f));
+				Add(faction.Template, Mathf.RoundToInt(faction.Value * 0.01f));
 			}
 		}
 

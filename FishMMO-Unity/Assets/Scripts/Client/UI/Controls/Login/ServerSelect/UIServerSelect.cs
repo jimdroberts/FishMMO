@@ -88,15 +88,15 @@ namespace FishMMO.Client
 
 		private void OnClientServerListBroadcastReceived(ServerListBroadcast msg, Channel channel)
 		{
-			if (msg.servers != null)
+			if (msg.Servers != null)
 			{
 				DestroyServerList();
 
 				serverList = new List<ServerDetailsButton>();
-				for (int i = 0; i < msg.servers.Count; ++i)
+				for (int i = 0; i < msg.Servers.Count; ++i)
 				{
 					ServerDetailsButton newServer = Instantiate(serverButtonPrefab, serverParent);
-					newServer.Initialize(msg.servers[i]);
+					newServer.Initialize(msg.Servers[i]);
 					newServer.OnServerSelected += OnServerSelected;
 					serverList.Add(newServer);
 				}
@@ -111,7 +111,7 @@ namespace FishMMO.Client
 				selectedServer != null)
 			{
 				// connect to the scene server
-				Client.ConnectToServer(msg.address, msg.port);
+				Client.ConnectToServer(msg.Address, msg.Port);
 
 				SetConnectToServerLocked(true);
 			}

@@ -107,14 +107,14 @@ namespace FishMMO.Client
 		private void OnClientCharacterCreateResultBroadcastReceived(CharacterCreateResultBroadcast msg, Channel channel)
 		{
 			SetCreateButtonLocked(false);
-			if (msg.result == CharacterCreateResult.Success)
+			if (msg.Result == CharacterCreateResult.Success)
 			{
 				Hide();
 				UIManager.Show("UICharacterSelect");
 			}
 			else if (createResultText != null)
 			{
-				createResultText.text = msg.result.ToString();
+				createResultText.text = msg.Result.ToString();
 			}
 		}
 
@@ -177,10 +177,10 @@ namespace FishMMO.Client
 						// create character
 						Client.Broadcast(new CharacterCreateBroadcast()
 						{
-							characterName = characterName,
-							raceTemplateID = raceTemplateID,
-							sceneName = spawnPosition.SceneName,
-							spawnerName = spawnPosition.SpawnerName,
+							CharacterName = characterName,
+							RaceTemplateID = raceTemplateID,
+							SceneName = spawnPosition.SceneName,
+							SpawnerName = spawnPosition.SpawnerName,
 						}, Channel.Reliable);
 						SetCreateButtonLocked(true);
 						return;

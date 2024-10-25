@@ -27,6 +27,8 @@ namespace FishMMO.Shared
 			public static readonly string BootstrapScenePath = "Assets/Scenes/Bootstraps/";
 			public static readonly string WorldScenePath = "Assets/Scenes/WorldScene";
 			public static readonly string LocalScenePath = "Assets/LOCAL/Scenes/";
+
+			public const int MaximumPlayerHotkeys = 12;
 		}
 
 		public static class Layers

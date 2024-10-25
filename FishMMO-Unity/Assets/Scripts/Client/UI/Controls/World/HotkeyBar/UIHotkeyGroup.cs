@@ -25,6 +25,7 @@ namespace FishMMO.Client
 			if (Button != null)
 			{
 				Button.CooldownMask = null;
+				Button.HotkeySlot = 0;
 			}
 		}
 	}

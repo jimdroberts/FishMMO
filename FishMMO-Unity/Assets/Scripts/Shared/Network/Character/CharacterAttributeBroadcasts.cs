@@ -5,24 +5,24 @@ namespace FishMMO.Shared
 {
 	public struct CharacterAttributeUpdateBroadcast : IBroadcast
 	{
-		public int templateID;
-		public int value;
+		public int TemplateID;
+		public int Value;
 	}
 
 	public struct CharacterResourceAttributeUpdateBroadcast : IBroadcast
 	{
-		public int templateID;
-		public int currentValue;
-		public int value;
+		public int TemplateID;
+		public int CurrentValue;
+		public int Value;
 	}
 
 	public struct CharacterAttributeUpdateMultipleBroadcast : IBroadcast
 	{
-		public List<CharacterAttributeUpdateBroadcast> attributes;
+		public List<CharacterAttributeUpdateBroadcast> Attributes;
 	}
 
 	public struct CharacterResourceAttributeUpdateMultipleBroadcast : IBroadcast
 	{
-		public List<CharacterResourceAttributeUpdateBroadcast> attributes;
+		public List<CharacterResourceAttributeUpdateBroadcast> Attributes;
 	}
 }

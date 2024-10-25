@@ -46,7 +46,7 @@ namespace FishMMO.Client
 						{
 							Client.Broadcast(new FriendAddNewBroadcast()
 							{
-								characterID = id
+								CharacterID = id
 							}, Channel.Reliable);
 						}
 					});
@@ -58,14 +58,14 @@ namespace FishMMO.Client
 						{
 							Client.Broadcast(new PartyChangeRankBroadcast()
 							{
-								memberID = id,
+								MemberID = id,
 							}, Channel.Reliable);
 						});
 						uiDropdown.AddButton("Kick", () =>
 						{
 							Client.Broadcast(new PartyRemoveBroadcast()
 							{
-								memberID = id,
+								MemberID = id,
 							}, Channel.Reliable);
 						});
 					}

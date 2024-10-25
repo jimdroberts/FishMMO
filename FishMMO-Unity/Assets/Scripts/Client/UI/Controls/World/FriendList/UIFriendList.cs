@@ -96,7 +96,7 @@ namespace FishMMO.Client
 				{
 					Client.Broadcast(new FriendRemoveBroadcast()
 					{
-						characterID = friendID,
+						CharacterID = friendID,
 					}, Channel.Reliable);
 				}, null);
 			}
@@ -120,7 +120,7 @@ namespace FishMMO.Client
 									{
 										Client.Broadcast(new FriendAddNewBroadcast()
 										{
-											characterID = id
+											CharacterID = id
 										}, Channel.Reliable);
 									}
 									else if (UIManager.TryGet("UIChat", out UIChat chat))

@@ -46,9 +46,9 @@ namespace FishMMO.Server
 				using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 				if (dbContext != null)
 				{
-					byte[] decryptedUsername = CryptoHelper.DecryptAES(encryptionData.SymmetricKey, encryptionData.IV, msg.username);
-					byte[] decryptedSalt = CryptoHelper.DecryptAES(encryptionData.SymmetricKey, encryptionData.IV, msg.salt);
-					byte[] decryptedVerifier = CryptoHelper.DecryptAES(encryptionData.SymmetricKey, encryptionData.IV, msg.verifier);
+					byte[] decryptedUsername = CryptoHelper.DecryptAES(encryptionData.SymmetricKey, encryptionData.IV, msg.Username);
+					byte[] decryptedSalt = CryptoHelper.DecryptAES(encryptionData.SymmetricKey, encryptionData.IV, msg.Salt);
+					byte[] decryptedVerifier = CryptoHelper.DecryptAES(encryptionData.SymmetricKey, encryptionData.IV, msg.Verifier);
 
 					string username = Encoding.UTF8.GetString(decryptedUsername);
 					string salt = Encoding.UTF8.GetString(decryptedSalt);
@@ -57,7 +57,7 @@ namespace FishMMO.Server
 					result = AccountService.TryCreate(dbContext, username, salt, verifier);
 				}
 			}
-			Server.Broadcast(conn, new ClientAuthResultBroadcast() { result = result }, false, Channel.Reliable);
+			Server.Broadcast(conn, new ClientAuthResultBroadcast() { Result = result }, false, Channel.Reliable);
 		}
 	}
 }

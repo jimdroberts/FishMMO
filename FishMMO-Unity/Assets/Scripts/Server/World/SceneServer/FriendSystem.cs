@@ -59,13 +59,13 @@ namespace FishMMO.Server
 			}
 
 			// are we trying to become our own friend again...
-			if (friendController.Character.ID == msg.characterID)
+			if (friendController.Character.ID == msg.CharacterID)
 			{
 				return;
 			}
 
 			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-			CharacterEntity friendEntity = CharacterService.GetByID(dbContext, msg.characterID, true);
+			CharacterEntity friendEntity = CharacterService.GetByID(dbContext, msg.CharacterID, true);
 			if (friendEntity != null)
 			{
 				// add the friend to the database
@@ -77,8 +77,8 @@ namespace FishMMO.Server
 				// tell the character they added a new friend!
 				Server.Broadcast(conn, new FriendAddBroadcast()
 				{
-					characterID = friendEntity.ID,
-					online = friendEntity.Online,
+					CharacterID = friendEntity.ID,
+					Online = friendEntity.Online,
 				}, true, Channel.Reliable);
 			}
 		}
@@ -102,16 +102,16 @@ namespace FishMMO.Server
 			}
 
 			// remove the friend if it exists
-			if (friendController.Friends.Contains(msg.characterID))
+			if (friendController.Friends.Contains(msg.CharacterID))
 			{
 				// remove the character from the friend in the database
 				using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-				if (CharacterFriendService.Delete(dbContext, friendController.Character.ID, msg.characterID))
+				if (CharacterFriendService.Delete(dbContext, friendController.Character.ID, msg.CharacterID))
 				{
 					// tell the character they removed a friend
 					Server.Broadcast(conn, new FriendRemoveBroadcast()
 					{
-						characterID = msg.characterID,
+						CharacterID = msg.CharacterID,
 					}, true, Channel.Reliable);
 				}
 			}

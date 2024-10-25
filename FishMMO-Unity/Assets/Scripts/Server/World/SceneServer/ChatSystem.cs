@@ -112,8 +112,8 @@ namespace FishMMO.Server
 				{
 					sayCommand.Func?.Invoke(null, new ChatBroadcast()
 					{
-						channel = channel,
-						text = message.Message,
+						Channel = channel,
+						Text = message.Message,
 					});
 				}
 			}
@@ -156,8 +156,8 @@ namespace FishMMO.Server
 		{
 			// validate message length
 			if (sender == null ||
-				string.IsNullOrWhiteSpace(msg.text) ||
-				msg.text.Length > MAX_LENGTH)
+				string.IsNullOrWhiteSpace(msg.Text) ||
+				msg.Text.Length > MAX_LENGTH)
 			{
 				conn.Kick(FishNet.Managing.Server.KickReason.ExploitExcessiveData);
 				return;
@@ -176,17 +176,17 @@ namespace FishMMO.Server
 			if (!AllowRepeatMessages)
 			{
 				if (!string.IsNullOrWhiteSpace(sender.LastChatMessage) &&
-					sender.LastChatMessage.Equals(msg.text))
+					sender.LastChatMessage.Equals(msg.Text))
 				{
 					return;
 				}
-				sender.LastChatMessage = msg.text;
+				sender.LastChatMessage = msg.Text;
 			}
 
 			// remove Rich Text Tags if any exist
-			msg.text = ChatHelper.Sanitize(msg.text);
+			msg.Text = ChatHelper.Sanitize(msg.Text);
 
-			string cmd = ChatHelper.GetCommandAndTrim(ref msg.text);
+			string cmd = ChatHelper.GetCommandAndTrim(ref msg.Text);
 
 			// commands are handled differently from chat commands
 			if (ChatHelper.TryParseCommand(cmd, sender, msg))
@@ -195,17 +195,17 @@ namespace FishMMO.Server
 			}
 
 			// the text is empty
-			if (msg.text.Length < 1)
+			if (msg.Text.Length < 1)
 			{
 				return;
 			}
 
 			if (ChatHelper.TryParseChatCommand(cmd, out ChatCommandDetails commandDetails))
 			{
-				msg.senderID = sender.ID;
-				msg.channel = commandDetails.Channel;
+				msg.SenderID = sender.ID;
+				msg.Channel = commandDetails.Channel;
 
-				switch (msg.channel)
+				switch (msg.Channel)
 				{
 					case ChatChannel.Guild:
 						if (!sender.TryGet(out IGuildController guildController) ||
@@ -215,7 +215,7 @@ namespace FishMMO.Server
 						}
 
 						// add the senders guild ID
-						msg.text = guildController.ID + " " + msg.text;
+						msg.Text = guildController.ID + " " + msg.Text;
 						break;
 					case ChatChannel.Party:
 						if (!sender.TryGet(out IPartyController partyController) ||
@@ -225,12 +225,12 @@ namespace FishMMO.Server
 						}
 
 						// add the senders party ID
-						msg.text = partyController.ID + " " + msg.text;
+						msg.Text = partyController.ID + " " + msg.Text;
 						break;
 					case ChatChannel.Trade:
 					case ChatChannel.World:
 						// add the senders world id
-						msg.text = sender.WorldServerID + " " + msg.text;
+						msg.Text = sender.WorldServerID + " " + msg.Text;
 						break;
 					default:
 						break;
@@ -241,7 +241,7 @@ namespace FishMMO.Server
 				{
 					// write the parsed message to the database
 					using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-					ChatService.Save(dbContext, sender.ID, sender.WorldServerID, sceneServerSystem.ID, msg.channel, msg.text);
+					ChatService.Save(dbContext, sender.ID, sender.WorldServerID, sceneServerSystem.ID, msg.Channel, msg.Text);
 				}
 			}
 		}
@@ -249,7 +249,7 @@ namespace FishMMO.Server
 		public bool OnWorldChat(IPlayerCharacter sender, ChatBroadcast msg)
 		{
 			// get the world ID
-			string wid = ChatHelper.GetWordAndTrimmed(msg.text, out string trimmed);
+			string wid = ChatHelper.GetWordAndTrimmed(msg.Text, out string trimmed);
 			if (string.IsNullOrWhiteSpace(wid) || !long.TryParse(wid, out long worldID))
 			{
 				// no worldID in the message
@@ -258,9 +258,9 @@ namespace FishMMO.Server
 
 			ChatBroadcast newMsg = new ChatBroadcast()
 			{
-				channel = msg.channel,
-				senderID = msg.senderID,
-				text = trimmed,
+				Channel = msg.Channel,
+				SenderID = msg.SenderID,
+				Text = trimmed,
 			};
 
 			if (ServerBehaviour.TryGet(out CharacterSystem characterSystem) &&
@@ -306,7 +306,7 @@ namespace FishMMO.Server
 			}
 
 			// get the party ID
-			string gid = ChatHelper.GetWordAndTrimmed(msg.text, out string trimmed);
+			string gid = ChatHelper.GetWordAndTrimmed(msg.Text, out string trimmed);
 			if (string.IsNullOrWhiteSpace(gid) || !long.TryParse(gid, out long partyID))
 			{
 				// no partyID in the message
@@ -321,9 +321,9 @@ namespace FishMMO.Server
 
 				ChatBroadcast newMsg = new ChatBroadcast()
 				{
-					channel = msg.channel,
-					senderID = msg.senderID,
-					text = trimmed,
+					Channel = msg.Channel,
+					SenderID = msg.SenderID,
+					Text = trimmed,
 				};
 
 				foreach (CharacterPartyEntity member in dbMembers)
@@ -347,7 +347,7 @@ namespace FishMMO.Server
 			}
 
 			// get the guild ID
-			string gid = ChatHelper.GetWordAndTrimmed(msg.text, out string trimmed);
+			string gid = ChatHelper.GetWordAndTrimmed(msg.Text, out string trimmed);
 			if (string.IsNullOrWhiteSpace(gid) || !long.TryParse(gid, out long guildID))
 			{
 				// no guildID in the message
@@ -362,9 +362,9 @@ namespace FishMMO.Server
 
 				ChatBroadcast newMsg = new ChatBroadcast()
 				{
-					channel = msg.channel,
-					senderID = msg.senderID,
-					text = trimmed,
+					Channel = msg.Channel,
+					SenderID = msg.SenderID,
+					Text = trimmed,
 				};
 				foreach (CharacterGuildEntity member in dbMembers)
 				{
@@ -382,7 +382,7 @@ namespace FishMMO.Server
 		public bool OnTellChat(IPlayerCharacter sender, ChatBroadcast msg)
 		{
 			// get the target
-			string targetName = ChatHelper.GetWordAndTrimmed(msg.text, out string trimmed);
+			string targetName = ChatHelper.GetWordAndTrimmed(msg.Text, out string trimmed);
 			if (string.IsNullOrWhiteSpace(targetName))
 			{
 				// no target in the tell message
@@ -408,13 +408,13 @@ namespace FishMMO.Server
 			if (sender != null)
 			{
 				// are we messaging ourself?
-				if (msg.senderID == targetID)
+				if (msg.SenderID == targetID)
 				{
 					Server.Broadcast(sender.Owner, new ChatBroadcast()
 					{
-						channel = msg.channel,
-						senderID = msg.senderID,
-						text = ChatHelper.TELL_ERROR_MESSAGE_SELF + " ",
+						Channel = msg.Channel,
+						SenderID = msg.SenderID,
+						Text = ChatHelper.TELL_ERROR_MESSAGE_SELF + " ",
 					}, true, Channel.Reliable);
 					return false;
 				}
@@ -423,9 +423,9 @@ namespace FishMMO.Server
 					// if the target character is not online
 					Server.Broadcast(sender.Owner, new ChatBroadcast()
 					{
-						channel = msg.channel,
-						senderID = msg.senderID,
-						text = ChatHelper.TARGET_OFFLINE + " " + targetName,
+						Channel = msg.Channel,
+						SenderID = msg.SenderID,
+						Text = ChatHelper.TARGET_OFFLINE + " " + targetName,
 					}, true, Channel.Reliable);
 					return false;
 				}
@@ -433,9 +433,9 @@ namespace FishMMO.Server
 				{
 					Server.Broadcast(sender.Owner, new ChatBroadcast()
 					{
-						channel = msg.channel,
-						senderID = targetID,
-						text = ChatHelper.TELL_RELAYED + " " + trimmed,
+						Channel = msg.Channel,
+						SenderID = targetID,
+						Text = ChatHelper.TELL_RELAYED + " " + trimmed,
 					}, true, Channel.Reliable);
 				}
 			}
@@ -448,9 +448,9 @@ namespace FishMMO.Server
 				{
 					Server.Broadcast(targetCharacter.Owner, new ChatBroadcast()
 					{
-						channel = msg.channel,
-						senderID = msg.senderID,
-						text = trimmed,
+						Channel = msg.Channel,
+						SenderID = msg.SenderID,
+						Text = trimmed,
 					}, true, Channel.Reliable);
 				}
 				return true;
@@ -461,7 +461,7 @@ namespace FishMMO.Server
 		public bool OnTradeChat(IPlayerCharacter sender, ChatBroadcast msg)
 		{
 			// get the world ID
-			string wid = ChatHelper.GetWordAndTrimmed(msg.text, out string trimmed);
+			string wid = ChatHelper.GetWordAndTrimmed(msg.Text, out string trimmed);
 			if (string.IsNullOrWhiteSpace(wid) || !long.TryParse(wid, out long worldID))
 			{
 				// no worldID in the message
@@ -472,9 +472,9 @@ namespace FishMMO.Server
 			{
 				ChatBroadcast newMsg = new ChatBroadcast()
 				{
-					channel = msg.channel,
-					senderID = msg.senderID,
-					text = trimmed,
+					Channel = msg.Channel,
+					SenderID = msg.SenderID,
+					Text = trimmed,
 				};
 				if (characterSystem != null &&
 					characterSystem.CharactersByWorld.TryGetValue(worldID, out Dictionary<long, IPlayerCharacter> characters))
@@ -513,8 +513,8 @@ namespace FishMMO.Server
 
 			ChatBroadcast msg = new ChatBroadcast()
 			{
-				channel = ChatChannel.System,
-				text = message,
+				Channel = ChatChannel.System,
+				Text = message,
 			};
 
 			Server.Broadcast(conn, msg, true, Channel.Reliable);

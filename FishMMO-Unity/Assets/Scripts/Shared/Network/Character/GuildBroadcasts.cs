@@ -5,13 +5,13 @@ namespace FishMMO.Shared
 {
 	public struct GuildCreateBroadcast : IBroadcast
 	{
-		public string guildName;
+		public string GuildName;
 	}
 
 	public struct GuildInviteBroadcast : IBroadcast
 	{
-		public long inviterCharacterID;
-		public long targetCharacterID;
+		public long InviterCharacterID;
+		public long TargetCharacterID;
 	}
 
 	public struct GuildAcceptInviteBroadcast : IBroadcast
@@ -23,15 +23,15 @@ namespace FishMMO.Shared
 
 	public struct GuildAddBroadcast : IBroadcast
 	{
-		public long guildID;
-		public long characterID;
-		public GuildRank rank;
-		public string location;
+		public long GuildID;
+		public long CharacterID;
+		public GuildRank Rank;
+		public string Location;
 	}
 
 	public struct GuildAddMultipleBroadcast : IBroadcast
 	{
-		public List<GuildAddBroadcast> members;
+		public List<GuildAddBroadcast> Members;
 	}
 
 	public struct GuildLeaveBroadcast : IBroadcast
@@ -40,12 +40,12 @@ namespace FishMMO.Shared
 
 	public struct GuildRemoveBroadcast : IBroadcast
 	{
-		public long guildMemberID;
+		public long GuildMemberID;
 	}
 
 	public struct GuildChangeRankBroadcast : IBroadcast
 	{
-		public long guildMemberID;
-		public GuildRank rank;
+		public long GuildMemberID;
+		public GuildRank Rank;
 	}
 }

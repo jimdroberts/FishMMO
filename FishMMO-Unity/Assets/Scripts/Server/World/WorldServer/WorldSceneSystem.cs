@@ -174,8 +174,8 @@ namespace FishMMO.Server
 						// Tell the client to connect to the scene
 						Server.Broadcast(connection, new WorldSceneConnectBroadcast()
 						{
-							address = sceneServer.Address,
-							port = sceneServer.Port,
+							Address = sceneServer.Address,
+							Port = sceneServer.Port,
 						});
 					}
 				}
@@ -266,8 +266,8 @@ namespace FishMMO.Server
 				// Tell the character to reconnect to the scene server
 				Server.Broadcast(conn, new WorldSceneConnectBroadcast()
 				{
-					address = sceneServer.Address,
-					port = sceneServer.Port,
+					Address = sceneServer.Address,
+					Port = sceneServer.Port,
 				});
 			}
 			else

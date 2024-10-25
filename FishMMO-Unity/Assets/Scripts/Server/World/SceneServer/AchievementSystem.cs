@@ -46,11 +46,11 @@ namespace FishMMO.Server
 							{
 								modifiedItemBroadcasts.Add(new InventorySetItemBroadcast()
 								{
-									instanceID = newItem.ID,
-									templateID = newItem.Template.ID,
-									slot = newItem.Slot,
-									seed = newItem.IsGenerated ? newItem.Generator.Seed : 0,
-									stackSize = newItem.IsStackable ? newItem.Stackable.Amount : 0,
+									InstanceID = newItem.ID,
+									TemplateID = newItem.Template.ID,
+									Slot = newItem.Slot,
+									Seed = newItem.IsGenerated ? newItem.Generator.Seed : 0,
+									StackSize = newItem.IsStackable ? newItem.Stackable.Amount : 0,
 								});
 							}
 						}
@@ -60,7 +60,7 @@ namespace FishMMO.Server
 						IPlayerCharacter playerCharacter = character as IPlayerCharacter;
 						playerCharacter.Owner.Broadcast(new InventorySetMultipleItemsBroadcast()
 						{
-							items = modifiedItemBroadcasts,
+							Items = modifiedItemBroadcasts,
 						}, true, Channel.Reliable);
 					}
 				}

@@ -5,22 +5,22 @@ namespace FishMMO.Shared
 {
 	public struct FriendAddNewBroadcast : IBroadcast
 	{
-		public long characterID;
+		public long CharacterID;
 	}
 
 	public struct FriendAddBroadcast : IBroadcast
 	{
-		public long characterID;
-		public bool online;
+		public long CharacterID;
+		public bool Online;
 	}
 
 	public struct FriendAddMultipleBroadcast : IBroadcast
 	{
-		public List<FriendAddBroadcast> friends;
+		public List<FriendAddBroadcast> Friends;
 	}
 
 	public struct FriendRemoveBroadcast : IBroadcast
 	{
-		public long characterID;
+		public long CharacterID;
 	}
 }

@@ -5,12 +5,12 @@ namespace FishMMO.Shared
 {
 	public struct FactionUpdateBroadcast : IBroadcast
 	{
-		public int templateID;
-		public int newValue;
+		public int TemplateID;
+		public int NewValue;
 	}
 
 	public struct FactionUpdateMultipleBroadcast : IBroadcast
 	{
-		public List<FactionUpdateBroadcast> factions;
+		public List<FactionUpdateBroadcast> Factions;
 	}
 }

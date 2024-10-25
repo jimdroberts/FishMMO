@@ -43,12 +43,12 @@ namespace FishMMO.Server
 			if (conn.IsActive)
 			{
 				// Validate character creation data
-				if (!Constants.Authentication.IsAllowedCharacterName(msg.characterName))
+				if (!Constants.Authentication.IsAllowedCharacterName(msg.CharacterName))
 				{
 					// Invalid character name
 					Server.Broadcast(conn, new CharacterCreateResultBroadcast()
 					{
-						result = CharacterCreateResult.InvalidCharacterName,
+						Result = CharacterCreateResult.InvalidCharacterName,
 					}, true, Channel.Reliable);
 					return;
 				}
@@ -66,17 +66,17 @@ namespace FishMMO.Server
 					// Too many characters
 					Server.Broadcast(conn, new CharacterCreateResultBroadcast()
 					{
-						result = CharacterCreateResult.TooMany,
+						Result = CharacterCreateResult.TooMany,
 					}, true, Channel.Reliable);
 					return;
 				}
-				var character = CharacterService.GetByName(dbContext, msg.characterName);
+				var character = CharacterService.GetByName(dbContext, msg.CharacterName);
 				if (character != null)
 				{
 					// Character name already taken
 					Server.Broadcast(conn, new CharacterCreateResultBroadcast()
 					{
-						result = CharacterCreateResult.CharacterNameTaken,
+						Result = CharacterCreateResult.CharacterNameTaken,
 					}, true, Channel.Reliable);
 					return;
 				}
@@ -88,18 +88,18 @@ namespace FishMMO.Server
 					// Failed to find spawn positions to validate with
 					Server.Broadcast(conn, new CharacterCreateResultBroadcast()
 					{
-						result = CharacterCreateResult.InvalidSpawn,
+						Result = CharacterCreateResult.InvalidSpawn,
 					}, true, Channel.Reliable);
 					return;
 				}
 				// Validate spawn details
-				if (WorldSceneDetailsCache.Scenes.TryGetValue(msg.sceneName, out WorldSceneDetails details))
+				if (WorldSceneDetailsCache.Scenes.TryGetValue(msg.SceneName, out WorldSceneDetails details))
 				{
 					// Validate spawner
-					if (details.InitialSpawnPositions.TryGetValue(msg.spawnerName, out CharacterInitialSpawnPositionDetails initialSpawnPosition))
+					if (details.InitialSpawnPositions.TryGetValue(msg.SpawnerName, out CharacterInitialSpawnPositionDetails initialSpawnPosition))
 					{
 						// Validate race
-						RaceTemplate raceTemplate = RaceTemplate.Get<RaceTemplate>(msg.raceTemplateID);
+						RaceTemplate raceTemplate = RaceTemplate.Get<RaceTemplate>(msg.RaceTemplateID);
 						if (raceTemplate == null ||
 							raceTemplate.Prefab == null)
 						{
@@ -134,10 +134,10 @@ namespace FishMMO.Server
 						var newCharacter = new CharacterEntity()
 						{
 							Account = accountName,
-							Name = msg.characterName,
-							NameLowercase = msg.characterName?.ToLower(),
-							RaceID = msg.raceTemplateID,
-							BindScene = msg.sceneName,
+							Name = msg.CharacterName,
+							NameLowercase = msg.CharacterName?.ToLower(),
+							RaceID = msg.RaceTemplateID,
+							BindScene = msg.SceneName,
 							BindX = initialSpawnPosition.Position.x,
 							BindY = initialSpawnPosition.Position.y,
 							BindZ = initialSpawnPosition.Position.z,
@@ -171,9 +171,9 @@ namespace FishMMO.Server
 							dbContext.SaveChanges();
 						}
 
+						// Add character factions
 						if (raceTemplate.InitialFaction != null)
 						{
-							// Add character factions
 							foreach (FactionTemplate faction in raceTemplate.InitialFaction.DefaultAllied)
 							{
 								dbContext.CharacterFactions.Add(new CharacterFactionEntity()
@@ -223,7 +223,7 @@ namespace FishMMO.Server
 						// Send success to the client
 						Server.Broadcast(conn, new CharacterCreateResultBroadcast()
 						{
-							result = CharacterCreateResult.Success,
+							Result = CharacterCreateResult.Success,
 						}, true, Channel.Reliable);
 
 						// Send the create broadcast back to the client

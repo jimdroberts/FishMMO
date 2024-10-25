@@ -5,27 +5,27 @@ namespace FishMMO.Shared
 {
 	public struct InventorySetItemBroadcast : IBroadcast
 	{
-		public long instanceID;
-		public int templateID;
-		public int slot;
-		public int seed;
-		public uint stackSize;
+		public long InstanceID;
+		public int TemplateID;
+		public int Slot;
+		public int Seed;
+		public uint StackSize;
 	}
 
 	public struct InventorySetMultipleItemsBroadcast : IBroadcast
 	{
-		public List<InventorySetItemBroadcast> items;
+		public List<InventorySetItemBroadcast> Items;
 	}
 
 	public struct InventoryRemoveItemBroadcast : IBroadcast
 	{
-		public int slot;
+		public int Slot;
 	}
 
 	public struct InventorySwapItemSlotsBroadcast : IBroadcast
 	{
-		public int from;
-		public int to;
-		public InventoryType fromInventory;
+		public int From;
+		public int To;
+		public InventoryType FromInventory;
 	}
 }

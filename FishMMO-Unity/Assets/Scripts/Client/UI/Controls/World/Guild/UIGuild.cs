@@ -149,7 +149,7 @@ namespace FishMMO.Client
 						{
 							Client.Broadcast(new GuildCreateBroadcast()
 							{
-								guildName = s,
+								GuildName = s,
 							}, Channel.Reliable);
 						}
 					}, null);
@@ -188,7 +188,7 @@ namespace FishMMO.Client
 					{
 						Client.Broadcast(new GuildInviteBroadcast()
 						{
-							targetCharacterID = targetCharacter.ID
+							TargetCharacterID = targetCharacter.ID
 						}, Channel.Reliable);
 
 						return;
@@ -209,7 +209,7 @@ namespace FishMMO.Client
 									{
 										Client.Broadcast(new GuildInviteBroadcast()
 										{
-											targetCharacterID = id,
+											TargetCharacterID = id,
 										}, Channel.Reliable);
 									}
 									else if (UIManager.TryGet("UIChat", out UIChat chat))

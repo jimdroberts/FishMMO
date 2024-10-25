@@ -12,6 +12,6 @@ namespace FishMMO.Shared
 
 	public struct AchievementUpdateMultipleBroadcast : IBroadcast
 	{
-		public List<AchievementUpdateBroadcast> achievements;
+		public List<AchievementUpdateBroadcast> Achievements;
 	}
 }

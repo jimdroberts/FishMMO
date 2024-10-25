@@ -62,7 +62,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void OnClientAchievementUpdateMultipleBroadcastReceived(AchievementUpdateMultipleBroadcast msg, Channel channel)
 		{
-			foreach (AchievementUpdateBroadcast subMsg in msg.achievements)
+			foreach (AchievementUpdateBroadcast subMsg in msg.Achievements)
 			{
 				AchievementTemplate template = AchievementTemplate.Get<AchievementTemplate>(subMsg.TemplateID);
 				

@@ -225,12 +225,12 @@ namespace FishMMO.Client
 						ServerAddresses result = JsonUtility.FromJson<ServerAddresses>(jsonResponse);
 
 						// Do something with the server list
-						foreach (ServerAddress server in result.addresses)
+						foreach (ServerAddress server in result.Addresses)
 						{
-							Debug.Log("Client: New Patch Server Address:" + server.address + ", Port: " + server.port);
+							Debug.Log("Client: New Patch Server Address:" + server.Address + ", Port: " + server.Port);
 						}
 
-						onFetchComplete?.Invoke(result.addresses);
+						onFetchComplete?.Invoke(result.Addresses);
 					}
 				}
 			}

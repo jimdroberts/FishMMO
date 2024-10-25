@@ -53,7 +53,7 @@ namespace FishMMO.Server
 				// append the characters to the broadcast message
 				CharacterListBroadcast characterListMsg = new CharacterListBroadcast()
 				{
-					characters = characterList
+					Characters = characterList
 				};
 
 				Server.Broadcast(conn, characterListMsg, true, Channel.Reliable);
@@ -65,11 +65,11 @@ namespace FishMMO.Server
 			if (conn.IsActive && AccountManager.GetAccountNameByConnection(conn, out string accountName))
 			{
 				using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-				CharacterService.Delete(dbContext, accountName, msg.characterName, KeepDeleteData);
+				CharacterService.Delete(dbContext, accountName, msg.CharacterName, KeepDeleteData);
 
 				CharacterDeleteBroadcast charDeleteMsg = new CharacterDeleteBroadcast()
 				{
-					characterName = msg.characterName,
+					CharacterName = msg.CharacterName,
 				};
 
 				Server.Broadcast(conn, charDeleteMsg, true, Channel.Reliable);
@@ -81,20 +81,20 @@ namespace FishMMO.Server
 			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 			if (conn.IsActive && AccountManager.GetAccountNameByConnection(conn, out string accountName))
 			{
-				if (!CharacterService.Exists(dbContext, accountName, msg.characterName))
+				if (!CharacterService.Exists(dbContext, accountName, msg.CharacterName))
 				{
 					// character doesn't exist for account
 					conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
 				}
 				else
 				{
-					if (CharacterService.TrySetSelected(dbContext, accountName, msg.characterName))
+					if (CharacterService.TrySetSelected(dbContext, accountName, msg.CharacterName))
 					{
 						// send the client the world server list
 						List<WorldServerDetails> worldServerList = WorldServerService.GetServerList(dbContext);
 						Server.Broadcast(conn, new ServerListBroadcast()
 						{
-							servers = worldServerList
+							Servers = worldServerList
 						}, true, Channel.Reliable);
 					}
 				}

@@ -62,11 +62,11 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void OnClientFriendAddBroadcastReceived(FriendAddBroadcast msg, Channel channel)
 		{
-			if (!Friends.Contains(msg.characterID))
+			if (!Friends.Contains(msg.CharacterID))
 			{
-				Friends.Add(msg.characterID);
+				Friends.Add(msg.CharacterID);
 
-				OnAddFriend?.Invoke(msg.characterID, msg.online);
+				OnAddFriend?.Invoke(msg.CharacterID, msg.Online);
 			}
 		}
 
@@ -75,13 +75,13 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void OnClientFriendAddMultipleBroadcastReceived(FriendAddMultipleBroadcast msg, Channel channel)
 		{
-			foreach (FriendAddBroadcast friend in msg.friends)
+			foreach (FriendAddBroadcast friend in msg.Friends)
 			{
-				if (!Friends.Contains(friend.characterID))
+				if (!Friends.Contains(friend.CharacterID))
 				{
-					Friends.Add(friend.characterID);
+					Friends.Add(friend.CharacterID);
 
-					OnAddFriend?.Invoke(friend.characterID, friend.online);
+					OnAddFriend?.Invoke(friend.CharacterID, friend.Online);
 				}
 			}
 		}
@@ -91,9 +91,9 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void OnClientFriendRemoveBroadcastReceived(FriendRemoveBroadcast msg, Channel channel)
 		{
-			Friends.Remove(msg.characterID);
+			Friends.Remove(msg.CharacterID);
 
-			OnRemoveFriend?.Invoke(msg.characterID);
+			OnRemoveFriend?.Invoke(msg.CharacterID);
 		}
 #endif
 	}

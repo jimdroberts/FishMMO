@@ -137,7 +137,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void OnClientKnownAbilityAddBroadcastReceived(KnownAbilityAddBroadcast msg, Channel channel)
 		{
-			BaseAbilityTemplate baseAbilityTemplate = BaseAbilityTemplate.Get<BaseAbilityTemplate>(msg.templateID);
+			BaseAbilityTemplate baseAbilityTemplate = BaseAbilityTemplate.Get<BaseAbilityTemplate>(msg.TemplateID);
 			if (baseAbilityTemplate != null)
 			{
 				LearnBaseAbilities(new List<BaseAbilityTemplate>() { baseAbilityTemplate });
@@ -152,9 +152,9 @@ namespace FishMMO.Shared
 		private void OnClientKnownAbilityAddMultipleBroadcastReceived(KnownAbilityAddMultipleBroadcast msg, Channel channel)
 		{
 			List<BaseAbilityTemplate> templates = new List<BaseAbilityTemplate>();
-			foreach (KnownAbilityAddBroadcast knownAbility in msg.abilities)
+			foreach (KnownAbilityAddBroadcast knownAbility in msg.Abilities)
 			{
-				BaseAbilityTemplate baseAbilityTemplate = BaseAbilityTemplate.Get<BaseAbilityTemplate>(knownAbility.templateID);
+				BaseAbilityTemplate baseAbilityTemplate = BaseAbilityTemplate.Get<BaseAbilityTemplate>(knownAbility.TemplateID);
 				if (baseAbilityTemplate != null)
 				{
 					templates.Add(baseAbilityTemplate);
@@ -170,10 +170,10 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void OnClientAbilityAddBroadcastReceived(AbilityAddBroadcast msg, Channel channel)
 		{
-			AbilityTemplate abilityTemplate = AbilityTemplate.Get<AbilityTemplate>(msg.templateID);
+			AbilityTemplate abilityTemplate = AbilityTemplate.Get<AbilityTemplate>(msg.TemplateID);
 			if (abilityTemplate != null)
 			{
-				Ability newAbility = new Ability(msg.id, abilityTemplate, msg.events);
+				Ability newAbility = new Ability(msg.ID, abilityTemplate, msg.Events);
 				LearnAbility(newAbility);
 
 				OnAddAbility?.Invoke(newAbility);
@@ -185,12 +185,12 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void OnClientAbilityAddMultipleBroadcastReceived(AbilityAddMultipleBroadcast msg, Channel channel)
 		{
-			foreach (AbilityAddBroadcast ability in msg.abilities)
+			foreach (AbilityAddBroadcast ability in msg.Abilities)
 			{
-				AbilityTemplate abilityTemplate = AbilityTemplate.Get<AbilityTemplate>(ability.templateID);
+				AbilityTemplate abilityTemplate = AbilityTemplate.Get<AbilityTemplate>(ability.TemplateID);
 				if (abilityTemplate != null)
 				{
-					Ability newAbility = new Ability(ability.id, abilityTemplate, ability.events);
+					Ability newAbility = new Ability(ability.ID, abilityTemplate, ability.Events);
 					LearnAbility(newAbility);
 
 					OnAddAbility?.Invoke(newAbility);

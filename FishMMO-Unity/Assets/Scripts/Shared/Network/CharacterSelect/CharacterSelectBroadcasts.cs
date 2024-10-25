@@ -9,16 +9,16 @@ namespace FishMMO.Shared
 
 	public struct CharacterListBroadcast : IBroadcast
 	{
-		public List<CharacterDetails> characters;
+		public List<CharacterDetails> Characters;
 	}
 
 	public struct CharacterDeleteBroadcast : IBroadcast
 	{
-		public string characterName;
+		public string CharacterName;
 	}
 
 	public struct CharacterSelectBroadcast : IBroadcast
 	{
-		public string characterName;
+		public string CharacterName;
 	}
 }

@@ -7,6 +7,7 @@ using FishMMO.Database.Npgsql;
 using FishMMO.Database.Npgsql.Entities;
 using FishMMO.Shared;
 using UnityEngine;
+using UnityEngine.TextCore.Text;
 
 namespace FishMMO.Server.DatabaseServices
 {
@@ -304,6 +305,7 @@ namespace FishMMO.Server.DatabaseServices
 			CharacterAchievementService.Save(dbContext, character);
 			CharacterFactionService.Save(dbContext, character);
 			CharacterBuffService.Save(dbContext, character);
+			CharacterHotkeyService.Save(dbContext, character);
 
 			dbContext.SaveChanges();
 
@@ -343,6 +345,7 @@ namespace FishMMO.Server.DatabaseServices
 			CharacterBankService.Delete(dbContext, character.ID, keepData);
 			CharacterAbilityService.Delete(dbContext, character.ID, keepData);
 			CharacterKnownAbilityService.Delete(dbContext, character.ID, keepData);
+			CharacterHotkeyService.Delete(dbContext, character.ID, keepData);
 
 			// complete deletions
 			CharacterGuildService.Delete(dbContext, character.ID);

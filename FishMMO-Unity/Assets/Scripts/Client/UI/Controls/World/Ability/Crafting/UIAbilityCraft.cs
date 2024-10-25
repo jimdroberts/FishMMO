@@ -57,7 +57,7 @@ namespace FishMMO.Client
 
 		private void OnClientAbilityCrafterBroadcastReceived(AbilityCrafterBroadcast msg, Channel channel)
 		{
-			lastInteractableID = msg.interactableID;
+			lastInteractableID = msg.InteractableID;
 			Show();
 		}
 
@@ -272,9 +272,9 @@ namespace FishMMO.Client
 
 			AbilityCraftBroadcast abilityAddBroadcast = new AbilityCraftBroadcast()
 			{
-				interactableID = lastInteractableID,
-				templateID = main.ID,
-				events = eventIds,
+				InteractableID = lastInteractableID,
+				TemplateID = main.ID,
+				Events = eventIds,
 			};
 
 			Client.Broadcast(abilityAddBroadcast, Channel.Reliable);

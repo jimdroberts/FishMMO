@@ -4,14 +4,14 @@ namespace FishMMO.Shared
 {
 	public struct CharacterCreateBroadcast : IBroadcast
 	{
-		public string characterName;
-		public int raceTemplateID;
-		public string sceneName;
-		public string spawnerName;
+		public string CharacterName;
+		public int RaceTemplateID;
+		public string SceneName;
+		public string SpawnerName;
 	}
 
 	public struct CharacterCreateResultBroadcast : IBroadcast
 	{
-		public CharacterCreateResult result;
+		public CharacterCreateResult Result;
 	}
 }

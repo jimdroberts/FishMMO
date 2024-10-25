@@ -193,7 +193,7 @@ namespace FishMMO.Client
 					{
 						Client.Broadcast(new PartyInviteBroadcast()
 						{
-							targetCharacterID = targetCharacter.ID,
+							TargetCharacterID = targetCharacter.ID,
 						}, Channel.Reliable);
 
 						return;
@@ -214,7 +214,7 @@ namespace FishMMO.Client
 									{
 										Client.Broadcast(new PartyInviteBroadcast()
 										{
-											targetCharacterID = id,
+											TargetCharacterID = id,
 										}, Channel.Reliable);
 									}
 									else if (UIManager.TryGet("UIChat", out UIChat chat))

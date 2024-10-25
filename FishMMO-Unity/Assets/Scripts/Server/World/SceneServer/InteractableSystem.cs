@@ -73,11 +73,11 @@ namespace FishMMO.Server
 					// create the new item broadcast
 					modifiedItemBroadcasts.Add(new InventorySetItemBroadcast()
 					{
-						instanceID = item.ID,
-						templateID = item.Template.ID,
-						slot = item.Slot,
-						seed = item.IsGenerated ? item.Generator.Seed : 0,
-						stackSize = item.IsStackable ? item.Stackable.Amount : 0,
+						InstanceID = item.ID,
+						TemplateID = item.Template.ID,
+						Slot = item.Slot,
+						Seed = item.IsGenerated ? item.Generator.Seed : 0,
+						StackSize = item.IsStackable ? item.Stackable.Amount : 0,
 					});
 				}
 			}
@@ -87,7 +87,7 @@ namespace FishMMO.Server
 			{
 				Server.Broadcast(conn, new InventorySetMultipleItemsBroadcast()
 				{
-					items = modifiedItemBroadcasts,
+					Items = modifiedItemBroadcasts,
 				}, true, Channel.Reliable);
 
 				return true;
@@ -127,7 +127,7 @@ namespace FishMMO.Server
 			}
 
 			// validate scene object
-			if (!ValidateSceneObject(msg.interactableID, character.GameObject.scene.handle, out ISceneObject sceneObject))
+			if (!ValidateSceneObject(msg.InteractableID, character.GameObject.scene.handle, out ISceneObject sceneObject))
 			{
 				return;
 			}
@@ -142,7 +142,7 @@ namespace FishMMO.Server
 						//Debug.Log("AbilityCrafter");
 						Server.Broadcast(character.Owner, new AbilityCrafterBroadcast()
 						{
-							interactableID = sceneObject.ID,
+							InteractableID = sceneObject.ID,
 						}, true, Channel.Reliable);
 						break;
 					case Banker:
@@ -158,8 +158,8 @@ namespace FishMMO.Server
 						//Debug.Log("Merchant");
 						Server.Broadcast(character.Owner, new MerchantBroadcast()
 						{
-							interactableID = sceneObject.ID,
-							templateID = merchant.Template.ID,
+							InteractableID = sceneObject.ID,
+							TemplateID = merchant.Template.ID,
 						}, true, Channel.Reliable);
 						break;
 					case WorldItem worldItem:
@@ -230,7 +230,7 @@ namespace FishMMO.Server
 			}
 
 			// validate template exists
-			MerchantTemplate merchantTemplate = MerchantTemplate.Get<MerchantTemplate>(msg.id);
+			MerchantTemplate merchantTemplate = MerchantTemplate.Get<MerchantTemplate>(msg.ID);
 			if (merchantTemplate == null)
 			{
 				return;
@@ -244,7 +244,7 @@ namespace FishMMO.Server
 			}
 
 			// validate scene object
-			if (!ValidateSceneObject(msg.interactableID, character.GameObject.scene.handle, out ISceneObject sceneObject))
+			if (!ValidateSceneObject(msg.InteractableID, character.GameObject.scene.handle, out ISceneObject sceneObject))
 			{
 				return;
 			}
@@ -269,10 +269,10 @@ namespace FishMMO.Server
 				return;
 			}
 
-			switch (msg.type)
+			switch (msg.Type)
 			{
 				case MerchantTabType.Item:
-					BaseItemTemplate itemTemplate = merchantTemplate.Items[msg.index];
+					BaseItemTemplate itemTemplate = merchantTemplate.Items[msg.Index];
 					if (itemTemplate == null)
 					{
 						return;
@@ -292,7 +292,7 @@ namespace FishMMO.Server
 					}
 
 					if (merchantTemplate.Items != null &&
-						merchantTemplate.Items.Count >= msg.index)
+						merchantTemplate.Items.Count >= msg.Index)
 					{
 						Item newItem = new Item(itemTemplate, 1);
 						if (newItem == null)
@@ -305,16 +305,16 @@ namespace FishMMO.Server
 					break;
 				case MerchantTabType.Ability:
 					if (merchantTemplate.Abilities != null &&
-						merchantTemplate.Abilities.Count >= msg.index)
+						merchantTemplate.Abilities.Count >= msg.Index)
 					{
-						LearnAbilityTemplate(dbContext, conn, character, merchantTemplate.Abilities[msg.index]);
+						LearnAbilityTemplate(dbContext, conn, character, merchantTemplate.Abilities[msg.Index]);
 					}
 					break;
 				case MerchantTabType.AbilityEvent:
 					if (merchantTemplate.AbilityEvents != null &&
-						merchantTemplate.AbilityEvents.Count >= msg.index)
+						merchantTemplate.AbilityEvents.Count >= msg.Index)
 					{
-						LearnAbilityTemplate(dbContext, conn, character, merchantTemplate.AbilityEvents[msg.index]);
+						LearnAbilityTemplate(dbContext, conn, character, merchantTemplate.AbilityEvents[msg.Index]);
 					}
 					break;
 				default: return;
@@ -358,7 +358,7 @@ namespace FishMMO.Server
 			// tell the client about the new ability event
 			Server.Broadcast(conn, new KnownAbilityAddBroadcast()
 			{
-				templateID = template.ID,
+				TemplateID = template.ID,
 			}, true, Channel.Reliable);
 		}
 
@@ -382,7 +382,7 @@ namespace FishMMO.Server
 			}
 
 			// validate main ability exists
-			AbilityTemplate mainAbility = AbilityTemplate.Get<AbilityTemplate>(msg.templateID);
+			AbilityTemplate mainAbility = AbilityTemplate.Get<AbilityTemplate>(msg.TemplateID);
 			if (mainAbility == null)
 			{
 				return;
@@ -396,7 +396,7 @@ namespace FishMMO.Server
 			}
 
 			// validate scene object
-			if (!ValidateSceneObject(msg.interactableID, character.GameObject.scene.handle, out ISceneObject sceneObject))
+			if (!ValidateSceneObject(msg.InteractableID, character.GameObject.scene.handle, out ISceneObject sceneObject))
 			{
 				return;
 			}
@@ -420,13 +420,13 @@ namespace FishMMO.Server
 			int price = mainAbility.Price;
 
 			// validate eventIds if there are any...
-			if (msg.events != null)
+			if (msg.Events != null)
 			{
 				bool hasTypeOverride = false;
 				HashSet<int> validatedEvents = new HashSet<int>();
-				for (int i = 0; i < msg.events.Count; ++i)
+				for (int i = 0; i < msg.Events.Count; ++i)
 				{
-					int id = msg.events[i];
+					int id = msg.Events[i];
 					if (validatedEvents.Contains(id))
 					{
 						// duplicate events
@@ -472,7 +472,7 @@ namespace FishMMO.Server
 				return;
 			}
 
-			Ability newAbility = new Ability(mainAbility, msg.events);
+			Ability newAbility = new Ability(mainAbility, msg.Events);
 			if (newAbility == null)
 			{
 				return;
@@ -492,9 +492,9 @@ namespace FishMMO.Server
 
 			AbilityAddBroadcast abilityAddBroadcast = new AbilityAddBroadcast()
 			{
-				id = newAbility.ID,
-				templateID = newAbility.Template.ID,
-				events = msg.events,
+				ID = newAbility.ID,
+				TemplateID = newAbility.Template.ID,
+				Events = msg.Events,
 			};
 
 			Server.Broadcast(conn, abilityAddBroadcast, true, Channel.Reliable);

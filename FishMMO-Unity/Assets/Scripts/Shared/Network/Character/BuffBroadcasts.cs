@@ -5,21 +5,21 @@ namespace FishMMO.Shared
 {
 	public struct BuffAddBroadcast : IBroadcast
 	{
-		public int templateID;
+		public int TemplateID;
 	}
 
 	public struct BuffAddMultipleBroadcast : IBroadcast
 	{
-		public List<BuffAddBroadcast> buffs;
+		public List<BuffAddBroadcast> Buffs;
 	}
 
 	public struct BuffRemoveBroadcast : IBroadcast
 	{
-		public int templateID;
+		public int TemplateID;
 	}
 
 	public struct BuffRemoveMultipleBroadcast : IBroadcast
 	{
-		public List<BuffRemoveBroadcast> buffs;
+		public List<BuffRemoveBroadcast> Buffs;
 	}
 }

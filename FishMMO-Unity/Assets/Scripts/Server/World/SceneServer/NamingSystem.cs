@@ -45,26 +45,26 @@ namespace FishMMO.Server
 		/// </summary>
 		private void OnServerNamingBroadcastReceived(NetworkConnection conn, NamingBroadcast msg, Channel channel)
 		{
-			switch (msg.type)
+			switch (msg.Type)
 			{
 				case NamingSystemType.CharacterName:
 					//Debug.Log("NamingSystem: Searching by Character ID: " + msg.id);
 					// check our local scene server first
 					if (ServerBehaviour.TryGet(out CharacterSystem characterSystem) &&
-						characterSystem.CharactersByID.TryGetValue(msg.id, out IPlayerCharacter character))
+						characterSystem.CharactersByID.TryGetValue(msg.ID, out IPlayerCharacter character))
 					{
 						//Debug.Log("NamingSystem: Character Local Result " + character.CharacterName);
-						SendNamingBroadcast(conn, NamingSystemType.CharacterName, msg.id, character.CharacterName);
+						SendNamingBroadcast(conn, NamingSystemType.CharacterName, msg.ID, character.CharacterName);
 					}
 					// then check the database
 					else if (Server.NpgsqlDbContextFactory != null)
 					{
 						using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-						string name = CharacterService.GetNameByID(dbContext, msg.id);
+						string name = CharacterService.GetNameByID(dbContext, msg.ID);
 						if (!string.IsNullOrWhiteSpace(name))
 						{
 							//Debug.Log("NamingSystem: Character Database Result " + name);
-							SendNamingBroadcast(conn, NamingSystemType.CharacterName, msg.id, name);
+							SendNamingBroadcast(conn, NamingSystemType.CharacterName, msg.ID, name);
 						}
 					}
 					break;
@@ -74,11 +74,11 @@ namespace FishMMO.Server
 					if (Server.NpgsqlDbContextFactory != null)
 					{
 						using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-						string name = GuildService.GetNameByID(dbContext, msg.id);
+						string name = GuildService.GetNameByID(dbContext, msg.ID);
 						if (!string.IsNullOrWhiteSpace(name))
 						{
 							//Debug.Log("NamingSystem: Guild Database Result " + name);
-							SendNamingBroadcast(conn, NamingSystemType.GuildName, msg.id, name);
+							SendNamingBroadcast(conn, NamingSystemType.GuildName, msg.ID, name);
 						}
 					}
 					break;
@@ -97,9 +97,9 @@ namespace FishMMO.Server
 
 			NamingBroadcast msg = new NamingBroadcast()
 			{
-				type = type,
-				id = id,
-				name = name,
+				Type = type,
+				ID = id,
+				Name = name,
 			};
 
 			Server.Broadcast(conn, msg, true, Channel.Reliable);
@@ -110,8 +110,8 @@ namespace FishMMO.Server
 		/// </summary>
 		private void OnServerReverseNamingBroadcastReceived(NetworkConnection conn, ReverseNamingBroadcast msg, Channel channel)
 		{
-			var nameLowerCase = msg.nameLowerCase.ToLower();
-			switch (msg.type)
+			var nameLowerCase = msg.NameLowerCase.ToLower();
+			switch (msg.Type)
 			{
 				case NamingSystemType.CharacterName:
 					//Debug.Log("NamingSystem: Searching by Character ID: " + msg.id);
@@ -127,7 +127,7 @@ namespace FishMMO.Server
 					if (Server.NpgsqlDbContextFactory != null)
 					{
 						using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-						CharacterEntity entity = CharacterService.GetByName(dbContext, msg.nameLowerCase);
+						CharacterEntity entity = CharacterService.GetByName(dbContext, msg.NameLowerCase);
 						if (entity != null)
 						{
 							//Debug.Log("NamingSystem: Character Database Result " + name);
@@ -156,10 +156,10 @@ namespace FishMMO.Server
 
 			ReverseNamingBroadcast msg = new ReverseNamingBroadcast()
 			{
-				type = type,
-				nameLowerCase = nameLowerCase,
-				id = id,
-				name = name
+				Type = type,
+				NameLowerCase = nameLowerCase,
+				ID = id,
+				Name = name
 			};
 
 			Server.Broadcast(conn, msg, true, Channel.Reliable);

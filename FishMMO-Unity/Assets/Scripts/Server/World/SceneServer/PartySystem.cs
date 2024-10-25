@@ -34,14 +34,14 @@ namespace FishMMO.Server
 		private Dictionary<string, ChatCommand> partyChatCommands;
 		public bool OnPartyInvite(IPlayerCharacter sender, ChatBroadcast msg)
 		{
-			string targetName = msg.text.Trim().ToLower();
+			string targetName = msg.Text.Trim().ToLower();
 			if (ServerBehaviour.TryGet(out CharacterSystem characterSystem) &&
 				characterSystem.CharactersByLowerCaseName.TryGetValue(targetName, out IPlayerCharacter character))
 			{
 				OnServerPartyInviteBroadcastReceived(sender.Owner, new PartyInviteBroadcast()
 				{
-					inviterCharacterID = sender.ID,
-					targetCharacterID = character.ID,
+					InviterCharacterID = sender.ID,
+					TargetCharacterID = character.ID,
 				}, Channel.Reliable);
 				return true;
 			}
@@ -191,15 +191,15 @@ namespace FishMMO.Server
 
 				var addBroadcasts = dbMembers.Select(x => new PartyAddBroadcast()
 				{
-					partyID = x.PartyID,
-					characterID = x.CharacterID,
-					rank = (PartyRank)x.Rank,
-					healthPCT = x.HealthPCT,
+					PartyID = x.PartyID,
+					CharacterID = x.CharacterID,
+					Rank = (PartyRank)x.Rank,
+					HealthPCT = x.HealthPCT,
 				}).ToList();
 
 				PartyAddMultipleBroadcast partyAddBroadcast = new PartyAddMultipleBroadcast()
 				{
-					members = addBroadcasts,
+					Members = addBroadcasts,
 				};
 
 				if (ServerBehaviour.TryGet(out CharacterSystem characterSystem))
@@ -262,8 +262,8 @@ namespace FishMMO.Server
 				// tell the character we made their party successfully
 				Server.Broadcast(conn, new PartyCreateBroadcast()
 				{
-					partyID = newParty.ID,
-					location = conn.FirstObject.gameObject.scene.name,
+					PartyID = newParty.ID,
+					Location = conn.FirstObject.gameObject.scene.name,
 				}, true, Channel.Reliable);
 			}
 		}
@@ -291,9 +291,9 @@ namespace FishMMO.Server
 			}
 
 			// if the target doesn't already have a pending invite
-			if (!pendingInvitations.ContainsKey(msg.targetCharacterID) &&
+			if (!pendingInvitations.ContainsKey(msg.TargetCharacterID) &&
 				ServerBehaviour.TryGet(out CharacterSystem characterSystem) &&
-				characterSystem.CharactersByID.TryGetValue(msg.targetCharacterID, out IPlayerCharacter targetCharacter) &&
+				characterSystem.CharactersByID.TryGetValue(msg.TargetCharacterID, out IPlayerCharacter targetCharacter) &&
 				targetCharacter.TryGet(out IPartyController targetPartyController))
 			{
 				// validate target
@@ -302,9 +302,9 @@ namespace FishMMO.Server
 					// we should tell the inviter the target is already in a party
 					Server.Broadcast(conn, new ChatBroadcast()
 					{
-						channel = ChatChannel.Party,
-						senderID = msg.targetCharacterID,
-						text = ChatHelper.PARTY_ERROR_TARGET_IN_PARTY + " ",
+						Channel = ChatChannel.Party,
+						SenderID = msg.TargetCharacterID,
+						Text = ChatHelper.PARTY_ERROR_TARGET_IN_PARTY + " ",
 					}, true, Channel.Reliable);
 					return;
 				}
@@ -313,8 +313,8 @@ namespace FishMMO.Server
 				pendingInvitations.Add(targetCharacter.ID, inviter.ID);
 				Server.Broadcast(targetCharacter.Owner, new PartyInviteBroadcast()
 				{
-					inviterCharacterID = inviter.Character.ID,
-					targetCharacterID = targetCharacter.ID
+					InviterCharacterID = inviter.Character.ID,
+					TargetCharacterID = targetCharacter.ID
 				}, true, Channel.Reliable);
 			}
 		}
@@ -364,10 +364,10 @@ namespace FishMMO.Server
 					// tell the new member they joined immediately, other clients will catch up with the PartyUpdate pass
 					Server.Broadcast(conn, new PartyAddBroadcast()
 					{
-						partyID = pendingPartyID,
-						characterID = partyController.Character.ID,
-						rank = PartyRank.Member,
-						healthPCT = attributesExist ? attributeController.GetResourceAttributeCurrentPercentage(HealthTemplate) : 1.0f,
+						PartyID = pendingPartyID,
+						CharacterID = partyController.Character.ID,
+						Rank = PartyRank.Member,
+						HealthPCT = attributesExist ? attributeController.GetResourceAttributeCurrentPercentage(HealthTemplate) : 1.0f,
 					}, true, Channel.Reliable);
 				}
 			}
@@ -483,20 +483,20 @@ namespace FishMMO.Server
 				return;
 			}
 
-			if (msg.memberID < 1)
+			if (msg.MemberID < 1)
 			{
 				return;
 			}
 
 			// we can't kick ourself
-			if (msg.memberID == partyController.Character.ID)
+			if (msg.MemberID == partyController.Character.ID)
 			{
 				return;
 			}
 
 			// remove the character from the party in the database
 			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-			bool result = CharacterPartyService.Delete(dbContext, partyController.Rank, partyController.ID, msg.memberID);
+			bool result = CharacterPartyService.Delete(dbContext, partyController.Rank, partyController.ID, msg.MemberID);
 			if (result)
 			{
 				// tell the other servers to update their party lists
@@ -524,13 +524,13 @@ namespace FishMMO.Server
 				return;
 			}
 
-			if (msg.memberID < 1)
+			if (msg.MemberID < 1)
 			{
 				return;
 			}
 
 			// we can't promote ourself
-			if (msg.memberID == partyController.Character.ID)
+			if (msg.MemberID == partyController.Character.ID)
 			{
 				return;
 			}
@@ -538,7 +538,7 @@ namespace FishMMO.Server
 			// update the leader and target party ranks in the party in the database
 			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 			if (CharacterPartyService.TrySaveRank(dbContext, partyController.Character.ID, partyController.ID, PartyRank.Member) &&
-				CharacterPartyService.TrySaveRank(dbContext, msg.memberID, partyController.ID, PartyRank.Leader))
+				CharacterPartyService.TrySaveRank(dbContext, msg.MemberID, partyController.ID, PartyRank.Leader))
 			{
 				// tell the other servers to update their party lists
 				PartyUpdateService.Save(dbContext, partyController.ID);

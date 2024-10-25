@@ -30,9 +30,9 @@ namespace FishMMO.Client
 									// swap item slots in the bank
 									Client.Broadcast(new BankSwapItemSlotsBroadcast()
 									{
-										from = from,
-										to = to,
-										fromInventory = inventoryType,
+										From = from,
+										To = to,
+										FromInventory = inventoryType,
 									}, Channel.Reliable);
 								}
 							}
@@ -43,8 +43,8 @@ namespace FishMMO.Client
 								// unequip the item
 								Client.Broadcast(new EquipmentUnequipItemBroadcast()
 								{
-									slot = (byte)dragObject.ReferenceID,
-									toInventory = InventoryType.Bank,
+									Slot = (byte)dragObject.ReferenceID,
+									ToInventory = InventoryType.Bank,
 								}, Channel.Reliable);
 							}
 						}

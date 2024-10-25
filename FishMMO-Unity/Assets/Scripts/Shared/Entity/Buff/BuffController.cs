@@ -148,7 +148,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void OnClientBuffAddBroadcastReceived(BuffAddBroadcast msg, Channel channel)
 		{
-			BuffTemplate template = BuffTemplate.Get<BuffTemplate>(msg.templateID);
+			BuffTemplate template = BuffTemplate.Get<BuffTemplate>(msg.TemplateID);
 			if (template != null)
 			{
 				Apply(template);
@@ -160,9 +160,9 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void OnClientBuffAddMultipleBroadcastReceived(BuffAddMultipleBroadcast msg, Channel channel)
 		{
-			foreach (BuffAddBroadcast subMsg in msg.buffs)
+			foreach (BuffAddBroadcast subMsg in msg.Buffs)
 			{
-				BuffTemplate template = BuffTemplate.Get<BuffTemplate>(subMsg.templateID);
+				BuffTemplate template = BuffTemplate.Get<BuffTemplate>(subMsg.TemplateID);
 				if (template != null)
 				{
 					Apply(template);
@@ -175,7 +175,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void OnClientBuffRemoveBroadcastReceived(BuffRemoveBroadcast msg, Channel channel)
 		{
-			BuffTemplate template = BuffTemplate.Get<BuffTemplate>(msg.templateID);
+			BuffTemplate template = BuffTemplate.Get<BuffTemplate>(msg.TemplateID);
 			if (template != null)
 			{
 				Remove(template.ID);
@@ -187,9 +187,9 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void OnClientBuffRemoveMultipleBroadcastReceived(BuffRemoveMultipleBroadcast msg, Channel channel)
 		{
-			foreach (BuffRemoveBroadcast subMsg in msg.buffs)
+			foreach (BuffRemoveBroadcast subMsg in msg.Buffs)
 			{
-				BuffTemplate template = BuffTemplate.Get<BuffTemplate>(subMsg.templateID);
+				BuffTemplate template = BuffTemplate.Get<BuffTemplate>(subMsg.TemplateID);
 				if (template != null)
 				{
 					Remove(template.ID);

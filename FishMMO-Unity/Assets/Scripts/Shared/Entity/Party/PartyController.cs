@@ -59,10 +59,10 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void OnClientPartyCreateBroadcastReceived(PartyCreateBroadcast msg, Channel channel)
 		{
-			ID = msg.partyID;
+			ID = msg.PartyID;
 			Rank = PartyRank.Leader;
 
-			OnPartyCreated?.Invoke(msg.location);
+			OnPartyCreated?.Invoke(msg.Location);
 		}
 
 		/// <summary>
@@ -71,7 +71,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void OnClientPartyInviteBroadcastReceived(PartyInviteBroadcast msg, Channel channel)
 		{
-			OnReceivePartyInvite?.Invoke(msg.inviterCharacterID);
+			OnReceivePartyInvite?.Invoke(msg.InviterCharacterID);
 		}
 
 		/// <summary>
@@ -80,13 +80,13 @@ namespace FishMMO.Shared
 		public void OnClientPartyAddBroadcastReceived(PartyAddBroadcast msg, Channel channel)
 		{
 			// if this is our own id
-			if (PlayerCharacter != null && msg.characterID == Character.ID)
+			if (PlayerCharacter != null && msg.CharacterID == Character.ID)
 			{
-				ID = msg.partyID;
-				Rank = msg.rank;
+				ID = msg.PartyID;
+				Rank = msg.Rank;
 			}
 
-			OnAddPartyMember?.Invoke(msg.characterID, msg.rank, msg.healthPCT);
+			OnAddPartyMember?.Invoke(msg.CharacterID, msg.Rank, msg.HealthPCT);
 		}
 
 		/// <summary>
@@ -94,11 +94,11 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void OnClientPartyAddMultipleBroadcastReceived(PartyAddMultipleBroadcast msg, Channel channel)
 		{
-			var newIds = msg.members.Select(x => x.characterID).ToHashSet();
+			var newIds = msg.Members.Select(x => x.CharacterID).ToHashSet();
 
 			OnValidatePartyMembers?.Invoke(newIds);
 
-			foreach (PartyAddBroadcast subMsg in msg.members)
+			foreach (PartyAddBroadcast subMsg in msg.Members)
 			{
 				OnClientPartyAddBroadcastReceived(subMsg, channel);
 			}
@@ -123,7 +123,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void OnClientPartyRemoveBroadcastReceived(PartyRemoveBroadcast msg, Channel channel)
 		{
-			OnRemovePartyMember?.Invoke(msg.memberID);
+			OnRemovePartyMember?.Invoke(msg.MemberID);
 		}
 #endif
 	}

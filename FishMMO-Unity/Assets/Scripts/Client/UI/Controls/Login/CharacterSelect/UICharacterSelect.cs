@@ -96,15 +96,15 @@ namespace FishMMO.Client
 
 		private void OnClientCharacterListBroadcastReceived(CharacterListBroadcast msg, Channel channel)
 		{
-			if (msg.characters != null)
+			if (msg.Characters != null)
 			{
 				DestroyCharacterList();
 
 				characterList = new List<CharacterDetailsButton>();
-				for (int i = 0; i < msg.characters.Count; ++i)
+				for (int i = 0; i < msg.Characters.Count; ++i)
 				{
 					CharacterDetailsButton newCharacter = Instantiate(characterButtonPrefab, characterButtonParent);
-					newCharacter.Initialize(msg.characters[i]);
+					newCharacter.Initialize(msg.Characters[i]);
 					newCharacter.OnCharacterSelected += OnCharacterSelected;
 					characterList.Add(newCharacter);
 				}
@@ -119,7 +119,7 @@ namespace FishMMO.Client
 			CharacterDetailsButton newCharacter = Instantiate(characterButtonPrefab, characterButtonParent);
 			CharacterDetails details = new CharacterDetails()
 			{
-				CharacterName = msg.characterName,
+				CharacterName = msg.CharacterName,
 				//modelTemplateIndex = msg.raceName,
 			};
 			newCharacter.Initialize(details);
@@ -134,7 +134,7 @@ namespace FishMMO.Client
 			{
 				for (int i = 0; i < characterList.Count; ++i)
 				{
-					if (characterList[i].Details.CharacterName == msg.characterName)
+					if (characterList[i].Details.CharacterName == msg.CharacterName)
 					{
 						characterList[i].OnCharacterSelected -= OnCharacterSelected;
 						characterList[i].gameObject.SetActive(false);
@@ -172,7 +172,7 @@ namespace FishMMO.Client
 				// tell the login server about our character selection
 				Client.Broadcast(new CharacterSelectBroadcast()
 				{
-					characterName = selectedCharacter.Details.CharacterName,
+					CharacterName = selectedCharacter.Details.CharacterName,
 				}, Channel.Reliable);
 				SetConnectButtonLocked(true);
 			}
@@ -193,7 +193,7 @@ namespace FishMMO.Client
 						// delete character
 						Client.Broadcast(new CharacterDeleteBroadcast()
 						{
-							characterName = selectedCharacter.Details.CharacterName,
+							CharacterName = selectedCharacter.Details.CharacterName,
 						}, Channel.Reliable);
 						SetDeleteButtonLocked(false);
 					}, () =>

@@ -1,13 +1,12 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
 using FishMMO.Shared;
+using FishNet.Transporting;
 
 namespace FishMMO.Client
 {
 	public class UIHotkeyBar : UICharacterControl
 	{
-		private const int MAX_HOTKEYS = 12;
-
 		public RectTransform parent;
 		public UIHotkeyGroup buttonPrefab;
 
@@ -15,7 +14,54 @@ namespace FishMMO.Client
 
 		public override void OnStarting()
 		{
-			AddHotkeys(MAX_HOTKEYS);
+			AddHotkeys(Constants.Configuration.MaximumPlayerHotkeys);
+
+			Client.NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
+		}
+
+		public override void OnDestroying()
+		{
+			Client.NetworkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
+		}
+
+		public void ClientManager_OnClientConnectionState(ClientConnectionStateArgs args)
+		{
+			if (args.ConnectionState == LocalConnectionState.Started)
+			{
+				Client.NetworkManager.ClientManager.RegisterBroadcast<HotkeySetBroadcast>(OnClientHotkeySetBroadcastReceived);
+				Client.NetworkManager.ClientManager.RegisterBroadcast<HotkeySetMultipleBroadcast>(OnClientHotkeySetMultipleBroadcastReceived);
+			}
+			else if (args.ConnectionState == LocalConnectionState.Stopped)
+			{
+				Client.NetworkManager.ClientManager.RegisterBroadcast<HotkeySetBroadcast>(OnClientHotkeySetBroadcastReceived);
+				Client.NetworkManager.ClientManager.UnregisterBroadcast<HotkeySetMultipleBroadcast>(OnClientHotkeySetMultipleBroadcastReceived);
+			}
+		}
+
+		private void OnClientHotkeySetBroadcastReceived(HotkeySetBroadcast msg, Channel channel)
+		{
+			UIHotkeyGroup group = hotkeys[msg.HotkeyData.Slot];
+			if (group.Button != null)
+			{
+				if (msg.HotkeyData.Type == 0)
+				{
+					group.Button.Clear();
+				}
+				else
+				{
+					group.Button.Type = (ReferenceButtonType)msg.HotkeyData.Type;
+					group.Button.HotkeySlot = msg.HotkeyData.Slot;
+					group.Button.ReferenceID = msg.HotkeyData.ReferenceID;
+				}
+			}
+		}
+
+		private void OnClientHotkeySetMultipleBroadcastReceived(HotkeySetMultipleBroadcast msg, Channel channel)
+		{
+			foreach (HotkeySetBroadcast subMsg in msg.Hotkeys)
+			{
+				OnClientHotkeySetBroadcastReceived(subMsg, channel);
+			}
 		}
 
 		public override void OnPostSetCharacter()
@@ -92,24 +138,65 @@ namespace FishMMO.Client
 					case ReferenceButtonType.None:
 						break;
 					case ReferenceButtonType.Inventory:
-						if (Character.TryGet(out IInventoryController inventoryController) &&
+						if (!Character.TryGet(out IInventoryController inventoryController) ||
 							inventoryController.IsSlotEmpty((int)button.ReferenceID))
 						{
 							button.Clear();
 						}
+						else
+						{
+							if (group.Button != null &&
+								group.Button.Icon != null)
+							{
+								Item item = inventoryController.Items[(int)button.ReferenceID];
+								if (item != null &&
+									item.Template != null &&
+									group.Button.Icon.sprite != item.Template.Icon)
+								{
+									group.Button.Icon.sprite = item.Template.Icon;
+								}
+							}
+						}
 						break;
 					case ReferenceButtonType.Equipment:
-						if (Character.TryGet(out IEquipmentController equipmentController) &&
+						if (!Character.TryGet(out IEquipmentController equipmentController) ||
 							equipmentController.IsSlotEmpty((int)button.ReferenceID))
 						{
 							button.Clear();
 						}
+						else
+						{
+							if (group.Button != null &&
+								group.Button.Icon != null)
+							{
+								Item item = equipmentController.Items[(int)button.ReferenceID];
+								if (item != null &&
+									item.Template != null &&
+									group.Button.Icon.sprite != item.Template.Icon)
+								{
+									group.Button.Icon.sprite = item.Template.Icon;
+								}
+							}
+						}
 						break;
 					case ReferenceButtonType.Ability:
-						if (Character.TryGet(out IAbilityController abilityController) &&
-							!abilityController.KnownAbilities.ContainsKey(button.ReferenceID))
+						if (!Character.TryGet(out IAbilityController abilityController) ||
+							!abilityController.KnownAbilities.TryGetValue(button.ReferenceID, out Ability ability))
 						{
 							button.Clear();
+						}
+						else
+						{
+							if (group.Button != null &&
+								group.Button.Icon != null)
+							{
+								if (ability != null &&
+									ability.Template != null &&
+									group.Button.Icon.sprite != ability.Template.Icon)
+								{
+									group.Button.Icon.sprite = ability.Template.Icon;
+								}
+							}
 						}
 						break;
 					default:
@@ -143,11 +230,12 @@ namespace FishMMO.Client
 		{
 			if (parent == null || buttonPrefab == null) return;
 
-			for (int i = 0; i < amount && i < MAX_HOTKEYS; ++i)
+			for (int i = 0; i < amount && i < Constants.Configuration.MaximumPlayerHotkeys; ++i)
 			{
 				UIHotkeyGroup group = Instantiate(buttonPrefab, parent);
 				if (group.Button != null)
 				{
+					group.Button.HotkeySlot = i;
 					group.Button.Character = Character;
 					group.Button.KeyMap = GetHotkeyIndexKeyMap(i);
 					group.Button.ReferenceID = UIReferenceButton.NULL_REFERENCE_ID;
