@@ -13,8 +13,10 @@ namespace FishMMO.Shared
 		private Dictionary<int, Faction> allied = new Dictionary<int, Faction>();
 		private Dictionary<int, Faction> neutral = new Dictionary<int, Faction>();
 		private Dictionary<int, Faction> hostile = new Dictionary<int, Faction>();
+		[SerializeField]
+		private bool isAggressive = false;
 
-		public bool IsAggressive { get; set; }
+		public bool IsAggressive { get { return isAggressive; } set { isAggressive = value; } }
 		public Dictionary<int, Faction> Factions { get { return factions; } }
 
 		public Dictionary<int, Faction> Allied { get { return allied; } }
