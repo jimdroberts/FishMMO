@@ -113,11 +113,15 @@ namespace FishMMO.Client
 
 			foreach (GameObject go in gobs)
 			{
+				if (go.name.Contains("Ignore"))
+				{
+					continue;
+				}
 				foreach (KeyValuePair<Type, BaseCanvasTypeSettings> pair in CanvasSettingsMap)
 				{
 					var type = go.GetComponent(pair.Key);
 					if (type == null) continue;
-
+					
 					pair.Value.ApplySettings(type, Configuration);
 				}
 			}
