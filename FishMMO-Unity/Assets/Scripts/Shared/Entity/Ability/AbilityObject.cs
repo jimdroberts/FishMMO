@@ -1,17 +1,20 @@
 ﻿using UnityEngine;
 using SceneManager = UnityEngine.SceneManagement.SceneManager;
 using System.Collections.Generic;
+using System;
 
 namespace FishMMO.Shared
 {
 	public class AbilityObject : MonoBehaviour
 	{
+		public static Action<Ability, IPlayerCharacter, Transform, TargetInfo, int> OnPetSummon;
+
 		internal int ContainerID;
 		internal int ID;
 		public Ability Ability;
 		public IPlayerCharacter Caster;
 		public Rigidbody CachedRigidBody;
-		// the number of remaining hits for this ability object before it disappears
+		// The number of remaining hits for this ability object before it disappears
 		public int HitCount;
 		public float RemainingLifeTime;
 
@@ -46,7 +49,7 @@ namespace FishMMO.Shared
 			{
 				foreach (MoveEvent moveEvent in Ability.MoveEvents.Values)
 				{
-					// invoke
+					// Invoke
 					moveEvent?.Invoke(this, Time.deltaTime);
 				}
 			}
@@ -76,8 +79,8 @@ namespace FishMMO.Shared
 						HitPosition = other.GetContact(0).point,
 					};
 
-					// we remove hit count with the events return value
-					// if hit count falls below 1 the object will be destroyed after iterating all events at least once
+					// We remove hit count with the events return value
+					// If hit count falls below 1 the object will be destroyed after iterating all events at least once
 					HitCount -= hitEvent.Invoke(Caster, hitCharacter, targetInfo, this);
 				}
 			}
@@ -122,6 +125,14 @@ namespace FishMMO.Shared
 				return;
 			}
 
+			// Pet Summons are spawned by the server
+			if (template.IsPetSummon)
+			{
+				// Handle server side Spawning of the pet object
+				OnPetSummon?.Invoke(ability, caster, abilitySpawner, targetInfo, seed);
+				return;
+			}
+
 			// TODO create/fetch from pool
 			GameObject go = Instantiate(template.FXPrefab);
 			SceneManager.MoveGameObjectToScene(go, caster.GameObject.scene);
@@ -129,7 +140,7 @@ namespace FishMMO.Shared
 			SetAbilitySpawnPosition(caster, ability, abilitySpawner, targetInfo, t);
 			go.SetActive(false);
 
-			// construct initial ability object
+			// Construct initial ability object
 			AbilityObject abilityObject = go.GetComponent<AbilityObject>();
 			if (abilityObject == null)
 			{
@@ -142,18 +153,18 @@ namespace FishMMO.Shared
 			abilityObject.RemainingLifeTime = ability.LifeTime;
 			abilityObject.RNG = new System.Random(seed);
 
-			// make sure the objects container exists
+			// Make sure the objects container exists
 			if (ability.Objects == null)
 			{
 				ability.Objects = new Dictionary<int, Dictionary<int, AbilityObject>>();
 			}
 
 			Dictionary<int, AbilityObject> abilityObjects = new Dictionary<int, AbilityObject>();
-			// assign random object container ID for the ability object tracking
+			// Assign random object container ID for the ability object tracking
 			int id;
 			do
 			{
-				id = Random.Range(int.MinValue, int.MaxValue);
+				id = UnityEngine.Random.Range(int.MinValue, int.MaxValue);
 			} while (ability.Objects.ContainsKey(id));
 
 			ability.Objects.Add(id, abilityObjects);
@@ -161,10 +172,10 @@ namespace FishMMO.Shared
 
 			Debug.Log(caster.CharacterName + " at " + caster.Transform.position.ToString() + " Spawned Ability at: " + abilityObject.Transform.position.ToString() + " rot: " + abilityObject.Transform.rotation.eulerAngles.ToString());
 
-			// reset id for spawning
+			// Reset id for spawning
 			id = 0;
 
-			// handle pre spawn events
+			// Handle pre spawn events
 			if (ability.PreSpawnEvents != null)
 			{
 				foreach (SpawnEvent spawnEvent in ability.PreSpawnEvents.Values)
@@ -173,7 +184,7 @@ namespace FishMMO.Shared
 				}
 			}
 
-			// handle spawn events
+			// Handle spawn events
 			if (ability.SpawnEvents != null)
 			{
 				foreach (SpawnEvent spawnEvent in ability.SpawnEvents.Values)
@@ -182,7 +193,7 @@ namespace FishMMO.Shared
 				}
 			}
 
-			// finalize
+			// Finalize
 			foreach (AbilityObject obj in abilityObjects.Values)
 			{
 				obj.gameObject.SetActive(true);
@@ -211,7 +222,7 @@ namespace FishMMO.Shared
 					break;
 				case AbilitySpawnTarget.Forward:
 					{
-						// calculate collider offsets so the spawned ability object appears centered in front of the caster
+						// Calculate collider offsets so the spawned ability object appears centered in front of the caster
 						float distance = 0.0f;
 						float height = 0.0f;
 						Collider collider = ability.Template.FXPrefab.GetComponent<Collider>();

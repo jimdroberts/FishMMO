@@ -62,6 +62,15 @@ namespace FishMMO.Shared
 				buffInstance = new Buff(template.ID);
 				buffInstance.Apply(Character);
 				buffs.Add(template.ID, buffInstance);
+
+				if (template.IsDebuff)
+				{
+					IBuffController.OnAddDebuff?.Invoke(buffInstance);
+				}
+				else
+				{
+					IBuffController.OnAddBuff?.Invoke(buffInstance);
+				}
 			}
 			else if (template.MaxStacks > 0 && buffInstance.Stacks.Count < template.MaxStacks)
 			{
@@ -81,6 +90,15 @@ namespace FishMMO.Shared
 			if (!buffs.ContainsKey(buff.Template.ID))
 			{
 				buffs.Add(buff.Template.ID, buff);
+
+				if (buff.Template.IsDebuff)
+				{
+					IBuffController.OnAddDebuff?.Invoke(buff);
+				}
+				else
+				{
+					IBuffController.OnAddBuff?.Invoke(buff);
+				}
 			}
 		}
 
@@ -94,6 +112,15 @@ namespace FishMMO.Shared
 				}
 				buffInstance.Remove(Character);
 				buffs.Remove(buffID);
+
+				if (buffInstance.Template.IsDebuff)
+				{
+					IBuffController.OnRemoveDebuff?.Invoke(buffInstance);
+				}
+				else
+				{
+					IBuffController.OnRemoveBuff?.Invoke(buffInstance);
+				}
 			}
 		}
 
@@ -109,6 +136,15 @@ namespace FishMMO.Shared
 					}
 					pair.Value.Remove(Character);
 					buffs.Remove(pair.Key);
+
+					if (pair.Value.Template.IsDebuff)
+					{
+						IBuffController.OnRemoveDebuff?.Invoke(pair.Value);
+					}
+					else
+					{
+						IBuffController.OnRemoveBuff?.Invoke(pair.Value);
+					}
 				}
 			}
 		}

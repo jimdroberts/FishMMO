@@ -6,6 +6,7 @@ namespace FishMMO.Shared
 	[CreateAssetMenu(fileName = "New Buff", menuName = "Character/Buff/Buff", order = 1)]
 	public class BuffTemplate : CachedScriptableObject<BuffTemplate>, ICachedObject
 	{
+		public GameObject FXPrefab;
 		public string Description;
 		public Texture2D Icon;
 		public float Duration;

@@ -9,6 +9,7 @@ namespace FishMMO.Shared
 		public GameObject FXPrefab;
 		public AbilitySpawnTarget AbilitySpawnTarget;
 		public bool RequiresTarget;
+		public bool IsPetSummon;
 		public byte EventSlots;
 		public int HitCount;
 		public AbilityType Type;

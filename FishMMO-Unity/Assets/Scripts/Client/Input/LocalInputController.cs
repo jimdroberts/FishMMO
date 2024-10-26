@@ -60,6 +60,8 @@ namespace FishMMO.Client
 			UIManager.Show("UIStaminaBar");
 			UIManager.Show("UIHotkeyBar");
 			UIManager.Show("UIChat");
+			UIManager.Show("UIBuff");
+			UIManager.Show("UIDebufF");
 		}
 
 		private void OnDisable()
@@ -69,6 +71,8 @@ namespace FishMMO.Client
 			UIManager.Hide("UIStaminaBar");
 			UIManager.Hide("UIHotkeyBar");
 			UIManager.Hide("UIChat");
+			UIManager.Hide("UIBuff");
+			UIManager.Hide("UIDebufF");
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -187,7 +191,7 @@ namespace FishMMO.Client
 
 			if (InputManager.GetKeyDown("Abilities"))
 			{
-				UIManager.ToggleVisibility("UIAbilities");
+				UIManager.ToggleVisibility("UIAbility");
 			}
 
 			if (InputManager.GetKeyDown("Equipment") &&
