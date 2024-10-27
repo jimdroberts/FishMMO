@@ -33,5 +33,28 @@ namespace FishMMO.Shared
 							   Unsafe.As<double, float>(ref y),
 							   Unsafe.As<double, float>(ref z));
 		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static Vector3 RandomInBoundingBox(Vector3 boundingBox)
+		{
+			return new Vector3(UnityEngine.Random.Range(-boundingBox.x, boundingBox.x),
+							   UnityEngine.Random.Range(-boundingBox.y, boundingBox.y),
+							   UnityEngine.Random.Range(-boundingBox.z, boundingBox.z));
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static Vector3 GetRandomPointInToroid(float R, float radius)
+		{
+			// Generate random angles
+			float theta = UnityEngine.Random.Range(0f, 2f * Mathf.PI); // Angle around the central axis
+			float phi = UnityEngine.Random.Range(0f, 2f * Mathf.PI);   // Angle around the tube
+
+			// Convert to Cartesian coordinates
+			float x = (R + radius * Mathf.Cos(phi)) * Mathf.Cos(theta);
+			float y = (R + radius * Mathf.Cos(phi)) * Mathf.Sin(theta);
+			float z = radius * Mathf.Sin(phi);
+
+			return new Vector3(x, y, z);
+		}
 	}
 }

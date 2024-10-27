@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using FishNet.Object;
 using UnityEngine;
 
 namespace FishMMO.Shared
@@ -9,7 +10,6 @@ namespace FishMMO.Shared
 		public GameObject FXPrefab;
 		public AbilitySpawnTarget AbilitySpawnTarget;
 		public bool RequiresTarget;
-		public bool IsPetSummon;
 		public byte EventSlots;
 		public int HitCount;
 		public AbilityType Type;

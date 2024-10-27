@@ -126,7 +126,8 @@ namespace FishMMO.Shared
 			}
 
 			// Pet Summons are spawned by the server
-			if (template.IsPetSummon)
+			PetAbilityTemplate petAbilityTemplate = template as PetAbilityTemplate;
+			if (petAbilityTemplate != null)
 			{
 				// Handle server side Spawning of the pet object
 				OnPetSummon?.Invoke(ability, caster, abilitySpawner, targetInfo, seed);

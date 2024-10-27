@@ -67,6 +67,7 @@ namespace FishMMO.Server
 				Server.NetworkManager.SceneManager.OnClientLoadedStartScenes += SceneManager_OnClientLoadedStartScenes;
 
 				ICharacterDamageController.OnKilled += CharacterDamageController_OnKilled;
+				AbilityObject.OnPetSummon += AbilityObject_OnPetSummon;
 			}
 			else
 			{
@@ -82,6 +83,7 @@ namespace FishMMO.Server
 				Server.NetworkManager.SceneManager.OnClientLoadedStartScenes -= SceneManager_OnClientLoadedStartScenes;
 
 				ICharacterDamageController.OnKilled -= CharacterDamageController_OnKilled;
+				AbilityObject.OnPetSummon -= AbilityObject_OnPetSummon;
 			}
 
 			if (Server != null &&
@@ -685,6 +687,66 @@ namespace FishMMO.Server
 			{
 				// Handle NPC deaths
 			}
+		}
+
+		private void AbilityObject_OnPetSummon(Ability ability, IPlayerCharacter caster, Transform abilitySpawner, TargetInfo targetInfo, int seed)
+		{
+			if (ability == null)
+			{
+				return;
+			}
+
+			if (ability.Template == null)
+			{
+				return;
+			}
+
+			PetAbilityTemplate petAbilityTemplate = ability.Template as PetAbilityTemplate;
+			if (petAbilityTemplate == null)
+			{
+				return;
+			}
+
+			if (petAbilityTemplate.PetPrefab == null)
+			{
+				return;
+			}
+
+			PhysicsScene physicsScene = caster.GameObject.scene.GetPhysicsScene();
+			if (physicsScene == null)
+			{
+				return;
+			}
+
+			// get a random point at the top of the bounding box
+			Vector3 origin = new Vector3(UnityEngine.Random.Range(-petAbilityTemplate.SpawnBoundingBox.x, petAbilityTemplate.SpawnBoundingBox.x),
+										 petAbilityTemplate.SpawnBoundingBox.y,
+										 UnityEngine.Random.Range(-petAbilityTemplate.SpawnBoundingBox.z, petAbilityTemplate.SpawnBoundingBox.z));
+
+			Vector3 spawnPosition = caster.Transform.position;
+
+			// add the spawner position
+			origin += spawnPosition;
+
+			if (physicsScene.SphereCast(origin, petAbilityTemplate.SpawnDistance, Vector3.down, out RaycastHit hit, petAbilityTemplate.SpawnBoundingBox.y, Constants.Layers.Obstruction, QueryTriggerInteraction.Ignore))
+			{
+				spawnPosition = hit.point;
+			}
+
+			NetworkObject nob = Server.NetworkManager.GetPooledInstantiated(petAbilityTemplate.PetPrefab, spawnPosition, caster.Transform.rotation, true);
+			NPC npc = nob.GetComponent<NPC>();
+			if (npc == null)
+			{
+				Server.NetworkManager.StorePooledInstantiated(nob, true);
+				return;
+			}
+
+			UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(nob.gameObject, caster.GameObject.scene);
+
+			// Ensure the game object is active, pooled objects are disabled
+			npc.GameObject.SetActive(true);
+
+			ServerManager.Spawn(nob.gameObject, caster.NetworkObject.Owner, caster.GameObject.scene);
 		}
 
 		private void TryTeleport(IPlayerCharacter character)
