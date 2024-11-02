@@ -120,8 +120,7 @@ namespace FishMMO.Shared
 
 		public void Apply(BaseBuffTemplate template)
 		{
-			Buff buffInstance;
-			if (!buffs.TryGetValue(template.ID, out buffInstance))
+			if (!buffs.TryGetValue(template.ID, out Buff buffInstance))
 			{
 				buffInstance = new Buff(template.ID);
 				buffInstance.Apply(Character);
@@ -136,7 +135,8 @@ namespace FishMMO.Shared
 					IBuffController.OnAddBuff?.Invoke(buffInstance);
 				}
 			}
-			else if (template.MaxStacks > 0 && buffInstance.Stacks.Count < template.MaxStacks)
+			
+			if (template.MaxStacks > 0 && buffInstance.Stacks.Count < template.MaxStacks)
 			{
 				Buff newStack = new Buff(template.ID);
 				buffInstance.AddStack(newStack, Character);

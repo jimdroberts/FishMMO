@@ -5,8 +5,8 @@ namespace FishMMO.Shared
 {
 	public class Buff
 	{
-		
 		private List<Buff> stacks = new List<Buff>();
+		
 		public float RemainingTime;
 		public float TickTime;
 		public BaseBuffTemplate Template { get; private set; }
