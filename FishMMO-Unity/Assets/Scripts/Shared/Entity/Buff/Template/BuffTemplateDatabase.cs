@@ -7,15 +7,15 @@ namespace FishMMO.Shared
 	public class BuffTemplateDatabase : ScriptableObject
 	{
 		[Serializable]
-		public class BuffDictionary : SerializableDictionary<string, BuffTemplate> { }
+		public class BuffDictionary : SerializableDictionary<string, BaseBuffTemplate> { }
 
 		[SerializeField]
 		private BuffDictionary buffs = new BuffDictionary();
 		public BuffDictionary Buffs { get { return this.buffs; } }
 
-		public BuffTemplate GetBuff(string name)
+		public BaseBuffTemplate GetBuff(string name)
 		{
-			this.buffs.TryGetValue(name, out BuffTemplate buff);
+			this.buffs.TryGetValue(name, out BaseBuffTemplate buff);
 			return buff;
 		}
 	}

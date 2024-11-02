@@ -10,7 +10,7 @@ namespace FishMMO.Shared
 		public int HitCount;
 		public int Stacks;
 		public float Radius;
-		public BuffTemplate BuffTemplate;
+		public BaseBuffTemplate BuffTemplate;
 		public LayerMask CollidableLayers = -1;
 
 		public override int Invoke(ICharacter attacker, ICharacter defender, TargetInfo hitTarget, AbilityObject abilityObject)

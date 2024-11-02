@@ -10,7 +10,7 @@ namespace FishMMO.Shared
 		public string TierCompleteMessage;
 		public AudioClip CompleteSound;
 		public BaseItemTemplate[] ItemRewards;
-		public BuffTemplate[] BuffRewards;
+		public BaseBuffTemplate[] BuffRewards;
 		public string[] TitleRewards;
 		public AbilityTemplate[] AbilityRewards;
 	}

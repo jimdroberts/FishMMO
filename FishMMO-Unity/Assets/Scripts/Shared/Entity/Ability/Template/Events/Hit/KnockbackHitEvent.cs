@@ -1,0 +1,28 @@
+using UnityEngine;
+
+namespace FishMMO.Shared
+{
+	[CreateAssetMenu(fileName = "New Knockback Hit Event", menuName = "Character/Ability/Hit Event/Knockback", order = 1)]
+	public sealed class KnockbackHitEvent : HitEvent
+	{
+		public float Force;
+
+		public override int Invoke(ICharacter attacker, ICharacter defender, TargetInfo hitTarget, AbilityObject abilityObject)
+		{
+			if (attacker == null ||
+				defender == null ||
+				attacker.ID == defender.ID)
+			{
+				return 0;
+			}
+			if (attacker.TryGet(out IFactionController attackerFactionController) &&
+				defender.TryGet(out IFactionController defenderFactionController) &&
+				attackerFactionController.GetAllianceLevel(defenderFactionController) == FactionAllianceLevel.Enemy)
+			{
+				Debug.Log($"Knockback! {Force}");
+			}
+			// knockback doesn't count as a hit
+			return 0;
+		}
+	}
+}

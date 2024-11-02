@@ -11,7 +11,7 @@ namespace FishMMO.Shared
 		static Action<Buff> OnRemoveDebuff;
 
 		Dictionary<int, Buff> Buffs { get; }
-		void Apply(BuffTemplate template);
+		void Apply(BaseBuffTemplate template);
 		void Apply(Buff buff);
 		void Remove(int buffID);
 		void RemoveAll();

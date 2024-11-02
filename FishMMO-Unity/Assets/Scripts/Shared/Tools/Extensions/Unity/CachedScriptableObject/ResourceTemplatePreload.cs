@@ -18,7 +18,7 @@ namespace FishMMO.Shared
 			HitEvent.LoadCache<HitEvent>();
 			MoveEvent.LoadCache<MoveEvent>();
 			AchievementTemplate.LoadCache<AchievementTemplate>();
-			BuffTemplate.LoadCache<BuffTemplate>();
+			BaseBuffTemplate.LoadCache<BaseBuffTemplate>();
 			CharacterAttributeTemplate.LoadCache<CharacterAttributeTemplate>();
 			ItemAttributeTemplate.LoadCache<ItemAttributeTemplate>();
 			BaseItemTemplate.LoadCache<BaseItemTemplate>();
@@ -41,7 +41,7 @@ namespace FishMMO.Shared
 			HitEvent.UnloadCache<HitEvent>();
 			MoveEvent.UnloadCache<MoveEvent>();
 			AchievementTemplate.UnloadCache<AchievementTemplate>();
-			BuffTemplate.UnloadCache<BuffTemplate>();
+			BaseBuffTemplate.UnloadCache<BaseBuffTemplate>();
 			CharacterAttributeTemplate.UnloadCache<CharacterAttributeTemplate>();
 			ItemAttributeTemplate.UnloadCache<ItemAttributeTemplate>();
 			BaseItemTemplate.UnloadCache<BaseItemTemplate>();

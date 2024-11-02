@@ -8,14 +8,26 @@ namespace FishMMO.Client
 	public class UIDebuff : UICharacterControl
 	{
 		public RectTransform DebuffParent;
-		public GameObject DebuffButtonPrefab;
+		public UIBuffGroup DebuffButtonPrefab;
+
+		public Dictionary<int, UIBuffGroup> Debuffs = new Dictionary<int, UIBuffGroup>();
 
 		public override void OnStarting()
 		{
+			IBuffController.OnAddDebuff += BuffController_OnAddDebuff;
+			IBuffController.OnRemoveDebuff += BuffController_OnRemoveDebuff;
+
+			IPlayerCharacter.OnStopLocalClient += (c) => ClearAllDebuffs();
 		}
 
 		public override void OnDestroying()
 		{
+			IBuffController.OnAddDebuff -= BuffController_OnAddDebuff;
+			IBuffController.OnRemoveDebuff -= BuffController_OnRemoveDebuff;
+
+			IPlayerCharacter.OnStopLocalClient -= (c) => ClearAllDebuffs();
+
+			ClearAllDebuffs();
 		}
 
 		public override void OnPostSetCharacter()
@@ -29,33 +41,80 @@ namespace FishMMO.Client
 
 		public override void OnQuitToLogin()
 		{
-			ClearAllBuffs();
+			ClearAllDebuffs();
 		}
 
-		private void InstantiateBuff(long id, Sprite icon, ReferenceButtonType buttonType, AbilityTabType tabType, string toolTip, ref List<UIAbilityButton> container)
+		private void BuffController_OnAddDebuff(Buff buff)
 		{
-			/*UIAbilityButton button = Instantiate(AbilityButtonPrefab, AbilityParent);
-			button.Character = Character;
-			button.ReferenceID = id;
-			button.Type = buttonType;
-			if (button.DescriptionLabel != null)
+			if (buff == null)
 			{
-				button.DescriptionLabel.text = toolTip;
+				return;
 			}
-			if (button.Icon != null)
+			if (buff.Template == null)
 			{
-				button.Icon.sprite = icon;
+				return;
 			}
-			if (container == null)
+			if (!buff.Template.IsDebuff)
 			{
-				container = new List<UIAbilityButton>();
+				return;
 			}
-			container.Add(button);
-			button.gameObject.SetActive(CurrentTab == tabType ? true : false);*/
+			if (Debuffs.ContainsKey(buff.Template.ID))
+			{
+				return;
+			}
+			UIBuffGroup buffGroup = Instantiate(DebuffButtonPrefab, DebuffParent);
+			if (buffGroup.ButtonText != null)
+			{
+				buffGroup.ButtonText.text = buff.Template.Name;
+			}
+			if (buffGroup.TooltipButton != null)
+			{
+				buffGroup.TooltipButton.Initialize(buff.Template.ID, null, null, buff.Template);
+			}
+			if (buffGroup.Icon != null)
+			{
+				buffGroup.Icon.sprite = buff.Template.Icon;
+			}
+			if (Debuffs == null)
+			{
+				Debuffs = new Dictionary<int, UIBuffGroup>();
+			}
+			Debuffs.Add(buff.Template.ID, buffGroup);
+			buffGroup.gameObject.SetActive(true);
 		}
 
-		public void ClearAllBuffs()
+		private void BuffController_OnRemoveDebuff(Buff buff)
 		{
+			if (buff == null)
+			{
+				return;
+			}
+			if (buff.Template == null)
+			{
+				return;
+			}
+			if (!buff.Template.IsDebuff)
+			{
+				return;
+			}
+			if (Debuffs.TryGetValue(buff.Template.ID, out UIBuffGroup group))
+			{
+				Destroy(group.gameObject);
+				Debuffs.Remove(buff.Template.ID);
+			}
+		}
+
+		public void ClearAllDebuffs()
+		{
+			if (Debuffs == null || Debuffs.Count == 0)
+			{
+				return;
+			}
+			foreach (UIBuffGroup group in Debuffs.Values)
+			{
+				Destroy(group.gameObject);
+			}
+			Debuffs.Clear();
 		}
 	}
 }

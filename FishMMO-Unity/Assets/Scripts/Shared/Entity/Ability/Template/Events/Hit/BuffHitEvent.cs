@@ -6,7 +6,7 @@ namespace FishMMO.Shared
 	public sealed class BuffHitEvent : HitEvent
 	{
 		public int Stacks;
-		public BuffTemplate BuffTemplate;
+		public BaseBuffTemplate BuffTemplate;
 
 		public override int Invoke(ICharacter attacker, ICharacter defender, TargetInfo hitTarget, AbilityObject abilityObject)
 		{

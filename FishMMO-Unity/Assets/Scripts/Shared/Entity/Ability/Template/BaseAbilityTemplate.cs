@@ -88,7 +88,14 @@ namespace FishMMO.Shared
 						{
 							if (!string.IsNullOrWhiteSpace(pair.Key.Name))
 							{
-								resources[pair.Key] += pair.Value;
+								if (resources.ContainsKey(pair.Key))
+								{
+									resources[pair.Key] += pair.Value;
+								}
+								else
+								{
+									resources[pair.Key] = pair.Value;
+								}
 							}
 						}
 
@@ -96,7 +103,14 @@ namespace FishMMO.Shared
 						{
 							if (!string.IsNullOrWhiteSpace(pair.Key.Name))
 							{
-								requirements[pair.Key] += pair.Value;
+								if (requirements.ContainsKey(pair.Key))
+								{
+									requirements[pair.Key] += pair.Value;
+								}
+								else
+								{
+									requirements[pair.Key] = pair.Value;
+								}
 							}
 						}
 					}

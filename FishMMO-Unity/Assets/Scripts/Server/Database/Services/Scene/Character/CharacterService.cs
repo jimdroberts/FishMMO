@@ -440,6 +440,7 @@ namespace FishMMO.Server.DatabaseServices
 				CharacterBankService.Load(dbContext, character);
 				CharacterAbilityService.Load(dbContext, character);
 				CharacterKnownAbilityService.Load(dbContext, character);
+				CharacterHotkeyService.Load(dbContext, character);
 
 				/*Debug.Log(dbCharacter.Name + " has been loaded at Pos:" +
 					  nob.transform.position.ToString() +

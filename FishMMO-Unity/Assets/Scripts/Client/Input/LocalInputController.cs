@@ -72,7 +72,7 @@ namespace FishMMO.Client
 			UIManager.Hide("UIHotkeyBar");
 			UIManager.Hide("UIChat");
 			UIManager.Hide("UIBuff");
-			UIManager.Hide("UIDebufF");
+			UIManager.Hide("UIDebuff");
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]

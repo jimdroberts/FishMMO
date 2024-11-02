@@ -5,7 +5,7 @@ namespace FishMMO.Shared
 	[CreateAssetMenu(fileName = "New Region Apply Buff Action", menuName = "Region/Region Apply Buff", order = 1)]
 	public class RegionApplyBuffAction : RegionAction
 	{
-		public BuffTemplate Buff;
+		public BaseBuffTemplate Buff;
 
 		public override void Invoke(IPlayerCharacter character, Region region, bool isReconciling)
 		{

@@ -6,7 +6,7 @@ namespace FishMMO.Shared
 	[Serializable]
 	public class BuffAttributeTemplate
 	{
-		public long Value;
+		public int Value;
 		[Tooltip("Character Attribute the buff will apply its values to.")]
 		public CharacterAttributeTemplate Template;
 	}
