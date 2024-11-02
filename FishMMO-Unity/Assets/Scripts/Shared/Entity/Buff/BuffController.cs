@@ -86,6 +86,8 @@ namespace FishMMO.Shared
 				var buff = pair.Value;
 				buff.SubtractTime(dt);
 
+				IBuffController.OnSubtractTime?.Invoke(buff);
+
 				if (buff.RemainingTime > 0.0f)
 				{
 					buff.SubtractTickTime(dt);

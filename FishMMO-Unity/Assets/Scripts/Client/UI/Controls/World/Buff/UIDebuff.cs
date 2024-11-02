@@ -14,6 +14,7 @@ namespace FishMMO.Client
 
 		public override void OnStarting()
 		{
+			IBuffController.OnSubtractTime += BuffController_OnSubtractTime;
 			IBuffController.OnAddDebuff += BuffController_OnAddDebuff;
 			IBuffController.OnRemoveDebuff += BuffController_OnRemoveDebuff;
 
@@ -22,6 +23,7 @@ namespace FishMMO.Client
 
 		public override void OnDestroying()
 		{
+			IBuffController.OnSubtractTime -= BuffController_OnSubtractTime;
 			IBuffController.OnAddDebuff -= BuffController_OnAddDebuff;
 			IBuffController.OnRemoveDebuff -= BuffController_OnRemoveDebuff;
 
@@ -42,6 +44,26 @@ namespace FishMMO.Client
 		public override void OnQuitToLogin()
 		{
 			ClearAllDebuffs();
+		}
+
+		private void BuffController_OnSubtractTime(Buff buff)
+		{
+			if (buff == null)
+			{
+				return;
+			}
+			if (buff.Template == null)
+			{
+				return;
+			}
+			if (!buff.Template.IsDebuff)
+			{
+				return;
+			}
+			if (Debuffs.TryGetValue(buff.Template.ID, out UIBuffGroup buffGroup))
+			{
+				buffGroup.DurationSlider.value = buff.RemainingTime / buff.Template.Duration;
+			}
 		}
 
 		private void BuffController_OnAddDebuff(Buff buff)

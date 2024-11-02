@@ -8,6 +8,7 @@ namespace FishMMO.Client
     {
         public Image Icon;
         public UITooltipButton TooltipButton;
+        public Slider DurationSlider;
         public TMP_Text ButtonText;
     }
 }

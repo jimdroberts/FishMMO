@@ -51,19 +51,19 @@ MonoBehaviour:
         type: 3}
       InitialSpawnPositions:
         m_keys:
-        - West A
         - East A
+        - West A
         m_values:
-        - SpawnerName: West A
-          SceneName: StartScene A
-          Position: {x: -16, y: 68.30121, z: -34.26}
-          Rotation: {x: -0, y: -0, z: -0, w: 1}
-          AllowedRaces:
-          - {fileID: 11400000, guid: 6f8938bbed1286347b54bf3f4889f32a, type: 2}
         - SpawnerName: East A
           SceneName: StartScene A
           Position: {x: -9.069405, y: 68.3158, z: -31.849997}
           Rotation: {x: -0, y: 0.7071068, z: -0, w: 0.7071068}
+          AllowedRaces:
+          - {fileID: 11400000, guid: 6f8938bbed1286347b54bf3f4889f32a, type: 2}
+        - SpawnerName: West A
+          SceneName: StartScene A
+          Position: {x: -16, y: 68.30121, z: -34.26}
+          Rotation: {x: -0, y: -0, z: -0, w: 1}
           AllowedRaces:
           - {fileID: 11400000, guid: 6f8938bbed1286347b54bf3f4889f32a, type: 2}
       RespawnPositions:
@@ -200,8 +200,8 @@ MonoBehaviour:
       InitialSpawnPositions:
         m_keys:
         - Spawn Point D
-        - Spawn Point A
         - Spawn Point C
+        - Spawn Point A
         - Spawn Point B
         m_values:
         - SpawnerName: Spawn Point D
@@ -209,14 +209,14 @@ MonoBehaviour:
           Position: {x: 0, y: 1.5, z: -15}
           Rotation: {x: -0, y: -0, z: -0, w: 1}
           AllowedRaces: []
-        - SpawnerName: Spawn Point A
-          SceneName: Tutorial SpawnPoints
-          Position: {x: 15, y: 1.5, z: 0}
-          Rotation: {x: -0, y: -0, z: -0, w: 1}
-          AllowedRaces: []
         - SpawnerName: Spawn Point C
           SceneName: Tutorial SpawnPoints
           Position: {x: 0, y: 1.5, z: 15}
+          Rotation: {x: -0, y: -0, z: -0, w: 1}
+          AllowedRaces: []
+        - SpawnerName: Spawn Point A
+          SceneName: Tutorial SpawnPoints
+          Position: {x: 15, y: 1.5, z: 0}
           Rotation: {x: -0, y: -0, z: -0, w: 1}
           AllowedRaces: []
         - SpawnerName: Spawn Point B
@@ -226,15 +226,15 @@ MonoBehaviour:
           AllowedRaces: []
       RespawnPositions:
         m_keys:
+        - Character Respawn Position A
         - Character Respawn Position B
         - Character Respawn Position C
-        - Character Respawn Position A
         m_values:
+        - Position: {x: 8, y: 1.5, z: -8}
+          Rotation: {x: -0, y: -0, z: -0, w: 1}
         - Position: {x: -8, y: 1.5, z: -8}
           Rotation: {x: -0, y: -0, z: -0, w: 1}
         - Position: {x: -8, y: 1.5, z: 8}
-          Rotation: {x: -0, y: -0, z: -0, w: 1}
-        - Position: {x: 8, y: 1.5, z: -8}
           Rotation: {x: -0, y: -0, z: -0, w: 1}
       Teleporters:
         m_keys:

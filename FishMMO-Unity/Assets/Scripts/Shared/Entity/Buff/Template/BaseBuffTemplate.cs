@@ -43,7 +43,7 @@ namespace FishMMO.Shared
 
 		private string PrimaryTooltip(List<ITooltip> combineList)
 		{
-			using (var sb = ZString.CreateStringBuilder())
+ 			using (var sb = ZString.CreateStringBuilder())
 			{
 				sb.Append(RichText.Format(Name, true, "f5ad6e", "140%"));
 

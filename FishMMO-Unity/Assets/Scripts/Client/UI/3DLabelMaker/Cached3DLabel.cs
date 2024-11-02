@@ -26,7 +26,6 @@ namespace FishMMO.Client
 
 		public void Initialize(string text, Vector3 position, Color color, float fontSize, float persistTime, bool manualCache)
 		{
-			transform.position = position;
 			string hex = color.ToHex();
 			if (!string.IsNullOrWhiteSpace(hex))
 			{
@@ -37,6 +36,13 @@ namespace FishMMO.Client
 				TMP.text = text;
 			}
 			TMP.fontSize = fontSize;
+			
+			// Adjust position offset based on the text mesh height
+			TMP.ForceMeshUpdate();
+			float textHeight = TMP.textBounds.size.y;
+			position.y += textHeight;
+			transform.position = position;
+
 			remainingTime = persistTime;
 			this.manualCache = manualCache;
 		}

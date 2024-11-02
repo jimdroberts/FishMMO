@@ -20,7 +20,7 @@ namespace FishMMO.Client
 		{
 			if (text != null && background != null)
 			{
-				Vector3 offset = new Vector3(0.0f, background.rect.height, 0.0f);
+				Vector3 offset = new Vector3(0.0f, -background.rect.height, 0.0f);
 				transform.position = Input.mousePosition + offset;
 			}
 		}
@@ -31,7 +31,7 @@ namespace FishMMO.Client
 			if (this.text != null)
 			{
 				this.text.text = text;
-				Vector3 offset = new Vector3(0.0f, background.rect.height, 0.0f);
+				Vector3 offset = new Vector3(0.0f, -background.rect.height, 0.0f);
 				transform.position = Input.mousePosition + offset;
 				Show();
 			}
