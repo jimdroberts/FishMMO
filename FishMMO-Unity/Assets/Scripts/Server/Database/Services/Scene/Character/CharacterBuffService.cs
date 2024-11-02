@@ -39,18 +39,7 @@ namespace FishMMO.Server.DatabaseServices
 					dbBuff.CharacterID = character.ID;
 					dbBuff.TemplateID = buff.Template.ID;
 					dbBuff.RemainingTime = buff.RemainingTime;
-					if (dbBuff.Stacks != null)
-					{
-						dbBuff.Stacks.Clear();
-					}
-					foreach (Buff stack in buff.Stacks)
-					{
-						CharacterBuffEntity dbStack = new CharacterBuffEntity();
-						dbStack.CharacterID = character.ID;
-						dbStack.TemplateID = stack.Template.ID;
-						dbStack.RemainingTime = stack.RemainingTime;
-						dbBuff.Stacks.Add(dbStack);
-					}
+					dbBuff.Stacks = buff.Stacks;
 				}
 				else
 				{
@@ -59,15 +48,8 @@ namespace FishMMO.Server.DatabaseServices
 						CharacterID = character.ID,
 						TemplateID = buff.Template.ID,
 						RemainingTime = buff.RemainingTime,
+						Stacks = buff.Stacks,
 					};
-					foreach (Buff stack in buff.Stacks)
-					{
-						CharacterBuffEntity dbStack = new CharacterBuffEntity();
-						dbStack.CharacterID = character.ID;
-						dbStack.TemplateID = stack.Template.ID;
-						dbStack.RemainingTime = stack.RemainingTime;
-						newBuff.Stacks.Add(dbStack);
-					}
 
 					dbContext.CharacterBuffs.Add(newBuff);
 				}
@@ -108,16 +90,7 @@ namespace FishMMO.Server.DatabaseServices
 			var buffs = dbContext.CharacterBuffs.Where(c => c.CharacterID == character.ID);
 			foreach (CharacterBuffEntity buff in buffs)
 			{
-				List<Buff> stacks = new List<Buff>();
-				if (buff.Stacks != null && buff.Stacks.Count > 0)
-				{
-					foreach (CharacterBuffEntity stack in buff.Stacks)
-					{
-						Buff newStack = new Buff(stack.TemplateID, stack.RemainingTime);
-						stacks.Add(newStack);
-					}
-				}
-				Buff newBuff = new Buff(buff.TemplateID, buff.RemainingTime, buff.TickTime, stacks);
+				Buff newBuff = new Buff(buff.TemplateID, buff.RemainingTime, buff.TickTime, buff.Stacks);
 				buffController.Apply(newBuff);
 			};
 		}

@@ -17,23 +17,13 @@ namespace FishMMO.Shared
 
 		public override void ReadPayload(NetworkConnection conn, Reader reader)
 		{
-			List<Buff> stacks = new List<Buff>();
-
 			int buffCount = reader.ReadInt32();
 			for (int i = 0; i < buffCount; ++i)
 			{
 				int templateID = reader.ReadInt32();
 				float remainingTime = reader.ReadSingle();
 				float tickTime = reader.ReadSingle();
-
-				int stackCount = reader.ReadInt32();
-				for (int j = 0; j < stackCount; ++j)
-				{
-					int stackTemplateID = reader.ReadInt32();
-					float stackRemainingTime = reader.ReadSingle();
-
-					stacks.Add(new Buff(stackTemplateID, stackRemainingTime));
-				}
+				int stacks = reader.ReadInt32();
 
 				Buff buff = new Buff(templateID, remainingTime, tickTime, stacks);
 
@@ -60,20 +50,7 @@ namespace FishMMO.Shared
 				writer.WriteInt32(buff.Template.ID);
 				writer.WriteSingle(buff.RemainingTime);
 				writer.WriteSingle(buff.TickTime);
-
-				if (buff.Stacks == null)
-				{
-					writer.WriteInt32(0);
-					continue;
-				}
-
-				writer.WriteInt32(buff.Stacks.Count);
-				for (int i = 0; i < buff.Stacks.Count; ++i)
-				{
-					Buff stack = buff.Stacks[i];
-					writer.WriteInt32(stack.Template.ID);
-					writer.WriteSingle(stack.RemainingTime);
-				}
+				writer.WriteInt32(buff.Stacks);
 			}
 		}
 
@@ -95,18 +72,16 @@ namespace FishMMO.Shared
 				}
 				else
 				{
-					if (buff.Stacks.Count > 0 && buff.Template.IndependantStackTimer)
+					if (buff.Stacks > 0)
 					{
 						buff.RemoveStack(Character);
+						buff.ResetDuration();
 					}
-
-					foreach (Buff stack in buff.Stacks)
+					else
 					{
-						stack.RemoveStack(Character);
+						// Add the key to the list for later removal
+						keysToRemove.Add(pair.Key);
 					}
-
-					// Add the key to the list for later removal
-					keysToRemove.Add(pair.Key);
 				}
 			}
 
@@ -136,10 +111,9 @@ namespace FishMMO.Shared
 				}
 			}
 			
-			if (template.MaxStacks > 0 && buffInstance.Stacks.Count < template.MaxStacks)
+			if (template.MaxStacks > 0 && buffInstance.Stacks < template.MaxStacks)
 			{
-				Buff newStack = new Buff(template.ID);
-				buffInstance.AddStack(newStack, Character);
+				buffInstance.AddStack(Character);
 				buffInstance.ResetDuration();
 			}
 			else
@@ -170,10 +144,6 @@ namespace FishMMO.Shared
 		{
 			if (buffs.TryGetValue(buffID, out Buff buffInstance))
 			{
-				foreach (Buff stack in buffInstance.Stacks)
-				{
-					stack.RemoveStack(Character);
-				}
 				buffInstance.Remove(Character);
 				buffs.Remove(buffID);
 
@@ -194,10 +164,6 @@ namespace FishMMO.Shared
 			{
 				if (!pair.Value.Template.IsPermanent)
 				{
-					foreach (Buff stack in pair.Value.Stacks)
-					{
-						stack.RemoveStack(Character);
-					}
 					pair.Value.Remove(Character);
 					buffs.Remove(pair.Key);
 

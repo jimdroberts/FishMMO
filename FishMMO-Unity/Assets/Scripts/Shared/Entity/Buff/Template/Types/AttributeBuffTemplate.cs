@@ -96,12 +96,12 @@ namespace FishMMO.Shared
 
         public override void OnApplyStack(Buff buff, ICharacter target)
         {
-
+            OnApply(buff, target);
         }
 
         public override void OnRemoveStack(Buff buff, ICharacter target)
         {
-
+            OnRemove(buff, target);
         }
 
         public override void OnTick(Buff buff, ICharacter target)

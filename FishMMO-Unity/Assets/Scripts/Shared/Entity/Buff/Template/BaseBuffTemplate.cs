@@ -17,8 +17,6 @@ namespace FishMMO.Shared
 		public bool IsPermanent;
 		// is this considered a debuff? debuffs only apply to enemies
 		public bool IsDebuff;
-		// do we want independant timers on buff stacks?
-		public bool IndependantStackTimer;
 		//public AudioClip OnApplySounds;
 		//public AudioClip OnTickSounds;
 		//public AudioClip OnRemoveSounds;

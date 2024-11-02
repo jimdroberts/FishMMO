@@ -5,12 +5,11 @@ namespace FishMMO.Shared
 {
 	public class Buff
 	{
-		private List<Buff> stacks = new List<Buff>();
-		
 		public float RemainingTime;
 		public float TickTime;
+		public int Stacks;
+
 		public BaseBuffTemplate Template { get; private set; }
-		public List<Buff> Stacks { get { return stacks; } }
 
 		public Buff(int templateID)
 		{
@@ -26,12 +25,12 @@ namespace FishMMO.Shared
 			RemainingTime = remainingTime;
 		}
 
-		public Buff(int templateID, float remainingTime, float tickTime, List<Buff> stacks)
+		public Buff(int templateID, float remainingTime, float tickTime, int stacks)
 		{
 			Template = BaseBuffTemplate.Get<BaseBuffTemplate>(templateID);
 			TickTime = tickTime;
 			RemainingTime = remainingTime;
-			this.stacks = stacks;
+			Stacks = stacks;
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -93,16 +92,17 @@ namespace FishMMO.Shared
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public void AddStack(Buff stack, ICharacter target)
+		public void AddStack(ICharacter target)
 		{
-			Template.OnApplyStack(stack, target);
-			stacks.Add(stack);
+			Template.OnApplyStack(this, target);
+			++Stacks;
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void RemoveStack(ICharacter target)
 		{
 			Template.OnRemoveStack(this, target);
+			--Stacks;
 		}
 	}
 }
