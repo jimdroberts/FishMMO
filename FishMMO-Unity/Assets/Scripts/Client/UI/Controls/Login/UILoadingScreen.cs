@@ -1,4 +1,3 @@
-using FishNet.Transporting;
 using FishNet.Managing.Scened;
 using UnityEngine;
 using UnityEngine.UI;

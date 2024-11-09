@@ -158,7 +158,7 @@ namespace FishMMO.Server
 						// Add character attributes
 						if (raceTemplate.InitialAttributes != null)
 						{
-							foreach (CharacterAttributeTemplate template in raceTemplate.InitialAttributes.Attributes.Values)
+							foreach (CharacterAttributeTemplate template in raceTemplate.InitialAttributes.Attributes)
 							{
 								dbContext.CharacterAttributes.Add(new CharacterAttributeEntity()
 								{

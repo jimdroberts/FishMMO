@@ -1,7 +1,6 @@
 using UnityEngine;
 using FishMMO.Shared;
 using System.Collections.Generic;
-using LiteNetLib;
 
 namespace FishMMO.Client
 {

@@ -27,7 +27,7 @@ namespace FishMMO.Shared
 		{
 			if (CharacterAttributeDatabase != null)
 			{
-				foreach (CharacterAttributeTemplate attribute in CharacterAttributeDatabase.Attributes.Values)
+				foreach (CharacterAttributeTemplate attribute in CharacterAttributeDatabase.Attributes)
 				{
 					if (attribute.IsResourceAttribute)
 					{

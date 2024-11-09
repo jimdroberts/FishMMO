@@ -27,10 +27,9 @@ namespace FishMMO.Client
 
 			if (Character.TryGet(out ITargetController targetController))
 			{
-				targetController.OnChangeTarget += OnChangeTarget;
-				targetController.OnUpdateTarget += OnUpdateTarget;
+				targetController.OnChangeTarget += TargetController_OnChangeTarget;
+				targetController.OnUpdateTarget += TargetController_OnUpdateTarget;
 				targetController.OnClearTarget += TargetController_OnClearTarget;
-				targetController.OnNewTarget += TargetController_OnNewTarget;
 			}
 		}
 
@@ -40,41 +39,42 @@ namespace FishMMO.Client
 
 			if (Character.TryGet(out ITargetController targetController))
 			{
-				targetController.OnChangeTarget -= OnChangeTarget;
-				targetController.OnUpdateTarget -= OnUpdateTarget;
+				targetController.OnChangeTarget -= TargetController_OnChangeTarget;
+				targetController.OnUpdateTarget -= TargetController_OnUpdateTarget;
 				targetController.OnClearTarget -= TargetController_OnClearTarget;
-				targetController.OnNewTarget -= TargetController_OnNewTarget;
 
 				LabelMaker.Cache(targetLabel);
 				targetLabel = null;
 			}
 		}
 
-		public void OnChangeTarget(GameObject obj)
+		public void TargetController_OnChangeTarget(Transform target)
 		{
-			if (obj == null)
+			if (target == null ||
+				UIManager.ControlHasFocus())
 			{
-				// hide the UI
-				Hide();
+				TargetController_OnClearTarget();
 				return;
 			}
 
-			ICharacterAttributeController characterAttributeController = obj.GetComponent<ICharacterAttributeController>();
-			IInteractable interactable = obj.GetComponent<IInteractable>();
-			SceneTeleporter teleporter = obj.GetComponent<SceneTeleporter>();
-			SceneObjectNamer sceneObjectNamer = obj.GetComponent<SceneObjectNamer>();
+			ICharacterAttributeController characterAttributeController = target.GetComponent<ICharacterAttributeController>();
+			IInteractable interactable = target.GetComponent<IInteractable>();
+			SceneTeleporter teleporter = target.GetComponent<SceneTeleporter>();
+			SceneObjectNamer sceneObjectNamer = target.GetComponent<SceneObjectNamer>();
 
 			// must be an interactable or have an attribute controller
-			if (characterAttributeController == null && interactable == null && teleporter == null && sceneObjectNamer == null)
+			if ((interactable != null && sceneObjectNamer == null) ||
+				teleporter != null ||
+				characterAttributeController == null ||
+				sceneObjectNamer == null)
 			{
-				// hide the UI
-				Hide();
+				TargetController_OnClearTarget();
 				return;
 			}
 
 			if (NameLabel != null)
 			{
-				NameLabel.text = obj.name.Replace("(Clone)", "");
+				NameLabel.text = target.name.Replace("(Clone)", "");
 			}
 			if (characterAttributeController != null)
 			{
@@ -90,76 +90,55 @@ namespace FishMMO.Client
 
 			// make the UI visible
 			Show();
+
+			if (targetLabel == null)
+			{
+				UpdateTargetLabel(target, interactable);
+			}
 		}
 
-		public void OnUpdateTarget(GameObject obj)
+		public void TargetController_OnUpdateTarget(Transform target)
 		{
-			if (obj == null)
-			{
-				// hide the UI
-				Hide();
-				return;
-			}
+			TargetController_OnChangeTarget(target);
+		}
 
-			// update the health slider
-			ICharacterAttributeController characterAttributeController = obj.GetComponent<ICharacterAttributeController>();
-			if (characterAttributeController != null)
+		public void TargetController_OnClearTarget(Transform lastTarget = null)
+		{
+			if (lastTarget != null)
 			{
-				if (characterAttributeController.TryGetResourceAttribute(HealthAttribute, out CharacterResourceAttribute health))
+				Outline outline = lastTarget.GetComponent<Outline>();
+				if (outline != null)
 				{
-					HealthSlider.value = health.CurrentValue / health.FinalValue;
+					outline.enabled = false;
 				}
 			}
-		}
-
-		public void TargetController_OnClearTarget(Transform lastTarget)
-		{
-			Outline outline = lastTarget.GetComponent<Outline>();
-			if (outline != null)
-			{
-				outline.enabled = false;
-			}
+			
 			if (targetLabel != null)
 			{
 				LabelMaker.Cache(targetLabel);
+				targetLabel = null;
 			}
+
+			Hide();
 		}
 
-		public void TargetController_OnNewTarget(Transform newTarget)
+		private void UpdateTargetLabel(Transform target, IInteractable interactable = null)
 		{
-			Outline outline = newTarget.GetComponent<Outline>();
-			if (outline != null)
-			{
-				outline.enabled = true;
-			}
 			if (targetLabel != null)
 			{
 				LabelMaker.Cache(targetLabel);
+				targetLabel = null;
 			}
 
-			ICharacterAttributeController characterAttributeController = newTarget.GetComponent<ICharacterAttributeController>();
-			IInteractable interactable = newTarget.GetComponent<IInteractable>();
-			SceneTeleporter teleporter = newTarget.GetComponent<SceneTeleporter>();
-			SceneObjectNamer sceneObjectNamer = newTarget.GetComponent<SceneObjectNamer>();
+			Vector3 newPos = target.position;
 
-			// must be an interactable with a scene object namer or have an attribute controller
-			if ((interactable != null && sceneObjectNamer == null) ||
-				teleporter != null ||
-				characterAttributeController == null ||
-				sceneObjectNamer == null)
-			{
-				return;
-			}
-
-			Vector3 newPos = newTarget.position;
-
-			Collider collider = newTarget.GetComponent<Collider>();
+			Collider collider = target.GetComponent<Collider>();
 
 			float colliderHeight = collider.bounds.size.y * 0.5f;
 
 			newPos.y += colliderHeight;
 
-			string label = newTarget.name.Replace("(Clone)", "");
+			string label = target.name.Replace("(Clone)", "");
 			Color color = Color.grey;
 
 			// apply title

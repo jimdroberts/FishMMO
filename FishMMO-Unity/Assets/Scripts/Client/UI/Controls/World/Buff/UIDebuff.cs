@@ -1,5 +1,4 @@
 using UnityEngine;
-using UnityEngine.UI;
 using FishMMO.Shared;
 using System.Collections.Generic;
 

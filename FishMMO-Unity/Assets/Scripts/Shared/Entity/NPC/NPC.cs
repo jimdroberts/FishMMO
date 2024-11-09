@@ -22,7 +22,8 @@ namespace FishMMO.Shared
 			base.OnAwake();
 
 			if (AttributeBonuses != null &&
-				AttributeBonuses.Attributes != null)
+				AttributeBonuses.Attributes != null &&
+				this.TryGet(out ICharacterAttributeController attributeController))
 			{
 				foreach (NPCAttribute attribute in AttributeBonuses.Attributes)
 				{
@@ -36,33 +37,30 @@ namespace FishMMO.Shared
 						value = attribute.Max;
 					}
 
-					if (this.TryGet(out ICharacterAttributeController attributeController))
+					if (attributeController.TryGetAttribute(attribute.Template, out CharacterAttribute characterAttribute))
 					{
-						if (attributeController.TryGetAttribute(attribute.Template, out CharacterAttribute characterAttribute))
+						if (attribute.IsScalar)
 						{
-							if (attribute.IsScalar)
-							{
-								characterAttribute.AddValue(characterAttribute.FinalValue.PercentOf(value));
-							}
-							else
-							{
-								characterAttribute.AddValue(value);
-							}
+							characterAttribute.AddValue(characterAttribute.FinalValue.PercentOf(value));
 						}
-						else if (attributeController.TryGetResourceAttribute(attribute.Template, out CharacterResourceAttribute characterResourceAttribute))
+						else
 						{
-							if (attribute.IsScalar)
-							{
-								int additionalValue = characterAttribute.FinalValue.PercentOf(value);
+							characterAttribute.AddValue(value);
+						}
+					}
+					else if (attributeController.TryGetResourceAttribute(attribute.Template, out CharacterResourceAttribute characterResourceAttribute))
+					{
+						if (attribute.IsScalar)
+						{
+							int additionalValue = characterAttribute.FinalValue.PercentOf(value);
 
-								characterResourceAttribute.AddValue(additionalValue);
-								characterResourceAttribute.AddToCurrentValue(additionalValue);
-							}
-							else
-							{
-								characterResourceAttribute.AddValue(value);
-								characterResourceAttribute.AddToCurrentValue(value);
-							}
+							characterResourceAttribute.AddValue(additionalValue);
+							characterResourceAttribute.AddToCurrentValue(additionalValue);
+						}
+						else
+						{
+							characterResourceAttribute.AddValue(value);
+							characterResourceAttribute.AddToCurrentValue(value);
 						}
 					}
 				}

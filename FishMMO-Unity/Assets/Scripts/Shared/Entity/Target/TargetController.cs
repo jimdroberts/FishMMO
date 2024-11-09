@@ -12,11 +12,9 @@ namespace FishMMO.Shared
 		public TargetInfo Last;
 		public TargetInfo Current { get; private set; }
 
-		public event Action<GameObject> OnChangeTarget;
-		public event Action<GameObject> OnUpdateTarget;
-
+		public event Action<Transform> OnChangeTarget;
+		public event Action<Transform> OnUpdateTarget;
 		public event Action<Transform> OnClearTarget;
-		public event Action<Transform> OnNewTarget;
 
 #if !UNITY_SERVER
 		private float nextTick = 0.0f;
@@ -49,34 +47,21 @@ namespace FishMMO.Shared
 				// target has changed
 				if (Current.Target != Last.Target)
 				{
-					// invoke our change target function
-					if (Current.Target == null)
-					{
-						OnChangeTarget?.Invoke(null);
-					}
-					else
-					{
-						OnChangeTarget?.Invoke(Current.Target.gameObject);
-					}
-
 					// disable the previous outline and target label
 					if (Last.Target != null)
 					{
 						OnClearTarget?.Invoke(Last.Target);
 					}
 
-					// construct or enable the labels and outlines
-					if (Current.Target != null)
-					{
-						OnNewTarget?.Invoke(Current.Target);
-					}
+					// invoke our change target function
+					OnChangeTarget?.Invoke(Current.Target != null ? Current.Target : null);
 				}
 				else
 				{
 					// invoke our update function
 					if (Current.Target != null)
 					{
-						OnUpdateTarget?.Invoke(Current.Target.gameObject);
+						OnUpdateTarget?.Invoke(Current.Target);
 					}
 				}
 			}

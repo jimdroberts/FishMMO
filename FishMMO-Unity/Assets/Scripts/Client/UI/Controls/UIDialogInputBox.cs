@@ -1,6 +1,5 @@
 ﻿using System;
 using TMPro;
-using UnityEngine.UI;
 
 namespace FishMMO.Client
 {

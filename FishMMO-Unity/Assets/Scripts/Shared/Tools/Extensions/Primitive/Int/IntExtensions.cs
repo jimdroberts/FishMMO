@@ -75,10 +75,10 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Subtracts a percentage from the number and returns the result, rounded to the nearest integer.
-		/// For example, 100.PercentFrom(25) returns 75. (100 - 25% of 100).
+		/// For example, 100.SubtractPercent(25) returns 75. (100 - 25% of 100).
 		/// </summary>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static int PercentFrom(this int number, int percent)
+		public static int SubtractPercent(this int number, int percent)
 		{
 			return Mathf.RoundToInt(number * (1 - (percent * 0.01f)));
 		}

@@ -1,4 +1,3 @@
-using FishNet.Object;
 using FishNet.Transporting;
 using System.Collections.Generic;
 using TMPro;
