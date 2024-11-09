@@ -12,6 +12,7 @@ namespace FishMMO.Shared
 		event Action<HashSet<long>> OnValidateGuildMembers;
 		event Action<long> OnRemoveGuildMember;
 		event Action OnLeaveGuild;
+		event Action<GuildResultType> OnReceiveGuildResult;
 
 		long ID { get; set; }
 		GuildRank Rank { get; set; }

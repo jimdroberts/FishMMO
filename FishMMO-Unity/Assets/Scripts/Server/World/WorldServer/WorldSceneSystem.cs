@@ -53,8 +53,10 @@ namespace FishMMO.Server
 
 		public override void Destroying()
 		{
-			if (loginAuthenticator != null)
+			if (ServerManager != null)
 			{
+				ServerManager.OnRemoteConnectionState -= ServerManager_OnRemoteConnectionState;
+
 				loginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
 			}
 

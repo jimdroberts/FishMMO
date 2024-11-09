@@ -13,26 +13,10 @@ namespace FishMMO.Server
 	// Character Inventory Manager handles the players inventory
 	public class CharacterInventorySystem : ServerBehaviour
 	{
-		private SceneServerAuthenticator loginAuthenticator;
-		private LocalConnectionState serverState;
-
-		/*public float saveRate = 60.0f;
-		private float nextSave = 0.0f;
-
-		public Dictionary<string, InventoryController> inventories = new Dictionary<string, InventoryController>();*/
-
 		public override void InitializeOnce()
 		{
-			//nextSave = saveRate;
-
 			if (Server != null)
 			{
-				loginAuthenticator = FindFirstObjectByType<SceneServerAuthenticator>();
-				if (loginAuthenticator == null)
-					throw new UnityException("SceneServerAuthenticator not found!");
-
-				loginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
-
 				Server.RegisterBroadcast<InventoryRemoveItemBroadcast>(OnServerInventoryRemoveItemBroadcastReceived, true);
 				Server.RegisterBroadcast<InventorySwapItemSlotsBroadcast>(OnServerInventorySwapItemSlotsBroadcastReceived, true);
 
@@ -52,8 +36,6 @@ namespace FishMMO.Server
 		{
 			if (Server != null)
 			{
-				loginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
-
 				Server.UnregisterBroadcast<InventoryRemoveItemBroadcast>(OnServerInventoryRemoveItemBroadcastReceived);
 				Server.UnregisterBroadcast<InventorySwapItemSlotsBroadcast>(OnServerInventorySwapItemSlotsBroadcastReceived);
 
@@ -63,28 +45,6 @@ namespace FishMMO.Server
 				Server.UnregisterBroadcast<BankRemoveItemBroadcast>(OnServerBankRemoveItemBroadcastReceived);
 				Server.UnregisterBroadcast<BankSwapItemSlotsBroadcast>(OnServerBankSwapItemSlotsBroadcastReceived);
 			}
-		}
-
-		/*void LateUpdate()
-		{
-			if (serverState == LocalConnectionState.Started)
-			{
-				if (nextSave < 0)
-				{
-					nextSave = saveRate;
-					
-					Debug.Log("CharacterInventoryManager: Save");
-
-					// all characters inventories are periodically saved
-					// TODO: create an InventoryService with a save inventories function
-					//Database.Instance.SaveInventories(new List<Character>(characters.Values));
-				}
-				nextSave -= Time.deltaTime;
-			}
-		}*/
-
-		private void Authenticator_OnClientAuthenticationResult(NetworkConnection conn, bool authenticated)
-		{
 		}
 
 		public bool SwapContainerItems(NpgsqlDbContext dbContext,

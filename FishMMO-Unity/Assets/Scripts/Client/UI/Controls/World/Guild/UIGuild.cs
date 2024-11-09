@@ -15,7 +15,7 @@ namespace FishMMO.Client
 
 		public override void OnDestroying()
 		{
-			OnLeaveGuild();
+			GuildController_OnLeaveGuild();
 		}
 
 		public override void OnPostSetCharacter()
@@ -27,8 +27,9 @@ namespace FishMMO.Client
 				guildController.OnReceiveGuildInvite += GuildController_OnReceiveGuildInvite;
 				guildController.OnAddGuildMember += GuildController_OnAddGuildMember;
 				guildController.OnValidateGuildMembers += GuildController_OnValidateGuildMembers;
-				guildController.OnRemoveGuildMember += OnGuildRemoveMember;
-				guildController.OnLeaveGuild += OnLeaveGuild;
+				guildController.OnRemoveGuildMember += GuildController_OnRemoveMember;
+				guildController.OnLeaveGuild += GuildController_OnLeaveGuild;
+				guildController.OnReceiveGuildResult += GuildController_OnReceiveGuildResult;
 			}
 		}
 
@@ -41,8 +42,9 @@ namespace FishMMO.Client
 				guildController.OnReceiveGuildInvite -= GuildController_OnReceiveGuildInvite;
 				guildController.OnAddGuildMember -= GuildController_OnAddGuildMember;
 				guildController.OnValidateGuildMembers -= GuildController_OnValidateGuildMembers;
-				guildController.OnRemoveGuildMember -= OnGuildRemoveMember;
-				guildController.OnLeaveGuild -= OnLeaveGuild;
+				guildController.OnRemoveGuildMember -= GuildController_OnRemoveMember;
+				guildController.OnLeaveGuild -= GuildController_OnLeaveGuild;
+				guildController.OnReceiveGuildResult -= GuildController_OnReceiveGuildResult;
 			}
 		}
 
@@ -67,7 +69,7 @@ namespace FishMMO.Client
 
 		public void GuildController_OnAddGuildMember(long characterID, long guildID, GuildRank rank, string location)
 		{
-			OnGuildAddMember(characterID, rank, location);
+			GuildController_OnAddMember(characterID, rank, location);
 
 			ClientNamingSystem.SetName(NamingSystemType.GuildName, guildID, (s) =>
 			{
@@ -84,12 +86,12 @@ namespace FishMMO.Client
 			{
 				if (!newMembers.Contains(id))
 				{
-					OnGuildRemoveMember(id);
+					GuildController_OnRemoveMember(id);
 				}
 			}
 		}
 
-		public void OnLeaveGuild()
+		public void GuildController_OnLeaveGuild()
 		{
 			if (GuildLabel != null)
 			{
@@ -102,7 +104,7 @@ namespace FishMMO.Client
 			Members.Clear();
 		}
 
-		public void OnGuildAddMember(long characterID, GuildRank rank, string location)
+		public void GuildController_OnAddMember(long characterID, GuildRank rank, string location)
 		{
 			if (GuildMemberPrefab != null && GuildMemberParent != null)
 			{
@@ -126,12 +128,35 @@ namespace FishMMO.Client
 			}
 		}
 
-		public void OnGuildRemoveMember(long characterID)
+		public void GuildController_OnRemoveMember(long characterID)
 		{
 			if (Members.TryGetValue(characterID, out UIGuildMember member))
 			{
 				Members.Remove(characterID);
 				Destroy(member.gameObject);
+			}
+		}
+
+		public void GuildController_OnReceiveGuildResult(GuildResultType result)
+		{
+			if (!UIManager.TryGet("UIDialogBox", out UIDialogBox tooltip))
+			{
+				return;
+			}
+			switch (result)
+			{
+				case GuildResultType.Success:
+					break;
+				case GuildResultType.InvalidGuildName:
+					tooltip.Open("Guild name is invalid.", () => { }, () => { });
+					break;
+				case GuildResultType.NameAlreadyExists:
+					tooltip.Open("A guild with that name already exists.", () => { }, () => { });
+					break;
+				case GuildResultType.AlreadyInGuild:
+					tooltip.Open("You are already in a guild!", () => { }, () => { });
+					break;
+				default: return;
 			}
 		}
 

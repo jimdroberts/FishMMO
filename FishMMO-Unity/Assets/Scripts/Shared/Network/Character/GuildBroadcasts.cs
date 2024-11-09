@@ -48,4 +48,17 @@ namespace FishMMO.Shared
 		public long GuildMemberID;
 		public GuildRank Rank;
 	}
+
+	public enum GuildResultType : byte
+	{
+		Success = 0,
+		InvalidGuildName,
+		NameAlreadyExists,
+		AlreadyInGuild,
+	}
+
+	public struct GuildResultBroadcast : IBroadcast
+	{
+		public GuildResultType Result;
+	}
 }

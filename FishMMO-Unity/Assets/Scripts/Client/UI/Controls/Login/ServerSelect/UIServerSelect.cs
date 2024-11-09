@@ -146,7 +146,6 @@ namespace FishMMO.Client
 
 		public void OnClick_Refresh()
 		{
-			// TODO -- there should be a timer on the server too
 			if (nextRefresh < 0)
 			{
 				nextRefresh = RefreshRate;

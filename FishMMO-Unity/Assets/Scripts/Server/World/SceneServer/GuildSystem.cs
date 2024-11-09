@@ -294,6 +294,10 @@ namespace FishMMO.Server
 			if (guildController == null || guildController.ID > 0)
 			{
 				// already in a guild
+				Server.Broadcast(conn, new GuildResultBroadcast()
+				{
+					Result = GuildResultType.AlreadyInGuild,
+				}, true, Channel.Reliable);
 				return;
 			}
 
@@ -302,14 +306,20 @@ namespace FishMMO.Server
 
 			if (!Constants.Authentication.IsAllowedGuildName(msg.GuildName))
 			{
-				// we should tell the player the guild name is not valid TODO
+				Server.Broadcast(conn, new GuildResultBroadcast()
+				{
+					Result = GuildResultType.InvalidGuildName,
+				}, true, Channel.Reliable);
 				return;
 			}
 
 			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 			if (GuildService.Exists(dbContext, msg.GuildName))
 			{
-				// guild name is taken
+				Server.Broadcast(conn, new GuildResultBroadcast()
+				{
+					Result = GuildResultType.NameAlreadyExists,
+				}, true, Channel.Reliable);
 				return;
 			}
 			if (GuildService.TryCreate(dbContext, msg.GuildName, out GuildEntity newGuild))

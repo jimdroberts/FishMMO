@@ -171,7 +171,7 @@ namespace FishMMO.Shared
 			ability.Objects.Add(id, abilityObjects);
 			abilityObject.ContainerID = id;
 
-			Debug.Log(caster.CharacterName + " at " + caster.Transform.position.ToString() + " Spawned Ability at: " + abilityObject.Transform.position.ToString() + " rot: " + abilityObject.Transform.rotation.eulerAngles.ToString());
+			//Debug.Log(caster.CharacterName + " at " + caster.Transform.position.ToString() + " Spawned Ability at: " + abilityObject.Transform.position.ToString() + " rot: " + abilityObject.Transform.rotation.eulerAngles.ToString());
 
 			// Reset id for spawning
 			id = 0;

@@ -16,6 +16,7 @@ namespace FishMMO.Shared
 		public event Action<HashSet<long>> OnValidateGuildMembers;
 		public event Action<long> OnRemoveGuildMember;
 		public event Action OnLeaveGuild;
+		public event Action<GuildResultType> OnReceiveGuildResult;
 
 		public long ID { get { return GID.Value; } set { GID.Value = value; } }
 		public GuildRank Rank { get; set; }
@@ -63,6 +64,7 @@ namespace FishMMO.Shared
 				ClientManager.RegisterBroadcast<GuildAddMultipleBroadcast>(OnClientGuildAddMultipleBroadcastReceived);
 				ClientManager.RegisterBroadcast<GuildLeaveBroadcast>(OnClientGuildLeaveBroadcastReceived);
 				ClientManager.RegisterBroadcast<GuildRemoveBroadcast>(OnClientGuildRemoveBroadcastReceived);
+				ClientManager.RegisterBroadcast<GuildResultBroadcast>(OnClientGuildResultBroadcastReceived);
 
 				if (PlayerCharacter != null)
 				{
@@ -82,6 +84,7 @@ namespace FishMMO.Shared
 				ClientManager.UnregisterBroadcast<GuildAddMultipleBroadcast>(OnClientGuildAddMultipleBroadcastReceived);
 				ClientManager.UnregisterBroadcast<GuildLeaveBroadcast>(OnClientGuildLeaveBroadcastReceived);
 				ClientManager.UnregisterBroadcast<GuildRemoveBroadcast>(OnClientGuildRemoveBroadcastReceived);
+				ClientManager.UnregisterBroadcast<GuildResultBroadcast>(OnClientGuildResultBroadcastReceived);
 			}
 		}
 
@@ -146,6 +149,11 @@ namespace FishMMO.Shared
 		public void OnClientGuildRemoveBroadcastReceived(GuildRemoveBroadcast msg, Channel channel)
 		{
 			OnRemoveGuildMember?.Invoke(msg.GuildMemberID);
+		}
+
+		public void OnClientGuildResultBroadcastReceived(GuildResultBroadcast msg, Channel channel)
+		{
+			OnReceiveGuildResult?.Invoke(msg.Result);
 		}
 #endif
 	}
