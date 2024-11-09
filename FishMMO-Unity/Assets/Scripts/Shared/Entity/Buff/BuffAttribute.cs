@@ -4,13 +4,13 @@ namespace FishMMO.Shared
 {
 	public class BuffAttribute
 	{
-		public int value;
-		public CharacterAttributeTemplate template;
+		public int Value;
+		public CharacterAttributeTemplate Template;
 
 		public BuffAttribute(int value, CharacterAttributeTemplate template)
 		{
-			this.value = value;
-			this.template = template;
+			this.Value = value;
+			this.Template = template;
 		}
 
 		public string Tooltip()
@@ -18,12 +18,12 @@ namespace FishMMO.Shared
 			using (var sb = ZString.CreateStringBuilder())
 			{
 				sb.Append("<color=#a66ef5>");
-				sb.Append(template.Name);
-				if (template != null)
+				sb.Append(Template.Name);
+				if (Template != null)
 				{
-					sb.Append(template.name);
+					sb.Append(Template.name);
 					sb.Append(": ");
-					sb.Append(value);
+					sb.Append(Value);
 				}
 				sb.Append("</color>");
 				return sb.ToString();

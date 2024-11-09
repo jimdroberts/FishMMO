@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Collections;
 
 namespace FishMMO.Shared
 {
@@ -15,14 +16,35 @@ namespace FishMMO.Shared
 			{
 				return 0;
 			}
-			if (attacker.TryGet(out IFactionController attackerFactionController) &&
+
+			/*if (attacker.TryGet(out IFactionController attackerFactionController) &&
 				defender.TryGet(out IFactionController defenderFactionController) &&
 				attackerFactionController.GetAllianceLevel(defenderFactionController) == FactionAllianceLevel.Enemy)
 			{
 				Debug.Log($"Knockback! {Force}");
+			}*/
+
+			BaseCharacter character = defender as BaseCharacter;
+			if (character != null)
+			{
+				// Calculate the knockback direction
+				Vector3 knockbackDirection = abilityObject.transform.forward;
+
+				character.StartCoroutine(SmoothKnockback(defender.Transform, knockbackDirection, Force));
 			}
-			// knockback doesn't count as a hit
+
+			// Knockback doesn't count as a hit
 			return 0;
+		}
+
+		private IEnumerator SmoothKnockback(Transform target, Vector3 direction, float initialForce)
+		{
+			while (initialForce > 0.0f)
+			{
+				target.position += direction * initialForce * Time.deltaTime;
+				initialForce *= 0.8f;
+				yield return null;
+			}
 		}
 	}
 }

@@ -31,12 +31,12 @@ namespace FishMMO.Server
 			if (character != null &&
 				character.TryGet(out InventoryController inventoryController))
 			{
-				BaseItemTemplate[] itemRewards = tier.ItemRewards;
-				if (itemRewards != null && itemRewards.Length > 0 && inventoryController.FreeSlots() >= itemRewards.Length)
+				List<BaseItemTemplate> itemRewards = tier.ItemRewards;
+				if (itemRewards != null && itemRewards.Count > 0 && inventoryController.FreeSlots() >= itemRewards.Count)
 				{
 					List<InventorySetItemBroadcast> modifiedItemBroadcasts = new List<InventorySetItemBroadcast>();
 
-					for (int i = 0; i < itemRewards.Length; ++i)
+					for (int i = 0; i < itemRewards.Count; ++i)
 					{
 						Item newItem = new Item(123, 0, itemRewards[i].ID, 1);
 

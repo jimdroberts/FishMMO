@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Runtime.CompilerServices;
 
 namespace FishMMO.Shared
 {
@@ -8,6 +9,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Returns the number clamped to the specified minimum and maximum value.
 		/// </summary>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static ushort Clamp(this ushort number, ushort minimum, ushort maximum)
 		{
 			if (number < minimum)
@@ -24,6 +26,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Returns the number of digits of the current value.
 		/// </summary>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static int DigitCount(this ushort number)
 		{
 			if (number != 0)
@@ -36,6 +39,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Returns the specified digit of the number. Where zero is the least significant digit.
 		/// </summary>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static ushort GetDigit(this ushort number, int digit)
 		{
 			const byte MIN_DIGITS = 0;

@@ -5,6 +5,7 @@ using UnityEngine.AI;
 
 namespace FishMMO.Shared
 {
+	[RequireComponent(typeof(NavMeshAgent))]
 	public class AIController : CharacterBehaviour
 	{
 		public BaseAIState WanderState;
@@ -14,6 +15,9 @@ namespace FishMMO.Shared
 		public BaseAIState IdleState;
 		public BaseAIState AttackingState;
 		public BaseAIState DeadState;
+		public List<BaseAIState> MovementStates = new List<BaseAIState>();
+
+		public Transform LookTarget;
 
 		//public List<AIState> AllowedRandomStates;
 
@@ -62,8 +66,6 @@ namespace FishMMO.Shared
 		/// </summary>
 		public float InteractionDistance = 1.5f;
 
-		public readonly List<BaseAIState> MovementStates = new List<BaseAIState>();
-
 		private Transform target;
 		private float nextUpdate = 0;
 
@@ -90,11 +92,6 @@ namespace FishMMO.Shared
 			if (Agent == null)
 			{
 				Agent = GetComponent<NavMeshAgent>();
-				if (Agent == null)
-				{
-					gameObject.SetActive(false);
-					return;
-				}
 			}
 
 			Transform = transform;
@@ -118,10 +115,11 @@ namespace FishMMO.Shared
 			}
 		}
 
-		public void Initialize(Transform home, BaseAIState initialState, Vector3[] waypoints = null)
+		public void Initialize(Transform home, BaseAIState initialState, AgentAvoidancePriority avoidancePriority = AgentAvoidancePriority.Low, Vector3[] waypoints = null)
 		{
 			Home = home;
 			Waypoints = waypoints;
+			Agent.avoidancePriority = (int)avoidancePriority;
 
 			// Set initial state
 			ChangeState(initialState);
@@ -161,6 +159,10 @@ namespace FishMMO.Shared
 					nextUpdate = CurrentState.UpdateRate;
 				}
 				nextUpdate -= Time.deltaTime;
+			}
+			if (LookTarget != null)
+			{
+				FaceLookTarget();
 			}
 		}
 
@@ -286,6 +288,19 @@ namespace FishMMO.Shared
 				Agent.SetDestination(Waypoints[closestIndex]);
 				CurrentWaypointIndex = 0;
 			}
+		}
+
+		public void FaceLookTarget()
+		{
+			// Get the direction from the agent to the LookTarget
+			Vector3 direction = LookTarget.position - transform.position;
+			direction.y = 0;
+
+			// Calculate the rotation needed to face the target
+			Quaternion targetRotation = Quaternion.LookRotation(direction);
+
+			// Apply a smooth rotation (you can adjust the speed of the rotation here)
+			transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, Time.deltaTime * 5f);
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]

@@ -15,7 +15,6 @@ namespace FishMMO.Shared
 		public uint UseCount;
 		public uint MaxStacks;
 		public bool IsPermanent;
-		// is this considered a debuff? debuffs only apply to enemies
 		public bool IsDebuff;
 		//public AudioClip OnApplySounds;
 		//public AudioClip OnTickSounds;

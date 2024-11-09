@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Runtime.CompilerServices;
 
 namespace FishMMO.Shared
 {
@@ -7,6 +8,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Returns the absolute value of the difference between two values.
 		/// </summary>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static ulong AbsoluteSubtract(this ulong number, ulong other)
 		{
 			return (number > other) ? number - other : other - number;
@@ -15,6 +17,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Returns the number clamped to the specified minimum and maximum value.
 		/// </summary>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static ulong Clamp(this ulong number, ulong minimum, ulong maximum)
 		{
 			if (number < minimum)
@@ -31,6 +34,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Returns the number of digits of the current value.
 		/// </summary>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static int DigitCount(this ulong number)
 		{
 			if (number != 0)
@@ -43,6 +47,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Returns the specified digit of the number. Where zero is the least significant digit.
 		/// </summary>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static ulong GetDigit(this ulong number, int digit)
 		{
 			const byte MIN_DIGITS = 0;

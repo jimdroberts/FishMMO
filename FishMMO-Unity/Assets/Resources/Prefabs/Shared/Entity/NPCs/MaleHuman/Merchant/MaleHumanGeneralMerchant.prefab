@@ -21,6 +21,9 @@ GameObject:
   - component: {fileID: 2904084393932906552}
   - component: {fileID: 1344006232850483490}
   - component: {fileID: 572545888245421589}
+  - component: {fileID: 660248880258155722}
+  - component: {fileID: 2963138766242885534}
+  - component: {fileID: 5788082746784412897}
   m_Layer: 0
   m_Name: MaleHumanGeneralMerchant
   m_TagString: Untagged
@@ -222,6 +225,8 @@ MonoBehaviour:
   IdleState: {fileID: 0}
   AttackingState: {fileID: 0}
   DeadState: {fileID: 0}
+  MovementStates: []
+  LookTarget: {fileID: 0}
   MinLeashRange: 100
   MaxLeashRange: 500
   Waypoints: []
@@ -304,6 +309,7 @@ MonoBehaviour:
   _componentIndexCache: 6
   _addedNetworkObject: {fileID: 689555114688187283}
   _networkObjectCache: {fileID: 689555114688187283}
+  isAggressive: 0
   template: {fileID: 11400000, guid: 77a3fb139fbe85a43a013e72d3b303a3, type: 2}
 --- !u!114 &572545888245421589
 MonoBehaviour:
@@ -320,3 +326,84 @@ MonoBehaviour:
   _componentIndexCache: 7
   _addedNetworkObject: {fileID: 689555114688187283}
   _networkObjectCache: {fileID: 689555114688187283}
+  AttributeBonuses: []
+--- !u!195 &660248880258155722
+NavMeshAgent:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3223382129909948304}
+  m_Enabled: 1
+  m_AgentTypeID: 0
+  m_Radius: 0.5
+  m_Speed: 3.5
+  m_Acceleration: 8
+  avoidancePriority: 50
+  m_AngularSpeed: 120
+  m_StoppingDistance: 0
+  m_AutoTraverseOffMeshLink: 1
+  m_AutoBraking: 1
+  m_AutoRepath: 1
+  m_Height: 2
+  m_BaseOffset: 1
+  m_WalkableMask: 4294967295
+  m_ObstacleAvoidanceType: 2
+--- !u!114 &2963138766242885534
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3223382129909948304}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a2836e36774ca1c4bbbee976e17b649c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 689555114688187283}
+  _networkObjectCache: {fileID: 0}
+  _componentConfiguration: 0
+  _synchronizeParent: 0
+  _packing:
+    Position: 1
+    Rotation: 1
+    Scale: 0
+  _interpolation: 2
+  _extrapolation: 2
+  _enableTeleport: 0
+  _teleportThreshold: 1
+  _clientAuthoritative: 0
+  _sendToOwner: 1
+  _interval: 1
+  _synchronizePosition: 1
+  _positionSnapping:
+    X: 0
+    Y: 0
+    Z: 0
+  _synchronizeRotation: 1
+  _rotationSnapping:
+    X: 0
+    Y: 0
+    Z: 0
+  _synchronizeScale: 1
+  _scaleSnapping:
+    X: 0
+    Y: 0
+    Z: 0
+--- !u!114 &5788082746784412897
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3223382129909948304}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c71fd7f855ec523429999fc4e14a1928, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _overrideType: 1
+  _updateHostVisibility: 1
+  _observerConditions: []

@@ -18,7 +18,7 @@ namespace FishMMO.Shared
 	[RequireComponent(typeof(BuffController))]
 	[RequireComponent(typeof(CharacterAttributeController))]
 	[RequireComponent(typeof(CharacterDamageController))]
-	public class Pet : BaseCharacter
+	public class Pet : NPC
 	{
         	public ICharacter PetOwner;
 	}

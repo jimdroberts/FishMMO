@@ -10,7 +10,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8136b5d45d0dc424d8dd6607909c74a4, type: 3}
-  m_Name: Increase Armor
+  m_Name: Minor Increase Armor
   m_EditorClassIdentifier: 
   FXPrefab: {fileID: 0}
   Description: 3 Slightly increases the characters armor.
@@ -21,7 +21,6 @@ MonoBehaviour:
   MaxStacks: 0
   IsPermanent: 0
   IsDebuff: 0
-  IndependantStackTimer: 0
   BonusAttributes:
   - Value: 5
     Template: {fileID: 11400000, guid: 0892f64b2462ac94db21d06df7047e06, type: 2}

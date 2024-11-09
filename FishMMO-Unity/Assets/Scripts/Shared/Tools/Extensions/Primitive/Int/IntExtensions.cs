@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Runtime.CompilerServices;
+using UnityEngine;
 
 namespace FishMMO.Shared
 {
@@ -7,6 +9,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Returns the absolute value of the number.
 		/// </summary>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static int Absolute(this int number)
 		{
 			return (number < 0) ? -number : number;
@@ -15,6 +18,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Returns the number clamped to the specified minimum and maximum value.
 		/// </summary>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static int Clamp(this int number, int minimum, int maximum)
 		{
 			if (number < minimum)
@@ -31,6 +35,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Returns the number of digits of the current value.
 		/// </summary>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static int DigitCount(this int number)
 		{
 			if (number != 0)
@@ -43,6 +48,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Returns the specified digit of the number. Where zero is the least significant digit.
 		/// </summary>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static int GetDigit(this int number, int digit)
 		{
 			const byte MIN_DIGITS = 0;
@@ -55,6 +61,26 @@ namespace FishMMO.Shared
 				number /= BASE_TEN;
 			}
 			return number % BASE_TEN;
+		}
+
+		/// <summary>
+		/// Returns a rounded percent of the number.
+		/// For example, 100.PercentOf(25) returns 25. (25% of 100).
+		/// </summary>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static int PercentOf(this int number, int percent)
+		{
+			return Mathf.RoundToInt(number * (percent * 0.01f));
+		}
+
+		/// <summary>
+		/// Subtracts a percentage from the number and returns the result, rounded to the nearest integer.
+		/// For example, 100.PercentFrom(25) returns 75. (100 - 25% of 100).
+		/// </summary>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static int PercentFrom(this int number, int percent)
+		{
+			return Mathf.RoundToInt(number * (1 - (percent * 0.01f)));
 		}
 	}
 }
