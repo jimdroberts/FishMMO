@@ -139,7 +139,7 @@ namespace FishMMO.Client
 
 		public void GuildController_OnReceiveGuildResult(GuildResultType result)
 		{
-			if (!UIManager.TryGet("UIDialogBox", out UIDialogBox tooltip))
+			if (!UIManager.TryGet("UIChat", out UIChat chat))
 			{
 				return;
 			}
@@ -148,13 +148,13 @@ namespace FishMMO.Client
 				case GuildResultType.Success:
 					break;
 				case GuildResultType.InvalidGuildName:
-					tooltip.Open("Guild name is invalid.", () => { }, () => { });
+					chat.InstantiateChatMessage(ChatChannel.System, "", "The requested guild name is invalid.");
 					break;
 				case GuildResultType.NameAlreadyExists:
-					tooltip.Open("A guild with that name already exists.", () => { }, () => { });
+					chat.InstantiateChatMessage(ChatChannel.System, "", "A guild with that name already exists.");
 					break;
 				case GuildResultType.AlreadyInGuild:
-					tooltip.Open("You are already in a guild!", () => { }, () => { });
+					chat.InstantiateChatMessage(ChatChannel.System, "", "You are already in a guild!");
 					break;
 				default: return;
 			}
