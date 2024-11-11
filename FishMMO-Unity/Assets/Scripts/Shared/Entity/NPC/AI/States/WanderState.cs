@@ -1,8 +1,10 @@
 ﻿using System.Collections.Generic;
+using UnityEngine;
 using UnityEngine.AI;
 
 namespace FishMMO.Shared
 {
+	[CreateAssetMenu(fileName = "New AI Wander State", menuName = "Character/NPC/AI/Wander State", order = 0)]
 	public class WanderState : BaseAIState
 	{
 		public float WanderRadius;

@@ -90,5 +90,14 @@ namespace FishMMO.Shared
 						Regex.IsMatch(guildName, @"^[A-Za-z]+(?: [A-Za-z]+){0,2}$");
 			}
 		}
+
+		public static class Character
+		{
+			public const float SprintSpeed = 6.0f;
+			public const float MoveSpeed = 4.0f;
+			public const float CrouchSpeed = 2.0f;
+			public const float JumpUpSpeed = 6.5f;
+			public static readonly Vector3 Gravity = new Vector3(0, -14.0f, 0);
+		}
 	}
 }

@@ -21,6 +21,11 @@ namespace FishMMO.Shared
 		{
 			base.OnAwake();
 
+			AddNPCAttributes();
+		}
+
+		private void AddNPCAttributes()
+		{
 			if (AttributeBonuses != null &&
 				AttributeBonuses.Attributes != null &&
 				this.TryGet(out ICharacterAttributeController attributeController))

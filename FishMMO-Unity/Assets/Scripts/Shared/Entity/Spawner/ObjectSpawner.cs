@@ -225,6 +225,12 @@ namespace FishMMO.Shared
 						return;
 					}
 
+					IAIController aiController = nob.GetComponent<IAIController>();
+					if (aiController != null)
+					{
+						aiController.Initialize(spawnPosition);
+					}
+
 					ISpawnable nobSpawnable = nob.GetComponent<ISpawnable>();
 					if (nobSpawnable != null)
 					{

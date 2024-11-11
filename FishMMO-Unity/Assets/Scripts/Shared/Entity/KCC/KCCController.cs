@@ -30,12 +30,6 @@ namespace FishMMO.Shared
 
 	public class KCCController : MonoBehaviour, ICharacterController
 	{
-		public const float StableSprintSpeedConstant = 6.0f;
-		public const float StableMoveSpeedConstant = 4.0f;
-		public const float StableCrouchSpeedConstant = 2.0f;
-		public const float StableJumpUpSpeedConstant = 6.5f;
-		public static readonly Vector3 GravityConstant = new Vector3(0, -14.0f, 0);
-
 		public IPlayerCharacter Character;
 		public KinematicCharacterMotor Motor;
 
@@ -282,7 +276,7 @@ namespace FishMMO.Shared
 						if (BonusOrientationMethod == BonusOrientationMethod.TowardsGravity)
 						{
 							// Rotate from current up to invert gravity
-							Vector3 smoothedGravityDir = Vector3.Slerp(currentUp, -GravityConstant.normalized, 1 - Mathf.Exp(-BonusOrientationSharpness * deltaTime));
+							Vector3 smoothedGravityDir = Vector3.Slerp(currentUp, -Constants.Character.Gravity.normalized, 1 - Mathf.Exp(-BonusOrientationSharpness * deltaTime));
 							currentRotation = Quaternion.FromToRotation(currentUp, smoothedGravityDir) * currentRotation;
 						}
 						else if (BonusOrientationMethod == BonusOrientationMethod.TowardsGroundSlopeAndGravity)
@@ -299,7 +293,7 @@ namespace FishMMO.Shared
 							}
 							else
 							{
-								Vector3 smoothedGravityDir = Vector3.Slerp(currentUp, -GravityConstant.normalized, 1 - Mathf.Exp(-BonusOrientationSharpness * deltaTime));
+								Vector3 smoothedGravityDir = Vector3.Slerp(currentUp, -Constants.Character.Gravity.normalized, 1 - Mathf.Exp(-BonusOrientationSharpness * deltaTime));
 								currentRotation = Quaternion.FromToRotation(currentUp, smoothedGravityDir) * currentRotation;
 							}
 						}
@@ -351,13 +345,13 @@ namespace FishMMO.Shared
 							Vector3 inputRight = Vector3.Cross(_moveInputVector, Motor.CharacterUp);
 							Vector3 reorientedInput = Vector3.Cross(effectiveGroundNormal, inputRight).normalized * _moveInputVector.magnitude;
 
-							float targetSpeed = StableMoveSpeedConstant;
+							float targetSpeed = Constants.Character.MoveSpeed;
 
 							if (Character.TryGet(out ICharacterAttributeController attributeController))
 							{
 								if (_isCrouching)
 								{
-									targetSpeed = StableCrouchSpeedConstant;
+									targetSpeed = Constants.Character.CrouchSpeed;
 								}
 								else if (_sprintInputDown &&
 										 RunSpeedTemplate != null &&
@@ -370,13 +364,13 @@ namespace FishMMO.Shared
 									if (stamina.CurrentValue >= currentStaminaCost)
 									{
 										stamina.Consume(currentStaminaCost);
-										targetSpeed = StableSprintSpeedConstant * runSpeedModifier.FinalValueAsPct;
+										targetSpeed = Constants.Character.SprintSpeed * runSpeedModifier.FinalValueAsPct;
 									}
 								}
 								else if (MoveSpeedTemplate != null &&
 									attributeController.TryGetAttribute(MoveSpeedTemplate, out CharacterAttribute moveSpeedModifier))
 								{
-									targetSpeed = StableMoveSpeedConstant * moveSpeedModifier.FinalValueAsPct;
+									targetSpeed = Constants.Character.MoveSpeed * moveSpeedModifier.FinalValueAsPct;
 								}
 
 								/*if (_swimming &&
@@ -390,11 +384,11 @@ namespace FishMMO.Shared
 							{
 								if (_isCrouching)
 								{
-									targetSpeed = StableCrouchSpeedConstant;
+									targetSpeed = Constants.Character.CrouchSpeed;
 								}
 								else if (_sprintInputDown)
 								{
-									targetSpeed = StableSprintSpeedConstant;
+									targetSpeed = Constants.Character.SprintSpeed;
 								}
 							}
 
@@ -452,7 +446,7 @@ namespace FishMMO.Shared
 									GravityTemplate != null &&
 									attributeController.TryGetAttribute(GravityTemplate, out CharacterAttribute gravityModifier))
 								{
-									currentVelocity += GravityConstant * gravityModifier.FinalValueAsPct * deltaTime;
+									currentVelocity += Constants.Character.Gravity * gravityModifier.FinalValueAsPct * deltaTime;
 								}
 
 								// Fast Fall
@@ -460,13 +454,13 @@ namespace FishMMO.Shared
 									FastFallSpeedTemplate != null &&
 									attributeController.TryGetAttribute(FastFallSpeedTemplate, out CharacterAttribute fastFallModifier))
 								{
-									currentVelocity.y += GravityConstant.y * fastFallModifier.FinalValueAsPct * deltaTime;
+									currentVelocity.y += Constants.Character.Gravity.y * fastFallModifier.FinalValueAsPct * deltaTime;
 								}
 							}
 							else
 							{
 								// Default Gravity
-								currentVelocity += GravityConstant * deltaTime;
+								currentVelocity += Constants.Character.Gravity * deltaTime;
 							}
 
 							// Drag
@@ -498,7 +492,7 @@ namespace FishMMO.Shared
 								Motor.ForceUnground();
 
 								// Add to the return velocity and reset jump state
-								float jumpSpeed = StableJumpUpSpeedConstant;
+								float jumpSpeed = Constants.Character.JumpUpSpeed;
 								if (JumpSpeedTemplate != null &&
 									attributeController.TryGetAttribute(JumpSpeedTemplate, out CharacterAttribute jumpSpeedModifier))
 								{

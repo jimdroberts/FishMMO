@@ -6,8 +6,10 @@ using UnityEngine.AI;
 namespace FishMMO.Shared
 {
 	[RequireComponent(typeof(NavMeshAgent))]
-	public class AIController : CharacterBehaviour
+	public class AIController : CharacterBehaviour, IAIController
 	{
+		public BaseAIState InitialState;
+		public AgentAvoidancePriority AvoidancePriority;
 		public BaseAIState WanderState;
 		public BaseAIState PatrolState;
 		public BaseAIState ReturnHomeState;
@@ -23,7 +25,7 @@ namespace FishMMO.Shared
 
 		public Transform Transform { get; private set; }
 		public PhysicsScene PhysicsScene { get; private set; }
-		public Transform Home { get; private set; }
+		public Vector3 Home { get; private set;}
 		public Transform Target
 		{
 			get
@@ -78,9 +80,9 @@ namespace FishMMO.Shared
 			{
 				if (WanderState != null && WanderState is WanderState wanderState)
 				{
-					DrawDebugCircle(Home.position, wanderState.WanderRadius, Color.white);
+					DrawDebugCircle(Home, wanderState.WanderRadius, Color.white);
 				}
-				DrawDebugCircle(Home.position, 0.5f, Color.white);
+				DrawDebugCircle(Home, 0.5f, Color.white);
 			}
 		}
 #endif
@@ -96,33 +98,16 @@ namespace FishMMO.Shared
 
 			Transform = transform;
 			PhysicsScene = gameObject.scene.GetPhysicsScene();
-
-			if (WanderState != null)
-			{
-				MovementStates.Add(WanderState);
-			}
-			if (PatrolState != null)
-			{
-				MovementStates.Add(PatrolState);
-			}
-			if (ReturnHomeState != null)
-			{
-				MovementStates.Add(ReturnHomeState);
-			}
-			if (IdleState != null)
-			{
-				MovementStates.Add(IdleState);
-			}
+			Agent.avoidancePriority = (int)AvoidancePriority;
 		}
 
-		public void Initialize(Transform home, BaseAIState initialState, AgentAvoidancePriority avoidancePriority = AgentAvoidancePriority.Low, Vector3[] waypoints = null)
+		public void Initialize(Vector3 home, Vector3[] waypoints = null)
 		{
 			Home = home;
 			Waypoints = waypoints;
-			Agent.avoidancePriority = (int)avoidancePriority;
 
 			// Set initial state
-			ChangeState(initialState);
+			ChangeState(InitialState);
 		}
 
 		private void Update()
@@ -132,7 +117,7 @@ namespace FishMMO.Shared
 				if (nextUpdate < 0.0f)
 				{
 					// If the target is too far away from home, return home and forget the target
-					float distanceToHome = Vector3.Distance(Transform.position, Home.position);
+					float distanceToHome = Vector3.Distance(Transform.position, Home);
 					if (distanceToHome >= MinLeashRange)
 					{
 						// Warp back to home if we have somehow reached a significant leash range
@@ -144,7 +129,7 @@ namespace FishMMO.Shared
 								characterDamageController.CompleteHeal();
 							}
 							// Warp
-							Transform.position = Home.position;
+							Transform.position = Home;
 							Target = null;
 						}
 						// Otherwise run back
@@ -231,7 +216,7 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void SetRandomHomeDestination(float radius = 0.0f)
 		{
-			Vector3 randomDirection = Home.position;
+			Vector3 randomDirection = Home;
 			if (radius > 0.0f)
 			{
 				randomDirection += Vector3Extensions.RandomOnUnitSphere() * radius;
