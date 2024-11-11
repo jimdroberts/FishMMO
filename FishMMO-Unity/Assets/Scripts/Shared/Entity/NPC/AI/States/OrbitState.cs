@@ -52,9 +52,9 @@ namespace FishMMO.Shared
 			}
 
 			// Rotate the AI to face the target
-			Vector3 directionToTarget = (controller.Target.position - controller.Transform.position).normalized;
+			Vector3 directionToTarget = (controller.Target.position - controller.Character.Transform.position).normalized;
 			Quaternion targetRotation = Quaternion.LookRotation(directionToTarget);
-			controller.Transform.rotation = Quaternion.Slerp(controller.Transform.rotation, targetRotation, RotationSpeed * Time.deltaTime);
+			controller.Character.Transform.rotation = Quaternion.Slerp(controller.Character.Transform.rotation, targetRotation, RotationSpeed * Time.deltaTime);
 		}
 	}
 }

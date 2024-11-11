@@ -24,7 +24,7 @@ GameObject:
   - component: {fileID: 660248880258155722}
   - component: {fileID: 2963138766242885534}
   - component: {fileID: 5788082746784412897}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: MaleHumanGeneralMerchant
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -173,7 +173,16 @@ MonoBehaviour:
   <ComponentIndex>k__BackingField: 0
   <PredictedSpawn>k__BackingField: {fileID: 0}
   <PredictedOwner>k__BackingField: {fileID: 0}
-  NetworkBehaviours: []
+  NetworkBehaviours:
+  - {fileID: 7945001740132727675}
+  - {fileID: 8156109797912518976}
+  - {fileID: 4890296002639026647}
+  - {fileID: 8398088595326618500}
+  - {fileID: 3553689635749972857}
+  - {fileID: 2904084393932906552}
+  - {fileID: 1344006232850483490}
+  - {fileID: 572545888245421589}
+  - {fileID: 2963138766242885534}
   <InitializedParentNetworkBehaviour>k__BackingField: {fileID: 0}
   <InitializedNestedNetworkObjects>k__BackingField: []
   _isNetworked: 1
@@ -195,12 +204,12 @@ MonoBehaviour:
   _spectatorInterpolation: 2
   _enableTeleport: 0
   _teleportThreshold: 1
-  <PrefabId>k__BackingField: 10
+  <PrefabId>k__BackingField: 0
   <SpawnableCollectionId>k__BackingField: 0
   <AssetPathHash>k__BackingField: 3773011613940906536
   <SceneId>k__BackingField: 0
   SerializedTransformProperties:
-    Position: {x: -150.43001, y: 10.53, z: 41.04}
+    Position: {x: 0, y: 0, z: 0}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
     LocalScale: {x: 1, y: 1, z: 1}
 --- !u!114 &4890296002639026647
@@ -218,7 +227,9 @@ MonoBehaviour:
   _componentIndexCache: 2
   _addedNetworkObject: {fileID: 689555114688187283}
   _networkObjectCache: {fileID: 689555114688187283}
-  WanderState: {fileID: 0}
+  InitialState: {fileID: 11400000, guid: b4bee0c12e3b92c48b285850bd5d47c1, type: 2}
+  AvoidancePriority: 50
+  WanderState: {fileID: 11400000, guid: b4bee0c12e3b92c48b285850bd5d47c1, type: 2}
   PatrolState: {fileID: 0}
   ReturnHomeState: {fileID: 0}
   RetreatState: {fileID: 0}
@@ -326,7 +337,7 @@ MonoBehaviour:
   _componentIndexCache: 7
   _addedNetworkObject: {fileID: 689555114688187283}
   _networkObjectCache: {fileID: 689555114688187283}
-  AttributeBonuses: []
+  AttributeBonuses: {fileID: 0}
 --- !u!195 &660248880258155722
 NavMeshAgent:
   m_ObjectHideFlags: 0
@@ -361,9 +372,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a2836e36774ca1c4bbbee976e17b649c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 255
+  _componentIndexCache: 8
   _addedNetworkObject: {fileID: 689555114688187283}
-  _networkObjectCache: {fileID: 0}
+  _networkObjectCache: {fileID: 689555114688187283}
   _componentConfiguration: 0
   _synchronizeParent: 0
   _packing:

@@ -8,7 +8,6 @@ namespace FishMMO.Shared
 	public class WanderState : BaseAIState
 	{
 		public float WanderRadius;
-		public float RandomDestinationRate;
 
 		public override void Enter(AIController controller)
 		{

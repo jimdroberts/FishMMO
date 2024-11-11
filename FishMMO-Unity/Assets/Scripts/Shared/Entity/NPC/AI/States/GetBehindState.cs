@@ -18,7 +18,7 @@ namespace FishMMO.Shared
 			}
 
 			// Calculate the position behind the target
-			Vector3 behindPosition = CalculateBehindPosition(controller.Transform.position, controller.Target.position, controller.Target.forward);
+			Vector3 behindPosition = CalculateBehindPosition(controller.Character.Transform.position, controller.Target.position, controller.Target.forward);
 
 			// Set the destination
 			NavMeshHit hit;
@@ -42,9 +42,9 @@ namespace FishMMO.Shared
 			}
 
 			// Rotate to face the target
-			Vector3 directionToTarget = (controller.Target.position - controller.Transform.position).normalized;
+			Vector3 directionToTarget = (controller.Target.position - controller.Character.Transform.position).normalized;
 			Quaternion targetRotation = Quaternion.LookRotation(directionToTarget);
-			controller.Transform.rotation = Quaternion.Slerp(controller.Transform.rotation, targetRotation, RotationSpeed * Time.deltaTime);
+			controller.Character.Transform.rotation = Quaternion.Slerp(controller.Character.Transform.rotation, targetRotation, RotationSpeed * Time.deltaTime);
 
 			// Check if we reached the destination
 			if (!controller.Agent.pathPending && controller.Agent.remainingDistance < 1.0f)

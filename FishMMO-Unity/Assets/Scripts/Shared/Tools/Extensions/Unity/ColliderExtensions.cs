@@ -34,5 +34,39 @@ namespace FishMMO.Shared
 				}
 			}
 		}
+
+		public static bool TryGetDimensions(this Collider collider, out float height, out float radius)
+		{
+			height = 0f;
+			radius = 0f;
+
+			if (collider == null)
+			{
+				Debug.LogError("Collider is null.");
+				return false;
+			}
+
+			switch (collider)
+			{
+				case SphereCollider sphereCollider:
+					radius = sphereCollider.radius;
+					height = radius * 2f; // Height is the diameter of the sphere
+					break;
+				case CapsuleCollider capsuleCollider:
+					radius = capsuleCollider.radius;
+					height = capsuleCollider.height;
+					break;
+				case BoxCollider boxCollider:
+					radius = Mathf.Max(boxCollider.size.x, boxCollider.size.z) / 2f;
+					height = boxCollider.size.y;
+					break;
+				case MeshCollider meshCollider:
+					radius = Mathf.Max(meshCollider.sharedMesh.bounds.size.x, meshCollider.sharedMesh.bounds.size.z) / 2f;
+					height = meshCollider.sharedMesh.bounds.size.y;
+					break;
+				default: return false;
+			}
+			return true;
+		}
 	}
 }

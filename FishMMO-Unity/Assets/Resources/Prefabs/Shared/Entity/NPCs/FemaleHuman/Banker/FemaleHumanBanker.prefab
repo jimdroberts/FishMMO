@@ -24,7 +24,7 @@ GameObject:
   - component: {fileID: 6630461006965550917}
   - component: {fileID: 2898743231479186744}
   - component: {fileID: 3962825829099883798}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: FemaleHumanBanker
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -181,6 +181,7 @@ MonoBehaviour:
   - {fileID: 2150267445961412781}
   - {fileID: 2419637757703598923}
   - {fileID: 3332016334047483617}
+  - {fileID: 2898743231479186744}
   <InitializedParentNetworkBehaviour>k__BackingField: {fileID: 0}
   <InitializedNestedNetworkObjects>k__BackingField: []
   _isNetworked: 1
@@ -202,7 +203,7 @@ MonoBehaviour:
   _spectatorInterpolation: 2
   _enableTeleport: 0
   _teleportThreshold: 1
-  <PrefabId>k__BackingField: 5
+  <PrefabId>k__BackingField: 6
   <SpawnableCollectionId>k__BackingField: 0
   <AssetPathHash>k__BackingField: 15251200213172248852
   <SceneId>k__BackingField: 0
@@ -225,7 +226,9 @@ MonoBehaviour:
   _componentIndexCache: 2
   _addedNetworkObject: {fileID: 7250114663715075110}
   _networkObjectCache: {fileID: 7250114663715075110}
-  WanderState: {fileID: 0}
+  InitialState: {fileID: 11400000, guid: b4bee0c12e3b92c48b285850bd5d47c1, type: 2}
+  AvoidancePriority: 50
+  WanderState: {fileID: 11400000, guid: b4bee0c12e3b92c48b285850bd5d47c1, type: 2}
   PatrolState: {fileID: 0}
   ReturnHomeState: {fileID: 0}
   RetreatState: {fileID: 0}
@@ -333,7 +336,7 @@ MonoBehaviour:
   _componentIndexCache: 7
   _addedNetworkObject: {fileID: 7250114663715075110}
   _networkObjectCache: {fileID: 7250114663715075110}
-  AttributeBonuses: []
+  AttributeBonuses: {fileID: 0}
 --- !u!195 &6630461006965550917
 NavMeshAgent:
   m_ObjectHideFlags: 0
@@ -368,9 +371,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a2836e36774ca1c4bbbee976e17b649c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _componentIndexCache: 255
+  _componentIndexCache: 8
   _addedNetworkObject: {fileID: 7250114663715075110}
-  _networkObjectCache: {fileID: 0}
+  _networkObjectCache: {fileID: 7250114663715075110}
   _componentConfiguration: 0
   _synchronizeParent: 0
   _packing:

@@ -12,7 +12,22 @@ namespace FishMMO.Shared
 			return Quaternion.Euler(startPosition - ((distance * forward) + (RandomOnUnitSphere(random) * coneRadius)));
 		}
 
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static Vector3 RandomPositionWithinRadius(Vector3 center, float radius)
+		{
+			// Generate a random angle between 0 and 2π
+			float angle = UnityEngine.Random.Range(0f, 2 * Mathf.PI);
+
+			// Generate a random distance between 0 and radius
+			float distance = UnityEngine.Random.Range(0f, radius);
+
+			// Calculate X and Z offsets
+			float xOffset = distance * Mathf.Cos(angle);
+			float zOffset = distance * Mathf.Sin(angle);
+
+			// Return the random position offset from the center
+			return new Vector3(center.x + xOffset, center.y, center.z + zOffset);
+		}
+
 		public static Vector3 RandomOnUnitSphere(System.Random random = null)
 		{
 			if (random == null)

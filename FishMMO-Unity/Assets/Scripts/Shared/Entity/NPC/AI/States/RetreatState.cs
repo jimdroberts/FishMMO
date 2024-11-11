@@ -23,8 +23,8 @@ namespace FishMMO.Shared
 			}
 
 			// Calculate retreat position
-			Vector3 retreatDirection = (controller.Transform.position - controller.Target.position).normalized;
-			Vector3 retreatPosition = controller.Transform.position + retreatDirection * RetreatDistance;
+			Vector3 retreatDirection = (controller.Character.Transform.position - controller.Target.position).normalized;
+			Vector3 retreatPosition = controller.Character.Transform.position + retreatDirection * RetreatDistance;
 
 			// Set the destination for the retreat
 			NavMeshHit hit;
@@ -51,7 +51,7 @@ namespace FishMMO.Shared
 				controller.Agent.remainingDistance < 1.0f)
 			{
 				// Check distance from the target
-				float distanceToTarget = Vector3.Distance(controller.Transform.position, controller.Target.position);
+				float distanceToTarget = Vector3.Distance(controller.Character.Transform.position, controller.Target.position);
 				if (distanceToTarget > SafeDistance)
 				{
 					controller.TransitionToDefaultState(); // Transition to another state if safe distance is maintained
@@ -59,8 +59,8 @@ namespace FishMMO.Shared
 				else
 				{
 					// Continue retreating if not yet at safe distance
-					Vector3 retreatDirection = (controller.Transform.position - controller.Target.position).normalized;
-					Vector3 retreatPosition = controller.Transform.position + retreatDirection * RetreatDistance;
+					Vector3 retreatDirection = (controller.Character.Transform.position - controller.Target.position).normalized;
+					Vector3 retreatPosition = controller.Character.Transform.position + retreatDirection * RetreatDistance;
 
 					NavMeshHit hit;
 					if (NavMesh.SamplePosition(retreatPosition, out hit, RetreatDistance, NavMesh.AllAreas))

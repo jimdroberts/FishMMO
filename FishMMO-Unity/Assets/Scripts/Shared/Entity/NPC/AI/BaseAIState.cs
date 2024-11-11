@@ -14,11 +14,6 @@ namespace FishMMO.Shared
 		public float DetectionRadius;
 		public LayerMask EnemyLayers;
 
-		// Agent
-		public float Radius;
-		public float Height;
-		public float Speed;
-
 		public abstract void Enter(AIController controller);
 		public abstract void Exit(AIController controller);
 		public abstract void UpdateState(AIController controller);
@@ -29,8 +24,8 @@ namespace FishMMO.Shared
 		public virtual bool HasLineOfSight(AIController controller, ICharacter target)
 		{
 			RaycastHit hit;
-			Vector3 direction = (target.Transform.position - controller.Transform.position).normalized;
-			return controller.PhysicsScene.Raycast(controller.Transform.position, direction, out hit) && hit.transform == target.Transform;
+			Vector3 direction = (target.Transform.position - controller.Character.Transform.position).normalized;
+			return controller.PhysicsScene.Raycast(controller.Character.Transform.position, direction, out hit) && hit.transform == target.Transform;
 		}
 
 		/// <summary>
@@ -47,7 +42,7 @@ namespace FishMMO.Shared
 			}
 
 			int overlapCount = controller.PhysicsScene.OverlapSphere(
-					controller.Transform.position,
+					controller.Character.Transform.position,
 					controller.CurrentState.DetectionRadius,
 					Hits,
 					controller.CurrentState.EnemyLayers,

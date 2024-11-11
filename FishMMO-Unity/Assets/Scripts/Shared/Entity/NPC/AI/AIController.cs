@@ -23,7 +23,6 @@ namespace FishMMO.Shared
 
 		//public List<AIState> AllowedRandomStates;
 
-		public Transform Transform { get; private set; }
 		public PhysicsScene PhysicsScene { get; private set; }
 		public Vector3 Home { get; private set;}
 		public Transform Target
@@ -41,7 +40,7 @@ namespace FishMMO.Shared
 				}
 				else
 				{
-					Agent.SetDestination(Transform.position);
+					Agent.SetDestination(Character.Transform.position);
 				}
 			}
 		}
@@ -80,9 +79,9 @@ namespace FishMMO.Shared
 			{
 				if (WanderState != null && WanderState is WanderState wanderState)
 				{
-					DrawDebugCircle(Home, wanderState.WanderRadius, Color.white);
+					DrawDebugCircle(Home, wanderState.WanderRadius, Color.green);
 				}
-				DrawDebugCircle(Home, 0.5f, Color.white);
+				DrawDebugCircle(Home, 0.5f, Color.blue);
 			}
 		}
 #endif
@@ -90,15 +89,15 @@ namespace FishMMO.Shared
 		public override void OnAwake()
 		{
 			base.OnAwake();
-
+			
 			if (Agent == null)
 			{
 				Agent = GetComponent<NavMeshAgent>();
 			}
 
-			Transform = transform;
 			PhysicsScene = gameObject.scene.GetPhysicsScene();
 			Agent.avoidancePriority = (int)AvoidancePriority;
+			Agent.speed = Constants.Character.MoveSpeed;
 		}
 
 		public void Initialize(Vector3 home, Vector3[] waypoints = null)
@@ -110,14 +109,14 @@ namespace FishMMO.Shared
 			ChangeState(InitialState);
 		}
 
-		private void Update()
+		void Update()
 		{
 			if (CurrentState != null)
 			{
 				if (nextUpdate < 0.0f)
 				{
 					// If the target is too far away from home, return home and forget the target
-					float distanceToHome = Vector3.Distance(Transform.position, Home);
+					float distanceToHome = Vector3.Distance(Character.Transform.position, Home);
 					if (distanceToHome >= MinLeashRange)
 					{
 						// Warp back to home if we have somehow reached a significant leash range
@@ -129,7 +128,7 @@ namespace FishMMO.Shared
 								characterDamageController.CompleteHeal();
 							}
 							// Warp
-							Transform.position = Home;
+							Character.Transform.position = Home;
 							Target = null;
 						}
 						// Otherwise run back
@@ -180,8 +179,18 @@ namespace FishMMO.Shared
 			{
 				nextUpdate = CurrentState.UpdateRate;
 
-				Agent.height = newState.Height;
-				Agent.radius = newState.Radius;
+				Collider collider = Character.Transform.GetComponent<Collider>();
+				if (collider != null &&
+					collider.TryGetDimensions(out float height, out float radius))
+				{
+					Agent.height = height;
+					Agent.radius = radius;
+				}
+				else // default height and radius
+				{
+					Agent.height = 2.0f;
+					Agent.radius = 0.5f;
+				}
 			}
 
 			if (targets != null && newState is BaseAttackingState attackingState)
@@ -216,13 +225,13 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void SetRandomHomeDestination(float radius = 0.0f)
 		{
-			Vector3 randomDirection = Home;
+			Vector3 position = Character.Transform.position;
 			if (radius > 0.0f)
 			{
-				randomDirection += Vector3Extensions.RandomOnUnitSphere() * radius;
+				position = Vector3Extensions.RandomPositionWithinRadius(Home, radius);
 			}
 			NavMeshHit hit;
-			if (NavMesh.SamplePosition(randomDirection, out hit, radius, NavMesh.AllAreas))
+			if (NavMesh.SamplePosition(position, out hit, radius, NavMesh.AllAreas))
 			{
 				Agent.SetDestination(hit.position);
 			}
@@ -231,13 +240,13 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void SetRandomDestination(float radius = 0.0f)
 		{
-			Vector3 randomDirection = Transform.position;
+			Vector3 position = Character.Transform.position;
 			if (radius > 0.0f)
 			{
-				randomDirection += Vector3Extensions.RandomOnUnitSphere() * radius;
+				position = Vector3Extensions.RandomPositionWithinRadius(position, radius);
 			}
 			NavMeshHit hit;
-			if (NavMesh.SamplePosition(randomDirection, out hit, radius, NavMesh.AllAreas))
+			if (NavMesh.SamplePosition(position, out hit, radius, NavMesh.AllAreas))
 			{
 				Agent.SetDestination(hit.position);
 			}
@@ -262,7 +271,7 @@ namespace FishMMO.Shared
 				{
 					Vector3 waypoint = Waypoints[i];
 
-					float sqrDistance = (Transform.position - waypoint).sqrMagnitude;
+					float sqrDistance = (Character.Transform.position - waypoint).sqrMagnitude;
 					if (closestIndex < 0 ||
 						sqrDistance < lastSqrDistance)
 					{

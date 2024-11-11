@@ -51,7 +51,7 @@ namespace FishMMO.Shared
 
 		private void TryAttack(AIController controller)
 		{
-			float distanceToTarget = Vector3.Distance(controller.Transform.position, controller.Target.position);
+			float distanceToTarget = Vector3.Distance(controller.Character.Transform.position, controller.Target.position);
 
 			if (distanceToTarget <= controller.InteractionDistance)
 			{
