@@ -44,7 +44,6 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Implement your target picking logic here.
 		/// </summary>
-		/// <param name="targets"></param>
 		public virtual void PickTarget(AIController controller, List<ICharacter> targets)
 		{
 			controller.Target = targets[0].Transform;
@@ -52,9 +51,20 @@ namespace FishMMO.Shared
 
 		private void TryAttack(AIController controller)
 		{
+			if (controller.Target == null)
+			{
+				return;
+			}
+			ICharacter character = controller.Target.GetComponent<ICharacter>();
+			if (character == null)
+			{
+				return;
+			}
+
 			float distanceToTarget = Vector3.Distance(controller.Character.Transform.position, controller.Target.position);
 
-			if (distanceToTarget <= controller.Agent.radius)
+			if (distanceToTarget <= controller.Agent.radius &&
+				HasLineOfSight(controller, character))
 			{
 				// If we are in range. Perform attack
 				PerformAttack(distanceToTarget);
