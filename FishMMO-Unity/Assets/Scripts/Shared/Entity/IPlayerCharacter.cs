@@ -40,8 +40,6 @@ namespace FishMMO.Shared
 		KCCPlayer KCCPlayer { get; }
 
 #if !UNITY_SERVER
-		TextMeshPro CharacterNameLabel { get; set; }
-		TextMeshPro CharacterGuildLabel { get; set; }
 		Camera EquipmentViewCamera { get; set; }
 #endif
 

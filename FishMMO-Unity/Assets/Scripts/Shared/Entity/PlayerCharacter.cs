@@ -1,7 +1,4 @@
-﻿#if !UNITY_SERVER
-using TMPro;
-#endif
-using KinematicCharacterController;
+﻿using KinematicCharacterController;
 using UnityEngine;
 using System;
 using FishNet.Connection;
@@ -36,12 +33,6 @@ namespace FishMMO.Shared
 		#endregion
 
 #if !UNITY_SERVER
-		[SerializeField]
-		private TextMeshPro characterNameLabel;
-		public TextMeshPro CharacterNameLabel { get { return this.characterNameLabel; } set { this.characterNameLabel = value; } }
-		[SerializeField]
-		private TextMeshPro characterGuildLabel;
-		public TextMeshPro CharacterGuildLabel { get { return this.characterGuildLabel; } set { this.characterGuildLabel = value; } }
 		[SerializeField]
 		private Camera equipmentViewCamera;
 		public Camera EquipmentViewCamera { get { return this.equipmentViewCamera; } set { this.equipmentViewCamera = value; } }

@@ -72,6 +72,10 @@ namespace FishMMO.Shared
 #if UNITY_EDITOR
 		void OnDrawGizmos()
 		{
+			if (Agent == null)
+			{
+				return;
+			}
 			DrawDebugCircle(transform.position, Agent.radius, Color.red);
 
 			if (Home != null)

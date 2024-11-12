@@ -1,4 +1,7 @@
 ﻿using UnityEngine;
+#if !UNITY_SERVER
+using TMPro;
+#endif
 
 namespace FishMMO.Shared
 {
@@ -10,6 +13,11 @@ namespace FishMMO.Shared
 		Collider Collider { get; set; }
 		bool IsTeleporting { get; }
 		bool IsSpawned { get; }
+
+#if !UNITY_SERVER
+		TextMeshPro CharacterNameLabel { get; set; }
+		TextMeshPro CharacterGuildLabel { get; set; }
+#endif
 
 		void RegisterCharacterBehaviour(ICharacterBehaviour characterBehaviour);
 		void UnregisterCharacterBehaviour(ICharacterBehaviour characterBehaviour);

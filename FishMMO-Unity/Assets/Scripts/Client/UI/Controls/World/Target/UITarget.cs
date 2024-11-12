@@ -91,10 +91,7 @@ namespace FishMMO.Client
 			// make the UI visible
 			Show();
 
-			if (targetLabel == null)
-			{
-				UpdateTargetLabel(target, interactable);
-			}
+			UpdateTargetLabel(target, interactable);
 		}
 
 		public void TargetController_OnUpdateTarget(Transform target)
@@ -111,6 +108,15 @@ namespace FishMMO.Client
 				{
 					outline.enabled = false;
 				}
+
+#if !UNITY_SERVER
+				ICharacter character = lastTarget.GetComponent<ICharacter>();
+				if (character != null)
+				{
+					character.CharacterNameLabel.gameObject.SetActive(false);
+					character.CharacterGuildLabel.gameObject.SetActive(false);
+				}
+#endif
 			}
 			
 			if (targetLabel != null)
@@ -130,29 +136,41 @@ namespace FishMMO.Client
 				targetLabel = null;
 			}
 
-			Vector3 newPos = target.position;
-
-			Collider collider = target.GetComponent<Collider>();
-
-			float colliderHeight = collider.bounds.size.y * 0.5f;
-
-			newPos.y += colliderHeight;
-
-			string label = target.name.Replace("(Clone)", "");
-			Color color = Color.grey;
-
-			// apply title
-			if (interactable != null &&
-				!string.IsNullOrWhiteSpace(interactable.Title))
+			// Enable the character name labels
+			ICharacter character = interactable.GameObject.GetComponent<ICharacter>();
+			if (character != null)
 			{
-				string hex = interactable.TitleColor.ToHex();
-				if (!string.IsNullOrWhiteSpace(hex))
-				{
-					label += $"\r\n<<color=#{hex}>{interactable.Title}</color>>";
-				}
+#if !UNITY_SERVER
+				character.CharacterNameLabel.gameObject.SetActive(true);
+				character.CharacterGuildLabel.gameObject.SetActive(true);
+#endif
 			}
+			else // Otherwise display an overhead title
+			{
+				Vector3 newPos = target.position;
 
-			targetLabel = LabelMaker.Display3D(label, newPos, color, 1.0f, 0.0f, true);
+				Collider collider = target.GetComponent<Collider>();
+
+				float colliderHeight = collider.bounds.size.y * 0.5f;
+
+				newPos.y += colliderHeight;
+
+				string label = target.name.Replace("(Clone)", "");
+				Color color = Color.grey;
+
+				// apply title
+				if (interactable != null &&
+					!string.IsNullOrWhiteSpace(interactable.Title))
+				{
+					string hex = interactable.TitleColor.ToHex();
+					if (!string.IsNullOrWhiteSpace(hex))
+					{
+						label += $"\r\n<<color=#{hex}>{interactable.Title}</color>>";
+					}
+				}
+
+				targetLabel = LabelMaker.Display3D(label, newPos, color, 1.0f, 0.0f, true);
+			}
 		}
 	}
 }

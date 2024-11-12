@@ -45,6 +45,14 @@ namespace FishMMO.Shared
 			characterName += $" {Suffix.Names[suffixID]}";
 
 			this.gameObject.name = characterName.Trim();
+
+#if !UNITY_SERVER
+			ICharacter character = transform.GetComponent<ICharacter>();
+			if (character != null)
+			{
+				character.CharacterNameLabel.text = this.gameObject.name;
+			}
+#endif
 		}
 
 		public override void WritePayload(NetworkConnection connection, Writer writer)

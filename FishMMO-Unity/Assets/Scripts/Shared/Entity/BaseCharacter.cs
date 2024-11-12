@@ -4,6 +4,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
+#if !UNITY_SERVER
+using TMPro;
+#endif
 
 namespace FishMMO.Shared
 {
@@ -16,6 +19,15 @@ namespace FishMMO.Shared
 		public GameObject GameObject => this.gameObject;
 		public Collider Collider { get; set; }
 		public virtual bool IsTeleporting => false;
+
+#if !UNITY_SERVER
+		[SerializeField]
+		private TextMeshPro characterNameLabel;
+		public TextMeshPro CharacterNameLabel { get { return this.characterNameLabel; } set { this.characterNameLabel = value; } }
+		[SerializeField]
+		private TextMeshPro characterGuildLabel;
+		public TextMeshPro CharacterGuildLabel { get { return this.characterGuildLabel; } set { this.characterGuildLabel = value; } }
+#endif
 
 		void Awake()
 		{
