@@ -14,17 +14,23 @@ namespace FishMMO.Shared
 			// Cleanup if needed
 		}
 
-		public override void UpdateState(AIController controller)
+		public override void UpdateState(AIController controller, float deltaTime)
 		{
+			if (controller.RandomizeState)
+			{
+				controller.TransitionToRandomMovementState();
+				return;
+			}
+			
 			// Check for nearby enemies
-			if (SweepForEnemies(controller, out List<ICharacter> enemies))
+			if (controller.AttackingState != null &&
+				SweepForEnemies(controller, out List<ICharacter> enemies))
 			{
 				controller.ChangeState(controller.AttackingState, enemies);
 				return;
 			}
-
 			// Try to transition to the next waypoint
-			if (!controller.Agent.pathPending &&
+			else if (!controller.Agent.pathPending &&
 				controller.Agent.remainingDistance < 1.0f)
 			{
 				controller.TransitionToNextWaypoint();

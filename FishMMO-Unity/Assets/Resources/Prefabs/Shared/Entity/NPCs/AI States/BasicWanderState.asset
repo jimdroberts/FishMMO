@@ -12,10 +12,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5142541621af842409f9c4e165f3c2f4, type: 3}
   m_Name: BasicWanderState
   m_EditorClassIdentifier: 
-  UpdateRate: 15
+  updateRate: 1
   RandomizeState: 0
-  DetectionRadius: 0
+  DetectionRadius: 10
   EnemyLayers:
     serializedVersion: 2
-    m_Bits: 0
-  WanderRadius: 10
+    m_Bits: 64
+  AlwaysPickNewDestination: 0
+  WanderRadius: 15
+  MaxUpdateRate: 0

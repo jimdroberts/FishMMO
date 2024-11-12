@@ -9,7 +9,7 @@ namespace FishMMO.Shared
 	public class AIController : CharacterBehaviour, IAIController
 	{
 		public BaseAIState InitialState;
-		public AgentAvoidancePriority AvoidancePriority;
+		public AgentAvoidancePriority AvoidancePriority = AgentAvoidancePriority.Medium;
 		public BaseAIState WanderState;
 		public BaseAIState PatrolState;
 		public BaseAIState ReturnHomeState;
@@ -17,9 +17,9 @@ namespace FishMMO.Shared
 		public BaseAIState IdleState;
 		public BaseAIState AttackingState;
 		public BaseAIState DeadState;
-		public List<BaseAIState> MovementStates = new List<BaseAIState>();
 
 		public Transform LookTarget;
+		public bool RandomizeState;
 
 		//public List<AIState> AllowedRandomStates;
 
@@ -46,6 +46,7 @@ namespace FishMMO.Shared
 		}
 		public NavMeshAgent Agent { get; private set; }
 		public BaseAIState CurrentState { get; private set; }
+		public float LeashUpdateRate = 5.0f;
 		/// <summary>
 		/// Minimum distance at which the AI will forget the current target and return home
 		/// </summary>
@@ -62,18 +63,16 @@ namespace FishMMO.Shared
 		/// The current waypoint index
 		/// </summary>
 		public int CurrentWaypointIndex { get; private set; }
-		/// <summary>
-		/// Distance at which an interaction can be initiated
-		/// </summary>
-		public float InteractionDistance = 1.5f;
 
 		private Transform target;
 		private float nextUpdate = 0;
+		private float nextLeashUpdate = 0;
+		private List<BaseAIState> movementStates = new List<BaseAIState>();
 
 #if UNITY_EDITOR
 		void OnDrawGizmos()
 		{
-			DrawDebugCircle(transform.position, InteractionDistance, Color.red);
+			DrawDebugCircle(transform.position, Agent.radius, Color.red);
 
 			if (Home != null)
 			{
@@ -98,6 +97,23 @@ namespace FishMMO.Shared
 			PhysicsScene = gameObject.scene.GetPhysicsScene();
 			Agent.avoidancePriority = (int)AvoidancePriority;
 			Agent.speed = Constants.Character.MoveSpeed;
+
+			if (WanderState != null)
+			{
+				movementStates.Add(WanderState);
+			}
+			if (PatrolState != null)
+			{
+				movementStates.Add(PatrolState);
+			}
+			if (ReturnHomeState != null)
+			{
+				movementStates.Add(ReturnHomeState);
+			}
+			if (IdleState != null)
+			{
+				movementStates.Add(IdleState);
+			}
 		}
 
 		public void Initialize(Vector3 home, Vector3[] waypoints = null)
@@ -115,32 +131,40 @@ namespace FishMMO.Shared
 			{
 				if (nextUpdate < 0.0f)
 				{
-					// If the target is too far away from home, return home and forget the target
-					float distanceToHome = Vector3.Distance(Character.Transform.position, Home);
-					if (distanceToHome >= MinLeashRange)
+					if (nextLeashUpdate < 0.0f)
 					{
-						// Warp back to home if we have somehow reached a significant leash range
-						if (distanceToHome >= MaxLeashRange)
+						// If the target is too far away from home, return home and forget the target
+						float distanceToHome = Vector3.Distance(Character.Transform.position, Home);
+						if (distanceToHome >= MinLeashRange)
 						{
-							// Complete heal on returning home
-							if (Character.TryGet(out ICharacterDamageController characterDamageController))
+							// Warp back to home if we have somehow reached a significant leash range
+							if (distanceToHome >= MaxLeashRange)
 							{
-								characterDamageController.CompleteHeal();
+								// Complete heal on returning home
+								if (Character.TryGet(out ICharacterDamageController characterDamageController))
+								{
+									characterDamageController.CompleteHeal();
+								}
+								// Warp home
+								if (!Agent.Warp(Home))
+								{
+									Character.Transform.position = Home;
+								}
+								Target = null;
 							}
-							// Warp
-							Character.Transform.position = Home;
-							Target = null;
+							// Otherwise run back
+							else if (ReturnHomeState != null)
+							{
+								ChangeState(ReturnHomeState);
+								return;
+							}
 						}
-						// Otherwise run back
-						else if (ReturnHomeState != null)
-						{
-							ChangeState(ReturnHomeState);
-							return;
-						}
+						nextLeashUpdate = LeashUpdateRate;
 					}
+					nextLeashUpdate -= Time.deltaTime;
 
-					CurrentState.UpdateState(this);
-					nextUpdate = CurrentState.UpdateRate;
+					CurrentState.UpdateState(this, Time.deltaTime);
+					nextUpdate = CurrentState.GetUpdateRate();
 				}
 				nextUpdate -= Time.deltaTime;
 			}
@@ -177,7 +201,7 @@ namespace FishMMO.Shared
 			CurrentState = newState;
 			if (CurrentState != null)
 			{
-				nextUpdate = CurrentState.UpdateRate;
+				nextUpdate = CurrentState.GetUpdateRate();
 
 				Collider collider = Character.Transform.GetComponent<Collider>();
 				if (collider != null &&
@@ -209,13 +233,13 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public virtual void TransitionToRandomMovementState()
 		{
-			if (MovementStates == null ||
-				MovementStates.Count < 1)
+			if (movementStates == null ||
+				movementStates.Count < 1)
 			{
 				return;
 			}
 
-			BaseAIState randomState = MovementStates.GetRandom();
+			BaseAIState randomState = movementStates.GetRandom();
 			if (randomState != null)
 			{
 				ChangeState(randomState);

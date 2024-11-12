@@ -33,7 +33,7 @@ namespace FishMMO.Shared
 			// Optional: Stop movement or reset parameters if needed
 		}
 
-		public override void UpdateState(AIController controller)
+		public override void UpdateState(AIController controller, float deltaTime)
 		{
 			if (controller.Target == null)
 			{

@@ -18,12 +18,13 @@ namespace FishMMO.Shared
 			controller.Target = null;
 		}
 
-		public override void UpdateState(AIController controller)
+		public override void UpdateState(AIController controller, float deltaTime)
 		{
 			if (controller.Target == null)
 			{
 				// If the target is lost... Check for nearby enemies
-				if (SweepForEnemies(controller, out List<ICharacter> enemies))
+				if (controller.AttackingState != null &&
+					SweepForEnemies(controller, out List<ICharacter> enemies))
 				{
 					controller.ChangeState(controller.AttackingState, enemies);
 					return;
@@ -53,7 +54,7 @@ namespace FishMMO.Shared
 		{
 			float distanceToTarget = Vector3.Distance(controller.Character.Transform.position, controller.Target.position);
 
-			if (distanceToTarget <= controller.InteractionDistance)
+			if (distanceToTarget <= controller.Agent.radius)
 			{
 				// If we are in range. Perform attack
 				PerformAttack(distanceToTarget);

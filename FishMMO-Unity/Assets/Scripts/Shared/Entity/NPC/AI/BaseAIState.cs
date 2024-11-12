@@ -7,16 +7,17 @@ namespace FishMMO.Shared
 	{
 		private static Collider[] Hits = new Collider[10];
 
-		public float UpdateRate;
-		public bool RandomizeState;
+		[SerializeField]
+		private float updateRate = 1.0f;
 
 		// Sweep
-		public float DetectionRadius;
+		public float DetectionRadius = 10;
 		public LayerMask EnemyLayers;
 
+		public virtual float GetUpdateRate() { return updateRate; }
 		public abstract void Enter(AIController controller);
 		public abstract void Exit(AIController controller);
-		public abstract void UpdateState(AIController controller);
+		public abstract void UpdateState(AIController controller, float deltaTime);
 
 		/// <summary>
 		/// Implement your line of sight logic here.
@@ -46,7 +47,7 @@ namespace FishMMO.Shared
 					controller.CurrentState.DetectionRadius,
 					Hits,
 					controller.CurrentState.EnemyLayers,
-					QueryTriggerInteraction.UseGlobal);
+					QueryTriggerInteraction.Ignore);
 
 			detectedEnemies = new List<ICharacter>();
 

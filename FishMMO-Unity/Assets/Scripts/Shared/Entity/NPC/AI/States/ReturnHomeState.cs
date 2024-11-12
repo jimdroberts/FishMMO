@@ -18,7 +18,7 @@
 		{
 		}
 
-		public override void UpdateState(AIController controller)
+		public override void UpdateState(AIController controller, float deltaTime)
 		{
 			// Check if the AI has reached its destination
 			if (!controller.Agent.pathPending &&

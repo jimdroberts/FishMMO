@@ -38,7 +38,7 @@ namespace FishMMO.Shared
 		{
 		}
 
-		public override void UpdateState(AIController controller)
+		public override void UpdateState(AIController controller, float deltaTime)
 		{
 			if (controller.Target == null)
 			{
