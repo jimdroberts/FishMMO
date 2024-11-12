@@ -345,7 +345,7 @@ namespace FishMMO.Shared
 							Vector3 inputRight = Vector3.Cross(_moveInputVector, Motor.CharacterUp);
 							Vector3 reorientedInput = Vector3.Cross(effectiveGroundNormal, inputRight).normalized * _moveInputVector.magnitude;
 
-							float targetSpeed = Constants.Character.MoveSpeed;
+							float targetSpeed = Constants.Character.RunSpeed;
 
 							if (Character.TryGet(out ICharacterAttributeController attributeController))
 							{
@@ -370,7 +370,7 @@ namespace FishMMO.Shared
 								else if (MoveSpeedTemplate != null &&
 									attributeController.TryGetAttribute(MoveSpeedTemplate, out CharacterAttribute moveSpeedModifier))
 								{
-									targetSpeed = Constants.Character.MoveSpeed * moveSpeedModifier.FinalValueAsPct;
+									targetSpeed = Constants.Character.RunSpeed * moveSpeedModifier.FinalValueAsPct;
 								}
 
 								/*if (_swimming &&

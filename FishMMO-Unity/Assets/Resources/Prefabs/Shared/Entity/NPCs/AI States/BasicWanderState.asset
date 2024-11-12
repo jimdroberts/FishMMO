@@ -13,11 +13,10 @@ MonoBehaviour:
   m_Name: BasicWanderState
   m_EditorClassIdentifier: 
   updateRate: 1
-  RandomizeState: 0
   DetectionRadius: 10
   EnemyLayers:
     serializedVersion: 2
     m_Bits: 64
   AlwaysPickNewDestination: 0
   WanderRadius: 15
-  MaxUpdateRate: 0
+  MaxUpdateRate: 10

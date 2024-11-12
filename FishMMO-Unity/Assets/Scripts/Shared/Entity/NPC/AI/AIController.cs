@@ -96,7 +96,7 @@ namespace FishMMO.Shared
 
 			PhysicsScene = gameObject.scene.GetPhysicsScene();
 			Agent.avoidancePriority = (int)AvoidancePriority;
-			Agent.speed = Constants.Character.MoveSpeed;
+			Agent.speed = Constants.Character.WalkSpeed;
 
 			if (WanderState != null)
 			{
@@ -217,9 +217,18 @@ namespace FishMMO.Shared
 				}
 			}
 
-			if (targets != null && newState is BaseAttackingState attackingState)
+			if (newState is BaseAttackingState attackingState)
 			{
-				attackingState.PickTarget(this, targets);
+				Agent.speed = Constants.Character.RunSpeed;
+
+				if (targets != null)
+				{
+					attackingState.PickTarget(this, targets);
+				}
+			}
+			else
+			{
+				Agent.speed = Constants.Character.WalkSpeed;
 			}
 			CurrentState?.Enter(this);
 		}

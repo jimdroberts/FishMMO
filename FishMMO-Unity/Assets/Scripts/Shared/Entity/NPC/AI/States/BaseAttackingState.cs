@@ -89,6 +89,9 @@ namespace FishMMO.Shared
 		/// </summary>
 		public virtual void OutOfAttackRange(AIController controller, float distanceToTarget)
 		{
+			// Allow the agent to run
+			controller.Agent.speed = Constants.Character.RunSpeed;
+			
 			// If the target is out of range, move towards it or transition
 			controller.Agent.SetDestination(controller.Target.position);
 		}
