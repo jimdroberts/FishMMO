@@ -10,9 +10,9 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: bd705ccd005d95b43b3fee5021a4de1d, type: 3}
-  m_Name: Run Speed
+  m_Name: Sprint Speed
   m_EditorClassIdentifier: 
-  Description: Run speed for traversing the world.
+  Description: Sprint speed for quickly traversing the world.
   InitialValue: 100
   MinValue: 0
   MaxValue: 0

@@ -375,7 +375,8 @@ MonoBehaviour:
   CapsuleBaseOffset: 0.8
   StaminaTemplate: {fileID: 11400000, guid: f9116fa7190f01a4a93eb32cafac787b, type: 2}
   MoveSpeedTemplate: {fileID: 11400000, guid: 561336c510b90b546b2650ffa83a09dc, type: 2}
-  RunSpeedTemplate: {fileID: 11400000, guid: 27c4f240152242b4fb7dec2f5368445c, type: 2}
+  SprintSpeedTemplate: {fileID: 11400000, guid: 27c4f240152242b4fb7dec2f5368445c,
+    type: 2}
   JumpSpeedTemplate: {fileID: 11400000, guid: e32341894cca80f44988cbf96cd9a709, type: 2}
   SwimSpeedTemplate: {fileID: 11400000, guid: afefadf23d30db24e98774bcd84d31c3, type: 2}
   FastFallSpeedTemplate: {fileID: 11400000, guid: 3d34315a07aca4243adfc96a4d3479c8,
@@ -708,6 +709,7 @@ MonoBehaviour:
   _componentIndexCache: 14
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 4964627840297570917}
+  isAggressive: 0
   template: {fileID: 11400000, guid: 1ab8069820abc0b45ad5dd91bc796d4c, type: 2}
 --- !u!114 &7810264000710710752
 MonoBehaviour:

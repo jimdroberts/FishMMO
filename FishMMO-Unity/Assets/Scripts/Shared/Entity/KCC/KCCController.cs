@@ -60,7 +60,7 @@ namespace FishMMO.Shared
 		public float CapsuleBaseOffset = 1f;
 		public CharacterAttributeTemplate StaminaTemplate;
 		public CharacterAttributeTemplate MoveSpeedTemplate;
-		public CharacterAttributeTemplate RunSpeedTemplate;
+		public CharacterAttributeTemplate SprintSpeedTemplate;
 		public CharacterAttributeTemplate JumpSpeedTemplate;
 		public CharacterAttributeTemplate SwimSpeedTemplate;
 		public CharacterAttributeTemplate FastFallSpeedTemplate;
@@ -314,9 +314,6 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void UpdateVelocity(ref Vector3 currentVelocity, float deltaTime)
 		{
-			const float JUMP_STAMINA_COST = 5.0f;
-			const float SPRINT_STAMINA_COST = 5.0f;
-
 			switch (CurrentCharacterState)
 			{
 				case KCCCharacterState.Default:
@@ -354,21 +351,22 @@ namespace FishMMO.Shared
 									targetSpeed = Constants.Character.CrouchSpeed;
 								}
 								else if (_sprintInputDown &&
-										 RunSpeedTemplate != null &&
+										 SprintSpeedTemplate != null &&
 										 StaminaTemplate != null &&
 										 moveInputMagnitude > 0f &&
 										 attributeController.TryGetResourceAttribute(StaminaTemplate, out CharacterResourceAttribute stamina) &&
-										 attributeController.TryGetAttribute(RunSpeedTemplate, out CharacterAttribute runSpeedModifier))
+										 attributeController.TryGetAttribute(SprintSpeedTemplate, out CharacterAttribute sprintSpeedModifier))
 								{
-									float currentStaminaCost = SPRINT_STAMINA_COST * deltaTime;
+									float currentStaminaCost = Constants.Character.SprintStaminaCost * deltaTime;
+
 									if (stamina.CurrentValue >= currentStaminaCost)
 									{
 										stamina.Consume(currentStaminaCost);
-										targetSpeed = Constants.Character.SprintSpeed * runSpeedModifier.FinalValueAsPct;
+										targetSpeed = Constants.Character.SprintSpeed * sprintSpeedModifier.FinalValueAsPct;
 									}
 								}
 								else if (MoveSpeedTemplate != null &&
-									attributeController.TryGetAttribute(MoveSpeedTemplate, out CharacterAttribute moveSpeedModifier))
+										 attributeController.TryGetAttribute(MoveSpeedTemplate, out CharacterAttribute moveSpeedModifier))
 								{
 									targetSpeed = Constants.Character.RunSpeed * moveSpeedModifier.FinalValueAsPct;
 								}
@@ -475,7 +473,7 @@ namespace FishMMO.Shared
 							if (StaminaTemplate != null &&
 								Character.TryGet(out ICharacterAttributeController attributeController) &&
 								attributeController.TryGetResourceAttribute(StaminaTemplate, out CharacterResourceAttribute stamina) &&
-								stamina.CurrentValue >= JUMP_STAMINA_COST &&
+								stamina.CurrentValue >= Constants.Character.JumpStaminaCost &&
 								abilityType == AbilityType.None &&
 								(AllowJumpingWhenSliding ? Motor.GroundingStatus.FoundAnyGround : Motor.GroundingStatus.IsStableOnGround) &&
 								_timeSinceLastAbleToJump <= JumpPostGroundingGraceTime)
@@ -502,7 +500,7 @@ namespace FishMMO.Shared
 								currentVelocity += (_moveInputVector * JumpScalableForwardSpeed);
 
 								// Consume stamina when jumping
-								stamina.Consume(JUMP_STAMINA_COST);
+								stamina.Consume(Constants.Character.JumpStaminaCost);
 
 								_jumpRequested = false;
 

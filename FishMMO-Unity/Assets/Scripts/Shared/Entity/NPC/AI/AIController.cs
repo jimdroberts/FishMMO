@@ -219,6 +219,7 @@ namespace FishMMO.Shared
 
 			if (newState is BaseAttackingState attackingState)
 			{
+				// TODO - Add CharacterAttribute.MoveSpeed bonus
 				Agent.speed = Constants.Character.RunSpeed;
 
 				if (targets != null)
