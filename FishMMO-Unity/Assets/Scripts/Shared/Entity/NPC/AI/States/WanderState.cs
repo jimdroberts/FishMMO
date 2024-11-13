@@ -25,7 +25,6 @@ namespace FishMMO.Shared
         public override void Enter(AIController controller)
 		{
 			// Set wander parameters
-			controller.SetRandomHomeDestination(WanderRadius);
 		}
 
 		public override void Exit(AIController controller)

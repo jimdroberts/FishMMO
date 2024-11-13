@@ -12,6 +12,7 @@ namespace FishMMO.Shared
 		bool IsSlotEmpty(int slot);
 		bool TryGetItem(int slot, out Item item);
 		void AddSlots(List<Item> items, int amount);
+		void Clear();
 		bool HasFreeSlot();
 		int FreeSlots();
 		int FilledSlots();

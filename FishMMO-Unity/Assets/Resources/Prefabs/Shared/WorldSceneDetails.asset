@@ -74,14 +74,11 @@ MonoBehaviour:
           Rotation: {x: -0, y: -0, z: -0, w: 1}
       Teleporters:
         m_keys:
-        - Tutorial Spawners
         - Start Scene B 1
         - Tutorial Regions
         - Tutorial SpawnPoints
+        - Tutorial Spawners
         m_values:
-        - ToScene: Tutorial Spawners
-          ToPosition: {x: -4.2100005, y: 0.1, z: 0}
-          ToRotation: {x: -0, y: -0, z: -0, w: 1}
         - ToScene: StartScene B
           ToPosition: {x: -150.54633, y: 9.4210825, z: 44.43602}
           ToRotation: {x: -0, y: 0.7071068, z: -0, w: 0.7071068}
@@ -89,6 +86,9 @@ MonoBehaviour:
           ToPosition: {x: -4.2100005, y: 0.1, z: 0}
           ToRotation: {x: -0, y: -0, z: -0, w: 1}
         - ToScene: Tutorial SpawnPoints
+          ToPosition: {x: -4.2100005, y: 0.1, z: 0}
+          ToRotation: {x: -0, y: -0, z: -0, w: 1}
+        - ToScene: Tutorial Spawners
           ToPosition: {x: -4.2100005, y: 0.1, z: 0}
           ToRotation: {x: -0, y: -0, z: -0, w: 1}
       Boundaries:
@@ -199,11 +199,16 @@ MonoBehaviour:
       SceneTransitionImage: {fileID: 0}
       InitialSpawnPositions:
         m_keys:
+        - Spawn Point A
         - Spawn Point C
         - Spawn Point B
         - Spawn Point D
-        - Spawn Point A
         m_values:
+        - SpawnerName: Spawn Point A
+          SceneName: Tutorial SpawnPoints
+          Position: {x: 15, y: 1.5, z: 0}
+          Rotation: {x: -0, y: -0, z: -0, w: 1}
+          AllowedRaces: []
         - SpawnerName: Spawn Point C
           SceneName: Tutorial SpawnPoints
           Position: {x: 0, y: 1.5, z: 15}
@@ -219,22 +224,17 @@ MonoBehaviour:
           Position: {x: 0, y: 1.5, z: -15}
           Rotation: {x: -0, y: -0, z: -0, w: 1}
           AllowedRaces: []
-        - SpawnerName: Spawn Point A
-          SceneName: Tutorial SpawnPoints
-          Position: {x: 15, y: 1.5, z: 0}
-          Rotation: {x: -0, y: -0, z: -0, w: 1}
-          AllowedRaces: []
       RespawnPositions:
         m_keys:
         - Character Respawn Position C
-        - Character Respawn Position A
         - Character Respawn Position B
+        - Character Respawn Position A
         m_values:
         - Position: {x: -8, y: 1.5, z: 8}
           Rotation: {x: -0, y: -0, z: -0, w: 1}
-        - Position: {x: 8, y: 1.5, z: -8}
-          Rotation: {x: -0, y: -0, z: -0, w: 1}
         - Position: {x: -8, y: 1.5, z: -8}
+          Rotation: {x: -0, y: -0, z: -0, w: 1}
+        - Position: {x: 8, y: 1.5, z: -8}
           Rotation: {x: -0, y: -0, z: -0, w: 1}
       Teleporters:
         m_keys:

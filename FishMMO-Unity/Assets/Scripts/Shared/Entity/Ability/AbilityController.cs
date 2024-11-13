@@ -92,6 +92,18 @@ namespace FishMMO.Shared
 			abilitySeedGenerator = null;
 		}
 
+		public override void ResetState(bool asServer)
+		{
+			base.ResetState(asServer);
+
+			KnownAbilities.Clear();
+			KnownBaseAbilities.Clear();
+			KnownEvents.Clear();
+			KnownSpawnEvents.Clear();
+			KnownHitEvents.Clear();
+			KnownMoveEvents.Clear();
+		}
+
 #if !UNITY_SERVER
 		public override void OnStartCharacter()
 		{
@@ -218,6 +230,12 @@ namespace FishMMO.Shared
 				return;
 			}
 			KnownAbilities.Clear();
+			KnownAbilities.Clear();
+			KnownBaseAbilities.Clear();
+			KnownEvents.Clear();
+			KnownSpawnEvents.Clear();
+			KnownHitEvents.Clear();
+			KnownMoveEvents.Clear();
 
 			for (int i = 0; i < abilityCount; ++i)
 			{

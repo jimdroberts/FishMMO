@@ -136,6 +136,12 @@ namespace FishMMO.Client
 
 		public void OnClick_Login()
 		{
+			if (!Constants.Authentication.IsAllowedUsername(username.text) ||
+				!Constants.Authentication.IsAllowedPassword(password.text))
+			{
+				return;
+			}
+			
 			SetSignInLocked(true);
 
 			StartCoroutine(Client.GetLoginServerList((e) =>
@@ -164,6 +170,10 @@ namespace FishMMO.Client
 				handshakeMSG.text = handshakeMessage;
 				Client.LoginAuthenticator.SetLoginCredentials(username, password, isRegistration);
 				Client.ConnectToServer(serverAddress.address, serverAddress.port);
+			}
+			else
+			{
+				SetSignInLocked(false);
 			}
 		}
 

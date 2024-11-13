@@ -65,17 +65,8 @@ namespace FishMMO.Shared
 
 		public override void OnAwake()
 		{
-			if (Hotkeys == null)
-			{
-				Hotkeys = new List<HotkeyData>();
-				for (int i = 0; i < Constants.Configuration.MaximumPlayerHotkeys; ++i)
-				{
-					Hotkeys.Add(new HotkeyData()
-					{
-						Slot = i,
-					});
-				}
-			}
+			Hotkeys = new List<HotkeyData>();
+			ResetHotkeys();
 
 			#region KCC
 			Motor = gameObject.GetComponent<KinematicCharacterMotor>();
@@ -92,6 +83,18 @@ namespace FishMMO.Shared
 
 			NextChatMessageTime = DateTime.UtcNow;
 			NextInteractTime = DateTime.UtcNow;
+		}
+
+		public void ResetHotkeys()
+		{
+			Hotkeys.Clear();
+			for (int i = 0; i < Constants.Configuration.MaximumPlayerHotkeys; ++i)
+			{
+				Hotkeys.Add(new HotkeyData()
+				{
+					Slot = i,
+				});
+			}
 		}
 
 		public override void ReadPayload(NetworkConnection connection, Reader reader)
@@ -162,6 +165,8 @@ namespace FishMMO.Shared
 			LastChatMessage = "";
 			NextChatMessageTime = DateTime.UtcNow;
 			NextInteractTime = DateTime.UtcNow;
+
+			ResetHotkeys();
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]

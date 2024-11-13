@@ -39,12 +39,13 @@ namespace FishMMO.Shared
 			OnStarting();
 #if !UNITY_SERVER
 			ICharacter character = Transform.GetComponent<ICharacter>();
-			if (character != null)
+			if (character != null &&
+				!string.IsNullOrWhiteSpace(Title))
 			{
 				string hex = TitleColor.ToHex();
 				if (!string.IsNullOrWhiteSpace(hex))
 				{
-					character.CharacterGuildLabel.text += $"\r\n<<color=#{hex}>{Title}</color>>";
+					character.CharacterGuildLabel.text = $"<<color=#{hex}>{Title}</color>>";
 				}
 			}
 		}

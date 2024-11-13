@@ -19,6 +19,13 @@ namespace FishMMO.Shared
 			Friends = new HashSet<long>();
 		}
 
+		public override void ResetState(bool asServer)
+		{
+			base.ResetState(asServer);
+
+			Friends.Clear();
+		}
+
 		public void AddFriend(long friendID)
 		{
 			if (!Friends.Contains(friendID))

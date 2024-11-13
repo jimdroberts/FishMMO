@@ -48,6 +48,7 @@ namespace FishMMO.Shared
 		DateTime NextInteractTime { get; set; }
 
 		List<HotkeyData> Hotkeys { get; set; }
+		void ResetHotkeys();
 
 		void SetGuildName(string guildName);
 		void Teleport(string teleporterName);

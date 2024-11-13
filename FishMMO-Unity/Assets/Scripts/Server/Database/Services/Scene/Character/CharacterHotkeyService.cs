@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Collections.Generic;
 using FishMMO.Database.Npgsql;
 using FishMMO.Database.Npgsql.Entities;
 using FishMMO.Shared;
@@ -102,6 +103,7 @@ namespace FishMMO.Server.DatabaseServices
 				return;
 			}
 			var dbHotkeys = dbContext.CharacterHotkeys.Where(c => c.CharacterID == character.ID);
+
 			foreach (CharacterHotkeyEntity dbHotkey in dbHotkeys)
 			{
 				HotkeyData data = character.Hotkeys[dbHotkey.Slot];

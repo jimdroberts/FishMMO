@@ -81,6 +81,16 @@ namespace FishMMO.Shared
 		}
 #endif
 
+		public override void ResetState(bool asServer)
+		{
+			base.ResetState(asServer);
+
+			Factions.Clear();
+			Allied.Clear();
+			Neutral.Clear();
+			Hostile.Clear();
+		}
+		
 		public override void ReadPayload(NetworkConnection conn, Reader reader)
 		{
 			Factions.Clear();

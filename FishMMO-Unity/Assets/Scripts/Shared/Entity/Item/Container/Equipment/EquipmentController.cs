@@ -13,6 +13,13 @@ namespace FishMMO.Shared
 			AddSlots(null, System.Enum.GetNames(typeof(ItemSlot)).Length); // equipment size = itemslot size
 		}
 
+		public override void ResetState(bool asServer)
+		{
+			base.ResetState(asServer);
+
+			Clear();
+		}
+
 		public override void ReadPayload(NetworkConnection conn, Reader reader)
 		{
 			int itemCount = reader.ReadInt32();

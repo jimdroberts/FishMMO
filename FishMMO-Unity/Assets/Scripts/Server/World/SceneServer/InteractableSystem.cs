@@ -144,6 +144,8 @@ namespace FishMMO.Server
 						{
 							InteractableID = sceneObject.ID,
 						}, true, Channel.Reliable);
+
+						OnInteractNPC(character, interactable);
 						break;
 					case Banker:
 						//Debug.Log("Banker");
@@ -152,6 +154,8 @@ namespace FishMMO.Server
 							bankController.LastInteractableID = sceneObject.ID;
 
 							Server.Broadcast(character.Owner, new BankerBroadcast(), true, Channel.Reliable);
+
+							OnInteractNPC(character, interactable);
 						}
 						break;
 					case Merchant merchant:
@@ -161,6 +165,8 @@ namespace FishMMO.Server
 							InteractableID = sceneObject.ID,
 							TemplateID = merchant.Template.ID,
 						}, true, Channel.Reliable);
+
+						OnInteractNPC(character, interactable);
 						break;
 					case WorldItem worldItem:
 						//Debug.Log("WorldItem");
@@ -208,6 +214,28 @@ namespace FishMMO.Server
 						return;
 				}
 			}
+		}
+
+		private void OnInteractNPC(IPlayerCharacter character, IInteractable interactable)
+		{
+			if (character == null)
+			{
+				return;
+			}
+			if (interactable == null)
+			{
+				return;
+			}
+
+			AIController aiController = interactable.Transform.GetComponent<AIController>();
+			if (aiController == null)
+			{
+				return;
+			}
+
+			// Look at the target and transition to idle state
+			aiController.LookTarget = character.Transform;
+			aiController.TransitionToIdleState();
 		}
 
 		private void OnServerMerchantPurchaseBroadcastReceived(NetworkConnection conn, MerchantPurchaseBroadcast msg, Channel channel)

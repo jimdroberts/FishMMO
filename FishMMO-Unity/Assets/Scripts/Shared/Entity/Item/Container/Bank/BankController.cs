@@ -14,6 +14,13 @@ namespace FishMMO.Shared
 			AddSlots(null, 100);
 		}
 
+		public override void ResetState(bool asServer)
+		{
+			base.ResetState(asServer);
+
+			Clear();
+		}
+
 #if !UNITY_SERVER
 		public override void OnStartCharacter()
 		{

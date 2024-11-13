@@ -54,6 +54,7 @@ namespace FishMMO.Client
 				abilityController.OnAddAbility -= AddAbility;
 				abilityController.OnAddKnownAbility -= AddKnownAbility;
 			}
+			ClearAllSlots();
 		}
 
 		public override void OnQuitToLogin()

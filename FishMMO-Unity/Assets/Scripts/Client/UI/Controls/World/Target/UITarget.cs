@@ -103,22 +103,28 @@ namespace FishMMO.Client
 		{
 			if (lastTarget != null)
 			{
+#if !UNITY_SERVER
+				ICharacter character = lastTarget.GetComponent<ICharacter>();
+				if (character != null)
+				{
+					IPlayerCharacter playerCharacter = character as IPlayerCharacter;
+					if (playerCharacter != null &&
+						playerCharacter.NetworkObject.IsOwner)
+					{
+						return;
+					}
+					character.CharacterNameLabel.gameObject.SetActive(false);
+					character.CharacterGuildLabel.gameObject.SetActive(false);
+				}
+#endif
+
 				Outline outline = lastTarget.GetComponent<Outline>();
 				if (outline != null)
 				{
 					outline.enabled = false;
 				}
-
-#if !UNITY_SERVER
-				ICharacter character = lastTarget.GetComponent<ICharacter>();
-				if (character != null)
-				{
-					character.CharacterNameLabel.gameObject.SetActive(false);
-					character.CharacterGuildLabel.gameObject.SetActive(false);
-				}
-#endif
 			}
-			
+
 			if (targetLabel != null)
 			{
 				LabelMaker.Cache(targetLabel);

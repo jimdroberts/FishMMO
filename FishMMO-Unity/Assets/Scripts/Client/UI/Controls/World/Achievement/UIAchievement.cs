@@ -38,8 +38,8 @@ namespace FishMMO.Client
 
 			if (Character.TryGet(out IAchievementController achievementController))
 			{
-				achievementController.OnAddAchievement += AchievementController_OnAddAchievement;
-				achievementController.OnUpdateAchievement += AchievementController_OnUpdateAchievement;
+				IAchievementController.OnAddAchievement += AchievementController_OnAddAchievement;
+				IAchievementController.OnUpdateAchievement += AchievementController_OnUpdateAchievement;
 			}
 		}
 
@@ -47,8 +47,8 @@ namespace FishMMO.Client
 		{
 			if (Character.TryGet(out IAchievementController achievementController))
 			{
-				achievementController.OnAddAchievement -= AchievementController_OnAddAchievement;
-				achievementController.OnUpdateAchievement -= AchievementController_OnUpdateAchievement;
+				IAchievementController.OnAddAchievement -= AchievementController_OnAddAchievement;
+				IAchievementController.OnUpdateAchievement -= AchievementController_OnUpdateAchievement;
 			}
 		}
 

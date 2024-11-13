@@ -86,6 +86,20 @@ namespace FishMMO.Shared
 			}
 		}
 
+		public void Clear()
+		{
+			for (int i = 0; i < items.Count; ++i)
+			{
+				Item item = items[i];
+				if (item == null)
+				{
+					continue;
+				}
+				item.Destroy();
+				items[i] = null;
+			}
+		}
+
 		public bool HasFreeSlot()
 		{
 			for (int i = 0; i < Items.Count; ++i)

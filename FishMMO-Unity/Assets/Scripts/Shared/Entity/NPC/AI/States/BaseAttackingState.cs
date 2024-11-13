@@ -46,7 +46,10 @@ namespace FishMMO.Shared
 		/// </summary>
 		public virtual void PickTarget(AIController controller, List<ICharacter> targets)
 		{
-			controller.Target = targets[0].Transform;
+			ICharacter target = targets[0];
+			
+			controller.Target = target.Transform;
+			controller.LookTarget = target.Transform;
 		}
 
 		private void TryAttack(AIController controller)

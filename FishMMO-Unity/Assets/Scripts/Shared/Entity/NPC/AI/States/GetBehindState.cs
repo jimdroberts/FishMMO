@@ -13,7 +13,7 @@ namespace FishMMO.Shared
 			if (controller.Target == null)
 			{
 				Debug.LogWarning("No target set for GetBehindState.");
-				controller.TransitionToDefaultState(); // Or another default state
+				controller.TransitionToIdleState(); // Or another default state
 				return;
 			}
 
@@ -37,7 +37,7 @@ namespace FishMMO.Shared
 		{
 			if (controller.Target == null)
 			{
-				controller.TransitionToDefaultState(); // Transition if target is lost
+				controller.TransitionToIdleState(); // Transition if target is lost
 				return;
 			}
 
@@ -50,7 +50,7 @@ namespace FishMMO.Shared
 			if (!controller.Agent.pathPending && controller.Agent.remainingDistance < 1.0f)
 			{
 				// Optionally, transition to another state or behavior
-				controller.TransitionToDefaultState(); // Example transition
+				controller.TransitionToIdleState(); // Example transition
 			}
 		}
 

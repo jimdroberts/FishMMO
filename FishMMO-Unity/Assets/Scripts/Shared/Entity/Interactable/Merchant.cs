@@ -11,8 +11,8 @@ namespace FishMMO.Shared
 
 		public override string Title { get { return title; } }
 
-		void Start()
-		{
+        public override void OnStarting()
+        {
 			if (Template != null)
 			{
 				title = Template.Description;

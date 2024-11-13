@@ -295,6 +295,11 @@ namespace FishMMO.Client
 #endif
 		}
 
+		void OnApplicationPause(bool isPaused)
+		{
+			// Handle pause state here. (This is useful for VR Headsets/Android devices that suspend the application instead of exiting)
+		}
+
 		public void QuitToLogin(bool forceDisconnect = true)
 		{
 			if (forceDisconnect)

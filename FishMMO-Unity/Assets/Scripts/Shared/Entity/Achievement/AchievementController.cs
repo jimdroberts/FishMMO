@@ -9,11 +9,14 @@ namespace FishMMO.Shared
 	{
 		private Dictionary<int, Achievement> achievements = new Dictionary<int, Achievement>();
 
-
 		public Dictionary<int, Achievement> Achievements { get { return achievements; } }
 
-		public event Action<Achievement> OnAddAchievement;
-		public event Action<Achievement> OnUpdateAchievement;
+		public override void ResetState(bool asServer)
+		{
+			base.ResetState(asServer);
+
+			achievements.Clear();
+		}
 
 #if !UNITY_SERVER
 		public bool ShowAchievementCompletion = true;
@@ -83,12 +86,12 @@ namespace FishMMO.Shared
 			{
 				achievement.CurrentTier = tier;
 				achievement.CurrentValue = value;
-				OnUpdateAchievement?.Invoke(achievement);
+				IAchievementController.OnUpdateAchievement?.Invoke(achievement);
 			}
 			else
 			{
 				achievements.Add(templateID, achievement = new Achievement(templateID, tier, value));
-				OnAddAchievement?.Invoke(achievement);
+				IAchievementController.OnAddAchievement?.Invoke(achievement);
 			}
 		}
 
@@ -113,7 +116,7 @@ namespace FishMMO.Shared
 			if (!achievements.TryGetValue(template.ID, out achievement))
 			{
 				achievements.Add(template.ID, achievement = new Achievement(template.ID));
-				OnAddAchievement?.Invoke(achievement);
+				IAchievementController.OnAddAchievement?.Invoke(achievement);
 			}
 
 			// get the old values
@@ -143,7 +146,7 @@ namespace FishMMO.Shared
 				}
 			}
 
-			OnUpdateAchievement?.Invoke(achievement);
+			IAchievementController.OnUpdateAchievement?.Invoke(achievement);
 		}
 	}
 }

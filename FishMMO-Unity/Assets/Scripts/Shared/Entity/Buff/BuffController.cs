@@ -179,6 +179,13 @@ namespace FishMMO.Shared
 			}
 		}
 
+		public override void ResetState(bool asServer)
+		{
+			base.ResetState(asServer);
+
+			buffs.Clear();
+		}
+
 #if !UNITY_SERVER
 		public override void OnStartCharacter()
 		{

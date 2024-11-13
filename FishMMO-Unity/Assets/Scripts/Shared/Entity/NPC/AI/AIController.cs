@@ -239,7 +239,7 @@ namespace FishMMO.Shared
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public void TransitionToDefaultState()
+		public void TransitionToIdleState()
 		{
 			ChangeState(IdleState, null);
 		}

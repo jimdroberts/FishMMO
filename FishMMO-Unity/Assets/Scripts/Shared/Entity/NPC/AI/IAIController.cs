@@ -12,7 +12,7 @@ namespace FishMMO.Shared
 
 		void Initialize(Vector3 home, Vector3[] waypoints = null);
 		void ChangeState(BaseAIState newState, List<ICharacter> targets = null);
-		void TransitionToDefaultState();
+		void TransitionToIdleState();
 		void TransitionToRandomMovementState();
 		void SetRandomHomeDestination(float radius);
 		void SetRandomDestination(float radius);

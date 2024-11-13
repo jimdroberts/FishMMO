@@ -18,7 +18,7 @@ namespace FishMMO.Shared
 		{
 			if (controller.Target == null)
 			{
-				controller.TransitionToDefaultState(); // Or another default state
+				controller.TransitionToIdleState(); // Or another default state
 				return;
 			}
 
@@ -42,7 +42,7 @@ namespace FishMMO.Shared
 		{
 			if (controller.Target == null)
 			{
-				controller.TransitionToDefaultState(); // Transition if target is lost
+				controller.TransitionToIdleState(); // Transition if target is lost
 				return;
 			}
 
@@ -54,7 +54,7 @@ namespace FishMMO.Shared
 				float distanceToTarget = Vector3.Distance(controller.Character.Transform.position, controller.Target.position);
 				if (distanceToTarget > SafeDistance)
 				{
-					controller.TransitionToDefaultState(); // Transition to another state if safe distance is maintained
+					controller.TransitionToIdleState(); // Transition to another state if safe distance is maintained
 				}
 				else
 				{
