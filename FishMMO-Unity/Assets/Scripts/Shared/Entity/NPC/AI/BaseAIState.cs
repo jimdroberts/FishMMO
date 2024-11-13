@@ -36,7 +36,8 @@ namespace FishMMO.Shared
 		{
 			if (controller.Character == null ||
 				controller.AttackingState == null ||
-				!controller.Character.TryGet(out IFactionController ourFactionController))
+				!controller.Character.TryGet(out IFactionController ourFactionController) ||
+				controller.Observers.Count < 1)
 			{
 				detectedEnemies = null;
 				return false;

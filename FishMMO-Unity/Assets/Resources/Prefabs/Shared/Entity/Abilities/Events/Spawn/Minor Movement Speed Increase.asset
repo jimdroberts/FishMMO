@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8563dac1292a4344e80db7f7da222dea, type: 3}
+  m_Name: Minor Movement Speed Increase
+  m_EditorClassIdentifier: 
+  icon: {fileID: 21300000, guid: d1546f8db185caf4dafcfa58efa3ba2c, type: 3}
+  Description: 1 Slightly increases the characters movement speed.
+  ActivationTime: 4
+  LifeTime: 0
+  Cooldown: 20
+  Range: 0
+  Speed: 0
+  Price: 0
+  Resources:
+    m_keys:
+    - {fileID: 11400000, guid: f627a40e6b3ef5349b3c735f0bfd60c7, type: 2}
+    m_values: 0a000000
+  Requirements:
+    m_keys: []
+    m_values: 
+  Stacks: 0
+  BuffTemplate: {fileID: 11400000, guid: f382d90751b078548b47500f1817ff29, type: 2}
