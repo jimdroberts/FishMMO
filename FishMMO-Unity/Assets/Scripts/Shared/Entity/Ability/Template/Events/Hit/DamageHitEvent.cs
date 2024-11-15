@@ -7,9 +7,12 @@ namespace FishMMO.Shared
 	{
 		public int Damage;
 		public DamageAttributeTemplate DamageAttributeTemplate;
+		public GameObject FXPrefab;
 
 		public override int Invoke(ICharacter attacker, ICharacter defender, TargetInfo hitTarget, AbilityObject abilityObject)
 		{
+			OnApplyFX(hitTarget.HitPosition);
+
 			if (attacker == null ||
 				defender == null ||
 				attacker.ID == defender.ID)
@@ -28,6 +31,16 @@ namespace FishMMO.Shared
 				}
 			}
 			return 1;
+		}
+
+		public void OnApplyFX(Vector3 position)
+		{
+#if !UNITY_SERVER
+			if (FXPrefab != null)
+			{
+				GameObject fxPrefab = Instantiate(FXPrefab, position, Quaternion.identity);
+			}
+#endif
 		}
 
 		public override string GetFormattedDescription()

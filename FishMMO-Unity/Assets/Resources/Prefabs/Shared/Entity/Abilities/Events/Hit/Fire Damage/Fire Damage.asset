@@ -26,7 +26,8 @@ MonoBehaviour:
   Requirements:
     m_keys: []
     m_values: 
-  TargetType: 3
   Damage: 10
   DamageAttributeTemplate: {fileID: 11400000, guid: e0d004d1b5e90374fa54e7f9aec2166a,
     type: 2}
+  FXPrefab: {fileID: 1283335467853853480, guid: cb25fb39d2ec2b646b6b18059ae87bce,
+    type: 3}
