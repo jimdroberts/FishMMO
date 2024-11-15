@@ -37,6 +37,8 @@ namespace FishMMO.Client
 				abilityController.OnUpdate -= OnUpdate;
 				abilityController.OnCancel -= OnCancel;
 			}
+
+			Hide();
 		}
 
 		public void OnUpdate(string label, float remainingTime, float totalTime)
