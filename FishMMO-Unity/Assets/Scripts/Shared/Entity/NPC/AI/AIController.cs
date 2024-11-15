@@ -125,6 +125,19 @@ namespace FishMMO.Shared
 			Home = home;
 			Waypoints = waypoints;
 
+			Collider collider = Character.Transform.GetComponent<Collider>();
+			if (collider != null &&
+				collider.TryGetDimensions(out float height, out float radius))
+			{
+				Agent.height = height;
+				Agent.radius = radius;
+			}
+			else // default height and radius
+			{
+				Agent.height = 2.0f;
+				Agent.radius = 0.5f;
+			}
+
 			// Set initial state
 			ChangeState(InitialState);
 		}
@@ -206,19 +219,6 @@ namespace FishMMO.Shared
 			if (CurrentState != null)
 			{
 				nextUpdate = CurrentState.GetUpdateRate();
-
-				Collider collider = Character.Transform.GetComponent<Collider>();
-				if (collider != null &&
-					collider.TryGetDimensions(out float height, out float radius))
-				{
-					Agent.height = height;
-					Agent.radius = radius;
-				}
-				else // default height and radius
-				{
-					Agent.height = 2.0f;
-					Agent.radius = 0.5f;
-				}
 			}
 
 			if (newState is BaseAttackingState attackingState)

@@ -241,7 +241,7 @@ MonoBehaviour:
   PatrolState: {fileID: 0}
   ReturnHomeState: {fileID: 0}
   RetreatState: {fileID: 0}
-  IdleState: {fileID: 0}
+  IdleState: {fileID: 11400000, guid: 51f855b3de8e6644eb22eee716657935, type: 2}
   AttackingState: {fileID: 0}
   DeadState: {fileID: 0}
   LookTarget: {fileID: 0}
