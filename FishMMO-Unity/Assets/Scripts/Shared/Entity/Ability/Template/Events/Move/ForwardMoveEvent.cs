@@ -7,6 +7,10 @@ namespace FishMMO.Shared
 	{
 		public override void Invoke(AbilityObject abilityObject, float deltaTime)
 		{
+			if (abilityObject == null)
+			{
+				return;
+			}
 			abilityObject.Transform.position += abilityObject.Transform.forward * abilityObject.Ability.Speed * deltaTime;
 		}
 	}

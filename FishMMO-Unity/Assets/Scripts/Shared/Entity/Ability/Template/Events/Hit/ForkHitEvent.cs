@@ -11,7 +11,8 @@ namespace FishMMO.Shared
 		public override int Invoke(ICharacter attacker, ICharacter defender, TargetInfo hitTarget, AbilityObject abilityObject)
 		{
 			if (attacker == null ||
-				defender == null)
+				defender == null ||
+				abilityObject == null)
 			{
 				return 0;
 			}

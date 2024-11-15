@@ -12,7 +12,8 @@ namespace FishMMO.Shared
 		{
 			if (attacker == null ||
 				defender == null ||
-				attacker.ID == defender.ID)
+				attacker.ID == defender.ID ||
+				abilityObject == null)
 			{
 				return 0;
 			}

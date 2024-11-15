@@ -143,9 +143,7 @@ namespace FishMMO.Shared
 		public static void Spawn(Ability ability, IPlayerCharacter caster, Transform abilitySpawner, TargetInfo targetInfo, int seed)
 		{
 			AbilityTemplate template = ability.Template;
-
-			if (template == null ||
-				template.FXPrefab == null)
+			if (template == null)
 			{
 				return;
 			}
@@ -162,6 +160,19 @@ namespace FishMMO.Shared
 			{
 				// Handle server side Spawning of the pet object
 				OnPetSummon?.Invoke(ability, caster, abilitySpawner, targetInfo, seed);
+				return;
+			}
+
+			// Self target abilities don't spawn ability objects and are instead applied immediately
+			if (ability.Template.AbilitySpawnTarget == AbilitySpawnTarget.Self)
+			{
+				ApplyHitEvents(ability, caster, caster, null);
+				return;
+			}
+
+			// Missing ability object prefab
+			if (template.FXPrefab == null)
+			{
 				return;
 			}
 
@@ -183,18 +194,6 @@ namespace FishMMO.Shared
 			abilityObject.HitCount = template.HitCount;
 			abilityObject.RemainingLifeTime = ability.LifeTime;
 			abilityObject.RNG = new System.Random(seed);
-
-			// Self target abilities don't trigger collisions and are instead applied immediately
-			if (ability.Template.AbilitySpawnTarget == AbilitySpawnTarget.Self)
-			{
-				// Disable the collider so we can still play FX
-				Collider collider = go.GetComponent<Collider>();
-				if (collider != null)
-				{
-					collider.enabled = false;
-				}
-				ApplyHitEvents(ability, caster, caster, abilityObject);
-			}
 
 			// Make sure the objects container exists
 			if (ability.Objects == null)
