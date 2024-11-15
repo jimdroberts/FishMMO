@@ -33,6 +33,17 @@ namespace FishMMO.Shared
 					abilityObject.HitCount = initialObject.HitCount;
 					abilityObject.RemainingLifeTime = initialObject.RemainingLifeTime;
 					abilityObjects.Add(++nextID, abilityObject);
+
+					// Self target abilities don't trigger collisions
+					if (initialObject.Ability.Template.AbilitySpawnTarget == AbilitySpawnTarget.Self)
+					{
+						// Disable the collider so we can still play FX
+						Collider collider = go.GetComponent<Collider>();
+						if (collider != null)
+						{
+							collider.enabled = false;
+						}
+					}
 				}
 			}
 		}

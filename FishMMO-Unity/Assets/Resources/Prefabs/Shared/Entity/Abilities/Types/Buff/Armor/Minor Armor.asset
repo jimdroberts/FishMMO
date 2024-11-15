@@ -15,7 +15,7 @@ MonoBehaviour:
   icon: {fileID: 21300000, guid: 5a97d5afa6254804f81b7ba956296996, type: 3}
   Description: 
   ActivationTime: 0
-  LifeTime: 0
+  LifeTime: 1.5
   Cooldown: 0
   Range: 0
   Speed: 0

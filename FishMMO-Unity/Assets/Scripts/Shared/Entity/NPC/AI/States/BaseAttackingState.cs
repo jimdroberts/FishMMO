@@ -16,6 +16,7 @@ namespace FishMMO.Shared
 		public override void Exit(AIController controller)
 		{
 			controller.Target = null;
+			controller.SetRandomHomeDestination();
 		}
 
 		public override void UpdateState(AIController controller, float deltaTime)

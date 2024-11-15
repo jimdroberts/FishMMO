@@ -43,6 +43,11 @@ namespace FishMMO.Shared
 				}
 				RemainingLifeTime -= Time.deltaTime;
 			}
+			else // Immediately destroy the object if it has no lifetime
+			{
+				Destroy();
+				return;
+			}
 
 			if (Ability != null &&
 				Ability.MoveEvents != null)
@@ -65,31 +70,57 @@ namespace FishMMO.Shared
 
 			ICharacter hitCharacter = other.gameObject.GetComponent<ICharacter>();
 
-			if (Ability != null)
-			{
-				foreach (HitEvent hitEvent in Ability.HitEvents.Values)
-				{
-					if (hitEvent == null)
-					{
-						continue;
-					}
-					TargetInfo targetInfo = new TargetInfo()
-					{
-						Target = other.transform,
-						HitPosition = other.GetContact(0).point,
-					};
-
-					// We remove hit count with the events return value
-					// If hit count falls below 1 the object will be destroyed after iterating all events at least once
-					HitCount -= hitEvent.Invoke(Caster, hitCharacter, targetInfo, this);
-				}
-			}
+			HitCount = ApplyHitEvents(Ability, Caster, hitCharacter, this, other, HitCount);
 
 			if (hitCharacter == null ||
 				HitCount < 1)
 			{
 				Destroy();
 			}
+		}
+
+		private static int ApplyHitEvents(Ability ability, ICharacter caster, ICharacter hitCharacter, AbilityObject abilityObject, Collision other = null, int hitCount = 0)
+		{
+			if (ability == null)
+			{
+				return 0;
+			}
+			if (hitCharacter == null)
+			{
+				return 0;
+			}
+			
+			TargetInfo targetInfo;
+			if (other == null)
+			{
+				targetInfo = new TargetInfo()
+				{
+					Target = hitCharacter.Transform,
+					HitPosition = hitCharacter.Transform.position,
+				};
+			}
+			else
+			{
+				targetInfo = new TargetInfo()
+				{
+					Target = other.transform,
+					HitPosition = other.GetContact(0).point,
+				};
+			}
+
+			foreach (HitEvent hitEvent in ability.HitEvents.Values)
+			{
+				if (hitEvent == null)
+				{
+					continue;
+				}
+
+				// We remove hit count with the events return value
+				// If hit count falls below 1 the object will be destroyed after iterating all events at least once
+				hitCount -= hitEvent.Invoke(caster, hitCharacter, targetInfo, abilityObject);
+			}
+
+			return hitCount;
 		}
 
 		internal void Destroy()
@@ -137,8 +168,7 @@ namespace FishMMO.Shared
 			// TODO create/fetch from pool
 			GameObject go = Instantiate(template.FXPrefab);
 			SceneManager.MoveGameObjectToScene(go, caster.GameObject.scene);
-			Transform t = go.transform;
-			SetAbilitySpawnPosition(caster, ability, abilitySpawner, targetInfo, t);
+			SetAbilitySpawnPosition(caster, ability, abilitySpawner, targetInfo, go.transform);
 			go.SetActive(false);
 
 			// Construct initial ability object
@@ -153,6 +183,18 @@ namespace FishMMO.Shared
 			abilityObject.HitCount = template.HitCount;
 			abilityObject.RemainingLifeTime = ability.LifeTime;
 			abilityObject.RNG = new System.Random(seed);
+
+			// Self target abilities don't trigger collisions and are instead applied immediately
+			if (ability.Template.AbilitySpawnTarget == AbilitySpawnTarget.Self)
+			{
+				// Disable the collider so we can still play FX
+				Collider collider = go.GetComponent<Collider>();
+				if (collider != null)
+				{
+					collider.enabled = false;
+				}
+				ApplyHitEvents(ability, caster, caster, abilityObject);
+			}
 
 			// Make sure the objects container exists
 			if (ability.Objects == null)

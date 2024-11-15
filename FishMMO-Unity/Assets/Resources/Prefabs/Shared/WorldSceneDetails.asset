@@ -75,20 +75,20 @@ MonoBehaviour:
       Teleporters:
         m_keys:
         - Tutorial Regions
+        - Tutorial Spawners
         - Start Scene B 1
         - Tutorial SpawnPoints
-        - Tutorial Spawners
         m_values:
         - ToScene: Tutorial Regions
+          ToPosition: {x: -4.2100005, y: 0.1, z: 0}
+          ToRotation: {x: -0, y: -0, z: -0, w: 1}
+        - ToScene: Tutorial Spawners
           ToPosition: {x: -4.2100005, y: 0.1, z: 0}
           ToRotation: {x: -0, y: -0, z: -0, w: 1}
         - ToScene: StartScene B
           ToPosition: {x: -150.54633, y: 9.4210825, z: 44.43602}
           ToRotation: {x: -0, y: 0.7071068, z: -0, w: 0.7071068}
         - ToScene: Tutorial SpawnPoints
-          ToPosition: {x: -4.2100005, y: 0.1, z: 0}
-          ToRotation: {x: -0, y: -0, z: -0, w: 1}
-        - ToScene: Tutorial Spawners
           ToPosition: {x: -4.2100005, y: 0.1, z: 0}
           ToRotation: {x: -0, y: -0, z: -0, w: 1}
       Boundaries:
@@ -113,25 +113,25 @@ MonoBehaviour:
           - {fileID: 11400000, guid: f1bedd6f4354a7e41be26aee87734d66, type: 2}
       RespawnPositions:
         m_keys:
-        - Respawn 2
         - Respawn 1
+        - Respawn 2
         m_values:
-        - Position: {x: 224.6, y: 2, z: 0}
-          Rotation: {x: -0, y: -0, z: -0, w: 1}
         - Position: {x: 0, y: 2, z: 0}
+          Rotation: {x: -0, y: -0, z: -0, w: 1}
+        - Position: {x: 224.6, y: 2, z: 0}
           Rotation: {x: -0, y: -0, z: -0, w: 1}
       Teleporters:
         m_keys:
-        - Dungeon A 1
         - Start Scene A 1
+        - Dungeon A 1
         - Start Scene A 1 Teleporter
         m_values:
-        - ToScene: Dungeon
-          ToPosition: {x: -130.84203, y: 17.6, z: 22.710613}
-          ToRotation: {x: -0, y: 0.7071068, z: -0, w: 0.7071068}
         - ToScene: StartScene A
           ToPosition: {x: -20.561272, y: 68.3352, z: -27.581497}
           ToRotation: {x: -0, y: 1, z: -0, w: 0}
+        - ToScene: Dungeon
+          ToPosition: {x: -130.84203, y: 17.6, z: 22.710613}
+          ToRotation: {x: -0, y: 0.7071068, z: -0, w: 0.7071068}
         - ToScene: StartScene A
           ToPosition: {x: -18.889395, y: 68.33223, z: -27.589996}
           ToRotation: {x: -0, y: 1, z: -0, w: 0}

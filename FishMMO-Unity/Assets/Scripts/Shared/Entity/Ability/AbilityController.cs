@@ -96,6 +96,9 @@ namespace FishMMO.Shared
 		{
 			base.ResetState(asServer);
 
+			queuedAbilityID = NO_ABILITY;
+			Cancel();
+
 			KnownAbilities.Clear();
 			KnownBaseAbilities.Clear();
 			KnownEvents.Clear();
