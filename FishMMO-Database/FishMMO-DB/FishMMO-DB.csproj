@@ -1,12 +1,10 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
-
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>netstandard2.1</TargetFramework>
     <RootNamespace>FishMMO.Database</RootNamespace>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
-	
   <ItemGroup>
     <PackageReference Include="EFCore.NamingConventions" Version="5.0.2" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="5.0.17" />
@@ -23,38 +21,31 @@
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="5.0.10" />
     <PackageReference Include="StackExchange.Redis" Version="2.7.4" />
   </ItemGroup>
-
   <ItemGroup>
     <Folder Include="Migrations\" />
   </ItemGroup>
-
-	<!-- Define a custom property based on the existence of the marker file -->
-	<PropertyGroup>
-		<IsEFBuild>false</IsEFBuild>
-	</PropertyGroup>
-	
-	<PropertyGroup>
-		<IsEFBuild Condition="Exists('..\..\Installer.exe')">true</IsEFBuild>
-	</PropertyGroup>
-
-	<!-- Move the DLL to the Unity project. -->
-	<Target Name="FishMMODependencies" AfterTargets="Build" Condition="'$(IsEFBuild)' == 'false'">
-		<PropertyGroup>
-			<TargetDir>..\..\FishMMO-Unity\Assets\Dependencies</TargetDir>
-			<BuildConfiguration>Debug</BuildConfiguration>
-		</PropertyGroup>
-
-		<!-- Conditionally set the property based on the build configuration -->
-		<PropertyGroup Condition="'$(Configuration)' == 'Release'">
-			<BuildConfiguration>Release</BuildConfiguration>
-		</PropertyGroup>
-		
-		<ItemGroup>
-			<SourceDirWithExclusion Include="bin\$(BuildConfiguration)\**\FishMMO-DB.dll">
-				<Exclude>bin\$(BuildConfiguration)\**\appsettings.json</Exclude>
-			</SourceDirWithExclusion>
-		</ItemGroup>
-		<Copy SourceFiles="@(SourceDirWithExclusion)" DestinationFolder="$(TargetDir)" />
-	</Target>
-	
+  <!-- Define a custom property based on the existence of the marker file -->
+  <PropertyGroup>
+    <IsEFBuild>false</IsEFBuild>
+  </PropertyGroup>
+  <PropertyGroup>
+    <IsEFBuild Condition="Exists('..\..\Installer.exe')">true</IsEFBuild>
+  </PropertyGroup>
+  <!-- Move the DLL to the Unity project. -->
+  <Target Name="FishMMODependencies" AfterTargets="Build" Condition="'$(IsEFBuild)' == 'false'">
+    <PropertyGroup>
+      <TargetDir>..\..\FishMMO-Unity\Assets\Dependencies</TargetDir>
+      <BuildConfiguration>Debug</BuildConfiguration>
+    </PropertyGroup>
+    <!-- Conditionally set the property based on the build configuration -->
+    <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+      <BuildConfiguration>Release</BuildConfiguration>
+    </PropertyGroup>
+    <ItemGroup>
+      <SourceDirWithExclusion Include="bin\$(BuildConfiguration)\**\FishMMO-DB.dll">
+        <Exclude>bin\$(BuildConfiguration)\**\appsettings.json</Exclude>
+      </SourceDirWithExclusion>
+    </ItemGroup>
+    <Copy SourceFiles="@(SourceDirWithExclusion)" DestinationFolder="$(TargetDir)" />
+  </Target>
 </Project>

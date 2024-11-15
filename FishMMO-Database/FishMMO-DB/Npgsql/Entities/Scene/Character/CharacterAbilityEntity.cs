@@ -14,5 +14,6 @@ namespace FishMMO.Database.Npgsql.Entities
 		public CharacterEntity Character { get; set; }
 		public int TemplateID { get; set; }
 		public List<int> AbilityEvents { get; set; }
+		public float Cooldown { get; set; }
 	}
 }

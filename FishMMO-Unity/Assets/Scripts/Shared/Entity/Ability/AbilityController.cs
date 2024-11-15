@@ -252,6 +252,11 @@ namespace FishMMO.Shared
 
 				LearnAbility(ability);
 			}
+
+			if (Character.TryGet(out ICooldownController cooldownController))
+			{
+				cooldownController.Read(reader);
+			}
 		}
 
 		public override void WritePayload(NetworkConnection conn, Writer writer)
@@ -289,6 +294,11 @@ namespace FishMMO.Shared
 				{
 					writer.WriteInt32(abilityEvent);
 				}
+			}
+
+			if (Character.TryGet(out ICooldownController cooldownController))
+			{
+				cooldownController.Write(writer);
 			}
 		}
 

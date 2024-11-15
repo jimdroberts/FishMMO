@@ -18,10 +18,16 @@ namespace FishMMO.Shared
 			}
 		}
 
-		public CooldownInstance(float cooldown)
+		public CooldownInstance(float remainingTime)
 		{
-			totalTime = cooldown;
-			remainingTime = cooldown;
+			this.totalTime = remainingTime;
+			this.remainingTime = remainingTime;
+		}
+
+		public CooldownInstance(float totalTime, float remainingTime)
+		{
+			this.totalTime = totalTime;
+			this.remainingTime = remainingTime;
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]

@@ -20,7 +20,7 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// Adds a known ability for a character to the database using the Ability Template ID.
 		/// </summary>
-		public static void UpdateOrAdd(NpgsqlDbContext dbContext, long characterID, Ability ability)
+		public static void UpdateOrAdd(NpgsqlDbContext dbContext, long characterID, Ability ability, float cooldown = 0.0f)
 		{
 			if (characterID == 0)
 			{
@@ -40,6 +40,7 @@ namespace FishMMO.Server.DatabaseServices
 				dbAbility.TemplateID = ability.Template.ID;
 				dbAbility.AbilityEvents.Clear();
 				dbAbility.AbilityEvents = ability.AbilityEvents.Keys.ToList();
+				dbAbility.Cooldown = cooldown;
 				dbContext.SaveChanges();
 			}
 			else
@@ -49,6 +50,7 @@ namespace FishMMO.Server.DatabaseServices
 					CharacterID = characterID,
 					TemplateID = ability.Template.ID,
 					AbilityEvents = ability.AbilityEvents.Keys.ToList(),
+					Cooldown = cooldown,
 				};
 				dbContext.CharacterAbilities.Add(dbAbility);
 				dbContext.SaveChanges();
@@ -67,21 +69,29 @@ namespace FishMMO.Server.DatabaseServices
 				return;
 			}
 
+			character.TryGet(out ICooldownController cooldownController);
+
 			var dbAbilities = dbContext.CharacterAbilities.Where(c => c.CharacterID == character.ID)
 																	.ToDictionary(k => k.ID);
 
-			foreach (KeyValuePair<long, Ability> pair in abilityController.KnownAbilities)
+			foreach (var pair in abilityController.KnownAbilities)
 			{
 				if (pair.Key < 0)
 				{
 					continue;
 				}
+
+				// Determine cooldown value
+				cooldownController.TryGetCooldown(pair.Key, out float cooldown);
+
+				// Either update an existing ability or add a new one
 				if (dbAbilities.TryGetValue(pair.Key, out CharacterAbilityEntity ability))
 				{
 					ability.CharacterID = character.ID;
 					ability.TemplateID = pair.Value.Template.ID;
 					ability.AbilityEvents.Clear();
 					ability.AbilityEvents = pair.Value.AbilityEvents.Keys.ToList();
+					ability.Cooldown = cooldown;
 				}
 				else
 				{
@@ -90,6 +100,7 @@ namespace FishMMO.Server.DatabaseServices
 						CharacterID = character.ID,
 						TemplateID = pair.Value.Template.ID,
 						AbilityEvents = pair.Value.AbilityEvents.Keys.ToList(),
+						Cooldown = cooldown,
 					});
 				}
 			}
@@ -150,6 +161,12 @@ namespace FishMMO.Server.DatabaseServices
 				return;
 			}
 
+			character.TryGet(out ICooldownController cooldownController);
+			if (cooldownController != null)
+			{
+				cooldownController.Clear();
+			}
+
 			var dbAbilities = dbContext.CharacterAbilities.Where(c => c.CharacterID == character.ID);
 
 			foreach (CharacterAbilityEntity dbAbility in dbAbilities)
@@ -158,6 +175,10 @@ namespace FishMMO.Server.DatabaseServices
 				if (template != null)
 				{
 					abilityController.LearnAbility(new Ability(dbAbility.ID, template, dbAbility.AbilityEvents));
+				}
+				if (cooldownController != null)
+				{
+					cooldownController.AddCooldown(dbAbility.ID, new CooldownInstance(dbAbility.Cooldown));
 				}
 			};
 		}

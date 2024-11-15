@@ -306,6 +306,7 @@ namespace FishMMO.Server.DatabaseServices
 			CharacterFactionService.Save(dbContext, character);
 			CharacterBuffService.Save(dbContext, character);
 			CharacterHotkeyService.Save(dbContext, character);
+			CharacterAbilityService.Save(dbContext, character);
 
 			dbContext.SaveChanges();
 
