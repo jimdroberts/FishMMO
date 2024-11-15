@@ -251,6 +251,7 @@ namespace FishMMO.Shared
 			switch (ability.Template.AbilitySpawnTarget)
 			{
 				case AbilitySpawnTarget.Self:
+				case AbilitySpawnTarget.PointBlank:
 					abilityTransform.SetPositionAndRotation(caster.Motor.Transform.position, caster.Motor.Transform.rotation);
 					break;
 				case AbilitySpawnTarget.Target:

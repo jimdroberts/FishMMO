@@ -28,7 +28,7 @@ MonoBehaviour:
     m_values: 
   FXPrefab: {fileID: 5773491593115871611, guid: e48c22ecb1287cf4185c17311214bc8a,
     type: 3}
-  AbilitySpawnTarget: 2
+  AbilitySpawnTarget: 3
   RequiresTarget: 0
   EventSlots: 1
   HitCount: 1
