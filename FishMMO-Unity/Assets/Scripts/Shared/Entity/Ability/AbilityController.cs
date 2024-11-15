@@ -834,13 +834,22 @@ namespace FishMMO.Shared
 			return found != null;
 		}
 
-		public void LearnAbility(Ability ability)
+		public void LearnAbility(Ability ability, float remainingCooldown = 0.0f)
 		{
 			if (ability == null)
 			{
 				return;
 			}
 			KnownAbilities[ability.ID] = ability;
+
+			if (remainingCooldown > 0.0f &&
+				Character.TryGet(out ICooldownController cooldownController))
+			{
+				float cooldownReduction = CalculateSpeedReduction(CooldownReductionTemplate);
+				float cooldown = ability.Cooldown * cooldownReduction;
+
+				cooldownController.AddCooldown(ability.ID, new CooldownInstance(cooldown, remainingCooldown));
+			}
 		}
 	}
 }

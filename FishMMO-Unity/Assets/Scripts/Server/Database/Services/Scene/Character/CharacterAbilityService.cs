@@ -1,5 +1,4 @@
-﻿using System.Collections.Generic;
-using System.Linq;
+﻿using System.Linq;
 using FishMMO.Database.Npgsql;
 using FishMMO.Database.Npgsql.Entities;
 using FishMMO.Shared;
@@ -161,12 +160,6 @@ namespace FishMMO.Server.DatabaseServices
 				return;
 			}
 
-			character.TryGet(out ICooldownController cooldownController);
-			if (cooldownController != null)
-			{
-				cooldownController.Clear();
-			}
-
 			var dbAbilities = dbContext.CharacterAbilities.Where(c => c.CharacterID == character.ID);
 
 			foreach (CharacterAbilityEntity dbAbility in dbAbilities)
@@ -174,11 +167,7 @@ namespace FishMMO.Server.DatabaseServices
 				AbilityTemplate template = AbilityTemplate.Get<AbilityTemplate>(dbAbility.TemplateID);
 				if (template != null)
 				{
-					abilityController.LearnAbility(new Ability(dbAbility.ID, template, dbAbility.AbilityEvents));
-				}
-				if (cooldownController != null)
-				{
-					cooldownController.AddCooldown(dbAbility.ID, new CooldownInstance(dbAbility.Cooldown));
+					abilityController.LearnAbility(new Ability(dbAbility.ID, template, dbAbility.AbilityEvents), dbAbility.Cooldown);
 				}
 			};
 		}

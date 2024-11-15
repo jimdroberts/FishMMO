@@ -10,6 +10,13 @@ namespace FishMMO.Shared
 
 		private List<long> keysToRemove = new List<long>();
 
+		public override void ResetState(bool asServer)
+		{
+			base.ResetState(asServer);
+
+			cooldowns.Clear();
+		}
+
 		public void Read(Reader reader)
 		{
 			int cooldownCount = reader.ReadInt32();

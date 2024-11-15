@@ -38,6 +38,6 @@ namespace FishMMO.Shared
 		float CalculateSpeedReduction(CharacterAttributeTemplate attribute);
 		bool LearnBaseAbilities(List<BaseAbilityTemplate> abilityTemplates = null);
 		bool KnowsLearnedAbility(int templateID);
-		void LearnAbility(Ability ability);
+		void LearnAbility(Ability ability, float remainingCooldown = 0.0f);
 	}
 }
