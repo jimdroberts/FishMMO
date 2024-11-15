@@ -85,19 +85,22 @@ namespace FishMMO.Shared
 			{
 				return 0;
 			}
-			if (hitCharacter == null)
-			{
-				return 0;
-			}
-			
+
 			TargetInfo targetInfo;
 			if (other == null)
 			{
-				targetInfo = new TargetInfo()
+				if (hitCharacter != null)
 				{
-					Target = hitCharacter.Transform,
-					HitPosition = hitCharacter.Transform.position,
-				};
+					targetInfo = new TargetInfo()
+					{
+						Target = hitCharacter.Transform,
+						HitPosition = hitCharacter.Transform.position,
+					};
+				}
+				else
+				{
+					targetInfo = default;
+				}
 			}
 			else
 			{
@@ -118,6 +121,9 @@ namespace FishMMO.Shared
 				// We remove hit count with the events return value
 				// If hit count falls below 1 the object will be destroyed after iterating all events at least once
 				hitCount -= hitEvent.Invoke(caster, hitCharacter, targetInfo, abilityObject);
+
+				// Display FX
+				hitEvent.OnApplyFX(targetInfo.HitPosition);
 			}
 
 			return hitCount;
