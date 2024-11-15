@@ -5008,8 +5008,8 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 1040231679}
   m_HandleRect: {fileID: 1040231678}
   m_Direction: 0
-  m_Value: 0.000015258789
-  m_Size: 0.9973958
+  m_Value: -0.000030516647
+  m_Size: 0.99739575
   m_NumberOfSteps: 0
   m_OnValueChanged:
     m_PersistentCalls:
@@ -9872,7 +9872,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0.5}
   m_AnchorMax: {x: 1, y: 0.5}
-  m_AnchoredPosition: {x: 0.000045776367, y: 191.5}
+  m_AnchoredPosition: {x: 0.000045776367, y: 191.50002}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0, y: 1}
 --- !u!1 &1123188957
@@ -13501,7 +13501,7 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 656819719}
   m_HandleRect: {fileID: 656819718}
   m_Direction: 2
-  m_Value: 0
+  m_Value: 1
   m_Size: 1
   m_NumberOfSteps: 0
   m_OnValueChanged:
@@ -13999,7 +13999,7 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 1182307136}
   m_HandleRect: {fileID: 1182307135}
   m_Direction: 2
-  m_Value: 0
+  m_Value: 1
   m_Size: 1
   m_NumberOfSteps: 0
   m_OnValueChanged:
@@ -25187,7 +25187,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: -0.00036621094, y: 0.000030517578}
+  m_AnchoredPosition: {x: -0.00036621094, y: 0.000091552734}
   m_SizeDelta: {x: 0, y: 300}
   m_Pivot: {x: 0, y: 1}
 --- !u!114 &2004703440
@@ -27990,7 +27990,7 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 7634760403876079989}
   m_HandleRect: {fileID: 3675336562737491294}
   m_Direction: 2
-  m_Value: 0
+  m_Value: 1
   m_Size: 1
   m_NumberOfSteps: 0
   m_OnValueChanged:
@@ -30784,7 +30784,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0.5}
   m_AnchorMax: {x: 1, y: 0.5}
-  m_AnchoredPosition: {x: -0.00061035156, y: 91.49996}
+  m_AnchoredPosition: {x: -0.00061035156, y: 91.49998}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0, y: 1}
 --- !u!114 &1044085219738693208
@@ -59311,7 +59311,7 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 7893287529803971337}
   m_HandleRect: {fileID: 7893287529803971336}
   m_Direction: 2
-  m_Value: 0
+  m_Value: 1
   m_Size: 1
   m_NumberOfSteps: 0
   m_OnValueChanged:

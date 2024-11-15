@@ -70,9 +70,9 @@ namespace FishMMO.Client
 					Configuration.Set("BackgroundColorB", "128");
 					Configuration.Set("BackgroundColorA", "235");
 
-					Configuration.Set("TextColorR", "136");
-					Configuration.Set("TextColorG", "136");
-					Configuration.Set("TextColorB", "136");
+					Configuration.Set("TextColorR", "186");
+					Configuration.Set("TextColorG", "186");
+					Configuration.Set("TextColorB", "186");
 					Configuration.Set("TextColorA", "255");
 
 					Configuration.Set("HealthColorR", "207");

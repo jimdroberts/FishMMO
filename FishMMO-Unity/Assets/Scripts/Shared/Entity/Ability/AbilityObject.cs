@@ -171,13 +171,13 @@ namespace FishMMO.Shared
 			}
 
 			// Missing ability object prefab
-			if (template.FXPrefab == null)
+			if (template.AbilityObjectPrefab == null)
 			{
 				return;
 			}
 
 			// TODO create/fetch from pool
-			GameObject go = Instantiate(template.FXPrefab);
+			GameObject go = Instantiate(template.AbilityObjectPrefab);
 			SceneManager.MoveGameObjectToScene(go, caster.GameObject.scene);
 			SetAbilitySpawnPosition(caster, ability, abilitySpawner, targetInfo, go.transform);
 			go.SetActive(false);
@@ -268,7 +268,7 @@ namespace FishMMO.Shared
 						// Calculate collider offsets so the spawned ability object appears centered in front of the caster
 						float distance = 0.0f;
 						float height = 0.0f;
-						Collider collider = ability.Template.FXPrefab.GetComponent<Collider>();
+						Collider collider = ability.Template.AbilityObjectPrefab.GetComponent<Collider>();
 						if (collider != null)
 						{
 							Collider casterCollider = caster.GameObject.GetComponent<Collider>();

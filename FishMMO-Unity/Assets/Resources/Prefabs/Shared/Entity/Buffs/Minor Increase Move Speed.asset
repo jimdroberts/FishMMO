@@ -12,7 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8136b5d45d0dc424d8dd6607909c74a4, type: 3}
   m_Name: Minor Increase Move Speed
   m_EditorClassIdentifier: 
-  FXPrefab: {fileID: 0}
+  FXPrefab: {fileID: 7266499652759718708, guid: fc146935ca6612f4a816f8e9e2ad17c1,
+    type: 3}
   Description: Slightly increases the entities movement speed.
   icon: {fileID: 21300000, guid: 7f0db3cf23c93fc4eac01cb3a52388ee, type: 3}
   Duration: 360

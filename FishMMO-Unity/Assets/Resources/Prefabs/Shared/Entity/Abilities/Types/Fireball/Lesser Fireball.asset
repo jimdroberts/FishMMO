@@ -27,11 +27,11 @@ MonoBehaviour:
   Requirements:
     m_keys: []
     m_values: 
-  FXPrefab: {fileID: 5773491593115871611, guid: 549f4456666a19b428ae484dd2630ab1,
+  AbilityObjectPrefab: {fileID: 5773491593115871611, guid: 549f4456666a19b428ae484dd2630ab1,
     type: 3}
-  AbilitySpawnTarget: 5
+  AbilitySpawnTarget: 6
   RequiresTarget: 0
-  EventSlots: 1
+  EventSlots: 0
   HitCount: 1
   Type: 4
   Events:

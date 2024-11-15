@@ -120,6 +120,8 @@ namespace FishMMO.Shared
 			{
 				buffInstance.ResetDuration();
 			}
+
+			template.OnApplyFX(buffInstance, Character);
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]

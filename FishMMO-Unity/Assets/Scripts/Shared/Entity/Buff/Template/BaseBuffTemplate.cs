@@ -55,7 +55,23 @@ namespace FishMMO.Shared
 		}
 
 		public virtual void SecondaryTooltip(Utf16ValueStringBuilder stringBuilder) { }
-
+		public virtual void OnApplyFX(Buff buff, ICharacter target)
+		{
+			if (buff == null)
+			{
+				return;
+			}
+			if (target == null)
+			{
+				return;
+			}
+#if !UNITY_SERVER
+			if (FXPrefab != null)
+			{
+				GameObject fxPrefab = Instantiate(FXPrefab, target.Transform);
+			}
+#endif
+		}
 		public abstract void OnApply(Buff buff, ICharacter target);
 		public abstract void OnRemove(Buff buff, ICharacter target);
 		public abstract void OnApplyStack(Buff buff, ICharacter target);
