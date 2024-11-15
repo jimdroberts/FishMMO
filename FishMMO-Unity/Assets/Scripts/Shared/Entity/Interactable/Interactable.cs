@@ -19,7 +19,7 @@ namespace FishMMO.Shared
 #pragma warning restore CS0414
 
 		public ObjectSpawner ObjectSpawner { get; set; }
-		public Spawnable SpawnTemplate { get; set; }
+		public SpawnableSettings SpawnableSettings { get; set; }
 
 		public long ID { get; set; }
 
@@ -81,7 +81,7 @@ namespace FishMMO.Shared
 			base.ResetState(asServer);
 
 			OnDespawn = null;
-			SpawnTemplate = null;
+			SpawnableSettings = null;
 		}
 
 		public bool InRange(Transform transform)

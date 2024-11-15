@@ -2402,7 +2402,11 @@ MonoBehaviour:
   RandomRespawnTime: 1
   RandomSpawnable: 1
   Spawnables:
-  - {fileID: 11400000, guid: 3f10125fd8889b34eb402df65a3fb355, type: 2}
+  - NetworkObject: {fileID: 7260598054390996014, guid: fe3425a466033e34ead49fcfc3204895,
+      type: 3}
+    MinimumRespawnTime: 15
+    MaximumRespawnTime: 30
+    YOffset: 0
   MaxSpawnCount: 1
   RandomSpawnPosition: 1
   SphereRadius: 0.5

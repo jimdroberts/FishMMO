@@ -25,12 +25,13 @@ namespace FishMMO.Shared
 		public bool RandomRespawnTime = true;
 		[Tooltip("If true a random prefab will be instantiated during the next respawn.")]
 		public bool RandomSpawnable = true;
-		public List<Spawnable> Spawnables;
+		public List<SpawnableSettings> Spawnables;
 		[Tooltip("The maximum number of objects that can be spawned by this spawner.")]
 		public int MaxSpawnCount = 1;
 		public Dictionary<long, ISpawnable> Spawned = new Dictionary<long, ISpawnable>();
 		[Tooltip("If true a random spawn position will be picked inside of the bounding box using the current position as the center.")]
 		public bool RandomSpawnPosition = true;
+		[Tooltip("SphereCast radius used for spawning objects in the world.")]
 		public float SphereRadius = 0.5f;
 		public Vector3 BoundingBoxSize = Vector3.one;
 		[HideInInspector]
@@ -46,6 +47,12 @@ namespace FishMMO.Shared
 
 			// Extents are always half of BoundingBoxSize
 			BoundingBoxExtents = BoundingBoxSize * 0.5f;
+
+			// Adjust spawnable Y height offset
+			for (int i = 0; i < Spawnables.Count; ++i)
+			{
+				Spawnables[i].OnValidate();
+			}
 		}
 
 		void Update()
@@ -102,7 +109,7 @@ namespace FishMMO.Shared
 				return;
 			}
 			// set the next respawn time
-			respawnTime = RandomRespawnTime ? Random.Range(spawnable.SpawnTemplate.MinimumRespawnTime, spawnable.SpawnTemplate.MaximumRespawnTime) : InitialRespawnTime;
+			respawnTime = RandomRespawnTime ? Random.Range(spawnable.SpawnableSettings.MinimumRespawnTime, spawnable.SpawnableSettings.MaximumRespawnTime) : InitialRespawnTime;
 
 			// despawn the object
 			ServerManager?.Despawn(spawnable.NetworkObject, DespawnType.Pool);
@@ -161,7 +168,7 @@ namespace FishMMO.Shared
 			}
 
 			// pick a random index or increment
-			int spawnIndex = 0;
+			int spawnIndex;
 			if (RandomSpawnable)
 			{
 				spawnIndex = Random.Range(0, Spawnables.Count);
@@ -179,7 +186,7 @@ namespace FishMMO.Shared
 				spawnIndex = 0;
 			}
 
-			Spawnable spawnable = Spawnables[spawnIndex];
+			SpawnableSettings spawnable = Spawnables[spawnIndex];
 			if (spawnable == null ||
 				spawnable.NetworkObject == null)
 			{
@@ -235,7 +242,7 @@ namespace FishMMO.Shared
 					if (nobSpawnable != null)
 					{
 						nobSpawnable.ObjectSpawner = this;
-						nobSpawnable.SpawnTemplate = spawnable;
+						nobSpawnable.SpawnableSettings = spawnable;
 						Spawned.Add(nobSpawnable.ID, nobSpawnable);
 
 						//Debug.Log($"ISpawnable found.");

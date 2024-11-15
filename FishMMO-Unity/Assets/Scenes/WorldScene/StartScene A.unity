@@ -279,10 +279,26 @@ MonoBehaviour:
   RandomRespawnTime: 1
   RandomSpawnable: 0
   Spawnables:
-  - {fileID: 11400000, guid: 79c4daf0964bfcf458c686cd3902efce, type: 2}
-  - {fileID: 11400000, guid: fa15de61be30e7d42b233b96a5371856, type: 2}
-  - {fileID: 11400000, guid: cff788069b0183c4b9e38637603e9eb7, type: 2}
-  - {fileID: 11400000, guid: 40fb963b7c5d5584d8ebf1cedee34596, type: 2}
+  - NetworkObject: {fileID: -4468559157413045786, guid: 2ce4d12b80ddd9f4ca8a389e6c91c7e3,
+      type: 3}
+    MinimumRespawnTime: 5
+    MaximumRespawnTime: 30
+    YOffset: 0
+  - NetworkObject: {fileID: 7250114663715075110, guid: f7377f38d08b9c84ab957eb9d610e043,
+      type: 3}
+    MinimumRespawnTime: 5
+    MaximumRespawnTime: 30
+    YOffset: 0
+  - NetworkObject: {fileID: 689555114688187283, guid: a1cb36c06a320c240878d104ba4f0abb,
+      type: 3}
+    MinimumRespawnTime: 5
+    MaximumRespawnTime: 30
+    YOffset: 0
+  - NetworkObject: {fileID: 6349228138187238843, guid: 82e54404fe2ccc448bd81cbe31657e29,
+      type: 3}
+    MinimumRespawnTime: 5
+    MaximumRespawnTime: 30
+    YOffset: 0
   MaxSpawnCount: 4
   RandomSpawnPosition: 1
   SphereRadius: 0.5
