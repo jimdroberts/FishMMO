@@ -68,7 +68,7 @@ namespace FishMMO.Shared
 #if !UNITY_SERVER
 			if (FXPrefab != null)
 			{
-				GameObject fxPrefab = Instantiate(FXPrefab, target.Transform);
+				GameObject fxPrefab = Instantiate(FXPrefab, target.MeshRoot != null ? target.MeshRoot : target.Transform);
 			}
 #endif
 		}

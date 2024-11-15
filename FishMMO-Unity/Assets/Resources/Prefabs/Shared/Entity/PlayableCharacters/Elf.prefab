@@ -641,6 +641,7 @@ MonoBehaviour:
   _componentIndexCache: 13
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 4964627840297570917}
+  meshRoot: {fileID: 3575547950957483929}
   characterNameLabel: {fileID: 2817084262407755495}
   characterGuildLabel: {fileID: 3362407936794280637}
   equipmentViewCamera: {fileID: 6274733150604385851}
@@ -921,6 +922,11 @@ PrefabInstance:
       propertyPath: m_text
       value: 
       objectReference: {fileID: 0}
+    - target: {fileID: 4213452809119816547, guid: dc8cc64088072ae47872cf54e7cf6b6f,
+        type: 3}
+      propertyPath: 'm_ActiveFontFeatures.Array.data[0]'
+      value: 1801810542
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -1061,6 +1067,11 @@ PrefabInstance:
         type: 3}
       propertyPath: m_fontSize
       value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4213452809119816547, guid: 2de080fd835ec6747b1b1ff8ed6870f6,
+        type: 3}
+      propertyPath: 'm_ActiveFontFeatures.Array.data[0]'
+      value: 1801810542
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

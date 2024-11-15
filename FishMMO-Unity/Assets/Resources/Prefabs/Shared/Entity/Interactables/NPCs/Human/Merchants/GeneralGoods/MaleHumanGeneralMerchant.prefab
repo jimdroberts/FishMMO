@@ -345,6 +345,7 @@ MonoBehaviour:
   _componentIndexCache: 7
   _addedNetworkObject: {fileID: 689555114688187283}
   _networkObjectCache: {fileID: 689555114688187283}
+  meshRoot: {fileID: 5107870357346918046}
   characterNameLabel: {fileID: 2534329139438515105}
   characterGuildLabel: {fileID: 2553944627287386974}
   AttributeBonuses: {fileID: 0}

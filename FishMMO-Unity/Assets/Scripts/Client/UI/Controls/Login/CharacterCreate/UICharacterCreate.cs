@@ -51,8 +51,8 @@ namespace FishMMO.Client
 					{
 						continue;
 					}
-					raceNameMap.Add(character.GameObject.name, pair.Key);
-					initialRaceNames.Add(character.GameObject.name);
+					raceNameMap.Add(pair.Value.Prefab.name, pair.Key);
+					initialRaceNames.Add(pair.Value.Prefab.name);
 
 					// initialize spawn position map
 					if (!raceSpawnPositionMap.TryGetValue(pair.Value.Name, out HashSet<string> spawners))

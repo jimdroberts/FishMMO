@@ -15,6 +15,7 @@ namespace FishMMO.Shared
 		bool IsSpawned { get; }
 
 #if !UNITY_SERVER
+		Transform MeshRoot { get;}
 		TextMeshPro CharacterNameLabel { get; set; }
 		TextMeshPro CharacterGuildLabel { get; set; }
 #endif

@@ -15,12 +15,15 @@ namespace FishMMO.Shared
 		protected Dictionary<Type, ICharacterBehaviour> Behaviours = new Dictionary<Type, ICharacterBehaviour>();
 
 		public long ID { get; set; }
-		public Transform Transform { get; protected set; }
-		public GameObject GameObject => this.gameObject;
+		public Transform Transform { get; private set; }
+		public GameObject GameObject { get; private set; }
 		public Collider Collider { get; set; }
 		public virtual bool IsTeleporting => false;
 
 #if !UNITY_SERVER
+		[SerializeField]
+		private Transform meshRoot;
+		public Transform MeshRoot { get { return this.meshRoot; }}
 		[SerializeField]
 		private TextMeshPro characterNameLabel;
 		public TextMeshPro CharacterNameLabel { get { return this.characterNameLabel; } set { this.characterNameLabel = value; } }
@@ -32,6 +35,7 @@ namespace FishMMO.Shared
 		void Awake()
 		{
 			Transform = transform;
+			GameObject = this.gameObject;
 			Collider = this.gameObject.GetComponent<Collider>();
 
 			ICharacterBehaviour[] c = gameObject.GetComponents<ICharacterBehaviour>();
