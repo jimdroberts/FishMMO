@@ -10,6 +10,11 @@ namespace FishMMO.Shared
 
 		private static Dictionary<Type, Dictionary<int, T>> resourceCache = new Dictionary<Type, Dictionary<int, T>>();
 
+		public virtual void OnLoad(string typeName, string resourceName, int resourceID)
+		{
+			Debug.Log("CachedScriptableObject: Loaded[" + typeName + " " + resourceName + " ID:" + resourceID + "]");
+		}
+
 		/// <summary>
 		/// Returns the cached object as type U or null if it cannot be found.
 		/// </summary>
@@ -88,7 +93,7 @@ namespace FishMMO.Shared
 						if (!cache.ContainsKey(resource.ID))
 						{
 							cache.Add(resource.ID, resource);
-							Debug.Log("CachedScriptableObject: Loaded[" + t.Name + " " + resource.name + " ID:" + resource.ID + "]");
+							resource.OnLoad(t.Name, resource.name, resource.ID);
 						}
 						else
 						{

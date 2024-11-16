@@ -52,6 +52,11 @@ namespace FishMMO.Shared
 
 			InternalAddTemplateModifiers(Template);
 
+			if (AbilityEvents == null)
+			{
+				AbilityEvents = new Dictionary<int, AbilityEvent>();
+			}
+
 			if (abilityEvents != null)
 			{
 				for (int i = 0; i < abilityEvents.Count; ++i)
@@ -72,6 +77,11 @@ namespace FishMMO.Shared
 			Template = AbilityTemplate.Get<AbilityTemplate>(templateID);
 			Name = Template.Name;
 			CachedTooltip = null;
+
+			if (AbilityEvents == null)
+			{
+				AbilityEvents = new Dictionary<int, AbilityEvent>();
+			}
 
 			InternalAddTemplateModifiers(Template);
 
@@ -95,6 +105,11 @@ namespace FishMMO.Shared
 			Template = template;
 			Name = Template.Name;
 			CachedTooltip = null;
+
+			if (AbilityEvents == null)
+			{
+				AbilityEvents = new Dictionary<int, AbilityEvent>();
+			}
 
 			InternalAddTemplateModifiers(Template);
 
@@ -181,10 +196,6 @@ namespace FishMMO.Shared
 
 		public void AddAbilityEvent(AbilityEvent abilityEvent)
 		{
-			if (AbilityEvents == null)
-			{
-				AbilityEvents = new Dictionary<int, AbilityEvent>();
-			}
 			if (!AbilityEvents.ContainsKey(abilityEvent.ID))
 			{
 				CachedTooltip = null;

@@ -77,6 +77,10 @@ namespace FishMMO.Shared
 
 		private void NetworkCollider_OnEnter(Collider other)
 		{
+			if (other == null)
+			{
+				return;
+			}
 			IPlayerCharacter character = other.GetComponent<IPlayerCharacter>();
 			if (character == null)
 			{
@@ -119,6 +123,10 @@ namespace FishMMO.Shared
 
 		private void NetworkCollider_OnStay(Collider other)
 		{
+			if (other == null)
+			{
+				return;
+			}
 			IPlayerCharacter character = other.GetComponent<IPlayerCharacter>();
 			if (character == null)
 			{
@@ -139,6 +147,10 @@ namespace FishMMO.Shared
 
 		private void NetworkCollider_OnExit(Collider other)
 		{
+			if (other == null)
+			{
+				return;
+			}
 			IPlayerCharacter character = other.GetComponent<IPlayerCharacter>();
 			if (character == null)
 			{

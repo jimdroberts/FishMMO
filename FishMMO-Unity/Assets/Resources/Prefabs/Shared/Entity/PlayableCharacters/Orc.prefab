@@ -2399,6 +2399,7 @@ GameObject:
   - component: {fileID: 3713920853917057017}
   - component: {fileID: 27999188545287999}
   - component: {fileID: 2371259003259364826}
+  - component: {fileID: 1566919973034185416}
   m_Layer: 0
   m_Name: Orc
   m_TagString: Untagged
@@ -2478,7 +2479,7 @@ MonoBehaviour:
   _spectatorInterpolation: 2
   _enableTeleport: 0
   _teleportThreshold: 3
-  <PrefabId>k__BackingField: 4
+  <PrefabId>k__BackingField: 1
   <SpawnableCollectionId>k__BackingField: 0
   <AssetPathHash>k__BackingField: 4089603837730464546
   <SceneId>k__BackingField: 0
@@ -2931,6 +2932,21 @@ MonoBehaviour:
   _componentIndexCache: 16
   _addedNetworkObject: {fileID: 7248884440816270172}
   _networkObjectCache: {fileID: 7248884440816270172}
+--- !u!114 &1566919973034185416
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5839652419922276934}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6eb382409511904448ab4b46057e9150, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 7248884440816270172}
+  _networkObjectCache: {fileID: 0}
 --- !u!1 &5893296815098749217
 GameObject:
   m_ObjectHideFlags: 0

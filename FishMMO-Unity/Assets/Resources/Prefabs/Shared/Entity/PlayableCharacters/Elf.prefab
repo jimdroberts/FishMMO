@@ -210,6 +210,7 @@ GameObject:
   - component: {fileID: 6690946415020651589}
   - component: {fileID: 7810264000710710752}
   - component: {fileID: 34196052825852577}
+  - component: {fileID: -4700021757340413314}
   m_Layer: 0
   m_Name: Elf
   m_TagString: Untagged
@@ -289,7 +290,7 @@ MonoBehaviour:
   _spectatorInterpolation: 2
   _enableTeleport: 0
   _teleportThreshold: 3
-  <PrefabId>k__BackingField: 6
+  <PrefabId>k__BackingField: 7
   <SpawnableCollectionId>k__BackingField: 0
   <AssetPathHash>k__BackingField: 17352979735900003762
   <SceneId>k__BackingField: 0
@@ -742,6 +743,21 @@ MonoBehaviour:
   _componentIndexCache: 16
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 4964627840297570917}
+--- !u!114 &-4700021757340413314
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4573496687782621821}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6eb382409511904448ab4b46057e9150, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 4964627840297570917}
+  _networkObjectCache: {fileID: 0}
 --- !u!1 &5035121396218170946
 GameObject:
   m_ObjectHideFlags: 0

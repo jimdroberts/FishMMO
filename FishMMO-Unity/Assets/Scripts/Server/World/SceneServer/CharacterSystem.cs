@@ -1,4 +1,4 @@
-﻿using FishNet.Broadcast;
+using FishNet.Broadcast;
 using FishNet.Connection;
 using FishNet.Object;
 using SceneManager = FishNet.Managing.Scened.SceneManager;
@@ -689,6 +689,7 @@ namespace FishMMO.Server
 			}
 		}
 
+#region Pets
 		private void AbilityObject_OnPetSummon(Ability ability, IPlayerCharacter caster, Transform abilitySpawner, TargetInfo targetInfo, int seed)
 		{
 			if (ability == null)
@@ -697,6 +698,12 @@ namespace FishMMO.Server
 			}
 
 			if (ability.Template == null)
+			{
+				return;
+			}
+
+			IPetController petController = caster.GameObject.GetComponent<IPetController>();
+			if (petController == null)
 			{
 				return;
 			}
@@ -728,14 +735,14 @@ namespace FishMMO.Server
 			// add the spawner position
 			origin += spawnPosition;
 
-			if (physicsScene.SphereCast(origin, petAbilityTemplate.SpawnDistance, Vector3.down, out RaycastHit hit, petAbilityTemplate.SpawnBoundingBox.y, Constants.Layers.Obstruction, QueryTriggerInteraction.Ignore))
+			if (physicsScene.SphereCast(origin, petAbilityTemplate.SpawnDistance, Vector3.down, out RaycastHit hit, 20.0f, Constants.Layers.Ground, QueryTriggerInteraction.Ignore))
 			{
 				spawnPosition = hit.point;
 			}
 
 			NetworkObject nob = Server.NetworkManager.GetPooledInstantiated(petAbilityTemplate.PetPrefab, spawnPosition, caster.Transform.rotation, true);
-			NPC npc = nob.GetComponent<NPC>();
-			if (npc == null)
+			Pet pet = nob.GetComponent<Pet>();
+			if (pet == null)
 			{
 				Server.NetworkManager.StorePooledInstantiated(nob, true);
 				return;
@@ -744,10 +751,22 @@ namespace FishMMO.Server
 			UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(nob.gameObject, caster.GameObject.scene);
 
 			// Ensure the game object is active, pooled objects are disabled
-			npc.GameObject.SetActive(true);
+			pet.GameObject.SetActive(true);
 
 			ServerManager.Spawn(nob.gameObject, caster.NetworkObject.Owner, caster.GameObject.scene);
+
+			AIController aiController = pet.GetComponent<AIController>();
+			if (aiController != null)
+			{
+				aiController.Target = caster.Transform;
+				aiController.LookTarget = caster.Transform;
+			}
+
+			IFactionController factionController = pet.GetComponent<IFactionController>();
+
+			petController.Pet = pet;
 		}
+#endregion
 
 		private void TryTeleport(IPlayerCharacter character)
 		{

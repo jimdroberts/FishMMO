@@ -7,7 +7,7 @@ namespace FishMMO.Shared
 	/// </summary>
 	public class PetController : CharacterBehaviour, IPetController
 	{
-		public Pet Pet { get; }
+		public Pet Pet { get; set;}
 
 #if !UNITY_SERVER
 		public override void OnStartCharacter()

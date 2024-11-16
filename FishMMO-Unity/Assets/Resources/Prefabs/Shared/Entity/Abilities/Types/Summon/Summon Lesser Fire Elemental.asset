@@ -1,0 +1,40 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dbb9506110efaf74e8f0b51d9063ece3, type: 3}
+  m_Name: Summon Lesser Fire Elemental
+  m_EditorClassIdentifier: 
+  icon: {fileID: 21300000, guid: 066c0b04be98cd348abb79add91d42bf, type: 3}
+  Description: Summons a lesser fire elemental to assist the summoner in combat.
+  ActivationTime: 10
+  LifeTime: 0
+  Cooldown: 60
+  Range: 0
+  Speed: 0
+  Price: 0
+  Resources:
+    m_keys:
+    - {fileID: 11400000, guid: f627a40e6b3ef5349b3c735f0bfd60c7, type: 2}
+    m_values: 23000000
+  Requirements:
+    m_keys: []
+    m_values: 
+  AbilityObjectPrefab: {fileID: 0}
+  AbilitySpawnTarget: 0
+  RequiresTarget: 0
+  EventSlots: 0
+  HitCount: 0
+  Type: 4
+  Events: []
+  PetPrefab: {fileID: -4468559157413045786, guid: 0568e126266db254592d9ce8425e9830,
+    type: 3}
+  SpawnBoundingBox: {x: 3, y: 1.6, z: 3}
+  SpawnDistance: 5

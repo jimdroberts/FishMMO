@@ -328,6 +328,11 @@ namespace FishMMO.Shared
 			Vector3 direction = LookTarget.position - transform.position;
 			direction.y = 0;
 
+			if (direction == Vector3.zero)
+			{
+				return;
+			}
+
 			// Calculate the rotation needed to face the target
 			Quaternion targetRotation = Quaternion.LookRotation(direction);
 

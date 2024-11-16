@@ -7,6 +7,6 @@ namespace FishMMO.Shared
         static event Action<Pet> OnPetSummoned;
         static event Action<Pet> OnPetDestroyed;
 
-        Pet Pet { get;}
+        Pet Pet { get; set; }
     }
 }

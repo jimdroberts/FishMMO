@@ -19,6 +19,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 9a571cab03b3f684da8436e4391abdbb, type: 2}
   - {fileID: 11400000, guid: 7d912d81ccd28a041aeb98853a79cccb, type: 2}
   - {fileID: 11400000, guid: f455d8a612b6da645b9a5f066502307b, type: 2}
+  - {fileID: 11400000, guid: 070a580671acc704ba34689f4865bcf4, type: 2}
   AbilityEvents:
   - {fileID: 11400000, guid: 999421753c6c67f43b2ddcafecb29459, type: 2}
   - {fileID: 11400000, guid: 47a1e5c6cb2cdad41aa9ecc8acb69c1a, type: 2}
