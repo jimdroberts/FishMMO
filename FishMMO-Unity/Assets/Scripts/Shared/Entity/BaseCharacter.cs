@@ -37,6 +37,9 @@ namespace FishMMO.Shared
 			Transform = transform;
 			GameObject = this.gameObject;
 			Collider = this.gameObject.GetComponent<Collider>();
+			
+			// Override default layer settings
+			gameObject.layer = Constants.Layers.Player;
 
 			ICharacterBehaviour[] c = gameObject.GetComponents<ICharacterBehaviour>();
 			if (c != null)

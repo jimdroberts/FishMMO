@@ -209,7 +209,7 @@ namespace FishMMO.Shared
 					// add the spawner position
 					origin += spawnPosition;
 
-					if (physicsScene.SphereCast(origin, SphereRadius, Vector3.down, out RaycastHit hit, BoundingBoxSize.y, Constants.Layers.Obstruction, QueryTriggerInteraction.Ignore))
+					if (physicsScene.SphereCast(origin, SphereRadius, Vector3.down, out RaycastHit hit, BoundingBoxSize.y, 1 << Constants.Layers.Obstruction, QueryTriggerInteraction.Ignore))
 					{
 						spawnPosition = hit.point;
 						spawnPosition.y += spawnable.YOffset;

@@ -28,6 +28,20 @@ namespace FishMMO.Shared
 			return new Vector3(center.x + xOffset, center.y, center.z + zOffset);
 		}
 
+		public static Vector3 GetNearestPositionOnSphere(Vector3 pointA, Vector3 pointB, float radius)
+		{
+			// Calculate the direction vector from B to A
+			Vector3 direction = pointA - pointB;
+
+			// Normalize the direction vector to get a unit vector
+			Vector3 unitDirection = direction.normalized;
+
+			// Multiply the unit direction by the sphere's radius to get the nearest point on the sphere
+			Vector3 nearestPoint = pointB + unitDirection * radius;
+
+			return nearestPoint;
+		}
+
 		public static Vector3 RandomOnUnitSphere(System.Random random = null)
 		{
 			if (random == null)
@@ -57,7 +71,6 @@ namespace FishMMO.Shared
 							   UnityEngine.Random.Range(-boundingBox.z, boundingBox.z));
 		}
 
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static Vector3 GetRandomPointInToroid(float R, float radius)
 		{
 			// Generate random angles
@@ -70,6 +83,48 @@ namespace FishMMO.Shared
 			float z = radius * Mathf.Sin(phi);
 
 			return new Vector3(x, y, z);
+		}
+
+		public static Vector3 GetRandomPointInFlatToroid(float R, float radius)
+		{
+			// Generate a random angle (theta) around the central axis (the hole of the ring)
+			float theta = UnityEngine.Random.Range(0f, 2f * Mathf.PI);  // Angle around the center
+
+			// Generate a random radial distance between R and (R + radius) from the center of the ring
+			float r = UnityEngine.Random.Range(R, R + radius);  // Radial distance within the tube
+
+			// Convert to Cartesian coordinates
+			float x = r * Mathf.Cos(theta);
+			float y = r * Mathf.Sin(theta);
+
+			// Return as a Vector3, setting z = 0 (since it's a flat toroid)
+			return new Vector3(x, y, 0f);
+		}
+
+		public static Vector3 GetNearestPointOnFlatToroid(Vector3 pointA, Vector3 pointB, float R, float radius)
+		{
+			// Calculate the direction from A to B
+			Vector3 direction = pointA - pointB;
+
+			// Project the direction onto the xy-plane (ignore the z-component)
+			float px = direction.x;
+			float py = direction.y;
+
+			// Calculate the angle (theta) of the direction relative to the center of the toroid (pointB)
+			float theta = Mathf.Atan2(py, px);
+
+			// Calculate the radial distance from point B (the center of the toroid)
+			float distanceFromCenter = Mathf.Sqrt(px * px + py * py);
+
+			// Clamp the radial distance to lie within the bounds of the toroidal surface (R to R + radius)
+			float clampedRadius = Mathf.Clamp(distanceFromCenter, R, R + radius);
+
+			// Calculate the new position on the toroid at the clamped radius and angle theta
+			float x = clampedRadius * Mathf.Cos(theta);
+			float y = clampedRadius * Mathf.Sin(theta);
+
+			// Return the nearest point in world space (since pointB is the center of the toroid)
+			return new Vector3(x, y, 0f) + pointB;
 		}
 	}
 }

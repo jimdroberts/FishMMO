@@ -179,10 +179,7 @@ namespace FishMMO.Shared
 				}
 				nextUpdate -= Time.deltaTime;
 			}
-			if (LookTarget != null)
-			{
-				FaceLookTarget();
-			}
+			FaceLookTarget();
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -318,8 +315,13 @@ namespace FishMMO.Shared
 
 		public void FaceLookTarget()
 		{
+			if (LookTarget == null)
+			{
+				return;
+			}
+
 			// Get the direction from the agent to the LookTarget
-			Vector3 direction = LookTarget.position - transform.position;
+			Vector3 direction = LookTarget.position - Character.Transform.position;
 			direction.y = 0;
 
 			if (direction == Vector3.zero)
@@ -331,7 +333,7 @@ namespace FishMMO.Shared
 			Quaternion targetRotation = Quaternion.LookRotation(direction);
 
 			// Apply a smooth rotation (you can adjust the speed of the rotation here)
-			transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, Time.deltaTime * 5f);
+			Character.Transform.rotation = Quaternion.Slerp(Character.Transform.rotation, targetRotation, Time.deltaTime * 5f);
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]

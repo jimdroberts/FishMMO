@@ -20,6 +20,13 @@ namespace FishMMO.Shared
 	[RequireComponent(typeof(CharacterDamageController))]
 	public class Pet : NPC
 	{
-        	public ICharacter PetOwner;
+		public ICharacter PetOwner;
+
+		public override void ResetState(bool asServer)
+		{
+			base.ResetState(asServer);
+
+			PetOwner = null;
+		}
 	}
 }

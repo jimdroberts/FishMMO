@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.AI;
 
 namespace FishMMO.Shared
 {
@@ -7,6 +8,9 @@ namespace FishMMO.Shared
 	{
 		public override void Enter(AIController controller)
 		{
+			// Allow the agent to run
+			controller.Agent.speed = Constants.Character.RunSpeed;
+
 			if (controller.Target != null)
 			{
 				TryAttack(controller);
@@ -15,6 +19,9 @@ namespace FishMMO.Shared
 
 		public override void Exit(AIController controller)
 		{
+			// Return to walk speed
+			controller.Agent.speed = Constants.Character.WalkSpeed;
+
 			controller.Target = null;
 			controller.SetRandomHomeDestination();
 		}
@@ -48,7 +55,7 @@ namespace FishMMO.Shared
 		public virtual void PickTarget(AIController controller, List<ICharacter> targets)
 		{
 			ICharacter target = targets[0];
-			
+
 			controller.Target = target.Transform;
 			controller.LookTarget = target.Transform;
 		}
@@ -57,20 +64,22 @@ namespace FishMMO.Shared
 		{
 			if (controller.Target == null)
 			{
+				controller.TransitionToIdleState();
 				return;
 			}
 			ICharacter character = controller.Target.GetComponent<ICharacter>();
 			if (character == null)
 			{
+				controller.TransitionToIdleState();
 				return;
 			}
 
-			float distanceToTarget = Vector3.Distance(controller.Character.Transform.position, controller.Target.position);
+			float distanceToTarget = (controller.Target.position - controller.Character.Transform.position).sqrMagnitude;
 
-			if (distanceToTarget <= controller.Agent.radius &&
+			if (distanceToTarget <= controller.Agent.radius * controller.Agent.radius &&
 				HasLineOfSight(controller, character))
 			{
-				// If we are in range. Perform attack
+				// Attack if we are in range and we have line of sight
 				PerformAttack(distanceToTarget);
 			}
 			else
@@ -85,6 +94,8 @@ namespace FishMMO.Shared
 		/// </summary>
 		public virtual void PerformAttack(float distanceToTarget)
 		{
+			// if (distanceToTarget is small)
+			// controller.TransitionToCombatState();
 			Debug.Log("Attacking target!");
 		}
 
@@ -93,11 +104,23 @@ namespace FishMMO.Shared
 		/// </summary>
 		public virtual void OutOfAttackRange(AIController controller, float distanceToTarget)
 		{
-			// Allow the agent to run
-			controller.Agent.speed = Constants.Character.RunSpeed;
-			
-			// If the target is out of range, move towards it or transition
-			controller.Agent.SetDestination(controller.Target.position);
+			if (controller.Target == null)
+			{
+				controller.TransitionToIdleState();
+				return;
+			}
+
+			if (!controller.Agent.pathPending &&
+				 controller.Agent.remainingDistance > controller.Agent.radius)
+			{
+				Vector3 nearestPosition = Vector3Extensions.GetNearestPositionOnSphere(controller.Character.Transform.position, controller.Target.position, controller.Agent.radius);
+
+				NavMeshHit hit;
+				if (NavMesh.SamplePosition(nearestPosition, out hit, 5.0f, NavMesh.AllAreas))
+				{
+					controller.Agent.SetDestination(hit.position);
+				}
+			}
 		}
 	}
 }

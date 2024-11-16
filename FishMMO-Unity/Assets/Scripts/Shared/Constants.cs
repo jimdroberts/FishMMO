@@ -33,11 +33,11 @@ namespace FishMMO.Shared
 
 		public static class Layers
 		{
-			public static readonly LayerMask Default = LayerMask.GetMask("Default");
-			public static readonly LayerMask IgnoreRaycast = LayerMask.GetMask("Ignore Raycast");
-			public static readonly LayerMask Ground = LayerMask.GetMask("Ground");
+			public static readonly LayerMask Default = LayerMask.NameToLayer("Default");
+			public static readonly LayerMask IgnoreRaycast = LayerMask.NameToLayer("Ignore Raycast");
+			public static readonly LayerMask Ground = LayerMask.NameToLayer("Ground");
 			public static readonly LayerMask Obstruction = LayerMask.GetMask("Default", "Ground");
-			public static readonly LayerMask Player = LayerMask.GetMask("Player");
+			public static readonly LayerMask Player = LayerMask.NameToLayer("Player");
 		}
 
 		public static class Authentication

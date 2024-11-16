@@ -735,7 +735,7 @@ namespace FishMMO.Server
 			// add the spawner position
 			origin += spawnPosition;
 
-			if (physicsScene.SphereCast(origin, petAbilityTemplate.SpawnDistance, Vector3.down, out RaycastHit hit, 20.0f, Constants.Layers.Ground, QueryTriggerInteraction.Ignore))
+			if (physicsScene.SphereCast(origin, petAbilityTemplate.SpawnDistance, Vector3.down, out RaycastHit hit, 20.0f, 1 << Constants.Layers.Ground, QueryTriggerInteraction.Ignore))
 			{
 				spawnPosition = hit.point;
 			}
@@ -747,6 +747,14 @@ namespace FishMMO.Server
 				Server.NetworkManager.StorePooledInstantiated(nob, true);
 				return;
 			}
+			pet.PetOwner = caster;
+			petController.Pet = pet;
+
+			IAIController aiController = nob.GetComponent<IAIController>();
+			if (aiController != null)
+			{
+				aiController.Initialize(spawnPosition);
+			}
 
 			UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(nob.gameObject, caster.GameObject.scene);
 
@@ -755,16 +763,7 @@ namespace FishMMO.Server
 
 			ServerManager.Spawn(nob.gameObject, caster.NetworkObject.Owner, caster.GameObject.scene);
 
-			AIController aiController = pet.GetComponent<AIController>();
-			if (aiController != null)
-			{
-				aiController.Target = caster.Transform;
-				aiController.LookTarget = caster.Transform;
-			}
-
 			IFactionController factionController = pet.GetComponent<IFactionController>();
-
-			petController.Pet = pet;
 		}
 #endregion
 

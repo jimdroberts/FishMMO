@@ -200,7 +200,7 @@ ParticleSystem:
     startSpeed:
       serializedVersion: 2
       minMaxState: 0
-      scalar: 0.4
+      scalar: 0.2
       minScalar: 5
       maxCurve:
         serializedVersion: 2
@@ -901,7 +901,7 @@ ParticleSystem:
     rateOverTime:
       serializedVersion: 2
       minMaxState: 0
-      scalar: 50
+      scalar: 25
       minScalar: 10
       maxCurve:
         serializedVersion: 2
@@ -5031,20 +5031,17 @@ MonoBehaviour:
   _componentIndexCache: 3
   _addedNetworkObject: {fileID: -4468559157413045786}
   _networkObjectCache: {fileID: -4468559157413045786}
-  InitialState: {fileID: 11400000, guid: 51f855b3de8e6644eb22eee716657935, type: 2}
+  InitialState: {fileID: 11400000, guid: 533ddb9bdb34b7440a63e47f786a58ab, type: 2}
   AvoidancePriority: 25
-  WanderState: {fileID: 11400000, guid: 51f855b3de8e6644eb22eee716657935, type: 2}
+  WanderState: {fileID: 0}
   PatrolState: {fileID: 0}
   ReturnHomeState: {fileID: 0}
   RetreatState: {fileID: 0}
-  IdleState: {fileID: 11400000, guid: 51f855b3de8e6644eb22eee716657935, type: 2}
+  IdleState: {fileID: 11400000, guid: 533ddb9bdb34b7440a63e47f786a58ab, type: 2}
   AttackingState: {fileID: 0}
   DeadState: {fileID: 0}
   LookTarget: {fileID: 0}
   RandomizeState: 0
-  LeashUpdateRate: 5
-  MinLeashRange: 100
-  MaxLeashRange: 500
   Waypoints: []
 --- !u!114 &2119787057571980410
 MonoBehaviour:
@@ -5309,6 +5306,18 @@ PrefabInstance:
     - target: {fileID: 408730, guid: 7737647c22c1fc64a88d5cd030c352ce, type: 3}
       propertyPath: m_RootOrder
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 408730, guid: 7737647c22c1fc64a88d5cd030c352ce, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 0.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 408730, guid: 7737647c22c1fc64a88d5cd030c352ce, type: 3}
+      propertyPath: m_LocalScale.y
+      value: 0.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 408730, guid: 7737647c22c1fc64a88d5cd030c352ce, type: 3}
+      propertyPath: m_LocalScale.z
+      value: 0.5
       objectReference: {fileID: 0}
     - target: {fileID: 408730, guid: 7737647c22c1fc64a88d5cd030c352ce, type: 3}
       propertyPath: m_LocalPosition.x
