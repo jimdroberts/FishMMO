@@ -46,15 +46,6 @@ namespace FishMMO.Shared
 		}
 		public NavMeshAgent Agent { get; private set; }
 		public BaseAIState CurrentState { get; private set; }
-		public float LeashUpdateRate = 5.0f;
-		/// <summary>
-		/// Minimum distance at which the AI will forget the current target and return home
-		/// </summary>
-		public float MinLeashRange = 100.0f;
-		/// <summary>
-		/// Maximum distance at which the AI will forget the current target and teleport return home
-		/// </summary>
-		public float MaxLeashRange = 500.0f;
 		/// <summary>
 		/// The waypoints available to this AI controller
 		/// </summary>
@@ -148,37 +139,40 @@ namespace FishMMO.Shared
 			{
 				if (nextUpdate < 0.0f)
 				{
-					if (nextLeashUpdate < 0.0f)
+					if (CurrentState.LeashUpdateRate > 0.0f)
 					{
-						// If the target is too far away from home, return home and forget the target
-						float distanceToHome = Vector3.Distance(Character.Transform.position, Home);
-						if (distanceToHome >= MinLeashRange)
+						if (nextLeashUpdate < 0.0f)
 						{
-							// Warp back to home if we have somehow reached a significant leash range
-							if (distanceToHome >= MaxLeashRange)
+							// If the target is too far away from home, return home and forget the target
+							float distanceToHome = Vector3.Distance(Character.Transform.position, Home);
+							if (distanceToHome >= CurrentState.MinLeashRange)
 							{
-								// Complete heal on returning home
-								if (Character.TryGet(out ICharacterDamageController characterDamageController))
+								// Warp back to home if we have somehow reached a significant leash range
+								if (distanceToHome >= CurrentState.MaxLeashRange)
 								{
-									characterDamageController.CompleteHeal();
+									// Complete heal on returning home
+									if (Character.TryGet(out ICharacterDamageController characterDamageController))
+									{
+										characterDamageController.CompleteHeal();
+									}
+									// Warp home
+									if (!Agent.Warp(Home))
+									{
+										Character.Transform.position = Home;
+									}
+									Target = null;
 								}
-								// Warp home
-								if (!Agent.Warp(Home))
+								// Otherwise run back
+								else if (ReturnHomeState != null)
 								{
-									Character.Transform.position = Home;
+									ChangeState(ReturnHomeState);
+									return;
 								}
-								Target = null;
 							}
-							// Otherwise run back
-							else if (ReturnHomeState != null)
-							{
-								ChangeState(ReturnHomeState);
-								return;
-							}
+							nextLeashUpdate = CurrentState.LeashUpdateRate;
 						}
-						nextLeashUpdate = LeashUpdateRate;
+						nextLeashUpdate -= Time.deltaTime;
 					}
-					nextLeashUpdate -= Time.deltaTime;
 
 					CurrentState.UpdateState(this, Time.deltaTime);
 					nextUpdate = CurrentState.GetUpdateRate();

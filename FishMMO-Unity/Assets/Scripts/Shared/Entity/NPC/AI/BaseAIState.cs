@@ -9,6 +9,16 @@ namespace FishMMO.Shared
 
 		[SerializeField]
 		private float updateRate = 1.0f;
+		[Tooltip("The rate at which the AI will check if it should leash and return home. If 0 or below it will never leash.")]
+		public float LeashUpdateRate = 5.0f;
+		/// <summary>
+		/// Minimum distance at which the AI will forget the current target and return home
+		/// </summary>
+		public float MinLeashRange = 100.0f;
+		/// <summary>
+		/// Maximum distance at which the AI will forget the current target and teleport return home
+		/// </summary>
+		public float MaxLeashRange = 200.0f;
 
 		// Sweep
 		public float DetectionRadius = 10;

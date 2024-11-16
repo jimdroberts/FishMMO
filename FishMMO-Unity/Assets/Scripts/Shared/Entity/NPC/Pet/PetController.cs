@@ -9,8 +9,15 @@ namespace FishMMO.Shared
 	{
 		public Pet Pet { get; set;}
 
+        public override void ResetState(bool asServer)
+        {
+            base.ResetState(asServer);
+
+			Pet = null;
+        }
+
 #if !UNITY_SERVER
-		public override void OnStartCharacter()
+        public override void OnStartCharacter()
 		{
 			base.OnStartCharacter();
 
