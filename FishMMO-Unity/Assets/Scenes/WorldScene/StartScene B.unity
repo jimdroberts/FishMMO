@@ -1281,7 +1281,6 @@ GameObject:
   - component: {fileID: 520637845}
   - component: {fileID: 520637844}
   - component: {fileID: 520637843}
-  - component: {fileID: 520637842}
   - component: {fileID: 520637840}
   - component: {fileID: 520637846}
   m_Layer: 0
@@ -1325,18 +1324,6 @@ Transform:
   - {fileID: 1770604219}
   m_Father: {fileID: 700411445}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &520637842
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 520637839}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3d55bce5fe5091e4680796532c5ea90b, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
 --- !u!135 &520637843
 SphereCollider:
   m_ObjectHideFlags: 0
@@ -5585,7 +5572,6 @@ GameObject:
   - component: {fileID: 2026365188}
   - component: {fileID: 2026365187}
   - component: {fileID: 2026365186}
-  - component: {fileID: 2026365185}
   - component: {fileID: 2026365184}
   - component: {fileID: 2026365189}
   m_Layer: 0
@@ -5628,18 +5614,6 @@ MonoBehaviour:
   InteractionRange: 3.5
   GizmoColor: {r: 0, g: 1, b: 0, a: 1}
   Target: {fileID: 0}
---- !u!114 &2026365185
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2026365182}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3d55bce5fe5091e4680796532c5ea90b, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
 --- !u!135 &2026365186
 SphereCollider:
   m_ObjectHideFlags: 0

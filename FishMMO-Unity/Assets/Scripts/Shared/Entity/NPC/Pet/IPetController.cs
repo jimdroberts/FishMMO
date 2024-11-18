@@ -4,8 +4,8 @@ namespace FishMMO.Shared
 {
     public interface IPetController : ICharacterBehaviour
     {
-        static event Action<Pet> OnPetSummoned;
-        static event Action<Pet> OnPetDestroyed;
+        static Action<Pet> OnPetSummoned;
+        static Action OnPetDestroyed;
 
         Pet Pet { get; set; }
     }

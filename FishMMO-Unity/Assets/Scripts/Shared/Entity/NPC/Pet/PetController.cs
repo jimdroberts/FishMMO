@@ -41,10 +41,17 @@ namespace FishMMO.Shared
 
 		public void OnClientPetAddBroadcastReceived(PetAddBroadcast msg, Channel channel)
 		{
+			if (SceneObject.Objects.TryGetValue(msg.ID, out ISceneObject sceneObject))
+			{
+				Pet pet = sceneObject.GameObject.GetComponent<Pet>();
+
+				IPetController.OnPetSummoned?.Invoke(pet);
+			}
 		}
 
 		public void OnClientPetRemoveBroadcastReceived(PetRemoveBroadcast msg, Channel channel)
 		{
+			IPetController.OnPetDestroyed?.Invoke();
 		}
 #endif
 	}

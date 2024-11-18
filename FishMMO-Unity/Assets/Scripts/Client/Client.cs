@@ -209,6 +209,7 @@ namespace FishMMO.Client
 			IPlayerCharacter.OnStartLocalClient += Character_OnStartLocalClient;
 			IPlayerCharacter.OnStopLocalClient += Character_OnStopLocalClient;
 			IGuildController.OnReadID += GuildController_OnReadID;
+			Pet.OnReadID += Pet_OnReadID;
 			ICharacterDamageController.OnDamaged += CharacterDamageController_OnDamaged;
 			ICharacterDamageController.OnHealed += CharacterDamageController_OnHealed;
 			IAchievementController.OnCompleteAchievement += AchievementController_OnCompleteAchievement;
@@ -735,6 +736,21 @@ namespace FishMMO.Client
 			else
 			{
 				character.SetGuildName(null);
+			}
+		}
+
+		public static void Pet_OnReadID(long ownerID, Pet pet)
+		{
+			if (pet != null && ownerID != 0)
+			{
+				// Load the characters guild from disk or request it from the server.
+				ClientNamingSystem.SetName(NamingSystemType.CharacterName, ownerID, (s) =>
+				{
+					if (pet.CharacterGuildLabel)
+					{
+						pet.CharacterGuildLabel.text = $"<{s}'s pet>";
+					}
+				});
 			}
 		}
 

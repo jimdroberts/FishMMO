@@ -1,21 +1,23 @@
-﻿using UnityEngine;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 namespace FishMMO.Shared
 {
-	public class SceneObject : MonoBehaviour
+	public class SceneObject
 	{
 		public readonly static Dictionary<long, ISceneObject> Objects = new Dictionary<long, ISceneObject>();
 
 		private static long currentID = 0;
 
-		public static void Register(ISceneObject sceneObject)
+		public static void Register(ISceneObject sceneObject, long id = -1)
 		{
-			do
+			if (id < currentID)
 			{
-				sceneObject.ID = ++currentID;
+				do
+				{
+					sceneObject.ID = ++currentID;
+				}
+				while (Objects.ContainsKey(sceneObject.ID));
 			}
-			while (Objects.ContainsKey(sceneObject.ID));
 
 			Objects.Add(sceneObject.ID, sceneObject);
 		}

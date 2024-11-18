@@ -37,7 +37,18 @@ namespace FishMMO.Client
 				{
 					if (PetNameLabel != null)
 					{
-						PetNameLabel.text = petController.Pet.gameObject.name;
+						PetNameLabel.text = petController.Pet.GameObject.name;
+
+#if !UNITY_SERVER
+						if (petController.Pet.CharacterNameLabel != null)
+						{
+							petController.Pet.CharacterGuildLabel.gameObject.SetActive(true);
+						}
+						if (petController.Pet.CharacterGuildLabel != null)
+						{
+							petController.Pet.CharacterGuildLabel.gameObject.SetActive(true);
+						}
+#endif
 					}
 					if (petController.Pet.TryGet(out CharacterAttributeController attributeController) &&
 						PetHealth != null)
@@ -73,12 +84,42 @@ namespace FishMMO.Client
 
 		public void PetController_OnPetSummoned(Pet pet)
 		{
+			if (pet == null)
+			{
+				Hide();
+				return;
+			}
 
+			if (PetNameLabel != null)
+			{
+				PetNameLabel.text = pet.GameObject.name;
+
+#if !UNITY_SERVER
+				if (pet.CharacterNameLabel != null)
+				{
+					pet.CharacterNameLabel.gameObject.SetActive(true);
+				}
+				if (pet.CharacterGuildLabel != null)
+				{
+					pet.CharacterGuildLabel.gameObject.SetActive(true);
+				}
+#endif
+			}
+			if (pet.TryGet(out CharacterAttributeController attributeController) &&
+				PetHealth != null)
+			{
+				if (attributeController.TryGetResourceAttribute(HealthTemplate, out CharacterResourceAttribute health))
+				{
+					PetHealth.value = health.FinalValue / health.CurrentValue;
+				}
+			}
+
+			Show();
 		}
 
-		public void PetController_OnPetDestroyed(Pet pet)
+		public void PetController_OnPetDestroyed()
 		{
-
+			Hide();
 		}
 	}
 }

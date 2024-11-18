@@ -12,8 +12,9 @@ namespace FishMMO.Shared
 		Dictionary<int, Faction> Allied { get;}
 		Dictionary<int, Faction> Neutral { get; }
 		Dictionary<int, Faction> Hostile { get; }
-		FactionTemplate Template{ get; }
+		FactionTemplate Template { get; }
 
+		void CopyFrom(IFactionController factionController);
 		void SetFaction(int templateID, int value);
 		void Add(IFactionController defenderFactionController);
 		void Add(FactionTemplate template, int amount = 1);

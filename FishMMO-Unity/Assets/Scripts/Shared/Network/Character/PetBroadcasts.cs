@@ -4,7 +4,7 @@ namespace FishMMO.Shared
 {
 	public struct PetAddBroadcast : IBroadcast
 	{
-		public int PetID;
+		public long ID;
 	}
 
 	public struct PetRemoveBroadcast : IBroadcast

@@ -123,14 +123,11 @@ namespace FishMMO.Shared
 
 			if (killer != null)
 			{
-				if (Character != null)
+				// Reward the killer with faction.
+				if (killer.TryGet(out IFactionController factionController) &&
+					Character.TryGet(out IFactionController defenderFactionController))
 				{
-					// Reward the killer with faction.
-					if (killer.TryGet(out IFactionController factionController) &&
-						Character.TryGet(out IFactionController defenderFactionController))
-					{
-						factionController.Add(defenderFactionController);
-					}
+					factionController.Add(defenderFactionController);
 				}
 				
 				// Reward the killer with kill achievements.
@@ -140,18 +137,25 @@ namespace FishMMO.Shared
 				}
 			}
 			
-			if (Character != null)
+			// Reward the defender with death achievements.
+			if (Character.TryGet(out IAchievementController defenderAchievementController))
 			{
-				// Reward the defender with death achievements.
-				if (Character.TryGet(out IAchievementController defenderAchievementController))
-				{
-					defenderAchievementController.Increment(KilledAchievementTemplate, 1);
-				}
+				defenderAchievementController.Increment(KilledAchievementTemplate, 1);
+			}
 
-				// Remove all buffs
-				if (Character.TryGet(out IBuffController buffController))
+			// Remove all buffs
+			if (Character.TryGet(out IBuffController buffController))
+			{
+				buffController.RemoveAll();
+			}
+
+			// Kill the players pet
+			if (Character.TryGet(out IPetController petController) &&
+				petController.Pet != null)
+			{
+				if (petController.Pet.TryGet(out ICharacterDamageController petCharacterDamageController))
 				{
-					buffController.RemoveAll();
+					petCharacterDamageController.Kill(null);
 				}
 			}
 

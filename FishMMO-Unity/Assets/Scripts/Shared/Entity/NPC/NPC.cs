@@ -15,6 +15,7 @@ namespace FishMMO.Shared
 	[RequireComponent(typeof(NetworkObserver))]
 	public class NPC : BaseCharacter
 	{
+		public bool IsCharmable;
 		public NPCAttributeDatabase AttributeBonuses;
 
 		public override void OnAwake()

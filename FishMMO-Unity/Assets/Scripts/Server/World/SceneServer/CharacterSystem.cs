@@ -764,6 +764,16 @@ namespace FishMMO.Server
 			ServerManager.Spawn(nob.gameObject, caster.NetworkObject.Owner, caster.GameObject.scene);
 
 			IFactionController factionController = pet.GetComponent<IFactionController>();
+			if (factionController != null)
+			{
+				IFactionController casterFactionController = caster.GameObject.GetComponent<IFactionController>();
+				if (casterFactionController != null)
+				{
+					factionController.CopyFrom(casterFactionController);
+				}
+			}
+
+			Server.Broadcast(caster.Owner, new PetAddBroadcast() { ID = pet.ID }, true, Channel.Reliable);
 		}
 #endregion
 

@@ -124,6 +124,31 @@ namespace FishMMO.Shared
 			}
 		}
 
+		public void CopyFrom(IFactionController factionController)
+		{
+			Factions.Clear();
+			Allied.Clear();
+			Neutral.Clear();
+			Hostile.Clear();
+
+			foreach (Faction faction in factionController.Factions.Values)
+			{
+				Factions.Add(faction.Template.ID, faction);
+			}
+			foreach (Faction faction in factionController.Allied.Values)
+			{
+				Allied.Add(faction.Template.ID, faction);
+			}
+			foreach (Faction faction in factionController.Neutral.Values)
+			{
+				Neutral.Add(faction.Template.ID, faction);
+			}
+			foreach (Faction faction in factionController.Hostile.Values)
+			{
+				Hostile.Add(faction.Template.ID, faction);
+			}
+		}
+
 		public void SetFaction(int templateID, int value)
 		{
 			if (factions.TryGetValue(templateID, out Faction faction))
