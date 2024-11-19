@@ -72,7 +72,7 @@ namespace FishMMO.Server
 				Server.RegisterBroadcast<PartyChangeRankBroadcast>(OnServerPartyChangeRankBroadcastReceived, true);
 
 				// remove the characters pending guild invite request on disconnect
-				characterSystem.OnDisconnect += RemovePending;
+				characterSystem.OnDisconnect += CharacterSystem_OnDisconnect;
 			}
 			else
 			{
@@ -95,7 +95,7 @@ namespace FishMMO.Server
 				// remove the characters pending guild invite request on disconnect
 				if (ServerBehaviour.TryGet(out CharacterSystem characterSystem))
 				{
-					characterSystem.OnDisconnect -= RemovePending;
+					characterSystem.OnDisconnect -= CharacterSystem_OnDisconnect;
 				}
 			}
 		}
@@ -222,8 +222,9 @@ namespace FishMMO.Server
 			}
 		}
 
-		public void RemovePending(NetworkConnection conn, IPlayerCharacter character)
+		public void CharacterSystem_OnDisconnect(NetworkConnection conn, IPlayerCharacter character)
 		{
+			// Remove pending character invites for this character
 			if (character != null)
 			{
 				pendingInvitations.Remove(character.ID);

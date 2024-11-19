@@ -176,15 +176,7 @@ namespace FishMMO.Server
 				{
 					WaitingSceneLoadCharacters.Remove(conn);
 
-					if (sceneServerSystem.TryGetSceneInstanceDetails(waitingSceneCharacter.WorldServerID,
-																	 waitingSceneCharacter.SceneName,
-																	 waitingSceneCharacter.SceneHandle,
-																	 out SceneInstanceDetails instance))
-					{
-						instance.AddCharacterCount(-1);
-
-						OnDisconnect?.Invoke(conn, waitingSceneCharacter);
-					}
+					OnDisconnect?.Invoke(conn, waitingSceneCharacter);
 
 					Server.NetworkManager.StorePooledInstantiated(waitingSceneCharacter.NetworkObject, true);
 				}
@@ -205,6 +197,8 @@ namespace FishMMO.Server
 					}
 
 					OnDisconnect?.Invoke(conn, character);
+
+					TryDespawnPet(character);
 
 					TryTeleport(character);
 
@@ -258,10 +252,7 @@ namespace FishMMO.Server
 
 						WaitingSceneLoadCharacters.Add(conn, character);
 
-						// update character count
-						instance.AddCharacterCount(1);
-
-						Debug.Log("Character System: " + character.CharacterName + " is loading Scene: " + character.SceneName + ":" + character.SceneHandle);
+						//Debug.Log("Character System: " + character.CharacterName + " is loading Scene: " + character.SceneName + ":" + character.SceneHandle);
 					}
 					else
 					{
@@ -338,6 +329,8 @@ namespace FishMMO.Server
 
 				// spawn the nob over the network
 				ServerManager.Spawn(character.NetworkObject, conn, scene);
+
+				TrySpawnPet(character, scene);
 
 				// set the character status to online
 				if (AccountManager.GetAccountNameByConnection(conn, out string accountName))
@@ -690,26 +683,63 @@ namespace FishMMO.Server
 		}
 
 #region Pets
-		private void AbilityObject_OnPetSummon(Ability ability, IPlayerCharacter caster, Transform abilitySpawner, TargetInfo targetInfo, int seed)
+		private void TrySpawnPet(IPlayerCharacter character, Scene scene)
 		{
-			if (ability == null)
+			if (character == null)
 			{
 				return;
 			}
 
-			if (ability.Template == null)
+			if (scene == null)
+			{
+				return;
+			}
+
+			IPetController petController = character.GameObject.GetComponent<IPetController>();
+			if (petController == null)
+			{
+				return;
+			}
+
+			if (petController.Pet == null)
+			{
+				return;
+			}
+
+			AbilityObject_OnPetSummon(petController.PetAbilityTemplate, character);
+		}
+
+		private void TryDespawnPet(IPlayerCharacter character)
+		{
+			if (character == null)
+			{
+				return;
+			}
+
+			IPetController petController = character.GameObject.GetComponent<IPetController>();
+			if (petController == null)
+			{
+				return;
+			}
+
+			if (petController.Pet == null)
+			{
+				return;
+			}
+
+			if (petController.Pet.NetworkObject.IsSpawned)
+				ServerManager.Despawn(petController.Pet.NetworkObject, DespawnType.Pool);
+		}
+
+		private void AbilityObject_OnPetSummon(PetAbilityTemplate petAbilityTemplate, IPlayerCharacter caster)
+		{
+			if (petAbilityTemplate == null)
 			{
 				return;
 			}
 
 			IPetController petController = caster.GameObject.GetComponent<IPetController>();
 			if (petController == null)
-			{
-				return;
-			}
-
-			PetAbilityTemplate petAbilityTemplate = ability.Template as PetAbilityTemplate;
-			if (petAbilityTemplate == null)
 			{
 				return;
 			}
@@ -748,6 +778,7 @@ namespace FishMMO.Server
 				return;
 			}
 			pet.PetOwner = caster;
+			petController.PetAbilityTemplate = petAbilityTemplate;
 			petController.Pet = pet;
 
 			IAIController aiController = nob.GetComponent<IAIController>();

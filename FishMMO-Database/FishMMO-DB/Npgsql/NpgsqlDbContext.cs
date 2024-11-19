@@ -34,6 +34,9 @@ namespace FishMMO.Database.Npgsql
 		public DbSet<CharacterItemCooldownEntity> CharacterItemCooldowns { get; set; }
 		public DbSet<CharacterSkillEntity> CharacterSkills { get; set; }
 		public DbSet<CharacterBuffEntity> CharacterBuffs { get; set; }
+		public DbSet<CharacterPetEntity> CharacterPets { get; set; }
+		public DbSet<CharacterPetAttributeEntity> CharacterPetAttributes { get; set; }
+		public DbSet<CharacterPetBuffEntity> CharacterPetBuffs { get; set; }
 		public DbSet<CharacterFactionEntity> CharacterFactions { get; set; }
 		public DbSet<CharacterQuestEntity> CharacterQuests { get; set; }
 		public DbSet<CharacterFriendEntity> CharacterFriends { get; set; }

@@ -58,6 +58,7 @@ namespace FishMMO.Server
 					}
 
 					characterSystem.OnDisconnect += CharacterSystem_OnDisconnect;
+					characterSystem.OnAfterLoadCharacter += CharacterSystem_OnAfterLoadCharacter;
 				}
 			}
 			else
@@ -99,6 +100,18 @@ namespace FishMMO.Server
 											out SceneInstanceDetails instance))
 			{
 				instance.AddCharacterCount(-1);
+			}
+		}
+
+		private void CharacterSystem_OnAfterLoadCharacter(NetworkConnection conn, IPlayerCharacter character)
+		{
+			// update scene instance details
+			if (TryGetSceneInstanceDetails(character.WorldServerID,
+											character.SceneName,
+											character.SceneHandle,
+											out SceneInstanceDetails instance))
+			{
+				instance.AddCharacterCount(1);
 			}
 		}
 

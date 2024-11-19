@@ -7,7 +7,7 @@ namespace FishMMO.Shared
 {
 	public class AbilityObject : MonoBehaviour
 	{
-		public static Action<Ability, IPlayerCharacter, Transform, TargetInfo, int> OnPetSummon;
+		public static Action<PetAbilityTemplate, IPlayerCharacter> OnPetSummon;
 
 		internal int ContainerID;
 		internal int ID;
@@ -165,7 +165,7 @@ namespace FishMMO.Shared
 			if (petAbilityTemplate != null)
 			{
 				// Handle server side Spawning of the pet object
-				OnPetSummon?.Invoke(ability, caster, abilitySpawner, targetInfo, seed);
+				OnPetSummon?.Invoke(petAbilityTemplate, caster);
 				return;
 			}
 

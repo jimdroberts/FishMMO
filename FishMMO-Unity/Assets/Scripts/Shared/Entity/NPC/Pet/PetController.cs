@@ -7,6 +7,7 @@ namespace FishMMO.Shared
 	/// </summary>
 	public class PetController : CharacterBehaviour, IPetController
 	{
+		public PetAbilityTemplate PetAbilityTemplate { get; set; }
 		public Pet Pet { get; set;}
 
         public override void ResetState(bool asServer)
