@@ -448,8 +448,10 @@ namespace FishMMO.Server.DatabaseServices
 					  " Rot:" + nob.transform.rotation.ToString());*/
 
 				dbTransaction.Commit();
+
+				return true;
 			}
-			return true;
+			return false;
 		}
 	}
 }

@@ -28,7 +28,6 @@ namespace FishMMO.Shared
 		private int currentSeed = 0;
 
 		public Transform AbilitySpawner;
-		public CharacterAttributeTemplate BloodResourceTemplate;
 		public CharacterAttributeTemplate AttackSpeedReductionTemplate;
 		public CharacterAttributeTemplate CastSpeedReductionTemplate;
 		public CharacterAttributeTemplate CooldownReductionTemplate;
@@ -521,7 +520,7 @@ namespace FishMMO.Shared
 								// Channeled abilities consume resources during activation
 
 								//Debug.Log($"4 Consumed On Tick: {activationData.GetTick()} State: {state}");
-								validatedAbility.ConsumeResources(Character, BloodResourceConversionTemplate, BloodResourceTemplate);
+								validatedAbility.ConsumeResources(Character, BloodResourceConversionTemplate);
 							}
 							// Handle NPC targetting and ability spawning
 							else
@@ -569,7 +568,7 @@ namespace FishMMO.Shared
 
 				// Consume resources
 				//Debug.Log($"6 Consumed On Tick: {activationData.GetTick()} State: {state}");
-				validatedAbility.ConsumeResources(Character, BloodResourceConversionTemplate, BloodResourceTemplate);
+				validatedAbility.ConsumeResources(Character, BloodResourceConversionTemplate);
 
 				// Add ability to cooldowns
 				AddCooldown(validatedAbility);
@@ -703,8 +702,18 @@ namespace FishMMO.Shared
 				default: break;
 			}
 
+			// Check if the character already has a pet
+			PetAbilityTemplate petAbilityTemplate = validatedAbility.Template as PetAbilityTemplate;
+			if (petAbilityTemplate != null &&
+				Character.TryGet(out IPetController petController) &&
+				petController.Pet != null)
+			{
+				Debug.Log("Already has a pet!");
+				return false;
+			}
+
 			if (!validatedAbility.MeetsRequirements(Character) ||
-				!validatedAbility.HasResource(Character, BloodResourceConversionTemplate, BloodResourceTemplate))
+				!validatedAbility.HasResource(Character, BloodResourceConversionTemplate))
 			{
 				//Debug.Log("Not enough resources.");
 				return false;

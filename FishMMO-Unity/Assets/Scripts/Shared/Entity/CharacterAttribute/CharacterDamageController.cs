@@ -4,9 +4,6 @@ namespace FishMMO.Shared
 {
 	public class CharacterDamageController : CharacterBehaviour, ICharacterDamageController
 	{
-		[Tooltip("The resource attribute the damage will be applied to.")]
-		public CharacterAttributeTemplate ResourceAttribute;
-
 		public AchievementTemplate DamageAchievementTemplate;
 		public AchievementTemplate DamagedAchievementTemplate;
 		public AchievementTemplate KillAchievementTemplate;
@@ -44,13 +41,12 @@ namespace FishMMO.Shared
 			{
 				if (resourceInstance == null)
 				{
-					if (ResourceAttribute == null ||
-						!Character.TryGet(out ICharacterAttributeController attributeController) ||
-						!attributeController.TryGetResourceAttribute(ResourceAttribute.ID, out CharacterResourceAttribute resource))
+					if (!Character.TryGet(out ICharacterAttributeController attributeController) ||
+						!attributeController.TryGetHealthAttribute(out CharacterResourceAttribute health))
 					{
-						throw new UnityException("Character Damage Controller ResourceAttribute is missing");
+						throw new UnityException("Health Resource Attribute is missing");
 					}
-					resourceInstance = resource;
+					resourceInstance = health;
 				}
 				return resourceInstance;
 			}

@@ -20,14 +20,13 @@ namespace FishMMO.Shared
 		{
 			if (CharacterAttributeRequirements != null && CharacterAttributeRequirements.Count > 0)
 			{
-				ICharacterAttributeController characterAttributes = character.GameObject.GetComponent<ICharacterAttributeController>();
-				if (characterAttributes == null)
+				if (!character.TryGet(out ICharacterAttributeController characterAttributeController))
 				{
 					return false;
 				}
 				foreach (QuestAttributeRequirement attributeRequirement in CharacterAttributeRequirements)
 				{
-					if (!attributeRequirement.MeetsRequirements(characterAttributes))
+					if (!attributeRequirement.MeetsRequirements(characterAttributeController))
 					{
 						return false;
 					}
@@ -35,8 +34,7 @@ namespace FishMMO.Shared
 			}
 			if (CompletedQuestRequirements != null && CompletedQuestRequirements.Count > 0)
 			{
-				IQuestController questController = character.GameObject.GetComponent<IQuestController>();
-				if (questController == null)
+				if (!character.TryGet(out IQuestController questController))
 				{
 					return false;
 				}
@@ -54,8 +52,7 @@ namespace FishMMO.Shared
 
 		public void AcceptQuest(IPlayerCharacter character)
 		{
-			IQuestController questController = character.GameObject.GetComponent<IQuestController>();
-			if (questController == null)
+			if (!character.TryGet(out IQuestController questController))
 			{
 				return;
 			}

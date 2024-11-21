@@ -128,13 +128,51 @@ namespace FishMMO.Shared
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public float GetResourceAttributeCurrentPercentage(CharacterAttributeTemplate template)
+		public float GetHealthResourceAttributeCurrentPercentage()
 		{
-			if (ResourceAttributes.TryGetValue(template.ID, out CharacterResourceAttribute attribute))
+			if (ResourceAttributes.TryGetValue(HealthResourceTemplate.ID, out CharacterResourceAttribute attribute))
 			{
 				return attribute.FinalValue / attribute.CurrentValue;
 			}
 			return 0.0f;
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public float GetManaResourceAttributeCurrentPercentage()
+		{
+			if (ResourceAttributes.TryGetValue(ManaResourceTemplate.ID, out CharacterResourceAttribute attribute))
+			{
+				return attribute.FinalValue / attribute.CurrentValue;
+			}
+			return 0.0f;
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public float GetStaminaResourceAttributeCurrentPercentage()
+		{
+			if (ResourceAttributes.TryGetValue(StaminaResourceTemplate.ID, out CharacterResourceAttribute attribute))
+			{
+				return attribute.FinalValue / attribute.CurrentValue;
+			}
+			return 0.0f;
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public bool TryGetHealthAttribute(out CharacterResourceAttribute health)
+		{
+			return ResourceAttributes.TryGetValue(HealthResourceTemplate.ID, out health);
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public bool TryGetManaAttribute(out CharacterResourceAttribute mana)
+		{
+			return ResourceAttributes.TryGetValue(ManaResourceTemplate.ID, out mana);
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public bool TryGetStaminaAttribute(out CharacterResourceAttribute stamina)
+		{
+			return ResourceAttributes.TryGetValue(StaminaResourceTemplate.ID, out stamina);
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]

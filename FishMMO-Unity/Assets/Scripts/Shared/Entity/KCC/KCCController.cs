@@ -58,7 +58,6 @@ namespace FishMMO.Shared
 		public float CrouchedCapsuleHeight = 0.5f;
 		public float FullCapsuleHeight = 2f;
 		public float CapsuleBaseOffset = 1f;
-		public CharacterAttributeTemplate StaminaTemplate;
 		public CharacterAttributeTemplate MoveSpeedTemplate;
 		public CharacterAttributeTemplate SprintSpeedTemplate;
 		public CharacterAttributeTemplate JumpSpeedTemplate;
@@ -352,9 +351,8 @@ namespace FishMMO.Shared
 								}
 								else if (_sprintInputDown &&
 										 SprintSpeedTemplate != null &&
-										 StaminaTemplate != null &&
 										 moveInputMagnitude > 0f &&
-										 attributeController.TryGetResourceAttribute(StaminaTemplate, out CharacterResourceAttribute stamina) &&
+										 attributeController.TryGetStaminaAttribute(out CharacterResourceAttribute stamina) &&
 										 attributeController.TryGetAttribute(SprintSpeedTemplate, out CharacterAttribute sprintSpeedModifier))
 								{
 									float currentStaminaCost = Constants.Character.SprintStaminaCost * deltaTime;
@@ -470,9 +468,8 @@ namespace FishMMO.Shared
 						if (_jumpRequested)
 						{
 							// See if we actually are allowed to jump
-							if (StaminaTemplate != null &&
-								Character.TryGet(out ICharacterAttributeController attributeController) &&
-								attributeController.TryGetResourceAttribute(StaminaTemplate, out CharacterResourceAttribute stamina) &&
+							if (Character.TryGet(out ICharacterAttributeController attributeController) &&
+								attributeController.TryGetStaminaAttribute(out CharacterResourceAttribute stamina) &&
 								stamina.CurrentValue >= Constants.Character.JumpStaminaCost &&
 								abilityType == AbilityType.None &&
 								(AllowJumpingWhenSliding ? Motor.GroundingStatus.FoundAnyGround : Motor.GroundingStatus.IsStableOnGround) &&

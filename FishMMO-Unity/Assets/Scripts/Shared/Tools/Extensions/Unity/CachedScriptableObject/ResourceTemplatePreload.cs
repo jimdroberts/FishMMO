@@ -30,6 +30,7 @@ namespace FishMMO.Shared
 			MerchantTemplate.LoadCache<MerchantTemplate>();
 			FactionTemplate.LoadCache<FactionTemplate>();
 			RaceTemplate.LoadCache<RaceTemplate>();
+			PetAbilityTemplate.LoadCache<PetAbilityTemplate>();
 		}
 
 		private void OnApplicationQuit()
@@ -53,6 +54,7 @@ namespace FishMMO.Shared
 			MerchantTemplate.UnloadCache<MerchantTemplate>();
 			FactionTemplate.UnloadCache<FactionTemplate>();
 			RaceTemplate.UnloadCache<RaceTemplate>();
+			PetAbilityTemplate.UnloadCache<PetAbilityTemplate>();
 		}
 	}
 }

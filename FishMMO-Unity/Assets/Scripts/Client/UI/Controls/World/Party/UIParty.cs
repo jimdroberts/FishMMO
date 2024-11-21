@@ -7,7 +7,6 @@ namespace FishMMO.Client
 {
 	public class UIParty : UICharacterControl
 	{
-		public CharacterAttributeTemplate HealthTemplate;
 		public RectTransform PartyMemberParent;
 		public UIPartyMember PartyMemberPrefab;
 		public Dictionary<long, UIPartyMember> Members = new Dictionary<long, UIPartyMember>();
@@ -99,7 +98,7 @@ namespace FishMMO.Client
 						member.Rank.text = partyController.Rank == PartyRank.Leader ? "*" : "";
 					}
 					if (member.Health != null)
-						member.Health.value = Character.TryGet(out ICharacterAttributeController attributeController) ? attributeController.GetResourceAttributeCurrentPercentage(HealthTemplate) : 0.0f;
+						member.Health.value = Character.TryGet(out ICharacterAttributeController attributeController) ? attributeController.GetHealthResourceAttributeCurrentPercentage() : 0.0f;
 					
 					member.gameObject.SetActive(true);
 					Members.Add(Character.ID, member);

@@ -6,7 +6,6 @@ namespace FishMMO.Client
 {
 	public class UIPetControl : UICharacterControl
 	{
-		public CharacterAttributeTemplate HealthTemplate;
 		public TMP_Text PetNameLabel;
 		public Slider PetHealth;
 		public Button AttackButton;
@@ -50,10 +49,10 @@ namespace FishMMO.Client
 						}
 #endif
 					}
-					if (petController.Pet.TryGet(out CharacterAttributeController attributeController) &&
+					if (petController.Pet.TryGet(out ICharacterAttributeController attributeController) &&
 						PetHealth != null)
 					{
-						if (attributeController.TryGetResourceAttribute(HealthTemplate, out CharacterResourceAttribute health))
+						if (attributeController.TryGetHealthAttribute(out CharacterResourceAttribute health))
 						{
 							PetHealth.value = health.FinalValue / health.CurrentValue;
 						}
@@ -105,10 +104,10 @@ namespace FishMMO.Client
 				}
 #endif
 			}
-			if (pet.TryGet(out CharacterAttributeController attributeController) &&
+			if (pet.TryGet(out ICharacterAttributeController attributeController) &&
 				PetHealth != null)
 			{
-				if (attributeController.TryGetResourceAttribute(HealthTemplate, out CharacterResourceAttribute health))
+				if (attributeController.TryGetHealthAttribute(out CharacterResourceAttribute health))
 				{
 					PetHealth.value = health.FinalValue / health.CurrentValue;
 				}

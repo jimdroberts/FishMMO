@@ -208,7 +208,9 @@ namespace FishMMO.Server
 
 					// immediately log out for now.. we could add a timeout later on..?
 					if (character.NetworkObject.IsSpawned)
+					{
 						ServerManager.Despawn(character.NetworkObject, DespawnType.Pool);
+					}
 				}
 			}
 		}
@@ -695,18 +697,48 @@ namespace FishMMO.Server
 				return;
 			}
 
-			IPetController petController = character.GameObject.GetComponent<IPetController>();
-			if (petController == null)
+			if (!character.TryGet(out IPetController petController))
 			{
 				return;
 			}
 
-			if (petController.Pet == null)
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
+
+			if (dbContext == null)
 			{
 				return;
 			}
 
-			AbilityObject_OnPetSummon(petController.PetAbilityTemplate, character);
+			if (!CharacterPetService.TryLoad(dbContext, character, out Pet pet))
+			{
+				return;
+			}
+
+			pet.PetOwner = character;
+			petController.Pet = pet;
+
+			if (pet.TryGet(out IAIController aiController))
+			{
+				// Initialize AI Controller
+				aiController.Initialize(Vector3.zero);
+			}
+
+			UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(pet.GameObject, character.GameObject.scene);
+
+			// Ensure the game object is active, pooled objects are disabled
+			pet.GameObject.SetActive(true);
+
+			ServerManager.Spawn(pet.GameObject, character.NetworkObject.Owner, character.GameObject.scene);
+
+			if (pet.TryGet(out IFactionController petFactionController))
+			{
+				if (character.TryGet(out IFactionController casterFactionController))
+				{
+					petFactionController.CopyFrom(casterFactionController);
+				}
+			}
+
+			Server.Broadcast(character.Owner, new PetAddBroadcast() { ID = pet.ID }, true, Channel.Reliable);
 		}
 
 		private void TryDespawnPet(IPlayerCharacter character)
@@ -716,19 +748,33 @@ namespace FishMMO.Server
 				return;
 			}
 
-			IPetController petController = character.GameObject.GetComponent<IPetController>();
-			if (petController == null)
+			if (!character.TryGet(out IPetController petController))
 			{
 				return;
 			}
 
-			if (petController.Pet == null)
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
+
+			if (dbContext == null)
 			{
 				return;
 			}
 
-			if (petController.Pet.NetworkObject.IsSpawned)
+			float currentHealth = 0.0f;
+			if (petController.Pet != null &&
+				petController.Pet.TryGet(out ICharacterAttributeController petAttributeController) &&
+				petAttributeController.TryGetHealthAttribute(out CharacterResourceAttribute health))
+			{
+				currentHealth = health.CurrentValue;
+			}
+
+			CharacterPetService.Save(dbContext, character, petController.Pet != null && currentHealth > 0.0f);
+
+			if (petController.Pet != null &&
+				petController.Pet.NetworkObject.IsSpawned)
+			{
 				ServerManager.Despawn(petController.Pet.NetworkObject, DespawnType.Pool);
+			}
 		}
 
 		private void AbilityObject_OnPetSummon(PetAbilityTemplate petAbilityTemplate, IPlayerCharacter caster)
@@ -738,8 +784,7 @@ namespace FishMMO.Server
 				return;
 			}
 
-			IPetController petController = caster.GameObject.GetComponent<IPetController>();
-			if (petController == null)
+			if (!caster.TryGet(out IPetController petController))
 			{
 				return;
 			}
@@ -774,16 +819,16 @@ namespace FishMMO.Server
 			Pet pet = nob.GetComponent<Pet>();
 			if (pet == null)
 			{
-				Server.NetworkManager.StorePooledInstantiated(nob, true);
+				//throw exception
 				return;
 			}
 			pet.PetOwner = caster;
-			petController.PetAbilityTemplate = petAbilityTemplate;
+			pet.PetAbilityTemplate = petAbilityTemplate;
 			petController.Pet = pet;
 
-			IAIController aiController = nob.GetComponent<IAIController>();
-			if (aiController != null)
+			if (pet.TryGet(out IAIController aiController))
 			{
+				// Initialize AI Controller
 				aiController.Initialize(spawnPosition);
 			}
 
@@ -794,13 +839,11 @@ namespace FishMMO.Server
 
 			ServerManager.Spawn(nob.gameObject, caster.NetworkObject.Owner, caster.GameObject.scene);
 
-			IFactionController factionController = pet.GetComponent<IFactionController>();
-			if (factionController != null)
+			if (pet.TryGet(out IFactionController petFactionController))
 			{
-				IFactionController casterFactionController = caster.GameObject.GetComponent<IFactionController>();
-				if (casterFactionController != null)
+				if (caster.TryGet(out IFactionController casterFactionController))
 				{
-					factionController.CopyFrom(casterFactionController);
+					petFactionController.CopyFrom(casterFactionController);
 				}
 			}
 

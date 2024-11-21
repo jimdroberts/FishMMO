@@ -1,10 +1,6 @@
-using FishNet.Object;
-using FishNet.Object.Synchronizing;
-using FishNet.Transporting;
 using UnityEngine;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using FishNet.Connection;
 using FishNet.Serializing;
 
@@ -14,11 +10,16 @@ namespace FishMMO.Shared
 	{
 		public static Action<long, Pet> OnReadID;
 
+		public PetAbilityTemplate PetAbilityTemplate;
 		public ICharacter PetOwner;
+		public List<int> Abilities { get; set; }
 
         public override void OnAwake()
         {
             base.OnAwake();
+
+			Abilities = new List<int>();
+			
 #if !UNITY_SERVER
 			GameObject.name = GameObject.name.Replace("(Clone)", "");
 			if (CharacterNameLabel != null)
@@ -60,6 +61,10 @@ namespace FishMMO.Shared
 		{
 			writer.WriteInt64(ID);
 			writer.WriteInt64(PetOwner.ID);
+		}
+
+		public void LearnAbilities(List<int> abilities)
+		{
 		}
 	}
 }

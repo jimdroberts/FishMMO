@@ -23,7 +23,7 @@ namespace FishMMO.Shared
 #if !UNITY_SERVER
 		[SerializeField]
 		private Transform meshRoot;
-		public Transform MeshRoot { get { return this.meshRoot; }}
+		public Transform MeshRoot { get { return this.meshRoot; } }
 		[SerializeField]
 		private TextMeshPro characterNameLabel;
 		public TextMeshPro CharacterNameLabel { get { return this.characterNameLabel; } set { this.characterNameLabel = value; } }
@@ -37,7 +37,7 @@ namespace FishMMO.Shared
 			Transform = transform;
 			GameObject = this.gameObject;
 			Collider = this.gameObject.GetComponent<Collider>();
-			
+
 			// Override default layer settings
 			gameObject.layer = Constants.Layers.Player;
 
@@ -51,7 +51,6 @@ namespace FishMMO.Shared
 					{
 						continue;
 					}
-
 					behaviour.InitializeOnce(this);
 				}
 			}
@@ -111,7 +110,13 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public bool TryGet<T>(out T control) where T : class, ICharacterBehaviour
 		{
-			if (Behaviours.TryGetValue(typeof(T), out ICharacterBehaviour result))
+			Type type = typeof(T);
+			if (!type.IsInterface)
+			{
+				throw new UnityException($"{type.Name} must be an interface.");
+			}
+
+			if (Behaviours.TryGetValue(type, out ICharacterBehaviour result))
 			{
 				if ((control = result as T) != null)
 				{
@@ -125,7 +130,13 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public T Get<T>() where T : class, ICharacterBehaviour
 		{
-			if (Behaviours.TryGetValue(typeof(T), out ICharacterBehaviour result))
+			Type type = typeof(T);
+			if (!type.IsInterface)
+			{
+				throw new UnityException($"{type.Name} must be an interface.");
+			}
+
+			if (Behaviours.TryGetValue(type, out ICharacterBehaviour result))
 			{
 				return result as T;
 			}

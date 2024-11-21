@@ -16,7 +16,6 @@ namespace FishMMO.Server
 	/// </summary>
 	public class PartySystem : ServerBehaviour
 	{
-		public CharacterAttributeTemplate HealthTemplate;
 		public int MaxPartySize = 6;
 		[Tooltip("The server party update pump rate limit in seconds.")]
 		public float UpdatePumpRate = 1.0f;
@@ -258,7 +257,7 @@ namespace FishMMO.Server
 										   partyController.Character.ID,
 										   partyController.ID,
 										   partyController.Rank,
-										   partyController.Character.TryGet(out ICharacterAttributeController attributeController) ? attributeController.GetResourceAttributeCurrentPercentage(HealthTemplate) : 0.0f);
+										   partyController.Character.TryGet(out ICharacterAttributeController attributeController) ? attributeController.GetHealthResourceAttributeCurrentPercentage() : 0.0f);
 
 				// tell the character we made their party successfully
 				Server.Broadcast(conn, new PartyCreateBroadcast()
@@ -357,7 +356,7 @@ namespace FishMMO.Server
 											   partyController.Character.ID,
 											   partyController.ID,
 											   partyController.Rank,
-											   attributesExist ? attributeController.GetResourceAttributeCurrentPercentage(HealthTemplate) : 1.0f);
+											   attributesExist ? attributeController.GetHealthResourceAttributeCurrentPercentage() : 1.0f);
 
 					// tell the other servers to update their party lists
 					PartyUpdateService.Save(dbContext, pendingPartyID);
@@ -368,7 +367,7 @@ namespace FishMMO.Server
 						PartyID = pendingPartyID,
 						CharacterID = partyController.Character.ID,
 						Rank = PartyRank.Member,
-						HealthPCT = attributesExist ? attributeController.GetResourceAttributeCurrentPercentage(HealthTemplate) : 1.0f,
+						HealthPCT = attributesExist ? attributeController.GetHealthResourceAttributeCurrentPercentage() : 1.0f,
 					}, true, Channel.Reliable);
 				}
 			}
