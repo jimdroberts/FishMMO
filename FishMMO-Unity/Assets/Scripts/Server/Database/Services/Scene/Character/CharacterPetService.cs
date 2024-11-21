@@ -55,7 +55,7 @@ namespace FishMMO.Server.DatabaseServices
 				dbPet.Spawned = spawned;
 				dbContext.SaveChanges();
 			}
-			else
+			else if (spawned)
 			{
 				dbPet = new CharacterPetEntity()
 				{

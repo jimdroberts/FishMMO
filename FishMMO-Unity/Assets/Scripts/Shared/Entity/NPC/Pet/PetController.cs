@@ -43,14 +43,15 @@ namespace FishMMO.Shared
 		{
 			if (SceneObject.Objects.TryGetValue(msg.ID, out ISceneObject sceneObject))
 			{
-				Pet pet = sceneObject.GameObject.GetComponent<Pet>();
+				Pet = sceneObject.GameObject.GetComponent<Pet>();
 
-				IPetController.OnPetSummoned?.Invoke(pet);
+				IPetController.OnPetSummoned?.Invoke(Pet);
 			}
 		}
 
 		public void OnClientPetRemoveBroadcastReceived(PetRemoveBroadcast msg, Channel channel)
 		{
+			Pet = null;
 			IPetController.OnPetDestroyed?.Invoke();
 		}
 #endif

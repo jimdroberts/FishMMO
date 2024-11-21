@@ -708,7 +708,6 @@ namespace FishMMO.Shared
 				Character.TryGet(out IPetController petController) &&
 				petController.Pet != null)
 			{
-				Debug.Log("Already has a pet!");
 				return false;
 			}
 

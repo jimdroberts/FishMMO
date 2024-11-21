@@ -41,6 +41,7 @@ namespace FishMMO.Shared
 			base.ResetState(asServer);
 
 			PetOwner = null;
+			Abilities.Clear();
 
 #if !UNITY_SERVER
 			SceneObject.Unregister(this);
