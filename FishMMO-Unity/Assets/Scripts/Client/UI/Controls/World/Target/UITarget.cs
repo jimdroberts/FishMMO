@@ -1,3 +1,4 @@
+using System;
 using FishMMO.Shared;
 using TMPro;
 using UnityEngine;
@@ -62,13 +63,12 @@ namespace FishMMO.Client
 			SceneTeleporter teleporter = target.GetComponent<SceneTeleporter>();
 			SceneObjectNamer sceneObjectNamer = target.GetComponent<SceneObjectNamer>();
 
-			// must be an interactable or have an attribute controller
-			if ((interactable != null && sceneObjectNamer == null) ||
-				teleporter != null ||
-				characterAttributeController == null ||
+			// Return if all conditions are false
+			if (interactable == null &&
+				teleporter == null &&
+				characterAttributeController == null &&
 				sceneObjectNamer == null)
 			{
-				TargetController_OnClearTarget();
 				return;
 			}
 
@@ -91,7 +91,7 @@ namespace FishMMO.Client
 			// make the UI visible
 			Show();
 
-			UpdateTargetLabel(target, interactable);
+			UpdateTargetLabel(target, target.gameObject, interactable);
 		}
 
 		public void TargetController_OnUpdateTarget(Transform target)
@@ -103,25 +103,34 @@ namespace FishMMO.Client
 		{
 			if (lastTarget != null)
 			{
-#if !UNITY_SERVER
+				Outline outline = lastTarget.GetComponent<Outline>();
+				if (outline != null)
+				{
+					outline.enabled = false;
+				}
+
 				ICharacter character = lastTarget.GetComponent<ICharacter>();
 				if (character != null)
 				{
+					// Don't deactivate our own name label
 					IPlayerCharacter playerCharacter = character as IPlayerCharacter;
 					if (playerCharacter != null &&
 						playerCharacter.NetworkObject.IsOwner)
 					{
 						return;
 					}
+
+					// Don't deactivate our pets name label
+					Pet pet = lastTarget.GetComponent<Pet>();
+					if (pet != null &&
+						pet.NetworkObject.IsOwner)
+					{
+						return;
+					}
+#if !UNITY_SERVER
 					character.CharacterNameLabel.gameObject.SetActive(false);
 					character.CharacterGuildLabel.gameObject.SetActive(false);
-				}
 #endif
-
-				Outline outline = lastTarget.GetComponent<Outline>();
-				if (outline != null)
-				{
-					outline.enabled = false;
 				}
 			}
 
@@ -134,7 +143,7 @@ namespace FishMMO.Client
 			Hide();
 		}
 
-		private void UpdateTargetLabel(Transform target, IInteractable interactable = null)
+		private void UpdateTargetLabel(Transform target, GameObject gameObject, IInteractable interactable)
 		{
 			if (targetLabel != null)
 			{
@@ -143,40 +152,47 @@ namespace FishMMO.Client
 			}
 
 			// Enable the character name labels
-			ICharacter character = interactable.GameObject.GetComponent<ICharacter>();
-			if (character != null)
+			if (gameObject != null)
 			{
-#if !UNITY_SERVER
-				character.CharacterNameLabel.gameObject.SetActive(true);
-				character.CharacterGuildLabel.gameObject.SetActive(true);
-#endif
-			}
-			else // Otherwise display an overhead title
-			{
-				Vector3 newPos = target.position;
-
-				Collider collider = target.GetComponent<Collider>();
-
-				float colliderHeight = collider.bounds.size.y * 0.5f;
-
-				newPos.y += colliderHeight;
-
-				string label = target.name.Replace("(Clone)", "");
-				Color color = Color.grey;
-
-				// apply title
-				if (interactable != null &&
-					!string.IsNullOrWhiteSpace(interactable.Title))
+				ICharacter character = gameObject.GetComponent<ICharacter>();
+				if (character != null)
 				{
-					string hex = interactable.TitleColor.ToHex();
-					if (!string.IsNullOrWhiteSpace(hex))
-					{
-						label += $"\r\n<<color=#{hex}>{interactable.Title}</color>>";
-					}
+#if !UNITY_SERVER
+					character.CharacterNameLabel.gameObject.SetActive(true);
+					character.CharacterGuildLabel.gameObject.SetActive(true);
+#endif
 				}
+				else if (interactable != null) // Otherwise display an overhead title for interactables
+				{
+					Vector3 newPos = target.position;
 
-				targetLabel = LabelMaker.Display3D(label, newPos, color, 1.0f, 0.0f, true);
+					float colliderHeight = 1.0f;
+
+					Collider collider = target.GetComponent<Collider>();
+					if (collider != null)
+					{
+						collider.TryGetDimensions(out colliderHeight, out float radius);
+					}
+					
+					newPos.y += colliderHeight;
+
+					string label = target.name.Replace("(Clone)", "");
+					Color color = Color.grey;
+
+					// apply title
+					if (!string.IsNullOrWhiteSpace(interactable.Title))
+					{
+						string hex = interactable.TitleColor.ToHex();
+						if (!string.IsNullOrWhiteSpace(hex))
+						{
+							label += $"\r\n<<color=#{hex}>{interactable.Title}</color>>";
+						}
+					}
+
+					targetLabel = LabelMaker.Display3D(label, newPos, color, 1.0f, 0.0f, true);
+				}
 			}
+
 		}
 	}
 }

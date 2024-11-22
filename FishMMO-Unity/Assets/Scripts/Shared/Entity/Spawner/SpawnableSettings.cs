@@ -30,18 +30,10 @@ namespace FishMMO.Shared
 
 			// get the collider height
 			Collider collider = NetworkObject.GetComponent<Collider>();
-			switch (collider)
+			if (collider != null)
 			{
-				case CapsuleCollider capsule:
-					YOffset = capsule.height * 0.5f;
-					break;
-				case BoxCollider box:
-					YOffset = box.bounds.extents.y;
-					break;
-				case SphereCollider sphere:
-					YOffset = sphere.radius;
-					break;
-				default: break;
+				collider.TryGetDimensions(out float height, out float radius);
+				YOffset = height;
 			}
 		}
 	}
