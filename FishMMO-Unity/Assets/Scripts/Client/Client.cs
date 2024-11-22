@@ -777,7 +777,43 @@ namespace FishMMO.Client
 
 			displayPos.y += colliderHeight;
 
-			LabelMaker.Display3D(amount.ToString(), displayPos, damageAttribute.DisplayColor, 4.0f, 1.0f, false);
+			Cached3DLabel label = LabelMaker.Display3D(amount.ToString(), displayPos, damageAttribute.DisplayColor, 2.0f, 1.0f, false);
+
+			// Start the move coroutine if provided
+			if (label != null)
+			{
+				label.StartCoroutine(MoveLabelUpwardAndRandomly(label, 1.0f));
+			}
+		}
+
+		public static IEnumerator MoveLabelUpwardAndRandomly(Cached3DLabel label, float duration, float gravity = -4.0f)
+		{
+			Vector3 initialPosition = label.transform.position;
+			Vector3 randomDirection = new Vector3(
+				UnityEngine.Random.Range(-1f, 1f),  // Random X direction
+				1f,                                 // Always moving up initially
+				UnityEngine.Random.Range(-1f, 1f)   // Random Z direction
+			).normalized;
+
+			Vector3 velocity = randomDirection * 2f; // Initial velocity in the random direction
+			float elapsedTime = 0f;
+
+			while (elapsedTime < duration)
+			{
+				float t = elapsedTime / duration;
+
+				// Apply gravity (simulating gravity by modifying the Y component of the velocity)
+				velocity.y += gravity * Time.deltaTime;
+
+				// Update position based on the velocity
+				label.transform.position += velocity * Time.deltaTime;
+
+				elapsedTime += Time.deltaTime;
+				yield return null;
+			}
+
+			// Ensure it reaches the final position, just in case the gravity had too much effect
+			label.transform.position = initialPosition + randomDirection * 2f;
 		}
 
 		public void CharacterDamageController_OnHealed(ICharacter healer, ICharacter healed, int amount)
