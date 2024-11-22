@@ -67,15 +67,18 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
-			DrawDebugCircle(transform.position, Agent.radius, Color.red);
+			Gizmos.color = Color.red;
+			Gizmos.DrawWireSphere(transform.position, Agent.radius);
 
 			if (Home != null)
 			{
 				if (WanderState != null && WanderState is WanderState wanderState)
 				{
-					DrawDebugCircle(Home, wanderState.WanderRadius, Color.green);
+					Gizmos.color = Color.green;
+					Gizmos.DrawWireSphere(Home, wanderState.WanderRadius);
 				}
-				DrawDebugCircle(Home, 0.5f, Color.blue);
+				Gizmos.color = Color.blue;
+				Gizmos.DrawWireSphere(Home, 0.5f);
 			}
 		}
 #endif
@@ -334,13 +337,6 @@ namespace FishMMO.Shared
 
 			// Apply a smooth rotation (you can adjust the speed of the rotation here)
 			Character.Transform.rotation = Quaternion.Slerp(Character.Transform.rotation, targetRotation, Time.deltaTime * 5f);
-		}
-
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public void DrawDebugCircle(Vector3 position, float radius, Color color)
-		{
-			Gizmos.color = color;
-			Gizmos.DrawWireSphere(position, radius);
 		}
 	}
 }
