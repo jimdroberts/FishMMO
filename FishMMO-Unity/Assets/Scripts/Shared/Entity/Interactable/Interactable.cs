@@ -26,6 +26,7 @@ namespace FishMMO.Shared
 		public Transform Transform { get; private set; }
 		public GameObject GameObject { get => this.gameObject; }
 
+		public virtual string Name { get { return GameObject.name; } }
 		public virtual string Title { get { return "Interactable"; } }
 		public virtual Color TitleColor { get { return TinyColor.ToUnityColor(TinyColor.forestGreen); } }
 
@@ -36,8 +37,9 @@ namespace FishMMO.Shared
 			Transform = transform;
 			interactionRangeSqr = InteractionRange * InteractionRange;
 
-			OnStarting();
+			OnAwake();
 #if !UNITY_SERVER
+			GameObject.name = GameObject.name.Replace("(Clone)", "");
 			ICharacter character = Transform.GetComponent<ICharacter>();
 			if (character != null &&
 				!string.IsNullOrWhiteSpace(Title))
@@ -69,7 +71,7 @@ namespace FishMMO.Shared
 			writer.WriteInt64(ID);
 		}
 
-		public virtual void OnStarting() { }
+		public virtual void OnAwake() { }
 
 		public void Despawn()
 		{

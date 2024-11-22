@@ -74,7 +74,7 @@ namespace FishMMO.Client
 
 			if (NameLabel != null)
 			{
-				NameLabel.text = target.name.Replace("(Clone)", "");
+				NameLabel.text = interactable != null ? interactable.Name : target.name.Replace("(Clone)", "");
 			}
 			if (characterAttributeController != null)
 			{
@@ -176,7 +176,9 @@ namespace FishMMO.Client
 					
 					newPos.y += colliderHeight;
 
-					string label = target.name.Replace("(Clone)", "");
+					string label = interactable.Name;
+
+					// TODO Get target name color based on alliance level
 					Color color = Color.grey;
 
 					// apply title
@@ -192,7 +194,6 @@ namespace FishMMO.Client
 					targetLabel = LabelMaker.Display3D(label, newPos, color, 1.0f, 0.0f, true);
 				}
 			}
-
 		}
 	}
 }

@@ -8,7 +8,8 @@ namespace FishMMO.Shared
 	{
 		NavMeshAgent Agent { get; }
 		BaseAIState CurrentState { get; }
-		Vector3 Home { get; }
+		Vector3 Home { get; set; }
+		Transform Target { get; set;}
 
 		void Initialize(Vector3 home, Vector3[] waypoints = null);
 		void ChangeState(BaseAIState newState, List<ICharacter> targets = null);

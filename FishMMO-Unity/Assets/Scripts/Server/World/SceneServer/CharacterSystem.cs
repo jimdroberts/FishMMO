@@ -42,6 +42,14 @@ namespace FishMMO.Server
 		/// Triggered immediately after a character is removed from their respective cache.
 		/// </summary>
 		public event Action<NetworkConnection, IPlayerCharacter> OnDisconnect;
+		/// <summary>
+		/// Triggered immediately after a character is spawned in the scene.
+		/// </summary>
+		public event Action<NetworkConnection, IPlayerCharacter, Scene> OnSpawnCharacter;
+		/// <summary>
+		/// Triggered immediately after a character is despawned from the scene.
+		/// </summary>
+		public event Action<NetworkConnection, IPlayerCharacter> OnDespawnCharacter;
 
 		public Dictionary<long, IPlayerCharacter> CharactersByID = new Dictionary<long, IPlayerCharacter>();
 		public Dictionary<string, IPlayerCharacter> CharactersByLowerCaseName = new Dictionary<string, IPlayerCharacter>();
@@ -67,7 +75,6 @@ namespace FishMMO.Server
 				Server.NetworkManager.SceneManager.OnClientLoadedStartScenes += SceneManager_OnClientLoadedStartScenes;
 
 				ICharacterDamageController.OnKilled += CharacterDamageController_OnKilled;
-				AbilityObject.OnPetSummon += AbilityObject_OnPetSummon;
 			}
 			else
 			{
@@ -83,7 +90,6 @@ namespace FishMMO.Server
 				Server.NetworkManager.SceneManager.OnClientLoadedStartScenes -= SceneManager_OnClientLoadedStartScenes;
 
 				ICharacterDamageController.OnKilled -= CharacterDamageController_OnKilled;
-				AbilityObject.OnPetSummon -= AbilityObject_OnPetSummon;
 			}
 
 			if (Server != null &&
@@ -198,7 +204,7 @@ namespace FishMMO.Server
 
 					OnDisconnect?.Invoke(conn, character);
 
-					TryDespawnPet(character);
+					OnDespawnCharacter?.Invoke(conn, character);
 
 					TryTeleport(character);
 
@@ -332,7 +338,7 @@ namespace FishMMO.Server
 				// spawn the nob over the network
 				ServerManager.Spawn(character.NetworkObject, conn, scene);
 
-				TrySpawnPet(character, scene);
+				OnSpawnCharacter?.Invoke(conn, character, scene);
 
 				// set the character status to online
 				if (AccountManager.GetAccountNameByConnection(conn, out string accountName))
@@ -683,173 +689,6 @@ namespace FishMMO.Server
 				// Handle NPC deaths
 			}
 		}
-
-#region Pets
-		private void TrySpawnPet(IPlayerCharacter character, Scene scene)
-		{
-			if (character == null)
-			{
-				return;
-			}
-
-			if (scene == null)
-			{
-				return;
-			}
-
-			if (!character.TryGet(out IPetController petController))
-			{
-				return;
-			}
-
-			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-
-			if (dbContext == null)
-			{
-				return;
-			}
-
-			if (!CharacterPetService.TryLoad(dbContext, character, out Pet pet))
-			{
-				return;
-			}
-
-			pet.PetOwner = character;
-			petController.Pet = pet;
-
-			if (pet.TryGet(out IAIController aiController))
-			{
-				// Initialize AI Controller
-				aiController.Initialize(Vector3.zero);
-			}
-
-			UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(pet.GameObject, character.GameObject.scene);
-
-			// Ensure the game object is active, pooled objects are disabled
-			pet.GameObject.SetActive(true);
-
-			ServerManager.Spawn(pet.GameObject, character.NetworkObject.Owner, character.GameObject.scene);
-
-			if (pet.TryGet(out IFactionController petFactionController))
-			{
-				if (character.TryGet(out IFactionController casterFactionController))
-				{
-					petFactionController.CopyFrom(casterFactionController);
-				}
-			}
-
-			Server.Broadcast(character.Owner, new PetAddBroadcast() { ID = pet.ID }, true, Channel.Reliable);
-		}
-
-		private void TryDespawnPet(IPlayerCharacter character)
-		{
-			if (character == null)
-			{
-				return;
-			}
-
-			if (!character.TryGet(out IPetController petController))
-			{
-				return;
-			}
-
-			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-
-			if (dbContext == null)
-			{
-				return;
-			}
-
-			float currentHealth = 0.0f;
-			if (petController.Pet != null &&
-				petController.Pet.TryGet(out ICharacterAttributeController petAttributeController) &&
-				petAttributeController.TryGetHealthAttribute(out CharacterResourceAttribute health))
-			{
-				currentHealth = health.CurrentValue;
-			}
-
-			CharacterPetService.Save(dbContext, character, petController.Pet != null && currentHealth > 0.0f);
-
-			if (petController.Pet != null &&
-				petController.Pet.NetworkObject.IsSpawned)
-			{
-				ServerManager.Despawn(petController.Pet.NetworkObject, DespawnType.Pool);
-			}
-		}
-
-		private void AbilityObject_OnPetSummon(PetAbilityTemplate petAbilityTemplate, IPlayerCharacter caster)
-		{
-			if (petAbilityTemplate == null)
-			{
-				return;
-			}
-
-			if (!caster.TryGet(out IPetController petController))
-			{
-				return;
-			}
-
-			if (petAbilityTemplate.PetPrefab == null)
-			{
-				return;
-			}
-
-			PhysicsScene physicsScene = caster.GameObject.scene.GetPhysicsScene();
-			if (physicsScene == null)
-			{
-				return;
-			}
-
-			// get a random point at the top of the bounding box
-			Vector3 origin = new Vector3(UnityEngine.Random.Range(-petAbilityTemplate.SpawnBoundingBox.x, petAbilityTemplate.SpawnBoundingBox.x),
-										 petAbilityTemplate.SpawnBoundingBox.y,
-										 UnityEngine.Random.Range(-petAbilityTemplate.SpawnBoundingBox.z, petAbilityTemplate.SpawnBoundingBox.z));
-
-			Vector3 spawnPosition = caster.Transform.position;
-
-			// add the spawner position
-			origin += spawnPosition;
-
-			if (physicsScene.SphereCast(origin, petAbilityTemplate.SpawnDistance, Vector3.down, out RaycastHit hit, 20.0f, 1 << Constants.Layers.Ground, QueryTriggerInteraction.Ignore))
-			{
-				spawnPosition = hit.point;
-			}
-
-			NetworkObject nob = Server.NetworkManager.GetPooledInstantiated(petAbilityTemplate.PetPrefab, spawnPosition, caster.Transform.rotation, true);
-			Pet pet = nob.GetComponent<Pet>();
-			if (pet == null)
-			{
-				//throw exception
-				return;
-			}
-			pet.PetOwner = caster;
-			pet.PetAbilityTemplate = petAbilityTemplate;
-			petController.Pet = pet;
-
-			if (pet.TryGet(out IAIController aiController))
-			{
-				// Initialize AI Controller
-				aiController.Initialize(spawnPosition);
-			}
-
-			UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(nob.gameObject, caster.GameObject.scene);
-
-			// Ensure the game object is active, pooled objects are disabled
-			pet.GameObject.SetActive(true);
-
-			ServerManager.Spawn(nob.gameObject, caster.NetworkObject.Owner, caster.GameObject.scene);
-
-			if (pet.TryGet(out IFactionController petFactionController))
-			{
-				if (caster.TryGet(out IFactionController casterFactionController))
-				{
-					petFactionController.CopyFrom(casterFactionController);
-				}
-			}
-
-			Server.Broadcast(caster.Owner, new PetAddBroadcast() { ID = pet.ID }, true, Channel.Reliable);
-		}
-#endregion
 
 		private void TryTeleport(IPlayerCharacter character)
 		{

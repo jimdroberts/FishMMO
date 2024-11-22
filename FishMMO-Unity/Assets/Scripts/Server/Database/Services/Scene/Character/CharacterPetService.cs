@@ -31,7 +31,7 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// Save a character to the database. Only Scene Servers should be saving characters. A character can only be in one scene at a time.
 		/// </summary>
-		public static void Save(NpgsqlDbContext dbContext, IPlayerCharacter character, bool spawned)
+		public static void Save(NpgsqlDbContext dbContext, ICharacter character, bool spawned)
 		{
 			if (character == null)
 			{

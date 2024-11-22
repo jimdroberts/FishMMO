@@ -34,6 +34,10 @@ namespace FishMMO.Shared
 			{
 				collider.TryGetDimensions(out float height, out float radius);
 				YOffset = height;
+				if (collider is SphereCollider)
+				{
+					YOffset = radius;
+				}
 			}
 		}
 	}

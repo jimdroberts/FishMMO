@@ -17,6 +17,11 @@ namespace FishMMO.Shared
 
 		public override void UpdateState(AIController controller, float deltaTime)
 		{
+			if (controller.Target == null)
+			{
+				return;
+			}
+			
 			Pet pet = controller.gameObject.GetComponent<Pet>();
 			if (pet == null)
 			{
@@ -28,8 +33,6 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
-
-			// Check for Owner commands
 
 			float distanceToOwner = controller.Agent.radius * 1.5f;
 

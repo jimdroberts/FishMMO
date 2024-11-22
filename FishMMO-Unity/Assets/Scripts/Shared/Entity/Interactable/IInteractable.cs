@@ -5,7 +5,7 @@ namespace FishMMO.Shared
 	public interface IInteractable : ISceneObject
 	{
 		Transform Transform { get; }
-		
+		string Name { get;}
 		string Title { get; }
 		Color TitleColor { get; }
 		bool InRange(Transform transform);

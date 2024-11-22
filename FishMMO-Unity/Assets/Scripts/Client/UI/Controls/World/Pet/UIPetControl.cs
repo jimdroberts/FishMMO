@@ -1,6 +1,7 @@
 using UnityEngine.UI;
 using TMPro;
 using FishMMO.Shared;
+using FishNet.Transporting;
 
 namespace FishMMO.Client
 {
@@ -8,12 +9,6 @@ namespace FishMMO.Client
 	{
 		public TMP_Text PetNameLabel;
 		public Slider PetHealth;
-		public Button AttackButton;
-		public Button StayButton;
-		public Button FollowButton;
-		public Button BanishButton;
-		public Button SummonButton;
-		public Button ReleaseButton;
 
 		public override void OnStarting()
 		{
@@ -119,6 +114,49 @@ namespace FishMMO.Client
 		public void PetController_OnPetDestroyed()
 		{
 			Hide();
+		}
+
+		private bool HasPet()
+		{
+			return Character != null &&
+				  Character.TryGet(out IPetController petController) &&
+				  petController.Pet != null;
+		}
+
+		public void OnFollowPet()
+		{
+			if (!HasPet())
+			{
+				return;
+			}
+			Client.Broadcast(new PetFollowBroadcast(), Channel.Reliable);
+		}
+
+		public void OnStayPet()
+		{
+			if (!HasPet())
+			{
+				return;
+			}
+			Client.Broadcast(new PetStayBroadcast(), Channel.Reliable);
+		}
+
+		public void OnSummonPet()
+		{
+			if (!HasPet())
+			{
+				return;
+			}
+			Client.Broadcast(new PetSummonBroadcast(), Channel.Reliable);
+		}
+
+		public void OnReleasePet()
+		{
+			if (!HasPet())
+			{
+				return;
+			}
+			Client.Broadcast(new PetReleaseBroadcast(), Channel.Reliable);
 		}
 	}
 }

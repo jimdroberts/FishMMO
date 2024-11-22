@@ -24,7 +24,7 @@ namespace FishMMO.Shared
 		//public List<AIState> AllowedRandomStates;
 
 		public PhysicsScene PhysicsScene { get; private set; }
-		public Vector3 Home { get; private set;}
+		public Vector3 Home { get; set;}
 		public Transform Target
 		{
 			get
@@ -36,11 +36,13 @@ namespace FishMMO.Shared
 				target = value;
 				if (value != null)
 				{
-					Agent.SetDestination(value.position);
+					if (Agent.isOnNavMesh)
+						Agent.SetDestination(value.position);
 				}
 				else
 				{
-					Agent.SetDestination(Character.Transform.position);
+					if (Agent.isOnNavMesh)
+						Agent.SetDestination(transform.position);
 				}
 			}
 		}
@@ -136,7 +138,16 @@ namespace FishMMO.Shared
 			ChangeState(InitialState);
 		}
 
-		void Update()
+        public override void ResetState(bool asServer)
+        {
+            base.ResetState(asServer);
+
+			Home = Vector3.zero;
+			Target = null;
+			LookTarget = null;
+        }
+
+        void Update()
 		{
 			if (CurrentState != null)
 			{

@@ -10,4 +10,20 @@ namespace FishMMO.Shared
 	public struct PetRemoveBroadcast : IBroadcast
 	{
 	}
+
+	public struct PetFollowBroadcast : IBroadcast
+	{
+	}
+
+	public struct PetStayBroadcast : IBroadcast
+	{
+	}
+
+	public struct PetSummonBroadcast : IBroadcast
+	{
+	}
+	
+	public struct PetReleaseBroadcast : IBroadcast
+	{
+	}
 }

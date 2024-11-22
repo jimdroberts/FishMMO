@@ -11,8 +11,10 @@ namespace FishMMO.Shared
 
 		public override string Title { get { return title; } }
 
-        public override void OnStarting()
+        public override void OnAwake()
         {
+			base.OnAwake();
+			
 			if (Template != null)
 			{
 				title = Template.Description;
