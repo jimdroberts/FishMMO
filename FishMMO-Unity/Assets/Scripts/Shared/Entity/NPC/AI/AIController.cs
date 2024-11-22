@@ -24,7 +24,7 @@ namespace FishMMO.Shared
 
 		//public List<AIState> AllowedRandomStates;
 
-		public PhysicsScene PhysicsScene { get; private set; }
+		public PhysicsScene PhysicsScene { get { return Character.GameObject.scene.GetPhysicsScene(); } }
 		public Vector3 Home { get; set;}
 		public Transform Target
 		{
@@ -96,7 +96,7 @@ namespace FishMMO.Shared
 				Agent = GetComponent<NavMeshAgent>();
 			}
 
-			PhysicsScene = Character.GameObject.scene.GetPhysicsScene();
+			//PhysicsScene = Character.GameObject.scene.GetPhysicsScene();
 			Agent.avoidancePriority = (int)AvoidancePriority;
 			Agent.speed = Constants.Character.WalkSpeed;
 

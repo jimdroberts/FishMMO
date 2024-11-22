@@ -62,12 +62,16 @@ namespace FishMMO.Shared
 
 			detectedEnemies = new List<ICharacter>();
 
+			Debug.Log($"Sweep Detected: {detectedEnemies.Count}");
+
 			for (int i = 0; i < overlapCount && i < Hits.Length; ++i)
 			{
 				Collider hitCollider = Hits[i];
 				if (hitCollider != controller.Character.Collider)
 				{
 					ICharacter def = Hits[i].gameObject.GetComponent<ICharacter>();
+					Debug.Log($"Sweep Detected Character: {def.GameObject.name}");
+
 					if (def != null &&
 						def.TryGet(out IFactionController defenderFactionController) &&
 						defenderFactionController.GetAllianceLevel(ourFactionController) == FactionAllianceLevel.Enemy)
