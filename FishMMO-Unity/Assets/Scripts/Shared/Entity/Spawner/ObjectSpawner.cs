@@ -235,6 +235,8 @@ namespace FishMMO.Shared
 						return;
 					}
 
+					UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(nob.gameObject, this.gameObject.scene);
+
 					IAIController aiController = nob.GetComponent<IAIController>();
 					if (aiController != null)
 					{
