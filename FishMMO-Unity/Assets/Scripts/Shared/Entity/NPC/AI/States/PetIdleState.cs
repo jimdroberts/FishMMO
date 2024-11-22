@@ -49,7 +49,7 @@ namespace FishMMO.Shared
 				{
 					float sphereRadius = distanceToOwner * 0.95f;
 
-					Vector3 nearestPosition= Vector3Extensions.GetNearestPositionOnSphere(controller.Character.Transform.position, pet.PetOwner.Transform.position, sphereRadius);
+					Vector3 nearestPosition = Vector3Extensions.GetNearestPositionOnSphere(controller.Character.Transform.position, pet.PetOwner.Transform.position, sphereRadius);
 
 					//Debug.Log($"path | distanceToOwner: {distanceToOwner} | sphereRadius: {sphereRadius} | nearestPosition: {nearestPosition}");
 

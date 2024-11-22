@@ -4,7 +4,8 @@ using UnityEngine.AI;
 
 namespace FishMMO.Shared
 {
-	public abstract class BaseAttackingState : BaseAIState
+	[CreateAssetMenu(fileName = "New AI Attacking State", menuName = "Character/NPC/AI/Attacking State", order = 0)]
+	public class BaseAttackingState : BaseAIState
 	{
 		public override void Enter(AIController controller)
 		{
@@ -30,7 +31,7 @@ namespace FishMMO.Shared
 		{
 			if (controller.Target == null)
 			{
-				// If the target is lost... Check for nearby enemies
+				// If the target is lost... Check again for nearby enemies
 				if (controller.AttackingState != null &&
 					SweepForEnemies(controller, out List<ICharacter> enemies))
 				{
@@ -74,26 +75,31 @@ namespace FishMMO.Shared
 				return;
 			}
 
+			float agentRadius = controller.Agent.radius * 1.5f;
+
 			float distanceToTarget = (controller.Target.position - controller.Character.Transform.position).sqrMagnitude;
 
-			if (distanceToTarget <= controller.Agent.radius * controller.Agent.radius &&
-				HasLineOfSight(controller, character))
+			if (distanceToTarget <= agentRadius * agentRadius)
 			{
 				// Attack if we are in range and we have line of sight
-				PerformAttack(distanceToTarget);
+				PerformAttack(controller, character, distanceToTarget, agentRadius);
 			}
 			else
 			{
 				// If we are out of range handle follow up
-				OutOfAttackRange(controller, distanceToTarget);
+				OutOfAttackRange(controller, distanceToTarget, agentRadius);
 			}
 		}
 
 		/// <summary>
 		/// Implement your attack logic here.
 		/// </summary>
-		public virtual void PerformAttack(float distanceToTarget)
+		public virtual void PerformAttack(AIController controller, ICharacter targetCharacter, float distanceToTarget, float agentRadius)
 		{
+			if (!HasLineOfSight(controller, targetCharacter))
+			{
+				return;
+			}
 			// if (distanceToTarget is small)
 			// controller.TransitionToCombatState();
 			Debug.Log("Attacking target!");
@@ -102,9 +108,10 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Implement out of attack range logic here.
 		/// </summary>
-		public virtual void OutOfAttackRange(AIController controller, float distanceToTarget)
+		public virtual void OutOfAttackRange(AIController controller, float distanceToTarget, float agentRadius)
 		{
-			if (controller.Target == null)
+			if (controller.Target == null ||
+				controller.Agent.pathStatus == NavMeshPathStatus.PathInvalid)
 			{
 				controller.TransitionToIdleState();
 				return;
@@ -113,7 +120,9 @@ namespace FishMMO.Shared
 			if (!controller.Agent.pathPending &&
 				 controller.Agent.remainingDistance > controller.Agent.radius)
 			{
-				Vector3 nearestPosition = Vector3Extensions.GetNearestPositionOnSphere(controller.Character.Transform.position, controller.Target.position, controller.Agent.radius);
+				float sphereRadius = agentRadius * 0.95f;
+
+				Vector3 nearestPosition = Vector3Extensions.GetNearestPositionOnSphere(controller.Character.Transform.position, controller.Target.position, sphereRadius);
 
 				NavMeshHit hit;
 				if (NavMesh.SamplePosition(nearestPosition, out hit, 5.0f, NavMesh.AllAreas))

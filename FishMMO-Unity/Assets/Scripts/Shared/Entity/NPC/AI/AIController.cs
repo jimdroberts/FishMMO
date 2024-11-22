@@ -8,6 +8,7 @@ namespace FishMMO.Shared
 	[RequireComponent(typeof(NavMeshAgent))]
 	public class AIController : CharacterBehaviour, IAIController
 	{
+		public float EnemySweepRate = 1.5f;
 		public BaseAIState InitialState;
 		public AgentAvoidancePriority AvoidancePriority = AgentAvoidancePriority.Medium;
 		public BaseAIState WanderState;
@@ -58,8 +59,9 @@ namespace FishMMO.Shared
 		public int CurrentWaypointIndex { get; private set; }
 
 		private Transform target;
-		private float nextUpdate = 0;
-		private float nextLeashUpdate = 0;
+		private float nextUpdate = 0.0f;
+		private float nextLeashUpdate = 0.0f;
+		private float nextEnemySweepUpdate = 0.0f;
 		private List<BaseAIState> movementStates = new List<BaseAIState>();
 
 #if UNITY_EDITOR
@@ -85,16 +87,16 @@ namespace FishMMO.Shared
 		}
 #endif
 
-		public override void OnAwake()
+		public override void InitializeOnce()
 		{
-			base.OnAwake();
+			base.InitializeOnce();
 			
 			if (Agent == null)
 			{
 				Agent = GetComponent<NavMeshAgent>();
 			}
 
-			PhysicsScene = gameObject.scene.GetPhysicsScene();
+			PhysicsScene = Character.GameObject.scene.GetPhysicsScene();
 			Agent.avoidancePriority = (int)AvoidancePriority;
 			Agent.speed = Constants.Character.WalkSpeed;
 
@@ -151,8 +153,25 @@ namespace FishMMO.Shared
 		{
 			if (CurrentState != null)
 			{
+				// Sweep for enemies!
+				if (nextEnemySweepUpdate < 0.0f &&
+					AttackingState != null)
+				{
+					// Check for nearby enemies if we aren't already in a combat state.
+					if (CurrentState != AttackingState &&
+						AttackingState.SweepForEnemies(this, out List<ICharacter> enemies))
+					{
+						ChangeState(AttackingState, enemies);
+					}
+					nextEnemySweepUpdate = EnemySweepRate;
+				}
+				nextEnemySweepUpdate -= Time.deltaTime;
+
+				// Update state
 				if (nextUpdate < 0.0f)
 				{
+
+					// Check for leash
 					if (CurrentState.LeashUpdateRate > 0.0f)
 					{
 						if (nextLeashUpdate < 0.0f)
@@ -219,6 +238,8 @@ namespace FishMMO.Shared
 			{
 				CurrentState?.Exit(this);
 			}
+
+			Debug.Log($"{this.gameObject.name} Transitioning to: {newState.GetType().Name}");
 
 			CurrentState = newState;
 			if (CurrentState != null)

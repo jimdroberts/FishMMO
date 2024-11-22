@@ -31,6 +31,9 @@ namespace FishMMO.Shared
 			OnAwake();
 		}
 
+		/// <summary>
+		/// Called before InitializeOnce, character will not be set yet.
+		/// </summary>
 		public virtual void OnAwake() { }
 
 		private void OnDestroy()
@@ -47,12 +50,12 @@ namespace FishMMO.Shared
 		public virtual void OnDestroying() { }
 
 		/// <summary>
-		/// Called after Character.OnStartClient
+		/// Called after Character.OnStartClient. Use this for your Local Client.
 		/// </summary>
 		public virtual void OnStartCharacter() { }
 
 		/// <summary>
-		/// Called right before Character.OnStopClient
+		/// Called right before Character.OnStopClient. Use this for your Local Client.
 		/// </summary>
 		public virtual void OnStopCharacter() { }
 	}

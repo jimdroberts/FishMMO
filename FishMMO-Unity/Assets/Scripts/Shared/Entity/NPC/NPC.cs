@@ -2,6 +2,8 @@
 using UnityEngine;
 using FishNet.Component.Transforming;
 using FishNet.Observing;
+using FishNet.Connection;
+using FishNet.Serializing;
 
 namespace FishMMO.Shared
 {
@@ -13,10 +15,15 @@ namespace FishMMO.Shared
 	[RequireComponent(typeof(NetworkObject))]
 	[RequireComponent(typeof(NetworkTransform))]
 	[RequireComponent(typeof(NetworkObserver))]
-	public class NPC : BaseCharacter
+	public class NPC : BaseCharacter, ISceneObject, ISpawnable
 	{
 		public bool IsCharmable;
 		public NPCAttributeDatabase AttributeBonuses;
+
+		[ShowReadonly]
+		public ObjectSpawner ObjectSpawner { get; set; }
+		[ShowReadonly]
+		public SpawnableSettings SpawnableSettings { get; set; }
 
 		public override void OnAwake()
 		{
@@ -30,7 +37,31 @@ namespace FishMMO.Shared
 			{
 				CharacterNameLabel.text = GameObject.name;
 			}
+		}
+#else
+			SceneObject.Register(this);
+		}
 #endif
+
+		void OnDestroy()
+		{
+			SceneObject.Unregister(this);
+		}
+
+		public override void ReadPayload(NetworkConnection connection, Reader reader)
+		{
+			ID = reader.ReadInt64();
+			SceneObject.Register(this, true);
+		}
+
+		public override void WritePayload(NetworkConnection connection, Writer writer)
+		{
+			writer.WriteInt64(ID);
+		}
+
+		public void Despawn()
+		{
+			ObjectSpawner?.Despawn(this);
 		}
 
 		private void AddNPCAttributes()

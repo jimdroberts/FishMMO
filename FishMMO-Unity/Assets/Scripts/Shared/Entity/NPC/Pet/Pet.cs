@@ -1,4 +1,3 @@
-using UnityEngine;
 using System;
 using System.Collections.Generic;
 using FishNet.Connection;
@@ -6,7 +5,7 @@ using FishNet.Serializing;
 
 namespace FishMMO.Shared
 {
-	public class Pet : NPC, ISceneObject
+	public class Pet : NPC
 	{
 		public static Action<long, Pet> OnReadID;
 
@@ -19,21 +18,6 @@ namespace FishMMO.Shared
             base.OnAwake();
 
 			Abilities = new List<int>();
-			
-#if !UNITY_SERVER
-			GameObject.name = GameObject.name.Replace("(Clone)", "");
-			if (CharacterNameLabel != null)
-			{
-				CharacterNameLabel.text = GameObject.name;
-			}
-		}
-#else
-			SceneObject.Register(this);
-		}
-#endif
-		void OnDestroy()
-		{
-			SceneObject.Unregister(this);
 		}
 
         public override void ResetState(bool asServer)
@@ -42,25 +26,21 @@ namespace FishMMO.Shared
 
 			PetOwner = null;
 			Abilities.Clear();
-
-#if !UNITY_SERVER
-			SceneObject.Unregister(this);
-#endif
 		}
 
 		public override void ReadPayload(NetworkConnection connection, Reader reader)
 		{
-			ID = reader.ReadInt64();
+			base.ReadPayload(connection, reader);
+
 			long ownerID = reader.ReadInt64();
 
 			OnReadID?.Invoke(ownerID, this);
-
-			SceneObject.Register(this, ID);
 		}
 
 		public override void WritePayload(NetworkConnection connection, Writer writer)
 		{
-			writer.WriteInt64(ID);
+			base.WritePayload(connection, writer);
+
 			writer.WriteInt64(PetOwner.ID);
 		}
 

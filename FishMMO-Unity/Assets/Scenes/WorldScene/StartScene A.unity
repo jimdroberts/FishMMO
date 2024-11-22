@@ -275,7 +275,7 @@ MonoBehaviour:
   Transform: {fileID: 0}
   OrConditions: []
   TrueConditions: []
-  InitialRespawnTime: 15
+  InitialRespawnTime: 1
   RandomRespawnTime: 1
   RandomSpawnable: 0
   Spawnables:
@@ -1374,7 +1374,7 @@ MonoBehaviour:
   Transform: {fileID: 0}
   OrConditions: []
   TrueConditions: []
-  InitialRespawnTime: 25
+  InitialRespawnTime: 1
   RandomRespawnTime: 1
   RandomSpawnable: 1
   Spawnables:
@@ -1388,7 +1388,7 @@ MonoBehaviour:
     MinimumRespawnTime: 35
     MaximumRespawnTime: 60
     YOffset: 0
-  MaxSpawnCount: 6
+  MaxSpawnCount: 2
   RandomSpawnPosition: 1
   SphereRadius: 0.5
   BoundingBoxSize: {x: 47.8, y: 15, z: 47.8}

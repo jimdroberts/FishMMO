@@ -34,14 +34,6 @@ namespace FishMMO.Shared
 
 		public override void UpdateState(AIController controller, float deltaTime)
 		{
-			// Check for nearby enemies
-			if (controller.AttackingState != null &&
-				SweepForEnemies(controller, out List<ICharacter> enemies))
-			{
-				controller.ChangeState(controller.AttackingState, enemies);
-				return;
-			}
-
 			if (controller.RandomizeState)
 			{
 				controller.TransitionToRandomMovementState();
@@ -55,9 +47,21 @@ namespace FishMMO.Shared
 				controller.SetRandomHomeDestination(WanderRadius);
 			}
 			else if (AlwaysPickNewDestination ||
-					(!controller.Agent.pathPending && controller.Agent.remainingDistance < 1.0f))
+					(!controller.Agent.pathPending &&
+					  controller.Agent.remainingDistance < 1.0f))
 			{
-				controller.SetRandomHomeDestination(WanderRadius);
+				float randomChance = Random.Range(0f, 1f); // Random value between 0 and 1
+				float transitionThreshold = 0.5f; // Set the probability (e.g., 50%)
+
+				if (randomChance <= transitionThreshold)
+				{
+					controller.TransitionToIdleState();
+				}
+				else
+				{
+					// Normal behavior: Set a new random home destination
+					controller.SetRandomHomeDestination(WanderRadius);
+				}
 			}
 		}
 	}

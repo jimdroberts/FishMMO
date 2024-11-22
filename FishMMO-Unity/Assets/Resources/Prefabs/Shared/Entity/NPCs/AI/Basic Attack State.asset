@@ -9,12 +9,14 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9f5e9ece473877549a96e39db6ed6034, type: 3}
-  m_Name: BasicIdleState
+  m_Script: {fileID: 11500000, guid: ab377656cb3f7194fabf1f60b959cc28, type: 3}
+  m_Name: Basic Attack State
   m_EditorClassIdentifier: 
-  updateRate: 5
+  updateRate: 1
+  LeashUpdateRate: 5
+  MinLeashRange: 100
+  MaxLeashRange: 200
   DetectionRadius: 10
   EnemyLayers:
     serializedVersion: 2
     m_Bits: 64
-  MaxUpdateRate: 10

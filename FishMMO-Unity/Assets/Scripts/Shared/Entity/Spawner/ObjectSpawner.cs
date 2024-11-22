@@ -111,6 +111,9 @@ namespace FishMMO.Shared
 			// set the next respawn time
 			respawnTime = RandomRespawnTime ? Random.Range(spawnable.SpawnableSettings.MinimumRespawnTime, spawnable.SpawnableSettings.MaximumRespawnTime) : InitialRespawnTime;
 
+			spawnable.ObjectSpawner = null;
+			spawnable.SpawnableSettings = null;
+
 			// despawn the object
 			ServerManager?.Despawn(spawnable.NetworkObject, DespawnType.Pool);
 

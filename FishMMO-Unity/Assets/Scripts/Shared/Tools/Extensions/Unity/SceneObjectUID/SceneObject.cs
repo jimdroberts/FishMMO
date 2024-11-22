@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using UnityEngine;
 
 namespace FishMMO.Shared
 {
@@ -8,9 +9,9 @@ namespace FishMMO.Shared
 
 		private static long currentID = 0;
 
-		public static void Register(ISceneObject sceneObject, long id = -1)
+		public static void Register(ISceneObject sceneObject, bool asClient = false)
 		{
-			if (id < currentID)
+			if (!asClient)
 			{
 				do
 				{
@@ -18,7 +19,7 @@ namespace FishMMO.Shared
 				}
 				while (Objects.ContainsKey(sceneObject.ID));
 			}
-
+			Debug.Log($"Registering {sceneObject.GameObject.name}:{sceneObject.ID} | {asClient}");
 			Objects.Add(sceneObject.ID, sceneObject);
 		}
 

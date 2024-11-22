@@ -9,14 +9,15 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 87cae7192eb033e47961d06fa5331477, type: 3}
-  m_Name: BasicPetIdleState
+  m_Script: {fileID: 11500000, guid: 0fa8641c680b4be47b6e295b5fceb799, type: 3}
+  m_Name: Basic ReturnHome State
   m_EditorClassIdentifier: 
   updateRate: 1
-  LeashUpdateRate: 0
+  LeashUpdateRate: 5
   MinLeashRange: 100
   MaxLeashRange: 200
   DetectionRadius: 10
   EnemyLayers:
     serializedVersion: 2
-    m_Bits: 0
+    m_Bits: 64
+  CompleteHealOnReturn: 1

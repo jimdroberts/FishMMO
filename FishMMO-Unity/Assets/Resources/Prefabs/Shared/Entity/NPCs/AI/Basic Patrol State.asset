@@ -9,14 +9,14 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 5142541621af842409f9c4e165f3c2f4, type: 3}
-  m_Name: BasicWanderState
+  m_Script: {fileID: 11500000, guid: ce4ed3a5b7eaaf34c80d2996af8594ce, type: 3}
+  m_Name: Basic Patrol State
   m_EditorClassIdentifier: 
   updateRate: 1
+  LeashUpdateRate: 5
+  MinLeashRange: 100
+  MaxLeashRange: 200
   DetectionRadius: 10
   EnemyLayers:
     serializedVersion: 2
     m_Bits: 64
-  AlwaysPickNewDestination: 0
-  WanderRadius: 15
-  MaxUpdateRate: 10

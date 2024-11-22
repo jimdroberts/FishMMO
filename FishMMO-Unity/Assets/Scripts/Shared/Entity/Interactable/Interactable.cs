@@ -54,16 +54,18 @@ namespace FishMMO.Shared
 #else
 			SceneObject.Register(this);
 		}
+#endif
 
 		void OnDestroy()
 		{
 			SceneObject.Unregister(this);
 		}
-#endif
+
 
 		public override void ReadPayload(NetworkConnection connection, Reader reader)
 		{
 			ID = reader.ReadInt64();
+			SceneObject.Register(this, true);
 		}
 
 		public override void WritePayload(NetworkConnection connection, Writer writer)

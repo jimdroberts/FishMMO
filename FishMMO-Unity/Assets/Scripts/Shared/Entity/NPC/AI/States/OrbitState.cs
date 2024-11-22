@@ -3,6 +3,7 @@ using UnityEngine.AI;
 
 namespace FishMMO.Shared
 {
+	[CreateAssetMenu(fileName = "New AI Orbit State", menuName = "Character/NPC/AI/Orbit State", order = 0)]
 	public class OrbitState : BaseAIState
 	{
 		public float OrbitRadius = 10.0f; // Radius of the orbit around the target

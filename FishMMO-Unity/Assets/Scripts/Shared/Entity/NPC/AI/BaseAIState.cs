@@ -5,7 +5,7 @@ namespace FishMMO.Shared
 {
 	public abstract class BaseAIState : CachedScriptableObject<BaseAIState>, ICachedObject
 	{
-		private static Collider[] Hits = new Collider[10];
+		private static Collider[] Hits = new Collider[20];
 
 		[SerializeField]
 		private float updateRate = 1.0f;
@@ -55,25 +55,31 @@ namespace FishMMO.Shared
 
 			int overlapCount = controller.PhysicsScene.OverlapSphere(
 					controller.Character.Transform.position,
-					controller.CurrentState.DetectionRadius,
+					DetectionRadius,
 					Hits,
-					controller.CurrentState.EnemyLayers,
+					EnemyLayers,
 					QueryTriggerInteraction.Ignore);
 
 			detectedEnemies = new List<ICharacter>();
 
-			for (int i = 0; i < overlapCount && detectedEnemies.Count < 10; ++i)
+			for (int i = 0; i < overlapCount && i < Hits.Length; ++i)
 			{
-				if (Hits[i] != controller.Character.Collider)
+				Collider hitCollider = Hits[i];
+				if (hitCollider != controller.Character.Collider)
 				{
 					ICharacter def = Hits[i].gameObject.GetComponent<ICharacter>();
 					if (def != null &&
 						def.TryGet(out IFactionController defenderFactionController) &&
-						def.TryGet(out ICharacterDamageController damageController) &&
-						ourFactionController.GetAllianceLevel(defenderFactionController) == FactionAllianceLevel.Enemy &&
-						HasLineOfSight(controller, def))
+						defenderFactionController.GetAllianceLevel(ourFactionController) == FactionAllianceLevel.Enemy)
 					{
-						detectedEnemies.Add(def);
+						bool lineOfSight = HasLineOfSight(controller, def);
+
+						Debug.Log($"{controller.gameObject.name} Enemy Detected: {def.GameObject.name} | Line of Sight: {lineOfSight}");
+
+						if (lineOfSight)
+						{
+							detectedEnemies.Add(def);
+						}
 					}
 				}
 			}

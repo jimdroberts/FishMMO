@@ -173,7 +173,7 @@ MonoBehaviour:
   _spectatorInterpolation: 2
   _enableTeleport: 0
   _teleportThreshold: 1
-  <PrefabId>k__BackingField: 6
+  <PrefabId>k__BackingField: 3
   <SpawnableCollectionId>k__BackingField: 0
   <AssetPathHash>k__BackingField: 6405415636215423230
   <SceneId>k__BackingField: 0
@@ -200,10 +200,10 @@ MonoBehaviour:
   AvoidancePriority: 25
   WanderState: {fileID: 11400000, guid: b4bee0c12e3b92c48b285850bd5d47c1, type: 2}
   PatrolState: {fileID: 0}
-  ReturnHomeState: {fileID: 0}
-  RetreatState: {fileID: 0}
+  ReturnHomeState: {fileID: 11400000, guid: b646a6d9bc4f07d428f12e255af67366, type: 2}
+  RetreatState: {fileID: 11400000, guid: 5b56c55d686ceac4cac2a744a5bf0951, type: 2}
   IdleState: {fileID: 11400000, guid: 51f855b3de8e6644eb22eee716657935, type: 2}
-  AttackingState: {fileID: 0}
+  AttackingState: {fileID: 11400000, guid: a188e3de8a5794043903352f3ce4a57d, type: 2}
   DeadState: {fileID: 0}
   LookTarget: {fileID: 0}
   RandomizeState: 0

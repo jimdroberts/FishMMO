@@ -1,5 +1,8 @@
-﻿namespace FishMMO.Shared
+﻿using UnityEngine;
+
+namespace FishMMO.Shared
 {
+	[CreateAssetMenu(fileName = "New AI ReturnHome State", menuName = "Character/NPC/AI/ReturnHome State", order = 0)]
 	public class ReturnHomeState : BaseAIState
 	{
 		public bool CompleteHealOnReturn = true;

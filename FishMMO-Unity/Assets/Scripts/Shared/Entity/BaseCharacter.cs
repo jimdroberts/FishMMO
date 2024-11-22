@@ -58,9 +58,10 @@ namespace FishMMO.Shared
 			OnAwake();
 		}
 
-		public virtual void OnAwake()
-		{
-		}
+		/// <summary>
+		/// Called after all CharacterBehaviours have called InitializeOnce.
+		/// </summary>
+		public virtual void OnAwake() { }
 
 		public void RegisterCharacterBehaviour(ICharacterBehaviour behaviour)
 		{
