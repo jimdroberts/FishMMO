@@ -128,8 +128,14 @@ namespace FishMMO.Client
 						return;
 					}
 #if !UNITY_SERVER
-					character.CharacterNameLabel.gameObject.SetActive(false);
-					character.CharacterGuildLabel.gameObject.SetActive(false);
+					if (character.CharacterNameLabel != null)
+					{
+						character.CharacterNameLabel.gameObject.SetActive(false);
+					}
+					if (character.CharacterGuildLabel != null)
+					{
+						character.CharacterGuildLabel.gameObject.SetActive(false);
+					}
 #endif
 				}
 			}
@@ -151,6 +157,8 @@ namespace FishMMO.Client
 				targetLabel = null;
 			}
 
+			Color color = Color.grey;
+
 			// Enable the character name labels
 			if (gameObject != null)
 			{
@@ -158,8 +166,21 @@ namespace FishMMO.Client
 				if (character != null)
 				{
 #if !UNITY_SERVER
-					character.CharacterNameLabel.gameObject.SetActive(true);
-					character.CharacterGuildLabel.gameObject.SetActive(true);
+					if (Character.TryGet(out IFactionController factionController) &&
+						character.TryGet(out IFactionController targetFactionController))
+					{
+						color = factionController.GetAllianceLevelColor(targetFactionController);
+					}
+
+					if (character.CharacterNameLabel != null)
+					{
+						character.CharacterNameLabel.gameObject.SetActive(true);
+						character.CharacterNameLabel.color = color;
+					}
+					if (character.CharacterGuildLabel != null)
+					{
+						character.CharacterGuildLabel.gameObject.SetActive(true);
+					}
 #endif
 				}
 				else if (interactable != null) // Otherwise display an overhead title for interactables
@@ -177,9 +198,6 @@ namespace FishMMO.Client
 					newPos.y += colliderHeight;
 
 					string label = interactable.Name;
-
-					// TODO Get target name color based on alliance level
-					Color color = Color.grey;
 
 					// apply title
 					if (!string.IsNullOrWhiteSpace(interactable.Title))

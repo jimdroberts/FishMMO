@@ -307,5 +307,26 @@ namespace FishMMO.Shared
 			}
 			return FactionAllianceLevel.Neutral;
 		}
+
+		public Color GetAllianceLevelColor(IFactionController otherFactionController)
+		{
+			if (IsAggressive || otherFactionController.IsAggressive)
+			{
+				return TinyColor.ToUnityColor(TinyColor.red);
+			}
+
+			FactionAllianceLevel allianceLevel = GetAllianceLevel(otherFactionController);
+
+			switch (allianceLevel)
+			{
+				case FactionAllianceLevel.Ally:
+					return TinyColor.ToUnityColor(TinyColor.green);
+				case FactionAllianceLevel.Neutral:
+					return TinyColor.ToUnityColor(TinyColor.skyBlue);
+				case FactionAllianceLevel.Enemy:
+					return TinyColor.ToUnityColor(TinyColor.red);
+				default: return Color.white;
+			}
+		}
 	}
 }

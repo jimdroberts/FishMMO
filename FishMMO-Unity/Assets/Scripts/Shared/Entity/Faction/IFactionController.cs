@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using UnityEngine;
 
 namespace FishMMO.Shared
 {
@@ -19,5 +20,6 @@ namespace FishMMO.Shared
 		void Add(IFactionController defenderFactionController);
 		void Add(FactionTemplate template, int amount = 1);
 		FactionAllianceLevel GetAllianceLevel(IFactionController otherFactionController);
+		Color GetAllianceLevelColor(IFactionController otherFactionController);
 	}
 }
