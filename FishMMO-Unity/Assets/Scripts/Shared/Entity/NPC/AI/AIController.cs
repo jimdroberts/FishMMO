@@ -24,7 +24,7 @@ namespace FishMMO.Shared
 
 		//public List<AIState> AllowedRandomStates;
 
-		public PhysicsScene PhysicsScene { get { return Character.GameObject.scene.GetPhysicsScene(); } }
+		public PhysicsScene PhysicsScene { get; private set; }
 		public Vector3 Home { get; set;}
 		public Transform Target
 		{
@@ -95,8 +95,7 @@ namespace FishMMO.Shared
 			{
 				Agent = GetComponent<NavMeshAgent>();
 			}
-
-			//PhysicsScene = Character.GameObject.scene.GetPhysicsScene();
+			
 			Agent.avoidancePriority = (int)AvoidancePriority;
 			Agent.speed = Constants.Character.WalkSpeed;
 
@@ -122,6 +121,8 @@ namespace FishMMO.Shared
 		{
 			Home = home;
 			Waypoints = waypoints;
+
+			PhysicsScene = Character.GameObject.scene.GetPhysicsScene();
 
 			Collider collider = Character.Transform.GetComponent<Collider>();
 			if (collider != null &&
