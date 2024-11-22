@@ -23,6 +23,14 @@ namespace FishMMO.Shared
 			base.OnAwake();
 
 			AddNPCAttributes();
+
+#if !UNITY_SERVER
+			GameObject.name = GameObject.name.Replace("(Clone)", "");
+			if (CharacterNameLabel != null)
+			{
+				CharacterNameLabel.text = GameObject.name;
+			}
+#endif
 		}
 
 		private void AddNPCAttributes()
@@ -58,7 +66,7 @@ namespace FishMMO.Shared
 					{
 						if (attribute.IsScalar)
 						{
-							int additionalValue = characterAttribute.FinalValue.PercentOf(value);
+							int additionalValue = characterResourceAttribute.FinalValue.PercentOf(value);
 
 							characterResourceAttribute.AddValue(additionalValue);
 							characterResourceAttribute.AddToCurrentValue(additionalValue);

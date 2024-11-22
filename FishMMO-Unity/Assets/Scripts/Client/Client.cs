@@ -764,12 +764,19 @@ namespace FishMMO.Client
 			{
 				return;
 			}
+
 			Vector3 displayPos = hitCharacter.Transform.position;
-			IPlayerCharacter playerCharacter = hitCharacter as IPlayerCharacter;
-			if (playerCharacter != null)
+
+			float colliderHeight = 1.0f;
+
+			Collider collider = hitCharacter.GameObject.GetComponent<Collider>();
+			if (collider != null)
 			{
-				displayPos.y += playerCharacter.CharacterController.FullCapsuleHeight;
+				collider.TryGetDimensions(out colliderHeight, out float radius);
 			}
+
+			displayPos.y += colliderHeight;
+
 			LabelMaker.Display3D(amount.ToString(), displayPos, damageAttribute.DisplayColor, 4.0f, 1.0f, false);
 		}
 

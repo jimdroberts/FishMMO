@@ -10,12 +10,16 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: b7b551807656ce745a879fa8667193a5, type: 3}
-  m_Name: an orc pawn
+  m_Name: an orc warrior
   m_EditorClassIdentifier: 
   Attributes:
-  - Min: -35
-    Max: -15
+  - IsScalar: 1
+    IsRandom: 1
+    Min: 25
+    Max: 35
     Template: {fileID: 11400000, guid: e5c10a046ee277f46a57ee2048ae5ec9, type: 2}
-  - Min: 5
+  - IsScalar: 1
+    IsRandom: 1
+    Min: 10
     Max: 15
     Template: {fileID: 11400000, guid: 27c4f240152242b4fb7dec2f5368445c, type: 2}

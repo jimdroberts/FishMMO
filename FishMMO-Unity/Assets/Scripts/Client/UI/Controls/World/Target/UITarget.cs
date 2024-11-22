@@ -60,11 +60,13 @@ namespace FishMMO.Client
 
 			ICharacterAttributeController characterAttributeController = target.GetComponent<ICharacterAttributeController>();
 			IInteractable interactable = target.GetComponent<IInteractable>();
+			ICharacter character = target.GetComponent<ICharacter>();
 			SceneTeleporter teleporter = target.GetComponent<SceneTeleporter>();
 			SceneObjectNamer sceneObjectNamer = target.GetComponent<SceneObjectNamer>();
 
 			// Return if all conditions are false
 			if (interactable == null &&
+				character == null &&
 				teleporter == null &&
 				characterAttributeController == null &&
 				sceneObjectNamer == null)
@@ -74,7 +76,17 @@ namespace FishMMO.Client
 
 			if (NameLabel != null)
 			{
+				Color color = Color.white;
+
+				if (character != null &&
+					Character.TryGet(out IFactionController factionController) &&
+					character.TryGet(out IFactionController targetFactionController))
+				{
+					color = factionController.GetAllianceLevelColor(targetFactionController);
+				}
+
 				NameLabel.text = interactable != null ? interactable.Name : target.name.Replace("(Clone)", "");
+				NameLabel.color = color;
 			}
 			if (characterAttributeController != null)
 			{
@@ -91,7 +103,7 @@ namespace FishMMO.Client
 			// make the UI visible
 			Show();
 
-			UpdateTargetLabel(target, target.gameObject, interactable);
+			UpdateTargetLabel(target, character, interactable);
 		}
 
 		public void TargetController_OnUpdateTarget(Transform target)
@@ -149,7 +161,7 @@ namespace FishMMO.Client
 			Hide();
 		}
 
-		private void UpdateTargetLabel(Transform target, GameObject gameObject, IInteractable interactable)
+		private void UpdateTargetLabel(Transform target, ICharacter character, IInteractable interactable)
 		{
 			if (targetLabel != null)
 			{
@@ -160,57 +172,53 @@ namespace FishMMO.Client
 			Color color = Color.grey;
 
 			// Enable the character name labels
-			if (gameObject != null)
+			if (character != null)
 			{
-				ICharacter character = gameObject.GetComponent<ICharacter>();
-				if (character != null)
-				{
 #if !UNITY_SERVER
-					if (Character.TryGet(out IFactionController factionController) &&
-						character.TryGet(out IFactionController targetFactionController))
-					{
-						color = factionController.GetAllianceLevelColor(targetFactionController);
-					}
-
-					if (character.CharacterNameLabel != null)
-					{
-						character.CharacterNameLabel.gameObject.SetActive(true);
-						character.CharacterNameLabel.color = color;
-					}
-					if (character.CharacterGuildLabel != null)
-					{
-						character.CharacterGuildLabel.gameObject.SetActive(true);
-					}
-#endif
-				}
-				else if (interactable != null) // Otherwise display an overhead title for interactables
+				if (Character.TryGet(out IFactionController factionController) &&
+					character.TryGet(out IFactionController targetFactionController))
 				{
-					Vector3 newPos = target.position;
-
-					float colliderHeight = 1.0f;
-
-					Collider collider = target.GetComponent<Collider>();
-					if (collider != null)
-					{
-						collider.TryGetDimensions(out colliderHeight, out float radius);
-					}
-					
-					newPos.y += colliderHeight;
-
-					string label = interactable.Name;
-
-					// apply title
-					if (!string.IsNullOrWhiteSpace(interactable.Title))
-					{
-						string hex = interactable.TitleColor.ToHex();
-						if (!string.IsNullOrWhiteSpace(hex))
-						{
-							label += $"\r\n<<color=#{hex}>{interactable.Title}</color>>";
-						}
-					}
-
-					targetLabel = LabelMaker.Display3D(label, newPos, color, 1.0f, 0.0f, true);
+					color = factionController.GetAllianceLevelColor(targetFactionController);
 				}
+
+				if (character.CharacterNameLabel != null)
+				{
+					character.CharacterNameLabel.gameObject.SetActive(true);
+					character.CharacterNameLabel.color = color;
+				}
+				if (character.CharacterGuildLabel != null)
+				{
+					character.CharacterGuildLabel.gameObject.SetActive(true);
+				}
+#endif
+			}
+			else if (interactable != null) // Otherwise display an overhead title for interactables
+			{
+				Vector3 newPos = target.position;
+
+				float colliderHeight = 1.0f;
+
+				Collider collider = target.GetComponent<Collider>();
+				if (collider != null)
+				{
+					collider.TryGetDimensions(out colliderHeight, out float radius);
+				}
+
+				newPos.y += colliderHeight;
+
+				string label = interactable.Name;
+
+				// apply title
+				if (!string.IsNullOrWhiteSpace(interactable.Title))
+				{
+					string hex = interactable.TitleColor.ToHex();
+					if (!string.IsNullOrWhiteSpace(hex))
+					{
+						label += $"\r\n<<color=#{hex}>{interactable.Title}</color>>";
+					}
+				}
+
+				targetLabel = LabelMaker.Display3D(label, newPos, color, 1.0f, 0.0f, true);
 			}
 		}
 	}
