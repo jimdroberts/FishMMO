@@ -50,6 +50,10 @@ namespace FishMMO.Server
 		/// Triggered immediately after a character is despawned from the scene.
 		/// </summary>
 		public event Action<NetworkConnection, IPlayerCharacter> OnDespawnCharacter;
+		/// <summary>
+		/// Triggered immediately after a pet is killed.
+		/// </summary>
+		public event Action<NetworkConnection, IPlayerCharacter> OnPetKilled;
 
 		public Dictionary<long, IPlayerCharacter> CharactersByID = new Dictionary<long, IPlayerCharacter>();
 		public Dictionary<string, IPlayerCharacter> CharactersByLowerCaseName = new Dictionary<string, IPlayerCharacter>();
@@ -687,6 +691,20 @@ namespace FishMMO.Server
 			else
 			{
 				// Handle NPC deaths
+				NPC npc = defender as NPC;
+				if (npc != null)
+				{
+					Pet pet = defender as Pet;
+					if (pet != null)
+					{
+						IPlayerCharacter petOwner = pet.PetOwner as IPlayerCharacter;
+						OnPetKilled?.Invoke(petOwner.NetworkObject.Owner, petOwner);
+					}
+					else
+					{
+						npc.Despawn();
+					}
+				}
 			}
 		}
 

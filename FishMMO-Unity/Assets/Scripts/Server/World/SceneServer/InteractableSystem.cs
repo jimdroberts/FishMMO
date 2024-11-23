@@ -500,32 +500,37 @@ namespace FishMMO.Server
 				return;
 			}
 
-			Ability newAbility = new Ability(mainAbility, msg.Events);
-			if (newAbility == null)
+			Ability newAbility = LearnAbility(abilityController, mainAbility, msg.Events);
+			if (newAbility != null)
 			{
-				return;
+				currency.AddValue(price);
+
+				AbilityAddBroadcast abilityAddBroadcast = new AbilityAddBroadcast()
+				{
+					ID = newAbility.ID,
+					TemplateID = newAbility.Template.ID,
+					Events = msg.Events,
+				};
+
+				Server.Broadcast(conn, abilityAddBroadcast, true, Channel.Reliable);
 			}
+		}
+
+		public Ability LearnAbility(IAbilityController abilityController, AbilityTemplate abilityTemplate, List<int> abilityEvents)
+		{
+			Ability newAbility = new Ability(abilityTemplate, abilityEvents);
 
 			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 			if (dbContext == null)
 			{
-				return;
+				return null;
 			}
 
-			CharacterAbilityService.UpdateOrAdd(dbContext, character.ID, newAbility);
+			CharacterAbilityService.UpdateOrAdd(dbContext, abilityController.Character.ID, newAbility);
 
 			abilityController.LearnAbility(newAbility);
 
-			currency.AddValue(price);
-
-			AbilityAddBroadcast abilityAddBroadcast = new AbilityAddBroadcast()
-			{
-				ID = newAbility.ID,
-				TemplateID = newAbility.Template.ID,
-				Events = msg.Events,
-			};
-
-			Server.Broadcast(conn, abilityAddBroadcast, true, Channel.Reliable);
+			return newAbility;
 		}
 
 		private void TryBind(IPlayerCharacter character, Bindstone bindstone)

@@ -26,6 +26,7 @@ namespace FishMMO.Server
 				{
 					characterSystem.OnSpawnCharacter += CharacterSystem_OnSpawnCharacter;
 					characterSystem.OnDespawnCharacter += CharacterSystem_OnDespawnCharacter;
+					characterSystem.OnPetKilled += CharacterSystem_OnPetKilled;
 				}
 			}
 			else
@@ -49,6 +50,7 @@ namespace FishMMO.Server
 				{
 					characterSystem.OnSpawnCharacter -= CharacterSystem_OnSpawnCharacter;
 					characterSystem.OnDespawnCharacter -= CharacterSystem_OnDespawnCharacter;
+					characterSystem.OnPetKilled -= CharacterSystem_OnPetKilled;
 				}
 			}
 		}
@@ -256,6 +258,13 @@ namespace FishMMO.Server
 			{
 				ServerManager.Despawn(petController.Pet.NetworkObject, DespawnType.Pool);
 			}
+		}
+
+		private void CharacterSystem_OnPetKilled(NetworkConnection conn, IPlayerCharacter character)
+		{
+			CharacterSystem_OnDespawnCharacter(conn, character);
+
+			Server.Broadcast(conn, new PetRemoveBroadcast(), true, Channel.Reliable);
 		}
 
 		private void AbilityObject_OnPetSummon(PetAbilityTemplate petAbilityTemplate, IPlayerCharacter caster)
