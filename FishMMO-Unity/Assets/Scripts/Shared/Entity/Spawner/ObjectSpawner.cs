@@ -101,13 +101,12 @@ namespace FishMMO.Shared
 
 			Spawned.Remove(spawnable.ID);
 
-			// did we already set a previous respawn time?
-			if (respawnTime > 0)
+			// should we set a new respawn time?
+			if (respawnTime <= 0)
 			{
-				return;
+				// set the next respawn time
+				respawnTime = RandomRespawnTime ? Random.Range(spawnable.SpawnableSettings.MinimumRespawnTime, spawnable.SpawnableSettings.MaximumRespawnTime) : InitialRespawnTime;
 			}
-			// set the next respawn time
-			respawnTime = RandomRespawnTime ? Random.Range(spawnable.SpawnableSettings.MinimumRespawnTime, spawnable.SpawnableSettings.MaximumRespawnTime) : InitialRespawnTime;
 
 			spawnable.ObjectSpawner = null;
 			spawnable.SpawnableSettings = null;

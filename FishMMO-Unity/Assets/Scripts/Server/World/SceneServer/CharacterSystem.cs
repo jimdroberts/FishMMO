@@ -665,7 +665,6 @@ namespace FishMMO.Server
 
 		private void CharacterDamageController_OnKilled(ICharacter killer, ICharacter defender)
 		{
-			Debug.Log("Character Died");
 			if (defender == null)
 			{
 				return;
@@ -675,6 +674,8 @@ namespace FishMMO.Server
 			IPlayerCharacter playerCharacter = defender as IPlayerCharacter;
 			if (playerCharacter != null)
 			{
+				//Debug.Log($"PlayerCharacter: {playerCharacter.GameObject.name} Died");
+
 				if (playerCharacter.TryGet(out ICharacterDamageController damageController))
 				{
 					// Full heal the character

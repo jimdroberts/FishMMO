@@ -27,6 +27,7 @@ namespace FishMMO.Shared
 
 			BaseCharacter character = defender as BaseCharacter;
 			if (character != null &&
+				character.isActiveAndEnabled &&
 				defender.TryGet(out ICharacterDamageController defenderDamageController) &&
 				!defenderDamageController.Immortal)
 			{

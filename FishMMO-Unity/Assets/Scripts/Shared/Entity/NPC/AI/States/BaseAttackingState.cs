@@ -23,7 +23,8 @@ namespace FishMMO.Shared
 
 		public override void UpdateState(AIController controller, float deltaTime)
 		{
-			if (controller.Target == null)
+			if (controller.Target == null ||
+				!controller.Target.gameObject.activeSelf)
 			{
 				// If the target is lost... Check again for nearby enemies
 				if (controller.AttackingState != null &&
