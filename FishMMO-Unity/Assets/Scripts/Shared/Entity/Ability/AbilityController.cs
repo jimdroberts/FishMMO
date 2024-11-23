@@ -67,6 +67,21 @@ namespace FishMMO.Shared
 			KnownSpawnEvents = new HashSet<int>();
 			KnownHitEvents = new HashSet<int>();
 			KnownMoveEvents = new HashSet<int>();
+
+#if UNITY_SERVER
+			// Check if we already instantiated an RNG for this ability controller
+			if (abilitySeedGenerator == null)
+			{
+				// Generate an AbilitySeedGenerator Seed
+				abilitySeed = playerSeedGenerator.Next();
+
+				// Instantiate the AbilitySeedGenerator on the server
+				abilitySeedGenerator = new System.Random(abilitySeed);
+
+				// Set the initial seed
+				currentSeed = abilitySeedGenerator.Next();
+			}
+#endif
 		}
 
 		public override void OnStartNetwork()
@@ -87,8 +102,6 @@ namespace FishMMO.Shared
 			{
 				base.TimeManager.OnTick -= TimeManager_OnTick;
 			}
-
-			abilitySeedGenerator = null;
 		}
 
 		public override void ResetState(bool asServer)
@@ -216,7 +229,7 @@ namespace FishMMO.Shared
 		public override void ReadPayload(NetworkConnection conn, Reader reader)
 		{
 			// Read the AbilitySeedGenerator seed
-			int abilitySeed = reader.ReadInt32();
+			abilitySeed = reader.ReadInt32();
 
 			// Instantiate the AbilitySeedGenerator
 			abilitySeedGenerator = new System.Random(abilitySeed);
@@ -224,7 +237,7 @@ namespace FishMMO.Shared
 			// Set the initial seed
 			currentSeed = abilitySeedGenerator.Next();
 
-			//Debug.Log($"Received AbilityGenerator Seed {abilitySeed}\r\nCurrent Seed {currentSeed}");
+			//Debug.Log($"Received AbilitySeedGenerator Seed {abilitySeed}\r\nCurrent Seed {currentSeed}");
 
 			int abilityCount = reader.ReadInt32();
 			if (abilityCount < 1)
@@ -263,26 +276,10 @@ namespace FishMMO.Shared
 
 		public override void WritePayload(NetworkConnection conn, Writer writer)
 		{
-			if (base.IsServerStarted)
-			{
-				// Check if we already instantiated an RNG for this ability controller
-				if (abilitySeedGenerator == null)
-				{
-					// Generate an AbilitySeedGenerator Seed
-					abilitySeed = playerSeedGenerator.Next();
-
-					// Instantiate the AbilitySeedGenerator on the server
-					abilitySeedGenerator = new System.Random(abilitySeed);
-
-					// Set the initial seed
-					currentSeed = abilitySeedGenerator.Next();
-				}
-			}
-
-			//Debug.Log($"AbilityGenerator Seed {abilitySeed}\r\nCurrent Seed {currentSeed}");
-
 			// Write the ability RNG seed for the clients
 			writer.WriteInt32(abilitySeed);
+			
+			//Debug.Log($"Writing AbilitySeedGenerator Seed {abilitySeed}\r\nCurrent Seed {currentSeed}");
 
 			// Write the abilities for the clients
 			writer.WriteInt32(KnownAbilities.Count);

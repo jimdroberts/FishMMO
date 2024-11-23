@@ -17,6 +17,11 @@ namespace FishMMO.Shared
 	[RequireComponent(typeof(NetworkObserver))]
 	public class NPC : BaseCharacter, ISceneObject, ISpawnable
 	{
+		private static System.Random npcSeedGenerator = new System.Random();
+
+		private System.Random npcAttributeGenerator;
+		private int npcAttributeSeed = 0;
+
 		public bool IsCharmable;
 		public NPCAttributeDatabase AttributeBonuses;
 
@@ -28,8 +33,6 @@ namespace FishMMO.Shared
 		public override void OnAwake()
 		{
 			base.OnAwake();
-
-			AddNPCAttributes();
 
 #if !UNITY_SERVER
 			GameObject.name = GameObject.name.Replace("(Clone)", "");
@@ -52,11 +55,40 @@ namespace FishMMO.Shared
 		{
 			ID = reader.ReadInt64();
 			SceneObject.Register(this, true);
+
+			// Read the AbilitySeedGenerator seed
+			npcAttributeSeed = reader.ReadInt32();
+
+			// Instantiate the AbilitySeedGenerator
+			npcAttributeGenerator = new System.Random(npcAttributeSeed);
+
+			//Debug.Log($"Received NPCAttributeGenerator Seed {npcAttributeSeed}");
+
+			AddNPCAttributes();
 		}
 
 		public override void WritePayload(NetworkConnection connection, Writer writer)
 		{
 			writer.WriteInt64(ID);
+
+			if (base.IsServerStarted)
+			{
+				// Check if we already instantiated an RNG for this npc
+				if (npcAttributeGenerator == null)
+				{
+					// Generate an NPCSeedGenerator Seed
+					npcAttributeSeed = npcSeedGenerator.Next();
+
+					// Instantiate the NPCAttributeSeedGenerator on the server
+					npcAttributeGenerator = new System.Random(npcAttributeSeed);
+				}
+				AddNPCAttributes();
+			}
+
+			// Write the npc RNG seed for the clients
+			writer.WriteInt32(npcAttributeSeed);
+
+			//Debug.Log($"Writing NPCAttributeGenerator Seed {npcAttributeSeed}");
 		}
 
 		public void Despawn()
@@ -75,7 +107,7 @@ namespace FishMMO.Shared
 					int value;
 					if (attribute.IsRandom)
 					{
-						value = Random.Range(attribute.Min, attribute.Max);
+						value = npcAttributeGenerator.Next(attribute.Min, attribute.Max);
 					}
 					else
 					{
@@ -84,28 +116,41 @@ namespace FishMMO.Shared
 
 					if (attributeController.TryGetAttribute(attribute.Template, out CharacterAttribute characterAttribute))
 					{
+						int old = characterAttribute.Value;
+
 						if (attribute.IsScalar)
 						{
-							characterAttribute.AddValue(characterAttribute.FinalValue.PercentOf(value));
+							int newValue = characterAttribute.Value.GetPercentOf(value);
+							characterAttribute.SetValue(newValue);
+
+							//Debug.Log($"{characterAttribute.Template.Name} Old: {old} | New: {characterAttribute.Value}");
 						}
 						else
 						{
-							characterAttribute.AddValue(value);
+							characterAttribute.SetValue(value);
+
+							//Debug.Log($"{characterAttribute.Template.Name} Old: {old} | New: {characterAttribute.Value}");
 						}
 					}
 					else if (attributeController.TryGetResourceAttribute(attribute.Template, out CharacterResourceAttribute characterResourceAttribute))
 					{
+						int old = characterResourceAttribute.Value;
+
 						if (attribute.IsScalar)
 						{
-							int additionalValue = characterResourceAttribute.FinalValue.PercentOf(value);
+							int newValue = characterResourceAttribute.Value.GetPercentOf(value);
 
-							characterResourceAttribute.AddValue(additionalValue);
-							characterResourceAttribute.AddToCurrentValue(additionalValue);
+							characterResourceAttribute.SetValue(newValue);
+							characterResourceAttribute.SetCurrentValue(newValue);
+
+							//Debug.Log($"{characterResourceAttribute.Template.Name} Old: {old} | New: {characterResourceAttribute.Value}");
 						}
 						else
 						{
-							characterResourceAttribute.AddValue(value);
-							characterResourceAttribute.AddToCurrentValue(value);
+							characterResourceAttribute.SetValue(value);
+							characterResourceAttribute.SetCurrentValue(value);
+
+							//Debug.Log($"{characterResourceAttribute.Template.Name} Old: {old} | New: {characterResourceAttribute.Value}");
 						}
 					}
 				}

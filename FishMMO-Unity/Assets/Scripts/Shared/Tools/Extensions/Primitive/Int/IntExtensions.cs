@@ -65,10 +65,10 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Returns a rounded percent of the number.
-		/// For example, 100.PercentOf(25) returns 25. (25% of 100).
+		/// For example, 100.GetPercentOf(25) returns 25. (25% of 100).
 		/// </summary>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static int PercentOf(this int number, int percent)
+		public static int GetPercentOf(this int number, int percent)
 		{
 			return Mathf.RoundToInt(number * (percent * 0.01f));
 		}

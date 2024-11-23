@@ -665,6 +665,7 @@ namespace FishMMO.Server
 
 		private void CharacterDamageController_OnKilled(ICharacter killer, ICharacter defender)
 		{
+			Debug.Log("Character Died");
 			if (defender == null)
 			{
 				return;

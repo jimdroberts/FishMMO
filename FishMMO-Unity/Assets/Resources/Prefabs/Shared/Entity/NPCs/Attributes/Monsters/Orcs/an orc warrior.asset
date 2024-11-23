@@ -20,6 +20,6 @@ MonoBehaviour:
     Template: {fileID: 11400000, guid: e5c10a046ee277f46a57ee2048ae5ec9, type: 2}
   - IsScalar: 1
     IsRandom: 1
-    Min: 10
-    Max: 15
+    Min: 110
+    Max: 115
     Template: {fileID: 11400000, guid: 27c4f240152242b4fb7dec2f5368445c, type: 2}

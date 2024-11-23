@@ -76,7 +76,7 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			if (ResourceInstance != null && ResourceInstance.CurrentValue >= 0.001f)
+			if (ResourceInstance != null && ResourceInstance.CurrentValue >= 1.0f)
 			{
 				amount = ApplyModifiers(Character, amount, damageAttribute);
 				if (amount < 1)
@@ -101,12 +101,12 @@ namespace FishMMO.Shared
 						defenderAchievementController.Increment(DamagedAchievementTemplate, fullAmount);
 					}
 				}
+			}
 
-				// check if we died
-				if (ResourceInstance.CurrentValue < 0.001f)
-				{
-					Kill(attacker);
-				}
+			// check if we died
+			if (ResourceInstance.CurrentValue < 1.00f)
+			{
+				Kill(attacker);
 			}
 		}
 
