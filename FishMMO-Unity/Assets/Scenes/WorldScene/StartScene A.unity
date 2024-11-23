@@ -256,7 +256,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &70787372
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1388,7 +1388,7 @@ MonoBehaviour:
     MinimumRespawnTime: 35
     MaximumRespawnTime: 60
     YOffset: 0
-  MaxSpawnCount: 2
+  MaxSpawnCount: 1
   RandomSpawnPosition: 1
   SphereRadius: 0.5
   BoundingBoxSize: {x: 47.8, y: 15, z: 47.8}

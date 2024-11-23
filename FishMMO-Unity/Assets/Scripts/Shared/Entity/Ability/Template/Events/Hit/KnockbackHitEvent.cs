@@ -26,7 +26,9 @@ namespace FishMMO.Shared
 			}*/
 
 			BaseCharacter character = defender as BaseCharacter;
-			if (character != null)
+			if (character != null &&
+				defender.TryGet(out ICharacterDamageController defenderDamageController) &&
+				!defenderDamageController.Immortal)
 			{
 				// Calculate the knockback direction
 				Vector3 knockbackDirection = abilityObject.transform.forward;

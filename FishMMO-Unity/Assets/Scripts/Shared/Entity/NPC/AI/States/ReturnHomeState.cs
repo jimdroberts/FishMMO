@@ -9,6 +9,11 @@ namespace FishMMO.Shared
 
 		public override void Enter(AIController controller)
 		{
+			controller.Target = null;
+			controller.LookTarget = null;
+
+			controller.Agent.speed = Constants.Character.RunSpeed;
+
 			controller.SetRandomHomeDestination();
 			if (controller.Character.TryGet(out ICharacterDamageController characterDamageController))
 			{
@@ -19,6 +24,12 @@ namespace FishMMO.Shared
 
 		public override void Exit(AIController controller)
 		{
+			controller.Agent.speed = Constants.Character.WalkSpeed;
+
+			if (controller.Character.TryGet(out ICharacterDamageController characterDamageController))
+			{
+				characterDamageController.Immortal = false;
+			}
 		}
 
 		public override void UpdateState(AIController controller, float deltaTime)
@@ -27,11 +38,6 @@ namespace FishMMO.Shared
 			if (!controller.Agent.pathPending &&
 				controller.Agent.remainingDistance < 1.0f)
 			{
-				if (controller.Character.TryGet(out ICharacterDamageController characterDamageController))
-				{
-					characterDamageController.Immortal = false;
-				}
-
 				// Transition to random movement state
 				controller.TransitionToRandomMovementState();
 			}

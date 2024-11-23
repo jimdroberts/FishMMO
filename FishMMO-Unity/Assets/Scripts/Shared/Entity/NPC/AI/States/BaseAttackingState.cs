@@ -11,20 +11,14 @@ namespace FishMMO.Shared
 		{
 			// Allow the agent to run
 			controller.Agent.speed = Constants.Character.RunSpeed;
-
-			if (controller.Target != null)
-			{
-				TryAttack(controller);
-			}
 		}
 
 		public override void Exit(AIController controller)
 		{
 			// Return to walk speed
 			controller.Agent.speed = Constants.Character.WalkSpeed;
-
 			controller.Target = null;
-			controller.SetRandomHomeDestination();
+			controller.LookTarget = null;
 		}
 
 		public override void UpdateState(AIController controller, float deltaTime)
@@ -63,11 +57,6 @@ namespace FishMMO.Shared
 
 		private void TryAttack(AIController controller)
 		{
-			if (controller.Target == null)
-			{
-				controller.TransitionToIdleState();
-				return;
-			}
 			ICharacter character = controller.Target.GetComponent<ICharacter>();
 			if (character == null)
 			{
@@ -75,19 +64,19 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			float agentRadius = controller.Agent.radius * 1.5f;
+			float agentAttackRadius = (controller.Agent.radius * 2.0f).Min(1.0f);
 
 			float distanceToTarget = (controller.Target.position - controller.Character.Transform.position).sqrMagnitude;
 
-			if (distanceToTarget <= agentRadius * agentRadius)
+			if (distanceToTarget > agentAttackRadius * agentAttackRadius)
 			{
-				// Attack if we are in range and we have line of sight
-				PerformAttack(controller, character, distanceToTarget, agentRadius);
+				// If we are out of range handle follow up
+				OutOfAttackRange(controller, distanceToTarget, agentAttackRadius);
 			}
 			else
 			{
-				// If we are out of range handle follow up
-				OutOfAttackRange(controller, distanceToTarget, agentRadius);
+				// Attack if we are in range and we have line of sight
+				PerformAttack(controller, character, distanceToTarget, agentAttackRadius);
 			}
 		}
 
@@ -96,10 +85,11 @@ namespace FishMMO.Shared
 		/// </summary>
 		public virtual void PerformAttack(AIController controller, ICharacter targetCharacter, float distanceToTarget, float agentRadius)
 		{
-			if (!HasLineOfSight(controller, targetCharacter))
+			/*if (!HasLineOfSight(controller, targetCharacter))
 			{
+				Debug.Log("Line of sight lost!");
 				return;
-			}
+			}*/
 			// if (distanceToTarget is small)
 			// controller.TransitionToCombatState();
 			Debug.Log("Attacking target!");
@@ -117,8 +107,7 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			if (!controller.Agent.pathPending &&
-				 controller.Agent.remainingDistance > controller.Agent.radius)
+			if (!controller.Agent.pathPending)
 			{
 				float sphereRadius = agentRadius * 0.95f;
 

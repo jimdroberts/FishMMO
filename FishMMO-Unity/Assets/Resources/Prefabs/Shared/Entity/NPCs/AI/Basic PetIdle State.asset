@@ -14,8 +14,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   updateRate: 1
   LeashUpdateRate: 0
-  MinLeashRange: 100
-  MaxLeashRange: 200
+  MinLeashRange: 50
+  MaxLeashRange: 100
   DetectionRadius: 10
   EnemyLayers:
     serializedVersion: 2

@@ -59,6 +59,7 @@ namespace FishMMO.Shared
 		{
 			if (!base.IsServerStarted)
 			{
+				enabled = false;
 				return;
 			}
 			TryRespawn();

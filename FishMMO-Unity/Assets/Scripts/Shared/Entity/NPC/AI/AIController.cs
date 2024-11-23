@@ -152,68 +152,91 @@ namespace FishMMO.Shared
 
         void Update()
 		{
-			if (CurrentState != null)
+			if (!base.IsServerStarted)
 			{
-				// Sweep for enemies!
-				if (nextEnemySweepUpdate < 0.0f &&
-					AttackingState != null)
-				{
-					// Check for nearby enemies if we aren't already in a combat state.
-					if (CurrentState != AttackingState &&
-						AttackingState.SweepForEnemies(this, out List<ICharacter> enemies))
-					{
-						ChangeState(AttackingState, enemies);
-					}
-					nextEnemySweepUpdate = EnemySweepRate;
-				}
-				nextEnemySweepUpdate -= Time.deltaTime;
-
-				// Update state
-				if (nextUpdate < 0.0f)
-				{
-
-					// Check for leash
-					if (CurrentState.LeashUpdateRate > 0.0f)
-					{
-						if (nextLeashUpdate < 0.0f)
-						{
-							// If the target is too far away from home, return home and forget the target
-							float distanceToHome = Vector3.Distance(Character.Transform.position, Home);
-							if (distanceToHome >= CurrentState.MinLeashRange)
-							{
-								// Warp back to home if we have somehow reached a significant leash range
-								if (distanceToHome >= CurrentState.MaxLeashRange)
-								{
-									// Complete heal on returning home
-									if (Character.TryGet(out ICharacterDamageController characterDamageController))
-									{
-										characterDamageController.CompleteHeal();
-									}
-									// Warp home
-									if (!Agent.Warp(Home))
-									{
-										Character.Transform.position = Home;
-									}
-									Target = null;
-								}
-								// Otherwise run back
-								else if (ReturnHomeState != null)
-								{
-									ChangeState(ReturnHomeState);
-									return;
-								}
-							}
-							nextLeashUpdate = CurrentState.LeashUpdateRate;
-						}
-						nextLeashUpdate -= Time.deltaTime;
-					}
-
-					CurrentState.UpdateState(this, Time.deltaTime);
-					nextUpdate = CurrentState.GetUpdateRate();
-				}
-				nextUpdate -= Time.deltaTime;
+				enabled = false;
+				return;
 			}
+			SweepForEnemies();
+			CheckLeash();
+			UpdateCurrentState();
 			FaceLookTarget();
+		}
+
+		private void SweepForEnemies()
+		{
+			// Sweep for enemies if not returning home or already in an attacking state.
+			if (AttackingState == null ||
+				CurrentState == ReturnHomeState ||
+				CurrentState == AttackingState)
+			{
+				return;
+			}
+			if (nextEnemySweepUpdate < 0.0f)
+			{
+				// Check for nearby enemies if we aren't already in a combat state.
+				if (AttackingState.SweepForEnemies(this, out List<ICharacter> enemies))
+				{
+					ChangeState(AttackingState, enemies);
+				}
+				nextEnemySweepUpdate = EnemySweepRate;
+			}
+			nextEnemySweepUpdate -= Time.deltaTime;
+		}
+
+		private void CheckLeash()
+		{
+			// Check for leash
+			if (ReturnHomeState == null ||
+				CurrentState == null ||
+				CurrentState.LeashUpdateRate <= 0.0f ||
+				CurrentState == ReturnHomeState)
+			{
+				return;
+			}
+			if (nextLeashUpdate < 0.0f)
+			{
+				float distanceToHome = (Home - Character.Transform.position).sqrMagnitude;
+
+				// Warp back to home if we have somehow reached a significant leash range
+				if (distanceToHome > CurrentState.MaxLeashRange * CurrentState.MaxLeashRange)
+				{
+					// Complete heal on returning home
+					if (Character.TryGet(out ICharacterDamageController characterDamageController))
+					{
+						characterDamageController.CompleteHeal();
+					}
+					// Warp home
+					if (!Agent.Warp(Home))
+					{
+						Character.Transform.position = Home;
+					}
+					return;
+				}
+				else if (distanceToHome > CurrentState.MinLeashRange * CurrentState.MinLeashRange)
+				{
+					ChangeState(ReturnHomeState);
+				}
+
+				nextLeashUpdate = CurrentState.LeashUpdateRate;
+			}
+			nextLeashUpdate -= Time.deltaTime;
+		}
+
+		private void UpdateCurrentState()
+		{
+			if (CurrentState == null)
+			{
+				return;
+			}
+			// Update state
+			if (nextUpdate < 0.0f)
+			{
+				CurrentState.UpdateState(this, Time.deltaTime);
+
+				nextUpdate = CurrentState.GetUpdateRate();
+			}
+			nextUpdate -= Time.deltaTime;
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -240,7 +263,7 @@ namespace FishMMO.Shared
 				CurrentState?.Exit(this);
 			}
 
-			Debug.Log($"{this.gameObject.name} Transitioning to: {newState.GetType().Name}");
+			//Debug.Log($"{this.gameObject.name} Transitioning to: {newState.GetType().Name}");
 
 			CurrentState = newState;
 			if (CurrentState != null)
@@ -288,9 +311,9 @@ namespace FishMMO.Shared
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public void SetRandomHomeDestination(float radius = 0.0f)
+		public void SetRandomHomeDestination(float radius = 5.0f)
 		{
-			Vector3 position = Character.Transform.position;
+			Vector3 position = Home;
 			if (radius > 0.0f)
 			{
 				position = Vector3Extensions.RandomPositionWithinRadius(Home, radius);
@@ -303,7 +326,7 @@ namespace FishMMO.Shared
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public void SetRandomDestination(float radius = 0.0f)
+		public void SetRandomDestination(float radius = 5.0f)
 		{
 			Vector3 position = Character.Transform.position;
 			if (radius > 0.0f)

@@ -14,11 +14,11 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Minimum distance at which the AI will forget the current target and return home
 		/// </summary>
-		public float MinLeashRange = 100.0f;
+		public float MinLeashRange = 50.0f;
 		/// <summary>
 		/// Maximum distance at which the AI will forget the current target and teleport return home
 		/// </summary>
-		public float MaxLeashRange = 200.0f;
+		public float MaxLeashRange = 100.0f;
 
 		// Sweep
 		public float DetectionRadius = 10;
@@ -62,28 +62,25 @@ namespace FishMMO.Shared
 
 			detectedEnemies = new List<ICharacter>();
 
-			Debug.Log($"Sweep Detected: {detectedEnemies.Count}");
-
 			for (int i = 0; i < overlapCount && i < Hits.Length; ++i)
 			{
 				Collider hitCollider = Hits[i];
 				if (hitCollider != controller.Character.Collider)
 				{
 					ICharacter def = Hits[i].gameObject.GetComponent<ICharacter>();
-					Debug.Log($"Sweep Detected Character: {def.GameObject.name}");
 
 					if (def != null &&
 						def.TryGet(out IFactionController defenderFactionController) &&
 						defenderFactionController.GetAllianceLevel(ourFactionController) == FactionAllianceLevel.Enemy)
 					{
-						bool lineOfSight = HasLineOfSight(controller, def);
+						//bool lineOfSight = HasLineOfSight(controller, def);
 
-						Debug.Log($"{controller.gameObject.name} Enemy Detected: {def.GameObject.name} | Line of Sight: {lineOfSight}");
+						//Debug.Log($"{controller.gameObject.name} Enemy Detected: {def.GameObject.name} | Line of Sight: {lineOfSight}");
 
-						if (lineOfSight)
-						{
+						//if (lineOfSight)
+						//{
 							detectedEnemies.Add(def);
-						}
+						//}
 					}
 				}
 			}

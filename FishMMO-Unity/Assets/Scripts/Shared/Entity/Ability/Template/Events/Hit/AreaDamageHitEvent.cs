@@ -43,11 +43,12 @@ namespace FishMMO.Shared
 					continue;
 				}
 
-				if (def.TryGet(out IFactionController defenderFactionController) &&
-					def.TryGet(out ICharacterDamageController damageController) &&
-					attackerFactionController.GetAllianceLevel(defenderFactionController) == FactionAllianceLevel.Enemy)
+				if (def.TryGet(out IFactionController defFactionController) &&
+					def.TryGet(out ICharacterDamageController defDamageController) &&
+					!defDamageController.Immortal &&
+					attackerFactionController.GetAllianceLevel(defFactionController) == FactionAllianceLevel.Enemy)
 				{
-					damageController.Damage(attacker, Damage, DamageAttributeTemplate);
+					defDamageController.Damage(attacker, Damage, DamageAttributeTemplate);
 					++hits;
 				}
 			}

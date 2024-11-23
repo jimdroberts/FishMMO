@@ -122,8 +122,10 @@ namespace FishMMO.Shared
 				// If hit count falls below 1 the object will be destroyed after iterating all events at least once
 				hitCount -= hitEvent.Invoke(caster, hitCharacter, targetInfo, abilityObject);
 
+#if !UNITY_SERVER
 				// Display FX
 				hitEvent.OnApplyFX(targetInfo.HitPosition);
+#endif
 			}
 
 			return hitCount;
