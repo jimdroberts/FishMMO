@@ -317,8 +317,7 @@ namespace FishMMO.Shared
 				AbilityReconcileData state = default;
 				if (Character.TryGet(out ICharacterAttributeController attributeController))
 				{
-					state = new AbilityReconcileData(interruptQueued,
-													 currentAbilityID,
+					state = new AbilityReconcileData(currentAbilityID,
 													 remainingTime,
 													 attributeController.GetResourceState());
 				}
@@ -389,13 +388,14 @@ namespace FishMMO.Shared
 			if (interruptQueued)
 			{
 				activationFlags.EnableBit(AbilityActivationFlags.Interrupt);
+
+				interruptQueued = false;
 			}
 
 			AbilityActivationReplicateData activationEventData = new AbilityActivationReplicateData(activationFlags,
 																									queuedAbilityID,
 																									heldKey);
 			// Clear the locally queued data
-			interruptQueued = false;
 			queuedAbilityID = NO_ABILITY;
 
 			return activationEventData;
@@ -437,27 +437,22 @@ namespace FishMMO.Shared
 				attributeController.Regenerate(deltaTime);
 			}
 
-			// If we are already activating
-			if (IsActivating)
+			// If we have an interrupt queued
+			if (activationData.ActivationFlags.IsFlagged(AbilityActivationFlags.Interrupt))
 			{
-				// If we receive an interrupt from the client or the server triggers an interrupt
-				if (activationData.ActivationFlags.IsFlagged(AbilityActivationFlags.Interrupt) ||
-					interruptQueued)
-				{
-					OnInterrupt?.Invoke();
-					Cancel();
-					return;
-				}
+				Debug.Log("Interrupting");
+				OnInterrupt?.Invoke();
+				Cancel();
+				return;
 			}
+
 			// If we aren't activating anything
-			else
+			if (!IsActivating)
 			{
 				// Try to activate the queued ability
 				if (CanActivate(activationData.QueuedAbilityID, out Ability newAbility))
 				{
 					//Debug.Log($"1 New Ability Activation:{newAbility.ID} State:{state} Tick:{activationData.GetTick()}");
-
-					interruptQueued = false;
 					currentAbilityID = newAbility.ID;
 					remainingTime = newAbility.ActivationTime * CalculateSpeedReduction(GetActivationAttributeTemplate(newAbility));
 
@@ -582,11 +577,6 @@ namespace FishMMO.Shared
 		private void Reconcile(AbilityReconcileData rd, Channel channel = Channel.Unreliable)
 		{
 			//Debug.Log($"Reconciled: {rd.GetTick()}");
-			if (rd.Interrupt)
-			{
-				OnInterrupt?.Invoke();
-				Cancel();
-			}
 			currentAbilityID = rd.AbilityID;
 			remainingTime = rd.RemainingTime;
 
@@ -723,8 +713,6 @@ namespace FishMMO.Shared
 		internal void Cancel()
 		{
 			//Debug.Log("Cancel");
-
-			interruptQueued = false;
 			currentAbilityID = NO_ABILITY;
 			remainingTime = 0.0f;
 			heldKey = KeyCode.None;

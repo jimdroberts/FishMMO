@@ -4,14 +4,12 @@ namespace FishMMO.Shared
 {
 	public struct AbilityReconcileData : IReconcileData
 	{
-		public bool Interrupt;
 		public long AbilityID;
 		public float RemainingTime;
 		public CharacterAttributeResourceState ResourceState;
 
-		public AbilityReconcileData(bool interrupt, long abilityID, float remainingTime, CharacterAttributeResourceState resourceState) : this()
+		public AbilityReconcileData(long abilityID, float remainingTime, CharacterAttributeResourceState resourceState) : this()
 		{
-			Interrupt = interrupt;
 			AbilityID = abilityID;
 			RemainingTime = remainingTime;
 			ResourceState = resourceState;

@@ -234,6 +234,12 @@ namespace FishMMO.Client
 				}
 			}
 
+			if (InputManager.GetKeyDown("Cancel") &&
+				Character.TryGet(out IAbilityController abilityController))
+			{
+				abilityController.Interrupt(Character);
+			}
+
 			if (!InputManager.ForcedMouseMode && !UIManager.CloseNext(true))
 			{
 				if (InputManager.MouseMode)
