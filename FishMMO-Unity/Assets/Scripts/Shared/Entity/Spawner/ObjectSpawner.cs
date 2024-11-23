@@ -21,6 +21,7 @@ namespace FishMMO.Shared
 		public List<BaseRespawnCondition> TrueConditions = new List<BaseRespawnCondition>();
 
 		public float InitialRespawnTime = 0.0f;
+		public int InitialSpawnCount = 0;
 		[Tooltip("If true a random number will be selected within the minimum and maximum range provided. Otherwise the maximum respawn time will be used.")]
 		public bool RandomRespawnTime = true;
 		[Tooltip("If true a random prefab will be instantiated during the next respawn.")]
@@ -40,8 +41,16 @@ namespace FishMMO.Shared
 		private float respawnTime = 0.0f;
 		private int lastSpawnIndex = 0;
 
-		void Awake()
-		{
+        public override void OnStartNetwork()
+        {
+            base.OnStartNetwork();
+
+			if (!base.IsServerStarted)
+			{
+				enabled = false;
+				return;
+			}
+
 			Transform = transform;
 			respawnTime = InitialRespawnTime;
 
@@ -53,32 +62,20 @@ namespace FishMMO.Shared
 			{
 				Spawnables[i].OnValidate();
 			}
-		}
 
-		void Update()
-		{
-			if (!base.IsServerStarted)
+			InitialSpawnCount = InitialSpawnCount.Clamp(0, MaxSpawnCount);
+			for (int i = 0; i < InitialSpawnCount; ++i)
 			{
-				enabled = false;
-				return;
+				TryRespawn(true);
 			}
+        }
+
+        void Update()
+		{
 			TryRespawn();
 
 			respawnTime -= Time.deltaTime;
 		}
-
-#if !UNITY_SERVER
-		public override void OnStartClient()
-		{
-			base.OnStartClient();
-
-			if (!base.IsOwner)
-			{
-				enabled = false;
-				return;
-			}
-		}
-#endif
 
 #if UNITY_EDITOR
 		public Color GizmoColor = Color.red;
@@ -121,10 +118,15 @@ namespace FishMMO.Shared
 			//Debug.Log($"Object despawned, next respawn at {respawnTime}.");
 		}
 
-		public void TryRespawn()
+		public void TryRespawn(bool overrideSpawnTime = false)
 		{
-			if (respawnTime > 0.0f ||
-				Spawnables == null ||
+			if (!overrideSpawnTime &&
+				respawnTime > 0.0f)
+			{
+				return;
+			}
+
+			if (Spawnables == null ||
 				Spawnables.Count < 1)
 			{
 				return;

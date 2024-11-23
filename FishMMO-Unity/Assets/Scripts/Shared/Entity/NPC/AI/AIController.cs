@@ -87,7 +87,18 @@ namespace FishMMO.Shared
 		}
 #endif
 
-		public override void InitializeOnce()
+        public override void OnStartNetwork()
+        {
+            base.OnStartNetwork();
+
+			if (!base.IsServerStarted)
+			{
+				enabled = false;
+				return;
+			}
+        }
+
+        public override void InitializeOnce()
 		{
 			base.InitializeOnce();
 			
@@ -152,11 +163,6 @@ namespace FishMMO.Shared
 
         void Update()
 		{
-			if (!base.IsServerStarted)
-			{
-				enabled = false;
-				return;
-			}
 			SweepForEnemies();
 			CheckLeash();
 			UpdateCurrentState();

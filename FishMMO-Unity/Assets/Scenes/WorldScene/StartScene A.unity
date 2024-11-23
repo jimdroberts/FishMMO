@@ -256,7 +256,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &70787372
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -275,7 +275,8 @@ MonoBehaviour:
   Transform: {fileID: 0}
   OrConditions: []
   TrueConditions: []
-  InitialRespawnTime: 1
+  InitialRespawnTime: 0
+  InitialSpawnCount: 4
   RandomRespawnTime: 1
   RandomSpawnable: 0
   Spawnables:
@@ -302,7 +303,7 @@ MonoBehaviour:
   MaxSpawnCount: 4
   RandomSpawnPosition: 1
   SphereRadius: 0.5
-  BoundingBoxSize: {x: 15, y: 5, z: 15}
+  BoundingBoxSize: {x: 50, y: 5, z: 25}
   BoundingBoxExtents: {x: 1, y: 1, z: 1}
   GizmoColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!114 &70787373
@@ -360,7 +361,7 @@ Transform:
   m_GameObject: {fileID: 70787371}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -33.73, y: 70.97, z: -40.91}
+  m_LocalPosition: {x: -22.31, y: 70.97, z: -39.29}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1374,24 +1375,25 @@ MonoBehaviour:
   Transform: {fileID: 0}
   OrConditions: []
   TrueConditions: []
-  InitialRespawnTime: 1
+  InitialRespawnTime: 0
+  InitialSpawnCount: 6
   RandomRespawnTime: 1
   RandomSpawnable: 1
   Spawnables:
   - NetworkObject: {fileID: -4468559157413045786, guid: ecf1db3ea5ffe04438c0c425adb9bb32,
       type: 3}
-    MinimumRespawnTime: 60
-    MaximumRespawnTime: 90
+    MinimumRespawnTime: 120
+    MaximumRespawnTime: 360
     YOffset: 0
   - NetworkObject: {fileID: -4468559157413045786, guid: f69ceb06ce90da94fbf1cbff95f3b7f0,
       type: 3}
-    MinimumRespawnTime: 35
-    MaximumRespawnTime: 60
+    MinimumRespawnTime: 60
+    MaximumRespawnTime: 120
     YOffset: 0
-  MaxSpawnCount: 1
+  MaxSpawnCount: 12
   RandomSpawnPosition: 1
   SphereRadius: 0.5
-  BoundingBoxSize: {x: 47.8, y: 15, z: 47.8}
+  BoundingBoxSize: {x: 75, y: 15, z: 65}
   BoundingBoxExtents: {x: 1, y: 1, z: 1}
   GizmoColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!114 &784079646
@@ -1449,7 +1451,7 @@ Transform:
   m_GameObject: {fileID: 784079644}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 26.17, y: 75.23, z: -87.73}
+  m_LocalPosition: {x: 5.3, y: 75.4, z: -105.8}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
