@@ -20,7 +20,11 @@ namespace FishMMO.Shared
 				while (Objects.ContainsKey(sceneObject.ID));
 			}
 			//Debug.Log($"Registering {sceneObject.GameObject.name}:{sceneObject.ID} | {asClient}");
-			Objects.Add(sceneObject.ID, sceneObject);
+
+			if (!Objects.ContainsKey(sceneObject.ID))
+			{
+				Objects.Add(sceneObject.ID, sceneObject);
+			}
 		}
 
 		public static void Unregister(ISceneObject sceneObject)
