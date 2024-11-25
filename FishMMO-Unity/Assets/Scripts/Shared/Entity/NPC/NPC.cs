@@ -81,8 +81,9 @@ namespace FishMMO.Shared
 
 					// Instantiate the NPCAttributeSeedGenerator on the server
 					npcAttributeGenerator = new System.Random(npcAttributeSeed);
+
+					AddNPCAttributes();
 				}
-				AddNPCAttributes();
 			}
 
 			// Write the npc RNG seed for the clients
@@ -121,15 +122,15 @@ namespace FishMMO.Shared
 						if (attribute.IsScalar)
 						{
 							int newValue = characterAttribute.Value.GetPercentOf(value);
-							characterAttribute.SetValue(newValue);
+							characterAttribute.SetModifier(newValue - old);
 
-							//Debug.Log($"{characterAttribute.Template.Name} Old: {old} | New: {characterAttribute.Value}");
+							//Debug.Log($"{characterAttribute.Template.Name} Old: {old} | New: {characterAttribute.FinalValue}");
 						}
 						else
 						{
-							characterAttribute.SetValue(value);
+							characterAttribute.SetModifier(value - old);
 
-							//Debug.Log($"{characterAttribute.Template.Name} Old: {old} | New: {characterAttribute.Value}");
+							//Debug.Log($"{characterAttribute.Template.Name} Old: {old} | New: {characterAttribute.FinalValue}");
 						}
 					}
 					else if (attributeController.TryGetResourceAttribute(attribute.Template, out CharacterResourceAttribute characterResourceAttribute))
@@ -139,18 +140,21 @@ namespace FishMMO.Shared
 						if (attribute.IsScalar)
 						{
 							int newValue = characterResourceAttribute.Value.GetPercentOf(value);
+							int modifier = newValue - old;
 
-							characterResourceAttribute.SetValue(newValue);
+							characterResourceAttribute.SetModifier(modifier);
 							characterResourceAttribute.SetCurrentValue(newValue);
 
-							//Debug.Log($"{characterResourceAttribute.Template.Name} Old: {old} | New: {characterResourceAttribute.Value}");
+							//Debug.Log($"{characterResourceAttribute.Template.Name} Old: {old} | New: {characterResourceAttribute.CurrentValue}/{characterResourceAttribute.FinalValue}");
 						}
 						else
 						{
-							characterResourceAttribute.SetValue(value);
+							int modifier = value - old;
+
+							characterResourceAttribute.SetModifier(modifier);
 							characterResourceAttribute.SetCurrentValue(value);
 
-							//Debug.Log($"{characterResourceAttribute.Template.Name} Old: {old} | New: {characterResourceAttribute.Value}");
+							//Debug.Log($"{characterResourceAttribute.Template.Name} Old: {old} | New: {characterResourceAttribute.CurrentValue}/{characterResourceAttribute.FinalValue}");
 						}
 					}
 				}

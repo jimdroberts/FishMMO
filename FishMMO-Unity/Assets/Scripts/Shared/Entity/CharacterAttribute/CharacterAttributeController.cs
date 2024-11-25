@@ -25,6 +25,8 @@ namespace FishMMO.Shared
 
 		public override void OnAwake()
 		{
+			base.OnAwake();
+			
 			if (CharacterAttributeDatabase != null)
 			{
 				foreach (CharacterAttributeTemplate attribute in CharacterAttributeDatabase.Attributes)
