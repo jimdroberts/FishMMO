@@ -6,7 +6,7 @@ namespace FishMMO.Shared
 {
 	public interface IFactionController : ICharacterBehaviour
 	{
-		static Action<Faction, int> OnAddFaction;
+		static Action<Faction, int> OnUpdateFaction;
 
 		bool IsAggressive { get; set; }
 		Dictionary<int, Faction> Factions { get; }

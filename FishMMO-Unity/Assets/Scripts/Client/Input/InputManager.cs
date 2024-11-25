@@ -103,6 +103,7 @@ namespace FishMMO.Client
 			AddKey("Abilities", KeyCode.K);
 			AddKey("Achievements", KeyCode.J);
 			AddKey("Equipment", KeyCode.O);
+			AddKey("Factions", KeyCode.L);
 			AddKey("Guild", KeyCode.G);
 			AddKey("Party", KeyCode.P);
 			AddKey("Friends", KeyCode.H);

@@ -9,6 +9,8 @@ namespace FishMMO.Shared
 		[Serializable]
 		public class FactionHashSet : SerializableHashSet<FactionTemplate> { }
 
+		public Sprite Icon;
+		
 		public const int Minimum = -10000;
 		public const int Maximum = 10000;
 		

@@ -28,7 +28,7 @@ namespace FishMMO.Shared
 		public FactionTemplate Template { get { return this.template; } set { this.template = value; } }
 
 #if !UNITY_SERVER
-        public override void OnStartCharacter()
+		public override void OnStartCharacter()
 		{
 			base.OnStartCharacter();
 
@@ -59,10 +59,10 @@ namespace FishMMO.Shared
 		private void OnClientFactionUpdateBroadcastReceived(FactionUpdateBroadcast msg, Channel channel)
 		{
 			FactionTemplate template = FactionTemplate.Get<FactionTemplate>(msg.TemplateID);
-				if (template != null)
-				{
-					SetFaction(template.ID, msg.NewValue);
-				}
+			if (template != null)
+			{
+				SetFaction(template.ID, msg.NewValue);
+			}
 		}
 
 		/// <summary>
@@ -90,7 +90,7 @@ namespace FishMMO.Shared
 			Neutral.Clear();
 			Hostile.Clear();
 		}
-		
+
 		public override void ReadPayload(NetworkConnection conn, Reader reader)
 		{
 			Factions.Clear();
@@ -162,6 +162,8 @@ namespace FishMMO.Shared
 				factions.Add(templateID, faction = new Faction(templateID, value));
 			}
 			InsertToAllianceGroup(faction);
+
+			IFactionController.OnUpdateFaction?.Invoke(faction, value);
 		}
 
 		public void Add(IFactionController defenderFactionController)
@@ -199,7 +201,7 @@ namespace FishMMO.Shared
 			}
 			if (faction != null)
 			{
-				IFactionController.OnAddFaction?.Invoke(faction, amount);
+				IFactionController.OnUpdateFaction?.Invoke(faction, amount);
 
 				InsertToAllianceGroup(faction);
 			}

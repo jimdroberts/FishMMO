@@ -5,7 +5,7 @@ using System.Collections.Generic;
 
 namespace FishMMO.Client
 {
-	public class UIAbility : UICharacterControl
+	public class UIAbilities : UICharacterControl
 	{
 		public RectTransform AbilityParent;
 		public UIAbilityButton AbilityButtonPrefab;

@@ -1,5 +1,4 @@
-﻿using System;
-using FishNet.Transporting;
+﻿using FishNet.Transporting;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
@@ -77,11 +76,6 @@ namespace FishMMO.Shared
 
 		public void SetAchievement(int templateID, byte tier, uint value)
 		{
-			if (achievements == null)
-			{
-				achievements = new Dictionary<int, Achievement>();
-			}
-
 			if (achievements.TryGetValue(templateID, out Achievement achievement))
 			{
 				achievement.CurrentTier = tier;
@@ -106,10 +100,6 @@ namespace FishMMO.Shared
 			if (template == null)
 			{
 				return;
-			}
-			if (achievements == null)
-			{
-				achievements = new Dictionary<int, Achievement>();
 			}
 
 			Achievement achievement;

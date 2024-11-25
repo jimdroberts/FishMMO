@@ -191,7 +191,7 @@ namespace FishMMO.Client
 
 			if (InputManager.GetKeyDown("Abilities"))
 			{
-				UIManager.ToggleVisibility("UIAbility");
+				UIManager.ToggleVisibility("UIAbilities");
 			}
 
 			if (InputManager.GetKeyDown("Equipment") &&
@@ -219,6 +219,11 @@ namespace FishMMO.Client
 			if (InputManager.GetKeyDown("Achievements"))
 			{
 				UIManager.ToggleVisibility("UIAchievements");
+			}
+
+			if (InputManager.GetKeyDown("Factions"))
+			{
+				UIManager.ToggleVisibility("UIFactions");
 			}
 
 			if (InputManager.GetKeyDown("Menu"))

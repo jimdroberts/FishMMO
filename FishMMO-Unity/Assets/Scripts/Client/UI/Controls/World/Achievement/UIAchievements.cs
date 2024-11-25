@@ -120,6 +120,7 @@ namespace FishMMO.Client
 				{
 					categoryButton.Button.onClick.AddListener(() => Category_OnClick(achievement.Template.Category));
 				}
+				categoryButton.gameObject.SetActive(true);
 				CategoryButtons.Add(categoryButton);
 			}
 
@@ -140,6 +141,7 @@ namespace FishMMO.Client
 				{
 					description.Progress.value = achievement.CurrentMaxValue / achievement.CurrentValue;
 				}
+				description.gameObject.SetActive(true);
 				achievements.Add(achievement.Template.ID, description);
 			}
 		}
