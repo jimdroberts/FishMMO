@@ -85,7 +85,7 @@ namespace FishMMO.Shared
 			else
 			{
 				achievements.Add(templateID, achievement = new Achievement(templateID, tier, value));
-				IAchievementController.OnAddAchievement?.Invoke(achievement);
+				IAchievementController.OnUpdateAchievement?.Invoke(achievement);
 			}
 		}
 
@@ -106,7 +106,6 @@ namespace FishMMO.Shared
 			if (!achievements.TryGetValue(template.ID, out achievement))
 			{
 				achievements.Add(template.ID, achievement = new Achievement(template.ID));
-				IAchievementController.OnAddAchievement?.Invoke(achievement);
 			}
 
 			// get the old values

@@ -14,8 +14,8 @@ namespace FishMMO.Client
         public RectTransform AchievementDescriptionParent;
 		public UIAchievementDescription AchievementDescriptionPrefab;
 
-		private List<UIAchievementCategory> CategoryButtons;
-		private Dictionary<AchievementCategory, Dictionary<int, UIAchievementDescription>> Categories;
+		private List<UIAchievementCategory> CategoryButtons = new List<UIAchievementCategory>();
+		private Dictionary<AchievementCategory, Dictionary<int, UIAchievementDescription>> Categories = new Dictionary<AchievementCategory, Dictionary<int, UIAchievementDescription>>();
 
 
 		public override void OnStarting()
@@ -38,7 +38,6 @@ namespace FishMMO.Client
 
 			if (Character.TryGet(out IAchievementController achievementController))
 			{
-				IAchievementController.OnAddAchievement += AchievementController_OnAddAchievement;
 				IAchievementController.OnUpdateAchievement += AchievementController_OnUpdateAchievement;
 			}
 		}
@@ -47,7 +46,6 @@ namespace FishMMO.Client
 		{
 			if (Character.TryGet(out IAchievementController achievementController))
 			{
-				IAchievementController.OnAddAchievement -= AchievementController_OnAddAchievement;
 				IAchievementController.OnUpdateAchievement -= AchievementController_OnUpdateAchievement;
 			}
 		}
@@ -67,19 +65,9 @@ namespace FishMMO.Client
 				}
 				foreach (Achievement achievement in achievementController.Achievements.Values)
 				{
-					AchievementController_OnAddAchievement(achievement);
+					AchievementController_OnUpdateAchievement(achievement);
 				}
 			}
-		}
-
-		public void AchievementController_OnAddAchievement(Achievement achievement)
-		{
-			if (achievement == null)
-			{
-				return;
-			}
-
-			InstantiateAchievement(achievement);
 		}
 
 		public void AchievementController_OnUpdateAchievement(Achievement achievement)
@@ -89,23 +77,6 @@ namespace FishMMO.Client
 				return;
 			}
 
-			if (Categories.TryGetValue(achievement.Template.Category, out Dictionary<int, UIAchievementDescription> achievements) &&
-				achievements.TryGetValue(achievement.Template.ID, out UIAchievementDescription description))
-			{
-				if (description.Progress != null &&
-					achievement.Template.Tiers != null)
-				{
-					description.Progress.value = achievement.CurrentMaxValue / achievement.CurrentValue;
-				}
-			}
-			else
-			{
-				InstantiateAchievement(achievement);
-			}
-		}
-
-		private void InstantiateAchievement(Achievement achievement)
-		{
 			// Instantiate the Category Button
 			if (!Categories.TryGetValue(achievement.Template.Category, out Dictionary<int, UIAchievementDescription> achievements))
 			{
@@ -136,13 +107,13 @@ namespace FishMMO.Client
 				{
 					description.Image.sprite = achievement.Template.Icon;
 				}
-				if (description.Progress != null &&
-					achievement.Template.Tiers != null)
-				{
-					description.Progress.value = achievement.CurrentMaxValue / achievement.CurrentValue;
-				}
 				description.gameObject.SetActive(true);
 				achievements.Add(achievement.Template.ID, description);
+			}
+
+			if (description.Progress != null)
+			{
+				description.Progress.value = achievement.CurrentMaxValue / achievement.CurrentValue;
 			}
 		}
 
@@ -165,9 +136,17 @@ namespace FishMMO.Client
 			}
 			foreach (UIAchievementCategory category in CategoryButtons)
 			{
-				category.Button.onClick.RemoveAllListeners();
+				if (category == null)
+				{
+					continue;
+				}
+				if (category.Button != null)
+				{
+					category.Button.onClick.RemoveAllListeners();
+				}
 				Destroy(category.gameObject);
 			}
+			Categories.Clear();
 		}
 
 		public void Category_OnClick(AchievementCategory type)

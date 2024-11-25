@@ -11,7 +11,8 @@
 		{
 			get
 			{
-				if (Template.Tiers == null)
+				if (Template.Tiers == null ||
+					Template.Tiers.Count < 1)
 				{
 					return 1;
 				}
@@ -19,10 +20,7 @@
 				{
 					return 1;
 				}
-				else
-				{
-					return Template.Tiers[CurrentTier].MaxValue;
-				}
+				return Template.Tiers[CurrentTier].MaxValue;
 			}
 		}
 

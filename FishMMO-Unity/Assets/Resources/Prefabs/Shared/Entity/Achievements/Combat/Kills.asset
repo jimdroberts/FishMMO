@@ -15,4 +15,18 @@ MonoBehaviour:
   Icon: {fileID: 0}
   Category: 2
   Description: Total number of enemies killed.
-  Tiers: []
+  Tiers:
+  - MaxValue: 5
+    TierCompleteMessage: Completed the first kill achievement!
+    CompleteSound: {fileID: 0}
+    ItemRewards: []
+    BuffRewards: []
+    TitleRewards: []
+    AbilityRewards: []
+  - MaxValue: 15
+    TierCompleteMessage: Completed the second kill achievement!
+    CompleteSound: {fileID: 0}
+    ItemRewards: []
+    BuffRewards: []
+    TitleRewards: []
+    AbilityRewards: []
