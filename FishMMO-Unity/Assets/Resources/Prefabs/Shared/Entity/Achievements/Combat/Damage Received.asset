@@ -14,5 +14,5 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   Icon: {fileID: 0}
   Category: 2
-  Description: Total damage received
+  Description: Total damage received.
   Tiers: []
