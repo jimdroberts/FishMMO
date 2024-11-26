@@ -231,10 +231,15 @@ namespace FishMMO.Shared
 
 		private void UpdateCurrentState()
 		{
+			if (Agent == null)
+			{
+				return;
+			}
 			if (CurrentState == null)
 			{
 				return;
 			}
+			
 			// Update state
 			if (nextUpdate < 0.0f)
 			{

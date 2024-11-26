@@ -10,5 +10,6 @@ namespace FishMMO.Client
         public TMP_Text Label;
         public Slider Progress;
         public Image ProgressFillImage;
+        public TMP_Text Value;
     }
 }

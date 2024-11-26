@@ -1,6 +1,7 @@
 using UnityEngine;
 using FishMMO.Shared;
 using System.Collections.Generic;
+using System;
 
 namespace FishMMO.Client
 {
@@ -108,6 +109,10 @@ namespace FishMMO.Client
 					{
 						description.ProgressFillImage.color = Hex.ToColor(hexColor);
 					}
+				}
+				if (description.Value != null)
+				{
+					description.Value.text = faction.Value.ToString();
 				}
 				description.gameObject.SetActive(true);
 				factions.Add(faction.Template.ID, description);

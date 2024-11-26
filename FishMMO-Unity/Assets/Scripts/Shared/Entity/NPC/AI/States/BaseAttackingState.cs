@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
 
@@ -94,11 +95,6 @@ namespace FishMMO.Shared
 			// if (distanceToTarget is small)
 			// controller.TransitionToCombatState();
 			Debug.Log("Attacking target!");
-
-			if (controller.Agent.path != null)
-			{
-				controller.Agent.ResetPath();
-			}
 		}
 
 		/// <summary>

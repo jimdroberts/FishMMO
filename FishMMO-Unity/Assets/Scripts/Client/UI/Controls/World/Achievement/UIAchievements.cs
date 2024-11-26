@@ -115,6 +115,11 @@ namespace FishMMO.Client
 			{
 				description.Progress.value = achievement.CurrentMaxValue / achievement.CurrentValue;
 			}
+			if (description.Value != null)
+			{
+				string maxValue = (achievement.CurrentMaxValue > 1) ? $"/ {achievement.CurrentMaxValue}" : "";
+				description.Value.text = $"{achievement.CurrentValue} {maxValue}";
+			}
 		}
 
 		public void ClearAll()
