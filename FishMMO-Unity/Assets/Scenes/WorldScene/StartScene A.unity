@@ -275,36 +275,41 @@ MonoBehaviour:
   Transform: {fileID: 0}
   OrConditions: []
   TrueConditions: []
+  IsCacheDirty: 1
   InitialRespawnTime: 0
   InitialSpawnCount: 4
+  MaxSpawnCount: 4
   RandomRespawnTime: 1
-  RandomSpawnable: 0
+  SpawnType: 0
+  RandomSpawnPosition: 1
+  SphereRadius: 0.5
+  BoundingBoxSize: {x: 50, y: 5, z: 25}
+  BoundingBoxExtents: {x: 1, y: 1, z: 1}
   Spawnables:
   - NetworkObject: {fileID: -4468559157413045786, guid: 2ce4d12b80ddd9f4ca8a389e6c91c7e3,
       type: 3}
     MinimumRespawnTime: 5
     MaximumRespawnTime: 30
+    SpawnChance: 0.5
     YOffset: 0
   - NetworkObject: {fileID: 7250114663715075110, guid: f7377f38d08b9c84ab957eb9d610e043,
       type: 3}
     MinimumRespawnTime: 5
     MaximumRespawnTime: 30
+    SpawnChance: 0.5
     YOffset: 0
   - NetworkObject: {fileID: 689555114688187283, guid: a1cb36c06a320c240878d104ba4f0abb,
       type: 3}
     MinimumRespawnTime: 5
     MaximumRespawnTime: 30
+    SpawnChance: 0.5
     YOffset: 0
   - NetworkObject: {fileID: 6349228138187238843, guid: 82e54404fe2ccc448bd81cbe31657e29,
       type: 3}
     MinimumRespawnTime: 5
     MaximumRespawnTime: 30
+    SpawnChance: 0.5
     YOffset: 0
-  MaxSpawnCount: 4
-  RandomSpawnPosition: 1
-  SphereRadius: 0.5
-  BoundingBoxSize: {x: 50, y: 5, z: 25}
-  BoundingBoxExtents: {x: 1, y: 1, z: 1}
   GizmoColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!114 &70787373
 MonoBehaviour:
@@ -1375,26 +1380,35 @@ MonoBehaviour:
   Transform: {fileID: 0}
   OrConditions: []
   TrueConditions: []
+  IsCacheDirty: 1
   InitialRespawnTime: 0
   InitialSpawnCount: 6
+  MaxSpawnCount: 9
   RandomRespawnTime: 1
-  RandomSpawnable: 1
-  Spawnables:
-  - NetworkObject: {fileID: -4468559157413045786, guid: ecf1db3ea5ffe04438c0c425adb9bb32,
-      type: 3}
-    MinimumRespawnTime: 120
-    MaximumRespawnTime: 360
-    YOffset: 0
-  - NetworkObject: {fileID: -4468559157413045786, guid: f69ceb06ce90da94fbf1cbff95f3b7f0,
-      type: 3}
-    MinimumRespawnTime: 60
-    MaximumRespawnTime: 120
-    YOffset: 0
-  MaxSpawnCount: 12
+  SpawnType: 2
   RandomSpawnPosition: 1
   SphereRadius: 0.5
   BoundingBoxSize: {x: 75, y: 15, z: 65}
   BoundingBoxExtents: {x: 1, y: 1, z: 1}
+  Spawnables:
+  - NetworkObject: {fileID: -4468559157413045786, guid: ecf1db3ea5ffe04438c0c425adb9bb32,
+      type: 3}
+    MinimumRespawnTime: 90
+    MaximumRespawnTime: 180
+    SpawnChance: 0.35
+    YOffset: 0
+  - NetworkObject: {fileID: -4468559157413045786, guid: f69ceb06ce90da94fbf1cbff95f3b7f0,
+      type: 3}
+    MinimumRespawnTime: 45
+    MaximumRespawnTime: 90
+    SpawnChance: 0.5
+    YOffset: 0
+  - NetworkObject: {fileID: -4468559157413045786, guid: a7364fafb6a45174babebcc6a5fbdce4,
+      type: 3}
+    MinimumRespawnTime: 120
+    MaximumRespawnTime: 240
+    SpawnChance: 0.2
+    YOffset: 0
   GizmoColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!114 &784079646
 MonoBehaviour:

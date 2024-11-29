@@ -10,6 +10,8 @@ namespace FishMMO.Shared
 		public NetworkObject NetworkObject;
 		public float MinimumRespawnTime;
 		public float MaximumRespawnTime;
+		[Range(0f, 1f)]
+		public float SpawnChance = 0.5f; // Default is 50% chance to spawn
 
 		[ShowReadonly]
 		public float YOffset;

@@ -84,7 +84,7 @@ GameObject:
   - component: {fileID: 1969692536659621655}
   - component: {fileID: 2692326841349964227}
   m_Layer: 6
-  m_Name: an orc warrior
+  m_Name: an orc mage
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -176,7 +176,7 @@ MonoBehaviour:
   _teleportThreshold: 1
   <PrefabId>k__BackingField: 4
   <SpawnableCollectionId>k__BackingField: 0
-  <AssetPathHash>k__BackingField: 6619456396803672866
+  <AssetPathHash>k__BackingField: 13427134085274249860
   <SceneId>k__BackingField: 0
   SerializedTransformProperties:
     Position: {x: 0, y: 0, z: 0}
