@@ -91,6 +91,16 @@ namespace FishMMO.Shared
 				writer.WriteSingle(resourceAttribute.CurrentValue);
 			}
 		}
+		
+		public override void ResetState(bool asServer)
+		{
+			base.ResetState(asServer);
+
+			foreach (CharacterResourceAttribute characterResourceAttribute in ResourceAttributes.Values)
+			{
+				characterResourceAttribute.SetCurrentValue(characterResourceAttribute.FinalValue);
+			}
+		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void SetAttribute(int id, int value)

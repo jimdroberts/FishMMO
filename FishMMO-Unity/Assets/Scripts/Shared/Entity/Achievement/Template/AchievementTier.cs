@@ -7,7 +7,7 @@ namespace FishMMO.Shared
 	[Serializable]
 	public class AchievementTier
 	{
-		public uint MaxValue;
+		public uint Value;
 		public string TierCompleteMessage;
 		public AudioClip CompleteSound;
 		public List<BaseAbilityTemplate> AbilityRewards;

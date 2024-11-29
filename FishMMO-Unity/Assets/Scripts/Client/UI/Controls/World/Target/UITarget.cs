@@ -93,6 +93,11 @@ namespace FishMMO.Client
 				if (characterAttributeController.TryGetResourceAttribute(HealthAttribute, out CharacterResourceAttribute health))
 				{
 					HealthSlider.value = health.CurrentValue / health.FinalValue;
+
+					if (NameLabel != null)
+					{
+						NameLabel.text += $" [{health.CurrentValue}/{health.FinalValue}]";
+					}
 				}
 			}
 			else

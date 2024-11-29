@@ -111,14 +111,16 @@ namespace FishMMO.Client
 				achievements.Add(achievement.Template.ID, description);
 			}
 
+			uint nextTierValue = achievement.NextTierValue;
+
 			if (description.Progress != null)
 			{
-				description.Progress.value = achievement.CurrentMaxValue / achievement.CurrentValue;
+				description.Progress.value = nextTierValue > 0 && achievement.CurrentValue > 0 ? nextTierValue / achievement.CurrentValue : 1.0f;
 			}
 			if (description.Value != null)
 			{
-				string maxValue = (achievement.CurrentMaxValue > 1) ? $"/ {achievement.CurrentMaxValue}" : "";
-				description.Value.text = $"{achievement.CurrentValue} {maxValue}";
+				string maxValue = (nextTierValue > 1) ? $" / {nextTierValue}" : "";
+				description.Value.text = $"{achievement.CurrentValue}{maxValue}";
 			}
 		}
 

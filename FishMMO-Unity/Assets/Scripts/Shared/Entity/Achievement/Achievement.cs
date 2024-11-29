@@ -7,20 +7,24 @@
 
 		public AchievementTemplate Template { get; private set; }
 
-		public uint CurrentMaxValue
+		public uint NextTierValue
 		{
 			get
 			{
-				if (Template.Tiers == null ||
-					Template.Tiers.Count < 1)
+				// Check if tiers exist and are valid
+				if (Template.Tiers == null || Template.Tiers.Count < 1)
 				{
-					return 1;
+					return 0; // Or any default value you prefer
 				}
-				if (Template.Tiers.Count < CurrentTier)
+
+				// If we're already at the last tier, return a default value (no next tier)
+				if (CurrentTier >= Template.Tiers.Count)
 				{
-					return 1;
+					return 0; // Or any value that indicates no next tier
 				}
-				return Template.Tiers[CurrentTier].MaxValue;
+
+				// Return the value of the next tier
+				return Template.Tiers[CurrentTier].Value;
 			}
 		}
 

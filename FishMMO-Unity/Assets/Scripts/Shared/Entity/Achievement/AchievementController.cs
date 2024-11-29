@@ -18,8 +18,6 @@ namespace FishMMO.Shared
 		}
 
 #if !UNITY_SERVER
-		public bool ShowAchievementCompletion = true;
-
 		public override void OnStartCharacter()
 		{
 			base.OnStartCharacter();
@@ -108,30 +106,26 @@ namespace FishMMO.Shared
 				achievements.Add(template.ID, achievement = new Achievement(template.ID));
 			}
 
-			// get the old values
 			byte currentTier = achievement.CurrentTier;
-			uint currentValue = achievement.CurrentValue;
 
-			// update current value
 			achievement.CurrentValue += amount;
 
 			List<AchievementTier> tiers = template.Tiers;
 			if (tiers != null)
 			{
-				for (byte i = currentTier; i < tiers.Count && i < byte.MaxValue; ++i)
+				for (byte i = currentTier; i < tiers.Count; ++i)
 				{
 					AchievementTier tier = tiers[i];
-					if (achievement.CurrentValue > tier.MaxValue)
+
+					if (achievement.CurrentValue >= tier.Value)
 					{
 						// Client: Display a text message above the characters head showing the achievement.
 						// Server: Provide rewards.
 						IAchievementController.OnCompleteAchievement?.Invoke(Character, achievement.Template, tier);
+
+						achievement.CurrentTier = (byte)(i + 1);
 					}
-					else
-					{
-						achievement.CurrentTier = i;
-						break;
-					}
+					else break;
 				}
 			}
 

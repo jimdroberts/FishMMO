@@ -17,7 +17,7 @@ namespace FishMMO.Shared
 			controller.SetRandomHomeDestination();
 			if (controller.Character.TryGet(out ICharacterDamageController characterDamageController))
 			{
-				characterDamageController.Immortal = true;
+				//characterDamageController.Immortal = true;
 				characterDamageController.CompleteHeal();
 			}
 		}
@@ -26,10 +26,10 @@ namespace FishMMO.Shared
 		{
 			controller.Agent.speed = Constants.Character.WalkSpeed;
 
-			if (controller.Character.TryGet(out ICharacterDamageController characterDamageController))
+			/*if (controller.Character.TryGet(out ICharacterDamageController characterDamageController))
 			{
 				characterDamageController.Immortal = false;
-			}
+			}*/
 		}
 
 		public override void UpdateState(AIController controller, float deltaTime)

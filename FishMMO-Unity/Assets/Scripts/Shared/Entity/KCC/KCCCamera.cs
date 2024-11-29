@@ -197,8 +197,11 @@ namespace FishMMO.Shared
 		private Vector3 CalculateTargetPosition(Quaternion targetRotation)
 		{
 			Vector3 targetPosition = _currentFollowPosition - (targetRotation * Vector3.forward * _currentDistance);
-			targetPosition += Transform.right * FollowPointFraming.x;
-			targetPosition += Transform.up * FollowPointFraming.y;
+			if (TargetDistance > 0.0f)
+			{
+				targetPosition += Transform.right * FollowPointFraming.x;
+				targetPosition += Transform.up * FollowPointFraming.y;
+			}
 			return targetPosition;
 		}
 	}

@@ -76,35 +76,44 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			if (ResourceInstance != null && ResourceInstance.CurrentValue >= 1.0f)
+			if (ResourceInstance == null)
 			{
-				amount = ApplyModifiers(Character, amount, damageAttribute);
-				if (amount < 1)
+				return;
+			}
+
+			// We are already dead.
+			if (ResourceInstance.CurrentValue <= 0.0f)
+			{
+				return;
+			}
+
+			amount = ApplyModifiers(Character, amount, damageAttribute);
+
+			if (amount < 1)
+			{
+				return;
+			}
+			ResourceInstance.Consume(amount);
+
+			ICharacterDamageController.OnDamaged?.Invoke(attacker, Character, amount, damageAttribute);
+
+			uint fullAmount = (uint)amount;
+
+			if (!ignoreAchievements)
+			{
+				if (attacker.TryGet(out IAchievementController attackerAchievementController))
 				{
-					return;
+					attackerAchievementController.Increment(DamageAchievementTemplate, fullAmount);
 				}
-				ResourceInstance.Consume(amount);
 
-				ICharacterDamageController.OnDamaged?.Invoke(attacker, Character, amount, damageAttribute);
-
-				uint fullAmount = (uint)amount;
-
-				if (!ignoreAchievements)
+				if (Character.TryGet(out IAchievementController defenderAchievementController))
 				{
-					if (attacker.TryGet(out IAchievementController attackerAchievementController))
-					{
-						attackerAchievementController.Increment(DamageAchievementTemplate, fullAmount);
-					}
-					
-					if (Character.TryGet(out IAchievementController defenderAchievementController))
-					{
-						defenderAchievementController.Increment(DamagedAchievementTemplate, fullAmount);
-					}
+					defenderAchievementController.Increment(DamagedAchievementTemplate, fullAmount);
 				}
 			}
 
-			// check if we died
-			if (ResourceInstance.CurrentValue < 1.00f)
+			// Check if we died after taking damage.
+			if (ResourceInstance.CurrentValue <= 0.0f)
 			{
 				Kill(attacker);
 			}

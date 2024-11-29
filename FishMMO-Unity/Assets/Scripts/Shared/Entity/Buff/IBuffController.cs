@@ -16,6 +16,6 @@ namespace FishMMO.Shared
 		void Apply(BaseBuffTemplate template);
 		void Apply(Buff buff);
 		void Remove(int buffID);
-		void RemoveAll();
+		void RemoveAll(bool ignoreInvokeRemove = false);
 	}
 }

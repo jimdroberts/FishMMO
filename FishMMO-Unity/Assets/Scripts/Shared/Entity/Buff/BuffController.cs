@@ -160,7 +160,7 @@ namespace FishMMO.Shared
 			}
 		}
 
-		public void RemoveAll()
+		public void RemoveAll(bool ignoreInvokeRemove = false)
 		{
 			foreach (KeyValuePair<int, Buff> pair in new Dictionary<int, Buff>(buffs))
 			{
@@ -169,13 +169,16 @@ namespace FishMMO.Shared
 					pair.Value.Remove(Character);
 					buffs.Remove(pair.Key);
 
-					if (pair.Value.Template.IsDebuff)
+					if (!ignoreInvokeRemove)
 					{
-						IBuffController.OnRemoveDebuff?.Invoke(pair.Value);
-					}
-					else
-					{
-						IBuffController.OnRemoveBuff?.Invoke(pair.Value);
+						if (pair.Value.Template.IsDebuff)
+						{
+							IBuffController.OnRemoveDebuff?.Invoke(pair.Value);
+						}
+						else
+						{
+							IBuffController.OnRemoveBuff?.Invoke(pair.Value);
+						}
 					}
 				}
 			}

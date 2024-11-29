@@ -670,6 +670,11 @@ namespace FishMMO.Server
 				return;
 			}
 
+			if (defender.TryGet(out IBuffController buffController))
+			{
+				buffController.RemoveAll(true);
+			}
+
 			// Handle Player deaths
 			IPlayerCharacter playerCharacter = defender as IPlayerCharacter;
 			if (playerCharacter != null)
@@ -699,11 +704,14 @@ namespace FishMMO.Server
 					Pet pet = defender as Pet;
 					if (pet != null)
 					{
+						//Debug.Log($"Pet: {pet.GameObject.name} Died");
+
 						IPlayerCharacter petOwner = pet.PetOwner as IPlayerCharacter;
 						OnPetKilled?.Invoke(petOwner.NetworkObject.Owner, petOwner);
 					}
 					else
 					{
+						//Debug.Log($"NPC: {npc.GameObject.name} Died");
 						npc.Despawn();
 					}
 				}
