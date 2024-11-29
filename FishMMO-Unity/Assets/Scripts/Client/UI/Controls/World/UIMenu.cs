@@ -12,6 +12,10 @@
 
 		public void OnButtonOptions()
 		{
+			if (UIManager.TryGet("UIOptions", out UIOptions uiOptions))
+			{
+				uiOptions.Show();
+			}
 		}
 
 		public void OnButtonQuitToLogin()

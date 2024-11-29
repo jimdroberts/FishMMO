@@ -852,7 +852,7 @@ namespace FishMMO.Client
 			{
 				displayPos.y += playerCharacter.CharacterController.FullCapsuleHeight;
 			}
-			LabelMaker.Display3D("Achievement: " + template.Name + "\r\n" + tier.TierCompleteMessage, displayPos, Color.yellow, 12.0f, 4.0f, false);
+			LabelMaker.Display3D("Achievement: " + template.Name + "\r\n" + tier.TierCompleteMessage, displayPos, Color.yellow, 2.0f, 4.0f, false);
 		}
 		#endregion
 

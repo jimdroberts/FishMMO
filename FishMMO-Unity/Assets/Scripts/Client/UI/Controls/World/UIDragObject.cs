@@ -66,7 +66,11 @@ namespace FishMMO.Client
 			Type = type;
 
 			// set position immediately so we don't have any position glitches before Update is triggered
-			Vector3 offset = new Vector3(Icon.sprite.bounds.size.x * 0.5f + 1.0f, Icon.sprite.bounds.size.y * -0.5f - 1.0f, 0.0f);
+			Vector3 offset = Vector3.zero;
+			if (Icon != null && Icon.sprite != null)
+			{
+				offset = new Vector3(Icon.sprite.bounds.size.x * 0.5f + 1.0f, Icon.sprite.bounds.size.y * -0.5f - 1.0f, 0.0f);
+			}
 			transform.position = Input.mousePosition + offset;
 
 			Show();

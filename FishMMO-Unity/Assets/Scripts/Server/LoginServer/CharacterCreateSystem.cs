@@ -17,6 +17,7 @@ namespace FishMMO.Server
 		public WorldSceneDetailsCache WorldSceneDetailsCache;
 		public int MaxCharacters = 8;
 		public List<AbilityTemplate> StartingAbilities = new List<AbilityTemplate>();
+		public List<BaseItemTemplate> StartingItems = new List<BaseItemTemplate>();
 
 		public override void InitializeOnce()
 		{
@@ -216,6 +217,24 @@ namespace FishMMO.Server
 									AbilityEvents = startingAbility.Events.Select(a => a.ID).ToList(),
 								};
 								dbContext.CharacterAbilities.Add(dbAbility);
+							}
+							dbContext.SaveChanges();
+						}
+
+						if (StartingItems != null)
+						{
+							for (int i = 0; i < StartingItems.Count; ++i)
+							{
+								BaseItemTemplate itemTemplate = StartingItems[i];
+								var dbItem = new CharacterInventoryEntity()
+								{
+									CharacterID = newCharacter.ID,
+									TemplateID = itemTemplate.ID,
+									Slot = i,
+									Seed = 0,
+									Amount = 1,
+								};
+								dbContext.CharacterInventoryItems.Add(dbItem);
 							}
 							dbContext.SaveChanges();
 						}

@@ -36,6 +36,7 @@ namespace FishMMO.Shared
 				}
 			}
 		}
+
 		public Item(long id, int seed, BaseItemTemplate template, uint amount)
 		{
 			ID = id;
@@ -44,6 +45,7 @@ namespace FishMMO.Shared
 
 			Initialize(id, amount, seed);
 		}
+		
 		public Item(long id, int seed, int templateID, uint amount)
 		{
 			ID = id;
