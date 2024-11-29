@@ -17,7 +17,7 @@ MonoBehaviour:
   ActivationTime: 0.5
   LifeTime: 5
   Cooldown: 1
-  Range: 0
+  Range: 50
   Speed: 0
   Price: 0
   Resources:

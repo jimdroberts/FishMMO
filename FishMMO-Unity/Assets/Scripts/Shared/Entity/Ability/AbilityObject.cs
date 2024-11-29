@@ -324,11 +324,8 @@ namespace FishMMO.Shared
 						// Get the camera's forward vector
 						Vector3 cameraForward = caster.CharacterController.VirtualCameraRotation * Vector3.forward;
 
-						// TODO - replace this with ability Range... that way the ability is 100% accurate up to the distance
-						const float farDistance = 50.0f;
-
 						// Get a target position far from the camera position
-						Vector3 farTargetPosition = caster.CharacterController.VirtualCameraPosition + cameraForward * farDistance;//ability.Range;
+						Vector3 farTargetPosition = caster.CharacterController.VirtualCameraPosition + cameraForward * ability.Range;
 
 						// Calculate the look direction towards the far target position
 						Vector3 lookDirection = (farTargetPosition - abilitySpawner.position).normalized;
