@@ -28,8 +28,15 @@ namespace FishMMO.Client
 				{
 					UIEquipmentButton button = equipmentButtons[i];
 					button.Type = ReferenceButtonType.Equipment;
-					button.ReferenceID = (int)button.ItemSlotType;
-					buttons.Add(button);
+					int itemSlot = (int)button.ItemSlotType;
+					button.ReferenceID = itemSlot;
+
+					while (buttons.Count <= button.ReferenceID)
+					{
+						buttons.Add(null);
+					}
+
+					buttons[itemSlot] = button;
 				}
 			}
 		}
