@@ -1,4 +1,3 @@
-using System;
 using FishMMO.Shared;
 using TMPro;
 using UnityEngine;

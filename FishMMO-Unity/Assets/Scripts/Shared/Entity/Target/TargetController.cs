@@ -86,6 +86,21 @@ namespace FishMMO.Shared
 				PlayerCharacter.Motor.PhysicsScene.Raycast(origin, direction, out hit, distance, LayerMask))
 #endif
 			{
+				// Check if we hit ourself with the raycast. If we did shoot another one through the character.
+				IPlayerCharacter hitPlayerCharacter = hit.transform.GetComponent<IPlayerCharacter>();
+				if (hitPlayerCharacter != null &&
+					hitPlayerCharacter.ID == Character.ID)
+				{
+					// Adjust the ray origin slightly forward in the direction so that the ray starts inside the character.
+					Vector3 newRayOrigin = hit.point + direction.normalized * 0.1f;
+#if !UNITY_SERVER
+					ray = new Ray(newRayOrigin, direction);
+					Physics.Raycast(ray, out hit, (distance - hit.distance).Min(0.0f), LayerMask);
+#else
+					if (PlayerCharacter != null &&
+						PlayerCharacter.Motor.PhysicsScene.Raycast(newRayOrigin, direction, out hit, (distance - hit.distance).Min(0.0f), LayerMask));
+#endif
+				}
 				//Debug.DrawLine(ray.origin, hit.point, Color.red, 1);
 				//Debug.Log("hit: " + hit.transform.name + " pos: " + hit.point);
 				Current = new TargetInfo(hit.transform, hit.point);

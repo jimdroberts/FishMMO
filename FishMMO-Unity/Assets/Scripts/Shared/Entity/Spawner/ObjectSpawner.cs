@@ -27,9 +27,9 @@ namespace FishMMO.Shared
 		public int InitialSpawnCount = 0;
 		[Tooltip("The maximum number of objects that can be spawned by this spawner.")]
 		public int MaxSpawnCount = 1;
+		public ObjectSpawnType SpawnType = ObjectSpawnType.Linear;
 		[Tooltip("If true a random number will be selected within the minimum and maximum range provided. Otherwise the maximum respawn time will be used.")]
 		public bool RandomRespawnTime = true;
-		public ObjectSpawnType SpawnType = ObjectSpawnType.Linear;
 		[Tooltip("If true a random spawn position will be picked inside of the bounding box using the current position as the center.")]
 		public bool RandomSpawnPosition = true;
 		[Tooltip("SphereCast radius used for spawning objects in the world.")]
