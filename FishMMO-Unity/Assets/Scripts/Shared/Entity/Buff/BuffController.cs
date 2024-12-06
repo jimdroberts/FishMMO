@@ -160,6 +160,41 @@ namespace FishMMO.Shared
 			}
 		}
 
+		public void RemoveRandom(System.Random rng, bool includeBuffs = false, bool includeDebuffs = false)
+		{
+			List<int> keys = new List<int>(buffs.Keys);
+
+			if (keys.Count < 1)
+			{
+				return;
+			}
+
+			int key;
+
+			int attempts = 0;
+
+			// We can try a maximum of 10 times to remove a random buff
+			while (attempts < 10)
+			{
+				key = keys[rng.Next(0, keys.Count)];
+
+				// Get the buff instance
+				if (buffs.TryGetValue(key, out Buff buffInstance) && !buffInstance.Template.IsPermanent)
+				{
+					// Check if the buff meets the conditions
+					if ((includeBuffs && !buffInstance.Template.IsDebuff) || (includeDebuffs && buffInstance.Template.IsDebuff))
+					{
+						// Remove the buff
+						Remove(key);
+						return;
+					}
+				}
+
+				// Increment the attempt counter
+				attempts++;
+			}
+		}
+
 		public void RemoveAll(bool ignoreInvokeRemove = false)
 		{
 			foreach (KeyValuePair<int, Buff> pair in new Dictionary<int, Buff>(buffs))

@@ -42,10 +42,11 @@ namespace FishMMO.Shared
 			{
 				sb.Append(RichText.Format(Name, true, "f5ad6e", "140%"));
 
-				if (!string.IsNullOrWhiteSpace(Description))
+				string description = GetFormattedDescription();
+				if (!string.IsNullOrWhiteSpace(description))
 				{
 					sb.AppendLine();
-					sb.Append(RichText.Format(GetFormattedDescription(), true, "a66ef5FF"));
+					sb.Append(RichText.Format(description, true, "a66ef5FF"));
 				}
 
 				float activationTime = ActivationTime;
