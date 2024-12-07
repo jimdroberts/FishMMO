@@ -10,12 +10,13 @@ namespace FishMMO.Shared
 		public string Description;
 		public float ActivationTime;
 		public float LifeTime;
-		public float Cooldown;
-		public float Range;
 		public float Speed;
+		public float Cooldown;
 		public int Price;
 		public AbilityResourceDictionary Resources = new AbilityResourceDictionary();
-		public AbilityResourceDictionary Requirements = new AbilityResourceDictionary();
+		public AbilityResourceDictionary RequiredAttributes = new AbilityResourceDictionary();
+		public FactionTemplate RequiredFaction;
+		public ArcheTypeTemplate RequiredArchetype;
 
 		public string Name { get { return this.name; } }
 
@@ -51,16 +52,15 @@ namespace FishMMO.Shared
 
 				float activationTime = ActivationTime;
 				float lifeTime = LifeTime;
-				float cooldown = Cooldown;
-				float range = Range;
 				float speed = Speed;
+				float cooldown = Cooldown;
 				float price = Price;
 
 				AbilityResourceDictionary resources = new AbilityResourceDictionary();
 				resources.CopyFrom(Resources);
 
 				AbilityResourceDictionary requirements = new AbilityResourceDictionary();
-				requirements.CopyFrom(Requirements);
+				requirements.CopyFrom(RequiredAttributes);
 
 				if (combineList != null &&
 					combineList.Count > 0)
@@ -80,9 +80,8 @@ namespace FishMMO.Shared
 
 						activationTime += template.ActivationTime;
 						lifeTime += template.LifeTime;
-						cooldown += template.Cooldown;
-						range += template.Range;
 						speed += template.Speed;
+						cooldown += template.Cooldown;
 						price += template.Price;
 
 						foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in template.Resources)
@@ -100,7 +99,7 @@ namespace FishMMO.Shared
 							}
 						}
 
-						foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in template.Requirements)
+						foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in template.RequiredAttributes)
 						{
 							if (!string.IsNullOrWhiteSpace(pair.Key.Name))
 							{
@@ -120,17 +119,16 @@ namespace FishMMO.Shared
 				if (activationTime > 0 ||
 					lifeTime > 0 ||
 					cooldown > 0 ||
-					range > 0 ||
 					speed > 0)
 				{
 					sb.AppendLine();
 					sb.Append(RichText.Format("Activation Time", activationTime, true, "FFFFFFFF", "", "s"));
 					sb.Append(RichText.Format("Life Time", lifeTime, true, "FFFFFFFF", "", "s"));
-					sb.Append(RichText.Format("Cooldown", cooldown, true, "FFFFFFFF", "", "s"));
-					sb.Append(RichText.Format("Range", range, true, "FFFFFFFF", "", "m"));
 					sb.Append(RichText.Format("Speed", speed, true, "FFFFFFFF", "", "m/s"));
+					sb.Append(RichText.Format("Range", speed * lifeTime, true, "FFFFFFFF", "", "m"));
+					sb.Append(RichText.Format("Cooldown", cooldown, true, "FFFFFFFF", "", "s"));
 				}
-				
+
 				if (resources != null && resources.Count > 0)
 				{
 					//sb.Append("\r\n______________________________\r\n\r\n");
@@ -140,7 +138,7 @@ namespace FishMMO.Shared
 					{
 						if (!string.IsNullOrWhiteSpace(pair.Key.Name))
 						{
-							sb.Append(RichText.Format(pair.Key.Name, pair.Value, true, "f5ad6eFF", "", "","120%"));
+							sb.Append(RichText.Format(pair.Key.Name, pair.Value, true, "f5ad6eFF", "", "", "120%"));
 						}
 					}
 				}

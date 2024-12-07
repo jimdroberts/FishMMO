@@ -9,14 +9,14 @@ namespace FishMMO.Shared
 		public float ActivationTime;
 		public float LifeTime;
 		public float Cooldown;
-		public float Range;
+		public float Range { get { return Speed * LifeTime;}}
 		public float Speed;
 
 		public AbilityTemplate Template { get; private set; }
 		public string Name { get; set; }
 		public string CachedTooltip { get; private set; }
 		public AbilityResourceDictionary Resources { get; private set; }
-		public AbilityResourceDictionary Requirements { get; private set; }
+		public AbilityResourceDictionary RequiredAttributes { get; private set; }
 
 		public Dictionary<int, AbilityEvent> AbilityEvents { get; private set; }
 		public Dictionary<int, SpawnEvent> PreSpawnEvents { get; private set; }
@@ -132,7 +132,6 @@ namespace FishMMO.Shared
 			ActivationTime += template.ActivationTime;
 			LifeTime += template.LifeTime;
 			Cooldown += template.Cooldown;
-			Range += template.Range;
 			Speed += template.Speed;
 
 			if (Resources == null)
@@ -140,9 +139,9 @@ namespace FishMMO.Shared
 				Resources = new AbilityResourceDictionary();
 			}
 
-			if (Requirements == null)
+			if (RequiredAttributes == null)
 			{
-				Requirements = new AbilityResourceDictionary();
+				RequiredAttributes = new AbilityResourceDictionary();
 			}
 
 			foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in template.Resources)
@@ -157,15 +156,15 @@ namespace FishMMO.Shared
 				}
 			}
 
-			foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in template.Requirements)
+			foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in template.RequiredAttributes)
 			{
-				if (!Requirements.ContainsKey(pair.Key))
+				if (!RequiredAttributes.ContainsKey(pair.Key))
 				{
-					Requirements[pair.Key] = pair.Value;
+					RequiredAttributes[pair.Key] = pair.Value;
 				}
 				else
 				{
-					Requirements[pair.Key] += pair.Value;
+					RequiredAttributes[pair.Key] += pair.Value;
 				}
 			}
 
@@ -253,7 +252,6 @@ namespace FishMMO.Shared
 				ActivationTime += abilityEvent.ActivationTime;
 				LifeTime += abilityEvent.LifeTime;
 				Cooldown += abilityEvent.Cooldown;
-				Range += abilityEvent.Range;
 				Speed += abilityEvent.Speed;
 				foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in abilityEvent.Resources)
 				{
@@ -266,15 +264,15 @@ namespace FishMMO.Shared
 						Resources[pair.Key] += pair.Value;
 					}
 				}
-				foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in abilityEvent.Requirements)
+				foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in abilityEvent.RequiredAttributes)
 				{
-					if (!Requirements.ContainsKey(pair.Key))
+					if (!RequiredAttributes.ContainsKey(pair.Key))
 					{
-						Requirements[pair.Key] = pair.Value;
+						RequiredAttributes[pair.Key] = pair.Value;
 					}
 					else
 					{
-						Requirements[pair.Key] += pair.Value;
+						RequiredAttributes[pair.Key] += pair.Value;
 					}
 				}
 			}
@@ -317,7 +315,6 @@ namespace FishMMO.Shared
 				ActivationTime -= abilityEvent.ActivationTime;
 				LifeTime -= abilityEvent.LifeTime;
 				Cooldown -= abilityEvent.Cooldown;
-				Range -= abilityEvent.Range;
 				Speed -= abilityEvent.Speed;
 				foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in abilityEvent.Resources)
 				{
@@ -326,11 +323,11 @@ namespace FishMMO.Shared
 						Resources[pair.Key] -= pair.Value;
 					}
 				}
-				foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in abilityEvent.Requirements)
+				foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in abilityEvent.RequiredAttributes)
 				{
-					if (Requirements.ContainsKey(pair.Key))
+					if (RequiredAttributes.ContainsKey(pair.Key))
 					{
-						Requirements[pair.Key] += pair.Value;
+						RequiredAttributes[pair.Key] += pair.Value;
 					}
 				}
 			}
@@ -342,7 +339,7 @@ namespace FishMMO.Shared
 			{
 				return false;
 			}
-			foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in Requirements)
+			foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in RequiredAttributes)
 			{
 				if (!attributeController.TryGetResourceAttribute(pair.Key.ID, out CharacterResourceAttribute requirement) ||
 					requirement.CurrentValue < pair.Value)

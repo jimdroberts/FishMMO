@@ -8,11 +8,9 @@ namespace FishMMO.Shared
 		public float Arc = 180.0f;
 		public float Distance = 60.0f;
 
-		public override int Invoke(ICharacter attacker, ICharacter defender, TargetInfo hitTarget, AbilityObject abilityObject)
+		protected override int OnInvoke(ICharacter attacker, ICharacter defender, TargetInfo hitTarget, AbilityObject abilityObject)
 		{
-			if (attacker == null ||
-				defender == null ||
-				abilityObject == null)
+			if (abilityObject == null)
 			{
 				return 0;
 			}

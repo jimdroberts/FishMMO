@@ -10,11 +10,11 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: a29a51fb85cebf343a2fdc648be52f36, type: 3}
-  m_Name: Greater Fire Damage
+  m_Name: Area Fire Damage
   m_EditorClassIdentifier: 
   icon: {fileID: 21300000, guid: 05c7216c78d4dd34ebe2bac9c1e274d7, type: 3}
   Description: Applies $DAMAGE$ $ELEMENT$ to the enemy that is hit.
-  ActivationTime: 1
+  ActivationTime: 0.5
   LifeTime: 0
   Cooldown: 5
   Range: 0
@@ -37,6 +37,6 @@ MonoBehaviour:
     m_Bits: 4294967295
   FXPrefab: {fileID: 1283335467853853480, guid: cb25fb39d2ec2b646b6b18059ae87bce,
     type: 3}
-  Damage: 21
+  Damage: 10
   DamageAttributeTemplate: {fileID: 11400000, guid: e0d004d1b5e90374fa54e7f9aec2166a,
     type: 2}

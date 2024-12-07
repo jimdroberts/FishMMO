@@ -26,8 +26,17 @@ MonoBehaviour:
   Requirements:
     m_keys: []
     m_values: 
-  Damage: 10
-  DamageAttributeTemplate: {fileID: 11400000, guid: e0d004d1b5e90374fa54e7f9aec2166a,
-    type: 2}
+  MaxHitCount: 0
+  ApplyToSelf: 0
+  ApplyToEnemy: 1
+  ApplyToNeutral: 0
+  ApplyToAllies: 0
+  Radius: 0
+  CollidableLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
   FXPrefab: {fileID: 1283335467853853480, guid: cb25fb39d2ec2b646b6b18059ae87bce,
     type: 3}
+  Damage: 14
+  DamageAttributeTemplate: {fileID: 11400000, guid: e0d004d1b5e90374fa54e7f9aec2166a,
+    type: 2}

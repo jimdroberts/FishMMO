@@ -8,22 +8,12 @@ namespace FishMMO.Shared
 	{
 		public float Force;
 
-		public override int Invoke(ICharacter attacker, ICharacter defender, TargetInfo hitTarget, AbilityObject abilityObject)
+		protected override int OnInvoke(ICharacter attacker, ICharacter defender, TargetInfo hitTarget, AbilityObject abilityObject)
 		{
-			if (attacker == null ||
-				defender == null ||
-				attacker.ID == defender.ID ||
-				abilityObject == null)
+			if (abilityObject == null)
 			{
 				return 0;
 			}
-
-			/*if (attacker.TryGet(out IFactionController attackerFactionController) &&
-				defender.TryGet(out IFactionController defenderFactionController) &&
-				attackerFactionController.GetAllianceLevel(defenderFactionController) == FactionAllianceLevel.Enemy)
-			{
-				Debug.Log($"Knockback! {Force}");
-			}*/
 
 			BaseCharacter character = defender as BaseCharacter;
 			if (character != null &&

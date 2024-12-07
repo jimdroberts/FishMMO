@@ -8,27 +8,12 @@ namespace FishMMO.Shared
 		public int Damage;
 		public DamageAttributeTemplate DamageAttributeTemplate;
 
-		public override int Invoke(ICharacter attacker, ICharacter defender, TargetInfo hitTarget, AbilityObject abilityObject)
+		protected override int OnInvoke(ICharacter attacker, ICharacter defender, TargetInfo hitTarget, AbilityObject abilityObject)
 		{
-			if (attacker == null ||
-				defender == null ||
-				attacker.ID == defender.ID)
-			{
-				return 0;
-			}
-			if (attacker.TryGet(out IFactionController attackerFactionController) &&
-				defender.TryGet(out IFactionController defenderFactionController) &&
-				defender.TryGet(out ICharacterDamageController defenderDamageController) &&
+			if (defender.TryGet(out ICharacterDamageController defenderDamageController) &&
 				!defenderDamageController.Immortal)
 			{
-				FactionAllianceLevel allianceLevel = attackerFactionController.GetAllianceLevel(defenderFactionController);
-
-				//Debug.Log($"{attacker.GameObject.name} hit {defender.GameObject.name} - Alliance: {allianceLevel}");
-				
-				if (allianceLevel == FactionAllianceLevel.Enemy)
-				{
-					defenderDamageController.Damage(attacker, Damage, DamageAttributeTemplate);
-				}
+				defenderDamageController.Damage(attacker, Damage, DamageAttributeTemplate);
 			}
 			return 1;
 		}
