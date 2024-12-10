@@ -14,6 +14,8 @@ namespace FishMMO.Shared
 		public List<BaseItemTemplate> ItemRewards;
 		public List<BaseBuffTemplate> BuffRewards;
 		public List<string> TitleRewards;
+		public AbilityResourceDictionary RequiredAttributes = new AbilityResourceDictionary();
+		public ItemTemplateDatabase RequiredItems;
 
 		public string Name { get { return this.name; } }
 	}
