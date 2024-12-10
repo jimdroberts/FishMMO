@@ -3,7 +3,8 @@ using System.Collections.Generic;
 
 namespace FishMMO.Shared
 {
-	public class ArcheTypeTemplate : CachedScriptableObject<ArcheTypeTemplate>, ICachedObject
+	[CreateAssetMenu(fileName = "New Archetype", menuName = "Character/Archetype/Archetype", order = 1)]
+	public class ArchetypeTemplate : CachedScriptableObject<ArchetypeTemplate>, ICachedObject
 	{
 		public NPCGuildTemplate NPCGuild;
 		public Sprite Icon;

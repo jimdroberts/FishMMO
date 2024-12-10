@@ -16,7 +16,7 @@ namespace FishMMO.Shared
 		public AbilityResourceDictionary Resources = new AbilityResourceDictionary();
 		public AbilityResourceDictionary RequiredAttributes = new AbilityResourceDictionary();
 		public FactionTemplate RequiredFaction;
-		public ArcheTypeTemplate RequiredArchetype;
+		public ArchetypeTemplate RequiredArchetype;
 
 		public string Name { get { return this.name; } }
 
