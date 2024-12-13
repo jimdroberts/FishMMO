@@ -81,8 +81,15 @@ namespace FishMMO.Client
 		public NetworkManager NetworkManager;
 		public ClientLoginAuthenticator LoginAuthenticator;
 
+		public AudioListener AudioListener;
+
 		void Awake()
 		{
+			if (AudioListener == null)
+			{
+				AudioListener = Camera.main.gameObject.GetComponent<AudioListener>();
+			}
+			
 #if UNITY_WEBGL
 			if (HijackKeyCodes != null && HijackKeyCodes.Length > 0)
 			{
