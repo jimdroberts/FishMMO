@@ -753,7 +753,7 @@ start Scene.exe SCENE";
 							BuildTarget.StandaloneWindows64);
 		}
 
-		[MenuItem("FishMMO/Build/Server/Windows x64 Login", priority = 3)]
+		//[MenuItem("FishMMO/Build/Server/Windows x64 Login", priority = 3)]
 		public static void BuildWindows64LoginServer()
 		{
 			WorldSceneDetailsCacheBuilder.Rebuild();
@@ -765,7 +765,7 @@ start Scene.exe SCENE";
 							BuildTarget.StandaloneWindows64);
 		}
 
-		[MenuItem("FishMMO/Build/Server/Windows x64 World", priority = 4)]
+		//[MenuItem("FishMMO/Build/Server/Windows x64 World", priority = 4)]
 		public static void BuildWindows64WorldServer()
 		{
 			WorldSceneDetailsCacheBuilder.Rebuild();
@@ -777,7 +777,7 @@ start Scene.exe SCENE";
 							BuildTarget.StandaloneWindows64);
 		}
 
-		[MenuItem("FishMMO/Build/Server/Windows x64 Scene", priority = 5)]
+		//[MenuItem("FishMMO/Build/Server/Windows x64 Scene", priority = 5)]
 		public static void BuildWindows64SceneServer()
 		{
 			WorldSceneDetailsCacheBuilder.Rebuild();

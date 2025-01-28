@@ -10,10 +10,12 @@ namespace FishMMO.Shared
 		public bool Generate;
 		public uint MaxStackSize = 1;
 		public int Price;
-		//use this for item generation
+		// Use this for item generation.
 		public int[] IconPools;
 		public Sprite icon;
 		public Mesh Mesh;
+		[Tooltip("The base attributes that are added to the item after the ItemGenerator has completed.")]
+		public List<ItemAttributeTemplate> Attributes;
 
 		public string Name { get { return this.name; } }
 		public bool IsStackable { get { return MaxStackSize > 1; } }

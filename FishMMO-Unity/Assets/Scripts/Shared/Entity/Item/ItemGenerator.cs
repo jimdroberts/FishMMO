@@ -76,17 +76,34 @@ namespace FishMMO.Shared
 						}
 					}
 
-					if (Equippable.AttributeDatabases != null && Equippable.AttributeDatabases.Length > 0)
+					if (Equippable.RandomAttributeDatabases != null && Equippable.RandomAttributeDatabases.Length > 0)
 					{
 						int attributeCount = random.Next(0, Equippable.MaxItemAttributes);
 						for (int i = 0, rng; i < attributeCount; ++i)
 						{
-							rng = random.Next(0, Equippable.AttributeDatabases.Length);
-							ItemAttributeTemplateDatabase db = Equippable.AttributeDatabases[rng];
+							rng = random.Next(0, Equippable.RandomAttributeDatabases.Length);
+							ItemAttributeTemplateDatabase db = Equippable.RandomAttributeDatabases[rng];
 							rng = random.Next(0, db.Attributes.Count);
 							ItemAttributeTemplate attributeTemplate = Enumerable.ToList(db.Attributes.Values)[rng];
 							attributes.Add(attributeTemplate.Name, new ItemAttribute(attributeTemplate.ID, random.Next(attributeTemplate.MinValue, attributeTemplate.MaxValue)));
 						}
+					}
+				}
+			}
+
+			if (item != null &&
+				item.Template != null)
+			{
+				for (int i = 0; i < item.Template.Attributes.Count; ++i)
+				{
+					ItemAttributeTemplate additionalAttribute = item.Template.Attributes[i];
+					if (attributes.TryGetValue(additionalAttribute.Name, out ItemAttribute itemAttribute))
+					{
+						itemAttribute.value += additionalAttribute.MinValue;
+					}
+					else
+					{
+						attributes.Add(additionalAttribute.Name, new ItemAttribute(additionalAttribute.ID, additionalAttribute.MinValue));
 					}
 				}
 			}
