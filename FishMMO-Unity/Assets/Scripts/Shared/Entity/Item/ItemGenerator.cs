@@ -2,6 +2,7 @@
 using System.Linq;
 using Cysharp.Text;
 using System;
+using UnityEngine;
 
 namespace FishMMO.Shared
 {
@@ -11,6 +12,8 @@ namespace FishMMO.Shared
 
 		private Item item;
 		public event Action<ItemAttribute, int, int> OnSetAttribute;
+		
+		public Dictionary<string, ItemAttribute> Attributes { get { return attributes; } }
 
 		public void Initialize(Item item, int seed)
 		{
@@ -45,66 +48,76 @@ namespace FishMMO.Shared
 			}
 		}
 
-		public override void Generate(int seed)
+		public override void Generate(int seed, BaseItemTemplate template = null)
 		{
-			this.seed = seed;
-
-			System.Random random = new System.Random(seed);
-			if (random != null)
+			if (item == null && template == null)
 			{
-				if (attributes != null)
+				throw new UnityException("Missing item template during Generation!");
+			}
+
+			template ??= item?.Template; // Use null-coalescing operator for cleaner assignment
+
+			this.seed = seed;
+			System.Random random = new System.Random(seed);
+
+			if (random != null && attributes != null)
+			{
+				attributes.Clear();
+
+				if (template is EquippableItemTemplate equippable)
 				{
-					attributes.Clear();
-					attributes = new Dictionary<string, ItemAttribute>();
+					GenerateItemAttributes(random, equippable);
 
-					EquippableItemTemplate Equippable = item.Template as EquippableItemTemplate;
-					if (Equippable == null)
-						return;
-
-					WeaponTemplate weapon = item.Template as WeaponTemplate;
-					if (weapon != null)
+					if (equippable.RandomAttributeDatabases?.Length > 0)
 					{
-						attributes.Add(weapon.AttackPower.Name, new ItemAttribute(weapon.AttackPower.ID, random.Next(weapon.AttackPower.MinValue, weapon.AttackPower.MaxValue)));
-						attributes.Add(weapon.AttackSpeed.Name, new ItemAttribute(weapon.AttackSpeed.ID, random.Next(weapon.AttackSpeed.MinValue, weapon.AttackSpeed.MaxValue)));
-					}
-					else
-					{
-						ArmorTemplate armor = item.Template as ArmorTemplate;
-						if (armor != null)
-						{
-							attributes.Add(armor.ArmorBonus.Name, new ItemAttribute(armor.ArmorBonus.ID, random.Next(armor.ArmorBonus.MinValue, armor.ArmorBonus.MaxValue)));
-						}
-					}
-
-					if (Equippable.RandomAttributeDatabases != null && Equippable.RandomAttributeDatabases.Length > 0)
-					{
-						int attributeCount = random.Next(0, Equippable.MaxItemAttributes);
-						for (int i = 0, rng; i < attributeCount; ++i)
-						{
-							rng = random.Next(0, Equippable.RandomAttributeDatabases.Length);
-							ItemAttributeTemplateDatabase db = Equippable.RandomAttributeDatabases[rng];
-							rng = random.Next(0, db.Attributes.Count);
-							ItemAttributeTemplate attributeTemplate = Enumerable.ToList(db.Attributes.Values)[rng];
-							attributes.Add(attributeTemplate.Name, new ItemAttribute(attributeTemplate.ID, random.Next(attributeTemplate.MinValue, attributeTemplate.MaxValue)));
-						}
+						AddRandomAttributes(random, equippable);
 					}
 				}
 			}
 
-			if (item != null &&
-				item.Template != null)
+			if (template != null)
 			{
-				for (int i = 0; i < item.Template.Attributes.Count; ++i)
+				AddAdditionalTemplateAttributes(template);
+			}
+		}
+
+		private void GenerateItemAttributes(System.Random random, EquippableItemTemplate equippable)
+		{
+			if (equippable is WeaponTemplate weapon)
+			{
+				attributes.Add(weapon.AttackPower.Name, new ItemAttribute(weapon.AttackPower.ID, random.Next(weapon.AttackPower.MinValue, weapon.AttackPower.MaxValue)));
+				attributes.Add(weapon.AttackSpeed.Name, new ItemAttribute(weapon.AttackSpeed.ID, random.Next(weapon.AttackSpeed.MinValue, weapon.AttackSpeed.MaxValue)));
+			}
+			else if (equippable is ArmorTemplate armor)
+			{
+				attributes.Add(armor.ArmorBonus.Name, new ItemAttribute(armor.ArmorBonus.ID, random.Next(armor.ArmorBonus.MinValue, armor.ArmorBonus.MaxValue)));
+			}
+		}
+
+		private void AddRandomAttributes(System.Random random, EquippableItemTemplate equippable)
+		{
+			int attributeCount = random.Next(0, equippable.MaxItemAttributes);
+			for (int i = 0; i < attributeCount; ++i)
+			{
+				var rng = random.Next(0, equippable.RandomAttributeDatabases.Length);
+				ItemAttributeTemplateDatabase db = equippable.RandomAttributeDatabases[rng];
+				rng = random.Next(0, db.Attributes.Count);
+				ItemAttributeTemplate attributeTemplate = db.Attributes.Values.ToList()[rng];
+				attributes.Add(attributeTemplate.Name, new ItemAttribute(attributeTemplate.ID, random.Next(attributeTemplate.MinValue, attributeTemplate.MaxValue)));
+			}
+		}
+
+		private void AddAdditionalTemplateAttributes(BaseItemTemplate template)
+		{
+			foreach (var additionalAttribute in template.Attributes)
+			{
+				if (attributes.TryGetValue(additionalAttribute.Name, out ItemAttribute itemAttribute))
 				{
-					ItemAttributeTemplate additionalAttribute = item.Template.Attributes[i];
-					if (attributes.TryGetValue(additionalAttribute.Name, out ItemAttribute itemAttribute))
-					{
-						itemAttribute.value += additionalAttribute.MinValue;
-					}
-					else
-					{
-						attributes.Add(additionalAttribute.Name, new ItemAttribute(additionalAttribute.ID, additionalAttribute.MinValue));
-					}
+					itemAttribute.value += additionalAttribute.MinValue;
+				}
+				else
+				{
+					attributes.Add(additionalAttribute.Name, new ItemAttribute(additionalAttribute.ID, additionalAttribute.MinValue));
 				}
 			}
 		}

@@ -6,6 +6,7 @@ using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
 using System.Collections.Generic;
 using System.Linq;
+using System.Diagnostics;
 
 namespace FishMMO.Server
 {
@@ -17,7 +18,8 @@ namespace FishMMO.Server
 		public WorldSceneDetailsCache WorldSceneDetailsCache;
 		public int MaxCharacters = 8;
 		public List<AbilityTemplate> StartingAbilities = new List<AbilityTemplate>();
-		public List<BaseItemTemplate> StartingItems = new List<BaseItemTemplate>();
+		public List<BaseItemTemplate> StartingInventoryItems = new List<BaseItemTemplate>();
+		public List<EquippableItemTemplate> StartingEquipment = new List<EquippableItemTemplate>();
 
 		public override void InitializeOnce()
 		{
@@ -156,20 +158,24 @@ namespace FishMMO.Server
 						dbContext.Characters.Add(newCharacter);
 						dbContext.SaveChanges();
 
-						// Add character attributes
-						if (raceTemplate.InitialAttributes != null)
+						Dictionary<int, CharacterAttributeEntity> initialAttributes = new Dictionary<int, CharacterAttributeEntity>();
+
+						// Create the initial character attributes set
+						if (raceTemplate.InitialAttributes != null &&
+							raceTemplate.InitialAttributes.Attributes.Count > 0)
 						{
 							foreach (CharacterAttributeTemplate template in raceTemplate.InitialAttributes.Attributes)
 							{
-								dbContext.CharacterAttributes.Add(new CharacterAttributeEntity()
+								initialAttributes.Add(template.ID, new CharacterAttributeEntity()
 								{
 									CharacterID = newCharacter.ID,
 									TemplateID = template.ID,
 									Value = template.InitialValue,
 									CurrentValue = template.IsResourceAttribute ? template.InitialValue : 0.0f,
 								});
+
+								UnityEngine.Debug.Log($"{template.Name} : Initial {template.InitialValue}");
 							}
-							dbContext.SaveChanges();
 						}
 
 						// Add character factions
@@ -221,11 +227,12 @@ namespace FishMMO.Server
 							dbContext.SaveChanges();
 						}
 
-						if (StartingItems != null)
+						// Add inventory items
+						if (StartingInventoryItems != null)
 						{
-							for (int i = 0; i < StartingItems.Count; ++i)
+							for (int i = 0; i < StartingInventoryItems.Count; ++i)
 							{
-								BaseItemTemplate itemTemplate = StartingItems[i];
+								BaseItemTemplate itemTemplate = StartingInventoryItems[i];
 								var dbItem = new CharacterInventoryEntity()
 								{
 									CharacterID = newCharacter.ID,
@@ -235,6 +242,51 @@ namespace FishMMO.Server
 									Amount = 1,
 								};
 								dbContext.CharacterInventoryItems.Add(dbItem);
+							}
+							dbContext.SaveChanges();
+						}
+
+						// Add equipped items
+						if (StartingEquipment != null)
+						{
+							for (int i = 0; i < StartingEquipment.Count; ++i)
+							{
+								EquippableItemTemplate itemTemplate = StartingEquipment[i];
+
+								// Generate the item attributes so we can add them to the initial character attributes
+								ItemGenerator itemGenerator = new ItemGenerator();
+								itemGenerator.Generate(1, itemTemplate);
+
+								foreach (ItemAttribute itemAttribute in itemGenerator.Attributes.Values)
+								{
+									if (initialAttributes.TryGetValue(itemAttribute.Template.CharacterAttribute.ID, out CharacterAttributeEntity attributeEntity))
+									{
+										UnityEngine.Debug.Log($"{itemTemplate.Name} - {itemAttribute.Template.CharacterAttribute.Name} adding {itemAttribute.value}");
+										attributeEntity.Value += itemAttribute.value;
+									}
+								}
+
+								// Add the equipped item to the database
+								var dbItem = new CharacterEquipmentEntity()
+								{
+									CharacterID = newCharacter.ID,
+									TemplateID = itemTemplate.ID,
+									Slot = (int)itemTemplate.Slot,
+									Seed = itemGenerator.Seed,
+									Amount = 0,
+								};
+								dbContext.CharacterEquippedItems.Add(dbItem);
+							}
+							dbContext.SaveChanges();
+						}
+
+						// Save the initial character attributes to the database
+						if (initialAttributes != null &&
+							initialAttributes.Count > 0)
+						{
+							foreach (KeyValuePair<int, CharacterAttributeEntity> pair in initialAttributes)
+							{
+								dbContext.CharacterAttributes.Add(pair.Value);
 							}
 							dbContext.SaveChanges();
 						}

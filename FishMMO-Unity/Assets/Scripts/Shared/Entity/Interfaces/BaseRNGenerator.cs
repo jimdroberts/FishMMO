@@ -25,6 +25,6 @@
 			Generate(seed);
 		}
 
-		public abstract void Generate(int seed);
+		public abstract void Generate(int seed, BaseItemTemplate template = null);
 	}
 }

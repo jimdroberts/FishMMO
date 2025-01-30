@@ -13,15 +13,16 @@ MonoBehaviour:
   m_Name: Test Gloves
   m_EditorClassIdentifier: 
   IsIdentifiable: 0
-  Generate: 0
+  Generate: 1
   MaxStackSize: 1
   Price: 0
   IconPools: 
   icon: {fileID: 21300000, guid: 66305a19e3614694f868c75a982e6b68, type: 3}
   Mesh: {fileID: 0}
+  Attributes: []
   Slot: 3
   MaxItemAttributes: 0
-  AttributeDatabases: []
+  RandomAttributeDatabases: []
   ModelSeed: 0
   ModelPools: 
   ArmorBonus: {fileID: 11400000, guid: cb16e96639b06ca4d9f2ed6c038bc1a9, type: 2}
