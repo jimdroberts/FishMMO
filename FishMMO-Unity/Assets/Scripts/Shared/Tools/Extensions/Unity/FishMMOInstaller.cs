@@ -103,10 +103,13 @@ namespace FishMMO.Shared
 
 				process.Start();
 
-				await process.WaitForExitAsync(); // Use asynchronous wait
+				var outputTask = process.StandardOutput.ReadToEndAsync();
+				var errorTask = process.StandardError.ReadToEndAsync();
 
-				string output = await process.StandardOutput.ReadToEndAsync();
-				string error = await process.StandardError.ReadToEndAsync();
+				await Task.WhenAll(outputTask, errorTask);
+
+				string output = outputTask.Result;
+				string error = errorTask.Result;
 
 				if (processResult != null)
 				{
@@ -888,8 +891,8 @@ namespace FishMMO.Shared
 		#region Database
 		private async Task<bool> InstallPostgreSQLWindows(AppSettings appSettings)
 		{
-			string superUsername = PromptForInput("Enter PostgreSQL Superuser Username: ");
-			string superPassword = PromptForPassword("Enter PostgreSQL Superuser Password: ");
+			string superUsername = "postgres";//PromptForInput("Enter PostgreSQL Superuser Username: ");
+			string superPassword = PromptForPassword("Enter new PostgreSQL Superuser Password (Username is default to \"postgres\"): ");
 
 			if (!PromptForYesNo("Install PostgreSQL?"))
 			{
@@ -1013,7 +1016,7 @@ namespace FishMMO.Shared
 					if (PromptForYesNo("Update PostgreSQL Superuser Password?"))
 					{
 						string superUsername = "postgres";
-						string superPassword = PromptForPassword("Enter new PostgreSQL Superuser Password: ");
+						string superPassword = PromptForPassword("Enter new PostgreSQL Superuser Password (Username is default to \"postgres\"): ");
 
 						string updateUserCommand = $"ALTER USER {superUsername} WITH PASSWORD '{superPassword}';";
 
@@ -1130,17 +1133,17 @@ namespace FishMMO.Shared
 				bool skip = false;
 				while (!skip)
 				{
-					Console.WriteLine("Press a key (0-4):");
-					Console.WriteLine($"1 : Install Docker Database");
-					Console.WriteLine($"2 : Install PostgreSQL");
-					Console.WriteLine($"3 : Install FishMMO Database");
-					Console.WriteLine($"4 : Return to Main Menu");
+					Console.WriteLine("Press a key (0-3):");
+					//Console.WriteLine($"1 : Install Docker Database");
+					Console.WriteLine($"1 : Install PostgreSQL");
+					Console.WriteLine($"2 : Install FishMMO Database");
+					Console.WriteLine($"3 : Return to Main Menu");
 					Console.WriteLine($"0 : Quit");
 					ConsoleKeyInfo key = Console.ReadKey(true); // Read key and don't show it in the console
 
 					switch (key.Key)
 					{
-						case ConsoleKey.D1:
+						/*case ConsoleKey.D1:
 							if (!await InstallDocker())
 							{
 								Log("Failed to install Docker.");
@@ -1160,8 +1163,8 @@ namespace FishMMO.Shared
 							Log(output);
 
 							skip = true;
-							break;
-						case ConsoleKey.D2:
+							break;*/
+						case ConsoleKey.D1:
 							if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
 							{
 								if (!await InstallPostgreSQLWindows(appSettings))
@@ -1178,8 +1181,8 @@ namespace FishMMO.Shared
 								}
 							}
 							break;
-						case ConsoleKey.D3:
-							string superUsername = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? PromptForInput("Enter PostgreSQL Superuser Username: ") : "postgres";
+						case ConsoleKey.D2:
+							string superUsername = "postgres";//RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? PromptForInput("Enter PostgreSQL Superuser Username: ") : "postgres";
 							string superPassword = PromptForPassword("Enter PostgreSQL Superuser Password: ");
 
 							if (!await InstallFishMMODatabase(superUsername, superPassword, appSettings))
@@ -1202,7 +1205,7 @@ namespace FishMMO.Shared
 								}
 							}
 							break;
-						case ConsoleKey.D4:
+						case ConsoleKey.D3:
 							skip = true;
 							break;
 						case ConsoleKey.D0:
