@@ -9,11 +9,28 @@ from aiohttp import web
 import asyncio
 import asyncpg
 
-# Configure logging
-logging.basicConfig(level=logging.DEBUG,
-		    format='%(asctime)s - %(levelname)s - %(message)s',
-		    filename='ipfetch_server.log',  # File to which log messages will be written
-		    filemode='w')  # Mode to open the file: 'a' for append, 'w' for overwrite)
+# Create a logger instance
+logger = logging.getLogger()  # Root logger
+
+# Create a file handler to log to a file
+file_handler = logging.FileHandler('ipfetch_server.log', mode='w')
+file_handler.setLevel(logging.DEBUG)  # Write all debug and above level logs to the file
+
+# Create a stream handler to log to the console
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)  # Adjust this to control what is shown on the console
+
+# Create a formatter that will be used by both handlers
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+file_handler.setFormatter(formatter)
+console_handler.setFormatter(formatter)
+
+# Add both handlers to the logger
+logger.addHandler(file_handler)
+logger.addHandler(console_handler)
+
+# Set the logging level for the root logger
+logger.setLevel(logging.DEBUG)  # You can adjust the root level to control what gets logged globally
 
 class RequestHandler:
 
@@ -138,8 +155,8 @@ class RequestHandler:
             logging.error(f"Error connecting to database: {e}")
             return None
 
-async def run_server():
-    # Ask the user for IP and Port
+def ask_for_ip_and_port():
+    """Ask the user for IP address and port if the configuration file fails."""
     external_ip = input("Enter the external IP address to bind to (leave blank for default): ").strip()
     if not external_ip:
         external_ip = ''  # This will bind to all available interfaces (including external)
@@ -147,6 +164,37 @@ async def run_server():
     port = input("Enter the port you would like to bind to (leave blank for 8080): ").strip()
     if not port:
         port = 8080
+    else:
+        port = int(port)  # Convert the port to an integer
+
+    return external_ip, port
+
+async def run_server():
+    # Try to load configuration from config.txt
+    try:
+        config = {}
+        with open('ipfetchserver.cfg', 'r') as config_file:
+            for line in config_file:
+                # Split the line at ':' and strip extra spaces
+                if ':' in line:
+                    key, value = line.split(':', 1)
+                    config[key.strip()] = value.strip()
+
+    except (FileNotFoundError, Exception) as e:
+        # If an error occurs (file not found or other exceptions), log it
+        logging.error(f"Error reading configuration file: {e}")
+
+        # Call the function to ask for user input if the configuration fails
+        external_ip, port = ask_for_ip_and_port()
+
+    else:
+        # If the configuration file is read successfully, use values from the config
+        external_ip = config.get('Address', '')
+        try:
+            port = int(config.get('Port', 8080))
+        except ValueError:
+            logging.error("Invalid port value in configuration.")
+            return
 
     # Create an aiohttp.web.Application instance
     app = aiohttp.web.Application()

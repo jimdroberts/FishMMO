@@ -17,11 +17,28 @@ PATCHES_DIR = './patches/'
 
 LATEST_VERSION = None
 
-# Configure logging
-logging.basicConfig(level=logging.DEBUG,
-		    format='%(asctime)s - %(levelname)s - %(message)s',
-		    filename='patch_server.log',  # File to which log messages will be written
-		    filemode='w')  # Mode to open the file: 'a' for append, 'w' for overwrite
+# Create a logger instance
+logger = logging.getLogger()  # Root logger
+
+# Create a file handler to log to a file
+file_handler = logging.FileHandler('patch_server.log', mode='w')
+file_handler.setLevel(logging.DEBUG)  # Write all debug and above level logs to the file
+
+# Create a stream handler to log to the console
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)  # Adjust this to control what is shown on the console
+
+# Create a formatter that will be used by both handlers
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+file_handler.setFormatter(formatter)
+console_handler.setFormatter(formatter)
+
+# Add both handlers to the logger
+logger.addHandler(file_handler)
+logger.addHandler(console_handler)
+
+# Set the logging level for the root logger
+logger.setLevel(logging.DEBUG)  # You can adjust the root level to control what gets logged globally
 
 def get_external_ip():
     try:
@@ -157,25 +174,54 @@ async def periodic_database_update(external_ip, port, interval):
             logging.error(f"Error during periodic update at {datetime.now()}: {e}", exc_info=True)
         
         await asyncio.sleep(interval)
-        
+
+def ask_for_ip_and_port():
+    """Ask the user for IP address and port if the configuration file fails."""
+    external_ip = input("Enter the external IP address to bind to (leave blank for default): ").strip()
+    if not external_ip:
+        external_ip = ''  # This will bind to all available interfaces (including external)
+
+    port = input("Enter the port you would like to bind to (leave blank for 8000): ").strip()
+    if not port:
+        port = 8000
+    else:
+        port = int(port)  # Convert the port to an integer
+
+    return external_ip, port
+
 async def run_server():
-    config_file_path = input("Enter the path to the latest configuration file: ").strip()
+    config_file_path = input("Enter the path to the latest Client Configuration.cfg file: ").strip()
     read_configuration_file_version(config_file_path)
     if LATEST_VERSION:
         print(f"Version: {LATEST_VERSION}")
     else:
         print("Version not found in the configuration file.")
 
-    # Ask the user for IP and Port
-    interface_address = input("Enter the interface address to bind to (leave blank for default): ").strip()
-    if not interface_address:
-        interface_address = ''  # This will bind to all available interfaces (including external)
+    # Try to load configuration from config.txt
+    try:
+        config = {}
+        with open('patchserver.cfg', 'r') as config_file:
+            for line in config_file:
+                # Split the line at ':' and strip extra spaces
+                if ':' in line:
+                    key, value = line.split(':', 1)
+                    config[key.strip()] = value.strip()
 
-    external_ip = get_external_ip()
+    except (FileNotFoundError, Exception) as e:
+        # If an error occurs (file not found or other exceptions), log it
+        logging.error(f"Error reading configuration file: {e}")
 
-    port = input("Enter the port you would like to bind to (leave blank for 8000): ").strip()
-    if not port:
-        port = 8000
+        # Call the function to ask for user input if the configuration fails
+        external_ip, port = ask_for_ip_and_port()
+
+    else:
+        # If the configuration file is read successfully, use values from the config
+        external_ip = config.get('Address', '')
+        try:
+            port = int(config.get('Port', 8000))
+        except ValueError:
+            logging.error("Invalid port value in configuration.")
+            return
 
     # Get the current working directory
     cwd = os.path.dirname(__file__)
