@@ -107,6 +107,7 @@ namespace FishMMO.Client
 			AddKey("Guild", KeyCode.G);
 			AddKey("Party", KeyCode.P);
 			AddKey("Friends", KeyCode.H);
+			AddKey("Minimap", KeyCode.M);
 			AddKey("Menu", KeyCode.F1);
 			AddKey("ToggleFirstPerson", KeyCode.F9);
 			AddKey("Cancel", KeyCode.Tab);

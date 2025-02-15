@@ -49,10 +49,6 @@ class RequestHandler:
     async def handle_patch_servers(self, request):
         conn = None
         try:
-            conn = await self.connect_to_database()
-            if conn is None:
-                return aiohttp.web.Response(status=500, text="Failed to connect to the database")
-
             current_time = datetime.now()
             cache_expiration = timedelta(seconds=self.CACHE_TIMEOUT)
             
@@ -60,6 +56,10 @@ class RequestHandler:
                 logging.info("Cache hit for patch servers. Returning cached data.")
                 patch_servers = self.cache['patch_servers']
             else:
+                conn = await self.connect_to_database()
+                if conn is None:
+                    return aiohttp.web.Response(status=500, text="Failed to connect to the database.")
+
                 cutoff_time = current_time - timedelta(minutes=5)
 
                 logging.info("Cache miss for patch servers. Fetching data from the database.")
@@ -99,10 +99,6 @@ class RequestHandler:
     async def handle_login_servers(self, request):
         conn = None
         try:
-            conn = await self.connect_to_database()
-            if conn is None:
-                return aiohttp.web.Response(status=500, text="Failed to connect to the database")
-
             current_time = datetime.now()
             cache_expiration = timedelta(seconds=self.CACHE_TIMEOUT)
             
@@ -111,6 +107,10 @@ class RequestHandler:
                 login_servers = self.cache['login_servers']
             else:
                 logging.info("Cache miss for login servers. Fetching data from the database.")
+                conn = await self.connect_to_database()
+                if conn is None:
+                    return aiohttp.web.Response(status=500, text="Failed to connect to the database.")
+                
                 async with conn.transaction():
                     login_servers = await conn.fetch("SELECT address, port FROM fish_mmo_postgresql.login_servers;")
                 logging.info("Query executed successfully. Fetched login server data from the database.")

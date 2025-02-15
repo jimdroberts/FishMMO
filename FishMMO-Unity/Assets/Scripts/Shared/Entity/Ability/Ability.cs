@@ -50,12 +50,12 @@ namespace FishMMO.Shared
 			Name = Template.Name;
 			CachedTooltip = null;
 
-			InternalAddTemplateModifiers(Template);
-
 			if (AbilityEvents == null)
 			{
 				AbilityEvents = new Dictionary<int, AbilityEvent>();
 			}
+
+			InternalAddTemplateModifiers(Template);
 
 			if (abilityEvents != null)
 			{
@@ -176,7 +176,7 @@ namespace FishMMO.Shared
 
 		public bool TryGetAbilityEvent<T>(int templateID, out T modifier) where T : AbilityEvent
 		{
-			if (AbilityEvents.TryGetValue(templateID, out AbilityEvent result))
+			if (AbilityEvents != null && AbilityEvents.TryGetValue(templateID, out AbilityEvent result))
 			{
 				if ((modifier = result as T) != null)
 				{
@@ -190,11 +190,16 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public bool HasAbilityEvent(int templateID)
 		{
-			return AbilityEvents.ContainsKey(templateID);
+			return AbilityEvents?.ContainsKey(templateID) ?? false;
 		}
 
 		public void AddAbilityEvent(AbilityEvent abilityEvent)
 		{
+			if (AbilityEvents == null)
+			{
+				AbilityEvents = new Dictionary<int, AbilityEvent>();
+			}
+
 			if (!AbilityEvents.ContainsKey(abilityEvent.ID))
 			{
 				CachedTooltip = null;
@@ -280,6 +285,11 @@ namespace FishMMO.Shared
 
 		public void RemoveAbilityEvent(AbilityEvent abilityEvent)
 		{
+			if (AbilityEvents == null)
+			{
+				return;
+			}
+
 			if (AbilityEvents.ContainsKey(abilityEvent.ID))
 			{
 				CachedTooltip = null;
@@ -433,7 +443,10 @@ namespace FishMMO.Shared
 				return CachedTooltip;
 			}
 
-			CachedTooltip = Template.Tooltip(new List<ITooltip>(AbilityEvents.Values));
+			if (AbilityEvents != null)
+			{
+				CachedTooltip = Template.Tooltip(new List<ITooltip>(AbilityEvents.Values));
+			}
 
 			if (TypeOverride != null)
 			{

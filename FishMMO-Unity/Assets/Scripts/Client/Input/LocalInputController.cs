@@ -61,7 +61,8 @@ namespace FishMMO.Client
 			UIManager.Show("UIHotkeyBar");
 			UIManager.Show("UIChat");
 			UIManager.Show("UIBuff");
-			UIManager.Show("UIDebufF");
+			UIManager.Show("UIDebuff");
+			UIManager.Show("UIMinimap");
 		}
 
 		private void OnDisable()
@@ -73,6 +74,7 @@ namespace FishMMO.Client
 			UIManager.Hide("UIChat");
 			UIManager.Hide("UIBuff");
 			UIManager.Hide("UIDebuff");
+			UIManager.Hide("UIMinimap");
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -224,6 +226,11 @@ namespace FishMMO.Client
 			if (InputManager.GetKeyDown("Factions"))
 			{
 				UIManager.ToggleVisibility("UIFactions");
+			}
+
+			if (InputManager.GetKeyDown("Minimap"))
+			{
+				UIManager.ToggleVisibility("UIMinimap");
 			}
 
 			if (InputManager.GetKeyDown("Menu"))
