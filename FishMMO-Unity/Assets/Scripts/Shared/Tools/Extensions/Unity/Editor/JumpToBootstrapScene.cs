@@ -20,15 +20,15 @@ namespace FishMMO.Shared
 			}
 			else
 			{
-				Debug.LogError("Scene asset 'ClientBootstrap' not found at path: " + scenePath);
+				Debug.LogError("Scene asset 'Client Bootstrap' not found at path: " + scenePath);
 			}
 		}
 
-		[MenuItem("FishMMO/QuickStart/Login Bootstrap", priority = -9)]
+		[MenuItem("FishMMO/QuickStart/Login Server Bootstrap", priority = -9)]
 		public static void GoToLoginBootstrapScene()
 		{
 			// Specify the path to the scene asset
-			string scenePath = Constants.Configuration.BootstrapScenePath + "LoginBootstrap.unity";
+			string scenePath = Constants.Configuration.BootstrapScenePath + "LoginServer.unity";
 
 			// Check if the scene exists at the specified path
 			if (AssetDatabase.LoadAssetAtPath<SceneAsset>(scenePath) != null)
@@ -38,15 +38,15 @@ namespace FishMMO.Shared
 			}
 			else
 			{
-				Debug.LogError("Scene asset 'LoginBootstrap' not found at path: " + scenePath);
+				Debug.LogError("Scene asset 'Login Server Bootstrap' not found at path: " + scenePath);
 			}
 		}
 
-		[MenuItem("FishMMO/QuickStart/World Bootstrap", priority = -8)]
+		[MenuItem("FishMMO/QuickStart/World Server Bootstrap", priority = -8)]
 		public static void GoToWorldBootstrapScene()
 		{
 			// Specify the path to the scene asset
-			string scenePath = Constants.Configuration.BootstrapScenePath + "WorldBootstrap.unity";
+			string scenePath = Constants.Configuration.BootstrapScenePath + "WorldServer.unity";
 
 			// Check if the scene exists at the specified path
 			if (AssetDatabase.LoadAssetAtPath<SceneAsset>(scenePath) != null)
@@ -56,15 +56,15 @@ namespace FishMMO.Shared
 			}
 			else
 			{
-				Debug.LogError("Scene asset 'WorldBootstrap' not found at path: " + scenePath);
+				Debug.LogError("Scene asset 'World Server Bootstrap' not found at path: " + scenePath);
 			}
 		}
 
-		[MenuItem("FishMMO/QuickStart/Scene Bootstrap", priority = -7)]
+		[MenuItem("FishMMO/QuickStart/Scene Server Bootstrap", priority = -7)]
 		public static void GoToSceneBootstrapScene()
 		{
 			// Specify the path to the scene asset
-			string scenePath = Constants.Configuration.BootstrapScenePath + "SceneBootstrap.unity";
+			string scenePath = Constants.Configuration.BootstrapScenePath + "SceneServer.unity";
 
 			// Check if the scene exists at the specified path
 			if (AssetDatabase.LoadAssetAtPath<SceneAsset>(scenePath) != null)
@@ -74,7 +74,7 @@ namespace FishMMO.Shared
 			}
 			else
 			{
-				Debug.LogError("Scene asset 'SceneBootstrap' not found at path: " + scenePath);
+				Debug.LogError("Scene asset 'Scene Server Bootstrap' not found at path: " + scenePath);
 			}
 		}
 	}
