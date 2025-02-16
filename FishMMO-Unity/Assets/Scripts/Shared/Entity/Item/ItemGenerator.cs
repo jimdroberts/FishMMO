@@ -50,14 +50,15 @@ namespace FishMMO.Shared
 
 		public override void Generate(int seed, BaseItemTemplate template = null)
 		{
+			this.seed = seed;
+
 			if (item == null && template == null)
 			{
 				throw new UnityException("Missing item template during Generation!");
 			}
 
 			template ??= item?.Template; // Use null-coalescing operator for cleaner assignment
-
-			this.seed = seed;
+			
 			System.Random random = new System.Random(seed);
 
 			if (random != null && attributes != null)

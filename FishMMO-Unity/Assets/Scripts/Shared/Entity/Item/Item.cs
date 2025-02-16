@@ -88,14 +88,13 @@ namespace FishMMO.Shared
 
 			// ensure Item Generator is created if the item can be generated
 			if (Generator == null &&
-				Template.Generate &&
-				ID != 0)
+				Template.Generate)
 			{
 				initializeGenerator = true;
 				Generator = new ItemGenerator();
 
 				// get the items seed if none is provided
-				if (seed == 0)
+				if (seed == 0 && ID != 0)
 				{
 					var longBytes = BitConverter.GetBytes(ID);
 
