@@ -239,8 +239,8 @@ async def run_server():
     runner = aiohttp.web.AppRunner(app)
 
     await runner.setup()
-    site = aiohttp.web.TCPSite(runner, interface_address, port, ssl_context=ssl_context)
-    logging.info(f"Starting HTTP server on {interface_address}:{port}")
+    site = aiohttp.web.TCPSite(runner, external_ip, port, ssl_context=ssl_context)
+    logging.info(f"Starting HTTP server on {external_ip}:{port}")
     await site.start()
 
     # Start the periodic database update task
