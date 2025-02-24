@@ -9,6 +9,10 @@ namespace FishMMO.Client
 		
 		public override void OnStarting()
 		{
+			if (MinimapCamera == null)
+			{
+				return;
+			}
 			MinimapCamera.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
 		}
 
@@ -35,6 +39,10 @@ namespace FishMMO.Client
 		void LateUpdate()
 		{
 #if !UNITY_SERVER
+			if (Character == null)
+			{
+				return;
+			}
 			Vector3 newPosition = Character.MeshRoot.position;
 			newPosition.y = 1000.0f;
 

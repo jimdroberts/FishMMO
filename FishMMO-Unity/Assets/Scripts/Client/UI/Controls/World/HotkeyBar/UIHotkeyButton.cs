@@ -145,7 +145,8 @@ namespace FishMMO.Client
 					case ReferenceButtonType.Bank:
 						break;
 					case ReferenceButtonType.Ability:
-						if (Character.TryGet(out IAbilityController abilityController))
+						if (!UIManager.ControlHasFocus() &&
+							Character.TryGet(out IAbilityController abilityController))
 						{
 							abilityController.Activate(ReferenceID, InputManager.GetKeyCode(KeyMap));
 						}

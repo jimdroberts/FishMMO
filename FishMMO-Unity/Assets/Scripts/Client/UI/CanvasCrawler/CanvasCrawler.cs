@@ -46,7 +46,7 @@ namespace FishMMO.Client
 
 			if (Configuration == null)
 			{
-				Configuration = new Configuration(Client.GetWorkingDirectory());
+				Configuration = new Configuration(Constants.GetWorkingDirectory());
 				if (!Configuration.Load("UIConfiguration" + Configuration.EXTENSION))
 				{
 					// if we failed to load the file.. save a new one

@@ -1,11 +1,32 @@
 ﻿using UnityEngine;
 using System.IO;
+using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 
 namespace FishMMO.Shared
 {
 	public static class Constants
 	{
+		/// <summary>
+		/// IPv4 Regex, can we get IPv6 support???
+		/// </summary>
+		public static bool IsAddressValid(string address)
+		{
+			const string ValidIpAddressRegex = "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$";
+			Match match = Regex.Match(address, ValidIpAddressRegex);
+			return match.Success;
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static string GetWorkingDirectory()
+		{
+#if UNITY_EDITOR
+			return Directory.GetParent(Directory.GetParent(Application.dataPath).FullName).FullName;
+#else
+			return AppDomain.CurrentDomain.BaseDirectory;
+#endif
+		}
+
 		public static class Configuration
 		{
 			public static readonly string Version = "1.0";

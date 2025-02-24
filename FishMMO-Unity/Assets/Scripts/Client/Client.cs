@@ -163,7 +163,7 @@ namespace FishMMO.Client
 			// load configuration
 			if (Configuration.GlobalSettings == null)
 			{
-				Configuration.GlobalSettings = new Configuration(Client.GetWorkingDirectory());
+				Configuration.GlobalSettings = new Configuration(Constants.GetWorkingDirectory());
 				if (!Configuration.GlobalSettings.Load(Configuration.DEFAULT_FILENAME + Configuration.EXTENSION))
 				{
 					// if we failed to load the file.. save a new one
@@ -255,16 +255,6 @@ namespace FishMMO.Client
 
 				ForceDisconnect();
 			}
-		}
-
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static string GetWorkingDirectory()
-		{
-#if UNITY_EDITOR
-			return Directory.GetParent(Directory.GetParent(Application.dataPath).FullName).FullName;
-#else
-			return AppDomain.CurrentDomain.BaseDirectory;
-#endif
 		}
 
 		public void OnDestroy()
@@ -460,7 +450,7 @@ namespace FishMMO.Client
 			}
 			if (reconnectsAttempted < ReconnectAttempts)
 			{
-				if (IsAddressValid(lastWorldAddress) && lastWorldPort != 0)
+				if (Constants.IsAddressValid(lastWorldAddress) && lastWorldPort != 0)
 				{
 					++reconnectsAttempted;
 					OnReconnectAttempt?.Invoke(reconnectsAttempted, ReconnectAttempts);
@@ -534,16 +524,6 @@ namespace FishMMO.Client
 			}
 			serverAddress = default;
 			return false;
-		}
-
-		/// <summary>
-		/// IPv4 Regex, can we get IPv6 support???
-		/// </summary>
-		public bool IsAddressValid(string address)
-		{
-			const string ValidIpAddressRegex = "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$";
-			Match match = Regex.Match(address, ValidIpAddressRegex);
-			return match.Success;
 		}
 
 		public IEnumerator GetLoginServerList(Action<string> onFetchFail, Action<List<ServerAddress>> onFetchComplete)

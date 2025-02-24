@@ -98,7 +98,7 @@ namespace FishMMO.Client
 					{
 						CharacterID = friendID,
 					}, Channel.Reliable);
-				}, null);
+				}, () => { });
 			}
 		}
 

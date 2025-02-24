@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using FishMMO.Shared;
+using System.Collections.Generic;
 
 namespace FishMMO.Client
 {
@@ -17,6 +18,10 @@ namespace FishMMO.Client
 		public RectTransform MainPanel = null;
 		[Tooltip("Helper field to check input field focus status in UIManager.")]
 		public TMP_InputField InputField = null;
+		/// <summary>
+		/// Container that stores all InputFields on the UIControl. This is used to tab between Input Fields.
+		/// </summary>
+		public List<TMP_InputField> InputFields = new List<TMP_InputField>();
 		public bool StartOpen = true;
 		public bool IsAlwaysOpen = false;
 		public bool HasFocus = false;
@@ -202,7 +207,10 @@ namespace FishMMO.Client
 		public void SetClient(Client client)
 		{
 			Client = client;
-			Client.OnQuitToLogin += Client_OnQuitToLogin;
+			if (client != null)
+			{
+				Client.OnQuitToLogin += Client_OnQuitToLogin;
+			}
 		}
 
 		/// <summary>
@@ -212,8 +220,13 @@ namespace FishMMO.Client
 
 		private void OnDestroy()
 		{
-			Client.OnQuitToLogin -= Client_OnQuitToLogin;
 			OnDestroying();
+			if (Client != null)
+			{
+				Client.OnQuitToLogin -= Client_OnQuitToLogin;
+			}
+			Client = null;
+
 			if (CloseOnEscape)
 			{
 				UIManager.UnregisterCloseOnEscapeUI(this);

@@ -5,12 +5,6 @@ using FishMMO.Shared;
 using FishMMO.Database.Npgsql.Entities;
 //using UnityEngine;
 
-public enum NamingSystemType : byte
-{
-	CharacterName,
-	GuildName,
-}
-
 namespace FishMMO.Server
 {
 	/// <summary>

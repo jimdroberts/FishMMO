@@ -23,6 +23,16 @@ namespace FishMMO.Client
 		internal static void SetClient(Client client)
 		{
 			_client = client;
+
+			foreach (UIControl control in controls.Values)
+			{
+				control.SetClient(client);
+			}
+
+			foreach (UICharacterControl control in characterControls.Values)
+			{
+				control.SetClient(client);
+			}
 		}
 
 		internal static void SetCharacter(IPlayerCharacter character)

@@ -57,6 +57,7 @@ namespace FishMMO.Client
 
 		private void Awake()
 		{
+			
 			if (HtmlTextLinkHandler != null)
 			{
 				HtmlTextLinkHandler.OnLinkClicked += (link) =>
@@ -71,10 +72,10 @@ namespace FishMMO.Client
 
 			StartCoroutine(FetchHtmlFromURL(HtmlViewURL));
 
-			updaterPath = Path.Combine(Client.GetWorkingDirectory(), Constants.Configuration.UpdaterExecutable);
+			updaterPath = Path.Combine(Constants.GetWorkingDirectory(), Constants.Configuration.UpdaterExecutable);
 
 			// load configuration
-			Configuration.GlobalSettings = new Configuration(Client.GetWorkingDirectory());
+			Configuration.GlobalSettings = new Configuration(Constants.GetWorkingDirectory());
 			if (!Configuration.GlobalSettings.Load(Configuration.DEFAULT_FILENAME + Configuration.EXTENSION))
 			{
 				// if we failed to load the file.. save a new one
@@ -271,7 +272,7 @@ namespace FishMMO.Client
 				request.certificateHandler = new ClientSSLCertificateHandler();
 
 				// Define the file path to save the downloaded patch file
-				string filePath = Path.Combine(Client.GetWorkingDirectory(), "patches", $"{Constants.Configuration.Version}-{latestversion}.patch");
+				string filePath = Path.Combine(Constants.GetWorkingDirectory(), "patches", $"{Constants.Configuration.Version}-{latestversion}.patch");
 
 				// Create the file stream
 				request.downloadHandler = new DownloadHandlerFile(filePath)

@@ -68,7 +68,7 @@ namespace FishMMO.Server
 
 			if (LogToDisk)
 			{
-				logFilePath = Path.Combine(GetWorkingDirectory(), "Logs", serverTypeName + "_DebugLog_" + startTime.ToString("yyyy-MM-dd") + ".txt");
+				logFilePath = Path.Combine(Constants.GetWorkingDirectory(), "Logs", serverTypeName + "_DebugLog_" + startTime.ToString("yyyy-MM-dd") + ".txt");
 
 				Application.logMessageReceived += this.Application_logMessageReceived;
 			}
@@ -87,7 +87,7 @@ namespace FishMMO.Server
 
 			RemoteAddress = remoteAddress;
 
-			string workingDirectory = Server.GetWorkingDirectory();
+			string workingDirectory = Constants.GetWorkingDirectory();
 			Debug.Log("Server: Current working directory[" + workingDirectory + "]");
 
 			// load configuration
@@ -187,16 +187,6 @@ namespace FishMMO.Server
 			{
 				Debug.LogError($"Failed to write to log file: {e.Message}");
 			}
-		}
-
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static string GetWorkingDirectory()
-		{
-#if UNITY_EDITOR
-			return Directory.GetParent(Directory.GetParent(Application.dataPath).FullName).FullName;
-#else
-			return AppDomain.CurrentDomain.BaseDirectory;
-#endif
 		}
 
 		public void OnDestroy()

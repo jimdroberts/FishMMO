@@ -1,5 +1,4 @@
-﻿using FishMMO.Client;
-using FishNet.Connection;
+﻿using FishNet.Connection;
 using FishNet.Object;
 using FishNet.Object.Prediction;
 using FishNet.Serializing;
@@ -604,11 +603,6 @@ namespace FishMMO.Shared
 
 		public void Activate(long referenceID, KeyCode heldKey)
 		{
-			if (UIManager.ControlHasFocus())
-			{
-				return;
-			}
-
 			if (!CanActivate(referenceID, out Ability validatedAbility))
 			{
 				return;
