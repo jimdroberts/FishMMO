@@ -4,7 +4,6 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using FishMMO.Shared;
-using System.Collections.Generic;
 
 namespace FishMMO.Client
 {
@@ -18,10 +17,6 @@ namespace FishMMO.Client
 		public RectTransform MainPanel = null;
 		[Tooltip("Helper field to check input field focus status in UIManager.")]
 		public TMP_InputField InputField = null;
-		/// <summary>
-		/// Container that stores all InputFields on the UIControl. This is used to tab between Input Fields.
-		/// </summary>
-		public List<TMP_InputField> InputFields = new List<TMP_InputField>();
 		public bool StartOpen = true;
 		public bool IsAlwaysOpen = false;
 		public bool HasFocus = false;
@@ -37,6 +32,12 @@ namespace FishMMO.Client
 		private Vector2 startPosition;
 		private Vector2 dragOffset = Vector2.zero;
 		private bool isDragging;
+
+		/// <summary>
+		/// Container that stores a reference to all InputFields on the UIControl. This is used internally to tab between Input Fields.
+		/// </summary>
+		private TMP_InputField[] inputFields;
+		private int currentInputFieldIndex = 0;
 
 		public Action OnLoseFocus;
 
@@ -97,6 +98,16 @@ namespace FishMMO.Client
 				MainPanel = transform as RectTransform;
 			}
 
+			inputFields = MainPanel.GetComponentsInChildren<TMP_InputField>(true);
+			if (inputFields != null && inputFields.Length > 0)
+			{
+				for (int i = 0; i < inputFields.Length; i++)
+				{
+					int index = i;  // Capture the current index in the closure
+					inputFields[i].onSelect.AddListener((string text) => { currentInputFieldIndex = index; });
+				}
+			}
+
 			//AdjustPositionForPivotChange(MainPanel, new Vector2(0.5f, 0.5f));
 			//AdjustPositionForAnchorChange(MainPanel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
 		}
@@ -147,6 +158,41 @@ namespace FishMMO.Client
 			if (!StartOpen)
 			{
 				Hide();
+			}
+		}
+
+		void Update()
+		{
+			if (inputFields != null && inputFields.Length > 0)
+			{
+				if (Input.GetKeyDown(KeyCode.Tab))
+				{
+					CycleInputFields();
+				}
+			}
+		}
+
+		void CycleInputFields()
+		{
+			// Move to the next input field in the array
+			currentInputFieldIndex = (currentInputFieldIndex + 1) % inputFields.Length;
+
+			// Select the new input field
+			SelectInputField(currentInputFieldIndex);
+		}
+
+		void SelectInputField(int index)
+		{
+			if (index < 0 || index >= inputFields.Length || EventSystem.current == null)
+			{
+				return;
+			}
+
+			TMP_InputField selectedField = inputFields[index];
+			if (EventSystem.current.currentSelectedGameObject != selectedField.gameObject)
+			{
+				EventSystem.current.SetSelectedGameObject(selectedField.gameObject);
+				selectedField.OnSelect(null);
 			}
 		}
 
@@ -220,6 +266,16 @@ namespace FishMMO.Client
 
 		private void OnDestroy()
 		{
+			if (inputFields != null && inputFields.Length > 0)
+			{
+				for (int i = 0; i < inputFields.Length; i++)
+				{
+					int index = i;
+					inputFields[i].onSelect.RemoveListener((string text) => { currentInputFieldIndex = index; });
+				}
+			}
+			inputFields = null;
+
 			OnDestroying();
 			if (Client != null)
 			{
