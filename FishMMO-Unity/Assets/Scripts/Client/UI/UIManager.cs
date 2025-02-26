@@ -203,9 +203,7 @@ namespace FishMMO.Client
 		{
 			if (controls.TryGetValue(name, out UIControl result))
 			{
-				if (result.Visible &&
-					result.InputField != null &&
-					result.InputField.isFocused)
+				if (result.Visible && result.IsInputFieldFocused)
 				{
 					return true;
 				}
@@ -222,9 +220,7 @@ namespace FishMMO.Client
 				{
 					continue;
 				}
-				if (control.Visible &&
-					control.InputField != null &&
-					control.InputField.isFocused)
+				if (control.Visible && control.IsInputFieldFocused)
 				{
 					return true;
 				}

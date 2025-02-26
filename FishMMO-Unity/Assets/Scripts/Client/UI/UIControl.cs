@@ -38,6 +38,23 @@ namespace FishMMO.Client
 		/// </summary>
 		private TMP_InputField[] inputFields;
 		private int currentInputFieldIndex = 0;
+		public bool IsInputFieldFocused
+		{
+			get
+			{
+				if (inputFields != null && inputFields.Length > 0)
+				{
+					for (int i = 0; i < inputFields.Length; ++i)
+					{
+						if (inputFields[i].isFocused)
+						{
+							return true;
+						}
+					}
+				}
+				return false;
+			}
+		}
 
 		public Action OnLoseFocus;
 
