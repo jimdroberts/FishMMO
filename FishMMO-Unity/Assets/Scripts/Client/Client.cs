@@ -177,7 +177,7 @@ namespace FishMMO.Client
 					Configuration.GlobalSettings.Set("ShowAchievementCompletion", true);
 					Configuration.GlobalSettings.Set("IPFetchHost", Constants.Configuration.IPFetchHost);
 #if !UNITY_EDITOR
-				Configuration.GlobalSettings.Save();
+					Configuration.GlobalSettings.Save();
 #endif
 				}
 			}
@@ -261,6 +261,10 @@ namespace FishMMO.Client
 		{
 #if UNITY_EDITOR
 			InputManager.MouseMode = true;
+#endif
+
+#if !UNITY_EDITOR
+			Configuration.GlobalSettings.Save();
 #endif
 
 #if !UNITY_SERVER

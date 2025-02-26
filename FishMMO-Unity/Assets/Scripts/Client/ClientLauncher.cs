@@ -411,6 +411,7 @@ namespace FishMMO.Client
 #if UNITY_EDITOR
 			EditorApplication.ExitPlaymode();
 #else
+			Configuration.GlobalSettings.Save();
 			Application.Quit();
 #endif
 		}
