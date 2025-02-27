@@ -16,10 +16,6 @@ namespace FishMMO.Client
 			MinimapCamera.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
 		}
 
-		public override void OnDestroying()
-		{
-		}
-
 		public override void OnPostSetCharacter()
 		{
 			base.OnPostSetCharacter();

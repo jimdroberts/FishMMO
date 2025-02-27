@@ -19,7 +19,7 @@ namespace FishMMO.Client
 		public float RefreshRate = 5.0f;
 		private float nextRefresh = 0.0f;
 
-		public override void OnStarting()
+		public override void OnClientSet()
 		{
 			nextRefresh = RefreshRate;
 
@@ -29,14 +29,16 @@ namespace FishMMO.Client
 			Client.LoginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
 		}
 
-
-		public override void OnDestroying()
+		public override void OnClientUnset()
 		{
 			Client.NetworkManager.ClientManager.UnregisterBroadcast<ServerListBroadcast>(OnClientServerListBroadcastReceived);
 			Client.NetworkManager.ClientManager.UnregisterBroadcast<WorldSceneConnectBroadcast>(OnClientWorldSceneConnectBroadcastReceived);
 
 			Client.LoginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
+		}
 
+		public override void OnDestroying()
+		{
 			DestroyServerList();
 		}
 

@@ -13,14 +13,6 @@ namespace FishMMO.Client
 
 		private Cached3DLabel targetLabel;
 
-		public override void OnStarting()
-		{
-		}
-
-		public override void OnDestroying()
-		{
-		}
-
 		public override void OnPostSetCharacter()
 		{
 			base.OnPostSetCharacter();

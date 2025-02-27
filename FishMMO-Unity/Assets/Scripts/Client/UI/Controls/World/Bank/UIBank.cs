@@ -11,14 +11,18 @@ namespace FishMMO.Client
 		public UIBankButton buttonPrefab;
 		public List<UIBankButton> bankSlots = null;
 
-		public override void OnStarting()
+		public override void OnClientSet()
 		{
 			Client.NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
 		}
 
-		public override void OnDestroying()
+		public override void OnClientUnset()
 		{
 			Client.NetworkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
+		}
+
+		public override void OnDestroying()
+		{
 			DestroySlots();
 		}
 

@@ -68,10 +68,6 @@ namespace FishMMO.Client
 			SetColor(InitialColor);
 		}
 
-		public override void OnDestroying()
-		{
-		}
-
 		public void SetColor(Color color)
 		{
 			Current.color = color;

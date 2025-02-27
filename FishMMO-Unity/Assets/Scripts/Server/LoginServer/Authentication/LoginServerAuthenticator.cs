@@ -32,7 +32,6 @@ namespace FishMMO.Server
 			networkManager.ServerManager.RegisterBroadcast<ClientHandshake>(OnServerClientHandshakeReceived, false);
 			networkManager.ServerManager.RegisterBroadcast<SrpVerifyBroadcast>(OnServerSrpVerifyBroadcastReceived, false);
 			networkManager.ServerManager.RegisterBroadcast<SrpProofBroadcast>(OnServerSrpProofBroadcastReceived, false);
-			networkManager.ServerManager.RegisterBroadcast<SrpSuccess>(OnServerSrpSuccessBroadcastReceived, false);
 		}
 
 		internal void OnServerClientHandshakeReceived(NetworkConnection conn, ClientHandshake msg, Channel channel)
@@ -103,7 +102,7 @@ namespace FishMMO.Server
 			byte[] decryptedRawUsername = CryptoHelper.DecryptAES(encryptionData.SymmetricKey, encryptionData.IV, msg.S);
 			string username = Encoding.UTF8.GetString(decryptedRawUsername);
 
-			// if the database is unavailable
+			// If the database is unavailable
 			if (NpgsqlDbContextFactory == null)
 			{
 				result = ClientAuthenticationResult.ServerFull;
@@ -112,7 +111,7 @@ namespace FishMMO.Server
 			{
 				using var dbContext = NpgsqlDbContextFactory.CreateDbContext();
 
-				// check if any characters are online already
+				// Check if any characters are online already
 				if (CharacterService.TryGetOnline(dbContext, username))
 				{
 					// Add a kick request
@@ -124,15 +123,15 @@ namespace FishMMO.Server
 					byte[] decryptedRawPublicEphemeral = CryptoHelper.DecryptAES(encryptionData.SymmetricKey, encryptionData.IV, msg.PublicEphemeral);
 					string publicEphemeral = Encoding.UTF8.GetString(decryptedRawPublicEphemeral);
 
-					// get account salt and verifier if no one is online
+					// Get account salt and verifier if no one is online
 					result = AccountService.TryLogin(dbContext, username, out string salt, out string verifier, out AccessLevel accessLevel);
 					if (result != ClientAuthenticationResult.Banned &&
 						result == ClientAuthenticationResult.SrpVerify)
 					{
-						// prepare account
+						// Prepare account
 						AccountManager.AddConnectionAccount(conn, username, publicEphemeral, salt, verifier, accessLevel);
 
-						// verify SrpState equals SrpVerify and then send account public data
+						// Verify SrpState equals SrpVerify and then send account public data
 						if (AccountManager.TryUpdateSrpState(conn, SrpState.SrpVerify, SrpState.SrpVerify, (a) =>
 							{
 								//UnityEngine.Debug.Log("SrpVerify");
@@ -181,17 +180,39 @@ namespace FishMMO.Server
 					byte[] decryptedProof = CryptoHelper.DecryptAES(encryptionData.SymmetricKey, encryptionData.IV, msg.Proof);
 					string proof = Encoding.UTF8.GetString(decryptedProof);
 
-					if (a.SrpData.GetProof(proof, out string serverProof))
-					{
-						//UnityEngine.Debug.Log("SrpProof");
-						byte[] encryptedProof = CryptoHelper.EncryptAES(encryptionData.SymmetricKey, encryptionData.IV, Encoding.UTF8.GetBytes(serverProof));
-
-						SrpProofBroadcast proofMsg = new SrpProofBroadcast()
+					// Check for successful validation of the client proof on the server
+					if (a.SrpData.GetProof(proof, out string serverProof) &&
+						!AccountManager.TryUpdateSrpState(conn, SrpState.SrpProof, SrpState.SrpSuccess, (a) =>
 						{
-							Proof = encryptedProof,
-						};
-						Server.Broadcast(conn, proofMsg, false, Channel.Reliable);
-						return true;
+							using var dbContext = NpgsqlDbContextFactory.CreateDbContext();
+
+							// Attempt to complete login authentication and return a result broadcast
+							ClientAuthenticationResult result = TryLogin(dbContext, ClientAuthenticationResult.LoginSuccess, a.SrpData.UserName);
+
+							bool authenticated = result != ClientAuthenticationResult.InvalidUsernameOrPassword &&
+												 result != ClientAuthenticationResult.ServerFull;
+
+							byte[] encryptedProof = CryptoHelper.EncryptAES(encryptionData.SymmetricKey, encryptionData.IV, Encoding.UTF8.GetBytes(serverProof));
+
+							// Tell the connecting client the final result of the authentication
+							SrpSuccessBroadcast resultMsg = new SrpSuccessBroadcast()
+							{
+								Proof = encryptedProof,
+								Result = result,
+							};
+							Server.Broadcast(conn, resultMsg, false, Channel.Reliable);
+
+							//UnityEngine.Debug.Log("Authorized: " + authResult);
+
+							/* Invoke result. This is handled internally to complete the connection authentication or kick client.
+							 * It's important to call this after sending the broadcast so that the broadcast
+							 * makes it out to the client before the kick. */
+							OnAuthentication(conn, authenticated);
+							OnClientAuthenticationResult?.Invoke(conn, authenticated);
+							return true;
+						}))
+					{
+						return false;
 					}
 					return false;
 				}))
@@ -202,45 +223,6 @@ namespace FishMMO.Server
 				};
 				Server.Broadcast(conn, authResult, false, Channel.Unreliable);
 				conn.Disconnect(false);
-			}
-		}
-
-		/// <summary>
-		/// Received on server when a Client sends the SrpSuccess broadcast message.
-		/// </summary>
-		internal void OnServerSrpSuccessBroadcastReceived(NetworkConnection conn, SrpSuccess msg, Channel channel)
-		{
-			/* If client is already authenticated this could be an attack. Connections
-			 * are removed when a client disconnects so there is no reason they should
-			 * already be considered authenticated. */
-			if (conn.IsAuthenticated ||
-				!AccountManager.TryUpdateSrpState(conn, SrpState.SrpProof, SrpState.SrpSuccess, (a) =>
-				{
-					using var dbContext = NpgsqlDbContextFactory.CreateDbContext();
-					// attempt to complete login authentication and return a result broadcast
-					ClientAuthenticationResult result = TryLogin(dbContext, ClientAuthenticationResult.LoginSuccess, a.SrpData.UserName);
-
-					bool authenticated = result != ClientAuthenticationResult.InvalidUsernameOrPassword &&
-										 result != ClientAuthenticationResult.ServerFull;
-
-					// tell the connecting client the result of the authentication
-					ClientAuthResultBroadcast authResult = new ClientAuthResultBroadcast()
-					{
-						Result = result,
-					};
-					Server.Broadcast(conn, authResult, false, Channel.Reliable);
-
-					//UnityEngine.Debug.Log("Authorized: " + authResult);
-
-					/* Invoke result. This is handled internally to complete the connection authentication or kick client.
-					 * It's important to call this after sending the broadcast so that the broadcast
-					 * makes it out to the client before the kick. */
-					OnAuthentication(conn, authenticated);
-					OnClientAuthenticationResult?.Invoke(conn, authenticated);
-					return true;
-				}))
-			{
-				conn.Disconnect(true);
 			}
 		}
 
@@ -257,7 +239,7 @@ namespace FishMMO.Server
 			return ClientAuthenticationResult.LoginSuccess;
 		}
 
-		// remove the connection from the AccountManager
+		// Remove the connection from the AccountManager
 		private void ServerManager_OnRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args)
 		{
 			if (args.ConnectionState == RemoteConnectionState.Stopped)

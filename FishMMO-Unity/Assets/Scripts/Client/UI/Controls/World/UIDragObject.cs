@@ -14,14 +14,6 @@ namespace FishMMO.Client
 		public LayerMask LayerMask;
 		public float DropDistance = 5.0f;
 
-		public override void OnStarting()
-		{
-		}
-
-		public override void OnDestroying()
-		{
-		}
-
 		void Update()
 		{
 			if (Visible)

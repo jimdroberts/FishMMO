@@ -8,14 +8,6 @@ namespace FishMMO.Client
 		public TMP_Text text;
 		public RectTransform background;
 
-		public override void OnStarting()
-		{
-		}
-
-		public override void OnDestroying()
-		{
-		}
-
 		void Update()
 		{
 			if (text != null && background != null)

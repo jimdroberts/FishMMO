@@ -9,14 +9,6 @@ namespace FishMMO.Client
 		public Slider slider;
 		public TMP_Text castText;
 
-		public override void OnStarting()
-		{
-		}
-
-		public override void OnDestroying()
-		{
-		}
-
 		public override void OnPostSetCharacter()
 		{
 			base.OnPostSetCharacter();

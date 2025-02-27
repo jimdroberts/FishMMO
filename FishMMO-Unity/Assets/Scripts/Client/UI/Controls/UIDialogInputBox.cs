@@ -10,12 +10,10 @@ namespace FishMMO.Client
 		private Action<string> onAccept;
 		private Action onCancel;
 
-		public override void OnStarting()
-		{
-		}
-
 		public override void OnDestroying()
 		{
+			onAccept = null;
+			onCancel = null;
 		}
 
 		public void Open(string text, Action<string> onAccept = null, Action onCancel = null)

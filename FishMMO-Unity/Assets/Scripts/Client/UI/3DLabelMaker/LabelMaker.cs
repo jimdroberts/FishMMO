@@ -1,5 +1,4 @@
 ﻿using UnityEngine;
-using System.Collections;
 using System.Collections.Generic;
 
 namespace FishMMO.Client
@@ -28,8 +27,6 @@ namespace FishMMO.Client
 			instance = this;
 
 			gameObject.name = typeof(LabelMaker).Name;
-
-			DontDestroyOnLoad(this.gameObject);
 		}
 
 		public bool Dequeue(out Cached3DLabel label)

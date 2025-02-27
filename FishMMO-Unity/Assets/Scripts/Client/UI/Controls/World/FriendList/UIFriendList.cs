@@ -11,10 +11,6 @@ namespace FishMMO.Client
 		public UIFriend FriendPrefab;
 		public Dictionary<long, UIFriend> Friends = new Dictionary<long, UIFriend>();
 
-		public override void OnStarting()
-		{
-		}
-
 		public override void OnDestroying()
 		{
 			foreach (UIFriend friend in new List<UIFriend>(Friends.Values))

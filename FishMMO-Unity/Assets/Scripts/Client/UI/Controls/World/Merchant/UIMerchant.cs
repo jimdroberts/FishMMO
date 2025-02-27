@@ -25,15 +25,18 @@ namespace FishMMO.Client
 		private int currentTemplateID = 0;
 		private MerchantTabType currentTab = MerchantTabType.Item;
 
-		public override void OnStarting()
+		public override void OnClientSet()
 		{
 			Client.NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
 		}
 
-		public override void OnDestroying()
+		public override void OnClientUnset()
 		{
 			Client.NetworkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
+		}
 
+		public override void OnDestroying()
+		{
 			ClearAllSlots();
 		}
 

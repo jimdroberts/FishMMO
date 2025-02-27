@@ -22,10 +22,6 @@ namespace FishMMO.Client
 			}
 		}
 
-		public override void OnDestroying()
-		{
-		}
-
 		public void Open(string text, Action onAccept = null, Action onCancel = null)
 		{
 			if (Visible)

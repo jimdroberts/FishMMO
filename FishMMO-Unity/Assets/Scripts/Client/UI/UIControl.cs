@@ -104,6 +104,8 @@ namespace FishMMO.Client
 
 		private void Awake()
 		{
+			UIManager.Register(this);
+
 			Transform = transform;
 			MainCanvas = GetComponentInParent<Canvas>();
 			CanvasScaler = GetComponentInParent<CanvasScaler>();
@@ -125,9 +127,20 @@ namespace FishMMO.Client
 				}
 			}
 
+			OnStarting();
+
+			if (!StartOpen)
+			{
+				Hide();
+			}
 			//AdjustPositionForPivotChange(MainPanel, new Vector2(0.5f, 0.5f));
 			//AdjustPositionForAnchorChange(MainPanel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
 		}
+
+		/// <summary>
+		/// Called at the end of the MonoBehaviour Awake function.
+		/// </summary>
+		public virtual void OnStarting() { }
 
 		/* WIP - Pivot change works but Anchor does not.
 		public void AdjustPositionForPivotChange(RectTransform rectTransform, Vector2 newPivot)
@@ -165,18 +178,6 @@ namespace FishMMO.Client
 			Vector3 newPosition = originalPosition - Vector3.Scale(anchorMinDifference, originalSizeDelta) - Vector3.Scale(anchorMaxDifference, originalSizeDelta);
 			rectTransform.localPosition = newPosition;
 		}*/
-
-		private void Start()
-		{
-			UIManager.Register(this);
-
-			OnStarting();
-
-			if (!StartOpen)
-			{
-				Hide();
-			}
-		}
 
 		void Update()
 		{
@@ -273,13 +274,13 @@ namespace FishMMO.Client
 			if (client != null)
 			{
 				Client.OnQuitToLogin += Client_OnQuitToLogin;
+				OnClientSet();
 			}
 		}
 
-		/// <summary>
-		/// Called at the start of the MonoBehaviour Start function.
-		/// </summary>
-		public abstract void OnStarting();
+		public virtual void OnClientSet() { }
+
+		public virtual void OnClientUnset() { }
 
 		private void OnDestroy()
 		{
@@ -296,6 +297,7 @@ namespace FishMMO.Client
 			OnDestroying();
 			if (Client != null)
 			{
+				OnClientUnset();
 				Client.OnQuitToLogin -= Client_OnQuitToLogin;
 			}
 			Client = null;
@@ -307,6 +309,11 @@ namespace FishMMO.Client
 			UIManager.Unregister(this);
 		}
 
+		/// <summary>
+		/// Called at the start of the MonoBehaviour OnDestroy function.
+		/// </summary>
+		public virtual void OnDestroying() { }
+
 		public void UIManager_OnAdd(CircularBuffer<UIControl>.Node node)
 		{
 			CurrentNode = node;
@@ -316,11 +323,6 @@ namespace FishMMO.Client
 		{
 			CurrentNode = null;
 		}
-
-		/// <summary>
-		/// Called at the start of the MonoBehaviour OnDestroy function.
-		/// </summary>
-		public abstract void OnDestroying();
 
 		public void OnPointerEnter(PointerEventData eventData)
 		{

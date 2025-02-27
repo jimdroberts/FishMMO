@@ -163,7 +163,7 @@ namespace FishMMO.Shared
 			Set(name, value.ToString("R", cultureInfo));
 		}
 
-		public bool TryGet<T>(string name, out T result) where T : IConvertible
+		public bool TryGet<T>(string name, out T result, T defaultValue = default(T)) where T : IConvertible
 		{
 			if (settings.TryGetValue(name, out string setting))
 			{
@@ -174,132 +174,137 @@ namespace FishMMO.Shared
 					return true;
 				}
 			}
-			result = default(T);
+			result = defaultValue;
 			return false;
 		}
 
-		public bool TryGetString(string name, out string result)
+		public bool TryGetString(string name, out string result, string defaultValue = default(string))
 		{
-			return settings.TryGetValue(name, out result);
+			if (settings.TryGetValue(name, out result))
+			{
+				return true;
+			}
+			result = defaultValue;
+			return false;
 		}
 
-		public bool TryGetChar(string name, out char result)
+		public bool TryGetChar(string name, out char result, char defaultValue = default(char))
 		{
 			if (settings.TryGetValue(name, out string setting))
 			{
 				return char.TryParse(setting, out result);
 			}
-			result = default(char);
+			result = defaultValue;
 			return false;
 		}
 
-		public bool TryGetByte(string name, out byte result)
+		public bool TryGetByte(string name, out byte result, byte defaultValue = default(byte))
 		{
 			if (settings.TryGetValue(name, out string setting))
 			{
 				return byte.TryParse(setting, out result);
 			}
-			result = default(byte);
+			result = defaultValue;
 			return false;
 		}
 
-		public bool TryGetSByte(string name, out sbyte result)
+		public bool TryGetSByte(string name, out sbyte result, sbyte defaultValue = default(sbyte))
 		{
 			if (settings.TryGetValue(name, out string setting))
 			{
 				return sbyte.TryParse(setting, out result);
 			}
-			result = default(sbyte);
+			result = defaultValue;
 			return false;
 		}
 
-		public bool TryGetShort(string name, out short result)
+		public bool TryGetShort(string name, out short result, short defaultValue = default(short))
 		{
 			if (settings.TryGetValue(name, out string setting))
 			{
 				return short.TryParse(setting, out result);
 			}
-			result = default(short);
+			result = defaultValue;
 			return false;
 		}
 
-		public bool TryGetUShort(string name, out ushort result)
+		public bool TryGetUShort(string name, out ushort result, ushort defaultValue = default(ushort))
 		{
 			if (settings.TryGetValue(name, out string setting))
 			{
 				return ushort.TryParse(setting, out result);
 			}
-			result = default(ushort);
+			result = defaultValue;
 			return false;
 		}
 
-		public bool TryGetInt(string name, out int result)
+		public bool TryGetInt(string name, out int result, int defaultValue = default(int))
 		{
 			if (settings.TryGetValue(name, out string setting))
 			{
 				return int.TryParse(setting, out result);
 			}
-			result = default(int);
+			result = defaultValue;
 			return false;
 		}
 
-		public bool TryGetUInt(string name, out uint result)
+		public bool TryGetUInt(string name, out uint result, uint defaultValue = default(uint))
 		{
 			if (settings.TryGetValue(name, out string setting))
 			{
 				return uint.TryParse(setting, out result);
 			}
-			result = default(uint);
+			result = defaultValue;
 			return false;
 		}
 
-		public bool TryGetLong(string name, out long result)
+		public bool TryGetLong(string name, out long result, long defaultValue = default(long))
 		{
 			if (settings.TryGetValue(name, out string setting))
 			{
 				return long.TryParse(setting, out result);
 			}
-			result = default(long);
+			result = defaultValue;
 			return false;
 		}
 
-		public bool TryGetULong(string name, out ulong result)
+		public bool TryGetULong(string name, out ulong result, ulong defaultValue = default(ulong))
 		{
 			if (settings.TryGetValue(name, out string setting))
 			{
 				return ulong.TryParse(setting, out result);
 			}
-			result = default(ulong);
+			result = defaultValue;
 			return false;
 		}
 
-		public bool TryGetBool(string name, out bool result)
+		public bool TryGetBool(string name, out bool result, bool defaultValue = default(bool))
 		{
 			if (settings.TryGetValue(name, out string setting))
 			{
 				return bool.TryParse(setting, out result);
 			}
-			result = default(bool);
+			result = defaultValue;
 			return false;
 		}
 
-		public bool TryGetFloat(string name, out float result)
+		public bool TryGetFloat(string name, out float result, float defaultValue = default(float))
 		{
 			if (settings.TryGetValue(name, out string setting))
 			{
 				return float.TryParse(setting, out result);
 			}
-			result = default(float);
+			result = defaultValue;
 			return false;
 		}
 
-		public bool TryGetDouble(string name, out double result)
+		public bool TryGetDouble(string name, out double result, double defaultValue = default(double))
 		{
 			if (settings.TryGetValue(name, out string setting))
 			{
 				return double.TryParse(setting, NumberStyles.Any, cultureInfo.NumberFormat, out result);
 			}
-			result = default(double);
+			result = defaultValue;
 			return false;
 		}
 	}

@@ -15,10 +15,6 @@ namespace FishMMO.Client
 		public RectTransform ButtonParent;
 		public UITooltipButton ButtonPrefab;
 
-		public override void OnStarting()
-		{
-		}
-
 		public override void OnDestroying()
 		{
 			ClearSlots();

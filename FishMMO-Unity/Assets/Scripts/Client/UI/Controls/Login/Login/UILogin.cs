@@ -14,18 +14,17 @@ namespace FishMMO.Client
 		public Button signInButton;
 		public TMP_Text handshakeMSG;
 
-		public override void OnStarting()
+		public override void OnClientSet()
 		{
 			Client.NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
 			Client.LoginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
 			Client.OnReconnectFailed += ClientManager_OnReconnectFailed;
 		}
-		public override void OnDestroying()
+		
+		public override void OnClientUnset()
 		{
 			Client.NetworkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
-
 			Client.LoginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
-
 			Client.OnReconnectFailed -= ClientManager_OnReconnectFailed;
 		}
 

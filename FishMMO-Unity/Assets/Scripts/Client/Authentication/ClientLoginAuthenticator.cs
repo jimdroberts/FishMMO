@@ -44,7 +44,7 @@ namespace FishMMO.Client
 			base.NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
 			base.NetworkManager.ClientManager.RegisterBroadcast<ServerHandshake>(OnClientServerHandshakeBroadcastReceived);
 			base.NetworkManager.ClientManager.RegisterBroadcast<SrpVerifyBroadcast>(OnClientSrpVerifyBroadcastReceived);
-			base.NetworkManager.ClientManager.RegisterBroadcast<SrpProofBroadcast>(OnClientSrpProofBroadcastReceived);
+			base.NetworkManager.ClientManager.RegisterBroadcast<SrpSuccessBroadcast>(OnClientSrpSuccessBroadcastReceived);
 			base.NetworkManager.ClientManager.RegisterBroadcast<ClientAuthResultBroadcast>(OnClientAuthResultBroadcastReceived);
 		}
 
@@ -181,7 +181,7 @@ namespace FishMMO.Client
 			//Debug.Log("Srp: " + proof);
 		}
 
-		private void OnClientSrpProofBroadcastReceived(SrpProofBroadcast msg, Channel channel)
+		private void OnClientSrpSuccessBroadcastReceived(SrpSuccessBroadcast msg, Channel channel)
 		{
 			if (SrpData == null)
 			{
@@ -192,9 +192,15 @@ namespace FishMMO.Client
 
 			string proof = Encoding.UTF8.GetString(decryptedProof);
 
+			// Verify the client session
 			if (SrpData.Verify(proof, out string result))
 			{
-				Client.Broadcast(new SrpSuccess(), Channel.Reliable);
+				// Invoke result on the client
+				OnClientAuthenticationResult(msg.Result);
+				if (NetworkManagerExtensions.CanLog(LoggingType.Common))
+				{
+					Debug.Log(msg.Result);
+				}
 			}
 			else
 			{
@@ -208,11 +214,12 @@ namespace FishMMO.Client
 		/// </summary>
 		private void OnClientAuthResultBroadcastReceived(ClientAuthResultBroadcast msg, Channel channel)
 		{
-			// invoke result on the client
+			// Invoke result on the client
 			OnClientAuthenticationResult(msg.Result);
-
 			if (NetworkManagerExtensions.CanLog(LoggingType.Common))
+			{
 				Debug.Log(msg.Result);
+			}
 		}
 	}
 }

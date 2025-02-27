@@ -15,11 +15,14 @@ namespace FishMMO.Client
 		public override void OnStarting()
 		{
 			AddHotkeys(Constants.Configuration.MaximumPlayerHotkeys);
+		}
 
+		public override void OnClientSet()
+		{
 			Client.NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
 		}
 
-		public override void OnDestroying()
+		public override void OnClientUnset()
 		{
 			Client.NetworkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
 		}

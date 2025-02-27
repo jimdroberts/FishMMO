@@ -10,14 +10,6 @@ namespace FishMMO.Client
 		public TMP_Text PetNameLabel;
 		public Slider PetHealth;
 
-		public override void OnStarting()
-		{
-		}
-
-		public override void OnDestroying()
-		{
-		}
-
 		public override void OnPostSetCharacter()
 		{
 			base.OnPostSetCharacter();

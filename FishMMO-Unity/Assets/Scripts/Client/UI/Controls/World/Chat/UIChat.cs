@@ -79,11 +79,14 @@ namespace FishMMO.Client
 				}
 				InstantiateChatMessage(ChatChannel.System, "", newLine, ChannelColors[pair.Key]);
 			}
+		}
 
+		public override void OnClientSet()
+		{
 			Client.NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
 		}
 
-		public override void OnDestroying()
+		public override void OnClientUnset()
 		{
 			Client.NetworkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
 		}

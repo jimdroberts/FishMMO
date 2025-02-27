@@ -19,7 +19,7 @@ namespace FishMMO.Client
 
 		private Color previousColor;
 
-		public override void OnStarting()
+		public override void OnClientSet()
 		{
 			Client.NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
 			Client.NetworkManager.ClientManager.RegisterBroadcast<CharacterListBroadcast>(OnClientCharacterListBroadcastReceived);
@@ -29,8 +29,7 @@ namespace FishMMO.Client
 			Client.LoginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
 		}
 
-
-		public override void OnDestroying()
+		public override void OnClientUnset()
 		{
 			Client.NetworkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
 			Client.NetworkManager.ClientManager.UnregisterBroadcast<CharacterListBroadcast>(OnClientCharacterListBroadcastReceived);
@@ -41,7 +40,10 @@ namespace FishMMO.Client
 			{
 				Client.LoginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
 			}
+		}
 
+		public override void OnDestroying()
+		{
 			DestroyCharacterList();
 		}
 
@@ -162,7 +164,7 @@ namespace FishMMO.Client
 		}
 
 		public void OnClick_SelectCharacter()
-		{	
+		{
 			if (Client.IsConnectionReady() &&
 				selectedCharacter != null &&
 				selectedCharacter.Details != null)

@@ -31,8 +31,10 @@ namespace FishMMO.Shared
 		public byte[] Proof;
 	}
 
-	public struct SrpSuccess : IBroadcast
+	public struct SrpSuccessBroadcast : IBroadcast
 	{
+		public byte[] Proof;
+		public ClientAuthenticationResult Result;
 	}
 
 	public struct ClientAuthResultBroadcast : IBroadcast

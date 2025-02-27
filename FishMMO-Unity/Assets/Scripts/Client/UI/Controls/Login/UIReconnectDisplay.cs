@@ -11,14 +11,14 @@ namespace FishMMO.Client
 		public TMP_Text CancelButtonText;
 		public TMP_Text AttemptCounterText;
 
-		public override void OnStarting()
+		public override void OnClientSet()
 		{
 			Client.OnReconnectAttempt += OnReconnectAttemptsChanged;
 			Client.OnConnectionSuccessful += OnCloseScreen;
 			Client.OnReconnectFailed += OnCloseScreen;
 		}
 
-		public override void OnDestroying()
+		public override void OnClientUnset()
 		{
 			Client.OnReconnectAttempt -= OnReconnectAttemptsChanged;
 			Client.OnConnectionSuccessful -= OnCloseScreen;

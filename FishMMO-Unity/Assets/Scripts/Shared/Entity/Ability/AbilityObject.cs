@@ -81,7 +81,7 @@ namespace FishMMO.Shared
 
 		private static int ApplyHitEvents(Ability ability, ICharacter caster, ICharacter hitCharacter, AbilityObject abilityObject, Collision other = null, int hitCount = 0)
 		{
-			if (ability == null)
+			if (ability == null || ability.HitEvents == null || ability.HitEvents.Count < 1)
 			{
 				return 0;
 			}

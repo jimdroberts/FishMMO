@@ -25,7 +25,7 @@ namespace FishMMO.Server
 			State = SrpState.SrpVerify;
 		}
 
-		public bool GetProof(string proof, out string serverProof)
+		public bool GetProof(string clientProof, out string serverProof)
 		{
 			try
 			{
@@ -34,7 +34,7 @@ namespace FishMMO.Server
 												  Salt,
 												  UserName,
 												  Verifier,
-												  proof);
+												  clientProof);
 				serverProof = Session.Proof;
 				return true;
 			}

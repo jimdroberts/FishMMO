@@ -26,7 +26,7 @@ namespace FishMMO.Client
 
 		private Dictionary<string, HashSet<string>> raceSpawnPositionMap = new Dictionary<string, HashSet<string>>();
 
-		public override void OnStarting()
+		public override void OnClientSet()
 		{
 			// initialize race dropdown
 			if (startRaceDropdown != null &&
@@ -89,7 +89,7 @@ namespace FishMMO.Client
 		}
 
 
-		public override void OnDestroying()
+		public override void OnClientUnset()
 		{
 			Client.NetworkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
 			Client.NetworkManager.ClientManager.UnregisterBroadcast<CharacterCreateResultBroadcast>(OnClientCharacterCreateResultBroadcastReceived);

@@ -20,9 +20,18 @@ namespace FishMMO.Client
 		private long lastInteractableID = 0;
 		private Dictionary<int, UITooltipButton> EventSlots;
 
-		public override void OnStarting()
+		public override void OnClientSet()
 		{
 			Client.NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
+		}
+
+		public override void OnClientUnset()
+		{
+			Client.NetworkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
+		}
+
+		public override void OnStarting()
+		{
 			if (MainEntry != null)
 			{
 				MainEntry.OnLeftClick += MainEntry_OnLeftClick;
@@ -32,14 +41,11 @@ namespace FishMMO.Client
 
 		public override void OnDestroying()
 		{
-			Client.NetworkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
-
 			if (MainEntry != null)
 			{
 				MainEntry.OnLeftClick -= MainEntry_OnLeftClick;
 				MainEntry.OnRightClick -= MainEntry_OnRightClick;
 			}
-
 			ClearSlots();
 		}
 
