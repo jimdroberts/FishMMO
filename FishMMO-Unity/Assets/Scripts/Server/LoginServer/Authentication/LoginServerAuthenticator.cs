@@ -177,12 +177,12 @@ namespace FishMMO.Server
 			if (conn.IsAuthenticated ||
 				!AccountManager.TryUpdateSrpState(conn, SrpState.SrpVerify, SrpState.SrpProof, (a) =>
 				{
-					byte[] decryptedProof = CryptoHelper.DecryptAES(encryptionData.SymmetricKey, encryptionData.IV, msg.Proof);
-					string proof = Encoding.UTF8.GetString(decryptedProof);
+					byte[] decryptedClientProof = CryptoHelper.DecryptAES(encryptionData.SymmetricKey, encryptionData.IV, msg.Proof);
+					string clientProof = Encoding.UTF8.GetString(decryptedClientProof);
 
 					// Check for successful validation of the client proof on the server
-					if (a.SrpData.GetProof(proof, out string serverProof) &&
-						!AccountManager.TryUpdateSrpState(conn, SrpState.SrpProof, SrpState.SrpSuccess, (a) =>
+					if (a.SrpData.GetProof(clientProof, out string serverProof) &&
+						AccountManager.TryUpdateSrpState(conn, SrpState.SrpProof, SrpState.SrpSuccess, (a) =>
 						{
 							using var dbContext = NpgsqlDbContextFactory.CreateDbContext();
 
@@ -192,12 +192,12 @@ namespace FishMMO.Server
 							bool authenticated = result != ClientAuthenticationResult.InvalidUsernameOrPassword &&
 												 result != ClientAuthenticationResult.ServerFull;
 
-							byte[] encryptedProof = CryptoHelper.EncryptAES(encryptionData.SymmetricKey, encryptionData.IV, Encoding.UTF8.GetBytes(serverProof));
+							byte[] encryptedServerProof = CryptoHelper.EncryptAES(encryptionData.SymmetricKey, encryptionData.IV, Encoding.UTF8.GetBytes(serverProof));
 
 							// Tell the connecting client the final result of the authentication
 							SrpSuccessBroadcast resultMsg = new SrpSuccessBroadcast()
 							{
-								Proof = encryptedProof,
+								Proof = encryptedServerProof,
 								Result = result,
 							};
 							Server.Broadcast(conn, resultMsg, false, Channel.Reliable);
@@ -212,7 +212,7 @@ namespace FishMMO.Server
 							return true;
 						}))
 					{
-						return false;
+						return true;
 					}
 					return false;
 				}))

@@ -1,9 +1,7 @@
 ﻿using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
-#if !UNITY_EDITOR
 using System.IO;
-#endif
 using FishMMO.Shared;
 
 namespace FishMMO.Client
@@ -31,7 +29,7 @@ namespace FishMMO.Client
 			Client.NetworkManager.ClientManager.RegisterBroadcast<ReverseNamingBroadcast>(OnClientReverseNamingBroadcastReceived);
 
 #if !UNITY_EDITOR
-			string workingDirectory = Client.GetWorkingDirectory();
+			string workingDirectory = Constants.GetWorkingDirectory();
 			foreach (NamingSystemType type in EnumExtensions.ToArray<NamingSystemType>())
 			{
 				idToName[type] = DictionaryExtensions.ReadFromGZipFile(Path.Combine(workingDirectory, type.ToString() + ".bin"));
@@ -62,7 +60,7 @@ namespace FishMMO.Client
 				return;
 			}
 
-			string workingDirectory = Client.GetWorkingDirectory();
+			string workingDirectory = Constants.GetWorkingDirectory();
 			foreach (KeyValuePair<NamingSystemType, Dictionary<long, string>> pair in idToName)
 			{
 				pair.Value.WriteToGZipFile(Path.Combine(workingDirectory, pair.Key.ToString() + ".bin"));
