@@ -23,6 +23,8 @@ namespace FishMMO.Client
 		[SerializeField]
 		public Image Icon;
 		[SerializeField]
+		public Sprite DefaultIconSprite;
+		[SerializeField]
 		public TMP_Text CooldownText;
 		[SerializeField]
 		public TMP_Text AmountText;
@@ -128,7 +130,7 @@ namespace FishMMO.Client
 		{
 			ReferenceID = NULL_REFERENCE_ID;
 			Type = ReferenceButtonType.None;
-			if (Icon != null) Icon.sprite = null;
+			if (Icon != null) Icon.sprite = DefaultIconSprite;
 			if (CooldownText != null) CooldownText.text = "";
 			if (AmountText != null) AmountText.text = "";
 			ClearTooltip();
