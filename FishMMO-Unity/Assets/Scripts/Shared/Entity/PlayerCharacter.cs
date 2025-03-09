@@ -163,10 +163,12 @@ namespace FishMMO.Shared
 		{
 			TeleporterName = teleporterName;
 
-#if UNITY_SERVER
+			IPlayerCharacter.OnTeleport?.Invoke(this);
+
+/*#if UNITY_SERVER
 			// just disconnect
 			Owner.Disconnect(false);
-#endif
+#endif*/
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]

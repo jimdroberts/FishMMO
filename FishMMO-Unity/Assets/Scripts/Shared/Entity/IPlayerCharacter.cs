@@ -16,6 +16,7 @@ namespace FishMMO.Shared
 		static Action<IPlayerCharacter> OnReadPayload;
 		static Action<IPlayerCharacter> OnStartLocalClient;
 		static Action<IPlayerCharacter> OnStopLocalClient;
+		static Action<IPlayerCharacter> OnTeleport;
 
 		string CharacterName { get; set; }
 		string CharacterNameLower { get; set; }

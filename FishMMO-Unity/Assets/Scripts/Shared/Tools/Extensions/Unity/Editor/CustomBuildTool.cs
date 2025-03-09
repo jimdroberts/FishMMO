@@ -1,24 +1,32 @@
 ﻿// --------- DO NOT FORMAT DOCUMENT ---------
 
 #if UNITY_EDITOR
+using UnityEngine;
+using UnityEngine.AddressableAssets;
 using UnityEditor;
 using UnityEditor.Build;
+using UnityEditor.AddressableAssets;
+using UnityEditor.AddressableAssets.Build;
+using UnityEditor.AddressableAssets.Settings;
+using UnityEditor.AddressableAssets.Settings.GroupSchemas;
+using UnityEditor.Build.Reporting;
+using Debug = UnityEngine.Debug;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Xml;
-using UnityEditor.Build.Reporting;
-using Debug = UnityEngine.Debug;
 using System.Diagnostics;
-using UnityEngine;
 using System.Runtime.InteropServices;
 
 namespace FishMMO.Shared
 {
 	public class CustomBuildTool
 	{
+		private static string[] clientAddressableGroups = new string[] { "ClientOnly" };
+		private static string[] serverAddressableGroups = new string[] { "ServerOnly" };
+
 		public enum CustomBuildType : byte
 		{
 			AllInOne = 0,
@@ -34,14 +42,6 @@ namespace FishMMO.Shared
 		public const string WORLD_SERVER_BUILD_NAME = "World";
 		public const string SCENE_SERVER_BUILD_NAME = "Scene";
 
-		public static readonly string[] ALL_IN_ONE_SERVER_BOOTSTRAP_SCENES = new string[]
-		{
-			Constants.Configuration.BootstrapScenePath + "ServerLauncher.unity",
-			Constants.Configuration.BootstrapScenePath + "LoginServer.unity",
-			Constants.Configuration.BootstrapScenePath + "WorldServer.unity",
-			Constants.Configuration.BootstrapScenePath + "SceneServer.unity",
-		};
-
 		public static readonly string ALL_IN_ONE_SERVER_BAT_SCRIPT = @"@echo off
 start All-In-One.exe LOGIN
 start All-In-One.exe WORLD
@@ -51,40 +51,21 @@ start All-In-One.exe SCENE";
 ./All-In-One.exe WORLD &
 ./All-In-One.exe SCENE";
 
-		public static readonly string[] LOGIN_SERVER_BOOTSTRAP_SCENES = new string[]
-		{
-			Constants.Configuration.BootstrapScenePath + "ServerLauncher.unity",
-			Constants.Configuration.BootstrapScenePath + "LoginServer.unity",
-		};
-
 		public static readonly string LOGIN_SERVER_BAT_SCRIPT = @"@echo off
 start Login.exe LOGIN";
 		public static readonly string LINUX_LOGIN_SERVER_BAT_SCRIPT = @"./Login.exe LOGIN";
-
-		public static readonly string[] WORLD_SERVER_BOOTSTRAP_SCENES = new string[]
-		{
-			Constants.Configuration.BootstrapScenePath + "ServerLauncher.unity",
-			Constants.Configuration.BootstrapScenePath + "WorldServer.unity",
-		};
 
 		public static readonly string WORLD_SERVER_BAT_SCRIPT = @"@echo off
 start World.exe WORLD";
 		public static readonly string LINUX_WORLD_SERVER_BAT_SCRIPT = @"./World.exe WORLD";
 
-		public static readonly string[] SCENE_SERVER_BOOTSTRAP_SCENES = new string[]
-		{
-			Constants.Configuration.BootstrapScenePath + "ServerLauncher.unity",
-			Constants.Configuration.BootstrapScenePath + "SceneServer.unity",
-		};
-
 		public static readonly string SCENE_SERVER_BAT_SCRIPT = @"@echo off
 start Scene.exe SCENE";
 		public static readonly string LINUX_SCENE_SERVER_BAT_SCRIPT = @"./Scene.exe SCENE";
 
-		public static readonly string[] CLIENT_BOOTSTRAP_SCENES = new string[]
+		public static readonly string[] BOOTSTRAP_SCENES = new string[]
 		{
-			Constants.Configuration.ScenePath + "ClientLauncher.unity",
-			Constants.Configuration.BootstrapScenePath + "ClientBootstrap.unity",
+			Constants.Configuration.BootstrapScenePath + "MainBootstrapScene.unity",
 		};
 
 		public static readonly string[] WEBGL_CLIENT_BOOTSTRAP_SCENES = new string[]
@@ -184,7 +165,7 @@ start Scene.exe SCENE";
 			}
 
 			// Ensure all assets are included
-        		AssetDatabase.Refresh();
+			AssetDatabase.Refresh();
 
 			// Get the original active build info
 			BuildTargetGroup originalGroup = EditorUserBuildSettings.selectedBuildTargetGroup;
@@ -225,9 +206,9 @@ start Scene.exe SCENE";
 			EditorUserBuildSettings.standaloneBuildSubtarget = subTarget;
 
 			// Append world scene paths to bootstrap scene array
-			string[] scenes = customBuildType == CustomBuildType.AllInOne ||
+			/*string[] scenes = customBuildType == CustomBuildType.AllInOne ||
 							  customBuildType == CustomBuildType.Scene ||
-							  customBuildType == CustomBuildType.Client ? AppendWorldScenePaths(bootstrapScenes) : bootstrapScenes;
+							  customBuildType == CustomBuildType.Client ? AppendWorldScenePaths(bootstrapScenes) : bootstrapScenes;*/
 
 			string folderName = executableName;
 			if (customBuildType != CustomBuildType.Installer &&
@@ -252,7 +233,7 @@ start Scene.exe SCENE";
 				{
 					locationPathName = Path.Combine(buildPath, executableName + ".exe"),
 					options = buildOptions,
-					scenes = scenes,
+					scenes = bootstrapScenes,
 					subtarget = (int)subTarget,
 					target = buildTarget,
 					targetGroup = targetGroup,
@@ -267,7 +248,7 @@ start Scene.exe SCENE";
 				{
 					Debug.Log($"Build Succeeded: {summary.totalSize} bytes {DateTime.UtcNow}");
 					Debug.Log($"Build Duration: {summary.totalTime}");
-					Debug.Log($"Scenes Included: {string.Join(", ", scenes)}");
+					Debug.Log($"Scenes Included: {string.Join(", ", bootstrapScenes)}");
 					Debug.Log($"Build Target: {buildTarget}");
 					Debug.Log($"Build Subtarget: {subTarget}");
 
@@ -399,7 +380,7 @@ start Scene.exe SCENE";
 			catch (Exception ex)
 			{
 				Debug.LogError($"Exception during build: {ex.Message}");
-            			Debug.LogError($"Stack trace: {ex.StackTrace}");
+				Debug.LogError($"Stack trace: {ex.StackTrace}");
 			}
 
 			// Return IL2CPP settings to original
@@ -532,7 +513,7 @@ start Scene.exe SCENE";
 						FileUtil.ReplaceFile(Path.Combine(configurationPath, "Launch WebGL Client Server.bat"), Path.Combine(webGLBuildPath, "Launch WebGL Client Server.bat"));
 					}
 					break;
-				default:break;
+				default: break;
 			}
 			if (customBuildType != CustomBuildType.Client)
 			{
@@ -633,6 +614,7 @@ start Scene.exe SCENE";
 			return buildOptions;
 		}
 
+		#region Menu
 		[MenuItem("FishMMO/Build/Misc/Update Linker", priority = 12)]
 		public static void UpdateLinker()
 		{
@@ -648,37 +630,40 @@ start Scene.exe SCENE";
 			string rootPath = Path.Combine(selectedPath, Constants.Configuration.ProjectName);
 			string serverRootPath = Path.Combine(selectedPath, Constants.Configuration.ProjectName + Path.DirectorySeparatorChar + "Server");
 			WorldSceneDetailsCacheBuilder.Rebuild();
+			BuildAddressables(serverAddressableGroups);
 			BuildExecutable(rootPath,
 							Constants.Configuration.ProjectName,
-							CLIENT_BOOTSTRAP_SCENES,
+							BOOTSTRAP_SCENES,
 							CustomBuildType.Client,
 							GetBuildOptions(),
 							StandaloneBuildSubtarget.Player,
 							BuildTarget.StandaloneWindows64);
+
+			BuildAddressables(clientAddressableGroups);
 			BuildExecutable(serverRootPath,
 							ALL_IN_ONE_SERVER_BUILD_NAME,
-							ALL_IN_ONE_SERVER_BOOTSTRAP_SCENES,
+							BOOTSTRAP_SCENES,
 							CustomBuildType.AllInOne,
 							GetBuildOptions(),
 							StandaloneBuildSubtarget.Server,
 							BuildTarget.StandaloneWindows64);
 			BuildExecutable(serverRootPath,
 							LOGIN_SERVER_BUILD_NAME,
-							LOGIN_SERVER_BOOTSTRAP_SCENES,
+							BOOTSTRAP_SCENES,
 							CustomBuildType.Login,
 							GetBuildOptions(),
 							StandaloneBuildSubtarget.Server,
 							BuildTarget.StandaloneWindows64);
 			BuildExecutable(serverRootPath,
 							WORLD_SERVER_BUILD_NAME,
-							WORLD_SERVER_BOOTSTRAP_SCENES,
+							BOOTSTRAP_SCENES,
 							CustomBuildType.World,
 							GetBuildOptions(),
 							StandaloneBuildSubtarget.Server,
 							BuildTarget.StandaloneWindows64);
 			BuildExecutable(serverRootPath,
 							SCENE_SERVER_BUILD_NAME,
-							SCENE_SERVER_BOOTSTRAP_SCENES,
+							BOOTSTRAP_SCENES,
 							CustomBuildType.Scene,
 							GetBuildOptions(),
 							StandaloneBuildSubtarget.Server,
@@ -698,37 +683,40 @@ start Scene.exe SCENE";
 			string rootPath = Path.Combine(selectedPath, Constants.Configuration.ProjectName);
 			string serverRootPath = Path.Combine(selectedPath, Constants.Configuration.ProjectName + Path.DirectorySeparatorChar + "Server");
 			WorldSceneDetailsCacheBuilder.Rebuild();
+			BuildAddressables(serverAddressableGroups);
 			BuildExecutable(rootPath,
 							Constants.Configuration.ProjectName,
-							CLIENT_BOOTSTRAP_SCENES,
+							BOOTSTRAP_SCENES,
 							CustomBuildType.Client,
 							GetBuildOptions(),
 							StandaloneBuildSubtarget.Player,
 							BuildTarget.StandaloneLinux64);
+
+			BuildAddressables(clientAddressableGroups);
 			BuildExecutable(serverRootPath,
 							ALL_IN_ONE_SERVER_BUILD_NAME,
-							ALL_IN_ONE_SERVER_BOOTSTRAP_SCENES,
+							BOOTSTRAP_SCENES,
 							CustomBuildType.AllInOne,
 							GetBuildOptions(),
 							StandaloneBuildSubtarget.Server,
 							BuildTarget.StandaloneLinux64);
 			BuildExecutable(serverRootPath,
 							LOGIN_SERVER_BUILD_NAME,
-							LOGIN_SERVER_BOOTSTRAP_SCENES,
+							BOOTSTRAP_SCENES,
 							CustomBuildType.Login,
 							GetBuildOptions(),
 							StandaloneBuildSubtarget.Server,
 							BuildTarget.StandaloneLinux64);
 			BuildExecutable(serverRootPath,
 							WORLD_SERVER_BUILD_NAME,
-							WORLD_SERVER_BOOTSTRAP_SCENES,
+							BOOTSTRAP_SCENES,
 							CustomBuildType.World,
 							GetBuildOptions(),
 							StandaloneBuildSubtarget.Server,
 							BuildTarget.StandaloneLinux64);
 			BuildExecutable(serverRootPath,
 							SCENE_SERVER_BUILD_NAME,
-							SCENE_SERVER_BOOTSTRAP_SCENES,
+							BOOTSTRAP_SCENES,
 							CustomBuildType.Scene,
 							GetBuildOptions(),
 							StandaloneBuildSubtarget.Server,
@@ -745,8 +733,9 @@ start Scene.exe SCENE";
 		public static void BuildWindows64AllInOneServer()
 		{
 			WorldSceneDetailsCacheBuilder.Rebuild();
+			BuildAddressables(clientAddressableGroups);
 			BuildExecutable(ALL_IN_ONE_SERVER_BUILD_NAME,
-							ALL_IN_ONE_SERVER_BOOTSTRAP_SCENES,
+							BOOTSTRAP_SCENES,
 							CustomBuildType.AllInOne,
 							GetBuildOptions(),
 							StandaloneBuildSubtarget.Server,
@@ -757,8 +746,9 @@ start Scene.exe SCENE";
 		public static void BuildWindows64LoginServer()
 		{
 			WorldSceneDetailsCacheBuilder.Rebuild();
+			BuildAddressables(clientAddressableGroups);
 			BuildExecutable(LOGIN_SERVER_BUILD_NAME,
-							LOGIN_SERVER_BOOTSTRAP_SCENES,
+							BOOTSTRAP_SCENES,
 							CustomBuildType.Login,
 							GetBuildOptions(),
 							StandaloneBuildSubtarget.Server,
@@ -769,8 +759,9 @@ start Scene.exe SCENE";
 		public static void BuildWindows64WorldServer()
 		{
 			WorldSceneDetailsCacheBuilder.Rebuild();
+			BuildAddressables(clientAddressableGroups);
 			BuildExecutable(WORLD_SERVER_BUILD_NAME,
-							WORLD_SERVER_BOOTSTRAP_SCENES,
+							BOOTSTRAP_SCENES,
 							CustomBuildType.World,
 							GetBuildOptions(),
 							StandaloneBuildSubtarget.Server,
@@ -781,8 +772,9 @@ start Scene.exe SCENE";
 		public static void BuildWindows64SceneServer()
 		{
 			WorldSceneDetailsCacheBuilder.Rebuild();
+			BuildAddressables(clientAddressableGroups);
 			BuildExecutable(SCENE_SERVER_BUILD_NAME,
-							SCENE_SERVER_BOOTSTRAP_SCENES,
+							BOOTSTRAP_SCENES,
 							CustomBuildType.Scene,
 							GetBuildOptions(),
 							StandaloneBuildSubtarget.Server,
@@ -793,8 +785,9 @@ start Scene.exe SCENE";
 		public static void BuildWindows64Client()
 		{
 			WorldSceneDetailsCacheBuilder.Rebuild();
+			BuildAddressables(serverAddressableGroups);
 			BuildExecutable(Constants.Configuration.ProjectName,
-							CLIENT_BOOTSTRAP_SCENES,
+							BOOTSTRAP_SCENES,
 							CustomBuildType.Client,
 							GetBuildOptions(),
 							StandaloneBuildSubtarget.Player,
@@ -828,8 +821,9 @@ start Scene.exe SCENE";
 		public static void BuildLinux64AllInOneServer()
 		{
 			WorldSceneDetailsCacheBuilder.Rebuild();
+			BuildAddressables(clientAddressableGroups);
 			BuildExecutable(ALL_IN_ONE_SERVER_BUILD_NAME,
-							ALL_IN_ONE_SERVER_BOOTSTRAP_SCENES,
+							BOOTSTRAP_SCENES,
 							CustomBuildType.AllInOne,
 							GetBuildOptions(),
 							StandaloneBuildSubtarget.Server,
@@ -909,8 +903,9 @@ start Scene.exe SCENE";
 		public static void BuildLinux64Client()
 		{
 			WorldSceneDetailsCacheBuilder.Rebuild();
+			BuildAddressables(serverAddressableGroups);
 			BuildExecutable(Constants.Configuration.ProjectName,
-							CLIENT_BOOTSTRAP_SCENES,
+							BOOTSTRAP_SCENES,
 							CustomBuildType.Client,
 							GetBuildOptions(),
 							StandaloneBuildSubtarget.Player,
@@ -921,6 +916,7 @@ start Scene.exe SCENE";
 		public static void BuildWebGLClient()
 		{
 			WorldSceneDetailsCacheBuilder.Rebuild();
+			BuildAddressables(serverAddressableGroups);
 			BuildExecutable(Constants.Configuration.ProjectName,
 							WEBGL_CLIENT_BOOTSTRAP_SCENES,
 							CustomBuildType.Client,
@@ -928,6 +924,109 @@ start Scene.exe SCENE";
 							StandaloneBuildSubtarget.Player,
 							BuildTarget.WebGL);
 		}
+
+		[MenuItem("FishMMO/Build/Addressables/Build Client Addressables")]
+		public static void BuildClientAddressables()
+		{
+			BuildAddressables(serverAddressableGroups);
+		}
+
+		[MenuItem("FishMMO/Build/Addressables/Build Server Addressables")]
+		public static void BuildServerAddressables()
+		{
+			BuildAddressables(clientAddressableGroups);
+		}
+
+		public static void BuildAddressables(string[] excludeGroups)
+		{
+			// Get the original AddressableAssetSettings (default settings)
+			AddressableAssetSettings originalSettings = AddressableAssetSettingsDefaultObject.GetSettings(true);
+
+			// Loop through each Addressable group and exclude based on the provided group names
+			foreach (var group in originalSettings.groups)
+			{
+				foreach (var exclusion in excludeGroups)
+				{
+					var schema = group.GetSchema<BundledAssetGroupSchema>();
+					if (schema != null)
+					{
+						if (group.name.Contains(exclusion))
+						{
+							schema.IncludeInBuild = false;
+							Debug.Log($"Group {group.name} has been excluded from the build.");
+						}
+						else
+						{
+							schema.IncludeInBuild = true;
+							Debug.LogWarning($"Group {group.name} has been included in the build.");
+						}
+					}
+					else
+					{
+						Debug.LogWarning($"No schema found for group: {group.name}");
+					}
+				}
+			}
+
+			// Clean up old Addressable builds if the build path exists
+			string buildPath = Addressables.BuildPath;
+			if (Directory.Exists(buildPath))
+			{
+				try
+				{
+					Directory.Delete(buildPath, recursive: true);
+					Debug.Log($"Deleted previous Addressable build directory at {buildPath}");
+				}
+				catch (Exception ex)
+				{
+					Debug.LogError($"Failed to delete previous build directory: {ex.Message}");
+				}
+			}
+
+			// Start the Addressables build process
+			try
+			{
+				// Perform the actual Addressables build
+				AddressableAssetSettings.BuildPlayerContent(out AddressablesPlayerBuildResult result);
+
+				// Log the overall build result
+				if (!string.IsNullOrEmpty(result.Error))
+				{
+					Debug.LogError(result.Error);
+					Debug.LogError("Addressable content build failure (duration: " + TimeSpan.FromSeconds(result.Duration).ToString("g") + ")");
+				}
+				else
+				{
+					// Log information about the asset bundles that were built
+					if (result.AssetBundleBuildResults != null && result.AssetBundleBuildResults.Count > 0)
+					{
+						Debug.Log("Built Asset Bundles:");
+						foreach (var bundleResult in result.AssetBundleBuildResults)
+						{
+							Debug.Log($"Bundle: {bundleResult.SourceAssetGroup.Name} | {bundleResult.FilePath}");
+
+							// Log each asset in the bundle
+							foreach (var assetPath in bundleResult.SourceAssetGroup.entries)
+							{
+								Debug.Log($"  - Asset: {assetPath}");
+							}
+						}
+					}
+					else
+					{
+						Debug.Log("No asset bundles were built.");
+					}
+				}
+			}
+			catch (Exception ex)
+			{
+				Debug.LogError($"Error during Addressables build: {ex.Message}");
+			}
+
+			// Optionally, refresh the asset database after the build
+			AssetDatabase.Refresh();
+		}
+		#endregion
 
 		private static void OpenDirectory(string directory)
 		{

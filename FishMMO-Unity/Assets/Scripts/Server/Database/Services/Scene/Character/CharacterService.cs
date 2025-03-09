@@ -386,6 +386,7 @@ namespace FishMMO.Server.DatabaseServices
 				if (raceTemplate == null ||
 					raceTemplate.Prefab == null)
 				{
+					Debug.Log("Character RaceTemplate is null or not loaded.");
 					return false;
 				}
 
@@ -394,6 +395,7 @@ namespace FishMMO.Server.DatabaseServices
 				if (characterPrefab == null ||
 					networkManager.SpawnablePrefabs.GetObject(true, characterPrefab.NetworkObject.PrefabId) == null)
 				{
+					Debug.Log("Character Prefab is null or not loaded.");
 					return false;
 				}
 
@@ -405,6 +407,7 @@ namespace FishMMO.Server.DatabaseServices
 				character = nob.GetComponent<IPlayerCharacter>();
 				if (character == null)
 				{
+					Debug.Log("Character Prefab does not contain a NetworkObject.");
 					return false;
 				}
 
@@ -443,14 +446,13 @@ namespace FishMMO.Server.DatabaseServices
 				CharacterKnownAbilityService.Load(dbContext, character);
 				CharacterHotkeyService.Load(dbContext, character);
 
-				/*Debug.Log(dbCharacter.Name + " has been loaded at Pos:" +
-					  nob.transform.position.ToString() +
-					  " Rot:" + nob.transform.rotation.ToString());*/
+				//Debug.Log($"{dbCharacter.Name} has been loaded at Pos: {nob.transform.position.ToString()} Rot: {nob.transform.rotation.ToString()}");
 
 				dbTransaction.Commit();
 
 				return true;
 			}
+			Debug.Log("Character was unable to be loaded from the database.");
 			return false;
 		}
 	}

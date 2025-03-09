@@ -1,0 +1,37 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bbb281ee3bf0b054c82ac2347e9e782c, type: 3}
+  m_Name: BaseBuffTemplate
+  m_EditorClassIdentifier: 
+  m_GroupName: BaseBuffTemplate
+  m_GUID: 0b29e4226e3660c4ea4a2af99e362644
+  m_SerializeEntries:
+  - m_GUID: 0fbfa8b68911e1c4fa66d6b57fcab6a2
+    m_Address: Minor Increase Armor
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - AttributeBuffTemplate
+    - BaseBuffTemplate
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f382d90751b078548b47500f1817ff29
+    m_Address: Minor Increase Move Speed
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - AttributeBuffTemplate
+    - BaseBuffTemplate
+    FlaggedDuringContentUpdateRestriction: 0
+  m_ReadOnly: 0
+  m_Settings: {fileID: 11400000, guid: 32d60da793475f74593af93cb933abd4, type: 2}
+  m_SchemaSet:
+    m_Schemas:
+    - {fileID: 11400000, guid: 09cc983cbb8b718498a656a7a2d2f015, type: 2}
+    - {fileID: 11400000, guid: 743150ec42b8f7743a3edcef6cc22c0a, type: 2}

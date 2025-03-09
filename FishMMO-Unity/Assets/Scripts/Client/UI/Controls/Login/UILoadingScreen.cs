@@ -36,7 +36,7 @@ namespace FishMMO.Client
 
 		public void OnProgressUpdate(float progress)
 		{
-			//Debug.Log($"Progress update: {progress}");
+			Debug.Log($"Progress update: {progress}");
 			if (LoadingProgress == null)
 			{
 				return;

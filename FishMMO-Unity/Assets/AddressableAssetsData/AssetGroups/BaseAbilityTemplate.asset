@@ -1,0 +1,190 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bbb281ee3bf0b054c82ac2347e9e782c, type: 3}
+  m_Name: BaseAbilityTemplate
+  m_EditorClassIdentifier: 
+  m_GroupName: BaseAbilityTemplate
+  m_GUID: 72a1c167b4406fb44a378ada89011065
+  m_SerializeEntries:
+  - m_GUID: 0312175c8f0d5eb4cb034cea5952573b
+    m_Address: Greater Fire Damage
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - AbilityEvent
+    - BaseAbilityTemplate
+    - DamageHitEvent
+    - HitEvent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 070a580671acc704ba34689f4865bcf4
+    m_Address: Summon Lesser Fire Elemental
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - AbilityTemplate
+    - BaseAbilityTemplate
+    - PetAbilityTemplate
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0dcd4269131d0ac46972996284c03e80
+    m_Address: Area Greater Fire Damage
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - AbilityEvent
+    - BaseAbilityTemplate
+    - DamageHitEvent
+    - HitEvent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2e669850a4855b9438e174f70db28d9a
+    m_Address: Punch
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - AbilityTemplate
+    - BaseAbilityTemplate
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 31fd812565fea7940b6681ede8b3797f
+    m_Address: Physical Aerial Override
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - AbilityEvent
+    - AbilityTypeOverrideEventType
+    - BaseAbilityTemplate
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 47a1e5c6cb2cdad41aa9ecc8acb69c1a
+    m_Address: Lesser Physical Damage
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - AbilityEvent
+    - BaseAbilityTemplate
+    - DamageHitEvent
+    - HitEvent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 49f4c132334e6924a83535a095c331d9
+    m_Address: Lesser Knockback
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - AbilityEvent
+    - BaseAbilityTemplate
+    - HitEvent
+    - KnockbackHitEvent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4aeff0d62b20dcc458440d56a97b0398
+    m_Address: Area Lesser Fire Damage
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - AbilityEvent
+    - BaseAbilityTemplate
+    - DamageHitEvent
+    - HitEvent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5a49dbc5bd95c4149a537a1a52e4f161
+    m_Address: Lesser Fire Damage
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - AbilityEvent
+    - BaseAbilityTemplate
+    - DamageHitEvent
+    - HitEvent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5bfeb86111a12784ab0682fc2a1733ff
+    m_Address: Minor Physical Damage
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - AbilityEvent
+    - BaseAbilityTemplate
+    - DamageHitEvent
+    - HitEvent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7c14874e3c902684a8d562913ed73c24
+    m_Address: Lesser Flame
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - AbilityTemplate
+    - BaseAbilityTemplate
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7d912d81ccd28a041aeb98853a79cccb
+    m_Address: Minor Armor
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - AbilityTemplate
+    - BaseAbilityTemplate
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 93ab466c27720914dbc41e82269d4c0c
+    m_Address: Minor Movement Speed Increase
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - AbilityEvent
+    - BaseAbilityTemplate
+    - BuffHitEvent
+    - HitEvent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 999421753c6c67f43b2ddcafecb29459
+    m_Address: Lesser Move Forward
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - AbilityEvent
+    - BaseAbilityTemplate
+    - ForwardMoveEvent
+    - MoveEvent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9a571cab03b3f684da8436e4391abdbb
+    m_Address: Lesser Fireball
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - AbilityTemplate
+    - BaseAbilityTemplate
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9ff935e98f3e2294ab9e0a838ad8ca5b
+    m_Address: Magic Aerial Override
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - AbilityEvent
+    - AbilityTypeOverrideEventType
+    - BaseAbilityTemplate
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cb25ec34218f1f24b9ce67303dc79860
+    m_Address: Minor Armor Increase
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - AbilityEvent
+    - BaseAbilityTemplate
+    - BuffHitEvent
+    - HitEvent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e2515f67b6dcce8438d18005decc2c29
+    m_Address: Area Fire Damage
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - AbilityEvent
+    - BaseAbilityTemplate
+    - DamageHitEvent
+    - HitEvent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f2d6e37479575f64b8a515553b0972a4
+    m_Address: Fire Damage
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - AbilityEvent
+    - BaseAbilityTemplate
+    - DamageHitEvent
+    - HitEvent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f455d8a612b6da645b9a5f066502307b
+    m_Address: Minor Movement Speed
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - AbilityTemplate
+    - BaseAbilityTemplate
+    FlaggedDuringContentUpdateRestriction: 0
+  m_ReadOnly: 0
+  m_Settings: {fileID: 11400000, guid: 32d60da793475f74593af93cb933abd4, type: 2}
+  m_SchemaSet:
+    m_Schemas:
+    - {fileID: 11400000, guid: ad8eec139a7abed4bb02e6ad56bfb6ba, type: 2}
+    - {fileID: 11400000, guid: 834a5ce9ebb61c14a89165d3adf80be0, type: 2}

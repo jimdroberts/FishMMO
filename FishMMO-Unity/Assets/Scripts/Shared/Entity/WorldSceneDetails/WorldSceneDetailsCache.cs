@@ -11,7 +11,7 @@ namespace FishMMO.Shared
 	[CreateAssetMenu(fileName = "WorldSceneDetails", menuName = "World Scene Details")]
 	public class WorldSceneDetailsCache : ScriptableObject
 	{
-		public const string CACHE_PATH = "Assets/Resources/Prefabs/Shared/";
+		public const string CACHE_PATH = "Assets/Prefabs/Shared/";
 		public const string CACHE_FILE_NAME = "WorldSceneDetails.asset";
 		public const string CACHE_FULL_PATH = CACHE_PATH + CACHE_FILE_NAME;
 

@@ -16,7 +16,7 @@ namespace FishMMO.Client
 		private static Dictionary<NamingSystemType, Dictionary<long, Action<string>>> pendingNameRequests = new Dictionary<NamingSystemType, Dictionary<long, Action<string>>>();
 		private static Dictionary<NamingSystemType, Dictionary<string, Action<long>>> pendingIdRequests = new Dictionary<NamingSystemType, Dictionary<string, Action<long>>>();
 
-		public static void InitializeOnce(Client client)
+		public static void Initialize(Client client)
 		{
 			if (client == null)
 			{

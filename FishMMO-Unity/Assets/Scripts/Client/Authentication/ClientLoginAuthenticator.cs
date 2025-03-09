@@ -197,10 +197,7 @@ namespace FishMMO.Client
 			{
 				// Invoke result on the client
 				OnClientAuthenticationResult(msg.Result);
-				if (NetworkManagerExtensions.CanLog(LoggingType.Common))
-				{
-					Debug.Log(msg.Result);
-				}
+				Debug.Log(msg.Result);
 			}
 			else
 			{
@@ -216,10 +213,7 @@ namespace FishMMO.Client
 		{
 			// Invoke result on the client
 			OnClientAuthenticationResult(msg.Result);
-			if (NetworkManagerExtensions.CanLog(LoggingType.Common))
-			{
-				Debug.Log(msg.Result);
-			}
+			Debug.Log(msg.Result);
 		}
 	}
 }

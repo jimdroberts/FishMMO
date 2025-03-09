@@ -27,29 +27,17 @@ namespace FishMMO.Client
 
 		public override void OnClientSet()
 		{
-			Client.NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
+			Client.NetworkManager.ClientManager.RegisterBroadcast<MerchantBroadcast>(OnClientMerchantBroadcastReceived);
 		}
 
 		public override void OnClientUnset()
 		{
-			Client.NetworkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
+			Client.NetworkManager.ClientManager.UnregisterBroadcast<MerchantBroadcast>(OnClientMerchantBroadcastReceived);
 		}
 
 		public override void OnDestroying()
 		{
 			ClearAllSlots();
-		}
-
-		public void ClientManager_OnClientConnectionState(ClientConnectionStateArgs args)
-		{
-			if (args.ConnectionState == LocalConnectionState.Started)
-			{
-				Client.NetworkManager.ClientManager.RegisterBroadcast<MerchantBroadcast>(OnClientMerchantBroadcastReceived);
-			}
-			else if (args.ConnectionState == LocalConnectionState.Stopped)
-			{
-				Client.NetworkManager.ClientManager.UnregisterBroadcast<MerchantBroadcast>(OnClientMerchantBroadcastReceived);
-			}
 		}
 
 		private void OnClientMerchantBroadcastReceived(MerchantBroadcast msg, Channel channel)

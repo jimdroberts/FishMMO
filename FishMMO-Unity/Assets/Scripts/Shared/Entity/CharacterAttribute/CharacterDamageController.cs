@@ -41,10 +41,13 @@ namespace FishMMO.Shared
 			{
 				if (resourceInstance == null)
 				{
-					if (!Character.TryGet(out ICharacterAttributeController attributeController) ||
-						!attributeController.TryGetHealthAttribute(out CharacterResourceAttribute health))
+					if (!Character.TryGet(out ICharacterAttributeController attributeController))
 					{
-						throw new UnityException("Health Resource Attribute is missing");
+						throw new UnityException($"{gameObject.name} ICharacterAttributeController is missing");
+					}
+					if (!attributeController.TryGetHealthAttribute(out CharacterResourceAttribute health))
+					{
+						throw new UnityException($"{gameObject.name} Health Resource Attribute is missing");
 					}
 					resourceInstance = health;
 				}

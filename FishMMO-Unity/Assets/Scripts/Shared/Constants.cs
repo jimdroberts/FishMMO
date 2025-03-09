@@ -3,11 +3,26 @@ using System;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
+using System.Collections.Generic;
 
 namespace FishMMO.Shared
 {
 	public static class Constants
 	{
+		public static List<string> TemplateTypeCache = new List<string>()
+		{
+			typeof(BaseBuffTemplate).Name,
+			typeof(FactionTemplate).Name,
+			typeof(AchievementTemplate).Name,
+			typeof(NameCache).Name,
+			typeof(ItemAttributeTemplate).Name,
+			typeof(BaseAbilityTemplate).Name,
+			typeof(RaceTemplate).Name,
+			typeof(BaseAIState).Name,
+			typeof(CharacterAttributeTemplate).Name,
+			typeof(BaseItemTemplate).Name,
+		};
+
 		/// <summary>
 		/// IPv4 Regex, can we get IPv6 support???
 		/// </summary>
@@ -46,7 +61,7 @@ namespace FishMMO.Shared
 
 			public static readonly string InstallerPath = "Assets" + Path.DirectorySeparatorChar + "Scenes" + Path.DirectorySeparatorChar + "Installer.unity";
 			public static readonly string ScenePath = "Assets/Scenes/";
-			public static readonly string BootstrapScenePath = "Assets/Scenes/Bootstraps/";
+			public static readonly string BootstrapScenePath = "Assets/Scenes/";
 			public static readonly string WorldScenePath = "Assets/Scenes/WorldScene";
 			public static readonly string LocalScenePath = "Assets/LOCAL/Scenes/";
 

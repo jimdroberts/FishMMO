@@ -83,24 +83,12 @@ namespace FishMMO.Client
 
 		public override void OnClientSet()
 		{
-			Client.NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
+			Client.NetworkManager.ClientManager.RegisterBroadcast<ChatBroadcast>(OnClientChatBroadcastReceived);
 		}
 
 		public override void OnClientUnset()
 		{
-			Client.NetworkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
-		}
-
-		public void ClientManager_OnClientConnectionState(ClientConnectionStateArgs args)
-		{
-			if (args.ConnectionState == LocalConnectionState.Started)
-			{
-				Client.NetworkManager.ClientManager.RegisterBroadcast<ChatBroadcast>(OnClientChatBroadcastReceived);
-			}
-			else if (args.ConnectionState == LocalConnectionState.Stopped)
-			{
-				Client.NetworkManager.ClientManager.UnregisterBroadcast<ChatBroadcast>(OnClientChatBroadcastReceived);
-			}
+			Client.NetworkManager.ClientManager.UnregisterBroadcast<ChatBroadcast>(OnClientChatBroadcastReceived);
 		}
 
 		void Update()

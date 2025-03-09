@@ -1,34 +1,35 @@
 using UnityEngine;
-using UnityEngine.SceneManagement;
-using System.Runtime.CompilerServices;
-
-#if UNITY_EDITOR
-using UnityEditor;
-#endif
+using System.Collections.Generic;
+using FishMMO.Shared;
 
 namespace FishMMO.Server
 {
-	public class ServerLauncher : MonoBehaviour
+	public class ServerLauncher : BootstrapSystem
 	{
 		public string[] BootList = new string[]
 		{
-			"LoginServer",
-			"WorldServer",
-			"SceneServer",
+			"LoginServerBootstrap",
+			"WorldServerBootstrap",
+			"SceneServerBootstrap",
 		};
 
-		void Start()
+		public override void OnPreload()
 		{
+			// Load Template Cache
+			AddressableLoadProcessor.OnAddressableLoaded += AddressableLoadProcessor_OnAddressableLoaded;
+			AddressableLoadProcessor.OnAddressableUnloaded += AddressableLoadProcessor_OnAddressableUnloaded;
+			AddressableLoadProcessor.EnqueueLoad(Constants.TemplateTypeCache);
+
+			List<AddressableSceneLoadData> initialScenes = new List<AddressableSceneLoadData>();
+
 #if !UNITY_EDITOR && !UNITY_EDITOR_LINUX
 			string[] args = System.Environment.GetCommandLineArgs();
 			if (args == null || args.Length < 2)
 			{
 #endif
-				bool tryInit = Initialize(BootList);
-				if (!tryInit)
+				foreach (string serverName in BootList)
 				{
-					// otherwise we close the application
-					Close();
+					initialScenes.Add(new AddressableSceneLoadData(serverName));
 				}
 #if !UNITY_EDITOR
 			}
@@ -37,13 +38,13 @@ namespace FishMMO.Server
 				switch (args[1].ToUpper())
 				{
 					case "LOGIN":
-						Initialize("LoginServer");
+						initialScenes.Add(new AddressableSceneLoadData("LoginServerBootstrap"));
 						break;
 					case "WORLD":
-						Initialize("WorldServer");
+						initialScenes.Add(new AddressableSceneLoadData("WorldServerBootstrap"));
 						break;
 					case "SCENE":
-						Initialize("SceneServer");
+						initialScenes.Add(new AddressableSceneLoadData("SceneServerBootstrap"));
 						break;
 					default:
 						Close();
@@ -51,6 +52,7 @@ namespace FishMMO.Server
 				}
 			}
 #endif
+			AddressableLoadProcessor.EnqueueLoad(initialScenes);
 		}
 
 		private void Close()
@@ -59,46 +61,28 @@ namespace FishMMO.Server
 			Server.Quit();
 		}
 
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		private void Initialize(string bootstrapSceneName)
+		public override void OnDestroying()
 		{
-#if UNITY_SERVER && !UNITY_EDITOR
-			Application.SetStackTraceLogType(LogType.Log, StackTraceLogType.None);
-#endif
-			SceneManager.LoadScene(bootstrapSceneName, LoadSceneMode.Single);
+			AddressableLoadProcessor.OnAddressableLoaded -= AddressableLoadProcessor_OnAddressableLoaded;
+			AddressableLoadProcessor.OnAddressableUnloaded -= AddressableLoadProcessor_OnAddressableUnloaded;
 		}
 
-		private bool Initialize(string[] bootstrapSceneNames)
+		public void AddressableLoadProcessor_OnAddressableLoaded(Object addressable)
 		{
-			bool loaded = false;
-#if UNITY_EDITOR
-			EditorBuildSettingsScene[] scenes = EditorBuildSettings.scenes;
-			foreach (string boostrapSceneName in bootstrapSceneNames)
+			ICachedObject cachedObject = addressable as ICachedObject;
+			if (cachedObject != null)
 			{
-				foreach (EditorBuildSettingsScene scene in scenes)
-				{
-					if (scene.enabled &&
-						scene.path.Contains(boostrapSceneName))
-					{
-						UnityEditor.SceneManagement.EditorSceneManager.LoadScene(scene.path, LoadSceneMode.Additive);
-						loaded = true;
-					}
-				}
+				cachedObject.AddToCache(addressable.name);
 			}
-#elif UNITY_SERVER
-			foreach (string bootstrapSceneName in bootstrapSceneNames)
-			{
-				Scene scene = SceneManager.GetSceneByName(bootstrapSceneName);
-				if (scene != null)
-				{
-					Application.SetStackTraceLogType(LogType.Log, StackTraceLogType.None);
+		}
 
-					SceneManager.LoadScene(bootstrapSceneName, LoadSceneMode.Additive);
-					loaded = true;
-				}
+		public void AddressableLoadProcessor_OnAddressableUnloaded(Object addressable)
+		{
+			ICachedObject cachedObject = addressable as ICachedObject;
+			if (cachedObject != null)
+			{
+				cachedObject.RemoveFromCache();
 			}
-#endif
-			return loaded;
 		}
 	}
 }

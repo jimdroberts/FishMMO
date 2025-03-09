@@ -35,7 +35,7 @@ namespace FishMMO.Client
 				raceNameMap.Clear();
 				initialRaceNames.Clear();
 
-				Dictionary<int, RaceTemplate> raceTemplates = RaceTemplate.LoadCache<RaceTemplate>();
+				Dictionary<int, RaceTemplate> raceTemplates = RaceTemplate.GetCache<RaceTemplate>();
 				foreach (KeyValuePair<int, RaceTemplate> pair in raceTemplates)
 				{
 					if (pair.Value.Prefab == null)

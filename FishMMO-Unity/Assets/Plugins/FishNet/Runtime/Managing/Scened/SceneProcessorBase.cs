@@ -1,4 +1,5 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -10,11 +11,11 @@ namespace FishNet.Managing.Scened
 
     public abstract class SceneProcessorBase : MonoBehaviour
     {
-        #region Protected.
-        /// <summary>
-        /// SceneManager for this processor.
-        /// </summary>
-        protected SceneManager SceneManager;
+		#region Protected.
+		/// <summary>
+		/// SceneManager for this processor.
+		/// </summary>
+		protected SceneManager SceneManager;
         /// <summary>
         /// Scene used to store objects while they are being moved from one scene to another.
         /// </summary>
@@ -66,7 +67,7 @@ namespace FishNet.Managing.Scened
         /// Begin loading a scene using an async method.
         /// </summary>
         /// <param name="sceneName">Scene name to load.</param>
-        public abstract void BeginLoadAsync(string sceneName, LoadSceneParameters parameters);
+        public abstract void BeginLoadAsync(string sceneName, LoadSceneParameters parameters, Action<Scene> onLoadComplete);
         /// <summary>
         /// Begin unloading a scene using an async method.
         /// </summary>

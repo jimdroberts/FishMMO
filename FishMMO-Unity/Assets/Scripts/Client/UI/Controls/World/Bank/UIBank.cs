@@ -13,12 +13,12 @@ namespace FishMMO.Client
 
 		public override void OnClientSet()
 		{
-			Client.NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
+			Client.NetworkManager.ClientManager.RegisterBroadcast<BankerBroadcast>(OnClientBankerBroadcastReceived);
 		}
 
 		public override void OnClientUnset()
 		{
-			Client.NetworkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
+			Client.NetworkManager.ClientManager.UnregisterBroadcast<BankerBroadcast>(OnClientBankerBroadcastReceived);
 		}
 
 		public override void OnDestroying()
@@ -37,18 +37,6 @@ namespace FishMMO.Client
 					Destroy(button.gameObject);
 				}
 				bankSlots.Clear();
-			}
-		}
-
-		public void ClientManager_OnClientConnectionState(ClientConnectionStateArgs args)
-		{
-			if (args.ConnectionState == LocalConnectionState.Started)
-			{
-				Client.NetworkManager.ClientManager.RegisterBroadcast<BankerBroadcast>(OnClientBankerBroadcastReceived);
-			}
-			else if (args.ConnectionState == LocalConnectionState.Stopped)
-			{
-				Client.NetworkManager.ClientManager.UnregisterBroadcast<BankerBroadcast>(OnClientBankerBroadcastReceived);
 			}
 		}
 

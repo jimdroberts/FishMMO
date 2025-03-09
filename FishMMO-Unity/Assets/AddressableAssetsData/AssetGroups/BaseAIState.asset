@@ -1,0 +1,86 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bbb281ee3bf0b054c82ac2347e9e782c, type: 3}
+  m_Name: BaseAIState
+  m_EditorClassIdentifier: 
+  m_GroupName: BaseAIState
+  m_GUID: bec10d0173ec1a24aba200c9c6855c51
+  m_SerializeEntries:
+  - m_GUID: 3b1405c322d7a2744a16faa08683d319
+    m_Address: Basic Patrol State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - BaseAIState
+    - PatrolState
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 51f855b3de8e6644eb22eee716657935
+    m_Address: Basic Idle State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - BaseAIState
+    - IdleState
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 533ddb9bdb34b7440a63e47f786a58ab
+    m_Address: Basic PetIdle State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - BaseAIState
+    - PetIdleState
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5b56c55d686ceac4cac2a744a5bf0951
+    m_Address: Basic Retreat State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - BaseAIState
+    - RetreatState
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a188e3de8a5794043903352f3ce4a57d
+    m_Address: Basic Attack State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - BaseAIState
+    - BaseAttackingState
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: acce2c15167bca3468900e3963385b1e
+    m_Address: Basic GetBehind State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - BaseAIState
+    - GetBehindState
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b4bee0c12e3b92c48b285850bd5d47c1
+    m_Address: Basic Wander State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - BaseAIState
+    - WanderState
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b646a6d9bc4f07d428f12e255af67366
+    m_Address: Basic ReturnHome State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - BaseAIState
+    - ReturnHomeState
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bfb81bf76967bb24098b2eb22e2a386e
+    m_Address: Basic Orbit State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - BaseAIState
+    - OrbitState
+    FlaggedDuringContentUpdateRestriction: 0
+  m_ReadOnly: 0
+  m_Settings: {fileID: 11400000, guid: 32d60da793475f74593af93cb933abd4, type: 2}
+  m_SchemaSet:
+    m_Schemas:
+    - {fileID: 11400000, guid: cad4479eac649844288d107e897aec1d, type: 2}
+    - {fileID: 11400000, guid: da695f10279bd364cbcc2846c357f986, type: 2}

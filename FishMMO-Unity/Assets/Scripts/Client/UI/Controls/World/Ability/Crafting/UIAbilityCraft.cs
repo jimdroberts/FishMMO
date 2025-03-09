@@ -22,12 +22,12 @@ namespace FishMMO.Client
 
 		public override void OnClientSet()
 		{
-			Client.NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
+			Client.NetworkManager.ClientManager.RegisterBroadcast<AbilityCrafterBroadcast>(OnClientAbilityCrafterBroadcastReceived);
 		}
 
 		public override void OnClientUnset()
 		{
-			Client.NetworkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
+			Client.NetworkManager.ClientManager.UnregisterBroadcast<AbilityCrafterBroadcast>(OnClientAbilityCrafterBroadcastReceived);
 		}
 
 		public override void OnStarting()
@@ -47,18 +47,6 @@ namespace FishMMO.Client
 				MainEntry.OnRightClick -= MainEntry_OnRightClick;
 			}
 			ClearSlots();
-		}
-
-		public void ClientManager_OnClientConnectionState(ClientConnectionStateArgs args)
-		{
-			if (args.ConnectionState == LocalConnectionState.Started)
-			{
-				Client.NetworkManager.ClientManager.RegisterBroadcast<AbilityCrafterBroadcast>(OnClientAbilityCrafterBroadcastReceived);
-			}
-			else if (args.ConnectionState == LocalConnectionState.Stopped)
-			{
-				Client.NetworkManager.ClientManager.UnregisterBroadcast<AbilityCrafterBroadcast>(OnClientAbilityCrafterBroadcastReceived);
-			}
 		}
 
 		private void OnClientAbilityCrafterBroadcastReceived(AbilityCrafterBroadcast msg, Channel channel)

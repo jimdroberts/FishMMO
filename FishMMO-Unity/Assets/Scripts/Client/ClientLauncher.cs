@@ -74,26 +74,6 @@ namespace FishMMO.Client
 
 			updaterPath = Path.Combine(Constants.GetWorkingDirectory(), Constants.Configuration.UpdaterExecutable);
 
-			// load configuration
-			Configuration.GlobalSettings = new Configuration(Constants.GetWorkingDirectory());
-			if (!Configuration.GlobalSettings.Load(Configuration.DEFAULT_FILENAME + Configuration.EXTENSION))
-			{
-				// if we failed to load the file.. save a new one
-				Configuration.GlobalSettings.Set("Version", Constants.Configuration.Version);
-				Configuration.GlobalSettings.Set("Resolution Width", 1280);
-				Configuration.GlobalSettings.Set("Resolution Height", 800);
-				Configuration.GlobalSettings.Set("Refresh Rate", (uint)60);
-				Configuration.GlobalSettings.Set("Fullscreen", false);
-				Configuration.GlobalSettings.Set("ShowDamage", true);
-				Configuration.GlobalSettings.Set("ShowHeals", true);
-				Configuration.GlobalSettings.Set("ShowAchievementCompletion", true);
-				Configuration.GlobalSettings.Set("IPFetchHost", Constants.Configuration.IPFetchHost);
-#if !UNITY_EDITOR
-				Configuration.GlobalSettings.Save();
-#endif
-			}
-
-
 #if !UNITY_EDITOR
 			Screen.SetResolution(1024, 768, FullScreenMode.Windowed, new RefreshRate()
 			{
@@ -359,7 +339,16 @@ namespace FishMMO.Client
 		public void PlayButton_Launch()
 		{
 			SetButtonLock(true);
-			SceneManager.LoadScene("ClientBootstrap", LoadSceneMode.Single);
+			AddressableLoadProcessor.EnqueueLoad("ClientPostbootScene");
+			try
+			{
+				AddressableLoadProcessor.BeginProcessQueue();
+			}
+			catch (UnityException ex)
+			{
+				Debug.LogError($"Failed to load preload scenes: {ex.Message}");
+				SetButtonLock(false);
+			}
 		}
 
 		public void PlayButton_Update()
@@ -371,31 +360,20 @@ namespace FishMMO.Client
 			},
 			() =>
 			{
-				try
-				{
-					// Start the updater
-					ProcessStartInfo startInfo = new ProcessStartInfo(updaterPath);
-					startInfo.Arguments = $"-version={latestversion} -pid={Process.GetCurrentProcess().Id} -exe={Constants.Configuration.ClientExecutable}";
-					startInfo.UseShellExecute = false;
-					Process.Start(startInfo);
+				// Start the updater
+				ProcessStartInfo startInfo = new ProcessStartInfo(updaterPath);
+				startInfo.Arguments = $"-version={latestversion} -pid={Process.GetCurrentProcess().Id} -exe={Constants.Configuration.ClientExecutable}";
+				startInfo.UseShellExecute = false;
+				Process process = Process.Start(startInfo);
 
-					// Exit the launcher
-					Quit();
-				}
-				catch (ArgumentNullException argNullEx)
+				if (process == null)
 				{
-					Debug.Log($"Error: Application path is null or empty.");
-					Debug.Log(argNullEx.Message);
+					Debug.LogError("Failed to start the process.");
+					return;
 				}
-				catch (System.ComponentModel.Win32Exception win32Ex)
-				{
-					Debug.Log($"Error: Failed to start the updater.");
-					Debug.Log(win32Ex.Message);
-				}
-				catch (Exception ex)
-				{
-					Debug.Log($"Error: {ex.Message}");
-				}
+
+				// Exit the launcher
+				Quit();
 			},
 			(progress) =>
 			{
@@ -411,7 +389,6 @@ namespace FishMMO.Client
 #if UNITY_EDITOR
 			EditorApplication.ExitPlaymode();
 #else
-			Configuration.GlobalSettings.Save();
 			Application.Quit();
 #endif
 		}

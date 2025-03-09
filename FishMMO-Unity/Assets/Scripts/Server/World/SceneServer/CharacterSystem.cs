@@ -76,8 +76,12 @@ namespace FishMMO.Server
 				ServerManager.OnRemoteConnectionState += ServerManager_OnRemoteConnectionState;
 
 				loginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
+
+				Server.RegisterBroadcast<ClientValidatedSceneBroadcast>(OnClientValidatedSceneBroadcastReceived, true);
+				Server.RegisterBroadcast<ClientScenesUnloadedBroadcast>(OnClientScenesUnloadedBroadcastReceived, true);
 				Server.NetworkManager.SceneManager.OnClientLoadedStartScenes += SceneManager_OnClientLoadedStartScenes;
 
+				IPlayerCharacter.OnTeleport += IPlayerCharacter_OnTeleport;
 				ICharacterDamageController.OnKilled += CharacterDamageController_OnKilled;
 			}
 			else
@@ -91,8 +95,12 @@ namespace FishMMO.Server
 			if (ServerManager != null)
 			{
 				loginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
+
+				Server.UnregisterBroadcast<ClientValidatedSceneBroadcast>(OnClientValidatedSceneBroadcastReceived, true);
+				Server.UnregisterBroadcast<ClientScenesUnloadedBroadcast>(OnClientScenesUnloadedBroadcastReceived, true);
 				Server.NetworkManager.SceneManager.OnClientLoadedStartScenes -= SceneManager_OnClientLoadedStartScenes;
 
+				IPlayerCharacter.OnTeleport -= IPlayerCharacter_OnTeleport;
 				ICharacterDamageController.OnKilled -= CharacterDamageController_OnKilled;
 			}
 
@@ -110,7 +118,7 @@ namespace FishMMO.Server
 			if (serverState == LocalConnectionState.Started &&
 				ServerBehaviour.TryGet(out SceneServerSystem sceneServerSystem))
 			{
-				if(nextOutOfBoundsCheck < 0)
+				if (nextOutOfBoundsCheck < 0)
 				{
 					nextOutOfBoundsCheck = OutOfBoundsCheckRate;
 
@@ -154,7 +162,7 @@ namespace FishMMO.Server
 				if (nextSave < 0)
 				{
 					nextSave = SaveRate;
-					
+
 					if (CharactersByID.Count > 0)
 					{
 						Debug.Log("Character System: Save" + "[" + DateTime.UtcNow + "]");
@@ -181,47 +189,65 @@ namespace FishMMO.Server
 			if (args.ConnectionState == RemoteConnectionState.Stopped &&
 				ServerBehaviour.TryGet(out SceneServerSystem sceneServerSystem))
 			{
-				// Remove the waiting scene load character if it exists, these characters exist but are not spawned
-				if (WaitingSceneLoadCharacters.TryGetValue(conn, out IPlayerCharacter waitingSceneCharacter))
-				{
-					WaitingSceneLoadCharacters.Remove(conn);
+				RemoveCharacterConnectionMapping(conn);
+			}
+		}
 
-					OnDisconnect?.Invoke(conn, waitingSceneCharacter);
+		/// <summary>
+		/// Removes the character connection mapping and saves the character state to the database.
+		/// </summary>
+		private void RemoveCharacterConnectionMapping(NetworkConnection conn)
+		{
+			// Remove the waiting scene load character if it exists, these characters exist but are not spawned
+			if (WaitingSceneLoadCharacters.TryGetValue(conn, out IPlayerCharacter waitingSceneCharacter))
+			{
+				WaitingSceneLoadCharacters.Remove(conn);
 
-					Server.NetworkManager.StorePooledInstantiated(waitingSceneCharacter.NetworkObject, true);
-				}
+				OnDisconnect?.Invoke(conn, waitingSceneCharacter);
 
-				if (ConnectionCharacters.TryGetValue(conn, out IPlayerCharacter character))
-				{
-					// remove the connection->character entry
-					ConnectionCharacters.Remove(conn);
+				Server.NetworkManager.StorePooledInstantiated(waitingSceneCharacter.NetworkObject, true);
+			}
 
-					// remove the characterID->character entry
-					CharactersByID.Remove(character.ID);
-					// remove the characterName->character entry
-					CharactersByLowerCaseName.Remove(character.CharacterNameLower);
-					// remove the worldid<characterID->character> entry
-					if (CharactersByWorld.TryGetValue(character.WorldServerID, out Dictionary<long, IPlayerCharacter> characters))
-					{
-						characters.Remove(character.ID);
-					}
+			if (!ConnectionCharacters.TryGetValue(conn, out IPlayerCharacter character))
+			{
+				return;
+			}
 
-					OnDisconnect?.Invoke(conn, character);
+			// Remove the connection->character entry
+			ConnectionCharacters.Remove(conn);
 
-					OnDespawnCharacter?.Invoke(conn, character);
+			// Remove the characterID->character entry
+			CharactersByID.Remove(character.ID);
+			// Remove the characterName->character entry
+			CharactersByLowerCaseName.Remove(character.CharacterNameLower);
+			// Remove the worldid<characterID->character> entry
+			if (CharactersByWorld.TryGetValue(character.WorldServerID, out Dictionary<long, IPlayerCharacter> characters))
+			{
+				characters.Remove(character.ID);
+			}
 
-					TryTeleport(character);
+			OnDisconnect?.Invoke(conn, character);
 
-					// save the character and set online status to false
-					using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-					CharacterService.Save(dbContext, character, false);
+			SaveAndDespawnCharacter(conn, character);
+		}
 
-					// immediately log out for now.. we could add a timeout later on..?
-					if (character.NetworkObject.IsSpawned)
-					{
-						ServerManager.Despawn(character.NetworkObject, DespawnType.Pool);
-					}
-				}
+		private void SaveAndDespawnCharacter(NetworkConnection conn, IPlayerCharacter character)
+		{
+			// Save the character and set online status to false
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
+			if (dbContext == null)
+			{
+				return;
+			}
+
+			CharacterService.Save(dbContext, character, false);
+
+			// Immediately log out for now.. we could add a timeout later on..?
+			if (character.NetworkObject.IsSpawned)
+			{
+				OnDespawnCharacter?.Invoke(conn, character);
+
+				ServerManager.Despawn(character.NetworkObject, DespawnType.Pool);
 			}
 		}
 
@@ -286,9 +312,45 @@ namespace FishMMO.Server
 		}
 
 		/// <summary>
-		/// Called when a client loads scenes after connecting. The character is activated and spawned for all observers.
+		/// Called when a client loads world scenes after connecting. The character is validated and the client is notified.
 		/// </summary>
 		private void SceneManager_OnClientLoadedStartScenes(NetworkConnection conn, bool asServer)
+		{
+			// Validate the connection has a character ready to play.
+			if (!WaitingSceneLoadCharacters.TryGetValue(conn, out IPlayerCharacter character))
+			{
+				conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
+				return;
+			}
+
+			// Get the characters scene.
+			Scene scene = SceneManager.GetScene(character.SceneHandle);
+
+			// Validate the characters scene.
+			if (scene == null ||
+				!scene.IsValid() ||
+				!scene.isLoaded)
+			{
+				Debug.Log("Scene is not valid.");
+
+				WaitingSceneLoadCharacters.Remove(conn);
+
+				Destroy(character.GameObject);
+				conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
+				return;
+			}
+
+			Server.Broadcast(conn, new ClientValidatedSceneBroadcast()
+			{
+				Position = character.Transform.position,
+				Rotation = character.Transform.rotation,
+			}, true, Channel.Reliable);
+		}
+
+		/// <summary>
+		/// Called when a client completely finishes loading into a world scene.
+		/// </summary>
+		private void OnClientValidatedSceneBroadcastReceived(NetworkConnection conn, ClientValidatedSceneBroadcast msg, Channel channel)
 		{
 			if (WaitingSceneLoadCharacters.TryGetValue(conn, out IPlayerCharacter character))
 			{
@@ -353,11 +415,35 @@ namespace FishMMO.Server
 
 				OnConnect?.Invoke(conn, character);
 
-				// send server character data to the client
+				// Send server character local observer data to the client.
 				SendAllCharacterData(character);
 
 				//Debug.Log(character.CharacterName + " has been spawned at: " + character.SceneName + " " + character.Transform.position.ToString());
 			}
+		}
+
+		/// <summary>
+		/// The client notified the server it unloaded scenes.
+		/// </summary>
+		private void OnClientScenesUnloadedBroadcastReceived(NetworkConnection conn, ClientScenesUnloadedBroadcast msg, Channel channel)
+		{
+			if (msg.UnloadedScenes == null || msg.UnloadedScenes.Count == 0)
+			{
+				Debug.Log("No unloaded scenes received.");
+				return;
+			}
+
+			// Check if the connection has a character loaded.
+			if (ConnectionCharacters.TryGetValue(conn, out IPlayerCharacter character))
+			{
+				Debug.Log("Character is still loaded for connection.");
+				return;
+			}
+
+			Debug.Log($"Connection unloaded scene: {msg.UnloadedScenes[0].Name}|{msg.UnloadedScenes[0].Handle}");
+
+			// Otherwise disconnect the connection.
+			conn.Disconnect(false);
 		}
 
 		/// <summary>
@@ -395,7 +481,7 @@ namespace FishMMO.Server
 						});
 					}
 				}
-				
+
 				if (abilityController.KnownEvents != null)
 				{
 					// and event templates
@@ -663,6 +749,68 @@ namespace FishMMO.Server
 			return spawnPoints[index];
 		}
 
+		public void IPlayerCharacter_OnTeleport(IPlayerCharacter character)
+		{
+			if (character == null)
+			{
+				Debug.Log("Character doesn't exist..");
+				return;
+			}
+
+			if (!character.IsTeleporting)
+			{
+				Debug.Log("Character is not teleporting..");
+				return;
+			}
+
+			// Should we prevent players from moving to a different scene if they are in combat?
+			/*if (character.TryGet(out CharacterDamageController damageController) &&
+				  damageController.Attackers.Count > 0)
+			{
+				return;
+			}*/
+
+			if (!ServerBehaviour.TryGet(out SceneServerSystem sceneServerSystem))
+			{
+				Debug.Log("SceneServerSystem not found!");
+				return;
+			}
+
+			// Cache the current scene name
+			string playerScene = character.SceneName;
+
+			if (sceneServerSystem.WorldSceneDetailsCache == null ||
+				!sceneServerSystem.WorldSceneDetailsCache.Scenes.TryGetValue(playerScene, out WorldSceneDetails details))
+			{
+				Debug.Log(playerScene + " not found!");
+				return;
+			}
+
+			// Check if are a valid scene teleporter
+			if (details.Teleporters.TryGetValue(character.TeleporterName, out SceneTeleporterDetails teleporter))
+			{
+				//Debug.Log($"Teleporter: {character.TeleporterName} found! Teleporting {character.CharacterName} to {teleporter.ToScene}.");
+
+				Debug.Log($"Unloading scene for {character.CharacterName}: {character.SceneName}|{character.SceneHandle}");
+
+				// Tell the connection to unload their current world scene.
+				sceneServerSystem.UnloadSceneForConnection(character.Owner, character.SceneName);
+
+				// Character becomes immortal when teleporting
+				if (character.TryGet(out ICharacterDamageController damageController))
+				{
+					Debug.Log($"{character.CharacterName} is now immortal.");
+					damageController.Immortal = true;
+				}
+
+				character.SceneName = teleporter.ToScene;
+				character.Motor.SetPositionAndRotationAndVelocity(teleporter.ToPosition, teleporter.ToRotation, Vector3.zero);
+
+				// Save the character and remove it from the scene
+				RemoveCharacterConnectionMapping(character.Owner);
+			}
+		}
+
 		private void CharacterDamageController_OnKilled(ICharacter killer, ICharacter defender)
 		{
 			if (defender == null)
@@ -686,9 +834,12 @@ namespace FishMMO.Server
 					// Full heal the character
 					damageController.Heal(null, 999999, true);
 				}
+
 				if (playerCharacter.SceneName != playerCharacter.BindScene)
 				{
-					playerCharacter.Teleport(playerCharacter.BindScene);
+					playerCharacter.SceneName = playerCharacter.BindScene;
+					playerCharacter.Motor.SetPositionAndRotationAndVelocity(playerCharacter.BindPosition, playerCharacter.Motor.Transform.rotation, Vector3.zero);
+					playerCharacter.NetworkObject.Owner.Disconnect(false);
 				}
 				else
 				{
@@ -715,64 +866,6 @@ namespace FishMMO.Server
 						npc.Despawn();
 					}
 				}
-			}
-		}
-
-		private void TryTeleport(IPlayerCharacter character)
-		{
-			if (character == null)
-			{
-				Debug.Log("Character not found!");
-				return;
-			}
-
-			if (!character.IsTeleporting)
-			{
-				return;
-			}
-
-			// should we prevent players from moving to a different scene if they are in combat?
-			/*if (character.TryGet(out CharacterDamageController damageController) &&
-				  damageController.Attackers.Count > 0)
-			{
-				return;
-			}*/
-
-			if (!ServerBehaviour.TryGet(out SceneServerSystem sceneServerSystem))
-			{
-				Debug.Log("SceneServerSystem not found!");
-				return;
-			}
-
-			// cache the current scene name
-			string playerScene = character.SceneName;
-
-			if (sceneServerSystem.WorldSceneDetailsCache == null ||
-				!sceneServerSystem.WorldSceneDetailsCache.Scenes.TryGetValue(playerScene, out WorldSceneDetails details))
-			{
-				Debug.Log(playerScene + " not found!");
-				return;
-			}
-
-			// check if we are a scene teleporter
-			if (details.Teleporters.TryGetValue(character.TeleporterName, out SceneTeleporterDetails teleporter))
-			{
-				//Debug.Log($"Teleporter: {character.TeleporterName} found! Teleporting {character.CharacterName} to {teleporter.ToScene}.");
-
-				// character becomes immortal when teleporting
-				if (character.TryGet(out ICharacterDamageController damageController))
-				{
-					damageController.Immortal = true;
-				}
-
-				character.SceneName = teleporter.ToScene;
-				character.Motor.SetPositionAndRotationAndVelocity(teleporter.ToPosition, teleporter.ToRotation, Vector3.zero);
-			}
-			// the character died
-			else
-			{
-				character.SceneName = character.BindScene;
-				character.Motor.SetPositionAndRotationAndVelocity(character.BindPosition, character.Motor.Transform.rotation, Vector3.zero);
 			}
 		}
 	}

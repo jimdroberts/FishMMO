@@ -270,9 +270,18 @@ namespace FishMMO.Client
 		/// </summary>
 		public void SetClient(Client client)
 		{
-			Client = client;
+			// Unset previous client.
+			if (Client != null)
+			{
+				OnClientUnset();
+				Client.OnQuitToLogin -= Client_OnQuitToLogin;
+				Client = null;
+			}
+
+			// Set new client.
 			if (client != null)
 			{
+				Client = client;
 				Client.OnQuitToLogin += Client_OnQuitToLogin;
 				OnClientSet();
 			}

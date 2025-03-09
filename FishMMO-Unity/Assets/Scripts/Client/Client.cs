@@ -29,39 +29,20 @@ namespace FishMMO.Client
 	/// </summary>
 	public class Client : MonoBehaviour
 	{
-		private enum ServerConnectionType : byte
-		{
-			None,
-			Login,
-			ConnectingToWorld,
-			World,
-			Scene,
-		}
-
-#if UNITY_WEBGL
-		[DllImport("__Internal")]
-		private static extern void ClientWebGLQuit();
-
-		[DllImport("__Internal")]
-		private static extern void AddHijackKeysListener(IntPtr keyCodesPtr, int keyCodesLength);
-#endif
-
 		private LocalConnectionState clientState = LocalConnectionState.Stopped;
-		private Dictionary<string, Scene> serverLoadedScenes = new Dictionary<string, Scene>();
+		private ServerConnectionType currentConnectionType = ServerConnectionType.None;
 
 		private byte reconnectsAttempted = 0;
 		private float nextReconnect = 0;
 		private bool forceDisconnect = false;
-
 		private string lastWorldAddress = "";
 		private ushort lastWorldPort = 0;
 
-		private ServerConnectionType currentConnectionType = ServerConnectionType.None;
-		public byte ReconnectAttempts = 10;
-		public float ReconnectAttemptWaitTime = 5f;
-
+		public string UILoadingScreenKey = "UILoadingScreen";
 		public List<ServerAddress> LoginServerAddresses;
-		public int[] HijackKeyCodes;
+		public List<AddressableSceneLoadData> WorldPreloadScenes = new List<AddressableSceneLoadData>();
+		public byte MaxReconnectAttempts = 10;
+		public float ReconnectAttemptWaitTime = 5f;
 
 		public event Action OnConnectionSuccessful;
 		public event Action<byte, byte> OnReconnectAttempt;
@@ -85,105 +66,32 @@ namespace FishMMO.Client
 
 		void Awake()
 		{
-			if (AudioListener == null)
+			if (!TryInitializeNetworkManager() ||
+				!TryInitializeLoginAuthenticator() ||
+				!TryInitializeTransport())
+			{
+				Quit();
+				return;
+			}
+			Application.logMessageReceived += this.Application_logMessageReceived;
+
+			if (AudioListener == null && Camera.main != null)
 			{
 				AudioListener = Camera.main.gameObject.GetComponent<AudioListener>();
 			}
-			
-#if UNITY_WEBGL
-			if (HijackKeyCodes != null && HijackKeyCodes.Length > 0)
-			{
-				// Allocate memory and copy keyCodes array to it
-				GCHandle handle = GCHandle.Alloc(HijackKeyCodes, GCHandleType.Pinned);
-				IntPtr pointer = handle.AddrOfPinnedObject();
 
-				AddHijackKeysListener(pointer, HijackKeyCodes.Length);
-
-				// Release memory
-				handle.Free();
-			}
-#endif
-
-			if (NetworkManager == null)
-			{
-				NetworkManager = FindFirstObjectByType<NetworkManager>();
-				if (NetworkManager == null)
-				{
-					Debug.LogError("Client: NetworkManager not found.");
-					Quit();
-					return;
-				}
-			}
-
-			// set our static NM reference... this is used for easier client broadcasts
-			_networkManager = NetworkManager;
-
-			if (LoginAuthenticator == null)
-			{
-				LoginAuthenticator = FindFirstObjectByType<ClientLoginAuthenticator>();
-				if (LoginAuthenticator == null)
-				{
-					Debug.LogError("Client: LoginAuthenticator not found.");
-					Quit();
-					return;
-				}
-			}
-
-			TransportManager transportManager = _networkManager.TransportManager;
-			if (transportManager == null)
-			{
-				Debug.LogError("Client: TransportManager not found.");
-				Quit();
-				return;
-			}
-			Multipass multipass = transportManager.GetTransport<Multipass>();
-			if (multipass == null)
-			{
-				Debug.LogError("Client: Multipass not found.");
-				Quit();
-				return;
-			}
-#if UNITY_WEBGL && !UNITY_EDITOR
-			multipass.SetClientTransport<Bayou>();
-#else
-			multipass.SetClientTransport<Tugboat>();
-#endif
-
-			Application.logMessageReceived += this.Application_logMessageReceived;
-
-			// set the UIManager Client
+			// Set the UIManager Client
 			UIManager.SetClient(this);
 
-			// initialize naming service
-			ClientNamingSystem.InitializeOnce(this);
+			// Initialize naming service
+			ClientNamingSystem.Initialize(this);
 
-			// assign the client to the Login Authenticator
-			LoginAuthenticator.SetClient(this);
-
-			// load configuration
-			if (Configuration.GlobalSettings == null)
-			{
-				Configuration.GlobalSettings = new Configuration(Constants.GetWorkingDirectory());
-				if (!Configuration.GlobalSettings.Load(Configuration.DEFAULT_FILENAME + Configuration.EXTENSION))
-				{
-					// if we failed to load the file.. save a new one
-					Configuration.GlobalSettings.Set("Version", Constants.Configuration.Version);
-					Configuration.GlobalSettings.Set("Resolution Width", 1280);
-					Configuration.GlobalSettings.Set("Resolution Height", 800);
-					Configuration.GlobalSettings.Set("Refresh Rate", (uint)60);
-					Configuration.GlobalSettings.Set("Fullscreen", false);
-					Configuration.GlobalSettings.Set("ShowDamage", true);
-					Configuration.GlobalSettings.Set("ShowHeals", true);
-					Configuration.GlobalSettings.Set("ShowAchievementCompletion", true);
-					Configuration.GlobalSettings.Set("IPFetchHost", Constants.Configuration.IPFetchHost);
-#if !UNITY_EDITOR
-					Configuration.GlobalSettings.Save();
-#endif
-				}
-			}
+			// Ensure the KCC System is created.
+			KinematicCharacterSystem.EnsureCreation();
+			KinematicCharacterSystem.Settings.AutoSimulation = false;
 
 #if !UNITY_WEBGL
-			if (Configuration.GlobalSettings.TryGetInt("Resolution Width", out int width) &&
+			/*if (Configuration.GlobalSettings.TryGetInt("Resolution Width", out int width) &&
 				Configuration.GlobalSettings.TryGetInt("Resolution Height", out int height) &&
 				Configuration.GlobalSettings.TryGetUInt("Refresh Rate", out uint refreshRate) &&
 				Configuration.GlobalSettings.TryGetBool("Fullscreen", out bool fullscreen))
@@ -194,31 +102,21 @@ namespace FishMMO.Client
 					numerator = refreshRate,
 					denominator = 1,
 				});
-			}
+			}*/
 #endif
-
-			// Ensure the KCC System is created.
-			KinematicCharacterSystem.EnsureCreation();
-			KinematicCharacterSystem.Settings.AutoSimulation = false;
-
-			UnityEngine.SceneManagement.SceneManager.sceneLoaded += UnitySceneManager_OnSceneLoaded;
-			UnityEngine.SceneManagement.SceneManager.sceneUnloaded += UnitySceneManager_OnSceneUnloaded;
-			NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
-			NetworkManager.SceneManager.OnLoadStart += SceneManager_OnLoadStart;
-			NetworkManager.SceneManager.OnLoadPercentChange += SceneManager_OnLoadPercentChange;
-			NetworkManager.SceneManager.OnLoadEnd += SceneManager_OnLoadEnd;
-			NetworkManager.SceneManager.OnUnloadStart += SceneManager_OnUnloadStart;
-			NetworkManager.SceneManager.OnUnloadEnd += SceneManager_OnUnloadEnd;
-			LoginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
 
 #if !UNITY_SERVER
 			IPlayerCharacter.OnReadPayload += Character_OnReadPayload;
 			IPlayerCharacter.OnStartLocalClient += Character_OnStartLocalClient;
 			IPlayerCharacter.OnStopLocalClient += Character_OnStopLocalClient;
+
 			IGuildController.OnReadID += GuildController_OnReadID;
+
 			Pet.OnReadID += Pet_OnReadID;
+
 			ICharacterDamageController.OnDamaged += CharacterDamageController_OnDamaged;
 			ICharacterDamageController.OnHealed += CharacterDamageController_OnHealed;
+
 			IAchievementController.OnCompleteAchievement += AchievementController_OnCompleteAchievement;
 
 			RegionNameLabel = UIAdvancedLabel.Create("", FontStyle.Normal, null, 0, Color.magenta, 0, false, false, Vector2.zero) as UIAdvancedLabel;
@@ -227,10 +125,94 @@ namespace FishMMO.Client
 #endif
 		}
 
+		private bool TryInitializeNetworkManager()
+		{
+			if (NetworkManager == null)
+			{
+				NetworkManager = FindFirstObjectByType<NetworkManager>();
+				if (NetworkManager == null)
+				{
+					Debug.LogError("Client: NetworkManager not found.");
+					return false;
+				}
+			}
+			_networkManager = NetworkManager;
+
+			NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
+			NetworkManager.ClientManager.RegisterBroadcast<ClientValidatedSceneBroadcast>(OnClientValidatedSceneBroadcastReceived);
+
+			NetworkManager.SceneManager.OnLoadStart += SceneManager_OnLoadStart;
+			NetworkManager.SceneManager.OnLoadPercentChange += SceneManager_OnLoadPercentChange;
+			NetworkManager.SceneManager.OnLoadEnd += SceneManager_OnLoadEnd;
+			NetworkManager.SceneManager.OnUnloadStart += SceneManager_OnUnloadStart;
+			NetworkManager.SceneManager.OnUnloadEnd += SceneManager_OnUnloadEnd;
+			return true;
+		}
+
+		private void DeinitializeNetworkManager()
+		{
+			NetworkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
+			NetworkManager.ClientManager.UnregisterBroadcast<ClientValidatedSceneBroadcast>(OnClientValidatedSceneBroadcastReceived);
+
+			NetworkManager.SceneManager.OnLoadStart -= SceneManager_OnLoadStart;
+			NetworkManager.SceneManager.OnLoadPercentChange -= SceneManager_OnLoadPercentChange;
+			NetworkManager.SceneManager.OnLoadEnd -= SceneManager_OnLoadEnd;
+			NetworkManager.SceneManager.OnUnloadStart -= SceneManager_OnUnloadStart;
+			NetworkManager.SceneManager.OnUnloadEnd -= SceneManager_OnUnloadEnd;
+		}
+
+		private bool TryInitializeLoginAuthenticator()
+		{
+			if (LoginAuthenticator == null)
+			{
+				LoginAuthenticator = FindFirstObjectByType<ClientLoginAuthenticator>();
+				if (LoginAuthenticator == null)
+				{
+					Debug.LogError("Client: LoginAuthenticator not found.");
+					return false;
+				}
+			}
+			LoginAuthenticator.SetClient(this);
+			LoginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
+			return true;
+		}
+
+		private void DeinitializeLoginAuthenticator()
+		{
+			if (LoginAuthenticator == null)
+			{
+				return;
+			}
+			LoginAuthenticator.SetClient(null);
+			LoginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
+		}
+
+		private bool TryInitializeTransport()
+		{
+			TransportManager transportManager = _networkManager.TransportManager;
+			if (transportManager == null)
+			{
+				Debug.LogError("Client: TransportManager not found.");
+				return false;
+			}
+			Multipass multipass = transportManager.GetTransport<Multipass>();
+			if (multipass == null)
+			{
+				Debug.LogError("Client: Multipass not found.");
+				return false;
+			}
+#if UNITY_WEBGL && !UNITY_EDITOR
+			multipass.SetClientTransport<Bayou>();
+#else
+			multipass.SetClientTransport<Tugboat>();
+#endif
+			return true;
+		}
+
 		private void Update()
 		{
 			if (forceDisconnect ||
-				reconnectsAttempted > ReconnectAttempts ||
+				reconnectsAttempted > MaxReconnectAttempts ||
 				clientState != LocalConnectionState.Stopped)
 			{
 				return;
@@ -257,7 +239,7 @@ namespace FishMMO.Client
 			}
 		}
 
-		public void OnDestroy()
+		void OnDestroy()
 		{
 #if UNITY_EDITOR
 			InputManager.MouseMode = true;
@@ -271,16 +253,33 @@ namespace FishMMO.Client
 			IPlayerCharacter.OnReadPayload -= Character_OnReadPayload;
 			IPlayerCharacter.OnStartLocalClient -= Character_OnStartLocalClient;
 			IPlayerCharacter.OnStopLocalClient -= Character_OnStopLocalClient;
+
 			IGuildController.OnReadID -= GuildController_OnReadID;
+
+			Pet.OnReadID -= Pet_OnReadID;
+
 			ICharacterDamageController.OnDamaged -= CharacterDamageController_OnDamaged;
 			ICharacterDamageController.OnHealed -= CharacterDamageController_OnHealed;
+
 			IAchievementController.OnCompleteAchievement -= AchievementController_OnCompleteAchievement;
 
+			if (RegionNameLabel != null)
+			{
+				Destroy(RegionNameLabel.gameObject);
+				RegionNameLabel = null;
+			}
 			RegionDisplayNameAction.OnDisplay2DLabel -= RegionDisplayNameAction_OnDisplay2DLabel;
 			RegionChangeFogAction.OnChangeFog -= RegionChangeFogAction_OnChangeFog;
 #endif
 
+			AudioListener = null;
+
+			DeinitializeLoginAuthenticator();
+			DeinitializeNetworkManager();
+
 			ClientNamingSystem.Destroy();
+
+			UIManager.SetClient(null);
 
 			Application.logMessageReceived -= this.Application_logMessageReceived;
 		}
@@ -320,8 +319,6 @@ namespace FishMMO.Client
 #if UNITY_EDITOR
 			InputManager.MouseMode = true;
 #endif
-
-			UnloadServerLoadedScenes();
 		}
 
 		/// <summary>
@@ -374,9 +371,6 @@ namespace FishMMO.Client
 			switch (clientState)
 			{
 				case LocalConnectionState.Stopped:
-					// unload previous scenes
-					UnloadServerLoadedScenes();
-
 					if (currentConnectionType == ServerConnectionType.Login)
 					{
 						QuitToLogin();
@@ -390,7 +384,7 @@ namespace FishMMO.Client
 							nextReconnect = ReconnectAttemptWaitTime;
 
 							// show the reconnect screen?
-							OnReconnectAttempt?.Invoke(reconnectsAttempted, ReconnectAttempts);
+							OnReconnectAttempt?.Invoke(reconnectsAttempted, MaxReconnectAttempts);
 						}
 					}
 					currentConnectionType = ServerConnectionType.None;
@@ -452,12 +446,12 @@ namespace FishMMO.Client
 			{
 				nextReconnect = ReconnectAttemptWaitTime;
 			}
-			if (reconnectsAttempted < ReconnectAttempts)
+			if (reconnectsAttempted < MaxReconnectAttempts)
 			{
 				if (Constants.IsAddressValid(lastWorldAddress) && lastWorldPort != 0)
 				{
 					++reconnectsAttempted;
-					OnReconnectAttempt?.Invoke(reconnectsAttempted, ReconnectAttempts);
+					OnReconnectAttempt?.Invoke(reconnectsAttempted, MaxReconnectAttempts);
 					ConnectToServer(lastWorldAddress, lastWorldPort);
 				}
 			}
@@ -582,34 +576,18 @@ namespace FishMMO.Client
 				onFetchFail?.Invoke("Failed to configure IPFetchHost.");
 			}
 		}
-
-		private void UnitySceneManager_OnSceneLoaded(Scene scene, LoadSceneMode mode)
-		{
-			// ClientBootstrap overrides active scene if it is ever loaded.
-			if (scene.name.Contains("ClientBootstrap"))
-			{
-				UnityEngine.SceneManagement.SceneManager.SetActiveScene(scene);
-			}
-		}
-
-		private void UnitySceneManager_OnSceneUnloaded(Scene scene)
-		{
-		}
-
+		
 		private void SceneManager_OnLoadStart(SceneLoadStartEventArgs args)
 		{
-		}
-
-		private void UnloadServerLoadedScenes()
-		{
-			foreach (Scene scene in serverLoadedScenes.Values)
+			// add loaded scenes to list
+			if (args.QueueData.SceneLoadData != null)
 			{
-				UnityEngine.SceneManagement.SceneManager.UnloadSceneAsync(scene);
+				SceneLookupData[] lud = args.QueueData.SceneLoadData.SceneLookupDatas;
+				for (int i = 0; i < lud.Length; ++i)
+				{
+					Debug.Log($"FN Scene loaded: {lud[i].Name}|{lud[i].Handle}");
+				}
 			}
-			serverLoadedScenes.Clear();
-
-			// Test
-			//Resources.UnloadUnusedAssets();
 		}
 
 		private void SceneManager_OnLoadPercentChange(SceneLoadPercentEventArgs args)
@@ -623,17 +601,91 @@ namespace FishMMO.Client
 			{
 				foreach (Scene scene in args.LoadedScenes)
 				{
-					serverLoadedScenes[scene.name] = scene;
+					Debug.Log($"FN Scene loaded: {scene.name}|{scene.handle}");
 				}
 			}
 		}
 
 		private void SceneManager_OnUnloadStart(SceneUnloadStartEventArgs args)
 		{
+			SceneLookupData[] lud = args.QueueData.SceneUnloadData.SceneLookupDatas;
+			for (int i = 0; i < lud.Length; ++i)
+			{
+				Debug.Log($"Scene unload: {lud[i].Name}|{lud[i].Handle}");
+			}
 		}
 
 		private void SceneManager_OnUnloadEnd(SceneUnloadEndEventArgs args)
 		{
+			if (args.UnloadedScenesV2 != null)
+			{
+				foreach (UnloadedScene unloadedScene in args.UnloadedScenesV2)
+				{
+					Debug.Log($"FN Scene unloaded: {unloadedScene.Name}|{unloadedScene.Handle}");
+				}
+
+				// Notify the server that we unloaded scenes.
+				Client.Broadcast(new ClientScenesUnloadedBroadcast()
+				{
+					UnloadedScenes = args.UnloadedScenesV2,
+				});
+			}
+			else
+			{
+				Debug.Log("No scenes unloaded.");
+			}
+		}
+
+		/// <summary>
+		/// The server validated the client scene is valid and fully loaded. This is invoked before the clients character is spawned in the World scene.
+		/// </summary>
+		public void OnClientValidatedSceneBroadcastReceived(ClientValidatedSceneBroadcast msg, Channel channel)
+		{
+			/*if (Camera.main != null)
+			{
+				Camera.main.transform.position = msg.Position;
+				Camera.main.transform.rotation = msg.Rotation;
+			}*/
+
+			// Set up the UI Loading Screen for the current AddressableLoadProcessor.
+			if (UIManager.TryGet(UILoadingScreenKey, out UILoadingScreen loadingScreen))
+			{
+				AddressableLoadProcessor.OnProgressUpdate += loadingScreen.OnProgressUpdate;
+				loadingScreen.Show();
+			}
+
+			AddressableLoadProcessor.EnqueueLoad(WorldPreloadScenes);
+			try
+			{
+				AddressableLoadProcessor.OnProgressUpdate += AddressableLoadProcessor_OnPreloadProgressUpdate;
+				AddressableLoadProcessor.BeginProcessQueue();
+			}
+			catch (UnityException ex)
+			{
+				Debug.LogError($"Failed to load preload scenes: {ex.Message}");
+			}
+		}
+
+		/// <summary>
+		/// Called after Preload is completed.
+		/// </summary>
+		private void AddressableLoadProcessor_OnPreloadProgressUpdate(float progress)
+		{
+			// Wait for the Addressable Load Processor queue to complete loading.
+			if (progress < 1.0f)
+			{
+				return;
+			}
+
+			AddressableLoadProcessor.OnProgressUpdate -= AddressableLoadProcessor_OnPreloadProgressUpdate;
+
+			if (UIManager.TryGet(UILoadingScreenKey, out UILoadingScreen loadingScreen))
+			{
+				AddressableLoadProcessor.OnProgressUpdate -= loadingScreen.OnProgressUpdate;
+				loadingScreen.Hide();
+			}
+
+			Client.Broadcast(new ClientValidatedSceneBroadcast(), Channel.Reliable);
 		}
 
 #if !UNITY_SERVER
@@ -644,14 +696,14 @@ namespace FishMMO.Client
 		public void Character_OnReadPayload(IPlayerCharacter character)
 		{
 			// load the characters name from disk or request it from the server
-			ClientNamingSystem.SetName(NamingSystemType.CharacterName, character.ID, (n) =>
+			ClientNamingSystem.SetName(NamingSystemType.CharacterName, character.ID, (name) =>
 			{
-				character.GameObject.name = n;
-				character.CharacterName = n;
-				character.CharacterNameLower = n.ToLower();
+				character.GameObject.name = name;
+				character.CharacterName = name;
+				character.CharacterNameLower = name.ToLower();
 
 				if (character.CharacterNameLabel != null)
-					character.CharacterNameLabel.text = n;
+					character.CharacterNameLabel.text = name;
 			});
 		}
 
@@ -719,9 +771,9 @@ namespace FishMMO.Client
 			if (ID != 0)
 			{
 				// Load the characters guild from disk or request it from the server.
-				ClientNamingSystem.SetName(NamingSystemType.GuildName, ID, (s) =>
+				ClientNamingSystem.SetName(NamingSystemType.GuildName, ID, (name) =>
 				{
-					character.SetGuildName(s);
+					character.SetGuildName(name);
 				});
 			}
 			else
@@ -735,11 +787,11 @@ namespace FishMMO.Client
 			if (pet != null && ownerID != 0)
 			{
 				// Load the characters guild from disk or request it from the server.
-				ClientNamingSystem.SetName(NamingSystemType.CharacterName, ownerID, (s) =>
+				ClientNamingSystem.SetName(NamingSystemType.CharacterName, ownerID, (name) =>
 				{
 					if (pet.CharacterGuildLabel)
 					{
-						pet.CharacterGuildLabel.text = $"<{s}'s pet>";
+						pet.CharacterGuildLabel.text = $"<{name}'s pet>";
 					}
 				});
 			}

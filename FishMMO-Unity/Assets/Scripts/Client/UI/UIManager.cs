@@ -70,7 +70,7 @@ namespace FishMMO.Client
 
 			control.SetClient(_client);
 
-			Debug.Log("UIManager: Registered[" + control.Name + "]");
+			//Debug.Log("UIManager: Registered[" + control.Name + "]");
 			controls.Add(control.Name, control);
 		}
 
@@ -82,7 +82,7 @@ namespace FishMMO.Client
 			}
 			else
 			{
-				Debug.Log("UIManager: Unregistered[" + control.Name + "]");
+				//Debug.Log("UIManager: Unregistered[" + control.Name + "]");
 				controls.Remove(control.Name);
 				characterControls.Remove(control.Name);
 			}

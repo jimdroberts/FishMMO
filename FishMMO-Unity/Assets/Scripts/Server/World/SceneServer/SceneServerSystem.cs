@@ -83,6 +83,16 @@ namespace FishMMO.Server
 					Debug.Log("Scene Server System: Removing Scene Server scenes: " + id);
 					LoadedSceneService.Delete(dbContext, id);
 				}
+
+				Server.NetworkManager.SceneManager.OnLoadEnd -= SceneManager_OnLoadEnd;
+				Server.NetworkManager.SceneManager.OnUnloadEnd -= SceneManager_OnUnloadEnd;
+				ServerManager.OnServerConnectionState -= ServerManager_OnServerConnectionState;
+			}
+
+			if (ServerBehaviour.TryGet(out CharacterSystem characterSystem))
+			{
+				characterSystem.OnDisconnect -= CharacterSystem_OnDisconnect;
+				characterSystem.OnAfterLoadCharacter -= CharacterSystem_OnAfterLoadCharacter;
 			}
 		}
 
@@ -319,6 +329,8 @@ namespace FishMMO.Server
 			Scene scene = SceneManager.GetScene(instance.Handle);
 			if (scene != null && scene.IsValid() && scene.isLoaded)
 			{
+				//Debug.Log($"Scene: {instance.Name} - {instance.Handle} found in SceneManager.");
+
 				SceneLookupData lookupData = new SceneLookupData(instance.Handle);
 				SceneLoadData sld = new SceneLoadData(lookupData)
 				{
@@ -332,7 +344,27 @@ namespace FishMMO.Server
 				Server.NetworkManager.SceneManager.LoadConnectionScenes(connection, sld);
 				return true;
 			}
+			else
+			{
+				Debug.Log($"Scene: {instance.Name}|{instance.Handle} not found in SceneManager.");
+			}
 			return false;
+		}
+
+		public void UnloadSceneForConnection(NetworkConnection connection, string sceneName)
+		{
+			SceneUnloadData sud = new SceneUnloadData()
+			{
+				SceneLookupDatas = new SceneLookupData[]
+				{
+					new SceneLookupData(sceneName),
+				},
+				Options = new UnloadOptions()
+				{
+					Mode = UnloadOptions.ServerUnloadMode.KeepUnused
+				}
+			};
+			Server.NetworkManager.SceneManager.UnloadConnectionScenes(connection, sud);
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]

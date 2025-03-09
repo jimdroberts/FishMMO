@@ -133,6 +133,14 @@ namespace FishMMO.Client
 			}));
 		}
 
+		public void OnClick_OnOptions()
+		{
+			if (UIManager.TryGet("UIOptions", out UIOptions uiOptions))
+			{
+				uiOptions.Show();
+			}
+		}
+
 		public void OnClick_Login()
 		{
 			if (!Constants.Authentication.IsAllowedUsername(username.text) ||

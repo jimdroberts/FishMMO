@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using FishNet.Connection;
 using FishNet.Serializing;
 using FishNet.Transporting;
+using UnityEngine;
 
 namespace FishMMO.Shared
 {
@@ -26,7 +27,7 @@ namespace FishMMO.Shared
 		public override void OnAwake()
 		{
 			base.OnAwake();
-			
+
 			if (CharacterAttributeDatabase != null)
 			{
 				foreach (CharacterAttributeTemplate attribute in CharacterAttributeDatabase.Attributes)
@@ -43,6 +44,10 @@ namespace FishMMO.Shared
 
 				InitializeAttributeDependents();
 				InitializeResourceAttributeDependents();
+			}
+			else
+			{
+				UnityEngine.Debug.LogError("Character Attribute Database is missing!");
 			}
 		}
 

@@ -211,12 +211,7 @@ namespace FishMMO.Server
 
 		private ServerType GetServerType()
 		{
-			Scene scene = gameObject.scene;
-			if (!scene.path.Contains("Bootstraps"))
-			{
-				throw new UnityException("Server: Active scene is not in the bootstraps folder.");
-			}
-			serverTypeName = scene.name;
+			serverTypeName = gameObject.scene.name.Replace("Bootstrap", "");
 			string upper = serverTypeName.ToUpper();
 			if (upper.StartsWith("LOGIN"))
 			{

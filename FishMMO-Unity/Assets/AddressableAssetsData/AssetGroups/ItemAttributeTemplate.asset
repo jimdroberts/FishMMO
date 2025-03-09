@@ -1,0 +1,77 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bbb281ee3bf0b054c82ac2347e9e782c, type: 3}
+  m_Name: ItemAttributeTemplate
+  m_EditorClassIdentifier: 
+  m_GroupName: ItemAttributeTemplate
+  m_GUID: 6efcd35cd40bd684488e6d48643513cb
+  m_SerializeEntries:
+  - m_GUID: 227021df2b20bff40ab713a1a868b1d3
+    m_Address: Health Regeneration
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - ItemAttributeTemplate
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 23b76e39682ae764690280034e76f280
+    m_Address: Tier1 Sword Attack Power
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - ItemAttributeTemplate
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2a3df451e24ce964d940bc7b1ea071cc
+    m_Address: Earth Resistance
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - ItemAttributeTemplate
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5d10e1ac3658ab248970a19c84e5eefb
+    m_Address: Wind Resistance
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - ItemAttributeTemplate
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8a24237090e0f5a45a5ea60c0137f86e
+    m_Address: Tier1 Sword Attack Speed
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - ItemAttributeTemplate
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9aa49e0922d75f341a2be18b3000840a
+    m_Address: Water Resistance
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - ItemAttributeTemplate
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cb16e96639b06ca4d9f2ed6c038bc1a9
+    m_Address: Armor
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - ItemAttributeTemplate
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e3e8b717b5d803248a6ff39ab30aa577
+    m_Address: Mana Regeneration
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - ItemAttributeTemplate
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f6e937b757cf3074cb6781f142abab98
+    m_Address: Fire Resistance
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - ItemAttributeTemplate
+    FlaggedDuringContentUpdateRestriction: 0
+  m_ReadOnly: 0
+  m_Settings: {fileID: 11400000, guid: 32d60da793475f74593af93cb933abd4, type: 2}
+  m_SchemaSet:
+    m_Schemas:
+    - {fileID: 11400000, guid: 91b9a5e6afa20414f8a3e72140a802ca, type: 2}
+    - {fileID: 11400000, guid: ead6094f4d2f1454bb25f5eb29d94329, type: 2}
