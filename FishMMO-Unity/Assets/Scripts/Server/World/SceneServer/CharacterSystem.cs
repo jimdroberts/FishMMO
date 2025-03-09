@@ -196,7 +196,7 @@ namespace FishMMO.Server
 		/// <summary>
 		/// Removes the character connection mapping and saves the character state to the database.
 		/// </summary>
-		private void RemoveCharacterConnectionMapping(NetworkConnection conn)
+		private void RemoveCharacterConnectionMapping(NetworkConnection conn, bool skipOnDisconnect = false)
 		{
 			// Remove the waiting scene load character if it exists, these characters exist but are not spawned
 			if (WaitingSceneLoadCharacters.TryGetValue(conn, out IPlayerCharacter waitingSceneCharacter))
@@ -226,7 +226,10 @@ namespace FishMMO.Server
 				characters.Remove(character.ID);
 			}
 
-			OnDisconnect?.Invoke(conn, character);
+			if (!skipOnDisconnect)
+			{
+				OnDisconnect?.Invoke(conn, character);
+			}
 
 			SaveAndDespawnCharacter(conn, character);
 		}
@@ -440,7 +443,7 @@ namespace FishMMO.Server
 				return;
 			}
 
-			Debug.Log($"Connection unloaded scene: {msg.UnloadedScenes[0].Name}|{msg.UnloadedScenes[0].Handle}");
+			//Debug.Log($"Connection unloaded scene: {msg.UnloadedScenes[0].Name}|{msg.UnloadedScenes[0].Handle}");
 
 			// Otherwise disconnect the connection.
 			conn.Disconnect(false);
@@ -791,7 +794,7 @@ namespace FishMMO.Server
 			{
 				//Debug.Log($"Teleporter: {character.TeleporterName} found! Teleporting {character.CharacterName} to {teleporter.ToScene}.");
 
-				Debug.Log($"Unloading scene for {character.CharacterName}: {character.SceneName}|{character.SceneHandle}");
+				//Debug.Log($"Unloading scene for {character.CharacterName}: {character.SceneName}|{character.SceneHandle}");
 
 				// Tell the connection to unload their current world scene.
 				sceneServerSystem.UnloadSceneForConnection(character.Owner, character.SceneName);
@@ -799,15 +802,18 @@ namespace FishMMO.Server
 				// Character becomes immortal when teleporting
 				if (character.TryGet(out ICharacterDamageController damageController))
 				{
-					Debug.Log($"{character.CharacterName} is now immortal.");
+					//Debug.Log($"{character.CharacterName} is now immortal.");
 					damageController.Immortal = true;
 				}
+
+				// Invoke disconnect early when teleporting because we require the scene the character is in.
+				OnDisconnect?.Invoke(character.Owner, character);
 
 				character.SceneName = teleporter.ToScene;
 				character.Motor.SetPositionAndRotationAndVelocity(teleporter.ToPosition, teleporter.ToRotation, Vector3.zero);
 
 				// Save the character and remove it from the scene
-				RemoveCharacterConnectionMapping(character.Owner);
+				RemoveCharacterConnectionMapping(character.Owner, true);
 			}
 		}
 

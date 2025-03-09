@@ -41,21 +41,56 @@ namespace Scenes
 				Debug.LogError("SceneName is null or empty!");
 				return;
 			}
+			//Debug.LogWarning($"AddressableSceneProcessor Loading Scene: {sceneName}");
 			AsyncOperationHandle<SceneInstance> loadHandle = Addressables.LoadSceneAsync(sceneName, parameters, false);
 			_loadingAsyncOperations.Add(loadHandle);
 			_currentAsyncOperation = loadHandle;
 
-			loadHandle.Completed += (handle) => onLoadComplete(handle.Result.Scene);
+			loadHandle.Completed += (op) =>
+			{
+				if (op.Status == AsyncOperationStatus.Succeeded)
+				{
+					//Debug.LogWarning($"AddressableSceneProcessor Loaded scene: {op.Result.Scene.name}|{op.Result.Scene.handle}");
+
+					onLoadComplete?.Invoke(op.Result.Scene);
+				}
+				else
+				{
+					Debug.LogError($"Failed to unload scene: {sceneName}");
+				}
+			};
 		}
 
 		public override void BeginUnloadAsync(Scene scene)
 		{
 			if (_loadedScenesByHandle.TryGetValue(scene.handle, out var loadHandle))
 			{
+				//Debug.LogWarning($"AddressableSceneProcessor Unloading Scene: {scene.name}|{scene.handle}");
 				AsyncOperationHandle<SceneInstance> unloadHandle = Addressables.UnloadSceneAsync(loadHandle, false);
 				_currentAsyncOperation = unloadHandle;
-				_loadedScenes.Remove(scene);
-				_loadedScenesByHandle.Remove(scene.handle);
+
+				unloadHandle.Completed += (op) =>
+				{
+					if (op.Status == AsyncOperationStatus.Succeeded)
+					{
+						Scene unloadedScene = op.Result.Scene;
+
+						//Debug.LogWarning($"AddressableSceneProcessor Unloaded Scene: {unloadedScene.name}|{unloadedScene.handle}");
+						
+						_loadedScenes.Remove(unloadedScene);
+						_loadedScenesByHandle.Remove(unloadedScene.handle);
+
+						// Try to release the load handle if it's still valid for some reason.
+						if (loadHandle.IsValid())
+						{
+							Addressables.Release(loadHandle);
+						}
+					}
+					else
+					{
+						Debug.LogError($"Failed to unload scene: {scene.name}");
+					}
+				};
 			}
 			else
 			{

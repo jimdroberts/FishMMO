@@ -179,7 +179,7 @@ namespace FishMMO.Server
 										}
 										else
 										{
-											//Debug.Log($"Scene Server System: {sceneDetails.Name}:{sceneDetails.WorldServerID}{sceneDetails.Handle}:{sceneDetails.CharacterCount} Pulse");
+											Debug.Log($"Scene Server System: {sceneDetails.Name}:{sceneDetails.WorldServerID}{sceneDetails.Handle}:{sceneDetails.CharacterCount} Pulse");
 											sceneDetails.StalePulse = false;
 											LoadedSceneService.Pulse(dbContext, sceneDetails.Handle, sceneDetails.CharacterCount);
 										}
@@ -289,7 +289,7 @@ namespace FishMMO.Server
 
 				// save the loaded scene information to the database
 				using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-				Debug.Log("Scene Server System: Loaded Scene " + scene.name + ":" + scene.handle);
+				Debug.Log($"Scene Server System: Saved newly loaded scene {scene.name}:{scene.handle} to the database.");
 				LoadedSceneService.Add(dbContext, id, worldServerID, scene.name, scene.handle);
 			}
 			else

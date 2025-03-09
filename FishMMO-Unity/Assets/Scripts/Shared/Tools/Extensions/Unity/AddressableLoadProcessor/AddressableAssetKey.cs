@@ -11,6 +11,12 @@ namespace FishMMO.Shared
 		public List<string> Keys;
 		public Addressables.MergeMode MergeMode = Addressables.MergeMode.None;
 
+		public AddressableAssetKey(string key, Addressables.MergeMode mergeMode = Addressables.MergeMode.None)
+		{
+			Keys = new List<string>() { key } ?? throw new ArgumentNullException(nameof(key));
+			MergeMode = mergeMode;
+		}
+
 		public AddressableAssetKey(List<string> keys, Addressables.MergeMode mergeMode = Addressables.MergeMode.None)
 		{
 			Keys = keys ?? throw new ArgumentNullException(nameof(keys));

@@ -93,7 +93,7 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Returns the cached objects as type List U or empty if nothing is found.
+		/// Returns the first cached object as type U or null if nothing is found.
 		/// </summary>
 		public static U GetFirst<U>() where U : T
 		{
@@ -115,7 +115,7 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Returns the cached objects as type List U or empty if nothing is found.
+		/// Returns the cached objects as type Dictionary<ID, Template> or null if nothing is found.
 		/// </summary>
 		public static Dictionary<int, U> GetCache<U>() where U : T
 		{

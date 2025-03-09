@@ -29,6 +29,8 @@ namespace FishMMO.Client
 	/// </summary>
 	public class Client : MonoBehaviour
 	{
+		private Dictionary<int, Scene> loadedWorldScenes = new Dictionary<int, Scene>();
+
 		private LocalConnectionState clientState = LocalConnectionState.Stopped;
 		private ServerConnectionType currentConnectionType = ServerConnectionType.None;
 
@@ -303,6 +305,8 @@ namespace FishMMO.Client
 
 		public void QuitToLogin(bool forceDisconnect = true)
 		{
+			UnloadWorldScenes();
+			
 			if (forceDisconnect)
 			{
 				ForceDisconnect();
@@ -579,15 +583,14 @@ namespace FishMMO.Client
 		
 		private void SceneManager_OnLoadStart(SceneLoadStartEventArgs args)
 		{
-			// add loaded scenes to list
-			if (args.QueueData.SceneLoadData != null)
+			/*if (args.QueueData.SceneLoadData != null)
 			{
 				SceneLookupData[] lud = args.QueueData.SceneLoadData.SceneLookupDatas;
 				for (int i = 0; i < lud.Length; ++i)
 				{
-					Debug.Log($"FN Scene loaded: {lud[i].Name}|{lud[i].Handle}");
+					Debug.Log($"FN Scene loading: {lud[i].Name}|{lud[i].Handle}");
 				}
-			}
+			}*/
 		}
 
 		private void SceneManager_OnLoadPercentChange(SceneLoadPercentEventArgs args)
@@ -596,32 +599,33 @@ namespace FishMMO.Client
 
 		private void SceneManager_OnLoadEnd(SceneLoadEndEventArgs args)
 		{
-			// add loaded scenes to list
+			// Add Loaded World Scenes
 			if (args.LoadedScenes != null)
 			{
 				foreach (Scene scene in args.LoadedScenes)
 				{
-					Debug.Log($"FN Scene loaded: {scene.name}|{scene.handle}");
+					loadedWorldScenes.Add(scene.handle, scene);
 				}
 			}
 		}
 
 		private void SceneManager_OnUnloadStart(SceneUnloadStartEventArgs args)
 		{
-			SceneLookupData[] lud = args.QueueData.SceneUnloadData.SceneLookupDatas;
+			/*SceneLookupData[] lud = args.QueueData.SceneUnloadData.SceneLookupDatas;
 			for (int i = 0; i < lud.Length; ++i)
 			{
-				Debug.Log($"Scene unload: {lud[i].Name}|{lud[i].Handle}");
-			}
+				Debug.Log($"FN Scene unloading: {lud[i].Name}|{lud[i].Handle}");
+			}*/
 		}
 
 		private void SceneManager_OnUnloadEnd(SceneUnloadEndEventArgs args)
 		{
+			// Remove Loaded World Scenes
 			if (args.UnloadedScenesV2 != null)
 			{
 				foreach (UnloadedScene unloadedScene in args.UnloadedScenesV2)
 				{
-					Debug.Log($"FN Scene unloaded: {unloadedScene.Name}|{unloadedScene.Handle}");
+					loadedWorldScenes.Remove(unloadedScene.Handle);
 				}
 
 				// Notify the server that we unloaded scenes.
@@ -633,6 +637,26 @@ namespace FishMMO.Client
 			else
 			{
 				Debug.Log("No scenes unloaded.");
+			}
+		}
+
+		/// <summary>
+		/// Unloads all cached World Scenes loaded by the Server. This is generally only called when the player exits back to the login screen.
+		/// </summary>
+		private void UnloadWorldScenes()
+		{
+			AddressableLoadProcessor.UnloadSceneByLabelAsync(WorldPreloadScenes);
+
+			SceneProcessorBase sceneProcessor = NetworkManager.SceneManager.GetSceneProcessor();
+			if (sceneProcessor == null)
+			{
+				return;
+			}
+			foreach (Scene scene in new List<Scene>(loadedWorldScenes.Values))
+			{
+				//Debug.LogWarning($"WorldSceneUnload: {scene.name}");
+				sceneProcessor.BeginUnloadAsync(scene);
+				loadedWorldScenes.Remove(scene.handle);
 			}
 		}
 
