@@ -199,7 +199,7 @@ namespace FishMMO.Server
 									CurrentValue = template.IsResourceAttribute ? template.InitialValue : 0.0f,
 								});
 
-								UnityEngine.Debug.Log($"{template.Name} : Initial {template.InitialValue}");
+								//UnityEngine.Debug.Log($"{template.Name} : Initial {template.InitialValue}");
 							}
 						}
 
@@ -286,7 +286,7 @@ namespace FishMMO.Server
 								{
 									if (initialAttributes.TryGetValue(itemAttribute.Template.CharacterAttribute.ID, out CharacterAttributeEntity attributeEntity))
 									{
-										UnityEngine.Debug.Log($"{itemTemplate.Name} - {itemAttribute.Template.CharacterAttribute.Name} adding {itemAttribute.value}");
+										//UnityEngine.Debug.Log($"{itemTemplate.Name} - {itemAttribute.Template.CharacterAttribute.Name} adding {itemAttribute.value}");
 										attributeEntity.Value += itemAttribute.value;
 									}
 								}

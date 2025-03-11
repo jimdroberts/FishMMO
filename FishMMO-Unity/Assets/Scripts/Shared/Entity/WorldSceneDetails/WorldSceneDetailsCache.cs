@@ -185,7 +185,7 @@ namespace FishMMO.Shared
 						});
 					}
 				}
-				EditorSceneManager.SaveOpenScenes();
+				//EditorSceneManager.SaveOpenScenes();
 				Debug.Log("WorldSceneDetails Scene Unloaded[" + currentScene.name + "]");
 				EditorSceneManager.CloseScene(currentScene, true);
 			}

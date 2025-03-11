@@ -179,7 +179,7 @@ namespace FishMMO.Server
 										}
 										else
 										{
-											Debug.Log($"Scene Server System: {sceneDetails.Name}:{sceneDetails.WorldServerID}{sceneDetails.Handle}:{sceneDetails.CharacterCount} Pulse");
+											//Debug.Log($"Scene Server System: {sceneDetails.Name}:{sceneDetails.WorldServerID}{sceneDetails.Handle}:{sceneDetails.CharacterCount} Pulse");
 											sceneDetails.StalePulse = false;
 											LoadedSceneService.Pulse(dbContext, sceneDetails.Handle, sceneDetails.CharacterCount);
 										}

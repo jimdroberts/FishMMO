@@ -17,18 +17,24 @@ namespace FishMMO.Server
 	{
 		private LocalConnectionState serverState;
 		private DateTime lastFetchTime = DateTime.UtcNow;
-		private long lastPosition = 0;
 		private float nextPump = 0.0f;
 
 		public int MaxGuildSize = 100;
 		public int MaxGuildNameLength = 64;
 		[Tooltip("The server guild update pump rate limit in seconds.")]
 		public float UpdatePumpRate = 1.0f;
-		public int UpdateFetchCount = 100;
 
-		// <GuildID <MemberIDs>>
+		/// <summary>
+		/// Tracks all of the members for a guild if any of the guild members are logged in to this server.
+		/// </summary>
 		private Dictionary<long, HashSet<long>> guildMemberTracker = new Dictionary<long, HashSet<long>>();
-		// clientID / guildID
+		/// <summary>
+		/// Tracks all active guilds and currently online guild members on this scene server.
+		/// </summary>
+		private Dictionary<long, HashSet<long>> guildCharacterTracker = new Dictionary<long, HashSet<long>>();
+		/// <summary>
+		/// Pending guild invites Dictionary<FromCharacterID, ToCharacterID>
+		/// </summary>
 		private readonly Dictionary<long, long> pendingInvitations = new Dictionary<long, long>();
 
 		private Dictionary<string, ChatCommand> guildChatCommands;
@@ -117,7 +123,6 @@ namespace FishMMO.Server
 
 					List<GuildUpdateEntity> updates = FetchGuildUpdates();
 					ProcessGuildUpdates(updates);
-
 				}
 				nextPump -= Time.deltaTime;
 			}
@@ -128,15 +133,10 @@ namespace FishMMO.Server
 			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 
 			// fetch guild updates from the database
-			List<GuildUpdateEntity> updates = GuildUpdateService.Fetch(dbContext, lastFetchTime, lastPosition, UpdateFetchCount);
+			List<GuildUpdateEntity> updates = GuildUpdateService.Fetch(dbContext, guildCharacterTracker.Keys.ToList(), lastFetchTime);
 			if (updates != null && updates.Count > 0)
 			{
-				GuildUpdateEntity latest = updates[updates.Count - 1];
-				if (latest != null)
-				{
-					lastFetchTime = latest.TimeCreated;
-					lastPosition = latest.ID;
-				}
+				lastFetchTime = DateTime.UtcNow;
 			}
 			return updates;
 		}
@@ -149,29 +149,33 @@ namespace FishMMO.Server
 				return;
 			}
 
-			// guilds that have previously been updated, we do this so we aren't updating guilds multiple times
+			// Guilds that have previously been updated, we do this so we aren't updating guilds multiple times
 			HashSet<long> updatedGuilds = new HashSet<long>();
 
 			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 			foreach (GuildUpdateEntity update in updates)
 			{
-				// check if we have already updated this guild
+				// Check if we have already updated this guild
 				if (updatedGuilds.Contains(update.GuildID))
 				{
 					continue;
 				}
-				// otherwise add the guild to our list and continue with the update
+				// Otherwise add the guild to our list and continue with the update
 				updatedGuilds.Add(update.GuildID);
 
-				// get the current guild members from the database
+				// Get the current guild members from the database
 				List<CharacterGuildEntity> dbMembers = CharacterGuildService.Members(dbContext, update.GuildID);
 
 				// Get the current member ids
 				var currentMemberIDs = dbMembers.Select(x => x.CharacterID).ToHashSet();
 
+				//Debug.Log($"Current Update Guild: {update.GuildID} MemberCount: {currentMemberIDs.Count}");
+
 				// Check if we have previously cached the guild member list
 				if (guildMemberTracker.TryGetValue(update.GuildID, out HashSet<long> previousMembers))
 				{
+					//Debug.Log($"Previously Cached Guild: {update.GuildID} MemberCount: {previousMembers.Count}");
+
 					// Compute the difference: members that are in previousMembers but not in currentMemberIDs
 					List<long> difference = previousMembers.Except(currentMemberIDs).ToList();
 
@@ -206,7 +210,7 @@ namespace FishMMO.Server
 
 				if (ServerBehaviour.TryGet(out CharacterSystem characterSystem))
 				{
-					// tell all of the local guild members to update their guild member lists
+					// Tell all of the local guild members to update their guild member lists
 					foreach (CharacterGuildEntity entity in dbMembers)
 					{
 						if (characterSystem.CharactersByID.TryGetValue(entity.CharacterID, out IPlayerCharacter character))
@@ -216,11 +220,52 @@ namespace FishMMO.Server
 							{
 								continue;
 							}
-							// update server rank in the case of a membership rank change
+							// Update server rank in the case of a membership rank change
 							guildController.Rank = (GuildRank)entity.Rank;
 							Server.Broadcast(character.Owner, guildAddBroadcast, true, Channel.Reliable);
 						}
 					}
+				}
+			}
+		}
+
+		/// <summary>
+		/// Adds a mapping for the Guild to Guild Members connected to this Scene Server.
+		/// </summary>
+		public void AddGuildCharacterTracker(long guildID, long characterID)
+		{
+			if (guildID == 0)
+			{
+				return;
+			}
+			if (!guildCharacterTracker.TryGetValue(guildID, out HashSet<long> characterIDs))
+			{
+				guildCharacterTracker.Add(guildID, characterIDs = new HashSet<long>());
+			}
+			if (!characterIDs.Contains(characterID))
+			{
+				characterIDs.Add(characterID);
+			}
+		}
+
+		/// <summary>
+		/// Removes the mapping of Guild to Guild Members connected to this Scene Server.
+		/// </summary>
+		public void RemoveGuildCharacterTracker(long guildID, long characterID)
+		{
+			if (guildID == 0)
+			{
+				return;
+			}
+			if (guildCharacterTracker.TryGetValue(guildID, out HashSet<long> characterIDs))
+			{
+				characterIDs.Remove(characterID);
+
+				// If there are no active guild members we can remove the character and member trackers for the guild.
+				if (characterIDs.Count < 1)
+				{
+					guildCharacterTracker.Remove(guildID);
+					guildMemberTracker.Remove(guildID);
 				}
 			}
 		}
@@ -244,6 +289,8 @@ namespace FishMMO.Server
 				return;
 			}
 
+			AddGuildCharacterTracker(guildController.ID, character.ID);
+
 			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 			CharacterGuildService.Save(dbContext, guildController.Character, character.SceneName);
 			GuildUpdateService.Save(dbContext, guildController.ID);
@@ -256,8 +303,7 @@ namespace FishMMO.Server
 				pendingInvitations.Remove(character.ID);
 			}
 
-			if (character == null ||
-				character.IsTeleporting)
+			if (character == null)
 			{
 				return;
 			}
@@ -273,6 +319,8 @@ namespace FishMMO.Server
 				// not in a guild
 				return;
 			}
+
+			RemoveGuildCharacterTracker(guildController.ID, character.ID);
 
 			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 			CharacterGuildService.Save(dbContext, guildController.Character, "Offline");
@@ -327,6 +375,8 @@ namespace FishMMO.Server
 				guildController.ID = newGuild.ID;
 				guildController.Rank = GuildRank.Leader;
 				CharacterGuildService.Save(dbContext, guildController.Character);
+
+				AddGuildCharacterTracker(guildController.ID, guildController.Character.ID);
 
 				// tell the character we made their guild successfully
 				Server.Broadcast(conn, new GuildAddBroadcast()
@@ -421,10 +471,12 @@ namespace FishMMO.Server
 				{
 					guildController.ID = pendingGuildID;
 					guildController.Rank = GuildRank.Member;
+
+					AddGuildCharacterTracker(guildController.ID, guildController.Character.ID);
 					
 					CharacterGuildService.Save(dbContext, guildController.Character);
 					// tell the other servers to update their guild lists
-					GuildUpdateService.Save(dbContext, pendingGuildID);
+					GuildUpdateService.Save(dbContext, guildController.ID);
 
 					// tell the new member they joined immediately, other clients will catch up with the GuildUpdate pass
 					Server.Broadcast(conn, new GuildAddBroadcast()
@@ -520,6 +572,8 @@ namespace FishMMO.Server
 				guildController.ID = 0;
 				guildController.Rank = GuildRank.None;
 
+				RemoveGuildCharacterTracker(guildID, guildController.Character.ID);
+
 				// tell character that they left the guild immediately, other clients will catch up with the GuildUpdate pass
 				Server.Broadcast(conn, new GuildLeaveBroadcast(), true, Channel.Reliable);
 
@@ -576,6 +630,8 @@ namespace FishMMO.Server
 			bool result = CharacterGuildService.Delete(dbContext, guildController.Rank, guildController.ID, msg.GuildMemberID);
 			if (result)
 			{
+				RemoveGuildCharacterTracker(guildController.ID, guildController.Character.ID);
+
 				// tell the servers to update their guild lists
 				GuildUpdateService.Save(dbContext, guildController.ID);
 			}

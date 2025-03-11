@@ -8,7 +8,6 @@ using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
 using FishMMO.Database.Npgsql.Entities;
 
-
 namespace FishMMO.Server
 {
 	/// <summary>
@@ -19,14 +18,19 @@ namespace FishMMO.Server
 		public int MaxPartySize = 6;
 		[Tooltip("The server party update pump rate limit in seconds.")]
 		public float UpdatePumpRate = 1.0f;
-		public int UpdateFetchCount = 100;
 
 		private LocalConnectionState serverState;
 		private DateTime lastFetchTime = DateTime.UtcNow;
-		private long lastPosition = 0;
 		private float nextPump = 0.0f;
-		// <PartyID <MemberIDs>>
+
+		/// <summary>
+		/// Tracks all of the members for a party if any of the party members are logged in to this server.
+		/// </summary>
 		private Dictionary<long, HashSet<long>> partyMemberTracker = new Dictionary<long, HashSet<long>>();
+		/// <summary>
+		/// Tracks all active parties and currently online party members on this scene server.
+		/// </summary>
+		private Dictionary<long, HashSet<long>> partyCharacterTracker = new Dictionary<long, HashSet<long>>();
 		// clientID / partyID
 		private readonly Dictionary<long, long> pendingInvitations = new Dictionary<long, long>();
 
@@ -70,7 +74,7 @@ namespace FishMMO.Server
 				Server.RegisterBroadcast<PartyRemoveBroadcast>(OnServerPartyRemoveBroadcastReceived, true);
 				Server.RegisterBroadcast<PartyChangeRankBroadcast>(OnServerPartyChangeRankBroadcastReceived, true);
 
-				// remove the characters pending guild invite request on disconnect
+				characterSystem.OnConnect += CharacterSystem_OnConnect;
 				characterSystem.OnDisconnect += CharacterSystem_OnDisconnect;
 			}
 			else
@@ -94,6 +98,7 @@ namespace FishMMO.Server
 				// remove the characters pending guild invite request on disconnect
 				if (ServerBehaviour.TryGet(out CharacterSystem characterSystem))
 				{
+					characterSystem.OnConnect -= CharacterSystem_OnConnect;
 					characterSystem.OnDisconnect -= CharacterSystem_OnDisconnect;
 				}
 			}
@@ -125,15 +130,10 @@ namespace FishMMO.Server
 			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 
 			// fetch party updates from the database
-			List<PartyUpdateEntity> updates = PartyUpdateService.Fetch(dbContext, lastFetchTime, lastPosition, UpdateFetchCount);
+			List<PartyUpdateEntity> updates = PartyUpdateService.Fetch(dbContext, partyCharacterTracker.Keys.ToList(), lastFetchTime);
 			if (updates != null && updates.Count > 0)
 			{
-				PartyUpdateEntity latest = updates[updates.Count - 1];
-				if (latest != null)
-				{
-					lastFetchTime = latest.TimeCreated;
-					lastPosition = latest.ID;
-				}
+				lastFetchTime = DateTime.UtcNow;
 			}
 			return updates;
 		}
@@ -166,9 +166,13 @@ namespace FishMMO.Server
 				// Get the current member ids
 				var currentMemberIDs = dbMembers.Select(x => x.CharacterID).ToHashSet();
 
+				//Debug.Log($"Current Update Party: {update.PartyID} MemberCount: {currentMemberIDs.Count}");
+
 				// Check if we have previously cached the party member list
 				if (partyMemberTracker.TryGetValue(update.PartyID, out HashSet<long> previousMembers))
 				{
+					//Debug.Log($"Previously Cached Party: {update.PartyID} MemberCount: {previousMembers.Count}");
+
 					// Compute the difference: members that are in previousMembers but not in currentMemberIDs
 					List<long> difference = previousMembers.Except(currentMemberIDs).ToList();
 
@@ -221,13 +225,102 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Adds a mapping for the Party to Party Members connected to this Scene Server.
+		/// </summary>
+		public void AddPartyCharacterTracker(long partyID, long characterID)
+		{
+			if (partyID == 0)
+			{
+				return;
+			}
+			if (!partyCharacterTracker.TryGetValue(partyID, out HashSet<long> characterIDs))
+			{
+				partyCharacterTracker.Add(partyID, characterIDs = new HashSet<long>());
+			}
+			if (!characterIDs.Contains(characterID))
+			{
+				//Debug.Log($"Added Character Party Tracker: {characterID} | {partyID}");
+				characterIDs.Add(characterID);
+			}
+		}
+
+		/// <summary>
+		/// Removes the mapping of Party to Party Members connected to this Scene Server.
+		/// </summary>
+		public void RemovePartyCharacterTracker(long partyID, long characterID)
+		{
+			if (partyID == 0)
+			{
+				return;
+			}
+			if (partyCharacterTracker.TryGetValue(partyID, out HashSet<long> characterIDs))
+			{
+				//Debug.Log($"Removed Character Party Tracker: {characterID} | {partyID}");
+				characterIDs.Remove(characterID);
+
+				// If there are no active party members we can remove the character and member trackers for the party.
+				if (characterIDs.Count < 1)
+				{
+					partyCharacterTracker.Remove(partyID);
+					partyMemberTracker.Remove(partyID);
+				}
+			}
+		}
+
+		public void CharacterSystem_OnConnect(NetworkConnection conn, IPlayerCharacter character)
+		{
+			if (character == null)
+			{
+				return;
+			}
+
+			if (Server.NpgsqlDbContextFactory == null)
+			{
+				return;
+			}
+
+			if (!character.TryGet(out IPartyController partyController) ||
+				partyController.ID < 1)
+			{
+				// not in a Party
+				return;
+			}
+
+			AddPartyCharacterTracker(partyController.ID, character.ID);
+
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
+			PartyUpdateService.Save(dbContext, partyController.ID);
+		}
+
 		public void CharacterSystem_OnDisconnect(NetworkConnection conn, IPlayerCharacter character)
 		{
-			// Remove pending character invites for this character
 			if (character != null)
 			{
 				pendingInvitations.Remove(character.ID);
 			}
+
+			if (character == null)
+			{
+				return;
+			}
+
+			if (Server.NpgsqlDbContextFactory == null)
+			{
+				return;
+			}
+
+			if (!character.TryGet(out IPartyController partyController) ||
+				partyController.ID < 1)
+			{
+				// not in a Party
+				return;
+			}
+
+			RemovePartyCharacterTracker(partyController.ID, character.ID);
+
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
+			PartyUpdateService.Save(dbContext, partyController.ID);
 		}
 
 		public void OnServerPartyCreateBroadcastReceived(NetworkConnection conn, PartyCreateBroadcast msg, Channel channel)
@@ -258,6 +351,8 @@ namespace FishMMO.Server
 										   partyController.ID,
 										   partyController.Rank,
 										   partyController.Character.TryGet(out ICharacterAttributeController attributeController) ? attributeController.GetHealthResourceAttributeCurrentPercentage() : 0.0f);
+
+				AddPartyCharacterTracker(partyController.ID, partyController.Character.ID);
 
 				// tell the character we made their party successfully
 				Server.Broadcast(conn, new PartyCreateBroadcast()
@@ -358,8 +453,10 @@ namespace FishMMO.Server
 											   partyController.Rank,
 											   attributesExist ? attributeController.GetHealthResourceAttributeCurrentPercentage() : 1.0f);
 
+					AddPartyCharacterTracker(partyController.ID, partyController.Character.ID);
+
 					// tell the other servers to update their party lists
-					PartyUpdateService.Save(dbContext, pendingPartyID);
+					PartyUpdateService.Save(dbContext, partyController.ID);
 
 					// tell the new member they joined immediately, other clients will catch up with the PartyUpdate pass
 					Server.Broadcast(conn, new PartyAddBroadcast()
@@ -443,6 +540,8 @@ namespace FishMMO.Server
 				partyController.ID = 0;
 				partyController.Rank = PartyRank.None;
 
+				RemovePartyCharacterTracker(partyController.ID, partyController.Character.ID);
+
 				// tell character that they left the party immediately, other clients will catch up with the PartyUpdate pass
 				Server.Broadcast(conn, new PartyLeaveBroadcast(), true, Channel.Reliable);
 
@@ -499,6 +598,8 @@ namespace FishMMO.Server
 			bool result = CharacterPartyService.Delete(dbContext, partyController.Rank, partyController.ID, msg.MemberID);
 			if (result)
 			{
+				RemovePartyCharacterTracker(partyController.ID, partyController.Character.ID);
+
 				// tell the other servers to update their party lists
 				PartyUpdateService.Save(dbContext, partyController.ID);
 			}

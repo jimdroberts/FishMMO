@@ -630,7 +630,6 @@ start Scene.exe SCENE";
 			string rootPath = Path.Combine(selectedPath, Constants.Configuration.ProjectName);
 			string serverRootPath = Path.Combine(selectedPath, Constants.Configuration.ProjectName + Path.DirectorySeparatorChar + "Server");
 			WorldSceneDetailsCacheBuilder.Rebuild();
-			BuildAddressables(serverAddressableGroups);
 			BuildExecutable(rootPath,
 							Constants.Configuration.ProjectName,
 							BOOTSTRAP_SCENES,
@@ -639,7 +638,6 @@ start Scene.exe SCENE";
 							StandaloneBuildSubtarget.Player,
 							BuildTarget.StandaloneWindows64);
 
-			BuildAddressables(clientAddressableGroups);
 			BuildExecutable(serverRootPath,
 							ALL_IN_ONE_SERVER_BUILD_NAME,
 							BOOTSTRAP_SCENES,
@@ -683,7 +681,6 @@ start Scene.exe SCENE";
 			string rootPath = Path.Combine(selectedPath, Constants.Configuration.ProjectName);
 			string serverRootPath = Path.Combine(selectedPath, Constants.Configuration.ProjectName + Path.DirectorySeparatorChar + "Server");
 			WorldSceneDetailsCacheBuilder.Rebuild();
-			BuildAddressables(serverAddressableGroups);
 			BuildExecutable(rootPath,
 							Constants.Configuration.ProjectName,
 							BOOTSTRAP_SCENES,
@@ -692,7 +689,6 @@ start Scene.exe SCENE";
 							StandaloneBuildSubtarget.Player,
 							BuildTarget.StandaloneLinux64);
 
-			BuildAddressables(clientAddressableGroups);
 			BuildExecutable(serverRootPath,
 							ALL_IN_ONE_SERVER_BUILD_NAME,
 							BOOTSTRAP_SCENES,
@@ -733,7 +729,6 @@ start Scene.exe SCENE";
 		public static void BuildWindows64AllInOneServer()
 		{
 			WorldSceneDetailsCacheBuilder.Rebuild();
-			BuildAddressables(clientAddressableGroups);
 			BuildExecutable(ALL_IN_ONE_SERVER_BUILD_NAME,
 							BOOTSTRAP_SCENES,
 							CustomBuildType.AllInOne,
@@ -746,7 +741,6 @@ start Scene.exe SCENE";
 		public static void BuildWindows64LoginServer()
 		{
 			WorldSceneDetailsCacheBuilder.Rebuild();
-			BuildAddressables(clientAddressableGroups);
 			BuildExecutable(LOGIN_SERVER_BUILD_NAME,
 							BOOTSTRAP_SCENES,
 							CustomBuildType.Login,
@@ -759,7 +753,6 @@ start Scene.exe SCENE";
 		public static void BuildWindows64WorldServer()
 		{
 			WorldSceneDetailsCacheBuilder.Rebuild();
-			BuildAddressables(clientAddressableGroups);
 			BuildExecutable(WORLD_SERVER_BUILD_NAME,
 							BOOTSTRAP_SCENES,
 							CustomBuildType.World,
@@ -772,7 +765,6 @@ start Scene.exe SCENE";
 		public static void BuildWindows64SceneServer()
 		{
 			WorldSceneDetailsCacheBuilder.Rebuild();
-			BuildAddressables(clientAddressableGroups);
 			BuildExecutable(SCENE_SERVER_BUILD_NAME,
 							BOOTSTRAP_SCENES,
 							CustomBuildType.Scene,
@@ -785,7 +777,6 @@ start Scene.exe SCENE";
 		public static void BuildWindows64Client()
 		{
 			WorldSceneDetailsCacheBuilder.Rebuild();
-			BuildAddressables(serverAddressableGroups);
 			BuildExecutable(Constants.Configuration.ProjectName,
 							BOOTSTRAP_SCENES,
 							CustomBuildType.Client,
@@ -821,7 +812,6 @@ start Scene.exe SCENE";
 		public static void BuildLinux64AllInOneServer()
 		{
 			WorldSceneDetailsCacheBuilder.Rebuild();
-			BuildAddressables(clientAddressableGroups);
 			BuildExecutable(ALL_IN_ONE_SERVER_BUILD_NAME,
 							BOOTSTRAP_SCENES,
 							CustomBuildType.AllInOne,
@@ -903,7 +893,6 @@ start Scene.exe SCENE";
 		public static void BuildLinux64Client()
 		{
 			WorldSceneDetailsCacheBuilder.Rebuild();
-			BuildAddressables(serverAddressableGroups);
 			BuildExecutable(Constants.Configuration.ProjectName,
 							BOOTSTRAP_SCENES,
 							CustomBuildType.Client,
@@ -916,7 +905,6 @@ start Scene.exe SCENE";
 		public static void BuildWebGLClient()
 		{
 			WorldSceneDetailsCacheBuilder.Rebuild();
-			BuildAddressables(serverAddressableGroups);
 			BuildExecutable(Constants.Configuration.ProjectName,
 							WEBGL_CLIENT_BOOTSTRAP_SCENES,
 							CustomBuildType.Client,
