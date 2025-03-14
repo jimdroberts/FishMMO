@@ -63,6 +63,10 @@ namespace FishMMO.Shared
 			{
 				SetFaction(template.ID, msg.NewValue);
 			}
+			else
+			{
+				Debug.Log($"Faction Template not found while Updating: {msg.TemplateID}");
+			}
 		}
 
 		/// <summary>
@@ -72,11 +76,7 @@ namespace FishMMO.Shared
 		{
 			foreach (FactionUpdateBroadcast subMsg in msg.Factions)
 			{
-				FactionTemplate template = FactionTemplate.Get<FactionTemplate>(subMsg.TemplateID);
-				if (template != null)
-				{
-					SetFaction(template.ID, subMsg.NewValue);
-				}
+				OnClientFactionUpdateBroadcastReceived(subMsg, channel);
 			}
 		}
 #endif
@@ -163,7 +163,9 @@ namespace FishMMO.Shared
 			}
 			InsertToAllianceGroup(faction);
 
-			IFactionController.OnUpdateFaction?.Invoke(faction, value);
+			Debug.Log($"Set Faction: {templateID}:{value}");
+
+			IFactionController.OnUpdateFaction?.Invoke(Character, faction);
 		}
 
 		public void Add(IFactionController defenderFactionController)
@@ -201,7 +203,7 @@ namespace FishMMO.Shared
 			}
 			if (faction != null)
 			{
-				IFactionController.OnUpdateFaction?.Invoke(faction, amount);
+				IFactionController.OnUpdateFaction?.Invoke(Character, faction);
 
 				InsertToAllianceGroup(faction);
 			}

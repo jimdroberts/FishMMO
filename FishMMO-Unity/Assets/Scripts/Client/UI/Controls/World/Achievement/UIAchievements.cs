@@ -65,12 +65,12 @@ namespace FishMMO.Client
 				}
 				foreach (Achievement achievement in achievementController.Achievements.Values)
 				{
-					AchievementController_OnUpdateAchievement(achievement);
+					AchievementController_OnUpdateAchievement(character, achievement);
 				}
 			}
 		}
 
-		public void AchievementController_OnUpdateAchievement(Achievement achievement)
+		public void AchievementController_OnUpdateAchievement(ICharacter character, Achievement achievement)
 		{
 			if (achievement == null)
 			{

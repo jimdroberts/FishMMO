@@ -6,7 +6,7 @@ namespace FishMMO.Shared
 	public interface IAchievementController : ICharacterBehaviour
 	{
 		static Action<ICharacter, AchievementTemplate, AchievementTier> OnCompleteAchievement;
-		static Action<Achievement> OnUpdateAchievement;
+		static Action<ICharacter, Achievement> OnUpdateAchievement;
 
 		Dictionary<int, Achievement> Achievements { get; }
 		void SetAchievement(int templateID, byte tier, uint value);

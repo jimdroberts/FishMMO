@@ -12,6 +12,7 @@ namespace FishMMO.Server
 		{
 			if (ServerManager != null)
 			{
+				IAchievementController.OnUpdateAchievement += IAchievementController_OnUpdateAchievement;
 				IAchievementController.OnCompleteAchievement += IAchievementController_HandleAchievementRewards;
 			}
 			else
@@ -24,8 +25,36 @@ namespace FishMMO.Server
 		{
 			if (ServerManager != null)
 			{
+				IAchievementController.OnUpdateAchievement -= IAchievementController_OnUpdateAchievement;
 				IAchievementController.OnCompleteAchievement -= IAchievementController_HandleAchievementRewards;
 			}
+		}
+
+		private void IAchievementController_OnUpdateAchievement(ICharacter character, Achievement achievement)
+		{
+			if (character == null || achievement == null)
+			{
+				return;
+			}
+
+			IPlayerCharacter playerCharacter = character as IPlayerCharacter;
+			if (playerCharacter == null)
+			{
+				return;
+			}
+
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
+			if (dbContext == null)
+			{
+				return;
+			}
+
+			playerCharacter.Owner.Broadcast(new AchievementUpdateBroadcast()
+			{
+				TemplateID = achievement.Template.ID,
+				Value = achievement.CurrentValue,
+				Tier = achievement.CurrentTier,
+			});
 		}
 
 		private void IAchievementController_HandleAchievementRewards(ICharacter character, AchievementTemplate template, AchievementTier tier)

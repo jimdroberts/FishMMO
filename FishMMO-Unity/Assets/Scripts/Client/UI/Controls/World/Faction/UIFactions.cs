@@ -1,7 +1,6 @@
 using UnityEngine;
 using FishMMO.Shared;
 using System.Collections.Generic;
-using System;
 
 namespace FishMMO.Client
 {
@@ -61,12 +60,12 @@ namespace FishMMO.Client
 				}
 				foreach (Faction faction in factionController.Factions.Values)
 				{
-					FactionController_OnUpdateFaction(faction, faction.Value);
+					FactionController_OnUpdateFaction(character, faction);
 				}
 			}
 		}
 
-		public void FactionController_OnUpdateFaction(Faction faction, int amount)
+		public void FactionController_OnUpdateFaction(ICharacter character, Faction faction)
 		{
 			if (faction == null)
 			{

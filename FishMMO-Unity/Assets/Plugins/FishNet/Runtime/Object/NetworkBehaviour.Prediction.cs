@@ -563,7 +563,7 @@ namespace FishNet.Object
             //Owner always replicates with new data.
             del.Invoke(dataContainer.Data, (ReplicateState.Ticked | ReplicateState.Created), dataContainer.Channel);
 #else
-            del.Invoke(data.Data, ReplicateState.CurrentCreated, data.Channel);
+            del.Invoke(dataContainer.Data, ReplicateState.CurrentCreated, dataContainer.Channel);
 #endif
         }
 
@@ -803,7 +803,7 @@ namespace FishNet.Object
                         state |= ReplicateState.Ticked;
 #else
                     //state = ReplicateState.ReplayedCreated;
-                    state = (_readReplicateTicks.Contains(replayTick)) ? ReplicateState.ReplayedCreated : ReplicateState.ReplayedFuture;
+                    state = (dataContainer.IsCreated) ? ReplicateState.ReplayedCreated : ReplicateState.ReplayedFuture;
 #endif
                 }
                 else

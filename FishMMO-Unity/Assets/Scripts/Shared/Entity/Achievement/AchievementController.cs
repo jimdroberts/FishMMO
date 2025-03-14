@@ -1,6 +1,7 @@
 ﻿using FishNet.Transporting;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using UnityEngine;
 
 namespace FishMMO.Shared
 {
@@ -53,6 +54,10 @@ namespace FishMMO.Shared
 			{
 				SetAchievement(template.ID, msg.Tier, msg.Value);
 			}
+			else
+			{
+				//Debug.Log($"Achievement Template not found while Updating: {msg.TemplateID}");
+			}
 		}
 
 		/// <summary>
@@ -62,12 +67,7 @@ namespace FishMMO.Shared
 		{
 			foreach (AchievementUpdateBroadcast subMsg in msg.Achievements)
 			{
-				AchievementTemplate template = AchievementTemplate.Get<AchievementTemplate>(subMsg.TemplateID);
-				
-				if (template != null)
-				{
-					SetAchievement(template.ID, subMsg.Tier, subMsg.Value);
-				}
+				OnClientAchievementUpdateBroadcastReceived(subMsg, channel);
 			}
 		}
 #endif
@@ -78,13 +78,15 @@ namespace FishMMO.Shared
 			{
 				achievement.CurrentTier = tier;
 				achievement.CurrentValue = value;
-				IAchievementController.OnUpdateAchievement?.Invoke(achievement);
 			}
 			else
 			{
 				achievements.Add(templateID, achievement = new Achievement(templateID, tier, value));
-				IAchievementController.OnUpdateAchievement?.Invoke(achievement);
 			}
+
+			IAchievementController.OnUpdateAchievement?.Invoke(Character, achievement);
+
+			//Debug.Log($"Achievement Template Set: {achievement.Template.ID}:{achievement.CurrentValue}");
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -129,7 +131,7 @@ namespace FishMMO.Shared
 				}
 			}
 
-			IAchievementController.OnUpdateAchievement?.Invoke(achievement);
+			IAchievementController.OnUpdateAchievement?.Invoke(Character, achievement);
 		}
 	}
 }

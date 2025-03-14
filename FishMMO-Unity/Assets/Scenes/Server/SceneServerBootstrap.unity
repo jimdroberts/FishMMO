@@ -236,7 +236,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   MaxPartySize: 6
   UpdatePumpRate: 1
-  UpdateFetchCount: 100
 --- !u!114 &720886231438937583
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -424,7 +423,6 @@ MonoBehaviour:
   MaxGuildSize: 100
   MaxGuildNameLength: 64
   UpdatePumpRate: 1
-  UpdateFetchCount: 100
 --- !u!114 &3897615595877637487
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -501,6 +499,7 @@ GameObject:
   - component: {fileID: 7050712621775980323}
   - component: {fileID: 2641911232102751626}
   - component: {fileID: 1339999477293024302}
+  - component: {fileID: 8596418967717447528}
   - component: {fileID: 720886231438937583}
   - component: {fileID: 1737856339}
   - component: {fileID: 1737856340}
@@ -659,7 +658,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _sceneProcessor: {fileID: 8097462252018206295}
   _lightProbeUpdating: 0
-  _moveClientHostObjects: 1
+  _moveClientObjects: 1
   _setActiveScene: 1
 --- !u!114 &8596418967717447527
 MonoBehaviour:
@@ -676,6 +675,18 @@ MonoBehaviour:
   WorldSceneDetailsCache: {fileID: 11400000, guid: 3f3e421dc58c81d4e94dcea943cfcd35,
     type: 2}
   PulseRate: 5
+--- !u!114 &8596418967717447528
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6036284252421008547}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 99dbe019adb8f5249aecf3660cc3b81d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
