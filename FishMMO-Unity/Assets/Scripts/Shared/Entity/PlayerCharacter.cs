@@ -98,8 +98,8 @@ namespace FishMMO.Shared
 		{
 			ID = reader.ReadInt64();
 			RaceID = reader.ReadInt32();
-			RaceName = reader.ReadString();
-			SceneName = reader.ReadString();
+			RaceName = reader.ReadStringAllocated();
+			SceneName = reader.ReadStringAllocated();
 
 #if !UNITY_SERVER
 			IPlayerCharacter.OnReadPayload?.Invoke(this);

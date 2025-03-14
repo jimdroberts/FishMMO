@@ -104,26 +104,29 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			if (state.IsFuture())
+			if (!base.IsServerStarted && !base.IsOwner)
 			{
-				uint lastCreatedTick = lastCreatedData.GetTick();
-				uint thisTick = input.GetTick();
-				uint tickDiff = lastCreatedTick - thisTick;
-				if (tickDiff <= 1)
+				if (state.IsFuture())
 				{
-					input.MoveFlags = lastCreatedData.MoveFlags;
-					// don't predict jumping, only crouch and sprint
-					input.MoveFlags.DisableBit(KCCMoveFlags.Jump);
-					input.CameraPosition = lastCreatedData.CameraPosition;
-					input.CameraRotation = lastCreatedData.CameraRotation;
-					input.MoveAxisForward = lastCreatedData.MoveAxisForward;
-					input.MoveAxisRight = lastCreatedData.MoveAxisRight;
+					uint lastCreatedTick = lastCreatedData.GetTick();
+					uint thisTick = input.GetTick();
+					uint tickDiff = lastCreatedTick - thisTick;
+					if (tickDiff <= 1)
+					{
+						input.MoveFlags = lastCreatedData.MoveFlags;
+						// don't predict jumping, only crouch and sprint
+						input.MoveFlags.DisableBit(KCCMoveFlags.Jump);
+						input.CameraPosition = lastCreatedData.CameraPosition;
+						input.CameraRotation = lastCreatedData.CameraRotation;
+						input.MoveAxisForward = lastCreatedData.MoveAxisForward;
+						input.MoveAxisRight = lastCreatedData.MoveAxisRight;
+					}
 				}
-			}
-			else if (state == ReplicateState.ReplayedCreated)
-			{
-				lastCreatedData.Dispose();
-				lastCreatedData = input;
+				else if (state.ContainsTicked())
+				{
+					lastCreatedData.Dispose();
+					lastCreatedData = input;
+				}
 			}
 
 			CharacterController.SetInputs(ref input);

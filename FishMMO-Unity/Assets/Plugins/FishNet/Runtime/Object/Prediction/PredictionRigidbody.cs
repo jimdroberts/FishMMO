@@ -311,7 +311,7 @@ namespace FishNet.Object.Prediction
         /// </summary>
         public void Velocity(Vector3 force)
         {
-            Rigidbody.linearVelocity = force;
+            Rigidbody.velocity = force;
             RemoveForces(true);
         }
 

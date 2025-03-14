@@ -1,4 +1,4 @@
-﻿#if FISHNET_STABLE_MODE
+﻿#if FISHNET_STABLE_SYNCTYPES
 using FishNet.CodeGenerating;
 using FishNet.Documenting;
 using FishNet.Managing;
@@ -362,7 +362,7 @@ namespace FishNet.Object.Synchronizing
         /// <param name="asServer">True if OnStartServer was called, false if OnStartClient.</param>
         
         [MakePublic]
-        internal protected override void OnStartCallback(bool asServer)
+        protected internal override void OnStartCallback(bool asServer)
         {
             base.OnStartCallback(asServer);
 
@@ -384,7 +384,7 @@ namespace FishNet.Object.Synchronizing
         /// </summary>
         /// <param name="resetSyncTick">True to set the next time data may sync.</param>
         [MakePublic]
-        internal protected override void WriteDelta(PooledWriter writer, bool resetSyncTick = true)
+        protected internal override void WriteDelta(PooledWriter writer, bool resetSyncTick = true)
         {
             base.WriteDelta(writer, resetSyncTick);
             writer.Write(_value);
@@ -394,7 +394,7 @@ namespace FishNet.Object.Synchronizing
         /// Writes current value if not initialized value.
         /// </summary>m>
         [MakePublic]
-        internal protected override void WriteFull(PooledWriter obj0)
+        protected internal override void WriteFull(PooledWriter obj0)
         {
             /* If a class then skip comparer check.
              * InitialValue and Value will be the same reference.
@@ -450,8 +450,8 @@ namespace FishNet.Object.Synchronizing
              * asServer is true.
              * Is not network initialized.
              * asServer is false, and server is not started. */
-            if ((asServer && !base.NetworkManager.IsClientStarted) ||
-                (!asServer && base.NetworkBehaviour.IsDeinitializing))
+            bool clientStarted = (base.IsNetworkInitialized && base.NetworkManager.IsClientStarted);
+            if ((asServer && !clientStarted) || (!asServer && base.NetworkBehaviour.IsDeinitializing))
             {
                 _value = _initialValue;
                 _previousClientValue = _initialValue;

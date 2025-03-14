@@ -17,6 +17,7 @@ namespace Scenes
 		private readonly List<AsyncOperationHandle<SceneInstance>> _loadingAsyncOperations = new(4);
 		private AsyncOperationHandle<SceneInstance> _currentAsyncOperation;
 		private AsyncOperation _currentBasicAsyncOperation;
+		private Scene _lastLoadedScene;
 
 		public override void LoadStart(LoadQueueData queueData)
 		{
@@ -34,7 +35,7 @@ namespace Scenes
 			_loadingAsyncOperations.Clear();
 		}
 
-		public override void BeginLoadAsync(string sceneName, LoadSceneParameters parameters, Action<Scene> onLoadComplete)
+		public override void BeginLoadAsync(string sceneName, LoadSceneParameters parameters)
 		{
 			if (string.IsNullOrEmpty(sceneName))
 			{
@@ -51,8 +52,7 @@ namespace Scenes
 				if (op.Status == AsyncOperationStatus.Succeeded)
 				{
 					//Debug.LogWarning($"AddressableSceneProcessor Loaded scene: {op.Result.Scene.name}|{op.Result.Scene.handle}");
-
-					onLoadComplete?.Invoke(op.Result.Scene);
+					_lastLoadedScene = op.Result.Scene;
 				}
 				else
 				{

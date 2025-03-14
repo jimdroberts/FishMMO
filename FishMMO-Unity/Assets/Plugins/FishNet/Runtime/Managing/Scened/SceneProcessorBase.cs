@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -11,11 +10,11 @@ namespace FishNet.Managing.Scened
 
     public abstract class SceneProcessorBase : MonoBehaviour
     {
-		#region Protected.
-		/// <summary>
-		/// SceneManager for this processor.
-		/// </summary>
-		protected SceneManager SceneManager;
+        #region Protected.
+        /// <summary>
+        /// SceneManager for this processor.
+        /// </summary>
+        protected SceneManager SceneManager;
         /// <summary>
         /// Scene used to store objects while they are being moved from one scene to another.
         /// </summary>
@@ -67,7 +66,7 @@ namespace FishNet.Managing.Scened
         /// Begin loading a scene using an async method.
         /// </summary>
         /// <param name="sceneName">Scene name to load.</param>
-        public abstract void BeginLoadAsync(string sceneName, LoadSceneParameters parameters, Action<Scene> onLoadComplete);
+        public abstract void BeginLoadAsync(string sceneName, LoadSceneParameters parameters);
         /// <summary>
         /// Begin unloading a scene using an async method.
         /// </summary>
@@ -83,6 +82,11 @@ namespace FishNet.Managing.Scened
         /// </summary>
         /// <returns></returns>
         public abstract float GetPercentComplete();
+        /// <summary>
+        /// Gets the scene last loaded by the processor.
+        /// </summary>
+        /// <remarks>This is called after IsPercentComplete returns true.</remarks>
+        public virtual Scene GetLastLoadedScene() => default;
         /// <summary>
         /// Adds a scene to loaded scenes.
         /// </summary>

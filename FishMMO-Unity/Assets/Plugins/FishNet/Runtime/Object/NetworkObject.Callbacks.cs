@@ -8,7 +8,6 @@ namespace FishNet.Object
     public partial class NetworkObject : MonoBehaviour
     {
         #region Private.
-
         /// <summary>
         /// True if OnStartServer was called.
         /// </summary>
@@ -17,14 +16,12 @@ namespace FishNet.Object
         /// True if OnStartClient was called.
         /// </summary>
         private bool _onStartClientCalled;
-
         #endregion
 
         // ReSharper disable Unity.PerformanceAnalysis
         /// <summary>
         /// Called after all data is synchronized with this NetworkObject.
         /// </summary>
-        
         private void InvokeStartCallbacks(bool asServer, bool invokeSyncTypeCallbacks)
         {
             /* Note: When invoking OnOwnership here previous owner will
@@ -36,7 +33,7 @@ namespace FishNet.Object
             if (invokeOnNetwork)
             {
                 for (int i = 0; i < NetworkBehaviours.Count; i++)
-                    NetworkBehaviours[i].InvokeOnNetwork(start: true);
+                    NetworkBehaviours[i].InvokeOnNetwork_Internal(start: true);
             }
 
             //As server.
@@ -63,7 +60,6 @@ namespace FishNet.Object
 
             InvokeStartCallbacks_Prediction(asServer);
         }
-
 
         /// <summary>
         /// Invokes OnStartXXXX for synctypes, letting them know the NetworkBehaviour start cycle has been completed.
@@ -117,27 +113,36 @@ namespace FishNet.Object
 
             if (invokeSyncTypeCallbacks)
                 InvokeOnStopSyncTypeCallbacks(asServer);
-
-            bool clientStartCalled = _onStartClientCalled;
-
+            
             if (asServer && _onStartServerCalled)
             {
                 for (int i = 0; i < NetworkBehaviours.Count; i++)
                     NetworkBehaviours[i].OnStopServer_Internal();
+
+                if (!_onStartClientCalled)
+                    InvokeOnNetwork();
+
                 _onStartServerCalled = false;
             }
             else if (!asServer && _onStartClientCalled)
             {
                 for (int i = 0; i < NetworkBehaviours.Count; i++)
                     NetworkBehaviours[i].OnStopClient_Internal();
+
+                /* Only invoke OnNetwork if server start isn't called, otherwise
+                 * that means this is still intialized on the server. This would
+                 * happen if the object despawned for the clientHost but not on the
+                 * server. */
+                if (!_onStartServerCalled)
+                    InvokeOnNetwork();
+
                 _onStartClientCalled = false;
             }
 
-            bool invokeOnNetwork = asServer || (clientStartCalled && !IsServerStarted);
-            if (invokeOnNetwork)
+            void InvokeOnNetwork()
             {
                 for (int i = 0; i < NetworkBehaviours.Count; i++)
-                    NetworkBehaviours[i].InvokeOnNetwork(false);
+                    NetworkBehaviours[i].InvokeOnNetwork_Internal(start: false);
             }
         }
 

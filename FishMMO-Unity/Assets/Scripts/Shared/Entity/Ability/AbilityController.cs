@@ -409,21 +409,24 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			// Predict held state
-			if (state.IsFuture())
+			if (!base.IsServerStarted && !base.IsOwner)
 			{
-				uint lastCreatedTick = lastCreatedData.GetTick();
-				uint thisTick = activationData.GetTick();
-				uint tickDiff = lastCreatedTick - thisTick;
-				if (tickDiff <= 1)
+				// Predict held state
+				if (state.IsFuture())
 				{
-					activationData.HeldKey = lastCreatedData.HeldKey;
+					uint lastCreatedTick = lastCreatedData.GetTick();
+					uint thisTick = activationData.GetTick();
+					uint tickDiff = lastCreatedTick - thisTick;
+					if (tickDiff <= 1)
+					{
+						activationData.HeldKey = lastCreatedData.HeldKey;
+					}
 				}
-			}
-			else if (state == ReplicateState.ReplayedCreated)
-			{
-				lastCreatedData.Dispose();
-				lastCreatedData = activationData;
+				else if (state.ContainsTicked())
+				{
+					lastCreatedData.Dispose();
+					lastCreatedData = activationData;
+				}
 			}
 
 			float deltaTime = (float)base.TimeManager.TickDelta;
@@ -468,7 +471,7 @@ namespace FishMMO.Shared
 					//Debug.Log($"2 Activating {validatedAbility.ID} State: {state}");
 
 					// Handle ability updates here, display cast bar, display hitbox telegraphs, etc
-					if (state == ReplicateState.CurrentCreated)
+					if (state.IsTickedCreated())
 					{
 						OnUpdate?.Invoke(validatedAbility.Name, remainingTime, validatedAbility.ActivationTime * CalculateSpeedReduction(GetActivationAttributeTemplate(validatedAbility)));
 					}

@@ -36,7 +36,7 @@ namespace FishNet.Object
                     return;
 
                 for (int i = 0; i < Writers.Count; i++)
-                    Writers[i].Reset();
+                    Writers[i].Clear();
             }
 
             public void ResetState()
@@ -184,7 +184,7 @@ namespace FishNet.Object
                 if (_syncTypes.TryGetValueIL2CPP(syncTypeId, out SyncBase sb))
                     sb.Read(reader, asServer);
                 else
-                    NetworkManager.LogWarning($"SyncType not found for index {syncTypeId} on {transform.name}, component {GetType().FullName}. Remainder of packet may become corrupt.");
+                    NetworkManager.LogError($"SyncType not found for index {syncTypeId} on {transform.name}, component {GetType().FullName}. The remainder of the packet will become corrupt likely resulting in unforeseen issues for this tick, such as data missing or objects not spawning.");
             }
 
             if (reader.Position > endPosition)
@@ -341,7 +341,7 @@ namespace FishNet.Object
                         continue;
                     
                     CompleteSyncTypePacket(fullWriter, writer);
-                    writer.Reset();
+                    writer.Clear();
                     
                     //Should not be the case but check for safety.
                     if (fullWriter.Length == 0)
@@ -368,7 +368,7 @@ namespace FishNet.Object
                             break;
                     }
 
-                    fullWriter.Reset();
+                    fullWriter.Clear();
                 }
             }
 
@@ -415,7 +415,7 @@ namespace FishNet.Object
             {
                 PooledWriter writer = stw.Writers[i];
                 CompleteSyncTypePacket(fullWriter, writer);
-                writer.Reset();
+                writer.Clear();
 
                 byte channel = (byte)Channel.Reliable;
                 _networkObjectCache.NetworkManager.TransportManager.SendToClient(channel, fullWriter.GetArraySegment(), conn);
@@ -433,7 +433,7 @@ namespace FishNet.Object
             if (syncTypeWriter.Length == 0)
                 return;
 
-            fullWriter.Reset();
+            fullWriter.Clear();
             fullWriter.WritePacketIdUnpacked(PacketId.SyncType);
             fullWriter.WriteNetworkBehaviour(this);
 

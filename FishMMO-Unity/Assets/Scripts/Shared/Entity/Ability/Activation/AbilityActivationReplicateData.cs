@@ -9,11 +9,12 @@ namespace FishMMO.Shared
 		public long QueuedAbilityID;
 		public KeyCode HeldKey;
 
-		public AbilityActivationReplicateData(int activationFlags, long queuedAbilityID, KeyCode heldKey) : this()
+		public AbilityActivationReplicateData(int activationFlags, long queuedAbilityID, KeyCode heldKey)
 		{
 			ActivationFlags = activationFlags;
 			QueuedAbilityID = queuedAbilityID;
 			HeldKey = heldKey;
+
 			_tick = 0;
 		}
 

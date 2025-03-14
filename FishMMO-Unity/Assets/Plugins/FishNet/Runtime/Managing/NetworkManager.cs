@@ -1,4 +1,13 @@
-﻿using FishNet.Connection;
+﻿#if UNITY_EDITOR || DEVELOPMENT_BUILD
+#define DEVELOPMENT
+#endif
+
+#if UNITY_EDITOR
+using FishNet.Editing.PrefabCollectionGenerator;
+using UnityEditor;
+#endif
+
+using FishNet.Connection;
 using FishNet.Managing.Client;
 using FishNet.Managing.Server;
 using FishNet.Managing.Timing;
@@ -24,10 +33,7 @@ using FishNet.Managing.Predicting;
 using System.Runtime.CompilerServices;
 using GameKit.Dependencies.Utilities;
 
-#if UNITY_EDITOR
-using FishNet.Editing.PrefabCollectionGenerator;
-using UnityEditor;
-#endif
+
 
 namespace FishNet.Managing
 {
@@ -161,6 +167,12 @@ namespace FishNet.Managing
         /// Starting index for RpcLinks.
         /// </summary>
         internal static ushort StartingRpcLinkIndex;
+        #if DEVELOPMENT
+        /// <summary>
+        /// Last read packetId be it from server or client.
+        /// </summary>
+        internal PacketId LastReadPacketId;
+#endif
         #endregion
 
         #region Serialized.
@@ -212,7 +224,7 @@ namespace FishNet.Managing
         /// <summary>
         /// Version of this release.
         /// </summary>
-        public const string FISHNET_VERSION = "4.5.0";
+        public const string FISHNET_VERSION = "4.6.4";
         /// <summary>
         /// Maximum framerate allowed.
         /// </summary>
@@ -240,7 +252,7 @@ namespace FishNet.Managing
             {
                 Generator.IgnorePostProcess = true;
                 Debug.Log("DefaultPrefabCollection is being refreshed.");
-                Generator.GenerateFull();
+                Generator.GenerateFull(initializeAdded: false);
                 Generator.IgnorePostProcess = false;
             }
 #endif
@@ -250,7 +262,7 @@ namespace FishNet.Managing
                 DefaultPrefabObjects originalDpo = (DefaultPrefabObjects)SpawnablePrefabs;
                 //If not editor then a new instance must be made and sorted.
                 DefaultPrefabObjects instancedDpo = ScriptableObject.CreateInstance<DefaultPrefabObjects>();
-                instancedDpo.AddObjects(originalDpo.Prefabs.ToList(), false);
+                instancedDpo.AddObjects(originalDpo.Prefabs.ToList(), checkForDuplicates: false, initializeAdded: false);
                 instancedDpo.Sort();
                 SpawnablePrefabs = instancedDpo;
             }

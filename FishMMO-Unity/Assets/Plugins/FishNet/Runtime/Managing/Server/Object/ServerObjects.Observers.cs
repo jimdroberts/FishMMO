@@ -1,18 +1,12 @@
-﻿using FishNet.Component.Observing;
-using FishNet.Connection;
+﻿using FishNet.Connection;
 using FishNet.Managing.Object;
 using FishNet.Managing.Timing;
 using FishNet.Object;
 using FishNet.Observing;
 using FishNet.Serializing;
 using FishNet.Transporting;
-using FishNet.Utility;
-using FishNet.Utility.Performance;
 using GameKit.Dependencies.Utilities;
-using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Runtime.CompilerServices;
 using UnityEngine;
 
 namespace FishNet.Managing.Server
@@ -67,7 +61,7 @@ namespace FishNet.Managing.Server
 
             /* Try to iterate all timed observers every half a second.
              * This value will increase as there's more observers or timed conditions. */
-            float timeMultiplier = 1f + (float)((base.NetworkManager.ServerManager.Clients.Count * 0.005f) + (_timedNetworkObservers.Count * 0.0005f));
+            float timeMultiplier = 1f + ((base.NetworkManager.ServerManager.Clients.Count * 0.005f) + (_timedNetworkObservers.Count * 0.0005f));
             //Check cap this way for readability.
             float completionTime = Mathf.Min((0.5f * timeMultiplier), base.NetworkManager.ObserverManager.MaximumTimedObserversDuration);
             uint completionTicks = base.NetworkManager.TimeManager.TimeToTicks(completionTime, TickRounding.RoundUp);
@@ -162,48 +156,73 @@ namespace FishNet.Managing.Server
         /// <returns></returns>
         private List<NetworkObject> RetrieveOrderedSpawnedObjects()
         {
+            List<NetworkObject> spawnedCache = GetSpawnedNetworkObjects();
+
+            List<NetworkObject> sortedCache = SortRootAndNestedByInitializeOrder(spawnedCache);
+
+            CollectionCaches<NetworkObject>.Store(spawnedCache);
+
+            return sortedCache;
+        }
+
+        /// <summary>
+        /// Returns spawned NetworkObjects as a list.
+        /// Collection returned is a new cache and should be disposed of properly.
+        /// </summary>
+        /// <returns></returns>
+        private List<NetworkObject> GetSpawnedNetworkObjects()
+        {
             List<NetworkObject> cache = CollectionCaches<NetworkObject>.RetrieveList();
-
-            //First order root objects.
-            foreach (NetworkObject item in Spawned.Values)
-            {
-                if (item.IsNested)
-                    continue;
-
-                cache.AddOrdered(item);
-            }
-
-            OrderNestedByInitializationOrder(cache);
+            Spawned.ValuesToList(ref cache);
 
             return cache;
         }
 
         /// <summary>
-        /// Orders nested NetworkObjects of cache by initialization order.
+        /// Sorts a collection of NetworkObjects root and nested by initialize order.
+        /// Collection returned is a new cache and should be disposed of properly.
         /// </summary>
-        /// <param name="cache">Cache to sort.</param>
-        private void OrderNestedByInitializationOrder(List<NetworkObject> cache)
+        internal List<NetworkObject> SortRootAndNestedByInitializeOrder(List<NetworkObject> nobs)
         {
-            //After everything is sorted by root only insert children.
-            for (int i = 0; i < cache.Count; i++)
+            List<NetworkObject> sortedRootCache = CollectionCaches<NetworkObject>.RetrieveList();
+
+            //First order root objects.
+            foreach (NetworkObject item in nobs)
             {
-                NetworkObject nob = cache[i];
-                //Skip root.
-                if (nob.IsNested)
+                if (item.IsNested)
                     continue;
 
-                int startingIndex = i;
-                AddChildNetworkObjects(nob, ref startingIndex);
+                sortedRootCache.AddOrdered(item);
             }
 
-            void AddChildNetworkObjects(NetworkObject n, ref int index)
+            /* After all root are ordered check
+             * their nested. Order nested in segments
+             * of each root then insert after the root.
+             * This must be performed after all roots are ordered. */
+            List<NetworkObject> sortedRootAndNestedCache = CollectionCaches<NetworkObject>.RetrieveList();
+            List<NetworkObject> sortedNestedCache = CollectionCaches<NetworkObject>.RetrieveList();
+            foreach (NetworkObject item in sortedRootCache)
             {
-                foreach (NetworkObject childObject in n.InitializedNestedNetworkObjects)
-                {
-                    cache.Insert(++index, childObject);
-                    AddChildNetworkObjects(childObject, ref index);
-                }
+                List<NetworkObject> nested = item.RetrieveNestedNetworkObjects(recursive: true);
+                foreach (NetworkObject nestedItem in nested)
+                    sortedNestedCache.AddOrdered(nestedItem);
+
+                CollectionCaches<NetworkObject>.Store(nested);
+
+                /* Once all nested are sorted then can be added to the
+                 * sorted root and nested cache. */
+                sortedRootAndNestedCache.Add(item);
+                sortedRootAndNestedCache.AddRange(sortedNestedCache);
+
+                //Reset cache.
+                sortedNestedCache.Clear();
             }
+
+            //Store temp caches.
+            CollectionCaches<NetworkObject>.Store(sortedRootCache);
+            CollectionCaches<NetworkObject>.Store(sortedNestedCache);
+
+            return sortedRootAndNestedCache;
         }
 
         /// <summary>
@@ -337,7 +356,7 @@ namespace FishNet.Managing.Server
                 if (_writer.Length > 0)
                 {
                     NetworkManager.TransportManager.SendToClient((byte)Channel.Reliable, _writer.GetArraySegment(), nc);
-                    _writer.Reset();
+                    _writer.Clear();
 
                     foreach (NetworkObject n in nobCache)
                         n.OnSpawnServer(nc);
@@ -354,17 +373,24 @@ namespace FishNet.Managing.Server
         {
             if (ApplicationState.IsQuitting())
                 return;
-            _writer.Reset();
+            _writer.Clear();
 
             conn.UpdateHashGridPositions(!timedOnly);
             //If observer state changed then write changes.
             ObserverStateChange osc = nob.RebuildObservers(conn, timedOnly);
             if (osc == ObserverStateChange.Added)
+            {
                 WriteSpawn(nob, _writer, conn);
+            }
             else if (osc == ObserverStateChange.Removed)
+            {
+                nob.InvokeOnServerDespawn(conn);
                 WriteDespawn(nob, nob.GetDefaultDespawnType(), _writer);
+            }
             else
+            {
                 return;
+            }
 
             NetworkManager.TransportManager.SendToClient((byte)Channel.Reliable, _writer.GetArraySegment(), conn);
 
@@ -373,6 +399,8 @@ namespace FishNet.Managing.Server
              * and onspawnserver. */
             if (osc == ObserverStateChange.Added)
                 nob.OnSpawnServer(conn);
+            
+            _writer.Clear();
 
             /* If there is change then also rebuild recursive networkObjects. */
             foreach (NetworkBehaviour item in nob.RuntimeChildNetworkBehaviours)
@@ -400,6 +428,7 @@ namespace FishNet.Managing.Server
             }
             else if (osc == ObserverStateChange.Removed)
             {
+                nob.InvokeOnServerDespawn(conn);
                 WriteDespawn(nob, nob.GetDefaultDespawnType(), _writer);
             }
             else

@@ -43,6 +43,7 @@ namespace FishMMO.Client
 			{
 				IFactionController.OnUpdateFaction -= FactionController_OnUpdateFaction;
 			}
+			ClearAll();
 		}
 
 		public override void OnQuitToLogin()
@@ -141,7 +142,7 @@ namespace FishMMO.Client
 		{
 			foreach (UIFactionDescription faction in new List<UIFactionDescription>(factions.Values))
 			{
-				Destroy(faction);
+				Destroy(faction.gameObject);
 			}
 			factions.Clear();
 		}

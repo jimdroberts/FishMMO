@@ -23,6 +23,10 @@ namespace FishNet.Managing.Scened
         /// Current AsyncOperation being processed.
         /// </summary>
         protected AsyncOperation CurrentAsyncOperation;
+        /// <summary>
+        /// Last scene to load or begin loading.
+        /// </summary>
+        private UnityScene _lastLoadedScene;
         #endregion
 
         /// <summary>
@@ -63,20 +67,16 @@ namespace FishNet.Managing.Scened
         /// Begin loading a scene using an async method.
         /// </summary>
         /// <param name="sceneName">Scene name to load.</param>
-        public override void BeginLoadAsync(string sceneName, UnityEngine.SceneManagement.LoadSceneParameters parameters, Action<UnityScene> onLoadComplete)
+        public override void BeginLoadAsync(string sceneName, UnityEngine.SceneManagement.LoadSceneParameters parameters)
         {
             AsyncOperation ao = UnitySceneManager.LoadSceneAsync(sceneName, parameters);
-
-			// This immediately returns the new scene handle regardless of being loaded or not.
-			UnityScene newScene = UnitySceneManager.GetSceneAt(UnitySceneManager.sceneCount - 1);
-
             LoadingAsyncOperations.Add(ao);
+            
+            _lastLoadedScene = UnitySceneManager.GetSceneAt(UnitySceneManager.sceneCount - 1); 
             
             CurrentAsyncOperation = ao;
             CurrentAsyncOperation.allowSceneActivation = false;
-
-			ao.completed += (s) => onLoadComplete?.Invoke(newScene);
-		}
+        }
 
         /// <summary>
         /// Begin unloading a scene using an async method.
@@ -104,6 +104,13 @@ namespace FishNet.Managing.Scened
         {
             return (CurrentAsyncOperation == null) ? 1f : CurrentAsyncOperation.progress;
         }
+
+        /// <summary>
+        /// Gets the scene last loaded by the processor.
+        /// </summary>
+        /// <remarks>This is called after IsPercentComplete returns true.</remarks>
+        public override UnityScene GetLastLoadedScene() => _lastLoadedScene;
+
 
         /// <summary>
         /// Adds a loaded scene.
@@ -162,8 +169,7 @@ namespace FishNet.Managing.Scened
                 }
                 yield return null;
             } while (notDone);
-
-            yield break;
+            
         }
     }
 

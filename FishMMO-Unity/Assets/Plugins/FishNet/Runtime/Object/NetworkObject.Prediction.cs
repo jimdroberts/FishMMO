@@ -10,6 +10,7 @@ using System.Collections.Generic;
 using FishNet.Connection;
 using FishNet.Managing.Server;
 using UnityEngine;
+#pragma warning disable CS0618 // Type or member is obsolete
 
 namespace FishNet.Object
 {
@@ -37,7 +38,8 @@ namespace FishNet.Object
         /// <summary>
         /// Graphical smoother to use when using set for owner.
         /// </summary> 
-        public ChildTransformTickSmoother PredictionSmoother { get; private set; }
+        [Obsolete("This field will be removed in v5. Instead reference NetworkTickSmoother on each graphical object used.")]
+        public TransformTickSmoother PredictionSmoother { get; private set; }
         #endregion
 
         #region Internal.
@@ -171,7 +173,7 @@ namespace FishNet.Object
                 PredictionSmoother.OnUpdate();
         }
 
-        private void Preinitialize_Prediction(NetworkManager manager, bool asServer)
+        private void InitializePredictionEarly(NetworkManager manager, bool asServer)
         {
             if (!_enablePrediction)
                 return;
@@ -181,8 +183,8 @@ namespace FishNet.Object
 
             if (asServer)
                 return;
-            else
-                InitializeSmoothers();
+
+            InitializeSmoothers();
 
             if (_predictionBehaviours.Count > 0)
             {
@@ -203,7 +205,7 @@ namespace FishNet.Object
              * dropping their connection. */
             if (_predictionBehaviours.Count > 0)
             {
-                ChangePredictionSubscriptions(false, NetworkManager);
+                ChangePredictionSubscriptions(subscribe: false, NetworkManager);
                 foreach (NetworkBehaviour item in _predictionBehaviours)
                     item.Deinitialize_Prediction(asServer);
             }
@@ -260,7 +262,7 @@ namespace FishNet.Object
             else
             {
                 if (PredictionSmoother == null)
-                    PredictionSmoother = ResettableObjectCaches<ChildTransformTickSmoother>.Retrieve();
+                    PredictionSmoother = ResettableObjectCaches<TransformTickSmoother>.Retrieve();
                 InitializeTickSmoother();
             }
         }
@@ -284,7 +286,7 @@ namespace FishNet.Object
             if (PredictionSmoother != null)
             {
                 PredictionSmoother.Deinitialize();
-                ResettableObjectCaches<ChildTransformTickSmoother>.Store(PredictionSmoother);
+                ResettableObjectCaches<TransformTickSmoother>.Store(PredictionSmoother);
                 PredictionSmoother = null;
                 ResettableObjectCaches<RigidbodyPauser>.StoreAndDefault(ref _rigidbodyPauser);
             }
@@ -325,7 +327,7 @@ namespace FishNet.Object
         private void PredictionManager_OnPostReplicateReplay(uint clientTick, uint serverTick)
         {
             if (PredictionSmoother != null)
-                PredictionSmoother.OnPostReplay(clientTick);
+                PredictionSmoother.OnPostReplicateReplay(clientTick);
         }
 
         private void TimeManager_OnPostTick()
@@ -340,7 +342,6 @@ namespace FishNet.Object
                 PredictionSmoother.OnPreReconcile();
         }
 
-#if !FISHNET_STABLE_MODE
         private void PredictionManager_OnReconcile(uint clientReconcileTick, uint serverReconcileTick)
         {
             /* Tell all prediction behaviours to set/validate their
@@ -359,28 +360,6 @@ namespace FishNet.Object
                     _rigidbodyPauser.Pause();
             }
         }
-#else
-        private void PredictionManager_OnReconcile(uint clientReconcileTick, uint serverReconcileTick)
-        {
-            /* If still not reconciling then pause rigidbody.
-             * This shouldn't happen unless the user is not calling
-             * reconcile at all. */
-            if (!IsObjectReconciling)
-            {
-                if (_rigidbodyPauser != null)
-                    _rigidbodyPauser.Pause();
-
-                return;
-            }
-
-            /* Tell all prediction behaviours to set/validate their
-             * reconcile data now. This will use reconciles from the server
-             * whenever possible, and local reconciles if a server reconcile
-             * is not available. */
-            for (int i = 0; i < _predictionBehaviours.Count; i++)
-                _predictionBehaviours[i].Reconcile_Client_Start();
-        }
-#endif
 
         private void PredictionManager_OnPostReconcile(uint clientReconcileTick, uint serverReconcileTick)
         {

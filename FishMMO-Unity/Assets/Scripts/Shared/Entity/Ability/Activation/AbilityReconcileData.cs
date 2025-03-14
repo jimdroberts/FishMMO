@@ -8,7 +8,7 @@ namespace FishMMO.Shared
 		public float RemainingTime;
 		public CharacterAttributeResourceState ResourceState;
 
-		public AbilityReconcileData(long abilityID, float remainingTime, CharacterAttributeResourceState resourceState) : this()
+		public AbilityReconcileData(long abilityID, float remainingTime, CharacterAttributeResourceState resourceState)
 		{
 			AbilityID = abilityID;
 			RemainingTime = remainingTime;

@@ -9,7 +9,7 @@ using UnityEngine.Scripting;
 
 namespace FishNet.Object.Prediction
 {
-    public static class PredictionRigidbody2D2DSerializers
+    public static class PredictionRigidbody2DSerializers
     {
         public static void WriteForceData(this Writer w, PredictionRigidbody2D.EntryData value)
         {
@@ -239,7 +239,7 @@ namespace FishNet.Object.Prediction
         /// </summary>
         public void Velocity(Vector3 force)
         {
-            Rigidbody2D.linearVelocity = force;
+            Rigidbody2D.velocity = force;
             RemoveForces(true);
         }
 
