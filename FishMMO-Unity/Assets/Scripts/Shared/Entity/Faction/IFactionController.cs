@@ -16,8 +16,8 @@ namespace FishMMO.Shared
 		FactionTemplate Template { get; }
 
 		void CopyFrom(IFactionController factionController);
-		void SetFaction(int templateID, int value);
-		void Add(IFactionController defenderFactionController);
+		void SetFaction(int templateID, int value, bool skipEvent = false);
+		void AdjustFaction(IFactionController defenderFactionController, float alliedPercentToSubtract, float hostilePercentToAdd);
 		void Add(FactionTemplate template, int amount = 1);
 		FactionAllianceLevel GetAllianceLevel(IFactionController otherFactionController);
 		Color GetAllianceLevelColor(IFactionController otherFactionController);

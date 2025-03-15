@@ -135,7 +135,7 @@ namespace FishMMO.Shared
 				if (killer.TryGet(out IFactionController factionController) &&
 					Character.TryGet(out IFactionController defenderFactionController))
 				{
-					factionController.Add(defenderFactionController);
+					factionController.AdjustFaction(defenderFactionController, 0.01f, 0.01f);
 				}
 				
 				// Reward the killer with kill achievements.

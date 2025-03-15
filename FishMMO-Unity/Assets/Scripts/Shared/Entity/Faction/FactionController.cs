@@ -149,7 +149,10 @@ namespace FishMMO.Shared
 			}
 		}
 
-		public void SetFaction(int templateID, int value)
+		/// <summary>
+		/// Sets the faction to value.
+		/// </summary>
+		public void SetFaction(int templateID, int value, bool skipEvent = false)
 		{
 			if (factions.TryGetValue(templateID, out Faction faction))
 			{
@@ -165,25 +168,15 @@ namespace FishMMO.Shared
 
 			Debug.Log($"Set Faction: {templateID}:{value}");
 
-			IFactionController.OnUpdateFaction?.Invoke(Character, faction);
-		}
-
-		public void Add(IFactionController defenderFactionController)
-		{
-			if (defenderFactionController == null)
+			if (!skipEvent)
 			{
-				return;
-			}
-			foreach (Faction faction in defenderFactionController.Allied.Values)
-			{
-				Add(faction.Template, -Mathf.RoundToInt(faction.Value * 0.01f));
-			}
-			foreach (Faction faction in defenderFactionController.Hostile.Values)
-			{
-				Add(faction.Template, Mathf.RoundToInt(faction.Value * 0.01f));
+				IFactionController.OnUpdateFaction?.Invoke(Character, faction);
 			}
 		}
 
+		/// <summary>
+		/// Adds amount to the faction value.
+		/// </summary>
 		public void Add(FactionTemplate template, int amount = 1)
 		{
 			if (template == null)
@@ -206,6 +199,47 @@ namespace FishMMO.Shared
 				IFactionController.OnUpdateFaction?.Invoke(Character, faction);
 
 				InsertToAllianceGroup(faction);
+			}
+		}
+
+		private void AdjustFactionValue(FactionTemplate template, float value, float percentageToAdjust)
+		{
+			int amountToAdjust = Mathf.RoundToInt(value * percentageToAdjust);
+			Debug.Log($"{(value > 0 ? "Add" : "Subtract")} Faction: {template.ID}:{amountToAdjust}");
+			Add(template, amountToAdjust);
+		}
+
+		/// <summary>
+		/// Adds a percentage of the defenders hostile faction and removes a percentage of the defenders allied faction.
+		/// </summary>
+		public void AdjustFaction(IFactionController defenderFactionController, float alliedPercentToSubtract, float hostilePercentToAdd)
+		{
+			if (defenderFactionController == null)
+			{
+				return;
+			}
+			// Is the other character an NPC?
+			if (defenderFactionController.Character as NPC != null)
+			{
+				foreach (FactionTemplate factionTemplate in defenderFactionController.Template.DefaultAllied)
+				{
+					AdjustFactionValue(factionTemplate, -FactionTemplate.Maximum, alliedPercentToSubtract);
+				}
+				foreach (FactionTemplate factionTemplate in defenderFactionController.Template.DefaultHostile)
+				{
+					AdjustFactionValue(factionTemplate, FactionTemplate.Maximum, hostilePercentToAdd);
+				}
+			}
+			else
+			{
+				foreach (Faction faction in defenderFactionController.Allied.Values)
+				{
+					AdjustFactionValue(faction.Template, -faction.Value, alliedPercentToSubtract);
+				}
+				foreach (Faction faction in defenderFactionController.Hostile.Values)
+				{
+					AdjustFactionValue(faction.Template, faction.Value, hostilePercentToAdd);
+				}
 			}
 		}
 
@@ -284,6 +318,7 @@ namespace FishMMO.Shared
 				return FactionAllianceLevel.Enemy;
 			}
 
+			// Is the other character an NPC? Directly use the template data if so.
 			if (otherFactionController.Character as NPC != null)
 			{
 				if (Hostile.ContainsKey(otherFactionController.Template.ID))

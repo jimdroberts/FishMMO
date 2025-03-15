@@ -72,7 +72,7 @@ namespace FishMMO.Shared
 		}
 #endif
 
-		public void SetAchievement(int templateID, byte tier, uint value)
+		public void SetAchievement(int templateID, byte tier, uint value, bool skipEvent = false)
 		{
 			if (achievements.TryGetValue(templateID, out Achievement achievement))
 			{
@@ -84,8 +84,10 @@ namespace FishMMO.Shared
 				achievements.Add(templateID, achievement = new Achievement(templateID, tier, value));
 			}
 
-			IAchievementController.OnUpdateAchievement?.Invoke(Character, achievement);
-
+			if (!skipEvent)
+			{
+				IAchievementController.OnUpdateAchievement?.Invoke(Character, achievement);
+			}
 			//Debug.Log($"Achievement Template Set: {achievement.Template.ID}:{achievement.CurrentValue}");
 		}
 

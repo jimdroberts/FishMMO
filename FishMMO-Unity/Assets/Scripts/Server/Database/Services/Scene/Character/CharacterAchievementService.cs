@@ -78,7 +78,7 @@ namespace FishMMO.Server.DatabaseServices
 			var achievements = dbContext.CharacterAchievements.Where(c => c.CharacterID == character.ID);
 			foreach (CharacterAchievementEntity achievement in  achievements)
 			{
-				achievementController.SetAchievement(achievement.TemplateID, achievement.Tier, achievement.Value);
+				achievementController.SetAchievement(achievement.TemplateID, achievement.Tier, achievement.Value, true);
 			};
 		}
 	}

@@ -76,7 +76,7 @@ namespace FishMMO.Server.DatabaseServices
 			var factions = dbContext.CharacterFactions.Where(c => c.CharacterID == character.ID);
 			foreach (CharacterFactionEntity faction in factions)
 			{
-				factionController.SetFaction(faction.TemplateID, faction.Value);
+				factionController.SetFaction(faction.TemplateID, faction.Value, true);
 			};
 		}
 	}
