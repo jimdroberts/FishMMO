@@ -99,6 +99,13 @@ namespace FishMMO.Client
 				{
 					description.Image.sprite = faction.Template.Icon;
 				}
+				
+				description.gameObject.SetActive(true);
+				factions.Add(faction.Template.ID, description);
+			}
+
+			if (description != null)
+			{
 				if (description.Progress != null)
 				{
 					float progress = Normalize(faction.Value, FactionTemplate.Minimum, FactionTemplate.Maximum);
@@ -113,21 +120,6 @@ namespace FishMMO.Client
 				if (description.Value != null)
 				{
 					description.Value.text = faction.Value.ToString();
-				}
-				description.gameObject.SetActive(true);
-				factions.Add(faction.Template.ID, description);
-			}
-
-			if (description != null &&
-				description.Progress != null)
-			{
-				float progress = Normalize(faction.Value, FactionTemplate.Minimum, FactionTemplate.Maximum);
-
-				description.Progress.value = progress;
-
-				if (description.ProgressFillImage != null)
-				{
-					description.ProgressFillImage.color = Hex.ToColor(hexColor);
 				}
 			}
 		}

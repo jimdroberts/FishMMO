@@ -159,6 +159,7 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
+
 			if (factions.TryGetValue(templateID, out Faction faction))
 			{
 				RemoveFromAllianceGroup(faction);
@@ -189,10 +190,12 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
+
 			if (template == null)
 			{
 				return;
 			}
+
 			if (factions.TryGetValue(template.ID, out Faction faction))
 			{
 				RemoveFromAllianceGroup(faction);
@@ -204,19 +207,24 @@ namespace FishMMO.Shared
 			{
 				factions.Add(template.ID, faction = new Faction(template.ID, amount));
 			}
-			if (faction != null)
-			{
-				IFactionController.OnUpdateFaction?.Invoke(Character, faction);
+			InsertToAllianceGroup(faction);
 
-				InsertToAllianceGroup(faction);
-			}
+			//Debug.Log($"Update Faction: {template.ID}:{amount}");
+
+			IFactionController.OnUpdateFaction?.Invoke(Character, faction);
 		}
 
 		private void AdjustFactionValue(FactionTemplate template, float value, float percentageToAdjust)
 		{
+			if (template == null)
+			{
+				return;
+			}
 			int amountToAdjust = Mathf.RoundToInt(value * percentageToAdjust);
-			Debug.Log($"{(value > 0 ? "Add" : "Subtract")} Faction: {template.ID}:{amountToAdjust}");
+			
 			Add(template, amountToAdjust);
+
+			//Debug.Log($"{(value > 0 ? "Add" : "Subtract")} Faction: {template.ID}:{amountToAdjust}");
 		}
 
 		/// <summary>
