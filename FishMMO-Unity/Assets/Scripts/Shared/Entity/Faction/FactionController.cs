@@ -154,6 +154,11 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void SetFaction(int templateID, int value, bool skipEvent = false)
 		{
+			// NPCs don't get faction adjustments. This would make them eventually attack each other.
+			if (Character as NPC != null)
+			{
+				return;
+			}
 			if (factions.TryGetValue(templateID, out Faction faction))
 			{
 				RemoveFromAllianceGroup(faction);
@@ -179,6 +184,11 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void Add(FactionTemplate template, int amount = 1)
 		{
+			// NPCs don't get faction adjustments. This would make them eventually attack each other.
+			if (Character as NPC != null)
+			{
+				return;
+			}
 			if (template == null)
 			{
 				return;
@@ -187,7 +197,7 @@ namespace FishMMO.Shared
 			{
 				RemoveFromAllianceGroup(faction);
 
-				// update value
+				// Update value
 				faction.Value = (faction.Value + amount).Clamp(FactionTemplate.Minimum, FactionTemplate.Maximum);
 			}
 			else
@@ -214,6 +224,11 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void AdjustFaction(IFactionController defenderFactionController, float alliedPercentToSubtract, float hostilePercentToAdd)
 		{
+			// NPCs don't get faction adjustments. This would make them eventually attack each other.
+			if (Character as NPC != null)
+			{
+				return;
+			}
 			if (defenderFactionController == null)
 			{
 				return;
@@ -294,7 +309,7 @@ namespace FishMMO.Shared
 				return FactionAllianceLevel.Neutral;
 			}
 
-			// same party?
+			// Same party?
 			if (Character.TryGet(out IPartyController partyController) &&
 				otherFactionController.Character.TryGet(out IPartyController otherPartyController) &&
 				partyController.ID != 0 &&
@@ -303,7 +318,7 @@ namespace FishMMO.Shared
 				return FactionAllianceLevel.Ally;
 			}
 
-			// same guild?
+			// Same guild?
 			if (Character.TryGet(out IGuildController guildController) &&
 				otherFactionController.Character.TryGet(out IGuildController otherGuildController) &&
 				guildController.ID != 0 &&
@@ -312,7 +327,7 @@ namespace FishMMO.Shared
 				return FactionAllianceLevel.Ally;
 			}
 
-			// is aggression toggled on either?
+			// Is aggression toggled on either?
 			if (IsAggressive || otherFactionController.IsAggressive)
 			{
 				return FactionAllianceLevel.Enemy;
