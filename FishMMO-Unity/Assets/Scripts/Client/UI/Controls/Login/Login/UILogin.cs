@@ -3,6 +3,8 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using FishMMO.Shared;
+using System;
+using System.Collections;
 
 namespace FishMMO.Client
 {
@@ -14,13 +16,22 @@ namespace FishMMO.Client
 		public Button signInButton;
 		public TMP_Text handshakeMSG;
 
+		/// <summary>
+		/// Called when a Login Success Client Authentication result is received from the server.
+		/// </summary>
+		public Action OnLoginSuccessStart;
+		/// <summary>
+		/// Called after OnLoginSuccessStart finishes.
+		/// </summary>
+		public Action OnLoginSuccessEnd;
+
 		public override void OnClientSet()
 		{
 			Client.NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
 			Client.LoginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
 			Client.OnReconnectFailed += ClientManager_OnReconnectFailed;
 		}
-		
+
 		public override void OnClientUnset()
 		{
 			Client.NetworkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
@@ -96,13 +107,7 @@ namespace FishMMO.Client
 					}
 					break;
 				case ClientAuthenticationResult.LoginSuccess:
-					// reset handshake message and hide the panel
-					handshakeMSG.text = "";
-					Hide();
-
-					// request the character list
-					CharacterRequestListBroadcast requestCharacterList = new CharacterRequestListBroadcast();
-					Client.Broadcast(requestCharacterList, Channel.Reliable);
+					OnLoginSuccess();
 					break;
 				case ClientAuthenticationResult.WorldLoginSuccess:
 					break;
@@ -112,6 +117,31 @@ namespace FishMMO.Client
 					break;
 			}
 			SetSignInLocked(false);
+		}
+
+		private void OnLoginSuccess()
+		{
+			handshakeMSG.text = "Connected";
+			
+			OnLoginSuccessStart?.Invoke();
+
+			Client.StartCoroutine(OnProcessLoginSuccess());
+		}
+
+		IEnumerator OnProcessLoginSuccess()
+		{
+			// Wait 1 second before requesting the character list
+			yield return new WaitForSeconds(1.0f);
+
+			// Reset handshake message and hide the panel
+			handshakeMSG.text = "";
+			Hide();
+
+			// Request the character list after login is successfully finished
+			CharacterRequestListBroadcast requestCharacterList = new CharacterRequestListBroadcast();
+			Client.Broadcast(requestCharacterList, Channel.Reliable);
+
+			OnLoginSuccessEnd?.Invoke();
 		}
 
 		public void OnClick_OnRegister()
@@ -148,7 +178,7 @@ namespace FishMMO.Client
 			{
 				return;
 			}
-			
+
 			SetSignInLocked(true);
 
 			StartCoroutine(Client.GetLoginServerList((e) =>
