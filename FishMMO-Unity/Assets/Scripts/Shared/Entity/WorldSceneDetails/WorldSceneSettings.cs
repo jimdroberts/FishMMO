@@ -78,6 +78,8 @@ namespace FishMMO.Shared
 
 		private void Awake()
 		{
+			RenderSettings.skybox = DaySkyboxMaterial;
+			
 			UpdateDayNightState(GetGameTimeOfDay(DateTime.UtcNow), true);
 		}
 
@@ -169,8 +171,12 @@ namespace FishMMO.Shared
 					NightSkyBoxMaterial != null &&
 					RenderSettings.skybox != null)
 				{
-					RenderSettings.skybox.Lerp(DaySkyboxMaterial, NightSkyBoxMaterial, lerpTime);
-					DynamicGI.UpdateEnvironment();
+					// Only update the skybox if it has actually changed to prevent unnecessary lerp calls
+					if (RenderSettings.skybox != DaySkyboxMaterial)
+					{
+						RenderSettings.skybox.Lerp(DaySkyboxMaterial, NightSkyBoxMaterial, lerpTime);
+						DynamicGI.UpdateEnvironment(); // Update global illumination if required
+					}
 				}
 #endif
 			}
@@ -186,8 +192,12 @@ namespace FishMMO.Shared
 					NightSkyBoxMaterial != null &&
 					RenderSettings.skybox != null)
 				{
-					RenderSettings.skybox.Lerp(NightSkyBoxMaterial, DaySkyboxMaterial, lerpTime);
-					DynamicGI.UpdateEnvironment();
+					// Only update the skybox if it has actually changed to prevent unnecessary lerp calls
+					if (RenderSettings.skybox != NightSkyBoxMaterial)
+					{
+						RenderSettings.skybox.Lerp(NightSkyBoxMaterial, DaySkyboxMaterial, lerpTime);
+						DynamicGI.UpdateEnvironment(); // Update global illumination if required
+					}
 				}
 #endif
 			}

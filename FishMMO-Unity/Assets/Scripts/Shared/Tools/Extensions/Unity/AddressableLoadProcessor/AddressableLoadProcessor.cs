@@ -385,7 +385,7 @@ namespace FishMMO.Shared
 			// Check if the scene is already loaded
 			if (!loadedScenes.TryGetValue(sceneName, out var handle))
 			{
-				Debug.LogError($"Scene {sceneName} not found in loaded scenes.");
+				Debug.LogWarning($"Scene {sceneName} not found in loaded scenes.");
 				return;
 			}
 
