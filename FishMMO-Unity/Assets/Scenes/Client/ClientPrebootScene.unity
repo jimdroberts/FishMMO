@@ -26,7 +26,7 @@ RenderSettings:
   m_AmbientIntensity: 1
   m_AmbientMode: 3
   m_SubtractiveShadowColor: {r: 0.42, g: 0.478, b: 0.627, a: 1}
-  m_SkyboxMaterial: {fileID: 0}
+  m_SkyboxMaterial: {fileID: 10304, guid: 0000000000000000f000000000000000, type: 0}
   m_HaloStrength: 0.5
   m_FlareStrength: 1
   m_FlareFadeSpeed: 3
@@ -497,6 +497,7 @@ GameObject:
   - component: {fileID: 72499059}
   - component: {fileID: 72499061}
   - component: {fileID: 72499060}
+  - component: {fileID: 72499062}
   m_Layer: 5
   m_Name: ShowDamageToggle
   m_TagString: Untagged
@@ -593,6 +594,20 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   m_IsOn: 1
+--- !u!114 &72499062
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 72499058}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ef2d0ad17464ee845b8f89e2221060e9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  ToggleKey: ShowDamage
+  Toggle: {fileID: 72499061}
 --- !u!1 &79947645
 GameObject:
   m_ObjectHideFlags: 0
@@ -971,16 +986,6 @@ MonoBehaviour:
   CloseOnEscape: 1
   CanDrag: 0
   ClampToScreen: 1
-  ResolutionDropdown: {fileID: 1393846967}
-  FullscreenDropdown: {fileID: 754112017}
-  RefreshRateDropdown: {fileID: 524281233}
-  VSyncToggle: {fileID: 1215816811}
-  BrightnessSlider: {fileID: 1704450599}
-  ShowDamageToggle: {fileID: 72499059}
-  ShowHealsToggle: {fileID: 210585103}
-  ShowAchievementsToggle: {fileID: 1712537463}
-  IgnorePartyInvitesToggle: {fileID: 1875657411}
-  IgnoreGuildInvitesToggle: {fileID: 1145508800}
 --- !u!114 &117462242
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1918,6 +1923,7 @@ GameObject:
   - component: {fileID: 210585103}
   - component: {fileID: 210585105}
   - component: {fileID: 210585104}
+  - component: {fileID: 210585106}
   m_Layer: 5
   m_Name: ShowHealsToggle
   m_TagString: Untagged
@@ -2014,6 +2020,20 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   m_IsOn: 1
+--- !u!114 &210585106
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 210585102}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ef2d0ad17464ee845b8f89e2221060e9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  ToggleKey: ShowHeals
+  Toggle: {fileID: 210585105}
 --- !u!1 &222244674
 GameObject:
   m_ObjectHideFlags: 0
@@ -2474,7 +2494,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: Button
+  m_Text: Apply
 --- !u!222 &253629741
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -3569,7 +3589,7 @@ Camera:
   m_GameObject: {fileID: 330585543}
   m_Enabled: 1
   serializedVersion: 2
-  m_ClearFlags: 2
+  m_ClearFlags: 1
   m_BackGroundColor: {r: 0, g: 0, b: 0, a: 0}
   m_projectionMatrixMode: 1
   m_GateFitMode: 2
@@ -6498,6 +6518,7 @@ GameObject:
   - component: {fileID: 524281235}
   - component: {fileID: 524281234}
   - component: {fileID: 524281237}
+  - component: {fileID: 524281238}
   m_Layer: 5
   m_Name: RefreshDropdown
   m_TagString: Untagged
@@ -6649,6 +6670,19 @@ MonoBehaviour:
   m_FlexibleWidth: -1
   m_FlexibleHeight: -1
   m_LayoutPriority: 1
+--- !u!114 &524281238
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 524281232}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a51923609b3018a4fbbb790e326b81fa, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  RefreshRateDropdown: {fileID: 524281234}
 --- !u!1 &524527240
 GameObject:
   m_ObjectHideFlags: 0
@@ -6731,7 +6765,7 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 1200979439}
   m_HandleRect: {fileID: 1200979438}
   m_Direction: 2
-  m_Value: 1
+  m_Value: 0
   m_Size: 1
   m_NumberOfSteps: 0
   m_OnValueChanged:
@@ -7136,7 +7170,7 @@ GameObject:
   - component: {fileID: 554342448}
   - component: {fileID: 554342447}
   m_Layer: 5
-  m_Name: Button (Legacy)
+  m_Name: Close
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -7205,7 +7239,19 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 554342448}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 117462241}
+        m_TargetAssemblyTypeName: FishMMO.Client.UIControl, Assembly-CSharp
+        m_MethodName: Hide
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!114 &554342448
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -8281,7 +8327,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: Button
+  m_Text: Close
 --- !u!222 &610559505
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -8682,11 +8728,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 22426080, guid: 67117722a812a2e46ab8cb8eafbf5f5e, type: 3}
       propertyPath: m_AnchorMax.x
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 22426080, guid: 67117722a812a2e46ab8cb8eafbf5f5e, type: 3}
       propertyPath: m_AnchorMax.y
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 22426080, guid: 67117722a812a2e46ab8cb8eafbf5f5e, type: 3}
       propertyPath: m_AnchorMin.y
@@ -10436,6 +10482,7 @@ GameObject:
   - component: {fileID: 754112019}
   - component: {fileID: 754112018}
   - component: {fileID: 754112021}
+  - component: {fileID: 754112022}
   m_Layer: 5
   m_Name: FullscreenDropdown
   m_TagString: Untagged
@@ -10587,6 +10634,19 @@ MonoBehaviour:
   m_FlexibleWidth: -1
   m_FlexibleHeight: -1
   m_LayoutPriority: 1
+--- !u!114 &754112022
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 754112016}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7b3a5d364d26bd44d85ecbffa371f871, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  FullscreenDropdown: {fileID: 754112018}
 --- !u!1 &758614681
 GameObject:
   m_ObjectHideFlags: 0
@@ -13619,6 +13679,7 @@ GameObject:
   - component: {fileID: 1145508800}
   - component: {fileID: 1145508802}
   - component: {fileID: 1145508801}
+  - component: {fileID: 1145508803}
   m_Layer: 5
   m_Name: IgnoreGuildInvitesToggle
   m_TagString: Untagged
@@ -13714,7 +13775,21 @@ MonoBehaviour:
   onValueChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_IsOn: 1
+  m_IsOn: 0
+--- !u!114 &1145508803
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1145508799}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ef2d0ad17464ee845b8f89e2221060e9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  ToggleKey: IgnoreGuildInvites
+  Toggle: {fileID: 1145508802}
 --- !u!1 &1153788110
 GameObject:
   m_ObjectHideFlags: 0
@@ -14390,6 +14465,7 @@ GameObject:
   - component: {fileID: 1215816811}
   - component: {fileID: 1215816813}
   - component: {fileID: 1215816812}
+  - component: {fileID: 1215816814}
   m_Layer: 5
   m_Name: VSyncToggle
   m_TagString: Untagged
@@ -14486,6 +14562,19 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   m_IsOn: 1
+--- !u!114 &1215816814
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1215816810}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 05793e9a5edf59642ac62fb19d78d46f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  VsyncToggle: {fileID: 1215816813}
 --- !u!1 &1220066094
 GameObject:
   m_ObjectHideFlags: 0
@@ -15063,7 +15152,7 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 462473095}
   m_HandleRect: {fileID: 462473094}
   m_Direction: 2
-  m_Value: 0
+  m_Value: 1
   m_Size: 1
   m_NumberOfSteps: 0
   m_OnValueChanged:
@@ -15959,7 +16048,7 @@ GameObject:
   - component: {fileID: 1358867657}
   - component: {fileID: 1358867656}
   m_Layer: 5
-  m_Name: Button (Legacy) (1)
+  m_Name: Apply
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -16028,7 +16117,19 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 1358867657}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 117462241}
+        m_TargetAssemblyTypeName: FishMMO.Client.UIOptions, Assembly-CSharp
+        m_MethodName: SaveAll
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!114 &1358867657
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -16420,6 +16521,7 @@ GameObject:
   - component: {fileID: 1393846969}
   - component: {fileID: 1393846968}
   - component: {fileID: 1393846971}
+  - component: {fileID: 1393846972}
   m_Layer: 5
   m_Name: ResolutionDropdown
   m_TagString: Untagged
@@ -16571,6 +16673,21 @@ MonoBehaviour:
   m_FlexibleWidth: -1
   m_FlexibleHeight: -1
   m_LayoutPriority: 1
+--- !u!114 &1393846972
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1393846966}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cc36d79b6765dc54c99a7023af7b9e81, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  DefaultResolutionWidth: 1280
+  DefaultResolutionHeight: 800
+  ResolutionDropdown: {fileID: 1393846968}
 --- !u!1 &1397262255
 GameObject:
   m_ObjectHideFlags: 0
@@ -20715,6 +20832,7 @@ GameObject:
   - component: {fileID: 1704450599}
   - component: {fileID: 1704450601}
   - component: {fileID: 1704450600}
+  - component: {fileID: 1704450602}
   m_Layer: 5
   m_Name: BrightnessSlider
   m_TagString: Untagged
@@ -20815,6 +20933,19 @@ MonoBehaviour:
   m_OnValueChanged:
     m_PersistentCalls:
       m_Calls: []
+--- !u!114 &1704450602
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1704450598}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: da2fbb2fea8974444bd2f35527851d51, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  BrightnessSlider: {fileID: 1704450601}
 --- !u!1 &1709188913
 GameObject:
   m_ObjectHideFlags: 0
@@ -20862,6 +20993,7 @@ GameObject:
   - component: {fileID: 1712537463}
   - component: {fileID: 1712537465}
   - component: {fileID: 1712537464}
+  - component: {fileID: 1712537466}
   m_Layer: 5
   m_Name: ShowAchievementsToggle
   m_TagString: Untagged
@@ -20958,6 +21090,20 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   m_IsOn: 1
+--- !u!114 &1712537466
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1712537462}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ef2d0ad17464ee845b8f89e2221060e9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  ToggleKey: ShowAchievements
+  Toggle: {fileID: 1712537465}
 --- !u!1 &1738168852
 GameObject:
   m_ObjectHideFlags: 0
@@ -22311,6 +22457,7 @@ GameObject:
   - component: {fileID: 1875657411}
   - component: {fileID: 1875657413}
   - component: {fileID: 1875657412}
+  - component: {fileID: 1875657414}
   m_Layer: 5
   m_Name: IgnorePartyInvitesToggle
   m_TagString: Untagged
@@ -22406,7 +22553,21 @@ MonoBehaviour:
   onValueChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_IsOn: 1
+  m_IsOn: 0
+--- !u!114 &1875657414
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1875657410}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ef2d0ad17464ee845b8f89e2221060e9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  ToggleKey: IgnorePartyInvites
+  Toggle: {fileID: 1875657413}
 --- !u!1 &1876072453
 GameObject:
   m_ObjectHideFlags: 0

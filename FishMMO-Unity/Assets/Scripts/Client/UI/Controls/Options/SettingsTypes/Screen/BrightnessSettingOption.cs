@@ -8,42 +8,33 @@ namespace FishMMO.Client
 	{
 		private const string BrightnessKey = "Brightness";
 
-		public Slider brightnessSlider;
+		public Slider BrightnessSlider;
 
-		public override void Initialize(RectTransform transform)
+		public override void Initialize()
 		{
-			if (transform == null)
+			if (BrightnessSlider == null)
 			{
-				Debug.LogError("BrightnessSettingsOption: transform is null.");
+				Debug.LogError("BrightnessSettingsOption: Slider is missing.");
 			}
 			else
 			{
-				brightnessSlider = transform.GetComponent<Slider>();
-				if (brightnessSlider == null)
-				{
-					Debug.LogError("BrightnessSettingsOption: Slider is missing.");
-				}
-				else
-				{
-					brightnessSlider.onValueChanged.RemoveAllListeners();
-					brightnessSlider.onValueChanged.AddListener((value) => { Save(); });
-				}
+				BrightnessSlider.onValueChanged.RemoveAllListeners();
+				BrightnessSlider.onValueChanged.AddListener((value) => { Save(); });
 			}
 		}
 
 		public override void Load()
 		{
-			if (Configuration.GlobalSettings.TryGetFloat(BrightnessKey, out float brightness))
-			{
-				brightnessSlider.value = brightness;
-				RenderSettings.ambientLight = new Color(brightness, brightness, brightness, brightness);
-			}
+			Configuration.GlobalSettings.TryGetFloat(BrightnessKey, out float brightness, 1.0f);
+			
+			BrightnessSlider.value = brightness;
+			RenderSettings.ambientLight = new Color(brightness, brightness, brightness, brightness);
 		}
 
 		public override void Save()
 		{
-			Configuration.GlobalSettings.Set(BrightnessKey, brightnessSlider.value);
-			RenderSettings.ambientLight = new Color(brightnessSlider.value, brightnessSlider.value, brightnessSlider.value, brightnessSlider.value);
+			Configuration.GlobalSettings.Set(BrightnessKey, BrightnessSlider.value);
+			RenderSettings.ambientLight = new Color(BrightnessSlider.value, BrightnessSlider.value, BrightnessSlider.value, BrightnessSlider.value);
 		}
 	}
 }

@@ -6,47 +6,37 @@ namespace FishMMO.Client
 {
 	public class ToggleSettingOption : SettingOption
 	{
-		private string toggleKey = "";
+		public string ToggleKey = "";
 
-		public Toggle toggle;
+		public Toggle Toggle;
 
-		public ToggleSettingOption(string toggleKey)
+		public override void Initialize()
 		{
-			this.toggleKey = toggleKey;
-		}
-
-		public override void Initialize(RectTransform transform)
-		{
-			if (transform == null)
+			if (string.IsNullOrEmpty(ToggleKey))
 			{
-				Debug.LogError("ToggleSettingOption: transform is null.");
+				Debug.LogError($"ToggleKey cannot be null on {gameObject.name}!");
+			}
+			if (Toggle == null)
+			{
+				Debug.LogError("ToggleSettingOption: Toggle is missing.");
 			}
 			else
 			{
-				toggle = transform.GetComponent<Toggle>();
-				if (toggle == null)
-				{
-					Debug.LogError("ToggleSettingOption: Toggle is missing.");
-				}
-				else
-				{
-					toggle.onValueChanged.RemoveAllListeners();
-					toggle.onValueChanged.AddListener((value) => { Save(); });
-				}
+				Toggle.onValueChanged.RemoveAllListeners();
+				Toggle.onValueChanged.AddListener((value) => { Save(); });
 			}
 		}
 
 		public override void Load()
 		{
-			if (Configuration.GlobalSettings.TryGetBool(toggleKey, out bool value))
-			{
-				toggle.isOn = value;
-			}
+			Configuration.GlobalSettings.TryGetBool(ToggleKey, out bool value, Toggle.isOn);
+			
+			Toggle.isOn = value;
 		}
 
 		public override void Save()
 		{
-			Configuration.GlobalSettings.Set(toggleKey, toggle.isOn);
+			Configuration.GlobalSettings.Set(ToggleKey, Toggle.isOn);
 		}
 	}
 }

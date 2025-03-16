@@ -8,42 +8,33 @@ namespace FishMMO.Client
 	{
 		private const string VSyncKey = "VSync";
 
-		public Toggle vsyncToggle;
+		public Toggle VsyncToggle;
 
-		public override void Initialize(RectTransform transform)
+		public override void Initialize()
 		{
-			if (transform == null)
+			if (VsyncToggle == null)
 			{
-				Debug.LogError("VSyncSettingOption: transform is null.");
+				Debug.LogError("VSyncSettingOption: Toggle is missing.");
 			}
 			else
 			{
-				vsyncToggle = transform.GetComponent<Toggle>();
-				if (vsyncToggle == null)
-				{
-					Debug.LogError("VSyncSettingOption: Toggle is missing.");
-				}
-				else
-				{
-					vsyncToggle.onValueChanged.RemoveAllListeners();
-					vsyncToggle.onValueChanged.AddListener((value) => { Save(); });
-				}
+				VsyncToggle.onValueChanged.RemoveAllListeners();
+				VsyncToggle.onValueChanged.AddListener((value) => { Save(); });
 			}
 		}
 
 		public override void Load()
 		{
-			if (Configuration.GlobalSettings.TryGetBool(VSyncKey, out bool vsync))
-			{
-				vsyncToggle.isOn = vsync;
-				QualitySettings.vSyncCount = vsyncToggle.isOn ? 1 : 0;
-			}
+			Configuration.GlobalSettings.TryGetBool(VSyncKey, out bool vsync, false);
+			
+			VsyncToggle.isOn = vsync;
+			QualitySettings.vSyncCount = VsyncToggle.isOn ? 1 : 0;
 		}
 
 		public override void Save()
 		{
-			Configuration.GlobalSettings.Set(VSyncKey, vsyncToggle.isOn);
-			QualitySettings.vSyncCount = vsyncToggle.isOn ? 1 : 0;
+			Configuration.GlobalSettings.Set(VSyncKey, VsyncToggle.isOn);
+			QualitySettings.vSyncCount = VsyncToggle.isOn ? 1 : 0;
 		}
 	}
 }

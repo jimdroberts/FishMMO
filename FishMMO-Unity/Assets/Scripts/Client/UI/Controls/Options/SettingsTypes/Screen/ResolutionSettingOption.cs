@@ -9,36 +9,31 @@ namespace FishMMO.Client
 		public const string ResolutionWidthKey = "Resolution Width";
 		public const string ResolutionHeightKey = "Resolution Height";
 
-		private TMP_Dropdown resolutionDropdown;
+		public int DefaultResolutionWidth = 1280;
+		public int DefaultResolutionHeight = 800;
+
+		public TMP_Dropdown ResolutionDropdown;
 
 		// Initialize the settings class with the UI GameObject containing the UI component
-		public override void Initialize(RectTransform transform)
+		public override void Initialize()
 		{
-			if (transform == null)
+			if (ResolutionDropdown == null)
 			{
-				Debug.LogError("ResolutionSettingsOption: transform is null.");
+				Debug.LogError("ResolutionSettingsOption: TMP_Dropdown is missing.");
 			}
 			else
 			{
-				resolutionDropdown = transform.GetComponent<TMP_Dropdown>();
-				if (resolutionDropdown == null)
-				{
-					Debug.LogError("ResolutionSettingsOption: TMP_Dropdown is missing.");
-				}
-				else
-				{
-					resolutionDropdown.onValueChanged.RemoveAllListeners();
-					resolutionDropdown.onValueChanged.AddListener((value) => { Save(); });
+				ResolutionDropdown.onValueChanged.RemoveAllListeners();
+				ResolutionDropdown.onValueChanged.AddListener((value) => { Save(); });
 
-					// Populate the dropdown with all available resolutions
-					PopulateResolutions();
-				}
+				// Populate the dropdown with all available resolutions
+				PopulateResolutions();
 			}
 		}
 
 		private void PopulateResolutions()
 		{
-			resolutionDropdown.ClearOptions();
+			ResolutionDropdown.ClearOptions();
 			Resolution[] resolutions = Screen.resolutions;
 
 			// Create a list to hold the resolution names for the dropdown
@@ -51,7 +46,7 @@ namespace FishMMO.Client
 			}
 
 			// Add the list of resolutions as options in the dropdown
-			resolutionDropdown.AddOptions(options);
+			ResolutionDropdown.AddOptions(options);
 
 			// Load the saved resolution width and height
 			Configuration.GlobalSettings.TryGetInt(ResolutionWidthKey, out int savedWidth);
@@ -59,26 +54,26 @@ namespace FishMMO.Client
 
 			// Find the matching resolution in the list and set the dropdown index
 			int selectedIndex = GetResolutionIndex(savedWidth, savedHeight);
-			resolutionDropdown.value = selectedIndex;
+			ResolutionDropdown.value = selectedIndex;
 			ApplyResolution(selectedIndex);
 		}
 
 		public override void Load()
 		{
 			// Load the saved resolution width and height
-			Configuration.GlobalSettings.TryGetInt(ResolutionWidthKey, out int savedWidth);
-			Configuration.GlobalSettings.TryGetInt(ResolutionHeightKey, out int savedHeight);
+			Configuration.GlobalSettings.TryGetInt(ResolutionWidthKey, out int savedWidth, DefaultResolutionWidth);
+			Configuration.GlobalSettings.TryGetInt(ResolutionHeightKey, out int savedHeight, DefaultResolutionHeight);
 
 			// Find the matching resolution in the list and set the dropdown index
 			int selectedIndex = GetResolutionIndex(savedWidth, savedHeight);
-			resolutionDropdown.value = selectedIndex;
+			ResolutionDropdown.value = selectedIndex;
 			ApplyResolution(selectedIndex);
 		}
 
 		public override void Save()
 		{
 			// Get the selected resolution
-			int selectedResolutionIndex = resolutionDropdown.value;
+			int selectedResolutionIndex = ResolutionDropdown.value;
 			Resolution selectedResolution = Screen.resolutions[selectedResolutionIndex];
 
 			// Save the width and height of the selected resolution

@@ -1,7 +1,6 @@
 using FishMMO.Shared;
 using TMPro;
 using UnityEngine;
-using UnityEngine.UI;
 
 namespace FishMMO.Client
 {
@@ -9,35 +8,27 @@ namespace FishMMO.Client
 	{
 		private const string FullscreenKey = "Fullscreen";
 
-		private TMP_Dropdown fullscreenDropdown;
+		public TMP_Dropdown FullscreenDropdown;
 
 		// Initialize with the settings UI GameObject containing the UI component
-		public override void Initialize(RectTransform transform)
+		public override void Initialize()
 		{
-			if (transform == null)
+			if (FullscreenDropdown == null)
 			{
-				Debug.LogError("FullscreenSettingsOption: transform is null.");
+				Debug.LogError("FullscreenSettingsOption: TMP_Dropdown is missing.");
 			}
 			else
 			{
-				fullscreenDropdown = transform.GetComponent<TMP_Dropdown>();
-				if (fullscreenDropdown == null)
-				{
-					Debug.LogError("FullscreenSettingsOption: TMP_Dropdown is missing.");
-				}
-				else
-				{
-					fullscreenDropdown.onValueChanged.RemoveAllListeners();
-					fullscreenDropdown.onValueChanged.AddListener((value) => { Save(); });
+				FullscreenDropdown.onValueChanged.RemoveAllListeners();
+				FullscreenDropdown.onValueChanged.AddListener((value) => { Save(); });
 
-					PopulateFullscreenSettings();
-				}
+				PopulateFullscreenSettings();
 			}
 		}
 
 		private void PopulateFullscreenSettings()
 		{
-			fullscreenDropdown.ClearOptions();
+			FullscreenDropdown.ClearOptions();
 			System.Collections.Generic.List<string> options = new System.Collections.Generic.List<string>()
 			{
 				FullScreenMode.ExclusiveFullScreen.ToString(),
@@ -46,21 +37,22 @@ namespace FishMMO.Client
 				FullScreenMode.Windowed.ToString(),
 			};
 			// Add the list of resolutions as options in the dropdown
-			fullscreenDropdown.AddOptions(options);
+			FullscreenDropdown.AddOptions(options);
 		}
 
 		public override void Load()
 		{
 #if !UNITY_WEBGL
-			Configuration.GlobalSettings.TryGetBool(FullscreenKey, out bool isFullscreen);
-			fullscreenDropdown.value = isFullscreen ? 1 : 0;
+			Configuration.GlobalSettings.TryGetBool(FullscreenKey, out bool isFullscreen, false);
+
+			FullscreenDropdown.value = isFullscreen ? 1 : 0;
 			Screen.fullScreen = isFullscreen;
 #endif
 		}
 
 		public override void Save()
 		{
-			bool isFullscreen = fullscreenDropdown.value == 1;
+			bool isFullscreen = FullscreenDropdown.value == 1;
 			Configuration.GlobalSettings.Set(FullscreenKey, isFullscreen);
 			Screen.fullScreen = isFullscreen;
 		}

@@ -8,36 +8,28 @@ namespace FishMMO.Client
 	{
 		private const string RefreshRateKey = "Refresh Rate";
 
-		private TMP_Dropdown refreshRateDropdown;
+		public TMP_Dropdown RefreshRateDropdown;
 
 		// Initialize with the settings UI GameObject containing the UI component
-		public override void Initialize(RectTransform transform)
+		public override void Initialize()
 		{
-			if (transform == null)
+			if (RefreshRateDropdown == null)
 			{
-				Debug.LogError("RefreshRateSettingsOption: transform is null.");
+				Debug.LogError("RefreshRateSettingsOption: TMP_Dropdown is missing.");
 			}
 			else
 			{
-				refreshRateDropdown = transform.GetComponent<TMP_Dropdown>();
-				if (refreshRateDropdown == null)
-				{
-					Debug.LogError("RefreshRateSettingsOption: TMP_Dropdown is missing.");
-				}
-				else
-				{
-					refreshRateDropdown.onValueChanged.RemoveAllListeners();
-					refreshRateDropdown.onValueChanged.AddListener((value) => { Save(); });
+				RefreshRateDropdown.onValueChanged.RemoveAllListeners();
+				RefreshRateDropdown.onValueChanged.AddListener((value) => { Save(); });
 
-					// Populate the dropdown with available refresh rates for the current resolution
-					PopulateRefreshRates();
-				}
+				// Populate the dropdown with available refresh rates for the current resolution
+				PopulateRefreshRates();
 			}
 		}
 
 		private void PopulateRefreshRates()
 		{
-			refreshRateDropdown.ClearOptions();
+			RefreshRateDropdown.ClearOptions();
 			Resolution currentResolution = Screen.currentResolution;
 			Resolution[] resolutions = Screen.resolutions;
 
@@ -59,7 +51,7 @@ namespace FishMMO.Client
 				refreshRateOptions.Add(rate + " Hz");
 			}
 
-			refreshRateDropdown.AddOptions(refreshRateOptions);
+			RefreshRateDropdown.AddOptions(refreshRateOptions);
 
 			// Load the saved refresh rate from Configuration GlobalSettings (default to 60Hz if not set)
 			Configuration.GlobalSettings.TryGetInt(RefreshRateKey, out int savedRefreshRate, 60);
@@ -71,7 +63,7 @@ namespace FishMMO.Client
 				selectedIndex = 0;
 			}
 
-			refreshRateDropdown.value = selectedIndex;
+			RefreshRateDropdown.value = selectedIndex;
 			ApplyRefreshRate(savedRefreshRate);
 		}
 
@@ -87,7 +79,7 @@ namespace FishMMO.Client
 		public override void Save()
 		{
 			// Get the selected refresh rate from the dropdown
-			string selectedRefreshRate = refreshRateDropdown.options[refreshRateDropdown.value].text.Replace(" Hz", "");
+			string selectedRefreshRate = RefreshRateDropdown.options[RefreshRateDropdown.value].text.Replace(" Hz", "");
 
 			// Save the selected refresh rate to Configuration GlobalSettings
 			Configuration.GlobalSettings.Set(RefreshRateKey, int.Parse(selectedRefreshRate));
