@@ -343,11 +343,7 @@ namespace FishMMO.Server
 				return;
 			}
 
-			Server.Broadcast(conn, new ClientValidatedSceneBroadcast()
-			{
-				Position = character.Transform.position,
-				Rotation = character.Transform.rotation,
-			}, true, Channel.Reliable);
+			Server.Broadcast(conn, new ClientValidatedSceneBroadcast(), true, Channel.Reliable);
 		}
 
 		/// <summary>

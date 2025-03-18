@@ -12,10 +12,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ab0b9bcba9bd4a247bb5e760d5958dc7, type: 3}
   m_Name: StartScene A Fog
   m_EditorClassIdentifier: 
-  fogEnabled: 0
-  fogChangeRate: 1
-  fogMode: 3
-  fogColor: {r: 0.33615467, g: 0.6603774, b: 0.015574936, a: 1}
-  fogDensity: 0.05
-  fogStartDistance: 2500
-  fogEndDistance: 9999
+  FogSettings:
+    Enabled: 1
+    ChangeRate: 0
+    Mode: 2
+    Color: {r: 0.04892087, g: 0.3301887, b: 0, a: 1}
+    Density: 0.15
+    StartDistance: 35
+    EndDistance: 100

@@ -41,9 +41,19 @@ namespace FishMMO.Client
 
 		public override void OnQuitToLogin()
 		{
-			Show();// override setting, this is our main menu
-			StopAllCoroutines();
+			base.OnQuitToLogin();
+
+			Show();
+
 			SetSignInLocked(false);
+		}
+
+		public override void Hide()
+		{
+			base.Hide();
+			
+			// Reset handshake message and hide the panel
+			handshakeMSG.text = "";
 		}
 
 		private void ClientManager_OnClientConnectionState(ClientConnectionStateArgs obj)
@@ -66,45 +76,16 @@ namespace FishMMO.Client
 			switch (result)
 			{
 				case ClientAuthenticationResult.AccountCreated:
-					{
-						if (UIManager.TryGet("UIDialogBox", out UIDialogBox uiDialogBox))
-						{
-							uiDialogBox.Open("Your account has been created!");
-						}
-						Client.ForceDisconnect();
-						SetSignInLocked(false);
-					}
-
+					OnLoginAuthenticationDialog("Your account has been created!");
 					break;
 				case ClientAuthenticationResult.InvalidUsernameOrPassword:
-					{
-						if (UIManager.TryGet("UIDialogBox", out UIDialogBox uiDialogBox))
-						{
-							uiDialogBox.Open("Invalid Username or Password.");
-						}
-						Client.ForceDisconnect();
-						SetSignInLocked(false);
-					}
+					OnLoginAuthenticationDialog("Invalid Username or Password.");
 					break;
 				case ClientAuthenticationResult.AlreadyOnline:
-					{
-						if (UIManager.TryGet("UIDialogBox", out UIDialogBox uiDialogBox))
-						{
-							uiDialogBox.Open("Account is already online.");
-						}
-						Client.ForceDisconnect();
-						SetSignInLocked(false);
-					}
+					OnLoginAuthenticationDialog("Account is already online.");
 					break;
 				case ClientAuthenticationResult.Banned:
-					{
-						if (UIManager.TryGet("UIDialogBox", out UIDialogBox uiDialogBox))
-						{
-							uiDialogBox.Open("Account is banned. Please contact the system administrator.");
-						}
-						Client.ForceDisconnect();
-						SetSignInLocked(false);
-					}
+					OnLoginAuthenticationDialog("Account is banned. Please contact the system administrator.");
 					break;
 				case ClientAuthenticationResult.LoginSuccess:
 					OnLoginSuccess();
@@ -112,10 +93,21 @@ namespace FishMMO.Client
 				case ClientAuthenticationResult.WorldLoginSuccess:
 					break;
 				case ClientAuthenticationResult.ServerFull:
+					OnLoginAuthenticationDialog("Server is currently full please wait a while and try again.");
 					break;
 				default:
 					break;
 			}
+			SetSignInLocked(false);
+		}
+
+		private void OnLoginAuthenticationDialog(string errorMsg)
+		{
+			if (UIManager.TryGet("UIDialogBox", out UIDialogBox uiDialogBox))
+			{
+				uiDialogBox.Open(errorMsg);
+			}
+			Client.ForceDisconnect();
 			SetSignInLocked(false);
 		}
 
@@ -133,8 +125,6 @@ namespace FishMMO.Client
 			// Wait 1 second before requesting the character list
 			yield return new WaitForSeconds(1.0f);
 
-			// Reset handshake message and hide the panel
-			handshakeMSG.text = "";
 			Hide();
 
 			// Request the character list after login is successfully finished
@@ -187,7 +177,7 @@ namespace FishMMO.Client
 				{
 					uiDialogBox.Open(e);
 				}
-				Debug.LogError(e);
+				Debug.LogWarning(e);
 				SetSignInLocked(false);
 			},
 			(servers) =>
@@ -216,7 +206,6 @@ namespace FishMMO.Client
 
 		public void OnClick_Quit()
 		{
-			StopAllCoroutines();
 			Client.Quit();
 		}
 

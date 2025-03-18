@@ -2,7 +2,6 @@ using FishNet.Managing.Scened;
 using UnityEngine;
 using UnityEngine.UI;
 using FishMMO.Shared;
-using System;
 
 namespace FishMMO.Client
 {
@@ -14,11 +13,29 @@ namespace FishMMO.Client
 		public WorldSceneDetailsCache Details;
 		public Sprite DefaultLoadingScreenSprite;
 
+		public override void OnStarting()
+		{
+			base.OnStarting();
+
+			AddressableLoadProcessor.OnProgressUpdate += OnProgressUpdate;
+
+			LoadingImage.sprite = DefaultLoadingScreenSprite;
+		}
+
+		public override void OnDestroying()
+		{
+			base.OnDestroying();
+
+			AddressableLoadProcessor.OnProgressUpdate -= OnProgressUpdate;
+		}
+
 		public override void OnClientSet()
 		{
 			Client.NetworkManager.SceneManager.OnLoadStart += OnSceneStartLoad;
 			Client.NetworkManager.SceneManager.OnLoadPercentChange += OnSceneProgressUpdate;
 			Client.NetworkManager.SceneManager.OnLoadEnd += OnSceneEndLoad;
+			Client.NetworkManager.SceneManager.OnUnloadStart += OnSceneStartUnload;
+			Client.NetworkManager.SceneManager.OnUnloadEnd += OnSceneEndUnload;
 
 			Client.OnReconnectAttempt += Client_OnReconnectAttempt;
 			Client.OnReconnectFailed += Client_OnReconnectFailed;
@@ -29,6 +46,8 @@ namespace FishMMO.Client
 			Client.NetworkManager.SceneManager.OnLoadStart -= OnSceneStartLoad;
 			Client.NetworkManager.SceneManager.OnLoadPercentChange -= OnSceneProgressUpdate;
 			Client.NetworkManager.SceneManager.OnLoadEnd -= OnSceneEndLoad;
+			Client.NetworkManager.SceneManager.OnUnloadStart -= OnSceneStartUnload;
+			Client.NetworkManager.SceneManager.OnUnloadEnd -= OnSceneEndUnload;
 
 			Client.OnReconnectAttempt -= Client_OnReconnectAttempt;
 			Client.OnReconnectFailed -= Client_OnReconnectFailed;
@@ -36,12 +55,19 @@ namespace FishMMO.Client
 
 		public void OnProgressUpdate(float progress)
 		{
-			//Debug.Log($"Progress update: {progress}");
-			if (LoadingProgress == null)
+			if (progress < 1.0f && !Visible)
 			{
-				return;
+				Show();
 			}
-			LoadingProgress.value = progress;
+			else if (progress >= 1.0f)
+			{
+				Hide();
+			}
+
+			if (LoadingProgress != null)
+			{
+				LoadingProgress.value = progress;
+			}
 		}
 
 		public override void Show()
@@ -59,7 +85,7 @@ namespace FishMMO.Client
 		public void Client_OnReconnectAttempt(byte attempts, byte maxAttempts)
 		{
 			LoadingImage.sprite = DefaultLoadingScreenSprite;
-			//ShowLoadingScreen();
+			Show();
 		}
 
 		public void Client_OnReconnectFailed()
@@ -70,7 +96,7 @@ namespace FishMMO.Client
 		#region Scene Events
 		private void OnSceneStartLoad(SceneLoadStartEventArgs startEvent)
 		{
-			//ShowLoadingScreen();
+			Show();
 
 			SceneLookupData[] lookupData = startEvent.QueueData.SceneLoadData.SceneLookupDatas;
 
@@ -95,12 +121,26 @@ namespace FishMMO.Client
 
 		private void OnSceneProgressUpdate(SceneLoadPercentEventArgs percentEvent)
 		{
-			LoadingProgress.value = percentEvent.Percent;
+			if (LoadingProgress != null)
+			{
+				LoadingProgress.value = percentEvent.Percent;
+			}
 		}
 
 		private void OnSceneEndLoad(SceneLoadEndEventArgs endEvent)
 		{
 			Hide();
+		}
+
+		private void OnSceneStartUnload(SceneUnloadStartEventArgs startEvent)
+		{
+			LoadingImage.sprite = DefaultLoadingScreenSprite;
+			Show();
+		}
+
+		private void OnSceneEndUnload(SceneUnloadEndEventArgs endEvent)
+		{
+			//Hide();
 		}
 		#endregion
 	}

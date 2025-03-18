@@ -24,7 +24,6 @@ namespace FishMMO.Client
 			nextRefresh = RefreshRate;
 
 			Client.NetworkManager.ClientManager.RegisterBroadcast<ServerListBroadcast>(OnClientServerListBroadcastReceived);
-			Client.NetworkManager.ClientManager.RegisterBroadcast<WorldSceneConnectBroadcast>(OnClientWorldSceneConnectBroadcastReceived);
 
 			Client.LoginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
 		}
@@ -32,7 +31,6 @@ namespace FishMMO.Client
 		public override void OnClientUnset()
 		{
 			Client.NetworkManager.ClientManager.UnregisterBroadcast<ServerListBroadcast>(OnClientServerListBroadcastReceived);
-			Client.NetworkManager.ClientManager.UnregisterBroadcast<WorldSceneConnectBroadcast>(OnClientWorldSceneConnectBroadcastReceived);
 
 			Client.LoginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
 		}
@@ -55,24 +53,41 @@ namespace FishMMO.Client
 			switch (result)
 			{
 				case ClientAuthenticationResult.InvalidUsernameOrPassword:
+					OnLoginAuthenticationDialog("Invalid Username or Password.");
 					break;
 				case ClientAuthenticationResult.AlreadyOnline:
+					OnLoginAuthenticationDialog("Account is already online.");
 					break;
 				case ClientAuthenticationResult.Banned:
+					OnLoginAuthenticationDialog("Account is banned. Please contact the system administrator.");
+					break;
+				case ClientAuthenticationResult.ServerFull:
+					OnLoginAuthenticationDialog("Server is currently full please wait a while and try again.");
 					break;
 				case ClientAuthenticationResult.LoginSuccess:
 					break;
 				case ClientAuthenticationResult.WorldLoginSuccess:
 					break;
 				case ClientAuthenticationResult.SceneLoginSuccess:
-					SetConnectToServerLocked(false);
-					Hide();
-					break;
-				case ClientAuthenticationResult.ServerFull:
+					{
+						SetConnectToServerLocked(false);
+						Hide();
+					}
 					break;
 				default:
 					break;
 			}
+		}
+
+		private void OnLoginAuthenticationDialog(string errorMsg)
+		{
+			if (UIManager.TryGet("UIDialogBox", out UIDialogBox uiDialogBox))
+			{
+				uiDialogBox.Open(errorMsg);
+			}
+			SetConnectToServerLocked(false);
+
+			OnClick_QuitToLogin();
 		}
 
 		public void DestroyServerList()
@@ -107,18 +122,6 @@ namespace FishMMO.Client
 			Show();
 		}
 
-		private void OnClientWorldSceneConnectBroadcastReceived(WorldSceneConnectBroadcast msg, Channel channel)
-		{
-			if (Client.IsConnectionReady() &&
-				selectedServer != null)
-			{
-				// connect to the scene server
-				Client.ConnectToServer(msg.Address, msg.Port);
-
-				SetConnectToServerLocked(true);
-			}
-		}
-
 		private void OnServerSelected(ServerDetailsButton button)
 		{
 			ServerDetailsButton prevButton = selectedServer;
@@ -141,7 +144,7 @@ namespace FishMMO.Client
 			{
 				SetConnectToServerLocked(true);
 
-				// connect to the world server
+				// Connect to the world server
 				Client.ConnectToServer(selectedServer.Details.Address, selectedServer.Details.Port, true);
 			}
 		}
@@ -152,7 +155,7 @@ namespace FishMMO.Client
 			{
 				nextRefresh = RefreshRate;
 
-				// request an updated server list
+				// Request an updated server list
 				RequestServerListBroadcast requestServerList = new RequestServerListBroadcast();
 				Client.Broadcast(requestServerList, Channel.Reliable);
 			}
@@ -161,15 +164,11 @@ namespace FishMMO.Client
 		public override void OnQuitToLogin()
 		{
 			base.OnQuitToLogin();
-
 			SetConnectToServerLocked(false);
 		}
 
 		public void OnClick_QuitToLogin()
 		{
-			StopAllCoroutines();
-
-			// we should go back to login..
 			Client.QuitToLogin();
 		}
 

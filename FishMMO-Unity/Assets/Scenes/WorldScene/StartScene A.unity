@@ -279,8 +279,8 @@ MonoBehaviour:
   InitialRespawnTime: 0
   InitialSpawnCount: 4
   MaxSpawnCount: 4
-  RandomRespawnTime: 1
   SpawnType: 0
+  RandomRespawnTime: 1
   RandomSpawnPosition: 1
   SphereRadius: 0.5
   BoundingBoxSize: {x: 50, y: 5, z: 25}
@@ -328,12 +328,15 @@ MonoBehaviour:
   <PredictedSpawn>k__BackingField: {fileID: 0}
   <PredictedOwner>k__BackingField: {fileID: 0}
   NetworkBehaviours: []
-  <InitializedParentNetworkBehaviour>k__BackingField: {fileID: 0}
-  <InitializedNestedNetworkObjects>k__BackingField: []
+  InitializedParentNetworkBehaviour: {fileID: 0}
+  InitializedNestedNetworkObjects: []
+  RuntimeParentNetworkBehaviour: {fileID: 0}
+  RuntimeChildNetworkBehaviours: []
   _isNetworked: 1
   _isSpawnable: 1
   _isGlobal: 0
   _initializeOrder: 0
+  _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
   NetworkObserver: {fileID: 0}
   _enablePrediction: 0
@@ -356,7 +359,8 @@ MonoBehaviour:
   SerializedTransformProperties:
     Position: {x: -33.73, y: 70.97, z: -40.91}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
-    LocalScale: {x: 1, y: 1, z: 1}
+    Scale: {x: 0, y: 0, z: 0}
+    IsValid: 0
 --- !u!4 &70787374
 Transform:
   m_ObjectHideFlags: 0
@@ -1384,8 +1388,8 @@ MonoBehaviour:
   InitialRespawnTime: 0
   InitialSpawnCount: 6
   MaxSpawnCount: 9
-  RandomRespawnTime: 1
   SpawnType: 2
+  RandomRespawnTime: 1
   RandomSpawnPosition: 1
   SphereRadius: 0.5
   BoundingBoxSize: {x: 75, y: 15, z: 65}
@@ -1427,12 +1431,15 @@ MonoBehaviour:
   <PredictedSpawn>k__BackingField: {fileID: 0}
   <PredictedOwner>k__BackingField: {fileID: 0}
   NetworkBehaviours: []
-  <InitializedParentNetworkBehaviour>k__BackingField: {fileID: 0}
-  <InitializedNestedNetworkObjects>k__BackingField: []
+  InitializedParentNetworkBehaviour: {fileID: 0}
+  InitializedNestedNetworkObjects: []
+  RuntimeParentNetworkBehaviour: {fileID: 0}
+  RuntimeChildNetworkBehaviours: []
   _isNetworked: 1
   _isSpawnable: 1
   _isGlobal: 0
   _initializeOrder: 0
+  _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
   NetworkObserver: {fileID: 0}
   _enablePrediction: 0
@@ -1455,7 +1462,8 @@ MonoBehaviour:
   SerializedTransformProperties:
     Position: {x: -33.73, y: 70.97, z: -40.91}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
-    LocalScale: {x: 1, y: 1, z: 1}
+    Scale: {x: 0, y: 0, z: 0}
+    IsValid: 0
 --- !u!4 &784079647
 Transform:
   m_ObjectHideFlags: 0
@@ -1547,7 +1555,6 @@ MonoBehaviour:
   Terrain: {fileID: 1011847574}
   OnRegionEnter:
   - {fileID: 11400000, guid: 22297f79efd99de43a9e8079889ee4b4, type: 2}
-  - {fileID: 11400000, guid: 34647e48cd749f04eb768bb8a41a47ad, type: 2}
   OnRegionStay: []
   OnRegionExit: []
   GizmoColor: {r: 0, g: 1, b: 1, a: 1}
@@ -1568,12 +1575,15 @@ MonoBehaviour:
   <PredictedSpawn>k__BackingField: {fileID: 0}
   <PredictedOwner>k__BackingField: {fileID: 0}
   NetworkBehaviours: []
-  <InitializedParentNetworkBehaviour>k__BackingField: {fileID: 0}
-  <InitializedNestedNetworkObjects>k__BackingField: []
+  InitializedParentNetworkBehaviour: {fileID: 0}
+  InitializedNestedNetworkObjects: []
+  RuntimeParentNetworkBehaviour: {fileID: 0}
+  RuntimeChildNetworkBehaviours: []
   _isNetworked: 1
   _isSpawnable: 1
   _isGlobal: 0
   _initializeOrder: 0
+  _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
   NetworkObserver: {fileID: 0}
   _enablePrediction: 0
@@ -1596,7 +1606,8 @@ MonoBehaviour:
   SerializedTransformProperties:
     Position: {x: 12, y: 48.92877, z: 12}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
-    LocalScale: {x: 1, y: 1, z: 1}
+    Scale: {x: 0, y: 0, z: 0}
+    IsValid: 0
 --- !u!114 &788347307
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1613,7 +1624,6 @@ MonoBehaviour:
   _addedNetworkObject: {fileID: 788347306}
   _networkObjectCache: {fileID: 788347306}
   _maximumSimultaneousHits: 16
-  _historyDuration: 0.5
   _additionalSize: 0.1
   _layers:
     serializedVersion: 2
@@ -2490,6 +2500,7 @@ MonoBehaviour:
   MaxClients: 100
   SceneTransitionImage: {fileID: 21300000, guid: 5c2d23be0cbdd4048a53de5b3b050809,
     type: 3}
+  DefaultSceneFog: {fileID: 11400000, guid: 34647e48cd749f04eb768bb8a41a47ad, type: 2}
   DayNightCycle: 1
   DayCycleDuration: 10800
   NightCycleDuration: 10800
@@ -4014,12 +4025,15 @@ MonoBehaviour:
   <PredictedSpawn>k__BackingField: {fileID: 0}
   <PredictedOwner>k__BackingField: {fileID: 0}
   NetworkBehaviours: []
-  <InitializedParentNetworkBehaviour>k__BackingField: {fileID: 0}
-  <InitializedNestedNetworkObjects>k__BackingField: []
+  InitializedParentNetworkBehaviour: {fileID: 0}
+  InitializedNestedNetworkObjects: []
+  RuntimeParentNetworkBehaviour: {fileID: 0}
+  RuntimeChildNetworkBehaviours: []
   _isNetworked: 1
   _isSpawnable: 1
   _isGlobal: 0
   _initializeOrder: 0
+  _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
   NetworkObserver: {fileID: 0}
   _enablePrediction: 0
@@ -4042,7 +4056,8 @@ MonoBehaviour:
   SerializedTransformProperties:
     Position: {x: 6.99, y: 9.12, z: 9.3}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
-    LocalScale: {x: 1, y: 1, z: 1}
+    Scale: {x: 0, y: 0, z: 0}
+    IsValid: 0
 --- !u!65 &1729415599
 BoxCollider:
   m_ObjectHideFlags: 0

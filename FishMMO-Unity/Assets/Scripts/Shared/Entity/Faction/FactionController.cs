@@ -172,7 +172,7 @@ namespace FishMMO.Shared
 			}
 			InsertToAllianceGroup(faction);
 
-			Debug.Log($"Set Faction: {templateID}:{value}");
+			//Debug.Log($"Set Faction: {templateID}:{value}");
 
 			if (!skipEvent)
 			{

@@ -1,4 +1,6 @@
 ﻿using FishNet.Transporting;
+using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -13,6 +15,19 @@ namespace FishMMO.Client
 		public RectTransform selectedCharacterParent;
 		public RectTransform characterButtonParent;
 		public CharacterDetailsButton characterButtonPrefab;
+
+		/// <summary>
+		/// Called when a Character List is received and ready to use.
+		/// </summary>
+		public Action OnCharacterListStart;
+		/// <summary>
+		/// Called after OnCharacterListReceivedStart finishes.
+		/// </summary>
+		public Action OnCharacterListEnd;
+		/// <summary>
+		/// Reference to the Cinematic Camera attached to this UI control.
+		/// </summary>
+		public CinematicCamera CinematicCamera;
 
 		private List<CharacterDetailsButton> characterList = new List<CharacterDetailsButton>();
 		private CharacterDetailsButton selectedCharacter;
@@ -66,7 +81,7 @@ namespace FishMMO.Client
 				case ClientAuthenticationResult.Banned:
 					break;
 				case ClientAuthenticationResult.LoginSuccess:
-					Show(); // show the panel even if we don't get the character list.. this will let us return to login or quit
+					//Show(); // show the panel even if we don't get the character list.. this will let us return to login or quit
 					break;
 				case ClientAuthenticationResult.WorldLoginSuccess:
 					Hide();
@@ -98,11 +113,21 @@ namespace FishMMO.Client
 
 		private void OnClientCharacterListBroadcastReceived(CharacterListBroadcast msg, Channel channel)
 		{
+			Hide();
+
 			if (msg.Characters != null)
 			{
 				DestroyCharacterList();
 
 				characterList = new List<CharacterDetailsButton>();
+
+				// No characters were sent.
+				if (msg.Characters.Count < 1)
+				{
+					OnCharacterListReady();
+					return;
+				}
+
 				for (int i = 0; i < msg.Characters.Count; ++i)
 				{
 					CharacterDetailsButton newCharacter = Instantiate(characterButtonPrefab, characterButtonParent);
@@ -112,6 +137,28 @@ namespace FishMMO.Client
 				}
 			}
 
+			OnCharacterListReady();
+		}
+
+		private void OnCharacterListReady()
+		{
+			OnCharacterListStart?.Invoke();
+			
+			Client.StartCoroutine(OnProcessCharacterList());
+		}
+
+		IEnumerator OnProcessCharacterList()
+		{
+			if (CinematicCamera != null)
+			{
+				CinematicCamera.Reset();
+				yield return CinematicCamera.MoveToNextWaypoint(() =>
+				{
+					//Debug.Log("Camera movement completed!");
+				}, true);
+			}
+
+			OnCharacterListEnd?.Invoke();
 			Show();
 		}
 
@@ -122,7 +169,8 @@ namespace FishMMO.Client
 			CharacterDetails details = new CharacterDetails()
 			{
 				CharacterName = msg.CharacterName,
-				//modelTemplateIndex = msg.raceName,
+				SceneName = msg.SceneName,
+				RaceTemplateID = msg.RaceTemplateID,
 			};
 			newCharacter.Initialize(details);
 			newCharacter.OnCharacterSelected += OnCharacterSelected;
@@ -219,13 +267,16 @@ namespace FishMMO.Client
 		{
 			base.OnQuitToLogin();
 
+			Client.StopCoroutine(OnProcessCharacterList());
+
 			SetDeleteButtonLocked(false);
 			SetConnectButtonLocked(false);
 		}
 
 		public void OnClick_QuitToLogin()
 		{
-			// we should go back to login..
+			Client.StopCoroutine(OnProcessCharacterList());
+			
 			Client.QuitToLogin();
 		}
 

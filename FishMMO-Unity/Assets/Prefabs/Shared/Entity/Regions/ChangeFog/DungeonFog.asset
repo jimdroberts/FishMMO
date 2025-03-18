@@ -12,9 +12,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ab0b9bcba9bd4a247bb5e760d5958dc7, type: 3}
   m_Name: DungeonFog
   m_EditorClassIdentifier: 
-  fogEnabled: 1
-  fogMode: 2
-  fogColor: {r: 0.69803923, g: 0.6112569, b: 0.5254902, a: 1}
-  fogDensity: 0.2
-  fogStartDistance: 1500
-  fogEndDistance: 2000
+  FogSettings:
+    Enabled: 1
+    ChangeRate: 0
+    Mode: 2
+    Color: {r: 0.30437878, g: 0.36652026, b: 0.6792453, a: 1}
+    Density: 0.15
+    StartDistance: 25
+    EndDistance: 100

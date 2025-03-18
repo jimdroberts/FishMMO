@@ -47,8 +47,8 @@ namespace FishMMO.Server
 			else if (conn.IsActive)
 			{
 				using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-                // load all character details for the account from database
-                List<CharacterDetails> characterList = CharacterService.GetDetails(dbContext, accountName);
+				// load all character details for the account from database
+				List<CharacterDetails> characterList = CharacterService.GetDetails(dbContext, accountName);
 
 				// append the characters to the broadcast message
 				CharacterListBroadcast characterListMsg = new CharacterListBroadcast()
@@ -65,14 +65,15 @@ namespace FishMMO.Server
 			if (conn.IsActive && AccountManager.GetAccountNameByConnection(conn, out string accountName))
 			{
 				using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-				CharacterService.Delete(dbContext, accountName, msg.CharacterName, KeepDeleteData);
-
-				CharacterDeleteBroadcast charDeleteMsg = new CharacterDeleteBroadcast()
+				if (CharacterService.TryDelete(dbContext, accountName, msg.CharacterName, KeepDeleteData))
 				{
-					CharacterName = msg.CharacterName,
-				};
+					CharacterDeleteBroadcast charDeleteMsg = new CharacterDeleteBroadcast()
+					{
+						CharacterName = msg.CharacterName,
+					};
 
-				Server.Broadcast(conn, charDeleteMsg, true, Channel.Reliable);
+					Server.Broadcast(conn, charDeleteMsg, true, Channel.Reliable);
+				}
 			}
 		}
 

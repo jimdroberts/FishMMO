@@ -45,10 +45,12 @@ namespace FishMMO.Client
 		public List<AddressableSceneLoadData> WorldPreloadScenes = new List<AddressableSceneLoadData>();
 		public byte MaxReconnectAttempts = 10;
 		public float ReconnectAttemptWaitTime = 5f;
+		public ClientPostbootSystem ClientPostbootSystem;
 
 		public event Action OnConnectionSuccessful;
 		public event Action<byte, byte> OnReconnectAttempt;
 		public event Action OnReconnectFailed;
+		public event Action OnEnterGameWorld;
 		public event Action OnQuitToLogin;
 
 		public bool CanReconnect
@@ -56,7 +58,7 @@ namespace FishMMO.Client
 			get
 			{
 				return currentConnectionType == ServerConnectionType.World ||
-												currentConnectionType == ServerConnectionType.Scene;
+					   currentConnectionType == ServerConnectionType.Scene;
 			}
 		}
 
@@ -80,6 +82,11 @@ namespace FishMMO.Client
 			if (AudioListener == null && Camera.main != null)
 			{
 				AudioListener = Camera.main.gameObject.GetComponent<AudioListener>();
+			}
+
+			if (ClientPostbootSystem != null)
+			{
+				ClientPostbootSystem.SetClient(this);
 			}
 
 			// Set the UIManager Client
@@ -141,6 +148,7 @@ namespace FishMMO.Client
 			_networkManager = NetworkManager;
 
 			NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
+			NetworkManager.ClientManager.RegisterBroadcast<WorldSceneConnectBroadcast>(OnClientWorldSceneConnectBroadcastReceived);
 			NetworkManager.ClientManager.RegisterBroadcast<ClientValidatedSceneBroadcast>(OnClientValidatedSceneBroadcastReceived);
 
 			NetworkManager.SceneManager.OnLoadStart += SceneManager_OnLoadStart;
@@ -154,6 +162,7 @@ namespace FishMMO.Client
 		private void DeinitializeNetworkManager()
 		{
 			NetworkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
+			NetworkManager.ClientManager.UnregisterBroadcast<WorldSceneConnectBroadcast>(OnClientWorldSceneConnectBroadcastReceived);
 			NetworkManager.ClientManager.UnregisterBroadcast<ClientValidatedSceneBroadcast>(OnClientValidatedSceneBroadcastReceived);
 
 			NetworkManager.SceneManager.OnLoadStart -= SceneManager_OnLoadStart;
@@ -283,6 +292,11 @@ namespace FishMMO.Client
 
 			UIManager.SetClient(null);
 
+			if (ClientPostbootSystem != null)
+			{
+				ClientPostbootSystem.UnsetClient(this);
+			}
+
 			Application.logMessageReceived -= this.Application_logMessageReceived;
 		}
 
@@ -305,6 +319,8 @@ namespace FishMMO.Client
 
 		public void QuitToLogin(bool forceDisconnect = true)
 		{
+			StopAllCoroutines();
+
 			UnloadWorldScenes();
 			
 			if (forceDisconnect)
@@ -422,6 +438,8 @@ namespace FishMMO.Client
 					break;
 				case ClientAuthenticationResult.SceneLoginSuccess:
 					currentConnectionType = ServerConnectionType.Scene;
+
+					OnEnterGameWorld?.Invoke();
 					break;
 				case ClientAuthenticationResult.ServerFull:
 					break;
@@ -497,7 +515,7 @@ namespace FishMMO.Client
 		public void ReconnectCancel()
 		{
 			OnReconnectFailed?.Invoke();
-			ForceDisconnect();
+			QuitToLogin();
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -583,14 +601,6 @@ namespace FishMMO.Client
 		
 		private void SceneManager_OnLoadStart(SceneLoadStartEventArgs args)
 		{
-			/*if (args.QueueData.SceneLoadData != null)
-			{
-				SceneLookupData[] lud = args.QueueData.SceneLoadData.SceneLookupDatas;
-				for (int i = 0; i < lud.Length; ++i)
-				{
-					Debug.Log($"FN Scene loading: {lud[i].Name}|{lud[i].Handle}");
-				}
-			}*/
 		}
 
 		private void SceneManager_OnLoadPercentChange(SceneLoadPercentEventArgs args)
@@ -599,45 +609,39 @@ namespace FishMMO.Client
 
 		private void SceneManager_OnLoadEnd(SceneLoadEndEventArgs args)
 		{
-			// Add Loaded World Scenes
-			if (args.LoadedScenes != null)
+			if (args.LoadedScenes == null)
 			{
-				foreach (Scene scene in args.LoadedScenes)
-				{
-					loadedWorldScenes.Add(scene.handle, scene);
-				}
+				return;
+			}
+			// Add Loaded World Scenes
+			foreach (Scene scene in args.LoadedScenes)
+			{
+				loadedWorldScenes.Add(scene.handle, scene);
 			}
 		}
 
 		private void SceneManager_OnUnloadStart(SceneUnloadStartEventArgs args)
 		{
-			/*SceneLookupData[] lud = args.QueueData.SceneUnloadData.SceneLookupDatas;
-			for (int i = 0; i < lud.Length; ++i)
-			{
-				Debug.Log($"FN Scene unloading: {lud[i].Name}|{lud[i].Handle}");
-			}*/
 		}
 
 		private void SceneManager_OnUnloadEnd(SceneUnloadEndEventArgs args)
 		{
-			// Remove Loaded World Scenes
-			if (args.UnloadedScenesV2 != null)
+			if (args.UnloadedScenesV2 == null)
 			{
-				foreach (UnloadedScene unloadedScene in args.UnloadedScenesV2)
-				{
-					loadedWorldScenes.Remove(unloadedScene.Handle);
-				}
+				return;
+			}
 
-				// Notify the server that we unloaded scenes.
-				Client.Broadcast(new ClientScenesUnloadedBroadcast()
-				{
-					UnloadedScenes = args.UnloadedScenesV2,
-				});
-			}
-			else
+			// Remove Loaded World Scenes
+			foreach (UnloadedScene unloadedScene in args.UnloadedScenesV2)
 			{
-				Debug.Log("No scenes unloaded.");
+				loadedWorldScenes.Remove(unloadedScene.Handle);
 			}
+
+			// Notify the server that we unloaded scenes.
+			Client.Broadcast(new ClientScenesUnloadedBroadcast()
+			{
+				UnloadedScenes = args.UnloadedScenesV2,
+			});
 		}
 
 		/// <summary>
@@ -652,11 +656,23 @@ namespace FishMMO.Client
 			{
 				return;
 			}
-			foreach (Scene scene in new List<Scene>(loadedWorldScenes.Values))
+			if (loadedWorldScenes == null || loadedWorldScenes.Count < 1)
 			{
-				//Debug.LogWarning($"WorldSceneUnload: {scene.name}");
+				return;
+			}
+			foreach (Scene scene in loadedWorldScenes.Values)
+			{
 				sceneProcessor.BeginUnloadAsync(scene);
-				loadedWorldScenes.Remove(scene.handle);
+			}
+			loadedWorldScenes.Clear();
+		}
+
+		private void OnClientWorldSceneConnectBroadcastReceived(WorldSceneConnectBroadcast msg, Channel channel)
+		{
+			if (IsConnectionReady())
+			{
+				// Connect to the scene server
+				ConnectToServer(msg.Address, msg.Port);
 			}
 		}
 
@@ -665,23 +681,11 @@ namespace FishMMO.Client
 		/// </summary>
 		public void OnClientValidatedSceneBroadcastReceived(ClientValidatedSceneBroadcast msg, Channel channel)
 		{
-			/*if (Camera.main != null)
-			{
-				Camera.main.transform.position = msg.Position;
-				Camera.main.transform.rotation = msg.Rotation;
-			}*/
-
-			// Set up the UI Loading Screen for the current AddressableLoadProcessor.
-			if (UIManager.TryGet(UILoadingScreenKey, out UILoadingScreen loadingScreen))
-			{
-				AddressableLoadProcessor.OnProgressUpdate += loadingScreen.OnProgressUpdate;
-				loadingScreen.Show();
-			}
-
 			AddressableLoadProcessor.EnqueueLoad(WorldPreloadScenes);
 			try
 			{
-				AddressableLoadProcessor.OnProgressUpdate += AddressableLoadProcessor_OnPreloadProgressUpdate;
+				AddressableLoadProcessor.OnProgressUpdate += OnClientValidatedSceneProgressUpdate;
+
 				AddressableLoadProcessor.BeginProcessQueue();
 			}
 			catch (UnityException ex)
@@ -690,24 +694,14 @@ namespace FishMMO.Client
 			}
 		}
 
-		/// <summary>
-		/// Called after Preload is completed.
-		/// </summary>
-		private void AddressableLoadProcessor_OnPreloadProgressUpdate(float progress)
+		private void OnClientValidatedSceneProgressUpdate(float progress)
 		{
-			// Wait for the Addressable Load Processor queue to complete loading.
 			if (progress < 1.0f)
 			{
 				return;
 			}
 
-			AddressableLoadProcessor.OnProgressUpdate -= AddressableLoadProcessor_OnPreloadProgressUpdate;
-
-			if (UIManager.TryGet(UILoadingScreenKey, out UILoadingScreen loadingScreen))
-			{
-				AddressableLoadProcessor.OnProgressUpdate -= loadingScreen.OnProgressUpdate;
-				loadingScreen.Hide();
-			}
+			AddressableLoadProcessor.OnProgressUpdate -= OnClientValidatedSceneProgressUpdate;
 
 			Client.Broadcast(new ClientValidatedSceneBroadcast(), Channel.Reliable);
 		}
@@ -962,7 +956,7 @@ namespace FishMMO.Client
 		private float fogFinalStartDistance = 0.0f;
 		private float fogFinalEndDistance = 0.0f;
 
-		public void RegionChangeFogAction_OnChangeFog(bool fogEnabled, float fogChangeRate, FogMode fogMode, Color fogColor, float fogDensity, float fogStartDistance, float fogEndDistance)
+		public void RegionChangeFogAction_OnChangeFog(FogSettings fogSettings)
 		{
 			// If the coroutine exists.
 			if (fogLerpRoutine != null)
@@ -978,32 +972,32 @@ namespace FishMMO.Client
 				fogLerpRoutine = null;
 			}
 
-			RenderSettings.fog = fogEnabled;
+			RenderSettings.fog = fogSettings.Enabled;
 
-			if (!fogEnabled)
+			if (!fogSettings.Enabled)
 			{
 				return;
 			}
 
-			RenderSettings.fogMode = fogMode;
+			RenderSettings.fogMode = fogSettings.Mode;
 
 			// If no fog lerp settings exist we should instantiate one and immediately set fog render settings.
 			if (fogInitialLerpSettings == null)
 			{
 				fogInitialLerpSettings = new FogInitialLerpSettings();
-				fogInitialLerpSettings.Initialize(fogColor, fogDensity, fogStartDistance, fogEndDistance);
-				RenderSettings.fogColor = fogColor;
-				RenderSettings.fogDensity = fogDensity;
-				RenderSettings.fogStartDistance = fogStartDistance;
-				RenderSettings.fogEndDistance = fogEndDistance;
+				fogInitialLerpSettings.Initialize(fogSettings.Color, fogSettings.Density, fogSettings.StartDistance, fogSettings.EndDistance);
+				RenderSettings.fogColor = fogSettings.Color;
+				RenderSettings.fogDensity = fogSettings.Density;
+				RenderSettings.fogStartDistance = fogSettings.StartDistance;
+				RenderSettings.fogEndDistance = fogSettings.EndDistance;
 			}
 
 			// Assign the final lerp values for these fog settings.
-			this.fogChangeRate = fogChangeRate;
-			this.fogFinalColor = fogColor;
-			this.fogFinalDensity = fogDensity;
-			this.fogFinalStartDistance = fogStartDistance;
-			this.fogFinalEndDistance = fogEndDistance;
+			this.fogChangeRate = fogSettings.ChangeRate;
+			this.fogFinalColor = fogSettings.Color;
+			this.fogFinalDensity = fogSettings.Density;
+			this.fogFinalStartDistance = fogSettings.StartDistance;
+			this.fogFinalEndDistance = fogSettings.EndDistance;
 
 			fogLerpRoutine = StartCoroutine(FogLerp());
 		}

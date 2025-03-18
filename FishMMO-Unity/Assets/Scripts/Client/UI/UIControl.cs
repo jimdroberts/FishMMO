@@ -257,6 +257,7 @@ namespace FishMMO.Client
 
 		public virtual void OnQuitToLogin()
 		{
+			StopAllCoroutines();
 		}
 
 		private void Client_OnQuitToLogin()

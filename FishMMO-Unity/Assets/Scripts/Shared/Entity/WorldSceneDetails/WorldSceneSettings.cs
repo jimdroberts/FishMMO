@@ -18,6 +18,8 @@ namespace FishMMO.Shared
 		[Tooltip("The image that will be displayed when entering this scene.")]
 		public Sprite SceneTransitionImage;
 
+		public RegionChangeFogAction DefaultSceneFog;
+
 		/// <summary>
 		/// True if the day night cycle should run. False if not.
 		/// </summary>
@@ -78,6 +80,8 @@ namespace FishMMO.Shared
 
 		private void Awake()
 		{
+			DefaultSceneFog?.Invoke(null, null, false);
+
 			RenderSettings.skybox = DaySkyboxMaterial;
 			
 			UpdateDayNightState(GetGameTimeOfDay(DateTime.UtcNow), true);

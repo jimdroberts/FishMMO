@@ -16,7 +16,6 @@ namespace Scenes
 		private readonly List<Scene> _loadedScenes = new(4);
 		private readonly List<AsyncOperationHandle<SceneInstance>> _loadingAsyncOperations = new(4);
 		private AsyncOperationHandle<SceneInstance> _currentAsyncOperation;
-		private AsyncOperation _currentBasicAsyncOperation;
 		private Scene _lastLoadedScene;
 
 		public override void LoadStart(LoadQueueData queueData)
@@ -32,6 +31,7 @@ namespace Scenes
 		private void ResetProcessor()
 		{
 			_currentAsyncOperation = default;
+			_lastLoadedScene = default;
 			_loadingAsyncOperations.Clear();
 		}
 
@@ -51,95 +51,70 @@ namespace Scenes
 			{
 				if (op.Status == AsyncOperationStatus.Succeeded)
 				{
-					//Debug.LogWarning($"AddressableSceneProcessor Loaded scene: {op.Result.Scene.name}|{op.Result.Scene.handle}");
-					_lastLoadedScene = op.Result.Scene;
+					//Debug.LogWarning($"AddressableSceneProcessor Loaded scene: {_currentAsyncOperation.Result.Scene.name}|{_currentAsyncOperation.Result.Scene.handle}");
+					AddLoadedScene(_currentAsyncOperation);
 				}
 				else
 				{
-					Debug.LogError($"Failed to unload scene: {sceneName}");
+					Debug.LogError($"Failed to load scene: {sceneName}");
 				}
 			};
 		}
 
 		public override void BeginUnloadAsync(Scene scene)
 		{
-			if (_loadedScenesByHandle.TryGetValue(scene.handle, out var loadHandle))
+			if (!_loadedScenesByHandle.TryGetValue(scene.handle, out var loadHandle))
 			{
-				//Debug.LogWarning($"AddressableSceneProcessor Unloading Scene: {scene.name}|{scene.handle}");
-				AsyncOperationHandle<SceneInstance> unloadHandle = Addressables.UnloadSceneAsync(loadHandle, false);
-				_currentAsyncOperation = unloadHandle;
+				Debug.LogError("Trying to unload a non addressable scene.");
+				return;
+			}
 
-				unloadHandle.Completed += (op) =>
+			//Debug.LogWarning($"AddressableSceneProcessor Unloading Scene: {scene.name}|{scene.handle}");
+			AsyncOperationHandle<SceneInstance> unloadHandle = Addressables.UnloadSceneAsync(loadHandle, false);
+			_currentAsyncOperation = unloadHandle;
+
+			unloadHandle.Completed += (op) =>
+			{
+				if (op.Status == AsyncOperationStatus.Succeeded)
 				{
-					if (op.Status == AsyncOperationStatus.Succeeded)
-					{
-						Scene unloadedScene = op.Result.Scene;
+					Scene unloadedScene = op.Result.Scene;
 
-						//Debug.LogWarning($"AddressableSceneProcessor Unloaded Scene: {unloadedScene.name}|{unloadedScene.handle}");
-						
-						_loadedScenes.Remove(unloadedScene);
-						_loadedScenesByHandle.Remove(unloadedScene.handle);
+					//Debug.LogWarning($"AddressableSceneProcessor Unloaded Scene: {unloadedScene.name}|{unloadedScene.handle}");
 
-						// Try to release the load handle if it's still valid for some reason.
-						if (loadHandle.IsValid())
-						{
-							Addressables.Release(loadHandle);
-						}
-					}
-					else
+					_loadedScenes.Remove(unloadedScene);
+					_loadedScenesByHandle.Remove(unloadedScene.handle);
+
+					// Try to release the load handle if it's still valid for some reason.
+					if (loadHandle.IsValid())
 					{
-						Debug.LogError($"Failed to unload scene: {scene.name}");
+						Addressables.Release(loadHandle);
 					}
-				};
-			}
-			else
-			{
-				_currentBasicAsyncOperation = UnityEngine.SceneManagement.SceneManager.UnloadSceneAsync(scene);
-			}
+				}
+				else
+				{
+					Debug.LogError($"Failed to unload scene: {scene.name}");
+				}
+			};
 		}
 
 		public override bool IsPercentComplete()
 		{
-			bool completed;
-
-			if (_currentBasicAsyncOperation != null)
+			if (_currentAsyncOperation.IsValid())
 			{
-				completed = GetPercentComplete() >= 1.0f;
-				if (completed)
+				if (GetPercentComplete() < 1.0f)
 				{
-					_currentBasicAsyncOperation = null;
+					return false;
 				}
-				return completed;
 			}
-			else if (_currentAsyncOperation.IsValid())
-			{
-				completed = _currentAsyncOperation.IsDone;
-				if (completed)
-				{
-					AddLoadedScene(_currentAsyncOperation);
-				}
-				return completed;
-			}
-
-			//Debug.LogError("Something went wrong, no valid async operation found.", this);
-			return false;
+			return true;
 		}
 
 		public override float GetPercentComplete()
 		{
-			float percent = 0f;
-
-			if (_currentBasicAsyncOperation != null)
-			{
-				percent = _currentBasicAsyncOperation.progress;
-			}
-			else if (_currentAsyncOperation.IsValid())
-			{
-				percent = _currentAsyncOperation.PercentComplete;
-			}
-
-			return percent;
+			return _currentAsyncOperation.IsValid() ? _currentAsyncOperation.PercentComplete : 1.0f;
 		}
+
+		public override Scene GetLastLoadedScene() => _lastLoadedScene;
 
 		public override List<Scene> GetLoadedScenes() => _loadedScenes;
 
@@ -151,7 +126,7 @@ namespace Scenes
 				Debug.LogWarning("Already added scene with handle: " + scene.handle);
 				return;
 			}
-
+			_lastLoadedScene = scene;
 			_loadedScenes.Add(scene);
 			_loadedScenesByHandle.Add(scene.handle, loadHandle);
 		}
@@ -182,15 +157,12 @@ namespace Scenes
 					if (!ao.IsDone)
 					{
 						notDone = true;
-						//Debug.Log($"Scene '{ao.Result.Scene.name}' is still loading...");
 						break;
 					}
 				}
 
 				yield return null;
 			}
-
-			//Debug.Log("All async operations are complete.");
 		}
 	}
 }

@@ -48,7 +48,7 @@ namespace FishMMO.Shared
         {
             base.OnStartNetwork();
 
-			if (!base.IsServerStarted)
+			if (!base.IsServerStarted || Spawnables == null || Spawnables.Count < 1)
 			{
 				enabled = false;
 				return;
@@ -220,7 +220,7 @@ namespace FishMMO.Shared
 
 		private void UpdateTotalSpawnChanceCache()
 		{
-			if (IsCacheDirty)
+			if (Spawnables != null && Spawnables.Count > 0 && IsCacheDirty)
 			{
 				cachedTotalSpawnChance = 0f;
 				foreach (var spawnableSettings in Spawnables)
@@ -233,6 +233,11 @@ namespace FishMMO.Shared
 
 		private int GetWeightedSpawnIndex()
 		{
+			if (Spawnables == null || Spawnables.Count < 1)
+			{
+				return 0;
+			}
+
 			UpdateTotalSpawnChanceCache();
 
 			// Pick a random value between 0 and TotalSpawnChance
@@ -257,6 +262,11 @@ namespace FishMMO.Shared
 
 		public int GetSpawnIndex()
 		{
+			if (Spawnables == null || Spawnables.Count < 1)
+			{
+				return 0;
+			}
+
 			int spawnIndex;
 			switch (SpawnType)
 			{
@@ -287,6 +297,11 @@ namespace FishMMO.Shared
 
 		public void SpawnObject()
 		{
+			if (Spawnables == null || Spawnables.Count < 1)
+			{
+				return;
+			}
+
 			SpawnableSettings spawnableSettings = Spawnables[GetSpawnIndex()];
 			if (spawnableSettings == null ||
 				spawnableSettings.NetworkObject == null)

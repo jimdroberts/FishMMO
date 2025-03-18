@@ -7,7 +7,6 @@ using FishMMO.Database.Npgsql;
 using FishMMO.Database.Npgsql.Entities;
 using FishMMO.Shared;
 using UnityEngine;
-using UnityEngine.TextCore.Text;
 
 namespace FishMMO.Server.DatabaseServices
 {
@@ -100,7 +99,9 @@ namespace FishMMO.Server.DatabaseServices
 			return dbContext.Characters.Where(c => c.Account == account && !c.Deleted)
 										.Select(c => new CharacterDetails()
 										{
-											CharacterName = c.Name
+											CharacterName = c.Name,
+											SceneName = c.SceneName,
+											RaceTemplateID = c.RaceID,
 										})
 										.ToList();
 		}
@@ -318,13 +319,13 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// KeepData is automatically true... This means we don't actually delete anything. Deleted is simply set to true just incase we need to reinstate a character..
 		/// </summary>
-		public static void Delete(NpgsqlDbContext dbContext, string account, string characterName, bool keepData = true)
+		public static bool TryDelete(NpgsqlDbContext dbContext, string account, string characterName, bool keepData = true)
 		{
 			using var dbTransaction = dbContext.Database.BeginTransaction();
 
 			if (dbTransaction == null)
 			{
-				return;
+				return false;
 			}
 
 			var character = dbContext.Characters.FirstOrDefault(c => c.Account == account &&
@@ -332,7 +333,7 @@ namespace FishMMO.Server.DatabaseServices
 
 			if (character == null)
 			{
-				return;
+				return false;
 			}
 
 			// possible preserved data
@@ -365,6 +366,8 @@ namespace FishMMO.Server.DatabaseServices
 			}
 
 			dbTransaction.Commit();
+
+			return true;
 		}
 
 		/// <summary>

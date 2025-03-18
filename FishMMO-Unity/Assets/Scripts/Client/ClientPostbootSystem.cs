@@ -1,4 +1,5 @@
 using FishMMO.Shared;
+using UnityEngine;
 
 namespace FishMMO.Client
 {
@@ -6,28 +7,22 @@ namespace FishMMO.Client
 	{
 		public string UILoadingScreenKey = "UILoadingScreen";
 
+		private Vector3 cameraInitialPosition;
+		private Quaternion cameraInitialRotation;
+
 		public override void OnPreload()
 		{
-			// Set up the UI Loading Screen for the current AddressableLoadProcessor.
-			if (UIManager.TryGet(UILoadingScreenKey, out UILoadingScreen loadingScreen))
+			// Try to capture the initial camera position and rotation
+			if (Camera.main != null)
 			{
-				AddressableLoadProcessor.OnProgressUpdate += loadingScreen.OnProgressUpdate;
-				loadingScreen.Show();
+				cameraInitialPosition = Camera.main.transform.position;
+				cameraInitialRotation = Camera.main.transform.rotation;
 			}
 
 			// Load Template Cache
 			AddressableLoadProcessor.OnAddressableLoaded += AddressableLoadProcessor_OnAddressableLoaded;
 			AddressableLoadProcessor.OnAddressableUnloaded += AddressableLoadProcessor_OnAddressableUnloaded;
 			AddressableLoadProcessor.EnqueueLoad(Constants.TemplateTypeCache);
-		}
-
-		public override void OnCompleteProcessing()
-		{
-			if (UIManager.TryGet(UILoadingScreenKey, out UILoadingScreen loadingScreen))
-			{
-				AddressableLoadProcessor.OnProgressUpdate -= loadingScreen.OnProgressUpdate;
-				loadingScreen.Hide();
-			}
 		}
 
 		public override void OnDestroying()
@@ -51,6 +46,43 @@ namespace FishMMO.Client
 			if (cachedObject != null)
 			{
 				cachedObject.RemoveFromCache();
+			}
+		}
+
+		public void SetClient(Client client)
+		{
+			client.OnQuitToLogin += ReloadPostloadScenes;
+			client.OnEnterGameWorld += UnloadPostloadScenes;
+		}
+
+		public void UnsetClient(Client client)
+		{
+			client.OnQuitToLogin -= ReloadPostloadScenes;
+			client.OnEnterGameWorld -= UnloadPostloadScenes;
+		}
+
+		private void UnloadPostloadScenes()
+		{
+			AddressableLoadProcessor.UnloadSceneByLabelAsync(PostloadScenes);
+		}
+
+		private void ReloadPostloadScenes()
+		{
+			// Try to reset the initial camera position and rotation
+			if (Camera.main != null)
+			{
+				Camera.main.transform.position = cameraInitialPosition;
+				Camera.main.transform.rotation = cameraInitialRotation;
+			}
+
+			AddressableLoadProcessor.EnqueueLoad(PostloadScenes);
+			try
+			{
+				AddressableLoadProcessor.BeginProcessQueue();
+			}
+			catch (UnityException ex)
+			{
+				Debug.LogError($"Failed to load preload scenes: {ex.Message}");
 			}
 		}
 	}

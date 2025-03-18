@@ -7,7 +7,8 @@ namespace FishMMO.Shared
 	public class CharacterDetails
 	{
 		public string CharacterName;
-		public int ModelTemplateIndex;
+		public string SceneName;
+		public int RaceTemplateID;
 		//public List<EquippedItems>
 	}
 }

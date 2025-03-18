@@ -9,6 +9,7 @@ namespace FishMMO.Client
 	{
 		public Button CharacterButton;
 		public TMP_Text CharacterNameLabel;
+		public TMP_Text CharacterSceneLabel;
 
 		public CharacterDetails Details;
 
@@ -20,10 +21,16 @@ namespace FishMMO.Client
 		public void Initialize(CharacterDetails details)
 		{
 			Details = details;
-			CharacterNameLabel.text = details.CharacterName;
+			if (CharacterNameLabel != null)
+			{
+				CharacterNameLabel.text = details.CharacterName;
+				labelColor = CharacterNameLabel.color;
+			}
+			if (CharacterSceneLabel != null)
+			{
+				CharacterSceneLabel.text = details.SceneName;
+			}
 			gameObject.SetActive(true);
-
-			labelColor = CharacterNameLabel.color;
 		}
 
 		public void OnClick_CharacterButton()
@@ -33,11 +40,20 @@ namespace FishMMO.Client
 
 		public void ResetLabelColor()
 		{
+			if (CharacterNameLabel == null)
+			{
+				return;
+			}
 			CharacterNameLabel.color = labelColor;
 		}
 
 		public void SetLabelColors(Color color)
 		{
+			if (CharacterNameLabel == null)
+			{
+				return;
+			}
+
 			labelColor = CharacterNameLabel.color;
 			CharacterNameLabel.color = color;
 		}

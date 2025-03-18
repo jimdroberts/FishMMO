@@ -149,14 +149,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b5c2edaa6d4e0fd4393eb1def39f4f2f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  ReconnectAttempts: 5
-  ReconnectAttemptWaitTime: 5
-  LoginServerAddresses: []
   UILoadingScreenKey: UILoadingScreen
+  LoginServerAddresses: []
   WorldPreloadScenes:
   - SceneName: ClientWorldGUIScene
     ActivateOnLoad: 1
     LoadSceneMode: 1
+  MaxReconnectAttempts: 10
+  ReconnectAttemptWaitTime: 5
+  ClientPostbootSystem: {fileID: 1045518714}
   NetworkManager: {fileID: 567623046510845244}
   LoginAuthenticator: {fileID: 2516426190219138202}
   AudioListener: {fileID: 0}
@@ -201,7 +202,6 @@ MonoBehaviour:
   - SceneName: ClientLoginGUIScene
     ActivateOnLoad: 1
     LoadSceneMode: 1
-  WebGLKeyHijack: {fileID: 1045518715}
   UILoadingScreenKey: UILoadingScreen
 --- !u!114 &1045518715
 MonoBehaviour:
@@ -532,7 +532,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _sceneProcessor: {fileID: 6776049995475983712}
   _lightProbeUpdating: 0
-  _moveClientHostObjects: 1
+  _moveClientObjects: 1
   _setActiveScene: 1
 --- !u!1660057539 &9223372036854775807
 SceneRoots:

@@ -385,7 +385,7 @@ namespace FishMMO.Shared
 			// Check if the scene is already loaded
 			if (!loadedScenes.TryGetValue(sceneName, out var handle))
 			{
-				Debug.LogWarning($"Scene {sceneName} not found in loaded scenes.");
+				//Debug.LogWarning($"Scene {sceneName} not found in loaded scenes.");
 				return;
 			}
 
@@ -415,9 +415,6 @@ namespace FishMMO.Shared
 					// Log an error if unloading the scene failed
 					Debug.LogError($"Failed to unload scene Addressable: {sceneName}");
 				}
-
-				assetsProcessedSoFar++;
-				UpdateProgress();
 			};
 		}
 
