@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.AddressableAssets;
 
 namespace FishMMO.Shared
 {
@@ -17,21 +18,26 @@ namespace FishMMO.Shared
 		{
 			Factions = new List<FactionTemplate>();
 
-			FactionTemplate[] resources = Resources.LoadAll<FactionTemplate>("");
-			if (resources != null && resources.Length > 0)
+			// Load all FactionTemplate assets synchronously using Addressables
+			var handle = Addressables.LoadAssetsAsync<FactionTemplate>("FactionTemplate");
+
+			// Block until the assets are loaded synchronously
+			var result = handle.WaitForCompletion();
+
+			if (result != null && result.Count > 0)
 			{
-				for (int i = 0; i < resources.Length; ++i)
+				Factions.AddRange(result);
+				if (Factions.Count < 1)
 				{
-					Factions.Add(resources[i]);
+					return;
 				}
-			}
 
-			if (Factions.Count < 1)
+				Matrix = new FactionMatrix(Factions);
+			}
+			else
 			{
-				return;
+				Debug.LogError("Failed to load Faction Templates with Addressables.");
 			}
-
-			Matrix = new FactionMatrix(Factions);
 		}
 
 		public void RebuildFactions()

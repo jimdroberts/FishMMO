@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e0201ce6fddf76342b21998a7f81ec3c, type: 3}
   m_Name: Orc Horde
   m_EditorClassIdentifier: 
+  Icon: {fileID: 0}
   Description: The orcish chieftains rule the horde.
   DefaultAllied:
     m_keys:

@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e0201ce6fddf76342b21998a7f81ec3c, type: 3}
   m_Name: Highborn Nations
   m_EditorClassIdentifier: 
+  Icon: {fileID: 0}
   Description: The high elven alliance. A democracy of ancient elves that worship
     the forest gods.
   DefaultAllied:
@@ -19,9 +20,9 @@ MonoBehaviour:
     - {fileID: 11400000}
   DefaultNeutral:
     m_keys:
+    - {fileID: 11400000, guid: 531ed21f335ef6e4cab9440971452675, type: 2}
     - {fileID: 11400000, guid: 77a3fb139fbe85a43a013e72d3b303a3, type: 2}
     - {fileID: 11400000, guid: ba6fc6ea5873d2f4dbf7c973fdafb667, type: 2}
-    - {fileID: 11400000, guid: 531ed21f335ef6e4cab9440971452675, type: 2}
   DefaultHostile:
     m_keys:
     - {fileID: 11400000, guid: e5859044195c03e44adebc73805dd570, type: 2}

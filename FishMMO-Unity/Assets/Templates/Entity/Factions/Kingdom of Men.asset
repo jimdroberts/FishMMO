@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e0201ce6fddf76342b21998a7f81ec3c, type: 3}
   m_Name: Kingdom of Men
   m_EditorClassIdentifier: 
+  Icon: {fileID: 0}
   Description: The alliance of great human kings and queens.
   DefaultAllied:
     m_keys:
@@ -19,8 +20,8 @@ MonoBehaviour:
   DefaultNeutral:
     m_keys:
     - {fileID: 11400000, guid: 1ab8069820abc0b45ad5dd91bc796d4c, type: 2}
-    - {fileID: 11400000, guid: ba6fc6ea5873d2f4dbf7c973fdafb667, type: 2}
     - {fileID: 11400000, guid: 531ed21f335ef6e4cab9440971452675, type: 2}
+    - {fileID: 11400000, guid: ba6fc6ea5873d2f4dbf7c973fdafb667, type: 2}
   DefaultHostile:
     m_keys:
     - {fileID: 11400000, guid: e5859044195c03e44adebc73805dd570, type: 2}
