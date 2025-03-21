@@ -19,7 +19,7 @@ namespace FishMMO.Shared
 			// Initialize the client bootstrap scenes.
 			List<AddressableSceneLoadData> initialScenes = new List<AddressableSceneLoadData>()
 			{
-				new AddressableSceneLoadData("ClientPrebootScene"),
+				new AddressableSceneLoadData("ClientPreboot"),
 			};
 			#endregion
 #endif

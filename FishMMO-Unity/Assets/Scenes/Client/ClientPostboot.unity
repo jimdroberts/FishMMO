@@ -152,7 +152,7 @@ MonoBehaviour:
   UILoadingScreenKey: UILoadingScreen
   LoginServerAddresses: []
   WorldPreloadScenes:
-  - SceneName: ClientWorldGUIScene
+  - SceneName: ClientWorldGUI
     ActivateOnLoad: 1
     LoadSceneMode: 1
   MaxReconnectAttempts: 10
@@ -192,14 +192,14 @@ MonoBehaviour:
   EditorPostloadAssets: []
   EditorPreloadScenes: []
   EditorPostloadScenes:
-  - SceneName: ClientLoginGUIScene
+  - SceneName: ClientLoginGUI
     ActivateOnLoad: 1
     LoadSceneMode: 1
   PreloadAssets: []
   PostloadAssets: []
   PreloadScenes: []
   PostloadScenes:
-  - SceneName: ClientLoginGUIScene
+  - SceneName: ClientLoginGUI
     ActivateOnLoad: 1
     LoadSceneMode: 1
   UILoadingScreenKey: UILoadingScreen

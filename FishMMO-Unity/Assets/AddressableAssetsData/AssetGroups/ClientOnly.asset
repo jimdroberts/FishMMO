@@ -16,32 +16,32 @@ MonoBehaviour:
   m_GUID: 1a960e71bf0a0ad4d8b941b303f0b460
   m_SerializeEntries:
   - m_GUID: 23b5cf170c94a974ba419bf15e943864
-    m_Address: ClientWorldGUIScene
+    m_Address: ClientWorldGUI
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2f9b6832506387e4f914d2365d583a47
-    m_Address: ClientLauncherScene
+    m_Address: ClientLauncher
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 40249726afffb674b809a9d0c1f41227
-    m_Address: ClientLoginGUIScene
+    m_Address: ClientLoginGUI
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 6645529da48a29b4fb1f95fe470c9520
-    m_Address: ClientPostbootScene
+    m_Address: ClientPostboot
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 99c9720ab356a0642a771bea13969a05
-    m_Address: ClientPrebootScene
+    m_Address: ClientPreboot
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d8f6edc9fd710ef48aa70267f52b0425
-    m_Address: Assets/Prefabs/Client/LoginTerrain.asset
+    m_Address: LoginTerrain
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

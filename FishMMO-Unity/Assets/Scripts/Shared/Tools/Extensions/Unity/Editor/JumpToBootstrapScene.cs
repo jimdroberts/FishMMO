@@ -6,12 +6,8 @@ namespace FishMMO.Shared
 {
 	public class JumpToBootstrapScene
 	{
-		[MenuItem("FishMMO/QuickStart/Client Bootstrap", priority = -10)]
-		public static void GoToClientBootstrapScene()
+		private static void LoadScene(string scenePath)
 		{
-			// Specify the path to the scene asset
-			string scenePath = Constants.Configuration.BootstrapScenePath + "ClientBootstrap.unity";
-
 			// Check if the scene exists at the specified path
 			if (AssetDatabase.LoadAssetAtPath<SceneAsset>(scenePath) != null)
 			{
@@ -20,62 +16,50 @@ namespace FishMMO.Shared
 			}
 			else
 			{
-				Debug.LogError("Scene asset 'Client Bootstrap' not found at path: " + scenePath);
+				Debug.LogError("Scene not found at path: " + scenePath);
 			}
 		}
 
-		[MenuItem("FishMMO/QuickStart/Login Server Bootstrap", priority = -9)]
+		[MenuItem("FishMMO/QuickStart/Main Bootstrap", priority = -10)]
+		public static void GoToMainBootstrapScene()
+		{
+			LoadScene(Constants.Configuration.BootstrapScenePath + "MainBootstrap.unity");
+		}
+
+		[MenuItem("FishMMO/QuickStart/Client Preboot", priority = -10)]
+		public static void GoToClientPrebootScene()
+		{
+			LoadScene(Constants.Configuration.ClientBootstrapScenePath + "ClientPreboot.unity");
+		}
+
+		[MenuItem("FishMMO/QuickStart/Client Postboot", priority = -10)]
+		public static void GoToClientPostbootScene()
+		{
+			LoadScene(Constants.Configuration.ClientBootstrapScenePath + "ClientPostboot.unity");
+		}
+
+		[MenuItem("FishMMO/QuickStart/Client Launcher", priority = -10)]
+		public static void GoToClientLauncherScene()
+		{
+			LoadScene(Constants.Configuration.ClientBootstrapScenePath + "ClientLauncher.unity");
+		}
+
+		[MenuItem("FishMMO/QuickStart/Login Server", priority = -9)]
 		public static void GoToLoginBootstrapScene()
 		{
-			// Specify the path to the scene asset
-			string scenePath = Constants.Configuration.BootstrapScenePath + "LoginServer.unity";
-
-			// Check if the scene exists at the specified path
-			if (AssetDatabase.LoadAssetAtPath<SceneAsset>(scenePath) != null)
-			{
-				// Open the scene in the editor
-				EditorSceneManager.OpenScene(scenePath);
-			}
-			else
-			{
-				Debug.LogError("Scene asset 'Login Server Bootstrap' not found at path: " + scenePath);
-			}
+			LoadScene(Constants.Configuration.ServerBootstrapScenePath + "LoginServer.unity");
 		}
 
-		[MenuItem("FishMMO/QuickStart/World Server Bootstrap", priority = -8)]
+		[MenuItem("FishMMO/QuickStart/World Server", priority = -8)]
 		public static void GoToWorldBootstrapScene()
 		{
-			// Specify the path to the scene asset
-			string scenePath = Constants.Configuration.BootstrapScenePath + "WorldServer.unity";
-
-			// Check if the scene exists at the specified path
-			if (AssetDatabase.LoadAssetAtPath<SceneAsset>(scenePath) != null)
-			{
-				// Open the scene in the editor
-				EditorSceneManager.OpenScene(scenePath);
-			}
-			else
-			{
-				Debug.LogError("Scene asset 'World Server Bootstrap' not found at path: " + scenePath);
-			}
+			LoadScene(Constants.Configuration.ServerBootstrapScenePath + "WorldServer.unity");
 		}
 
-		[MenuItem("FishMMO/QuickStart/Scene Server Bootstrap", priority = -7)]
+		[MenuItem("FishMMO/QuickStart/Scene Server", priority = -7)]
 		public static void GoToSceneBootstrapScene()
 		{
-			// Specify the path to the scene asset
-			string scenePath = Constants.Configuration.BootstrapScenePath + "SceneServer.unity";
-
-			// Check if the scene exists at the specified path
-			if (AssetDatabase.LoadAssetAtPath<SceneAsset>(scenePath) != null)
-			{
-				// Open the scene in the editor
-				EditorSceneManager.OpenScene(scenePath);
-			}
-			else
-			{
-				Debug.LogError("Scene asset 'Scene Server Bootstrap' not found at path: " + scenePath);
-			}
+			LoadScene(Constants.Configuration.ServerBootstrapScenePath + "SceneServer.unity");
 		}
 	}
 }

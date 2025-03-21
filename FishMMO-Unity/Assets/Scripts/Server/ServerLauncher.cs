@@ -8,9 +8,9 @@ namespace FishMMO.Server
 	{
 		public string[] BootList = new string[]
 		{
-			"LoginServerBootstrap",
-			"WorldServerBootstrap",
-			"SceneServerBootstrap",
+			"LoginServer",
+			"WorldServer",
+			"SceneServer",
 		};
 
 		public override void OnPreload()
@@ -38,13 +38,13 @@ namespace FishMMO.Server
 				switch (args[1].ToUpper())
 				{
 					case "LOGIN":
-						initialScenes.Add(new AddressableSceneLoadData("LoginServerBootstrap"));
+						initialScenes.Add(new AddressableSceneLoadData("LoginServer"));
 						break;
 					case "WORLD":
-						initialScenes.Add(new AddressableSceneLoadData("WorldServerBootstrap"));
+						initialScenes.Add(new AddressableSceneLoadData("WorldServer"));
 						break;
 					case "SCENE":
-						initialScenes.Add(new AddressableSceneLoadData("SceneServerBootstrap"));
+						initialScenes.Add(new AddressableSceneLoadData("SceneServer"));
 						break;
 					default:
 						Close();

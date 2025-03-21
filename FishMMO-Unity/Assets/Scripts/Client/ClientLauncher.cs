@@ -339,7 +339,7 @@ namespace FishMMO.Client
 		public void PlayButton_Launch()
 		{
 			SetButtonLock(true);
-			AddressableLoadProcessor.EnqueueLoad("ClientPostbootScene");
+			AddressableLoadProcessor.EnqueueLoad("ClientPostboot");
 			try
 			{
 				AddressableLoadProcessor.BeginProcessQueue();

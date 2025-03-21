@@ -14223,14 +14223,14 @@ MonoBehaviour:
   EditorPreloadAssets: []
   EditorPostloadAssets: []
   EditorPreloadScenes:
-  - SceneName: ClientPostbootScene
+  - SceneName: ClientPostboot
     ActivateOnLoad: 1
     LoadSceneMode: 1
   EditorPostloadScenes: []
   PreloadAssets: []
   PostloadAssets: []
   PreloadScenes:
-  - SceneName: ClientLauncherScene
+  - SceneName: ClientLauncher
     ActivateOnLoad: 1
     LoadSceneMode: 1
   PostloadScenes: []
@@ -15152,7 +15152,7 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 462473095}
   m_HandleRect: {fileID: 462473094}
   m_Direction: 2
-  m_Value: 1
+  m_Value: 0
   m_Size: 1
   m_NumberOfSteps: 0
   m_OnValueChanged:

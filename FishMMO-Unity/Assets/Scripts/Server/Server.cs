@@ -211,7 +211,7 @@ namespace FishMMO.Server
 
 		private ServerType GetServerType()
 		{
-			serverTypeName = gameObject.scene.name.Replace("Bootstrap", "");
+			serverTypeName = gameObject.scene.name;
 			string upper = serverTypeName.ToUpper();
 			if (upper.StartsWith("LOGIN"))
 			{

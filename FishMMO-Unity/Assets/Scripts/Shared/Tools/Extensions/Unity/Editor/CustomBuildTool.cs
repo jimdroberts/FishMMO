@@ -65,12 +65,7 @@ start Scene.exe SCENE";
 
 		public static readonly string[] BOOTSTRAP_SCENES = new string[]
 		{
-			Constants.Configuration.BootstrapScenePath + "MainBootstrapScene.unity",
-		};
-
-		public static readonly string[] WEBGL_CLIENT_BOOTSTRAP_SCENES = new string[]
-		{
-			Constants.Configuration.BootstrapScenePath + "ClientBootstrap.unity",
+			Constants.Configuration.BootstrapScenePath + "MainBootstrap.unity",
 		};
 
 		public static string GetBuildTargetShortName(BuildTarget target)
@@ -906,7 +901,7 @@ start Scene.exe SCENE";
 		{
 			WorldSceneDetailsCacheBuilder.Rebuild();
 			BuildExecutable(Constants.Configuration.ProjectName,
-							WEBGL_CLIENT_BOOTSTRAP_SCENES,
+							BOOTSTRAP_SCENES,
 							CustomBuildType.Client,
 							GetBuildOptions(BuildTarget.WebGL),
 							StandaloneBuildSubtarget.Player,

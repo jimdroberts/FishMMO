@@ -21,17 +21,17 @@ MonoBehaviour:
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7e1b8e5abbda71a4b9f84cee5252b68c
-    m_Address: SceneServerBootstrap
+    m_Address: SceneServer
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c5c748f123bdc7e41bcb72c4f239ca6b
-    m_Address: WorldServerBootstrap
+    m_Address: WorldServer
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e4f01a5d084fafb47a77f7552e2af05e
-    m_Address: LoginServerBootstrap
+    m_Address: LoginServer
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
