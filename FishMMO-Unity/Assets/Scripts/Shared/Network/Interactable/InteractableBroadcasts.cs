@@ -27,6 +27,14 @@ namespace FishMMO.Shared
 	{
 	}
 
+	public struct DungeonFinderListBroadcast : IBroadcast
+	{
+	}
+
+	public struct DungeonFinderBroadcast : IBroadcast
+	{
+	}
+
 	public struct MerchantBroadcast : IBroadcast
 	{
 		public long InteractableID;

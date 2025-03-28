@@ -51,38 +51,35 @@ MonoBehaviour:
         type: 3}
       InitialSpawnPositions:
         m_keys:
-        - East A
         - West A
+        - East A
         m_values:
-        - SpawnerName: East A
-          SceneName: StartScene A
-          Position: {x: -9.069405, y: 68.3158, z: -31.849997}
-          Rotation: {x: -0, y: 0.7071068, z: -0, w: 0.7071068}
-          AllowedRaces:
-          - {fileID: 11400000, guid: 6f8938bbed1286347b54bf3f4889f32a, type: 2}
         - SpawnerName: West A
           SceneName: StartScene A
-          Position: {x: -16, y: 68.30121, z: -34.26}
-          Rotation: {x: -0, y: -0, z: -0, w: 1}
+          Position: {x: 4.0226974, y: 30.904213, z: -44.803207}
+          Rotation: {x: -0, y: 0.8571673, z: -0, w: 0.51503813}
+          AllowedRaces:
+          - {fileID: 11400000, guid: 6f8938bbed1286347b54bf3f4889f32a, type: 2}
+        - SpawnerName: East A
+          SceneName: StartScene A
+          Position: {x: 46.831566, y: 30.904213, z: -65.22532}
+          Rotation: {x: -0, y: -0.37420192, z: -0, w: 0.92734724}
           AllowedRaces:
           - {fileID: 11400000, guid: 6f8938bbed1286347b54bf3f4889f32a, type: 2}
       RespawnPositions:
         m_keys:
         - Respawn Point
         m_values:
-        - Position: {x: 2.290001, y: 68.27639, z: -34.844753}
-          Rotation: {x: -0, y: -0, z: -0, w: 1}
+        - Position: {x: 56.99047, y: 30.904213, z: -48.292007}
+          Rotation: {x: -0, y: 0.47907484, z: -0, w: 0.87777406}
       Teleporters:
         m_keys:
         - Tutorial Spawners
-        - Tutorial Regions
         - Tutorial SpawnPoints
         - Start Scene B 1
+        - Tutorial Regions
         m_values:
         - ToScene: Tutorial Spawners
-          ToPosition: {x: -4.2100005, y: 0.1, z: 0}
-          ToRotation: {x: -0, y: -0, z: -0, w: 1}
-        - ToScene: Tutorial Regions
           ToPosition: {x: -4.2100005, y: 0.1, z: 0}
           ToRotation: {x: -0, y: -0, z: -0, w: 1}
         - ToScene: Tutorial SpawnPoints
@@ -91,12 +88,15 @@ MonoBehaviour:
         - ToScene: StartScene B
           ToPosition: {x: -150.54633, y: 9.4210825, z: 44.43602}
           ToRotation: {x: -0, y: 0.7071068, z: -0, w: 0.7071068}
+        - ToScene: Tutorial Regions
+          ToPosition: {x: -4.2100005, y: 0.1, z: 0}
+          ToRotation: {x: -0, y: -0, z: -0, w: 1}
       Boundaries:
         m_keys:
         - Terrain
         m_values:
-        - BoundaryOrigin: {x: 12, y: 49.138767, z: 12}
-          BoundarySize: {x: 1024, y: 97.85754, z: 1024}
+        - BoundaryOrigin: {x: 12, y: 74.80027, z: 12}
+          BoundarySize: {x: 1024, y: 149.18054, z: 1024}
     - MaxClients: 100
       SceneTransitionImage: {fileID: 21300000, guid: af9d2e8814f76f4498e2ed07cc8191ef,
         type: 3}
@@ -130,11 +130,11 @@ MonoBehaviour:
           ToPosition: {x: -130.84203, y: 17.6, z: 22.710613}
           ToRotation: {x: -0, y: 0.7071068, z: -0, w: 0.7071068}
         - ToScene: StartScene A
-          ToPosition: {x: -20.561272, y: 68.3352, z: -27.581497}
-          ToRotation: {x: -0, y: 1, z: -0, w: 0}
+          ToPosition: {x: 10.631569, y: 30.904213, z: -75.19532}
+          ToRotation: {x: -0, y: -0, z: -0, w: 1}
         - ToScene: StartScene A
-          ToPosition: {x: -18.889395, y: 68.33223, z: -27.589996}
-          ToRotation: {x: -0, y: 1, z: -0, w: 0}
+          ToPosition: {x: 8.641569, y: 30.904213, z: -75.23532}
+          ToRotation: {x: -0, y: -0, z: -0, w: 1}
       Boundaries:
         m_keys:
         - Primary Boundary
@@ -148,19 +148,19 @@ MonoBehaviour:
         m_values: []
       RespawnPositions:
         m_keys:
-        - Respawn Position A
         - Respawn Position B
+        - Respawn Position A
         m_values:
-        - Position: {x: 15, y: 1.5, z: 0}
-          Rotation: {x: -0, y: -0, z: -0, w: 1}
         - Position: {x: -15, y: 1.5, z: 0}
+          Rotation: {x: -0, y: -0, z: -0, w: 1}
+        - Position: {x: 15, y: 1.5, z: 0}
           Rotation: {x: -0, y: -0, z: -0, w: 1}
       Teleporters:
         m_keys:
         - Tutorial Regions Entrance
         m_values:
         - ToScene: StartScene A
-          ToPosition: {x: 1.1187267, y: 68.3352, z: -27.583496}
+          ToPosition: {x: 22.411568, y: 30.904213, z: -40.85532}
           ToRotation: {x: -0, y: 1, z: -0, w: 0}
       Boundaries:
         m_keys:
@@ -175,19 +175,19 @@ MonoBehaviour:
         m_values: []
       RespawnPositions:
         m_keys:
-        - Respawn Position A
         - Respawn Position B
+        - Respawn Position A
         m_values:
-        - Position: {x: 15, y: 1.5, z: 0}
-          Rotation: {x: -0, y: -0, z: -0, w: 1}
         - Position: {x: -15, y: 1.5, z: 0}
+          Rotation: {x: -0, y: -0, z: -0, w: 1}
+        - Position: {x: 15, y: 1.5, z: 0}
           Rotation: {x: -0, y: -0, z: -0, w: 1}
       Teleporters:
         m_keys:
         - Tutorial Spawners Entrance
         m_values:
         - ToScene: StartScene A
-          ToPosition: {x: 7.0587273, y: 68.3352, z: -27.583496}
+          ToPosition: {x: 29.111568, y: 30.904213, z: -41.27882}
           ToRotation: {x: -0, y: 1, z: -0, w: 0}
       Boundaries:
         m_keys:
@@ -199,14 +199,14 @@ MonoBehaviour:
       SceneTransitionImage: {fileID: 0}
       InitialSpawnPositions:
         m_keys:
-        - Spawn Point A
+        - Spawn Point C
         - Spawn Point B
         - Spawn Point D
-        - Spawn Point C
+        - Spawn Point A
         m_values:
-        - SpawnerName: Spawn Point A
+        - SpawnerName: Spawn Point C
           SceneName: Tutorial SpawnPoints
-          Position: {x: 15, y: 1.5, z: 0}
+          Position: {x: 0, y: 1.5, z: 15}
           Rotation: {x: -0, y: -0, z: -0, w: 1}
           AllowedRaces: []
         - SpawnerName: Spawn Point B
@@ -219,9 +219,9 @@ MonoBehaviour:
           Position: {x: 0, y: 1.5, z: -15}
           Rotation: {x: -0, y: -0, z: -0, w: 1}
           AllowedRaces: []
-        - SpawnerName: Spawn Point C
+        - SpawnerName: Spawn Point A
           SceneName: Tutorial SpawnPoints
-          Position: {x: 0, y: 1.5, z: 15}
+          Position: {x: 15, y: 1.5, z: 0}
           Rotation: {x: -0, y: -0, z: -0, w: 1}
           AllowedRaces: []
       RespawnPositions:
@@ -241,7 +241,7 @@ MonoBehaviour:
         - Tutorial SpawnPoints Entrance
         m_values:
         - ToScene: StartScene A
-          ToPosition: {x: -4.8112717, y: 68.3352, z: -27.583496}
+          ToPosition: {x: 15.661569, y: 30.904213, z: -41.275322}
           ToRotation: {x: -0, y: 1, z: -0, w: 0}
       Boundaries:
         m_keys:

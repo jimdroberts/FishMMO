@@ -7,6 +7,7 @@ using FishMMO.Shared;
 using FishMMO.Database.Npgsql;
 using FishMMO.Database.Npgsql.Entities;
 using UnityEngine;
+using System.Linq;
 
 namespace FishMMO.Server
 {
@@ -65,7 +66,7 @@ namespace FishMMO.Server
 				ServerBehaviour.TryGet(out WorldServerSystem worldServerSystem))
 			{
 				using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-				PendingSceneService.Delete(dbContext, worldServerSystem.ID);
+				SceneService.WorldDelete(dbContext, worldServerSystem.ID);
 			}
 		}
 
@@ -110,23 +111,37 @@ namespace FishMMO.Server
 
 		private void TryClearWaitQueues(NpgsqlDbContext dbContext, string sceneName)
 		{
-			if (WaitingConnections.TryGetValue(sceneName, out HashSet<NetworkConnection> connections))
+			if (!WaitingConnections.TryGetValue(sceneName, out HashSet<NetworkConnection> connections))
 			{
-				if (connections == null ||
-					connections.Count < 1 ||
-					!ServerBehaviour.TryGet(out WorldServerSystem worldServerSystem))
-				{
-					WaitingConnections.Remove(sceneName);
-					return;
-				}
+				return;
+			}
 
-				List<LoadedSceneEntity> loadedScenes = LoadedSceneService.GetServerList(dbContext, worldServerSystem.ID, sceneName, MAX_CLIENTS_PER_INSTANCE);
-				if (loadedScenes == null || loadedScenes.Count < 1)
-				{
-					return;
-				}
+			if (connections == null ||
+				connections.Count < 1 ||
+				!ServerBehaviour.TryGet(out WorldServerSystem worldServerSystem))
+			{
+				WaitingConnections.Remove(sceneName);
+				return;
+			}
 
-				foreach (LoadedSceneEntity loadedScene in loadedScenes)
+			int maxClientsPerInstance = MAX_CLIENTS_PER_INSTANCE;
+
+			// See if we can get a per scene max client count
+			if (WorldSceneDetailsCache != null &&
+				WorldSceneDetailsCache.Scenes != null &&
+				WorldSceneDetailsCache.Scenes.TryGetValue(sceneName, out WorldSceneDetails details))
+			{
+				maxClientsPerInstance = details.MaxClients;
+			}
+
+			// Clamp at 1 to MAX_CLIENTS_PER_INSTANCE
+			maxClientsPerInstance = maxClientsPerInstance.Clamp(1, MAX_CLIENTS_PER_INSTANCE);
+
+			// Try and get an existing scene
+			List<SceneEntity> loadedScenes = SceneService.GetServerList(dbContext, worldServerSystem.ID, sceneName, maxClientsPerInstance);
+			if (loadedScenes != null && loadedScenes.Count() > 0)
+			{
+				foreach (SceneEntity loadedScene in loadedScenes)
 				{
 					if (connections.Count < 1)
 					{
@@ -141,23 +156,10 @@ namespace FishMMO.Server
 
 					foreach (NetworkConnection connection in new List<NetworkConnection>(connections))
 					{
-						int maxClientsPerInstance = MAX_CLIENTS_PER_INSTANCE;
-
-						// See if we can get a per scene max client count
-						if (WorldSceneDetailsCache != null &&
-							WorldSceneDetailsCache.Scenes != null &&
-							WorldSceneDetailsCache.Scenes.TryGetValue(sceneName, out WorldSceneDetails details))
-						{
-							maxClientsPerInstance = details.MaxClients;
-						}
-
-						// Clamp at 1 to 100
-						maxClientsPerInstance = maxClientsPerInstance.Clamp(1, MAX_CLIENTS_PER_INSTANCE);
-
 						// If we are at maximum capacity on this server move to the next one
 						if (loadedScene.CharacterCount >= maxClientsPerInstance)
 						{
-							continue;
+							break;
 						}
 
 						// Clear the connection from our wait queues
@@ -181,18 +183,18 @@ namespace FishMMO.Server
 						});
 					}
 				}
+			}
 
-				// Check if we still have some players that are waiting for a scene
-				if (connections.Count < 1)
-				{
-					WaitingConnections.Remove(sceneName);
-				}
-				// Enqueue a new pending scene load request to the database, we need a new scene
-				else if (!PendingSceneService.Exists(dbContext, worldServerSystem.ID, sceneName))
-				{
-					Debug.Log("World Scene System: Enqueing new PendingSceneLoadRequest: " + worldServerSystem.ID + ":" + sceneName);
-					PendingSceneService.Enqueue(dbContext, worldServerSystem.ID, sceneName);
-				}
+			// Check if we still have some players that are waiting for a scene
+			if (connections.Count < 1)
+			{
+				WaitingConnections.Remove(sceneName);
+			}
+			// Enqueue a new pending scene load request to the database, we need a new scene
+			else if (!SceneService.PendingExists(dbContext, worldServerSystem.ID, sceneName))
+			{
+				Debug.Log("World Scene System: Enqueing new PendingSceneLoadRequest: " + worldServerSystem.ID + ":" + sceneName);
+				SceneService.Enqueue(dbContext, worldServerSystem.ID, sceneName, SceneType.OpenWorld);
 			}
 		}
 
@@ -204,12 +206,12 @@ namespace FishMMO.Server
 			}
 
 			// Get the scene data from each of our worlds scenes
-			List<LoadedSceneEntity> sceneServerCount = LoadedSceneService.GetServerList(dbContext, worldServerSystem.ID);
+			IQueryable<SceneEntity> sceneServerCount = SceneService.GetServerList(dbContext, worldServerSystem.ID);
 			if (sceneServerCount != null)
 			{
 				// count the total
 				ConnectionCount = WaitingConnections != null ? WaitingConnections.Count : 0;
-				foreach (LoadedSceneEntity scene in sceneServerCount)
+				foreach (SceneEntity scene in sceneServerCount)
 				{
 					ConnectionCount += scene.CharacterCount;
 				}
@@ -219,78 +221,53 @@ namespace FishMMO.Server
 		private void Authenticator_OnClientAuthenticationResult(NetworkConnection conn, bool authenticated)
 		{
 			if (!authenticated)
-				return;
-
-			// If we are authenticated try and connect the client to a scene server
-			TryConnectToSceneServer(conn);
-		}
-
-		/// <summary>
-		/// Try to connect the client to a Scene Server.
-		/// </summary>
-		private void TryConnectToSceneServer(NetworkConnection conn)
-		{
-			if (!ServerBehaviour.TryGet(out WorldServerSystem worldServerSystem))
 			{
-				Debug.Log("World Scene System: World Server System could not be found.");
-				conn.Kick(KickReason.UnexpectedProblem);
 				return;
 			}
-			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
+
 			// Get the scene for the selected character
-			if (!AccountManager.GetAccountNameByConnection(conn, out string accountName) ||
-				!CharacterService.TryGetSelectedSceneName(dbContext, accountName, out string sceneName))
+			if (!AccountManager.GetAccountNameByConnection(conn, out string accountName))
 			{
-				Debug.Log("World Scene System: " + conn.ClientId + " failed to get selected scene or account name.");
+				Debug.Log("World Scene System: " + conn.ClientId + " failed to get account name.");
 				conn.Kick(KickReason.UnexpectedProblem);
 				return;
 			}
 
-			List<LoadedSceneEntity> loadedScenes = LoadedSceneService.GetServerList(dbContext, worldServerSystem.ID, sceneName, MAX_CLIENTS_PER_INSTANCE);
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 
-			LoadedSceneEntity selectedScene = null;
-			if (loadedScenes != null && loadedScenes.Count > 0)
+			if (dbContext == null || !ServerBehaviour.TryGet(out WorldServerSystem worldServerSystem))
 			{
-				foreach (LoadedSceneEntity sceneEntity in loadedScenes)
+				Debug.Log("World Scene System: " + conn.ClientId + " failed to access database context or world server system.");
+				conn.Kick(KickReason.UnexpectedProblem);
+				return;
+			}
+
+			// Check if the selected character has an instance
+			if (CharacterService.TryGetSelectedDetails(dbContext, accountName, out long characterID))
+			{
+				SceneEntity sceneEntity = SceneService.GetCharacterInstance(dbContext, characterID, worldServerSystem.ID);
+				if (sceneEntity != null)
 				{
-					selectedScene = sceneEntity;
-					break;// First scene? We could load balance here and distribute players evenly across scenes.
+
 				}
 			}
-			// If we found a valid scene server
-			if (selectedScene != null)
+
+			if (!CharacterService.TryGetSelectedSceneName(dbContext, accountName, out string sceneName))
 			{
-				SceneServerEntity sceneServer = SceneServerService.GetServer(dbContext, selectedScene.SceneServerID);
-
-				// Successfully found a scene to connect to
-				CharacterService.SetSceneHandle(dbContext, accountName, selectedScene.SceneHandle);
-
-				// Tell the character to reconnect to the scene server
-				Server.Broadcast(conn, new WorldSceneConnectBroadcast()
-				{
-					Address = sceneServer.Address,
-					Port = sceneServer.Port,
-				});
+				Debug.Log("World Scene System: " + conn.ClientId + " failed to get selected scene.");
+				conn.Kick(KickReason.UnexpectedProblem);
+				return;
 			}
-			else
-			{
-				// Add the client to the wait queue, when a scene server loads the scene the client will be connected when it's ready
-				WaitingConnectionsScenes[conn] = sceneName;
-				if (!WaitingConnections.TryGetValue(sceneName, out HashSet<NetworkConnection> connections))
-				{
-					WaitingConnections.Add(sceneName, connections = new HashSet<NetworkConnection>());
-				}
-				if (!connections.Contains(conn))
-				{
-					connections.Add(conn);
-				}
 
-				if (!PendingSceneService.Exists(dbContext, worldServerSystem.ID, sceneName))
-				{
-					// Enqueue the pending scene load to the database
-					Debug.Log("World Scene System: Enqueing new PendingSceneLoadRequest: " + worldServerSystem.ID + ":" + sceneName);
-					PendingSceneService.Enqueue(dbContext, worldServerSystem.ID, sceneName);
-				}
+			// Add the client to the wait queue, when a scene server loads the scene the client will be connected when it's ready
+			WaitingConnectionsScenes[conn] = sceneName;
+			if (!WaitingConnections.TryGetValue(sceneName, out HashSet<NetworkConnection> connections))
+			{
+				WaitingConnections.Add(sceneName, connections = new HashSet<NetworkConnection>());
+			}
+			if (!connections.Contains(conn))
+			{
+				connections.Add(conn);
 			}
 		}
 	}

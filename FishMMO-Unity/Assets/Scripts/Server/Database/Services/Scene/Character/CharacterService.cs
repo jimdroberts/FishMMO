@@ -131,7 +131,7 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
-		/// Selects a character in the database. This is used for validation purposes.
+		/// Gets a character in the database. This is used for validation purposes.
 		/// </summary>
 		public static bool GetSelected(NpgsqlDbContext dbContext, string account)
 		{

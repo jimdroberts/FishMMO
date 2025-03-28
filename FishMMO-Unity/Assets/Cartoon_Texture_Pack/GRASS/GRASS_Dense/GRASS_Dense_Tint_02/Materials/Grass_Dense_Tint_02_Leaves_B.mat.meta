@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: a87ac08e690bb8f4eab5eb0a60502961
+timeCreated: 1518469779
+licenseType: Store
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 111778
+  packageName: FREE Stylized PBR Textures Pack
+  packageVersion: 1.55
+  assetPath: Assets/Cartoon_Texture_Pack/GRASS/GRASS_Dense/GRASS_Dense_Tint_02/Materials/Grass_Dense_Tint_02_Leaves_B.mat
+  uploadId: 585011

@@ -310,8 +310,8 @@ namespace FishMMO.Server
 			{
 				address = new ServerAddress()
 				{
-					address = transport.GetServerBindAddress(IPAddressType.IPv4),
-					port = transport.GetPort(),
+					Address = transport.GetServerBindAddress(IPAddressType.IPv4),
+					Port = transport.GetPort(),
 				};
 				return true;
 			}
@@ -326,8 +326,8 @@ namespace FishMMO.Server
 			{
 				address = new ServerAddress()
 				{
-					address = transport.GetServerBindAddress(IPAddressType.IPv6),
-					port = transport.GetPort(),
+					Address = transport.GetServerBindAddress(IPAddressType.IPv6),
+					Port = transport.GetPort(),
 				};
 				return true;
 			}
@@ -356,8 +356,8 @@ namespace FishMMO.Server
 
 				address = new ServerAddress()
 				{
-					address = actualAddress,
-					port = transport.GetPort(),
+					Address = actualAddress,
+					Port = transport.GetPort(),
 				};
 				return true;
 			}

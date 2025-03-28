@@ -17,6 +17,6 @@ MonoBehaviour:
     ChangeRate: 0
     Mode: 2
     Color: {r: 0.04892087, g: 0.3301887, b: 0, a: 1}
-    Density: 0.15
+    Density: 0.05
     StartDistance: 35
     EndDistance: 100

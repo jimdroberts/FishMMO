@@ -1,5 +1,4 @@
 ﻿using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using FishMMO.Database.Npgsql;
 using FishMMO.Database.Npgsql.Entities;

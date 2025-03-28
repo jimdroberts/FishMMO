@@ -577,19 +577,24 @@ namespace FishMMO.Client
 					{
 						// Parse JSON response
 						string jsonResponse = request.downloadHandler.text;
-						jsonResponse = "{\"addresses\":" + jsonResponse.ToString() + "}";
+
+						// Replace lowercase field names with PascalCase to fit our type
+						jsonResponse = jsonResponse.Replace("\"address\"", "\"Address\"")
+												   .Replace("\"port\"", "\"Port\"");
+
+						jsonResponse = "{\"Addresses\":" + jsonResponse.ToString() + "}";
 						ServerAddresses result = JsonUtility.FromJson<ServerAddresses>(jsonResponse);
 
 						// Do something with the server list
-						foreach (ServerAddress server in result.addresses)
+						foreach (ServerAddress server in result.Addresses)
 						{
-							Debug.Log("Client: New Login Server Address:" + server.address + ", Port: " + server.port);
+							Debug.Log("Client: New Login Server Address:" + server.Address + ", Port: " + server.Port);
 						}
 
 						// Assign our LoginServerAddresses
-						LoginServerAddresses = result.addresses;
+						LoginServerAddresses = result.Addresses;
 
-						onFetchComplete?.Invoke(result.addresses);
+						onFetchComplete?.Invoke(result.Addresses);
 					}
 				}
 			}

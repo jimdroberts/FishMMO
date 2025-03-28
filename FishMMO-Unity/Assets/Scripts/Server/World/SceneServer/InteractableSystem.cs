@@ -158,6 +158,9 @@ namespace FishMMO.Server
 							OnInteractNPC(character, interactable);
 						}
 						break;
+					case DungeonEntrance:
+						Server.Broadcast(character.Owner, new DungeonFinderBroadcast(), true, Channel.Reliable);
+						break;
 					case Merchant merchant:
 						//Debug.Log("Merchant");
 						Server.Broadcast(character.Owner, new MerchantBroadcast()

@@ -776,16 +776,16 @@ namespace FishMMO.Server
 			}
 
 			// Cache the current scene name
-			string playerScene = character.SceneName;
+			string currentScene = character.SceneName;
 
 			if (sceneServerSystem.WorldSceneDetailsCache == null ||
-				!sceneServerSystem.WorldSceneDetailsCache.Scenes.TryGetValue(playerScene, out WorldSceneDetails details))
+				!sceneServerSystem.WorldSceneDetailsCache.Scenes.TryGetValue(currentScene, out WorldSceneDetails details))
 			{
-				Debug.Log(playerScene + " not found!");
+				Debug.Log(currentScene + " not found!");
 				return;
 			}
 
-			// Check if are a valid scene teleporter
+			// Check if teleporter is a valid scene teleporter
 			if (details.Teleporters.TryGetValue(character.TeleporterName, out SceneTeleporterDetails teleporter))
 			{
 				//Debug.Log($"Teleporter: {character.TeleporterName} found! Teleporting {character.CharacterName} to {teleporter.ToScene}.");

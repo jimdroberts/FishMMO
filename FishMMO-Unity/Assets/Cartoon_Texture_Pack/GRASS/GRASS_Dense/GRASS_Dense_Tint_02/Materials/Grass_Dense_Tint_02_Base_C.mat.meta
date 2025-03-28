@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: e64c3036389ea2c45b7120379f426518
+timeCreated: 1518469779
+licenseType: Store
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 111778
+  packageName: FREE Stylized PBR Textures Pack
+  packageVersion: 1.55
+  assetPath: Assets/Cartoon_Texture_Pack/GRASS/GRASS_Dense/GRASS_Dense_Tint_02/Materials/Grass_Dense_Tint_02_Base_C.mat
+  uploadId: 585011

@@ -20,12 +20,12 @@ namespace FishMMO.Database.Npgsql.Entities
 		public string Account { get; set; }
 		public bool Selected { get; set; }
 		public long WorldServerID { get; set; }
+		public string SceneName { get; set; }
 		public int SceneHandle { get; set; }
 		public string BindScene { get; set; }
 		public float BindX { get; set; }
 		public float BindY { get; set; }
 		public float BindZ { get; set; }
-		public string SceneName { get; set; }
 		public int RaceID { get; set; }
 		public float X { get; set; }
 		public float Y { get; set; }

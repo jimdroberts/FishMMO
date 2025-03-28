@@ -48,10 +48,7 @@ namespace FishMMO.Client
 				Hide();
 				return;
 			}
-			if (UIManager.TryGet("UIBank", out UIBank bank))
-			{
-				bank.Show();
-			}
+			Show();
 		}
 
 		public override void OnPreSetCharacter()

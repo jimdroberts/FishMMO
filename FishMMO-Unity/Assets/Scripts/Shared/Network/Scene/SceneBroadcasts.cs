@@ -32,4 +32,14 @@ namespace FishMMO.Shared
 		public string FromTeleporter;
 		public string TeleporterName;
 	}
+
+	public struct SceneChannelListBroadcast : IBroadcast
+	{
+		public List<ChannelAddress> Addresses;
+	}
+
+	public struct SceneChannelSelectBroadcast : IBroadcast
+	{
+		public ChannelAddress Channel;
+	}
 }
