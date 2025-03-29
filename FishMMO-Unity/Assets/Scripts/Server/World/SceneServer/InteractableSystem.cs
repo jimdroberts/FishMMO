@@ -159,7 +159,11 @@ namespace FishMMO.Server
 						}
 						break;
 					case DungeonEntrance:
-						Server.Broadcast(character.Owner, new DungeonFinderBroadcast(), true, Channel.Reliable);
+						//Debug.Log("Dungeon Finder");
+						Server.Broadcast(character.Owner, new DungeonFinderBroadcast()
+						{
+							InteractableID = sceneObject.ID,
+						}, true, Channel.Reliable);
 						break;
 					case Merchant merchant:
 						//Debug.Log("Merchant");

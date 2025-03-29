@@ -1,13 +1,14 @@
-using System.Collections.Generic;
 using UnityEngine;
 using FishNet.Transporting;
 using FishMMO.Shared;
+using TMPro;
 
 namespace FishMMO.Client
 {
 	public class UIDungeonFinder : UICharacterControl
 	{
-		public RectTransform content;
+		public RectTransform Content;
+		public TMP_Text DungeonDescriptionLabel;
 
 		public override void OnClientSet()
 		{
@@ -35,7 +36,28 @@ namespace FishMMO.Client
 				Hide();
 				return;
 			}
-			Show();
+
+			if (!SceneObject.Objects.TryGetValue(msg.InteractableID, out ISceneObject sceneObject))
+			{
+				if (sceneObject == null)
+				{
+					Debug.Log("Missing SceneObject");
+				}
+				else
+				{
+					Debug.Log("Missing ID:" + msg.InteractableID);
+				}
+				return;
+			}
+
+			if (sceneObject is DungeonEntrance dungeonEntrance)
+			{
+				if (DungeonDescriptionLabel != null)
+				{
+					DungeonDescriptionLabel.text = dungeonEntrance.DungeonName;
+				}
+				Show();
+			}
 		}
 
 		public override void OnPreSetCharacter()

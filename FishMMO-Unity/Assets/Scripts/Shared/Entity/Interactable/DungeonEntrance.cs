@@ -6,6 +6,8 @@ namespace FishMMO.Shared
 	{
 		private string title = "Dungeon";
 
+		public string DungeonName;
+
 		public override string Title { get { return title; } }
 	}
 }

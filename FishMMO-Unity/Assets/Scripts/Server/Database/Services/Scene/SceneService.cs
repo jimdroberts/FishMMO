@@ -9,27 +9,23 @@ namespace FishMMO.Server.DatabaseServices
 	public class SceneService
 	{
 		/// <summary>
-		/// Checks if a pending or loading scene exists already.
-		/// </summary>
-		public static bool PendingExists(NpgsqlDbContext dbContext, long worldServerID, string sceneName)
-		{
-			return worldServerID != 0 && dbContext.Scenes.FirstOrDefault(c => c.WorldServerID == worldServerID &&
-																			  c.SceneName == sceneName &&
-																			  (c.SceneStatus == (int)SceneStatus.Pending || c.SceneStatus == (int)SceneStatus.Loading)) != null;
-		}
-
-		/// <summary>
 		/// Enqueues a new scene load request to the database.
 		/// </summary>
-		public static void Enqueue(NpgsqlDbContext dbContext, long worldServerID, string sceneName, SceneType sceneType)
+		public static bool Enqueue(NpgsqlDbContext dbContext, long worldServerID, string sceneName, SceneType sceneType, long characterID = 0)
 		{
 			if (worldServerID == 0)
 			{
-				return;
+				return false;
 			}
 			int type = (int)sceneType;
 
-			var entity = dbContext.Scenes.FirstOrDefault(c => c.WorldServerID == worldServerID && c.SceneName == sceneName && c.SceneType == type);
+			var entity = dbContext.Scenes.FirstOrDefault(c => c.WorldServerID == worldServerID &&
+															  c.SceneName == sceneName &&
+															  c.CharacterID == characterID &&
+															  c.SceneType == type &&
+															  (c.SceneStatus == (int)SceneStatus.Pending || c.SceneStatus == (int)SceneStatus.Loading));
+
+			// If there is no pending scene load add a new one to the database.
 			if (entity == null)
 			{
 				entity = new SceneEntity()
@@ -38,11 +34,15 @@ namespace FishMMO.Server.DatabaseServices
 					SceneName = sceneName,
 					SceneType = type,
 					SceneStatus = (int)SceneStatus.Pending,
+					CharacterID = characterID,
 					TimeCreated = DateTime.UtcNow,
 				};
 				dbContext.Scenes.Add(entity);
 				dbContext.SaveChanges();
+
+				return true;
 			}
+			return false;
 		}
 
 		/// <summary>
@@ -53,7 +53,6 @@ namespace FishMMO.Server.DatabaseServices
 			SceneEntity entity = dbContext.Scenes.FirstOrDefault(c => c.SceneStatus == (int)SceneStatus.Pending);
 			if (entity != null)
 			{
-				UnityEngine.Debug.Log("Updating scene status to Loading");
 				entity.SceneStatus = (int)SceneStatus.Loading;
 				dbContext.SaveChanges();
 			}
@@ -75,8 +74,6 @@ namespace FishMMO.Server.DatabaseServices
 																			 c.SceneStatus == (int)SceneStatus.Loading);
 			if (entity != null)
 			{
-				UnityEngine.Debug.Log("Updating scene status to Ready");
-
 				entity.SceneServerID = sceneServerID;
 				entity.SceneHandle = sceneHandle;
 				entity.CharacterCount = 0;
@@ -166,29 +163,23 @@ namespace FishMMO.Server.DatabaseServices
 				return null;
 			}
 
-			using var dbTransaction = dbContext.Database.BeginTransaction();
-
-			// Execute the query immediately and return the result
 			var result = dbContext.Scenes
 				.Where(c => c.WorldServerID == worldServerID &&
 							c.SceneName == sceneName &&
 							c.CharacterCount < maxClients &&
 							c.SceneStatus == (int)SceneStatus.Ready)
-				.ToList();  // Forces immediate execution of the query
-
-			dbTransaction.Commit();  // Commit the transaction (not really needed for a read-only query)
+				.ToList();
 
 			return result;
 		}
 
-		public static IQueryable<SceneEntity> GetServerList(NpgsqlDbContext dbContext, long worldServerID)
+		public static List<SceneEntity> GetServerList(NpgsqlDbContext dbContext, long worldServerID)
 		{
 			if (worldServerID == 0)
 			{
 				return null;
 			}
-			return dbContext.Scenes.Where(c => c.WorldServerID == worldServerID &&
-													 c.SceneStatus == (int)SceneStatus.Ready);
+			return dbContext.Scenes.Where(c => c.WorldServerID == worldServerID && c.SceneStatus == (int)SceneStatus.Ready).ToList();
 		}
 	}
 }

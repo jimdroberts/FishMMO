@@ -191,10 +191,9 @@ namespace FishMMO.Server
 				WaitingConnections.Remove(sceneName);
 			}
 			// Enqueue a new pending scene load request to the database, we need a new scene
-			else if (!SceneService.PendingExists(dbContext, worldServerSystem.ID, sceneName))
+			else if (!SceneService.Enqueue(dbContext, worldServerSystem.ID, sceneName, SceneType.OpenWorld))
 			{
 				Debug.Log("World Scene System: Enqueing new PendingSceneLoadRequest: " + worldServerSystem.ID + ":" + sceneName);
-				SceneService.Enqueue(dbContext, worldServerSystem.ID, sceneName, SceneType.OpenWorld);
 			}
 		}
 
@@ -206,7 +205,7 @@ namespace FishMMO.Server
 			}
 
 			// Get the scene data from each of our worlds scenes
-			IQueryable<SceneEntity> sceneServerCount = SceneService.GetServerList(dbContext, worldServerSystem.ID);
+			List<SceneEntity> sceneServerCount = SceneService.GetServerList(dbContext, worldServerSystem.ID);
 			if (sceneServerCount != null)
 			{
 				// count the total
