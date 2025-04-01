@@ -19,6 +19,7 @@ namespace FishMMO.Shared
 		public GameObject GameObject { get; private set; }
 		public Collider Collider { get; set; }
 		public virtual bool IsTeleporting => false;
+		public int Flags { get; set;}
 
 #if !UNITY_SERVER
 		[SerializeField]

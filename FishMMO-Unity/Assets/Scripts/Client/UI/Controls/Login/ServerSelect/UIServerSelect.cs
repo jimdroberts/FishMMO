@@ -8,10 +8,10 @@ namespace FishMMO.Client
 {
 	public class UIServerSelect : UIControl
 	{
-		public Button connectToServerButton;
-		public Button refreshButton;
-		public RectTransform serverParent;
-		public ServerDetailsButton serverButtonPrefab;
+		public Button ConnectToServerButton;
+		public Button RefreshButton;
+		public RectTransform ServerParent;
+		public ServerDetailsButton ServerButtonPrefab;
 
 		private List<ServerDetailsButton> serverList = new List<ServerDetailsButton>();
 		private ServerDetailsButton selectedServer;
@@ -112,7 +112,7 @@ namespace FishMMO.Client
 				serverList = new List<ServerDetailsButton>();
 				for (int i = 0; i < msg.Servers.Count; ++i)
 				{
-					ServerDetailsButton newServer = Instantiate(serverButtonPrefab, serverParent);
+					ServerDetailsButton newServer = Instantiate(ServerButtonPrefab, ServerParent);
 					newServer.Initialize(msg.Servers[i]);
 					newServer.OnServerSelected += OnServerSelected;
 					serverList.Add(newServer);
@@ -183,7 +183,7 @@ namespace FishMMO.Client
 		/// </summary>
 		private void SetConnectToServerLocked(bool locked)
 		{
-			connectToServerButton.interactable = !locked;
+			ConnectToServerButton.interactable = !locked;
 		}
 	}
 }

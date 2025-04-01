@@ -6,6 +6,7 @@ using FishMMO.Database.Npgsql;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using UnityEngine;
+using FishMMO.Database.Npgsql.Entities;
 
 namespace FishMMO.Server
 {
@@ -25,6 +26,7 @@ namespace FishMMO.Server
 				Server.RegisterBroadcast<InteractableBroadcast>(OnServerInteractableBroadcastReceived, true);
 				Server.RegisterBroadcast<MerchantPurchaseBroadcast>(OnServerMerchantPurchaseBroadcastReceived, true);
 				Server.RegisterBroadcast<AbilityCraftBroadcast>(OnServerAbilityCraftBroadcastReceived, true);
+				Server.RegisterBroadcast<DungeonFinderBroadcast>(OnServerDungeonFinderBroadcastReceived, true);
 
 				Bindstone.OnBind += TryBind;
 			}
@@ -41,6 +43,7 @@ namespace FishMMO.Server
 				Server.UnregisterBroadcast<InteractableBroadcast>(OnServerInteractableBroadcastReceived);
 				Server.UnregisterBroadcast<MerchantPurchaseBroadcast>(OnServerMerchantPurchaseBroadcastReceived);
 				Server.UnregisterBroadcast<AbilityCraftBroadcast>(OnServerAbilityCraftBroadcastReceived);
+				Server.UnregisterBroadcast<DungeonFinderBroadcast>(OnServerDungeonFinderBroadcastReceived);
 
 				Bindstone.OnBind -= TryBind;
 			}
@@ -520,6 +523,90 @@ namespace FishMMO.Server
 				};
 
 				Server.Broadcast(conn, abilityAddBroadcast, true, Channel.Reliable);
+			}
+		}
+
+		public void OnServerDungeonFinderBroadcastReceived(NetworkConnection conn, DungeonFinderBroadcast msg, Channel channel)
+		{
+			if (conn == null)
+			{
+				return;
+			}
+
+			// Validate connection character
+			if (conn.FirstObject == null)
+			{
+				return;
+			}
+			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
+			if (character == null)
+			{
+				return;
+			}
+
+			// Validate scene
+			if (!WorldSceneDetailsCache.Scenes.TryGetValue(character.SceneName, out WorldSceneDetails details))
+			{
+				Debug.Log("Missing Scene:" + character.SceneName);
+				return;
+			}
+
+			// Validate scene object
+			if (!ValidateSceneObject(msg.InteractableID, character.GameObject.scene.handle, out ISceneObject sceneObject))
+			{
+				return;
+			}
+
+			// Validate Dungeon Entrance
+			DungeonEntrance dungeonEntrance = sceneObject.GameObject.GetComponent<DungeonEntrance>();
+			if (dungeonEntrance == null ||
+				!dungeonEntrance.InRange(character.Transform))
+			{
+				return;
+			}
+
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
+			if (dbContext == null)
+			{
+				return;
+			}
+
+			// Check the status of the characters instance
+			SceneEntity sceneEntity = SceneService.GetCharacterInstance(dbContext, character.ID);
+			if (sceneEntity == null)
+			{
+				if (!SceneService.Enqueue(dbContext, character.WorldServerID, dungeonEntrance.DungeonName, SceneType.Group))
+				{
+					Debug.Log("Failed to enqueue new pending scene load request: " + character.WorldServerID + ":" + dungeonEntrance.DungeonName);
+				}
+				else
+				{
+					Server.Broadcast(conn, new DungeonFinderStatusBroadcast()
+					{
+						Status = DungeonFinderStatus.Pending,
+					}, true);
+				}
+			}
+			else if ((SceneStatus)sceneEntity.SceneStatus == SceneStatus.Pending)
+			{
+				Server.Broadcast(conn, new DungeonFinderStatusBroadcast()
+				{
+					Status = DungeonFinderStatus.Pending,
+				}, true);
+			}
+			else if ((SceneStatus)sceneEntity.SceneStatus == SceneStatus.Loading)
+			{
+				Server.Broadcast(conn, new DungeonFinderStatusBroadcast()
+				{
+					Status = DungeonFinderStatus.Loading,
+				}, true);
+			}
+			else if ((SceneStatus)sceneEntity.SceneStatus == SceneStatus.Ready)
+			{
+				Server.Broadcast(conn, new DungeonFinderStatusBroadcast()
+				{
+					Status = DungeonFinderStatus.Ready,
+				}, true);
 			}
 		}
 

@@ -35,6 +35,8 @@ namespace FishMMO.Shared
 		Vector3 BindPosition { get; set; }
 		string SceneName { get; set; }
 		int SceneHandle { get; set; }
+		long InstanceID { get; set; }
+		Vector3 InstancePosition { get; set; }
 
 		KinematicCharacterMotor Motor { get; }
 		KCCController CharacterController { get; }

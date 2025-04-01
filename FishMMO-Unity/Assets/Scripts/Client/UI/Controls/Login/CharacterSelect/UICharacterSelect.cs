@@ -10,11 +10,11 @@ namespace FishMMO.Client
 {
 	public class UICharacterSelect : UIControl
 	{
-		public Button connectButton;
-		public Button deleteButton;
-		public RectTransform selectedCharacterParent;
-		public RectTransform characterButtonParent;
-		public CharacterDetailsButton characterButtonPrefab;
+		public Button ConnectButton;
+		public Button DeleteButton;
+		public RectTransform SelectedCharacterParent;
+		public RectTransform CharacterButtonParent;
+		public CharacterDetailsButton CharacterButtonPrefab;
 
 		/// <summary>
 		/// Called when a Character List is received and ready to use.
@@ -130,7 +130,7 @@ namespace FishMMO.Client
 
 				for (int i = 0; i < msg.Characters.Count; ++i)
 				{
-					CharacterDetailsButton newCharacter = Instantiate(characterButtonPrefab, characterButtonParent);
+					CharacterDetailsButton newCharacter = Instantiate(CharacterButtonPrefab, CharacterButtonParent);
 					newCharacter.Initialize(msg.Characters[i]);
 					newCharacter.OnCharacterSelected += OnCharacterSelected;
 					characterList.Add(newCharacter);
@@ -165,7 +165,7 @@ namespace FishMMO.Client
 		private void OnClientCharacterCreateBroadcastReceived(CharacterCreateBroadcast msg, Channel channel)
 		{
 			// new characters can be constructed with basic data, they have no equipped items
-			CharacterDetailsButton newCharacter = Instantiate(characterButtonPrefab, characterButtonParent);
+			CharacterDetailsButton newCharacter = Instantiate(CharacterButtonPrefab, CharacterButtonParent);
 			CharacterDetails details = new CharacterDetails()
 			{
 				CharacterName = msg.CharacterName,
@@ -287,12 +287,12 @@ namespace FishMMO.Client
 
 		private void SetConnectButtonLocked(bool locked)
 		{
-			connectButton.interactable = !locked;
+			ConnectButton.interactable = !locked;
 		}
 
 		private void SetDeleteButtonLocked(bool locked)
 		{
-			deleteButton.interactable = !locked;
+			DeleteButton.interactable = !locked;
 		}
 	}
 }

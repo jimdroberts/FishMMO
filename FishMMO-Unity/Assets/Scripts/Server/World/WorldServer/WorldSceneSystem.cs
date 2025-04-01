@@ -193,7 +193,7 @@ namespace FishMMO.Server
 			// Enqueue a new pending scene load request to the database, we need a new scene
 			else if (!SceneService.Enqueue(dbContext, worldServerSystem.ID, sceneName, SceneType.OpenWorld))
 			{
-				Debug.Log("World Scene System: Enqueing new PendingSceneLoadRequest: " + worldServerSystem.ID + ":" + sceneName);
+				Debug.Log("World Scene System: Failed to enqueue new pending scene load request: " + worldServerSystem.ID + ":" + sceneName);
 			}
 		}
 
@@ -244,7 +244,7 @@ namespace FishMMO.Server
 			// Check if the selected character has an instance
 			if (CharacterService.TryGetSelectedDetails(dbContext, accountName, out long characterID))
 			{
-				SceneEntity sceneEntity = SceneService.GetCharacterInstance(dbContext, characterID, worldServerSystem.ID);
+				SceneEntity sceneEntity = SceneService.GetCharacterInstance(dbContext, characterID);
 				if (sceneEntity != null)
 				{
 

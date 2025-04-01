@@ -26,6 +26,10 @@ namespace FishMMO.Database.Npgsql.Entities
 		public float BindX { get; set; }
 		public float BindY { get; set; }
 		public float BindZ { get; set; }
+		public long InstanceID { get; set; }
+		public float InstanceX { get; set; }
+		public float InstanceY { get; set; }
+		public float InstanceZ { get; set; }
 		public int RaceID { get; set; }
 		public float X { get; set; }
 		public float Y { get; set; }
@@ -39,6 +43,7 @@ namespace FishMMO.Database.Npgsql.Entities
 		// just 'online', or 'online && (DateTime.UtcNow - lastsaved) <= 1min)
 		// which is robust to server crashes too.
 		public bool Online { get; set; }
+		public int Flags { get; set; }
 		public DateTime TimeCreated { get; set; }
 		public DateTime LastSaved { get; set; }
 		public DateTime TimeDeleted { get; set; }
@@ -55,8 +60,11 @@ namespace FishMMO.Database.Npgsql.Entities
 		public ICollection<CharacterBankEntity> Bank { get; set; }
 		public CharacterGuildEntity Guild { get; set; }
 		public CharacterPartyEntity Party { get; set; }
+		public ICollection<CharacterFactionEntity> Faction { get; set; }
 		public ICollection<CharacterFriendEntity> Friends { get; set; }
 		public ICollection<CharacterItemCooldownEntity> ItemCooldowns { get; set; }
+		public ICollection<CharacterPetBuffEntity> PetBuffs { get; set; }
+		public CharacterPetEntity Pet { get; set; }
 		public ICollection<CharacterQuestEntity> Quests { get; set; }
 		public ICollection<CharacterSkillEntity> Skills { get; set; }
 	}

@@ -3475,10 +3475,10 @@ MonoBehaviour:
   CloseOnEscape: 0
   CanDrag: 0
   ClampToScreen: 1
-  connectToServerButton: {fileID: 945602301}
-  refreshButton: {fileID: 7169268986886196035}
-  serverParent: {fileID: 2004703439}
-  serverButtonPrefab: {fileID: 2913617428376626120}
+  ConnectToServerButton: {fileID: 945602301}
+  RefreshButton: {fileID: 7169268986886196035}
+  ServerParent: {fileID: 2004703439}
+  ServerButtonPrefab: {fileID: 2913617428376626120}
   RefreshRate: 5
 --- !u!1 &1810670022
 GameObject:
@@ -15391,11 +15391,11 @@ MonoBehaviour:
   CloseOnEscape: 0
   CanDrag: 1
   ClampToScreen: 1
-  username: {fileID: 5219631022881974915}
-  password: {fileID: 94787996}
-  registerButton: {fileID: 533459266}
-  signInButton: {fileID: 5219631023740585445}
-  handshakeMSG: {fileID: 2928016627321303672}
+  Username: {fileID: 5219631022881974915}
+  Password: {fileID: 94787996}
+  RegisterButton: {fileID: 533459266}
+  SignInButton: {fileID: 5219631023740585445}
+  HandshakeMSG: {fileID: 2928016627321303672}
 --- !u!224 &5219631022264098040
 RectTransform:
   m_ObjectHideFlags: 0
@@ -22789,11 +22789,11 @@ MonoBehaviour:
   CloseOnEscape: 0
   CanDrag: 0
   ClampToScreen: 1
-  connectButton: {fileID: 786171173221473208}
-  deleteButton: {fileID: 5370995478022308996}
-  selectedCharacterParent: {fileID: 0}
-  characterButtonParent: {fileID: 3259376304746546184}
-  characterButtonPrefab: {fileID: 6865829223754404160}
+  ConnectButton: {fileID: 786171173221473208}
+  DeleteButton: {fileID: 5370995478022308996}
+  SelectedCharacterParent: {fileID: 0}
+  CharacterButtonParent: {fileID: 3259376304746546184}
+  CharacterButtonPrefab: {fileID: 6865829223754404160}
   CinematicCamera: {fileID: 8410660288176364253}
 --- !u!1 &6251707575647001242
 GameObject:
@@ -23327,18 +23327,18 @@ MonoBehaviour:
   CloseOnEscape: 0
   CanDrag: 0
   ClampToScreen: 1
-  createButton: {fileID: 7555919191308437878}
-  createResultText: {fileID: 1762716258834786518}
-  startRaceDropdown: {fileID: 3832639609752036408}
-  startLocationDropdown: {fileID: 8409908471948426446}
-  characterParent: {fileID: 0}
-  characterName: 
-  raceIndex: -1
-  initialRaceNames: []
-  initialSpawnLocationNames: []
-  worldSceneDetailsCache: {fileID: 11400000, guid: 3f3e421dc58c81d4e94dcea943cfcd35,
+  CreateButton: {fileID: 7555919191308437878}
+  CreateResultText: {fileID: 1762716258834786518}
+  StartRaceDropdown: {fileID: 3832639609752036408}
+  StartLocationDropdown: {fileID: 8409908471948426446}
+  CharacterParent: {fileID: 0}
+  CharacterName: 
+  RaceIndex: -1
+  InitialRaceNames: []
+  InitialSpawnLocationNames: []
+  WorldSceneDetailsCache: {fileID: 11400000, guid: 3f3e421dc58c81d4e94dcea943cfcd35,
     type: 2}
-  selectedSpawnPosition: -1
+  SelectedSpawnPosition: -1
 --- !u!1 &6487781012011738639
 GameObject:
   m_ObjectHideFlags: 0

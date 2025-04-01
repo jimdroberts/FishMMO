@@ -147,13 +147,18 @@ namespace FishMMO.Server.DatabaseServices
 			}
 		}
 
-		public static SceneEntity GetCharacterInstance(NpgsqlDbContext dbContext, long characterID, long worldServerID)
+		public static SceneEntity GetCharacterInstance(NpgsqlDbContext dbContext, long characterID)
 		{
-			if (worldServerID == 0)
+			if (characterID == 0)
 			{
 				return null;
 			}
 			return dbContext.Scenes.FirstOrDefault(c => c.CharacterID == characterID);
+		}
+
+		public static SceneEntity GetInstanceByID(NpgsqlDbContext dbContext, long instanceID)
+		{
+			return dbContext.Scenes.FirstOrDefault((c) => c.ID == instanceID);
 		}
 
 		public static List<SceneEntity> GetServerList(NpgsqlDbContext dbContext, long worldServerID, string sceneName, int maxClients)

@@ -7,6 +7,7 @@ using FishMMO.Database.Npgsql;
 using FishMMO.Database.Npgsql.Entities;
 using FishMMO.Shared;
 using UnityEngine;
+using System.Transactions;
 
 namespace FishMMO.Server.DatabaseServices
 {
@@ -238,6 +239,32 @@ namespace FishMMO.Server.DatabaseServices
 			}
 		}
 
+		public static void SetInstance(NpgsqlDbContext dbContext, long characterID, long sceneInstanceID, Vector3 instancePosition)
+		{
+			// get all characters for account
+			var character = dbContext.Characters.FirstOrDefault((c) => c.ID == characterID && !c.Deleted);
+			if (character != null)
+			{
+				character.InstanceID = sceneInstanceID;
+				character.InstanceX = instancePosition.x;
+				character.InstanceY = instancePosition.y;
+				character.InstanceZ = instancePosition.z;
+				dbContext.SaveChanges();
+			}
+		}
+
+		public static bool GetInstanceID(NpgsqlDbContext dbContext, long characterID, out long instanceID)
+		{
+			var character = dbContext.Characters.FirstOrDefault((c) => c.ID == characterID && !c.Deleted);
+			if (character != null)
+			{
+				instanceID = character.InstanceID;
+				return true;
+			}
+			instanceID = 0;
+			return false;
+		}
+
 		public static void Save(NpgsqlDbContext dbContext, List<IPlayerCharacter> characters, bool online = true)
 		{
 			using var dbTransaction = dbContext.Database.BeginTransaction();
@@ -285,13 +312,12 @@ namespace FishMMO.Server.DatabaseServices
 			existingCharacter.Name = character.CharacterName;
 			existingCharacter.NameLowercase = character.CharacterName.ToLower();
 			existingCharacter.Account = character.Account;
-			existingCharacter.AccessLevel = (byte)character.AccessLevel;
-			existingCharacter.RaceID = character.RaceID;
+			existingCharacter.SceneName = character.SceneName;
 			existingCharacter.BindScene = character.BindScene;
 			existingCharacter.BindX = bindPosition.x;
 			existingCharacter.BindY = bindPosition.y;
 			existingCharacter.BindZ = bindPosition.z;
-			existingCharacter.SceneName = character.SceneName;
+			existingCharacter.RaceID = character.RaceID;
 			existingCharacter.X = charPosition.x;
 			existingCharacter.Y = charPosition.y;
 			existingCharacter.Z = charPosition.z;
@@ -299,6 +325,8 @@ namespace FishMMO.Server.DatabaseServices
 			existingCharacter.RotY = rotation.y;
 			existingCharacter.RotZ = rotation.z;
 			existingCharacter.RotW = rotation.w;
+			existingCharacter.Flags = character.Flags;
+			existingCharacter.AccessLevel = (byte)character.AccessLevel;
 			existingCharacter.Online = online;
 			existingCharacter.LastSaved = DateTime.UtcNow;
 
@@ -419,15 +447,18 @@ namespace FishMMO.Server.DatabaseServices
 				character.CharacterName = dbCharacter.Name;
 				character.CharacterNameLower = dbCharacter.NameLowercase;
 				character.Account = dbCharacter.Account;
-				character.AccessLevel = (AccessLevel)dbCharacter.AccessLevel;
-				character.TimeCreated = dbCharacter.TimeCreated;
 				character.WorldServerID = dbCharacter.WorldServerID;
-				character.RaceID = dbCharacter.RaceID;
-				character.RaceName = raceTemplate.Name;
+				character.SceneName = dbCharacter.SceneName;
+				character.SceneHandle = dbCharacter.SceneHandle;
 				character.BindScene = dbCharacter.BindScene;
 				character.BindPosition = new Vector3(dbCharacter.BindX, dbCharacter.BindY, dbCharacter.BindZ);
-				character.SceneHandle = dbCharacter.SceneHandle;
-				character.SceneName = dbCharacter.SceneName;
+				character.InstanceID = dbCharacter.InstanceID;
+				character.InstancePosition = new Vector3(dbCharacter.InstanceX, dbCharacter.InstanceY, dbCharacter.InstanceZ);
+				character.RaceID = dbCharacter.RaceID;
+				character.RaceName = raceTemplate.Name;
+				character.Flags = dbCharacter.Flags;
+				character.AccessLevel = (AccessLevel)dbCharacter.AccessLevel;
+				character.TimeCreated = dbCharacter.TimeCreated;
 
 				// character becomes immortal when loading.. just in case..
 				if (character.TryGet(out ICharacterDamageController damageController))

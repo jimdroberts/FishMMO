@@ -13,6 +13,7 @@ namespace FishMMO.Shared
 		Collider Collider { get; set; }
 		bool IsTeleporting { get; }
 		bool IsSpawned { get; }
+		int Flags { get; set; }
 
 #if !UNITY_SERVER
 		Transform MeshRoot { get;}

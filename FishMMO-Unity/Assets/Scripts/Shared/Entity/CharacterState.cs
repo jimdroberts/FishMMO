@@ -11,6 +11,5 @@
 		IsFrozen,
 		IsStunned,
 		IsMesmerized,
-		IsGameMaster,
 	}
 }

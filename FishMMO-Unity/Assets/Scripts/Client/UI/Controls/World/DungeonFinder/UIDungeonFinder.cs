@@ -10,6 +10,8 @@ namespace FishMMO.Client
 		public RectTransform Content;
 		public TMP_Text DungeonDescriptionLabel;
 
+		private long currentInteractableID;
+
 		public override void OnClientSet()
 		{
 			Client.NetworkManager.ClientManager.RegisterBroadcast<DungeonFinderBroadcast>(OnClientDungeonFinderBroadcastReceived);
@@ -52,6 +54,8 @@ namespace FishMMO.Client
 
 			if (sceneObject is DungeonEntrance dungeonEntrance)
 			{
+				currentInteractableID = msg.InteractableID;
+
 				if (DungeonDescriptionLabel != null)
 				{
 					DungeonDescriptionLabel.text = dungeonEntrance.DungeonName;
@@ -66,6 +70,11 @@ namespace FishMMO.Client
 
 		public override void OnPostSetCharacter()
 		{
+		}
+
+		public void OnClick_Start()
+		{
+			
 		}
 	}
 }

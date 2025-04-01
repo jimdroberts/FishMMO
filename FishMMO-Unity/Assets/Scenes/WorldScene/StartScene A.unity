@@ -3239,7 +3239,7 @@ MonoBehaviour:
   _componentIndexCache: 255
   _addedNetworkObject: {fileID: 1565944405}
   _networkObjectCache: {fileID: 0}
-  InteractionRange: 3.5
+  InteractionRange: 10
   GizmoColor: {r: 0, g: 1, b: 0, a: 1}
   DungeonName: Test Dungeon
 --- !u!1 &1572371891

@@ -10,11 +10,11 @@ namespace FishMMO.Client
 {
 	public class UILogin : UIControl
 	{
-		public TMP_InputField username;
-		public TMP_InputField password;
-		public Button registerButton;
-		public Button signInButton;
-		public TMP_Text handshakeMSG;
+		public TMP_InputField Username;
+		public TMP_InputField Password;
+		public Button RegisterButton;
+		public Button SignInButton;
+		public TMP_Text HandshakeMSG;
 
 		/// <summary>
 		/// Called when a Login Success Client Authentication result is received from the server.
@@ -53,14 +53,14 @@ namespace FishMMO.Client
 			base.Hide();
 			
 			// Reset handshake message and hide the panel
-			handshakeMSG.text = "";
+			HandshakeMSG.text = "";
 		}
 
 		private void ClientManager_OnClientConnectionState(ClientConnectionStateArgs obj)
 		{
 			if (obj.ConnectionState == LocalConnectionState.Stopped)
 			{
-				handshakeMSG.text = "";
+				HandshakeMSG.text = "";
 				SetSignInLocked(false);
 			}
 		}
@@ -113,7 +113,7 @@ namespace FishMMO.Client
 
 		private void OnLoginSuccess()
 		{
-			handshakeMSG.text = "Connected";
+			HandshakeMSG.text = "Connected";
 			
 			OnLoginSuccessStart?.Invoke();
 
@@ -149,7 +149,7 @@ namespace FishMMO.Client
 			},
 			(servers) =>
 			{
-				Connect("Creating account.", username.text, password.text, true);
+				Connect("Creating account.", Username.text, Password.text, true);
 			}));
 		}
 
@@ -163,8 +163,8 @@ namespace FishMMO.Client
 
 		public void OnClick_Login()
 		{
-			if (!Constants.Authentication.IsAllowedUsername(username.text) ||
-				!Constants.Authentication.IsAllowedPassword(password.text))
+			if (!Constants.Authentication.IsAllowedUsername(Username.text) ||
+				!Constants.Authentication.IsAllowedPassword(Password.text))
 			{
 				return;
 			}
@@ -183,7 +183,7 @@ namespace FishMMO.Client
 			(servers) =>
 			{
 				servers.GetRandom();
-				Connect("Connecting...", username.text, password.text);
+				Connect("Connecting...", Username.text, Password.text);
 			}));
 		}
 
@@ -194,7 +194,7 @@ namespace FishMMO.Client
 				Constants.Authentication.IsAllowedPassword(password) &&
 				Client.TryGetRandomLoginServerAddress(out ServerAddress serverAddress))
 			{
-				handshakeMSG.text = handshakeMessage;
+				HandshakeMSG.text = handshakeMessage;
 				Client.LoginAuthenticator.SetLoginCredentials(username, password, isRegistration);
 				Client.ConnectToServer(serverAddress.Address, serverAddress.Port);
 			}
@@ -214,10 +214,10 @@ namespace FishMMO.Client
 		/// </summary>
 		public void SetSignInLocked(bool locked)
 		{
-			registerButton.interactable = !locked;
-			signInButton.interactable = !locked;
-			username.enabled = !locked;
-			password.enabled = !locked;
+			RegisterButton.interactable = !locked;
+			SignInButton.interactable = !locked;
+			Username.enabled = !locked;
+			Password.enabled = !locked;
 		}
 	}
 }
