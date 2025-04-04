@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.UI;
 using FishNet.Transporting;
 using FishMMO.Shared;
 using TMPro;
@@ -8,6 +9,7 @@ namespace FishMMO.Client
 	public class UIDungeonFinder : UICharacterControl
 	{
 		public RectTransform Content;
+		public Image DungeonImage;
 		public TMP_Text DungeonDescriptionLabel;
 
 		private long currentInteractableID;
@@ -55,7 +57,10 @@ namespace FishMMO.Client
 			if (sceneObject is DungeonEntrance dungeonEntrance)
 			{
 				currentInteractableID = msg.InteractableID;
-
+				if (DungeonImage != null)
+				{
+					DungeonImage = dungeonEntrance.DungeonImage;
+				}
 				if (DungeonDescriptionLabel != null)
 				{
 					DungeonDescriptionLabel.text = dungeonEntrance.DungeonName;
@@ -74,7 +79,15 @@ namespace FishMMO.Client
 
 		public void OnClick_Start()
 		{
-			
+			if (currentInteractableID == 0)
+			{
+				return;
+			}
+
+			Client.Broadcast(new DungeonFinderBroadcast()
+			{
+				InteractableID = currentInteractableID,
+			});
 		}
 	}
 }

@@ -234,20 +234,36 @@ namespace FishMMO.Server
 
 			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 
-			if (dbContext == null || !ServerBehaviour.TryGet(out WorldServerSystem worldServerSystem))
+			if (dbContext == null)
 			{
 				Debug.Log("World Scene System: " + conn.ClientId + " failed to access database context or world server system.");
 				conn.Kick(KickReason.UnexpectedProblem);
 				return;
 			}
 
-			// Check if the selected character has an instance
+			// Get the currently selected characters ID for the account.
 			if (CharacterService.TryGetSelectedDetails(dbContext, accountName, out long characterID))
 			{
+				// Check if the selected character has an instance available.
 				SceneEntity sceneEntity = SceneService.GetCharacterInstance(dbContext, characterID);
 				if (sceneEntity != null)
 				{
+					// Check if the scene is actually running, if not the character should be returned to the world scene
+					SceneServerEntity sceneServer = SceneServerService.GetServer(dbContext, sceneEntity.SceneServerID);
+					if (sceneServer != null)
+					{
+						// Successfully found a scene to connect to
+						CharacterService.SetSceneHandle(dbContext, accountName, sceneEntity.SceneHandle);
 
+						// Tell the client to connect to the scene
+						Server.Broadcast(conn, new WorldSceneConnectBroadcast()
+						{
+							Address = sceneServer.Address,
+							Port = sceneServer.Port,
+						});
+
+						return;
+					}
 				}
 			}
 

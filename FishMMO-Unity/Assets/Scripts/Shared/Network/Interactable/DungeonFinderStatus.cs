@@ -5,5 +5,6 @@ namespace FishMMO.Shared
 		Pending = 0,
 		Loading,
 		Ready,
+		Joinable,
 	}
 }

@@ -551,6 +551,12 @@ namespace FishMMO.Server
 				return;
 			}
 
+			if (details.RespawnPositions == null || details.RespawnPositions.Count < 1)
+			{
+				Debug.Log($"Missing Scene: {character.SceneName} respawn points.");
+				return;
+			}
+
 			// Validate scene object
 			if (!ValidateSceneObject(msg.InteractableID, character.GameObject.scene.handle, out ISceneObject sceneObject))
 			{
@@ -575,6 +581,18 @@ namespace FishMMO.Server
 			SceneEntity sceneEntity = SceneService.GetCharacterInstance(dbContext, character.ID);
 			if (sceneEntity == null)
 			{
+				// Check if any party members currently have an instance.
+				if (CheckCharacterPartyInstance(dbContext, character))
+				{
+					// Notify the party member they can join the party members instance.
+					Server.Broadcast(conn, new DungeonFinderStatusBroadcast()
+					{
+						Status = DungeonFinderStatus.Joinable,
+					}, true);
+
+					return;
+				}
+
 				if (!SceneService.Enqueue(dbContext, character.WorldServerID, dungeonEntrance.DungeonName, SceneType.Group))
 				{
 					Debug.Log("Failed to enqueue new pending scene load request: " + character.WorldServerID + ":" + dungeonEntrance.DungeonName);
@@ -587,27 +605,52 @@ namespace FishMMO.Server
 					}, true);
 				}
 			}
-			else if ((SceneStatus)sceneEntity.SceneStatus == SceneStatus.Pending)
+			else
 			{
-				Server.Broadcast(conn, new DungeonFinderStatusBroadcast()
+				if ((SceneStatus)sceneEntity.SceneStatus == SceneStatus.Pending)
 				{
-					Status = DungeonFinderStatus.Pending,
-				}, true);
+					Server.Broadcast(conn, new DungeonFinderStatusBroadcast()
+					{
+						Status = DungeonFinderStatus.Pending,
+					}, true);
+				}
+				else if ((SceneStatus)sceneEntity.SceneStatus == SceneStatus.Loading)
+				{
+					Server.Broadcast(conn, new DungeonFinderStatusBroadcast()
+					{
+						Status = DungeonFinderStatus.Loading,
+					}, true);
+				}
+				else if ((SceneStatus)sceneEntity.SceneStatus == SceneStatus.Ready)
+				{
+					Server.Broadcast(conn, new DungeonFinderStatusBroadcast()
+					{
+						Status = DungeonFinderStatus.Ready,
+					}, true);
+				}
 			}
-			else if ((SceneStatus)sceneEntity.SceneStatus == SceneStatus.Loading)
+		}
+
+		/// <summary>
+		/// Checks if a characters party members have a valid instance.
+		/// </summary>
+		public bool CheckCharacterPartyInstance(NpgsqlDbContext dbContext, IPlayerCharacter character)
+		{
+			if (character.TryGet(out IPartyController partyController) && partyController.ID != 0)
 			{
-				Server.Broadcast(conn, new DungeonFinderStatusBroadcast()
+				PartyEntity partyEntity = PartyService.Load(dbContext, partyController.ID);
+				if (partyEntity != null && partyEntity.Characters.Count > 0)
 				{
-					Status = DungeonFinderStatus.Loading,
-				}, true);
+					foreach (CharacterPartyEntity characterPartyEntity in partyEntity.Characters)
+					{
+						if (SceneService.GetCharacterInstance(dbContext, characterPartyEntity.ID) != null)
+						{
+							return true;
+						}
+					}
+				}
 			}
-			else if ((SceneStatus)sceneEntity.SceneStatus == SceneStatus.Ready)
-			{
-				Server.Broadcast(conn, new DungeonFinderStatusBroadcast()
-				{
-					Status = DungeonFinderStatus.Ready,
-				}, true);
-			}
+			return false;
 		}
 
 		public Ability LearnAbility(IAbilityController abilityController, AbilityTemplate abilityTemplate, List<int> abilityEvents)
