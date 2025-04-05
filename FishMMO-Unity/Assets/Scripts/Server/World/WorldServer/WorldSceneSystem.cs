@@ -27,6 +27,12 @@ namespace FishMMO.Server
 		public Dictionary<string, HashSet<NetworkConnection>> WaitingConnections = new Dictionary<string, HashSet<NetworkConnection>>();
 		public Dictionary<NetworkConnection, string> WaitingConnectionsScenes = new Dictionary<NetworkConnection, string>();
 
+		/// <summary>
+		/// Connections waiting for an instanced scene to finish loading.
+		/// </summary>
+		public Dictionary<long, HashSet<NetworkConnection>> WaitingInstanceConnections = new Dictionary<long, HashSet<NetworkConnection>>();
+		public Dictionary<NetworkConnection, long> WaitingInstanceConnectionsScenes = new Dictionary<NetworkConnection, long>();
+
 		public int ConnectionCount { get; private set; }
 
 		private float waitQueueRate = 2.0f;
@@ -86,6 +92,19 @@ namespace FishMMO.Server
 					}
 					WaitingConnectionsScenes.Remove(conn);
 				}
+
+				if (WaitingInstanceConnectionsScenes.TryGetValue(conn, out long sceneID))
+				{
+					if (WaitingInstanceConnections.TryGetValue(sceneID, out HashSet<NetworkConnection> instanceConnections))
+					{
+						instanceConnections.Remove(conn);
+						if (instanceConnections.Count < 1)
+						{
+							WaitingInstanceConnections.Remove(sceneID);
+						}
+					}
+					WaitingInstanceConnectionsScenes.Remove(conn);
+				}
 			}
 		}
 
@@ -100,7 +119,11 @@ namespace FishMMO.Server
 					using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 					foreach (string sceneName in new List<string>(WaitingConnections.Keys))
 					{
-						TryClearWaitQueues(dbContext, sceneName);
+						TryClearOpenWorldWaitQueues(dbContext, sceneName);
+					}
+					foreach (NetworkConnection conn in new List<NetworkConnection>(WaitingInstanceConnectionsScenes.Keys))
+					{
+						TryProcessInstanceConnection(dbContext, conn);
 					}
 
 					UpdateConnectionCount(dbContext);
@@ -109,7 +132,7 @@ namespace FishMMO.Server
 			nextWaitQueueUpdate -= Time.deltaTime;
 		}
 
-		private void TryClearWaitQueues(NpgsqlDbContext dbContext, string sceneName)
+		private void TryClearOpenWorldWaitQueues(NpgsqlDbContext dbContext, string sceneName)
 		{
 			if (!WaitingConnections.TryGetValue(sceneName, out HashSet<NetworkConnection> connections))
 			{
@@ -191,10 +214,75 @@ namespace FishMMO.Server
 				WaitingConnections.Remove(sceneName);
 			}
 			// Enqueue a new pending scene load request to the database, we need a new scene
-			else if (!SceneService.Enqueue(dbContext, worldServerSystem.ID, sceneName, SceneType.OpenWorld))
+			else if (!SceneService.Enqueue(dbContext, worldServerSystem.ID, sceneName, SceneType.OpenWorld, out long sceneID))
 			{
 				Debug.Log("World Scene System: Failed to enqueue new pending scene load request: " + worldServerSystem.ID + ":" + sceneName);
 			}
+		}
+
+		private bool TryProcessInstanceConnection(NpgsqlDbContext dbContext, NetworkConnection conn)
+		{
+			// Get the scene for the selected character
+			if (!AccountManager.GetAccountNameByConnection(conn, out string accountName))
+			{
+				Debug.Log("World Scene System: " + conn.ClientId + " failed to get account name.");
+				conn.Kick(KickReason.UnexpectedProblem);
+				return false;
+			}
+
+			// Get the currently selected characters ID for the account.
+			if (CharacterService.TryGetSelectedCharacterID(dbContext, accountName, out long characterID) &&
+				CharacterService.GetCharacterFlags(dbContext, characterID, out int characterFlags) &&
+				characterFlags.IsFlagged(CharacterFlags.IsInInstance))
+			{
+				// Check if the selected character has a group instance.
+				SceneEntity sceneEntity = SceneService.GetCharacterInstance(dbContext, characterID, SceneType.Group);
+				if (sceneEntity != null)
+				{
+					SceneStatus sceneStatus = (SceneStatus)sceneEntity.SceneStatus;
+					if (sceneStatus == SceneStatus.Ready)
+					{
+						// Ensure the Scene Server is running, if not the character will be returned to the world scene.
+						SceneServerEntity sceneServer = SceneServerService.GetServer(dbContext, sceneEntity.SceneServerID);
+						if (sceneServer != null)
+						{
+							// Successfully found a scene to connect to
+							CharacterService.SetSceneHandle(dbContext, accountName, sceneEntity.SceneHandle);
+
+							// Tell the client to connect to the scene
+							Server.Broadcast(conn, new WorldSceneConnectBroadcast()
+							{
+								Address = sceneServer.Address,
+								Port = sceneServer.Port,
+							});
+
+							return true;
+						}
+						else
+						{
+							// Clear the characters Scene Instance and delete the Scene entry
+							CharacterService.SetInstance(dbContext, characterID, 0, Vector3.zero);
+							SceneService.Delete(dbContext, sceneEntity.SceneServerID, sceneEntity.SceneHandle);
+						}
+					}
+					else if (sceneStatus == SceneStatus.Pending ||
+							 sceneStatus == SceneStatus.Loading)
+					{
+						// Add the client to the wait queue, when a scene server loads the scene the client will be connected when it's ready
+						WaitingInstanceConnectionsScenes[conn] = sceneEntity.ID;
+						if (!WaitingInstanceConnections.TryGetValue(sceneEntity.ID, out HashSet<NetworkConnection> instanceConnections))
+						{
+							WaitingInstanceConnections.Add(sceneEntity.ID, instanceConnections = new HashSet<NetworkConnection>());
+						}
+						if (!instanceConnections.Contains(conn))
+						{
+							instanceConnections.Add(conn);
+						}
+						return true;
+					}
+				}
+			}
+			return false;
 		}
 
 		private void UpdateConnectionCount(NpgsqlDbContext dbContext)
@@ -233,7 +321,6 @@ namespace FishMMO.Server
 			}
 
 			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-
 			if (dbContext == null)
 			{
 				Debug.Log("World Scene System: " + conn.ClientId + " failed to access database context or world server system.");
@@ -241,30 +328,9 @@ namespace FishMMO.Server
 				return;
 			}
 
-			// Get the currently selected characters ID for the account.
-			if (CharacterService.TryGetSelectedDetails(dbContext, accountName, out long characterID))
+			if (TryProcessInstanceConnection(dbContext, conn))
 			{
-				// Check if the selected character has an instance available.
-				SceneEntity sceneEntity = SceneService.GetCharacterInstance(dbContext, characterID);
-				if (sceneEntity != null)
-				{
-					// Check if the scene is actually running, if not the character should be returned to the world scene
-					SceneServerEntity sceneServer = SceneServerService.GetServer(dbContext, sceneEntity.SceneServerID);
-					if (sceneServer != null)
-					{
-						// Successfully found a scene to connect to
-						CharacterService.SetSceneHandle(dbContext, accountName, sceneEntity.SceneHandle);
-
-						// Tell the client to connect to the scene
-						Server.Broadcast(conn, new WorldSceneConnectBroadcast()
-						{
-							Address = sceneServer.Address,
-							Port = sceneServer.Port,
-						});
-
-						return;
-					}
-				}
+				return;
 			}
 
 			if (!CharacterService.TryGetSelectedSceneName(dbContext, accountName, out string sceneName))

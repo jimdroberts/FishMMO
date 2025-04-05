@@ -11,10 +11,11 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// Enqueues a new scene load request to the database.
 		/// </summary>
-		public static bool Enqueue(NpgsqlDbContext dbContext, long worldServerID, string sceneName, SceneType sceneType, long characterID = 0)
+		public static bool Enqueue(NpgsqlDbContext dbContext, long worldServerID, string sceneName, SceneType sceneType, out long sceneID, long characterID = 0)
 		{
 			if (worldServerID == 0)
 			{
+				sceneID = 0;
 				return false;
 			}
 			int type = (int)sceneType;
@@ -40,8 +41,11 @@ namespace FishMMO.Server.DatabaseServices
 				dbContext.Scenes.Add(entity);
 				dbContext.SaveChanges();
 
+				sceneID = entity.ID;
+
 				return true;
 			}
+			sceneID = 0;
 			return false;
 		}
 
@@ -147,13 +151,16 @@ namespace FishMMO.Server.DatabaseServices
 			}
 		}
 
-		public static SceneEntity GetCharacterInstance(NpgsqlDbContext dbContext, long characterID)
+		public static SceneEntity GetCharacterInstance(NpgsqlDbContext dbContext, long characterID, SceneType sceneType)
 		{
 			if (characterID == 0)
 			{
 				return null;
 			}
-			return dbContext.Scenes.FirstOrDefault(c => c.CharacterID == characterID);
+			
+			int type = (int)sceneType;
+
+			return dbContext.Scenes.FirstOrDefault(c => c.CharacterID == characterID && c.SceneType == type);
 		}
 
 		public static SceneEntity GetInstanceByID(NpgsqlDbContext dbContext, long instanceID)

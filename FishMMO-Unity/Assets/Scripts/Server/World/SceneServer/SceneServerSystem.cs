@@ -29,7 +29,8 @@ namespace FishMMO.Server
 		public long ID { get { return id; } }
 
 		// <worldID, <sceneName, <sceneHandle, details>>>
-		public Dictionary<long, Dictionary<string, Dictionary<int, SceneInstanceDetails>>> worldScenes = new Dictionary<long, Dictionary<string, Dictionary<int, SceneInstanceDetails>>>();
+		public readonly Dictionary<long, Dictionary<string, Dictionary<int, SceneInstanceDetails>>> WorldScenes = new Dictionary<long, Dictionary<string, Dictionary<int, SceneInstanceDetails>>>();
+		public readonly Dictionary<int, string> SceneNameByHandle = new Dictionary<int, string>();
 
 		public override void InitializeOnce()
 		{
@@ -143,11 +144,11 @@ namespace FishMMO.Server
 						SceneServerService.Pulse(dbContext, id, characterCount);
 
 						// process loaded scene pulse update
-						if (worldScenes != null)
+						if (WorldScenes != null)
 						{
-							foreach (Dictionary<string, Dictionary<int, SceneInstanceDetails>> sceneGroup in worldScenes.Values)
+							foreach (Dictionary<string, Dictionary<int, SceneInstanceDetails>> sceneGroup in WorldScenes.Values)
 							{
-								foreach (Dictionary<int, SceneInstanceDetails> scene in sceneGroup.Values)
+								foreach (Dictionary<int, SceneInstanceDetails> scene in new List<Dictionary<int, SceneInstanceDetails>>(sceneGroup.Values))
 								{
 									foreach (SceneInstanceDetails sceneDetails in new List<SceneInstanceDetails>(scene.Values))
 									{
@@ -276,32 +277,30 @@ namespace FishMMO.Server
 			// Process the scene by adding it to the world dictionary mappings.
 			ProcessScene(scene, sceneType, worldServerID);
 
-			switch (sceneType)
+			// Save the loaded scene information to the database
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
+			Debug.Log($"Scene Server System: Saved Open World Scene {scene.name}:{scene.handle} to the database.");
+			SceneService.Update(dbContext, id, worldServerID, scene.name, scene.handle);
+
+			/*switch (sceneType)
 			{
 				case SceneType.OpenWorld:
-					{
-						// Save the loaded scene information to the database
-						using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-						Debug.Log($"Scene Server System: Saved Open World Scene {scene.name}:{scene.handle} to the database.");
-						SceneService.Update(dbContext, id, worldServerID, scene.name, scene.handle);
-					}
 					break;
 				case SceneType.Group:
-					
 					break;
 				case SceneType.PvP:
 					break;
 				case SceneType.Unknown:
-				default : return;
-			}
+				default: return;
+			}*/
 		}
 
 		private void ProcessScene(Scene scene, SceneType sceneType, long worldServerID)
 		{
 			// Configure the mapping for this specific world scene
-			if (!worldScenes.TryGetValue(worldServerID, out Dictionary<string, Dictionary<int, SceneInstanceDetails>> scenes))
+			if (!WorldScenes.TryGetValue(worldServerID, out Dictionary<string, Dictionary<int, SceneInstanceDetails>> scenes))
 			{
-				worldScenes.Add(worldServerID, scenes = new Dictionary<string, Dictionary<int, SceneInstanceDetails>>());
+				WorldScenes.Add(worldServerID, scenes = new Dictionary<string, Dictionary<int, SceneInstanceDetails>>());
 			}
 			if (!scenes.TryGetValue(scene.name, out Dictionary<int, SceneInstanceDetails> handles))
 			{
@@ -325,6 +324,8 @@ namespace FishMMO.Server
 					Handle = scene.handle,
 					CharacterCount = 0,
 				});
+
+				SceneNameByHandle.Add(scene.handle, scene.name);
 			}
 			else
 			{
@@ -334,16 +335,50 @@ namespace FishMMO.Server
 
 		public void SceneManager_OnUnloadEnd(SceneUnloadEndEventArgs args)
 		{
-			// Test
-			//Resources.UnloadUnusedAssets();
+			if (WorldScenes == null)
+			{
+				return;
+			}
+
+			if (args.UnloadedScenesV2.Count <= 0)
+			{
+				return;
+			}
+
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
+			if (dbContext == null)
+			{
+				return;
+			}
+
+			for (int i = 0; i < args.UnloadedScenesV2.Count; ++id)
+			{
+				UnloadedScene unloaded = args.UnloadedScenesV2[i];
+
+				foreach (Dictionary<string, Dictionary<int, SceneInstanceDetails>> sceneGroup in WorldScenes.Values)
+				{
+					foreach (Dictionary<int, SceneInstanceDetails> scene in sceneGroup.Values)
+					{
+						if (scene.ContainsKey(unloaded.Handle))
+						{
+							// Remove the scene
+							scene.Remove(unloaded.Handle);
+							SceneNameByHandle.Remove(unloaded.Handle);
+
+							// Remove the scene details from the database
+							SceneService.Delete(dbContext, id, unloaded.Handle);
+						}
+					}
+				}
+			}
 		}
 
 		public bool TryGetSceneInstanceDetails(long worldServerID, string sceneName, int sceneHandle, out SceneInstanceDetails instanceDetails)
 		{
 			instanceDetails = default;
 
-			if (worldScenes != null &&
-				worldScenes.TryGetValue(worldServerID, out Dictionary<string, Dictionary<int, SceneInstanceDetails>> scenes))
+			if (WorldScenes != null &&
+				WorldScenes.TryGetValue(worldServerID, out Dictionary<string, Dictionary<int, SceneInstanceDetails>> scenes))
 			{
 				if (scenes != null &&
 					scenes.TryGetValue(sceneName, out Dictionary<int, SceneInstanceDetails> instances))

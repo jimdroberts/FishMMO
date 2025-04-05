@@ -160,7 +160,7 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// Returns true if we successfully get our selected character for the connections account, otherwise returns false.
 		/// </summary>
-		public static bool TryGetSelectedDetails(NpgsqlDbContext dbContext, string account, out long characterID)
+		public static bool TryGetSelectedCharacterID(NpgsqlDbContext dbContext, string account, out long characterID)
 		{
 			var character = dbContext.Characters.FirstOrDefault((c) => c.Account == account && c.Selected && !c.Deleted);
 			if (character != null)
@@ -262,6 +262,18 @@ namespace FishMMO.Server.DatabaseServices
 				return true;
 			}
 			instanceID = 0;
+			return false;
+		}
+
+		public static bool GetCharacterFlags(NpgsqlDbContext dbContext, long characterID, out int flags)
+		{
+			var character = dbContext.Characters.FirstOrDefault((c) => c.ID == characterID && !c.Deleted);
+			if (character != null)
+			{
+				flags = character.Flags;
+				return true;
+			}
+			flags = 0;
 			return false;
 		}
 

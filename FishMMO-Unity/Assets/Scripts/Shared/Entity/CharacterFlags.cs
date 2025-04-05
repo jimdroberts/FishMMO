@@ -1,6 +1,6 @@
 ﻿namespace FishMMO.Shared
 {
-	public enum CharacterState : byte
+	public enum CharacterFlags : int
 	{
 		Idle = 0,
 		IsMoving,
@@ -11,5 +11,6 @@
 		IsFrozen,
 		IsStunned,
 		IsMesmerized,
+		IsInInstance,
 	}
 }

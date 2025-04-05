@@ -268,16 +268,16 @@ namespace FishMMO.Server
 				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
 				return;
 			}
-			// create the db context
+			// Create the db context
 			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 
-			if (CharacterService.TryGetSelectedDetails(dbContext, accountName, out long selectedCharacterID))
+			if (CharacterService.TryGetSelectedCharacterID(dbContext, accountName, out long selectedCharacterID))
 			{
 				if (CharactersByID.ContainsKey(selectedCharacterID))
 				{
 					//Debug.Log(selectedCharacterID + " is already loaded or loading. FIXME");
 
-					// character load already started or complete
+					// Character load already started or complete
 					conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
 					return;
 				}
@@ -285,31 +285,47 @@ namespace FishMMO.Server
 				OnBeforeLoadCharacter?.Invoke(conn, selectedCharacterID);
 				if (CharacterService.TryGet(dbContext, selectedCharacterID, Server.NetworkManager, out IPlayerCharacter character))
 				{
-					// check if the scene is valid, loaded, and cached properly
-					if (sceneServerSystem.TryGetSceneInstanceDetails(character.WorldServerID, character.SceneName, character.SceneHandle, out SceneInstanceDetails instance) &&
+					string sceneName = character.SceneName;
+					int sceneHandle = character.SceneHandle;
+
+					// Check if the character is in an instance or not.
+					int characterFlags = character.Flags;
+					if (characterFlags.IsFlagged(CharacterFlags.IsInInstance))
+					{
+						SceneEntity sceneEntity = SceneService.GetInstanceByID(dbContext, character.InstanceID);
+						if (sceneEntity != null)
+						{
+							// Have the player enter the instance.
+							sceneName = sceneEntity.SceneName;
+							sceneHandle = sceneEntity.SceneHandle;
+						}
+					}
+					
+					// Check if the scene is valid, loaded, and cached properly
+					if (sceneServerSystem.TryGetSceneInstanceDetails(character.WorldServerID, sceneName, sceneHandle, out SceneInstanceDetails instance) &&
 						sceneServerSystem.TryLoadSceneForConnection(conn, instance))
 					{
 						OnAfterLoadCharacter?.Invoke(conn, character);
 
 						WaitingSceneLoadCharacters.Add(conn, character);
 
-						//Debug.Log("Character System: " + character.CharacterName + " is loading Scene: " + character.SceneName + ":" + character.SceneHandle);
+						//Debug.Log("Character System: " + character.CharacterName + " is loading Scene: " + sceneName + ":" + sceneHandle);
 					}
 					else
 					{
-						// send the character back to the world server.. something went wrong
+						// Send the character back to the world server.. something went wrong
 						conn.Disconnect(false);
 					}
 				}
 				else
 				{
-					// loading the character failed for some reason, maybe it doesn't exist? we should never get to this point but we will kick the player anyway
+					// Loading the character failed for some reason, maybe it doesn't exist? we should never get to this point but we will kick the player anyway
 					conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
 				}
 			}
 			else
 			{
-				// loading the character data failed to load for some reason, maybe it doesn't exist? we should never get to this point but we will kick the player anyway
+				// Loading the character data failed to load for some reason, maybe it doesn't exist? we should never get to this point but we will kick the player anyway
 				conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
 			}
 		}
@@ -808,6 +824,11 @@ namespace FishMMO.Server
 				character.SceneName = teleporter.ToScene;
 				character.Motor.SetPositionAndRotationAndVelocity(teleporter.ToPosition, teleporter.ToRotation, Vector3.zero);
 
+				// Remove the character from an instance if it was in one.
+				int characterFlags = character.Flags;
+				characterFlags.DisableBit(CharacterFlags.IsInInstance);
+				character.Flags = characterFlags;
+
 				// Save the character and remove it from the scene
 				RemoveCharacterConnectionMapping(character.Owner, true);
 			}
@@ -842,6 +863,11 @@ namespace FishMMO.Server
 					playerCharacter.SceneName = playerCharacter.BindScene;
 					playerCharacter.Motor.SetPositionAndRotationAndVelocity(playerCharacter.BindPosition, playerCharacter.Motor.Transform.rotation, Vector3.zero);
 					playerCharacter.NetworkObject.Owner.Disconnect(false);
+
+					// Remove the character from the instance if it dies.
+					int characterFlags = playerCharacter.Flags;
+					characterFlags.DisableBit(CharacterFlags.IsInInstance);
+					playerCharacter.Flags = characterFlags;
 				}
 				else
 				{

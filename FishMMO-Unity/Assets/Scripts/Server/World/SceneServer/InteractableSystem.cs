@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using UnityEngine;
 using FishMMO.Database.Npgsql.Entities;
+using System.Linq;
 
 namespace FishMMO.Server
 {
@@ -577,58 +578,39 @@ namespace FishMMO.Server
 				return;
 			}
 
+			character.InstancePosition = details.RespawnPositions.Values.ToList().GetRandom().Position;
+
+			int characterFlags = character.Flags;
+			characterFlags.EnableBit(CharacterFlags.IsInInstance);
+			character.Flags = characterFlags;
+
 			// Check the status of the characters instance
-			SceneEntity sceneEntity = SceneService.GetCharacterInstance(dbContext, character.ID);
+			SceneEntity sceneEntity = SceneService.GetCharacterInstance(dbContext, character.ID, SceneType.Group);
 			if (sceneEntity == null)
 			{
 				// Check if any party members currently have an instance.
 				if (CheckCharacterPartyInstance(dbContext, character))
 				{
-					// Notify the party member they can join the party members instance.
-					Server.Broadcast(conn, new DungeonFinderStatusBroadcast()
-					{
-						Status = DungeonFinderStatus.Joinable,
-					}, true);
-
+					// Notify the connection the party member already has an instance.
 					return;
 				}
 
-				if (!SceneService.Enqueue(dbContext, character.WorldServerID, dungeonEntrance.DungeonName, SceneType.Group))
+				if (!SceneService.Enqueue(dbContext, character.WorldServerID, dungeonEntrance.DungeonName, SceneType.Group, out long sceneID, character.ID))
 				{
 					Debug.Log("Failed to enqueue new pending scene load request: " + character.WorldServerID + ":" + dungeonEntrance.DungeonName);
 				}
 				else
 				{
-					Server.Broadcast(conn, new DungeonFinderStatusBroadcast()
-					{
-						Status = DungeonFinderStatus.Pending,
-					}, true);
+					character.InstanceID = sceneID;
 				}
 			}
 			else
 			{
-				if ((SceneStatus)sceneEntity.SceneStatus == SceneStatus.Pending)
-				{
-					Server.Broadcast(conn, new DungeonFinderStatusBroadcast()
-					{
-						Status = DungeonFinderStatus.Pending,
-					}, true);
-				}
-				else if ((SceneStatus)sceneEntity.SceneStatus == SceneStatus.Loading)
-				{
-					Server.Broadcast(conn, new DungeonFinderStatusBroadcast()
-					{
-						Status = DungeonFinderStatus.Loading,
-					}, true);
-				}
-				else if ((SceneStatus)sceneEntity.SceneStatus == SceneStatus.Ready)
-				{
-					Server.Broadcast(conn, new DungeonFinderStatusBroadcast()
-					{
-						Status = DungeonFinderStatus.Ready,
-					}, true);
-				}
+				character.InstanceID = sceneEntity.ID;
 			}
+
+			// Connect to the instance
+			conn.Disconnect(false);
 		}
 
 		/// <summary>
@@ -643,7 +625,7 @@ namespace FishMMO.Server
 				{
 					foreach (CharacterPartyEntity characterPartyEntity in partyEntity.Characters)
 					{
-						if (SceneService.GetCharacterInstance(dbContext, characterPartyEntity.ID) != null)
+						if (SceneService.GetCharacterInstance(dbContext, characterPartyEntity.ID, SceneType.Group) != null)
 						{
 							return true;
 						}
