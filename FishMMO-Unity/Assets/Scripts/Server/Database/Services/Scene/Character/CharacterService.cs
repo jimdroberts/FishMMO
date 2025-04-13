@@ -277,6 +277,16 @@ namespace FishMMO.Server.DatabaseServices
 			return false;
 		}
 
+		public static void SetCharacterFlags(NpgsqlDbContext dbContext, long characterID, int flags)
+		{
+			var character = dbContext.Characters.FirstOrDefault((c) => c.ID == characterID && !c.Deleted);
+			if (character != null)
+			{
+				character.Flags = flags;
+				dbContext.SaveChanges();
+			}
+		}
+
 		public static void Save(NpgsqlDbContext dbContext, List<IPlayerCharacter> characters, bool online = true)
 		{
 			using var dbTransaction = dbContext.Database.BeginTransaction();
