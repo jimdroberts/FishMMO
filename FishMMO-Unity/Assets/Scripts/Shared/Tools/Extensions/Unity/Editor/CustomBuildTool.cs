@@ -411,7 +411,7 @@ start Scene.exe SCENE";
 			return allPaths.ToArray();
 		}
 
-		private static void CopyIPFetchFiles(BuildTarget buildTarget, string ipFetchPath, string configurationPath, string buildPath, string certificatePath = null)
+		/*private static void CopyIPFetchFiles(BuildTarget buildTarget, string ipFetchPath, string configurationPath, string buildPath, string certificatePath = null)
 		{
 			if (Directory.Exists(buildPath))
 			{
@@ -422,27 +422,12 @@ start Scene.exe SCENE";
 			FileUtil.ReplaceFile(Path.Combine(ipFetchPath, "IPFetchServer.py"), Path.Combine(buildPath, "IPFetchServer.py"));
 			FileUtil.ReplaceFile(Path.Combine(configurationPath, "appsettings.json"), Path.Combine(buildPath, "appsettings.json"));
 
-			if (buildTarget == BuildTarget.StandaloneWindows64)
-			{
-				FileUtil.ReplaceFile(Path.Combine(ipFetchPath, "WindowsSetup.bat"), Path.Combine(buildPath, "WindowsSetup.bat"));
-			}
-			else
-			{
-				FileUtil.ReplaceFile(Path.Combine(ipFetchPath, "LinuxSetup.sh"), Path.Combine(buildPath, "LinuxSetup.sh"));
-			}
-
 			if (!string.IsNullOrWhiteSpace(certificatePath))
 			{
-				string certPath = Path.Combine(certificatePath, "certificate.pem");
+				string certPath = Path.Combine(certificatePath, "certificate.pfx");
 				if (File.Exists(certPath))
 				{
-					FileUtil.ReplaceFile(certPath, Path.Combine(buildPath, "certificate.pem"));
-				}
-
-				string keyPath = Path.Combine(certificatePath, "privatekey.pem");
-				if (File.Exists(certPath))
-				{
-					FileUtil.ReplaceFile(keyPath, Path.Combine(buildPath, "privatekey.pem"));
+					FileUtil.ReplaceFile(certPath, Path.Combine(buildPath, "certificate.pfx"));
 				}
 			}
 		}
@@ -458,30 +443,15 @@ start Scene.exe SCENE";
 			FileUtil.ReplaceFile(Path.Combine(patcherPath, "PatchServer.py"), Path.Combine(buildPath, "PatchServer.py"));
 			FileUtil.ReplaceFile(Path.Combine(configurationPath, "appsettings.json"), Path.Combine(buildPath, "appsettings.json"));
 
-			if (buildTarget == BuildTarget.StandaloneWindows64)
-			{
-				FileUtil.ReplaceFile(Path.Combine(patcherPath, "WindowsSetup.bat"), Path.Combine(buildPath, "WindowsSetup.bat"));
-			}
-			else
-			{
-				FileUtil.ReplaceFile(Path.Combine(patcherPath, "LinuxSetup.sh"), Path.Combine(buildPath, "LinuxSetup.sh"));
-			}
-
 			if (!string.IsNullOrWhiteSpace(certificatePath))
 			{
-				string certPath = Path.Combine(certificatePath, "certificate.pem");
+				string certPath = Path.Combine(certificatePath, "certificate.pfx");
 				if (File.Exists(certPath))
 				{
-					FileUtil.ReplaceFile(certPath, Path.Combine(buildPath, "certificate.pem"));
-				}
-
-				string keyPath = Path.Combine(certificatePath, "privatekey.pem");
-				if (File.Exists(certPath))
-				{
-					FileUtil.ReplaceFile(keyPath, Path.Combine(buildPath, "privatekey.pem"));
+					FileUtil.ReplaceFile(certPath, Path.Combine(buildPath, "certificate.pfx"));
 				}
 			}
-		}
+		}*/
 
 		private static void CopyConfigurationFiles(BuildTarget buildTarget, CustomBuildType customBuildType, string configurationPath, string buildPath)
 		{
@@ -532,7 +502,7 @@ start Scene.exe SCENE";
 			}
 		}
 
-		[MenuItem("FishMMO/Build/Database/Windows Installer", priority = -10)]
+		[MenuItem("FishMMO/Build/Database/Windows x64", priority = -10)]
 		public static void BuildWindows64Setup()
 		{
 			BuildExecutable("Installer",
@@ -546,7 +516,7 @@ start Scene.exe SCENE";
 							BuildTarget.StandaloneWindows64);
 		}
 
-		[MenuItem("FishMMO/Build/Database/Linux Installer", priority = -9)]
+		[MenuItem("FishMMO/Build/Database/Linux x64", priority = -9)]
 		public static void BuildLinuxSetup()
 		{
 			BuildExecutable("Installer",
@@ -720,7 +690,7 @@ start Scene.exe SCENE";
 #endif
 		}
 
-		[MenuItem("FishMMO/Build/Server/Windows x64 All-In-One", priority = 2)]
+		[MenuItem("FishMMO/Build/Server/Windows x64", priority = 2)]
 		public static void BuildWindows64AllInOneServer()
 		{
 			WorldSceneDetailsCacheBuilder.Rebuild();
@@ -780,7 +750,19 @@ start Scene.exe SCENE";
 							BuildTarget.StandaloneWindows64);
 		}
 
-		[MenuItem("FishMMO/Build/Server/Windows IPFetch Server", priority = 7)]
+		[MenuItem("FishMMO/Build/Server/Linux x64", priority = 8)]
+		public static void BuildLinux64AllInOneServer()
+		{
+			WorldSceneDetailsCacheBuilder.Rebuild();
+			BuildExecutable(ALL_IN_ONE_SERVER_BUILD_NAME,
+							BOOTSTRAP_SCENES,
+							CustomBuildType.AllInOne,
+							GetBuildOptions(),
+							StandaloneBuildSubtarget.Server,
+							BuildTarget.StandaloneLinux64);
+		}
+
+		/*[MenuItem("FishMMO/Build/Server/Windows IPFetch Server", priority = 7)]
 		public static void BuildWindowsIPFetchServer()
 		{
 			string rootPath = "";
@@ -798,21 +780,13 @@ start Scene.exe SCENE";
 			string folderName = Constants.Configuration.ProjectName + " Windows IPFetch Server";
 			string buildPath = Path.Combine(rootPath, folderName);
 
-			CopyIPFetchFiles(BuildTarget.StandaloneWindows64, Path.Combine(root, "FishMMO-WebServers", "IPFetch"), Path.Combine(root, configurationPath), buildPath, Path.Combine(root, "FishMMO-WebServers", "CertificateGenerator"));
+			CopyIPFetchFiles(BuildTarget.StandaloneWindows64,
+							 Path.Combine(root, "FishMMO-WebServers", "IPFetch"),
+							 Path.Combine(root, configurationPath),
+							 buildPath,
+							 Path.Combine(root, "FishMMO-WebServers", "CertificateGenerator"));
 
 			OpenDirectory(buildPath);
-		}
-
-		[MenuItem("FishMMO/Build/Server/Linux x64 All-In-One", priority = 8)]
-		public static void BuildLinux64AllInOneServer()
-		{
-			WorldSceneDetailsCacheBuilder.Rebuild();
-			BuildExecutable(ALL_IN_ONE_SERVER_BUILD_NAME,
-							BOOTSTRAP_SCENES,
-							CustomBuildType.AllInOne,
-							GetBuildOptions(),
-							StandaloneBuildSubtarget.Server,
-							BuildTarget.StandaloneLinux64);
 		}
 
 		[MenuItem("FishMMO/Build/Server/Linux IPFetch Server", priority = 9)]
@@ -882,7 +856,7 @@ start Scene.exe SCENE";
 			CopyPatcherFiles(BuildTarget.StandaloneLinux64, Path.Combine(root, "FishMMO-WebServers", "Patcher"), Path.Combine(root, configurationPath), buildPath, Path.Combine(root, "FishMMO-WebServers", "CertificateGenerator"));
 
 			OpenDirectory(buildPath);
-		}
+		}*/
 
 		[MenuItem("FishMMO/Build/Client/Linux x64", priority = 2)]
 		public static void BuildLinux64Client()
