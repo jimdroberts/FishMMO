@@ -92,10 +92,10 @@ namespace FishMMO.Server.DatabaseServices
 		/// </summary>
 		public static void Pulse(NpgsqlDbContext dbContext, int handle, int characterCount)
 		{
-			var loadedScenes = dbContext.Scenes.FirstOrDefault(c => c.SceneHandle == handle);
-			if (loadedScenes == null) throw new Exception($"Couldn't find Scene Server with Scene Handle: {handle}");
+			var loadedScene = dbContext.Scenes.FirstOrDefault(c => c.SceneHandle == handle);
+			if (loadedScene == null) throw new Exception($"Couldn't find Scene Server with Scene Handle: {handle}");
 
-			loadedScenes.CharacterCount = characterCount;
+			loadedScene.CharacterCount = characterCount;
 			dbContext.SaveChanges();
 		}
 

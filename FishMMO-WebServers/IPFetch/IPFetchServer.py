@@ -8,6 +8,7 @@ import aiohttp
 from aiohttp import web
 import asyncio
 import asyncpg
+import re
 
 # Create a logger instance
 logger = logging.getLogger()  # Root logger
@@ -31,6 +32,18 @@ logger.addHandler(console_handler)
 
 # Set the logging level for the root logger
 logger.setLevel(logging.DEBUG)  # You can adjust the root level to control what gets logged globally
+
+unity_regex = re.compile(r"UnityPlayer/\d+\.\d+\.\d+.*\(UnityWebRequest/\d+\.\d+.*\)")
+
+@web.middleware
+async def unity_only_middleware(request, handler):
+    user_agent = request.headers.get('User-Agent', '')
+
+    if not unity_regex.match(user_agent):
+        logging.warning(f"Rejected non-Unity request: {user_agent}")
+        return web.Response(status=403, text="Access denied.")
+
+    return await handler(request)
 
 class RequestHandler:
 
@@ -197,7 +210,7 @@ async def run_server():
             return
 
     # Create an aiohttp.web.Application instance
-    app = aiohttp.web.Application()
+    app = aiohttp.web.Application(middlewares=[unity_only_middleware])
 
     # Create an instance of RequestHandler
     handler = RequestHandler(app)

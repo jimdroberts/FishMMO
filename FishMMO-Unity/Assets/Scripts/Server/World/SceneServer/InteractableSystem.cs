@@ -545,19 +545,6 @@ namespace FishMMO.Server
 				return;
 			}
 
-			// Validate scene
-			if (!WorldSceneDetailsCache.Scenes.TryGetValue(character.SceneName, out WorldSceneDetails details))
-			{
-				Debug.Log("Missing Scene:" + character.SceneName);
-				return;
-			}
-
-			if (details.RespawnPositions == null || details.RespawnPositions.Count < 1)
-			{
-				Debug.Log($"Missing Scene: {character.SceneName} respawn points.");
-				return;
-			}
-
 			// Validate scene object
 			if (!ValidateSceneObject(msg.InteractableID, character.GameObject.scene.handle, out ISceneObject sceneObject))
 			{
@@ -569,6 +556,19 @@ namespace FishMMO.Server
 			if (dungeonEntrance == null ||
 				!dungeonEntrance.InRange(character.Transform))
 			{
+				return;
+			}
+
+			// Validate scene
+			if (!WorldSceneDetailsCache.Scenes.TryGetValue(dungeonEntrance.DungeonName, out WorldSceneDetails details))
+			{
+				Debug.Log("Missing Scene:" + character.SceneName);
+				return;
+			}
+
+			if (details.RespawnPositions == null || details.RespawnPositions.Count < 1)
+			{
+				Debug.Log($"Missing Scene: {character.SceneName} respawn points.");
 				return;
 			}
 

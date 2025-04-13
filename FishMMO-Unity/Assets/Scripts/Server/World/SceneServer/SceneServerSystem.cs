@@ -141,7 +141,7 @@ namespace FishMMO.Server
 						using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 						//Debug.Log("Scene Server System: Pulse");
 						int characterCount = characterSystem.ConnectionCharacters.Count;
-						SceneServerService.Pulse(dbContext, id, characterCount);
+						SceneServerService.Pulse(dbContext, id, characterCount, locked);
 
 						// process loaded scene pulse update
 						if (WorldScenes != null)
@@ -279,7 +279,7 @@ namespace FishMMO.Server
 
 			// Save the loaded scene information to the database
 			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-			Debug.Log($"Scene Server System: Saved Open World Scene {scene.name}:{scene.handle} to the database.");
+			Debug.Log($"Scene Server System: Saved {sceneType} scene {scene.name}:{scene.handle} to the database.");
 			SceneService.Update(dbContext, id, worldServerID, scene.name, scene.handle);
 
 			/*switch (sceneType)

@@ -11,6 +11,7 @@ import atexit
 import signal
 import requests
 from datetime import datetime
+import re
 
 # Constants for directories
 PATCHES_DIR = './patches/'
@@ -39,6 +40,18 @@ logger.addHandler(console_handler)
 
 # Set the logging level for the root logger
 logger.setLevel(logging.DEBUG)  # You can adjust the root level to control what gets logged globally
+
+unity_regex = re.compile(r"UnityPlayer/\d+\.\d+\.\d+.*\(UnityWebRequest/\d+\.\d+.*\)")
+
+@web.middleware
+async def unity_only_middleware(request, handler):
+    user_agent = request.headers.get('User-Agent', '')
+
+    if not unity_regex.match(user_agent):
+        logging.warning(f"Rejected non-Unity request: {user_agent}")
+        return web.Response(status=403, text="Access denied.")
+
+    return await handler(request)
 
 def get_external_ip():
     try:
@@ -234,7 +247,7 @@ async def run_server():
     ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
     ssl_context.load_cert_chain(certfile=ssl_cert, keyfile=ssl_key)
 
-    app = aiohttp.web.Application()
+    app = aiohttp.web.Application(middlewares=[unity_only_middleware])
     app.router.add_route('GET', '/{tail:.*}', handle_request)
     runner = aiohttp.web.AppRunner(app)
 

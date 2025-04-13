@@ -60,7 +60,7 @@ namespace FishMMO.Server.DatabaseServices
 			return server;
 		}
 
-		public static void Pulse(NpgsqlDbContext dbContext, long id, int characterCount)
+		public static void Pulse(NpgsqlDbContext dbContext, long id, int characterCount, bool locked)
 		{
 			if (id == 0)
 			{
@@ -72,6 +72,7 @@ namespace FishMMO.Server.DatabaseServices
 
 			sceneServer.LastPulse = DateTime.UtcNow;
 			sceneServer.CharacterCount = characterCount;
+			sceneServer.Locked = locked;
 			dbContext.SaveChanges();
 		}
 
