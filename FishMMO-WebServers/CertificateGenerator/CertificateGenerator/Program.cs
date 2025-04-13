@@ -3,6 +3,8 @@ using System.Security.Cryptography.X509Certificates;
 
 class Program
 {
+	private static readonly string CertificateFileName = "certificate.pfx";
+
 	static void Main()
 	{
 		Console.Write("Enter country name (e.g., US): ");
@@ -38,18 +40,13 @@ class Program
 		// Self-sign the certificate, valid for 1 year
 		var notBefore = DateTimeOffset.UtcNow;
 		var notAfter = notBefore.AddYears(1);
-
-		var cert = request.CreateSelfSigned(
-			notBefore: DateTimeOffset.UtcNow,
-			notAfter: DateTimeOffset.UtcNow.AddYears(1)
-		);
+		var cert = request.CreateSelfSigned(notBefore, notAfter);
 
 		// Export the certificate and private key to a PFX
 		byte[] pfxBytes = cert.Export(X509ContentType.Pfx, password);
 
 		// Save the .pfx file
-		string fileName = $"{commonName}.pfx";
-		File.WriteAllBytes(fileName, pfxBytes);
-		Console.WriteLine($"PFX certificate saved to: {Path.GetFullPath(fileName)}");
+		File.WriteAllBytes(CertificateFileName, pfxBytes);
+		Console.WriteLine($"PFX certificate saved to: {Path.GetFullPath(CertificateFileName)}");
 	}
 }
