@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using FishMMO.Database.Npgsql;
 using FishMMO.Database.Npgsql.Entities;
 
@@ -9,41 +10,43 @@ public class LoginServerController : ControllerBase
 {
 	private readonly NpgsqlDbContextFactory dbContextFactory;
 	private readonly ILogger<LoginServerController> logger;
-	private static List<LoginServerEntity> loginCache;
-	private static DateTime cacheTimestamp;
-	private static readonly TimeSpan CacheDuration = TimeSpan.FromSeconds(300);
+	private readonly IMemoryCache memoryCache;
 
-	public LoginServerController(NpgsqlDbContextFactory dbContextFactory, ILogger<LoginServerController> logger)
+	public LoginServerController(NpgsqlDbContextFactory dbContextFactory, ILogger<LoginServerController> logger, IMemoryCache memoryCache)
 	{
 		this.dbContextFactory = dbContextFactory;
 		this.logger = logger;
+		this.memoryCache = memoryCache;
 	}
 
 	[HttpGet]
 	public async Task<IActionResult> GetLoginServers()
 	{
-		if (loginCache != null && DateTime.UtcNow - cacheTimestamp < CacheDuration)
+		const string cacheKey = "login_servers";
+
+		if (!memoryCache.TryGetValue(cacheKey, out List<LoginServerEntity> loginServers))
+		{
+			using NpgsqlDbContext dbContext = dbContextFactory.CreateDbContext();
+			if (dbContext == null)
+			{
+				return Unauthorized();
+			}
+
+			loginServers = await dbContext.LoginServers.ToListAsync();
+			var cacheEntryOptions = new MemoryCacheEntryOptions
+			{
+				AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(300)
+			};
+
+			memoryCache.Set(cacheKey, loginServers, cacheEntryOptions);
+			logger.LogInformation("Cache miss. Loaded login servers from DB.");
+		}
+		else
 		{
 			logger.LogInformation("Cache hit for login servers.");
-			return Ok(loginCache.Select(l => new
-			{
-				l.Address,
-				l.Port
-			}));
 		}
 
-		using NpgsqlDbContext dbContext = dbContextFactory.CreateDbContext();
-		if (dbContext == null)
-		{
-			return Unauthorized();
-		}
-
-		var loginServers = await dbContext.LoginServers.ToListAsync();
-		loginCache = loginServers;
-		cacheTimestamp = DateTime.UtcNow;
-
-		logger.LogInformation("Cache miss for login servers. Pulled from DB.");
-		return Ok(loginCache.Select(l => new
+		return Ok(loginServers.Select(l => new
 		{
 			l.Address,
 			l.Port

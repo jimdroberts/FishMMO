@@ -40,6 +40,9 @@ namespace FishMMO.WebServer
 					{
 						// Register NpgsqlDbContextFactory
 						services.AddSingleton<NpgsqlDbContextFactory>();
+						
+						// Register Memory Cache
+						services.AddMemoryCache();
 
 						// Add controllers (MVC) to the DI container
 						services.AddControllers();
