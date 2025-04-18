@@ -65,11 +65,6 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: bccc2ce460150eb43bb0d7f0db28b05b
-    m_Address: NavMesh-Terrain
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c43b6eb487815084ca437ada41086fa4
     m_Address: NavMesh-Terrain
     m_ReadOnly: 0

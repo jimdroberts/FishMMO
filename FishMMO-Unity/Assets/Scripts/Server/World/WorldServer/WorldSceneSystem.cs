@@ -197,7 +197,7 @@ namespace FishMMO.Server
 
 			if (!CharacterService.GetCharacterFlags(dbContext, characterID, out int characterFlags))
 			{
-				Kick(conn, "invalid character ID");
+				Kick(conn, "invalid character flags");
 				return;
 			}
 
@@ -229,8 +229,7 @@ namespace FishMMO.Server
 					}
 					else
 					{
-						// Clear the characters Scene Instance and delete the Scene entry
-						CharacterService.SetInstance(dbContext, characterID, 0, Vector3.zero);
+						// Delete the Scene entry
 						SceneService.Delete(dbContext, sceneEntity.SceneServerID, sceneEntity.SceneHandle);
 					}
 				}

@@ -328,7 +328,7 @@ namespace FishMMO.Server.DatabaseServices
 			// store these into vars so we don't have to access them a bunch of times
 			var bindPosition = character.BindPosition;
 			var charPosition = character.Transform.position;
-			var rotation = character.Transform.rotation;
+			var charRotation = character.Transform.rotation;
 
 			// copy over the new values into the existing entity
 			existingCharacter.Name = character.CharacterName;
@@ -340,21 +340,30 @@ namespace FishMMO.Server.DatabaseServices
 			existingCharacter.BindY = bindPosition.y;
 			existingCharacter.BindZ = bindPosition.z;
 			existingCharacter.InstanceID = character.InstanceID;
-			existingCharacter.InstanceX = character.InstancePosition.x;
-			existingCharacter.InstanceY = character.InstancePosition.y;
-			existingCharacter.InstanceZ = character.InstancePosition.z;
-			existingCharacter.InstanceRotX = character.InstanceRotation.x;
-			existingCharacter.InstanceRotY = character.InstanceRotation.y;
-			existingCharacter.InstanceRotZ = character.InstanceRotation.z;
-			existingCharacter.InstanceRotW = character.InstanceRotation.w;
 			existingCharacter.RaceID = character.RaceID;
-			existingCharacter.X = charPosition.x;
-			existingCharacter.Y = charPosition.y;
-			existingCharacter.Z = charPosition.z;
-			existingCharacter.RotX = rotation.x;
-			existingCharacter.RotY = rotation.y;
-			existingCharacter.RotZ = rotation.z;
-			existingCharacter.RotW = rotation.w;
+			// Save the character position to XYZ and RotXYZW if we are not in an instance.
+			// This preserves the character position when it leaves an instance.
+			if (!character.Flags.IsFlagged(CharacterFlags.IsInInstance))
+			{
+				existingCharacter.X = charPosition.x;
+				existingCharacter.Y = charPosition.y;
+				existingCharacter.Z = charPosition.z;
+				existingCharacter.RotX = charRotation.x;
+				existingCharacter.RotY = charRotation.y;
+				existingCharacter.RotZ = charRotation.z;
+				existingCharacter.RotW = charRotation.w;
+			}
+			// Otherwise save to the InstanceXYZ and InstanceRotXYZW columns.
+			else
+			{
+				existingCharacter.InstanceX = charPosition.x;
+				existingCharacter.InstanceY = charPosition.y;
+				existingCharacter.InstanceZ = charPosition.z;
+				existingCharacter.InstanceRotX = charRotation.x;
+				existingCharacter.InstanceRotY = charRotation.y;
+				existingCharacter.InstanceRotZ = charRotation.z;
+				existingCharacter.InstanceRotW = charRotation.w;
+			}
 			existingCharacter.Flags = character.Flags;
 			existingCharacter.AccessLevel = (byte)character.AccessLevel;
 			existingCharacter.Online = online;
@@ -462,10 +471,29 @@ namespace FishMMO.Server.DatabaseServices
 
 				Vector3 dbPosition;
 				Quaternion dbRotation;
+
+				string instanceSceneName = null;
+				int instanceSceneHandle = 0;
+
 				if (dbCharacter.Flags.IsFlagged(CharacterFlags.IsInInstance))
 				{
-					dbPosition = new Vector3(dbCharacter.InstanceX, dbCharacter.InstanceY, dbCharacter.InstanceZ);
-					dbRotation = new Quaternion(dbCharacter.InstanceRotX, dbCharacter.InstanceRotY, dbCharacter.InstanceRotZ, dbCharacter.InstanceRotW);
+					var sceneEntity = SceneService.GetInstanceByID(dbContext, dbCharacter.InstanceID);
+					if (sceneEntity != null)
+					{
+						dbPosition = new Vector3(dbCharacter.InstanceX, dbCharacter.InstanceY, dbCharacter.InstanceZ);
+						dbRotation = new Quaternion(dbCharacter.InstanceRotX, dbCharacter.InstanceRotY, dbCharacter.InstanceRotZ, dbCharacter.InstanceRotW);
+
+						// Cache the Instance Scene Name and Instance Scene Handle on the character
+						instanceSceneName = sceneEntity.SceneName;
+						instanceSceneHandle = sceneEntity.SceneHandle;
+					}
+					else
+					{
+						Debug.Log($"Character {dbCharacter.ID} flagged as in instance but instance {dbCharacter.InstanceID} not found. Falling back to overworld position.");
+
+						dbPosition = new Vector3(dbCharacter.X, dbCharacter.Y, dbCharacter.Z);
+						dbRotation = new Quaternion(dbCharacter.RotX, dbCharacter.RotY, dbCharacter.RotZ, dbCharacter.RotW);
+					}
 				}
 				else
 				{
@@ -493,8 +521,8 @@ namespace FishMMO.Server.DatabaseServices
 				character.BindScene = dbCharacter.BindScene;
 				character.BindPosition = new Vector3(dbCharacter.BindX, dbCharacter.BindY, dbCharacter.BindZ);
 				character.InstanceID = dbCharacter.InstanceID;
-				character.InstancePosition = new Vector3(dbCharacter.InstanceX, dbCharacter.InstanceY, dbCharacter.InstanceZ);
-				character.InstanceRotation = new Quaternion(dbCharacter.InstanceRotX, dbCharacter.InstanceRotY, dbCharacter.InstanceRotZ, dbCharacter.InstanceRotW);
+				character.InstanceSceneName = instanceSceneName;
+				character.InstanceSceneHandle = instanceSceneHandle;
 				character.RaceID = dbCharacter.RaceID;
 				character.RaceName = raceTemplate.Name;
 				character.Flags = dbCharacter.Flags;

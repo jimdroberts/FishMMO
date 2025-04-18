@@ -98,7 +98,6 @@ namespace FishMMO.Client
 				default:
 					break;
 			}
-			SetSignInLocked(false);
 		}
 
 		private void OnLoginAuthenticationDialog(string errorMsg)
@@ -132,6 +131,8 @@ namespace FishMMO.Client
 			Client.Broadcast(requestCharacterList, Channel.Reliable);
 
 			OnLoginSuccessEnd?.Invoke();
+
+			SetSignInLocked(false);
 		}
 
 		public void OnClick_OnRegister()

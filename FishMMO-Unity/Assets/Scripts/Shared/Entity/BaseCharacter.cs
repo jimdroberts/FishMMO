@@ -32,7 +32,7 @@ namespace FishMMO.Shared
 		public void DisableFlags(CharacterFlags flags)
 		{
 			int characterFlags = Flags;
-			characterFlags.DisableBit(CharacterFlags.IsInInstance);
+			characterFlags.DisableBit(flags);
 			Flags = characterFlags;
 		}
 

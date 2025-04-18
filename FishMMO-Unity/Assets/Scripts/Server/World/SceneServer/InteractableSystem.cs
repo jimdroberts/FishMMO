@@ -604,9 +604,7 @@ namespace FishMMO.Server
 			}
 
 			CharacterRespawnPositionDetails respawnDetails = details.RespawnPositions.Values.ToList().GetRandom();
-			character.InstancePosition = respawnDetails.Position;
-			character.InstanceRotation = respawnDetails.Rotation;
-
+			character.Motor.SetPositionAndRotationAndVelocity(respawnDetails.Position, respawnDetails.Rotation, Vector3.zero);
 			character.EnableFlags(CharacterFlags.IsInInstance);
 
 			// Connect to the instance.

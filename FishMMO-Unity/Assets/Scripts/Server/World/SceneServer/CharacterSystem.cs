@@ -130,13 +130,16 @@ namespace FishMMO.Server
 						// which would prevent the need to do all of this lookup stuff.
 						foreach (IPlayerCharacter character in ConnectionCharacters.Values)
 						{
-							if (character == null ||
-								string.IsNullOrWhiteSpace(character.SceneName))
+							if (character == null || string.IsNullOrWhiteSpace(character.SceneName))
 							{
 								continue;
 							}
 
-							if (sceneServerSystem.WorldSceneDetailsCache.Scenes.TryGetValue(character.SceneName, out WorldSceneDetails details))
+							var sceneName = string.IsNullOrWhiteSpace(character.InstanceSceneName)
+										? character.SceneName
+										: character.InstanceSceneName;
+
+							if (sceneServerSystem.WorldSceneDetailsCache.Scenes.TryGetValue(sceneName, out WorldSceneDetails details))
 							{
 								// Check if they are within some bounds, if not we need to move them to a respawn location!
 								// TODO: Try to prevent combat escape, maybe this needs to be handled on the game design level?
@@ -290,19 +293,12 @@ namespace FishMMO.Server
 					int sceneHandle = character.SceneHandle;
 
 					// Check if the character is in an instance or not.
-					if (character.Flags.IsFlagged(CharacterFlags.IsInInstance))
+					if (character.Flags.IsFlagged(CharacterFlags.IsInInstance) &&
+						!string.IsNullOrWhiteSpace(character.InstanceSceneName))
 					{
-						SceneEntity sceneEntity = SceneService.GetInstanceByID(dbContext, character.InstanceID);
-						if (sceneEntity != null)
-						{
-							// Have the player enter the instance.
-							sceneName = sceneEntity.SceneName;
-							sceneHandle = sceneEntity.SceneHandle;
-
-							// Cache the Instance Scene Name and Instance Scene Handle
-							character.InstanceSceneName = sceneName;
-							character.InstanceSceneHandle = sceneHandle;
-						}
+						// Have the player enter the instance.
+						sceneName = character.InstanceSceneName;
+						sceneHandle = character.InstanceSceneHandle;
 					}
 
 					//Debug.Log($"Character loaded into {sceneName}:{sceneHandle}.");
@@ -354,8 +350,16 @@ namespace FishMMO.Server
 				return;
 			}
 
-			// Get the characters scene.
-			Scene scene = SceneManager.GetScene(character.SceneHandle);
+			// Get the characters scene
+			Scene scene;
+			if (character.Flags.IsFlagged(CharacterFlags.IsInInstance))
+			{
+				scene = SceneManager.GetScene(character.InstanceSceneHandle);
+			}
+			else
+			{
+				scene = SceneManager.GetScene(character.SceneHandle);
+			}
 
 			// Validate the characters scene.
 			if (scene == null ||
@@ -387,25 +391,33 @@ namespace FishMMO.Server
 					return;
 				}
 
-				// remove the waiting scene load character
+				// Remove the waiting scene load character
 				WaitingSceneLoadCharacters.Remove(conn);
 
-				// add a connection->character map for ease of use
+				// Add a connection->character map for ease of use
 				ConnectionCharacters[conn] = character;
-				// add a characterName->character map for ease of use
+				// Add a characterName->character map for ease of use
 				CharactersByID[character.ID] = character;
 				CharactersByLowerCaseName[character.CharacterNameLower] = character;
-				// add a worldID<characterID->character> map for ease of use
+				// Add a worldID<characterID->character> map for ease of use
 				if (!CharactersByWorld.TryGetValue(character.WorldServerID, out Dictionary<long, IPlayerCharacter> characters))
 				{
 					CharactersByWorld.Add(character.WorldServerID, characters = new Dictionary<long, IPlayerCharacter>());
 				}
 				characters[character.ID] = character;
 
-				// get the characters scene
-				Scene scene = SceneManager.GetScene(character.SceneHandle);
+				// Get the characters scene
+				Scene scene;
+				if (character.Flags.IsFlagged(CharacterFlags.IsInInstance))
+				{
+					scene = SceneManager.GetScene(character.InstanceSceneHandle);
+				}
+				else
+				{
+					scene = SceneManager.GetScene(character.SceneHandle);
+				}
 
-				// validate the scene
+				// Validate the scene
 				if (scene == null ||
 					!scene.IsValid() ||
 					!scene.isLoaded)
@@ -416,24 +428,24 @@ namespace FishMMO.Server
 					return;
 				}
 
-				// set the proper physics scene for the character, scene stacking requires separated physics
+				// Set the proper physics scene for the character, scene stacking requires separated physics
 				character.Motor?.SetPhysicsScene(scene.GetPhysicsScene());
 
-				// character becomes mortal when loaded into the scene
+				// Character becomes mortal when loaded into the scene
 				if (character.TryGet(out ICharacterDamageController damageController))
 				{
 					damageController.Immortal = false;
 				}
 
-				// ensure the game object is active, pooled objects are disabled
+				// Ensure the game object is active, pooled objects are disabled
 				character.GameObject.SetActive(true);
 
-				// spawn the nob over the network
+				// Spawn the nob over the network
 				ServerManager.Spawn(character.NetworkObject, conn, scene);
 
 				OnSpawnCharacter?.Invoke(conn, character, scene);
 
-				// set the character status to online
+				// Set the character status to online
 				if (AccountManager.GetAccountNameByConnection(conn, out string accountName))
 				{
 					using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
@@ -858,7 +870,8 @@ namespace FishMMO.Server
 					damageController.Heal(null, 999999, true);
 				}
 
-				if (playerCharacter.SceneName != playerCharacter.BindScene)
+				if (playerCharacter.Flags.IsFlagged(CharacterFlags.IsInInstance) && playerCharacter.InstanceSceneName != playerCharacter.BindScene ||
+					playerCharacter.SceneName != playerCharacter.BindScene)
 				{
 					playerCharacter.SceneName = playerCharacter.BindScene;
 					playerCharacter.Motor.SetPositionAndRotationAndVelocity(playerCharacter.BindPosition, playerCharacter.Motor.Transform.rotation, Vector3.zero);

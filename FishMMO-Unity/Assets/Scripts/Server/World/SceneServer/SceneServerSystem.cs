@@ -104,20 +104,26 @@ namespace FishMMO.Server
 
 		private void CharacterSystem_OnDisconnect(NetworkConnection conn, IPlayerCharacter character)
 		{
-			if (character.Flags.IsFlagged(CharacterFlags.IsInInstance))
+			if (character.InstanceSceneHandle != 0 && character.Flags.IsFlagged(CharacterFlags.IsInInstance))
 			{
 				AdjustSceneCharacterCount(character.WorldServerID, character.InstanceSceneName, character.InstanceSceneHandle, -1);
 			}
-			AdjustSceneCharacterCount(character.WorldServerID, character.SceneName, character.SceneHandle, -1);
+			else
+			{
+				AdjustSceneCharacterCount(character.WorldServerID, character.SceneName, character.SceneHandle, -1);
+			}
 		}
 
 		private void CharacterSystem_OnAfterLoadCharacter(NetworkConnection conn, IPlayerCharacter character)
 		{
-			if (character.Flags.IsFlagged(CharacterFlags.IsInInstance))
+			if (character.InstanceSceneHandle != 0 && character.Flags.IsFlagged(CharacterFlags.IsInInstance))
 			{
 				AdjustSceneCharacterCount(character.WorldServerID, character.InstanceSceneName, character.InstanceSceneHandle, 1);
 			}
-			AdjustSceneCharacterCount(character.WorldServerID, character.SceneName, character.SceneHandle, 1);
+			else
+			{
+				AdjustSceneCharacterCount(character.WorldServerID, character.SceneName, character.SceneHandle, 1);
+			}
 		}
 
 		private void AdjustSceneCharacterCount(long worldServerID, string sceneName, int sceneHandle, int amount)

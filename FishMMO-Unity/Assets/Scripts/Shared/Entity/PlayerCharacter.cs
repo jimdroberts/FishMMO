@@ -61,8 +61,6 @@ namespace FishMMO.Shared
 		public long InstanceID { get; set; }
 		public string InstanceSceneName { get; set; }
 		public int InstanceSceneHandle { get; set; }
-		public Vector3 InstancePosition { get; set; }
-		public Quaternion InstanceRotation { get; set; }
 		public string LastChatMessage { get; set; }
 		public DateTime NextChatMessageTime { get; set; }
 		public DateTime NextInteractTime { get; set; }
