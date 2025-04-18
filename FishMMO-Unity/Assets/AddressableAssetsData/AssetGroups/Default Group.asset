@@ -56,11 +56,6 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 188cb4ddc03de3b40b08c95fc5afb56a
-    m_Address: Assets/Prefabs/Shared/Terrain/GreaterFaydark.asset
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1a3fc9516df07da4ebbb643fe79bc80b
     m_Address: Assets/Prefabs/Shared/Models/EthanCharacter/Materials/Ethan.mat
     m_ReadOnly: 0
@@ -143,11 +138,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 44d3914835afcff478745749b153f953
     m_Address: Assets/Prefabs/Shared/Entity/Regions/DisplayName/AreaOfInterestDisplayNameAction.asset
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 46351237b3e72234a8bf86b294af5914
-    m_Address: Assets/Prefabs/Shared/Terrain/Felwithe.asset
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
@@ -283,11 +273,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: dc8cc64088072ae47872cf54e7cf6b6f
     m_Address: Assets/Prefabs/Client/UI/Player Guild Label.prefab
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: dd202fa0a3b7de04ab1143a8d66afd98
-    m_Address: Assets/Prefabs/Shared/Terrain/Crushbone.asset
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

@@ -606,6 +606,8 @@ namespace FishMMO.Client
 		
 		private void SceneManager_OnLoadStart(SceneLoadStartEventArgs args)
 		{
+			// Immediately unload all previous World scenes. We can only be in one World scene at a time.
+			UnloadWorldScenes();
 		}
 
 		private void SceneManager_OnLoadPercentChange(SceneLoadPercentEventArgs args)

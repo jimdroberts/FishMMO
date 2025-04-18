@@ -30,6 +30,10 @@ namespace FishMMO.Database.Npgsql.Entities
 		public float InstanceX { get; set; }
 		public float InstanceY { get; set; }
 		public float InstanceZ { get; set; }
+		public float InstanceRotX { get; set; }
+		public float InstanceRotY { get; set; }
+		public float InstanceRotZ { get; set; }
+		public float InstanceRotW { get; set; }
 		public int RaceID { get; set; }
 		public float X { get; set; }
 		public float Y { get; set; }

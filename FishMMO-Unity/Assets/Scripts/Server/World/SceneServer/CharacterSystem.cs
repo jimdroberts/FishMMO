@@ -142,14 +142,15 @@ namespace FishMMO.Server
 								// TODO: Try to prevent combat escape, maybe this needs to be handled on the game design level?
 								if (!details.Boundaries.PointContainedInBoundaries(character.Transform.position))
 								{
-									CharacterRespawnPositionDetails spawnPoint = GetRandomRespawnPoint(details.RespawnPositions);
-
+									CharacterRespawnPositionDetails spawnPoint = details.RespawnPositions.Values.ToList().GetRandom();
 									if (spawnPoint == null ||
 										character == null ||
 										character.Motor == null)
 									{
 										continue;
 									}
+
+									Debug.Log($"{character.CharacterName} is out of bounds.");
 
 									character.Motor.SetPositionAndRotationAndVelocity(spawnPoint.Position, spawnPoint.Rotation, Vector3.zero);
 								}
@@ -275,7 +276,7 @@ namespace FishMMO.Server
 			{
 				if (CharactersByID.ContainsKey(selectedCharacterID))
 				{
-					//Debug.Log(selectedCharacterID + " is already loaded or loading. FIXME");
+					Debug.Log(selectedCharacterID + " is already loaded or loading.");
 
 					// Character load already started or complete
 					conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
@@ -289,8 +290,7 @@ namespace FishMMO.Server
 					int sceneHandle = character.SceneHandle;
 
 					// Check if the character is in an instance or not.
-					int characterFlags = character.Flags;
-					if (characterFlags.IsFlagged(CharacterFlags.IsInInstance))
+					if (character.Flags.IsFlagged(CharacterFlags.IsInInstance))
 					{
 						SceneEntity sceneEntity = SceneService.GetInstanceByID(dbContext, character.InstanceID);
 						if (sceneEntity != null)
@@ -298,8 +298,14 @@ namespace FishMMO.Server
 							// Have the player enter the instance.
 							sceneName = sceneEntity.SceneName;
 							sceneHandle = sceneEntity.SceneHandle;
+
+							// Cache the Instance Scene Name and Instance Scene Handle
+							character.InstanceSceneName = sceneName;
+							character.InstanceSceneHandle = sceneHandle;
 						}
 					}
+
+					//Debug.Log($"Character loaded into {sceneName}:{sceneHandle}.");
 					
 					// Check if the scene is valid, loaded, and cached properly
 					if (sceneServerSystem.TryGetSceneInstanceDetails(character.WorldServerID, sceneName, sceneHandle, out SceneInstanceDetails instance) &&
@@ -309,22 +315,28 @@ namespace FishMMO.Server
 
 						WaitingSceneLoadCharacters.Add(conn, character);
 
-						//Debug.Log("Character System: " + character.CharacterName + " is loading Scene: " + sceneName + ":" + sceneHandle);
+						//Debug.Log($"Character System: {character.CharacterName} is loading Scene: {sceneName}:{sceneHandle}");
 					}
 					else
 					{
+						Debug.Log($"Character System: Failed to load scene for connection.");
+
 						// Send the character back to the world server.. something went wrong
 						conn.Disconnect(false);
 					}
 				}
 				else
 				{
+					Debug.Log($"Character System: Failed to fetch character.");
+
 					// Loading the character failed for some reason, maybe it doesn't exist? we should never get to this point but we will kick the player anyway
 					conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
 				}
 			}
 			else
 			{
+				Debug.Log($"Character System: Failed to fetch character ID.");
+
 				// Loading the character data failed to load for some reason, maybe it doesn't exist? we should never get to this point but we will kick the player anyway
 				conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
 			}
@@ -753,17 +765,6 @@ namespace FishMMO.Server
 			return false;
 		}
 
-		private CharacterRespawnPositionDetails GetRandomRespawnPoint(CharacterRespawnPositionDictionary respawnPoints)
-		{
-			CharacterRespawnPositionDetails[] spawnPoints = respawnPoints.Values.ToArray();
-
-			if (spawnPoints.Length == 0) throw new IndexOutOfRangeException("Failed to get a respawn point! Please ensure you have rebuilt your world scene cache and have respawn points in your scene!");
-
-			int index = UnityEngine.Random.Range(0, spawnPoints.Length);
-
-			return spawnPoints[index];
-		}
-
 		public void IPlayerCharacter_OnTeleport(IPlayerCharacter character)
 		{
 			if (character == null)
@@ -809,7 +810,8 @@ namespace FishMMO.Server
 				//Debug.Log($"Unloading scene for {character.CharacterName}: {character.SceneName}|{character.SceneHandle}");
 
 				// Tell the connection to unload their current world scene.
-				sceneServerSystem.UnloadSceneForConnection(character.Owner, character.SceneName);
+				// This is no longer used as we automatically unload all previous world scenes on the Client.
+				//sceneServerSystem.UnloadSceneForConnection(character.Owner, character.SceneName);
 
 				// Character becomes immortal when teleporting
 				if (character.TryGet(out ICharacterDamageController damageController))
@@ -825,9 +827,7 @@ namespace FishMMO.Server
 				character.Motor.SetPositionAndRotationAndVelocity(teleporter.ToPosition, teleporter.ToRotation, Vector3.zero);
 
 				// Remove the character from an instance if it was in one.
-				int characterFlags = character.Flags;
-				characterFlags.DisableBit(CharacterFlags.IsInInstance);
-				character.Flags = characterFlags;
+				character.DisableFlags(CharacterFlags.IsInInstance);
 
 				// Save the character and remove it from the scene
 				RemoveCharacterConnectionMapping(character.Owner, true);
@@ -865,9 +865,7 @@ namespace FishMMO.Server
 					playerCharacter.NetworkObject.Owner.Disconnect(false);
 
 					// Remove the character from the instance if it dies.
-					int characterFlags = playerCharacter.Flags;
-					characterFlags.DisableBit(CharacterFlags.IsInInstance);
-					playerCharacter.Flags = characterFlags;
+					playerCharacter.DisableFlags(CharacterFlags.IsInInstance);
 				}
 				else
 				{

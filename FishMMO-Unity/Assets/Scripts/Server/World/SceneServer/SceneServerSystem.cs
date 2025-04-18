@@ -104,25 +104,31 @@ namespace FishMMO.Server
 
 		private void CharacterSystem_OnDisconnect(NetworkConnection conn, IPlayerCharacter character)
 		{
-			// update scene instance details
-			if (TryGetSceneInstanceDetails(character.WorldServerID,
-											character.SceneName,
-											character.SceneHandle,
-											out SceneInstanceDetails instance))
+			if (character.Flags.IsFlagged(CharacterFlags.IsInInstance))
 			{
-				instance.AddCharacterCount(-1);
+				AdjustSceneCharacterCount(character.WorldServerID, character.InstanceSceneName, character.InstanceSceneHandle, -1);
 			}
+			AdjustSceneCharacterCount(character.WorldServerID, character.SceneName, character.SceneHandle, -1);
 		}
 
 		private void CharacterSystem_OnAfterLoadCharacter(NetworkConnection conn, IPlayerCharacter character)
 		{
+			if (character.Flags.IsFlagged(CharacterFlags.IsInInstance))
+			{
+				AdjustSceneCharacterCount(character.WorldServerID, character.InstanceSceneName, character.InstanceSceneHandle, 1);
+			}
+			AdjustSceneCharacterCount(character.WorldServerID, character.SceneName, character.SceneHandle, 1);
+		}
+
+		private void AdjustSceneCharacterCount(long worldServerID, string sceneName, int sceneHandle, int amount)
+		{
 			// update scene instance details
-			if (TryGetSceneInstanceDetails(character.WorldServerID,
-											character.SceneName,
-											character.SceneHandle,
+			if (TryGetSceneInstanceDetails(worldServerID,
+											sceneName,
+											sceneHandle,
 											out SceneInstanceDetails instance))
 			{
-				instance.AddCharacterCount(1);
+				instance.AddCharacterCount(amount);
 			}
 		}
 
@@ -279,7 +285,7 @@ namespace FishMMO.Server
 
 			// Save the loaded scene information to the database
 			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-			Debug.Log($"Scene Server System: Saved {sceneType} scene {scene.name}:{scene.handle} to the database.");
+			Debug.Log($"SceneServerSystem: Saved {sceneType} scene {scene.name}:{scene.handle} to the database.");
 			SceneService.Update(dbContext, id, worldServerID, scene.name, scene.handle);
 
 			/*switch (sceneType)
@@ -325,11 +331,13 @@ namespace FishMMO.Server
 					CharacterCount = 0,
 				});
 
+				Debug.Log($"SceneServerSystem: New scene handle added for {worldServerID}:{scene.name}:{scene.handle}");
+
 				SceneNameByHandle.Add(scene.handle, scene.name);
 			}
 			else
 			{
-				throw new UnityException("Scene Server System: Duplicate scene handles!!");
+				throw new UnityException("SceneServerSystem: Duplicate scene handles!!");
 			}
 		}
 
@@ -381,6 +389,7 @@ namespace FishMMO.Server
 				WorldScenes.TryGetValue(worldServerID, out Dictionary<string, Dictionary<int, SceneInstanceDetails>> scenes))
 			{
 				if (scenes != null &&
+					!string.IsNullOrEmpty(sceneName) &&
 					scenes.TryGetValue(sceneName, out Dictionary<int, SceneInstanceDetails> instances))
 				{
 					if (instances != null &&
@@ -388,8 +397,20 @@ namespace FishMMO.Server
 					{
 						return true;
 					}
+					else
+					{
+						Debug.LogWarning($"Scene handle {sceneHandle} not found in '{sceneName}'. Available: {string.Join(", ", instances.Keys)}");
+					}
 				}
+				/*else
+				{
+					Debug.Log($"Failed to find scene by name: {sceneName}");
+				}*/
 			}
+			/*else
+			{
+				Debug.Log($"Failed to find world scene: {worldServerID}");
+			}*/
 			return false;
 		}
 

@@ -15,6 +15,16 @@ MonoBehaviour:
   m_GroupName: WorldScenes
   m_GUID: 3fcca9f57a8ed5c47a0559a5be1c8b5d
   m_SerializeEntries:
+  - m_GUID: 188cb4ddc03de3b40b08c95fc5afb56a
+    m_Address: GreaterFaydark
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 372294cecb987eb418c8609b8fb4d289
+    m_Address: Test Dungeon
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3a3ad1e67809ba94c984635c5d313682
     m_Address: StartScene B
     m_ReadOnly: 0
@@ -22,6 +32,11 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 4421ff33e86120247a8ae615ef06f2c7
     m_Address: Dungeon
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 46351237b3e72234a8bf86b294af5914
+    m_Address: Felwithe
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
@@ -40,13 +55,28 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a0f2e2dfb049684459f356b4502cc0d6
+    m_Address: TestDungeon
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b6a7b407afcf0a14e9b034d20ed554c8
     m_Address: Tutorial SpawnPoints
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bccc2ce460150eb43bb0d7f0db28b05b
+    m_Address: NavMesh-Terrain
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c43b6eb487815084ca437ada41086fa4
     m_Address: NavMesh-Terrain
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: dd202fa0a3b7de04ab1143a8d66afd98
+    m_Address: Crushbone
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

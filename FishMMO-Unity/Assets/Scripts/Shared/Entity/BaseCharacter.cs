@@ -19,7 +19,22 @@ namespace FishMMO.Shared
 		public GameObject GameObject { get; private set; }
 		public Collider Collider { get; set; }
 		public virtual bool IsTeleporting => false;
-		public int Flags { get; set;}
+		public int Flags { get; set; }
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public void EnableFlags(CharacterFlags flags)
+		{
+			int characterFlags = Flags;
+			characterFlags.EnableBit(flags);
+			Flags = characterFlags;
+		}
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public void DisableFlags(CharacterFlags flags)
+		{
+			int characterFlags = Flags;
+			characterFlags.DisableBit(CharacterFlags.IsInInstance);
+			Flags = characterFlags;
+		}
 
 #if !UNITY_SERVER
 		[SerializeField]

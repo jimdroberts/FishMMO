@@ -578,12 +578,6 @@ namespace FishMMO.Server
 				return;
 			}
 
-			character.InstancePosition = details.RespawnPositions.Values.ToList().GetRandom().Position;
-
-			int characterFlags = character.Flags;
-			characterFlags.EnableBit(CharacterFlags.IsInInstance);
-			character.Flags = characterFlags;
-
 			// Check the status of the characters instance
 			SceneEntity sceneEntity = SceneService.GetCharacterInstance(dbContext, character.ID, SceneType.Group);
 			if (sceneEntity == null)
@@ -609,7 +603,13 @@ namespace FishMMO.Server
 				character.InstanceID = sceneEntity.ID;
 			}
 
-			// Connect to the instance
+			CharacterRespawnPositionDetails respawnDetails = details.RespawnPositions.Values.ToList().GetRandom();
+			character.InstancePosition = respawnDetails.Position;
+			character.InstanceRotation = respawnDetails.Rotation;
+
+			character.EnableFlags(CharacterFlags.IsInInstance);
+
+			// Connect to the instance.
 			conn.Disconnect(false);
 		}
 

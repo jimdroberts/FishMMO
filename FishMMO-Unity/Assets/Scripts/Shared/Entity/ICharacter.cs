@@ -14,6 +14,8 @@ namespace FishMMO.Shared
 		bool IsTeleporting { get; }
 		bool IsSpawned { get; }
 		int Flags { get; set; }
+		void EnableFlags(CharacterFlags flags);
+		void DisableFlags(CharacterFlags flags);
 
 #if !UNITY_SERVER
 		Transform MeshRoot { get;}

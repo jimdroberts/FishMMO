@@ -339,6 +339,14 @@ namespace FishMMO.Server.DatabaseServices
 			existingCharacter.BindX = bindPosition.x;
 			existingCharacter.BindY = bindPosition.y;
 			existingCharacter.BindZ = bindPosition.z;
+			existingCharacter.InstanceID = character.InstanceID;
+			existingCharacter.InstanceX = character.InstancePosition.x;
+			existingCharacter.InstanceY = character.InstancePosition.y;
+			existingCharacter.InstanceZ = character.InstancePosition.z;
+			existingCharacter.InstanceRotX = character.InstanceRotation.x;
+			existingCharacter.InstanceRotY = character.InstanceRotation.y;
+			existingCharacter.InstanceRotZ = character.InstanceRotation.z;
+			existingCharacter.InstanceRotW = character.InstanceRotation.w;
 			existingCharacter.RaceID = character.RaceID;
 			existingCharacter.X = charPosition.x;
 			existingCharacter.Y = charPosition.y;
@@ -452,8 +460,18 @@ namespace FishMMO.Server.DatabaseServices
 					return false;
 				}
 
-				Vector3 dbPosition = new Vector3(dbCharacter.X, dbCharacter.Y, dbCharacter.Z);
-				Quaternion dbRotation = new Quaternion(dbCharacter.RotX, dbCharacter.RotY, dbCharacter.RotZ, dbCharacter.RotW);
+				Vector3 dbPosition;
+				Quaternion dbRotation;
+				if (dbCharacter.Flags.IsFlagged(CharacterFlags.IsInInstance))
+				{
+					dbPosition = new Vector3(dbCharacter.InstanceX, dbCharacter.InstanceY, dbCharacter.InstanceZ);
+					dbRotation = new Quaternion(dbCharacter.InstanceRotX, dbCharacter.InstanceRotY, dbCharacter.InstanceRotZ, dbCharacter.InstanceRotW);
+				}
+				else
+				{
+					dbPosition = new Vector3(dbCharacter.X, dbCharacter.Y, dbCharacter.Z);
+					dbRotation = new Quaternion(dbCharacter.RotX, dbCharacter.RotY, dbCharacter.RotZ, dbCharacter.RotW);
+				}
 
 				// instantiate the character object
 				NetworkObject nob = networkManager.GetPooledInstantiated(characterPrefab.NetworkObject, dbPosition, dbRotation, true);
@@ -476,6 +494,7 @@ namespace FishMMO.Server.DatabaseServices
 				character.BindPosition = new Vector3(dbCharacter.BindX, dbCharacter.BindY, dbCharacter.BindZ);
 				character.InstanceID = dbCharacter.InstanceID;
 				character.InstancePosition = new Vector3(dbCharacter.InstanceX, dbCharacter.InstanceY, dbCharacter.InstanceZ);
+				character.InstanceRotation = new Quaternion(dbCharacter.InstanceRotX, dbCharacter.InstanceRotY, dbCharacter.InstanceRotZ, dbCharacter.InstanceRotW);
 				character.RaceID = dbCharacter.RaceID;
 				character.RaceName = raceTemplate.Name;
 				character.Flags = dbCharacter.Flags;

@@ -207,9 +207,11 @@ namespace FishMMO.Server
 				return;
 			}
 
-			// Check if the selected character has a group instance.
-			SceneEntity sceneEntity = SceneService.GetCharacterInstance(dbContext, characterID, SceneType.Group);
-			if (sceneEntity != null)
+			SceneEntity sceneEntity;
+
+			// Check if the selected character has an instance available.
+			if (CharacterService.GetInstanceID(dbContext, characterID, out long instanceID) &&
+				(sceneEntity = SceneService.GetInstanceByID(dbContext, instanceID)) != null)
 			{
 				SceneStatus sceneStatus = (SceneStatus)sceneEntity.SceneStatus;
 				if (sceneStatus == SceneStatus.Ready)
@@ -218,9 +220,6 @@ namespace FishMMO.Server
 					SceneServerEntity sceneServer = SceneServerService.GetServer(dbContext, sceneEntity.SceneServerID);
 					if (sceneServer != null)
 					{
-						// Successfully found a scene to connect to
-						CharacterService.SetSceneHandle(dbContext, accountName, sceneEntity.SceneHandle);
-
 						// Tell the client to connect to the scene
 						Server.Broadcast(conn, new WorldSceneConnectBroadcast()
 						{
