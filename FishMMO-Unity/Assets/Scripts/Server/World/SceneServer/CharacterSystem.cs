@@ -821,8 +821,7 @@ namespace FishMMO.Server
 				//Debug.Log($"Unloading scene for {character.CharacterName}: {character.SceneName}|{character.SceneHandle}");
 
 				// Tell the connection to unload their current world scene.
-				// This is no longer used as we automatically unload all previous world scenes on the Client.
-				//sceneServerSystem.UnloadSceneForConnection(character.Owner, character.SceneName);
+				sceneServerSystem.UnloadSceneForConnection(character.Owner, character.SceneName);
 
 				// Character becomes immortal when teleporting
 				if (character.TryGet(out ICharacterDamageController damageController))

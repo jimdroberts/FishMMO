@@ -321,6 +321,7 @@ namespace FishMMO.Client
 		{
 			StopAllCoroutines();
 
+			AddressableLoadProcessor.UnloadSceneByLabelAsync(WorldPreloadScenes);
 			UnloadWorldScenes();
 			
 			if (forceDisconnect)
@@ -656,8 +657,6 @@ namespace FishMMO.Client
 		/// </summary>
 		private void UnloadWorldScenes()
 		{
-			AddressableLoadProcessor.UnloadSceneByLabelAsync(WorldPreloadScenes);
-
 			SceneProcessorBase sceneProcessor = NetworkManager.SceneManager.GetSceneProcessor();
 			if (sceneProcessor == null)
 			{
