@@ -293,8 +293,7 @@ namespace FishMMO.Server
 					int sceneHandle = character.SceneHandle;
 
 					// Check if the character is in an instance or not.
-					if (character.Flags.IsFlagged(CharacterFlags.IsInInstance) &&
-						!string.IsNullOrWhiteSpace(character.InstanceSceneName))
+					if (character.IsInInstance())
 					{
 						// Have the player enter the instance.
 						sceneName = character.InstanceSceneName;
@@ -352,7 +351,7 @@ namespace FishMMO.Server
 
 			// Get the characters scene
 			Scene scene;
-			if (character.Flags.IsFlagged(CharacterFlags.IsInInstance))
+			if (character.IsInInstance())
 			{
 				scene = SceneManager.GetScene(character.InstanceSceneHandle);
 			}
@@ -408,7 +407,7 @@ namespace FishMMO.Server
 
 				// Get the characters scene
 				Scene scene;
-				if (character.Flags.IsFlagged(CharacterFlags.IsInInstance))
+				if (character.IsInInstance())
 				{
 					scene = SceneManager.GetScene(character.InstanceSceneHandle);
 				}
@@ -870,7 +869,7 @@ namespace FishMMO.Server
 					damageController.Heal(null, 999999, true);
 				}
 
-				if (playerCharacter.Flags.IsFlagged(CharacterFlags.IsInInstance) && playerCharacter.InstanceSceneName != playerCharacter.BindScene ||
+				if (playerCharacter.IsInInstance() && playerCharacter.InstanceSceneName != playerCharacter.BindScene ||
 					playerCharacter.SceneName != playerCharacter.BindScene)
 				{
 					playerCharacter.SceneName = playerCharacter.BindScene;

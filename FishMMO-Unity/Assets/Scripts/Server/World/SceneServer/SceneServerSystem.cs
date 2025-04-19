@@ -104,7 +104,7 @@ namespace FishMMO.Server
 
 		private void CharacterSystem_OnDisconnect(NetworkConnection conn, IPlayerCharacter character)
 		{
-			if (character.InstanceSceneHandle != 0 && character.Flags.IsFlagged(CharacterFlags.IsInInstance))
+			if (character.IsInInstance())
 			{
 				AdjustSceneCharacterCount(character.WorldServerID, character.InstanceSceneName, character.InstanceSceneHandle, -1);
 			}
@@ -116,7 +116,7 @@ namespace FishMMO.Server
 
 		private void CharacterSystem_OnAfterLoadCharacter(NetworkConnection conn, IPlayerCharacter character)
 		{
-			if (character.InstanceSceneHandle != 0 && character.Flags.IsFlagged(CharacterFlags.IsInInstance))
+			if (character.IsInInstance())
 			{
 				AdjustSceneCharacterCount(character.WorldServerID, character.InstanceSceneName, character.InstanceSceneHandle, 1);
 			}

@@ -562,13 +562,13 @@ namespace FishMMO.Server
 			// Validate scene
 			if (!WorldSceneDetailsCache.Scenes.TryGetValue(dungeonEntrance.DungeonName, out WorldSceneDetails details))
 			{
-				Debug.Log("Missing Scene:" + character.SceneName);
+				Debug.Log("Missing Scene:" + dungeonEntrance.DungeonName);
 				return;
 			}
 
 			if (details.RespawnPositions == null || details.RespawnPositions.Count < 1)
 			{
-				Debug.Log($"Missing Scene: {character.SceneName} respawn points.");
+				Debug.Log($"Missing Scene: {dungeonEntrance.DungeonName} respawn points.");
 				return;
 			}
 
@@ -604,7 +604,8 @@ namespace FishMMO.Server
 			}
 
 			CharacterRespawnPositionDetails respawnDetails = details.RespawnPositions.Values.ToList().GetRandom();
-			character.Motor.SetPositionAndRotationAndVelocity(respawnDetails.Position, respawnDetails.Rotation, Vector3.zero);
+			character.InstancePosition = respawnDetails.Position;
+			character.InstanceRotation = respawnDetails.Rotation;
 			character.EnableFlags(CharacterFlags.IsInInstance);
 
 			// Connect to the instance.

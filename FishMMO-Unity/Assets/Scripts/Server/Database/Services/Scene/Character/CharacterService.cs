@@ -304,6 +304,30 @@ namespace FishMMO.Server.DatabaseServices
 			dbTransaction.Commit();
 		}
 
+		private static void SaveTransform(CharacterEntity existingCharacter, Vector3 pos, Quaternion rot, bool toInstance)
+		{
+			if (toInstance)
+			{
+				existingCharacter.InstanceX = pos.x;
+				existingCharacter.InstanceY = pos.y;
+				existingCharacter.InstanceZ = pos.z;
+				existingCharacter.InstanceRotX = rot.x;
+				existingCharacter.InstanceRotY = rot.y;
+				existingCharacter.InstanceRotZ = rot.z;
+				existingCharacter.InstanceRotW = rot.w;
+			}
+			else
+			{
+				existingCharacter.X = pos.x;
+				existingCharacter.Y = pos.y;
+				existingCharacter.Z = pos.z;
+				existingCharacter.RotX = rot.x;
+				existingCharacter.RotY = rot.y;
+				existingCharacter.RotZ = rot.z;
+				existingCharacter.RotW = rot.w;
+			}
+		}
+
 		/// <summary>
 		/// Save a character to the database. Only Scene Servers should be saving characters. A character can only be in one scene at a time.
 		/// </summary>
@@ -341,28 +365,33 @@ namespace FishMMO.Server.DatabaseServices
 			existingCharacter.BindZ = bindPosition.z;
 			existingCharacter.InstanceID = character.InstanceID;
 			existingCharacter.RaceID = character.RaceID;
-			// Save the character position to XYZ and RotXYZW if we are not in an instance.
-			// This preserves the character position when it leaves an instance.
-			if (!character.Flags.IsFlagged(CharacterFlags.IsInInstance))
+
+			bool isInInstance = character.Flags.IsFlagged(CharacterFlags.IsInInstance);
+			bool hasInstanceScene = !string.IsNullOrWhiteSpace(character.InstanceSceneName);
+
+			// Case 1: Overworld only
+			if (!isInInstance && !hasInstanceScene)
 			{
-				existingCharacter.X = charPosition.x;
-				existingCharacter.Y = charPosition.y;
-				existingCharacter.Z = charPosition.z;
-				existingCharacter.RotX = charRotation.x;
-				existingCharacter.RotY = charRotation.y;
-				existingCharacter.RotZ = charRotation.z;
-				existingCharacter.RotW = charRotation.w;
+				Debug.Log($"Character {character.ID} saved overworld position: {charPosition}:{charRotation}");
+				SaveTransform(existingCharacter, charPosition, charRotation, false);
 			}
-			// Otherwise save to the InstanceXYZ and InstanceRotXYZW columns.
+			// Case 2: Transitioning into instance (save both overworld + instance)
+			else if (isInInstance && !hasInstanceScene)
+			{
+				Debug.Log($"Character {character.ID} saved overworld position: {charPosition}:{charRotation}");
+				SaveTransform(existingCharacter, charPosition, charRotation, false);
+
+				var instancePos = character.InstancePosition;
+				var instanceRot = character.InstanceRotation;
+
+				Debug.Log($"Character {character.ID} saved instance position: {instancePos}:{instanceRot}");
+				SaveTransform(existingCharacter, instancePos, instanceRot, true);
+			}
+			// Case 3: In instance only
 			else
 			{
-				existingCharacter.InstanceX = charPosition.x;
-				existingCharacter.InstanceY = charPosition.y;
-				existingCharacter.InstanceZ = charPosition.z;
-				existingCharacter.InstanceRotX = charRotation.x;
-				existingCharacter.InstanceRotY = charRotation.y;
-				existingCharacter.InstanceRotZ = charRotation.z;
-				existingCharacter.InstanceRotW = charRotation.w;
+				Debug.Log($"Character {character.ID} saved instance position: {charPosition}:{charRotation}");
+				SaveTransform(existingCharacter, charPosition, charRotation, true);
 			}
 			existingCharacter.Flags = character.Flags;
 			existingCharacter.AccessLevel = (byte)character.AccessLevel;
@@ -475,30 +504,25 @@ namespace FishMMO.Server.DatabaseServices
 				string instanceSceneName = null;
 				int instanceSceneHandle = 0;
 
-				if (dbCharacter.Flags.IsFlagged(CharacterFlags.IsInInstance))
+				SceneEntity sceneEntity = null;
+				if (dbCharacter.Flags.IsFlagged(CharacterFlags.IsInInstance) &&
+					(sceneEntity = SceneService.GetInstanceByID(dbContext, dbCharacter.InstanceID)) != null)
 				{
-					var sceneEntity = SceneService.GetInstanceByID(dbContext, dbCharacter.InstanceID);
-					if (sceneEntity != null)
-					{
-						dbPosition = new Vector3(dbCharacter.InstanceX, dbCharacter.InstanceY, dbCharacter.InstanceZ);
-						dbRotation = new Quaternion(dbCharacter.InstanceRotX, dbCharacter.InstanceRotY, dbCharacter.InstanceRotZ, dbCharacter.InstanceRotW);
+					dbPosition = new Vector3(dbCharacter.InstanceX, dbCharacter.InstanceY, dbCharacter.InstanceZ);
+					dbRotation = new Quaternion(dbCharacter.InstanceRotX, dbCharacter.InstanceRotY, dbCharacter.InstanceRotZ, dbCharacter.InstanceRotW);
 
-						// Cache the Instance Scene Name and Instance Scene Handle on the character
-						instanceSceneName = sceneEntity.SceneName;
-						instanceSceneHandle = sceneEntity.SceneHandle;
-					}
-					else
-					{
-						Debug.Log($"Character {dbCharacter.ID} flagged as in instance but instance {dbCharacter.InstanceID} not found. Falling back to overworld position.");
+					// Cache the Instance Scene Name and Instance Scene Handle on the character
+					instanceSceneName = sceneEntity.SceneName;
+					instanceSceneHandle = sceneEntity.SceneHandle;
 
-						dbPosition = new Vector3(dbCharacter.X, dbCharacter.Y, dbCharacter.Z);
-						dbRotation = new Quaternion(dbCharacter.RotX, dbCharacter.RotY, dbCharacter.RotZ, dbCharacter.RotW);
-					}
+					Debug.Log($"Character {dbCharacter.ID} spawning into instance position: {dbPosition}:{dbRotation}");
 				}
 				else
 				{
 					dbPosition = new Vector3(dbCharacter.X, dbCharacter.Y, dbCharacter.Z);
 					dbRotation = new Quaternion(dbCharacter.RotX, dbCharacter.RotY, dbCharacter.RotZ, dbCharacter.RotW);
+
+					Debug.Log($"Character {dbCharacter.ID} spawning into overworld position: {dbPosition}:{dbRotation}");
 				}
 
 				// instantiate the character object

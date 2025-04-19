@@ -61,6 +61,9 @@ namespace FishMMO.Shared
 		public long InstanceID { get; set; }
 		public string InstanceSceneName { get; set; }
 		public int InstanceSceneHandle { get; set; }
+		public Vector3 InstancePosition { get; set; }
+		public Quaternion InstanceRotation { get; set; }
+		public bool IsInInstance() { return Flags.IsFlagged(CharacterFlags.IsInInstance) && !string.IsNullOrWhiteSpace(InstanceSceneName); }
 		public string LastChatMessage { get; set; }
 		public DateTime NextChatMessageTime { get; set; }
 		public DateTime NextInteractTime { get; set; }
@@ -159,6 +162,8 @@ namespace FishMMO.Shared
 			NextInteractTime = DateTime.UtcNow;
 			InstanceSceneName = null;
 			InstanceSceneHandle = 0;
+			InstancePosition = Vector3.zero;
+			InstanceRotation = Quaternion.identity;
 
 			ResetHotkeys();
 		}
