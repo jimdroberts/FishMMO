@@ -39,5 +39,12 @@ namespace FishMMO.Client
 			}
 #endif
 		}
+
+		public void ClientQuit()
+		{
+#if UNITY_WEBGL
+			ClientWebGLQuit();
+#endif
+		}
 	}
 }

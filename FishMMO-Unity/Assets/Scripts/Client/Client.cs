@@ -306,7 +306,11 @@ namespace FishMMO.Client
 #if UNITY_EDITOR
 			EditorApplication.ExitPlaymode();
 #elif UNITY_WEBGL
-			ClientWebGLQuit();
+			WebGLKeyHijack webGLKeyHijack = gameObject.GetComponent<WebGLKeyHijack>();
+			if (webGLKeyHijack != null)
+			{
+				webGLKeyHijack.ClientQuit();
+			}
 #else
 			Application.Quit();
 #endif
@@ -558,6 +562,8 @@ namespace FishMMO.Client
 			{
 				using (UnityWebRequest request = UnityWebRequest.Get(ipFetchHost + "loginserver"))
 				{
+					request.SetRequestHeader("X-FishMMO", "Client");
+
 					// Pick a random IPFetch Host address if available.
 					string[] ipFetchServers = ipFetchHost.Split(",");
 					if (ipFetchServers != null && ipFetchServers.Length > 1)

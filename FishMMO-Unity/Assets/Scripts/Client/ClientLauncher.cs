@@ -118,6 +118,7 @@ namespace FishMMO.Client
 		IEnumerator FetchHtmlFromURL(string url)
 		{
 			UnityWebRequest www = UnityWebRequest.Get(url);
+			www.SetRequestHeader("X-FishMMO", "Client");
 			yield return www.SendWebRequest();
 
 			if (www.result != UnityWebRequest.Result.Success)
@@ -188,6 +189,7 @@ namespace FishMMO.Client
 
 				using (UnityWebRequest request = UnityWebRequest.Get(ipFetchHost + "patchserver"))
 				{
+					request.SetRequestHeader("X-FishMMO", "Client");
 					request.certificateHandler = new ClientSSLCertificateHandler();
 
 					yield return request.SendWebRequest();
@@ -224,6 +226,7 @@ namespace FishMMO.Client
 		{
 			using (UnityWebRequest request = UnityWebRequest.Get(patcherHost + "latest_version"))
 			{
+				request.SetRequestHeader("X-FishMMO", "Client");
 				request.certificateHandler = new ClientSSLCertificateHandler();
 
 				yield return request.SendWebRequest();
@@ -248,6 +251,7 @@ namespace FishMMO.Client
 		{
 			using (UnityWebRequest request = UnityWebRequest.Get(patcherHost + Constants.Configuration.Version))
 			{
+				request.SetRequestHeader("X-FishMMO", "Client");
 				request.certificateHandler = new ClientSSLCertificateHandler();
 
 				// Define the file path to save the downloaded patch file

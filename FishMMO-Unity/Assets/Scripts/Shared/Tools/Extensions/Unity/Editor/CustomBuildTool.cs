@@ -135,6 +135,88 @@ start Scene.exe SCENE";
 			}
 		}
 
+		private static BuildTargetGroup originalGroup;
+		private static NamedBuildTarget originalNamedBuildTargetGroup;
+		private static BuildTarget originalBuildTarget;
+		private static StandaloneBuildSubtarget originalBuildSubtarget;
+		private static ScriptingImplementation originalScriptingImp;
+		private static Il2CppCompilerConfiguration originalCompilerConf;
+		private static Il2CppCodeGeneration originalOptimization;
+		private static bool bakeCollisionMeshes;
+		private static bool stripUnusedMeshComponents;
+		private static WebGLCompressionFormat compressionFormat;
+		private static bool decompressionFallback;
+		private static bool dataCaching;
+
+		private static BuildTargetGroup SetActiveBuildTarget(BuildTarget buildTarget, StandaloneBuildSubtarget subTarget)
+		{
+			// Switch active build target so #defines work properly
+			BuildTargetGroup targetGroup = BuildPipeline.GetBuildTargetGroup(buildTarget);
+			EditorUserBuildSettings.SwitchActiveBuildTarget(targetGroup, buildTarget);
+			EditorUserBuildSettings.standaloneBuildSubtarget = subTarget;
+			return targetGroup;
+		}
+
+		private static void RestoreActiveBuildTarget()
+		{
+			EditorUserBuildSettings.SwitchActiveBuildTarget(originalGroup, originalBuildTarget);
+			EditorUserBuildSettings.standaloneBuildSubtarget = originalBuildSubtarget;
+		}
+
+		private static void PushSettings(BuildTarget buildTarget)
+		{
+			// Get the original active build info
+			originalGroup = EditorUserBuildSettings.selectedBuildTargetGroup;
+			originalNamedBuildTargetGroup = NamedBuildTarget.FromBuildTargetGroup(originalGroup);
+			originalBuildTarget = EditorUserBuildSettings.activeBuildTarget;
+			originalBuildSubtarget = EditorUserBuildSettings.standaloneBuildSubtarget;
+			originalScriptingImp = PlayerSettings.GetScriptingBackend(originalNamedBuildTargetGroup);
+			originalCompilerConf = PlayerSettings.GetIl2CppCompilerConfiguration(originalNamedBuildTargetGroup);
+			originalOptimization = PlayerSettings.GetIl2CppCodeGeneration(originalNamedBuildTargetGroup);
+
+			// Enable IL2CPP for webgl
+			bakeCollisionMeshes = PlayerSettings.bakeCollisionMeshes;
+			stripUnusedMeshComponents = PlayerSettings.stripUnusedMeshComponents;
+			compressionFormat = PlayerSettings.WebGL.compressionFormat;
+			decompressionFallback = PlayerSettings.WebGL.decompressionFallback;
+			dataCaching = PlayerSettings.WebGL.dataCaching;
+			if (buildTarget == BuildTarget.WebGL)
+			{
+				PlayerSettings.SetScriptingBackend(originalNamedBuildTargetGroup, ScriptingImplementation.IL2CPP);
+				PlayerSettings.SetIl2CppCompilerConfiguration(originalNamedBuildTargetGroup, Il2CppCompilerConfiguration.Release);
+				PlayerSettings.SetIl2CppCodeGeneration(NamedBuildTarget.WebGL, Il2CppCodeGeneration.OptimizeSize);
+
+				// Disable pre-baked meshes and mesh stripping in WebGL
+				PlayerSettings.bakeCollisionMeshes = false;
+				PlayerSettings.stripUnusedMeshComponents = false;
+
+				// Force Decompression Fallback and GZIP
+				PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Gzip;
+				PlayerSettings.WebGL.decompressionFallback = true;
+
+				// Enable data caching on clients so they don't redownload without clearing their cache
+				PlayerSettings.WebGL.dataCaching = true;
+			}
+		}
+
+		private static void PopSettings(BuildTarget buildTarget)
+		{
+			// Return IL2CPP settings to original
+			if (buildTarget == BuildTarget.WebGL)
+			{
+				PlayerSettings.SetScriptingBackend(originalNamedBuildTargetGroup, originalScriptingImp);
+				PlayerSettings.SetIl2CppCompilerConfiguration(originalNamedBuildTargetGroup, originalCompilerConf);
+				PlayerSettings.SetIl2CppCodeGeneration(originalNamedBuildTargetGroup, originalOptimization);
+				PlayerSettings.bakeCollisionMeshes = bakeCollisionMeshes;
+				PlayerSettings.stripUnusedMeshComponents = stripUnusedMeshComponents;
+				PlayerSettings.WebGL.compressionFormat = compressionFormat;
+				PlayerSettings.WebGL.decompressionFallback = decompressionFallback;
+				PlayerSettings.WebGL.dataCaching = dataCaching;
+			}
+
+			SetActiveBuildTarget(originalBuildTarget, originalBuildSubtarget);
+		}
+
 		private static void BuildExecutable(string executableName, string[] bootstrapScenes, CustomBuildType customBuildType, BuildOptions buildOptions, StandaloneBuildSubtarget subTarget, BuildTarget buildTarget)
 		{
 			BuildExecutable(null, executableName, bootstrapScenes, customBuildType, buildOptions, subTarget, buildTarget);
@@ -162,43 +244,10 @@ start Scene.exe SCENE";
 			// Ensure all assets are included
 			AssetDatabase.Refresh();
 
-			// Get the original active build info
-			BuildTargetGroup originalGroup = EditorUserBuildSettings.selectedBuildTargetGroup;
-			NamedBuildTarget originalNamedBuildTargetGroup = NamedBuildTarget.FromBuildTargetGroup(originalGroup);
-			BuildTarget originalBuildTarget = EditorUserBuildSettings.activeBuildTarget;
-			StandaloneBuildSubtarget originalBuildSubtarget = EditorUserBuildSettings.standaloneBuildSubtarget;
-			ScriptingImplementation originalScriptingImp = PlayerSettings.GetScriptingBackend(originalNamedBuildTargetGroup);
-			Il2CppCompilerConfiguration originalCompilerConf = PlayerSettings.GetIl2CppCompilerConfiguration(originalNamedBuildTargetGroup);
-			Il2CppCodeGeneration originalOptimization = PlayerSettings.GetIl2CppCodeGeneration(originalNamedBuildTargetGroup);
-
-			// Enable IL2CPP for webgl
-			bool bakeCollisionMeshes = PlayerSettings.bakeCollisionMeshes;
-			bool stripUnusedMeshComponents = PlayerSettings.stripUnusedMeshComponents;
-			WebGLCompressionFormat compressionFormat = PlayerSettings.WebGL.compressionFormat;
-			bool decompressionFallback = PlayerSettings.WebGL.decompressionFallback;
-			bool dataCaching = PlayerSettings.WebGL.dataCaching;
-			if (buildTarget == BuildTarget.WebGL)
-			{
-				PlayerSettings.SetScriptingBackend(originalNamedBuildTargetGroup, ScriptingImplementation.IL2CPP);
-				PlayerSettings.SetIl2CppCompilerConfiguration(originalNamedBuildTargetGroup, Il2CppCompilerConfiguration.Release);
-				PlayerSettings.SetIl2CppCodeGeneration(NamedBuildTarget.WebGL, Il2CppCodeGeneration.OptimizeSize);
-
-				// Disable pre-baked meshes and mesh stripping in WebGL
-				PlayerSettings.bakeCollisionMeshes = false;
-				PlayerSettings.stripUnusedMeshComponents = false;
-
-				// Force Decompression Fallback and GZIP
-				PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Gzip;
-				PlayerSettings.WebGL.decompressionFallback = true;
-
-				// Enable data caching on clients so they don't redownload without clearing their cache
-				PlayerSettings.WebGL.dataCaching = true;
-			}
+			PushSettings(buildTarget);
 
 			// Switch active build target so #defines work properly
-			BuildTargetGroup targetGroup = BuildPipeline.GetBuildTargetGroup(buildTarget);
-			EditorUserBuildSettings.SwitchActiveBuildTarget(targetGroup, buildTarget);
-			EditorUserBuildSettings.standaloneBuildSubtarget = subTarget;
+			BuildTargetGroup targetGroup = SetActiveBuildTarget(buildTarget, subTarget);
 
 			// Append world scene paths to bootstrap scene array
 			/*string[] scenes = customBuildType == CustomBuildType.AllInOne ||
@@ -378,21 +427,9 @@ start Scene.exe SCENE";
 				Debug.LogError($"Stack trace: {ex.StackTrace}");
 			}
 
-			// Return IL2CPP settings to original
-			if (buildTarget == BuildTarget.WebGL)
-			{
-				PlayerSettings.SetScriptingBackend(originalNamedBuildTargetGroup, originalScriptingImp);
-				PlayerSettings.SetIl2CppCompilerConfiguration(originalNamedBuildTargetGroup, originalCompilerConf);
-				PlayerSettings.SetIl2CppCodeGeneration(originalNamedBuildTargetGroup, originalOptimization);
-				PlayerSettings.bakeCollisionMeshes = bakeCollisionMeshes;
-				PlayerSettings.stripUnusedMeshComponents = stripUnusedMeshComponents;
-				PlayerSettings.WebGL.compressionFormat = compressionFormat;
-				PlayerSettings.WebGL.decompressionFallback = decompressionFallback;
-				PlayerSettings.WebGL.dataCaching = dataCaching;
-			}
+			PopSettings(buildTarget);
 
-			EditorUserBuildSettings.SwitchActiveBuildTarget(originalGroup, originalBuildTarget);
-			EditorUserBuildSettings.standaloneBuildSubtarget = originalBuildSubtarget;
+			RestoreActiveBuildTarget();
 		}
 
 		private static string[] AppendWorldScenePaths(string[] requiredPaths)
@@ -882,16 +919,54 @@ start Scene.exe SCENE";
 							BuildTarget.WebGL);
 		}
 
-		[MenuItem("FishMMO/Build/Addressables/Build Client Addressables")]
-		public static void BuildClientAddressables()
+		[MenuItem("FishMMO/Build/Addressables/Build Windows Client Addressables")]
+		public static void BuildWindowsClientAddressables()
 		{
+			PushSettings(BuildTarget.StandaloneWindows64);
+			SetActiveBuildTarget(BuildTarget.StandaloneWindows64, StandaloneBuildSubtarget.Player);
 			BuildAddressables(serverAddressableGroups);
+			PopSettings(BuildTarget.StandaloneWindows64);
+			RestoreActiveBuildTarget();
 		}
 
-		[MenuItem("FishMMO/Build/Addressables/Build Server Addressables")]
-		public static void BuildServerAddressables()
+		[MenuItem("FishMMO/Build/Addressables/Build Windows Server Addressables")]
+		public static void BuildWindowsServerAddressables()
 		{
+			PushSettings(BuildTarget.StandaloneWindows64);
+			SetActiveBuildTarget(BuildTarget.StandaloneWindows64, StandaloneBuildSubtarget.Server);
 			BuildAddressables(clientAddressableGroups);
+			PopSettings(BuildTarget.StandaloneWindows64);
+			RestoreActiveBuildTarget();
+		}
+
+		[MenuItem("FishMMO/Build/Addressables/Build Linux Client Addressables")]
+		public static void BuildLinuxClientAddressables()
+		{
+			PushSettings(BuildTarget.StandaloneLinux64);
+			SetActiveBuildTarget(BuildTarget.StandaloneLinux64, StandaloneBuildSubtarget.Player);
+			BuildAddressables(serverAddressableGroups);
+			PopSettings(BuildTarget.StandaloneLinux64);
+			RestoreActiveBuildTarget();
+		}
+
+		[MenuItem("FishMMO/Build/Addressables/Build Linux Server Addressables")]
+		public static void BuildLinuxServerAddressables()
+		{
+			PushSettings(BuildTarget.StandaloneLinux64);
+			SetActiveBuildTarget(BuildTarget.StandaloneLinux64, StandaloneBuildSubtarget.Server);
+			BuildAddressables(clientAddressableGroups);
+			PopSettings(BuildTarget.StandaloneLinux64);
+			RestoreActiveBuildTarget();
+		}
+
+		[MenuItem("FishMMO/Build/Addressables/Build WebGL Addressables")]
+		public static void BuildWebGLAddressables()
+		{
+			PushSettings(BuildTarget.WebGL);
+			SetActiveBuildTarget(BuildTarget.WebGL, StandaloneBuildSubtarget.Player);
+			BuildAddressables(serverAddressableGroups);
+			PopSettings(BuildTarget.WebGL);
+			RestoreActiveBuildTarget();
 		}
 
 		public static void BuildAddressables(string[] excludeGroups)
