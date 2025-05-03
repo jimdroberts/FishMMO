@@ -46,9 +46,24 @@ namespace FishMMO.WebServer
 
 						// Add controllers (MVC) to the DI container
 						services.AddControllers();
+
+						// Configure CORS
+                        services.AddCors(options =>
+                        {
+                            options.AddPolicy("AllowXFishMMO", builder =>
+                            {
+                                builder
+                                    .AllowAnyOrigin()  // Allow all origins (you can specify a list for production)
+                                    .AllowAnyMethod()   // Allow all HTTP methods (GET, POST, OPTIONS)
+                                    .WithHeaders("X-FishMMO");  // Only allow the X-FishMMO header
+                            });
+                        });
 					})
 					.Configure(app =>
 					{
+						// Enable CORS with the configured policy
+                        app.UseCors("AllowXFishMMO");
+
 						app.UseMiddleware<UnityOnlyMiddleware>();
 
 						// Enable routing for API endpoints

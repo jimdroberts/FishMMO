@@ -6765,7 +6765,7 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 1200979439}
   m_HandleRect: {fileID: 1200979438}
   m_Direction: 2
-  m_Value: 0
+  m_Value: 1
   m_Size: 1
   m_NumberOfSteps: 0
   m_OnValueChanged:
@@ -14234,6 +14234,13 @@ MonoBehaviour:
     ActivateOnLoad: 1
     LoadSceneMode: 1
   PostloadScenes: []
+  WebGLPreloadAssets: []
+  WebGLPostloadAssets: []
+  WebGLPreloadScenes:
+  - SceneName: ClientPostboot
+    ActivateOnLoad: 1
+    LoadSceneMode: 1
+  WebGLPostloadScenes: []
 --- !u!1 &1200828874
 GameObject:
   m_ObjectHideFlags: 0
@@ -15152,7 +15159,7 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 462473095}
   m_HandleRect: {fileID: 462473094}
   m_Direction: 2
-  m_Value: 0
+  m_Value: 1
   m_Size: 1
   m_NumberOfSteps: 0
   m_OnValueChanged:

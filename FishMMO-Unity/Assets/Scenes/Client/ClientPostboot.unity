@@ -202,6 +202,13 @@ MonoBehaviour:
   - SceneName: ClientLoginGUI
     ActivateOnLoad: 1
     LoadSceneMode: 1
+  WebGLPreloadAssets: []
+  WebGLPostloadAssets: []
+  WebGLPreloadScenes: []
+  WebGLPostloadScenes:
+  - SceneName: ClientLoginGUI
+    ActivateOnLoad: 1
+    LoadSceneMode: 1
   UILoadingScreenKey: UILoadingScreen
 --- !u!114 &1045518715
 MonoBehaviour:

@@ -13,9 +13,11 @@ public class UnityOnlyMiddleware
 	{
 		var userAgent = context.Request.Headers["X-FishMMO"].ToString();
 
+		logger.LogWarning($"UserAgent: {userAgent}");
+
 		if (!userAgent.Equals("Client"))
 		{
-			logger.LogWarning($"Rejected Non-FishMMO Client request: {userAgent}");
+			logger.LogWarning($"Rejected Non-FishMMO Client");
 			context.Response.StatusCode = StatusCodes.Status403Forbidden;
 			await context.Response.WriteAsync("Access denied.");
 			return;

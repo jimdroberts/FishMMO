@@ -20,7 +20,7 @@ namespace FishMMO.Client
 					// If we failed to load the file.. save a new one
 					Configuration.GlobalSettings.Set("Version", Constants.Configuration.Version);
 					Configuration.GlobalSettings.Set("IPFetchHost", Constants.Configuration.IPFetchHost);
-#if !UNITY_EDITOR
+#if !UNITY_EDITOR && !UNITY_WEBGL
 					Configuration.GlobalSettings.Save();
 #endif
 				}
@@ -69,7 +69,7 @@ namespace FishMMO.Client
 				settingOptions[i].Save();
 			}
 
-#if !UNITY_EDITOR
+#if !UNITY_EDITOR && !UNITY_WEBGL
 			Configuration.GlobalSettings.Save();
 #endif
 		}

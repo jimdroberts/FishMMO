@@ -15,6 +15,11 @@ namespace FishMMO.Shared
 		public List<AddressableSceneLoadData> PreloadScenes = new List<AddressableSceneLoadData>();
 		public List<AddressableSceneLoadData> PostloadScenes = new List<AddressableSceneLoadData>();
 
+		public List<AddressableAssetKey> WebGLPreloadAssets = new List<AddressableAssetKey>();
+		public List<AddressableAssetKey> WebGLPostloadAssets = new List<AddressableAssetKey>();
+		public List<AddressableSceneLoadData> WebGLPreloadScenes = new List<AddressableSceneLoadData>();
+		public List<AddressableSceneLoadData> WebGLPostloadScenes = new List<AddressableSceneLoadData>();
+
 		void Awake()
 		{
 #if UNITY_EDITOR
@@ -23,6 +28,12 @@ namespace FishMMO.Shared
 				AddressableLoadProcessor.EnqueueLoad(assetKey.Keys, assetKey.MergeMode);
 			}
 			AddressableLoadProcessor.EnqueueLoad(EditorPreloadScenes);
+#elif UNITY_WEBGL
+			foreach (AddressableAssetKey assetKey in WebGLPreloadAssets)
+			{
+				AddressableLoadProcessor.EnqueueLoad(assetKey.Keys, assetKey.MergeMode);
+			}
+			AddressableLoadProcessor.EnqueueLoad(WebGLPreloadScenes);
 #else
 			foreach (AddressableAssetKey assetKey in PreloadAssets)
 			{
@@ -70,6 +81,12 @@ namespace FishMMO.Shared
 				AddressableLoadProcessor.EnqueueLoad(assetKey.Keys, assetKey.MergeMode);
 			}
 			AddressableLoadProcessor.EnqueueLoad(EditorPostloadScenes);
+#elif UNITY_WEBGL
+			foreach (AddressableAssetKey assetKey in WebGLPostloadAssets)
+			{
+				AddressableLoadProcessor.EnqueueLoad(assetKey.Keys, assetKey.MergeMode);
+			}
+			AddressableLoadProcessor.EnqueueLoad(WebGLPostloadScenes);
 #else
 			foreach (AddressableAssetKey assetKey in PostloadAssets)
 			{

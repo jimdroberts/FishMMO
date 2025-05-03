@@ -25,14 +25,14 @@ MonoBehaviour:
     m_AssemblyName: Unity.ResourceManager, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null
     m_ClassName: UnityEngine.ResourceManagement.ResourceProviders.BundledAssetProvider
   m_ForceUniqueProvider: 0
-  m_UseAssetBundleCache: 1
+  m_UseAssetBundleCache: 0
   m_UseAssetBundleCrc: 1
   m_UseAssetBundleCrcForCachedBundles: 1
-  m_UseUWRForLocalBundles: 0
-  m_Timeout: 0
+  m_UseUWRForLocalBundles: 1
+  m_Timeout: 15
   m_ChunkedTransfer: 0
   m_RedirectLimit: -1
-  m_RetryCount: 0
+  m_RetryCount: 2
   m_BuildPath:
     m_Id: 4a4084c077ed2fb4ca8c50fc89be0de9
   m_LoadPath:
