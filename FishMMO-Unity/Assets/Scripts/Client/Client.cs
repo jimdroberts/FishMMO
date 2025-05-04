@@ -575,10 +575,17 @@ namespace FishMMO.Client
 
 					yield return request.SendWebRequest();
 
-					if (request.result == UnityWebRequest.Result.ConnectionError ||
-						request.result == UnityWebRequest.Result.ProtocolError)
+					if (request.result == UnityWebRequest.Result.ConnectionError)
 					{
-						onFetchFail?.Invoke("Error: " + request.error);
+						onFetchFail?.Invoke("Connection Error: " + request.error);
+					}
+					else if (request.result == UnityWebRequest.Result.ProtocolError)
+					{
+						onFetchFail?.Invoke("Protocol Error: " + request.error);
+					}
+					else if (request.result == UnityWebRequest.Result.DataProcessingError)
+					{
+						onFetchFail?.Invoke("Data Processing Error: " + request.error);
 					}
 					else
 					{

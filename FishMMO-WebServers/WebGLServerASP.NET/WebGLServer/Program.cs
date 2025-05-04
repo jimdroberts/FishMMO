@@ -1,5 +1,3 @@
-using Microsoft.Extensions.FileProviders;
-
 namespace FishMMO.WebServer
 {
 	public class Program
