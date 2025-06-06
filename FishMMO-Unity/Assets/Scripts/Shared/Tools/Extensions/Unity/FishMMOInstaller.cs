@@ -1,61 +1,175 @@
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using UnityEngine;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
-using Debug = UnityEngine.Debug;
 using FishMMO.Database;
 using Npgsql;
+using Debug = UnityEngine.Debug; // Ensure Debug refers to UnityEngine.Debug
 
 namespace FishMMO.Shared
 {
+	public static class InstallationConstants
+	{
+		public const string DotNetSDKUrl = "https://download.visualstudio.microsoft.com/download/pr/b6f19ef3-52ca-40b1-b78b-0712d3c8bf4d/426bd0d376479d551ce4d5ac0ecf63a5/dotnet-sdk-8.0.302-win-x64.exe";
+		public const string DotNetSDKFileName = "dotnet-sdk-8.0.302-win-x64.exe";
+		public const string DotNetInstallScriptUrl = "https://dot.net/v1/dotnet-install.sh";
+		public const string DotNetInstallScriptFileName = "dotnet-install.sh";
+		public const string DotNetSDKVersion = "8.0.302"; // Full version string
+		public const string DotNetSDKMajorVersion = "8.0"; // Major version for checks
+		public const string DotNetEFVersion = "5.0.17";
+
+		public const string PostgreSQLWindowsInstallerUrl = @"https://sbp.enterprisedb.com/getfile.jsp?fileid=1259105";
+		public const string PostgreSQLWindowsInstallerFileName = "PostgreSQLInstaller.exe";
+		public const string PostgreSQLDefaultSuperuser = "postgres";
+		public const string PostgreSQLDefaultAdminDb = "postgres"; // A database to connect to for admin tasks
+
+		// NGINX Constants
+		public const string NGINXWindowsDownloadUrl = "http://nginx.org/download/nginx-1.24.0.zip"; // Check for the latest stable version
+		public const string NGINXWindowsFileName = "nginx-1.24.0.zip";
+		public const string NGINXWindowsExtractPath = "C:\\nginx"; // Default extraction path on Windows
+
+		// Visual Studio Build Tools Constants
+		public const string VSBuildToolsUrl = "https://aka.ms/vs/17/release/vs_buildtools.exe";
+		public const string VSBuildToolsFileName = "vs_buildtools.exe";
+	}
+
 	public class FishMMOInstaller : MonoBehaviour
 	{
+		private AppSettings _appSettings; // Field to store appSettings loaded once
+
 		private async void Awake()
 		{
+			// Load appsettings.json once at the start
+			string workingDirectory = GetWorkingDirectory();
+			string appSettingsPath = Path.Combine(workingDirectory, "appsettings.json");
+
+			if (File.Exists(appSettingsPath))
+			{
+				try
+				{
+					string jsonContent = File.ReadAllText(appSettingsPath);
+					_appSettings = JsonUtility.FromJson<AppSettings>(jsonContent);
+					Console.WriteLine("appsettings.json loaded successfully.");
+				}
+				catch (Exception ex)
+				{
+					Log($"Error loading appsettings.json: {ex.Message}. Database operations may be affected.");
+					_appSettings = new AppSettings(); // Initialize to prevent NullReferenceException
+				}
+			}
+			else
+			{
+				Log("appsettings.json file not found. Database operations will be limited or unavailable.");
+				_appSettings = new AppSettings(); // Initialize to prevent NullReferenceException
+			}
+
 			while (true)
 			{
-				Console.Clear(); // Clear the console at the beginning of each loop iteration
-				Console.WriteLine("Welcome to the FishMMO Database Tool.");
-				Console.WriteLine("Press a key (1-6):");
-				Console.WriteLine("1 : Install Everything");
-				Console.WriteLine("2 : Install DotNet");
-				Console.WriteLine("3 : Install Python");
-				Console.WriteLine("4 : Install Database");
-				Console.WriteLine("5 : Create Migration");
-				Console.WriteLine("6 : Quit");
+				Console.Clear();
+				Console.WriteLine("Welcome to the FishMMO Installer Tool.");
+				Console.WriteLine("Press a key (1-9):");
+				Console.WriteLine("1 : Install DotNet");
+				Console.WriteLine("2 : Install Visual Studio Build Tools (Windows Only)");
+				Console.WriteLine("3 : Install NGINX (Web Server/Reverse Proxy)");
+				Console.WriteLine("4 : Install PostgreSQL (Database Server)");
+				Console.WriteLine("5 : Install FishMMO Database (User/Schema/Initial Migration)");
+				Console.WriteLine("6 : Create new database migration");
+				Console.WriteLine("7 : Grant User Permissions on Database");
+				Console.WriteLine("8 : Delete FishMMO Database (DANGEROUS!)");
+				Console.WriteLine("9 : Quit");
 
-				ConsoleKeyInfo key = Console.ReadKey(true); // Read key and don't show it in the console
+				ConsoleKeyInfo key = Console.ReadKey(true);
 
 				switch (key.Key)
 				{
 					case ConsoleKey.D1:
-						await InstallEverything();
-						break;
-					case ConsoleKey.D2:
 						await InstallDotNet();
 						break;
-					case ConsoleKey.D3:
-						await InstallPython();
+					case ConsoleKey.D2: // Install Visual Studio Build Tools
+						await InstallVSBuildTools();
 						break;
-					case ConsoleKey.D4:
-						await InstallDatabase();
+					case ConsoleKey.D3: // Install NGINX
+						await InstallNGINX();
 						break;
-					case ConsoleKey.D5:
+					case ConsoleKey.D4: // Install PostgreSQL
+						if (_appSettings == null || string.IsNullOrWhiteSpace(_appSettings.Npgsql?.Host))
+						{
+							Log("appsettings.json is not loaded or Npgsql settings are incomplete. Cannot install PostgreSQL without configuration.");
+							break;
+						}
+						if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+						{
+							await InstallPostgreSQLWindows(_appSettings);
+						}
+						else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ||
+								 RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+						{
+							await InstallPostgreSQLLinuxMAC();
+						}
+						else
+						{
+							Log("Unsupported operating system for PostgreSQL installation.");
+						}
+						break;
+					case ConsoleKey.D5: // Install FishMMO Database
+						if (_appSettings == null || string.IsNullOrWhiteSpace(_appSettings.Npgsql?.Database))
+						{
+							Log("appsettings.json is not loaded or Npgsql database settings are incomplete. Cannot install FishMMO Database without configuration.");
+							break;
+						}
+						string superUsernameInstall = InstallationConstants.PostgreSQLDefaultSuperuser;
+						string superPasswordInstall = PromptForPassword($"Enter PostgreSQL Superuser Password (username is '{superUsernameInstall}'): ");
+
+						if (await InstallFishMMODatabase(superUsernameInstall, superPasswordInstall, _appSettings))
+						{
+							if (PromptForYesNo("Create Initial Migration and apply to database?"))
+							{
+								Console.WriteLine("Creating Initial database migration...");
+								await RunDotNetCommandAsync($"ef migrations add Initial -p {Constants.Configuration.ProjectPath} -s {Constants.Configuration.StartupProject}");
+
+								Console.WriteLine("Updating database...");
+								await RunDotNetCommandAsync($"ef database update -p {Constants.Configuration.ProjectPath} -s {Constants.Configuration.StartupProject}");
+
+								Log($"Initial Migration completed and applied.");
+							}
+						}
+						break;
+					case ConsoleKey.D6: // Create Migration
 						await CreateMigration();
 						break;
-					case ConsoleKey.D6:
+					case ConsoleKey.D7: // Grant User Permissions
+						if (_appSettings == null || string.IsNullOrWhiteSpace(_appSettings.Npgsql?.Database) || string.IsNullOrWhiteSpace(_appSettings.Npgsql?.Username))
+						{
+							Log("appsettings.json or Npgsql database/username is not defined. Cannot grant permissions without configuration.");
+							break;
+						}
+						string superUsernameGrant = InstallationConstants.PostgreSQLDefaultSuperuser;
+						string superPasswordGrant = PromptForPassword($"Enter PostgreSQL Superuser Password (username is '{superUsernameGrant}'): ");
+						await GrantUserPermissions(superUsernameGrant, superPasswordGrant, _appSettings);
+						break;
+					case ConsoleKey.D8: // Delete Database
+						if (_appSettings == null || string.IsNullOrWhiteSpace(_appSettings.Npgsql?.Database))
+						{
+							Log("appsettings.json or Npgsql database name is not defined. Cannot delete database without configuration.");
+							break;
+						}
+						string superUsernameDelete = InstallationConstants.PostgreSQLDefaultSuperuser;
+						string superPasswordDelete = PromptForPassword($"Enter PostgreSQL Superuser Password (username is '{superUsernameDelete}'): ");
+						await DeleteFishMMODatabase(superUsernameDelete, superPasswordDelete, _appSettings);
+						break;
+					case ConsoleKey.D9: // Quit
 #if UNITY_EDITOR
-						EditorApplication.ExitPlaymode(); // Make sure to include the UnityEditor namespace if using Unity
+						EditorApplication.ExitPlaymode();
 #else
-                		Application.Quit();
+                        Application.Quit();
 #endif
 						return; // Exit the method
 					default:
@@ -68,22 +182,28 @@ namespace FishMMO.Shared
 			}
 		}
 
-		private async Task<bool> InstallEverything()
-		{
-			if (!await InstallDotNet())
-			{
-				Log("DotNet 8 and DotNet-EF Tools 5.0.17 are required by FishMMO. Please install them and try again.");
-				return false;
-			}
-			await InstallPython();
-			await InstallDatabase();
-
-			return true;
-		}
-
 		private string GetWorkingDirectory()
 		{
 			return AppDomain.CurrentDomain.BaseDirectory;
+		}
+
+		/// <summary>
+		/// Gets the appropriate shell command and argument prefix for the current OS.
+		/// </summary>
+		private (string shell, string argPrefix) GetShellCommand()
+		{
+			if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+			{
+				return ("cmd.exe", "/c");
+			}
+			else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) || RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+			{
+				return ("/bin/bash", "-c");
+			}
+			else
+			{
+				throw new PlatformNotSupportedException("Unsupported operating system");
+			}
 		}
 
 		/// <summary>
@@ -117,14 +237,10 @@ namespace FishMMO.Shared
 				}
 				else
 				{
+					// Default behavior: return true if exit code is 0 (success)
 					return process.ExitCode == 0;
 				}
 			}
-		}
-
-		private async Task RunDismCommandAsync(string arguments)
-		{
-			await RunProcessAsync("dism.exe", arguments);
 		}
 
 		private string PromptForInput(string prompt)
@@ -175,7 +291,7 @@ namespace FishMMO.Shared
 				else if (key.Key == ConsoleKey.Backspace && password.Length > 0)
 				{
 					password = password.Substring(0, (password.Length - 1));
-					Console.Write("\b \b"); // Erase the last * from console
+					Console.Write("\b \b"); // Erase the last * from console: Backspace, Space (to overwrite), Backspace
 				}
 			}
 			while (key.Key != ConsoleKey.Enter);
@@ -184,6 +300,9 @@ namespace FishMMO.Shared
 			return password;
 		}
 
+		/// <summary>
+		/// Logs a message to the console and Unity's Debug.Log.
+		/// </summary>
 		private void Log(string message, bool logTime = false)
 		{
 			if (string.IsNullOrWhiteSpace(message))
@@ -193,16 +312,16 @@ namespace FishMMO.Shared
 			if (logTime)
 			{
 				Debug.Log($"{DateTime.Now}: {message}");
+				//Console.WriteLine($"{DateTime.Now}: {message}");
 			}
 			else
 			{
 				Debug.Log(message);
+				//Console.WriteLine(message);
 			}
-			Console.WriteLine("Press any key to continue...");
-			Console.ReadKey(true); // Wait for user to press a key
 		}
 
-		private async Task<string> DownloadFileAsync(string url, string fileName = "tempFileName.tmpFile")
+		private async Task<string> DownloadFileAsync(string url, string fileName)
 		{
 			try
 			{
@@ -211,12 +330,12 @@ namespace FishMMO.Shared
 
 				if (File.Exists(outputPath))
 				{
-					Console.WriteLine(outputPath + " already exists... Skipping download.");
+					Log(outputPath + " already exists... Skipping download.");
 					return outputPath;
 				}
 
-				Console.WriteLine($"Downloading file from {url}");
-				Console.WriteLine("Please wait...");
+				Log($"Downloading file from {url}");
+				Log("Please wait...");
 				using (HttpClient client = new HttpClient())
 				using (HttpResponseMessage response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead))
 				{
@@ -224,11 +343,9 @@ namespace FishMMO.Shared
 
 					if (response.Content.Headers.ContentDisposition != null)
 					{
-						fileName = response.Content.Headers.ContentDisposition.FileNameStar ?? response.Content.Headers.ContentDisposition.FileName;
-					}
-					else
-					{
-						//Log("Failed to get filename from content-disposition header.");
+						// Prefer filename from content-disposition if available
+						fileName = response.Content.Headers.ContentDisposition.FileNameStar ?? response.Content.Headers.ContentDisposition.FileName ?? fileName;
+						outputPath = Path.Combine(tempDir, fileName); // Update path if filename changed
 					}
 
 					using (Stream streamToReadFrom = await response.Content.ReadAsStreamAsync())
@@ -238,7 +355,7 @@ namespace FishMMO.Shared
 							await streamToReadFrom.CopyToAsync(streamToWriteTo);
 						}
 					}
-					Console.WriteLine($"File successfully downloaded to {outputPath}");
+					Log($"File successfully downloaded to {outputPath}");
 					return outputPath;
 				}
 			}
@@ -248,232 +365,6 @@ namespace FishMMO.Shared
 			}
 		}
 
-		#region WSL
-		private async Task<bool> IsVirtualizationEnabledAsync()
-		{
-			return await RunProcessAsync("systeminfo", "",
-								(e, o, err) => { return o.Contains("Virtualization Enabled In Firmware: Yes") || o.Contains("A hypervisor has been detected."); });
-		}
-
-		private async Task<bool> IsHyperVEnabledAsync()
-		{
-			return await RunProcessAsync("powershell.exe", "-Command \"Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V-All\"",
-								(e, o, err) => { return o.Contains("State : Enabled"); });
-		}
-
-		private async Task<bool> IsWSLInstalledAsync()
-		{
-			if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-			{
-				return true;
-			}
-			return await RunProcessAsync("where", "/q wsl.exe");
-		}
-
-		private async Task<bool> InstallWSL()
-		{
-			if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-			{
-				return true;
-			}
-
-			bool virtualization = await IsVirtualizationEnabledAsync();
-			bool hyperV = await IsHyperVEnabledAsync();
-
-			if (virtualization || hyperV)
-			{
-				if (!await IsWSLInstalledAsync())
-				{
-					if (PromptForYesNo("Windows Subsystem for Linux needs to be installed for Docker. Would you like to install it?"))
-					{
-						Console.WriteLine("Installing WSL...");
-						await RunDismCommandAsync("/online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart");
-						Log("WSL has been installed.");
-						return true;
-					}
-					else
-					{
-						return false;
-					}
-				}
-				else
-				{
-					Log("WSL is already installed.");
-					return true;
-				}
-			}
-			else
-			{
-				Log("Virtualization is not enabled. Please enable Virtualization in your systems BIOS.");
-				return false;
-			}
-		}
-		#endregion
-
-		#region Python
-		private async Task<bool> IsPythonInstalled()
-		{
-			string command;
-			string arguments;
-
-			if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-			{
-				// Check for Python install in the registry
-				command = "reg";
-				arguments = "query HKEY_LOCAL_MACHINE\\SOFTWARE\\Python\\PythonCore /s";
-
-				try
-				{
-					return await RunProcessAsync(command, arguments);
-				}
-				catch (Exception ex)
-				{
-					Log($"Error checking Python installation on Windows: {ex.Message}");
-					return false; // Return false if an error occurs
-				}
-			}
-			else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ||
-					 RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-			{
-				// For Linux and macOS, check for python3 or python in the system PATH
-				command = "/bin/bash";
-				arguments = "-c \"command -v python3 || command -v python\"";
-
-				try
-				{
-					return await RunProcessAsync(command, arguments, (e, o, err) =>
-					{
-						return !string.IsNullOrEmpty(o);
-					});
-				}
-				catch (Exception ex)
-				{
-					Log($"Error checking Python installation: {ex.Message}");
-					return false; // Return false if an error occurs
-				}
-			}
-			else
-			{
-				throw new PlatformNotSupportedException("Unsupported operating system");
-			}
-		}
-
-		private async Task InstallPython()
-		{
-			if (await IsPythonInstalled())
-			{
-				Log("Python is already installed.");
-				return;
-			}
-
-			if (!PromptForYesNo("Install Python?"))
-			{
-				return;
-			}
-
-			string command;
-			string arguments;
-
-			if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-			{
-				command = "powershell.exe";
-				arguments = "-Command \"[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest https://www.python.org/ftp/python/3.12.4/python-3.12.4-amd64.exe -OutFile python-installer.exe\"";
-			}
-			else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ||
-					 RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-			{
-				command = "/bin/bash";
-				arguments = "-c \"sudo apt-get update && sudo apt-get install -y python3\"";
-			}
-			else
-			{
-				throw new PlatformNotSupportedException("Unsupported operating system");
-			}
-
-			try
-			{
-				Console.WriteLine("Downloading Python...");
-
-				if (await RunProcessAsync(command, arguments, (e, o, err) =>
-								  {
-									  if (e != 0)
-									  {
-										  // Handle non-zero exit codes if necessary
-										  throw new Exception($"Python Download failed with exit code {e}.\nError: {err}");
-									  }
-									  Log(o);
-									  return true;
-								  }))
-				{
-					// Install Python silently on Windows
-					if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-					{
-						Console.WriteLine("Installing Python...");
-
-						if (await RunProcessAsync("python-installer.exe", "/quiet InstallAllUsers=1 PrependPath=1", (e, o, err) =>
-									{
-										if (e != 0)
-										{
-											// Handle non-zero exit codes if necessary
-											throw new Exception($"Python Install failed with exit code {e}.\nError: {err}");
-										}
-										Log(o);
-										return true;
-									}))
-						{
-							Log("Python has been installed.");
-
-							await UpdatePip();
-						}
-					}
-					else
-					{
-						Log("Python has been installed.");
-
-						await UpdatePip();
-					}
-				}
-			}
-			catch (Exception ex)
-			{
-				Log($"Error installing Python: {ex.Message}");
-			}
-		}
-
-		private async Task UpdatePip()
-		{
-			try
-			{
-				Console.WriteLine("Updating pip...");
-				string command;
-				string arguments;
-
-				if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-				{
-					command = "python";
-					arguments = "-m pip install --upgrade pip";
-				}
-				else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) || RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-				{
-					command = "/bin/bash";
-					arguments = $"-c \"sudo python3 -m pip install --upgrade pip || sudo python -m pip install --upgrade pip\"";
-				}
-				else
-				{
-					throw new PlatformNotSupportedException("Unsupported operating system");
-				}
-
-				await RunProcessAsync(command, arguments);
-
-				Log("pip updated successfully.");
-			}
-			catch (Exception ex)
-			{
-				Log($"Error updating pip: {ex.Message}");
-			}
-		}
-		#endregion
-
 		#region DotNet
 		private async Task<bool> InstallDotNet()
 		{
@@ -481,7 +372,7 @@ namespace FishMMO.Shared
 			{
 				if (PromptForYesNo("DotNet 8 is not installed, would you like to install it?"))
 				{
-					Console.WriteLine("Installing DotNet...");
+					Log("Installing DotNet...");
 					await DownloadAndInstallDotNetAsync();
 					Log("DotNet has been installed.");
 					return true;
@@ -493,17 +384,17 @@ namespace FishMMO.Shared
 			}
 			else
 			{
-				Console.WriteLine("DotNet is already installed.");
+				Log("DotNet is already installed.");
 			}
 
 			if (!await IsDotNetEFInstalledAsync())
 			{
 				if (PromptForYesNo("DotNet-EF is not installed, would you like to install it?"))
 				{
-					Console.WriteLine("Installing DotNet-EF v5.0.17...");
-					await RunDotNetCommandAsync("tool install --global dotnet-ef --version 5.0.17");
+					Log($"Installing DotNet-EF v{InstallationConstants.DotNetEFVersion}...");
+					await RunDotNetCommandAsync($"tool install --global dotnet-ef --version {InstallationConstants.DotNetEFVersion}");
 
-					Log("DotNet-EF is has been installed.");
+					Log("DotNet-EF has been installed.");
 					return true;
 				}
 				return false;
@@ -517,29 +408,15 @@ namespace FishMMO.Shared
 
 		private async Task<bool> IsDotNetInstalledAsync()
 		{
-			string command;
-			string arguments = $"dotnet --version";
+			// Use the GetShellCommand helper
+			(string shell, string argPrefix) = GetShellCommand();
+			string arguments = $"{argPrefix} \"dotnet --version\"";
 
-			if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+			return await RunProcessAsync(shell, arguments, (e, o, err) =>
 			{
-				command = "cmd.exe";
-				arguments = $"/c {arguments}";
-			}
-			else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ||
-					 RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-			{
-				command = "/bin/bash";
-				arguments = $"-c \"{arguments}\"";
-			}
-			else
-			{
-				throw new PlatformNotSupportedException("Unsupported operating system");
-			}
-
-			return await RunProcessAsync(command, arguments, (e, o, err) =>
-			{
+				// Check if the exit code is 0 AND the output contains the major version
 				return e == 0 &&
-					   o.Contains("8.0", StringComparison.OrdinalIgnoreCase);
+					   o.Contains(InstallationConstants.DotNetSDKMajorVersion, StringComparison.OrdinalIgnoreCase);
 			});
 		}
 
@@ -547,14 +424,17 @@ namespace FishMMO.Shared
 		{
 			if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
 			{
-				string installerPath = await DownloadFileAsync("https://download.visualstudio.microsoft.com/download/pr/b6f19ef3-52ca-40b1-b78b-0712d3c8bf4d/426bd0d376479d551ce4d5ac0ecf63a5/dotnet-sdk-8.0.302-win-x64.exe", "dotnet-sdk-8.0.302-win-x64.exe");
+				string installerPath = await DownloadFileAsync(InstallationConstants.DotNetSDKUrl, InstallationConstants.DotNetSDKFileName);
 
 				try
 				{
-					ProcessStartInfo startInfo = new ProcessStartInfo();
-					startInfo.FileName = installerPath;
-					startInfo.UseShellExecute = true;
-					startInfo.Verb = "runas";
+					ProcessStartInfo startInfo = new ProcessStartInfo
+					{
+						FileName = installerPath,
+						Arguments = "/install /quiet /norestart", // Silent install options
+						UseShellExecute = true,
+						Verb = "runas" // Request administrator privileges
+					};
 
 					Process process = Process.Start(startInfo);
 
@@ -578,15 +458,12 @@ namespace FishMMO.Shared
 			else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ||
 					 RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
 			{
-				string version = "8.0.302";
-				string installDir = "/usr/local/share/dotnet";
-				string downloadUrl = "https://dot.net/v1/dotnet-install.sh";
-				string shScriptFile = "dotnet-install.sh";
+				string shScriptFile = InstallationConstants.DotNetInstallScriptFileName;
 
 				// Download the shell script
 				using (HttpClient client = new HttpClient())
 				{
-					var scriptContent = await client.GetStringAsync(downloadUrl);
+					var scriptContent = await client.GetStringAsync(InstallationConstants.DotNetInstallScriptUrl);
 					await File.WriteAllTextAsync(shScriptFile, scriptContent);
 				}
 
@@ -595,7 +472,7 @@ namespace FishMMO.Shared
 
 				// Run the shell script
 				await RunProcessAsync("/bin/bash",
-									  $"./{shScriptFile} --version {version} --install-dir {installDir}",
+									  $"./{shScriptFile} --version {InstallationConstants.DotNetSDKVersion}",
 									  (e, o, err) =>
 									  {
 										  if (e != 0)
@@ -615,293 +492,118 @@ namespace FishMMO.Shared
 		{
 			try
 			{
-				return await RunProcessAsync("dotnet",
-											 "tool list --global",
-											 (e, o, err) =>
-											 {
-												 return o.Contains("dotnet-ef");
-											 });
+				return await RunDotNetCommandAsync(
+					"tool list --global",
+					(e, o, err) => o.Contains("dotnet-ef", StringComparison.OrdinalIgnoreCase));
 			}
 			catch (Exception ex)
 			{
 				Log($"Error checking dotnet-ef tool: {ex.Message}");
-				return false; // Return false if an error occurs
+				return false;
 			}
 		}
 
-		private bool pathSet = false;
-		private async Task RunDotNetCommandAsync(string arguments)
+		private bool _pathSet = false; // Flag to ensure path is set only once for Linux/OSX
+		private async Task<bool> RunDotNetCommandAsync(string arguments, Func<int, string, string, bool> customProcessResult = null)
 		{
 			if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ||
 				RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
 			{
-				if (!pathSet)
+				if (!_pathSet)
 				{
+					// Ensure ~/.dotnet/tools is in PATH and DOTNET_ROOT is set for non-Windows
 					string homePath = Environment.GetEnvironmentVariable("HOME");
 					if (string.IsNullOrEmpty(homePath))
 					{
-						throw new Exception("The HOME environment variable is not set.");
+						Log("Warning: The HOME environment variable is not set. DotNet commands may fail.");
 					}
-
-					string currentPath = Environment.GetEnvironmentVariable("PATH");
-					if (string.IsNullOrEmpty(currentPath))
+					else
 					{
-						throw new Exception("The PATH environment variable is not set.");
+						string currentPath = Environment.GetEnvironmentVariable("PATH") ?? "";
+						string dotnetToolsPath = Path.Combine(homePath, ".dotnet", "tools");
+
+						if (!currentPath.Split(':').Contains(dotnetToolsPath))
+						{
+							string newPath = $"{currentPath}:{dotnetToolsPath}";
+							Environment.SetEnvironmentVariable("PATH", newPath);
+							Log($"Updated PATH to include: {dotnetToolsPath}");
+						}
 					}
-
-					string dotnetToolsPath = Path.Combine(homePath, ".dotnet", "tools");
-
-					if (!currentPath.Split(':').Contains(dotnetToolsPath))
+					// For systems where dotnet might not be globally installed via default package managers
+					string dotnetRoot = "/usr/share/dotnet"; // Common install location
+					if (Directory.Exists(dotnetRoot))
 					{
-						string newPath = $"{currentPath}:{dotnetToolsPath}";
-						Environment.SetEnvironmentVariable("PATH", newPath);
+						Environment.SetEnvironmentVariable("DOTNET_ROOT", dotnetRoot);
+						Log($"Set DOTNET_ROOT to: {dotnetRoot}");
 					}
 
-					string dotnetRoot = "/usr/share/dotnet";
-					Environment.SetEnvironmentVariable("DOTNET_ROOT", dotnetRoot);
-
-					pathSet = true;
+					_pathSet = true;
 				}
 			}
 
 			Console.WriteLine("Running DotNet Command: \r\n" +
-				"dotnet " + arguments);
+							  "dotnet " + arguments);
 
-			await RunProcessAsync("dotnet", arguments,
-								  (e, o, err) =>
-								  {
-									  if (e != 0)
-									  {
-										  // Handle non-zero exit codes if necessary
-										  Log($"DotNet command failed with exit code {e}.\nError: {err}");
-									  }
-									  Log(o);
-									  return true;
-								  });
-		}
-		#endregion
+			(string shell, string argPrefix) = GetShellCommand();
+			// Quote the entire 'dotnet arguments' part for the shell to interpret it as a single command
+			string fullArguments = $"{argPrefix} \"dotnet {arguments}\"";
 
-		#region Docker
-		private async Task<bool> InstallDocker()
-		{
-			if (!await InstallWSL())
-			{
-				return false;
-			}
-
-			if (await IsDockerInstalledAsync())
-			{
-				Log("Docker is already installed.");
-				return true;
-			}
-
-			Console.WriteLine("Installing Docker...");
-
-			try
-			{
-				if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+			bool success = await RunProcessAsync(shell, fullArguments,
+				(exitCode, output, error) =>
 				{
-					await InstallDockerWindowsAsync();
-				}
-				else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-				{
-					await InstallDockerLinuxAsync();
-					await InstallPipLinuxAsync();
-				}
-				else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-				{
-					await InstallDockerMacAsync();
-				}
-				else
-				{
-					throw new PlatformNotSupportedException("Unsupported operating system");
-				}
-
-				Log("Docker has been installed.");
-				return true;
-			}
-			catch (Exception ex)
-			{
-				Log($"Installation failed: {ex.Message}");
-				return false;
-			}
-		}
-
-		private async Task InstallDockerWindowsAsync()
-		{
-			await RunProcessAsync("curl", "-L https://desktop.docker.com/win/stable/Docker%20Desktop%20Installer.exe -o DockerInstaller.exe");
-			await RunProcessAsync("DockerInstaller.exe", "/quiet /install");
-
-			// Delete DockerInstaller.exe
-			if (File.Exists("DockerInstaller.exe"))
-			{
-				File.Delete("DockerInstaller.exe");
-			}
-		}
-
-		private async Task InstallDockerLinuxAsync()
-		{
-			string command = "curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh";
-
-			await RunProcessAsync("bash",
-								  $"-c \"{command}\"",
-								  (e, o, err) =>
-								  {
-									  if (e != 0)
-									  {
-										  throw new Exception($"Command '{command}' failed with exit code {e}");
-									  }
-									  return true;
-								  });
-		}
-
-		private async Task InstallPipLinuxAsync()
-		{
-			string command = "sudo apt install -y python3-pip";
-
-			await RunProcessAsync("bash",
-								  $"-c \"{command}\"",
-								  (e, o, err) =>
-								  {
-									  if (e != 0)
-									  {
-										  throw new Exception($"Command '{command}' failed with exit code {e}");
-									  }
-									  return true;
-								  });
-		}
-
-		private async Task InstallDockerMacAsync()
-		{
-			await RunProcessAsync("brew", "install --cask docker");
-		}
-
-		private async Task<bool> IsDockerInstalledAsync()
-		{
-			return await RunProcessAsync(RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "where" : "which", "docker",
-										 (e, o, err) =>
-										 {
-											 return e == 0 && !string.IsNullOrWhiteSpace(o);
-										 });
-		}
-
-		private async Task<string> RunDockerCommandAsync(string commandArgs)
-		{
-			Console.WriteLine("Running Docker Command: \r\n" +
-				"docker " + commandArgs);
-
-			using (Process process = new Process())
-			{
-				process.StartInfo.FileName = "docker";
-				process.StartInfo.Arguments = commandArgs;
-				process.StartInfo.RedirectStandardOutput = true;
-				process.StartInfo.RedirectStandardError = true;
-				process.StartInfo.UseShellExecute = false;
-				process.StartInfo.CreateNoWindow = true;
-
-				var outputBuilder = new System.Text.StringBuilder();
-				var errorOutputBuilder = new System.Text.StringBuilder();
-
-				process.OutputDataReceived += (sender, e) =>
-				{
-					if (!string.IsNullOrEmpty(e.Data))
+					// Always log standard output and error from the process
+					if (!string.IsNullOrWhiteSpace(output))
 					{
-						outputBuilder.AppendLine(e.Data);
+						Console.WriteLine(output); // Print standard output directly to console
 					}
-				};
-
-				process.ErrorDataReceived += (sender, e) =>
-				{
-					if (!string.IsNullOrEmpty(e.Data))
+					if (!string.IsNullOrWhiteSpace(error))
 					{
-						errorOutputBuilder.AppendLine(e.Data);
+						Log($"Process Error: {error}"); // Use Log for standard error
 					}
-				};
 
-				process.Start();
-				process.BeginOutputReadLine();
-				process.BeginErrorReadLine();
+					// If a custom success criteria is provided, use it.
+					if (customProcessResult != null)
+					{
+						return customProcessResult.Invoke(exitCode, output, error);
+					}
+					else
+					{
+						// Default success criteria: exit code is 0
+						return exitCode == 0;
+					}
+				});
 
-				await process.WaitForExitAsync();
-
-				string output = outputBuilder.ToString();
-				string errorOutput = errorOutputBuilder.ToString();
-
-				return output + "\r\n" + errorOutput;
-			}
-		}
-
-		/// <summary>
-		/// Docker-Compose commands are not available in the editor.
-		/// </summary>
-		private async Task<string> RunDockerComposeCommandAsync(string commandArgs, Dictionary<string, string> environmentVariables = null)
-		{
-			Console.WriteLine("Running Docker-Compose Command: \r\n" +
-				"docker-compose " + commandArgs);
-
-			using (Process process = new Process())
+			if (!success)
 			{
-				process.StartInfo.FileName = "docker-compose";
-				process.StartInfo.Arguments = commandArgs;
-				if (environmentVariables != null)
-				{
-					foreach (KeyValuePair<string, string> kvp in environmentVariables)
-					{
-						process.StartInfo.EnvironmentVariables[kvp.Key] = kvp.Value;
-					}
-				}
-				process.StartInfo.RedirectStandardOutput = true;
-				process.StartInfo.RedirectStandardError = true;
-				process.StartInfo.UseShellExecute = false;
-				process.StartInfo.CreateNoWindow = true;
-
-				var outputBuilder = new System.Text.StringBuilder();
-				var errorOutputBuilder = new System.Text.StringBuilder();
-
-				process.OutputDataReceived += (sender, e) =>
-				{
-					if (!string.IsNullOrEmpty(e.Data))
-					{
-						outputBuilder.AppendLine(e.Data);
-					}
-				};
-
-				process.ErrorDataReceived += (sender, e) =>
-				{
-					if (!string.IsNullOrEmpty(e.Data))
-					{
-						errorOutputBuilder.AppendLine(e.Data);
-					}
-				};
-
-				process.Start();
-				process.BeginOutputReadLine();
-				process.BeginErrorReadLine();
-
-				await process.WaitForExitAsync();
-
-				string output = outputBuilder.ToString();
-				string errorOutput = errorOutputBuilder.ToString();
-
-				return output + "\r\n" + errorOutput;
+				Log($"DotNet command 'dotnet {arguments}' failed.");
 			}
+			return success;
 		}
 		#endregion
 
 		#region Database
 		private async Task<bool> InstallPostgreSQLWindows(AppSettings appSettings)
 		{
-			string superUsername = "postgres";//PromptForInput("Enter PostgreSQL Superuser Username: ");
-			string superPassword = PromptForPassword("Enter new PostgreSQL Superuser Password (Username is default to \"postgres\"): ");
+			string superUsername = InstallationConstants.PostgreSQLDefaultSuperuser;
+			string superPassword = PromptForPassword($"Enter new PostgreSQL Superuser Password (username is '{superUsername}'): ");
 
-			if (!PromptForYesNo("Install PostgreSQL?"))
+			if (!PromptForYesNo("Install PostgreSQL server?"))
 			{
 				return false;
 			}
 
-			Console.WriteLine("Installing PostgreSQL...");
+			Log("Installing PostgreSQL...");
 
-			string installerPath = await DownloadFileAsync(@"https://sbp.enterprisedb.com/getfile.jsp?fileid=1259105", "PostgreSQLInstaller.exe");
+			string installerPath;
+			try
+			{
+				installerPath = await DownloadFileAsync(InstallationConstants.PostgreSQLWindowsInstallerUrl, InstallationConstants.PostgreSQLWindowsInstallerFileName);
+			}
+			catch (Exception ex)
+			{
+				Log($"Failed to download PostgreSQL installer: {ex.Message}");
+				return false;
+			}
 
 			try
 			{
@@ -912,12 +614,14 @@ namespace FishMMO.Shared
 								   $"--serverport {appSettings.Npgsql.Port} " +
 								   $"--disable-components pgAdmin,stackbuilder";
 
-				ProcessStartInfo startInfo = new ProcessStartInfo();
-				startInfo.FileName = installerPath;
-				startInfo.Arguments = arguments;
-				startInfo.CreateNoWindow = true;
-				startInfo.UseShellExecute = true;
-				startInfo.Verb = "runas";
+				ProcessStartInfo startInfo = new ProcessStartInfo
+				{
+					FileName = installerPath,
+					Arguments = arguments,
+					CreateNoWindow = true,
+					UseShellExecute = true, // Must be true for Verb "runas"
+					Verb = "runas" // Request administrator privileges
+				};
 
 				Process process = Process.Start(startInfo);
 
@@ -931,7 +635,7 @@ namespace FishMMO.Shared
 				}
 				else
 				{
-					Log($"PostgreSQL installation failed with exit code {exitCode}.");
+					Log($"PostgreSQL installation failed with exit code {exitCode}. Please check installer logs or try running the installer manually.");
 					return false;
 				}
 			}
@@ -944,316 +648,722 @@ namespace FishMMO.Shared
 
 		private async Task<bool> InstallPostgreSQLLinuxMAC()
 		{
-			if (PromptForYesNo("Install PostgreSQL?"))
+			if (!PromptForYesNo("Install PostgreSQL server?"))
 			{
-				Console.WriteLine("Installing PostgreSQL...");
-
-				try
-				{
-					// Detect platform
-					bool isMac = RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
-
-					string updateCommand = isMac ? "brew update" : "sudo apt-get update";
-					bool updateSuccess = await RunProcessAsync("/bin/bash", $"-c \"{updateCommand}\"",
-						(exitCode, output, error) =>
-						{
-							if (exitCode != 0)
-							{
-								Log($"Failed to update package lists. Exit code: {exitCode}\nError: {error}");
-								return false;
-							}
-							return true;
-						});
-
-					if (!updateSuccess) return false;
-
-					string installCommand = isMac ? "brew install postgresql" : "sudo apt-get install -y postgresql postgresql-contrib";
-					bool installSuccess = await RunProcessAsync("/bin/bash", $"-c \"{installCommand}\"",
-						(exitCode, output, error) =>
-						{
-							if (exitCode != 0)
-							{
-								Log($"Failed to install PostgreSQL. Exit code: {exitCode}\nError: {error}");
-								return false;
-							}
-							return true;
-						});
-
-					if (!installSuccess) return false;
-
-					string startCommand = isMac ? "brew services start postgresql" : "sudo systemctl start postgresql";
-					bool startSuccess = await RunProcessAsync("/bin/bash", $"-c \"{startCommand}\"",
-						(exitCode, output, error) =>
-						{
-							if (exitCode != 0)
-							{
-								Log($"Failed to start PostgreSQL. Exit code: {exitCode}\nError: {error}");
-								return false;
-							}
-							return true;
-						});
-
-					if (!startSuccess) return false;
-
-					if (!isMac)
-					{
-						string enableCommand = isMac ? null : "sudo systemctl enable postgresql";
-
-						bool enableSuccess = await RunProcessAsync("/bin/bash", $"-c \"{enableCommand}\"",
-							(exitCode, output, error) =>
-							{
-								if (exitCode != 0)
-								{
-									Log($"Failed to enable PostgreSQL to start on boot. Exit code: {exitCode}\nError: {error}");
-									return false;
-								}
-								return true;
-							});
-
-						if (!enableSuccess) return false;
-					}
-
-					if (PromptForYesNo("Update PostgreSQL Superuser Password?"))
-					{
-						string superUsername = "postgres";
-						string superPassword = PromptForPassword("Enter new PostgreSQL Superuser Password (Username is default to \"postgres\"): ");
-
-						string updateUserCommand = $"ALTER USER {superUsername} WITH PASSWORD '{superPassword}';";
-
-						bool updateUserSuccess = await RunProcessAsync("/bin/bash", $"-c \"sudo -u postgres psql -c \\\"{updateUserCommand}\\\"\"",
-						(exitCode, output, error) =>
-						{
-							if (exitCode != 0)
-							{
-								Log($"Failed to update PostgreSQL superuser. Exit code: {exitCode}\nError: {error}");
-								return false;
-							}
-							return true;
-						});
-
-						if (!updateUserSuccess) return false;
-					}
-
-					Log("PostgreSQL installation successful.");
-				}
-				catch (Exception ex)
-				{
-					Log($"Error installing PostgreSQL: {ex.Message}");
-					return false;
-				}
+				return false;
 			}
-			return true;
+
+			Log("Installing PostgreSQL...");
+
+			try
+			{
+				bool isMac = RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
+				string updateCommand = isMac ? "brew update" : "sudo apt-get update";
+				string installCommand = isMac ? "brew install postgresql" : "sudo apt-get install -y postgresql postgresql-contrib";
+				string startCommand = isMac ? "brew services start postgresql" : "sudo systemctl start postgresql";
+				string enableCommand = isMac ? null : "sudo systemctl enable postgresql"; // Linux-specific
+
+				(string shell, string argPrefix) = GetShellCommand();
+
+				if (!await RunProcessAsync(shell, $"{argPrefix} \"{updateCommand}\"", (e, o, err) =>
+				{
+					if (e != 0) { Log($"Failed to update package lists. Error: {err}"); return false; }
+					return true;
+				})) return false;
+
+				if (!await RunProcessAsync(shell, $"{argPrefix} \"{installCommand}\"", (e, o, err) =>
+				{
+					if (e != 0) { Log($"Failed to install PostgreSQL. Error: {err}"); return false; }
+					return true;
+				})) return false;
+
+				if (!await RunProcessAsync(shell, $"{argPrefix} \"{startCommand}\"", (e, o, err) =>
+				{
+					if (e != 0) { Log($"Failed to start PostgreSQL. Error: {err}"); return false; }
+					return true;
+				})) return false;
+
+				if (!isMac && enableCommand != null)
+				{
+					if (!await RunProcessAsync(shell, $"{argPrefix} \"{enableCommand}\"", (e, o, err) =>
+					{
+						if (e != 0) { Log($"Failed to enable PostgreSQL to start on boot. Error: {err}"); return false; }
+						return true;
+					})) return false;
+				}
+
+				if (PromptForYesNo("Update PostgreSQL Superuser Password?"))
+				{
+					string superUsername = InstallationConstants.PostgreSQLDefaultSuperuser;
+					string superPassword = PromptForPassword($"Enter new PostgreSQL Superuser Password (username is '{superUsername}'): ");
+
+					string updateUserCommand = $"ALTER USER {superUsername} WITH PASSWORD '{superPassword}';";
+					// Using psql -c to execute SQL command as postgres user
+					if (!await RunProcessAsync(shell, $"{argPrefix} \"sudo -u postgres psql -c \\\"{updateUserCommand}\\\"\"",
+					(e, o, err) =>
+					{
+						if (e != 0) { Log($"Failed to update PostgreSQL superuser password. Error: {err}"); return false; }
+						return true;
+					})) return false;
+				}
+
+				Log("PostgreSQL installation successful.");
+				return true;
+			}
+			catch (Exception ex)
+			{
+				Log($"Error installing PostgreSQL: {ex.Message}");
+				return false;
+			}
 		}
 
 		public async Task<bool> InstallFishMMODatabase(string superUsername, string superPassword, AppSettings appSettings)
 		{
 			try
 			{
-				Console.WriteLine($"Installing FishMMO Database {appSettings.Npgsql.Database} using appsettings.json");
-				string connectionString = $"Host={appSettings.Npgsql.Host};Port={appSettings.Npgsql.Port};Username={superUsername};Password={superPassword};";
+				Log($"Attempting to connect to PostgreSQL at {appSettings.Npgsql.Host}:{appSettings.Npgsql.Port}");
+				// Connect to a default administrative database (like 'postgres') to create the new database
+				string connectionString = $"Host={appSettings.Npgsql.Host};Port={appSettings.Npgsql.Port};Username={superUsername};Password={superPassword};Database={InstallationConstants.PostgreSQLDefaultAdminDb}";
 
-				// Connect to PostgreSQL
 				using (var connection = new NpgsqlConnection(connectionString))
 				{
 					await connection.OpenAsync();
+					Log("Successfully connected to PostgreSQL server.");
 
 					// Create database
-					if (PromptForYesNo($"Create Database {appSettings.Npgsql.Database}?"))
+					if (PromptForYesNo($"Create Database '{appSettings.Npgsql.Database}'?"))
 					{
-						await CreateDatabase(connection, appSettings.Npgsql.Database);
+						using (var checkDbCommand = new NpgsqlCommand($"SELECT 1 FROM pg_database WHERE datname = @dbName", connection))
+						{
+							checkDbCommand.Parameters.AddWithValue("dbName", appSettings.Npgsql.Database);
+							var result = await checkDbCommand.ExecuteScalarAsync();
+							if (result != null)
+							{
+								Log($"Database '{appSettings.Npgsql.Database}' already exists. Skipping creation.");
+							}
+							else
+							{
+								Log($"Creating database '{appSettings.Npgsql.Database}'...");
+								await CreateDatabase(connection, appSettings.Npgsql.Database);
+								Log($"Database '{appSettings.Npgsql.Database}' created successfully.");
+							}
+						}
 					}
 
-					if (PromptForYesNo($"Create User Role {appSettings.Npgsql.Username}?"))
+					// Create user role
+					if (PromptForYesNo($"Create User Role '{appSettings.Npgsql.Username}' for database access?"))
 					{
-						// Create user role
-						await CreateUser(connection, appSettings.Npgsql.Username, appSettings.Npgsql.Password);
-
-						// Grant privileges
+						using (var checkUserCommand = new NpgsqlCommand($"SELECT 1 FROM pg_roles WHERE rolname = @username", connection))
+						{
+							checkUserCommand.Parameters.AddWithValue("username", appSettings.Npgsql.Username);
+							var result = await checkUserCommand.ExecuteScalarAsync();
+							if (result != null)
+							{
+								Log($"User role '{appSettings.Npgsql.Username}' already exists. Skipping creation.");
+							}
+							else
+							{
+								Log($"Creating user role '{appSettings.Npgsql.Username}'...");
+								await CreateUser(connection, appSettings.Npgsql.Username, appSettings.Npgsql.Password);
+								Log($"User role '{appSettings.Npgsql.Username}' created successfully.");
+							}
+						}
+						// Grant privileges (always attempt to grant, even if user existed)
+						Log($"Granting privileges on database '{appSettings.Npgsql.Database}' to user '{appSettings.Npgsql.Username}'...");
 						await GrantPrivileges(connection, appSettings.Npgsql.Username, appSettings.Npgsql.Database);
+						Log("Privileges granted successfully.");
 					}
 
-					Log("FishMMO Database installed.");
+					Log("FishMMO Database components installed/configured.");
 					return true;
 				}
 			}
+			catch (NpgsqlException npgEx)
+			{
+				Log($"PostgreSQL connection or database operation error: {npgEx.Message}. Check your appsettings.json and PostgreSQL server status.");
+				return false;
+			}
 			catch (Exception ex)
 			{
-				Log($"Error installing database: {ex.Message}");
+				Log($"General error installing FishMMO database components: {ex.Message}");
 				return false;
 			}
 		}
 
 		private async Task CreateDatabase(NpgsqlConnection connection, string dbName)
 		{
-			using (var command = new NpgsqlCommand($"CREATE DATABASE \"{dbName}\"", connection))
+			if (!Regex.IsMatch(dbName, @"^[a-zA-Z0-9_]+$"))
 			{
-				await command.ExecuteNonQueryAsync();
+				throw new ArgumentException("Invalid database name format. Database names can only contain alphanumeric characters and underscores.", nameof(dbName));
+			}
+
+			string formatSql = $"SELECT format('CREATE DATABASE %I', @dbNameParam)";
+			string createDatabaseCommandText;
+
+			using (var command = new NpgsqlCommand(formatSql, connection))
+			{
+				command.Parameters.AddWithValue("dbNameParam", dbName);
+				createDatabaseCommandText = (string)await command.ExecuteScalarAsync();
+			}
+
+			using (var createDbCommand = new NpgsqlCommand(createDatabaseCommandText, connection))
+			{
+				await createDbCommand.ExecuteNonQueryAsync();
 			}
 		}
 
 		private async Task CreateUser(NpgsqlConnection connection, string username, string password)
 		{
-			using (var command = new NpgsqlCommand($"CREATE ROLE \"{username}\" WITH LOGIN PASSWORD '{password}'", connection))
+			if (!Regex.IsMatch(username, @"^[a-zA-Z0-9_]+$"))
 			{
-				await command.ExecuteNonQueryAsync();
+				throw new ArgumentException("Invalid username format. Usernames can only contain alphanumeric characters and underscores.", nameof(username));
+			}
+
+			string formatSql = $"SELECT format('CREATE ROLE %I WITH LOGIN PASSWORD %L', @usernameParam, @passwordParam)";
+			string createRoleCommandText;
+
+			using (var command = new NpgsqlCommand(formatSql, connection))
+			{
+				command.Parameters.AddWithValue("usernameParam", username);
+				command.Parameters.AddWithValue("passwordParam", password);
+				createRoleCommandText = (string)await command.ExecuteScalarAsync();
+			}
+
+			using (var createRoleCommand = new NpgsqlCommand(createRoleCommandText, connection))
+			{
+				await createRoleCommand.ExecuteNonQueryAsync();
 			}
 		}
 
 		private async Task GrantPrivileges(NpgsqlConnection connection, string username, string dbName)
 		{
-			using (var command = new NpgsqlCommand($"GRANT ALL PRIVILEGES ON DATABASE \"{dbName}\" TO \"{username}\"", connection))
+			if (!Regex.IsMatch(username, @"^[a-zA-Z0-9_]+$"))
 			{
-				await command.ExecuteNonQueryAsync();
+				throw new ArgumentException("Invalid username format. Usernames can only contain alphanumeric characters and underscores.", nameof(username));
 			}
-			using (var command = new NpgsqlCommand($"ALTER DATABASE \"{dbName}\" OWNER TO \"{username}\"", connection))
+			if (!Regex.IsMatch(dbName, @"^[a-zA-Z0-9_]+$"))
 			{
-				await command.ExecuteNonQueryAsync();
+				throw new ArgumentException("Invalid database name format. Database names can only contain alphanumeric characters and underscores.", nameof(dbName));
 			}
-		}
 
-		private async Task InstallDatabase()
-		{
-			Console.Clear();
-			Console.WriteLine("Installing Database...");
+			string grantSqlFormat = $"SELECT format('GRANT ALL PRIVILEGES ON DATABASE %I TO %I', @dbNameParam, @usernameParam)";
+			string grantCommandText;
 
-			string workingDirectory = GetWorkingDirectory();
-			//Log(workingDirectory);
-
-			string appSettingsPath = Path.Combine(workingDirectory, "appsettings.json");
-			//Log(appSettingsPath);
-
-			if (File.Exists(appSettingsPath))
+			using (var formatCommand = new NpgsqlCommand(grantSqlFormat, connection))
 			{
-				string jsonContent = File.ReadAllText(appSettingsPath);
-
-				//Log(jsonContent);
-
-				AppSettings appSettings = JsonUtility.FromJson<AppSettings>(jsonContent);
-
-				bool skip = false;
-				while (!skip)
-				{
-					Console.WriteLine("Press a key (0-3):");
-					//Console.WriteLine($"1 : Install Docker Database");
-					Console.WriteLine($"1 : Install PostgreSQL");
-					Console.WriteLine($"2 : Install FishMMO Database");
-					Console.WriteLine($"3 : Return to Main Menu");
-					Console.WriteLine($"0 : Quit");
-					ConsoleKeyInfo key = Console.ReadKey(true); // Read key and don't show it in the console
-
-					switch (key.Key)
-					{
-						/*case ConsoleKey.D1:
-							if (!await InstallDocker())
-							{
-								Log("Failed to install Docker.");
-								return;
-							}
-
-							// docker-compose up
-							string output = await RunDockerComposeCommandAsync("-p " + Constants.Configuration.ProjectName.ToLower() + " up -d", new Dictionary<string, string>()
-							{
-								{ "POSTGRES_DB", appSettings.Npgsql.Database },
-								{ "POSTGRES_USER", appSettings.Npgsql.Username },
-								{ "POSTGRES_PASSWORD", appSettings.Npgsql.Password },
-								{ "POSTGRES_PORT", appSettings.Npgsql.Port },
-								{ "REDIS_PORT", appSettings.Redis.Port },
-								{ "REDIS_PASSWORD", appSettings.Redis.Password },
-							});
-							Log(output);
-
-							skip = true;
-							break;*/
-						case ConsoleKey.D1:
-							if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-							{
-								if (!await InstallPostgreSQLWindows(appSettings))
-								{
-									continue;
-								}
-							}
-							else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ||
-									 RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-							{
-								if (!await InstallPostgreSQLLinuxMAC())
-								{
-									continue;
-								}
-							}
-							break;
-						case ConsoleKey.D2:
-							string superUsername = "postgres";//RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? PromptForInput("Enter PostgreSQL Superuser Username: ") : "postgres";
-							string superPassword = PromptForPassword("Enter PostgreSQL Superuser Password: ");
-
-							if (!await InstallFishMMODatabase(superUsername, superPassword, appSettings))
-							{
-								continue;
-							}
-							else
-							{
-								if (PromptForYesNo("Create Initial Migration?"))
-								{
-									// Run 'dotnet ef migrations add Initial' command
-									Console.WriteLine("Creating Initial database migration...");
-									await RunDotNetCommandAsync($"ef migrations add Initial -p {Constants.Configuration.ProjectPath} -s {Constants.Configuration.StartupProject}");
-
-									// Run 'dotnet ef database update' command
-									Console.WriteLine("Updating database...");
-									await RunDotNetCommandAsync($"ef database update -p {Constants.Configuration.ProjectPath} -s {Constants.Configuration.StartupProject}");
-
-									Log($"Initial Migration completed...");
-								}
-							}
-							break;
-						case ConsoleKey.D3:
-							skip = true;
-							break;
-						case ConsoleKey.D0:
-#if UNITY_EDITOR
-							EditorApplication.ExitPlaymode(); // Make sure to include the UnityEditor namespace if using Unity
-#else
-                			Application.Quit();
-#endif
-							return; // Exit the method
-						default:
-							Console.WriteLine("Invalid input. Please enter a valid number.");
-							continue;
-					}
-				}
+				formatCommand.Parameters.AddWithValue("dbNameParam", dbName);
+				formatCommand.Parameters.AddWithValue("usernameParam", username);
+				grantCommandText = (string)await formatCommand.ExecuteScalarAsync();
 			}
-			else
+
+			using (var grantCommand = new NpgsqlCommand(grantCommandText, connection))
 			{
-				Log("appsettings.json file not found.");
+				await grantCommand.ExecuteNonQueryAsync();
 			}
-		}
 
-		private async void UpdateDatabase()
-		{
-			string timestamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
-			
-			Console.WriteLine($"Updating the database at {timestamp}...");
+			string alterOwnerSqlFormat = $"SELECT format('ALTER DATABASE %I OWNER TO %I', @dbNameParam, @usernameParam)";
+			string alterOwnerCommandText;
 
-			// Run 'dotnet ef database update' command
-			await RunDotNetCommandAsync($"ef database update -p {Constants.Configuration.ProjectPath}  -s  {Constants.Configuration.StartupProject}");
+			using (var formatCommand = new NpgsqlCommand(alterOwnerSqlFormat, connection))
+			{
+				formatCommand.Parameters.AddWithValue("dbNameParam", dbName);
+				formatCommand.Parameters.AddWithValue("usernameParam", username);
+				alterOwnerCommandText = (string)await formatCommand.ExecuteScalarAsync();
+			}
 
-			Log($"Database Update completed...");
+			using (var alterOwnerCommand = new NpgsqlCommand(alterOwnerCommandText, connection))
+			{
+				await alterOwnerCommand.ExecuteNonQueryAsync();
+			}
 		}
 
 		private async Task CreateMigration()
 		{
-			string timestamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
+			Console.Clear();
+			// Check for necessary configuration before proceeding
+			if (_appSettings == null ||
+				string.IsNullOrWhiteSpace(Constants.Configuration.ProjectPath) ||
+				string.IsNullOrWhiteSpace(Constants.Configuration.StartupProject))
+			{
+				Log("Configuration paths (ProjectPath or StartupProject) are not set. Cannot create migration.");
+				return;
+			}
 
-			Console.WriteLine($"Creating a new migration {timestamp}...");
+			string migrationName = PromptForInput("Enter a name for the new migration (e.g., 'AddPlayerInventory'): ");
+			if (string.IsNullOrWhiteSpace(migrationName))
+			{
+				Log("Migration name cannot be empty. Aborting migration creation.");
+				return;
+			}
 
-			// Run 'dotnet ef migrations add Initial' command
-			await RunDotNetCommandAsync($"ef migrations add {timestamp} -p {Constants.Configuration.ProjectPath} -s {Constants.Configuration.StartupProject}");
+			Log($"Creating a new migration '{migrationName}'...");
 
-			Log($"Updating the database at {timestamp}...");
-			
+			// Run 'dotnet ef migrations add [MigrationName]' command
+			bool migrationSuccess = await RunDotNetCommandAsync($"ef migrations add {migrationName} -p {Constants.Configuration.ProjectPath} -s {Constants.Configuration.StartupProject}");
+
+			if (!migrationSuccess)
+			{
+				Log($"Failed to create migration '{migrationName}'. Please check the console output for details.");
+				return;
+			}
+
+			Log($"Updating the database with migration '{migrationName}'...");
+
 			// Run 'dotnet ef database update' command
-			await RunDotNetCommandAsync($"ef database update -p {Constants.Configuration.ProjectPath}  -s  {Constants.Configuration.StartupProject}");
+			bool updateSuccess = await RunDotNetCommandAsync($"ef database update -p {Constants.Configuration.ProjectPath} -s {Constants.Configuration.StartupProject}");
 
-			Log($"Migration completed...");
+			if (updateSuccess)
+			{
+				Log($"Migration '{migrationName}' created and applied successfully.");
+			}
+			else
+			{
+				Log($"Failed to apply migration '{migrationName}' to the database. Please check the console output for details.");
+			}
+		}
+
+		/// <summary>
+		/// Deletes the FishMMO database as defined in appsettings.json.
+		/// Requires PostgreSQL superuser credentials. This operation is DANGEROUS and irreversible.
+		/// </summary>
+		private async Task DeleteFishMMODatabase(string superUsername, string superPassword, AppSettings appSettings)
+		{
+			if (appSettings == null || string.IsNullOrWhiteSpace(appSettings.Npgsql?.Database))
+			{
+				Log("appsettings.json or Npgsql database name is not defined. Cannot proceed with deletion.");
+				return;
+			}
+
+			string databaseToDelete = appSettings.Npgsql.Database;
+
+			Console.WriteLine($"\n!!! DANGER ZONE: YOU ARE ABOUT TO DELETE THE DATABASE !!!");
+			Console.WriteLine($"This action is irreversible and will permanently delete all data in '{databaseToDelete}'.");
+			Console.WriteLine($"Are you absolutely sure you want to delete the database '{databaseToDelete}'?");
+
+			string confirmationInput = PromptForInput("Type 'DELETE' (all caps) to confirm: ");
+			if (!confirmationInput?.Trim().Equals("DELETE", StringComparison.Ordinal) == true)
+			{
+				Log("Database deletion cancelled by user.");
+				return;
+			}
+
+			try
+			{
+				// Connect to a default administrative database (like 'postgres')
+				// You cannot drop a database you are currently connected to.
+				string adminConnectionString = $"Host={appSettings.Npgsql.Host};Port={appSettings.Npgsql.Port};Username={superUsername};Password={superPassword};Database={InstallationConstants.PostgreSQLDefaultAdminDb}";
+
+				using (var connection = new NpgsqlConnection(adminConnectionString))
+				{
+					await connection.OpenAsync();
+					Log($"Connected to '{InstallationConstants.PostgreSQLDefaultAdminDb}' database as superuser.");
+
+					// 1. Terminate all active connections to the database we want to drop
+					Log($"Terminating active connections to database '{databaseToDelete}'...");
+					using (var terminateCommand = new NpgsqlCommand(
+						$"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = @dbName;", connection))
+					{
+						terminateCommand.Parameters.AddWithValue("dbName", databaseToDelete);
+						await terminateCommand.ExecuteNonQueryAsync();
+						Log("Active connections terminated.");
+					}
+
+					// 2. Drop the database
+					Log($"Attempting to drop database '{databaseToDelete}'...");
+					using (var dropCommand = new NpgsqlCommand($"DROP DATABASE \"{databaseToDelete}\";", connection))
+					{
+						await dropCommand.ExecuteNonQueryAsync();
+						Log($"Database '{databaseToDelete}' deleted successfully.");
+					}
+				}
+			}
+			catch (NpgsqlException npgEx)
+			{
+				Log($"PostgreSQL error during database deletion: {npgEx.Message}. Ensure correct superuser password and permissions.");
+			}
+			catch (Exception ex)
+			{
+				Log($"An unexpected error occurred during database deletion: {ex.Message}");
+			}
+		}
+
+		/// <summary>
+		/// Grants comprehensive permissions to a specified user on a specific database.
+		/// This includes permissions on existing and future tables, sequences, and functions.
+		/// </summary>
+		private async Task GrantUserPermissions(string superUsername, string superPassword, AppSettings appSettings)
+		{
+			Console.Clear();
+			Log("--- Grant User Permissions ---");
+
+			if (appSettings == null || string.IsNullOrWhiteSpace(appSettings.Npgsql?.Host) || string.IsNullOrWhiteSpace(appSettings.Npgsql?.Port.ToString()))
+			{
+				Log("appsettings.json or Npgsql host/port is not defined. Cannot connect to database.");
+				return;
+			}
+
+			string defaultDbName = appSettings.Npgsql?.Database ?? "fishmmo_database"; // Fallback default
+			string dbName = PromptForInput($"Enter database name to grant permissions on (default: {defaultDbName}): ");
+			if (string.IsNullOrWhiteSpace(dbName)) dbName = defaultDbName;
+
+			string defaultUsername = appSettings.Npgsql?.Username ?? "fishmmo_user"; // Fallback default
+			string usernameToGrant = PromptForInput($"Enter username to grant permissions to (default: {defaultUsername}): ");
+			if (string.IsNullOrWhiteSpace(usernameToGrant)) usernameToGrant = defaultUsername;
+
+			Console.WriteLine($"Attempting to grant permissions for user '{usernameToGrant}' on database '{dbName}'.");
+
+			try
+			{
+				// Connect to the target database directly to grant schema-level permissions.
+				// We assume the database already exists at this point.
+				string connectionString = $"Host={appSettings.Npgsql.Host};Port={appSettings.Npgsql.Port};Username={superUsername};Password={superPassword};Database={dbName}";
+
+				using (var connection = new NpgsqlConnection(connectionString))
+				{
+					await connection.OpenAsync();
+					Log($"Successfully connected to database '{dbName}' as superuser.");
+
+					// Grant privileges on the database itself (already done during Install, but safe to re-run)
+					Log($"Granting ALL PRIVILEGES on DATABASE \"{dbName}\" to \"{usernameToGrant}\"...");
+					using (var cmd = new NpgsqlCommand($"GRANT ALL PRIVILEGES ON DATABASE \"{dbName}\" TO \"{usernameToGrant}\";", connection))
+					{
+						await cmd.ExecuteNonQueryAsync();
+					}
+
+					// Grant privileges on existing tables in public schema
+					Log($"Granting ALL PRIVILEGES on ALL TABLES in SCHEMA public to \"{usernameToGrant}\"...");
+					using (var cmd = new NpgsqlCommand($"GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO \"{usernameToGrant}\";", connection))
+					{
+						await cmd.ExecuteNonQueryAsync();
+					}
+
+					// Grant privileges on existing sequences in public schema
+					Log($"Granting ALL PRIVILEGES on ALL SEQUENCES in SCHEMA public to \"{usernameToGrant}\"...");
+					using (var cmd = new NpgsqlCommand($"GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO \"{usernameToGrant}\";", connection))
+					{
+						await cmd.ExecuteNonQueryAsync();
+					}
+
+					// Grant privileges on existing functions in public schema (if any)
+					Log($"Granting ALL PRIVILEGES on ALL FUNCTIONS in SCHEMA public to \"{usernameToGrant}\"...");
+					using (var cmd = new NpgsqlCommand($"GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public TO \"{usernameToGrant}\";", connection))
+					{
+						await cmd.ExecuteNonQueryAsync();
+					}
+
+					// Set default privileges for future objects in public schema
+					Log($"Setting ALTER DEFAULT PRIVILEGES for future TABLES in SCHEMA public to \"{usernameToGrant}\"...");
+					using (var cmd = new NpgsqlCommand($"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON TABLES TO \"{usernameToGrant}\";", connection))
+					{
+						await cmd.ExecuteNonQueryAsync();
+					}
+
+					Log($"Setting ALTER DEFAULT PRIVILEGES for future SEQUENCES in SCHEMA public to \"{usernameToGrant}\"...");
+					using (var cmd = new NpgsqlCommand($"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON SEQUENCES TO \"{usernameToGrant}\";", connection))
+					{
+						await cmd.ExecuteNonQueryAsync();
+					}
+
+					Log($"Setting ALTER DEFAULT PRIVILEGES for future FUNCTIONS in SCHEMA public to \"{usernameToGrant}\"...");
+					using (var cmd = new NpgsqlCommand($"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON FUNCTIONS TO \"{usernameToGrant}\";", connection))
+					{
+						await cmd.ExecuteNonQueryAsync();
+					}
+
+
+					Log($"Successfully granted comprehensive permissions to user '{usernameToGrant}' on database '{dbName}'.");
+				}
+			}
+			catch (NpgsqlException npgEx)
+			{
+				Log($"PostgreSQL error granting permissions: {npgEx.Message}. Ensure database '{dbName}' exists and superuser credentials are correct.");
+			}
+			catch (Exception ex)
+			{
+				Log($"An unexpected error occurred during permission granting: {ex.Message}");
+			}
+		}
+		#endregion
+
+		#region NGINX
+		/// <summary>
+		/// Installs NGINX based on the operating system.
+		/// </summary>
+		private async Task InstallNGINX()
+		{
+			Console.Clear();
+			Log("--- Install NGINX ---");
+
+			if (await IsNGINXInstalledAsync())
+			{
+				Log("NGINX appears to be already installed. Skipping installation.");
+				return;
+			}
+
+			if (!PromptForYesNo("NGINX is not detected. Would you like to install it?"))
+			{
+				Log("NGINX installation cancelled by user.");
+				return;
+			}
+
+			if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+			{
+				await InstallNGINXWindows();
+			}
+			else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+			{
+				await InstallNGINXLinux();
+			}
+			else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+			{
+				await InstallNGINXMac();
+			}
+			else
+			{
+				Log("Unsupported operating system for NGINX installation.");
+			}
+		}
+
+		/// <summary>
+		/// Checks if NGINX is installed by trying to run `nginx -v`.
+		/// </summary>
+		private async Task<bool> IsNGINXInstalledAsync()
+		{
+			(string shell, string argPrefix) = GetShellCommand();
+			string arguments = $"{argPrefix} \"nginx -v\""; // Command to get NGINX version
+
+			bool installed = await RunProcessAsync(shell, arguments, (exitCode, output, error) =>
+			{
+				// NGINX -v usually outputs to stderr with exit code 0 or 1, if found.
+				// Check if the output/error contains "nginx version".
+				return (exitCode == 0 || exitCode == 1) && (output.Contains("nginx version") || error.Contains("nginx version"));
+			});
+
+			if (installed)
+			{
+				Log("NGINX detected. (Run 'nginx -v' to confirm version)");
+			}
+			return installed;
+		}
+
+		/// <summary>
+		/// Installs NGINX on Windows by downloading and extracting the zip file.
+		/// </summary>
+		private async Task InstallNGINXWindows()
+		{
+			Log("Installing NGINX on Windows...");
+			try
+			{
+				string downloadPath = await DownloadFileAsync(InstallationConstants.NGINXWindowsDownloadUrl, InstallationConstants.NGINXWindowsFileName);
+				string extractDirectory = InstallationConstants.NGINXWindowsExtractPath;
+
+				if (Directory.Exists(extractDirectory))
+				{
+					Log($"NGINX extraction directory '{extractDirectory}' already exists. Please manually delete it or choose a different path if you want a clean install.");
+					if (!PromptForYesNo("Attempt to extract anyway (may overwrite files)?"))
+					{
+						Log("NGINX installation cancelled.");
+						return;
+					}
+				}
+				else
+				{
+					Directory.CreateDirectory(extractDirectory);
+				}
+
+				System.IO.Compression.ZipFile.ExtractToDirectory(downloadPath, extractDirectory);
+				Log($"NGINX successfully extracted to '{extractDirectory}'.");
+				Log("To start NGINX, navigate to the extracted directory (e.g., C:\\nginx-1.24.0) and run 'nginx.exe'.");
+				Log("For production, consider running NGINX as a Windows service.");
+			}
+			catch (Exception ex)
+			{
+				Log($"Error installing NGINX on Windows: {ex.Message}");
+			}
+		}
+
+		/// <summary>
+		/// Installs NGINX on Linux using apt or yum/dnf.
+		/// </summary>
+		private async Task InstallNGINXLinux()
+		{
+			Log("Installing NGINX on Linux...");
+			(string shell, string argPrefix) = GetShellCommand();
+			string updateCommand;
+			string installCommand;
+			string startCommand = "sudo systemctl start nginx";
+			string enableCommand = "sudo systemctl enable nginx";
+
+			// Determine package manager
+			if (await RunProcessAsync(shell, $"{argPrefix} \"which apt-get\"", (e, o, err) => e == 0))
+			{
+				Log("Using apt-get for NGINX installation.");
+				updateCommand = "sudo apt-get update";
+				installCommand = "sudo apt-get install -y nginx";
+			}
+			else if (await RunProcessAsync(shell, $"{argPrefix} \"which yum\"", (e, o, err) => e == 0))
+			{
+				Log("Using yum for NGINX installation.");
+				updateCommand = "sudo yum check-update"; // No direct update, just check
+				installCommand = "sudo yum install -y nginx";
+			}
+			else if (await RunProcessAsync(shell, $"{argPrefix} \"which dnf\"", (e, o, err) => e == 0))
+			{
+				Log("Using dnf for NGINX installation.");
+				updateCommand = "sudo dnf check-update"; // No direct update, just check
+				installCommand = "sudo dnf install -y nginx";
+			}
+			else
+			{
+				Log("No supported package manager (apt, yum, dnf) found. Please install NGINX manually.");
+				return;
+			}
+
+			try
+			{
+				Log("Updating package lists...");
+				if (!await RunProcessAsync(shell, $"{argPrefix} \"{updateCommand}\""))
+				{
+					Log("Failed to update package lists. Continuing anyway, but installation might fail.");
+				}
+
+				Log("Installing NGINX...");
+				if (!await RunProcessAsync(shell, $"{argPrefix} \"{installCommand}\""))
+				{
+					Log("Failed to install NGINX. Check for errors above.");
+					return;
+				}
+
+				Log("Starting NGINX service...");
+				if (!await RunProcessAsync(shell, $"{argPrefix} \"{startCommand}\""))
+				{
+					Log("Failed to start NGINX service. You may need to start it manually: 'sudo systemctl start nginx'");
+				}
+				else
+				{
+					Log("NGINX service started successfully.");
+				}
+
+				Log("Enabling NGINX to start on boot...");
+				if (!await RunProcessAsync(shell, $"{argPrefix} \"{enableCommand}\""))
+				{
+					Log("Failed to enable NGINX to start on boot. You may need to enable it manually: 'sudo systemctl enable nginx'");
+				}
+				else
+				{
+					Log("NGINX enabled to start on boot.");
+				}
+
+				Log("NGINX installed and configured on Linux. Check its status with 'sudo systemctl status nginx'.");
+			}
+			catch (Exception ex)
+			{
+				Log($"Error during NGINX installation on Linux: {ex.Message}");
+			}
+		}
+
+		/// <summary>
+		/// Installs NGINX on macOS using Homebrew.
+		/// </summary>
+		private async Task InstallNGINXMac()
+		{
+			Log("Installing NGINX on macOS...");
+			(string shell, string argPrefix) = GetShellCommand();
+
+			// Check if Homebrew is installed
+			if (!await RunProcessAsync(shell, $"{argPrefix} \"which brew\"", (e, o, err) => e == 0))
+			{
+				Log("Homebrew (brew) is not installed. Please install Homebrew first from https://brew.sh/, then try again.");
+				return;
+			}
+
+			try
+			{
+				Log("Updating Homebrew...");
+				if (!await RunProcessAsync(shell, $"{argPrefix} \"brew update\""))
+				{
+					Log("Failed to update Homebrew. Continuing anyway, but installation might fail.");
+				}
+
+				Log("Installing NGINX with Homebrew...");
+				if (!await RunProcessAsync(shell, $"{argPrefix} \"brew install nginx\""))
+				{
+					Log("Failed to install NGINX. Check for errors above.");
+					return;
+				}
+
+				Log("Starting NGINX service...");
+				if (!await RunProcessAsync(shell, $"{argPrefix} \"brew services start nginx\""))
+				{
+					Log("Failed to start NGINX service. You may need to start it manually: 'brew services start nginx' or 'nginx'.");
+				}
+				else
+				{
+					Log("NGINX service started successfully.");
+				}
+
+				Log("NGINX installed and configured on macOS. Check its status with 'brew services list' or access http://localhost:8080 (default NGINX port on Homebrew).");
+			}
+			catch (Exception ex)
+			{
+				Log($"Error during NGINX installation on macOS: {ex.Message}");
+			}
+		}
+		#endregion
+
+		#region Visual Studio Build Tools
+		/// <summary>
+		/// Installs Visual Studio Build Tools on Windows.
+		/// This method downloads the bootstrapper and launches it, providing manual instructions.
+		/// </summary>
+		private async Task InstallVSBuildTools()
+		{
+			Console.Clear();
+			Log("--- Install Visual Studio Build Tools ---");
+
+			if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+			{
+				Log("Visual Studio Build Tools can only be installed on Windows. Skipping.");
+				return;
+			}
+
+			if (!PromptForYesNo("This option will download and launch the Visual Studio Build Tools installer. Would you like to proceed?"))
+			{
+				Log("Visual Studio Build Tools installation cancelled by user.");
+				return;
+			}
+
+			try
+			{
+				string installerPath = await DownloadFileAsync(InstallationConstants.VSBuildToolsUrl, InstallationConstants.VSBuildToolsFileName);
+
+				Log("\n*** IMPORTANT: MANUAL SELECTION REQUIRED ***");
+				Log("The Visual Studio Build Tools installer will now launch.");
+				Log("Please ensure you select the following components/workloads:");
+				Log("  1. '.NET desktop development' workload (includes .NET Framework development tools)");
+				Log("  2. 'Desktop development with C++' workload (MSVC 64-bit compiler for x86, x64, ARM, and ARM64)");
+				Log("  3. Within 'Desktop development with C++', ensure 'Windows 10 SDK (or newer)' is selected under Individual Components.");
+				Log("After installation, restart your computer if prompted by the installer.");
+				Log("\nPress any key to launch the installer...");
+				Console.ReadKey(true);
+
+				ProcessStartInfo startInfo = new ProcessStartInfo
+				{
+					FileName = installerPath,
+					UseShellExecute = true,
+					Verb = "runas" // Request administrator privileges
+				};
+
+				Process process = Process.Start(startInfo);
+				await process.WaitForExitAsync();
+
+				Log("Visual Studio Build Tools installer has finished. Please verify the installation manually.");
+				Log("Remember to select the components mentioned above if you haven't already.");
+			}
+			catch (Exception ex)
+			{
+				Log($"Error installing Visual Studio Build Tools: {ex.Message}");
+			}
 		}
 		#endregion
 	}
