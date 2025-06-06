@@ -24,7 +24,7 @@ namespace FishMMO.Server.DatabaseServices
 															  c.SceneName == sceneName &&
 															  c.CharacterID == characterID &&
 															  c.SceneType == type &&
-															  (c.SceneStatus == (int)SceneStatus.Pending || c.SceneStatus == (int)SceneStatus.Loading));
+															  (c.SceneStatus == (int)SceneStatus.Pending || c.SceneStatus == (int)SceneStatus.Loading || c.SceneStatus == (int)SceneStatus.Failed));
 
 			// If there is no pending scene load add a new one to the database.
 			if (entity == null)
@@ -64,9 +64,27 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
+		/// Updates the scene status.
+		/// </summary>
+		public static void UpdateStatus(NpgsqlDbContext dbContext, long dbSceneID, SceneStatus sceneStatus)
+		{
+			if (dbSceneID == 0)
+			{
+				return;
+			}
+
+			SceneEntity entity = dbContext.Scenes.FirstOrDefault(c => c.ID == dbSceneID);
+			if (entity != null)
+			{
+				entity.SceneStatus = (int)sceneStatus;
+				dbContext.SaveChanges();
+			}
+		}
+
+		/// <summary>
 		/// Updates the scene server id, scene handle, and the scene status for a loading scene to Ready.
 		/// </summary>
-		public static void Update(NpgsqlDbContext dbContext, long sceneServerID, long worldServerID, string sceneName, int sceneHandle)
+		public static void SetReady(NpgsqlDbContext dbContext, long sceneServerID, long worldServerID, string sceneName, int sceneHandle)
 		{
 			if (sceneServerID == 0 || worldServerID == 0)
 			{
@@ -157,7 +175,7 @@ namespace FishMMO.Server.DatabaseServices
 			{
 				return null;
 			}
-			
+
 			int type = (int)sceneType;
 
 			return dbContext.Scenes.FirstOrDefault(c => c.CharacterID == characterID && c.SceneType == type);

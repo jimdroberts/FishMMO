@@ -842,6 +842,10 @@ namespace FishMMO.Server
 				// Save the character and remove it from the scene
 				RemoveCharacterConnectionMapping(character.Owner, true);
 			}
+			else
+			{
+				Debug.Log($"{character.TeleporterName} not found!");
+			}
 		}
 
 		private void CharacterDamageController_OnKilled(ICharacter killer, ICharacter defender)

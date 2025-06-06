@@ -242,6 +242,7 @@ namespace FishMMO.Server
 				{
 					ServerParams = new object[]
 					{
+						sceneEntity.ID,
 						sceneEntity.WorldServerID,
 						sceneEntity.SceneType,
 					}
@@ -255,56 +256,49 @@ namespace FishMMO.Server
 		{
 			const int UNKNOWN_WORLD_ID = -1;
 
-			// we only operate on newly loaded scenes here
-			if (args.LoadedScenes == null ||
-				args.LoadedScenes.Length < 1)
-			{
-				return;
-			}
-
-			UnityEngine.SceneManagement.Scene scene = args.LoadedScenes[0];
-
 			// If ServerParams are missing or there are no elements we should ignore processing this scene load.
 			if (args.QueueData.SceneLoadData.Params.ServerParams == null ||
-				args.QueueData.SceneLoadData.Params.ServerParams.Length < 2)
+				args.QueueData.SceneLoadData.Params.ServerParams.Length < 3)
 			{
 				Debug.LogError("Failed to process scene. Invalid Server Parameter Length.");
 				return;
 			}
-			
-			long worldServerID = (long)args.QueueData.SceneLoadData.Params.ServerParams[0];
+
+			long dbSceneId = (long)args.QueueData.SceneLoadData.Params.ServerParams[0];
+			long worldServerID = (long)args.QueueData.SceneLoadData.Params.ServerParams[1];
 			if (worldServerID == UNKNOWN_WORLD_ID)
 			{
 				Debug.LogError("Failed to get World Server ID.");
 				return;
 			}
 
-			SceneType sceneType = (SceneType)args.QueueData.SceneLoadData.Params.ServerParams[1];
+			SceneType sceneType = (SceneType)args.QueueData.SceneLoadData.Params.ServerParams[2];
 			if (sceneType == SceneType.Unknown)
 			{
 				Debug.LogError("Unknown scene type.");
 				return;
 			}
 
-			// Process the scene by adding it to the world dictionary mappings.
-			ProcessScene(scene, sceneType, worldServerID);
-
-			// Save the loaded scene information to the database
-			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-			Debug.Log($"SceneServerSystem: Saved {sceneType} scene {scene.name}:{scene.handle} to the database.");
-			SceneService.Update(dbContext, id, worldServerID, scene.name, scene.handle);
-
-			/*switch (sceneType)
+			// If the load was unsuccessful, args.LoadedScenes will be empty.
+			if (args.LoadedScenes == null || args.LoadedScenes.Length < 1)
 			{
-				case SceneType.OpenWorld:
-					break;
-				case SceneType.Group:
-					break;
-				case SceneType.PvP:
-					break;
-				case SceneType.Unknown:
-				default: return;
-			}*/
+				// Save the loaded scene information to the database
+				using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
+				Debug.Log($"SceneServerSystem: Failed to load Database Scene[{dbSceneId}].");
+				SceneService.UpdateStatus(dbContext, dbSceneId, SceneStatus.Failed);
+			}
+			else
+			{
+				Scene scene = args.LoadedScenes[0];
+
+				// Process the scene by adding it to the world dictionary mappings.
+				ProcessScene(scene, sceneType, worldServerID);
+
+				// Save the loaded scene information to the database
+				using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
+				Debug.Log($"SceneServerSystem: Saved {sceneType} scene {scene.name}:{scene.handle} to the database.");
+				SceneService.SetReady(dbContext, id, worldServerID, scene.name, scene.handle);
+			}
 		}
 
 		private void ProcessScene(Scene scene, SceneType sceneType, long worldServerID)

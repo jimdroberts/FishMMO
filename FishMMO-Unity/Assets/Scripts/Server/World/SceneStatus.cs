@@ -5,5 +5,6 @@ namespace FishMMO.Server
 		Pending = 0,
 		Loading,
 		Ready,
+		Failed,
 	}
 }

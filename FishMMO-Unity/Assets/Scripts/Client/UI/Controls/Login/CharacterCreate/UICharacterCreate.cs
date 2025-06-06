@@ -4,6 +4,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using FishMMO.Shared;
+using FishMMO.EQ;
 
 namespace FishMMO.Client
 {
@@ -51,8 +52,8 @@ namespace FishMMO.Client
 					{
 						continue;
 					}
-					raceNameMap.Add(pair.Value.Prefab.name, pair.Key);
-					InitialRaceNames.Add(pair.Value.Prefab.name);
+					raceNameMap.Add(pair.Value.Name, pair.Key);
+					InitialRaceNames.Add(pair.Value.Name);
 
 					// initialize spawn position map
 					if (!raceSpawnPositionMap.TryGetValue(pair.Value.Name, out HashSet<string> spawners))
