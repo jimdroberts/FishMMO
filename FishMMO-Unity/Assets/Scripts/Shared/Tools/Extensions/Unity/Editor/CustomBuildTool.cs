@@ -234,9 +234,7 @@ start Scene.exe SCENE";
 				}
 			}
 
-			if (string.IsNullOrWhiteSpace(executableName) ||
-				bootstrapScenes == null ||
-				bootstrapScenes.Length < 1)
+			if (string.IsNullOrWhiteSpace(executableName))
 			{
 				return;
 			}
@@ -250,9 +248,9 @@ start Scene.exe SCENE";
 			BuildTargetGroup targetGroup = SetActiveBuildTarget(buildTarget, subTarget);
 
 			// Append world scene paths to bootstrap scene array
-			/*string[] scenes = customBuildType == CustomBuildType.AllInOne ||
+			string[] scenes = customBuildType == CustomBuildType.AllInOne ||
 							  customBuildType == CustomBuildType.Scene ||
-							  customBuildType == CustomBuildType.Client ? AppendWorldScenePaths(bootstrapScenes) : bootstrapScenes;*/
+							  customBuildType == CustomBuildType.Client ? AppendWorldScenePaths(bootstrapScenes) : bootstrapScenes;
 
 			string folderName = executableName;
 			if (customBuildType != CustomBuildType.Installer &&
@@ -277,7 +275,7 @@ start Scene.exe SCENE";
 				{
 					locationPathName = Path.Combine(buildPath, executableName + ".exe"),
 					options = buildOptions,
-					scenes = bootstrapScenes,
+					scenes = scenes,
 					subtarget = (int)subTarget,
 					target = buildTarget,
 					targetGroup = targetGroup,
@@ -447,48 +445,6 @@ start Scene.exe SCENE";
 
 			return allPaths.ToArray();
 		}
-
-		/*private static void CopyIPFetchFiles(BuildTarget buildTarget, string ipFetchPath, string configurationPath, string buildPath, string certificatePath = null)
-		{
-			if (Directory.Exists(buildPath))
-			{
-				Directory.Delete(buildPath, true);
-			}
-			Directory.CreateDirectory(buildPath);
-
-			FileUtil.ReplaceFile(Path.Combine(ipFetchPath, "IPFetchServer.py"), Path.Combine(buildPath, "IPFetchServer.py"));
-			FileUtil.ReplaceFile(Path.Combine(configurationPath, "appsettings.json"), Path.Combine(buildPath, "appsettings.json"));
-
-			if (!string.IsNullOrWhiteSpace(certificatePath))
-			{
-				string certPath = Path.Combine(certificatePath, "certificate.pfx");
-				if (File.Exists(certPath))
-				{
-					FileUtil.ReplaceFile(certPath, Path.Combine(buildPath, "certificate.pfx"));
-				}
-			}
-		}
-
-		private static void CopyPatcherFiles(BuildTarget buildTarget, string patcherPath, string configurationPath, string buildPath, string certificatePath = null)
-		{
-			if (Directory.Exists(buildPath))
-			{
-				Directory.Delete(buildPath, true);
-			}
-			Directory.CreateDirectory(buildPath);
-
-			FileUtil.ReplaceFile(Path.Combine(patcherPath, "PatchServer.py"), Path.Combine(buildPath, "PatchServer.py"));
-			FileUtil.ReplaceFile(Path.Combine(configurationPath, "appsettings.json"), Path.Combine(buildPath, "appsettings.json"));
-
-			if (!string.IsNullOrWhiteSpace(certificatePath))
-			{
-				string certPath = Path.Combine(certificatePath, "certificate.pfx");
-				if (File.Exists(certPath))
-				{
-					FileUtil.ReplaceFile(certPath, Path.Combine(buildPath, "certificate.pfx"));
-				}
-			}
-		}*/
 
 		private static void CopyConfigurationFiles(BuildTarget buildTarget, CustomBuildType customBuildType, string configurationPath, string buildPath)
 		{
