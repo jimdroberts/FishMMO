@@ -569,11 +569,6 @@ start Scene.exe SCENE";
 		{
 			string setup = Path.Combine(rootPath, Constants.Configuration.SetupDirectory);
 
-			// Copy docker-compose to installer directory
-			string dockerComposeTarget = Path.Combine(buildPath, "docker-compose.yml");
-			FileUtil.DeleteFileOrDirectory(dockerComposeTarget);
-			FileUtil.CopyFileOrDirectory(Path.Combine(setup, "docker-compose.yml"), dockerComposeTarget);
-
 			// Copy appsettings to installer directory
 			string envConfigurationPath = WorkingEnvironmentOptions.AppendEnvironmentToPath(setup);
 			string appsettingsTarget = Path.Combine(buildPath, "appsettings.json");
