@@ -18,7 +18,7 @@ public class PatchServerHeartbeatService : BackgroundService
 	protected override async Task ExecuteAsync(CancellationToken stoppingToken)
 	{
 		var ip = await GetExternalIpAsync();
-		var port = ushort.TryParse(config["Server:Port"], out var parsedPort) ? parsedPort : (ushort)8000;
+		var port = ushort.TryParse(config["Server:Port"], out var parsedPort) ? parsedPort : (ushort)8090;
 
 		logger.LogInformation("PatchServerHeartbeatService started. IP: {IP}, Port: {Port}", ip, port);
 

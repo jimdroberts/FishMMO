@@ -1,13 +1,11 @@
 using FishMMO.Database.Npgsql;
-using System.Security.Cryptography.X509Certificates;
+using Microsoft.AspNetCore.HttpOverrides;
 
 namespace FishMMO.WebServer
 {
 	public class Program
 	{
-		private static readonly string HttpsPort = "8000";
-		private static readonly string PfxCertificatePath = Path.Combine(Directory.GetCurrentDirectory(), "certificate.pfx");
-		private static readonly string PfxPassword = "testpassword";
+		private static readonly string HttpPort = "8090";
 
 		public static void Main(string[] args)
 		{
@@ -27,14 +25,7 @@ namespace FishMMO.WebServer
 				{
 					webBuilder.ConfigureKestrel((context, options) =>
 					{
-						// Use the .pfx certificate directly
-						var certificate = new X509Certificate2(PfxCertificatePath, PfxPassword);
-
-						// Configure Kestrel to use the loaded certificate for HTTPS
-						options.ListenAnyIP(int.Parse(HttpsPort), listenOptions =>
-						{
-							listenOptions.UseHttps(certificate);
-						});
+						options.ListenAnyIP(int.Parse(HttpPort));
 					})
 					.ConfigureServices((context, services) =>
 					{
@@ -47,9 +38,35 @@ namespace FishMMO.WebServer
 
 						// Controllers
 						services.AddControllers();
+
+						services.AddCors(options =>
+						{
+							options.AddPolicy("AllowXFishMMO", builder =>
+							{
+								builder
+									.AllowAnyOrigin()
+									.AllowAnyMethod()
+									.WithHeaders("X-FishMMO");
+							});
+						});
+
+						services.Configure<ForwardedHeadersOptions>(options =>
+						{
+							options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+							// If your NGINX server is not on localhost (e.g., a separate VM or container),
+							// you might need to add its IP address or network range here.
+							// By default, loopback addresses (localhost) are trusted.
+							// options.KnownProxies.Add(System.Net.IPAddress.Parse("YOUR_NGINX_SERVER_IP"));
+							// options.KnownNetworks.Add(new System.Net.IPNetwork(System.Net.IPAddress.Parse("10.0.0.0"), 8));
+						});
 					})
 					.Configure(app =>
 					{
+						app.UseForwardedHeaders();
+
+						// Enable CORS with the configured policy
+						app.UseCors("AllowXFishMMO");
+
 						// Custom middleware to allow only Unity clients
 						app.UseMiddleware<UnityOnlyMiddleware>();
 
