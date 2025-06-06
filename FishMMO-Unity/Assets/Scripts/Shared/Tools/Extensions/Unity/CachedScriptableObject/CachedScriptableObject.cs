@@ -16,8 +16,6 @@ namespace FishMMO.Shared
 			
 			ID = (baseType.Name + objectName).GetDeterministicHashCode();
 
-			OnLoad(baseType.Name, name, ID);
-
 			while (baseType != null && (!baseType.IsGenericType || baseType.GetGenericTypeDefinition() != typeof(CachedScriptableObject<>)))
 			{
 				// Add the cached object to the resourceCache
@@ -28,6 +26,8 @@ namespace FishMMO.Shared
 					resourceCache.Add(baseType, resources = new Dictionary<int, T>());
 				}
 				resources.Add(ID, this as T);
+
+				OnLoad(baseType.Name, name, ID);
 
 				// Move up the inheritance chain
 				baseType = baseType.BaseType;
@@ -40,8 +40,6 @@ namespace FishMMO.Shared
 		{
 			Type baseType = this.GetType();
 
-			OnUnload(baseType.Name, name, ID);
-
 			while (baseType != null && (!baseType.IsGenericType || baseType.GetGenericTypeDefinition() != typeof(CachedScriptableObject<>)))
 			{
 				// Remove the cached object from the resourceCache
@@ -49,6 +47,8 @@ namespace FishMMO.Shared
 				{
 					//Debug.Log($"Resource '{objectName}' removed from cache: {baseType.Name}");
 					resources.Remove(ID);
+
+					OnUnload(baseType.Name, name, ID);
 
 					if (resources.Count < 1)
 					{
