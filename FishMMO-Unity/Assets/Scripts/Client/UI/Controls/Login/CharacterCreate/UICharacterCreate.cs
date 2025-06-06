@@ -4,7 +4,6 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using FishMMO.Shared;
-using FishMMO.EQ;
 
 namespace FishMMO.Client
 {
