@@ -133,8 +133,8 @@ namespace FishMMO.Client
 			{
 				Hide();
 			}
-			//AdjustPositionForPivotChange(MainPanel, new Vector2(0.5f, 0.5f));
-			//AdjustPositionForAnchorChange(MainPanel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+			AdjustPositionForPivotChange(MainPanel, new Vector2(0.5f, 0.5f));
+			AdjustPositionForAnchorChange(MainPanel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
 		}
 
 		/// <summary>
@@ -142,42 +142,74 @@ namespace FishMMO.Client
 		/// </summary>
 		public virtual void OnStarting() { }
 
-		/* WIP - Pivot change works but Anchor does not.
+		/// <summary>
+		/// Adjusts the RectTransform's local position to keep its visual position the same when its pivot is changed.
+		/// </summary>
+		/// <param name="rectTransform">The RectTransform to adjust.</param>
+		/// <param name="newPivot">The new pivot value (0 to 1 in X and Y).</param>
 		public void AdjustPositionForPivotChange(RectTransform rectTransform, Vector2 newPivot)
 		{
-			// Store the original values
-			Vector3 originalPosition = rectTransform.localPosition;
-			Vector2 originalSizeDelta = rectTransform.sizeDelta;
-			Vector2 originalPivot = rectTransform.pivot;
+			if (rectTransform == null)
+			{
+				Debug.LogError("RectTransform is null. Cannot adjust position for pivot change.");
+				return;
+			}
 
-			// Change the pivot
+			Vector2 oldPivot = rectTransform.pivot;
+			Vector2 oldAnchoredPosition = rectTransform.anchoredPosition;
+
+			// Apply the new pivot
 			rectTransform.pivot = newPivot;
 
-			// Adjust localPosition based on pivot change
-			Vector2 pivotDelta = new Vector2(newPivot.x - originalPivot.x, newPivot.y - originalPivot.y);
-			rectTransform.localPosition = originalPosition + Vector3.Scale(pivotDelta, originalSizeDelta);
+			// Calculate the pivot shift relative to the RectTransform's current size
+			Vector2 pivotShift = newPivot - oldPivot;
+			Vector2 pivotOffset = new Vector2(rectTransform.rect.width * pivotShift.x, rectTransform.rect.height * pivotShift.y);
+
+			// Adjust anchoredPosition to compensate for the pivot change.
+			// If the pivot moves right, the anchoredPosition needs to move left to keep the content still.
+			rectTransform.anchoredPosition = oldAnchoredPosition - pivotOffset;
 		}
 
+		/// <summary>
+		/// Adjusts the RectTransform's position to keep its visual position the same when its anchors are changed.
+		/// </summary>
+		/// <param name="rectTransform">The RectTransform to adjust.</param>
+		/// <param name="newAnchorMin">The new minimum anchor value (0 to 1 in X and Y).</param>
+		/// <param name="newAnchorMax">The new maximum anchor value (0 to 1 in X and Y).</param>
 		public void AdjustPositionForAnchorChange(RectTransform rectTransform, Vector2 newAnchorMin, Vector2 newAnchorMax)
 		{
-			// Store the original values
-			Vector3 originalPosition = rectTransform.localPosition;
-			Vector2 originalSizeDelta = rectTransform.sizeDelta;
-			Vector2 originalAnchorMin = rectTransform.anchorMin;
-			Vector2 originalAnchorMax = rectTransform.anchorMax;
+			if (rectTransform == null)
+			{
+				Debug.LogError("RectTransform is null. Cannot adjust position for anchor change.");
+				return;
+			}
 
-			// Change the anchor
+			// Store the current world position of the RectTransform's pivot.
+			// This is the most reliable point to maintain.
+			Vector3 oldWorldPivotPosition = rectTransform.position;
+
+			// Store original sizeDelta to restore it if the element is fixed size
+			// (i.e., anchors are not stretching).
+			Vector2 oldSizeDelta = rectTransform.sizeDelta;
+
+			// Apply the new anchors
 			rectTransform.anchorMin = newAnchorMin;
 			rectTransform.anchorMax = newAnchorMax;
 
-			// Calculate the differences in anchor positions
-			Vector2 anchorMinDifference = newAnchorMin - originalAnchorMin;
-			Vector2 anchorMaxDifference = newAnchorMax - originalAnchorMax;
+			// After changing anchors, set the world position back.
+			// Unity will internally recalculate anchoredPosition and sizeDelta
+			// to achieve this world position with the new anchor/pivot configuration.
+			rectTransform.position = oldWorldPivotPosition;
 
-			// Adjust localPosition based on anchor change
-			Vector3 newPosition = originalPosition - Vector3.Scale(anchorMinDifference, originalSizeDelta) - Vector3.Scale(anchorMaxDifference, originalSizeDelta);
-			rectTransform.localPosition = newPosition;
-		}*/
+			// If the RectTransform is not set to stretch (anchors are not different),
+			// we often want to preserve its original sizeDelta to prevent unwanted resizing.
+			// If anchors are different, sizeDelta will adjust to maintain the world position.
+			if (rectTransform.anchorMin.x == rectTransform.anchorMax.x &&
+				rectTransform.anchorMin.y == rectTransform.anchorMax.y)
+			{
+				rectTransform.sizeDelta = oldSizeDelta;
+			}
+		}
 
 		void Update()
 		{
@@ -342,7 +374,7 @@ namespace FishMMO.Client
 		public void OnPointerExit(PointerEventData eventData)
 		{
 			HasFocus = false;
-			
+
 			OnLoseFocus?.Invoke();
 		}
 
@@ -372,7 +404,7 @@ namespace FishMMO.Client
 			{
 				return;
 			}
-			
+
 			Visible = false;
 		}
 
