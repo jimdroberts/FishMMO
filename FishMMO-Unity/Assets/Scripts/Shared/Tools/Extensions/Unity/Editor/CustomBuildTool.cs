@@ -511,8 +511,6 @@ start Scene.exe SCENE";
 				case CustomBuildType.Client:
 					if (buildTarget == BuildTarget.WebGL)
 					{
-						string webGLBuildPath = Path.Combine(buildPath, Constants.Configuration.ProjectName + ".exe");
-						FileUtil.ReplaceFile(Path.Combine(configurationPath, "Launch WebGL Client Server.bat"), Path.Combine(webGLBuildPath, "Launch WebGL Client Server.bat"));
 					}
 					break;
 				default: break;
