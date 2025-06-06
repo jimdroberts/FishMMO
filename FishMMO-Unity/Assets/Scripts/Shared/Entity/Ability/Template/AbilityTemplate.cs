@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace FishMMO.Shared
 {
-	[CreateAssetMenu(fileName = "New Ability", menuName = "Character/Ability/Ability", order = 1)]
+	[CreateAssetMenu(fileName = "New Ability", menuName = "FishMMO/Character/Ability/Ability", order = 1)]
 	public class AbilityTemplate : BaseAbilityTemplate, ITooltip
 	{
 		public GameObject AbilityObjectPrefab;

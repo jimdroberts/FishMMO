@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace FishMMO.Shared
 {
-	[CreateAssetMenu(fileName = "New Region Apply Character Attribute Action", menuName = "Region/Region Apply Character Attribute", order = 1)]
+	[CreateAssetMenu(fileName = "New Region Apply Character Attribute Action", menuName = "FishMMO/Region/Region Apply Character Attribute", order = 1)]
 	public class RegionApplyCharacterAttributeAction : RegionAction
 	{
 		public CharacterAttributeTemplate attribute;

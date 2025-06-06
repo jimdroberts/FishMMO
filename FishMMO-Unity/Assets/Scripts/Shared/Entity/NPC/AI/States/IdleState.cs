@@ -2,7 +2,7 @@
 
 namespace FishMMO.Shared
 {
-	[CreateAssetMenu(fileName = "New AI Idle State", menuName = "Character/NPC/AI/Idle State", order = 0)]
+	[CreateAssetMenu(fileName = "New AI Idle State", menuName = "FishMMO/Character/NPC/AI/Idle State", order = 0)]
 	public class IdleState : BaseAIState
 	{
 		[Tooltip("If max update rate is greater than the update rate it will return a random range between the two.")]

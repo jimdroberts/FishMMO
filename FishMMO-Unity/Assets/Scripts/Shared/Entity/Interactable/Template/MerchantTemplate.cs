@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace FishMMO.Shared
 {
-	[CreateAssetMenu(fileName = "New Merchant", menuName = "Character/Merchant/Merchant", order = 1)]
+	[CreateAssetMenu(fileName = "New Merchant", menuName = "FishMMO/Character/Merchant/Merchant", order = 1)]
 	public class MerchantTemplate : CachedScriptableObject<MerchantTemplate>, ICachedObject
 	{
 		public Sprite icon;

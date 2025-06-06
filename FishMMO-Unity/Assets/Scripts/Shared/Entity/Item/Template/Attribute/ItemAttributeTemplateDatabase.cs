@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace FishMMO.Shared
 {
-	[CreateAssetMenu(fileName = "New Item Attribute Database", menuName = "Item/Item Attribute/Database", order = 0)]
+	[CreateAssetMenu(fileName = "New Item Attribute Database", menuName = "FishMMO/Item/Item Attribute/Database", order = 0)]
 	public class ItemAttributeTemplateDatabase : ScriptableObject
 	{
 		[Serializable]

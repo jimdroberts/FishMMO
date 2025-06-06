@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace FishMMO.Shared
 {
-	[CreateAssetMenu(fileName = "New Buff Hit Event", menuName = "Character/Ability/Hit Event/Buff", order = 1)]
+	[CreateAssetMenu(fileName = "New Buff Hit Event", menuName = "FishMMO/Character/Ability/Hit Event/Buff", order = 1)]
 	public sealed class BuffHitEvent : HitEvent
 	{
 		public int Stacks;

@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace FishMMO.Shared
 {
-	[CreateAssetMenu(fileName = "New Region Enity Spawner Action", menuName = "Region/Region Entity Spawner", order = 1)]
+	[CreateAssetMenu(fileName = "New Region Enity Spawner Action", menuName = "FishMMO/Region/Region Entity Spawner", order = 1)]
 	public class RegionEntitySpawnerAction : RegionAction
 	{
 		//public Entity[] spawnables;

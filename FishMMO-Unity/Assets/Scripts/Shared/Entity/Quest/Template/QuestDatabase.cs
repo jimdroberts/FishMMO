@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace FishMMO.Shared
 {
-	[CreateAssetMenu(fileName = "New Quest Database", menuName = "Character/Quest/Database", order = 0)]
+	[CreateAssetMenu(fileName = "New Quest Database", menuName = "FishMMO/Character/Quest/Database", order = 0)]
 	public class QuestDatabase : ScriptableObject
 	{
 		[Serializable]

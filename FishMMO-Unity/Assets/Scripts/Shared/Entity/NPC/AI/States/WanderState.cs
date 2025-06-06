@@ -4,7 +4,7 @@ using UnityEngine.AI;
 
 namespace FishMMO.Shared
 {
-	[CreateAssetMenu(fileName = "New AI Wander State", menuName = "Character/NPC/AI/Wander State", order = 0)]
+	[CreateAssetMenu(fileName = "New AI Wander State", menuName = "FishMMO/Character/NPC/AI/Wander State", order = 0)]
 	public class WanderState : BaseAIState
 	{
 		public bool AlwaysPickNewDestination;

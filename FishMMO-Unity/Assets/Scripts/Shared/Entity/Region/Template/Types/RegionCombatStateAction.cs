@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace FishMMO.Shared
 {
-	[CreateAssetMenu(fileName = "New Region Combat State Action", menuName = "Region/Region Combat State", order = 1)]
+	[CreateAssetMenu(fileName = "New Region Combat State Action", menuName = "FishMMO/Region/Region Combat State", order = 1)]
 	public class RegionCombatStateAction : RegionAction
 	{
 		public bool EnableCombat;

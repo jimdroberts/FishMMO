@@ -4,7 +4,7 @@ using UnityEngine.AddressableAssets;
 
 namespace FishMMO.Shared
 {
-	[CreateAssetMenu(fileName = "New Faction Matrix", menuName = "Character/Faction/Faction Matrix", order = 1)]
+	[CreateAssetMenu(fileName = "New Faction Matrix", menuName = "FishMMO/Character/Faction/Faction Matrix", order = 1)]
 	public class FactionMatrixTemplate : CachedScriptableObject<FactionMatrixTemplate>, ICachedObject
 	{
 		public List<FactionTemplate> Factions;

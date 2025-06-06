@@ -2,7 +2,7 @@
 
 namespace FishMMO.Shared
 {
-	[CreateAssetMenu(fileName = "New Fork Hit Event", menuName = "Character/Ability/Hit Event/Fork", order = 1)]
+	[CreateAssetMenu(fileName = "New Fork Hit Event", menuName = "FishMMO/Character/Ability/Hit Event/Fork", order = 1)]
 	public sealed class ForkHitEvent : HitEvent
 	{
 		public float Arc = 180.0f;

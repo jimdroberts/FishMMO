@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace FishMMO.Shared
 {
-	[CreateAssetMenu(fileName = "New Region Audio Action", menuName = "Region/Region Audio", order = 1)]
+	[CreateAssetMenu(fileName = "New Region Audio Action", menuName = "FishMMO/Region/Region Audio", order = 1)]
 	public class RegionAudioTriggerAction : RegionAction
 	{
 		public AudioClip clip;

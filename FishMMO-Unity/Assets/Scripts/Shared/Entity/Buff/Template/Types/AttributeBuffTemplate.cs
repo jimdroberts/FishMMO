@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace FishMMO.Shared
 {
-    [CreateAssetMenu(fileName = "New Attribute Buff Template", menuName = "Character/Buff/Attribute Buff", order = 1)]
+    [CreateAssetMenu(fileName = "New Attribute Buff Template", menuName = "FishMMO/Character/Buff/Attribute Buff", order = 1)]
     public class AttributeBuffTemplate : BaseBuffTemplate
     {
         public List<BuffAttributeTemplate> BonusAttributes;

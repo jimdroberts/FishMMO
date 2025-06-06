@@ -3,7 +3,7 @@ using UnityEngine.AI;
 
 namespace FishMMO.Shared
 {
-	[CreateAssetMenu(fileName = "New AI GetBehind State", menuName = "Character/NPC/AI/GetBehind State", order = 0)]
+	[CreateAssetMenu(fileName = "New AI GetBehind State", menuName = "FishMMO/Character/NPC/AI/GetBehind State", order = 0)]
 	public class GetBehindState : BaseAIState
 	{
 		public float BehindDistance = 5.0f; // Distance behind the target to move

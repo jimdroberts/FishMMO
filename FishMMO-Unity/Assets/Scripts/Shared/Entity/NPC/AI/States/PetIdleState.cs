@@ -3,7 +3,7 @@ using UnityEngine.AI;
 
 namespace FishMMO.Shared
 {
-	[CreateAssetMenu(fileName = "New AI Pet Idle State", menuName = "Character/NPC/AI/Pet Idle State", order = 0)]
+	[CreateAssetMenu(fileName = "New AI Pet Idle State", menuName = "FishMMO/Character/NPC/AI/Pet Idle State", order = 0)]
 	public class PetIdleState : BaseAIState
 	{
 		public override void Enter(AIController controller)

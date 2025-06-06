@@ -2,7 +2,7 @@
 
 namespace FishMMO.Shared
 {
-	[CreateAssetMenu(fileName = "New Race", menuName = "Character/Race/Race", order = 1)]
+	[CreateAssetMenu(fileName = "New Race", menuName = "FishMMO/Character/Race/Race", order = 1)]
 	public class RaceTemplate : CachedScriptableObject<RaceTemplate>, ICachedObject
 	{
 		public GameObject Prefab;
@@ -11,6 +11,6 @@ namespace FishMMO.Shared
 		public FactionTemplate InitialFaction;
 		//public List<CharacterAttributeTemplate> BonusAttributes;
 
-		public string Name { get { return Prefab == null ? this.name : Prefab.gameObject.name; } }
+		public string Name { get { return this.name; } }
 	}
 }

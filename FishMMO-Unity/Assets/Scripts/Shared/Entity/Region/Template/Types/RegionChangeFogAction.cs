@@ -3,7 +3,7 @@ using System;
 
 namespace FishMMO.Shared
 {
-	[CreateAssetMenu(fileName = "New Region Change Fog Action", menuName = "Region/Region Change Fog", order = 1)]
+	[CreateAssetMenu(fileName = "New Region Change Fog Action", menuName = "FishMMO/Region/Region Change Fog", order = 1)]
 	public class RegionChangeFogAction : RegionAction
 	{
         public static event Action<FogSettings> OnChangeFog;

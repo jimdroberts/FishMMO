@@ -3,7 +3,7 @@ using System.Collections;
 
 namespace FishMMO.Shared
 {
-	[CreateAssetMenu(fileName = "New Knockback Hit Event", menuName = "Character/Ability/Hit Event/Knockback", order = 1)]
+	[CreateAssetMenu(fileName = "New Knockback Hit Event", menuName = "FishMMO/Character/Ability/Hit Event/Knockback", order = 1)]
 	public sealed class KnockbackHitEvent : HitEvent
 	{
 		public float Force;

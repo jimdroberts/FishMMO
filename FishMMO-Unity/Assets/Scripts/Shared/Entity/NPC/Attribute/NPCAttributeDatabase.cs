@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace FishMMO.Shared
 {
-	[CreateAssetMenu(fileName = "New NPC Attribute Database", menuName = "Character/NPC/Attribute/Database", order = 0)]
+	[CreateAssetMenu(fileName = "New NPC Attribute Database", menuName = "FishMMO/Character/NPC/Attribute/Database", order = 0)]
 	public class NPCAttributeDatabase : ScriptableObject
 	{
 		public List<NPCAttribute> Attributes = new List<NPCAttribute>();

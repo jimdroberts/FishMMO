@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace FishMMO.Shared
 {
-	[CreateAssetMenu(fileName = "New Faction", menuName = "Character/Faction/Faction", order = 1)]
+	[CreateAssetMenu(fileName = "New Faction", menuName = "FishMMO/Character/Faction/Faction", order = 1)]
 	public class FactionTemplate : CachedScriptableObject<FactionTemplate>, ICachedObject
 	{
 		[Serializable]

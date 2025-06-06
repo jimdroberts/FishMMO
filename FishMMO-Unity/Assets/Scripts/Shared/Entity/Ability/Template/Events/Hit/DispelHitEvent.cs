@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace FishMMO.Shared
 {
-	[CreateAssetMenu(fileName = "New Dispel Hit Event", menuName = "Character/Ability/Hit Event/Dispel", order = 1)]
+	[CreateAssetMenu(fileName = "New Dispel Hit Event", menuName = "FishMMO/Character/Ability/Hit Event/Dispel", order = 1)]
 	public sealed class DispelHitEvent : HitEvent
 	{
 		public byte AmountToRemove;

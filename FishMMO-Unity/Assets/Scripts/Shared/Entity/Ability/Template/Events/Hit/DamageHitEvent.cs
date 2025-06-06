@@ -2,7 +2,7 @@
 
 namespace FishMMO.Shared
 {
-	[CreateAssetMenu(fileName = "New Damage Hit Event", menuName = "Character/Ability/Hit Event/Damage", order = 1)]
+	[CreateAssetMenu(fileName = "New Damage Hit Event", menuName = "FishMMO/Character/Ability/Hit Event/Damage", order = 1)]
 	public sealed class DamageHitEvent : HitEvent
 	{
 		public int Damage;

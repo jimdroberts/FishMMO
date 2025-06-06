@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace FishMMO.Shared
 {
-	[CreateAssetMenu(fileName = "New Region Display Name Action", menuName = "Region/Region Display Name", order = 1)]
+	[CreateAssetMenu(fileName = "New Region Display Name Action", menuName = "FishMMO/Region/Region Display Name", order = 1)]
 	public class RegionDisplayNameAction : RegionAction
 	{
 		public static event Action<string, FontStyle, Font, int, Color, float, bool, bool, Vector2> OnDisplay2DLabel;

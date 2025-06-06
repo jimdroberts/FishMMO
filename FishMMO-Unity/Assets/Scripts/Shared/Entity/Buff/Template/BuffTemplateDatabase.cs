@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace FishMMO.Shared
 {
-	[CreateAssetMenu(fileName = "New Buff Database", menuName = "Character/Buff/Database", order = 1)]
+	[CreateAssetMenu(fileName = "New Buff Database", menuName = "FishMMO/Character/Buff/Database", order = 1)]
 	public class BuffTemplateDatabase : ScriptableObject
 	{
 		[Serializable]

@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace FishMMO.Shared
 {
-	[CreateAssetMenu(fileName = "New Quest", menuName = "Character/Quest/Quest", order = 1)]
+	[CreateAssetMenu(fileName = "New Quest", menuName = "FishMMO/Character/Quest/Quest", order = 1)]
 	public class QuestTemplate : CachedScriptableObject<QuestTemplate>, ICachedObject
 	{
 		public string Description;
@@ -78,45 +78,45 @@ namespace FishMMO.Shared
 		public Creature CreatureToKill;
 	}*/
 
-	[CreateAssetMenu(fileName = "New Quest", menuName = "Character/Quest/Quest Objective/Harvest Objective", order = 1)]
+	[CreateAssetMenu(fileName = "New Quest", menuName = "FishMMO/Character/Quest/Quest Objective/Harvest Objective", order = 1)]
 	public class QuestHarvestObjective : QuestObjective
 	{
 		public BaseItemTemplate ItemToHarvest;
 	}
 
-	[CreateAssetMenu(fileName = "New Quest", menuName = "Character/Quest/Quest Objective/Craft Objective", order = 1)]
+	[CreateAssetMenu(fileName = "New Quest", menuName = "FishMMO/Character/Quest/Quest Objective/Craft Objective", order = 1)]
 	public class QuestCraftObjective : QuestObjective
 	{
 		public BaseItemTemplate ItemToCraft;
 	}
 
-	[CreateAssetMenu(fileName = "New Quest", menuName = "Character/Quest/Quest Objective/Enchant Objective", order = 1)]
+	[CreateAssetMenu(fileName = "New Quest", menuName = "FishMMO/Character/Quest/Quest Objective/Enchant Objective", order = 1)]
 	public class QuestEnchantObjective : QuestObjective
 	{
 	}
 
-	[CreateAssetMenu(fileName = "New Quest", menuName = "Character/Quest/Quest Objective/Purchase Objective", order = 1)]
+	[CreateAssetMenu(fileName = "New Quest", menuName = "FishMMO/Character/Quest/Quest Objective/Purchase Objective", order = 1)]
 	public class QuestPurchaseObjective : QuestObjective
 	{
 		public BaseItemTemplate ItemToPurchase;
 	}
 
-	[CreateAssetMenu(fileName = "New Quest", menuName = "Character/Quest/Quest Objective/CharacterAttribute Objective", order = 1)]
+	[CreateAssetMenu(fileName = "New Quest", menuName = "FishMMO/Character/Quest/Quest Objective/CharacterAttribute Objective", order = 1)]
 	public class QuestCharacterAttributeObjective : QuestObjective
 	{
 	}
 
-	[CreateAssetMenu(fileName = "New Quest", menuName = "Character/Quest/Quest Objective/Interact Objective", order = 1)]
+	[CreateAssetMenu(fileName = "New Quest", menuName = "FishMMO/Character/Quest/Quest Objective/Interact Objective", order = 1)]
 	public class QuestInteractObjective : QuestObjective
 	{
 	}
 
-	[CreateAssetMenu(fileName = "New Quest", menuName = "Character/Quest/Quest Objective/Socialize Objective", order = 1)]
+	[CreateAssetMenu(fileName = "New Quest", menuName = "FishMMO/Character/Quest/Quest Objective/Socialize Objective", order = 1)]
 	public class QuestSocializeObjective : QuestObjective
 	{
 	}
 
-	[CreateAssetMenu(fileName = "New Quest", menuName = "Character/Quest/Quest Objective/Explore Objective", order = 1)]
+	[CreateAssetMenu(fileName = "New Quest", menuName = "FishMMO/Character/Quest/Quest Objective/Explore Objective", order = 1)]
 	public class QuestExploreObjective : QuestObjective
 	{
 		//public BaseWorldScene SceneToExplore;

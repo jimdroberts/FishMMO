@@ -35,6 +35,7 @@ namespace FishMMO.Shared
 
 			if (character.IsTeleporting)
 			{
+				Debug.Log("Character is already teleporting!");
 				return;
 			}
 

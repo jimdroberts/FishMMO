@@ -2,7 +2,7 @@
 
 namespace FishMMO.Shared
 {
-	[CreateAssetMenu(fileName = "New Heal Hit Event", menuName = "Character/Ability/Hit Event/Heal", order = 1)]
+	[CreateAssetMenu(fileName = "New Heal Hit Event", menuName = "FishMMO/Character/Ability/Hit Event/Heal", order = 1)]
 	public sealed class HealHitEvent : HitEvent
 	{
 		public int HealAmount;

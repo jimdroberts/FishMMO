@@ -2,7 +2,7 @@
 
 namespace FishMMO.Shared
 {
-	[CreateAssetMenu(fileName = "Flat Bonus Formula", menuName = "Character/Attribute/Formula/Flat Bonus Formula", order = 1)]
+	[CreateAssetMenu(fileName = "Flat Bonus Formula", menuName = "FishMMO/Character/Attribute/Formula/Flat Bonus Formula", order = 1)]
 	public class FlatBonusFormulaTemplate : CharacterAttributeFormulaTemplate
 	{
 		public override int CalculateBonus(CharacterAttribute self, CharacterAttribute bonusAttribute)

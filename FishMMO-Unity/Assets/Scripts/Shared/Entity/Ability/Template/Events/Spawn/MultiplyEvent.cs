@@ -4,7 +4,7 @@ using SceneManager = UnityEngine.SceneManagement.SceneManager;
 
 namespace FishMMO.Shared
 {
-	[CreateAssetMenu(fileName = "New Ability Multiply Event", menuName = "Character/Ability/Spawn Event/Multiply", order = 1)]
+	[CreateAssetMenu(fileName = "New Ability Multiply Event", menuName = "FishMMO/Character/Ability/Spawn Event/Multiply", order = 1)]
 	public sealed class MultiplyEvent : SpawnEvent
 	{
 		public int SpawnCount;

@@ -2,7 +2,7 @@
 
 namespace FishMMO.Shared
 {
-	[CreateAssetMenu(fileName = "New Pierce Hit Event", menuName = "Character/Ability/Hit Event/Pierce", order = 1)]
+	[CreateAssetMenu(fileName = "New Pierce Hit Event", menuName = "FishMMO/Character/Ability/Hit Event/Pierce", order = 1)]
 	public sealed class PierceHitEvent : HitEvent
 	{
 		public int PierceCount = -1;

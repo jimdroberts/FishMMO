@@ -1,24 +1,13 @@
-﻿using UnityEngine;
+using UnityEngine;
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
 namespace FishMMO.Shared
 {
-	public class WorldSceneSettings : MonoBehaviour
+	public class WorldDayNightCycle : MonoBehaviour
 	{
-		/// <summary>
-		/// The maximum number of clients allowed in this scene.
-		/// </summary>
-		[Tooltip("The maximum number of clients allowed in this scene.")]
-		public int MaxClients = 100;
-		/// <summary>
-		/// The image that will be displayed when entering this scene.
-		/// </summary>
-		[Tooltip("The image that will be displayed when entering this scene.")]
-		public Sprite SceneTransitionImage;
-
-		public RegionChangeFogAction DefaultSceneFog;
+		public RegionChangeFogAction SceneFog;
 
 		/// <summary>
 		/// True if the day night cycle should run. False if not.
@@ -80,7 +69,7 @@ namespace FishMMO.Shared
 
 		private void Awake()
 		{
-			DefaultSceneFog?.Invoke(null, null, false);
+			SceneFog?.Invoke(null, null, false);
 
 			RenderSettings.skybox = DaySkyboxMaterial;
 			

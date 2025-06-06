@@ -5,7 +5,7 @@ using UnityEngine.AI;
 
 namespace FishMMO.Shared
 {
-	[CreateAssetMenu(fileName = "New AI Attacking State", menuName = "Character/NPC/AI/Attacking State", order = 0)]
+	[CreateAssetMenu(fileName = "New AI Attacking State", menuName = "FishMMO/Character/NPC/AI/Attacking State", order = 0)]
 	public class BaseAttackingState : BaseAIState
 	{
 		public override void Enter(AIController controller)

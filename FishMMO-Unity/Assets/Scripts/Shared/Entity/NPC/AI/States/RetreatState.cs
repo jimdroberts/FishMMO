@@ -3,7 +3,7 @@ using UnityEngine.AI;
 
 namespace FishMMO.Shared
 {
-	[CreateAssetMenu(fileName = "New AI Retreat State", menuName = "Character/NPC/AI/Retreat State", order = 0)]
+	[CreateAssetMenu(fileName = "New AI Retreat State", menuName = "FishMMO/Character/NPC/AI/Retreat State", order = 0)]
 	public class RetreatState : BaseAIState
 	{
 		/// <summary>

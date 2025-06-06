@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace FishMMO.Shared
 {
-	[CreateAssetMenu(fileName = "New Achievement Database", menuName = "Character/Achievement/Database", order = 0)]
+	[CreateAssetMenu(fileName = "New Achievement Database", menuName = "FishMMO/Character/Achievement/Database", order = 0)]
 	public class AchievementTemplateDatabase : ScriptableObject
 	{
 		[Serializable]

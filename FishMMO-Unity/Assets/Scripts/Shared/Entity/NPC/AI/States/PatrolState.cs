@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace FishMMO.Shared
 {
-	[CreateAssetMenu(fileName = "New AI Patrol State", menuName = "Character/NPC/AI/Patrol State", order = 0)]
+	[CreateAssetMenu(fileName = "New AI Patrol State", menuName = "FishMMO/Character/NPC/AI/Patrol State", order = 0)]
 	public class PatrolState : BaseAIState
 	{
 		public override void Enter(AIController controller)
