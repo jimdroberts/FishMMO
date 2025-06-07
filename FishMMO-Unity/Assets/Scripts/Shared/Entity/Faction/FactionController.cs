@@ -1,6 +1,7 @@
 ﻿using FishNet.Connection;
 using FishNet.Serializing;
 using FishNet.Transporting;
+using Mono.Cecil.Cil;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using UnityEngine;
@@ -24,8 +25,8 @@ namespace FishMMO.Shared
 		public Dictionary<int, Faction> Hostile { get { return hostile; } }
 
 		[SerializeField]
-		private FactionTemplate template;
-		public FactionTemplate Template { get { return this.template; } set { this.template = value; } }
+		private RaceTemplate raceTemplate;
+		public RaceTemplate RaceTemplate { get { return this.raceTemplate; } }
 
 #if !UNITY_SERVER
 		public override void OnStartCharacter()
@@ -244,11 +245,11 @@ namespace FishMMO.Shared
 			// Is the other character an NPC?
 			if (defenderFactionController.Character as NPC != null)
 			{
-				foreach (FactionTemplate factionTemplate in defenderFactionController.Template.DefaultAllied)
+				foreach (FactionTemplate factionTemplate in defenderFactionController.RaceTemplate.InitialFaction.DefaultAllied)
 				{
 					AdjustFactionValue(factionTemplate, -FactionTemplate.Maximum, alliedPercentToSubtract);
 				}
-				foreach (FactionTemplate factionTemplate in defenderFactionController.Template.DefaultHostile)
+				foreach (FactionTemplate factionTemplate in defenderFactionController.RaceTemplate.InitialFaction.DefaultHostile)
 				{
 					AdjustFactionValue(factionTemplate, FactionTemplate.Maximum, hostilePercentToAdd);
 				}
@@ -344,7 +345,7 @@ namespace FishMMO.Shared
 			// Is the other character an NPC? Directly use the template data if so.
 			if (otherFactionController.Character as NPC != null)
 			{
-				if (Hostile.ContainsKey(otherFactionController.Template.ID))
+				if (Hostile.ContainsKey(otherFactionController.RaceTemplate.InitialFaction.ID))
 				{
 					//UnityEngine.Debug.Log($"{otherFactionController.Template.Name}: {otherFactionController.Character.GameObject.name} is an Enemy of {this.Character.GameObject.name}.");
 

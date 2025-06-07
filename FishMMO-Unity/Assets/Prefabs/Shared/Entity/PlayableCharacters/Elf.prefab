@@ -269,12 +269,15 @@ MonoBehaviour:
   - {fileID: 6690946415020651589}
   - {fileID: 7810264000710710752}
   - {fileID: 34196052825852577}
-  <InitializedParentNetworkBehaviour>k__BackingField: {fileID: 0}
-  <InitializedNestedNetworkObjects>k__BackingField: []
+  InitializedParentNetworkBehaviour: {fileID: 0}
+  InitializedNestedNetworkObjects: []
+  RuntimeParentNetworkBehaviour: {fileID: 0}
+  RuntimeChildNetworkBehaviours: []
   _isNetworked: 1
   _isSpawnable: 1
   _isGlobal: 0
   _initializeOrder: 0
+  _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
   NetworkObserver: {fileID: 0}
   _enablePrediction: 1
@@ -297,7 +300,8 @@ MonoBehaviour:
   SerializedTransformProperties:
     Position: {x: 0, y: 0, z: 0}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
-    LocalScale: {x: 1, y: 1, z: 1}
+    Scale: {x: 0, y: 0, z: 0}
+    IsValid: 0
 --- !u!114 &961999050755331747
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -707,7 +711,7 @@ MonoBehaviour:
   _addedNetworkObject: {fileID: 4964627840297570917}
   _networkObjectCache: {fileID: 4964627840297570917}
   isAggressive: 0
-  template: {fileID: 11400000, guid: 1ab8069820abc0b45ad5dd91bc796d4c, type: 2}
+  raceTemplate: {fileID: 11400000, guid: 6f8938bbed1286347b54bf3f4889f32a, type: 2}
 --- !u!114 &7810264000710710752
 MonoBehaviour:
   m_ObjectHideFlags: 0
