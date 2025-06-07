@@ -19,6 +19,9 @@ namespace FishMMO.Shared
 		public string Description;
 		public CharacterAttributeTemplateDatabase InitialAttributes;
 		public FactionTemplate InitialFaction;
+		public List<AbilityTemplate> StartingAbilities = new List<AbilityTemplate>();
+		public List<BaseItemTemplate> StartingInventoryItems = new List<BaseItemTemplate>();
+		public List<EquippableItemTemplate> StartingEquipment = new List<EquippableItemTemplate>();
 
 		public string Name { get { return this.name; } }
 
