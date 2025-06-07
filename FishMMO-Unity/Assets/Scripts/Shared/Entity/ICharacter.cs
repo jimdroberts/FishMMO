@@ -18,9 +18,10 @@ namespace FishMMO.Shared
 		void DisableFlags(CharacterFlags flags);
 
 #if !UNITY_SERVER
-		Transform MeshRoot { get;}
+		Transform MeshRoot { get; }
 		TextMeshPro CharacterNameLabel { get; set; }
 		TextMeshPro CharacterGuildLabel { get; set; }
+		void InstantiateRaceModelFromIndex(RaceTemplate raceTemplate, int modelIndex);
 #endif
 
 		void RegisterCharacterBehaviour(ICharacterBehaviour characterBehaviour);

@@ -494,7 +494,16 @@ namespace FishMMO.Shared
 					Addressables.Release(assetList);
 				}
 			}
-			loadedAssets.Clear(); // Clear the dictionary of loaded assets
+			loadedAssets.Clear();
+
+			foreach (var prefabHandle in loadedPrefabs.Values)
+			{
+				if (prefabHandle.IsValid())
+				{
+					Addressables.Release(prefabHandle);
+				}
+			}
+			loadedPrefabs.Clear();
 		}
 	}
 }

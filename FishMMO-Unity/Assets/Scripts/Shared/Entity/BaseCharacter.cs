@@ -6,6 +6,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 #if !UNITY_SERVER
 using TMPro;
+using UnityEngine.AddressableAssets;
 #endif
 
 namespace FishMMO.Shared
@@ -46,6 +47,31 @@ namespace FishMMO.Shared
 		[SerializeField]
 		private TextMeshPro characterGuildLabel;
 		public TextMeshPro CharacterGuildLabel { get { return this.characterGuildLabel; } set { this.characterGuildLabel = value; } }
+
+		public void InstantiateRaceModelFromIndex(RaceTemplate raceTemplate, int modelIndex)
+		{
+			if (raceTemplate == null || MeshRoot == null)
+			{
+				return;
+			}
+
+			AssetReference modelReference = raceTemplate.GetModelReference(modelIndex);
+			if (modelReference != null)
+			{
+				AddressableLoadProcessor.LoadPrefabAsync(modelReference, (go) =>
+				{
+					if (MeshRoot.childCount > 0)
+					{
+						foreach (Transform child in MeshRoot)
+						{
+							child.gameObject.SetActive(false);
+							Destroy(child.gameObject);
+						}
+					}
+					Instantiate(go, Vector3.zero, Quaternion.identity, MeshRoot);
+				});
+			}
+		}
 #endif
 
 		void Awake()
