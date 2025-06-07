@@ -55,6 +55,7 @@ namespace FishMMO.Shared
 		/// The prefab ID for the character object.
 		/// </summary>
 		public int RaceID { get; set; }
+		public int ModelIndex { get; set; }
 		public string RaceName { get; set; }
 		public string BindScene { get; set; }
 		public Vector3 BindPosition { get; set; }
@@ -106,7 +107,7 @@ namespace FishMMO.Shared
 		{
 			ID = reader.ReadInt64();
 			RaceID = reader.ReadInt32();
-			int ModelIndex = reader.ReadInt32();
+			ModelIndex = reader.ReadInt32();
 			RaceName = reader.ReadStringAllocated();
 			SceneName = reader.ReadStringAllocated();
 
@@ -143,7 +144,7 @@ namespace FishMMO.Shared
 		{
 			writer.WriteInt64(ID);
 			writer.WriteInt32(RaceID);
-			writer.WriteInt32(0);
+			writer.WriteInt32(ModelIndex);
 			writer.WriteString(RaceName);
 			writer.WriteString(SceneName);
 		}
