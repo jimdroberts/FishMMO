@@ -6,6 +6,7 @@ namespace FishMMO.Shared
 	{
 		public string CharacterName;
 		public int RaceTemplateID;
+		public int ModelIndex;
 		public string SceneName;
 		public string SpawnerName;
 	}

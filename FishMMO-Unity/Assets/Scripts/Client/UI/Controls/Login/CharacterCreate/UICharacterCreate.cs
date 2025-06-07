@@ -1,5 +1,6 @@
 using FishNet.Transporting;
 using System.Collections.Generic;
+using System.Linq;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -12,12 +13,15 @@ namespace FishMMO.Client
 		public Button CreateButton;
 		public TMP_Text CreateResultText;
 		public TMP_Dropdown StartRaceDropdown;
+		public TMP_Dropdown StartModelDropdown;
 		public TMP_Dropdown StartLocationDropdown;
 		public RectTransform CharacterParent;
 
 		public string CharacterName = "";
 		public int RaceIndex = -1;
+		public int ModelIndex = -1;
 		public List<string> InitialRaceNames = new List<string>();
+		public List<string> InitialModelNames = new List<string>();
 		public List<string> InitialSpawnLocationNames = new List<string>();
 		public WorldSceneDetailsCache WorldSceneDetailsCache = null;
 		public int SelectedSpawnPosition = -1;
@@ -30,10 +34,12 @@ namespace FishMMO.Client
 		{
 			// initialize race dropdown
 			if (StartRaceDropdown != null &&
-				InitialRaceNames != null)
+				InitialRaceNames != null &&
+				InitialModelNames != null)
 			{
 				raceNameMap.Clear();
 				InitialRaceNames.Clear();
+				InitialModelNames.Clear();
 
 				Dictionary<int, RaceTemplate> raceTemplates = RaceTemplate.GetCache<RaceTemplate>();
 				foreach (KeyValuePair<int, RaceTemplate> pair in raceTemplates)
@@ -53,6 +59,7 @@ namespace FishMMO.Client
 					}
 					raceNameMap.Add(pair.Value.Name, pair.Key);
 					InitialRaceNames.Add(pair.Value.Name);
+					InitialModelNames.AddRange(pair.Value.Models.Select(m => m.Asset.name));
 
 					// initialize spawn position map
 					if (!raceSpawnPositionMap.TryGetValue(pair.Value.Name, out HashSet<string> spawners))
@@ -77,9 +84,12 @@ namespace FishMMO.Client
 				}
 				StartRaceDropdown.ClearOptions();
 				StartRaceDropdown.AddOptions(InitialRaceNames);
+				StartModelDropdown.ClearOptions();
+				StartModelDropdown.AddOptions(InitialModelNames);
 
 				// set initial race selection
 				RaceIndex = 0;
+				ModelIndex = 0;
 			}
 
 			UpdateStartLocationDropdown();
@@ -125,8 +135,22 @@ namespace FishMMO.Client
 		public void OnRaceDropdownValueChanged(TMP_Dropdown dropdown)
 		{
 			RaceIndex = dropdown.value;
+			// Reset Model Index
+			ModelIndex = 0;
 
 			UpdateStartLocationDropdown();
+		}
+
+		public void OnModelDropdownValueChanged(TMP_Dropdown dropdown)
+		{
+			ModelIndex = dropdown.value;
+
+			UpdateModel();
+		}
+
+		private void UpdateModel()
+		{
+
 		}
 
 		private void UpdateStartLocationDropdown()
@@ -164,6 +188,7 @@ namespace FishMMO.Client
 				Constants.Authentication.IsAllowedCharacterName(CharacterName) &&
 				WorldSceneDetailsCache != null &&
 				RaceIndex > -1 &&
+				ModelIndex > -1 &&
 				SelectedSpawnPosition > -1)
 			{
 				foreach (WorldSceneDetails details in WorldSceneDetailsCache.Scenes.Values)
@@ -178,6 +203,7 @@ namespace FishMMO.Client
 						{
 							CharacterName = CharacterName,
 							RaceTemplateID = raceTemplateID,
+							ModelIndex = ModelIndex,
 							SceneName = spawnPosition.SceneName,
 							SpawnerName = spawnPosition.SpawnerName,
 						}, Channel.Reliable);

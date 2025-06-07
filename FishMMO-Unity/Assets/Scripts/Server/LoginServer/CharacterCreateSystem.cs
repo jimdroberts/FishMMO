@@ -1,6 +1,7 @@
 ﻿using FishNet.Connection;
 using FishNet.Transporting;
 using System;
+using FishMMO.Database.Npgsql;
 using FishMMO.Database.Npgsql.Entities;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
@@ -129,6 +130,13 @@ namespace FishMMO.Server
 							conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
 							return;
 						}
+						if (raceTemplate.GetModelReference(msg.ModelIndex) == null)
+						{
+							//Debug.Log("ModelIndex is invalid.");
+
+							conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
+							return;
+						}
 
 						bool validateAllowedRace = false;
 						foreach (RaceTemplate t in initialSpawnPosition.AllowedRaces)
@@ -165,6 +173,7 @@ namespace FishMMO.Server
 							Name = msg.CharacterName,
 							NameLowercase = msg.CharacterName?.ToLower(),
 							RaceID = msg.RaceTemplateID,
+							ModelIndex = msg.ModelIndex,
 							BindScene = msg.SceneName,
 							BindX = initialSpawnPosition.Position.x,
 							BindY = initialSpawnPosition.Position.y,
@@ -237,73 +246,16 @@ namespace FishMMO.Server
 						}
 
 						// Add starting abilities
-						if (StartingAbilities != null)
-						{
-							foreach (AbilityTemplate startingAbility in StartingAbilities)
-							{
-								var dbAbility = new CharacterAbilityEntity()
-								{
-									CharacterID = newCharacter.ID,
-									TemplateID = startingAbility.ID,
-									AbilityEvents = startingAbility.Events.Select(a => a.ID).ToList(),
-								};
-								dbContext.CharacterAbilities.Add(dbAbility);
-							}
-							dbContext.SaveChanges();
-						}
+						AddStartingAbilities(dbContext, newCharacter.ID, StartingAbilities);
+						AddStartingAbilities(dbContext, newCharacter.ID, raceTemplate.StartingAbilities);
 
 						// Add inventory items
-						if (StartingInventoryItems != null)
-						{
-							for (int i = 0; i < StartingInventoryItems.Count; ++i)
-							{
-								BaseItemTemplate itemTemplate = StartingInventoryItems[i];
-								var dbItem = new CharacterInventoryEntity()
-								{
-									CharacterID = newCharacter.ID,
-									TemplateID = itemTemplate.ID,
-									Slot = i,
-									Seed = 0,
-									Amount = 1,
-								};
-								dbContext.CharacterInventoryItems.Add(dbItem);
-							}
-							dbContext.SaveChanges();
-						}
+						AddStartingItems(dbContext, newCharacter.ID, StartingInventoryItems);
+						AddStartingItems(dbContext, newCharacter.ID, raceTemplate.StartingInventoryItems);
 
 						// Add equipped items
-						if (StartingEquipment != null)
-						{
-							for (int i = 0; i < StartingEquipment.Count; ++i)
-							{
-								EquippableItemTemplate itemTemplate = StartingEquipment[i];
-
-								// Generate the item attributes so we can add them to the initial character attributes
-								ItemGenerator itemGenerator = new ItemGenerator();
-								itemGenerator.Generate(1, itemTemplate);
-
-								foreach (ItemAttribute itemAttribute in itemGenerator.Attributes.Values)
-								{
-									if (initialAttributes.TryGetValue(itemAttribute.Template.CharacterAttribute.ID, out CharacterAttributeEntity attributeEntity))
-									{
-										//UnityEngine.Debug.Log($"{itemTemplate.Name} - {itemAttribute.Template.CharacterAttribute.Name} adding {itemAttribute.value}");
-										attributeEntity.Value += itemAttribute.value;
-									}
-								}
-
-								// Add the equipped item to the database
-								var dbItem = new CharacterEquipmentEntity()
-								{
-									CharacterID = newCharacter.ID,
-									TemplateID = itemTemplate.ID,
-									Slot = (int)itemTemplate.Slot,
-									Seed = itemGenerator.Seed,
-									Amount = 0,
-								};
-								dbContext.CharacterEquippedItems.Add(dbItem);
-							}
-							dbContext.SaveChanges();
-						}
+						AddStartingEquipment(dbContext, newCharacter.ID, StartingEquipment, initialAttributes);
+						AddStartingEquipment(dbContext, newCharacter.ID, raceTemplate.StartingEquipment, initialAttributes);
 
 						// Save the initial character attributes to the database
 						if (initialAttributes != null &&
@@ -315,7 +267,7 @@ namespace FishMMO.Server
 							}
 							dbContext.SaveChanges();
 						}
-						
+
 						// Send success to the client
 						Server.Broadcast(conn, new CharacterCreateResultBroadcast()
 						{
@@ -334,6 +286,82 @@ namespace FishMMO.Server
 				{
 					Debug.Log("Unable to get World Scene Details.");
 				}
+			}
+		}
+
+		private void AddStartingAbilities(NpgsqlDbContext dbContext, long characterID, List<AbilityTemplate> startingAbilities)
+		{
+			if (startingAbilities != null)
+			{
+				foreach (AbilityTemplate startingAbility in startingAbilities)
+				{
+					var dbAbility = new CharacterAbilityEntity()
+					{
+						CharacterID = characterID,
+						TemplateID = startingAbility.ID,
+						AbilityEvents = startingAbility.Events.Select(a => a.ID).ToList(),
+					};
+					dbContext.CharacterAbilities.Add(dbAbility);
+				}
+				dbContext.SaveChanges();
+			}
+		}
+
+		private void AddStartingItems(NpgsqlDbContext dbContext, long characterID, List<BaseItemTemplate> startingItems)
+		{
+			if (startingItems != null)
+			{
+				for (int i = 0; i < startingItems.Count; ++i)
+				{
+					BaseItemTemplate itemTemplate = startingItems[i];
+					var dbItem = new CharacterInventoryEntity()
+					{
+						CharacterID = characterID,
+						TemplateID = itemTemplate.ID,
+						Slot = i,
+						Seed = 0,
+						Amount = 1,
+					};
+					dbContext.CharacterInventoryItems.Add(dbItem);
+				}
+				dbContext.SaveChanges();
+			}
+		}
+
+		private void AddStartingEquipment(NpgsqlDbContext dbContext, long characterID, List<EquippableItemTemplate> startingEquipment, Dictionary<int, CharacterAttributeEntity> initialAttributes)
+		{
+			if (startingEquipment != null)
+			{
+				for (int i = 0; i < startingEquipment.Count; ++i)
+				{
+					EquippableItemTemplate itemTemplate = startingEquipment[i];
+
+					// Generate the item attributes so we can add them to the initial character attributes
+					ItemGenerator itemGenerator = new ItemGenerator();
+					itemGenerator.Generate(1, itemTemplate);
+
+					// Update our initial attribute values to include equipped item attributes
+					foreach (ItemAttribute itemAttribute in itemGenerator.Attributes.Values)
+					{
+						if (initialAttributes.TryGetValue(itemAttribute.Template.CharacterAttribute.ID, out CharacterAttributeEntity attributeEntity))
+						{
+							//UnityEngine.Debug.Log($"{itemTemplate.Name} - {itemAttribute.Template.CharacterAttribute.Name} adding {itemAttribute.value}");
+							attributeEntity.Value += itemAttribute.value;
+						}
+					}
+
+					// Add the equipped item to the database
+					var dbItem = new CharacterEquipmentEntity()
+					{
+						CharacterID = characterID,
+						TemplateID = itemTemplate.ID,
+						Slot = (int)itemTemplate.Slot,
+						Seed = itemGenerator.Seed,
+						Amount = 0,
+					};
+					dbContext.CharacterEquippedItems.Add(dbItem);
+				}
+				dbContext.SaveChanges();
 			}
 		}
 	}
