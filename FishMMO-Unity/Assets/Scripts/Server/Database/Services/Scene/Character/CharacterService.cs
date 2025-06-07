@@ -548,6 +548,7 @@ namespace FishMMO.Server.DatabaseServices
 				character.InstanceSceneName = instanceSceneName;
 				character.InstanceSceneHandle = instanceSceneHandle;
 				character.RaceID = dbCharacter.RaceID;
+				character.ModelIndex = dbCharacter.ModelIndex;
 				character.RaceName = raceTemplate.Name;
 				character.Flags = dbCharacter.Flags;
 				character.AccessLevel = (AccessLevel)dbCharacter.AccessLevel;

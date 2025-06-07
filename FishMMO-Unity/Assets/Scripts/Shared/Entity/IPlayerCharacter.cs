@@ -30,6 +30,7 @@ namespace FishMMO.Shared
 		PredictionManager PredictionManager { get; }
 		HashSet<NetworkConnection> Observers { get; }
 		int RaceID { get; set; }
+		int ModelIndex { get; set; }
 		string RaceName { get; set; }
 		string BindScene { get; set; }
 		Vector3 BindPosition { get; set; }
