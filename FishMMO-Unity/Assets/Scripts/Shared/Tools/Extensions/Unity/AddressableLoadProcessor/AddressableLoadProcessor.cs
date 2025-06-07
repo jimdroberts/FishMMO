@@ -37,6 +37,10 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Currently loaded prefab assets.
+		/// </summary>
+		private static Dictionary<AssetReference, AsyncOperationHandle<GameObject>> loadedPrefabs = new Dictionary<AssetReference, AsyncOperationHandle<GameObject>>();
+		/// <summary>
 		/// The currently loaded assets.
 		/// </summary>
 		private static Dictionary<AddressableAssetKey, AsyncOperationHandle<IList<UnityEngine.Object>>> loadedAssets = new Dictionary<AddressableAssetKey, AsyncOperationHandle<IList<UnityEngine.Object>>>();
@@ -242,6 +246,39 @@ namespace FishMMO.Shared
 
 			// Ensure progress is reported as completed.
 			OnProgressUpdate?.Invoke(1f);
+		}
+
+		/// <summary>
+		/// Allows for loading prefab AssetReferences with a callback if it succeeds.
+		/// </summary>
+		public static void LoadPrefabAsync(AssetReference assetReference, Action<GameObject> onLoadComplete)
+		{
+			if (!assetReference.RuntimeKeyIsValid())
+			{
+				return;
+			}
+
+			if (loadedPrefabs.TryGetValue(assetReference, out AsyncOperationHandle<GameObject> op))
+			{
+				onLoadComplete?.Invoke(op.Result);
+				return;
+			}
+
+			AsyncOperationHandle<GameObject> handle = assetReference.LoadAssetAsync<GameObject>();
+			handle.Completed += (op) =>
+			{
+				if (op.Status == AsyncOperationStatus.Succeeded)
+				{
+					Debug.Log($"Load Complete: {op.Result.name}");
+					loadedPrefabs.Add(assetReference, op);
+					onLoadComplete?.Invoke(op.Result);
+				}
+				else if (op.Status == AsyncOperationStatus.Failed)
+				{
+					Debug.LogError($"Failed to load addressable {op.Result.name}");
+					op.Release();
+				}
+			};
 		}
 
 		// Load assets for a specific label

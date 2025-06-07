@@ -13,7 +13,7 @@ namespace FishMMO.Shared
 		Dictionary<int, Faction> Allied { get;}
 		Dictionary<int, Faction> Neutral { get; }
 		Dictionary<int, Faction> Hostile { get; }
-		FactionTemplate Template { get; }
+		RaceTemplate RaceTemplate { get; }
 
 		void CopyFrom(IFactionController factionController);
 		void SetFaction(int templateID, int value, bool skipEvent = false);

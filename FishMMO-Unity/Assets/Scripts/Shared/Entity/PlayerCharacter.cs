@@ -2,10 +2,12 @@
 using UnityEngine;
 using System;
 using FishNet.Connection;
-using FishNet.Object.Synchronizing;
 using FishNet.Serializing;
 using System.Runtime.CompilerServices;
 using System.Collections.Generic;
+using UnityEngine.AddressableAssets;
+using GameKit.Dependencies.Utilities;
+using UnityEditor;
 
 namespace FishMMO.Shared
 {
@@ -104,11 +106,36 @@ namespace FishMMO.Shared
 		{
 			ID = reader.ReadInt64();
 			RaceID = reader.ReadInt32();
+			int ModelIndex = reader.ReadInt32();
 			RaceName = reader.ReadStringAllocated();
 			SceneName = reader.ReadStringAllocated();
 
 #if !UNITY_SERVER
 			IPlayerCharacter.OnReadPayload?.Invoke(this);
+
+			if (MeshRoot != null)
+			{
+				RaceTemplate template = RaceTemplate.Get<RaceTemplate>(RaceID);
+				if (template != null)
+				{
+					AssetReference modelReference = template.GetModelReference(ModelIndex);
+					if (modelReference != null)
+					{
+						AddressableLoadProcessor.LoadPrefabAsync(modelReference, (go) =>
+						{
+							if (MeshRoot.childCount > 0)
+							{
+								foreach (Transform child in MeshRoot)
+								{
+									child.gameObject.SetActive(false);
+									Destroy(child.gameObject);
+								}
+							}
+							Instantiate(go, Vector3.zero, Quaternion.identity, MeshRoot);
+						});
+					}
+				}
+			}
 #endif
 		}
 
@@ -116,6 +143,7 @@ namespace FishMMO.Shared
 		{
 			writer.WriteInt64(ID);
 			writer.WriteInt32(RaceID);
+			writer.WriteInt32(0);
 			writer.WriteString(RaceName);
 			writer.WriteString(SceneName);
 		}
@@ -174,11 +202,6 @@ namespace FishMMO.Shared
 			TeleporterName = teleporterName;
 
 			IPlayerCharacter.OnTeleport?.Invoke(this);
-
-/*#if UNITY_SERVER
-			// just disconnect
-			Owner.Disconnect(false);
-#endif*/
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
