@@ -281,6 +281,37 @@ namespace FishMMO.Shared
 			};
 		}
 
+		/// <summary>
+		/// Unload a specific prefab by its key.
+		/// </summary>
+		public static void UnloadPrefab(AssetReference assetReference)
+		{
+			// Check if the prefab is loaded (exists in the loadedPrefabs dictionary)
+			if (loadedPrefabs.TryGetValue(assetReference, out var assetHandle))
+			{
+				// Ensure the asset handle is valid
+				if (assetHandle.IsValid())
+				{
+					Debug.Log($"Unloading asset: {assetHandle.Result.name}");
+
+					// Release the asset handle and remove it from the loadedPrefabs dictionary
+					Addressables.Release(assetHandle);
+					loadedPrefabs.Remove(assetReference);
+
+					Debug.Log($"Asset with key {assetReference} has been unloaded.");
+				}
+				else
+				{
+					Debug.LogError($"Asset handle for {assetReference} is invalid.");
+				}
+			}
+			else
+			{
+				// Log if the prefab key was not found in the loaded prefabs dictionary
+				Debug.LogWarning($"Asset with key {assetReference} not found in loaded assets.");
+			}
+		}
+
 		// Load assets for a specific label
 		private static AsyncOperationHandle<IList<UnityEngine.Object>> LoadAssetsAsync(AddressableAssetKey assetkey)
 		{
