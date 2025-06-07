@@ -5,9 +5,7 @@ using FishNet.Connection;
 using FishNet.Serializing;
 using System.Runtime.CompilerServices;
 using System.Collections.Generic;
-using UnityEngine.AddressableAssets;
-using GameKit.Dependencies.Utilities;
-using UnityEditor;
+
 
 namespace FishMMO.Shared
 {
@@ -52,11 +50,12 @@ namespace FishMMO.Shared
 		public string TeleporterName { get; set; }
 		public override bool IsTeleporting { get { return !string.IsNullOrWhiteSpace(TeleporterName); } }
 		/// <summary>
-		/// The prefab ID for the character object.
+		/// The Race Template ID for the character object.
 		/// </summary>
 		public int RaceID { get; set; }
 		public int ModelIndex { get; set; }
 		public string RaceName { get; set; }
+		public int ModelIndex { get; set; }
 		public string BindScene { get; set; }
 		public Vector3 BindPosition { get; set; }
 		public string SceneName { get; set; }
@@ -114,28 +113,10 @@ namespace FishMMO.Shared
 #if !UNITY_SERVER
 			IPlayerCharacter.OnReadPayload?.Invoke(this);
 
-			if (MeshRoot != null)
+			RaceTemplate raceTemplate = RaceTemplate.Get<RaceTemplate>(RaceID);
+			if (raceTemplate != null)
 			{
-				RaceTemplate template = RaceTemplate.Get<RaceTemplate>(RaceID);
-				if (template != null)
-				{
-					AssetReference modelReference = template.GetModelReference(ModelIndex);
-					if (modelReference != null)
-					{
-						AddressableLoadProcessor.LoadPrefabAsync(modelReference, (go) =>
-						{
-							if (MeshRoot.childCount > 0)
-							{
-								foreach (Transform child in MeshRoot)
-								{
-									child.gameObject.SetActive(false);
-									Destroy(child.gameObject);
-								}
-							}
-							Instantiate(go, Vector3.zero, Quaternion.identity, MeshRoot);
-						});
-					}
-				}
+				InstantiateRaceModelFromIndex(raceTemplate, ModelIndex);
 			}
 #endif
 		}

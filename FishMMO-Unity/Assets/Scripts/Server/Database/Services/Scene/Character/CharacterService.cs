@@ -365,6 +365,7 @@ namespace FishMMO.Server.DatabaseServices
 			existingCharacter.BindZ = bindPosition.z;
 			existingCharacter.InstanceID = character.InstanceID;
 			existingCharacter.RaceID = character.RaceID;
+			existingCharacter.ModelIndex = character.ModelIndex;
 
 			bool isInInstance = character.Flags.IsFlagged(CharacterFlags.IsInInstance);
 			bool hasInstanceScene = !string.IsNullOrWhiteSpace(character.InstanceSceneName);

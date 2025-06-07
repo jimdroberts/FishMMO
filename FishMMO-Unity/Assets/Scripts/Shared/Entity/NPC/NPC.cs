@@ -65,6 +65,21 @@ namespace FishMMO.Shared
 			//Debug.Log($"Received NPCAttributeGenerator Seed {npcAttributeSeed}");
 
 			AddNPCAttributes();
+
+#if !UNITY_SERVER
+			// FactionController stores a reference to the RaceTemplate.
+			if (this.TryGet(out FactionController factionController))
+			{
+				RaceTemplate raceTemplate = factionController.RaceTemplate;
+				int modelIndex = -1;
+				if (raceTemplate.Models == null || raceTemplate.Models.Count < 1)
+				{
+					// Pick a random model for this NPC
+					modelIndex = npcAttributeGenerator.Next(0, raceTemplate.Models.Count);
+				}
+				InstantiateRaceModelFromIndex(raceTemplate, modelIndex);
+			}
+#endif
 		}
 
 		public override void WritePayload(NetworkConnection connection, Writer writer)

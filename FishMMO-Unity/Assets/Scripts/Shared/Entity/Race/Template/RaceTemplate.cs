@@ -26,7 +26,7 @@ namespace FishMMO.Shared
 		{
 			if (Models == null || Models.Count == 0)
 			{
-				return null;
+				return StandardModel;
 			}
 
 			if (index >= Models.Count || index < 0)
