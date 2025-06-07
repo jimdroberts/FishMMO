@@ -55,7 +55,6 @@ namespace FishMMO.Shared
 		public int RaceID { get; set; }
 		public int ModelIndex { get; set; }
 		public string RaceName { get; set; }
-		public int ModelIndex { get; set; }
 		public string BindScene { get; set; }
 		public Vector3 BindPosition { get; set; }
 		public string SceneName { get; set; }
