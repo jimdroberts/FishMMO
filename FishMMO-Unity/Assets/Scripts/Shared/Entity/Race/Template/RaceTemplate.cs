@@ -11,7 +11,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// This model is loaded during ClientPreboot as a static model reference for this Race. It will be replaced by the players selected model at runtime.
 		/// </summary>
-		public AssetReference StandardModel;
+		public AssetReference PlaceholderModel;
 		/// <summary>
 		/// The real character model references.
 		/// </summary>
@@ -29,7 +29,7 @@ namespace FishMMO.Shared
 		{
 			if (Models == null || Models.Count == 0)
 			{
-				return StandardModel;
+				return PlaceholderModel;
 			}
 
 			if (index >= Models.Count || index < 0)

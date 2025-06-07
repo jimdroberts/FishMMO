@@ -59,7 +59,18 @@ namespace FishMMO.Client
 					}
 					raceNameMap.Add(pair.Value.Name, pair.Key);
 					InitialRaceNames.Add(pair.Value.Name);
-					InitialModelNames.AddRange(pair.Value.Models.Select(m => m.Asset.name));
+					if (pair.Value != null && pair.Value.Models != null)
+					{
+						InitialModelNames.AddRange(pair.Value.Models.Select(m => m.Asset.name));
+					}
+					else if (pair.Value.PlaceholderModel != null)
+					{
+						ModelIndex = 0;
+					}
+					else
+					{
+						Debug.LogWarning($"No standard model or placeholder exists for {pair.Value.name}");
+					}
 
 					// initialize spawn position map
 					if (!raceSpawnPositionMap.TryGetValue(pair.Value.Name, out HashSet<string> spawners))
