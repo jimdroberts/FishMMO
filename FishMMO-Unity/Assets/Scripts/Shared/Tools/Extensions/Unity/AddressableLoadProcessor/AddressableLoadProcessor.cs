@@ -253,7 +253,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		public static void LoadPrefabAsync(AssetReference assetReference, Action<GameObject> onLoadComplete)
 		{
-			if (!assetReference.RuntimeKeyIsValid())
+			if (assetReference == null || !assetReference.RuntimeKeyIsValid())
 			{
 				return;
 			}

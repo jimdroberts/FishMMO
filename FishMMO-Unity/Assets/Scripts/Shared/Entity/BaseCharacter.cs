@@ -6,7 +6,6 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 #if !UNITY_SERVER
 using TMPro;
-using UnityEngine.AddressableAssets;
 #endif
 
 namespace FishMMO.Shared
@@ -55,22 +54,18 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			AssetReference modelReference = raceTemplate.GetModelReference(modelIndex);
-			if (modelReference != null)
+			AddressableLoadProcessor.LoadPrefabAsync(raceTemplate.GetModelReference(modelIndex), (go) =>
 			{
-				AddressableLoadProcessor.LoadPrefabAsync(modelReference, (go) =>
+				if (MeshRoot.childCount > 0)
 				{
-					if (MeshRoot.childCount > 0)
+					foreach (Transform child in MeshRoot)
 					{
-						foreach (Transform child in MeshRoot)
-						{
-							child.gameObject.SetActive(false);
-							Destroy(child.gameObject);
-						}
+						child.gameObject.SetActive(false);
+						Destroy(child.gameObject);
 					}
-					Instantiate(go, Vector3.zero, Quaternion.identity, MeshRoot);
-				});
-			}
+				}
+				Instantiate(go, Vector3.zero, Quaternion.identity, MeshRoot);
+			});
 		}
 #endif
 
