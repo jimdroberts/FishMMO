@@ -6,13 +6,31 @@ using UnityEngine;
 
 namespace FishMMO.Shared
 {
-	public class ItemGenerator : BaseRNGenerator
+	public class ItemGenerator
 	{
+		protected int seed;
+
+		public int Seed
+		{
+			get
+			{
+				return seed;
+			}
+			set
+			{
+				if (seed != value)
+				{
+					seed = value;
+					Generate();
+				}
+			}
+		}
+
 		private Dictionary<string, ItemAttribute> attributes = new Dictionary<string, ItemAttribute>();
 
 		private Item item;
 		public event Action<ItemAttribute, int, int> OnSetAttribute;
-		
+
 		public Dictionary<string, ItemAttribute> Attributes { get { return attributes; } }
 
 		public void Initialize(Item item, int seed)
@@ -48,7 +66,12 @@ namespace FishMMO.Shared
 			}
 		}
 
-		public override void Generate(int seed, BaseItemTemplate template = null)
+		public void Generate()
+		{
+			Generate(seed);
+		}
+
+		public void Generate(int seed, BaseItemTemplate template = null)
 		{
 			this.seed = seed;
 
@@ -58,7 +81,7 @@ namespace FishMMO.Shared
 			}
 
 			template ??= item?.Template; // Use null-coalescing operator for cleaner assignment
-			
+
 			System.Random random = new System.Random(seed);
 
 			if (random != null && attributes != null)

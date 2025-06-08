@@ -68,6 +68,24 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// 
+		/// </summary>
+		/// <param name="itemTemplate"></param>
+		/// <returns></returns>
+		public bool ContainsItem(BaseItemTemplate itemTemplate)
+		{
+			for (int i = 0; i < Items.Count; ++i)
+			{
+				Item item = Items[i];
+				if (item.Template.ID == itemTemplate.ID)
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/// <summary>
 		/// Adds items or sets empty slots.
 		/// </summary>
 		public void AddSlots(List<Item> items, int amount)

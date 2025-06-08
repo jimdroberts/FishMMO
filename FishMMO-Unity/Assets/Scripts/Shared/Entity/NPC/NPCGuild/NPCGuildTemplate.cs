@@ -9,8 +9,7 @@ namespace FishMMO.Shared
 		public Sprite Icon;
 		public string Description;
 		public List<ArchetypeTemplate> Archetypes = new List<ArchetypeTemplate>();
-		public AbilityResourceDictionary RequiredAttributes = new AbilityResourceDictionary();
-		public ItemTemplateDatabase RequiredItems;
+		public NPCGuildJoinCondition NPCGuildJoinCondition;
 
 		public string Name { get { return this.name; } }
 	}
