@@ -317,6 +317,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   WorldSceneDetailsCache: {fileID: 11400000, guid: 3f3e421dc58c81d4e94dcea943cfcd35,
     type: 2}
+  InteractableHandlerInitializer: {fileID: 11400000, guid: f97e472947ce9664f80129a66ac31499,
+    type: 2}
   MaxAbilityCount: 25
   CurrencyTemplate: {fileID: 11400000, guid: 5f83904fcedd0864fbb6162f45fbeb9e, type: 2}
 --- !u!1 &2696072683415778311

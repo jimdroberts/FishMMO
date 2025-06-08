@@ -8,6 +8,7 @@ using System.Runtime.CompilerServices;
 using UnityEngine;
 using FishMMO.Database.Npgsql.Entities;
 using System.Linq;
+using System;
 
 namespace FishMMO.Server
 {
@@ -17,6 +18,7 @@ namespace FishMMO.Server
 	public class InteractableSystem : ServerBehaviour
 	{
 		public WorldSceneDetailsCache WorldSceneDetailsCache;
+		public InteractableHandlerInitializer InteractableHandlerInitializer;
 		public int MaxAbilityCount = 25;
 		public CharacterAttributeTemplate CurrencyTemplate;
 
@@ -24,6 +26,12 @@ namespace FishMMO.Server
 		{
 			if (Server != null)
 			{
+				if (InteractableHandlerInitializer == null)
+				{
+					Debug.LogError($"InteractableHandlerInitializer cannot be null!");
+				}
+				InteractableHandlerInitializer.RegisterHandlers();
+
 				Server.RegisterBroadcast<InteractableBroadcast>(OnServerInteractableBroadcastReceived, true);
 				Server.RegisterBroadcast<MerchantPurchaseBroadcast>(OnServerMerchantPurchaseBroadcastReceived, true);
 				Server.RegisterBroadcast<AbilityCraftBroadcast>(OnServerAbilityCraftBroadcastReceived, true);
@@ -41,6 +49,8 @@ namespace FishMMO.Server
 		{
 			if (Server != null)
 			{
+				ClearAllHandlers();
+
 				Server.UnregisterBroadcast<InteractableBroadcast>(OnServerInteractableBroadcastReceived);
 				Server.UnregisterBroadcast<MerchantPurchaseBroadcast>(OnServerMerchantPurchaseBroadcastReceived);
 				Server.UnregisterBroadcast<AbilityCraftBroadcast>(OnServerAbilityCraftBroadcastReceived);
@@ -50,10 +60,68 @@ namespace FishMMO.Server
 			}
 		}
 
+		private static Dictionary<Type, IInteractableHandler> interactableHandlers = new Dictionary<Type, IInteractableHandler>();
+
+		/// <summary>
+		/// Registers an interactable handler for a specific type. The type must implement IInteractable.
+		/// </summary>
+		/// <typeparam name="T">The type of interactable to register the handler for. Must implement IInteractable.</typeparam>
+		/// <param name="handler">The handler instance for the specified interactable type.</param>
+		public static void RegisterInteractableHandler<T>(IInteractableHandler handler) where T : IInteractableHandler
+		{
+			Type type = typeof(T);
+			if (!interactableHandlers.ContainsKey(type))
+			{
+				interactableHandlers.Add(type, handler);
+				Debug.Log($"Registered handler for {type.Name}");
+			}
+			else
+			{
+				Debug.LogWarning($"Handler for type {type.Name} is already registered. Overwriting existing handler.");
+				interactableHandlers[type] = handler; // Overwrite in case you want to update handlers
+			}
+		}
+
+		/// <summary>
+		/// Unregisters the handler for a specific interactable type.
+		/// </summary>
+		/// <typeparam name="T">The type of interactable to unregister the handler for. Must implement IInteractable.</typeparam>
+		/// <returns>True if the handler was found and removed; otherwise, false.</returns>
+		public static bool UnregisterInteractableHandler<T>() where T : IInteractableHandler
+		{
+			Type type = typeof(T);
+			if (interactableHandlers.Remove(type))
+			{
+				Debug.Log($"Unregistered handler for {type.Name}");
+				return true;
+			}
+			else
+			{
+				Debug.LogWarning($"Attempted to unregister handler for type {type.Name}, but no handler was found.");
+				return false;
+			}
+		}
+
+		/// <summary>
+		/// Retrieves the interactable handler for a given type.
+		/// </summary>
+		public static IInteractableHandler GetInteractableHandler<T>()
+		{
+			Type type = typeof(T);
+			interactableHandlers.TryGetValue(type, out var handler);
+			return handler;
+		}
+
+		public static void ClearAllHandlers()
+		{
+			interactableHandlers.Clear();
+			Debug.Log("All interactable handlers cleared.");
+		}
+
 		/// <summary>
 		/// Attempts to add items to a characters inventory controller and broadcasts the update to the client.
 		/// </summary>
-		private bool SendNewItemBroadcast(NpgsqlDbContext dbContext, NetworkConnection conn, ICharacter character, IInventoryController inventoryController, Item newItem)
+		public bool SendNewItemBroadcast(NpgsqlDbContext dbContext, NetworkConnection conn, ICharacter character, IInventoryController inventoryController, Item newItem)
 		{
 			List<InventorySetItemBroadcast> modifiedItemBroadcasts = new List<InventorySetItemBroadcast>();
 
@@ -140,94 +208,20 @@ namespace FishMMO.Server
 			if (interactable != null &&
 				interactable.CanInteract(character))
 			{
-				switch (interactable)
+				Type interactableType = interactable.GetType();
+
+				if (interactableHandlers.TryGetValue(interactableType, out IInteractableHandler handler))
 				{
-					case AbilityCrafter:
-						//Debug.Log("AbilityCrafter");
-						Server.Broadcast(character.Owner, new AbilityCrafterBroadcast()
-						{
-							InteractableID = sceneObject.ID,
-						}, true, Channel.Reliable);
-
-						OnInteractNPC(character, interactable);
-						break;
-					case Banker:
-						//Debug.Log("Banker");
-						if (character.TryGet(out IBankController bankController))
-						{
-							bankController.LastInteractableID = sceneObject.ID;
-
-							Server.Broadcast(character.Owner, new BankerBroadcast(), true, Channel.Reliable);
-
-							OnInteractNPC(character, interactable);
-						}
-						break;
-					case DungeonEntrance:
-						//Debug.Log("Dungeon Finder");
-						Server.Broadcast(character.Owner, new DungeonFinderBroadcast()
-						{
-							InteractableID = sceneObject.ID,
-						}, true, Channel.Reliable);
-						break;
-					case Merchant merchant:
-						//Debug.Log("Merchant");
-						Server.Broadcast(character.Owner, new MerchantBroadcast()
-						{
-							InteractableID = sceneObject.ID,
-							TemplateID = merchant.Template.ID,
-						}, true, Channel.Reliable);
-
-						OnInteractNPC(character, interactable);
-						break;
-					case WorldItem worldItem:
-						//Debug.Log("WorldItem");
-						if (worldItem.Template != null &&
-							character.TryGet(out IInventoryController inventoryController))
-						{
-							if (worldItem.Amount > 0)
-							{
-								//Debug.Log($"WorldItem Amount {worldItem.Amount}");
-								using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-								if (dbContext == null)
-								{
-									return;
-								}
-
-								Item newItem = new Item(worldItem.Template, worldItem.Amount);
-								if (newItem == null)
-								{
-									return;
-								}
-
-								if (SendNewItemBroadcast(dbContext, conn, character, inventoryController, newItem))
-								{
-									if (newItem.IsStackable &&
-										newItem.Stackable.Amount > 1)
-									{
-										//Debug.Log($"WorldItem Remaining {newItem.Stackable.Amount}");
-										worldItem.Amount = newItem.Stackable.Amount;
-									}
-									else
-									{
-										//Debug.Log($"WorldItem Despawn");
-										worldItem.Despawn();
-									}
-								}
-							}
-							else
-							{
-								//Debug.Log($"WorldItem Despawn 2");
-								worldItem.Despawn();
-							}
-						}
-						break;
-					default:
-						return;
+					handler.HandleInteraction(interactable, character, sceneObject, this);
+				}
+				else
+				{
+					Debug.LogWarning($"No interaction handler registered for type: {interactableType.Name}");
 				}
 			}
 		}
 
-		private void OnInteractNPC(IPlayerCharacter character, IInteractable interactable)
+		public void OnInteractNPC(IPlayerCharacter character, IInteractable interactable)
 		{
 			if (character == null)
 			{
