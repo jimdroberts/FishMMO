@@ -18,5 +18,24 @@ namespace FishMMO.Shared
 		public ItemTemplateDatabase RequiredItems;
 
 		public string Name { get { return this.name; } }
+
+		public bool MeetsRequirements(IPlayerCharacter playerCharacter)
+		{
+			if (!playerCharacter.TryGet(out ICharacterAttributeController characterAttributeController))
+			{
+				return false;
+			}
+
+			// Check if we meet the attribute requirements to accept this Archetype. Use the base value for condition check instead of the final.
+			foreach (var requiredAttribute in RequiredAttributes)
+			{
+				if (!characterAttributeController.TryGetAttribute(requiredAttribute.Key, out CharacterAttribute attribute) ||
+					attribute.Value < requiredAttribute.Value)
+				{
+					return false;
+				}
+			}
+			return true;
+		}
 	}
 }
