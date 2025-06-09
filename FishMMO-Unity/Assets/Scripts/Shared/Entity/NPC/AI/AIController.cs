@@ -8,6 +8,7 @@ namespace FishMMO.Shared
 	[RequireComponent(typeof(NavMeshAgent))]
 	public class AIController : CharacterBehaviour, IAIController
 	{
+		public Collider[] SweepHits = new Collider[20];
 		public float EnemySweepRate = 1.5f;
 		public BaseAIState InitialState;
 		public AgentAvoidancePriority AvoidancePriority = AgentAvoidancePriority.Medium;
@@ -18,6 +19,10 @@ namespace FishMMO.Shared
 		public BaseAIState IdleState;
 		public BaseAIState AttackingState;
 		public BaseAIState DeadState;
+
+		[SerializeField]
+		private Transform eyeTransform;
+		public Transform EyeTransform => eyeTransform != null ? eyeTransform : Character.Transform;
 
 		public Transform LookTarget;
 		public bool RandomizeState;

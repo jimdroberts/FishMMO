@@ -20,10 +20,23 @@ namespace FishMMO.Shared
 			controller.Agent.speed = Constants.Character.WalkSpeed;
 			controller.Target = null;
 			controller.LookTarget = null;
+			if (controller.Character.TryGet(out IAbilityController abilityController))
+			{
+				abilityController.Interrupt(null); // Ensure any cast is stopped
+			}
 		}
 
 		public override void UpdateState(AIController controller, float deltaTime)
 		{
+			// Cache frequently used components
+			if (!controller.Character.TryGet(out ICharacterDamageController damageController) ||
+				!damageController.IsAlive)
+			{
+				// If AI is dead, stop attacking
+				controller.TransitionToIdleState(); // Or a specific 'Dead' state
+				return;
+			}
+
 			if (controller.Target == null ||
 				!controller.Target.gameObject.activeSelf)
 			{
@@ -51,10 +64,28 @@ namespace FishMMO.Shared
 		/// </summary>
 		public virtual void PickTarget(AIController controller, List<ICharacter> targets)
 		{
-			ICharacter target = targets[0];
+			ICharacter target = null;
+			foreach (var potentialTarget in targets)
+			{
+				if (potentialTarget != null && potentialTarget.GameObject.activeSelf &&
+					potentialTarget.TryGet(out ICharacterDamageController targetDamageController) &&
+					targetDamageController.IsAlive)
+				{
+					target = potentialTarget;
+					break;
+				}
+			}
 
-			controller.Target = target.Transform;
-			controller.LookTarget = target.Transform;
+			if (target != null)
+			{
+				controller.Target = target.Transform;
+				controller.LookTarget = target.Transform;
+			}
+			else
+			{
+				// No valid target found, transition out of attacking state
+				controller.TransitionToRandomMovementState();
+			}
 		}
 
 		private void TryAttack(AIController controller)
