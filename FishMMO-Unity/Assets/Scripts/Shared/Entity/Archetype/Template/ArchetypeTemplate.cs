@@ -14,28 +14,18 @@ namespace FishMMO.Shared
 		public List<BaseItemTemplate> ItemRewards;
 		public List<BaseBuffTemplate> BuffRewards;
 		public List<string> TitleRewards;
-		public AbilityResourceDictionary RequiredAttributes = new AbilityResourceDictionary();
-		public ItemTemplateDatabase RequiredItems;
+		public BaseCondition<IPlayerCharacter> ArchetypeRequirements;
 
 		public string Name { get { return this.name; } }
 
 		public bool MeetsRequirements(IPlayerCharacter playerCharacter)
 		{
-			if (!playerCharacter.TryGet(out ICharacterAttributeController characterAttributeController))
+			if (ArchetypeRequirements == null)
 			{
-				return false;
+				Debug.LogWarning($"ArchetypeTemplate: No Archetype Requirements assigned for {this.name}. Assuming requirements are met.");
+				return true;
 			}
-
-			// Check if we meet the attribute requirements to accept this Archetype. Use the base value for condition check instead of the final.
-			foreach (var requiredAttribute in RequiredAttributes)
-			{
-				if (!characterAttributeController.TryGetAttribute(requiredAttribute.Key, out CharacterAttribute attribute) ||
-					attribute.Value < requiredAttribute.Value)
-				{
-					return false;
-				}
-			}
-			return true;
+			return ArchetypeRequirements.Evaluate(playerCharacter);
 		}
 	}
 }

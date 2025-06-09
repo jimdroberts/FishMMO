@@ -9,8 +9,18 @@ namespace FishMMO.Shared
 		public Sprite Icon;
 		public string Description;
 		public List<ArchetypeTemplate> Archetypes = new List<ArchetypeTemplate>();
-		public NPCGuildJoinCondition NPCGuildJoinCondition;
+		public BaseCondition<IPlayerCharacter> GuildRequirements;
 
 		public string Name { get { return this.name; } }
+
+		public bool MeetsRequirements(IPlayerCharacter playerCharacter)
+		{
+			if (GuildRequirements == null)
+			{
+				Debug.LogWarning($"NPCGuildTemplate: No Guild Requirements assigned for {this.name}. Assuming requirements are met.");
+				return true;
+			}
+			return GuildRequirements.Evaluate(playerCharacter);
+		}
 	}
 }
