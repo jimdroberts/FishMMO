@@ -244,7 +244,6 @@ namespace FishMMO.Shared
 				return;
 			}
 			KnownAbilities.Clear();
-			KnownAbilities.Clear();
 			KnownBaseAbilities.Clear();
 			KnownEvents.Clear();
 			KnownSpawnEvents.Clear();

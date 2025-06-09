@@ -14,9 +14,18 @@ namespace FishMMO.Shared
 		public List<BaseItemTemplate> ItemRewards;
 		public List<BaseBuffTemplate> BuffRewards;
 		public List<string> TitleRewards;
-		public AbilityResourceDictionary RequiredAttributes = new AbilityResourceDictionary();
-		public ItemTemplateDatabase RequiredItems;
+		public BaseCondition<IPlayerCharacter> ArchetypeRequirements;
 
 		public string Name { get { return this.name; } }
+
+		public bool MeetsRequirements(IPlayerCharacter playerCharacter)
+		{
+			if (ArchetypeRequirements == null)
+			{
+				Debug.LogWarning($"ArchetypeTemplate: No Archetype Requirements assigned for {this.name}. Assuming requirements are met.");
+				return true;
+			}
+			return ArchetypeRequirements.Evaluate(playerCharacter);
+		}
 	}
 }
