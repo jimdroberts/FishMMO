@@ -27,23 +27,14 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Validates an IP Address or Hostname
 		/// </summary>
-		public static bool IsAddressValid(string addressOrHostname)
+		public static bool IsAddressValid(string address)
 		{
-			// 1. Check if it's a valid IP address (IPv4 or IPv6)
-			if (IPAddress.TryParse(addressOrHostname, out _))
-			{
-				return true;
-			}
+			// Uri.CheckHostName can validate DNS(HostName), IPv4, and IPv6
+			UriHostNameType hostNameType = Uri.CheckHostName(address);
 
-			// 2. Check if it's a syntactically valid hostname
-			// Uri.CheckHostName returns UriHostNameType.Dns for valid DNS hostnames
-			// and UriHostNameType.Unknown for invalid ones.
-			if (Uri.CheckHostName(addressOrHostname) == UriHostNameType.Dns)
-			{
-				return true;
-			}
-
-			return false;
+			return hostNameType == UriHostNameType.Dns ||
+				   hostNameType == UriHostNameType.IPv4 ||
+				   hostNameType == UriHostNameType.IPv6;
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
