@@ -25,11 +25,25 @@ namespace FishMMO.Shared
 		};
 
 		/// <summary>
-		/// IPv4 Regex, can we get IPv6 support???
+		/// Validates an IP Address or Hostname
 		/// </summary>
-		public static bool IsAddressValid(string address)
+		public static bool IsAddressValid(string addressOrHostname)
 		{
-			return IPAddress.TryParse(address, out _);
+			// 1. Check if it's a valid IP address (IPv4 or IPv6)
+			if (IPAddress.TryParse(addressOrHostname, out _))
+			{
+				return true;
+			}
+
+			// 2. Check if it's a syntactically valid hostname
+			// Uri.CheckHostName returns UriHostNameType.Dns for valid DNS hostnames
+			// and UriHostNameType.Unknown for invalid ones.
+			if (Uri.CheckHostName(addressOrHostname) == UriHostNameType.Dns)
+			{
+				return true;
+			}
+
+			return false;
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
