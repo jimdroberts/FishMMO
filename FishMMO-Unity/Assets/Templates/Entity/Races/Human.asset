@@ -13,6 +13,16 @@ MonoBehaviour:
   m_Name: Human
   m_EditorClassIdentifier: 
   Prefab: {fileID: 5839652419922276934, guid: 67671c10327f3b144a21191076a7af5b, type: 3}
+  PlaceholderModel:
+    m_AssetGUID: 7737647c22c1fc64a88d5cd030c352ce
+    m_SubObjectName: 
+    m_SubObjectGUID: 
+    m_SubObjectType: 
+    m_EditorAssetChanged: 0
+  Models: []
   Description: 
   InitialAttributes: {fileID: 11400000, guid: 8fe93c66f5bc53c45a7b0f8334be9016, type: 2}
   InitialFaction: {fileID: 11400000, guid: 77a3fb139fbe85a43a013e72d3b303a3, type: 2}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []
