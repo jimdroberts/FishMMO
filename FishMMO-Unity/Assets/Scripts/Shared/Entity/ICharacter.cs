@@ -8,6 +8,7 @@ namespace FishMMO.Shared
 	public interface ICharacter
 	{
 		long ID { get; set; }
+		string Name { get; }
 		Transform Transform { get; }
 		GameObject GameObject { get; }
 		Collider Collider { get; set; }

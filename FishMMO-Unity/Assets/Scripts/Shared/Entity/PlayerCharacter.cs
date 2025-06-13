@@ -37,7 +37,7 @@ namespace FishMMO.Shared
 		private Camera equipmentViewCamera;
 		public Camera EquipmentViewCamera { get { return this.equipmentViewCamera; } set { this.equipmentViewCamera = value; } }
 #endif
-
+		public new string Name { get { return CharacterName; } }
 		/// <summary>
 		/// The characters real name. Use this if you are referencing a character by name. Avoid character.name unless you want the name of the game object.
 		/// </summary>

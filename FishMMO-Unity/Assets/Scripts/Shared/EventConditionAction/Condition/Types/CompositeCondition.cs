@@ -6,12 +6,12 @@ namespace FishMMO.Shared
 	public enum ConditionOperator { AND, OR }
 
 	[CreateAssetMenu(fileName = "New Composite Condition", menuName = "FishMMO/Conditions/Composite Condition", order = 1)]
-	public class CompositeCondition : BaseCondition<IPlayerCharacter>
+	public class CompositeCondition : BaseCondition
 	{
 		public ConditionOperator Operator = ConditionOperator.AND;
-		public List<BaseCondition<IPlayerCharacter>> Conditions = new List<BaseCondition<IPlayerCharacter>>();
+		public List<BaseCondition> Conditions = new List<BaseCondition>();
 
-		public override bool Evaluate(IPlayerCharacter playerCharacter)
+		public override bool Evaluate(ICharacter initiator, EventData eventData)
 		{
 			if (Conditions == null || Conditions.Count == 0)
 			{
@@ -23,7 +23,7 @@ namespace FishMMO.Shared
 			{
 				foreach (var condition in Conditions)
 				{
-					if (condition == null || !condition.Evaluate(playerCharacter))
+					if (condition == null || !condition.Evaluate(initiator, eventData))
 					{
 						return false; // If any condition fails, AND fails
 					}
@@ -34,7 +34,7 @@ namespace FishMMO.Shared
 			{
 				foreach (var condition in Conditions)
 				{
-					if (condition != null && condition.Evaluate(playerCharacter))
+					if (condition != null && condition.Evaluate(initiator, eventData))
 					{
 						return true; // If any condition passes, OR passes
 					}

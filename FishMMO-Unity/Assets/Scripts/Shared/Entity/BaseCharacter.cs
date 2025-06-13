@@ -15,6 +15,7 @@ namespace FishMMO.Shared
 		protected Dictionary<Type, ICharacterBehaviour> Behaviours = new Dictionary<Type, ICharacterBehaviour>();
 
 		public long ID { get; set; }
+		public string Name { get { return gameObject.name; } }
 		public Transform Transform { get; private set; }
 		public GameObject GameObject { get; private set; }
 		public Collider Collider { get; set; }
