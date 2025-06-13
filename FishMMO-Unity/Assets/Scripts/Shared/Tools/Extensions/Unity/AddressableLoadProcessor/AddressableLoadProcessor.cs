@@ -39,7 +39,9 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Currently loaded prefab assets.
 		/// </summary>
-		private static Dictionary<AssetReference, AsyncOperationHandle<GameObject>> loadedPrefabs = new Dictionary<AssetReference, AsyncOperationHandle<GameObject>>();
+		private static Dictionary<object, AsyncOperationHandle<GameObject>> loadedPrefabs = new Dictionary<object, AsyncOperationHandle<GameObject>>();
+		private static Dictionary<object, AsyncOperationHandle<GameObject>> currentPrefabOperations = new Dictionary<object, AsyncOperationHandle<GameObject>>();
+
 		/// <summary>
 		/// The currently loaded assets.
 		/// </summary>
@@ -119,7 +121,7 @@ namespace FishMMO.Shared
 		// Enqueue multiple labels (IEnumerable<string>)
 		public static void EnqueueLoad(IEnumerable<string> labels, Addressables.MergeMode mergeMode = Addressables.MergeMode.None)
 		{
-			if (labels == null || labels.Count() < 1)
+			if (labels == null || !labels.Any())
 			{
 				return;
 			}
@@ -143,7 +145,7 @@ namespace FishMMO.Shared
 		// Enqueue multiple label-key pairs (IEnumerable<KeyValuePair<string, string>>)
 		public static void EnqueueLoad(IEnumerable<KeyValuePair<string, string>> labels, Addressables.MergeMode mergeMode = Addressables.MergeMode.Intersection)
 		{
-			if (labels == null || labels.Count() < 1)
+			if (labels == null || !labels.Any())
 			{
 				return;
 			}
@@ -166,7 +168,7 @@ namespace FishMMO.Shared
 
 		public static void EnqueueLoad(IEnumerable<AddressableSceneLoadData> sceneLoadDatas)
 		{
-			if (sceneLoadDatas == null || sceneLoadDatas.Count() < 1)
+			if (sceneLoadDatas == null || !sceneLoadDatas.Any())
 			{
 				return;
 			}
@@ -248,67 +250,124 @@ namespace FishMMO.Shared
 			OnProgressUpdate?.Invoke(1f);
 		}
 
-		/// <summary>
-		/// Allows for loading prefab AssetReferences with a callback if it succeeds.
-		/// </summary>
 		public static void LoadPrefabAsync(AssetReference assetReference, Action<GameObject> onLoadComplete)
 		{
 			if (assetReference == null || !assetReference.RuntimeKeyIsValid())
 			{
+				onLoadComplete?.Invoke(null);
 				return;
 			}
 
-			if (loadedPrefabs.TryGetValue(assetReference, out AsyncOperationHandle<GameObject> op))
+			object key = assetReference.RuntimeKey;
+
+			if (loadedPrefabs.TryGetValue(key, out AsyncOperationHandle<GameObject> completedHandle))
 			{
-				onLoadComplete?.Invoke(op.Result);
-				return;
+				if (completedHandle.Status == AsyncOperationStatus.Succeeded)
+				{
+					onLoadComplete?.Invoke(completedHandle.Result);
+					return;
+				}
 			}
 
-			AsyncOperationHandle<GameObject> handle = assetReference.LoadAssetAsync<GameObject>();
-			handle.Completed += (op) =>
+			if (currentPrefabOperations.TryGetValue(key, out AsyncOperationHandle<GameObject> existingHandle))
 			{
-				if (op.Status == AsyncOperationStatus.Succeeded)
+				if (existingHandle.IsValid())
 				{
-					Debug.Log($"Load Complete: {op.Result.name}");
-					loadedPrefabs.Add(assetReference, op);
-					onLoadComplete?.Invoke(op.Result);
-				}
-				else if (op.Status == AsyncOperationStatus.Failed)
-				{
-					Debug.LogError($"Failed to load addressable {op.Result.name}");
-					op.Release();
-				}
-			};
-		}
-
-		/// <summary>
-		/// Unload a specific prefab by its key.
-		/// </summary>
-		public static void UnloadPrefab(AssetReference assetReference)
-		{
-			// Check if the prefab is loaded (exists in the loadedPrefabs dictionary)
-			if (loadedPrefabs.TryGetValue(assetReference, out var assetHandle))
-			{
-				// Ensure the asset handle is valid
-				if (assetHandle.IsValid())
-				{
-					Debug.Log($"Unloading asset: {assetHandle.Result.name}");
-
-					// Release the asset handle and remove it from the loadedPrefabs dictionary
-					Addressables.Release(assetHandle);
-					loadedPrefabs.Remove(assetReference);
-
-					Debug.Log($"Asset with key {assetReference} has been unloaded.");
+					if (existingHandle.IsDone)
+					{
+						//Debug.Log($"Reusing completed existing handle for {key}");
+						if (existingHandle.Status == AsyncOperationStatus.Succeeded)
+						{
+							onLoadComplete?.Invoke(existingHandle.Result);
+						}
+						else
+						{
+							onLoadComplete?.Invoke(null);
+						}
+						return;
+					}
+					else
+					{
+						//Debug.Log($"Attaching new callback to in-progress load for {key}");
+						existingHandle.Completed += (op) =>
+						{
+							if (op.Status == AsyncOperationStatus.Succeeded)
+							{
+								onLoadComplete?.Invoke(op.Result);
+							}
+							else
+							{
+								onLoadComplete?.Invoke(null);
+							}
+						};
+						return;
+					}
 				}
 				else
 				{
-					Debug.LogError($"Asset handle for {assetReference} is invalid.");
+					Debug.LogWarning($"Found invalid handle for {key} in currentPrefabOperations. Removing and restarting load.");
+					currentPrefabOperations.Remove(key);
+				}
+			}
+
+			// 3. Start a new load operation
+			AsyncOperationHandle<GameObject> newHandle = assetReference.LoadAssetAsync<GameObject>();
+
+			currentPrefabOperations.Add(key, newHandle);
+
+			newHandle.Completed += (op) =>
+			{
+				if (op.Status == AsyncOperationStatus.Succeeded)
+				{
+					Debug.Log($"New Load Complete: {op.Result.name}");
+					loadedPrefabs[key] = op;
+					onLoadComplete?.Invoke(op.Result);
+				}
+				else
+				{
+					Debug.LogError($"Failed to load addressable {key}: {op.OperationException?.Message}");
+					if (loadedPrefabs.ContainsKey(key))
+					{
+						loadedPrefabs.Remove(key);
+					}
+					onLoadComplete?.Invoke(null);
+				}
+
+				currentPrefabOperations.Remove(key);
+			};
+		}
+
+		public static void UnloadPrefab(AssetReference assetReference)
+		{
+			if (assetReference == null) return;
+
+			object key = assetReference.RuntimeKey;
+
+			// Ensure the asset is not currently loading
+			if (currentPrefabOperations.ContainsKey(key))
+			{
+				Debug.LogWarning($"Attempted to unload prefab {key} while it's still loading. Unload will be attempted after current load finishes.");
+				return;
+			}
+
+			if (loadedPrefabs.TryGetValue(key, out var assetHandle))
+			{
+				if (assetHandle.IsValid())
+				{
+					Debug.Log($"Unloading prefab: {(assetHandle.Result != null ? assetHandle.Result.name : key)}");
+					Addressables.Release(assetHandle);
+					loadedPrefabs.Remove(key);
+					Debug.Log($"Prefab with key {key} has been unloaded.");
+				}
+				else
+				{
+					Debug.LogWarning($"Asset handle for {key} is invalid. Removing from loadedPrefabs.");
+					loadedPrefabs.Remove(key);
 				}
 			}
 			else
 			{
-				// Log if the prefab key was not found in the loaded prefabs dictionary
-				Debug.LogWarning($"Asset with key {assetReference} not found in loaded assets.");
+				Debug.LogWarning($"Prefab with key {key} not found in loaded prefabs. Not currently managed by this processor or already unloaded.");
 			}
 		}
 

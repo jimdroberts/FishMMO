@@ -13,6 +13,16 @@ MonoBehaviour:
   m_Name: Elf
   m_EditorClassIdentifier: 
   Prefab: {fileID: 4573496687782621821, guid: 3243c87cb242a03478e9ee038f7873ed, type: 3}
+  PlaceholderModel:
+    m_AssetGUID: 7737647c22c1fc64a88d5cd030c352ce
+    m_SubObjectName: 
+    m_SubObjectGUID: 
+    m_SubObjectType: 
+    m_EditorAssetChanged: 0
+  Models: []
   Description: 
   InitialAttributes: {fileID: 11400000, guid: 8fe93c66f5bc53c45a7b0f8334be9016, type: 2}
   InitialFaction: {fileID: 11400000, guid: 1ab8069820abc0b45ad5dd91bc796d4c, type: 2}
+  StartingAbilities: []
+  StartingInventoryItems: []
+  StartingEquipment: []

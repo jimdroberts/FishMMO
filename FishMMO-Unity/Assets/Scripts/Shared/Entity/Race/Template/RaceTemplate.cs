@@ -38,5 +38,35 @@ namespace FishMMO.Shared
 			}
 			return Models[index];
 		}
+
+		public override void OnLoad(string typeName, string resourceName, int resourceID)
+		{
+			base.OnLoad(typeName, resourceName, resourceID);
+
+			LoadPlaceholderModel();
+		}
+
+		public override void OnUnload(string typeName, string resourceName, int resourceID)
+		{
+			UnloadPlaceholderModel();
+
+			base.OnUnload(typeName, resourceName, resourceID);
+		}
+
+		public void LoadPlaceholderModel()
+		{
+			if (PlaceholderModel == null)
+			{
+				Debug.LogWarning($"RaceTemplate '{Name}' has no valid PlaceholderModel assigned to load.");
+				return;
+			}
+
+			AddressableLoadProcessor.LoadPrefabAsync(PlaceholderModel, null);
+		}
+
+		public void UnloadPlaceholderModel()
+		{
+			AddressableLoadProcessor.UnloadPrefab(PlaceholderModel);
+		}
 	}
 }

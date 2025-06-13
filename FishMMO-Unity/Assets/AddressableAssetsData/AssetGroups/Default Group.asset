@@ -181,6 +181,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7737647c22c1fc64a88d5cd030c352ce
+    m_Address: Assets/Prefabs/Shared/Models/EthanCharacter/Prefabs/Ethan.prefab
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7c33d6280baf6d94b8eee0548a749deb
     m_Address: Assets/Prefabs/Shared/Entity/NPCs/Attributes/Monsters/Orcs/an orc.asset
     m_ReadOnly: 0
@@ -218,11 +223,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b1a5e04ae51004842aba06704a6c2903
     m_Address: Assets/Prefabs/Shared/Models/EthanCharacter/Animation/HumanoidWalk.fbx
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: b235179bd2a63d1468dd430670338c55
-    m_Address: Assets/Prefabs/Shared/Models/EthanCharacter/Models/Ethan.fbx
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
