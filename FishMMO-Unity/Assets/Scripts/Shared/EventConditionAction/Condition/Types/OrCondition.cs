@@ -4,14 +4,14 @@ using System.Collections.Generic;
 namespace FishMMO.Shared
 {
 	[CreateAssetMenu(fileName = "New Or Condition", menuName = "FishMMO/Conditions/Or Condition", order = 0)]
-	public class OrCondition : BaseCondition<IPlayerCharacter>
+	public class OrCondition : BaseCondition
 	{
 		// A list of other conditions, where at least ONE must be met
-		public List<BaseCondition<IPlayerCharacter>> Conditions = new List<BaseCondition<IPlayerCharacter>>();
+		public List<BaseCondition> Conditions = new List<BaseCondition>();
 
-		public override bool Evaluate(IPlayerCharacter playerCharacter)
+		public override bool Evaluate(ICharacter initiator, EventData eventData)
 		{
-			if (playerCharacter == null)
+			if (initiator == null)
 			{
 				Debug.LogWarning("PlayerCharacter is null for OrCondition check.");
 				return false;
@@ -25,7 +25,7 @@ namespace FishMMO.Shared
 					continue;
 				}
 
-				if (condition.Evaluate(playerCharacter))
+				if (condition.Evaluate(initiator, eventData))
 				{
 					return true; // If any condition is true, the OR condition is true
 				}

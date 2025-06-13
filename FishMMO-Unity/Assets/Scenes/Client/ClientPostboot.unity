@@ -503,7 +503,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 362dfd7e6009fb44c90beec3df0ad853, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _useWss: 0
+  _useWss: 1
   _sslConfiguration:
     Enabled: 0
     CertificatePath: 
@@ -537,7 +537,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 15895a51081447d46bda466e7e830c08, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _sceneProcessor: {fileID: 6776049995475983712}
+  _sceneProcessor: {fileID: 0}
   _lightProbeUpdating: 0
   _moveClientObjects: 1
   _setActiveScene: 1

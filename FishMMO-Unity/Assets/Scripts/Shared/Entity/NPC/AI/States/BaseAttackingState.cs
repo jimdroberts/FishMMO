@@ -28,7 +28,6 @@ namespace FishMMO.Shared
 
 		public override void UpdateState(AIController controller, float deltaTime)
 		{
-			// Cache frequently used components
 			if (!controller.Character.TryGet(out ICharacterDamageController damageController) ||
 				!damageController.IsAlive)
 			{

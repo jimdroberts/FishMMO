@@ -128,6 +128,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1983298281}
   - component: {fileID: 1983298282}
+  - component: {fileID: 1983298283}
   m_Layer: 0
   m_Name: MainBootstrapSystem
   m_TagString: Untagged
@@ -170,6 +171,23 @@ MonoBehaviour:
   PostloadAssets: []
   PreloadScenes: []
   PostloadScenes: []
+  WebGLPreloadAssets: []
+  WebGLPostloadAssets: []
+  WebGLPreloadScenes: []
+  WebGLPostloadScenes: []
+--- !u!114 &1983298283
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1983298280}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 16f2d94bc9b8e7a4288d439c1ac5bcbb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  RuntimeBaseUrl: https://127.0.0.1:8080/
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

@@ -1,9 +1,10 @@
 ﻿using UnityEngine;
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Net;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
-using System.Collections.Generic;
 
 namespace FishMMO.Shared
 {
@@ -24,13 +25,16 @@ namespace FishMMO.Shared
 		};
 
 		/// <summary>
-		/// IPv4 Regex, can we get IPv6 support???
+		/// Validates an IP Address or Hostname
 		/// </summary>
 		public static bool IsAddressValid(string address)
 		{
-			const string ValidIpAddressRegex = "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$";
-			Match match = Regex.Match(address, ValidIpAddressRegex);
-			return match.Success;
+			// Uri.CheckHostName can validate DNS(HostName), IPv4, and IPv6
+			UriHostNameType hostNameType = Uri.CheckHostName(address);
+
+			return hostNameType == UriHostNameType.Dns ||
+				   hostNameType == UriHostNameType.IPv4 ||
+				   hostNameType == UriHostNameType.IPv6;
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -51,7 +55,10 @@ namespace FishMMO.Shared
 			public static readonly string UpdaterExecutable = "Updater.exe";
 			public static readonly string SetupDirectory = "FishMMO-Setup";
 
-			public static readonly string IPFetchHost = "http://127.0.0.1:8080/";
+			/// <summary>
+			/// IPFetch Host should be a secure HTTPS connection as it's connecting to NGINX over SSL.
+			/// </summary>
+			public static readonly string IPFetchHost = "https://127.0.0.1:8080/";
 
 			public static readonly string DatabaseDirectory = "FishMMO-Database";
 			public static readonly string DatabaseProjectDirectory = "FishMMO-DB";
@@ -126,7 +133,7 @@ namespace FishMMO.Shared
 			{
 				return !string.IsNullOrWhiteSpace(guildName) &&
 						guildName.Length <= MaxGuildNameLength &&
-						Regex.IsMatch(guildName, @"^[A-Za-z]+(?: [A-Za-z]+){0,2}$");
+						Regex.IsMatch(guildName, @"^[A-Za-z]+(?: [A-Za-z]+){0,4}$");
 			}
 		}
 
