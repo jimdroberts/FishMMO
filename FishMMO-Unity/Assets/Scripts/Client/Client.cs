@@ -560,17 +560,16 @@ namespace FishMMO.Client
 			}
 			else if (Configuration.GlobalSettings.TryGetString("IPFetchHost", out string ipFetchHost))
 			{
+				// Pick a random IPFetch Host address if available.
+				string[] ipFetchServers = ipFetchHost.Split(",");
+				if (ipFetchServers != null && ipFetchServers.Length > 1)
+				{
+					ipFetchHost = ipFetchServers.GetRandom();
+				}
+
 				using (UnityWebRequest request = UnityWebRequest.Get(ipFetchHost + "loginserver"))
 				{
 					request.SetRequestHeader("X-FishMMO", "Client");
-
-					// Pick a random IPFetch Host address if available.
-					string[] ipFetchServers = ipFetchHost.Split(",");
-					if (ipFetchServers != null && ipFetchServers.Length > 1)
-					{
-						ipFetchHost = ipFetchServers.GetRandom();
-					}
-
 					request.certificateHandler = new ClientSSLCertificateHandler();
 
 					yield return request.SendWebRequest();
