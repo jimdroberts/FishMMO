@@ -310,7 +310,6 @@ namespace FishMMO.Shared
 				}
 			}
 
-			// 3. Start a new load operation
 			AsyncOperationHandle<GameObject> newHandle = assetReference.LoadAssetAsync<GameObject>();
 
 			currentPrefabOperations.Add(key, newHandle);
