@@ -36,8 +36,6 @@ namespace FishMMO.Server
 				Server.RegisterBroadcast<MerchantPurchaseBroadcast>(OnServerMerchantPurchaseBroadcastReceived, true);
 				Server.RegisterBroadcast<AbilityCraftBroadcast>(OnServerAbilityCraftBroadcastReceived, true);
 				Server.RegisterBroadcast<DungeonFinderBroadcast>(OnServerDungeonFinderBroadcastReceived, true);
-
-				Bindstone.OnBind += TryBind;
 			}
 			else
 			{
@@ -55,8 +53,6 @@ namespace FishMMO.Server
 				Server.UnregisterBroadcast<MerchantPurchaseBroadcast>(OnServerMerchantPurchaseBroadcastReceived);
 				Server.UnregisterBroadcast<AbilityCraftBroadcast>(OnServerAbilityCraftBroadcastReceived);
 				Server.UnregisterBroadcast<DungeonFinderBroadcast>(OnServerDungeonFinderBroadcastReceived);
-
-				Bindstone.OnBind -= TryBind;
 			}
 		}
 
@@ -192,7 +188,7 @@ namespace FishMMO.Server
 			}
 
 			// validate scene
-			if (!WorldSceneDetailsCache.Scenes.TryGetValue(character.SceneName, out WorldSceneDetails details))
+			if (!WorldSceneDetailsCache.Scenes.TryGetValue(character.SceneName, out WorldSceneDetails _))
 			{
 				Debug.Log("Missing Scene:" + character.SceneName);
 				return;
@@ -643,38 +639,6 @@ namespace FishMMO.Server
 			abilityController.LearnAbility(newAbility);
 
 			return newAbility;
-		}
-
-		private void TryBind(IPlayerCharacter character, Bindstone bindstone)
-		{
-			if (character == null)
-			{
-				Debug.Log("Character not found!");
-				return;
-			}
-
-			// Validate same scene
-			if (character.SceneName != bindstone.gameObject.scene.name)
-			{
-				Debug.Log("Character is not in the same scene as the bindstone!");
-				return;
-			}
-
-			if (!ServerBehaviour.TryGet(out SceneServerSystem sceneServerSystem))
-			{
-				Debug.Log("SceneServerSystem not found!");
-				return;
-			}
-
-			using var dbContext = sceneServerSystem.Server.NpgsqlDbContextFactory.CreateDbContext();
-			if (dbContext == null)
-			{
-				Debug.Log("Could not get database context.");
-				return;
-			}
-
-			character.BindPosition = character.Motor.Transform.position;
-			character.BindScene = character.SceneName;
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]

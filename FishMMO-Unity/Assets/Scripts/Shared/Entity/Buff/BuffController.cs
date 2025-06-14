@@ -162,6 +162,11 @@ namespace FishMMO.Shared
 
 		public void RemoveRandom(System.Random rng, bool includeBuffs = false, bool includeDebuffs = false)
 		{
+			if (rng == null)
+			{
+				return;
+			}
+
 			List<int> keys = new List<int>(buffs.Keys);
 
 			if (keys.Count < 1)

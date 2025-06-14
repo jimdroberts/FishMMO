@@ -7,7 +7,6 @@ using FishMMO.Database.Npgsql;
 using FishMMO.Database.Npgsql.Entities;
 using FishMMO.Shared;
 using UnityEngine;
-using System.Transactions;
 
 namespace FishMMO.Server.DatabaseServices
 {

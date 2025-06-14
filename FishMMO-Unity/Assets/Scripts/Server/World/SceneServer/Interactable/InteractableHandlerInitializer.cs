@@ -12,6 +12,8 @@ namespace FishMMO.Server
 			InteractableSystem.RegisterInteractableHandler<DungeonEntranceHandler>(new DungeonEntranceHandler());
 			InteractableSystem.RegisterInteractableHandler<MerchantHandler>(new MerchantHandler());
 			InteractableSystem.RegisterInteractableHandler<WorldItemHandler>(new WorldItemHandler());
+			InteractableSystem.RegisterInteractableHandler<BindstoneHandler>(new BindstoneHandler());
+			InteractableSystem.RegisterInteractableHandler<TeleporterHandler>(new TeleporterHandler());
 		}
 	}
 }
