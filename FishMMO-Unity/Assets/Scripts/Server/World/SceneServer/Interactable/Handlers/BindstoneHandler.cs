@@ -26,13 +26,6 @@ namespace FishMMO.Server
 				return;
 			}
 
-			using var dbContext = sceneServerSystem.Server.NpgsqlDbContextFactory.CreateDbContext();
-			if (dbContext == null)
-			{
-				Debug.Log("Could not get database context.");
-				return;
-			}
-
 			character.BindPosition = character.Motor.Transform.position;
 			character.BindScene = character.SceneName;
 		}
