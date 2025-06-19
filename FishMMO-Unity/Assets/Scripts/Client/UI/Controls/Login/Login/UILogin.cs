@@ -183,7 +183,6 @@ namespace FishMMO.Client
 			},
 			(servers) =>
 			{
-				servers.GetRandom();
 				Connect("Connecting...", Username.text, Password.text);
 			}));
 		}
@@ -193,7 +192,8 @@ namespace FishMMO.Client
 			if (Client.IsConnectionReady(LocalConnectionState.Stopped) &&
 				Constants.Authentication.IsAllowedUsername(username) &&
 				Constants.Authentication.IsAllowedPassword(password) &&
-				Client.TryGetRandomLoginServerAddress(out ServerAddress serverAddress))
+				Client.TryGetRandomLoginServerAddress(out ServerAddress serverAddress) &&
+				Constants.IsAddressValid(serverAddress.Address))
 			{
 				HandshakeMSG.text = handshakeMessage;
 				Client.LoginAuthenticator.SetLoginCredentials(username, password, isRegistration);

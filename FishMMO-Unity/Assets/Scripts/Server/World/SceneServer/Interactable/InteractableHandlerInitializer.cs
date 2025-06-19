@@ -1,4 +1,5 @@
 using UnityEngine;
+using FishMMO.Shared;
 
 namespace FishMMO.Server
 {
@@ -7,11 +8,13 @@ namespace FishMMO.Server
 	{
 		public void RegisterHandlers()
 		{
-			InteractableSystem.RegisterInteractableHandler<AbilityCrafterHandler>(new AbilityCrafterHandler());
-			InteractableSystem.RegisterInteractableHandler<BankerHandler>(new BankerHandler());
-			InteractableSystem.RegisterInteractableHandler<DungeonEntranceHandler>(new DungeonEntranceHandler());
-			InteractableSystem.RegisterInteractableHandler<MerchantHandler>(new MerchantHandler());
-			InteractableSystem.RegisterInteractableHandler<WorldItemHandler>(new WorldItemHandler());
+			InteractableSystem.RegisterInteractableHandler<AbilityCrafter>(new AbilityCrafterHandler());
+			InteractableSystem.RegisterInteractableHandler<Banker>(new BankerHandler());
+			InteractableSystem.RegisterInteractableHandler<DungeonEntrance>(new DungeonEntranceHandler());
+			InteractableSystem.RegisterInteractableHandler<Merchant>(new MerchantHandler());
+			InteractableSystem.RegisterInteractableHandler<WorldItem>(new WorldItemHandler());
+			InteractableSystem.RegisterInteractableHandler<Bindstone>(new BindstoneHandler());
+			InteractableSystem.RegisterInteractableHandler<Teleporter>(new TeleporterHandler());
 		}
 	}
 }

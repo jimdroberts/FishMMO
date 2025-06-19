@@ -38,6 +38,8 @@ namespace FishMMO.Server
 		public RedisDbContextFactory RedisDbContextFactory { get; private set; }
 		public NetworkManager NetworkManager { get; private set; }
 		public string RemoteAddress { get; private set; }
+		public string AddressOverride;
+		public ushort PortOverride;
 		public string Address { get; private set; }
 		public ushort Port { get; private set; }
 
@@ -337,6 +339,16 @@ namespace FishMMO.Server
 
 		public bool TryGetServerIPAddress(out ServerAddress address)
 		{
+			if (!string.IsNullOrEmpty(AddressOverride))
+			{
+				address = new ServerAddress()
+				{
+					Address = AddressOverride,
+					Port = PortOverride,
+				};
+				return true;
+			}
+
 			const string LoopBack = "127.0.0.1";
 			const string LocalHost = "localhost";
 
