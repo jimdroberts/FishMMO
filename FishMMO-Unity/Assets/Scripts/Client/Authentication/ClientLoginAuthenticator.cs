@@ -79,7 +79,10 @@ namespace FishMMO.Client
 		/// </summary>
 		private void ClientManager_OnClientConnectionState(ClientConnectionStateArgs args)
 		{
-			if (args.ConnectionState == LocalConnectionState.Stopping)
+			if (args.ConnectionState == LocalConnectionState.Stopping ||
+				args.ConnectionState == LocalConnectionState.Stopped ||
+				args.ConnectionState == LocalConnectionState.StoppedClosed ||
+				args.ConnectionState == LocalConnectionState.StoppedError)
 			{
 				if (rsa != null)
 				{
@@ -88,11 +91,6 @@ namespace FishMMO.Client
 				}
 			}
 
-			/* If anything but the started state then exit early.
-			 * Only try to authenticate on started state. The server
-			* doesn't have to send an authentication request before client
-			* can authenticate, that is entirely optional and up to you. In this
-			* example the client tries to authenticate soon as they connect. */
 			if (args.ConnectionState != LocalConnectionState.Started)
 				return;
 

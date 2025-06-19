@@ -20,11 +20,9 @@ namespace FishMMO.Server
 
 		public static void AddConnectionEncryptionData(NetworkConnection connection, byte[] publicKey)
 		{
-			ConnectionEncryptionDatas.Remove(connection);
-
-			ConnectionEncryptionDatas.Add(connection, new ConnectionEncryptionData(publicKey,
-																					CryptoHelper.GenerateKey(32),
-																					CryptoHelper.GenerateKey(16)));
+			ConnectionEncryptionDatas[connection] = new ConnectionEncryptionData(publicKey,
+																				 CryptoHelper.GenerateKey(32),
+																				 CryptoHelper.GenerateKey(16));
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
