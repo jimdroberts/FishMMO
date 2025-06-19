@@ -63,7 +63,7 @@ namespace FishMMO.Server
 		/// </summary>
 		/// <typeparam name="T">The type of interactable to register the handler for. Must implement IInteractable.</typeparam>
 		/// <param name="handler">The handler instance for the specified interactable type.</param>
-		public static void RegisterInteractableHandler<T>(IInteractableHandler handler) where T : IInteractableHandler
+		public static void RegisterInteractableHandler<T>(IInteractableHandler handler) where T : IInteractable
 		{
 			Type type = typeof(T);
 			if (!interactableHandlers.ContainsKey(type))
@@ -83,7 +83,7 @@ namespace FishMMO.Server
 		/// </summary>
 		/// <typeparam name="T">The type of interactable to unregister the handler for. Must implement IInteractable.</typeparam>
 		/// <returns>True if the handler was found and removed; otherwise, false.</returns>
-		public static bool UnregisterInteractableHandler<T>() where T : IInteractableHandler
+		public static bool UnregisterInteractableHandler<T>() where T : IInteractable
 		{
 			Type type = typeof(T);
 			if (interactableHandlers.Remove(type))
