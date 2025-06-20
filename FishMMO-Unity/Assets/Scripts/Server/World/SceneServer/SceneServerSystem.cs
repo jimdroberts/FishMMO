@@ -161,22 +161,18 @@ namespace FishMMO.Server
 						{
 							foreach (Dictionary<string, Dictionary<int, SceneInstanceDetails>> sceneGroup in WorldScenes.Values)
 							{
-								foreach (Dictionary<int, SceneInstanceDetails> scene in new List<Dictionary<int, SceneInstanceDetails>>(sceneGroup.Values))
+								foreach (Dictionary<int, SceneInstanceDetails> scenes in new List<Dictionary<int, SceneInstanceDetails>>(sceneGroup.Values))
 								{
-									foreach (SceneInstanceDetails sceneDetails in new List<SceneInstanceDetails>(scene.Values))
+									foreach (SceneInstanceDetails sceneDetails in new List<SceneInstanceDetails>(scenes.Values))
 									{
-										if (sceneDetails.CharacterCount < 1)
+										if (sceneDetails.StalePulse)
 										{
 											double timeSinceLastExit = DateTime.UtcNow.Subtract(sceneDetails.LastExit).TotalMinutes;
 											if (Configuration.GlobalSettings.TryGetInt("StaleSceneTimeout", out int result) &&
 												timeSinceLastExit < result)
 											{
-												if (sceneDetails.StalePulse)
-												{
-													Debug.Log($"Scene Server System: {sceneDetails.Name}:{sceneDetails.WorldServerID}{sceneDetails.Handle}:{sceneDetails.CharacterCount} Stale Pulse");
-													SceneService.Pulse(dbContext, sceneDetails.Handle, sceneDetails.CharacterCount);
-													sceneDetails.StalePulse = false;
-												}
+												Debug.Log($"Scene Server System: {sceneDetails.Name}:{sceneDetails.WorldServerID}{sceneDetails.Handle}:{sceneDetails.CharacterCount} Stale Pulse");
+												SceneService.Pulse(dbContext, sceneDetails.Handle, sceneDetails.CharacterCount);
 												continue;
 											}
 
@@ -184,17 +180,10 @@ namespace FishMMO.Server
 
 											// Unload the scene on the server
 											UnloadScene(sceneDetails.Handle);
-
-											// Remove the scene details
-											scene.Remove(sceneDetails.Handle);
-
-											// Remove the scene details from the database
-											SceneService.Delete(dbContext, id, sceneDetails.Handle);
 										}
 										else
 										{
 											//Debug.Log($"Scene Server System: {sceneDetails.Name}:{sceneDetails.WorldServerID}{sceneDetails.Handle}:{sceneDetails.CharacterCount} Pulse");
-											sceneDetails.StalePulse = false;
 											SceneService.Pulse(dbContext, sceneDetails.Handle, sceneDetails.CharacterCount);
 										}
 									}
@@ -346,17 +335,20 @@ namespace FishMMO.Server
 		{
 			if (WorldScenes == null)
 			{
+				Debug.LogWarning("No World Scenes found.");
 				return;
 			}
 
 			if (args.UnloadedScenesV2.Count <= 0)
 			{
+				Debug.LogWarning("UnloadedScenesV2 failed to unload any scenes.");
 				return;
 			}
 
 			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 			if (dbContext == null)
 			{
+				Debug.LogWarning("Failed to create dbContext during Scene Unload.");
 				return;
 			}
 
@@ -376,6 +368,8 @@ namespace FishMMO.Server
 
 							// Remove the scene details from the database
 							SceneService.Delete(dbContext, id, unloaded.Handle);
+
+							Debug.Log($"SceneServerSystem: Unloaded scene handle: {unloaded.Handle}");
 						}
 					}
 				}
@@ -461,6 +455,16 @@ namespace FishMMO.Server
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void UnloadScene(int handle)
 		{
+			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
+			if (dbContext == null)
+			{
+				Debug.LogWarning("Failed to create dbContext during Scene Unload.");
+				return;
+			}
+
+			// Remove the scene details from the database, we do this immediately upon an Unload request to prevent new clients from connecting to it.
+			SceneService.Delete(dbContext, id, handle);
+
 			SceneUnloadData sud = new SceneUnloadData()
 			{
 				SceneLookupDatas = new SceneLookupData[]
