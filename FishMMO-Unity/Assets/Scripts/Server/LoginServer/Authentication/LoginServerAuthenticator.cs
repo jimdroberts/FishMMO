@@ -8,6 +8,7 @@ using System.Security.Cryptography;
 using System.Text;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
+using UnityEngine;
 
 namespace FishMMO.Server
 {
@@ -73,6 +74,7 @@ namespace FishMMO.Server
 			else
 			{
 				// Something weird happened... Adding a connection IV should not be an issue.
+				Debug.LogWarning("Failed to generation encryption keys for connection.");
 				conn.Disconnect(true);
 			}
 		}
