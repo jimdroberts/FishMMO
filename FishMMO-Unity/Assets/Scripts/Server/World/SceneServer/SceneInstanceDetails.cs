@@ -10,7 +10,7 @@ namespace FishMMO.Server
 		public int Handle;
 		public SceneType SceneType;
 		public int CharacterCount;
-		public bool StalePulse = false;
+		public bool StalePulse { get { return CharacterCount < 1; } }
 		public DateTime LastExit = DateTime.UtcNow;
 
 		public void AddCharacterCount(int count)
@@ -20,7 +20,6 @@ namespace FishMMO.Server
 			if (CharacterCount < 1)
 			{
 				LastExit = DateTime.UtcNow;
-				StalePulse = true;
 			}
 		}
 	}
