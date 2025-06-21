@@ -32,6 +32,8 @@ namespace FishMMO.Server
 		public readonly Dictionary<long, Dictionary<string, Dictionary<int, SceneInstanceDetails>>> WorldScenes = new Dictionary<long, Dictionary<string, Dictionary<int, SceneInstanceDetails>>>();
 		public readonly Dictionary<int, string> SceneNameByHandle = new Dictionary<int, string>();
 
+		private Dictionary<long, SceneEntity> pendingScenes = new Dictionary<long, SceneEntity>();
+
 		public override void InitializeOnce()
 		{
 			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
@@ -176,7 +178,7 @@ namespace FishMMO.Server
 												continue;
 											}
 
-											Debug.Log($"Scene Server System: {sceneDetails.Name}:{sceneDetails.WorldServerID}{sceneDetails.Handle}:{sceneDetails.CharacterCount} Closing Stale Scene");
+											//Debug.Log($"Scene Server System: {sceneDetails.Name}:{sceneDetails.WorldServerID}{sceneDetails.Handle}:{sceneDetails.CharacterCount} Closing Stale Scene");
 
 											// Unload the scene on the server
 											UnloadScene(sceneDetails.Handle);
@@ -217,6 +219,8 @@ namespace FishMMO.Server
 				return;
 			}
 
+			pendingScenes[sceneEntity.ID] = sceneEntity;
+
 			// Pre cache the scene on the server
 			SceneLookupData lookupData = new SceneLookupData(sceneEntity.SceneName);
 			SceneLoadData sld = new SceneLoadData(lookupData)
@@ -226,16 +230,14 @@ namespace FishMMO.Server
 				{
 					AllowStacking = true,
 					AutomaticallyUnload = false,
-					LocalPhysics = UnityEngine.SceneManagement.LocalPhysicsMode.Physics3D,
+					LocalPhysics = LocalPhysicsMode.Physics3D,
 				},
 				Params = new LoadParams()
 				{
 					ServerParams = new object[]
 					{
 						sceneEntity.ID,
-						sceneEntity.WorldServerID,
-						sceneEntity.SceneType,
-					}
+					},
 				},
 			};
 			Server.NetworkManager.SceneManager.LoadConnectionScenes(sld);
@@ -247,25 +249,36 @@ namespace FishMMO.Server
 			const int UNKNOWN_WORLD_ID = -1;
 
 			// If ServerParams are missing or there are no elements we should ignore processing this scene load.
-			if (args.QueueData.SceneLoadData.Params.ServerParams == null ||
-				args.QueueData.SceneLoadData.Params.ServerParams.Length < 3)
+			if (args.QueueData.SceneLoadData.Params.ServerParams == null)
 			{
-				Debug.LogError("Failed to process scene. Invalid Server Parameter Length.");
+				Debug.LogWarning("Failed to process scene. Invalid Server Parameters.");
 				return;
 			}
 
-			long dbSceneId = (long)args.QueueData.SceneLoadData.Params.ServerParams[0];
-			long worldServerID = (long)args.QueueData.SceneLoadData.Params.ServerParams[1];
-			if (worldServerID == UNKNOWN_WORLD_ID)
+			if (args.QueueData.SceneLoadData.Params.ServerParams.Length < 1)
 			{
-				Debug.LogError("Failed to get World Server ID.");
+				//Debug.LogWarning($"Failed to process scene. Invalid Server Parameter Length. Length is {args.QueueData.SceneLoadData.Params.ServerParams.Length}");
 				return;
 			}
 
-			SceneType sceneType = (SceneType)args.QueueData.SceneLoadData.Params.ServerParams[2];
+			if (!pendingScenes.TryGetValue((long)args.QueueData.SceneLoadData.Params.ServerParams[0], out SceneEntity sceneEntity))
+			{
+				Debug.LogWarning("Pending Scene does not exist!");
+				return;
+			}
+
+			pendingScenes.Remove(sceneEntity.ID);
+
+			if (sceneEntity.WorldServerID == UNKNOWN_WORLD_ID)
+			{
+				Debug.LogWarning("Failed to get World Server ID.");
+				return;
+			}
+
+			SceneType sceneType = (SceneType)sceneEntity.SceneType;
 			if (sceneType == SceneType.Unknown)
 			{
-				Debug.LogError("Unknown scene type.");
+				Debug.LogWarning("Unknown scene type.");
 				return;
 			}
 
@@ -274,20 +287,20 @@ namespace FishMMO.Server
 			{
 				// Save the loaded scene information to the database
 				using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-				Debug.Log($"SceneServerSystem: Failed to load Database Scene[{dbSceneId}].");
-				SceneService.UpdateStatus(dbContext, dbSceneId, SceneStatus.Failed);
+				Debug.Log($"SceneServerSystem: Failed to load Database Scene[{sceneEntity.ID}].");
+				SceneService.UpdateStatus(dbContext, sceneEntity.ID, SceneStatus.Failed);
 			}
 			else
 			{
 				Scene scene = args.LoadedScenes[0];
 
 				// Process the scene by adding it to the world dictionary mappings.
-				ProcessScene(scene, sceneType, worldServerID);
+				ProcessScene(scene, sceneType, sceneEntity.WorldServerID);
 
 				// Save the loaded scene information to the database
 				using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 				Debug.Log($"SceneServerSystem: Saved {sceneType} scene {scene.name}:{scene.handle} to the database.");
-				SceneService.SetReady(dbContext, id, worldServerID, scene.name, scene.handle);
+				SceneService.SetReady(dbContext, id, sceneEntity.WorldServerID, scene.name, scene.handle);
 			}
 		}
 
@@ -339,20 +352,13 @@ namespace FishMMO.Server
 				return;
 			}
 
-			if (args.UnloadedScenesV2.Count <= 0)
+			if (args.UnloadedScenesV2.Count < 1)
 			{
 				Debug.LogWarning("UnloadedScenesV2 failed to unload any scenes.");
 				return;
 			}
 
-			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-			if (dbContext == null)
-			{
-				Debug.LogWarning("Failed to create dbContext during Scene Unload.");
-				return;
-			}
-
-			for (int i = 0; i < args.UnloadedScenesV2.Count; ++id)
+			for (int i = 0; i < args.UnloadedScenesV2.Count; ++i)
 			{
 				UnloadedScene unloaded = args.UnloadedScenesV2[i];
 
@@ -366,10 +372,9 @@ namespace FishMMO.Server
 							scene.Remove(unloaded.Handle);
 							SceneNameByHandle.Remove(unloaded.Handle);
 
-							// Remove the scene details from the database
-							SceneService.Delete(dbContext, id, unloaded.Handle);
-
 							Debug.Log($"SceneServerSystem: Unloaded scene handle: {unloaded.Handle}");
+
+							break;
 						}
 					}
 				}

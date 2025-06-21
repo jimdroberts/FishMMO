@@ -160,11 +160,11 @@ namespace FishMMO.Server.DatabaseServices
 			{
 				return;
 			}
-			var loadedScenes = dbContext.Scenes.Where(c => c.SceneServerID == sceneServerID &&
-																 c.SceneHandle == sceneHandle);
-			if (loadedScenes != null)
+
+			var loadedScene = dbContext.Scenes.FirstOrDefault(c => c.SceneServerID == sceneServerID && c.SceneHandle == sceneHandle);
+			if (loadedScene != null)
 			{
-				dbContext.Scenes.RemoveRange(loadedScenes);
+				dbContext.Scenes.Remove(loadedScene);
 				dbContext.SaveChanges();
 			}
 		}
