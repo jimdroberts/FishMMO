@@ -43,9 +43,19 @@ namespace FishMMO.Shared
 		public const string SCENE_SERVER_BUILD_NAME = "Scene";
 
 		public static readonly string ALL_IN_ONE_SERVER_BAT_SCRIPT = @"@echo off
+
+echo Starting Login Server...
 start All-In-One.exe LOGIN
+timeout /t 5 /nobreak >nul
+
+echo Starting World Server...
 start All-In-One.exe WORLD
-start All-In-One.exe SCENE";
+timeout /t 5 /nobreak >nul
+
+echo Starting Scene Server...
+start All-In-One.exe SCENE
+
+echo All servers launched.";
 
 		public static readonly string LINUX_ALL_IN_ONE_SERVER_BAT_SCRIPT = @"./All-In-One.exe LOGIN &
 ./All-In-One.exe WORLD &

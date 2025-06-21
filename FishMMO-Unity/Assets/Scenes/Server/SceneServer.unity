@@ -206,7 +206,7 @@ MonoBehaviour:
   _refreshDefaultPrefabs: 1
   _runInBackground: 1
   _dontDestroyOnLoad: 1
-  _objectPool: {fileID: 0}
+  _objectPool: {fileID: 8097462252018206291}
   _persistence: 0
   _logging: {fileID: 11400000, guid: c66ed2b42bcd6b14194a796e70a740e0, type: 2}
   _spawnablePrefabs: {fileID: 11400000, guid: 7d40862968a2aed4f859067648b24444, type: 2}
@@ -582,6 +582,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 03313be06094e964aa4ef9f757c6f674, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  AddressOverride: 
+  PortOverride: 0
   LogToDisk: 1
 --- !u!114 &8097462252018206291
 MonoBehaviour:
@@ -658,10 +660,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 15895a51081447d46bda466e7e830c08, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _sceneProcessor: {fileID: 0}
+  _sceneProcessor: {fileID: 8097462252018206295}
   _lightProbeUpdating: 0
-  _moveClientObjects: 1
-  _setActiveScene: 1
+  _moveClientObjects: 0
+  _setActiveScene: 0
 --- !u!114 &8596418967717447527
 MonoBehaviour:
   m_ObjectHideFlags: 0

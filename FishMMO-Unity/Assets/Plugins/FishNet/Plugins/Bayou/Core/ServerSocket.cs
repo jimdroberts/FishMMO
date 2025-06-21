@@ -85,7 +85,7 @@ namespace FishNet.Transporting.Bayou.Server
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void Socket()
         {
-            TcpConfig tcpConfig = new TcpConfig(false, 5000, 20000);
+            TcpConfig tcpConfig = new TcpConfig(false, 5000, 120000);
             SslConfig config;
             if (!_sslConfiguration.Enabled)
                 config = new SslConfig();
