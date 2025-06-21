@@ -67,7 +67,7 @@ namespace FishMMO.Shared
 			EditorGUILayout.Space(10);
 
 			EditorGUILayout.LabelField("Build Output:", EditorStyles.boldLabel);
-			this.scrollPosition = EditorGUILayout.BeginScrollView(this.scrollPosition, GUILayout.Height(200));
+			this.scrollPosition = EditorGUILayout.BeginScrollView(this.scrollPosition, GUILayout.Height(800));
 			EditorGUILayout.TextArea(this.logOutput, GUI.skin.textArea);
 			EditorGUILayout.EndScrollView();
 		}
@@ -181,12 +181,12 @@ namespace FishMMO.Shared
 
 			AddLog($"Executing: {settings.DotnetExecutablePath} {fullArguments}");
 
-			using (Process process = new Process()) // Use 'using' for automatic disposal
+			using (Process process = new Process())
 			{
 				process.StartInfo.FileName = settings.DotnetExecutablePath;
 				process.StartInfo.Arguments = fullArguments;
 				process.StartInfo.UseShellExecute = false;
-				process.StartInfo.CreateNoWindow = true; // Prevents a command prompt window from popping up
+				process.StartInfo.CreateNoWindow = true;
 				process.StartInfo.RedirectStandardOutput = true;
 				process.StartInfo.RedirectStandardError = true;
 
@@ -222,10 +222,9 @@ namespace FishMMO.Shared
 					AddLogException(ex);
 					return false;
 				}
-			} // 'process' is disposed here
+			}
 		}
 
-		// Internal logging methods - NO Repaint() here
 		private void AddLogInternal(string message)
 		{
 			Debug.Log(message);
@@ -244,7 +243,6 @@ namespace FishMMO.Shared
 			this.logOutput += "<color=orange>" + message + "</color>\n";
 		}
 
-		// Public logging methods - these are called from the main thread logic, not stream callbacks
 		private void AddLog(string message)
 		{
 			AddLogInternal(message);

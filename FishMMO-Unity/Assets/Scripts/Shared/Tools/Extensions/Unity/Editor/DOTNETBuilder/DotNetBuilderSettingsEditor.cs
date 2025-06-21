@@ -42,16 +42,9 @@ namespace FishMMO.Shared
 				string selectedPath = EditorUtility.OpenFolderPanel("Select Output Directory (in Assets)", currentPath, "");
 				if (!string.IsNullOrEmpty(selectedPath))
 				{
-					if (selectedPath.StartsWith(Application.dataPath))
-					{
-						string relativePath = Path.GetRelativePath(Application.dataPath, selectedPath);
-						serializedSettings.FindProperty(nameof(DotNetBuildSettings.OutputDirectory)).stringValue = relativePath.Replace('\\', '/');
-						serializedSettings.ApplyModifiedProperties();
-					}
-					else
-					{
-						Debug.LogError("Output directory must be within your Unity project's Assets folder.");
-					}
+					string relativePath = Path.GetRelativePath(Application.dataPath, selectedPath);
+					serializedSettings.FindProperty(nameof(DotNetBuildSettings.OutputDirectory)).stringValue = relativePath.Replace('\\', '/');
+					serializedSettings.ApplyModifiedProperties();
 				}
 			}
 			EditorGUILayout.EndHorizontal();
