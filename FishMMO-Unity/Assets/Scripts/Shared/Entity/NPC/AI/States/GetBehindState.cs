@@ -13,7 +13,7 @@ namespace FishMMO.Shared
 		{
 			if (controller.Target == null)
 			{
-				Debug.LogWarning("No target set for GetBehindState.");
+				Log.Warning("No target set for GetBehindState.");
 				controller.TransitionToIdleState(); // Or another default state
 				return;
 			}

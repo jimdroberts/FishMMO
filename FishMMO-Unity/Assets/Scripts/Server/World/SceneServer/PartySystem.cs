@@ -166,12 +166,12 @@ namespace FishMMO.Server
 				// Get the current member ids
 				var currentMemberIDs = dbMembers.Select(x => x.CharacterID).ToHashSet();
 
-				//Debug.Log($"Current Update Party: {update.PartyID} MemberCount: {currentMemberIDs.Count}");
+				//Log.Debug($"Current Update Party: {update.PartyID} MemberCount: {currentMemberIDs.Count}");
 
 				// Check if we have previously cached the party member list
 				if (partyMemberTracker.TryGetValue(update.PartyID, out HashSet<long> previousMembers))
 				{
-					//Debug.Log($"Previously Cached Party: {update.PartyID} MemberCount: {previousMembers.Count}");
+					//Log.Debug($"Previously Cached Party: {update.PartyID} MemberCount: {previousMembers.Count}");
 
 					// Compute the difference: members that are in previousMembers but not in currentMemberIDs
 					List<long> difference = previousMembers.Except(currentMemberIDs).ToList();
@@ -240,7 +240,7 @@ namespace FishMMO.Server
 			}
 			if (!characterIDs.Contains(characterID))
 			{
-				//Debug.Log($"Added Character Party Tracker: {characterID} | {partyID}");
+				//Log.Debug($"Added Character Party Tracker: {characterID} | {partyID}");
 				characterIDs.Add(characterID);
 			}
 		}
@@ -256,7 +256,7 @@ namespace FishMMO.Server
 			}
 			if (partyCharacterTracker.TryGetValue(partyID, out HashSet<long> characterIDs))
 			{
-				//Debug.Log($"Removed Character Party Tracker: {characterID} | {partyID}");
+				//Log.Debug($"Removed Character Party Tracker: {characterID} | {partyID}");
 				characterIDs.Remove(characterID);
 
 				// If there are no active party members we can remove the character and member trackers for the party.

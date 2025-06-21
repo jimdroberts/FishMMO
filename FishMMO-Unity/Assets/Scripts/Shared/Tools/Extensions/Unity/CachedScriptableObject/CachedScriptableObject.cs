@@ -13,14 +13,14 @@ namespace FishMMO.Shared
 		public void AddToCache(string objectName)
 		{
 			Type baseType = this.GetType();
-			
+
 			ID = (baseType.Name + objectName).GetDeterministicHashCode();
 
 			while (baseType != null && (!baseType.IsGenericType || baseType.GetGenericTypeDefinition() != typeof(CachedScriptableObject<>)))
 			{
 				// Add the cached object to the resourceCache
-				//Debug.Log($"Resource '{objectName}' added to cache: {baseType.Name}");
-				
+				//Log.Info($"Resource '{objectName}' added to cache: {baseType.Name}");
+
 				if (!resourceCache.TryGetValue(baseType, out Dictionary<int, T> resources))
 				{
 					resourceCache.Add(baseType, resources = new Dictionary<int, T>());
@@ -33,7 +33,7 @@ namespace FishMMO.Shared
 				baseType = baseType.BaseType;
 			}
 
-			//Debug.Log($"CachedScriptableObject ID Set: {ID}");
+			//Log.Info($"CachedScriptableObject ID Set: {ID}");
 		}
 
 		public void RemoveFromCache()
@@ -45,7 +45,7 @@ namespace FishMMO.Shared
 				// Remove the cached object from the resourceCache
 				if (resourceCache.TryGetValue(baseType, out Dictionary<int, T> resources))
 				{
-					//Debug.Log($"Resource '{objectName}' removed from cache: {baseType.Name}");
+					//Log.Info($"Resource '{objectName}' removed from cache: {baseType.Name}");
 					resources.Remove(ID);
 
 					OnUnload(baseType.Name, name, ID);
@@ -60,17 +60,23 @@ namespace FishMMO.Shared
 				baseType = baseType.BaseType;
 			}
 
-			//Debug.Log($"CachedScriptableObject Removed: {ID}");
+			//Log.Info($"CachedScriptableObject Removed: {ID}");
 		}
 
 		public virtual void OnLoad(string typeName, string resourceName, int resourceID)
 		{
-			Debug.Log("CachedScriptableObject: Loaded[" + typeName + " " + resourceName + " ID:" + resourceID + "]");
+			Log.WriteColored(LogLevel.Info, 35,
+							("#00FF00", typeName + " "),
+							("#FFFF00", resourceName + " "),
+							("#00FFFF", "ID: " + resourceID));
 		}
 
 		public virtual void OnUnload(string typeName, string resourceName, int resourceID)
 		{
-			Debug.Log("CachedScriptableObject: Unloaded[" + typeName + " " + resourceName + " ID:" + resourceID + "]");
+			Log.WriteColored(LogLevel.Info, 35,
+							("#00FF00", typeName + " "),
+							("#FFFF00", resourceName + " "),
+							("#00FFFF", "ID: " + resourceID));
 		}
 
 		/// <summary>

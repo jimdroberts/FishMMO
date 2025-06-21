@@ -124,15 +124,6 @@ MonoBehaviour:
     - BuffHitEvent
     - HitEvent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 999421753c6c67f43b2ddcafecb29459
-    m_Address: Lesser Move Forward
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - AbilityEvent
-    - BaseAbilityTemplate
-    - ForwardMoveEvent
-    - MoveEvent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9a571cab03b3f684da8436e4391abdbb
     m_Address: Lesser Fireball
     m_ReadOnly: 0

@@ -36,7 +36,7 @@ namespace FishMMO.Shared
 			}
 			else
 			{
-				Debug.LogError("Failed to load Faction Templates with Addressables.");
+				Log.Error("Failed to load Faction Templates with Addressables.");
 			}
 		}
 

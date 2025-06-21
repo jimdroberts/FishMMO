@@ -46,11 +46,11 @@ namespace FishMMO.Client
 			{
 				if (sceneObject == null)
 				{
-					Debug.Log("Missing SceneObject");
+					Log.Debug("Missing SceneObject");
 				}
 				else
 				{
-					Debug.Log("Missing ID:" + msg.InteractableID);
+					Log.Debug("Missing ID:" + msg.InteractableID);
 				}
 				return;
 			}

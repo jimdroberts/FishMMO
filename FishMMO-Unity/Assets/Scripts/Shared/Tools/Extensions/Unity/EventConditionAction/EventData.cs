@@ -13,6 +13,9 @@ namespace FishMMO.Shared
 		public EventData(ICharacter initiator, params EventData[] initialData)
 		{
 			Initiator = initiator;
+
+			Add(this);
+
 			foreach (var data in initialData)
 			{
 				if (data != null)

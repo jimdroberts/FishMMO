@@ -29,13 +29,13 @@ namespace FishMMO.Shared
 			IPlayerCharacter character = other.gameObject.GetComponent<IPlayerCharacter>();
 			if (character == null)
 			{
-				Debug.Log("Character not found!");
+				Log.Debug("Character not found!");
 				return;
 			}
 
 			if (character.IsTeleporting)
 			{
-				Debug.Log("Character is already teleporting!");
+				Log.Debug("Character is already teleporting!");
 				return;
 			}
 

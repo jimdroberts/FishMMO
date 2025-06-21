@@ -51,19 +51,19 @@ namespace FishMMO.Shared
 
 					Vector3 nearestPosition = Vector3Extensions.GetNearestPositionOnSphere(controller.Character.Transform.position, pet.PetOwner.Transform.position, sphereRadius);
 
-					//Debug.Log($"path | distanceToOwner: {distanceToOwner} | sphereRadius: {sphereRadius} | nearestPosition: {nearestPosition}");
+					//Log.Debug($"path | distanceToOwner: {distanceToOwner} | sphereRadius: {sphereRadius} | nearestPosition: {nearestPosition}");
 
 					NavMeshHit hit;
 					if (NavMesh.SamplePosition(nearestPosition, out hit, 5.0f, NavMesh.AllAreas))
 					{
-						//Debug.Log($"sample | hitPosition: {hit.position}");
+						//Log.Debug($"sample | hitPosition: {hit.position}");
 						controller.Agent.SetDestination(hit.position);
 					}
 				}
 			}
 			else
 			{
-				//Debug.Log("idle");
+				//Log.Debug("idle");
 			}
 		}
 	}

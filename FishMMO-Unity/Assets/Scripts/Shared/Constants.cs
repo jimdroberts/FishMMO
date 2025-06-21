@@ -2,7 +2,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Net;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 
@@ -22,6 +21,9 @@ namespace FishMMO.Shared
 			typeof(BaseAIState).Name,
 			typeof(CharacterAttributeTemplate).Name,
 			typeof(BaseItemTemplate).Name,
+			//typeof(Trigger).Name,
+			//typeof(BaseCondition).Name,
+			//typeof(BaseAction).Name,
 		};
 
 		/// <summary>
@@ -30,7 +32,7 @@ namespace FishMMO.Shared
 		public static bool IsAddressValid(string address)
 		{
 			// Uri.CheckHostName can validate DNS(HostName), IPv4, and IPv6
-			UriHostNameType hostNameType = Uri.CheckHostName(address);
+			UriHostNameType hostNameType = Uri.CheckHostName(address.Trim());
 
 			return hostNameType == UriHostNameType.Dns ||
 				   hostNameType == UriHostNameType.IPv4 ||

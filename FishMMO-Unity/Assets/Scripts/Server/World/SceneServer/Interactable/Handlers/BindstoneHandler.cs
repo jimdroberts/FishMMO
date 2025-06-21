@@ -9,20 +9,20 @@ namespace FishMMO.Server
 		{
 			if (character == null)
 			{
-				Debug.Log("Character not found!");
+				Log.Debug("Character not found!");
 				return;
 			}
 
 			// Validate same scene
 			if (character.SceneName != sceneObject.GameObject.scene.name)
 			{
-				Debug.Log("Character is not in the same scene as the bindstone!");
+				Log.Debug("Character is not in the same scene as the bindstone!");
 				return;
 			}
 
 			if (!ServerBehaviour.TryGet(out SceneServerSystem sceneServerSystem))
 			{
-				Debug.Log("SceneServerSystem not found!");
+				Log.Debug("SceneServerSystem not found!");
 				return;
 			}
 

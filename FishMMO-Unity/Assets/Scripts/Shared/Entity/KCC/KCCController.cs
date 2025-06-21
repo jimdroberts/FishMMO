@@ -174,7 +174,7 @@ namespace FishMMO.Shared
 			VirtualCameraPosition = inputs.CameraPosition;
 			VirtualCameraRotation = inputs.CameraRotation;
 
-			//Debug.Log("VPos:" + VirtualCameraPosition + " VRot:" + VirtualCameraRotation);
+			//Log.Debug("VPos:" + VirtualCameraPosition + " VRot:" + VirtualCameraRotation);
 
 			// Clamp input
 			Vector3 moveInputVector = Vector3.ClampMagnitude(new Vector3(inputs.MoveAxisRight, 0f, inputs.MoveAxisForward), 1f);
@@ -264,7 +264,7 @@ namespace FishMMO.Shared
 
 							if (Mathf.Abs(Quaternion.Angle(Motor.TransientRotation, targetQuarternion) - 180f) <= 3f)
 							{
-								//Debug.Log("180 degree detected");
+								//Log.Debug("180 degree detected");
 								targetRotationY -= 10f;
 							}
 

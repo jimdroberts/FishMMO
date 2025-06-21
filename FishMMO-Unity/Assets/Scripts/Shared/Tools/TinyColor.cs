@@ -116,7 +116,7 @@ namespace FishMMO.Shared
 			else
 			{
 				// Handle invalid input gracefully, e.g., by returning a default color
-				Debug.LogError("Failed to parse color string: " + colorString);
+				Log.Error("Failed to parse color string: " + colorString);
 				return TinyColor.indigo;
 			}
 		}

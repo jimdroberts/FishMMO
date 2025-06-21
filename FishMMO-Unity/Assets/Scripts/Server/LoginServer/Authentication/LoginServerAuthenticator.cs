@@ -74,7 +74,7 @@ namespace FishMMO.Server
 			else
 			{
 				// Something weird happened... Adding a connection IV should not be an issue.
-				Debug.LogWarning("Failed to generation encryption keys for connection.");
+				Log.Warning("Failed to generation encryption keys for connection.");
 				conn.Disconnect(true);
 			}
 		}
@@ -136,7 +136,7 @@ namespace FishMMO.Server
 						// Verify SrpState equals SrpVerify and then send account public data
 						if (AccountManager.TryUpdateSrpState(conn, SrpState.SrpVerify, SrpState.SrpVerify, (a) =>
 							{
-								//UnityEngine.Debug.Log("SrpVerify");
+								//UnityEngine.Log.Debug("SrpVerify");
 
 								byte[] encryptedSalt = CryptoHelper.EncryptAES(encryptionData.SymmetricKey, encryptionData.IV, Encoding.UTF8.GetBytes(a.SrpData.Salt));
 								byte[] encryptedPublicServerEphemeral = CryptoHelper.EncryptAES(encryptionData.SymmetricKey, encryptionData.IV, Encoding.UTF8.GetBytes(a.SrpData.ServerEphemeral.Public));
@@ -204,7 +204,7 @@ namespace FishMMO.Server
 							};
 							Server.Broadcast(conn, resultMsg, false, Channel.Reliable);
 
-							//UnityEngine.Debug.Log("Authorized: " + authResult);
+							//UnityEngine.Log.Debug("Authorized: " + authResult);
 
 							/* Invoke result. This is handled internally to complete the connection authentication or kick client.
 							 * It's important to call this after sending the broadcast so that the broadcast

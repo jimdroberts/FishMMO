@@ -56,7 +56,7 @@ namespace FishMMO.Shared
 			}
 			else
 			{
-				//Debug.Log($"Achievement Template not found while Updating: {msg.TemplateID}");
+				//Log.Debug($"Achievement Template not found while Updating: {msg.TemplateID}");
 			}
 		}
 
@@ -88,7 +88,7 @@ namespace FishMMO.Shared
 			{
 				IAchievementController.OnUpdateAchievement?.Invoke(Character, achievement);
 			}
-			//Debug.Log($"Achievement Template Set: {achievement.Template.ID}:{achievement.CurrentValue}");
+			//Log.Debug($"Achievement Template Set: {achievement.Template.ID}:{achievement.CurrentValue}");
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]

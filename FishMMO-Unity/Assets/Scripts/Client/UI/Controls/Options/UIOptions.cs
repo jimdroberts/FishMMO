@@ -29,15 +29,15 @@ namespace FishMMO.Client
 			settingOptions = gameObject.GetComponentsInChildren<SettingOption>().ToList();
 			if (settingOptions == null || settingOptions.Count < 1)
 			{
-				Debug.Log("No SettingOptions have been found.");
+				Log.Debug("No SettingOptions have been found.");
 			}
 			else
 			{
-				//Debug.Log($"Found {settingOptions.Count} settings.");
+				//Log.Debug($"Found {settingOptions.Count} settings.");
 				for (int i = 0; i < settingOptions.Count; ++i)
 				{
 					SettingOption settings = settingOptions[i];
-					//Debug.Log($"Loading {settings.gameObject.name}");
+					//Log.Debug($"Loading {settings.gameObject.name}");
 					settings.Initialize();
 					settings.Load();
 				}

@@ -37,7 +37,7 @@ namespace FishMMO.Shared
 			Collider = gameObject.GetComponent<Collider>();
 			if (Collider == null)
 			{
-				Debug.Log(Name + " collider is null and will not function properly.");
+				Log.Debug(Name + " collider is null and will not function properly.");
 				return;
 			}
 			// set the collider to trigger just incase we forgot to set it in the inspector
@@ -102,7 +102,7 @@ namespace FishMMO.Shared
 					// does a child of this region already contain our character?
 					if (child.Collider.bounds.Intersects(other.bounds))
 					{
-						//Debug.Log($"OnEnter: {other.gameObject.name} intersects child {child.gameObject.name}");
+						//Log.Debug($"OnEnter: {other.gameObject.name} intersects child {child.gameObject.name}");
 						return;
 					}
 				}
@@ -113,7 +113,7 @@ namespace FishMMO.Shared
 			}
 			if (OnRegionEnter != null)
 			{
-				//Debug.Log($"OnEnter: {character.CharacterName} Entered {gameObject.name}");
+				//Log.Debug($"OnEnter: {character.CharacterName} Entered {gameObject.name}");
 				foreach (RegionAction action in OnRegionEnter)
 				{
 					action?.Invoke(character, this, base.PredictionManager.IsReconciling);
@@ -162,7 +162,7 @@ namespace FishMMO.Shared
 			}
 			if (OnRegionExit != null)
 			{
-				//Debug.Log($"OnExit: {character.CharacterName} Exited {gameObject.name}");
+				//Log.Debug($"OnExit: {character.CharacterName} Exited {gameObject.name}");
 				foreach (RegionAction action in OnRegionExit)
 				{
 					action?.Invoke(character, this, base.PredictionManager.IsReconciling);

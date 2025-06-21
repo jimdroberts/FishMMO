@@ -9,7 +9,7 @@ namespace FishMMO.Shared
 		public float ActivationTime;
 		public float LifeTime;
 		public float Cooldown;
-		public float Range { get { return Speed * LifeTime;}}
+		public float Range { get { return Speed * LifeTime; } }
 		public float Speed;
 
 		public AbilityTemplate Template { get; private set; }
@@ -23,7 +23,13 @@ namespace FishMMO.Shared
 		public Dictionary<int, SpawnEvent> SpawnEvents { get; private set; }
 		public Dictionary<int, MoveEvent> MoveEvents { get; private set; }
 		public Dictionary<int, HitEvent> HitEvents { get; private set; }
-		public AbilityTypeOverrideEventType TypeOverride { get;	private set; }
+		public AbilityTypeOverrideEventType TypeOverride { get; private set; }
+
+		public List<Trigger> OnTickTriggers = new List<Trigger>();
+		public List<Trigger> OnHitTriggers = new List<Trigger>();
+		public List<Trigger> OnPreSpawnTriggers = new List<Trigger>();
+		public List<Trigger> OnSpawnTriggers = new List<Trigger>();
+		public List<Trigger> OnDestroyTriggers = new List<Trigger>();
 
 		/// <summary>
 		/// Cache of all active ability Objects. <ContainerID, <AbilityObjectID, AbilityObject>>

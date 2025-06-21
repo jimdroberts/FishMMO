@@ -279,7 +279,7 @@ namespace FishMMO.Shared
 				CurrentState?.Exit(this);
 			}
 
-			//Debug.Log($"{this.gameObject.name} Transitioning to: {newState.GetType().Name}");
+			//Log.Debug($"{this.gameObject.name} Transitioning to: {newState.GetType().Name}");
 
 			CurrentState = newState;
 			if (CurrentState != null)

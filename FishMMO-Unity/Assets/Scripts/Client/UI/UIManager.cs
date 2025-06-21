@@ -70,7 +70,7 @@ namespace FishMMO.Client
 
 			control.SetClient(_client);
 
-			//Debug.Log("UIManager: Registered[" + control.Name + "]");
+			//Log.Debug("UIManager: Registered[" + control.Name + "]");
 			controls.Add(control.Name, control);
 		}
 
@@ -82,7 +82,7 @@ namespace FishMMO.Client
 			}
 			else
 			{
-				//Debug.Log("UIManager: Unregistered[" + control.Name + "]");
+				//Log.Debug("UIManager: Unregistered[" + control.Name + "]");
 				controls.Remove(control.Name);
 				characterControls.Remove(control.Name);
 			}
@@ -94,7 +94,7 @@ namespace FishMMO.Client
 			{
 				return;
 			}
-			//Debug.Log("UIManager: Registered CloseOnEscapeUI[" + control.Name + "]");
+			//Log.Debug("UIManager: Registered CloseOnEscapeUI[" + control.Name + "]");
 			closeOnEscapeControls.Add(control, control.UIManager_OnAdd, control.UIManager_OnRemove);
 		}
 
@@ -106,7 +106,7 @@ namespace FishMMO.Client
 			}
 			else
 			{
-				//Debug.Log("UIManager: Unregistered CloseOnEscapeUI[" + control.Name + "]");
+				//Log.Debug("UIManager: Unregistered CloseOnEscapeUI[" + control.Name + "]");
 				closeOnEscapeControls.Remove(control.CurrentNode);
 			}
 		}

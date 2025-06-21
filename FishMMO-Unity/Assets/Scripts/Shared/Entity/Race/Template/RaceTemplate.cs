@@ -57,7 +57,7 @@ namespace FishMMO.Shared
 		{
 			if (PlaceholderModel == null)
 			{
-				Debug.LogWarning($"RaceTemplate '{Name}' has no valid PlaceholderModel assigned to load.");
+				Log.Warning($"RaceTemplate '{Name}' has no valid PlaceholderModel assigned to load.");
 				return;
 			}
 

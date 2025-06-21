@@ -83,14 +83,14 @@ namespace FishMMO.Server.DatabaseServices
 			//string formattedLastFetch = lastFetch.ToString("yyyy-MM-dd HH:mm:ss.fffffff");
 
 			// Log the guild IDs being used in the query
-			//Debug.Log($"Fetching updates for Party: {string.Join(", ", partyIDs)} at {formattedLastFetch}");
+			//Log.Debug($"Fetching updates for Party: {string.Join(", ", partyIDs)} at {formattedLastFetch}");
 
 			var result = dbContext.PartyUpdates
 				.Where(b => b.LastUpdate >= lastFetch && partyIDs.Contains(b.PartyID)) // Use IN under the hood
 				.ToList();
 
 			// Log the number of updates found
-			//Debug.Log($"Found {result.Count} updates for the given party.");
+			//Log.Debug($"Found {result.Count} updates for the given party.");
 
 			return result;
 		}

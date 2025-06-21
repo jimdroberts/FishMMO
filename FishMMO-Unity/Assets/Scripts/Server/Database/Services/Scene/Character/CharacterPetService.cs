@@ -124,7 +124,7 @@ namespace FishMMO.Server.DatabaseServices
 				//CharacterPetAttributeService.Load(dbContext, pet);
 				//CharacterPetBuffService.Load(dbContext, pet);
 
-				/*Debug.Log(dbCharacter.Name + " has been loaded at Pos:" +
+				/*Log.Debug(dbCharacter.Name + " has been loaded at Pos:" +
 					  nob.transform.position.ToString() +
 					  " Rot:" + nob.transform.rotation.ToString());*/
 

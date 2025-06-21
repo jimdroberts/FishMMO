@@ -137,11 +137,11 @@ start Scene.exe SCENE";
 				// Save the XML document to the specified file
 				xmlDoc.Save(linkerPath);
 
-				Debug.Log($"XML file '{rootPath}' has been generated successfully.");
+				Log.Debug($"XML file '{rootPath}' has been generated successfully.");
 			}
 			catch (Exception ex)
 			{
-				Debug.Log($"An error occurred: {ex.Message}");
+				Log.Debug($"An error occurred: {ex.Message}");
 			}
 		}
 
@@ -266,17 +266,17 @@ start Scene.exe SCENE";
 				// Only reimport if the file actually exists, to avoid errors with deleted assets
 				if (File.Exists(scriptPath))
 				{
-					Debug.Log($"Forcing editor recompile by reimporting: {scriptPath}");
+					Log.Debug($"Forcing editor recompile by reimporting: {scriptPath}");
 					AssetDatabase.ImportAsset(scriptPath, ImportAssetOptions.ForceUpdate);
 				}
 				else
 				{
-					Debug.LogWarning("Found script GUID but file does not exist to reimport. Define symbols might not update as expected.");
+					Log.Warning("Found script GUID but file does not exist to reimport. Define symbols might not update as expected.");
 				}
 			}
 			else
 			{
-				Debug.LogWarning("No script files found to force editor recompile. Define symbols might not update.");
+				Log.Warning("No script files found to force editor recompile. Define symbols might not update.");
 			}
 		}
 
@@ -350,33 +350,33 @@ start Scene.exe SCENE";
 				BuildSummary summary = report.summary;
 				if (summary.result == BuildResult.Succeeded)
 				{
-					Debug.Log($"Build Succeeded: {summary.totalSize} bytes {DateTime.UtcNow}");
-					Debug.Log($"Build Duration: {summary.totalTime}");
-					Debug.Log($"Scenes Included: {string.Join(", ", bootstrapScenes)}");
-					Debug.Log($"Build Target: {buildTarget}");
-					Debug.Log($"Build Subtarget: {subTarget}");
+					Log.Debug($"Build Succeeded: {summary.totalSize} bytes {DateTime.UtcNow}");
+					Log.Debug($"Build Duration: {summary.totalTime}");
+					Log.Debug($"Scenes Included: {string.Join(", ", bootstrapScenes)}");
+					Log.Debug($"Build Target: {buildTarget}");
+					Log.Debug($"Build Subtarget: {subTarget}");
 
 					// Log details about each build step
-					Debug.Log("Build Steps:");
+					Log.Debug("Build Steps:");
 					int i = 0;
 					foreach (var step in report.steps)
 					{
-						Debug.Log($"Step {i}: {step.name}, Duration: {step.duration}");
+						Log.Debug($"Step {i}: {step.name}, Duration: {step.duration}");
 						if (step.messages.Length > 0)
 						{
 							foreach (var message in step.messages)
 							{
 								if (message.type == LogType.Error)
 								{
-									Debug.LogError($"Error in step {step.name}: {message.content}");
+									Log.Error($"Error in step {step.name}: {message.content}");
 								}
 								else if (message.type == LogType.Warning)
 								{
-									Debug.LogWarning($"Warning in step {step.name}: {message.content}");
+									Log.Warning($"Warning in step {step.name}: {message.content}");
 								}
 								else
 								{
-									Debug.Log($"Message in step {step.name}: {message.content}");
+									Log.Debug($"Message in step {step.name}: {message.content}");
 								}
 							}
 						}
@@ -443,37 +443,37 @@ start Scene.exe SCENE";
 
 					if (buildTarget == BuildTarget.WebGL)
 					{
-						Debug.Log(@"Please visit https://docs.unity3d.com/2022.3/Documentation/Manual/webgl-server-configuration-code-samples.html for further WebGL WebServer configuration.");
+						Log.Debug(@"Please visit https://docs.unity3d.com/2022.3/Documentation/Manual/webgl-server-configuration-code-samples.html for further WebGL WebServer configuration.");
 					}
 				}
 				else if (summary.result == BuildResult.Failed)
 				{
-					Debug.LogError($"Build {report.summary.result}!");
-					Debug.LogError($"Total Errors: {summary.totalErrors}");
-					Debug.LogError($"Build Target: {buildTarget}");
-					Debug.LogError($"Build Subtarget: {subTarget}");
+					Log.Error($"Build {report.summary.result}!");
+					Log.Error($"Total Errors: {summary.totalErrors}");
+					Log.Error($"Build Target: {buildTarget}");
+					Log.Error($"Build Subtarget: {subTarget}");
 
 					// Log details about each build step
-					Debug.Log("Build Steps:");
+					Log.Debug("Build Steps:");
 					int i = 0;
 					foreach (var step in report.steps)
 					{
-						Debug.Log($"Step {i}: {step.name}, Duration: {step.duration}");
+						Log.Debug($"Step {i}: {step.name}, Duration: {step.duration}");
 						if (step.messages.Length > 0)
 						{
 							foreach (var message in step.messages)
 							{
 								if (message.type == LogType.Error)
 								{
-									Debug.LogError($"Error in step {step.name}: {message.content}");
+									Log.Error($"Error in step {step.name}: {message.content}");
 								}
 								else if (message.type == LogType.Warning)
 								{
-									Debug.LogWarning($"Warning in step {step.name}: {message.content}");
+									Log.Warning($"Warning in step {step.name}: {message.content}");
 								}
 								else
 								{
-									Debug.Log($"Message in step {step.name}: {message.content}");
+									Log.Debug($"Message in step {step.name}: {message.content}");
 								}
 							}
 						}
@@ -483,12 +483,12 @@ start Scene.exe SCENE";
 			}
 			catch (Exception ex)
 			{
-				Debug.LogError($"Exception during build: {ex.Message}");
-				Debug.LogError($"Stack trace: {ex.StackTrace}");
+				Log.Error($"Exception during build: {ex.Message}");
+				Log.Error($"Stack trace: {ex.StackTrace}");
 			}
 			finally
 			{
-				Debug.Log("Build finished.");
+				Log.Debug("Build finished.");
 
 				PopSettings();
 			}
@@ -897,17 +897,17 @@ start Scene.exe SCENE";
 						if (group.name.Contains(exclusion))
 						{
 							schema.IncludeInBuild = false;
-							Debug.Log($"Group {group.name} has been excluded from the build.");
+							Log.Debug($"Group {group.name} has been excluded from the build.");
 						}
 						else
 						{
 							schema.IncludeInBuild = true;
-							Debug.LogWarning($"Group {group.name} has been included in the build.");
+							Log.Warning($"Group {group.name} has been included in the build.");
 						}
 					}
 					else
 					{
-						Debug.LogWarning($"No schema found for group: {group.name}");
+						Log.Warning($"No schema found for group: {group.name}");
 					}
 				}
 			}
@@ -919,11 +919,11 @@ start Scene.exe SCENE";
 				try
 				{
 					Directory.Delete(buildPath, recursive: true);
-					Debug.Log($"Deleted previous Addressable build directory at {buildPath}");
+					Log.Debug($"Deleted previous Addressable build directory at {buildPath}");
 				}
 				catch (Exception ex)
 				{
-					Debug.LogError($"Failed to delete previous build directory: {ex.Message}");
+					Log.Error($"Failed to delete previous build directory: {ex.Message}");
 				}
 			}
 
@@ -936,35 +936,35 @@ start Scene.exe SCENE";
 				// Log the overall build result
 				if (!string.IsNullOrEmpty(result.Error))
 				{
-					Debug.LogError(result.Error);
-					Debug.LogError("Addressable content build failure (duration: " + TimeSpan.FromSeconds(result.Duration).ToString("g") + ")");
+					Log.Error(result.Error);
+					Log.Error("Addressable content build failure (duration: " + TimeSpan.FromSeconds(result.Duration).ToString("g") + ")");
 				}
 				else
 				{
 					// Log information about the asset bundles that were built
 					if (result.AssetBundleBuildResults != null && result.AssetBundleBuildResults.Count > 0)
 					{
-						Debug.Log("Built Asset Bundles:");
+						Log.Debug("Built Asset Bundles:");
 						foreach (var bundleResult in result.AssetBundleBuildResults)
 						{
-							Debug.Log($"Bundle: {bundleResult.SourceAssetGroup.Name} | {bundleResult.FilePath}");
+							Log.Debug($"Bundle: {bundleResult.SourceAssetGroup.Name} | {bundleResult.FilePath}");
 
 							// Log each asset in the bundle
 							foreach (var assetPath in bundleResult.SourceAssetGroup.entries)
 							{
-								Debug.Log($"  - Asset: {assetPath}");
+								Log.Debug($"  - Asset: {assetPath}");
 							}
 						}
 					}
 					else
 					{
-						Debug.Log("No asset bundles were built.");
+						Log.Debug("No asset bundles were built.");
 					}
 				}
 			}
 			catch (Exception ex)
 			{
-				Debug.LogError($"Error during Addressables build: {ex.Message}");
+				Log.Error($"Error during Addressables build: {ex.Message}");
 			}
 
 			// Optionally, refresh the asset database after the build

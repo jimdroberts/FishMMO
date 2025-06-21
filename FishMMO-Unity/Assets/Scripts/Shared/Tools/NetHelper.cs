@@ -9,14 +9,14 @@ namespace FishMMO.Shared
 	{
 		public static IEnumerator FetchExternalIPAddress(Action<string> onSuccess = null, Action<string> onError = null, string serviceUrl = "https://checkip.amazonaws.com/")
 		{
-			Debug.Log($"NetHelper: Fetching Remote IP Address from \"{serviceUrl}\"");
+			Log.Debug($"NetHelper: Fetching Remote IP Address from \"{serviceUrl}\"");
 			using (UnityWebRequest webRequest = UnityWebRequest.Get(serviceUrl))
 			{
 				yield return webRequest.SendWebRequest();
 
 				if (webRequest.result == UnityWebRequest.Result.ConnectionError || webRequest.result == UnityWebRequest.Result.ProtocolError)
 				{
-					Debug.Log($"NetHelper: Request error: {webRequest.error}");
+					Log.Debug($"NetHelper: Request error: {webRequest.error}");
 					onError?.Invoke(webRequest.error);
 				}
 				else
@@ -26,12 +26,12 @@ namespace FishMMO.Shared
 
 					if (IsValidIPAddress(ipAddress))
 					{
-						Debug.Log($"NetHelper: External IP: {ipAddress}");
+						Log.Debug($"NetHelper: External IP: {ipAddress}");
 						onSuccess?.Invoke(ipAddress);
 					}
 					else
 					{
-						Debug.Log("NetHelper: Invalid IP address format.");
+						Log.Debug("NetHelper: Invalid IP address format.");
 						onError?.Invoke("NetHelper: Invalid IP address format.");
 					}
 				}

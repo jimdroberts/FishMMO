@@ -16,7 +16,7 @@ namespace FishMMO.Shared
 			AddressableAssetSettings settings = AddressableAssetSettingsDefaultObject.Settings;
 			if (settings == null)
 			{
-				Debug.LogError("Addressable Asset Settings not found.");
+				Log.Error("Addressable Asset Settings not found.");
 				return;
 			}
 
@@ -26,7 +26,7 @@ namespace FishMMO.Shared
 			if (entry == null)
 			{
 				entry = settings.CreateOrMoveEntry(AssetDatabase.AssetPathToGUID(assetPath), settings.DefaultGroup);
-				Debug.Log($"Asset '{scriptableObject.name}' added to Addressables.");
+				Log.Debug($"Asset '{scriptableObject.name}' added to Addressables.");
 			}
 
 			Type type = scriptableObject.GetType();
@@ -38,7 +38,7 @@ namespace FishMMO.Shared
 				{
 					settings.AddLabel(type.Name);
 					entry.labels.Add(type.Name);
-					Debug.Log($"Label '{type.Name}' added to asset: {scriptableObject.name}");
+					Log.Debug($"Label '{type.Name}' added to asset: {scriptableObject.name}");
 				}
 
 				Type baseType = scriptableObject.GetType();
@@ -51,7 +51,7 @@ namespace FishMMO.Shared
 					{
 						settings.AddLabel(baseType.Name);
 						entry.labels.Add(baseType.Name);
-						Debug.Log($"Label '{baseType.Name}' added to asset: {scriptableObject.name}");
+						Log.Debug($"Label '{baseType.Name}' added to asset: {scriptableObject.name}");
 					}
 
 					lastValidBase = baseType;
@@ -70,7 +70,7 @@ namespace FishMMO.Shared
 			if (group == null)
 			{
 				group = settings.CreateGroup(lastValidBase.Name, false, false, false, settings.DefaultGroup.Schemas);
-				Debug.Log($"Group '{lastValidBase.Name}' created.");
+				Log.Debug($"Group '{lastValidBase.Name}' created.");
 			}
 
 			// Add the asset entry to the specific group
@@ -81,7 +81,7 @@ namespace FishMMO.Shared
 				{
 					entry.SetAddress(entry.MainAsset.name);
 					settings.MoveEntry(entry, group);
-					Debug.Log($"Asset '{scriptableObject.name}' added to Addressables group '{lastValidBase.Name}'.");
+					Log.Debug($"Asset '{scriptableObject.name}' added to Addressables group '{lastValidBase.Name}'.");
 				}
 			}
 		}

@@ -14,7 +14,7 @@ namespace FishMMO.Client
 		{
 			if (VsyncToggle == null)
 			{
-				Debug.LogError("VSyncSettingOption: Toggle is missing.");
+				Log.Error("VSyncSettingOption: Toggle is missing.");
 			}
 			else
 			{

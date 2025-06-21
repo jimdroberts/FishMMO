@@ -12,7 +12,6 @@ using UnityEditor;
 #endif
 using FishMMO.Database;
 using Npgsql;
-using Debug = UnityEngine.Debug; // Ensure Debug refers to UnityEngine.Debug
 
 namespace FishMMO.Shared
 {
@@ -311,12 +310,12 @@ namespace FishMMO.Shared
 			}
 			if (logTime)
 			{
-				Debug.Log($"{DateTime.Now}: {message}");
+				FishMMO.Shared.Log.Debug($"{DateTime.Now}: {message}");
 				//Console.WriteLine($"{DateTime.Now}: {message}");
 			}
 			else
 			{
-				Debug.Log(message);
+				FishMMO.Shared.Log.Debug(message);
 				//Console.WriteLine(message);
 			}
 		}

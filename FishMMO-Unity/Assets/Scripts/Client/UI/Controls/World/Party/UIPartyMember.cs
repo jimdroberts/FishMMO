@@ -15,7 +15,7 @@ namespace FishMMO.Client
 
 		public void Button_OnClick()
 		{
-			//Debug.Log(Name.text);
+			//Log.Debug(Name.text);
 
 			if (UIManager.TryGet("UIDropdown", out UIDropdown uiDropdown) &&
 			    UIManager.TryGet("UIParty", out UIParty uiParty) &&

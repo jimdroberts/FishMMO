@@ -18,7 +18,7 @@ namespace FishMMO.Shared
 				}
 				while (Objects.ContainsKey(sceneObject.ID));
 			}
-			//Debug.Log($"Registering {sceneObject.GameObject.name}:{sceneObject.ID} | {asClient}");
+			//Log.Debug($"Registering {sceneObject.GameObject.name}:{sceneObject.ID} | {asClient}");
 
 			if (!Objects.ContainsKey(sceneObject.ID))
 			{

@@ -17,7 +17,7 @@ namespace FishMMO.Shared
 		{
 			if (GuildRequirements == null)
 			{
-				//Debug.LogWarning($"NPCGuildTemplate: No Guild Requirements assigned for {this.name}. Assuming requirements are met.");
+				//Log.Warning($"NPCGuildTemplate: No Guild Requirements assigned for {this.name}. Assuming requirements are met.");
 				return true;
 			}
 			return GuildRequirements.Evaluate(playerCharacter);

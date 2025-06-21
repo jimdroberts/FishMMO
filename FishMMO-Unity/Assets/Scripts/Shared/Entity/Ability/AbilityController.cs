@@ -236,7 +236,7 @@ namespace FishMMO.Shared
 			// Set the initial seed
 			currentSeed = abilitySeedGenerator.Next();
 
-			//Debug.Log($"Received AbilitySeedGenerator Seed {abilitySeed}\r\nCurrent Seed {currentSeed}");
+			//Log.Debug($"Received AbilitySeedGenerator Seed {abilitySeed}\r\nCurrent Seed {currentSeed}");
 
 			int abilityCount = reader.ReadInt32();
 			if (abilityCount < 1)
@@ -277,7 +277,7 @@ namespace FishMMO.Shared
 			// Write the ability RNG seed for the clients
 			writer.WriteInt32(abilitySeed);
 			
-			//Debug.Log($"Writing AbilitySeedGenerator Seed {abilitySeed}\r\nCurrent Seed {currentSeed}");
+			//Log.Debug($"Writing AbilitySeedGenerator Seed {abilitySeed}\r\nCurrent Seed {currentSeed}");
 
 			// Write the abilities for the clients
 			writer.WriteInt32(KnownAbilities.Count);
@@ -438,7 +438,7 @@ namespace FishMMO.Shared
 			// If we have an interrupt queued
 			if (activationData.ActivationFlags.IsFlagged(AbilityActivationFlags.Interrupt))
 			{
-				Debug.Log("Interrupting");
+				Log.Debug("Interrupting");
 				OnInterrupt?.Invoke();
 				Cancel();
 				return;
@@ -450,7 +450,7 @@ namespace FishMMO.Shared
 				// Try to activate the queued ability
 				if (CanActivate(activationData.QueuedAbilityID, out Ability newAbility))
 				{
-					//Debug.Log($"1 New Ability Activation:{newAbility.ID} State:{state} Tick:{activationData.GetTick()}");
+					//Log.Debug($"1 New Ability Activation:{newAbility.ID} State:{state} Tick:{activationData.GetTick()}");
 					currentAbilityID = newAbility.ID;
 					remainingTime = newAbility.ActivationTime * CalculateSpeedReduction(GetActivationAttributeTemplate(newAbility));
 
@@ -467,7 +467,7 @@ namespace FishMMO.Shared
 			{
 				if (remainingTime > 0.0f)
 				{
-					//Debug.Log($"2 Activating {validatedAbility.ID} State: {state}");
+					//Log.Debug($"2 Activating {validatedAbility.ID} State: {state}");
 
 					// Handle ability updates here, display cast bar, display hitbox telegraphs, etc
 					if (state.IsTickedCreated())
@@ -508,11 +508,11 @@ namespace FishMMO.Shared
 								// Generate a new seed
 								currentSeed = abilitySeedGenerator.Next();
 
-								//Debug.Log($"3 New Ability Seed {currentSeed}");
+								//Log.Debug($"3 New Ability Seed {currentSeed}");
 
 								// Channeled abilities consume resources during activation
 
-								//Debug.Log($"4 Consumed On Tick: {activationData.GetTick()} State: {state}");
+								//Log.Debug($"4 Consumed On Tick: {activationData.GetTick()} State: {state}");
 								validatedAbility.ConsumeResources(Character, BloodResourceConversionTemplate);
 							}
 							// Handle NPC targetting and ability spawning
@@ -551,7 +551,7 @@ namespace FishMMO.Shared
 					// Generate a new seed
 					currentSeed = abilitySeedGenerator.Next();
 
-					//Debug.Log($"5 New Ability Seed {currentSeed}");
+					//Log.Debug($"5 New Ability Seed {currentSeed}");
 				}
 				// Handle NPC targetting and ability spawning
 				else
@@ -560,7 +560,7 @@ namespace FishMMO.Shared
 				}
 
 				// Consume resources
-				//Debug.Log($"6 Consumed On Tick: {activationData.GetTick()} State: {state}");
+				//Log.Debug($"6 Consumed On Tick: {activationData.GetTick()} State: {state}");
 				validatedAbility.ConsumeResources(Character, BloodResourceConversionTemplate);
 
 				// Add ability to cooldowns
@@ -574,7 +574,7 @@ namespace FishMMO.Shared
 		[Reconcile]
 		private void Reconcile(AbilityReconcileData rd, Channel channel = Channel.Unreliable)
 		{
-			//Debug.Log($"Reconciled: {rd.GetTick()}");
+			//Log.Debug($"Reconciled: {rd.GetTick()}");
 			currentAbilityID = rd.AbilityID;
 			remainingTime = rd.RemainingTime;
 
@@ -613,7 +613,7 @@ namespace FishMMO.Shared
 			// Don't activate spells when hovering over UI controls.
 			if (!(OnCanManipulate == null ? true : (bool)OnCanManipulate?.Invoke()))
 			{
-				//Debug.Log("Cannot activate");
+				//Log.Debug("Cannot activate");
 				return;
 			}
 
@@ -622,7 +622,7 @@ namespace FishMMO.Shared
 				!IsActivating &&
 				!interruptQueued)
 			{
-				//Debug.Log("Activating " + referenceID);
+				//Log.Debug("Activating " + referenceID);
 				queuedAbilityID = referenceID;
 				this.heldKey = heldKey;
 			}
@@ -637,29 +637,29 @@ namespace FishMMO.Shared
 
 			if (abilityID == NO_ABILITY)
 			{
-				//Debug.Log("NO Ability.");
+				//Log.Debug("NO Ability.");
 				return false;
 			}
 			if (!CanManipulate())
 			{
-				//Debug.Log("Can't manipulate.");
+				//Log.Debug("Can't manipulate.");
 				return false;
 			}
 			if (!KnownAbilities.TryGetValue(abilityID, out validatedAbility))
 			{
-				//Debug.Log("Trying to activate an unknown ability.");
+				//Log.Debug("Trying to activate an unknown ability.");
 				return false;
 			}
 			if (!Character.TryGet(out ICharacterDamageController damageController) ||
 				!damageController.IsAlive)
 			{
-				//Debug.Log("Cannot activate an ability while dead.");
+				//Log.Debug("Cannot activate an ability while dead.");
 				return false;
 			}
 			if (!Character.TryGet(out ICooldownController cooldownController) ||
 				cooldownController.IsOnCooldown(validatedAbility.ID))
 			{
-				//Debug.Log("Ability is cooling down.");
+				//Log.Debug("Ability is cooling down.");
 				return false;
 			}
 
@@ -697,7 +697,7 @@ namespace FishMMO.Shared
 			if (!validatedAbility.MeetsRequirements(Character) ||
 				!validatedAbility.HasResource(Character, BloodResourceConversionTemplate))
 			{
-				//Debug.Log("Not enough resources.");
+				//Log.Debug("Not enough resources.");
 				return false;
 			}
 			return true;
@@ -705,7 +705,7 @@ namespace FishMMO.Shared
 
 		internal void Cancel()
 		{
-			//Debug.Log("Cancel");
+			//Log.Debug("Cancel");
 			currentAbilityID = NO_ABILITY;
 			remainingTime = 0.0f;
 			heldKey = KeyCode.None;

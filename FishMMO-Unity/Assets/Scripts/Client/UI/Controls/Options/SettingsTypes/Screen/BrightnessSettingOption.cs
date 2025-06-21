@@ -14,7 +14,7 @@ namespace FishMMO.Client
 		{
 			if (BrightnessSlider == null)
 			{
-				Debug.LogError("BrightnessSettingsOption: Slider is missing.");
+				Log.Error("BrightnessSettingsOption: Slider is missing.");
 			}
 			else
 			{

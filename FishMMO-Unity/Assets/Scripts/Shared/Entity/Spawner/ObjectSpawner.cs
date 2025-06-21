@@ -81,7 +81,7 @@ namespace FishMMO.Shared
 				// Get a new respawn time
 				DateTime respawnTime = GetNextRespawnTime(spawnableSettings);
 
-				//Debug.Log($"{i} Added new respawn for {respawnTime}");
+				//Log.Debug($"{i} Added new respawn for {respawnTime}");
 
 				// Add a new respawn time
 				SpawnableRespawnTimers.Add(respawnTime);
@@ -113,7 +113,7 @@ namespace FishMMO.Shared
 
 		public void Despawn(ISpawnable spawnable)
 		{
-			//Debug.Log($"Despawning {spawnable.NetworkObject.name}");
+			//Log.Debug($"Despawning {spawnable.NetworkObject.name}");
 
 			Spawned.Remove(spawnable.ID);
 
@@ -129,7 +129,7 @@ namespace FishMMO.Shared
 			// despawn the object
 			ServerManager?.Despawn(spawnable.NetworkObject, DespawnType.Pool);
 
-			//Debug.Log($"Object despawned, added new respawn for {respawnTime}");
+			//Log.Debug($"Object despawned, added new respawn for {respawnTime}");
 		}
 
 		private DateTime GetNextRespawnTime(SpawnableSettings spawnableSettings)
@@ -360,19 +360,19 @@ namespace FishMMO.Shared
 					nobSpawnable.SpawnableSettings = spawnableSettings;
 					Spawned.Add(nobSpawnable.ID, nobSpawnable);
 
-					//Debug.Log($"ISpawnable found.");
+					//Log.Debug($"ISpawnable found.");
 				}
 
 				ServerManager.Spawn(nob, null, Transform.gameObject.scene);
 
-				//Debug.Log($"Spawned Count: {Spawned.Count}");
+				//Log.Debug($"Spawned Count: {Spawned.Count}");
 
 				if (Spawned.Count >= MaxSpawnCount)
 				{
 					SpawnableRespawnTimers.Clear();
 				}
 
-				//Debug.Log($"Spawned {nob.gameObject.name} at {DateTime.UtcNow}");
+				//Log.Debug($"Spawned {nob.gameObject.name} at {DateTime.UtcNow}");
 			}
 		}
 	}

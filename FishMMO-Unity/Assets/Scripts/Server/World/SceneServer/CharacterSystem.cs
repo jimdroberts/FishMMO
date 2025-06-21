@@ -153,7 +153,7 @@ namespace FishMMO.Server
 										continue;
 									}
 
-									Debug.Log($"{character.CharacterName} is out of bounds.");
+									Log.Debug($"{character.CharacterName} is out of bounds.");
 
 									character.Motor.SetPositionAndRotationAndVelocity(spawnPoint.Position, spawnPoint.Rotation, Vector3.zero);
 								}
@@ -169,7 +169,7 @@ namespace FishMMO.Server
 
 					if (CharactersByID.Count > 0)
 					{
-						Debug.Log("Character System: Save" + "[" + DateTime.UtcNow + "]");
+						Log.Debug("Character System: Save" + "[" + DateTime.UtcNow + "]");
 
 						// all characters are periodically saved
 						using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
@@ -279,7 +279,7 @@ namespace FishMMO.Server
 			{
 				if (CharactersByID.ContainsKey(selectedCharacterID))
 				{
-					Debug.Log(selectedCharacterID + " is already loaded or loading.");
+					Log.Debug(selectedCharacterID + " is already loaded or loading.");
 
 					// Character load already started or complete
 					conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
@@ -300,7 +300,7 @@ namespace FishMMO.Server
 						sceneHandle = character.InstanceSceneHandle;
 					}
 
-					//Debug.Log($"Character loaded into {sceneName}:{sceneHandle}.");
+					//Log.Debug($"Character loaded into {sceneName}:{sceneHandle}.");
 					
 					// Check if the scene is valid, loaded, and cached properly
 					if (sceneServerSystem.TryGetSceneInstanceDetails(character.WorldServerID, sceneName, sceneHandle, out SceneInstanceDetails instance) &&
@@ -310,11 +310,11 @@ namespace FishMMO.Server
 
 						WaitingSceneLoadCharacters.Add(conn, character);
 
-						//Debug.Log($"Character System: {character.CharacterName} is loading Scene: {sceneName}:{sceneHandle}");
+						//Log.Debug($"Character System: {character.CharacterName} is loading Scene: {sceneName}:{sceneHandle}");
 					}
 					else
 					{
-						Debug.Log($"Character System: Failed to load scene for connection.");
+						Log.Debug($"Character System: Failed to load scene for connection.");
 
 						// Send the character back to the world server.. something went wrong
 						conn.Disconnect(false);
@@ -322,7 +322,7 @@ namespace FishMMO.Server
 				}
 				else
 				{
-					Debug.Log($"Character System: Failed to fetch character.");
+					Log.Debug($"Character System: Failed to fetch character.");
 
 					// Loading the character failed for some reason, maybe it doesn't exist? we should never get to this point but we will kick the player anyway
 					conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
@@ -330,7 +330,7 @@ namespace FishMMO.Server
 			}
 			else
 			{
-				Debug.Log($"Character System: Failed to fetch character ID.");
+				Log.Debug($"Character System: Failed to fetch character ID.");
 
 				// Loading the character data failed to load for some reason, maybe it doesn't exist? we should never get to this point but we will kick the player anyway
 				conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
@@ -365,7 +365,7 @@ namespace FishMMO.Server
 				!scene.IsValid() ||
 				!scene.isLoaded)
 			{
-				Debug.Log("Scene is not valid.");
+				Log.Debug("Scene is not valid.");
 
 				WaitingSceneLoadCharacters.Remove(conn);
 
@@ -421,7 +421,7 @@ namespace FishMMO.Server
 					!scene.IsValid() ||
 					!scene.isLoaded)
 				{
-					Debug.Log("Scene is not valid.");
+					Log.Debug("Scene is not valid.");
 					Destroy(character.GameObject);
 					conn.Kick(FishNet.Managing.Server.KickReason.MalformedData);
 					return;
@@ -456,7 +456,7 @@ namespace FishMMO.Server
 				// Send server character local observer data to the client.
 				SendAllCharacterData(character);
 
-				//Debug.Log(character.CharacterName + " has been spawned at: " + character.SceneName + " " + character.Transform.position.ToString());
+				//Log.Debug(character.CharacterName + " has been spawned at: " + character.SceneName + " " + character.Transform.position.ToString());
 			}
 		}
 
@@ -467,18 +467,18 @@ namespace FishMMO.Server
 		{
 			if (msg.UnloadedScenes == null || msg.UnloadedScenes.Count == 0)
 			{
-				Debug.Log("No unloaded scenes received.");
+				Log.Debug("No unloaded scenes received.");
 				return;
 			}
 
 			// Check if the connection has a character loaded.
 			if (ConnectionCharacters.TryGetValue(conn, out IPlayerCharacter character))
 			{
-				Debug.Log("Character is still loaded for connection.");
+				Log.Debug("Character is still loaded for connection.");
 				return;
 			}
 
-			//Debug.Log($"Connection unloaded scene: {msg.UnloadedScenes[0].Name}|{msg.UnloadedScenes[0].Handle}");
+			//Log.Debug($"Connection unloaded scene: {msg.UnloadedScenes[0].Name}|{msg.UnloadedScenes[0].Handle}");
 
 			// Otherwise disconnect the connection.
 			conn.Disconnect(false);
@@ -780,13 +780,13 @@ namespace FishMMO.Server
 		{
 			if (character == null)
 			{
-				Debug.Log("Character doesn't exist..");
+				Log.Debug("Character doesn't exist..");
 				return;
 			}
 
 			if (!character.IsTeleporting)
 			{
-				Debug.Log("Character is not teleporting..");
+				Log.Debug("Character is not teleporting..");
 				return;
 			}
 
@@ -799,7 +799,7 @@ namespace FishMMO.Server
 
 			if (!ServerBehaviour.TryGet(out SceneServerSystem sceneServerSystem))
 			{
-				Debug.Log("SceneServerSystem not found!");
+				Log.Debug("SceneServerSystem not found!");
 				return;
 			}
 
@@ -809,16 +809,16 @@ namespace FishMMO.Server
 			if (sceneServerSystem.WorldSceneDetailsCache == null ||
 				!sceneServerSystem.WorldSceneDetailsCache.Scenes.TryGetValue(currentScene, out WorldSceneDetails details))
 			{
-				Debug.Log(currentScene + " not found!");
+				Log.Debug(currentScene + " not found!");
 				return;
 			}
 
 			// Check if teleporter is a valid scene teleporter
 			if (details.Teleporters.TryGetValue(character.TeleporterName, out SceneTeleporterDetails teleporter))
 			{
-				//Debug.Log($"Teleporter: {character.TeleporterName} found! Teleporting {character.CharacterName} to {teleporter.ToScene}.");
+				//Log.Debug($"Teleporter: {character.TeleporterName} found! Teleporting {character.CharacterName} to {teleporter.ToScene}.");
 
-				//Debug.Log($"Unloading scene for {character.CharacterName}: {character.SceneName}|{character.SceneHandle}");
+				//Log.Debug($"Unloading scene for {character.CharacterName}: {character.SceneName}|{character.SceneHandle}");
 
 				// Tell the connection to unload their current world scene.
 				sceneServerSystem.UnloadSceneForConnection(character.Owner, character.SceneName);
@@ -826,7 +826,7 @@ namespace FishMMO.Server
 				// Character becomes immortal when teleporting
 				if (character.TryGet(out ICharacterDamageController damageController))
 				{
-					//Debug.Log($"{character.CharacterName} is now immortal.");
+					//Log.Debug($"{character.CharacterName} is now immortal.");
 					damageController.Immortal = true;
 				}
 
@@ -844,7 +844,7 @@ namespace FishMMO.Server
 			}
 			else
 			{
-				Debug.Log($"{character.TeleporterName} not found!");
+				Log.Debug($"{character.TeleporterName} not found!");
 			}
 		}
 
@@ -864,7 +864,7 @@ namespace FishMMO.Server
 			IPlayerCharacter playerCharacter = defender as IPlayerCharacter;
 			if (playerCharacter != null)
 			{
-				//Debug.Log($"PlayerCharacter: {playerCharacter.GameObject.name} Died");
+				//Log.Debug($"PlayerCharacter: {playerCharacter.GameObject.name} Died");
 
 				if (playerCharacter.TryGet(out ICharacterDamageController damageController))
 				{
@@ -896,14 +896,14 @@ namespace FishMMO.Server
 					Pet pet = defender as Pet;
 					if (pet != null)
 					{
-						//Debug.Log($"Pet: {pet.GameObject.name} Died");
+						//Log.Debug($"Pet: {pet.GameObject.name} Died");
 
 						IPlayerCharacter petOwner = pet.PetOwner as IPlayerCharacter;
 						OnPetKilled?.Invoke(petOwner.NetworkObject.Owner, petOwner);
 					}
 					else
 					{
-						//Debug.Log($"NPC: {npc.GameObject.name} Died");
+						//Log.Debug($"NPC: {npc.GameObject.name} Died");
 						npc.Despawn();
 					}
 				}

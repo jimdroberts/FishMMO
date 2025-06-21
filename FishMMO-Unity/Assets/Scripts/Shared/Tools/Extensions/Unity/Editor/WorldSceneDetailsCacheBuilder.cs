@@ -25,20 +25,20 @@ namespace FishMMO.Shared
 					WorldSceneDetailsCache worldDetailsCache = op.Result as WorldSceneDetailsCache;
 					if (worldDetailsCache != null)
 					{
-						Debug.Log($"Addressable asset loaded: {worldDetailsCache.name}");
+						Log.Debug($"Addressable asset loaded: {worldDetailsCache.name}");
 						worldDetailsCache.Rebuild();
 						EditorUtility.SetDirty(worldDetailsCache);
 						AssetDatabase.SaveAssets();
 					}
 					else
 					{
-						Debug.LogError("Failed to cast the loaded asset to WorldSceneDetailsCache.");
+						Log.Error("Failed to cast the loaded asset to WorldSceneDetailsCache.");
 					}
 				}
 				else
 				{
 					// If the asset failed to load, log the error and handle accordingly
-					Debug.LogError($"Failed to load Addressable asset: {WorldSceneDetailsCache.CACHE_FULL_PATH}");
+					Log.Error($"Failed to load Addressable asset: {WorldSceneDetailsCache.CACHE_FULL_PATH}");
 					HandleLoadFailure();
 				}
 			};
@@ -60,7 +60,7 @@ namespace FishMMO.Shared
 				AddressableAssetSettings settings = AddressableAssetSettingsDefaultObject.Settings;
 				if (settings == null)
 				{
-					Debug.LogError("Addressable Asset Settings not found.");
+					Log.Error("Addressable Asset Settings not found.");
 					return;
 				}
 
@@ -68,7 +68,7 @@ namespace FishMMO.Shared
 				if (entry == null)
 				{
 					entry = settings.CreateOrMoveEntry(AssetDatabase.AssetPathToGUID(WorldSceneDetailsCache.CACHE_FULL_PATH), settings.DefaultGroup);
-					Debug.Log($"Asset '{WorldSceneDetailsCache.CACHE_FULL_PATH}' added to Addressables.");
+					Log.Debug($"Asset '{WorldSceneDetailsCache.CACHE_FULL_PATH}' added to Addressables.");
 				}
 
 				EditorUtility.SetDirty(settings);
@@ -78,7 +78,7 @@ namespace FishMMO.Shared
 			catch (Exception ex)
 			{
 				// Log any error that occurs during asset creation
-				Debug.LogError($"Error during asset creation: {ex.Message}");
+				Log.Error($"Error during asset creation: {ex.Message}");
 			}
 		}
 	}

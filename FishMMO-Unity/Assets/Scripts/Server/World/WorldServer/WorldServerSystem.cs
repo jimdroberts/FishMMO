@@ -68,7 +68,7 @@ namespace FishMMO.Server
 
 					// TODO: maybe this one should exist....how expensive will this be to run on update?
 					using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-					//Debug.Log("World Server System: Pulse");
+					//Log.Debug("World Server System: Pulse");
 					int characterCount = worldSceneSystem.ConnectionCount;
 					WorldServerService.Pulse(dbContext, id, characterCount);
 				}

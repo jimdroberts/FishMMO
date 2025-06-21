@@ -248,7 +248,7 @@ namespace FishMMO.Client
 
 			if (container.TryGetItem((int)button.ItemSlotType, out Item item))
 			{
-				//Debug.Log($"1 Setting Equipment Slot: {button.ItemSlotType} - {item.Template.Name}");
+				//Log.Debug($"1 Setting Equipment Slot: {button.ItemSlotType} - {item.Template.Name}");
 
 				// update our button display
 				if (button.Icon != null)
@@ -277,7 +277,7 @@ namespace FishMMO.Client
 
 			if (!container.IsSlotEmpty(equipmentSlot))
 			{
-				//Debug.Log($"2 Setting Equipment Slot: {equipmentSlot} - {item.Template.Name}");
+				//Log.Debug($"2 Setting Equipment Slot: {equipmentSlot} - {item.Template.Name}");
 				
 				// update our button display
 				UIEquipmentButton button = buttons[equipmentSlot];

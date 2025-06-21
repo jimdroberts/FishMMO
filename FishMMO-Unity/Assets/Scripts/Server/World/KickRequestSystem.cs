@@ -114,7 +114,7 @@ namespace FishMMO.Server
 				{
 					using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 
-					//Debug.Log($"Processing kick request for {kickRequest.AccountName}");
+					//Log.Debug($"Processing kick request for {kickRequest.AccountName}");
 
 					// Immediately set all characters for the account to offline. Kick will be processed on scene servers.
 					CharacterService.SetOnlineState(dbContext, kickRequest.AccountName, false);
@@ -123,7 +123,7 @@ namespace FishMMO.Server
 					{
 						if (lastLogin >= kickRequest.TimeCreated)
 						{
-							//Debug.Log($"{kickRequest.AccountName} is recently connected.");
+							//Log.Debug($"{kickRequest.AccountName} is recently connected.");
 							return;
 						}
 					}
@@ -131,7 +131,7 @@ namespace FishMMO.Server
 
 				if (AccountManager.GetConnectionByAccountName(kickRequest.AccountName, out NetworkConnection conn))
 				{
-					//Debug.Log($"Kicking {kickRequest.AccountName}");
+					//Log.Debug($"Kicking {kickRequest.AccountName}");
 
 					// Kick the connection
 					conn.Kick(FishNet.Managing.Server.KickReason.UnexpectedProblem);

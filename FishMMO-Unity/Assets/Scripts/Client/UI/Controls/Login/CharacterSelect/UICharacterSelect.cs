@@ -154,7 +154,7 @@ namespace FishMMO.Client
 				CinematicCamera.Reset();
 				yield return CinematicCamera.MoveToNextWaypoint(() =>
 				{
-					//Debug.Log("Camera movement completed!");
+					//Log.Debug("Camera movement completed!");
 				}, true);
 			}
 
