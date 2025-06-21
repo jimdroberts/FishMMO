@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: FishMMO AppHealthMonitor Build Settings
   m_EditorClassIdentifier: 
   PathToClassLibraryCsproj: ../FishMMO-AppHealthMonitor/AppHealthMonitor/AppHealthMonitor.csproj
-  OutputDirectory: C:/Users/jim/Desktop/Builds/Test
+  OutputDirectory: C:/Users/jim/Desktop/Builds/AppHealthMonitor
   UseDefaultOutputPath: 0
   BuildConfiguration: Release
   TargetFramework: net8.0

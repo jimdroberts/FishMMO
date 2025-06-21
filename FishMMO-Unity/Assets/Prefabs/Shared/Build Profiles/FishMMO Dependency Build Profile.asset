@@ -1,0 +1,1090 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 44f0b9529a9efbe4690fb5b769c7ef49, type: 3}
+  m_Name: FishMMO Dependency Build Profile
+  m_EditorClassIdentifier: 
+  SettingsList:
+  - {fileID: 11400000, guid: c69a0d242a25c45418f10a6461f84a7a, type: 2}
+  - {fileID: 11400000, guid: 0ed411e218cb49345b0cd1301bb64883, type: 2}
+  LogOutput: "Starting all builds...\n--- Starting Build for: FishMMO Dependencies
+    Build Settings ---\nPerforming clean for 'FishMMO Dependencies Build Settings'...\nExecuting:
+    dotnet clean \"D:\\FishMMO Dev\\FishMMO-Dependencies\\FishMMO-Dependencies.csproj\"
+    --configuration Release --framework netstandard2.1\nBuild started 6/20/2025 11:52:38
+    PM.\r\n     1>Project \"D:\\FishMMO Dev\\FishMMO-Dependencies\\FishMMO-Dependencies.csproj\"
+    on node 1 (Clean target(s)).\r\n     1>CoreClean:\r\n         Deleting file \"D:\\FishMMO
+    Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\FishMMO-Dependencies.deps.json\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\FishMMO-Dependencies.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\FishMMO-Dependencies.pdb\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\EFCore.NamingConventions.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\HtmlAgilityPack.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\Humanizer.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\Microsoft.Bcl.AsyncInterfaces.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\Microsoft.CSharp.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\Microsoft.EntityFrameworkCore.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\Microsoft.EntityFrameworkCore.Abstractions.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\Microsoft.EntityFrameworkCore.Design.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\Microsoft.EntityFrameworkCore.Relational.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\Microsoft.Extensions.Caching.Abstractions.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\Microsoft.Extensions.Caching.Memory.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\Microsoft.Extensions.Configuration.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\Microsoft.Extensions.Configuration.Abstractions.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\Microsoft.Extensions.Configuration.FileExtensions.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\Microsoft.Extensions.Configuration.Json.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\Microsoft.Extensions.DependencyInjection.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\Microsoft.Extensions.DependencyInjection.Abstractions.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\Microsoft.Extensions.FileProviders.Abstractions.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\Microsoft.Extensions.FileProviders.Physical.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\Microsoft.Extensions.FileSystemGlobbing.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\Microsoft.Extensions.Http.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\Microsoft.Extensions.Logging.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\Microsoft.Extensions.Logging.Abstractions.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\Microsoft.Extensions.Options.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\Microsoft.Extensions.Primitives.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\Newtonsoft.Json.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\Npgsql.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\Npgsql.EntityFrameworkCore.PostgreSQL.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\OpenAI_API.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\Pipelines.Sockets.Unofficial.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\srp.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\StackExchange.Redis.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\StackExchange.Redis.Extensions.Core.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\System.Buffers.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\System.Collections.Concurrent.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\System.Collections.Immutable.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\System.ComponentModel.Annotations.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\System.Diagnostics.DiagnosticSource.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\System.IO.Pipelines.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\System.Linq.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\System.Memory.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\System.Numerics.Vectors.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\System.Runtime.CompilerServices.Unsafe.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\System.Runtime.Numerics.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\System.Security.Cryptography.Primitives.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\System.Text.Encodings.Web.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\System.Text.Json.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\System.Text.RegularExpressions.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\System.Threading.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\System.Threading.Channels.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\System.Threading.Tasks.Extensions.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\af\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\ar\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\az\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\bg\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\bn-BD\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\cs\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\da\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\de\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\el\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\es\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\fa\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\fi-FI\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\fr\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\fr-BE\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\he\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\hr\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\hu\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\hy\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\id\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\is\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\it\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\ja\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\ko-KR\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\ku\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\lv\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\ms-MY\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\mt\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\nb\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\nb-NO\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\nl\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\pl\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\pt\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\ro\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\ru\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\sk\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\sl\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\sr\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\sr-Latn\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\sv\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\th-TH\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\tr\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\uk\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\uz-Cyrl-UZ\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\uz-Latn-UZ\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\vi\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\zh-CN\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\zh-Hans\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\zh-Hant\\Humanizer.resources.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\obj\\Release\\netstandard2.1\\FishMMO-Dependencies.csproj.AssemblyReference.cache\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\obj\\Release\\netstandard2.1\\FishMMO-Dependencies.GeneratedMSBuildEditorConfig.editorconfig\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\obj\\Release\\netstandard2.1\\FishMMO-Dependencies.AssemblyInfoInputs.cache\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\obj\\Release\\netstandard2.1\\FishMMO-Dependencies.AssemblyInfo.cs\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\obj\\Release\\netstandard2.1\\FishMMO-Dependencies.csproj.CoreCompileInputs.cache\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\obj\\Release\\netstandard2.1\\FishMMO-Dependencies.sourcelink.json\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\obj\\Release\\netstandard2.1\\FishMMO-.EEC07A1B.Up2Date\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\obj\\Release\\netstandard2.1\\FishMMO-Dependencies.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\obj\\Release\\netstandard2.1\\FishMMO-Dependencies.pdb\".\r\n    
+    1>Done Building Project \"D:\\FishMMO Dev\\FishMMO-Dependencies\\FishMMO-Dependencies.csproj\"
+    (Clean target(s)).\r\n\r\nBuild succeeded.\r\n    0 Warning(s)\r\n    0 Error(s)\r\n\r\nTime
+    Elapsed 00:00:00.36\r\n\nClean for 'FishMMO Dependencies Build Settings' completed
+    successfully.\nExecuting: dotnet build \"D:\\FishMMO Dev\\FishMMO-Dependencies\\FishMMO-Dependencies.csproj\"
+    --configuration Release --framework netstandard2.1 --no-restore\n  FishMMO-Dependencies
+    -> D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\FishMMO-Dependencies.dll\r\n\r\nBuild
+    succeeded.\r\n    0 Warning(s)\r\n    0 Error(s)\r\n\r\nTime Elapsed 00:00:01.06\r\n\nBuild
+    for 'FishMMO Dependencies Build Settings' completed successfully!\n\n\n--- Starting
+    Build for: FishMMO Database Build Settings ---\nPerforming clean for 'FishMMO
+    Database Build Settings'...\nExecuting: dotnet clean \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\FishMMO-DB-Migrator.csproj\"
+    --configuration Release --framework net8.0\nBuild started 6/20/2025 11:52:39
+    PM.\r\n     1>Project \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\FishMMO-DB-Migrator.csproj\"
+    on node 1 (Clean target(s)).\r\n     1>CoreClean:\r\n         Deleting file \"D:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\bin\\Release\\net8.0\\FishMMO-DB-Migrator.exe\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\bin\\Release\\net8.0\\FishMMO-DB-Migrator.deps.json\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\bin\\Release\\net8.0\\FishMMO-DB-Migrator.runtimeconfig.json\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\bin\\Release\\net8.0\\FishMMO-DB-Migrator.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\bin\\Release\\net8.0\\FishMMO-DB-Migrator.pdb\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\bin\\Release\\net8.0\\EFCore.NamingConventions.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\bin\\Release\\net8.0\\Humanizer.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\bin\\Release\\net8.0\\Microsoft.EntityFrameworkCore.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\bin\\Release\\net8.0\\Microsoft.EntityFrameworkCore.Abstractions.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\bin\\Release\\net8.0\\Microsoft.EntityFrameworkCore.Design.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\bin\\Release\\net8.0\\Microsoft.EntityFrameworkCore.Relational.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\bin\\Release\\net8.0\\Microsoft.Extensions.Caching.Abstractions.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\bin\\Release\\net8.0\\Microsoft.Extensions.Caching.Memory.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\bin\\Release\\net8.0\\Microsoft.Extensions.Configuration.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\bin\\Release\\net8.0\\Microsoft.Extensions.Configuration.Abstractions.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\bin\\Release\\net8.0\\Microsoft.Extensions.Configuration.FileExtensions.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\bin\\Release\\net8.0\\Microsoft.Extensions.Configuration.Json.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\bin\\Release\\net8.0\\Microsoft.Extensions.DependencyInjection.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\bin\\Release\\net8.0\\Microsoft.Extensions.DependencyInjection.Abstractions.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\bin\\Release\\net8.0\\Microsoft.Extensions.FileProviders.Abstractions.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\bin\\Release\\net8.0\\Microsoft.Extensions.FileProviders.Physical.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\bin\\Release\\net8.0\\Microsoft.Extensions.FileSystemGlobbing.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\bin\\Release\\net8.0\\Microsoft.Extensions.Logging.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\bin\\Release\\net8.0\\Microsoft.Extensions.Logging.Abstractions.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\bin\\Release\\net8.0\\Microsoft.Extensions.Options.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\bin\\Release\\net8.0\\Microsoft.Extensions.Primitives.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\bin\\Release\\net8.0\\Npgsql.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\bin\\Release\\net8.0\\Npgsql.EntityFrameworkCore.PostgreSQL.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\bin\\Release\\net8.0\\Pipelines.Sockets.Unofficial.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\bin\\Release\\net8.0\\StackExchange.Redis.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\bin\\Release\\net8.0\\System.IO.Pipelines.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\bin\\Release\\net8.0\\System.Text.Encodings.Web.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\bin\\Release\\net8.0\\System.Text.Json.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\bin\\Release\\net8.0\\runtimes\\browser\\lib\\net8.0\\System.Text.Encodings.Web.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\bin\\Release\\net8.0\\FishMMO-DB.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\bin\\Release\\net8.0\\FishMMO-DB.pdb\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\obj\\Release\\net8.0\\FishMMO-DB-Migrator.csproj.AssemblyReference.cache\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\obj\\Release\\net8.0\\FishMMO-DB-Migrator.GeneratedMSBuildEditorConfig.editorconfig\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\obj\\Release\\net8.0\\FishMMO-DB-Migrator.AssemblyInfoInputs.cache\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\obj\\Release\\net8.0\\FishMMO-DB-Migrator.AssemblyInfo.cs\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\obj\\Release\\net8.0\\FishMMO-DB-Migrator.csproj.CoreCompileInputs.cache\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\obj\\Release\\net8.0\\FishMMO-DB-Migrator.sourcelink.json\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\obj\\Release\\net8.0\\FishMMO-.54B3B4DA.Up2Date\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\obj\\Release\\net8.0\\FishMMO-DB-Migrator.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\obj\\Release\\net8.0\\refint\\FishMMO-DB-Migrator.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\obj\\Release\\net8.0\\FishMMO-DB-Migrator.pdb\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\obj\\Release\\net8.0\\FishMMO-DB-Migrator.genruntimeconfig.cache\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\obj\\Release\\net8.0\\ref\\FishMMO-DB-Migrator.dll\".\r\n    
+    1>Project \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\FishMMO-DB-Migrator.csproj\"
+    (1) is building \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj\"
+    (2:2) on node 1 (Clean target(s)).\r\n     2>CoreClean:\r\n         Deleting
+    file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\obj\\Release\\netstandard2.1\\FishMMO-DB.csproj.AssemblyReference.cache\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\obj\\Release\\netstandard2.1\\FishMMO-DB.GeneratedMSBuildEditorConfig.editorconfig\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\obj\\Release\\netstandard2.1\\FishMMO-DB.AssemblyInfoInputs.cache\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\obj\\Release\\netstandard2.1\\FishMMO-DB.AssemblyInfo.cs\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\obj\\Release\\netstandard2.1\\FishMMO-DB.csproj.CoreCompileInputs.cache\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\obj\\Release\\netstandard2.1\\FishMMO-DB.sourcelink.json\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\obj\\Release\\netstandard2.1\\FishMMO-DB.dll\".\r\n        
+    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\obj\\Release\\netstandard2.1\\FishMMO-DB.pdb\".\r\n    
+    2>Done Building Project \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj\"
+    (Clean target(s)).\r\n     1>Done Building Project \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\FishMMO-DB-Migrator.csproj\"
+    (Clean target(s)).\r\n\r\nBuild succeeded.\r\n    0 Warning(s)\r\n    0 Error(s)\r\n\r\nTime
+    Elapsed 00:00:00.37\r\n\nClean for 'FishMMO Database Build Settings' completed
+    successfully.\nExecuting: dotnet build \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\FishMMO-DB-Migrator.csproj\"
+    --configuration Release --framework net8.0 --no-restore\nD:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\AppSettings.cs(8,25):
+    warning CS8618: Non-nullable field 'Npgsql' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    field as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\AppSettings.cs(9,24): warning CS8618: Non-nullable
+    field 'Redis' must contain a non-null value when exiting constructor. Consider
+    adding the 'required' modifier or declaring the field as nullable. [D:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\AppSettings.cs(15,17):
+    warning CS8618: Non-nullable field 'Database' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    field as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\AppSettings.cs(25,17): warning CS8618: Non-nullable
+    field 'Host' must contain a non-null value when exiting constructor. Consider
+    adding the 'required' modifier or declaring the field as nullable. [D:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\AppSettings.cs(16,17):
+    warning CS8618: Non-nullable field 'Username' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    field as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\AppSettings.cs(26,17): warning CS8618: Non-nullable
+    field 'Port' must contain a non-null value when exiting constructor. Consider
+    adding the 'required' modifier or declaring the field as nullable. [D:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\AppSettings.cs(17,17):
+    warning CS8618: Non-nullable field 'Password' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    field as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\AppSettings.cs(18,17): warning CS8618: Non-nullable
+    field 'Host' must contain a non-null value when exiting constructor. Consider
+    adding the 'required' modifier or declaring the field as nullable. [D:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\AppSettings.cs(27,17):
+    warning CS8618: Non-nullable field 'Password' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    field as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\AppSettings.cs(19,17): warning CS8618: Non-nullable
+    field 'Port' must contain a non-null value when exiting constructor. Consider
+    adding the 'required' modifier or declaring the field as nullable. [D:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\PatchServerEntity.cs(13,17):
+    warning CS8618: Non-nullable property 'Address' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'PatchServers' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'LoginServers' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'WorldServers' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'SceneServers' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'Scenes' must contain a non-null value when exiting
+    constructor. Consider adding the 'required' modifier or declaring the property
+    as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'Accounts' must contain a non-null value when exiting
+    constructor. Consider adding the 'required' modifier or declaring the property
+    as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'KickRequests' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'Characters' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'CharacterAbilities' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'CharacterKnownAbilities' must contain a non-null
+    value when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'CharacterAttributes' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'CharacterAchievements' must contain a non-null
+    value when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'CharacterInventoryItems' must contain a non-null
+    value when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'CharacterEquippedItems' must contain a non-null
+    value when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'CharacterBankItems' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'CharacterHotkeys' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'CharacterMail' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'CharacterItemCooldowns' must contain a non-null
+    value when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'CharacterSkills' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'CharacterBuffs' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'CharacterPets' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'CharacterPetAttributes' must contain a non-null
+    value when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'CharacterPetBuffs' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'CharacterFactions' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'CharacterQuests' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'CharacterFriends' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'CharacterGuilds' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'Guilds' must contain a non-null value when exiting
+    constructor. Consider adding the 'required' modifier or declaring the property
+    as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'GuildUpdates' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'CharacterParties' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'Parties' must contain a non-null value when exiting
+    constructor. Consider adding the 'required' modifier or declaring the property
+    as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'PartyUpdates' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'Chat' must contain a non-null value when exiting
+    constructor. Consider adding the 'required' modifier or declaring the property
+    as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContextFactory.cs(13,52):
+    warning CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Login\\LoginServerEntity.cs(13,17):
+    warning CS8618: Non-nullable property 'Name' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Login\\LoginServerEntity.cs(15,17):
+    warning CS8618: Non-nullable property 'Address' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterAttributeEntity.cs(13,26):
+    warning CS8618: Non-nullable property 'Character' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterAchievementEntity.cs(13,26):
+    warning CS8618: Non-nullable property 'Character' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Login\\AccountEntity.cs(11,17):
+    warning CS8618: Non-nullable property 'Name' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Login\\AccountEntity.cs(12,17):
+    warning CS8618: Non-nullable property 'Salt' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Login\\AccountEntity.cs(13,17):
+    warning CS8618: Non-nullable property 'Verifier' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterAbilityEntity.cs(14,26):
+    warning CS8618: Non-nullable property 'Character' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterAbilityEntity.cs(16,20):
+    warning CS8618: Non-nullable property 'AbilityEvents' must contain a non-null
+    value when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterFriendEntity.cs(14,26):
+    warning CS8618: Non-nullable property 'Character' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterBankEntity.cs(14,26):
+    warning CS8618: Non-nullable property 'Character' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterFactionEntity.cs(13,26):
+    warning CS8618: Non-nullable property 'Character' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterBuffEntity.cs(13,26):
+    warning CS8618: Non-nullable property 'Character' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterHotkeyEntity.cs(14,26):
+    warning CS8618: Non-nullable property 'Character' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEquipmentEntity.cs(14,26):
+    warning CS8618: Non-nullable property 'Character' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterGuildEntity.cs(16,26):
+    warning CS8618: Non-nullable property 'Character' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterGuildEntity.cs(18,22):
+    warning CS8618: Non-nullable property 'Guild' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterGuildEntity.cs(20,17):
+    warning CS8618: Non-nullable property 'Location' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterKnownAbilityEntity.cs(13,26):
+    warning CS8618: Non-nullable property 'Character' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterItemCooldownEntity.cs(14,26):
+    warning CS8618: Non-nullable property 'Character' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterItemCooldownEntity.cs(15,17):
+    warning CS8618: Non-nullable property 'Category' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterPetAttributeEntity.cs(13,26):
+    warning CS8618: Non-nullable property 'Character' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterPartyEntity.cs(16,26):
+    warning CS8618: Non-nullable property 'Character' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterPartyEntity.cs(18,22):
+    warning CS8618: Non-nullable property 'Party' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterPetBuffEntity.cs(13,26):
+    warning CS8618: Non-nullable property 'Character' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterInventoryEntity.cs(14,26):
+    warning CS8618: Non-nullable property 'Character' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterMailEntity.cs(14,17):
+    warning CS8618: Non-nullable property 'Subject' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterMailEntity.cs(15,17):
+    warning CS8618: Non-nullable property 'Message' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Party\\PartyEntity.cs(11,37):
+    warning CS8618: Non-nullable property 'Characters' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Guild\\GuildEntity.cs(14,17):
+    warning CS8618: Non-nullable property 'Name' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Guild\\GuildEntity.cs(15,17):
+    warning CS8618: Non-nullable property 'Notice' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Guild\\GuildEntity.cs(17,37):
+    warning CS8618: Non-nullable property 'Characters' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterPetEntity.cs(15,26):
+    warning CS8618: Non-nullable property 'Character' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterPetEntity.cs(17,20):
+    warning CS8618: Non-nullable property 'Abilities' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterQuestEntity.cs(14,26):
+    warning CS8618: Non-nullable property 'Character' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterQuestEntity.cs(15,17):
+    warning CS8618: Non-nullable property 'Name' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterSkillEntity.cs(14,26):
+    warning CS8618: Non-nullable property 'Character' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\ChatEntity.cs(19,17):
+    warning CS8618: Non-nullable property 'Message' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\World\\KickRequestEntity.cs(13,17):
+    warning CS8618: Non-nullable property 'AccountName' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\World\\WorldServerEntity.cs(13,17):
+    warning CS8618: Non-nullable property 'Name' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\World\\WorldServerEntity.cs(15,17):
+    warning CS8618: Non-nullable property 'Address' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\SceneServerEntity.cs(13,17):
+    warning CS8618: Non-nullable property 'Name' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\SceneServerEntity.cs(15,17):
+    warning CS8618: Non-nullable property 'Address' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\SceneEntity.cs(17,17):
+    warning CS8618: Non-nullable property 'SceneName' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEntity.cs(18,17):
+    warning CS8618: Non-nullable property 'Name' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEntity.cs(19,17):
+    warning CS8618: Non-nullable property 'NameLowercase' must contain a non-null
+    value when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEntity.cs(20,17):
+    warning CS8618: Non-nullable property 'Account' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEntity.cs(23,17):
+    warning CS8618: Non-nullable property 'SceneName' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEntity.cs(25,17):
+    warning CS8618: Non-nullable property 'BindScene' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEntity.cs(58,46):
+    warning CS8618: Non-nullable property 'Abilities' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEntity.cs(59,51):
+    warning CS8618: Non-nullable property 'KnownAbilities' must contain a non-null
+    value when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEntity.cs(60,48):
+    warning CS8618: Non-nullable property 'Attributes' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEntity.cs(61,50):
+    warning CS8618: Non-nullable property 'Achievements' must contain a non-null
+    value when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEntity.cs(62,43):
+    warning CS8618: Non-nullable property 'Buffs' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEntity.cs(63,48):
+    warning CS8618: Non-nullable property 'Inventory' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEntity.cs(64,48):
+    warning CS8618: Non-nullable property 'Equipment' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEntity.cs(65,43):
+    warning CS8618: Non-nullable property 'Bank' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEntity.cs(66,31):
+    warning CS8618: Non-nullable property 'Guild' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEntity.cs(67,31):
+    warning CS8618: Non-nullable property 'Party' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEntity.cs(68,46):
+    warning CS8618: Non-nullable property 'Faction' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEntity.cs(69,45):
+    warning CS8618: Non-nullable property 'Friends' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEntity.cs(70,51):
+    warning CS8618: Non-nullable property 'ItemCooldowns' must contain a non-null
+    value when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEntity.cs(71,46):
+    warning CS8618: Non-nullable property 'PetBuffs' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEntity.cs(72,29):
+    warning CS8618: Non-nullable property 'Pet' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEntity.cs(73,44):
+    warning CS8618: Non-nullable property 'Quests' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEntity.cs(74,44):
+    warning CS8618: Non-nullable property 'Skills' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\n 
+    FishMMO-DB -> D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\bin\\Release\\netstandard2.1\\FishMMO-DB.dll\r\n 
+    FishMMO-DB-Migrator -> D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\bin\\Release\\net8.0\\FishMMO-DB-Migrator.dll\r\n\r\nBuild
+    succeeded.\r\n\r\nD:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\AppSettings.cs(8,25):
+    warning CS8618: Non-nullable field 'Npgsql' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    field as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\AppSettings.cs(9,24): warning CS8618: Non-nullable
+    field 'Redis' must contain a non-null value when exiting constructor. Consider
+    adding the 'required' modifier or declaring the field as nullable. [D:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\AppSettings.cs(15,17):
+    warning CS8618: Non-nullable field 'Database' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    field as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\AppSettings.cs(25,17): warning CS8618: Non-nullable
+    field 'Host' must contain a non-null value when exiting constructor. Consider
+    adding the 'required' modifier or declaring the field as nullable. [D:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\AppSettings.cs(16,17):
+    warning CS8618: Non-nullable field 'Username' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    field as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\AppSettings.cs(26,17): warning CS8618: Non-nullable
+    field 'Port' must contain a non-null value when exiting constructor. Consider
+    adding the 'required' modifier or declaring the field as nullable. [D:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\AppSettings.cs(17,17):
+    warning CS8618: Non-nullable field 'Password' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    field as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\AppSettings.cs(18,17): warning CS8618: Non-nullable
+    field 'Host' must contain a non-null value when exiting constructor. Consider
+    adding the 'required' modifier or declaring the field as nullable. [D:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\AppSettings.cs(27,17):
+    warning CS8618: Non-nullable field 'Password' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    field as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\AppSettings.cs(19,17): warning CS8618: Non-nullable
+    field 'Port' must contain a non-null value when exiting constructor. Consider
+    adding the 'required' modifier or declaring the field as nullable. [D:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\PatchServerEntity.cs(13,17):
+    warning CS8618: Non-nullable property 'Address' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'PatchServers' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'LoginServers' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'WorldServers' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'SceneServers' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'Scenes' must contain a non-null value when exiting
+    constructor. Consider adding the 'required' modifier or declaring the property
+    as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'Accounts' must contain a non-null value when exiting
+    constructor. Consider adding the 'required' modifier or declaring the property
+    as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'KickRequests' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'Characters' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'CharacterAbilities' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'CharacterKnownAbilities' must contain a non-null
+    value when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'CharacterAttributes' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'CharacterAchievements' must contain a non-null
+    value when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'CharacterInventoryItems' must contain a non-null
+    value when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'CharacterEquippedItems' must contain a non-null
+    value when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'CharacterBankItems' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'CharacterHotkeys' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'CharacterMail' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'CharacterItemCooldowns' must contain a non-null
+    value when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'CharacterSkills' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'CharacterBuffs' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'CharacterPets' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'CharacterPetAttributes' must contain a non-null
+    value when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'CharacterPetBuffs' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'CharacterFactions' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'CharacterQuests' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'CharacterFriends' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'CharacterGuilds' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'Guilds' must contain a non-null value when exiting
+    constructor. Consider adding the 'required' modifier or declaring the property
+    as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'GuildUpdates' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'CharacterParties' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'Parties' must contain a non-null value when exiting
+    constructor. Consider adding the 'required' modifier or declaring the property
+    as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'PartyUpdates' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContext.cs(8,10): warning
+    CS8618: Non-nullable property 'Chat' must contain a non-null value when exiting
+    constructor. Consider adding the 'required' modifier or declaring the property
+    as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\NpgsqlDbContextFactory.cs(13,52):
+    warning CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Login\\LoginServerEntity.cs(13,17):
+    warning CS8618: Non-nullable property 'Name' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Login\\LoginServerEntity.cs(15,17):
+    warning CS8618: Non-nullable property 'Address' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterAttributeEntity.cs(13,26):
+    warning CS8618: Non-nullable property 'Character' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterAchievementEntity.cs(13,26):
+    warning CS8618: Non-nullable property 'Character' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Login\\AccountEntity.cs(11,17):
+    warning CS8618: Non-nullable property 'Name' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Login\\AccountEntity.cs(12,17):
+    warning CS8618: Non-nullable property 'Salt' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Login\\AccountEntity.cs(13,17):
+    warning CS8618: Non-nullable property 'Verifier' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterAbilityEntity.cs(14,26):
+    warning CS8618: Non-nullable property 'Character' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterAbilityEntity.cs(16,20):
+    warning CS8618: Non-nullable property 'AbilityEvents' must contain a non-null
+    value when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterFriendEntity.cs(14,26):
+    warning CS8618: Non-nullable property 'Character' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterBankEntity.cs(14,26):
+    warning CS8618: Non-nullable property 'Character' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterFactionEntity.cs(13,26):
+    warning CS8618: Non-nullable property 'Character' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterBuffEntity.cs(13,26):
+    warning CS8618: Non-nullable property 'Character' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterHotkeyEntity.cs(14,26):
+    warning CS8618: Non-nullable property 'Character' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEquipmentEntity.cs(14,26):
+    warning CS8618: Non-nullable property 'Character' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterGuildEntity.cs(16,26):
+    warning CS8618: Non-nullable property 'Character' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterGuildEntity.cs(18,22):
+    warning CS8618: Non-nullable property 'Guild' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterGuildEntity.cs(20,17):
+    warning CS8618: Non-nullable property 'Location' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterKnownAbilityEntity.cs(13,26):
+    warning CS8618: Non-nullable property 'Character' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterItemCooldownEntity.cs(14,26):
+    warning CS8618: Non-nullable property 'Character' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterItemCooldownEntity.cs(15,17):
+    warning CS8618: Non-nullable property 'Category' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterPetAttributeEntity.cs(13,26):
+    warning CS8618: Non-nullable property 'Character' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterPartyEntity.cs(16,26):
+    warning CS8618: Non-nullable property 'Character' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterPartyEntity.cs(18,22):
+    warning CS8618: Non-nullable property 'Party' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterPetBuffEntity.cs(13,26):
+    warning CS8618: Non-nullable property 'Character' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterInventoryEntity.cs(14,26):
+    warning CS8618: Non-nullable property 'Character' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterMailEntity.cs(14,17):
+    warning CS8618: Non-nullable property 'Subject' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterMailEntity.cs(15,17):
+    warning CS8618: Non-nullable property 'Message' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Party\\PartyEntity.cs(11,37):
+    warning CS8618: Non-nullable property 'Characters' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Guild\\GuildEntity.cs(14,17):
+    warning CS8618: Non-nullable property 'Name' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Guild\\GuildEntity.cs(15,17):
+    warning CS8618: Non-nullable property 'Notice' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Guild\\GuildEntity.cs(17,37):
+    warning CS8618: Non-nullable property 'Characters' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterPetEntity.cs(15,26):
+    warning CS8618: Non-nullable property 'Character' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterPetEntity.cs(17,20):
+    warning CS8618: Non-nullable property 'Abilities' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterQuestEntity.cs(14,26):
+    warning CS8618: Non-nullable property 'Character' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterQuestEntity.cs(15,17):
+    warning CS8618: Non-nullable property 'Name' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterSkillEntity.cs(14,26):
+    warning CS8618: Non-nullable property 'Character' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\ChatEntity.cs(19,17):
+    warning CS8618: Non-nullable property 'Message' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\World\\KickRequestEntity.cs(13,17):
+    warning CS8618: Non-nullable property 'AccountName' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\World\\WorldServerEntity.cs(13,17):
+    warning CS8618: Non-nullable property 'Name' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\World\\WorldServerEntity.cs(15,17):
+    warning CS8618: Non-nullable property 'Address' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\SceneServerEntity.cs(13,17):
+    warning CS8618: Non-nullable property 'Name' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\SceneServerEntity.cs(15,17):
+    warning CS8618: Non-nullable property 'Address' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\SceneEntity.cs(17,17):
+    warning CS8618: Non-nullable property 'SceneName' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEntity.cs(18,17):
+    warning CS8618: Non-nullable property 'Name' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEntity.cs(19,17):
+    warning CS8618: Non-nullable property 'NameLowercase' must contain a non-null
+    value when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEntity.cs(20,17):
+    warning CS8618: Non-nullable property 'Account' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEntity.cs(23,17):
+    warning CS8618: Non-nullable property 'SceneName' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEntity.cs(25,17):
+    warning CS8618: Non-nullable property 'BindScene' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEntity.cs(58,46):
+    warning CS8618: Non-nullable property 'Abilities' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEntity.cs(59,51):
+    warning CS8618: Non-nullable property 'KnownAbilities' must contain a non-null
+    value when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEntity.cs(60,48):
+    warning CS8618: Non-nullable property 'Attributes' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEntity.cs(61,50):
+    warning CS8618: Non-nullable property 'Achievements' must contain a non-null
+    value when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEntity.cs(62,43):
+    warning CS8618: Non-nullable property 'Buffs' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEntity.cs(63,48):
+    warning CS8618: Non-nullable property 'Inventory' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEntity.cs(64,48):
+    warning CS8618: Non-nullable property 'Equipment' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEntity.cs(65,43):
+    warning CS8618: Non-nullable property 'Bank' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEntity.cs(66,31):
+    warning CS8618: Non-nullable property 'Guild' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEntity.cs(67,31):
+    warning CS8618: Non-nullable property 'Party' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEntity.cs(68,46):
+    warning CS8618: Non-nullable property 'Faction' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEntity.cs(69,45):
+    warning CS8618: Non-nullable property 'Friends' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEntity.cs(70,51):
+    warning CS8618: Non-nullable property 'ItemCooldowns' must contain a non-null
+    value when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEntity.cs(71,46):
+    warning CS8618: Non-nullable property 'PetBuffs' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEntity.cs(72,29):
+    warning CS8618: Non-nullable property 'Pet' must contain a non-null value when
+    exiting constructor. Consider adding the 'required' modifier or declaring the
+    property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEntity.cs(73,44):
+    warning CS8618: Non-nullable property 'Quests' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\nD:\\FishMMO
+    Dev\\FishMMO-Database\\FishMMO-DB\\Npgsql\\Entities\\Scene\\Character\\CharacterEntity.cs(74,44):
+    warning CS8618: Non-nullable property 'Skills' must contain a non-null value
+    when exiting constructor. Consider adding the 'required' modifier or declaring
+    the property as nullable. [D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj]\r\n   
+    111 Warning(s)\r\n    0 Error(s)\r\n\r\nTime Elapsed 00:00:01.35\r\n\nBuild for
+    'FishMMO Database Build Settings' completed successfully!\n\n\n\nAll requested
+    builds finished. Refreshing Unity AssetDatabase...\nUnity AssetDatabase refreshed.\n"
