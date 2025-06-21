@@ -13,7 +13,44 @@ const SimpleWeb = {
     },
     RemoveSocket: function (index) {
         SimpleWeb.webSockets[index] = undefined;
+		SimpleWeb.stopPinging(index);
     },
+    setupPinging: function(index) {
+        const sendPing = function() {
+            var webSocket = SimpleWeb.GetWebSocket(index);
+            if (webSocket && webSocket.readyState === WebSocket.OPEN) {
+                // Create a binary ping message
+                var buffer = new ArrayBuffer(5); // 1 byte for PacketId + 4 bytes for timestamp
+                var view = new DataView(buffer);
+                view.setUint8(0, 14); // 14 is the PacketId for PingPong
+                view.setUint32(1, Math.floor(Date.now() / 1000), true);
+                webSocket.send(buffer);
+            } else {
+                SimpleWeb.stopPinging(index);
+            }
+        };
+
+        document.addEventListener("visibilitychange", function() {
+            if (document.hidden) {
+                if (!SimpleWeb.pingIntervals[index]) {
+                    SimpleWeb.pingIntervals[index] = setInterval(sendPing, 10000); // Every 10 seconds when hidden
+                }
+            } else {
+                SimpleWeb.stopPinging(index);
+            }
+        });
+
+        // Start pinging immediately if the tab is already hidden
+        if (document.hidden) {
+            SimpleWeb.pingIntervals[index] = setInterval(sendPing, 10000);
+        }
+    },
+    stopPinging: function(index) {
+        if (SimpleWeb.pingIntervals[index]) {
+            clearInterval(SimpleWeb.pingIntervals[index]);
+            delete SimpleWeb.pingIntervals[index];
+        }
+    }
 };
 
 function IsConnected(index) {
@@ -43,6 +80,7 @@ function Connect(addressPtr, openCallbackPtr, closeCallBackPtr, messageCallbackP
     webSocket = new WebSocket(address);
     webSocket.binaryType = 'arraybuffer';
     const index = SimpleWeb.AddNextSocket(webSocket);
+	SimpleWeb.setupPinging(index);
 
     // Connection opened
     webSocket.addEventListener('open', function (event) {
@@ -51,6 +89,7 @@ function Connect(addressPtr, openCallbackPtr, closeCallBackPtr, messageCallbackP
     });
     webSocket.addEventListener('close', function (event) {
         console.log("Disconnected from " + address);
+		SimpleWeb.stopPinging(index);
         Runtime.dynCall('vi', closeCallBackPtr, [index]);
     });
 
@@ -85,7 +124,7 @@ function Connect(addressPtr, openCallbackPtr, closeCallBackPtr, messageCallbackP
 function Disconnect(index) {
     var webSocket = SimpleWeb.GetWebSocket(index);
     if (webSocket) {
-        webSocket.close(1000, "Disconnect Called by Mirror");
+        webSocket.close(1000, "Disconnect");
     }
 
     SimpleWeb.RemoveSocket(index);
