@@ -3,6 +3,7 @@
     <TargetFramework>netstandard2.1</TargetFramework>
     <RootNamespace>FishMMO.Database</RootNamespace>
     <Nullable>enable</Nullable>
+    <NoWarn>$(NoWarn);CS8618;CS8625</NoWarn>
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
   <ItemGroup>
