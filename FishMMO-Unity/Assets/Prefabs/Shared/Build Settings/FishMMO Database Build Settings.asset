@@ -18,5 +18,5 @@ MonoBehaviour:
   BuildConfiguration: Release
   TargetFramework: net8.0
   DotnetExecutablePath: dotnet
-  SkipDotNetRestore: 1
+  SkipDotNetRestore: 0
   PerformCleanBeforeBuild: 1

@@ -20,8 +20,8 @@ MonoBehaviour:
   LogOutput: "Starting all builds...\n--- Starting Build for: FishMMO AppHealthMonitor
     Build Settings ---\nPerforming clean for 'FishMMO AppHealthMonitor Build Settings'...\nExecuting:
     dotnet clean \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj\"
-    --configuration Release --framework net8.0\nBuild started 6/20/2025 11:58:48
-    PM.\r\n     1>Project \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj\"
+    --configuration Release --framework net8.0\nBuild started 6/21/2025 12:24:12
+    AM.\r\n     1>Project \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj\"
     on node 1 (Clean target(s)).\r\n     1>CoreClean:\r\n         Deleting file \"D:\\FishMMO
     Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\obj\\Release\\net8.0\\AppHealthMonitor.csproj.AssemblyReference.cache\".\r\n        
     Deleting file \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\obj\\Release\\net8.0\\AppHealthMonitor.GeneratedMSBuildEditorConfig.editorconfig\".\r\n        
@@ -38,102 +38,19 @@ MonoBehaviour:
     (Clean target(s)).\r\n\r\nBuild succeeded.\r\n    0 Warning(s)\r\n    0 Error(s)\r\n\r\nTime
     Elapsed 00:00:00.28\r\n\nClean for 'FishMMO AppHealthMonitor Build Settings'
     completed successfully.\nExecuting: dotnet build \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj\"
-    --configuration Release --framework net8.0 --no-restore --output \"C:\\Users\\jim\\Desktop\\Builds\\AppHealthMonitor\"\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppConfig.cs(6,17): warning
-    CS8618: Non-nullable property 'Name' must contain a non-null value when exiting
-    constructor. Consider adding the 'required' modifier or declaring the property
-    as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppConfig.cs(7,17): warning
-    CS8618: Non-nullable property 'ApplicationExePath' must contain a non-null value
-    when exiting constructor. Consider adding the 'required' modifier or declaring
-    the property as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppConfig.cs(8,17): warning
-    CS8618: Non-nullable property 'ApplicationProcessName' must contain a non-null
-    value when exiting constructor. Consider adding the 'required' modifier or declaring
-    the property as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppConfig.cs(10,25): warning
-    CS8618: Non-nullable property 'PortTypes' must contain a non-null value when
-    exiting constructor. Consider adding the 'required' modifier or declaring the
-    property as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppConfig.cs(11,17): warning
-    CS8618: Non-nullable property 'LaunchArguments' must contain a non-null value
-    when exiting constructor. Consider adding the 'required' modifier or declaring
-    the property as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(51,28): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(33,10): warning
-    CS8618: Non-nullable field 'monitoredProcess' must contain a non-null value when
-    exiting constructor. Consider adding the 'required' modifier or declaring the
-    field as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(194,29): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(201,29): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(222,29): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(247,29): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
+    --configuration Release --framework net8.0 --output \"C:\\Users\\jim\\Desktop\\Builds\\AppHealthMonitor\"\n 
+    Determining projects to restore...\r\n  All projects are up-to-date for restore.\r\nD:\\FishMMO
     Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(266,29): warning
-    CS8601: Possible null reference assignment. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(279,29): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\n 
+    CS8601: Possible null reference assignment. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\n 
     AppHealthMonitor -> C:\\Users\\jim\\Desktop\\Builds\\AppHealthMonitor\\AppHealthMonitor.dll\r\n\r\nBuild
-    succeeded.\r\n\r\nD:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppConfig.cs(6,17):
-    warning CS8618: Non-nullable property 'Name' must contain a non-null value when
-    exiting constructor. Consider adding the 'required' modifier or declaring the
-    property as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppConfig.cs(7,17): warning
-    CS8618: Non-nullable property 'ApplicationExePath' must contain a non-null value
-    when exiting constructor. Consider adding the 'required' modifier or declaring
-    the property as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppConfig.cs(8,17): warning
-    CS8618: Non-nullable property 'ApplicationProcessName' must contain a non-null
-    value when exiting constructor. Consider adding the 'required' modifier or declaring
-    the property as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppConfig.cs(10,25): warning
-    CS8618: Non-nullable property 'PortTypes' must contain a non-null value when
-    exiting constructor. Consider adding the 'required' modifier or declaring the
-    property as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppConfig.cs(11,17): warning
-    CS8618: Non-nullable property 'LaunchArguments' must contain a non-null value
-    when exiting constructor. Consider adding the 'required' modifier or declaring
-    the property as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(51,28): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(33,10): warning
-    CS8618: Non-nullable field 'monitoredProcess' must contain a non-null value when
-    exiting constructor. Consider adding the 'required' modifier or declaring the
-    field as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(194,29): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(201,29): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(222,29): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(247,29): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(266,29): warning
-    CS8601: Possible null reference assignment. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(279,29): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\n   
-    13 Warning(s)\r\n    0 Error(s)\r\n\r\nTime Elapsed 00:00:00.55\r\n\nBuild for
+    succeeded.\r\n\r\nD:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(266,29):
+    warning CS8601: Possible null reference assignment. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\n   
+    1 Warning(s)\r\n    0 Error(s)\r\n\r\nTime Elapsed 00:00:00.43\r\n\nBuild for
     'FishMMO AppHealthMonitor Build Settings' completed successfully!\n\n\n--- Starting
     Build for: FishMMO IPFetch Build Settings ---\nPerforming clean for 'FishMMO
     IPFetch Build Settings'...\nExecuting: dotnet clean \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj\"
-    --configuration Release --framework net8.0\nBuild started 6/20/2025 11:58:50
-    PM.\r\n     1>Project \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj\"
+    --configuration Release --framework net8.0\nBuild started 6/21/2025 12:24:13
+    AM.\r\n     1>Project \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj\"
     on node 1 (Clean target(s)).\r\n     1>CoreClean:\r\n         Deleting file \"D:\\FishMMO
     Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\obj\\Release\\net8.0\\AppHealthMonitor.csproj.AssemblyReference.cache\".\r\n        
     Deleting file \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\obj\\Release\\net8.0\\AppHealthMonitor.GeneratedMSBuildEditorConfig.editorconfig\".\r\n        
@@ -141,7 +58,6 @@ MonoBehaviour:
     Deleting file \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\obj\\Release\\net8.0\\AppHealthMonitor.AssemblyInfo.cs\".\r\n        
     Deleting file \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\obj\\Release\\net8.0\\AppHealthMonitor.csproj.CoreCompileInputs.cache\".\r\n        
     Deleting file \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\obj\\Release\\net8.0\\AppHealthMonitor.sourcelink.json\".\r\n        
-    Deleting file \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\obj\\Release\\net8.0\\AppHealt.9507C1F3.Up2Date\".\r\n        
     Deleting file \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\obj\\Release\\net8.0\\AppHealthMonitor.dll\".\r\n        
     Deleting file \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\obj\\Release\\net8.0\\refint\\AppHealthMonitor.dll\".\r\n        
     Deleting file \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\obj\\Release\\net8.0\\AppHealthMonitor.pdb\".\r\n        
@@ -150,104 +66,20 @@ MonoBehaviour:
     1>Done Building Project \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj\"
     (Clean target(s)).\r\n\r\nBuild succeeded.\r\n    0 Warning(s)\r\n    0 Error(s)\r\n\r\nTime
     Elapsed 00:00:00.28\r\n\nClean for 'FishMMO IPFetch Build Settings' completed
-    successfully.\nCreated output directory: C:\\Users\\jim\\Desktop\\Builds\\IPFetch
-    Server\nExecuting: dotnet build \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj\"
-    --configuration Release --framework net8.0 --no-restore --output \"C:\\Users\\jim\\Desktop\\Builds\\IPFetch
-    Server\"\nD:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppConfig.cs(6,17):
-    warning CS8618: Non-nullable property 'Name' must contain a non-null value when
-    exiting constructor. Consider adding the 'required' modifier or declaring the
-    property as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppConfig.cs(7,17): warning
-    CS8618: Non-nullable property 'ApplicationExePath' must contain a non-null value
-    when exiting constructor. Consider adding the 'required' modifier or declaring
-    the property as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppConfig.cs(8,17): warning
-    CS8618: Non-nullable property 'ApplicationProcessName' must contain a non-null
-    value when exiting constructor. Consider adding the 'required' modifier or declaring
-    the property as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppConfig.cs(10,25): warning
-    CS8618: Non-nullable property 'PortTypes' must contain a non-null value when
-    exiting constructor. Consider adding the 'required' modifier or declaring the
-    property as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppConfig.cs(11,17): warning
-    CS8618: Non-nullable property 'LaunchArguments' must contain a non-null value
-    when exiting constructor. Consider adding the 'required' modifier or declaring
-    the property as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(51,28): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(33,10): warning
-    CS8618: Non-nullable field 'monitoredProcess' must contain a non-null value when
-    exiting constructor. Consider adding the 'required' modifier or declaring the
-    field as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(194,29): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(201,29): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(222,29): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(247,29): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(266,29): warning
-    CS8601: Possible null reference assignment. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(279,29): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\n 
+    successfully.\nExecuting: dotnet build \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj\"
+    --configuration Release --framework net8.0 --output \"C:\\Users\\jim\\Desktop\\Builds\\IPFetch
+    Server\"\n  Determining projects to restore...\r\n  All projects are up-to-date
+    for restore.\r\nD:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(266,29):
+    warning CS8601: Possible null reference assignment. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\n 
     AppHealthMonitor -> C:\\Users\\jim\\Desktop\\Builds\\IPFetch Server\\AppHealthMonitor.dll\r\n\r\nBuild
-    succeeded.\r\n\r\nD:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppConfig.cs(6,17):
-    warning CS8618: Non-nullable property 'Name' must contain a non-null value when
-    exiting constructor. Consider adding the 'required' modifier or declaring the
-    property as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppConfig.cs(7,17): warning
-    CS8618: Non-nullable property 'ApplicationExePath' must contain a non-null value
-    when exiting constructor. Consider adding the 'required' modifier or declaring
-    the property as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppConfig.cs(8,17): warning
-    CS8618: Non-nullable property 'ApplicationProcessName' must contain a non-null
-    value when exiting constructor. Consider adding the 'required' modifier or declaring
-    the property as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppConfig.cs(10,25): warning
-    CS8618: Non-nullable property 'PortTypes' must contain a non-null value when
-    exiting constructor. Consider adding the 'required' modifier or declaring the
-    property as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppConfig.cs(11,17): warning
-    CS8618: Non-nullable property 'LaunchArguments' must contain a non-null value
-    when exiting constructor. Consider adding the 'required' modifier or declaring
-    the property as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(51,28): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(33,10): warning
-    CS8618: Non-nullable field 'monitoredProcess' must contain a non-null value when
-    exiting constructor. Consider adding the 'required' modifier or declaring the
-    field as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(194,29): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(201,29): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(222,29): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(247,29): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(266,29): warning
-    CS8601: Possible null reference assignment. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(279,29): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\n   
-    13 Warning(s)\r\n    0 Error(s)\r\n\r\nTime Elapsed 00:00:00.57\r\n\nBuild for
+    succeeded.\r\n\r\nD:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(266,29):
+    warning CS8601: Possible null reference assignment. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\n   
+    1 Warning(s)\r\n    0 Error(s)\r\n\r\nTime Elapsed 00:00:00.39\r\n\nBuild for
     'FishMMO IPFetch Build Settings' completed successfully!\n\n\n--- Starting Build
     for: FishMMO Patcher Build Settings ---\nPerforming clean for 'FishMMO Patcher
     Build Settings'...\nExecuting: dotnet clean \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj\"
-    --configuration Release --framework net8.0\nBuild started 6/20/2025 11:58:51
-    PM.\r\n     1>Project \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj\"
+    --configuration Release --framework net8.0\nBuild started 6/21/2025 12:24:14
+    AM.\r\n     1>Project \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj\"
     on node 1 (Clean target(s)).\r\n     1>CoreClean:\r\n         Deleting file \"D:\\FishMMO
     Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\obj\\Release\\net8.0\\AppHealthMonitor.csproj.AssemblyReference.cache\".\r\n        
     Deleting file \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\obj\\Release\\net8.0\\AppHealthMonitor.GeneratedMSBuildEditorConfig.editorconfig\".\r\n        
@@ -255,7 +87,6 @@ MonoBehaviour:
     Deleting file \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\obj\\Release\\net8.0\\AppHealthMonitor.AssemblyInfo.cs\".\r\n        
     Deleting file \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\obj\\Release\\net8.0\\AppHealthMonitor.csproj.CoreCompileInputs.cache\".\r\n        
     Deleting file \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\obj\\Release\\net8.0\\AppHealthMonitor.sourcelink.json\".\r\n        
-    Deleting file \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\obj\\Release\\net8.0\\AppHealt.9507C1F3.Up2Date\".\r\n        
     Deleting file \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\obj\\Release\\net8.0\\AppHealthMonitor.dll\".\r\n        
     Deleting file \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\obj\\Release\\net8.0\\refint\\AppHealthMonitor.dll\".\r\n        
     Deleting file \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\obj\\Release\\net8.0\\AppHealthMonitor.pdb\".\r\n        
@@ -264,104 +95,20 @@ MonoBehaviour:
     1>Done Building Project \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj\"
     (Clean target(s)).\r\n\r\nBuild succeeded.\r\n    0 Warning(s)\r\n    0 Error(s)\r\n\r\nTime
     Elapsed 00:00:00.28\r\n\nClean for 'FishMMO Patcher Build Settings' completed
-    successfully.\nCreated output directory: C:\\Users\\jim\\Desktop\\Builds\\Patcher
-    Server\nExecuting: dotnet build \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj\"
-    --configuration Release --framework net8.0 --no-restore --output \"C:\\Users\\jim\\Desktop\\Builds\\Patcher
-    Server\"\nD:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppConfig.cs(6,17):
-    warning CS8618: Non-nullable property 'Name' must contain a non-null value when
-    exiting constructor. Consider adding the 'required' modifier or declaring the
-    property as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppConfig.cs(7,17): warning
-    CS8618: Non-nullable property 'ApplicationExePath' must contain a non-null value
-    when exiting constructor. Consider adding the 'required' modifier or declaring
-    the property as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppConfig.cs(8,17): warning
-    CS8618: Non-nullable property 'ApplicationProcessName' must contain a non-null
-    value when exiting constructor. Consider adding the 'required' modifier or declaring
-    the property as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppConfig.cs(10,25): warning
-    CS8618: Non-nullable property 'PortTypes' must contain a non-null value when
-    exiting constructor. Consider adding the 'required' modifier or declaring the
-    property as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppConfig.cs(11,17): warning
-    CS8618: Non-nullable property 'LaunchArguments' must contain a non-null value
-    when exiting constructor. Consider adding the 'required' modifier or declaring
-    the property as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(51,28): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(33,10): warning
-    CS8618: Non-nullable field 'monitoredProcess' must contain a non-null value when
-    exiting constructor. Consider adding the 'required' modifier or declaring the
-    field as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(194,29): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(201,29): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(222,29): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(247,29): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(266,29): warning
-    CS8601: Possible null reference assignment. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(279,29): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\n 
+    successfully.\nExecuting: dotnet build \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj\"
+    --configuration Release --framework net8.0 --output \"C:\\Users\\jim\\Desktop\\Builds\\Patcher
+    Server\"\n  Determining projects to restore...\r\n  All projects are up-to-date
+    for restore.\r\nD:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(266,29):
+    warning CS8601: Possible null reference assignment. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\n 
     AppHealthMonitor -> C:\\Users\\jim\\Desktop\\Builds\\Patcher Server\\AppHealthMonitor.dll\r\n\r\nBuild
-    succeeded.\r\n\r\nD:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppConfig.cs(6,17):
-    warning CS8618: Non-nullable property 'Name' must contain a non-null value when
-    exiting constructor. Consider adding the 'required' modifier or declaring the
-    property as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppConfig.cs(7,17): warning
-    CS8618: Non-nullable property 'ApplicationExePath' must contain a non-null value
-    when exiting constructor. Consider adding the 'required' modifier or declaring
-    the property as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppConfig.cs(8,17): warning
-    CS8618: Non-nullable property 'ApplicationProcessName' must contain a non-null
-    value when exiting constructor. Consider adding the 'required' modifier or declaring
-    the property as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppConfig.cs(10,25): warning
-    CS8618: Non-nullable property 'PortTypes' must contain a non-null value when
-    exiting constructor. Consider adding the 'required' modifier or declaring the
-    property as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppConfig.cs(11,17): warning
-    CS8618: Non-nullable property 'LaunchArguments' must contain a non-null value
-    when exiting constructor. Consider adding the 'required' modifier or declaring
-    the property as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(51,28): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(33,10): warning
-    CS8618: Non-nullable field 'monitoredProcess' must contain a non-null value when
-    exiting constructor. Consider adding the 'required' modifier or declaring the
-    field as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(194,29): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(201,29): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(222,29): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(247,29): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(266,29): warning
-    CS8601: Possible null reference assignment. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(279,29): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\n   
-    13 Warning(s)\r\n    0 Error(s)\r\n\r\nTime Elapsed 00:00:00.57\r\n\nBuild for
+    succeeded.\r\n\r\nD:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(266,29):
+    warning CS8601: Possible null reference assignment. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\n   
+    1 Warning(s)\r\n    0 Error(s)\r\n\r\nTime Elapsed 00:00:00.38\r\n\nBuild for
     'FishMMO Patcher Build Settings' completed successfully!\n\n\n--- Starting Build
     for: FishMMO WebGL Server Build Settings ---\nPerforming clean for 'FishMMO WebGL
     Server Build Settings'...\nExecuting: dotnet clean \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj\"
-    --configuration Release --framework net8.0\nBuild started 6/20/2025 11:58:52
-    PM.\r\n     1>Project \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj\"
+    --configuration Release --framework net8.0\nBuild started 6/21/2025 12:24:16
+    AM.\r\n     1>Project \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj\"
     on node 1 (Clean target(s)).\r\n     1>CoreClean:\r\n         Deleting file \"D:\\FishMMO
     Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\obj\\Release\\net8.0\\AppHealthMonitor.csproj.AssemblyReference.cache\".\r\n        
     Deleting file \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\obj\\Release\\net8.0\\AppHealthMonitor.GeneratedMSBuildEditorConfig.editorconfig\".\r\n        
@@ -369,7 +116,6 @@ MonoBehaviour:
     Deleting file \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\obj\\Release\\net8.0\\AppHealthMonitor.AssemblyInfo.cs\".\r\n        
     Deleting file \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\obj\\Release\\net8.0\\AppHealthMonitor.csproj.CoreCompileInputs.cache\".\r\n        
     Deleting file \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\obj\\Release\\net8.0\\AppHealthMonitor.sourcelink.json\".\r\n        
-    Deleting file \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\obj\\Release\\net8.0\\AppHealt.9507C1F3.Up2Date\".\r\n        
     Deleting file \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\obj\\Release\\net8.0\\AppHealthMonitor.dll\".\r\n        
     Deleting file \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\obj\\Release\\net8.0\\refint\\AppHealthMonitor.dll\".\r\n        
     Deleting file \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\obj\\Release\\net8.0\\AppHealthMonitor.pdb\".\r\n        
@@ -377,99 +123,15 @@ MonoBehaviour:
     Deleting file \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\obj\\Release\\net8.0\\ref\\AppHealthMonitor.dll\".\r\n    
     1>Done Building Project \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj\"
     (Clean target(s)).\r\n\r\nBuild succeeded.\r\n    0 Warning(s)\r\n    0 Error(s)\r\n\r\nTime
-    Elapsed 00:00:00.30\r\n\nClean for 'FishMMO WebGL Server Build Settings' completed
-    successfully.\nCreated output directory: C:\\Users\\jim\\Desktop\\Builds\\WebGL
-    Server\nExecuting: dotnet build \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj\"
-    --configuration Release --framework net8.0 --no-restore --output \"C:\\Users\\jim\\Desktop\\Builds\\WebGL
-    Server\"\nD:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppConfig.cs(6,17):
-    warning CS8618: Non-nullable property 'Name' must contain a non-null value when
-    exiting constructor. Consider adding the 'required' modifier or declaring the
-    property as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppConfig.cs(7,17): warning
-    CS8618: Non-nullable property 'ApplicationExePath' must contain a non-null value
-    when exiting constructor. Consider adding the 'required' modifier or declaring
-    the property as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppConfig.cs(8,17): warning
-    CS8618: Non-nullable property 'ApplicationProcessName' must contain a non-null
-    value when exiting constructor. Consider adding the 'required' modifier or declaring
-    the property as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppConfig.cs(10,25): warning
-    CS8618: Non-nullable property 'PortTypes' must contain a non-null value when
-    exiting constructor. Consider adding the 'required' modifier or declaring the
-    property as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppConfig.cs(11,17): warning
-    CS8618: Non-nullable property 'LaunchArguments' must contain a non-null value
-    when exiting constructor. Consider adding the 'required' modifier or declaring
-    the property as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(51,28): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(33,10): warning
-    CS8618: Non-nullable field 'monitoredProcess' must contain a non-null value when
-    exiting constructor. Consider adding the 'required' modifier or declaring the
-    field as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(194,29): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(201,29): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(222,29): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(247,29): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(266,29): warning
-    CS8601: Possible null reference assignment. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(279,29): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\n 
+    Elapsed 00:00:00.27\r\n\nClean for 'FishMMO WebGL Server Build Settings' completed
+    successfully.\nExecuting: dotnet build \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj\"
+    --configuration Release --framework net8.0 --output \"C:\\Users\\jim\\Desktop\\Builds\\WebGL
+    Server\"\n  Determining projects to restore...\r\n  All projects are up-to-date
+    for restore.\r\nD:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(266,29):
+    warning CS8601: Possible null reference assignment. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\n 
     AppHealthMonitor -> C:\\Users\\jim\\Desktop\\Builds\\WebGL Server\\AppHealthMonitor.dll\r\n\r\nBuild
-    succeeded.\r\n\r\nD:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppConfig.cs(6,17):
-    warning CS8618: Non-nullable property 'Name' must contain a non-null value when
-    exiting constructor. Consider adding the 'required' modifier or declaring the
-    property as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppConfig.cs(7,17): warning
-    CS8618: Non-nullable property 'ApplicationExePath' must contain a non-null value
-    when exiting constructor. Consider adding the 'required' modifier or declaring
-    the property as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppConfig.cs(8,17): warning
-    CS8618: Non-nullable property 'ApplicationProcessName' must contain a non-null
-    value when exiting constructor. Consider adding the 'required' modifier or declaring
-    the property as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppConfig.cs(10,25): warning
-    CS8618: Non-nullable property 'PortTypes' must contain a non-null value when
-    exiting constructor. Consider adding the 'required' modifier or declaring the
-    property as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppConfig.cs(11,17): warning
-    CS8618: Non-nullable property 'LaunchArguments' must contain a non-null value
-    when exiting constructor. Consider adding the 'required' modifier or declaring
-    the property as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(51,28): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(33,10): warning
-    CS8618: Non-nullable field 'monitoredProcess' must contain a non-null value when
-    exiting constructor. Consider adding the 'required' modifier or declaring the
-    field as nullable. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(194,29): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(201,29): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(222,29): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(247,29): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(266,29): warning
-    CS8601: Possible null reference assignment. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(279,29): warning
-    CS8625: Cannot convert null literal to non-nullable reference type. [D:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\n   
-    13 Warning(s)\r\n    0 Error(s)\r\n\r\nTime Elapsed 00:00:00.58\r\n\nBuild for
+    succeeded.\r\n\r\nD:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(266,29):
+    warning CS8601: Possible null reference assignment. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\n   
+    1 Warning(s)\r\n    0 Error(s)\r\n\r\nTime Elapsed 00:00:00.38\r\n\nBuild for
     'FishMMO WebGL Server Build Settings' completed successfully!\n\n\n\nAll requested
     builds finished. Refreshing Unity AssetDatabase...\nUnity AssetDatabase refreshed.\n"

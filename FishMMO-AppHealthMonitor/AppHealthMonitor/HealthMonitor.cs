@@ -13,11 +13,15 @@ namespace AppHealthMonitor
 		private readonly int monitoredPort;
 		private readonly List<PortType> portTypes;
 		private readonly string launchArguments;
-		private readonly TimeSpan checkInterval;
+		private readonly TimeSpan checkInterval; // Base check interval
 		private readonly CancellationToken cancellationToken;
 
-		// NEW: Field to hold the specific process instance launched by this monitor
 		private Process monitoredProcess;
+
+		private const int MaxHealthCheckRetries = 5;
+		private readonly TimeSpan initialHealthCheckDelay = TimeSpan.FromSeconds(30);
+		private readonly TimeSpan processCrashRestartDelay = TimeSpan.FromSeconds(10);
+
 
 		/// <summary>
 		/// Initializes a new instance of the HealthMonitor class.
@@ -48,40 +52,106 @@ namespace AppHealthMonitor
 			this.launchArguments = launchArguments ?? string.Empty;
 			this.checkInterval = checkInterval;
 			this.cancellationToken = cancellationToken;
-			this.monitoredProcess = null; // Initialize to null
+			this.monitoredProcess = null;
 		}
 
 		public async Task StartMonitoring()
 		{
 			// Initial launch of the application if it's not already running
-			// or if it crashed before the daemon started monitoring.
 			if (!IsApplicationProcessRunning())
 			{
 				Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Application process not found at startup. Attempting initial launch...");
 				LaunchApplication();
-				// Give it a moment to start up before the first health check
-				await Task.Delay(TimeSpan.FromSeconds(5), this.cancellationToken); // Initial startup delay
+				// Give it a moment to start up after initial launch
+				await Task.Delay(TimeSpan.FromSeconds(5), this.cancellationToken);
 			}
 
+			Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Waiting {this.initialHealthCheckDelay.TotalSeconds} seconds before first health check...");
+			await Task.Delay(this.initialHealthCheckDelay, this.cancellationToken);
 
 			while (!this.cancellationToken.IsCancellationRequested)
 			{
 				Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Performing health check...");
-				bool isHealthy = await CheckApplicationHealth();
 
-				if (!isHealthy)
+				// FIRST CHECK: Is the process running?
+				if (!IsApplicationProcessRunning())
 				{
-					Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Application detected as unhealthy. Attempting to restart...");
-					KillApplication(); // Only kills the specific process this monitor manages
-					LaunchApplication(); // Relaunches the specific process
+					Console.ForegroundColor = ConsoleColor.Red;
+					Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Process is NOT running or has exited. Preparing to restart in {this.processCrashRestartDelay.TotalSeconds} seconds...");
+					Console.ResetColor();
+
+					await Task.Delay(this.processCrashRestartDelay, this.cancellationToken); // Wait 10 seconds
+					if (this.cancellationToken.IsCancellationRequested) return; // Check for cancellation during delay
+
+					KillApplication(); // Ensure it's fully gone
+					LaunchApplication();
+					// Give it a moment to start up after crash restart
+					await Task.Delay(TimeSpan.FromSeconds(5), this.cancellationToken);
 				}
-				else
+				else // Process IS running, now check ports
 				{
-					Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Application is healthy.");
+					bool portsHealthy = false;
+					int retryCount = 0;
+					TimeSpan currentRetryDelay = this.checkInterval; // Start with the base interval for the first potential retry
+
+					while (retryCount < MaxHealthCheckRetries)
+					{
+						portsHealthy = await CheckApplicationPortsResponsiveness(); // Only checks ports
+
+						if (portsHealthy)
+						{
+							Console.ForegroundColor = ConsoleColor.Green;
+							Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Application process is running and ports are healthy.");
+							Console.ResetColor();
+							break; // Exit retry loop, application is healthy
+						}
+						else
+						{
+							retryCount++;
+							if (retryCount < MaxHealthCheckRetries)
+							{
+								Console.ForegroundColor = ConsoleColor.Magenta;
+								Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Ports are unresponsive (Attempt {retryCount}/{MaxHealthCheckRetries}). Retrying in {currentRetryDelay.TotalSeconds:F1} seconds...");
+								Console.ResetColor();
+
+								try
+								{
+									await Task.Delay(currentRetryDelay, this.cancellationToken);
+								}
+								catch (OperationCanceledException)
+								{
+									Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Monitoring task cancelled during retry delay for ports.");
+									return; // Exit StartMonitoring entirely if cancelled
+								}
+
+								// Reduce delay by 50% for the next retry
+								currentRetryDelay = TimeSpan.FromMilliseconds(currentRetryDelay.TotalMilliseconds * 0.5);
+								if (currentRetryDelay < TimeSpan.FromSeconds(1)) // Ensure a minimum delay, e.g., 1 second
+								{
+									currentRetryDelay = TimeSpan.FromSeconds(1);
+								}
+							}
+						}
+					}
+
+					// If after all retries, the ports are still not healthy, then restart
+					if (!portsHealthy)
+					{
+						Console.ForegroundColor = ConsoleColor.Red;
+						Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Ports detected as unresponsive after {MaxHealthCheckRetries} retries. Attempting to restart application...");
+						Console.ResetColor();
+
+						KillApplication();
+						LaunchApplication();
+						// Give it a moment to start up after restart
+						await Task.Delay(TimeSpan.FromSeconds(5), this.cancellationToken);
+					}
 				}
 
+				// Wait for the regular check interval before the next main health check cycle
 				try
 				{
+					Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Waiting {this.checkInterval.TotalSeconds} seconds for next main health check cycle...");
 					await Task.Delay(this.checkInterval, this.cancellationToken);
 				}
 				catch (OperationCanceledException)
@@ -94,82 +164,49 @@ namespace AppHealthMonitor
 		}
 
 		/// <summary>
-		/// Checks the health of the application by verifying its specific process and all configured port types.
+		/// Checks only the responsiveness of the configured ports. Assumes the process is already running.
 		/// </summary>
-		/// <returns>True if the application is considered healthy, false otherwise.</returns>
-		private async Task<bool> CheckApplicationHealth()
+		/// <returns>True if all configured ports are responsive, false otherwise.</returns>
+		private async Task<bool> CheckApplicationPortsResponsiveness()
 		{
-			// 1. Check if the specific process launched by THIS monitor is running
-			if (!IsApplicationProcessRunning())
+			if (this.monitoredPort <= 0 && this.portTypes.Contains(PortType.None))
 			{
-				Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Health Check: Monitored process is not running or has exited.");
-				return false; // Process not running or exited
+				// If no specific port is configured for monitoring, consider ports healthy by default.
+				// This covers scenarios where an app doesn't expose a port for health checks.
+				return true;
 			}
 
-			// If we reached here, monitoredProcess is not null and is still running.
-			// Refresh its state to ensure accurate HasExited.
-			try
+			foreach (var portType in this.portTypes)
 			{
-				this.monitoredProcess.Refresh();
-				if (this.monitoredProcess.HasExited)
+				if (portType == PortType.None) continue; // Already handled above or means "no specific type" for port 0
+
+				Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Port Check: Attempting to connect to port {this.monitoredPort} (Type: {portType})...");
+				bool currentPortTypeResponsive = false;
+
+				switch (portType)
 				{
-					Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Health Check: Monitored process (ID: {this.monitoredProcess.Id}) has exited after refresh.");
-					return false;
+					case PortType.TCP:
+						currentPortTypeResponsive = await IsTcpPortResponsive("127.0.0.1", this.monitoredPort, 2000);
+						break;
+					case PortType.UDP:
+						currentPortTypeResponsive = await IsUdpPortResponsive("127.0.0.1", this.monitoredPort, 2000);
+						break;
+					case PortType.WebSocket:
+						currentPortTypeResponsive = await IsWebSocketPortResponsive($"ws://127.0.0.1:{this.monitoredPort}", 5000);
+						break;
+					default:
+						Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Port Check: Unsupported PortType '{portType}'. Skipping this check.");
+						currentPortTypeResponsive = false; // Treat unsupported as unresponsive for safety
+						break;
 				}
-				Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Health Check: Monitored process (ID: {this.monitoredProcess.Id}, Name: {this.monitoredProcess.ProcessName}) is running.");
-			}
-			catch (InvalidOperationException) // Process might have exited just before Refresh()
-			{
-				Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Health Check: Monitored process seems to have exited unexpectedly during refresh.");
-				return false;
-			}
 
-
-			// 2. Check if the specified ports are responsive based on ALL configured PortTypes
-			bool allPortsResponsive = true;
-			if (this.monitoredPort > 0)
-			{
-				foreach (var portType in this.portTypes)
+				if (!currentPortTypeResponsive)
 				{
-					Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Health Check: Attempting to connect to port {this.monitoredPort} (Type: {portType})...");
-					bool currentPortTypeResponsive = false;
-
-					switch (portType)
-					{
-						case PortType.TCP:
-							currentPortTypeResponsive = await IsTcpPortResponsive("127.0.0.1", this.monitoredPort, 2000);
-							break;
-						case PortType.UDP:
-							currentPortTypeResponsive = await IsUdpPortResponsive("127.0.0.1", this.monitoredPort, 2000);
-							break;
-						case PortType.WebSocket:
-							currentPortTypeResponsive = await IsWebSocketPortResponsive($"ws://127.0.0.1:{this.monitoredPort}", 5000);
-							break;
-						case PortType.None:
-							Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Health Check: PortType is None. Skipping specific port check for this type.");
-							currentPortTypeResponsive = true;
-							break;
-						default:
-							Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Health Check: Unsupported PortType '{portType}'. Skipping this check.");
-							currentPortTypeResponsive = false;
-							break;
-					}
-
-					if (!currentPortTypeResponsive)
-					{
-						Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Health Check: Port {this.monitoredPort} (Type: {portType}) is NOT responsive.");
-						allPortsResponsive = false; // Mark as unhealthy if any port check fails
-						break; // No need to check other ports if one already failed
-					}
-					Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Health Check: Port {this.monitoredPort} (Type: {portType}) is responsive.");
+					Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Port Check: Port {this.monitoredPort} (Type: {portType}) is NOT responsive.");
+					return false; // If any port check fails, the overall port health is false
 				}
 			}
-			else
-			{
-				Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Health Check: No port specified for monitoring (MonitoredPort is 0 or less). Skipping all port checks.");
-			}
-
-			return allPortsResponsive; // Return true only if process is running and all ports are healthy
+			return true; // All configured ports are responsive
 		}
 
 		/// <summary>
@@ -179,29 +216,39 @@ namespace AppHealthMonitor
 		{
 			if (this.monitoredProcess == null)
 			{
-				return false; // Process not launched yet by this monitor
+				Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Process check: monitoredProcess reference is null.");
+				return false;
 			}
 
 			try
 			{
-				// Try to refresh its state; if it throws, the process handle is invalid (i.e., it exited)
+				// Refresh its state; if it throws, the process handle is invalid (i.e., it exited)
 				this.monitoredProcess.Refresh();
-				return !this.monitoredProcess.HasExited;
+				if (this.monitoredProcess.HasExited)
+				{
+					Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Process check: Monitored process (ID: {this.monitoredProcess.Id}) has exited after refresh.");
+					// It's crucial to clear the reference if the process has exited so we don't try to use a stale handle.
+					this.monitoredProcess = null;
+					return false;
+				}
+				Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Process check: Monitored process (ID: {this.monitoredProcess.Id}, Name: {this.monitoredProcess.ProcessName}) is running.");
+				return true;
 			}
 			catch (InvalidOperationException)
 			{
-				// The process has exited. Clear the reference.
-				this.monitoredProcess = null;
+				// The process handle is no longer valid, meaning it exited or was never started properly
+				Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Process check: Monitored process seems to have exited unexpectedly (InvalidOperationException).");
+				this.monitoredProcess = null; // Clear reference
 				return false;
 			}
 			catch (Exception ex)
 			{
-				// Other errors refreshing process state
-				Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Error refreshing process state for ID: {this.monitoredProcess?.Id}. Error: {ex.Message}");
+				Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Process check: Error refreshing process state for ID: {this.monitoredProcess?.Id}. Error: {ex.Message}");
 				this.monitoredProcess = null; // Assume it's no longer valid
 				return false;
 			}
 		}
+
 
 		/// <summary>
 		/// Kills the specific process instance launched by this monitor.
@@ -210,21 +257,19 @@ namespace AppHealthMonitor
 		{
 			if (this.monitoredProcess == null)
 			{
-				Console.WriteLine($"[{DateTime.Now}] [{this.appName}] No specific process to kill (not launched by this monitor or already exited).");
-				return;
-			}
-
-			// Refresh to get the latest status before attempting to kill
-			this.monitoredProcess.Refresh();
-			if (this.monitoredProcess.HasExited)
-			{
-				Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Process ID: {this.monitoredProcess.Id} (Name: {this.monitoredProcess.ProcessName}) has already exited.");
-				this.monitoredProcess = null; // Clear reference
 				return;
 			}
 
 			try
 			{
+				this.monitoredProcess.Refresh(); // Get latest state
+				if (this.monitoredProcess.HasExited)
+				{
+					Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Process ID: {this.monitoredProcess.Id} (Name: {this.monitoredProcess.ProcessName}) has already exited, no need to kill.");
+					this.monitoredProcess = null; // Clear reference if it already exited
+					return;
+				}
+
 				Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Killing specific process ID: {this.monitoredProcess.Id} (Name: {this.monitoredProcess.ProcessName})...");
 				this.monitoredProcess.Kill();
 				this.monitoredProcess.WaitForExit(5000); // Wait up to 5 seconds for the process to exit
@@ -235,7 +280,7 @@ namespace AppHealthMonitor
 				}
 				else
 				{
-					Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Warning: Process ID: {this.monitoredProcess.Id} did not exit after kill command.");
+					Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Warning: Process ID: {this.monitoredProcess.Id} did not exit after kill command. It might be stuck.");
 				}
 			}
 			catch (Exception ex)
@@ -244,7 +289,7 @@ namespace AppHealthMonitor
 			}
 			finally
 			{
-				this.monitoredProcess = null; // Always clear the reference after attempting to kill
+				this.monitoredProcess = null; // Always clear the reference after attempting to kill, regardless of success
 			}
 		}
 
@@ -260,17 +305,20 @@ namespace AppHealthMonitor
 				{
 					FileName = this.applicationExePath,
 					Arguments = this.launchArguments,
-					UseShellExecute = true // Set to true to launch as a separate process, allowing it to run independently
+					UseShellExecute = true,
+					RedirectStandardOutput = false,
+					RedirectStandardError = false,
+					CreateNoWindow = false,
 				};
 
-				this.monitoredProcess = Process.Start(startInfo); // Store the launched process
+				this.monitoredProcess = Process.Start(startInfo);
 				if (this.monitoredProcess != null)
 				{
 					Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Application launched successfully. Process ID: {this.monitoredProcess.Id}");
 				}
 				else
 				{
-					Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Warning: Process.Start returned null for '{this.applicationExePath}'.");
+					Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Warning: Process.Start returned null for '{this.applicationExePath}'. This might indicate a problem.");
 				}
 			}
 			catch (Exception ex)
@@ -318,9 +366,13 @@ namespace AppHealthMonitor
 			{
 				try
 				{
-					byte[] datagram = Encoding.UTF8.GetBytes("healththis.check");
+					// For UDP, "responsive" often just means we can send a datagram without an immediate error.
+					// True responsiveness (e.g., getting a reply) would require the target app to send one back.
+					// This simple check confirms if the OS allows sending to that port.
+					byte[] datagram = Encoding.UTF8.GetBytes("health_check_ping");
 					var sendTask = udpClient.SendAsync(datagram, datagram.Length, host, port);
 
+					// We just care if the send operation completes or times out
 					if (await Task.WhenAny(sendTask, Task.Delay(timeoutMilliseconds, this.cancellationToken)) == sendTask)
 					{
 						this.cancellationToken.ThrowIfCancellationRequested();
@@ -352,13 +404,17 @@ namespace AppHealthMonitor
 			{
 				try
 				{
+					// Set a reasonable connection timeout for the WebSocket
+					ws.Options.KeepAliveInterval = TimeSpan.Zero; // Don't send keep-alives during connect attempt
 					var connectTask = ws.ConnectAsync(new Uri(webSocketUri), this.cancellationToken);
+
 					if (await Task.WhenAny(connectTask, Task.Delay(timeoutMilliseconds, this.cancellationToken)) == connectTask)
 					{
 						this.cancellationToken.ThrowIfCancellationRequested();
 						if (ws.State == WebSocketState.Open)
 						{
-							await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "Health check", this.cancellationToken);
+							// Close the connection immediately after successful establishment
+							await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "Health check complete", CancellationToken.None); // Use CancellationToken.None for graceful close
 							return true;
 						}
 						else
