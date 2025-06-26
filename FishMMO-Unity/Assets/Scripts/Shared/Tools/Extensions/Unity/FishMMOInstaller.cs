@@ -300,7 +300,7 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Logs a message to the console and Unity's Debug.Log.
+		/// Logs a message to the console.
 		/// </summary>
 		private void Log(string message, bool logTime = false)
 		{

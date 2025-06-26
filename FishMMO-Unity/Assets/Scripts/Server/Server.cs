@@ -93,7 +93,7 @@ namespace FishMMO.Server
 			Log.Debug("Server: Current working directory[" + workingDirectory + "]");
 
 			// load configuration
-			Configuration.GlobalSettings = new Configuration(workingDirectory);
+			Configuration.SetGlobalSettings(new Configuration(workingDirectory));
 			if (!Configuration.GlobalSettings.Load(serverTypeName + Configuration.EXTENSION))
 			{
 				// if we failed to load the file.. save a new one

@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b6e0592da3f7497449a761889c6dfaf2, type: 3}
   m_Name: FishMMO Patch Server Build Settings
   m_EditorClassIdentifier: 
-  PathToClassLibraryCsproj: ../FishMMO-AppHealthMonitor/AppHealthMonitor/AppHealthMonitor.csproj
+  PathToClassLibraryCsproj: ../FishMMO-WebServers/PatcherASP.NET/Patcher/Patcher.csproj
   OutputDirectory: C:/Users/jim/Desktop/Builds/Patcher Server
   UseDefaultOutputPath: 0
   BuildConfiguration: Release

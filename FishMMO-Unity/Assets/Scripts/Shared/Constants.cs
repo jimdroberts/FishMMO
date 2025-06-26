@@ -60,7 +60,7 @@ namespace FishMMO.Shared
 			/// <summary>
 			/// IPFetch Host should be a secure HTTPS connection as it's connecting to NGINX over SSL.
 			/// </summary>
-			public static readonly string IPFetchHost = "https://127.0.0.1:8080/";
+			public static readonly string IPFetchHost = "http://127.0.0.1:8080/";
 
 			public static readonly string DatabaseDirectory = "FishMMO-Database";
 			public static readonly string DatabaseProjectDirectory = "FishMMO-DB";
