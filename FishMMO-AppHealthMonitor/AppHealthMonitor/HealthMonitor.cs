@@ -22,7 +22,9 @@ namespace AppHealthMonitor
 		private readonly TimeSpan initialHealthCheckDelay = TimeSpan.FromSeconds(30);
 		private readonly TimeSpan processCrashRestartDelay = TimeSpan.FromSeconds(10);
 
-
+		// Helper property to determine if only process monitoring is active
+		private bool IsProcessOnlyMonitoring => this.portTypes.Count == 1 && this.portTypes.Contains(PortType.None);
+		
 		/// <summary>
 		/// Initializes a new instance of the HealthMonitor class.
 		/// </summary>
@@ -88,63 +90,73 @@ namespace AppHealthMonitor
 					// Give it a moment to start up after crash restart
 					await Task.Delay(TimeSpan.FromSeconds(5), this.cancellationToken);
 				}
-				else // Process IS running, now check ports
+				else // Process IS running
 				{
-					bool portsHealthy = false;
-					int retryCount = 0;
-					TimeSpan currentRetryDelay = this.checkInterval; // Start with the base interval for the first potential retry
-
-					while (retryCount < MaxHealthCheckRetries)
+					// If configured for process-only monitoring via PortType.None
+					if (IsProcessOnlyMonitoring)
 					{
-						portsHealthy = await CheckApplicationPortsResponsiveness(); // Only checks ports
+						Console.ForegroundColor = ConsoleColor.Green;
+						Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Application process is running. Monitoring only process status.");
+						Console.ResetColor();
+					}
+					else // Perform port checks as well
+					{
+						bool portsHealthy = false;
+						int retryCount = 0;
+						TimeSpan currentRetryDelay = this.checkInterval; // Start with the base interval for the first potential retry
 
-						if (portsHealthy)
+						while (retryCount < MaxHealthCheckRetries)
 						{
-							Console.ForegroundColor = ConsoleColor.Green;
-							Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Application process is running and ports are healthy.");
-							Console.ResetColor();
-							break; // Exit retry loop, application is healthy
-						}
-						else
-						{
-							retryCount++;
-							if (retryCount < MaxHealthCheckRetries)
+							portsHealthy = await CheckApplicationPortsResponsiveness(); // Checks ports
+
+							if (portsHealthy)
 							{
-								Console.ForegroundColor = ConsoleColor.Magenta;
-								Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Ports are unresponsive (Attempt {retryCount}/{MaxHealthCheckRetries}). Retrying in {currentRetryDelay.TotalSeconds:F1} seconds...");
+								Console.ForegroundColor = ConsoleColor.Green;
+								Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Application process is running and ports are healthy.");
 								Console.ResetColor();
+								break; // Exit retry loop, application is healthy
+							}
+							else
+							{
+								retryCount++;
+								if (retryCount < MaxHealthCheckRetries)
+								{
+									Console.ForegroundColor = ConsoleColor.Magenta;
+									Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Ports are unresponsive (Attempt {retryCount}/{MaxHealthCheckRetries}). Retrying in {currentRetryDelay.TotalSeconds:F1} seconds...");
+									Console.ResetColor();
 
-								try
-								{
-									await Task.Delay(currentRetryDelay, this.cancellationToken);
-								}
-								catch (OperationCanceledException)
-								{
-									Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Monitoring task cancelled during retry delay for ports.");
-									return; // Exit StartMonitoring entirely if cancelled
-								}
+									try
+									{
+										await Task.Delay(currentRetryDelay, this.cancellationToken);
+									}
+									catch (OperationCanceledException)
+									{
+										Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Monitoring task cancelled during retry delay for ports.");
+										return; // Exit StartMonitoring entirely if cancelled
+									}
 
-								// Reduce delay by 50% for the next retry
-								currentRetryDelay = TimeSpan.FromMilliseconds(currentRetryDelay.TotalMilliseconds * 0.5);
-								if (currentRetryDelay < TimeSpan.FromSeconds(1)) // Ensure a minimum delay, e.g., 1 second
-								{
-									currentRetryDelay = TimeSpan.FromSeconds(1);
+									// Reduce delay by 50% for the next retry, ensuring a minimum delay
+									currentRetryDelay = TimeSpan.FromMilliseconds(currentRetryDelay.TotalMilliseconds * 0.5);
+									if (currentRetryDelay < TimeSpan.FromSeconds(1))
+									{
+										currentRetryDelay = TimeSpan.FromSeconds(1);
+									}
 								}
 							}
 						}
-					}
 
-					// If after all retries, the ports are still not healthy, then restart
-					if (!portsHealthy)
-					{
-						Console.ForegroundColor = ConsoleColor.Red;
-						Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Ports detected as unresponsive after {MaxHealthCheckRetries} retries. Attempting to restart application...");
-						Console.ResetColor();
+						// If after all retries, the ports are still not healthy, then restart
+						if (!portsHealthy)
+						{
+							Console.ForegroundColor = ConsoleColor.Red;
+							Console.WriteLine($"[{DateTime.Now}] [{this.appName}] Ports detected as unresponsive after {MaxHealthCheckRetries} retries. Attempting to restart application...");
+							Console.ResetColor();
 
-						KillApplication();
-						LaunchApplication();
-						// Give it a moment to start up after restart
-						await Task.Delay(TimeSpan.FromSeconds(5), this.cancellationToken);
+							KillApplication();
+							LaunchApplication();
+							// Give it a moment to start up after restart
+							await Task.Delay(TimeSpan.FromSeconds(5), this.cancellationToken);
+						}
 					}
 				}
 

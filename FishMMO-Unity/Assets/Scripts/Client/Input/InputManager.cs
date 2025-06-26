@@ -195,6 +195,23 @@ namespace FishMMO.Client
 			LoadConfiguration();
 		}
 
+		/// <summary>
+		/// Returns an enumerable collection of all registered virtual key names.
+		/// Useful for populating UI lists or validating input.
+		/// </summary>
+		public static IEnumerable<string> GetVirtualKeyNames()
+		{
+			return virtualKeyMaps.Keys;
+		}
+
+		/// <summary>
+		/// Returns an enumerable collection of all registered virtual axis names.
+		/// </summary>
+		public static IEnumerable<string> GetVirtualAxisNames()
+		{
+			return axisMaps.Keys;
+		}
+
 		private static void LoadConfiguration()
 		{
 			// Apply Saved Overrides from Global Configuration

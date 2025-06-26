@@ -18,7 +18,7 @@ MonoBehaviour:
   LogOutput: "Starting all builds...\n--- Starting Build for: FishMMO Dependencies
     Build Settings ---\nPerforming clean for 'FishMMO Dependencies Build Settings'...\nExecuting:
     dotnet clean \"D:\\FishMMO Dev\\FishMMO-Dependencies\\FishMMO-Dependencies.csproj\"
-    --configuration Release --framework netstandard2.1\nBuild started 6/21/2025 12:31:16
+    --configuration Release --framework netstandard2.1\nBuild started 6/26/2025 12:06:41
     AM.\r\n     1>Project \"D:\\FishMMO Dev\\FishMMO-Dependencies\\FishMMO-Dependencies.csproj\"
     on node 1 (Clean target(s)).\r\n     1>CoreClean:\r\n         Deleting file \"D:\\FishMMO
     Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\FishMMO-Dependencies.deps.json\".\r\n        
@@ -134,16 +134,16 @@ MonoBehaviour:
     Deleting file \"D:\\FishMMO Dev\\FishMMO-Dependencies\\obj\\Release\\netstandard2.1\\FishMMO-Dependencies.pdb\".\r\n    
     1>Done Building Project \"D:\\FishMMO Dev\\FishMMO-Dependencies\\FishMMO-Dependencies.csproj\"
     (Clean target(s)).\r\n\r\nBuild succeeded.\r\n    0 Warning(s)\r\n    0 Error(s)\r\n\r\nTime
-    Elapsed 00:00:00.29\r\n\nClean for 'FishMMO Dependencies Build Settings' completed
+    Elapsed 00:00:00.45\r\n\nClean for 'FishMMO Dependencies Build Settings' completed
     successfully.\nExecuting: dotnet build \"D:\\FishMMO Dev\\FishMMO-Dependencies\\FishMMO-Dependencies.csproj\"
     --configuration Release --framework netstandard2.1\n  Determining projects to
     restore...\r\n  All projects are up-to-date for restore.\r\n  FishMMO-Dependencies
     -> D:\\FishMMO Dev\\FishMMO-Dependencies\\bin\\Release\\netstandard2.1\\FishMMO-Dependencies.dll\r\n\r\nBuild
-    succeeded.\r\n    0 Warning(s)\r\n    0 Error(s)\r\n\r\nTime Elapsed 00:00:00.35\r\n\nBuild
+    succeeded.\r\n    0 Warning(s)\r\n    0 Error(s)\r\n\r\nTime Elapsed 00:00:01.71\r\n\nBuild
     for 'FishMMO Dependencies Build Settings' completed successfully!\n\n\n--- Starting
     Build for: FishMMO Database Build Settings ---\nPerforming clean for 'FishMMO
     Database Build Settings'...\nExecuting: dotnet clean \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\FishMMO-DB-Migrator.csproj\"
-    --configuration Release --framework net8.0\nBuild started 6/21/2025 12:31:18
+    --configuration Release --framework net8.0\nBuild started 6/26/2025 12:06:44
     AM.\r\n     1>Project \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\FishMMO-DB-Migrator.csproj\"
     on node 1 (Clean target(s)).\r\n     1>CoreClean:\r\n         Deleting file \"D:\\FishMMO
     Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\bin\\Release\\net8.0\\FishMMO-DB-Migrator.exe\".\r\n        
@@ -211,11 +211,11 @@ MonoBehaviour:
     2>Done Building Project \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj\"
     (Clean target(s)).\r\n     1>Done Building Project \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\FishMMO-DB-Migrator.csproj\"
     (Clean target(s)).\r\n\r\nBuild succeeded.\r\n    0 Warning(s)\r\n    0 Error(s)\r\n\r\nTime
-    Elapsed 00:00:00.36\r\n\nClean for 'FishMMO Database Build Settings' completed
+    Elapsed 00:00:00.50\r\n\nClean for 'FishMMO Database Build Settings' completed
     successfully.\nExecuting: dotnet build \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\FishMMO-DB-Migrator.csproj\"
     --configuration Release --framework net8.0\n  Determining projects to restore...\r\n 
     All projects are up-to-date for restore.\r\n  FishMMO-DB -> D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\bin\\Release\\netstandard2.1\\FishMMO-DB.dll\r\n 
     FishMMO-DB-Migrator -> D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB-Migrator\\bin\\Release\\net8.0\\FishMMO-DB-Migrator.dll\r\n\r\nBuild
-    succeeded.\r\n    0 Warning(s)\r\n    0 Error(s)\r\n\r\nTime Elapsed 00:00:00.57\r\n\nBuild
+    succeeded.\r\n    0 Warning(s)\r\n    0 Error(s)\r\n\r\nTime Elapsed 00:00:02.36\r\n\nBuild
     for 'FishMMO Database Build Settings' completed successfully!\n\n\n\nAll requested
     builds finished. Refreshing Unity AssetDatabase...\nUnity AssetDatabase refreshed.\n"

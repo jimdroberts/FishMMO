@@ -1,12 +1,10 @@
 ﻿using FishNet.Authenticating;
 using FishNet.Connection;
-using FishNet.Managing.Logging;
 using FishNet.Managing;
 using FishNet.Transporting;
 using System;
 using System.Security.Cryptography;
 using System.Text;
-using UnityEngine;
 using SecureRemotePassword;
 using FishMMO.Shared;
 using System.Runtime.CompilerServices;

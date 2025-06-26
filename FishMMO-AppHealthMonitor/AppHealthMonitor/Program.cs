@@ -60,6 +60,19 @@ namespace AppHealthMonitor
 						continue;
 					}
 
+					// Ensure PortTypes list is initialized to avoid NullReferenceException
+					if (appConfig.PortTypes == null)
+					{
+						appConfig.PortTypes = new List<PortType> { PortType.None };
+					}
+					// If PortTypes contains anything other than None, or if it's empty, and MonitoredPort is 0,
+					// we might need to adjust default behavior or warn. For now, we'll let HealthMonitor handle.
+					// If PortTypes is empty, default to None.
+					if (!appConfig.PortTypes.Any())
+					{
+						appConfig.PortTypes.Add(PortType.None);
+					}
+
 					TimeSpan checkInterval = TimeSpan.FromSeconds(appConfig.CheckIntervalSeconds > 0 ? appConfig.CheckIntervalSeconds : 10); // Default to 10 seconds
 
 					Console.WriteLine($"  [{appConfig.Name}]");
