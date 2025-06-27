@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a8dc21d8c107e2741b39eb876d8bb887, type: 3}
   m_Name: Orc
   m_EditorClassIdentifier: 
-  Prefab: {fileID: 5839652419922276934, guid: dbec2b75ed2ccff42a670b790e5cf889, type: 3}
+  Prefab: {fileID: 4573496687782621821, guid: 7b96a8c61db3a844ebc4c92b2487b0d1, type: 3}
   PlaceholderModel:
     m_AssetGUID: 7737647c22c1fc64a88d5cd030c352ce
     m_SubObjectName: 

@@ -161,11 +161,6 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 67671c10327f3b144a21191076a7af5b
-    m_Address: Assets/Prefabs/Shared/Entity/PlayableCharacters/Human.prefab
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 67e5b419b5e646f4895935cf06fca178
     m_Address: Assets/Prefabs/Shared/Entity/Regions/ChangeFog/StartScene B Fog.asset
     m_ReadOnly: 0
@@ -263,11 +258,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d9b40c4bb7d3f5d4c965814c5433ce65
     m_Address: Assets/Prefabs/Shared/Entity/Regions/SunAndMoon.prefab
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: dbec2b75ed2ccff42a670b790e5cf889
-    m_Address: Assets/Prefabs/Shared/Entity/PlayableCharacters/Orc.prefab
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

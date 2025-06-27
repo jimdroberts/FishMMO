@@ -68,7 +68,7 @@ namespace FishMMO.Shared
 
 #if !UNITY_SERVER
 			// FactionController stores a reference to the RaceTemplate.
-			if (this.TryGet(out FactionController factionController))
+			if (this.TryGet(out IFactionController factionController))
 			{
 				RaceTemplate raceTemplate = factionController.RaceTemplate;
 				int modelIndex = -1;
