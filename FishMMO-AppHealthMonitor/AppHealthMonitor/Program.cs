@@ -14,9 +14,25 @@ namespace AppHealthMonitor
 		// List to keep track of HealthMonitor instances for explicit cleanup
 		private static List<HealthMonitor> activeMonitors = new List<HealthMonitor>();
 
+		/// <summary>
+		/// Helper method for consistent logging to the console.
+		/// </summary>
+		/// <param name="message">The message to log.</param>
+		/// <param name="color">Optional. The foreground color for the message.</param>
+		private static void Log(string message, ConsoleColor? color = null)
+		{
+			if (color.HasValue)
+			{
+				Console.ForegroundColor = color.Value;
+			}
+			Console.WriteLine(message);
+			Console.ResetColor(); // Always reset color after writing
+		}
+
+
 		static async Task Main(string[] args)
 		{
-			Console.WriteLine("Starting Application Health Monitor Daemon...");
+			Log("Starting Application Health Monitor Daemon...");
 
 			// --- Load Configuration from appsettings.json ---
 			var builder = new ConfigurationBuilder()
@@ -29,9 +45,7 @@ namespace AppHealthMonitor
 
 			if (appConfigs == null || appConfigs.Count == 0)
 			{
-				Console.ForegroundColor = ConsoleColor.Red;
-				Console.WriteLine("Error: No application configurations found in 'Applications' section of appsettings.json. Please configure at least one application.");
-				Console.ResetColor();
+				Log("Error: No application configurations found in 'Applications' section of appsettings.json. Please configure at least one application.", ConsoleColor.Red);
 				return;
 			}
 
@@ -43,7 +57,7 @@ namespace AppHealthMonitor
 				{
 					if (!sharedDaemonCts.IsCancellationRequested)
 					{
-						Console.WriteLine("\nCtrl+C pressed. Signalling daemon shutdown...");
+						Log("\nCtrl+C pressed. Signalling daemon shutdown...", ConsoleColor.Cyan);
 						sharedDaemonCts.Cancel();
 						eventArgs.Cancel = true; // Prevent immediate termination
 					}
@@ -55,19 +69,15 @@ namespace AppHealthMonitor
 				// Start the console command reader in parallel
 				Task consoleReaderTask = ConsoleCommandReader(sharedDaemonCts, startMonitoringEvent);
 
-				Console.ForegroundColor = ConsoleColor.Green;
-				Console.WriteLine("\nApplication Health Monitor Daemon is ready.");
-				Console.WriteLine("Type 'help' to list available commands.");
-				Console.ResetColor();
+				Log("\nApplication Health Monitor Daemon is ready.", ConsoleColor.Green);
+				Log("Type 'help' to list available commands.", ConsoleColor.Green);
 
 				// Wait for the main orchestration loop and console reader to complete (when daemon-wide shutdown is requested)
 				await Task.WhenAll(orchestrationLoopTask, consoleReaderTask);
 
 				// Final cleanup: ensure all processes are terminated when the daemon itself is stopping.
 				// This handles cases where 'stop'/'force-kill' might not have been called, but 'shutdown'/'exit' was.
-				Console.ForegroundColor = ConsoleColor.Yellow;
-				Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Daemon] All daemon tasks have concluded. Initiating final cleanup of all monitored applications.");
-				Console.ResetColor();
+				Log($"[{DateTime.Now:HH:mm:ss}] [Daemon] All daemon tasks have concluded. Initiating final cleanup of all monitored applications.", ConsoleColor.Yellow);
 
 				foreach (var monitor in activeMonitors.ToList()) // ToList to ensure collection isn't modified during enumeration if it's cleared elsewhere
 				{
@@ -75,9 +85,7 @@ namespace AppHealthMonitor
 				}
 				activeMonitors.Clear(); // Clear the list after cleanup
 
-				Console.ForegroundColor = ConsoleColor.Yellow;
-				Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Daemon] All monitored applications terminated. Application Health Monitor Daemon stopped gracefully.");
-				Console.ResetColor();
+				Log($"[{DateTime.Now:HH:mm:ss}] [Daemon] All monitored applications terminated. Application Health Monitor Daemon stopped gracefully.", ConsoleColor.Yellow);
 			}
 		}
 
@@ -95,9 +103,7 @@ namespace AppHealthMonitor
 			{
 				while (!daemonCancellationToken.IsCancellationRequested)
 				{
-					Console.ForegroundColor = ConsoleColor.DarkGray;
-					Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Orchestration] Waiting for 'start' command...");
-					Console.ResetColor();
+					Log($"[{DateTime.Now:HH:mm:ss}] [Orchestration] Waiting for 'start' command...", ConsoleColor.DarkGray);
 
 					// This will block until startMonitoringEvent.Set() is called.
 					try
@@ -107,7 +113,7 @@ namespace AppHealthMonitor
 					catch (OperationCanceledException)
 					{
 						// Daemon is shutting down, exit loop
-						Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Orchestration] Waiting for start command cancelled. Daemon shutting down.");
+						Log($"[{DateTime.Now:HH:mm:ss}] [Orchestration] Waiting for start command cancelled. Daemon shutting down.");
 						break;
 					}
 
@@ -115,9 +121,7 @@ namespace AppHealthMonitor
 					// This ensures that the event is always ready to receive a new Set() signal for the next monitoring cycle.
 					startMonitoringEvent.Reset();
 
-					Console.ForegroundColor = ConsoleColor.Green;
-					Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Orchestration] 'start' command received. Launching application monitors...");
-					Console.ResetColor();
+					Log($"[{DateTime.Now:HH:mm:ss}] [Orchestration] 'start' command received. Launching application monitors...", ConsoleColor.Green);
 
 					using (currentMonitoringCts = new CancellationTokenSource())
 					using (var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(currentMonitoringCts.Token, daemonCancellationToken))
@@ -129,9 +133,7 @@ namespace AppHealthMonitor
 						{
 							if (linkedCts.Token.IsCancellationRequested)
 							{
-								Console.ForegroundColor = ConsoleColor.Yellow;
-								Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Orchestration] Monitoring launch cancelled during setup.");
-								Console.ResetColor();
+								Log($"[{DateTime.Now:HH:mm:ss}] [Orchestration] Monitoring launch cancelled during setup.", ConsoleColor.Yellow);
 								break;
 							}
 
@@ -140,9 +142,7 @@ namespace AppHealthMonitor
 							if (string.IsNullOrWhiteSpace(appConfig.Name) ||
 								string.IsNullOrWhiteSpace(appConfig.ApplicationExePath))
 							{
-								Console.ForegroundColor = ConsoleColor.Yellow;
-								Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Orchestration] Skipping invalid configuration entry during launch: Name='{appConfig.Name}' ExePath='{appConfig.ApplicationExePath}'.");
-								Console.ResetColor();
+								Log($"[{DateTime.Now:HH:mm:ss}] [Orchestration] Skipping invalid configuration entry during launch: Name='{appConfig.Name}' ExePath='{appConfig.ApplicationExePath}'.", ConsoleColor.Yellow);
 								continue;
 							}
 
@@ -153,24 +153,24 @@ namespace AppHealthMonitor
 
 							TimeSpan checkInterval = TimeSpan.FromSeconds(appConfig.CheckIntervalSeconds > 0 ? appConfig.CheckIntervalSeconds : 10);
 
-							Console.WriteLine($"\n--- Launching Monitor for: [{appConfig.Name}] ---");
-							Console.WriteLine($"    ApplicationExePath: {appConfig.ApplicationExePath}");
+							Log($"\n--- Launching Monitor for: [{appConfig.Name}] ---");
+							Log($"    ApplicationExePath: {appConfig.ApplicationExePath}");
 							if (appConfig.PortTypes.Count == 1 && appConfig.PortTypes.Contains(PortType.None))
 							{
-								Console.WriteLine($"    Monitoring Mode: Process Only (No Port Checks)");
+								Log($"    Monitoring Mode: Process Only (No Port Checks)");
 							}
 							else
 							{
-								Console.WriteLine($"    MonitoredPort: {appConfig.MonitoredPort} (Types: {string.Join(", ", appConfig.PortTypes)})");
+								Log($"    MonitoredPort: {appConfig.MonitoredPort} (Types: {string.Join(", ", appConfig.PortTypes)})");
 							}
-							Console.WriteLine($"    LaunchArguments: {appConfig.LaunchArguments}");
-							Console.WriteLine($"    CheckInterval: {checkInterval.TotalSeconds} seconds");
-							Console.WriteLine($"    LaunchDelay: {appConfig.LaunchDelaySeconds} seconds");
-							Console.WriteLine($"    CPU Threshold: {appConfig.CpuThresholdPercent}%");
-							Console.WriteLine($"    Memory Threshold: {appConfig.MemoryThresholdMB}MB");
-							Console.WriteLine($"    Graceful Shutdown Timeout: {appConfig.GracefulShutdownTimeoutSeconds} seconds");
-							Console.WriteLine($"    Restart Backoff (Initial/Max Attempts/Max Delay): {appConfig.InitialRestartDelaySeconds}s / {appConfig.MaxRestartAttempts} / {appConfig.MaxRestartDelaySeconds}s");
-							Console.WriteLine($"    Circuit Breaker (Failures/Reset Timeout): {appConfig.CircuitBreakerFailureThreshold} / {appConfig.CircuitBreakerResetTimeoutMinutes}min");
+							Log($"    LaunchArguments: {appConfig.LaunchArguments}");
+							Log($"    CheckInterval: {checkInterval.TotalSeconds} seconds");
+							Log($"    LaunchDelay: {appConfig.LaunchDelaySeconds} seconds");
+							Log($"    CPU Threshold: {appConfig.CpuThresholdPercent}%");
+							Log($"    Memory Threshold: {appConfig.MemoryThresholdMB}MB");
+							Log($"    Graceful Shutdown Timeout: {appConfig.GracefulShutdownTimeoutSeconds} seconds");
+							Log($"    Restart Backoff (Initial/Max Attempts/Max Delay): {appConfig.InitialRestartDelaySeconds}s / {appConfig.MaxRestartAttempts} / {appConfig.MaxRestartDelaySeconds}s");
+							Log($"    Circuit Breaker (Failures/Reset Timeout): {appConfig.CircuitBreakerFailureThreshold} / {appConfig.CircuitBreakerResetTimeoutMinutes}min");
 
 							HealthMonitor monitor = new HealthMonitor(
 								appConfig.ApplicationExePath,
@@ -194,18 +194,14 @@ namespace AppHealthMonitor
 
 							if (appConfig.LaunchDelaySeconds > 0 && i < appConfigs.Count - 1)
 							{
-								Console.ForegroundColor = ConsoleColor.Cyan;
-								Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Orchestration] Pausing for {appConfig.LaunchDelaySeconds} seconds before starting the next monitor...");
-								Console.ResetColor();
+								Log($"[{DateTime.Now:HH:mm:ss}] [Orchestration] Pausing for {appConfig.LaunchDelaySeconds} seconds before starting the next monitor...", ConsoleColor.Cyan);
 								try
 								{
 									await Task.Delay(TimeSpan.FromSeconds(appConfig.LaunchDelaySeconds), linkedCts.Token);
 								}
 								catch (OperationCanceledException)
 								{
-									Console.ForegroundColor = ConsoleColor.Yellow;
-									Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Orchestration] Launch delay cancelled during monitor setup.");
-									Console.ResetColor();
+									Log($"[{DateTime.Now:HH:mm:ss}] [Orchestration] Launch delay cancelled during monitor setup.", ConsoleColor.Yellow);
 									break;
 								}
 							}
@@ -213,59 +209,47 @@ namespace AppHealthMonitor
 
 						if (!currentMonitoringTasks.Any())
 						{
-							Console.ForegroundColor = ConsoleColor.Yellow;
-							Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Orchestration] No valid applications were launched for monitoring in this cycle.");
-							Console.ResetColor();
-							// If no valid apps, orchestration loop will naturally hit startMonitoringEvent.Wait() again
+							Log($"[{DateTime.Now:HH:mm:ss}] [Orchestration] No valid applications were launched for monitoring in this cycle.", ConsoleColor.Yellow);
 							continue;
 						}
 						else
 						{
-							Console.ForegroundColor = ConsoleColor.Green;
-							Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Orchestration] All configured application monitors are now active and running.");
-							Console.ResetColor();
+							Log($"[{DateTime.Now:HH:mm:ss}] [Orchestration] All configured application monitors are now active and running.", ConsoleColor.Green);
 						}
 
 						// Wait for all current monitoring tasks to complete
 						try
 						{
-							Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Orchestration] Waiting for current monitoring tasks to complete or be cancelled...");
+							Log($"[{DateTime.Now:HH:mm:ss}] [Orchestration] Waiting for current monitoring tasks to complete or be cancelled...");
 							await Task.WhenAll(currentMonitoringTasks);
-							Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Orchestration] All current monitoring tasks completed normally.");
+							Log($"[{DateTime.Now:HH:mm:ss}] [Orchestration] All current monitoring tasks completed normally.");
 						}
 						catch (OperationCanceledException)
 						{
-							Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Orchestration] One or more monitoring tasks were cancelled (e.g., by 'stop' or daemon shutdown).");
-							// Do not re-throw, allow cleanup to proceed.
+							Log($"[{DateTime.Now:HH:mm:ss}] [Orchestration] One or more monitoring tasks were cancelled (e.g., by 'stop' or daemon shutdown).");
 						}
 					} // currentMonitoringCts is disposed here
 
-					Console.ForegroundColor = ConsoleColor.Yellow;
-					Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Orchestration] Current monitoring cycle concluded. Initiating cleanup of applications.");
-					Console.ResetColor();
+					Log($"[{DateTime.Now:HH:mm:ss}] [Orchestration] Current monitoring cycle concluded. Initiating cleanup of applications.", ConsoleColor.Yellow);
 
 					foreach (var monitor in activeMonitors.ToList())
 					{
-						Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Orchestration] Calling KillApplication for a monitor.");
+						Log($"[{DateTime.Now:HH:mm:ss}] [Orchestration] Calling KillApplication for a monitor.");
 						monitor.KillApplication();
 					}
 					activeMonitors.Clear();
 
-					Console.ForegroundColor = ConsoleColor.Yellow;
-					Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Orchestration] Applications cleaned up for this cycle.");
-					Console.ResetColor();
+					Log($"[{DateTime.Now:HH:mm:ss}] [Orchestration] Applications cleaned up for this cycle.", ConsoleColor.Yellow);
 				}
-				Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Orchestration] Monitoring orchestration loop exited.");
+				Log($"[{DateTime.Now:HH:mm:ss}] [Orchestration] Monitoring orchestration loop exited.");
 			}
 			catch (OperationCanceledException)
 			{
-				Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Orchestration] Monitoring orchestration loop was cancelled by daemon shutdown.");
+				Log($"[{DateTime.Now:HH:mm:ss}] [Orchestration] Monitoring orchestration loop was cancelled by daemon shutdown.");
 			}
 			catch (Exception ex)
 			{
-				Console.ForegroundColor = ConsoleColor.Red;
-				Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Orchestration] An unhandled error occurred in the monitoring orchestration loop: {ex.Message}");
-				Console.ResetColor();
+				Log($"[{DateTime.Now:HH:mm:ss}] [Orchestration] An unhandled error occurred in the monitoring orchestration loop: {ex.Message}", ConsoleColor.Red);
 			}
 		}
 
@@ -282,14 +266,12 @@ namespace AppHealthMonitor
 
 			commands.Add("help", new ConsoleCommand("help", "Lists all available commands.", async () =>
 			{
-				Console.ForegroundColor = ConsoleColor.Yellow;
-				Console.WriteLine("\n--- Available Commands ---");
+				Log("\n--- Available Commands ---", ConsoleColor.Yellow);
 				foreach (var cmd in commands.Values.OrderBy(c => c.Name))
 				{
-					Console.WriteLine($"  {cmd.Name,-15} - {cmd.Description}");
+					Log($"  {cmd.Name,-15} - {cmd.Description}");
 				}
-				Console.WriteLine("--------------------------");
-				Console.ResetColor();
+				Log("--------------------------", ConsoleColor.Yellow);
 				await Task.CompletedTask;
 			}));
 
@@ -297,15 +279,11 @@ namespace AppHealthMonitor
 			{
 				if (IsMonitoringActive())
 				{
-					Console.ForegroundColor = ConsoleColor.Yellow;
-					Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Daemon] Monitoring is already active.");
-					Console.ResetColor();
+					Log($"[{DateTime.Now:HH:mm:ss}] [Daemon] Monitoring is already active.", ConsoleColor.Yellow);
 				}
 				else
 				{
-					Console.ForegroundColor = ConsoleColor.Cyan;
-					Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Daemon] 'start' command received. Signalling monitoring to begin...");
-					Console.ResetColor();
+					Log($"[{DateTime.Now:HH:mm:ss}] [Daemon] 'start' command received. Signalling monitoring to begin...", ConsoleColor.Cyan);
 					startEvent.Set();
 				}
 				await Task.CompletedTask;
@@ -315,16 +293,12 @@ namespace AppHealthMonitor
 			{
 				if (IsMonitoringActive())
 				{
-					Console.ForegroundColor = ConsoleColor.Cyan;
-					Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Daemon] 'stop' command received. Cancelling current monitoring cycle (currentMonitoringCts)...");
-					Console.ResetColor();
+					Log($"[{DateTime.Now:HH:mm:ss}] [Daemon] 'stop' command received. Cancelling current monitoring cycle (currentMonitoringCts)...", ConsoleColor.Cyan);
 					currentMonitoringCts.Cancel();
 				}
 				else
 				{
-					Console.ForegroundColor = ConsoleColor.Yellow;
-					Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Daemon] Monitoring is not active, or already stopping.");
-					Console.ResetColor();
+					Log($"[{DateTime.Now:HH:mm:ss}] [Daemon] Monitoring is not active, or already stopping.", ConsoleColor.Yellow);
 				}
 				await Task.CompletedTask;
 			}));
@@ -333,78 +307,64 @@ namespace AppHealthMonitor
 			{
 				if (IsMonitoringActive())
 				{
-					Console.ForegroundColor = ConsoleColor.Red;
-					Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Daemon] 'force-kill' command received. Immediately terminating all monitored processes...");
-					Console.ResetColor();
+					Log($"[{DateTime.Now:HH:mm:ss}] [Daemon] 'force-kill' command received. Immediately terminating all monitored processes...", ConsoleColor.Red);
 
 					foreach (var monitor in activeMonitors.ToList())
 					{
-						Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Daemon] Force-killing monitor process directly.");
+						Log($"[{DateTime.Now:HH:mm:ss}] [Daemon] Force-killing monitor process directly.");
 						monitor.KillApplication();
 					}
 					activeMonitors.Clear();
 
-					currentMonitoringCts.Cancel(); // Ensure the monitoring loop itself also stops
-					startEvent.Reset(); // Reset the start event so it waits for 'start' again
+					currentMonitoringCts.Cancel();
+					startEvent.Reset();
 				}
 				else
 				{
-					Console.ForegroundColor = ConsoleColor.Yellow;
-					Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Daemon] No active monitoring to force-kill.");
-					Console.ResetColor();
+					Log($"[{DateTime.Now:HH:mm:ss}] [Daemon] No active monitoring to force-kill.", ConsoleColor.Yellow);
 				}
 				await Task.CompletedTask;
 			}));
 
 			commands.Add("force-restart", new ConsoleCommand("force-restart", "Immediately terminates and then restarts all applications.", async () =>
 			{
-				if (IsMonitoringActive()) // Use the updated check
+				if (IsMonitoringActive())
 				{
-					Console.ForegroundColor = ConsoleColor.Red;
-					Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Daemon] 'force-restart' command received. Immediately terminating and then restarting all monitored processes...");
-					Console.ResetColor();
+					Log($"[{DateTime.Now:HH:mm:ss}] [Daemon] 'force-restart' command received. Immediately terminating and then restarting all monitored processes...", ConsoleColor.Red);
 
 					foreach (var monitor in activeMonitors.ToList())
 					{
-						Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Daemon] Force-killing monitor process directly for restart.");
+						Log($"[{DateTime.Now:HH:mm:ss}] [Daemon] Force-killing monitor process directly for restart.");
 						monitor.KillApplication();
 					}
 					activeMonitors.Clear();
 
-					currentMonitoringCts.Cancel(); // Signal current cycle to stop
-					startEvent.Set(); // Signal to restart the orchestration loop immediately after cleanup
-					Console.ForegroundColor = ConsoleColor.Green;
-					Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Daemon] Restart sequence initiated. Applications will re-launch shortly.");
-					Console.ResetColor();
+					currentMonitoringCts.Cancel();
+					startEvent.Set();
+					Log($"[{DateTime.Now:HH:mm:ss}] [Daemon] Restart sequence initiated. Applications will re-launch shortly.", ConsoleColor.Green);
 				}
-				else if (!startEvent.IsSet) // Only signal start if not already waiting for it
+				else if (!startEvent.IsSet)
 				{
-					Console.ForegroundColor = ConsoleColor.Yellow;
-					Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Daemon] Monitoring is not active. Signalling 'start' to launch applications for force-restart.");
-					Console.ResetColor();
+					Log($"[{DateTime.Now:HH:mm:ss}] [Daemon] Monitoring is not active. Signalling 'start' to launch applications for force-restart.", ConsoleColor.Yellow);
 					startEvent.Set();
 				}
 				else
 				{
-					Console.ForegroundColor = ConsoleColor.Yellow;
-					Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Daemon] Cannot force-restart: Monitoring cycle is already stopping or in an unexpected state.");
-					Console.ResetColor();
+					Log($"[{DateTime.Now:HH:mm:ss}] [Daemon] Cannot force-restart: Monitoring cycle is already stopping or in an unexpected state.", ConsoleColor.Yellow);
 				}
 				await Task.CompletedTask;
 			}));
 
 			commands.Add("shutdown", new ConsoleCommand("shutdown", "Gracefully stops the daemon and all monitored applications.", async () =>
 			{
-				Console.ForegroundColor = ConsoleColor.Cyan;
-				Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Daemon] 'shutdown' command received. Initiating graceful daemon shutdown...");
-				Console.ResetColor();
+				Log($"[{DateTime.Now:HH:mm:ss}] [Daemon] 'shutdown' command received. Initiating graceful daemon shutdown...", ConsoleColor.Cyan);
 
 				if (currentMonitoringCts != null && !currentMonitoringCts.IsCancellationRequested)
 				{
-					Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Daemon] Signalled active monitoring cycle to stop first.");
+					Log($"[{DateTime.Now:HH:mm:ss}] [Daemon] Signalled active monitoring cycle to stop first.");
 					currentMonitoringCts.Cancel();
 				}
-				sharedDaemonCts.Cancel(); // This will eventually stop the main orchestration loop and console reader
+				sharedDaemonCts.Cancel();
 				await Task.CompletedTask;
 			}));
 
@@ -428,7 +388,7 @@ namespace AppHealthMonitor
 
 				if (string.IsNullOrWhiteSpace(input))
 				{
-					continue; // If input is empty, just loop and re-prompt
+					continue;
 				}
 
 				if (commands.TryGetValue(input, out var command))
@@ -437,12 +397,10 @@ namespace AppHealthMonitor
 				}
 				else
 				{
-					Console.ForegroundColor = ConsoleColor.Yellow;
-					Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Daemon] Unknown command: '{input}'. Type 'help' to see available commands.");
-					Console.ResetColor();
+					Log($"[{DateTime.Now:HH:mm:ss}] [Daemon] Unknown command: '{input}'. Type 'help' to see available commands.", ConsoleColor.Yellow);
 				}
 			}
-			Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Daemon] Console command reader stopped.");
+			Log($"[{DateTime.Now:HH:mm:ss}] [Daemon] Console command reader stopped.");
 		}
 	}
 }

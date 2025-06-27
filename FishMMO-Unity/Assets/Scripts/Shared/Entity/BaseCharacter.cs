@@ -1,4 +1,5 @@
 ﻿using FishNet.Object;
+using FishNet.Utility.Extension;
 using UnityEngine;
 using System;
 using System.Collections.Generic;
@@ -61,11 +62,20 @@ namespace FishMMO.Shared
 				{
 					foreach (Transform child in MeshRoot)
 					{
+						if (child.gameObject.name.Contains("Labels") ||
+							child.gameObject.name.Contains("FollowPoint") ||
+							child.gameObject.name.Contains("SpawnPoint"))
+						{
+							continue;
+						}
 						child.gameObject.SetActive(false);
 						Destroy(child.gameObject);
 					}
 				}
-				Instantiate(go, Vector3.zero, Quaternion.identity, MeshRoot);
+				GameObject modelInstance = Instantiate(go);
+				modelInstance.transform.SetParent(MeshRoot);
+				modelInstance.transform.SetLocalPositionRotationAndScale(Vector3.zero, Quaternion.identity, Vector3.one);
+				Debug.Log($"Setting Child model to identity. {modelInstance.transform.position}");
 			});
 		}
 #endif
