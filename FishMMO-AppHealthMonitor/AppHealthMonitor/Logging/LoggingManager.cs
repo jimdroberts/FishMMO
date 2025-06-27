@@ -13,7 +13,7 @@ namespace AppHealthMonitor
 		// Define fixed widths for console columns
 		private const int TimestampColumnWidth = 12; // [HH:mm:ss]
 		private const int LogLevelColumnWidth = 12;  // [LEVEL] - e.g., "CRITICAL "W
-		private const int SourceColumnWidth = 20;    // [Source] - e.g., "HealthMonitor-LoginServer  "
+		private const int SourceColumnWidth = 18;    // [Source] - e.g., "HealthMonitor-LoginServer  "
 
 		/// <summary>
 		/// Initializes a new instance of the LoggingManager.
@@ -152,8 +152,8 @@ namespace AppHealthMonitor
 		{
 			return level switch
 			{
-				LogLevel.Debug => ConsoleColor.Gray,
-				LogLevel.Info => ConsoleColor.White,
+				LogLevel.Debug => ConsoleColor.DarkGray,
+				LogLevel.Info => ConsoleColor.Gray,
 				LogLevel.Warning => ConsoleColor.Yellow,
 				LogLevel.Error => ConsoleColor.Red,
 				LogLevel.Critical => ConsoleColor.Magenta,
@@ -169,7 +169,7 @@ namespace AppHealthMonitor
 			return level switch
 			{
 				LogLevel.Debug => ConsoleColor.DarkGray,
-				LogLevel.Info => ConsoleColor.Green,
+				LogLevel.Info => ConsoleColor.Gray,
 				LogLevel.Warning => ConsoleColor.DarkYellow,
 				LogLevel.Error => ConsoleColor.DarkRed,
 				LogLevel.Critical => ConsoleColor.Red,

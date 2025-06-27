@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+
 namespace AppHealthMonitor
 {
 	/// <summary>

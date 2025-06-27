@@ -1,11 +1,4 @@
-﻿// Program.cs
-using Microsoft.Extensions.Configuration;
-using System.IO;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using System;
-using System.Threading;
-using System.Linq;
+﻿using Microsoft.Extensions.Configuration;
 
 namespace AppHealthMonitor
 {
@@ -185,7 +178,7 @@ namespace AppHealthMonitor
 							TimeSpan checkInterval = TimeSpan.FromSeconds(appConfig.CheckIntervalSeconds > 0 ? appConfig.CheckIntervalSeconds : 10);
 
 							// Log a header for the application launch
-							loggingManager.Log(LogLevel.Info, "Orchestration", $"\n--- Launching Monitor for: [{appConfig.Name}] ---");
+							loggingManager.Log(LogLevel.Info, "Orchestration", $"--- Launching Monitor for: [{appConfig.Name}] ---");
 
 							// Create a dictionary to hold application configuration data for logging
 							var appDetails = new Dictionary<string, object>
@@ -305,7 +298,7 @@ namespace AppHealthMonitor
 
 			commands.Add("help", new ConsoleCommand("help", "Lists all available commands.", async () =>
 			{
-				loggingManager.Log(LogLevel.Info, "DaemonCommand", "\n--- Available Commands ---");
+				loggingManager.Log(LogLevel.Info, "DaemonCommand", "--- Available Commands ---\n");
 				foreach (var cmd in commands.Values.OrderBy(c => c.Name))
 				{
 					loggingManager.Log(LogLevel.Info, "DaemonCommand", $"  {cmd.Name,-15} - {cmd.Description}");
