@@ -15,7 +15,7 @@ namespace FishMMO.Client
 			if (Configuration.GlobalSettings == null)
 			{
 				Configuration.SetGlobalSettings(new Configuration(Constants.GetWorkingDirectory()));
-				if (!Configuration.GlobalSettings.Load(Configuration.DEFAULT_FILENAME + Configuration.EXTENSION))
+				if (!Configuration.GlobalSettings.Load(Configuration.DEFAULT_FILENAME))
 				{
 					// If we failed to load the file.. save a new one
 					Configuration.GlobalSettings.Set("Version", Constants.Configuration.Version);

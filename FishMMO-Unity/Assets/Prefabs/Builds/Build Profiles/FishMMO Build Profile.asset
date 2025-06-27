@@ -20,8 +20,8 @@ MonoBehaviour:
   LogOutput: "Starting all builds...\n--- Starting Build for: FishMMO AppHealthMonitor
     Build Settings ---\nPerforming clean for 'FishMMO AppHealthMonitor Build Settings'...\nExecuting:
     dotnet clean \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj\"
-    --configuration Release --framework net8.0\nBuild started 6/26/2025 12:07:19
-    AM.\r\n     1>Project \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj\"
+    --configuration Release --framework net8.0\nBuild started 6/26/2025 5:00:36 PM.\r\n    
+    1>Project \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj\"
     on node 1 (Clean target(s)).\r\n     1>CoreClean:\r\n         Deleting file \"D:\\FishMMO
     Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\obj\\Release\\net8.0\\AppHealthMonitor.csproj.AssemblyReference.cache\".\r\n        
     Deleting file \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\obj\\Release\\net8.0\\AppHealthMonitor.GeneratedMSBuildEditorConfig.editorconfig\".\r\n        
@@ -36,26 +36,21 @@ MonoBehaviour:
     Deleting file \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\obj\\Release\\net8.0\\ref\\AppHealthMonitor.dll\".\r\n    
     1>Done Building Project \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj\"
     (Clean target(s)).\r\n\r\nBuild succeeded.\r\n    0 Warning(s)\r\n    0 Error(s)\r\n\r\nTime
-    Elapsed 00:00:00.34\r\n\nClean for 'FishMMO AppHealthMonitor Build Settings'
-    completed successfully.\nCreated output directory: C:\\Users\\jim\\Desktop\\Builds\\AppHealthMonitor\nExecuting:
-    dotnet build \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj\"
+    Elapsed 00:00:00.28\r\n\nClean for 'FishMMO AppHealthMonitor Build Settings'
+    completed successfully.\nExecuting: dotnet build \"D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj\"
     --configuration Release --framework net8.0 --output \"C:\\Users\\jim\\Desktop\\Builds\\AppHealthMonitor\"\n 
     Determining projects to restore...\r\n  All projects are up-to-date for restore.\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(288,86): warning
-    CS8602: Dereference of a possibly null reference. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(314,29): warning
+    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(654,29): warning
     CS8601: Possible null reference assignment. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\n 
     AppHealthMonitor -> C:\\Users\\jim\\Desktop\\Builds\\AppHealthMonitor\\AppHealthMonitor.dll\r\n\r\nBuild
-    succeeded.\r\n\r\nD:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(288,86):
-    warning CS8602: Dereference of a possibly null reference. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\nD:\\FishMMO
-    Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(314,29): warning
-    CS8601: Possible null reference assignment. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\n   
-    2 Warning(s)\r\n    0 Error(s)\r\n\r\nTime Elapsed 00:00:00.61\r\n\nBuild for
+    succeeded.\r\n\r\nD:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\HealthMonitor.cs(654,29):
+    warning CS8601: Possible null reference assignment. [D:\\FishMMO Dev\\FishMMO-AppHealthMonitor\\AppHealthMonitor\\AppHealthMonitor.csproj]\r\n   
+    1 Warning(s)\r\n    0 Error(s)\r\n\r\nTime Elapsed 00:00:01.42\r\n\nBuild for
     'FishMMO AppHealthMonitor Build Settings' completed successfully!\n\n\n--- Starting
     Build for: FishMMO IPFetch Server Build Settings ---\nPerforming clean for 'FishMMO
     IPFetch Server Build Settings'...\nExecuting: dotnet clean \"D:\\FishMMO Dev\\FishMMO-WebServers\\IPFetchASP.NET\\IpFetchServer\\IpFetchServer.csproj\"
-    --configuration Release --framework net8.0\nBuild started 6/26/2025 12:07:21
-    AM.\r\n     1>Project \"D:\\FishMMO Dev\\FishMMO-WebServers\\IPFetchASP.NET\\IpFetchServer\\IpFetchServer.csproj\"
+    --configuration Release --framework net8.0\nBuild started 6/26/2025 5:00:39 PM.\r\n    
+    1>Project \"D:\\FishMMO Dev\\FishMMO-WebServers\\IPFetchASP.NET\\IpFetchServer\\IpFetchServer.csproj\"
     on node 1 (Clean target(s)).\r\n     1>CoreClean:\r\n         Deleting file \"D:\\FishMMO
     Dev\\FishMMO-WebServers\\IPFetchASP.NET\\IpFetchServer\\obj\\Release\\net8.0\\IpFetchServer.csproj.AssemblyReference.cache\".\r\n        
     Deleting file \"D:\\FishMMO Dev\\FishMMO-WebServers\\IPFetchASP.NET\\IpFetchServer\\obj\\Release\\net8.0\\IpFetchServer.GeneratedMSBuildEditorConfig.editorconfig\".\r\n        
@@ -69,7 +64,6 @@ MonoBehaviour:
     Deleting file \"D:\\FishMMO Dev\\FishMMO-WebServers\\IPFetchASP.NET\\IpFetchServer\\obj\\Release\\net8.0\\staticwebassets\\msbuild.build.IpFetchServer.props\".\r\n        
     Deleting file \"D:\\FishMMO Dev\\FishMMO-WebServers\\IPFetchASP.NET\\IpFetchServer\\obj\\Release\\net8.0\\staticwebassets\\msbuild.buildMultiTargeting.IpFetchServer.props\".\r\n        
     Deleting file \"D:\\FishMMO Dev\\FishMMO-WebServers\\IPFetchASP.NET\\IpFetchServer\\obj\\Release\\net8.0\\staticwebassets\\msbuild.buildTransitive.IpFetchServer.props\".\r\n        
-    Deleting file \"D:\\FishMMO Dev\\FishMMO-WebServers\\IPFetchASP.NET\\IpFetchServer\\obj\\Release\\net8.0\\IpFetchS.19941E90.Up2Date\".\r\n        
     Deleting file \"D:\\FishMMO Dev\\FishMMO-WebServers\\IPFetchASP.NET\\IpFetchServer\\obj\\Release\\net8.0\\IpFetchServer.dll\".\r\n        
     Deleting file \"D:\\FishMMO Dev\\FishMMO-WebServers\\IPFetchASP.NET\\IpFetchServer\\obj\\Release\\net8.0\\refint\\IpFetchServer.dll\".\r\n        
     Deleting file \"D:\\FishMMO Dev\\FishMMO-WebServers\\IPFetchASP.NET\\IpFetchServer\\obj\\Release\\net8.0\\IpFetchServer.pdb\".\r\n        
@@ -78,10 +72,7 @@ MonoBehaviour:
     1>Project \"D:\\FishMMO Dev\\FishMMO-WebServers\\IPFetchASP.NET\\IpFetchServer\\IpFetchServer.csproj\"
     (1) is building \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj\"
     (2:2) on node 1 (Clean target(s)).\r\n     2>CoreClean:\r\n         Deleting
-    file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\bin\\Release\\netstandard2.1\\FishMMO-DB.deps.json\".\r\n        
-    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\bin\\Release\\netstandard2.1\\FishMMO-DB.dll\".\r\n        
-    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\bin\\Release\\netstandard2.1\\FishMMO-DB.pdb\".\r\n        
-    Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\obj\\Release\\netstandard2.1\\FishMMO-DB.csproj.AssemblyReference.cache\".\r\n        
+    file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\obj\\Release\\netstandard2.1\\FishMMO-DB.csproj.AssemblyReference.cache\".\r\n        
     Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\obj\\Release\\netstandard2.1\\FishMMO-DB.GeneratedMSBuildEditorConfig.editorconfig\".\r\n        
     Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\obj\\Release\\netstandard2.1\\FishMMO-DB.AssemblyInfoInputs.cache\".\r\n        
     Deleting file \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\obj\\Release\\netstandard2.1\\FishMMO-DB.AssemblyInfo.cs\".\r\n        
@@ -92,9 +83,8 @@ MonoBehaviour:
     2>Done Building Project \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj\"
     (Clean target(s)).\r\n     1>Done Building Project \"D:\\FishMMO Dev\\FishMMO-WebServers\\IPFetchASP.NET\\IpFetchServer\\IpFetchServer.csproj\"
     (Clean target(s)).\r\n\r\nBuild succeeded.\r\n    0 Warning(s)\r\n    0 Error(s)\r\n\r\nTime
-    Elapsed 00:00:00.57\r\n\nClean for 'FishMMO IPFetch Server Build Settings' completed
-    successfully.\nCreated output directory: C:\\Users\\jim\\Desktop\\Builds\\IPFetch
-    Server\nExecuting: dotnet build \"D:\\FishMMO Dev\\FishMMO-WebServers\\IPFetchASP.NET\\IpFetchServer\\IpFetchServer.csproj\"
+    Elapsed 00:00:00.38\r\n\nClean for 'FishMMO IPFetch Server Build Settings' completed
+    successfully.\nExecuting: dotnet build \"D:\\FishMMO Dev\\FishMMO-WebServers\\IPFetchASP.NET\\IpFetchServer\\IpFetchServer.csproj\"
     --configuration Release --framework net8.0 --output \"C:\\Users\\jim\\Desktop\\Builds\\IPFetch
     Server\"\n  Determining projects to restore...\r\n  All projects are up-to-date
     for restore.\r\n  FishMMO-DB -> C:\\Users\\jim\\Desktop\\Builds\\IPFetch Server\\FishMMO-DB.dll\r\nD:\\FishMMO
@@ -133,12 +123,12 @@ MonoBehaviour:
     <anonymous type: string Address, ushort Port, string LastPulse>>(IEnumerable<PatchServerEntity>
     source, Func<PatchServerEntity, <anonymous type: string Address, ushort Port,
     string LastPulse>> selector)'. [D:\\FishMMO Dev\\FishMMO-WebServers\\IPFetchASP.NET\\IpFetchServer\\IpFetchServer.csproj]\r\n   
-    4 Warning(s)\r\n    0 Error(s)\r\n\r\nTime Elapsed 00:00:01.29\r\n\nBuild for
+    4 Warning(s)\r\n    0 Error(s)\r\n\r\nTime Elapsed 00:00:01.06\r\n\nBuild for
     'FishMMO IPFetch Server Build Settings' completed successfully!\n\n\n--- Starting
     Build for: FishMMO Patch Server Build Settings ---\nPerforming clean for 'FishMMO
     Patch Server Build Settings'...\nExecuting: dotnet clean \"D:\\FishMMO Dev\\FishMMO-WebServers\\PatcherASP.NET\\Patcher\\Patcher.csproj\"
-    --configuration Release --framework net8.0\nBuild started 6/26/2025 12:07:24
-    AM.\r\n     1>Project \"D:\\FishMMO Dev\\FishMMO-WebServers\\PatcherASP.NET\\Patcher\\Patcher.csproj\"
+    --configuration Release --framework net8.0\nBuild started 6/26/2025 5:00:41 PM.\r\n    
+    1>Project \"D:\\FishMMO Dev\\FishMMO-WebServers\\PatcherASP.NET\\Patcher\\Patcher.csproj\"
     on node 1 (Clean target(s)).\r\n     1>CoreClean:\r\n         Deleting file \"D:\\FishMMO
     Dev\\FishMMO-WebServers\\PatcherASP.NET\\Patcher\\obj\\Release\\net8.0\\Patcher.csproj.AssemblyReference.cache\".\r\n        
     Deleting file \"D:\\FishMMO Dev\\FishMMO-WebServers\\PatcherASP.NET\\Patcher\\obj\\Release\\net8.0\\Patcher.GeneratedMSBuildEditorConfig.editorconfig\".\r\n        
@@ -152,7 +142,6 @@ MonoBehaviour:
     Deleting file \"D:\\FishMMO Dev\\FishMMO-WebServers\\PatcherASP.NET\\Patcher\\obj\\Release\\net8.0\\staticwebassets\\msbuild.build.Patcher.props\".\r\n        
     Deleting file \"D:\\FishMMO Dev\\FishMMO-WebServers\\PatcherASP.NET\\Patcher\\obj\\Release\\net8.0\\staticwebassets\\msbuild.buildMultiTargeting.Patcher.props\".\r\n        
     Deleting file \"D:\\FishMMO Dev\\FishMMO-WebServers\\PatcherASP.NET\\Patcher\\obj\\Release\\net8.0\\staticwebassets\\msbuild.buildTransitive.Patcher.props\".\r\n        
-    Deleting file \"D:\\FishMMO Dev\\FishMMO-WebServers\\PatcherASP.NET\\Patcher\\obj\\Release\\net8.0\\Patcher.csproj.Up2Date\".\r\n        
     Deleting file \"D:\\FishMMO Dev\\FishMMO-WebServers\\PatcherASP.NET\\Patcher\\obj\\Release\\net8.0\\Patcher.dll\".\r\n        
     Deleting file \"D:\\FishMMO Dev\\FishMMO-WebServers\\PatcherASP.NET\\Patcher\\obj\\Release\\net8.0\\refint\\Patcher.dll\".\r\n        
     Deleting file \"D:\\FishMMO Dev\\FishMMO-WebServers\\PatcherASP.NET\\Patcher\\obj\\Release\\net8.0\\Patcher.pdb\".\r\n        
@@ -172,9 +161,8 @@ MonoBehaviour:
     2>Done Building Project \"D:\\FishMMO Dev\\FishMMO-Database\\FishMMO-DB\\FishMMO-DB.csproj\"
     (Clean target(s)).\r\n     1>Done Building Project \"D:\\FishMMO Dev\\FishMMO-WebServers\\PatcherASP.NET\\Patcher\\Patcher.csproj\"
     (Clean target(s)).\r\n\r\nBuild succeeded.\r\n    0 Warning(s)\r\n    0 Error(s)\r\n\r\nTime
-    Elapsed 00:00:00.55\r\n\nClean for 'FishMMO Patch Server Build Settings' completed
-    successfully.\nCreated output directory: C:\\Users\\jim\\Desktop\\Builds\\Patcher
-    Server\nExecuting: dotnet build \"D:\\FishMMO Dev\\FishMMO-WebServers\\PatcherASP.NET\\Patcher\\Patcher.csproj\"
+    Elapsed 00:00:00.39\r\n\nClean for 'FishMMO Patch Server Build Settings' completed
+    successfully.\nExecuting: dotnet build \"D:\\FishMMO Dev\\FishMMO-WebServers\\PatcherASP.NET\\Patcher\\Patcher.csproj\"
     --configuration Release --framework net8.0 --output \"C:\\Users\\jim\\Desktop\\Builds\\Patcher
     Server\"\n  Determining projects to restore...\r\n  All projects are up-to-date
     for restore.\r\n  FishMMO-DB -> C:\\Users\\jim\\Desktop\\Builds\\Patcher Server\\FishMMO-DB.dll\r\nC:\\Program
@@ -267,12 +255,12 @@ MonoBehaviour:
     Dev\\FishMMO-WebServers\\PatcherASP.NET\\Patcher\\Services\\PatchVersionService.cs(58,19):
     warning CS8600: Converting null literal or possible null value to non-nullable
     type. [D:\\FishMMO Dev\\FishMMO-WebServers\\PatcherASP.NET\\Patcher\\Patcher.csproj]\r\n   
-    2 Warning(s)\r\n    0 Error(s)\r\n\r\nTime Elapsed 00:00:01.13\r\n\nBuild for
+    2 Warning(s)\r\n    0 Error(s)\r\n\r\nTime Elapsed 00:00:00.72\r\n\nBuild for
     'FishMMO Patch Server Build Settings' completed successfully!\n\n\n--- Starting
     Build for: FishMMO WebGL Server Build Settings ---\nPerforming clean for 'FishMMO
     WebGL Server Build Settings'...\nExecuting: dotnet clean \"D:\\FishMMO Dev\\FishMMO-WebServers\\WebGLServerASP.NET\\WebGLServer\\WebGLServer.csproj\"
-    --configuration Release --framework net8.0\nBuild started 6/26/2025 12:07:27
-    AM.\r\n     1>Project \"D:\\FishMMO Dev\\FishMMO-WebServers\\WebGLServerASP.NET\\WebGLServer\\WebGLServer.csproj\"
+    --configuration Release --framework net8.0\nBuild started 6/26/2025 5:00:43 PM.\r\n    
+    1>Project \"D:\\FishMMO Dev\\FishMMO-WebServers\\WebGLServerASP.NET\\WebGLServer\\WebGLServer.csproj\"
     on node 1 (Clean target(s)).\r\n     1>CoreClean:\r\n         Deleting file \"D:\\FishMMO
     Dev\\FishMMO-WebServers\\WebGLServerASP.NET\\WebGLServer\\obj\\Release\\net8.0\\WebGLServer.csproj.AssemblyReference.cache\".\r\n        
     Deleting file \"D:\\FishMMO Dev\\FishMMO-WebServers\\WebGLServerASP.NET\\WebGLServer\\obj\\Release\\net8.0\\WebGLServer.GeneratedMSBuildEditorConfig.editorconfig\".\r\n        
@@ -286,7 +274,6 @@ MonoBehaviour:
     Deleting file \"D:\\FishMMO Dev\\FishMMO-WebServers\\WebGLServerASP.NET\\WebGLServer\\obj\\Release\\net8.0\\staticwebassets\\msbuild.build.WebGLServer.props\".\r\n        
     Deleting file \"D:\\FishMMO Dev\\FishMMO-WebServers\\WebGLServerASP.NET\\WebGLServer\\obj\\Release\\net8.0\\staticwebassets\\msbuild.buildMultiTargeting.WebGLServer.props\".\r\n        
     Deleting file \"D:\\FishMMO Dev\\FishMMO-WebServers\\WebGLServerASP.NET\\WebGLServer\\obj\\Release\\net8.0\\staticwebassets\\msbuild.buildTransitive.WebGLServer.props\".\r\n        
-    Deleting file \"D:\\FishMMO Dev\\FishMMO-WebServers\\WebGLServerASP.NET\\WebGLServer\\obj\\Release\\net8.0\\WebGLSer.C8495F2F.Up2Date\".\r\n        
     Deleting file \"D:\\FishMMO Dev\\FishMMO-WebServers\\WebGLServerASP.NET\\WebGLServer\\obj\\Release\\net8.0\\WebGLServer.dll\".\r\n        
     Deleting file \"D:\\FishMMO Dev\\FishMMO-WebServers\\WebGLServerASP.NET\\WebGLServer\\obj\\Release\\net8.0\\refint\\WebGLServer.dll\".\r\n        
     Deleting file \"D:\\FishMMO Dev\\FishMMO-WebServers\\WebGLServerASP.NET\\WebGLServer\\obj\\Release\\net8.0\\WebGLServer.pdb\".\r\n        
@@ -294,13 +281,12 @@ MonoBehaviour:
     Deleting file \"D:\\FishMMO Dev\\FishMMO-WebServers\\WebGLServerASP.NET\\WebGLServer\\obj\\Release\\net8.0\\ref\\WebGLServer.dll\".\r\n    
     1>Done Building Project \"D:\\FishMMO Dev\\FishMMO-WebServers\\WebGLServerASP.NET\\WebGLServer\\WebGLServer.csproj\"
     (Clean target(s)).\r\n\r\nBuild succeeded.\r\n    0 Warning(s)\r\n    0 Error(s)\r\n\r\nTime
-    Elapsed 00:00:00.45\r\n\nClean for 'FishMMO WebGL Server Build Settings' completed
-    successfully.\nCreated output directory: C:\\Users\\jim\\Desktop\\Builds\\WebGL
-    Server\nExecuting: dotnet build \"D:\\FishMMO Dev\\FishMMO-WebServers\\WebGLServerASP.NET\\WebGLServer\\WebGLServer.csproj\"
+    Elapsed 00:00:00.28\r\n\nClean for 'FishMMO WebGL Server Build Settings' completed
+    successfully.\nExecuting: dotnet build \"D:\\FishMMO Dev\\FishMMO-WebServers\\WebGLServerASP.NET\\WebGLServer\\WebGLServer.csproj\"
     --configuration Release --framework net8.0 --output \"C:\\Users\\jim\\Desktop\\Builds\\WebGL
     Server\"\n  Determining projects to restore...\r\n  All projects are up-to-date
     for restore.\r\n  WebGLServer -> C:\\Users\\jim\\Desktop\\Builds\\WebGL Server\\WebGLServer.dll\r\n\r\nBuild
-    succeeded.\r\n    0 Warning(s)\r\n    0 Error(s)\r\n\r\nTime Elapsed 00:00:00.68\r\n\nBuild
+    succeeded.\r\n    0 Warning(s)\r\n    0 Error(s)\r\n\r\nTime Elapsed 00:00:00.48\r\n\nBuild
     for 'FishMMO WebGL Server Build Settings' completed successfully!\n\n\n\nAll
     requested builds finished. Refreshing Unity AssetDatabase...\nUnity AssetDatabase
     refreshed.\n"

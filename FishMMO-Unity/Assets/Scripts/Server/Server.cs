@@ -94,7 +94,7 @@ namespace FishMMO.Server
 
 			// load configuration
 			Configuration.SetGlobalSettings(new Configuration(workingDirectory));
-			if (!Configuration.GlobalSettings.Load(serverTypeName + Configuration.EXTENSION))
+			if (!Configuration.GlobalSettings.Load(serverTypeName))
 			{
 				// if we failed to load the file.. save a new one
 				Configuration.GlobalSettings.Set("ServerName", "TestName");
