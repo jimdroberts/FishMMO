@@ -59,7 +59,7 @@ namespace FishMMO.Shared
 
 			foreach (var key in keysToRemove)
 			{
-				//Debug.Log($"{key} is off cooldown.");
+				//Log.Debug($"{key} is off cooldown.");
 				RemoveCooldown(key);
 			}
 			keysToRemove.Clear();
@@ -88,7 +88,7 @@ namespace FishMMO.Shared
 		{
 			if (!cooldowns.ContainsKey(id))
 			{
-				//Debug.Log($"{id} is on cooldown.");
+				//Log.Debug($"{id} is on cooldown.");
 				cooldowns.Add(id, cooldown);
 
 				if (base.IsOwner)

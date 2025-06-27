@@ -22,7 +22,7 @@ namespace FishMMO.Shared
 		{
 			if (ArchetypeRequirements == null)
 			{
-				//Debug.LogWarning($"ArchetypeTemplate: No Archetype Requirements assigned for {this.name}. Assuming requirements are met.");
+				//Log.Warning($"ArchetypeTemplate: No Archetype Requirements assigned for {this.name}. Assuming requirements are met.");
 				return true;
 			}
 			return ArchetypeRequirements.Evaluate(playerCharacter);

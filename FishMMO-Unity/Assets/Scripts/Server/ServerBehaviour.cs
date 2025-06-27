@@ -3,6 +3,7 @@ using UnityEngine;
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using FishMMO.Shared;
 
 namespace FishMMO.Server
 {
@@ -21,7 +22,7 @@ namespace FishMMO.Server
 			{
 				return;
 			}
-			Debug.Log("ServerBehaviour: Registered " + type.Name);
+			Log.Debug("ServerBehaviour: Registered " + type.Name);
 			behaviours.Add(type, behaviour);
 		}
 
@@ -34,7 +35,7 @@ namespace FishMMO.Server
 			else
 			{
 				Type type = behaviour.GetType();
-				Debug.Log("ServerBehaviour: Unregistered " + type.Name);
+				Log.Debug("ServerBehaviour: Unregistered " + type.Name);
 				behaviours.Remove(type);
 			}
 		}
@@ -71,14 +72,14 @@ namespace FishMMO.Server
 				return;
 			}
 
-			Debug.Log("ServerBehaviour: Initializing");
+			Log.Debug("ServerBehaviour: Initializing");
 
 			foreach (ServerBehaviour behaviour in behaviours.Values)
 			{
 				behaviour.InternalInitializeOnce(server, serverManager);
 			}
 
-			Debug.Log("ServerBehaviour: Initialization Complete");
+			Log.Debug("ServerBehaviour: Initialization Complete");
 		}
 
 		public bool Initialized { get; private set; }
@@ -99,7 +100,7 @@ namespace FishMMO.Server
 
 			InitializeOnce();
 
-			Debug.Log("ServerBehaviour: Initialized[" + this.GetType().Name + "]");
+			Log.Debug("ServerBehaviour: Initialized[" + this.GetType().Name + "]");
 		}
 
 		public abstract void InitializeOnce();

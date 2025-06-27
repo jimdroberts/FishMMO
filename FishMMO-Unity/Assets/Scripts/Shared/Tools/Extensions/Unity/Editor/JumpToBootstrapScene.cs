@@ -16,7 +16,7 @@ namespace FishMMO.Shared
 			}
 			else
 			{
-				Debug.LogError("Scene not found at path: " + scenePath);
+				Log.Error("Scene not found at path: " + scenePath);
 			}
 		}
 

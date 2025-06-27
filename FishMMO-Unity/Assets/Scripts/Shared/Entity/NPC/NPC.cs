@@ -62,7 +62,7 @@ namespace FishMMO.Shared
 			// Instantiate the AbilitySeedGenerator
 			npcAttributeGenerator = new System.Random(npcAttributeSeed);
 
-			//Debug.Log($"Received NPCAttributeGenerator Seed {npcAttributeSeed}");
+			//Log.Debug($"Received NPCAttributeGenerator Seed {npcAttributeSeed}");
 
 			AddNPCAttributes();
 
@@ -104,7 +104,7 @@ namespace FishMMO.Shared
 			// Write the npc RNG seed for the clients
 			writer.WriteInt32(npcAttributeSeed);
 
-			//Debug.Log($"Writing NPCAttributeGenerator Seed {npcAttributeSeed}");
+			//Log.Debug($"Writing NPCAttributeGenerator Seed {npcAttributeSeed}");
 		}
 
 		public void Despawn()
@@ -139,13 +139,13 @@ namespace FishMMO.Shared
 							int newValue = characterAttribute.Value.GetPercentOf(value);
 							characterAttribute.SetModifier(newValue - old);
 
-							//Debug.Log($"{characterAttribute.Template.Name} Old: {old} | New: {characterAttribute.FinalValue}");
+							//Log.Debug($"{characterAttribute.Template.Name} Old: {old} | New: {characterAttribute.FinalValue}");
 						}
 						else
 						{
 							characterAttribute.SetModifier(value - old);
 
-							//Debug.Log($"{characterAttribute.Template.Name} Old: {old} | New: {characterAttribute.FinalValue}");
+							//Log.Debug($"{characterAttribute.Template.Name} Old: {old} | New: {characterAttribute.FinalValue}");
 						}
 					}
 					else if (attributeController.TryGetResourceAttribute(attribute.Template, out CharacterResourceAttribute characterResourceAttribute))
@@ -160,7 +160,7 @@ namespace FishMMO.Shared
 							characterResourceAttribute.SetModifier(modifier);
 							characterResourceAttribute.SetCurrentValue(newValue);
 
-							//Debug.Log($"{characterResourceAttribute.Template.Name} Old: {old} | New: {characterResourceAttribute.CurrentValue}/{characterResourceAttribute.FinalValue}");
+							//Log.Debug($"{characterResourceAttribute.Template.Name} Old: {old} | New: {characterResourceAttribute.CurrentValue}/{characterResourceAttribute.FinalValue}");
 						}
 						else
 						{
@@ -169,7 +169,7 @@ namespace FishMMO.Shared
 							characterResourceAttribute.SetModifier(modifier);
 							characterResourceAttribute.SetCurrentValue(value);
 
-							//Debug.Log($"{characterResourceAttribute.Template.Name} Old: {old} | New: {characterResourceAttribute.CurrentValue}/{characterResourceAttribute.FinalValue}");
+							//Log.Debug($"{characterResourceAttribute.Template.Name} Old: {old} | New: {characterResourceAttribute.CurrentValue}/{characterResourceAttribute.FinalValue}");
 						}
 					}
 				}

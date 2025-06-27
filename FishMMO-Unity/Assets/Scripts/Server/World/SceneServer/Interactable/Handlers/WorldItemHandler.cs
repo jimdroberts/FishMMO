@@ -17,7 +17,7 @@ namespace FishMMO.Server
 			}
 			else if (character.TryGet(out IInventoryController inventoryController))
 			{
-				//Debug.Log($"WorldItem Amount {worldItem.Amount}");
+				//Log.Debug($"WorldItem Amount {worldItem.Amount}");
 				using var dbContext = serverInstance.Server.NpgsqlDbContextFactory.CreateDbContext();
 				if (dbContext == null)
 				{
@@ -35,12 +35,12 @@ namespace FishMMO.Server
 					if (newItem.IsStackable &&
 						newItem.Stackable.Amount > 1)
 					{
-						//Debug.Log($"WorldItem Remaining {newItem.Stackable.Amount}");
+						//Log.Debug($"WorldItem Remaining {newItem.Stackable.Amount}");
 						worldItem.Amount = newItem.Stackable.Amount;
 					}
 					else
 					{
-						//Debug.Log($"WorldItem Despawn");
+						//Log.Debug($"WorldItem Despawn");
 						worldItem.Despawn();
 					}
 				}

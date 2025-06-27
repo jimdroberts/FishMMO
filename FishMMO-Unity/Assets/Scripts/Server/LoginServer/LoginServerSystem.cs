@@ -61,7 +61,7 @@ namespace FishMMO.Server
 
 					using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 
-					//Debug.Log("Login Server System: Pulse");
+					//Log.Debug("Login Server System: Pulse");
 					LoginServerService.Pulse(dbContext, id);
 				}
 				nextPulse -= Time.deltaTime;

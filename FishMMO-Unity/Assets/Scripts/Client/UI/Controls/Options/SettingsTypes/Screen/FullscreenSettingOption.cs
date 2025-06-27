@@ -15,7 +15,7 @@ namespace FishMMO.Client
         {
             if (FullscreenDropdown == null)
             {
-                Debug.LogError("FullscreenSettingsOption: TMP_Dropdown is missing.");
+                Log.Error("FullscreenSettingsOption: TMP_Dropdown is missing.");
             }
             else
             {

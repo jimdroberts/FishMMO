@@ -44,13 +44,13 @@ namespace FishMMO.Shared
 			OnPreload();
 			try
 			{
-				//Debug.Log($"{gameObject.scene.name} Preload Start");
+				//Log.Debug($"{gameObject.scene.name} Preload Start");
 				AddressableLoadProcessor.OnProgressUpdate += AddressableLoadProcessor_OnPreloadProgressUpdate;
 				AddressableLoadProcessor.BeginProcessQueue();
 			}
 			catch (UnityException ex)
 			{
-				Debug.LogError($"Failed to load preload scenes: {ex.Message}");
+				Log.Error($"Failed to load preload scenes: {ex.Message}");
 			}
 		}
 
@@ -70,7 +70,7 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			//Debug.Log($"{gameObject.scene.name} Preload Completed");
+			//Log.Debug($"{gameObject.scene.name} Preload Completed");
 
 			// Preload has completed.
 			AddressableLoadProcessor.OnProgressUpdate -= AddressableLoadProcessor_OnPreloadProgressUpdate;
@@ -97,14 +97,14 @@ namespace FishMMO.Shared
 			OnPostLoad();
 			try
 			{
-				//Debug.Log($"{gameObject.scene.name} Postload Start");
+				//Log.Debug($"{gameObject.scene.name} Postload Start");
 
 				AddressableLoadProcessor.OnProgressUpdate += AddressableLoadProcessor_OnPostloadProgressUpdate;
 				AddressableLoadProcessor.BeginProcessQueue();
 			}
 			catch (UnityException ex)
 			{
-				Debug.LogError($"Failed to load postload scenes: {ex.Message}");
+				Log.Error($"Failed to load postload scenes: {ex.Message}");
 			}
 		}
 
@@ -125,7 +125,7 @@ namespace FishMMO.Shared
 			// Postload has completed.
 			AddressableLoadProcessor.OnProgressUpdate -= AddressableLoadProcessor_OnPostloadProgressUpdate;
 
-			//Debug.Log($"{gameObject.scene.name} Postload Complete");
+			//Log.Debug($"{gameObject.scene.name} Postload Complete");
 			OnCompleteProcessing();
 		}
 

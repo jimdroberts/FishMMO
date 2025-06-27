@@ -28,7 +28,7 @@ namespace FishMMO.Server
 			{
 				if (InteractableHandlerInitializer == null)
 				{
-					Debug.LogError($"InteractableHandlerInitializer cannot be null!");
+					Log.Error($"InteractableHandlerInitializer cannot be null!");
 				}
 				InteractableHandlerInitializer.RegisterHandlers();
 
@@ -69,11 +69,11 @@ namespace FishMMO.Server
 			if (!interactableHandlers.ContainsKey(type))
 			{
 				interactableHandlers.Add(type, handler);
-				Debug.Log($"Registered handler for {type.Name}");
+				Log.Debug($"Registered handler for {type.Name}");
 			}
 			else
 			{
-				Debug.LogWarning($"Handler for type {type.Name} is already registered. Overwriting existing handler.");
+				Log.Warning($"Handler for type {type.Name} is already registered. Overwriting existing handler.");
 				interactableHandlers[type] = handler; // Overwrite in case you want to update handlers
 			}
 		}
@@ -88,12 +88,12 @@ namespace FishMMO.Server
 			Type type = typeof(T);
 			if (interactableHandlers.Remove(type))
 			{
-				Debug.Log($"Unregistered handler for {type.Name}");
+				Log.Debug($"Unregistered handler for {type.Name}");
 				return true;
 			}
 			else
 			{
-				Debug.LogWarning($"Attempted to unregister handler for type {type.Name}, but no handler was found.");
+				Log.Warning($"Attempted to unregister handler for type {type.Name}, but no handler was found.");
 				return false;
 			}
 		}
@@ -111,7 +111,7 @@ namespace FishMMO.Server
 		public static void ClearAllHandlers()
 		{
 			interactableHandlers.Clear();
-			Debug.Log("All interactable handlers cleared.");
+			Log.Debug("All interactable handlers cleared.");
 		}
 
 		/// <summary>
@@ -170,27 +170,27 @@ namespace FishMMO.Server
 		{
 			if (conn == null)
 			{
-				Debug.Log("No connnection");
+				Log.Debug("No connnection");
 				return;
 			}
 
 			// validate connection character
 			if (conn.FirstObject == null)
 			{
-				Debug.Log("No first object");
+				Log.Debug("No first object");
 				return;
 			}
 			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
 			if (character == null)
 			{
-				Debug.Log("No character");
+				Log.Debug("No character");
 				return;
 			}
 
 			// validate scene
 			if (!WorldSceneDetailsCache.Scenes.TryGetValue(character.SceneName, out WorldSceneDetails _))
 			{
-				Debug.Log("Missing Scene:" + character.SceneName);
+				Log.Debug("Missing Scene:" + character.SceneName);
 				return;
 			}
 
@@ -212,7 +212,7 @@ namespace FishMMO.Server
 				}
 				else
 				{
-					Debug.LogWarning($"No interaction handler registered for type: {interactableType.Name}");
+					Log.Warning($"No interaction handler registered for type: {interactableType.Name}");
 				}
 			}
 		}
@@ -268,7 +268,7 @@ namespace FishMMO.Server
 			// validate scene
 			if (!WorldSceneDetailsCache.Scenes.TryGetValue(character.SceneName, out WorldSceneDetails details))
 			{
-				Debug.Log("Missing Scene:" + character.SceneName);
+				Log.Debug("Missing Scene:" + character.SceneName);
 				return;
 			}
 
@@ -310,7 +310,7 @@ namespace FishMMO.Server
 					// do we have enough currency to purchase this?
 					if (CurrencyTemplate == null)
 					{
-						Debug.Log("CurrencyTemplate is null.");
+						Log.Debug("CurrencyTemplate is null.");
 						return;
 					}
 					if (!character.TryGet(out ICharacterAttributeController attributeController) ||
@@ -364,14 +364,14 @@ namespace FishMMO.Server
 			// do we have enough currency to purchase this?
 			if (CurrencyTemplate == null)
 			{
-				Debug.Log("CurrencyTemplate is null.");
+				Log.Debug("CurrencyTemplate is null.");
 				return;
 			}
 			if (!character.TryGet(out ICharacterAttributeController attributeController) ||
 				!attributeController.TryGetAttribute(CurrencyTemplate, out CharacterAttribute currency) ||
 				currency.FinalValue < template.Price)
 			{
-				Debug.Log("Not enough currency!");
+				Log.Debug("Not enough currency!");
 				return;
 			}
 
@@ -420,7 +420,7 @@ namespace FishMMO.Server
 			// validate scene
 			if (!WorldSceneDetailsCache.Scenes.TryGetValue(character.SceneName, out WorldSceneDetails details))
 			{
-				Debug.Log("Missing Scene:" + character.SceneName);
+				Log.Debug("Missing Scene:" + character.SceneName);
 				return;
 			}
 
@@ -491,7 +491,7 @@ namespace FishMMO.Server
 			// do we have enough currency to purchase this?
 			if (CurrencyTemplate == null)
 			{
-				Debug.Log("CurrencyTemplate is null.");
+				Log.Debug("CurrencyTemplate is null.");
 				return;
 			}
 			if (!character.TryGet(out ICharacterAttributeController attributeController) ||
@@ -552,13 +552,13 @@ namespace FishMMO.Server
 			// Validate scene
 			if (!WorldSceneDetailsCache.Scenes.TryGetValue(dungeonEntrance.DungeonName, out WorldSceneDetails details))
 			{
-				Debug.Log("Missing Scene:" + dungeonEntrance.DungeonName);
+				Log.Debug("Missing Scene:" + dungeonEntrance.DungeonName);
 				return;
 			}
 
 			if (details.RespawnPositions == null || details.RespawnPositions.Count < 1)
 			{
-				Debug.Log($"Missing Scene: {dungeonEntrance.DungeonName} respawn points.");
+				Log.Debug($"Missing Scene: {dungeonEntrance.DungeonName} respawn points.");
 				return;
 			}
 
@@ -581,7 +581,7 @@ namespace FishMMO.Server
 
 				if (!SceneService.Enqueue(dbContext, character.WorldServerID, dungeonEntrance.DungeonName, SceneType.Group, out long sceneID, character.ID))
 				{
-					Debug.Log("Failed to enqueue new pending scene load request: " + character.WorldServerID + ":" + dungeonEntrance.DungeonName);
+					Log.Debug("Failed to enqueue new pending scene load request: " + character.WorldServerID + ":" + dungeonEntrance.DungeonName);
 				}
 				else
 				{
@@ -648,17 +648,17 @@ namespace FishMMO.Server
 			{
 				if (sceneObject == null)
 				{
-					Debug.Log("Missing SceneObject");
+					Log.Debug("Missing SceneObject");
 				}
 				else
 				{
-					Debug.Log("Missing ID:" + sceneObjectID);
+					Log.Debug("Missing ID:" + sceneObjectID);
 				}
 				return false;
 			}
 			if (sceneObject.GameObject.scene.handle != characterSceneHandle)
 			{
-				Debug.Log("Object scene mismatch.");
+				Log.Debug("Object scene mismatch.");
 				return false;
 			}
 			return true;

@@ -19,7 +19,7 @@ namespace FishMMO.Client
 		{
 			if (ResolutionDropdown == null)
 			{
-				Debug.LogError("ResolutionSettingsOption: TMP_Dropdown is missing.");
+				Log.Error("ResolutionSettingsOption: TMP_Dropdown is missing.");
 			}
 			else
 			{

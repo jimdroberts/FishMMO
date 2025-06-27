@@ -14,11 +14,11 @@ namespace FishMMO.Client
 		{
 			if (string.IsNullOrEmpty(ToggleKey))
 			{
-				Debug.LogError($"ToggleKey cannot be null on {gameObject.name}!");
+				Log.Error($"ToggleKey cannot be null on {gameObject.name}!");
 			}
 			if (Toggle == null)
 			{
-				Debug.LogError("ToggleSettingOption: Toggle is missing.");
+				Log.Error("ToggleSettingOption: Toggle is missing.");
 			}
 			else
 			{

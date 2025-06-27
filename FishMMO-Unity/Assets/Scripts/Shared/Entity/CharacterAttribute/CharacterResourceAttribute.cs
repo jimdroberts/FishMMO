@@ -41,7 +41,7 @@ namespace FishMMO.Shared
 			{
 				Internal_OnAttributeChanged(this);
 			}
-			//UnityEngine.Debug.Log($"Set {Template.Name} to {value} - [{currentValue}/{FinalValue}]");
+			//UnityEngine.Log.Debug($"Set {Template.Name} to {value} - [{currentValue}/{FinalValue}]");
 		}
 
 		public void Consume(float amount)
@@ -51,7 +51,7 @@ namespace FishMMO.Shared
 			{
 				currentValue = 0.0f;
 			}
-			//UnityEngine.Debug.Log($"Consumed {amount} {Template.Name} - [{currentValue}/{FinalValue}]");
+			//UnityEngine.Log.Debug($"Consumed {amount} {Template.Name} - [{currentValue}/{FinalValue}]");
 			Internal_OnAttributeChanged(this);
 		}
 

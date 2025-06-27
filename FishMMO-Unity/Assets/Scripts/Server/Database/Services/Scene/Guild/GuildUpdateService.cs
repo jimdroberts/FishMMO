@@ -80,14 +80,14 @@ namespace FishMMO.Server.DatabaseServices
 			//string formattedLastFetch = lastFetch.ToString("yyyy-MM-dd HH:mm:ss.fffffff");
 
 			// Log the guild IDs being used in the query
-			//Debug.Log($"Fetching updates for guilds: {string.Join(", ", guildIDs)} at {formattedLastFetch}");
+			//Log.Debug($"Fetching updates for guilds: {string.Join(", ", guildIDs)} at {formattedLastFetch}");
 
 			var result = dbContext.GuildUpdates
 				.Where(b => b.LastUpdate >= lastFetch && guildIDs.Contains(b.GuildID)) // Use IN under the hood
 				.ToList();
 
 			// Log the number of updates found
-			//Debug.Log($"Found {result.Count} updates for the given guilds.");
+			//Log.Debug($"Found {result.Count} updates for the given guilds.");
 
 			return result;
 		}

@@ -119,12 +119,12 @@ namespace FishMMO.Shared
 		{
 			/*if (!HasLineOfSight(controller, targetCharacter))
 			{
-				Debug.Log("Line of sight lost!");
+				Log.Debug("Line of sight lost!");
 				return;
 			}*/
 			// if (distanceToTarget is small)
 			// controller.TransitionToCombatState();
-			Debug.Log("Attacking target!");
+			Log.Debug("Attacking target!");
 		}
 
 		/// <summary>

@@ -75,7 +75,7 @@ namespace FishMMO.Server
 				Application.logMessageReceived += this.Application_logMessageReceived;
 			}
 
-			Debug.Log("Server: " + serverTypeName + " is starting[" + DateTime.UtcNow + "]");
+			Log.Debug("Server: " + serverTypeName + " is starting[" + DateTime.UtcNow + "]");
 
 			StartCoroutine(NetHelper.FetchExternalIPAddress(OnFinalizeSetup));
 		}
@@ -90,11 +90,11 @@ namespace FishMMO.Server
 			RemoteAddress = remoteAddress;
 
 			string workingDirectory = Constants.GetWorkingDirectory();
-			Debug.Log("Server: Current working directory[" + workingDirectory + "]");
+			Log.Debug("Server: Current working directory[" + workingDirectory + "]");
 
 			// load configuration
-			Configuration.GlobalSettings = new Configuration(workingDirectory);
-			if (!Configuration.GlobalSettings.Load(serverTypeName + Configuration.EXTENSION))
+			Configuration.SetGlobalSettings(new Configuration(workingDirectory));
+			if (!Configuration.GlobalSettings.Load(serverTypeName))
 			{
 				// if we failed to load the file.. save a new one
 				Configuration.GlobalSettings.Set("ServerName", "TestName");
@@ -106,7 +106,7 @@ namespace FishMMO.Server
 				Configuration.GlobalSettings.Save();
 #endif
 			}
-			Debug.Log(Configuration.GlobalSettings.ToString());
+			Log.Debug(Configuration.GlobalSettings.ToString());
 
 			// initialize the DB contexts
 #if UNITY_EDITOR
@@ -130,7 +130,7 @@ namespace FishMMO.Server
 			}
 
 			// initialize server behaviours
-			Debug.Log("Server: Initializing Components");
+			Log.Debug("Server: Initializing Components");
 
 			// Load Server Details
 			if (!LoadTransportServerDetails())
@@ -152,7 +152,7 @@ namespace FishMMO.Server
 			// initialize our server behaviours
 			ServerBehaviour.InitializeOnceInternal(this, NetworkManager.ServerManager);
 
-			Debug.Log("Server: Initialization Complete");
+			Log.Debug("Server: Initialization Complete");
 
 			// start the local server connection
 			if (NetworkManager.ServerManager != null)
@@ -168,7 +168,7 @@ namespace FishMMO.Server
 				Server.Quit();
 			}
 
-			Debug.Log("Server: " + serverTypeName + " is running[" + DateTime.UtcNow + "]");
+			Log.Debug("Server: " + serverTypeName + " is running[" + DateTime.UtcNow + "]");
 		}
 
 		private void Application_logMessageReceived(string condition, string stackTrace, LogType type)
@@ -187,7 +187,7 @@ namespace FishMMO.Server
 			}
 			catch (Exception e)
 			{
-				Debug.LogError($"Failed to write to log file: {e.Message}");
+				Log.Error($"Failed to write to log file: {e.Message}");
 			}
 		}
 
@@ -249,7 +249,7 @@ namespace FishMMO.Server
 			Transport transport = NetworkManager.TransportManager.GetTransport(obj.TransportIndex);
 			if (transport != null)
 			{
-				Debug.Log($"Server: {serverTypeName} Local: {transport.GetServerBindAddress(IPAddressType.IPv4)}:{transport.GetPort()} Remote: {RemoteAddress}:{transport.GetPort()} - {transport.GetType().Name} {serverState}");
+				Log.Debug($"Server: {serverTypeName} Local: {transport.GetServerBindAddress(IPAddressType.IPv4)}:{transport.GetPort()} Remote: {RemoteAddress}:{transport.GetPort()} - {transport.GetType().Name} {serverState}");
 			}
 		}
 
@@ -267,21 +267,21 @@ namespace FishMMO.Server
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void Broadcast<T>(NetworkConnection conn, T broadcast, bool requireAuthentication = true, Channel channel = Channel.Reliable) where T : struct, IBroadcast
 		{
-			Debug.Log($"[Broadcast] Sending: " + typeof(T));
+			Log.Debug($"[Broadcast] Sending: " + typeof(T));
 			conn.Broadcast(broadcast, requireAuthentication, channel);
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void RegisterBroadcast<T>(Action<NetworkConnection, T, Channel> handler, bool requireAuthentication = true) where T : struct, IBroadcast
 		{
-			Debug.Log($"Broadcast: Registered " + typeof(T));
+			Log.Debug($"Broadcast: Registered " + typeof(T));
 			NetworkManager.ServerManager.RegisterBroadcast<T>(handler, requireAuthentication);
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void UnregisterBroadcast<T>(Action<NetworkConnection, T, Channel> handler, bool requireAuthentication = true) where T : struct, IBroadcast
 		{
-			Debug.Log($"Broadcast: Unregistered " + typeof(T));
+			Log.Debug($"Broadcast: Unregistered " + typeof(T));
 			NetworkManager.ServerManager.UnregisterBroadcast<T>(handler);
 		}
 

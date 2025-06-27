@@ -16,7 +16,7 @@ namespace FishMMO.Shared
 		{
 			if (controller.Target == null)
 			{
-				Debug.LogWarning("No target set for OrbitState.");
+				Log.Warning("No target set for OrbitState.");
 				controller.TransitionToIdleState(); // Or another default state
 				return;
 			}

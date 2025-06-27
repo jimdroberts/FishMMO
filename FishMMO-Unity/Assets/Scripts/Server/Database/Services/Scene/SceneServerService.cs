@@ -2,6 +2,7 @@
 using System.Linq;
 using FishMMO.Database.Npgsql;
 using FishMMO.Database.Npgsql.Entities;
+using FishMMO.Shared;
 
 namespace FishMMO.Server.DatabaseServices
 {
@@ -28,7 +29,7 @@ namespace FishMMO.Server.DatabaseServices
 			var sceneServer = dbContext.SceneServers.FirstOrDefault(c => c.Name == name);
 			if (sceneServer != null)
 			{
-				UnityEngine.Debug.Log($"ServerServerService: Scene Server[{sceneServer.ID}] with name \"{name}\" already exists. Updating information.");
+				Log.Debug($"ServerServerService: Scene Server[{sceneServer.ID}] with name \"{name}\" already exists. Updating information.");
 
 				sceneServer.LastPulse = DateTime.UtcNow;
 				sceneServer.Address = address;
@@ -54,7 +55,7 @@ namespace FishMMO.Server.DatabaseServices
 			dbContext.SceneServers.Add(server);
 			dbContext.SaveChanges();
 
-			UnityEngine.Debug.Log($"ServerServerService: Added Scene Server to Database: [{server.ID}] {name}:{address}:{port}");
+			Log.Debug($"ServerServerService: Added Scene Server to Database: [{server.ID}] {name}:{address}:{port}");
 
 			id = server.ID;
 			return server;

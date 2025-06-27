@@ -145,7 +145,7 @@ namespace FishMMO.Client
 				{
 					uiDialogBox.Open(e);
 				}
-				Debug.LogError(e);
+				Log.Error(e);
 				SetSignInLocked(false);
 			},
 			(servers) =>
@@ -178,7 +178,7 @@ namespace FishMMO.Client
 				{
 					uiDialogBox.Open(e);
 				}
-				Debug.LogWarning(e);
+				Log.Warning(e);
 				SetSignInLocked(false);
 			},
 			(servers) =>

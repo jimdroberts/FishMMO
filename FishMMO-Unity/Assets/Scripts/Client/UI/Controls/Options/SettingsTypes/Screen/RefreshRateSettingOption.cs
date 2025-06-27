@@ -16,7 +16,7 @@ namespace FishMMO.Client
 		{
 			if (RefreshRateDropdown == null)
 			{
-				Debug.LogError("RefreshRateSettingsOption: TMP_Dropdown is missing.");
+				Log.Error("RefreshRateSettingsOption: TMP_Dropdown is missing.");
 			}
 			else
 			{

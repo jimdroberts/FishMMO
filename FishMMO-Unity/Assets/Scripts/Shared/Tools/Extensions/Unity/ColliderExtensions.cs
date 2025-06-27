@@ -42,7 +42,7 @@ namespace FishMMO.Shared
 
 			if (collider == null)
 			{
-				Debug.LogError("Collider is null.");
+				Log.Error("Collider is null.");
 				return false;
 			}
 

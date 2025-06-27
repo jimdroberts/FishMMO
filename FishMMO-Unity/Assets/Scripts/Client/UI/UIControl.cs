@@ -151,7 +151,7 @@ namespace FishMMO.Client
 		{
 			if (rectTransform == null)
 			{
-				Debug.LogError("RectTransform is null. Cannot adjust position for pivot change.");
+				Log.Error("RectTransform is null. Cannot adjust position for pivot change.");
 				return;
 			}
 
@@ -180,7 +180,7 @@ namespace FishMMO.Client
 		{
 			if (rectTransform == null)
 			{
-				Debug.LogError("RectTransform is null. Cannot adjust position for anchor change.");
+				Log.Error("RectTransform is null. Cannot adjust position for anchor change.");
 				return;
 			}
 

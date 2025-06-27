@@ -72,7 +72,7 @@ namespace FishMMO.Client
 					if (template != null)
 					{
 						MainEntry.Initialize(Character, template);
-						SetEventSlots(template.EventSlots);
+						SetEventSlots(template.AdditionalEventSlots);
 
 						// update the main description text
 						UpdateMainDescription();
@@ -254,7 +254,7 @@ namespace FishMMO.Client
 			// do we have enough currency to purchase this?
 			if (CurrencyTemplate == null)
 			{
-				Debug.Log("CurrencyTemplate is null.");
+				Log.Debug("CurrencyTemplate is null.");
 				return;
 			}
 			if (!Character.TryGet(out ICharacterAttributeController attributeController) ||

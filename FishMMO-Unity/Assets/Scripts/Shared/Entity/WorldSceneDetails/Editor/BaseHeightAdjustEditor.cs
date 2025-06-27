@@ -51,7 +51,7 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
-			//Debug.Log("Mouse click detected on: " + clickedObject.name);
+			//Log.Debug("Mouse click detected on: " + clickedObject.name);
 		}
 
 		protected virtual void HandleMouseUp(GameObject clickedObject)
@@ -61,7 +61,7 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			//Debug.Log("Mouse release detected on: " + clickedObject.name);
+			//Log.Debug("Mouse release detected on: " + clickedObject.name);
 
 			Vector3 clickedObjectPosition = clickedObject.transform.position;
 
@@ -74,7 +74,7 @@ namespace FishMMO.Shared
 			RaycastHit hitInfo;
 			if (Physics.SphereCast(raycastStart, 1.0f, Vector3.down, out hitInfo, raycastDistance))
 			{
-				Debug.Log("Raycast hit object: " + hitInfo.collider.gameObject.name);
+				Log.Debug("Raycast hit object: " + hitInfo.collider.gameObject.name);
 				Debug.DrawLine(raycastStart, hitInfo.point, Color.red, 0.5f); // Visualize the raycast
 
 				clickedObject.transform.position = hitInfo.point + new Vector3(0.0f, 0.1f, 0.0f);

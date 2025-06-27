@@ -563,30 +563,30 @@ namespace FishMMO.Server
 			{
 				if (sceneObject == null)
 				{
-					Debug.Log("Missing SceneObject");
+					Log.Debug("Missing SceneObject");
 				}
 				else
 				{
-					Debug.Log("Missing ID:" + sceneObjectID);
+					Log.Debug("Missing ID:" + sceneObjectID);
 				}
 				return false;
 			}
 			if (sceneObject.GameObject.scene.handle != character.GameObject.scene.handle)
 			{
-				Debug.Log("Object scene mismatch.");
+				Log.Debug("Object scene mismatch.");
 				return false;
 			}
 			IInteractable interactable = sceneObject.GameObject.GetComponent<IInteractable>();
 			if (interactable == null ||
 				!interactable.InRange(character.Transform))
 			{
-				Debug.Log($"{character.CharacterName} is not in range of {sceneObject.GameObject.name}!");
+				Log.Debug($"{character.CharacterName} is not in range of {sceneObject.GameObject.name}!");
 				return false;
 			}
 			Banker banker = interactable as Banker;
 			if (banker == null)
 			{
-				Debug.Log($"{sceneObject.GameObject.name} is not a banker!");
+				Log.Debug($"{sceneObject.GameObject.name} is not a banker!");
 				return false;
 			}
 			return true;

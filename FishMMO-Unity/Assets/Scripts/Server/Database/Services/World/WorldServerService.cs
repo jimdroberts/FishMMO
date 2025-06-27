@@ -31,7 +31,7 @@ namespace FishMMO.Server.DatabaseServices
 			var worldServer = dbContext.WorldServers.FirstOrDefault(c => c.Name.Equals(name));
 			if (worldServer != null)
 			{
-				UnityEngine.Debug.Log($"WorldServerService: World Server[{worldServer.ID}] with name \"{name}\" already exists. Updating information.");
+				Log.Debug($"WorldServerService: World Server[{worldServer.ID}] with name \"{name}\" already exists. Updating information.");
 
 				worldServer.LastPulse = DateTime.UtcNow;
 				worldServer.Address = address;
@@ -57,7 +57,7 @@ namespace FishMMO.Server.DatabaseServices
 			dbContext.WorldServers.Add(server);
 			dbContext.SaveChanges();
 
-			UnityEngine.Debug.Log($"WorldServerService: Added World Server to Database: [{server.ID}] {name}:{address}:{port}");
+			Log.Debug($"WorldServerService: Added World Server to Database: [{server.ID}] {name}:{address}:{port}");
 
 			id = server.ID;
 			return server;

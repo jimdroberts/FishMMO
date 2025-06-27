@@ -47,7 +47,7 @@ namespace FishMMO.Shared
 			}
 			else
 			{
-				UnityEngine.Debug.LogError("Character Attribute Database is missing!");
+				Log.Error("Character Attribute Database is missing!");
 			}
 		}
 

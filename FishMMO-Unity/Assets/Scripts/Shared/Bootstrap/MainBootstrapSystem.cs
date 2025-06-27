@@ -6,6 +6,10 @@ namespace FishMMO.Shared
 	{
 		public override void OnPreload()
 		{
+			Log.CurrentLogLevel = LogLevel.Debug;
+			Log.SetDisableDefaultUnityLoggerInBuilds(true);
+			Log.SetFileLoggingEnabled(false);
+
 			//Application.SetStackTraceLogType(LogType.Log, StackTraceLogType.None);
 #if UNITY_SERVER
 #region Server
@@ -15,7 +19,7 @@ namespace FishMMO.Shared
 			};
 #endregion
 #else
-#region Client
+			#region Client
 			// Initialize the client bootstrap scenes.
 			List<AddressableSceneLoadData> initialScenes = new List<AddressableSceneLoadData>()
 			{

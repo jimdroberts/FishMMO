@@ -340,7 +340,7 @@ namespace FishMMO.Server
 
 		private void Kick(NetworkConnection conn, string reason)
 		{
-			Debug.Log($"World Scene System: {conn.ClientId} {reason}.");
+			Log.Debug($"World Scene System: {conn.ClientId} {reason}.");
 			conn.Kick(KickReason.UnexpectedProblem);
 		}
 

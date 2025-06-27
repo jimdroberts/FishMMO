@@ -82,7 +82,7 @@ namespace FishMMO.Client
 			}
 			catch (UnityException ex)
 			{
-				Debug.LogError($"Failed to load preload scenes: {ex.Message}");
+				Log.Error($"Failed to load preload scenes: {ex.Message}");
 			}
 		}
 	}

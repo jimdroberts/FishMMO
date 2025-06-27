@@ -1,6 +1,4 @@
-﻿using UnityEngine;
-
-namespace FishMMO.Shared
+﻿namespace FishMMO.Shared
 {
 	public enum MerchantTabType : byte
 	{

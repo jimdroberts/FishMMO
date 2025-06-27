@@ -27,7 +27,7 @@ namespace FishMMO.Shared
 				AssetDatabase.CreateAsset(profile, path);
 				AssetDatabase.SaveAssets();
 				AssetDatabase.Refresh();
-				Debug.Log($"Created new DotNetBuildProfile asset at: {path}. Please open it in the Inspector.");
+				Log.Debug($"Created new DotNetBuildProfile asset at: {path}. Please open it in the Inspector.");
 			}
 			Selection.activeObject = profile;
 			EditorGUIUtility.PingObject(profile);
@@ -180,21 +180,21 @@ namespace FishMMO.Shared
 
 		private static void AddLogInternal(DotNetBuildProfile profile, string message)
 		{
-			//Debug.Log(message);
+			//Log.Debug(message);
 			profile.LogOutput += message + "\n";
 			EditorUtility.SetDirty(profile);
 		}
 
 		private static void AddLogErrorInternal(DotNetBuildProfile profile, string message)
 		{
-			//Debug.LogError(message);
+			//Log.Error(message);
 			profile.LogOutput += "<color=red>" + message + "</color>\n";
 			EditorUtility.SetDirty(profile);
 		}
 
 		private static void AddLogWarningInternal(DotNetBuildProfile profile, string message)
 		{
-			//Debug.LogWarning(message);
+			//Log.Warning(message);
 			profile.LogOutput += "<color=orange>" + message + "</color>\n";
 			EditorUtility.SetDirty(profile);
 		}
@@ -216,7 +216,7 @@ namespace FishMMO.Shared
 
 		private static void AddLogException(DotNetBuildProfile profile, System.Exception ex)
 		{
-			//Debug.LogException(ex);
+			//Log.Exception(ex);
 			profile.LogOutput += "<color=red>EXCEPTION: " + ex.Message + "</color>\n";
 			EditorUtility.SetDirty(profile);
 		}

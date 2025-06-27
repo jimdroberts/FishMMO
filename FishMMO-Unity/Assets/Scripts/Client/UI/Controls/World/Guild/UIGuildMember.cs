@@ -14,7 +14,7 @@ namespace FishMMO.Client
 
 		public void Button_OnClickName()
 		{
-			//Debug.Log(Name.text);
+			//Log.Debug(Name.text);
 
 			if (UIManager.TryGet("UIDropdown", out UIDropdown uiDropdown) &&
 			    UIManager.TryGet("UIGuild", out UIGuild uiGuild) &&
@@ -55,7 +55,7 @@ namespace FishMMO.Client
 
 		public void Button_OnClickRank()
 		{
-			//Debug.Log(Rank.text);
+			//Log.Debug(Rank.text);
 
 			if (UIManager.TryGet("UIDropdown", out UIDropdown uiDropdown) &&
 			    UIManager.TryGet("UIGuild", out UIGuild uiGuild) &&
@@ -120,7 +120,7 @@ namespace FishMMO.Client
 
 		public void Button_OnClickLocation()
 		{
-			//Debug.Log(Location.text);
+			//Log.Debug(Location.text);
 		}
 	}
 }

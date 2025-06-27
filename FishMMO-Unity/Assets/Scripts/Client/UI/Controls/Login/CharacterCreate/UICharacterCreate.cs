@@ -69,7 +69,7 @@ namespace FishMMO.Client
 					}
 					else
 					{
-						Debug.LogWarning($"No standard model or placeholder exists for {pair.Value.name}");
+						Log.Warning($"No standard model or placeholder exists for {pair.Value.name}");
 					}
 
 					// initialize spawn position map

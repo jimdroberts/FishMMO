@@ -15,7 +15,7 @@ namespace FishMMO.Server
 
 		public void AddCharacterCount(int count)
 		{
-			//UnityEngine.Debug.Log($"{Name} adding {count} to CharacterCount {CharacterCount}");
+			//UnityEngine.Log.Debug($"{Name} adding {count} to CharacterCount {CharacterCount}");
 			CharacterCount += count;
 			if (CharacterCount < 1)
 			{

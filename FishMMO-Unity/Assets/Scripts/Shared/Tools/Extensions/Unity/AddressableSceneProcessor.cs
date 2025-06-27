@@ -1,14 +1,12 @@
 using FishNet.Managing.Scened;
-using System;
 using System.Collections;
 using System.Collections.Generic;
-using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
 using UnityEngine.ResourceManagement.ResourceProviders;
 using UnityEngine.SceneManagement;
 
-namespace Scenes
+namespace FishMMO.Shared
 {
 	public sealed class AddressableSceneProcessor : SceneProcessorBase
 	{
@@ -39,10 +37,10 @@ namespace Scenes
 		{
 			if (string.IsNullOrEmpty(sceneName))
 			{
-				Debug.LogError("SceneName is null or empty!");
+				Log.Error("SceneName is null or empty!");
 				return;
 			}
-			//Debug.LogWarning($"AddressableSceneProcessor Loading Scene: {sceneName}");
+			//Log.Warning($"AddressableSceneProcessor Loading Scene: {sceneName}");
 			AsyncOperationHandle<SceneInstance> loadHandle = Addressables.LoadSceneAsync(sceneName, parameters, false);
 			_loadingAsyncOperations.Add(loadHandle);
 			_currentAsyncOperation = loadHandle;
@@ -51,12 +49,12 @@ namespace Scenes
 			{
 				if (op.Status == AsyncOperationStatus.Succeeded)
 				{
-					//Debug.LogWarning($"AddressableSceneProcessor Loaded scene: {_currentAsyncOperation.Result.Scene.name}|{_currentAsyncOperation.Result.Scene.handle}");
+					//Log.Warning($"AddressableSceneProcessor Loaded scene: {_currentAsyncOperation.Result.Scene.name}|{_currentAsyncOperation.Result.Scene.handle}");
 					AddLoadedScene(_currentAsyncOperation);
 				}
 				else
 				{
-					Debug.LogError($"Failed to load scene: {sceneName}");
+					Log.Error($"Failed to load scene: {sceneName}");
 				}
 			};
 		}
@@ -65,11 +63,11 @@ namespace Scenes
 		{
 			if (!_loadedScenesByHandle.TryGetValue(scene.handle, out var loadHandle))
 			{
-				Debug.LogError("Trying to unload a non addressable scene.");
+				Log.Error("Trying to unload a non addressable scene.");
 				return;
 			}
 
-			//Debug.LogWarning($"AddressableSceneProcessor Unloading Scene: {scene.name}|{scene.handle}");
+			//Log.Warning($"AddressableSceneProcessor Unloading Scene: {scene.name}|{scene.handle}");
 			AsyncOperationHandle<SceneInstance> unloadHandle = Addressables.UnloadSceneAsync(loadHandle, false);
 			_currentAsyncOperation = unloadHandle;
 
@@ -79,7 +77,7 @@ namespace Scenes
 				{
 					Scene unloadedScene = op.Result.Scene;
 
-					//Debug.LogWarning($"AddressableSceneProcessor Unloaded Scene: {unloadedScene.name}|{unloadedScene.handle}");
+					//Log.Warning($"AddressableSceneProcessor Unloaded Scene: {unloadedScene.name}|{unloadedScene.handle}");
 
 					_loadedScenes.Remove(unloadedScene);
 					_loadedScenesByHandle.Remove(unloadedScene.handle);
@@ -92,7 +90,7 @@ namespace Scenes
 				}
 				else
 				{
-					Debug.LogError($"Failed to unload scene: {scene.name}");
+					Log.Error($"Failed to unload scene: {scene.name}");
 				}
 			};
 		}
@@ -123,7 +121,7 @@ namespace Scenes
 			Scene scene = loadHandle.Result.Scene;
 			if (_loadedScenesByHandle.ContainsKey(scene.handle))
 			{
-				Debug.LogWarning("Already added scene with handle: " + scene.handle);
+				Log.Warning("Already added scene with handle: " + scene.handle);
 				return;
 			}
 			_lastLoadedScene = scene;

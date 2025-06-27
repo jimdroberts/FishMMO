@@ -13,11 +13,11 @@ public class DynamicAddressableLoadPathSystem : MonoBehaviour
 
 	private void SetAddressablesLoadPathOverride()
 	{
-		//Debug.Log($"Attempting to set Addressable Remote Load path to {RuntimeBaseUrl}");
+		//Log.Debug($"Attempting to set Addressable Remote Load path to {RuntimeBaseUrl}");
 
 		Addressables.ResourceManager.InternalIdTransformFunc = (IResourceLocation location) =>
 		{
-			//Debug.Log($"Current Addressable load path {location.InternalId}");
+			//Log.Debug($"Current Addressable load path {location.InternalId}");
 
 			// Modify remote asset load paths based on custom logic (e.g., IP discovery)
 			// Ensure the location starts with a protocol to identify it as a remote asset
@@ -36,13 +36,13 @@ public class DynamicAddressableLoadPathSystem : MonoBehaviour
 					string relativePath = location.InternalId.Substring(thirdSlashIndex + 1);
 					string newPath = RuntimeBaseUrl + relativePath;
 
-					//Debug.Log($"Original Path: {location.InternalId}");
-					//Debug.Log($"Transformed Path: {newPath}");
+					//Log.Debug($"Original Path: {location.InternalId}");
+					//Log.Debug($"Transformed Path: {newPath}");
 					return newPath;
 				}
 				else
 				{
-					//Debug.LogWarning($"Addressable InternalId '{location.InternalId}' starts with http/https but has no path component after the domain/port. Using runtimeBaseUrl directly.");
+					//Log.Warning($"Addressable InternalId '{location.InternalId}' starts with http/https but has no path component after the domain/port. Using runtimeBaseUrl directly.");
 					return RuntimeBaseUrl;
 				}
 			}

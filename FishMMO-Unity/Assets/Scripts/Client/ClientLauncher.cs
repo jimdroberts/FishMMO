@@ -123,7 +123,7 @@ namespace FishMMO.Client
 
 			if (www.result != UnityWebRequest.Result.Success)
 			{
-				Debug.LogError("Error fetching HTML: " + www.error);
+				Log.Error("Error fetching HTML: " + www.error);
 			}
 			else
 			{
@@ -161,7 +161,7 @@ namespace FishMMO.Client
 				}
 			}
 
-			Debug.LogError($"Div with class '{divClass}' not found.");
+			Log.Error($"Div with class '{divClass}' not found.");
 			return string.Empty;
 		}
 
@@ -209,7 +209,7 @@ namespace FishMMO.Client
 						// Do something with the server list
 						foreach (ServerAddress server in result.Addresses)
 						{
-							Debug.Log("Client: New Patch Server Address:" + server.Address + ", Port: " + server.Port);
+							Log.Debug("Client: New Patch Server Address:" + server.Address + ", Port: " + server.Port);
 						}
 
 						onFetchComplete?.Invoke(result.Addresses);
@@ -284,7 +284,7 @@ namespace FishMMO.Client
 				else
 				{
 					// Log the success
-					Debug.Log($"Patch downloaded and saved to {filePath}");
+					Log.Debug($"Patch downloaded and saved to {filePath}");
 
 					// Optionally, handle the patch data here
 					onFetchComplete?.Invoke();
@@ -300,7 +300,7 @@ namespace FishMMO.Client
 			{
 				SetButtonLock(false);
 
-				Debug.LogError(e);
+				Log.Error(e);
 			},
 			(patch_servers) =>
 			{
@@ -313,12 +313,12 @@ namespace FishMMO.Client
 				{
 					SetButtonLock(false);
 
-					Debug.LogError(e);
+					Log.Error(e);
 				},
 				(latest_version) =>
 				{
 					latestversion = latest_version;
-					Debug.Log(latest_version);
+					Log.Debug(latest_version);
 
 					// Compare latest_version with the current client version
 					if (latest_version.Equals(Constants.Configuration.Version))
@@ -349,7 +349,7 @@ namespace FishMMO.Client
 			}
 			catch (UnityException ex)
 			{
-				Debug.LogError($"Failed to load preload scenes: {ex.Message}");
+				Log.Error($"Failed to load preload scenes: {ex.Message}");
 				SetButtonLock(false);
 			}
 		}
@@ -359,7 +359,7 @@ namespace FishMMO.Client
 			SetButtonLock(true);
 			StartCoroutine(GetPatch((e) =>
 			{
-				Debug.LogError(e);
+				Log.Error(e);
 			},
 			() =>
 			{
@@ -371,7 +371,7 @@ namespace FishMMO.Client
 
 				if (process == null)
 				{
-					Debug.LogError("Failed to start the process.");
+					Log.Error("Failed to start the process.");
 					return;
 				}
 

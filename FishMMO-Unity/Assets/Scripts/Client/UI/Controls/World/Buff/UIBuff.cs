@@ -140,7 +140,7 @@ namespace FishMMO.Client
 
 		public void Buff_OnLeftClick(int index, object[] optionalParams)
 		{
-			Debug.Log($"Clicked buff {index} {optionalParams}");
+			Log.Debug($"Clicked buff {index} {optionalParams}");
 		}
 	}
 }

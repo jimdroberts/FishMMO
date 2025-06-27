@@ -57,7 +57,7 @@ namespace FishMMO.Server
 
 		private void Close()
 		{
-			Debug.Log("ServerLauncher: Unknown server type. Available servers {Login, World, Scene}");
+			Log.Debug("ServerLauncher: Unknown server type. Available servers {Login, World, Scene}");
 			Server.Quit();
 		}
 

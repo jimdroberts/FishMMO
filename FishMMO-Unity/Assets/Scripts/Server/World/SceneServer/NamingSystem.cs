@@ -42,12 +42,12 @@ namespace FishMMO.Server
 			switch (msg.Type)
 			{
 				case NamingSystemType.CharacterName:
-					//Debug.Log("NamingSystem: Searching by Character ID: " + msg.id);
+					//Log.Debug("NamingSystem: Searching by Character ID: " + msg.id);
 					// check our local scene server first
 					if (ServerBehaviour.TryGet(out CharacterSystem characterSystem) &&
 						characterSystem.CharactersByID.TryGetValue(msg.ID, out IPlayerCharacter character))
 					{
-						//Debug.Log("NamingSystem: Character Local Result " + character.CharacterName);
+						//Log.Debug("NamingSystem: Character Local Result " + character.CharacterName);
 						SendNamingBroadcast(conn, NamingSystemType.CharacterName, msg.ID, character.CharacterName);
 					}
 					// then check the database
@@ -57,13 +57,13 @@ namespace FishMMO.Server
 						string name = CharacterService.GetNameByID(dbContext, msg.ID);
 						if (!string.IsNullOrWhiteSpace(name))
 						{
-							//Debug.Log("NamingSystem: Character Database Result " + name);
+							//Log.Debug("NamingSystem: Character Database Result " + name);
 							SendNamingBroadcast(conn, NamingSystemType.CharacterName, msg.ID, name);
 						}
 					}
 					break;
 				case NamingSystemType.GuildName:
-					//Debug.Log("NamingSystem: Searching by Guild ID: " + msg.id);
+					//Log.Debug("NamingSystem: Searching by Guild ID: " + msg.id);
 					// get the name from the database
 					if (Server.NpgsqlDbContextFactory != null)
 					{
@@ -71,7 +71,7 @@ namespace FishMMO.Server
 						string name = GuildService.GetNameByID(dbContext, msg.ID);
 						if (!string.IsNullOrWhiteSpace(name))
 						{
-							//Debug.Log("NamingSystem: Guild Database Result " + name);
+							//Log.Debug("NamingSystem: Guild Database Result " + name);
 							SendNamingBroadcast(conn, NamingSystemType.GuildName, msg.ID, name);
 						}
 					}
@@ -108,12 +108,12 @@ namespace FishMMO.Server
 			switch (msg.Type)
 			{
 				case NamingSystemType.CharacterName:
-					//Debug.Log("NamingSystem: Searching by Character ID: " + msg.id);
+					//Log.Debug("NamingSystem: Searching by Character ID: " + msg.id);
 					// check our local scene server first
 					if (ServerBehaviour.TryGet(out CharacterSystem characterSystem) &&
 						characterSystem.CharactersByLowerCaseName.TryGetValue(nameLowerCase, out IPlayerCharacter character))
 					{
-						//Debug.Log("NamingSystem: Character Local Result " + character.CharacterName);
+						//Log.Debug("NamingSystem: Character Local Result " + character.CharacterName);
 						SendReverseNamingBroadcast(conn, NamingSystemType.CharacterName, nameLowerCase, character.ID, character.CharacterName);
 						break;
 					}
@@ -124,7 +124,7 @@ namespace FishMMO.Server
 						CharacterEntity entity = CharacterService.GetByName(dbContext, msg.NameLowerCase);
 						if (entity != null)
 						{
-							//Debug.Log("NamingSystem: Character Database Result " + name);
+							//Log.Debug("NamingSystem: Character Database Result " + name);
 							SendReverseNamingBroadcast(conn, NamingSystemType.CharacterName, nameLowerCase, entity.ID, entity.Name);
 							break;
 						}

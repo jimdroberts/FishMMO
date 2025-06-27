@@ -119,7 +119,7 @@ namespace FishMMO.Shared
 
 				if (!Behaviours.ContainsKey(interfaceType))
 				{
-					//Debug.Log(CharacterName + ": Registered " + interfaceType.Name);
+					//Log.Debug(CharacterName + ": Registered " + interfaceType.Name);
 					Behaviours.Add(interfaceType, behaviour);
 				}
 			}
@@ -141,7 +141,7 @@ namespace FishMMO.Shared
 			{
 				Type interfaceType = interfaces[i];
 
-				//Debug.Log(CharacterName + ": Unregistered " + interfaceType.Name);
+				//Log.Debug(CharacterName + ": Unregistered " + interfaceType.Name);
 				Behaviours.Remove(interfaceType);
 			}
 		}

@@ -102,7 +102,7 @@ namespace FishMMO.Shared
 #endif
 				}
 				//Debug.DrawLine(ray.origin, hit.point, Color.red, 1);
-				//Debug.Log("hit: " + hit.transform.name + " pos: " + hit.point);
+				//Log.Debug("hit: " + hit.transform.name + " pos: " + hit.point);
 				Current = new TargetInfo(hit.transform, hit.point);
 			}
 			else

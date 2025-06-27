@@ -65,7 +65,7 @@ namespace FishMMO.Shared
 			}
 			else
 			{
-				Debug.Log($"Faction Template not found while Updating: {msg.TemplateID}");
+				Log.Debug($"Faction Template not found while Updating: {msg.TemplateID}");
 			}
 		}
 
@@ -172,7 +172,7 @@ namespace FishMMO.Shared
 			}
 			InsertToAllianceGroup(faction);
 
-			//Debug.Log($"Set Faction: {templateID}:{value}");
+			//Log.Debug($"Set Faction: {templateID}:{value}");
 
 			if (!skipEvent)
 			{
@@ -209,7 +209,7 @@ namespace FishMMO.Shared
 			}
 			InsertToAllianceGroup(faction);
 
-			//Debug.Log($"Update Faction: {template.ID}:{amount}");
+			//Log.Debug($"Update Faction: {template.ID}:{amount}");
 
 			IFactionController.OnUpdateFaction?.Invoke(Character, faction);
 		}
@@ -224,7 +224,7 @@ namespace FishMMO.Shared
 			
 			Add(template, amountToAdjust);
 
-			//Debug.Log($"{(value > 0 ? "Add" : "Subtract")} Faction: {template.ID}:{amountToAdjust}");
+			//Log.Debug($"{(value > 0 ? "Add" : "Subtract")} Faction: {template.ID}:{amountToAdjust}");
 		}
 
 		/// <summary>
@@ -346,7 +346,7 @@ namespace FishMMO.Shared
 			{
 				if (Hostile.ContainsKey(otherFactionController.RaceTemplate.InitialFaction.ID))
 				{
-					//UnityEngine.Debug.Log($"{otherFactionController.Template.Name}: {otherFactionController.Character.GameObject.name} is an Enemy of {this.Character.GameObject.name}.");
+					//UnityEngine.Log.Debug($"{otherFactionController.Template.Name}: {otherFactionController.Character.GameObject.name} is an Enemy of {this.Character.GameObject.name}.");
 
 					return FactionAllianceLevel.Enemy;
 				}
@@ -357,7 +357,7 @@ namespace FishMMO.Shared
 				{
 					if (otherFactionController.Factions.TryGetValue(faction.Template.ID, out Faction enemyFaction))
 					{
-						//UnityEngine.Debug.Log($"{faction.Template.Name}: The target is an {(enemyFaction.Value > 0 ? "Ally" : "Enemy")} of this faction.");
+						//UnityEngine.Log.Debug($"{faction.Template.Name}: The target is an {(enemyFaction.Value > 0 ? "Ally" : "Enemy")} of this faction.");
 
 						// Is the enemy allied with our enemy?
 						if (enemyFaction.Value > 0)

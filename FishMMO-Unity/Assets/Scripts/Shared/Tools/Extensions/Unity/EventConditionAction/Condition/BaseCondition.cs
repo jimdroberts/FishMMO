@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace FishMMO.Shared
 {
-	public abstract class BaseCondition : ScriptableObject, ICondition
+	public abstract class BaseCondition : CachedScriptableObject<BaseCondition>, ICachedObject, ICondition
 	{
 		[TextArea]
 		public string ConditionDescription = "";

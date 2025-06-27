@@ -169,12 +169,12 @@ namespace FishMMO.Server
 				// Get the current member ids
 				var currentMemberIDs = dbMembers.Select(x => x.CharacterID).ToHashSet();
 
-				//Debug.Log($"Current Update Guild: {update.GuildID} MemberCount: {currentMemberIDs.Count}");
+				//Log.Debug($"Current Update Guild: {update.GuildID} MemberCount: {currentMemberIDs.Count}");
 
 				// Check if we have previously cached the guild member list
 				if (guildMemberTracker.TryGetValue(update.GuildID, out HashSet<long> previousMembers))
 				{
-					//Debug.Log($"Previously Cached Guild: {update.GuildID} MemberCount: {previousMembers.Count}");
+					//Log.Debug($"Previously Cached Guild: {update.GuildID} MemberCount: {previousMembers.Count}");
 
 					// Compute the difference: members that are in previousMembers but not in currentMemberIDs
 					List<long> difference = previousMembers.Except(currentMemberIDs).ToList();

@@ -13,7 +13,7 @@ namespace FishMMO.Shared
 		{
 			if (initiator == null)
 			{
-				Debug.LogWarning("PlayerCharacter is null for AndCondition check.");
+				Log.Warning("PlayerCharacter is null for AndCondition check.");
 				return false;
 			}
 
@@ -21,7 +21,7 @@ namespace FishMMO.Shared
 			{
 				if (condition == null)
 				{
-					Debug.LogWarning("Null condition found in AndCondition list. Skipping.");
+					Log.Warning("Null condition found in AndCondition list. Skipping.");
 					continue;
 				}
 

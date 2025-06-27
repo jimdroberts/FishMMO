@@ -39,12 +39,12 @@ namespace FishMMO.Shared
 				}
 				catch (UnauthorizedAccessException)
 				{
-					Debug.Log($"Access to directory '{currentDir}' is denied.");
+					Log.Debug($"Access to directory '{currentDir}' is denied.");
 					continue; // Skip this directory if access is denied
 				}
 				catch (DirectoryNotFoundException)
 				{
-					Debug.Log($"Directory '{currentDir}' not found.");
+					Log.Debug($"Directory '{currentDir}' not found.");
 					continue; // Skip this directory if it's not found
 				}
 
@@ -59,12 +59,12 @@ namespace FishMMO.Shared
 				}
 				catch (UnauthorizedAccessException)
 				{
-					Debug.Log($"Access to directory '{currentDir}' is denied.");
+					Log.Debug($"Access to directory '{currentDir}' is denied.");
 					continue; // Skip subdirectories if access is denied
 				}
 				catch (DirectoryNotFoundException)
 				{
-					Debug.Log($"Directory '{currentDir}' not found.");
+					Log.Debug($"Directory '{currentDir}' not found.");
 					continue; // Skip subdirectories if the current directory is not found
 				}
 			}
