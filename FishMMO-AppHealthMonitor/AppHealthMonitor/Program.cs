@@ -14,21 +14,6 @@ namespace AppHealthMonitor
 		// List to keep track of HealthMonitor instances for explicit cleanup
 		private static List<HealthMonitor> activeMonitors = new List<HealthMonitor>();
 
-		// Represents a console command
-		private class ConsoleCommand
-		{
-			public string Name { get; }
-			public string Description { get; }
-			public Func<Task> Action { get; }
-
-			public ConsoleCommand(string name, string description, Func<Task> action)
-			{
-				Name = name;
-				Description = description;
-				Action = action;
-			}
-		}
-
 		static async Task Main(string[] args)
 		{
 			Console.WriteLine("Starting Application Health Monitor Daemon...");
@@ -84,7 +69,7 @@ namespace AppHealthMonitor
 				Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Daemon] All daemon tasks have concluded. Initiating final cleanup of all monitored applications.");
 				Console.ResetColor();
 
-				foreach (var monitor in activeMonitors)
+				foreach (var monitor in activeMonitors.ToList()) // ToList to ensure collection isn't modified during enumeration if it's cleared elsewhere
 				{
 					monitor.KillApplication(); // This method already handles if the process is null or exited.
 				}
@@ -122,6 +107,7 @@ namespace AppHealthMonitor
 					catch (OperationCanceledException)
 					{
 						// Daemon is shutting down, exit loop
+						Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Orchestration] Waiting for start command cancelled. Daemon shutting down.");
 						break;
 					}
 
@@ -243,11 +229,13 @@ namespace AppHealthMonitor
 						// Wait for all current monitoring tasks to complete
 						try
 						{
+							Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Orchestration] Waiting for current monitoring tasks to complete or be cancelled...");
 							await Task.WhenAll(currentMonitoringTasks);
+							Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Orchestration] All current monitoring tasks completed normally.");
 						}
 						catch (OperationCanceledException)
 						{
-							Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Orchestration] Current monitoring cycle was cancelled.");
+							Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Orchestration] One or more monitoring tasks were cancelled (e.g., by 'stop' or daemon shutdown).");
 							// Do not re-throw, allow cleanup to proceed.
 						}
 					} // currentMonitoringCts is disposed here
@@ -258,6 +246,7 @@ namespace AppHealthMonitor
 
 					foreach (var monitor in activeMonitors.ToList())
 					{
+						Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Orchestration] Calling KillApplication for a monitor.");
 						monitor.KillApplication();
 					}
 					activeMonitors.Clear();
@@ -289,7 +278,7 @@ namespace AppHealthMonitor
 		{
 			var commands = new Dictionary<string, ConsoleCommand>();
 
-			bool IsMonitoringActive() => startEvent.IsSet && currentMonitoringCts != null && !currentMonitoringCts.IsCancellationRequested;
+			bool IsMonitoringActive() => currentMonitoringCts != null && !currentMonitoringCts.IsCancellationRequested;
 
 			commands.Add("help", new ConsoleCommand("help", "Lists all available commands.", async () =>
 			{
@@ -306,7 +295,7 @@ namespace AppHealthMonitor
 
 			commands.Add("start", new ConsoleCommand("start", "Starts monitoring all configured applications.", async () =>
 			{
-				if (startEvent.IsSet)
+				if (IsMonitoringActive())
 				{
 					Console.ForegroundColor = ConsoleColor.Yellow;
 					Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Daemon] Monitoring is already active.");
@@ -327,7 +316,7 @@ namespace AppHealthMonitor
 				if (IsMonitoringActive())
 				{
 					Console.ForegroundColor = ConsoleColor.Cyan;
-					Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Daemon] 'stop' command received. Terminating current monitoring cycle...");
+					Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Daemon] 'stop' command received. Cancelling current monitoring cycle (currentMonitoringCts)...");
 					Console.ResetColor();
 					currentMonitoringCts.Cancel();
 				}
@@ -350,12 +339,13 @@ namespace AppHealthMonitor
 
 					foreach (var monitor in activeMonitors.ToList())
 					{
+						Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Daemon] Force-killing monitor process directly.");
 						monitor.KillApplication();
 					}
 					activeMonitors.Clear();
 
-					currentMonitoringCts.Cancel();
-					startEvent.Reset();
+					currentMonitoringCts.Cancel(); // Ensure the monitoring loop itself also stops
+					startEvent.Reset(); // Reset the start event so it waits for 'start' again
 				}
 				else
 				{
@@ -368,7 +358,7 @@ namespace AppHealthMonitor
 
 			commands.Add("force-restart", new ConsoleCommand("force-restart", "Immediately terminates and then restarts all applications.", async () =>
 			{
-				if (IsMonitoringActive())
+				if (IsMonitoringActive()) // Use the updated check
 				{
 					Console.ForegroundColor = ConsoleColor.Red;
 					Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Daemon] 'force-restart' command received. Immediately terminating and then restarting all monitored processes...");
@@ -376,17 +366,18 @@ namespace AppHealthMonitor
 
 					foreach (var monitor in activeMonitors.ToList())
 					{
+						Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Daemon] Force-killing monitor process directly for restart.");
 						monitor.KillApplication();
 					}
 					activeMonitors.Clear();
 
-					currentMonitoringCts.Cancel();
-					startEvent.Set(); // Signal to restart the orchestration loop
+					currentMonitoringCts.Cancel(); // Signal current cycle to stop
+					startEvent.Set(); // Signal to restart the orchestration loop immediately after cleanup
 					Console.ForegroundColor = ConsoleColor.Green;
 					Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Daemon] Restart sequence initiated. Applications will re-launch shortly.");
 					Console.ResetColor();
 				}
-				else if (!startEvent.IsSet)
+				else if (!startEvent.IsSet) // Only signal start if not already waiting for it
 				{
 					Console.ForegroundColor = ConsoleColor.Yellow;
 					Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Daemon] Monitoring is not active. Signalling 'start' to launch applications for force-restart.");
@@ -410,10 +401,10 @@ namespace AppHealthMonitor
 
 				if (currentMonitoringCts != null && !currentMonitoringCts.IsCancellationRequested)
 				{
-					currentMonitoringCts.Cancel();
 					Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Daemon] Signalled active monitoring cycle to stop first.");
+					currentMonitoringCts.Cancel();
 				}
-				sharedDaemonCts.Cancel();
+				sharedDaemonCts.Cancel(); // This will eventually stop the main orchestration loop and console reader
 				await Task.CompletedTask;
 			}));
 
@@ -425,8 +416,8 @@ namespace AppHealthMonitor
 			// Main loop for reading commands
 			while (!sharedDaemonCts.IsCancellationRequested)
 			{
-				// Print the prompt on a new line before awaiting input
-				Console.WriteLine("Daemon Command > ");
+				// Print the prompt on the same line as input
+				Console.Write("Daemon Command > ");
 				string input = await Task.Run(() => Console.ReadLine()?.ToLowerInvariant(), sharedDaemonCts.Token)
 										 .ContinueWith(t => t.IsCanceled ? null : t.Result, sharedDaemonCts.Token);
 
