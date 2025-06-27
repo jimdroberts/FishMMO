@@ -171,9 +171,9 @@ MonoBehaviour:
   _enableStateForwarding: 1
   _networkTransform: {fileID: 0}
   _ownerInterpolation: 1
-  _ownerSmoothedProperties: 255
+  _ownerSmoothedProperties: 4294967295
   _adaptiveInterpolation: 3
-  _spectatorSmoothedProperties: 255
+  _spectatorSmoothedProperties: 4294967295
   _spectatorInterpolation: 2
   _enableTeleport: 0
   _teleportThreshold: 1
@@ -201,6 +201,27 @@ MonoBehaviour:
   _componentIndexCache: 0
   _addedNetworkObject: {fileID: -4468559157413045786}
   _networkObjectCache: {fileID: -4468559157413045786}
+  SweepHits:
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
   EnemySweepRate: 1.5
   InitialState: {fileID: 11400000, guid: b4bee0c12e3b92c48b285850bd5d47c1, type: 2}
   AvoidancePriority: 25
@@ -211,6 +232,7 @@ MonoBehaviour:
   IdleState: {fileID: 11400000, guid: 51f855b3de8e6644eb22eee716657935, type: 2}
   AttackingState: {fileID: 11400000, guid: a188e3de8a5794043903352f3ce4a57d, type: 2}
   DeadState: {fileID: 0}
+  eyeTransform: {fileID: 0}
   LookTarget: {fileID: 0}
   RandomizeState: 0
   Waypoints: []

@@ -25,14 +25,14 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 341773760523114429}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 1.85, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 2817084262407755493}
   - {fileID: 3362407936794280639}
-  m_Father: {fileID: 3575547950957483929}
+  m_Father: {fileID: 2976285799004961102}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &6885785571115267623
 MonoBehaviour:
@@ -373,7 +373,7 @@ MonoBehaviour:
   IgnoredColliders: []
   BonusOrientationMethod: 0
   BonusOrientationSharpness: 10
-  MeshRoot: {fileID: 3575547950957483929}
+  MeshRoot: {fileID: 2976285799004961102}
   CameraFollowPoint: {fileID: 8755975724377161100}
   CrouchedCapsuleHeight: 0.8
   FullCapsuleHeight: 1.6
@@ -786,7 +786,7 @@ Transform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 3575547950957483929}
+  m_Father: {fileID: 2976285799004961102}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &8062274067328127363
 GameObject:
@@ -818,6 +818,9 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 3575547950957483929}
+  - {fileID: 2248620930137115295}
+  - {fileID: 8755975724377161100}
+  - {fileID: 6125569142059716731}
   m_Father: {fileID: 4573496687782621817}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &8718706173774098268
@@ -844,12 +847,12 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 8718706173774098268}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 1.35, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 3575547950957483929}
+  m_Father: {fileID: 2976285799004961102}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &1499871529757219294
 PrefabInstance:
@@ -1213,19 +1216,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
-    m_AddedGameObjects:
-    - targetCorrespondingSourceObject: {fileID: 408730, guid: 7737647c22c1fc64a88d5cd030c352ce,
-        type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 2248620930137115295}
-    - targetCorrespondingSourceObject: {fileID: 408730, guid: 7737647c22c1fc64a88d5cd030c352ce,
-        type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 8755975724377161100}
-    - targetCorrespondingSourceObject: {fileID: 408730, guid: 7737647c22c1fc64a88d5cd030c352ce,
-        type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 6125569142059716731}
+    m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 7737647c22c1fc64a88d5cd030c352ce, type: 3}
 --- !u!4 &3575547950957483929 stripped
