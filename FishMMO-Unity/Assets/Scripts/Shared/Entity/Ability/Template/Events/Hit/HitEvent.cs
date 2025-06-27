@@ -19,7 +19,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Returns the number of hits the event has issued,
 		/// </summary>
-		public virtual int Invoke(ICharacter attacker, ICharacter defender, TargetInfo hitTarget, AbilityObject abilityObject)
+		public int Invoke(ICharacter attacker, ICharacter defender, TargetInfo hitTarget, AbilityObject abilityObject)
 		{
 			// Attacker should exist with a faction controller
 			if (attacker == null ||
