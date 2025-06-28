@@ -108,7 +108,11 @@ namespace FishMMO.Server
 			foreach (ChatEntity message in messages)
 			{
 				ChatChannel channel = (ChatChannel)message.Channel;
-				if (ChatHelper.ChatChannelCommands.TryGetValue(channel, out ChatCommandDetails sayCommand))
+				if (channel == ChatChannel.Discord)
+				{
+					OnSendDiscordMessage(message.WorldServerID, message.SceneServerID, message.Message);
+				}
+				else if (ChatHelper.ChatChannelCommands.TryGetValue(channel, out ChatCommandDetails sayCommand))
 				{
 					sayCommand.Func?.Invoke(null, new ChatBroadcast()
 					{
@@ -518,6 +522,29 @@ namespace FishMMO.Server
 			};
 
 			Server.Broadcast(conn, msg, true, Channel.Reliable);
+		}
+
+		/// <summary>
+		/// Allows the server to send Discord messages to a specific world server
+		/// </summary>
+		public void OnSendDiscordMessage(long worldServerID, long sceneServerID, string message)
+		{
+			ChatBroadcast newMsg = new ChatBroadcast()
+			{
+				Channel = ChatChannel.Discord,
+				SenderID = 0,
+				Text = message,
+			};
+
+			if (ServerBehaviour.TryGet(out CharacterSystem characterSystem) &&
+				characterSystem.CharactersByWorld.TryGetValue(worldServerID, out Dictionary<long, IPlayerCharacter> characters))
+			{
+				// send to all world characters
+				foreach (IPlayerCharacter character in new List<IPlayerCharacter>(characters.Values))
+				{
+					Server.Broadcast(character.Owner, newMsg, true, Channel.Reliable);
+				}
+			}
 		}
 	}
 }

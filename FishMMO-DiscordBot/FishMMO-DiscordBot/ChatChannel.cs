@@ -1,4 +1,4 @@
-﻿namespace FishMMO.Shared
+namespace FishMMO.DiscordBot
 {
 	public enum ChatChannel : byte
 	{

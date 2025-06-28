@@ -27,14 +27,15 @@ namespace FishMMO.Client
 
 		public UIChatChannelColorDictionary ChannelColors = new UIChatChannelColorDictionary()
 		{
-			{ ChatChannel.Say,		Color.white },
-			{ ChatChannel.World,	Color.cyan },
-			{ ChatChannel.Region,	Color.blue },
-			{ ChatChannel.Party,	Color.red },
-			{ ChatChannel.Guild,	Color.green},
-			{ ChatChannel.Tell,		Color.magenta },
-			{ ChatChannel.Trade,	Color.black },
-			{ ChatChannel.System,	Color.yellow },
+			{ ChatChannel.Say,      Color.white },
+			{ ChatChannel.World,    Color.cyan },
+			{ ChatChannel.Region,   Color.blue },
+			{ ChatChannel.Party,    Color.red },
+			{ ChatChannel.Guild,    Color.green},
+			{ ChatChannel.Tell,     Color.magenta },
+			{ ChatChannel.Trade,    Color.black },
+			{ ChatChannel.System,   Color.yellow },
+			{ ChatChannel.Discord,  TinyColor.turquoise.ToUnityColor() },
 		};
 
 		public Dictionary<string, ChatTab> Tabs = new Dictionary<string, ChatTab>();
@@ -136,7 +137,7 @@ namespace FishMMO.Client
 			{
 				foreach (UIChatMessage message in Messages)
 				{
-					if (message == null) continue;
+					if (message == null || message.Channel == ChatChannel.Discord) continue;
 
 					if (tab.ActiveChannels.Contains(message.Channel))
 					{
@@ -309,7 +310,7 @@ namespace FishMMO.Client
 					previousName = name;
 				}
 			}
-			else if (previousChannel == channel && channel == ChatChannel.System)
+			else if (previousChannel == channel || channel == ChatChannel.System)
 			{
 				newMessage.CharacterName.enabled = false;
 			}
@@ -317,7 +318,7 @@ namespace FishMMO.Client
 			newMessage.Text.text = message;
 			newMessage.gameObject.SetActive(true);
 			AddMessage(newMessage);
-			
+
 			previousChannel = channel;
 		}
 
@@ -341,7 +342,7 @@ namespace FishMMO.Client
 		{
 			if (!string.IsNullOrWhiteSpace(CurrentTab) && Tabs.TryGetValue(CurrentTab, out ChatTab tab))
 			{
-				if (tab.ActiveChannels.Contains(msg.Channel))
+				if (msg.Channel == ChatChannel.Discord || tab.ActiveChannels.Contains(msg.Channel))
 				{
 					// parse the local message
 					ParseLocalMessage(Character, msg);
@@ -357,11 +358,23 @@ namespace FishMMO.Client
 				return;
 			}
 
-			ChatCommand command = ChatHelper.ParseChatChannel(msg.Channel);
-			if (command != null)
+			if (msg.Channel == ChatChannel.Discord)
 			{
-				command?.Invoke(localCharacter, msg);
+				OnDiscordChat(msg);
 			}
+			else
+			{
+				ChatCommand command = ChatHelper.ParseChatChannel(msg.Channel);
+				if (command != null)
+				{
+					command?.Invoke(localCharacter, msg);
+				}
+			}
+		}
+
+		public void OnDiscordChat(ChatBroadcast msg)
+		{
+			InstantiateChatMessage(ChatChannel.Discord, "", msg.Text);
 		}
 
 		public bool OnWorldChat(IPlayerCharacter localCharacter, ChatBroadcast msg)
@@ -370,7 +383,7 @@ namespace FishMMO.Client
 			{
 				InstantiateChatMessage(msg.Channel, s, msg.Text);
 			});
-			
+
 			return true;
 		}
 
