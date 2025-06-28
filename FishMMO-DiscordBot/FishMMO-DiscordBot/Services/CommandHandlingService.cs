@@ -126,7 +126,7 @@ namespace FishMMO.DiscordBot.Services
 										SceneServerID = sceneId.Value,
 										TimeCreated = DateTime.UtcNow,
 										Channel = DiscordChatChannelType, // Set to the byte value for Discord chat
-										Message = $"{context.User.Username}: {message.Content}"
+										Message = $"{context.User.Username} {message.Content}"
 									};
 
 									await scopedDbContext.Chat.AddAsync(chatEntity);

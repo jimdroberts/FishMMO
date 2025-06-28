@@ -374,7 +374,8 @@ namespace FishMMO.Client
 
 		public void OnDiscordChat(ChatBroadcast msg)
 		{
-			InstantiateChatMessage(ChatChannel.Discord, "", msg.Text);
+			string characterName = ChatHelper.GetWordAndTrimmed(msg.Text, out string trimmed).TrimEnd(':');;
+			InstantiateChatMessage(ChatChannel.Discord, characterName, trimmed);
 		}
 
 		public bool OnWorldChat(IPlayerCharacter localCharacter, ChatBroadcast msg)

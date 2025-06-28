@@ -198,7 +198,7 @@ namespace FishMMO.DiscordBot.Services
 								var discordChannel = discordClient.GetChannel(channelState.DiscordChannelId) as IMessageChannel;
 								if (discordChannel != null)
 								{
-									await discordChannel.SendMessageAsync($"**[{chatMessage.TimeCreated:HH:mm:ss} {((ChatChannel)chatMessage.Channel).ToString()}] {characterName}:** {chatMessage.Message}");
+									await discordChannel.SendMessageAsync($"[{chatMessage.TimeCreated:HH:mm:ss}] [{((ChatChannel)chatMessage.Channel).ToString()}] {characterName}: {chatMessage.Message}");
 									logger.LogInformation("Sent game chat '{Message}' from '{CharacterName}' to Discord channel ID {ChannelId}.", chatMessage.Message, characterName, channelState.DiscordChannelId);
 
 									await dynamicChannelManager.UpdateChannelActivityAsync(channelState.DiscordCategoryId, chatMessage.WorldServerID, chatMessage.SceneServerID);
