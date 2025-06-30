@@ -10,7 +10,7 @@ namespace FishMMO.Shared
 {
 	public class WorldSceneDetailsCacheBuilder
 	{
-		[MenuItem("FishMMO/Build/Misc/Rebuild World Scene Details", priority = -9)]
+		[MenuItem("FishMMO/Build/Rebuild World Scene Details", priority = -10)]
 		public static void Rebuild()
 		{
 			// Try loading the addressable asset asynchronously
