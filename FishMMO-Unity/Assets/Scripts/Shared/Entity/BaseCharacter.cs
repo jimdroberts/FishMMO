@@ -8,6 +8,7 @@ using System.Runtime.CompilerServices;
 #if !UNITY_SERVER
 using TMPro;
 #endif
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -75,7 +76,7 @@ namespace FishMMO.Shared
 				GameObject modelInstance = Instantiate(go);
 				modelInstance.transform.SetParent(MeshRoot);
 				modelInstance.transform.SetLocalPositionRotationAndScale(Vector3.zero, Quaternion.identity, Vector3.one);
-				Debug.Log($"Setting Child model to identity. {modelInstance.transform.position}");
+				Log.Debug("BaseCharacter", $"Setting Child model to identity. {modelInstance.transform.position}");
 			});
 		}
 #endif

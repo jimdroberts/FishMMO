@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -14,13 +15,13 @@ namespace FishMMO.Shared
 		{
 			if (initiator == null || eventData == null)
 			{
-				Log.Warning("CanEquipItemCondition: Initiator or EventData is null.");
+				Log.Warning("CanEquipItemCondition", "Initiator or EventData is null.");
 				return false;
 			}
 
 			if (!eventData.TryGet(out ItemEventData itemEventData))
 			{
-				Log.Warning("CanEquipItemCondition: EventData does not contain ItemEventData.");
+				Log.Warning("CanEquipItemCondition", "EventData does not contain ItemEventData.");
 				return false;
 			}
 
@@ -30,41 +31,41 @@ namespace FishMMO.Shared
 
 			if (itemToEquip == null)
 			{
-				Log.Warning("CanEquipItemCondition: Item to equip is null in ItemEventData.");
+				Log.Warning("CanEquipItemCondition", "Item to equip is null in ItemEventData.");
 				return false;
 			}
 
 			if (!itemToEquip.IsEquippable)
 			{
-				//Log.Debug($"CanEquipItemCondition: Item {itemToEquip.Template.name} is not equippable.");
+				//Log.Debug($"CanEquipItemCondition", "Item {itemToEquip.Template.name} is not equippable.");
 				return false;
 			}
 
 			EquippableItemTemplate equippableTemplate = itemToEquip.Template as EquippableItemTemplate;
 			if (equippableTemplate == null)
 			{
-				Log.Warning($"CanEquipItemCondition: Item {itemToEquip.Template.name} does not have an EquippableItemTemplate.");
+				Log.Warning($"CanEquipItemCondition", "Item {itemToEquip.Template.name} does not have an EquippableItemTemplate.");
 				return false;
 			}
 
 			// If a specific target slot is provided, ensure it matches the item's slot
 			if (targetSlot != equippableTemplate.Slot)
 			{
-				//Log.Debug($"CanEquipItemCondition: Target slot {targetSlot} does not match item's required slot {equippableTemplate.Slot}.");
+				//Log.Debug($"CanEquipItemCondition", "Target slot {targetSlot} does not match item's required slot {equippableTemplate.Slot}.");
 				return false;
 			}
 
 			// Get the EquipmentController from the initiator
 			if (!initiator.TryGet(out EquipmentController equipmentController))
 			{
-				Log.Warning("CanEquipItemCondition: Initiator does not have an EquipmentController.");
+				Log.Warning("CanEquipItemCondition", "Initiator does not have an EquipmentController.");
 				return false;
 			}
 
 			// Check if the EquipmentController can manipulate (e.g., character is not busy)
 			if (!equipmentController.CanManipulate())
 			{
-				//Log.Debug("CanEquipItemCondition: EquipmentController cannot manipulate items right now.");
+				//Log.Debug("CanEquipItemCondition", "EquipmentController cannot manipulate items right now.");
 				return false;
 			}
 
@@ -74,14 +75,14 @@ namespace FishMMO.Shared
 				// If the existing item is the same as the one we want to equip (already equipped)
 				if (existingItemInSlot.ID == itemToEquip.ID && existingItemInSlot.Template.ID == itemToEquip.Template.ID)
 				{
-					//Log.Debug($"CanEquipItemCondition: Item {itemToEquip.Template.name} is already equipped in the target slot.");
+					//Log.Debug($"CanEquipItemCondition", "Item {itemToEquip.Template.name} is already equipped in the target slot.");
 					return false; // Already equipped
 				}
 
 				// If we are swapping, the source container must be able to accept the existing item
 				if (sourceContainer != null && !sourceContainer.CanAddItem(existingItemInSlot))
 				{
-					//Log.Debug($"CanEquipItemCondition: Source container cannot accommodate existing item {existingItemInSlot.Template.name}.");
+					//Log.Debug($"CanEquipItemCondition", "Source container cannot accommodate existing item {existingItemInSlot.Template.name}.");
 					return false;
 				}
 			}
@@ -90,7 +91,7 @@ namespace FishMMO.Shared
 				// If we're moving from a container, ensure the container has the item and can remove it
 				if (sourceContainer != null && !sourceContainer.ContainsItem(itemToEquip.Template)) // Assuming Contains method exists
 				{
-					//Log.Debug($"CanEquipItemCondition: Source container does not contain item {itemToEquip.Template.name}.");
+					//Log.Debug($"CanEquipItemCondition", "Source container does not contain item {itemToEquip.Template.name}.");
 					return false;
 				}
 			}
@@ -115,13 +116,13 @@ namespace FishMMO.Shared
 		{
 			if (initiator == null || eventData == null)
 			{
-				Log.Warning("EquipItemAction: Initiator or EventData is null. Cannot execute action.");
+				Log.Warning("EquipItemAction", "Initiator or EventData is null. Cannot execute action.");
 				return;
 			}
 
 			if (!eventData.TryGet(out ItemEventData itemEventData))
 			{
-				Log.Warning("EquipItemAction: EventData does not contain ItemEventData. Cannot execute action.");
+				Log.Warning("EquipItemAction", "EventData does not contain ItemEventData. Cannot execute action.");
 				return;
 			}
 
@@ -132,13 +133,13 @@ namespace FishMMO.Shared
 
 			if (itemToEquip == null)
 			{
-				Log.Warning("EquipItemAction: Item to equip is null in ItemEventData.");
+				Log.Warning("EquipItemAction", "Item to equip is null in ItemEventData.");
 				return;
 			}
 
 			if (!initiator.TryGet(out EquipmentController equipmentController))
 			{
-				Log.Warning("EquipItemAction: Initiator does not have an EquipmentController.");
+				Log.Warning("EquipItemAction", "Initiator does not have an EquipmentController.");
 				return;
 			}
 
@@ -163,11 +164,11 @@ namespace FishMMO.Shared
 
 			if (success)
 			{
-				Log.Debug($"EquipItemAction: Successfully equipped {itemToEquip.Template.name} to {targetSlot}.");
+				Log.Debug("EquipItemAction", $"Successfully equipped {itemToEquip.Template.name} to {targetSlot}.");
 			}
 			else
 			{
-				Log.Warning($"EquipItemAction: Failed to equip {itemToEquip.Template.name} to {targetSlot}.");
+				Log.Warning("EquipItemAction", $"Failed to equip {itemToEquip.Template.name} to {targetSlot}.");
 			}
 		}
 	}
@@ -185,13 +186,13 @@ namespace FishMMO.Shared
 		{
 			if (initiator == null)
 			{
-				Log.Warning("UnequipItemAction: Initiator is null. Cannot execute action.");
+				Log.Warning("UnequipItemAction", "Initiator is null. Cannot execute action.");
 				return;
 			}
 
 			if (!initiator.TryGet(out EquipmentController equipmentController))
 			{
-				Log.Warning("UnequipItemAction: Initiator does not have an EquipmentController.");
+				Log.Warning("UnequipItemAction", "Initiator does not have an EquipmentController.");
 				return;
 			}
 
@@ -210,7 +211,7 @@ namespace FishMMO.Shared
 
 			if (targetContainer == null)
 			{
-				Log.Warning("UnequipItemAction: No target container specified to unequip item to. Aborting.");
+				Log.Warning("UnequipItemAction", "No target container specified to unequip item to. Aborting.");
 				return;
 			}
 
@@ -218,12 +219,12 @@ namespace FishMMO.Shared
 
 			if (success)
 			{
-				Log.Debug($"UnequipItemAction: Successfully unequipped item from {unequipSlot}.");
+				Log.Debug("UnequipItemAction", $"Successfully unequipped item from {unequipSlot}.");
 				// You might want to do something with modifiedItems here, e.g., update UI
 			}
 			else
 			{
-				Log.Warning($"UnequipItemAction: Failed to unequip item from {unequipSlot}.");
+				Log.Warning("UnequipItemAction", $"Failed to unequip item from {unequipSlot}.");
 			}
 		}
 	}

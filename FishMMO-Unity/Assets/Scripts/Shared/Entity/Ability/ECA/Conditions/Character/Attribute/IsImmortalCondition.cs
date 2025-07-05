@@ -1,4 +1,5 @@
 using FishMMO.Shared;
+using FishMMO.Logging;
 using UnityEngine;
 
 namespace FishMMO.Server.Conditions
@@ -15,7 +16,7 @@ namespace FishMMO.Server.Conditions
 			// Attempt to get the ICharacterDamageController from the eventData.
 			if (!initiator.TryGet(out ICharacterDamageController damageController))
 			{
-				Log.Warning($"IsImmortalCondition: EventData does not contain an ICharacterDamageController. Condition failed. (Initiator: {initiator?.Name})");
+				Log.Warning("IsImmortalCondition", $"EventData does not contain an ICharacterDamageController. Condition failed. (Initiator: {initiator?.Name})");
 				return false;
 			}
 
@@ -31,7 +32,7 @@ namespace FishMMO.Server.Conditions
 				string status = isImmortal ? "is immortal" : "is mortal";
 				string invertedText = InvertResult ? " (inverted check)" : "";
 
-				Log.Debug($"IsImmortalCondition: (Initiator: '{initiator?.Name}') failed immortality check. Status: {status}{invertedText}.");
+				Log.Debug("IsImmortalCondition", $"(Initiator: '{initiator?.Name}') failed immortality check. Status: {status}{invertedText}.");
 			}
 
 			return finalResult;

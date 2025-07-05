@@ -97,11 +97,11 @@ namespace FishMMO.Shared
 				// Save the XML document to the specified file
 				xmlDoc.Save(linkerPath);
 
-				Log.Debug($"XML file '{rootPath}' has been generated successfully.");
+				UnityEngine.Debug.Log($"XML file '{rootPath}' has been generated successfully.");
 			}
 			catch (Exception ex)
 			{
-				Log.Debug($"An error occurred: {ex.Message}");
+				UnityEngine.Debug.Log($"An error occurred: {ex.Message}");
 			}
 		}
 
@@ -226,17 +226,17 @@ namespace FishMMO.Shared
 				// Only reimport if the file actually exists, to avoid errors with deleted assets
 				if (File.Exists(scriptPath))
 				{
-					Log.Debug($"Forcing editor recompile by reimporting: {scriptPath}");
+					UnityEngine.Debug.Log($"Forcing editor recompile by reimporting: {scriptPath}");
 					AssetDatabase.ImportAsset(scriptPath, ImportAssetOptions.ForceUpdate);
 				}
 				else
 				{
-					Log.Warning("Found script GUID but file does not exist to reimport. Define symbols might not update as expected.");
+					UnityEngine.Debug.LogWarning("Found script GUID but file does not exist to reimport. Define symbols might not update as expected.");
 				}
 			}
 			else
 			{
-				Log.Warning("No script files found to force editor recompile. Define symbols might not update.");
+				UnityEngine.Debug.LogWarning("No script files found to force editor recompile. Define symbols might not update.");
 			}
 		}
 
@@ -309,33 +309,33 @@ namespace FishMMO.Shared
 				BuildSummary summary = report.summary;
 				if (summary.result == BuildResult.Succeeded)
 				{
-					Log.Debug($"Build Succeeded: {summary.totalSize} bytes {DateTime.UtcNow}");
-					Log.Debug($"Build Duration: {summary.totalTime}");
-					Log.Debug($"Scenes Included: {string.Join(", ", bootstrapScenes)}");
-					Log.Debug($"Build Target: {buildTarget}");
-					Log.Debug($"Build Subtarget: {subTarget}");
+					UnityEngine.Debug.Log($"Build Succeeded: {summary.totalSize} bytes {DateTime.UtcNow}");
+					UnityEngine.Debug.Log($"Build Duration: {summary.totalTime}");
+					UnityEngine.Debug.Log($"Scenes Included: {string.Join(", ", bootstrapScenes)}");
+					UnityEngine.Debug.Log($"Build Target: {buildTarget}");
+					UnityEngine.Debug.Log($"Build Subtarget: {subTarget}");
 
 					// Log details about each build step
-					Log.Debug("Build Steps:");
+					UnityEngine.Debug.Log("Build Steps:");
 					int i = 0;
 					foreach (var step in report.steps)
 					{
-						Log.Debug($"Step {i}: {step.name}, Duration: {step.duration}");
+						UnityEngine.Debug.Log($"Step {i}: {step.name}, Duration: {step.duration}");
 						if (step.messages.Length > 0)
 						{
 							foreach (var message in step.messages)
 							{
 								if (message.type == LogType.Error)
 								{
-									Log.Error($"Error in step {step.name}: {message.content}");
+									UnityEngine.Debug.LogError($"Error in step {step.name}: {message.content}");
 								}
 								else if (message.type == LogType.Warning)
 								{
-									Log.Warning($"Warning in step {step.name}: {message.content}");
+									UnityEngine.Debug.LogWarning($"Warning in step {step.name}: {message.content}");
 								}
 								else
 								{
-									Log.Debug($"Message in step {step.name}: {message.content}");
+									UnityEngine.Debug.Log($"Message in step {step.name}: {message.content}");
 								}
 							}
 						}
@@ -355,37 +355,37 @@ namespace FishMMO.Shared
 
 					if (buildTarget == BuildTarget.WebGL)
 					{
-						Log.Debug(@"Please visit https://docs.unity3d.com/2022.3/Documentation/Manual/webgl-server-configuration-code-samples.html for further WebGL WebServer configuration.");
+						UnityEngine.Debug.Log(@"Please visit https://docs.unity3d.com/2022.3/Documentation/Manual/webgl-server-configuration-code-samples.html for further WebGL WebServer configuration.");
 					}
 				}
 				else if (summary.result == BuildResult.Failed)
 				{
-					Log.Error($"Build {report.summary.result}!");
-					Log.Error($"Total Errors: {summary.totalErrors}");
-					Log.Error($"Build Target: {buildTarget}");
-					Log.Error($"Build Subtarget: {subTarget}");
+					UnityEngine.Debug.LogError($"Build {report.summary.result}!");
+					UnityEngine.Debug.LogError($"Total Errors: {summary.totalErrors}");
+					UnityEngine.Debug.LogError($"Build Target: {buildTarget}");
+					UnityEngine.Debug.LogError($"Build Subtarget: {subTarget}");
 
 					// Log details about each build step
-					Log.Debug("Build Steps:");
+					UnityEngine.Debug.Log("Build Steps:");
 					int i = 0;
 					foreach (var step in report.steps)
 					{
-						Log.Debug($"Step {i}: {step.name}, Duration: {step.duration}");
+						UnityEngine.Debug.Log($"Step {i}: {step.name}, Duration: {step.duration}");
 						if (step.messages.Length > 0)
 						{
 							foreach (var message in step.messages)
 							{
 								if (message.type == LogType.Error)
 								{
-									Log.Error($"Error in step {step.name}: {message.content}");
+									UnityEngine.Debug.LogError($"Error in step {step.name}: {message.content}");
 								}
 								else if (message.type == LogType.Warning)
 								{
-									Log.Warning($"Warning in step {step.name}: {message.content}");
+									UnityEngine.Debug.LogWarning($"Warning in step {step.name}: {message.content}");
 								}
 								else
 								{
-									Log.Debug($"Message in step {step.name}: {message.content}");
+									UnityEngine.Debug.Log($"Message in step {step.name}: {message.content}");
 								}
 							}
 						}
@@ -395,12 +395,12 @@ namespace FishMMO.Shared
 			}
 			catch (Exception ex)
 			{
-				Log.Error($"Exception during build: {ex.Message}");
-				Log.Error($"Stack trace: {ex.StackTrace}");
+				UnityEngine.Debug.LogError($"Exception during build: {ex.Message}");
+				UnityEngine.Debug.LogError($"Stack trace: {ex.StackTrace}");
 			}
 			finally
 			{
-				Log.Debug("Build finished.");
+				UnityEngine.Debug.Log("Build finished.");
 
 				PopSettings();
 			}
@@ -646,17 +646,17 @@ namespace FishMMO.Shared
 						if (group.name.Contains(exclusion))
 						{
 							schema.IncludeInBuild = false;
-							Log.Debug($"Group {group.name} has been excluded from the build.");
+							UnityEngine.Debug.Log($"[Addressables] Group {group.name} has been excluded from the build.");
 						}
 						else
 						{
 							schema.IncludeInBuild = true;
-							Log.Warning($"Group {group.name} has been included in the build.");
+							UnityEngine.Debug.LogWarning($"[Addressables] Group {group.name} has been included in the build.");
 						}
 					}
 					else
 					{
-						Log.Warning($"No schema found for group: {group.name}");
+						UnityEngine.Debug.LogWarning($"[Addressables] No schema found for group: {group.name}");
 					}
 				}
 			}
@@ -668,11 +668,11 @@ namespace FishMMO.Shared
 				try
 				{
 					Directory.Delete(buildPath, recursive: true);
-					Log.Debug($"Deleted previous Addressable build directory at {buildPath}");
+					UnityEngine.Debug.Log($"[Addressables] Deleted previous Addressable build directory at {buildPath}");
 				}
 				catch (Exception ex)
 				{
-					Log.Error($"Failed to delete previous build directory: {ex.Message}");
+					UnityEngine.Debug.LogError($"[Addressables] Failed to delete previous build directory: {ex.Message}");
 				}
 			}
 
@@ -685,35 +685,35 @@ namespace FishMMO.Shared
 				// Log the overall build result
 				if (!string.IsNullOrEmpty(result.Error))
 				{
-					Log.Error(result.Error);
-					Log.Error("Addressable content build failure (duration: " + TimeSpan.FromSeconds(result.Duration).ToString("g") + ")");
+					UnityEngine.Debug.LogError(result.Error);
+					UnityEngine.Debug.LogError("[Addressables] Addressable content build failure (duration: " + TimeSpan.FromSeconds(result.Duration).ToString("g") + ")");
 				}
 				else
 				{
 					// Log information about the asset bundles that were built
 					if (result.AssetBundleBuildResults != null && result.AssetBundleBuildResults.Count > 0)
 					{
-						Log.Debug("Built Asset Bundles:");
+						UnityEngine.Debug.Log("[Addressables] Built Asset Bundles:");
 						foreach (var bundleResult in result.AssetBundleBuildResults)
 						{
-							Log.Debug($"Bundle: {bundleResult.SourceAssetGroup.Name} | {bundleResult.FilePath}");
+							UnityEngine.Debug.Log($"[Addressables] Bundle: {bundleResult.SourceAssetGroup.Name} | {bundleResult.FilePath}");
 
 							// Log each asset in the bundle
 							foreach (var assetPath in bundleResult.SourceAssetGroup.entries)
 							{
-								Log.Debug($"  - Asset: {assetPath}");
+								UnityEngine.Debug.Log($"[Addressables] Asset: {assetPath}");
 							}
 						}
 					}
 					else
 					{
-						Log.Debug("No asset bundles were built.");
+						UnityEngine.Debug.Log("[Addressables] No asset bundles were built.");
 					}
 				}
 			}
 			catch (Exception ex)
 			{
-				Log.Error($"Error during Addressables build: {ex.Message}");
+				UnityEngine.Debug.LogError($"[Addressables] Error during Addressables build: {ex.Message}");
 			}
 
 			// Optionally, refresh the asset database after the build

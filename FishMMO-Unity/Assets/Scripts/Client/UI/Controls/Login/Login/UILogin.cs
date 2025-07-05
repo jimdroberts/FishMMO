@@ -3,6 +3,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using FishMMO.Shared;
+using FishMMO.Logging;
 using System;
 using System.Collections;
 
@@ -145,7 +146,7 @@ namespace FishMMO.Client
 				{
 					uiDialogBox.Open(e);
 				}
-				Log.Error(e);
+				Log.Error("UILogin", e);
 				SetSignInLocked(false);
 			},
 			(servers) =>
@@ -178,7 +179,7 @@ namespace FishMMO.Client
 				{
 					uiDialogBox.Open(e);
 				}
-				Log.Warning(e);
+				Log.Warning("UILogin", e);
 				SetSignInLocked(false);
 			},
 			(servers) =>

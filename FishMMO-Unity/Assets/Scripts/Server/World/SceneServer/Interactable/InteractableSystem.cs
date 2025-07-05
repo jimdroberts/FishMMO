@@ -1,6 +1,7 @@
 ﻿using FishNet.Connection;
 using FishNet.Transporting;
 using FishMMO.Shared;
+using FishMMO.Logging;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Database.Npgsql;
 using System.Collections.Generic;
@@ -28,7 +29,7 @@ namespace FishMMO.Server
 			{
 				if (InteractableHandlerInitializer == null)
 				{
-					Log.Error($"InteractableHandlerInitializer cannot be null!");
+					Log.Error("InteractableSystem", "InteractableHandlerInitializer cannot be null!");
 				}
 				InteractableHandlerInitializer.RegisterHandlers();
 
@@ -69,11 +70,11 @@ namespace FishMMO.Server
 			if (!interactableHandlers.ContainsKey(type))
 			{
 				interactableHandlers.Add(type, handler);
-				Log.Debug($"Registered handler for {type.Name}");
+				Log.Debug("InteractableSystem", $"Registered handler for {type.Name}");
 			}
 			else
 			{
-				Log.Warning($"Handler for type {type.Name} is already registered. Overwriting existing handler.");
+				Log.Warning("InteractableSystem", $"Handler for type {type.Name} is already registered. Overwriting existing handler.");
 				interactableHandlers[type] = handler; // Overwrite in case you want to update handlers
 			}
 		}
@@ -88,12 +89,12 @@ namespace FishMMO.Server
 			Type type = typeof(T);
 			if (interactableHandlers.Remove(type))
 			{
-				Log.Debug($"Unregistered handler for {type.Name}");
+				Log.Debug("InteractableSystem", $"Unregistered handler for {type.Name}");
 				return true;
 			}
 			else
 			{
-				Log.Warning($"Attempted to unregister handler for type {type.Name}, but no handler was found.");
+				Log.Warning("InteractableSystem", $"Attempted to unregister handler for type {type.Name}, but no handler was found.");
 				return false;
 			}
 		}
@@ -111,7 +112,7 @@ namespace FishMMO.Server
 		public static void ClearAllHandlers()
 		{
 			interactableHandlers.Clear();
-			Log.Debug("All interactable handlers cleared.");
+			Log.Debug("InteractableSystem", "All interactable handlers cleared.");
 		}
 
 		/// <summary>
@@ -170,27 +171,27 @@ namespace FishMMO.Server
 		{
 			if (conn == null)
 			{
-				Log.Debug("No connnection");
+				Log.Debug("InteractableSystem", "No connnection");
 				return;
 			}
 
 			// validate connection character
 			if (conn.FirstObject == null)
 			{
-				Log.Debug("No first object");
+				Log.Debug("InteractableSystem", "No first object");
 				return;
 			}
 			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
 			if (character == null)
 			{
-				Log.Debug("No character");
+				Log.Debug("InteractableSystem", "No character");
 				return;
 			}
 
 			// validate scene
 			if (!WorldSceneDetailsCache.Scenes.TryGetValue(character.SceneName, out WorldSceneDetails _))
 			{
-				Log.Debug("Missing Scene:" + character.SceneName);
+				Log.Debug("InteractableSystem", "Missing Scene:" + character.SceneName);
 				return;
 			}
 
@@ -212,7 +213,7 @@ namespace FishMMO.Server
 				}
 				else
 				{
-					Log.Warning($"No interaction handler registered for type: {interactableType.Name}");
+					Log.Warning("InteractableSystem", $"No interaction handler registered for type: {interactableType.Name}");
 				}
 			}
 		}
@@ -268,7 +269,7 @@ namespace FishMMO.Server
 			// validate scene
 			if (!WorldSceneDetailsCache.Scenes.TryGetValue(character.SceneName, out WorldSceneDetails details))
 			{
-				Log.Debug("Missing Scene:" + character.SceneName);
+				Log.Debug("InteractableSystem", "Missing Scene:" + character.SceneName);
 				return;
 			}
 
@@ -310,7 +311,7 @@ namespace FishMMO.Server
 					// do we have enough currency to purchase this?
 					if (CurrencyTemplate == null)
 					{
-						Log.Debug("CurrencyTemplate is null.");
+						Log.Debug("InteractableSystem", "CurrencyTemplate is null.");
 						return;
 					}
 					if (!character.TryGet(out ICharacterAttributeController attributeController) ||
@@ -364,14 +365,14 @@ namespace FishMMO.Server
 			// do we have enough currency to purchase this?
 			if (CurrencyTemplate == null)
 			{
-				Log.Debug("CurrencyTemplate is null.");
+				Log.Debug("InteractableSystem", "CurrencyTemplate is null.");
 				return;
 			}
 			if (!character.TryGet(out ICharacterAttributeController attributeController) ||
 				!attributeController.TryGetAttribute(CurrencyTemplate, out CharacterAttribute currency) ||
 				currency.FinalValue < template.Price)
 			{
-				Log.Debug("Not enough currency!");
+				Log.Debug("InteractableSystem", "Not enough currency!");
 				return;
 			}
 
@@ -420,7 +421,7 @@ namespace FishMMO.Server
 			// validate scene
 			if (!WorldSceneDetailsCache.Scenes.TryGetValue(character.SceneName, out WorldSceneDetails details))
 			{
-				Log.Debug("Missing Scene:" + character.SceneName);
+				Log.Debug("InteractableSystem", "Missing Scene:" + character.SceneName);
 				return;
 			}
 
@@ -491,7 +492,7 @@ namespace FishMMO.Server
 			// do we have enough currency to purchase this?
 			if (CurrencyTemplate == null)
 			{
-				Log.Debug("CurrencyTemplate is null.");
+				Log.Debug("InteractableSystem", "CurrencyTemplate is null.");
 				return;
 			}
 			if (!character.TryGet(out ICharacterAttributeController attributeController) ||
@@ -552,13 +553,13 @@ namespace FishMMO.Server
 			// Validate scene
 			if (!WorldSceneDetailsCache.Scenes.TryGetValue(dungeonEntrance.DungeonName, out WorldSceneDetails details))
 			{
-				Log.Debug("Missing Scene:" + dungeonEntrance.DungeonName);
+				Log.Debug("InteractableSystem", "Missing Scene:" + dungeonEntrance.DungeonName);
 				return;
 			}
 
 			if (details.RespawnPositions == null || details.RespawnPositions.Count < 1)
 			{
-				Log.Debug($"Missing Scene: {dungeonEntrance.DungeonName} respawn points.");
+				Log.Debug("InteractableSystem", $"Missing Scene: {dungeonEntrance.DungeonName} respawn points.");
 				return;
 			}
 
@@ -581,7 +582,7 @@ namespace FishMMO.Server
 
 				if (!SceneService.Enqueue(dbContext, character.WorldServerID, dungeonEntrance.DungeonName, SceneType.Group, out long sceneID, character.ID))
 				{
-					Log.Debug("Failed to enqueue new pending scene load request: " + character.WorldServerID + ":" + dungeonEntrance.DungeonName);
+					Log.Debug("InteractableSystem", "Failed to enqueue new pending scene load request: " + character.WorldServerID + ":" + dungeonEntrance.DungeonName);
 				}
 				else
 				{
@@ -648,17 +649,17 @@ namespace FishMMO.Server
 			{
 				if (sceneObject == null)
 				{
-					Log.Debug("Missing SceneObject");
+					Log.Debug("InteractableSystem", "Missing SceneObject");
 				}
 				else
 				{
-					Log.Debug("Missing ID:" + sceneObjectID);
+					Log.Debug("InteractableSystem", "Missing ID:" + sceneObjectID);
 				}
 				return false;
 			}
 			if (sceneObject.GameObject.scene.handle != characterSceneHandle)
 			{
-				Log.Debug("Object scene mismatch.");
+				Log.Debug("InteractableSystem", "Object scene mismatch.");
 				return false;
 			}
 			return true;

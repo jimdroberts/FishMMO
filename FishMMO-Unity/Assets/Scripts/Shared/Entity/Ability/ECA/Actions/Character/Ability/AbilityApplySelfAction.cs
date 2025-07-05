@@ -1,4 +1,5 @@
 using UnityEngine;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -12,7 +13,7 @@ namespace FishMMO.Shared
 			}
 			else
 			{
-				Log.Warning("AbilityApplySelfAction: Expected TargetEventData.");
+				Log.Warning("AbilityApplySelfAction", "Expected TargetEventData.");
 			}
 		}
 	}

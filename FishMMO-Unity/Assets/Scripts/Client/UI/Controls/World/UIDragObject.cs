@@ -1,6 +1,7 @@
 ﻿using UnityEngine;
 using UnityEngine.UI;
 using FishMMO.Shared;
+using FishMMO.Logging;
 
 namespace FishMMO.Client
 {
@@ -39,7 +40,7 @@ namespace FishMMO.Client
 						if (Physics.Raycast(ray, out hit, DropDistance, LayerMask))
 						{
 							//Drop item at position of hit
-							Log.Debug("Dropping item at pos[" + hit.point + "]");
+							Log.Debug("UIDragObject", "Dropping item at pos[" + hit.point + "]");
 						}
 					}
 					Clear();

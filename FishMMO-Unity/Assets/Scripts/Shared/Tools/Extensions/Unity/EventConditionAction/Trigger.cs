@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -16,7 +17,7 @@ namespace FishMMO.Shared
 		{
 			if (eventData.Initiator == null)
 			{
-				Log.Warning($"Trigger '{name}' attempted to execute without a valid Initiator.");
+				Log.Warning("Trigger", $"Trigger '{name}' attempted to execute without a valid Initiator.");
 				return;
 			}
 
@@ -27,14 +28,14 @@ namespace FishMMO.Shared
 				{
 					if (!condition.Evaluate(eventData.Initiator, eventData)) // Pass the base EventData
 					{
-						Log.Debug($"Trigger '{name}' conditions not met for {eventData.Initiator?.Name}. Event: {eventData.GetType().Name}.");
+						Log.Debug("Trigger", $"Trigger '{name}' conditions not met for {eventData.Initiator?.Name}. Event: {eventData.GetType().Name}.");
 						return;
 					}
 				}
 			}
 
 			// If all conditions pass, execute all actions
-			Log.Debug($"Trigger '{name}' conditions met for {eventData.Initiator?.Name}. Executing actions for Event: {eventData.GetType().Name}...");
+			Log.Debug("Trigger", $"Trigger '{name}' conditions met for {eventData.Initiator?.Name}. Executing actions for Event: {eventData.GetType().Name}...");
 			foreach (var action in Actions)
 			{
 				if (action != null)

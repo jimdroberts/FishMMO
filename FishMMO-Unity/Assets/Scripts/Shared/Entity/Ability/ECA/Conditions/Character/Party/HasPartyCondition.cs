@@ -1,4 +1,5 @@
 using FishMMO.Shared;
+using FishMMO.Logging;
 using UnityEngine;
 
 namespace FishMMO.Server.Conditions
@@ -13,7 +14,7 @@ namespace FishMMO.Server.Conditions
 		{
 			if (!initiator.TryGet(out IPartyController partyController))
 			{
-				Log.Warning($"HasPartyCondition: Initiator '{initiator?.Name}' does not have a Party Controller. Condition failed.");
+				Log.Warning("HasPartyCondition", $"Initiator '{initiator?.Name}' does not have a Party Controller. Condition failed.");
 				return false;
 			}
 
@@ -23,7 +24,7 @@ namespace FishMMO.Server.Conditions
 			{
 				if (isInParty)
 				{
-					Log.Debug($"HasPartyCondition: Character '{initiator?.Name}' is in a party, but 'invertResult' is true. Condition failed.");
+					Log.Debug("HasPartyCondition", $"Character '{initiator?.Name}' is in a party, but 'invertResult' is true. Condition failed.");
 				}
 				return !isInParty;
 			}
@@ -32,7 +33,7 @@ namespace FishMMO.Server.Conditions
 				// If invertResult is false, we pass if they ARE in a party
 				if (!isInParty)
 				{
-					Log.Debug($"HasPartyCondition: Character '{initiator?.Name}' is not in a party. Condition failed.");
+					Log.Debug("HasPartyCondition", $"Character '{initiator?.Name}' is not in a party. Condition failed.");
 				}
 				return isInParty;
 			}

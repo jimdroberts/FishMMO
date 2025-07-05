@@ -1,4 +1,5 @@
 using UnityEngine;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -23,7 +24,7 @@ namespace FishMMO.Shared
 			}
 			else
 			{
-				Log.Warning("ApplyDispelAction: Expected CharacterTargetEventData.");
+				Log.Warning("ApplyDispelAction", "Expected CharacterTargetEventData.");
 			}
 		}
 	}

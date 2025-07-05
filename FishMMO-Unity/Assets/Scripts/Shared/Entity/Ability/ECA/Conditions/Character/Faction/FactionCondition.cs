@@ -1,4 +1,5 @@
 using UnityEngine;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -18,19 +19,19 @@ namespace FishMMO.Shared
         {
             if (initiator == null)
             {
-                Log.Warning($"FactionCondition: Player character does not exist.");
+                Log.Warning($"FactionCondition", "Player character does not exist.");
                 return false;
             }
 
             if (TargetFaction == null)
             {
-                Log.Warning($"FactionCondition: TargetFaction is not assigned for {this.name}.");
+                Log.Warning($"FactionCondition", $"TargetFaction is not assigned for {this.name}.");
                 return false;
             }
 
             if (!initiator.TryGet(out IFactionController playerFactionController))
             {
-                Log.Warning($"FactionCondition: Player character does not have an IFactionController.");
+                Log.Warning($"FactionCondition", "Player character does not have an IFactionController.");
                 return false;
             }
 

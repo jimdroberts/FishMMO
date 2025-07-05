@@ -1,5 +1,6 @@
 using UnityEngine;
 using FishMMO.Shared;
+using FishMMO.Logging;
 
 namespace FishMMO.Client
 {
@@ -13,7 +14,7 @@ namespace FishMMO.Client
 		{
 			if (MinimapCamera == null)
 			{
-				Log.Warning("MinimapCamera is not assigned to UIMinimap. Minimap will not function correctly.");
+				Log.Warning("UIMinimap", "MinimapCamera is not assigned to UIMinimap. Minimap will not function correctly.");
 				return;
 			}
 
@@ -35,7 +36,7 @@ namespace FishMMO.Client
 #if !UNITY_SERVER
 			if (Character == null || Character.MeshRoot == null)
 			{
-				Log.Warning("Character or Character.MeshRoot is null on OnPostSetCharacter.");
+				Log.Warning("UIMinimap", "Character or Character.MeshRoot is null on OnPostSetCharacter.");
 				return;
 			}
 

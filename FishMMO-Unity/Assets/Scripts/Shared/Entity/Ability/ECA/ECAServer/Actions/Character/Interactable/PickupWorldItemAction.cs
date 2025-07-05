@@ -1,5 +1,6 @@
 using FishMMO.Shared;
 using UnityEngine;
+using FishMMO.Logging;
 
 namespace FishMMO.Server
 {
@@ -10,12 +11,12 @@ namespace FishMMO.Server
 		{
 			if (!eventData.TryGet(out InteractableEventData interactableEventData))
 			{
-				Log.Error("PickupWorldItemAction: Missing InteractableEventData.");
+				Log.Error("PickupWorldItemAction", "Missing InteractableEventData.");
 				return;
 			}
 			if (!interactableEventData.TryGet(out InventoryControllerEventData inventoryControllerEventData))
 			{
-				Log.Error("PickupWorldItemAction: Missing InventoryControllerEventData.");
+				Log.Error("PickupWorldItemAction", "Missing InventoryControllerEventData.");
 				return;
 			}
 
@@ -26,21 +27,21 @@ namespace FishMMO.Server
 
 			if (worldItem == null || worldItem.Template == null || worldItem.Amount < 1 || inventoryController == null || character == null || serverInstance == null)
 			{
-				Log.Warning("PickupWorldItemAction: Invalid data for item pickup.");
+				Log.Warning("PickupWorldItemAction", "Invalid data for item pickup.");
 				return;
 			}
 
 			using var dbContext = serverInstance.Server.NpgsqlDbContextFactory.CreateDbContext();
 			if (dbContext == null)
 			{
-				Log.Error("PickupWorldItemAction: Could not create DbContext.");
+				Log.Error("PickupWorldItemAction", "Could not create DbContext.");
 				return;
 			}
 
 			Item newItem = new Item(worldItem.Template, worldItem.Amount);
 			if (newItem == null)
 			{
-				Log.Error("PickupWorldItemAction: Failed to create new item.");
+				Log.Error("PickupWorldItemAction", "Failed to create new item.");
 				return;
 			}
 
@@ -49,17 +50,17 @@ namespace FishMMO.Server
 				if (newItem.IsStackable && newItem.Stackable.Amount > 0)
 				{
 					worldItem.Amount = newItem.Stackable.Amount;
-					Log.Debug($"WorldItem partially picked up. Remaining: {worldItem.Amount}");
+					Log.Debug("PickupWorldItemAction", $"WorldItem partially picked up. Remaining: {worldItem.Amount}");
 				}
 				else
 				{
 					worldItem.Despawn();
-					Log.Debug("WorldItem fully picked up and despawned.");
+					Log.Debug("PickupWorldItemAction", "WorldItem fully picked up and despawned.");
 				}
 			}
 			else
 			{
-				Log.Warning("PickupWorldItemAction: Failed to send new item broadcast or add item to inventory.");
+				Log.Warning("PickupWorldItemAction", "Failed to send new item broadcast or add item to inventory.");
 			}
 		}
 	}

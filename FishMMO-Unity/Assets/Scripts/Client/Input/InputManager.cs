@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using FishMMO.Shared;
+using FishMMO.Logging;
 
 namespace FishMMO.Client
 {
@@ -217,7 +218,7 @@ namespace FishMMO.Client
 			// Apply Saved Overrides from Global Configuration
 			if (Configuration.GlobalSettings != null)
 			{
-				Log.Debug("Attempting to load input overrides from Global Configuration.");
+				Log.Debug("InputManager", "Attempting to load input overrides from Global Configuration.");
 
 				// Key Mapping Overrides
 				foreach (var virtualKey in new List<string>(virtualKeyMaps.Keys))
@@ -227,7 +228,7 @@ namespace FishMMO.Client
 					{
 						// Apply the override using AddKey (which updates virtualKeyMaps)
 						AddKey(virtualKey, savedKeyCode);
-						Debug.Log($"Overrode '{virtualKey}' to '{savedKeyCode}' from config.");
+						Log.Debug("InputManager", $"Overrode '{virtualKey}' to '{savedKeyCode}' from config.");
 					}
 				}
 
@@ -239,13 +240,13 @@ namespace FishMMO.Client
 					{
 						// Apply the override using AddAxis (which updates axisMaps)
 						AddAxis(virtualAxis, savedUnityAxis);
-						Debug.Log($"Overrode '{virtualAxis}' to '{savedUnityAxis}' from config.");
+						Log.Debug("InputManager", $"Overrode '{virtualAxis}' to '{savedUnityAxis}' from config.");
 					}
 				}
 			}
 			else
 			{
-				Log.Warning("Global.Configuration or its Input settings were not available during InputManager initialization. Using default input settings only.");
+				Log.Warning("InputManager", "Global.Configuration or its Input settings were not available during InputManager initialization. Using default input settings only.");
 			}
 		}
 
@@ -254,7 +255,7 @@ namespace FishMMO.Client
 			// Apply Saved Overrides from Global Configuration
 			if (Configuration.GlobalSettings != null)
 			{
-				Log.Debug("Attempting to save input to Global Configuration.");
+				Log.Debug("InputManager", "Attempting to save input to Global Configuration.");
 
 				// Key Mapping Overrides
 				foreach (var virtualKey in virtualKeyMaps)

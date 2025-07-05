@@ -1,6 +1,7 @@
 ﻿using UnityEngine.Networking;
 using System;
 using System.Collections;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -22,7 +23,7 @@ namespace FishMMO.Shared
 		public static IEnumerator FetchExternalIPAddress(Action<string> onSuccess = null, Action<string> onError = null, string serviceUrl = "https://checkip.amazonaws.com/")
 		{
 			// Log the attempt to fetch the IP address for debugging.
-			Log.Debug($"NetHelper: Fetching Remote IP Address from \"{serviceUrl}\"");
+			Log.Debug("NetHelper", $"Fetching Remote IP Address from \"{serviceUrl}\"");
 
 			// Use 'using' statement to ensure the UnityWebRequest is properly disposed.
 			using (UnityWebRequest webRequest = UnityWebRequest.Get(serviceUrl))
@@ -34,7 +35,7 @@ namespace FishMMO.Shared
 				if (webRequest.result == UnityWebRequest.Result.ConnectionError || webRequest.result == UnityWebRequest.Result.ProtocolError)
 				{
 					// Log the error more prominently.
-					Log.Error($"NetHelper: Request error: {webRequest.error}");
+					Log.Error("NetHelper", $"Request error: {webRequest.error}");
 
 					// Invoke the error callback with the web request's error message.
 					onError?.Invoke(webRequest.error);
@@ -51,7 +52,7 @@ namespace FishMMO.Shared
 					if (Constants.IsAddressValid(ipAddress))
 					{
 						// Log the successful retrieval and the IP address.
-						Log.Debug($"NetHelper: External IP: {ipAddress}");
+						Log.Debug("NetHelper", $"External IP: {ipAddress}");
 
 						// Invoke the success callback with the validated IP address.
 						onSuccess?.Invoke(ipAddress);
@@ -59,7 +60,7 @@ namespace FishMMO.Shared
 					else
 					{
 						// Log an error if the received string is not a valid IP address.
-						Log.Error("NetHelper: Received string is not a valid IP address format.");
+						Log.Error("NetHelper", "Received string is not a valid IP address format.");
 
 						// Invoke the error callback with a descriptive message.
 						onError?.Invoke("NetHelper: Received string is not a valid IP address format.");

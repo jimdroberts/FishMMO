@@ -1,5 +1,6 @@
 using UnityEngine;
 using FishMMO.Shared;
+using FishMMO.Logging;
 using System.Linq;
 using System.Collections.Generic;
 
@@ -29,7 +30,7 @@ namespace FishMMO.Client
 			settingOptions = gameObject.GetComponentsInChildren<SettingOption>().ToList();
 			if (settingOptions == null || settingOptions.Count < 1)
 			{
-				Log.Debug("No SettingOptions have been found.");
+				Log.Debug("UIOptions", "No SettingOptions have been found.");
 			}
 			else
 			{

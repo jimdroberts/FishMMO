@@ -1,4 +1,5 @@
 using UnityEngine;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -19,7 +20,7 @@ namespace FishMMO.Shared
 				if (initiator.TryGet(out ICharacterDamageController initiatorDamageController))
 				{
 					initiatorDamageController.Heal(initiator, HealAmount);
-					Log.Debug($"HealAction: Initiator '{initiator.Name}' healed for {HealAmount}.");
+					Log.Debug("HealAction", $"Initiator '{initiator.Name}' healed for {HealAmount}.");
 				}
 			}
 
@@ -31,12 +32,12 @@ namespace FishMMO.Shared
 					if (targetEventData.Target.TryGet(out ICharacterDamageController defenderDamageController))
 					{
 						defenderDamageController.Heal(initiator, HealAmount);
-						Log.Debug($"HealAction: Initiator '{initiator.Name}' healed target '{targetEventData.Target.Name}' for {HealAmount}.");
+						Log.Debug("HealAction", $"Initiator '{initiator.Name}' healed target '{targetEventData.Target.Name}' for {HealAmount}.");
 					}
 				}
 				else
 				{
-					Log.Warning("HealAction: Expected CharacterTargetEventData for target healing, but none found in EventData.");
+					Log.Warning("HealAction", "Expected CharacterTargetEventData for target healing, but none found in EventData.");
 				}
 			}
 		}

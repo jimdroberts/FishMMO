@@ -8,6 +8,7 @@ using System.Security.Cryptography;
 using System.Text;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
+using FishMMO.Logging;
 using UnityEngine;
 
 namespace FishMMO.Server
@@ -74,7 +75,7 @@ namespace FishMMO.Server
 			else
 			{
 				// Something weird happened... Adding a connection IV should not be an issue.
-				Log.Warning("Failed to generation encryption keys for connection.");
+				Log.Warning("LoginServerAuthenticator", "Failed to generation encryption keys for connection.");
 				conn.Disconnect(true);
 			}
 		}
@@ -136,7 +137,7 @@ namespace FishMMO.Server
 						// Verify SrpState equals SrpVerify and then send account public data
 						if (AccountManager.TryUpdateSrpState(conn, SrpState.SrpVerify, SrpState.SrpVerify, (a) =>
 							{
-								//UnityEngine.Log.Debug("SrpVerify");
+								//Log.Debug("LoginServerAuthenticator", "SrpVerify");
 
 								byte[] encryptedSalt = CryptoHelper.EncryptAES(encryptionData.SymmetricKey, encryptionData.IV, Encoding.UTF8.GetBytes(a.SrpData.Salt));
 								byte[] encryptedPublicServerEphemeral = CryptoHelper.EncryptAES(encryptionData.SymmetricKey, encryptionData.IV, Encoding.UTF8.GetBytes(a.SrpData.ServerEphemeral.Public));
@@ -204,7 +205,7 @@ namespace FishMMO.Server
 							};
 							Server.Broadcast(conn, resultMsg, false, Channel.Reliable);
 
-							//UnityEngine.Log.Debug("Authorized: " + authResult);
+							//Log.Debug("LoginServerAuthenticator", "Authorized: " + authResult);
 
 							/* Invoke result. This is handled internally to complete the connection authentication or kick client.
 							 * It's important to call this after sending the broadcast so that the broadcast

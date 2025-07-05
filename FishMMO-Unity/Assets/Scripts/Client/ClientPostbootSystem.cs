@@ -1,4 +1,5 @@
 using FishMMO.Shared;
+using FishMMO.Logging;
 using UnityEngine;
 
 namespace FishMMO.Client
@@ -82,7 +83,7 @@ namespace FishMMO.Client
 			}
 			catch (UnityException ex)
 			{
-				Log.Error($"Failed to load preload scenes: {ex.Message}");
+				Log.Error("ClientPostbootSystem", $"Failed to load preload scenes...", ex);
 			}
 		}
 	}

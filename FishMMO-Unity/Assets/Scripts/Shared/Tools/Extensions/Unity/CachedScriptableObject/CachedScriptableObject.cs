@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using System.Linq;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -90,7 +91,7 @@ namespace FishMMO.Shared
 				currentType = currentType.BaseType;
 			}
 
-			// Log.Info($"CachedScriptableObject ID Set: {ID}");
+			// Log.Info("CachedScriptableObject", $"ID Set: {ID}");
 		}
 
 		/// <summary>
@@ -128,7 +129,7 @@ namespace FishMMO.Shared
 				currentType = currentType.BaseType;
 			}
 
-			// Log.Info($"CachedScriptableObject Removed: {ID}");
+			// Log.Info("CachedScriptableObject", $"Removed: {ID}");
 		}
 
 		/// <summary>
@@ -141,7 +142,7 @@ namespace FishMMO.Shared
 		/// <param name="resourceID">The deterministic ID generated for the resource instance.</param>
 		public virtual void OnLoad(string typeName, string resourceName, int resourceID)
 		{
-			Log.WriteColored(LogLevel.Info, 35,
+			Log.WritePartsToConsole(LogLevel.Info, "CachedScriptableObject", 35,
 							 ("#00FF00", $"Loaded {typeName} "),
 							 ("#FFFF00", $"'{resourceName}' "),
 							 ("#00FFFF", $"ID: {resourceID}"));
@@ -157,7 +158,7 @@ namespace FishMMO.Shared
 		/// <param name="resourceID">The deterministic ID of the resource instance.</param>
 		public virtual void OnUnload(string typeName, string resourceName, int resourceID)
 		{
-			Log.WriteColored(LogLevel.Info, 35,
+			Log.WritePartsToConsole(LogLevel.Info, "CachedScriptableObject", 35,
 							 ("#FF0000", $"Unloaded {typeName} "),
 							 ("#FFFF00", $"'{resourceName}' "),
 							 ("#00FFFF", $"ID: {resourceID}"));

@@ -1,5 +1,6 @@
 using UnityEngine;
 using FishMMO.Shared;
+using FishMMO.Logging;
 using System.Collections.Generic;
 
 namespace FishMMO.Client
@@ -140,7 +141,7 @@ namespace FishMMO.Client
 
 		public void Buff_OnLeftClick(int index, object[] optionalParams)
 		{
-			Log.Debug($"Clicked buff {index} {optionalParams}");
+			Log.Debug("UIBuff", $"Clicked buff {index} {optionalParams}");
 		}
 	}
 }

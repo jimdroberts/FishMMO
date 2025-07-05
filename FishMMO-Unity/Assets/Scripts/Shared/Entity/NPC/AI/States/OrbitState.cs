@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.AI;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -16,7 +17,7 @@ namespace FishMMO.Shared
 		{
 			if (controller.Target == null)
 			{
-				Log.Warning("No target set for OrbitState.");
+				Log.Warning("OrbitState", "No target set for OrbitState.");
 				controller.TransitionToIdleState(); // Or another default state
 				return;
 			}

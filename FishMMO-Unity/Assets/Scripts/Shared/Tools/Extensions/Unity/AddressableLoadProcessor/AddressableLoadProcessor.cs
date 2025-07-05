@@ -7,6 +7,11 @@ using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
 using UnityEngine.ResourceManagement.ResourceProviders;
 using UnityEngine.SceneManagement;
+using FishMMO.Logging;
+
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 namespace FishMMO.Shared
 {
@@ -30,7 +35,7 @@ namespace FishMMO.Shared
 				DontDestroyOnLoad(this.gameObject);
 			}
 
-			void OnDestroy()
+			void OnApplicationQuit()
 			{
 				AddressableLoadProcessor.ReleaseAllAssets();
 			}
@@ -113,7 +118,7 @@ namespace FishMMO.Shared
 			AddressableAssetKey assetKey = new AddressableAssetKey(new List<string>() { label, }, mergeMode);
 			if (!operationQueue.Contains(assetKey) && !currentOperations.ContainsKey(assetKey) && !loadedAssets.ContainsKey(assetKey))
 			{
-				//Log.Debug($"Enqueued: {assetKey}");
+				//Log.Debug("AddressableLoadProcessor", $"Enqueued: {assetKey}");
 				operationQueue.Add(assetKey);
 			}
 		}
@@ -137,7 +142,7 @@ namespace FishMMO.Shared
 			AddressableAssetKey assetKey = new AddressableAssetKey(new List<string>() { label, key, }, mergeMode);
 			if (!operationQueue.Contains(assetKey) && !currentOperations.ContainsKey(assetKey) && !loadedAssets.ContainsKey(assetKey))
 			{
-				//Log.Debug($"Enqueued: {assetKey}");
+				//Log.Debug("AddressableLoadProcessor", $"Enqueued: {assetKey}");
 				operationQueue.Add(assetKey);
 			}
 		}
@@ -160,7 +165,7 @@ namespace FishMMO.Shared
 		{
 			if (!sceneOperationQueue.Contains(sceneLoadData) && !currentSceneOperations.ContainsKey(sceneLoadData) && !loadedScenes.ContainsKey(sceneLoadData.SceneName))
 			{
-				//Log.Debug($"Enqueued: {sceneLoadData.SceneName}");
+				//Log.Debug("AddressableLoadProcessor", $"Enqueued: {sceneLoadData.SceneName}");
 				AsyncOperationHandle<SceneInstance> operation = LoadSceneByLabelAsync(sceneLoadData);
 				currentSceneOperations.Add(sceneLoadData, operation);
 			}
@@ -188,7 +193,7 @@ namespace FishMMO.Shared
 			// Make sure the remaining assets to load are greater than 0
 			if (RemainingAssetsToLoad > 0)
 			{
-				//Log.Debug($"BeginProcessQueue");
+				//Log.Debug("AddressableLoadProcessor", $"BeginProcessQueue");
 				isProcessingQueue = true;
 				helper.StartCoroutine(ProcessLoadQueue());
 			}
@@ -213,7 +218,7 @@ namespace FishMMO.Shared
 					var assetKey = operationQueue.First(); // Take the first asset in the queue
 					operationQueue.Remove(assetKey); // Remove it from the queue
 
-					Log.Debug($"Loading: {assetKey}");
+					Log.Debug("AddressableLoadProcessor", $"Loading: {assetKey}");
 
 					AsyncOperationHandle<IList<UnityEngine.Object>> operation = LoadAssetsAsync(assetKey);
 					currentOperations.Add(assetKey, operation);
@@ -228,7 +233,7 @@ namespace FishMMO.Shared
 					var sceneAssetKey = sceneOperationQueue.First(); // Take the first scene in the queue
 					sceneOperationQueue.Remove(sceneAssetKey); // Remove it from the queue
 
-					Log.Debug($"Scene Loading: {sceneAssetKey.SceneName}");
+					Log.Debug("AddressableLoadProcessor", $"Scene Loading: {sceneAssetKey.SceneName}");
 
 					AsyncOperationHandle<SceneInstance> operation = LoadSceneByLabelAsync(sceneAssetKey);
 					currentSceneOperations.Add(sceneAssetKey, operation);
@@ -241,7 +246,7 @@ namespace FishMMO.Shared
 				yield return null;
 			}
 
-			//Log.Debug($"Processing Completed: {assetsProcessedSoFar} - {RemainingAssetsToLoad}");
+			//Log.Debug("AddressableLoadProcessor", $"Processing Completed: {assetsProcessedSoFar} - {RemainingAssetsToLoad}");
 
 			// Mark that the queue processing is complete
 			isProcessingQueue = false;
@@ -275,7 +280,7 @@ namespace FishMMO.Shared
 				{
 					if (existingHandle.IsDone)
 					{
-						//Log.Debug($"Reusing completed existing handle for {key}");
+						//Log.Debug("AddressableLoadProcessor", $"Reusing completed existing handle for {key}");
 						if (existingHandle.Status == AsyncOperationStatus.Succeeded)
 						{
 							onLoadComplete?.Invoke(existingHandle.Result);
@@ -288,7 +293,7 @@ namespace FishMMO.Shared
 					}
 					else
 					{
-						//Log.Debug($"Attaching new callback to in-progress load for {key}");
+						//Log.Debug("AddressableLoadProcessor", $"Attaching new callback to in-progress load for {key}");
 						existingHandle.Completed += (op) =>
 						{
 							if (op.Status == AsyncOperationStatus.Succeeded)
@@ -305,7 +310,7 @@ namespace FishMMO.Shared
 				}
 				else
 				{
-					Log.Warning($"Found invalid handle for {key} in currentPrefabOperations. Removing and restarting load.");
+					Log.Warning("AddressableLoadProcessor", $"Found invalid handle for {key} in currentPrefabOperations. Removing and restarting load.");
 					currentPrefabOperations.Remove(key);
 				}
 			}
@@ -318,13 +323,13 @@ namespace FishMMO.Shared
 			{
 				if (op.Status == AsyncOperationStatus.Succeeded)
 				{
-					Log.Debug($"New Load Complete: {op.Result.name}");
+					Log.Debug("AddressableLoadProcessor", $"New Load Complete: {op.Result.name}");
 					loadedPrefabs[key] = op;
 					onLoadComplete?.Invoke(op.Result);
 				}
 				else
 				{
-					Log.Error($"Failed to load addressable {key}: {op.OperationException?.Message}");
+					Log.Error("AddressableLoadProcessor", $"Failed to load addressable {key}: {op.OperationException?.Message}");
 					if (loadedPrefabs.ContainsKey(key))
 					{
 						loadedPrefabs.Remove(key);
@@ -345,7 +350,7 @@ namespace FishMMO.Shared
 			// Ensure the asset is not currently loading
 			if (currentPrefabOperations.ContainsKey(key))
 			{
-				Log.Warning($"Attempted to unload prefab {key} while it's still loading. Unload will be attempted after current load finishes.");
+				Log.Warning("AddressableLoadProcessor", $"Attempted to unload prefab {key} while it's still loading. Unload will be attempted after current load finishes.");
 				return;
 			}
 
@@ -353,20 +358,20 @@ namespace FishMMO.Shared
 			{
 				if (assetHandle.IsValid())
 				{
-					Log.Debug($"Unloading prefab: {(assetHandle.Result != null ? assetHandle.Result.name : key)}");
+					Log.Debug("AddressableLoadProcessor", $"Unloading prefab: {(assetHandle.Result != null ? assetHandle.Result.name : key)}");
 					Addressables.Release(assetHandle);
 					loadedPrefabs.Remove(key);
-					Log.Debug($"Prefab with key {key} has been unloaded.");
+					Log.Debug("AddressableLoadProcessor", $"Prefab with key {key} has been unloaded.");
 				}
 				else
 				{
-					Log.Warning($"Asset handle for {key} is invalid. Removing from loadedPrefabs.");
+					Log.Warning("AddressableLoadProcessor", $"Asset handle for {key} is invalid. Removing from loadedPrefabs.");
 					loadedPrefabs.Remove(key);
 				}
 			}
 			else
 			{
-				Log.Warning($"Prefab with key {key} not found in loaded prefabs. Not currently managed by this processor or already unloaded.");
+				Log.Warning("AddressableLoadProcessor", $"Prefab with key {key} not found in loaded prefabs. Not currently managed by this processor or already unloaded.");
 			}
 		}
 
@@ -389,7 +394,7 @@ namespace FishMMO.Shared
 					{
 						OnAddressableLoaded?.Invoke(asset);
 
-						//Log.Debug($"Load Complete: {asset.name}");
+						//Log.Debug("AddressableLoadProcessor", $"Load Complete: {asset.name}");
 					}
 
 					if (!loadedAssets.ContainsKey(assetkey))
@@ -399,7 +404,7 @@ namespace FishMMO.Shared
 				}
 				else if (op.Status == AsyncOperationStatus.Failed)
 				{
-					Log.Error($"Failed to load Addressable: {assetkey.Keys}");
+					Log.Error("AddressableLoadProcessor", $"Failed to load Addressable: {assetkey.Keys}");
 					op.Release();
 				}
 
@@ -432,7 +437,7 @@ namespace FishMMO.Shared
 
 					currentSceneOperations.Remove(sceneLoadData);
 
-					//Log.Debug($"Scene Load Complete: {sceneLoadData.SceneName}");
+					//Log.Debug("AddressableLoadProcessor", $"Scene Load Complete: {sceneLoadData.SceneName}");
 
 					loadedScenes.Add(loadedScene.name, op);
 					sceneLoadData.OnSceneLoaded?.Invoke(loadedScene);
@@ -440,7 +445,7 @@ namespace FishMMO.Shared
 				}
 				else if (op.Status == AsyncOperationStatus.Failed)
 				{
-					Log.Error($"Failed to load scene Addressable: {sceneLoadData.SceneName}");
+					Log.Error("AddressableLoadProcessor", $"Failed to load scene Addressable: {sceneLoadData.SceneName}");
 					op.Release();
 				}
 
@@ -469,24 +474,24 @@ namespace FishMMO.Shared
 						OnAddressableUnloaded?.Invoke(asset);
 
 						// Log the unloading action for debugging purposes
-						Log.Debug($"Unloading asset: {asset.name}");
+						Log.Debug("AddressableLoadProcessor", $"Unloading asset: {asset.name}");
 					}
 
 					// Release the asset handle and remove it from the loadedAssets dictionary
 					Addressables.Release(assetHandle);
 					loadedAssets.Remove(assetKey);
 
-					Log.Debug($"Asset with key {assetKey} has been unloaded.");
+					Log.Debug("AddressableLoadProcessor", $"Asset with key {assetKey} has been unloaded.");
 				}
 				else
 				{
-					Log.Error($"Asset handle for {assetKey} is invalid.");
+					Log.Error("AddressableLoadProcessor", $"Asset handle for {assetKey} is invalid.");
 				}
 			}
 			else
 			{
 				// Log if the asset key was not found in the loaded assets dictionary
-				Log.Warning($"Asset with key {assetKey} not found in loaded assets.");
+				Log.Warning("AddressableLoadProcessor", $"Asset with key {assetKey} not found in loaded assets.");
 			}
 		}
 
@@ -511,7 +516,7 @@ namespace FishMMO.Shared
 			// Check if the scene is already loaded
 			if (!loadedScenes.TryGetValue(sceneName, out var handle))
 			{
-				//Log.Warning($"Scene {sceneName} not found in loaded scenes.");
+				//Log.Warning("AddressableLoadProcessor", $"Scene {sceneName} not found in loaded scenes.");
 				return;
 			}
 
@@ -531,7 +536,7 @@ namespace FishMMO.Shared
 						Addressables.Release(handle);
 					}
 
-					//Log.Debug($"AddressableLoadProcessor Successfully unloaded scene {sceneName}");
+					//Log.Debug("AddressableLoadProcessor", $"Successfully unloaded scene {sceneName}");
 
 					// Invoke the unload callback
 					OnSceneUnloaded?.Invoke(sceneName);
@@ -539,7 +544,7 @@ namespace FishMMO.Shared
 				else if (op.Status == AsyncOperationStatus.Failed)
 				{
 					// Log an error if unloading the scene failed
-					Log.Error($"Failed to unload scene Addressable: {sceneName}");
+					Log.Error("AddressableLoadProcessor", $"Failed to unload scene Addressable: {sceneName}");
 				}
 			};
 		}

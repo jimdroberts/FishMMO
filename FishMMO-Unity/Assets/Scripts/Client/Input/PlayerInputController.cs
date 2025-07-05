@@ -1,6 +1,7 @@
 using FishNet.Transporting;
 using UnityEngine;
-using FishMMO.Shared; // Assuming FishMMO.Shared contains Log and Configuration
+using FishMMO.Shared;
+using FishMMO.Logging;
 using KinematicCharacterController;
 using UnityEngine.InputSystem;
 
@@ -58,7 +59,7 @@ namespace FishMMO.Client
 		{
 			if (PlayerInputHandler.Controls == null)
 			{
-				Debug.LogError("PlayerControls not initialized. Ensure PlayerInputHandler is active in the scene.");
+				Log.Error("PlayerInputController", "PlayerControls not initialized. Ensure PlayerInputHandler is active in the scene.");
 				return;
 			}
 
@@ -352,7 +353,7 @@ namespace FishMMO.Client
 		{
 			// Implement your hotkey logic here, e.g., using an ability, consuming an item.
 			// Example: Character.UseAbility(hotkeyNumber);
-			Debug.Log($"Hotkey {hotkeyNumber} pressed!");
+			Log.Debug("PlayerInputController", $"Hotkey {hotkeyNumber} pressed!");
 		}
 #endif
 	}

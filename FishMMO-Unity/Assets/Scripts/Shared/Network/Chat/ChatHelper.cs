@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -111,7 +112,7 @@ namespace FishMMO.Shared
 
 			foreach (KeyValuePair<string, ChatCommand> pair in commands)
 			{
-				Log.Debug("ChatHelper: Added Command[" + pair.Key + "]");
+				Log.Debug("ChatHelper", $"Added Command[" + pair.Key + "]");
 				Commands[pair.Key] = pair.Value;
 			}
 		}
@@ -120,7 +121,7 @@ namespace FishMMO.Shared
 		{
 			foreach (string command in commands)
 			{
-				Log.Debug("ChatHelper: Added Chat Command[" + command + "]");
+				Log.Debug("ChatHelper", $"Added Chat Command[" + command + "]");
 				ChatChannelCommands[details.Channel] = details;
 				CommandChannelMap.Add(command, details);
 			}

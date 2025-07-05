@@ -1,4 +1,5 @@
 using UnityEngine;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -11,12 +12,12 @@ namespace FishMMO.Shared
 		{
 			if (initiator == null)
 			{
-				Log.Warning($"Player character does not exist.");
+				Log.Warning("ItemCondition", "Player character does not exist.");
 				return false;
 			}
 			if (!initiator.TryGet(out IInventoryController inventoryController))
 			{
-				Log.Warning($"Player character does not have an IInventoryController.");
+				Log.Warning("ItemCondition", "Player character does not have an IInventoryController.");
 				return false;
 			}
 

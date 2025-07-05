@@ -26,7 +26,7 @@ namespace FishMMO.Shared
         {
             if (particleAdjuster == null || particleAdjuster.ParticleSystem == null)
             {
-                Log.Warning("Particle system is missing.");
+                UnityEngine.Debug.LogWarning("Particle system is missing.");
                 return;
             }
 

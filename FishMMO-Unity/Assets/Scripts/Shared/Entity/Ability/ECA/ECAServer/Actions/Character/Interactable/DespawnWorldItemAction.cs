@@ -1,4 +1,5 @@
 using FishMMO.Shared;
+using FishMMO.Logging;
 using UnityEngine;
 
 namespace FishMMO.Server
@@ -10,7 +11,7 @@ namespace FishMMO.Server
 		{
 			if (!eventData.TryGet(out InteractableEventData interactableEventData))
 			{
-				Log.Error("DespawnWorldItemAction: Missing InteractableEventData.");
+				Log.Error("DespawnWorldItemAction", "Missing InteractableEventData.");
 				return;
 			}
 
@@ -18,12 +19,12 @@ namespace FishMMO.Server
 
 			if (worldItem == null)
 			{
-				Log.Warning("DespawnWorldItemAction: Invalid data for despawn.");
+				Log.Warning("DespawnWorldItemAction", "Invalid data for despawn.");
 				return;
 			}
 
 			worldItem.Despawn();
-			Log.Debug("WorldItem despawned via action.");
+			Log.Debug("DespawnWorldItemAction", "WorldItem despawned via action.");
 		}
 	}
 }

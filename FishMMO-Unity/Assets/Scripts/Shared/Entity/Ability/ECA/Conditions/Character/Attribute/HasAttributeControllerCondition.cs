@@ -1,4 +1,5 @@
 using UnityEngine;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -9,12 +10,12 @@ namespace FishMMO.Shared
 		{
 			if (initiator == null)
 			{
-				Log.Warning($"Character does not exist.");
+				Log.Warning("HasAttributeControllerCondition", "Character does not exist.");
 				return false;
 			}
 			if (!initiator.TryGet(out ICharacterAttributeController characterAttributeController))
 			{
-				Log.Warning($"Character does not have an ICharacterAttributeController.");
+				Log.Warning("HasAttributeControllerCondition", "Character does not have an ICharacterAttributeController.");
 				return false;
 			}
 			return true;

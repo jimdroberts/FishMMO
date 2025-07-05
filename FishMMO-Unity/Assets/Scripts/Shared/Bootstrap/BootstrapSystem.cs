@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -50,7 +51,7 @@ namespace FishMMO.Shared
 			}
 			catch (UnityException ex)
 			{
-				Log.Error($"Failed to load preload scenes: {ex.Message}");
+				Log.Error("BootstrapSystem", $"Failed to load preload scenes...", ex);
 			}
 		}
 
@@ -104,7 +105,7 @@ namespace FishMMO.Shared
 			}
 			catch (UnityException ex)
 			{
-				Log.Error($"Failed to load postload scenes: {ex.Message}");
+				Log.Error("BootstrapSystem", $"Failed to load postload scenes...", ex);
 			}
 		}
 

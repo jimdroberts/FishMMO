@@ -3,6 +3,7 @@ using FishNet.Serializing;
 using FishNet.Transporting;
 using System.Collections.Generic;
 using UnityEngine;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -202,7 +203,7 @@ namespace FishMMO.Shared
 			}
 			if (TryGetItem(index, out Item item))
 			{
-				Log.Debug("EquipmentController: using item in slot[" + index + "]");
+				Log.Debug("EquipmentController", $"Using item in slot[" + index + "]");
 				//items[index].OnUseItem();
 			}
 		}

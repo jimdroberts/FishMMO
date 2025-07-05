@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -57,7 +58,7 @@ namespace FishMMO.Shared
 		{
 			if (PlaceholderModel == null)
 			{
-				Log.Warning($"RaceTemplate '{Name}' has no valid PlaceholderModel assigned to load.");
+				Log.Warning("RaceTemplate", $"'{Name}' has no valid PlaceholderModel assigned to load.");
 				return;
 			}
 

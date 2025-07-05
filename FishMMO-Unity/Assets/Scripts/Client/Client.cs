@@ -7,6 +7,7 @@ using FishNet.Transporting.Tugboat;
 using FishNet.Transporting.Bayou;
 using FishNet.Managing.Scened;
 using FishMMO.Shared;
+using FishMMO.Logging;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
@@ -141,7 +142,7 @@ namespace FishMMO.Client
 				NetworkManager = FindFirstObjectByType<NetworkManager>();
 				if (NetworkManager == null)
 				{
-					Log.Error("Client: NetworkManager not found.");
+					Log.Error("Client", "NetworkManager not found.");
 					return false;
 				}
 			}
@@ -179,7 +180,7 @@ namespace FishMMO.Client
 				LoginAuthenticator = FindFirstObjectByType<ClientLoginAuthenticator>();
 				if (LoginAuthenticator == null)
 				{
-					Log.Error("Client: LoginAuthenticator not found.");
+					Log.Error("Client", "LoginAuthenticator not found.");
 					return false;
 				}
 			}
@@ -203,13 +204,13 @@ namespace FishMMO.Client
 			TransportManager transportManager = _networkManager.TransportManager;
 			if (transportManager == null)
 			{
-				Log.Error("Client: TransportManager not found.");
+				Log.Error("Client", "TransportManager not found.");
 				return false;
 			}
 			Multipass multipass = transportManager.GetTransport<Multipass>();
 			if (multipass == null)
 			{
-				Log.Error("Client: Multipass not found.");
+				Log.Error("Client", "Multipass not found.");
 				return false;
 			}
 #if UNITY_WEBGL && !UNITY_EDITOR
@@ -244,7 +245,7 @@ namespace FishMMO.Client
 		{
 			if (type == LogType.Exception)
 			{
-				Log.Error($"{stackTrace}");
+				Log.Error("Client", $"{stackTrace}");
 
 				ForceDisconnect();
 			}
@@ -535,7 +536,7 @@ namespace FishMMO.Client
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void Broadcast<T>(T broadcast, Channel channel = Channel.Reliable) where T : struct, IBroadcast
 		{
-			Log.Debug($"[Broadcast] Sending: " + typeof(T));
+			Log.Debug("Broadcast", "Sending: " + typeof(T));
 			_networkManager.ClientManager.Broadcast(broadcast, channel);
 		}
 
@@ -601,7 +602,7 @@ namespace FishMMO.Client
 						// Do something with the server list
 						foreach (ServerAddress server in result.Addresses)
 						{
-							Log.Debug("Client: New Login Server Address:" + server.Address + ", Port: " + server.Port);
+							Log.Debug("Client", $"New Login Server Address:{server.Address}, Port: {server.Port}");
 						}
 
 						// Assign our LoginServerAddresses
@@ -708,7 +709,7 @@ namespace FishMMO.Client
 			}
 			catch (UnityException ex)
 			{
-				Log.Error($"Failed to load preload scenes: {ex.Message}");
+				Log.Error("Client", $"Failed to load preload scenes...", ex);
 			}
 		}
 

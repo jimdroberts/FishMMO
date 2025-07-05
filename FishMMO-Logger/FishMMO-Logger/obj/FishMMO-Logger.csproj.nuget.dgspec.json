@@ -1,0 +1,72 @@
+{
+  "format": 1,
+  "restore": {
+    "D:\\FishMMO Dev\\FishMMO-Logger\\FishMMO-Logger\\FishMMO-Logger.csproj": {}
+  },
+  "projects": {
+    "D:\\FishMMO Dev\\FishMMO-Logger\\FishMMO-Logger\\FishMMO-Logger.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "D:\\FishMMO Dev\\FishMMO-Logger\\FishMMO-Logger\\FishMMO-Logger.csproj",
+        "projectName": "FishMMO-Logger",
+        "projectPath": "D:\\FishMMO Dev\\FishMMO-Logger\\FishMMO-Logger\\FishMMO-Logger.csproj",
+        "packagesPath": "C:\\Users\\jim\\.nuget\\packages\\",
+        "outputPath": "D:\\FishMMO Dev\\FishMMO-Logger\\FishMMO-Logger\\obj\\",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "C:\\Users\\jim\\AppData\\Roaming\\NuGet\\NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "netstandard2.1"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "netstandard2.1": {
+            "targetAlias": "netstandard2.1",
+            "projectReferences": {}
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        }
+      },
+      "frameworks": {
+        "netstandard2.1": {
+          "targetAlias": "netstandard2.1",
+          "dependencies": {
+            "System.Text.Json": {
+              "target": "Package",
+              "version": "[9.0.4, )"
+            }
+          },
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "NETStandard.Library": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.400\\RuntimeIdentifierGraph.json"
+        }
+      }
+    }
+  }
+}

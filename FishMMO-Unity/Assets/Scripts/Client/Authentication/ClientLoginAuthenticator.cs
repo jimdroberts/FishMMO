@@ -7,6 +7,7 @@ using System.Security.Cryptography;
 using System.Text;
 using SecureRemotePassword;
 using FishMMO.Shared;
+using FishMMO.Logging;
 using System.Runtime.CompilerServices;
 
 namespace FishMMO.Client
@@ -174,7 +175,7 @@ namespace FishMMO.Client
 			{
 				Client.ForceDisconnect();
 			}
-			//Log.Debug("Srp: " + proof);
+			//Log.Debug("ClientLoginAuthenticator", "Srp: " + proof);
 		}
 
 		private void OnClientSrpSuccessBroadcastReceived(SrpSuccessBroadcast msg, Channel channel)
@@ -193,13 +194,13 @@ namespace FishMMO.Client
 			{
 				// Invoke result on the client
 				OnClientAuthenticationResult(msg.Result);
-				Log.Debug(msg.Result.ToString());
+				Log.Debug("ClientLoginAuthenticator", msg.Result.ToString());
 			}
 			else
 			{
 				Client.ForceDisconnect();
 			}
-			//Log.Debug("Srp: " + result);
+			//Log.Debug("ClientLoginAuthenticator", "Srp: " + result);
 		}
 
 		/// <summary>
@@ -209,7 +210,7 @@ namespace FishMMO.Client
 		{
 			// Invoke result on the client
 			OnClientAuthenticationResult(msg.Result);
-			Log.Debug(msg.Result.ToString());
+			Log.Debug("ClientLoginAuthenticator", msg.Result.ToString());
 		}
 	}
 }

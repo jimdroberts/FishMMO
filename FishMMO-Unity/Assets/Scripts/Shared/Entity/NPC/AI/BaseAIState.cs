@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -107,7 +108,7 @@ namespace FishMMO.Shared
 					{
 						bool lineOfSight = HasLineOfSight(controller, def);
 
-						Log.Debug($"{controller.gameObject.name} Enemy Detected: {def.GameObject.name} | Line of Sight: {lineOfSight}");
+						Log.Debug("BaseAIState", $"{controller.gameObject.name} Enemy Detected: {def.GameObject.name} | Line of Sight: {lineOfSight}");
 
 						if (lineOfSight)
 						{

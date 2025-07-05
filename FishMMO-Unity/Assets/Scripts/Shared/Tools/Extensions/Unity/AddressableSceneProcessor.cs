@@ -5,6 +5,7 @@ using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
 using UnityEngine.ResourceManagement.ResourceProviders;
 using UnityEngine.SceneManagement;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -37,7 +38,7 @@ namespace FishMMO.Shared
 		{
 			if (string.IsNullOrEmpty(sceneName))
 			{
-				Log.Error("SceneName is null or empty!");
+				Log.Error("AddressableSceneProcessor", "SceneName is null or empty!");
 				return;
 			}
 			//Log.Warning($"AddressableSceneProcessor Loading Scene: {sceneName}");
@@ -54,7 +55,7 @@ namespace FishMMO.Shared
 				}
 				else
 				{
-					Log.Error($"Failed to load scene: {sceneName}");
+					Log.Error("AddressableSceneProcessor", $"Failed to load scene: {sceneName}");
 				}
 			};
 		}
@@ -63,7 +64,7 @@ namespace FishMMO.Shared
 		{
 			if (!_loadedScenesByHandle.TryGetValue(scene.handle, out var loadHandle))
 			{
-				Log.Error("Trying to unload a non addressable scene.");
+				Log.Error("AddressableSceneProcessor", "Trying to unload a non addressable scene.");
 				return;
 			}
 
@@ -90,7 +91,7 @@ namespace FishMMO.Shared
 				}
 				else
 				{
-					Log.Error($"Failed to unload scene: {scene.name}");
+					Log.Error("AddressableSceneProcessor", $"Failed to unload scene: {scene.name}");
 				}
 			};
 		}
@@ -121,7 +122,7 @@ namespace FishMMO.Shared
 			Scene scene = loadHandle.Result.Scene;
 			if (_loadedScenesByHandle.ContainsKey(scene.handle))
 			{
-				Log.Warning("Already added scene with handle: " + scene.handle);
+				Log.Warning("AddressableSceneProcessor", "Already added scene with handle: " + scene.handle);
 				return;
 			}
 			_lastLoadedScene = scene;

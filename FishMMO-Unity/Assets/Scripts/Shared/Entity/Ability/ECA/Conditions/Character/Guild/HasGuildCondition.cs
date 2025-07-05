@@ -1,4 +1,5 @@
 using FishMMO.Shared;
+using FishMMO.Logging;
 using UnityEngine;
 
 namespace FishMMO.Server.Conditions
@@ -13,7 +14,7 @@ namespace FishMMO.Server.Conditions
 		{
 			if (!initiator.TryGet(out IGuildController guildController))
 			{
-				Log.Warning($"HasGuildCondition: Initiator '{initiator?.Name}' does not have a Guild Controller. Condition failed.");
+				Log.Warning("HasGuildCondition", $"Initiator '{initiator?.Name}' does not have a Guild Controller. Condition failed.");
 				return false;
 			}
 
@@ -24,7 +25,7 @@ namespace FishMMO.Server.Conditions
 				// If invertResult is true, we pass if they are NOT in a party
 				if (isInGuild)
 				{
-					Log.Debug($"HasGuildCondition: Character '{initiator?.Name}' is in a guild, but 'invertResult' is true. Condition failed.");
+					Log.Debug("HasGuildCondition", $"Character '{initiator?.Name}' is in a guild, but 'invertResult' is true. Condition failed.");
 				}
 				return !isInGuild;
 			}
@@ -33,7 +34,7 @@ namespace FishMMO.Server.Conditions
 				// If invertResult is false, we pass if they ARE in a party
 				if (!isInGuild)
 				{
-					Log.Debug($"HasGuildCondition: Character '{initiator?.Name}' is not in a guild. Condition failed.");
+					Log.Debug("HasGuildCondition", $"Character '{initiator?.Name}' is not in a guild. Condition failed.");
 				}
 				return isInGuild;
 			}

@@ -3,6 +3,7 @@ using UnityEngine;
 using FishNet.Object;
 using FishNet.Component.Prediction;
 using System;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -37,7 +38,7 @@ namespace FishMMO.Shared
 			Collider = gameObject.GetComponent<Collider>();
 			if (Collider == null)
 			{
-				Log.Debug(Name + " collider is null and will not function properly.");
+				Log.Debug("Region", Name + " collider is null and will not function properly.");
 				return;
 			}
 			// set the collider to trigger just incase we forgot to set it in the inspector

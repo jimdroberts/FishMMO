@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -13,7 +14,7 @@ namespace FishMMO.Shared
 		{
 			if (initiator == null)
 			{
-				Log.Warning("PlayerCharacter is null for OrCondition check.");
+				Log.Warning("OrCondition", "PlayerCharacter is null for OrCondition check.");
 				return false;
 			}
 
@@ -21,7 +22,7 @@ namespace FishMMO.Shared
 			{
 				if (condition == null)
 				{
-					Log.Warning("Null condition found in OrCondition list. Skipping.");
+					Log.Warning("OrCondition", "Null condition found in OrCondition list. Skipping.");
 					continue;
 				}
 

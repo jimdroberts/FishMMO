@@ -4,6 +4,7 @@ using FishNet.Connection;
 using FishNet.Serializing;
 using FishNet.Transporting;
 using UnityEngine;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -47,7 +48,7 @@ namespace FishMMO.Shared
 			}
 			else
 			{
-				Log.Error("Character Attribute Database is missing!");
+				Log.Error("CharacterAttributeController", "Character Attribute Database is missing!");
 			}
 		}
 

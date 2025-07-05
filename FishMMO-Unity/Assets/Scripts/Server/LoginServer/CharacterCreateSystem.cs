@@ -5,6 +5,7 @@ using FishMMO.Database.Npgsql;
 using FishMMO.Database.Npgsql.Entities;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
+using FishMMO.Logging;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -49,7 +50,7 @@ namespace FishMMO.Server
 				// Validate character creation data
 				if (!Constants.Authentication.IsAllowedCharacterName(msg.CharacterName))
 				{
-					//Log.Debug("Invalid Character Name.");
+					//Log.Debug("CharacterCreateSystem", "Invalid Character Name.");
 
 					// Invalid character name
 					Server.Broadcast(conn, new CharacterCreateResultBroadcast()
@@ -62,7 +63,7 @@ namespace FishMMO.Server
 				using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 				if (!AccountManager.GetAccountNameByConnection(conn, out string accountName))
 				{
-					//Log.Debug("Account not found.");
+					//Log.Debug("CharacterCreateSystem", "Account not found.");
 
 					// Account not found??
 					conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
@@ -71,7 +72,7 @@ namespace FishMMO.Server
 				int characterCount = CharacterService.GetCount(dbContext, accountName);
 				if (characterCount >= MaxCharacters)
 				{
-					//Log.Debug("Too many characters.");
+					//Log.Debug("CharacterCreateSystem", "Too many characters.");
 
 					// Too many characters
 					Server.Broadcast(conn, new CharacterCreateResultBroadcast()
@@ -83,7 +84,7 @@ namespace FishMMO.Server
 				var character = CharacterService.GetByName(dbContext, msg.CharacterName);
 				if (character != null)
 				{
-					//Log.Debug("Character name is taken.");
+					//Log.Debug("CharacterCreateSystem", "Character name is taken.");
 
 					// Character name already taken
 					Server.Broadcast(conn, new CharacterCreateResultBroadcast()
@@ -97,7 +98,7 @@ namespace FishMMO.Server
 					WorldSceneDetailsCache.Scenes == null ||
 					WorldSceneDetailsCache.Scenes.Count < 1)
 				{
-					//Log.Debug("Spawn positions invalid.");
+					//Log.Debug("CharacterCreateSystem", "Spawn positions invalid.");
 
 					// Failed to find spawn positions to validate with
 					Server.Broadcast(conn, new CharacterCreateResultBroadcast()
@@ -112,27 +113,27 @@ namespace FishMMO.Server
 					// Validate spawner
 					if (details.InitialSpawnPositions.TryGetValue(msg.SpawnerName, out CharacterInitialSpawnPositionDetails initialSpawnPosition))
 					{
-						//Log.Debug($"RaceTemplate ID: {msg.RaceTemplateID}");
+						//Log.Debug("CharacterCreateSystem", $"RaceTemplate ID: {msg.RaceTemplateID}");
 
 						// Validate race
 						RaceTemplate raceTemplate = RaceTemplate.Get<RaceTemplate>(msg.RaceTemplateID);
 						if (raceTemplate == null)
 						{
-							//Log.Debug("RaceTemplate is invalid.");
+							//Log.Debug("CharacterCreateSystem", "RaceTemplate is invalid.");
 
 							conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
 							return;
 						}
 						if (raceTemplate.Prefab == null)
 						{
-							//Log.Debug("RaceTemplate Prefab is invalid.");
+							//Log.Debug("CharacterCreateSystem", "RaceTemplate Prefab is invalid.");
 
 							conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
 							return;
 						}
 						if (raceTemplate.GetModelReference(msg.ModelIndex) == null)
 						{
-							//Log.Debug("ModelIndex is invalid.");
+							//Log.Debug("CharacterCreateSystem", "ModelIndex is invalid.");
 
 							conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
 							return;
@@ -149,7 +150,7 @@ namespace FishMMO.Server
 						}
 						if (!validateAllowedRace)
 						{
-							//Log.Debug("Race not allowed.");
+							//Log.Debug("CharacterCreateSystem", "Race not allowed.");
 
 							conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
 							return;
@@ -160,7 +161,7 @@ namespace FishMMO.Server
 						if (characterPrefab == null ||
 							Server.NetworkManager.SpawnablePrefabs.GetObject(true, characterPrefab.NetworkObject.PrefabId) == null)
 						{
-							//Log.Debug("Character prefab is broken or not loaded.");
+							//Log.Debug("CharacterCreateSystem", "Character prefab is broken or not loaded.");
 
 							conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
 							return;
@@ -208,7 +209,7 @@ namespace FishMMO.Server
 									CurrentValue = template.IsResourceAttribute ? template.InitialValue : 0.0f,
 								});
 
-								//UnityEngine.Log.Debug($"{template.Name} : Initial {template.InitialValue}");
+								//Log.Debug("CharacterCreateSystem", $"{template.Name} : Initial {template.InitialValue}");
 							}
 						}
 
@@ -279,12 +280,12 @@ namespace FishMMO.Server
 					}
 					else
 					{
-						Log.Debug("Unable to get find initial spawn position for Spawner.");
+						Log.Debug("CharacterCreateSystem", "Unable to get find initial spawn position for Spawner.");
 					}
 				}
 				else
 				{
-					Log.Debug("Unable to get World Scene Details.");
+					Log.Debug("CharacterCreateSystem", "Unable to get World Scene Details.");
 				}
 			}
 		}
@@ -345,7 +346,7 @@ namespace FishMMO.Server
 					{
 						if (initialAttributes.TryGetValue(itemAttribute.Template.CharacterAttribute.ID, out CharacterAttributeEntity attributeEntity))
 						{
-							//UnityEngine.Log.Debug($"{itemTemplate.Name} - {itemAttribute.Template.CharacterAttribute.Name} adding {itemAttribute.value}");
+							//Log.Debug("CharacterCreateSystem", $"{itemTemplate.Name} - {itemAttribute.Template.CharacterAttribute.Name} adding {itemAttribute.value}");
 							attributeEntity.Value += itemAttribute.value;
 						}
 					}

@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using FishMMO.Shared;
+using FishMMO.Logging;
 
 namespace FishMMO.Client
 {
@@ -151,7 +152,7 @@ namespace FishMMO.Client
 		{
 			if (rectTransform == null)
 			{
-				Log.Error("RectTransform is null. Cannot adjust position for pivot change.");
+				Log.Error("UIControl", "RectTransform is null. Cannot adjust position for pivot change.");
 				return;
 			}
 
@@ -180,7 +181,7 @@ namespace FishMMO.Client
 		{
 			if (rectTransform == null)
 			{
-				Log.Error("RectTransform is null. Cannot adjust position for anchor change.");
+				Log.Error("UIControl", "RectTransform is null. Cannot adjust position for anchor change.");
 				return;
 			}
 

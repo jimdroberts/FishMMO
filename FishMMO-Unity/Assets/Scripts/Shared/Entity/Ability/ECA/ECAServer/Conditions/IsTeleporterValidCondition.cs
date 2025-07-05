@@ -1,5 +1,6 @@
 using FishMMO.Shared;
 using UnityEngine;
+using FishMMO.Logging;
 
 namespace FishMMO.Server
 {
@@ -10,14 +11,14 @@ namespace FishMMO.Server
         {
             if (!eventData.TryGet(out InteractableEventData interactableEventData))
             {
-                Log.Error("IsTeleporterValidCondition: Missing InteractableEventData.");
+                Log.Error("IsTeleporterValidCondition", "Missing InteractableEventData.");
                 return false;
             }
 
             Teleporter teleporter = interactableEventData.Interactable as Teleporter;
             if (teleporter == null)
             {
-                Log.Warning($"IsTeleporterValidCondition: Interactable {interactableEventData.Interactable?.GetType().Name} is not a Teleporter.");
+                Log.Warning("IsTeleporterValidCondition", $"Interactable {interactableEventData.Interactable?.GetType().Name} is not a Teleporter.");
                 return false;
             }
             // Additional checks if necessary, e.g., teleporter has a target or scene name defined

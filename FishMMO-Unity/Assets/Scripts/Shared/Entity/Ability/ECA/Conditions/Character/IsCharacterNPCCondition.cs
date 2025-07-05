@@ -1,4 +1,5 @@
 using FishMMO.Shared;
+using FishMMO.Logging;
 using UnityEngine;
 
 namespace FishMMO.Server.Conditions
@@ -21,7 +22,7 @@ namespace FishMMO.Server.Conditions
 				string status = isNPC ? "is an NPC" : "is not an NPC";
 				string invertedText = invertResult ? " (inverted check)" : "";
 
-				Log.Debug($"IsCharacterNPCCondition: Character '{initiator?.Name}' failed NPC check. Status: {status}{invertedText}.");
+				Log.Debug("IsCharacterNPCCondition", $"Character '{initiator?.Name}' failed NPC check. Status: {status}{invertedText}.");
 			}
 
 			return finalResult;

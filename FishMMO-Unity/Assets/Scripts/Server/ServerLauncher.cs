@@ -1,6 +1,7 @@
 using UnityEngine;
 using System.Collections.Generic;
 using FishMMO.Shared;
+using FishMMO.Logging;
 
 namespace FishMMO.Server
 {
@@ -57,7 +58,7 @@ namespace FishMMO.Server
 
 		private void Close()
 		{
-			Log.Debug("ServerLauncher: Unknown server type. Available servers {Login, World, Scene}");
+			Log.Debug("ServerLauncher", "Unknown server type. Available servers {Login, World, Scene}");
 			Server.Quit();
 		}
 

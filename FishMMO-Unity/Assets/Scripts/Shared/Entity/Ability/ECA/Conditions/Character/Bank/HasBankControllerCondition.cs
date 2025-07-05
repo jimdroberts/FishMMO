@@ -1,4 +1,5 @@
 using UnityEngine;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -13,7 +14,7 @@ namespace FishMMO.Shared
 				return true;
 			}
 
-			Log.Warning($"HasBankControllerCondition: Initiator {initiator?.Name} does not have a bank controller in EventData.");
+			Log.Warning("HasBankControllerCondition", $"Initiator {initiator?.Name} does not have a bank controller in EventData.");
 			return false;
 		}
 	}
