@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Configuration;
+using FishMMO.Logging;
 
 namespace AppHealthMonitor
 {
@@ -14,8 +15,7 @@ namespace AppHealthMonitor
 		// List to keep track of HealthMonitor instances for explicit cleanup
 		private static List<HealthMonitor> activeMonitors = new List<HealthMonitor>();
 
-		// Central logging manager instance
-		private static LoggingManager loggingManager;
+		private static readonly string loggingConfigName = "logging.json";
 
 		// Represents a console command
 		private class ConsoleCommand
@@ -34,46 +34,30 @@ namespace AppHealthMonitor
 
 		static async Task Main(string[] args)
 		{
-			// --- Load Configuration from appsettings.json ---
+			string workingDirectory = Directory.GetCurrentDirectory();
+
+			// Load Application Configuration from appsettings.json
 			var builder = new ConfigurationBuilder()
-				.SetBasePath(Directory.GetCurrentDirectory())
+				.SetBasePath(workingDirectory)
 				.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
 
 			IConfiguration configuration = builder.Build();
 
-			// Setup Logging Manager
-			var loggingConfig = configuration.GetSection("Logging").Get<LoggingConfig>();
+			// Load Logging Configuration from logging.json
+			string configFilePath = Path.Combine(workingDirectory, loggingConfigName);
 
-			// Ensure loggingConfig and all its sub-configs are initialized to avoid NullReferenceExceptions
-			if (loggingConfig == null)
-			{
-				// Fallback to default configs if Logging section is missing entirely
-				loggingConfig = new LoggingConfig();
-				Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] [Program] Warning: 'Logging' section not found in appsettings.json. Using default logging configurations.");
-			}
+			// Initialize the Log manager.
+			Log.Initialize(configFilePath, new ConsoleFormatter(), null, Log.OnInternalLogMessage);
 
-			// Always ensure sub-configs are instantiated, regardless if 'loggingConfig' was initially null or not.
-			loggingConfig.LoggingManager ??= new LoggingManagerConfig();
-			loggingConfig.FileLogger ??= new FileLoggerConfig();
-			loggingConfig.EmailLogger ??= new EmailLoggerConfig { Enabled = false };
-
-
-			// Create individual logger instances based on global configuration
-			FileLogger fileLogger = loggingConfig.FileLogger.Enabled ? new FileLogger(loggingConfig.FileLogger) : null;
-			EmailLogger emailLogger = loggingConfig.EmailLogger.Enabled ? new EmailLogger(loggingConfig.EmailLogger) : null;
-
-			// Initialize the central LoggingManager with relevant logger instances
-			loggingManager = new LoggingManager(fileLogger, emailLogger, loggingConfig.LoggingManager.ConsoleMinimumLevel);
-
-			loggingManager.Log(LogLevel.Info, "Daemon", "Starting Application Health Monitor Daemon...");
+			Log.Info("Daemon", "Starting Application Health Monitor Daemon...");
 
 			var appConfigs = configuration.GetSection("Applications").Get<List<AppConfig>>();
 
 			if (appConfigs == null || appConfigs.Count == 0)
 			{
-				loggingManager.Log(LogLevel.Critical, "Daemon", "Error: No application configurations found in 'Applications' section of appsettings.json. Please configure at least one application.");
+				Log.Critical("Daemon", "Error: No application configurations found in 'Applications' section of appsettings.json. Please configure at least one application.");
 				await Task.Delay(1000);
-				(loggingManager as IDisposable)?.Dispose();
+				await Log.Shutdown();
 				return;
 			}
 
@@ -85,7 +69,7 @@ namespace AppHealthMonitor
 				{
 					if (!sharedDaemonCts.IsCancellationRequested)
 					{
-						loggingManager.Log(LogLevel.Info, "Daemon", "\nCtrl+C pressed. Signalling daemon shutdown...");
+						Log.Info("Daemon", "\nCtrl+C pressed. Signalling daemon shutdown...");
 						sharedDaemonCts.Cancel();
 						eventArgs.Cancel = true; // Prevent immediate termination
 					}
@@ -97,14 +81,14 @@ namespace AppHealthMonitor
 				// Start the console command reader in parallel
 				Task consoleReaderTask = ConsoleCommandReader(sharedDaemonCts, startMonitoringEvent);
 
-				loggingManager.Log(LogLevel.Info, "Daemon", "\nApplication Health Monitor Daemon is ready.");
-				loggingManager.Log(LogLevel.Info, "Daemon", "Type 'help' to list available commands.");
+				Log.Info("Daemon", "\nApplication Health Monitor Daemon is ready.");
+				Log.Info("Daemon", "Type 'help' to list available commands.");
 
 				// Wait for the main orchestration loop and console reader to complete (when daemon-wide shutdown is requested)
 				await Task.WhenAll(orchestrationLoopTask, consoleReaderTask);
 
 				// Final cleanup: ensure all processes are terminated when the daemon itself is stopping.
-				loggingManager.Log(LogLevel.Warning, "Daemon", $"All daemon tasks have concluded. Initiating final cleanup of all monitored applications.");
+				Log.Warning("Daemon", $"All daemon tasks have concluded. Initiating final cleanup of all monitored applications.");
 
 				foreach (var monitor in activeMonitors.ToList())
 				{
@@ -112,9 +96,9 @@ namespace AppHealthMonitor
 				}
 				activeMonitors.Clear();
 
-				loggingManager.Log(LogLevel.Warning, "Daemon", $"All monitored applications terminated. Application Health Monitor Daemon stopped gracefully.");
+				Log.Warning("Daemon", $"All monitored applications terminated. Application Health Monitor Daemon stopped gracefully.");
 			}
-			(loggingManager as IDisposable)?.Dispose();
+			await Log.Shutdown();
 		}
 
 		/// <summary>
@@ -131,7 +115,7 @@ namespace AppHealthMonitor
 			{
 				while (!daemonCancellationToken.IsCancellationRequested)
 				{
-					loggingManager.Log(LogLevel.Info, "Orchestration", "Waiting for 'start' command...");
+					Log.Info("Orchestration", "Waiting for 'start' command...");
 
 					try
 					{
@@ -139,13 +123,13 @@ namespace AppHealthMonitor
 					}
 					catch (OperationCanceledException)
 					{
-						loggingManager.Log(LogLevel.Info, "Orchestration", "Waiting for start command cancelled. Daemon shutting down.");
+						Log.Info("Orchestration", "Waiting for start command cancelled. Daemon shutting down.");
 						break;
 					}
 
 					startMonitoringEvent.Reset();
 
-					loggingManager.Log(LogLevel.Info, "Orchestration", "'start' command received. Launching application monitors.");
+					Log.Info("Orchestration", "'start' command received. Launching application monitors.");
 
 					using (currentMonitoringCts = new CancellationTokenSource())
 					using (var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(currentMonitoringCts.Token, daemonCancellationToken))
@@ -157,7 +141,7 @@ namespace AppHealthMonitor
 						{
 							if (linkedCts.Token.IsCancellationRequested)
 							{
-								loggingManager.Log(LogLevel.Warning, "Orchestration", "Monitoring launch cancelled during setup.");
+								Log.Warning("Orchestration", "Monitoring launch cancelled during setup.");
 								break;
 							}
 
@@ -166,7 +150,7 @@ namespace AppHealthMonitor
 							if (string.IsNullOrWhiteSpace(appConfig.Name) ||
 								string.IsNullOrWhiteSpace(appConfig.ApplicationExePath))
 							{
-								loggingManager.Log(LogLevel.Warning, "Orchestration", $"Skipping invalid configuration entry during launch: Name='{appConfig.Name}' ExePath='{appConfig.ApplicationExePath}'.");
+								Log.Warning("Orchestration", $"Skipping invalid configuration entry during launch: Name='{appConfig.Name}' ExePath='{appConfig.ApplicationExePath}'.");
 								continue;
 							}
 
@@ -178,7 +162,7 @@ namespace AppHealthMonitor
 							TimeSpan checkInterval = TimeSpan.FromSeconds(appConfig.CheckIntervalSeconds > 0 ? appConfig.CheckIntervalSeconds : 10);
 
 							// Log a header for the application launch
-							loggingManager.Log(LogLevel.Info, "Orchestration", $"--- Launching Monitor for: [{appConfig.Name}] ---");
+							Log.Info("Orchestration", $"--- Launching Monitor for: [{appConfig.Name}] ---");
 
 							// Create a dictionary to hold application configuration data for logging
 							var appDetails = new Dictionary<string, object>
@@ -200,7 +184,7 @@ namespace AppHealthMonitor
 							};
 
 							// Log the structured application details
-							loggingManager.Log(LogLevel.Info, "Orchestration", $"Application Configuration for {appConfig.Name}:", data: appDetails);
+							Log.Info("Orchestration", $"Application Configuration for {appConfig.Name}:", data: appDetails);
 
 
 							HealthMonitor monitor = new HealthMonitor(
@@ -218,8 +202,7 @@ namespace AppHealthMonitor
 								appConfig.MaxRestartAttempts,
 								appConfig.CircuitBreakerFailureThreshold,
 								appConfig.CircuitBreakerResetTimeoutMinutes,
-								linkedCts.Token,
-								loggingManager
+								linkedCts.Token
 							);
 
 							activeMonitors.Add(monitor);
@@ -227,14 +210,14 @@ namespace AppHealthMonitor
 
 							if (appConfig.LaunchDelaySeconds > 0 && i < appConfigs.Count - 1)
 							{
-								loggingManager.Log(LogLevel.Info, "Orchestration", $"Pausing for {appConfig.LaunchDelaySeconds} seconds before starting the next monitor...");
+								Log.Info("Orchestration", $"Pausing for {appConfig.LaunchDelaySeconds} seconds before starting the next monitor...");
 								try
 								{
 									await Task.Delay(TimeSpan.FromSeconds(appConfig.LaunchDelaySeconds), linkedCts.Token);
 								}
 								catch (OperationCanceledException)
 								{
-									loggingManager.Log(LogLevel.Warning, "Orchestration", "Launch delay cancelled during monitor setup.");
+									Log.Warning("Orchestration", "Launch delay cancelled during monitor setup.");
 									break;
 								}
 							}
@@ -242,46 +225,46 @@ namespace AppHealthMonitor
 
 						if (!currentMonitoringTasks.Any())
 						{
-							loggingManager.Log(LogLevel.Warning, "Orchestration", "No valid applications were launched for monitoring in this cycle.");
+							Log.Warning("Orchestration", "No valid applications were launched for monitoring in this cycle.");
 							continue;
 						}
 						else
 						{
-							loggingManager.Log(LogLevel.Info, "Orchestration", "All configured application monitors are now active and running.");
+							Log.Info("Orchestration", "All configured application monitors are now active and running.");
 						}
 
 						try
 						{
-							loggingManager.Log(LogLevel.Debug, "Orchestration", "Waiting for current monitoring tasks to complete or be cancelled...");
+							Log.Debug("Orchestration", "Waiting for current monitoring tasks to complete or be cancelled...");
 							await Task.WhenAll(currentMonitoringTasks);
-							loggingManager.Log(LogLevel.Debug, "Orchestration", "All current monitoring tasks completed normally.");
+							Log.Debug("Orchestration", "All current monitoring tasks completed normally.");
 						}
 						catch (OperationCanceledException)
 						{
-							loggingManager.Log(LogLevel.Info, "Orchestration", "One or more monitoring tasks were cancelled (e.g., by 'stop' or daemon shutdown).");
+							Log.Info("Orchestration", "One or more monitoring tasks were cancelled (e.g., by 'stop' or daemon shutdown).");
 						}
 					} // currentMonitoringCts is disposed here
 
-					loggingManager.Log(LogLevel.Warning, "Orchestration", "Current monitoring cycle concluded. Initiating cleanup of applications.");
+					Log.Warning("Orchestration", "Current monitoring cycle concluded. Initiating cleanup of applications.");
 
 					foreach (var monitor in activeMonitors.ToList())
 					{
-						loggingManager.Log(LogLevel.Debug, "Orchestration", "Calling KillApplication for a monitor.");
+						Log.Debug("Orchestration", "Calling KillApplication for a monitor.");
 						monitor.KillApplication();
 					}
 					activeMonitors.Clear();
 
-					loggingManager.Log(LogLevel.Warning, "Orchestration", "Applications cleaned up for this cycle.");
+					Log.Warning("Orchestration", "Applications cleaned up for this cycle.");
 				}
-				loggingManager.Log(LogLevel.Info, "Orchestration", "Monitoring orchestration loop exited.");
+				Log.Info("Orchestration", "Monitoring orchestration loop exited.");
 			}
 			catch (OperationCanceledException ex)
 			{
-				loggingManager.Log(LogLevel.Info, "Orchestration", $"Monitoring orchestration loop was cancelled by daemon shutdown.", ex);
+				Log.Info("Orchestration", $"Monitoring orchestration loop was cancelled by daemon shutdown.", ex);
 			}
 			catch (Exception ex)
 			{
-				loggingManager.Log(LogLevel.Critical, "Orchestration", $"An unhandled error occurred in the monitoring orchestration loop: {ex.Message}", ex);
+				Log.Critical("Orchestration", $"An unhandled error occurred in the monitoring orchestration loop: {ex.Message}", ex);
 			}
 		}
 
@@ -298,12 +281,12 @@ namespace AppHealthMonitor
 
 			commands.Add("help", new ConsoleCommand("help", "Lists all available commands.", async () =>
 			{
-				loggingManager.Log(LogLevel.Info, "DaemonCommand", "--- Available Commands ---\n");
+				Log.Info("DaemonCommand", "--- Available Commands ---\n");
 				foreach (var cmd in commands.Values.OrderBy(c => c.Name))
 				{
-					loggingManager.Log(LogLevel.Info, "DaemonCommand", $"  {cmd.Name,-15} - {cmd.Description}");
+					Log.Info("DaemonCommand", $"  {cmd.Name,-15} - {cmd.Description}");
 				}
-				loggingManager.Log(LogLevel.Info, "DaemonCommand", "--------------------------");
+				Log.Info("DaemonCommand", "--------------------------");
 				await Task.CompletedTask;
 			}));
 
@@ -311,11 +294,11 @@ namespace AppHealthMonitor
 			{
 				if (IsMonitoringActive())
 				{
-					loggingManager.Log(LogLevel.Warning, "DaemonCommand", "Monitoring is already active.");
+					Log.Warning("DaemonCommand", "Monitoring is already active.");
 				}
 				else
 				{
-					loggingManager.Log(LogLevel.Info, "DaemonCommand", "'start' command received. Signalling monitoring to begin...");
+					Log.Info("DaemonCommand", "'start' command received. Signalling monitoring to begin...");
 					startEvent.Set();
 				}
 				await Task.CompletedTask;
@@ -325,12 +308,12 @@ namespace AppHealthMonitor
 			{
 				if (IsMonitoringActive())
 				{
-					loggingManager.Log(LogLevel.Info, "DaemonCommand", "'stop' command received. Cancelling current monitoring cycle (currentMonitoringCts)...");
+					Log.Info("DaemonCommand", "'stop' command received. Cancelling current monitoring cycle (currentMonitoringCts)...");
 					currentMonitoringCts.Cancel();
 				}
 				else
 				{
-					loggingManager.Log(LogLevel.Warning, "DaemonCommand", "Monitoring is not active, or already stopping.");
+					Log.Warning("DaemonCommand", "Monitoring is not active, or already stopping.");
 				}
 				await Task.CompletedTask;
 			}));
@@ -339,11 +322,11 @@ namespace AppHealthMonitor
 			{
 				if (IsMonitoringActive())
 				{
-					loggingManager.Log(LogLevel.Error, "DaemonCommand", "'force-kill' command received. Immediately terminating all monitored processes...");
+					Log.Error("DaemonCommand", "'force-kill' command received. Immediately terminating all monitored processes...");
 
 					foreach (var monitor in activeMonitors.ToList())
 					{
-						loggingManager.Log(LogLevel.Debug, "DaemonCommand", "Force-killing monitor process directly.");
+						Log.Debug("DaemonCommand", "Force-killing monitor process directly.");
 						monitor.KillApplication();
 					}
 					activeMonitors.Clear();
@@ -353,7 +336,7 @@ namespace AppHealthMonitor
 				}
 				else
 				{
-					loggingManager.Log(LogLevel.Warning, "DaemonCommand", "No active monitoring to force-kill.");
+					Log.Warning("DaemonCommand", "No active monitoring to force-kill.");
 				}
 				await Task.CompletedTask;
 			}));
@@ -362,38 +345,38 @@ namespace AppHealthMonitor
 			{
 				if (IsMonitoringActive())
 				{
-					loggingManager.Log(LogLevel.Error, "DaemonCommand", "'force-restart' command received. Immediately terminating and then restarting all monitored processes...");
+					Log.Error("DaemonCommand", "'force-restart' command received. Immediately terminating and then restarting all monitored processes...");
 
 					foreach (var monitor in activeMonitors.ToList())
 					{
-						loggingManager.Log(LogLevel.Debug, "DaemonCommand", "Force-killing monitor process directly for restart.");
+						Log.Debug("DaemonCommand", "Force-killing monitor process directly for restart.");
 						monitor.KillApplication();
 					}
 					activeMonitors.Clear();
 
 					currentMonitoringCts.Cancel();
 					startEvent.Set();
-					loggingManager.Log(LogLevel.Info, "DaemonCommand", "Restart sequence initiated. Applications will re-launch shortly.");
+					Log.Info("DaemonCommand", "Restart sequence initiated. Applications will re-launch shortly.");
 				}
 				else if (!startEvent.IsSet)
 				{
-					loggingManager.Log(LogLevel.Warning, "DaemonCommand", "Monitoring is not active. Signalling 'start' to launch applications for force-restart.");
+					Log.Warning("DaemonCommand", "Monitoring is not active. Signalling 'start' to launch applications for force-restart.");
 					startEvent.Set();
 				}
 				else
 				{
-					loggingManager.Log(LogLevel.Warning, "DaemonCommand", "Cannot force-restart: Monitoring cycle is already stopping or in an unexpected state.");
+					Log.Warning("DaemonCommand", "Cannot force-restart: Monitoring cycle is already stopping or in an unexpected state.");
 				}
 				await Task.CompletedTask;
 			}));
 
 			commands.Add("shutdown", new ConsoleCommand("shutdown", "Gracefully stops the daemon and all monitored applications.", async () =>
 			{
-				loggingManager.Log(LogLevel.Info, "DaemonCommand", "'shutdown' command received. Initiating graceful daemon shutdown...");
+				Log.Info("DaemonCommand", "'shutdown' command received. Initiating graceful daemon shutdown...");
 
 				if (currentMonitoringCts != null && !currentMonitoringCts.IsCancellationRequested)
 				{
-					loggingManager.Log(LogLevel.Debug, "DaemonCommand", "Signalled active monitoring cycle to stop first.");
+					Log.Debug("DaemonCommand", "Signalled active monitoring cycle to stop first.");
 					currentMonitoringCts.Cancel();
 				}
 				sharedDaemonCts.Cancel();
@@ -428,10 +411,10 @@ namespace AppHealthMonitor
 				}
 				else
 				{
-					loggingManager.Log(LogLevel.Warning, "DaemonCommand", $"Unknown command: '{input}'. Type 'help' to see available commands.");
+					Log.Warning("DaemonCommand", $"Unknown command: '{input}'. Type 'help' to see available commands.");
 				}
 			}
-			loggingManager.Log(LogLevel.Info, "DaemonCommand", "Console command reader stopped.");
+			Log.Info("DaemonCommand", "Console command reader stopped.");
 		}
 	}
 }

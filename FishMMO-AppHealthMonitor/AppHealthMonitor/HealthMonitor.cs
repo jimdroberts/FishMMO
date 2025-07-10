@@ -3,6 +3,7 @@ using System.Net.Sockets;
 using System.Net.WebSockets;
 using System.Text;
 using System.Runtime.InteropServices;
+using FishMMO.Logging;
 
 namespace AppHealthMonitor
 {
@@ -42,9 +43,6 @@ namespace AppHealthMonitor
 
 		private readonly TimeSpan initialHealthCheckDelay = TimeSpan.FromSeconds(30);
 
-		// Injected LoggingManager (removed per-app logger types field)
-		private readonly LoggingManager logger;
-
 		private bool IsProcessOnlyMonitoring => this.portTypes.Count == 1 && this.portTypes.Contains(PortType.None);
 
 		/// <summary>
@@ -65,8 +63,7 @@ namespace AppHealthMonitor
 			int maxRestartAttempts,
 			int circuitBreakerFailureThreshold,
 			int circuitBreakerResetTimeoutMinutes,
-			CancellationToken cancellationToken,
-			LoggingManager loggerParam)
+			CancellationToken cancellationToken)
 		{
 			this.appName = appName;
 			this.applicationExePath = Path.GetFullPath(applicationExePath ?? throw new ArgumentNullException(nameof(applicationExePath)));
@@ -75,8 +72,6 @@ namespace AppHealthMonitor
 			this.launchArguments = launchArguments ?? string.Empty;
 			this.checkInterval = checkInterval;
 			this.cancellationToken = cancellationToken;
-
-			this.logger = loggerParam ?? throw new ArgumentNullException(nameof(loggerParam));
 
 			this.cpuThresholdPercent = cpuThresholdPercent;
 			this.memoryThresholdBytes = (long)memoryThresholdMB * 1024 * 1024;
@@ -107,42 +102,42 @@ namespace AppHealthMonitor
 
 		public async Task StartMonitoring()
 		{
-			logger.Log(LogLevel.Info, GetLogSource(), "Starting monitoring loop."); // Removed enabledLoggersForSource
+			Log.Info(GetLogSource(), "Starting monitoring loop."); // Removed enabledLoggersForSource
 
 			if (!IsApplicationProcessRunning())
 			{
-				logger.Log(LogLevel.Info, GetLogSource(), "Application process not found at startup. Attempting initial launch."); // Removed enabledLoggersForSource
+				Log.Info(GetLogSource(), "Application process not found at startup. Attempting initial launch."); // Removed enabledLoggersForSource
 				LaunchApplication();
 				await Task.Delay(TimeSpan.FromSeconds(5), this.cancellationToken);
 			}
 
-			logger.Log(LogLevel.Info, GetLogSource(), $"Waiting {this.initialHealthCheckDelay.TotalSeconds} seconds before first full health check..."); // Removed enabledLoggersForSource
+			Log.Info(GetLogSource(), $"Waiting {this.initialHealthCheckDelay.TotalSeconds} seconds before first full health check..."); // Removed enabledLoggersForSource
 			try
 			{
 				await Task.Delay(this.initialHealthCheckDelay, this.cancellationToken);
 			}
 			catch (OperationCanceledException)
 			{
-				logger.Log(LogLevel.Info, GetLogSource(), "Initial delay cancelled. Monitoring stopping."); // Removed enabledLoggersForSource
+				Log.Info(GetLogSource(), "Initial delay cancelled. Monitoring stopping."); // Removed enabledLoggersForSource
 				return;
 			}
 
 			while (!this.cancellationToken.IsCancellationRequested)
 			{
-				logger.Log(LogLevel.Debug, GetLogSource(), "Performing health check cycle."); // Removed enabledLoggersForSource
+				Log.Debug(GetLogSource(), "Performing health check cycle."); // Removed enabledLoggersForSource
 
 				bool needsRestart = false;
 
 				if (!IsApplicationProcessRunning())
 				{
-					logger.Log(LogLevel.Error, GetLogSource(), "Process is NOT running or has exited."); // Removed enabledLoggersForSource
+					Log.Error(GetLogSource(), "Process is NOT running or has exited."); // Removed enabledLoggersForSource
 					needsRestart = true;
 				}
 				else
 				{
 					if ((this.cpuThresholdPercent > 0 || this.memoryThresholdBytes > 0) && !CheckMemoryAndCpuUsage())
 					{
-						logger.Log(LogLevel.Error, GetLogSource(), "CPU or Memory usage exceeds configured thresholds."); // Removed enabledLoggersForSource
+						Log.Error(GetLogSource(), "CPU or Memory usage exceeds configured thresholds."); // Removed enabledLoggersForSource
 						needsRestart = true;
 					}
 					else if (!IsProcessOnlyMonitoring)
@@ -151,20 +146,20 @@ namespace AppHealthMonitor
 						{
 							if (DateTime.Now - circuitOpenTimestamp < circuitBreakerResetTimeout)
 							{
-								logger.Log(LogLevel.Warning, GetLogSource(), $"Circuit Breaker is OPEN. Skipping port checks for now. Resets in {Math.Ceiling((circuitBreakerResetTimeout - (DateTime.Now - circuitOpenTimestamp)).TotalSeconds)}s."); // Removed enabledLoggersForSource
+								Log.Warning(GetLogSource(), $"Circuit Breaker is OPEN. Skipping port checks for now. Resets in {Math.Ceiling((circuitBreakerResetTimeout - (DateTime.Now - circuitOpenTimestamp)).TotalSeconds)}s."); // Removed enabledLoggersForSource
 							}
 							else
 							{
-								logger.Log(LogLevel.Warning, GetLogSource(), "Circuit Breaker reset timeout reached. Attempting to CLOSE circuit with one port check."); // Removed enabledLoggersForSource
+								Log.Warning(GetLogSource(), "Circuit Breaker reset timeout reached. Attempting to CLOSE circuit with one port check."); // Removed enabledLoggersForSource
 								if (await CheckApplicationPortsResponsiveness())
 								{
-									logger.Log(LogLevel.Info, GetLogSource(), "Circuit Breaker closed successfully. Ports are healthy."); // Removed enabledLoggersForSource
+									Log.Info(GetLogSource(), "Circuit Breaker closed successfully. Ports are healthy."); // Removed enabledLoggersForSource
 									isCircuitOpen = false;
 									consecutivePortCheckFailures = 0;
 								}
 								else
 								{
-									logger.Log(LogLevel.Error, GetLogSource(), "Circuit Breaker remains OPEN. Port check failed again."); // Removed enabledLoggersForSource
+									Log.Error(GetLogSource(), "Circuit Breaker remains OPEN. Port check failed again."); // Removed enabledLoggersForSource
 									circuitOpenTimestamp = DateTime.Now;
 									needsRestart = true;
 								}
@@ -175,11 +170,11 @@ namespace AppHealthMonitor
 							if (!await CheckApplicationPortsResponsiveness())
 							{
 								consecutivePortCheckFailures++;
-								logger.Log(LogLevel.Warning, GetLogSource(), $"Port check failed. Consecutive failures: {consecutivePortCheckFailures}/{circuitBreakerFailureThreshold}."); // Removed enabledLoggersForSource
+								Log.Warning(GetLogSource(), $"Port check failed. Consecutive failures: {consecutivePortCheckFailures}/{circuitBreakerFailureThreshold}."); // Removed enabledLoggersForSource
 
 								if (consecutivePortCheckFailures >= circuitBreakerFailureThreshold)
 								{
-									logger.Log(LogLevel.Error, GetLogSource(), "Circuit Breaker OPEN! Too many consecutive port failures."); // Removed enabledLoggersForSource
+									Log.Error(GetLogSource(), "Circuit Breaker OPEN! Too many consecutive port failures."); // Removed enabledLoggersForSource
 									isCircuitOpen = true;
 									circuitOpenTimestamp = DateTime.Now;
 									needsRestart = true;
@@ -193,7 +188,7 @@ namespace AppHealthMonitor
 							{
 								if (consecutivePortCheckFailures > 0)
 								{
-									logger.Log(LogLevel.Info, GetLogSource(), "Port check successful. Consecutive failures reset."); // Removed enabledLoggersForSource
+									Log.Info(GetLogSource(), "Port check successful. Consecutive failures reset."); // Removed enabledLoggersForSource
 								}
 								consecutivePortCheckFailures = 0;
 							}
@@ -211,21 +206,21 @@ namespace AppHealthMonitor
 					currentCalculatedRestartDelay = this.initialRestartDelay;
 					isCircuitOpen = false;
 					consecutivePortCheckFailures = 0;
-					logger.Log(LogLevel.Info, GetLogSource(), "Application is healthy."); // Removed enabledLoggersForSource
+					Log.Info(GetLogSource(), "Application is healthy."); // Removed enabledLoggersForSource
 				}
 
 				try
 				{
-					logger.Log(LogLevel.Debug, GetLogSource(), $"Waiting {this.checkInterval.TotalSeconds} seconds for next main health check cycle..."); // Removed enabledLoggersForSource
+					Log.Debug(GetLogSource(), $"Waiting {this.checkInterval.TotalSeconds} seconds for next main health check cycle..."); // Removed enabledLoggersForSource
 					await Task.Delay(this.checkInterval, this.cancellationToken);
 				}
 				catch (OperationCanceledException)
 				{
-					logger.Log(LogLevel.Info, GetLogSource(), "Monitoring task cancelled. Exiting loop."); // Removed enabledLoggersForSource
+					Log.Info(GetLogSource(), "Monitoring task cancelled. Exiting loop."); // Removed enabledLoggersForSource
 					break;
 				}
 			}
-			logger.Log(LogLevel.Info, GetLogSource(), "Monitoring stopped."); // Removed enabledLoggersForSource
+			Log.Info(GetLogSource(), "Monitoring stopped."); // Removed enabledLoggersForSource
 		}
 
 		private async Task HandleApplicationRestart()
@@ -233,8 +228,8 @@ namespace AppHealthMonitor
 			currentRestartAttemptCount++;
 			TimeSpan delayToUse = currentCalculatedRestartDelay;
 
-			logger.Log(LogLevel.Warning, GetLogSource(), $"Application unhealthy. Attempting restart (Attempt {currentRestartAttemptCount}/{maxRestartAttempts})."); // Removed enabledLoggersForSource
-			logger.Log(LogLevel.Warning, GetLogSource(), $"Next restart in {delayToUse.TotalSeconds:F1} seconds..."); // Removed enabledLoggersForSource
+			Log.Warning(GetLogSource(), $"Application unhealthy. Attempting restart (Attempt {currentRestartAttemptCount}/{maxRestartAttempts})."); // Removed enabledLoggersForSource
+			Log.Warning(GetLogSource(), $"Next restart in {delayToUse.TotalSeconds:F1} seconds..."); // Removed enabledLoggersForSource
 
 			try
 			{
@@ -242,13 +237,13 @@ namespace AppHealthMonitor
 			}
 			catch (OperationCanceledException)
 			{
-				logger.Log(LogLevel.Info, GetLogSource(), "Restart delay cancelled."); // Removed enabledLoggersForSource
+				Log.Info(GetLogSource(), "Restart delay cancelled."); // Removed enabledLoggersForSource
 				throw;
 			}
 
 			if (currentRestartAttemptCount >= maxRestartAttempts)
 			{
-				logger.Log(LogLevel.Critical, GetLogSource(), $"Max restart attempts ({maxRestartAttempts}) reached. Stopping monitoring for this application."); // Removed enabledLoggersForSource
+				Log.Critical(GetLogSource(), $"Max restart attempts ({maxRestartAttempts}) reached. Stopping monitoring for this application."); // Removed enabledLoggersForSource
 				this.cancellationToken.ThrowIfCancellationRequested();
 				return;
 			}
@@ -268,7 +263,7 @@ namespace AppHealthMonitor
 		{
 			if (this.monitoredProcess == null || this.monitoredProcess.HasExited)
 			{
-				logger.Log(LogLevel.Debug, GetLogSource(), "Process not available for CPU/Memory check."); // Removed enabledLoggersForSource
+				Log.Debug(GetLogSource(), "Process not available for CPU/Memory check."); // Removed enabledLoggersForSource
 				return false;
 			}
 
@@ -281,7 +276,7 @@ namespace AppHealthMonitor
 					long currentMemory = this.monitoredProcess.WorkingSet64;
 					if (currentMemory > this.memoryThresholdBytes)
 					{
-						logger.Log(LogLevel.Warning, GetLogSource(), $"Memory Usage Alert: {BytesToMB(currentMemory):F2}MB exceeds threshold of {BytesToMB(this.memoryThresholdBytes):F2}MB."); // Removed enabledLoggersForSource
+						Log.Warning(GetLogSource(), $"Memory Usage Alert: {BytesToMB(currentMemory):F2}MB exceeds threshold of {BytesToMB(this.memoryThresholdBytes):F2}MB."); // Removed enabledLoggersForSource
 						return false;
 					}
 				}
@@ -292,7 +287,7 @@ namespace AppHealthMonitor
 					{
 						lastCpuCheckTime = DateTime.Now;
 						lastCpuTotalProcessorTime = this.monitoredProcess.TotalProcessorTime;
-						logger.Log(LogLevel.Debug, GetLogSource(), "Initializing CPU usage tracking."); // Removed enabledLoggersForSource
+						Log.Debug(GetLogSource(), "Initializing CPU usage tracking."); // Removed enabledLoggersForSource
 						return true;
 					}
 
@@ -308,7 +303,7 @@ namespace AppHealthMonitor
 
 						if (cpuUsage > this.cpuThresholdPercent)
 						{
-							logger.Log(LogLevel.Warning, GetLogSource(), $"CPU Usage Alert: {cpuUsage:F2}% exceeds threshold of {this.cpuThresholdPercent}%."); // Removed enabledLoggersForSource
+							Log.Warning(GetLogSource(), $"CPU Usage Alert: {cpuUsage:F2}% exceeds threshold of {this.cpuThresholdPercent}%."); // Removed enabledLoggersForSource
 							return false;
 						}
 					}
@@ -317,17 +312,17 @@ namespace AppHealthMonitor
 					lastCpuTotalProcessorTime = currentTotalProcessorTime;
 				}
 
-				logger.Log(LogLevel.Debug, GetLogSource(), "CPU/Memory checks passed (if configured)."); // Removed enabledLoggersForSource
+				Log.Debug(GetLogSource(), "CPU/Memory checks passed (if configured)."); // Removed enabledLoggersForSource
 				return true;
 			}
 			catch (InvalidOperationException ex)
 			{
-				logger.Log(LogLevel.Error, GetLogSource(), "Process exited during CPU/Memory check.", ex); // Removed enabledLoggersForSource
+				Log.Error(GetLogSource(), "Process exited during CPU/Memory check.", ex); // Removed enabledLoggersForSource
 				return false;
 			}
 			catch (Exception ex)
 			{
-				logger.Log(LogLevel.Error, GetLogSource(), $"Error during CPU/Memory check: {ex.Message}", ex); // Removed enabledLoggersForSource
+				Log.Error(GetLogSource(), $"Error during CPU/Memory check: {ex.Message}", ex); // Removed enabledLoggersForSource
 				return false;
 			}
 		}
@@ -341,13 +336,13 @@ namespace AppHealthMonitor
 		{
 			if (IsProcessOnlyMonitoring)
 			{
-				logger.Log(LogLevel.Debug, GetLogSource(), "Skipping port checks (Process-Only Monitoring)."); // Removed enabledLoggersForSource
+				Log.Debug(GetLogSource(), "Skipping port checks (Process-Only Monitoring)."); // Removed enabledLoggersForSource
 				return true;
 			}
 
 			if (!this.portTypes.Any(pt => pt != PortType.None) && monitoredPort <= 0)
 			{
-				logger.Log(LogLevel.Warning, GetLogSource(), "No valid port types or port configured. Considering ports healthy by default."); // Removed enabledLoggersForSource
+				Log.Warning(GetLogSource(), "No valid port types or port configured. Considering ports healthy by default."); // Removed enabledLoggersForSource
 				return true;
 			}
 
@@ -359,7 +354,7 @@ namespace AppHealthMonitor
 					continue;
 				}
 
-				logger.Log(LogLevel.Debug, GetLogSource(), $"Port Check: Attempting to connect to port {this.monitoredPort} (Type: {portType})..."); // Removed enabledLoggersForSource
+				Log.Debug(GetLogSource(), $"Port Check: Attempting to connect to port {this.monitoredPort} (Type: {portType})..."); // Removed enabledLoggersForSource
 				bool currentPortTypeResponsive = false;
 
 				switch (portType)
@@ -374,18 +369,18 @@ namespace AppHealthMonitor
 						currentPortTypeResponsive = await IsWebSocketPortResponsive($"ws://127.0.0.1:{this.monitoredPort}", 5000);
 						break;
 					default:
-						logger.Log(LogLevel.Warning, GetLogSource(), $"Port Check: Unsupported PortType '{portType}'. Skipping this check."); // Removed enabledLoggersForSource
+						Log.Warning(GetLogSource(), $"Port Check: Unsupported PortType '{portType}'. Skipping this check."); // Removed enabledLoggersForSource
 						currentPortTypeResponsive = false;
 						break;
 				}
 
 				if (!currentPortTypeResponsive)
 				{
-					logger.Log(LogLevel.Warning, GetLogSource(), $"Port Check: Port {this.monitoredPort} (Type: {portType}) is NOT responsive."); // Removed enabledLoggersForSource
+					Log.Warning(GetLogSource(), $"Port Check: Port {this.monitoredPort} (Type: {portType}) is NOT responsive."); // Removed enabledLoggersForSource
 					return false;
 				}
 			}
-			logger.Log(LogLevel.Debug, GetLogSource(), "All configured ports are responsive."); // Removed enabledLoggersForSource
+			Log.Debug(GetLogSource(), "All configured ports are responsive."); // Removed enabledLoggersForSource
 			return true;
 		}
 
@@ -393,7 +388,7 @@ namespace AppHealthMonitor
 		{
 			if (this.monitoredProcess == null)
 			{
-				logger.Log(LogLevel.Debug, GetLogSource(), "No process currently being monitored (monitoredProcess is null)."); // Removed enabledLoggersForSource
+				Log.Debug(GetLogSource(), "No process currently being monitored (monitoredProcess is null)."); // Removed enabledLoggersForSource
 				return false;
 			}
 
@@ -402,22 +397,22 @@ namespace AppHealthMonitor
 				this.monitoredProcess.Refresh();
 				if (this.monitoredProcess.HasExited)
 				{
-					logger.Log(LogLevel.Info, GetLogSource(), $"Monitored process (ID: {this.monitoredProcess.Id}) has exited after refresh."); // Removed enabledLoggersForSource
+					Log.Info(GetLogSource(), $"Monitored process (ID: {this.monitoredProcess.Id}) has exited after refresh."); // Removed enabledLoggersForSource
 					this.monitoredProcess = null;
 					return false;
 				}
-				logger.Log(LogLevel.Debug, GetLogSource(), $"Monitored process (ID: {this.monitoredProcess.Id}) is running."); // Removed enabledLoggersForSource
+				Log.Debug(GetLogSource(), $"Monitored process (ID: {this.monitoredProcess.Id}) is running."); // Removed enabledLoggersForSource
 				return true;
 			}
 			catch (InvalidOperationException ex)
 			{
-				logger.Log(LogLevel.Error, GetLogSource(), $"Monitored process (ID: {this.monitoredProcess?.Id}) seems to have exited unexpectedly (InvalidOperationException).", ex); // Removed enabledLoggersForSource
+				Log.Error(GetLogSource(), $"Monitored process (ID: {this.monitoredProcess?.Id}) seems to have exited unexpectedly (InvalidOperationException).", ex); // Removed enabledLoggersForSource
 				this.monitoredProcess = null;
 				return false;
 			}
 			catch (Exception ex)
 			{
-				logger.Log(LogLevel.Error, GetLogSource(), $"Error refreshing process state for ID: {this.monitoredProcess?.Id}. Error: {ex.Message}", ex); // Removed enabledLoggersForSource
+				Log.Error(GetLogSource(), $"Error refreshing process state for ID: {this.monitoredProcess?.Id}. Error: {ex.Message}", ex); // Removed enabledLoggersForSource
 				this.monitoredProcess = null;
 				return false;
 			}
@@ -427,7 +422,7 @@ namespace AppHealthMonitor
 		{
 			if (this.monitoredProcess == null)
 			{
-				logger.Log(LogLevel.Debug, GetLogSource(), "KillApplication: No active process reference to kill."); // Removed enabledLoggersForSource
+				Log.Debug(GetLogSource(), "KillApplication: No active process reference to kill."); // Removed enabledLoggersForSource
 				return;
 			}
 
@@ -439,12 +434,12 @@ namespace AppHealthMonitor
 				this.monitoredProcess.Refresh();
 				if (this.monitoredProcess.HasExited)
 				{
-					logger.Log(LogLevel.Info, GetLogSource(), $"KillApplication: Process ID: {processId} has already exited, no need to kill."); // Removed enabledLoggersForSource
+					Log.Info(GetLogSource(), $"KillApplication: Process ID: {processId} has already exited, no need to kill."); // Removed enabledLoggersForSource
 					this.monitoredProcess = null;
 					return;
 				}
 
-				logger.Log(LogLevel.Warning, GetLogSource(), $"KillApplication: Attempting graceful shutdown for process ID: {processId}..."); // Removed enabledLoggersForSource
+				Log.Warning(GetLogSource(), $"KillApplication: Attempting graceful shutdown for process ID: {processId}..."); // Removed enabledLoggersForSource
 
 				bool gracefulShutdownAttempted = false;
 
@@ -453,65 +448,65 @@ namespace AppHealthMonitor
 					if (this.monitoredProcess.MainWindowHandle != IntPtr.Zero)
 					{
 						this.monitoredProcess.CloseMainWindow();
-						logger.Log(LogLevel.Info, GetLogSource(), "KillApplication: Sent CloseMainWindow signal (Windows)."); // Removed enabledLoggersForSource
+						Log.Info(GetLogSource(), "KillApplication: Sent CloseMainWindow signal (Windows)."); // Removed enabledLoggersForSource
 						gracefulShutdownAttempted = true;
 					}
 					else
 					{
-						logger.Log(LogLevel.Info, GetLogSource(), "KillApplication: No main window detected for graceful shutdown on Windows via CloseMainWindow. Will proceed to force kill if needed."); // Removed enabledLoggersForSource
+						Log.Info(GetLogSource(), "KillApplication: No main window detected for graceful shutdown on Windows via CloseMainWindow. Will proceed to force kill if needed."); // Removed enabledLoggersForSource
 					}
 				}
 				else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) || RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
 				{
-					logger.Log(LogLevel.Info, GetLogSource(), "KillApplication: Relying on Process.Kill(true) for graceful termination on Unix-like OS (Linux/macOS), which sends SIGTERM to process tree."); // Removed enabledLoggersForSource
+					Log.Info(GetLogSource(), "KillApplication: Relying on Process.Kill(true) for graceful termination on Unix-like OS (Linux/macOS), which sends SIGTERM to process tree."); // Removed enabledLoggersForSource
 					gracefulShutdownAttempted = true;
 				}
 				else
 				{
-					logger.Log(LogLevel.Warning, GetLogSource(), "KillApplication: Unsupported OS for specific graceful shutdown methods. Will rely on Process.Kill(true) for all termination attempts."); // Removed enabledLoggersForSource
+					Log.Warning(GetLogSource(), "KillApplication: Unsupported OS for specific graceful shutdown methods. Will rely on Process.Kill(true) for all termination attempts."); // Removed enabledLoggersForSource
 				}
 
 				if (gracefulShutdownAttempted)
 				{
-					logger.Log(LogLevel.Debug, GetLogSource(), $"KillApplication: Waiting for process ID: {processId} to exit gracefully ({this.gracefulShutdownTimeout.TotalSeconds}s timeout)."); // Removed enabledLoggersForSource
+					Log.Debug(GetLogSource(), $"KillApplication: Waiting for process ID: {processId} to exit gracefully ({this.gracefulShutdownTimeout.TotalSeconds}s timeout)."); // Removed enabledLoggersForSource
 					if (this.monitoredProcess.WaitForExit((int)this.gracefulShutdownTimeout.TotalMilliseconds))
 					{
-						logger.Log(LogLevel.Info, GetLogSource(), $"KillApplication: Process ID: {processId} exited gracefully."); // Removed enabledLoggersForSource
+						Log.Info(GetLogSource(), $"KillApplication: Process ID: {processId} exited gracefully."); // Removed enabledLoggersForSource
 						this.monitoredProcess = null;
 						return;
 					}
 					else
 					{
-						logger.Log(LogLevel.Warning, GetLogSource(), $"KillApplication: Process ID: {processId} did not exit gracefully within {this.gracefulShutdownTimeout.TotalSeconds}s. Proceeding with force kill."); // Removed enabledLoggersForSource
+						Log.Warning(GetLogSource(), $"KillApplication: Process ID: {processId} did not exit gracefully within {this.gracefulShutdownTimeout.TotalSeconds}s. Proceeding with force kill."); // Removed enabledLoggersForSource
 					}
 				}
 				else
 				{
-					logger.Log(LogLevel.Info, GetLogSource(), "KillApplication: No specific graceful shutdown method applied. Proceeding with force kill."); // Removed enabledLoggersForSource
+					Log.Info(GetLogSource(), "KillApplication: No specific graceful shutdown method applied. Proceeding with force kill."); // Removed enabledLoggersForSource
 				}
 
-				logger.Log(LogLevel.Error, GetLogSource(), $"KillApplication: Force killing process ID: {processId} and its children using Process.Kill(true)..."); // Removed enabledLoggersForSource
+				Log.Error(GetLogSource(), $"KillApplication: Force killing process ID: {processId} and its children using Process.Kill(true)..."); // Removed enabledLoggersForSource
 				this.monitoredProcess.Kill(true);
 
-				logger.Log(LogLevel.Debug, GetLogSource(), $"KillApplication: Waiting for process ID: {processId} to confirm exit after force kill (5s timeout)."); // Removed enabledLoggersForSource
+				Log.Debug(GetLogSource(), $"KillApplication: Waiting for process ID: {processId} to confirm exit after force kill (5s timeout)."); // Removed enabledLoggersForSource
 				this.monitoredProcess.WaitForExit(5000);
 
 				if (this.monitoredProcess.HasExited)
 				{
-					logger.Log(LogLevel.Info, GetLogSource(), $"KillApplication: Process ID: {processId} and its children killed successfully."); // Removed enabledLoggersForSource
+					Log.Info(GetLogSource(), $"KillApplication: Process ID: {processId} and its children killed successfully."); // Removed enabledLoggersForSource
 				}
 				else
 				{
-					logger.Log(LogLevel.Critical, GetLogSource(), $"KillApplication: Critical Warning: Process ID: {processId} did not exit even after force kill(true) command. It might be stuck!"); // Removed enabledLoggersForSource
+					Log.Critical(GetLogSource(), $"KillApplication: Critical Warning: Process ID: {processId} did not exit even after force kill(true) command. It might be stuck!"); // Removed enabledLoggersForSource
 				}
 			}
 			catch (InvalidOperationException ex)
 			{
-				logger.Log(LogLevel.Error, GetLogSource(), $"KillApplication: Process ID: {processId} already exited or invalid handle during kill attempt (InvalidOperationException).", ex); // Removed enabledLoggersForSource
+				Log.Error(GetLogSource(), $"KillApplication: Process ID: {processId} already exited or invalid handle during kill attempt (InvalidOperationException).", ex); // Removed enabledLoggersForSource
 			}
 			catch (Exception ex)
 			{
-				logger.Log(LogLevel.Critical, GetLogSource(), $"KillApplication: Error during application kill for process ID: {processId}. Error: {ex.Message}", ex); // Removed enabledLoggersForSource
+				Log.Critical(GetLogSource(), $"KillApplication: Error during application kill for process ID: {processId}. Error: {ex.Message}", ex); // Removed enabledLoggersForSource
 			}
 			finally
 			{
@@ -521,7 +516,7 @@ namespace AppHealthMonitor
 
 		private void LaunchApplication()
 		{
-			logger.Log(LogLevel.Info, GetLogSource(), $"Launching application '{this.applicationExePath}' with arguments: '{this.launchArguments}'..."); // Removed enabledLoggersForSource
+			Log.Info(GetLogSource(), $"Launching application '{this.applicationExePath}' with arguments: '{this.launchArguments}'..."); // Removed enabledLoggersForSource
 			try
 			{
 				ProcessStartInfo startInfo = new ProcessStartInfo
@@ -537,23 +532,23 @@ namespace AppHealthMonitor
 				this.monitoredProcess = Process.Start(startInfo);
 				if (this.monitoredProcess != null)
 				{
-					logger.Log(LogLevel.Info, GetLogSource(), $"Application launched successfully. Process ID: {this.monitoredProcess.Id}"); // Removed enabledLoggersForSource
+					Log.Info(GetLogSource(), $"Application launched successfully. Process ID: {this.monitoredProcess.Id}"); // Removed enabledLoggersForSource
 					lastCpuCheckTime = DateTime.Now;
 					lastCpuTotalProcessorTime = TimeSpan.Zero;
 				}
 				else
 				{
-					logger.Log(LogLevel.Warning, GetLogSource(), $"Warning: Process.Start returned null for '{this.applicationExePath}'. This might indicate a problem."); // Removed enabledLoggersForSource
+					Log.Warning(GetLogSource(), $"Warning: Process.Start returned null for '{this.applicationExePath}'. This might indicate a problem."); // Removed enabledLoggersForSource
 				}
 			}
 			catch (System.ComponentModel.Win32Exception ex)
 			{
-				logger.Log(LogLevel.Critical, GetLogSource(), $"Error launching application '{this.applicationExePath}'. Check if the path is correct and the executable exists. Error: {ex.Message}", ex); // Removed enabledLoggersForSource
+				Log.Critical(GetLogSource(), $"Error launching application '{this.applicationExePath}'. Check if the path is correct and the executable exists. Error: {ex.Message}", ex); // Removed enabledLoggersForSource
 				this.monitoredProcess = null;
 			}
 			catch (Exception ex)
 			{
-				logger.Log(LogLevel.Critical, GetLogSource(), $"Unexpected error launching application '{this.applicationExePath}'. Error: {ex.Message}", ex); // Removed enabledLoggersForSource
+				Log.Critical(GetLogSource(), $"Unexpected error launching application '{this.applicationExePath}'. Error: {ex.Message}", ex); // Removed enabledLoggersForSource
 				this.monitoredProcess = null;
 			}
 		}
@@ -570,25 +565,25 @@ namespace AppHealthMonitor
 						this.cancellationToken.ThrowIfCancellationRequested();
 						if (!client.Connected)
 						{
-							logger.Log(LogLevel.Debug, GetLogSource(), $"TCP Port {host}:{port} connection failed (not connected)."); // Removed enabledLoggersForSource
+							Log.Debug(GetLogSource(), $"TCP Port {host}:{port} connection failed (not connected)."); // Removed enabledLoggersForSource
 						}
 						return client.Connected;
 					}
 					else
 					{
-						logger.Log(LogLevel.Warning, GetLogSource(), $"TCP Port Check Timeout: {host}:{port} did not respond within {timeoutMilliseconds}ms."); // Removed enabledLoggersForSource
+						Log.Warning(GetLogSource(), $"TCP Port Check Timeout: {host}:{port} did not respond within {timeoutMilliseconds}ms."); // Removed enabledLoggersForSource
 						return false;
 					}
 				}
 				catch (OperationCanceledException) { throw; }
 				catch (SocketException ex)
 				{
-					logger.Log(LogLevel.Warning, GetLogSource(), $"TCP Port Check Error: Could not connect to {host}:{port}. Socket error: {ex.SocketErrorCode} - {ex.Message}"); // Removed enabledLoggersForSource
+					Log.Warning(GetLogSource(), $"TCP Port Check Error: Could not connect to {host}:{port}. Socket error: {ex.SocketErrorCode} - {ex.Message}"); // Removed enabledLoggersForSource
 					return false;
 				}
 				catch (Exception ex)
 				{
-					logger.Log(LogLevel.Error, GetLogSource(), $"TCP Port Check Unexpected Error: {ex.Message}", ex); // Removed enabledLoggersForSource
+					Log.Error(GetLogSource(), $"TCP Port Check Unexpected Error: {ex.Message}", ex); // Removed enabledLoggersForSource
 					return false;
 				}
 			}
@@ -610,19 +605,19 @@ namespace AppHealthMonitor
 					}
 					else
 					{
-						logger.Log(LogLevel.Warning, GetLogSource(), $"UDP Port Send Timeout: {host}:{port} did not complete send within {timeoutMilliseconds}ms."); // Removed enabledLoggersForSource
+						Log.Warning(GetLogSource(), $"UDP Port Send Timeout: {host}:{port} did not complete send within {timeoutMilliseconds}ms."); // Removed enabledLoggersForSource
 						return false;
 					}
 				}
 				catch (OperationCanceledException) { throw; }
 				catch (SocketException ex)
 				{
-					logger.Log(LogLevel.Warning, GetLogSource(), $"UDP Port Check Error: Could not send to {host}:{port}. Socket error: {ex.SocketErrorCode} - {ex.Message}"); // Removed enabledLoggersForSource
+					Log.Warning(GetLogSource(), $"UDP Port Check Error: Could not send to {host}:{port}. Socket error: {ex.SocketErrorCode} - {ex.Message}"); // Removed enabledLoggersForSource
 					return false;
 				}
 				catch (Exception ex)
 				{
-					logger.Log(LogLevel.Error, GetLogSource(), $"UDP Port Check Unexpected Error: {ex.Message}", ex); // Removed enabledLoggersForSource
+					Log.Error(GetLogSource(), $"UDP Port Check Unexpected Error: {ex.Message}", ex); // Removed enabledLoggersForSource
 					return false;
 				}
 			}
@@ -648,25 +643,25 @@ namespace AppHealthMonitor
 						}
 						else
 						{
-							logger.Log(LogLevel.Warning, GetLogSource(), $"WebSocket Port Check: Connection failed. State: {ws.State}."); // Removed enabledLoggersForSource
+							Log.Warning(GetLogSource(), $"WebSocket Port Check: Connection failed. State: {ws.State}."); // Removed enabledLoggersForSource
 							return false;
 						}
 					}
 					else
 					{
-						logger.Log(LogLevel.Warning, GetLogSource(), $"WebSocket Port Check Timeout: {webSocketUri} did not establish connection within {timeoutMilliseconds}ms."); // Removed enabledLoggersForSource
+						Log.Warning(GetLogSource(), $"WebSocket Port Check Timeout: {webSocketUri} did not establish connection within {timeoutMilliseconds}ms."); // Removed enabledLoggersForSource
 						return false;
 					}
 				}
 				catch (OperationCanceledException) { throw; }
 				catch (WebSocketException ex)
 				{
-					logger.Log(LogLevel.Warning, GetLogSource(), $"WebSocket Port Check Error: {webSocketUri}. WebSocket error: {ex.WebSocketErrorCode} - {ex.Message}"); // Removed enabledLoggersForSource
+					Log.Warning(GetLogSource(), $"WebSocket Port Check Error: {webSocketUri}. WebSocket error: {ex.WebSocketErrorCode} - {ex.Message}"); // Removed enabledLoggersForSource
 					return false;
 				}
 				catch (Exception ex)
 				{
-					logger.Log(LogLevel.Error, GetLogSource(), $"WebSocket Port Check Unexpected Error: {ex.Message}", ex); // Removed enabledLoggersForSource
+					Log.Error(GetLogSource(), $"WebSocket Port Check Unexpected Error: {ex.Message}", ex); // Removed enabledLoggersForSource
 					return false;
 				}
 			}
