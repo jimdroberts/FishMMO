@@ -1,4 +1,3 @@
-using UnityEngine;
 using FishMMO.Shared;
 using FishMMO.Logging;
 using System.Linq;
@@ -19,7 +18,6 @@ namespace FishMMO.Client
 				if (!Configuration.GlobalSettings.Load(Configuration.DEFAULT_FILENAME))
 				{
 					// If we failed to load the file.. save a new one
-					Configuration.GlobalSettings.Set("Version", Constants.Configuration.Version);
 					Configuration.GlobalSettings.Set("IPFetchHost", Constants.Configuration.IPFetchHost);
 #if !UNITY_EDITOR && !UNITY_WEBGL
 					Configuration.GlobalSettings.Save();

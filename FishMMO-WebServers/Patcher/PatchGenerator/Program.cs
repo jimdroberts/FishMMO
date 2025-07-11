@@ -8,30 +8,52 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
-using FishMMO.Shared; // Assuming this namespace exists for Configuration
-using FishMMO.Patcher; // Using the namespace for the new PatchMetadata classes
+using FishMMO.Patcher;
+using FishMMO.Logging;
 
 class Program
 {
+	private static string latestVersion = "";
+	private static readonly string loggingConfigName = "logging.json";
+
 	static void Main()
 	{
-		Console.WriteLine("Welcome to the Game Client Patch Generator!");
-		Console.WriteLine("This tool will create patch files to update older game client versions to the latest version.");
-		Console.WriteLine("-------------------------------------------------------------------------------------");
+		string workingDirectory = Directory.GetCurrentDirectory();
+
+		// Load Logging Configuration from logging.json
+		string configFilePath = Path.Combine(workingDirectory, loggingConfigName);
+
+		// Initialize the Log manager.
+		Log.Initialize(configFilePath, new ConsoleFormatter(), null, Log.OnInternalLogMessage);
+
+		Log.Info("Patcher", "Welcome to the Game Client Patch Generator!");
+		Log.Info("Patcher", "This tool will create patch files to update older game client versions to the latest version.");
+		Log.Info("Patcher", "-------------------------------------------------------------------------------------");
 
 		Console.Write("Enter the FULL path to the directory containing the LATEST game client files (e.g., C:\\GameClient\\LatestVersion): ");
 		string latestDirectory = ReadAndTrimQuotes(Console.ReadLine());
 		if (!Directory.Exists(latestDirectory))
 		{
-			Console.WriteLine($"Error: The specified directory '{latestDirectory}' does not exist. Please ensure the path is correct.");
+			Log.Error("Patcher", $"The specified directory '{latestDirectory}' does not exist. Please ensure the path is correct.");
 			return;
 		}
+
+		// Load latest version using UnityAssetReader
+		Log.Info("Patcher", $"Attempting to load latest version from '{latestDirectory}'...");
+		VersionConfig latestVersionConfig = UnityAssetReader.GetVersionFromClientDirectory(latestDirectory);
+		if (latestVersionConfig == null)
+		{
+			Log.Error("Patcher", $"Unable to determine latest version from '{latestDirectory}'. Closing...");
+			return;
+		}
+		latestVersion = latestVersionConfig.FullVersion;
+		Log.Info("Patcher", $"Latest client version detected: {latestVersion}");
 
 		Console.Write("Enter the FULL path to the directory containing the OLD game client versions. This directory should contain subdirectories, each representing a distinct old version (e.g., C:\\OldGameClients): ");
 		string oldRootDirectory = ReadAndTrimQuotes(Console.ReadLine());
 		if (!Directory.Exists(oldRootDirectory))
 		{
-			Console.WriteLine($"Error: The specified directory '{oldRootDirectory}' does not exist. Please ensure the path is correct.");
+			Log.Error("Patcher", $"The specified directory '{oldRootDirectory}' does not exist. Please ensure the path is correct.");
 			return;
 		}
 
@@ -40,7 +62,7 @@ class Program
 		// Delete the old patches as they should no longer be relevant. We want the shortest path to the latest version only.
 		if (Directory.Exists(patchesDirectory))
 		{
-			Console.WriteLine($"Warning: Deleting existing content in the patch output directory '{patchesDirectory}'.");
+			Log.Warning("Patcher", $"Deleting existing content in the patch output directory '{patchesDirectory}'.");
 			Directory.Delete(patchesDirectory, true);
 		}
 		// Ensure patch directory exists
@@ -49,45 +71,50 @@ class Program
 		// Define extensions to ignore (e.g., .cfg, .log, .bak)
 		HashSet<string> ignoredExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
 		{
-			".cfg", // Ignore configuration files
+			".cfg", // Ignore configuration files (less relevant now, but good to keep)
             ".log", // Ignore log files
             ".bak", // Ignore backup files
             // Add any other extensions you want to ignore here
         };
-		Console.WriteLine("The following file extensions will be ignored during patch generation: " + string.Join(", ", ignoredExtensions));
+		// Ensure VersionConfig.asset is NOT ignored if it's the only .asset file you care about
+		// This is handled implicitly by the VersionConfigFileName constant in UnityAssetReader.
+		// If there were other .asset files you wanted to ignore generally, you'd add them here,
+		// but for now, it's safer to keep the .asset extension in mind for explicit handling.
+
+		Log.Info("Patcher", "The following file extensions will be ignored during patch generation: " + string.Join(", ", ignoredExtensions));
 
 		PatchGenerator patchGenerator = new PatchGenerator();
 
 		try
 		{
-			Console.WriteLine("\nStarting patch generation process.");
+			Log.Info("Patcher", "\nStarting patch generation process.");
 
 			// Get all directories under the specified oldRootDirectory
 			string[] oldDirectories = Directory.GetDirectories(oldRootDirectory);
 
 			if (oldDirectories.Length == 0)
 			{
-				Console.WriteLine($"No old client version subdirectories found in '{oldRootDirectory}'. No patches will be generated.");
+				Log.Info("Patcher", $"No old client version subdirectories found in '{oldRootDirectory}'. No patches will be generated.");
 				return;
 			}
 
-			Console.WriteLine($"Found {oldDirectories.Length} old client versions. Generating patches for each:");
+			Log.Info("Patcher", $"Found {oldDirectories.Length} old client versions. Generating patches for each:");
 
 			// Use Parallel.ForEach to process old directories concurrently
 			// Each CreatePatch call will generate a single compressed ZIP file
 			Parallel.ForEach(oldDirectories, (oldDirectory) =>
 			{
 				CreatePatch(patchGenerator, latestDirectory, oldDirectory, patchesDirectory, ignoredExtensions);
-				Console.WriteLine(); // Add a newline for better readability between patch generations
 			});
 
-			Console.WriteLine("All patch generation operations complete.");
+			Log.Info("Patcher", "All patch generation operations complete.");
 		}
 		catch (Exception ex)
 		{
-			Console.WriteLine($"An unexpected error occurred during patch generation: {ex.Message}");
-			Console.WriteLine(ex.StackTrace); // Provide stack trace for debugging
+			Log.Error("Patcher", $"An unexpected error occurred during patch generation.", ex);
 		}
+
+		Log.Shutdown();
 	}
 
 	/// <summary>
@@ -104,33 +131,16 @@ class Program
 
 	public static void CreatePatch(PatchGenerator patchGenerator, string latestDirectory, string oldDirectory, string patchOutputDirectory, HashSet<string> ignoredExtensions)
 	{
-		// Load latest configuration
-		Configuration latestConfiguration = new Configuration(latestDirectory);
-		if (!latestConfiguration.Load())
+		// Load old version using UnityAssetReader
+		Log.Info("Patcher", $"[{Path.GetFileName(oldDirectory)}] Attempting to load old version from '{oldDirectory}'...");
+		VersionConfig oldVersionConfig = UnityAssetReader.GetVersionFromClientDirectory(oldDirectory);
+		if (oldVersionConfig == null)
 		{
-			Console.WriteLine($"[{Path.GetFileName(oldDirectory)}] Unable to load latest configuration file from '{latestDirectory}'. Skipping patch generation for this version.");
+			Log.Info("Patcher", $"[{Path.GetFileName(oldDirectory)}] Unable to determine old version from '{oldDirectory}'. Skipping patch generation for this version.");
 			return;
 		}
-		if (!latestConfiguration.TryGetString("Version", out string latestVersion) ||
-			string.IsNullOrWhiteSpace(latestVersion))
-		{
-			Console.WriteLine($"[{Path.GetFileName(oldDirectory)}] Unable to load 'Version' data from latest configuration at '{latestDirectory}'. Skipping patch generation for this version.");
-			return;
-		}
-
-		// Load old configuration
-		Configuration oldConfiguration = new Configuration(oldDirectory);
-		if (!oldConfiguration.Load())
-		{
-			Console.WriteLine($"[{Path.GetFileName(oldDirectory)}] Unable to load old configuration file from '{oldDirectory}'. Skipping patch generation for this version.");
-			return;
-		}
-		if (!oldConfiguration.TryGetString("Version", out string oldVersion) ||
-			string.IsNullOrWhiteSpace(oldVersion))
-		{
-			Console.WriteLine($"[{Path.GetFileName(oldDirectory)}] Unable to load 'Version' data from old configuration at '{oldDirectory}'. Skipping patch generation for this version.");
-			return;
-		}
+		string oldVersion = oldVersionConfig.FullVersion;
+		Log.Info("Patcher", $"[{Path.GetFileName(oldDirectory)}] Old client version detected: {oldVersion}");
 
 		string patchFileName = $"{oldVersion}-{latestVersion}.zip";
 		string patchFilePath = Path.Combine(patchOutputDirectory, patchFileName);
@@ -139,87 +149,86 @@ class Program
 		// List to keep track of temporary patch files that need to be cleaned up
 		ConcurrentBag<string> tempPatchFilesToCleanUp = new ConcurrentBag<string>();
 
-		Console.WriteLine($"[{Path.GetFileName(oldDirectory)}] Generating patch: {patchFileName}");
+		Log.Info("Patcher", $"[{Path.GetFileName(oldDirectory)}] Generating patch: {patchFileName}");
 
 		try
 		{
 			// Get all files in old and latest directories with their hashes, applying ignoredExtensions
-			Console.WriteLine($"[{Path.GetFileName(oldDirectory)}] Scanning Latest Files for hashes (ignoring {ignoredExtensions.Count} extensions)...");
+			Log.Info("Patcher", $"[{Path.GetFileName(oldDirectory)}] Scanning Latest Files for hashes (ignoring {ignoredExtensions.Count} extensions)...");
 			Dictionary<string, (string relativePath, string hash)> latestFilesWithHashes = GetAllFilesWithHashes(latestDirectory, ignoredExtensions);
 			HashSet<string> latestFileRelativePaths = latestFilesWithHashes.Keys.ToHashSet();
 
-			Console.WriteLine($"[{Path.GetFileName(oldDirectory)}] Scanning Old Files for hashes (ignoring {ignoredExtensions.Count} extensions)...");
+			Log.Info("Patcher", $"[{Path.GetFileName(oldDirectory)}] Scanning Old Files for hashes (ignoring {ignoredExtensions.Count} extensions)...");
 			Dictionary<string, (string relativePath, string hash)> oldFilesWithHashes = GetAllFilesWithHashes(oldDirectory, ignoredExtensions);
 			HashSet<string> oldFileRelativePaths = oldFilesWithHashes.Keys.ToHashSet();
 
-			// Match files based on relative paths
-			List<string> matchedRelativePaths = MatchFiles(oldFileRelativePaths, latestFileRelativePaths);
-
-			Console.WriteLine($"[{Path.GetFileName(oldDirectory)}] Building patch data (writing to temporary files)...");
+			// Determine deleted, new, and modified files based on hashes
+			List<string> filesToDelete = oldFileRelativePaths.Except(latestFileRelativePaths).ToList();
+			List<string> filesToAdd = latestFileRelativePaths.Except(oldFileRelativePaths).ToList();
+			List<string> filesToCompare = oldFileRelativePaths.Intersect(latestFileRelativePaths).ToList();
 
 			ConcurrentBag<ModifiedFileEntry> modifiedFilesData = new ConcurrentBag<ModifiedFileEntry>();
 			ConcurrentBag<NewFileEntry> newFilesData = new ConcurrentBag<NewFileEntry>();
 			ConcurrentBag<DeletedFileEntry> deletedFilesData = new ConcurrentBag<DeletedFileEntry>();
 
-			// 1. Process Deleted Files (sequential, as they are just paths)
-			foreach (var deletedFilePath in oldFileRelativePaths)
+			// 1. Process Deleted Files
+			foreach (var deletedFilePath in filesToDelete)
 			{
 				deletedFilesData.Add(new DeletedFileEntry { RelativePath = deletedFilePath });
-				Console.WriteLine($"[{Path.GetFileName(oldDirectory)}] \tIdentified for deletion: {deletedFilePath}");
+				Log.Info("Patcher", $"[{Path.GetFileName(oldDirectory)}] \tIdentified for deletion: {deletedFilePath}");
 			}
 
 			// 2. Process Modified Files in parallel
-			Parallel.ForEach(matchedRelativePaths, (matchedRelativePath) =>
+			Parallel.ForEach(filesToCompare, (comparedRelativePath) =>
 			{
-				string oldFullFilePath = Path.Combine(oldDirectory, matchedRelativePath);
-				string newFullFilePath = Path.Combine(latestDirectory, matchedRelativePath);
-
-				// Generate patch data (byte array) for this specific file
-				byte[] patchDataBytes = patchGenerator.Generate(oldFullFilePath, newFullFilePath);
-
-				if (patchDataBytes.Length > 0) // Only add if there's actual patch data
+				// Only generate patch if hash differs
+				if (oldFilesWithHashes[comparedRelativePath].hash != latestFilesWithHashes[comparedRelativePath].hash)
 				{
-					// Create a unique temporary file path for this patch data
-					string tempPatchFile = Path.Combine(Path.GetTempPath(), $"patch_{Guid.NewGuid()}.bin");
+					string oldFullFilePath = Path.Combine(oldDirectory, comparedRelativePath);
+					string newFullFilePath = Path.Combine(latestDirectory, comparedRelativePath);
 
-					try
+					byte[] patchDataBytes = patchGenerator.Generate(oldFullFilePath, newFullFilePath);
+
+					if (patchDataBytes.Length > 0)
 					{
-						// Write patch data directly to the temporary file
-						File.WriteAllBytes(tempPatchFile, patchDataBytes);
-						tempPatchFilesToCleanUp.Add(tempPatchFile); // Add to cleanup list
-
-						modifiedFilesData.Add(new ModifiedFileEntry
+						string tempPatchFile = Path.Combine(Path.GetTempPath(), $"patch_{Guid.NewGuid()}.bin");
+						try
 						{
-							RelativePath = matchedRelativePath,
-							OldHash = oldFilesWithHashes[matchedRelativePath].hash,
-							NewHash = latestFilesWithHashes[matchedRelativePath].hash,
-							PatchDataEntryName = $"patches/{matchedRelativePath.Replace('\\', '/')}.bin", // Consistent ZIP path
-							TempPatchFilePath = tempPatchFile // Store path to temp file
-						});
-						Console.WriteLine($"[{Path.GetFileName(oldDirectory)}] \tGenerated patch for modified: {matchedRelativePath} (written to temp file)");
+							File.WriteAllBytes(tempPatchFile, patchDataBytes);
+							tempPatchFilesToCleanUp.Add(tempPatchFile);
+
+							modifiedFilesData.Add(new ModifiedFileEntry
+							{
+								RelativePath = comparedRelativePath,
+								OldHash = oldFilesWithHashes[comparedRelativePath].hash,
+								NewHash = latestFilesWithHashes[comparedRelativePath].hash,
+								PatchDataEntryName = $"patches/{comparedRelativePath.Replace('\\', '/')}.bin",
+								TempPatchFilePath = tempPatchFile
+							});
+							Log.Info("Patcher", $"[{Path.GetFileName(oldDirectory)}] \tGenerated patch for modified: {comparedRelativePath} (written to temp file)");
+						}
+						catch (Exception ex)
+						{
+							Log.Info("Patcher", $"[{Path.GetFileName(oldDirectory)}] \tError writing patch for {comparedRelativePath} to temp file: {ex.Message}");
+						}
 					}
-					catch (Exception ex)
+					else
 					{
-						Console.WriteLine($"[{Path.GetFileName(oldDirectory)}] \tError writing patch for {matchedRelativePath} to temp file: {ex.Message}");
-						// Continue processing other files, but this one will be skipped
+						Log.Info("Patcher", $"[{Path.GetFileName(oldDirectory)}] \tFiles are identical, no patch generated for: {comparedRelativePath}");
 					}
-				}
-				else // If patchDataBytes is empty, it means files are identical, no patch needed
-				{
-					Console.WriteLine($"[{Path.GetFileName(oldDirectory)}] \tFiles are identical, no patch generated for: {matchedRelativePath}");
 				}
 			});
 
-			// 3. Process New Files (metadata only here, actual file streaming happens during ZIP creation)
-			Parallel.ForEach(latestFileRelativePaths, (newRelativePath) =>
+			// 3. Process New Files
+			Parallel.ForEach(filesToAdd, (newRelativePath) =>
 			{
 				newFilesData.Add(new NewFileEntry
 				{
 					RelativePath = newRelativePath,
 					NewHash = latestFilesWithHashes[newRelativePath].hash,
-					FileDataEntryName = $"new_files/{newRelativePath.Replace('\\', '/')}" // Consistent ZIP path
+					FileDataEntryName = $"new_files/{newRelativePath.Replace('\\', '/')}"
 				});
-				Console.WriteLine($"[{Path.GetFileName(oldDirectory)}] \tPrepared metadata for new file: {newRelativePath}");
+				Log.Info("Patcher", $"[{Path.GetFileName(oldDirectory)}] \tPrepared metadata for new file: {newRelativePath}");
 			});
 
 			// 4. Assemble the PatchManifest
@@ -248,7 +257,7 @@ class Program
 					{
 						entryStream.Write(manifestBytes, 0, manifestBytes.Length);
 					}
-					Console.WriteLine($"[{Path.GetFileName(oldDirectory)}] \tAdded manifest.json to ZIP.");
+					Log.Info("Patcher", $"[{Path.GetFileName(oldDirectory)}] \tAdded manifest.json to ZIP.");
 
 					// Add Modified File Patches to ZIP by streaming from temporary files
 					foreach (var entry in modifiedFilesData)
@@ -259,17 +268,17 @@ class Program
 							using (Stream entryStream = patchEntry.Open())
 							using (FileStream sourcePatchStream = File.OpenRead(entry.TempPatchFilePath))
 							{
-								sourcePatchStream.CopyTo(entryStream); // Stream directly
+								sourcePatchStream.CopyTo(entryStream);
 							}
-							Console.WriteLine($"[{Path.GetFileName(oldDirectory)}] \tAdded patch data for {entry.RelativePath} to ZIP by streaming from temp file.");
+							Log.Info("Patcher", $"[{Path.GetFileName(oldDirectory)}] \tAdded patch data for {entry.RelativePath} to ZIP by streaming from temp file.");
 						}
 						else
 						{
-							Console.WriteLine($"[{Path.GetFileName(oldDirectory)}] \tWarning: Temporary patch file not found for {entry.RelativePath}, skipping ZIP addition.");
+							Log.Warning("Patcher", $"[{Path.GetFileName(oldDirectory)}] \tTemporary patch file not found for {entry.RelativePath}, skipping ZIP addition.");
 						}
 					}
 
-					// Add New Files to ZIP by streaming directly from disk (already optimized in previous step)
+					// Add New Files to ZIP by streaming directly from disk
 					foreach (var entry in newFilesData)
 					{
 						string fullFilePath = Path.Combine(latestDirectory, entry.RelativePath);
@@ -279,26 +288,26 @@ class Program
 							using (Stream entryStream = newFileEntry.Open())
 							using (FileStream sourceFileStream = File.OpenRead(fullFilePath))
 							{
-								sourceFileStream.CopyTo(entryStream); // Stream directly from source file to ZIP entry
+								sourceFileStream.CopyTo(entryStream);
 							}
-							Console.WriteLine($"[{Path.GetFileName(oldDirectory)}] \tAdded new file data for {entry.RelativePath} to ZIP by streaming.");
+							Log.Info("Patcher", $"[{Path.GetFileName(oldDirectory)}] \tAdded new file data for {entry.RelativePath} to ZIP by streaming.");
 						}
 						else
 						{
-							Console.WriteLine($"[{Path.GetFileName(oldDirectory)}] \tWarning: New file not found at {fullFilePath}, skipping ZIP addition.");
+							Log.Warning("Patcher", $"[{Path.GetFileName(oldDirectory)}] \tNew file not found at {fullFilePath}, skipping ZIP addition.");
 						}
 					}
-				} // ZipArchive is disposed and written to stream
-			} // FileStream is disposed, completing the file write
+				}
+			}
 
 			// Move the temporary file to its final destination
 			File.Move(tempZipFilePath, patchFilePath);
-			Console.WriteLine($"[{Path.GetFileName(oldDirectory)}] Patch build completed: {patchFileName}");
+			Log.Info("Patcher", $"[{Path.GetFileName(oldDirectory)}] Patch build completed: {patchFileName}");
 		}
 		catch (Exception ex)
 		{
-			Console.WriteLine($"[{Path.GetFileName(oldDirectory)}] Error generating patch for '{oldDirectory}': {ex.Message}");
-			Console.WriteLine(ex.StackTrace);
+			Log.Info("Patcher", $"[{Path.GetFileName(oldDirectory)}] Error generating patch for '{oldDirectory}': {ex.Message}");
+			Log.Info("Patcher", ex.StackTrace);
 			// Clean up temporary patch file in case of error
 			if (File.Exists(tempZipFilePath))
 			{
@@ -315,12 +324,12 @@ class Program
 					if (File.Exists(tempFile))
 					{
 						File.Delete(tempFile);
-						Console.WriteLine($"[{Path.GetFileName(oldDirectory)}] \tCleaned up temporary patch file: {tempFile}");
+						Log.Info("Patcher", $"[{Path.GetFileName(oldDirectory)}] \tCleaned up temporary patch file: {tempFile}");
 					}
 				}
 				catch (Exception ex)
 				{
-					Console.WriteLine($"[{Path.GetFileName(oldDirectory)}] \tError cleaning up temporary file {tempFile}: {ex.Message}");
+					Log.Info("Patcher", $"[{Path.GetFileName(oldDirectory)}] \tError cleaning up temporary file {tempFile}: {ex.Message}");
 				}
 			}
 		}
@@ -346,7 +355,7 @@ class Program
 		}
 		catch (Exception ex)
 		{
-			Console.WriteLine($"Error streaming file chunks from '{sourceFilePath}' to memory: {ex.Message}");
+			Log.Info("Patcher", $"Error streaming file chunks from '{sourceFilePath}' to memory: {ex.Message}");
 			throw; // Propagate the exception
 		}
 	}
@@ -379,9 +388,17 @@ class Program
 						// Skip files if their extension is in the ignoredExtensions set
 						if (ignoredExtensions.Contains(extension))
 						{
-							Console.WriteLine($"\tSkipping ignored file: {Path.GetFileName(file)} (.{extension})");
+							Log.Info("Patcher", $"\tSkipping ignored file: {Path.GetFileName(file)} (.{extension})");
 							continue;
 						}
+
+						// IMPORTANT: Do NOT ignore VersionConfig.asset itself during hash calculation,
+						// as it's the source of truth for versioning. The UnityAssetReader will find it.
+						// However, if it's explicitly added to ignoredExtensions, the file will be skipped
+						// for hashing, which might be an issue if it changes beyond just version number.
+						// For this specific case, it's fine if the VersionConfig.asset itself
+						// isn't included in the patch content unless its hash changes (e.g., if you added a new field).
+						// It's mainly used for *determining* the versions.
 
 						string relativePath = file.Substring(rootDirectory.Length);
 						if (Path.IsPathRooted(relativePath))
@@ -393,23 +410,22 @@ class Program
 						relativePath = relativePath.Replace('\\', '/');
 
 						string fileHash = ComputeFileHash(file, sha256);
-						// Using Add instead of []= to ensure unique keys in case of unexpected duplicates (though unlikely for paths)
 						filesWithHashes.Add(relativePath, (relativePath, fileHash));
 					}
 				}
 				catch (UnauthorizedAccessException)
 				{
-					Console.WriteLine($"Warning: Access to directory '{currentDir}' is denied. Skipping.");
+					Log.Warning("Patcher", $"Access to directory '{currentDir}' is denied. Skipping.");
 					continue;
 				}
 				catch (DirectoryNotFoundException)
 				{
-					Console.WriteLine($"Warning: Directory '{currentDir}' not found. Skipping.");
+					Log.Warning("Patcher", $"Directory '{currentDir}' not found. Skipping.");
 					continue;
 				}
 				catch (IOException ex)
 				{
-					Console.WriteLine($"Warning: IO error accessing files in '{currentDir}': {ex.Message}. Skipping.");
+					Log.Warning("Patcher", $"IO error accessing files in '{currentDir}': {ex.Message}. Skipping.");
 					continue;
 				}
 
@@ -424,12 +440,12 @@ class Program
 				}
 				catch (UnauthorizedAccessException)
 				{
-					Console.WriteLine($"Warning: Access to subdirectory '{currentDir}' is denied. Skipping.");
+					Log.Warning("Patcher", $"Access to subdirectory '{currentDir}' is denied. Skipping.");
 					continue;
 				}
 				catch (DirectoryNotFoundException)
 				{
-					Console.WriteLine($"Warning: Subdirectory '{currentDir}' not found. Skipping.");
+					Log.Warning("Patcher", $"Subdirectory '{currentDir}' not found. Skipping.");
 					continue;
 				}
 			}
@@ -450,21 +466,15 @@ class Program
 	}
 
 	/// <summary>
-	/// Returns a list of matching relative file paths. OldFiles and LatestFiles are updated so that matching files are no longer contained.
+	/// Returns a list of matching relative file paths.
+	/// This method is modified to only find the intersection, as `GetAllFilesWithHashes` now returns all files,
+	/// and the subsequent logic uses `Except` and `Intersect` on the file paths to determine differences.
 	/// </summary>
 	static List<string> MatchFiles(HashSet<string> oldFiles, HashSet<string> latestFiles)
 	{
-		List<string> matchingFiles = new List<string>();
-		// Create a copy to iterate, as we will modify the original oldFiles HashSet
-		foreach (string oldFile in new HashSet<string>(oldFiles))
-		{
-			if (latestFiles.Contains(oldFile))
-			{
-				matchingFiles.Add(oldFile);
-				latestFiles.Remove(oldFile); // Remove from latest as it's a matched file
-				oldFiles.Remove(oldFile);    // Remove from old as it's a matched file
-			}
-		}
-		return matchingFiles;
+		// This method is now effectively redundant in the new flow,
+		// as the Intersection logic is handled directly in CreatePatch.
+		// Keeping it for now, but it's not strictly needed for the new approach.
+		return oldFiles.Intersect(latestFiles).ToList();
 	}
 }

@@ -83,7 +83,7 @@ namespace FishMMO.Client
 #endif
 
 			// Assign the title name
-			Title.text = Constants.Configuration.ProjectName + " v" + Constants.Configuration.Version;
+			Title.text = Constants.Configuration.ProjectName + " v" + MainBootstrapSystem.GameVersion;
 
 			// Clear the launch button events, this is done programmatically.
 			PlayButton.onClick.RemoveAllListeners();
@@ -250,13 +250,13 @@ namespace FishMMO.Client
 
 		public IEnumerator GetPatch(Action<string> onFetchFail, Action onFetchComplete, Action<float> onProgressUpdate)
 		{
-			using (UnityWebRequest request = UnityWebRequest.Get(patcherHost + Constants.Configuration.Version))
+			using (UnityWebRequest request = UnityWebRequest.Get(patcherHost + MainBootstrapSystem.GameVersion))
 			{
 				request.SetRequestHeader("X-FishMMO", "Client");
 				request.certificateHandler = new ClientSSLCertificateHandler();
 
 				// Define the file path to save the downloaded patch file
-				string filePath = Path.Combine(Constants.GetWorkingDirectory(), "patches", $"{Constants.Configuration.Version}-{latestversion}.patch");
+				string filePath = Path.Combine(Constants.GetWorkingDirectory(), "patches", $"{MainBootstrapSystem.GameVersion}-{latestversion}.patch");
 
 				// Create the file stream
 				request.downloadHandler = new DownloadHandlerFile(filePath)
@@ -322,7 +322,7 @@ namespace FishMMO.Client
 					Log.Debug("ClientLauncher", latest_version);
 
 					// Compare latest_version with the current client version
-					if (latest_version.Equals(Constants.Configuration.Version))
+					if (latest_version.Equals(MainBootstrapSystem.GameVersion))
 					{
 						// If version matches we can enable the launch button functionality to load the ClientBootstrap scene
 						PlayButtonText.text = "Play";

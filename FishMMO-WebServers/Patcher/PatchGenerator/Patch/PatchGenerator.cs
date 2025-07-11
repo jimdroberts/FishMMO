@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Security.Cryptography;
+using FishMMO.Logging;
 
 namespace FishMMO.Patcher
 {
@@ -65,7 +66,7 @@ namespace FishMMO.Patcher
 			}
 			catch (Exception ex)
 			{
-				Console.WriteLine($"Error generating patch data for '{oldFilePath}' vs '{newFilePath}': {ex.Message}");
+				Log.Error("PatchGenerator", $"Failed generating patch data for '{oldFilePath}' vs '{newFilePath}': {ex.Message}");
 				// Return an empty byte array to indicate failure or no patch data generated
 				return new byte[0];
 			}

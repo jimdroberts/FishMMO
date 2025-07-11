@@ -13,9 +13,13 @@ namespace FishMMO.Shared
 {
 	public class MainBootstrapSystem : BootstrapSystem
 	{
+		public static string GameVersion = "UNKNOWN_VERSION";
+
 		[Tooltip("The name of the logging configuration JSON file (e.g., logging.json).")]
 		public string configFileName = "logging.json";
 
+		[SerializeField]
+		private VersionConfig versionConfig;
 		private static bool isInitiatingShutdown = false;
 		private static bool canQuitApplication = false; // Controls if Application.wantsToQuit should allow quitting
 
@@ -203,6 +207,13 @@ namespace FishMMO.Shared
 		public override void OnPreload()
 		{
 			Debug.Log("[MainBootstrapSystem] Initializing...");
+
+			if (versionConfig == null)
+			{
+				Debug.LogError($"[MainBootstrapSystem] FATAL ERROR: Failed to initialize Version Config.");
+			}
+			GameVersion = versionConfig.FullVersion;
+
 #if UNITY_EDITOR
 			EditorApplication.playModeStateChanged += OnEditorPlayModeStateChanged;
 #endif

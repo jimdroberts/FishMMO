@@ -51,7 +51,6 @@ namespace FishMMO.Shared
 
 		public static class Configuration
 		{
-			public static readonly string Version = "1.0";
 			public static readonly string ProjectName = "FishMMO";
 			public static readonly string ClientExecutable = ProjectName + ".exe";
 			public static readonly string UpdaterExecutable = "Updater.exe";
