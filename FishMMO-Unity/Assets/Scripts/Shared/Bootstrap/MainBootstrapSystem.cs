@@ -214,6 +214,8 @@ namespace FishMMO.Shared
 			}
 			GameVersion = versionConfig.FullVersion;
 
+			Debug.Log($"[MainBootstrapSystem] Loaded GameVersion: {GameVersion}");
+
 #if UNITY_EDITOR
 			EditorApplication.playModeStateChanged += OnEditorPlayModeStateChanged;
 #endif

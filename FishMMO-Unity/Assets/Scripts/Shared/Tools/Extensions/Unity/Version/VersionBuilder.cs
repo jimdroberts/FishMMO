@@ -4,18 +4,44 @@ using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
 using UnityEngine;
 using System.IO;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
-	public class VersionBuilder : IPreprocessBuildWithReport
+	public class VersionBuilder : IPostprocessBuildWithReport
 	{
 		public int callbackOrder => 0; // Defines the order in which callbacks are executed.
 
 		private const string VersionConfigPath = "Assets/VersionConfig.asset";
+		private const string VersionFileName = "version.txt";
 
-		public void OnPreprocessBuild(BuildReport report)
+		public void OnPostprocessBuild(BuildReport report)
 		{
-			//UpdateBuildVersion();
+			//UpdateBuildVersion(); // Auto increment build version
+
+			// Get the current version configuration
+			VersionConfig config = GetVersionConfig();
+			if (config != null)
+			{
+				// Determine the path where the build will be created
+				string buildPath = report.summary.outputPath;
+				// Get the directory of the build (e.g., where the .exe or app bundle will be)
+				string buildDirectory = Path.GetDirectoryName(buildPath);
+
+				// Construct the full path for the version.txt file
+				string versionFilePath = Path.Combine(buildDirectory, VersionFileName);
+
+				try
+				{
+					// Write the full version string to the file
+					File.WriteAllText(versionFilePath, config.FullVersion);
+					Log.Debug("VersionBuilder", $"Version file written to: {versionFilePath} with content: {config.FullVersion}");
+				}
+				catch (System.Exception e)
+				{
+					Log.Error("VersionBuilder", $"Failed to write version file to {versionFilePath}: {e.Message}");
+				}
+			}
 		}
 
 		[MenuItem("FishMMO/Version/Increment Major")]
@@ -29,7 +55,7 @@ namespace FishMMO.Shared
 				config.Patch = 0;
 				config.PreRelease = ""; // Clear pre-release on major increment
 				SaveVersionConfig(config);
-				Debug.Log($"Major Version incremented... {config.FullVersion}");
+				Log.Debug("VersionBuilder", $"Major Version incremented... {config.FullVersion}");
 			}
 		}
 
@@ -43,7 +69,7 @@ namespace FishMMO.Shared
 				config.Patch = 0;
 				config.PreRelease = ""; // Clear pre-release on minor increment
 				SaveVersionConfig(config);
-				Debug.Log($"Minor Version incremented... {config.FullVersion}");
+				Log.Debug("VersionBuilder", $"Minor Version incremented... {config.FullVersion}");
 			}
 		}
 
@@ -56,7 +82,7 @@ namespace FishMMO.Shared
 				config.Patch++;
 				// Don't clear pre-release or metadata on patch, as it's a bug fix.
 				SaveVersionConfig(config);
-				Debug.Log($"Patch Version incremented... {config.FullVersion}");
+				Log.Debug("VersionBuilder", $"Patch Version incremented... {config.FullVersion}");
 			}
 		}
 
@@ -71,7 +97,7 @@ namespace FishMMO.Shared
 				config.Patch = 0;
 				config.PreRelease = "";
 				SaveVersionConfig(config);
-				Debug.Log($"Version reset to {config.FullVersion}");
+				Log.Debug("VersionBuilder", $"Version reset to {config.FullVersion}");
 			}
 		}
 
@@ -85,7 +111,7 @@ namespace FishMMO.Shared
 				config.Patch++;
 
 				SaveVersionConfig(config);
-				Debug.Log($"Build Version: {config.FullVersion}");
+				Log.Debug("VersionBuilder", $"Build Version: {config.FullVersion}");
 			}
 		}
 
@@ -105,7 +131,7 @@ namespace FishMMO.Shared
 				config = ScriptableObject.CreateInstance<VersionConfig>();
 				AssetDatabase.CreateAsset(config, VersionConfigPath);
 				AssetDatabase.SaveAssets();
-				Debug.LogWarning($"No VersionConfig asset found at {VersionConfigPath}. Created a new one.");
+				Log.Warning("VersionBuilder", $"No VersionConfig asset found at {VersionConfigPath}. Created a new one.");
 			}
 			return config;
 		}

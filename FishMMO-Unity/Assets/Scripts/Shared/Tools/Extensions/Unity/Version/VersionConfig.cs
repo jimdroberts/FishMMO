@@ -1,5 +1,6 @@
 using UnityEngine;
 using System;
+using System.Text.RegularExpressions;
 
 namespace FishMMO.Shared
 {
@@ -28,6 +29,39 @@ namespace FishMMO.Shared
 					version += $".{PreRelease}";
 				}
 				return version;
+			}
+		}
+
+		/// <summary>
+		/// Parses a version string (e.g., "1.2.3" or "1.2.3.alpha") into a new VersionConfig instance.
+		/// </summary>
+		/// <param name="versionString">The version string to parse.</param>
+		/// <returns>A new VersionConfig instance populated with the parsed version, or null if parsing fails.</returns>
+		public static VersionConfig Parse(string versionString)
+		{
+			if (string.IsNullOrWhiteSpace(versionString))
+			{
+				Debug.LogError("VersionConfig.Parse: Cannot parse null or empty version string.");
+				return null;
+			}
+
+			// Regex to match versions like X.Y.Z or X.Y.Z.PreRelease
+			// Group 1: Major, Group 2: Minor, Group 3: Patch, Group 4: PreRelease (optional)
+			Match match = Regex.Match(versionString, @"^(\d+)\.(\d+)\.(\d+)(?:\.(.+))?$");
+
+			if (match.Success)
+			{
+				VersionConfig config = ScriptableObject.CreateInstance<VersionConfig>();
+				config.Major = int.Parse(match.Groups[1].Value);
+				config.Minor = int.Parse(match.Groups[2].Value);
+				config.Patch = int.Parse(match.Groups[3].Value);
+				config.PreRelease = match.Groups.Count > 4 && match.Groups[4].Success ? match.Groups[4].Value : "";
+				return config;
+			}
+			else
+			{
+				Debug.LogError($"VersionConfig.Parse: Failed to parse version string '{versionString}'. Expected format: Major.Minor.Patch[.PreRelease]");
+				return null;
 			}
 		}
 

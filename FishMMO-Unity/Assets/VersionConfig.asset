@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ec047f4feb8a563479c836f3c2e4c144, type: 3}
   m_Name: VersionConfig
   m_EditorClassIdentifier: 
-  Major: 0
+  Major: 1
   Minor: 0
   Patch: 0
   PreRelease: 
