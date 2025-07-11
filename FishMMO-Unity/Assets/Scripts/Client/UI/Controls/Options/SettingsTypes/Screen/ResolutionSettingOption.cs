@@ -1,4 +1,5 @@
 using FishMMO.Shared;
+using FishMMO.Logging;
 using TMPro;
 using UnityEngine;
 
@@ -19,7 +20,7 @@ namespace FishMMO.Client
 		{
 			if (ResolutionDropdown == null)
 			{
-				Log.Error("ResolutionSettingsOption: TMP_Dropdown is missing.");
+				Log.Error("ResolutionSettingsOption", "TMP_Dropdown is missing.");
 			}
 			else
 			{

@@ -1,5 +1,6 @@
 using FishMMO.Shared;
 using UnityEngine;
+using FishMMO.Logging;
 
 namespace FishMMO.Server
 {
@@ -10,7 +11,7 @@ namespace FishMMO.Server
 		{
 			if (!eventData.TryGet(out InteractableEventData interactableEventData))
 			{
-				Log.Warning("CanPickUpWorldItemCondition: Missing InteractableEventData.");
+				Log.Warning("CanPickUpWorldItemCondition", "Missing InteractableEventData.");
 				return false;
 			}
 
@@ -30,7 +31,7 @@ namespace FishMMO.Server
 			if (!interactableEventData.TryGet(out InventoryControllerEventData inventoryControllerEventData) ||
 				inventoryControllerEventData.InventoryController == null)
 			{
-				Log.Warning($"CanPickUpWorldItemCondition: Initiator {initiator?.Name} does not have an inventory controller in EventData.");
+				Log.Warning("CanPickUpWorldItemCondition", $"Initiator {initiator?.Name} does not have an inventory controller in EventData.");
 				return false;
 			}
 

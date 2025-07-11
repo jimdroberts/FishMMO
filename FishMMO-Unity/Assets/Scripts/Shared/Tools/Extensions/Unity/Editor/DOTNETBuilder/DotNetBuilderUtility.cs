@@ -2,7 +2,6 @@ using UnityEngine;
 using UnityEditor;
 using System.Diagnostics;
 using System.IO;
-using Debug = UnityEngine.Debug;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Linq;
@@ -11,28 +10,6 @@ namespace FishMMO.Shared
 {
 	public static class DotNetBuilderUtility
 	{
-		// Add a menu item to easily create or find the DotNetBuildProfile asset
-		[MenuItem("FishMMO/Tools/Open DotNet Build Profile")]
-		public static void OpenOrCreateDotNetBuildProfile()
-		{
-			DotNetBuildProfile profile = AssetDatabase.FindAssets("t:DotNetBuildProfile")
-										   .Select(guid => AssetDatabase.LoadAssetAtPath<DotNetBuildProfile>(AssetDatabase.GUIDToAssetPath(guid)))
-										   .FirstOrDefault();
-
-			if (profile == null)
-			{
-				profile = ScriptableObject.CreateInstance<DotNetBuildProfile>();
-				string path = "Assets/DotNetBuildProfile.asset";
-				path = AssetDatabase.GenerateUniqueAssetPath(path);
-				AssetDatabase.CreateAsset(profile, path);
-				AssetDatabase.SaveAssets();
-				AssetDatabase.Refresh();
-				Log.Debug($"Created new DotNetBuildProfile asset at: {path}. Please open it in the Inspector.");
-			}
-			Selection.activeObject = profile;
-			EditorGUIUtility.PingObject(profile);
-		}
-
 		/// <summary>
 		/// Initiates the build process for all settings within the given DotNetBuildProfile.
 		/// </summary>

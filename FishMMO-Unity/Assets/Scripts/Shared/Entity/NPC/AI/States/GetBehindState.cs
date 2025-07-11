@@ -1,5 +1,6 @@
 ﻿using UnityEngine;
 using UnityEngine.AI;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -13,7 +14,7 @@ namespace FishMMO.Shared
 		{
 			if (controller.Target == null)
 			{
-				Log.Warning("No target set for GetBehindState.");
+				Log.Warning("GetBehindState", "No target set for GetBehindState.");
 				controller.TransitionToIdleState(); // Or another default state
 				return;
 			}

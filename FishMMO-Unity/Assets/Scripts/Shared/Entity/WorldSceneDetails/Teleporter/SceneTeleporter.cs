@@ -1,4 +1,5 @@
 using UnityEngine;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -29,13 +30,13 @@ namespace FishMMO.Shared
 			IPlayerCharacter character = other.gameObject.GetComponent<IPlayerCharacter>();
 			if (character == null)
 			{
-				Log.Debug("Character not found!");
+				Log.Debug("SceneTeleporter", "Character not found!");
 				return;
 			}
 
 			if (character.IsTeleporting)
 			{
-				Log.Debug("Character is already teleporting!");
+				Log.Debug("SceneTeleporter", "Character is already teleporting!");
 				return;
 			}
 

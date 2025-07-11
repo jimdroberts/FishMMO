@@ -1,4 +1,5 @@
 using FishMMO.Shared;
+using FishMMO.Logging;
 using UnityEngine;
 
 namespace FishMMO.Server
@@ -10,7 +11,7 @@ namespace FishMMO.Server
         {
             if (!eventData.TryGet(out InteractableEventData interactableEventData))
             {
-                Log.Error("TeleportInSceneAction: Missing InteractableEventData.");
+                Log.Error("TeleportInSceneAction", "Missing InteractableEventData.");
                 return;
             }
 
@@ -19,13 +20,13 @@ namespace FishMMO.Server
 
             if (character == null || teleporter == null || teleporter.Target == null || character.Motor == null)
             {
-                Log.Warning("TeleportInSceneAction: Invalid character, teleporter, or target for in-scene teleport.");
+                Log.Warning("TeleportInSceneAction", "Invalid character, teleporter, or target for in-scene teleport.");
                 return;
             }
 
             // Perform the in-scene teleport
             character.Motor.SetPositionAndRotationAndVelocity(teleporter.Target.position, teleporter.Target.rotation, Vector3.zero);
-            Log.Debug($"Character {character.Name} teleported to {teleporter.Target.position} in current scene.");
+            Log.Debug("TeleportInSceneAction", $"Character {character.Name} teleported to {teleporter.Target.position} in current scene.");
         }
     }
 }

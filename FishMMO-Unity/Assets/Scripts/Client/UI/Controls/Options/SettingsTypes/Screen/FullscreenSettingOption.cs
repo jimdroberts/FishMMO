@@ -1,4 +1,5 @@
 using FishMMO.Shared;
+using FishMMO.Logging;
 using TMPro;
 using UnityEngine;
 
@@ -15,7 +16,7 @@ namespace FishMMO.Client
         {
             if (FullscreenDropdown == null)
             {
-                Log.Error("FullscreenSettingsOption: TMP_Dropdown is missing.");
+                Log.Error("FullscreenSettingsOption", "TMP_Dropdown is missing.");
             }
             else
             {

@@ -1,4 +1,5 @@
 using FishMMO.Shared;
+using FishMMO.Logging;
 using FishNet.Transporting;
 using UnityEngine;
 
@@ -11,14 +12,14 @@ namespace FishMMO.Server
         {
             if (!eventData.TryGet(out InteractableEventData interactableEventData))
             {
-                Log.Error("OpenAbilityCrafterUIAction: Missing InteractableEventData.");
+                Log.Error("OpenAbilityCrafterUIAction", "Missing InteractableEventData.");
                 return;
             }
 
             IPlayerCharacter character = initiator as IPlayerCharacter;
             if (character == null || character.Owner == null || interactableEventData.SceneObject == null)
             {
-                Log.Warning("OpenAbilityCrafterUIAction: Invalid character, owner, or scene object for broadcast.");
+                Log.Warning("OpenAbilityCrafterUIAction", "Invalid character, owner, or scene object for broadcast.");
                 return;
             }
             
@@ -28,7 +29,7 @@ namespace FishMMO.Server
                 InteractableID = interactableEventData.SceneObject.ID,
             }, true, Channel.Reliable);
 
-            Log.Debug($"AbilityCrafter UI broadcasted to {character.Name} for InteractableID: {interactableEventData.SceneObject.ID}");
+            Log.Debug("OpenAbilityCrafterUIAction", $"AbilityCrafter UI broadcasted to {character.Name} for InteractableID: {interactableEventData.SceneObject.ID}");
         }
     }
 }

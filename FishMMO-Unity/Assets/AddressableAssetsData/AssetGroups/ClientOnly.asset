@@ -30,13 +30,38 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4ae8ae7350b67b44785d874c413a2e03
+    m_Address: WaterReflection
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 54daef9394b95ea4cb9b1d26e02236b0
+    m_Address: MinimapRenderTexture
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 6645529da48a29b4fb1f95fe470c9520
     m_Address: ClientPostboot
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7097ba7ba649e1f41bba232312bdcbd8
+    m_Address: WaterBlock_50m
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 838c0bef810bfe94d8e33947c3cba7c6
+    m_Address: WaterReflectionCamera
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 99c9720ab356a0642a771bea13969a05
     m_Address: ClientPreboot
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9d03b89b0b5eb734eb6e3aea188b17bf
+    m_Address: CharacterRenderTexture
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

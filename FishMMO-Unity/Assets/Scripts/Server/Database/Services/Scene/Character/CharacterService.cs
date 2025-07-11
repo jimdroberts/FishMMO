@@ -6,6 +6,7 @@ using FishNet.Object;
 using FishMMO.Database.Npgsql;
 using FishMMO.Database.Npgsql.Entities;
 using FishMMO.Shared;
+using FishMMO.Logging;
 using UnityEngine;
 
 namespace FishMMO.Server.DatabaseServices
@@ -372,25 +373,25 @@ namespace FishMMO.Server.DatabaseServices
 			// Case 1: Overworld only
 			if (!isInInstance && !hasInstanceScene)
 			{
-				//Log.Debug($"Character {character.ID} saved overworld position: {charPosition}:{charRotation}");
+				//Log.Debug("CharacterService", $"Character {character.ID} saved overworld position: {charPosition}:{charRotation}");
 				SaveTransform(existingCharacter, charPosition, charRotation, false);
 			}
 			// Case 2: Transitioning into instance (save both overworld + instance)
 			else if (isInInstance && !hasInstanceScene)
 			{
-				//Log.Debug($"Character {character.ID} saved overworld position: {charPosition}:{charRotation}");
+				//Log.Debug("CharacterService", $"Character {character.ID} saved overworld position: {charPosition}:{charRotation}");
 				SaveTransform(existingCharacter, charPosition, charRotation, false);
 
 				var instancePos = character.InstancePosition;
 				var instanceRot = character.InstanceRotation;
 
-				//Log.Debug($"Character {character.ID} saved instance position: {instancePos}:{instanceRot}");
+				//Log.Debug("CharacterService", $"Character {character.ID} saved instance position: {instancePos}:{instanceRot}");
 				SaveTransform(existingCharacter, instancePos, instanceRot, true);
 			}
 			// Case 3: In instance only
 			else
 			{
-				//Log.Debug($"Character {character.ID} saved instance position: {charPosition}:{charRotation}");
+				//Log.Debug("CharacterService", $"Character {character.ID} saved instance position: {charPosition}:{charRotation}");
 				SaveTransform(existingCharacter, charPosition, charRotation, true);
 			}
 			existingCharacter.Flags = character.Flags;
@@ -407,7 +408,7 @@ namespace FishMMO.Server.DatabaseServices
 
 			dbContext.SaveChanges();
 
-			/*Log.Debug(character.CharacterName + " has been saved at Pos: " +
+			/*Log.Debug("CharacterService", character.CharacterName + " has been saved at Pos: " +
 					  character.Transform.position.ToString() +
 					  " Rot: " + rotation);*/
 		}
@@ -485,7 +486,7 @@ namespace FishMMO.Server.DatabaseServices
 				if (raceTemplate == null ||
 					raceTemplate.Prefab == null)
 				{
-					Log.Debug("Character RaceTemplate is null or not loaded.");
+					Log.Debug("CharacterService", "Character RaceTemplate is null or not loaded.");
 					return false;
 				}
 
@@ -494,7 +495,7 @@ namespace FishMMO.Server.DatabaseServices
 				if (characterPrefab == null ||
 					networkManager.SpawnablePrefabs.GetObject(true, characterPrefab.NetworkObject.PrefabId) == null)
 				{
-					Log.Debug("Character Prefab is null or not loaded.");
+					Log.Debug("CharacterService", "Character Prefab is null or not loaded.");
 					return false;
 				}
 
@@ -515,14 +516,14 @@ namespace FishMMO.Server.DatabaseServices
 					instanceSceneName = sceneEntity.SceneName;
 					instanceSceneHandle = sceneEntity.SceneHandle;
 
-					//Log.Debug($"Character {dbCharacter.ID} spawning into instance position: {dbPosition}:{dbRotation}");
+					//Log.Debug("CharacterService", $"Character {dbCharacter.ID} spawning into instance position: {dbPosition}:{dbRotation}");
 				}
 				else
 				{
 					dbPosition = new Vector3(dbCharacter.X, dbCharacter.Y, dbCharacter.Z);
 					dbRotation = new Quaternion(dbCharacter.RotX, dbCharacter.RotY, dbCharacter.RotZ, dbCharacter.RotW);
 
-					//Log.Debug($"Character {dbCharacter.ID} spawning into overworld position: {dbPosition}:{dbRotation}");
+					//Log.Debug("CharacterService", $"Character {dbCharacter.ID} spawning into overworld position: {dbPosition}:{dbRotation}");
 				}
 
 				// instantiate the character object
@@ -530,7 +531,7 @@ namespace FishMMO.Server.DatabaseServices
 				character = nob.GetComponent<IPlayerCharacter>();
 				if (character == null)
 				{
-					Log.Debug("Character Prefab does not contain a NetworkObject.");
+					Log.Debug("CharacterService", "Character Prefab does not contain a NetworkObject.");
 					return false;
 				}
 
@@ -574,13 +575,13 @@ namespace FishMMO.Server.DatabaseServices
 				CharacterKnownAbilityService.Load(dbContext, character);
 				CharacterHotkeyService.Load(dbContext, character);
 
-				//Log.Debug($"{dbCharacter.Name} has been loaded at Pos: {nob.transform.position.ToString()} Rot: {nob.transform.rotation.ToString()}");
+				//Log.Debug("CharacterService", $"{dbCharacter.Name} has been loaded at Pos: {nob.transform.position.ToString()} Rot: {nob.transform.rotation.ToString()}");
 
 				dbTransaction.Commit();
 
 				return true;
 			}
-			Log.Debug("Character was unable to be loaded from the database.");
+			Log.Debug("CharacterService", "Character was unable to be loaded from the database.");
 			return false;
 		}
 	}

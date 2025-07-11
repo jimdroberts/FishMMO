@@ -5,6 +5,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using FishMMO.Shared;
+using FishMMO.Logging;
 
 namespace FishMMO.Client
 {
@@ -69,7 +70,7 @@ namespace FishMMO.Client
 					}
 					else
 					{
-						Log.Warning($"No standard model or placeholder exists for {pair.Value.name}");
+						Log.Warning("UICharacterCreate", $"No standard model or placeholder exists for {pair.Value.name}");
 					}
 
 					// initialize spawn position map

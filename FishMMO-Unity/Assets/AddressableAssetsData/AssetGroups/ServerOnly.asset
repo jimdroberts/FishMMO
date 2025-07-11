@@ -36,7 +36,7 @@ MonoBehaviour:
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f97e472947ce9664f80129a66ac31499
-    m_Address: Assets/Prefabs/Shared/FishMMO Interactable Handler Initializer.asset
+    m_Address: FishMMO Interactable Handler Initializer
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

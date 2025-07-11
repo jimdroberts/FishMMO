@@ -3,6 +3,7 @@ using UnityEngine;
 using TMPro;
 using System.Collections.Generic;
 using FishMMO.Shared;
+using FishMMO.Logging;
 
 namespace FishMMO.Client
 {
@@ -254,7 +255,7 @@ namespace FishMMO.Client
 			// do we have enough currency to purchase this?
 			if (CurrencyTemplate == null)
 			{
-				Log.Debug("CurrencyTemplate is null.");
+				Log.Debug("UIAbilityCraft", "CurrencyTemplate is null.");
 				return;
 			}
 			if (!Character.TryGet(out ICharacterAttributeController attributeController) ||

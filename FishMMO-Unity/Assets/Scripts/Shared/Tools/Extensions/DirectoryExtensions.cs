@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -39,12 +40,12 @@ namespace FishMMO.Shared
 				}
 				catch (UnauthorizedAccessException)
 				{
-					Log.Debug($"Access to directory '{currentDir}' is denied.");
+					Log.Debug("DirectoryExtensions", $"Access to directory '{currentDir}' is denied.");
 					continue; // Skip this directory if access is denied
 				}
 				catch (DirectoryNotFoundException)
 				{
-					Log.Debug($"Directory '{currentDir}' not found.");
+					Log.Debug("DirectoryExtensions", $"Directory '{currentDir}' not found.");
 					continue; // Skip this directory if it's not found
 				}
 
@@ -59,12 +60,12 @@ namespace FishMMO.Shared
 				}
 				catch (UnauthorizedAccessException)
 				{
-					Log.Debug($"Access to directory '{currentDir}' is denied.");
+					Log.Debug("DirectoryExtensions", $"Access to directory '{currentDir}' is denied.");
 					continue; // Skip subdirectories if access is denied
 				}
 				catch (DirectoryNotFoundException)
 				{
-					Log.Debug($"Directory '{currentDir}' not found.");
+					Log.Debug("DirectoryExtensions", $"Directory '{currentDir}' not found.");
 					continue; // Skip subdirectories if the current directory is not found
 				}
 			}

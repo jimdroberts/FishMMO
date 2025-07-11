@@ -7,6 +7,7 @@ using UnityEditor;
 #endif
 using TMPro;
 using FishMMO.Shared;
+using FishMMO.Logging;
 using System;
 using System.Collections;
 using System.Diagnostics;
@@ -82,7 +83,7 @@ namespace FishMMO.Client
 #endif
 
 			// Assign the title name
-			Title.text = Constants.Configuration.ProjectName + " v" + Constants.Configuration.Version;
+			Title.text = Constants.Configuration.ProjectName + " v" + MainBootstrapSystem.GameVersion;
 
 			// Clear the launch button events, this is done programmatically.
 			PlayButton.onClick.RemoveAllListeners();
@@ -123,7 +124,7 @@ namespace FishMMO.Client
 
 			if (www.result != UnityWebRequest.Result.Success)
 			{
-				Log.Error("Error fetching HTML: " + www.error);
+				Log.Error("ClientLauncher", "Error fetching HTML: " + www.error);
 			}
 			else
 			{
@@ -161,7 +162,7 @@ namespace FishMMO.Client
 				}
 			}
 
-			Log.Error($"Div with class '{divClass}' not found.");
+			Log.Error("ClientLauncher", $"Div with class '{divClass}' not found.");
 			return string.Empty;
 		}
 
@@ -209,7 +210,7 @@ namespace FishMMO.Client
 						// Do something with the server list
 						foreach (ServerAddress server in result.Addresses)
 						{
-							Log.Debug("Client: New Patch Server Address:" + server.Address + ", Port: " + server.Port);
+							Log.Debug("ClientLauncher", "New Patch Server Address:" + server.Address + ", Port: " + server.Port);
 						}
 
 						onFetchComplete?.Invoke(result.Addresses);
@@ -249,13 +250,13 @@ namespace FishMMO.Client
 
 		public IEnumerator GetPatch(Action<string> onFetchFail, Action onFetchComplete, Action<float> onProgressUpdate)
 		{
-			using (UnityWebRequest request = UnityWebRequest.Get(patcherHost + Constants.Configuration.Version))
+			using (UnityWebRequest request = UnityWebRequest.Get(patcherHost + MainBootstrapSystem.GameVersion))
 			{
 				request.SetRequestHeader("X-FishMMO", "Client");
 				request.certificateHandler = new ClientSSLCertificateHandler();
 
 				// Define the file path to save the downloaded patch file
-				string filePath = Path.Combine(Constants.GetWorkingDirectory(), "patches", $"{Constants.Configuration.Version}-{latestversion}.patch");
+				string filePath = Path.Combine(Constants.GetWorkingDirectory(), "patches", $"{MainBootstrapSystem.GameVersion}-{latestversion}.patch");
 
 				// Create the file stream
 				request.downloadHandler = new DownloadHandlerFile(filePath)
@@ -284,7 +285,7 @@ namespace FishMMO.Client
 				else
 				{
 					// Log the success
-					Log.Debug($"Patch downloaded and saved to {filePath}");
+					Log.Debug("ClientLauncher", $"Patch downloaded and saved to {filePath}");
 
 					// Optionally, handle the patch data here
 					onFetchComplete?.Invoke();
@@ -300,7 +301,7 @@ namespace FishMMO.Client
 			{
 				SetButtonLock(false);
 
-				Log.Error(e);
+				Log.Error("ClientLauncher", e);
 			},
 			(patch_servers) =>
 			{
@@ -313,15 +314,15 @@ namespace FishMMO.Client
 				{
 					SetButtonLock(false);
 
-					Log.Error(e);
+					Log.Error("ClientLauncher", e);
 				},
 				(latest_version) =>
 				{
 					latestversion = latest_version;
-					Log.Debug(latest_version);
+					Log.Debug("ClientLauncher", latest_version);
 
 					// Compare latest_version with the current client version
-					if (latest_version.Equals(Constants.Configuration.Version))
+					if (latest_version.Equals(MainBootstrapSystem.GameVersion))
 					{
 						// If version matches we can enable the launch button functionality to load the ClientBootstrap scene
 						PlayButtonText.text = "Play";
@@ -349,7 +350,7 @@ namespace FishMMO.Client
 			}
 			catch (UnityException ex)
 			{
-				Log.Error($"Failed to load preload scenes: {ex.Message}");
+				Log.Error("ClientLauncher", $"Failed to load preload scenes: {ex.Message}");
 				SetButtonLock(false);
 			}
 		}
@@ -359,7 +360,7 @@ namespace FishMMO.Client
 			SetButtonLock(true);
 			StartCoroutine(GetPatch((e) =>
 			{
-				Log.Error(e);
+				Log.Error("ClientLauncher", e);
 			},
 			() =>
 			{
@@ -371,7 +372,7 @@ namespace FishMMO.Client
 
 				if (process == null)
 				{
-					Log.Error("Failed to start the process.");
+					Log.Error("ClientLauncher", "Failed to start the process.");
 					return;
 				}
 

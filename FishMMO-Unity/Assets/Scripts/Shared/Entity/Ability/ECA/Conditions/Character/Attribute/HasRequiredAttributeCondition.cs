@@ -1,4 +1,5 @@
 using FishMMO.Shared;
+using FishMMO.Logging;
 using UnityEngine;
 
 namespace FishMMO.Server.Conditions
@@ -20,21 +21,21 @@ namespace FishMMO.Server.Conditions
 		{
 			if (Template == null)
 			{
-				Log.Error($"HasRequiredCharacterAttribute: Attribute Name is not set for '{name}'. Condition failed.");
+				Log.Error("HasRequiredCharacterAttribute", $"Attribute Name is not set for '{name}'. Condition failed.");
 				return false;
 			}
 
 			// Try to get the ICharacterAttributeController from the initiator.
 			if (!initiator.TryGet(out ICharacterAttributeController attributeController))
 			{
-				Log.Warning($"HasRequiredCharacterAttribute: Initiator '{initiator?.Name}' does not have an ICharacterAttributeController. Condition failed.");
+				Log.Warning("HasRequiredCharacterAttribute", $"Initiator '{initiator?.Name}' does not have an ICharacterAttributeController. Condition failed.");
 				return false;
 			}
 
 			// Get the specific CharacterAttribute instance from the controller.
 			if (!attributeController.TryGetAttribute(Template, out CharacterAttribute characterAttribute))
 			{
-				Log.Warning($"HasRequiredCharacterAttribute: Initiator '{initiator?.Name}' does not have the specified Character Attribute. Condition failed.");
+				Log.Warning("HasRequiredCharacterAttribute", $"Initiator '{initiator?.Name}' does not have the specified Character Attribute. Condition failed.");
 				return false;
 			}
 
@@ -51,7 +52,7 @@ namespace FishMMO.Server.Conditions
 					$"has {characterAttribute.FinalValue} (meets requirement)" :
 					$"has {characterAttribute.FinalValue} (does NOT meet requirement)";
 
-				Log.Debug($"HasRequiredCharacterAttribute: Character '{initiator?.Name}' failed stat check for '{Template.Name}'. Current: {characterAttribute.FinalValue}, Required: {RequiredValue}. Inverted: {InvertResult}.");
+				Log.Debug("HasRequiredCharacterAttribute", $"Character '{initiator?.Name}' failed stat check for '{Template.Name}'. Current: {characterAttribute.FinalValue}, Required: {RequiredValue}. Inverted: {InvertResult}.");
 			}
 
 			return finalResult;

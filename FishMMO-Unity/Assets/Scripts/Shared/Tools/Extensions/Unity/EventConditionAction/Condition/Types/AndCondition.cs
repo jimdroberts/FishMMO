@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -13,7 +14,7 @@ namespace FishMMO.Shared
 		{
 			if (initiator == null)
 			{
-				Log.Warning("PlayerCharacter is null for AndCondition check.");
+				Log.Warning("AndCondition", "PlayerCharacter is null for AndCondition check.");
 				return false;
 			}
 
@@ -21,7 +22,7 @@ namespace FishMMO.Shared
 			{
 				if (condition == null)
 				{
-					Log.Warning("Null condition found in AndCondition list. Skipping.");
+					Log.Warning("AndCondition", "Null condition found in AndCondition list. Skipping.");
 					continue;
 				}
 

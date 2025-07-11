@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: FishMMO Dependency Build Profile
   m_EditorClassIdentifier: 
   SettingsList:
+  - {fileID: 11400000, guid: 4a39edd19e54add4890f4c250a05c060, type: 2}
   - {fileID: 11400000, guid: c69a0d242a25c45418f10a6461f84a7a, type: 2}
   - {fileID: 11400000, guid: 0ed411e218cb49345b0cd1301bb64883, type: 2}
   LogOutput: "Starting all builds...\n--- Starting Build for: FishMMO Dependencies

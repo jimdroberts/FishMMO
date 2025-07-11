@@ -1,4 +1,5 @@
 using FishMMO.Shared;
+using FishMMO.Logging;
 using UnityEngine;
 
 namespace FishMMO.Server
@@ -10,24 +11,24 @@ namespace FishMMO.Server
 		{
 			if (!eventData.TryGet(out InteractableEventData interactableEventData))
 			{
-				Log.Error("SetBankLastInteractableAction: Missing InteractableEventData.");
+				Log.Error("SetBankLastInteractableAction", "Missing InteractableEventData.");
 				return;
 			}
 
 			if (interactableEventData.SceneObject == null)
 			{
-				Log.Warning("SetBankLastInteractableAction: Invalid scene object.");
+				Log.Warning("SetBankLastInteractableAction", "Invalid scene object.");
 				return;
 			}
 
 			if (initiator == null || !initiator.TryGet(out IBankController bankController))
 			{
-				Log.Error("SetBankLastInteractableAction: Missing BankController.");
+				Log.Error("SetBankLastInteractableAction", "Missing BankController.");
 				return;
 			}
 
 			bankController.LastInteractableID = interactableEventData.SceneObject.ID;
-			Log.Debug($"Banker: Set LastInteractableID to {interactableEventData.SceneObject.ID} for {initiator?.Name}.");
+			Log.Debug("SetBankLastInteractableAction", $"Banker: Set LastInteractableID to {interactableEventData.SceneObject.ID} for {initiator?.Name}.");
 		}
 	}
 }

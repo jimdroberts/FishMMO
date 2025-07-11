@@ -11,5 +11,6 @@
 		Trade,
 		System,
 		Command,
+		Discord,
 	}
 }

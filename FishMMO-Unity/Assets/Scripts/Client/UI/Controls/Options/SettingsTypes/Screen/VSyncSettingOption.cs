@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using FishMMO.Shared;
+using FishMMO.Logging;
 
 namespace FishMMO.Client
 {
@@ -14,7 +15,7 @@ namespace FishMMO.Client
 		{
 			if (VsyncToggle == null)
 			{
-				Log.Error("VSyncSettingOption: Toggle is missing.");
+				Log.Error("VSyncSettingOption", "Toggle is missing.");
 			}
 			else
 			{

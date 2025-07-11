@@ -175,6 +175,8 @@ MonoBehaviour:
   WebGLPostloadAssets: []
   WebGLPreloadScenes: []
   WebGLPostloadScenes: []
+  configFileName: logging.json
+  versionConfig: {fileID: 11400000, guid: 3beac095da1831c42b95c47d02fbaf12, type: 2}
 --- !u!114 &1983298283
 MonoBehaviour:
   m_ObjectHideFlags: 0

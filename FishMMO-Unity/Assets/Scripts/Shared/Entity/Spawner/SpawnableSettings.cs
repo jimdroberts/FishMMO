@@ -1,6 +1,7 @@
 ﻿using UnityEngine;
 using FishNet.Object;
 using System;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -25,7 +26,7 @@ namespace FishMMO.Shared
 
 			if (!NetworkObject.GetIsSpawnable())
 			{
-				Log.Error($"{NetworkObject.name} is not spawnable. Mark it as spawnable and re-assign the object.");
+				Log.Error("SpawnableSettings", $"{NetworkObject.name} is not spawnable. Mark it as spawnable and re-assign the object.");
 				NetworkObject = null;
 				return;
 			}

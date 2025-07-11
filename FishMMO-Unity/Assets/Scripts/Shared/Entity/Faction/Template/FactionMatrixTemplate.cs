@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -36,7 +37,7 @@ namespace FishMMO.Shared
 			}
 			else
 			{
-				Log.Error("Failed to load Faction Templates with Addressables.");
+				Log.Error("FactionMatrixTemplate", "Failed to load Faction Templates with Addressables.");
 			}
 		}
 

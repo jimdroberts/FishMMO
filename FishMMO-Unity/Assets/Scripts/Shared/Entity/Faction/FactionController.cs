@@ -4,6 +4,7 @@ using FishNet.Transporting;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using UnityEngine;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -65,7 +66,7 @@ namespace FishMMO.Shared
 			}
 			else
 			{
-				Log.Debug($"Faction Template not found while Updating: {msg.TemplateID}");
+				Log.Debug("FactionController", $"Faction Template not found while Updating: {msg.TemplateID}");
 			}
 		}
 

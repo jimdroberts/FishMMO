@@ -310,12 +310,12 @@ namespace FishMMO.Shared
 			}
 			if (logTime)
 			{
-				FishMMO.Shared.Log.Debug($"{DateTime.Now}: {message}");
+				FishMMO.Logging.Log.Debug("FishMMOInstaller", $"{DateTime.Now}: {message}");
 				//Console.WriteLine($"{DateTime.Now}: {message}");
 			}
 			else
 			{
-				FishMMO.Shared.Log.Debug(message);
+				FishMMO.Logging.Log.Debug("FishMMOInstaller", message);
 				//Console.WriteLine(message);
 			}
 		}

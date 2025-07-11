@@ -1,4 +1,5 @@
 using UnityEngine;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -22,7 +23,7 @@ namespace FishMMO.Shared
 				if (initiator.TryGet(out ICharacterDamageController initiatorDamageController))
 				{
 					initiatorDamageController.Damage(initiator, DamageAmount, DamageAttributeTemplate);
-					Log.Debug($"DamageAction: Initiator '{initiator.Name}' took {DamageAmount} damage.");
+					Log.Debug("DamageAction", $"Initiator '{initiator.Name}' took {DamageAmount} damage.");
 				}
 			}
 
@@ -34,12 +35,12 @@ namespace FishMMO.Shared
 					if (targetEventData.Target.TryGet(out ICharacterDamageController defenderDamageController))
 					{
 						defenderDamageController.Damage(initiator, DamageAmount, DamageAttributeTemplate);
-						Log.Debug($"DamageAction: Initiator '{initiator.Name}' dealt {DamageAmount} damage to target '{targetEventData.Target.Name}'.");
+						Log.Debug("DamageAction", $"Initiator '{initiator.Name}' dealt {DamageAmount} damage to target '{targetEventData.Target.Name}'.");
 					}
 				}
 				else
 				{
-					Log.Warning("DamageAction: Expected CharacterTargetEventData for target damage, but none found in EventData.");
+					Log.Warning("DamageAction", "Expected CharacterTargetEventData for target damage, but none found in EventData.");
 				}
 			}
 		}

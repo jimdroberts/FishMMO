@@ -1,4 +1,5 @@
 ﻿using UnityEngine;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -42,7 +43,7 @@ namespace FishMMO.Shared
 
 			if (collider == null)
 			{
-				Log.Error("Collider is null.");
+				Log.Error("ColliderExtensions", "Collider is null.");
 				return false;
 			}
 

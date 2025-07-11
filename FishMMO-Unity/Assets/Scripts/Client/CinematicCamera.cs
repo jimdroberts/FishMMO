@@ -3,6 +3,7 @@ using UnityEngine.Splines;
 using System;
 using System.Collections;
 using FishMMO.Shared;
+using FishMMO.Logging;
 
 namespace FishMMO.Client
 {
@@ -31,7 +32,7 @@ namespace FishMMO.Client
 			// Ensure that there's a valid camera and spline container
 			if (Camera.main == null || SplineContainer == null || SplineContainer.Splines.Count == 0)
 			{
-				Log.Error("Camera or SplineContainer is missing.");
+				Log.Error("CinematicCamera", "Camera or SplineContainer is missing.");
 				yield break;
 			}
 

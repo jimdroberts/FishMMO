@@ -1,4 +1,5 @@
 using UnityEngine;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -11,12 +12,12 @@ namespace FishMMO.Shared
 		{
 			if (initiator == null)
 			{
-				Log.Warning($"Player character does not exist.");
+				Log.Warning("GuildCondition", "Player character does not exist.");
 				return false;
 			}
 			if (!initiator.TryGet(out IGuildController guildController))
 			{
-				Log.Warning($"Player character does not have an IGuildController.");
+				Log.Warning("GuildCondition", "Player character does not have an IGuildController.");
 				return false;
 			}
 

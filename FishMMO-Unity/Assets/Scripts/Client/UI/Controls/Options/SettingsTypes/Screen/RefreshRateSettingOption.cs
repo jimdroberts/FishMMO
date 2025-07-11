@@ -1,4 +1,5 @@
 using FishMMO.Shared;
+using FishMMO.Logging;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
@@ -16,7 +17,7 @@ namespace FishMMO.Client
 		{
 			if (RefreshRateDropdown == null)
 			{
-				Log.Error("RefreshRateSettingsOption: TMP_Dropdown is missing.");
+				Log.Error("RefreshRateSettingsOption", "TMP_Dropdown is missing.");
 			}
 			else
 			{

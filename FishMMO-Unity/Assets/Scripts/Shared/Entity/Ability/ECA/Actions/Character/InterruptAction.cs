@@ -1,4 +1,5 @@
 using UnityEngine;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -16,7 +17,7 @@ namespace FishMMO.Shared
 			}
 			else
 			{
-				Log.Warning("InterruptAction: Expected CharacterTargetEventData.");
+				Log.Warning("InterruptAction", "Expected CharacterTargetEventData.");
 			}
 		}
 	}

@@ -3,6 +3,7 @@ using System.Linq;
 using FishMMO.Database.Npgsql;
 using FishMMO.Database.Npgsql.Entities;
 using FishMMO.Shared;
+using FishMMO.Logging;
 
 namespace FishMMO.Server.DatabaseServices
 {
@@ -27,7 +28,7 @@ namespace FishMMO.Server.DatabaseServices
 			var loginServer = dbContext.LoginServers.FirstOrDefault(c => c.Name == name);
 			if (loginServer != null)
 			{
-				Log.Debug($"LoginServerService: Login Server[{loginServer.ID}] with name \"{name}\" already exists. Updating information.");
+				Log.Debug("LoginServerService", $"Login Server[{loginServer.ID}] with name \"{name}\" already exists. Updating information.");
 
 				loginServer.LastPulse = DateTime.UtcNow;
 				loginServer.Address = address;
@@ -49,7 +50,7 @@ namespace FishMMO.Server.DatabaseServices
 			dbContext.LoginServers.Add(server);
 			dbContext.SaveChanges();
 
-			Log.Debug($"LoginServerService: Added Login Server to Database: [{server.ID}] {name}:{address}:{port}");
+			Log.Debug("LoginServerService", $"Added Login Server to Database: [{server.ID}] {name}:{address}:{port}");
 
 			id = server.ID;
 			return server;

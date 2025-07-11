@@ -1,4 +1,5 @@
 using FishMMO.Shared;
+using FishMMO.Logging;
 using FishNet.Transporting;
 using UnityEngine;
 
@@ -11,19 +12,19 @@ namespace FishMMO.Server
 		{
 			if (!eventData.TryGet(out InteractableEventData interactableEventData))
 			{
-				Log.Error("OpenBankerUIAction: Missing InteractableEventData.");
+				Log.Error("OpenBankerUIAction", "Missing InteractableEventData.");
 				return;
 			}
 
 			IPlayerCharacter character = initiator as IPlayerCharacter;
 			if (character == null || character.Owner == null)
 			{
-				Log.Warning("OpenBankerUIAction: Invalid character or owner for broadcast.");
+				Log.Warning("OpenBankerUIAction", "Invalid character or owner for broadcast.");
 				return;
 			}
 
 			Server.Broadcast(character.Owner, new BankerBroadcast(), true, Channel.Reliable);
-			Log.Debug($"Banker UI broadcasted to {character.Name}.");
+			Log.Debug("OpenBankerUIAction", $"Banker UI broadcasted to {character.Name}.");
 		}
 	}
 }

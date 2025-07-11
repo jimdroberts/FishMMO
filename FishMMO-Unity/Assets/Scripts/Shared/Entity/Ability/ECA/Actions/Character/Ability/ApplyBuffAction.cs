@@ -1,4 +1,5 @@
 using UnityEngine;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -22,7 +23,7 @@ namespace FishMMO.Shared
 			}
 			else
 			{
-				Log.Warning("ApplyBuffAction: Expected CharacterTargetEventData.");
+				Log.Warning("ApplyBuffAction", "Expected CharacterTargetEventData.");
 			}
 		}
 	}

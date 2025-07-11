@@ -1,4 +1,5 @@
 using FishMMO.Shared;
+using FishMMO.Logging;
 using UnityEngine;
 
 namespace FishMMO.Server
@@ -9,20 +10,20 @@ namespace FishMMO.Server
 		{
 			if (character == null)
 			{
-				Log.Debug("Character not found!");
+				Log.Debug("BindstoneHandler", "Character not found!");
 				return;
 			}
 
 			// Validate same scene
 			if (character.SceneName != sceneObject.GameObject.scene.name)
 			{
-				Log.Debug("Character is not in the same scene as the bindstone!");
+				Log.Debug("BindstoneHandler", "Character is not in the same scene as the bindstone!");
 				return;
 			}
 
 			if (!ServerBehaviour.TryGet(out SceneServerSystem sceneServerSystem))
 			{
-				Log.Debug("SceneServerSystem not found!");
+				Log.Debug("BindstoneHandler", "SceneServerSystem not found!");
 				return;
 			}
 

@@ -1,4 +1,5 @@
 using UnityEngine;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -12,13 +13,13 @@ namespace FishMMO.Shared
 		{
 			if (initiator == null)
 			{
-				Log.Warning($"PartyCondition: Player character does not exist.");
+				Log.Warning("PartyCondition", "Player character does not exist.");
 				return false;
 			}
 
 			if (!initiator.TryGet(out IPartyController partyController))
 			{
-				Log.Warning($"PartyCondition: Player character does not have an IPartyController. Cannot evaluate party condition.");
+				Log.Warning("PartyCondition", "Player character does not have an IPartyController. Cannot evaluate party condition.");
 				return false;
 			}
 
@@ -38,7 +39,7 @@ namespace FishMMO.Shared
 				/*int currentPartyMembers = partyController.GetMemberCount();
                 if (currentPartyMembers < MinimumPartyMembers)
                 {
-                    //Log.Debug($"PartyCondition: Player {playerCharacter.Name}'s party (size {currentPartyMembers}) is less than required minimum of {MinimumPartyMembers}.");
+                    //Log.Debug("PartyCondition", "Player {playerCharacter.Name}'s party (size {currentPartyMembers}) is less than required minimum of {MinimumPartyMembers}.");
                     return false;
                 }*/
 			}

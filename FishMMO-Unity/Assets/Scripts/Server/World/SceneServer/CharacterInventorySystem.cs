@@ -1,6 +1,7 @@
 ﻿using FishNet.Connection;
 using FishNet.Transporting;
 using FishMMO.Shared;
+using FishMMO.Logging;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Database.Npgsql;
 using System;
@@ -563,30 +564,30 @@ namespace FishMMO.Server
 			{
 				if (sceneObject == null)
 				{
-					Log.Debug("Missing SceneObject");
+					Log.Debug("CharacterInventorySystem", "Missing SceneObject");
 				}
 				else
 				{
-					Log.Debug("Missing ID:" + sceneObjectID);
+					Log.Debug("CharacterInventorySystem", "Missing ID:" + sceneObjectID);
 				}
 				return false;
 			}
 			if (sceneObject.GameObject.scene.handle != character.GameObject.scene.handle)
 			{
-				Log.Debug("Object scene mismatch.");
+				Log.Debug("CharacterInventorySystem", "Object scene mismatch.");
 				return false;
 			}
 			IInteractable interactable = sceneObject.GameObject.GetComponent<IInteractable>();
 			if (interactable == null ||
 				!interactable.InRange(character.Transform))
 			{
-				Log.Debug($"{character.CharacterName} is not in range of {sceneObject.GameObject.name}!");
+				Log.Debug("CharacterInventorySystem", $"{character.CharacterName} is not in range of {sceneObject.GameObject.name}!");
 				return false;
 			}
 			Banker banker = interactable as Banker;
 			if (banker == null)
 			{
-				Log.Debug($"{sceneObject.GameObject.name} is not a banker!");
+				Log.Debug("CharacterInventorySystem", $"{sceneObject.GameObject.name} is not a banker!");
 				return false;
 			}
 			return true;

@@ -1,6 +1,4 @@
-﻿// --------- DO NOT FORMAT DOCUMENT ---------
-
-#if UNITY_EDITOR
+﻿#if UNITY_EDITOR
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEditor;
@@ -10,7 +8,6 @@ using UnityEditor.AddressableAssets.Build;
 using UnityEditor.AddressableAssets.Settings;
 using UnityEditor.AddressableAssets.Settings.GroupSchemas;
 using UnityEditor.Build.Reporting;
-using Debug = UnityEngine.Debug;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -29,49 +26,12 @@ namespace FishMMO.Shared
 
 		public enum CustomBuildType : byte
 		{
-			AllInOne = 0,
-			Login,
-			World,
-			Scene,
+			Server = 0,
 			Client,
 			Installer,
 		}
 
-		public const string ALL_IN_ONE_SERVER_BUILD_NAME = "All-In-One";
-		public const string LOGIN_SERVER_BUILD_NAME = "Login";
-		public const string WORLD_SERVER_BUILD_NAME = "World";
-		public const string SCENE_SERVER_BUILD_NAME = "Scene";
-
-		public static readonly string ALL_IN_ONE_SERVER_BAT_SCRIPT = @"@echo off
-
-echo Starting Login Server...
-start All-In-One.exe LOGIN
-timeout /t 5 /nobreak >nul
-
-echo Starting World Server...
-start All-In-One.exe WORLD
-timeout /t 5 /nobreak >nul
-
-echo Starting Scene Server...
-start All-In-One.exe SCENE
-
-echo All servers launched.";
-
-		public static readonly string LINUX_ALL_IN_ONE_SERVER_BAT_SCRIPT = @"./All-In-One.exe LOGIN &
-./All-In-One.exe WORLD &
-./All-In-One.exe SCENE";
-
-		public static readonly string LOGIN_SERVER_BAT_SCRIPT = @"@echo off
-start Login.exe LOGIN";
-		public static readonly string LINUX_LOGIN_SERVER_BAT_SCRIPT = @"./Login.exe LOGIN";
-
-		public static readonly string WORLD_SERVER_BAT_SCRIPT = @"@echo off
-start World.exe WORLD";
-		public static readonly string LINUX_WORLD_SERVER_BAT_SCRIPT = @"./World.exe WORLD";
-
-		public static readonly string SCENE_SERVER_BAT_SCRIPT = @"@echo off
-start Scene.exe SCENE";
-		public static readonly string LINUX_SCENE_SERVER_BAT_SCRIPT = @"./Scene.exe SCENE";
+		public const string GAMESERVER_BUILD_NAME = "GameServer";
 
 		public static readonly string[] BOOTSTRAP_SCENES = new string[]
 		{
@@ -137,11 +97,11 @@ start Scene.exe SCENE";
 				// Save the XML document to the specified file
 				xmlDoc.Save(linkerPath);
 
-				Log.Debug($"XML file '{rootPath}' has been generated successfully.");
+				UnityEngine.Debug.Log($"XML file '{rootPath}' has been generated successfully.");
 			}
 			catch (Exception ex)
 			{
-				Log.Debug($"An error occurred: {ex.Message}");
+				UnityEngine.Debug.Log($"An error occurred: {ex.Message}");
 			}
 		}
 
@@ -266,17 +226,17 @@ start Scene.exe SCENE";
 				// Only reimport if the file actually exists, to avoid errors with deleted assets
 				if (File.Exists(scriptPath))
 				{
-					Log.Debug($"Forcing editor recompile by reimporting: {scriptPath}");
+					UnityEngine.Debug.Log($"Forcing editor recompile by reimporting: {scriptPath}");
 					AssetDatabase.ImportAsset(scriptPath, ImportAssetOptions.ForceUpdate);
 				}
 				else
 				{
-					Log.Warning("Found script GUID but file does not exist to reimport. Define symbols might not update as expected.");
+					UnityEngine.Debug.LogWarning("Found script GUID but file does not exist to reimport. Define symbols might not update as expected.");
 				}
 			}
 			else
 			{
-				Log.Warning("No script files found to force editor recompile. Define symbols might not update.");
+				UnityEngine.Debug.LogWarning("No script files found to force editor recompile. Define symbols might not update.");
 			}
 		}
 
@@ -310,8 +270,7 @@ start Scene.exe SCENE";
 			BuildTargetGroup targetGroup = BuildPipeline.GetBuildTargetGroup(buildTarget);
 
 			// Append world scene paths to bootstrap scene array
-			string[] scenes = customBuildType == CustomBuildType.AllInOne ||
-							  customBuildType == CustomBuildType.Scene ||
+			string[] scenes = customBuildType == CustomBuildType.Server ||
 							  customBuildType == CustomBuildType.Client ? AppendWorldScenePaths(bootstrapScenes) : bootstrapScenes;
 
 			string folderName = executableName;
@@ -350,33 +309,33 @@ start Scene.exe SCENE";
 				BuildSummary summary = report.summary;
 				if (summary.result == BuildResult.Succeeded)
 				{
-					Log.Debug($"Build Succeeded: {summary.totalSize} bytes {DateTime.UtcNow}");
-					Log.Debug($"Build Duration: {summary.totalTime}");
-					Log.Debug($"Scenes Included: {string.Join(", ", bootstrapScenes)}");
-					Log.Debug($"Build Target: {buildTarget}");
-					Log.Debug($"Build Subtarget: {subTarget}");
+					UnityEngine.Debug.Log($"Build Succeeded: {summary.totalSize} bytes {DateTime.UtcNow}");
+					UnityEngine.Debug.Log($"Build Duration: {summary.totalTime}");
+					UnityEngine.Debug.Log($"Scenes Included: {string.Join(", ", bootstrapScenes)}");
+					UnityEngine.Debug.Log($"Build Target: {buildTarget}");
+					UnityEngine.Debug.Log($"Build Subtarget: {subTarget}");
 
 					// Log details about each build step
-					Log.Debug("Build Steps:");
+					UnityEngine.Debug.Log("Build Steps:");
 					int i = 0;
 					foreach (var step in report.steps)
 					{
-						Log.Debug($"Step {i}: {step.name}, Duration: {step.duration}");
+						UnityEngine.Debug.Log($"Step {i}: {step.name}, Duration: {step.duration}");
 						if (step.messages.Length > 0)
 						{
 							foreach (var message in step.messages)
 							{
 								if (message.type == LogType.Error)
 								{
-									Log.Error($"Error in step {step.name}: {message.content}");
+									UnityEngine.Debug.LogError($"Error in step {step.name}: {message.content}");
 								}
 								else if (message.type == LogType.Warning)
 								{
-									Log.Warning($"Warning in step {step.name}: {message.content}");
+									UnityEngine.Debug.LogWarning($"Warning in step {step.name}: {message.content}");
 								}
 								else
 								{
-									Log.Debug($"Message in step {step.name}: {message.content}");
+									UnityEngine.Debug.Log($"Message in step {step.name}: {message.content}");
 								}
 							}
 						}
@@ -384,53 +343,6 @@ start Scene.exe SCENE";
 					}
 
 					string root = Directory.GetParent(Directory.GetCurrentDirectory()).FullName;
-
-					// Copy the configuration files if it's a server build
-					if (subTarget == StandaloneBuildSubtarget.Server)
-					{
-						if (buildTarget == BuildTarget.StandaloneWindows64)
-						{
-							switch (customBuildType)
-							{
-								case CustomBuildType.AllInOne:
-									CreateScript(Path.Combine(buildPath, "Start.bat"), ALL_IN_ONE_SERVER_BAT_SCRIPT);
-									break;
-								case CustomBuildType.Login:
-									CreateScript(Path.Combine(buildPath, "Start.bat"), LOGIN_SERVER_BAT_SCRIPT);
-									break;
-								case CustomBuildType.World:
-									CreateScript(Path.Combine(buildPath, "Start.bat"), WORLD_SERVER_BAT_SCRIPT);
-									break;
-								case CustomBuildType.Scene:
-									CreateScript(Path.Combine(buildPath, "Start.bat"), SCENE_SERVER_BAT_SCRIPT);
-									break;
-								case CustomBuildType.Client:
-								default:
-									break;
-							}
-						}
-						else if (buildTarget == BuildTarget.StandaloneLinux64)
-						{
-							switch (customBuildType)
-							{
-								case CustomBuildType.AllInOne:
-									CreateScript(Path.Combine(buildPath, "Start.sh"), LINUX_ALL_IN_ONE_SERVER_BAT_SCRIPT);
-									break;
-								case CustomBuildType.Login:
-									CreateScript(Path.Combine(buildPath, "Start.sh"), LINUX_LOGIN_SERVER_BAT_SCRIPT);
-									break;
-								case CustomBuildType.World:
-									CreateScript(Path.Combine(buildPath, "Start.sh"), LINUX_WORLD_SERVER_BAT_SCRIPT);
-									break;
-								case CustomBuildType.Scene:
-									CreateScript(Path.Combine(buildPath, "Start.sh"), LINUX_SCENE_SERVER_BAT_SCRIPT);
-									break;
-								case CustomBuildType.Client:
-								default:
-									break;
-							}
-						}
-					}
 
 					// Copy configuration files
 					string configurationPath = WorkingEnvironmentOptions.AppendEnvironmentToPath(Constants.Configuration.SetupDirectory);
@@ -443,37 +355,37 @@ start Scene.exe SCENE";
 
 					if (buildTarget == BuildTarget.WebGL)
 					{
-						Log.Debug(@"Please visit https://docs.unity3d.com/2022.3/Documentation/Manual/webgl-server-configuration-code-samples.html for further WebGL WebServer configuration.");
+						UnityEngine.Debug.Log(@"Please visit https://docs.unity3d.com/2022.3/Documentation/Manual/webgl-server-configuration-code-samples.html for further WebGL WebServer configuration.");
 					}
 				}
 				else if (summary.result == BuildResult.Failed)
 				{
-					Log.Error($"Build {report.summary.result}!");
-					Log.Error($"Total Errors: {summary.totalErrors}");
-					Log.Error($"Build Target: {buildTarget}");
-					Log.Error($"Build Subtarget: {subTarget}");
+					UnityEngine.Debug.LogError($"Build {report.summary.result}!");
+					UnityEngine.Debug.LogError($"Total Errors: {summary.totalErrors}");
+					UnityEngine.Debug.LogError($"Build Target: {buildTarget}");
+					UnityEngine.Debug.LogError($"Build Subtarget: {subTarget}");
 
 					// Log details about each build step
-					Log.Debug("Build Steps:");
+					UnityEngine.Debug.Log("Build Steps:");
 					int i = 0;
 					foreach (var step in report.steps)
 					{
-						Log.Debug($"Step {i}: {step.name}, Duration: {step.duration}");
+						UnityEngine.Debug.Log($"Step {i}: {step.name}, Duration: {step.duration}");
 						if (step.messages.Length > 0)
 						{
 							foreach (var message in step.messages)
 							{
 								if (message.type == LogType.Error)
 								{
-									Log.Error($"Error in step {step.name}: {message.content}");
+									UnityEngine.Debug.LogError($"Error in step {step.name}: {message.content}");
 								}
 								else if (message.type == LogType.Warning)
 								{
-									Log.Warning($"Warning in step {step.name}: {message.content}");
+									UnityEngine.Debug.LogWarning($"Warning in step {step.name}: {message.content}");
 								}
 								else
 								{
-									Log.Debug($"Message in step {step.name}: {message.content}");
+									UnityEngine.Debug.Log($"Message in step {step.name}: {message.content}");
 								}
 							}
 						}
@@ -483,12 +395,12 @@ start Scene.exe SCENE";
 			}
 			catch (Exception ex)
 			{
-				Log.Error($"Exception during build: {ex.Message}");
-				Log.Error($"Stack trace: {ex.StackTrace}");
+				UnityEngine.Debug.LogError($"Exception during build: {ex.Message}");
+				UnityEngine.Debug.LogError($"Stack trace: {ex.StackTrace}");
 			}
 			finally
 			{
-				Log.Debug("Build finished.");
+				UnityEngine.Debug.Log("Build finished.");
 
 				PopSettings();
 			}
@@ -514,18 +426,9 @@ start Scene.exe SCENE";
 		{
 			switch (customBuildType)
 			{
-				case CustomBuildType.AllInOne:
+				case CustomBuildType.Server:
 					FileUtil.ReplaceFile(Path.Combine(configurationPath, "LoginServer.cfg"), Path.Combine(buildPath, "LoginServer.cfg"));
 					FileUtil.ReplaceFile(Path.Combine(configurationPath, "WorldServer.cfg"), Path.Combine(buildPath, "WorldServer.cfg"));
-					FileUtil.ReplaceFile(Path.Combine(configurationPath, "SceneServer.cfg"), Path.Combine(buildPath, "SceneServer.cfg"));
-					break;
-				case CustomBuildType.Login:
-					FileUtil.ReplaceFile(Path.Combine(configurationPath, "LoginServer.cfg"), Path.Combine(buildPath, "LoginServer.cfg"));
-					break;
-				case CustomBuildType.World:
-					FileUtil.ReplaceFile(Path.Combine(configurationPath, "WorldServer.cfg"), Path.Combine(buildPath, "WorldServer.cfg"));
-					break;
-				case CustomBuildType.Scene:
 					FileUtil.ReplaceFile(Path.Combine(configurationPath, "SceneServer.cfg"), Path.Combine(buildPath, "SceneServer.cfg"));
 					break;
 				case CustomBuildType.Client:
@@ -541,23 +444,7 @@ start Scene.exe SCENE";
 			}
 		}
 
-		private static void CreateScript(string filePath, string scriptContent)
-		{
-			// Check if the file already exists and delete it if it does
-			if (File.Exists(filePath))
-			{
-				File.Delete(filePath);
-			}
-
-			// Create the script file
-			using (StreamWriter writer = File.CreateText(filePath))
-			{
-				// Write the script content to the file
-				writer.Write(scriptContent);
-			}
-		}
-
-		[MenuItem("FishMMO/Build/Installer/Windows x64", priority = -10)]
+		[MenuItem("FishMMO/Build/Windows x64/Database Installer")]
 		public static void BuildWindows64Setup()
 		{
 			BuildExecutable("Installer",
@@ -571,7 +458,7 @@ start Scene.exe SCENE";
 							BuildTarget.StandaloneWindows64);
 		}
 
-		[MenuItem("FishMMO/Build/Installer/Linux x64", priority = -9)]
+		[MenuItem("FishMMO/Build/Linux x64/Database Installer")]
 		public static void BuildLinuxSetup()
 		{
 			BuildExecutable("Installer",
@@ -630,7 +517,7 @@ start Scene.exe SCENE";
 		}
 
 		#region Menu
-		[MenuItem("FishMMO/Build/Misc/Update Linker", priority = 12)]
+		[MenuItem("FishMMO/Update Linker")]
 		public static void UpdateLinker()
 		{
 			string current = Directory.GetCurrentDirectory();
@@ -638,157 +525,19 @@ start Scene.exe SCENE";
 			UpdateLinker(assets, Path.Combine(assets, "Dependencies"));
 		}
 
-		[MenuItem("FishMMO/Build/Build All Windows", priority = 10)]
-		public static void BuildWindows64AllSeparate()
-		{
-			string selectedPath = EditorUtility.SaveFolderPanel("Pick a save directory", "", "");
-			string rootPath = Path.Combine(selectedPath, Constants.Configuration.ProjectName);
-			string serverRootPath = Path.Combine(selectedPath, Constants.Configuration.ProjectName + Path.DirectorySeparatorChar + "Server");
-			//WorldSceneDetailsCacheBuilder.Rebuild();
-			BuildExecutable(rootPath,
-							Constants.Configuration.ProjectName,
-							BOOTSTRAP_SCENES,
-							CustomBuildType.Client,
-							GetBuildOptions(),
-							StandaloneBuildSubtarget.Player,
-							BuildTarget.StandaloneWindows64);
-
-			BuildExecutable(serverRootPath,
-							ALL_IN_ONE_SERVER_BUILD_NAME,
-							BOOTSTRAP_SCENES,
-							CustomBuildType.AllInOne,
-							GetBuildOptions(),
-							StandaloneBuildSubtarget.Server,
-							BuildTarget.StandaloneWindows64);
-			BuildExecutable(serverRootPath,
-							LOGIN_SERVER_BUILD_NAME,
-							BOOTSTRAP_SCENES,
-							CustomBuildType.Login,
-							GetBuildOptions(),
-							StandaloneBuildSubtarget.Server,
-							BuildTarget.StandaloneWindows64);
-			BuildExecutable(serverRootPath,
-							WORLD_SERVER_BUILD_NAME,
-							BOOTSTRAP_SCENES,
-							CustomBuildType.World,
-							GetBuildOptions(),
-							StandaloneBuildSubtarget.Server,
-							BuildTarget.StandaloneWindows64);
-			BuildExecutable(serverRootPath,
-							SCENE_SERVER_BUILD_NAME,
-							BOOTSTRAP_SCENES,
-							CustomBuildType.Scene,
-							GetBuildOptions(),
-							StandaloneBuildSubtarget.Server,
-							BuildTarget.StandaloneWindows64);
-
-#if UNITY_STANDALONE_LINUX || UNITY_EDITOR_LINUX
-		Process.Start("xdg-open", rootPath);
-#elif UNITY_STANDALONE_WIN
-			Process.Start(rootPath);
-#endif
-		}
-
-		[MenuItem("FishMMO/Build/Build All Linux", priority = 11)]
-		public static void BuildAllLinux()
-		{
-			string selectedPath = EditorUtility.SaveFolderPanel("Pick a save directory", "", "");
-			string rootPath = Path.Combine(selectedPath, Constants.Configuration.ProjectName);
-			string serverRootPath = Path.Combine(selectedPath, Constants.Configuration.ProjectName + Path.DirectorySeparatorChar + "Server");
-			//WorldSceneDetailsCacheBuilder.Rebuild();
-			BuildExecutable(rootPath,
-							Constants.Configuration.ProjectName,
-							BOOTSTRAP_SCENES,
-							CustomBuildType.Client,
-							GetBuildOptions(),
-							StandaloneBuildSubtarget.Player,
-							BuildTarget.StandaloneLinux64);
-
-			BuildExecutable(serverRootPath,
-							ALL_IN_ONE_SERVER_BUILD_NAME,
-							BOOTSTRAP_SCENES,
-							CustomBuildType.AllInOne,
-							GetBuildOptions(),
-							StandaloneBuildSubtarget.Server,
-							BuildTarget.StandaloneLinux64);
-			BuildExecutable(serverRootPath,
-							LOGIN_SERVER_BUILD_NAME,
-							BOOTSTRAP_SCENES,
-							CustomBuildType.Login,
-							GetBuildOptions(),
-							StandaloneBuildSubtarget.Server,
-							BuildTarget.StandaloneLinux64);
-			BuildExecutable(serverRootPath,
-							WORLD_SERVER_BUILD_NAME,
-							BOOTSTRAP_SCENES,
-							CustomBuildType.World,
-							GetBuildOptions(),
-							StandaloneBuildSubtarget.Server,
-							BuildTarget.StandaloneLinux64);
-			BuildExecutable(serverRootPath,
-							SCENE_SERVER_BUILD_NAME,
-							BOOTSTRAP_SCENES,
-							CustomBuildType.Scene,
-							GetBuildOptions(),
-							StandaloneBuildSubtarget.Server,
-							BuildTarget.StandaloneLinux64);
-
-#if UNITY_STANDALONE_LINUX || UNITY_EDITOR_LINUX
-			Process.Start("xdg-open", rootPath);
-#elif UNITY_STANDALONE_WIN
-			Process.Start(rootPath);
-#endif
-		}
-
-		[MenuItem("FishMMO/Build/Server/Windows x64", priority = 2)]
-		public static void BuildWindows64AllInOneServer()
+		[MenuItem("FishMMO/Build/Windows x64/Game Server")]
+		public static void BuildWindows64GameServer()
 		{
 			//WorldSceneDetailsCacheBuilder.Rebuild();
-			BuildExecutable(ALL_IN_ONE_SERVER_BUILD_NAME,
+			BuildExecutable(GAMESERVER_BUILD_NAME,
 							BOOTSTRAP_SCENES,
-							CustomBuildType.AllInOne,
+							CustomBuildType.Server,
 							GetBuildOptions(),
 							StandaloneBuildSubtarget.Server,
 							BuildTarget.StandaloneWindows64);
 		}
 
-		//[MenuItem("FishMMO/Build/Server/Windows x64 Login", priority = 3)]
-		public static void BuildWindows64LoginServer()
-		{
-			//WorldSceneDetailsCacheBuilder.Rebuild();
-			BuildExecutable(LOGIN_SERVER_BUILD_NAME,
-							BOOTSTRAP_SCENES,
-							CustomBuildType.Login,
-							GetBuildOptions(),
-							StandaloneBuildSubtarget.Server,
-							BuildTarget.StandaloneWindows64);
-		}
-
-		//[MenuItem("FishMMO/Build/Server/Windows x64 World", priority = 4)]
-		public static void BuildWindows64WorldServer()
-		{
-			//WorldSceneDetailsCacheBuilder.Rebuild();
-			BuildExecutable(WORLD_SERVER_BUILD_NAME,
-							BOOTSTRAP_SCENES,
-							CustomBuildType.World,
-							GetBuildOptions(),
-							StandaloneBuildSubtarget.Server,
-							BuildTarget.StandaloneWindows64);
-		}
-
-		//[MenuItem("FishMMO/Build/Server/Windows x64 Scene", priority = 5)]
-		public static void BuildWindows64SceneServer()
-		{
-			//WorldSceneDetailsCacheBuilder.Rebuild();
-			BuildExecutable(SCENE_SERVER_BUILD_NAME,
-							BOOTSTRAP_SCENES,
-							CustomBuildType.Scene,
-							GetBuildOptions(),
-							StandaloneBuildSubtarget.Server,
-							BuildTarget.StandaloneWindows64);
-		}
-
-		[MenuItem("FishMMO/Build/Client/Windows x64", priority = 1)]
+		[MenuItem("FishMMO/Build/Windows x64/Game Client")]
 		public static void BuildWindows64Client()
 		{
 			//WorldSceneDetailsCacheBuilder.Rebuild();
@@ -800,19 +549,19 @@ start Scene.exe SCENE";
 							BuildTarget.StandaloneWindows64);
 		}
 
-		[MenuItem("FishMMO/Build/Server/Linux x64", priority = 8)]
-		public static void BuildLinux64AllInOneServer()
+		[MenuItem("FishMMO/Build/Linux x64/Game Server")]
+		public static void BuildLinux64GameServer()
 		{
 			//WorldSceneDetailsCacheBuilder.Rebuild();
-			BuildExecutable(ALL_IN_ONE_SERVER_BUILD_NAME,
+			BuildExecutable(GAMESERVER_BUILD_NAME,
 							BOOTSTRAP_SCENES,
-							CustomBuildType.AllInOne,
+							CustomBuildType.Server,
 							GetBuildOptions(),
 							StandaloneBuildSubtarget.Server,
 							BuildTarget.StandaloneLinux64);
 		}
 
-		[MenuItem("FishMMO/Build/Client/Linux x64", priority = 2)]
+		[MenuItem("FishMMO/Build/Linux x64/Game Client")]
 		public static void BuildLinux64Client()
 		{
 			//WorldSceneDetailsCacheBuilder.Rebuild();
@@ -824,7 +573,7 @@ start Scene.exe SCENE";
 							BuildTarget.StandaloneLinux64);
 		}
 
-		[MenuItem("FishMMO/Build/Client/WebGL", priority = 3)]
+		[MenuItem("FishMMO/Build/WebGL/Game Client")]
 		public static void BuildWebGLClient()
 		{
 			//WorldSceneDetailsCacheBuilder.Rebuild();
@@ -836,7 +585,7 @@ start Scene.exe SCENE";
 							BuildTarget.WebGL);
 		}
 
-		[MenuItem("FishMMO/Build/Addressables/Build Windows Client Addressables")]
+		[MenuItem("FishMMO/Build/Windows x64/Addressables/Client Addressables")]
 		public static void BuildWindowsClientAddressables()
 		{
 			PushSettings(BuildTarget.StandaloneWindows64);
@@ -845,7 +594,7 @@ start Scene.exe SCENE";
 			PopSettings();
 		}
 
-		[MenuItem("FishMMO/Build/Addressables/Build Windows Server Addressables")]
+		[MenuItem("FishMMO/Build/Windows x64/Addressables/Server Addressables")]
 		public static void BuildWindowsServerAddressables()
 		{
 			PushSettings(BuildTarget.StandaloneWindows64);
@@ -854,7 +603,7 @@ start Scene.exe SCENE";
 			PopSettings();
 		}
 
-		[MenuItem("FishMMO/Build/Addressables/Build Linux Client Addressables")]
+		[MenuItem("FishMMO/Build/Linux x64/Addressables/Client Addressables")]
 		public static void BuildLinuxClientAddressables()
 		{
 			PushSettings(BuildTarget.StandaloneLinux64);
@@ -863,7 +612,7 @@ start Scene.exe SCENE";
 			PopSettings();
 		}
 
-		[MenuItem("FishMMO/Build/Addressables/Build Linux Server Addressables")]
+		[MenuItem("FishMMO/Build/Linux x64/Addressables/Server Addressables")]
 		public static void BuildLinuxServerAddressables()
 		{
 			PushSettings(BuildTarget.StandaloneLinux64);
@@ -872,7 +621,7 @@ start Scene.exe SCENE";
 			PopSettings();
 		}
 
-		[MenuItem("FishMMO/Build/Addressables/Build WebGL Addressables")]
+		[MenuItem("FishMMO/Build/WebGL/Addressables/Client Addressables")]
 		public static void BuildWebGLAddressables()
 		{
 			PushSettings(BuildTarget.WebGL);
@@ -897,17 +646,17 @@ start Scene.exe SCENE";
 						if (group.name.Contains(exclusion))
 						{
 							schema.IncludeInBuild = false;
-							Log.Debug($"Group {group.name} has been excluded from the build.");
+							UnityEngine.Debug.Log($"[Addressables] Group {group.name} has been excluded from the build.");
 						}
 						else
 						{
 							schema.IncludeInBuild = true;
-							Log.Warning($"Group {group.name} has been included in the build.");
+							UnityEngine.Debug.LogWarning($"[Addressables] Group {group.name} has been included in the build.");
 						}
 					}
 					else
 					{
-						Log.Warning($"No schema found for group: {group.name}");
+						UnityEngine.Debug.LogWarning($"[Addressables] No schema found for group: {group.name}");
 					}
 				}
 			}
@@ -919,11 +668,11 @@ start Scene.exe SCENE";
 				try
 				{
 					Directory.Delete(buildPath, recursive: true);
-					Log.Debug($"Deleted previous Addressable build directory at {buildPath}");
+					UnityEngine.Debug.Log($"[Addressables] Deleted previous Addressable build directory at {buildPath}");
 				}
 				catch (Exception ex)
 				{
-					Log.Error($"Failed to delete previous build directory: {ex.Message}");
+					UnityEngine.Debug.LogError($"[Addressables] Failed to delete previous build directory: {ex.Message}");
 				}
 			}
 
@@ -936,35 +685,35 @@ start Scene.exe SCENE";
 				// Log the overall build result
 				if (!string.IsNullOrEmpty(result.Error))
 				{
-					Log.Error(result.Error);
-					Log.Error("Addressable content build failure (duration: " + TimeSpan.FromSeconds(result.Duration).ToString("g") + ")");
+					UnityEngine.Debug.LogError(result.Error);
+					UnityEngine.Debug.LogError("[Addressables] Addressable content build failure (duration: " + TimeSpan.FromSeconds(result.Duration).ToString("g") + ")");
 				}
 				else
 				{
 					// Log information about the asset bundles that were built
 					if (result.AssetBundleBuildResults != null && result.AssetBundleBuildResults.Count > 0)
 					{
-						Log.Debug("Built Asset Bundles:");
+						UnityEngine.Debug.Log("[Addressables] Built Asset Bundles:");
 						foreach (var bundleResult in result.AssetBundleBuildResults)
 						{
-							Log.Debug($"Bundle: {bundleResult.SourceAssetGroup.Name} | {bundleResult.FilePath}");
+							UnityEngine.Debug.Log($"[Addressables] Bundle: {bundleResult.SourceAssetGroup.Name} | {bundleResult.FilePath}");
 
 							// Log each asset in the bundle
 							foreach (var assetPath in bundleResult.SourceAssetGroup.entries)
 							{
-								Log.Debug($"  - Asset: {assetPath}");
+								UnityEngine.Debug.Log($"[Addressables] Asset: {assetPath}");
 							}
 						}
 					}
 					else
 					{
-						Log.Debug("No asset bundles were built.");
+						UnityEngine.Debug.Log("[Addressables] No asset bundles were built.");
 					}
 				}
 			}
 			catch (Exception ex)
 			{
-				Log.Error($"Error during Addressables build: {ex.Message}");
+				UnityEngine.Debug.LogError($"[Addressables] Error during Addressables build: {ex.Message}");
 			}
 
 			// Optionally, refresh the asset database after the build

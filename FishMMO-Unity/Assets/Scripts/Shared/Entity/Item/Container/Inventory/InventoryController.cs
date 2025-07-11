@@ -1,6 +1,7 @@
 ﻿using FishNet.Transporting;
 using System.Runtime.CompilerServices;
 using UnityEngine;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -138,7 +139,7 @@ namespace FishMMO.Shared
 			}
 			if (TryGetItem(index, out Item item))
 			{
-				Log.Debug("InventoryController: using item in slot[" + index + "]");
+				Log.Debug("InventoryController", $"Using item in slot[" + index + "]");
 				//items[index].OnUseItem();
 			}
 		}

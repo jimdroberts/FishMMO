@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using FishNet.Transporting;
 using FishMMO.Shared;
+using FishMMO.Logging;
 using TMPro;
 
 namespace FishMMO.Client
@@ -46,11 +47,11 @@ namespace FishMMO.Client
 			{
 				if (sceneObject == null)
 				{
-					Log.Debug("Missing SceneObject");
+					Log.Debug("UIDungeonFinder", "Missing SceneObject");
 				}
 				else
 				{
-					Log.Debug("Missing ID:" + msg.InteractableID);
+					Log.Debug("UIDungeonFinder", "Missing ID:" + msg.InteractableID);
 				}
 				return;
 			}

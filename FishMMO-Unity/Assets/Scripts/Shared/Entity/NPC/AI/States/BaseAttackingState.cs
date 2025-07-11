@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -124,7 +125,7 @@ namespace FishMMO.Shared
 			}*/
 			// if (distanceToTarget is small)
 			// controller.TransitionToCombatState();
-			Log.Debug("Attacking target!");
+			Log.Debug("BaseAttackingState", "Attacking target!");
 		}
 
 		/// <summary>

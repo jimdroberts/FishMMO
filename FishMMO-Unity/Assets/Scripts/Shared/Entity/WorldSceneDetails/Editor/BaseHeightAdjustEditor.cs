@@ -74,7 +74,7 @@ namespace FishMMO.Shared
 			RaycastHit hitInfo;
 			if (Physics.SphereCast(raycastStart, 1.0f, Vector3.down, out hitInfo, raycastDistance))
 			{
-				Log.Debug("Raycast hit object: " + hitInfo.collider.gameObject.name);
+				Debug.Log("Raycast hit object: " + hitInfo.collider.gameObject.name);
 				Debug.DrawLine(raycastStart, hitInfo.point, Color.red, 0.5f); // Visualize the raycast
 
 				clickedObject.transform.position = hitInfo.point + new Vector3(0.0f, 0.1f, 0.0f);

@@ -1,4 +1,5 @@
 using FishMMO.Shared;
+using FishMMO.Logging;
 using UnityEngine;
 
 namespace FishMMO.Server
@@ -10,7 +11,7 @@ namespace FishMMO.Server
         {
             if (!eventData.TryGet(out InteractableEventData interactableEventData))
             {
-                Log.Error("NPCFaceCharacterAction: Missing InteractableEventData.");
+                Log.Error("NPCFaceCharacterAction", "Missing InteractableEventData.");
                 return;
             }
 
@@ -21,13 +22,13 @@ namespace FishMMO.Server
 
             if (character == null || npcInteractable == null || serverInstance == null)
             {
-                Log.Warning("NPCFaceCharacterAction: Invalid character, NPC interactable, or server instance.");
+                Log.Warning("NPCFaceCharacterAction", "Invalid character, NPC interactable, or server instance.");
                 return;
             }
 
             // Call the existing method on the InteractableSystem
             serverInstance.OnInteractNPC(character, npcInteractable);
-            Log.Debug($"NPC {npcInteractable.GetType().Name} made to face character {character.Name}.");
+            Log.Debug("NPCFaceCharacterAction", $"NPC {npcInteractable.GetType().Name} made to face character {character.Name}.");
         }
     }
 }

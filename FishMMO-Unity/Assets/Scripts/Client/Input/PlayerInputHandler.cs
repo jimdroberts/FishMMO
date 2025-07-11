@@ -3,6 +3,7 @@ using UnityEngine.InputSystem;
 using UnityEngine.EventSystems;
 using System.Collections.Generic;
 using FishMMO.Shared; // Assuming FishMMO.Shared contains Log and Configuration
+using FishMMO.Logging;
 
 namespace FishMMO.Client
 {
@@ -14,7 +15,7 @@ namespace FishMMO.Client
 	public class PlayerInputHandler : MonoBehaviour
 	{
 		// Reference to the generated Input Actions asset.
-		private PlayerControls _playerControls;
+		private PlayerControls playerControls;
 
 		/// <summary>
 		/// Gets a value indicating whether the mouse cursor's visibility is currently being "forced"
@@ -85,8 +86,8 @@ namespace FishMMO.Client
 				return;
 			}
 
-			_playerControls = new PlayerControls();
-			Controls = _playerControls; // Assign to static property for global access
+			playerControls = new PlayerControls();
+			Controls = playerControls; // Assign to static property for global access
 
 			// Load saved bindings when the application starts
 			LoadBindingOverrides();
@@ -95,26 +96,26 @@ namespace FishMMO.Client
 			MouseMode = true; // Start with mouse visible and unlocked
 
 			// Subscribe to the ToggleMouseMode action
-			_playerControls.Player.ToggleMouseMode.performed += ctx => ToggleMouseMode(true);
+			playerControls.Player.ToggleMouseMode.performed += ctx => ToggleMouseMode(true);
 		}
 
 		private void OnEnable()
 		{
-			_playerControls.Enable();
+			playerControls.Enable();
 			// Ensure Player map is active initially. UI map will be enabled/disabled by EventSystem.
-			_playerControls.Player.Enable();
-			_playerControls.UI.Enable(); // UI map should generally always be enabled for UI interaction, EventSystem manages its behavior
+			playerControls.Player.Enable();
+			playerControls.UI.Enable(); // UI map should generally always be enabled for UI interaction, EventSystem manages its behavior
 		}
 
 		private void OnDisable()
 		{
-			_playerControls.Disable();
+			playerControls.Disable();
 		}
 
 		private void OnDestroy()
 		{
-			_playerControls.Player.ToggleMouseMode.performed -= ctx => ToggleMouseMode(true);
-			_playerControls?.Dispose(); // Dispose of the input actions when no longer needed
+			playerControls.Player.ToggleMouseMode.performed -= ctx => ToggleMouseMode(true);
+			playerControls?.Dispose(); // Dispose of the input actions when no longer needed
 			Controls = null; // Clear static reference
 		}
 
@@ -187,15 +188,15 @@ namespace FishMMO.Client
 		{
 			if (Configuration.GlobalSettings != null && Controls != null)
 			{
-				Log.Debug("Attempting to save input binding overrides to Global Configuration.");
+				Log.Debug("PlayerInputHandler", "Attempting to save input binding overrides to Global Configuration.");
 				// Serialize the binding overrides to a JSON string
 				string overridesJson = Controls.SaveBindingOverridesAsJson();
 				Configuration.GlobalSettings.Set("InputBindingOverrides", overridesJson);
-				Debug.Log("Input binding overrides saved.");
+				Log.Debug("PlayerInputHandler", "Input binding overrides saved.");
 			}
 			else
 			{
-				Log.Warning("Global.Configuration or PlayerControls were not available during input override saving. Binding overrides not saved.");
+				Log.Warning("PlayerInputHandler", "Global.Configuration or PlayerControls were not available during input override saving. Binding overrides not saved.");
 			}
 		}
 
@@ -207,28 +208,28 @@ namespace FishMMO.Client
 		{
 			if (Configuration.GlobalSettings != null && Controls != null)
 			{
-				Log.Debug("Attempting to load input binding overrides from Global Configuration.");
+				Log.Debug("PlayerInputHandler", "Attempting to load input binding overrides from Global Configuration.");
 				if (Configuration.GlobalSettings.TryGetString("InputBindingOverrides", out string overridesJson))
 				{
 					if (!string.IsNullOrEmpty(overridesJson))
 					{
 						// Apply the loaded JSON string to the input actions
 						Controls.LoadBindingOverridesFromJson(overridesJson);
-						Debug.Log("Input binding overrides loaded.");
+						Log.Debug("PlayerInputHandler", "Input binding overrides loaded.");
 					}
 					else
 					{
-						Log.Warning("No input binding overrides found in configuration. Using default bindings.");
+						Log.Warning("PlayerInputHandler", "No input binding overrides found in configuration. Using default bindings.");
 					}
 				}
 				else
 				{
-					Log.Warning("Input binding overrides key not found in configuration. Using default bindings.");
+					Log.Warning("PlayerInputHandler", "Input binding overrides key not found in configuration. Using default bindings.");
 				}
 			}
 			else
 			{
-				Log.Warning("Global.Configuration or PlayerControls were not available during input override loading. Using default bindings.");
+				Log.Warning("PlayerInputHandler", "Global.Configuration or PlayerControls were not available during input override loading. Using default bindings.");
 			}
 		}
 

@@ -1,4 +1,5 @@
 using UnityEngine;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -21,12 +22,12 @@ namespace FishMMO.Shared
 				}
 				else
 				{
-					Log.Warning($"HitCountAction: HitEventData did not contain a valid AbilityObject for initiator {initiator?.Name}.");
+					Log.Warning("HitCountAction", $"HitEventData did not contain a valid AbilityObject for initiator {initiator?.Name}.");
 				}
 			}
 			else
 			{
-				Log.Warning($"HitCountAction: EventData is not of type HitEventData for initiator {initiator?.Name}.");
+				Log.Warning("HitCountAction", $"EventData is not of type HitEventData for initiator {initiator?.Name}.");
 			}
 		}
 	}

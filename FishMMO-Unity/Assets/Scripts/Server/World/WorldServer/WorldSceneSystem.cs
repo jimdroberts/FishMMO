@@ -3,6 +3,7 @@ using FishNet.Managing.Server;
 using FishNet.Transporting;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
+using FishMMO.Logging;
 using FishMMO.Database.Npgsql;
 using FishMMO.Database.Npgsql.Entities;
 using UnityEngine;
@@ -340,7 +341,7 @@ namespace FishMMO.Server
 
 		private void Kick(NetworkConnection conn, string reason)
 		{
-			Log.Debug($"World Scene System: {conn.ClientId} {reason}.");
+			Log.Debug("WorldSceneSystem", $"World Scene System: {conn.ClientId} {reason}.");
 			conn.Kick(KickReason.UnexpectedProblem);
 		}
 

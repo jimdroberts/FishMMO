@@ -16,183 +16,177 @@ MonoBehaviour:
   m_GUID: 9f41fb9c2f019e548ad7e95d00d2093e
   m_SerializeEntries:
   - m_GUID: 0568e126266db254592d9ce8425e9830
-    m_Address: Assets/Prefabs/Shared/Entity/NPCs/Pets/a lesser fire elemental.prefab
+    m_Address: a lesser fire elemental
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 057385a6a43986c4395767410661fd2e
-    m_Address: Assets/Prefabs/Client/UI/World/Chat/LiberationSans SDF UIChat.asset
+    m_Address: LiberationSans SDF UIChat
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 0b780052956643349b36dbed5d16fd35
-    m_Address: Assets/Prefabs/Client/UI/ColorPicker/Cursor3.0.png
+    m_Address: Cursor3.0
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 0d9d26e2162aa4d11ab075b34c029673
-    m_Address: Assets/Prefabs/Shared/Models/EthanCharacter/Animation/HumanoidIdleJumpUp.fbx
+    m_Address: HumanoidIdleJumpUp
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 0f2ff92179a6d1b4c9dde7ad6a4afdb0
-    m_Address: Assets/Prefabs/Shared/Entity/NPCs/Attributes/Monsters/Orcs/an orc
-      warrior.asset
+    m_Address: an orc warrior
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1062212255550964e974f3ffb3cbaae3
-    m_Address: Assets/Prefabs/Shared/Models/EthanCharacter/Animation/HumanoidRunTurn.fbx
+    m_Address: HumanoidRunTurn
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 153116bad200a3444be96b22a65500ea
-    m_Address: Assets/Prefabs/Client/UI/World/Equipment/Camera.prefab
+    m_Address: Camera
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 16eb23baeafad21469a3509842b500e3
-    m_Address: Assets/Prefabs/Shared/Entity/Regions/NightSkybox.mat
+    m_Address: NightSkybox
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1a3fc9516df07da4ebbb643fe79bc80b
-    m_Address: Assets/Prefabs/Shared/Models/EthanCharacter/Materials/Ethan.mat
+    m_Address: Ethan
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1c52c953c83c2254a9fa72d50250f028
-    m_Address: Assets/Prefabs/Shared/Models/EthanCharacter/Animation/HumanoidWalkTurn.fbx
+    m_Address: HumanoidWalkTurn
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1c5ebba9ff4ecbe4d8420fe4a3dc7db1
-    m_Address: Assets/Prefabs/Shared/Entity/Regions/DisplayName/EventRegionDisplayNameAction.asset
+    m_Address: EventRegionDisplayNameAction
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1cb8ed3cbba15f0479fbae54e0a963df
-    m_Address: Assets/Prefabs/Shared/Models/EthanCharacter/Animation/HumanoidRun.fbx
+    m_Address: HumanoidRun
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 22297f79efd99de43a9e8079889ee4b4
-    m_Address: Assets/Prefabs/Shared/Entity/Regions/DisplayName/SceneRegionDisplayNameAction.asset
+    m_Address: SceneRegionDisplayNameAction
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2ce4d12b80ddd9f4ca8a389e6c91c7e3
-    m_Address: Assets/Prefabs/Shared/Entity/Interactables/NPCs/Interactables/Human/AbilityCrafter/FemaleHumanAbilityCrafter.prefab
+    m_Address: FemaleHumanAbilityCrafter
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2de080fd835ec6747b1b1ff8ed6870f6
-    m_Address: Assets/Prefabs/Client/UI/Player Name Label.prefab
+    m_Address: Player Name Label
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 30339dbf6301676479d2c51120c3c56b
-    m_Address: Assets/Prefabs/Client/UI/Cached3DLabel.prefab
+    m_Address: Cached3DLabel
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 316068aec7de8294ba9429fc2bc910b9
-    m_Address: Assets/Prefabs/Shared/Entity/Regions/DaySkybox.mat
+    m_Address: DaySkybox
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3243c87cb242a03478e9ee038f7873ed
-    m_Address: Assets/Prefabs/Shared/Entity/PlayableCharacters/Elf.prefab
+    m_Address: Elf
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 34647e48cd749f04eb768bb8a41a47ad
-    m_Address: Assets/Prefabs/Shared/Entity/Regions/ChangeFog/StartScene A Fog.asset
+    m_Address: StartScene A Fog
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 36866adaddfae0c4e975f65903f11405
-    m_Address: Assets/Prefabs/Materials/Teleporter/fm_teleporter_PLACEHOLDER.mat
+    m_Address: fm_teleporter_PLACEHOLDER
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3b5b7be0f2332c24f89a2af018daa62d
-    m_Address: Assets/Prefabs/Shared/Models/EthanCharacter/Textures/EthanNormals.png
+    m_Address: EthanNormals
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3f3e421dc58c81d4e94dcea943cfcd35
-    m_Address: Assets/Prefabs/Shared/WorldSceneDetails.asset
+    m_Address: WorldSceneDetails
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 409d23918fda94d4daf83122bcb63ead
-    m_Address: Assets/Prefabs/Shared/Models/EthanCharacter/Models/Materials/EthanWhite.mat
+    m_Address: EthanWhite
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 422ac1a06602ba841bd45b8b1c616098
-    m_Address: Assets/Prefabs/Client/FX/Abilities/Fire.prefab
+    m_Address: Fire
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 44d3914835afcff478745749b153f953
-    m_Address: Assets/Prefabs/Shared/Entity/Regions/DisplayName/AreaOfInterestDisplayNameAction.asset
+    m_Address: AreaOfInterestDisplayNameAction
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 4e2f32e9a1fefc24092337ae061f3dbc
-    m_Address: Assets/Prefabs/Shared/Models/EthanCharacter/Textures/EthanOcclusion.png
+    m_Address: EthanOcclusion
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 51dd2e4c869794f75a0df7d54b210214
-    m_Address: Assets/Prefabs/Shared/Models/EthanCharacter/Animation/HumanoidJumpAndFall.fbx
+    m_Address: HumanoidJumpAndFall
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 549f4456666a19b428ae484dd2630ab1
-    m_Address: Assets/Prefabs/Shared/Entity/Abilities/Types/Fireball/Lesser Fireball.prefab
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 54daef9394b95ea4cb9b1d26e02236b0
-    m_Address: Assets/Prefabs/Client/MinimapRenderTexture.renderTexture
+    m_Address: Lesser Fireball
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 67e5b419b5e646f4895935cf06fca178
-    m_Address: Assets/Prefabs/Shared/Entity/Regions/ChangeFog/StartScene B Fog.asset
+    m_Address: StartScene B Fog
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 6bed0c614c46964408373a65aba83a0e
-    m_Address: Assets/Prefabs/Client/FX/Abilities/TestBuffFX.prefab
+    m_Address: TestBuffFX
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 6fb3851da6a6f5948ab6892bee8ba920
-    m_Address: Assets/Prefabs/Shared/Models/EthanCharacter/Animation/HumanoidStandTurn.fbx
+    m_Address: HumanoidStandTurn
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7737647c22c1fc64a88d5cd030c352ce
-    m_Address: Assets/Prefabs/Shared/Models/EthanCharacter/Prefabs/Ethan.prefab
+    m_Address: Ethan
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7c33d6280baf6d94b8eee0548a749deb
-    m_Address: Assets/Prefabs/Shared/Entity/NPCs/Attributes/Monsters/Orcs/an orc.asset
+    m_Address: an orc
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 81dd6c8841df66e44ad306e2ef34aaee
-    m_Address: Assets/Prefabs/Shared/Entity/Abilities/Types/Flame/Flame.prefab
+    m_Address: Flame
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 82e54404fe2ccc448bd81cbe31657e29
-    m_Address: Assets/Prefabs/Shared/Entity/Interactables/NPCs/Interactables/Human/Merchants/GeneralGoods/FemaleHumanGeneralMerchant.prefab
+    m_Address: FemaleHumanGeneralMerchant
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
@@ -201,134 +195,128 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 9d03b89b0b5eb734eb6e3aea188b17bf
-    m_Address: Assets/Prefabs/Client/UI/World/Equipment/CharacterRenderTexture.renderTexture
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a1cb36c06a320c240878d104ba4f0abb
-    m_Address: Assets/Prefabs/Shared/Entity/Interactables/NPCs/Interactables/Human/Merchants/GeneralGoods/MaleHumanGeneralMerchant.prefab
+    m_Address: MaleHumanGeneralMerchant
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a7364fafb6a45174babebcc6a5fbdce4
-    m_Address: Assets/Prefabs/Shared/Entity/NPCs/Monsters/Orcs/an orc mage.prefab
+    m_Address: an orc mage
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b1a5e04ae51004842aba06704a6c2903
-    m_Address: Assets/Prefabs/Shared/Models/EthanCharacter/Animation/HumanoidWalk.fbx
+    m_Address: HumanoidWalk
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b3763d5e92357f74c8c29b08f426493f
-    m_Address: Assets/Prefabs/Client/FX/Abilities/TestBuffFX 3.prefab
+    m_Address: TestBuffFX 3
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b4012c6b79fc4f142860bb5fb688e83f
-    m_Address: Assets/Prefabs/Client/UI/Damage Material.mat
+    m_Address: Damage Material
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: bb141fc9a700c9c4ca7e6dadb8acf24b
-    m_Address: Assets/Prefabs/Shared/Models/EthanCharacter/Animation/HumanoidWalkTurnSharp.fbx
+    m_Address: HumanoidWalkTurnSharp
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c66ed2b42bcd6b14194a796e70a740e0
-    m_Address: Assets/Prefabs/LevelLoggingConfiguration.asset
+    m_Address: LevelLoggingConfiguration
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c70f6d8041358ed41bfaf8483b590e34
-    m_Address: Assets/Prefabs/Shared/Entity/Regions/ChangeFog/Disable Fog.asset
+    m_Address: Disable Fog
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: cb25fb39d2ec2b646b6b18059ae87bce
-    m_Address: Assets/Prefabs/Client/FX/Abilities/Explosion.prefab
+    m_Address: Explosion
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d89ea37480b6d75458aa38843e9688dc
-    m_Address: Assets/Prefabs/Shared/Models/EthanCharacter/Animation/HumanoidCrouch.fbx
+    m_Address: HumanoidCrouch
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d9b40c4bb7d3f5d4c965814c5433ce65
-    m_Address: Assets/Prefabs/Shared/Entity/Regions/SunAndMoon.prefab
+    m_Address: SunAndMoon
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: dc8cc64088072ae47872cf54e7cf6b6f
-    m_Address: Assets/Prefabs/Client/UI/Player Guild Label.prefab
+    m_Address: Player Guild Label
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: dffa50cfe77e0434bbfa71245b3dd529
-    m_Address: Assets/Prefabs/Shared/Models/EthanCharacter/Animation/HumanoidIdle.fbx
+    m_Address: HumanoidIdle
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e2cf68ff4b1ffda45a77f7307dd789b9
-    m_Address: Assets/Prefabs/Shared/Models/EthanCharacter/Animator/ThirdPersonAnimatorController.controller
+    m_Address: ThirdPersonAnimatorController
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e34076ce9f0c6224986256c72f6258fb
-    m_Address: Assets/Prefabs/Shared/Entity/Regions/ChangeFog/DungeonEntranceFog.asset
+    m_Address: DungeonEntranceFog
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e37548aba1d69c14cb2bd288e7882f76
-    m_Address: Assets/Prefabs/Shared/Entity/Regions/ChangeFog/DungeonFog.asset
+    m_Address: DungeonFog
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e48c22ecb1287cf4185c17311214bc8a
-    m_Address: Assets/Prefabs/Shared/Entity/Abilities/Types/Punch/Punch.prefab
+    m_Address: Punch
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ecf1db3ea5ffe04438c0c425adb9bb32
-    m_Address: Assets/Prefabs/Shared/Entity/NPCs/Monsters/Orcs/an orc warrior.prefab
+    m_Address: an orc warrior
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f03e10c73f30b4ab4aa8ea8f1cc16d36
-    m_Address: Assets/Prefabs/Shared/Models/EthanCharacter/Animation/HumanoidMidAir.fbx
+    m_Address: HumanoidMidAir
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f2bed5dc5afacff44a00de8daae9703b
-    m_Address: Assets/Prefabs/Shared/Models/EthanCharacter/Animation/HumanoidRunTurnSharp.fbx
+    m_Address: HumanoidRunTurnSharp
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f69ceb06ce90da94fbf1cbff95f3b7f0
-    m_Address: Assets/Prefabs/Shared/Entity/NPCs/Monsters/Orcs/an orc.prefab
+    m_Address: an orc
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f70d8da8f64f2b84d9ada31241ac8a57
-    m_Address: Assets/Prefabs/Client/UI/ColorPicker/UIColorPicker.prefab
+    m_Address: UIColorPicker
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f7377f38d08b9c84ab957eb9d610e043
-    m_Address: Assets/Prefabs/Shared/Entity/Interactables/NPCs/Interactables/Human/Banker/FemaleHumanBanker.prefab
+    m_Address: FemaleHumanBanker
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: fc146935ca6612f4a816f8e9e2ad17c1
-    m_Address: Assets/Prefabs/Client/FX/Abilities/TestBuffFX 2.prefab
+    m_Address: TestBuffFX 2
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: fe3425a466033e34ead49fcfc3204895
-    m_Address: Assets/Prefabs/Shared/Entity/Interactables/World Items/Chest/Test
-      Tunic.prefab
+    m_Address: Test Tunic
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

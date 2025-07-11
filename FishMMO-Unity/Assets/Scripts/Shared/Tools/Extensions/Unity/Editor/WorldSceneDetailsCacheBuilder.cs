@@ -10,7 +10,7 @@ namespace FishMMO.Shared
 {
 	public class WorldSceneDetailsCacheBuilder
 	{
-		[MenuItem("FishMMO/Build/Misc/Rebuild World Scene Details", priority = -9)]
+		[MenuItem("FishMMO/Build/Rebuild World Scene Details", priority = -10)]
 		public static void Rebuild()
 		{
 			// Try loading the addressable asset asynchronously
@@ -25,20 +25,20 @@ namespace FishMMO.Shared
 					WorldSceneDetailsCache worldDetailsCache = op.Result as WorldSceneDetailsCache;
 					if (worldDetailsCache != null)
 					{
-						Log.Debug($"Addressable asset loaded: {worldDetailsCache.name}");
+						UnityEngine.Debug.Log($"Addressable asset loaded: {worldDetailsCache.name}");
 						worldDetailsCache.Rebuild();
 						EditorUtility.SetDirty(worldDetailsCache);
 						AssetDatabase.SaveAssets();
 					}
 					else
 					{
-						Log.Error("Failed to cast the loaded asset to WorldSceneDetailsCache.");
+						UnityEngine.Debug.LogError("Failed to cast the loaded asset to WorldSceneDetailsCache.");
 					}
 				}
 				else
 				{
 					// If the asset failed to load, log the error and handle accordingly
-					Log.Error($"Failed to load Addressable asset: {WorldSceneDetailsCache.CACHE_FULL_PATH}");
+					UnityEngine.Debug.LogError($"Failed to load Addressable asset: {WorldSceneDetailsCache.CACHE_FULL_PATH}");
 					HandleLoadFailure();
 				}
 			};
@@ -60,7 +60,7 @@ namespace FishMMO.Shared
 				AddressableAssetSettings settings = AddressableAssetSettingsDefaultObject.Settings;
 				if (settings == null)
 				{
-					Log.Error("Addressable Asset Settings not found.");
+					UnityEngine.Debug.LogError("Addressable Asset Settings not found.");
 					return;
 				}
 
@@ -68,7 +68,7 @@ namespace FishMMO.Shared
 				if (entry == null)
 				{
 					entry = settings.CreateOrMoveEntry(AssetDatabase.AssetPathToGUID(WorldSceneDetailsCache.CACHE_FULL_PATH), settings.DefaultGroup);
-					Log.Debug($"Asset '{WorldSceneDetailsCache.CACHE_FULL_PATH}' added to Addressables.");
+					UnityEngine.Debug.Log($"Asset '{WorldSceneDetailsCache.CACHE_FULL_PATH}' added to Addressables.");
 				}
 
 				EditorUtility.SetDirty(settings);
@@ -78,7 +78,7 @@ namespace FishMMO.Shared
 			catch (Exception ex)
 			{
 				// Log any error that occurs during asset creation
-				Log.Error($"Error during asset creation: {ex.Message}");
+				UnityEngine.Debug.LogError($"Error during asset creation: {ex.Message}");
 			}
 		}
 	}

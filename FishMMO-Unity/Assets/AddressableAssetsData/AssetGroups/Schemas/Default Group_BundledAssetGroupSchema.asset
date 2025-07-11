@@ -43,5 +43,5 @@ MonoBehaviour:
     m_ClassName: UnityEngine.ResourceManagement.ResourceProviders.AssetBundleProvider
   m_UseDefaultSchemaSettings: 0
   m_SelectedPathPairIndex: 0
-  m_BundleNaming: 0
+  m_BundleNaming: 1
   m_AssetLoadMode: 0

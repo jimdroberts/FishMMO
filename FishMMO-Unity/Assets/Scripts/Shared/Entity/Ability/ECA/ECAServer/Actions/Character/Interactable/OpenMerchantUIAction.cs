@@ -1,6 +1,7 @@
 using FishMMO.Shared;
 using FishNet.Transporting;
 using UnityEngine;
+using FishMMO.Logging;
 
 namespace FishMMO.Server
 {
@@ -11,7 +12,7 @@ namespace FishMMO.Server
         {
             if (!eventData.TryGet(out InteractableEventData interactableEventData))
             {
-                Log.Error("OpenMerchantUIAction: Missing InteractableEventData.");
+                Log.Error("OpenMerchantUIAction", "Missing InteractableEventData.");
                 return;
             }
 
@@ -21,7 +22,7 @@ namespace FishMMO.Server
 
             if (character == null || character.Owner == null || merchant == null || merchant.Template == null || interactableEventData.SceneObject == null)
             {
-                Log.Warning("OpenMerchantUIAction: Invalid character, owner, merchant, template, or scene object for broadcast.");
+                Log.Warning("OpenMerchantUIAction", "Invalid character, owner, merchant, template, or scene object for broadcast.");
                 return;
             }
             
@@ -32,7 +33,7 @@ namespace FishMMO.Server
                 TemplateID = merchant.Template.ID,
             }, true, Channel.Reliable);
 
-            Log.Debug($"Merchant UI broadcasted to {character.Name} for InteractableID: {interactableEventData.SceneObject.ID} (TemplateID: {merchant.Template.ID}).");
+            Log.Debug("OpenMerchantUIAction", $"Merchant UI broadcasted to {character.Name} for InteractableID: {interactableEventData.SceneObject.ID} (TemplateID: {merchant.Template.ID}).");
         }
     }
 }

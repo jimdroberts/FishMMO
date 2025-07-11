@@ -7,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -438,7 +439,7 @@ namespace FishMMO.Shared
 			// If we have an interrupt queued
 			if (activationData.ActivationFlags.IsFlagged(AbilityActivationFlags.Interrupt))
 			{
-				Log.Debug("Interrupting");
+				Log.Debug("AbilityController", "Interrupting");
 				OnInterrupt?.Invoke();
 				Cancel();
 				return;

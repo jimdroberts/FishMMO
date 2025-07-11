@@ -1,4 +1,5 @@
 using UnityEngine;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -30,7 +31,7 @@ namespace FishMMO.Shared
 
 				if (abilityObject == null)
 				{
-					Log.Warning($"HitCountCondition: No AbilityObject found in HitEventData for initiator {initiator?.Name}.");
+					Log.Warning("HitCountCondition", $"No AbilityObject found in HitEventData for initiator {initiator?.Name}.");
 					return false;
 				}
 
@@ -50,14 +51,14 @@ namespace FishMMO.Shared
 					case HitCountComparisonType.NotEqualTo:
 						return abilityObject.HitCount != RequiredHitCount;
 					default:
-						Log.Error($"HitCountCondition: Unknown ComparisonType {ComparisonType}.");
+						Log.Error("HitCountCondition", $"Unknown ComparisonType {ComparisonType}.");
 						return false;
 				}
 			}
 			else
 			{
 				// This condition only makes sense for HitEventData as it requires an AbilityObject
-				Log.Warning($"HitCountCondition: EventData is not of type HitEventData for initiator {initiator?.Name}.");
+				Log.Warning("HitCountCondition", $"EventData is not of type HitEventData for initiator {initiator?.Name}.");
 				return false;
 			}
 		}

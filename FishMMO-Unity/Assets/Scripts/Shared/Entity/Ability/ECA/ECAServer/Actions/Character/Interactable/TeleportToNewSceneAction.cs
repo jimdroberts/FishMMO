@@ -1,4 +1,5 @@
 using FishMMO.Shared;
+using FishMMO.Logging;
 using UnityEngine;
 
 namespace FishMMO.Server
@@ -10,7 +11,7 @@ namespace FishMMO.Server
         {
             if (!eventData.TryGet(out InteractableEventData interactableEventData))
             {
-                Log.Error("TeleportToNewSceneAction: Missing InteractableEventData.");
+                Log.Error("TeleportToNewSceneAction", "Missing InteractableEventData.");
                 return;
             }
 
@@ -22,7 +23,7 @@ namespace FishMMO.Server
             
             if (character == null || interactableEventData.SceneObject == null || interactableEventData.SceneObject.GameObject == null)
             {
-                Log.Warning("TeleportToNewSceneAction: Invalid character or scene object for scene teleport.");
+                Log.Warning("TeleportToNewSceneAction", "Invalid character or scene object for scene teleport.");
                 return;
             }
             
@@ -30,7 +31,7 @@ namespace FishMMO.Server
             
             // Perform the scene change teleport
             character.Teleport(targetSceneName);
-            Log.Debug($"Character {character.Name} initiated teleport to new scene: {targetSceneName}.");
+            Log.Debug("TeleportToNewSceneAction", $"Character {character.Name} initiated teleport to new scene: {targetSceneName}.");
         }
     }
 }

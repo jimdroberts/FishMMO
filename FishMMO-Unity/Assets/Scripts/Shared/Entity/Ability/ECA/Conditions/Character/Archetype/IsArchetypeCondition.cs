@@ -1,4 +1,5 @@
 using UnityEngine;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -11,12 +12,12 @@ namespace FishMMO.Shared
 		{
 			if (initiator == null)
 			{
-				Log.Warning($"Character does not exist.");
+				Log.Warning("IsArchetypeCondition", $"Character does not exist.");
 				return false;
 			}
 			if (!initiator.TryGet(out IArchetypeController archetypeController))
 			{
-				Log.Warning($"Character does not have an IArchetypeController.");
+				Log.Warning("IsArchetypeCondition", $"Character does not have an IArchetypeController.");
 				return false;
 			}
 

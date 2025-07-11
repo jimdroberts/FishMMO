@@ -1,4 +1,5 @@
 using FishMMO.Shared;
+using FishMMO.Logging;
 using UnityEngine;
 
 namespace FishMMO.Server.Conditions
@@ -15,14 +16,14 @@ namespace FishMMO.Server.Conditions
 			// This is crucial because it holds the health attribute.
 			if (!initiator.TryGet(out CharacterAttributeController attributeController))
 			{
-				Log.Warning($"IsCharacterAliveCondition: Initiator '{initiator?.Name}' does not have a CharacterAttributeController. Condition failed.");
+				Log.Warning("IsCharacterAliveCondition", $"Initiator '{initiator?.Name}' does not have a CharacterAttributeController. Condition failed.");
 				return false;
 			}
 
 			// Next, try to get the Health Resource Attribute from the controller.
 			if (!attributeController.TryGetHealthAttribute(out CharacterResourceAttribute healthAttribute))
 			{
-				Log.Warning($"IsCharacterAliveCondition: Character '{initiator?.Name}' does not have a Health Resource Attribute. Condition failed.");
+				Log.Warning("IsCharacterAliveCondition", $"Character '{initiator?.Name}' does not have a Health Resource Attribute. Condition failed.");
 				return false;
 			}
 
@@ -37,7 +38,7 @@ namespace FishMMO.Server.Conditions
 				string status = isAlive ? "is alive" : "is dead (health <= 0)";
 				string invertedText = InvertResult ? " (inverted check)" : "";
 
-				Log.Debug($"IsCharacterAliveCondition: Character '{initiator?.Name}' failed alive check. Status: {status}{invertedText}.");
+				Log.Debug("IsCharacterAliveCondition", $"Character '{initiator?.Name}' failed alive check. Status: {status}{invertedText}.");
 			}
 
 			return finalResult;

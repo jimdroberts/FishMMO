@@ -1,4 +1,5 @@
 using UnityEngine;
+using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
@@ -16,19 +17,19 @@ namespace FishMMO.Shared
 		{
 			if (initiator == null)
 			{
-				Log.Warning("HasEquippedItemCondition: Initiator is null.");
+				Log.Warning("HasEquippedItemCondition", "Initiator is null.");
 				return false;
 			}
 
 			if (!initiator.TryGet(out EquipmentController equipmentController))
 			{
-				Log.Warning("HasEquippedItemCondition: Initiator does not have an EquipmentController.");
+				Log.Warning("HasEquippedItemCondition", "Initiator does not have an EquipmentController.");
 				return false;
 			}
 
 			if (ItemTemplate == null)
 			{
-				Log.Warning("HasEquippedItemCondition: ItemTemplate is null.");
+				Log.Warning("HasEquippedItemCondition", "ItemTemplate is null.");
 				return false;
 			}
 

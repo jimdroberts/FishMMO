@@ -1,4 +1,5 @@
 using FishMMO.Shared;
+using FishMMO.Logging;
 using UnityEngine;
 
 namespace FishMMO.Server
@@ -11,13 +12,13 @@ namespace FishMMO.Server
             IPlayerCharacter character = initiator as IPlayerCharacter;
             if (character == null)
             {
-                Log.Warning("IsNotTeleportingCondition: Initiator is not an IPlayerCharacter.");
+                Log.Warning("IsTeleportingCondition", "Initiator is not an IPlayerCharacter.");
                 return false;
             }
 
             if (character.IsTeleporting)
             {
-                Log.Debug($"IsNotTeleportingCondition: Character {character.Name} is already teleporting.");
+                Log.Debug("IsTeleportingCondition", $"Character {character.Name} is already teleporting.");
                 return true;
             }
             return true;

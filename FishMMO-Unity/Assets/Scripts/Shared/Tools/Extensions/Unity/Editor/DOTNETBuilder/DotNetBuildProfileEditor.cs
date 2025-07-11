@@ -77,7 +77,7 @@ namespace FishMMO.Shared
 			AssetDatabase.CreateAsset(newSettings, path);
 			AssetDatabase.SaveAssets();
 			AssetDatabase.Refresh();
-			Log.Debug($"Created new DotNetBuildSettings asset at: {path}");
+			Debug.Log($"Created new DotNetBuildSettings asset at: {path}");
 			return newSettings;
 		}
 	}

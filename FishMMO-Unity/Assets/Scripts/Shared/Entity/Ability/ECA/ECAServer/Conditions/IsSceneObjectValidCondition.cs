@@ -1,5 +1,6 @@
 using FishMMO.Shared;
 using UnityEngine;
+using FishMMO.Logging;
 
 namespace FishMMO.Server
 {
@@ -10,14 +11,14 @@ namespace FishMMO.Server
         {
             if (!eventData.TryGet(out InteractableEventData interactableEventData))
             {
-                Log.Error("IsSceneObjectValidCondition: Missing InteractableEventData.");
+                Log.Error("IsSceneObjectValidCondition", "Missing InteractableEventData.");
                 return false;
             }
 
             if (interactableEventData.SceneObject == null ||
 				interactableEventData.SceneObject.GameObject == null)
             {
-                Log.Warning($"IsSceneObjectValidCondition: SceneObject is missing or invalid.");
+                Log.Warning("IsSceneObjectValidCondition", "SceneObject is missing or invalid.");
                 return false;
             }
             return true;

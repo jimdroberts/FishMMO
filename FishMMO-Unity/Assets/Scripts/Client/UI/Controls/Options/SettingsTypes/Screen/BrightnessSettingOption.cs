@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using FishMMO.Shared;
+using FishMMO.Logging;
 
 namespace FishMMO.Client
 {
@@ -14,7 +15,7 @@ namespace FishMMO.Client
 		{
 			if (BrightnessSlider == null)
 			{
-				Log.Error("BrightnessSettingsOption: Slider is missing.");
+				Log.Error("BrightnessSettingsOption", "Slider is missing.");
 			}
 			else
 			{

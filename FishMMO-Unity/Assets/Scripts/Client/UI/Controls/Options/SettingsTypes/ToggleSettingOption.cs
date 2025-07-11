@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using FishMMO.Shared;
+using FishMMO.Logging;
 
 namespace FishMMO.Client
 {
@@ -14,11 +15,11 @@ namespace FishMMO.Client
 		{
 			if (string.IsNullOrEmpty(ToggleKey))
 			{
-				Log.Error($"ToggleKey cannot be null on {gameObject.name}!");
+				Log.Error("ToggleSettingOption", $"ToggleKey cannot be null on {gameObject.name}!");
 			}
 			if (Toggle == null)
 			{
-				Log.Error("ToggleSettingOption: Toggle is missing.");
+				Log.Error("ToggleSettingOption", "Toggle is missing.");
 			}
 			else
 			{
