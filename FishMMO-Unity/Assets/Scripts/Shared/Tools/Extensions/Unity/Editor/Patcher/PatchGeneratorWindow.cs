@@ -607,15 +607,15 @@ namespace FishMMO.Patcher
 
 			ConcurrentBag<string> tempPatchFilesToCleanUp = new ConcurrentBag<string>();
 
-			Log.Info("Patcher", $"[{oldDirName}] Generating patch: {patchFileName}");
+			Log.Info("Patcher", $"Generating patch: {patchFileName}");
 
 			try
 			{
-				Log.Info("Patcher", $"[{oldDirName}] Scanning Latest Files for hashes (ignoring {ignoredExtensions.Count} extensions and {ignoredDirectories.Count} directories)...");
+				Log.Info("Patcher", $"Scanning Latest Files for hashes (ignoring {ignoredExtensions.Count} extensions and {ignoredDirectories.Count} directories)...");
 				Dictionary<string, (string relativePath, string hash)> latestFilesWithHashes = GetAllFilesWithHashes(latestClientDirectory, ignoredExtensions, ignoredDirectories);
 				HashSet<string> latestFileRelativePaths = DictionaryKeysToHashSet(latestFilesWithHashes);
 
-				Log.Info("Patcher", $"[{oldDirName}] Scanning Old Files for hashes (ignoring {ignoredExtensions.Count} extensions and {ignoredDirectories.Count} directories)...");
+				Log.Info("Patcher", $"Scanning Old Files for hashes (ignoring {ignoredExtensions.Count} extensions and {ignoredDirectories.Count} directories)...");
 				Dictionary<string, (string relativePath, string hash)> oldFilesWithHashes = GetAllFilesWithHashes(oldDirectory, ignoredExtensions, ignoredDirectories);
 				HashSet<string> oldFileRelativePaths = DictionaryKeysToHashSet(oldFilesWithHashes);
 
@@ -630,7 +630,7 @@ namespace FishMMO.Patcher
 				foreach (var deletedFilePath in filesToDelete)
 				{
 					deletedFilesData.Add(new DeletedFileEntry { RelativePath = deletedFilePath });
-					Log.Info("Patcher", $"[{oldDirName}] \tIdentified for deletion: {deletedFilePath}");
+					Log.Info("Patcher", $"\tIdentified for deletion: {deletedFilePath}");
 				}
 
 				progressCallback?.Invoke(0.4f, "Generating file diffs for modified files...");
@@ -659,16 +659,16 @@ namespace FishMMO.Patcher
 									PatchDataEntryName = $"patches/{comparedRelativePath.Replace('\\', '/')}.bin",
 									TempPatchFilePath = tempPatchFile
 								});
-								Log.Info("Patcher", $"[{oldDirName}] \tGenerated patch for modified: {comparedRelativePath} (written to temp file)");
+								Log.Info("Patcher", $"\tGenerated patch for modified: {comparedRelativePath} (written to temp file)");
 							}
 							catch (Exception ex)
 							{
-								Log.Error("Patcher", $"[{oldDirName}] \tError writing patch for {comparedRelativePath} to temp file: {ex.Message}");
+								Log.Error("Patcher", $"\tError writing patch for {comparedRelativePath} to temp file: {ex.Message}");
 							}
 						}
 						else
 						{
-							Log.Info("Patcher", $"[{oldDirName}] \tFiles are identical, no patch generated for: {comparedRelativePath}");
+							Log.Info("Patcher", $"\tFiles are identical, no patch generated for: {comparedRelativePath}");
 						}
 					}
 				});
@@ -682,7 +682,7 @@ namespace FishMMO.Patcher
 						NewHash = latestFilesWithHashes[newRelativePath].hash,
 						FileDataEntryName = $"new_files/{newRelativePath.Replace('\\', '/')}"
 					});
-					Log.Info("Patcher", $"[{oldDirName}] \tPrepared metadata for new file: {newRelativePath}");
+					Log.Info("Patcher", $"\tPrepared metadata for new file: {newRelativePath}");
 				});
 
 				PatchManifest manifest = new PatchManifest
@@ -708,7 +708,7 @@ namespace FishMMO.Patcher
 						{
 							entryStream.Write(manifestBytes, 0, manifestBytes.Length);
 						}
-						Log.Info("Patcher", $"[{oldDirName}] \tAdded manifest.json to ZIP.");
+						Log.Info("Patcher", $"\tAdded manifest.json to ZIP.");
 
 						foreach (var entry in modifiedFilesData)
 						{
@@ -720,11 +720,11 @@ namespace FishMMO.Patcher
 								{
 									sourcePatchStream.CopyTo(entryStream);
 								}
-								Log.Info("Patcher", $"[{oldDirName}] \tAdded patch data for {entry.RelativePath} to ZIP by streaming from temp file.");
+								Log.Info("Patcher", $"\tAdded patch data for {entry.RelativePath} to ZIP by streaming from temp file.");
 							}
 							else
 							{
-								Log.Warning("Patcher", $"[{oldDirName}] \tTemporary patch file not found for {entry.RelativePath}, skipping ZIP addition.");
+								Log.Warning("Patcher", $"\tTemporary patch file not found for {entry.RelativePath}, skipping ZIP addition.");
 							}
 						}
 
@@ -739,11 +739,11 @@ namespace FishMMO.Patcher
 								{
 									sourceFileStream.CopyTo(entryStream);
 								}
-								Log.Info("Patcher", $"[{oldDirName}] \tAdded new file data for {entry.RelativePath} to ZIP by streaming.");
+								Log.Info("Patcher", $"\tAdded new file data for {entry.RelativePath} to ZIP by streaming.");
 							}
 							else
 							{
-								Log.Warning("Patcher", $"[{oldDirName}] \tNew file not found at {fullFilePath}, skipping ZIP addition.");
+								Log.Warning("Patcher", $"\tNew file not found at {fullFilePath}, skipping ZIP addition.");
 							}
 						}
 					}
@@ -751,12 +751,12 @@ namespace FishMMO.Patcher
 
 				progressCallback?.Invoke(0.95f, "Finalizing patch file...");
 				File.Move(tempZipFilePath, patchFilePath);
-				Log.Info("Patcher", $"[{oldDirName}] Patch build completed: {patchFileName}");
+				Log.Info("Patcher", $"Patch build completed: {patchFileName}");
 				progressCallback?.Invoke(1.0f, "Completed!");
 			}
 			catch (Exception ex)
 			{
-				Log.Error("Patcher", $"[{oldDirName}] Error generating patch for '{oldDirectory}': {ex.Message}", ex);
+				Log.Error("Patcher", $"Error generating patch for '{oldDirectory}': {ex.Message}", ex);
 				if (File.Exists(tempZipFilePath))
 				{
 					File.Delete(tempZipFilePath);
@@ -772,12 +772,12 @@ namespace FishMMO.Patcher
 						if (File.Exists(tempFile))
 						{
 							File.Delete(tempFile);
-							Log.Info("Patcher", $"[{oldDirName}] \tCleaned up temporary patch file: {tempFile}");
+							Log.Info("Patcher", $"\tCleaned up temporary patch file: {tempFile}");
 						}
 					}
 					catch (Exception ex)
 					{
-						Log.Error("Patcher", $"[{oldDirName}] \tError cleaning up temporary file {tempFile}: {ex.Message}");
+						Log.Error("Patcher", $"\tError cleaning up temporary file {tempFile}: {ex.Message}");
 					}
 				}
 			}
