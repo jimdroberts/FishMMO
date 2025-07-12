@@ -92,11 +92,14 @@ namespace FishMMO.Patcher
 		{
 			// --- Header ---
 			GUILayout.Label("FishMMO Client Patch Generator", EditorStyles.boldLabel);
+
+			EditorGUILayout.Space();
 			EditorGUILayout.Space();
 
 			// --- Latest Client Directory Selection ---
+			GUILayout.Label("Latest Client Directory", EditorStyles.boldLabel);
 			EditorGUILayout.BeginHorizontal();
-			latestClientDirectory = EditorGUILayout.TextField("Latest Client Directory", latestClientDirectory);
+			latestClientDirectory = EditorGUILayout.TextField("", latestClientDirectory);
 			if (GUILayout.Button("Browse", GUILayout.Width(80)))
 			{
 				string selectedPath = EditorUtility.OpenFolderPanel("Select Latest Client Build Directory", latestClientDirectory, "");
@@ -108,6 +111,8 @@ namespace FishMMO.Patcher
 			EditorGUILayout.EndHorizontal();
 
 			EditorGUILayout.Space();
+			EditorGUILayout.Space();
+
 			GUILayout.Label("Old Client(s) Selection", EditorStyles.boldLabel);
 			EditorGUILayout.HelpBox("Choose whether to generate patches from a single old client or multiple clients within a root directory.", MessageType.Info);
 
@@ -131,7 +136,7 @@ namespace FishMMO.Patcher
 			if (generateMultipleClientsMode)
 			{
 				EditorGUILayout.BeginHorizontal();
-				oldClientsRootDirectory = EditorGUILayout.TextField("Root of Old Clients", oldClientsRootDirectory);
+				oldClientsRootDirectory = EditorGUILayout.TextField("", oldClientsRootDirectory);
 				if (GUILayout.Button("Browse", GUILayout.Width(80)))
 				{
 					string selectedPath = EditorUtility.OpenFolderPanel("Select Root Directory Containing Old Client Builds", oldClientsRootDirectory, "");
@@ -146,7 +151,7 @@ namespace FishMMO.Patcher
 			else // Single client mode
 			{
 				EditorGUILayout.BeginHorizontal();
-				singleOldClientDirectory = EditorGUILayout.TextField("Single Old Client Directory", singleOldClientDirectory);
+				singleOldClientDirectory = EditorGUILayout.TextField("", singleOldClientDirectory);
 				if (GUILayout.Button("Browse", GUILayout.Width(80)))
 				{
 					string selectedPath = EditorUtility.OpenFolderPanel("Select a Single Old Client Build Directory", singleOldClientDirectory, "");
@@ -160,10 +165,12 @@ namespace FishMMO.Patcher
 			}
 
 			EditorGUILayout.Space();
+			EditorGUILayout.Space();
 
 			// --- Patch Output Directory Selection ---
+			GUILayout.Label("Patch Output Directory", EditorStyles.boldLabel);
 			EditorGUILayout.BeginHorizontal();
-			patchOutputDirectory = EditorGUILayout.TextField("Patch Output Directory", patchOutputDirectory);
+			patchOutputDirectory = EditorGUILayout.TextField("", patchOutputDirectory);
 			if (GUILayout.Button("Browse", GUILayout.Width(80)))
 			{
 				string selectedPath = EditorUtility.OpenFolderPanel("Select Patch Output Directory", patchOutputDirectory, "");
@@ -174,24 +181,47 @@ namespace FishMMO.Patcher
 			}
 			EditorGUILayout.EndHorizontal();
 
+			EditorGUILayout.Space();
+			EditorGUILayout.Space();
+
 			// --- Ignored Extensions Configuration ---
+			GUILayout.Label("Ignored File Extensions", EditorStyles.boldLabel);
+			EditorGUILayout.HelpBox("Files with these extensions will be ignored during hash calculation and patch generation. Example: .cfg, .log, .tmp", MessageType.Info);
 			EditorGUI.BeginChangeCheck();
-			ignoredExtensionsInput = EditorGUILayout.TextField("Ignored File Extensions (comma-separated)", ignoredExtensionsInput);
+			ignoredExtensionsInput = EditorGUILayout.TextField("", ignoredExtensionsInput);
 			if (EditorGUI.EndChangeCheck())
 			{
 				UpdateIgnoredExtensionsSet();
 			}
-			EditorGUILayout.HelpBox("Files with these extensions will be ignored during hash calculation and patch generation. Example: .cfg, .log, .tmp", MessageType.Info);
+
+			EditorGUILayout.Space();
+			EditorGUILayout.Space();
 
 			// --- Ignored Directories Configuration ---
+			GUILayout.Label("Ignored Directories", EditorStyles.boldLabel);
+			EditorGUILayout.HelpBox("Directories with these names will be completely skipped during file scanning. Example: MyTempFolder, DebugInfo", MessageType.Info);
 			EditorGUI.BeginChangeCheck();
-			ignoredDirectoriesInput = EditorGUILayout.TextField("Ignored Directories (comma-separated)", ignoredDirectoriesInput);
+			ignoredDirectoriesInput = EditorGUILayout.TextField("", ignoredDirectoriesInput);
 			if (EditorGUI.EndChangeCheck())
 			{
 				UpdateIgnoredDirectoriesSet();
 			}
-			EditorGUILayout.HelpBox("Directories with these names will be completely skipped during file scanning. Example: MyTempFolder, DebugInfo", MessageType.Info);
 
+			EditorGUILayout.Space();
+			EditorGUILayout.Space();
+
+			// --- Generate Client File Manifest Button ---
+			GUILayout.Label("Generate Client File Manifest", EditorStyles.boldLabel);
+			EditorGUILayout.HelpBox("Generates a manifest (JSON) of all files and their checksums in the Latest Client Directory. This can be used for full client verification.", MessageType.Info);
+			EditorGUI.BeginDisabledGroup(isProcessing);
+			if (GUILayout.Button("Generate Client File Manifest", GUILayout.Height(40)))
+			{
+				GenerateCompleteManifestAsync();
+			}
+			EditorGUI.EndDisabledGroup();
+			EditorGUILayout.LabelField("Status:", manifestGenerationStatus);
+
+			EditorGUILayout.Space();
 			EditorGUILayout.Space();
 
 			// --- Generate Patches Button ---
@@ -201,18 +231,6 @@ namespace FishMMO.Patcher
 				GeneratePatchesAsync(); // Call the async method
 			}
 			EditorGUI.EndDisabledGroup();
-
-			EditorGUILayout.Space();
-			GUILayout.Label("Generate Complete Manifest:", EditorStyles.boldLabel);
-			EditorGUILayout.HelpBox("Generates a manifest (JSON) of all files and their checksums in the Latest Client Directory. This can be used for full client verification.", MessageType.Info);
-			EditorGUI.BeginDisabledGroup(isProcessing);
-			if (GUILayout.Button("Generate Client File Manifest", GUILayout.Height(30)))
-			{
-				GenerateCompleteManifestAsync();
-			}
-			EditorGUI.EndDisabledGroup();
-			EditorGUILayout.LabelField("Status:", manifestGenerationStatus);
-
 
 			EditorGUILayout.Space();
 			GUILayout.Label("Patch Generation Progress:", EditorStyles.boldLabel);
@@ -903,7 +921,7 @@ namespace FishMMO.Patcher
 		}
 
 		/// <summary>
-		/// Recursively scans a directory and its subdirectories to get all file paths and their SHA256 hashes.
+		/// Recursively scans a directory and its subdirectories to get all file paths and their MD5 hashes.
 		/// Files and directories specified in the 'ignoredExtensions' and 'ignoredDirectories' sets are skipped.
 		/// This method handles common file system access errors gracefully.
 		/// </summary>
@@ -927,7 +945,7 @@ namespace FishMMO.Patcher
 
 			directories.Push(normalizedRootDirectory); // Start the traversal from the normalized root directory.
 
-			using (var sha256 = SHA256.Create())
+			using (var md5 = MD5.Create()) // Use MD5 for hashing
 			{
 				while (directories.Count > 0)
 				{
@@ -962,7 +980,7 @@ namespace FishMMO.Patcher
 
 							//Log.Debug("Patcher", $"\tProcessing file: '{file}' -> Relative Path: '{relativePath}'");
 
-							string fileHash = ComputeFileHash(file, sha256);
+							string fileHash = ComputeFileHash(file, md5); // Pass MD5 instance
 							filesWithHashes.Add(relativePath, (relativePath, fileHash));
 						}
 					}
@@ -1012,11 +1030,17 @@ namespace FishMMO.Patcher
 			return filesWithHashes;
 		}
 
-		private static string ComputeFileHash(string filePath, SHA256 sha256)
+		/// <summary>
+		/// Computes the MD5 hash of a file.
+		/// </summary>
+		/// <param name="filePath">The path to the file.</param>
+		/// <param name="md5">The MD5 hash algorithm instance to use.</param>
+		/// <returns>The MD5 hash as a lowercase hexadecimal string.</returns>
+		private static string ComputeFileHash(string filePath, MD5 md5)
 		{
 			using (var stream = File.OpenRead(filePath))
 			{
-				byte[] hashBytes = sha256.ComputeHash(stream);
+				byte[] hashBytes = md5.ComputeHash(stream);
 				return BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
 			}
 		}

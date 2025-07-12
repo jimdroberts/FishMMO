@@ -630,19 +630,19 @@ class Program
 	}
 
 	/// <summary>
-	/// Computes the SHA256 hash of a file.
+	/// Computes the MD5 hash of a file.
 	/// </summary>
 	/// <param name="filePath">The path to the file.</param>
-	/// <returns>The SHA256 hash as a lowercase hexadecimal string, or null if the file does not exist.</returns>
+	/// <returns>The MD5 hash as a lowercase hexadecimal string, or null if the file does not exist.</returns>
 	private static string ComputeFileHash(string filePath)
 	{
 		if (!File.Exists(filePath)) return null;
 
-		using (var sha256 = SHA256.Create())
+		using (var md5 = MD5.Create())
 		{
 			using (var stream = File.OpenRead(filePath))
 			{
-				byte[] hashBytes = sha256.ComputeHash(stream);
+				byte[] hashBytes = md5.ComputeHash(stream);
 				return BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
 			}
 		}

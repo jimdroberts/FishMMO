@@ -47,7 +47,7 @@ namespace FishMMO.Client
 			if (Configuration == null)
 			{
 				Configuration = new Configuration(Constants.GetWorkingDirectory());
-				if (!Configuration.Load("UIConfiguration" + Configuration.EXTENSION))
+				if (!Configuration.Load("UIConfiguration"))
 				{
 					// if we failed to load the file.. save a new one
 					Configuration.Set("PrimaryColorR", "44");
