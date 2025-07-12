@@ -651,13 +651,17 @@ namespace FishMMO.Patcher
 								File.WriteAllBytes(tempPatchFile, patchDataBytes);
 								tempPatchFilesToCleanUp.Add(tempPatchFile);
 
+								// Get the final file size from the new file
+								long finalFileSize = new FileInfo(newFullFilePath).Length;
+
 								modifiedFilesData.Add(new ModifiedFileEntry
 								{
 									RelativePath = comparedRelativePath,
 									OldHash = oldFilesWithHashes[comparedRelativePath].hash,
 									NewHash = latestFilesWithHashes[comparedRelativePath].hash,
 									PatchDataEntryName = $"patches/{comparedRelativePath.Replace('\\', '/')}.bin",
-									TempPatchFilePath = tempPatchFile
+									TempPatchFilePath = tempPatchFile,
+									FinalFileSize = finalFileSize // Populate the new property
 								});
 								Log.Info("Patcher", $"\tGenerated patch for modified: {comparedRelativePath} (written to temp file)");
 							}

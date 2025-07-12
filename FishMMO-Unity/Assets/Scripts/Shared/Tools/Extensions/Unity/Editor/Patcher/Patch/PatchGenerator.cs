@@ -1,20 +1,25 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using FishMMO.Logging;
 
 namespace FishMMO.Patcher
 {
+	/// <summary>
+	/// Generates binary patch data for a file by comparing an old version and a new version.
+	/// It breaks files into chunks and identifies the smallest differing segments within each chunk.
+	/// </summary>
 	public class PatchGenerator
 	{
-		private const int ChunkSize = 65535; // 65KB chunk size
+		private const int ChunkSize = 65536; // Define the fixed size for processing file chunks (64KB).
 
 		/// <summary>
 		/// Generates binary patch data for a single file by comparing an old and new version.
-		/// The patch data includes metadata for each changed chunk.
+		/// The generated patch data describes the changes needed to transform oldFilePath into newFilePath.
 		/// </summary>
-		/// <param name="oldFilePath">Path to the old version of the file.</param>
-		/// <param name="newFilePath">Path to the new version of the file.</param>
-		/// <returns>A byte array containing the serialized patch metadata for the file, or an empty array if no changes or an error occurred.</returns>
+		/// <param name="oldFilePath">The path to the original (old) version of the file.</param>
+		/// <param name="newFilePath">The path to the updated (new) version of the file.</param>
+		/// <returns>A byte array containing the binary patch data, or an empty array if generation fails.</returns>
 		public byte[] Generate(string oldFilePath, string newFilePath)
 		{
 			try
@@ -25,148 +30,193 @@ namespace FishMMO.Patcher
 					using (FileStream oldFile = File.OpenRead(oldFilePath))
 					using (FileStream newFile = File.OpenRead(newFilePath))
 					{
-						long fileSize = Math.Max(oldFile.Length, newFile.Length);
+						long fileSize = newFile.Length;
 						int numChunks = (int)Math.Ceiling((double)fileSize / ChunkSize);
 
+						Log.Debug("PatchGenerator", $"Generating patch for '{oldFilePath}' to '{newFilePath}'. New file size: {fileSize} bytes. Number of chunks: {numChunks}");
+
+						long lastOffset = -1;
+						long lastLength = 0;
+						List<byte> lastNewBytes = null;
+
+						// Iterate through each chunk of the new file to find differences.
 						for (int i = 0; i < numChunks; i++)
 						{
-							byte[] oldChunk = ReadChunk(oldFile, i);
-							byte[] newChunk = ReadChunk(newFile, i);
+							// Read corresponding chunks from both old and new files.
+							byte[] oldChunk = ReadChunk(oldFile, i) ?? Array.Empty<byte>();
+							byte[] newChunk = ReadChunk(newFile, i) ?? Array.Empty<byte>();
 
-							if (oldChunk != null && newChunk != null)
+							// Generate patch metadata (differences) for the current chunk pair.
+							List<PatchMetadata> patches = GenerateMetadata(oldChunk, newChunk, (long)i * ChunkSize);
+
+							foreach (var patch in patches)
 							{
-								var patchMetadata = GenerateMetadata(oldChunk, newChunk, i * ChunkSize);
-								if (patchMetadata.Length > 0 || patchMetadata.NewBytes.Length > 0) // Only write if there's an actual change
+								// Attempt to coalesce the current patch with the previous one if they are contiguous.
+								if (lastOffset >= 0 && lastOffset + lastLength == patch.Offset)
 								{
-									WritePatchMetadata(writer, patchMetadata);
+									lastLength += patch.Length;
+									if (patch.NewBytes?.Length > 0)
+										lastNewBytes.AddRange(patch.NewBytes);
+								}
+								else
+								{
+									// If not contiguous, write the previously coalesced patch to the stream.
+									if (lastOffset >= 0)
+									{
+										WritePatchMetadata(writer, new PatchMetadata
+										{
+											Offset = lastOffset,
+											Length = (int)lastLength,
+											NewBytes = lastNewBytes?.ToArray() ?? Array.Empty<byte>()
+										});
+									}
+
+									// Start a new coalescing region with the current patch.
+									lastOffset = patch.Offset;
+									lastLength = patch.Length;
+									lastNewBytes = new List<byte>(patch.NewBytes ?? Array.Empty<byte>());
 								}
 							}
-							else if (newChunk != null)
+						}
+
+						// After processing all chunks, write any remaining coalesced patch data.
+						if (lastOffset >= 0)
+						{
+							WritePatchMetadata(writer, new PatchMetadata
 							{
-								// This chunk is new or the old file was shorter
-								var patchMetadata = new PatchMetadata()
-								{
-									Offset = i * ChunkSize,
-									Length = 0, // Indicate insertion or new part where old didn't exist
-									NewBytes = newChunk,
-								};
-								WritePatchMetadata(writer, patchMetadata);
-							}
-							// If oldChunk is not null and newChunk is null, it means deletion beyond new file length.
-							// The current GenerateMetadata handles this by comparing up to minLength, and any remaining
-							// old data effectively means the new file is shorter. The patch applier needs to handle this by
-							// truncating or managing deletions correctly. Our current patch metadata is focused on
-							// what bytes to *replace or insert* in the new file.
+								Offset = lastOffset,
+								Length = (int)lastLength,
+								NewBytes = lastNewBytes?.ToArray() ?? Array.Empty<byte>()
+							});
 						}
 					}
-					return patchDataStream.ToArray();
+					return patchDataStream.ToArray(); // Return the complete binary patch data.
 				}
 			}
 			catch (Exception ex)
 			{
-				Log.Error("PatchGenerator", $"Failed generating patch data for '{oldFilePath}' vs '{newFilePath}': {ex.Message}");
-				// Return an empty byte array to indicate failure or no patch data generated
-				return new byte[0];
+				Log.Error("PatchGenerator", $"Failed generating patch data for '{oldFilePath}' vs '{newFilePath}': {ex.Message}\n{ex.StackTrace}");
+				return Array.Empty<byte>();
 			}
 		}
 
+		/// <summary>
+		/// Reads a specific chunk of data from a file stream.
+		/// </summary>
+		/// <param name="fileStream">The FileStream to read from.</param>
+		/// <param name="chunkIndex">The index of the chunk to read.</param>
+		/// <returns>A byte array containing the chunk data, or null if the chunk is beyond the file's end.</returns>
 		private byte[] ReadChunk(FileStream fileStream, int chunkIndex)
 		{
-			byte[] buffer = new byte[ChunkSize];
-			long offset = chunkIndex * ChunkSize;
-			if (offset >= fileStream.Length) return null; // No more data to read
+			long offset = (long)chunkIndex * ChunkSize;
+			if (offset >= fileStream.Length)
+				return null; // No more data in this chunk or beyond file end.
 
-			fileStream.Seek(offset, SeekOrigin.Begin);
-			int bytesRead = fileStream.Read(buffer, 0, ChunkSize);
-			if (bytesRead > 0)
-			{
-				Array.Resize(ref buffer, bytesRead); // Trim buffer to actual size read
-				return buffer;
-			}
-			return null;
+			int bytesToRead = (int)Math.Min(ChunkSize, fileStream.Length - offset);
+			byte[] buffer = new byte[bytesToRead];
+
+			fileStream.Seek(offset, SeekOrigin.Begin); // Position the stream to the start of the chunk.
+			int bytesRead = fileStream.Read(buffer, 0, bytesToRead);
+
+			if (bytesRead <= 0)
+				return null; // No bytes read (e.g., end of stream reached unexpectedly).
+
+			// If the last chunk is smaller than ChunkSize, resize the buffer to actual bytes read.
+			if (bytesRead != bytesToRead)
+				Array.Resize(ref buffer, bytesRead);
+
+			return buffer;
 		}
 
 		/// <summary>
-		/// Generates metadata for a patch by comparing two byte arrays (chunks).
-		/// It finds the differing segments and returns the offset within the chunk,
-		/// the length of the new data, and the new bytes.
+		/// Generates a list of PatchMetadata entries by comparing two byte arrays (chunks).
+		/// This method finds differing segments and their common prefixes/suffixes.
 		/// </summary>
-		private PatchMetadata GenerateMetadata(byte[] oldData, byte[] newData, long chunkBaseOffset)
+		/// <param name="oldData">The byte array representing the old chunk.</param>
+		/// <param name="newData">The byte array representing the new chunk.</param>
+		/// <param name="chunkBaseOffset">The absolute starting offset of this chunk within the overall file.</param>
+		/// <returns>A list of <see cref="PatchMetadata"/> objects detailing the differences.</returns>
+		private List<PatchMetadata> GenerateMetadata(byte[] oldData, byte[] newData, long chunkBaseOffset)
 		{
-			int start = 0;
-			int oldLength = oldData.Length;
-			int newLength = newData.Length;
-			int minLength = Math.Min(oldLength, newLength);
+			List<PatchMetadata> patches = new();
+			int oldPtr = 0; // Pointer for oldData.
+			int newPtr = 0; // Pointer for newData.
+			int oldLen = oldData.Length;
+			int newLen = newData.Length;
 
-			// Find the first differing byte
-			while (start < minLength && oldData[start] == newData[start])
+			while (oldPtr < oldLen || newPtr < newLen)
 			{
-				start++;
-			}
-
-			// If no difference found within minLength, check for length differences
-			if (start == minLength)
-			{
-				if (oldLength == newLength)
+				// Skip common prefix: Advance pointers as long as bytes match.
+				while (oldPtr < oldLen && newPtr < newLen && oldData[oldPtr] == newData[newPtr])
 				{
-					// Chunks are identical
-					return new PatchMetadata { Offset = chunkBaseOffset + start, Length = 0, NewBytes = new byte[0] };
+					oldPtr++;
+					newPtr++;
 				}
-				else if (newLength > oldLength)
+
+				if (oldPtr == oldLen && newPtr == newLen)
+					break; // Both pointers reached the end, no more differences in this chunk.
+
+				int diffStartOld = oldPtr; // Mark the start of the difference in oldData.
+				int diffStartNew = newPtr; // Mark the start of the difference in newData.
+
+				// Find common suffix: Pointers start from the end of their respective chunks and move inwards.
+				int suffixOldIdx = oldLen - 1;
+				int suffixNewIdx = newLen - 1;
+				int commonSuffixLength = 0;
+
+				while (suffixOldIdx >= oldPtr && suffixNewIdx >= newPtr && oldData[suffixOldIdx] == newData[suffixNewIdx])
 				{
-					// New data appended
-					byte[] bytes = new byte[newLength - start];
-					Buffer.BlockCopy(newData, start, bytes, 0, bytes.Length);
-					return new PatchMetadata { Offset = chunkBaseOffset + start, Length = 0, NewBytes = bytes };
+					commonSuffixLength++;
+					suffixOldIdx--;
+					suffixNewIdx--;
 				}
-				else // oldLength > newLength
+
+				// Calculate the length of the actual differing segments.
+				// lenOld: Length of bytes to remove/replace from oldData.
+				// lenNew: Length of bytes to insert from newData.
+				int lenOld = (suffixOldIdx - diffStartOld) + 1;
+				int lenNew = (suffixNewIdx - diffStartNew) + 1;
+
+				// Ensure lengths are not negative (can occur if a match spans an entire segment, e.g., pure insertion/deletion).
+				lenOld = Math.Max(0, lenOld);
+				lenNew = Math.Max(0, lenNew);
+
+				// Extract the new bytes for the patch.
+				byte[] newBytes = new byte[lenNew];
+				if (lenNew > 0)
+					Array.Copy(newData, diffStartNew, newBytes, 0, lenNew);
+
+				// Add the generated patch metadata to the list.
+				patches.Add(new PatchMetadata
 				{
-					// Data truncated. This patch metadata will represent the portion that *remains* up to newLength.
-					// The truncation itself needs to be handled by the patch applier based on final file size.
-					// For now, if no difference up to newLength, and newLength is smaller, no patch is generated for this segment.
-					// The patch applier will use the new file's total size.
-					return new PatchMetadata { Offset = chunkBaseOffset + start, Length = 0, NewBytes = new byte[0] };
-				}
+					Offset = chunkBaseOffset + diffStartOld, // Absolute offset in the original file.
+					Length = lenOld, // Number of bytes to effectively remove/replace from the old file.
+					NewBytes = newBytes // The actual new bytes to insert.
+				});
+
+				// Advance pointers past the detected difference and its common suffix.
+				oldPtr = diffStartOld + lenOld + commonSuffixLength;
+				newPtr = diffStartNew + lenNew + commonSuffixLength;
 			}
-
-			// Find the last differing byte (from the end)
-			int endOld = oldLength - 1;
-			int endNew = newLength - 1;
-			while (endOld >= start && endNew >= start && oldData[endOld] == newData[endNew])
-			{
-				endOld--;
-				endNew--;
-			}
-
-			// Calculate the length of the differing segment in the new data
-			int segmentLength = endNew - start + 1;
-			byte[] newBytes = new byte[Math.Max(0, segmentLength)]; // Ensure non-negative length
-
-			if (segmentLength > 0)
-			{
-				Buffer.BlockCopy(newData, start, newBytes, 0, segmentLength);
-			}
-
-			// Length in PatchMetadata indicates the count of *old* bytes that are replaced/removed.
-			// If newBytes.Length is different from this Length, it's an insertion or deletion.
-			return new PatchMetadata
-			{
-				Offset = chunkBaseOffset + start,
-				Length = endOld - start + 1, // Length of the segment in the old file that is affected
-				NewBytes = newBytes,
-			};
+			return patches;
 		}
 
-
 		/// <summary>
-		/// Writes a PatchMetadata object to a BinaryWriter.
+		/// Writes a <see cref="PatchMetadata"/> object to a <see cref="BinaryWriter"/>.
+		/// The format is: Offset (long), Length (int), NewBytes.Length (int), NewBytes (byte[]).
 		/// </summary>
-		private void WritePatchMetadata(BinaryWriter writer, PatchMetadata patchMetadata)
+		/// <param name="writer">The BinaryWriter to write to.</param>
+		/// <param name="metadata">The PatchMetadata object to write.</param>
+		/// <exception cref="InvalidOperationException">Thrown if PatchMetadata.NewBytes is null.</exception>
+		private void WritePatchMetadata(BinaryWriter writer, PatchMetadata metadata)
 		{
-			writer.Write(patchMetadata.Offset);
-			writer.Write(patchMetadata.Length); // Length of old data replaced
-			writer.Write(patchMetadata.NewBytes.Length); // Length of new data inserted
-			writer.Write(patchMetadata.NewBytes);
+			if (metadata.NewBytes == null)
+				throw new InvalidOperationException("PatchMetadata.NewBytes cannot be null.");
+
+			writer.Write(metadata.Offset);
+			writer.Write(metadata.Length);
+			writer.Write(metadata.NewBytes.Length);
+			writer.Write(metadata.NewBytes);
 		}
 	}
 }
