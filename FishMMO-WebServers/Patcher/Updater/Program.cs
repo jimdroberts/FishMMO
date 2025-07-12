@@ -22,6 +22,112 @@ class Program
 	private const int MaxFileOperationRetries = 5;
 	private const int FileOperationRetryDelayMs = 200;
 
+	/// <summary>
+	/// Helper method for robust file deletion with retries.
+	/// </summary>
+	/// <param name="path">The path of the file to delete.</param>
+	/// <param name="retries">The number of retry attempts.</param>
+	/// <returns>True if the file was successfully deleted or didn't exist, false otherwise.</returns>
+	private static bool TryDeleteFile(string path, int retries)
+	{
+		for (int i = 0; i < retries; i++)
+		{
+			try
+			{
+				if (File.Exists(path))
+				{
+					File.Delete(path);
+					lock (consoleLock)
+					{
+						Console.WriteLine($"DEBUG: Successfully deleted: '{path}' (Attempt {i + 1})");
+					}
+				}
+				return true;
+			}
+			catch (IOException ex)
+			{
+				lock (consoleLock)
+				{
+					Console.WriteLine($"WARNING: Failed to delete '{path}' (Attempt {i + 1}/{retries}). Reason: {ex.Message}");
+				}
+				Thread.Sleep(FileOperationRetryDelayMs);
+			}
+			catch (UnauthorizedAccessException ex)
+			{
+				lock (consoleLock)
+				{
+					Console.WriteLine($"ERROR: Unauthorized access when deleting '{path}'. This usually indicates permission issues. Reason: {ex.Message}");
+				}
+				return false;
+			}
+			catch (Exception ex)
+			{
+				lock (consoleLock)
+				{
+					Console.WriteLine($"ERROR: An unexpected error occurred while deleting '{path}'. Reason: {ex.Message}");
+				}
+				return false;
+			}
+		}
+		lock (consoleLock)
+		{
+			Console.WriteLine($"ERROR: Failed to delete '{path}' after {retries} attempts. Giving up.");
+		}
+		return false;
+	}
+
+	/// <summary>
+	/// Helper method for robust file move with retries.
+	/// </summary>
+	/// <param name="sourcePath">The source file path.</param>
+	/// <param name="destinationPath">The destination file path.</param>
+	/// <param name="retries">The number of retry attempts.</param>
+	/// <returns>True if the file was successfully moved, false otherwise.</returns>
+	private static bool TryMoveFile(string sourcePath, string destinationPath, int retries)
+	{
+		for (int i = 0; i < retries; i++)
+		{
+			try
+			{
+				File.Move(sourcePath, destinationPath);
+				lock (consoleLock)
+				{
+					Console.WriteLine($"DEBUG: Successfully moved '{sourcePath}' to '{destinationPath}' (Attempt {i + 1})");
+				}
+				return true;
+			}
+			catch (IOException ex)
+			{
+				lock (consoleLock)
+				{
+					Console.WriteLine($"WARNING: Failed to move '{sourcePath}' to '{destinationPath}' (Attempt {i + 1}/{retries}). Reason: {ex.Message}");
+				}
+				Thread.Sleep(FileOperationRetryDelayMs);
+			}
+			catch (UnauthorizedAccessException ex)
+			{
+				lock (consoleLock)
+				{
+					Console.WriteLine($"ERROR: Unauthorized access when moving '{sourcePath}' to '{destinationPath}'. Reason: {ex.Message}");
+				}
+				return false;
+			}
+			catch (Exception ex)
+			{
+				lock (consoleLock)
+				{
+					Console.WriteLine($"ERROR: An unexpected error occurred while moving '{sourcePath}' to '{destinationPath}'. Reason: {ex.Message}");
+				}
+				return false;
+			}
+		}
+		lock (consoleLock)
+		{
+			Console.WriteLine($"ERROR: Failed to move '{sourcePath}' to '{destinationPath}' after {retries} attempts. Giving up.");
+		}
+		return false;
+	}
+
 	static void Main(string[] args)
 	{
 		// Parse command line arguments.
@@ -76,114 +182,6 @@ class Program
 
 		Console.WriteLine("\nPatch applied. Client is up-to-date. Exiting patcher.");
 		TryStartExecutableAndExit(Executable, PID);
-	}
-
-	/// <summary>
-	/// Helper method for robust file deletion with retries.
-	/// </summary>
-	/// <param name="path">The path of the file to delete.</param>
-	/// <param name="retries">The number of retry attempts.</param>
-	/// <returns>True if the file was successfully deleted or didn't exist, false otherwise.</returns>
-	private static bool TryDeleteFile(string path, int retries)
-	{
-		for (int i = 0; i < retries; i++)
-		{
-			try
-			{
-				if (File.Exists(path))
-				{
-					File.Delete(path);
-					lock (consoleLock)
-					{
-						Console.WriteLine($"DEBUG: Successfully deleted: '{path}' (Attempt {i + 1})");
-					}
-				}
-				return true;
-			}
-			catch (IOException ex)
-			{
-				// Marshal.GetLastWin32Error() is Windows-specific, removed for cross-platform compatibility.
-				lock (consoleLock)
-				{
-					Console.WriteLine($"WARNING: Failed to delete '{path}' (Attempt {i + 1}/{retries}). Reason: {ex.Message}");
-				}
-				Thread.Sleep(FileOperationRetryDelayMs);
-			}
-			catch (UnauthorizedAccessException ex)
-			{
-				lock (consoleLock)
-				{
-					Console.WriteLine($"ERROR: Unauthorized access when deleting '{path}'. This usually indicates permission issues. Reason: {ex.Message}");
-				}
-				return false;
-			}
-			catch (Exception ex)
-			{
-				lock (consoleLock)
-				{
-					Console.WriteLine($"ERROR: An unexpected error occurred while deleting '{path}'. Reason: {ex.Message}");
-				}
-				return false;
-			}
-		}
-		lock (consoleLock)
-		{
-			Console.WriteLine($"ERROR: Failed to delete '{path}' after {retries} attempts. Giving up.");
-		}
-		return false;
-	}
-
-	/// <summary>
-	/// Helper method for robust file move with retries.
-	/// </summary>
-	/// <param name="sourcePath">The source file path.</param>
-	/// <param name="destinationPath">The destination file path.</param>
-	/// <param name="retries">The number of retry attempts.</param>
-	/// <returns>True if the file was successfully moved, false otherwise.</returns>
-	private static bool TryMoveFile(string sourcePath, string destinationPath, int retries)
-	{
-		for (int i = 0; i < retries; i++)
-		{
-			try
-			{
-				File.Move(sourcePath, destinationPath);
-				lock (consoleLock)
-				{
-					Console.WriteLine($"DEBUG: Successfully moved '{sourcePath}' to '{destinationPath}' (Attempt {i + 1})");
-				}
-				return true;
-			}
-			catch (IOException ex)
-			{
-				// Marshal.GetLastWin32Error() is Windows-specific, removed for cross-platform compatibility.
-				lock (consoleLock)
-				{
-					Console.WriteLine($"WARNING: Failed to move '{sourcePath}' to '{destinationPath}' (Attempt {i + 1}/{retries}). Reason: {ex.Message}");
-				}
-				Thread.Sleep(FileOperationRetryDelayMs);
-			}
-			catch (UnauthorizedAccessException ex)
-			{
-				lock (consoleLock)
-				{
-					Console.WriteLine($"ERROR: Unauthorized access when moving '{sourcePath}' to '{destinationPath}'. Reason: {ex.Message}");
-				}
-				return false;
-			}
-			catch (Exception ex)
-			{
-				lock (consoleLock)
-				{
-					Console.WriteLine($"ERROR: An unexpected error occurred while moving '{sourcePath}' to '{destinationPath}'. Reason: {ex.Message}");
-				}
-				return false;
-			}
-		}
-		lock (consoleLock)
-		{
-			Console.WriteLine($"ERROR: Failed to move '{sourcePath}' to '{destinationPath}' after {retries} attempts. Giving up.");
-		}
-		return false;
 	}
 
 	/// <summary>
@@ -330,7 +328,16 @@ class Program
 								string tempPatchedFilePath = null;
 								try
 								{
-									tempPatchedFilePath = patcher.Apply(reader, oldFilePath, modifiedFile.FinalFileSize);
+									// Generate a unique temp file path for each parallel task
+									string uniqueTempFilePath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString() + ".tmp");
+									// Ensure the temp directory exists
+									string tempDir = Path.GetDirectoryName(uniqueTempFilePath);
+									if (!string.IsNullOrEmpty(tempDir) && !Directory.Exists(tempDir))
+									{
+										Directory.CreateDirectory(tempDir);
+									}
+
+									tempPatchedFilePath = patcher.Apply(reader, oldFilePath, modifiedFile.FinalFileSize, uniqueTempFilePath);
 								}
 								catch (Exception ex) // Catch exceptions from Patcher.Apply
 								{
