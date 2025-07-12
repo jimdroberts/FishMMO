@@ -366,7 +366,7 @@ namespace FishMMO.Client
 			{
 				// Start the updater
 				ProcessStartInfo startInfo = new ProcessStartInfo(updaterPath);
-				startInfo.Arguments = $"-version={latestversion} -pid={Process.GetCurrentProcess().Id} -exe={Constants.Configuration.ClientExecutable}";
+				startInfo.Arguments = $"-version={MainBootstrapSystem.GameVersion} -latestversion={latestversion} -pid={Process.GetCurrentProcess().Id} -exe={Constants.Configuration.ClientExecutable}";
 				startInfo.UseShellExecute = false;
 				Process process = Process.Start(startInfo);
 

@@ -8,6 +8,7 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <!-- Disabled ImplicitUsings to resolve CS8400 error -->
     <Nullable>enable</Nullable>
+    <NoWarn>$(NoWarn);CS8618;CS8600;CS8601;CS8603;CS8604;CS4014;CS1998</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

@@ -1,12 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Diagnostics;
+using System.IO;
 using System.IO.Compression;
+using System.Linq;
 using System.Text.Json;
 using System.Security.Cryptography;
-using FishMMO.Shared;
+using System.Threading.Tasks;
 using FishMMO.Patcher;
 
 class Program
@@ -14,18 +14,25 @@ class Program
 	private static readonly string WorkingDirectory = AppDomain.CurrentDomain.BaseDirectory;
 	private static readonly string PatchesDirectory = Path.Combine(WorkingDirectory, "patches");
 
+	private static string Version;
 	private static string LatestVersion;
 	private static int PID;
 	private static string Executable;
-	private static string Version;
-	private static Configuration Configuration;
 
 	static void Main(string[] args)
 	{
-		// Parse command line arguments for version, launcher pid, and exe
+		// Parse command line arguments for Version, Latest Version, Client Launcher PID, and Client Launcher Executable
 		foreach (var arg in args)
 		{
 			if (arg.StartsWith("-version"))
+			{
+				var splitArg = arg.Split('=');
+				if (splitArg.Length == 2)
+				{
+					Version = splitArg[1];
+				}
+			}
+			if (arg.StartsWith("-latestversion"))
 			{
 				var splitArg = arg.Split('=');
 				if (splitArg.Length == 2)
@@ -52,100 +59,34 @@ class Program
 			}
 		}
 
-		Console.WriteLine($"Client Patcher started. LatestVersion: {LatestVersion}, Launcher PID: {PID}, Executable: {Executable}");
+		Console.WriteLine($"Client Patcher started. Current Client Version: {Version}, LatestVersion: {LatestVersion}, Launcher PID: {PID}, Executable: {Executable}");
 
-		// Load current client version
-		Configuration = new Configuration(WorkingDirectory);
-		if (!Configuration.Load())
-		{
-			Console.WriteLine("Unable to load client configuration. Assuming version 0.0.0.");
-			Version = "0.0.0"; // Default to a very old version if config not found
-		}
-		else
-		{
-			if (!Configuration.TryGetString("Version", out Version))
-			{
-				Console.WriteLine("Version not found in client configuration. Assuming version 0.0.0.");
-				Version = "0.0.0";
-			}
-		}
-
-		Console.WriteLine($"Current Client Version: {Version}");
+		// Attempt to kill the launcher process immediately after parsing arguments
+		// This ensures the old launcher is terminated before any file operations for patching begin.
+		KillLauncherProcess(PID);
 
 		if (Version == LatestVersion)
 		{
 			Console.WriteLine("Client is already up-to-date. Exiting patcher.");
-			TryStartExecutableAndExit();
+			TryStartExecutableAndExit(Executable, PID);
 			return;
 		}
 
-		// Find relevant patch files
-		// Sorting by name should ensure correct application order (e.g., 1.0.0-1.0.1.zip before 1.0.1-1.0.2.zip)
-		string[] patchFiles = Directory.GetFiles(PatchesDirectory, "*.zip")
-									  .OrderBy(f => f)
-									  .ToArray();
+		string expectedPatchFileName = $"{Version}-{LatestVersion}.zip";
+		string patchFilePath = Path.Combine(PatchesDirectory, expectedPatchFileName);
 
-		List<string> relevantPatches = new List<string>();
-		string currentPatchVersion = Version;
-
-		foreach (string patchFile in patchFiles)
+		if (!File.Exists(patchFilePath))
 		{
-			string fileName = Path.GetFileNameWithoutExtension(patchFile);
-			string[] versions = fileName.Split('-'); // Expected format: oldVersion-newVersion
-
-			if (versions.Length == 2)
-			{
-				string oldVer = versions[0];
-				string newVer = versions[1];
-
-				// If this patch starts from our current version, add it to the list
-				if (oldVer == currentPatchVersion)
-				{
-					relevantPatches.Add(patchFile);
-					currentPatchVersion = newVer; // Update current version to the new version of this patch
-				}
-
-				// If we've reached the target LatestVersion, stop looking for more patches
-				if (currentPatchVersion == LatestVersion)
-				{
-					break;
-				}
-			}
-		}
-
-		if (relevantPatches.Count == 0 && Version != LatestVersion)
-		{
-			Console.WriteLine("No relevant patch files found to update the client. Exiting.");
-			TryStartExecutableAndExit();
+			Console.WriteLine($"Error: Expected patch file '{expectedPatchFileName}' not found in '{PatchesDirectory}'. Cannot update client.");
+			TryStartExecutableAndExit(Executable, PID);
 			return;
 		}
 
-		Console.WriteLine($"Found {relevantPatches.Count} relevant patches to apply:");
-		foreach (var patch in relevantPatches)
-		{
-			Console.WriteLine($"- {Path.GetFileName(patch)}");
-		}
+		Console.WriteLine($"\nApplying patch: {Path.GetFileName(patchFilePath)}");
+		ApplyPatchFile(patchFilePath);
 
-		// Apply patches sequentially
-		foreach (string patchFilePath in relevantPatches)
-		{
-			Console.WriteLine($"\nApplying patch: {Path.GetFileName(patchFilePath)}");
-			ApplyPatchFile(patchFilePath);
-
-			// After applying, update the current version in the configuration
-			// This assumes the patch successfully updated the client to the 'newVersion' of this patch file
-			string[] versions = Path.GetFileNameWithoutExtension(patchFilePath).Split('-');
-			if (versions.Length == 2)
-			{
-				Version = versions[1];
-				Configuration.Set("Version", Version);
-				Configuration.Save();
-				Console.WriteLine($"Client version updated to {Version}.");
-			}
-		}
-
-		Console.WriteLine("\nAll patches applied. Client is up-to-date. Exiting patcher.");
-		TryStartExecutableAndExit();
+		Console.WriteLine("\nPatch applied. Client is up-to-date. Exiting patcher.");
+		TryStartExecutableAndExit(Executable, PID);
 	}
 
 	/// <summary>
@@ -154,12 +95,10 @@ class Program
 	/// <param name="patchFilePath">The full path to the patch ZIP file.</param>
 	static void ApplyPatchFile(string patchFilePath)
 	{
-		Patcher patcher = new Patcher();
 		try
 		{
 			using (ZipArchive archive = ZipFile.OpenRead(patchFilePath))
 			{
-				// Read the manifest from the ZIP archive
 				ZipArchiveEntry manifestEntry = archive.GetEntry("manifest.json");
 				if (manifestEntry == null)
 				{
@@ -174,137 +113,245 @@ class Program
 				}
 				Console.WriteLine($"Loaded manifest from {Path.GetFileName(patchFilePath)}. Old Version: {manifest.OldVersion}, New Version: {manifest.NewVersion}");
 
-				// 1. Process Deleted Files
-				if (manifest.DeletedFiles != null)
-				{
-					Console.WriteLine($"Processing {manifest.DeletedFiles.Count} files for deletion...");
-					foreach (var deletedFile in manifest.DeletedFiles)
-					{
-						string fullPath = Path.Combine(WorkingDirectory, deletedFile.RelativePath);
-						if (File.Exists(fullPath))
-						{
-							try
-							{
-								File.Delete(fullPath);
-								Console.WriteLine($"\tDeleted: {deletedFile.RelativePath}");
-							}
-							catch (Exception ex)
-							{
-								Console.WriteLine($"\tError deleting {deletedFile.RelativePath}: {ex.Message}");
-							}
-						}
-						else
-						{
-							Console.WriteLine($"\tWarning: File to delete not found: {deletedFile.RelativePath}");
-						}
-					}
-				}
+				// Pre-create all necessary directories before parallel file processing
+				PreCreateDirectories(manifest);
 
-				// 2. Process New Files
-				if (manifest.NewFiles != null)
-				{
-					Console.WriteLine($"Processing {manifest.NewFiles.Count} new files...");
-					foreach (var newFile in manifest.NewFiles)
-					{
-						string fullPath = Path.Combine(WorkingDirectory, newFile.RelativePath);
-						ZipArchiveEntry newFileZipEntry = archive.GetEntry(newFile.FileDataEntryName);
-
-						if (newFileZipEntry != null)
-						{
-							try
-							{
-								// Ensure directory exists for the new file
-								string directoryPath = Path.GetDirectoryName(fullPath);
-								if (!string.IsNullOrEmpty(directoryPath))
-								{
-									Directory.CreateDirectory(directoryPath);
-								}
-
-								// Stream the new file directly from the ZIP to its destination
-								using (Stream sourceStream = newFileZipEntry.Open())
-								using (FileStream destinationStream = File.Create(fullPath))
-								{
-									sourceStream.CopyTo(destinationStream);
-								}
-								Console.WriteLine($"\tAdded new file: {newFile.RelativePath}");
-
-								string actualHash = ComputeFileHash(fullPath);
-								if (actualHash != newFile.NewHash)
-								{
-									Console.WriteLine($"\tERROR: Hash mismatch for new file {newFile.RelativePath}. Expected {newFile.NewHash}, Got {actualHash}. File might be corrupted or patch is bad. (Deleting file)");
-									File.Delete(fullPath); // Optionally delete corrupted file
-								}
-								else
-								{
-									Console.WriteLine($"\tHash verified for new file: {newFile.RelativePath}");
-								}
-
-							}
-							catch (Exception ex)
-							{
-								Console.WriteLine($"\tError adding new file {newFile.RelativePath}: {ex.Message}");
-							}
-						}
-						else
-						{
-							Console.WriteLine($"\tWarning: New file entry not found in ZIP: {newFile.FileDataEntryName}");
-						}
-					}
-				}
-
-				// 3. Process Modified Files
-				if (manifest.ModifiedFiles != null)
-				{
-					Console.WriteLine($"Processing {manifest.ModifiedFiles.Count} modified files...");
-					foreach (var modifiedFile in manifest.ModifiedFiles)
-					{
-						string oldFilePath = Path.Combine(WorkingDirectory, modifiedFile.RelativePath);
-						ZipArchiveEntry patchDataEntry = archive.GetEntry(modifiedFile.PatchDataEntryName);
-
-						if (patchDataEntry != null)
-						{
-							Console.WriteLine($"\tApplying patch for modified file: {modifiedFile.RelativePath}");
-							// Open the patch data stream from the ZIP and pass it to Patcher.Apply
-							using (Stream patchDataStream = patchDataEntry.Open())
-							{
-								using (BinaryReader reader = new BinaryReader(patchDataStream))
-								{
-									patcher.Apply(reader, oldFilePath, (success) =>
-									{
-										if (success)
-										{
-											Console.WriteLine($"\tSuccessfully patched: {modifiedFile.RelativePath}");
-
-											string actualHash = ComputeFileHash(oldFilePath);
-											if (actualHash != modifiedFile.NewHash)
-											{
-												Console.WriteLine($"\tERROR: Hash mismatch for patched file {modifiedFile.RelativePath}. Expected {modifiedFile.NewHash}, Got {actualHash}. File might be corrupted or patch is bad. (Restore from backup if possible)");
-											}
-											else
-											{
-												Console.WriteLine($"\tHash verified for patched file: {modifiedFile.RelativePath}");
-											}
-										}
-										else
-										{
-											Console.WriteLine($"\tFailed to patch: {modifiedFile.RelativePath}");
-										}
-									});
-								}
-							}
-						}
-						else
-						{
-							Console.WriteLine($"\tWarning: Patch data entry not found in ZIP for {modifiedFile.RelativePath}: {modifiedFile.PatchDataEntryName}");
-						}
-					}
-				}
+				// Process files
+				ProcessDeletedFiles(manifest.DeletedFiles);
+				ProcessNewFiles(archive, manifest.NewFiles);
+				ProcessModifiedFiles(archive, manifest.ModifiedFiles);
 			}
 		}
 		catch (Exception ex)
 		{
 			Console.WriteLine($"Critical Error during patch application of '{Path.GetFileName(patchFilePath)}': {ex.Message}");
 			Console.WriteLine(ex.StackTrace);
+		}
+	}
+
+	/// <summary>
+	/// Gathers and creates all unique directories required for new and modified files.
+	/// </summary>
+	/// <param name="manifest">The patch manifest containing file entries.</param>
+	private static void PreCreateDirectories(PatchManifest manifest)
+	{
+		HashSet<string> directoriesToCreate = new HashSet<string>();
+
+		if (manifest.NewFiles != null)
+		{
+			foreach (var newFile in manifest.NewFiles)
+			{
+				string fullPath = Path.Combine(WorkingDirectory, newFile.RelativePath);
+				string directoryPath = Path.GetDirectoryName(fullPath);
+				if (!string.IsNullOrEmpty(directoryPath))
+				{
+					directoriesToCreate.Add(directoryPath);
+				}
+			}
+		}
+
+		if (manifest.ModifiedFiles != null)
+		{
+			foreach (var modifiedFile in manifest.ModifiedFiles)
+			{
+				string fullPath = Path.Combine(WorkingDirectory, modifiedFile.RelativePath);
+				string directoryPath = Path.GetDirectoryName(fullPath);
+				if (!string.IsNullOrEmpty(directoryPath))
+				{
+					directoriesToCreate.Add(directoryPath);
+				}
+			}
+		}
+
+		if (directoriesToCreate.Count > 0)
+		{
+			Console.WriteLine($"Pre-creating {directoriesToCreate.Count} directories...");
+			Parallel.ForEach(directoriesToCreate, dirPath =>
+			{
+				try
+				{
+					Directory.CreateDirectory(dirPath);
+				}
+				catch (Exception ex)
+				{
+					lock (Console.Out)
+					{
+						Console.WriteLine($"\tError creating directory {dirPath}: {ex.Message}");
+					}
+				}
+			});
+		}
+	}
+
+	/// <summary>
+	/// Processes files marked for deletion.
+	/// </summary>
+	/// <param name="deletedFiles">List of files to delete.</param>
+	private static void ProcessDeletedFiles(List<DeletedFileEntry> deletedFiles)
+	{
+		if (deletedFiles != null)
+		{
+			Console.WriteLine($"Processing {deletedFiles.Count} files for deletion...");
+			foreach (var deletedFile in deletedFiles) // Keeping sequential for simplicity as often very fast
+			{
+				string fullPath = Path.Combine(WorkingDirectory, deletedFile.RelativePath);
+				if (File.Exists(fullPath))
+				{
+					try
+					{
+						File.Delete(fullPath);
+						Console.WriteLine($"\tDeleted: {deletedFile.RelativePath}");
+					}
+					catch (Exception ex)
+					{
+						Console.WriteLine($"\tError deleting {deletedFile.RelativePath}: {ex.Message}");
+					}
+				}
+				else
+				{
+					Console.WriteLine($"\tWarning: File to delete not found: {deletedFile.RelativePath}");
+				}
+			}
+		}
+	}
+
+	/// <summary>
+	/// Processes new files, adding them to the working directory.
+	/// </summary>
+	/// <param name="archive">The ZIP archive containing the patch data.</param>
+	/// <param name="newFiles">List of new files to add.</param>
+	private static void ProcessNewFiles(ZipArchive archive, List<NewFileEntry> newFiles)
+	{
+		if (newFiles != null)
+		{
+			Console.WriteLine($"Processing {newFiles.Count} new files...");
+			Parallel.ForEach(newFiles, newFile =>
+			{
+				string fullPath = Path.Combine(WorkingDirectory, newFile.RelativePath);
+				ZipArchiveEntry newFileZipEntry = archive.GetEntry(newFile.FileDataEntryName);
+
+				if (newFileZipEntry != null)
+				{
+					try
+					{
+						// Directory.CreateDirectory is removed here as directories are pre-created
+						using (Stream sourceStream = newFileZipEntry.Open())
+						using (FileStream destinationStream = File.Create(fullPath))
+						{
+							sourceStream.CopyTo(destinationStream);
+						}
+						lock (Console.Out) // Lock for safe console output
+						{
+							Console.WriteLine($"\tAdded new file: {newFile.RelativePath}");
+						}
+
+						string actualHash = ComputeFileHash(fullPath);
+						if (actualHash != newFile.NewHash)
+						{
+							lock (Console.Out) // Lock for safe console output
+							{
+								Console.WriteLine($"\tERROR: Hash mismatch for new file {newFile.RelativePath}. Expected {newFile.NewHash}, Got {actualHash}. File might be corrupted or patch is bad. (Deleting file)");
+							}
+							File.Delete(fullPath);
+						}
+						else
+						{
+							lock (Console.Out) // Lock for safe console output
+							{
+								Console.WriteLine($"\tHash verified for new file: {newFile.RelativePath}");
+							}
+						}
+					}
+					catch (Exception ex)
+					{
+						lock (Console.Out) // Lock for safe console output
+						{
+							Console.WriteLine($"\tError adding new file {newFile.RelativePath}: {ex.Message}");
+						}
+					}
+				}
+				else
+				{
+					lock (Console.Out) // Lock for safe console output
+					{
+						Console.WriteLine($"\tWarning: New file entry not found in ZIP: {newFile.FileDataEntryName}");
+					}
+				}
+			});
+		}
+	}
+
+	/// <summary>
+	/// Processes modified files, applying binary patches to them.
+	/// </summary>
+	/// <param name="archive">The ZIP archive containing the patch data.</param>
+	/// <param name="modifiedFiles">List of modified files to patch.</param>
+	private static void ProcessModifiedFiles(ZipArchive archive, List<ModifiedFileEntry> modifiedFiles)
+	{
+		if (modifiedFiles != null)
+		{
+			Console.WriteLine($"Processing {modifiedFiles.Count} modified files...");
+			Parallel.ForEach(modifiedFiles, modifiedFile =>
+			{
+				// Each parallel task gets its own Patcher instance
+				Patcher patcher = new Patcher();
+				string oldFilePath = Path.Combine(WorkingDirectory, modifiedFile.RelativePath);
+				ZipArchiveEntry patchDataEntry = archive.GetEntry(modifiedFile.PatchDataEntryName);
+
+				if (patchDataEntry != null)
+				{
+					lock (Console.Out) // Lock for safe console output
+					{
+						Console.WriteLine($"\tApplying patch for modified file: {modifiedFile.RelativePath}");
+					}
+					using (Stream patchDataStream = patchDataEntry.Open())
+					{
+						using (BinaryReader reader = new BinaryReader(patchDataStream))
+						{
+							patcher.Apply(reader, oldFilePath, (success) =>
+							{
+								if (success)
+								{
+									lock (Console.Out) // Lock for safe console output
+									{
+										Console.WriteLine($"\tSuccessfully patched: {modifiedFile.RelativePath}");
+									}
+
+									string actualHash = ComputeFileHash(oldFilePath);
+									if (actualHash != modifiedFile.NewHash)
+									{
+										lock (Console.Out) // Lock for safe console output
+										{
+											Console.WriteLine($"\tERROR: Hash mismatch for patched file {modifiedFile.RelativePath}. Expected {modifiedFile.NewHash}, Got {actualHash}. File might be corrupted or patch is bad. (Restore from backup if possible)");
+										}
+									}
+									else
+									{
+										lock (Console.Out) // Lock for safe console output
+										{
+											Console.WriteLine($"\tHash verified for patched file: {modifiedFile.RelativePath}");
+										}
+									}
+								}
+								else
+								{
+									lock (Console.Out) // Lock for safe console output
+									{
+										Console.WriteLine($"\tFailed to patch: {modifiedFile.RelativePath}");
+									}
+								}
+							});
+						}
+					}
+				}
+				else
+				{
+					lock (Console.Out) // Lock for safe console output
+					{
+						Console.WriteLine($"\tWarning: Patch data entry not found in ZIP for {modifiedFile.RelativePath}: {modifiedFile.PatchDataEntryName}");
+					}
+				}
+			});
 		}
 	}
 
@@ -329,41 +376,95 @@ class Program
 		}
 	}
 
-	static void TryStartExecutableAndExit()
+	/// <summary>
+	/// Attempts to gracefully close and then forcefully kill a process by its PID.
+	/// </summary>
+	/// <param name="pidToKill">The process ID of the launcher process to manage.</param>
+	private static void KillLauncherProcess(int pidToKill)
 	{
-		if (!string.IsNullOrEmpty(Executable))
+		if (pidToKill > 0)
 		{
 			try
 			{
-				ProcessStartInfo startInfo = new ProcessStartInfo(Executable)
+				Process launcherProcess = Process.GetProcessById(pidToKill);
+				if (!launcherProcess.HasExited)
 				{
-					WorkingDirectory = Path.GetDirectoryName(Executable),
-					UseShellExecute = true // Use shell execute to allow starting without full path or in case of associated file types
-				};
-				Process.Start(startInfo);
-				Console.WriteLine($"Started executable: {Executable}");
-			}
-			catch (Exception ex)
-			{
-				Console.WriteLine($"Error starting executable '{Executable}': {ex.Message}");
-			}
-		}
-
-		if (PID > 0)
-		{
-			try
-			{
-				Process launcherProcess = Process.GetProcessById(PID);
-				launcherProcess.Kill();
-				Console.WriteLine($"Killed launcher process with PID: {PID}");
+					Console.WriteLine($"Attempting to close launcher process with PID {pidToKill} gracefully...");
+					// Attempt graceful close first
+					if (launcherProcess.CloseMainWindow())
+					{
+						Console.WriteLine($"Launcher process with PID {pidToKill} main window closed. Waiting for exit...");
+						if (!launcherProcess.WaitForExit(5000)) // Wait up to 5 seconds for it to exit after close request
+						{
+							Console.WriteLine($"Launcher process with PID {pidToKill} did not exit after main window close, forcing kill...");
+							launcherProcess.Kill();
+							launcherProcess.WaitForExit(); // Wait for the process to actually terminate after killing
+							Console.WriteLine($"Killed launcher process with PID: {pidToKill}");
+						}
+						else
+						{
+							Console.WriteLine($"Launcher process with PID {pidToKill} exited gracefully after main window closed.");
+						}
+					}
+					else if (!launcherProcess.WaitForExit(5000)) // If no main window or graceful close failed, try waiting for a short period
+					{
+						Console.WriteLine($"Launcher process with PID {pidToKill} did not exit gracefully, forcing kill...");
+						launcherProcess.Kill(); // Force kill if it didn't exit
+						launcherProcess.WaitForExit(); // Wait for the process to actually terminate after killing
+						Console.WriteLine($"Killed launcher process with PID: {pidToKill}");
+					}
+					else
+					{
+						Console.WriteLine($"Launcher process with PID {pidToKill} exited gracefully.");
+					}
+				}
+				else
+				{
+					Console.WriteLine($"Launcher process with PID {pidToKill} was already exited.");
+				}
 			}
 			catch (ArgumentException)
 			{
-				Console.WriteLine($"Launcher process with PID {PID} not found or already exited.");
+				// Process not found, likely already exited or never existed.
+				Console.WriteLine($"Launcher process with PID {pidToKill} not found (already exited or never started).");
 			}
 			catch (Exception ex)
 			{
-				Console.WriteLine($"Error killing launcher process {PID}: {ex.Message}");
+				Console.WriteLine($"Error managing launcher process {pidToKill}: {ex.Message}");
+			}
+		}
+	}
+
+	/// <summary>
+	/// Attempts to start the client executable and then exits the patcher.
+	/// It also ensures the old launcher process is terminated.
+	/// </summary>
+	/// <param name="executable">The name or relative path of the executable to launch.</param>
+	/// <param name="pidToKill">The process ID of the launcher process to kill before starting the executable.</param>
+	static void TryStartExecutableAndExit(string executable, int pidToKill)
+	{
+		// First, kill the old process if it's still running (as a final failsafe)
+		KillLauncherProcess(pidToKill);
+
+		if (!string.IsNullOrEmpty(executable))
+		{
+			try
+			{
+				// Ensure the executable path is combined with the working directory
+				// to correctly resolve its location relative to the patcher.
+				string fullExecutablePath = Path.Combine(WorkingDirectory, executable);
+
+				ProcessStartInfo startInfo = new ProcessStartInfo(fullExecutablePath)
+				{
+					WorkingDirectory = Path.GetDirectoryName(fullExecutablePath), // Set working directory for the launched process
+					UseShellExecute = false, // Use false for direct execution, better control
+				};
+				Process.Start(startInfo);
+				Console.WriteLine($"Started executable: {fullExecutablePath}");
+			}
+			catch (Exception ex)
+			{
+				Console.WriteLine($"Error starting executable '{executable}': {ex.Message}");
 			}
 		}
 		Environment.Exit(0);
