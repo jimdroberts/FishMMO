@@ -256,7 +256,7 @@ namespace FishMMO.Client
 				request.certificateHandler = new ClientSSLCertificateHandler();
 
 				// Define the file path to save the downloaded patch file
-				string filePath = Path.Combine(Constants.GetWorkingDirectory(), "patches", $"{MainBootstrapSystem.GameVersion}-{latestversion}.patch");
+				string filePath = Path.Combine(Constants.GetWorkingDirectory(), "Patches", $"{MainBootstrapSystem.GameVersion}-{latestversion}.patch");
 
 				// Create the file stream
 				request.downloadHandler = new DownloadHandlerFile(filePath)

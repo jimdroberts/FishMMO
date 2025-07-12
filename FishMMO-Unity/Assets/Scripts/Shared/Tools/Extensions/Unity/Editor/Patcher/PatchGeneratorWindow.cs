@@ -17,17 +17,11 @@ namespace FishMMO.Patcher
 {
 	public class PatchGeneratorWindow : EditorWindow
 	{
-		// --- Logger Callback ---
-		private void OnInternalLogCallback(string message)
-		{
-			Debug.Log($"{message}");
-		}
-
 		// --- UI State Variables ---
 		private string latestClientDirectory = "";
 		private string oldClientsRootDirectory = ""; // For multiple old clients
 		private string singleOldClientDirectory = ""; // For a single old client
-		private bool generateMultipleClientsMode = false; // New toggle for UI mode
+		private bool generateMultipleClientsMode = false; // Toggle for UI mode
 		private string patchOutputDirectory = "";
 		private string ignoredExtensionsInput = ".cfg, .log, .bak";
 		private string ignoredDirectoriesInput = "FishMMO_BackUpThisFolder_ButDontShipItWithYourGame, FishMMO_BurstDebugInformation_DoNotShip";
@@ -46,6 +40,7 @@ namespace FishMMO.Patcher
 
 		// Overall processing state to disable UI during async operations
 		private bool isProcessing = false;
+		private string manifestGenerationStatus = "Ready."; // Status for complete manifest generation
 
 		// Helper class to hold progress details for each patch
 		private class PatchProgressInfo
@@ -53,6 +48,14 @@ namespace FishMMO.Patcher
 			public float Progress { get; set; } = 0f;
 			public Color Color { get; set; } = Color.gray;
 			public string Message { get; set; } = "Pending...";
+		}
+
+		// Data structure for the complete manifest entry
+		[Serializable]
+		public class CompleteManifestEntry
+		{
+			public string RelativePath { get; set; }
+			public string Hash { get; set; }
 		}
 
 		[MenuItem("FishMMO/Patch/Patch Generator")]
@@ -63,14 +66,10 @@ namespace FishMMO.Patcher
 
 		private void OnEnable()
 		{
-			UpdateIgnoredExtensionsSet(); // Initialize the ignoredExtensions set
-			UpdateIgnoredDirectoriesSet(); // Initialize the ignoredDirectories set
+			UpdateIgnoredExtensionsSet();
+			UpdateIgnoredDirectoriesSet();
 
 			// Initialize custom logging for the Editor tool.
-			// This setup only needs to happen once.
-			// If Log.Initialize is called multiple times, it should handle it gracefully,
-			// but ensuring it's not needlessly re-registered could be a minor optimization.
-			// For an EditorWindow, this is typically fine as is.
 			Log.RegisterLoggerFactory(nameof(UnityConsoleLoggerConfig), (cfg, logCallback) => new UnityConsoleLogger((UnityConsoleLoggerConfig)cfg, logCallback));
 			var defaultUnityConsoleLoggerConfig = new UnityConsoleLoggerConfig();
 			var unityConsoleFormatter = new UnityConsoleFormatter(defaultUnityConsoleLoggerConfig.LogLevelColors, true);
@@ -84,7 +83,7 @@ namespace FishMMO.Patcher
 						LogLevel.Info, LogLevel.Debug, LogLevel.Warning, LogLevel.Error, LogLevel.Critical, LogLevel.Verbose
 					}
 				},
-				OnInternalLogCallback),
+				(message) => Debug.Log($"{message}")), // Direct Debug.Log for internal callback
 			};
 			Log.Initialize(null, unityConsoleFormatter, manualLoggers, Log.OnInternalLogMessage, new List<Type>() { typeof(UnityConsoleLoggerConfig) });
 		}
@@ -202,6 +201,18 @@ namespace FishMMO.Patcher
 				GeneratePatchesAsync(); // Call the async method
 			}
 			EditorGUI.EndDisabledGroup();
+
+			EditorGUILayout.Space();
+			GUILayout.Label("Generate Complete Manifest:", EditorStyles.boldLabel);
+			EditorGUILayout.HelpBox("Generates a manifest (JSON) of all files and their checksums in the Latest Client Directory. This can be used for full client verification.", MessageType.Info);
+			EditorGUI.BeginDisabledGroup(isProcessing);
+			if (GUILayout.Button("Generate Client File Manifest", GUILayout.Height(30)))
+			{
+				GenerateCompleteManifestAsync();
+			}
+			EditorGUI.EndDisabledGroup();
+			EditorGUILayout.LabelField("Status:", manifestGenerationStatus);
+
 
 			EditorGUILayout.Space();
 			GUILayout.Label("Patch Generation Progress:", EditorStyles.boldLabel);
@@ -469,6 +480,84 @@ namespace FishMMO.Patcher
 		}
 
 		/// <summary>
+		/// Generates a complete manifest (JSON file) of all files and their checksums
+		/// in the specified latest client directory.
+		/// </summary>
+		private async void GenerateCompleteManifestAsync()
+		{
+			if (isProcessing) return;
+			isProcessing = true;
+			manifestGenerationStatus = "Starting...";
+			Repaint();
+
+			try
+			{
+				if (!Directory.Exists(latestClientDirectory))
+				{
+					Log.Error("Patcher", $"Error: Latest client directory '{latestClientDirectory}' does not exist. Cannot generate manifest.");
+					EditorUtility.DisplayDialog("Error", "Latest client directory does not exist.", "OK");
+					manifestGenerationStatus = "Failed: Directory not found.";
+					return;
+				}
+				if (string.IsNullOrEmpty(patchOutputDirectory) || !Directory.Exists(patchOutputDirectory))
+				{
+					Log.Error("Patcher", $"Error: Patch output directory '{patchOutputDirectory}' is invalid or does not exist. Cannot save manifest.");
+					EditorUtility.DisplayDialog("Error", "Patch output directory is invalid or does not exist.", "OK");
+					manifestGenerationStatus = "Failed: Output directory invalid.";
+					return;
+				}
+
+				manifestGenerationStatus = "Scanning files and computing hashes...";
+				Repaint();
+
+				Dictionary<string, (string relativePath, string hash)> filesWithHashes = new Dictionary<string, (string, string)>();
+				await Task.Run(() =>
+				{
+					filesWithHashes = GetAllFilesWithHashes(latestClientDirectory, ignoredExtensions, ignoredDirectories);
+				});
+
+				List<CompleteManifestEntry> manifestEntries = filesWithHashes.Select(kvp => new CompleteManifestEntry
+				{
+					RelativePath = kvp.Key,
+					Hash = kvp.Value.hash
+				}).OrderBy(e => e.RelativePath).ToList(); // Order for consistent manifest generation
+
+				string manifestFileName = $"client_file_manifest.json";
+				string manifestFilePath = Path.Combine(patchOutputDirectory, manifestFileName);
+
+				manifestGenerationStatus = "Serializing manifest to JSON...";
+				Repaint();
+
+				var options = new JsonSerializerOptions { WriteIndented = true };
+				string manifestJson = JsonSerializer.Serialize(manifestEntries, options);
+
+				manifestGenerationStatus = "Saving manifest file...";
+				Repaint();
+
+				await Task.Run(() =>
+				{
+					File.WriteAllText(manifestFilePath, manifestJson);
+				});
+
+				Log.Info("Patcher", $"Successfully generated complete manifest: {manifestFilePath}");
+				EditorUtility.DisplayDialog("Success", $"Complete manifest generated at:\n{manifestFilePath}", "OK");
+				manifestGenerationStatus = $"Completed: {manifestFileName}";
+			}
+			catch (Exception ex)
+			{
+				Log.Error("Patcher", $"Error generating complete manifest: {ex.Message}", ex);
+				EditorUtility.DisplayDialog("Error", $"Failed to generate complete manifest: {ex.Message}", "OK");
+				manifestGenerationStatus = $"Failed: {ex.Message}";
+			}
+			finally
+			{
+				isProcessing = false;
+				Repaint();
+			}
+		}
+
+
+		/// <summary>
 		/// Preloads version configurations for the latest client and all discovered old clients.
 		/// This method reads the version from the 'version.txt' file within each client directory.
 		/// </summary>
@@ -554,9 +643,7 @@ namespace FishMMO.Patcher
 
 			if (!string.IsNullOrEmpty(versionString))
 			{
-				// Parsing should also be done on a background thread if complex, but for simple parsing, it's fine.
-				// However, if VersionConfig.Parse uses Unity API calls (like Debug.LogError), it must be on the main thread.
-				// Since VersionConfig.Parse now uses Debug.LogError, we will ensure this part runs on the main thread.
+				// Parsing VersionConfig.Parse uses Debug.LogError, so it must run on the main thread.
 				TaskCompletionSource<VersionConfig> tcs = new TaskCompletionSource<VersionConfig>();
 				EditorApplication.delayCall += () =>
 				{
@@ -816,19 +903,29 @@ namespace FishMMO.Patcher
 		}
 
 		/// <summary>
-		/// Scans a directory and its subdirectories to get all file paths and their SHA256 hashes,
-		/// ignoring specified extensions and directories.
+		/// Recursively scans a directory and its subdirectories to get all file paths and their SHA256 hashes.
+		/// Files and directories specified in the 'ignoredExtensions' and 'ignoredDirectories' sets are skipped.
+		/// This method handles common file system access errors gracefully.
 		/// </summary>
 		/// <param name="rootDirectory">The root directory to start scanning from.</param>
-		/// <param name="ignoredExtensions">A set of file extensions to ignore.</param>
-		/// <param name="ignoredDirectories">A set of directory names to ignore.</param>
-		/// <returns>A dictionary where the key is the relative file path and the value is a tuple of (relativePath, hash).</returns>
+		/// <param name="ignoredExtensions">A set of file extensions (e.g., ".log", ".tmp") to ignore.</param>
+		/// <param name="ignoredDirectories">A set of directory names (e.g., "Temp", "Debug") to ignore.</param>
+		/// <returns>A dictionary where the key is the relative file path (e.g., "Data/file.dat") and the value is a tuple of (relativePath, hash).</returns>
 		public static Dictionary<string, (string relativePath, string hash)> GetAllFilesWithHashes(string rootDirectory, HashSet<string> ignoredExtensions, HashSet<string> ignoredDirectories)
 		{
 			Dictionary<string, (string, string)> filesWithHashes = new Dictionary<string, (string, string)>();
 			Stack<string> directories = new Stack<string>();
 
-			directories.Push(rootDirectory);
+			// Normalize rootDirectory to ensure it ends with a directory separator.
+			// This makes substring calculations for relative paths consistent.
+			string normalizedRootDirectory = Path.GetFullPath(rootDirectory);
+			if (!normalizedRootDirectory.EndsWith(Path.DirectorySeparatorChar.ToString()) &&
+				!normalizedRootDirectory.EndsWith(Path.AltDirectorySeparatorChar.ToString()))
+			{
+				normalizedRootDirectory += Path.DirectorySeparatorChar;
+			}
+
+			directories.Push(normalizedRootDirectory); // Start the traversal from the normalized root directory.
 
 			using (var sha256 = SHA256.Create())
 			{
@@ -836,12 +933,15 @@ namespace FishMMO.Patcher
 				{
 					string currentDir = directories.Pop();
 
-					// Check if the current directory itself should be ignored
-					string currentDirName = Path.GetFileName(currentDir);
-					if (ignoredDirectories.Contains(currentDirName) && !currentDir.Equals(rootDirectory, StringComparison.OrdinalIgnoreCase))
+					// Get the actual directory name, trimming any trailing slashes for accurate comparison with ignoredDirectories.
+					string currentDirName = Path.GetFileName(currentDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+
+					// Skip the current directory if its name is in the ignored list,
+					// but explicitly ensure the initial rootDirectory itself is always processed.
+					if (ignoredDirectories.Contains(currentDirName) && !currentDir.Equals(normalizedRootDirectory, StringComparison.OrdinalIgnoreCase))
 					{
-						Log.Info("Patcher", $"Skipping ignored directory and its contents: {currentDirName}");
-						continue; // Skip this directory and its subdirectories
+						Log.Info("Patcher", $"Skipping ignored directory and its contents: {currentDirName} (Full Path: {currentDir})");
+						continue; // Move to the next directory in the stack.
 					}
 
 					try
@@ -852,17 +952,15 @@ namespace FishMMO.Patcher
 							string extension = Path.GetExtension(file);
 							if (ignoredExtensions.Contains(extension))
 							{
-								Log.Info("Patcher", $"\tSkipping ignored file: {Path.GetFileName(file)} ({extension})");
+								Log.Info("Patcher", $"\tSkipping file by extension: {Path.GetFileName(file)} ({extension}) in {currentDir}");
 								continue;
 							}
 
-							string relativePath = file.Substring(rootDirectory.Length);
-							if (Path.IsPathRooted(relativePath))
-							{
-								relativePath = relativePath.TrimStart(Path.DirectorySeparatorChar);
-								relativePath = relativePath.TrimStart(Path.AltDirectorySeparatorChar);
-							}
-							relativePath = relativePath.Replace('\\', '/');
+							// Calculate relative path based on the normalized root directory.
+							string relativePath = file.Substring(normalizedRootDirectory.Length);
+							relativePath = relativePath.Replace('\\', '/'); // Standardize path separators for manifest.
+
+							//Log.Debug("Patcher", $"\tProcessing file: '{file}' -> Relative Path: '{relativePath}'");
 
 							string fileHash = ComputeFileHash(file, sha256);
 							filesWithHashes.Add(relativePath, (relativePath, fileHash));
@@ -870,18 +968,18 @@ namespace FishMMO.Patcher
 					}
 					catch (UnauthorizedAccessException)
 					{
-						Log.Warning("Patcher", $"Access to directory '{currentDir}' is denied. Skipping.");
-						continue;
+						Log.Warning("Patcher", $"Access to directory '{currentDir}' is denied. Skipping files in this directory.");
+						// Continue to process subdirectories if possible, don't 'continue' the while loop here.
 					}
 					catch (DirectoryNotFoundException)
 					{
 						Log.Warning("Patcher", $"Directory '{currentDir}' not found. Skipping.");
-						continue;
+						continue; // This directory is gone, move to the next.
 					}
 					catch (IOException ex)
 					{
 						Log.Warning("Patcher", $"IO error accessing files in '{currentDir}': {ex.Message}. Skipping.");
-						continue;
+						continue; // Critical IO error for this directory, move to the next.
 					}
 
 					try
@@ -889,14 +987,14 @@ namespace FishMMO.Patcher
 						string[] subdirectories = Directory.GetDirectories(currentDir);
 						foreach (string subdir in subdirectories)
 						{
-							// Check if subdirectory name should be ignored before pushing to stack
-							string subDirName = Path.GetFileName(subdir);
+							// Check if subdirectory name should be ignored before pushing to stack.
+							string subDirName = Path.GetFileName(subdir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
 							if (ignoredDirectories.Contains(subDirName))
 							{
-								Log.Info("Patcher", $"Skipping ignored subdirectory: {subDirName}");
-								continue; // Skip this subdirectory
+								Log.Info("Patcher", $"Skipping ignored subdirectory: {subDirName} (Full Path: {subdir})");
+								continue; // Skip this subdirectory and its contents.
 							}
-							directories.Push(subdir);
+							directories.Push(subdir); // Add subdirectory to the stack for later processing.
 						}
 					}
 					catch (UnauthorizedAccessException)

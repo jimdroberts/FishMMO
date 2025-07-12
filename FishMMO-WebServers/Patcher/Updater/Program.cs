@@ -3,7 +3,7 @@ using System.IO.Compression;
 using System.Text.Json;
 using System.Security.Cryptography;
 using FishMMO.Patcher;
-using System.Collections.Concurrent; // For ConcurrentBag
+using System.Collections.Concurrent;
 
 class Program
 {
