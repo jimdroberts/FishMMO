@@ -285,9 +285,9 @@ namespace FishMMO.Shared
 					OnInternalLogCallback),
 				};
 #else
-            	// For standalone builds, UnityConsoleFormatter and manual loggers are typically managed by the config file
-            	IConsoleFormatter unityConsoleFormatter = null;
-            	List<FishMMO.Logging.ILogger> manualLoggers = null;
+				// For standalone builds, UnityConsoleFormatter and manual loggers are typically managed by the config file
+				IConsoleFormatter unityConsoleFormatter = null;
+				List<FishMMO.Logging.ILogger> manualLoggers = null;
 #endif
 
 				// Initialize the Log manager. It will attempt to load config from file first,

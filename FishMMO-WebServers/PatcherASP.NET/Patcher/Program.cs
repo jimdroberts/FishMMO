@@ -70,11 +70,6 @@ namespace FishMMO.WebServer
 						// Custom middleware to allow only Unity clients
 						app.UseMiddleware<UnityOnlyMiddleware>();
 
-						// Ensure that PatchVersionService loads version file on app start
-						var versionService = app.ApplicationServices.GetRequiredService<PatchVersionService>();
-						var versionFilePath = Path.Combine(Directory.GetCurrentDirectory(), "Configuration.cfg");
-						versionService.LoadFromFile(versionFilePath);  // Load version during app startup
-
 						// Enable routing for API endpoints
 						app.UseRouting();
 

@@ -49,6 +49,12 @@ namespace FishMMO.Shared
 #endif
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static string GetTemporaryPath()
+		{
+			return Path.Combine(GetWorkingDirectory(), "Temp");
+		}
+
 		public static class Configuration
 		{
 			public static readonly string ProjectName = "FishMMO";
