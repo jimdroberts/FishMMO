@@ -17,21 +17,6 @@ namespace AppHealthMonitor
 
 		private static readonly string loggingConfigName = "logging.json";
 
-		// Represents a console command
-		private class ConsoleCommand
-		{
-			public string Name { get; }
-			public string Description { get; }
-			public Func<Task> Action { get; }
-
-			public ConsoleCommand(string name, string description, Func<Task> action)
-			{
-				Name = name;
-				Description = description;
-				Action = action;
-			}
-		}
-
 		static async Task Main(string[] args)
 		{
 			string workingDirectory = Directory.GetCurrentDirectory();
