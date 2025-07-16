@@ -3,19 +3,22 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using FishMMO.Database.Npgsql;
 using FishMMO.Database.Npgsql.Entities;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using FishMMO.Logging;
 
 [ApiController]
 [Route("[controller]")]
 public class LoginServerController : ControllerBase
 {
 	private readonly NpgsqlDbContextFactory dbContextFactory;
-	private readonly ILogger<LoginServerController> logger;
 	private readonly IMemoryCache memoryCache;
 
-	public LoginServerController(NpgsqlDbContextFactory dbContextFactory, ILogger<LoginServerController> logger, IMemoryCache memoryCache)
+	public LoginServerController(NpgsqlDbContextFactory dbContextFactory, IMemoryCache memoryCache)
 	{
 		this.dbContextFactory = dbContextFactory;
-		this.logger = logger;
 		this.memoryCache = memoryCache;
 	}
 
@@ -24,11 +27,14 @@ public class LoginServerController : ControllerBase
 	{
 		const string cacheKey = "login_servers";
 
-		if (!memoryCache.TryGetValue(cacheKey, out List<LoginServerEntity> loginServers))
+		List<LoginServerEntity> loginServers;
+
+		if (!memoryCache.TryGetValue(cacheKey, out loginServers))
 		{
 			using NpgsqlDbContext dbContext = dbContextFactory.CreateDbContext();
 			if (dbContext == null)
 			{
+				await Log.Error("LoginServerController", "Failed to create DbContext for LoginServerController.");
 				return Unauthorized();
 			}
 
@@ -39,11 +45,17 @@ public class LoginServerController : ControllerBase
 			};
 
 			memoryCache.Set(cacheKey, loginServers, cacheEntryOptions);
-			logger.LogInformation("Cache miss. Loaded login servers from DB.");
+			await Log.Info("LoginServerController", "Cache miss. Loaded login servers from DB.");
 		}
 		else
 		{
-			logger.LogInformation("Cache hit for login servers.");
+			await Log.Info("LoginServerController", "Cache hit for login servers.");
+		}
+
+		if (loginServers == null || !loginServers.Any()) // Handle case where dbContext was null or no servers found
+		{
+			await Log.Error("LoginServerController", "No login servers available.");
+			return NotFound("No login servers available.");
 		}
 
 		return Ok(loginServers.Select(l => new

@@ -47,7 +47,7 @@ namespace AppHealthMonitor
 			string configFilePath = Path.Combine(workingDirectory, loggingConfigName);
 
 			// Initialize the Log manager.
-			Log.Initialize(configFilePath, new ConsoleFormatter(), null, Log.OnInternalLogMessage);
+			Log.Initialize(configFilePath, new ConsoleFormatter());
 
 			Log.Info("Daemon", "Starting Application Health Monitor Daemon...");
 

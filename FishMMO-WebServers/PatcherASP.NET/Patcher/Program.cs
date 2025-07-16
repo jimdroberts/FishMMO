@@ -1,43 +1,61 @@
 using FishMMO.Database.Npgsql;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Configuration;
+using FishMMO.Logging;
 
 namespace FishMMO.WebServer
 {
 	public class Program
 	{
-		private static readonly string HttpPort = "8090";
-
-		public static void Main(string[] args)
+		public static async Task Main(string[] args)
 		{
+			await Log.Initialize("logging.json");
+
+			await Log.Info("Program", "Starting WebServer application...");
+
 			CreateHostBuilder(args).Build().Run();
+
+			await Log.Shutdown();
+			await Log.Info("Program", "WebServer application shut down.");
 		}
 
 		public static IHostBuilder CreateHostBuilder(string[] args) =>
 			Host.CreateDefaultBuilder(args)
 				.ConfigureLogging((context, logging) =>
 				{
-					// Configure the logger to log to the console
 					logging.ClearProviders();
-					logging.AddConsole();
-					logging.SetMinimumLevel(LogLevel.Information);
 				})
 				.ConfigureWebHostDefaults(webBuilder =>
 				{
 					webBuilder.ConfigureKestrel((context, options) =>
 					{
-						options.ListenAnyIP(int.Parse(HttpPort));
+						// Get port from configuration
+						var httpPort = context.Configuration["WebServer:HttpPort"] ?? "8090"; // Default to 8090 if not found
+						options.ListenAnyIP(int.Parse(httpPort));
+						Log.Info("Kestrel", $"Kestrel configured to listen on any IP on port {httpPort}.");
 					})
 					.ConfigureServices((context, services) =>
 					{
+						Log.Info("Services", "Registering services...");
+
 						// Register NpgsqlDbContextFactory
 						services.AddSingleton<NpgsqlDbContextFactory>();
+						Log.Info("Services", "Registered NpgsqlDbContextFactory.");
+
+						// Register HttpClientFactory
+						services.AddHttpClient();
+						Log.Info("Services", "Registered HttpClientFactory.");
 
 						// Register patch version tracking and background heartbeat service
 						services.AddSingleton<PatchVersionService>();
+						Log.Info("Services", "Registered PatchVersionService.");
 						services.AddHostedService<PatchServerHeartbeatService>();
+						Log.Info("Services", "Registered PatchServerHeartbeatService.");
 
 						// Controllers
 						services.AddControllers();
+						Log.Info("Services", "Registered Controllers.");
 
 						services.AddCors(options =>
 						{
@@ -49,6 +67,7 @@ namespace FishMMO.WebServer
 									.WithHeaders("X-FishMMO");
 							});
 						});
+						Log.Info("Services", "Configured CORS policy 'AllowXFishMMO' with AllowAnyOrigin.");
 
 						services.Configure<ForwardedHeadersOptions>(options =>
 						{
@@ -59,26 +78,32 @@ namespace FishMMO.WebServer
 							// options.KnownProxies.Add(System.Net.IPAddress.Parse("YOUR_NGINX_SERVER_IP"));
 							// options.KnownNetworks.Add(new System.Net.IPNetwork(System.Net.IPAddress.Parse("10.0.0.0"), 8));
 						});
+						Log.Info("Services", "Configured ForwardedHeadersOptions.");
+
+						Log.Info("Services", "All services registered.");
 					})
 					.Configure(app =>
 					{
+						Log.Info("Middleware", "Configuring HTTP request pipeline...");
+
 						app.UseForwardedHeaders();
+						Log.Info("Middleware", "Added UseForwardedHeaders middleware.");
 
-						// Enable CORS with the configured policy
 						app.UseCors("AllowXFishMMO");
+						Log.Info("Middleware", "Added UseCors middleware with policy 'AllowXFishMMO'.");
 
-						// Custom middleware to allow only Unity clients
 						app.UseMiddleware<UnityOnlyMiddleware>();
+						Log.Info("Middleware", "Added UnityOnlyMiddleware.");
 
-						// Enable routing for API endpoints
 						app.UseRouting();
+						Log.Info("Middleware", "Added UseRouting middleware.");
 
-						// Enable endpoints for controllers
 						app.UseEndpoints(endpoints =>
 						{
-							// Map controllers to their respective routes
 							endpoints.MapControllers();
 						});
+						Log.Info("Middleware", "Mapped controller endpoints.");
+						Log.Info("Middleware", "HTTP request pipeline configured.");
 					});
 				});
 	}

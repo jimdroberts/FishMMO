@@ -1,24 +1,22 @@
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Logging;
 using System.IO;
 using System.Threading.Tasks;
+using FishMMO.Logging;
 
 public class RangeRequestMiddleware
 {
 	private readonly RequestDelegate next;
-	private readonly ILogger<RangeRequestMiddleware> logger;
 
-	public RangeRequestMiddleware(RequestDelegate next, ILogger<RangeRequestMiddleware> logger)
+	public RangeRequestMiddleware(RequestDelegate next)
 	{
 		this.next = next;
-		this.logger = logger;
 	}
 
 	public async Task InvokeAsync(HttpContext context)
 	{
 		var path = context.Request.Path.Value;
 
-		logger.LogInformation($"RangeRequestMiddleware path: {path}");
+		await Log.Info("RangeRequestMiddleare", $"RangeRequestMiddleware path: {path}");
 
 		if (string.IsNullOrEmpty(path))
 		{

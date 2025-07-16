@@ -1,83 +1,98 @@
 using FishMMO.Database.Npgsql;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Configuration;
+using FishMMO.Logging;
+using System.Threading.Tasks;
 
 namespace FishMMO.WebServer
 {
 	public class Program
 	{
-		private static readonly string HttpPort = "8080";
-
-		public static void Main(string[] args)
+		public static async Task Main(string[] args)
 		{
+			await Log.Initialize("logging.json");
+
+			await Log.Info("Program", "Starting WebServer application...");
+
 			CreateHostBuilder(args).Build().Run();
+
+			await Log.Shutdown();
+			await Log.Info("Program", "WebServer application shut down.");
 		}
 
 		public static IHostBuilder CreateHostBuilder(string[] args) =>
 			Host.CreateDefaultBuilder(args)
 				.ConfigureLogging((context, logging) =>
 				{
-					// Configure the logger to log to the console
 					logging.ClearProviders();
-					logging.AddConsole();
-					logging.SetMinimumLevel(LogLevel.Information);
 				})
 				.ConfigureWebHostDefaults(webBuilder =>
 				{
 					webBuilder.ConfigureKestrel((context, options) =>
 					{
-						options.ListenAnyIP(int.Parse(HttpPort));
+						var httpPort = context.Configuration["WebServer:HttpPort"] ?? "8080"; // Default to 8080 if not found
+						options.ListenAnyIP(int.Parse(httpPort));
+						Log.Info("Kestrel", $"Kestrel configured to listen on any IP on port {httpPort}.");
 					})
 					.ConfigureServices((context, services) =>
 					{
-						// Register NpgsqlDbContextFactory
+						Log.Info("Services", "Registering services...");
+
 						services.AddSingleton<NpgsqlDbContextFactory>();
+						Log.Info("Services", "Registered NpgsqlDbContextFactory.");
 
-						// Register Memory Cache
 						services.AddMemoryCache();
+						Log.Info("Services", "Registered IMemoryCache.");
 
-						// Add controllers (MVC) to the DI container
 						services.AddControllers();
+						Log.Info("Services", "Registered Controllers.");
 
-						// Configure CORS
 						services.AddCors(options =>
 						{
 							options.AddPolicy("AllowXFishMMO", builder =>
 							{
 								builder
-									.AllowAnyOrigin()  // Allow all origins (you can specify a list for production)
-									.AllowAnyMethod()   // Allow all HTTP methods (GET, POST, OPTIONS)
-									.WithHeaders("X-FishMMO");  // Only allow the X-FishMMO header
+									.AllowAnyOrigin()
+									.AllowAnyMethod()
+									.WithHeaders("X-FishMMO");
 							});
 						});
+						Log.Info("Services", "Configured CORS policy 'AllowXFishMMO' with AllowAnyOrigin.");
 
 						services.Configure<ForwardedHeadersOptions>(options =>
 						{
 							options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
-							// If your NGINX server is not on localhost (e.g., a separate VM or container),
-							// you might need to add its IP address or network range here.
-							// By default, loopback addresses (localhost) are trusted.
-							// options.KnownProxies.Add(System.Net.IPAddress.Parse("YOUR_NGINX_SERVER_IP"));
-							// options.KnownNetworks.Add(new System.Net.IPNetwork(System.Net.IPAddress.Parse("10.0.0.0"), 8));
 						});
+						Log.Info("Services", "Configured ForwardedHeadersOptions.");
+
+						Log.Info("Services", "All services registered.");
 					})
 					.Configure(app =>
 					{
-						app.UseForwardedHeaders();
+						Log.Info("Middleware", "Configuring HTTP request pipeline...");
 
-						// Enable CORS with the configured policy
+						app.UseForwardedHeaders();
+						Log.Info("Middleware", "Added UseForwardedHeaders middleware.");
+
 						app.UseCors("AllowXFishMMO");
+						Log.Info("Middleware", "Added UseCors middleware with policy 'AllowXFishMMO'.");
 
 						app.UseMiddleware<UnityOnlyMiddleware>();
+						Log.Info("Middleware", "Added UnityOnlyMiddleware.");
 
-						// Enable routing for API endpoints
 						app.UseRouting();
+						Log.Info("Middleware", "Added UseRouting middleware.");
 
-						// Enable endpoints for controllers
+						app.UseAuthorization();
+						Log.Info("Middleware", "Added UseAuthorization middleware.");
+
 						app.UseEndpoints(endpoints =>
 						{
-							// Map controllers to their respective routes
 							endpoints.MapControllers();
 						});
+						Log.Info("Middleware", "Mapped controller endpoints.");
+						Log.Info("Middleware", "HTTP request pipeline configured.");
 					});
 				});
 	}

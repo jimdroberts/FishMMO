@@ -1,19 +1,20 @@
 using Microsoft.AspNetCore.Mvc;
 using System;
+using Microsoft.Extensions.Hosting;
+using System.IO;
+using FishMMO.Logging;
 
 [ApiController]
 [Route("/")]
 public class PatchController : ControllerBase
 {
-	private readonly IWebHostEnvironment env;
+	private readonly IHostEnvironment env;
 	private readonly PatchVersionService versionService;
-	private readonly ILogger<PatchController> logger; // Inject logger for better error messages
 
-	public PatchController(IWebHostEnvironment env, PatchVersionService versionService, ILogger<PatchController> logger)
+	public PatchController(IHostEnvironment env, PatchVersionService versionService)
 	{
 		this.env = env;
 		this.versionService = versionService;
-		this.logger = logger;
 	}
 
 	[HttpGet("latest_version")]
@@ -28,51 +29,53 @@ public class PatchController : ControllerBase
 		var latest = versionService.LatestVersion;
 		if (latest == null)
 		{
-			logger.LogWarning("Latest version is null, cannot process patch request for version {RequestedVersion}.", version);
-			return NotFound("Latest version information not available.");
+			Log.Warning("PatchController", $"Latest version is null, cannot process patch request for version {version}.");
+			return StatusCode(500, "Latest version information not available on server."); // More specific error
 		}
 
-		// Parse client's requested version and the latest version using System.Version
-		if (!System.Version.TryParse(version, out System.Version? clientVersion))
+		// Use VersionConfig.Parse for client version
+		VersionConfig? clientVersionConfig = VersionConfig.Parse(version);
+		if (clientVersionConfig == null)
 		{
-			logger.LogWarning("Invalid client version format received: {RequestedVersion}", version);
-			return BadRequest("Invalid client version format.");
+			Log.Warning("PatchController", $"Invalid client version format received: {version}");
+			return BadRequest("Invalid client version format. Expected X.Y.Z or X.Y.Z.PreRelease.");
 		}
 
-		if (!System.Version.TryParse(latest, out System.Version? latestVersion))
+		// Use VersionConfig.Parse for latest version
+		VersionConfig? latestVersionConfig = VersionConfig.Parse(latest);
+		if (latestVersionConfig == null)
 		{
-			// This case should ideally not happen if PatchVersionService initializes correctly.
-			logger.LogError("Failed to parse latest version '{LatestVersion}' from PatchVersionService.", latest);
-			return StatusCode(500, "Internal server error: Latest version malformed.");
+			Log.Error("PatchController", $"Failed to parse latest version '{latest}' from PatchVersionService. Server version malformed.");
+			return StatusCode(500, "Internal server error: Latest server version malformed.");
 		}
 
-		// Use System.Version's comparison to check if already updated
-		if (clientVersion >= latestVersion)
+		// Use VersionConfig's comparison
+		if (clientVersionConfig >= latestVersionConfig)
 		{
-			logger.LogInformation("Client version {ClientVersion} is already up to date with latest version {LatestVersion}.", clientVersion, latestVersion);
+			Log.Info("PatchController", $"Client version {clientVersionConfig.FullVersion} is already up to date with latest version {latestVersionConfig.FullVersion}.");
 			return Ok(new { status = "AlreadyUpdated" });
 		}
 
-		// Construct the file path using the string representations of the parsed versions
-		var filePath = Path.Combine(env.ContentRootPath, "Patches", $"{clientVersion}-{latestVersion}.zip");
+		var patchDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Patches");
+		var filePath = Path.Combine(patchDirectory, $"{clientVersionConfig.FullVersion}-{latestVersionConfig.FullVersion}.zip");
 
 		if (!System.IO.File.Exists(filePath))
 		{
-			logger.LogWarning("Patch file not found for request {ClientVersion}-{LatestVersion}: {FilePath}", clientVersion, latestVersion, filePath);
-			return NotFound($"Patch file not found for version {version}.");
+			Log.Warning("PatchController", $"Patch file not found for request {clientVersionConfig.FullVersion}-{latestVersionConfig.FullVersion}: {filePath}");
+			return NotFound($"Patch file not found from version {clientVersionConfig.FullVersion} to {latestVersionConfig.FullVersion}.");
 		}
 
 		try
 		{
-			// Open a FileStream to the patch file
-			// FileShare.Read allows other processes to read the file while it's open
-			var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
-			// Return a FileStreamResult to stream the file
-			return new FileStreamResult(fileStream, "application/octet-stream");
+			var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, useAsync: true);
+			return new FileStreamResult(fileStream, "application/octet-stream")
+			{
+				FileDownloadName = $"{clientVersionConfig.FullVersion}-{latestVersionConfig.FullVersion}.zip" // Suggest download name
+			};
 		}
 		catch (Exception ex)
 		{
-			logger.LogError(ex, "Error opening patch file for streaming: {FilePath}", filePath);
+			Log.Error("PatchController", $"Error opening patch file for streaming: {filePath}", ex);
 			return StatusCode(500, "Internal server error: Could not access patch file.");
 		}
 	}

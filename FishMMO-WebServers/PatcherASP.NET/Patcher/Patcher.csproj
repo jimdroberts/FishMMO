@@ -10,8 +10,16 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.8" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.4.0" />
+	<PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="5.0.17" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\..\FishMMO-Logger\FishMMO-Logger\FishMMO-Logger.csproj" />
     <ProjectReference Include="..\..\..\FishMMO-Database\FishMMO-DB\FishMMO-DB.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Ensure appsettings.json is copied to the output directory -->
+    <None Update="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 </Project>

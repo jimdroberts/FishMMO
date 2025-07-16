@@ -2,7 +2,7 @@
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
-    <NoWarn>$(NoWarn);CS8618;CS8625</NoWarn>
+    <NoWarn>$(NoWarn);CS8618;CS8625;CS8600;CS8601;CS4014</NoWarn>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
@@ -11,6 +11,13 @@
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.4.0" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\..\FishMMO-Logger\FishMMO-Logger\FishMMO-Logger.csproj" />
     <ProjectReference Include="..\..\..\FishMMO-Database\FishMMO-DB\FishMMO-DB.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Ensure appsettings.json is copied to the output directory -->
+    <None Update="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 </Project>

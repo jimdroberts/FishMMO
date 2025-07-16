@@ -1,5 +1,6 @@
 using System;
 using System.Text.RegularExpressions;
+using FishMMO.Logging;
 
 public class VersionConfig : IComparable<VersionConfig>
 {
@@ -30,12 +31,10 @@ public class VersionConfig : IComparable<VersionConfig>
 	{
 		if (string.IsNullOrWhiteSpace(versionString))
 		{
-			Console.WriteLine("VersionConfig.Parse: Cannot parse null or empty version string.");
+			Log.Warning("VersionConfig", "VersionConfig.Parse: Cannot parse null or empty version string.");
 			return null;
 		}
 
-		// Regex to match versions like X.Y.Z or X.Y.Z.PreRelease
-		// Group 1: Major, Group 2: Minor, Group 3: Patch, Group 4: PreRelease (optional)
 		Match match = Regex.Match(versionString, @"^(\d+)\.(\d+)\.(\d+)(?:\.(.+))?$");
 
 		if (match.Success)
@@ -49,7 +48,7 @@ public class VersionConfig : IComparable<VersionConfig>
 		}
 		else
 		{
-			Console.WriteLine($"VersionConfig.Parse: Failed to parse version string '{versionString}'. Expected format: Major.Minor.Patch[.PreRelease]");
+			Log.Warning("VersionConfig", $"VersionConfig.Parse: Failed to parse version string '{versionString}'. Expected format: Major.Minor.Patch[.PreRelease]");
 			return null;
 		}
 	}
