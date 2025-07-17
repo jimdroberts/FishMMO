@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using System.IO.Compression;
+using System.IO.Hashing;
 using System.Text.Json;
 using System.Security.Cryptography;
 using FishMMO.Patcher;
@@ -637,21 +638,26 @@ class Program
 	}
 
 	/// <summary>
-	/// Computes the MD5 hash of a file.
+	/// Computes the XxHash128 hash of a file.
 	/// </summary>
 	/// <param name="filePath">The path to the file.</param>
-	/// <returns>The MD5 hash as a lowercase hexadecimal string, or null if the file does not exist.</returns>
+	/// <returns>The XxHash128 hash as a lowercase hexadecimal string (32 characters for 128-bit hash).</returns>
 	private static string ComputeFileHash(string filePath)
 	{
-		if (!File.Exists(filePath)) return null;
-
-		using (var md5 = MD5.Create())
+		using (var stream = File.OpenRead(filePath))
 		{
-			using (var stream = File.OpenRead(filePath))
+			XxHash128 xxHash128 = new XxHash128();
+
+			byte[] buffer = new byte[65536]; // 64KB buffer
+			int bytesRead;
+			while ((bytesRead = stream.Read(buffer, 0, buffer.Length)) > 0)
 			{
-				byte[] hashBytes = md5.ComputeHash(stream);
-				return BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
+				ReadOnlySpan<byte> dataSpan = new ReadOnlySpan<byte>(buffer, 0, bytesRead);
+				xxHash128.Append(dataSpan);
 			}
+
+			byte[] hashBytes = xxHash128.GetCurrentHash();
+			return BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
 		}
 	}
 

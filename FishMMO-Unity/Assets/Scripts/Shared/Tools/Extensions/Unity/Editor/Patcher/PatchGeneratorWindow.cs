@@ -5,13 +5,13 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Collections.Concurrent;
-using System.Security.Cryptography;
 using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using FishMMO.Logging;
 using FishMMO.Shared;
+using System.IO.Hashing;
 
 namespace FishMMO.Patcher
 {
@@ -921,7 +921,7 @@ namespace FishMMO.Patcher
 		}
 
 		/// <summary>
-		/// Recursively scans a directory and its subdirectories to get all file paths and their MD5 hashes.
+		/// Recursively scans a directory and its subdirectories to get all file paths and their XxHash3 hashes.
 		/// Files and directories specified in the 'ignoredExtensions' and 'ignoredDirectories' sets are skipped.
 		/// This method handles common file system access errors gracefully.
 		/// </summary>
@@ -945,102 +945,108 @@ namespace FishMMO.Patcher
 
 			directories.Push(normalizedRootDirectory); // Start the traversal from the normalized root directory.
 
-			using (var md5 = MD5.Create()) // Use MD5 for hashing
+			while (directories.Count > 0)
 			{
-				while (directories.Count > 0)
+				string currentDir = directories.Pop();
+
+				// Get the actual directory name, trimming any trailing slashes for accurate comparison with ignoredDirectories.
+				string currentDirName = Path.GetFileName(currentDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+
+				// Skip the current directory if its name is in the ignored list,
+				// but explicitly ensure the initial rootDirectory itself is always processed.
+				if (ignoredDirectories.Contains(currentDirName) && !currentDir.Equals(normalizedRootDirectory, StringComparison.OrdinalIgnoreCase))
 				{
-					string currentDir = directories.Pop();
+					Log.Info("Patcher", $"Skipping ignored directory and its contents: {currentDirName} (Full Path: {currentDir})");
+					continue; // Move to the next directory in the stack.
+				}
 
-					// Get the actual directory name, trimming any trailing slashes for accurate comparison with ignoredDirectories.
-					string currentDirName = Path.GetFileName(currentDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-
-					// Skip the current directory if its name is in the ignored list,
-					// but explicitly ensure the initial rootDirectory itself is always processed.
-					if (ignoredDirectories.Contains(currentDirName) && !currentDir.Equals(normalizedRootDirectory, StringComparison.OrdinalIgnoreCase))
+				try
+				{
+					string[] currentFiles = Directory.GetFiles(currentDir);
+					foreach (string file in currentFiles)
 					{
-						Log.Info("Patcher", $"Skipping ignored directory and its contents: {currentDirName} (Full Path: {currentDir})");
-						continue; // Move to the next directory in the stack.
-					}
-
-					try
-					{
-						string[] currentFiles = Directory.GetFiles(currentDir);
-						foreach (string file in currentFiles)
+						string extension = Path.GetExtension(file);
+						if (ignoredExtensions.Contains(extension))
 						{
-							string extension = Path.GetExtension(file);
-							if (ignoredExtensions.Contains(extension))
-							{
-								Log.Info("Patcher", $"\tSkipping file by extension: {Path.GetFileName(file)} ({extension}) in {currentDir}");
-								continue;
-							}
-
-							// Calculate relative path based on the normalized root directory.
-							string relativePath = file.Substring(normalizedRootDirectory.Length);
-							relativePath = relativePath.Replace('\\', '/'); // Standardize path separators for manifest.
-
-							//Log.Debug("Patcher", $"\tProcessing file: '{file}' -> Relative Path: '{relativePath}'");
-
-							string fileHash = ComputeFileHash(file, md5); // Pass MD5 instance
-							filesWithHashes.Add(relativePath, (relativePath, fileHash));
+							Log.Info("Patcher", $"\tSkipping file by extension: {Path.GetFileName(file)} ({extension}) in {currentDir}");
+							continue;
 						}
-					}
-					catch (UnauthorizedAccessException)
-					{
-						Log.Warning("Patcher", $"Access to directory '{currentDir}' is denied. Skipping files in this directory.");
-						// Continue to process subdirectories if possible, don't 'continue' the while loop here.
-					}
-					catch (DirectoryNotFoundException)
-					{
-						Log.Warning("Patcher", $"Directory '{currentDir}' not found. Skipping.");
-						continue; // This directory is gone, move to the next.
-					}
-					catch (IOException ex)
-					{
-						Log.Warning("Patcher", $"IO error accessing files in '{currentDir}': {ex.Message}. Skipping.");
-						continue; // Critical IO error for this directory, move to the next.
-					}
 
-					try
+						// Calculate relative path based on the normalized root directory.
+						string relativePath = file.Substring(normalizedRootDirectory.Length);
+						relativePath = relativePath.Replace('\\', '/'); // Standardize path separators for manifest.
+
+						//Log.Debug("Patcher", $"\tProcessing file: '{file}' -> Relative Path: '{relativePath}'");
+
+						string fileHash = ComputeFileHash(file); // Call the updated hash method
+						filesWithHashes.Add(relativePath, (relativePath, fileHash));
+					}
+				}
+				catch (UnauthorizedAccessException)
+				{
+					Log.Warning("Patcher", $"Access to directory '{currentDir}' is denied. Skipping files in this directory.");
+					// Continue to process subdirectories if possible, don't 'continue' the while loop here.
+				}
+				catch (DirectoryNotFoundException)
+				{
+					Log.Warning("Patcher", $"Directory '{currentDir}' not found. Skipping.");
+					continue; // This directory is gone, move to the next.
+				}
+				catch (IOException ex)
+				{
+					Log.Warning("Patcher", $"IO error accessing files in '{currentDir}': {ex.Message}. Skipping.");
+					continue; // Critical IO error for this directory, move to the next.
+				}
+
+				try
+				{
+					string[] subdirectories = Directory.GetDirectories(currentDir);
+					foreach (string subdir in subdirectories)
 					{
-						string[] subdirectories = Directory.GetDirectories(currentDir);
-						foreach (string subdir in subdirectories)
+						// Check if subdirectory name should be ignored before pushing to stack.
+						string subDirName = Path.GetFileName(subdir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+						if (ignoredDirectories.Contains(subDirName))
 						{
-							// Check if subdirectory name should be ignored before pushing to stack.
-							string subDirName = Path.GetFileName(subdir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-							if (ignoredDirectories.Contains(subDirName))
-							{
-								Log.Info("Patcher", $"Skipping ignored subdirectory: {subDirName} (Full Path: {subdir})");
-								continue; // Skip this subdirectory and its contents.
-							}
-							directories.Push(subdir); // Add subdirectory to the stack for later processing.
+							Log.Info("Patcher", $"Skipping ignored subdirectory: {subDirName} (Full Path: {subdir})");
+							continue; // Skip this subdirectory and its contents.
 						}
+						directories.Push(subdir); // Add subdirectory to the stack for later processing.
 					}
-					catch (UnauthorizedAccessException)
-					{
-						Log.Warning("Patcher", $"Access to subdirectory '{currentDir}' is denied. Skipping.");
-						continue;
-					}
-					catch (DirectoryNotFoundException)
-					{
-						Log.Warning("Patcher", $"Subdirectory '{currentDir}' not found. Skipping.");
-						continue;
-					}
+				}
+				catch (UnauthorizedAccessException)
+				{
+					Log.Warning("Patcher", $"Access to subdirectory '{currentDir}' is denied. Skipping.");
+					continue;
+				}
+				catch (DirectoryNotFoundException)
+				{
+					Log.Warning("Patcher", $"Subdirectory '{currentDir}' not found. Skipping.");
+					continue;
 				}
 			}
 			return filesWithHashes;
 		}
 
 		/// <summary>
-		/// Computes the MD5 hash of a file.
+		/// Computes the XxHash128 hash of a file.
 		/// </summary>
 		/// <param name="filePath">The path to the file.</param>
-		/// <param name="md5">The MD5 hash algorithm instance to use.</param>
-		/// <returns>The MD5 hash as a lowercase hexadecimal string.</returns>
-		private static string ComputeFileHash(string filePath, MD5 md5)
+		/// <returns>The XxHash128 hash as a lowercase hexadecimal string (32 characters for 128-bit hash).</returns>
+		private static string ComputeFileHash(string filePath)
 		{
 			using (var stream = File.OpenRead(filePath))
 			{
-				byte[] hashBytes = md5.ComputeHash(stream);
+				XxHash128 xxHash128 = new XxHash128();
+
+				byte[] buffer = new byte[65536]; // 64KB buffer
+				int bytesRead;
+				while ((bytesRead = stream.Read(buffer, 0, buffer.Length)) > 0)
+				{
+					ReadOnlySpan<byte> dataSpan = new ReadOnlySpan<byte>(buffer, 0, bytesRead);
+					xxHash128.Append(dataSpan);
+				}
+
+				byte[] hashBytes = xxHash128.GetCurrentHash();
 				return BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
 			}
 		}

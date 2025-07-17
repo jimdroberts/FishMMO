@@ -8,4 +8,7 @@
     <NoWarn>$(NoWarn);CS8618;CS8600;CS8602;CS8603</NoWarn>
   </PropertyGroup>
 
+	<ItemGroup>
+		<PackageReference Include="System.IO.Hashing" Version="9.0.4" />
+	</ItemGroup>
 </Project>
