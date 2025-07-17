@@ -31,11 +31,13 @@ namespace FishMMO.Client
 			if (UIManager.TryGet("UILoadingScreen", out UILoadingScreen loadingScreen) &&
 				loadingScreen.Visible)
 			{
+				this.gameObject.SetActive(false);
 				return;
 			}
 			if (UIManager.TryGet("UIReconnectDisplay", out UIReconnectDisplay reconnectDisplay) &&
 				reconnectDisplay.Visible)
 			{
+				this.gameObject.SetActive(false);
 				return;
 			}
 			if (RemainingLife > 0.0f)
@@ -61,7 +63,7 @@ namespace FishMMO.Client
 					c.a = alpha;
 					Style.normal.textColor = c;
 				}
-				
+
 				if (IncreaseY)
 				{
 					PixelOffset.y = Mathf.Lerp(OldY, YIncreaseValue, t);

@@ -23,6 +23,12 @@ namespace FishMMO.Shared
 		private static bool isInitiatingShutdown = false;
 		private static bool canQuitApplication = false; // Controls if Application.wantsToQuit should allow quitting
 
+		void Awake()
+		{
+			// Starts the Bootstrap initialization chain.
+			StartBootstrap();
+		}
+
 		private void OnInternalLogCallback(string message)
 		{
 			// This callback is used by FishMMO.Logging.Log for its internal messages.
@@ -216,7 +222,7 @@ namespace FishMMO.Shared
 
 			string workingDir = Constants.GetWorkingDirectory();
 
-#if UNITY_EDITOR
+#if !UNITY_EDITOR
 			string versionFilePath = Path.Combine(workingDir, "version.txt");
 
 			if (File.Exists(versionFilePath))
@@ -308,14 +314,14 @@ namespace FishMMO.Shared
 #region Server
 			List<AddressableSceneLoadData> initialScenes = new List<AddressableSceneLoadData>()
 			{
-				new AddressableSceneLoadData("ServerLauncher"),
+				new AddressableSceneLoadData("ServerLauncher", OnBootstrapPostProcess),
 			};
 #endregion
 #else
 			#region Client
 			List<AddressableSceneLoadData> initialScenes = new List<AddressableSceneLoadData>()
 			{
-				new AddressableSceneLoadData("ClientPreboot"),
+				new AddressableSceneLoadData("ClientPreboot", OnBootstrapPostProcess),
 			};
 			#endregion
 #endif

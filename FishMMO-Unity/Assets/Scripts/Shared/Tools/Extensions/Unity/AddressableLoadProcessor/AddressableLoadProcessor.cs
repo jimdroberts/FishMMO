@@ -161,17 +161,20 @@ namespace FishMMO.Shared
 		}
 
 		// Enqueue a single scene (string)
-		public static void EnqueueLoad(AddressableSceneLoadData sceneLoadData)
+		public static void EnqueueLoad(AddressableSceneLoadData sceneLoadData, Action<Scene> globalOnScenePostProcess = null)
 		{
 			if (!sceneOperationQueue.Contains(sceneLoadData) && !currentSceneOperations.ContainsKey(sceneLoadData) && !loadedScenes.ContainsKey(sceneLoadData.SceneName))
 			{
-				//Log.Debug("AddressableLoadProcessor", $"Enqueued: {sceneLoadData.SceneName}");
-				AsyncOperationHandle<SceneInstance> operation = LoadSceneByLabelAsync(sceneLoadData);
-				currentSceneOperations.Add(sceneLoadData, operation);
+				if (globalOnScenePostProcess != null)
+				{
+					sceneLoadData.OnSceneLoaded += globalOnScenePostProcess;
+				}
+				Log.Debug("AddressableLoadProcessor", $"Enqueued: {sceneLoadData.SceneName}");
+				sceneOperationQueue.Add(sceneLoadData);
 			}
 		}
 
-		public static void EnqueueLoad(IEnumerable<AddressableSceneLoadData> sceneLoadDatas)
+		public static void EnqueueLoad(IEnumerable<AddressableSceneLoadData> sceneLoadDatas, Action<Scene> globalOnScenePostProcess = null)
 		{
 			if (sceneLoadDatas == null || !sceneLoadDatas.Any())
 			{
@@ -179,7 +182,7 @@ namespace FishMMO.Shared
 			}
 			foreach (var sceneLoadData in sceneLoadDatas)
 			{
-				EnqueueLoad(sceneLoadData); // Reusing the single enqueue method
+				EnqueueLoad(sceneLoadData, globalOnScenePostProcess); // Reusing the single enqueue method
 			}
 		}
 
@@ -441,6 +444,7 @@ namespace FishMMO.Shared
 
 					loadedScenes.Add(loadedScene.name, op);
 					sceneLoadData.OnSceneLoaded?.Invoke(loadedScene);
+					sceneLoadData.OnSceneLoaded = null;
 					OnSceneLoaded?.Invoke(loadedScene);
 				}
 				else if (op.Status == AsyncOperationStatus.Failed)

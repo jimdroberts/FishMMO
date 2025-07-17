@@ -6,8 +6,6 @@ namespace FishMMO.Client
 {
 	public class ClientPostbootSystem : BootstrapSystem
 	{
-		public string UILoadingScreenKey = "UILoadingScreen";
-
 		private Vector3 cameraInitialPosition;
 		private Quaternion cameraInitialRotation;
 

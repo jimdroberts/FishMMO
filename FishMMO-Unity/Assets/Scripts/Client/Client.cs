@@ -41,7 +41,6 @@ namespace FishMMO.Client
 		private string lastWorldAddress = "";
 		private ushort lastWorldPort = 0;
 
-		public string UILoadingScreenKey = "UILoadingScreen";
 		public List<ServerAddress> LoginServerAddresses;
 		public List<AddressableSceneLoadData> WorldPreloadScenes = new List<AddressableSceneLoadData>();
 		public byte MaxReconnectAttempts = 10;

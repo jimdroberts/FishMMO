@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using FishMMO.Logging;
 
 namespace FishMMO.Shared
@@ -21,91 +22,155 @@ namespace FishMMO.Shared
 		public List<AddressableSceneLoadData> WebGLPreloadScenes = new List<AddressableSceneLoadData>();
 		public List<AddressableSceneLoadData> WebGLPostloadScenes = new List<AddressableSceneLoadData>();
 
+		private bool hasStartedBootstrap = false;
+		private List<BootstrapSystem> preloadedBootstrapSystems = new List<BootstrapSystem>();
+
 		void Awake()
+		{
+			// Logging is still safe to initialize here, as it's typically a global setup
+			Log.OnInternalLogMessage += OnInternalLogCallback;
+		}
+
+		/// <summary>
+		/// Initiates the asset and scene loading process for this bootstrap system.
+		/// This should be called explicitly, typically by a previous BootstrapSystem
+		/// after a scene has been loaded.
+		/// </summary>
+		public virtual void StartBootstrap()
+		{
+			if (hasStartedBootstrap)
+			{
+				Log.Warning("BootstrapSystem", $"{gameObject.scene.name} BootstrapSystem tried to start multiple times. Ignoring.");
+				return;
+			}
+			hasStartedBootstrap = true;
+
+			Log.Debug("BootstrapSystem", $"{gameObject.scene.name} BootstrapSystem Start");
+
+			InitializePreload();
+		}
+
+		private void OnInternalLogCallback(string message)
+		{
+			// This callback is used by FishMMO.Logging.Log for its internal messages.
+			// We set IsLoggingInternally to true to prevent UnityLoggerBridge from re-capturing
+			// Debug.Log calls made by our own logging system or internal processes.
+			// This ensures that these messages go directly to Unity's console without re-routing.
+			UnityLoggerBridge.IsLoggingInternally = true;
+			Debug.Log($"{message}");
+			UnityLoggerBridge.IsLoggingInternally = false;
+		}
+
+		/// <summary>
+		/// Called immediately after the BootstrapSystem has completed its full loading process (Preload & Postload).
+		/// This is the ideal place to trigger the loading of the next scene in a sequential flow.
+		/// </summary>
+		public virtual void OnCompleteProcessing()
+		{
+			Log.Debug("BootstrapSystem", $"{gameObject.scene.name} OnCompleteProcessing");
+
+			// Start any Bootstrap systems in the scenes that were loaded by this BootstrapSystem.
+			foreach (BootstrapSystem bootstrapSystem in preloadedBootstrapSystems)
+			{
+				bootstrapSystem.StartBootstrap();
+			}
+		}
+
+		/// <summary>
+		/// Called when Preload is completed.
+		/// </summary>
+		public virtual void OnCompletePreload()
+		{
+			Log.Debug("BootstrapSystem", $"{gameObject.scene.name} OnCompletePreload");
+			InitializePostload();
+		}
+
+		// Called immediately after Preload Scenes are enqueued to the Load Processor.
+		public virtual void OnPreload() { }
+
+		public void InitializePreload()
 		{
 #if UNITY_EDITOR
 			foreach (AddressableAssetKey assetKey in EditorPreloadAssets)
 			{
 				AddressableLoadProcessor.EnqueueLoad(assetKey.Keys, assetKey.MergeMode);
 			}
-			AddressableLoadProcessor.EnqueueLoad(EditorPreloadScenes);
+			AddressableLoadProcessor.EnqueueLoad(EditorPreloadScenes, OnBootstrapPostProcess);
 #elif UNITY_WEBGL
-			foreach (AddressableAssetKey assetKey in WebGLPreloadAssets)
-			{
-				AddressableLoadProcessor.EnqueueLoad(assetKey.Keys, assetKey.MergeMode);
-			}
-			AddressableLoadProcessor.EnqueueLoad(WebGLPreloadScenes);
+            foreach (AddressableAssetKey assetKey in WebGLPreloadAssets)
+            {
+                AddressableLoadProcessor.EnqueueLoad(assetKey.Keys, assetKey.MergeMode);
+            }
+            AddressableLoadProcessor.EnqueueLoad(WebGLPreloadScenes, OnBootstrapPostProcess);
 #else
-			foreach (AddressableAssetKey assetKey in PreloadAssets)
-			{
-				AddressableLoadProcessor.EnqueueLoad(assetKey.Keys, assetKey.MergeMode);
-			}
-			AddressableLoadProcessor.EnqueueLoad(PreloadScenes);
+            foreach (AddressableAssetKey assetKey in PreloadAssets)
+            {
+                AddressableLoadProcessor.EnqueueLoad(assetKey.Keys, assetKey.MergeMode);
+            }
+            AddressableLoadProcessor.EnqueueLoad(PreloadScenes, OnBootstrapPostProcess);
 #endif
 			OnPreload();
 			try
 			{
-				//Log.Debug($"{gameObject.scene.name} Preload Start");
+				Log.Debug("BootstrapSystem", $"{gameObject.scene.name} Preload Start");
+
 				AddressableLoadProcessor.OnProgressUpdate += AddressableLoadProcessor_OnPreloadProgressUpdate;
-				AddressableLoadProcessor.BeginProcessQueue();
+				AddressableLoadProcessor.BeginProcessQueue(); // This will start processing the global queue
 			}
 			catch (UnityException ex)
 			{
-				Log.Error("BootstrapSystem", $"Failed to load preload scenes...", ex);
+				Log.Error("BootstrapSystem", "Failed to load preload scenes...", ex);
 			}
 		}
 
 		/// <summary>
-		/// Called immediately after PreloadScenes are enqueued to the Load Processor.
-		/// </summary>
-		public virtual void OnPreload() { }
-
-		/// <summary>
 		/// Called after Preload is completed.
 		/// </summary>
-		private void AddressableLoadProcessor_OnPreloadProgressUpdate(float progress)
+		public void AddressableLoadProcessor_OnPreloadProgressUpdate(float progress)
 		{
-			// Wait for the Addressable Load Processor queue to complete loading.
 			if (progress < 1.0f)
 			{
 				return;
 			}
-
-			//Log.Debug($"{gameObject.scene.name} Preload Completed");
-
 			// Preload has completed.
 			AddressableLoadProcessor.OnProgressUpdate -= AddressableLoadProcessor_OnPreloadProgressUpdate;
 
+			Log.Debug("BootstrapSystem", $"{gameObject.scene.name} Preload Complete");
+			OnCompletePreload();
+		}
+
+		public void InitializePostload()
+		{
 #if UNITY_EDITOR
 			foreach (AddressableAssetKey assetKey in EditorPostloadAssets)
 			{
 				AddressableLoadProcessor.EnqueueLoad(assetKey.Keys, assetKey.MergeMode);
 			}
-			AddressableLoadProcessor.EnqueueLoad(EditorPostloadScenes);
+			AddressableLoadProcessor.EnqueueLoad(EditorPostloadScenes, OnBootstrapPostProcess);
 #elif UNITY_WEBGL
-			foreach (AddressableAssetKey assetKey in WebGLPostloadAssets)
-			{
-				AddressableLoadProcessor.EnqueueLoad(assetKey.Keys, assetKey.MergeMode);
-			}
-			AddressableLoadProcessor.EnqueueLoad(WebGLPostloadScenes);
+            foreach (AddressableAssetKey assetKey in WebGLPostloadAssets)
+            {
+                AddressableLoadProcessor.EnqueueLoad(assetKey.Keys, assetKey.MergeMode);
+            }
+            AddressableLoadProcessor.EnqueueLoad(WebGLPostloadScenes, OnBootstrapPostProcess);
 #else
-			foreach (AddressableAssetKey assetKey in PostloadAssets)
-			{
-				AddressableLoadProcessor.EnqueueLoad(assetKey.Keys, assetKey.MergeMode);
-			}
-			AddressableLoadProcessor.EnqueueLoad(PostloadScenes);
+            foreach (AddressableAssetKey assetKey in PostloadAssets)
+            {
+                AddressableLoadProcessor.EnqueueLoad(assetKey.Keys, assetKey.MergeMode);
+            }
+            AddressableLoadProcessor.EnqueueLoad(PostloadScenes, OnBootstrapPostProcess);
 #endif
 			OnPostLoad();
 			try
 			{
-				//Log.Debug($"{gameObject.scene.name} Postload Start");
+				Log.Debug("BootstrapSystem", $"{gameObject.scene.name} Postload Start");
 
 				AddressableLoadProcessor.OnProgressUpdate += AddressableLoadProcessor_OnPostloadProgressUpdate;
 				AddressableLoadProcessor.BeginProcessQueue();
 			}
 			catch (UnityException ex)
 			{
-				Log.Error("BootstrapSystem", $"Failed to load postload scenes...", ex);
+				Log.Error("BootstrapSystem", "Failed to load postload scenes...", ex);
 			}
 		}
 
@@ -126,20 +191,34 @@ namespace FishMMO.Shared
 			// Postload has completed.
 			AddressableLoadProcessor.OnProgressUpdate -= AddressableLoadProcessor_OnPostloadProgressUpdate;
 
-			//Log.Debug($"{gameObject.scene.name} Postload Complete");
+			Log.Debug("BootstrapSystem", $"{gameObject.scene.name} Postload Complete");
 			OnCompleteProcessing();
 		}
-
-		public virtual void OnCompleteProcessing() { }
 
 		void OnDestroy()
 		{
 			OnDestroying();
 		}
 
-		/// <summary>
-		/// Called immediately before the Load Processor releases all assets.
-		/// </summary>
 		public virtual void OnDestroying() { }
+
+		public void OnBootstrapPostProcess(Scene scene)
+		{
+			preloadedBootstrapSystems = OnScenePostProcess(scene);
+		}
+
+		private List<BootstrapSystem> OnScenePostProcess(Scene scene)
+		{
+			List<BootstrapSystem> preloadedBootstrapSystems = new List<BootstrapSystem>();
+			foreach (GameObject rootObject in scene.GetRootGameObjects())
+			{
+				BootstrapSystem[] bootstraps = rootObject.GetComponentsInChildren<BootstrapSystem>();
+				foreach (BootstrapSystem bootstrap in bootstraps)
+				{
+					preloadedBootstrapSystems.Add(bootstrap);
+				}
+			}
+			return preloadedBootstrapSystems;
+		}
 	}
 }
