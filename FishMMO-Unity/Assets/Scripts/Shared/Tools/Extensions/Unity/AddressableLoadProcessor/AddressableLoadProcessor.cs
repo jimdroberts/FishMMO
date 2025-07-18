@@ -34,11 +34,6 @@ namespace FishMMO.Shared
 			{
 				DontDestroyOnLoad(this.gameObject);
 			}
-
-			void OnApplicationQuit()
-			{
-				AddressableLoadProcessor.ReleaseAllAssets();
-			}
 		}
 
 		/// <summary>

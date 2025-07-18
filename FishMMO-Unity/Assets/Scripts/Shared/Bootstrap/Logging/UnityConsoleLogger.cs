@@ -71,11 +71,6 @@ namespace FishMMO.Shared
 			{
 				StringBuilder sb = new StringBuilder();
 
-				// Pad the raw timestamp string (excluding brackets), then add brackets and apply color.
-				string timestampContent = entry.Timestamp.ToString("yyyy-MM-dd HH:mm:ss 'UTC'");
-				string paddedTimestamp = ConsoleFormatterHelpers.PadRight($"[{timestampContent}]", ConsoleFormatterHelpers.TimestampColumnWidth - 2);
-				sb.Append($"<color=grey>{paddedTimestamp}</color>");
-
 				// Log Level with padding
 				// Pad the raw level string (excluding brackets), then add brackets and apply color.
 				string levelContent = entry.Level.ToString().ToUpper();

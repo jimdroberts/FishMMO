@@ -89,6 +89,16 @@ namespace FishMMO.Shared
 			}
 			isInitiatingShutdown = true;
 
+			// Perform Graphics Cleanup.
+			// This is critical for preventing "Releasing render texture" errors.
+			// For a dedicated server build, there typically should be no active cameras
+			// or render textures. If you still see "Releasing render texture" warnings,
+			// it suggests some unexpected graphics context or resource is being created.
+			// Implement specific logic here if you identify such resources.
+			Debug.Log("[MainBootstrapSystem] Starting graphics cleanup...");
+			GraphicsCleanup();
+			Debug.Log("[MainBootstrapSystem] Graphics cleanup completed.");
+
 			// Before performing asynchronous shutdown, detach our UnityLoggerBridge
 			// so that any Debug.Log calls during the async shutdown (e.g., from
 			// Log.SaveConfig or Log.Shutdown's internal messages) go directly to Unity's console
@@ -131,17 +141,7 @@ namespace FishMMO.Shared
 
 			try
 			{
-				// Step 1: Perform Graphics Cleanup.
-				// This is critical for preventing "Releasing render texture" errors.
-				// For a dedicated server build, there typically should be no active cameras
-				// or render textures. If you still see "Releasing render texture" warnings,
-				// it suggests some unexpected graphics context or resource is being created.
-				// Implement specific logic here if you identify such resources.
-				Debug.Log("[MainBootstrapSystem] Starting graphics cleanup...");
-				await GraphicsCleanup();
-				Debug.Log("[MainBootstrapSystem] Graphics cleanup completed.");
-
-				// Step 2: Save logging configuration.
+				// Step 1: Save logging configuration.
 				// Only save config for standalone builds during shutdown
 				Debug.Log("[MainBootstrapSystem] Attempting to save logging configuration...");
 				// IMPORTANT: Log.CurrentLoggingConfig might be null if Log.Initialize failed
@@ -161,7 +161,7 @@ namespace FishMMO.Shared
 				}
 				Debug.Log("[MainBootstrapSystem] Finished attempting to save logging configuration.");
 
-				// Step 3: Shut down the logging system.
+				// Step 2: Shut down the logging system.
 				if (Log.IsInitialized)
 				{
 					Debug.Log("[MainBootstrapSystem] Awaiting Log.Shutdown()...");
@@ -197,13 +197,11 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Placeholder for actual graphics cleanup logic.
 		/// For a dedicated server build, this method typically does nothing as there are no cameras or visual rendering.
-		/// However, if "Releasing render texture" warnings persist, you might need to investigate
-		/// if any code is creating RenderTextures (e.g., for compute shaders, image processing)
-		/// and explicitly release them here.
 		/// </summary>
 		private async Task GraphicsCleanup()
 		{
-			Debug.Log("[MainBootstrapSystem] GraphicsCleanup method executed for server build.");
+			AddressableLoadProcessor.ReleaseAllAssets();
+			
 			await Task.Yield(); // Simulate asynchronous work if needed.
 		}
 
@@ -265,8 +263,6 @@ namespace FishMMO.Shared
 #endif
 			Application.wantsToQuit += OnApplicationWantsToQuit;
 
-			Log.OnInternalLogMessage += OnInternalLogCallback;
-
 			string configFilePath = Path.Combine(workingDir, configFileName);
 
 			try
@@ -298,7 +294,7 @@ namespace FishMMO.Shared
 
 				// Initialize the Log manager. It will attempt to load config from file first,
 				// then use manual loggers if provided.
-				Log.Initialize(configFilePath, unityConsoleFormatter, manualLoggers, Log.OnInternalLogMessage, new List<Type>() { typeof(UnityConsoleLoggerConfig) });
+				Log.Initialize(configFilePath, unityConsoleFormatter, manualLoggers, OnInternalLogCallback, new List<Type>() { typeof(UnityConsoleLoggerConfig) });
 
 
 				Debug.Log("[MainBootstrapSystem] Logging system initialized successfully.");
@@ -334,7 +330,6 @@ namespace FishMMO.Shared
 			EditorApplication.playModeStateChanged -= OnEditorPlayModeStateChanged;
 #endif
 			Application.wantsToQuit -= OnApplicationWantsToQuit;
-			Log.OnInternalLogMessage -= OnInternalLogCallback;
 
 			if (!isInitiatingShutdown && Application.isPlaying)
 			{

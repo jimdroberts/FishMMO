@@ -28,7 +28,7 @@ namespace FishMMO.Shared
 		void Awake()
 		{
 			// Logging is still safe to initialize here, as it's typically a global setup
-			Log.OnInternalLogMessage += OnInternalLogCallback;
+			Log.OnInternalLogMessage = OnInternalLogCallback;
 		}
 
 		/// <summary>
@@ -198,6 +198,8 @@ namespace FishMMO.Shared
 		void OnDestroy()
 		{
 			OnDestroying();
+
+			Log.OnInternalLogMessage = null;
 		}
 
 		public virtual void OnDestroying() { }
