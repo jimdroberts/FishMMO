@@ -79,9 +79,7 @@ namespace FishMMO.Client
 		private void ClientManager_OnClientConnectionState(ClientConnectionStateArgs args)
 		{
 			if (args.ConnectionState == LocalConnectionState.Stopping ||
-				args.ConnectionState == LocalConnectionState.Stopped ||
-				args.ConnectionState == LocalConnectionState.StoppedClosed ||
-				args.ConnectionState == LocalConnectionState.StoppedError)
+				args.ConnectionState == LocalConnectionState.Stopped)
 			{
 				if (rsa != null)
 				{

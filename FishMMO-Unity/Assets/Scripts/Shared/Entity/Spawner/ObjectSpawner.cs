@@ -1,4 +1,5 @@
 ﻿using FishNet.Object;
+using FishNet.Utility.Performance;
 using System;
 using System.Collections.Generic;
 using UnityEngine;
@@ -337,9 +338,8 @@ namespace FishMMO.Shared
 
 			if (prefab != null)
 			{
-				// instantiate the an object
-				NetworkObject nob = NetworkManager.GetPooledInstantiated(prefab, spawnPosition, Transform.rotation, true);
-
+				// Instantiate the object
+				NetworkObject nob = NetworkManager.GetPooledInstantiated(spawnableSettings.NetworkObject.PrefabId, spawnableSettings.NetworkObject.SpawnableCollectionId, ObjectPoolRetrieveOption.MakeActive, null, spawnPosition, Transform.rotation, null, true);
 				if (nob == null)
 				{
 					return;

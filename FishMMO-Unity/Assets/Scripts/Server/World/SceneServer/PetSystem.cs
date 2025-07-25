@@ -1,6 +1,7 @@
 using FishNet.Connection;
 using FishNet.Object;
 using FishNet.Transporting;
+using FishNet.Utility.Performance;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
 using UnityEngine;
@@ -305,7 +306,7 @@ namespace FishMMO.Server
 				spawnPosition = hit.point;
 			}
 
-			NetworkObject nob = Server.NetworkManager.GetPooledInstantiated(petAbilityTemplate.PetPrefab, spawnPosition, caster.Transform.rotation, true);
+			NetworkObject nob = Server.NetworkManager.GetPooledInstantiated(petAbilityTemplate.PetPrefab.PrefabId, petAbilityTemplate.PetPrefab.SpawnableCollectionId, ObjectPoolRetrieveOption.Unset, null, spawnPosition, caster.Transform.rotation, null, true);
 			Pet pet = nob.GetComponent<Pet>();
 			if (pet == null)
 			{

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using FishNet.Managing;
 using FishNet.Object;
+using FishNet.Utility.Performance;
 using FishMMO.Database.Npgsql;
 using FishMMO.Database.Npgsql.Entities;
 using FishMMO.Shared;
@@ -527,7 +528,7 @@ namespace FishMMO.Server.DatabaseServices
 				}
 
 				// instantiate the character object
-				NetworkObject nob = networkManager.GetPooledInstantiated(characterPrefab.NetworkObject, dbPosition, dbRotation, true);
+				NetworkObject nob = networkManager.GetPooledInstantiated(characterPrefab.NetworkObject.PrefabId, characterPrefab.NetworkObject.SpawnableCollectionId, ObjectPoolRetrieveOption.Unset, null, dbPosition, dbRotation, null, true);
 				character = nob.GetComponent<IPlayerCharacter>();
 				if (character == null)
 				{

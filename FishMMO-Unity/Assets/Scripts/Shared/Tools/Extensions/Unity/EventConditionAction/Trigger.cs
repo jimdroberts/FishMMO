@@ -5,7 +5,7 @@ using FishMMO.Logging;
 namespace FishMMO.Shared
 {
 	[CreateAssetMenu(fileName = "New Trigger", menuName = "FishMMO/Triggers/Trigger", order = 0)]
-	public class Trigger : CachedScriptableObject<BaseCondition>, ICachedObject
+	public class Trigger : CachedScriptableObject<Trigger>, ICachedObject
 	{
 		[Tooltip("Conditions that must be met for actions to execute.")]
 		public List<BaseCondition> Conditions = new List<BaseCondition>();

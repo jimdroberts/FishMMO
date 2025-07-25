@@ -303,7 +303,7 @@ namespace FishMMO.Patcher
 				// --- Step 1: Validate Directories ---
 				if (!Directory.Exists(latestClientDirectory))
 				{
-					Log.Error("Patcher", $"Error: Latest client directory '{latestClientDirectory}' does not exist. Please check the path.");
+					await Log.Error("Patcher", $"Error: Latest client directory '{latestClientDirectory}' does not exist. Please check the path.");
 					EditorUtility.DisplayDialog("Error", "Latest client directory does not exist.", "OK");
 					return;
 				}
@@ -317,7 +317,7 @@ namespace FishMMO.Patcher
 						string[] foundOldDirs = Directory.GetDirectories(oldClientsRootDirectory);
 						if (foundOldDirs.Length == 0)
 						{
-							Log.Info("Patcher", $"No old client version subdirectories found in '{oldClientsRootDirectory}'.");
+							await Log.Info("Patcher", $"No old client version subdirectories found in '{oldClientsRootDirectory}'.");
 						}
 						else
 						{
@@ -326,7 +326,7 @@ namespace FishMMO.Patcher
 					}
 					else
 					{
-						Log.Error("Patcher", "Error: Root directory for multiple old clients is not valid or does not exist.");
+						await Log.Error("Patcher", "Error: Root directory for multiple old clients is not valid or does not exist.");
 						EditorUtility.DisplayDialog("Error", "Root directory for multiple old clients is not valid or does not exist.", "OK");
 						return;
 					}
@@ -339,7 +339,7 @@ namespace FishMMO.Patcher
 					}
 					else
 					{
-						Log.Error("Patcher", "Error: Single old client directory is not valid or does not exist.");
+						await Log.Error("Patcher", "Error: Single old client directory is not valid or does not exist.");
 						EditorUtility.DisplayDialog("Error", "Single old client directory is not valid or does not exist.", "OK");
 						return;
 					}
@@ -347,7 +347,7 @@ namespace FishMMO.Patcher
 
 				if (oldClientDirsToProcess.Count == 0)
 				{
-					Log.Info("Patcher", "No old client directories to process. Aborting.");
+					await Log.Info("Patcher", "No old client directories to process. Aborting.");
 					EditorUtility.DisplayDialog("Information", "No old client directories found to process.", "OK");
 					return;
 				}
@@ -359,7 +359,7 @@ namespace FishMMO.Patcher
 				}
 
 				// --- Step 2: Pre-cache ALL Version Data (Latest & Old) ---
-				Log.Info("Patcher", "Starting pre-caching of all client versions...");
+				await Log.Info("Patcher", "Starting pre-caching of all client versions...");
 				await PreloadAllClientVersionsAsync(latestClientDirectory, oldClientDirsToProcess);
 
 				if (latestVersionConfig == null)
@@ -377,24 +377,24 @@ namespace FishMMO.Patcher
 				{
 					if (Directory.Exists(patchOutputDirectory))
 					{
-						Log.Warning("Patcher", $"Deleting existing content in patch output directory '{patchOutputDirectory}'.");
+						await Log.Warning("Patcher", $"Deleting existing content in patch output directory '{patchOutputDirectory}'.");
 						Directory.Delete(patchOutputDirectory, true);
 					}
 					Directory.CreateDirectory(patchOutputDirectory);
 				}
 				catch (Exception ex)
 				{
-					Log.Error("Patcher", $"Error preparing patch output directory '{patchOutputDirectory}': {ex.Message}");
+					await Log.Error("Patcher", $"Error preparing patch output directory '{patchOutputDirectory}': {ex.Message}");
 					EditorUtility.DisplayDialog("Error", $"Could not prepare output directory: {ex.Message}", "OK");
 					return;
 				}
 
-				Log.Info("Patcher", "The following file extensions will be ignored during patch generation: " + string.Join(", ", ignoredExtensions));
-				Log.Info("Patcher", "The following directories will be ignored during patch generation: " + string.Join(", ", ignoredDirectories));
+				await Log.Info("Patcher", "The following file extensions will be ignored during patch generation: " + string.Join(", ", ignoredExtensions));
+				await Log.Info("Patcher", "The following directories will be ignored during patch generation: " + string.Join(", ", ignoredDirectories));
 
 				// --- Step 4: Generate Patches in Parallel using cached data ---
-				Log.Info("Patcher", "Starting multi-threaded patch generation process.");
-				Log.Info("Patcher", $"Generating patches from {oldClientDirsToProcess.Count} old client versions to latest ({latestVersionConfig.FullVersion}):");
+				await Log.Info("Patcher", "Starting multi-threaded patch generation process.");
+				await Log.Info("Patcher", $"Generating patches from {oldClientDirsToProcess.Count} old client versions to latest ({latestVersionConfig.FullVersion}):");
 
 				PatchGenerator patchGenerator = new PatchGenerator();
 
@@ -481,12 +481,12 @@ namespace FishMMO.Patcher
 					});
 				});
 
-				Log.Info("Patcher", "All patch generation operations complete.");
+				await Log.Info("Patcher", "All patch generation operations complete.");
 				EditorUtility.DisplayDialog("Success", "Patch generation process finished. Check console for detailed logs.", "OK");
 			}
 			catch (Exception ex)
 			{
-				Log.Error("Patcher", $"An unhandled error occurred during patch generation: {ex.Message}", ex);
+				await Log.Error("Patcher", $"An unhandled error occurred during patch generation: {ex.Message}", ex);
 				EditorUtility.DisplayDialog("Error", $"An unexpected error occurred: {ex.Message}", "OK");
 			}
 			finally
@@ -512,14 +512,14 @@ namespace FishMMO.Patcher
 			{
 				if (!Directory.Exists(latestClientDirectory))
 				{
-					Log.Error("Patcher", $"Error: Latest client directory '{latestClientDirectory}' does not exist. Cannot generate manifest.");
+					await Log.Error("Patcher", $"Error: Latest client directory '{latestClientDirectory}' does not exist. Cannot generate manifest.");
 					EditorUtility.DisplayDialog("Error", "Latest client directory does not exist.", "OK");
 					manifestGenerationStatus = "Failed: Directory not found.";
 					return;
 				}
 				if (string.IsNullOrEmpty(patchOutputDirectory) || !Directory.Exists(patchOutputDirectory))
 				{
-					Log.Error("Patcher", $"Error: Patch output directory '{patchOutputDirectory}' is invalid or does not exist. Cannot save manifest.");
+					await Log.Error("Patcher", $"Error: Patch output directory '{patchOutputDirectory}' is invalid or does not exist. Cannot save manifest.");
 					EditorUtility.DisplayDialog("Error", "Patch output directory is invalid or does not exist.", "OK");
 					manifestGenerationStatus = "Failed: Output directory invalid.";
 					return;
@@ -557,13 +557,13 @@ namespace FishMMO.Patcher
 					File.WriteAllText(manifestFilePath, manifestJson);
 				});
 
-				Log.Info("Patcher", $"Successfully generated complete manifest: {manifestFilePath}");
+				await Log.Info("Patcher", $"Successfully generated complete manifest: {manifestFilePath}");
 				EditorUtility.DisplayDialog("Success", $"Complete manifest generated at:\n{manifestFilePath}", "OK");
 				manifestGenerationStatus = $"Completed: {manifestFileName}";
 			}
 			catch (Exception ex)
 			{
-				Log.Error("Patcher", $"Error generating complete manifest: {ex.Message}", ex);
+				await Log.Error("Patcher", $"Error generating complete manifest: {ex.Message}", ex);
 				EditorUtility.DisplayDialog("Error", $"Failed to generate complete manifest: {ex.Message}", "OK");
 				manifestGenerationStatus = $"Failed: {ex.Message}";
 			}
@@ -594,11 +594,11 @@ namespace FishMMO.Patcher
 			latestVersionConfig = await GetVersionConfigFromFile(latestClientPath);
 			if (latestVersionConfig == null)
 			{
-				Log.Error("Patcher", $"Failed to pre-cache latest client version from '{latestClientPath}'.");
+				await Log.Error("Patcher", $"Failed to pre-cache latest client version from '{latestClientPath}'.");
 			}
 			else
 			{
-				Log.Info("Patcher", $"Pre-cached latest client version from '{Path.GetFileName(latestClientPath)}': {latestVersionConfig.FullVersion}");
+				await Log.Info("Patcher", $"Pre-cached latest client version from '{Path.GetFileName(latestClientPath)}': {latestVersionConfig.FullVersion}");
 			}
 			currentOperationIndex++;
 
@@ -611,12 +611,12 @@ namespace FishMMO.Patcher
 				VersionConfig oldConfig = await GetVersionConfigFromFile(oldPath);
 				if (oldConfig == null)
 				{
-					Log.Warning("Patcher", $"Failed to pre-cache old client version from '{oldPath}'. This client will be skipped.");
+					await Log.Warning("Patcher", $"Failed to pre-cache old client version from '{oldPath}'. This client will be skipped.");
 				}
 				else
 				{
 					oldClientVersionCache[oldPath] = oldConfig;
-					Log.Info("Patcher", $"Pre-cached old client version from '{oldClientName}': {oldConfig.FullVersion}");
+					await Log.Info("Patcher", $"Pre-cached old client version from '{oldClientName}': {oldConfig.FullVersion}");
 				}
 				currentOperationIndex++;
 			}

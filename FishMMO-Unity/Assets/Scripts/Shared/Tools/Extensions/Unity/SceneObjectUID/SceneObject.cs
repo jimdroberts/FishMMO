@@ -10,6 +10,11 @@ namespace FishMMO.Shared
 
 		public static void Register(ISceneObject sceneObject, bool asClient = false)
 		{
+			if (sceneObject == null)
+			{
+				return;
+			}
+			// If this is a client, we don't want to assign an ID, as it will be assigned by the server.
 			if (!asClient)
 			{
 				do

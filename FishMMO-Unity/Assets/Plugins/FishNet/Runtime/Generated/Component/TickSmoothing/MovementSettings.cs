@@ -33,6 +33,11 @@ namespace FishNet.Component.Transforming.Beta
         /// </summary>
         [Tooltip("Properties to smooth. Any value not selected will become offset with every movement.")]
         public TransformPropertiesFlag SmoothedProperties;
+        /// <summary>
+        /// True to keep non-smoothed properties at their original localspace every tick. A false value will keep the properties in the same world space as they were before each tick.
+        /// </summary>
+        [Tooltip("True to keep non-smoothed properties at their original localspace every tick. A false value will keep the properties in the same world space as they were before each tick.")]
+        public bool SnapNonSmoothedProperties;
 
         public MovementSettings(bool unityReallyNeedsToSupportParameterlessInitializersOnStructsAlready)
         {
@@ -41,7 +46,7 @@ namespace FishNet.Component.Transforming.Beta
             AdaptiveInterpolationValue = AdaptiveInterpolationType.Off;
             InterpolationValue = 2;
             SmoothedProperties = TransformPropertiesFlag.Everything;
+            SnapNonSmoothedProperties = false;
         }
-
     }
 }

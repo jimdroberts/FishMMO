@@ -21,15 +21,12 @@ namespace FishNet.Component.Transforming.Beta
 
         #region Private.
         /// <summary>
-        /// 
         /// </summary>
         private InitializationSettings _initializationSettings = new();
         /// <summary>
-        /// 
         /// </summary>
         private MovementSettings _ownerMovementSettings = new();
         /// <summary>
-        /// 
         /// </summary>
         private MovementSettings _spectatorMovementSettings = new();
         /// <summary>
@@ -53,10 +50,6 @@ namespace FishNet.Component.Transforming.Beta
         /// </summary>
         private bool _initializedOffline;
         /// <summary>
-        /// Last localTick the adaptive interpolation was re-calculated.
-        /// </summary>
-        private uint _nextRealtimeInterpolationUpdateTick = TimeManager.UNSET_TICK;
-        /// <summary>
         /// True if subscribed to events used for adaptiveInterpolation.
         /// </summary>
         private bool _subscribedToAdaptiveEvents;
@@ -79,7 +72,7 @@ namespace FishNet.Component.Transforming.Beta
             _ownerMovementSettings = ownerSettings;
             _spectatorMovementSettings = spectatorSettings;
 
-            _initializedOffline = (initializationSettings.InitializingNetworkBehaviour == null);
+            _initializedOffline = initializationSettings.InitializingNetworkBehaviour == null;
 
             _isInitialized = true;
         }
@@ -97,7 +90,7 @@ namespace FishNet.Component.Transforming.Beta
             if (!_isInitialized)
                 return;
 
-            bool canStart = (_initializedOffline) ? StartOffline() : StartOnline();
+            bool canStart = _initializedOffline ? StartOffline() : StartOnline();
 
             if (!canStart)
                 return;
@@ -132,7 +125,7 @@ namespace FishNet.Component.Transforming.Beta
 
             if (!_initializedOffline)
                 StopOnline();
-            
+
             if (UniversalSmoother != null)
                 UniversalSmoother.StopSmoother();
 
@@ -140,9 +133,9 @@ namespace FishNet.Component.Transforming.Beta
             {
                 SetTimeManager(tm: null);
             }
-            
-            //Intentionally left blank.
-            //void StopOffline() { }
+
+            // Intentionally left blank.
+            // void StopOffline() { }
         }
 
         public void TimeManager_OnUpdate()
@@ -152,43 +145,7 @@ namespace FishNet.Component.Transforming.Beta
 
         public void TimeManager_OnPreTick()
         {
-            UpdateRealtimeInterpolation(_timeManager, UniversalSmoother);
-
             UniversalSmoother.OnPreTick();
-        }
-
-        /// <summary>
-        /// Updates realtime interpolation value using a variety of calculations.
-        /// </summary>
-        private void UpdateRealtimeInterpolation(TimeManager tm, UniversalTickSmoother smoother, uint clientReconcileStateTick = TimeManager.UNSET_TICK, bool force = false)
-        {
-            uint localTick = tm.LocalTick;
-
-            bool canUpdate = (!force && localTick >= _nextRealtimeInterpolationUpdateTick);
-            if (!canUpdate)
-                return;
-
-            _nextRealtimeInterpolationUpdateTick = localTick + tm.TickRate;
-
-            /* If tick is specified then update with that using the PreReconcile method.
-             * Otherwise, guestimate latency using roundTripTime. */
-            if (clientReconcileStateTick != TimeManager.UNSET_TICK)
-            {
-                smoother.UpdateRealtimeInterpolation(clientReconcileStateTick);
-                _nextRealtimeInterpolationUpdateTick = tm.LocalTick + 1;
-            }
-            //Using rtt.
-            else
-            {
-                //Calculate roughly what client state tick would be.
-                uint rttToTicks = tm.TimeToTicks(tm.RoundTripTime / 2);
-
-                long clientStateTick = (long)(rttToTicks / 2) - tm.NetworkManager.PredictionManager.StateInterpolation;
-                if (clientStateTick < 0)
-                    clientStateTick = 0;
-
-                smoother.UpdateRealtimeInterpolation((uint)clientStateTick);
-            }
         }
 
         /// <summary>
@@ -200,19 +157,14 @@ namespace FishNet.Component.Transforming.Beta
                 UniversalSmoother.OnPostTick(_timeManager.LocalTick);
         }
 
-        private void PredictionManager_OnPreReconcile(uint clientTick, uint serverTick)
-        {
-            NetworkObject nob = _initializingNetworkBehaviour.NetworkObject;
-            if (!nob.EnablePrediction || !nob.IsObjectReconciling)
-                return;
-
-            uint clientStateTick = nob.PredictionManager.ClientStateTick;
-            UpdateRealtimeInterpolation(_timeManager, UniversalSmoother, clientStateTick);
-        }
-
         private void PredictionManager_OnPostReplicateReplay(uint clientTick, uint serverTick)
         {
             UniversalSmoother.OnPostReplicateReplay(clientTick);
+        }
+
+        private void TimeManager_OnRoundTripTimeUpdated(long rttMs)
+        {
+            UniversalSmoother.UpdateRealtimeInterpolation();
         }
 
         /// <summary>
@@ -250,7 +202,7 @@ namespace FishNet.Component.Transforming.Beta
         //
         //     bool previousTargetTransformIsValid = (currentTargetTransform != null);
         //
-        //     //If target is different and old is not null then reset.
+        //     // If target is different and old is not null then reset.
         //     if (previousTargetTransformIsValid && clientStartCalled)
         //         OnStopClient();
         //
@@ -267,7 +219,7 @@ namespace FishNet.Component.Transforming.Beta
             if (tm == _timeManager)
                 return;
 
-            //Unsub from current.
+            // Unsub from current.
             ChangeSubscriptions(false);
             //Sub to newest.
             _timeManager = tm;
@@ -289,7 +241,7 @@ namespace FishNet.Component.Transforming.Beta
                 return;
             _subscribed = subscribe;
 
-            bool adaptiveIsOff = (_ownerMovementSettings.AdaptiveInterpolationValue == AdaptiveInterpolationType.Off && _spectatorMovementSettings.AdaptiveInterpolationValue == AdaptiveInterpolationType.Off);
+            bool adaptiveIsOff = _ownerMovementSettings.AdaptiveInterpolationValue == AdaptiveInterpolationType.Off && _spectatorMovementSettings.AdaptiveInterpolationValue == AdaptiveInterpolationType.Off;
 
             if (subscribe)
             {
@@ -299,8 +251,8 @@ namespace FishNet.Component.Transforming.Beta
 
                 if (!adaptiveIsOff)
                 {
+                    tm.OnRoundTripTimeUpdated += TimeManager_OnRoundTripTimeUpdated;
                     PredictionManager pm = tm.NetworkManager.PredictionManager;
-                    pm.OnPreReconcile += PredictionManager_OnPreReconcile;
                     pm.OnPostReplicateReplay += PredictionManager_OnPostReplicateReplay;
                     _subscribedToAdaptiveEvents = true;
                 }
@@ -313,8 +265,8 @@ namespace FishNet.Component.Transforming.Beta
 
                 if (_subscribedToAdaptiveEvents)
                 {
+                    tm.OnRoundTripTimeUpdated -= TimeManager_OnRoundTripTimeUpdated;
                     PredictionManager pm = tm.NetworkManager.PredictionManager;
-                    pm.OnPreReconcile -= PredictionManager_OnPreReconcile;
                     pm.OnPostReplicateReplay -= PredictionManager_OnPostReplicateReplay;
                 }
             }
@@ -330,11 +282,10 @@ namespace FishNet.Component.Transforming.Beta
             _timeManager = null;
             _initializingNetworkBehaviour = null;
             _graphicalTransform = null;
-            _nextRealtimeInterpolationUpdateTick = TimeManager.UNSET_TICK;
 
             _subscribed = false;
             _subscribedToAdaptiveEvents = false;
-            
+
             _isInitialized = false;
         }
 

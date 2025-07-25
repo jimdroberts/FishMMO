@@ -13,6 +13,16 @@ namespace FishMMO.Shared
 		public List<KnownAbilityAddBroadcast> Abilities;
 	}
 
+	public struct KnownAbilityEventAddBroadcast : IBroadcast
+	{
+		public int TemplateID;
+	}
+
+	public struct KnownAbilityEventAddMultipleBroadcast : IBroadcast
+	{
+		public List<KnownAbilityEventAddBroadcast> AbilityEvents;
+	}
+
 	public struct AbilityAddBroadcast : IBroadcast
 	{
 		public long ID;

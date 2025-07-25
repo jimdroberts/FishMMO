@@ -8,7 +8,7 @@ namespace FishNet.Component.Prediction
     [UseGlobalCustomSerializer]
     [Preserve]
     public struct RigidbodyState
-    {        
+    {
         public Vector3 Position;
         public Quaternion Rotation;
         public bool IsKinematic;
@@ -20,15 +20,16 @@ namespace FishNet.Component.Prediction
             Position = rb.transform.position;
             Rotation = rb.transform.rotation;
             IsKinematic = isKinematic;
-            Velocity = rb.linearVelocity;
+            Velocity = rb.velocity;
             AngularVelocity = rb.angularVelocity;
         }
+
         public RigidbodyState(Rigidbody rb)
         {
             Position = rb.transform.position;
             Rotation = rb.transform.rotation;
             IsKinematic = rb.isKinematic;
-            Velocity = rb.linearVelocity;
+            Velocity = rb.velocity;
             AngularVelocity = rb.angularVelocity;
         }
     }
@@ -48,7 +49,7 @@ namespace FishNet.Component.Prediction
         {
             Position = rb.transform.position;
             Rotation = rb.transform.rotation;
-            Velocity = rb.linearVelocity;
+            Velocity = rb.velocity;
             AngularVelocity = rb.angularVelocity;
             Simulated = simulated;
             IsKinematic = rb.isKinematic;
@@ -58,7 +59,7 @@ namespace FishNet.Component.Prediction
         {
             Position = rb.transform.position;
             Rotation = rb.transform.rotation;
-            Velocity = rb.linearVelocity;
+            Velocity = rb.velocity;
             AngularVelocity = rb.angularVelocity;
             Simulated = rb.simulated;
             IsKinematic = rb.isKinematic;
@@ -130,8 +131,6 @@ namespace FishNet.Component.Prediction
 
             return state;
         }
-
-
     }
 
     [Preserve]
@@ -144,6 +143,7 @@ namespace FishNet.Component.Prediction
         {
             return new(rb);
         }
+
         /// <summary>
         /// Sets a state to a rigidbody.
         /// </summary>
@@ -152,7 +152,7 @@ namespace FishNet.Component.Prediction
             Transform t = rb.transform;
             t.position = state.Position;
             t.rotation = state.Rotation;
-            rb.linearVelocity = state.Velocity;
+            rb.velocity = state.Velocity;
             rb.angularVelocity = state.AngularVelocity;
         }
 
@@ -163,6 +163,7 @@ namespace FishNet.Component.Prediction
         {
             return new(rb);
         }
+
         /// <summary>
         /// Sets a state to a rigidbody.
         /// </summary>
@@ -171,9 +172,8 @@ namespace FishNet.Component.Prediction
             Transform t = rb.transform;
             t.position = state.Position;
             t.rotation = state.Rotation;
-            rb.linearVelocity = state.Velocity;
+            rb.velocity = state.Velocity;
             rb.angularVelocity = state.AngularVelocity;
         }
-
     }
 }

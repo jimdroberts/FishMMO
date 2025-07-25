@@ -1,4 +1,7 @@
-﻿using FishNet.Managing.Statistic;
+﻿using FishNet.Editing;
+using FishNet.Managing;
+using FishNet.Managing.Statistic;
+using FishNet.Managing.Timing;
 using GameKit.Dependencies.Utilities;
 using GameKit.Dependencies.Utilities.Types;
 using UnityEngine;
@@ -20,15 +23,15 @@ namespace FishNet.Component.Utility
             BottomRight
         }
 
-        private class InOutAverage
+        public class InOutAverage
         {
             private RingBuffer<ulong> _in;
             private RingBuffer<ulong> _out;
 
-            public InOutAverage(byte seconds)
+            public InOutAverage(int ticks)
             {
-                _in = new(seconds);
-                _out = new(seconds);
+                _in = new(ticks);
+                _out = new(ticks);
             }
 
             public void AddIn(ulong value) => _in.Add(value);
@@ -36,15 +39,17 @@ namespace FishNet.Component.Utility
 
             public ulong GetAverage(bool inAverage)
             {
-                RingBuffer<ulong> buffer = (inAverage) ? _in : _out;
+                RingBuffer<ulong> buffer = inAverage ? _in : _out;
 
                 int count = buffer.Count;
+                if (count == 0)
+                    return 0;
 
                 ulong total = 0;
                 foreach (ulong v in buffer)
                     total += v;
 
-                return (total / (uint)count);
+                return total / (uint)count;
             }
 
             public void ResetState()
@@ -61,7 +66,43 @@ namespace FishNet.Component.Utility
         }
         #endregion
 
+        #region Public.
+#if UNITY_EDITOR || !UNITY_SERVER
+        /// <summary>
+        /// Averages for client.
+        /// </summary>
+        public InOutAverage ClientAverages { get; private set; }
+        /// <summary>
+        /// Averages for server.
+        /// </summary>
+        public InOutAverage ServerAverages { get; private set; }
+#endif
+        #endregion
+
         #region Serialized.
+        [Header("Misc")]
+        /// <summary>
+        /// True to operate while in release. This may cause allocations and impact performance.
+        /// </summary>
+        [Tooltip("True to operate while in release. This may cause allocations and impact performance.")]
+        [SerializeField]
+        private bool _runInRelease;
+        [Header("Timing")]
+        /// <summary>
+        /// Number of seconds used to gather data per second. Lower values will show more up to date usage per second while higher values provide a better over-all estimate.
+        /// </summary>
+        [Tooltip("Number of seconds used to gather data per second. Lower values will show more up to date usage per second while higher values provide a better over-all estimate.")]
+        [SerializeField]
+        [Range(1, byte.MaxValue)]
+        private byte _secondsAveraged = 1;
+        /// <summary>
+        /// How often to update displayed text.
+        /// </summary>
+        [Tooltip("How often to update displayed text.")]
+        [Range(0f, 10f)]
+        [SerializeField]
+        private float _updateInterval = 1f;
+        [Header("Appearance")]
         /// <summary>
         /// Color for text.
         /// </summary>
@@ -75,14 +116,6 @@ namespace FishNet.Component.Utility
         [SerializeField]
         private Corner _placement = Corner.TopRight;
         /// <summary>
-        /// Number of seconds used to gather data per second. Lower values will show more up to date usage per second while higher values provide a better over-all estimate.
-        /// </summary>
-        [Tooltip("Number of seconds used to gather data per second. Lower values will show more up to date usage per second while higher values provide a better over-all estimate.")]
-        [SerializeField]
-        [Range(1, byte.MaxValue)]
-        private byte _secondsAveraged = 1;
-
-        /// <summary>
         /// rue to show outgoing data bytes.
         /// </summary>
         [Tooltip("True to show outgoing data bytes.")]
@@ -92,7 +125,7 @@ namespace FishNet.Component.Utility
         /// <summary>
         /// Sets ShowOutgoing value.
         /// </summary>
-        /// <param name="value"></param>
+        /// <param name = "value"></param>
         public void SetShowOutgoing(bool value) => _showOutgoing = value;
 
         /// <summary>
@@ -105,7 +138,7 @@ namespace FishNet.Component.Utility
         /// <summary>
         /// Sets ShowIncoming value.
         /// </summary>
-        /// <param name="value"></param>
+        /// <param name = "value"></param>
         public void SetShowIncoming(bool value) => _showIncoming = value;
         #endregion
 
@@ -127,66 +160,139 @@ namespace FishNet.Component.Utility
         /// <summary>
         /// First found NetworkTrafficStatistics.
         /// </summary>
-        private NetworkTraficStatistics _networkTrafficStatistics;
+        private NetworkTrafficStatistics _networkTrafficStatistics;
         /// <summary>
-        /// Averages for client.
+        /// Next time the server text can be updated.
         /// </summary>
-        private InOutAverage _clientAverages;
+        private float _nextServerTextUpdateTime;
         /// <summary>
-        /// Averages for server.
+        /// Next time the server text can be updated.
         /// </summary>
-        private InOutAverage _serverAverages;
+        private float _nextClientTextUpdateTime;
+        /// <summary>
+        /// True if component is initialized.
+        /// </summary>
+        private bool _initialized;
         #endregion
 
         private void Start()
         {
-            SetSecondsAveraged(_secondsAveraged);
+            // Requires a UI, so exit if server build.
+#if UNITY_SERVER
+            return;
+#endif
+            // If release build, check if able to run in release.
+#if !DEVELOPMENT_BUILD && !UNITY_EDITOR
+            if (!_runInRelease)
+                return;
+#endif
 
-            _networkTrafficStatistics = InstanceFinder.NetworkManager.StatisticsManager.NetworkTraffic;
-            //Subscribe to both traffic updates.
-            _networkTrafficStatistics.OnClientNetworkTraffic += NetworkTraffic_OnClientNetworkTraffic;
-            _networkTrafficStatistics.OnServerNetworkTraffic += NetworkTraffic_OnServerNetworkTraffic;
+            // Not enabled.
+            if (!InstanceFinder.NetworkManager.StatisticsManager.TryGetNetworkTrafficStatistics(out _networkTrafficStatistics))
+                return;
 
             if (!_networkTrafficStatistics.UpdateClient && !_networkTrafficStatistics.UpdateServer)
+            {
                 Debug.LogWarning($"StatisticsManager.NetworkTraffic is not updating for client nor server. To see results ensure your NetworkManager has a StatisticsManager component added with the NetworkTraffic values configured.");
+                return;
+            }
+
+            SetSecondsAveraged(_secondsAveraged);
+
+            _networkTrafficStatistics.OnNetworkTraffic += NetworkTrafficStatistics_OnNetworkTraffic;
+            
+            _initialized = true;
         }
 
         private void OnDestroy()
         {
             if (_networkTrafficStatistics != null)
-            {
-                _networkTrafficStatistics.OnClientNetworkTraffic -= NetworkTraffic_OnClientNetworkTraffic;
-                _networkTrafficStatistics.OnServerNetworkTraffic -= NetworkTraffic_OnServerNetworkTraffic;
-            }
+                _networkTrafficStatistics.OnNetworkTraffic -= NetworkTrafficStatistics_OnNetworkTraffic;
         }
-        
+
         /// <summary>
         /// Sets a new number of seconds to average from.
         /// </summary>
         public void SetSecondsAveraged(byte seconds)
         {
+            // Get to ticks.
+            NetworkManager manager = InstanceFinder.NetworkManager;
+            if (manager == null)
+                return;
+
             if (seconds <= 0)
                 seconds = 1;
 
-            _clientAverages = new(seconds);
-            _serverAverages = new(seconds);
+            uint ticks = manager.TimeManager.TimeToTicks(seconds, TickRounding.RoundUp);
+            // Should not ever be possible.
+            if (ticks <= 0)
+                ticks = 60;
+
+            ClientAverages = new((int)ticks);
+            ServerAverages = new((int)ticks);
         }
+        
+        /// <summary>
+        /// Called when new traffic statistics are received.
+        /// </summary>
+        private void NetworkTrafficStatistics_OnNetworkTraffic(uint tick, BidirectionalNetworkTraffic serverTraffic, BidirectionalNetworkTraffic clientTraffic)
+        {
+            if (!_initialized)
+                return;
+ 
+            ServerAverages.AddIn(serverTraffic.InboundTraffic.Bytes);
+            ServerAverages.AddOut(serverTraffic.OutboundTraffic.Bytes);
+
+            ClientAverages.AddIn(clientTraffic.InboundTraffic.Bytes);
+            ClientAverages.AddOut(clientTraffic.OutboundTraffic.Bytes);
+            
+            if (Time.time < _nextServerTextUpdateTime)
+                return;
+            _nextServerTextUpdateTime = Time.time + _updateInterval;
+
+            string nl = System.Environment.NewLine;
+            string result = string.Empty;
+            
+            if (_showIncoming)
+                result += $"Server In: {NetworkTrafficStatistics.FormatBytesToLargest(ServerAverages.GetAverage(inAverage: true))}/s{nl}";
+            if (_showOutgoing)
+                result += $"Server Out: {NetworkTrafficStatistics.FormatBytesToLargest(ServerAverages.GetAverage(inAverage: false))}/s{nl}";
+
+            _serverText = result;
+            
+            result = string.Empty;
+
+            if (_showIncoming)
+                result += $"Client In: {NetworkTrafficStatistics.FormatBytesToLargest(ClientAverages.GetAverage(inAverage: true))}/s{nl}";
+            if (_showOutgoing)
+                result += $"Client Out: {NetworkTrafficStatistics.FormatBytesToLargest(ClientAverages.GetAverage(inAverage: false))}/s{nl}";
+
+            _clientText = result;
+        }
+
 
         /// <summary>
         /// Called when client network traffic is updated.
         /// </summary>
-        private void NetworkTraffic_OnClientNetworkTraffic(NetworkTrafficArgs obj)
+        private void NetworkTraffic_OnClientNetworkTraffic(BidirectionalNetworkTraffic traffic)
         {
+            if (!_initialized)
+                return;
+
+            ClientAverages.AddIn(traffic.InboundTraffic.Bytes);
+            ClientAverages.AddOut(traffic.OutboundTraffic.Bytes);
+
+            if (Time.time < _nextClientTextUpdateTime)
+                return;
+            _nextClientTextUpdateTime = Time.time + _updateInterval;
+
             string nl = System.Environment.NewLine;
             string result = string.Empty;
 
-            _clientAverages.AddIn(obj.FromServerBytes);
-            _clientAverages.AddOut(obj.ToServerBytes);
-
             if (_showIncoming)
-                result += $"Client In: {NetworkTraficStatistics.FormatBytesToLargest(_clientAverages.GetAverage(inAverage: true))}/s{nl}";
+                result += $"Client In: {NetworkTrafficStatistics.FormatBytesToLargest(ClientAverages.GetAverage(inAverage: true))}/s{nl}";
             if (_showOutgoing)
-                result += $"Client Out: {NetworkTraficStatistics.FormatBytesToLargest(_clientAverages.GetAverage(inAverage: false))}/s{nl}";
+                result += $"Client Out: {NetworkTrafficStatistics.FormatBytesToLargest(ClientAverages.GetAverage(inAverage: false))}/s{nl}";
 
             _clientText = result;
         }
@@ -194,18 +300,25 @@ namespace FishNet.Component.Utility
         /// <summary>
         /// Called when server network traffic is updated.
         /// </summary>
-        private void NetworkTraffic_OnServerNetworkTraffic(NetworkTrafficArgs obj)
+        private void NetworkTraffic_OnServerNetworkTraffic(BidirectionalNetworkTraffic traffic)
         {
+            if (!_initialized)
+                return;
+
+            ServerAverages.AddIn(traffic.InboundTraffic.Bytes);
+            ServerAverages.AddOut(traffic.OutboundTraffic.Bytes);
+
+            if (Time.time < _nextServerTextUpdateTime)
+                return;
+            _nextServerTextUpdateTime = Time.time + _updateInterval;
+
             string nl = System.Environment.NewLine;
             string result = string.Empty;
 
-            _serverAverages.AddIn(obj.ToServerBytes);
-            _serverAverages.AddOut(obj.FromServerBytes);
-
             if (_showIncoming)
-                result += $"Server In: {NetworkTraficStatistics.FormatBytesToLargest(_serverAverages.GetAverage(inAverage: true))}/s{nl}";
+                result += $"Server In: {NetworkTrafficStatistics.FormatBytesToLargest(ServerAverages.GetAverage(inAverage: true))}/s{nl}";
             if (_showOutgoing)
-                result += $"Server Out: {NetworkTraficStatistics.FormatBytesToLargest(_serverAverages.GetAverage(inAverage: false))}/s{nl}";
+                result += $"Server Out: {NetworkTrafficStatistics.FormatBytesToLargest(ServerAverages.GetAverage(inAverage: false))}/s{nl}";
 
             _serverText = result;
         }
@@ -261,11 +374,11 @@ namespace FishNet.Component.Utility
                 _style.alignment = TextAnchor.LowerRight;
             }
 
-            GUI.Label(new(horizontal, vertical, width, height), (_clientText + _serverText), _style);
+            GUI.Label(new(horizontal, vertical, width, height), _clientText + _serverText, _style);
         }
 
         [ContextMenu("Reset Averages")]
-        private void ResetAverages()
+        public void ResetAverages()
         {
             ResetCalculationsAndDisplay(forServer: true);
             ResetCalculationsAndDisplay(forServer: false);
@@ -273,15 +386,18 @@ namespace FishNet.Component.Utility
 
         private void ResetCalculationsAndDisplay(bool forServer)
         {
+            if (!_initialized)
+                return;
+
             if (forServer)
             {
                 _serverText = string.Empty;
-                _serverAverages.ResetState();
+                ServerAverages.ResetState();
             }
             else
             {
                 _clientText = string.Empty;
-                _clientAverages.ResetState();
+                ClientAverages.ResetState();
             }
         }
 #endif

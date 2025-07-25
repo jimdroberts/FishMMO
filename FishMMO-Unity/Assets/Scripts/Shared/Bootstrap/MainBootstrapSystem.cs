@@ -96,7 +96,7 @@ namespace FishMMO.Shared
 			// it suggests some unexpected graphics context or resource is being created.
 			// Implement specific logic here if you identify such resources.
 			Debug.Log("[MainBootstrapSystem] Starting graphics cleanup...");
-			GraphicsCleanup();
+			GraphicsCleanup().Wait();
 			Debug.Log("[MainBootstrapSystem] Graphics cleanup completed.");
 
 			// Before performing asynchronous shutdown, detach our UnityLoggerBridge
@@ -202,7 +202,7 @@ namespace FishMMO.Shared
 		{
 			AddressableLoadProcessor.ReleaseAllAssets();
 			
-			await Task.Yield(); // Simulate asynchronous work if needed.
+			//await Task.Yield(); // Simulate asynchronous work if needed.
 		}
 
 		/// <summary>

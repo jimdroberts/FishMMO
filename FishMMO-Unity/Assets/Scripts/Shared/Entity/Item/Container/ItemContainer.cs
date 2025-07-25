@@ -68,10 +68,11 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// 
+		/// Searches the inventory for an item with the specified template.
 		/// </summary>
 		/// <param name="itemTemplate"></param>
 		/// <returns></returns>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public bool ContainsItem(BaseItemTemplate itemTemplate)
 		{
 			for (int i = 0; i < Items.Count; ++i)
@@ -83,6 +84,33 @@ namespace FishMMO.Shared
 				}
 			}
 			return false;
+		}
+
+		///	<summary>
+		/// Searches the inventory for an item with the specified template.
+		/// </summary>
+		/// <param name="itemTemplate"></param>
+		/// <returns></returns>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public int GetItemCount(BaseItemTemplate itemTemplate)
+		{
+			int count = 0;
+			for (int i = 0; i < Items.Count; ++i)
+			{
+				Item item = Items[i];
+				if (item != null && item.Template.ID == itemTemplate.ID)
+				{
+					if (item.IsStackable)
+					{
+						count += (int)item.Stackable.Amount;
+					}
+					else
+					{
+						count += 1;
+					}
+				}
+			}
+			return count;
 		}
 
 		/// <summary>
