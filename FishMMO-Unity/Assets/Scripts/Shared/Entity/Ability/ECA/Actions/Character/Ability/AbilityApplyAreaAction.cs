@@ -45,7 +45,7 @@ namespace FishMMO.Shared
 							AbilityCollisionEventData collisionEvent = new AbilityCollisionEventData(initiator, targetCharacter);
 							collisionEvent.Add(new CharacterHitEventData(initiator, targetCharacter, abilityObject.RNG));
 
-							foreach (var trigger in abilityObject.Ability.OnHitTriggers.Values)
+							foreach (var trigger in abilityObject.Ability.OnHitEvents.Values)
 							{
 								trigger?.Execute(eventData);
 							}
@@ -61,6 +61,11 @@ namespace FishMMO.Shared
 			{
 				Log.Warning("AbilityApplyAreaAction", "Expected AbilityCollisionEventData.");
 			}
+		}
+
+		public override string GetFormattedDescription()
+		{
+			return $"Applies area effect in a <color=#FFD700>radius of {Radius}</color> units, affecting up to <color=#FFD700>{MaxHits}</color> targets.";
 		}
 	}
 }

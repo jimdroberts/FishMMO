@@ -37,5 +37,12 @@ namespace FishMMO.Server.Conditions
 
 			return finalResult;
 		}
+
+		public override string GetFormattedDescription()
+		{
+			return InvertResult
+				? "Requires the character to be mortal."
+				: "Requires the character to be immortal.";
+		}
 	}
 }

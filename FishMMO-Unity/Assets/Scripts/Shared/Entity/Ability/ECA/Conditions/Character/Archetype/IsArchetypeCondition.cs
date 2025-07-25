@@ -28,5 +28,11 @@ namespace FishMMO.Shared
 
 			return archetypeController.Template.ID == ArchetypeTemplate.ID;
 		}
+
+		public override string GetFormattedDescription()
+		{
+			string archetypeName = ArchetypeTemplate != null ? ArchetypeTemplate.Name : "[Unassigned Archetype]";
+			return $"Requires the character to be of archetype: {archetypeName}.";
+		}
 	}
 }

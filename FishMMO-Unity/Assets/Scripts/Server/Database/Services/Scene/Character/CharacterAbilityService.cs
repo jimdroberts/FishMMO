@@ -37,8 +37,8 @@ namespace FishMMO.Server.DatabaseServices
 			{
 				dbAbility.CharacterID = characterID;
 				dbAbility.TemplateID = ability.Template.ID;
-				dbAbility.AbilityTriggers.Clear();
-				dbAbility.AbilityTriggers = ability.AbilityTriggers.Keys.ToList();
+				dbAbility.AbilityEvents.Clear();
+				dbAbility.AbilityEvents = ability.AbilityEvents.Keys.ToList();
 				dbAbility.Cooldown = cooldown;
 				dbContext.SaveChanges();
 			}
@@ -48,7 +48,7 @@ namespace FishMMO.Server.DatabaseServices
 				{
 					CharacterID = characterID,
 					TemplateID = ability.Template.ID,
-					AbilityTriggers = ability.AbilityTriggers.Keys.ToList(),
+					AbilityEvents = ability.AbilityEvents.Keys.ToList(),
 					Cooldown = cooldown,
 				};
 				dbContext.CharacterAbilities.Add(dbAbility);
@@ -88,8 +88,8 @@ namespace FishMMO.Server.DatabaseServices
 				{
 					ability.CharacterID = character.ID;
 					ability.TemplateID = pair.Value.Template.ID;
-					ability.AbilityTriggers.Clear();
-					ability.AbilityTriggers = pair.Value.AbilityTriggers.Keys.ToList();
+					ability.AbilityEvents.Clear();
+					ability.AbilityEvents = pair.Value.AbilityEvents.Keys.ToList();
 					ability.Cooldown = cooldown;
 				}
 				else
@@ -98,7 +98,7 @@ namespace FishMMO.Server.DatabaseServices
 					{
 						CharacterID = character.ID,
 						TemplateID = pair.Value.Template.ID,
-						AbilityTriggers = pair.Value.AbilityTriggers.Keys.ToList(),
+						AbilityEvents = pair.Value.AbilityEvents.Keys.ToList(),
 						Cooldown = cooldown,
 					});
 				}
@@ -167,9 +167,10 @@ namespace FishMMO.Server.DatabaseServices
 				AbilityTemplate template = AbilityTemplate.Get<AbilityTemplate>(dbAbility.TemplateID);
 				if (template != null)
 				{
-					abilityController.LearnAbility(new Ability(dbAbility.ID, template, dbAbility.AbilityTriggers), dbAbility.Cooldown);
+					abilityController.LearnAbility(new Ability(dbAbility.ID, template, dbAbility.AbilityEvents), dbAbility.Cooldown);
 				}
-			};
+			}
+			;
 		}
 	}
 }

@@ -57,5 +57,12 @@ namespace FishMMO.Server.Conditions
 
 			return finalResult;
 		}
+
+		public override string GetFormattedDescription()
+		{
+			string attrName = Template != null ? Template.Name : "[Unassigned Attribute]";
+			string invert = InvertResult ? "not " : string.Empty;
+			return $"Requires the character to {invert} have at least {RequiredValue} {attrName}.";
+		}
 	}
 }

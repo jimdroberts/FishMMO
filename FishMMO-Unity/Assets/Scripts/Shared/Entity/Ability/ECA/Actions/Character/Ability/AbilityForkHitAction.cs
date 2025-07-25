@@ -20,5 +20,10 @@ namespace FishMMO.Shared
 				}
 			}
 		}
+
+		public override string GetFormattedDescription()
+		{
+			return $"Forks ability hit in a <color=#FFD700>{Arc}°</color> arc up to <color=#FFD700>{Distance}</color> units.";
+		}
 	}
 }

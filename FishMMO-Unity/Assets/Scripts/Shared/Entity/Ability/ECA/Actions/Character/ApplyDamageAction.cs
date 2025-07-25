@@ -20,12 +20,18 @@ namespace FishMMO.Shared
 				{
 					defenderDamageController.Damage(initiator, DamageAmount, DamageAttributeTemplate);
 					Log.Debug("DamageAction", $"Initiator '{initiator.Name}' dealt {DamageAmount} damage to target '{targetEventData.Target.Name}'.");
-			   }
-		   }
-		   else
-		   {
-			   Log.Warning("DamageAction", "Expected CharacterHitEventData.");
-		   }
-	   }
-   }
+				}
+			}
+			else
+			{
+				Log.Warning("DamageAction", "Expected CharacterHitEventData.");
+			}
+		}
+
+		public override string GetFormattedDescription()
+		{
+			return Description.Replace("$DAMAGE$", "<size=125%><color=#" + DamageAttributeTemplate.DisplayColor.ToHex() + ">" + DamageAmount + "</color></size>")
+							  .Replace("$ELEMENT$", "<size=125%><color=#" + DamageAttributeTemplate.DisplayColor.ToHex() + ">" + DamageAttributeTemplate.Name + "</color></size>");
+		}
+	}
 }

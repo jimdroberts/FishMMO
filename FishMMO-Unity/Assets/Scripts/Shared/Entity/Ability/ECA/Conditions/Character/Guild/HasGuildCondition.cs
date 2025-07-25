@@ -40,5 +40,12 @@ namespace FishMMO.Server.Conditions
 				return isInGuild;
 			}
 		}
+
+		public override string GetFormattedDescription()
+		{
+			return InvertResult
+				? "Requires the character to NOT be in a guild."
+				: "Requires the character to be in a guild.";
+		}
 	}
 }

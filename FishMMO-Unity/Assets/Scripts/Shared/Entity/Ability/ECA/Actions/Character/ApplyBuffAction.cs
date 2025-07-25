@@ -26,5 +26,9 @@ namespace FishMMO.Shared
 				Log.Warning("ApplyBuffAction", "Expected CharacterHitEventData.");
 			}
 		}
+		public override string GetFormattedDescription()
+		{
+			return $"Applies <color=#FFD700>{Stacks}</color> stack(s) of <color=#FFD700>{BuffTemplate?.name ?? "Buff"}</color> to the target.";
+		}
 	}
 }

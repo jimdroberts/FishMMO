@@ -48,5 +48,15 @@ namespace FishMMO.Shared
 			}
 			return false; // Not a CharacterHitEventData or other conditions not met
 		}
+
+		public override string GetFormattedDescription()
+		{
+			var allowed = new System.Collections.Generic.List<string>();
+			if (ApplyToSelf) allowed.Add("self");
+			if (ApplyToEnemy) allowed.Add("enemies");
+			if (ApplyToNeutral) allowed.Add("neutrals");
+			if (ApplyToAllies) allowed.Add("allies");
+			return $"Condition applies to: {string.Join(", ", allowed)}.";
+		}
 	}
 }

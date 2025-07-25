@@ -20,5 +20,10 @@ namespace FishMMO.Shared
 				Log.Warning("MoveTransformAction", "Expected AbilityTickEventData.");
 			}
 		}
+
+		public override string GetFormattedDescription()
+		{
+			return $"Moves transform in direction <color=#FFD700>{MoveDirection}</color> based on ability speed.";
+		}
 	}
 }

@@ -63,5 +63,12 @@ namespace FishMMO.Shared
 			}
 			return false;
 		}
+
+		public override string GetFormattedDescription()
+		{
+			string itemName = ItemTemplate != null ? ItemTemplate.Name : "[Unassigned Item]";
+			string slotName = ItemTemplate != null ? ItemTemplate.Slot.ToString() : "[Unassigned Slot]";
+			return $"Requires the character to have {itemName} equipped in slot {slotName}.";
+		}
 	}
 }

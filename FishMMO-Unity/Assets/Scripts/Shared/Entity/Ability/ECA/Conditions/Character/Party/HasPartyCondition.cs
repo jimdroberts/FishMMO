@@ -40,5 +40,12 @@ namespace FishMMO.Server.Conditions
 				return isInParty;
 			}
 		}
+
+		public override string GetFormattedDescription()
+		{
+			return InvertResult
+				? "Requires the character to NOT be in a party."
+				: "Requires the character to be in a party.";
+		}
 	}
 }

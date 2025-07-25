@@ -32,5 +32,11 @@ namespace FishMMO.Shared
             }
             return regionController.CurrentRegion == RequiredRegion;
         }
+
+        public override string GetFormattedDescription()
+        {
+            string regionName = RequiredRegion != null ? RequiredRegion.Name : "[Unassigned Region]";
+            return $"Requires the character to be in region: {regionName}.";
+        }
     }
 }*/

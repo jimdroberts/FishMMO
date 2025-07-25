@@ -34,5 +34,11 @@ namespace FishMMO.Shared
             // For now, we will just check if the item exists in the inventory.
             return inventoryController.ContainsItem(RequiredItem);
         }
+
+        public override string GetFormattedDescription()
+        {
+            string itemName = RequiredItem != null ? RequiredItem.Name : "[Unassigned Item]";
+            return $"Requires the ability to use item: {itemName}.";
+        }
     }
 }

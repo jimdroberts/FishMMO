@@ -41,5 +41,10 @@ namespace FishMMO.Shared
 				Log.Warning("PlayFXAction", "Expected CollisionEventData.");
 			}
 		}
+
+		public override string GetFormattedDescription()
+		{
+			return $"Plays FX: <color=#FFD700>{FXPrefab?.name ?? "FX"}</color> at the collision location.";
+		}
 	}
 }

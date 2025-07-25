@@ -20,5 +20,10 @@ namespace FishMMO.Shared
 			//Log.Debug($"[{speaker}]: {DialogueText} (to {playerCharacter?.Name}. Event: {eventData})");
 			//UIManager.Instance.ShowDialogue(speaker, DialogueText);
 		}
+
+		public override string GetFormattedDescription()
+		{
+			return $"Displays dialogue: <color=#FFD700>\"{DialogueText}\"</color> from <color=#FFD700>{SpeakerName}</color>.";
+		}
 	}
 }

@@ -32,32 +32,32 @@ namespace FishMMO.Shared
 		[Tooltip("Ability Events to execute when the ability object is destroyed.")]
 		public List<AbilityOnDestroyEvent> OnDestroyEvents = new List<AbilityOnDestroyEvent>();
 
-		// Cached list of all trigger IDs for this ability template
+		// Cached list of all event IDs for this ability template
 		[System.NonSerialized]
-		private List<int> cachedAllTriggerIDs;
+		private List<int> cachedAllEventIDs;
 
 		/// <summary>
-		/// Returns a cached list of all unique trigger IDs from all trigger lists on this template.
+		/// Returns a cached list of all unique event IDs from all event lists on this template.
 		/// </summary>
-		public List<int> GetAllAbilityTriggerIDs()
+		public List<int> GetAllAbilityEventIDs()
 		{
-			if (cachedAllTriggerIDs != null)
-				return cachedAllTriggerIDs;
+			if (cachedAllEventIDs != null)
+				return cachedAllEventIDs;
 
-			var triggerIDs = new HashSet<int>();
+			var eventIDs = new HashSet<int>();
 			if (OnTickEvents != null)
-				triggerIDs.UnionWith(OnTickEvents.FindAll(t => t != null).ConvertAll(t => t.ID));
+				eventIDs.UnionWith(OnTickEvents.FindAll(t => t != null).ConvertAll(t => t.ID));
 			if (OnHitEvents != null)
-				triggerIDs.UnionWith(OnHitEvents.FindAll(t => t != null).ConvertAll(t => t.ID));
+				eventIDs.UnionWith(OnHitEvents.FindAll(t => t != null).ConvertAll(t => t.ID));
 			if (OnPreSpawnEvents != null)
-				triggerIDs.UnionWith(OnPreSpawnEvents.FindAll(t => t != null).ConvertAll(t => t.ID));
+				eventIDs.UnionWith(OnPreSpawnEvents.FindAll(t => t != null).ConvertAll(t => t.ID));
 			if (OnSpawnEvents != null)
-				triggerIDs.UnionWith(OnSpawnEvents.FindAll(t => t != null).ConvertAll(t => t.ID));
+				eventIDs.UnionWith(OnSpawnEvents.FindAll(t => t != null).ConvertAll(t => t.ID));
 			if (OnDestroyEvents != null)
-				triggerIDs.UnionWith(OnDestroyEvents.FindAll(t => t != null).ConvertAll(t => t.ID));
+				eventIDs.UnionWith(OnDestroyEvents.FindAll(t => t != null).ConvertAll(t => t.ID));
 
-			cachedAllTriggerIDs = new List<int>(triggerIDs);
-			return cachedAllTriggerIDs;
+			cachedAllEventIDs = new List<int>(eventIDs);
+			return cachedAllEventIDs;
 		}
 
 		public override string Tooltip()

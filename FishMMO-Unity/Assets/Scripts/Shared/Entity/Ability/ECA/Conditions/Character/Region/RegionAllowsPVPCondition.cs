@@ -35,6 +35,13 @@ namespace FishMMO.Shared
                 return false;
             return RequiredRegion.AllowsPVP == MustAllowPVP;
         }
+
+        public override string GetFormattedDescription()
+        {
+            string regionName = RequiredRegion != null ? RequiredRegion.Name : "[Unassigned Region]";
+            string pvpText = MustAllowPVP ? "allow" : "not allow";
+            return $"Requires the region '{regionName}' to {pvpText} PVP.";
+        }
     }
 }
 */

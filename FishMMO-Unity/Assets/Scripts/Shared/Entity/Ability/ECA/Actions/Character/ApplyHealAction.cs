@@ -24,5 +24,9 @@ namespace FishMMO.Shared
 				Log.Warning("HealAction", "Expected CharacterHitEventData.");
 			}
 		}
+		public override string GetFormattedDescription()
+		{
+			return $"Heals the target for <color=#00FF00>{HealAmount}</color> health.";
+		}
 	}
 }

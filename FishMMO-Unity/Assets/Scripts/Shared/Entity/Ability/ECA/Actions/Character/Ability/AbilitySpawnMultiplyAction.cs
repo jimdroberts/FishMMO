@@ -60,5 +60,10 @@ namespace FishMMO.Shared
 				spawnEventData.SpawnedAbilityObjects[++nextID.Value] = abilityObject;
 			}
 		}
+
+		public override string GetFormattedDescription()
+		{
+			return $"Spawns <color=#FFD700>{SpawnCount}</color> copies of the ability object.";
+		}
 	}
 }

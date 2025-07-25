@@ -27,5 +27,10 @@ namespace FishMMO.Shared
 				Log.Warning("ApplyDispelAction", "Expected CharacterHitEventData.");
 			}
 		}
+		public override string GetFormattedDescription()
+		{
+			string type = (IncludeBuffs && IncludeDebuffs) ? "buffs and debuffs" : (IncludeBuffs ? "buffs" : (IncludeDebuffs ? "debuffs" : "effects"));
+			return $"Dispels <color=#FFD700>{AmountToRemove}</color> {type} from the target.";
+		}
 	}
 }

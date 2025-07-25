@@ -14,7 +14,7 @@ namespace FishMMO.Shared
 
 				if (abilityObject != null)
 				{
-					foreach (var action in abilityObject.Ability.OnHitTriggers.Values)
+					foreach (var action in abilityObject.Ability.OnHitEvents.Values)
 					{
 						action?.Execute(abilityEventData);
 					}
@@ -28,6 +28,11 @@ namespace FishMMO.Shared
 			{
 				Log.Warning("AbilityApplyTargetAction", "Expected AbilityCollisionEventData.");
 			}
+		}
+
+		public override string GetFormattedDescription()
+		{
+			return "Applies ability effects to the targeted character.";
 		}
 	}
 }

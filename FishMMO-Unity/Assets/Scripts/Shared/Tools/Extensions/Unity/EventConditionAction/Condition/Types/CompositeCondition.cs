@@ -42,5 +42,11 @@ namespace FishMMO.Shared
 				return false; // All conditions failed
 			}
 		}
+
+		public override string GetFormattedDescription()
+		{
+			string op = Operator == ConditionOperator.AND ? "AND" : "OR";
+			return $"Composite condition: all sub-conditions must be true or at least one. Current: {op}.";
+		}
 	}
 }

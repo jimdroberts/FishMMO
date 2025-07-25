@@ -37,11 +37,17 @@ namespace FishMMO.Server.Conditions
 			{
 				string status = isAlive ? "is alive" : "is dead (health <= 0)";
 				string invertedText = InvertResult ? " (inverted check)" : "";
-
 				Log.Debug("IsCharacterAliveCondition", $"Character '{characterToCheck?.Name}' failed alive check. Status: {status}{invertedText}.");
 			}
 
 			return finalResult;
+		}
+
+		public override string GetFormattedDescription()
+		{
+			return InvertResult
+				? "Requires the character to be dead."
+				: "Requires the character to be alive.";
 		}
 	}
 }

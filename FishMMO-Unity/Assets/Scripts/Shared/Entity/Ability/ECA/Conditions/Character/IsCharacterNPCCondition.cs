@@ -33,5 +33,12 @@ namespace FishMMO.Server.Conditions
 
 			return finalResult;
 		}
+
+		public override string GetFormattedDescription()
+		{
+			return invertResult
+				? "Requires the character to NOT be an NPC."
+				: "Requires the character to be an NPC.";
+		}
 	}
 }

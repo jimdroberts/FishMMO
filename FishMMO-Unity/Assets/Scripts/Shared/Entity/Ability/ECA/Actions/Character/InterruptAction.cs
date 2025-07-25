@@ -20,5 +20,9 @@ namespace FishMMO.Shared
 				Log.Warning("InterruptAction", "Expected CharacterTargetEventData.");
 			}
 		}
+		public override string GetFormattedDescription()
+		{
+			return "Interrupts the target's current ability or action.";
+		}
 	}
 }

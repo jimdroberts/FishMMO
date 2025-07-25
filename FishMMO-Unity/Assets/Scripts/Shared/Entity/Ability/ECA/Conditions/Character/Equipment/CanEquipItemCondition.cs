@@ -80,13 +80,18 @@ namespace FishMMO.Shared
 			// Additional checks can be added here, e.g., level requirements, class requirements etc.
 			return true;
 		}
+
+		public override string GetFormattedDescription()
+		{
+			return "Requires the character to be able to equip the specified item in the specified slot.";
+		}
 	}
 
 	/// <summary>
 	/// Action that attempts to equip an item.
 	/// Requires an ItemEventData in the EventData.
 	/// </summary>
-	[CreateAssetMenu(fileName = "EquipItemAction", menuName = "Runtimes/Actions/Equip Item Action")]
+	[CreateAssetMenu(fileName = "EquipItemAction", menuName = "FishMMO/Triggers/Conditions/Equipment/Equip Item Action")]
 	public class EquipItemAction : BaseAction
 	{
 		public override void Execute(ICharacter initiator, EventData eventData)
@@ -154,7 +159,7 @@ namespace FishMMO.Shared
 	/// Action that attempts to unequip an item.
 	/// Requires an ItemEventData in the EventData, or a specific slot.
 	/// </summary>
-	[CreateAssetMenu(fileName = "UnequipItemAction", menuName = "Runtimes/Actions/Unequip Item Action")]
+	[CreateAssetMenu(fileName = "UnequipItemAction", menuName = "FishMMO/Triggers/Conditions/Equipment/Unequip Item Action")]
 	public class UnequipItemAction : BaseAction
 	{
 		public ItemSlot SourceSlotToUnequip = ItemSlot.Head;

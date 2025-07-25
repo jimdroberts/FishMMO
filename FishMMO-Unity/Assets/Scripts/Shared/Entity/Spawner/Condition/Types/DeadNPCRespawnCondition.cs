@@ -6,6 +6,13 @@ namespace FishMMO.Shared
 	{
 		public List<NPC> NPCs;
 
+		public string GetFormattedDescription()
+		{
+			if (NPCs == null || NPCs.Count == 0)
+				return "Respawn if all tracked NPCs are dead (no NPCs specified).";
+			return $"Respawn if all {NPCs.Count} tracked NPCs are dead.";
+		}
+
 		public override bool OnCheckCondition(ObjectSpawner spawner)
 		{
 			if (NPCs == null ||

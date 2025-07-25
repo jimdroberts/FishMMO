@@ -30,5 +30,11 @@ namespace FishMMO.Shared
 				Log.Warning("HitCountAction", $"EventData is not of type AbilityHitEventData for initiator {initiator?.Name}.");
 			}
 		}
+
+		public override string GetFormattedDescription()
+		{
+			string verb = Amount > 0 ? "Increases" : "Decreases";
+			return $"{verb} hit count by <color=#FFD700>{Amount}</color> on the ability object.";
+		}
 	}
 }

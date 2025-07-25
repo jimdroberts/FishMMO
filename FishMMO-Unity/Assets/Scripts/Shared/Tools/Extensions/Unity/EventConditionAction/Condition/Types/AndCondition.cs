@@ -33,5 +33,10 @@ namespace FishMMO.Shared
 			}
 			return true; // All conditions met
 		}
+
+		public override string GetFormattedDescription()
+		{
+			return "All sub-conditions must be true.";
+		}
 	}
 }

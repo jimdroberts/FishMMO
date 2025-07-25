@@ -3,17 +3,6 @@ using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
-	// Enum to define how the HitCount should be compared
-	public enum HitCountComparisonType
-	{
-		GreaterThan,
-		GreaterThanOrEqualTo,
-		LessThan,
-		LessThanOrEqualTo,
-		EqualTo,
-		NotEqualTo
-	}
-
 	[CreateAssetMenu(fileName = "New Hit Count Condition", menuName = "FishMMO/Triggers/Conditions/Ability/Hit Count", order = 20)]
 	public sealed class HitCountCondition : BaseCondition
 	{
@@ -61,6 +50,12 @@ namespace FishMMO.Shared
 				Log.Warning("HitCountCondition", $"EventData is not of type AbilityHitEventData for initiator {initiator?.Name}.");
 				return false;
 			}
+		}
+
+		public override string GetFormattedDescription()
+		{
+			string comparison = ComparisonType.ToString().Replace("OrEqualTo", " or equal to").Replace("GreaterThan", "> ").Replace("LessThan", "< ").Replace("EqualTo", "==").Replace("NotEqualTo", "!=");
+			return $"Ability HitCount must be {ComparisonType.ToString().Replace("OrEqualTo", " or equal to").Replace("GreaterThan", "> ").Replace("LessThan", "< ").Replace("EqualTo", "equal to").Replace("NotEqualTo", "not equal to")} {RequiredHitCount}.";
 		}
 	}
 }

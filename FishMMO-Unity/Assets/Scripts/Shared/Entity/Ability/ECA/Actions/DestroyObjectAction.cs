@@ -21,5 +21,10 @@ namespace FishMMO.Shared
 				Log.Warning("DestroyObjectAction", "Expected TargetEventData.");
 			}
 		}
+
+		public override string GetFormattedDescription()
+		{
+			return "Destroys the specified game object.";
+		}
 	}
 }
