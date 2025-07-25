@@ -98,7 +98,7 @@ namespace FishMMO.Client
 				Character.TryGet(out IAbilityController abilityController) &&
 				UIManager.TryGet("UISelector", out UISelector uiSelector))
 			{
-				List<ICachedObject> templates = AbilityEvent.Get<AbilityEvent>(abilityController.KnownEvents);
+				List<ICachedObject> templates = AbilityEvent.Get<AbilityEvent>(abilityController.KnownAbilityEvents);
 
 				// remove duplicate events
 				foreach (UITooltipButton button in EventSlots.Values)
@@ -170,10 +170,10 @@ namespace FishMMO.Client
 					}
 					tooltips.Add(button.Tooltip);
 
-					AbilityEvent eventTemplate = button.Tooltip as AbilityEvent;
-					if (eventTemplate != null)
+					AbilityEvent abilityEvent = button.Tooltip as AbilityEvent;
+					if (abilityEvent != null)
 					{
-						price += eventTemplate.Price;
+						price += abilityEvent.Price;
 					}
 				}
 				AbilityDescription.text = MainEntry.Tooltip.Tooltip(tooltips);
@@ -243,11 +243,11 @@ namespace FishMMO.Client
 			{
 				for (int i = 0; i < EventSlots.Count; ++i)
 				{
-					AbilityEvent template = EventSlots[i].Tooltip as AbilityEvent;
-					if (template != null)
+					AbilityEvent abilityEvent = EventSlots[i].Tooltip as AbilityEvent;
+					if (abilityEvent != null)
 					{
-						eventIds.Add(template.ID);
-						price += template.Price;
+						eventIds.Add(abilityEvent.ID);
+						price += abilityEvent.Price;
 					}
 				}
 			}

@@ -14,7 +14,7 @@ namespace FishMMO.Shared
 		NotEqualTo
 	}
 
-	[CreateAssetMenu(fileName = "New Hit Count Condition", menuName = "FishMMO/Triggers/Conditions/Hit Count", order = 20)]
+	[CreateAssetMenu(fileName = "New Hit Count Condition", menuName = "FishMMO/Triggers/Conditions/Ability/Hit Count", order = 20)]
 	public sealed class HitCountCondition : BaseCondition
 	{
 		[Tooltip("The HitCount value to compare against.")]
@@ -25,13 +25,13 @@ namespace FishMMO.Shared
 
 		public override bool Evaluate(ICharacter initiator, EventData eventData)
 		{
-			if (eventData.TryGet(out HitEventData hitEventData))
+			if (eventData.TryGet(out AbilityCollisionEventData hitEventData))
 			{
 				AbilityObject abilityObject = hitEventData.AbilityObject;
 
 				if (abilityObject == null)
 				{
-					Log.Warning("HitCountCondition", $"No AbilityObject found in HitEventData for initiator {initiator?.Name}.");
+					Log.Warning("HitCountCondition", $"No AbilityObject found in AbilityHitEventData for initiator {initiator?.Name}.");
 					return false;
 				}
 
@@ -57,8 +57,8 @@ namespace FishMMO.Shared
 			}
 			else
 			{
-				// This condition only makes sense for HitEventData as it requires an AbilityObject
-				Log.Warning("HitCountCondition", $"EventData is not of type HitEventData for initiator {initiator?.Name}.");
+				// This condition only makes sense for AbilityHitEventData as it requires an AbilityObject
+				Log.Warning("HitCountCondition", $"EventData is not of type AbilityHitEventData for initiator {initiator?.Name}.");
 				return false;
 			}
 		}

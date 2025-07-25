@@ -43,6 +43,7 @@ namespace FishMMO.Client
 				abilityController.OnCanManipulate += () => { return !InputManager.MouseMode; };
 				abilityController.OnAddAbility += AddAbility;
 				abilityController.OnAddKnownAbility += AddKnownAbility;
+				abilityController.OnAddKnownAbilityEvent += AddKnownAbilityEvent;
 			}
 		}
 
@@ -53,6 +54,7 @@ namespace FishMMO.Client
 				abilityController.OnCanManipulate -= () => { return !InputManager.MouseMode; };
 				abilityController.OnAddAbility -= AddAbility;
 				abilityController.OnAddKnownAbility -= AddKnownAbility;
+				abilityController.OnAddKnownAbilityEvent -= AddKnownAbilityEvent;
 			}
 			ClearAllSlots();
 		}
@@ -99,16 +101,22 @@ namespace FishMMO.Client
 
 		public void AddKnownAbility(BaseAbilityTemplate template)
 		{
-			switch (template)
+			if (template == null)
 			{
-				case AbilityEvent:
-					InstantiateButton(template.ID, template.Icon, ReferenceButtonType.None, AbilityTabType.KnownAbilityEvent, template.Tooltip(), ref KnownAbilityEvents);
-					break;
-				case AbilityTemplate:
-					InstantiateButton(template.ID, template.Icon, ReferenceButtonType.None, AbilityTabType.KnownAbility, template.Tooltip(), ref KnownAbilities);
-					break;
-				default: return;
+				return;
 			}
+
+			InstantiateButton(template.ID, template.Icon, ReferenceButtonType.None, AbilityTabType.KnownAbility, template.Tooltip(), ref KnownAbilities);
+		}
+
+		public void AddKnownAbilityEvent(AbilityEvent abilityEvent)
+		{
+			if (abilityEvent == null)
+			{
+				return;
+			}
+
+			InstantiateButton(abilityEvent.ID, abilityEvent.Icon, ReferenceButtonType.None, AbilityTabType.KnownAbilityEvent, abilityEvent.Tooltip(), ref KnownAbilityEvents);
 		}
 
 		private void InstantiateButton(long id, Sprite icon, ReferenceButtonType buttonType, AbilityTabType tabType, string toolTip, ref List<UIAbilityButton> container)

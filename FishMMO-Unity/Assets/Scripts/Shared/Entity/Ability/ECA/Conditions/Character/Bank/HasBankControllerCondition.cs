@@ -3,18 +3,21 @@ using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
-	[CreateAssetMenu(fileName = "HasBankControllerCondition", menuName = "FishMMO/Conditions/Character/Has Bank Controller", order = 0)]
+	[CreateAssetMenu(fileName = "HasBankControllerCondition", menuName = "FishMMO/Triggers/Conditions/Bank/Has Bank Controller", order = 0)]
 	public class HasBankControllerCondition : BaseCondition
 	{
 		public override bool Evaluate(ICharacter initiator, EventData eventData)
 		{
-			// Try to retrieve the BankControllerEventData from the event data's dictionary
-			if (initiator.TryGet(out IBankController _))
+			ICharacter characterToCheck = initiator;
+			if (eventData != null && eventData.TryGet(out CharacterHitEventData charTargetEventData) && charTargetEventData.Target != null)
+			{
+				characterToCheck = charTargetEventData.Target;
+			}
+			if (characterToCheck.TryGet(out IBankController _))
 			{
 				return true;
 			}
-
-			Log.Warning("HasBankControllerCondition", $"Initiator {initiator?.Name} does not have a bank controller in EventData.");
+			Log.Warning("HasBankControllerCondition", $"Character {characterToCheck?.Name} does not have a bank controller in EventData.");
 			return false;
 		}
 	}

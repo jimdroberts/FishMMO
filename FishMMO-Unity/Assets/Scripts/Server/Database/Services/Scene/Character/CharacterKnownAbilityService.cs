@@ -59,7 +59,7 @@ namespace FishMMO.Server.DatabaseServices
 			}
 
 			// save event types
-			foreach (int abilityTemplate in abilityController.KnownEvents)
+			foreach (int abilityTemplate in abilityController.KnownAbilityEvents)
 			{
 				if (!dbKnownAbilities.ContainsKey(abilityTemplate))
 				{
@@ -127,6 +127,7 @@ namespace FishMMO.Server.DatabaseServices
 			var dbKnownAbilities = dbContext.CharacterKnownAbilities.Where(c => c.CharacterID == character.ID);
 
 			List<BaseAbilityTemplate> templates = new List<BaseAbilityTemplate>();
+			List<AbilityEvent> abilityEvents = new List<AbilityEvent>();
 
 			foreach (CharacterKnownAbilityEntity dbKnownAbility in dbKnownAbilities)
 			{
@@ -135,9 +136,18 @@ namespace FishMMO.Server.DatabaseServices
 				{
 					templates.Add(template);
 				}
-			};
+				else
+				{
+					AbilityEvent abilityEvent = AbilityEvent.Get<AbilityEvent>(dbKnownAbility.TemplateID);
+					if (abilityEvent != null)
+					{
+						abilityEvents.Add(abilityEvent);
+					}
+				}
+			}
 
 			abilityController.LearnBaseAbilities(templates);
+			abilityController.LearnAbilityEvents(abilityEvents);
 		}
 	}
 }

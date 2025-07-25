@@ -302,7 +302,7 @@ namespace FishMMO.Server
 					}
 
 					//Log.Debug("CharacterSystem", "$"Character loaded into {sceneName}:{sceneHandle}.");
-					
+
 					// Check if the scene is valid, loaded, and cached properly
 					if (sceneServerSystem.TryGetSceneInstanceDetails(character.WorldServerID, sceneName, sceneHandle, out SceneInstanceDetails instance) &&
 						sceneServerSystem.TryLoadSceneForConnection(conn, instance))
@@ -507,13 +507,13 @@ namespace FishMMO.Server
 			if (character.TryGet(out IAbilityController abilityController))
 			{
 				List<KnownAbilityAddBroadcast> knownAbilityBroadcasts = new List<KnownAbilityAddBroadcast>();
+				List<KnownAbilityEventAddBroadcast> knownAbilityEventBroadcasts = new List<KnownAbilityEventAddBroadcast>();
 
 				if (abilityController.KnownBaseAbilities != null)
 				{
 					// get base ability templates
 					foreach (int templateID in abilityController.KnownBaseAbilities)
 					{
-						// create the new item broadcast
 						knownAbilityBroadcasts.Add(new KnownAbilityAddBroadcast()
 						{
 							TemplateID = templateID,
@@ -521,13 +521,12 @@ namespace FishMMO.Server
 					}
 				}
 
-				if (abilityController.KnownEvents != null)
+				if (abilityController.KnownAbilityEvents != null)
 				{
 					// and event templates
-					foreach (int templateID in abilityController.KnownEvents)
+					foreach (int templateID in abilityController.KnownAbilityEvents)
 					{
-						// create the new item broadcast
-						knownAbilityBroadcasts.Add(new KnownAbilityAddBroadcast()
+						knownAbilityEventBroadcasts.Add(new KnownAbilityEventAddBroadcast()
 						{
 							TemplateID = templateID,
 						});
@@ -540,6 +539,11 @@ namespace FishMMO.Server
 					Server.Broadcast(character.Owner, new KnownAbilityAddMultipleBroadcast()
 					{
 						Abilities = knownAbilityBroadcasts,
+					}, true, Channel.Reliable);
+
+					Server.Broadcast(character.Owner, new KnownAbilityEventAddMultipleBroadcast()
+					{
+						AbilityEvents = knownAbilityEventBroadcasts,
 					}, true, Channel.Reliable);
 				}
 			}

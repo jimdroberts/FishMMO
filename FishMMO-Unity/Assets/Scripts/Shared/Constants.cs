@@ -21,9 +21,11 @@ namespace FishMMO.Shared
 			typeof(BaseAIState).Name,
 			typeof(CharacterAttributeTemplate).Name,
 			typeof(BaseItemTemplate).Name,
-			//typeof(Trigger).Name,
-			//typeof(BaseCondition).Name,
-			//typeof(BaseAction).Name,
+			typeof(ArchetypeTemplate).Name,
+			typeof(AbilityEvent).Name,
+			typeof(Trigger).Name,
+			typeof(BaseCondition).Name,
+			typeof(BaseAction).Name,
 		};
 
 		/// <summary>

@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace FishMMO.Shared
 {
-	[CreateAssetMenu(fileName = "New Target Alliance Condition", menuName = "FishMMO/Conditions/Target Alliance", order = 0)]
+	[CreateAssetMenu(fileName = "New Target Alliance Condition", menuName = "FishMMO/Triggers/Conditions/Faction/Target Alliance", order = 0)]
 	public sealed class TargetAllianceCondition : BaseCondition
 	{
 		public bool ApplyToSelf;
@@ -12,11 +12,11 @@ namespace FishMMO.Shared
 
 		public override bool Evaluate(ICharacter initiator, EventData eventData)
 		{
-			if (eventData.TryGet(out HitEventData hitEventData))
+			if (eventData.TryGet(out CharacterHitEventData hitEventData))
 			{
-				ICharacter defender = hitEventData.Defender;
+				ICharacter defender = hitEventData.Target;
 
-				if (initiator == null || !initiator.TryGet(out IFactionController attackerFactionController))
+				if (initiator == null)
 				{
 					return false; // Initiator or their faction controller is missing
 				}
@@ -25,6 +25,11 @@ namespace FishMMO.Shared
 				{
 					// If no defender, this condition typically wouldn't pass for character-specific effects
 					return false;
+				}
+
+				if (!initiator.TryGet(out IFactionController attackerFactionController))
+				{
+					return false; // Initiator must have a faction controller
 				}
 
 				// Skip Alliance check if we are targeting ourself
@@ -41,7 +46,7 @@ namespace FishMMO.Shared
 						   (allianceLevel == FactionAllianceLevel.Ally && ApplyToAllies);
 				}
 			}
-			return false; // Not a HitEventData or other conditions not met
+			return false; // Not a CharacterHitEventData or other conditions not met
 		}
 	}
 }

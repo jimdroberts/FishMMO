@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace FishMMO.Server.Conditions
 {
-	[CreateAssetMenu(fileName = "HasRequiredAttribute", menuName = "FishMMO/Conditions/Character/Has Required Attribute", order = 0)]
+	[CreateAssetMenu(fileName = "HasRequiredAttribute", menuName = "FishMMO/Triggers/Conditions/Attribute/Has Required Attribute", order = 0)]
 	public class HasRequiredAttribute : BaseCondition
 	{
 		[Header("Stat Requirements")]
@@ -25,34 +25,34 @@ namespace FishMMO.Server.Conditions
 				return false;
 			}
 
-			// Try to get the ICharacterAttributeController from the initiator.
-			if (!initiator.TryGet(out ICharacterAttributeController attributeController))
+			ICharacter characterToCheck = initiator;
+			if (eventData != null && eventData.TryGet(out CharacterHitEventData charTargetEventData) && charTargetEventData.Target != null)
 			{
-				Log.Warning("HasRequiredCharacterAttribute", $"Initiator '{initiator?.Name}' does not have an ICharacterAttributeController. Condition failed.");
+				characterToCheck = charTargetEventData.Target;
+			}
+
+			if (!characterToCheck.TryGet(out ICharacterAttributeController attributeController))
+			{
+				Log.Warning("HasRequiredCharacterAttribute", $"Character '{characterToCheck?.Name}' does not have an ICharacterAttributeController. Condition failed.");
 				return false;
 			}
 
-			// Get the specific CharacterAttribute instance from the controller.
 			if (!attributeController.TryGetAttribute(Template, out CharacterAttribute characterAttribute))
 			{
-				Log.Warning("HasRequiredCharacterAttribute", $"Initiator '{initiator?.Name}' does not have the specified Character Attribute. Condition failed.");
+				Log.Warning("HasRequiredCharacterAttribute", $"Character '{characterToCheck?.Name}' does not have the specified Character Attribute. Condition failed.");
 				return false;
 			}
 
-			// Check if the attribute's FinalValue meets the required value.
 			bool meetsRequirement = characterAttribute.FinalValue >= RequiredValue;
-
-			// Apply inversion logic
 			bool finalResult = InvertResult ? !meetsRequirement : meetsRequirement;
 
-			// Optional: Detailed logging for debugging
 			if (!finalResult)
 			{
 				string status = meetsRequirement ?
 					$"has {characterAttribute.FinalValue} (meets requirement)" :
 					$"has {characterAttribute.FinalValue} (does NOT meet requirement)";
 
-				Log.Debug("HasRequiredCharacterAttribute", $"Character '{initiator?.Name}' failed stat check for '{Template.Name}'. Current: {characterAttribute.FinalValue}, Required: {RequiredValue}. Inverted: {InvertResult}.");
+				Log.Debug("HasRequiredCharacterAttribute", $"Character '{characterToCheck?.Name}' failed stat check for '{Template.Name}'. Current: {characterAttribute.FinalValue}, Required: {RequiredValue}. Inverted: {InvertResult}.");
 			}
 
 			return finalResult;

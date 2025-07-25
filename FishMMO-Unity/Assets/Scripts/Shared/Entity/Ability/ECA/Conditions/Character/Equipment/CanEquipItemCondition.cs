@@ -8,99 +8,76 @@ namespace FishMMO.Shared
 	/// Condition that checks if an item can be equipped by the initiator.
 	/// Requires an ItemEventData in the EventData.
 	/// </summary>
-	[CreateAssetMenu(fileName = "CanEquipItemCondition", menuName = "Runtimes/Conditions/Can Equip Item Condition")]
+	[CreateAssetMenu(fileName = "CanEquipItemCondition", menuName = "FishMMO/Triggers/Conditions/Equipment/Can Equip Item Condition")]
 	public class CanEquipItemCondition : BaseCondition
 	{
-		public override bool Evaluate(ICharacter initiator, EventData eventData = null)
+		public override bool Evaluate(ICharacter initiator, EventData eventData)
 		{
-			if (initiator == null || eventData == null)
+			ICharacter characterToCheck = initiator;
+			if (eventData != null && eventData.TryGet(out CharacterHitEventData charTargetEventData) && charTargetEventData.Target != null)
 			{
-				Log.Warning("CanEquipItemCondition", "Initiator or EventData is null.");
+				characterToCheck = charTargetEventData.Target;
+			}
+			if (characterToCheck == null || eventData == null)
+			{
+				Log.Warning("CanEquipItemCondition", "Character or EventData is null.");
 				return false;
 			}
-
 			if (!eventData.TryGet(out ItemEventData itemEventData))
 			{
 				Log.Warning("CanEquipItemCondition", "EventData does not contain ItemEventData.");
 				return false;
 			}
-
 			Item itemToEquip = itemEventData.Item;
 			IItemContainer sourceContainer = itemEventData.SourceContainer;
 			ItemSlot targetSlot = itemEventData.TargetSlot;
-
 			if (itemToEquip == null)
 			{
 				Log.Warning("CanEquipItemCondition", "Item to equip is null in ItemEventData.");
 				return false;
 			}
-
 			if (!itemToEquip.IsEquippable)
 			{
-				//Log.Debug($"CanEquipItemCondition", "Item {itemToEquip.Template.name} is not equippable.");
 				return false;
 			}
-
 			EquippableItemTemplate equippableTemplate = itemToEquip.Template as EquippableItemTemplate;
 			if (equippableTemplate == null)
 			{
 				Log.Warning($"CanEquipItemCondition", "Item {itemToEquip.Template.name} does not have an EquippableItemTemplate.");
 				return false;
 			}
-
-			// If a specific target slot is provided, ensure it matches the item's slot
 			if (targetSlot != equippableTemplate.Slot)
 			{
-				//Log.Debug($"CanEquipItemCondition", "Target slot {targetSlot} does not match item's required slot {equippableTemplate.Slot}.");
 				return false;
 			}
-
-			// Get the EquipmentController from the initiator
-			if (!initiator.TryGet(out EquipmentController equipmentController))
+			if (!characterToCheck.TryGet(out EquipmentController equipmentController))
 			{
-				Log.Warning("CanEquipItemCondition", "Initiator does not have an EquipmentController.");
+				Log.Warning("CanEquipItemCondition", "Character does not have an EquipmentController.");
 				return false;
 			}
-
-			// Check if the EquipmentController can manipulate (e.g., character is not busy)
 			if (!equipmentController.CanManipulate())
 			{
-				//Log.Debug("CanEquipItemCondition", "EquipmentController cannot manipulate items right now.");
 				return false;
 			}
-
-			// If there's an item in the target slot, check if it can be unequipped and potentially swapped
 			if (equipmentController.TryGetItem((byte)equippableTemplate.Slot, out Item existingItemInSlot))
 			{
-				// If the existing item is the same as the one we want to equip (already equipped)
 				if (existingItemInSlot.ID == itemToEquip.ID && existingItemInSlot.Template.ID == itemToEquip.Template.ID)
 				{
-					//Log.Debug($"CanEquipItemCondition", "Item {itemToEquip.Template.name} is already equipped in the target slot.");
 					return false; // Already equipped
 				}
-
-				// If we are swapping, the source container must be able to accept the existing item
 				if (sourceContainer != null && !sourceContainer.CanAddItem(existingItemInSlot))
 				{
-					//Log.Debug($"CanEquipItemCondition", "Source container cannot accommodate existing item {existingItemInSlot.Template.name}.");
 					return false;
 				}
 			}
-			else // No item in the target slot
+			else
 			{
-				// If we're moving from a container, ensure the container has the item and can remove it
-				if (sourceContainer != null && !sourceContainer.ContainsItem(itemToEquip.Template)) // Assuming Contains method exists
+				if (sourceContainer != null && !sourceContainer.ContainsItem(itemToEquip.Template))
 				{
-					//Log.Debug($"CanEquipItemCondition", "Source container does not contain item {itemToEquip.Template.name}.");
 					return false;
 				}
 			}
-
 			// Additional checks can be added here, e.g., level requirements, class requirements etc.
-			// Example:
-			// if (itemToEquip.Template is ILevelRequirement levelReq && initiator.Level < levelReq.RequiredLevel) return false;
-			// if (itemToEquip.Template is IClassRequirement classReq && initiator.CharacterClass != classReq.RequiredClass) return false;
-
 			return true;
 		}
 	}

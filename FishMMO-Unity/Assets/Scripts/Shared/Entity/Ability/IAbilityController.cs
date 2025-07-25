@@ -17,13 +17,16 @@ namespace FishMMO.Shared
 		event Action OnReset;
 		event Action<Ability> OnAddAbility;
 		event Action<BaseAbilityTemplate> OnAddKnownAbility;
+		event Action<AbilityEvent> OnAddKnownAbilityEvent;
 
 		Dictionary<long, Ability> KnownAbilities { get; }
 		HashSet<int> KnownBaseAbilities { get; }
-		HashSet<int> KnownEvents { get; }
-		HashSet<int> KnownSpawnEvents { get; }
-		HashSet<int> KnownHitEvents { get; }
-		HashSet<int> KnownMoveEvents { get; }
+		HashSet<int> KnownAbilityEvents { get; }
+		HashSet<int> KnownAbilityOnTickEvents { get; }
+		HashSet<int> KnownAbilityOnHitEvents { get; }
+		HashSet<int> KnownAbilityOnPreSpawnEvents { get; }
+		HashSet<int> KnownAbilityOnSpawnEvents { get; }
+		HashSet<int> KnownAbilityOnDestroyEvents { get; }
 		bool IsActivating { get; }
 		bool AbilityQueued { get; }
 
@@ -31,12 +34,14 @@ namespace FishMMO.Shared
 		void Activate(long referenceID, KeyCode heldKey);
 		void RemoveAbility(int referenceID);
 		bool CanManipulate();
-		bool KnowsAbility(int abilityID);
 		AbilityType GetCurrentAbilityType();
 		bool IsCurrentAbilityTypeAerial();
 		CharacterAttributeTemplate GetActivationAttributeTemplate(Ability ability);
 		float CalculateSpeedReduction(CharacterAttributeTemplate attribute);
+		bool KnowsAbility(int abilityID);
 		bool LearnBaseAbilities(List<BaseAbilityTemplate> abilityTemplates = null);
+		bool KnowsAbilityEvent(int eventID);
+		bool LearnAbilityEvents(List<AbilityEvent> abilityEvents = null);
 		bool KnowsLearnedAbility(int templateID);
 		void LearnAbility(Ability ability, float remainingCooldown = 0.0f);
 	}

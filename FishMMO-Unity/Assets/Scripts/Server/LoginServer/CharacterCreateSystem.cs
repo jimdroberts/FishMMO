@@ -294,16 +294,16 @@ namespace FishMMO.Server
 		{
 			if (startingAbilities != null)
 			{
-				foreach (AbilityTemplate startingAbility in startingAbilities)
-				{
-					var dbAbility = new CharacterAbilityEntity()
-					{
-						CharacterID = characterID,
-						TemplateID = startingAbility.ID,
-						AbilityEvents = startingAbility.Events.Select(a => a.ID).ToList(),
-					};
-					dbContext.CharacterAbilities.Add(dbAbility);
-				}
+			   foreach (AbilityTemplate startingAbility in startingAbilities)
+			   {
+				   var dbAbility = new CharacterAbilityEntity()
+				   {
+					   CharacterID = characterID,
+					   TemplateID = startingAbility.ID,
+					   AbilityTriggers = startingAbility.GetAllAbilityTriggerIDs(),
+				   };
+				   dbContext.CharacterAbilities.Add(dbAbility);
+			   }
 				dbContext.SaveChanges();
 			}
 		}

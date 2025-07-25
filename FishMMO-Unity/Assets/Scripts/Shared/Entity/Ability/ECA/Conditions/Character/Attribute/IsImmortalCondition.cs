@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace FishMMO.Server.Conditions
 {
-	[CreateAssetMenu(fileName = "IsImmortalCondition", menuName = "FishMMO/Conditions/Character/Is Immortal", order = 0)]
+	[CreateAssetMenu(fileName = "IsImmortalCondition", menuName = "FishMMO/Triggers/Conditions/Attribute/Is Immortal", order = 0)]
 	public class IsImmortalCondition : BaseCondition
 	{
 		[Header("Immortality Check")]
@@ -13,26 +13,26 @@ namespace FishMMO.Server.Conditions
 
 		public override bool Evaluate(ICharacter initiator, EventData eventData)
 		{
-			// Attempt to get the ICharacterDamageController from the eventData.
-			if (!initiator.TryGet(out ICharacterDamageController damageController))
+			ICharacter characterToCheck = initiator;
+			if (eventData != null && eventData.TryGet(out CharacterHitEventData charTargetEventData) && charTargetEventData.Target != null)
 			{
-				Log.Warning("IsImmortalCondition", $"EventData does not contain an ICharacterDamageController. Condition failed. (Initiator: {initiator?.Name})");
+				characterToCheck = charTargetEventData.Target;
+			}
+
+			if (!characterToCheck.TryGet(out ICharacterDamageController damageController))
+			{
+				Log.Warning("IsImmortalCondition", $"EventData does not contain an ICharacterDamageController. Condition failed. (Character: {characterToCheck?.Name})");
 				return false;
 			}
 
-			// Check the Immortal property of the defender's damage controller.
 			bool isImmortal = damageController.Immortal;
-
-			// Apply inversion logic
 			bool finalResult = InvertResult ? !isImmortal : isImmortal;
 
-			// Optional: Detailed logging for debugging
-			if (!finalResult) // If the condition ultimately failed
+			if (!finalResult)
 			{
 				string status = isImmortal ? "is immortal" : "is mortal";
 				string invertedText = InvertResult ? " (inverted check)" : "";
-
-				Log.Debug("IsImmortalCondition", $"(Initiator: '{initiator?.Name}') failed immortality check. Status: {status}{invertedText}.");
+				Log.Debug("IsImmortalCondition", $"(Character: '{characterToCheck?.Name}') failed immortality check. Status: {status}{invertedText}.");
 			}
 
 			return finalResult;

@@ -1,5 +1,7 @@
 ﻿using FishNet.Transporting;
+using System;
 using System.Collections.Generic;
+using FishNet.Broadcast;
 using FishMMO.Shared;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Database.Npgsql;
@@ -77,53 +79,71 @@ namespace FishMMO.Server
 			}
 
 			HandleAbilityRewards(dbContext, playerCharacter, tier);
+			HandleAbilityEventRewards(dbContext, playerCharacter, tier);
 			HandleItemRewards(dbContext, playerCharacter, tier);
+		}
+
+		private void HandleAbilityGenericRewards<TTemplate, TBroadcast, TMultiBroadcast>(
+			NpgsqlDbContext dbContext,
+			IPlayerCharacter character,
+			List<TTemplate> rewards,
+			Func<IAbilityController, int, bool> knowsFunc,
+			Action<IAbilityController, List<TTemplate>> learnFunc,
+			Func<TTemplate, int> idSelector,
+			Func<TTemplate, TBroadcast> singleBroadcastFactory,
+			Func<List<TBroadcast>, TMultiBroadcast> multiBroadcastFactory
+		)
+			where TTemplate : class
+			where TBroadcast : struct, IBroadcast
+			where TMultiBroadcast : struct, IBroadcast
+		{
+			if (rewards == null || rewards.Count < 1) return;
+			if (!character.TryGet(out IAbilityController abilityController)) return;
+
+			List<TBroadcast> broadcasts = new List<TBroadcast>();
+
+			foreach (var reward in rewards)
+			{
+				int id = idSelector(reward);
+				if (knowsFunc(abilityController, id)) continue;
+
+				learnFunc(abilityController, new List<TTemplate> { reward });
+				CharacterKnownAbilityService.Add(dbContext, character.ID, id);
+				broadcasts.Add(singleBroadcastFactory(reward));
+			}
+
+			if (broadcasts.Count > 0)
+			{
+				character.Owner.Broadcast(multiBroadcastFactory(broadcasts), true, Channel.Reliable);
+			}
 		}
 
 		public void HandleAbilityRewards(NpgsqlDbContext dbContext, IPlayerCharacter character, AchievementTier tier)
 		{
-			List<BaseAbilityTemplate> abilityRewards = tier.AbilityRewards;
-			if (abilityRewards == null ||
-				abilityRewards.Count < 1)
-			{
-				return;
-			}
+			HandleAbilityGenericRewards<BaseAbilityTemplate, KnownAbilityAddBroadcast, KnownAbilityAddMultipleBroadcast>(
+				dbContext,
+				character,
+				tier.AbilityRewards,
+				(abilityController, id) => abilityController.KnowsAbility(id),
+				(abilityController, list) => abilityController.LearnBaseAbilities(list),
+				t => t.ID,
+				t => new KnownAbilityAddBroadcast { TemplateID = t.ID },
+				list => new KnownAbilityAddMultipleBroadcast { Abilities = list }
+			);
+		}
 
-			if (!character.TryGet(out IAbilityController abilityController))
-			{
-				return;
-			}
-
-			List<KnownAbilityAddBroadcast> modifiedAbilityBroadcasts = new List<KnownAbilityAddBroadcast>();
-
-			for (int i = 0; i < abilityRewards.Count; ++i)
-			{
-				BaseAbilityTemplate abilityReward = abilityRewards[i];
-				if (abilityController.KnowsAbility(abilityReward.ID))
-				{
-					continue;
-				}
-
-				// learn the ability
-				abilityController.LearnBaseAbilities(new List<BaseAbilityTemplate> { abilityReward });
-
-				// add the known ability to the database
-				CharacterKnownAbilityService.Add(dbContext, character.ID, abilityReward.ID);
-
-				modifiedAbilityBroadcasts.Add(new KnownAbilityAddBroadcast()
-				{
-					TemplateID = abilityReward.ID,
-				});
-			}
-
-			if (modifiedAbilityBroadcasts.Count > 0)
-			{
-				// tell the client about the new ability event
-				character.Owner.Broadcast(new KnownAbilityAddMultipleBroadcast()
-				{
-					Abilities = modifiedAbilityBroadcasts,
-				}, true, Channel.Reliable);
-			}
+		private void HandleAbilityEventRewards(NpgsqlDbContext dbContext, IPlayerCharacter character, AchievementTier tier)
+		{
+			HandleAbilityGenericRewards<AbilityEvent, KnownAbilityEventAddBroadcast, KnownAbilityEventAddMultipleBroadcast>(
+				dbContext,
+				character,
+				tier.AbilityEventRewards,
+				(abilityController, id) => abilityController.KnowsAbilityEvent(id),
+				(abilityController, list) => abilityController.LearnAbilityEvents(list),
+				t => t.ID,
+				t => new KnownAbilityEventAddBroadcast { TemplateID = t.ID },
+				list => new KnownAbilityEventAddMultipleBroadcast { AbilityEvents = list }
+			);
 		}
 
 		private void HandleItemRewards(NpgsqlDbContext dbContext, IPlayerCharacter character, AchievementTier tier)

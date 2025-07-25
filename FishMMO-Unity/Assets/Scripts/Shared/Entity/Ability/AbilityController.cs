@@ -1,11 +1,9 @@
 ﻿using FishNet.Connection;
-using FishNet.Object;
 using FishNet.Object.Prediction;
 using FishNet.Serializing;
 using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
 using FishMMO.Logging;
 
@@ -47,13 +45,17 @@ namespace FishMMO.Shared
 		public event Action OnReset;
 		public event Action<Ability> OnAddAbility;
 		public event Action<BaseAbilityTemplate> OnAddKnownAbility;
+		public event Action<AbilityEvent> OnAddKnownAbilityEvent;
 
 		public Dictionary<long, Ability> KnownAbilities { get; private set; }
 		public HashSet<int> KnownBaseAbilities { get; private set; }
-		public HashSet<int> KnownEvents { get; private set; }
-		public HashSet<int> KnownSpawnEvents { get; private set; }
-		public HashSet<int> KnownHitEvents { get; private set; }
-		public HashSet<int> KnownMoveEvents { get; private set; }
+		public HashSet<int> KnownAbilityEvents { get; private set; }
+		public HashSet<int> KnownAbilityOnTickEvents { get; private set; }
+		public HashSet<int> KnownAbilityOnHitEvents { get; private set; }
+		public HashSet<int> KnownAbilityOnPreSpawnEvents { get; private set; }
+		public HashSet<int> KnownAbilityOnSpawnEvents { get; private set; }
+		public HashSet<int> KnownAbilityOnDestroyEvents { get; private set; }
+
 		public bool IsActivating { get { return currentAbilityID != NO_ABILITY; } }
 		public bool AbilityQueued { get { return queuedAbilityID != NO_ABILITY; } }
 
@@ -63,10 +65,12 @@ namespace FishMMO.Shared
 
 			KnownAbilities = new Dictionary<long, Ability>();
 			KnownBaseAbilities = new HashSet<int>();
-			KnownEvents = new HashSet<int>();
-			KnownSpawnEvents = new HashSet<int>();
-			KnownHitEvents = new HashSet<int>();
-			KnownMoveEvents = new HashSet<int>();
+			KnownAbilityEvents = new HashSet<int>();
+			KnownAbilityOnTickEvents = new HashSet<int>();
+			KnownAbilityOnHitEvents = new HashSet<int>();
+			KnownAbilityOnPreSpawnEvents = new HashSet<int>();
+			KnownAbilityOnSpawnEvents = new HashSet<int>();
+			KnownAbilityOnDestroyEvents = new HashSet<int>();
 
 #if UNITY_SERVER
 			// Check if we already instantiated an RNG for this ability controller
@@ -113,10 +117,12 @@ namespace FishMMO.Shared
 
 			KnownAbilities.Clear();
 			KnownBaseAbilities.Clear();
-			KnownEvents.Clear();
-			KnownSpawnEvents.Clear();
-			KnownHitEvents.Clear();
-			KnownMoveEvents.Clear();
+			KnownAbilityEvents.Clear();
+			KnownAbilityOnTickEvents.Clear();
+			KnownAbilityOnHitEvents.Clear();
+			KnownAbilityOnPreSpawnEvents.Clear();
+			KnownAbilityOnSpawnEvents.Clear();
+			KnownAbilityOnDestroyEvents.Clear();
 		}
 
 #if !UNITY_SERVER
@@ -132,6 +138,8 @@ namespace FishMMO.Shared
 			{
 				ClientManager.RegisterBroadcast<KnownAbilityAddBroadcast>(OnClientKnownAbilityAddBroadcastReceived);
 				ClientManager.RegisterBroadcast<KnownAbilityAddMultipleBroadcast>(OnClientKnownAbilityAddMultipleBroadcastReceived);
+				ClientManager.RegisterBroadcast<KnownAbilityEventAddBroadcast>(OnClientKnownAbilityEventAddBroadcastReceived);
+				ClientManager.RegisterBroadcast<KnownAbilityEventAddMultipleBroadcast>(OnClientKnownAbilityEventAddMultipleBroadcastReceived);
 				ClientManager.RegisterBroadcast<AbilityAddBroadcast>(OnClientAbilityAddBroadcastReceived);
 				ClientManager.RegisterBroadcast<AbilityAddMultipleBroadcast>(OnClientAbilityAddMultipleBroadcastReceived);
 
@@ -154,6 +162,8 @@ namespace FishMMO.Shared
 			{
 				ClientManager.UnregisterBroadcast<KnownAbilityAddBroadcast>(OnClientKnownAbilityAddBroadcastReceived);
 				ClientManager.UnregisterBroadcast<KnownAbilityAddMultipleBroadcast>(OnClientKnownAbilityAddMultipleBroadcastReceived);
+				ClientManager.UnregisterBroadcast<KnownAbilityEventAddBroadcast>(OnClientKnownAbilityEventAddBroadcastReceived);
+				ClientManager.UnregisterBroadcast<KnownAbilityEventAddMultipleBroadcast>(OnClientKnownAbilityEventAddMultipleBroadcastReceived);
 				ClientManager.UnregisterBroadcast<AbilityAddBroadcast>(OnClientAbilityAddBroadcastReceived);
 				ClientManager.UnregisterBroadcast<AbilityAddMultipleBroadcast>(OnClientAbilityAddMultipleBroadcastReceived);
 			}
@@ -190,6 +200,39 @@ namespace FishMMO.Shared
 				}
 			}
 			LearnBaseAbilities(templates);
+		}
+
+		/// <summary>
+		/// Server sent an add known ability event broadcast.
+		/// </summary>
+		private void OnClientKnownAbilityEventAddBroadcastReceived(KnownAbilityEventAddBroadcast msg, Channel channel)
+		{
+			AbilityEvent abilityEvent = AbilityEvent.Get<AbilityEvent>(msg.TemplateID);
+			if (abilityEvent != null)
+			{
+				LearnAbilityEvents(new List<AbilityEvent>() { abilityEvent });
+
+				OnAddKnownAbilityEvent?.Invoke(abilityEvent);
+			}
+		}
+
+		/// <summary>
+		/// Server sent an add known ability broadcast.
+		/// </summary>
+		private void OnClientKnownAbilityEventAddMultipleBroadcastReceived(KnownAbilityEventAddMultipleBroadcast msg, Channel channel)
+		{
+			List<AbilityEvent> events = new List<AbilityEvent>();
+			foreach (KnownAbilityEventAddBroadcast knownAbilityEvent in msg.AbilityEvents)
+			{
+				AbilityEvent abilityEvent = AbilityEvent.Get<AbilityEvent>(knownAbilityEvent.TemplateID);
+				if (abilityEvent != null)
+				{
+					events.Add(abilityEvent);
+
+					OnAddKnownAbilityEvent?.Invoke(abilityEvent);
+				}
+			}
+			LearnAbilityEvents(events);
 		}
 
 		/// <summary>
@@ -246,10 +289,12 @@ namespace FishMMO.Shared
 			}
 			KnownAbilities.Clear();
 			KnownBaseAbilities.Clear();
-			KnownEvents.Clear();
-			KnownSpawnEvents.Clear();
-			KnownHitEvents.Clear();
-			KnownMoveEvents.Clear();
+			KnownAbilityEvents.Clear();
+			KnownAbilityOnTickEvents.Clear();
+			KnownAbilityOnHitEvents.Clear();
+			KnownAbilityOnPreSpawnEvents.Clear();
+			KnownAbilityOnSpawnEvents.Clear();
+			KnownAbilityOnDestroyEvents.Clear();
 
 			for (int i = 0; i < abilityCount; ++i)
 			{
@@ -277,7 +322,7 @@ namespace FishMMO.Shared
 		{
 			// Write the ability RNG seed for the clients
 			writer.WriteInt32(abilitySeed);
-			
+
 			//Log.Debug($"Writing AbilitySeedGenerator Seed {abilitySeed}\r\nCurrent Seed {currentSeed}");
 
 			// Write the abilities for the clients
@@ -366,7 +411,7 @@ namespace FishMMO.Shared
 			{
 				return default;
 			}
-			
+
 			float deltaTime = (float)base.TimeManager.TickDelta;
 			if (Character.TryGet(out ICooldownController cooldownController))
 			{
@@ -749,14 +794,9 @@ namespace FishMMO.Shared
 			return true;
 		}
 
-		public bool KnowsAbility(int abilityID)
+		public bool KnowsAbility(int templateID)
 		{
-			if ((KnownBaseAbilities != null && KnownBaseAbilities.Contains(abilityID)) ||
-				(KnownEvents != null && KnownEvents.Contains(abilityID)))
-			{
-				return true;
-			}
-			return false;
+			return KnownBaseAbilities?.Contains(templateID) ?? false;
 		}
 
 		public bool LearnBaseAbilities(List<BaseAbilityTemplate> abilityTemplates = null)
@@ -768,48 +808,53 @@ namespace FishMMO.Shared
 
 			for (int i = 0; i < abilityTemplates.Count; ++i)
 			{
-				// If the template is an ability event we add them to their mapped containers
-				AbilityEvent abilityEvent = abilityTemplates[i] as AbilityEvent;
-				if (abilityEvent != null)
+				BaseAbilityTemplate template = abilityTemplates[i];
+				if (template != null)
 				{
-					// Add the event to the global events map
-					if (!KnownEvents.Contains(abilityEvent.ID))
+					if (!KnownBaseAbilities.Contains(template.ID))
 					{
-						KnownEvents.Add(abilityEvent.ID);
-					}
-
-					switch (abilityEvent)
-					{
-						case HitEvent:
-							if (!KnownHitEvents.Contains(abilityEvent.ID))
-							{
-								KnownHitEvents.Add(abilityEvent.ID);
-							}
-							break;
-						case MoveEvent:
-							if (!KnownMoveEvents.Contains(abilityEvent.ID))
-							{
-								KnownMoveEvents.Add(abilityEvent.ID);
-							}
-							break;
-						case SpawnEvent:
-							if (!KnownSpawnEvents.Contains(abilityEvent.ID))
-							{
-								KnownSpawnEvents.Add(abilityEvent.ID);
-							}
-							break;
+						KnownBaseAbilities.Add(template.ID);
 					}
 				}
-				else
+			}
+			return true;
+		}
+
+		public bool KnowsAbilityEvent(int eventID)
+		{
+			return KnownAbilityEvents?.Contains(eventID) ?? false;
+		}
+
+		public bool LearnAbilityEvents(List<AbilityEvent> abilityEvents = null)
+		{
+			if (abilityEvents == null)
+			{
+				return false;
+			}
+
+			foreach (var abilityEvent in abilityEvents)
+			{
+				if (abilityEvent == null) continue;
+
+				KnownAbilityEvents.Add(abilityEvent.ID);
+
+				switch (abilityEvent)
 				{
-					AbilityTemplate abilityTemplate = abilityTemplates[i] as AbilityTemplate;
-					if (abilityTemplate != null)
-					{
-						if (!KnownBaseAbilities.Contains(abilityTemplate.ID))
-						{
-							KnownBaseAbilities.Add(abilityTemplate.ID);
-						}
-					}
+					case AbilityOnTickEvent _:
+						KnownAbilityOnTickEvents.Add(abilityEvent.ID);
+						break;
+					case AbilityOnHitEvent _:
+						KnownAbilityOnHitEvents.Add(abilityEvent.ID);
+						break;
+					case AbilityOnPreSpawnEvent _:
+						KnownAbilityOnPreSpawnEvents.Add(abilityEvent.ID);
+						break;
+					case AbilityOnSpawnEvent _:
+						KnownAbilityOnSpawnEvents.Add(abilityEvent.ID);
+						break;
+					case AbilityOnDestroyEvent _:
+						KnownAbilityOnDestroyEvents.Add(abilityEvent.ID);
+						break;
 				}
 			}
 			return true;
@@ -817,14 +862,7 @@ namespace FishMMO.Shared
 
 		public bool KnowsLearnedAbility(int templateID)
 		{
-			if (KnownAbilities == null)
-			{
-				return false;
-			}
-			KeyValuePair<long, Ability>? found = KnownAbilities.Where(x => x.Value.Template.ID == templateID)
-															   .Select(x => (KeyValuePair<long, Ability>?)x)
-															   .FirstOrDefault();
-			return found != null;
+			return KnownAbilities?.ContainsKey(templateID) ?? false;
 		}
 
 		public void LearnAbility(Ability ability, float remainingCooldown = 0.0f)

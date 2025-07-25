@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace FishMMO.Shared
 {
-	[CreateAssetMenu(fileName = "New Display Dialogue Action", menuName = "FishMMO/Actions/Display Dialogue Action", order = 0)]
+	[CreateAssetMenu(fileName = "New Display Dialogue Action", menuName = "FishMMO/Triggers/Actions/Display Dialogue Action", order = 0)]
 	public class DisplayDialogueAction : BaseAction
 	{
 		[TextArea(3, 5)]
