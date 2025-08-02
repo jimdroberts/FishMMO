@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "dgSpecHash": "D5GmQqspVgI=",
+  "success": true,
+  "projectFilePath": "D:\\FishMMO Dev\\FishMMO-WebServers\\Patcher\\Updater\\Updater.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\jim\\.nuget\\packages\\system.io.hashing\\9.0.4\\system.io.hashing.9.0.4.nupkg.sha512"
+  ],
+  "logs": []
+}

@@ -4,6 +4,8 @@
 
 The FishMMO Updater is a robust patching utility designed to update the FishMMO game client by applying versioned patch files. It ensures that the client is brought up-to-date with the latest version by processing patch manifests, handling new, modified, and deleted files, and providing transactional safety with rollback on failure. The updater is intended to be launched by the FishMMO launcher and can also restart the client executable after patching.
 
+The compiled project should be included in your releases but not before generating patches.
+
 ## Features
 
 - **Transactional patching:** Applies patches atomically with backup and rollback on failure.
