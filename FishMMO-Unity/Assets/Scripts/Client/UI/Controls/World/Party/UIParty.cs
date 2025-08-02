@@ -5,12 +5,28 @@ using FishMMO.Shared;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// UIParty class handles the user interface for party management, including displaying party members,
+	/// and handling party-related actions such as creating a party, leaving a party, and inviting members.
+	/// </summary>
 	public class UIParty : UICharacterControl
 	{
+		/// <summary>
+		/// The parent RectTransform for party member UI elements.
+		/// </summary>
 		public RectTransform PartyMemberParent;
+		/// <summary>
+		/// The prefab used to instantiate party member UI elements.
+		/// </summary>
 		public UIPartyMember PartyMemberPrefab;
+		/// <summary>
+		/// Dictionary of party members, keyed by character ID.
+		/// </summary>
 		public Dictionary<long, UIPartyMember> Members = new Dictionary<long, UIPartyMember>();
 
+		/// <summary>
+		/// Called when the party UI is being destroyed. Cleans up all member UI elements.
+		/// </summary>
 		public override void OnDestroying()
 		{
 			foreach (UIPartyMember member in new List<UIPartyMember>(Members.Values))
@@ -20,6 +36,9 @@ namespace FishMMO.Client
 			Members.Clear();
 		}
 
+		/// <summary>
+		/// Called after the character is set. Subscribes to party controller events.
+		/// </summary>
 		public override void OnPostSetCharacter()
 		{
 			base.OnPostSetCharacter();
@@ -35,6 +54,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Called before the character is unset. Unsubscribes from party controller events.
+		/// </summary>
 		public override void OnPreUnsetCharacter()
 		{
 			base.OnPreUnsetCharacter();
@@ -50,6 +72,10 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Handles receiving a party invite. Opens a dialog box to accept or decline.
+		/// </summary>
+		/// <param name="inviterCharacterID">The character ID of the inviter.</param>
 		public void PartyController_OnReceivePartyInvite(long inviterCharacterID)
 		{
 			ClientNamingSystem.SetName(NamingSystemType.CharacterName, inviterCharacterID, (n) =>
@@ -69,6 +95,10 @@ namespace FishMMO.Client
 			});
 		}
 
+		/// <summary>
+		/// Validates the current party members against a new set, removing any that are no longer present.
+		/// </summary>
+		/// <param name="newMembers">Set of valid member IDs.</param>
 		public void PartyController_OnValidatePartyMembers(HashSet<long> newMembers)
 		{
 			foreach (long id in new HashSet<long>(Members.Keys))
@@ -80,6 +110,10 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Handles party creation. Instantiates and adds the local player as a party member.
+		/// </summary>
+		/// <param name="location">Location string (unused).</param>
 		public void OnPartyCreated(string location)
 		{
 			if (Character != null &&
@@ -99,13 +133,16 @@ namespace FishMMO.Client
 					}
 					if (member.Health != null)
 						member.Health.value = Character.TryGet(out ICharacterAttributeController attributeController) ? attributeController.GetHealthResourceAttributeCurrentPercentage() : 0.0f;
-					
+
 					member.gameObject.SetActive(true);
 					Members.Add(Character.ID, member);
 				}
 			}
 		}
 
+		/// <summary>
+		/// Handles leaving the party. Cleans up all member UI elements.
+		/// </summary>
 		public void OnLeaveParty()
 		{
 			foreach (UIPartyMember member in new List<UIPartyMember>(Members.Values))
@@ -115,6 +152,12 @@ namespace FishMMO.Client
 			Members.Clear();
 		}
 
+		/// <summary>
+		/// Adds a new member to the party UI.
+		/// </summary>
+		/// <param name="characterID">The character ID of the new member.</param>
+		/// <param name="rank">The rank of the new member.</param>
+		/// <param name="healthPCT">The health percentage of the new member.</param>
 		public void OnPartyAddMember(long characterID, PartyRank rank, float healthPCT)
 		{
 			if (PartyMemberPrefab != null && PartyMemberParent != null)
@@ -142,6 +185,10 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Removes a member from the party UI.
+		/// </summary>
+		/// <param name="characterID">The character ID of the member to remove.</param>
 		public void OnPartyRemoveMember(long characterID)
 		{
 			if (Members.TryGetValue(characterID, out UIPartyMember member))
@@ -151,6 +198,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Called when the create party button is pressed. Broadcasts a create party request if not already in a party.
+		/// </summary>
 		public void OnButtonCreateParty()
 		{
 			if (Character != null &&
@@ -161,6 +211,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Called when the leave party button is pressed. Opens a confirmation dialog and broadcasts leave request.
+		/// </summary>
 		public void OnButtonLeaveParty()
 		{
 			if (Character != null &&
@@ -177,6 +230,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Called when the invite to party button is pressed. Broadcasts an invite to the selected target or prompts for a name.
+		/// </summary>
 		public void OnButtonInviteToParty()
 		{
 			if (Character != null &&

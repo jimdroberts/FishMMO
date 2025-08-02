@@ -5,12 +5,27 @@ using FishMMO.Shared;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// UI control for managing and displaying the player's friend list.
+	/// </summary>
 	public class UIFriendList : UICharacterControl
 	{
+		/// <summary>
+		/// The parent transform for friend UI elements.
+		/// </summary>
 		public RectTransform FriendParent;
+		/// <summary>
+		/// Prefab used to instantiate friend UI elements.
+		/// </summary>
 		public UIFriend FriendPrefab;
+		/// <summary>
+		/// Dictionary of friends by character ID.
+		/// </summary>
 		public Dictionary<long, UIFriend> Friends = new Dictionary<long, UIFriend>();
 
+		/// <summary>
+		/// Called when the UI is being destroyed. Cleans up friend UI elements.
+		/// </summary>
 		public override void OnDestroying()
 		{
 			foreach (UIFriend friend in new List<UIFriend>(Friends.Values))
@@ -22,6 +37,9 @@ namespace FishMMO.Client
 			Friends.Clear();
 		}
 
+		/// <summary>
+		/// Called after setting the character reference. Subscribes to friend controller events.
+		/// </summary>
 		public override void OnPostSetCharacter()
 		{
 			base.OnPostSetCharacter();
@@ -33,6 +51,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Called before unsetting the character reference. Unsubscribes from friend controller events.
+		/// </summary>
 		public override void OnPreUnsetCharacter()
 		{
 			base.OnPreUnsetCharacter();
@@ -44,6 +65,11 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Handles adding a friend and updates the friend list UI.
+		/// </summary>
+		/// <param name="friendID">The character ID of the friend.</param>
+		/// <param name="online">Whether the friend is online.</param>
 		public void FriendController_OnAddFriend(long friendID, bool online)
 		{
 			if (FriendPrefab != null && FriendParent != null)
@@ -73,6 +99,10 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Handles removing a friend from the friend list UI.
+		/// </summary>
+		/// <param name="friendID">The character ID of the friend to remove.</param>
 		public void FriendController_OnRemoveFriend(long friendID)
 		{
 			if (Friends.TryGetValue(friendID, out UIFriend friend))
@@ -84,6 +114,10 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Handles the remove friend button click. Prompts for confirmation and sends a remove request.
+		/// </summary>
+		/// <param name="friendID">The character ID of the friend to remove.</param>
 		private void OnButtonRemoveFriend(long friendID)
 		{
 			if (UIManager.TryGet("UIDialogBox", out UIDialogBox tooltip))
@@ -98,6 +132,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Handles the add friend button click. Prompts for a name and sends an add request.
+		/// </summary>
 		public void OnButtonAddFriend()
 		{
 			if (FriendPrefab != null && FriendParent != null)
@@ -107,7 +144,7 @@ namespace FishMMO.Client
 					tooltip.Open("Please type the name of the person you wish to add.", (s) =>
 					{
 						if (Constants.Authentication.IsAllowedCharacterName(s))
-                        {
+						{
 							ClientNamingSystem.GetCharacterID(s, (id) =>
 							{
 								if (id != 0)

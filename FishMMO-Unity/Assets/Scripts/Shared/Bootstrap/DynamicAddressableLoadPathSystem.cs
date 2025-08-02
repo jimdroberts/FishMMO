@@ -2,53 +2,69 @@ using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.ResourceLocations;
 
-public class DynamicAddressableLoadPathSystem : MonoBehaviour
+namespace AddressableAssets
 {
-	public string RuntimeBaseUrl;
-
-	void Awake()
+	/// <summary>
+	/// Dynamically overrides the Addressables remote load path at runtime.
+	/// Useful for changing asset server URLs based on runtime configuration (e.g., IP discovery).
+	/// </summary>
+	public class DynamicAddressableLoadPathSystem : MonoBehaviour
 	{
-		SetAddressablesLoadPathOverride();
-	}
+		/// <summary>
+		/// The base URL to use for remote Addressables asset loading at runtime.
+		/// </summary>
+		public string RuntimeBaseUrl;
 
-	private void SetAddressablesLoadPathOverride()
-	{
-		//Log.Debug($"Attempting to set Addressable Remote Load path to {RuntimeBaseUrl}");
-
-		Addressables.ResourceManager.InternalIdTransformFunc = (IResourceLocation location) =>
+		/// <summary>
+		/// Unity Awake message. Sets the Addressables load path override when the object is initialized.
+		/// </summary>
+		void Awake()
 		{
-			//Log.Debug($"Current Addressable load path {location.InternalId}");
+			SetAddressablesLoadPathOverride();
+		}
 
-			// Modify remote asset load paths based on custom logic (e.g., IP discovery)
-			// Ensure the location starts with a protocol to identify it as a remote asset
-			if (location.InternalId.StartsWith("http://") || location.InternalId.StartsWith("https://"))
+		/// <summary>
+		/// Sets the Addressables.ResourceManager.InternalIdTransformFunc to override remote asset load paths.
+		/// </summary>
+		private void SetAddressablesLoadPathOverride()
+		{
+			//Log.Debug($"Attempting to set Addressable Remote Load path to {RuntimeBaseUrl}");
+
+			Addressables.ResourceManager.InternalIdTransformFunc = (IResourceLocation location) =>
 			{
-				// Find the index of the third slash, which typically marks the end of the base URL
-				// e.g., "http://domain.com/path/to/asset" -> third slash is after .com
-				// For "http://127.0.0.1:8000/path/to/asset", the third slash is after 8000
-				int startIndex = location.InternalId.IndexOf("://") + 3; // Start after "http://" or "https://"
-				int thirdSlashIndex = location.InternalId.IndexOf('/', startIndex);
+				//Log.Debug($"Current Addressable load path {location.InternalId}");
 
-				// If a third slash exists, it means there's a path component after the base URL
-				if (thirdSlashIndex != -1)
+				// Modify remote asset load paths based on custom logic (e.g., IP discovery)
+				// Ensure the location starts with a protocol to identify it as a remote asset
+				if (location.InternalId.StartsWith("http://") || location.InternalId.StartsWith("https://"))
 				{
-					// Extract the part of the path that comes after the base URL
-					string relativePath = location.InternalId.Substring(thirdSlashIndex + 1);
-					string newPath = RuntimeBaseUrl + relativePath;
+					// Find the index of the third slash, which typically marks the end of the base URL
+					// e.g., "http://domain.com/path/to/asset" -> third slash is after .com
+					// For "http://127.0.0.1:8000/path/to/asset", the third slash is after 8000
+					int startIndex = location.InternalId.IndexOf("://") + 3; // Start after "http://" or "https://"
+					int thirdSlashIndex = location.InternalId.IndexOf('/', startIndex);
 
-					//Log.Debug($"Original Path: {location.InternalId}");
-					//Log.Debug($"Transformed Path: {newPath}");
-					return newPath;
-				}
-				else
-				{
-					//Log.Warning($"Addressable InternalId '{location.InternalId}' starts with http/https but has no path component after the domain/port. Using runtimeBaseUrl directly.");
-					return RuntimeBaseUrl;
-				}
-			}
+					// If a third slash exists, it means there's a path component after the base URL
+					if (thirdSlashIndex != -1)
+					{
+						// Extract the part of the path that comes after the base URL
+						string relativePath = location.InternalId.Substring(thirdSlashIndex + 1);
+						string newPath = RuntimeBaseUrl + relativePath;
 
-			// Local assets (e.g., models) can remain untouched
-			return location.InternalId;
-		};
+						//Log.Debug($"Original Path: {location.InternalId}");
+						//Log.Debug($"Transformed Path: {newPath}");
+						return newPath;
+					}
+					else
+					{
+						//Log.Warning($"Addressable InternalId '{location.InternalId}' starts with http/https but has no path component after the domain/port. Using runtimeBaseUrl directly.");
+						return RuntimeBaseUrl;
+					}
+				}
+
+				// Local assets (e.g., models) can remain untouched
+				return location.InternalId;
+			};
+		}
 	}
 }

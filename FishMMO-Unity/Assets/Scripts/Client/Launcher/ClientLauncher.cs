@@ -20,44 +20,116 @@ namespace FishMMO.Client
 	{
 		#region UI ELEMENTS
 		[Header("UI Elements")]
+		/// <summary>
+		/// The background image of the launcher UI.
+		/// </summary>
 		public Image Background;
+		/// <summary>
+		/// The title text of the launcher UI.
+		/// </summary>
 		public TMP_Text Title;
+		/// <summary>
+		/// The HTML view GameObject for displaying news or other content.
+		/// </summary>
 		public GameObject HTMLView;
+		/// <summary>
+		/// The group GameObject containing the progress bar UI.
+		/// </summary>
 		public GameObject ProgressBarGroup;
+		/// <summary>
+		/// The progress slider UI element.
+		/// </summary>
 		public Slider ProgressSlider;
+		/// <summary>
+		/// The progress text UI element.
+		/// </summary>
 		public TMP_Text ProgressText;
+		/// <summary>
+		/// The quit button UI element.
+		/// </summary>
 		public Button QuitButton;
+		/// <summary>
+		/// The play button UI element.
+		/// </summary>
 		public Button PlayButton;
+		/// <summary>
+		/// The play button text UI element.
+		/// </summary>
 		public TMP_Text PlayButtonText;
+		/// <summary>
+		/// The text UI element for displaying HTML content.
+		/// </summary>
 		public TMP_Text HtmlText;
+		/// <summary>
+		/// The handler for clickable links in the HTML text.
+		/// </summary>
 		public TMPro_TextLinkHandler HtmlTextLinkHandler;
 		#endregion
 
 		#region CONFIGURATION
 		[Header("Configuration")]
+		/// <summary>
+		/// The URL to fetch HTML news content from.
+		/// </summary>
 		public string HtmlViewURL = "https://github.com/jimdroberts/FishMMO/wiki";
+		/// <summary>
+		/// The class name of the div to extract from the HTML content.
+		/// </summary>
 		public string DivClass = "markdown-body";
+		/// <summary>
+		/// The default screen width for the launcher window.
+		/// </summary>
 		public int DefaultScreenWidth = 1024;
+		/// <summary>
+		/// The default screen height for the launcher window.
+		/// </summary>
 		public int DefaultScreenHeight = 768;
 		#endregion
 
 		#region DEPENDENCIES (Injected via Inspector)
 		[Header("Dependencies")]
+		/// <summary>
+		/// Service for handling Unity web requests.
+		/// </summary>
 		public UnityWebRequestService UnityWebRequestService;
+		/// <summary>
+		/// Service for fetching and processing HTML content.
+		/// </summary>
 		public UnityHtmlContentFetcher HtmlContentFetcher;
+		/// <summary>
+		/// Service for patch server communication and patch management.
+		/// </summary>
 		public HttpPatchServerService PatchServerService;
+		/// <summary>
+		/// The updater launcher used to start the external updater process.
+		/// </summary>
 		private IUpdaterLauncher updaterLauncher;
 		#endregion
 
 		#region INTERNAL STATE
+		/// <summary>
+		/// The patch server host URL.
+		/// </summary>
 		private string patcherHost;
-		private string latestVersionString; // Stores the latest client version string fetched from the patch server.
-		private string updaterPath; // Full path to the external updater executable.
+		/// <summary>
+		/// Stores the latest client version string fetched from the patch server.
+		/// </summary>
+		private string latestVersionString;
+		/// <summary>
+		/// Full path to the external updater executable.
+		/// </summary>
+		private string updaterPath;
 
+		/// <summary>
+		/// The current state of the launcher UI and process.
+		/// </summary>
 		private LauncherState currentLauncherState;
 		#endregion
 
 		#region UI TEXT CONSTANTS
+		/// <summary>
+		/// Contains constant strings for UI text and log messages.
+		/// </summary>
 		private static class UIText
 		{
 			public const string ButtonConnect = "Connect";
@@ -97,6 +169,9 @@ namespace FishMMO.Client
 		#endregion
 
 		#region UNITY LIFECYCLE METHODS
+		/// <summary>
+		/// Unity Awake method. Initializes dependencies, sets up UI, and starts HTML/news fetch.
+		/// </summary>
 		private void Awake()
 		{
 			// SystemUpdaterLauncher is a plain C# class, directly instantiate it
@@ -156,6 +231,9 @@ namespace FishMMO.Client
 			ProgressBarGroup.SetActive(false); // Ensure progress bar is hidden initially.
 		}
 
+		/// <summary>
+		/// Unity OnDestroy method. Cleans up event subscriptions.
+		/// </summary>
 		private void OnDestroy()
 		{
 			if (HtmlTextLinkHandler != null)
@@ -169,6 +247,11 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Sets the current launcher state and updates the UI accordingly.
 		/// This centralizes all UI updates related to the launcher's operational state.
+		/// </summary>
+		/// <param name="newState">The new state for the launcher.</param>
+		/// <summary>
+		/// Sets the current launcher state and updates the UI accordingly.
+		/// Centralizes all UI updates related to the launcher's operational state.
 		/// </summary>
 		/// <param name="newState">The new state for the launcher.</param>
 		private void SetLauncherState(LauncherState newState)
@@ -263,6 +346,11 @@ namespace FishMMO.Client
 		/// Opens external URLs in the default web browser.
 		/// </summary>
 		/// <param name="link">The URL string extracted from the clicked link.</param>
+		/// <summary>
+		/// Handles clicks on links embedded within the HTML news text.
+		/// Opens external URLs in the default web browser.
+		/// </summary>
+		/// <param name="link">The URL string extracted from the clicked link.</param>
 		private void HandleHtmlLinkClicked(string link)
 		{
 			if (link.Contains("http") || link.Contains("www"))
@@ -271,6 +359,10 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Initiates the connection process to fetch patch server list and check for game updates.
+		/// This is the primary action when the launcher starts or after an error.
+		/// </summary>
 		/// <summary>
 		/// Initiates the connection process to fetch patch server list and check for game updates.
 		/// This is the primary action when the launcher starts or after an error.
@@ -298,6 +390,9 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Launches the client after all version checks and updates are complete.
 		/// </summary>
+		/// <summary>
+		/// Launches the client after all version checks and updates are complete.
+		/// </summary>
 		public void PlayButton_Launch()
 		{
 			SetLauncherState(LauncherState.ReadyToPlay); // Set state, button will be disabled by this call.
@@ -313,6 +408,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Initiates the update process by attempting to download and apply the patch.
+		/// </summary>
 		/// <summary>
 		/// Initiates the update process by attempting to download and apply the patch.
 		/// </summary>
@@ -363,6 +461,10 @@ namespace FishMMO.Client
 		/// Fetches the latest client version from the currently selected patch server.
 		/// Compares it with the current client version and updates the UI accordingly.
 		/// </summary>
+		/// <summary>
+		/// Fetches the latest client version from the currently selected patch server.
+		/// Compares it with the current client version and updates the UI accordingly.
+		/// </summary>
 		private IEnumerator GetLatestVersion()
 		{
 			SetLauncherState(LauncherState.CheckingVersion);
@@ -409,6 +511,9 @@ namespace FishMMO.Client
 				}));
 		}
 
+		/// <summary>
+		/// Quits the application.
+		/// </summary>
 		/// <summary>
 		/// Quits the application.
 		/// </summary>

@@ -10,10 +10,25 @@ namespace FishMMO.Client
 {
 	public class UICharacterSelect : UIControl
 	{
+		/// <summary>
+		/// Button to connect with the selected character.
+		/// </summary>
 		public Button ConnectButton;
+		/// <summary>
+		/// Button to delete the selected character.
+		/// </summary>
 		public Button DeleteButton;
+		/// <summary>
+		/// Parent transform for the selected character UI.
+		/// </summary>
 		public RectTransform SelectedCharacterParent;
+		/// <summary>
+		/// Parent transform for character selection buttons.
+		/// </summary>
 		public RectTransform CharacterButtonParent;
+		/// <summary>
+		/// Prefab for individual character selection button.
+		/// </summary>
 		public CharacterDetailsButton CharacterButtonPrefab;
 
 		/// <summary>
@@ -29,11 +44,23 @@ namespace FishMMO.Client
 		/// </summary>
 		public CinematicCamera CinematicCamera;
 
+		/// <summary>
+		/// List of currently displayed character buttons.
+		/// </summary>
 		private List<CharacterDetailsButton> characterList = new List<CharacterDetailsButton>();
+		/// <summary>
+		/// The currently selected character button.
+		/// </summary>
 		private CharacterDetailsButton selectedCharacter;
 
+		/// <summary>
+		/// Stores the previous color for label reset.
+		/// </summary>
 		private Color previousColor;
 
+		/// <summary>
+		/// Called when the client is set. Subscribes to connection, authentication, and character broadcast events.
+		/// </summary>
 		public override void OnClientSet()
 		{
 			Client.NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
@@ -44,6 +71,9 @@ namespace FishMMO.Client
 			Client.LoginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
 		}
 
+		/// <summary>
+		/// Called when the client is unset. Unsubscribes from connection, authentication, and character broadcast events.
+		/// </summary>
 		public override void OnClientUnset()
 		{
 			Client.NetworkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
@@ -57,11 +87,18 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Called when the UI is being destroyed. Cleans up character list.
+		/// </summary>
 		public override void OnDestroying()
 		{
 			DestroyCharacterList();
 		}
 
+		/// <summary>
+		/// Handles client connection state changes. Hides panel when disconnected.
+		/// </summary>
+		/// <param name="obj">Connection state arguments.</param>
 		private void ClientManager_OnClientConnectionState(ClientConnectionStateArgs obj)
 		{
 			if (obj.ConnectionState == LocalConnectionState.Stopped)
@@ -70,6 +107,10 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Handles authentication results and updates UI accordingly.
+		/// </summary>
+		/// <param name="result">The result of client authentication.</param>
 		private void Authenticator_OnClientAuthenticationResult(ClientAuthenticationResult result)
 		{
 			switch (result)
@@ -97,6 +138,9 @@ namespace FishMMO.Client
 			SetConnectButtonLocked(false);
 		}
 
+		/// <summary>
+		/// Destroys all character buttons and clears the character list.
+		/// </summary>
 		public void DestroyCharacterList()
 		{
 			if (characterList != null)
@@ -111,6 +155,11 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Handles incoming character list broadcast, populates character buttons.
+		/// </summary>
+		/// <param name="msg">The broadcast message containing character details.</param>
+		/// <param name="channel">The network channel used.</param>
 		private void OnClientCharacterListBroadcastReceived(CharacterListBroadcast msg, Channel channel)
 		{
 			Hide();
@@ -140,13 +189,20 @@ namespace FishMMO.Client
 			OnCharacterListReady();
 		}
 
+		/// <summary>
+		/// Called when character list is ready. Invokes start event and begins post-processing coroutine.
+		/// </summary>
 		private void OnCharacterListReady()
 		{
 			OnCharacterListStart?.Invoke();
-			
+
 			Client.StartCoroutine(OnProcessCharacterList());
 		}
 
+		/// <summary>
+		/// Coroutine for post-character-list processing, resets camera and shows panel.
+		/// </summary>
+		/// <returns>IEnumerator for coroutine.</returns>
 		IEnumerator OnProcessCharacterList()
 		{
 			if (CinematicCamera != null)
@@ -162,6 +218,11 @@ namespace FishMMO.Client
 			Show();
 		}
 
+		/// <summary>
+		/// Handles character creation broadcast, adds new character button.
+		/// </summary>
+		/// <param name="msg">The broadcast message for character creation.</param>
+		/// <param name="channel">The network channel used.</param>
 		private void OnClientCharacterCreateBroadcastReceived(CharacterCreateBroadcast msg, Channel channel)
 		{
 			// new characters can be constructed with basic data, they have no equipped items
@@ -177,6 +238,11 @@ namespace FishMMO.Client
 			characterList.Add(newCharacter);
 		}
 
+		/// <summary>
+		/// Handles character deletion broadcast, removes character button.
+		/// </summary>
+		/// <param name="msg">The broadcast message for character deletion.</param>
+		/// <param name="channel">The network channel used.</param>
 		private void OnClientCharacterDeleteBroadcastReceived(CharacterDeleteBroadcast msg, Channel channel)
 		{
 			//remove the character from our characters list
@@ -196,6 +262,10 @@ namespace FishMMO.Client
 			SetDeleteButtonLocked(false);
 		}
 
+		/// <summary>
+		/// Handles character selection, updates button colors.
+		/// </summary>
+		/// <param name="button">The selected character button.</param>
 		private void OnCharacterSelected(CharacterDetailsButton button)
 		{
 			CharacterDetailsButton prevButton = selectedCharacter;
@@ -211,6 +281,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Called when the connect button is clicked. Initiates character selection and connection.
+		/// </summary>
 		public void OnClick_SelectCharacter()
 		{
 			if (Client.IsConnectionReady() &&
@@ -228,6 +301,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Called when the delete button is clicked. Prompts for confirmation and deletes character if confirmed.
+		/// </summary>
 		public void OnClick_DeleteCharacter()
 		{
 			if (Client.IsConnectionReady() &&
@@ -254,6 +330,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Called when the create character button is clicked. Shows character creation panel.
+		/// </summary>
 		public void OnClick_CreateCharacter()
 		{
 			if (UIManager.TryGet("UICharacterCreate", out UICharacterCreate createCharacter))
@@ -263,6 +342,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Called when quitting to login. Stops character list coroutine and unlocks buttons.
+		/// </summary>
 		public override void OnQuitToLogin()
 		{
 			base.OnQuitToLogin();
@@ -273,23 +355,37 @@ namespace FishMMO.Client
 			SetConnectButtonLocked(false);
 		}
 
+		/// <summary>
+		/// Called when the quit to login button is clicked. Stops character list coroutine and returns to login screen.
+		/// </summary>
 		public void OnClick_QuitToLogin()
 		{
 			Client.StopCoroutine(OnProcessCharacterList());
-			
+
 			Client.QuitToLogin();
 		}
 
+		/// <summary>
+		/// Called when the quit button is clicked. Quits the client application.
+		/// </summary>
 		public void OnClick_Quit()
 		{
 			Client.Quit();
 		}
 
+		/// <summary>
+		/// Sets locked state for connect button (enables/disables connect button).
+		/// </summary>
+		/// <param name="locked">True to lock (disable) the button, false to unlock.</param>
 		private void SetConnectButtonLocked(bool locked)
 		{
 			ConnectButton.interactable = !locked;
 		}
 
+		/// <summary>
+		/// Sets locked state for delete button (enables/disables delete button).
+		/// </summary>
+		/// <param name="locked">True to lock (disable) the button, false to unlock.</param>
 		private void SetDeleteButtonLocked(bool locked)
 		{
 			DeleteButton.interactable = !locked;

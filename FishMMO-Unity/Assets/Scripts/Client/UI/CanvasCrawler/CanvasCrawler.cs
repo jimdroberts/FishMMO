@@ -10,8 +10,14 @@ namespace FishMMO.Client
 {
 	public class CanvasCrawler : MonoBehaviour
 	{
+		/// <summary>
+		/// The configuration object for UI settings.
+		/// </summary>
 		public static Configuration Configuration;
 
+		/// <summary>
+		/// Maps UI component types to their canvas settings handlers.
+		/// </summary>
 		public static Dictionary<Type, BaseCanvasTypeSettings> CanvasSettingsMap = new Dictionary<Type, BaseCanvasTypeSettings>()
 		{
 			{ typeof(UnityEngine.UI.Button), new ButtonCanvasTypeSettings() },
@@ -27,17 +33,24 @@ namespace FishMMO.Client
 			{ typeof(VerticalLayoutGroup), new VerticalLayoutGroupCanvasTypeSettings() },
 			{ typeof(HorizontalLayoutGroup), new HorizontalLayoutGroupCanvasTypeSettings() },
 			{ typeof(TMP_InputField), new TMP_InputFieldCanvasTypeSettings() },
-			{ typeof(TMP_Text),	new TMP_TextCanvasTypeSettings() },
+			{ typeof(TMP_Text), new TMP_TextCanvasTypeSettings() },
 		};
 
+		/// <summary>
+		/// The canvas component to crawl and apply settings to.
+		/// </summary>
 		public Canvas Canvas;
 
+		/// <summary>
+		/// Unity Awake method. Initializes the canvas and configuration.
+		/// </summary>
 		void Awake()
 		{
 			if (Canvas == null)
 			{
 				Canvas = GetComponent<Canvas>();
 
+				// If no Canvas is found, throw an exception to prevent further errors.
 				if (Canvas == null)
 				{
 					throw new UnityException("Unable to find a Canvas on the gameObject.");
@@ -46,10 +59,11 @@ namespace FishMMO.Client
 
 			if (Configuration == null)
 			{
+				// Initialize configuration with working directory
 				Configuration = new Configuration(Constants.GetWorkingDirectory());
 				if (!Configuration.Load("UIConfiguration"))
 				{
-					// if we failed to load the file.. save a new one
+					// If loading fails, set default color values and save a new configuration file
 					Configuration.Set("PrimaryColorR", "44");
 					Configuration.Set("PrimaryColorG", "44");
 					Configuration.Set("PrimaryColorB", "44");
@@ -96,32 +110,42 @@ namespace FishMMO.Client
 					Configuration.Set("CrosshairColorA", "255");
 
 #if !UNITY_EDITOR
-					Configuration.Save();
+				   Configuration.Save();
 #endif
 				}
 			}
 		}
 
+		/// <summary>
+		/// Unity Start method. Begins crawling the canvas for UI components.
+		/// </summary>
 		void Start()
 		{
 			Crawl(Canvas);
 		}
 
+		/// <summary>
+		/// Crawls the given canvas, finds all child game objects, and applies settings to supported UI components.
+		/// </summary>
+		/// <param name="canvas">The canvas to crawl.</param>
 		public static void Crawl(Canvas canvas)
 		{
+			// Find all child game objects in the canvas
 			List<GameObject> gobs = canvas.transform.FindAllChildGameObjects();
 
 			foreach (GameObject go in gobs)
 			{
+				// Skip objects with "Ignore" in their name
 				if (go.name.Contains("Ignore"))
 				{
 					continue;
 				}
+				// For each supported UI type, apply its settings if present on the game object
 				foreach (KeyValuePair<Type, BaseCanvasTypeSettings> pair in CanvasSettingsMap)
 				{
 					var type = go.GetComponent(pair.Key);
 					if (type == null) continue;
-					
+
 					pair.Value.ApplySettings(type, Configuration);
 				}
 			}

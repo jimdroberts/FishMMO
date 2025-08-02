@@ -8,8 +8,15 @@ using System;
 
 namespace FishMMO.Shared
 {
+	/// <summary>
+	/// Utility for rebuilding and managing the WorldSceneDetailsCache addressable asset in the FishMMO project.
+	/// </summary>
 	public class WorldSceneDetailsCacheBuilder
 	{
+		/// <summary>
+		/// Rebuilds the WorldSceneDetailsCache asset. Loads the addressable asset asynchronously and triggers a rebuild.
+		/// If loading fails, creates a new asset and adds it to Addressables.
+		/// </summary>
 		[MenuItem("FishMMO/Build/Rebuild World Scene Details", priority = -10)]
 		public static void Rebuild()
 		{
@@ -44,7 +51,9 @@ namespace FishMMO.Shared
 			};
 		}
 
-		// Handle the failure by creating a new instance of the asset if it couldn't be loaded
+		/// <summary>
+		/// Handles asset load failure by creating a new WorldSceneDetailsCache asset and adding it to Addressables.
+		/// </summary>
 		private static void HandleLoadFailure()
 		{
 			try
@@ -64,6 +73,7 @@ namespace FishMMO.Shared
 					return;
 				}
 
+				// Add the new asset to Addressables if not already present
 				AddressableAssetEntry entry = settings.FindAssetEntry(AssetDatabase.AssetPathToGUID(WorldSceneDetailsCache.CACHE_FULL_PATH));
 				if (entry == null)
 				{

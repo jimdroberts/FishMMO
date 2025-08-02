@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using UnityEngine;
 using FishMMO.Logging;
 
 namespace FishMMO.Shared

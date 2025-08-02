@@ -9,28 +9,64 @@ namespace FishMMO.Client
 {
 	public class UIAbilityCraft : UICharacterControl
 	{
+		/// <summary>
+		/// The maximum number of event slots allowed for crafting an ability.
+		/// </summary>
 		private const int MAX_CRAFT_EVENT_SLOTS = 10;
 
+		/// <summary>
+		/// The main entry button for the ability to craft.
+		/// </summary>
 		public UITooltipButton MainEntry;
+		/// <summary>
+		/// The text field displaying the ability description.
+		/// </summary>
 		public TMP_Text AbilityDescription;
+		/// <summary>
+		/// The text field displaying the crafting cost.
+		/// </summary>
 		public TMP_Text CraftCost;
+		/// <summary>
+		/// The parent RectTransform for ability event buttons.
+		/// </summary>
 		public RectTransform AbilityEventParent;
+		/// <summary>
+		/// The prefab used to instantiate ability event buttons.
+		/// </summary>
 		public UITooltipButton AbilityEventPrefab;
+		/// <summary>
+		/// The template for the currency used to craft abilities.
+		/// </summary>
 		public CharacterAttributeTemplate CurrencyTemplate;
 
+		/// <summary>
+		/// The last interactable ID used for crafting.
+		/// </summary>
 		private long lastInteractableID = 0;
+		/// <summary>
+		/// Dictionary mapping event slot indices to their tooltip buttons.
+		/// </summary>
 		private Dictionary<int, UITooltipButton> EventSlots;
 
+		/// <summary>
+		/// Called when the client is set. Registers the broadcast handler for ability crafting.
+		/// </summary>
 		public override void OnClientSet()
 		{
 			Client.NetworkManager.ClientManager.RegisterBroadcast<AbilityCrafterBroadcast>(OnClientAbilityCrafterBroadcastReceived);
 		}
 
+		/// <summary>
+		/// Called when the client is unset. Unregisters the broadcast handler for ability crafting.
+		/// </summary>
 		public override void OnClientUnset()
 		{
 			Client.NetworkManager.ClientManager.UnregisterBroadcast<AbilityCrafterBroadcast>(OnClientAbilityCrafterBroadcastReceived);
 		}
 
+		/// <summary>
+		/// Called when the UI is starting. Subscribes to main entry button events.
+		/// </summary>
 		public override void OnStarting()
 		{
 			if (MainEntry != null)
@@ -40,6 +76,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Called when the UI is being destroyed. Unsubscribes from main entry button events and clears event slots.
+		/// </summary>
 		public override void OnDestroying()
 		{
 			if (MainEntry != null)
@@ -50,12 +89,22 @@ namespace FishMMO.Client
 			ClearSlots();
 		}
 
+		/// <summary>
+		/// Handles the broadcast message for ability crafting. Updates the interactable ID and shows the UI.
+		/// </summary>
+		/// <param name="msg">The broadcast message containing ability crafting info.</param>
+		/// <param name="channel">The network channel.</param>
 		private void OnClientAbilityCrafterBroadcastReceived(AbilityCrafterBroadcast msg, Channel channel)
 		{
 			lastInteractableID = msg.InteractableID;
 			Show();
 		}
 
+		/// <summary>
+		/// Event handler for left-clicking the main entry. Opens the selector for base abilities.
+		/// </summary>
+		/// <param name="index">The index of the entry.</param>
+		/// <param name="optionalParams">Optional parameters for the click event.</param>
 		private void MainEntry_OnLeftClick(int index, object[] optionalParams)
 		{
 			if (Character != null &&
@@ -82,6 +131,11 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Event handler for right-clicking the main entry. Clears the main entry and event slots.
+		/// </summary>
+		/// <param name="index">The index of the entry.</param>
+		/// <param name="optionalParams">Optional parameters for the click event.</param>
 		private void MainEntry_OnRightClick(int index, object[] optionalParams)
 		{
 			MainEntry.Clear();
@@ -91,6 +145,11 @@ namespace FishMMO.Client
 			UpdateMainDescription();
 		}
 
+		/// <summary>
+		/// Event handler for left-clicking an event entry. Opens the selector for ability events.
+		/// </summary>
+		/// <param name="index">The index of the event slot.</param>
+		/// <param name="optionalParams">Optional parameters for the click event.</param>
 		private void EventEntry_OnLeftClick(int index, object[] optionalParams)
 		{
 			if (EventSlots.ContainsKey(index) &&
@@ -124,6 +183,11 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Event handler for right-clicking an event entry. Clears the event slot.
+		/// </summary>
+		/// <param name="index">The index of the event slot.</param>
+		/// <param name="optionalParams">Optional parameters for the click event.</param>
 		private void EventEntry_OnRightClick(int index, object[] optionalParams)
 		{
 			if (index > -1 && index < EventSlots.Count)
@@ -135,6 +199,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Updates the main ability description and crafting cost display.
+		/// </summary>
 		private void UpdateMainDescription()
 		{
 			if (AbilityDescription == null)
@@ -188,6 +255,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Clears all event slots from the UI.
+		/// </summary>
 		private void ClearSlots()
 		{
 			if (EventSlots != null)
@@ -207,6 +277,10 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Sets up the specified number of event slots for ability crafting.
+		/// </summary>
+		/// <param name="count">The number of event slots to create.</param>
 		private void SetEventSlots(int count)
 		{
 			ClearSlots();
@@ -221,6 +295,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Handles the crafting action, validates currency, and broadcasts the craft event to the server.
+		/// </summary>
 		public void OnCraft()
 		{
 			// craft it on the server

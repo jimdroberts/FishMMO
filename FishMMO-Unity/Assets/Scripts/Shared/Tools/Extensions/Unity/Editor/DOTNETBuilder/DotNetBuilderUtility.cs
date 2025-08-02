@@ -155,6 +155,11 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Appends a standard log message to the build profile's output and marks it dirty for Unity serialization.
+		/// </summary>
+		/// <param name="profile">The build profile to log to.</param>
+		/// <param name="message">The message to append.</param>
 		private static void AddLogInternal(DotNetBuildProfile profile, string message)
 		{
 			//Log.Debug(message);
@@ -162,6 +167,11 @@ namespace FishMMO.Shared
 			EditorUtility.SetDirty(profile);
 		}
 
+		/// <summary>
+		/// Appends an error log message (colored red) to the build profile's output and marks it dirty for Unity serialization.
+		/// </summary>
+		/// <param name="profile">The build profile to log to.</param>
+		/// <param name="message">The error message to append.</param>
 		private static void AddLogErrorInternal(DotNetBuildProfile profile, string message)
 		{
 			//Log.Error(message);
@@ -169,6 +179,11 @@ namespace FishMMO.Shared
 			EditorUtility.SetDirty(profile);
 		}
 
+		/// <summary>
+		/// Appends a warning log message (colored orange) to the build profile's output and marks it dirty for Unity serialization.
+		/// </summary>
+		/// <param name="profile">The build profile to log to.</param>
+		/// <param name="message">The warning message to append.</param>
 		private static void AddLogWarningInternal(DotNetBuildProfile profile, string message)
 		{
 			//Log.Warning(message);
@@ -176,21 +191,41 @@ namespace FishMMO.Shared
 			EditorUtility.SetDirty(profile);
 		}
 
+		/// <summary>
+		/// Appends a standard log message to the build profile's output.
+		/// </summary>
+		/// <param name="profile">The build profile to log to.</param>
+		/// <param name="message">The message to append.</param>
 		private static void AddLog(DotNetBuildProfile profile, string message)
 		{
 			AddLogInternal(profile, message);
 		}
 
+		/// <summary>
+		/// Appends an error log message to the build profile's output.
+		/// </summary>
+		/// <param name="profile">The build profile to log to.</param>
+		/// <param name="message">The error message to append.</param>
 		private static void AddLogError(DotNetBuildProfile profile, string message)
 		{
 			AddLogErrorInternal(profile, message);
 		}
 
+		/// <summary>
+		/// Appends a warning log message to the build profile's output.
+		/// </summary>
+		/// <param name="profile">The build profile to log to.</param>
+		/// <param name="message">The warning message to append.</param>
 		private static void AddLogWarning(DotNetBuildProfile profile, string message)
 		{
 			AddLogWarningInternal(profile, message);
 		}
 
+		/// <summary>
+		/// Appends an exception message (colored red) to the build profile's output and marks it dirty for Unity serialization.
+		/// </summary>
+		/// <param name="profile">The build profile to log to.</param>
+		/// <param name="ex">The exception to log.</param>
 		private static void AddLogException(DotNetBuildProfile profile, System.Exception ex)
 		{
 			//Log.Exception(ex);

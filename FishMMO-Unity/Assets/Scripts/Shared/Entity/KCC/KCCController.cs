@@ -597,6 +597,11 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Called after grounding update to handle landing and leaving ground events.
+		/// Triggers OnLanded or OnLeaveStableGround as appropriate.
+		/// </summary>
+		/// <param name="deltaTime">Frame time.</param>
 		public void PostGroundingUpdate(float deltaTime)
 		{
 			// Handle landing and leaving ground
@@ -610,6 +615,11 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Determines if a collider is valid for collision checks, ignoring those in the IgnoredColliders list.
+		/// </summary>
+		/// <param name="coll">Collider to check.</param>
+		/// <returns>True if valid for collision, false if ignored.</returns>
 		public bool IsColliderValidForCollisions(Collider coll)
 		{
 			if (IgnoredColliders.Count == 0)
@@ -625,29 +635,67 @@ namespace FishMMO.Shared
 			return true;
 		}
 
+		/// <summary>
+		/// Called when the character hits the ground. Can be used for landing effects or stability checks.
+		/// </summary>
+		/// <param name="hitCollider">Collider hit.</param>
+		/// <param name="hitNormal">Normal of the hit surface.</param>
+		/// <param name="hitPoint">Point of contact.</param>
+		/// <param name="hitStabilityReport">Stability report for the hit.</param>
 		public void OnGroundHit(Collider hitCollider, Vector3 hitNormal, Vector3 hitPoint, ref HitStabilityReport hitStabilityReport)
 		{
+			// Implement landing logic or ground hit effects here if needed.
 		}
 
+		/// <summary>
+		/// Called when the character hits something during movement. Can be used for collision effects.
+		/// </summary>
+		/// <param name="hitCollider">Collider hit.</param>
+		/// <param name="hitNormal">Normal of the hit surface.</param>
+		/// <param name="hitPoint">Point of contact.</param>
+		/// <param name="hitStabilityReport">Stability report for the hit.</param>
 		public void OnMovementHit(Collider hitCollider, Vector3 hitNormal, Vector3 hitPoint, ref HitStabilityReport hitStabilityReport)
 		{
+			// Implement movement hit logic or effects here if needed.
 		}
 
+		/// <summary>
+		/// Processes the hit stability report for advanced collision and grounding logic.
+		/// </summary>
+		/// <param name="hitCollider">Collider hit.</param>
+		/// <param name="hitNormal">Normal of the hit surface.</param>
+		/// <param name="hitPoint">Point of contact.</param>
+		/// <param name="atCharacterPosition">Character position at hit.</param>
+		/// <param name="atCharacterRotation">Character rotation at hit.</param>
+		/// <param name="hitStabilityReport">Stability report for the hit.</param>
 		public void ProcessHitStabilityReport(Collider hitCollider, Vector3 hitNormal, Vector3 hitPoint, Vector3 atCharacterPosition, Quaternion atCharacterRotation, ref HitStabilityReport hitStabilityReport)
 		{
+			// Implement advanced hit stability processing here if needed.
 		}
 
+		/// <summary>
+		/// Called when the character lands on stable ground. Resets jumping state.
+		/// </summary>
 		protected void OnLanded()
 		{
 			IsJumping = false;
 		}
 
+		/// <summary>
+		/// Called when the character leaves stable ground. Can be used for airborne effects.
+		/// </summary>
 		protected void OnLeaveStableGround()
 		{
+			// Implement airborne logic or effects here if needed.
 		}
 
+		/// <summary>
+		/// Called when a discrete collision is detected. Can be used for collision effects.
+		/// </summary>
+		/// <param name="hitCollider">Collider hit.</param>
 		public void OnDiscreteCollisionDetected(Collider hitCollider)
 		{
+			// Implement discrete collision logic or effects here if needed.
 		}
 	}
 }

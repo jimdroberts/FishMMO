@@ -88,9 +88,18 @@ namespace FishMMO.Shared
 		/// </summary>
 		public static Action<string> OnSceneUnloaded;
 
+		/// <summary>
+		/// Tracks the number of assets processed so far during the current load operation.
+		/// </summary>
 		private static float assetsProcessedSoFar;
+		/// <summary>
+		/// Indicates whether the load queue is currently being processed.
+		/// </summary>
 		private static bool isProcessingQueue = false;
 
+		/// <summary>
+		/// Gets the current progress of the asset and scene loading queue as a normalized value (0 to 1).
+		/// </summary>
 		public static float CurrentProgress
 		{
 			get
@@ -99,6 +108,9 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Gets the total number of assets and scenes remaining to be loaded, including queued and in-progress operations.
+		/// </summary>
 		public static float RemainingAssetsToLoad
 		{
 			get
@@ -107,7 +119,16 @@ namespace FishMMO.Shared
 			}
 		}
 
-		// Enqueue a single label (string)
+		/// <summary>
+		/// Enqueues a single addressable asset label for loading. Ignores if already queued, loading, or loaded.
+		/// </summary>
+		/// <param name="label">The addressable label to load.</param>
+		/// <param name="mergeMode">The merge mode for label processing.</param>
+		/// <summary>
+		/// Enqueues a single addressable asset label for loading. Ignores if already queued, loading, or loaded.
+		/// </summary>
+		/// <param name="label">The addressable label to load.</param>
+		/// <param name="mergeMode">The merge mode for label processing.</param>
 		public static void EnqueueLoad(string label, Addressables.MergeMode mergeMode = Addressables.MergeMode.None)
 		{
 			AddressableAssetKey assetKey = new AddressableAssetKey(new List<string>() { label, }, mergeMode);
@@ -118,7 +139,16 @@ namespace FishMMO.Shared
 			}
 		}
 
-		// Enqueue multiple labels (IEnumerable<string>)
+		/// <summary>
+		/// Enqueues multiple addressable asset labels for loading. Ignores null or empty collections.
+		/// </summary>
+		/// <param name="labels">Enumerable of addressable labels to load.</param>
+		/// <param name="mergeMode">The merge mode for label processing.</param>
+		/// <summary>
+		/// Enqueues multiple addressable asset labels for loading. Ignores null or empty collections.
+		/// </summary>
+		/// <param name="labels">Enumerable of addressable labels to load.</param>
+		/// <param name="mergeMode">The merge mode for label processing.</param>
 		public static void EnqueueLoad(IEnumerable<string> labels, Addressables.MergeMode mergeMode = Addressables.MergeMode.None)
 		{
 			if (labels == null || !labels.Any())
@@ -131,7 +161,12 @@ namespace FishMMO.Shared
 			}
 		}
 
-		// Enqueue a label with a key (KeyValuePair<string, string>)
+		/// <summary>
+		/// Enqueues a label and key pair for loading. Uses intersection merge mode by default.
+		/// </summary>
+		/// <param name="label">The addressable label.</param>
+		/// <param name="key">The addressable key.</param>
+		/// <param name="mergeMode">The merge mode for label processing.</param>
 		public static void EnqueueLoad(string label, string key, Addressables.MergeMode mergeMode = Addressables.MergeMode.Intersection)
 		{
 			AddressableAssetKey assetKey = new AddressableAssetKey(new List<string>() { label, key, }, mergeMode);
@@ -142,7 +177,11 @@ namespace FishMMO.Shared
 			}
 		}
 
-		// Enqueue multiple label-key pairs (IEnumerable<KeyValuePair<string, string>>)
+		/// <summary>
+		/// Enqueues multiple label-key pairs for loading. Uses intersection merge mode by default.
+		/// </summary>
+		/// <param name="labels">Enumerable of label-key pairs.</param>
+		/// <param name="mergeMode">The merge mode for label processing.</param>
 		public static void EnqueueLoad(IEnumerable<KeyValuePair<string, string>> labels, Addressables.MergeMode mergeMode = Addressables.MergeMode.Intersection)
 		{
 			if (labels == null || !labels.Any())
@@ -155,7 +194,11 @@ namespace FishMMO.Shared
 			}
 		}
 
-		// Enqueue a single scene (string)
+		/// <summary>
+		/// Enqueues a single scene load operation. Optionally attaches a global post-process callback.
+		/// </summary>
+		/// <param name="sceneLoadData">Scene load data to enqueue.</param>
+		/// <param name="globalOnScenePostProcess">Optional callback invoked after scene is loaded.</param>
 		public static void EnqueueLoad(AddressableSceneLoadData sceneLoadData, Action<Scene> globalOnScenePostProcess = null)
 		{
 			if (!sceneOperationQueue.Contains(sceneLoadData) && !currentSceneOperations.ContainsKey(sceneLoadData) && !loadedScenes.ContainsKey(sceneLoadData.SceneName))
@@ -169,6 +212,11 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Enqueues multiple scene load operations. Optionally attaches a global post-process callback to each.
+		/// </summary>
+		/// <param name="sceneLoadDatas">Enumerable of scene load data to enqueue.</param>
+		/// <param name="globalOnScenePostProcess">Optional callback invoked after each scene is loaded.</param>
 		public static void EnqueueLoad(IEnumerable<AddressableSceneLoadData> sceneLoadDatas, Action<Scene> globalOnScenePostProcess = null)
 		{
 			if (sceneLoadDatas == null || !sceneLoadDatas.Any())
@@ -181,6 +229,10 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Begins processing the asset and scene load queues. Starts coroutine if there are assets to load.
+		/// Notifies completion if the queue is empty.
+		/// </summary>
 		public static void BeginProcessQueue()
 		{
 			if (isProcessingQueue)
@@ -202,6 +254,10 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Coroutine that processes the asset and scene load queues, loading each item in order and reporting progress.
+		/// </summary>
+		/// <returns>IEnumerator for coroutine execution.</returns>
 		public static IEnumerator ProcessLoadQueue()
 		{
 			// Reset and report that the progress is currently zero.
@@ -253,6 +309,11 @@ namespace FishMMO.Shared
 			OnProgressUpdate?.Invoke(1f);
 		}
 
+		/// <summary>
+		/// Loads a prefab asynchronously using an AssetReference. Invokes callback when load completes or fails.
+		/// </summary>
+		/// <param name="assetReference">The AssetReference to load.</param>
+		/// <param name="onLoadComplete">Callback invoked with loaded GameObject or null on failure.</param>
 		public static void LoadPrefabAsync(AssetReference assetReference, Action<GameObject> onLoadComplete)
 		{
 			if (assetReference == null || !assetReference.RuntimeKeyIsValid())
@@ -339,6 +400,10 @@ namespace FishMMO.Shared
 			};
 		}
 
+		/// <summary>
+		/// Unloads a prefab asset previously loaded by this processor. Ignores if asset is still loading or not managed.
+		/// </summary>
+		/// <param name="assetReference">The AssetReference to unload.</param>
 		public static void UnloadPrefab(AssetReference assetReference)
 		{
 			if (assetReference == null) return;
@@ -374,6 +439,11 @@ namespace FishMMO.Shared
 		}
 
 		// Load assets for a specific label
+		/// <summary>
+		/// Loads assets asynchronously for a specific addressable asset key. Handles completion and progress update.
+		/// </summary>
+		/// <param name="assetkey">The asset key containing labels and merge mode.</param>
+		/// <returns>AsyncOperationHandle for the load operation.</returns>
 		private static AsyncOperationHandle<IList<UnityEngine.Object>> LoadAssetsAsync(AddressableAssetKey assetkey)
 		{
 			if (assetkey == null || assetkey.Keys == null || assetkey.Keys.Count < 1)
@@ -413,6 +483,11 @@ namespace FishMMO.Shared
 		}
 
 		// Method to load the scene with a specific label
+		/// <summary>
+		/// Loads a scene asynchronously by label using the provided scene load data. Handles completion and progress update.
+		/// </summary>
+		/// <param name="sceneLoadData">The scene load data containing scene name and load options.</param>
+		/// <returns>AsyncOperationHandle for the scene load operation.</returns>
 		private static AsyncOperationHandle<SceneInstance> LoadSceneByLabelAsync(AddressableSceneLoadData sceneLoadData)
 		{
 			if (loadedScenes.ContainsKey(sceneLoadData.SceneName))
@@ -494,6 +569,10 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Unloads multiple scenes asynchronously by their names.
+		/// </summary>
+		/// <param name="sceneNames">List of scene names to unload.</param>
 		public static void UnloadSceneByLabelAsync(List<string> sceneNames)
 		{
 			foreach (string sceneName in sceneNames)
@@ -502,6 +581,10 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Unloads multiple scenes asynchronously using a list of AddressableSceneLoadData.
+		/// </summary>
+		/// <param name="sceneLoadData">List of scene load data objects to unload.</param>
 		public static void UnloadSceneByLabelAsync(List<AddressableSceneLoadData> sceneLoadData)
 		{
 			foreach (AddressableSceneLoadData scene in sceneLoadData)
@@ -510,6 +593,10 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Unloads a scene asynchronously by its name. Invokes callback on completion or logs error on failure.
+		/// </summary>
+		/// <param name="sceneName">The name of the scene to unload.</param>
 		public static void UnloadSceneByLabelAsync(string sceneName)
 		{
 			// Check if the scene is already loaded
@@ -548,6 +635,9 @@ namespace FishMMO.Shared
 			};
 		}
 
+		/// <summary>
+		/// Updates the progress of the load queue and invokes the progress update callback if not complete.
+		/// </summary>
 		private static void UpdateProgress()
 		{
 			float progress = CurrentProgress;
@@ -557,7 +647,9 @@ namespace FishMMO.Shared
 			}
 		}
 
-		// Release all loaded assets
+		/// <summary>
+		/// Releases all loaded assets, scenes, and prefabs managed by this processor. Stops all coroutines and clears internal state.
+		/// </summary>
 		public static void ReleaseAllAssets()
 		{
 			if (helper != null)

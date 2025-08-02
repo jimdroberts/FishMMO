@@ -5,8 +5,16 @@ using System.Runtime.Serialization.Formatters.Binary;
 
 namespace FishMMO.Shared
 {
+	/// <summary>
+	/// Extension methods for compressing and decompressing dictionaries using GZip and BinaryFormatter.
+	/// </summary>
 	public static class DictionaryExtensions
 	{
+		/// <summary>
+		/// Serializes and compresses a dictionary to a GZip file using BinaryFormatter.
+		/// </summary>
+		/// <param name="dictionary">Dictionary to serialize and compress.</param>
+		/// <param name="filePath">File path to write the compressed data.</param>
 		public static void WriteToGZipFile(this Dictionary<long, string> dictionary, string filePath)
 		{
 			using (var fileStream = File.Create(filePath))
@@ -17,6 +25,12 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Reads and decompresses a dictionary from a GZip file using BinaryFormatter.
+		/// Returns an empty dictionary if the file does not exist or is empty.
+		/// </summary>
+		/// <param name="filePath">File path to read the compressed data from.</param>
+		/// <returns>Decompressed dictionary, or empty dictionary if file is missing or empty.</returns>
 		public static Dictionary<long, string> ReadFromGZipFile(string filePath)
 		{
 			if (File.Exists(filePath))

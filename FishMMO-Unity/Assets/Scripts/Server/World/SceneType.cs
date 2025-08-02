@@ -1,7 +1,13 @@
 namespace FishMMO.Server
 {
+	/// <summary>
+	/// Defines the types of scenes available in the FishMMO server.
+	/// </summary>
 	public enum SceneType : int
 	{
+		/// <summary>
+		/// Unknown or undefined scene type.
+		/// </summary>
 		Unknown = 0,
 		/// <summary>
 		/// Normal open world scene instance.

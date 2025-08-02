@@ -4,14 +4,32 @@ using System;
 
 namespace FishMMO.Shared
 {
+	/// <summary>
+	/// Extension methods for Vector3, providing randomization and geometric utilities for spheres and toroids.
+	/// </summary>
 	public static class Vector3Extensions
 	{
+		/// <summary>
+		/// Returns a random conical direction as a Quaternion, based on a forward vector, start position, cone radius, and distance.
+		/// </summary>
+		/// <param name="forward">The forward direction vector.</param>
+		/// <param name="startPosition">The starting position.</param>
+		/// <param name="coneRadius">The radius of the cone.</param>
+		/// <param name="distance">The distance from the start position.</param>
+		/// <param name="random">Random number generator.</param>
+		/// <returns>A Quaternion representing the random conical direction.</returns>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static Quaternion GetRandomConicalDirection(this Vector3 forward, Vector3 startPosition, float coneRadius, float distance, System.Random random)
 		{
 			return Quaternion.Euler(startPosition - ((distance * forward) + (RandomOnUnitSphere(random) * coneRadius)));
 		}
 
+		/// <summary>
+		/// Returns a random position within a circle of given radius around a center point (on the XZ plane).
+		/// </summary>
+		/// <param name="center">The center position.</param>
+		/// <param name="radius">The radius of the circle.</param>
+		/// <returns>A random Vector3 position within the radius.</returns>
 		public static Vector3 RandomPositionWithinRadius(Vector3 center, float radius)
 		{
 			// Generate a random angle between 0 and 2π
@@ -28,6 +46,13 @@ namespace FishMMO.Shared
 			return new Vector3(center.x + xOffset, center.y, center.z + zOffset);
 		}
 
+		/// <summary>
+		/// Gets the nearest position on the surface of a sphere centered at pointB, from pointA.
+		/// </summary>
+		/// <param name="pointA">The point to project from.</param>
+		/// <param name="pointB">The center of the sphere.</param>
+		/// <param name="radius">The radius of the sphere.</param>
+		/// <returns>The nearest position on the sphere surface.</returns>
 		public static Vector3 GetNearestPositionOnSphere(Vector3 pointA, Vector3 pointB, float radius)
 		{
 			// Calculate the direction vector from B to A
@@ -42,6 +67,11 @@ namespace FishMMO.Shared
 			return nearestPoint;
 		}
 
+		/// <summary>
+		/// Returns a random point on the surface of a unit sphere using a provided or new System.Random.
+		/// </summary>
+		/// <param name="random">Optional random number generator.</param>
+		/// <returns>A random Vector3 on the unit sphere.</returns>
 		public static Vector3 RandomOnUnitSphere(System.Random random = null)
 		{
 			if (random == null)
@@ -58,11 +88,17 @@ namespace FishMMO.Shared
 			double y = Math.Sin(phi) * Math.Sin(theta);
 			double z = Math.Cos(phi);
 
+			// Unsafe.As is used for fast double-to-float conversion
 			return new Vector3(Unsafe.As<double, float>(ref x),
 							   Unsafe.As<double, float>(ref y),
 							   Unsafe.As<double, float>(ref z));
 		}
 
+		/// <summary>
+		/// Returns a random position inside a bounding box centered at the origin.
+		/// </summary>
+		/// <param name="boundingBox">The size of the bounding box.</param>
+		/// <returns>A random Vector3 inside the bounding box.</returns>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static Vector3 RandomInBoundingBox(Vector3 boundingBox)
 		{
@@ -71,6 +107,12 @@ namespace FishMMO.Shared
 							   UnityEngine.Random.Range(-boundingBox.z, boundingBox.z));
 		}
 
+		/// <summary>
+		/// Returns a random point inside a 3D toroid (donut shape) with major radius R and tube radius.
+		/// </summary>
+		/// <param name="R">Major radius (distance from center to tube center).</param>
+		/// <param name="radius">Tube radius.</param>
+		/// <returns>A random Vector3 inside the toroid.</returns>
 		public static Vector3 GetRandomPointInToroid(float R, float radius)
 		{
 			// Generate random angles
@@ -85,6 +127,12 @@ namespace FishMMO.Shared
 			return new Vector3(x, y, z);
 		}
 
+		/// <summary>
+		/// Returns a random point inside a flat toroid (2D ring) with major radius R and tube radius.
+		/// </summary>
+		/// <param name="R">Major radius (distance from center to tube center).</param>
+		/// <param name="radius">Tube radius.</param>
+		/// <returns>A random Vector3 inside the flat toroid (z = 0).</returns>
 		public static Vector3 GetRandomPointInFlatToroid(float R, float radius)
 		{
 			// Generate a random angle (theta) around the central axis (the hole of the ring)
@@ -101,6 +149,14 @@ namespace FishMMO.Shared
 			return new Vector3(x, y, 0f);
 		}
 
+		/// <summary>
+		/// Gets the nearest point on a flat toroid (2D ring) from pointA, clamped to the toroid's bounds.
+		/// </summary>
+		/// <param name="pointA">The point to project from.</param>
+		/// <param name="pointB">The center of the toroid.</param>
+		/// <param name="R">Major radius.</param>
+		/// <param name="radius">Tube radius.</param>
+		/// <returns>The nearest point on the flat toroid.</returns>
 		public static Vector3 GetNearestPointOnFlatToroid(Vector3 pointA, Vector3 pointB, float R, float radius)
 		{
 			// Calculate the direction from A to B

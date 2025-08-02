@@ -30,29 +30,87 @@ namespace FishMMO.Client
 	/// </summary>
 	public class Client : MonoBehaviour
 	{
+		/// <summary>
+		/// Dictionary of loaded world scenes, keyed by scene handle.
+		/// Used to track and unload scenes when changing worlds.
+		/// </summary>
 		private Dictionary<int, Scene> loadedWorldScenes = new Dictionary<int, Scene>();
 
+		/// <summary>
+		/// Current local connection state of the client.
+		/// </summary>
 		private LocalConnectionState clientState = LocalConnectionState.Stopped;
+		/// <summary>
+		/// Current type of server connection (login, world, scene, etc).
+		/// </summary>
 		private ServerConnectionType currentConnectionType = ServerConnectionType.None;
 
+		/// <summary>
+		/// Number of reconnect attempts made.
+		/// </summary>
 		private byte reconnectsAttempted = 0;
+		/// <summary>
+		/// Time remaining until next reconnect attempt.
+		/// </summary>
 		private float nextReconnect = 0;
+		/// <summary>
+		/// If true, forces the client to disconnect from the server.
+		/// </summary>
 		private bool forceDisconnect = false;
+		/// <summary>
+		/// Last world server address used for reconnect attempts.
+		/// </summary>
 		private string lastWorldAddress = "";
+		/// <summary>
+		/// Last world server port used for reconnect attempts.
+		/// </summary>
 		private ushort lastWorldPort = 0;
 
+		/// <summary>
+		/// List of login server addresses available to the client.
+		/// </summary>
 		public List<ServerAddress> LoginServerAddresses;
+		/// <summary>
+		/// List of scenes to preload when entering the world.
+		/// </summary>
 		public List<AddressableSceneLoadData> WorldPreloadScenes = new List<AddressableSceneLoadData>();
+		/// <summary>
+		/// Maximum number of reconnect attempts allowed.
+		/// </summary>
 		public byte MaxReconnectAttempts = 10;
+		/// <summary>
+		/// Time to wait between reconnect attempts (in seconds).
+		/// </summary>
 		public float ReconnectAttemptWaitTime = 5f;
+		/// <summary>
+		/// Reference to the client postboot system for scene management.
+		/// </summary>
 		public ClientPostbootSystem ClientPostbootSystem;
 
+		/// <summary>
+		/// Event triggered when a connection to the server is successful.
+		/// </summary>
 		public event Action OnConnectionSuccessful;
+		/// <summary>
+		/// Event triggered when a reconnect attempt is made.
+		/// </summary>
 		public event Action<byte, byte> OnReconnectAttempt;
+		/// <summary>
+		/// Event triggered when reconnect attempts fail.
+		/// </summary>
 		public event Action OnReconnectFailed;
+		/// <summary>
+		/// Event triggered when entering the game world.
+		/// </summary>
 		public event Action OnEnterGameWorld;
+		/// <summary>
+		/// Event triggered when quitting to the login screen.
+		/// </summary>
 		public event Action OnQuitToLogin;
 
+		/// <summary>
+		/// Returns true if the client can attempt to reconnect (only in world or scene connection states).
+		/// </summary>
 		public bool CanReconnect
 		{
 			get
@@ -62,12 +120,27 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Static reference to the network manager instance.
+		/// </summary>
 		private static NetworkManager _networkManager;
+		/// <summary>
+		/// Reference to the network manager for client networking.
+		/// </summary>
 		public NetworkManager NetworkManager;
+		/// <summary>
+		/// Reference to the login authenticator for client authentication.
+		/// </summary>
 		public ClientLoginAuthenticator LoginAuthenticator;
 
+		/// <summary>
+		/// Reference to the audio listener for the client.
+		/// </summary>
 		public AudioListener AudioListener;
 
+		/// <summary>
+		/// Initializes the client, network manager, authenticator, and other systems.
+		/// </summary>
 		void Awake()
 		{
 			if (!TryInitializeNetworkManager() ||
@@ -134,6 +207,10 @@ namespace FishMMO.Client
 #endif
 		}
 
+		/// <summary>
+		/// Attempts to initialize the network manager and register event handlers.
+		/// </summary>
+		/// <returns>True if successful, false otherwise.</returns>
 		private bool TryInitializeNetworkManager()
 		{
 			if (NetworkManager == null)
@@ -159,6 +236,9 @@ namespace FishMMO.Client
 			return true;
 		}
 
+		/// <summary>
+		/// Deinitializes the network manager and unregisters event handlers.
+		/// </summary>
 		private void DeinitializeNetworkManager()
 		{
 			NetworkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
@@ -172,6 +252,10 @@ namespace FishMMO.Client
 			NetworkManager.SceneManager.OnUnloadEnd -= SceneManager_OnUnloadEnd;
 		}
 
+		/// <summary>
+		/// Attempts to initialize the login authenticator and register event handlers.
+		/// </summary>
+		/// <returns>True if successful, false otherwise.</returns>
 		private bool TryInitializeLoginAuthenticator()
 		{
 			if (LoginAuthenticator == null)
@@ -188,6 +272,9 @@ namespace FishMMO.Client
 			return true;
 		}
 
+		/// <summary>
+		/// Deinitializes the login authenticator and unregisters event handlers.
+		/// </summary>
 		private void DeinitializeLoginAuthenticator()
 		{
 			if (LoginAuthenticator == null)
@@ -198,6 +285,10 @@ namespace FishMMO.Client
 			LoginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
 		}
 
+		/// <summary>
+		/// Attempts to initialize the transport layer for client networking.
+		/// </summary>
+		/// <returns>True if successful, false otherwise.</returns>
 		private bool TryInitializeTransport()
 		{
 			TransportManager transportManager = _networkManager.TransportManager;
@@ -220,6 +311,9 @@ namespace FishMMO.Client
 			return true;
 		}
 
+		/// <summary>
+		/// Handles per-frame client logic, including reconnect attempts.
+		/// </summary>
 		private void Update()
 		{
 			if (forceDisconnect ||
@@ -240,6 +334,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Handles log messages received by the application, disconnects on exceptions.
+		/// </summary>
 		private void Application_logMessageReceived(string condition, string stackTrace, LogType type)
 		{
 			if (type == LogType.Exception)
@@ -250,6 +347,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Cleans up client resources and unregisters event handlers on destroy.
+		/// </summary>
 		void OnDestroy()
 		{
 #if UNITY_EDITOR
@@ -300,6 +400,9 @@ namespace FishMMO.Client
 			Application.logMessageReceived -= this.Application_logMessageReceived;
 		}
 
+		/// <summary>
+		/// Quits the application or play mode, depending on platform.
+		/// </summary>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void Quit()
 		{
@@ -316,18 +419,25 @@ namespace FishMMO.Client
 #endif
 		}
 
+		/// <summary>
+		/// Handles application pause events (useful for mobile/VR platforms).
+		/// </summary>
 		void OnApplicationPause(bool isPaused)
 		{
 			// Handle pause state here. (This is useful for VR Headsets/Android devices that suspend the application instead of exiting)
 		}
 
+		/// <summary>
+		/// Quits to the login screen, disconnects from server, and unloads world scenes.
+		/// </summary>
+		/// <param name="forceDisconnect">If true, forces disconnect from server.</param>
 		public void QuitToLogin(bool forceDisconnect = true)
 		{
 			StopAllCoroutines();
 
 			AddressableLoadProcessor.UnloadSceneByLabelAsync(WorldPreloadScenes);
 			UnloadWorldScenes();
-			
+
 			if (forceDisconnect)
 			{
 				ForceDisconnect();
@@ -389,6 +499,10 @@ namespace FishMMO.Client
 			return true;
 		}
 
+		/// <summary>
+		/// Handles changes in client connection state, manages reconnect logic and triggers events.
+		/// </summary>
+		/// <param name="args">Arguments describing the connection state change.</param>
 		private void ClientManager_OnClientConnectionState(ClientConnectionStateArgs args)
 		{
 			clientState = args.ConnectionState;
@@ -423,6 +537,10 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Handles authentication result from the login authenticator, updates connection type and triggers events.
+		/// </summary>
+		/// <param name="result">The authentication result.</param>
 		private void Authenticator_OnClientAuthenticationResult(ClientAuthenticationResult result)
 		{
 			switch (result)
@@ -453,6 +571,12 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Connects to a server at the specified address and port. Optionally marks as world server.
+		/// </summary>
+		/// <param name="address">Server address.</param>
+		/// <param name="port">Server port.</param>
+		/// <param name="isWorldServer">True if connecting to a world server.</param>
 		public void ConnectToServer(string address, ushort port, bool isWorldServer = false)
 		{
 			if (isWorldServer)
@@ -467,6 +591,9 @@ namespace FishMMO.Client
 			StartCoroutine(OnAwaitingConnectionReady(address, port, isWorldServer));
 		}
 
+		/// <summary>
+		/// Attempts to reconnect to the last known world server address and port.
+		/// </summary>
 		public void OnTryReconnect()
 		{
 			if (nextReconnect < 0)
@@ -490,6 +617,12 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Coroutine that waits for connection to stop before connecting to a new server.
+		/// </summary>
+		/// <param name="address">Server address.</param>
+		/// <param name="port">Server port.</param>
+		/// <param name="isWorldServer">True if connecting to a world server.</param>
 		IEnumerator OnAwaitingConnectionReady(string address, ushort port, bool isWorldServer)
 		{
 			// wait for the connection to the current server to stop
@@ -516,6 +649,9 @@ namespace FishMMO.Client
 			yield return null;
 		}
 
+		/// <summary>
+		/// Cancels reconnect attempts and quits to login screen.
+		/// </summary>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void ReconnectCancel()
 		{
@@ -523,6 +659,9 @@ namespace FishMMO.Client
 			QuitToLogin();
 		}
 
+		/// <summary>
+		/// Forces the client to disconnect from the server.
+		/// </summary>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void ForceDisconnect()
 		{
@@ -532,6 +671,12 @@ namespace FishMMO.Client
 			NetworkManager.ClientManager.StopConnection();
 		}
 
+		/// <summary>
+		/// Broadcasts a message to the server using the network manager.
+		/// </summary>
+		/// <typeparam name="T">Type of broadcast message.</typeparam>
+		/// <param name="broadcast">The broadcast message.</param>
+		/// <param name="channel">The network channel to use.</param>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void Broadcast<T>(T broadcast, Channel channel = Channel.Reliable) where T : struct, IBroadcast
 		{
@@ -539,6 +684,11 @@ namespace FishMMO.Client
 			_networkManager.ClientManager.Broadcast(broadcast, channel);
 		}
 
+		/// <summary>
+		/// Attempts to get a random login server address from the available list.
+		/// </summary>
+		/// <param name="serverAddress">Output parameter for the selected server address.</param>
+		/// <returns>True if a server address was found, false otherwise.</returns>
 		public bool TryGetRandomLoginServerAddress(out ServerAddress serverAddress)
 		{
 			if (LoginServerAddresses != null && LoginServerAddresses.Count > 0)
@@ -551,6 +701,12 @@ namespace FishMMO.Client
 			return false;
 		}
 
+		/// <summary>
+		/// Coroutine to fetch the login server list from a remote host or configuration.
+		/// </summary>
+		/// <param name="onFetchFail">Callback invoked on fetch failure.</param>
+		/// <param name="onFetchComplete">Callback invoked on fetch success.</param>
+		/// <returns>Coroutine enumerator.</returns>
 		public IEnumerator GetLoginServerList(Action<string> onFetchFail, Action<List<ServerAddress>> onFetchComplete)
 		{
 			if (LoginServerAddresses != null &&
@@ -616,17 +772,29 @@ namespace FishMMO.Client
 				onFetchFail?.Invoke("Failed to configure IPFetchHost.");
 			}
 		}
-		
+
+		/// <summary>
+		/// Handler for scene load start event. Unloads previous world scenes.
+		/// </summary>
+		/// <param name="args">Arguments describing the scene load start.</param>
 		private void SceneManager_OnLoadStart(SceneLoadStartEventArgs args)
 		{
 			// Immediately unload all previous World scenes. We can only be in one World scene at a time.
 			UnloadWorldScenes();
 		}
 
+		/// <summary>
+		/// Handler for scene load percent change event.
+		/// </summary>
+		/// <param name="args">Arguments describing the scene load percent change.</param>
 		private void SceneManager_OnLoadPercentChange(SceneLoadPercentEventArgs args)
 		{
 		}
 
+		/// <summary>
+		/// Handler for scene load end event. Adds loaded scenes to cache.
+		/// </summary>
+		/// <param name="args">Arguments describing the scene load end.</param>
 		private void SceneManager_OnLoadEnd(SceneLoadEndEventArgs args)
 		{
 			if (args.LoadedScenes == null)
@@ -640,10 +808,18 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Handler for scene unload start event.
+		/// </summary>
+		/// <param name="args">Arguments describing the scene unload start.</param>
 		private void SceneManager_OnUnloadStart(SceneUnloadStartEventArgs args)
 		{
 		}
 
+		/// <summary>
+		/// Handler for scene unload end event. Removes unloaded scenes from cache and notifies server.
+		/// </summary>
+		/// <param name="args">Arguments describing the scene unload end.</param>
 		private void SceneManager_OnUnloadEnd(SceneUnloadEndEventArgs args)
 		{
 			if (args.UnloadedScenesV2 == null)
@@ -665,7 +841,7 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Unloads all cached World Scenes loaded by the Server. This is generally only called when the player exits back to the login screen.
+		/// Unloads all cached world scenes loaded by the server. Called when exiting to login screen.
 		/// </summary>
 		private void UnloadWorldScenes()
 		{
@@ -685,6 +861,11 @@ namespace FishMMO.Client
 			loadedWorldScenes.Clear();
 		}
 
+		/// <summary>
+		/// Handler for world scene connect broadcast from the server. Connects to the scene server.
+		/// </summary>
+		/// <param name="msg">The world scene connect broadcast message.</param>
+		/// <param name="channel">The network channel used.</param>
 		private void OnClientWorldSceneConnectBroadcastReceived(WorldSceneConnectBroadcast msg, Channel channel)
 		{
 			if (IsConnectionReady())
@@ -695,8 +876,10 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// The server validated the client scene is valid and fully loaded. This is invoked before the clients character is spawned in the World scene.
+		/// Handler for validated scene broadcast from the server. Loads world preload scenes.
 		/// </summary>
+		/// <param name="msg">The validated scene broadcast message.</param>
+		/// <param name="channel">The network channel used.</param>
 		public void OnClientValidatedSceneBroadcastReceived(ClientValidatedSceneBroadcast msg, Channel channel)
 		{
 			AddressableLoadProcessor.EnqueueLoad(WorldPreloadScenes);
@@ -712,6 +895,10 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Handler for progress update during validated scene loading. Broadcasts completion to server.
+		/// </summary>
+		/// <param name="progress">Progress value (0-1).</param>
 		private void OnClientValidatedSceneProgressUpdate(float progress)
 		{
 			if (progress < 1.0f)
@@ -802,11 +989,16 @@ namespace FishMMO.Client
 			fogInitialLerpSettings = null;
 		}
 
+		/// <summary>
+		/// Handles guild ID assignment for a character, loads guild name from disk or requests from server.
+		/// </summary>
+		/// <param name="ID">Guild ID to resolve.</param>
+		/// <param name="character">The character to assign the guild name to.</param>
 		public static void GuildController_OnReadID(long ID, IPlayerCharacter character)
 		{
 			if (ID != 0)
 			{
-				// Load the characters guild from disk or request it from the server.
+				// Load the character's guild name from disk or request from the server.
 				ClientNamingSystem.SetName(NamingSystemType.GuildName, ID, (name) =>
 				{
 					character.SetGuildName(name);
@@ -818,11 +1010,15 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Handles pet owner ID assignment, loads owner's name from disk or requests from server.
+		/// </summary>
+		/// <param name="ownerID">Owner's character ID.</param>
+		/// <param name="pet">The pet to assign the owner's name to.</param>
 		public static void Pet_OnReadID(long ownerID, Pet pet)
 		{
 			if (pet != null && ownerID != 0)
 			{
-				// Load the characters guild from disk or request it from the server.
 				ClientNamingSystem.SetName(NamingSystemType.CharacterName, ownerID, (name) =>
 				{
 					if (pet.CharacterGuildLabel)
@@ -833,12 +1029,20 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Handles damage events for a character, displays damage label above the character.
+		/// </summary>
+		/// <param name="attacker">The character dealing damage.</param>
+		/// <param name="hitCharacter">The character receiving damage.</param>
+		/// <param name="amount">Amount of damage dealt.</param>
+		/// <param name="damageAttribute">Damage attribute template for color and type.</param>
 		public void CharacterDamageController_OnDamaged(ICharacter attacker, ICharacter hitCharacter, int amount, DamageAttributeTemplate damageAttribute)
 		{
 			if (hitCharacter == null)
 			{
 				return;
 			}
+			// Only show damage if enabled in configuration.
 			if (!Configuration.GlobalSettings.TryGetBool("ShowDamage", out bool result) || !result)
 			{
 				return;
@@ -848,6 +1052,7 @@ namespace FishMMO.Client
 
 			float colliderHeight = 1.0f;
 
+			// Try to get the collider height for proper label placement.
 			Collider collider = hitCharacter.GameObject.GetComponent<Collider>();
 			if (collider != null)
 			{
@@ -856,6 +1061,7 @@ namespace FishMMO.Client
 
 			displayPos.y += colliderHeight;
 
+			// Display damage label above the character.
 			Cached3DLabel label = LabelMaker.Display3D(amount.ToString(), displayPos, damageAttribute.DisplayColor, 2.0f, 1.0f, false);
 
 			// Start the move coroutine if provided
@@ -865,9 +1071,17 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Coroutine to move a damage label upward and randomly for a short duration, simulating a floating effect.
+		/// </summary>
+		/// <param name="label">The label to move.</param>
+		/// <param name="duration">How long the label should move.</param>
+		/// <param name="gravity">Gravity applied to the label's movement (default -4.0f).</param>
+		/// <returns>Coroutine enumerator.</returns>
 		public static IEnumerator MoveLabelUpwardAndRandomly(Cached3DLabel label, float duration, float gravity = -4.0f)
 		{
 			Vector3 initialPosition = label.transform.position;
+			// Pick a random direction for the label to float, always moving up initially.
 			Vector3 randomDirection = new Vector3(
 				UnityEngine.Random.Range(-1f, 1f),  // Random X direction
 				1f,                                 // Always moving up initially
@@ -895,12 +1109,19 @@ namespace FishMMO.Client
 			label.transform.position = initialPosition + randomDirection * 2f;
 		}
 
+		/// <summary>
+		/// Handles heal events for a character, displays heal label above the character.
+		/// </summary>
+		/// <param name="healer">The character performing the heal.</param>
+		/// <param name="healed">The character being healed.</param>
+		/// <param name="amount">Amount of healing.</param>
 		public void CharacterDamageController_OnHealed(ICharacter healer, ICharacter healed, int amount)
 		{
 			if (healed == null)
 			{
 				return;
 			}
+			// Only show heals if enabled in configuration.
 			if (!Configuration.GlobalSettings.TryGetBool("ShowHeals", out bool result) || !result)
 			{
 				return;
@@ -914,6 +1135,12 @@ namespace FishMMO.Client
 			LabelMaker.Display3D(amount.ToString(), displayPos, new TinyColor(64, 64, 255).ToUnityColor(), 4.0f, 1.0f, false);
 		}
 
+		/// <summary>
+		/// Handles achievement completion events, displays achievement label above the character.
+		/// </summary>
+		/// <param name="character">The character completing the achievement.</param>
+		/// <param name="template">Achievement template data.</param>
+		/// <param name="tier">Achievement tier completed.</param>
 		public void AchievementController_OnCompleteAchievement(ICharacter character, AchievementTemplate template, AchievementTier tier)
 		{
 			if (character == null ||
@@ -921,6 +1148,7 @@ namespace FishMMO.Client
 			{
 				return;
 			}
+			// Only show achievement completion if enabled in configuration.
 			if (!Configuration.GlobalSettings.TryGetBool("ShowAchievementCompletion", out bool result) || !result)
 			{
 				return;
@@ -936,8 +1164,23 @@ namespace FishMMO.Client
 		#endregion
 
 		#region RegionNameDisplay
+		/// <summary>
+		/// Label used to display region names in the UI.
+		/// </summary>
 		private UIAdvancedLabel RegionNameLabel;
 
+		/// <summary>
+		/// Displays a 2D label for region names in the UI.
+		/// </summary>
+		/// <param name="text">Text to display.</param>
+		/// <param name="style">Font style.</param>
+		/// <param name="font">Font to use.</param>
+		/// <param name="fontSize">Font size.</param>
+		/// <param name="color">Text color.</param>
+		/// <param name="lifeTime">How long the label should be visible.</param>
+		/// <param name="fadeColor">Whether the label should fade out.</param>
+		/// <param name="increaseY">Whether to increase Y position for stacking.</param>
+		/// <param name="pixelOffset">Pixel offset for label placement.</param>
 		public void RegionDisplayNameAction_OnDisplay2DLabel(string text, FontStyle style, Font font, int fontSize, Color color, float lifeTime, bool fadeColor, bool increaseY, Vector2 pixelOffset)
 		{
 			if (RegionNameLabel != null)
@@ -949,13 +1192,35 @@ namespace FishMMO.Client
 		#endregion
 
 		#region Fog
+		/// <summary>
+		/// Stores the initial fog settings for smooth transitions.
+		/// </summary>
 		private class FogInitialLerpSettings
 		{
+			/// <summary>
+			/// Initial fog color before transition.
+			/// </summary>
 			public Color InitialColor = Color.white;
+			/// <summary>
+			/// Initial fog density before transition.
+			/// </summary>
 			public float InitialDensity = 0.0f;
+			/// <summary>
+			/// Initial fog start distance before transition.
+			/// </summary>
 			public float InitialStartDistance = 0.0f;
+			/// <summary>
+			/// Initial fog end distance before transition.
+			/// </summary>
 			public float InitialEndDistance = 0.0f;
 
+			/// <summary>
+			/// Initializes the initial fog settings for a transition.
+			/// </summary>
+			/// <param name="initialColor">Initial fog color.</param>
+			/// <param name="initialDensity">Initial fog density.</param>
+			/// <param name="initialStartDistance">Initial fog start distance.</param>
+			/// <param name="initialEndDistance">Initial fog end distance.</param>
 			public void Initialize(Color initialColor, float initialDensity, float initialStartDistance, float initialEndDistance)
 			{
 				InitialColor = initialColor;
@@ -965,23 +1230,48 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Stores the initial fog settings for lerp transitions.
+		/// </summary>
 		private FogInitialLerpSettings fogInitialLerpSettings;
+		/// <summary>
+		/// Reference to the running fog lerp coroutine.
+		/// </summary>
 		private Coroutine fogLerpRoutine;
 
+		/// <summary>
+		/// Target fog change rate for transitions.
+		/// </summary>
 		private float fogChangeRate = 0.0f;
+		/// <summary>
+		/// Target fog color for transitions.
+		/// </summary>
 		private Color fogFinalColor = Color.white;
+		/// <summary>
+		/// Target fog density for transitions.
+		/// </summary>
 		private float fogFinalDensity = 0.0f;
+		/// <summary>
+		/// Target fog start distance for transitions.
+		/// </summary>
 		private float fogFinalStartDistance = 0.0f;
+		/// <summary>
+		/// Target fog end distance for transitions.
+		/// </summary>
 		private float fogFinalEndDistance = 0.0f;
 
+		/// <summary>
+		/// Handles fog change events, smoothly transitions fog settings using a coroutine.
+		/// </summary>
+		/// <param name="fogSettings">The new fog settings to apply.</param>
 		public void RegionChangeFogAction_OnChangeFog(FogSettings fogSettings)
 		{
-			// If the coroutine exists.
+			// If the coroutine exists, stop it and save current render settings for smooth transition.
 			if (fogLerpRoutine != null)
 			{
 				StopCoroutine(fogLerpRoutine);
 
-				// If there is an existing lerp setting we will save the current render settings.
+				// Save current render settings for lerp if available.
 				if (fogInitialLerpSettings != null)
 				{
 					fogInitialLerpSettings.Initialize(RenderSettings.fogColor, RenderSettings.fogDensity, RenderSettings.fogStartDistance, RenderSettings.fogEndDistance);
@@ -999,7 +1289,7 @@ namespace FishMMO.Client
 
 			RenderSettings.fogMode = fogSettings.Mode;
 
-			// If no fog lerp settings exist we should instantiate one and immediately set fog render settings.
+			// If no fog lerp settings exist, instantiate and set immediately.
 			if (fogInitialLerpSettings == null)
 			{
 				fogInitialLerpSettings = new FogInitialLerpSettings();
@@ -1020,6 +1310,10 @@ namespace FishMMO.Client
 			fogLerpRoutine = StartCoroutine(FogLerp());
 		}
 
+		/// <summary>
+		/// Coroutine to smoothly interpolate fog settings over time for visual transitions.
+		/// </summary>
+		/// <returns>Coroutine enumerator.</returns>
 		IEnumerator FogLerp()
 		{
 			for (float t = 0.01f; t < fogChangeRate; t += 0.01f)

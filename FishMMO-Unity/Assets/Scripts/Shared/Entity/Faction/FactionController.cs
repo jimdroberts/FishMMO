@@ -10,22 +10,66 @@ namespace FishMMO.Shared
 {
 	public class FactionController : CharacterBehaviour, IFactionController
 	{
+		/// <summary>
+		/// Dictionary of all factions for this character, keyed by template ID.
+		/// Holds reputation/standing values for each faction.
+		/// </summary>
 		private Dictionary<int, Faction> factions = new Dictionary<int, Faction>();
+
+		/// <summary>
+		/// Dictionary of allied factions (positive standing), keyed by template ID.
+		/// </summary>
 		private Dictionary<int, Faction> allied = new Dictionary<int, Faction>();
+
+		/// <summary>
+		/// Dictionary of neutral factions (zero standing), keyed by template ID.
+		/// </summary>
 		private Dictionary<int, Faction> neutral = new Dictionary<int, Faction>();
+
+		/// <summary>
+		/// Dictionary of hostile factions (negative standing), keyed by template ID.
+		/// </summary>
 		private Dictionary<int, Faction> hostile = new Dictionary<int, Faction>();
+
+		/// <summary>
+		/// If true, this character is aggressive and will treat others as enemies regardless of faction standing.
+		/// </summary>
 		[SerializeField]
 		private bool isAggressive = false;
 
+		/// <summary>
+		/// Gets or sets whether the character is aggressive (treats others as enemies).
+		/// </summary>
 		public bool IsAggressive { get { return isAggressive; } set { isAggressive = value; } }
+
+		/// <summary>
+		/// Public accessor for all factions and their standing values.
+		/// </summary>
 		public Dictionary<int, Faction> Factions { get { return factions; } }
 
+		/// <summary>
+		/// Public accessor for allied factions.
+		/// </summary>
 		public Dictionary<int, Faction> Allied { get { return allied; } }
+
+		/// <summary>
+		/// Public accessor for neutral factions.
+		/// </summary>
 		public Dictionary<int, Faction> Neutral { get { return neutral; } }
+
+		/// <summary>
+		/// Public accessor for hostile factions.
+		/// </summary>
 		public Dictionary<int, Faction> Hostile { get { return hostile; } }
 
+		/// <summary>
+		/// The race template associated with this character, used for initial faction setup.
+		/// </summary>
 		[SerializeField]
 		private RaceTemplate raceTemplate;
+		/// <summary>
+		/// Gets the race template for this character.
+		/// </summary>
 		public RaceTemplate RaceTemplate { get { return this.raceTemplate; } }
 
 #if !UNITY_SERVER
@@ -222,7 +266,7 @@ namespace FishMMO.Shared
 				return;
 			}
 			int amountToAdjust = Mathf.RoundToInt(value * percentageToAdjust);
-			
+
 			Add(template, amountToAdjust);
 
 			//Log.Debug($"{(value > 0 ? "Add" : "Subtract")} Faction: {template.ID}:{amountToAdjust}");

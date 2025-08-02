@@ -14,18 +14,36 @@ namespace FishMMO.Client
 	public class UnityHtmlContentFetcher : MonoBehaviour, IHtmlContentFetcher
 	{
 		[Header("Dependencies")]
+		/// <summary>
+		/// Service for handling Unity web requests.
+		/// </summary>
 		public UnityWebRequestService WebRequestService;
 
 		[Header("Configuration")]
+		/// <summary>
+		/// Maximum number of retries for each web request.
+		/// </summary>
 		[Tooltip("Maximum number of retries for each web request.")]
 		public int MaxRetries = 3;
+		/// <summary>
+		/// Delay in seconds between retries for web requests.
+		/// </summary>
 		[Tooltip("Delay in seconds between retries for web requests.")]
 		public float RetryDelay = 1.0f;
+		/// <summary>
+		/// Timeout in seconds for each individual web request.
+		/// </summary>
 		[Tooltip("Timeout in seconds for each individual web request.")]
 		public int WebRequestTimeout = 10;
+		/// <summary>
+		/// Approximate conversion factor from HTML pixels to TextMeshPro font size.
+		/// </summary>
 		[Tooltip("Approximate conversion factor from HTML pixels to TextMeshPro font size.")]
 		public float HtmlPxToTmpSizeFactor = 1.5f;
 
+		/// <summary>
+		/// Unity Awake method. Validates dependencies and disables script if missing.
+		/// </summary>
 		private void Awake()
 		{
 			if (WebRequestService == null)
@@ -35,6 +53,14 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Fetches HTML from a URL, extracts content from a div, and processes it into TMP rich text.
+		/// </summary>
+		/// <param name="url">The URL to fetch HTML from.</param>
+		/// <param name="divClass">The class name of the div to extract.</param>
+		/// <param name="onHtmlReady">Callback for successful extraction.</param>
+		/// <param name="onError">Callback for error handling.</param>
+		/// <returns>Coroutine enumerator.</returns>
 		public IEnumerator FetchAndProcessHtml(string url, string divClass, Action<string> onHtmlReady, Action<string> onError)
 		{
 			if (WebRequestService == null)
@@ -73,8 +99,11 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// Extracts and converts HTML content from a specific div element into TextMeshPro rich text.
-		/// This method handles various HTML tags, inline styles, and basic sanitization.
+		/// Handles various HTML tags, inline styles, and basic sanitization.
 		/// </summary>
+		/// <param name="htmlContent">The raw HTML content.</param>
+		/// <param name="divClass">The class name of the div to extract.</param>
+		/// <returns>Extracted and converted TMP rich text, or empty string if not found.</returns>
 		private string ExtractTextFromDiv(string htmlContent, string divClass)
 		{
 			HtmlDocument htmlDoc = new HtmlDocument();
@@ -105,7 +134,10 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// Recursively converts an HtmlAgilityPack HtmlNode into a TextMeshPro rich text string.
+		/// Handles block elements, inline styles, and links.
 		/// </summary>
+		/// <param name="node">The HTML node to convert.</param>
+		/// <returns>Converted TMP rich text string.</returns>
 		private string ConvertHtmlNodeToTmpText(HtmlNode node)
 		{
 			StringBuilder sb = new StringBuilder();

@@ -8,6 +8,9 @@ namespace FishMMO.Client
 	[Serializable]
 	public struct VersionFetch
 	{
+		/// <summary>
+		/// The latest version string returned by the /latest_version endpoint.
+		/// </summary>
 		public string latest_version;
 	}
 }

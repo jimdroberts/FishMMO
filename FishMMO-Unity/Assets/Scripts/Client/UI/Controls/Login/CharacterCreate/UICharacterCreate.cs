@@ -11,26 +11,77 @@ namespace FishMMO.Client
 {
 	public class UICharacterCreate : UIControl
 	{
+		/// <summary>
+		/// Button to create a new character.
+		/// </summary>
 		public Button CreateButton;
+		/// <summary>
+		/// Text field for displaying character creation result messages.
+		/// </summary>
 		public TMP_Text CreateResultText;
+		/// <summary>
+		/// Dropdown for selecting starting race.
+		/// </summary>
 		public TMP_Dropdown StartRaceDropdown;
+		/// <summary>
+		/// Dropdown for selecting starting model.
+		/// </summary>
 		public TMP_Dropdown StartModelDropdown;
+		/// <summary>
+		/// Dropdown for selecting starting location.
+		/// </summary>
 		public TMP_Dropdown StartLocationDropdown;
+		/// <summary>
+		/// Parent transform for character preview UI.
+		/// </summary>
 		public RectTransform CharacterParent;
 
+		/// <summary>
+		/// The name of the character being created.
+		/// </summary>
 		public string CharacterName = "";
+		/// <summary>
+		/// The selected race index.
+		/// </summary>
 		public int RaceIndex = -1;
+		/// <summary>
+		/// The selected model index.
+		/// </summary>
 		public int ModelIndex = -1;
+		/// <summary>
+		/// List of available race names for dropdown.
+		/// </summary>
 		public List<string> InitialRaceNames = new List<string>();
+		/// <summary>
+		/// List of available model names for dropdown.
+		/// </summary>
 		public List<string> InitialModelNames = new List<string>();
+		/// <summary>
+		/// List of available spawn location names for dropdown.
+		/// </summary>
 		public List<string> InitialSpawnLocationNames = new List<string>();
+		/// <summary>
+		/// Cache containing details for world scenes and spawn positions.
+		/// </summary>
 		public WorldSceneDetailsCache WorldSceneDetailsCache = null;
+		/// <summary>
+		/// The selected spawn position index.
+		/// </summary>
 		public int SelectedSpawnPosition = -1;
 
+		/// <summary>
+		/// Maps race names to their template IDs.
+		/// </summary>
 		private Dictionary<string, int> raceNameMap = new Dictionary<string, int>();
 
+		/// <summary>
+		/// Maps race names to allowed spawn positions.
+		/// </summary>
 		private Dictionary<string, HashSet<string>> raceSpawnPositionMap = new Dictionary<string, HashSet<string>>();
 
+		/// <summary>
+		/// Called when the client is set. Initializes dropdowns and subscribes to events.
+		/// </summary>
 		public override void OnClientSet()
 		{
 			// initialize race dropdown
@@ -111,12 +162,19 @@ namespace FishMMO.Client
 		}
 
 
+		/// <summary>
+		/// Called when the client is unset. Unsubscribes from events.
+		/// </summary>
 		public override void OnClientUnset()
 		{
 			Client.NetworkManager.ClientManager.OnClientConnectionState -= ClientManager_OnClientConnectionState;
 			Client.NetworkManager.ClientManager.UnregisterBroadcast<CharacterCreateResultBroadcast>(OnClientCharacterCreateResultBroadcastReceived);
 		}
 
+		/// <summary>
+		/// Handles client connection state changes. Hides panel when disconnected.
+		/// </summary>
+		/// <param name="obj">Connection state arguments.</param>
 		private void ClientManager_OnClientConnectionState(ClientConnectionStateArgs obj)
 		{
 			if (obj.ConnectionState == LocalConnectionState.Stopped)
@@ -125,6 +183,11 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Handles character creation result broadcast, updates UI and shows select panel on success.
+		/// </summary>
+		/// <param name="msg">The broadcast message for character creation result.</param>
+		/// <param name="channel">The network channel used.</param>
 		private void OnClientCharacterCreateResultBroadcastReceived(CharacterCreateResultBroadcast msg, Channel channel)
 		{
 			SetCreateButtonLocked(false);
@@ -139,11 +202,19 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Called when character name input field edit ends. Updates character name.
+		/// </summary>
+		/// <param name="inputField">The input field for character name.</param>
 		public void OnCharacterNameChangeEndEdit(TMP_InputField inputField)
 		{
 			CharacterName = inputField.text;
 		}
 
+		/// <summary>
+		/// Called when race dropdown value changes. Updates race index and resets model index.
+		/// </summary>
+		/// <param name="dropdown">The race dropdown.</param>
 		public void OnRaceDropdownValueChanged(TMP_Dropdown dropdown)
 		{
 			RaceIndex = dropdown.value;
@@ -153,6 +224,10 @@ namespace FishMMO.Client
 			UpdateStartLocationDropdown();
 		}
 
+		/// <summary>
+		/// Called when model dropdown value changes. Updates model index and model preview.
+		/// </summary>
+		/// <param name="dropdown">The model dropdown.</param>
 		public void OnModelDropdownValueChanged(TMP_Dropdown dropdown)
 		{
 			ModelIndex = dropdown.value;
@@ -160,11 +235,17 @@ namespace FishMMO.Client
 			UpdateModel();
 		}
 
+		/// <summary>
+		/// Updates the character model preview. (Not implemented)
+		/// </summary>
 		private void UpdateModel()
 		{
 
 		}
 
+		/// <summary>
+		/// Updates the start location dropdown based on selected race.
+		/// </summary>
 		private void UpdateStartLocationDropdown()
 		{
 			// update start location dropdown
@@ -189,11 +270,18 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Called when spawn location dropdown value changes. Updates selected spawn position.
+		/// </summary>
+		/// <param name="dropdown">The spawn location dropdown.</param>
 		public void OnSpawnLocationDropdownValueChanged(TMP_Dropdown dropdown)
 		{
 			SelectedSpawnPosition = dropdown.value;
 		}
 
+		/// <summary>
+		/// Called when the create button is clicked. Validates input and broadcasts character creation request.
+		/// </summary>
 		public void OnClick_CreateCharacter()
 		{
 			if (Client.IsConnectionReady() &&
@@ -226,6 +314,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Called when quitting to login. Unlocks create button.
+		/// </summary>
 		public override void OnQuitToLogin()
 		{
 			base.OnQuitToLogin();
@@ -233,17 +324,27 @@ namespace FishMMO.Client
 			SetCreateButtonLocked(false);
 		}
 
+		/// <summary>
+		/// Called when the quit to login button is clicked. Returns to login screen.
+		/// </summary>
 		public void OnClick_QuitToLogin()
 		{
 			// we should go back to login..
 			Client.QuitToLogin();
 		}
 
+		/// <summary>
+		/// Called when the quit button is clicked. Quits the client application.
+		/// </summary>
 		public void OnClick_Quit()
 		{
 			Client.Quit();
 		}
 
+		/// <summary>
+		/// Sets locked state for create button (enables/disables create button).
+		/// </summary>
+		/// <param name="locked">True to lock (disable) the button, false to unlock.</param>
 		private void SetCreateButtonLocked(bool locked)
 		{
 			CreateButton.interactable = !locked;

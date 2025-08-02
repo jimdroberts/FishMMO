@@ -10,6 +10,9 @@ namespace FishMMO.Server
 {
 	public class AchievementSystem : ServerBehaviour
 	{
+		/// <summary>
+		/// Initializes the achievement system, subscribing to achievement update and completion events.
+		/// </summary>
 		public override void InitializeOnce()
 		{
 			if (ServerManager != null)
@@ -23,6 +26,9 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Cleans up the achievement system, unsubscribing from achievement update and completion events.
+		/// </summary>
 		public override void Destroying()
 		{
 			if (ServerManager != null)
@@ -32,6 +38,11 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Handles achievement update events for characters, validates input, and broadcasts achievement changes to the player client.
+		/// </summary>
+		/// <param name="character">The character whose achievement was updated.</param>
+		/// <param name="achievement">The updated achievement data.</param>
 		private void IAchievementController_OnUpdateAchievement(ICharacter character, Achievement achievement)
 		{
 			if (character == null || achievement == null)
@@ -59,6 +70,12 @@ namespace FishMMO.Server
 			});
 		}
 
+		/// <summary>
+		/// Handles achievement completion events, validates input, and processes achievement rewards for the player character.
+		/// </summary>
+		/// <param name="character">The character who completed the achievement.</param>
+		/// <param name="template">The achievement template.</param>
+		/// <param name="tier">The achievement tier completed.</param>
 		private void IAchievementController_HandleAchievementRewards(ICharacter character, AchievementTemplate template, AchievementTier tier)
 		{
 			if (character == null || tier == null)
@@ -83,6 +100,20 @@ namespace FishMMO.Server
 			HandleItemRewards(dbContext, playerCharacter, tier);
 		}
 
+		/// <summary>
+		/// Generic handler for ability rewards, processes learning and broadcasting new abilities to the player character.
+		/// </summary>
+		/// <typeparam name="TTemplate">Type of ability template.</typeparam>
+		/// <typeparam name="TBroadcast">Type of single ability broadcast.</typeparam>
+		/// <typeparam name="TMultiBroadcast">Type of multiple ability broadcast.</typeparam>
+		/// <param name="dbContext">Database context for updates.</param>
+		/// <param name="character">Player character receiving rewards.</param>
+		/// <param name="rewards">List of ability rewards.</param>
+		/// <param name="knowsFunc">Function to check if ability is already known.</param>
+		/// <param name="learnFunc">Function to learn new abilities.</param>
+		/// <param name="idSelector">Function to select ability ID.</param>
+		/// <param name="singleBroadcastFactory">Factory to create single ability broadcast.</param>
+		/// <param name="multiBroadcastFactory">Factory to create multiple ability broadcast.</param>
 		private void HandleAbilityGenericRewards<TTemplate, TBroadcast, TMultiBroadcast>(
 			NpgsqlDbContext dbContext,
 			IPlayerCharacter character,
@@ -118,6 +149,12 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Handles ability rewards for achievement tiers, processes learning and broadcasting new base abilities.
+		/// </summary>
+		/// <param name="dbContext">Database context for updates.</param>
+		/// <param name="character">Player character receiving rewards.</param>
+		/// <param name="tier">Achievement tier containing ability rewards.</param>
 		public void HandleAbilityRewards(NpgsqlDbContext dbContext, IPlayerCharacter character, AchievementTier tier)
 		{
 			HandleAbilityGenericRewards<BaseAbilityTemplate, KnownAbilityAddBroadcast, KnownAbilityAddMultipleBroadcast>(
@@ -132,6 +169,12 @@ namespace FishMMO.Server
 			);
 		}
 
+		/// <summary>
+		/// Handles ability event rewards for achievement tiers, processes learning and broadcasting new ability events.
+		/// </summary>
+		/// <param name="dbContext">Database context for updates.</param>
+		/// <param name="character">Player character receiving rewards.</param>
+		/// <param name="tier">Achievement tier containing ability event rewards.</param>
 		private void HandleAbilityEventRewards(NpgsqlDbContext dbContext, IPlayerCharacter character, AchievementTier tier)
 		{
 			HandleAbilityGenericRewards<AbilityEvent, KnownAbilityEventAddBroadcast, KnownAbilityEventAddMultipleBroadcast>(
@@ -146,6 +189,12 @@ namespace FishMMO.Server
 			);
 		}
 
+		/// <summary>
+		/// Handles item rewards for achievement tiers, adds items to inventory or bank and broadcasts updates to the client.
+		/// </summary>
+		/// <param name="dbContext">Database context for updates.</param>
+		/// <param name="character">Player character receiving rewards.</param>
+		/// <param name="tier">Achievement tier containing item rewards.</param>
 		private void HandleItemRewards(NpgsqlDbContext dbContext, IPlayerCharacter character, AchievementTier tier)
 		{
 			List<BaseItemTemplate> itemRewards = tier.ItemRewards;

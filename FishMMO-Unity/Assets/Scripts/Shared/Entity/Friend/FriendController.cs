@@ -5,27 +5,47 @@ using System.Collections.Generic;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Character guild controller.
+	/// Character friend controller. Manages the player's friend list and handles friend-related network events.
 	/// </summary>
 	public class FriendController : CharacterBehaviour, IFriendController
 	{
+		/// <summary>
+		/// Event invoked when a friend is added. Parameters: friend ID, online status.
+		/// </summary>
 		public event Action<long, bool> OnAddFriend;
+
+		/// <summary>
+		/// Event invoked when a friend is removed. Parameter: friend ID.
+		/// </summary>
 		public event Action<long> OnRemoveFriend;
 
+		/// <summary>
+		/// Set of friend IDs for this character.
+		/// </summary>
 		public HashSet<long> Friends { get; private set; }
 
+		/// <summary>
+		/// Initializes the friend list when the component awakens.
+		/// </summary>
 		public override void OnAwake()
 		{
 			Friends = new HashSet<long>();
 		}
 
+		/// <summary>
+		/// Resets the friend list state, clearing all friends.
+		/// </summary>
+		/// <param name="asServer">True if called on the server.</param>
 		public override void ResetState(bool asServer)
 		{
 			base.ResetState(asServer);
-
 			Friends.Clear();
 		}
 
+		/// <summary>
+		/// Adds a friend by ID if not already present.
+		/// </summary>
+		/// <param name="friendID">The ID of the friend to add.</param>
 		public void AddFriend(long friendID)
 		{
 			if (!Friends.Contains(friendID))

@@ -5,24 +5,46 @@ using FishMMO.Logging;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Condition that checks if an item can be equipped by the initiator.
-	/// Requires an ItemEventData in the EventData.
+	/// Condition that checks if an item can be equipped by the character (initiator or event target).
+	/// Requires an <see cref="ItemEventData"/> in the <see cref="EventData"/>.
 	/// </summary>
 	[CreateAssetMenu(fileName = "CanEquipItemCondition", menuName = "FishMMO/Triggers/Conditions/Equipment/Can Equip Item Condition")]
 	public class CanEquipItemCondition : BaseCondition
 	{
+		/// <summary>
+		/// Evaluates whether the character (or event target) can equip the specified item, based on the provided event data.
+		/// </summary>
+		/// <param name="initiator">The character to check, or the fallback if no event target is present.</param>
+		/// <param name="eventData">Event data containing item and slot information.</param>
+		/// <returns>True if the item can be equipped; otherwise, false.</returns>
+		/// <remarks>
+		/// This method performs a series of checks:
+		/// <list type="number">
+		/// <item>Determines the character to check (event target or initiator).</item>
+		/// <item>Ensures both character and event data are present.</item>
+		/// <item>Extracts <see cref="ItemEventData"/> from the event data.</item>
+		/// <item>Checks if the item is equippable and has a valid template.</item>
+		/// <item>Verifies the target slot matches the item's required slot.</item>
+		/// <item>Ensures the character has an <see cref="EquipmentController"/> and can manipulate equipment.</item>
+		/// <item>Checks for slot conflicts and whether the source container can accept swapped items.</item>
+		/// <item>Allows for additional requirements (e.g., level, class) to be added as needed.</item>
+		/// </list>
+		/// </remarks>
 		public override bool Evaluate(ICharacter initiator, EventData eventData)
 		{
+			// Determine which character to check: use the event target if available, otherwise use the initiator.
 			ICharacter characterToCheck = initiator;
 			if (eventData != null && eventData.TryGet(out CharacterHitEventData charTargetEventData) && charTargetEventData.Target != null)
 			{
 				characterToCheck = charTargetEventData.Target;
 			}
+			// Ensure both character and event data are present.
 			if (characterToCheck == null || eventData == null)
 			{
 				Log.Warning("CanEquipItemCondition", "Character or EventData is null.");
 				return false;
 			}
+			// Extract ItemEventData from the event data.
 			if (!eventData.TryGet(out ItemEventData itemEventData))
 			{
 				Log.Warning("CanEquipItemCondition", "EventData does not contain ItemEventData.");
@@ -31,6 +53,7 @@ namespace FishMMO.Shared
 			Item itemToEquip = itemEventData.Item;
 			IItemContainer sourceContainer = itemEventData.SourceContainer;
 			ItemSlot targetSlot = itemEventData.TargetSlot;
+			// Check if the item is present and equippable.
 			if (itemToEquip == null)
 			{
 				Log.Warning("CanEquipItemCondition", "Item to equip is null in ItemEventData.");
@@ -40,16 +63,19 @@ namespace FishMMO.Shared
 			{
 				return false;
 			}
+			// Ensure the item has an equippable template.
 			EquippableItemTemplate equippableTemplate = itemToEquip.Template as EquippableItemTemplate;
 			if (equippableTemplate == null)
 			{
-				Log.Warning($"CanEquipItemCondition", "Item {itemToEquip.Template.name} does not have an EquippableItemTemplate.");
+				Log.Warning($"CanEquipItemCondition", $"Item {itemToEquip.Template.name} does not have an EquippableItemTemplate.");
 				return false;
 			}
+			// Verify the target slot matches the item's required slot.
 			if (targetSlot != equippableTemplate.Slot)
 			{
 				return false;
 			}
+			// Ensure the character has an EquipmentController and can manipulate equipment.
 			if (!characterToCheck.TryGet(out EquipmentController equipmentController))
 			{
 				Log.Warning("CanEquipItemCondition", "Character does not have an EquipmentController.");
@@ -59,6 +85,7 @@ namespace FishMMO.Shared
 			{
 				return false;
 			}
+			// Check for slot conflicts and whether the source container can accept swapped items.
 			if (equipmentController.TryGetItem((byte)equippableTemplate.Slot, out Item existingItemInSlot))
 			{
 				if (existingItemInSlot.ID == itemToEquip.ID && existingItemInSlot.Template.ID == itemToEquip.Template.ID)
@@ -129,7 +156,7 @@ namespace FishMMO.Shared
 			// For robustness, you might want to call the CanEquipItemCondition here, or ensure the event system
 			// only triggers this action if the conditions are met.
 			// If you want to be super robust:
-			// var canEquipCondition = CachedScriptableObject<CanEquipItemCondition>.Get("CanEquipItemCondition"); // Assuming a method to get scriptable objects by name
+			// var canEquipCondition = CachedScriptableObject<CanEquipItemCondition>.Get("CanEquipItemCondition");
 			// if (canEquipCondition != null && !canEquipCondition.Evaluate(initiator, eventData))
 			// {
 			//     Log.Warning("EquipItemAction: Conditions for equipping item were not met. Aborting action.");

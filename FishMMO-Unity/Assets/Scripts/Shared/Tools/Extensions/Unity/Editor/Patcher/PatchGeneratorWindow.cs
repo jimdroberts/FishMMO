@@ -17,53 +17,108 @@ namespace FishMMO.Patcher
 {
 	public class PatchGeneratorWindow : EditorWindow
 	{
-		// --- UI State Variables ---
+		/// <summary>
+		/// Path to the latest client build directory.
+		/// </summary>
 		private string latestClientDirectory = "";
-		private string oldClientsRootDirectory = ""; // For multiple old clients
-		private string singleOldClientDirectory = ""; // For a single old client
-		private bool generateMultipleClientsMode = false; // Toggle for UI mode
+		/// <summary>
+		/// Path to the root directory containing multiple old client builds.
+		/// </summary>
+		private string oldClientsRootDirectory = "";
+		/// <summary>
+		/// Path to a single old client build directory.
+		/// </summary>
+		private string singleOldClientDirectory = "";
+		/// <summary>
+		/// Toggle for UI mode: true for multiple clients, false for single client.
+		/// </summary>
+		private bool generateMultipleClientsMode = false;
+		/// <summary>
+		/// Path to the output directory for generated patches.
+		/// </summary>
 		private string patchOutputDirectory = "";
+		/// <summary>
+		/// Comma-separated list of file extensions to ignore during patch generation.
+		/// </summary>
 		private string ignoredExtensionsInput = ".cfg, .log, .bak";
+		/// <summary>
+		/// Comma-separated list of directory names to ignore during patch generation.
+		/// </summary>
 		private string ignoredDirectoriesInput = "FishMMO_BackUpThisFolder_ButDontShipItWithYourGame, FishMMO_BurstDebugInformation_DoNotShip";
 
-		// --- Internal Data & State ---
+		/// <summary>
+		/// Set of file extensions to ignore during patch generation.
+		/// </summary>
 		private HashSet<string> ignoredExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		/// <summary>
+		/// Set of directory names to ignore during patch generation.
+		/// </summary>
 		private HashSet<string> ignoredDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-		// Cached version configurations
+		/// <summary>
+		/// Cached version configuration for the latest client.
+		/// </summary>
 		private VersionConfig latestVersionConfig;
+		/// <summary>
+		/// Cached version configurations for old clients, keyed by directory path.
+		/// </summary>
 		private Dictionary<string, VersionConfig> oldClientVersionCache = new Dictionary<string, VersionConfig>();
 
-		// UI related fields for displaying individual patch progress bars
+		/// <summary>
+		/// UI fields for displaying individual patch progress bars.
+		/// </summary>
 		private Dictionary<string, PatchProgressInfo> patchProgress = new Dictionary<string, PatchProgressInfo>();
+		/// <summary>
+		/// Scroll position for the patch progress scroll view.
+		/// </summary>
 		private Vector2 scrollPosition;
 
-		// Overall processing state to disable UI during async operations
+		/// <summary>
+		/// Overall processing state to disable UI during async operations.
+		/// </summary>
 		private bool isProcessing = false;
-		private string manifestGenerationStatus = "Ready."; // Status for complete manifest generation
+		/// <summary>
+		/// Status message for complete manifest generation.
+		/// </summary>
+		private string manifestGenerationStatus = "Ready.";
 
-		// Helper class to hold progress details for each patch
+		/// <summary>
+		/// Helper class to hold progress details for each patch.
+		/// </summary>
 		private class PatchProgressInfo
 		{
+			/// <summary>Progress value (0-1).</summary>
 			public float Progress { get; set; } = 0f;
+			/// <summary>Color of the progress bar.</summary>
 			public Color Color { get; set; } = Color.gray;
+			/// <summary>Status message for the patch.</summary>
 			public string Message { get; set; } = "Pending...";
 		}
 
-		// Data structure for the complete manifest entry
+		/// <summary>
+		/// Data structure for the complete manifest entry.
+		/// </summary>
 		[Serializable]
 		public class CompleteManifestEntry
 		{
+			/// <summary>Relative file path in the manifest.</summary>
 			public string RelativePath { get; set; }
+			/// <summary>Hash of the file.</summary>
 			public string Hash { get; set; }
 		}
 
+		/// <summary>
+		/// Adds the Patch Generator window to the Unity Editor menu.
+		/// </summary>
 		[MenuItem("FishMMO/Patch/Patch Generator")]
 		public static void ShowWindow()
 		{
 			GetWindow<PatchGeneratorWindow>("FishMMO Patch Generator");
 		}
 
+		/// <summary>
+		/// Unity event called when the window is enabled. Initializes ignored sets and logging.
+		/// </summary>
 		private void OnEnable()
 		{
 			UpdateIgnoredExtensionsSet();
@@ -88,6 +143,9 @@ namespace FishMMO.Patcher
 			Log.Initialize(null, unityConsoleFormatter, manualLoggers, Log.OnInternalLogMessage, new List<Type>() { typeof(UnityConsoleLoggerConfig) });
 		}
 
+		/// <summary>
+		/// Unity event called to draw the window GUI. Handles all UI controls and progress bars.
+		/// </summary>
 		private void OnGUI()
 		{
 			// --- Header ---
@@ -257,6 +315,9 @@ namespace FishMMO.Patcher
 			}
 		}
 
+		/// <summary>
+		/// Updates the set of ignored file extensions from the input string.
+		/// </summary>
 		private void UpdateIgnoredExtensionsSet()
 		{
 			ignoredExtensions.Clear();
@@ -272,6 +333,9 @@ namespace FishMMO.Patcher
 		}
 
 		// Update ignored directories set
+		/// <summary>
+		/// Updates the set of ignored directory names from the input string.
+		/// </summary>
 		private void UpdateIgnoredDirectoriesSet()
 		{
 			ignoredDirectories.Clear();
@@ -287,8 +351,7 @@ namespace FishMMO.Patcher
 
 		/// <summary>
 		/// Initiates the patch generation process asynchronously.
-		/// This method orchestrates the pre-caching of version data on the main thread,
-		/// then triggers multi-threaded patch generation.
+		/// Orchestrates pre-caching of version data and triggers multi-threaded patch generation.
 		/// </summary>
 		private async void GeneratePatchesAsync()
 		{
@@ -498,8 +561,7 @@ namespace FishMMO.Patcher
 		}
 
 		/// <summary>
-		/// Generates a complete manifest (JSON file) of all files and their checksums
-		/// in the specified latest client directory.
+		/// Generates a complete manifest (JSON file) of all files and their checksums in the latest client directory.
 		/// </summary>
 		private async void GenerateCompleteManifestAsync()
 		{
@@ -574,13 +636,12 @@ namespace FishMMO.Patcher
 			}
 		}
 
-
 		/// <summary>
 		/// Preloads version configurations for the latest client and all discovered old clients.
-		/// This method reads the version from the 'version.txt' file within each client directory.
+		/// Reads the version from the 'version.txt' file within each client directory.
 		/// </summary>
-		/// <param name="latestClientPath">The path to the latest client build directory.</param>
-		/// <param name="oldClientPaths">A list of paths to old client build directories.</param>
+		/// <param name="latestClientPath">Path to the latest client build directory.</param>
+		/// <param name="oldClientPaths">List of paths to old client build directories.</param>
 		private async Task PreloadAllClientVersionsAsync(string latestClientPath, List<string> oldClientPaths)
 		{
 			latestVersionConfig = null;
@@ -628,9 +689,9 @@ namespace FishMMO.Patcher
 
 		/// <summary>
 		/// Reads the version string from 'version.txt' within the specified directory and parses it into a VersionConfig.
-		/// This method handles file I/O and parsing errors.
+		/// Handles file I/O and parsing errors.
 		/// </summary>
-		/// <param name="directoryPath">The path to the client build directory containing 'version.txt'.</param>
+		/// <param name="directoryPath">Path to the client build directory containing 'version.txt'.</param>
 		/// <returns>A VersionConfig instance if successful, otherwise null.</returns>
 		private async Task<VersionConfig> GetVersionConfigFromFile(string directoryPath)
 		{
@@ -681,22 +742,23 @@ namespace FishMMO.Patcher
 			return config;
 		}
 
-
-		// Delegate definition for the progress callback
+		/// <summary>
+		/// Delegate definition for reporting patch progress.
+		/// </summary>
 		public delegate void ProgressCallback(float progress, string message);
 
 		/// <summary>
 		/// Generates a patch ZIP file comparing an old client directory with the latest client directory.
-		/// This method now takes pre-cached version strings.
+		/// Uses pre-cached version strings and reports progress via callback.
 		/// </summary>
-		/// <param name="patchGenerator">The PatchGenerator instance for binary diffing.</param>
-		/// <param name="latestVersionString">The full version string of the latest client.</param>
-		/// <param name="oldDirectory">The full path to the old client build to generate a patch from.</param>
-		/// <param name="oldVersionString">The full version string of the old client.</param>
-		/// <param name="patchOutputDirectory">The directory where the generated patch ZIP will be saved.</param>
-		/// <param name="ignoredExtensions">A set of file extensions to ignore during hashing and inclusion.</param>
-		/// <param name="ignoredDirectories">A set of directory names to ignore.</param>
-		/// <param name="progressCallback">An optional callback to report progress and status messages.</param>
+		/// <param name="patchGenerator">PatchGenerator instance for binary diffing.</param>
+		/// <param name="latestVersionString">Full version string of the latest client.</param>
+		/// <param name="oldDirectory">Full path to the old client build.</param>
+		/// <param name="oldVersionString">Full version string of the old client.</param>
+		/// <param name="patchOutputDirectory">Directory for the generated patch ZIP.</param>
+		/// <param name="ignoredExtensions">Set of file extensions to ignore.</param>
+		/// <param name="ignoredDirectories">Set of directory names to ignore.</param>
+		/// <param name="progressCallback">Optional callback to report progress and status messages.</param>
 		public void CreatePatchInternal(PatchGenerator patchGenerator, string latestVersionString, string oldDirectory, string oldVersionString, string patchOutputDirectory, HashSet<string> ignoredExtensions, HashSet<string> ignoredDirectories, ProgressCallback progressCallback = null)
 		{
 			string oldDirName = Path.GetFileName(oldDirectory);
@@ -895,11 +957,18 @@ namespace FishMMO.Patcher
 		/// <summary>
 		/// Helper method to convert a dictionary's keys to a HashSet for efficient lookups.
 		/// </summary>
+		/// <param name="dictionary">Dictionary to convert.</param>
+		/// <returns>HashSet of dictionary keys.</returns>
 		private static HashSet<string> DictionaryKeysToHashSet(Dictionary<string, (string relativePath, string hash)> dictionary)
 		{
 			return new HashSet<string>(dictionary.Keys);
 		}
 
+		/// <summary>
+		/// Streams file chunks into memory and returns the byte array.
+		/// </summary>
+		/// <param name="sourceFilePath">Path to the source file.</param>
+		/// <returns>Byte array of the file contents.</returns>
 		public static byte[] StreamFileChunksIntoMemory(string sourceFilePath)
 		{
 			try
@@ -923,12 +992,12 @@ namespace FishMMO.Patcher
 		/// <summary>
 		/// Recursively scans a directory and its subdirectories to get all file paths and their XxHash3 hashes.
 		/// Files and directories specified in the 'ignoredExtensions' and 'ignoredDirectories' sets are skipped.
-		/// This method handles common file system access errors gracefully.
+		/// Handles common file system access errors gracefully.
 		/// </summary>
-		/// <param name="rootDirectory">The root directory to start scanning from.</param>
-		/// <param name="ignoredExtensions">A set of file extensions (e.g., ".log", ".tmp") to ignore.</param>
-		/// <param name="ignoredDirectories">A set of directory names (e.g., "Temp", "Debug") to ignore.</param>
-		/// <returns>A dictionary where the key is the relative file path (e.g., "Data/file.dat") and the value is a tuple of (relativePath, hash).</returns>
+		/// <param name="rootDirectory">Root directory to start scanning from.</param>
+		/// <param name="ignoredExtensions">Set of file extensions to ignore.</param>
+		/// <param name="ignoredDirectories">Set of directory names to ignore.</param>
+		/// <returns>Dictionary where key is relative file path and value is tuple of (relativePath, hash).</returns>
 		public static Dictionary<string, (string relativePath, string hash)> GetAllFilesWithHashes(string rootDirectory, HashSet<string> ignoredExtensions, HashSet<string> ignoredDirectories)
 		{
 			Dictionary<string, (string, string)> filesWithHashes = new Dictionary<string, (string, string)>();
@@ -1030,8 +1099,8 @@ namespace FishMMO.Patcher
 		/// <summary>
 		/// Computes the XxHash128 hash of a file.
 		/// </summary>
-		/// <param name="filePath">The path to the file.</param>
-		/// <returns>The XxHash128 hash as a lowercase hexadecimal string (32 characters for 128-bit hash).</returns>
+		/// <param name="filePath">Path to the file.</param>
+		/// <returns>XxHash128 hash as a lowercase hexadecimal string (32 characters for 128-bit hash).</returns>
 		private static string ComputeFileHash(string filePath)
 		{
 			using (var stream = File.OpenRead(filePath))

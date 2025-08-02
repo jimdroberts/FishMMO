@@ -5,29 +5,76 @@ using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
+	/// <summary>
+	/// Base class for bootstrap systems in FishMMO. Handles asset and scene loading, progress tracking, and initialization flow.
+	/// </summary>
 	public class BootstrapSystem : MonoBehaviour
 	{
+		/// <summary>
+		/// Assets to preload in the editor before scene loading.
+		/// </summary>
 		public List<AddressableAssetKey> EditorPreloadAssets = new List<AddressableAssetKey>();
+		/// <summary>
+		/// Assets to load after scene loading in the editor.
+		/// </summary>
 		public List<AddressableAssetKey> EditorPostloadAssets = new List<AddressableAssetKey>();
+		/// <summary>
+		/// Scenes to preload in the editor.
+		/// </summary>
 		public List<AddressableSceneLoadData> EditorPreloadScenes = new List<AddressableSceneLoadData>();
+		/// <summary>
+		/// Scenes to load after preloading in the editor.
+		/// </summary>
 		public List<AddressableSceneLoadData> EditorPostloadScenes = new List<AddressableSceneLoadData>();
 
+		/// <summary>
+		/// Assets to preload in standalone builds.
+		/// </summary>
 		public List<AddressableAssetKey> PreloadAssets = new List<AddressableAssetKey>();
+		/// <summary>
+		/// Assets to load after scene loading in standalone builds.
+		/// </summary>
 		public List<AddressableAssetKey> PostloadAssets = new List<AddressableAssetKey>();
+		/// <summary>
+		/// Scenes to preload in standalone builds.
+		/// </summary>
 		public List<AddressableSceneLoadData> PreloadScenes = new List<AddressableSceneLoadData>();
+		/// <summary>
+		/// Scenes to load after preloading in standalone builds.
+		/// </summary>
 		public List<AddressableSceneLoadData> PostloadScenes = new List<AddressableSceneLoadData>();
 
+		/// <summary>
+		/// Assets to preload in WebGL builds.
+		/// </summary>
 		public List<AddressableAssetKey> WebGLPreloadAssets = new List<AddressableAssetKey>();
+		/// <summary>
+		/// Assets to load after scene loading in WebGL builds.
+		/// </summary>
 		public List<AddressableAssetKey> WebGLPostloadAssets = new List<AddressableAssetKey>();
+		/// <summary>
+		/// Scenes to preload in WebGL builds.
+		/// </summary>
 		public List<AddressableSceneLoadData> WebGLPreloadScenes = new List<AddressableSceneLoadData>();
+		/// <summary>
+		/// Scenes to load after preloading in WebGL builds.
+		/// </summary>
 		public List<AddressableSceneLoadData> WebGLPostloadScenes = new List<AddressableSceneLoadData>();
 
+		/// <summary>
+		/// Indicates whether the bootstrap process has started for this system.
+		/// </summary>
 		private bool hasStartedBootstrap = false;
+		/// <summary>
+		/// List of bootstrap systems that were preloaded by this system.
+		/// </summary>
 		private List<BootstrapSystem> preloadedBootstrapSystems = new List<BootstrapSystem>();
 
+		/// <summary>
+		/// Unity Awake message. Initializes logging callback.
+		/// </summary>
 		void Awake()
 		{
-			// Logging is still safe to initialize here, as it's typically a global setup
 			Log.OnInternalLogMessage = OnInternalLogCallback;
 		}
 
@@ -50,12 +97,13 @@ namespace FishMMO.Shared
 			InitializePreload();
 		}
 
+		/// <summary>
+		/// Callback for internal logging messages from FishMMO.Logging.Log.
+		/// Ensures UnityLoggerBridge does not re-capture internal log calls.
+		/// </summary>
+		/// <param name="message">The log message.</param>
 		private void OnInternalLogCallback(string message)
 		{
-			// This callback is used by FishMMO.Logging.Log for its internal messages.
-			// We set IsLoggingInternally to true to prevent UnityLoggerBridge from re-capturing
-			// Debug.Log calls made by our own logging system or internal processes.
-			// This ensures that these messages go directly to Unity's console without re-routing.
 			UnityLoggerBridge.IsLoggingInternally = true;
 			Debug.Log($"{message}");
 			UnityLoggerBridge.IsLoggingInternally = false;
@@ -85,9 +133,14 @@ namespace FishMMO.Shared
 			InitializePostload();
 		}
 
-		// Called immediately after Preload Scenes are enqueued to the Load Processor.
+		/// <summary>
+		/// Called immediately after Preload Scenes are enqueued to the Load Processor.
+		/// </summary>
 		public virtual void OnPreload() { }
 
+		/// <summary>
+		/// Initializes the preload asset and scene loading process.
+		/// </summary>
 		public void InitializePreload()
 		{
 #if UNITY_EDITOR
@@ -124,8 +177,9 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Called after Preload is completed.
+		/// Called after Preload is completed. Handles progress update and triggers postload.
 		/// </summary>
+		/// <param name="progress">The progress value (0.0 to 1.0).</param>
 		public void AddressableLoadProcessor_OnPreloadProgressUpdate(float progress)
 		{
 			if (progress < 1.0f)
@@ -139,6 +193,9 @@ namespace FishMMO.Shared
 			OnCompletePreload();
 		}
 
+		/// <summary>
+		/// Initializes the postload asset and scene loading process.
+		/// </summary>
 		public void InitializePostload()
 		{
 #if UNITY_EDITOR
@@ -180,8 +237,9 @@ namespace FishMMO.Shared
 		public virtual void OnPostLoad() { }
 
 		/// <summary>
-		/// Called after Postload is completed.
+		/// Called after Postload is completed. Handles progress update and triggers completion processing.
 		/// </summary>
+		/// <param name="progress">The progress value (0.0 to 1.0).</param>
 		public void AddressableLoadProcessor_OnPostloadProgressUpdate(float progress)
 		{
 			if (progress < 1.0f)
@@ -195,6 +253,9 @@ namespace FishMMO.Shared
 			OnCompleteProcessing();
 		}
 
+		/// <summary>
+		/// Unity OnDestroy message. Handles cleanup when the object is destroyed.
+		/// </summary>
 		void OnDestroy()
 		{
 			OnDestroying();
@@ -202,13 +263,25 @@ namespace FishMMO.Shared
 			Log.OnInternalLogMessage = null;
 		}
 
+		/// <summary>
+		/// Called when the object is being destroyed. Override for custom cleanup logic.
+		/// </summary>
 		public virtual void OnDestroying() { }
 
+		/// <summary>
+		/// Called after a scene is loaded to process bootstrap systems in the new scene.
+		/// </summary>
+		/// <param name="scene">The loaded scene.</param>
 		public void OnBootstrapPostProcess(Scene scene)
 		{
 			preloadedBootstrapSystems = OnScenePostProcess(scene);
 		}
 
+		/// <summary>
+		/// Finds all BootstrapSystem components in the root objects of the given scene.
+		/// </summary>
+		/// <param name="scene">The scene to search.</param>
+		/// <returns>List of found BootstrapSystem components.</returns>
 		private List<BootstrapSystem> OnScenePostProcess(Scene scene)
 		{
 			List<BootstrapSystem> preloadedBootstrapSystems = new List<BootstrapSystem>();

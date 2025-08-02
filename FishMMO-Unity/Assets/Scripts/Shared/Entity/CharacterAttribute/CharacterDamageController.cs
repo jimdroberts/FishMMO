@@ -4,19 +4,52 @@ namespace FishMMO.Shared
 {
 	public class CharacterDamageController : CharacterBehaviour, ICharacterDamageController
 	{
+		/// <summary>
+		/// Achievement template for dealing damage to another character.
+		/// </summary>
 		public AchievementTemplate DamageAchievementTemplate;
+		/// <summary>
+		/// Achievement template for receiving damage from another character.
+		/// </summary>
 		public AchievementTemplate DamagedAchievementTemplate;
+		/// <summary>
+		/// Achievement template for killing another character.
+		/// </summary>
 		public AchievementTemplate KillAchievementTemplate;
+		/// <summary>
+		/// Achievement template for being killed by another character.
+		/// </summary>
 		public AchievementTemplate KilledAchievementTemplate;
+		/// <summary>
+		/// Achievement template for healing another character.
+		/// </summary>
 		public AchievementTemplate HealAchievementTemplate;
+		/// <summary>
+		/// Achievement template for being healed by another character.
+		/// </summary>
 		public AchievementTemplate HealedAchievementTemplate;
+		/// <summary>
+		/// Achievement template for resurrecting another character.
+		/// </summary>
 		public AchievementTemplate ResurrectAchievementTemplate;
+		/// <summary>
+		/// Achievement template for being resurrected by another character.
+		/// </summary>
 		public AchievementTemplate ResurrectedAchievementTemplate;
 
+		/// <summary>
+		/// If true, this character cannot be damaged or killed.
+		/// </summary>
 		[SerializeField]
 		private bool immortal = false;
+		/// <summary>
+		/// Gets or sets whether the character is immortal (cannot be damaged or killed).
+		/// </summary>
 		public bool Immortal { get { return this.immortal; } set { this.immortal = value; } }
 
+		/// <summary>
+		/// Returns true if the character is alive (resource attribute's current value is above zero).
+		/// </summary>
 		public bool IsAlive
 		{
 			get
@@ -29,11 +62,16 @@ namespace FishMMO.Shared
 			}
 		}
 
-		//public List<Character> Attackers;
+		//public List<Character> Attackers; // Uncomment and implement if tracking attackers is needed.
 
+		/// <summary>
+		/// Cached reference to the character's health resource attribute.
+		/// Lazily initialized on first access; throws if missing.
+		/// </summary>
 		private CharacterResourceAttribute resourceInstance;
 		/// <summary>
-		/// Cache the resource
+		/// Gets the cached health resource attribute for this character.
+		/// Throws an exception if the attribute controller or health attribute is missing.
 		/// </summary>
 		public CharacterResourceAttribute ResourceInstance
 		{
@@ -55,6 +93,14 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Applies resistance modifiers to the damage amount for the target character.
+		/// Subtracts the target's resistance value from the incoming damage and clamps the result.
+		/// </summary>
+		/// <param name="target">The character receiving damage.</param>
+		/// <param name="amount">The base damage amount.</param>
+		/// <param name="damageAttribute">The damage type being applied.</param>
+		/// <returns>The modified damage amount after resistance is applied.</returns>
 		public int ApplyModifiers(ICharacter target, int amount, DamageAttributeTemplate damageAttribute)
 		{
 			const int MIN_DAMAGE = 0;
@@ -65,6 +111,7 @@ namespace FishMMO.Shared
 				damageAttribute == null)
 				return 0;
 
+			// If the target has a resistance attribute for this damage type, subtract its value from the damage.
 			if (attributeController.TryGetAttribute(damageAttribute.Resistance.ID, out CharacterAttribute resistance))
 			{
 				amount = (amount - resistance.FinalValue).Clamp(MIN_DAMAGE, MAX_DAMAGE);
@@ -137,14 +184,14 @@ namespace FishMMO.Shared
 				{
 					factionController.AdjustFaction(defenderFactionController, 0.01f, 0.01f);
 				}
-				
+
 				// Reward the killer with kill achievements.
 				if (killer.TryGet(out IAchievementController killerAchievementController))
 				{
 					killerAchievementController.Increment(KillAchievementTemplate, 1);
 				}
 			}
-			
+
 			// Reward the defender with death achievements.
 			if (Character.TryGet(out IAchievementController defenderAchievementController))
 			{
@@ -220,7 +267,7 @@ namespace FishMMO.Shared
 				ICharacterDamageController.OnHealed?.Invoke(healer, Character, amount);
 
 				uint fullAmount = (uint)amount;
-				
+
 				if (!ignoreAchievements)
 				{
 					if (healer != null &&
@@ -229,7 +276,7 @@ namespace FishMMO.Shared
 						healerAchievementController.Increment(HealAchievementTemplate, fullAmount);
 					}
 					if (Character != null &&
-						Character.TryGet(out IAchievementController healedAchievementController)) 
+						Character.TryGet(out IAchievementController healedAchievementController))
 					{
 						healedAchievementController.Increment(HealedAchievementTemplate, fullAmount);
 					}

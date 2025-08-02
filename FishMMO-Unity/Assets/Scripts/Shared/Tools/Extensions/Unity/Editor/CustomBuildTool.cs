@@ -19,25 +19,51 @@ using System.Runtime.InteropServices;
 
 namespace FishMMO.Shared
 {
+	/// <summary>
+	/// Provides custom build utilities for FishMMO, including build target management, Addressables, and configuration copying.
+	/// </summary>
 	public class CustomBuildTool
 	{
+		/// <summary>
+		/// Addressable group names for client-only assets.
+		/// </summary>
 		private static string[] clientAddressableGroups = new string[] { "ClientOnly" };
+		/// <summary>
+		/// Addressable group names for server-only assets.
+		/// </summary>
 		private static string[] serverAddressableGroups = new string[] { "ServerOnly" };
 
+		/// <summary>
+		/// Enum for custom build types (Server, Client, Installer).
+		/// </summary>
 		public enum CustomBuildType : byte
 		{
+			/// <summary>Server build type.</summary>
 			Server = 0,
+			/// <summary>Client build type.</summary>
 			Client,
+			/// <summary>Installer build type.</summary>
 			Installer,
 		}
 
+		/// <summary>
+		/// The build name for the game server executable.
+		/// </summary>
 		public const string GAMESERVER_BUILD_NAME = "GameServer";
 
+		/// <summary>
+		/// Bootstrap scenes required for initial game startup.
+		/// </summary>
 		public static readonly string[] BOOTSTRAP_SCENES = new string[]
 		{
 			Constants.Configuration.BootstrapScenePath + "MainBootstrap.unity",
 		};
 
+		/// <summary>
+		/// Returns a short name string for the given build target.
+		/// </summary>
+		/// <param name="target">The build target.</param>
+		/// <returns>Short name for the build target.</returns>
 		public static string GetBuildTargetShortName(BuildTarget target)
 		{
 			switch (target)
@@ -55,6 +81,11 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Generates a link.xml file for managed assemblies, preserving all types and namespaces.
+		/// </summary>
+		/// <param name="rootPath">Root path for the link.xml file.</param>
+		/// <param name="directoryPath">Directory to scan for assemblies (unused).</param>
 		public static void UpdateLinker(string rootPath, string directoryPath)
 		{
 			string linkerPath = Path.Combine(rootPath, "link.xml");
@@ -105,21 +136,58 @@ namespace FishMMO.Shared
 			}
 		}
 
-		// Store original settings
+		/// <summary>
+		/// Stores the original build target group before switching for a build.
+		/// </summary>
 		private static BuildTargetGroup originalGroup;
+		/// <summary>
+		/// Stores the original build target before switching for a build.
+		/// </summary>
 		private static BuildTarget originalBuildTarget;
+		/// <summary>
+		/// Stores the original standalone build subtarget before switching for a build.
+		/// </summary>
 		private static StandaloneBuildSubtarget originalBuildSubtarget;
 
-		// PlayerSettings for the original build target group
+		/// <summary>
+		/// Stores the original scripting backend for the build target group.
+		/// </summary>
 		private static ScriptingImplementation originalScriptingImp;
+		/// <summary>
+		/// Stores the original IL2CPP compiler configuration for the build target group.
+		/// </summary>
 		private static Il2CppCompilerConfiguration originalCompilerConf;
+		/// <summary>
+		/// Stores the original IL2CPP code generation optimization for the build target group.
+		/// </summary>
 		private static Il2CppCodeGeneration originalOptimization;
+		/// <summary>
+		/// Stores the original bake collision meshes setting.
+		/// </summary>
 		private static bool originalBakeCollisionMeshes;
+		/// <summary>
+		/// Stores the original strip unused mesh components setting.
+		/// </summary>
 		private static bool originalStripUnusedMeshComponents;
+		/// <summary>
+		/// Stores the original WebGL compression format.
+		/// </summary>
 		private static WebGLCompressionFormat originalCompressionFormat;
+		/// <summary>
+		/// Stores the original WebGL decompression fallback setting.
+		/// </summary>
 		private static bool originalDecompressionFallback;
+		/// <summary>
+		/// Stores the original WebGL data caching setting.
+		/// </summary>
 		private static bool originalDataCaching;
 
+		/// <summary>
+		/// Switches the active build target and subtarget in the Unity Editor.
+		/// </summary>
+		/// <param name="buildTarget">The build target to activate.</param>
+		/// <param name="subTarget">The standalone build subtarget.</param>
+		/// <returns>The build target group for the specified build target.</returns>
 		private static BuildTargetGroup SetActiveBuildTarget(BuildTarget buildTarget, StandaloneBuildSubtarget subTarget)
 		{
 			// Switch active build target so #defines work properly
@@ -129,6 +197,10 @@ namespace FishMMO.Shared
 			return targetGroup;
 		}
 
+		/// <summary>
+		/// Stores the current build and player settings, then switches to the specified build target.
+		/// </summary>
+		/// <param name="buildTarget">The build target to switch to.</param>
 		private static void PushSettings(BuildTarget buildTarget)
 		{
 			// Get and store the ORIGINAL active build target settings
@@ -186,7 +258,7 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Restores original Editor and Player settings.
+		/// Restores original Editor and Player settings after a build operation.
 		/// </summary>
 		private static void PopSettings()
 		{
@@ -217,6 +289,9 @@ namespace FishMMO.Shared
 			ForceEditorScriptRecompile();
 		}
 
+		/// <summary>
+		/// Forces the Unity Editor to recompile scripts by reimporting a script asset.
+		/// </summary>
 		private static void ForceEditorScriptRecompile()
 		{
 			string[] allScriptGuids = AssetDatabase.FindAssets("t:Script");
@@ -240,11 +315,18 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Builds an executable with the specified parameters, using the default save folder dialog.
+		/// </summary>
 		private static void BuildExecutable(string executableName, string[] bootstrapScenes, CustomBuildType customBuildType, BuildOptions buildOptions, StandaloneBuildSubtarget subTarget, BuildTarget buildTarget)
 		{
 			BuildExecutable(null, executableName, bootstrapScenes, customBuildType, buildOptions, subTarget, buildTarget);
 		}
 
+		/// <summary>
+		/// Builds an executable with the specified parameters and root path.
+		/// Handles build options, scene selection, configuration copying, and error reporting.
+		/// </summary>
 		private static void BuildExecutable(string rootPath, string executableName, string[] bootstrapScenes, CustomBuildType customBuildType, BuildOptions buildOptions, StandaloneBuildSubtarget subTarget, BuildTarget buildTarget)
 		{
 			string tmpPath = rootPath;
@@ -406,6 +488,11 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Appends all world scene paths (and optionally local scenes) to the required bootstrap scenes.
+		/// </summary>
+		/// <param name="requiredPaths">Required bootstrap scene paths.</param>
+		/// <returns>Array of all scene paths to include in the build.</returns>
 		private static string[] AppendWorldScenePaths(string[] requiredPaths)
 		{
 			HashSet<string> allPaths = new HashSet<string>(requiredPaths);
@@ -422,6 +509,9 @@ namespace FishMMO.Shared
 			return allPaths.ToArray();
 		}
 
+		/// <summary>
+		/// Copies configuration files to the build output directory based on build type and target.
+		/// </summary>
 		private static void CopyConfigurationFiles(BuildTarget buildTarget, CustomBuildType customBuildType, string configurationPath, string buildPath)
 		{
 			switch (customBuildType)
@@ -444,6 +534,9 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Builds the Windows x64 Database Installer executable for FishMMO.
+		/// </summary>
 		[MenuItem("FishMMO/Build/Windows x64/Database Installer")]
 		public static void BuildWindows64Setup()
 		{
@@ -458,6 +551,9 @@ namespace FishMMO.Shared
 							BuildTarget.StandaloneWindows64);
 		}
 
+		/// <summary>
+		/// Builds the Linux x64 Database Installer executable for FishMMO.
+		/// </summary>
 		[MenuItem("FishMMO/Build/Linux x64/Database Installer")]
 		public static void BuildLinuxSetup()
 		{
@@ -472,6 +568,9 @@ namespace FishMMO.Shared
 							BuildTarget.StandaloneLinux64);
 		}
 
+		/// <summary>
+		/// Copies setup and database files to the installer build directory, cleaning up old binaries.
+		/// </summary>
 		private static void BuildSetupFolder(string rootPath, string buildPath)
 		{
 			string setup = Path.Combine(rootPath, Constants.Configuration.SetupDirectory);
@@ -494,6 +593,11 @@ namespace FishMMO.Shared
 			FileUtil.DeleteFileOrDirectory(Path.Combine(Path.Combine(dbBuildDirectory, Constants.Configuration.DatabaseMigratorProjectDirectory), "bin"));
 		}
 
+		/// <summary>
+		/// Returns build options based on the current working environment and build target.
+		/// </summary>
+		/// <param name="buildTarget">Optional build target for environment-specific options.</param>
+		/// <returns>BuildOptions flags for the build.</returns>
 		private static BuildOptions GetBuildOptions(BuildTarget? buildTarget = null)
 		{
 			BuildOptions buildOptions = BuildOptions.CleanBuildCache | BuildOptions.ShowBuiltPlayer;
@@ -517,6 +621,9 @@ namespace FishMMO.Shared
 		}
 
 		#region Menu
+		/// <summary>
+		/// Menu item to update the linker XML file for managed assemblies.
+		/// </summary>
 		[MenuItem("FishMMO/Update Linker")]
 		public static void UpdateLinker()
 		{
@@ -525,9 +632,13 @@ namespace FishMMO.Shared
 			UpdateLinker(assets, Path.Combine(assets, "Dependencies"));
 		}
 
+		/// <summary>
+		/// Builds the Windows x64 Game Server executable for FishMMO.
+		/// </summary>
 		[MenuItem("FishMMO/Build/Windows x64/Game Server")]
 		public static void BuildWindows64GameServer()
 		{
+			// Optionally rebuild world scene details cache before build
 			//WorldSceneDetailsCacheBuilder.Rebuild();
 			BuildExecutable(GAMESERVER_BUILD_NAME,
 							BOOTSTRAP_SCENES,
@@ -537,9 +648,13 @@ namespace FishMMO.Shared
 							BuildTarget.StandaloneWindows64);
 		}
 
+		/// <summary>
+		/// Builds the Windows x64 Game Client executable for FishMMO.
+		/// </summary>
 		[MenuItem("FishMMO/Build/Windows x64/Game Client")]
 		public static void BuildWindows64Client()
 		{
+			// Optionally rebuild world scene details cache before build
 			//WorldSceneDetailsCacheBuilder.Rebuild();
 			BuildExecutable(Constants.Configuration.ProjectName,
 							BOOTSTRAP_SCENES,
@@ -549,9 +664,13 @@ namespace FishMMO.Shared
 							BuildTarget.StandaloneWindows64);
 		}
 
+		/// <summary>
+		/// Builds the Linux x64 Game Server executable for FishMMO.
+		/// </summary>
 		[MenuItem("FishMMO/Build/Linux x64/Game Server")]
 		public static void BuildLinux64GameServer()
 		{
+			// Optionally rebuild world scene details cache before build
 			//WorldSceneDetailsCacheBuilder.Rebuild();
 			BuildExecutable(GAMESERVER_BUILD_NAME,
 							BOOTSTRAP_SCENES,
@@ -561,9 +680,13 @@ namespace FishMMO.Shared
 							BuildTarget.StandaloneLinux64);
 		}
 
+		/// <summary>
+		/// Builds the Linux x64 Game Client executable for FishMMO.
+		/// </summary>
 		[MenuItem("FishMMO/Build/Linux x64/Game Client")]
 		public static void BuildLinux64Client()
 		{
+			// Optionally rebuild world scene details cache before build
 			//WorldSceneDetailsCacheBuilder.Rebuild();
 			BuildExecutable(Constants.Configuration.ProjectName,
 							BOOTSTRAP_SCENES,
@@ -573,9 +696,13 @@ namespace FishMMO.Shared
 							BuildTarget.StandaloneLinux64);
 		}
 
+		/// <summary>
+		/// Builds the WebGL Game Client executable for FishMMO.
+		/// </summary>
 		[MenuItem("FishMMO/Build/WebGL/Game Client")]
 		public static void BuildWebGLClient()
 		{
+			// Optionally rebuild world scene details cache before build
 			//WorldSceneDetailsCacheBuilder.Rebuild();
 			BuildExecutable(Constants.Configuration.ProjectName,
 							BOOTSTRAP_SCENES,
@@ -585,6 +712,9 @@ namespace FishMMO.Shared
 							BuildTarget.WebGL);
 		}
 
+		/// <summary>
+		/// Builds Addressables for Windows x64 Client, excluding server-only groups.
+		/// </summary>
 		[MenuItem("FishMMO/Build/Windows x64/Addressables/Client Addressables")]
 		public static void BuildWindowsClientAddressables()
 		{
@@ -594,6 +724,9 @@ namespace FishMMO.Shared
 			PopSettings();
 		}
 
+		/// <summary>
+		/// Builds Addressables for Windows x64 Server, excluding client-only groups.
+		/// </summary>
 		[MenuItem("FishMMO/Build/Windows x64/Addressables/Server Addressables")]
 		public static void BuildWindowsServerAddressables()
 		{
@@ -603,6 +736,9 @@ namespace FishMMO.Shared
 			PopSettings();
 		}
 
+		/// <summary>
+		/// Builds Addressables for Linux x64 Client, excluding server-only groups.
+		/// </summary>
 		[MenuItem("FishMMO/Build/Linux x64/Addressables/Client Addressables")]
 		public static void BuildLinuxClientAddressables()
 		{
@@ -612,6 +748,9 @@ namespace FishMMO.Shared
 			PopSettings();
 		}
 
+		/// <summary>
+		/// Builds Addressables for Linux x64 Server, excluding client-only groups.
+		/// </summary>
 		[MenuItem("FishMMO/Build/Linux x64/Addressables/Server Addressables")]
 		public static void BuildLinuxServerAddressables()
 		{
@@ -621,6 +760,9 @@ namespace FishMMO.Shared
 			PopSettings();
 		}
 
+		/// <summary>
+		/// Builds Addressables for WebGL Client, excluding server-only groups.
+		/// </summary>
 		[MenuItem("FishMMO/Build/WebGL/Addressables/Client Addressables")]
 		public static void BuildWebGLAddressables()
 		{
@@ -630,6 +772,10 @@ namespace FishMMO.Shared
 			PopSettings();
 		}
 
+		/// <summary>
+		/// Builds Addressables content, excluding specified groups from the build.
+		/// </summary>
+		/// <param name="excludeGroups">Array of group names to exclude from the build.</param>
 		public static void BuildAddressables(string[] excludeGroups)
 		{
 			// Get the original AddressableAssetSettings (default settings)
@@ -721,6 +867,10 @@ namespace FishMMO.Shared
 		}
 		#endregion
 
+		/// <summary>
+		/// Opens the specified directory in the system's file explorer.
+		/// </summary>
+		/// <param name="directory">The directory path to open.</param>
 		private static void OpenDirectory(string directory)
 		{
 			directory = directory.Replace('/', Path.DirectorySeparatorChar);

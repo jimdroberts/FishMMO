@@ -6,16 +6,23 @@ using UnityEngine;
 
 namespace FishMMO.Shared
 {
+	/// <summary>
+	/// Handles random attribute generation and management for items, including applying/removing attributes to characters.
+	/// Supports equippable and template-based attribute logic, and exposes events for attribute changes.
+	/// </summary>
 	public class ItemGenerator
 	{
+		/// <summary>
+		/// The random seed used for attribute generation.
+		/// </summary>
 		protected int seed;
 
+		/// <summary>
+		/// Gets or sets the seed for generation. Changing the seed triggers attribute regeneration.
+		/// </summary>
 		public int Seed
 		{
-			get
-			{
-				return seed;
-			}
+			get { return seed; }
 			set
 			{
 				if (seed != value)
@@ -26,24 +33,49 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Dictionary of generated item attributes, keyed by attribute name.
+		/// </summary>
 		private Dictionary<string, ItemAttribute> attributes = new Dictionary<string, ItemAttribute>();
 
+		/// <summary>
+		/// The item instance this generator is attached to.
+		/// </summary>
 		private Item item;
+
+		/// <summary>
+		/// Event triggered when an attribute value is set, providing the attribute, old value, and new value.
+		/// </summary>
 		public event Action<ItemAttribute, int, int> OnSetAttribute;
 
+		/// <summary>
+		/// Exposes the generated attributes for external access.
+		/// </summary>
 		public Dictionary<string, ItemAttribute> Attributes { get { return attributes; } }
 
+		/// <summary>
+		/// Initializes the generator with its parent item and seed, triggering attribute generation.
+		/// </summary>
+		/// <param name="item">The item instance.</param>
+		/// <param name="seed">The random seed for generation.</param>
 		public void Initialize(Item item, int seed)
 		{
 			this.item = item;
 			Seed = seed;
 		}
 
+		/// <summary>
+		/// Cleans up the generator, detaching from the item.
+		/// </summary>
 		public void Destroy()
 		{
 			item = null;
 		}
 
+		/// <summary>
+		/// Appends generator information and all generated attributes to the provided tooltip string builder.
+		/// </summary>
+		/// <param name="sb">The string builder to append to.</param>
 		public void Tooltip(ref Utf16ValueStringBuilder sb)
 		{
 			sb.Append("<color=#a66ef5>Seed: ");
@@ -66,11 +98,20 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Triggers attribute generation using the current seed and item template.
+		/// </summary>
 		public void Generate()
 		{
 			Generate(seed);
 		}
 
+		/// <summary>
+		/// Generates item attributes using the provided seed and template.
+		/// Handles equippable logic, random attributes, and additional template attributes.
+		/// </summary>
+		/// <param name="seed">The random seed for generation.</param>
+		/// <param name="template">The item template to use. If null, uses the item's template.</param>
 		public void Generate(int seed, BaseItemTemplate template = null)
 		{
 			this.seed = seed;
@@ -88,6 +129,7 @@ namespace FishMMO.Shared
 			{
 				attributes.Clear();
 
+				// If the template is equippable, generate base and random attributes.
 				if (template is EquippableItemTemplate equippable)
 				{
 					GenerateItemAttributes(random, equippable);
@@ -99,12 +141,18 @@ namespace FishMMO.Shared
 				}
 			}
 
+			// Add any additional attributes defined in the template.
 			if (template != null)
 			{
 				AddAdditionalTemplateAttributes(template);
 			}
 		}
 
+		/// <summary>
+		/// Generates base attributes for equippable items, such as weapon or armor stats.
+		/// </summary>
+		/// <param name="random">The random number generator.</param>
+		/// <param name="equippable">The equippable item template.</param>
 		private void GenerateItemAttributes(System.Random random, EquippableItemTemplate equippable)
 		{
 			if (equippable is WeaponTemplate weapon)
@@ -118,6 +166,11 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Adds random attributes from the template's random attribute databases.
+		/// </summary>
+		/// <param name="random">The random number generator.</param>
+		/// <param name="equippable">The equippable item template.</param>
 		private void AddRandomAttributes(System.Random random, EquippableItemTemplate equippable)
 		{
 			int attributeCount = random.Next(0, equippable.MaxItemAttributes);
@@ -131,6 +184,10 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Adds additional attributes defined in the base item template, merging with existing attributes if present.
+		/// </summary>
+		/// <param name="template">The item template.</param>
 		private void AddAdditionalTemplateAttributes(BaseItemTemplate template)
 		{
 			foreach (var additionalAttribute in template.Attributes)
@@ -146,12 +203,22 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Gets the generated attribute by name, or null if not found.
+		/// </summary>
+		/// <param name="name">The attribute name.</param>
+		/// <returns>The ItemAttribute instance, or null.</returns>
 		public ItemAttribute GetAttribute(string name)
 		{
 			attributes.TryGetValue(name, out ItemAttribute attribute);
 			return attribute;
 		}
 
+		/// <summary>
+		/// Sets the value of a generated attribute by name, firing the OnSetAttribute event if changed.
+		/// </summary>
+		/// <param name="name">The attribute name.</param>
+		/// <param name="newValue">The new value to set.</param>
 		public void SetAttribute(string name, int newValue)
 		{
 			if (attributes.TryGetValue(name, out ItemAttribute attribute))
@@ -165,6 +232,10 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Applies all generated attributes to the specified character, adding values to their stats/resources.
+		/// </summary>
+		/// <param name="character">The character to apply attributes to.</param>
 		public void ApplyAttributes(ICharacter character)
 		{
 			if (!character.TryGet(out ICharacterAttributeController attributeController))
@@ -184,6 +255,10 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Removes all generated attributes from the specified character, subtracting values from their stats/resources.
+		/// </summary>
+		/// <param name="character">The character to remove attributes from.</param>
 		public void RemoveAttributes(ICharacter character)
 		{
 			if (!character.TryGet(out ICharacterAttributeController attributeController))

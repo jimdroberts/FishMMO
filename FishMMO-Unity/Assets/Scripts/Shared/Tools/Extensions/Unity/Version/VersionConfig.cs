@@ -4,21 +4,40 @@ using System.Text.RegularExpressions;
 
 namespace FishMMO.Shared
 {
+	/// <summary>
+	/// ScriptableObject holding semantic versioning information for FishMMO builds.
+	/// Supports parsing, comparison, and equality operations.
+	/// </summary>
 	[CreateAssetMenu(fileName = "VersionConfig", menuName = "FishMMO/Version/Version Configuration")]
 	public class VersionConfig : ScriptableObject, IComparable<VersionConfig>
 	{
+		/// <summary>
+		/// Major version: Incremented for incompatible API changes or major features.
+		/// </summary>
 		[Tooltip("Major version: Incremented for incompatible API changes, Major features.")]
 		public int Major = 0;
 
+		/// <summary>
+		/// Minor version: Incremented for new, backward-compatible functionality.
+		/// </summary>
 		[Tooltip("Minor version: Incremented for new, backward-compatible functionality.")]
 		public int Minor = 0;
 
+		/// <summary>
+		/// Patch version: Incremented for backward-compatible bug fixes.
+		/// </summary>
 		[Tooltip("Patch version: Incremented for backward-compatible bug fixes.")]
 		public int Patch = 0;
 
+		/// <summary>
+		/// Optional pre-release identifier (e.g., "alpha", "beta", "rc.1").
+		/// </summary>
 		[Tooltip("Optional: Pre-release identifier (e.g., 'alpha', 'beta', 'rc.1').")]
 		public string PreRelease = "";
 
+		/// <summary>
+		/// Returns the full version string in the format Major.Minor.Patch[.PreRelease].
+		/// </summary>
 		public string FullVersion
 		{
 			get
@@ -47,7 +66,7 @@ namespace FishMMO.Shared
 
 			// Regex to match versions like X.Y.Z or X.Y.Z.PreRelease
 			// Group 1: Major, Group 2: Minor, Group 3: Patch, Group 4: PreRelease (optional)
-			Match match = Regex.Match(versionString, @"^(\d+)\.(\d+)\.(\d+)(?:\.(.+))?$");
+			Match match = Regex.Match(versionString, @"^(\d+)\.(\d+)\.(\d+)(?:\.(.+))?$", RegexOptions.Compiled);
 
 			if (match.Success)
 			{
@@ -72,6 +91,7 @@ namespace FishMMO.Shared
 		///  0 if versions are equal
 		///  1 if this version is newer
 		/// </summary>
+		/// <param name="other">The other VersionConfig to compare against.</param>
 		public int CompareTo(VersionConfig other)
 		{
 			if (other == null) return 1; // Any version is newer than null
@@ -110,6 +130,9 @@ namespace FishMMO.Shared
 			return 0; // Versions are effectively equal
 		}
 
+		/// <summary>
+		/// Equality operator for VersionConfig. Returns true if both are equal.
+		/// </summary>
 		public static bool operator ==(VersionConfig a, VersionConfig b)
 		{
 			if (ReferenceEquals(a, b)) return true;
@@ -117,44 +140,72 @@ namespace FishMMO.Shared
 			return a.CompareTo(b) == 0;
 		}
 
+		/// <summary>
+		/// Inequality operator for VersionConfig. Returns true if not equal.
+		/// </summary>
 		public static bool operator !=(VersionConfig a, VersionConfig b)
 		{
 			return !(a == b);
 		}
 
+		/// <summary>
+		/// Less-than operator for VersionConfig.
+		/// </summary>
 		public static bool operator <(VersionConfig a, VersionConfig b)
 		{
 			if (ReferenceEquals(a, null)) return !ReferenceEquals(b, null); // null < any non-null
 			return a.CompareTo(b) < 0;
 		}
 
+		/// <summary>
+		/// Greater-than operator for VersionConfig.
+		/// </summary>
 		public static bool operator >(VersionConfig a, VersionConfig b)
 		{
 			if (ReferenceEquals(b, null)) return !ReferenceEquals(a, null); // any non-null > null
 			return a.CompareTo(b) > 0;
 		}
 
+		/// <summary>
+		/// Less-than-or-equal operator for VersionConfig.
+		/// </summary>
 		public static bool operator <=(VersionConfig a, VersionConfig b)
 		{
 			return a < b || a == b;
 		}
 
+		/// <summary>
+		/// Greater-than-or-equal operator for VersionConfig.
+		/// </summary>
 		public static bool operator >=(VersionConfig a, VersionConfig b)
 		{
 			return a > b || a == b;
 		}
 
+		/// <summary>
+		/// Determines whether this instance is equal to another object.
+		/// </summary>
+		/// <param name="obj">The object to compare with.</param>
+		/// <returns>True if equal, otherwise false.</returns>
 		public override bool Equals(object obj)
 		{
 			return Equals(obj as VersionConfig);
 		}
 
+		/// <summary>
+		/// Determines whether this instance is equal to another VersionConfig.
+		/// </summary>
+		/// <param name="other">The VersionConfig to compare with.</param>
+		/// <returns>True if equal, otherwise false.</returns>
 		public bool Equals(VersionConfig other)
 		{
 			if (ReferenceEquals(other, null)) return false;
 			return this.CompareTo(other) == 0;
 		}
 
+		/// <summary>
+		/// Returns a hash code for this instance.
+		/// </summary>
 		public override int GetHashCode()
 		{
 			unchecked

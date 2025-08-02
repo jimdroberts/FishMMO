@@ -5,12 +5,25 @@ using UnityEngine;
 
 namespace FishMMO.Shared
 {
+	/// <summary>
+	/// Controls and tracks a character's achievements, including progress, tier, and event handling.
+	/// </summary>
 	public class AchievementController : CharacterBehaviour, IAchievementController
 	{
+		/// <summary>
+		/// Internal dictionary mapping achievement template IDs to achievement progress.
+		/// </summary>
 		private Dictionary<int, Achievement> achievements = new Dictionary<int, Achievement>();
 
+		/// <summary>
+		/// Public accessor for the character's achievements.
+		/// </summary>
 		public Dictionary<int, Achievement> Achievements { get { return achievements; } }
 
+		/// <summary>
+		/// Resets the achievement state for this character, clearing all progress.
+		/// </summary>
+		/// <param name="asServer">Whether the reset is being performed on the server.</param>
 		public override void ResetState(bool asServer)
 		{
 			base.ResetState(asServer);
@@ -19,6 +32,9 @@ namespace FishMMO.Shared
 		}
 
 #if !UNITY_SERVER
+		/// <summary>
+		/// Called when the character is started on the client. Registers broadcast listeners for achievement updates.
+		/// </summary>
 		public override void OnStartCharacter()
 		{
 			base.OnStartCharacter();
@@ -33,6 +49,9 @@ namespace FishMMO.Shared
 			ClientManager.RegisterBroadcast<AchievementUpdateMultipleBroadcast>(OnClientAchievementUpdateMultipleBroadcastReceived);
 		}
 
+		/// <summary>
+		/// Called when the character is stopped on the client. Unregisters achievement update listeners.
+		/// </summary>
 		public override void OnStopCharacter()
 		{
 			base.OnStopCharacter();
@@ -45,8 +64,10 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Server sent an achievement update broadcast.
+		/// Handles a broadcast from the server to update a single achievement's progress.
 		/// </summary>
+		/// <param name="msg">The achievement update message.</param>
+		/// <param name="channel">The network channel.</param>
 		private void OnClientAchievementUpdateBroadcastReceived(AchievementUpdateBroadcast msg, Channel channel)
 		{
 			AchievementTemplate template = AchievementTemplate.Get<AchievementTemplate>(msg.TemplateID);
@@ -61,8 +82,10 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Server sent a multiple achievement update broadcast.
+		/// Handles a broadcast from the server to update multiple achievements at once.
 		/// </summary>
+		/// <param name="msg">The multiple achievement update message.</param>
+		/// <param name="channel">The network channel.</param>
 		private void OnClientAchievementUpdateMultipleBroadcastReceived(AchievementUpdateMultipleBroadcast msg, Channel channel)
 		{
 			foreach (AchievementUpdateBroadcast subMsg in msg.Achievements)
@@ -72,6 +95,13 @@ namespace FishMMO.Shared
 		}
 #endif
 
+		/// <summary>
+		/// Sets or updates the progress for a specific achievement, optionally skipping the update event.
+		/// </summary>
+		/// <param name="templateID">The template ID of the achievement.</param>
+		/// <param name="tier">The current tier to set.</param>
+		/// <param name="value">The current value to set.</param>
+		/// <param name="skipEvent">If true, does not invoke the update event.</param>
 		public void SetAchievement(int templateID, byte tier, uint value, bool skipEvent = false)
 		{
 			if (achievements.TryGetValue(templateID, out Achievement achievement))
@@ -91,12 +121,23 @@ namespace FishMMO.Shared
 			//Log.Debug($"Achievement Template Set: {achievement.Template.ID}:{achievement.CurrentValue}");
 		}
 
+		/// <summary>
+		/// Attempts to retrieve an achievement by template ID.
+		/// </summary>
+		/// <param name="templateID">The template ID of the achievement.</param>
+		/// <param name="achievement">The resulting achievement if found.</param>
+		/// <returns>True if the achievement exists, false otherwise.</returns>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public bool TryGetAchievement(int templateID, out Achievement achievement)
 		{
 			return achievements.TryGetValue(templateID, out achievement);
 		}
 
+		/// <summary>
+		/// Increments the progress of an achievement by a specified amount, handling tier advancement and rewards.
+		/// </summary>
+		/// <param name="template">The achievement template to increment.</param>
+		/// <param name="amount">The amount to increment the achievement's value by.</param>
 		public void Increment(AchievementTemplate template, uint amount)
 		{
 			if (template == null)
@@ -123,8 +164,8 @@ namespace FishMMO.Shared
 
 					if (achievement.CurrentValue >= tier.Value)
 					{
-						// Client: Display a text message above the characters head showing the achievement.
-						// Server: Provide rewards.
+						// Client: Display a text message above the character's head showing the achievement.
+						// Server: Provide rewards for completion.
 						IAchievementController.OnCompleteAchievement?.Invoke(Character, achievement.Template, tier);
 
 						achievement.CurrentTier = (byte)(i + 1);

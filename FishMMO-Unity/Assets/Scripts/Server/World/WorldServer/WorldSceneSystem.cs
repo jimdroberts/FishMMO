@@ -12,32 +12,62 @@ using System.Linq;
 
 namespace FishMMO.Server
 {
-	// World scene system handles the node services
+	/// <summary>
+	/// Manages world scene connections, queues, and scene assignment for players in the MMO server.
+	/// Handles open world and instanced scene logic, connection authentication, and database updates.
+	/// </summary>
 	public class WorldSceneSystem : ServerBehaviour
 	{
+		/// <summary>
+		/// Maximum number of clients allowed per scene instance.
+		/// </summary>
 		private const int MAX_CLIENTS_PER_INSTANCE = 500;
 
+		/// <summary>
+		/// Reference to the world server authenticator for login/authentication events.
+		/// </summary>
 		private WorldServerAuthenticator loginAuthenticator;
 
+		/// <summary>
+		/// Cache of world scene details, including max clients per scene.
+		/// </summary>
 		public WorldSceneDetailsCache WorldSceneDetailsCache;
 
 		/// <summary>
-		/// Connections waiting for a scene to finish loading.
+		/// Connections waiting for a scene to finish loading, mapped by scene name.
 		/// </summary>
 		public Dictionary<string, HashSet<NetworkConnection>> WaitingOpenWorldConnections = new Dictionary<string, HashSet<NetworkConnection>>();
+		/// <summary>
+		/// Maps connections to the open world scene they are waiting for.
+		/// </summary>
 		public Dictionary<NetworkConnection, string> OpenWorldConnectionScenes = new Dictionary<NetworkConnection, string>();
 
 		/// <summary>
-		/// Connections waiting for an instanced scene to finish loading.
+		/// Connections waiting for an instanced scene to finish loading, mapped by instance ID.
 		/// </summary>
 		public Dictionary<long, HashSet<NetworkConnection>> WaitingInstanceConnections = new Dictionary<long, HashSet<NetworkConnection>>();
+		/// <summary>
+		/// Maps connections to the instance scene they are waiting for.
+		/// </summary>
 		public Dictionary<NetworkConnection, long> InstanceConnectionScenes = new Dictionary<NetworkConnection, long>();
 
+		/// <summary>
+		/// Total number of connections managed by this system (waiting + active).
+		/// </summary>
 		public int ConnectionCount { get; private set; }
 
+		/// <summary>
+		/// Interval (in seconds) between wait queue updates.
+		/// </summary>
 		private float waitQueueRate = 2.0f;
+		/// <summary>
+		/// Time remaining until the next wait queue update.
+		/// </summary>
 		private float nextWaitQueueUpdate = 0.0f;
 
+		/// <summary>
+		/// Called once to initialize the world scene system. Subscribes to authentication and connection events.
+		/// </summary>
 		public override void InitializeOnce()
 		{
 			loginAuthenticator = FindFirstObjectByType<WorldServerAuthenticator>();
@@ -58,6 +88,9 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Called when the system is being destroyed. Unsubscribes from events and deletes world scene data from the database.
+		/// </summary>
 		public override void Destroying()
 		{
 			if (ServerManager != null)
@@ -76,6 +109,11 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Handles remote connection state changes. Removes connections from queues when they disconnect.
+		/// </summary>
+		/// <param name="conn">The network connection.</param>
+		/// <param name="args">Remote connection state arguments.</param>
 		private void ServerManager_OnRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args)
 		{
 			if (args.ConnectionState != RemoteConnectionState.Stopped)
@@ -87,6 +125,9 @@ namespace FishMMO.Server
 			RemoveFromQueue(conn, InstanceConnectionScenes, WaitingInstanceConnections);
 		}
 
+		/// <summary>
+		/// Unity LateUpdate callback. Periodically processes open world and instance queues, and updates connection count.
+		/// </summary>
 		private void LateUpdate()
 		{
 			if (nextWaitQueueUpdate <= 0)
@@ -111,6 +152,11 @@ namespace FishMMO.Server
 			nextWaitQueueUpdate -= Time.deltaTime;
 		}
 
+		/// <summary>
+		/// Processes the queue for open world scenes, assigning connections to available scenes or enqueuing new scene requests.
+		/// </summary>
+		/// <param name="dbContext">Database context.</param>
+		/// <param name="sceneName">Name of the scene to process.</param>
 		private void ProcessOpenWorldQueue(NpgsqlDbContext dbContext, string sceneName)
 		{
 			if (!WaitingOpenWorldConnections.TryGetValue(sceneName, out HashSet<NetworkConnection> connections) ||
@@ -181,6 +227,8 @@ namespace FishMMO.Server
 		/// <summary>
 		/// Tries to process an Instance scene for the connection character otherwise falls back to the world scene.
 		/// </summary>
+		/// <param name="dbContext">Database context.</param>
+		/// <param name="conn">Network connection to process.</param>
 		private void ProcessInstanceConnection(NpgsqlDbContext dbContext, NetworkConnection conn)
 		{
 			// Get the scene for the selected character
@@ -250,6 +298,10 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Updates the total connection count by summing waiting and active connections across all scenes.
+		/// </summary>
+		/// <param name="dbContext">Database context.</param>
 		private void UpdateConnectionCount(NpgsqlDbContext dbContext)
 		{
 			if (dbContext == null || !ServerBehaviour.TryGet(out WorldServerSystem worldServerSystem))
@@ -268,6 +320,11 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Handles client authentication results. Processes instance connection or falls back to world scene.
+		/// </summary>
+		/// <param name="conn">Network connection.</param>
+		/// <param name="authenticated">True if client authenticated successfully.</param>
 		private void Authenticator_OnClientAuthenticationResult(NetworkConnection conn, bool authenticated)
 		{
 			if (!authenticated)
@@ -293,6 +350,14 @@ namespace FishMMO.Server
 			ProcessInstanceConnection(dbContext, conn);
 		}
 
+		/// <summary>
+		/// Adds a connection to a queue for a scene or instance, updating both forward and reverse maps.
+		/// </summary>
+		/// <typeparam name="T">Type of the key (scene name or instance ID).</typeparam>
+		/// <param name="conn">Network connection.</param>
+		/// <param name="key">Scene name or instance ID.</param>
+		/// <param name="queue">Queue mapping key to connections.</param>
+		/// <param name="reverseMap">Reverse map from connection to key.</param>
 		private void AddToQueue<T>(NetworkConnection conn, T key,
 			Dictionary<T, HashSet<NetworkConnection>> queue,
 			Dictionary<NetworkConnection, T> reverseMap)
@@ -305,6 +370,13 @@ namespace FishMMO.Server
 			set.Add(conn);
 		}
 
+		/// <summary>
+		/// Removes a connection from a queue for a scene or instance, updating both forward and reverse maps.
+		/// </summary>
+		/// <typeparam name="T">Type of the key (scene name or instance ID).</typeparam>
+		/// <param name="conn">Network connection.</param>
+		/// <param name="reverseMap">Reverse map from connection to key.</param>
+		/// <param name="queue">Queue mapping key to connections.</param>
 		private void RemoveFromQueue<T>(NetworkConnection conn,
 			Dictionary<NetworkConnection, T> reverseMap,
 			Dictionary<T, HashSet<NetworkConnection>> queue)
@@ -321,6 +393,12 @@ namespace FishMMO.Server
 			reverseMap.Remove(conn);
 		}
 
+		/// <summary>
+		/// Fallbacks a connection to the world scene if instance scene assignment fails.
+		/// </summary>
+		/// <param name="dbContext">Database context.</param>
+		/// <param name="conn">Network connection.</param>
+		/// <param name="accountName">Account name for the connection.</param>
 		private void FallbackToWorldScene(NpgsqlDbContext dbContext, NetworkConnection conn, string accountName)
 		{
 			// Fallback to the world scene
@@ -333,18 +411,34 @@ namespace FishMMO.Server
 			AddToQueue(conn, sceneName, WaitingOpenWorldConnections, OpenWorldConnectionScenes);
 		}
 
+		/// <summary>
+		/// Checks if a connection is valid and retrieves the account name.
+		/// </summary>
+		/// <param name="conn">Network connection.</param>
+		/// <param name="accountName">Output account name.</param>
+		/// <returns>True if connection is valid and account name is found.</returns>
 		private bool IsValidConnection(NetworkConnection conn, out string accountName)
 		{
 			accountName = null;
 			return conn != null && conn.IsActive && AccountManager.GetAccountNameByConnection(conn, out accountName);
 		}
 
+		/// <summary>
+		/// Kicks a connection from the server with a specified reason.
+		/// </summary>
+		/// <param name="conn">Network connection.</param>
+		/// <param name="reason">Reason for kicking.</param>
 		private void Kick(NetworkConnection conn, string reason)
 		{
 			Log.Debug("WorldSceneSystem", $"World Scene System: {conn.ClientId} {reason}.");
 			conn.Kick(KickReason.UnexpectedProblem);
 		}
 
+		/// <summary>
+		/// Gets the maximum number of clients allowed for a given scene, using cached details if available.
+		/// </summary>
+		/// <param name="sceneName">Name of the scene.</param>
+		/// <returns>Maximum number of clients for the scene.</returns>
 		private int GetMaxClients(string sceneName)
 		{
 			if (WorldSceneDetailsCache?.Scenes?.TryGetValue(sceneName, out var details) == true)

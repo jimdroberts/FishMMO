@@ -15,16 +15,31 @@ namespace FishMMO.Client
 	public class HttpPatchServerService : MonoBehaviour, IPatchServerService
 	{
 		[Header("Dependencies")]
+		/// <summary>
+		/// Service for handling Unity web requests.
+		/// </summary>
 		public UnityWebRequestService WebRequestService;
 
 		[Header("Configuration")]
+		/// <summary>
+		/// Maximum number of retries for each web request.
+		/// </summary>
 		[Tooltip("Maximum number of retries for each web request.")]
 		public int MaxRetries = 3;
+		/// <summary>
+		/// Delay in seconds between retries for web requests.
+		/// </summary>
 		[Tooltip("Delay in seconds between retries for web requests.")]
 		public float RetryDelay = 1.0f;
+		/// <summary>
+		/// Timeout in seconds for each individual web request.
+		/// </summary>
 		[Tooltip("Timeout in seconds for each individual web request.")]
 		public int WebRequestTimeout = 10;
 
+		/// <summary>
+		/// Unity Awake method. Validates dependencies and disables script if missing.
+		/// </summary>
 		private void Awake()
 		{
 			if (WebRequestService == null)
@@ -34,7 +49,13 @@ namespace FishMMO.Client
 			}
 		}
 
-		/// <inheritdoc/>
+		/// <summary>
+		/// Fetches the patch server address from the given host and returns it via callback.
+		/// </summary>
+		/// <param name="ipFetchHost">The host URL to fetch the patch server address from.</param>
+		/// <param name="onComplete">Callback for successful address fetch.</param>
+		/// <param name="onError">Callback for error handling.</param>
+		/// <returns>Coroutine enumerator.</returns>
 		public IEnumerator GetPatchServerAddress(string ipFetchHost, Action<ServerAddress> onComplete, Action<string> onError)
 		{
 			if (WebRequestService == null)
@@ -71,7 +92,13 @@ namespace FishMMO.Client
 			}
 		}
 
-		/// <inheritdoc/>
+		/// <summary>
+		/// Fetches the latest version from the patcher host and returns it via callback.
+		/// </summary>
+		/// <param name="patcherHost">The patcher host URL.</param>
+		/// <param name="onComplete">Callback for successful version fetch.</param>
+		/// <param name="onError">Callback for error handling.</param>
+		/// <returns>Coroutine enumerator.</returns>
 		public IEnumerator GetLatestVersion(string patcherHost, Action<VersionConfig> onComplete, Action<string> onError)
 		{
 			if (WebRequestService == null)
@@ -109,7 +136,15 @@ namespace FishMMO.Client
 			}
 		}
 
-		/// <inheritdoc/>
+		/// <summary>
+		/// Downloads a patch file from the given URL to a temporary file path, reporting progress and completion via callbacks.
+		/// </summary>
+		/// <param name="patchUrl">The URL to download the patch from.</param>
+		/// <param name="tempFilePath">The temporary file path to save the patch.</param>
+		/// <param name="onComplete">Callback for successful download.</param>
+		/// <param name="onError">Callback for error handling.</param>
+		/// <param name="onProgress">Callback for progress updates.</param>
+		/// <returns>Coroutine enumerator.</returns>
 		public IEnumerator DownloadPatch(string patchUrl, string tempFilePath, Action onComplete, Action<string> onError, Action<float, string> onProgress)
 		{
 			if (WebRequestService == null)

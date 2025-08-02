@@ -7,12 +7,27 @@ namespace FishMMO.Client
 {
 	public class UITarget : UICharacterControl
 	{
+		/// <summary>
+		/// The label displaying the target's name.
+		/// </summary>
 		public TMP_Text NameLabel;
+		/// <summary>
+		/// The slider displaying the target's health.
+		/// </summary>
 		public Slider HealthSlider;
+		/// <summary>
+		/// The health attribute template used to identify health resources.
+		/// </summary>
 		public CharacterAttributeTemplate HealthAttribute;
 
+		/// <summary>
+		/// Cached 3D label for displaying overhead information about the target.
+		/// </summary>
 		private Cached3DLabel targetLabel;
 
+		/// <summary>
+		/// Called after the character is set. Subscribes to target controller events.
+		/// </summary>
 		public override void OnPostSetCharacter()
 		{
 			base.OnPostSetCharacter();
@@ -25,6 +40,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Called before the character is unset. Unsubscribes from target controller events and caches the label.
+		/// </summary>
 		public override void OnPreUnsetCharacter()
 		{
 			base.OnPreUnsetCharacter();
@@ -40,6 +58,10 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Handles target change event. Updates UI and overhead label for the new target.
+		/// </summary>
+		/// <param name="target">The new target transform.</param>
 		public void TargetController_OnChangeTarget(Transform target)
 		{
 			if (target == null ||
@@ -55,7 +77,7 @@ namespace FishMMO.Client
 			SceneTeleporter teleporter = target.GetComponent<SceneTeleporter>();
 			SceneObjectNamer sceneObjectNamer = target.GetComponent<SceneObjectNamer>();
 
-			// Return if all conditions are false
+			// Return if all conditions are false (target is not interactable, character, teleporter, or named object)
 			if (interactable == null &&
 				character == null &&
 				teleporter == null &&
@@ -96,17 +118,25 @@ namespace FishMMO.Client
 				HealthSlider.value = 0;
 			}
 
-			// make the UI visible
+			// Make the UI visible
 			Show();
 
 			UpdateTargetLabel(target, character, interactable);
 		}
 
+		/// <summary>
+		/// Handles target update event. Reuses change target logic.
+		/// </summary>
+		/// <param name="target">The target transform.</param>
 		public void TargetController_OnUpdateTarget(Transform target)
 		{
 			TargetController_OnChangeTarget(target);
 		}
 
+		/// <summary>
+		/// Handles target clear event. Hides UI and disables overhead labels.
+		/// </summary>
+		/// <param name="lastTarget">The last target transform (optional).</param>
 		public void TargetController_OnClearTarget(Transform lastTarget = null)
 		{
 			if (lastTarget != null)
@@ -157,6 +187,12 @@ namespace FishMMO.Client
 			Hide();
 		}
 
+		/// <summary>
+		/// Updates the overhead label for the target, displaying name, title, and color.
+		/// </summary>
+		/// <param name="target">The target transform.</param>
+		/// <param name="character">The character component, if present.</param>
+		/// <param name="interactable">The interactable component, if present.</param>
 		private void UpdateTargetLabel(Transform target, ICharacter character, IInteractable interactable)
 		{
 			if (targetLabel != null)
@@ -204,7 +240,7 @@ namespace FishMMO.Client
 
 				string label = interactable.Name;
 
-				// apply title
+				// Apply title if present
 				if (!string.IsNullOrWhiteSpace(interactable.Title))
 				{
 					string hex = interactable.TitleColor.ToHex();

@@ -6,16 +6,39 @@ using FishMMO.Shared;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// The ClientNamingSystem class is responsible for managing the mapping between character and object IDs
+	/// and their corresponding names in the FishMMO game client. It handles the registration and unregistration
+	/// of naming broadcasts, as well as the storage and retrieval of name-ID mappings.
+	/// </summary>
 	public static class ClientNamingSystem
 	{
+		/// <summary>
+		/// Reference to the client instance for network operations.
+		/// </summary>
 		internal static Client Client;
 
+		/// <summary>
+		/// Maps naming system type and ID to name. Used for fast lookup and caching.
+		/// </summary>
 		private static Dictionary<NamingSystemType, Dictionary<long, string>> idToName = new Dictionary<NamingSystemType, Dictionary<long, string>>();
-		// character names are unique so we can presume this works properly
+		/// <summary>
+		/// Maps character names to their unique IDs. Assumes character names are unique.
+		/// </summary>
 		private static Dictionary<string, long> nameToID = new Dictionary<string, long>();
+		/// <summary>
+		/// Tracks pending name requests by type and ID, with callbacks to invoke when names are received.
+		/// </summary>
 		private static Dictionary<NamingSystemType, Dictionary<long, Action<string>>> pendingNameRequests = new Dictionary<NamingSystemType, Dictionary<long, Action<string>>>();
+		/// <summary>
+		/// Tracks pending ID requests by type and name, with callbacks to invoke when IDs are received.
+		/// </summary>
 		private static Dictionary<NamingSystemType, Dictionary<string, Action<long>>> pendingIdRequests = new Dictionary<NamingSystemType, Dictionary<string, Action<long>>>();
 
+		/// <summary>
+		/// Initializes the naming system, registers broadcast handlers, and loads cached names from disk (outside Unity Editor).
+		/// </summary>
+		/// <param name="client">The client instance to use for network operations.</param>
 		public static void Initialize(Client client)
 		{
 			if (client == null)
@@ -46,6 +69,9 @@ namespace FishMMO.Client
 #endif
 		}
 
+		/// <summary>
+		/// Cleans up the naming system, unregisters broadcast handlers, and saves cached names to disk (outside Unity Editor).
+		/// </summary>
 		public static void Destroy()
 		{
 			if (Client != null)
@@ -69,9 +95,12 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Checks if the name matching the ID and type are known. If they are not the value will be retreived from the server and set at a later time.
-		/// Values learned this way are saved to the clients hard drive when the game closes and loaded when the game loads.
+		/// Checks if the name matching the ID and type is known. If not, requests it from the server and invokes the callback when available.
+		/// Values learned this way are saved to disk when the game closes and loaded when the game loads.
 		/// </summary>
+		/// <param name="type">The naming system type.</param>
+		/// <param name="id">The unique ID to resolve to a name.</param>
+		/// <param name="action">Callback to invoke with the resolved name.</param>
 		public static void SetName(NamingSystemType type, long id, Action<string> action)
 		{
 			if (!idToName.TryGetValue(type, out Dictionary<long, string> typeNames))
@@ -80,7 +109,7 @@ namespace FishMMO.Client
 			}
 			if (typeNames.TryGetValue(id, out string name))
 			{
-				//UnityEngine.Log.Debug("Found Name for: " + id + ":" + name);
+				// Name found in cache, invoke callback immediately.
 				action?.Invoke(name);
 			}
 			else if (Client != null)
@@ -93,9 +122,7 @@ namespace FishMMO.Client
 				{
 					pendingActions.Add(id, action);
 
-					//UnityEngine.Log.Debug("Requesting Name for: " + id);
-
-					// send the request to the server to get a name
+					// Send request to server to get the name for this ID.
 					Client.Broadcast(new NamingBroadcast()
 					{
 						Type = type,
@@ -105,24 +132,29 @@ namespace FishMMO.Client
 				}
 				else
 				{
-					//UnityEngine.Log.Debug("Adding pending Name for: " + id);
+					// Multiple callbacks for the same ID are combined.
 					pendingActions[id] += action;
 				}
 			}
 		}
 
+		/// <summary>
+		/// Gets the character ID for a given name. If not cached, requests it from the server and invokes the callback when available.
+		/// </summary>
+		/// <param name="name">The character name to resolve to an ID.</param>
+		/// <param name="action">Callback to invoke with the resolved ID.</param>
 		public static void GetCharacterID(string name, Action<long> action)
 		{
 			if (nameToID.TryGetValue(name, out long id))
 			{
-				// if we find the name we're done
+				// ID found in cache, invoke callback immediately.
 				action?.Invoke(id);
 			}
 			else if (Client != null)
 			{
 				var nameLowerCase = name.ToLower().Trim();
 
-				// request the name from the server
+				// Send request to server to get the ID for this name.
 				if (!pendingIdRequests.TryGetValue(NamingSystemType.CharacterName, out Dictionary<string, Action<long>> pendingActions))
 				{
 					pendingIdRequests.Add(NamingSystemType.CharacterName, pendingActions = new Dictionary<string, Action<long>>());
@@ -131,9 +163,6 @@ namespace FishMMO.Client
 				{
 					pendingActions.Add(nameLowerCase, action);
 
-					//UnityEngine.Log.Debug("Requesting Id for: " + name);
-
-					// send the request to the server to get the id and correct name
 					Client.Broadcast(new ReverseNamingBroadcast()
 					{
 						Type = NamingSystemType.CharacterName,
@@ -144,20 +173,23 @@ namespace FishMMO.Client
 				}
 				else
 				{
-					//UnityEngine.Log.Debug("Adding pending Id for: " + name);
+					// Multiple callbacks for the same name are combined.
 					pendingActions[nameLowerCase] += action;
 				}
 			}
 		}
 
+		/// <summary>
+		/// Handler for naming broadcasts from the server. Invokes pending name callbacks and updates local cache.
+		/// </summary>
+		/// <param name="msg">The naming broadcast message.</param>
+		/// <param name="channel">The network channel used.</param>
 		private static void OnClientNamingBroadcastReceived(NamingBroadcast msg, Channel channel)
 		{
 			if (pendingNameRequests.TryGetValue(msg.Type, out Dictionary<long, Action<string>> pendingRequests))
 			{
 				if (pendingRequests.TryGetValue(msg.ID, out Action<string> pendingActions))
 				{
-					//UnityEngine.Log.Debug("Processing Name for: " + msg.id + ":" + msg.name);
-
 					pendingActions?.Invoke(msg.Name);
 					pendingRequests[msg.ID] = null;
 					pendingRequests.Remove(msg.ID);
@@ -169,14 +201,17 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Handler for reverse naming broadcasts from the server. Invokes pending ID callbacks and updates local cache.
+		/// </summary>
+		/// <param name="msg">The reverse naming broadcast message.</param>
+		/// <param name="channel">The network channel used.</param>
 		private static void OnClientReverseNamingBroadcastReceived(ReverseNamingBroadcast msg, Channel channel)
 		{
 			if (pendingIdRequests.TryGetValue(msg.Type, out Dictionary<string, Action<long>> pendingRequests))
 			{
 				if (pendingRequests.TryGetValue(msg.NameLowerCase, out Action<long> pendingActions))
 				{
-					//UnityEngine.Log.Debug("Processing Id for: " + msg.id + ":" + msg.name);
-
 					pendingActions?.Invoke(msg.ID);
 					pendingRequests[msg.NameLowerCase] = null;
 					pendingRequests.Remove(msg.NameLowerCase);
@@ -189,6 +224,12 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Updates the local cache with a new name and ID mapping for the given type.
+		/// </summary>
+		/// <param name="type">The naming system type.</param>
+		/// <param name="id">The unique ID.</param>
+		/// <param name="name">The name to associate with the ID.</param>
 		private static void UpdateKnownNames(NamingSystemType type, long id, string name)
 		{
 			if (!idToName.TryGetValue(type, out Dictionary<long, string> knownNames))

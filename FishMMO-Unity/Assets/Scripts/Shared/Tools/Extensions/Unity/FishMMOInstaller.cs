@@ -15,6 +15,9 @@ using Npgsql;
 
 namespace FishMMO.Shared
 {
+	/// <summary>
+	/// Contains constants for installation URLs, filenames, and default configuration values for FishMMO dependencies.
+	/// </summary>
 	public static class InstallationConstants
 	{
 		public const string DotNetSDKUrl = "https://download.visualstudio.microsoft.com/download/pr/b6f19ef3-52ca-40b1-b78b-0712d3c8bf4d/426bd0d376479d551ce4d5ac0ecf63a5/dotnet-sdk-8.0.302-win-x64.exe";
@@ -40,10 +43,19 @@ namespace FishMMO.Shared
 		public const string VSBuildToolsFileName = "vs_buildtools.exe";
 	}
 
+	/// <summary>
+	/// Provides installation and configuration utilities for FishMMO dependencies and database setup.
+	/// </summary>
 	public class FishMMOInstaller : MonoBehaviour
 	{
-		private AppSettings _appSettings; // Field to store appSettings loaded once
+		/// <summary>
+		/// Stores the loaded application settings from appsettings.json.
+		/// </summary>
+		private AppSettings _appSettings;
 
+		/// <summary>
+		/// Unity Awake event. Loads appsettings.json and displays the installer menu loop.
+		/// </summary>
 		private async void Awake()
 		{
 			// Load appsettings.json once at the start
@@ -168,7 +180,7 @@ namespace FishMMO.Shared
 #if UNITY_EDITOR
 						EditorApplication.ExitPlaymode();
 #else
-                        Application.Quit();
+						Application.Quit();
 #endif
 						return; // Exit the method
 					default:
@@ -181,6 +193,10 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Gets the working directory for the current application domain.
+		/// </summary>
+		/// <returns>Base directory path.</returns>
 		private string GetWorkingDirectory()
 		{
 			return AppDomain.CurrentDomain.BaseDirectory;
@@ -189,6 +205,10 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Gets the appropriate shell command and argument prefix for the current OS.
 		/// </summary>
+		/// <summary>
+		/// Gets the appropriate shell command and argument prefix for the current OS.
+		/// </summary>
+		/// <returns>Tuple of shell executable and argument prefix.</returns>
 		private (string shell, string argPrefix) GetShellCommand()
 		{
 			if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
@@ -209,6 +229,13 @@ namespace FishMMO.Shared
 		/// Runs a process asynchronously.
 		/// ProcessResult = ExitCode, Standard Output, Standard Error
 		/// </summary>
+		/// <summary>
+		/// Runs a process asynchronously and returns true if successful.
+		/// </summary>
+		/// <param name="command">Process executable.</param>
+		/// <param name="arguments">Arguments for the process.</param>
+		/// <param name="processResult">Optional callback to handle process result.</param>
+		/// <returns>True if process succeeded, otherwise false.</returns>
 		private async Task<bool> RunProcessAsync(string command, string arguments, Func<int, string, string, bool> processResult = null)
 		{
 			using (Process process = new Process())
@@ -242,12 +269,22 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Prompts the user for input in the console.
+		/// </summary>
+		/// <param name="prompt">Prompt message.</param>
+		/// <returns>User input string.</returns>
 		private string PromptForInput(string prompt)
 		{
 			Console.Write(prompt);
 			return Console.ReadLine();
 		}
 
+		/// <summary>
+		/// Prompts the user for a yes/no response in the console.
+		/// </summary>
+		/// <param name="prompt">Prompt message.</param>
+		/// <returns>True for yes, false for no.</returns>
 		private bool PromptForYesNo(string prompt)
 		{
 			while (true)
@@ -271,6 +308,11 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Prompts the user for a password in the console, masking input.
+		/// </summary>
+		/// <param name="prompt">Prompt message.</param>
+		/// <returns>Password string.</returns>
 		private string PromptForPassword(string prompt)
 		{
 			Console.Write(prompt);
@@ -302,6 +344,11 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Logs a message to the console.
 		/// </summary>
+		/// <summary>
+		/// Logs a message to the console and debug output.
+		/// </summary>
+		/// <param name="message">Message to log.</param>
+		/// <param name="logTime">Whether to include timestamp.</param>
 		private void Log(string message, bool logTime = false)
 		{
 			if (string.IsNullOrWhiteSpace(message))
@@ -320,6 +367,12 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Downloads a file asynchronously from the specified URL.
+		/// </summary>
+		/// <param name="url">File URL.</param>
+		/// <param name="fileName">Desired filename.</param>
+		/// <returns>Path to downloaded file.</returns>
 		private async Task<string> DownloadFileAsync(string url, string fileName)
 		{
 			try
@@ -365,6 +418,10 @@ namespace FishMMO.Shared
 		}
 
 		#region DotNet
+		/// <summary>
+		/// Installs DotNet SDK and DotNet-EF tool if not already installed.
+		/// </summary>
+		/// <returns>True if installation succeeded or already installed.</returns>
 		private async Task<bool> InstallDotNet()
 		{
 			if (!await IsDotNetInstalledAsync())
@@ -405,6 +462,10 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Checks if DotNet SDK is installed and matches required major version.
+		/// </summary>
+		/// <returns>True if installed, otherwise false.</returns>
 		private async Task<bool> IsDotNetInstalledAsync()
 		{
 			// Use the GetShellCommand helper
@@ -419,6 +480,9 @@ namespace FishMMO.Shared
 			});
 		}
 
+		/// <summary>
+		/// Downloads and installs DotNet SDK for the current OS.
+		/// </summary>
 		private async Task DownloadAndInstallDotNetAsync()
 		{
 			if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
@@ -487,6 +551,10 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Checks if DotNet-EF tool is installed globally.
+		/// </summary>
+		/// <returns>True if installed, otherwise false.</returns>
 		private async Task<bool> IsDotNetEFInstalledAsync()
 		{
 			try
@@ -503,6 +571,12 @@ namespace FishMMO.Shared
 		}
 
 		private bool _pathSet = false; // Flag to ensure path is set only once for Linux/OSX
+		/// <summary>
+		/// Runs a dotnet command asynchronously, handling environment setup for Linux/OSX.
+		/// </summary>
+		/// <param name="arguments">DotNet command arguments.</param>
+		/// <param name="customProcessResult">Optional custom result handler.</param>
+		/// <returns>True if command succeeded, otherwise false.</returns>
 		private async Task<bool> RunDotNetCommandAsync(string arguments, Func<int, string, string, bool> customProcessResult = null)
 		{
 			if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ||
@@ -581,6 +655,11 @@ namespace FishMMO.Shared
 		#endregion
 
 		#region Database
+		/// <summary>
+		/// Installs PostgreSQL on Windows using the official installer.
+		/// </summary>
+		/// <param name="appSettings">Application settings for database configuration.</param>
+		/// <returns>True if installation succeeded, otherwise false.</returns>
 		private async Task<bool> InstallPostgreSQLWindows(AppSettings appSettings)
 		{
 			string superUsername = InstallationConstants.PostgreSQLDefaultSuperuser;
@@ -645,6 +724,10 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Installs PostgreSQL on Linux or macOS using system package managers.
+		/// </summary>
+		/// <returns>True if installation succeeded, otherwise false.</returns>
 		private async Task<bool> InstallPostgreSQLLinuxMAC()
 		{
 			if (!PromptForYesNo("Install PostgreSQL server?"))
@@ -716,6 +799,13 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Installs the FishMMO database, creates user role, and grants privileges.
+		/// </summary>
+		/// <param name="superUsername">PostgreSQL superuser name.</param>
+		/// <param name="superPassword">PostgreSQL superuser password.</param>
+		/// <param name="appSettings">Application settings for database configuration.</param>
+		/// <returns>True if installation succeeded, otherwise false.</returns>
 		public async Task<bool> InstallFishMMODatabase(string superUsername, string superPassword, AppSettings appSettings)
 		{
 			try
@@ -789,6 +879,11 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Creates a new PostgreSQL database with the specified name.
+		/// </summary>
+		/// <param name="connection">Open NpgsqlConnection.</param>
+		/// <param name="dbName">Database name.</param>
 		private async Task CreateDatabase(NpgsqlConnection connection, string dbName)
 		{
 			if (!Regex.IsMatch(dbName, @"^[a-zA-Z0-9_]+$"))
@@ -811,6 +906,12 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Creates a new PostgreSQL user role with the specified username and password.
+		/// </summary>
+		/// <param name="connection">Open NpgsqlConnection.</param>
+		/// <param name="username">Username for the role.</param>
+		/// <param name="password">Password for the role.</param>
 		private async Task CreateUser(NpgsqlConnection connection, string username, string password)
 		{
 			if (!Regex.IsMatch(username, @"^[a-zA-Z0-9_]+$"))
@@ -834,6 +935,12 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Grants all privileges on the specified database to the specified user.
+		/// </summary>
+		/// <param name="connection">Open NpgsqlConnection.</param>
+		/// <param name="username">Username to grant privileges to.</param>
+		/// <param name="dbName">Database name.</param>
 		private async Task GrantPrivileges(NpgsqlConnection connection, string username, string dbName)
 		{
 			if (!Regex.IsMatch(username, @"^[a-zA-Z0-9_]+$"))
@@ -876,6 +983,9 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Creates a new database migration and applies it using dotnet ef commands.
+		/// </summary>
 		private async Task CreateMigration()
 		{
 			Console.Clear();
@@ -925,6 +1035,9 @@ namespace FishMMO.Shared
 		/// Deletes the FishMMO database as defined in appsettings.json.
 		/// Requires PostgreSQL superuser credentials. This operation is DANGEROUS and irreversible.
 		/// </summary>
+		/// <param name="superUsername">PostgreSQL superuser name.</param>
+		/// <param name="superPassword">PostgreSQL superuser password.</param>
+		/// <param name="appSettings">Application settings for database configuration.</param>
 		private async Task DeleteFishMMODatabase(string superUsername, string superPassword, AppSettings appSettings)
 		{
 			if (appSettings == null || string.IsNullOrWhiteSpace(appSettings.Npgsql?.Database))
@@ -990,6 +1103,9 @@ namespace FishMMO.Shared
 		/// Grants comprehensive permissions to a specified user on a specific database.
 		/// This includes permissions on existing and future tables, sequences, and functions.
 		/// </summary>
+		/// <param name="superUsername">PostgreSQL superuser name.</param>
+		/// <param name="superPassword">PostgreSQL superuser password.</param>
+		/// <param name="appSettings">Application settings for database configuration.</param>
 		private async Task GrantUserPermissions(string superUsername, string superPassword, AppSettings appSettings)
 		{
 			Console.Clear();
@@ -1124,8 +1240,9 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Checks if NGINX is installed by trying to run `nginx -v`.
+		/// Checks if NGINX is installed by trying to run 'nginx -v'.
 		/// </summary>
+		/// <returns>True if NGINX is installed, otherwise false.</returns>
 		private async Task<bool> IsNGINXInstalledAsync()
 		{
 			(string shell, string argPrefix) = GetShellCommand();
@@ -1182,7 +1299,7 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Installs NGINX on Linux using apt or yum/dnf.
+		/// Installs NGINX on Linux using apt, yum, or dnf package managers.
 		/// </summary>
 		private async Task InstallNGINXLinux()
 		{

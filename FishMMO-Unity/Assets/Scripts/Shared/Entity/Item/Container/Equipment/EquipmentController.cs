@@ -7,13 +7,24 @@ using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
+	/// <summary>
+	/// Controls the character's equipment slots, handling equip/unequip logic and network synchronization.
+	/// Manages client-server broadcasts for equipment changes and slot management.
+	/// </summary>
 	public class EquipmentController : ItemContainer, IEquipmentController
 	{
+		/// <summary>
+		/// Called when the equipment controller is initialized. Adds slots for each equipment type.
+		/// </summary>
 		public override void OnAwake()
 		{
 			AddSlots(null, System.Enum.GetNames(typeof(ItemSlot)).Length); // equipment size = itemslot size
 		}
 
+		/// <summary>
+		/// Resets the state of the equipment controller, clearing all equipped items and calling base reset logic.
+		/// </summary>
+		/// <param name="asServer">True if called on the server.</param>
 		public override void ResetState(bool asServer)
 		{
 			base.ResetState(asServer);
@@ -21,6 +32,11 @@ namespace FishMMO.Shared
 			Clear();
 		}
 
+		/// <summary>
+		/// Reads equipment data from the network payload and sets item slots accordingly.
+		/// </summary>
+		/// <param name="conn">The network connection.</param>
+		/// <param name="reader">The network reader.</param>
 		public override void ReadPayload(NetworkConnection conn, Reader reader)
 		{
 			int itemCount = reader.ReadInt32();
@@ -38,6 +54,11 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Writes equipment data to the network payload for synchronization.
+		/// </summary>
+		/// <param name="conn">The network connection.</param>
+		/// <param name="writer">The network writer.</param>
 		public override void WritePayload(NetworkConnection conn, Writer writer)
 		{
 			if (Items == null ||
@@ -63,10 +84,15 @@ namespace FishMMO.Shared
 		}
 
 #if !UNITY_SERVER
+		/// <summary>
+		/// Called when the character starts. Sets owners for equippable items and registers client broadcast handlers for equipment operations if the local player owns this equipment.
+		/// Disables the controller for non-owners.
+		/// </summary>
 		public override void OnStartCharacter()
 		{
 			base.OnStartCharacter();
 
+			// Set the owner for all equippable items.
 			foreach (Item item in Items)
 			{
 				if (item == null ||
@@ -83,12 +109,16 @@ namespace FishMMO.Shared
 				return;
 			}
 
+			// Register client broadcast handlers for equipment item operations.
 			ClientManager.RegisterBroadcast<EquipmentSetItemBroadcast>(OnClientEquipmentSetItemBroadcastReceived);
 			ClientManager.RegisterBroadcast<EquipmentSetMultipleItemsBroadcast>(OnClientEquipmentSetMultipleItemsBroadcastReceived);
 			ClientManager.RegisterBroadcast<EquipmentEquipItemBroadcast>(OnClientEquipmentEquipItemBroadcastReceived);
 			ClientManager.RegisterBroadcast<EquipmentUnequipItemBroadcast>(OnClientEquipmentUnequipItemBroadcastReceived);
 		}
 
+		/// <summary>
+		/// Called when the character stops. Unregisters client broadcast handlers for equipment operations if the local player owns this equipment.
+		/// </summary>
 		public override void OnStopCharacter()
 		{
 			base.OnStopCharacter();
@@ -105,6 +135,12 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Server sent a set item broadcast. Item slot is set to the received item details.
 		/// </summary>
+		/// <summary>
+		/// Handles a broadcast from the server to set a single equipment item.
+		/// Equips the received item in the specified slot.
+		/// </summary>
+		/// <param name="msg">The broadcast message containing item data.</param>
+		/// <param name="channel">The network channel used for the broadcast.</param>
 		private void OnClientEquipmentSetItemBroadcastReceived(EquipmentSetItemBroadcast msg, Channel channel)
 		{
 			Item newItem = new Item(msg.InstanceID, msg.Seed, msg.TemplateID, msg.StackSize);
@@ -114,6 +150,12 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Server sent a multiple set item broadcast. Item slot is set to the received item details.
 		/// </summary>
+		/// <summary>
+		/// Handles a broadcast from the server to set multiple equipment items.
+		/// Equips each received item in the specified slot.
+		/// </summary>
+		/// <param name="msg">The broadcast message containing multiple items.</param>
+		/// <param name="channel">The network channel used for the broadcast.</param>
 		private void OnClientEquipmentSetMultipleItemsBroadcastReceived(EquipmentSetMultipleItemsBroadcast msg, Channel channel)
 		{
 			foreach (EquipmentSetItemBroadcast subMsg in msg.Items)
@@ -126,6 +168,12 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Server sent an equip item broadcast.
 		/// </summary>
+		/// <summary>
+		/// Handles a broadcast from the server to equip an item from another inventory.
+		/// Performs the equip operation based on the source inventory type.
+		/// </summary>
+		/// <param name="msg">The broadcast message containing equip details.</param>
+		/// <param name="channel">The network channel used for the broadcast.</param>
 		private void OnClientEquipmentEquipItemBroadcastReceived(EquipmentEquipItemBroadcast msg, Channel channel)
 		{
 			switch (msg.FromInventory)
@@ -138,6 +186,7 @@ namespace FishMMO.Shared
 					}
 					break;
 				case InventoryType.Equipment:
+					// Equipment swaps are not handled here.
 					break;
 				case InventoryType.Bank:
 					if (Character.TryGet(out IBankController bankController) &&
@@ -153,6 +202,12 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Server sent an unequip item broadcast.
 		/// </summary>
+		/// <summary>
+		/// Handles a broadcast from the server to unequip an item to another inventory.
+		/// Performs the unequip operation based on the destination inventory type.
+		/// </summary>
+		/// <param name="msg">The broadcast message containing unequip details.</param>
+		/// <param name="channel">The network channel used for the broadcast.</param>
 		private void OnClientEquipmentUnequipItemBroadcastReceived(EquipmentUnequipItemBroadcast msg, Channel channel)
 		{
 			switch (msg.ToInventory)
@@ -164,6 +219,7 @@ namespace FishMMO.Shared
 					}
 					break;
 				case InventoryType.Equipment:
+					// Equipment swaps are not handled here.
 					break;
 				case InventoryType.Bank:
 					if (Character.TryGet(out IBankController bankController))
@@ -176,6 +232,11 @@ namespace FishMMO.Shared
 		}
 #endif
 
+		/// <summary>
+		/// Determines if the equipment can be manipulated (e.g., items moved or swapped).
+		/// Always returns true unless base logic restricts manipulation.
+		/// </summary>
+		/// <returns>True if manipulation is allowed, false otherwise.</returns>
 		public override bool CanManipulate()
 		{
 			if (!base.CanManipulate())
@@ -183,22 +244,21 @@ namespace FishMMO.Shared
 				return false;
 			}
 
-			/*if ((character.State == CharacterState.Idle ||
-				  character.State == CharacterState.Moving) &&
-				  character.State != CharacterState.UsingObject &&
-				  character.State != CharacterState.IsFrozen &&
-				  character.State != CharacterState.IsStunned &&
-				  character.State != CharacterState.IsMesmerized) return true;
-			*/
+			// Additional character state checks could be added here if needed.
 			return true;
 		}
 
+		/// <summary>
+		/// Activates the item in the specified equipment slot, typically triggering its use effect.
+		/// Only activates if the character is alive and the item exists in the slot.
+		/// </summary>
+		/// <param name="index">The equipment slot index to activate.</param>
 		public void Activate(int index)
 		{
 			if (!Character.TryGet(out ICharacterDamageController damageController) ||
 				!damageController.IsAlive)
 			{
-				//Log.Debug("Cannot activate an equipment while dead.");
+				// Cannot activate equipment while dead.
 				return;
 			}
 			if (TryGetItem(index, out Item item))
@@ -208,6 +268,15 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Equips the specified item into the given equipment slot, handling swaps and unequips as needed.
+		/// Ensures slot compatibility and updates both equipment and source container.
+		/// </summary>
+		/// <param name="item">The item to equip.</param>
+		/// <param name="inventoryIndex">The index in the source inventory.</param>
+		/// <param name="container">The source item container (e.g., inventory or bank).</param>
+		/// <param name="toSlot">The equipment slot to equip the item into.</param>
+		/// <returns>True if the item was successfully equipped, false otherwise.</returns>
 		public bool Equip(Item item, int inventoryIndex, IItemContainer container, ItemSlot toSlot)
 		{
 			if (item == null ||
@@ -218,7 +287,7 @@ namespace FishMMO.Shared
 			}
 
 			EquippableItemTemplate Equippable = item.Template as EquippableItemTemplate;
-			// make sure the slot type matches so we aren't equipping things in weird places
+			// Make sure the slot type matches so we aren't equipping things in incorrect places.
 			if (Equippable == null || toSlot != Equippable.Slot)
 			{
 				return false;
@@ -233,7 +302,7 @@ namespace FishMMO.Shared
 				{
 					previousItem.Equippable.Unequip();
 
-					// swap the items
+					// Swap the items.
 					if (!container.SetItemSlot(previousItem, inventoryIndex))
 					{
 						return false;
@@ -241,18 +310,18 @@ namespace FishMMO.Shared
 				}
 				else
 				{
-					// remove the item from the inventory
+					// Remove the item from the inventory.
 					container.RemoveItem(inventoryIndex);
 				}
 			}
 
-			// put the new item in the correct slot
+			// Put the new item in the correct slot.
 			if (!SetItemSlot(item, slotIndex))
 			{
 				return false;
 			}
 
-			// equip the item to the character (adds attributes.. etc..)
+			// Equip the item to the character (adds attributes, etc.).
 			if (item.IsEquippable)
 			{
 				item.Equippable.Equip(Character);
@@ -261,8 +330,13 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Unequips the item and puts it in the inventory.
+		/// Unequips the item from the specified slot and adds it to the given container (e.g., inventory or bank).
+		/// Ensures the item can be added before removing it from the equipment slot.
 		/// </summary>
+		/// <param name="container">The destination item container.</param>
+		/// <param name="slot">The equipment slot to unequip from.</param>
+		/// <param name="modifiedItems">The list of items modified during the operation.</param>
+		/// <returns>True if the item was successfully unequipped and added, false otherwise.</returns>
 		public bool Unequip(IItemContainer container, byte slot, out List<Item> modifiedItems)
 		{
 			if (!CanManipulate() ||
@@ -274,21 +348,21 @@ namespace FishMMO.Shared
 				return false;
 			}
 
-			// try to add the item back to the inventory before we remove it from the slot
+			// Try to add the item back to the inventory before removing it from the slot.
 			if (!container.TryAddItem(item, out modifiedItems))
 			{
 				return false;
 			}
 
-			// unequip the item
+			// Unequip the item.
 			if (item.IsEquippable)
 			{
 				item.Equippable.Unequip();
 			}
 
-			// remove the equipped item
+			// Remove the equipped item.
 			SetItemSlot(null, slot);
-			
+
 			return true;
 		}
 	}

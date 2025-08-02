@@ -15,6 +15,9 @@ namespace KinematicCharacterController
 		public Quaternion Rotation;
 		public Vector3 BaseVelocity;
 
+		// Reference ID to the platform for reconciliation
+		public long CurrentPlatformID;
+
 		public bool MustUnground;
 		public float MustUngroundTime;
 		public bool LastMovementIterationFoundAnyGround;

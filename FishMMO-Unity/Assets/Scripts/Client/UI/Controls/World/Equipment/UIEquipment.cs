@@ -5,19 +5,49 @@ using FishMMO.Shared;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// UI control for managing and displaying player equipment and attributes.
+	/// </summary>
 	public class UIEquipment : UICharacterControl
 	{
+		/// <summary>
+		/// Camera used for equipment view (e.g., 3D preview).
+		/// </summary>
 		private Camera equipmentViewCamera;
 
+		/// <summary>
+		/// The parent RectTransform for equipment UI elements.
+		/// </summary>
 		public RectTransform content;
+
+		/// <summary>
+		/// The label prefab for attribute categories and attributes.
+		/// </summary>
 		public TMP_Text UILabel;
+
+		/// <summary>
+		/// Prefab used to instantiate attribute labels.
+		/// </summary>
 		public UIAttribute AttributeLabelPrefab;
 
+		/// <summary>
+		/// List of equipment slot buttons.
+		/// </summary>
 		public List<UIEquipmentButton> buttons = new List<UIEquipmentButton>();
 
+		/// <summary>
+		/// List of category labels for attributes (e.g., Resource, Damage).
+		/// </summary>
 		public List<TMP_Text> attributeCategoryLabels = new List<TMP_Text>();
+
+		/// <summary>
+		/// Dictionary of attribute labels by attribute template ID.
+		/// </summary>
 		public Dictionary<long, UIAttribute> attributeLabels = new Dictionary<long, UIAttribute>();
 
+		/// <summary>
+		/// Called when the UI is starting. Initializes equipment buttons and their slot references.
+		/// </summary>
 		public override void OnStarting()
 		{
 			UIEquipmentButton[] equipmentButtons = gameObject.GetComponentsInChildren<UIEquipmentButton>();
@@ -31,6 +61,7 @@ namespace FishMMO.Client
 					int itemSlot = (int)button.ItemSlotType;
 					button.ReferenceID = itemSlot;
 
+					// Ensure the buttons list is large enough for the slot index
 					while (buttons.Count <= button.ReferenceID)
 					{
 						buttons.Add(null);
@@ -41,12 +72,18 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Called when the UI is being destroyed. Cleans up camera and attribute labels.
+		/// </summary>
 		public override void OnDestroying()
 		{
 			equipmentViewCamera = null;
 			DestroyAttributes();
 		}
 
+		/// <summary>
+		/// Toggles the visibility of the equipment UI and associated camera.
+		/// </summary>
 		public override void ToggleVisibility()
 		{
 			base.ToggleVisibility();
@@ -57,6 +94,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Shows the equipment UI and associated camera.
+		/// </summary>
 		public override void Show()
 		{
 			base.Show();
@@ -67,6 +107,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Hides the equipment UI and associated camera.
+		/// </summary>
 		public override void Hide()
 		{
 			base.Hide();
@@ -77,6 +120,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Destroys all attribute labels and category labels in the UI.
+		/// </summary>
 		private void DestroyAttributes()
 		{
 			if (attributeLabels != null)
@@ -97,6 +143,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Called before setting the character reference. Unsubscribes from equipment slot updates.
+		/// </summary>
 		public override void OnPreSetCharacter()
 		{
 			if (Character != null &&
@@ -106,6 +155,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Called after setting the character reference. Initializes equipment buttons and attribute labels.
+		/// </summary>
 		public override void OnPostSetCharacter()
 		{
 			base.OnPostSetCharacter();
@@ -130,6 +182,7 @@ namespace FishMMO.Client
 			if (Character != null &&
 				Character.TryGet(out ICharacterAttributeController attributeController))
 			{
+				// Categorize attributes for display
 				List<CharacterAttribute> resourceAttributes = new List<CharacterAttribute>();
 				List<CharacterAttribute> damageAttributes = new List<CharacterAttribute>();
 				List<CharacterAttribute> resistanceAttributes = new List<CharacterAttribute>();
@@ -160,6 +213,7 @@ namespace FishMMO.Client
 					}
 				}
 
+				// Add category labels and attribute labels for each category
 				TMP_Text label = Instantiate(UILabel, content);
 				label.text = "Resource";
 				label.fontSize = 16.0f;
@@ -213,6 +267,10 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Adds a UI label for a character attribute and subscribes to updates.
+		/// </summary>
+		/// <param name="attribute">The character attribute to display.</param>
 		private void AddCharacterAttributeLabel(CharacterAttribute attribute)
 		{
 			attribute.OnAttributeUpdated -= OnAttributeUpdated; // just in case..
@@ -239,6 +297,11 @@ namespace FishMMO.Client
 			attribute.OnAttributeUpdated += OnAttributeUpdated;
 		}
 
+		/// <summary>
+		/// Sets the equipment button slot display based on the item in the container.
+		/// </summary>
+		/// <param name="container">The equipment controller.</param>
+		/// <param name="button">The equipment button to update.</param>
 		private void SetButtonSlot(IEquipmentController container, UIEquipmentButton button)
 		{
 			if (container == null || button == null)
@@ -248,14 +311,11 @@ namespace FishMMO.Client
 
 			if (container.TryGetItem((int)button.ItemSlotType, out Item item))
 			{
-				//Log.Debug($"1 Setting Equipment Slot: {button.ItemSlotType} - {item.Template.Name}");
-
-				// update our button display
+				// Update button display with item icon and amount
 				if (button.Icon != null)
 				{
 					button.Icon.sprite = item.Template.Icon;
 				}
-				//inventorySlots[i].cooldownText = character.CooldownController.IsOnCooldown();
 				if (button.AmountText != null)
 				{
 					button.AmountText.text = item.IsStackable ? item.Stackable.Amount.ToString() : "";
@@ -263,11 +323,17 @@ namespace FishMMO.Client
 			}
 			else
 			{
-				// clear the slot
+				// Clear the slot if no item
 				button.Clear();
 			}
 		}
 
+		/// <summary>
+		/// Callback for when an equipment slot is updated. Refreshes the corresponding button display.
+		/// </summary>
+		/// <param name="container">The item container holding the equipment.</param>
+		/// <param name="item">The item in the updated slot.</param>
+		/// <param name="equipmentSlot">The index of the updated equipment slot.</param>
 		public void OnEquipmentSlotUpdated(IItemContainer container, Item item, int equipmentSlot)
 		{
 			if (container == null || buttons == null)
@@ -277,15 +343,12 @@ namespace FishMMO.Client
 
 			if (!container.IsSlotEmpty(equipmentSlot))
 			{
-				//Log.Debug($"2 Setting Equipment Slot: {equipmentSlot} - {item.Template.Name}");
-				
-				// update our button display
+				// Update button display with item icon and amount
 				UIEquipmentButton button = buttons[equipmentSlot];
 				if (button.Icon != null)
 				{
 					button.Icon.sprite = item.Template.Icon;
 				}
-				//inventorySlots[i].cooldownText = character.CooldownController.IsOnCooldown();
 				if (button.AmountText != null)
 				{
 					button.AmountText.text = item.IsStackable ? item.Stackable.Amount.ToString() : "";
@@ -293,11 +356,15 @@ namespace FishMMO.Client
 			}
 			else
 			{
-				// clear the slot
+				// Clear the slot if no item
 				buttons[equipmentSlot].Clear();
 			}
 		}
 
+		/// <summary>
+		/// Callback for when an attribute is updated. Refreshes the corresponding attribute label.
+		/// </summary>
+		/// <param name="attribute">The updated character attribute.</param>
 		public void OnAttributeUpdated(CharacterAttribute attribute)
 		{
 			if (attributeLabels.TryGetValue(attribute.Template.ID, out UIAttribute label))
@@ -322,6 +389,10 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Sets the camera used for equipment view (e.g., 3D preview).
+		/// </summary>
+		/// <param name="camera">The camera to set.</param>
 		public void SetEquipmentViewCamera(Camera camera)
 		{
 			if (camera == null)

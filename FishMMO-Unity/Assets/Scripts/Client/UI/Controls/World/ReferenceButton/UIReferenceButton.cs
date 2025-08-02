@@ -11,26 +11,53 @@ namespace FishMMO.Client
 	/// </summary>
 	public class UIReferenceButton : Button
 	{
+		/// <summary>
+		/// Constant representing a null reference ID for buttons.
+		/// </summary>
 		public const long NULL_REFERENCE_ID = -1;
 
+		/// <summary>
+		/// Reference to the currently displayed tooltip instance.
+		/// </summary>
 		protected UITooltip currentUITooltip;
 
 		/// <summary>
 		/// ReferenceID is equal to the inventory slot, equipment slot, or ability id based on Reference Type.
 		/// </summary>
 		public long ReferenceID = NULL_REFERENCE_ID;
+		/// <summary>
+		/// The type of reference button (inventory, equipment, bank, ability, etc.).
+		/// </summary>
 		public ReferenceButtonType Type = ReferenceButtonType.None;
+		/// <summary>
+		/// The icon image displayed on the button.
+		/// </summary>
 		[SerializeField]
 		public Image Icon;
+		/// <summary>
+		/// The default icon sprite to use when no item is present.
+		/// </summary>
 		[SerializeField]
 		public Sprite DefaultIconSprite;
+		/// <summary>
+		/// The text displaying cooldown information.
+		/// </summary>
 		[SerializeField]
 		public TMP_Text CooldownText;
+		/// <summary>
+		/// The text displaying item amount or stack size.
+		/// </summary>
 		[SerializeField]
 		public TMP_Text AmountText;
 
+		/// <summary>
+		/// The player character associated with this button.
+		/// </summary>
 		public IPlayerCharacter Character;
 
+		/// <summary>
+		/// Called when the button is disabled. Hides any active tooltip.
+		/// </summary>
 		protected override void OnDisable()
 		{
 			base.OnDisable();
@@ -38,9 +65,19 @@ namespace FishMMO.Client
 			ClearTooltip();
 		}
 
+		/// <summary>
+		/// Called when the left mouse button is clicked. Override for custom logic.
+		/// </summary>
 		public virtual void OnLeftClick() { }
+		/// <summary>
+		/// Called when the right mouse button is clicked. Override for custom logic.
+		/// </summary>
 		public virtual void OnRightClick() { }
 
+		/// <summary>
+		/// Handles pointer enter event to show tooltip for the referenced item or ability.
+		/// </summary>
+		/// <param name="eventData">Pointer event data.</param>
 		public override void OnPointerEnter(PointerEventData eventData)
 		{
 			base.OnPointerEnter(eventData);
@@ -48,6 +85,10 @@ namespace FishMMO.Client
 			ShowTooltip(ReferenceID);
 		}
 
+		/// <summary>
+		/// Shows the tooltip for the referenced item, equipment, bank item, or ability based on button type.
+		/// </summary>
+		/// <param name="referenceID">Reference ID to look up tooltip data.</param>
 		public virtual void ShowTooltip(long referenceID)
 		{
 			if (Character == null ||
@@ -55,6 +96,7 @@ namespace FishMMO.Client
 			{
 				return;
 			}
+			// Show tooltip based on button type
 			switch (Type)
 			{
 				case ReferenceButtonType.None:
@@ -93,9 +135,13 @@ namespace FishMMO.Client
 					break;
 				default:
 					return;
-			};
+			}
 		}
 
+		/// <summary>
+		/// Handles pointer exit event to hide tooltip.
+		/// </summary>
+		/// <param name="eventData">Pointer event data.</param>
 		public override void OnPointerExit(PointerEventData eventData)
 		{
 			base.OnPointerExit(eventData);
@@ -103,6 +149,10 @@ namespace FishMMO.Client
 			ClearTooltip();
 		}
 
+		/// <summary>
+		/// Handles pointer click event, invoking left or right click logic.
+		/// </summary>
+		/// <param name="eventData">Pointer event data.</param>
 		public override void OnPointerClick(PointerEventData eventData)
 		{
 			base.OnPointerClick(eventData);
@@ -117,6 +167,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Hides the currently displayed tooltip, if any.
+		/// </summary>
 		private void ClearTooltip()
 		{
 			if (currentUITooltip != null)
@@ -126,6 +179,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Clears the button state, resets icon and text, and hides tooltip.
+		/// </summary>
 		public virtual void Clear()
 		{
 			ReferenceID = NULL_REFERENCE_ID;

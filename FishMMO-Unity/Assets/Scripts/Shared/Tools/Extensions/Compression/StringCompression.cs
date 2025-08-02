@@ -5,8 +5,17 @@ using System.Text;
 
 namespace FishMMO.Shared
 {
+	/// <summary>
+	/// Static class providing methods for compressing and decompressing strings using GZip and Base64 encoding.
+	/// Includes file operations for reading and writing compressed strings.
+	/// </summary>
 	public static class StringCompression
 	{
+		/// <summary>
+		/// Compresses a string using GZip and encodes the result as a Base64 string.
+		/// </summary>
+		/// <param name="input">Input string to compress.</param>
+		/// <returns>Compressed and Base64-encoded string.</returns>
 		public static string CompressString(string input)
 		{
 			try
@@ -31,6 +40,11 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Decompresses a Base64-encoded, GZip-compressed string back to its original form.
+		/// </summary>
+		/// <param name="compressedInput">Compressed and Base64-encoded string.</param>
+		/// <returns>Decompressed original string.</returns>
 		public static string DecompressString(string compressedInput)
 		{
 			try
@@ -54,6 +68,11 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Writes a compressed, Base64-encoded string to a file.
+		/// </summary>
+		/// <param name="compressedString">Compressed and Base64-encoded string to write.</param>
+		/// <param name="filePath">File path to write the data.</param>
 		public static void WriteCompressedStringToFile(string compressedString, string filePath)
 		{
 			try
@@ -71,6 +90,11 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Reads a compressed string from a file and returns it as a Base64-encoded string.
+		/// </summary>
+		/// <param name="filePath">File path to read the compressed data from.</param>
+		/// <returns>Compressed and Base64-encoded string read from the file.</returns>
 		public static string ReadCompressedStringFromFile(string filePath)
 		{
 			try

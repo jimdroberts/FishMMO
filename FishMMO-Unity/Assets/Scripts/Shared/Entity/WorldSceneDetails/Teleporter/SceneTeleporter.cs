@@ -3,11 +3,20 @@ using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
+	/// <summary>
+	/// MonoBehaviour for scene teleporters. Handles teleportation logic on the server and draws gizmos for visualization in the editor.
+	/// </summary>
 	public class SceneTeleporter : MonoBehaviour
 	{
 #if UNITY_EDITOR
+		/// <summary>
+		/// The color used to draw the teleporter gizmo in the editor.
+		/// </summary>
 		public Color GizmoColor = Color.magenta;
 
+		/// <summary>
+		/// Draws a gizmo at the teleporter position for visualization in the Unity editor.
+		/// </summary>
 		void OnDrawGizmos()
 		{
 			Collider collider = gameObject.GetComponent<Collider>();
@@ -19,6 +28,10 @@ namespace FishMMO.Shared
 #endif
 
 #if UNITY_SERVER
+		/// <summary>
+		/// Called when another collider enters the teleporter's trigger. Teleports the player character if valid and not already teleporting.
+		/// </summary>
+		/// <param name="other">The collider that entered the trigger.</param>
 		void OnTriggerEnter(Collider other)
 		{
 			if (other == null ||
@@ -40,6 +53,7 @@ namespace FishMMO.Shared
 				return;
 			}
 
+			// Teleport the character to the destination associated with this teleporter's name.
 			character.Teleport(gameObject.name);
 		}
 #endif

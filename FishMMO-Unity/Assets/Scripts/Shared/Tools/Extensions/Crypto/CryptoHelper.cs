@@ -4,8 +4,16 @@ using System.Security.Cryptography;
 
 namespace FishMMO.Shared
 {
+	/// <summary>
+	/// Static class providing cryptographic helper methods for RSA key export/import, key generation, and AES encryption/decryption.
+	/// </summary>
 	public static class CryptoHelper
 	{
+		/// <summary>
+		/// Exports the public key from an RSA instance as a structured byte array (modulus + exponent).
+		/// </summary>
+		/// <param name="rsa">RSA instance to export the public key from.</param>
+		/// <returns>Byte array containing the modulus and exponent of the public key.</returns>
 		public static byte[] ExportPublicKey(RSA rsa)
 		{
 			RSAParameters rsaParameters = rsa.ExportParameters(false); // false to get the public key only
@@ -26,6 +34,11 @@ namespace FishMMO.Shared
 			return publicKeyBytes;
 		}
 
+		/// <summary>
+		/// Imports a public key into an RSA instance from a structured byte array (modulus + exponent).
+		/// </summary>
+		/// <param name="rsa">RSA instance to import the public key into.</param>
+		/// <param name="publicKeyBytes">Byte array containing the modulus and exponent.</param>
 		public static void ImportPublicKey(RSA rsa, byte[] publicKeyBytes)
 		{
 			int modulusLength = (rsa.KeySize + 7) / 8; // Calculate modulus length in bytes
@@ -48,6 +61,11 @@ namespace FishMMO.Shared
 			rsa.ImportParameters(rsaParameters);
 		}
 
+		/// <summary>
+		/// Generates a cryptographically secure random key of the specified length in bytes.
+		/// </summary>
+		/// <param name="length">Length of the key in bytes.</param>
+		/// <returns>Randomly generated key as a byte array.</returns>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static byte[] GenerateKey(int length)
 		{
@@ -59,6 +77,13 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Encrypts input data using AES symmetric encryption with the provided key and IV.
+		/// </summary>
+		/// <param name="symmetricKey">AES symmetric key.</param>
+		/// <param name="iv">Initialization vector for AES.</param>
+		/// <param name="input">Input data to encrypt.</param>
+		/// <returns>Encrypted data as a byte array.</returns>
 		public static byte[] EncryptAES(byte[] symmetricKey, byte[] iv, byte[] input)
 		{
 			using (Aes aes = Aes.Create())
@@ -77,6 +102,13 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Decrypts input data using AES symmetric decryption with the provided key and IV.
+		/// </summary>
+		/// <param name="symmetricKey">AES symmetric key.</param>
+		/// <param name="iv">Initialization vector for AES.</param>
+		/// <param name="input">Input data to decrypt.</param>
+		/// <returns>Decrypted data as a byte array.</returns>
 		public static byte[] DecryptAES(byte[] symmetricKey, byte[] iv, byte[] input)
 		{
 			using (Aes aes = Aes.Create())

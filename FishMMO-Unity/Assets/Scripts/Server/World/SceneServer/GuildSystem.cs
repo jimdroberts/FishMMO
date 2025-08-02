@@ -15,29 +15,60 @@ namespace FishMMO.Server
 	/// </summary>
 	public class GuildSystem : ServerBehaviour
 	{
+		/// <summary>
+		/// Current connection state of the server.
+		/// </summary>
 		private LocalConnectionState serverState;
+		/// <summary>
+		/// Timestamp of the last successful fetch from the database.
+		/// </summary>
 		private DateTime lastFetchTime = DateTime.UtcNow;
+		/// <summary>
+		/// Time remaining until the next database poll for guild updates.
+		/// </summary>
 		private float nextPump = 0.0f;
 
+		/// <summary>
+		/// Maximum number of members allowed in a guild.
+		/// </summary>
 		public int MaxGuildSize = 100;
+		/// <summary>
+		/// Maximum length allowed for a guild name.
+		/// </summary>
 		public int MaxGuildNameLength = 64;
+		/// <summary>
+		/// The server guild update pump rate limit in seconds.
+		/// </summary>
 		[Tooltip("The server guild update pump rate limit in seconds.")]
 		public float UpdatePumpRate = 1.0f;
 
 		/// <summary>
 		/// Tracks all of the members for a guild if any of the guild members are logged in to this server.
+		/// Key: Guild ID, Value: Set of Character IDs.
 		/// </summary>
 		private Dictionary<long, HashSet<long>> guildMemberTracker = new Dictionary<long, HashSet<long>>();
 		/// <summary>
 		/// Tracks all active guilds and currently online guild members on this scene server.
+		/// Key: Guild ID, Value: Set of Character IDs.
 		/// </summary>
 		private Dictionary<long, HashSet<long>> guildCharacterTracker = new Dictionary<long, HashSet<long>>();
 		/// <summary>
-		/// Pending guild invites Dictionary<FromCharacterID, ToCharacterID>
+		/// Tracks pending guild invitations by client ID and guild ID.
+		/// Key: FromCharacterID, Value: ToCharacterID.
 		/// </summary>
 		private readonly Dictionary<long, long> pendingInvitations = new Dictionary<long, long>();
 
+		/// <summary>
+		/// Registered chat commands for guild actions.
+		/// </summary>
 		private Dictionary<string, ChatCommand> guildChatCommands;
+
+		/// <summary>
+		/// Handles guild invite chat commands.
+		/// </summary>
+		/// <param name="sender">The character sending the invite.</param>
+		/// <param name="msg">Chat broadcast message containing the target character name.</param>
+		/// <returns>True if invite was sent, false otherwise.</returns>
 		public bool OnGuildInvite(IPlayerCharacter sender, ChatBroadcast msg)
 		{
 			string characterName = msg.Text.Trim().ToLower();
@@ -54,6 +85,9 @@ namespace FishMMO.Server
 			return false;
 		}
 
+		/// <summary>
+		/// Initializes the guild system, registering chat commands and broadcast handlers, and character events.
+		/// </summary>
 		public override void InitializeOnce()
 		{
 			if (ServerManager != null &&
@@ -87,6 +121,9 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Cleans up the guild system, unregistering broadcast handlers and character events.
+		/// </summary>
 		public override void Destroying()
 		{
 			if (Server != null)
@@ -108,11 +145,18 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Handles changes in the server's connection state.
+		/// </summary>
+		/// <param name="args">Arguments containing the new connection state.</param>
 		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs args)
 		{
 			serverState = args.ConnectionState;
 		}
 
+		/// <summary>
+		/// Unity LateUpdate callback. Polls the database for guild updates at the specified rate and processes them.
+		/// </summary>
 		void LateUpdate()
 		{
 			if (serverState == LocalConnectionState.Started)
@@ -128,6 +172,10 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Fetches new guild updates from the database since the last fetch.
+		/// </summary>
+		/// <returns>List of new guild update entities.</returns>
 		private List<GuildUpdateEntity> FetchGuildUpdates()
 		{
 			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
@@ -141,7 +189,10 @@ namespace FishMMO.Server
 			return updates;
 		}
 
-		// process updates from the database
+		/// <summary>
+		/// Processes a list of guild updates, synchronizing guild membership and broadcasting changes to clients.
+		/// </summary>
+		/// <param name="updates">List of guild update entities to process.</param>
 		private void ProcessGuildUpdates(List<GuildUpdateEntity> updates)
 		{
 			if (Server == null || Server.NpgsqlDbContextFactory == null || updates == null || updates.Count < 1)
@@ -232,6 +283,8 @@ namespace FishMMO.Server
 		/// <summary>
 		/// Adds a mapping for the Guild to Guild Members connected to this Scene Server.
 		/// </summary>
+		/// <param name="guildID">ID of the guild.</param>
+		/// <param name="characterID">ID of the character to add.</param>
 		public void AddGuildCharacterTracker(long guildID, long characterID)
 		{
 			if (guildID == 0)
@@ -251,6 +304,8 @@ namespace FishMMO.Server
 		/// <summary>
 		/// Removes the mapping of Guild to Guild Members connected to this Scene Server.
 		/// </summary>
+		/// <param name="guildID">ID of the guild.</param>
+		/// <param name="characterID">ID of the character to remove.</param>
 		public void RemoveGuildCharacterTracker(long guildID, long characterID)
 		{
 			if (guildID == 0)
@@ -270,6 +325,11 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Handles character connect event, adding the character to the guild tracker and saving guild update.
+		/// </summary>
+		/// <param name="conn">Network connection of the character.</param>
+		/// <param name="character">The character that connected.</param>
 		public void CharacterSystem_OnConnect(NetworkConnection conn, IPlayerCharacter character)
 		{
 			if (character == null)
@@ -296,6 +356,11 @@ namespace FishMMO.Server
 			GuildUpdateService.Save(dbContext, guildController.ID);
 		}
 
+		/// <summary>
+		/// Handles character disconnect event, removing the character from the guild tracker and saving guild update.
+		/// </summary>
+		/// <param name="conn">Network connection of the character.</param>
+		/// <param name="character">The character that disconnected.</param>
 		public void CharacterSystem_OnDisconnect(NetworkConnection conn, IPlayerCharacter character)
 		{
 			if (character != null)
@@ -327,6 +392,12 @@ namespace FishMMO.Server
 			GuildUpdateService.Save(dbContext, guildController.ID);
 		}
 
+		/// <summary>
+		/// Handles guild creation broadcast, validates and creates a new guild for the requesting character.
+		/// </summary>
+		/// <param name="conn">Network connection of the requester.</param>
+		/// <param name="msg">GuildCreateBroadcast message containing guild creation details.</param>
+		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerGuildCreateBroadcastReceived(NetworkConnection conn, GuildCreateBroadcast msg, Channel channel)
 		{
 			if (conn.FirstObject == null)
@@ -389,6 +460,13 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Handles guild invitation broadcast, validates inviter and target, and sends invitation to the target character.
+		/// Only guild leaders or officers can invite, and invitations are tracked to prevent duplicates.
+		/// </summary>
+		/// <param name="conn">Network connection of the inviter.</param>
+		/// <param name="msg">GuildInviteBroadcast message containing inviter and target IDs.</param>
+		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerGuildInviteBroadcastReceived(NetworkConnection conn, GuildInviteBroadcast msg, Channel channel)
 		{
 			if (Server.NpgsqlDbContextFactory == null)
@@ -405,7 +483,7 @@ namespace FishMMO.Server
 			// validate guild leader or officer is inviting
 			if (inviter == null ||
 				inviter.ID < 1 ||
-				inviter.Character.ID == msg.TargetCharacterID || 
+				inviter.Character.ID == msg.TargetCharacterID ||
 				!(inviter.Rank == GuildRank.Leader | inviter.Rank == GuildRank.Officer) ||
 				!CharacterGuildService.ExistsNotFull(dbContext, inviter.ID, MaxGuildSize))
 			{
@@ -441,6 +519,12 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Handles acceptance of a guild invitation, validates the invite, adds the character to the guild, and broadcasts the update.
+		/// </summary>
+		/// <param name="conn">Network connection of the accepting character.</param>
+		/// <param name="msg">GuildAcceptInviteBroadcast message containing acceptance details.</param>
+		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerGuildAcceptInviteBroadcastReceived(NetworkConnection conn, GuildAcceptInviteBroadcast msg, Channel channel)
 		{
 			if (conn.FirstObject == null)
@@ -473,7 +557,7 @@ namespace FishMMO.Server
 					guildController.Rank = GuildRank.Member;
 
 					AddGuildCharacterTracker(guildController.ID, guildController.Character.ID);
-					
+
 					CharacterGuildService.Save(dbContext, guildController.Character);
 					// tell the other servers to update their guild lists
 					GuildUpdateService.Save(dbContext, guildController.ID);
@@ -490,6 +574,12 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Handles decline of a guild invitation, removes pending invitation for the character.
+		/// </summary>
+		/// <param name="conn">Network connection of the declining character.</param>
+		/// <param name="msg">GuildDeclineInviteBroadcast message containing decline details.</param>
+		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerGuildDeclineInviteBroadcastReceived(NetworkConnection conn, GuildDeclineInviteBroadcast msg, Channel channel)
 		{
 			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
@@ -499,6 +589,12 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Handles guild leave broadcast, validates character, transfers leadership if needed, removes member from guild, and updates or deletes guild as appropriate.
+		/// </summary>
+		/// <param name="conn">Network connection of the leaving character.</param>
+		/// <param name="msg">GuildLeaveBroadcast message containing leave details.</param>
+		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerGuildLeaveBroadcastReceived(NetworkConnection conn, GuildLeaveBroadcast msg, Channel channel)
 		{
 			if (Server.NpgsqlDbContextFactory == null)
@@ -594,6 +690,13 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Handles guild member removal broadcast, validates and removes a member from the guild in the database.
+		/// Only officers and leaders can remove other members.
+		/// </summary>
+		/// <param name="conn">Network connection of the requester.</param>
+		/// <param name="msg">GuildRemoveBroadcast message containing member ID to remove.</param>
+		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerGuildRemoveBroadcastReceived(NetworkConnection conn, GuildRemoveBroadcast msg, Channel channel)
 		{
 			if (Server.NpgsqlDbContextFactory == null)
@@ -609,7 +712,7 @@ namespace FishMMO.Server
 			// validate character
 			if (guildController == null ||
 				guildController.ID < 1 ||
-				guildController.Rank < GuildRank.Officer) 
+				guildController.Rank < GuildRank.Officer)
 			{
 				return;
 			}
@@ -637,6 +740,13 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Handles guild rank change broadcast, validates leader and target, and updates ranks in the database.
+		/// Only guild leaders can promote another member to a new rank.
+		/// </summary>
+		/// <param name="conn">Network connection of the requester.</param>
+		/// <param name="msg">GuildChangeRankBroadcast message containing target member ID and new rank.</param>
+		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerGuildChangeRankBroadcastReceived(NetworkConnection conn, GuildChangeRankBroadcast msg, Channel channel)
 		{
 			if (Server.NpgsqlDbContextFactory == null)

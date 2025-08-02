@@ -14,6 +14,9 @@ namespace FishMMO.Server
 	// Character Inventory Manager handles the players inventory
 	public class CharacterInventorySystem : ServerBehaviour
 	{
+		/// <summary>
+		/// Initializes the character inventory system, registering broadcast handlers for inventory, equipment, and bank actions.
+		/// </summary>
 		public override void InitializeOnce()
 		{
 			if (Server != null)
@@ -33,6 +36,9 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Cleans up the character inventory system, unregistering broadcast handlers for inventory, equipment, and bank actions.
+		/// </summary>
 		public override void Destroying()
 		{
 			if (Server != null)
@@ -48,11 +54,21 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Swaps two items within the same container and updates the database slots.
+		/// </summary>
+		/// <param name="dbContext">Database context for updates.</param>
+		/// <param name="characterID">ID of the character owning the container.</param>
+		/// <param name="container">Item container to swap items in.</param>
+		/// <param name="fromIndex">Source slot index.</param>
+		/// <param name="toIndex">Target slot index.</param>
+		/// <param name="onDatabaseUpdateSlot">Callback to update database slot for each item.</param>
+		/// <returns>True if swap succeeded, false otherwise.</returns>
 		public bool SwapContainerItems(NpgsqlDbContext dbContext,
-									   long characterID,
-									   IItemContainer container,
-									   int fromIndex, int toIndex,
-									   Action<NpgsqlDbContext, long, Item> onDatabaseUpdateSlot)
+								   long characterID,
+								   IItemContainer container,
+								   int fromIndex, int toIndex,
+								   Action<NpgsqlDbContext, long, Item> onDatabaseUpdateSlot)
 		{
 			if (container != null &&
 				container.SwapItemSlots(fromIndex, toIndex, out Item fromItem, out Item toItem))
@@ -65,13 +81,26 @@ namespace FishMMO.Server
 			return false;
 		}
 
+		/// <summary>
+		/// Swaps items between two containers and updates the database slots as needed.
+		/// </summary>
+		/// <param name="dbContext">Database context for updates.</param>
+		/// <param name="characterID">ID of the character owning the containers.</param>
+		/// <param name="from">Source item container.</param>
+		/// <param name="to">Target item container.</param>
+		/// <param name="fromIndex">Source slot index.</param>
+		/// <param name="toIndex">Target slot index.</param>
+		/// <param name="onDatabaseSetOldSlot">Callback to set old slot in database.</param>
+		/// <param name="onDatabaseDeleteOldSlot">Callback to delete old slot in database.</param>
+		/// <param name="onDatabaseSetNewSlot">Callback to set new slot in database.</param>
+		/// <returns>True if swap succeeded, false otherwise.</returns>
 		public bool SwapContainerItems(NpgsqlDbContext dbContext,
-									   long characterID,
-									   IItemContainer from, IItemContainer to,
-									   int fromIndex, int toIndex,
-									   Action<NpgsqlDbContext, long, Item> onDatabaseSetOldSlot = null,
-									   Action<NpgsqlDbContext, long, long> onDatabaseDeleteOldSlot = null,
-									   Action<NpgsqlDbContext, long, Item> onDatabaseSetNewSlot = null)
+								   long characterID,
+								   IItemContainer from, IItemContainer to,
+								   int fromIndex, int toIndex,
+								   Action<NpgsqlDbContext, long, Item> onDatabaseSetOldSlot = null,
+								   Action<NpgsqlDbContext, long, long> onDatabaseDeleteOldSlot = null,
+								   Action<NpgsqlDbContext, long, Item> onDatabaseSetNewSlot = null)
 		{
 			// same container... do the quick swap
 			if (from == to)
@@ -104,6 +133,12 @@ namespace FishMMO.Server
 			return false;
 		}
 
+		/// <summary>
+		/// Handles broadcast to remove an item from the player's inventory, updates the database and notifies the client.
+		/// </summary>
+		/// <param name="conn">Network connection of the client.</param>
+		/// <param name="msg">InventoryRemoveItemBroadcast message.</param>
+		/// <param name="channel">Network channel used for the broadcast.</param>
 		private void OnServerInventoryRemoveItemBroadcastReceived(NetworkConnection conn, InventoryRemoveItemBroadcast msg, Channel channel)
 		{
 			if (conn == null ||
@@ -132,6 +167,12 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Handles broadcast to swap item slots in the player's inventory or bank, updates the database and notifies the client.
+		/// </summary>
+		/// <param name="conn">Network connection of the client.</param>
+		/// <param name="msg">InventorySwapItemSlotsBroadcast message.</param>
+		/// <param name="channel">Network channel used for the broadcast.</param>
 		private void OnServerInventorySwapItemSlotsBroadcastReceived(NetworkConnection conn, InventorySwapItemSlotsBroadcast msg, Channel channel)
 		{
 			if (conn == null ||
@@ -216,6 +257,12 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Handles broadcast to equip an item from inventory or bank, updates the database and notifies the client.
+		/// </summary>
+		/// <param name="conn">Network connection of the client.</param>
+		/// <param name="msg">EquipmentEquipItemBroadcast message.</param>
+		/// <param name="channel">Network channel used for the broadcast.</param>
 		private void OnServerEquipmentEquipItemBroadcastReceived(NetworkConnection conn, EquipmentEquipItemBroadcast msg, Channel channel)
 		{
 			if (conn == null ||
@@ -322,6 +369,12 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Handles broadcast to unequip an item to inventory or bank, updates the database and notifies the client.
+		/// </summary>
+		/// <param name="conn">Network connection of the client.</param>
+		/// <param name="msg">EquipmentUnequipItemBroadcast message.</param>
+		/// <param name="channel">Network channel used for the broadcast.</param>
 		private void OnServerEquipmentUnequipItemBroadcastReceived(NetworkConnection conn, EquipmentUnequipItemBroadcast msg, Channel channel)
 		{
 			if (conn == null ||
@@ -452,6 +505,12 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Handles broadcast to remove an item from the player's bank, updates the database and notifies the client.
+		/// </summary>
+		/// <param name="conn">Network connection of the client.</param>
+		/// <param name="msg">BankRemoveItemBroadcast message.</param>
+		/// <param name="channel">Network channel used for the broadcast.</param>
 		private void OnServerBankRemoveItemBroadcastReceived(NetworkConnection conn, BankRemoveItemBroadcast msg, Channel channel)
 		{
 			if (conn == null ||
@@ -480,6 +539,12 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Handles broadcast to swap item slots in the player's bank, updates the database and notifies the client.
+		/// </summary>
+		/// <param name="conn">Network connection of the client.</param>
+		/// <param name="msg">BankSwapItemSlotsBroadcast message.</param>
+		/// <param name="channel">Network channel used for the broadcast.</param>
 		private void OnServerBankSwapItemSlotsBroadcastReceived(NetworkConnection conn, BankSwapItemSlotsBroadcast msg, Channel channel)
 		{
 			if (conn == null ||
@@ -557,6 +622,12 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Validates that the banker scene object is present, in the correct scene, and the character is in range.
+		/// </summary>
+		/// <param name="sceneObjectID">ID of the scene object to validate.</param>
+		/// <param name="character">Player character interacting with the banker.</param>
+		/// <returns>True if validation succeeds, false otherwise.</returns>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private bool ValidateBankerSceneObject(long sceneObjectID, IPlayerCharacter character)
 		{

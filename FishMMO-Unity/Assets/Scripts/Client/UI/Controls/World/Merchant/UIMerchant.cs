@@ -10,36 +10,83 @@ namespace FishMMO.Client
 {
 	public class UIMerchant : UICharacterControl
 	{
+		/// <summary>
+		/// The parent RectTransform for merchant entry buttons.
+		/// </summary>
 		public RectTransform Parent;
+		/// <summary>
+		/// The prefab used to instantiate merchant entry buttons.
+		/// </summary>
 		public UITooltipButton Prefab;
 
+		/// <summary>
+		/// Button to show abilities tab.
+		/// </summary>
 		public Button AbilitiesButton;
+		/// <summary>
+		/// Button to show ability events tab.
+		/// </summary>
 		public Button AbilityEventsButton;
+		/// <summary>
+		/// Button to show items tab.
+		/// </summary>
 		public Button ItemsButton;
 
+		/// <summary>
+		/// List of ability entry buttons.
+		/// </summary>
 		private List<UITooltipButton> Abilities;
+		/// <summary>
+		/// List of ability event entry buttons.
+		/// </summary>
 		private List<UITooltipButton> AbilityEvents;
+		/// <summary>
+		/// List of item entry buttons.
+		/// </summary>
 		private List<UITooltipButton> Items;
 
+		/// <summary>
+		/// The last merchant's interactable ID.
+		/// </summary>
 		private long lastMerchantID = 0;
+		/// <summary>
+		/// The current merchant template ID.
+		/// </summary>
 		private int currentTemplateID = 0;
+		/// <summary>
+		/// The currently selected merchant tab.
+		/// </summary>
 		private MerchantTabType currentTab = MerchantTabType.Item;
 
+		/// <summary>
+		/// Called when the client is set. Registers merchant broadcast handler.
+		/// </summary>
 		public override void OnClientSet()
 		{
 			Client.NetworkManager.ClientManager.RegisterBroadcast<MerchantBroadcast>(OnClientMerchantBroadcastReceived);
 		}
 
+		/// <summary>
+		/// Called when the client is unset. Unregisters merchant broadcast handler.
+		/// </summary>
 		public override void OnClientUnset()
 		{
 			Client.NetworkManager.ClientManager.UnregisterBroadcast<MerchantBroadcast>(OnClientMerchantBroadcastReceived);
 		}
 
+		/// <summary>
+		/// Called when the merchant UI is being destroyed. Clears all entry slots.
+		/// </summary>
 		public override void OnDestroying()
 		{
 			ClearAllSlots();
 		}
 
+		/// <summary>
+		/// Handles merchant broadcast messages, sets up merchant entry buttons and tabs.
+		/// </summary>
+		/// <param name="msg">Merchant broadcast message.</param>
+		/// <param name="channel">Network channel.</param>
 		private void OnClientMerchantBroadcastReceived(MerchantBroadcast msg, Channel channel)
 		{
 			lastMerchantID = msg.InteractableID;
@@ -47,7 +94,7 @@ namespace FishMMO.Client
 			MerchantTemplate template = MerchantTemplate.Get<MerchantTemplate>(currentTemplateID);
 			if (template != null)
 			{
-				// set up prefab lists
+				// Set up prefab lists for each tab
 				SetButtonSlots(template.Abilities.Select(s => s as ITooltip).ToList(), ref Abilities, AbilityEntry_OnLeftClick, AbilityEntry_OnRightClick);
 				AbilitiesButton.gameObject.SetActive((Abilities == null || Abilities.Count < 1) ? false : true);
 
@@ -57,7 +104,7 @@ namespace FishMMO.Client
 				SetButtonSlots(template.Items.Select(s => s as ITooltip).ToList(), ref Items, ItemEntry_OnLeftClick, ItemEntry_OnRightClick);
 				ItemsButton.gameObject.SetActive((Items == null || Items.Count < 1) ? false : true);
 
-				// show the first valid tab if any otherwise hide
+				// Show the first valid tab if any, otherwise hide
 				if (AbilitiesButton.gameObject.activeSelf)
 				{
 					currentTab = MerchantTabType.Ability;
@@ -89,6 +136,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Clears all merchant entry slots and resets merchant state.
+		/// </summary>
 		private void ClearAllSlots()
 		{
 			lastMerchantID = 0;
@@ -97,6 +147,10 @@ namespace FishMMO.Client
 			ClearSlots(ref Items);
 		}
 
+		/// <summary>
+		/// Clears the specified list of merchant entry buttons and destroys their game objects.
+		/// </summary>
+		/// <param name="slots">Reference to the list of entry buttons.</param>
 		private void ClearSlots(ref List<UITooltipButton> slots)
 		{
 			if (slots != null)
@@ -116,6 +170,13 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Sets up merchant entry buttons for a given list of items, assigning click handlers.
+		/// </summary>
+		/// <param name="items">List of items to display.</param>
+		/// <param name="slots">Reference to the list of entry buttons.</param>
+		/// <param name="onLeftClick">Handler for left click.</param>
+		/// <param name="onRightClick">Handler for right click.</param>
 		private void SetButtonSlots(List<ITooltip> items, ref List<UITooltipButton> slots, Action<int, object[]> onLeftClick, Action<int, object[]> onRightClick)
 		{
 			ClearSlots(ref slots);
@@ -142,6 +203,10 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Handles tab button clicks, switching the visible merchant tab.
+		/// </summary>
+		/// <param name="type">The tab type as an integer.</param>
 		public void Tab_OnClick(int type)
 		{
 			MerchantTabType tabType = (MerchantTabType)type;
@@ -169,6 +234,11 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Shows or hides a list of merchant entry buttons.
+		/// </summary>
+		/// <param name="buttons">List of entry buttons.</param>
+		/// <param name="show">Whether to show or hide the buttons.</param>
 		private void ShowEntries(List<UITooltipButton> buttons, bool show = true)
 		{
 			if (buttons == null ||
@@ -182,6 +252,11 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Handles Ctrl+click purchase events for merchant entries.
+		/// </summary>
+		/// <param name="index">Index of the entry.</param>
+		/// <param name="optionalParams">Optional parameters.</param>
 		private void PurchaseEventEntry_OnCtrlClick(int index, object[] optionalParams)
 		{
 			switch (currentTab)
@@ -221,6 +296,9 @@ namespace FishMMO.Client
 			Client.Broadcast(message, Channel.Reliable);
 		}
 
+		/// <summary>
+		/// Handles left click events for ability entries.
+		/// </summary>
 		private void AbilityEntry_OnLeftClick(int index, object[] optionalParams)
 		{
 			if (index > -1 && index < Abilities.Count &&
@@ -229,10 +307,16 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Handles right click events for ability entries.
+		/// </summary>
 		private void AbilityEntry_OnRightClick(int index, object[] optionalParams)
 		{
 		}
 
+		/// <summary>
+		/// Handles left click events for ability event entries.
+		/// </summary>
 		private void AbilityEventEntry_OnLeftClick(int index, object[] optionalParams)
 		{
 			if (index > -1 && index < AbilityEvents.Count &&
@@ -241,10 +325,16 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Handles right click events for ability event entries.
+		/// </summary>
 		private void AbilityEventEntry_OnRightClick(int index, object[] optionalParams)
 		{
 		}
 
+		/// <summary>
+		/// Handles left click events for item entries.
+		/// </summary>
 		private void ItemEntry_OnLeftClick(int index, object[] optionalParams)
 		{
 			if (index > -1 && index < Items.Count &&
@@ -253,6 +343,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Handles right click events for item entries.
+		/// </summary>
 		private void ItemEntry_OnRightClick(int index, object[] optionalParams)
 		{
 		}

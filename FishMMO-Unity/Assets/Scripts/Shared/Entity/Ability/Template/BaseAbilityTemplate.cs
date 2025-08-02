@@ -4,39 +4,106 @@ using System.Collections.Generic;
 
 namespace FishMMO.Shared
 {
+	/// <summary>
+	/// Abstract base ScriptableObject for ability templates, providing common fields and tooltip logic.
+	/// </summary>
 	public abstract class BaseAbilityTemplate : CachedScriptableObject<BaseAbilityTemplate>, ITooltip, ICachedObject
 	{
+		/// <summary>
+		/// The icon representing the ability.
+		/// </summary>
 		public Sprite icon;
+
+		/// <summary>
+		/// Description of the ability.
+		/// </summary>
 		public string Description;
+
+		/// <summary>
+		/// Time required to activate the ability.
+		/// </summary>
 		public float ActivationTime;
+
+		/// <summary>
+		/// Lifetime of the ability effect.
+		/// </summary>
 		public float LifeTime;
+
+		/// <summary>
+		/// Speed of the ability effect.
+		/// </summary>
 		public float Speed;
+
+		/// <summary>
+		/// Cooldown time for the ability.
+		/// </summary>
 		public float Cooldown;
+
+		/// <summary>
+		/// Price or cost of the ability.
+		/// </summary>
 		public int Price;
+
+		/// <summary>
+		/// Resources required to use the ability.
+		/// </summary>
 		public AbilityResourceDictionary Resources = new AbilityResourceDictionary();
+
+		/// <summary>
+		/// Attributes required to use the ability.
+		/// </summary>
 		public AbilityResourceDictionary RequiredAttributes = new AbilityResourceDictionary();
+
+		/// <summary>
+		/// Faction required to use the ability.
+		/// </summary>
 		public FactionTemplate RequiredFaction;
+
+		/// <summary>
+		/// Archetype required to use the ability.
+		/// </summary>
 		public ArchetypeTemplate RequiredArchetype;
 
+		/// <summary>
+		/// The name of the ability (from the ScriptableObject name).
+		/// </summary>
 		public string Name { get { return this.name; } }
 
+		/// <summary>
+		/// The icon representing the ability (property accessor).
+		/// </summary>
 		public Sprite Icon { get { return this.icon; } }
 
+		/// <summary>
+		/// Returns the tooltip string for the ability.
+		/// </summary>
 		public virtual string Tooltip()
 		{
 			return PrimaryTooltip(null);
 		}
 
+		/// <summary>
+		/// Returns the tooltip string for the ability, optionally combining with other tooltips.
+		/// </summary>
+		/// <param name="combineList">List of tooltips to combine.</param>
 		public virtual string Tooltip(List<ITooltip> combineList)
 		{
 			return PrimaryTooltip(combineList);
 		}
 
+		/// <summary>
+		/// Returns the formatted description for the ability.
+		/// </summary>
 		public virtual string GetFormattedDescription()
 		{
 			return Description;
 		}
 
+		/// <summary>
+		/// Builds the primary tooltip string for the ability, including name, description, and stats.
+		/// </summary>
+		/// <param name="combineList">List of tooltips to combine.</param>
+		/// <returns>Formatted tooltip string.</returns>
 		private string PrimaryTooltip(List<ITooltip> combineList)
 		{
 			using (var sb = ZString.CreateStringBuilder())

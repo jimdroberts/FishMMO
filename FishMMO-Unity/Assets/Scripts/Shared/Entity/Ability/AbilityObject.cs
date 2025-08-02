@@ -5,23 +5,63 @@ using SceneManager = UnityEngine.SceneManagement.SceneManager;
 
 namespace FishMMO.Shared
 {
+
+	/// <summary>
+	/// Represents a spawned ability object in the world, handling its lifetime, collision, and event triggers.
+	/// </summary>
 	public class AbilityObject : MonoBehaviour
 	{
+		/// <summary>
+		/// Event invoked when a pet ability is summoned.
+		/// </summary>
 		public static Action<PetAbilityTemplate, IPlayerCharacter> OnPetSummon;
 
+		/// <summary>
+		/// The container ID for grouping spawned ability objects.
+		/// </summary>
 		internal int ContainerID;
+		/// <summary>
+		/// The unique ID for this ability object within its container.
+		/// </summary>
 		internal int ID;
+		/// <summary>
+		/// The ability instance this object represents.
+		/// </summary>
 		public Ability Ability;
+		/// <summary>
+		/// The character who cast or owns this ability object.
+		/// </summary>
 		public IPlayerCharacter Caster;
+		/// <summary>
+		/// Cached reference to the object's Rigidbody, if present.
+		/// </summary>
 		public Rigidbody CachedRigidBody;
+		/// <summary>
+		/// Number of hits this object can perform before being destroyed.
+		/// </summary>
 		public int HitCount;
+		/// <summary>
+		/// Remaining lifetime in seconds before the object is destroyed.
+		/// </summary>
 		public float RemainingLifeTime;
 
+		/// <summary>
+		/// Random number generator for ability effects.
+		/// </summary>
 		public System.Random RNG;
 
+		/// <summary>
+		/// Cached reference to the object's GameObject.
+		/// </summary>
 		public GameObject GameObject { get; private set; }
+		/// <summary>
+		/// Cached reference to the object's Transform.
+		/// </summary>
 		public Transform Transform { get; private set; }
 
+		/// <summary>
+		/// Unity Awake callback. Caches references and sets Rigidbody to kinematic if present.
+		/// </summary>
 		private void Awake()
 		{
 			GameObject = gameObject;
@@ -33,15 +73,18 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Unity Update callback. Handles ticking, event dispatch, and lifetime management.
+		/// </summary>
 		void Update()
 		{
-			// Update remaining lifetime
+			// Update remaining lifetime if the ability has a positive lifetime
 			if (Ability.LifeTime > 0.0f)
 			{
 				RemainingLifeTime -= Time.deltaTime;
 			}
 
-			// Dispatch Tick Event
+			// Dispatch OnTick events for this ability object
 			if (Ability?.OnTickEvents != null)
 			{
 				AbilityTickEventData tickEvent = new AbilityTickEventData(Caster, Transform, Time.deltaTime, this);
@@ -52,7 +95,7 @@ namespace FishMMO.Shared
 			}
 
 			// If lifetime reaches 0, trigger destruction directly (or via a trigger for more control)
-			// For simplicity, let's keep it direct for now as a fallback if no trigger handles it
+			// For simplicity, destroy immediately if no trigger handles it
 			if (Ability.LifeTime > 0.0f && RemainingLifeTime < 0.0f)
 			{
 				DestroyAbilityObjectInternal();
@@ -65,6 +108,10 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Unity OnCollisionEnter callback. Handles collision logic, event dispatch, and destruction.
+		/// </summary>
+		/// <param name="collision">The collision data from Unity.</param>
 		void OnCollisionEnter(Collision collision)
 		{
 			ICharacter hitCharacter = collision.gameObject.GetComponent<ICharacter>();
@@ -80,7 +127,7 @@ namespace FishMMO.Shared
 			{
 				// Create an AbilityCollisionEventData for the collision
 				AbilityCollisionEventData collisionEvent = new AbilityCollisionEventData(Caster, hitCharacter, this, collision);
-				// Add the CharacterHitEventData to the collision event
+				// Add the CharacterHitEventData to the collision event (for damage, effects, etc)
 				collisionEvent.Add(new CharacterHitEventData(Caster, hitCharacter, RNG));
 
 				Ability.Template.TargetTrigger.Execute(collisionEvent);
@@ -93,7 +140,12 @@ namespace FishMMO.Shared
 			}
 		}
 
-		// Renamed to avoid confusion with public Destroy() from MonoBehaviour
+		/// <summary>
+		/// Destroys this ability object, dispatching OnDestroy events and cleaning up references.
+		/// </summary>
+		/// <remarks>
+		/// Renamed to avoid confusion with MonoBehaviour.Destroy().
+		/// </remarks>
 		internal void DestroyAbilityObjectInternal()
 		{
 			// Log.Debug("Destroyed " + gameObject.name);

@@ -15,21 +15,51 @@ namespace FishMMO.Server
 	/// </summary>
 	public class ChatSystem : ServerBehaviour, IChatHelper
 	{
+		/// <summary>
+		/// Maximum allowed chat message length.
+		/// </summary>
 		public const int MAX_LENGTH = 128;
 
+		/// <summary>
+		/// If true, allows repeat messages from clients without spam filtering.
+		/// </summary>
 		public bool AllowRepeatMessages = false;
+		/// <summary>
+		/// The server chat rate limit in milliseconds. Should match the client's UIChat.messageRateLimit.
+		/// </summary>
 		[Tooltip("The server chat rate limit in milliseconds. This should be equal to the clients UIChat.messageRateLimit")]
 		public float MessageRateLimit = 0.0f;
+		/// <summary>
+		/// The server chat message pump rate limit in seconds.
+		/// </summary>
 		[Tooltip("The server chat message pump rate limit in seconds.")]
 		public float MessagePumpRate = 2.0f;
+		/// <summary>
+		/// Number of chat messages to fetch per database poll.
+		/// </summary>
 		public int MessageFetchCount = 20;
 
+		/// <summary>
+		/// Timestamp of the last successful fetch from the database.
+		/// </summary>
 		private DateTime lastFetchTime = DateTime.UtcNow;
+		/// <summary>
+		/// Position of the last fetched chat message in the database.
+		/// </summary>
 		private long lastFetchPosition = 0;
+		/// <summary>
+		/// Time remaining until the next database poll for chat messages.
+		/// </summary>
 		private float nextPump = 0.0f;
 
+		/// <summary>
+		/// Current connection state of the server.
+		/// </summary>
 		private LocalConnectionState serverState;
 
+		/// <summary>
+		/// Initializes the chat system, registering broadcast handlers and chat helper commands.
+		/// </summary>
 		public override void InitializeOnce()
 		{
 			if (ServerManager != null &&
@@ -45,6 +75,9 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Cleans up the chat system, unregistering broadcast handlers and chat helper commands.
+		/// </summary>
 		public override void Destroying()
 		{
 			if (ServerManager != null &&
@@ -55,11 +88,18 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Handles changes in the server's connection state.
+		/// </summary>
+		/// <param name="args">Arguments containing the new connection state.</param>
 		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs args)
 		{
 			serverState = args.ConnectionState;
 		}
 
+		/// <summary>
+		/// Unity LateUpdate callback. Polls the database for chat messages at the specified rate and processes them.
+		/// </summary>
 		void LateUpdate()
 		{
 			if (serverState == LocalConnectionState.Started)
@@ -76,6 +116,10 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Fetches new chat messages from the database since the last fetch.
+		/// </summary>
+		/// <returns>List of new chat message entities.</returns>
 		private List<ChatEntity> FetchChatMessages()
 		{
 			if (!ServerBehaviour.TryGet(out SceneServerSystem sceneServerSystem))
@@ -98,7 +142,10 @@ namespace FishMMO.Server
 			return messages;
 		}
 
-		// process chat messages from the database
+		/// <summary>
+		/// Processes a list of chat messages, broadcasting them to appropriate channels and clients.
+		/// </summary>
+		/// <param name="messages">List of chat message entities to process.</param>
 		private void ProcessChatMessages(List<ChatEntity> messages)
 		{
 			if (messages == null || messages.Count < 1)
@@ -123,6 +170,11 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Gets the chat command handler for a specific chat channel.
+		/// </summary>
+		/// <param name="channel">Chat channel to get the command for.</param>
+		/// <returns>Chat command delegate for the channel.</returns>
 		public ChatCommand GetChannelCommand(ChatChannel channel)
 		{
 			switch (channel)
@@ -140,8 +192,11 @@ namespace FishMMO.Server
 		}
 
 		/// <summary>
-		/// Chat message received from a character.
+		/// Handles incoming chat broadcast from a character, validates and processes the message.
 		/// </summary>
+		/// <param name="conn">Network connection of the sender.</param>
+		/// <param name="msg">Chat broadcast message.</param>
+		/// <param name="channel">Network channel used for the broadcast.</param>
 		private void OnServerChatBroadcastReceived(NetworkConnection conn, ChatBroadcast msg, Channel channel)
 		{
 			if (conn.FirstObject != null)
@@ -155,7 +210,12 @@ namespace FishMMO.Server
 			}
 		}
 
-		// parse a message received from a connection
+		/// <summary>
+		/// Parses and processes a new chat message received from a connection, including validation, rate limiting, spam filtering, and command handling.
+		/// </summary>
+		/// <param name="conn">Network connection of the sender.</param>
+		/// <param name="sender">Player character sending the message.</param>
+		/// <param name="msg">Chat broadcast message.</param>
 		private void ProcessNewChatMessage(NetworkConnection conn, IPlayerCharacter sender, ChatBroadcast msg)
 		{
 			// validate message length
@@ -250,6 +310,12 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Handles world chat messages, broadcasting to all characters in the specified world.
+		/// </summary>
+		/// <param name="sender">Player character sending the message.</param>
+		/// <param name="msg">Chat broadcast message.</param>
+		/// <returns>True if message was broadcast, false otherwise.</returns>
 		public bool OnWorldChat(IPlayerCharacter sender, ChatBroadcast msg)
 		{
 			// get the world ID
@@ -279,6 +345,12 @@ namespace FishMMO.Server
 			return true;
 		}
 
+		/// <summary>
+		/// Handles region chat messages, broadcasting to all connections in the sender's scene.
+		/// </summary>
+		/// <param name="sender">Player character sending the message.</param>
+		/// <param name="msg">Chat broadcast message.</param>
+		/// <returns>False to prevent message from being written to the database.</returns>
 		public bool OnRegionChat(IPlayerCharacter sender, ChatBroadcast msg)
 		{
 			if (sender == null)
@@ -302,6 +374,12 @@ namespace FishMMO.Server
 			return false; // we return false here so the message is not written to the database
 		}
 
+		/// <summary>
+		/// Handles party chat messages, broadcasting to all party members.
+		/// </summary>
+		/// <param name="sender">Player character sending the message.</param>
+		/// <param name="msg">Chat broadcast message.</param>
+		/// <returns>True if message was broadcast, false otherwise.</returns>
 		public bool OnPartyChat(IPlayerCharacter sender, ChatBroadcast msg)
 		{
 			if (Server.NpgsqlDbContextFactory == null)
@@ -343,6 +421,12 @@ namespace FishMMO.Server
 			return false;
 		}
 
+		/// <summary>
+		/// Handles guild chat messages, broadcasting to all guild members.
+		/// </summary>
+		/// <param name="sender">Player character sending the message.</param>
+		/// <param name="msg">Chat broadcast message.</param>
+		/// <returns>True if message was broadcast, false otherwise.</returns>
 		public bool OnGuildChat(IPlayerCharacter sender, ChatBroadcast msg)
 		{
 			if (Server.NpgsqlDbContextFactory == null)
@@ -383,6 +467,12 @@ namespace FishMMO.Server
 			return false;
 		}
 
+		/// <summary>
+		/// Handles tell (private) chat messages, broadcasting to the target character if online.
+		/// </summary>
+		/// <param name="sender">Player character sending the message.</param>
+		/// <param name="msg">Chat broadcast message.</param>
+		/// <returns>True if message was broadcast, false otherwise.</returns>
 		public bool OnTellChat(IPlayerCharacter sender, ChatBroadcast msg)
 		{
 			// get the target
@@ -462,6 +552,12 @@ namespace FishMMO.Server
 			return false;
 		}
 
+		/// <summary>
+		/// Handles trade chat messages, broadcasting to all characters in the specified world.
+		/// </summary>
+		/// <param name="sender">Player character sending the message.</param>
+		/// <param name="msg">Chat broadcast message.</param>
+		/// <returns>True if message was broadcast, false otherwise.</returns>
 		public bool OnTradeChat(IPlayerCharacter sender, ChatBroadcast msg)
 		{
 			// get the world ID
@@ -494,6 +590,12 @@ namespace FishMMO.Server
 			return false;
 		}
 
+		/// <summary>
+		/// Handles say (local) chat messages, broadcasting to all observers of the sender.
+		/// </summary>
+		/// <param name="sender">Player character sending the message.</param>
+		/// <param name="msg">Chat broadcast message.</param>
+		/// <returns>False to prevent message from being written to the database.</returns>
 		public bool OnSayChat(IPlayerCharacter sender, ChatBroadcast msg)
 		{
 			if (sender != null && sender.Observers != null)
@@ -508,8 +610,10 @@ namespace FishMMO.Server
 		}
 
 		/// <summary>
-		/// Allows the server to send system messages to the connection
+		/// Allows the server to send system messages to the connection.
 		/// </summary>
+		/// <param name="conn">Network connection to send the system message to.</param>
+		/// <param name="message">System message text.</param>
 		public void OnSendSystemMessage(NetworkConnection conn, string message)
 		{
 			if (conn == null)
@@ -525,8 +629,11 @@ namespace FishMMO.Server
 		}
 
 		/// <summary>
-		/// Allows the server to send Discord messages to a specific world server
+		/// Allows the server to send Discord messages to a specific world server.
 		/// </summary>
+		/// <param name="worldServerID">World server ID to send the message to.</param>
+		/// <param name="sceneServerID">Scene server ID (for context).</param>
+		/// <param name="message">Discord message text.</param>
 		public void OnSendDiscordMessage(long worldServerID, long sceneServerID, string message)
 		{
 			ChatBroadcast newMsg = new ChatBroadcast()

@@ -4,19 +4,32 @@ using FishNet.Serializing;
 
 namespace FishMMO.Shared
 {
+	/// <summary>
+	/// Controls and manages ability cooldowns for a character.
+	/// </summary>
 	public class CooldownController : CharacterBehaviour, ICooldownController
 	{
+		/// <summary>
+		/// Dictionary of active cooldowns, keyed by ability ID.
+		/// </summary>
 		private Dictionary<long, CooldownInstance> cooldowns = new Dictionary<long, CooldownInstance>();
 
+		/// <summary>
+		/// List of keys to remove after cooldowns expire.
+		/// </summary>
 		private List<long> keysToRemove = new List<long>();
 
+		/// <inheritdoc/>
 		public override void ResetState(bool asServer)
 		{
 			base.ResetState(asServer);
-
 			cooldowns.Clear();
 		}
 
+		/// <summary>
+		/// Reads cooldown data from a network reader.
+		/// </summary>
+		/// <param name="reader">The network reader.</param>
 		public void Read(Reader reader)
 		{
 			int cooldownCount = reader.ReadInt32();
@@ -24,11 +37,14 @@ namespace FishMMO.Shared
 			{
 				long abilityID = reader.ReadInt64();
 				CooldownInstance cooldown = new CooldownInstance(reader.ReadSingle(), reader.ReadSingle());
-
 				AddCooldown(abilityID, cooldown);
 			}
 		}
 
+		/// <summary>
+		/// Writes cooldown data to a network writer.
+		/// </summary>
+		/// <param name="writer">The network writer.</param>
 		public void Write(Writer writer)
 		{
 			writer.WriteInt32(cooldowns.Count);
@@ -40,6 +56,10 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Updates all cooldowns by subtracting deltaTime and removes expired cooldowns.
+		/// </summary>
+		/// <param name="deltaTime">Time to subtract from each cooldown.</param>
 		public void OnTick(float deltaTime)
 		{
 			foreach (var pair in cooldowns)
@@ -65,12 +85,23 @@ namespace FishMMO.Shared
 			keysToRemove.Clear();
 		}
 
+		/// <summary>
+		/// Checks if an ability is currently on cooldown.
+		/// </summary>
+		/// <param name="id">Ability ID.</param>
+		/// <returns>True if on cooldown, otherwise false.</returns>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public bool IsOnCooldown(long id)
 		{
 			return cooldowns.ContainsKey(id);
 		}
 
+		/// <summary>
+		/// Tries to get the remaining cooldown time for an ability.
+		/// </summary>
+		/// <param name="id">Ability ID.</param>
+		/// <param name="cooldown">Remaining cooldown time.</param>
+		/// <returns>True if found, otherwise false.</returns>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public bool TryGetCooldown(long id, out float cooldown)
 		{
@@ -83,6 +114,11 @@ namespace FishMMO.Shared
 			return false;
 		}
 
+		/// <summary>
+		/// Adds a cooldown for the specified ability.
+		/// </summary>
+		/// <param name="id">Ability ID.</param>
+		/// <param name="cooldown">Cooldown instance.</param>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void AddCooldown(long id, CooldownInstance cooldown)
 		{
@@ -98,6 +134,10 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Removes the cooldown for the specified ability.
+		/// </summary>
+		/// <param name="id">Ability ID.</param>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void RemoveCooldown(long id)
 		{
@@ -109,6 +149,9 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Clears all cooldowns.
+		/// </summary>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void Clear()
 		{

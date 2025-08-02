@@ -3,21 +3,30 @@ using FishNet.Transporting;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Character guild controller.
+	/// Controller for managing pet entities attached to a character. Handles pet state, network broadcasts, and event invocation.
 	/// </summary>
 	public class PetController : CharacterBehaviour, IPetController
 	{
-		public Pet Pet { get; set;}
+		/// <summary>
+		/// The pet instance managed by this controller.
+		/// </summary>
+		public Pet Pet { get; set; }
 
-        public override void ResetState(bool asServer)
-        {
-            base.ResetState(asServer);
-
+		/// <summary>
+		/// Resets the controller's state, clearing the pet reference.
+		/// </summary>
+		/// <param name="asServer">Whether the reset is performed on the server.</param>
+		public override void ResetState(bool asServer)
+		{
+			base.ResetState(asServer);
 			Pet = null;
-        }
+		}
 
 #if !UNITY_SERVER
-        public override void OnStartCharacter()
+		/// <summary>
+		/// Called when the character starts. Registers broadcast listeners for pet add/remove events if owner.
+		/// </summary>
+		public override void OnStartCharacter()
 		{
 			base.OnStartCharacter();
 
@@ -28,6 +37,9 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Called when the character stops. Unregisters broadcast listeners for pet add/remove events if owner.
+		/// </summary>
 		public override void OnStopCharacter()
 		{
 			base.OnStopCharacter();
@@ -39,6 +51,11 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Handles the broadcast when a pet is added. Sets the pet reference and invokes the OnPetSummoned event.
+		/// </summary>
+		/// <param name="msg">The broadcast message containing the pet ID.</param>
+		/// <param name="channel">The network channel.</param>
 		public void OnClientPetAddBroadcastReceived(PetAddBroadcast msg, Channel channel)
 		{
 			if (SceneObject.Objects.TryGetValue(msg.ID, out ISceneObject sceneObject))
@@ -49,6 +66,11 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Handles the broadcast when a pet is removed. Clears the pet reference and invokes the OnPetDestroyed event.
+		/// </summary>
+		/// <param name="msg">The broadcast message for pet removal.</param>
+		/// <param name="channel">The network channel.</param>
 		public void OnClientPetRemoveBroadcastReceived(PetRemoveBroadcast msg, Channel channel)
 		{
 			Pet = null;
