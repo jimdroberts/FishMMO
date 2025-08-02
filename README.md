@@ -1,4 +1,5 @@
 [![](https://dcbadge.vercel.app/api/server/9JQEYjkSNk?style=full)](https://discord.gg/9JQEYjkSNk)
+[Join our Discord](https://discord.gg/9JQEYjkSNk)
 
 # **FishMMO Installation Guide (2025)**
 
