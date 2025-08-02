@@ -1,60 +1,193 @@
 ﻿using FishNet.Connection;
-using FishNet.Object;
 using FishNet.Object.Prediction;
 using FishNet.Serializing;
 using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
 using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
+	/// <summary>
+	/// Controls the activation, management, and synchronization of abilities for a character, including known abilities, events, and network state.
+	/// Handles ability casting, queuing, cooldowns, and client/server synchronization.
+	/// </summary>
 	public class AbilityController : CharacterBehaviour, IAbilityController
 	{
+		/// <summary>
+		/// Static RNG for generating player ability seeds (server-side).
+		/// </summary>
 		private static System.Random playerSeedGenerator = new System.Random();
 
+		/// <summary>
+		/// Constant representing no active ability.
+		/// </summary>
 		public const long NO_ABILITY = 0;
 
+		/// <summary>
+		/// The ID of the currently activating ability, or NO_ABILITY if none.
+		/// </summary>
 		private long currentAbilityID;
+
+		/// <summary>
+		/// True if an interrupt is queued for the current ability.
+		/// </summary>
 		private bool interruptQueued;
+
+		/// <summary>
+		/// The ID of the next ability to activate after the current one, or NO_ABILITY if none.
+		/// </summary>
 		private long queuedAbilityID;
+
+		/// <summary>
+		/// Remaining time for the current ability activation or cooldown.
+		/// </summary>
 		private float remainingTime;
+
+		/// <summary>
+		/// The key currently held for ability activation.
+		/// </summary>
 		private KeyCode heldKey;
 
+		/// <summary>
+		/// RNG for ability-specific randomization (server-side).
+		/// </summary>
 		private System.Random abilitySeedGenerator;
+
+		/// <summary>
+		/// The seed used to initialize the ability RNG.
+		/// </summary>
 		private int abilitySeed = 0;
+
+		/// <summary>
+		/// The current seed value for ability RNG.
+		/// </summary>
 		private int currentSeed = 0;
 
+		/// <summary>
+		/// Transform used as the spawn point for ability objects (e.g., projectiles).
+		/// </summary>
 		public Transform AbilitySpawner;
+
+		/// <summary>
+		/// Attribute template for attack speed reduction (physical abilities).
+		/// </summary>
 		public CharacterAttributeTemplate AttackSpeedReductionTemplate;
+
+		/// <summary>
+		/// Attribute template for cast speed reduction (magical abilities).
+		/// </summary>
 		public CharacterAttributeTemplate CastSpeedReductionTemplate;
+
+		/// <summary>
+		/// Attribute template for cooldown reduction.
+		/// </summary>
 		public CharacterAttributeTemplate CooldownReductionTemplate;
+
+		/// <summary>
+		/// Ability event template for converting blood resource (e.g., health for mana).
+		/// </summary>
 		public AbilityEvent BloodResourceConversionTemplate;
+
+		/// <summary>
+		/// Ability event template for charged abilities.
+		/// </summary>
 		public AbilityEvent ChargedTemplate;
+
+		/// <summary>
+		/// Ability event template for channeled abilities.
+		/// </summary>
 		public AbilityEvent ChanneledTemplate;
 
+		/// <summary>
+		/// Event invoked to check if the character can manipulate abilities (e.g., not stunned).
+		/// </summary>
 		public event Func<bool> OnCanManipulate;
 
-		// Handle ability updates here, display cast bar, display hitbox telegraphs, etc
+		/// <summary>
+		/// Event for ability UI updates (e.g., cast bar, telegraphs).
+		/// </summary>
 		public event Action<string, float, float> OnUpdate;
-		// Invoked when the current ability is Interrupted.
+
+		/// <summary>
+		/// Event invoked when the current ability is interrupted.
+		/// </summary>
 		public event Action OnInterrupt;
-		// Invoked when the current ability is Cancelled.
+
+		/// <summary>
+		/// Event invoked when the current ability is cancelled.
+		/// </summary>
 		public event Action OnCancel;
-		// UI
+
+		/// <summary>
+		/// Event invoked to reset the ability UI.
+		/// </summary>
 		public event Action OnReset;
+
+		/// <summary>
+		/// Event invoked when a new ability is added to the character.
+		/// </summary>
 		public event Action<Ability> OnAddAbility;
+
+		/// <summary>
+		/// Event invoked when a new base ability is learned.
+		/// </summary>
 		public event Action<BaseAbilityTemplate> OnAddKnownAbility;
 
+		/// <summary>
+		/// Event invoked when a new ability event is learned.
+		/// </summary>
+		public event Action<AbilityEvent> OnAddKnownAbilityEvent;
+
+		/// <summary>
+		/// All known abilities for this character, indexed by ability ID.
+		/// </summary>
 		public Dictionary<long, Ability> KnownAbilities { get; private set; }
+
+		/// <summary>
+		/// All known base ability template IDs for this character.
+		/// </summary>
 		public HashSet<int> KnownBaseAbilities { get; private set; }
-		public HashSet<int> KnownEvents { get; private set; }
-		public HashSet<int> KnownSpawnEvents { get; private set; }
-		public HashSet<int> KnownHitEvents { get; private set; }
-		public HashSet<int> KnownMoveEvents { get; private set; }
+
+		/// <summary>
+		/// All known ability event template IDs for this character.
+		/// </summary>
+		public HashSet<int> KnownAbilityEvents { get; private set; }
+
+		/// <summary>
+		/// All known OnTick event template IDs for this character.
+		/// </summary>
+		public HashSet<int> KnownAbilityOnTickEvents { get; private set; }
+
+		/// <summary>
+		/// All known OnHit event template IDs for this character.
+		/// </summary>
+		public HashSet<int> KnownAbilityOnHitEvents { get; private set; }
+
+		/// <summary>
+		/// All known OnPreSpawn event template IDs for this character.
+		/// </summary>
+		public HashSet<int> KnownAbilityOnPreSpawnEvents { get; private set; }
+
+		/// <summary>
+		/// All known OnSpawn event template IDs for this character.
+		/// </summary>
+		public HashSet<int> KnownAbilityOnSpawnEvents { get; private set; }
+
+		/// <summary>
+		/// All known OnDestroy event template IDs for this character.
+		/// </summary>
+		public HashSet<int> KnownAbilityOnDestroyEvents { get; private set; }
+
+		/// <summary>
+		/// True if an ability is currently being activated.
+		/// </summary>
 		public bool IsActivating { get { return currentAbilityID != NO_ABILITY; } }
+
+		/// <summary>
+		/// True if an ability is queued to activate after the current one.
+		/// </summary>
 		public bool AbilityQueued { get { return queuedAbilityID != NO_ABILITY; } }
 
 		public override void OnAwake()
@@ -63,10 +196,12 @@ namespace FishMMO.Shared
 
 			KnownAbilities = new Dictionary<long, Ability>();
 			KnownBaseAbilities = new HashSet<int>();
-			KnownEvents = new HashSet<int>();
-			KnownSpawnEvents = new HashSet<int>();
-			KnownHitEvents = new HashSet<int>();
-			KnownMoveEvents = new HashSet<int>();
+			KnownAbilityEvents = new HashSet<int>();
+			KnownAbilityOnTickEvents = new HashSet<int>();
+			KnownAbilityOnHitEvents = new HashSet<int>();
+			KnownAbilityOnPreSpawnEvents = new HashSet<int>();
+			KnownAbilityOnSpawnEvents = new HashSet<int>();
+			KnownAbilityOnDestroyEvents = new HashSet<int>();
 
 #if UNITY_SERVER
 			// Check if we already instantiated an RNG for this ability controller
@@ -113,10 +248,12 @@ namespace FishMMO.Shared
 
 			KnownAbilities.Clear();
 			KnownBaseAbilities.Clear();
-			KnownEvents.Clear();
-			KnownSpawnEvents.Clear();
-			KnownHitEvents.Clear();
-			KnownMoveEvents.Clear();
+			KnownAbilityEvents.Clear();
+			KnownAbilityOnTickEvents.Clear();
+			KnownAbilityOnHitEvents.Clear();
+			KnownAbilityOnPreSpawnEvents.Clear();
+			KnownAbilityOnSpawnEvents.Clear();
+			KnownAbilityOnDestroyEvents.Clear();
 		}
 
 #if !UNITY_SERVER
@@ -132,6 +269,8 @@ namespace FishMMO.Shared
 			{
 				ClientManager.RegisterBroadcast<KnownAbilityAddBroadcast>(OnClientKnownAbilityAddBroadcastReceived);
 				ClientManager.RegisterBroadcast<KnownAbilityAddMultipleBroadcast>(OnClientKnownAbilityAddMultipleBroadcastReceived);
+				ClientManager.RegisterBroadcast<KnownAbilityEventAddBroadcast>(OnClientKnownAbilityEventAddBroadcastReceived);
+				ClientManager.RegisterBroadcast<KnownAbilityEventAddMultipleBroadcast>(OnClientKnownAbilityEventAddMultipleBroadcastReceived);
 				ClientManager.RegisterBroadcast<AbilityAddBroadcast>(OnClientAbilityAddBroadcastReceived);
 				ClientManager.RegisterBroadcast<AbilityAddMultipleBroadcast>(OnClientAbilityAddMultipleBroadcastReceived);
 
@@ -154,6 +293,8 @@ namespace FishMMO.Shared
 			{
 				ClientManager.UnregisterBroadcast<KnownAbilityAddBroadcast>(OnClientKnownAbilityAddBroadcastReceived);
 				ClientManager.UnregisterBroadcast<KnownAbilityAddMultipleBroadcast>(OnClientKnownAbilityAddMultipleBroadcastReceived);
+				ClientManager.UnregisterBroadcast<KnownAbilityEventAddBroadcast>(OnClientKnownAbilityEventAddBroadcastReceived);
+				ClientManager.UnregisterBroadcast<KnownAbilityEventAddMultipleBroadcast>(OnClientKnownAbilityEventAddMultipleBroadcastReceived);
 				ClientManager.UnregisterBroadcast<AbilityAddBroadcast>(OnClientAbilityAddBroadcastReceived);
 				ClientManager.UnregisterBroadcast<AbilityAddMultipleBroadcast>(OnClientAbilityAddMultipleBroadcastReceived);
 			}
@@ -193,6 +334,39 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Server sent an add known ability event broadcast.
+		/// </summary>
+		private void OnClientKnownAbilityEventAddBroadcastReceived(KnownAbilityEventAddBroadcast msg, Channel channel)
+		{
+			AbilityEvent abilityEvent = AbilityEvent.Get<AbilityEvent>(msg.TemplateID);
+			if (abilityEvent != null)
+			{
+				LearnAbilityEvents(new List<AbilityEvent>() { abilityEvent });
+
+				OnAddKnownAbilityEvent?.Invoke(abilityEvent);
+			}
+		}
+
+		/// <summary>
+		/// Server sent an add known ability broadcast.
+		/// </summary>
+		private void OnClientKnownAbilityEventAddMultipleBroadcastReceived(KnownAbilityEventAddMultipleBroadcast msg, Channel channel)
+		{
+			List<AbilityEvent> events = new List<AbilityEvent>();
+			foreach (KnownAbilityEventAddBroadcast knownAbilityEvent in msg.AbilityEvents)
+			{
+				AbilityEvent abilityEvent = AbilityEvent.Get<AbilityEvent>(knownAbilityEvent.TemplateID);
+				if (abilityEvent != null)
+				{
+					events.Add(abilityEvent);
+
+					OnAddKnownAbilityEvent?.Invoke(abilityEvent);
+				}
+			}
+			LearnAbilityEvents(events);
+		}
+
+		/// <summary>
 		/// Server sent an add ability broadcast.
 		/// </summary>
 		private void OnClientAbilityAddBroadcastReceived(AbilityAddBroadcast msg, Channel channel)
@@ -226,6 +400,11 @@ namespace FishMMO.Shared
 		}
 #endif
 
+		/// <summary>
+		/// Reads the ability controller's state from the network payload, including ability RNG seed, known abilities, and cooldowns.
+		/// </summary>
+		/// <param name="conn">The network connection.</param>
+		/// <param name="reader">The network reader to read from.</param>
 		public override void ReadPayload(NetworkConnection conn, Reader reader)
 		{
 			// Read the AbilitySeedGenerator seed
@@ -246,10 +425,12 @@ namespace FishMMO.Shared
 			}
 			KnownAbilities.Clear();
 			KnownBaseAbilities.Clear();
-			KnownEvents.Clear();
-			KnownSpawnEvents.Clear();
-			KnownHitEvents.Clear();
-			KnownMoveEvents.Clear();
+			KnownAbilityEvents.Clear();
+			KnownAbilityOnTickEvents.Clear();
+			KnownAbilityOnHitEvents.Clear();
+			KnownAbilityOnPreSpawnEvents.Clear();
+			KnownAbilityOnSpawnEvents.Clear();
+			KnownAbilityOnDestroyEvents.Clear();
 
 			for (int i = 0; i < abilityCount; ++i)
 			{
@@ -273,11 +454,16 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Writes the ability controller's state to the network payload, including ability RNG seed, known abilities, and cooldowns.
+		/// </summary>
+		/// <param name="conn">The network connection.</param>
+		/// <param name="writer">The network writer to write to.</param>
 		public override void WritePayload(NetworkConnection conn, Writer writer)
 		{
 			// Write the ability RNG seed for the clients
 			writer.WriteInt32(abilitySeed);
-			
+
 			//Log.Debug($"Writing AbilitySeedGenerator Seed {abilitySeed}\r\nCurrent Seed {currentSeed}");
 
 			// Write the abilities for the clients
@@ -300,12 +486,18 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Called on each network tick to replicate input and reconcile state.
+		/// </summary>
 		private void TimeManager_OnTick()
 		{
 			Replicate(HandleCharacterInput());
 			CreateReconcile();
 		}
 
+		/// <summary>
+		/// Creates and sends a reconcile state for the ability controller to synchronize client/server state.
+		/// </summary>
 		public override void CreateReconcile()
 		{
 			if (base.IsServerStarted)
@@ -321,6 +513,10 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Gets the current ability type, considering any type override.
+		/// </summary>
+		/// <returns>The current <see cref="AbilityType"/> if an ability is active, otherwise <see cref="AbilityType.None"/>.</returns>
 		public AbilityType GetCurrentAbilityType()
 		{
 			if (currentAbilityID != NO_ABILITY &&
@@ -331,6 +527,10 @@ namespace FishMMO.Shared
 			return AbilityType.None;
 		}
 
+		/// <summary>
+		/// Checks if the current ability type is an aerial type (AerialPhysical or AerialMagic).
+		/// </summary>
+		/// <returns>True if the current ability is aerial, false otherwise.</returns>
 		public bool IsCurrentAbilityTypeAerial()
 		{
 			AbilityType abilityType = GetCurrentAbilityType();
@@ -344,6 +544,11 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Gets the appropriate attribute template for activation speed reduction based on the ability type.
+		/// </summary>
+		/// <param name="ability">The ability to check.</param>
+		/// <returns>The attribute template for speed reduction.</returns>
 		public CharacterAttributeTemplate GetActivationAttributeTemplate(Ability ability)
 		{
 			AbilityType abilityType = ability.TypeOverride != null ? ability.TypeOverride.OverrideAbilityType : ability.Template.Type;
@@ -360,13 +565,17 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Handles local character input for ability activation, building the replicate data for the current tick.
+		/// </summary>
+		/// <returns>The replicate data representing the current input state.</returns>
 		private AbilityActivationReplicateData HandleCharacterInput()
 		{
 			if (Character == null)
 			{
 				return default;
 			}
-			
+
 			float deltaTime = (float)base.TimeManager.TickDelta;
 			if (Character.TryGet(out ICooldownController cooldownController))
 			{
@@ -389,8 +598,8 @@ namespace FishMMO.Shared
 			}
 
 			AbilityActivationReplicateData activationEventData = new AbilityActivationReplicateData(activationFlags,
-																									queuedAbilityID,
-																									heldKey);
+																									 queuedAbilityID,
+																									 heldKey);
 			// Clear the locally queued data
 			queuedAbilityID = NO_ABILITY;
 
@@ -399,6 +608,12 @@ namespace FishMMO.Shared
 
 		private AbilityActivationReplicateData lastCreatedData;
 
+		/// <summary>
+		/// Replicates ability activation input and state across the network, handling prediction, interrupts, and ability activation.
+		/// </summary>
+		/// <param name="activationData">The replicate data for this tick.</param>
+		/// <param name="state">The prediction state.</param>
+		/// <param name="channel">The network channel.</param>
 		[Replicate]
 		private void Replicate(AbilityActivationReplicateData activationData, ReplicateState state = ReplicateState.Invalid, Channel channel = Channel.Unreliable)
 		{
@@ -500,8 +715,8 @@ namespace FishMMO.Shared
 							{
 								// Get target info
 								TargetInfo targetInfo = t.UpdateTarget(PlayerCharacter.CharacterController.VirtualCameraPosition,
-																	   PlayerCharacter.CharacterController.VirtualCameraRotation * Vector3.forward,
-																	   validatedAbility.Range);
+																		   PlayerCharacter.CharacterController.VirtualCameraRotation * Vector3.forward,
+																		   validatedAbility.Range);
 
 								// Spawn the ability object
 								AbilityObject.Spawn(validatedAbility, PlayerCharacter, AbilitySpawner, targetInfo, currentSeed);
@@ -543,8 +758,8 @@ namespace FishMMO.Shared
 				{
 					// Get target info
 					TargetInfo targetInfo = tc.UpdateTarget(PlayerCharacter.CharacterController.VirtualCameraPosition,
-															PlayerCharacter.CharacterController.VirtualCameraRotation * Vector3.forward,
-															validatedAbility.Range);
+														   PlayerCharacter.CharacterController.VirtualCameraRotation * Vector3.forward,
+														   validatedAbility.Range);
 
 					// Spawn the ability object
 					AbilityObject.Spawn(validatedAbility, PlayerCharacter, AbilitySpawner, targetInfo, currentSeed);
@@ -572,6 +787,11 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Reconciles the ability controller's state from the server, applying ability and resource state.
+		/// </summary>
+		/// <param name="rd">The reconcile data from the server.</param>
+		/// <param name="channel">The network channel.</param>
 		[Reconcile]
 		private void Reconcile(AbilityReconcileData rd, Channel channel = Channel.Unreliable)
 		{
@@ -585,6 +805,11 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Calculates the speed reduction factor for ability activation based on the given attribute.
+		/// </summary>
+		/// <param name="attribute">The attribute template to use for calculation.</param>
+		/// <returns>The speed reduction multiplier (1.0 = no reduction).</returns>
 		public float CalculateSpeedReduction(CharacterAttributeTemplate attribute)
 		{
 			if (attribute != null &&
@@ -599,11 +824,20 @@ namespace FishMMO.Shared
 			return 1.0f;
 		}
 
+		/// <summary>
+		/// Queues an interrupt for the current ability, to be processed on the next tick.
+		/// </summary>
+		/// <param name="attacker">The character causing the interrupt (not used).</param>
 		public void Interrupt(ICharacter attacker)
 		{
 			interruptQueued = true;
 		}
 
+		/// <summary>
+		/// Attempts to activate an ability by reference ID and held key, if all conditions are met.
+		/// </summary>
+		/// <param name="referenceID">The ability reference ID to activate.</param>
+		/// <param name="heldKey">The key currently held for activation.</param>
 		public void Activate(long referenceID, KeyCode heldKey)
 		{
 			if (!CanActivate(referenceID, out Ability validatedAbility))
@@ -704,6 +938,9 @@ namespace FishMMO.Shared
 			return true;
 		}
 
+		/// <summary>
+		/// Cancels the current ability activation and resets all related state.
+		/// </summary>
 		internal void Cancel()
 		{
 			//Log.Debug("Cancel");
@@ -714,6 +951,10 @@ namespace FishMMO.Shared
 			OnCancel?.Invoke();
 		}
 
+		/// <summary>
+		/// Adds a cooldown for the given ability using the cooldown controller.
+		/// </summary>
+		/// <param name="ability">The ability to add a cooldown for.</param>
 		internal void AddCooldown(Ability ability)
 		{
 			if (ability.Cooldown > 0.0f &&
@@ -726,11 +967,19 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Removes the ability with the given reference ID from the known abilities set.
+		/// </summary>
+		/// <param name="referenceID">The ability reference ID to remove.</param>
 		public void RemoveAbility(int referenceID)
 		{
 			KnownAbilities.Remove(referenceID);
 		}
 
+		/// <summary>
+		/// Checks if the character is in a valid state to manipulate abilities (not teleporting, not despawned, etc).
+		/// </summary>
+		/// <returns>True if the character can manipulate abilities, false otherwise.</returns>
 		public bool CanManipulate()
 		{
 			if (Character == null ||
@@ -749,16 +998,21 @@ namespace FishMMO.Shared
 			return true;
 		}
 
-		public bool KnowsAbility(int abilityID)
+		/// <summary>
+		/// Checks if the controller knows a base ability with the given template ID.
+		/// </summary>
+		/// <param name="templateID">The base ability template ID to check.</param>
+		/// <returns>True if the base ability is known, false otherwise.</returns>
+		public bool KnowsAbility(int templateID)
 		{
-			if ((KnownBaseAbilities != null && KnownBaseAbilities.Contains(abilityID)) ||
-				(KnownEvents != null && KnownEvents.Contains(abilityID)))
-			{
-				return true;
-			}
-			return false;
+			return KnownBaseAbilities?.Contains(templateID) ?? false;
 		}
 
+		/// <summary>
+		/// Adds the provided base ability templates to the known base abilities set.
+		/// </summary>
+		/// <param name="abilityTemplates">List of base ability templates to learn.</param>
+		/// <returns>True if any templates were learned, false if input is null.</returns>
 		public bool LearnBaseAbilities(List<BaseAbilityTemplate> abilityTemplates = null)
 		{
 			if (abilityTemplates == null)
@@ -768,65 +1022,84 @@ namespace FishMMO.Shared
 
 			for (int i = 0; i < abilityTemplates.Count; ++i)
 			{
-				// If the template is an ability event we add them to their mapped containers
-				AbilityEvent abilityEvent = abilityTemplates[i] as AbilityEvent;
-				if (abilityEvent != null)
+				BaseAbilityTemplate template = abilityTemplates[i];
+				if (template != null)
 				{
-					// Add the event to the global events map
-					if (!KnownEvents.Contains(abilityEvent.ID))
+					if (!KnownBaseAbilities.Contains(template.ID))
 					{
-						KnownEvents.Add(abilityEvent.ID);
-					}
-
-					switch (abilityEvent)
-					{
-						case HitEvent:
-							if (!KnownHitEvents.Contains(abilityEvent.ID))
-							{
-								KnownHitEvents.Add(abilityEvent.ID);
-							}
-							break;
-						case MoveEvent:
-							if (!KnownMoveEvents.Contains(abilityEvent.ID))
-							{
-								KnownMoveEvents.Add(abilityEvent.ID);
-							}
-							break;
-						case SpawnEvent:
-							if (!KnownSpawnEvents.Contains(abilityEvent.ID))
-							{
-								KnownSpawnEvents.Add(abilityEvent.ID);
-							}
-							break;
-					}
-				}
-				else
-				{
-					AbilityTemplate abilityTemplate = abilityTemplates[i] as AbilityTemplate;
-					if (abilityTemplate != null)
-					{
-						if (!KnownBaseAbilities.Contains(abilityTemplate.ID))
-						{
-							KnownBaseAbilities.Add(abilityTemplate.ID);
-						}
+						KnownBaseAbilities.Add(template.ID);
 					}
 				}
 			}
 			return true;
 		}
 
-		public bool KnowsLearnedAbility(int templateID)
+		/// <summary>
+		/// Checks if the controller knows the specified ability event by event ID.
+		/// </summary>
+		/// <param name="eventID">The event template ID to check.</param>
+		/// <returns>True if the event is known, false otherwise.</returns>
+		public bool KnowsAbilityEvent(int eventID)
 		{
-			if (KnownAbilities == null)
+			return KnownAbilityEvents?.Contains(eventID) ?? false;
+		}
+
+		/// <summary>
+		/// Adds the provided ability events to the known event sets, categorizing them by event type.
+		/// </summary>
+		/// <param name="abilityEvents">List of ability events to learn.</param>
+		/// <returns>True if any events were learned, false if input is null.</returns>
+		public bool LearnAbilityEvents(List<AbilityEvent> abilityEvents = null)
+		{
+			if (abilityEvents == null)
 			{
 				return false;
 			}
-			KeyValuePair<long, Ability>? found = KnownAbilities.Where(x => x.Value.Template.ID == templateID)
-															   .Select(x => (KeyValuePair<long, Ability>?)x)
-															   .FirstOrDefault();
-			return found != null;
+
+			foreach (var abilityEvent in abilityEvents)
+			{
+				if (abilityEvent == null) continue;
+
+				KnownAbilityEvents.Add(abilityEvent.ID);
+
+				// Categorize the event by its specific type for fast lookup.
+				switch (abilityEvent)
+				{
+					case AbilityOnTickEvent _:
+						KnownAbilityOnTickEvents.Add(abilityEvent.ID);
+						break;
+					case AbilityOnHitEvent _:
+						KnownAbilityOnHitEvents.Add(abilityEvent.ID);
+						break;
+					case AbilityOnPreSpawnEvent _:
+						KnownAbilityOnPreSpawnEvents.Add(abilityEvent.ID);
+						break;
+					case AbilityOnSpawnEvent _:
+						KnownAbilityOnSpawnEvents.Add(abilityEvent.ID);
+						break;
+					case AbilityOnDestroyEvent _:
+						KnownAbilityOnDestroyEvents.Add(abilityEvent.ID);
+						break;
+				}
+			}
+			return true;
 		}
 
+		/// <summary>
+		/// Checks if the controller knows an ability instance with the given template ID.
+		/// </summary>
+		/// <param name="templateID">The template ID to check.</param>
+		/// <returns>True if the ability is known, false otherwise.</returns>
+		public bool KnowsLearnedAbility(int templateID)
+		{
+			return KnownAbilities?.ContainsKey(templateID) ?? false;
+		}
+
+		/// <summary>
+		/// Adds the given ability to the known abilities set, and applies any remaining cooldown if specified.
+		/// </summary>
+		/// <param name="ability">The ability to learn.</param>
+		/// <param name="remainingCooldown">Optional remaining cooldown to apply to the ability.</param>
 		public void LearnAbility(Ability ability, float remainingCooldown = 0.0f)
 		{
 			if (ability == null)
@@ -835,6 +1108,7 @@ namespace FishMMO.Shared
 			}
 			KnownAbilities[ability.ID] = ability;
 
+			// If a cooldown is specified, apply it to the cooldown controller.
 			if (remainingCooldown > 0.0f &&
 				Character.TryGet(out ICooldownController cooldownController))
 			{

@@ -11,7 +11,13 @@ namespace FishMMO.Shared
 	/// </summary>
 	public class UnityConsoleLoggerConfig : ILoggerConfig
 	{
+		/// <summary>
+		/// The type name of this config (for serialization and identification).
+		/// </summary>
 		public string Type { get; set; }
+		/// <summary>
+		/// The logger type name (for serialization and identification).
+		/// </summary>
 		public string LoggerType { get; set; }
 
 		/// <summary>
@@ -32,7 +38,7 @@ namespace FishMMO.Shared
 			LogLevel.Info,
 			LogLevel.Debug,
 			LogLevel.Verbose
-		}; // All levels allowed by default
+		};
 
 		/// <summary>
 		/// Defines Unity Rich Text color strings for each LogLevel.
@@ -49,6 +55,9 @@ namespace FishMMO.Shared
             { LogLevel.Verbose, "grey" }       // Or "#808080"
         };
 
+		/// <summary>
+		/// Initializes a new instance of the UnityConsoleLoggerConfig class with default type and logger type names.
+		/// </summary>
 		public UnityConsoleLoggerConfig()
 		{
 			Type = nameof(UnityConsoleLoggerConfig);

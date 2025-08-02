@@ -10,17 +10,42 @@ namespace FishMMO.Client
 	public class PlayerInputController : MonoBehaviour
 	{
 #if !UNITY_SERVER
+		/// <summary>
+		/// The player character associated with this input controller.
+		/// </summary>
 		public IPlayerCharacter Character { get; private set; }
 
+		/// <summary>
+		/// Indicates if a jump input has been queued for processing.
+		/// </summary>
 		private bool _jumpQueued = false;
+		/// <summary>
+		/// Indicates if crouch input is currently active.
+		/// </summary>
 		private bool _crouchInputActive = false;
+		/// <summary>
+		/// Indicates if sprint input is currently active.
+		/// </summary>
 		private bool _sprintInputActive = false;
 
-		// Current input values from the new Input System
+		/// <summary>
+		/// Current movement input vector from the Input System.
+		/// </summary>
 		private Vector2 _moveInput;
+		/// <summary>
+		/// Current look input vector from the Input System.
+		/// </summary>
 		private Vector2 _lookInput;
+		/// <summary>
+		/// Current mouse scroll input value (y component).
+		/// </summary>
 		private float _mouseScrollInput;
 
+		/// <summary>
+		/// Initializes the input controller for the specified player character.
+		/// Subscribes to input events and character input handling.
+		/// </summary>
+		/// <param name="character">The player character to control.</param>
 		public void Initialize(IPlayerCharacter character)
 		{
 			Character = character;
@@ -39,6 +64,9 @@ namespace FishMMO.Client
 			SubscribeToInputActions();
 		}
 
+		/// <summary>
+		/// Deinitializes the input controller, unsubscribing from input events and character input handling.
+		/// </summary>
 		public void Deinitialize()
 		{
 			if (Character == null)
@@ -55,6 +83,9 @@ namespace FishMMO.Client
 			UnsubscribeFromInputActions();
 		}
 
+		/// <summary>
+		/// Subscribes to all relevant input actions from the Input System.
+		/// </summary>
 		private void SubscribeToInputActions()
 		{
 			if (PlayerInputHandler.Controls == null)
@@ -112,6 +143,9 @@ namespace FishMMO.Client
 			PlayerInputHandler.Controls.Player.Hotkey0.performed += ctx => HandleHotkeyInput(0);
 		}
 
+		/// <summary>
+		/// Unsubscribes from all input actions to prevent memory leaks and unwanted input processing.
+		/// </summary>
 		private void UnsubscribeFromInputActions()
 		{
 			if (PlayerInputHandler.Controls == null) return;
@@ -160,6 +194,10 @@ namespace FishMMO.Client
 			PlayerInputHandler.Controls.Player.Hotkey0.performed -= ctx => HandleHotkeyInput(0);
 		}
 
+		/// <summary>
+		/// Unity event called when the object becomes enabled and active.
+		/// Shows key UI elements for the player.
+		/// </summary>
 		private void OnEnable()
 		{
 			UIManager.Show("UIHealthBar");
@@ -172,6 +210,10 @@ namespace FishMMO.Client
 			UIManager.Show("UIMinimap");
 		}
 
+		/// <summary>
+		/// Unity event called when the object becomes disabled or inactive.
+		/// Hides key UI elements for the player.
+		/// </summary>
 		private void OnDisable()
 		{
 			UIManager.Hide("UIHealthBar");
@@ -184,6 +226,11 @@ namespace FishMMO.Client
 			UIManager.Hide("UIMinimap");
 		}
 
+		/// <summary>
+		/// Determines if input should be processed for the player character.
+		/// Input is only processed if the character is alive, mouse mode is off, and no UI input field has focus.
+		/// </summary>
+		/// <returns>True if input can be processed; otherwise, false.</returns>
 		[System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
 		private bool CanUpdateInput()
 		{
@@ -199,6 +246,11 @@ namespace FishMMO.Client
 			return !PlayerInputHandler.MouseMode && !UIManager.InputControlHasFocus();
 		}
 
+		/// <summary>
+		/// Handles character input for KinematicCharacterController.
+		/// Converts input states into KCCInputReplicateData for movement replication.
+		/// </summary>
+		/// <returns>KCCInputReplicateData containing movement and camera input.</returns>
 		public KCCInputReplicateData KCCPlayer_OnHandleCharacterInput()
 		{
 			int moveFlags = 0;
@@ -242,6 +294,10 @@ namespace FishMMO.Client
 											 Character.KCCPlayer.CharacterCamera.Transform.rotation);
 		}
 
+		/// <summary>
+		/// Unity event called every frame after all Update functions have been called.
+		/// Handles camera input for the player character.
+		/// </summary>
 		private void LateUpdate()
 		{
 			if (Character.KCCPlayer.CharacterCamera == null)
@@ -252,6 +308,9 @@ namespace FishMMO.Client
 			HandleCameraInput();
 		}
 
+		/// <summary>
+		/// Processes camera input, including rotation and zoom, based on player input and physics movers.
+		/// </summary>
 		private void HandleCameraInput()
 		{
 			// Handle rotating the camera along with physics movers
@@ -286,6 +345,11 @@ namespace FishMMO.Client
 		}
 
 		// --- Action Callbacks ---
+		/// <summary>
+		/// Callback for when the Interact input action is performed.
+		/// Attempts to interact with the current target if possible.
+		/// </summary>
+		/// <param name="context">Input action callback context.</param>
 		private void OnInteractPerformed(InputAction.CallbackContext context)
 		{
 			if (!CanUpdateInput() || UIManager.ControlHasFocus()) return;
@@ -307,12 +371,22 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Callback for toggling first-person camera mode.
+		/// Switches between first-person and default camera distance.
+		/// </summary>
+		/// <param name="context">Input action callback context.</param>
 		private void OnToggleFirstPersonPerformed(InputAction.CallbackContext context)
 		{
 			if (!CanUpdateInput()) return;
 			Character.KCCPlayer.CharacterCamera.TargetDistance = (Character.KCCPlayer.CharacterCamera.TargetDistance == 0f) ? Character.KCCPlayer.CharacterCamera.DefaultDistance : 0f;
 		}
 
+		/// <summary>
+		/// Callback for cancel input action.
+		/// Interrupts the current ability if possible.
+		/// </summary>
+		/// <param name="context">Input action callback context.</param>
 		private void OnCancelPerformed(InputAction.CallbackContext context)
 		{
 			if (Character.TryGet(out IAbilityController abilityController))
@@ -321,6 +395,11 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Callback for closing the last UI element.
+		/// If no UI can be closed and mouse mode is active, toggles mouse mode off.
+		/// </summary>
+		/// <param name="context">Input action callback context.</param>
 		private void OnCloseLastUIPerformed(InputAction.CallbackContext context)
 		{
 			if (!UIManager.CloseNext())
@@ -333,6 +412,11 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Callback for chat input action.
+		/// Intended to activate chat UI (implementation may vary).
+		/// </summary>
+		/// <param name="context">Input action callback context.</param>
 		private void OnChatPerformed(InputAction.CallbackContext context)
 		{
 			// You might want to explicitly activate the chat UI here
@@ -340,6 +424,11 @@ namespace FishMMO.Client
 			// UIManager.ActivateChatInput();
 		}
 
+		/// <summary>
+		/// Callback for equipment input action.
+		/// Shows the equipment UI and sets the equipment view camera.
+		/// </summary>
+		/// <param name="context">Input action callback context.</param>
 		private void OnEquipmentPerformed(InputAction.CallbackContext context)
 		{
 			if (UIManager.TryGet("UIEquipment", out UIEquipment uiEquipment))
@@ -349,6 +438,10 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Handles hotkey input for abilities or items.
+		/// </summary>
+		/// <param name="hotkeyNumber">The hotkey number pressed (1-9, 0).</param>
 		private void HandleHotkeyInput(int hotkeyNumber)
 		{
 			// Implement your hotkey logic here, e.g., using an ability, consuming an item.

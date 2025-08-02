@@ -1,9 +1,123 @@
 ﻿#if UNITY_EDITOR
+using System;
 using UnityEditor;
 using UnityEngine;
 
 namespace GameKit.Dependencies.Utilities
 {
+    public enum EditorLayoutEnableType
+    {
+        Enabled = 0,
+        Disabled = 1,
+        DisabledWhilePlaying = 2
+    }
+
+    public static class EditorGuiLayoutTools
+    {
+        /// <summary>
+        /// Adds a helpbox field.
+        /// </summary>
+        public static void AddHelpBox(string text, MessageType messageType = MessageType.Info)
+        {
+            EditorGUILayout.HelpBox(text, messageType);
+        }
+
+        /// <summary>
+        /// Adds a property field.
+        /// </summary>
+        public static void AddPropertyField(SerializedProperty sp, string fieldName, string tooltip = "")
+        {
+            if (tooltip == "")
+                tooltip = sp.tooltip;
+
+            EditorGUILayout.PropertyField(sp, new GUIContent(fieldName, tooltip));
+        }
+
+        /// <summary>
+        /// Adds a property field.
+        /// </summary>
+        public static void AddPropertyField(SerializedProperty sp, GUIContent guiContent)
+        {
+            EditorGUILayout.PropertyField(sp, guiContent);
+        }
+
+        /// <summary>
+        /// Adds a property field.
+        /// </summary>
+        public static void AddPropertyField(SerializedProperty sp, GUIContent guiContent = null, EditorLayoutEnableType enableType = EditorLayoutEnableType.Enabled, params GUILayoutOption[] options)
+        {
+            bool disable = IsDisableLayoutType(enableType);
+            if (disable)
+                GUI.enabled = false;
+
+            EditorGUILayout.PropertyField(sp, guiContent, options);
+
+            if (disable)
+                GUI.enabled = true;
+        }
+
+        /// <summary>
+        /// Adds a property field.
+        /// </summary>
+        /// <param name = "enabled">True to have property enabled.</param>
+        [Obsolete("Use AddPropertyField(SerializedProperty, GUIContent, EditorLayoutEnableType, GUILayoutOption.")]
+        public static void AddPropertyField(SerializedProperty sp, GUIContent guiContent = null, bool enabled = true, params GUILayoutOption[] options)
+        {
+            EditorLayoutEnableType enableType = enabled ? EditorLayoutEnableType.Enabled : EditorLayoutEnableType.Disabled;
+            bool disable = IsDisableLayoutType(enableType);
+            if (disable)
+                GUI.enabled = false;
+
+            EditorGUILayout.PropertyField(sp, guiContent, options);
+
+            if (disable)
+                GUI.enabled = true;
+        }
+
+        /// <summary>
+        /// Adds an object field.
+        /// </summary>
+        public static void AddObjectField(string label, MonoScript ms, Type type, bool allowSceneObjects, EditorLayoutEnableType enableType = EditorLayoutEnableType.Enabled, params GUILayoutOption[] options)
+        {
+            bool disable = IsDisableLayoutType(enableType);
+            if (disable)
+                GUI.enabled = false;
+
+            EditorGUILayout.ObjectField("Script:", ms, type, allowSceneObjects, options);
+
+            if (disable)
+                GUI.enabled = true;
+        }
+
+        /// <summary>
+        /// Disables GUI if playing.
+        /// </summary>
+        public static void DisableGUIIfPlaying()
+        {
+            if (Application.isPlaying)
+                GUI.enabled = false;
+        }
+
+        /// <summary>
+        /// Enables GUI if playing.
+        /// </summary>
+        public static void EnableGUIIfPlaying()
+        {
+            if (Application.isPlaying)
+                GUI.enabled = true;
+        }
+
+        /// <summary>
+        /// Returns if a layout field should be disabled.
+        /// </summary>
+        /// <param name = "enableType"></param>
+        /// <returns></returns>
+        private static bool IsDisableLayoutType(EditorLayoutEnableType enableType)
+        {
+            return enableType == EditorLayoutEnableType.Disabled || (enableType == EditorLayoutEnableType.DisabledWhilePlaying && Application.isPlaying);
+        }
+    }
+
     public static class PropertyDrawerToolExtensions
     {
         /// <summary>
@@ -14,7 +128,7 @@ namespace GameKit.Dependencies.Utilities
             if (drawerTool == null)
                 return EditorGUIUtility.singleLineHeight;
 
-            return (EditorGUIUtility.singleLineHeight * drawerTool.LineSpacingMultiplier * drawerTool.PropertiesDrawn);
+            return EditorGUIUtility.singleLineHeight * drawerTool.LineSpacingMultiplier * drawerTool.PropertiesDrawn;
         }
     }
 
@@ -37,7 +151,7 @@ namespace GameKit.Dependencies.Utilities
         }
 
         /// <summary>
-        /// Starting position as indicated by the OnGUI method. 
+        /// Starting position as indicated by the OnGUI method.
         /// </summary>
         /// <remarks>This value may be modified by user code.</remarks>
         public Rect Position = default;
@@ -49,7 +163,6 @@ namespace GameKit.Dependencies.Utilities
         /// Number of entries drawn by this object.
         /// </summary>
         public int PropertiesDrawn = 0;
-
         /// <summary>
         /// Additional position Y of next draw.
         /// </summary>
@@ -84,7 +197,7 @@ namespace GameKit.Dependencies.Utilities
             if (indent != 0)
                 EditorGUI.indentLevel += indent;
 
-            //Set style.
+            // Set style.
             FontStyle startingStyle = EditorStyles.label.fontStyle;
             EditorStyles.label.fontStyle = styleOverride;
 
@@ -110,7 +223,7 @@ namespace GameKit.Dependencies.Utilities
         /// Draws a property.
         /// </summary>
         public void DrawProperty(SerializedProperty prop, GUIContent content) => DrawProperty(prop, content, EditorStyles.label.fontStyle, indent: 0);
-        
+
         /// <summary>
         /// Draws a property.
         /// </summary>
@@ -125,18 +238,18 @@ namespace GameKit.Dependencies.Utilities
         /// Draws a property.
         /// </summary>
         public void DrawProperty(SerializedProperty prop, GUIContent content, int indent) => DrawProperty(prop, content, EditorStyles.label.fontStyle, indent);
-        
+
         /// <summary>
         /// Draws a property.
         /// </summary>
         public void DrawProperty(SerializedProperty prop, GUIContent content, FontStyle labelStyle) => DrawProperty(prop, content, labelStyle, indent: 0);
-        
+
         /// <summary>
         /// Draws a property.
         /// </summary>
         public void DrawProperty(SerializedProperty prop, string lLabel, FontStyle labelStyle, int indent)
         {
-            GUIContent content = (lLabel == "") ? default : new GUIContent(lLabel);
+            GUIContent content = lLabel == "" ? default : new GUIContent(lLabel);
 
             DrawProperty(prop, content, labelStyle, indent);
         }
@@ -167,11 +280,11 @@ namespace GameKit.Dependencies.Utilities
         public Rect GetRect(float? lineSpacingMultiplierOverride = null)
         {
             float multiplier = lineSpacingMultiplierOverride ?? LineSpacingMultiplier;
-            
+
             Rect result = new(Position.x, Position.y + _additionalPositionY, Position.width, EditorGUIUtility.singleLineHeight * multiplier);
-            
+
             _additionalPositionY += EditorGUIUtility.singleLineHeight * multiplier;
-            
+
             return result;
         }
     }

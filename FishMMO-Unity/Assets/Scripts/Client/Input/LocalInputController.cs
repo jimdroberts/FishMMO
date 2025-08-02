@@ -9,22 +9,48 @@ namespace FishMMO.Client
 	public class LocalInputController : MonoBehaviour
 	{
 #if !UNITY_SERVER
+		/// <summary>
+		/// The player character associated with this input controller.
+		/// </summary>
 		public IPlayerCharacter Character { get; private set; }
 
+		/// <summary>Input axis name for mouse X movement.</summary>
 		private const string MouseXInput = "Mouse X";
+		/// <summary>Input axis name for mouse Y movement.</summary>
 		private const string MouseYInput = "Mouse Y";
+		/// <summary>Input axis name for mouse scroll wheel.</summary>
 		private const string MouseScrollInput = "Mouse ScrollWheel";
+		/// <summary>Input axis name for horizontal movement.</summary>
 		private const string HorizontalInput = "Horizontal";
+		/// <summary>Input axis name for vertical movement.</summary>
 		private const string VerticalInput = "Vertical";
+		/// <summary>Input name for jump action.</summary>
 		private const string JumpInput = "Jump";
+		/// <summary>Input name for crouch action.</summary>
 		private const string CrouchInput = "Crouch";
+		/// <summary>Input name for run/sprint action.</summary>
 		private const string RunInput = "Run";
+		/// <summary>Input name for toggling first-person camera.</summary>
 		private const string ToggleFirstPersonInput = "ToggleFirstPerson";
 
+		/// <summary>
+		/// Indicates if a jump input has been queued for processing.
+		/// </summary>
 		private bool _jumpQueued = false;
+		/// <summary>
+		/// Indicates if crouch input is currently active.
+		/// </summary>
 		private bool _crouchInputActive = false;
+		/// <summary>
+		/// Indicates if sprint input is currently active.
+		/// </summary>
 		private bool _sprintInputActive = false;
 
+		/// <summary>
+		/// Initializes the input controller for the specified player character.
+		/// Subscribes to character input handling.
+		/// </summary>
+		/// <param name="character">The player character to control.</param>
 		public void Initialize(IPlayerCharacter character)
 		{
 			Character = character;
@@ -40,6 +66,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Deinitializes the input controller, unsubscribing from character input handling.
+		/// </summary>
 		public void Deinitialize()
 		{
 			if (Character == null)
@@ -53,6 +82,10 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Unity event called when the object becomes enabled and active.
+		/// Shows key UI elements for the player.
+		/// </summary>
 		private void OnEnable()
 		{
 			UIManager.Show("UIHealthBar");
@@ -65,6 +98,10 @@ namespace FishMMO.Client
 			UIManager.Show("UIMinimap");
 		}
 
+		/// <summary>
+		/// Unity event called when the object becomes disabled or inactive.
+		/// Hides key UI elements for the player.
+		/// </summary>
 		private void OnDisable()
 		{
 			UIManager.Hide("UIHealthBar");
@@ -77,6 +114,11 @@ namespace FishMMO.Client
 			UIManager.Hide("UIMinimap");
 		}
 
+		/// <summary>
+		/// Determines if input should be processed for the player character.
+		/// Input is only processed if the character is alive and mouse mode is off.
+		/// </summary>
+		/// <returns>True if input can be processed; otherwise, false.</returns>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private bool CanUpdateInput()
 		{
@@ -90,6 +132,11 @@ namespace FishMMO.Client
 			return !InputManager.MouseMode;
 		}
 
+		/// <summary>
+		/// Handles character input for KinematicCharacterController.
+		/// Converts input states into KCCInputReplicateData for movement replication.
+		/// </summary>
+		/// <returns>KCCInputReplicateData containing movement and camera input.</returns>
 		public KCCInputReplicateData KCCPlayer_OnHandleCharacterInput()
 		{
 			int moveFlags = 0;
@@ -105,7 +152,7 @@ namespace FishMMO.Client
 												 Character.KCCPlayer.CharacterCamera.Transform.position,
 												 Character.KCCPlayer.CharacterCamera.Transform.rotation);
 			}
-			
+
 			if (_jumpQueued)
 			{
 				moveFlags.EnableBit(KCCMoveFlags.Jump);
@@ -127,13 +174,17 @@ namespace FishMMO.Client
 											 Character.KCCPlayer.CharacterCamera.Transform.rotation);
 		}
 
+		/// <summary>
+		/// Unity event called every frame. Updates input states.
+		/// </summary>
 		private void Update()
 		{
 			UpdateInput();
 		}
 
 		/// <summary>
-		/// We handle UI input here because we completely disable UI elements when toggling visibility.
+		/// Handles UI and gameplay input, including movement, interaction, and UI toggling.
+		/// UI input is handled here because UI elements are disabled when toggling visibility.
 		/// </summary>
 		private void UpdateInput()
 		{
@@ -261,6 +312,10 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Unity event called every frame after all Update functions have been called.
+		/// Handles camera input for the player character.
+		/// </summary>
 		private void LateUpdate()
 		{
 			if (Character.KCCPlayer.CharacterCamera == null)
@@ -271,6 +326,9 @@ namespace FishMMO.Client
 			HandleCameraInput();
 		}
 
+		/// <summary>
+		/// Processes camera input, including rotation and zoom, based on player input and physics movers.
+		/// </summary>
 		private void HandleCameraInput()
 		{
 			// Handle rotating the camera along with physics movers

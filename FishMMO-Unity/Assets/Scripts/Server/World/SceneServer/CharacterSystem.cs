@@ -18,13 +18,31 @@ namespace FishMMO.Server
 	// Character manager handles the players character
 	public class CharacterSystem : ServerBehaviour
 	{
+		/// <summary>
+		/// Authenticator for login and character loading.
+		/// </summary>
 		private SceneServerAuthenticator loginAuthenticator;
+		/// <summary>
+		/// Current connection state of the server.
+		/// </summary>
 		private LocalConnectionState serverState;
 
+		/// <summary>
+		/// Interval in seconds between periodic character saves.
+		/// </summary>
 		public float SaveRate = 60.0f;
+		/// <summary>
+		/// Time remaining until the next character save.
+		/// </summary>
 		private float nextSave = 0.0f;
 
+		/// <summary>
+		/// Interval in seconds between out-of-bounds checks for characters.
+		/// </summary>
 		public float OutOfBoundsCheckRate = 2.5f;
+		/// <summary>
+		/// Time remaining until the next out-of-bounds check.
+		/// </summary>
 		private float nextOutOfBoundsCheck = 0.0f;
 
 		/// <summary>
@@ -56,12 +74,30 @@ namespace FishMMO.Server
 		/// </summary>
 		public event Action<NetworkConnection, IPlayerCharacter> OnPetKilled;
 
+		/// <summary>
+		/// Maps character IDs to player character instances.
+		/// </summary>
 		public Dictionary<long, IPlayerCharacter> CharactersByID = new Dictionary<long, IPlayerCharacter>();
+		/// <summary>
+		/// Maps lowercase character names to player character instances.
+		/// </summary>
 		public Dictionary<string, IPlayerCharacter> CharactersByLowerCaseName = new Dictionary<string, IPlayerCharacter>();
+		/// <summary>
+		/// Maps world server IDs to dictionaries of character IDs and player character instances.
+		/// </summary>
 		public Dictionary<long, Dictionary<long, IPlayerCharacter>> CharactersByWorld = new Dictionary<long, Dictionary<long, IPlayerCharacter>>();
+		/// <summary>
+		/// Maps network connections to player character instances.
+		/// </summary>
 		public Dictionary<NetworkConnection, IPlayerCharacter> ConnectionCharacters = new Dictionary<NetworkConnection, IPlayerCharacter>();
+		/// <summary>
+		/// Maps network connections to player characters waiting for scene load.
+		/// </summary>
 		public Dictionary<NetworkConnection, IPlayerCharacter> WaitingSceneLoadCharacters = new Dictionary<NetworkConnection, IPlayerCharacter>();
 
+		/// <summary>
+		/// Initializes the character system, registers event handlers, and sets up character authentication and broadcast handling.
+		/// </summary>
 		public override void InitializeOnce()
 		{
 			nextSave = SaveRate;
@@ -91,6 +127,9 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Cleans up the character system, unregisters event handlers, and saves all characters to the database before shutdown.
+		/// </summary>
 		public override void Destroying()
 		{
 			if (ServerManager != null)
@@ -114,6 +153,9 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Unity LateUpdate callback. Periodically checks for out-of-bounds characters and saves character data.
+		/// </summary>
 		void LateUpdate()
 		{
 			if (serverState == LocalConnectionState.Started &&
@@ -181,6 +223,10 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Handles changes in the server's connection state.
+		/// </summary>
+		/// <param name="args">Arguments containing the new connection state.</param>
 		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs args)
 		{
 			serverState = args.ConnectionState;
@@ -201,6 +247,8 @@ namespace FishMMO.Server
 		/// <summary>
 		/// Removes the character connection mapping and saves the character state to the database.
 		/// </summary>
+		/// <param name="conn">Network connection to remove.</param>
+		/// <param name="skipOnDisconnect">If true, skips OnDisconnect event invocation.</param>
 		private void RemoveCharacterConnectionMapping(NetworkConnection conn, bool skipOnDisconnect = false)
 		{
 			// Remove the waiting scene load character if it exists, these characters exist but are not spawned
@@ -239,6 +287,11 @@ namespace FishMMO.Server
 			SaveAndDespawnCharacter(conn, character);
 		}
 
+		/// <summary>
+		/// Saves the character state and despawns the character from the scene.
+		/// </summary>
+		/// <param name="conn">Network connection of the character.</param>
+		/// <param name="character">Player character to save and despawn.</param>
 		private void SaveAndDespawnCharacter(NetworkConnection conn, IPlayerCharacter character)
 		{
 			// Save the character and set online status to false
@@ -259,6 +312,11 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Handles client authentication results, loads character data and initiates scene loading.
+		/// </summary>
+		/// <param name="conn">Network connection of the client.</param>
+		/// <param name="authenticated">True if authentication succeeded.</param>
 		private void Authenticator_OnClientAuthenticationResult(NetworkConnection conn, bool authenticated)
 		{
 			// Is the character already loading?
@@ -302,7 +360,7 @@ namespace FishMMO.Server
 					}
 
 					//Log.Debug("CharacterSystem", "$"Character loaded into {sceneName}:{sceneHandle}.");
-					
+
 					// Check if the scene is valid, loaded, and cached properly
 					if (sceneServerSystem.TryGetSceneInstanceDetails(character.WorldServerID, sceneName, sceneHandle, out SceneInstanceDetails instance) &&
 						sceneServerSystem.TryLoadSceneForConnection(conn, instance))
@@ -339,8 +397,10 @@ namespace FishMMO.Server
 		}
 
 		/// <summary>
-		/// Called when a client loads world scenes after connecting. The character is validated and the client is notified.
+		/// Called when a client loads world scenes after connecting. Validates character and scene, then notifies client.
 		/// </summary>
+		/// <param name="conn">Network connection of the client.</param>
+		/// <param name="asServer">True if loaded as server.</param>
 		private void SceneManager_OnClientLoadedStartScenes(NetworkConnection conn, bool asServer)
 		{
 			// Validate the connection has a character ready to play.
@@ -379,8 +439,11 @@ namespace FishMMO.Server
 		}
 
 		/// <summary>
-		/// Called when a client completely finishes loading into a world scene.
+		/// Called when a client completely finishes loading into a world scene. Spawns character and sets online status.
 		/// </summary>
+		/// <param name="conn">Network connection of the client.</param>
+		/// <param name="msg">ClientValidatedSceneBroadcast message.</param>
+		/// <param name="channel">Network channel used for the broadcast.</param>
 		private void OnClientValidatedSceneBroadcastReceived(NetworkConnection conn, ClientValidatedSceneBroadcast msg, Channel channel)
 		{
 			if (WaitingSceneLoadCharacters.TryGetValue(conn, out IPlayerCharacter character))
@@ -462,8 +525,11 @@ namespace FishMMO.Server
 		}
 
 		/// <summary>
-		/// The client notified the server it unloaded scenes.
+		/// The client notified the server it unloaded scenes. Disconnects connection if character is not loaded.
 		/// </summary>
+		/// <param name="conn">Network connection of the client.</param>
+		/// <param name="msg">ClientScenesUnloadedBroadcast message.</param>
+		/// <param name="channel">Network channel used for the broadcast.</param>
 		private void OnClientScenesUnloadedBroadcastReceived(NetworkConnection conn, ClientScenesUnloadedBroadcast msg, Channel channel)
 		{
 			if (msg.UnloadedScenes == null || msg.UnloadedScenes.Count == 0)
@@ -486,9 +552,9 @@ namespace FishMMO.Server
 		}
 
 		/// <summary>
-		/// Sends all Server Side Character data to the owner. *Expensive*
+		/// Sends all server-side character data to the owner. Expensive operation.
 		/// </summary>
-		/// <param name="character"></param>
+		/// <param name="character">Player character to send data for.</param>
 		public void SendAllCharacterData(IPlayerCharacter character)
 		{
 			if (Server.NpgsqlDbContextFactory == null)
@@ -507,13 +573,13 @@ namespace FishMMO.Server
 			if (character.TryGet(out IAbilityController abilityController))
 			{
 				List<KnownAbilityAddBroadcast> knownAbilityBroadcasts = new List<KnownAbilityAddBroadcast>();
+				List<KnownAbilityEventAddBroadcast> knownAbilityEventBroadcasts = new List<KnownAbilityEventAddBroadcast>();
 
 				if (abilityController.KnownBaseAbilities != null)
 				{
 					// get base ability templates
 					foreach (int templateID in abilityController.KnownBaseAbilities)
 					{
-						// create the new item broadcast
 						knownAbilityBroadcasts.Add(new KnownAbilityAddBroadcast()
 						{
 							TemplateID = templateID,
@@ -521,13 +587,12 @@ namespace FishMMO.Server
 					}
 				}
 
-				if (abilityController.KnownEvents != null)
+				if (abilityController.KnownAbilityEvents != null)
 				{
 					// and event templates
-					foreach (int templateID in abilityController.KnownEvents)
+					foreach (int templateID in abilityController.KnownAbilityEvents)
 					{
-						// create the new item broadcast
-						knownAbilityBroadcasts.Add(new KnownAbilityAddBroadcast()
+						knownAbilityEventBroadcasts.Add(new KnownAbilityEventAddBroadcast()
 						{
 							TemplateID = templateID,
 						});
@@ -540,6 +605,11 @@ namespace FishMMO.Server
 					Server.Broadcast(character.Owner, new KnownAbilityAddMultipleBroadcast()
 					{
 						Abilities = knownAbilityBroadcasts,
+					}, true, Channel.Reliable);
+
+					Server.Broadcast(character.Owner, new KnownAbilityEventAddMultipleBroadcast()
+					{
+						AbilityEvents = knownAbilityEventBroadcasts,
 					}, true, Channel.Reliable);
 				}
 			}
@@ -749,9 +819,11 @@ namespace FishMMO.Server
 
 		/// <summary>
 		/// Allows sending a broadcast to a specific character by their character name.
-		/// Returns true if the broadcast was sent successfully.
-		/// False if the character could not by found.
+		/// Returns true if the broadcast was sent successfully, false otherwise.
 		/// </summary>
+		/// <typeparam name="T">Type of broadcast message.</typeparam>
+		/// <param name="characterName">Name of the character to send to.</param>
+		/// <param name="msg">Broadcast message to send.</param>
 		public bool SendBroadcastToCharacter<T>(string characterName, T msg) where T : struct, IBroadcast
 		{
 			if (CharactersByLowerCaseName.TryGetValue(characterName.ToLower(), out IPlayerCharacter character))
@@ -763,10 +835,12 @@ namespace FishMMO.Server
 		}
 
 		/// <summary>
-		/// Allows sending a broadcast to a specific character by their character id.
-		/// Returns true if the broadcast was sent successfully.
-		/// False if the character could not by found.
+		/// Allows sending a broadcast to a specific character by their character ID.
+		/// Returns true if the broadcast was sent successfully, false otherwise.
 		/// </summary>
+		/// <typeparam name="T">Type of broadcast message.</typeparam>
+		/// <param name="characterID">ID of the character to send to.</param>
+		/// <param name="msg">Broadcast message to send.</param>
 		public bool SendBroadcastToCharacter<T>(long characterID, T msg) where T : struct, IBroadcast
 		{
 			if (CharactersByID.TryGetValue(characterID, out IPlayerCharacter character))
@@ -777,6 +851,10 @@ namespace FishMMO.Server
 			return false;
 		}
 
+		/// <summary>
+		/// Handles character teleport events, validates teleporter and scene, updates position, and saves state.
+		/// </summary>
+		/// <param name="character">Player character to teleport.</param>
 		public void IPlayerCharacter_OnTeleport(IPlayerCharacter character)
 		{
 			if (character == null)
@@ -849,6 +927,11 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Handles character killed events, processes player and NPC deaths, respawns, and updates state.
+		/// </summary>
+		/// <param name="killer">Character that performed the kill.</param>
+		/// <param name="defender">Character that was killed.</param>
 		private void CharacterDamageController_OnKilled(ICharacter killer, ICharacter defender)
 		{
 			if (defender == null)

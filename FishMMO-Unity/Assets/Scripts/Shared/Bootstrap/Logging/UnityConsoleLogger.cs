@@ -14,15 +14,35 @@ namespace FishMMO.Shared
 	/// </summary>
 	public class UnityConsoleLogger : FishMMO.Logging.ILogger
 	{
+		/// <summary>
+		/// The configuration for this Unity console logger instance.
+		/// </summary>
 		private readonly UnityConsoleLoggerConfig config;
+		/// <summary>
+		/// The set of log levels this logger is allowed to process.
+		/// </summary>
 		private HashSet<LogLevel> allowedLevels;
-		private Dictionary<LogLevel, string> logLevelColors; // Store configured colors
+		/// <summary>
+		/// Configured colors for each log level.
+		/// </summary>
+		private Dictionary<LogLevel, string> logLevelColors;
 
+		/// <summary>
+		/// Indicates whether this logger is enabled.
+		/// </summary>
 		public bool IsEnabled { get; private set; }
+		/// <summary>
+		/// The set of allowed log levels (read-only).
+		/// </summary>
 		public IReadOnlyCollection<LogLevel> AllowedLevels => allowedLevels;
-		public bool HandlesConsoleParts { get { return false; } } // This logger does not handle "parts" directly for console output
+		/// <summary>
+		/// Indicates if this logger handles console parts directly (always false).
+		/// </summary>
+		public bool HandlesConsoleParts { get { return false; } }
 
-		// Internal logging callback for messages specific to the UnityConsoleLogger's operation
+		/// <summary>
+		/// Internal logging callback for messages specific to the UnityConsoleLogger's operation.
+		/// </summary>
 		private readonly Action<string> internalLogCallback;
 
 		/// <summary>
@@ -48,6 +68,7 @@ namespace FishMMO.Shared
 		/// Logs a structured entry to the Unity console, formatted similarly to ConsoleFormatter.
 		/// </summary>
 		/// <param name="entry">The log entry to send.</param>
+		/// <returns>A Task representing the async log operation.</returns>
 		public async Task Log(LogEntry entry)
 		{
 			// Check if logger is enabled and if the log level is allowed
@@ -70,11 +91,6 @@ namespace FishMMO.Shared
 			try
 			{
 				StringBuilder sb = new StringBuilder();
-
-				// Pad the raw timestamp string (excluding brackets), then add brackets and apply color.
-				string timestampContent = entry.Timestamp.ToString("yyyy-MM-dd HH:mm:ss 'UTC'");
-				string paddedTimestamp = ConsoleFormatterHelpers.PadRight($"[{timestampContent}]", ConsoleFormatterHelpers.TimestampColumnWidth - 2);
-				sb.Append($"<color=grey>{paddedTimestamp}</color>");
 
 				// Log Level with padding
 				// Pad the raw level string (excluding brackets), then add brackets and apply color.

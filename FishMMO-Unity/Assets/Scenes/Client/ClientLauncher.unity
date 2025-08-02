@@ -488,7 +488,10 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 468852877}
-  - component: {fileID: 468852878}
+  - component: {fileID: 468852882}
+  - component: {fileID: 468852881}
+  - component: {fileID: 468852880}
+  - component: {fileID: 468852879}
   m_Layer: 0
   m_Name: FishMMOClientLauncher
   m_TagString: Untagged
@@ -511,7 +514,7 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &468852878
+--- !u!114 &468852879
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -520,7 +523,52 @@ MonoBehaviour:
   m_GameObject: {fileID: 468852875}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d9067a5243daf094a85051a0db2ff408, type: 3}
+  m_Script: {fileID: 11500000, guid: e0ebe9f1a5ebec045a7e5672bec3ed62, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  WebRequestService: {fileID: 468852881}
+  MaxRetries: 3
+  RetryDelay: 1
+  WebRequestTimeout: 10
+--- !u!114 &468852880
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 468852875}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3f15a46464814e3479c3dbc2eaf6f05b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  WebRequestService: {fileID: 468852881}
+  MaxRetries: 3
+  RetryDelay: 1
+  WebRequestTimeout: 10
+  HtmlPxToTmpSizeFactor: 1.5
+--- !u!114 &468852881
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 468852875}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b2abc65b6d98a8b4b99e5c71940fd4e8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!114 &468852882
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 468852875}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c6d296ce8cc95d248961b5580c336645, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   Background: {fileID: 212578446}
@@ -532,10 +580,15 @@ MonoBehaviour:
   QuitButton: {fileID: 772784617}
   PlayButton: {fileID: 1434612282}
   PlayButtonText: {fileID: 1342158545}
-  HtmlViewURL: https://github.com/jimdroberts/FishMMO/wiki
-  DivClass: markdown-body
   HtmlText: {fileID: 2101316213}
   HtmlTextLinkHandler: {fileID: 2101316215}
+  HtmlViewURL: https://github.com/jimdroberts/FishMMO/wiki
+  DivClass: markdown-body
+  DefaultScreenWidth: 1024
+  DefaultScreenHeight: 768
+  UnityWebRequestService: {fileID: 468852881}
+  HtmlContentFetcher: {fileID: 468852880}
+  PatchServerService: {fileID: 468852879}
 --- !u!1 &535781244
 GameObject:
   m_ObjectHideFlags: 0
@@ -1110,7 +1163,7 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 468852878}
+      - m_Target: {fileID: 0}
         m_TargetAssemblyTypeName: FishMMO.Client.ClientLauncher, Assembly-CSharp
         m_MethodName: Quit
         m_Mode: 1
@@ -2219,7 +2272,19 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 1434612283}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 468852875}
+        m_TargetAssemblyTypeName: 
+        m_MethodName: 
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: 
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!114 &1434612283
 MonoBehaviour:
   m_ObjectHideFlags: 0

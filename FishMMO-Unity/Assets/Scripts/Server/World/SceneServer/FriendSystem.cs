@@ -12,8 +12,14 @@ namespace FishMMO.Server
 	/// </summary>
 	public class FriendSystem : ServerBehaviour
 	{
+		/// <summary>
+		/// Maximum number of friends allowed per character.
+		/// </summary>
 		public int MaxFriends = 100;
 
+		/// <summary>
+		/// Initializes the friend system, registering broadcast handlers for friend add and remove requests.
+		/// </summary>
 		public override void InitializeOnce()
 		{
 			if (Server != null &&
@@ -28,6 +34,9 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Cleans up the friend system, unregistering broadcast handlers.
+		/// </summary>
 		public override void Destroying()
 		{
 			if (Server != null)
@@ -37,6 +46,13 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Handles broadcast to add a new friend for a player character.
+		/// Validates character, friend count, and prevents self-friending. Adds friend to database and notifies client.
+		/// </summary>
+		/// <param name="conn">Network connection of the requesting client.</param>
+		/// <param name="msg">FriendAddNewBroadcast message containing friend data.</param>
+		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerFriendAddNewBroadcastReceived(NetworkConnection conn, FriendAddNewBroadcast msg, Channel channel)
 		{
 			if (conn.FirstObject == null)
@@ -45,20 +61,20 @@ namespace FishMMO.Server
 			}
 			IFriendController friendController = conn.FirstObject.GetComponent<IFriendController>();
 
-			// validate character
+			// Validate character
 			if (friendController == null ||
 				friendController.Friends.Count > MaxFriends)
 			{
 				return;
 			}
 
-			// validate friend invite
+			// Validate friend invite
 			if (Server == null || Server.NpgsqlDbContextFactory == null)
 			{
 				return;
 			}
 
-			// are we trying to become our own friend again...
+			// Are we trying to become our own friend again...
 			if (friendController.Character.ID == msg.CharacterID)
 			{
 				return;
@@ -68,13 +84,13 @@ namespace FishMMO.Server
 			CharacterEntity friendEntity = CharacterService.GetByID(dbContext, msg.CharacterID, true);
 			if (friendEntity != null)
 			{
-				// add the friend to the database
+				// Add the friend to the database
 				CharacterFriendService.Save(dbContext, friendController.Character.ID, friendEntity.ID);
 
-				// add the friend to the characters friend controller
+				// Add the friend to the characters friend controller
 				friendController.AddFriend(friendEntity.ID);
 
-				// tell the character they added a new friend!
+				// Tell the character they added a new friend!
 				Server.Broadcast(conn, new FriendAddBroadcast()
 				{
 					CharacterID = friendEntity.ID,
@@ -83,6 +99,13 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Handles broadcast to remove a friend for a player character.
+		/// Validates character and removes friend from database and notifies client if successful.
+		/// </summary>
+		/// <param name="conn">Network connection of the requesting client.</param>
+		/// <param name="msg">FriendRemoveBroadcast message containing friend removal data.</param>
+		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerFriendRemoveBroadcastReceived(NetworkConnection conn, FriendRemoveBroadcast msg, Channel channel)
 		{
 			if (Server.NpgsqlDbContextFactory == null)
@@ -95,20 +118,20 @@ namespace FishMMO.Server
 			}
 			IFriendController friendController = conn.FirstObject.GetComponent<IFriendController>();
 
-			// validate character
+			// Validate character
 			if (friendController == null)
 			{
 				return;
 			}
 
-			// remove the friend if it exists
+			// Remove the friend if it exists
 			if (friendController.Friends.Contains(msg.CharacterID))
 			{
-				// remove the character from the friend in the database
+				// Remove the character from the friend in the database
 				using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 				if (CharacterFriendService.Delete(dbContext, friendController.Character.ID, msg.CharacterID))
 				{
-					// tell the character they removed a friend
+					// Tell the character they removed a friend
 					Server.Broadcast(conn, new FriendRemoveBroadcast()
 					{
 						CharacterID = msg.CharacterID,

@@ -1,4 +1,5 @@
-﻿using FishNet.Connection;
+﻿using FishNet.Broadcast;
+using FishNet.Connection;
 using FishNet.Transporting;
 using FishMMO.Shared;
 using FishMMO.Logging;
@@ -6,7 +7,6 @@ using FishMMO.Server.DatabaseServices;
 using FishMMO.Database.Npgsql;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
-using UnityEngine;
 using FishMMO.Database.Npgsql.Entities;
 using System.Linq;
 using System;
@@ -344,25 +344,32 @@ namespace FishMMO.Server
 					if (merchantTemplate.AbilityEvents != null &&
 						merchantTemplate.AbilityEvents.Count >= msg.Index)
 					{
-						LearnAbilityTemplate(dbContext, conn, character, merchantTemplate.AbilityEvents[msg.Index]);
+						LearnAbilityEvent(dbContext, conn, character, merchantTemplate.AbilityEvents[msg.Index]);
 					}
 					break;
 				default: return;
 			}
 		}
 
-		public void LearnAbilityTemplate<T>(NpgsqlDbContext dbContext, NetworkConnection conn, IPlayerCharacter character, T template) where T : BaseAbilityTemplate
+		private void LearnAbilityGeneric<TTemplate, TBroadcast>(
+			NpgsqlDbContext dbContext,
+			NetworkConnection conn,
+			IPlayerCharacter character,
+			TTemplate template,
+			Func<IAbilityController, int, bool> knowsFunc,
+			Action<IAbilityController, List<TTemplate>> learnFunc,
+			Action<NpgsqlDbContext, long, int> addToDbFunc,
+			Func<TTemplate, int> idSelector,
+			Func<TTemplate, int> priceSelector,
+			Func<TTemplate, TBroadcast> broadcastFactory)
+			where TTemplate : class
+			where TBroadcast : struct, IBroadcast
 		{
-			// do we already know this ability?
-			if (template == null ||
-				character == null ||
-				!character.TryGet(out IAbilityController abilityController) ||
-				abilityController.KnowsAbility(template.ID))
+			if (template == null || character == null || !character.TryGet(out IAbilityController abilityController) || knowsFunc(abilityController, idSelector(template)))
 			{
 				return;
 			}
 
-			// do we have enough currency to purchase this?
 			if (CurrencyTemplate == null)
 			{
 				Log.Debug("InteractableSystem", "CurrencyTemplate is null.");
@@ -370,26 +377,55 @@ namespace FishMMO.Server
 			}
 			if (!character.TryGet(out ICharacterAttributeController attributeController) ||
 				!attributeController.TryGetAttribute(CurrencyTemplate, out CharacterAttribute currency) ||
-				currency.FinalValue < template.Price)
+				currency.FinalValue < priceSelector(template))
 			{
 				Log.Debug("InteractableSystem", "Not enough currency!");
 				return;
 			}
 
-			// learn the ability
-			abilityController.LearnBaseAbilities(new List<BaseAbilityTemplate> { template });
+			// learn the ability or event
+			learnFunc(abilityController, new List<TTemplate> { template });
 
 			// remove the price from the characters currency
-			currency.AddValue(template.Price);
+			currency.AddValue(priceSelector(template));
 
-			// add the known ability to the database
-			CharacterKnownAbilityService.Add(dbContext, character.ID, template.ID);
+			// add the known ability/event to the database
+			addToDbFunc(dbContext, character.ID, idSelector(template));
 
-			// tell the client about the new ability event
-			Server.Broadcast(conn, new KnownAbilityAddBroadcast()
-			{
-				TemplateID = template.ID,
-			}, true, Channel.Reliable);
+			// tell the client about the new ability/event
+			Server.Broadcast(conn, broadcastFactory(template), true, Channel.Reliable);
+		}
+
+		public void LearnAbilityTemplate<T>(NpgsqlDbContext dbContext, NetworkConnection conn, IPlayerCharacter character, T template) where T : BaseAbilityTemplate
+		{
+			LearnAbilityGeneric<BaseAbilityTemplate, KnownAbilityAddBroadcast>(
+				dbContext,
+				conn,
+				character,
+				template,
+				(abilityController, id) => abilityController.KnowsAbility(id),
+				(abilityController, list) => abilityController.LearnBaseAbilities(list.Cast<BaseAbilityTemplate>().ToList()),
+				(db, charId, tempId) => CharacterKnownAbilityService.Add(db, charId, tempId),
+				t => t.ID,
+				t => t.Price,
+				t => new KnownAbilityAddBroadcast { TemplateID = t.ID }
+			);
+		}
+
+		public void LearnAbilityEvent<T>(NpgsqlDbContext dbContext, NetworkConnection conn, IPlayerCharacter character, T template) where T : AbilityEvent
+		{
+			LearnAbilityGeneric<AbilityEvent, KnownAbilityEventAddBroadcast>(
+				dbContext,
+				conn,
+				character,
+				template,
+				(abilityController, id) => abilityController.KnowsAbilityEvent(id),
+				(abilityController, list) => abilityController.LearnAbilityEvents(list.Cast<AbilityEvent>().ToList()),
+				(db, charId, tempId) => CharacterKnownAbilityService.Add(db, charId, tempId),
+				t => t.ID,
+				t => t.Price,
+				t => new KnownAbilityEventAddBroadcast { TemplateID = t.ID }
+			);
 		}
 
 		public void OnServerAbilityCraftBroadcastReceived(NetworkConnection conn, AbilityCraftBroadcast msg, Channel channel)
@@ -462,20 +498,20 @@ namespace FishMMO.Server
 						// duplicate events
 						return;
 					}
-					AbilityEvent eventTemplate = AbilityEvent.Get<AbilityEvent>(id);
-					if (eventTemplate == null)
+					AbilityEvent abilityEvent = AbilityEvent.Get<AbilityEvent>(id);
+					if (abilityEvent == null)
 					{
 						// unknown ability event
 						return;
 					}
 
 					// validate that the character knows the ability event
-					if (!abilityController.KnowsAbility(eventTemplate.ID))
+					if (!abilityController.KnowsAbilityEvent(abilityEvent.ID))
 					{
 						return;
 					}
 
-					if (eventTemplate is AbilityTypeOverrideEventType)
+					/*if (trigger is AbilityTypeOverrideEventType)
 					{
 						if (hasTypeOverride)
 						{
@@ -483,9 +519,9 @@ namespace FishMMO.Server
 							return;
 						}
 						hasTypeOverride = true;
-					}
+					}*/
 
-					price += eventTemplate.Price;
+					price += abilityEvent.Price;
 				}
 			}
 

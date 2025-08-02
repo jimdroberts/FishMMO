@@ -5,6 +5,7 @@ namespace FishNet.Object.Synchronizing
     /// <summary>
     /// Settings which can be passed into SyncTypes.
     /// </summary>
+    [System.Serializable]
     public struct SyncTypeSettings
     {
         public WritePermission WritePermission;
@@ -14,11 +15,10 @@ namespace FishNet.Object.Synchronizing
 
         internal bool IsDefault()
         {
-            return (WritePermission == WritePermission.ServerOnly && ReadPermission == ReadPermission.Observers
-                && SendRate == 0f && Channel == (Channel)0);
+            return WritePermission == WritePermission.ServerOnly && ReadPermission == ReadPermission.Observers && SendRate == 0f && Channel == (Channel)0;
         }
 
-        //Work around for C# parameterless struct limitation.
+        // Work around for C# parameterless struct limitation.
         public SyncTypeSettings(float sendRate = 0.1f)
         {
             WritePermission = WritePermission.ServerOnly;
@@ -45,7 +45,6 @@ namespace FishNet.Object.Synchronizing
 
         public SyncTypeSettings(WritePermission writePermissions)
         {
-
             WritePermission = writePermissions;
             ReadPermission = ReadPermission.Observers;
             SendRate = 0.1f;
@@ -62,7 +61,6 @@ namespace FishNet.Object.Synchronizing
 
         public SyncTypeSettings(WritePermission writePermissions, ReadPermission readPermissions)
         {
-
             WritePermission = writePermissions;
             ReadPermission = readPermissions;
             SendRate = 0.1f;
@@ -71,7 +69,6 @@ namespace FishNet.Object.Synchronizing
 
         public SyncTypeSettings(WritePermission writePermissions, ReadPermission readPermissions, float sendRate, Channel channel)
         {
-                
             WritePermission = writePermissions;
             ReadPermission = readPermissions;
             SendRate = sendRate;

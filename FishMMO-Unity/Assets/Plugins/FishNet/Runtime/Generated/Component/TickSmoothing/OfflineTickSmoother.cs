@@ -17,6 +17,11 @@ namespace FishNet.Component.Transforming.Beta
         /// Logic for owner smoothing.
         /// </summary>
         public TickSmootherController SmootherController { get; private set; }
+        /// <summary>
+        /// True if this component is initialized.
+        /// </summary>
+        /// <remarks>This API is for internal use and may change at any time.</remarks>
+        public bool IsInitialized { get; private set; }
         #endregion
 
         #region Serialized.
@@ -40,7 +45,7 @@ namespace FishNet.Component.Transforming.Beta
         [SerializeField]
         private MovementSettings _movementSettings = new(true);
         #endregion
-        
+
         private void Awake()
         {
             RetrieveControllers();
@@ -56,6 +61,8 @@ namespace FishNet.Component.Transforming.Beta
             }
 
             StoreControllers();
+
+            IsInitialized = false;
         }
 
         /// <summary>
@@ -79,7 +86,7 @@ namespace FishNet.Component.Transforming.Beta
         /// <summary>
         /// Initializes using a specified TimeManager.
         /// </summary>
-        /// <param name="timeManager"></param>
+        /// <param name = "timeManager"></param>
         public void Initialize(TimeManager timeManager)
         {
             if (timeManager == null)
@@ -88,13 +95,28 @@ namespace FishNet.Component.Transforming.Beta
                 return;
             }
 
-            //_initialized = true;
-            
             SmootherController.SetTimeManager(timeManager);
 
-            _initializationSettings.UpdateRuntimeSettings(initializingNetworkBehaviour: null, transform, (float)timeManager.TickDelta);
+            _initializationSettings.SetOfflineRuntimeValues(timeManager, graphicalTransform: transform);
             SmootherController.Initialize(_initializationSettings, _movementSettings, default);
             SmootherController.StartSmoother();
+
+            IsInitialized = true;
+        }
+
+        /// <summary>
+        /// Sets a transform as the target to follow.
+        /// </summary>
+        /// <param name = "value">New value.</param>
+        public void SetTargetTransform(Transform value)
+        {
+            if (IsInitialized)
+            {
+                NetworkManagerExtensions.LogError($"Target can only be set before Initialize is called.");
+                return;
+            }
+
+            _initializationSettings.TargetTransform = value;
         }
 
         /// <summary>

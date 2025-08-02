@@ -4,7 +4,7 @@
     <RootNamespace>FishMMO_Logger</RootNamespace>
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <NoWarn>$(NoWarn);CS8618;CS8625;CS8600;CS8601;CS8603;CS8604;CS4014</NoWarn>
+    <NoWarn>$(NoWarn);CS8618;CS8625;CS8600;CS8601;CS8603;CS8604;CS4014;CS1998</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="System.Text.Json" Version="9.0.4" />

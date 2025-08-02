@@ -7,14 +7,31 @@ using UnityEngine;
 
 namespace FishMMO.Shared
 {
+	/// <summary>
+	/// Controls the application, ticking, and removal of buffs for a character, including network synchronization.
+	/// </summary>
 	public class BuffController : CharacterBehaviour, IBuffController
 	{
+		/// <summary>
+		/// Internal dictionary mapping buff template IDs to active buff instances.
+		/// </summary>
 		private Dictionary<int, Buff> buffs = new Dictionary<int, Buff>();
 
+		/// <summary>
+		/// Public accessor for the character's active buffs.
+		/// </summary>
 		public Dictionary<int, Buff> Buffs { get { return buffs; } }
 
+		/// <summary>
+		/// Temporary list of keys to remove after update loop (avoids modifying dictionary during iteration).
+		/// </summary>
 		private List<int> keysToRemove = new List<int>();
 
+		/// <summary>
+		/// Reads the buff state from the network payload and applies each buff to the character.
+		/// </summary>
+		/// <param name="conn">The network connection.</param>
+		/// <param name="reader">The network reader to read from.</param>
 		public override void ReadPayload(NetworkConnection conn, Reader reader)
 		{
 			int buffCount = reader.ReadInt32();
@@ -31,6 +48,11 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Writes the current buff state to the network payload for synchronization.
+		/// </summary>
+		/// <param name="conn">The network connection.</param>
+		/// <param name="writer">The network writer to write to.</param>
 		public override void WritePayload(NetworkConnection conn, Writer writer)
 		{
 			if (Buffs == null ||
@@ -54,6 +76,9 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Unity Update callback. Handles ticking, expiration, and removal of buffs each frame.
+		/// </summary>
 		void Update()
 		{
 			float dt = Time.deltaTime;
@@ -74,6 +99,7 @@ namespace FishMMO.Shared
 				{
 					if (buff.Stacks > 0)
 					{
+						// Remove a stack and reset duration if stacks remain
 						buff.RemoveStack(Character);
 						buff.ResetDuration();
 					}
@@ -93,6 +119,10 @@ namespace FishMMO.Shared
 			keysToRemove.Clear();
 		}
 
+		/// <summary>
+		/// Applies a buff to the character by template, creating a new instance if needed and handling stacking.
+		/// </summary>
+		/// <param name="template">The buff template to apply.</param>
 		public void Apply(BaseBuffTemplate template)
 		{
 			if (!buffs.TryGetValue(template.ID, out Buff buffInstance))
@@ -110,7 +140,8 @@ namespace FishMMO.Shared
 					IBuffController.OnAddBuff?.Invoke(buffInstance);
 				}
 			}
-			
+
+			// Handle stacking logic
 			if (template.MaxStacks > 0 && buffInstance.Stacks < template.MaxStacks)
 			{
 				buffInstance.AddStack(Character);
@@ -124,6 +155,10 @@ namespace FishMMO.Shared
 			template.OnApplyFX(buffInstance, Character);
 		}
 
+		/// <summary>
+		/// Applies a buff instance to the character if not already present, invoking appropriate events.
+		/// </summary>
+		/// <param name="buff">The buff instance to apply.</param>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void Apply(Buff buff)
 		{
@@ -142,6 +177,10 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Removes a buff by template ID, invoking removal events and cleaning up.
+		/// </summary>
+		/// <param name="buffID">The template ID of the buff to remove.</param>
 		public void Remove(int buffID)
 		{
 			if (buffs.TryGetValue(buffID, out Buff buffInstance))
@@ -160,6 +199,12 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Removes a random buff or debuff from the character, with options to include buffs and/or debuffs.
+		/// </summary>
+		/// <param name="rng">The random number generator to use.</param>
+		/// <param name="includeBuffs">Whether to include buffs in the selection.</param>
+		/// <param name="includeDebuffs">Whether to include debuffs in the selection.</param>
 		public void RemoveRandom(System.Random rng, bool includeBuffs = false, bool includeDebuffs = false)
 		{
 			if (rng == null)
@@ -200,6 +245,10 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Removes all non-permanent buffs from the character, optionally suppressing removal events.
+		/// </summary>
+		/// <param name="ignoreInvokeRemove">If true, does not invoke OnRemoveBuff/OnRemoveDebuff events.</param>
 		public void RemoveAll(bool ignoreInvokeRemove = false)
 		{
 			foreach (KeyValuePair<int, Buff> pair in new Dictionary<int, Buff>(buffs))
@@ -224,6 +273,10 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Resets the buff controller state, clearing all buffs.
+		/// </summary>
+		/// <param name="asServer">Whether the reset is being performed on the server.</param>
 		public override void ResetState(bool asServer)
 		{
 			base.ResetState(asServer);
@@ -232,6 +285,9 @@ namespace FishMMO.Shared
 		}
 
 #if !UNITY_SERVER
+		/// <summary>
+		/// Called when the character is started on the client. Registers broadcast listeners for buff updates.
+		/// </summary>
 		public override void OnStartCharacter()
 		{
 			base.OnStartCharacter();
@@ -248,6 +304,9 @@ namespace FishMMO.Shared
 			ClientManager.RegisterBroadcast<BuffRemoveMultipleBroadcast>(OnClientBuffRemoveMultipleBroadcastReceived);
 		}
 
+		/// <summary>
+		/// Called when the character is stopped on the client. Unregisters buff update listeners.
+		/// </summary>
 		public override void OnStopCharacter()
 		{
 			base.OnStopCharacter();
@@ -262,8 +321,10 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Server sent a buff add broadcast.
+		/// Handles a broadcast from the server to add a single buff.
 		/// </summary>
+		/// <param name="msg">The buff add message.</param>
+		/// <param name="channel">The network channel.</param>
 		private void OnClientBuffAddBroadcastReceived(BuffAddBroadcast msg, Channel channel)
 		{
 			BaseBuffTemplate template = BaseBuffTemplate.Get<BaseBuffTemplate>(msg.TemplateID);
@@ -274,8 +335,10 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Server sent a multiple buff add broadcast.
+		/// Handles a broadcast from the server to add multiple buffs.
 		/// </summary>
+		/// <param name="msg">The multiple buff add message.</param>
+		/// <param name="channel">The network channel.</param>
 		private void OnClientBuffAddMultipleBroadcastReceived(BuffAddMultipleBroadcast msg, Channel channel)
 		{
 			foreach (BuffAddBroadcast subMsg in msg.Buffs)
@@ -289,8 +352,10 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Server sent a remove buff add broadcast.
+		/// Handles a broadcast from the server to remove a single buff.
 		/// </summary>
+		/// <param name="msg">The buff remove message.</param>
+		/// <param name="channel">The network channel.</param>
 		private void OnClientBuffRemoveBroadcastReceived(BuffRemoveBroadcast msg, Channel channel)
 		{
 			BaseBuffTemplate template = BaseBuffTemplate.Get<BaseBuffTemplate>(msg.TemplateID);
@@ -301,8 +366,10 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Server sent a remove multiple buff add broadcast.
+		/// Handles a broadcast from the server to remove multiple buffs.
 		/// </summary>
+		/// <param name="msg">The multiple buff remove message.</param>
+		/// <param name="channel">The network channel.</param>
 		private void OnClientBuffRemoveMultipleBroadcastReceived(BuffRemoveMultipleBroadcast msg, Channel channel)
 		{
 			foreach (BuffRemoveBroadcast subMsg in msg.Buffs)

@@ -1,5 +1,6 @@
 using System.Linq;
 using FishNet.Object;
+using FishNet.Utility.Performance;
 using FishMMO.Database.Npgsql;
 using FishMMO.Database.Npgsql.Entities;
 using FishMMO.Shared;
@@ -103,7 +104,7 @@ namespace FishMMO.Server.DatabaseServices
 				}
 
 				// instantiate the pet object
-				NetworkObject nob = character.NetworkObject.NetworkManager.GetPooledInstantiated(petAbilityTemplate.PetPrefab, character.Transform.position, character.Transform.rotation, true);
+				NetworkObject nob = character.NetworkObject.NetworkManager.GetPooledInstantiated(petAbilityTemplate.PetPrefab.PrefabId, petAbilityTemplate.PetPrefab.SpawnableCollectionId, ObjectPoolRetrieveOption.Unset, null, character.Transform.position, character.Transform.rotation, null, true);
 				pet = nob.GetComponent<Pet>();
 				if (pet == null)
 				{

@@ -3,39 +3,109 @@ using System.Runtime.CompilerServices;
 
 namespace FishMMO.Shared
 {
+	/// <summary>
+	/// Represents an in-game ability instance, constructed from an <see cref="AbilityTemplate"/> and containing all runtime state, events, and resource requirements.
+	/// </summary>
 	public class Ability
 	{
+		/// <summary>
+		/// Unique identifier for this ability instance.
+		/// </summary>
 		public long ID;
-		public float ActivationTime;
-		public float LifeTime;
-		public float Cooldown;
-		public float Range { get { return Speed * LifeTime; } }
-		public float Speed;
-
-		public AbilityTemplate Template { get; private set; }
-		public string Name { get; set; }
-		public string CachedTooltip { get; private set; }
-		public AbilityResourceDictionary Resources { get; private set; }
-		public AbilityResourceDictionary RequiredAttributes { get; private set; }
-
-		public Dictionary<int, AbilityEvent> AbilityEvents { get; private set; }
-		public Dictionary<int, SpawnEvent> PreSpawnEvents { get; private set; }
-		public Dictionary<int, SpawnEvent> SpawnEvents { get; private set; }
-		public Dictionary<int, MoveEvent> MoveEvents { get; private set; }
-		public Dictionary<int, HitEvent> HitEvents { get; private set; }
-		public AbilityTypeOverrideEventType TypeOverride { get; private set; }
-
-		public List<Trigger> OnTickTriggers = new List<Trigger>();
-		public List<Trigger> OnHitTriggers = new List<Trigger>();
-		public List<Trigger> OnPreSpawnTriggers = new List<Trigger>();
-		public List<Trigger> OnSpawnTriggers = new List<Trigger>();
-		public List<Trigger> OnDestroyTriggers = new List<Trigger>();
 
 		/// <summary>
-		/// Cache of all active ability Objects. <ContainerID, <AbilityObjectID, AbilityObject>>
+		/// Total activation time for this ability, including all modifiers.
+		/// </summary>
+		public float ActivationTime;
+
+		/// <summary>
+		/// Total lifetime of the ability effect, including all modifiers.
+		/// </summary>
+		public float LifeTime;
+
+		/// <summary>
+		/// Total cooldown for this ability, including all modifiers.
+		/// </summary>
+		public float Cooldown;
+
+		/// <summary>
+		/// The effective range of the ability, calculated as <see cref="Speed"/> * <see cref="LifeTime"/>.
+		/// </summary>
+		public float Range { get { return Speed * LifeTime; } }
+
+		/// <summary>
+		/// Total speed of the ability effect, including all modifiers.
+		/// </summary>
+		public float Speed;
+
+		/// <summary>
+		/// The template from which this ability was constructed.
+		/// </summary>
+		public AbilityTemplate Template { get; private set; }
+
+		/// <summary>
+		/// The display name of the ability.
+		/// </summary>
+		public string Name { get; set; }
+
+		/// <summary>
+		/// Cached tooltip string for this ability, for UI display.
+		/// </summary>
+		public string CachedTooltip { get; private set; }
+
+		/// <summary>
+		/// The total resources required to use this ability, including all modifiers.
+		/// </summary>
+		public AbilityResourceDictionary Resources { get; private set; }
+
+		/// <summary>
+		/// The total required attributes to use this ability, including all modifiers.
+		/// </summary>
+		public AbilityResourceDictionary RequiredAttributes { get; private set; }
+
+		/// <summary>
+		/// Optional override for the ability type, set by certain events.
+		/// </summary>
+		public AbilityTypeOverrideEventType TypeOverride { get; private set; }
+
+		/// <summary>
+		/// All ability events, indexed by event ID, for quick access.
+		/// </summary>
+		public Dictionary<int, AbilityEvent> AbilityEvents = new Dictionary<int, AbilityEvent>();
+
+		/// <summary>
+		/// All OnTick events, indexed by event ID.
+		/// </summary>
+		public Dictionary<int, AbilityOnTickEvent> OnTickEvents = new Dictionary<int, AbilityOnTickEvent>();
+
+		/// <summary>
+		/// All OnHit events, indexed by event ID.
+		/// </summary>
+		public Dictionary<int, AbilityOnHitEvent> OnHitEvents = new Dictionary<int, AbilityOnHitEvent>();
+
+		/// <summary>
+		/// All OnPreSpawn events, indexed by event ID.
+		/// </summary>
+		public Dictionary<int, AbilityOnPreSpawnEvent> OnPreSpawnEvents = new Dictionary<int, AbilityOnPreSpawnEvent>();
+
+		/// <summary>
+		/// All OnSpawn events, indexed by event ID.
+		/// </summary>
+		public Dictionary<int, AbilityOnSpawnEvent> OnSpawnEvents = new Dictionary<int, AbilityOnSpawnEvent>();
+
+		/// <summary>
+		/// All OnDestroy events, indexed by event ID.
+		/// </summary>
+		public Dictionary<int, AbilityOnDestroyEvent> OnDestroyEvents = new Dictionary<int, AbilityOnDestroyEvent>();
+
+		/// <summary>
+		/// Cache of all active ability objects, organized by container and object ID: <ContainerID, <AbilityObjectID, AbilityObject>>
 		/// </summary>
 		public Dictionary<int, Dictionary<int, AbilityObject>> Objects { get; set; }
 
+		/// <summary>
+		/// The total resource cost for this ability, summing all resource values.
+		/// </summary>
 		public int TotalResourceCost
 		{
 			get
@@ -49,96 +119,172 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Constructs an ability from a template and optional event list.
+		/// </summary>
+		/// <param name="template">The ability template to use.</param>
+		/// <param name="abilityEvents">Optional list of event IDs to add to the ability.</param>
 		public Ability(AbilityTemplate template, List<int> abilityEvents = null)
 		{
-			ID = -1;
-			Template = template;
-			Name = Template.Name;
-			CachedTooltip = null;
-
-			if (AbilityEvents == null)
-			{
-				AbilityEvents = new Dictionary<int, AbilityEvent>();
-			}
-
-			InternalAddTemplateModifiers(Template);
-
-			if (abilityEvents != null)
-			{
-				for (int i = 0; i < abilityEvents.Count; ++i)
-				{
-					AbilityEvent abilityEvent = AbilityEvent.Get<AbilityEvent>(abilityEvents[i]);
-					if (abilityEvent == null)
-					{
-						continue;
-					}
-					AddAbilityEvent(abilityEvent);
-				}
-			}
+			Initialize(-1, template, abilityEvents);
 		}
 
+		/// <summary>
+		/// Constructs an ability from an ability ID, template ID, and optional event list.
+		/// </summary>
+		/// <param name="abilityID">The unique ability instance ID.</param>
+		/// <param name="templateID">The template ID to look up.</param>
+		/// <param name="abilityEvents">Optional list of event IDs to add to the ability.</param>
 		public Ability(long abilityID, int templateID, List<int> abilityEvents = null)
 		{
-			ID = abilityID;
-			Template = AbilityTemplate.Get<AbilityTemplate>(templateID);
-			Name = Template.Name;
-			CachedTooltip = null;
-
-			if (AbilityEvents == null)
-			{
-				AbilityEvents = new Dictionary<int, AbilityEvent>();
-			}
-
-			InternalAddTemplateModifiers(Template);
-
-			if (abilityEvents != null)
-			{
-				for (int i = 0; i < abilityEvents.Count; ++i)
-				{
-					AbilityEvent abilityEvent = AbilityEvent.Get<AbilityEvent>(abilityEvents[i]);
-					if (abilityEvent == null)
-					{
-						continue;
-					}
-					AddAbilityEvent(abilityEvent);
-				}
-			}
+			Initialize(abilityID, AbilityTemplate.Get<AbilityTemplate>(templateID), abilityEvents);
 		}
 
+		/// <summary>
+		/// Constructs an ability from an ability ID, template, and optional event list.
+		/// </summary>
+		/// <param name="abilityID">The unique ability instance ID.</param>
+		/// <param name="template">The ability template to use.</param>
+		/// <param name="abilityEvents">Optional list of event IDs to add to the ability.</param>
 		public Ability(long abilityID, AbilityTemplate template, List<int> abilityEvents = null)
+		{
+			Initialize(abilityID, template, abilityEvents);
+		}
+
+		/// <summary>
+		/// Initializes the ability instance from the given template and event list.
+		/// </summary>
+		/// <param name="abilityID">The unique ability instance ID.</param>
+		/// <param name="template">The ability template to use.</param>
+		/// <param name="abilityEvents">Optional list of event IDs to add to the ability.</param>
+		private void Initialize(long abilityID, AbilityTemplate template, List<int> abilityEvents)
 		{
 			ID = abilityID;
 			Template = template;
 			Name = Template.Name;
 			CachedTooltip = null;
 
-			if (AbilityEvents == null)
-			{
-				AbilityEvents = new Dictionary<int, AbilityEvent>();
-			}
+			// Add all events from the template to the ability's event dictionaries.
+			AddEvents(Template.OnTickEvents);
+			AddEvents(Template.OnHitEvents);
+			AddEvents(Template.OnPreSpawnEvents);
+			AddEvents(Template.OnSpawnEvents);
+			AddEvents(Template.OnDestroyEvents);
 
-			InternalAddTemplateModifiers(Template);
-
+			// Add any additional events provided in the constructor.
 			if (abilityEvents != null)
 			{
-				for (int i = 0; i < abilityEvents.Count; ++i)
+				foreach (var eventId in abilityEvents)
 				{
-					AbilityEvent abilityEvent = AbilityEvent.Get<AbilityEvent>(abilityEvents[i]);
-					if (abilityEvent == null)
-					{
-						continue;
-					}
-					AddAbilityEvent(abilityEvent);
+					var abilityEvent = AbilityEvent.Get<AbilityEvent>(eventId);
+					if (abilityEvent != null && !AbilityEvents.ContainsKey(abilityEvent.ID))
+						AbilityEvents.Add(abilityEvent.ID, abilityEvent);
+				}
+			}
+
+			// Apply all stat/resource/attribute modifiers from the template.
+			AddTemplateModifiers(Template);
+		}
+
+
+		/// <summary>
+		/// Adds a list of ability events to the appropriate event dictionaries and applies their stat/resource/attribute modifiers.
+		/// </summary>
+		/// <typeparam name="T">The type of ability event.</typeparam>
+		/// <param name="abilityEvents">The list of events to add.</param>
+		public void AddEvents<T>(List<T> abilityEvents) where T : AbilityEvent
+		{
+			if (abilityEvents == null) return;
+
+			foreach (var abilityEvent in abilityEvents)
+			{
+				if (abilityEvent == null) continue;
+
+				// Always add to AbilityEvents
+				if (!AbilityEvents.ContainsKey(abilityEvent.ID))
+					AbilityEvents.Add(abilityEvent.ID, abilityEvent);
+
+				// Add to the specific event dictionary and apply modifiers
+				switch (abilityEvent)
+				{
+					case AbilityOnTickEvent tickEvent:
+						if (!OnTickEvents.ContainsKey(tickEvent.ID))
+						{
+							OnTickEvents.Add(tickEvent.ID, tickEvent);
+							AddEventModifiers(tickEvent);
+						}
+						break;
+					case AbilityOnHitEvent hitEvent:
+						if (!OnHitEvents.ContainsKey(hitEvent.ID))
+						{
+							OnHitEvents.Add(hitEvent.ID, hitEvent);
+							AddEventModifiers(hitEvent);
+						}
+						break;
+					case AbilityOnPreSpawnEvent preSpawnEvent:
+						if (!OnPreSpawnEvents.ContainsKey(preSpawnEvent.ID))
+						{
+							OnPreSpawnEvents.Add(preSpawnEvent.ID, preSpawnEvent);
+							AddEventModifiers(preSpawnEvent);
+						}
+						break;
+					case AbilityOnSpawnEvent spawnEvent:
+						if (!OnSpawnEvents.ContainsKey(spawnEvent.ID))
+						{
+							OnSpawnEvents.Add(spawnEvent.ID, spawnEvent);
+							AddEventModifiers(spawnEvent);
+						}
+						break;
+					case AbilityOnDestroyEvent destroyEvent:
+						if (!OnDestroyEvents.ContainsKey(destroyEvent.ID))
+						{
+							OnDestroyEvents.Add(destroyEvent.ID, destroyEvent);
+							AddEventModifiers(destroyEvent);
+						}
+						break;
 				}
 			}
 		}
 
-		internal void InternalAddTemplateModifiers(AbilityTemplate template)
+		/// <summary>
+		/// Adds the stat/resource/attribute modifiers from an ability event to this ability.
+		/// </summary>
+		/// <param name="abilityEvent">The event whose modifiers to add.</param>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		private void AddEventModifiers(AbilityEvent abilityEvent)
 		{
-			ActivationTime += template.ActivationTime;
-			LifeTime += template.LifeTime;
-			Cooldown += template.Cooldown;
-			Speed += template.Speed;
+			AddStats(abilityEvent.ActivationTime, abilityEvent.LifeTime, abilityEvent.Cooldown, abilityEvent.Speed,
+				abilityEvent.Resources, abilityEvent.RequiredAttributes);
+		}
+
+		/// <summary>
+		/// Adds the stat/resource/attribute modifiers from a template to this ability.
+		/// </summary>
+		/// <param name="template">The template whose modifiers to add.</param>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		private void AddTemplateModifiers(AbilityTemplate template)
+		{
+			AddStats(template.ActivationTime, template.LifeTime, template.Cooldown, template.Speed,
+				template.Resources, template.RequiredAttributes);
+		}
+
+		/// <summary>
+		/// Adds stat/resource/attribute modifiers to this ability.
+		/// </summary>
+		/// <param name="activationTime">Activation time to add.</param>
+		/// <param name="lifeTime">Lifetime to add.</param>
+		/// <param name="cooldown">Cooldown to add.</param>
+		/// <param name="speed">Speed to add.</param>
+		/// <param name="addResources">Resources to add.</param>
+		/// <param name="addRequiredAttributes">Required attributes to add.</param>
+		private void AddStats(float activationTime, float lifeTime, float cooldown, float speed,
+			IDictionary<CharacterAttributeTemplate, int> addResources,
+			IDictionary<CharacterAttributeTemplate, int> addRequiredAttributes)
+		{
+			ActivationTime += activationTime;
+			LifeTime += lifeTime;
+			Cooldown += cooldown;
+			Speed += speed;
 
 			if (Resources == null)
 			{
@@ -150,121 +296,9 @@ namespace FishMMO.Shared
 				RequiredAttributes = new AbilityResourceDictionary();
 			}
 
-			foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in template.Resources)
+			if (addResources != null)
 			{
-				if (!Resources.ContainsKey(pair.Key))
-				{
-					Resources[pair.Key] = pair.Value;
-				}
-				else
-				{
-					Resources[pair.Key] += pair.Value;
-				}
-			}
-
-			foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in template.RequiredAttributes)
-			{
-				if (!RequiredAttributes.ContainsKey(pair.Key))
-				{
-					RequiredAttributes[pair.Key] = pair.Value;
-				}
-				else
-				{
-					RequiredAttributes[pair.Key] += pair.Value;
-				}
-			}
-
-			foreach (AbilityEvent abilityEvent in template.Events)
-			{
-				AddAbilityEvent(abilityEvent);
-			}
-		}
-
-		public bool TryGetAbilityEvent<T>(int templateID, out T modifier) where T : AbilityEvent
-		{
-			if (AbilityEvents != null && AbilityEvents.TryGetValue(templateID, out AbilityEvent result))
-			{
-				if ((modifier = result as T) != null)
-				{
-					return true;
-				}
-			}
-			modifier = null;
-			return false;
-		}
-
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public bool HasAbilityEvent(int templateID)
-		{
-			return AbilityEvents?.ContainsKey(templateID) ?? false;
-		}
-
-		public void AddAbilityEvent(AbilityEvent abilityEvent)
-		{
-			if (AbilityEvents == null)
-			{
-				AbilityEvents = new Dictionary<int, AbilityEvent>();
-			}
-
-			if (!AbilityEvents.ContainsKey(abilityEvent.ID))
-			{
-				CachedTooltip = null;
-
-				AbilityEvents.Add(abilityEvent.ID, abilityEvent);
-
-				switch (abilityEvent)
-				{
-					case SpawnEvent spawnEvent:
-						if (PreSpawnEvents == null)
-						{
-							PreSpawnEvents = new Dictionary<int, SpawnEvent>();
-						}
-						if (SpawnEvents == null)
-						{
-							SpawnEvents = new Dictionary<int, SpawnEvent>();
-						}
-						switch (spawnEvent.SpawnEventType)
-						{
-							case SpawnEventType.OnPreSpawn:
-								if (!PreSpawnEvents.ContainsKey(spawnEvent.ID))
-								{
-									PreSpawnEvents.Add(spawnEvent.ID, spawnEvent);
-								}
-								break;
-							case SpawnEventType.OnSpawn:
-								if (!SpawnEvents.ContainsKey(spawnEvent.ID))
-								{
-									SpawnEvents.Add(spawnEvent.ID, spawnEvent);
-								}
-								break;
-							default:
-								break;
-						}
-						break;
-					case HitEvent hitEvent:
-						if (HitEvents == null)
-						{
-							HitEvents = new Dictionary<int, HitEvent>();
-						}
-						HitEvents.Add(abilityEvent.ID, hitEvent);
-						break;
-					case MoveEvent moveEvent:
-						if (MoveEvents == null)
-						{
-							MoveEvents = new Dictionary<int, MoveEvent>();
-						}
-						MoveEvents.Add(abilityEvent.ID, moveEvent);
-						break;
-					case AbilityTypeOverrideEventType overrideTypeEvent:
-						TypeOverride = overrideTypeEvent;
-						break;
-				}
-
-				ActivationTime += abilityEvent.ActivationTime;
-				LifeTime += abilityEvent.LifeTime;
-				Cooldown += abilityEvent.Cooldown;
-				Speed += abilityEvent.Speed;
-				foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in abilityEvent.Resources)
+				foreach (var pair in addResources)
 				{
 					if (!Resources.ContainsKey(pair.Key))
 					{
@@ -275,7 +309,11 @@ namespace FishMMO.Shared
 						Resources[pair.Key] += pair.Value;
 					}
 				}
-				foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in abilityEvent.RequiredAttributes)
+			}
+
+			if (addRequiredAttributes != null)
+			{
+				foreach (var pair in addRequiredAttributes)
 				{
 					if (!RequiredAttributes.ContainsKey(pair.Key))
 					{
@@ -289,66 +327,11 @@ namespace FishMMO.Shared
 			}
 		}
 
-		public void RemoveAbilityEvent(AbilityEvent abilityEvent)
-		{
-			if (AbilityEvents == null)
-			{
-				return;
-			}
-
-			if (AbilityEvents.ContainsKey(abilityEvent.ID))
-			{
-				CachedTooltip = null;
-
-				AbilityEvents.Remove(abilityEvent.ID);
-
-				switch (abilityEvent)
-				{
-					case SpawnEvent spawnEvent:
-						switch (spawnEvent.SpawnEventType)
-						{
-							case SpawnEventType.OnPreSpawn:
-								PreSpawnEvents.Remove(spawnEvent.ID);
-								break;
-							case SpawnEventType.OnSpawn:
-								SpawnEvents.Remove(spawnEvent.ID);
-								break;
-							default:
-								break;
-						}
-						break;
-					case HitEvent:
-						HitEvents.Remove(abilityEvent.ID);
-						break;
-					case MoveEvent:
-						MoveEvents.Remove(abilityEvent.ID);
-						break;
-					case AbilityTypeOverrideEventType:
-						TypeOverride = null;
-						break;
-				}
-
-				ActivationTime -= abilityEvent.ActivationTime;
-				LifeTime -= abilityEvent.LifeTime;
-				Cooldown -= abilityEvent.Cooldown;
-				Speed -= abilityEvent.Speed;
-				foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in abilityEvent.Resources)
-				{
-					if (Resources.ContainsKey(pair.Key))
-					{
-						Resources[pair.Key] -= pair.Value;
-					}
-				}
-				foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in abilityEvent.RequiredAttributes)
-				{
-					if (RequiredAttributes.ContainsKey(pair.Key))
-					{
-						RequiredAttributes[pair.Key] += pair.Value;
-					}
-				}
-			}
-		}
-
+		/// <summary>
+		/// Checks if the given character meets all required attributes for this ability.
+		/// </summary>
+		/// <param name="character">The character to check.</param>
+		/// <returns>True if requirements are met, false otherwise.</returns>
 		public bool MeetsRequirements(ICharacter character)
 		{
 			if (!character.TryGet(out ICharacterAttributeController attributeController))
@@ -366,73 +349,147 @@ namespace FishMMO.Shared
 			return true;
 		}
 
-		public bool HasResource(ICharacter character, AbilityEvent bloodResourceConversion)
+		/// <summary>
+		/// Attempts to get an ability event by its event ID.
+		/// </summary>
+		/// <param name="eventID">The event ID to look up.</param>
+		/// <param name="abilityEvent">The found ability event, or null if not found.</param>
+		/// <returns>True if found, false otherwise.</returns>
+		public bool TryGetAbilityEvent(int eventID, out AbilityEvent abilityEvent)
+		{
+			return AbilityEvents.TryGetValue(eventID, out abilityEvent);
+		}
+
+		/// <summary>
+		/// Checks if this ability contains an event with the given event ID.
+		/// </summary>
+		/// <param name="eventID">The event ID to check.</param>
+		/// <returns>True if the event exists, false otherwise.</returns>
+		public bool HasAbilityEvent(int eventID)
+		{
+			return AbilityEvents.ContainsKey(eventID);
+		}
+
+		/// <summary>
+		/// Removes an ability event by its event ID and updates all stat/resource/attribute modifiers accordingly.
+		/// </summary>
+		/// <param name="eventID">The event ID to remove.</param>
+		/// <returns>True if the event was removed, false otherwise.</returns>
+		public bool RemoveAbilityEvent(int eventID)
+		{
+			if (AbilityEvents.TryGetValue(eventID, out var abilityEvent))
+			{
+				AbilityEvents.Remove(eventID);
+				OnTickEvents.Remove(eventID);
+				OnHitEvents.Remove(eventID);
+				OnPreSpawnEvents.Remove(eventID);
+				OnSpawnEvents.Remove(eventID);
+				OnDestroyEvents.Remove(eventID);
+
+				ActivationTime -= abilityEvent.ActivationTime;
+				LifeTime -= abilityEvent.LifeTime;
+				Cooldown -= abilityEvent.Cooldown;
+				Speed -= abilityEvent.Speed;
+
+				if (Resources != null)
+				{
+					foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in abilityEvent.Resources)
+					{
+						if (Resources.ContainsKey(pair.Key))
+						{
+							Resources[pair.Key] -= pair.Value;
+						}
+					}
+				}
+
+				if (RequiredAttributes != null)
+				{
+					foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in abilityEvent.RequiredAttributes)
+					{
+						if (RequiredAttributes.ContainsKey(pair.Key))
+						{
+							RequiredAttributes[pair.Key] -= pair.Value;
+						}
+					}
+				}
+				return true;
+			}
+			return false;
+		}
+
+		/// <summary>
+		/// Checks if the given character has enough resources to use this ability.
+		/// </summary>
+		/// <param name="character">The character to check.</param>
+		/// <param name="resourceConversionTrigger">Optional event that allows resource conversion (e.g., health for mana).</param>
+		/// <returns>True if the character has enough resources, false otherwise.</returns>
+		public bool HasResource(ICharacter character, AbilityEvent resourceConversionTrigger = null)
 		{
 			if (!character.TryGet(out ICharacterAttributeController attributeController))
 			{
 				return false;
 			}
-			if (AbilityEvents != null &&
-				bloodResourceConversion != null &&
-				AbilityEvents.ContainsKey(bloodResourceConversion.ID))
+			if (resourceConversionTrigger != null && AbilityEvents.ContainsKey(resourceConversionTrigger.ID))
 			{
 				int totalCost = TotalResourceCost;
-
 				CharacterResourceAttribute resource;
 				if (!attributeController.TryGetHealthAttribute(out resource) ||
 					resource.CurrentValue < totalCost)
 				{
 					return false;
 				}
+				return true;
 			}
-			else
+			foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in Resources)
 			{
-				foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in Resources)
+				CharacterResourceAttribute resource;
+				if (!attributeController.TryGetResourceAttribute(pair.Key.ID, out resource) ||
+					resource.CurrentValue < pair.Value)
 				{
-					CharacterResourceAttribute resource;
-					if (!attributeController.TryGetResourceAttribute(pair.Key.ID, out resource) ||
-						resource.CurrentValue < pair.Value)
-					{
-						return false;
-					}
+					return false;
 				}
 			}
 			return true;
 		}
 
-		public void ConsumeResources(ICharacter character, AbilityEvent bloodResourceConversion)
+		/// <summary>
+		/// Consumes the required resources from the given character to use this ability.
+		/// </summary>
+		/// <param name="character">The character using the ability.</param>
+		/// <param name="resourceConversionTrigger">Optional event that allows resource conversion (e.g., health for mana).</param>
+		public void ConsumeResources(ICharacter character, AbilityEvent resourceConversionTrigger = null)
 		{
 			if (!character.TryGet(out ICharacterAttributeController attributeController))
 			{
 				return;
 			}
-			if (AbilityEvents != null &&
-				bloodResourceConversion != null &&
-				AbilityEvents.ContainsKey(bloodResourceConversion.ID))
+			if (resourceConversionTrigger != null && AbilityEvents.ContainsKey(resourceConversionTrigger.ID))
 			{
 				int totalCost = TotalResourceCost;
-
 				CharacterResourceAttribute resource;
 				if (attributeController.TryGetHealthAttribute(out resource) &&
 					resource.CurrentValue >= totalCost)
 				{
 					resource.Consume(totalCost);
 				}
+				return;
 			}
-			else
+			foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in Resources)
 			{
-				foreach (KeyValuePair<CharacterAttributeTemplate, int> pair in Resources)
+				CharacterResourceAttribute resource;
+				if (attributeController.TryGetResourceAttribute(pair.Key.ID, out resource) &&
+					resource.CurrentValue >= pair.Value)
 				{
-					CharacterResourceAttribute resource;
-					if (attributeController.TryGetResourceAttribute(pair.Key.ID, out resource) &&
-						resource.CurrentValue >= pair.Value)
-					{
-						resource.Consume(pair.Value);
-					}
+					resource.Consume(pair.Value);
 				}
 			}
 		}
 
+		/// <summary>
+		/// Removes an ability object from the cache by container and object ID.
+		/// </summary>
+		/// <param name="containerID">The container ID.</param>
+		/// <param name="objectID">The object ID to remove.</param>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void RemoveAbilityObject(int containerID, int objectID)
 		{
@@ -442,6 +499,10 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Returns the tooltip string for this ability, using the template and type override if present.
+		/// </summary>
+		/// <returns>Formatted tooltip string for the ability.</returns>
 		public string Tooltip()
 		{
 			if (!string.IsNullOrWhiteSpace(CachedTooltip))
@@ -449,10 +510,7 @@ namespace FishMMO.Shared
 				return CachedTooltip;
 			}
 
-			if (AbilityEvents != null)
-			{
-				CachedTooltip = Template.Tooltip(new List<ITooltip>(AbilityEvents.Values));
-			}
+			CachedTooltip = Template.Tooltip(null);
 
 			if (TypeOverride != null)
 			{

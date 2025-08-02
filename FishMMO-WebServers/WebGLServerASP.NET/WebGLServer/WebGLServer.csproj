@@ -9,4 +9,13 @@
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.8" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.4.0" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\FishMMO-Logger\FishMMO-Logger\FishMMO-Logger.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Ensure appsettings.json is copied to the output directory -->
+    <None Update="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
 </Project>

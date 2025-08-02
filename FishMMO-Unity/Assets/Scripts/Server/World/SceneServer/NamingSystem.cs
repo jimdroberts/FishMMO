@@ -3,7 +3,6 @@ using FishNet.Transporting;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
 using FishMMO.Database.Npgsql.Entities;
-//using UnityEngine;
 
 namespace FishMMO.Server
 {
@@ -12,6 +11,9 @@ namespace FishMMO.Server
 	/// </summary>
 	public class NamingSystem : ServerBehaviour
 	{
+		/// <summary>
+		/// Initializes the naming system, registering broadcast handlers for naming and reverse naming requests.
+		/// </summary>
 		public override void InitializeOnce()
 		{
 			if (Server != null)
@@ -25,6 +27,9 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Cleans up the naming system, unregistering broadcast handlers.
+		/// </summary>
 		public override void Destroying()
 		{
 			if (Server != null)
@@ -35,8 +40,12 @@ namespace FishMMO.Server
 		}
 
 		/// <summary>
-		/// Naming request broadcast received from a character.
+		/// Handles incoming naming requests from clients, resolves names by ID for characters and guilds.
+		/// Checks local cache first, then falls back to database lookup.
 		/// </summary>
+		/// <param name="conn">Network connection of the requesting client.</param>
+		/// <param name="msg">NamingBroadcast message containing the type and ID to resolve.</param>
+		/// <param name="channel">Network channel used for the broadcast.</param>
 		private void OnServerNamingBroadcastReceived(NetworkConnection conn, NamingBroadcast msg, Channel channel)
 		{
 			switch (msg.Type)
@@ -82,8 +91,12 @@ namespace FishMMO.Server
 		}
 
 		/// <summary>
-		/// Allows the server to send naming requests to the connection
+		/// Sends a naming broadcast to the specified connection, providing the resolved name for the given ID and type.
 		/// </summary>
+		/// <param name="conn">Network connection to send the broadcast to.</param>
+		/// <param name="type">Type of naming system (character, guild, etc.).</param>
+		/// <param name="id">ID of the object to resolve.</param>
+		/// <param name="name">Resolved name to send.</param>
 		public void SendNamingBroadcast(NetworkConnection conn, NamingSystemType type, long id, string name)
 		{
 			if (conn == null)
@@ -100,8 +113,12 @@ namespace FishMMO.Server
 		}
 
 		/// <summary>
-		/// Reverse naming request broadcast received from a character.
+		/// Handles incoming reverse naming requests from clients, resolves IDs by name for characters.
+		/// Checks local cache first, then falls back to database lookup. Notifies client if not found.
 		/// </summary>
+		/// <param name="conn">Network connection of the requesting client.</param>
+		/// <param name="msg">ReverseNamingBroadcast message containing the type and name to resolve.</param>
+		/// <param name="channel">Network channel used for the broadcast.</param>
 		private void OnServerReverseNamingBroadcastReceived(NetworkConnection conn, ReverseNamingBroadcast msg, Channel channel)
 		{
 			var nameLowerCase = msg.NameLowerCase.ToLower();
@@ -141,8 +158,13 @@ namespace FishMMO.Server
 		}
 
 		/// <summary>
-		/// Allows the server to send reverse naming requests to the connection
+		/// Sends a reverse naming broadcast to the specified connection, providing the resolved ID and name for the given type and name.
 		/// </summary>
+		/// <param name="conn">Network connection to send the broadcast to.</param>
+		/// <param name="type">Type of naming system (character, guild, etc.).</param>
+		/// <param name="nameLowerCase">Lowercase name to resolve.</param>
+		/// <param name="id">Resolved ID to send.</param>
+		/// <param name="name">Resolved name to send.</param>
 		public void SendReverseNamingBroadcast(NetworkConnection conn, NamingSystemType type, string nameLowerCase, long id, string name)
 		{
 			if (conn == null)

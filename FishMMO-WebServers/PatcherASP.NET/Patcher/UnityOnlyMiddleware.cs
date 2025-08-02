@@ -1,15 +1,14 @@
 using System.Text.RegularExpressions;
+using FishMMO.Logging;
 
 public class UnityOnlyMiddleware
 {
 	private readonly RequestDelegate next;
-	private readonly ILogger<UnityOnlyMiddleware> logger;
 	private static readonly Regex UnityRegex = new Regex(@"UnityPlayer/\d+\.\d+\.\d+.*\(UnityWebRequest/\d+\.\d+.*\)", RegexOptions.Compiled);
 
-	public UnityOnlyMiddleware(RequestDelegate next, ILogger<UnityOnlyMiddleware> logger)
+	public UnityOnlyMiddleware(RequestDelegate next)
 	{
 		this.next = next;
-		this.logger = logger;
 	}
 
 	public async Task InvokeAsync(HttpContext context)
@@ -18,7 +17,7 @@ public class UnityOnlyMiddleware
 
 		if (!UnityRegex.IsMatch(userAgent))
 		{
-			logger.LogWarning($"Rejected non-Unity request: {userAgent}");
+			await Log.Warning("UnityOnlyMiddleware", $"Rejected non-Unity request: {userAgent}");
 			context.Response.StatusCode = StatusCodes.Status403Forbidden;
 			await context.Response.WriteAsync("Access denied.");
 			return;

@@ -7,13 +7,16 @@ namespace FishMMO.Server
 {
 	public class HotkeySystem : ServerBehaviour
 	{
+		/// <summary>
+		/// Initializes the hotkey system, registering broadcast handlers for hotkey set and hotkey set multiple requests.
+		/// </summary>
 		public override void InitializeOnce()
 		{
 			if (ServerManager != null &&
-                Server != null)
+				Server != null)
 			{
-                Server.RegisterBroadcast<HotkeySetBroadcast>(OnServerHotkeySetBroadcastReceived, true);
-                Server.RegisterBroadcast<HotkeySetMultipleBroadcast>(OnServerHotkeySetMultipleBroadcastReceived, true);
+				Server.RegisterBroadcast<HotkeySetBroadcast>(OnServerHotkeySetBroadcastReceived, true);
+				Server.RegisterBroadcast<HotkeySetMultipleBroadcast>(OnServerHotkeySetMultipleBroadcastReceived, true);
 			}
 			else
 			{
@@ -21,17 +24,27 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Cleans up the hotkey system, unregistering broadcast handlers.
+		/// </summary>
 		public override void Destroying()
 		{
 			if (ServerManager != null &&
-                Server != null)
+				Server != null)
 			{
-                Server.UnregisterBroadcast<HotkeySetBroadcast>(OnServerHotkeySetBroadcastReceived);
-                Server.UnregisterBroadcast<HotkeySetMultipleBroadcast>(OnServerHotkeySetMultipleBroadcastReceived);
+				Server.UnregisterBroadcast<HotkeySetBroadcast>(OnServerHotkeySetBroadcastReceived);
+				Server.UnregisterBroadcast<HotkeySetMultipleBroadcast>(OnServerHotkeySetMultipleBroadcastReceived);
 			}
 		}
 
-        public void OnServerHotkeySetBroadcastReceived(NetworkConnection conn, HotkeySetBroadcast msg, Channel channel)
+		/// <summary>
+		/// Handles broadcast to set a single hotkey for a player character.
+		/// Validates the hotkey list and slot, then updates the hotkey data for the specified slot.
+		/// </summary>
+		/// <param name="conn">Network connection of the requesting client.</param>
+		/// <param name="msg">HotkeySetBroadcast message containing hotkey data.</param>
+		/// <param name="channel">Network channel used for the broadcast.</param>
+		public void OnServerHotkeySetBroadcastReceived(NetworkConnection conn, HotkeySetBroadcast msg, Channel channel)
 		{
 			if (Server.NpgsqlDbContextFactory == null)
 			{
@@ -71,11 +84,18 @@ namespace FishMMO.Server
 				ReferenceID = msg.HotkeyData.ReferenceID,
 			};
 			playerCharacter.Hotkeys[msg.HotkeyData.Slot] = hotkeyData;
-        }
+		}
 
-        public void OnServerHotkeySetMultipleBroadcastReceived(NetworkConnection conn, HotkeySetMultipleBroadcast msg, Channel channel)
+		/// <summary>
+		/// Handles broadcast to set multiple hotkeys for a player character.
+		/// Iterates through each hotkey message, validates the hotkey list and slot, then updates the hotkey data for each slot.
+		/// </summary>
+		/// <param name="conn">Network connection of the requesting client.</param>
+		/// <param name="msg">HotkeySetMultipleBroadcast message containing multiple hotkey data entries.</param>
+		/// <param name="channel">Network channel used for the broadcast.</param>
+		public void OnServerHotkeySetMultipleBroadcastReceived(NetworkConnection conn, HotkeySetMultipleBroadcast msg, Channel channel)
 		{
-            if (Server.NpgsqlDbContextFactory == null)
+			if (Server.NpgsqlDbContextFactory == null)
 			{
 				return;
 			}
@@ -116,6 +136,6 @@ namespace FishMMO.Server
 				};
 				playerCharacter.Hotkeys[subMsg.HotkeyData.Slot] = hotkeyData;
 			}
-        }
+		}
 	}
 }

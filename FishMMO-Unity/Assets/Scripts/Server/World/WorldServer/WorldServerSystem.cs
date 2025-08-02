@@ -6,18 +6,42 @@ using FishMMO.Shared;
 
 namespace FishMMO.Server
 {
-	// World Server System handles the database heartbeat
+	/// <summary>
+	/// Handles world server registration and heartbeat (pulse) updates in the database.
+	/// Periodically updates the world server's status and character count.
+	/// </summary>
 	public class WorldServerSystem : ServerBehaviour
 	{
+		/// <summary>
+		/// Current connection state of the server.
+		/// </summary>
 		private LocalConnectionState serverState;
 
+		/// <summary>
+		/// Database ID for this world server instance.
+		/// </summary>
 		private long id;
+		/// <summary>
+		/// Indicates whether the world server is locked (not accepting new connections).
+		/// </summary>
 		private bool locked = false;
+		/// <summary>
+		/// Interval (in seconds) between heartbeat pulses to the database.
+		/// </summary>
 		private float pulseRate = 5.0f;
+		/// <summary>
+		/// Time remaining until the next heartbeat pulse.
+		/// </summary>
 		private float nextPulse = 0.0f;
 
+		/// <summary>
+		/// Gets the database ID for this world server instance.
+		/// </summary>
 		public long ID { get { return id; } }
 
+		/// <summary>
+		/// Called once to initialize the world server system. Registers the server in the database and subscribes to connection state events.
+		/// </summary>
 		public override void InitializeOnce()
 		{
 			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
@@ -30,6 +54,7 @@ namespace FishMMO.Server
 			{
 				ServerManager.OnServerConnectionState += ServerManager_OnServerConnectionState;
 
+				// Register the world server in the database if all required systems are available.
 				if (Server != null &&
 					Server.TryGetServerIPAddress(out ServerAddress server) &&
 					ServerBehaviour.TryGet(out WorldSceneSystem worldSceneSystem))
@@ -48,15 +73,25 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Called when the system is being destroyed. No custom logic implemented.
+		/// </summary>
 		public override void Destroying()
 		{
 		}
 
+		/// <summary>
+		/// Handles changes in the server's connection state.
+		/// </summary>
+		/// <param name="args">Connection state arguments.</param>
 		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs args)
 		{
 			serverState = args.ConnectionState;
 		}
 
+		/// <summary>
+		/// Unity LateUpdate callback. Periodically sends a heartbeat pulse to the database with the current character count.
+		/// </summary>
 		void LateUpdate()
 		{
 			if (serverState == LocalConnectionState.Started &&
@@ -66,9 +101,8 @@ namespace FishMMO.Server
 				{
 					nextPulse = pulseRate;
 
-					// TODO: maybe this one should exist....how expensive will this be to run on update?
+					// Send a heartbeat pulse to the database with the current character count.
 					using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-					//Log.Debug("World Server System: Pulse");
 					int characterCount = worldSceneSystem.ConnectionCount;
 					WorldServerService.Pulse(dbContext, id, characterCount);
 				}

@@ -6,18 +6,39 @@ using FishMMO.Shared;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// UI control for managing and displaying guild information and members.
+	/// </summary>
 	public class UIGuild : UICharacterControl
 	{
+		/// <summary>
+		/// The label displaying the guild name.
+		/// </summary>
 		public TMP_Text GuildLabel;
+		/// <summary>
+		/// The parent transform for guild member UI elements.
+		/// </summary>
 		public RectTransform GuildMemberParent;
+		/// <summary>
+		/// Prefab used to instantiate guild member UI elements.
+		/// </summary>
 		public UIGuildMember GuildMemberPrefab;
+		/// <summary>
+		/// Dictionary of guild members by character ID.
+		/// </summary>
 		public Dictionary<long, UIGuildMember> Members = new Dictionary<long, UIGuildMember>();
 
+		/// <summary>
+		/// Called when the UI is being destroyed. Cleans up guild members.
+		/// </summary>
 		public override void OnDestroying()
 		{
 			GuildController_OnLeaveGuild();
 		}
 
+		/// <summary>
+		/// Called after setting the character reference. Subscribes to guild controller events.
+		/// </summary>
 		public override void OnPostSetCharacter()
 		{
 			base.OnPostSetCharacter();
@@ -33,6 +54,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Called before unsetting the character reference. Unsubscribes from guild controller events.
+		/// </summary>
 		public override void OnPreUnsetCharacter()
 		{
 			base.OnPreUnsetCharacter();
@@ -48,6 +72,10 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Handles receiving a guild invite and shows a dialog to accept or decline.
+		/// </summary>
+		/// <param name="inviterCharacterID">The character ID of the inviter.</param>
 		public void GuildController_OnReceiveGuildInvite(long inviterCharacterID)
 		{
 			ClientNamingSystem.SetName(NamingSystemType.CharacterName, inviterCharacterID, (n) =>
@@ -67,6 +95,13 @@ namespace FishMMO.Client
 			});
 		}
 
+		/// <summary>
+		/// Handles adding a guild member and updates the guild label.
+		/// </summary>
+		/// <param name="characterID">The character ID of the new member.</param>
+		/// <param name="guildID">The guild ID.</param>
+		/// <param name="rank">The rank of the new member.</param>
+		/// <param name="location">The location of the new member.</param>
 		public void GuildController_OnAddGuildMember(long characterID, long guildID, GuildRank rank, string location)
 		{
 			GuildController_OnAddMember(characterID, rank, location);
@@ -80,6 +115,10 @@ namespace FishMMO.Client
 			});
 		}
 
+		/// <summary>
+		/// Validates the current guild members against a new set and removes any that are no longer present.
+		/// </summary>
+		/// <param name="newMembers">The set of valid member IDs.</param>
 		public void GuildController_OnValidateGuildMembers(HashSet<long> newMembers)
 		{
 			foreach (long id in new HashSet<long>(Members.Keys))
@@ -91,6 +130,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Handles leaving the guild. Clears the guild label and member list.
+		/// </summary>
 		public void GuildController_OnLeaveGuild()
 		{
 			if (GuildLabel != null)
@@ -104,6 +146,12 @@ namespace FishMMO.Client
 			Members.Clear();
 		}
 
+		/// <summary>
+		/// Adds a guild member UI element to the member list.
+		/// </summary>
+		/// <param name="characterID">The character ID of the member.</param>
+		/// <param name="rank">The rank of the member.</param>
+		/// <param name="location">The location of the member.</param>
 		public void GuildController_OnAddMember(long characterID, GuildRank rank, string location)
 		{
 			if (GuildMemberPrefab != null && GuildMemberParent != null)
@@ -128,6 +176,10 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Removes a guild member UI element from the member list.
+		/// </summary>
+		/// <param name="characterID">The character ID of the member to remove.</param>
 		public void GuildController_OnRemoveMember(long characterID)
 		{
 			if (Members.TryGetValue(characterID, out UIGuildMember member))
@@ -137,6 +189,10 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Handles the result of a guild operation and displays appropriate chat messages.
+		/// </summary>
+		/// <param name="result">The result type of the guild operation.</param>
 		public void GuildController_OnReceiveGuildResult(GuildResultType result)
 		{
 			if (!UIManager.TryGet("UIChat", out UIChat chat))
@@ -160,6 +216,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Handles the create guild button click. Prompts for a guild name and sends a create request.
+		/// </summary>
 		public void OnButtonCreateGuild()
 		{
 			if (Character != null &&
@@ -182,6 +241,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Handles the leave guild button click. Prompts for confirmation and sends a leave request.
+		/// </summary>
 		public void OnButtonLeaveGuild()
 		{
 			if (Character != null &&
@@ -198,6 +260,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Handles the invite to guild button click. Prompts for a target or uses the current target, then sends an invite request.
+		/// </summary>
 		public void OnButtonInviteToGuild()
 		{
 			if (Character != null &&

@@ -1,26 +1,31 @@
 using Microsoft.EntityFrameworkCore;
 using FishMMO.Database.Npgsql;
 using FishMMO.Database.Npgsql.Entities;
+using System.Net.Http; // Added for HttpClient
+using FishMMO.Logging;
 
 public class PatchServerHeartbeatService : BackgroundService
 {
 	private readonly NpgsqlDbContextFactory dbContextFactory;
-	private readonly ILogger<PatchServerHeartbeatService> logger;
 	private readonly IConfiguration config;
+	private readonly IHttpClientFactory httpClientFactory;
 
-	public PatchServerHeartbeatService(NpgsqlDbContextFactory dbContextFactory, ILogger<PatchServerHeartbeatService> logger, IConfiguration config)
+	public PatchServerHeartbeatService(NpgsqlDbContextFactory dbContextFactory, IConfiguration config, IHttpClientFactory httpClientFactory)
 	{
 		this.dbContextFactory = dbContextFactory;
-		this.logger = logger;
 		this.config = config;
+		this.httpClientFactory = httpClientFactory;
 	}
 
 	protected override async Task ExecuteAsync(CancellationToken stoppingToken)
 	{
 		var ip = await GetExternalIpAsync();
-		var port = ushort.TryParse(config["Server:Port"], out var parsedPort) ? parsedPort : (ushort)8090;
+		var port = ushort.TryParse(config["WebServer:HttpPort"], out var parsedPort) ? parsedPort : (ushort)8090;
 
-		logger.LogInformation("PatchServerHeartbeatService started. IP: {IP}, Port: {Port}", ip, port);
+		var intervalSeconds = config.GetValue<int>("HeartbeatService:IntervalSeconds", 60);
+		var heartbeatInterval = TimeSpan.FromSeconds(intervalSeconds);
+
+		await Log.Info("PatchServerHeartbeatService", $"PatchServerHeartbeatService started. IP: {ip}, Port: {port}");
 
 		while (!stoppingToken.IsCancellationRequested)
 		{
@@ -30,14 +35,12 @@ public class PatchServerHeartbeatService : BackgroundService
 
 				var now = DateTime.UtcNow;
 
-				// Check if the patch server already exists
 				var patchServer = await dbContext.PatchServers
 					.Where(ps => ps.Address == ip && ps.Port == port)
 					.FirstOrDefaultAsync();
 
 				if (patchServer == null)
 				{
-					// If it doesn't exist, create a new one
 					patchServer = new PatchServerEntity
 					{
 						Address = ip,
@@ -48,39 +51,37 @@ public class PatchServerHeartbeatService : BackgroundService
 				}
 				else
 				{
-					// If it exists, update the LastPulse value
 					patchServer.LastPulse = now;
 					dbContext.PatchServers.Update(patchServer);
 				}
 
-				// Commit the changes to the database
 				await dbContext.SaveChangesAsync();
 
-				logger.LogInformation("Updated patch server pulse at {Time}", now);
+				await Log.Info("PatchServerHeartbeatService", $"Updated patch server pulse at {now}");
 			}
 			catch (Exception ex)
 			{
-				logger.LogError(ex, "Failed to update patch server heartbeat");
+				await Log.Error("PatchServerHeartbeatService", "Failed to update patch server heartbeat", ex);
 			}
 
-			await Task.Delay(TimeSpan.FromSeconds(60), stoppingToken);
+			await Task.Delay(heartbeatInterval, stoppingToken);
 		}
 
-		logger.LogInformation("PatchServerHeartbeatService stopping...");
+		await Log.Info("PatchServerHeartbeatService", "PatchServerHeartbeatService stopping...");
 	}
 
 	private async Task<string> GetExternalIpAsync()
 	{
 		try
 		{
-			using var client = new HttpClient();
+			using var client = httpClientFactory.CreateClient(); // Use IHttpClientFactory
 			var ip = (await client.GetStringAsync("https://checkip.amazonaws.com/")).Trim();
-			logger.LogInformation("External IP resolved: {IP}", ip);
+			await Log.Info("PatchServerHeartbeatService", $"External IP resolved: {ip}");
 			return ip;
 		}
 		catch (Exception ex)
 		{
-			logger.LogError(ex, "Failed to retrieve external IP");
+			await Log.Error("PatchServerHeartbeatService", "Failed to retrieve external IP", ex);
 			return "127.0.0.1"; // fallback
 		}
 	}

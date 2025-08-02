@@ -45,13 +45,13 @@
 //         /// </summary>
 //         private Transform _graphicalObject;
 //         /// <summary>
-//         /// When not MoveRatesCls.UNSET_VALUE the graphical object will teleport into it's next position if the move distance exceeds this value.
+//         /// When not MoveRates.UNSET_VALUE the graphical object will teleport into it's next position if the move distance exceeds this value.
 //         /// </summary>
 //         private float _teleportThreshold;
 //         /// <summary>
 //         /// How quickly to move towards goal values.
 //         /// </summary>
-//         private MoveRates _moveRates = new MoveRates(MoveRatesCls.UNSET_VALUE);
+//         private MoveRates _moveRates = new MoveRates(MoveRates.UNSET_VALUE);
 //         /// <summary>
 //         /// True if a pretick occurred since last postTick.
 //         /// </summary>
@@ -172,7 +172,7 @@
 //         
 //         ~ChildTransformTickSmoother()
 //         {
-//             //This is a last resort for if something didnt deinitialize right.
+//             // This is a last resort for if something didnt deinitialize right.
 //             ResetState();
 //         }
 //
@@ -227,7 +227,7 @@
 //                     TimeManager tm = _networkObject.TimeManager;
 //                     if (clientStateTick == 0)
 //                     {
-//                         //Not enough data to calculate; guestimate. This should only happen once.
+//                         // Not enough data to calculate; guestimate. This should only happen once.
 //                         float fRtt = (float)tm.RoundTripTime;
 //                         interpolation = (fRtt / 10f);
 //
@@ -251,7 +251,7 @@
 //                         case AdaptiveInterpolationType.High:
 //                             interpolation *= 0.75f;
 //                             break;
-//                             //Make no changes for maximum.
+//                             // Make no changes for maximum.
 //                     }
 //
 //                     interpolation = Mathf.Clamp(interpolation, 1f, (float)byte.MaxValue);
@@ -309,7 +309,7 @@
 //                 DiscardExcessiveTransformPropertiesQueue();
 //             else
 //                 ClearTransformPropertiesQueue();
-//             //These only need to be set if still attached.
+//             // These only need to be set if still attached.
 //             if (!_detach)
 //                 _gfxPreSimulateWorldValues = _graphicalObject.GetWorldProperties();
 //         }
@@ -334,7 +334,7 @@
 //                 return;
 //
 //             uint firstTick = _transformProperties.Peek().Tick;
-//             //Already in motion to first entry, or first entry passed tick.
+//             // Already in motion to first entry, or first entry passed tick.
 //             if (clientTick <= firstTick)
 //                 return;
 //
@@ -389,7 +389,7 @@
 //         {
 //             _transformProperties.Clear();
 //             //Also unset move rates since there is no more queue.
-//             _moveRates = new MoveRates(MoveRatesCls.UNSET_VALUE);
+//             _moveRates = new MoveRates(MoveRates.UNSET_VALUE);
 //         }
 //
 //         /// <summary>
@@ -627,3 +627,4 @@
 //     }
 //
 // }
+

@@ -8,11 +8,20 @@ namespace FishMMO.Client
 {
 	public class RefreshRateSettingOption : SettingOption
 	{
+		/// <summary>
+		/// The configuration key used to store the refresh rate setting.
+		/// </summary>
 		private const string RefreshRateKey = "Refresh Rate";
 
+		/// <summary>
+		/// The dropdown UI component for selecting screen refresh rate.
+		/// </summary>
 		public TMP_Dropdown RefreshRateDropdown;
 
 		// Initialize with the settings UI GameObject containing the UI component
+		/// <summary>
+		/// Initializes the refresh rate setting, sets up listeners, and populates available refresh rates.
+		/// </summary>
 		public override void Initialize()
 		{
 			if (RefreshRateDropdown == null)
@@ -21,6 +30,7 @@ namespace FishMMO.Client
 			}
 			else
 			{
+				// Remove any existing listeners and add a new one to save the setting when changed.
 				RefreshRateDropdown.onValueChanged.RemoveAllListeners();
 				RefreshRateDropdown.onValueChanged.AddListener((value) => { Save(); });
 
@@ -29,6 +39,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Populates the dropdown with all available refresh rates for the current resolution and sets the current selection.
+		/// </summary>
 		private void PopulateRefreshRates()
 		{
 			RefreshRateDropdown.ClearOptions();
@@ -41,7 +54,7 @@ namespace FishMMO.Client
 
 			foreach (Resolution res in resolutions)
 			{
-				// Compare width and height
+				// Only consider refresh rates for the current resolution.
 				if (res.width == currentResolution.width && res.height == currentResolution.height)
 				{
 					float rateValue = (float)res.refreshRateRatio.numerator / res.refreshRateRatio.denominator;
@@ -95,15 +108,17 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Loads the saved refresh rate from configuration and applies it.
+		/// </summary>
 		public override void Load()
 		{
 			// Load the saved refresh rate from Configuration GlobalSettings
+			// Load the saved refresh rate from configuration, defaulting to 60Hz if not set.
 			Configuration.GlobalSettings.TryGetInt(RefreshRateKey, out int savedRefreshRateInt, 60);
 
-			// To apply the loaded refresh rate, we need to find the closest available RefreshRate struct
+			// To apply the loaded refresh rate, find the closest available RefreshRate struct.
 			Resolution currentResolution = Screen.currentResolution;
-
-			// Find the actual RefreshRate struct from available resolutions that matches the loaded int refresh rate
 			Resolution[] resolutions = Screen.resolutions;
 			RefreshRate bestMatch = new RefreshRate { numerator = (uint)savedRefreshRateInt, denominator = 1 }; // Default to loaded if no exact match found
 
@@ -122,18 +137,22 @@ namespace FishMMO.Client
 			ApplyRefreshRate(bestMatch);
 		}
 
+		/// <summary>
+		/// Saves the selected refresh rate to configuration and applies it.
+		/// </summary>
 		public override void Save()
 		{
+			// Get the selected refresh rate string from the dropdown (e.g., "60 Hz")
 			// Get the selected refresh rate string from the dropdown (e.g., "60 Hz")
 			string selectedRefreshRateText = RefreshRateDropdown.options[RefreshRateDropdown.value].text;
 
 			// Parse the integer part (e.g., 60)
 			int selectedRefreshRateInt = int.Parse(selectedRefreshRateText.Replace(" Hz", ""));
 
-			// Save the selected refresh rate as an integer to Configuration GlobalSettings
+			// Save the selected refresh rate as an integer to configuration
 			Configuration.GlobalSettings.Set(RefreshRateKey, selectedRefreshRateInt);
 
-			// To apply, we need to find the corresponding RefreshRate struct
+			// To apply, find the corresponding RefreshRate struct
 			Resolution currentResolution = Screen.currentResolution;
 			RefreshRate actualRefreshRateToApply = new RefreshRate { numerator = (uint)selectedRefreshRateInt, denominator = 1 }; // Default
 
@@ -154,6 +173,10 @@ namespace FishMMO.Client
 			ApplyRefreshRate(actualRefreshRateToApply);
 		}
 
+		/// <summary>
+		/// Applies the given refresh rate to the screen for the current resolution.
+		/// </summary>
+		/// <param name="refreshRate">The refresh rate to apply.</param>
 		private void ApplyRefreshRate(RefreshRate refreshRate)
 		{
 #if !UNITY_WEBGL

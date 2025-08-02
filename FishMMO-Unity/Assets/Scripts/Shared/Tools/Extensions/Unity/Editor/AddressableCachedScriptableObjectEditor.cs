@@ -6,9 +6,17 @@ using System;
 
 namespace FishMMO.Shared
 {
+	/// <summary>
+	/// Custom Unity Editor for CachedScriptableObject assets.
+	/// Automatically manages Addressables labels and groups for scriptable objects based on their type and inheritance.
+	/// </summary>
 	[CustomEditor(typeof(CachedScriptableObject<>), true)]
 	public class AddressableCachedScriptableObjectEditor : Editor
 	{
+		/// <summary>
+		/// Called when the editor is enabled. Ensures the target asset is registered with Addressables,
+		/// adds appropriate labels for its type and base types, and moves it to the correct Addressables group.
+		/// </summary>
 		private void OnEnable()
 		{
 			var scriptableObject = target;
@@ -22,6 +30,7 @@ namespace FishMMO.Shared
 
 			string assetPath = AssetDatabase.GetAssetPath(scriptableObject);
 
+			// Find or create the Addressable entry for this asset
 			AddressableAssetEntry entry = settings.FindAssetEntry(AssetDatabase.AssetPathToGUID(assetPath));
 			if (entry == null)
 			{
@@ -34,6 +43,7 @@ namespace FishMMO.Shared
 
 			if (entry != null)
 			{
+				// Add label for the asset's type if not present
 				if (!entry.labels.Contains(type.Name))
 				{
 					settings.AddLabel(type.Name);
@@ -43,7 +53,7 @@ namespace FishMMO.Shared
 
 				Type baseType = scriptableObject.GetType();
 
-				// Find the base type that matches the generic base class CachedScriptableObject<>
+				// Traverse the inheritance chain to add labels for each base type until reaching CachedScriptableObject<>
 				while (baseType != null && (!baseType.IsGenericType || baseType.GetGenericTypeDefinition() != typeof(CachedScriptableObject<>)))
 				{
 					// Add the base type label to the entry if it hasn't been added already
@@ -61,10 +71,12 @@ namespace FishMMO.Shared
 				}
 			}
 
+			// Mark settings as dirty and save changes to ensure Addressables data is updated
 			EditorUtility.SetDirty(settings);
 			AssetDatabase.SaveAssets();
 			AssetDatabase.Refresh();
 
+			// Find or create the Addressables group for the last valid base type
 			AddressableAssetGroup group = settings.groups.Find(g => g.Name == lastValidBase.Name);
 
 			if (group == null)
@@ -73,7 +85,7 @@ namespace FishMMO.Shared
 				Debug.Log($"Group '{lastValidBase.Name}' created.");
 			}
 
-			// Add the asset entry to the specific group
+			// Move the asset entry to the correct group if needed
 			if (entry != null && group != null)
 			{
 				// Move the entry to the group if it is not already in it

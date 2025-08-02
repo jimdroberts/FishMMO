@@ -4,6 +4,9 @@ namespace FishMMO.Server
 {
 	public class FactionSystem : ServerBehaviour
 	{
+		/// <summary>
+		/// Initializes the faction system, subscribing to faction update events.
+		/// </summary>
 		public override void InitializeOnce()
 		{
 			if (ServerManager != null)
@@ -16,6 +19,9 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Cleans up the faction system, unsubscribing from faction update events.
+		/// </summary>
 		public override void Destroying()
 		{
 			if (ServerManager != null)
@@ -24,6 +30,11 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Handles faction update events for characters, validates input, and broadcasts faction changes to the player client.
+		/// </summary>
+		/// <param name="character">The character whose faction was updated.</param>
+		/// <param name="faction">The updated faction data.</param>
 		private void IFactionController_OnUpdateFaction(ICharacter character, Faction faction)
 		{
 			if (character == null || faction == null)

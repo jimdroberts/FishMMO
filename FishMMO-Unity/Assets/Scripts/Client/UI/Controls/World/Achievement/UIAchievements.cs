@@ -6,24 +6,51 @@ namespace FishMMO.Client
 {
 	public class UIAchievements : UICharacterControl
 	{
+		/// <summary>
+		/// The currently selected achievement category.
+		/// </summary>
 		public AchievementCategory CurrentCategory;
 
+		/// <summary>
+		/// The parent RectTransform for achievement category buttons.
+		/// </summary>
 		public RectTransform AchievementCategoryParent;
+		/// <summary>
+		/// The prefab used to instantiate achievement category buttons.
+		/// </summary>
 		public UIAchievementCategory AchievementCategoryButtonPrefab;
 
-        public RectTransform AchievementDescriptionParent;
+		/// <summary>
+		/// The parent RectTransform for achievement description UI elements.
+		/// </summary>
+		public RectTransform AchievementDescriptionParent;
+		/// <summary>
+		/// The prefab used to instantiate achievement description UI elements.
+		/// </summary>
 		public UIAchievementDescription AchievementDescriptionPrefab;
 
+		/// <summary>
+		/// List of all achievement category buttons currently displayed.
+		/// </summary>
 		private List<UIAchievementCategory> CategoryButtons = new List<UIAchievementCategory>();
+		/// <summary>
+		/// Dictionary mapping achievement categories to their achievement descriptions.
+		/// </summary>
 		private Dictionary<AchievementCategory, Dictionary<int, UIAchievementDescription>> Categories = new Dictionary<AchievementCategory, Dictionary<int, UIAchievementDescription>>();
 
 
+		/// <summary>
+		/// Called when the UI is starting. Subscribes to character and local client events.
+		/// </summary>
 		public override void OnStarting()
 		{
 			OnSetCharacter += CharacterControl_OnSetCharacter;
 			IPlayerCharacter.OnStopLocalClient += (c) => ClearAll();
 		}
 
+		/// <summary>
+		/// Called when the UI is being destroyed. Unsubscribes from events and clears all achievement UI.
+		/// </summary>
 		public override void OnDestroying()
 		{
 			IPlayerCharacter.OnStopLocalClient -= (c) => ClearAll();
@@ -32,6 +59,9 @@ namespace FishMMO.Client
 			ClearAll();
 		}
 
+		/// <summary>
+		/// Called after the character is set. Subscribes to achievement update events.
+		/// </summary>
 		public override void OnPostSetCharacter()
 		{
 			base.OnPostSetCharacter();
@@ -42,6 +72,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Called before the character is unset. Unsubscribes from achievement update events.
+		/// </summary>
 		public override void OnPreUnsetCharacter()
 		{
 			if (Character.TryGet(out IAchievementController achievementController))
@@ -50,11 +83,18 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Called when quitting to login. Clears all achievement UI.
+		/// </summary>
 		public override void OnQuitToLogin()
 		{
 			ClearAll();
 		}
 
+		/// <summary>
+		/// Event handler for when the character is set. Instantiates achievement UI for all achievements.
+		/// </summary>
+		/// <param name="character">The player character.</param>
 		private void CharacterControl_OnSetCharacter(IPlayerCharacter character)
 		{
 			if (character.TryGet(out IAchievementController achievementController))
@@ -70,6 +110,11 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Event handler for when an achievement is updated. Instantiates or updates achievement UI elements.
+		/// </summary>
+		/// <param name="character">The character associated with the achievement.</param>
+		/// <param name="achievement">The achievement to update.</param>
 		public void AchievementController_OnUpdateAchievement(ICharacter character, Achievement achievement)
 		{
 			if (achievement == null)
@@ -78,6 +123,7 @@ namespace FishMMO.Client
 			}
 
 			// Instantiate the Category Button
+			// If the category does not exist, create a new category button and dictionary for achievements.
 			if (!Categories.TryGetValue(achievement.Template.Category, out Dictionary<int, UIAchievementDescription> achievements))
 			{
 				Categories.Add(achievement.Template.Category, achievements = new Dictionary<int, UIAchievementDescription>());
@@ -96,6 +142,7 @@ namespace FishMMO.Client
 			}
 
 			// Instantiate the Achievement
+			// If the achievement does not exist in the category, create a new achievement description UI.
 			if (!achievements.TryGetValue(achievement.Template.ID, out UIAchievementDescription description))
 			{
 				description = Instantiate(AchievementDescriptionPrefab, AchievementDescriptionParent);
@@ -111,6 +158,7 @@ namespace FishMMO.Client
 				achievements.Add(achievement.Template.ID, description);
 			}
 
+			// Update progress and value display for the achievement.
 			uint nextTierValue = achievement.NextTierValue;
 
 			if (description.Progress != null)
@@ -124,8 +172,12 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Clears all achievement UI elements and listeners.
+		/// </summary>
 		public void ClearAll()
 		{
+			// Destroy all achievement description UI elements and clear the dictionary.
 			if (Categories == null)
 			{
 				return;
@@ -137,6 +189,7 @@ namespace FishMMO.Client
 					Destroy(description.gameObject);
 				}
 			}
+			// Destroy all category buttons and remove their listeners.
 			if (CategoryButtons == null)
 			{
 				return;
@@ -156,8 +209,13 @@ namespace FishMMO.Client
 			Categories.Clear();
 		}
 
+		/// <summary>
+		/// Event handler for when an achievement category is clicked. Updates the visible achievements.
+		/// </summary>
+		/// <param name="type">The achievement category to display.</param>
 		public void Category_OnClick(AchievementCategory type)
 		{
+			// Set the current category and update which achievements are visible.
 			CurrentCategory = type;
 			foreach (KeyValuePair<AchievementCategory, Dictionary<int, UIAchievementDescription>> pair in Categories)
 			{

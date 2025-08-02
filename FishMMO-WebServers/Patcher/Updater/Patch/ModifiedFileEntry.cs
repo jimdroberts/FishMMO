@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
 namespace FishMMO.Patcher
@@ -22,5 +21,10 @@ namespace FishMMO.Patcher
 		// Temporary file path on disk where the patch data is stored before zipping
 		[JsonIgnore] // This property should not be serialized into the manifest JSON
 		public string TempPatchFilePath { get; set; }
+
+		// The expected final size of the file after the patch is applied.
+		// This is crucial for the Patcher to correctly truncate or extend the file.
+		[JsonPropertyName("final_file_size")]
+		public long FinalFileSize { get; set; }
 	}
 }

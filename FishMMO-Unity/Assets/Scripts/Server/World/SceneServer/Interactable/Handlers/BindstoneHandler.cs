@@ -4,8 +4,19 @@ using UnityEngine;
 
 namespace FishMMO.Server
 {
+	/// <summary>
+	/// Handles interactions with bindstone objects, allowing players to set their respawn location to the current scene and position.
+	/// </summary>
 	public class BindstoneHandler : IInteractableHandler
 	{
+		/// <summary>
+		/// Handles the interaction between a player character and a bindstone.
+		/// Validates character and scene, then sets the character's bind position and scene for respawn.
+		/// </summary>
+		/// <param name="interactable">The interactable object (should be a bindstone).</param>
+		/// <param name="character">The player character interacting with the bindstone.</param>
+		/// <param name="sceneObject">The scene object associated with the interaction.</param>
+		/// <param name="serverInstance">The server instance managing interactables.</param>
 		public void HandleInteraction(IInteractable interactable, IPlayerCharacter character, ISceneObject sceneObject, InteractableSystem serverInstance)
 		{
 			if (character == null)

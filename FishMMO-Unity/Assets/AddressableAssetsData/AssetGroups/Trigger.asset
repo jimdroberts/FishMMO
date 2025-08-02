@@ -1,0 +1,47 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bbb281ee3bf0b054c82ac2347e9e782c, type: 3}
+  m_Name: Trigger
+  m_EditorClassIdentifier: 
+  m_GroupName: Trigger
+  m_GUID: 1905701f2052d9f4c8af1c9cb0d420f6
+  m_SerializeEntries:
+  - m_GUID: b1b0ada2796be4c4ca8c95734c884fc2
+    m_Address: Minor Increase Armor Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - AbilityEvent
+    - AbilityOnHitEvent
+    - Trigger
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d00db1805f33b104b8b2198459b0a45d
+    m_Address: Ability On Hit Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - AbilityEvent
+    - AbilityOnHitEvent
+    - Trigger
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e6d97319903785e4f8bbdbaa2ba21412
+    m_Address: Minor Movement Speed Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - AbilityEvent
+    - AbilityOnHitEvent
+    - Trigger
+    FlaggedDuringContentUpdateRestriction: 0
+  m_ReadOnly: 0
+  m_Settings: {fileID: 11400000, guid: 32d60da793475f74593af93cb933abd4, type: 2}
+  m_SchemaSet:
+    m_Schemas:
+    - {fileID: 11400000, guid: fcac2279ffb978541be9be167225e2a1, type: 2}
+    - {fileID: 11400000, guid: 6b2f29e2fef046b4280c2e179ab61dd3, type: 2}

@@ -10,21 +10,59 @@ namespace FishMMO.Shared
 {
 	public class CharacterAttributeController : CharacterBehaviour, ICharacterAttributeController
 	{
+		/// <summary>
+		/// Reference to the ScriptableObject database containing all character attribute templates.
+		/// Used to initialize and manage available attributes for this character.
+		/// </summary>
 		public CharacterAttributeTemplateDatabase CharacterAttributeDatabase;
 
+		/// <summary>
+		/// Template for the health resource attribute (e.g., HP).
+		/// </summary>
 		public CharacterAttributeTemplate HealthResourceTemplate;
+		/// <summary>
+		/// Template for the health regeneration attribute.
+		/// </summary>
 		public CharacterAttributeTemplate HealthRegenerationTemplate;
+		/// <summary>
+		/// Template for the mana resource attribute (e.g., MP).
+		/// </summary>
 		public CharacterAttributeTemplate ManaResourceTemplate;
+		/// <summary>
+		/// Template for the mana regeneration attribute.
+		/// </summary>
 		public CharacterAttributeTemplate ManaRegenerationTemplate;
+		/// <summary>
+		/// Template for the stamina resource attribute.
+		/// </summary>
 		public CharacterAttributeTemplate StaminaResourceTemplate;
+		/// <summary>
+		/// Template for the stamina regeneration attribute.
+		/// </summary>
 		public CharacterAttributeTemplate StaminaRegenerationTemplate;
 
+		/// <summary>
+		/// Dictionary of all non-resource character attributes, keyed by template ID.
+		/// </summary>
 		private readonly Dictionary<int, CharacterAttribute> attributes = new Dictionary<int, CharacterAttribute>();
+		/// <summary>
+		/// Dictionary of all resource character attributes (e.g., health, mana), keyed by template ID.
+		/// </summary>
 		private readonly Dictionary<int, CharacterResourceAttribute> resourceAttributes = new Dictionary<int, CharacterResourceAttribute>();
 
+		/// <summary>
+		/// Public accessor for all non-resource character attributes.
+		/// </summary>
 		public Dictionary<int, CharacterAttribute> Attributes { get { return attributes; } }
+		/// <summary>
+		/// Public accessor for all resource character attributes.
+		/// </summary>
 		public Dictionary<int, CharacterResourceAttribute> ResourceAttributes { get { return resourceAttributes; } }
 
+		/// <summary>
+		/// Unity lifecycle method called when the component is initialized.
+		/// Initializes all attributes and resource attributes from the database, and sets up dependencies.
+		/// </summary>
 		public override void OnAwake()
 		{
 			base.OnAwake();
@@ -35,14 +73,17 @@ namespace FishMMO.Shared
 				{
 					if (attribute.IsResourceAttribute)
 					{
+						// Resource attributes (e.g., health, mana) are initialized with current and max values.
 						AddResourceAttribute(new CharacterResourceAttribute(attribute.ID, attribute.InitialValue, attribute.InitialValue, 0));
 					}
 					else
 					{
+						// Non-resource attributes (e.g., strength, agility) are initialized with base value.
 						AddAttribute(new CharacterAttribute(attribute.ID, attribute.InitialValue, 0));
 					}
 				}
 
+				// Set up parent/child/dependant relationships for all attributes.
 				InitializeAttributeDependents();
 				InitializeResourceAttributeDependents();
 			}
@@ -97,7 +138,7 @@ namespace FishMMO.Shared
 				writer.WriteSingle(resourceAttribute.CurrentValue);
 			}
 		}
-		
+
 		public override void ResetState(bool asServer)
 		{
 			base.ResetState(asServer);

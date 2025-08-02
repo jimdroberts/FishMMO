@@ -3,30 +3,42 @@ using FishMMO.Shared;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// UI button representing an equipment slot, handling drag-and-drop and equip/unequip logic.
+	/// </summary>
 	public class UIEquipmentButton : UIReferenceButton
 	{
+		/// <summary>
+		/// The type of equipment slot this button represents (e.g., Head, Chest).
+		/// </summary>
 		public ItemSlot ItemSlotType = ItemSlot.Head;
 
+		/// <summary>
+		/// Handles left mouse click events for equipment buttons.
+		/// Supports equipping items from inventory or bank, and drag-and-drop logic.
+		/// </summary>
 		public override void OnLeftClick()
 		{
 			if (UIManager.TryGet("UIDragObject", out UIDragObject dragObject))
 			{
 				if (Character != null)
 				{
+					// If the drag object is visible, handle drag-and-drop logic
 					if (dragObject.Visible)
 					{
 						if (Character.TryGet(out IEquipmentController equipmentController))
 						{
 							int referenceID = (int)dragObject.ReferenceID;
 
-							// we check the hotkey type because we can only equip items from the inventory
+							// Only allow equipping items from inventory
 							if (dragObject.Type == ReferenceButtonType.Inventory &&
 								Character.TryGet(out IInventoryController inventoryController))
 							{
-								// get the item from the Inventory
+								// Get the item from the inventory
 								Item item = inventoryController.Items[referenceID];
 								if (item != null)
 								{
+									// Broadcast equip item from inventory
 									Client.Broadcast(new EquipmentEquipItemBroadcast()
 									{
 										InventoryIndex = referenceID,
@@ -35,14 +47,15 @@ namespace FishMMO.Client
 									}, Channel.Reliable);
 								}
 							}
-							// taking an item from the bank and putting it in this equipment slot
+							// Allow equipping items from bank
 							else if (dragObject.Type == ReferenceButtonType.Bank &&
 									 Character.TryGet(out IBankController bankController))
 							{
-								// get the item from the Inventory
+								// Get the item from the bank
 								Item item = bankController.Items[referenceID];
 								if (item != null)
 								{
+									// Broadcast equip item from bank
 									Client.Broadcast(new EquipmentEquipItemBroadcast()
 									{
 										InventoryIndex = referenceID,
@@ -53,9 +66,10 @@ namespace FishMMO.Client
 							}
 						}
 
-						// clear the drag object no matter what
+						// Clear the drag object after operation
 						dragObject.Clear();
 					}
+					// If drag object is not visible, start dragging if slot is not empty
 					else if (Character.TryGet(out IEquipmentController equipmentController) &&
 							 !equipmentController.IsSlotEmpty((byte)ItemSlotType))
 					{
@@ -65,6 +79,10 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Handles right mouse click events for equipment buttons.
+		/// Unequips the item and sends it to the inventory.
+		/// </summary>
 		public override void OnRightClick()
 		{
 			if (UIManager.TryGet("UIDragObject", out UIDragObject dragObject) && dragObject.Visible)
@@ -77,7 +95,7 @@ namespace FishMMO.Client
 			{
 				Clear();
 
-				// right clicking an item will attempt to send it to the inventory
+				// Right clicking an item will attempt to send it to the inventory
 				Client.Broadcast(new EquipmentUnequipItemBroadcast()
 				{
 					Slot = (byte)ItemSlotType,
@@ -86,6 +104,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Clears the UI elements for this equipment button.
+		/// </summary>
 		public override void Clear()
 		{
 			if (Icon != null) Icon.sprite = null;

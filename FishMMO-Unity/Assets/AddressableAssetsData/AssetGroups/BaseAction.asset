@@ -1,0 +1,107 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bbb281ee3bf0b054c82ac2347e9e782c, type: 3}
+  m_Name: BaseAction
+  m_EditorClassIdentifier: 
+  m_GroupName: BaseAction
+  m_GUID: 0ffee29f85919cd4c962105d17780026
+  m_SerializeEntries:
+  - m_GUID: 2813a233ed4632e499c6487fad515c72
+    m_Address: Medium Area Action
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - AbilityApplyAreaAction
+    - BaseAction
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 330631dd81f582348b11bd40769c3ece
+    m_Address: Apply Minor Increase Armor Action
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - ApplyBuffAction
+    - BaseAction
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 35d98e747fa4e0f469bfc7b50ecaf63a
+    m_Address: Greater Area Action
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - AbilityApplyAreaAction
+    - BaseAction
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6429039c79a69a94d846b943051120a4
+    m_Address: Lesser Fire Damage Action
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - ApplyDamageAction
+    - BaseAction
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 816818339c158e94f881e5557e72c200
+    m_Address: Ability Apply Target Action
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - AbilityApplyTargetAction
+    - BaseAction
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 885a158851020fd469f63f1265d021e3
+    m_Address: Greater Fire Damage Action
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - ApplyDamageAction
+    - BaseAction
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9737ceb2a59fe29469b8e593a69e3f12
+    m_Address: Lesser Area Action
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - AbilityApplyAreaAction
+    - BaseAction
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b5ff41ab8f7082d4d89f6bdc98d1ec2c
+    m_Address: Apply Minor Movement Speed Increase Action
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - ApplyBuffAction
+    - BaseAction
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b6ef0d554b5f07e4e8f7e63a21d757ce
+    m_Address: Greater Physical Damage Action
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - ApplyDamageAction
+    - BaseAction
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c6be48514a8c1d4499c4857dc71f77c3
+    m_Address: Fire Damage Action
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - ApplyDamageAction
+    - BaseAction
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d22434812041a54468f78e2e35856a3f
+    m_Address: Lesser Physical Damage Action
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - ApplyDamageAction
+    - BaseAction
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fe143ac5bf7a59f4c83e14eaf5345e84
+    m_Address: Physical Damage Action
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - ApplyDamageAction
+    - BaseAction
+    FlaggedDuringContentUpdateRestriction: 0
+  m_ReadOnly: 0
+  m_Settings: {fileID: 11400000, guid: 32d60da793475f74593af93cb933abd4, type: 2}
+  m_SchemaSet:
+    m_Schemas:
+    - {fileID: 11400000, guid: c461c4171f3a9584eaae637425a7d0c1, type: 2}
+    - {fileID: 11400000, guid: 8a6b79c4434806f44a0ef1b1118673bf, type: 2}

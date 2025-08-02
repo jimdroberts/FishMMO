@@ -169,7 +169,8 @@ namespace FishMMO.Server.DatabaseServices
 				{
 					abilityController.LearnAbility(new Ability(dbAbility.ID, template, dbAbility.AbilityEvents), dbAbility.Cooldown);
 				}
-			};
+			}
+			;
 		}
 	}
 }

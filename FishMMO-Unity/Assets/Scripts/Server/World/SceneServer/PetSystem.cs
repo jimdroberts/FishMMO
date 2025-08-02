@@ -1,6 +1,7 @@
 using FishNet.Connection;
 using FishNet.Object;
 using FishNet.Transporting;
+using FishNet.Utility.Performance;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
 using UnityEngine;
@@ -8,9 +9,15 @@ using UnityEngine.SceneManagement;
 
 namespace FishMMO.Server
 {
-	// Character manager handles the players character
+	/// <summary>
+	/// Manages pet-related server logic, including pet summoning, following, staying, releasing, and persistence.
+	/// Handles pet broadcasts, character events, and pet AI initialization for player characters.
+	/// </summary>
 	public class PetSystem : ServerBehaviour
 	{
+		/// <summary>
+		/// Called once to initialize the pet system. Registers broadcast handlers and subscribes to character and ability events.
+		/// </summary>
 		public override void InitializeOnce()
 		{
 			if (ServerManager != null)
@@ -19,7 +26,7 @@ namespace FishMMO.Server
 				Server.RegisterBroadcast<PetStayBroadcast>(OnPetStayBroadcastReceived, true);
 				Server.RegisterBroadcast<PetSummonBroadcast>(OnPetSummonBroadcastReceived, true);
 				Server.RegisterBroadcast<PetReleaseBroadcast>(OnPetReleaseBroadcastReceived, true);
-				
+
 				AbilityObject.OnPetSummon += AbilityObject_OnPetSummon;
 
 				if (ServerBehaviour.TryGet(out CharacterSystem characterSystem))
@@ -35,6 +42,9 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Called when the system is being destroyed. Unregisters broadcast handlers and unsubscribes from character and ability events.
+		/// </summary>
 		public override void Destroying()
 		{
 			if (ServerManager != null)
@@ -55,6 +65,9 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Handles pet follow broadcast, updating pet AI to follow the character.
+		/// </summary>
 		private void OnPetFollowBroadcastReceived(NetworkConnection conn, PetFollowBroadcast msg, Channel channel)
 		{
 			if (conn.FirstObject == null)
@@ -80,6 +93,9 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Handles pet stay broadcast, updating pet AI to stay at its current position.
+		/// </summary>
 		private void OnPetStayBroadcastReceived(NetworkConnection conn, PetStayBroadcast msg, Channel channel)
 		{
 			if (conn.FirstObject == null)
@@ -105,6 +121,9 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Handles pet summon broadcast, warping pet to the character's position.
+		/// </summary>
 		private void OnPetSummonBroadcastReceived(NetworkConnection conn, PetSummonBroadcast msg, Channel channel)
 		{
 			if (conn.FirstObject == null)
@@ -129,6 +148,9 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Handles pet release broadcast, saving pet state and despawning the pet object.
+		/// </summary>
 		private void OnPetReleaseBroadcastReceived(NetworkConnection conn, PetReleaseBroadcast msg, Channel channel)
 		{
 			if (conn.FirstObject == null)
@@ -167,6 +189,9 @@ namespace FishMMO.Server
 			Server.Broadcast(conn, new PetRemoveBroadcast(), true, Channel.Reliable);
 		}
 
+		/// <summary>
+		/// Handles character spawn event, loading and spawning the pet for the character if available.
+		/// </summary>
 		private void CharacterSystem_OnSpawnCharacter(NetworkConnection conn, IPlayerCharacter character, Scene scene)
 		{
 			if (character == null)
@@ -224,6 +249,9 @@ namespace FishMMO.Server
 			Server.Broadcast(conn, new PetAddBroadcast() { ID = pet.ID }, true, Channel.Reliable);
 		}
 
+		/// <summary>
+		/// Handles character despawn event, saving pet state and despawning the pet object if necessary.
+		/// </summary>
 		private void CharacterSystem_OnDespawnCharacter(NetworkConnection conn, IPlayerCharacter character)
 		{
 			if (character == null)
@@ -260,6 +288,9 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Handles pet killed event, despawning the pet and broadcasting pet removal to the client.
+		/// </summary>
 		private void CharacterSystem_OnPetKilled(NetworkConnection conn, IPlayerCharacter character)
 		{
 			CharacterSystem_OnDespawnCharacter(conn, character);
@@ -267,6 +298,9 @@ namespace FishMMO.Server
 			Server.Broadcast(conn, new PetRemoveBroadcast(), true, Channel.Reliable);
 		}
 
+		/// <summary>
+		/// Handles pet summoning via ability, spawning the pet at a random position within the bounding box.
+		/// </summary>
 		private void AbilityObject_OnPetSummon(PetAbilityTemplate petAbilityTemplate, IPlayerCharacter caster)
 		{
 			if (petAbilityTemplate == null)
@@ -290,14 +324,14 @@ namespace FishMMO.Server
 				return;
 			}
 
-			// get a random point at the top of the bounding box
+			// Get a random point at the top of the bounding box
 			Vector3 origin = new Vector3(UnityEngine.Random.Range(-petAbilityTemplate.SpawnBoundingBox.x, petAbilityTemplate.SpawnBoundingBox.x),
-										 petAbilityTemplate.SpawnBoundingBox.y,
-										 UnityEngine.Random.Range(-petAbilityTemplate.SpawnBoundingBox.z, petAbilityTemplate.SpawnBoundingBox.z));
+									 petAbilityTemplate.SpawnBoundingBox.y,
+									 UnityEngine.Random.Range(-petAbilityTemplate.SpawnBoundingBox.z, petAbilityTemplate.SpawnBoundingBox.z));
 
 			Vector3 spawnPosition = caster.Transform.position;
 
-			// add the spawner position
+			// Add the spawner position
 			origin += spawnPosition;
 
 			if (physicsScene.SphereCast(origin, petAbilityTemplate.SpawnDistance, Vector3.down, out RaycastHit hit, 20.0f, 1 << Constants.Layers.Ground, QueryTriggerInteraction.Ignore))
@@ -305,7 +339,7 @@ namespace FishMMO.Server
 				spawnPosition = hit.point;
 			}
 
-			NetworkObject nob = Server.NetworkManager.GetPooledInstantiated(petAbilityTemplate.PetPrefab, spawnPosition, caster.Transform.rotation, true);
+			NetworkObject nob = Server.NetworkManager.GetPooledInstantiated(petAbilityTemplate.PetPrefab.PrefabId, petAbilityTemplate.PetPrefab.SpawnableCollectionId, ObjectPoolRetrieveOption.Unset, null, spawnPosition, caster.Transform.rotation, null, true);
 			Pet pet = nob.GetComponent<Pet>();
 			if (pet == null)
 			{

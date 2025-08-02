@@ -5,6 +5,9 @@ using System.Runtime.CompilerServices;
 
 namespace FishMMO.Shared
 {
+	/// <summary>
+	/// MonoBehaviour for configuring world scene settings, including client limits, transition visuals, day/night cycle, and object activations.
+	/// </summary>
 	public class WorldSceneSettings : MonoBehaviour
 	{
 		/// <summary>
@@ -18,6 +21,9 @@ namespace FishMMO.Shared
 		[Tooltip("The image that will be displayed when entering this scene.")]
 		public Sprite SceneTransitionImage;
 
+		/// <summary>
+		/// Delegate for triggering fog changes when the scene loads or transitions.
+		/// </summary>
 		public RegionChangeFogAction DefaultSceneFog;
 
 		/// <summary>
@@ -35,7 +41,13 @@ namespace FishMMO.Shared
 		/// </summary>
 		[Tooltip("The duration of the night cycle in seconds.")]
 		public int NightCycleDuration = 3 * 60 * 60; // 3 hours in seconds
+		/// <summary>
+		/// The skybox material used during the day cycle.
+		/// </summary>
 		public Material DaySkyboxMaterial;
+		/// <summary>
+		/// The skybox material used during the night cycle.
+		/// </summary>
 		public Material NightSkyBoxMaterial;
 		/// <summary>
 		/// These objects are constantly rotating based on current time of day.
@@ -78,15 +90,21 @@ namespace FishMMO.Shared
 		[SerializeField]
 		private bool isDaytime = true;
 
+		/// <summary>
+		/// Unity Awake callback. Initializes the day/night cycle, sets the initial skybox, and triggers fog if needed.
+		/// </summary>
 		private void Awake()
 		{
 			DefaultSceneFog?.Invoke(null, null, false);
 
 			RenderSettings.skybox = DaySkyboxMaterial;
-			
+
 			UpdateDayNightState(GetGameTimeOfDay(DateTime.UtcNow), true);
 		}
 
+		/// <summary>
+		/// Unity Update callback. Advances the day/night cycle, updates object states, rotations, and fading each frame.
+		/// </summary>
 		void Update()
 		{
 			if (DayNightCycle)
@@ -146,6 +164,10 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Tracks the last applied rotation angle for objects affected by the day/night cycle.
+		/// Used to calculate incremental rotation each frame.
+		/// </summary>
 		private float lastRotationAngle = 0.0f;
 		/// <summary>
 		/// Rotate objects based on the current Game Time Of Day.
@@ -221,6 +243,12 @@ namespace FishMMO.Shared
 			lastRotationAngle = rotationAngle;
 		}
 
+		/// <summary>
+		/// Enables or disables all GameObjects in the provided list based on the 'enable' parameter.
+		/// Used to activate day or night objects as the cycle changes.
+		/// </summary>
+		/// <param name="enable">True to enable objects, false to disable.</param>
+		/// <param name="objects">List of GameObjects to activate/deactivate.</param>
 		private void UpdateDayNightActivations(bool enable, List<GameObject> objects)
 		{
 			if (objects == null ||

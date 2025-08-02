@@ -5,11 +5,23 @@ using FishNet.Transporting;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// UIPetControl is responsible for controlling the pet's UI elements and interactions.
+	/// </summary>
 	public class UIPetControl : UICharacterControl
 	{
+		/// <summary>
+		/// The label displaying the pet's name.
+		/// </summary>
 		public TMP_Text PetNameLabel;
+		/// <summary>
+		/// The slider displaying the pet's health.
+		/// </summary>
 		public Slider PetHealth;
 
+		/// <summary>
+		/// Called after the character is set. Subscribes to pet controller events and updates pet UI.
+		/// </summary>
 		public override void OnPostSetCharacter()
 		{
 			base.OnPostSetCharacter();
@@ -41,6 +53,7 @@ namespace FishMMO.Client
 					{
 						if (attributeController.TryGetHealthAttribute(out CharacterResourceAttribute health))
 						{
+							// Note: This appears to be reversed; typically CurrentValue / FinalValue is used for health bars.
 							PetHealth.value = health.FinalValue / health.CurrentValue;
 						}
 					}
@@ -48,6 +61,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Called before the character is unset. Unsubscribes from pet controller events and resets pet UI.
+		/// </summary>
 		public override void OnPreUnsetCharacter()
 		{
 			base.OnPreUnsetCharacter();
@@ -68,6 +84,10 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Handles pet summoned event. Updates pet UI and makes it visible.
+		/// </summary>
+		/// <param name="pet">The summoned pet.</param>
 		public void PetController_OnPetSummoned(Pet pet)
 		{
 			if (pet == null)
@@ -103,11 +123,18 @@ namespace FishMMO.Client
 			Show();
 		}
 
+		/// <summary>
+		/// Handles pet destroyed event. Hides the pet UI.
+		/// </summary>
 		public void PetController_OnPetDestroyed()
 		{
 			Hide();
 		}
 
+		/// <summary>
+		/// Returns true if the character has a pet.
+		/// </summary>
+		/// <returns>True if pet exists, false otherwise.</returns>
 		private bool HasPet()
 		{
 			return Character != null &&
@@ -115,6 +142,9 @@ namespace FishMMO.Client
 				  petController.Pet != null;
 		}
 
+		/// <summary>
+		/// Sends a follow command to the pet.
+		/// </summary>
 		public void OnFollowPet()
 		{
 			if (!HasPet())
@@ -124,6 +154,9 @@ namespace FishMMO.Client
 			Client.Broadcast(new PetFollowBroadcast(), Channel.Reliable);
 		}
 
+		/// <summary>
+		/// Sends a stay command to the pet.
+		/// </summary>
 		public void OnStayPet()
 		{
 			if (!HasPet())
@@ -133,6 +166,9 @@ namespace FishMMO.Client
 			Client.Broadcast(new PetStayBroadcast(), Channel.Reliable);
 		}
 
+		/// <summary>
+		/// Sends a summon command to the pet.
+		/// </summary>
 		public void OnSummonPet()
 		{
 			if (!HasPet())
@@ -142,6 +178,9 @@ namespace FishMMO.Client
 			Client.Broadcast(new PetSummonBroadcast(), Channel.Reliable);
 		}
 
+		/// <summary>
+		/// Sends a release command to the pet.
+		/// </summary>
 		public void OnReleasePet()
 		{
 			if (!HasPet())

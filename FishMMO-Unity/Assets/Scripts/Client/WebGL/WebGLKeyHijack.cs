@@ -13,16 +13,30 @@ namespace FishMMO.Client
 	/// </summary>
 	public class WebGLKeyHijack : MonoBehaviour
 	{
+		/// <summary>
+		/// Array of key codes to hijack in the browser. Prevents default browser actions for these keys.
+		/// </summary>
 		public int[] HijackKeyCodes;
 
 #if UNITY_WEBGL
+		/// <summary>
+		/// Calls the browser-side function to quit the WebGL client.
+		/// </summary>
 		[DllImport("__Internal")]
 		private static extern void ClientWebGLQuit();
 
+		/// <summary>
+		/// Adds a browser-side key listener to hijack specified key codes.
+		/// </summary>
+		/// <param name="keyCodesPtr">Pointer to the array of key codes.</param>
+		/// <param name="keyCodesLength">Number of key codes in the array.</param>
 		[DllImport("__Internal")]
 		private static extern void AddHijackKeysListener(IntPtr keyCodesPtr, int keyCodesLength);
 #endif
 
+		/// <summary>
+		/// Called when the script instance is being loaded. Sets up key hijacking for WebGL builds.
+		/// </summary>
 		void Awake()
 		{
 #if UNITY_WEBGL
@@ -40,6 +54,9 @@ namespace FishMMO.Client
 #endif
 		}
 
+		/// <summary>
+		/// Quits the WebGL client by calling the browser-side quit function.
+		/// </summary>
 		public void ClientQuit()
 		{
 #if UNITY_WEBGL

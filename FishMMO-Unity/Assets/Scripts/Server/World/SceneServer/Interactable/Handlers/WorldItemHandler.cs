@@ -2,8 +2,19 @@ using FishMMO.Shared;
 
 namespace FishMMO.Server
 {
+	/// <summary>
+	/// Handles interactions with world item objects, allowing players to pick up items from the world.
+	/// </summary>
 	public class WorldItemHandler : IInteractableHandler
 	{
+		/// <summary>
+		/// Handles the interaction between a player character and a world item.
+		/// Validates the item, attempts to add it to the player's inventory, and despawns the item if picked up.
+		/// </summary>
+		/// <param name="interactable">The interactable object (should be a WorldItem).</param>
+		/// <param name="character">The player character interacting with the item.</param>
+		/// <param name="sceneObject">The scene object associated with the interaction.</param>
+		/// <param name="serverInstance">The server instance managing interactables.</param>
 		public void HandleInteraction(IInteractable interactable, IPlayerCharacter character, ISceneObject sceneObject, InteractableSystem serverInstance)
 		{
 			WorldItem worldItem = interactable as WorldItem;

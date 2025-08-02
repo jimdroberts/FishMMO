@@ -11,16 +11,32 @@ using FishMMO.Database.Npgsql.Entities;
 namespace FishMMO.Server
 {
 	/// <summary>
-	/// Server party system.
+	/// Manages party creation, invitations, membership, and updates for the MMO server.
+	/// Handles party broadcasts, chat commands, and synchronizes party state with the database.
 	/// </summary>
 	public class PartySystem : ServerBehaviour
 	{
+		/// <summary>
+		/// Maximum number of members allowed in a party.
+		/// </summary>
 		public int MaxPartySize = 6;
+		/// <summary>
+		/// The server party update pump rate limit in seconds.
+		/// </summary>
 		[Tooltip("The server party update pump rate limit in seconds.")]
 		public float UpdatePumpRate = 1.0f;
 
+		/// <summary>
+		/// Current connection state of the server.
+		/// </summary>
 		private LocalConnectionState serverState;
+		/// <summary>
+		/// Timestamp of the last successful fetch from the database.
+		/// </summary>
 		private DateTime lastFetchTime = DateTime.UtcNow;
+		/// <summary>
+		/// Time remaining until the next database poll for party updates.
+		/// </summary>
 		private float nextPump = 0.0f;
 
 		/// <summary>
@@ -31,10 +47,19 @@ namespace FishMMO.Server
 		/// Tracks all active parties and currently online party members on this scene server.
 		/// </summary>
 		private Dictionary<long, HashSet<long>> partyCharacterTracker = new Dictionary<long, HashSet<long>>();
-		// clientID / partyID
+		/// <summary>
+		/// Tracks pending party invitations by client ID and party ID.
+		/// </summary>
 		private readonly Dictionary<long, long> pendingInvitations = new Dictionary<long, long>();
 
+		/// <summary>
+		/// Registered chat commands for party actions.
+		/// </summary>
 		private Dictionary<string, ChatCommand> partyChatCommands;
+
+		/// <summary>
+		/// Handles party invite chat commands.
+		/// </summary>
 		public bool OnPartyInvite(IPlayerCharacter sender, ChatBroadcast msg)
 		{
 			string targetName = msg.Text.Trim().ToLower();
@@ -51,6 +76,9 @@ namespace FishMMO.Server
 			return false;
 		}
 
+		/// <summary>
+		/// Called once to initialize the party system. Registers chat commands, broadcast handlers, and character events.
+		/// </summary>
 		public override void InitializeOnce()
 		{
 			if (ServerManager != null &&
@@ -83,6 +111,9 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Called when the system is being destroyed. Unregisters broadcast handlers and character events.
+		/// </summary>
 		public override void Destroying()
 		{
 			if (Server != null)
@@ -95,7 +126,7 @@ namespace FishMMO.Server
 				Server.UnregisterBroadcast<PartyRemoveBroadcast>(OnServerPartyRemoveBroadcastReceived);
 				Server.UnregisterBroadcast<PartyChangeRankBroadcast>(OnServerPartyChangeRankBroadcastReceived);
 
-				// remove the characters pending guild invite request on disconnect
+				// Remove the characters pending guild invite request on disconnect
 				if (ServerBehaviour.TryGet(out CharacterSystem characterSystem))
 				{
 					characterSystem.OnConnect -= CharacterSystem_OnConnect;
@@ -104,11 +135,17 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Handles changes in the server's connection state.
+		/// </summary>
 		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs args)
 		{
 			serverState = args.ConnectionState;
 		}
 
+		/// <summary>
+		/// Unity LateUpdate callback. Polls the database for party updates at the specified rate and processes them.
+		/// </summary>
 		void LateUpdate()
 		{
 			if (serverState == LocalConnectionState.Started)
@@ -125,11 +162,15 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Fetches new party updates from the database since the last fetch.
+		/// </summary>
+		/// <returns>List of new party update entities.</returns>
 		private List<PartyUpdateEntity> FetchPartyUpdates()
 		{
 			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 
-			// fetch party updates from the database
+			// Fetch party updates from the database
 			List<PartyUpdateEntity> updates = PartyUpdateService.Fetch(dbContext, partyCharacterTracker.Keys.ToList(), lastFetchTime);
 			if (updates != null && updates.Count > 0)
 			{
@@ -138,7 +179,10 @@ namespace FishMMO.Server
 			return updates;
 		}
 
-		// process updates from the database
+		/// <summary>
+		/// Processes a list of party updates, synchronizing party membership and broadcasting changes to clients.
+		/// </summary>
+		/// <param name="updates">List of party update entities to process.</param>
 		private void ProcessPartyUpdates(List<PartyUpdateEntity> updates)
 		{
 			if (Server == null || Server.NpgsqlDbContextFactory == null || updates == null || updates.Count < 1)
@@ -146,33 +190,29 @@ namespace FishMMO.Server
 				return;
 			}
 
-			// parties that have previously been updated, we do this so we aren't updating partys multiple times
+			// Parties that have previously been updated, to avoid duplicate updates
 			HashSet<long> updatedParties = new HashSet<long>();
 
 			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 			foreach (PartyUpdateEntity update in updates)
 			{
-				// check if we have already updated this party
+				// Check if we have already updated this party
 				if (updatedParties.Contains(update.PartyID))
 				{
 					continue;
 				}
-				// otherwise add the party to our list and continue with the update
+				// Otherwise add the party to our list and continue with the update
 				updatedParties.Add(update.PartyID);
 
-				// get the current party members from the database
+				// Get the current party members from the database
 				List<CharacterPartyEntity> dbMembers = CharacterPartyService.Members(dbContext, update.PartyID);
 
-				// Get the current member ids
+				// Get the current member IDs
 				var currentMemberIDs = dbMembers.Select(x => x.CharacterID).ToHashSet();
-
-				//Log.Debug($"Current Update Party: {update.PartyID} MemberCount: {currentMemberIDs.Count}");
 
 				// Check if we have previously cached the party member list
 				if (partyMemberTracker.TryGetValue(update.PartyID, out HashSet<long> previousMembers))
 				{
-					//Log.Debug($"Previously Cached Party: {update.PartyID} MemberCount: {previousMembers.Count}");
-
 					// Compute the difference: members that are in previousMembers but not in currentMemberIDs
 					List<long> difference = previousMembers.Except(currentMemberIDs).ToList();
 
@@ -189,7 +229,7 @@ namespace FishMMO.Server
 						}
 					}
 				}
-				// Cache the guild member IDs
+				// Cache the party member IDs
 				partyMemberTracker[update.PartyID] = currentMemberIDs;
 
 				var addBroadcasts = dbMembers.Select(x => new PartyAddBroadcast()
@@ -207,7 +247,7 @@ namespace FishMMO.Server
 
 				if (ServerBehaviour.TryGet(out CharacterSystem characterSystem))
 				{
-					// tell all of the local party members to update their party member lists
+					// Tell all of the local party members to update their party member lists
 					foreach (CharacterPartyEntity entity in dbMembers)
 					{
 						if (characterSystem.CharactersByID.TryGetValue(entity.CharacterID, out IPlayerCharacter character))
@@ -240,7 +280,6 @@ namespace FishMMO.Server
 			}
 			if (!characterIDs.Contains(characterID))
 			{
-				//Log.Debug($"Added Character Party Tracker: {characterID} | {partyID}");
 				characterIDs.Add(characterID);
 			}
 		}
@@ -256,7 +295,6 @@ namespace FishMMO.Server
 			}
 			if (partyCharacterTracker.TryGetValue(partyID, out HashSet<long> characterIDs))
 			{
-				//Log.Debug($"Removed Character Party Tracker: {characterID} | {partyID}");
 				characterIDs.Remove(characterID);
 
 				// If there are no active party members we can remove the character and member trackers for the party.
@@ -268,6 +306,9 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Handles character connect event, adding the character to the party tracker and saving party update.
+		/// </summary>
 		public void CharacterSystem_OnConnect(NetworkConnection conn, IPlayerCharacter character)
 		{
 			if (character == null)
@@ -293,6 +334,9 @@ namespace FishMMO.Server
 			PartyUpdateService.Save(dbContext, partyController.ID);
 		}
 
+		/// <summary>
+		/// Handles character disconnect event, removing the character from the party tracker and saving party update.
+		/// </summary>
 		public void CharacterSystem_OnDisconnect(NetworkConnection conn, IPlayerCharacter character)
 		{
 			if (character != null)
@@ -323,6 +367,9 @@ namespace FishMMO.Server
 			PartyUpdateService.Save(dbContext, partyController.ID);
 		}
 
+		/// <summary>
+		/// Handles party creation broadcast, validates and creates a new party for the requesting character.
+		/// </summary>
 		public void OnServerPartyCreateBroadcastReceived(NetworkConnection conn, PartyCreateBroadcast msg, Channel channel)
 		{
 			if (conn.FirstObject == null)
@@ -363,6 +410,13 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Handles party invitation broadcast, validates inviter and target, and sends invitation to the target character.
+		/// Only party leaders can invite, and invitations are tracked to prevent duplicates.
+		/// </summary>
+		/// <param name="conn">Network connection of the inviter.</param>
+		/// <param name="msg">PartyInviteBroadcast message containing inviter and target IDs.</param>
+		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerPartyInviteBroadcastReceived(NetworkConnection conn, PartyInviteBroadcast msg, Channel channel)
 		{
 			if (Server.NpgsqlDbContextFactory == null)
@@ -414,6 +468,12 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Handles acceptance of a party invitation, validates the invite, adds the character to the party, and broadcasts the update.
+		/// </summary>
+		/// <param name="conn">Network connection of the accepting character.</param>
+		/// <param name="msg">PartyAcceptInviteBroadcast message containing acceptance details.</param>
+		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerPartyAcceptInviteBroadcastReceived(NetworkConnection conn, PartyAcceptInviteBroadcast msg, Channel channel)
 		{
 			if (conn.FirstObject == null)
@@ -470,6 +530,12 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Handles decline of a party invitation, removes pending invitation for the character.
+		/// </summary>
+		/// <param name="conn">Network connection of the declining character.</param>
+		/// <param name="msg">PartyDeclineInviteBroadcast message containing decline details.</param>
+		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerPartyDeclineInviteBroadcastReceived(NetworkConnection conn, PartyDeclineInviteBroadcast msg, Channel channel)
 		{
 			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
@@ -479,6 +545,12 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Handles party leave broadcast, validates character, transfers leadership if needed, removes member from party, and updates or deletes party as appropriate.
+		/// </summary>
+		/// <param name="conn">Network connection of the leaving character.</param>
+		/// <param name="msg">PartyLeaveBroadcast message containing leave details.</param>
+		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerPartyLeaveBroadcastReceived(NetworkConnection conn, PartyLeaveBroadcast msg, Channel channel)
 		{
 			if (Server.NpgsqlDbContextFactory == null)
@@ -562,6 +634,13 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Handles party member removal broadcast, validates and removes a member from the party in the database.
+		/// Only party leaders can remove other members.
+		/// </summary>
+		/// <param name="conn">Network connection of the requester.</param>
+		/// <param name="msg">PartyRemoveBroadcast message containing member ID to remove.</param>
+		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerPartyRemoveBroadcastReceived(NetworkConnection conn, PartyRemoveBroadcast msg, Channel channel)
 		{
 			if (Server.NpgsqlDbContextFactory == null)
@@ -574,7 +653,7 @@ namespace FishMMO.Server
 			}
 			IPartyController partyController = conn.FirstObject.GetComponent<IPartyController>();
 
-			// validate character
+			// Validate that the requester is a party leader and not trying to remove themselves.
 			if (partyController == null ||
 				partyController.ID < 1 ||
 				partyController.Rank != PartyRank.Leader)
@@ -587,24 +666,31 @@ namespace FishMMO.Server
 				return;
 			}
 
-			// we can't kick ourself
+			// Prevent party leaders from kicking themselves.
 			if (msg.MemberID == partyController.Character.ID)
 			{
 				return;
 			}
 
-			// remove the character from the party in the database
+			// Remove the character from the party in the database.
 			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
 			bool result = CharacterPartyService.Delete(dbContext, partyController.Rank, partyController.ID, msg.MemberID);
 			if (result)
 			{
 				RemovePartyCharacterTracker(partyController.ID, partyController.Character.ID);
 
-				// tell the other servers to update their party lists
+				// Tell the other servers to update their party lists.
 				PartyUpdateService.Save(dbContext, partyController.ID);
 			}
 		}
 
+		/// <summary>
+		/// Handles party rank change broadcast, validates leader and target, and updates ranks in the database.
+		/// Only party leaders can promote another member to leader.
+		/// </summary>
+		/// <param name="conn">Network connection of the requester.</param>
+		/// <param name="msg">PartyChangeRankBroadcast message containing target member ID.</param>
+		/// <param name="channel">Network channel used for the broadcast.</param>
 		public void OnServerPartyChangeRankBroadcastReceived(NetworkConnection conn, PartyChangeRankBroadcast msg, Channel channel)
 		{
 			if (Server.NpgsqlDbContextFactory == null)

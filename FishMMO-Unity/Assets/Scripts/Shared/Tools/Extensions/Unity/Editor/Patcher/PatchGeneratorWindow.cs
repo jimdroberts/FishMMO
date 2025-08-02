@@ -5,72 +5,126 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Collections.Concurrent;
-using System.Security.Cryptography;
 using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using FishMMO.Logging;
 using FishMMO.Shared;
+using System.IO.Hashing;
 
 namespace FishMMO.Patcher
 {
 	public class PatchGeneratorWindow : EditorWindow
 	{
-		// --- Logger Callback ---
-		private void OnInternalLogCallback(string message)
-		{
-			Debug.Log($"{message}");
-		}
-
-		// --- UI State Variables ---
+		/// <summary>
+		/// Path to the latest client build directory.
+		/// </summary>
 		private string latestClientDirectory = "";
-		private string oldClientsRootDirectory = ""; // For multiple old clients
-		private string singleOldClientDirectory = ""; // For a single old client
-		private bool generateMultipleClientsMode = false; // New toggle for UI mode
+		/// <summary>
+		/// Path to the root directory containing multiple old client builds.
+		/// </summary>
+		private string oldClientsRootDirectory = "";
+		/// <summary>
+		/// Path to a single old client build directory.
+		/// </summary>
+		private string singleOldClientDirectory = "";
+		/// <summary>
+		/// Toggle for UI mode: true for multiple clients, false for single client.
+		/// </summary>
+		private bool generateMultipleClientsMode = false;
+		/// <summary>
+		/// Path to the output directory for generated patches.
+		/// </summary>
 		private string patchOutputDirectory = "";
+		/// <summary>
+		/// Comma-separated list of file extensions to ignore during patch generation.
+		/// </summary>
 		private string ignoredExtensionsInput = ".cfg, .log, .bak";
+		/// <summary>
+		/// Comma-separated list of directory names to ignore during patch generation.
+		/// </summary>
 		private string ignoredDirectoriesInput = "FishMMO_BackUpThisFolder_ButDontShipItWithYourGame, FishMMO_BurstDebugInformation_DoNotShip";
 
-		// --- Internal Data & State ---
+		/// <summary>
+		/// Set of file extensions to ignore during patch generation.
+		/// </summary>
 		private HashSet<string> ignoredExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		/// <summary>
+		/// Set of directory names to ignore during patch generation.
+		/// </summary>
 		private HashSet<string> ignoredDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-		// Cached version configurations
+		/// <summary>
+		/// Cached version configuration for the latest client.
+		/// </summary>
 		private VersionConfig latestVersionConfig;
+		/// <summary>
+		/// Cached version configurations for old clients, keyed by directory path.
+		/// </summary>
 		private Dictionary<string, VersionConfig> oldClientVersionCache = new Dictionary<string, VersionConfig>();
 
-		// UI related fields for displaying individual patch progress bars
+		/// <summary>
+		/// UI fields for displaying individual patch progress bars.
+		/// </summary>
 		private Dictionary<string, PatchProgressInfo> patchProgress = new Dictionary<string, PatchProgressInfo>();
+		/// <summary>
+		/// Scroll position for the patch progress scroll view.
+		/// </summary>
 		private Vector2 scrollPosition;
 
-		// Overall processing state to disable UI during async operations
+		/// <summary>
+		/// Overall processing state to disable UI during async operations.
+		/// </summary>
 		private bool isProcessing = false;
+		/// <summary>
+		/// Status message for complete manifest generation.
+		/// </summary>
+		private string manifestGenerationStatus = "Ready.";
 
-		// Helper class to hold progress details for each patch
+		/// <summary>
+		/// Helper class to hold progress details for each patch.
+		/// </summary>
 		private class PatchProgressInfo
 		{
+			/// <summary>Progress value (0-1).</summary>
 			public float Progress { get; set; } = 0f;
+			/// <summary>Color of the progress bar.</summary>
 			public Color Color { get; set; } = Color.gray;
+			/// <summary>Status message for the patch.</summary>
 			public string Message { get; set; } = "Pending...";
 		}
 
+		/// <summary>
+		/// Data structure for the complete manifest entry.
+		/// </summary>
+		[Serializable]
+		public class CompleteManifestEntry
+		{
+			/// <summary>Relative file path in the manifest.</summary>
+			public string RelativePath { get; set; }
+			/// <summary>Hash of the file.</summary>
+			public string Hash { get; set; }
+		}
+
+		/// <summary>
+		/// Adds the Patch Generator window to the Unity Editor menu.
+		/// </summary>
 		[MenuItem("FishMMO/Patch/Patch Generator")]
 		public static void ShowWindow()
 		{
 			GetWindow<PatchGeneratorWindow>("FishMMO Patch Generator");
 		}
 
+		/// <summary>
+		/// Unity event called when the window is enabled. Initializes ignored sets and logging.
+		/// </summary>
 		private void OnEnable()
 		{
-			UpdateIgnoredExtensionsSet(); // Initialize the ignoredExtensions set
-			UpdateIgnoredDirectoriesSet(); // Initialize the ignoredDirectories set
+			UpdateIgnoredExtensionsSet();
+			UpdateIgnoredDirectoriesSet();
 
 			// Initialize custom logging for the Editor tool.
-			// This setup only needs to happen once.
-			// If Log.Initialize is called multiple times, it should handle it gracefully,
-			// but ensuring it's not needlessly re-registered could be a minor optimization.
-			// For an EditorWindow, this is typically fine as is.
 			Log.RegisterLoggerFactory(nameof(UnityConsoleLoggerConfig), (cfg, logCallback) => new UnityConsoleLogger((UnityConsoleLoggerConfig)cfg, logCallback));
 			var defaultUnityConsoleLoggerConfig = new UnityConsoleLoggerConfig();
 			var unityConsoleFormatter = new UnityConsoleFormatter(defaultUnityConsoleLoggerConfig.LogLevelColors, true);
@@ -84,20 +138,26 @@ namespace FishMMO.Patcher
 						LogLevel.Info, LogLevel.Debug, LogLevel.Warning, LogLevel.Error, LogLevel.Critical, LogLevel.Verbose
 					}
 				},
-				OnInternalLogCallback),
+				(message) => Debug.Log($"{message}")), // Direct Debug.Log for internal callback
 			};
 			Log.Initialize(null, unityConsoleFormatter, manualLoggers, Log.OnInternalLogMessage, new List<Type>() { typeof(UnityConsoleLoggerConfig) });
 		}
 
+		/// <summary>
+		/// Unity event called to draw the window GUI. Handles all UI controls and progress bars.
+		/// </summary>
 		private void OnGUI()
 		{
 			// --- Header ---
 			GUILayout.Label("FishMMO Client Patch Generator", EditorStyles.boldLabel);
+
+			EditorGUILayout.Space();
 			EditorGUILayout.Space();
 
 			// --- Latest Client Directory Selection ---
+			GUILayout.Label("Latest Client Directory", EditorStyles.boldLabel);
 			EditorGUILayout.BeginHorizontal();
-			latestClientDirectory = EditorGUILayout.TextField("Latest Client Directory", latestClientDirectory);
+			latestClientDirectory = EditorGUILayout.TextField("", latestClientDirectory);
 			if (GUILayout.Button("Browse", GUILayout.Width(80)))
 			{
 				string selectedPath = EditorUtility.OpenFolderPanel("Select Latest Client Build Directory", latestClientDirectory, "");
@@ -109,6 +169,8 @@ namespace FishMMO.Patcher
 			EditorGUILayout.EndHorizontal();
 
 			EditorGUILayout.Space();
+			EditorGUILayout.Space();
+
 			GUILayout.Label("Old Client(s) Selection", EditorStyles.boldLabel);
 			EditorGUILayout.HelpBox("Choose whether to generate patches from a single old client or multiple clients within a root directory.", MessageType.Info);
 
@@ -132,7 +194,7 @@ namespace FishMMO.Patcher
 			if (generateMultipleClientsMode)
 			{
 				EditorGUILayout.BeginHorizontal();
-				oldClientsRootDirectory = EditorGUILayout.TextField("Root of Old Clients", oldClientsRootDirectory);
+				oldClientsRootDirectory = EditorGUILayout.TextField("", oldClientsRootDirectory);
 				if (GUILayout.Button("Browse", GUILayout.Width(80)))
 				{
 					string selectedPath = EditorUtility.OpenFolderPanel("Select Root Directory Containing Old Client Builds", oldClientsRootDirectory, "");
@@ -147,7 +209,7 @@ namespace FishMMO.Patcher
 			else // Single client mode
 			{
 				EditorGUILayout.BeginHorizontal();
-				singleOldClientDirectory = EditorGUILayout.TextField("Single Old Client Directory", singleOldClientDirectory);
+				singleOldClientDirectory = EditorGUILayout.TextField("", singleOldClientDirectory);
 				if (GUILayout.Button("Browse", GUILayout.Width(80)))
 				{
 					string selectedPath = EditorUtility.OpenFolderPanel("Select a Single Old Client Build Directory", singleOldClientDirectory, "");
@@ -161,10 +223,12 @@ namespace FishMMO.Patcher
 			}
 
 			EditorGUILayout.Space();
+			EditorGUILayout.Space();
 
 			// --- Patch Output Directory Selection ---
+			GUILayout.Label("Patch Output Directory", EditorStyles.boldLabel);
 			EditorGUILayout.BeginHorizontal();
-			patchOutputDirectory = EditorGUILayout.TextField("Patch Output Directory", patchOutputDirectory);
+			patchOutputDirectory = EditorGUILayout.TextField("", patchOutputDirectory);
 			if (GUILayout.Button("Browse", GUILayout.Width(80)))
 			{
 				string selectedPath = EditorUtility.OpenFolderPanel("Select Patch Output Directory", patchOutputDirectory, "");
@@ -175,24 +239,47 @@ namespace FishMMO.Patcher
 			}
 			EditorGUILayout.EndHorizontal();
 
+			EditorGUILayout.Space();
+			EditorGUILayout.Space();
+
 			// --- Ignored Extensions Configuration ---
+			GUILayout.Label("Ignored File Extensions", EditorStyles.boldLabel);
+			EditorGUILayout.HelpBox("Files with these extensions will be ignored during hash calculation and patch generation. Example: .cfg, .log, .tmp", MessageType.Info);
 			EditorGUI.BeginChangeCheck();
-			ignoredExtensionsInput = EditorGUILayout.TextField("Ignored File Extensions (comma-separated)", ignoredExtensionsInput);
+			ignoredExtensionsInput = EditorGUILayout.TextField("", ignoredExtensionsInput);
 			if (EditorGUI.EndChangeCheck())
 			{
 				UpdateIgnoredExtensionsSet();
 			}
-			EditorGUILayout.HelpBox("Files with these extensions will be ignored during hash calculation and patch generation. Example: .cfg, .log, .tmp", MessageType.Info);
+
+			EditorGUILayout.Space();
+			EditorGUILayout.Space();
 
 			// --- Ignored Directories Configuration ---
+			GUILayout.Label("Ignored Directories", EditorStyles.boldLabel);
+			EditorGUILayout.HelpBox("Directories with these names will be completely skipped during file scanning. Example: MyTempFolder, DebugInfo", MessageType.Info);
 			EditorGUI.BeginChangeCheck();
-			ignoredDirectoriesInput = EditorGUILayout.TextField("Ignored Directories (comma-separated)", ignoredDirectoriesInput);
+			ignoredDirectoriesInput = EditorGUILayout.TextField("", ignoredDirectoriesInput);
 			if (EditorGUI.EndChangeCheck())
 			{
 				UpdateIgnoredDirectoriesSet();
 			}
-			EditorGUILayout.HelpBox("Directories with these names will be completely skipped during file scanning. Example: MyTempFolder, DebugInfo", MessageType.Info);
 
+			EditorGUILayout.Space();
+			EditorGUILayout.Space();
+
+			// --- Generate Client File Manifest Button ---
+			GUILayout.Label("Generate Client File Manifest", EditorStyles.boldLabel);
+			EditorGUILayout.HelpBox("Generates a manifest (JSON) of all files and their checksums in the Latest Client Directory. This can be used for full client verification.", MessageType.Info);
+			EditorGUI.BeginDisabledGroup(isProcessing);
+			if (GUILayout.Button("Generate Client File Manifest", GUILayout.Height(40)))
+			{
+				GenerateCompleteManifestAsync();
+			}
+			EditorGUI.EndDisabledGroup();
+			EditorGUILayout.LabelField("Status:", manifestGenerationStatus);
+
+			EditorGUILayout.Space();
 			EditorGUILayout.Space();
 
 			// --- Generate Patches Button ---
@@ -228,6 +315,9 @@ namespace FishMMO.Patcher
 			}
 		}
 
+		/// <summary>
+		/// Updates the set of ignored file extensions from the input string.
+		/// </summary>
 		private void UpdateIgnoredExtensionsSet()
 		{
 			ignoredExtensions.Clear();
@@ -243,6 +333,9 @@ namespace FishMMO.Patcher
 		}
 
 		// Update ignored directories set
+		/// <summary>
+		/// Updates the set of ignored directory names from the input string.
+		/// </summary>
 		private void UpdateIgnoredDirectoriesSet()
 		{
 			ignoredDirectories.Clear();
@@ -258,8 +351,7 @@ namespace FishMMO.Patcher
 
 		/// <summary>
 		/// Initiates the patch generation process asynchronously.
-		/// This method orchestrates the pre-caching of version data on the main thread,
-		/// then triggers multi-threaded patch generation.
+		/// Orchestrates pre-caching of version data and triggers multi-threaded patch generation.
 		/// </summary>
 		private async void GeneratePatchesAsync()
 		{
@@ -274,7 +366,7 @@ namespace FishMMO.Patcher
 				// --- Step 1: Validate Directories ---
 				if (!Directory.Exists(latestClientDirectory))
 				{
-					Log.Error("Patcher", $"Error: Latest client directory '{latestClientDirectory}' does not exist. Please check the path.");
+					await Log.Error("Patcher", $"Error: Latest client directory '{latestClientDirectory}' does not exist. Please check the path.");
 					EditorUtility.DisplayDialog("Error", "Latest client directory does not exist.", "OK");
 					return;
 				}
@@ -288,7 +380,7 @@ namespace FishMMO.Patcher
 						string[] foundOldDirs = Directory.GetDirectories(oldClientsRootDirectory);
 						if (foundOldDirs.Length == 0)
 						{
-							Log.Info("Patcher", $"No old client version subdirectories found in '{oldClientsRootDirectory}'.");
+							await Log.Info("Patcher", $"No old client version subdirectories found in '{oldClientsRootDirectory}'.");
 						}
 						else
 						{
@@ -297,7 +389,7 @@ namespace FishMMO.Patcher
 					}
 					else
 					{
-						Log.Error("Patcher", "Error: Root directory for multiple old clients is not valid or does not exist.");
+						await Log.Error("Patcher", "Error: Root directory for multiple old clients is not valid or does not exist.");
 						EditorUtility.DisplayDialog("Error", "Root directory for multiple old clients is not valid or does not exist.", "OK");
 						return;
 					}
@@ -310,7 +402,7 @@ namespace FishMMO.Patcher
 					}
 					else
 					{
-						Log.Error("Patcher", "Error: Single old client directory is not valid or does not exist.");
+						await Log.Error("Patcher", "Error: Single old client directory is not valid or does not exist.");
 						EditorUtility.DisplayDialog("Error", "Single old client directory is not valid or does not exist.", "OK");
 						return;
 					}
@@ -318,7 +410,7 @@ namespace FishMMO.Patcher
 
 				if (oldClientDirsToProcess.Count == 0)
 				{
-					Log.Info("Patcher", "No old client directories to process. Aborting.");
+					await Log.Info("Patcher", "No old client directories to process. Aborting.");
 					EditorUtility.DisplayDialog("Information", "No old client directories found to process.", "OK");
 					return;
 				}
@@ -330,7 +422,7 @@ namespace FishMMO.Patcher
 				}
 
 				// --- Step 2: Pre-cache ALL Version Data (Latest & Old) ---
-				Log.Info("Patcher", "Starting pre-caching of all client versions...");
+				await Log.Info("Patcher", "Starting pre-caching of all client versions...");
 				await PreloadAllClientVersionsAsync(latestClientDirectory, oldClientDirsToProcess);
 
 				if (latestVersionConfig == null)
@@ -348,24 +440,24 @@ namespace FishMMO.Patcher
 				{
 					if (Directory.Exists(patchOutputDirectory))
 					{
-						Log.Warning("Patcher", $"Deleting existing content in patch output directory '{patchOutputDirectory}'.");
+						await Log.Warning("Patcher", $"Deleting existing content in patch output directory '{patchOutputDirectory}'.");
 						Directory.Delete(patchOutputDirectory, true);
 					}
 					Directory.CreateDirectory(patchOutputDirectory);
 				}
 				catch (Exception ex)
 				{
-					Log.Error("Patcher", $"Error preparing patch output directory '{patchOutputDirectory}': {ex.Message}");
+					await Log.Error("Patcher", $"Error preparing patch output directory '{patchOutputDirectory}': {ex.Message}");
 					EditorUtility.DisplayDialog("Error", $"Could not prepare output directory: {ex.Message}", "OK");
 					return;
 				}
 
-				Log.Info("Patcher", "The following file extensions will be ignored during patch generation: " + string.Join(", ", ignoredExtensions));
-				Log.Info("Patcher", "The following directories will be ignored during patch generation: " + string.Join(", ", ignoredDirectories));
+				await Log.Info("Patcher", "The following file extensions will be ignored during patch generation: " + string.Join(", ", ignoredExtensions));
+				await Log.Info("Patcher", "The following directories will be ignored during patch generation: " + string.Join(", ", ignoredDirectories));
 
 				// --- Step 4: Generate Patches in Parallel using cached data ---
-				Log.Info("Patcher", "Starting multi-threaded patch generation process.");
-				Log.Info("Patcher", $"Generating patches from {oldClientDirsToProcess.Count} old client versions to latest ({latestVersionConfig.FullVersion}):");
+				await Log.Info("Patcher", "Starting multi-threaded patch generation process.");
+				await Log.Info("Patcher", $"Generating patches from {oldClientDirsToProcess.Count} old client versions to latest ({latestVersionConfig.FullVersion}):");
 
 				PatchGenerator patchGenerator = new PatchGenerator();
 
@@ -452,12 +544,12 @@ namespace FishMMO.Patcher
 					});
 				});
 
-				Log.Info("Patcher", "All patch generation operations complete.");
+				await Log.Info("Patcher", "All patch generation operations complete.");
 				EditorUtility.DisplayDialog("Success", "Patch generation process finished. Check console for detailed logs.", "OK");
 			}
 			catch (Exception ex)
 			{
-				Log.Error("Patcher", $"An unhandled error occurred during patch generation: {ex.Message}", ex);
+				await Log.Error("Patcher", $"An unhandled error occurred during patch generation: {ex.Message}", ex);
 				EditorUtility.DisplayDialog("Error", $"An unexpected error occurred: {ex.Message}", "OK");
 			}
 			finally
@@ -469,11 +561,87 @@ namespace FishMMO.Patcher
 		}
 
 		/// <summary>
-		/// Preloads version configurations for the latest client and all discovered old clients.
-		/// This method reads the version from the 'version.txt' file within each client directory.
+		/// Generates a complete manifest (JSON file) of all files and their checksums in the latest client directory.
 		/// </summary>
-		/// <param name="latestClientPath">The path to the latest client build directory.</param>
-		/// <param name="oldClientPaths">A list of paths to old client build directories.</param>
+		private async void GenerateCompleteManifestAsync()
+		{
+			if (isProcessing) return;
+			isProcessing = true;
+			manifestGenerationStatus = "Starting...";
+			Repaint();
+
+			try
+			{
+				if (!Directory.Exists(latestClientDirectory))
+				{
+					await Log.Error("Patcher", $"Error: Latest client directory '{latestClientDirectory}' does not exist. Cannot generate manifest.");
+					EditorUtility.DisplayDialog("Error", "Latest client directory does not exist.", "OK");
+					manifestGenerationStatus = "Failed: Directory not found.";
+					return;
+				}
+				if (string.IsNullOrEmpty(patchOutputDirectory) || !Directory.Exists(patchOutputDirectory))
+				{
+					await Log.Error("Patcher", $"Error: Patch output directory '{patchOutputDirectory}' is invalid or does not exist. Cannot save manifest.");
+					EditorUtility.DisplayDialog("Error", "Patch output directory is invalid or does not exist.", "OK");
+					manifestGenerationStatus = "Failed: Output directory invalid.";
+					return;
+				}
+
+				manifestGenerationStatus = "Scanning files and computing hashes...";
+				Repaint();
+
+				Dictionary<string, (string relativePath, string hash)> filesWithHashes = new Dictionary<string, (string, string)>();
+				await Task.Run(() =>
+				{
+					filesWithHashes = GetAllFilesWithHashes(latestClientDirectory, ignoredExtensions, ignoredDirectories);
+				});
+
+				List<CompleteManifestEntry> manifestEntries = filesWithHashes.Select(kvp => new CompleteManifestEntry
+				{
+					RelativePath = kvp.Key,
+					Hash = kvp.Value.hash
+				}).OrderBy(e => e.RelativePath).ToList(); // Order for consistent manifest generation
+
+				string manifestFileName = $"client_file_manifest.json";
+				string manifestFilePath = Path.Combine(patchOutputDirectory, manifestFileName);
+
+				manifestGenerationStatus = "Serializing manifest to JSON...";
+				Repaint();
+
+				var options = new JsonSerializerOptions { WriteIndented = true };
+				string manifestJson = JsonSerializer.Serialize(manifestEntries, options);
+
+				manifestGenerationStatus = "Saving manifest file...";
+				Repaint();
+
+				await Task.Run(() =>
+				{
+					File.WriteAllText(manifestFilePath, manifestJson);
+				});
+
+				await Log.Info("Patcher", $"Successfully generated complete manifest: {manifestFilePath}");
+				EditorUtility.DisplayDialog("Success", $"Complete manifest generated at:\n{manifestFilePath}", "OK");
+				manifestGenerationStatus = $"Completed: {manifestFileName}";
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("Patcher", $"Error generating complete manifest: {ex.Message}", ex);
+				EditorUtility.DisplayDialog("Error", $"Failed to generate complete manifest: {ex.Message}", "OK");
+				manifestGenerationStatus = $"Failed: {ex.Message}";
+			}
+			finally
+			{
+				isProcessing = false;
+				Repaint();
+			}
+		}
+
+		/// <summary>
+		/// Preloads version configurations for the latest client and all discovered old clients.
+		/// Reads the version from the 'version.txt' file within each client directory.
+		/// </summary>
+		/// <param name="latestClientPath">Path to the latest client build directory.</param>
+		/// <param name="oldClientPaths">List of paths to old client build directories.</param>
 		private async Task PreloadAllClientVersionsAsync(string latestClientPath, List<string> oldClientPaths)
 		{
 			latestVersionConfig = null;
@@ -487,11 +655,11 @@ namespace FishMMO.Patcher
 			latestVersionConfig = await GetVersionConfigFromFile(latestClientPath);
 			if (latestVersionConfig == null)
 			{
-				Log.Error("Patcher", $"Failed to pre-cache latest client version from '{latestClientPath}'.");
+				await Log.Error("Patcher", $"Failed to pre-cache latest client version from '{latestClientPath}'.");
 			}
 			else
 			{
-				Log.Info("Patcher", $"Pre-cached latest client version from '{Path.GetFileName(latestClientPath)}': {latestVersionConfig.FullVersion}");
+				await Log.Info("Patcher", $"Pre-cached latest client version from '{Path.GetFileName(latestClientPath)}': {latestVersionConfig.FullVersion}");
 			}
 			currentOperationIndex++;
 
@@ -504,12 +672,12 @@ namespace FishMMO.Patcher
 				VersionConfig oldConfig = await GetVersionConfigFromFile(oldPath);
 				if (oldConfig == null)
 				{
-					Log.Warning("Patcher", $"Failed to pre-cache old client version from '{oldPath}'. This client will be skipped.");
+					await Log.Warning("Patcher", $"Failed to pre-cache old client version from '{oldPath}'. This client will be skipped.");
 				}
 				else
 				{
 					oldClientVersionCache[oldPath] = oldConfig;
-					Log.Info("Patcher", $"Pre-cached old client version from '{oldClientName}': {oldConfig.FullVersion}");
+					await Log.Info("Patcher", $"Pre-cached old client version from '{oldClientName}': {oldConfig.FullVersion}");
 				}
 				currentOperationIndex++;
 			}
@@ -521,9 +689,9 @@ namespace FishMMO.Patcher
 
 		/// <summary>
 		/// Reads the version string from 'version.txt' within the specified directory and parses it into a VersionConfig.
-		/// This method handles file I/O and parsing errors.
+		/// Handles file I/O and parsing errors.
 		/// </summary>
-		/// <param name="directoryPath">The path to the client build directory containing 'version.txt'.</param>
+		/// <param name="directoryPath">Path to the client build directory containing 'version.txt'.</param>
 		/// <returns>A VersionConfig instance if successful, otherwise null.</returns>
 		private async Task<VersionConfig> GetVersionConfigFromFile(string directoryPath)
 		{
@@ -554,9 +722,7 @@ namespace FishMMO.Patcher
 
 			if (!string.IsNullOrEmpty(versionString))
 			{
-				// Parsing should also be done on a background thread if complex, but for simple parsing, it's fine.
-				// However, if VersionConfig.Parse uses Unity API calls (like Debug.LogError), it must be on the main thread.
-				// Since VersionConfig.Parse now uses Debug.LogError, we will ensure this part runs on the main thread.
+				// Parsing VersionConfig.Parse uses Debug.LogError, so it must run on the main thread.
 				TaskCompletionSource<VersionConfig> tcs = new TaskCompletionSource<VersionConfig>();
 				EditorApplication.delayCall += () =>
 				{
@@ -576,22 +742,23 @@ namespace FishMMO.Patcher
 			return config;
 		}
 
-
-		// Delegate definition for the progress callback
+		/// <summary>
+		/// Delegate definition for reporting patch progress.
+		/// </summary>
 		public delegate void ProgressCallback(float progress, string message);
 
 		/// <summary>
 		/// Generates a patch ZIP file comparing an old client directory with the latest client directory.
-		/// This method now takes pre-cached version strings.
+		/// Uses pre-cached version strings and reports progress via callback.
 		/// </summary>
-		/// <param name="patchGenerator">The PatchGenerator instance for binary diffing.</param>
-		/// <param name="latestVersionString">The full version string of the latest client.</param>
-		/// <param name="oldDirectory">The full path to the old client build to generate a patch from.</param>
-		/// <param name="oldVersionString">The full version string of the old client.</param>
-		/// <param name="patchOutputDirectory">The directory where the generated patch ZIP will be saved.</param>
-		/// <param name="ignoredExtensions">A set of file extensions to ignore during hashing and inclusion.</param>
-		/// <param name="ignoredDirectories">A set of directory names to ignore.</param>
-		/// <param name="progressCallback">An optional callback to report progress and status messages.</param>
+		/// <param name="patchGenerator">PatchGenerator instance for binary diffing.</param>
+		/// <param name="latestVersionString">Full version string of the latest client.</param>
+		/// <param name="oldDirectory">Full path to the old client build.</param>
+		/// <param name="oldVersionString">Full version string of the old client.</param>
+		/// <param name="patchOutputDirectory">Directory for the generated patch ZIP.</param>
+		/// <param name="ignoredExtensions">Set of file extensions to ignore.</param>
+		/// <param name="ignoredDirectories">Set of directory names to ignore.</param>
+		/// <param name="progressCallback">Optional callback to report progress and status messages.</param>
 		public void CreatePatchInternal(PatchGenerator patchGenerator, string latestVersionString, string oldDirectory, string oldVersionString, string patchOutputDirectory, HashSet<string> ignoredExtensions, HashSet<string> ignoredDirectories, ProgressCallback progressCallback = null)
 		{
 			string oldDirName = Path.GetFileName(oldDirectory);
@@ -651,13 +818,17 @@ namespace FishMMO.Patcher
 								File.WriteAllBytes(tempPatchFile, patchDataBytes);
 								tempPatchFilesToCleanUp.Add(tempPatchFile);
 
+								// Get the final file size from the new file
+								long finalFileSize = new FileInfo(newFullFilePath).Length;
+
 								modifiedFilesData.Add(new ModifiedFileEntry
 								{
 									RelativePath = comparedRelativePath,
 									OldHash = oldFilesWithHashes[comparedRelativePath].hash,
 									NewHash = latestFilesWithHashes[comparedRelativePath].hash,
 									PatchDataEntryName = $"patches/{comparedRelativePath.Replace('\\', '/')}.bin",
-									TempPatchFilePath = tempPatchFile
+									TempPatchFilePath = tempPatchFile,
+									FinalFileSize = finalFileSize // Populate the new property
 								});
 								Log.Info("Patcher", $"\tGenerated patch for modified: {comparedRelativePath} (written to temp file)");
 							}
@@ -786,11 +957,18 @@ namespace FishMMO.Patcher
 		/// <summary>
 		/// Helper method to convert a dictionary's keys to a HashSet for efficient lookups.
 		/// </summary>
+		/// <param name="dictionary">Dictionary to convert.</param>
+		/// <returns>HashSet of dictionary keys.</returns>
 		private static HashSet<string> DictionaryKeysToHashSet(Dictionary<string, (string relativePath, string hash)> dictionary)
 		{
 			return new HashSet<string>(dictionary.Keys);
 		}
 
+		/// <summary>
+		/// Streams file chunks into memory and returns the byte array.
+		/// </summary>
+		/// <param name="sourceFilePath">Path to the source file.</param>
+		/// <returns>Byte array of the file contents.</returns>
 		public static byte[] StreamFileChunksIntoMemory(string sourceFilePath)
 		{
 			try
@@ -812,109 +990,132 @@ namespace FishMMO.Patcher
 		}
 
 		/// <summary>
-		/// Scans a directory and its subdirectories to get all file paths and their SHA256 hashes,
-		/// ignoring specified extensions and directories.
+		/// Recursively scans a directory and its subdirectories to get all file paths and their XxHash3 hashes.
+		/// Files and directories specified in the 'ignoredExtensions' and 'ignoredDirectories' sets are skipped.
+		/// Handles common file system access errors gracefully.
 		/// </summary>
-		/// <param name="rootDirectory">The root directory to start scanning from.</param>
-		/// <param name="ignoredExtensions">A set of file extensions to ignore.</param>
-		/// <param name="ignoredDirectories">A set of directory names to ignore.</param>
-		/// <returns>A dictionary where the key is the relative file path and the value is a tuple of (relativePath, hash).</returns>
+		/// <param name="rootDirectory">Root directory to start scanning from.</param>
+		/// <param name="ignoredExtensions">Set of file extensions to ignore.</param>
+		/// <param name="ignoredDirectories">Set of directory names to ignore.</param>
+		/// <returns>Dictionary where key is relative file path and value is tuple of (relativePath, hash).</returns>
 		public static Dictionary<string, (string relativePath, string hash)> GetAllFilesWithHashes(string rootDirectory, HashSet<string> ignoredExtensions, HashSet<string> ignoredDirectories)
 		{
 			Dictionary<string, (string, string)> filesWithHashes = new Dictionary<string, (string, string)>();
 			Stack<string> directories = new Stack<string>();
 
-			directories.Push(rootDirectory);
-
-			using (var sha256 = SHA256.Create())
+			// Normalize rootDirectory to ensure it ends with a directory separator.
+			// This makes substring calculations for relative paths consistent.
+			string normalizedRootDirectory = Path.GetFullPath(rootDirectory);
+			if (!normalizedRootDirectory.EndsWith(Path.DirectorySeparatorChar.ToString()) &&
+				!normalizedRootDirectory.EndsWith(Path.AltDirectorySeparatorChar.ToString()))
 			{
-				while (directories.Count > 0)
+				normalizedRootDirectory += Path.DirectorySeparatorChar;
+			}
+
+			directories.Push(normalizedRootDirectory); // Start the traversal from the normalized root directory.
+
+			while (directories.Count > 0)
+			{
+				string currentDir = directories.Pop();
+
+				// Get the actual directory name, trimming any trailing slashes for accurate comparison with ignoredDirectories.
+				string currentDirName = Path.GetFileName(currentDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+
+				// Skip the current directory if its name is in the ignored list,
+				// but explicitly ensure the initial rootDirectory itself is always processed.
+				if (ignoredDirectories.Contains(currentDirName) && !currentDir.Equals(normalizedRootDirectory, StringComparison.OrdinalIgnoreCase))
 				{
-					string currentDir = directories.Pop();
+					Log.Info("Patcher", $"Skipping ignored directory and its contents: {currentDirName} (Full Path: {currentDir})");
+					continue; // Move to the next directory in the stack.
+				}
 
-					// Check if the current directory itself should be ignored
-					string currentDirName = Path.GetFileName(currentDir);
-					if (ignoredDirectories.Contains(currentDirName) && !currentDir.Equals(rootDirectory, StringComparison.OrdinalIgnoreCase))
+				try
+				{
+					string[] currentFiles = Directory.GetFiles(currentDir);
+					foreach (string file in currentFiles)
 					{
-						Log.Info("Patcher", $"Skipping ignored directory and its contents: {currentDirName}");
-						continue; // Skip this directory and its subdirectories
-					}
-
-					try
-					{
-						string[] currentFiles = Directory.GetFiles(currentDir);
-						foreach (string file in currentFiles)
+						string extension = Path.GetExtension(file);
+						if (ignoredExtensions.Contains(extension))
 						{
-							string extension = Path.GetExtension(file);
-							if (ignoredExtensions.Contains(extension))
-							{
-								Log.Info("Patcher", $"\tSkipping ignored file: {Path.GetFileName(file)} ({extension})");
-								continue;
-							}
-
-							string relativePath = file.Substring(rootDirectory.Length);
-							if (Path.IsPathRooted(relativePath))
-							{
-								relativePath = relativePath.TrimStart(Path.DirectorySeparatorChar);
-								relativePath = relativePath.TrimStart(Path.AltDirectorySeparatorChar);
-							}
-							relativePath = relativePath.Replace('\\', '/');
-
-							string fileHash = ComputeFileHash(file, sha256);
-							filesWithHashes.Add(relativePath, (relativePath, fileHash));
+							Log.Info("Patcher", $"\tSkipping file by extension: {Path.GetFileName(file)} ({extension}) in {currentDir}");
+							continue;
 						}
-					}
-					catch (UnauthorizedAccessException)
-					{
-						Log.Warning("Patcher", $"Access to directory '{currentDir}' is denied. Skipping.");
-						continue;
-					}
-					catch (DirectoryNotFoundException)
-					{
-						Log.Warning("Patcher", $"Directory '{currentDir}' not found. Skipping.");
-						continue;
-					}
-					catch (IOException ex)
-					{
-						Log.Warning("Patcher", $"IO error accessing files in '{currentDir}': {ex.Message}. Skipping.");
-						continue;
-					}
 
-					try
+						// Calculate relative path based on the normalized root directory.
+						string relativePath = file.Substring(normalizedRootDirectory.Length);
+						relativePath = relativePath.Replace('\\', '/'); // Standardize path separators for manifest.
+
+						//Log.Debug("Patcher", $"\tProcessing file: '{file}' -> Relative Path: '{relativePath}'");
+
+						string fileHash = ComputeFileHash(file); // Call the updated hash method
+						filesWithHashes.Add(relativePath, (relativePath, fileHash));
+					}
+				}
+				catch (UnauthorizedAccessException)
+				{
+					Log.Warning("Patcher", $"Access to directory '{currentDir}' is denied. Skipping files in this directory.");
+					// Continue to process subdirectories if possible, don't 'continue' the while loop here.
+				}
+				catch (DirectoryNotFoundException)
+				{
+					Log.Warning("Patcher", $"Directory '{currentDir}' not found. Skipping.");
+					continue; // This directory is gone, move to the next.
+				}
+				catch (IOException ex)
+				{
+					Log.Warning("Patcher", $"IO error accessing files in '{currentDir}': {ex.Message}. Skipping.");
+					continue; // Critical IO error for this directory, move to the next.
+				}
+
+				try
+				{
+					string[] subdirectories = Directory.GetDirectories(currentDir);
+					foreach (string subdir in subdirectories)
 					{
-						string[] subdirectories = Directory.GetDirectories(currentDir);
-						foreach (string subdir in subdirectories)
+						// Check if subdirectory name should be ignored before pushing to stack.
+						string subDirName = Path.GetFileName(subdir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+						if (ignoredDirectories.Contains(subDirName))
 						{
-							// Check if subdirectory name should be ignored before pushing to stack
-							string subDirName = Path.GetFileName(subdir);
-							if (ignoredDirectories.Contains(subDirName))
-							{
-								Log.Info("Patcher", $"Skipping ignored subdirectory: {subDirName}");
-								continue; // Skip this subdirectory
-							}
-							directories.Push(subdir);
+							Log.Info("Patcher", $"Skipping ignored subdirectory: {subDirName} (Full Path: {subdir})");
+							continue; // Skip this subdirectory and its contents.
 						}
+						directories.Push(subdir); // Add subdirectory to the stack for later processing.
 					}
-					catch (UnauthorizedAccessException)
-					{
-						Log.Warning("Patcher", $"Access to subdirectory '{currentDir}' is denied. Skipping.");
-						continue;
-					}
-					catch (DirectoryNotFoundException)
-					{
-						Log.Warning("Patcher", $"Subdirectory '{currentDir}' not found. Skipping.");
-						continue;
-					}
+				}
+				catch (UnauthorizedAccessException)
+				{
+					Log.Warning("Patcher", $"Access to subdirectory '{currentDir}' is denied. Skipping.");
+					continue;
+				}
+				catch (DirectoryNotFoundException)
+				{
+					Log.Warning("Patcher", $"Subdirectory '{currentDir}' not found. Skipping.");
+					continue;
 				}
 			}
 			return filesWithHashes;
 		}
 
-		private static string ComputeFileHash(string filePath, SHA256 sha256)
+		/// <summary>
+		/// Computes the XxHash128 hash of a file.
+		/// </summary>
+		/// <param name="filePath">Path to the file.</param>
+		/// <returns>XxHash128 hash as a lowercase hexadecimal string (32 characters for 128-bit hash).</returns>
+		private static string ComputeFileHash(string filePath)
 		{
 			using (var stream = File.OpenRead(filePath))
 			{
-				byte[] hashBytes = sha256.ComputeHash(stream);
+				XxHash128 xxHash128 = new XxHash128();
+
+				byte[] buffer = new byte[65536]; // 64KB buffer
+				int bytesRead;
+				while ((bytesRead = stream.Read(buffer, 0, buffer.Length)) > 0)
+				{
+					ReadOnlySpan<byte> dataSpan = new ReadOnlySpan<byte>(buffer, 0, bytesRead);
+					xxHash128.Append(dataSpan);
+				}
+
+				byte[] hashBytes = xxHash128.GetCurrentHash();
 				return BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
 			}
 		}

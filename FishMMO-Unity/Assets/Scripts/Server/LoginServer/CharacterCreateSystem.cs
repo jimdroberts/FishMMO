@@ -7,8 +7,6 @@ using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
 using FishMMO.Logging;
 using System.Collections.Generic;
-using System.Linq;
-using UnityEngine;
 
 namespace FishMMO.Server
 {
@@ -17,12 +15,30 @@ namespace FishMMO.Server
 	/// </summary>
 	public class CharacterCreateSystem : ServerBehaviour
 	{
+		/// <summary>
+		/// Cached world scene details used for validating spawn positions and initial character creation.
+		/// </summary>
 		public WorldSceneDetailsCache WorldSceneDetailsCache;
+		/// <summary>
+		/// Maximum number of characters allowed per account.
+		/// </summary>
 		public int MaxCharacters = 8;
+		/// <summary>
+		/// List of ability templates to grant to new characters on creation.
+		/// </summary>
 		public List<AbilityTemplate> StartingAbilities = new List<AbilityTemplate>();
+		/// <summary>
+		/// List of item templates to add to new characters' inventory on creation.
+		/// </summary>
 		public List<BaseItemTemplate> StartingInventoryItems = new List<BaseItemTemplate>();
+		/// <summary>
+		/// List of equipment templates to equip on new characters at creation.
+		/// </summary>
 		public List<EquippableItemTemplate> StartingEquipment = new List<EquippableItemTemplate>();
 
+		/// <summary>
+		/// Initializes the character creation system, registering broadcast handlers for character creation requests.
+		/// </summary>
 		public override void InitializeOnce()
 		{
 			if (Server != null)
@@ -35,6 +51,9 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Cleans up the character creation system, unregistering broadcast handlers for character creation requests.
+		/// </summary>
 		public override void Destroying()
 		{
 			if (Server != null)
@@ -43,6 +62,12 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Handles broadcast to create a new character, validates input, creates character and initial data, and notifies the client.
+		/// </summary>
+		/// <param name="conn">Network connection of the client.</param>
+		/// <param name="msg">CharacterCreateBroadcast message.</param>
+		/// <param name="channel">Network channel used for the broadcast.</param>
 		private void OnServerCharacterCreateBroadcastReceived(NetworkConnection conn, CharacterCreateBroadcast msg, Channel channel)
 		{
 			if (conn.IsActive)
@@ -290,6 +315,12 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Adds starting abilities to the character in the database.
+		/// </summary>
+		/// <param name="dbContext">Database context for updates.</param>
+		/// <param name="characterID">ID of the character to add abilities to.</param>
+		/// <param name="startingAbilities">List of ability templates to add.</param>
 		private void AddStartingAbilities(NpgsqlDbContext dbContext, long characterID, List<AbilityTemplate> startingAbilities)
 		{
 			if (startingAbilities != null)
@@ -300,7 +331,7 @@ namespace FishMMO.Server
 					{
 						CharacterID = characterID,
 						TemplateID = startingAbility.ID,
-						AbilityEvents = startingAbility.Events.Select(a => a.ID).ToList(),
+						AbilityEvents = startingAbility.GetAllAbilityEventIDs(),
 					};
 					dbContext.CharacterAbilities.Add(dbAbility);
 				}
@@ -308,6 +339,12 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Adds starting items to the character's inventory in the database.
+		/// </summary>
+		/// <param name="dbContext">Database context for updates.</param>
+		/// <param name="characterID">ID of the character to add items to.</param>
+		/// <param name="startingItems">List of item templates to add.</param>
 		private void AddStartingItems(NpgsqlDbContext dbContext, long characterID, List<BaseItemTemplate> startingItems)
 		{
 			if (startingItems != null)
@@ -329,6 +366,13 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Adds starting equipment to the character in the database and updates initial attributes.
+		/// </summary>
+		/// <param name="dbContext">Database context for updates.</param>
+		/// <param name="characterID">ID of the character to add equipment to.</param>
+		/// <param name="startingEquipment">List of equipment templates to add.</param>
+		/// <param name="initialAttributes">Dictionary of initial character attributes to update.</param>
 		private void AddStartingEquipment(NpgsqlDbContext dbContext, long characterID, List<EquippableItemTemplate> startingEquipment, Dictionary<int, CharacterAttributeEntity> initialAttributes)
 		{
 			if (startingEquipment != null)

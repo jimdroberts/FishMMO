@@ -1,8 +1,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.EventSystems;
-using System.Collections.Generic;
-using FishMMO.Shared; // Assuming FishMMO.Shared contains Log and Configuration
+using FishMMO.Shared;
 using FishMMO.Logging;
 
 namespace FishMMO.Client
@@ -14,7 +13,9 @@ namespace FishMMO.Client
 	/// </summary>
 	public class PlayerInputHandler : MonoBehaviour
 	{
-		// Reference to the generated Input Actions asset.
+		/// <summary>
+		/// Reference to the generated Input Actions asset.
+		/// </summary>
 		private PlayerControls playerControls;
 
 		/// <summary>

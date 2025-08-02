@@ -10,35 +10,92 @@ namespace FishMMO.Client
 {
 	public abstract class UIControl : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler, IPointerDownHandler, IPointerUpHandler, IDragHandler
 	{
+		/// <summary>
+		/// Default color for UI controls.
+		/// </summary>
 		public static readonly Color DEFAULT_COLOR = Hex.ColorNormalize(0.0f, 160.0f, 255.0f, 255.0f);
+		/// <summary>
+		/// Default color for selected UI controls.
+		/// </summary>
 		public static readonly Color DEFAULT_SELECTED_COLOR = Hex.ColorNormalize(0.0f, 255.0f, 255.0f, 255.0f);
 
+		/// <summary>
+		/// Reference to the main canvas containing this UI control.
+		/// </summary>
 		public Canvas MainCanvas;
+		/// <summary>
+		/// Reference to the canvas scaler for screen scaling.
+		/// </summary>
 		public CanvasScaler CanvasScaler;
+		/// <summary>
+		/// Main panel RectTransform for this UI control.
+		/// </summary>
 		public RectTransform MainPanel = null;
+		/// <summary>
+		/// Helper field to check input field focus status in UIManager.
+		/// </summary>
 		[Tooltip("Helper field to check input field focus status in UIManager.")]
 		public TMP_InputField InputField = null;
+		/// <summary>
+		/// If true, UI starts open when created.
+		/// </summary>
 		public bool StartOpen = true;
+		/// <summary>
+		/// If true, UI cannot be closed.
+		/// </summary>
 		public bool IsAlwaysOpen = false;
+		/// <summary>
+		/// True if the UI currently has focus.
+		/// </summary>
 		public bool HasFocus = false;
+		/// <summary>
+		/// If true, puts the UI on top when selected.
+		/// </summary>
 		[Tooltip("Puts the UI on top.")]
 		public bool FocusOnSelect = false;
+		/// <summary>
+		/// If true, closes the UI when quitting to menu.
+		/// </summary>
 		public bool CloseOnQuitToMenu = true;
+		/// <summary>
+		/// If true, closes the UI when Escape is pressed.
+		/// </summary>
 		[Tooltip("Closes the UI when Esc is pressed if true.")]
 		public bool CloseOnEscape = false;
 
+		/// <summary>
+		/// If true, allows the UI to be dragged.
+		/// </summary>
 		[Header("Drag")]
 		public bool CanDrag = false;
+		/// <summary>
+		/// If true, clamps the UI to the screen bounds when dragging.
+		/// </summary>
 		public bool ClampToScreen = true;
+		/// <summary>
+		/// Starting position of the UI control.
+		/// </summary>
 		private Vector2 startPosition;
+		/// <summary>
+		/// Offset used for dragging calculations.
+		/// </summary>
 		private Vector2 dragOffset = Vector2.zero;
+		/// <summary>
+		/// True if the UI is currently being dragged.
+		/// </summary>
 		private bool isDragging;
 
 		/// <summary>
 		/// Container that stores a reference to all InputFields on the UIControl. This is used internally to tab between Input Fields.
 		/// </summary>
 		private TMP_InputField[] inputFields;
+		/// <summary>
+		/// Index of the currently focused input field.
+		/// </summary>
 		private int currentInputFieldIndex = 0;
+		/// <summary>
+		/// Returns true if any input field on this control is focused.
+		/// </summary>
 		public bool IsInputFieldFocused
 		{
 			get
@@ -57,11 +114,26 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Event called when the UI loses focus.
+		/// </summary>
 		public Action OnLoseFocus;
 
+		/// <summary>
+		/// Reference to the injected Client instance.
+		/// </summary>
 		public Client Client { get; private set; }
+		/// <summary>
+		/// Cached transform of this UI control.
+		/// </summary>
 		public Transform Transform { get; private set; }
+		/// <summary>
+		/// Name of the UI control (maps to GameObject name).
+		/// </summary>
 		public string Name { get { return gameObject.name; } set { gameObject.name = value; } }
+		/// <summary>
+		/// True if the UI is currently visible.
+		/// </summary>
 		public bool Visible
 		{
 			get
@@ -212,6 +284,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Called every frame. Handles tab navigation between input fields.
+		/// </summary>
 		void Update()
 		{
 			if (inputFields != null && inputFields.Length > 0)
@@ -223,6 +298,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Cycles focus to the next input field in the array, allowing tab navigation between fields.
+		/// </summary>
 		void CycleInputFields()
 		{
 			// Move to the next input field in the array
@@ -232,6 +310,10 @@ namespace FishMMO.Client
 			SelectInputField(currentInputFieldIndex);
 		}
 
+		/// <summary>
+		/// Selects the input field at the specified index and sets it as the active field in the EventSystem.
+		/// </summary>
+		/// <param name="index">Index of the input field to select.</param>
 		void SelectInputField(int index)
 		{
 			if (index < 0 || index >= inputFields.Length || EventSystem.current == null)
@@ -258,6 +340,12 @@ namespace FishMMO.Client
 			nextPump -= Time.deltaTime;
 		}*/
 
+		/// <summary>
+		/// Clamps the UI panel's position to the screen bounds, preventing it from being dragged off-screen.
+		/// </summary>
+		/// <param name="x">Target X position.</param>
+		/// <param name="y">Target Y position.</param>
+		/// <param name="ignoreDimensions">If true, clamps to screen edges without considering panel size.</param>
 		public void ClampUIToScreen(float x, float y, bool ignoreDimensions = false)
 		{
 			if (!ClampToScreen) return;
@@ -274,6 +362,7 @@ namespace FishMMO.Client
 					float halfWidth = MainPanel.rect.width * 0.5f;
 					float halfHeight = MainPanel.rect.height * 0.5f;
 
+					// If using a CanvasScaler with screen size scaling, adjust for scale
 					if (CanvasScaler != null &&
 						CanvasScaler.uiScaleMode == CanvasScaler.ScaleMode.ScaleWithScreenSize)
 					{
@@ -288,11 +377,17 @@ namespace FishMMO.Client
 			Transform.position = new Vector2(x, y);
 		}
 
+		/// <summary>
+		/// Called when quitting to the login menu. Stops all coroutines for this UI control.
+		/// </summary>
 		public virtual void OnQuitToLogin()
 		{
 			StopAllCoroutines();
 		}
 
+		/// <summary>
+		/// Handles client quit-to-login event, toggles visibility and calls OnQuitToLogin.
+		/// </summary>
 		private void Client_OnQuitToLogin()
 		{
 			Visible = !CloseOnQuitToMenu;
@@ -300,8 +395,9 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Dependency injection for the Client.
+		/// Injects the Client instance for network/UI interaction. Handles cleanup and event registration.
 		/// </summary>
+		/// <param name="client">Client instance to inject.</param>
 		public void SetClient(Client client)
 		{
 			// Unset previous client.
@@ -321,10 +417,19 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Called when the Client is set via SetClient. Override to handle custom logic on client assignment.
+		/// </summary>
 		public virtual void OnClientSet() { }
 
+		/// <summary>
+		/// Called when the Client is unset or removed. Override to handle custom cleanup logic.
+		/// </summary>
 		public virtual void OnClientUnset() { }
 
+		/// <summary>
+		/// Called when the UIControl is destroyed. Cleans up input field listeners, client references, and unregisters from UIManager.
+		/// </summary>
 		private void OnDestroy()
 		{
 			if (inputFields != null && inputFields.Length > 0)
@@ -357,21 +462,36 @@ namespace FishMMO.Client
 		/// </summary>
 		public virtual void OnDestroying() { }
 
+		/// <summary>
+		/// Called by UIManager when this control is added to the circular buffer. Stores the buffer node reference.
+		/// </summary>
+		/// <param name="node">The circular buffer node for this control.</param>
 		public void UIManager_OnAdd(CircularBuffer<UIControl>.Node node)
 		{
 			CurrentNode = node;
 		}
 
+		/// <summary>
+		/// Called by UIManager when this control is removed from the circular buffer. Clears the buffer node reference.
+		/// </summary>
 		public void UIManager_OnRemove()
 		{
 			CurrentNode = null;
 		}
 
+		/// <summary>
+		/// Called when the pointer enters the UI control. Sets HasFocus to true.
+		/// </summary>
+		/// <param name="eventData">Pointer event data.</param>
 		public void OnPointerEnter(PointerEventData eventData)
 		{
 			HasFocus = true;
 		}
 
+		/// <summary>
+		/// Called when the pointer exits the UI control. Sets HasFocus to false and invokes OnLoseFocus event.
+		/// </summary>
+		/// <param name="eventData">Pointer event data.</param>
 		public void OnPointerExit(PointerEventData eventData)
 		{
 			HasFocus = false;
@@ -379,11 +499,17 @@ namespace FishMMO.Client
 			OnLoseFocus?.Invoke();
 		}
 
+		/// <summary>
+		/// Toggles the visibility of the UI control.
+		/// </summary>
 		public virtual void ToggleVisibility()
 		{
 			Visible = !Visible;
 		}
 
+		/// <summary>
+		/// Shows the UI control if it is not already visible.
+		/// </summary>
 		public virtual void Show()
 		{
 			if (Visible)
@@ -394,11 +520,18 @@ namespace FishMMO.Client
 			Visible = true;
 		}
 
+		/// <summary>
+		/// Hides the UI control, unless IsAlwaysOpen is true.
+		/// </summary>
 		public virtual void Hide()
 		{
 			Hide(IsAlwaysOpen);
 		}
 
+		/// <summary>
+		/// Hides the UI control, unless overrideIsAlwaysOpen is true.
+		/// </summary>
+		/// <param name="overrideIsAlwaysOpen">If true, prevents hiding the control.</param>
 		public virtual void Hide(bool overrideIsAlwaysOpen)
 		{
 			if (overrideIsAlwaysOpen)
@@ -409,11 +542,18 @@ namespace FishMMO.Client
 			Visible = false;
 		}
 
+		/// <summary>
+		/// Resets the UI control's position to its starting position.
+		/// </summary>
 		public virtual void OnResetPosition()
 		{
 			Transform.position = startPosition;
 		}
 
+		/// <summary>
+		/// Called when the pointer is pressed down on the UI control. Handles drag and focus logic.
+		/// </summary>
+		/// <param name="data">Pointer event data.</param>
 		public void OnPointerDown(PointerEventData data)
 		{
 			if (data == null)
@@ -432,7 +572,7 @@ namespace FishMMO.Client
 				if (CanDrag)
 				{
 					if (CanvasScaler != null &&
-					CanvasScaler.uiScaleMode == CanvasScaler.ScaleMode.ScaleWithScreenSize)
+						CanvasScaler.uiScaleMode == CanvasScaler.ScaleMode.ScaleWithScreenSize)
 					{
 						dragOffset.x *= CanvasScaler.transform.localScale.x;
 						dragOffset.y *= CanvasScaler.transform.localScale.y;
@@ -447,6 +587,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Brings the UI control to the front of its parent and re-registers for Escape-close if needed.
+		/// </summary>
 		private void OnFocus()
 		{
 			Transform parent = Transform.parent;
@@ -462,6 +605,10 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Called when the pointer is released on the UI control. Ends drag operation.
+		/// </summary>
+		/// <param name="data">Pointer event data.</param>
 		public void OnPointerUp(PointerEventData data)
 		{
 			if (!CanDrag) return;
@@ -470,6 +617,10 @@ namespace FishMMO.Client
 			dragOffset = Vector2.zero;
 		}
 
+		/// <summary>
+		/// Called when the UI control is dragged. Updates position if dragging is enabled.
+		/// </summary>
+		/// <param name="data">Pointer event data.</param>
 		public void OnDrag(PointerEventData data)
 		{
 			if (!CanDrag) return;
@@ -483,6 +634,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Resets the UI control's position and drag state to the initial values.
+		/// </summary>
 		public void ResetPosition()
 		{
 			Transform.position = startPosition;

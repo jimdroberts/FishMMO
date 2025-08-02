@@ -7,20 +7,53 @@ using System.Linq;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Character guild controller.
+	/// Character guild controller. Manages guild membership, events, and synchronization for a character.
 	/// </summary>
 	public class GuildController : CharacterBehaviour, IGuildController
 	{
+		/// <summary>
+		/// Event triggered when a guild invite is received. Parameter: inviter's character ID.
+		/// </summary>
 		public event Action<long> OnReceiveGuildInvite;
+
+		/// <summary>
+		/// Event triggered when a guild member is added. Parameters: character ID, guild ID, rank, location.
+		/// </summary>
 		public event Action<long, long, GuildRank, string> OnAddGuildMember;
+
+		/// <summary>
+		/// Event triggered to validate the set of guild members. Parameter: set of member IDs.
+		/// </summary>
 		public event Action<HashSet<long>> OnValidateGuildMembers;
+
+		/// <summary>
+		/// Event triggered when a guild member is removed. Parameter: member ID.
+		/// </summary>
 		public event Action<long> OnRemoveGuildMember;
+
+		/// <summary>
+		/// Event triggered when leaving a guild.
+		/// </summary>
 		public event Action OnLeaveGuild;
+
+		/// <summary>
+		/// Event triggered when a guild result is received. Parameter: result type.
+		/// </summary>
 		public event Action<GuildResultType> OnReceiveGuildResult;
 
+		/// <summary>
+		/// The unique guild ID for this character. Synchronized over the network.
+		/// </summary>
 		public long ID { get { return GID.Value; } set { GID.Value = value; } }
+
+		/// <summary>
+		/// The rank of the character in the guild (e.g., Member, Leader).
+		/// </summary>
 		public GuildRank Rank { get; set; }
 
+		/// <summary>
+		/// SyncVar for the guild ID, used for network synchronization. Configured for unreliable channel and server-only writes.
+		/// </summary>
 		private readonly SyncVar<long> GID = new SyncVar<long>(0, new SyncTypeSettings()
 		{
 			SendRate = 1.0f,
@@ -30,6 +63,9 @@ namespace FishMMO.Shared
 		});
 
 #if !UNITY_SERVER
+		/// <summary>
+		/// Called when the object is awakened. Subscribes to guild ID changes.
+		/// </summary>
 		public override void OnAwake()
 		{
 			base.OnAwake();

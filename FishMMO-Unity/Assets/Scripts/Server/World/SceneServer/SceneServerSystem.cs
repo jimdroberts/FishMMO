@@ -14,27 +14,62 @@ using System.Runtime.CompilerServices;
 
 namespace FishMMO.Server
 {
-	// Scene Manager handles the node services and heartbeat to World Server
+	/// <summary>
+	/// Manages scene server node services, scene loading/unloading, and heartbeat updates to the world server.
+	/// Tracks scene instances, handles connection events, and synchronizes scene state with the database.
+	/// </summary>
 	public class SceneServerSystem : ServerBehaviour
 	{
+		/// <summary>
+		/// Current connection state of the server.
+		/// </summary>
 		private LocalConnectionState serverState;
 
+		/// <summary>
+		/// Cache of world scene details, including max clients per scene.
+		/// </summary>
 		public WorldSceneDetailsCache WorldSceneDetailsCache;
 
+		/// <summary>
+		/// Database ID for this scene server instance.
+		/// </summary>
 		private long id;
+		/// <summary>
+		/// Indicates whether the scene server is locked (not accepting new connections).
+		/// </summary>
 		private bool locked = false;
+		/// <summary>
+		/// Time remaining until the next heartbeat pulse.
+		/// </summary>
 		private float nextPulse = 0.0f;
 
+		/// <summary>
+		/// Interval (in seconds) between heartbeat pulses to the database.
+		/// </summary>
 		public float PulseRate = 5.0f;
 
+		/// <summary>
+		/// Gets the database ID for this scene server instance.
+		/// </summary>
 		public long ID { get { return id; } }
 
-		// <worldID, <sceneName, <sceneHandle, details>>>
+		/// <summary>
+		/// Maps world server IDs to scene names and handles, tracking all loaded scene instances.
+		/// </summary>
 		public readonly Dictionary<long, Dictionary<string, Dictionary<int, SceneInstanceDetails>>> WorldScenes = new Dictionary<long, Dictionary<string, Dictionary<int, SceneInstanceDetails>>>();
+		/// <summary>
+		/// Maps scene handles to scene names for quick lookup.
+		/// </summary>
 		public readonly Dictionary<int, string> SceneNameByHandle = new Dictionary<int, string>();
 
+		/// <summary>
+		/// Tracks pending scene load requests by scene ID.
+		/// </summary>
 		private Dictionary<long, SceneEntity> pendingScenes = new Dictionary<long, SceneEntity>();
 
+		/// <summary>
+		/// Called once to initialize the scene server system. Registers the server in the database and subscribes to connection and scene events.
+		/// </summary>
 		public override void InitializeOnce()
 		{
 			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
@@ -72,6 +107,9 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Called when the system is being destroyed. Unsubscribes from events and deletes scene data from the database.
+		/// </summary>
 		public override void Destroying()
 		{
 			using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
@@ -101,11 +139,20 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Handles changes in the server's connection state.
+		/// </summary>
+		/// <param name="args">Connection state arguments.</param>
 		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs args)
 		{
 			serverState = args.ConnectionState;
 		}
 
+		/// <summary>
+		/// Handles character disconnect events, adjusting scene character counts.
+		/// </summary>
+		/// <param name="conn">Network connection.</param>
+		/// <param name="character">Player character that disconnected.</param>
 		private void CharacterSystem_OnDisconnect(NetworkConnection conn, IPlayerCharacter character)
 		{
 			if (character.IsInInstance())
@@ -118,6 +165,11 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Handles character load events, adjusting scene character counts.
+		/// </summary>
+		/// <param name="conn">Network connection.</param>
+		/// <param name="character">Player character that loaded.</param>
 		private void CharacterSystem_OnAfterLoadCharacter(NetworkConnection conn, IPlayerCharacter character)
 		{
 			if (character.IsInInstance())
@@ -130,6 +182,13 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Adjusts the character count for a specific scene instance.
+		/// </summary>
+		/// <param name="worldServerID">World server ID.</param>
+		/// <param name="sceneName">Scene name.</param>
+		/// <param name="sceneHandle">Scene handle.</param>
+		/// <param name="amount">Amount to adjust by (+1 or -1).</param>
 		private void AdjustSceneCharacterCount(long worldServerID, string sceneName, int sceneHandle, int amount)
 		{
 			// update scene instance details
@@ -142,6 +201,9 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Unity LateUpdate callback. Periodically sends heartbeat pulses to the database and processes scene state.
+		/// </summary>
 		void LateUpdate()
 		{
 			if (serverState == LocalConnectionState.Started)
@@ -153,13 +215,12 @@ namespace FishMMO.Server
 					if (Server != null &&
 						ServerBehaviour.TryGet(out CharacterSystem characterSystem))
 					{
-						// TODO: maybe this one should exist....how expensive will this be to run on update?
+						// Send heartbeat pulse to the database with current character count.
 						using var dbContext = Server.NpgsqlDbContextFactory.CreateDbContext();
-						//Log.Debug("SceneServerSystem", "Scene Server System: Pulse");
 						int characterCount = characterSystem.ConnectionCharacters.Count;
 						SceneServerService.Pulse(dbContext, id, characterCount, locked);
 
-						// process loaded scene pulse update
+						// Process loaded scene pulse update
 						if (WorldScenes != null)
 						{
 							foreach (Dictionary<string, Dictionary<int, SceneInstanceDetails>> sceneGroup in WorldScenes.Values)
@@ -179,14 +240,11 @@ namespace FishMMO.Server
 												continue;
 											}
 
-											//Log.Debug("SceneServerSystem", $"{sceneDetails.Name}:{sceneDetails.WorldServerID}{sceneDetails.Handle}:{sceneDetails.CharacterCount} Closing Stale Scene");
-
-											// Unload the scene on the server
+											// Unload the scene on the server if it is stale.
 											UnloadScene(sceneDetails.Handle);
 										}
 										else
 										{
-											//Log.Debug("SceneServerSystem", $"{sceneDetails.Name}:{sceneDetails.WorldServerID}{sceneDetails.Handle}:{sceneDetails.CharacterCount} Pulse");
 											SceneService.Pulse(dbContext, sceneDetails.Handle, sceneDetails.CharacterCount);
 										}
 									}
@@ -198,7 +256,7 @@ namespace FishMMO.Server
 						SceneEntity pending = SceneService.Dequeue(dbContext);
 						if (pending != null)
 						{
-							Log.Debug("SceneServerSystem", "Scene Server System: Dequeued Pending Scene Load request World:" + pending.WorldServerID + " Scene:" + pending.SceneName);
+							Log.Debug("SceneServerSystem", $"Scene Server System: Dequeued Pending Scene Load request World:{pending.WorldServerID} Scene:{pending.SceneName}");
 							ProcessSceneLoadRequest(pending);
 						}
 					}
@@ -208,21 +266,22 @@ namespace FishMMO.Server
 		}
 
 		/// <summary>
-		/// Process a single scene load request from the database.
+		/// Processes a single scene load request from the database, pre-caching and loading the scene.
 		/// </summary>
+		/// <param name="sceneEntity">Scene entity to process.</param>
 		private void ProcessSceneLoadRequest(SceneEntity sceneEntity)
 		{
 			if (WorldSceneDetailsCache == null ||
 				!WorldSceneDetailsCache.Scenes.Contains(sceneEntity.SceneName))
 			{
 				Log.Debug("SceneServerSystem", "Scene Server System: Scene is missing from the cache. Unable to load the scene.");
-				// TODO kick players waiting for this scene otherwise they get stuck
+				// TODO: kick players waiting for this scene otherwise they get stuck
 				return;
 			}
 
 			pendingScenes[sceneEntity.ID] = sceneEntity;
 
-			// Pre cache the scene on the server
+			// Pre-cache the scene on the server
 			SceneLookupData lookupData = new SceneLookupData(sceneEntity.SceneName);
 			SceneLoadData sld = new SceneLoadData(lookupData)
 			{
@@ -244,7 +303,10 @@ namespace FishMMO.Server
 			Server.NetworkManager.SceneManager.LoadConnectionScenes(sld);
 		}
 
-		// We only track scene handles here for scene stacking, the SceneManager has the real Scene reference
+		/// <summary>
+		/// Handles scene load completion events, updating mappings and database state.
+		/// </summary>
+		/// <param name="args">Scene load end event arguments.</param>
 		private void SceneManager_OnLoadEnd(SceneLoadEndEventArgs args)
 		{
 			const int UNKNOWN_WORLD_ID = -1;
@@ -258,7 +320,6 @@ namespace FishMMO.Server
 
 			if (args.QueueData.SceneLoadData.Params.ServerParams.Length < 1)
 			{
-				//Log.Warning("SceneServerSystem", $"Failed to process scene. Invalid Server Parameter Length. Length is {args.QueueData.SceneLoadData.Params.ServerParams.Length}");
 				return;
 			}
 
@@ -305,6 +366,12 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Adds a loaded scene to the world scene mappings and sets up physics ticking.
+		/// </summary>
+		/// <param name="scene">The loaded Unity scene.</param>
+		/// <param name="sceneType">Type of the scene.</param>
+		/// <param name="worldServerID">World server ID.</param>
 		private void ProcessScene(Scene scene, SceneType sceneType, long worldServerID)
 		{
 			// Configure the mapping for this specific world scene
@@ -335,7 +402,7 @@ namespace FishMMO.Server
 					CharacterCount = 0,
 				});
 
-				Log.Debug("SceneServerSystem", "$New scene handle added for {worldServerID}:{scene.name}:{scene.handle}");
+				Log.Debug("SceneServerSystem", $"New scene handle added for {worldServerID}:{scene.name}:{scene.handle}");
 
 				SceneNameByHandle.Add(scene.handle, scene.name);
 			}
@@ -345,6 +412,10 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Handles scene unload completion events, removing scene mappings and cleaning up.
+		/// </summary>
+		/// <param name="args">Scene unload end event arguments.</param>
 		public void SceneManager_OnUnloadEnd(SceneUnloadEndEventArgs args)
 		{
 			if (WorldScenes == null)
@@ -382,6 +453,14 @@ namespace FishMMO.Server
 			}
 		}
 
+		/// <summary>
+		/// Attempts to get scene instance details for a given world server, scene name, and handle.
+		/// </summary>
+		/// <param name="worldServerID">World server ID.</param>
+		/// <param name="sceneName">Scene name.</param>
+		/// <param name="sceneHandle">Scene handle.</param>
+		/// <param name="instanceDetails">Output instance details.</param>
+		/// <returns>True if found, false otherwise.</returns>
 		public bool TryGetSceneInstanceDetails(long worldServerID, string sceneName, int sceneHandle, out SceneInstanceDetails instanceDetails)
 		{
 			instanceDetails = default;
@@ -403,25 +482,21 @@ namespace FishMMO.Server
 						Log.Warning("SceneServerSystem", $"Scene handle {sceneHandle} not found in '{sceneName}'. Available: {string.Join(", ", instances.Keys)}");
 					}
 				}
-				/*else
-				{
-					Log.Debug("SceneServerSystem", $"Failed to find scene by name: {sceneName}");
-				}*/
 			}
-			/*else
-			{
-				Log.Debug("SceneServerSystem", $"Failed to find world scene: {worldServerID}");
-			}*/
 			return false;
 		}
 
+		/// <summary>
+		/// Attempts to load a scene for a connection if it is valid and loaded.
+		/// </summary>
+		/// <param name="connection">Network connection.</param>
+		/// <param name="instance">Scene instance details.</param>
+		/// <returns>True if scene was loaded for the connection, false otherwise.</returns>
 		public bool TryLoadSceneForConnection(NetworkConnection connection, SceneInstanceDetails instance)
 		{
 			Scene scene = SceneManager.GetScene(instance.Handle);
 			if (scene != null && scene.IsValid() && scene.isLoaded)
 			{
-				//Log.Debug("SceneServerSystem", $"Scene: {instance.Name} - {instance.Handle} found in SceneManager.");
-
 				SceneLookupData lookupData = new SceneLookupData(instance.Handle);
 				SceneLoadData sld = new SceneLoadData(lookupData)
 				{
@@ -442,6 +517,11 @@ namespace FishMMO.Server
 			return false;
 		}
 
+		/// <summary>
+		/// Unloads a scene for a connection by scene name.
+		/// </summary>
+		/// <param name="connection">Network connection.</param>
+		/// <param name="sceneName">Name of the scene to unload.</param>
 		public void UnloadSceneForConnection(NetworkConnection connection, string sceneName)
 		{
 			SceneUnloadData sud = new SceneUnloadData()
@@ -458,6 +538,10 @@ namespace FishMMO.Server
 			Server.NetworkManager.SceneManager.UnloadConnectionScenes(connection, sud);
 		}
 
+		/// <summary>
+		/// Unloads a scene by handle and removes its details from the database and server.
+		/// </summary>
+		/// <param name="handle">Scene handle to unload.</param>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void UnloadScene(int handle)
 		{
@@ -468,7 +552,7 @@ namespace FishMMO.Server
 				return;
 			}
 
-			// Remove the scene details from the database, we do this immediately upon an Unload request to prevent new clients from connecting to it.
+			// Remove the scene details from the database immediately upon an Unload request to prevent new clients from connecting to it.
 			SceneService.Delete(dbContext, id, handle);
 
 			SceneUnloadData sud = new SceneUnloadData()

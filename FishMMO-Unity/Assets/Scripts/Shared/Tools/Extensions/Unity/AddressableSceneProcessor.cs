@@ -9,24 +9,58 @@ using FishMMO.Logging;
 
 namespace FishMMO.Shared
 {
+	/// <summary>
+	/// Scene processor for loading and unloading Unity scenes using the Addressables system.
+	/// Manages async operations and loaded scene tracking.
+	/// </summary>
 	public sealed class AddressableSceneProcessor : SceneProcessorBase
 	{
+		/// <summary>
+		/// Maps scene handles to their async load operation handles.
+		/// </summary>
 		private readonly Dictionary<int, AsyncOperationHandle<SceneInstance>> _loadedScenesByHandle = new(4);
+
+		/// <summary>
+		/// List of currently loaded scenes.
+		/// </summary>
 		private readonly List<Scene> _loadedScenes = new(4);
+
+		/// <summary>
+		/// List of async operations for scenes currently loading.
+		/// </summary>
 		private readonly List<AsyncOperationHandle<SceneInstance>> _loadingAsyncOperations = new(4);
+
+		/// <summary>
+		/// The current async operation being processed (load or unload).
+		/// </summary>
 		private AsyncOperationHandle<SceneInstance> _currentAsyncOperation;
+
+		/// <summary>
+		/// The most recently loaded scene.
+		/// </summary>
 		private Scene _lastLoadedScene;
 
+		/// <summary>
+		/// Called at the start of a scene load queue. Resets processor state.
+		/// </summary>
+		/// <param name="queueData">The load queue data.</param>
 		public override void LoadStart(LoadQueueData queueData)
 		{
 			ResetProcessor();
 		}
 
+		/// <summary>
+		/// Called at the end of a scene load queue. Resets processor state.
+		/// </summary>
+		/// <param name="queueData">The load queue data.</param>
 		public override void LoadEnd(LoadQueueData queueData)
 		{
 			ResetProcessor();
 		}
 
+		/// <summary>
+		/// Resets async operation and loaded scene tracking for this processor.
+		/// </summary>
 		private void ResetProcessor()
 		{
 			_currentAsyncOperation = default;
@@ -34,6 +68,11 @@ namespace FishMMO.Shared
 			_loadingAsyncOperations.Clear();
 		}
 
+		/// <summary>
+		/// Begins loading a scene asynchronously using Addressables.
+		/// </summary>
+		/// <param name="sceneName">The name of the scene to load.</param>
+		/// <param name="parameters">Scene loading parameters.</param>
 		public override void BeginLoadAsync(string sceneName, LoadSceneParameters parameters)
 		{
 			if (string.IsNullOrEmpty(sceneName))
@@ -60,6 +99,10 @@ namespace FishMMO.Shared
 			};
 		}
 
+		/// <summary>
+		/// Begins unloading a scene asynchronously using Addressables.
+		/// </summary>
+		/// <param name="scene">The scene to unload.</param>
 		public override void BeginUnloadAsync(Scene scene)
 		{
 			if (!_loadedScenesByHandle.TryGetValue(scene.handle, out var loadHandle))
@@ -96,6 +139,9 @@ namespace FishMMO.Shared
 			};
 		}
 
+		/// <summary>
+		/// Returns true if the current async operation is complete (percent >= 1.0).
+		/// </summary>
 		public override bool IsPercentComplete()
 		{
 			if (_currentAsyncOperation.IsValid())
@@ -108,15 +154,28 @@ namespace FishMMO.Shared
 			return true;
 		}
 
+		/// <summary>
+		/// Gets the percent complete of the current async operation, or 1.0 if not valid.
+		/// </summary>
 		public override float GetPercentComplete()
 		{
 			return _currentAsyncOperation.IsValid() ? _currentAsyncOperation.PercentComplete : 1.0f;
 		}
 
+		/// <summary>
+		/// Gets the most recently loaded scene.
+		/// </summary>
 		public override Scene GetLastLoadedScene() => _lastLoadedScene;
 
+		/// <summary>
+		/// Gets the list of currently loaded scenes.
+		/// </summary>
 		public override List<Scene> GetLoadedScenes() => _loadedScenes;
 
+		/// <summary>
+		/// Adds a loaded scene to tracking collections after a successful load.
+		/// </summary>
+		/// <param name="loadHandle">The async operation handle for the loaded scene.</param>
 		public void AddLoadedScene(AsyncOperationHandle<SceneInstance> loadHandle)
 		{
 			Scene scene = loadHandle.Result.Scene;
@@ -130,6 +189,9 @@ namespace FishMMO.Shared
 			_loadedScenesByHandle.Add(scene.handle, loadHandle);
 		}
 
+		/// <summary>
+		/// Activates all loaded scenes asynchronously.
+		/// </summary>
 		public override void ActivateLoadedScenes()
 		{
 			foreach (var loadingAsyncOp in _loadingAsyncOperations)
@@ -138,6 +200,9 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>
+		/// Coroutine that yields until all async scene load operations are done.
+		/// </summary>
 		public override IEnumerator AsyncsIsDone()
 		{
 			if (_loadingAsyncOperations == null || _loadingAsyncOperations.Count == 0)

@@ -1,72 +1,89 @@
+using Microsoft.Extensions.Hosting;
+using System.IO;
+using System;
+using System.Linq;
+using System.Text.RegularExpressions;
+using Microsoft.Extensions.Configuration;
+using FishMMO.Logging;
+
 public class PatchVersionService
 {
-	private readonly ILogger<PatchVersionService> logger;
+	private readonly IHostEnvironment env;
+	private readonly IConfiguration config;
 	public string? LatestVersion { get; private set; }
 
-	public PatchVersionService(ILogger<PatchVersionService> logger)
+	private static readonly Regex PatchFileNameRegex =
+		new Regex(@"^(\d+\.\d+\.\d+(?:\.[a-zA-Z0-9]+)?)-(\d+\.\d+\.\d+(?:\.[a-zA-Z0-9]+)?)\.zip$", RegexOptions.Compiled);
+
+	public PatchVersionService(IHostEnvironment env, IConfiguration config)
 	{
-		this.logger = logger;
+		this.env = env;
+		this.config = config;
+		InitializeLatestVersion();
 	}
 
-	public void LoadFromFile(string filePath)
+	private void InitializeLatestVersion()
 	{
-		if (!File.Exists(filePath))
-		{
-			logger.LogWarning("Version config file not found: {Path}", filePath);
+		var patchesDirectoryConfig = config["Patches:DirectoryName"] ?? "Patches";
+		var patchesPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, patchesDirectoryConfig);
 
-			// Fall back to manual input if the file is missing
-			PromptForManualVersion();
+		if (!Directory.Exists(patchesPath))
+		{
+			Log.Warning("PatchVersionService", $"Patches directory not found: {patchesPath}. Setting latest version to 0.0.0.");
+			LatestVersion = new VersionConfig() { Major = 0, Minor = 0, Patch = 0 }.FullVersion;
 			return;
 		}
 
 		try
 		{
-			foreach (var line in File.ReadLines(filePath))
+			var patchFiles = Directory.EnumerateFiles(patchesPath, "*.zip", SearchOption.TopDirectoryOnly);
+
+			VersionConfig? highestVersion = null;
+
+			foreach (var filePath in patchFiles)
 			{
-				if (line.Contains('='))
+				string fileName = Path.GetFileName(filePath);
+				Match match = PatchFileNameRegex.Match(fileName);
+
+				if (match.Success && match.Groups.Count >= 3)
 				{
-					var parts = line.Split('=', 2);
-					if (parts[0].Trim() == "Version")
+					string newVersionString = match.Groups[2].Value;
+					// Pass the logger to VersionConfig.Parse
+					VersionConfig? currentPatchTargetVersion = VersionConfig.Parse(newVersionString);
+
+					if (currentPatchTargetVersion != null)
 					{
-						LatestVersion = parts[1].Trim();
-						logger.LogInformation("Loaded version: {Version}", LatestVersion);
-						return;
+						if (highestVersion == null || currentPatchTargetVersion > highestVersion)
+						{
+							highestVersion = currentPatchTargetVersion;
+						}
 					}
+					else
+					{
+						Log.Warning("PatchVersionService", $"Could not parse version '{newVersionString}' from patch file name '{fileName}'. Ensure versions follow X.Y.Z or X.Y.Z.PreRelease format.");
+					}
+				}
+				else
+				{
+					Log.Warning("PatchVersionService", $"File '{fileName}' does not match the expected patch file naming convention (e.g., '1.0.0-1.0.1.zip' or '1.0.0.alpha-1.0.0.beta.zip'). It will be ignored.");
 				}
 			}
 
-			// If the version key was not found, prompt for manual input
-			logger.LogWarning("Version not found in config file.");
-			PromptForManualVersion();
-		}
-		catch (Exception ex)
-		{
-			logger.LogError(ex, "Error loading version from file.");
-			// Fall back to manual input in case of any error
-			PromptForManualVersion();
-		}
-	}
-
-	private void PromptForManualVersion()
-	{
-		Console.WriteLine("Version config file is missing or invalid. Please enter the version manually:");
-
-		// Prompt user until a valid version is entered
-		while (true)
-		{
-			Console.Write("Enter Version: ");
-			string input = Console.ReadLine()?.Trim();
-
-			if (!string.IsNullOrEmpty(input))
+			if (highestVersion != null)
 			{
-				LatestVersion = input;
-				logger.LogInformation("Manually set version: {Version}", LatestVersion);
-				break;
+				LatestVersion = highestVersion.FullVersion;
+				Log.Info("PatchVersionService", $"Determined latest client version from patches: {LatestVersion}");
 			}
 			else
 			{
-				Console.WriteLine("Invalid input. Please enter a valid version.");
+				LatestVersion = new VersionConfig() { Major = 0, Minor = 0, Patch = 0 }.FullVersion;
+				Log.Info("PatchVersionService", $"No valid patch files found in '{patchesPath}' matching the expected pattern. Setting latest version to 0.0.0.");
 			}
+		}
+		catch (Exception ex)
+		{
+			Log.Error("PatchVersionService", $"Error determining latest version from patch files in '{patchesPath}'. Setting latest version to 0.0.0.", ex);
+			LatestVersion = new VersionConfig() { Major = 0, Minor = 0, Patch = 0 }.FullVersion;
 		}
 	}
 }

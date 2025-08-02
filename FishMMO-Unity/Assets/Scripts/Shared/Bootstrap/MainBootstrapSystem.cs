@@ -11,24 +11,53 @@ using UnityEditor;
 
 namespace FishMMO.Shared
 {
+	/// <summary>
+	/// Main bootstrap system for FishMMO. Handles initialization, logging, version management, and graceful shutdown.
+	/// </summary>
 	public class MainBootstrapSystem : BootstrapSystem
 	{
+		/// <summary>
+		/// The current game version string. Set during initialization.
+		/// </summary>
 		public static string GameVersion = "UNKNOWN_VERSION";
 
+		/// <summary>
+		/// The name of the logging configuration JSON file (e.g., logging.json).
+		/// </summary>
 		[Tooltip("The name of the logging configuration JSON file (e.g., logging.json).")]
 		public string configFileName = "logging.json";
 
+		/// <summary>
+		/// Reference to the VersionConfig asset.
+		/// </summary>
 		[SerializeField]
 		private VersionConfig versionConfig;
-		private static bool isInitiatingShutdown = false;
-		private static bool canQuitApplication = false; // Controls if Application.wantsToQuit should allow quitting
 
+		/// <summary>
+		/// Indicates if shutdown is currently being initiated.
+		/// </summary>
+		private static bool isInitiatingShutdown = false;
+
+		/// <summary>
+		/// Controls if Application.wantsToQuit should allow quitting.
+		/// </summary>
+		private static bool canQuitApplication = false;
+
+		/// <summary>
+		/// Unity Awake message. Starts the bootstrap initialization chain.
+		/// </summary>
+		void Awake()
+		{
+			StartBootstrap();
+		}
+
+		/// <summary>
+		/// Callback for internal logging messages from FishMMO.Logging.Log.
+		/// Ensures UnityLoggerBridge does not re-capture internal log calls.
+		/// </summary>
+		/// <param name="message">The log message.</param>
 		private void OnInternalLogCallback(string message)
 		{
-			// This callback is used by FishMMO.Logging.Log for its internal messages.
-			// We set IsLoggingInternally to true to prevent UnityLoggerBridge from re-capturing
-			// Debug.Log calls made by our own logging system or internal processes.
-			// This ensures that these messages go directly to Unity's console without re-routing.
 			UnityLoggerBridge.IsLoggingInternally = true;
 			Debug.Log($"{message}");
 			UnityLoggerBridge.IsLoggingInternally = false;
@@ -38,6 +67,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Handles changes in Unity Editor's Play Mode state.
 		/// </summary>
+		/// <param name="state">The play mode state change event.</param>
 		private void OnEditorPlayModeStateChanged(PlayModeStateChange state)
 		{
 			// When exiting Play Mode, initiate shutdown.
@@ -50,8 +80,7 @@ namespace FishMMO.Shared
 #endif
 
 		/// <summary>
-		/// This Unity message is called before the application quits.
-		/// It allows us to delay quitting to perform asynchronous cleanup.
+		/// Unity message called before the application quits. Allows delaying quit for async cleanup.
 		/// </summary>
 		/// <returns>True if the application should quit, false to defer quitting.</returns>
 		private bool OnApplicationWantsToQuit()
@@ -70,33 +99,30 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Initiates the shutdown process.
+		/// Initiates the shutdown process, including graphics cleanup and logging system shutdown.
 		/// </summary>
 		public void InitiateShutdown()
 		{
 			Debug.Log("[MainBootstrapSystem] InitiateShutdown called.");
 			if (isInitiatingShutdown)
 			{
-				// Already initiating shutdown, prevent redundant calls.
 				Debug.Log("[MainBootstrapSystem] InitiateShutdown already in progress. Returning.");
 				return;
 			}
 			isInitiatingShutdown = true;
 
-			// Before performing asynchronous shutdown, detach our UnityLoggerBridge
-			// so that any Debug.Log calls during the async shutdown (e.g., from
-			// Log.SaveConfig or Log.Shutdown's internal messages) go directly to Unity's console
-			// and do not try to re-route through a potentially shutting-down Log manager.
+			// Perform Graphics Cleanup.
+			Debug.Log("[MainBootstrapSystem] Starting graphics cleanup...");
+			GraphicsCleanup().Wait();
+			Debug.Log("[MainBootstrapSystem] Graphics cleanup completed.");
+
+			// Detach UnityLoggerBridge before async shutdown.
 			UnityLoggerBridge.Shutdown();
 
 #if UNITY_EDITOR
 			// Editor-specific shutdown logic
 			if (Log.IsInitialized)
 			{
-				// Synchronously wait for Log shutdown in editor to prevent race conditions.
-				// Note: Log.Shutdown() internally prints its own 'shutdown complete' message
-				// which might show up as 'CRITICAL' because it logs after clearing 'loggers'.
-				// This is an internal behavior of the Log class.
 				Debug.Log("[MainBootstrapSystem] Editor shutdown: Awaiting synchronous Log.Shutdown().");
 				Log.Shutdown().Wait();
 				Debug.Log("[MainBootstrapSystem] Editor shutdown: Log system synchronously shut down.");
@@ -105,7 +131,6 @@ namespace FishMMO.Shared
 			{
 				Debug.Log("[MainBootstrapSystem] Editor shutdown: Log manager not initialized or already shut down. Skipping synchronous Log.Shutdown().");
 			}
-			// Set canQuitApplication immediately for editor to allow quick exit
 			canQuitApplication = true;
 			Debug.Log("[MainBootstrapSystem] Editor shutdown: Setting canQuitApplication = true.");
 			return;
@@ -119,28 +144,15 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Performs asynchronous cleanup tasks before the application quits.
 		/// </summary>
+		/// <returns>A Task representing the async shutdown process.</returns>
 		private async Task PerformAsyncShutdown()
 		{
 			Debug.Log("[MainBootstrapSystem] PerformAsyncShutdown started.");
 
 			try
 			{
-				// Step 1: Perform Graphics Cleanup.
-				// This is critical for preventing "Releasing render texture" errors.
-				// For a dedicated server build, there typically should be no active cameras
-				// or render textures. If you still see "Releasing render texture" warnings,
-				// it suggests some unexpected graphics context or resource is being created.
-				// Implement specific logic here if you identify such resources.
-				Debug.Log("[MainBootstrapSystem] Starting graphics cleanup...");
-				await GraphicsCleanup();
-				Debug.Log("[MainBootstrapSystem] Graphics cleanup completed.");
-
-				// Step 2: Save logging configuration.
-				// Only save config for standalone builds during shutdown
+				// Step 1: Save logging configuration.
 				Debug.Log("[MainBootstrapSystem] Attempting to save logging configuration...");
-				// IMPORTANT: Log.CurrentLoggingConfig might be null if Log.Initialize failed
-				// or if the Log system's internal state was reset prematurely by Log.Shutdown().
-				// We add a null check here to prevent "Attempted to save a null LoggingConfig" error.
 				LoggingConfig currentConfig = Log.CurrentLoggingConfig;
 				if (currentConfig != null)
 				{
@@ -155,14 +167,10 @@ namespace FishMMO.Shared
 				}
 				Debug.Log("[MainBootstrapSystem] Finished attempting to save logging configuration.");
 
-				// Step 3: Shut down the logging system.
+				// Step 2: Shut down the logging system.
 				if (Log.IsInitialized)
 				{
 					Debug.Log("[MainBootstrapSystem] Awaiting Log.Shutdown()...");
-					// Calling Log.Shutdown() here will internally cause Log.cs to print
-					// "CRITICAL: Log manager not initialized or shut down" messages
-					// due to its internal logging of "shutdown complete" after clearing loggers.
-					// This is a known behavior of Log.cs and does not prevent application quit.
 					await Log.Shutdown();
 					Debug.Log("[MainBootstrapSystem] Log.Shutdown() completed.");
 				}
@@ -175,34 +183,29 @@ namespace FishMMO.Shared
 			}
 			catch (Exception ex)
 			{
-				// Log any unexpected errors during shutdown.
-				// Since UnityLoggerBridge is shut down, this Debug.LogError goes directly to Unity's console.
 				Debug.LogError($"[MainBootstrapSystem] An error occurred during async shutdown: {ex.Message}\n{ex.StackTrace}");
 			}
 			finally
 			{
-				// Always ensure the application can quit after cleanup attempts.
 				canQuitApplication = true;
 				Debug.Log("[MainBootstrapSystem] Finalizing shutdown.");
-				Application.Quit(); // Re-call Application.Quit() to finalize the deferred quit process.
+				Application.Quit();
 			}
 		}
 
 		/// <summary>
-		/// Placeholder for actual graphics cleanup logic.
-		/// For a dedicated server build, this method typically does nothing as there are no cameras or visual rendering.
-		/// However, if "Releasing render texture" warnings persist, you might need to investigate
-		/// if any code is creating RenderTextures (e.g., for compute shaders, image processing)
-		/// and explicitly release them here.
+		/// Placeholder for actual graphics cleanup logic. Typically does nothing for dedicated server builds.
 		/// </summary>
+		/// <returns>A Task representing the graphics cleanup process.</returns>
 		private async Task GraphicsCleanup()
 		{
-			Debug.Log("[MainBootstrapSystem] GraphicsCleanup method executed for server build.");
-			await Task.Yield(); // Simulate asynchronous work if needed.
+			AddressableLoadProcessor.ReleaseAllAssets();
+			//await Task.Yield(); // Simulate asynchronous work if needed.
 		}
 
 		/// <summary>
 		/// Initializes the logging system and other bootstrap components.
+		/// Loads version info and configures initial scene loading.
 		/// </summary>
 		public override void OnPreload()
 		{
@@ -210,9 +213,47 @@ namespace FishMMO.Shared
 
 			if (versionConfig == null)
 			{
-				Debug.LogError($"[MainBootstrapSystem] FATAL ERROR: Failed to initialize Version Config.");
+				Debug.LogError("[MainBootstrapSystem] FATAL ERROR: Failed to initialize Version Config.");
+				return;
 			}
-			GameVersion = versionConfig.FullVersion;
+
+			string workingDir = Constants.GetWorkingDirectory();
+
+#if !UNITY_EDITOR
+			string versionFilePath = Path.Combine(workingDir, "version.txt");
+
+			if (File.Exists(versionFilePath))
+			{
+				try
+				{
+					string versionText = File.ReadAllText(versionFilePath).Trim();
+					VersionConfig loadedVersionConfig = VersionConfig.Parse(versionText);
+
+					if (loadedVersionConfig != null)
+					{
+						Debug.Log($"[MainBootstrapSystem] Loaded VersionConfig from version.txt: {versionConfig.FullVersion}");
+
+						if (versionConfig != null && versionConfig != loadedVersionConfig)
+						{
+							Debug.LogError($"Version mismatch between asset and version.txt: {versionConfig.FullVersion} vs {loadedVersionConfig.FullVersion}");
+						}
+					}
+					else
+					{
+						Debug.LogError("[MainBootstrapSystem] Failed to parse version.txt content into VersionConfig.");
+					}
+				}
+				catch (System.Exception ex)
+				{
+					Debug.LogError($"[MainBootstrapSystem] Exception reading or parsing version.txt: {ex}");
+				}
+			}
+			else
+			{
+				Debug.LogError($"[MainBootstrapSystem] version.txt not found in working directory: {workingDir}");
+			}
+#endif
+			GameVersion = versionConfig?.FullVersion ?? "UNKNOWN";
 
 			Debug.Log($"[MainBootstrapSystem] Loaded GameVersion: {GameVersion}");
 
@@ -221,9 +262,7 @@ namespace FishMMO.Shared
 #endif
 			Application.wantsToQuit += OnApplicationWantsToQuit;
 
-			Log.OnInternalLogMessage += OnInternalLogCallback;
-
-			string configFilePath = Path.Combine(Constants.GetWorkingDirectory(), configFileName);
+			string configFilePath = Path.Combine(workingDir, configFileName);
 
 			try
 			{
@@ -247,15 +286,11 @@ namespace FishMMO.Shared
 					OnInternalLogCallback),
 				};
 #else
-            	// For standalone builds, UnityConsoleFormatter and manual loggers are typically managed by the config file
-            	IConsoleFormatter unityConsoleFormatter = null;
-            	List<FishMMO.Logging.ILogger> manualLoggers = null;
+				IConsoleFormatter unityConsoleFormatter = null;
+				List<FishMMO.Logging.ILogger> manualLoggers = null;
 #endif
 
-				// Initialize the Log manager. It will attempt to load config from file first,
-				// then use manual loggers if provided.
-				Log.Initialize(configFilePath, unityConsoleFormatter, manualLoggers, Log.OnInternalLogMessage, new List<Type>() { typeof(UnityConsoleLoggerConfig) });
-
+				Log.Initialize(configFilePath, unityConsoleFormatter, manualLoggers, OnInternalLogCallback, new List<Type>() { typeof(UnityConsoleLoggerConfig) });
 
 				Debug.Log("[MainBootstrapSystem] Logging system initialized successfully.");
 			}
@@ -270,27 +305,29 @@ namespace FishMMO.Shared
 #region Server
 			List<AddressableSceneLoadData> initialScenes = new List<AddressableSceneLoadData>()
 			{
-				new AddressableSceneLoadData("ServerLauncher"),
+				new AddressableSceneLoadData("ServerLauncher", OnBootstrapPostProcess),
 			};
 #endregion
 #else
-			#region Client
+#region Client
 			List<AddressableSceneLoadData> initialScenes = new List<AddressableSceneLoadData>()
 			{
-				new AddressableSceneLoadData("ClientPreboot"),
+				new AddressableSceneLoadData("ClientPreboot", OnBootstrapPostProcess),
 			};
-			#endregion
+#endregion
 #endif
 			AddressableLoadProcessor.EnqueueLoad(initialScenes);
 		}
 
+		/// <summary>
+		/// Unity OnDestroy message. Handles shutdown and cleanup when the object is destroyed.
+		/// </summary>
 		void OnDestroy()
 		{
 #if UNITY_EDITOR
 			EditorApplication.playModeStateChanged -= OnEditorPlayModeStateChanged;
 #endif
 			Application.wantsToQuit -= OnApplicationWantsToQuit;
-			Log.OnInternalLogMessage -= OnInternalLogCallback;
 
 			if (!isInitiatingShutdown && Application.isPlaying)
 			{

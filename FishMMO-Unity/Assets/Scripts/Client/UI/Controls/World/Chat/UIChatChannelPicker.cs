@@ -6,11 +6,24 @@ using FishMMO.Shared;
 
 namespace FishMMO.Client
 {
+	/// <summary>
+	/// UI control for picking chat channels and renaming chat tabs.
+	/// </summary>
 	public class UIChatChannelPicker : UIControl
 	{
+		/// <summary>
+		/// Prefab used to instantiate channel toggle buttons.
+		/// </summary>
 		public Toggle ChannelTogglePrefab;
+
+		/// <summary>
+		/// List of all channel toggle buttons currently displayed.
+		/// </summary>
 		public List<Toggle> Toggles = new List<Toggle>();
 
+		/// <summary>
+		/// Called when the UI is starting. Initializes channel toggles for each chat channel except Command.
+		/// </summary>
 		public override void OnStarting()
 		{
 			OnLoseFocus += Hide;
@@ -38,14 +51,20 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Called when the UI is being destroyed. Unsubscribes from lose focus event.
+		/// </summary>
 		public override void OnDestroying()
 		{
 			OnLoseFocus -= Hide;
 		}
 
 		/// <summary>
-		/// Sets up the toggles for the active channels for the selected tab, sets the input value to the name of the tab and moves the picker to the specified position.
+		/// Sets up the toggles for the active channels for the selected tab, sets the input value to the name of the tab, and moves the picker to the specified position.
 		/// </summary>
+		/// <param name="activeChannels">The set of active chat channels for the tab.</param>
+		/// <param name="name">The name of the tab.</param>
+		/// <param name="position">The position to move the picker to.</param>
 		public void Activate(HashSet<ChatChannel> activeChannels, string name, Vector3 position)
 		{
 			foreach (Toggle toggle in Toggles)
@@ -67,6 +86,10 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Changes the name of the current chat tab to the value in the input field.
+		/// Resets the input if renaming fails.
+		/// </summary>
 		public void ChangeTabName()
 		{
 			if (InputField != null)
@@ -78,7 +101,7 @@ namespace FishMMO.Client
 						string currentName = chat.CurrentTab;
 						if (!chat.RenameCurrentTab(InputField.text))
 						{
-							// reset the input to the old name if we fail to rename the tab
+							// Reset the input to the old name if we fail to rename the tab
 							InputField.text = currentName;
 						}
 					}
@@ -86,6 +109,10 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Sets the active state of a chat channel when its toggle is changed.
+		/// </summary>
+		/// <param name="toggle">The toggle for the chat channel.</param>
 		public void SetActiveChannel(Toggle toggle)
 		{
 			if (toggle != null)

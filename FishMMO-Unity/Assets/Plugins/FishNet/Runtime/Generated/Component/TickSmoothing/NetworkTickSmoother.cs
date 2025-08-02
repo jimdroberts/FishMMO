@@ -35,7 +35,7 @@ namespace FishNet.Component.Transforming.Beta
         [Tooltip("How smoothing occurs when spectating the object.")]
         [SerializeField]
         private MovementSettings _spectatorMovementSettings = new(true);
-        
+
         private void OnDestroy()
         {
             if (SmootherController != null)
@@ -47,7 +47,7 @@ namespace FishNet.Component.Transforming.Beta
         {
             RetrieveControllers();
 
-            _initializationSettings.UpdateRuntimeSettings(this, transform, (float)base.TimeManager.TickDelta);
+            _initializationSettings.SetNetworkedRuntimeValues(initializingNetworkBehaviour: this, graphicalTransform: transform);
             SmootherController.Initialize(_initializationSettings, _controllerMovementSettings, _spectatorMovementSettings);
 
             SmootherController.StartSmoother();
@@ -57,7 +57,7 @@ namespace FishNet.Component.Transforming.Beta
         {
             if (SmootherController == null)
                 return;
-            
+
             SmootherController.StopSmoother();
         }
 
