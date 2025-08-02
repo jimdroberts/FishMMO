@@ -1,7 +1,4 @@
-# **FishMMO**
-FishNetworking MMO Template
-
-[![](https://dcbadge.vercel.app/api/server/9JQEYjkSNk)](https://discord.gg/9JQEYjkSNk)
+[![](https://dcbadge.vercel.app/api/server/9JQEYjkSNk?style=full)](https://discord.gg/9JQEYjkSNk)
 
 # **FishMMO Installation Guide (2025)**
 
@@ -162,7 +159,7 @@ This tool is useful for distributing incremental updates to players. You can the
 
 ### **Server Setup**
 
-Configure the following files in the builds Data folder:
+Configure the following files in the builds directory:
 - `LoginServer.cfg`
 - `WorldServer.cfg`
 - `SceneServer.cfg`
@@ -173,7 +170,7 @@ Configure the following files in the builds Data folder:
 
 ### **Launching the Servers**
 
-Build the **FishMMO-AppHealthMonitor** application and configure its `appsetting.json`:
+Build the **FishMMO-AppHealthMonitor** application and configure the `appsetting.json`:
 
 ```json
 {
@@ -181,7 +178,7 @@ Build the **FishMMO-AppHealthMonitor** application and configure its `appsetting
     {
       "Name": "LoginServer",
       "ApplicationExePath": "path\\to\\your\\FishMMO GameServer Windows\\GameServer.exe",
-      "MonitoredPort": 7770,
+      "MonitoredPort": 7770, // This Port should match your LoginServer.cfg port
       "PortTypes": [ "TCP", "UDP" ],
       "LaunchArguments": "LOGIN",
       "CheckIntervalSeconds": 30,
@@ -198,7 +195,7 @@ Build the **FishMMO-AppHealthMonitor** application and configure its `appsetting
     {
       "Name": "WorldServer",
       "ApplicationExePath": "path\\to\\your\\FishMMO GameServer Windows\\GameServer.exe",
-      "MonitoredPort": 7780,
+      "MonitoredPort": 7780, // This Port should match your WorldServer.cfg port
       "PortTypes": [ "TCP", "UDP" ],
       "LaunchArguments": "WORLD",
       "CheckIntervalSeconds": 30,
@@ -215,7 +212,7 @@ Build the **FishMMO-AppHealthMonitor** application and configure its `appsetting
     {
       "Name": "SceneServer",
       "ApplicationExePath": "path\\to\\your\\FishMMO GameServer Windows\\GameServer.exe",
-      "MonitoredPort": 7781,
+      "MonitoredPort": 7781, // This Port should match your SceneServer.cfg port
       "PortTypes": [ "TCP", "UDP" ],
       "LaunchArguments": "SCENE",
       "CheckIntervalSeconds": 30,
