@@ -1,56 +1,255 @@
-# FishMMO
-FishNetworking MMO Template
+[![](https://dcbadge.vercel.app/api/server/9JQEYjkSNk?style=full)](https://discord.gg/9JQEYjkSNk)
+[Join our Discord](https://discord.gg/9JQEYjkSNk)
 
-[![](https://dcbadge.vercel.app/api/server/9JQEYjkSNk)](https://discord.gg/9JQEYjkSNk)
+# **FishMMO Installation Guide (2025)**
 
-INITIAL SETUP INSTRUCTIONS
+This guide provides step-by-step instructions for setting up and building the FishMMO project.
 
-If Dev branch is ahead of main, Please checkout project to Dev Branch!
+---
 
-### Windows
+## **1. Clone the FishMMO Repository**
 
-1) Download / Clone Project into your choosen directory (https://github.com/jimdroberts/FishMMO.git)
-2) Clone - CD into your directory, Open CMD of your choice, paste "git clone https://github.com/jimdroberts/FishMMO.git"
-3) Open the Unity Hub and ensure that Dedicated Server Build Support is installed for your current Unity3D install.
-4) In the Unity Hub go to the Projects tab and Click "ADD", Enter "FishMMO" Directory, finally Select "FishMMO-Unity"
-5) Open "\FishMMO\FishMMO-Dependencies" Directory, Open "FishMMO-Dependencies.sln" , Right click solution on right side menu, "Clean", Right click solution, Click "Build"
-6) Open "\FishMMO\FishMMO-Database" Directory, Open "FishMMO-Database.sln" , Right click solution on right side menu, "Clean", Right click solution, Click "Build"
-7) Go back to your open project, You should now see a "FishMMO" Menu up top. Click "FishMMO"
-8) Select "Build", Select "Installer", (If prompted name the .unity file as aio_serv.unity and save it to \Assets) Select "\FishMMO" Directory, Save it there.
-9) Select "Build", Select "Server", Select "Windows x64-All In One", Select "\FishMMO" Directory to save.
-10) Open the location of where you saved the "Installer". EX: "\FishMMO\FishMMO-Unity\Installer Windows"
-11) Ensure WSL, DOTNET 7, DOTNET-EF, Docker and your Initial Migration are all installed by launching the "Installer.exe". Select "Everything Option"
-12) Configure LoginServer.cfg, WorldServer.cfg, SceneServer.cfg, and appsettings.json in the builds Data folder.
+First, download or clone the project repository. It is recommended to use the **`dev`** branch if it is more up-to-date than **`main`**.
 
-### Launching the Server
+**Repository URL:**
+```shell
+https://github.com/jimdroberts/FishMMO.git
+```
 
-1) Navigate to "\FishMMO\All-In-One Windows" Or where you have chosen to install your "Windows x64-All-In-One".
-2) Launch "Start.Bat"
+---
 
-### Video of Installation
-https://drive.google.com/file/d/11FFrECZSh_zW9JVKZk7lR0xUYHBwVZAR/view?usp=sharing
+## **2. Build the FishMMO-Dependencies Project**
 
-#### Note
-If you want to use a different directory name than **FishMMO** please adjust FishMMO-DB.csproj and FishMMO-Utils.csproj.
+Navigate to the **`FishMMO/FishMMO-Dependencies`** directory and build the solution.
 
-     ...\FishMMO\Assets\Plugins\(FishMMO-Database or FishMMO-Dependencies)
+1.  Open **`FishMMO-Dependencies.sln`**.
+2.  In the Solution Explorer, right-click the solution and select **Clean**.
+3.  Right-click the solution again and select **Build**.
 
-You can rename the folder path to fit your directory structure.
+---
 
-### FishMMO (Unity)
+## **3. Build the FishMMO-Database Project**
 
-FishMMO will build your project for you.
-Click any of the Server or Client build types and select the output folder.
-All configuration files will be copied over automatically from the root project directory.
+Next, build the database project, which is essential for the server components.
 
-![buildgame](https://user-images.githubusercontent.com/19621936/233815094-711358a3-ca4b-44c4-84ea-b2c56b771c56.png)
+1.  Go to **`FishMMO/FishMMO-Database`**.
+2.  Open **`FishMMO-Database.sln`**.
+3.  In the Solution Explorer, right-click the solution and select **Clean**.
+4.  Right-click the solution again and select **Build**.
 
+---
 
-### Adding Scenes
+## **4. Configure Unity Hub**
 
-If you would like to Add new WorldScenes to your project simply place them in the /Scenes/WorldScenes/ directory.
+Configure Unity Hub to work with the FishMMO project and its required modules.
 
-To Bake Initial Spawn Positions, Respawn Positions, and/or Teleporters into your new scenes open the
-WorldSceneDetails asset which is located in /Resources/Prefabs/Shared/ and press the Rebuild button.
+1.  **Add the Project:**
+    - Click the **ADD** button in Unity Hub.
+    - Select the **`FishMMO-Unity`** directory from your cloned repository.
+2.  **Install Required Modules:**
+    - Go to the **Installs** tab.
+    - Click the gear icon next to your preferred Unity version and select **Add Modules**.
+    - Ensure the following modules are installed:
+        - **Linux Build Support (IL2CPP and Mono)**
+        - **Linux Dedicated Server Build Support**
+        - **Mac Build Support**
+        - **WebGL Build Support**
+        - **Windows Build Support (IL2CPP)**
+        - **Windows Dedicated Server Build Support**
 
-![worldscenedetails](https://user-images.githubusercontent.com/19621936/233815140-ce430187-a1cf-4ca1-8c9c-e4ff579af223.png)
+---
+
+## **5. Open the FishMMO-Unity Project**
+
+Launch the **`FishMMO-Unity`** project from the Unity Hub.
+
+---
+
+## **6. Build the FishMMO Database Installer**
+
+The Database Installer automates the setup of the backend infrastructure.
+
+1.  In the Unity Editor, navigate to the menu:  
+    **`FishMMO > Build > Operating System > Database Installer`**
+2.  Build the Database Installer executable.
+
+---
+
+## **7. Run the Database Installer**
+
+Execute the installer to set up the necessary tools and the database.
+
+1.  Run the **`Database Installer.exe`** you just built.
+2.  The installer will guide you through the process, automatically checking for and installing missing dependencies such as:
+    - **.NET 8 SDK**
+    - **Visual Studio Build Tools** (with .NET Desktop, C++ workloads, MSVC compiler, and Windows 10 SDK)
+    - **NGINX** (optional)
+    - **PostgreSQL**
+    - **The FishMMO Database** (including EFCore migrations)
+3.  Follow the on-screen prompts to complete the installation.
+
+---
+
+## **Miscellaneous**
+
+### **Build World Scene Details**
+This process caches important game world details for clients and servers. It should be run whenever you add a new scene to your project.
+
+**Unity Menu:**  
+`FishMMO/Build/Rebuild World Scene Details`
+
+---
+
+### **FishMMO Builds**
+Use the custom build menu in Unity to create clients, servers, Addressables, and the database installer.
+
+**Environments:**
+- **Development:** Uses `127.0.0.1` for loopback addresses in configuration files.
+- **Release:** Uses `0.0.0.0` to bind to all available network interfaces.
+
+---
+
+### **Database Setup**
+The Database Installer provides options for managing your database, including creating new migrations, adding user permissions, and deleting the database. FishMMO uses EFCore for migrations. After the initial migration is created during installation, you are ready to begin development.
+
+---
+
+### **VersionBuilder Menu**
+This menu helps you manage the project's versioning system.
+
+**Access:**  
+`FishMMO/Version/`
+
+**Options:**
+- `Increment Major`: Increases the major version number.
+- `Increment Minor`: Increases the minor version number.
+- `Increment Patch`: Increases the patch version number.
+- `Reset Version`: Resets all version fields to zero.
+
+Each action updates **`VersionConfig.asset`** and Unity's bundle version. The final version is written to **`version.txt`** in the build output directory.
+
+**Optional:**  
+You can enable automatic patch version increments by uncommenting the `UpdateBuildVersion()` call in `OnPostprocessBuild`.
+
+---
+
+### **DotNetBuilder**
+A utility class that automates .NET build, publish, and migration tasks for FishMMO servers and tools. It integrates with the installer to streamline backend setup and handles process execution and error logging for the .NET CLI.
+
+---
+
+### **DotNetBuilder Profiles**
+Profiles define build and publish settings for different environments (e.g., Development, Production). They ensure consistent and repeatable builds by specifying configurations like target framework, output directory, and runtime identifier.
+
+---
+
+### **PatchGenerator**
+A custom Unity Editor window for creating and managing game patches.
+
+**Access:**  
+`FishMMO/Patch/Patch Generator`
+
+**Usage:**
+1.  Select the new and old build directories.
+2.  Configure options, exclusions, and version details.
+3.  Click **Generate Patch** to create delta files and manifests.
+
+This tool is useful for distributing incremental updates to players. You can then build an ASP.NET Patch server and point it to the directory containing your generated patch files.
+
+---
+
+### **Server Setup**
+
+Configure the following files in the builds directory:
+- `LoginServer.cfg`
+- `WorldServer.cfg`
+- `SceneServer.cfg`
+- `logging.json`
+- `appsettings.json`
+
+---
+
+### **Launching the Servers**
+
+Build the **FishMMO-AppHealthMonitor** application and configure the `appsetting.json`:
+
+```json
+{
+  "Applications": [
+    {
+      "Name": "LoginServer",
+      "ApplicationExePath": "path\\to\\your\\FishMMO GameServer Windows\\GameServer.exe",
+      "MonitoredPort": 7770, // This Port should match your LoginServer.cfg port
+      "PortTypes": [ "TCP", "UDP" ],
+      "LaunchArguments": "LOGIN",
+      "CheckIntervalSeconds": 30,
+      "LaunchDelaySeconds": 2,
+      "CpuThresholdPercent": 0,
+      "MemoryThresholdMB": 0,
+      "GracefulShutdownTimeoutSeconds": 10,
+      "InitialRestartDelaySeconds": 5,
+      "MaxRestartDelaySeconds": 60,
+      "MaxRestartAttempts": 5,
+      "CircuitBreakerFailureThreshold": 3,
+      "CircuitBreakerResetTimeoutMinutes": 5
+    },
+    {
+      "Name": "WorldServer",
+      "ApplicationExePath": "path\\to\\your\\FishMMO GameServer Windows\\GameServer.exe",
+      "MonitoredPort": 7780, // This Port should match your WorldServer.cfg port
+      "PortTypes": [ "TCP", "UDP" ],
+      "LaunchArguments": "WORLD",
+      "CheckIntervalSeconds": 30,
+      "LaunchDelaySeconds": 2,
+      "CpuThresholdPercent": 0,
+      "MemoryThresholdMB": 0,
+      "GracefulShutdownTimeoutSeconds": 10,
+      "InitialRestartDelaySeconds": 5,
+      "MaxRestartDelaySeconds": 60,
+      "MaxRestartAttempts": 5,
+      "CircuitBreakerFailureThreshold": 3,
+      "CircuitBreakerResetTimeoutMinutes": 5
+    },
+    {
+      "Name": "SceneServer",
+      "ApplicationExePath": "path\\to\\your\\FishMMO GameServer Windows\\GameServer.exe",
+      "MonitoredPort": 7781, // This Port should match your SceneServer.cfg port
+      "PortTypes": [ "TCP", "UDP" ],
+      "LaunchArguments": "SCENE",
+      "CheckIntervalSeconds": 30,
+      "LaunchDelaySeconds": 2,
+      "CpuThresholdPercent": 0,
+      "MemoryThresholdMB": 0,
+      "GracefulShutdownTimeoutSeconds": 10,
+      "InitialRestartDelaySeconds": 5,
+      "MaxRestartDelaySeconds": 60,
+      "MaxRestartAttempts": 5,
+      "CircuitBreakerFailureThreshold": 3,
+      "CircuitBreakerResetTimeoutMinutes": 5
+    },
+    {
+      "Name": "IPFetch Server",
+      "ApplicationExePath": "path\\to\\your\\IPFetch Server\\IpFetchServer.exe",
+      "MonitoredPort": 0,
+      "PortTypes": [ "None" ],
+      "LaunchArguments": "",
+      "CheckIntervalSeconds": 30,
+      "LaunchDelaySeconds": 2,
+      "CpuThresholdPercent": 0,
+      "MemoryThresholdMB": 0,
+      "GracefulShutdownTimeoutSeconds": 10,
+      "InitialRestartDelaySeconds": 5,
+      "MaxRestartDelaySeconds": 60,
+      "MaxRestartAttempts": 5,
+      "CircuitBreakerFailureThreshold": 3,
+      "CircuitBreakerResetTimeoutMinutes": 5
+    }
+  ]
+}
+```
+
+Launch the **AppHealthMonitor.exe**.
+
+---
+
+**Enjoy building with FishMMO!**
