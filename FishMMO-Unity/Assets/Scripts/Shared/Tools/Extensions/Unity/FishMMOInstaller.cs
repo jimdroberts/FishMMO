@@ -1453,28 +1453,32 @@ namespace FishMMO.Shared
 			{
 				string installerPath = await DownloadFileAsync(InstallationConstants.VSBuildToolsUrl, InstallationConstants.VSBuildToolsFileName);
 
-				Log("\n*** IMPORTANT: MANUAL SELECTION REQUIRED ***");
-				Log("The Visual Studio Build Tools installer will now launch.");
-				Log("Please ensure you select the following components/workloads:");
+				Log("Automated installation of Visual Studio Build Tools will begin.");
+				Log("The following workloads and components will be installed:");
 				Log("  1. '.NET desktop development' workload (includes .NET Framework development tools)");
 				Log("  2. 'Desktop development with C++' workload (MSVC 64-bit compiler for x86, x64, ARM, and ARM64)");
-				Log("  3. Within 'Desktop development with C++', ensure 'Windows 10 SDK (or newer)' is selected under Individual Components.");
+				Log("  3. Windows 10 SDK");
 				Log("After installation, restart your computer if prompted by the installer.");
-				Log("\nPress any key to launch the installer...");
-				Console.ReadKey(true);
+
+				string arguments = "--quiet --wait --norestart --nocache " +
+					"--add Microsoft.VisualStudio.Workload.ManagedDesktop " +
+					"--add Microsoft.VisualStudio.Workload.NativeDesktop " +
+					"--add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 " +
+					"--add Microsoft.VisualStudio.Component.Windows10SDK.19041";
 
 				ProcessStartInfo startInfo = new ProcessStartInfo
 				{
 					FileName = installerPath,
+					Arguments = arguments,
 					UseShellExecute = true,
 					Verb = "runas" // Request administrator privileges
 				};
 
+				Log($"Launching installer with arguments: {arguments}");
 				Process process = Process.Start(startInfo);
 				await process.WaitForExitAsync();
 
-				Log("Visual Studio Build Tools installer has finished. Please verify the installation manually.");
-				Log("Remember to select the components mentioned above if you haven't already.");
+				Log("Visual Studio Build Tools automated installation finished. Please verify the installation and restart your computer if required.");
 			}
 			catch (Exception ex)
 			{
