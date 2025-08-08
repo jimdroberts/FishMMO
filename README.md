@@ -114,7 +114,7 @@ The Database Installer provides options for managing your database, including cr
 
 ---
 
-### **VersionBuilder Menu**
+### **Versioning**
 This menu helps you manage the project's versioning system.
 
 **Access:**  
