@@ -45,6 +45,7 @@ ExportedObj/
 *.pdb
 *.md
 *.mdb
+*.yml
 *.opendb
 *.VC.db
 *.vsconfig
