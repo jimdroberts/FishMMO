@@ -83,7 +83,7 @@ crashlytics-build.properties
 
 # Special ignore directory, anything here will be ignored
 /[Aa]ssets/[Dd]ependencies*
-/[Aa]ssets/[Ss]cripts/wiki/*
+/[Dd]ocumentation*
 
 # FishNet specific directory ignores, we don't want to include examples, demos, or upgrading
 /[Aa]ssets/[Pp]lugins/[Ff]ish[Nn]et/[Dd]emos*
