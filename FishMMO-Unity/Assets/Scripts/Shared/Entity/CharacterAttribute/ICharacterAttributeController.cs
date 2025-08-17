@@ -19,19 +19,21 @@ namespace FishMMO.Shared
 		Dictionary<int, CharacterResourceAttribute> ResourceAttributes { get; }
 
 		/// <summary>
-		/// Sets the value of a non-resource attribute by template ID.
+		/// Sets the value and optional modifier of a non-resource attribute by template ID.
 		/// </summary>
 		/// <param name="id">Template ID of the attribute.</param>
 		/// <param name="value">New value to set.</param>
-		void SetAttribute(int id, int value);
+		/// <param name="modifier">Optional modifier value to set.</param>
+		void SetAttribute(int id, int value, int? modifier = null);
 
 		/// <summary>
-		/// Sets the value and current value of a resource attribute by template ID.
+		/// Sets the value, current value, and optional modifier of a resource attribute by template ID.
 		/// </summary>
 		/// <param name="id">Template ID of the resource attribute.</param>
 		/// <param name="value">New value to set.</param>
 		/// <param name="currentValue">New current value to set.</param>
-		void SetResourceAttribute(int id, int value, float currentValue);
+		/// <param name="modifier">Optional modifier value to set.</param>
+		void SetResourceAttribute(int id, int value, float currentValue, int? modifier = null);
 
 		/// <summary>
 		/// Tries to get a non-resource attribute by template reference.

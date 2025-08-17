@@ -51,6 +51,10 @@ namespace FishMMO.Shared
 				Item item = new Item(id, seed, templateID, stackSize);
 
 				SetItemSlot(item, slot);
+				if (item.IsEquippable)
+				{
+					item.Equippable.Equip(Character);
+				}
 			}
 		}
 
@@ -91,17 +95,6 @@ namespace FishMMO.Shared
 		public override void OnStartCharacter()
 		{
 			base.OnStartCharacter();
-
-			// Set the owner for all equippable items.
-			foreach (Item item in Items)
-			{
-				if (item == null ||
-					!item.IsEquippable)
-				{
-					continue;
-				}
-				item.Equippable.SetOwner(Character);
-			}
 
 			if (!base.IsOwner)
 			{

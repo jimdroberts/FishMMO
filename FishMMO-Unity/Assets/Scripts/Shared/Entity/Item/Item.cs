@@ -183,11 +183,6 @@ namespace FishMMO.Shared
 			if (initializeEquippable)
 			{
 				Equippable?.Initialize(this);
-
-				if (initializeGenerator)
-				{
-					Generator.OnSetAttribute += ItemGenerator_OnSetAttribute;
-				}
 			}
 			if (initializeGenerator)
 			{
@@ -217,10 +212,7 @@ namespace FishMMO.Shared
 			}
 			if (Equippable != null)
 			{
-				if (IsGenerated)
-				{
-					Generator.OnSetAttribute -= ItemGenerator_OnSetAttribute;
-				}
+
 				Equippable.Destroy();
 			}
 			/*if (Stackable != null)
@@ -270,36 +262,6 @@ namespace FishMMO.Shared
 				sb.Dispose();
 			}
 			return tooltip;
-		}
-
-		/// <summary>
-		/// Event handler called when an item's attribute is set by the generator.
-		/// Updates character attributes or resources accordingly.
-		/// </summary>
-		/// <param name="attribute">The item attribute being changed.</param>
-		/// <param name="oldValue">The previous value of the attribute.</param>
-		/// <param name="newValue">The new value of the attribute.</param>
-		public void ItemGenerator_OnSetAttribute(ItemAttribute attribute, int oldValue, int newValue)
-		{
-			if (IsEquippable)
-			{
-				ICharacter character = Equippable.Character;
-
-				if (character != null &&
-					character.TryGet(out ICharacterAttributeController attributeController))
-				{
-					if (attributeController.TryGetAttribute(attribute.Template.CharacterAttribute.ID, out CharacterAttribute characterAttribute))
-					{
-						characterAttribute.AddValue(-oldValue);
-						characterAttribute.AddValue(newValue);
-					}
-					else if (attributeController.TryGetResourceAttribute(attribute.Template.CharacterAttribute.ID, out CharacterResourceAttribute characterResourceAttribute))
-					{
-						characterResourceAttribute.AddValue(-oldValue);
-						characterResourceAttribute.AddValue(newValue);
-					}
-				}
-			}
 		}
 
 		/// <summary>
