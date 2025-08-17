@@ -3,7 +3,6 @@ using System.Runtime.CompilerServices;
 using FishNet.Connection;
 using FishNet.Serializing;
 using FishNet.Transporting;
-using UnityEngine;
 using FishMMO.Logging;
 
 namespace FishMMO.Shared
@@ -60,12 +59,12 @@ namespace FishMMO.Shared
 		public Dictionary<int, CharacterResourceAttribute> ResourceAttributes { get { return resourceAttributes; } }
 
 		/// <summary>
-		/// Unity lifecycle method called when the component is initialized.
-		/// Initializes all attributes and resource attributes from the database, and sets up dependencies.
+		/// CharacterBehaviour function which is typically called once during initialization and typically before Awake or OnAwake.
+		/// Initializes all attributes and resource attributes from the CharacterAttributeDatabase, and sets up dependencies.
 		/// </summary>
-		public override void OnAwake()
+		public override void InitializeOnce()
 		{
-			base.OnAwake();
+			base.InitializeOnce();
 
 			if (CharacterAttributeDatabase != null)
 			{
