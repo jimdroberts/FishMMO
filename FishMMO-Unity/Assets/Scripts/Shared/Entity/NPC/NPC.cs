@@ -83,8 +83,8 @@ namespace FishMMO.Shared
 				npcRNG = new System.Random(npcSeed);
 
 				// Generate NPC attributes based on the seed on the server.
-				// Clients will receive the current NPC Attributes when CharacterAttributeController is synchronized.
-				AddNPCAttributes();
+				// Clients will receive the attributes BaseValue and CurrentValue when CharacterAttributeController is synchronized.
+				AddNPCAttributes(true);
 			}
 		}
 #endif
@@ -115,18 +115,22 @@ namespace FishMMO.Shared
 
 			//Log.Debug($"Received NPC RNG Seed {npcSeed}");
 
+			// Clients still need to generate the attribute modifier values locally.
+			AddNPCAttributes(false);
+
 #if !UNITY_SERVER
 			// FactionController stores a reference to the RaceTemplate.
 			if (this.TryGet(out IFactionController factionController))
 			{
 				RaceTemplate raceTemplate = factionController.RaceTemplate;
 				int modelIndex = -1;
-				if (raceTemplate.Models == null || raceTemplate.Models.Count < 1)
+				if (raceTemplate.Models != null && raceTemplate.Models.Count > 0)
 				{
 					// Pick a random model for this NPC using the RNG.
 					modelIndex = npcRNG.Next(0, raceTemplate.Models.Count);
+
+					InstantiateRaceModelFromIndex(raceTemplate, modelIndex);
 				}
-				InstantiateRaceModelFromIndex(raceTemplate, modelIndex);
 			}
 #endif
 		}
@@ -154,11 +158,10 @@ namespace FishMMO.Shared
 			ObjectSpawner?.Despawn(this);
 		}
 
-#if UNITY_SERVER
 		/// <summary>
 		/// Applies attribute bonuses to this NPC using the attribute database and random generator.
 		/// </summary>
-		private void AddNPCAttributes()
+		private void AddNPCAttributes(bool asServer)
 		{
 			if (AttributeBonuses != null &&
 				AttributeBonuses.Attributes != null &&
@@ -208,7 +211,10 @@ namespace FishMMO.Shared
 							int modifier = newValue - old;
 
 							characterResourceAttribute.SetModifier(modifier);
-							characterResourceAttribute.SetCurrentValue(newValue);
+							if (asServer)
+							{
+								characterResourceAttribute.SetCurrentValue(newValue);
+							}
 
 							//Log.Debug($"{characterResourceAttribute.Template.Name} Old: {old} | New: {characterResourceAttribute.CurrentValue}/{characterResourceAttribute.FinalValue}");
 						}
@@ -217,7 +223,10 @@ namespace FishMMO.Shared
 							int modifier = value - old;
 
 							characterResourceAttribute.SetModifier(modifier);
-							characterResourceAttribute.SetCurrentValue(value);
+							if (asServer)
+							{
+								characterResourceAttribute.SetCurrentValue(value);
+							}
 
 							//Log.Debug($"{characterResourceAttribute.Template.Name} Old: {old} | New: {characterResourceAttribute.CurrentValue}/{characterResourceAttribute.FinalValue}");
 						}
@@ -225,6 +234,5 @@ namespace FishMMO.Shared
 				}
 			}
 		}
-#endif
 	}
 }
