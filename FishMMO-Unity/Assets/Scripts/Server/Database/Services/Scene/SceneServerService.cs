@@ -7,11 +7,22 @@ using FishMMO.Logging;
 
 namespace FishMMO.Server.DatabaseServices
 {
-	public class SceneServerService
+		/// <summary>
+		/// Provides methods for managing scene servers, including adding, updating, deleting, and retrieving server data from the database.
+		/// </summary>
+		public class SceneServerService
 	{
 		/// <summary>
-		/// Adds a new server to the server list. The Login server will fetch this list for new clients.
+		/// Adds a new scene server to the server list or updates an existing one. The login server will fetch this list for new clients.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="name">The name of the scene server.</param>
+		/// <param name="address">The address of the scene server.</param>
+		/// <param name="port">The port of the scene server.</param>
+		/// <param name="characterCount">The number of characters on the server.</param>
+		/// <param name="locked">Whether the server is locked.</param>
+		/// <param name="id">The ID of the added or updated server.</param>
+		/// <returns>The added or updated scene server entity.</returns>
 		public static SceneServerEntity Add(
 			NpgsqlDbContext dbContext,
 			string name,
@@ -62,6 +73,13 @@ namespace FishMMO.Server.DatabaseServices
 			return server;
 		}
 
+		/// <summary>
+		/// Updates the last pulse, character count, and lock state for a scene server.
+		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="id">The ID of the scene server to update.</param>
+		/// <param name="characterCount">The number of characters on the server.</param>
+		/// <param name="locked">Whether the server is locked.</param>
 		public static void Pulse(NpgsqlDbContext dbContext, long id, int characterCount, bool locked)
 		{
 			if (id == 0)
@@ -78,6 +96,11 @@ namespace FishMMO.Server.DatabaseServices
 			dbContext.SaveChanges();
 		}
 
+		/// <summary>
+		/// Deletes a scene server from the database by its ID.
+		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="id">The ID of the scene server to delete.</param>
 		public static void Delete(NpgsqlDbContext dbContext, long id)
 		{
 			if (id == 0)
@@ -93,6 +116,12 @@ namespace FishMMO.Server.DatabaseServices
 			}
 		}
 
+		/// <summary>
+		/// Retrieves a scene server from the database by its ID.
+		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="id">The ID of the scene server to retrieve.</param>
+		/// <returns>The scene server entity if found; otherwise, null.</returns>
 		public static SceneServerEntity GetServer(NpgsqlDbContext dbContext, long id)
 		{
 			if (id == 0)

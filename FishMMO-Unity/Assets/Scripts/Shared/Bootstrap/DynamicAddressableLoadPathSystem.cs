@@ -2,7 +2,7 @@ using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.ResourceLocations;
 
-namespace AddressableAssets
+namespace FishMMO.Shared
 {
 	/// <summary>
 	/// Dynamically overrides the Addressables remote load path at runtime.

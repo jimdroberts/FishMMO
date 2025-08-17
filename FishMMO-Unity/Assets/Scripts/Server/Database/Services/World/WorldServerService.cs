@@ -8,11 +8,22 @@ using FishMMO.Logging;
 
 namespace FishMMO.Server.DatabaseServices
 {
-	public class WorldServerService
+		/// <summary>
+		/// Provides methods for managing world servers, including adding, updating, deleting, and retrieving server data from the database.
+		/// </summary>
+		public class WorldServerService
 	{
 		/// <summary>
-		/// Adds a new server to the server list. The Login server will fetch this list for new clients.
+		/// Adds a new world server to the server list or updates an existing one. The login server will fetch this list for new clients.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="name">The name of the world server.</param>
+		/// <param name="address">The address of the world server.</param>
+		/// <param name="port">The port of the world server.</param>
+		/// <param name="characterCount">The number of characters on the server.</param>
+		/// <param name="locked">Whether the server is locked.</param>
+		/// <param name="id">The ID of the added or updated server.</param>
+		/// <returns>The added or updated world server entity.</returns>
 		public static WorldServerEntity Add(
 		    NpgsqlDbContext dbContext,
 		    string name,
@@ -64,6 +75,12 @@ namespace FishMMO.Server.DatabaseServices
 			return server;
 		}
 
+		/// <summary>
+		/// Updates the last pulse and character count for a world server.
+		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="id">The ID of the world server to update.</param>
+		/// <param name="characterCount">The number of characters on the server.</param>
 		public static void Pulse(NpgsqlDbContext dbContext, long id, int characterCount)
 		{
 			if (id == 0)
@@ -78,6 +95,11 @@ namespace FishMMO.Server.DatabaseServices
 			dbContext.SaveChanges();
 		}
 
+		/// <summary>
+		/// Deletes a world server from the database by its ID.
+		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="id">The ID of the world server to delete.</param>
 		public static void Delete(NpgsqlDbContext dbContext, long id)
 		{
 			if (id == 0)
@@ -92,6 +114,12 @@ namespace FishMMO.Server.DatabaseServices
 			}
 		}
 
+		/// <summary>
+		/// Retrieves a world server from the database by its ID.
+		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="worldServerID">The ID of the world server to retrieve.</param>
+		/// <returns>The world server entity if found; otherwise, null.</returns>
 		public static WorldServerEntity GetServer(NpgsqlDbContext dbContext, long worldServerID)
 		{
 			if (worldServerID == 0)
@@ -104,6 +132,12 @@ namespace FishMMO.Server.DatabaseServices
 			return worldServer;
 		}
 
+		/// <summary>
+		/// Retrieves a list of world server details for servers that have not timed out.
+		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="idleTimeout">The idle timeout in seconds.</param>
+		/// <returns>A list of world server details for active servers.</returns>
 		public static List<WorldServerDetails> GetServerList(NpgsqlDbContext dbContext, float idleTimeout = 60.0f /*60 second timeout*/)
 		{
 			return dbContext.WorldServers.Where((s) => s.LastPulse.AddSeconds(idleTimeout) >= DateTime.UtcNow)

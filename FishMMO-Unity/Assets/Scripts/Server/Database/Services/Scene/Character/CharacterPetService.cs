@@ -8,132 +8,147 @@ using System.Collections.Generic;
 
 namespace FishMMO.Server.DatabaseServices
 {
-	/// <summary>
-	/// Handles all Database<->Server Character Pet interactions.
-	/// </summary>
-	public class CharacterPetService
-	{
-		public static CharacterPetEntity GetByCharacterID(NpgsqlDbContext dbContext, long characterID, bool checkSpawned = false)
-		{
-			if (characterID == 0)
-			{
-				return null;
-			}
-			var pet = dbContext.CharacterPets.FirstOrDefault(c => c.CharacterID == characterID);
-			if (pet == null ||
-				checkSpawned && !pet.Spawned)
-			{
-				//throw new Exception($"Couldn't find pet with id {id}");
-				return null;
-			}
-			return pet;
-		}
+    /// <summary>
+    /// Handles all Database &lt;-&gt; Server Character Pet interactions.
+    /// </summary>
+    public class CharacterPetService
+    {
+        /// <summary>
+        /// Gets the pet entity for a given character ID.
+        /// </summary>
+        /// <param name="dbContext">The database context.</param>
+        /// <param name="characterID">The character's ID.</param>
+        /// <param name="checkSpawned">If true, only returns the pet if it is spawned.</param>
+        /// <returns>The <see cref="CharacterPetEntity"/> if found; otherwise, null.</returns>
+        public static CharacterPetEntity GetByCharacterID(NpgsqlDbContext dbContext, long characterID, bool checkSpawned = false)
+        {
+            if (characterID == 0)
+            {
+                return null;
+            }
+            var pet = dbContext.CharacterPets.FirstOrDefault(c => c.CharacterID == characterID);
+            if (pet == null ||
+                checkSpawned && !pet.Spawned)
+            {
+                //throw new Exception($"Couldn't find pet with id {id}");
+                return null;
+            }
+            return pet;
+        }
 
-		/// <summary>
-		/// Save a character to the database. Only Scene Servers should be saving characters. A character can only be in one scene at a time.
-		/// </summary>
-		public static void Save(NpgsqlDbContext dbContext, ICharacter character, bool spawned)
-		{
-			if (character == null)
-			{
-				return;
-			}
+        /// <summary>
+        /// Saves a character's pet to the database. Only Scene Servers should be saving characters.
+        /// A character can only be in one scene at a time.
+        /// </summary>
+        /// <param name="dbContext">The database context.</param>
+        /// <param name="character">The character whose pet is being saved.</param>
+        /// <param name="spawned">Whether the pet is currently spawned.</param>
+        public static void Save(NpgsqlDbContext dbContext, ICharacter character, bool spawned)
+        {
+            if (character == null)
+            {
+                return;
+            }
 
-			if (!character.TryGet(out IPetController petController))
-			{
-				return;
-			}
+            if (!character.TryGet(out IPetController petController))
+            {
+                return;
+            }
 
-			int petID = spawned ? petController.Pet.PetAbilityTemplate.ID : 0;
-			List<int> petAbilities = spawned ? petController.Pet.Abilities : new List<int>();
+            int petID = spawned ? petController.Pet.PetAbilityTemplate.ID : 0;
+            List<int> petAbilities = spawned ? petController.Pet.Abilities : new List<int>();
 
-			var dbPet = dbContext.CharacterPets.FirstOrDefault((c) => c.CharacterID == character.ID);
-			if (dbPet != null)
-			{
-				dbPet.CharacterID = character.ID;
-				dbPet.TemplateID = petID;
-				dbPet.Abilities = petAbilities;
-				dbPet.Spawned = spawned;
-				dbContext.SaveChanges();
-			}
-			else if (spawned)
-			{
-				dbPet = new CharacterPetEntity()
-				{
-					CharacterID = character.ID,
-					TemplateID = petID,
-					Abilities = petAbilities,
-					Spawned = spawned,
-				};
-				dbContext.CharacterPets.Add(dbPet);
-				dbContext.SaveChanges();
-			}
-		}
+            var dbPet = dbContext.CharacterPets.FirstOrDefault((c) => c.CharacterID == character.ID);
+            if (dbPet != null)
+            {
+                dbPet.CharacterID = character.ID;
+                dbPet.TemplateID = petID;
+                dbPet.Abilities = petAbilities;
+                dbPet.Spawned = spawned;
+                dbContext.SaveChanges();
+            }
+            else if (spawned)
+            {
+                dbPet = new CharacterPetEntity()
+                {
+                    CharacterID = character.ID,
+                    TemplateID = petID,
+                    Abilities = petAbilities,
+                    Spawned = spawned,
+                };
+                dbContext.CharacterPets.Add(dbPet);
+                dbContext.SaveChanges();
+            }
+        }
 
-		/// <summary>
-		/// Attempts to load a pet from the database. The pet is loaded to the last known position/rotation and set inactive.
-		/// </summary>
-		public static bool TryLoad(NpgsqlDbContext dbContext, IPlayerCharacter character, out Pet pet)
-		{
-			pet = null;
+        /// <summary>
+        /// Attempts to load a pet from the database. The pet is loaded to the last known position/rotation and set inactive.
+        /// </summary>
+        /// <param name="dbContext">The database context.</param>
+        /// <param name="character">The player character whose pet is being loaded.</param>
+        /// <param name="pet">The loaded pet instance, or null if loading failed.</param>
+        /// <returns>True if the pet was loaded successfully; otherwise, false.</returns>
+        public static bool TryLoad(NpgsqlDbContext dbContext, IPlayerCharacter character, out Pet pet)
+        {
+            pet = null;
 
-			if (character == null ||
-				!character.TryGet(out IPetController petController))
-			{
-				return false;
-			}
+            if (character == null ||
+                !character.TryGet(out IPetController petController))
+            {
+                return false;
+            }
 
-			using var dbTransaction = dbContext.Database.BeginTransaction();
+            using var dbTransaction = dbContext.Database.BeginTransaction();
 
-			var dbPet = dbContext.CharacterPets.FirstOrDefault((c) => c.CharacterID == character.ID && c.Spawned);
-			if (dbPet != null &&
-				dbTransaction != null)
-			{
-				// validate pet template
-				PetAbilityTemplate petAbilityTemplate = PetAbilityTemplate.Get<PetAbilityTemplate>(dbPet.TemplateID);
-				if (petAbilityTemplate == null ||
-					petAbilityTemplate.PetPrefab == null)
-				{
-					return false;
-				}
+            var dbPet = dbContext.CharacterPets.FirstOrDefault((c) => c.CharacterID == character.ID && c.Spawned);
+            if (dbPet != null &&
+                dbTransaction != null)
+            {
+                // validate pet template
+                PetAbilityTemplate petAbilityTemplate = PetAbilityTemplate.Get<PetAbilityTemplate>(dbPet.TemplateID);
+                if (petAbilityTemplate == null ||
+                    petAbilityTemplate.PetPrefab == null)
+                {
+                    return false;
+                }
 
-				// validate spawnable prefab
-				if (character.NetworkObject.NetworkManager.SpawnablePrefabs.GetObject(true, petAbilityTemplate.PetPrefab.PrefabId) == null)
-				{
-					return false;
-				}
+                // validate spawnable prefab
+                if (character.NetworkObject.NetworkManager.SpawnablePrefabs.GetObject(true, petAbilityTemplate.PetPrefab.PrefabId) == null)
+                {
+                    return false;
+                }
 
-				// instantiate the pet object
-				NetworkObject nob = character.NetworkObject.NetworkManager.GetPooledInstantiated(petAbilityTemplate.PetPrefab.PrefabId, petAbilityTemplate.PetPrefab.SpawnableCollectionId, ObjectPoolRetrieveOption.Unset, null, character.Transform.position, character.Transform.rotation, null, true);
-				pet = nob.GetComponent<Pet>();
-				if (pet == null)
-				{
-					//throw exception
-					throw new UnityEngine.UnityException("Network object is missing the Pet component!");
-				}
+                // instantiate the pet object
+                NetworkObject nob = character.NetworkObject.NetworkManager.GetPooledInstantiated(petAbilityTemplate.PetPrefab.PrefabId, petAbilityTemplate.PetPrefab.SpawnableCollectionId, ObjectPoolRetrieveOption.Unset, null, character.Transform.position, character.Transform.rotation, null, true);
+                pet = nob.GetComponent<Pet>();
+                if (pet == null)
+                {
+                    //throw exception
+                    throw new UnityEngine.UnityException("Network object is missing the Pet component!");
+                }
 
-				pet.PetAbilityTemplate = petAbilityTemplate;
+                pet.PetAbilityTemplate = petAbilityTemplate;
 
-				// pet becomes immortal when loading.. just in case..
-				if (pet.TryGet(out ICharacterDamageController damageController))
-				{
-					damageController.Immortal = true;
-				}
+                // pet becomes immortal when loading.. just in case..
+                if (pet.TryGet(out ICharacterDamageController damageController))
+                {
+                    damageController.Immortal = true;
+                }
 
-				pet.LearnAbilities(dbPet.Abilities);
+                pet.LearnAbilities(dbPet.Abilities);
 
-				//CharacterPetAttributeService.Load(dbContext, pet);
-				//CharacterPetBuffService.Load(dbContext, pet);
+                //CharacterPetAttributeService.Load(dbContext, pet);
+                //CharacterPetBuffService.Load(dbContext, pet);
 
-				/*Log.Debug(dbCharacter.Name + " has been loaded at Pos:" +
-					  nob.transform.position.ToString() +
-					  " Rot:" + nob.transform.rotation.ToString());*/
+                /*Log.Debug(dbCharacter.Name + " has been loaded at Pos:" +
+                      nob.transform.position.ToString() +
+                      " Rot:" + nob.transform.rotation.ToString());*/
 
-				dbTransaction.Commit();
+                dbTransaction.Commit();
 
-				return true;
-			}
-			return false;
-		}
-	}
+                return true;
+            }
+            return false;
+        }
+    }
 }

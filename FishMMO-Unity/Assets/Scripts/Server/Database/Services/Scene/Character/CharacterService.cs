@@ -13,15 +13,27 @@ using UnityEngine;
 namespace FishMMO.Server.DatabaseServices
 {
 	/// <summary>
-	/// Handles all Database<->Server Character interactions.
+	/// Provides methods for handling all database and server character interactions, including retrieval, updates, and state management.
 	/// </summary>
 	public class CharacterService
 	{
+		/// <summary>
+		/// Gets the number of non-deleted characters for a given account.
+		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="account">The account name.</param>
+		/// <returns>The count of characters.</returns>
 		public static int GetCount(NpgsqlDbContext dbContext, string account)
 		{
 			return dbContext.Characters.Where((c) => c.Account == account && !c.Deleted).Count();
 		}
 
+		/// <summary>
+		/// Checks if a character with the specified ID exists and is online.
+		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="id">The character ID.</param>
+		/// <returns>True if the character exists and is online; otherwise, false.</returns>
 		public static bool ExistsAndOnline(NpgsqlDbContext dbContext, long id)
 		{
 			if (id == 0)
@@ -32,18 +44,38 @@ namespace FishMMO.Server.DatabaseServices
 															  c.Online) != null;
 		}
 
+		/// <summary>
+		/// Checks if a character with the specified name exists and is online.
+		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="characterName">The character name.</param>
+		/// <returns>True if the character exists and is online; otherwise, false.</returns>
 		public static bool ExistsAndOnline(NpgsqlDbContext dbContext, string characterName)
 		{
 			return dbContext.Characters.FirstOrDefault((c) => c.NameLowercase == characterName.ToLower() &&
 															  c.Online) != null;
 		}
 
+		/// <summary>
+		/// Checks if a character with the specified name exists for the given account.
+		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="account">The account name.</param>
+		/// <param name="characterName">The character name.</param>
+		/// <returns>True if the character exists; otherwise, false.</returns>
 		public static bool Exists(NpgsqlDbContext dbContext, string account, string characterName)
 		{
 			return dbContext.Characters.FirstOrDefault((c) => c.Account == account &&
 															  c.NameLowercase == characterName.ToLower()) != null;
 		}
 
+		/// <summary>
+		/// Retrieves a character entity by its ID.
+		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="id">The character ID.</param>
+		/// <param name="checkDeleted">Whether to check if the character is deleted.</param>
+		/// <returns>The character entity if found; otherwise, null.</returns>
 		public static CharacterEntity GetByID(NpgsqlDbContext dbContext, long id, bool checkDeleted = false)
 		{
 			if (id == 0)
@@ -60,6 +92,12 @@ namespace FishMMO.Server.DatabaseServices
 			return character;
 		}
 
+		/// <summary>
+		/// Gets the ID of a character by its name.
+		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="name">The character name.</param>
+		/// <returns>The character ID if found; otherwise, 0.</returns>
 		public static long GetIdByName(NpgsqlDbContext dbContext, string name)
 		{
 			var character = dbContext.Characters.FirstOrDefault(c => c.NameLowercase == name.ToLower());
@@ -70,6 +108,12 @@ namespace FishMMO.Server.DatabaseServices
 			return character.ID;
 		}
 
+		/// <summary>
+		/// Gets the name of a character by its ID.
+		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="id">The character ID.</param>
+		/// <returns>The character name if found; otherwise, an empty string.</returns>
 		public static string GetNameByID(NpgsqlDbContext dbContext, long id)
 		{
 			if (id == 0)
@@ -84,6 +128,13 @@ namespace FishMMO.Server.DatabaseServices
 			return character.Name;
 		}
 
+		/// <summary>
+		/// Retrieves a character entity by its name.
+		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="name">The character name.</param>
+		/// <param name="checkDeleted">Whether to check if the character is deleted.</param>
+		/// <returns>The character entity if found; otherwise, null.</returns>
 		public static CharacterEntity GetByName(NpgsqlDbContext dbContext, string name, bool checkDeleted = false)
 		{
 			var character = dbContext.Characters.FirstOrDefault(c => c.NameLowercase == name.ToLower());
@@ -96,6 +147,12 @@ namespace FishMMO.Server.DatabaseServices
 			return character;
 		}
 
+		/// <summary>
+		/// Gets a list of character details for a given account.
+		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="account">The account name.</param>
+		/// <returns>A list of character details.</returns>
 		public static List<CharacterDetails> GetDetails(NpgsqlDbContext dbContext, string account)
 		{
 			return dbContext.Characters.Where(c => c.Account == account && !c.Deleted)
@@ -109,8 +166,12 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
-		/// Selects a character in the database. This is used for validation purposes.
+		/// Sets the selected character for an account.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="account">The account name.</param>
+		/// <param name="characterName">The character name to select.</param>
+		/// <returns>True if the character was successfully selected; otherwise, false.</returns>
 		public static bool TrySetSelected(NpgsqlDbContext dbContext, string account, string characterName)
 		{
 			// get all characters for account
@@ -133,16 +194,23 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
-		/// Gets a character in the database. This is used for validation purposes.
+		/// Checks if an account has a selected character.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="account">The account name.</param>
+		/// <returns>True if a selected character exists; otherwise, false.</returns>
 		public static bool GetSelected(NpgsqlDbContext dbContext, string account)
 		{
 			return dbContext.Characters.Where((c) => c.Account == account && c.Selected && !c.Deleted) != null;
 		}
 
 		/// <summary>
-		/// Returns true if we successfully get our selected characters scene for the connections account, otherwise returns false.
+		/// Attempts to get the scene name of the selected character for an account.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="account">The account name.</param>
+		/// <param name="sceneName">The scene name of the selected character, if found.</param>
+		/// <returns>True if the scene name was found; otherwise, false.</returns>
 		public static bool TryGetSelectedSceneName(NpgsqlDbContext dbContext, string account, out string sceneName)
 		{
 			var character = dbContext.Characters.FirstOrDefault((c) => c.Account == account &&
@@ -159,8 +227,12 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
-		/// Returns true if we successfully get our selected character for the connections account, otherwise returns false.
+		/// Attempts to get the ID of the selected character for an account.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="account">The account name.</param>
+		/// <param name="characterID">The ID of the selected character, if found.</param>
+		/// <returns>True if the character ID was found; otherwise, false.</returns>
 		public static bool TryGetSelectedCharacterID(NpgsqlDbContext dbContext, string account, out long characterID)
 		{
 			var character = dbContext.Characters.FirstOrDefault((c) => c.Account == account && c.Selected && !c.Deleted);
@@ -173,6 +245,12 @@ namespace FishMMO.Server.DatabaseServices
 			return false;
 		}
 
+		/// <summary>
+		/// Sets the online state for all characters of an account.
+		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="account">The account name.</param>
+		/// <param name="online">The online state to set.</param>
 		public static void SetOnlineState(NpgsqlDbContext dbContext, string account, bool online = true)
 		{
 			var characters = dbContext.Characters.Where((c) => c.Account == account);
@@ -186,6 +264,12 @@ namespace FishMMO.Server.DatabaseServices
 			}
 		}
 
+		/// <summary>
+		/// Sets a specific character as online for an account.
+		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="account">The account name.</param>
+		/// <param name="characterName">The character name.</param>
 		public static void SetOnline(NpgsqlDbContext dbContext, string account, string characterName)
 		{
 			var selectedCharacter = dbContext.Characters.FirstOrDefault((c) => c.Account == account &&
@@ -198,8 +282,11 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
-		/// Returns true if any of the accounts characters are currently online.
+		/// Checks if any characters for an account are currently online.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="account">The account name.</param>
+		/// <returns>True if any characters are online; otherwise, false.</returns>
 		public static bool TryGetOnline(NpgsqlDbContext dbContext, string account)
 		{
 			var characters = dbContext.Characters.Where((c) => c.Account == account &&
@@ -209,8 +296,11 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
-		/// Set the selected characters world server id for the connections account.
+		/// Sets the world server ID for the selected character of an account.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="account">The account name.</param>
+		/// <param name="worldServerID">The world server ID to set.</param>
 		public static void SetWorld(NpgsqlDbContext dbContext, string account, long worldServerID)
 		{
 			if (worldServerID == 0)
@@ -227,8 +317,11 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
-		/// Set the selected characters scene handle for the connections account.
+		/// Sets the scene handle for the selected character of an account.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="account">The account name.</param>
+		/// <param name="sceneHandle">The scene handle to set.</param>
 		public static void SetSceneHandle(NpgsqlDbContext dbContext, string account, int sceneHandle)
 		{
 			// get all characters for account
@@ -240,6 +333,13 @@ namespace FishMMO.Server.DatabaseServices
 			}
 		}
 
+		/// <summary>
+		/// Sets the instance ID and position for a character.
+		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="characterID">The character ID.</param>
+		/// <param name="sceneInstanceID">The scene instance ID.</param>
+		/// <param name="instancePosition">The position in the instance.</param>
 		public static void SetInstance(NpgsqlDbContext dbContext, long characterID, long sceneInstanceID, Vector3 instancePosition)
 		{
 			// get all characters for account
@@ -254,6 +354,13 @@ namespace FishMMO.Server.DatabaseServices
 			}
 		}
 
+		/// <summary>
+		/// Gets the instance ID for a character.
+		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="characterID">The character ID.</param>
+		/// <param name="instanceID">The instance ID, if found.</param>
+		/// <returns>True if the instance ID was found; otherwise, false.</returns>
 		public static bool GetInstanceID(NpgsqlDbContext dbContext, long characterID, out long instanceID)
 		{
 			var character = dbContext.Characters.FirstOrDefault((c) => c.ID == characterID && !c.Deleted);
@@ -266,6 +373,13 @@ namespace FishMMO.Server.DatabaseServices
 			return false;
 		}
 
+		/// <summary>
+		/// Gets the flags for a character.
+		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="characterID">The character ID.</param>
+		/// <param name="flags">The flags value, if found.</param>
+		/// <returns>True if the flags were found; otherwise, false.</returns>
 		public static bool GetCharacterFlags(NpgsqlDbContext dbContext, long characterID, out int flags)
 		{
 			var character = dbContext.Characters.FirstOrDefault((c) => c.ID == characterID && !c.Deleted);
@@ -278,6 +392,12 @@ namespace FishMMO.Server.DatabaseServices
 			return false;
 		}
 
+		/// <summary>
+		/// Sets the flags for a character.
+		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="characterID">The character ID.</param>
+		/// <param name="flags">The flags value to set.</param>
 		public static void SetCharacterFlags(NpgsqlDbContext dbContext, long characterID, int flags)
 		{
 			var character = dbContext.Characters.FirstOrDefault((c) => c.ID == characterID && !c.Deleted);
@@ -288,6 +408,12 @@ namespace FishMMO.Server.DatabaseServices
 			}
 		}
 
+		/// <summary>
+		/// Saves a list of player characters to the database.
+		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="characters">The list of player characters.</param>
+		/// <param name="online">Whether the characters are online.</param>
 		public static void Save(NpgsqlDbContext dbContext, List<IPlayerCharacter> characters, bool online = true)
 		{
 			using var dbTransaction = dbContext.Database.BeginTransaction();
@@ -305,6 +431,13 @@ namespace FishMMO.Server.DatabaseServices
 			dbTransaction.Commit();
 		}
 
+		/// <summary>
+		/// Saves the transform (position and rotation) to the character entity.
+		/// </summary>
+		/// <param name="existingCharacter">The character entity to update.</param>
+		/// <param name="pos">The position to save.</param>
+		/// <param name="rot">The rotation to save.</param>
+		/// <param name="toInstance">Whether to save to the instance fields.</param>
 		private static void SaveTransform(CharacterEntity existingCharacter, Vector3 pos, Quaternion rot, bool toInstance)
 		{
 			if (toInstance)
@@ -330,8 +463,12 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
-		/// Save a character to the database. Only Scene Servers should be saving characters. A character can only be in one scene at a time.
+		/// Saves a character to the database. Only scene servers should save characters. A character can only be in one scene at a time.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="character">The player character to save.</param>
+		/// <param name="online">Whether the character is online.</param>
+		/// <param name="existingCharacter">The existing character entity, if already loaded.</param>
 		public static void Save(NpgsqlDbContext dbContext, IPlayerCharacter character, bool online = true, CharacterEntity existingCharacter = null)
 		{
 			if (character == null)
@@ -415,8 +552,13 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
-		/// KeepData is automatically true... This means we don't actually delete anything. Deleted is simply set to true just incase we need to reinstate a character..
+		/// Attempts to delete a character. If keepData is true, the character is soft-deleted (marked as deleted), otherwise it is removed from the database.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="account">The account name.</param>
+		/// <param name="characterName">The character name.</param>
+		/// <param name="keepData">Whether to keep the character data (soft delete).</param>
+		/// <returns>True if the character was deleted or marked as deleted; otherwise, false.</returns>
 		public static bool TryDelete(NpgsqlDbContext dbContext, string account, string characterName, bool keepData = true)
 		{
 			using var dbTransaction = dbContext.Database.BeginTransaction();
@@ -469,8 +611,13 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
-		/// Attempts to load a character from the database. The character is loaded to the last known position/rotation and set inactive.
+		/// Attempts to load a character from the database. The character is loaded to the last known position and rotation and set inactive.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="characterID">The character ID to load.</param>
+		/// <param name="networkManager">The network manager for spawning the character.</param>
+		/// <param name="character">The loaded player character, if successful.</param>
+		/// <returns>True if the character was loaded successfully; otherwise, false.</returns>
 		public static bool TryGet(NpgsqlDbContext dbContext, long characterID, NetworkManager networkManager, out IPlayerCharacter character)
 		{
 			character = null;

@@ -6,11 +6,17 @@ using FishMMO.Shared;
 
 namespace FishMMO.Server.DatabaseServices
 {
-	public class CharacterKnownAbilityService
+		/// <summary>
+		/// Provides methods for managing a character's known abilities, including adding, saving, deleting, and loading abilities from the database.
+		/// </summary>
+		public class CharacterKnownAbilityService
 	{
 		/// <summary>
-		/// Adds a known ability for a character to the database using the Ability Template ID.
+		/// Adds a known ability for a character to the database using the ability template ID.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="characterID">The character ID.</param>
+		/// <param name="templateID">The ability template ID.</param>
 		public static void Add(NpgsqlDbContext dbContext, long characterID, int templateID)
 		{
 			if (characterID == 0)
@@ -32,8 +38,10 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
-		/// Save a characters known abilities to the database.
+		/// Saves a character's known abilities to the database.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="character">The player character whose abilities will be saved.</param>
 		public static void Save(NpgsqlDbContext dbContext, IPlayerCharacter character)
 		{
 			if (character == null ||
@@ -74,8 +82,11 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
-		/// KeepData is automatically false... This means we delete the ability entry. TODO Deleted field is simply set to true just incase we need to reinstate a character..
+		/// Deletes all known abilities for a character from the database. If keepData is false, the entries are removed.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="characterID">The character ID.</param>
+		/// <param name="keepData">Whether to keep the data (currently not implemented).</param>
 		public static void Delete(NpgsqlDbContext dbContext, long characterID, bool keepData = false)
 		{
 			if (characterID == 0)
@@ -94,8 +105,12 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
-		/// KeepData is automatically false... This means we delete the ability entry. TODO Deleted field is simply set to true just incase we need to reinstate a character..
+		/// Deletes a specific known ability for a character from the database. If keepData is false, the entry is removed.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="characterID">The character ID.</param>
+		/// <param name="templateID">The ability template ID.</param>
+		/// <param name="keepData">Whether to keep the data (currently not implemented).</param>
 		public static void Delete(NpgsqlDbContext dbContext, long characterID, long templateID, bool keepData = false)
 		{
 			if (characterID == 0)
@@ -114,8 +129,10 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
-		/// Load a characters known abilities from the database.
+		/// Loads a character's known abilities from the database and assigns them to the character's ability controller.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="character">The player character to load abilities for.</param>
 		public static void Load(NpgsqlDbContext dbContext, IPlayerCharacter character)
 		{
 			if (character == null ||

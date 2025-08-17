@@ -49,9 +49,9 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Implicit conversion operator to allow SetOnce<T> to be used as T.
+		/// Implicit conversion operator to allow <see cref="SetOnce{T}"/> to be used as <typeparamref name="T"/>.
 		/// </summary>
-		/// <param name="convert">The SetOnce instance to convert.</param>
+		/// <param name="convert">The <see cref="SetOnce{T}"/> instance to convert.</param>
 		public static implicit operator T(SetOnce<T> convert)
 		{
 			return convert.Value;

@@ -627,7 +627,7 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Attempts to retrieve a double value from the configuration.
-		/// Parsing is performed using <see cref="NumberStyles.Any"/> and <see cref="CultureInfo.InvariantCulture.NumberFormat"/>.
+		/// Parsing is performed using <see cref="System.Globalization.NumberStyles.Any"/> and <see cref="System.Globalization.CultureInfo.InvariantCulture"/>.
 		/// </summary>
 		/// <param name="name">The name of the setting.</param>
 		/// <param name="result">When this method returns, contains the double value from the configuration,

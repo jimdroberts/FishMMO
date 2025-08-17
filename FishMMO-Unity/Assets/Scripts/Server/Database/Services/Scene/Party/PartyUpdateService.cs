@@ -6,8 +6,16 @@ using FishMMO.Database.Npgsql.Entities;
 
 namespace FishMMO.Server.DatabaseServices
 {
-	public class PartyUpdateService
+		/// <summary>
+		/// Provides methods for managing party update timestamps, including saving, deleting, and fetching update records from the database.
+		/// </summary>
+		public class PartyUpdateService
 	{
+		/// <summary>
+		/// Saves or updates the last update timestamp for a party. If the record does not exist, it is created.
+		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="partyID">The party ID to update.</param>
 		public static void Save(NpgsqlDbContext dbContext, long partyID)
 		{
 			if (partyID == 0)
@@ -58,6 +66,11 @@ namespace FishMMO.Server.DatabaseServices
 			}
 		}
 
+		/// <summary>
+		/// Deletes all update records for a specific party from the database.
+		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="partyID">The party ID whose update records will be deleted.</param>
 		public static void Delete(NpgsqlDbContext dbContext, long partyID)
 		{
 			if (partyID == 0)
@@ -72,6 +85,13 @@ namespace FishMMO.Server.DatabaseServices
 			}
 		}
 
+		/// <summary>
+		/// Fetches all party update records for the specified party IDs that have been updated since the given timestamp.
+		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="partyIDs">A list of party IDs to fetch updates for.</param>
+		/// <param name="lastFetch">The timestamp to compare updates against.</param>
+		/// <returns>A list of party update entities updated since the last fetch.</returns>
 		public static List<PartyUpdateEntity> Fetch(NpgsqlDbContext dbContext, List<long> partyIDs, DateTime lastFetch)
 		{
 			if (partyIDs == null || partyIDs.Count < 1)

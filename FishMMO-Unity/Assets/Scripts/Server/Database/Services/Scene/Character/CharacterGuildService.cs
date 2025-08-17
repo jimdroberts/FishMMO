@@ -6,8 +6,18 @@ using FishMMO.Shared;
 
 namespace FishMMO.Server.DatabaseServices
 {
-	public class CharacterGuildService
+		/// <summary>
+		/// Provides methods for managing a character's guild membership, including saving, updating, deleting, and loading guild data from the database.
+		/// </summary>
+		public class CharacterGuildService
 	{
+		/// <summary>
+		/// Checks if a guild exists and is not full.
+		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="guildID">The guild ID.</param>
+		/// <param name="max">The maximum allowed members in the guild.</param>
+		/// <returns>True if the guild exists and is not full; otherwise, false.</returns>
 		public static bool ExistsNotFull(NpgsqlDbContext dbContext, long guildID, int max)
 		{
 			if (guildID == 0)
@@ -23,8 +33,13 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
-		/// Saves a character guild rank to the database.
+		/// Attempts to save the rank of a character in a guild.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="characterID">The character ID.</param>
+		/// <param name="guildID">The guild ID.</param>
+		/// <param name="rank">The rank to assign.</param>
+		/// <returns>True if the rank was saved; otherwise, false.</returns>
 		public static bool TrySaveRank(NpgsqlDbContext dbContext, long characterID, long guildID, GuildRank rank)
 		{
 			if (characterID == 0 ||
@@ -44,8 +59,13 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
-		/// Saves a CharacterGuildEntity to the database.
+		/// Saves a character's guild membership to the database, or updates it if it already exists.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="characterID">The character ID.</param>
+		/// <param name="guildID">The guild ID.</param>
+		/// <param name="rank">The guild rank.</param>
+		/// <param name="location">The location of the character.</param>
 		public static void Save(NpgsqlDbContext dbContext, long characterID, long guildID, GuildRank rank, string location)
 		{
 			if (characterID == 0 ||
@@ -75,8 +95,11 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
-		/// Saves a CharacterGuildEntity to the database.
+		/// Saves a character's guild membership to the database using the character and an optional location override.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="character">The character whose guild membership will be saved.</param>
+		/// <param name="locationOverride">An optional location override for the character.</param>
 		public static void Save(NpgsqlDbContext dbContext, ICharacter character, string locationOverride = null)
 		{
 			if (character == null ||
@@ -108,6 +131,8 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// Removes a specific character from their guild.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="characterID">The character ID to remove from the guild.</param>
 		public static void Delete(NpgsqlDbContext dbContext, long characterID)
 		{
 			if (characterID == 0)
@@ -123,8 +148,13 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
-		/// Removes a character from their guild if they have a higher rank and the guild id matches the kickers guild id.
+		/// Removes a character from their guild if the kicker has a higher rank and the guild ID matches the kicker's guild ID.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="kickerRank">The rank of the character performing the removal.</param>
+		/// <param name="guildID">The guild ID.</param>
+		/// <param name="memberID">The ID of the member to remove.</param>
+		/// <returns>True if the member was removed; otherwise, false.</returns>
 		public static bool Delete(NpgsqlDbContext dbContext, GuildRank kickerRank, long guildID, long memberID)
 		{
 			if (guildID == 0 || memberID == 0)
@@ -145,8 +175,10 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
-		/// Load a CharacterGuildEntity from the database.
+		/// Loads a character's guild membership from the database and assigns it to the character's guild controller.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="character">The player character to load guild data for.</param>
 		public static void Load(NpgsqlDbContext dbContext, IPlayerCharacter character)
 		{
 			if (character == null ||
@@ -162,6 +194,12 @@ namespace FishMMO.Server.DatabaseServices
 			}
 		}
 
+		/// <summary>
+		/// Retrieves all members of a given guild.
+		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="guildID">The guild ID.</param>
+		/// <returns>A list of guild member entities, or null if the guild ID is invalid.</returns>
 		public static List<CharacterGuildEntity> Members(NpgsqlDbContext dbContext, long guildID)
 		{
 			if (guildID == 0)
