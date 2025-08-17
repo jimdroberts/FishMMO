@@ -6,11 +6,21 @@ using FishMMO.Database.Npgsql.Entities;
 
 namespace FishMMO.Server.DatabaseServices
 {
-	public class SceneService
+		/// <summary>
+		/// Provides methods for managing scenes, including enqueuing, dequeuing, updating, deleting, and retrieving scene data from the database.
+		/// </summary>
+		public class SceneService
 	{
 		/// <summary>
 		/// Enqueues a new scene load request to the database.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="worldServerID">The world server ID.</param>
+		/// <param name="sceneName">The name of the scene.</param>
+		/// <param name="sceneType">The type of the scene.</param>
+		/// <param name="sceneID">The ID of the enqueued scene, if successful.</param>
+		/// <param name="characterID">The character ID (optional).</param>
+		/// <returns>True if the scene was enqueued; otherwise, false.</returns>
 		public static bool Enqueue(NpgsqlDbContext dbContext, long worldServerID, string sceneName, SceneType sceneType, out long sceneID, long characterID = 0)
 		{
 			if (worldServerID == 0)
@@ -52,6 +62,8 @@ namespace FishMMO.Server.DatabaseServices
 		/// <summary>
 		/// Dequeues a pending scene load request from the database by setting the scene status to Loading.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <returns>The dequeued scene entity if found; otherwise, null.</returns>
 		public static SceneEntity Dequeue(NpgsqlDbContext dbContext)
 		{
 			SceneEntity entity = dbContext.Scenes.FirstOrDefault(c => c.SceneStatus == (int)SceneStatus.Pending);
@@ -64,8 +76,11 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
-		/// Updates the scene status.
+		/// Updates the status of a scene in the database.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="dbSceneID">The ID of the scene to update.</param>
+		/// <param name="sceneStatus">The new scene status.</param>
 		public static void UpdateStatus(NpgsqlDbContext dbContext, long dbSceneID, SceneStatus sceneStatus)
 		{
 			if (dbSceneID == 0)
@@ -82,8 +97,13 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
-		/// Updates the scene server id, scene handle, and the scene status for a loading scene to Ready.
+		/// Updates the scene server ID, scene handle, and sets the scene status to Ready for a loading scene.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="sceneServerID">The scene server ID.</param>
+		/// <param name="worldServerID">The world server ID.</param>
+		/// <param name="sceneName">The name of the scene.</param>
+		/// <param name="sceneHandle">The handle of the scene.</param>
 		public static void SetReady(NpgsqlDbContext dbContext, long sceneServerID, long worldServerID, string sceneName, int sceneHandle)
 		{
 			if (sceneServerID == 0 || worldServerID == 0)
@@ -106,8 +126,11 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
-		/// Updates the character count for the scene.
+		/// Updates the character count for a scene by its handle.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="handle">The handle of the scene.</param>
+		/// <param name="characterCount">The new character count.</param>
 		public static void Pulse(NpgsqlDbContext dbContext, int handle, int characterCount)
 		{
 			var loadedScene = dbContext.Scenes.FirstOrDefault(c => c.SceneHandle == handle);
@@ -118,8 +141,10 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
-		/// Deletes all scene entities from the database using the scene server id.
+		/// Deletes all scene entities from the database using the scene server ID.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="sceneServerID">The scene server ID.</param>
 		public static void Delete(NpgsqlDbContext dbContext, long sceneServerID)
 		{
 			if (sceneServerID == 0)
@@ -135,8 +160,10 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
-		/// Deletes all scene entities from the database using the world server id.
+		/// Deletes all scene entities from the database using the world server ID.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="worldServerID">The world server ID.</param>
 		public static void WorldDelete(NpgsqlDbContext dbContext, long worldServerID)
 		{
 			if (worldServerID == 0)
@@ -152,8 +179,11 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
-		/// Deletes a specific scene using the scene server id and scene handle.
+		/// Deletes a specific scene using the scene server ID and scene handle.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="sceneServerID">The scene server ID.</param>
+		/// <param name="sceneHandle">The handle of the scene to delete.</param>
 		public static void Delete(NpgsqlDbContext dbContext, long sceneServerID, int sceneHandle)
 		{
 			if (sceneServerID == 0)
@@ -169,6 +199,13 @@ namespace FishMMO.Server.DatabaseServices
 			}
 		}
 
+		/// <summary>
+		/// Retrieves a scene instance for a character by character ID and scene type.
+		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="characterID">The character ID.</param>
+		/// <param name="sceneType">The type of the scene.</param>
+		/// <returns>The scene entity if found; otherwise, null.</returns>
 		public static SceneEntity GetCharacterInstance(NpgsqlDbContext dbContext, long characterID, SceneType sceneType)
 		{
 			if (characterID == 0)
@@ -181,11 +218,25 @@ namespace FishMMO.Server.DatabaseServices
 			return dbContext.Scenes.FirstOrDefault(c => c.CharacterID == characterID && c.SceneType == type);
 		}
 
+		/// <summary>
+		/// Retrieves a scene entity by its instance ID.
+		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="instanceID">The instance ID of the scene.</param>
+		/// <returns>The scene entity if found; otherwise, null.</returns>
 		public static SceneEntity GetInstanceByID(NpgsqlDbContext dbContext, long instanceID)
 		{
 			return dbContext.Scenes.FirstOrDefault((c) => c.ID == instanceID);
 		}
 
+		/// <summary>
+		/// Retrieves a list of ready scene entities for a given world server, scene name, and maximum client count.
+		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="worldServerID">The world server ID.</param>
+		/// <param name="sceneName">The name of the scene.</param>
+		/// <param name="maxClients">The maximum number of clients allowed.</param>
+		/// <returns>A list of ready scene entities matching the criteria.</returns>
 		public static List<SceneEntity> GetServerList(NpgsqlDbContext dbContext, long worldServerID, string sceneName, int maxClients)
 		{
 			if (worldServerID == 0)
@@ -203,6 +254,12 @@ namespace FishMMO.Server.DatabaseServices
 			return result;
 		}
 
+		/// <summary>
+		/// Retrieves a list of ready scene entities for a given world server.
+		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="worldServerID">The world server ID.</param>
+		/// <returns>A list of ready scene entities for the world server.</returns>
 		public static List<SceneEntity> GetServerList(NpgsqlDbContext dbContext, long worldServerID)
 		{
 			if (worldServerID == 0)

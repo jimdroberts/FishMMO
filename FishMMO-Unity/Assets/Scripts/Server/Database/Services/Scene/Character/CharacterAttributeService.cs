@@ -5,11 +5,16 @@ using FishMMO.Shared;
 
 namespace FishMMO.Server.DatabaseServices
 {
-	public class CharacterAttributeService
+		/// <summary>
+		/// Provides methods for managing a character's attributes, including saving, deleting, and loading attribute data from the database.
+		/// </summary>
+		public class CharacterAttributeService
 	{
 		/// <summary>
-		/// Save a character attributes to the database.
+		/// Saves a character's attributes to the database.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="character">The player character whose attributes will be saved.</param>
 		public static void Save(NpgsqlDbContext dbContext, IPlayerCharacter character)
 		{
 			if (character == null ||
@@ -65,8 +70,11 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
-		/// KeepData is automatically true... This means we don't actually delete anything. Deleted is simply set to true just incase we need to reinstate a character..
+		/// Deletes all attributes for a character from the database. If keepData is false, the entries are removed.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="characterID">The character ID.</param>
+		/// <param name="keepData">Whether to keep the data (currently not implemented).</param>
 		public static void Delete(NpgsqlDbContext dbContext, long characterID, bool keepData = true)
 		{
 			if (characterID == 0)
@@ -85,8 +93,10 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
-		/// Load character attributes from the database.
+		/// Loads a character's attributes from the database and assigns them to the character's attribute controller.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="character">The player character to load attributes for.</param>
 		public static void Load(NpgsqlDbContext dbContext, IPlayerCharacter character)
 		{
 			if (character == null ||

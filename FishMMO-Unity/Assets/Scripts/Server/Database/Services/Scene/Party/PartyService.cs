@@ -5,8 +5,17 @@ using FishMMO.Database.Npgsql.Entities;
 
 namespace FishMMO.Server.DatabaseServices
 {
-	public class PartyService
+		/// <summary>
+		/// Provides methods for managing parties, including creation, deletion, and retrieval of party data from the database.
+		/// </summary>
+		public class PartyService
 	{
+		/// <summary>
+		/// Checks if a party with the specified ID exists in the database.
+		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="partyID">The party ID.</param>
+		/// <returns>True if the party exists; otherwise, false.</returns>
 		public static bool Exists(NpgsqlDbContext dbContext, long partyID)
 		{
 			if (partyID == 0)
@@ -17,8 +26,11 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
-		/// Saves a new Party to the database.
+		/// Saves a new party to the database.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="party">The created party entity.</param>
+		/// <returns>True if the party was created; otherwise, false.</returns>
 		public static bool TryCreate(NpgsqlDbContext dbContext, out PartyEntity party)
 		{
 			party = new PartyEntity()
@@ -30,6 +42,11 @@ namespace FishMMO.Server.DatabaseServices
 			return true;
 		}
 
+		/// <summary>
+		/// Deletes a party from the database by its ID.
+		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="partyID">The party ID to delete.</param>
 		public static void Delete(NpgsqlDbContext dbContext, long partyID)
 		{
 			if (partyID == 0)
@@ -45,8 +62,11 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
-		/// Load a Party from the database.
+		/// Loads a party from the database by its ID.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="partyID">The party ID to load.</param>
+		/// <returns>The loaded party entity if found; otherwise, null.</returns>
 		public static PartyEntity Load(NpgsqlDbContext dbContext, long partyID)
 		{
 			if (partyID == 0)

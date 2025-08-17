@@ -5,11 +5,17 @@ using FishMMO.Shared;
 
 namespace FishMMO.Server.DatabaseServices
 {
-	public class CharacterInventoryService
+		/// <summary>
+		/// Provides methods for managing a character's inventory, including updating, saving, deleting, and loading inventory items from the database.
+		/// </summary>
+		public class CharacterInventoryService
 	{
 		/// <summary>
-		/// Updates an existing item by ID.
+		/// Updates an existing inventory item by its ID for a specific character.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="characterID">The character ID.</param>
+		/// <param name="item">The item to update.</param>
 		public static void Update(NpgsqlDbContext dbContext, long characterID, Item item)
 		{
 			if (characterID == 0)
@@ -36,8 +42,11 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
-		/// Updates a CharacterInventoryItem slot to new values or adds a new CharacterInventoryItem and initializes the Item with the new ID.
+		/// Updates an inventory slot or adds a new inventory item for a character, initializing the item with the new ID if added.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="characterID">The character ID.</param>
+		/// <param name="item">The item to set in the slot.</param>
 		public static void SetSlot(NpgsqlDbContext dbContext, long characterID, Item item)
 		{
 			if (characterID == 0)
@@ -78,8 +87,10 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
-		/// Save a characters inventory to the database.
+		/// Saves a character's inventory to the database.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="character">The player character whose inventory will be saved.</param>
 		public static void Save(NpgsqlDbContext dbContext, IPlayerCharacter character)
 		{
 			if (character == null ||
@@ -117,8 +128,11 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
-		/// KeepData is automatically false... This means we delete the item. TODO Deleted field is simply set to true just incase we need to reinstate a character..
+		/// Deletes all inventory items for a character from the database. If keepData is false, the entries are removed.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="characterID">The character ID.</param>
+		/// <param name="keepData">Whether to keep the data (currently not implemented).</param>
 		public static void Delete(NpgsqlDbContext dbContext, long characterID, bool keepData = false)
 		{
 			if (characterID == 0)
@@ -138,8 +152,12 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
-		/// KeepData is automatically false... This means we delete the item. TODO Deleted field is simply set to true just incase we need to reinstate a character..
+		/// Deletes a specific inventory item for a character from the database. If keepData is false, the entry is removed.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="characterID">The character ID.</param>
+		/// <param name="slot">The inventory slot to delete.</param>
+		/// <param name="keepData">Whether to keep the data (currently not implemented).</param>
 		public static void Delete(NpgsqlDbContext dbContext, long characterID, long slot, bool keepData = false)
 		{
 			if (characterID == 0)
@@ -159,8 +177,10 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
-		/// Load character inventory from the database.
+		/// Loads a character's inventory from the database and assigns the items to the character's inventory controller.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="character">The player character to load inventory for.</param>
 		public static void Load(NpgsqlDbContext dbContext, IPlayerCharacter character)
 		{
 			if (character == null ||

@@ -124,11 +124,6 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <param name="label">The addressable label to load.</param>
 		/// <param name="mergeMode">The merge mode for label processing.</param>
-		/// <summary>
-		/// Enqueues a single addressable asset label for loading. Ignores if already queued, loading, or loaded.
-		/// </summary>
-		/// <param name="label">The addressable label to load.</param>
-		/// <param name="mergeMode">The merge mode for label processing.</param>
 		public static void EnqueueLoad(string label, Addressables.MergeMode mergeMode = Addressables.MergeMode.None)
 		{
 			AddressableAssetKey assetKey = new AddressableAssetKey(new List<string>() { label, }, mergeMode);
@@ -139,11 +134,6 @@ namespace FishMMO.Shared
 			}
 		}
 
-		/// <summary>
-		/// Enqueues multiple addressable asset labels for loading. Ignores null or empty collections.
-		/// </summary>
-		/// <param name="labels">Enumerable of addressable labels to load.</param>
-		/// <param name="mergeMode">The merge mode for label processing.</param>
 		/// <summary>
 		/// Enqueues multiple addressable asset labels for loading. Ignores null or empty collections.
 		/// </summary>
@@ -438,7 +428,6 @@ namespace FishMMO.Shared
 			}
 		}
 
-		// Load assets for a specific label
 		/// <summary>
 		/// Loads assets asynchronously for a specific addressable asset key. Handles completion and progress update.
 		/// </summary>
@@ -482,7 +471,6 @@ namespace FishMMO.Shared
 			return handle;
 		}
 
-		// Method to load the scene with a specific label
 		/// <summary>
 		/// Loads a scene asynchronously by label using the provided scene load data. Handles completion and progress update.
 		/// </summary>

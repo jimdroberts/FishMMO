@@ -5,11 +5,16 @@ using FishMMO.Shared;
 
 namespace FishMMO.Server.DatabaseServices
 {
-	public class CharacterAchievementService
+		/// <summary>
+		/// Provides methods for managing a character's achievements, including saving, deleting, and loading achievement data from the database.
+		/// </summary>
+		public class CharacterAchievementService
 	{
 		/// <summary>
-		/// Save a character Achievements to the database.
+		/// Saves a character's achievements to the database.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="character">The player character whose achievements will be saved.</param>
 		public static void Save(NpgsqlDbContext dbContext, IPlayerCharacter character)
 		{
 			if (character == null ||
@@ -45,8 +50,11 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
-		/// KeepData is automatically true... This means we don't actually delete anything. TODO Deleted is simply set to true just incase we need to reinstate a character..
+		/// Deletes all achievements for a character from the database. If keepData is false, the entries are removed.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="characterID">The character ID.</param>
+		/// <param name="keepData">Whether to keep the data (currently not implemented).</param>
 		public static void Delete(NpgsqlDbContext dbContext, long characterID, bool keepData = true)
 		{
 			if (characterID == 0)
@@ -66,8 +74,10 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
-		/// Load character Achievements from the database.
+		/// Loads a character's achievements from the database and assigns them to the character's achievement controller.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="character">The player character to load achievements for.</param>
 		public static void Load(NpgsqlDbContext dbContext, IPlayerCharacter character)
 		{
 			if (character == null ||

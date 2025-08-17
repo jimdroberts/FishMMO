@@ -6,11 +6,18 @@ using FishMMO.Shared;
 
 namespace FishMMO.Server.DatabaseServices
 {
-	public class CharacterFriendService
+		/// <summary>
+		/// Provides methods for managing a character's friends list, including saving, updating, deleting, and loading friend data from the database.
+		/// </summary>
+		public class CharacterFriendService
 	{
 		/// <summary>
-		/// Checks if the characters friends list is full.
+		/// Checks if the character's friends list is full.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="characterID">The character ID.</param>
+		/// <param name="max">The maximum allowed friends.</param>
+		/// <returns>True if the friends list is not full; otherwise, false.</returns>
 		public static bool Full(NpgsqlDbContext dbContext, long characterID, int max)
 		{
 			if (characterID == 0)
@@ -26,8 +33,10 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
-		/// Save a characters friends to the database.
+		/// Saves a character's friends to the database.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="character">The player character whose friends will be saved.</param>
 		public static void Save(NpgsqlDbContext dbContext, IPlayerCharacter character)
 		{
 			if (character == null ||
@@ -54,8 +63,11 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
-		/// Saves a CharacterFriendEntity to the database.
+		/// Saves a friend relationship between two characters to the database.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="characterID">The character ID.</param>
+		/// <param name="friendID">The friend character ID.</param>
 		public static void Save(NpgsqlDbContext dbContext, long characterID, long friendID)
 		{
 			if (friendID == 0)
@@ -76,8 +88,12 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
-		/// Removes a character from a friend list.
+		/// Removes a specific friend from a character's friends list.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="characterID">The character ID.</param>
+		/// <param name="friendID">The friend character ID to remove.</param>
+		/// <returns>True if the friend was removed; otherwise, false.</returns>
 		public static bool Delete(NpgsqlDbContext dbContext, long characterID, long friendID)
 		{
 			if (friendID == 0)
@@ -95,8 +111,11 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
-		/// Removes all characters from a friend list.
+		/// Removes all friends from a character's friends list. If keepData is false, the entries are removed.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="characterID">The character ID.</param>
+		/// <param name="keepData">Whether to keep the data (currently not implemented).</param>
 		public static void Delete(NpgsqlDbContext dbContext, long characterID, bool keepData = false)
 		{
 			if (characterID == 0)
@@ -115,8 +134,10 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
-		/// Load characters friends from the database.
+		/// Loads a character's friends from the database and assigns them to the character's friend controller.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="character">The player character to load friends for.</param>
 		public static void Load(NpgsqlDbContext dbContext, IPlayerCharacter character)
 		{
 			if (character == null ||
@@ -132,8 +153,11 @@ namespace FishMMO.Server.DatabaseServices
 		}
 
 		/// <summary>
-		/// Load all CharacterFriendEntity from the database for a specific character.
+		/// Loads all friend entities from the database for a specific character.
 		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="characterID">The character ID.</param>
+		/// <returns>A list of friend entities, or null if the character ID is invalid.</returns>
 		public static List<CharacterFriendEntity> Friends(NpgsqlDbContext dbContext, long characterID)
 		{
 			if (characterID == 0)

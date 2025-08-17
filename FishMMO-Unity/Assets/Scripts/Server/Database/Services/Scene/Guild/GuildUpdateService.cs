@@ -7,8 +7,16 @@ using UnityEngine;
 
 namespace FishMMO.Server.DatabaseServices
 {
-	public class GuildUpdateService
+		/// <summary>
+		/// Provides methods for managing guild update timestamps, including saving, deleting, and fetching update records from the database.
+		/// </summary>
+		public class GuildUpdateService
 	{
+		/// <summary>
+		/// Saves or updates the last update timestamp for a guild. If the record does not exist, it is created.
+		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="guildID">The guild ID to update.</param>
 		public static void Save(NpgsqlDbContext dbContext, long guildID)
 		{
 			if (guildID == 0)
@@ -59,6 +67,11 @@ namespace FishMMO.Server.DatabaseServices
 			}
 		}
 
+		/// <summary>
+		/// Deletes all update records for a specific guild from the database.
+		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="guildID">The guild ID whose update records will be deleted.</param>
 		public static void Delete(NpgsqlDbContext dbContext, long guildID)
 		{
 			var guildEntity = dbContext.GuildUpdates.Where(a => a.GuildID == guildID);
@@ -69,6 +82,13 @@ namespace FishMMO.Server.DatabaseServices
 			}
 		}
 
+		/// <summary>
+		/// Fetches all guild update records for the specified guild IDs that have been updated since the given timestamp.
+		/// </summary>
+		/// <param name="dbContext">The database context.</param>
+		/// <param name="guildIDs">A list of guild IDs to fetch updates for.</param>
+		/// <param name="lastFetch">The timestamp to compare updates against.</param>
+		/// <returns>A list of guild update entities updated since the last fetch.</returns>
 		public static List<GuildUpdateEntity> Fetch(NpgsqlDbContext dbContext, List<long> guildIDs, DateTime lastFetch)
 		{
 			if (guildIDs == null || guildIDs.Count < 1)
