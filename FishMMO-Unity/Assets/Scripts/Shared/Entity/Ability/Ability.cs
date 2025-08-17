@@ -99,7 +99,7 @@ namespace FishMMO.Shared
 		public Dictionary<int, AbilityOnDestroyEvent> OnDestroyEvents = new Dictionary<int, AbilityOnDestroyEvent>();
 
 		/// <summary>
-		/// Cache of all active ability objects, organized by container and object ID: <ContainerID, <AbilityObjectID, AbilityObject>>
+		/// Cache of all active ability objects, organized as a dictionary mapping container IDs to dictionaries of ability object IDs and their corresponding <see cref="AbilityObject"/> instances.
 		/// </summary>
 		public Dictionary<int, Dictionary<int, AbilityObject>> Objects { get; set; }
 
