@@ -1,3 +1,4 @@
+#if UNITY_EDITOR
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine.Networking;
@@ -16,3 +17,4 @@ namespace MeshyAI
 		Task<bool> CheckBalanceAsync(string apiKey, int requiredCredits, CancellationToken cancellationToken);
 	}
 }
+#endif

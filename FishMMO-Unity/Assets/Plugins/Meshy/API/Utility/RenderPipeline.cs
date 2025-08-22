@@ -1,3 +1,4 @@
+#if UNITY_EDITOR
 namespace MeshyAI
 {
 	/// <summary>
@@ -11,3 +12,4 @@ namespace MeshyAI
 		URP
 	}
 }
+#endif

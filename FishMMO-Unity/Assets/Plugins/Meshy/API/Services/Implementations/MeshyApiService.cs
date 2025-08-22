@@ -1,3 +1,4 @@
+#if UNITY_EDITOR
 using System;
 using System.Text;
 using System.Threading.Tasks;
@@ -146,3 +147,4 @@ namespace MeshyAI
 		}
 	}
 }
+#endif

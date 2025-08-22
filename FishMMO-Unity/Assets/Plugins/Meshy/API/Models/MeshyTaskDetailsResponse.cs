@@ -1,3 +1,4 @@
+#if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
 
@@ -37,3 +38,4 @@ namespace MeshyAI
 		public MeshyTaskError task_error;
 	}
 }
+#endif

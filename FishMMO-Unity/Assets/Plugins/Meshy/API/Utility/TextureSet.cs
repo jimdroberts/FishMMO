@@ -1,3 +1,4 @@
+#if UNITY_EDITOR
 using UnityEngine;
 
 namespace MeshyAI
@@ -7,3 +8,4 @@ namespace MeshyAI
 		public Texture2D baseColor, normal, roughness, metallic;
 	}
 }
+#endif

@@ -1,3 +1,4 @@
+#if UNITY_EDITOR
 using UnityEngine;
 
 namespace MeshyAI
@@ -11,3 +12,4 @@ namespace MeshyAI
 		void CreatePrefab(GameObject importedObject, string prefabPath);
 	}
 }
+#endif

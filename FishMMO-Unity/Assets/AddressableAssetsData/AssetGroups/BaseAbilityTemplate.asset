@@ -38,15 +38,6 @@ MonoBehaviour:
     - AbilityTypeOverrideEventType
     - BaseAbilityTemplate
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 49f4c132334e6924a83535a095c331d9
-    m_Address: Lesser Knockback
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - AbilityEvent
-    - BaseAbilityTemplate
-    - HitEvent
-    - KnockbackHitEvent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7c14874e3c902684a8d562913ed73c24
     m_Address: Lesser Flame
     m_ReadOnly: 0

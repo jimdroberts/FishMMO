@@ -73,6 +73,8 @@ namespace FishMMO.Shared
 			}
 		}
 #else
+			// Ensure the NPC is initialized on the server.
+
 			// Register this NPC in the scene object registry on the server.
 			SceneObject.Register(this);
 

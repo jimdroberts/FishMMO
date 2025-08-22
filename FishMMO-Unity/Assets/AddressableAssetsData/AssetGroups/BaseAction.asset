@@ -15,6 +15,13 @@ MonoBehaviour:
   m_GroupName: BaseAction
   m_GUID: 0ffee29f85919cd4c962105d17780026
   m_SerializeEntries:
+  - m_GUID: 1dc752bf589d93840911d2df5a1bc70a
+    m_Address: Lesser Knockback Action
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - BaseAction
+    - KnockbackHitAction
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2813a233ed4632e499c6487fad515c72
     m_Address: Medium Area Action
     m_ReadOnly: 0

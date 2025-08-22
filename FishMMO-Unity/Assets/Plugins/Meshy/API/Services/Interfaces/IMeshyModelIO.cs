@@ -1,3 +1,4 @@
+#if UNITY_EDITOR
 using System;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -13,3 +14,4 @@ namespace MeshyAI
 		void DownloadPreviewImageAsync(string url, Action<Texture2D> onDownloaded);
 	}
 }
+#endif
