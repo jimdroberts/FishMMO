@@ -1,7 +1,7 @@
 using UnityEngine;
 using System.IO;
 
-namespace FishMMO.Shared
+namespace FishMMO.Shared.DotNetBuilder
 {
 	/// <summary>
 	/// ScriptableObject that holds all settings for building a .NET Class Library from within Unity.

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using FishMMO.Shared;
 using FishMMO.Database.Npgsql;
 using FishMMO.Database.Npgsql.Entities;
 

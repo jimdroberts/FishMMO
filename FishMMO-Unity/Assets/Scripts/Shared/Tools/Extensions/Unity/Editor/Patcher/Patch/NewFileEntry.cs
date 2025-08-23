@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace FishMMO.Patcher
+namespace FishMMO.Shared.Patcher
 {
 	/// <summary>
 	/// Represents an entry for a new file that needs to be added during a patch operation.

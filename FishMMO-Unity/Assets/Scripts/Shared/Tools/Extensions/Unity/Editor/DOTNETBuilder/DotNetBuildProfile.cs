@@ -1,7 +1,7 @@
 using UnityEngine;
 using System.Collections.Generic;
 
-namespace FishMMO.Shared
+namespace FishMMO.Shared.DotNetBuilder
 {
 	/// <summary>
 	/// ScriptableObject representing a build profile for .NET projects in Unity.
