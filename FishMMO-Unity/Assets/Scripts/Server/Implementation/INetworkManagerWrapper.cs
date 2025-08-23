@@ -3,6 +3,7 @@ using FishNet.Broadcast;
 using FishNet.Managing;
 using FishNet.Transporting;
 using System;
+using FishMMO.Server.Core;
 
 namespace FishMMO.Server.Implementation
 {
@@ -72,7 +73,7 @@ namespace FishMMO.Server.Implementation
 		/// Attaches a login authenticator using the provided Server.
 		/// </summary>
 		/// <param name="server">The server instance.</param>
-		void AttachLoginAuthenticator(Server server);
+		void AttachLoginAuthenticator(IServer<INetworkManagerWrapper, NetworkConnection, ServerBehaviour> server);
 
 		/// <summary>
 		/// Broadcasts a message to a single network connection.
