@@ -1,3 +1,4 @@
+#if UNITY_EDITOR
 namespace MeshyAI
 {
 	/// <summary>
@@ -15,3 +16,4 @@ namespace MeshyAI
 		sculpture
 	}
 }
+#endif

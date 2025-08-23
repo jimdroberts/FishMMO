@@ -1,3 +1,4 @@
+#if UNITY_EDITOR
 using UnityEngine;
 using UnityEditor;
 using System.IO;
@@ -217,3 +218,4 @@ namespace MeshyAI
 		}
 	}
 }
+#endif

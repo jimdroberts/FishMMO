@@ -40,11 +40,8 @@ namespace FishMMO.Shared
 			}
 			//Log.Debug($"Registering {sceneObject.GameObject.name}:{sceneObject.ID} | {asClient}");
 
-			// Add to dictionary if not already present
-			if (!Objects.ContainsKey(sceneObject.ID))
-			{
-				Objects.Add(sceneObject.ID, sceneObject);
-			}
+			// Add to dictionary
+			Objects[sceneObject.ID] = sceneObject;
 		}
 
 		/// <summary>

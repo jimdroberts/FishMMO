@@ -2,7 +2,7 @@ using UnityEngine;
 using UnityEditor;
 using System.IO;
 
-namespace FishMMO.Shared
+namespace FishMMO.Shared.DotNetBuilder
 {
 	/// <summary>
 	/// Custom Unity Editor for DotNetBuildSettings ScriptableObject.

@@ -67,11 +67,11 @@ namespace FishMMO.Shared
 				// Try to apply to a regular attribute first, then to a resource attribute if not found
 				if (attributeController.TryGetAttribute(buffAttribute.Template.ID, out CharacterAttribute characterAttribute))
 				{
-					characterAttribute.AddValue(buffAttribute.Value);
+					characterAttribute.AddModifier(buffAttribute.Value);
 				}
 				else if (attributeController.TryGetResourceAttribute(buffAttribute.Template.ID, out CharacterResourceAttribute characterResourceAttribute))
 				{
-					characterResourceAttribute.AddValue(buffAttribute.Value);
+					characterResourceAttribute.AddModifier(buffAttribute.Value);
 				}
 			}
 		}
@@ -108,11 +108,11 @@ namespace FishMMO.Shared
 				// Remove from regular attribute first, then from resource attribute if not found
 				if (attributeController.TryGetAttribute(buffAttribute.Template.ID, out CharacterAttribute characterAttribute))
 				{
-					characterAttribute.AddValue(-buffAttribute.Value);
+					characterAttribute.AddModifier(-buffAttribute.Value);
 				}
 				else if (attributeController.TryGetResourceAttribute(buffAttribute.Template.ID, out CharacterResourceAttribute characterResourceAttribute))
 				{
-					characterResourceAttribute.AddValue(-buffAttribute.Value);
+					characterResourceAttribute.AddModifier(-buffAttribute.Value);
 				}
 			}
 		}

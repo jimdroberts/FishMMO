@@ -15,7 +15,7 @@ MonoBehaviour:
   m_DefaultGroup: 9f41fb9c2f019e548ad7e95d00d2093e
   m_currentHash:
     serializedVersion: 2
-    Hash: 52fa467e791192d8cb8548095fd4006d
+    Hash: 2265526b9412f82e288612166c3909d4
   m_OptimizeCatalogSize: 0
   m_BuildRemoteCatalog: 1
   m_CatalogRequestsTimeout: 15
@@ -76,6 +76,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 0923770f0a4268749b38890e1058e8f4, type: 2}
   - {fileID: 11400000, guid: 2dbd78b5603f9b14690876985bfd1573, type: 2}
   - {fileID: 11400000, guid: dfd694116c5b4eb4eb0f6855814b4c7b, type: 2}
+  - {fileID: 11400000, guid: fec38c1e7e41c6543b7cd30b6009348a, type: 2}
   - {fileID: 11400000, guid: 26aae4ed899763c4ba19bd73ea586784, type: 2}
   - {fileID: 11400000, guid: 7f6edeed1903e1046b208909e012b137, type: 2}
   - {fileID: 11400000, guid: b75f0c23876ced4479023cd41fceb9a4, type: 2}
@@ -196,6 +197,7 @@ MonoBehaviour:
     - ApplyBuffAction
     - ApplyDamageAction
     - AbilityApplyAreaAction
+    - KnockbackHitAction
   m_SchemaTemplates: []
   m_GroupTemplateObjects:
   - {fileID: 11400000, guid: 2f9575764d1020448a25d0512380c601, type: 2}

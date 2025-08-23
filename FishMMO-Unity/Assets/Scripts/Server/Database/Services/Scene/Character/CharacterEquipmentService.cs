@@ -131,7 +131,7 @@ namespace FishMMO.Server.DatabaseServices
 				equipmentController.SetItemSlot(item, dbItem.Slot);
 				if (item.IsEquippable)
 				{
-					item.Equippable.SetOwner(character);
+					item.Equippable.Equip(character);
 				}
 			};
 		}

@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Runtime.CompilerServices;
 
 namespace FishMMO.Shared
 {
@@ -75,16 +74,6 @@ namespace FishMMO.Shared
 				OnUnequip?.Invoke(Character);
 				Character = null;
 			}
-		}
-
-		/// <summary>
-		/// Sets the owner of this equippable item directly. Used for fast assignment.
-		/// </summary>
-		/// <param name="owner">The character to set as owner.</param>
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public void SetOwner(ICharacter owner)
-		{
-			Character = owner;
 		}
 	}
 }

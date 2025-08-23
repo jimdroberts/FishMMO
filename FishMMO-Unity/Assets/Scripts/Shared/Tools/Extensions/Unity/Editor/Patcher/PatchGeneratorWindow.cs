@@ -10,10 +10,9 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using FishMMO.Logging;
-using FishMMO.Shared;
 using System.IO.Hashing;
 
-namespace FishMMO.Patcher
+namespace FishMMO.Shared.Patcher
 {
 	public class PatchGeneratorWindow : EditorWindow
 	{

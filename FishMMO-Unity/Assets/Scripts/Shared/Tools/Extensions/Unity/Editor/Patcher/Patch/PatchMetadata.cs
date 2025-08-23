@@ -1,4 +1,4 @@
-﻿namespace FishMMO.Patcher
+﻿namespace FishMMO.Shared.Patcher
 {
 	/// <summary>
 	/// Represents metadata for a single patch operation on a file.

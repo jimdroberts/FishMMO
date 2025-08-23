@@ -44,11 +44,6 @@ namespace FishMMO.Shared
 		private Item item;
 
 		/// <summary>
-		/// Event triggered when an attribute value is set, providing the attribute, old value, and new value.
-		/// </summary>
-		public event Action<ItemAttribute, int, int> OnSetAttribute;
-
-		/// <summary>
 		/// Exposes the generated attributes for external access.
 		/// </summary>
 		public Dictionary<string, ItemAttribute> Attributes { get { return attributes; } }
@@ -215,7 +210,7 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Sets the value of a generated attribute by name, firing the OnSetAttribute event if changed.
+		/// Sets the value of a generated attribute by name, and updates the character's attribute modifiers if equipped.
 		/// </summary>
 		/// <param name="name">The attribute name.</param>
 		/// <param name="newValue">The new value to set.</param>
@@ -228,7 +223,25 @@ namespace FishMMO.Shared
 				int oldValue = attribute.value;
 				attribute.value = newValue;
 
-				OnSetAttribute?.Invoke(attribute, oldValue, newValue);
+				// If the item is equipped, update the character's attribute modifiers
+				if (item != null && item.IsEquippable && item.Equippable?.Character != null)
+				{
+					var character = item.Equippable.Character;
+					if (character != null && character.TryGet(out ICharacterAttributeController attributeController))
+					{
+						int attrId = attribute.Template.CharacterAttribute.ID;
+						if (attributeController.TryGetAttribute(attrId, out CharacterAttribute characterAttribute))
+						{
+							characterAttribute.AddModifier(-oldValue);
+							characterAttribute.AddModifier(newValue);
+						}
+						else if (attributeController.TryGetResourceAttribute(attrId, out CharacterResourceAttribute characterResourceAttribute))
+						{
+							characterResourceAttribute.AddModifier(-oldValue);
+							characterResourceAttribute.AddModifier(newValue);
+						}
+					}
+				}
 			}
 		}
 
@@ -246,11 +259,11 @@ namespace FishMMO.Shared
 			{
 				if (attributeController.TryGetAttribute(pair.Value.Template.CharacterAttribute.ID, out CharacterAttribute characterAttribute))
 				{
-					characterAttribute.AddValue(pair.Value.value);
+					characterAttribute.AddModifier(pair.Value.value);
 				}
 				else if (attributeController.TryGetResourceAttribute(pair.Value.Template.CharacterAttribute.ID, out CharacterResourceAttribute characterResourceAttribute))
 				{
-					characterResourceAttribute.AddValue(pair.Value.value);
+					characterResourceAttribute.AddModifier(pair.Value.value);
 				}
 			}
 		}
@@ -269,11 +282,11 @@ namespace FishMMO.Shared
 			{
 				if (attributeController.TryGetAttribute(pair.Value.Template.CharacterAttribute.ID, out CharacterAttribute characterAttribute))
 				{
-					characterAttribute.AddValue(-pair.Value.value);
+					characterAttribute.AddModifier(-pair.Value.value);
 				}
 				else if (attributeController.TryGetResourceAttribute(pair.Value.Template.CharacterAttribute.ID, out CharacterResourceAttribute characterResourceAttribute))
 				{
-					characterResourceAttribute.AddValue(-pair.Value.value);
+					characterResourceAttribute.AddModifier(-pair.Value.value);
 				}
 			}
 		}

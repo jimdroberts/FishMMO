@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
-namespace FishMMO.Patcher
+namespace FishMMO.Shared.Patcher
 {
 	/// <summary>
 	/// Represents the manifest for a patch file, including version info and lists of file changes.

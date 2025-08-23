@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace FishMMO.Shared
+namespace FishMMO.Shared.DotNetBuilder
 {
 	public static class DotNetBuilderUtility
 	{

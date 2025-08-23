@@ -2,7 +2,7 @@ using UnityEngine;
 using UnityEditor;
 using Debug = UnityEngine.Debug;
 
-namespace FishMMO.Shared
+namespace FishMMO.Shared.DotNetBuilder
 {
 	/// <summary>
 	/// Custom Unity Editor for DotNetBuildProfile ScriptableObject.

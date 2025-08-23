@@ -1,3 +1,4 @@
+#if UNITY_EDITOR
 using System;
 
 namespace MeshyAI
@@ -18,3 +19,4 @@ namespace MeshyAI
 		public string roughness;
 	}
 }
+#endif

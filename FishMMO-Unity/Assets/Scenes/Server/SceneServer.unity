@@ -154,7 +154,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6f48f002b825cbd45a19bd96d90f9edb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _stopSocketsOnThread: 0
   _dontRoute: 0
+  _reuseAddress: 0
   _unreliableMtu: 1023
   _ipv4BindAddress: 0.0.0.0
   _enableIpv6: 1
@@ -206,7 +208,7 @@ MonoBehaviour:
   _refreshDefaultPrefabs: 1
   _runInBackground: 1
   _dontDestroyOnLoad: 1
-  _objectPool: {fileID: 8097462252018206291}
+  _objectPool: {fileID: 0}
   _persistence: 0
   _logging: {fileID: 11400000, guid: c66ed2b42bcd6b14194a796e70a740e0, type: 2}
   _spawnablePrefabs: {fileID: 11400000, guid: 7d40862968a2aed4f859067648b24444, type: 2}
@@ -338,7 +340,6 @@ GameObject:
   - component: {fileID: 984075723737156061}
   - component: {fileID: 363288935454560800}
   - component: {fileID: 2946536618568869384}
-  - component: {fileID: 8097462252018206291}
   - component: {fileID: 3897615595877637487}
   - component: {fileID: 8097462252018206293}
   - component: {fileID: 142982559104787067}
@@ -584,20 +585,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   AddressOverride: 
   PortOverride: 0
-  LogToDisk: 1
---- !u!114 &8097462252018206291
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2696072683415778311}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 1afeaa36377bbf847880613509e71d54, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  _enabled: 1
 --- !u!114 &8097462252018206293
 MonoBehaviour:
   m_ObjectHideFlags: 0

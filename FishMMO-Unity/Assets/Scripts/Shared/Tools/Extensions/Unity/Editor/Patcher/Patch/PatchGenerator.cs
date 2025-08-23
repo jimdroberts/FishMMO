@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using FishMMO.Logging;
 
-namespace FishMMO.Patcher
+namespace FishMMO.Shared.Patcher
 {
 	/// <summary>
 	/// Generates binary patch data for a file by comparing an old version and a new version.

@@ -26,14 +26,14 @@ namespace FishMMO.Shared
 		private static System.Random npcSeedGenerator = new System.Random();
 
 		/// <summary>
-		/// Random number generator for this NPC's attributes, seeded for deterministic results.
+		/// Random number generator for this NPC, seeded for deterministic results.
 		/// </summary>
-		private System.Random npcAttributeGenerator;
+		private System.Random npcRNG;
 
 		/// <summary>
-		/// The seed used for attribute generation, synchronized over the network.
+		/// The seed used for RNG, synchronized over the network.
 		/// </summary>
-		private int npcAttributeSeed = 0;
+		private int npcSeed = 0;
 
 		/// <summary>
 		/// If true, this NPC can be charmed by players.
@@ -73,8 +73,21 @@ namespace FishMMO.Shared
 			}
 		}
 #else
+			// Ensure the NPC is initialized on the server.
+
 			// Register this NPC in the scene object registry on the server.
 			SceneObject.Register(this);
+
+			// If the RNG hasn't been instantiated, create it and generate a seed on the server.
+			if (npcRNG == null)
+			{
+				npcSeed = npcSeedGenerator.Next();
+				npcRNG = new System.Random(npcSeed);
+
+				// Generate NPC attributes based on the seed on the server.
+				// Clients will receive the attributes BaseValue and CurrentValue when CharacterAttributeController is synchronized.
+				AddNPCAttributes(true);
+			}
 		}
 #endif
 
@@ -97,14 +110,15 @@ namespace FishMMO.Shared
 			SceneObject.Register(this, true);
 
 			// Read the attribute seed for deterministic attribute generation.
-			npcAttributeSeed = reader.ReadInt32();
+			npcSeed = reader.ReadInt32();
 
-			// Instantiate the attribute generator with the received seed.
-			npcAttributeGenerator = new System.Random(npcAttributeSeed);
+			// Instantiate the client side NPC RNG with the received seed.
+			npcRNG = new System.Random(npcSeed);
 
-			//Log.Debug($"Received NPCAttributeGenerator Seed {npcAttributeSeed}");
+			//Log.Debug($"Received NPC RNG Seed {npcSeed}");
 
-			AddNPCAttributes();
+			// Clients still need to generate the attribute modifier values locally.
+			AddNPCAttributes(false);
 
 #if !UNITY_SERVER
 			// FactionController stores a reference to the RaceTemplate.
@@ -112,12 +126,13 @@ namespace FishMMO.Shared
 			{
 				RaceTemplate raceTemplate = factionController.RaceTemplate;
 				int modelIndex = -1;
-				if (raceTemplate.Models == null || raceTemplate.Models.Count < 1)
+				if (raceTemplate.Models != null && raceTemplate.Models.Count > 0)
 				{
-					// Pick a random model for this NPC using the attribute generator.
-					modelIndex = npcAttributeGenerator.Next(0, raceTemplate.Models.Count);
+					// Pick a random model for this NPC using the RNG.
+					modelIndex = npcRNG.Next(0, raceTemplate.Models.Count);
+
+					InstantiateRaceModelFromIndex(raceTemplate, modelIndex);
 				}
-				InstantiateRaceModelFromIndex(raceTemplate, modelIndex);
 			}
 #endif
 		}
@@ -131,21 +146,10 @@ namespace FishMMO.Shared
 		{
 			writer.WriteInt64(ID);
 
-			if (base.IsServerStarted)
-			{
-				// If the attribute generator hasn't been instantiated, create it and generate a seed.
-				if (npcAttributeGenerator == null)
-				{
-					npcAttributeSeed = npcSeedGenerator.Next();
-					npcAttributeGenerator = new System.Random(npcAttributeSeed);
-					AddNPCAttributes();
-				}
-			}
+			// Write the seed for clients to use for determinism.
+			writer.WriteInt32(npcSeed);
 
-			// Write the attribute seed for clients to use for deterministic attribute generation.
-			writer.WriteInt32(npcAttributeSeed);
-
-			//Log.Debug($"Writing NPCAttributeGenerator Seed {npcAttributeSeed}");
+			//Log.Debug($"Writing NPC RNG Seed {npcSeed}");
 		}
 
 		/// <summary>
@@ -159,7 +163,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Applies attribute bonuses to this NPC using the attribute database and random generator.
 		/// </summary>
-		private void AddNPCAttributes()
+		private void AddNPCAttributes(bool asServer)
 		{
 			if (AttributeBonuses != null &&
 				AttributeBonuses.Attributes != null &&
@@ -171,7 +175,7 @@ namespace FishMMO.Shared
 					// Determine the attribute value, randomizing if specified.
 					if (attribute.IsRandom)
 					{
-						value = npcAttributeGenerator.Next(attribute.Min, attribute.Max);
+						value = npcRNG.Next(attribute.Min, attribute.Max);
 					}
 					else
 					{
@@ -209,7 +213,10 @@ namespace FishMMO.Shared
 							int modifier = newValue - old;
 
 							characterResourceAttribute.SetModifier(modifier);
-							characterResourceAttribute.SetCurrentValue(newValue);
+							if (asServer)
+							{
+								characterResourceAttribute.SetCurrentValue(newValue);
+							}
 
 							//Log.Debug($"{characterResourceAttribute.Template.Name} Old: {old} | New: {characterResourceAttribute.CurrentValue}/{characterResourceAttribute.FinalValue}");
 						}
@@ -218,7 +225,10 @@ namespace FishMMO.Shared
 							int modifier = value - old;
 
 							characterResourceAttribute.SetModifier(modifier);
-							characterResourceAttribute.SetCurrentValue(value);
+							if (asServer)
+							{
+								characterResourceAttribute.SetCurrentValue(value);
+							}
 
 							//Log.Debug($"{characterResourceAttribute.Template.Name} Old: {old} | New: {characterResourceAttribute.CurrentValue}/{characterResourceAttribute.FinalValue}");
 						}
