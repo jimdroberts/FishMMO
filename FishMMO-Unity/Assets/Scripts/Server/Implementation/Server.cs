@@ -15,7 +15,7 @@ namespace FishMMO.Server.Implementation
 	/// <summary>
 	/// Composition root: orchestrates Core and Implementation into a running server.
 	/// </summary>
-	public class Server : MonoBehaviour
+	public class Server : MonoBehaviour, IServer<INetworkManagerWrapper, NetworkConnection, ServerBehaviour>
 	{
 		/// <summary>
 		/// Optional override for the server's bind address.
@@ -59,6 +59,11 @@ namespace FishMMO.Server.Implementation
 		public IServerEvents ServerEvents { get; private set; }
 
 		/// <summary>
+		/// Registry that manages all server behaviours.
+		/// </summary>
+		public IServerBehaviourRegistry<INetworkManagerWrapper, NetworkConnection, ServerBehaviour> BehaviourRegistry { get; private set; }
+
+		/// <summary>
 		/// Unity Start method. Initializes and composes all server components.
 		/// </summary>
 		void Start()
@@ -74,6 +79,8 @@ namespace FishMMO.Server.Implementation
 
 			CoreServer = new CoreServer(Configuration, ServerEvents);
 			NetworkWrapper = new FishNetNetworkWrapper(networkManager, Configuration, this);
+
+			BehaviourRegistry = new ServerBehaviourRegistry();
 
 			ServerEvents.OnLoginServerInitialized += () => Log.Debug("Server", "LoginServer initialized.");
 			ServerEvents.OnWorldServerInitialized += () => Log.Debug("Server", "WorldServer initialized.");
@@ -107,7 +114,12 @@ namespace FishMMO.Server.Implementation
 			AccountManager = new AccountManager();
 
 			// Initialize all registered server behaviours
-			ServerBehaviourRegistry.InitializeOnceInternal(this);
+			ServerBehaviour[] allBehaviours = FindObjectsByType<ServerBehaviour>(FindObjectsSortMode.InstanceID);
+			foreach (var behaviour in allBehaviours)
+			{
+				BehaviourRegistry.Register(behaviour);
+			}
+			BehaviourRegistry.InitializeOnceInternal(this);
 
 			KinematicCharacterSystem.EnsureCreation();
 			KinematicCharacterSystem.Settings.AutoSimulation = false;

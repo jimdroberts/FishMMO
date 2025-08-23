@@ -26,7 +26,7 @@ namespace FishMMO.Server.Implementation.WorldServer
 		internal override ClientAuthenticationResult TryLogin(NpgsqlDbContext dbContext, ClientAuthenticationResult result, string username)
 		{
 			// Check if the world server is full.
-			if (ServerBehaviourRegistry.TryGet(out WorldSceneSystem worldSceneSystem) &&
+			if (Server.BehaviourRegistry.TryGet(out WorldSceneSystem worldSceneSystem) &&
 				worldSceneSystem.ConnectionCount >= MaxPlayers)
 			{
 				return ClientAuthenticationResult.ServerFull;
@@ -38,7 +38,7 @@ namespace FishMMO.Server.Implementation.WorldServer
 			}
 			// If login is successful, assign the character to the world server.
 			else if (result == ClientAuthenticationResult.LoginSuccess &&
-				ServerBehaviourRegistry.TryGet(out WorldServerSystem worldServerSystem) &&
+				Server.BehaviourRegistry.TryGet(out WorldServerSystem worldServerSystem) &&
 				CharacterService.GetSelected(dbContext, username))
 			{
 				// Update the character's world assignment in the database.

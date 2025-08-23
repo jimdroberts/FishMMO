@@ -83,7 +83,7 @@ namespace FishMMO.Server.Core
 				"Development");
 			NpgsqlDbContextFactory = new NpgsqlDbContextFactory(dbConfigurationPath, false);
 #else
-				NpgsqlDbContextFactory = new NpgsqlDbContextFactory(workingDirectory, false);
+			NpgsqlDbContextFactory = new NpgsqlDbContextFactory(workingDirectory, false);
 #endif
 
 			RaiseLifecycleEvent();

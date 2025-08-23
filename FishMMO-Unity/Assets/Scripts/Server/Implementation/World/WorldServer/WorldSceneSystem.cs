@@ -102,7 +102,7 @@ namespace FishMMO.Server.Implementation.WorldServer
 
 			if (Server != null &&
 				Server.CoreServer.NpgsqlDbContextFactory != null &&
-				ServerBehaviourRegistry.TryGet(out WorldServerSystem worldServerSystem))
+				Server.BehaviourRegistry.TryGet(out WorldServerSystem worldServerSystem))
 			{
 				using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
 				SceneService.WorldDelete(dbContext, worldServerSystem.ID);
@@ -162,7 +162,7 @@ namespace FishMMO.Server.Implementation.WorldServer
 			if (!WaitingOpenWorldConnections.TryGetValue(sceneName, out HashSet<NetworkConnection> connections) ||
 				connections == null ||
 				connections.Count == 0 ||
-				!ServerBehaviourRegistry.TryGet(out WorldServerSystem worldServerSystem))
+				!Server.BehaviourRegistry.TryGet(out WorldServerSystem worldServerSystem))
 			{
 				WaitingOpenWorldConnections.Remove(sceneName);
 				return;
@@ -304,7 +304,7 @@ namespace FishMMO.Server.Implementation.WorldServer
 		/// <param name="dbContext">Database context.</param>
 		private void UpdateConnectionCount(NpgsqlDbContext dbContext)
 		{
-			if (dbContext == null || !ServerBehaviourRegistry.TryGet(out WorldServerSystem worldServerSystem))
+			if (dbContext == null || !Server.BehaviourRegistry.TryGet(out WorldServerSystem worldServerSystem))
 			{
 				return;
 			}

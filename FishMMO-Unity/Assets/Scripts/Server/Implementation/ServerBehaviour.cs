@@ -1,6 +1,8 @@
+using FishNet.Connection;
 using FishNet.Managing.Server;
 using UnityEngine;
 using FishMMO.Logging;
+using FishMMO.Server.Core;
 
 namespace FishMMO.Server.Implementation
 {
@@ -8,7 +10,7 @@ namespace FishMMO.Server.Implementation
 	/// Base class for all server-side behaviours in the FishMMO server architecture.
 	/// Provides registration, initialization, and lifecycle management for server behaviours.
 	/// </summary>
-	public abstract class ServerBehaviour : MonoBehaviour
+	public abstract class ServerBehaviour : MonoBehaviour, IServerBehaviour<INetworkManagerWrapper, ServerManager, NetworkConnection, ServerBehaviour>
 	{
 		/// <summary>
 		/// Indicates whether this behaviour has been initialized.
@@ -17,7 +19,7 @@ namespace FishMMO.Server.Implementation
 		/// <summary>
 		/// Reference to the server instance associated with this behaviour.
 		/// </summary>
-		public Server Server { get; private set; }
+		public IServer<INetworkManagerWrapper, NetworkConnection, ServerBehaviour> Server { get; private set; }
 		/// <summary>
 		/// Reference to the server manager instance associated with this behaviour.
 		/// </summary>
@@ -28,7 +30,7 @@ namespace FishMMO.Server.Implementation
 		/// </summary>
 		/// <param name="server">The server instance.</param>
 		/// <param name="serverManager">The server manager instance.</param>
-		internal void InternalInitializeOnce(Server server, ServerManager serverManager)
+		internal void InternalInitializeOnce(IServer<INetworkManagerWrapper, NetworkConnection, ServerBehaviour> server, ServerManager serverManager)
 		{
 			if (Initialized)
 				return;
@@ -53,20 +55,12 @@ namespace FishMMO.Server.Implementation
 		public abstract void Destroying();
 
 		/// <summary>
-		/// Unity Awake callback. Registers this behaviour instance.
-		/// </summary>
-		private void Awake()
-		{
-			ServerBehaviourRegistry.Register(this);
-		}
-
-		/// <summary>
 		/// Unity OnDestroy callback. Calls Destroying and unregisters this behaviour instance.
 		/// </summary>
 		private void OnDestroy()
 		{
 			Destroying();
-			ServerBehaviourRegistry.Unregister(this);
+			Server?.BehaviourRegistry?.Unregister(this);
 		}
 
 		/// <summary>
@@ -75,7 +69,7 @@ namespace FishMMO.Server.Implementation
 		private void OnApplicationQuit()
 		{
 			Destroying();
-			ServerBehaviourRegistry.Unregister(this);
+			Server?.BehaviourRegistry?.Unregister(this);
 		}
 	}
 }

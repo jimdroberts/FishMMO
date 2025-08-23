@@ -122,7 +122,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 		/// <returns>List of new chat message entities.</returns>
 		private List<ChatEntity> FetchChatMessages()
 		{
-			if (!ServerBehaviourRegistry.TryGet(out SceneServerSystem sceneServerSystem))
+			if (!Server.BehaviourRegistry.TryGet(out SceneServerSystem sceneServerSystem))
 			{
 				return null;
 			}
@@ -301,7 +301,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 				}
 
 				if (commandDetails.Func.Invoke(sender, msg) &&
-					ServerBehaviourRegistry.TryGet(out SceneServerSystem sceneServerSystem))
+					Server.BehaviourRegistry.TryGet(out SceneServerSystem sceneServerSystem))
 				{
 					// write the parsed message to the database
 					using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
@@ -333,7 +333,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 				Text = trimmed,
 			};
 
-			if (ServerBehaviourRegistry.TryGet(out CharacterSystem characterSystem) &&
+			if (Server.BehaviourRegistry.TryGet(out CharacterSystem characterSystem) &&
 				characterSystem.CharactersByWorld.TryGetValue(worldID, out Dictionary<long, IPlayerCharacter> characters))
 			{
 				// send to all world characters
@@ -395,7 +395,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 				return false;
 			}
 
-			if (ServerBehaviourRegistry.TryGet(out CharacterSystem characterSystem))
+			if (Server.BehaviourRegistry.TryGet(out CharacterSystem characterSystem))
 			{
 				// get all the member data so we can broadcast
 				using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
@@ -442,7 +442,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 				return false;
 			}
 
-			if (ServerBehaviourRegistry.TryGet(out CharacterSystem characterSystem))
+			if (Server.BehaviourRegistry.TryGet(out CharacterSystem characterSystem))
 			{
 				// get all the member data so we can broadcast
 				using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
@@ -534,7 +534,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 				}
 			}
 
-			if (ServerBehaviourRegistry.TryGet(out CharacterSystem characterSystem))
+			if (Server.BehaviourRegistry.TryGet(out CharacterSystem characterSystem))
 			{
 				// if the target character is on this server we send them the message
 				if (characterSystem != null &&
@@ -568,7 +568,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 				return false;
 			}
 
-			if (ServerBehaviourRegistry.TryGet(out CharacterSystem characterSystem))
+			if (Server.BehaviourRegistry.TryGet(out CharacterSystem characterSystem))
 			{
 				ChatBroadcast newMsg = new ChatBroadcast()
 				{
@@ -643,7 +643,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 				Text = message,
 			};
 
-			if (ServerBehaviourRegistry.TryGet(out CharacterSystem characterSystem) &&
+			if (Server.BehaviourRegistry.TryGet(out CharacterSystem characterSystem) &&
 				characterSystem.CharactersByWorld.TryGetValue(worldServerID, out Dictionary<long, IPlayerCharacter> characters))
 			{
 				// send to all world characters

@@ -170,7 +170,7 @@ namespace FishMMO.Server.Implementation
 						windowTitle.Append(port);
 						windowTitle.Append(" Clients:");
 						// Use WorldSceneSystem's ConnectionCount if available, otherwise fallback to ServerManager.Clients.Count.
-						windowTitle.Append(ServerBehaviourRegistry.TryGet(out WorldSceneSystem worldSceneSystem) ? worldSceneSystem.ConnectionCount : ServerManager.Clients.Count);
+						windowTitle.Append(Server.BehaviourRegistry.TryGet(out WorldSceneSystem worldSceneSystem) ? worldSceneSystem.ConnectionCount : ServerManager.Clients.Count);
 						windowTitle.Append("]");
 					}
 				}

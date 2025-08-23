@@ -87,7 +87,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 				ServerManager.OnServerConnectionState += ServerManager_OnServerConnectionState;
 
 				if (Server.AddressProvider.TryGetServerIPAddress(out ServerAddress server) &&
-					ServerBehaviourRegistry.TryGet(out CharacterSystem characterSystem))
+					Server.BehaviourRegistry.TryGet(out CharacterSystem characterSystem))
 				{
 					int characterCount = characterSystem.ConnectionCharacters.Count;
 
@@ -132,7 +132,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 				ServerManager.OnServerConnectionState -= ServerManager_OnServerConnectionState;
 			}
 
-			if (ServerBehaviourRegistry.TryGet(out CharacterSystem characterSystem))
+			if (Server.BehaviourRegistry.TryGet(out CharacterSystem characterSystem))
 			{
 				characterSystem.OnDisconnect -= CharacterSystem_OnDisconnect;
 				characterSystem.OnAfterLoadCharacter -= CharacterSystem_OnAfterLoadCharacter;
@@ -213,7 +213,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 					nextPulse = PulseRate;
 
 					if (Server != null &&
-						ServerBehaviourRegistry.TryGet(out CharacterSystem characterSystem))
+						Server.BehaviourRegistry.TryGet(out CharacterSystem characterSystem))
 					{
 						// Send heartbeat pulse to the database with current character count.
 						using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();

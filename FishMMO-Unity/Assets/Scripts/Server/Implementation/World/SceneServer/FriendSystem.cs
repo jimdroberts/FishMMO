@@ -22,7 +22,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 		public override void InitializeOnce()
 		{
 			if (Server != null &&
-				ServerBehaviourRegistry.TryGet(out CharacterSystem characterSystem))
+				Server.BehaviourRegistry.TryGet(out CharacterSystem characterSystem))
 			{
 				Server.NetworkWrapper.RegisterBroadcast<FriendAddNewBroadcast>(OnServerFriendAddNewBroadcastReceived, true);
 				Server.NetworkWrapper.RegisterBroadcast<FriendRemoveBroadcast>(OnServerFriendRemoveBroadcastReceived, true);

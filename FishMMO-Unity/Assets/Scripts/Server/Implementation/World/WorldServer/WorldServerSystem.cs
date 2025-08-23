@@ -57,7 +57,7 @@ namespace FishMMO.Server.Implementation.WorldServer
 				// Register the world server in the database if all required systems are available.
 				if (Server != null &&
 					Server.AddressProvider.TryGetServerIPAddress(out ServerAddress server) &&
-					ServerBehaviourRegistry.TryGet(out WorldSceneSystem worldSceneSystem))
+					Server.BehaviourRegistry.TryGet(out WorldSceneSystem worldSceneSystem))
 				{
 					int characterCount = worldSceneSystem.ConnectionCount;
 
@@ -95,7 +95,7 @@ namespace FishMMO.Server.Implementation.WorldServer
 		void LateUpdate()
 		{
 			if (serverState == LocalConnectionState.Started &&
-				ServerBehaviourRegistry.TryGet(out WorldSceneSystem worldSceneSystem))
+				Server.BehaviourRegistry.TryGet(out WorldSceneSystem worldSceneSystem))
 			{
 				if (nextPulse < 0)
 				{
