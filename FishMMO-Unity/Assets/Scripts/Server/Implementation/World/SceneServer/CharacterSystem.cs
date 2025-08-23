@@ -103,7 +103,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 			nextSave = SaveRate;
 
 			if (ServerManager != null &&
-				ServerBehaviourRegistry.TryGet(out SceneServerSystem sceneServerSystem))
+				Server.BehaviourRegistry.TryGet(out SceneServerSystem sceneServerSystem))
 			{
 				loginAuthenticator = FindFirstObjectByType<SceneServerAuthenticator>();
 				if (loginAuthenticator == null)
@@ -159,7 +159,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 		void LateUpdate()
 		{
 			if (serverState == LocalConnectionState.Started &&
-				ServerBehaviourRegistry.TryGet(out SceneServerSystem sceneServerSystem))
+				Server.BehaviourRegistry.TryGet(out SceneServerSystem sceneServerSystem))
 			{
 				if (nextOutOfBoundsCheck < 0)
 				{
@@ -238,7 +238,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 		private void ServerManager_OnRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args)
 		{
 			if (args.ConnectionState == RemoteConnectionState.Stopped &&
-				ServerBehaviourRegistry.TryGet(out SceneServerSystem sceneServerSystem))
+				Server.BehaviourRegistry.TryGet(out SceneServerSystem sceneServerSystem))
 			{
 				RemoveCharacterConnectionMapping(conn);
 			}
@@ -326,7 +326,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 			}
 			if (!authenticated ||
 				!Server.AccountManager.GetAccountNameByConnection(conn, out string accountName) ||
-				!ServerBehaviourRegistry.TryGet(out SceneServerSystem sceneServerSystem))
+				!Server.BehaviourRegistry.TryGet(out SceneServerSystem sceneServerSystem))
 			{
 				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
 				return;
@@ -876,7 +876,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 				return;
 			}*/
 
-			if (!ServerBehaviourRegistry.TryGet(out SceneServerSystem sceneServerSystem))
+			if (!Server.BehaviourRegistry.TryGet(out SceneServerSystem sceneServerSystem))
 			{
 				Log.Debug("CharacterSystem", "SceneServerSystem not found!");
 				return;

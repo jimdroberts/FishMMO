@@ -1,6 +1,6 @@
 using FishMMO.Shared;
 
-namespace FishMMO.Server.Implementation
+namespace FishMMO.Server.Core
 {
 	/// <summary>
 	/// Interface for a service that provides server address information.

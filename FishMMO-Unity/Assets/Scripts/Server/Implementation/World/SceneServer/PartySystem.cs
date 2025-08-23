@@ -63,7 +63,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 		public bool OnPartyInvite(IPlayerCharacter sender, ChatBroadcast msg)
 		{
 			string targetName = msg.Text.Trim().ToLower();
-			if (ServerBehaviourRegistry.TryGet(out CharacterSystem characterSystem) &&
+			if (Server.BehaviourRegistry.TryGet(out CharacterSystem characterSystem) &&
 				characterSystem.CharactersByLowerCaseName.TryGetValue(targetName, out IPlayerCharacter character))
 			{
 				OnServerPartyInviteBroadcastReceived(sender.Owner, new PartyInviteBroadcast()
@@ -83,7 +83,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 		{
 			if (ServerManager != null &&
 				Server != null &&
-				ServerBehaviourRegistry.TryGet(out CharacterSystem characterSystem) &&
+				Server.BehaviourRegistry.TryGet(out CharacterSystem characterSystem) &&
 				characterSystem != null)
 			{
 				partyChatCommands = new Dictionary<string, ChatCommand>()
@@ -127,7 +127,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 				Server.NetworkWrapper.UnregisterBroadcast<PartyChangeRankBroadcast>(OnServerPartyChangeRankBroadcastReceived);
 
 				// Remove the characters pending guild invite request on disconnect
-				if (ServerBehaviourRegistry.TryGet(out CharacterSystem characterSystem))
+				if (Server.BehaviourRegistry.TryGet(out CharacterSystem characterSystem))
 				{
 					characterSystem.OnConnect -= CharacterSystem_OnConnect;
 					characterSystem.OnDisconnect -= CharacterSystem_OnDisconnect;
@@ -219,7 +219,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 					foreach (long memberID in difference)
 					{
 						// Tell the member connection to leave their party immediately
-						if (ServerBehaviourRegistry.TryGet(out CharacterSystem cs) &&
+						if (Server.BehaviourRegistry.TryGet(out CharacterSystem cs) &&
 							cs.CharactersByID.TryGetValue(memberID, out IPlayerCharacter character) &&
 							character != null &&
 							character.TryGet(out IPartyController targetPartyController))
@@ -245,7 +245,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 					Members = addBroadcasts,
 				};
 
-				if (ServerBehaviourRegistry.TryGet(out CharacterSystem characterSystem))
+				if (Server.BehaviourRegistry.TryGet(out CharacterSystem characterSystem))
 				{
 					// Tell all of the local party members to update their party member lists
 					foreach (CharacterPartyEntity entity in dbMembers)
@@ -441,7 +441,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 
 			// if the target doesn't already have a pending invite
 			if (!pendingInvitations.ContainsKey(msg.TargetCharacterID) &&
-				ServerBehaviourRegistry.TryGet(out CharacterSystem characterSystem) &&
+				Server.BehaviourRegistry.TryGet(out CharacterSystem characterSystem) &&
 				characterSystem.CharactersByID.TryGetValue(msg.TargetCharacterID, out IPlayerCharacter targetCharacter) &&
 				targetCharacter.TryGet(out IPartyController targetPartyController))
 			{

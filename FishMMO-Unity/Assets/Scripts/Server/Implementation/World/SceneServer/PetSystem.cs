@@ -29,7 +29,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 
 				AbilityObject.OnPetSummon += AbilityObject_OnPetSummon;
 
-				if (ServerBehaviourRegistry.TryGet(out CharacterSystem characterSystem))
+				if (Server.BehaviourRegistry.TryGet(out CharacterSystem characterSystem))
 				{
 					characterSystem.OnSpawnCharacter += CharacterSystem_OnSpawnCharacter;
 					characterSystem.OnDespawnCharacter += CharacterSystem_OnDespawnCharacter;
@@ -56,7 +56,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 
 				AbilityObject.OnPetSummon -= AbilityObject_OnPetSummon;
 
-				if (ServerBehaviourRegistry.TryGet(out CharacterSystem characterSystem))
+				if (Server.BehaviourRegistry.TryGet(out CharacterSystem characterSystem))
 				{
 					characterSystem.OnSpawnCharacter -= CharacterSystem_OnSpawnCharacter;
 					characterSystem.OnDespawnCharacter -= CharacterSystem_OnDespawnCharacter;

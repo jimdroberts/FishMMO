@@ -53,7 +53,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 				case NamingSystemType.CharacterName:
 					//Log.Debug("NamingSystem: Searching by Character ID: " + msg.id);
 					// check our local scene server first
-					if (ServerBehaviourRegistry.TryGet(out CharacterSystem characterSystem) &&
+					if (Server.BehaviourRegistry.TryGet(out CharacterSystem characterSystem) &&
 						characterSystem.CharactersByID.TryGetValue(msg.ID, out IPlayerCharacter character))
 					{
 						//Log.Debug("NamingSystem: Character Local Result " + character.CharacterName);
@@ -127,7 +127,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 				case NamingSystemType.CharacterName:
 					//Log.Debug("NamingSystem: Searching by Character ID: " + msg.id);
 					// check our local scene server first
-					if (ServerBehaviourRegistry.TryGet(out CharacterSystem characterSystem) &&
+					if (Server.BehaviourRegistry.TryGet(out CharacterSystem characterSystem) &&
 						characterSystem.CharactersByLowerCaseName.TryGetValue(nameLowerCase, out IPlayerCharacter character))
 					{
 						//Log.Debug("NamingSystem: Character Local Result " + character.CharacterName);

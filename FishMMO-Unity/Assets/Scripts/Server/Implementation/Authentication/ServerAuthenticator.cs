@@ -6,6 +6,7 @@ using FishMMO.Database.Npgsql;
 using System;
 using System.Security.Cryptography;
 using System.Text;
+using FishMMO.Server.Core;
 using FishMMO.Server.Core.Account;
 using FishMMO.Server.Core.Account.SRP;
 using FishMMO.Server.DatabaseServices;
@@ -19,7 +20,7 @@ namespace FishMMO.Server.Implementation
 	/// </summary>
 	public class ServerAuthenticator : Authenticator
 	{
-		public Server Server { get; set; }
+		public IServer<INetworkManagerWrapper, NetworkConnection, ServerBehaviour> Server { get; set; }
 
 		/// <summary>
 		/// Event triggered when server authentication completes for a client connection.
