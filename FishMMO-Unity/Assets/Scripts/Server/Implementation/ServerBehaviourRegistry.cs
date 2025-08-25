@@ -7,55 +7,105 @@ using FishNet.Connection;
 namespace FishMMO.Server.Implementation
 {
 	/// <summary>
-	/// Handles registration, lookup, and initialization of <see cref="ServerBehaviour"/> instances.
+	/// Handles registration, lookup, and initialization of <see cref="IServerBehaviour"/> instances.
 	/// Provides global access and lifecycle management for server-side behaviours.
 	/// </summary>
-	public class ServerBehaviourRegistry : IServerBehaviourRegistry<INetworkManagerWrapper, NetworkConnection, ServerBehaviour>
+	public class ServerBehaviourRegistry : IServerBehaviourRegistry<INetworkManagerWrapper, NetworkConnection, IServerBehaviour>
 	{
 		/// <summary>
-		/// Static dictionary mapping behaviour types to their instances for global access and management.
+		/// Dictionary mapping behaviour interface types (and concrete types) to their instances.
+		/// Keys are interface types that implement <see cref="IServerBehaviour"/> or the concrete behaviour types.
 		/// </summary>
-		private Dictionary<Type, ServerBehaviour> behaviours = new Dictionary<Type, ServerBehaviour>();
+		private Dictionary<Type, IServerBehaviour> behaviours = new Dictionary<Type, IServerBehaviour>();
 
 		/// <summary>
-		/// Registers a <see cref="ServerBehaviour"/> instance for global access.
+		/// Registers a <see cref="IServerBehaviour"/> instance for global access.
+		/// The behaviour will be registered under every interface it implements that derives from <see cref="IServerBehaviour"/>,
+		/// as well as under its concrete type.
 		/// </summary>
-		/// <typeparam name="T">Type of the server behaviour.</typeparam>
-		/// <param name="behaviour">The behaviour instance to register.</param>
-		public void Register<T>(T behaviour) where T : ServerBehaviour
+		public void Register<T>(T behaviour) where T : class, IServerBehaviour
 		{
 			if (behaviour == null)
 				return;
-			Type type = behaviour.GetType();
-			if (behaviours.ContainsKey(type))
-				return;
-			Log.Debug("ServerBehaviourRegistry", "Registered " + type.Name);
-			behaviours.Add(type, behaviour);
+
+			Type concreteType = behaviour.GetType();
+
+			// Register under concrete type if not already present
+			if (!behaviours.ContainsKey(concreteType))
+			{
+				behaviours.Add(concreteType, behaviour);
+				Log.Debug("ServerBehaviourRegistry", "Registered " + concreteType.Name);
+			}
+
+			// Register under all IServerBehaviour interfaces implemented by this behaviour
+			var interfaces = concreteType.GetInterfaces();
+			foreach (var iface in interfaces)
+			{
+				if (iface == typeof(IServerBehaviour))
+				{
+					continue;
+				}
+				if (!typeof(IServerBehaviour).IsAssignableFrom(iface))
+				{
+					continue;
+				}
+				if (!behaviours.ContainsKey(iface))
+				{
+					behaviours.Add(iface, behaviour);
+					Log.Debug("ServerBehaviourRegistry", "Registered interface " + iface.Name + " => " + concreteType.Name);
+				}
+			}
 		}
 
 		/// <summary>
-		/// Unregisters a <see cref="ServerBehaviour"/> instance from global access.
+		/// Unregisters a <see cref="IServerBehaviour"/> instance from global access.
+		/// Removes any entries keyed by the concrete type and by any interfaces it implemented.
 		/// </summary>
-		/// <typeparam name="T">Type of the server behaviour.</typeparam>
-		/// <param name="behaviour">The behaviour instance to unregister.</param>
-		public void Unregister<T>(T behaviour) where T : ServerBehaviour
+		public void Unregister<T>(T behaviour) where T : class, IServerBehaviour
 		{
 			if (behaviour == null)
 				return;
-			Type type = behaviour.GetType();
-			Log.Debug("ServerBehaviourRegistry", "Unregistered " + type.Name);
-			behaviours.Remove(type);
+
+			Type concreteType = behaviour.GetType();
+
+			// Remove concrete type
+			if (behaviours.ContainsKey(concreteType))
+			{
+				behaviours.Remove(concreteType);
+				Log.Debug("ServerBehaviourRegistry", "Unregistered " + concreteType.Name);
+			}
+
+			// Remove any interface registrations pointing to this behaviour
+			var interfaces = concreteType.GetInterfaces();
+			foreach (var iface in interfaces)
+			{
+				if (iface == typeof(IServerBehaviour))
+				{
+					continue;
+				}
+				if (!typeof(IServerBehaviour).IsAssignableFrom(iface))
+				{
+					continue;
+				}
+				if (behaviours.TryGetValue(iface, out IServerBehaviour existing) && existing == behaviour)
+				{
+					behaviours.Remove(iface);
+					Log.Debug("ServerBehaviourRegistry", "Unregistered interface " + iface.Name + " => " + concreteType.Name);
+				}
+			}
 		}
 
 		/// <summary>
-		/// Attempts to get a registered <see cref="ServerBehaviour"/> of type <typeparamref name="T"/>.
+		/// Attempts to get a registered <see cref="IServerBehaviour"/> of type <typeparamref name="T"/>.
 		/// </summary>
 		/// <typeparam name="T">Type of the server behaviour.</typeparam>
 		/// <param name="control">The output behaviour instance if found.</param>
 		/// <returns>True if found, false otherwise.</returns>
-		public bool TryGet<T>(out T control) where T : ServerBehaviour
+		public bool TryGet<T>(out T control) where T : class, IServerBehaviour
 		{
-			if (behaviours.TryGetValue(typeof(T), out ServerBehaviour result))
+			Type type = typeof(T);
+
+			if (behaviours.TryGetValue(type, out IServerBehaviour result))
 			{
 				if ((control = result as T) != null)
 				{
@@ -67,13 +117,14 @@ namespace FishMMO.Server.Implementation
 		}
 
 		/// <summary>
-		/// Gets a registered <see cref="ServerBehaviour"/> of type <typeparamref name="T"/>, or null if not found.
+		/// Gets a registered <see cref="IServerBehaviour"/> of type <typeparamref name="T"/>, or null if not found.
 		/// </summary>
 		/// <typeparam name="T">Type of the server behaviour.</typeparam>
 		/// <returns>The behaviour instance if found, otherwise null.</returns>
-		public T Get<T>() where T : ServerBehaviour
+		public T Get<T>() where T : class, IServerBehaviour
 		{
-			if (behaviours.TryGetValue(typeof(T), out ServerBehaviour result))
+			Type type = typeof(T);
+			if (behaviours.TryGetValue(type, out IServerBehaviour result))
 			{
 				return result as T;
 			}
@@ -81,11 +132,11 @@ namespace FishMMO.Server.Implementation
 		}
 
 		/// <summary>
-		/// Initializes all registered <see cref="ServerBehaviour"/>s with the provided server and server manager.
+		/// Initializes all registered <see cref="IServerBehaviour"/>s with the provided server and server manager.
 		/// </summary>
 		/// <param name="server">The server instance.</param>
 		/// <param name="serverManager">The server manager instance.</param>
-		public void InitializeOnceInternal(IServer<INetworkManagerWrapper, NetworkConnection, ServerBehaviour> server)
+		public void InitializeOnceInternal(IServer<INetworkManagerWrapper, NetworkConnection, IServerBehaviour> server)
 		{
 			if (behaviours == null || behaviours.Count == 0)
 				return;

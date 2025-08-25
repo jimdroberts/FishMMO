@@ -10,9 +10,9 @@ namespace FishMMO.Server.Implementation.SceneServer
 	/// </summary>
 	public class AbilityCrafterHandler : IInteractableHandler
 	{
-		private readonly IServer<INetworkManagerWrapper, NetworkConnection, ServerBehaviour> server;
+		private readonly IServer<INetworkManagerWrapper, NetworkConnection, IServerBehaviour> server;
 
-		public AbilityCrafterHandler(IServer<INetworkManagerWrapper, NetworkConnection, ServerBehaviour> server)
+		public AbilityCrafterHandler(IServer<INetworkManagerWrapper, NetworkConnection, IServerBehaviour> server)
 		{
 			this.server = server;
 		}

@@ -49,7 +49,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 				if (Server != null &&
 					Server.AddressProvider.TryGetServerIPAddress(out ServerAddress server) &&
-					Configuration.GlobalSettings.TryGetString("ServerName", out string name))
+					Server.Configuration.TryGetString("ServerName", out string name))
 				{
 					LoginServerService.Add(dbContext, name, server.Address, server.Port, out id);
 				}

@@ -4,6 +4,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using UnityEngine.SceneManagement;
+using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
 using FishMMO.Database.Npgsql.Entities;
@@ -13,7 +15,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 	/// <summary>
 	/// Server guild system.
 	/// </summary>
-	public class GuildSystem : ServerBehaviour
+	public class GuildSystem : ServerBehaviour, IGuildSystem<NetworkConnection>
 	{
 		/// <summary>
 		/// Current connection state of the server.
@@ -28,19 +30,26 @@ namespace FishMMO.Server.Implementation.SceneServer
 		/// </summary>
 		private float nextPump = 0.0f;
 
+		[SerializeField]
+		private int maxGuildSize = 100;
+		[SerializeField]
+		private int maxGuildNameLength = 64;
+		[SerializeField]
+		private float updatePumpRate = 1.0f;
+
 		/// <summary>
 		/// Maximum number of members allowed in a guild.
 		/// </summary>
-		public int MaxGuildSize = 100;
+		public int MaxGuildSize { get { return maxGuildSize; } }
 		/// <summary>
 		/// Maximum length allowed for a guild name.
 		/// </summary>
-		public int MaxGuildNameLength = 64;
+		public int MaxGuildNameLength { get { return maxGuildNameLength; } }
 		/// <summary>
 		/// The server guild update pump rate limit in seconds.
 		/// </summary>
 		[Tooltip("The server guild update pump rate limit in seconds.")]
-		public float UpdatePumpRate = 1.0f;
+		public float UpdatePumpRate { get { return updatePumpRate; } }
 
 		/// <summary>
 		/// Tracks all of the members for a guild if any of the guild members are logged in to this server.
@@ -72,7 +81,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 		public bool OnGuildInvite(IPlayerCharacter sender, ChatBroadcast msg)
 		{
 			string characterName = msg.Text.Trim().ToLower();
-			if (Server.BehaviourRegistry.TryGet(out CharacterSystem characterSystem) &&
+			if (Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem) &&
 				characterSystem.CharactersByLowerCaseName.TryGetValue(characterName, out IPlayerCharacter character))
 			{
 				OnServerGuildInviteBroadcastReceived(sender.Owner, new GuildInviteBroadcast()
@@ -92,7 +101,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 		{
 			if (ServerManager != null &&
 				Server != null &&
-				Server.BehaviourRegistry.TryGet(out CharacterSystem characterSystem) &&
+				Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem) &&
 				characterSystem != null)
 			{
 				guildChatCommands = new Dictionary<string, ChatCommand>()
@@ -137,7 +146,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 				Server.NetworkWrapper.UnregisterBroadcast<GuildChangeRankBroadcast>(OnServerGuildChangeRankBroadcastReceived);
 
 				// remove the characters pending guild invite request on disconnect
-				if (Server.BehaviourRegistry.TryGet(out CharacterSystem characterSystem))
+				if (Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem))
 				{
 					characterSystem.OnConnect -= CharacterSystem_OnConnect;
 					characterSystem.OnDisconnect -= CharacterSystem_OnDisconnect;
@@ -159,7 +168,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 		/// </summary>
 		void LateUpdate()
 		{
-			if (serverState == LocalConnectionState.Started)
+			if (Initialized && serverState == LocalConnectionState.Started)
 			{
 				if (nextPump < 0)
 				{
@@ -233,7 +242,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 					foreach (long memberID in difference)
 					{
 						// Tell the member connection to leave their guild immediately
-						if (Server.BehaviourRegistry.TryGet(out CharacterSystem cs) &&
+						if (Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> cs) &&
 							cs.CharactersByID.TryGetValue(memberID, out IPlayerCharacter character) &&
 							character != null &&
 							character.TryGet(out IGuildController targetGuildController))
@@ -259,7 +268,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 					Members = addBroadcasts,
 				};
 
-				if (Server.BehaviourRegistry.TryGet(out CharacterSystem characterSystem))
+				if (Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem))
 				{
 					// Tell all of the local guild members to update their guild member lists
 					foreach (CharacterGuildEntity entity in dbMembers)
@@ -492,7 +501,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 
 			// if the target doesn't already have a pending invite
 			if (!pendingInvitations.ContainsKey(msg.TargetCharacterID) &&
-				Server.BehaviourRegistry.TryGet(out CharacterSystem characterSystem) &&
+				Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem) &&
 				characterSystem.CharactersByID.TryGetValue(msg.TargetCharacterID, out IPlayerCharacter targetCharacter) &&
 				targetCharacter.TryGet(out IGuildController targetGuildController))
 			{

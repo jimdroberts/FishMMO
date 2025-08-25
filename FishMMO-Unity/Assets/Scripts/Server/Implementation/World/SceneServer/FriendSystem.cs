@@ -1,5 +1,8 @@
-﻿using FishNet.Connection;
+﻿using UnityEngine;
+using UnityEngine.SceneManagement;
+using FishNet.Connection;
 using FishNet.Transporting;
+using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
 using FishMMO.Database.Npgsql.Entities;
@@ -9,12 +12,15 @@ namespace FishMMO.Server.Implementation.SceneServer
 	/// <summary>
 	/// Server friend system.
 	/// </summary>
-	public class FriendSystem : ServerBehaviour
+	public class FriendSystem : ServerBehaviour, IFriendSystem
 	{
+		[SerializeField]
+		private int maxFriends = 100;
+
 		/// <summary>
 		/// Maximum number of friends allowed per character.
 		/// </summary>
-		public int MaxFriends = 100;
+		public int MaxFriends { get { return maxFriends; } }
 
 		/// <summary>
 		/// Initializes the friend system, registering broadcast handlers for friend add and remove requests.
@@ -22,7 +28,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 		public override void InitializeOnce()
 		{
 			if (Server != null &&
-				Server.BehaviourRegistry.TryGet(out CharacterSystem characterSystem))
+				Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem))
 			{
 				Server.NetworkWrapper.RegisterBroadcast<FriendAddNewBroadcast>(OnServerFriendAddNewBroadcastReceived, true);
 				Server.NetworkWrapper.RegisterBroadcast<FriendRemoveBroadcast>(OnServerFriendRemoveBroadcastReceived, true);
@@ -62,7 +68,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 
 			// Validate character
 			if (friendController == null ||
-				friendController.Friends.Count > MaxFriends)
+				friendController.Friends.Count > maxFriends)
 			{
 				return;
 			}

@@ -8,7 +8,7 @@ using UnityEngine;
 using Cysharp.Text;
 using System.Runtime.CompilerServices;
 using FishMMO.Shared;
-using FishMMO.Server.Implementation.WorldServer;
+using FishMMO.Server.Core.World.WorldServer;
 
 namespace FishMMO.Server.Implementation
 {
@@ -131,7 +131,7 @@ namespace FishMMO.Server.Implementation
 			using (var windowTitle = ZString.CreateStringBuilder())
 			{
 				// Add server name from configuration if available.
-				if (Configuration.GlobalSettings.TryGetString("ServerName", out string title))
+				if (Server.Configuration.TryGetString("ServerName", out string title))
 				{
 					windowTitle.Append(title);
 				}
@@ -162,7 +162,7 @@ namespace FishMMO.Server.Implementation
 					}
 
 					// Add port, remote address, and client count.
-					if (Configuration.GlobalSettings.TryGetUShort("Port", out ushort port))
+					if (Server.Configuration.TryGetUShort("Port", out ushort port))
 					{
 						windowTitle.Append(" [Server:");
 						windowTitle.Append(Server.CoreServer.RemoteAddress);
@@ -170,7 +170,7 @@ namespace FishMMO.Server.Implementation
 						windowTitle.Append(port);
 						windowTitle.Append(" Clients:");
 						// Use WorldSceneSystem's ConnectionCount if available, otherwise fallback to ServerManager.Clients.Count.
-						windowTitle.Append(Server.BehaviourRegistry.TryGet(out WorldSceneSystem worldSceneSystem) ? worldSceneSystem.ConnectionCount : ServerManager.Clients.Count);
+						windowTitle.Append(Server.BehaviourRegistry.TryGet(out IWorldSceneSystem worldSceneSystem) ? worldSceneSystem.ConnectionCount : ServerManager.Clients.Count);
 						windowTitle.Append("]");
 					}
 				}

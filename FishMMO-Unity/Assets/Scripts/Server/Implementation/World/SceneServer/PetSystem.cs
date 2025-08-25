@@ -2,6 +2,7 @@ using FishNet.Connection;
 using FishNet.Object;
 using FishNet.Transporting;
 using FishNet.Utility.Performance;
+using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
 using UnityEngine;
@@ -13,7 +14,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 	/// Manages pet-related server logic, including pet summoning, following, staying, releasing, and persistence.
 	/// Handles pet broadcasts, character events, and pet AI initialization for player characters.
 	/// </summary>
-	public class PetSystem : ServerBehaviour
+	public class PetSystem : ServerBehaviour, IPetSystem
 	{
 		/// <summary>
 		/// Called once to initialize the pet system. Registers broadcast handlers and subscribes to character and ability events.
@@ -29,7 +30,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 
 				AbilityObject.OnPetSummon += AbilityObject_OnPetSummon;
 
-				if (Server.BehaviourRegistry.TryGet(out CharacterSystem characterSystem))
+				if (Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem))
 				{
 					characterSystem.OnSpawnCharacter += CharacterSystem_OnSpawnCharacter;
 					characterSystem.OnDespawnCharacter += CharacterSystem_OnDespawnCharacter;
@@ -56,7 +57,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 
 				AbilityObject.OnPetSummon -= AbilityObject_OnPetSummon;
 
-				if (Server.BehaviourRegistry.TryGet(out CharacterSystem characterSystem))
+				if (Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem))
 				{
 					characterSystem.OnSpawnCharacter -= CharacterSystem_OnSpawnCharacter;
 					characterSystem.OnDespawnCharacter -= CharacterSystem_OnDespawnCharacter;

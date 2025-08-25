@@ -1,6 +1,7 @@
 using FishMMO.Shared;
 using FishMMO.Logging;
 using FishMMO.Server.Core;
+using FishMMO.Server.Core.World.SceneServer;
 using FishNet.Connection;
 
 namespace FishMMO.Server.Implementation.SceneServer
@@ -10,9 +11,9 @@ namespace FishMMO.Server.Implementation.SceneServer
 	/// </summary>
 	public class BindstoneHandler : IInteractableHandler
 	{
-		private readonly IServer<INetworkManagerWrapper, NetworkConnection, ServerBehaviour> server;
+		private readonly IServer<INetworkManagerWrapper, NetworkConnection, IServerBehaviour> server;
 
-		public BindstoneHandler(IServer<INetworkManagerWrapper, NetworkConnection, ServerBehaviour> server)
+		public BindstoneHandler(IServer<INetworkManagerWrapper, NetworkConnection, IServerBehaviour> server)
 		{
 			this.server = server;
 		}
@@ -40,7 +41,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 				return;
 			}
 
-			if (!server.BehaviourRegistry.TryGet(out SceneServerSystem sceneServerSystem))
+			if (!server.BehaviourRegistry.TryGet(out ISceneServerSystem<NetworkConnection> sceneServerSystem))
 			{
 				Log.Debug("BindstoneHandler", "SceneServerSystem not found!");
 				return;

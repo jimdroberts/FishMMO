@@ -1,4 +1,5 @@
 ﻿using System;
+using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Shared;
 
 namespace FishMMO.Server.Implementation.SceneServer
@@ -7,32 +8,32 @@ namespace FishMMO.Server.Implementation.SceneServer
 	/// Stores details about a scene instance managed by the server, including server IDs, name, handle, type, and character count.
 	/// Tracks when the last character exited for stale scene detection.
 	/// </summary>
-	public class SceneInstanceDetails
+	public class SceneInstanceDetails : ISceneInstanceDetails
 	{
 		/// <summary>
 		/// The world server ID associated with this scene instance.
 		/// </summary>
-		public long WorldServerID;
+		public long WorldServerID { get; set; }
 		/// <summary>
 		/// The scene server ID associated with this scene instance.
 		/// </summary>
-		public long SceneServerID;
+		public long SceneServerID { get; set; }
 		/// <summary>
 		/// The name of the scene instance.
 		/// </summary>
-		public string Name;
+		public string Name { get; set; }
 		/// <summary>
 		/// The handle (unique identifier) for this scene instance.
 		/// </summary>
-		public int Handle;
+		public int Handle { get; set; }
 		/// <summary>
 		/// The type of scene (OpenWorld, Group, PvP, etc.).
 		/// </summary>
-		public SceneType SceneType;
+		public SceneType SceneType { get; set; }
 		/// <summary>
 		/// The current number of characters in this scene instance.
 		/// </summary>
-		public int CharacterCount;
+		public int CharacterCount { get; set; }
 		/// <summary>
 		/// Indicates whether the scene is stale (no characters present).
 		/// </summary>
@@ -40,7 +41,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 		/// <summary>
 		/// The time when the last character exited the scene.
 		/// </summary>
-		public DateTime LastExit = DateTime.UtcNow;
+		public DateTime LastExit { get; set; }
 
 		/// <summary>
 		/// Adds or subtracts from the character count, updating LastExit if the scene becomes empty.

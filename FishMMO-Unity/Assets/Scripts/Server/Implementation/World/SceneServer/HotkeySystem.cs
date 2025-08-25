@@ -2,10 +2,11 @@ using FishNet.Connection;
 using FishNet.Transporting;
 using FishMMO.Shared;
 using System.Collections.Generic;
+using FishMMO.Server.Core.World.SceneServer;
 
 namespace FishMMO.Server.Implementation.SceneServer
 {
-	public class HotkeySystem : ServerBehaviour
+	public class HotkeySystem : ServerBehaviour, IHotkeySystem
 	{
 		/// <summary>
 		/// Initializes the hotkey system, registering broadcast handlers for hotkey set and hotkey set multiple requests.

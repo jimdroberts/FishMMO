@@ -10,9 +10,9 @@ namespace FishMMO.Server.Implementation.SceneServer
 	/// </summary>
 	public class TeleporterHandler : IInteractableHandler
 	{
-		private readonly IServer<INetworkManagerWrapper, NetworkConnection, ServerBehaviour> server;
+		private readonly IServer<INetworkManagerWrapper, NetworkConnection, IServerBehaviour> server;
 
-		public TeleporterHandler(IServer<INetworkManagerWrapper, NetworkConnection, ServerBehaviour> server)
+		public TeleporterHandler(IServer<INetworkManagerWrapper, NetworkConnection, IServerBehaviour> server)
 		{
 			this.server = server;
 		}

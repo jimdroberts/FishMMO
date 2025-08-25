@@ -1,4 +1,5 @@
 using FishMMO.Database.Npgsql;
+using FishMMO.Server.Core.World.WorldServer;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
 
@@ -26,7 +27,7 @@ namespace FishMMO.Server.Implementation.WorldServer
 		internal override ClientAuthenticationResult TryLogin(NpgsqlDbContext dbContext, ClientAuthenticationResult result, string username)
 		{
 			// Check if the world server is full.
-			if (Server.BehaviourRegistry.TryGet(out WorldSceneSystem worldSceneSystem) &&
+			if (Server.BehaviourRegistry.TryGet(out IWorldSceneSystem worldSceneSystem) &&
 				worldSceneSystem.ConnectionCount >= MaxPlayers)
 			{
 				return ClientAuthenticationResult.ServerFull;

@@ -181,20 +181,24 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			// Find all interfaces implemented by the behaviour that derive from ICharacterBehaviour.
-			List<Type> interfaces = behaviour.GetType()
-											 .GetInterfaces()
-											 .Where(x => x != typeof(ICharacterBehaviour) &&
-														 typeof(ICharacterBehaviour).IsAssignableFrom(x)).ToList();
+			// Iterate interfaces directly to avoid LINQ allocations.
+			Type[] interfaces = behaviour.GetType().GetInterfaces();
 
-			for (int i = 0; i < interfaces.Count; ++i)
+			for (int i = 0; i < interfaces.Length; ++i)
 			{
-				Type interfaceType = interfaces[i];
-
-				if (!Behaviours.ContainsKey(interfaceType))
+				Type iface = interfaces[i];
+				if (iface == typeof(ICharacterBehaviour))
+				{
+					continue;
+				}
+				if (!typeof(ICharacterBehaviour).IsAssignableFrom(iface))
+				{
+					continue;
+				}
+				if (!Behaviours.ContainsKey(iface))
 				{
 					// Register the behaviour for this interface type.
-					Behaviours.Add(interfaceType, behaviour);
+					Behaviours.Add(iface, behaviour);
 				}
 			}
 		}
@@ -211,18 +215,25 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			// Find all interfaces implemented by the behaviour that derive from ICharacterBehaviour.
-			List<Type> interfaces = behaviour.GetType()
-											 .GetInterfaces()
-											 .Where(x => x != typeof(ICharacterBehaviour) &&
-														 typeof(ICharacterBehaviour).IsAssignableFrom(x)).ToList();
+			// Iterate interfaces directly to avoid LINQ allocations and only remove mappings
+			// that still point to this behaviour (safer if mappings were overwritten).
+			Type[] interfaces = behaviour.GetType().GetInterfaces();
 
-			for (int i = 0; i < interfaces.Count; ++i)
+			for (int i = 0; i < interfaces.Length; ++i)
 			{
-				Type interfaceType = interfaces[i];
-
-				// Remove the behaviour for this interface type.
-				Behaviours.Remove(interfaceType);
+				Type iface = interfaces[i];
+				if (iface == typeof(ICharacterBehaviour))
+				{
+					continue;
+				}
+				if (!typeof(ICharacterBehaviour).IsAssignableFrom(iface))
+				{
+					continue;
+				}
+				if (Behaviours.TryGetValue(iface, out ICharacterBehaviour existing) && existing == behaviour)
+				{
+					Behaviours.Remove(iface);
+				}
 			}
 		}
 
