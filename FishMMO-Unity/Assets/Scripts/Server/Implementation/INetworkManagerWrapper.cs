@@ -73,7 +73,7 @@ namespace FishMMO.Server.Implementation
 		/// Attaches a login authenticator using the provided Server.
 		/// </summary>
 		/// <param name="server">The server instance.</param>
-		void AttachLoginAuthenticator(IServer<INetworkManagerWrapper, NetworkConnection, ServerBehaviour> server);
+		void AttachLoginAuthenticator(IServer<INetworkManagerWrapper, NetworkConnection, IServerBehaviour> server);
 
 		/// <summary>
 		/// Broadcasts a message to a single network connection.

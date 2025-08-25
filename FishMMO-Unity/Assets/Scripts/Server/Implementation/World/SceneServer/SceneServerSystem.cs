@@ -6,6 +6,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using System;
 using System.Collections.Generic;
+using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
 using FishMMO.Logging;
@@ -18,17 +19,12 @@ namespace FishMMO.Server.Implementation.SceneServer
 	/// Manages scene server node services, scene loading/unloading, and heartbeat updates to the world server.
 	/// Tracks scene instances, handles connection events, and synchronizes scene state with the database.
 	/// </summary>
-	public class SceneServerSystem : ServerBehaviour
+	public class SceneServerSystem : ServerBehaviour, ISceneServerSystem<NetworkConnection>
 	{
 		/// <summary>
 		/// Current connection state of the server.
 		/// </summary>
 		private LocalConnectionState serverState;
-
-		/// <summary>
-		/// Cache of world scene details, including max clients per scene.
-		/// </summary>
-		public WorldSceneDetailsCache WorldSceneDetailsCache;
 
 		/// <summary>
 		/// Database ID for this scene server instance.
@@ -42,25 +38,42 @@ namespace FishMMO.Server.Implementation.SceneServer
 		/// Time remaining until the next heartbeat pulse.
 		/// </summary>
 		private float nextPulse = 0.0f;
-
 		/// <summary>
 		/// Interval (in seconds) between heartbeat pulses to the database.
 		/// </summary>
-		public float PulseRate = 5.0f;
+		[SerializeField]
+		private float pulseRate = 5.0f;
+		/// <summary>
+		/// Cache of world scene details, including max clients per scene.
+		/// </summary>
+		[SerializeField]
+		private WorldSceneDetailsCache worldSceneDetailsCache;
 
 		/// <summary>
 		/// Gets the database ID for this scene server instance.
 		/// </summary>
 		public long ID { get { return id; } }
+		/// <summary>
+		/// When true, the scene server is locked and will refuse new load/unload requests.
+		/// </summary>
+		public bool IsLocked { get { return locked; } }
+		/// <summary>
+		/// Interval (in seconds) between heartbeat pulses to the database.
+		/// </summary>
+		public float PulseRate { get { return pulseRate; } }
+		/// <summary>
+		/// Cache of world scene details, including max clients per scene.
+		/// </summary>
+		public WorldSceneDetailsCache WorldSceneDetailsCache { get { return worldSceneDetailsCache; } }
 
 		/// <summary>
 		/// Maps world server IDs to scene names and handles, tracking all loaded scene instances.
 		/// </summary>
-		public readonly Dictionary<long, Dictionary<string, Dictionary<int, SceneInstanceDetails>>> WorldScenes = new Dictionary<long, Dictionary<string, Dictionary<int, SceneInstanceDetails>>>();
+		public Dictionary<long, Dictionary<string, Dictionary<int, ISceneInstanceDetails>>> WorldScenes { get; } = new Dictionary<long, Dictionary<string, Dictionary<int, ISceneInstanceDetails>>>();
 		/// <summary>
 		/// Maps scene handles to scene names for quick lookup.
 		/// </summary>
-		public readonly Dictionary<int, string> SceneNameByHandle = new Dictionary<int, string>();
+		public Dictionary<int, string> SceneNameByHandle { get; } = new Dictionary<int, string>();
 
 		/// <summary>
 		/// Tracks pending scene load requests by scene ID.
@@ -87,11 +100,11 @@ namespace FishMMO.Server.Implementation.SceneServer
 				ServerManager.OnServerConnectionState += ServerManager_OnServerConnectionState;
 
 				if (Server.AddressProvider.TryGetServerIPAddress(out ServerAddress server) &&
-					Server.BehaviourRegistry.TryGet(out CharacterSystem characterSystem))
+					Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem))
 				{
 					int characterCount = characterSystem.ConnectionCharacters.Count;
 
-					if (Configuration.GlobalSettings.TryGetString("ServerName", out string name))
+					if (Server.Configuration.TryGetString("ServerName", out string name))
 					{
 						SceneServerService.Add(dbContext, name, server.Address, server.Port, characterCount, locked, out id);
 						SceneService.Delete(dbContext, id);
@@ -121,7 +134,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 			if (ServerManager != null)
 			{
 				if (Server != null &&
-					Configuration.GlobalSettings.TryGetString("ServerName", out string name))
+					Server.Configuration.TryGetString("ServerName", out string name))
 				{
 					Log.Debug("SceneServerSystem", "Scene Server System: Removing Scene Server scenes: " + id);
 					SceneService.Delete(dbContext, id);
@@ -132,7 +145,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 				ServerManager.OnServerConnectionState -= ServerManager_OnServerConnectionState;
 			}
 
-			if (Server.BehaviourRegistry.TryGet(out CharacterSystem characterSystem))
+			if (Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem))
 			{
 				characterSystem.OnDisconnect -= CharacterSystem_OnDisconnect;
 				characterSystem.OnAfterLoadCharacter -= CharacterSystem_OnAfterLoadCharacter;
@@ -195,7 +208,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 			if (TryGetSceneInstanceDetails(worldServerID,
 											sceneName,
 											sceneHandle,
-											out SceneInstanceDetails instance))
+											out ISceneInstanceDetails instance))
 			{
 				instance.AddCharacterCount(amount);
 			}
@@ -213,7 +226,8 @@ namespace FishMMO.Server.Implementation.SceneServer
 					nextPulse = PulseRate;
 
 					if (Server != null &&
-						Server.BehaviourRegistry.TryGet(out CharacterSystem characterSystem))
+						Server.BehaviourRegistry != null &&
+						Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem))
 					{
 						// Send heartbeat pulse to the database with current character count.
 						using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
@@ -223,16 +237,16 @@ namespace FishMMO.Server.Implementation.SceneServer
 						// Process loaded scene pulse update
 						if (WorldScenes != null)
 						{
-							foreach (Dictionary<string, Dictionary<int, SceneInstanceDetails>> sceneGroup in WorldScenes.Values)
+							foreach (Dictionary<string, Dictionary<int, ISceneInstanceDetails>> sceneGroup in WorldScenes.Values)
 							{
-								foreach (Dictionary<int, SceneInstanceDetails> scenes in new List<Dictionary<int, SceneInstanceDetails>>(sceneGroup.Values))
+								foreach (Dictionary<int, ISceneInstanceDetails> scenes in new List<Dictionary<int, ISceneInstanceDetails>>(sceneGroup.Values))
 								{
-									foreach (SceneInstanceDetails sceneDetails in new List<SceneInstanceDetails>(scenes.Values))
+									foreach (ISceneInstanceDetails sceneDetails in new List<ISceneInstanceDetails>(scenes.Values))
 									{
 										if (sceneDetails.StalePulse)
 										{
 											double timeSinceLastExit = DateTime.UtcNow.Subtract(sceneDetails.LastExit).TotalMinutes;
-											if (Configuration.GlobalSettings.TryGetInt("StaleSceneTimeout", out int result) &&
+											if (Server.Configuration.TryGetInt("StaleSceneTimeout", out int result) &&
 												timeSinceLastExit < result)
 											{
 												Log.Debug("SceneServerSystem", $"{sceneDetails.Name}:{sceneDetails.WorldServerID}{sceneDetails.Handle}:{sceneDetails.CharacterCount} Stale Pulse");
@@ -375,13 +389,13 @@ namespace FishMMO.Server.Implementation.SceneServer
 		private void ProcessScene(Scene scene, SceneType sceneType, long worldServerID)
 		{
 			// Configure the mapping for this specific world scene
-			if (!WorldScenes.TryGetValue(worldServerID, out Dictionary<string, Dictionary<int, SceneInstanceDetails>> scenes))
+			if (!WorldScenes.TryGetValue(worldServerID, out Dictionary<string, Dictionary<int, ISceneInstanceDetails>> scenes))
 			{
-				WorldScenes.Add(worldServerID, scenes = new Dictionary<string, Dictionary<int, SceneInstanceDetails>>());
+				WorldScenes.Add(worldServerID, scenes = new Dictionary<string, Dictionary<int, ISceneInstanceDetails>>());
 			}
-			if (!scenes.TryGetValue(scene.name, out Dictionary<int, SceneInstanceDetails> handles))
+			if (!scenes.TryGetValue(scene.name, out Dictionary<int, ISceneInstanceDetails> handles))
 			{
-				scenes.Add(scene.name, handles = new Dictionary<int, SceneInstanceDetails>());
+				scenes.Add(scene.name, handles = new Dictionary<int, ISceneInstanceDetails>());
 			}
 			if (!handles.ContainsKey(scene.handle))
 			{
@@ -400,6 +414,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 					SceneType = sceneType,
 					Handle = scene.handle,
 					CharacterCount = 0,
+					LastExit = DateTime.UtcNow,
 				});
 
 				Log.Debug("SceneServerSystem", $"New scene handle added for {worldServerID}:{scene.name}:{scene.handle}");
@@ -434,9 +449,9 @@ namespace FishMMO.Server.Implementation.SceneServer
 			{
 				UnloadedScene unloaded = args.UnloadedScenesV2[i];
 
-				foreach (Dictionary<string, Dictionary<int, SceneInstanceDetails>> sceneGroup in WorldScenes.Values)
+				foreach (Dictionary<string, Dictionary<int, ISceneInstanceDetails>> sceneGroup in WorldScenes.Values)
 				{
-					foreach (Dictionary<int, SceneInstanceDetails> scene in sceneGroup.Values)
+					foreach (Dictionary<int, ISceneInstanceDetails> scene in sceneGroup.Values)
 					{
 						if (scene.ContainsKey(unloaded.Handle))
 						{
@@ -461,16 +476,16 @@ namespace FishMMO.Server.Implementation.SceneServer
 		/// <param name="sceneHandle">Scene handle.</param>
 		/// <param name="instanceDetails">Output instance details.</param>
 		/// <returns>True if found, false otherwise.</returns>
-		public bool TryGetSceneInstanceDetails(long worldServerID, string sceneName, int sceneHandle, out SceneInstanceDetails instanceDetails)
+		public bool TryGetSceneInstanceDetails(long worldServerID, string sceneName, int sceneHandle, out ISceneInstanceDetails instanceDetails)
 		{
 			instanceDetails = default;
 
 			if (WorldScenes != null &&
-				WorldScenes.TryGetValue(worldServerID, out Dictionary<string, Dictionary<int, SceneInstanceDetails>> scenes))
+				WorldScenes.TryGetValue(worldServerID, out Dictionary<string, Dictionary<int, ISceneInstanceDetails>> scenes))
 			{
 				if (scenes != null &&
 					!string.IsNullOrEmpty(sceneName) &&
-					scenes.TryGetValue(sceneName, out Dictionary<int, SceneInstanceDetails> instances))
+					scenes.TryGetValue(sceneName, out Dictionary<int, ISceneInstanceDetails> instances))
 				{
 					if (instances != null &&
 						instances.TryGetValue(sceneHandle, out instanceDetails))
@@ -492,7 +507,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 		/// <param name="connection">Network connection.</param>
 		/// <param name="instance">Scene instance details.</param>
 		/// <returns>True if scene was loaded for the connection, false otherwise.</returns>
-		public bool TryLoadSceneForConnection(NetworkConnection connection, SceneInstanceDetails instance)
+		public bool TryLoadSceneForConnection(NetworkConnection connection, ISceneInstanceDetails instance)
 		{
 			Scene scene = SceneManager.GetScene(instance.Handle);
 			if (scene != null && scene.IsValid() && scene.isLoaded)

@@ -3,6 +3,7 @@ using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
 using FishMMO.Database.Npgsql.Entities;
+using FishMMO.Server.Core.World;
 using FishMMO.Server.DatabaseServices;
 using UnityEngine;
 
@@ -12,7 +13,7 @@ namespace FishMMO.Server.Implementation.WorldServer
 	/// System for processing kick requests from the database and disconnecting accounts as needed.
 	/// Periodically polls the database for new kick requests and processes them.
 	/// </summary>
-	public class KickRequestSystem : ServerBehaviour
+	public class KickRequestSystem : ServerBehaviour, IKickRequestSystem
 	{
 		/// <summary>
 		/// Current connection state of the server.
@@ -35,11 +36,22 @@ namespace FishMMO.Server.Implementation.WorldServer
 		/// The server kick request update pump rate limit in seconds.
 		/// </summary>
 		[Tooltip("The server kick request update pump rate limit in seconds.")]
-		public float UpdatePumpRate = 5.0f;
+		[SerializeField]
+		public float updatePumpRate = 5.0f;
 		/// <summary>
 		/// Maximum number of kick requests to fetch per poll.
 		/// </summary>
-		public int UpdateFetchCount = 100;
+		[SerializeField]
+		public int updateFetchCount = 100;
+
+		/// <summary>
+		/// The server kick request update pump rate limit in seconds.
+		/// </summary>
+		public float UpdatePumpRate { get { return updatePumpRate; } set { updatePumpRate = value; } }
+		/// <summary>
+		/// Maximum number of kick requests to fetch per poll.
+		/// </summary>
+		public int UpdateFetchCount { get { return updateFetchCount; } set { updateFetchCount = value; } }
 
 		/// <summary>
 		/// Called once to initialize the system. Subscribes to server connection state events.

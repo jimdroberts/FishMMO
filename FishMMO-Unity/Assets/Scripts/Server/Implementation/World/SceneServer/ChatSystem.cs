@@ -1,9 +1,11 @@
 ﻿using FishNet.Connection;
 using FishNet.Transporting;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
 using FishMMO.Database.Npgsql.Entities;
@@ -13,7 +15,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 	/// <summary>
 	/// Server chat system.
 	/// </summary>
-	public class ChatSystem : ServerBehaviour, IChatHelper
+	public class ChatSystem : ServerBehaviour, IChatSystem
 	{
 		/// <summary>
 		/// Maximum allowed chat message length.
@@ -102,7 +104,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 		/// </summary>
 		void LateUpdate()
 		{
-			if (serverState == LocalConnectionState.Started)
+			if (Initialized && serverState == LocalConnectionState.Started)
 			{
 				if (nextPump < 0)
 				{
@@ -122,7 +124,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 		/// <returns>List of new chat message entities.</returns>
 		private List<ChatEntity> FetchChatMessages()
 		{
-			if (!Server.BehaviourRegistry.TryGet(out SceneServerSystem sceneServerSystem))
+			if (!Server.BehaviourRegistry.TryGet(out ISceneServerSystem<NetworkConnection> sceneServerSystem))
 			{
 				return null;
 			}
@@ -301,7 +303,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 				}
 
 				if (commandDetails.Func.Invoke(sender, msg) &&
-					Server.BehaviourRegistry.TryGet(out SceneServerSystem sceneServerSystem))
+					Server.BehaviourRegistry.TryGet(out ISceneServerSystem<NetworkConnection> sceneServerSystem))
 				{
 					// write the parsed message to the database
 					using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
@@ -333,7 +335,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 				Text = trimmed,
 			};
 
-			if (Server.BehaviourRegistry.TryGet(out CharacterSystem characterSystem) &&
+			if (Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem) &&
 				characterSystem.CharactersByWorld.TryGetValue(worldID, out Dictionary<long, IPlayerCharacter> characters))
 			{
 				// send to all world characters
@@ -395,7 +397,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 				return false;
 			}
 
-			if (Server.BehaviourRegistry.TryGet(out CharacterSystem characterSystem))
+			if (Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem))
 			{
 				// get all the member data so we can broadcast
 				using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
@@ -442,7 +444,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 				return false;
 			}
 
-			if (Server.BehaviourRegistry.TryGet(out CharacterSystem characterSystem))
+			if (Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem))
 			{
 				// get all the member data so we can broadcast
 				using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
@@ -534,7 +536,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 				}
 			}
 
-			if (Server.BehaviourRegistry.TryGet(out CharacterSystem characterSystem))
+			if (Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem))
 			{
 				// if the target character is on this server we send them the message
 				if (characterSystem != null &&
@@ -568,7 +570,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 				return false;
 			}
 
-			if (Server.BehaviourRegistry.TryGet(out CharacterSystem characterSystem))
+			if (Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem))
 			{
 				ChatBroadcast newMsg = new ChatBroadcast()
 				{
@@ -643,7 +645,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 				Text = message,
 			};
 
-			if (Server.BehaviourRegistry.TryGet(out CharacterSystem characterSystem) &&
+			if (Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem) &&
 				characterSystem.CharactersByWorld.TryGetValue(worldServerID, out Dictionary<long, IPlayerCharacter> characters))
 			{
 				// send to all world characters

@@ -6,6 +6,7 @@ using FishNet.Transporting;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
 using FishMMO.Logging;
@@ -16,7 +17,7 @@ using UnityEngine.SceneManagement;
 namespace FishMMO.Server.Implementation.SceneServer
 {
 	// Character manager handles the players character
-	public class CharacterSystem : ServerBehaviour
+	public class CharacterSystem : ServerBehaviour, ICharacterSystem<NetworkConnection, Scene>
 	{
 		/// <summary>
 		/// Authenticator for login and character loading.
@@ -77,23 +78,23 @@ namespace FishMMO.Server.Implementation.SceneServer
 		/// <summary>
 		/// Maps character IDs to player character instances.
 		/// </summary>
-		public Dictionary<long, IPlayerCharacter> CharactersByID = new Dictionary<long, IPlayerCharacter>();
+		public Dictionary<long, IPlayerCharacter> CharactersByID { get; } = new Dictionary<long, IPlayerCharacter>();
 		/// <summary>
 		/// Maps lowercase character names to player character instances.
 		/// </summary>
-		public Dictionary<string, IPlayerCharacter> CharactersByLowerCaseName = new Dictionary<string, IPlayerCharacter>();
+		public Dictionary<string, IPlayerCharacter> CharactersByLowerCaseName { get; } = new Dictionary<string, IPlayerCharacter>();
 		/// <summary>
 		/// Maps world server IDs to dictionaries of character IDs and player character instances.
 		/// </summary>
-		public Dictionary<long, Dictionary<long, IPlayerCharacter>> CharactersByWorld = new Dictionary<long, Dictionary<long, IPlayerCharacter>>();
+		public Dictionary<long, Dictionary<long, IPlayerCharacter>> CharactersByWorld { get; } = new Dictionary<long, Dictionary<long, IPlayerCharacter>>();
 		/// <summary>
 		/// Maps network connections to player character instances.
 		/// </summary>
-		public Dictionary<NetworkConnection, IPlayerCharacter> ConnectionCharacters = new Dictionary<NetworkConnection, IPlayerCharacter>();
+		public Dictionary<NetworkConnection, IPlayerCharacter> ConnectionCharacters { get; } = new Dictionary<NetworkConnection, IPlayerCharacter>();
 		/// <summary>
 		/// Maps network connections to player characters waiting for scene load.
 		/// </summary>
-		public Dictionary<NetworkConnection, IPlayerCharacter> WaitingSceneLoadCharacters = new Dictionary<NetworkConnection, IPlayerCharacter>();
+		public Dictionary<NetworkConnection, IPlayerCharacter> WaitingSceneLoadCharacters { get; } = new Dictionary<NetworkConnection, IPlayerCharacter>();
 
 		/// <summary>
 		/// Initializes the character system, registers event handlers, and sets up character authentication and broadcast handling.
@@ -103,7 +104,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 			nextSave = SaveRate;
 
 			if (ServerManager != null &&
-				Server.BehaviourRegistry.TryGet(out SceneServerSystem sceneServerSystem))
+				Server.BehaviourRegistry.TryGet(out ISceneServerSystem<NetworkConnection> sceneServerSystem))
 			{
 				loginAuthenticator = FindFirstObjectByType<SceneServerAuthenticator>();
 				if (loginAuthenticator == null)
@@ -158,8 +159,9 @@ namespace FishMMO.Server.Implementation.SceneServer
 		/// </summary>
 		void LateUpdate()
 		{
-			if (serverState == LocalConnectionState.Started &&
-				Server.BehaviourRegistry.TryGet(out SceneServerSystem sceneServerSystem))
+			if (Initialized &&
+				serverState == LocalConnectionState.Started &&
+				Server.BehaviourRegistry.TryGet(out ISceneServerSystem<NetworkConnection> sceneServerSystem))
 			{
 				if (nextOutOfBoundsCheck < 0)
 				{
@@ -238,7 +240,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 		private void ServerManager_OnRemoteConnectionState(NetworkConnection conn, RemoteConnectionStateArgs args)
 		{
 			if (args.ConnectionState == RemoteConnectionState.Stopped &&
-				Server.BehaviourRegistry.TryGet(out SceneServerSystem sceneServerSystem))
+				Server.BehaviourRegistry.TryGet(out ISceneServerSystem<NetworkConnection> sceneServerSystem))
 			{
 				RemoveCharacterConnectionMapping(conn);
 			}
@@ -326,7 +328,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 			}
 			if (!authenticated ||
 				!Server.AccountManager.GetAccountNameByConnection(conn, out string accountName) ||
-				!Server.BehaviourRegistry.TryGet(out SceneServerSystem sceneServerSystem))
+				!Server.BehaviourRegistry.TryGet(out ISceneServerSystem<NetworkConnection> sceneServerSystem))
 			{
 				conn.Kick(FishNet.Managing.Server.KickReason.UnusualActivity);
 				return;
@@ -362,7 +364,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 					//Log.Debug("CharacterSystem", "$"Character loaded into {sceneName}:{sceneHandle}.");
 
 					// Check if the scene is valid, loaded, and cached properly
-					if (sceneServerSystem.TryGetSceneInstanceDetails(character.WorldServerID, sceneName, sceneHandle, out SceneInstanceDetails instance) &&
+					if (sceneServerSystem.TryGetSceneInstanceDetails(character.WorldServerID, sceneName, sceneHandle, out ISceneInstanceDetails instance) &&
 						sceneServerSystem.TryLoadSceneForConnection(conn, instance))
 					{
 						OnAfterLoadCharacter?.Invoke(conn, character);
@@ -876,7 +878,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 				return;
 			}*/
 
-			if (!Server.BehaviourRegistry.TryGet(out SceneServerSystem sceneServerSystem))
+			if (!Server.BehaviourRegistry.TryGet(out ISceneServerSystem<NetworkConnection> sceneServerSystem))
 			{
 				Log.Debug("CharacterSystem", "SceneServerSystem not found!");
 				return;

@@ -13,7 +13,15 @@ namespace FishMMO.Server.Core
 	/// Implementations should expose the server instance, server manager and lifecycle hooks used by the server runtime
 	/// to initialize and tear down server behaviours in a controlled manner.
 	/// </remarks>
-	public interface IServerBehaviour<TNetworkManager, TServerManager, TConnection, TServerBehaviour>
+	/// <summary>
+	/// Non-generic marker interface for server behaviours.
+	/// Use this when declaring engine-agnostic server behaviour interfaces so the implementation
+	/// registry can discover and register behaviours by their interface types.
+	/// </summary>
+	public interface IServerBehaviour { }
+
+	/// <inheritdoc/>
+	public interface IServerBehaviour<TNetworkManager, TServerManager, TConnection, TServerBehaviour> : IServerBehaviour
 	{
 		/// <summary>
 		/// Indicates whether this behaviour has been initialized by the server runtime.

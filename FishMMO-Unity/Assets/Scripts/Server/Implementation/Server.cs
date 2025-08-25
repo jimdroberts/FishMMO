@@ -15,7 +15,7 @@ namespace FishMMO.Server.Implementation
 	/// <summary>
 	/// Composition root: orchestrates Core and Implementation into a running server.
 	/// </summary>
-	public class Server : MonoBehaviour, IServer<INetworkManagerWrapper, NetworkConnection, ServerBehaviour>
+	public class Server : MonoBehaviour, IServer<INetworkManagerWrapper, NetworkConnection, IServerBehaviour>
 	{
 		/// <summary>
 		/// Optional override for the server's bind address.
@@ -61,7 +61,7 @@ namespace FishMMO.Server.Implementation
 		/// <summary>
 		/// Registry that manages all server behaviours.
 		/// </summary>
-		public IServerBehaviourRegistry<INetworkManagerWrapper, NetworkConnection, ServerBehaviour> BehaviourRegistry { get; private set; }
+		public IServerBehaviourRegistry<INetworkManagerWrapper, NetworkConnection, IServerBehaviour> BehaviourRegistry { get; private set; }
 
 		/// <summary>
 		/// Unity Start method. Initializes and composes all server components.

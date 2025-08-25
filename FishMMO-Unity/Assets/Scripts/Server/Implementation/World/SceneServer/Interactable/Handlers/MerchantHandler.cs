@@ -10,9 +10,9 @@ namespace FishMMO.Server.Implementation.SceneServer
 	/// </summary>
 	public class MerchantHandler : IInteractableHandler
 	{
-		private readonly IServer<INetworkManagerWrapper, NetworkConnection, ServerBehaviour> server;
+		private readonly IServer<INetworkManagerWrapper, NetworkConnection, IServerBehaviour> server;
 
-		public MerchantHandler(IServer<INetworkManagerWrapper, NetworkConnection, ServerBehaviour> server)
+		public MerchantHandler(IServer<INetworkManagerWrapper, NetworkConnection, IServerBehaviour> server)
 		{
 			this.server = server;
 		}

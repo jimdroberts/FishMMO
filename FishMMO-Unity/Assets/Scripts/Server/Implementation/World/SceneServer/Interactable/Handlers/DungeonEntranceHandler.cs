@@ -10,9 +10,9 @@ namespace FishMMO.Server.Implementation.SceneServer
 	/// </summary>
 	public class DungeonEntranceHandler : IInteractableHandler
 	{
-		private readonly IServer<INetworkManagerWrapper, NetworkConnection, ServerBehaviour> server;
+		private readonly IServer<INetworkManagerWrapper, NetworkConnection, IServerBehaviour> server;
 
-		public DungeonEntranceHandler(IServer<INetworkManagerWrapper, NetworkConnection, ServerBehaviour> server)
+		public DungeonEntranceHandler(IServer<INetworkManagerWrapper, NetworkConnection, IServerBehaviour> server)
 		{
 			this.server = server;
 		}

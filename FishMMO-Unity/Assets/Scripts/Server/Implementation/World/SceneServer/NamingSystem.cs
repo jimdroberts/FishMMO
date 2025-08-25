@@ -1,5 +1,7 @@
-﻿using FishNet.Connection;
+﻿using UnityEngine.SceneManagement;
+using FishNet.Connection;
 using FishNet.Transporting;
+using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
 using FishMMO.Database.Npgsql.Entities;
@@ -9,7 +11,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 	/// <summary>
 	/// This is a simple naming service that provides clients with names of objects based on their ID.
 	/// </summary>
-	public class NamingSystem : ServerBehaviour
+	public class NamingSystem : ServerBehaviour, INamingSystem<NetworkConnection>
 	{
 		/// <summary>
 		/// Initializes the naming system, registering broadcast handlers for naming and reverse naming requests.
@@ -53,7 +55,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 				case NamingSystemType.CharacterName:
 					//Log.Debug("NamingSystem: Searching by Character ID: " + msg.id);
 					// check our local scene server first
-					if (Server.BehaviourRegistry.TryGet(out CharacterSystem characterSystem) &&
+					if (Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem) &&
 						characterSystem.CharactersByID.TryGetValue(msg.ID, out IPlayerCharacter character))
 					{
 						//Log.Debug("NamingSystem: Character Local Result " + character.CharacterName);
@@ -127,7 +129,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 				case NamingSystemType.CharacterName:
 					//Log.Debug("NamingSystem: Searching by Character ID: " + msg.id);
 					// check our local scene server first
-					if (Server.BehaviourRegistry.TryGet(out CharacterSystem characterSystem) &&
+					if (Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem) &&
 						characterSystem.CharactersByLowerCaseName.TryGetValue(nameLowerCase, out IPlayerCharacter character))
 					{
 						//Log.Debug("NamingSystem: Character Local Result " + character.CharacterName);

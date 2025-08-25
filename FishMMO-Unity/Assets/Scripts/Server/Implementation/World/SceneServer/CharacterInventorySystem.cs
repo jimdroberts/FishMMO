@@ -2,17 +2,17 @@
 using FishNet.Transporting;
 using FishMMO.Shared;
 using FishMMO.Logging;
+using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Database.Npgsql;
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
-using UnityEngine;
 
 namespace FishMMO.Server.Implementation.SceneServer
 {
 	// Character Inventory Manager handles the players inventory
-	public class CharacterInventorySystem : ServerBehaviour
+	public class CharacterInventorySystem : ServerBehaviour, ICharacterInventorySystem
 	{
 		/// <summary>
 		/// Initializes the character inventory system, registering broadcast handlers for inventory, equipment, and bank actions.

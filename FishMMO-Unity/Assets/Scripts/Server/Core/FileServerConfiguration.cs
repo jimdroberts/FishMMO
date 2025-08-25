@@ -58,6 +58,18 @@ namespace FishMMO.Server.Core
 		}
 
 		/// <summary>
+		/// Attempts to retrieve a string value from the configuration for the
+		/// specified <paramref name="key"/>.
+		/// </summary>
+		/// <param name="key">The configuration key to look up.</param>
+		/// <param name="value">When this method returns <c>true</c>, contains the string value associated with <paramref name="key"/>; otherwise <c>null</c> or an empty string as provided by the underlying implementation.</param>
+		/// <returns><c>true</c> if the key exists and a value was retrieved; otherwise <c>false</c>.</returns>
+		public bool TryGetString(string key, out string value)
+		{
+			return config.TryGetString(key, out value);
+		}
+
+		/// <summary>
 		/// Retrieves an unsigned short value from the configuration.
 		/// </summary>
 		/// <param name="key">The configuration key.</param>
@@ -73,6 +85,17 @@ namespace FishMMO.Server.Core
 		}
 
 		/// <summary>
+		/// Attempts to retrieve an unsigned short value from the configuration for the specified <paramref name="key"/>.
+		/// </summary>
+		/// <param name="key">The configuration key to look up.</param>
+		/// <param name="value">When this method returns <c>true</c>, contains the ushort value associated with <paramref name="key"/>; otherwise <c>0</c> (or the default provided by the underlying implementation).</param>
+		/// <returns><c>true</c> if the key exists and a value was retrieved; otherwise <c>false</c>.</returns>
+		public bool TryGetUShort(string key, out ushort value)
+		{
+			return config.TryGetUShort(key, out value);
+		}
+
+		/// <summary>
 		/// Retrieves an integer value from the configuration.
 		/// </summary>
 		/// <param name="key">The configuration key.</param>
@@ -85,6 +108,17 @@ namespace FishMMO.Server.Core
 				return value;
 			}
 			return defaultValue;
+		}
+
+		/// <summary>
+		/// Attempts to retrieve an integer value from the configuration for the specified <paramref name="key"/>.
+		/// </summary>
+		/// <param name="key">The configuration key to look up.</param>
+		/// <param name="value">When this method returns <c>true</c>, contains the integer value associated with <paramref name="key"/>; otherwise <c>0</c> (or the default provided by the underlying implementation).</param>
+		/// <returns><c>true</c> if the key exists and a value was retrieved; otherwise <c>false</c>.</returns>
+		public bool TryGetInt(string key, out int value)
+		{
+			return config.TryGetInt(key, out value);
 		}
 
 		/// <summary>

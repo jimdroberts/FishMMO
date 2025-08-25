@@ -10,7 +10,7 @@ namespace FishMMO.Server.Implementation
 	/// Base class for all server-side behaviours in the FishMMO server architecture.
 	/// Provides registration, initialization, and lifecycle management for server behaviours.
 	/// </summary>
-	public abstract class ServerBehaviour : MonoBehaviour, IServerBehaviour<INetworkManagerWrapper, ServerManager, NetworkConnection, ServerBehaviour>
+	public abstract class ServerBehaviour : MonoBehaviour, IServerBehaviour<INetworkManagerWrapper, ServerManager, NetworkConnection, IServerBehaviour>
 	{
 		/// <summary>
 		/// Indicates whether this behaviour has been initialized.
@@ -19,7 +19,7 @@ namespace FishMMO.Server.Implementation
 		/// <summary>
 		/// Reference to the server instance associated with this behaviour.
 		/// </summary>
-		public IServer<INetworkManagerWrapper, NetworkConnection, ServerBehaviour> Server { get; private set; }
+		public IServer<INetworkManagerWrapper, NetworkConnection, IServerBehaviour> Server { get; private set; }
 		/// <summary>
 		/// Reference to the server manager instance associated with this behaviour.
 		/// </summary>
@@ -30,7 +30,7 @@ namespace FishMMO.Server.Implementation
 		/// </summary>
 		/// <param name="server">The server instance.</param>
 		/// <param name="serverManager">The server manager instance.</param>
-		internal void InternalInitializeOnce(IServer<INetworkManagerWrapper, NetworkConnection, ServerBehaviour> server, ServerManager serverManager)
+		internal void InternalInitializeOnce(IServer<INetworkManagerWrapper, NetworkConnection, IServerBehaviour> server, ServerManager serverManager)
 		{
 			if (Initialized)
 				return;

@@ -192,7 +192,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a61c878103efa02459d94801be90a2be, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  MaxFriends: 100
+  maxFriends: 100
 --- !u!114 &567623045535182215
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -423,9 +423,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d701440aea9074a4d85f9b2474c1793b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  MaxGuildSize: 100
-  MaxGuildNameLength: 64
-  UpdatePumpRate: 1
+  maxGuildSize: 100
+  maxGuildNameLength: 64
+  updatePumpRate: 1
 --- !u!114 &3897615595877637487
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -663,9 +663,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6958bb2e963ec024bbad7d2cf0a2f809, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  WorldSceneDetailsCache: {fileID: 11400000, guid: 3f3e421dc58c81d4e94dcea943cfcd35,
+  pulseRate: 5
+  worldSceneDetailsCache: {fileID: 11400000, guid: 3f3e421dc58c81d4e94dcea943cfcd35,
     type: 2}
-  PulseRate: 5
 --- !u!114 &8596418967717447528
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -1,8 +1,9 @@
+using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Shared;
 
 namespace FishMMO.Server.Implementation.SceneServer
 {
-	public class FactionSystem : ServerBehaviour
+	public class FactionSystem : ServerBehaviour, IFactionSystem
 	{
 		/// <summary>
 		/// Initializes the faction system, subscribing to faction update events.

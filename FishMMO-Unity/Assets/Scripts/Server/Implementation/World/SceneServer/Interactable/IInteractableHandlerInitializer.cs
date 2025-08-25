@@ -12,6 +12,6 @@ namespace FishMMO.Server.Implementation.SceneServer
 		/// Registers all interactable handlers with the system, providing the Server instance for dependency injection.
 		/// </summary>
 		/// <param name="server">The Server instance to provide to handlers.</param>
-		void RegisterHandlers(IServer<INetworkManagerWrapper, NetworkConnection, ServerBehaviour> server);
+		void RegisterHandlers(IServer<INetworkManagerWrapper, NetworkConnection, IServerBehaviour> server);
 	}
 }

@@ -20,7 +20,7 @@ namespace FishMMO.Server.Implementation
 	/// </summary>
 	public class ServerAuthenticator : Authenticator
 	{
-		public IServer<INetworkManagerWrapper, NetworkConnection, ServerBehaviour> Server { get; set; }
+		public IServer<INetworkManagerWrapper, NetworkConnection, IServerBehaviour> Server { get; set; }
 
 		/// <summary>
 		/// Event triggered when server authentication completes for a client connection.

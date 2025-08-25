@@ -1,6 +1,7 @@
 using FishNet.Connection;
 using FishNet.Managing.Server;
 using FishNet.Transporting;
+using FishMMO.Server.Core.World.WorldServer;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
 using FishMMO.Logging;
@@ -16,7 +17,7 @@ namespace FishMMO.Server.Implementation.WorldServer
 	/// Manages world scene connections, queues, and scene assignment for players in the MMO server.
 	/// Handles open world and instanced scene logic, connection authentication, and database updates.
 	/// </summary>
-	public class WorldSceneSystem : ServerBehaviour
+	public class WorldSceneSystem : ServerBehaviour, IWorldSceneSystem
 	{
 		/// <summary>
 		/// Maximum number of clients allowed per scene instance.
@@ -102,7 +103,7 @@ namespace FishMMO.Server.Implementation.WorldServer
 
 			if (Server != null &&
 				Server.CoreServer.NpgsqlDbContextFactory != null &&
-				Server.BehaviourRegistry.TryGet(out WorldServerSystem worldServerSystem))
+				Server.BehaviourRegistry.TryGet(out IWorldServerSystem worldServerSystem))
 			{
 				using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
 				SceneService.WorldDelete(dbContext, worldServerSystem.ID);
@@ -134,7 +135,7 @@ namespace FishMMO.Server.Implementation.WorldServer
 			{
 				nextWaitQueueUpdate = waitQueueRate;
 
-				if (Server.CoreServer.NpgsqlDbContextFactory != null)
+				if (Initialized && Server.CoreServer.NpgsqlDbContextFactory != null)
 				{
 					using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
 					foreach (string sceneName in WaitingOpenWorldConnections.Keys.ToList())
@@ -162,7 +163,7 @@ namespace FishMMO.Server.Implementation.WorldServer
 			if (!WaitingOpenWorldConnections.TryGetValue(sceneName, out HashSet<NetworkConnection> connections) ||
 				connections == null ||
 				connections.Count == 0 ||
-				!Server.BehaviourRegistry.TryGet(out WorldServerSystem worldServerSystem))
+				!Server.BehaviourRegistry.TryGet(out IWorldServerSystem worldServerSystem))
 			{
 				WaitingOpenWorldConnections.Remove(sceneName);
 				return;
@@ -304,7 +305,7 @@ namespace FishMMO.Server.Implementation.WorldServer
 		/// <param name="dbContext">Database context.</param>
 		private void UpdateConnectionCount(NpgsqlDbContext dbContext)
 		{
-			if (dbContext == null || !Server.BehaviourRegistry.TryGet(out WorldServerSystem worldServerSystem))
+			if (dbContext == null || !Server.BehaviourRegistry.TryGet(out IWorldServerSystem worldServerSystem))
 			{
 				return;
 			}
@@ -439,7 +440,7 @@ namespace FishMMO.Server.Implementation.WorldServer
 		/// </summary>
 		/// <param name="sceneName">Name of the scene.</param>
 		/// <returns>Maximum number of clients for the scene.</returns>
-		private int GetMaxClients(string sceneName)
+		public int GetMaxClients(string sceneName)
 		{
 			if (WorldSceneDetailsCache?.Scenes?.TryGetValue(sceneName, out var details) == true)
 			{

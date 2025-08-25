@@ -3,12 +3,13 @@ using System;
 using System.Collections.Generic;
 using FishNet.Broadcast;
 using FishMMO.Shared;
+using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Database.Npgsql;
 
 namespace FishMMO.Server.Implementation.SceneServer
 {
-	public class AchievementSystem : ServerBehaviour
+	public class AchievementSystem : ServerBehaviour, IAchievementSystem
 	{
 		/// <summary>
 		/// Initializes the achievement system, subscribing to achievement update and completion events.

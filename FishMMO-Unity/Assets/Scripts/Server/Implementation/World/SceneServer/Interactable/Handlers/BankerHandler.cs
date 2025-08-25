@@ -10,9 +10,9 @@ namespace FishMMO.Server.Implementation.SceneServer
 	/// </summary>
 	public class BankerHandler : IInteractableHandler
 	{
-		private readonly IServer<INetworkManagerWrapper, NetworkConnection, ServerBehaviour> server;
+		private readonly IServer<INetworkManagerWrapper, NetworkConnection, IServerBehaviour> server;
 
-		public BankerHandler(IServer<INetworkManagerWrapper, NetworkConnection, ServerBehaviour> server)
+		public BankerHandler(IServer<INetworkManagerWrapper, NetworkConnection, IServerBehaviour> server)
 		{
 			this.server = server;
 		}
