@@ -178,6 +178,40 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 			configurator.Restore();
 		}
 
+		/// <summary>
+		/// Builds the Windows x64 Database Installer executable for FishMMO.
+		/// </summary>
+		[MenuItem("FishMMO/Build/Windows x64/Database Installer")]
+		public static void BuildWindows64Setup()
+		{
+			BuildExecutable("Installer",
+							new string[]
+							{
+								Constants.Configuration.InstallerPath,
+							},
+							CustomBuildType.Installer,
+							GetBuildOptions(),
+							StandaloneBuildSubtarget.Server,
+							BuildTarget.StandaloneWindows64);
+		}
+
+		/// <summary>
+		/// Builds the Linux x64 Database Installer executable for FishMMO.
+		/// </summary>
+		[MenuItem("FishMMO/Build/Linux x64/Database Installer")]
+		public static void BuildLinuxSetup()
+		{
+			BuildExecutable("Installer",
+							new string[]
+							{
+								Constants.Configuration.InstallerPath,
+							},
+							CustomBuildType.Installer,
+							GetBuildOptions(),
+							StandaloneBuildSubtarget.Server,
+							BuildTarget.StandaloneLinux64);
+		}
+
 		// --- Helper methods and fields (stubs, to be implemented or replaced as needed) ---
 
 		/// <summary>
