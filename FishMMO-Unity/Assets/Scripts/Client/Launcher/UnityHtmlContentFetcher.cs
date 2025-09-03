@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Text;
@@ -69,32 +70,43 @@ namespace FishMMO.Client
 				yield break;
 			}
 
-			using (UnityWebRequest www = UnityWebRequest.Get(url))
+			UnityWebRequestService.WebRequestConfig config = new UnityWebRequestService.WebRequestConfig
 			{
-				www.SetRequestHeader("X-FishMMO", "Client");
-				// Delegate web request execution to the service
-				yield return WebRequestService.StartCoroutine(
-					WebRequestService.SendWebRequestWithRetries(www, MaxRetries, RetryDelay, WebRequestTimeout));
-
-				if (www.result != UnityWebRequest.Result.Success)
+				URL = url,
+				Method = UnityWebRequest.kHttpVerbGET,
+				Headers = new Dictionary<string, string>
 				{
-					onError?.Invoke($"Error fetching HTML from {url}: {www.error}");
-				}
-				else
+					{ "X-FishMMO", "Client" }
+				},
+				CertificateHandler = new ClientSSLCertificateHandler(),
+				Timeout = WebRequestTimeout,
+				MaxRetries = MaxRetries,
+				RetryDelay = RetryDelay,
+				OnProgress = null,
+				OnComplete = (request) =>
 				{
-					string htmlContent = www.downloadHandler.text;
-					string extractedText = ExtractTextFromDiv(htmlContent, divClass);
-
-					if (!string.IsNullOrEmpty(extractedText))
+					try
 					{
+						string htmlContent = request.downloadHandler.text;
+						string extractedText = ExtractTextFromDiv(htmlContent, divClass);
 						onHtmlReady?.Invoke(extractedText);
 					}
-					else
+					catch (Exception ex)
 					{
-						onError?.Invoke($"Failed to extract text from div '{divClass}' in HTML from {url}.");
+						Log.Error("UnityHtmlContentFetcher", $"Error processing HTML content: {ex.Message}");
+						onError?.Invoke($"Error processing HTML content: {ex.Message}");
 					}
+				},
+				OnFailure = (request) =>
+				{
+					string errorMsg = $"Failed to fetch HTML content from {url}. Error: {request.error}";
+					Log.Error("UnityHtmlContentFetcher", errorMsg);
+					onError?.Invoke(errorMsg);
 				}
-			}
+			};
+
+			// Delegate web request execution to the service
+			yield return WebRequestService.StartCoroutine(WebRequestService.SendWebRequestWithRetries(config));
 		}
 
 		/// <summary>

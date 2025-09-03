@@ -1437,8 +1437,8 @@ MonoBehaviour:
   CloseOnEscape: 0
   CanDrag: 0
   ClampToScreen: 0
-  text: {fileID: 129493652}
-  background: {fileID: 156051313}
+  Text: {fileID: 0}
+  Background: {fileID: 0}
 --- !u!114 &156051318
 MonoBehaviour:
   m_ObjectHideFlags: 0

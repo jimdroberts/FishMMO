@@ -71,11 +71,11 @@ namespace FishMMO.Client
 		/// <summary>
 		/// The URL to fetch HTML news content from.
 		/// </summary>
-		public string HtmlViewURL = "https://github.com/jimdroberts/FishMMO/wiki";
+		public string HtmlViewURL = "https://www.fishmmo.com/docs/introduction.html";
 		/// <summary>
 		/// The class name of the div to extract from the HTML content.
 		/// </summary>
-		public string DivClass = "markdown-body";
+		public string DivClass = "content";
 		/// <summary>
 		/// The default screen width for the launcher window.
 		/// </summary>
@@ -246,11 +246,6 @@ namespace FishMMO.Client
 		#region UI STATE MANAGEMENT
 		/// <summary>
 		/// Sets the current launcher state and updates the UI accordingly.
-		/// This centralizes all UI updates related to the launcher's operational state.
-		/// </summary>
-		/// <param name="newState">The new state for the launcher.</param>
-		/// <summary>
-		/// Sets the current launcher state and updates the UI accordingly.
 		/// Centralizes all UI updates related to the launcher's operational state.
 		/// </summary>
 		/// <param name="newState">The new state for the launcher.</param>
@@ -346,11 +341,6 @@ namespace FishMMO.Client
 		/// Opens external URLs in the default web browser.
 		/// </summary>
 		/// <param name="link">The URL string extracted from the clicked link.</param>
-		/// <summary>
-		/// Handles clicks on links embedded within the HTML news text.
-		/// Opens external URLs in the default web browser.
-		/// </summary>
-		/// <param name="link">The URL string extracted from the clicked link.</param>
 		private void HandleHtmlLinkClicked(string link)
 		{
 			if (link.Contains("http") || link.Contains("www"))
@@ -359,10 +349,6 @@ namespace FishMMO.Client
 			}
 		}
 
-		/// <summary>
-		/// Initiates the connection process to fetch patch server list and check for game updates.
-		/// This is the primary action when the launcher starts or after an error.
-		/// </summary>
 		/// <summary>
 		/// Initiates the connection process to fetch patch server list and check for game updates.
 		/// This is the primary action when the launcher starts or after an error.
@@ -390,13 +376,10 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Launches the client after all version checks and updates are complete.
 		/// </summary>
-		/// <summary>
-		/// Launches the client after all version checks and updates are complete.
-		/// </summary>
 		public void PlayButton_Launch()
 		{
 			SetLauncherState(LauncherState.ReadyToPlay); // Set state, button will be disabled by this call.
-			AddressableLoadProcessor.EnqueueLoad("ClientPostboot");
+			AddressableLoadProcessor.EnqueueLoad(new AddressableSceneLoadData("ClientPostboot", OnPostbootSceneLoaded));
 			try
 			{
 				AddressableLoadProcessor.BeginProcessQueue();
@@ -409,8 +392,21 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Initiates the update process by attempting to download and apply the patch.
+		/// Callback when the ClientPostboot scene is loaded.
 		/// </summary>
+		/// <param name="scene">The loaded scene.</param>
+		private void OnPostbootSceneLoaded(UnityEngine.SceneManagement.Scene scene)
+		{
+			Log.Debug("ClientLauncher", "ClientPostboot scene loaded.");
+			AddressableLoadProcessor.UnloadSceneByLabelAsync("ClientLauncher");
+
+			// Find the ClientPostbootSystem in the loaded scene and start its bootstrap process.
+			foreach (var rootGO in scene.GetRootGameObjects())
+			{
+				rootGO.GetComponent<ClientPostbootSystem>()?.StartBootstrap();
+			}
+		}
+
 		/// <summary>
 		/// Initiates the update process by attempting to download and apply the patch.
 		/// </summary>
@@ -461,10 +457,6 @@ namespace FishMMO.Client
 		/// Fetches the latest client version from the currently selected patch server.
 		/// Compares it with the current client version and updates the UI accordingly.
 		/// </summary>
-		/// <summary>
-		/// Fetches the latest client version from the currently selected patch server.
-		/// Compares it with the current client version and updates the UI accordingly.
-		/// </summary>
 		private IEnumerator GetLatestVersion()
 		{
 			SetLauncherState(LauncherState.CheckingVersion);
@@ -511,9 +503,6 @@ namespace FishMMO.Client
 				}));
 		}
 
-		/// <summary>
-		/// Quits the application.
-		/// </summary>
 		/// <summary>
 		/// Quits the application.
 		/// </summary>

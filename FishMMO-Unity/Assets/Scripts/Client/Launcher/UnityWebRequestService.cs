@@ -1,5 +1,5 @@
-using System;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Networking;
 using FishMMO.Logging;
@@ -9,38 +9,81 @@ namespace FishMMO.Client
 	public class UnityWebRequestService : MonoBehaviour
 	{
 		/// <summary>
-		/// Sends a UnityWebRequest with configurable retries and timeout.
-		/// Includes an optional progress callback for downloads.
+		/// Configuration object for web requests.
 		/// </summary>
-		/// <param name="request">The UnityWebRequest to send.</param>
-		/// <param name="maxRetries">Maximum number of retries for the request.</param>
-		/// <param name="retryDelay">Delay in seconds between retries.</param>
-		/// <param name="timeout">Timeout in seconds for each individual request attempt.</param>
-		/// <param name="onProgress">Optional callback to report download progress (0.0 to 1.0).</param>
-		/// <returns>The completed UnityWebRequest if successful, otherwise the last failed request.</returns>
-		public IEnumerator SendWebRequestWithRetries(UnityWebRequest request, int maxRetries, float retryDelay, int timeout, Action<float> onProgress = null)
+		public class WebRequestConfig
 		{
-			request.timeout = timeout;
-			for (int i = 0; i < maxRetries; i++)
-			{
-				UnityWebRequestAsyncOperation operation = request.SendWebRequest();
-				while (!operation.isDone)
-				{
-					onProgress?.Invoke(operation.progress);
-					yield return null;
-				}
-				onProgress?.Invoke(operation.progress); // Ensure final progress (100%) is reported.
+			public string URL;
+			public string Method;
+			public Dictionary<string, string> Headers = new Dictionary<string, string>();
+			public CertificateHandler CertificateHandler;
+			public DownloadHandler DownloadHandler;
+			public int MaxRetries = 3;
+			public float RetryDelay = 2.0f;
+			public int Timeout = 10;
+			public System.Action<UnityWebRequest, float> OnProgress;
+			public System.Action<UnityWebRequest> OnComplete;
+			public System.Action<UnityWebRequest> OnFailure;
+		}
 
-				if (request.result == UnityWebRequest.Result.Success)
+		/// <summary>
+		/// Sends a web request with configurable retries and timeout.
+		/// </summary>
+		/// <param name="config">The configuration for the web request.</param>
+		/// <returns>The completed UnityWebRequest if successful, otherwise the last failed request.</returns>
+		public IEnumerator SendWebRequestWithRetries(WebRequestConfig config)
+		{
+			for (int i = 0; i < config.MaxRetries + 1; i++)
+			{
+				using (UnityWebRequest request = new UnityWebRequest(config.URL, config.Method))
 				{
-					yield break; // Request succeeded, exit the coroutine.
-				}
-				else
-				{
-					Log.Warning("UnityWebRequestService", $"Request failed ({request.url}). Attempt {i + 1}/{maxRetries}. Error: {request.error}");
-					if (i < maxRetries - 1)
+					request.timeout = config.Timeout;
+
+					// Add custom headers
+					foreach (var header in config.Headers)
 					{
-						yield return new WaitForSeconds(retryDelay);
+						request.SetRequestHeader(header.Key, header.Value);
+					}
+
+					// Set custom handlers
+					if (config.CertificateHandler != null)
+					{
+						request.certificateHandler = config.CertificateHandler;
+					}
+					if (config.DownloadHandler != null)
+					{
+						request.downloadHandler = config.DownloadHandler;
+					}
+					else
+					{
+						request.downloadHandler = new DownloadHandlerBuffer();
+					}
+
+					UnityWebRequestAsyncOperation operation = request.SendWebRequest();
+					while (!operation.isDone)
+					{
+						config.OnProgress?.Invoke(request, operation.progress);
+						yield return null;
+					}
+					config.OnProgress?.Invoke(request, operation.progress);
+
+					if (request.result == UnityWebRequest.Result.Success)
+					{
+						config.OnComplete?.Invoke(request);
+						yield break;
+					}
+					else
+					{
+						Log.Warning("UnityWebRequestService", $"Request failed ({config.URL}). Attempt {i + 1}/{config.MaxRetries + 1}. Error: {request.error}");
+						if (i < config.MaxRetries)
+						{
+							yield return new WaitForSeconds(config.RetryDelay);
+						}
+						else
+						{
+							config.OnFailure?.Invoke(request);
+							yield break;
+						}
 					}
 				}
 			}

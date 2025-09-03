@@ -64,32 +64,38 @@ namespace FishMMO.Client
 				yield break;
 			}
 
-			using (UnityWebRequest www = UnityWebRequest.Get(ipFetchHost))
+			UnityWebRequestService.WebRequestConfig config = new UnityWebRequestService.WebRequestConfig
 			{
-				www.SetRequestHeader("X-FishMMO", "Client");
-				yield return WebRequestService.StartCoroutine(
-					WebRequestService.SendWebRequestWithRetries(www, MaxRetries, RetryDelay, WebRequestTimeout));
-
-				if (www.result != UnityWebRequest.Result.Success)
+				URL = ipFetchHost,
+				Method = UnityWebRequest.kHttpVerbGET,
+				Headers = new System.Collections.Generic.Dictionary<string, string>
 				{
-					onError?.Invoke($"Error fetching patch server list: {www.error}");
-					yield break;
-				}
-
-				try
+					{ "X-FishMMO", "Client" }
+				},
+				MaxRetries = MaxRetries,
+				RetryDelay = RetryDelay,
+				Timeout = WebRequestTimeout,
+				OnProgress = null,
+				OnComplete = (request) =>
 				{
-					ServerAddress server = JsonUtility.FromJson<ServerAddress>(www.downloadHandler.text);
-					if (string.IsNullOrEmpty(server.Address) || server.Port == 0)
+					try
 					{
-						throw new Exception("Invalid or empty patch server address found in response.");
+						ServerAddress server = JsonUtility.FromJson<ServerAddress>(request.downloadHandler.text);
+						if (string.IsNullOrEmpty(server.Address) || server.Port == 0)
+						{
+							throw new Exception("Invalid or empty patch server address found in response.");
+						}
+						onComplete?.Invoke(server);
 					}
-					onComplete?.Invoke(server);
-				}
-				catch (Exception ex)
-				{
-					onError?.Invoke($"Error parsing patch server address JSON: {ex.Message}");
-				}
-			}
+					catch (Exception ex)
+					{
+						onError?.Invoke($"Error parsing patch server address JSON: {ex.Message}");
+					}
+				},
+				OnFailure = (result) => onError?.Invoke($"Error fetching patch server list: {result}")
+			};
+
+			yield return WebRequestService.StartCoroutine(WebRequestService.SendWebRequestWithRetries(config));
 		}
 
 		/// <summary>
@@ -107,33 +113,39 @@ namespace FishMMO.Client
 				yield break;
 			}
 
-			using (UnityWebRequest www = UnityWebRequest.Get(patcherHost + "latest_version"))
+			UnityWebRequestService.WebRequestConfig config = new UnityWebRequestService.WebRequestConfig
 			{
-				www.SetRequestHeader("X-FishMMO", "Client");
-				yield return WebRequestService.StartCoroutine(
-					WebRequestService.SendWebRequestWithRetries(www, MaxRetries, RetryDelay, WebRequestTimeout));
+				URL = patcherHost + "latest_version",
+				Method = UnityWebRequest.kHttpVerbGET,
+				Headers = new System.Collections.Generic.Dictionary<string, string>
+				{
+					{ "X-FishMMO", "Client" }
+				},
+				MaxRetries = MaxRetries,
+				RetryDelay = RetryDelay,
+				Timeout = WebRequestTimeout,
+				OnProgress = null,
+				OnComplete = (request) =>
+				{
+					try
+					{
+						VersionFetch versionFetch = JsonUtility.FromJson<VersionFetch>(request.downloadHandler.text);
+						VersionConfig serverVersion = VersionConfig.Parse(versionFetch.latest_version);
+						onComplete?.Invoke(serverVersion);
+					}
+					catch (ArgumentException ex)
+					{
+						onError?.Invoke($"Invalid server version format: {ex.Message}");
+					}
+					catch (Exception ex)
+					{
+						onError?.Invoke($"Error parsing latest version JSON: {ex.Message}");
+					}
+				},
+				OnFailure = (result) => onError?.Invoke($"Error fetching latest version: {result}")
+			};
 
-				if (www.result != UnityWebRequest.Result.Success)
-				{
-					onError?.Invoke($"Error fetching latest version: {www.error}");
-					yield break;
-				}
-
-				try
-				{
-					VersionFetch versionFetch = JsonUtility.FromJson<VersionFetch>(www.downloadHandler.text);
-					VersionConfig serverVersion = VersionConfig.Parse(versionFetch.latest_version);
-					onComplete?.Invoke(serverVersion);
-				}
-				catch (ArgumentException ex)
-				{
-					onError?.Invoke($"Invalid server version format: {ex.Message}");
-				}
-				catch (Exception ex)
-				{
-					onError?.Invoke($"Error parsing latest version JSON: {ex.Message}");
-				}
-			}
+			yield return WebRequestService.StartCoroutine(WebRequestService.SendWebRequestWithRetries(config));
 		}
 
 		/// <summary>
@@ -153,33 +165,35 @@ namespace FishMMO.Client
 				yield break;
 			}
 
-			using (UnityWebRequest www = UnityWebRequest.Get(patchUrl))
+			UnityWebRequestService.WebRequestConfig config = new UnityWebRequestService.WebRequestConfig
 			{
-				www.SetRequestHeader("X-FishMMO", "Client");
-				www.downloadHandler = new DownloadHandlerFile(tempFilePath);
-
-				yield return WebRequestService.StartCoroutine(
-					WebRequestService.SendWebRequestWithRetries(www, MaxRetries, RetryDelay, WebRequestTimeout, (progress) =>
+				URL = patchUrl,
+				Method = UnityWebRequest.kHttpVerbGET,
+				Headers = new System.Collections.Generic.Dictionary<string, string>
 				{
-					string progressText = $"{Mathf.RoundToInt(progress * 100f)}% ({WebRequestService.FormatBytes(www.downloadedBytes)})";
+					{ "X-FishMMO", "Client" }
+				},
+				DownloadHandler = new DownloadHandlerFile(tempFilePath),
+				MaxRetries = MaxRetries,
+				RetryDelay = RetryDelay,
+				Timeout = WebRequestTimeout,
+				OnProgress = (request, progress) =>
+				{
+					string progressText = $"{Mathf.RoundToInt(progress * 100f)}% ({WebRequestService.FormatBytes(request.downloadedBytes)})";
 					onProgress?.Invoke(progress, progressText);
-				}));
-
-				if (www.result != UnityWebRequest.Result.Success)
+				},
+				OnComplete = (request) =>
 				{
-					onError?.Invoke($"Error downloading patch: {www.error}");
-					yield break;
-				}
-
-				if (www.responseCode == (long)HttpStatusCode.OK && www.downloadHandler.text.Contains("AlreadyUpdated"))
-				{
-					onProgress?.Invoke(1f, "100% (Already Updated)");
+					if (request.responseCode == (long)HttpStatusCode.OK || request.downloadHandler.text.Contains("AlreadyUpdated"))
+					{
+						onProgress?.Invoke(1f, "100% (Already Updated)");
+					}
 					onComplete?.Invoke();
-					yield break;
-				}
+				},
+				OnFailure = (result) => onError?.Invoke($"Error downloading patch: {result}")
+			};
 
-				onComplete?.Invoke();
-			}
+			yield return WebRequestService.StartCoroutine(WebRequestService.SendWebRequestWithRetries(config));
 		}
 	}
 }

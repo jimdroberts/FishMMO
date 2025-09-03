@@ -149,7 +149,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b5c2edaa6d4e0fd4393eb1def39f4f2f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  UILoadingScreenKey: UILoadingScreen
   LoginServerAddresses: []
   WorldPreloadScenes:
   - SceneName: ClientWorldGUI
@@ -209,7 +208,6 @@ MonoBehaviour:
   - SceneName: ClientLoginGUI
     ActivateOnLoad: 1
     LoadSceneMode: 1
-  UILoadingScreenKey: UILoadingScreen
 --- !u!114 &1045518715
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -281,7 +279,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6f48f002b825cbd45a19bd96d90f9edb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _stopSocketsOnThread: 0
   _dontRoute: 0
+  _reuseAddress: 0
   _unreliableMtu: 1023
   _ipv4BindAddress: 
   _enableIpv6: 1
@@ -377,7 +377,6 @@ GameObject:
   - component: {fileID: 363288936357880475}
   - component: {fileID: 984075724780075366}
   - component: {fileID: 2516426190219138202}
-  - component: {fileID: 4244413259443555893}
   - component: {fileID: 3897615594843188692}
   - component: {fileID: 6776049995475983710}
   - component: {fileID: 142982558130229952}
@@ -411,19 +410,6 @@ MonoBehaviour:
     _latency: 70
     _outOfOrder: 0
     _packetLoss: 0
---- !u!114 &4244413259443555893
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2696072684517196988}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 1afeaa36377bbf847880613509e71d54, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  _enabled: 1
 --- !u!114 &5291881773551430703
 MonoBehaviour:
   m_ObjectHideFlags: 0
