@@ -5,6 +5,7 @@ using System.Linq;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
+using UnityEngine.ResourceManagement.ResourceLocations;
 using UnityEngine.ResourceManagement.ResourceProviders;
 using UnityEngine.SceneManagement;
 using FishMMO.Logging;
@@ -50,6 +51,15 @@ namespace FishMMO.Shared
 		/// The currently loaded scenes.
 		/// </summary>
 		private static Dictionary<string, AsyncOperationHandle<SceneInstance>> loadedScenes = new Dictionary<string, AsyncOperationHandle<SceneInstance>>();
+
+		/// <summary>
+		/// Validation queue to hold items before resolving actual locations
+		/// </summary>
+		private static List<AddressableAssetKey> waitingResourceValidationQueue = new List<AddressableAssetKey>();
+		/// <summary>
+		/// The current validation operations.
+		/// </summary>
+		private static Dictionary<AddressableAssetKey, AsyncOperationHandle<IList<IResourceLocation>>> currentValidationOperations = new Dictionary<AddressableAssetKey, AsyncOperationHandle<IList<IResourceLocation>>>();
 		/// <summary>
 		/// The load request operations.
 		/// </summary>
@@ -115,7 +125,12 @@ namespace FishMMO.Shared
 		{
 			get
 			{
-				return operationQueue.Count + sceneOperationQueue.Count + currentOperations.Count + currentSceneOperations.Count;
+				return waitingResourceValidationQueue.Count +
+						operationQueue.Count +
+						sceneOperationQueue.Count +
+						currentValidationOperations.Count +
+						currentOperations.Count +
+						currentSceneOperations.Count;
 			}
 		}
 
@@ -127,10 +142,13 @@ namespace FishMMO.Shared
 		public static void EnqueueLoad(string label, Addressables.MergeMode mergeMode = Addressables.MergeMode.None)
 		{
 			AddressableAssetKey assetKey = new AddressableAssetKey(new List<string>() { label, }, mergeMode);
-			if (!operationQueue.Contains(assetKey) && !currentOperations.ContainsKey(assetKey) && !loadedAssets.ContainsKey(assetKey))
+			if (!waitingResourceValidationQueue.Contains(assetKey) &&
+				!operationQueue.Contains(assetKey) &&
+				!currentOperations.ContainsKey(assetKey) &&
+				!loadedAssets.ContainsKey(assetKey))
 			{
 				//Log.Debug("AddressableLoadProcessor", $"Enqueued: {assetKey}");
-				operationQueue.Add(assetKey);
+				waitingResourceValidationQueue.Add(assetKey);
 			}
 		}
 
@@ -160,10 +178,13 @@ namespace FishMMO.Shared
 		public static void EnqueueLoad(string label, string key, Addressables.MergeMode mergeMode = Addressables.MergeMode.Intersection)
 		{
 			AddressableAssetKey assetKey = new AddressableAssetKey(new List<string>() { label, key, }, mergeMode);
-			if (!operationQueue.Contains(assetKey) && !currentOperations.ContainsKey(assetKey) && !loadedAssets.ContainsKey(assetKey))
+			if (!waitingResourceValidationQueue.Contains(assetKey) &&
+				!operationQueue.Contains(assetKey) &&
+				!currentOperations.ContainsKey(assetKey) &&
+				!loadedAssets.ContainsKey(assetKey))
 			{
 				//Log.Debug("AddressableLoadProcessor", $"Enqueued: {assetKey}");
-				operationQueue.Add(assetKey);
+				waitingResourceValidationQueue.Add(assetKey);
 			}
 		}
 
@@ -256,6 +277,22 @@ namespace FishMMO.Shared
 
 			while (RemainingAssetsToLoad > 0)
 			{
+				// First, validate and move any waiting resources to the operation queue
+				while (waitingResourceValidationQueue.Count > 0)
+				{
+					var assetKey = waitingResourceValidationQueue.First();
+					waitingResourceValidationQueue.Remove(assetKey);
+
+					var handle = LoadResourceLocationsAsync(assetKey);
+					if (handle.IsValid())
+					{
+						currentValidationOperations.Add(assetKey, handle);
+
+						// Yield after starting the operation so the next frame can process other queued items
+						yield return handle;
+					}
+				}
+
 				// Process assets from the operationQueue if any are present
 				while (operationQueue.Count > 0)
 				{
@@ -297,6 +334,36 @@ namespace FishMMO.Shared
 
 			// Ensure progress is reported as completed.
 			OnProgressUpdate?.Invoke(1f);
+		}
+
+		/// <summary>
+		/// Loads resource locations asynchronously for a specific addressable asset key.
+		/// </summary>
+		/// <param name="assetKey">The addressable asset key to load resource locations for.</param>
+		/// <returns></returns>
+		private static AsyncOperationHandle<IList<IResourceLocation>> LoadResourceLocationsAsync(AddressableAssetKey assetKey)
+		{
+			if (assetKey == null || assetKey.Keys == null || assetKey.Keys.Count < 1)
+			{
+				return default;
+			}
+
+			var handle = Addressables.LoadResourceLocationsAsync(assetKey.Keys, assetKey.MergeMode);
+			handle.Completed += (op) =>
+			{
+				if (op.Status == AsyncOperationStatus.Succeeded && op.Result != null && op.Result.Count > 0)
+				{
+					Log.Debug("AddressableLoadProcessor", $"OperationQueue Added: {string.Join(",", assetKey.Keys)}");
+					operationQueue.Add(assetKey);
+				}
+				else
+				{
+					Log.Warning("AddressableLoadProcessor", $"Failed to load resource locations for: {string.Join(",", assetKey.Keys)}");
+				}
+				currentValidationOperations.Remove(assetKey);
+				Addressables.Release(handle);
+			};
+			return handle;
 		}
 
 		/// <summary>
