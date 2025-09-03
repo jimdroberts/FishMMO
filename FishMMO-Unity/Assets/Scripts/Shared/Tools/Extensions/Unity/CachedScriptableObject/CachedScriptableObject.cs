@@ -78,10 +78,7 @@ namespace FishMMO.Shared
 				// Add the current object to the inner dictionary using its generated ID.
 				// 'this as T' is safe and guaranteed to succeed due to the generic type constraint
 				// 'where T : CachedScriptableObject<T>'.
-				// If an item with the same ID already exists for this type, adding it will throw an ArgumentException.
-				// Consider if you want to allow overwriting (e.g., 'resources[ID] = this as T;') or
-				// log a warning/error if a duplicate ID is encountered.
-				resources.Add(ID, this as T);
+				resources[ID] = this as T;
 
 				// Call the virtual OnLoad method. This provides an extensibility point for derived classes
 				// to perform custom actions (e.g., logging, initialization) when an object is loaded into cache.

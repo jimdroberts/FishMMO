@@ -378,7 +378,7 @@ namespace FishMMO.Shared
 				}
 				else
 				{
-					Log.Error("AddressableLoadProcessor", $"Failed to load addressable {key}: {op.OperationException?.Message}");
+					Log.Warning("AddressableLoadProcessor", $"Failed to load addressable {key}: {op.OperationException?.Message}");
 					if (loadedPrefabs.ContainsKey(key))
 					{
 						loadedPrefabs.Remove(key);
@@ -461,7 +461,7 @@ namespace FishMMO.Shared
 				}
 				else if (op.Status == AsyncOperationStatus.Failed)
 				{
-					Log.Error("AddressableLoadProcessor", $"Failed to load Addressable: {assetkey.Keys}");
+					Log.Warning("AddressableLoadProcessor", $"Failed to load Addressable: {assetkey.Keys}");
 					op.Release();
 				}
 
@@ -507,7 +507,7 @@ namespace FishMMO.Shared
 				}
 				else if (op.Status == AsyncOperationStatus.Failed)
 				{
-					Log.Error("AddressableLoadProcessor", $"Failed to load scene Addressable: {sceneLoadData.SceneName}");
+					Log.Warning("AddressableLoadProcessor", $"Failed to load scene Addressable: {sceneLoadData.SceneName}");
 					op.Release();
 				}
 
@@ -547,7 +547,7 @@ namespace FishMMO.Shared
 				}
 				else
 				{
-					Log.Error("AddressableLoadProcessor", $"Asset handle for {assetKey} is invalid.");
+					Log.Warning("AddressableLoadProcessor", $"Asset handle for {assetKey} is invalid.");
 				}
 			}
 			else
@@ -618,7 +618,7 @@ namespace FishMMO.Shared
 				else if (op.Status == AsyncOperationStatus.Failed)
 				{
 					// Log an error if unloading the scene failed
-					Log.Error("AddressableLoadProcessor", $"Failed to unload scene Addressable: {sceneName}");
+					Log.Warning("AddressableLoadProcessor", $"Failed to unload scene Addressable: {sceneName}");
 				}
 			};
 		}
