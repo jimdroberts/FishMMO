@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Net;
 using FishMMO.Logging;
 using UnityEngine;
@@ -68,7 +69,7 @@ namespace FishMMO.Client
 			{
 				URL = ipFetchHost,
 				Method = UnityWebRequest.kHttpVerbGET,
-				Headers = new System.Collections.Generic.Dictionary<string, string>
+				Headers = new Dictionary<string, string>
 				{
 					{ "X-FishMMO", "Client" }
 				},
@@ -117,7 +118,7 @@ namespace FishMMO.Client
 			{
 				URL = patcherHost + "latest_version",
 				Method = UnityWebRequest.kHttpVerbGET,
-				Headers = new System.Collections.Generic.Dictionary<string, string>
+				Headers = new Dictionary<string, string>
 				{
 					{ "X-FishMMO", "Client" }
 				},
@@ -169,7 +170,7 @@ namespace FishMMO.Client
 			{
 				URL = patchUrl,
 				Method = UnityWebRequest.kHttpVerbGET,
-				Headers = new System.Collections.Generic.Dictionary<string, string>
+				Headers = new Dictionary<string, string>
 				{
 					{ "X-FishMMO", "Client" }
 				},
