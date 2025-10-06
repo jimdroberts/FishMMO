@@ -111,7 +111,6 @@ namespace FishMMO.Shared
 			SceneObject.Unregister(this);
 		}
 
-
 		/// <summary>
 		/// Reads network payload data for this interactable, setting its ID and registering it in the scene.
 		/// </summary>

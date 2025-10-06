@@ -23,7 +23,6 @@ namespace FishMMO.Client
 		/// </summary>
 		private Dictionary<int, UIFactionDescription> factions = new Dictionary<int, UIFactionDescription>();
 
-
 		/// <summary>
 		/// Called when the UI is starting. Subscribes to character set and local client stop events.
 		/// </summary>

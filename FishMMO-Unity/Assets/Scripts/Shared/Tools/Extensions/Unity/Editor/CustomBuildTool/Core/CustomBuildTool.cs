@@ -1,11 +1,10 @@
 #if UNITY_EDITOR
 using UnityEditor;
 using System.IO;
+using System.Collections.Generic;
+using System;
 using FishMMO.Logging;
-using FishMMO.Shared.CustomBuildTool.Config;
-using FishMMO.Shared.CustomBuildTool.Execution;
-using FishMMO.Shared.CustomBuildTool.Addressables;
-using FishMMO.Shared.CustomBuildTool.Linker;
+using UnityEngine;
 
 namespace FishMMO.Shared.CustomBuildTool.Core
 {
@@ -19,20 +18,23 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 		private readonly ILinkerGenerator linkerGenerator;
 		private readonly IAddressableManager addressableManager;
 
+		private static bool isBuildInProgress = false;
+		private static readonly object buildLock = new object();
+
 		public CustomBuildTool(
 			IBuildConfigurator configurator,
 			IBuildExecutor executor,
 			ILinkerGenerator linkerGenerator,
 			IAddressableManager addressableManager)
 		{
-			this.configurator = configurator;
-			this.executor = executor;
-			this.linkerGenerator = linkerGenerator;
-			this.addressableManager = addressableManager;
+			this.configurator = configurator ?? throw new System.ArgumentNullException(nameof(configurator));
+			this.executor = executor ?? throw new System.ArgumentNullException(nameof(executor));
+			this.linkerGenerator = linkerGenerator ?? throw new System.ArgumentNullException(nameof(linkerGenerator));
+			this.addressableManager = addressableManager ?? throw new System.ArgumentNullException(nameof(addressableManager));
 		}
 
 		/// <summary>
-		/// Runs the full custom build process.
+		/// Runs the full custom build process with proper error handling and cleanup.
 		/// </summary>
 		public void RunBuild(
 			string linkerRootPath,
@@ -46,26 +48,73 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 			StandaloneBuildSubtarget subTarget,
 			BuildTarget buildTarget)
 		{
-			Log.Debug("BuildLogger", "Configuring build...");
-			configurator.Configure();
-			Log.Debug("BuildLogger", "Configuring addressables...");
-			addressableManager.BuildAddressablesWithExclusions(excludedAddressableGroups);
-			Log.Debug("BuildLogger", "Generating linker file...");
-			linkerGenerator.GenerateLinker(linkerRootPath, linkerDirectoryPath);
-			Log.Debug("BuildLogger", "Executing build...");
-			executor.ExecuteBuild(rootPath, executableName, bootstrapScenes, customBuildType, buildOptions, subTarget, buildTarget);
-			Log.Debug("BuildLogger", "Restoring build configuration...");
-			configurator.Restore();
-			Log.Debug("BuildLogger", "Build process complete.");
+			// Prevent concurrent builds
+			lock (buildLock)
+			{
+				if (isBuildInProgress)
+				{
+					Log.Error("BuildTool", "A build is already in progress. Please wait for it to complete.");
+					return;
+				}
+				isBuildInProgress = true;
+			}
+
+			try
+			{
+				Log.Debug("BuildLogger", "=== Build Process Started ===");
+
+				Log.Debug("BuildLogger", "Configuring build...");
+				configurator.Configure();
+
+				try
+				{
+					Log.Debug("BuildLogger", "Configuring addressables...");
+					addressableManager.BuildAddressablesWithExclusions(excludedAddressableGroups);
+
+					//Log.Debug("BuildLogger", "Generating linker file...");
+					//linkerGenerator.GenerateLinker(linkerRootPath, linkerDirectoryPath);
+
+					Log.Debug("BuildLogger", "Executing build...");
+					executor.ExecuteBuild(rootPath, executableName, bootstrapScenes, customBuildType, buildOptions, subTarget, buildTarget);
+
+					Log.Debug("BuildLogger", "=== Build Process Complete ===");
+				}
+				finally
+				{
+					// CRITICAL: Always restore settings, even if build fails
+					Log.Debug("BuildLogger", "Restoring build configuration...");
+					configurator.Restore();
+				}
+			}
+			catch (System.Exception ex)
+			{
+				Log.Error("BuildTool", $"Build process failed with exception: {ex.Message}");
+				Log.Error("BuildTool", $"Stack trace: {ex.StackTrace}");
+				throw;
+			}
+			finally
+			{
+				lock (buildLock)
+				{
+					isBuildInProgress = false;
+				}
+			}
 		}
 
 		[MenuItem("FishMMO/Update Linker")]
 		public static void UpdateLinker()
 		{
-			string current = Directory.GetCurrentDirectory();
-			string assets = Path.Combine(current, "Assets");
-			var linker = new LinkerGenerator();
-			linker.GenerateLinker(assets, Path.Combine(assets, "Dependencies"));
+			try
+			{
+				string current = Directory.GetCurrentDirectory();
+				string assets = Path.Combine(current, "Assets");
+				var linker = CustomBuildToolFactory.CreateLinkerGenerator();
+				linker.GenerateLinker(assets, Path.Combine(assets, "Dependencies"));
+			}
+			catch (System.Exception ex)
+			{
+				Log.Error("BuildTool", $"Failed to update linker: {ex.Message}");
+			}
 		}
 
 		[MenuItem("FishMMO/Build/Windows x64/Game Server")]
@@ -128,54 +177,61 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 				BuildTarget.WebGL);
 		}
 
-
 		[MenuItem("FishMMO/Build/Windows x64/Addressables/Client Addressables")]
 		public static void BuildWindowsClientAddressables()
 		{
-			var configurator = new BuildConfigurator();
-			configurator.Configure();
-			new AddressableManager().BuildAddressablesWithExclusions(serverAddressableGroups);
-			configurator.Restore();
+			BuildAddressablesWithExclusionsWrapper(serverAddressableGroups);
 		}
-
 
 		[MenuItem("FishMMO/Build/Windows x64/Addressables/Server Addressables")]
 		public static void BuildWindowsServerAddressables()
 		{
-			var configurator = new BuildConfigurator();
-			configurator.Configure();
-			new AddressableManager().BuildAddressablesWithExclusions(clientAddressableGroups);
-			configurator.Restore();
+			BuildAddressablesWithExclusionsWrapper(clientAddressableGroups);
 		}
-
 
 		[MenuItem("FishMMO/Build/Linux x64/Addressables/Client Addressables")]
 		public static void BuildLinuxClientAddressables()
 		{
-			var configurator = new BuildConfigurator();
-			configurator.Configure();
-			new AddressableManager().BuildAddressablesWithExclusions(serverAddressableGroups);
-			configurator.Restore();
+			BuildAddressablesWithExclusionsWrapper(serverAddressableGroups);
 		}
-
 
 		[MenuItem("FishMMO/Build/Linux x64/Addressables/Server Addressables")]
 		public static void BuildLinuxServerAddressables()
 		{
-			var configurator = new BuildConfigurator();
-			configurator.Configure();
-			new AddressableManager().BuildAddressablesWithExclusions(clientAddressableGroups);
-			configurator.Restore();
+			BuildAddressablesWithExclusionsWrapper(clientAddressableGroups);
 		}
-
 
 		[MenuItem("FishMMO/Build/WebGL/Addressables/Client Addressables")]
 		public static void BuildWebGLAddressables()
 		{
-			var configurator = new BuildConfigurator();
-			configurator.Configure();
-			new AddressableManager().BuildAddressablesWithExclusions(serverAddressableGroups);
-			configurator.Restore();
+			BuildAddressablesWithExclusionsWrapper(serverAddressableGroups);
+		}
+
+		/// <summary>
+		/// Helper method to build addressables with proper error handling and cleanup.
+		/// </summary>
+		private static void BuildAddressablesWithExclusionsWrapper(string[] excludeGroups)
+		{
+			InitializeLogger();
+
+			var configurator = CustomBuildToolFactory.CreateConfigurator();
+			var addressableManager = CustomBuildToolFactory.CreateAddressableManager();
+
+			try
+			{
+				configurator.Configure();
+				addressableManager.BuildAddressablesWithExclusions(excludeGroups);
+			}
+			catch (System.Exception ex)
+			{
+				Log.Error("BuildTool", $"Addressables build failed: {ex.Message}");
+			}
+			finally
+			{
+				configurator.Restore();
+			}
+
+			Log.Shutdown();
 		}
 
 		/// <summary>
@@ -228,19 +284,81 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 		private static readonly string[] serverAddressableGroups = new string[] { "ServerOnly" };
 		private static readonly string[] clientAddressableGroups = new string[] { "ClientOnly" };
 
+		private static bool isLoggerInitialized = false;
+
+		/// <summary>
+		/// Initializes the FishMMO Logger for Editor build tools with all log levels enabled.
+		/// </summary>
+		private static void InitializeLogger()
+		{
+			if (isLoggerInitialized)
+				return;
+
+			try
+			{
+				// Initialize custom logging for the Editor build tool
+				Log.RegisterLoggerFactory(nameof(UnityConsoleLoggerConfig), (cfg, logCallback) => new UnityConsoleLogger((UnityConsoleLoggerConfig)cfg, logCallback));
+
+				var defaultUnityConsoleLoggerConfig = new UnityConsoleLoggerConfig();
+				var unityConsoleFormatter = new UnityConsoleFormatter(defaultUnityConsoleLoggerConfig.LogLevelColors, true);
+
+				var manualLoggers = new List<FishMMO.Logging.ILogger>
+				{
+					new UnityConsoleLogger(new UnityConsoleLoggerConfig
+					{
+						Enabled = true,
+						AllowedLevels = new HashSet<LogLevel>
+						{
+							LogLevel.Info, LogLevel.Debug, LogLevel.Warning, LogLevel.Error, LogLevel.Critical, LogLevel.Verbose
+						}
+					},
+					(message) => Debug.Log($"{message}")) // Direct Debug.Log for internal callback
+				};
+
+				Log.Initialize(null, unityConsoleFormatter, manualLoggers, Log.OnInternalLogMessage, new List<Type>() { typeof(UnityConsoleLoggerConfig) });
+
+				isLoggerInitialized = true;
+				Debug.Log("[BuildTool] Logger initialized successfully with all log levels enabled.");
+			}
+			catch (Exception ex)
+			{
+				Debug.LogError($"[BuildTool] Failed to initialize logger: {ex.Message}");
+			}
+		}
+
 		private static void BuildExecutable(string executableName, string[] bootstrapScenes, CustomBuildType customBuildType, BuildOptions buildOptions, StandaloneBuildSubtarget subTarget, BuildTarget buildTarget)
 		{
-			var configurator = new BuildConfigurator();
-			configurator.Configure();
-			new BuildExecutor().ExecuteBuild(
-				rootPath: string.Empty,
-				executableName: executableName,
-				bootstrapScenes: bootstrapScenes,
-				customBuildType: customBuildType,
-				buildOptions: buildOptions,
-				subTarget: subTarget,
-				buildTarget: buildTarget);
-			configurator.Restore();
+			InitializeLogger();
+
+			var buildTool = CustomBuildToolFactory.Create();
+
+			try
+			{
+				string current = Directory.GetCurrentDirectory();
+				string assets = Path.Combine(current, "Assets");
+
+				buildTool.RunBuild(
+					linkerRootPath: assets,
+					linkerDirectoryPath: Path.Combine(assets, "Dependencies"),
+					rootPath: string.Empty,
+					executableName: executableName,
+					bootstrapScenes: bootstrapScenes,
+					excludedAddressableGroups: customBuildType == CustomBuildType.Server ? clientAddressableGroups : serverAddressableGroups,
+					customBuildType: customBuildType,
+					buildOptions: buildOptions,
+					subTarget: subTarget,
+					buildTarget: buildTarget);
+			}
+			catch (System.Exception ex)
+			{
+				Log.Error("BuildTool", $"Build executable failed: {ex.Message}");
+				EditorUtility.DisplayDialog("Build Failed", $"Build process failed:\n{ex.Message}", "OK");
+			}
+
+			if (Log.IsInitialized)
+			{
+				Log.Shutdown();
+			}
 		}
 
 		/// <summary>

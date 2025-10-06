@@ -1,4 +1,11 @@
 #if UNITY_EDITOR
+using System;
+using System.Linq;
+using UnityEditor;
+using UnityEditor.AddressableAssets;
+using UnityEditor.AddressableAssets.Build;
+using UnityEditor.AddressableAssets.Settings;
+using UnityEditor.AddressableAssets.Settings.GroupSchemas;
 using FishMMO.Logging;
 using FishMMO.Shared.CustomBuildTool.Core;
 
@@ -15,76 +22,67 @@ namespace FishMMO.Shared.CustomBuildTool.Addressables
 		/// <param name="excludeGroups">Array of group name substrings to exclude from the build.</param>
 		public void BuildAddressablesWithExclusions(string[] excludeGroups)
 		{
-			// Get the original AddressableAssetSettings (default settings)
-			var originalSettings = UnityEditor.AddressableAssets.AddressableAssetSettingsDefaultObject.GetSettings(true);
-
-			// Loop through each Addressable group and exclude based on the provided group names
-			foreach (var group in originalSettings.groups)
+			// Get the default AddressableAssetSettings
+			var originalSettings = AddressableAssetSettingsDefaultObject.GetSettings(true);
+			if (originalSettings == null || originalSettings.groups == null)
 			{
-				foreach (var exclusion in excludeGroups)
-				{
-					var schema = group.GetSchema<UnityEditor.AddressableAssets.Settings.GroupSchemas.BundledAssetGroupSchema>();
-					if (schema != null)
-					{
-						if (group.name.Contains(exclusion))
-						{
-							schema.IncludeInBuild = false;
-							Log.Info("Addressables", $"Group {group.name} has been excluded from the build.");
-						}
-						else
-						{
-							schema.IncludeInBuild = true;
-							Log.Warning("Addressables", $"Group {group.name} has been included in the build.");
-						}
-					}
-					else
-					{
-						Log.Warning("Addressables", $"No schema found for group: {group.name}");
-					}
-				}
+				Log.Error("Addressables", "Addressable settings or groups are null.");
+				return;
 			}
 
-			// Clean up old Addressable builds if the build path exists
-			string buildPath = UnityEngine.AddressableAssets.Addressables.BuildPath;
-			if (System.IO.Directory.Exists(buildPath))
+			// Loop through each Addressable group and apply exclusion logic
+			foreach (var group in originalSettings.groups)
 			{
-				try
+				if (group == null) continue;
+
+				var schema = group.GetSchema<BundledAssetGroupSchema>();
+				if (schema == null)
 				{
-					System.IO.Directory.Delete(buildPath, recursive: true);
-					Log.Info("Addressables", $"Deleted previous Addressable build directory at {buildPath}");
+					Log.Warning("Addressables", $"No schema found for group: {group.name}");
+					continue;
 				}
-				catch (System.Exception ex)
-				{
-					Log.Error("Addressables", $"Failed to delete previous build directory: {ex.Message}");
-				}
+
+				bool exclude = excludeGroups.Any(exclusion =>
+					group.name.IndexOf(exclusion, StringComparison.OrdinalIgnoreCase) >= 0);
+				schema.IncludeInBuild = !exclude;
+
+				Log.Info("Addressables", $"{group.name} has been {(exclude ? "excluded" : "included")} from the build.");
+			}
+
+			// Clean previous Addressables build safely
+			try
+			{
+				AddressableAssetSettings.CleanPlayerContent();
+				Log.Info("Addressables", "Cleaned previous Addressables player content.");
+			}
+			catch (Exception ex)
+			{
+				Log.Warning("Addressables", $"Error during cleanup (non-fatal): {ex.Message}");
 			}
 
 			// Start the Addressables build process
 			try
 			{
-				// Perform the actual Addressables build
-				UnityEditor.AddressableAssets.Settings.AddressableAssetSettings.BuildPlayerContent(out UnityEditor.AddressableAssets.Build.AddressablesPlayerBuildResult result);
+				AddressableAssetSettings.BuildPlayerContent(out AddressablesPlayerBuildResult result);
 
-				// Log the overall build result
 				if (!string.IsNullOrEmpty(result.Error))
 				{
 					Log.Error("Addressables", result.Error);
-					Log.Error("Addressables", $"Addressable content build failure (duration: {System.TimeSpan.FromSeconds(result.Duration):g})");
+					Log.Error("Addressables", $"Addressable content build failed (duration: {TimeSpan.FromSeconds(result.Duration):g})");
 				}
 				else
 				{
-					// Log information about the asset bundles that were built
+					Log.Info("Addressables", $"Addressable content build succeeded (duration: {TimeSpan.FromSeconds(result.Duration):g})");
+
 					if (result.AssetBundleBuildResults != null && result.AssetBundleBuildResults.Count > 0)
 					{
-						Log.Info("Addressables", "Built Asset Bundles:");
 						foreach (var bundleResult in result.AssetBundleBuildResults)
 						{
-							Log.Info("Addressables", $"Bundle: {bundleResult.SourceAssetGroup.Name} | {bundleResult.FilePath}");
+							Log.Info("Addressables", $"Bundle: {bundleResult.SourceAssetGroup.Name} | File: {bundleResult.FilePath}");
 
-							// Log each asset in the bundle
-							foreach (var assetPath in bundleResult.SourceAssetGroup.entries)
+							foreach (var assetEntry in bundleResult.SourceAssetGroup.entries)
 							{
-								Log.Info("Addressables", $"Asset: {assetPath}");
+								Log.Info("Addressables", $" └─ Asset: {assetEntry.address} | Path: {assetEntry.AssetPath}");
 							}
 						}
 					}
@@ -93,14 +91,15 @@ namespace FishMMO.Shared.CustomBuildTool.Addressables
 						Log.Info("Addressables", "No asset bundles were built.");
 					}
 				}
+
 			}
-			catch (System.Exception ex)
+			catch (Exception ex)
 			{
 				Log.Error("Addressables", $"Error during Addressables build: {ex.Message}");
 			}
 
-			// Optionally, refresh the asset database after the build
-			UnityEditor.AssetDatabase.Refresh();
+			// Refresh the AssetDatabase after the build
+			AssetDatabase.Refresh();
 		}
 	}
 }

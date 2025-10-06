@@ -40,6 +40,12 @@ namespace FishMMO.Shared
 		public AbilityType Type;
 
 		[Header("Event-Condition-Action (ECA) Triggers")]
+		[Tooltip("The Ability Event executed when the ability is activated if AbilitySpawnTarget is Self or when the Ability hits a target.")]
+		/// <summary>
+		/// The event triggered when the ability is activated or hits a target.
+		/// </summary>
+		public AbilityEvent TargetTrigger;
+
 		[Tooltip("Ability Events to execute when the ability object 'ticks' (e.g., moves, applies continuous effects).")]
 		/// <summary>
 		/// Events executed when the ability object ticks.

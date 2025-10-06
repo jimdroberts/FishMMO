@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using FishMMO.Shared;
 using FishMMO.Logging;
 using TMPro;
@@ -44,7 +45,7 @@ namespace FishMMO.Client
 		private void PopulateFullscreenSettings()
 		{
 			FullscreenDropdown.ClearOptions();
-			System.Collections.Generic.List<string> options = new System.Collections.Generic.List<string>();
+			List<string> options = new List<string>();
 
 #if !UNITY_WEBGL
 			// Add FullScreenWindow (available on all platforms)

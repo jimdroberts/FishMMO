@@ -82,8 +82,6 @@ namespace FishMMO.Shared
 			}
 		}
 
-
-
 		/// <summary>
 		/// When we need to add a single friend.
 		/// </summary>

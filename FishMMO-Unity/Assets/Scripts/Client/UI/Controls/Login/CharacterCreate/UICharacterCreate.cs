@@ -161,7 +161,6 @@ namespace FishMMO.Client
 			Client.NetworkManager.ClientManager.RegisterBroadcast<CharacterCreateResultBroadcast>(OnClientCharacterCreateResultBroadcastReceived);
 		}
 
-
 		/// <summary>
 		/// Called when the client is unset. Unsubscribes from events.
 		/// </summary>
