@@ -186,7 +186,6 @@ namespace FishMMO.Shared
 			AddTemplateModifiers(Template);
 		}
 
-
 		/// <summary>
 		/// Adds a list of ability events to the appropriate event dictionaries and applies their stat/resource/attribute modifiers.
 		/// </summary>

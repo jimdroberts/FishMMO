@@ -2020,7 +2020,6 @@ namespace System
             return number.IsNegative ? -result : result;
         }
 
-
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static unsafe float Int32BitsToSingle(int value)
         {

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace FishMMO.Shared
@@ -85,7 +86,7 @@ namespace FishMMO.Shared
 		/// <returns>A string describing the allowed alliance types.</returns>
 		public override string GetFormattedDescription()
 		{
-			var allowed = new System.Collections.Generic.List<string>();
+			var allowed = new List<string>();
 			if (ApplyToSelf) allowed.Add("self");
 			if (ApplyToEnemy) allowed.Add("enemies");
 			if (ApplyToNeutral) allowed.Add("neutrals");

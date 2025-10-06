@@ -24,14 +24,28 @@ namespace FishMMO.Shared.CustomBuildTool.Config
         private WebGLCompressionFormat originalCompressionFormat;
         private bool originalDecompressionFallback;
         private bool originalDataCaching;
+        
+        private bool isConfigured = false;
+        private const int MAX_WAIT_FRAMES = 600; // 10 seconds at 60fps, 20 seconds at 30fps
 
         /// <summary>
         /// Configures the Unity Editor and Player settings for the build process, saving the current state for later restoration.
         /// </summary>
         public void Configure()
         {
+            if (isConfigured)
+            {
+                Log.Warning("BuildConfigurator", "Configure() called but already configured. Skipping.");
+                return;
+            }
+
             Log.Debug("BuildConfigurator", "Saving current build and player settings, and applying build configuration.");
+            
+            // Save all pending changes before switching build targets
+            AssetDatabase.SaveAssets();
+            
             PushSettings(EditorUserBuildSettings.activeBuildTarget);
+            isConfigured = true;
         }
 
         /// <summary>
@@ -39,8 +53,26 @@ namespace FishMMO.Shared.CustomBuildTool.Config
         /// </summary>
         public void Restore()
         {
-            Log.Debug("BuildConfigurator", "Restoring original build and player settings.");
-            PopSettings();
+            if (!isConfigured)
+            {
+                Log.Warning("BuildConfigurator", "Restore() called but Configure() was never called or failed. Skipping restore.");
+                return;
+            }
+
+            try
+            {
+                Log.Debug("BuildConfigurator", "Restoring original build and player settings.");
+                PopSettings();
+            }
+            catch (System.Exception ex)
+            {
+                Log.Error("BuildConfigurator", $"Error during settings restoration: {ex.Message}");
+                throw;
+            }
+            finally
+            {
+                isConfigured = false;
+            }
         }
 
         /// <summary>
@@ -63,9 +95,28 @@ namespace FishMMO.Shared.CustomBuildTool.Config
             originalDecompressionFallback = PlayerSettings.WebGL.decompressionFallback;
             originalDataCaching = PlayerSettings.WebGL.dataCaching;
 
-            // Switch active build target
+            // Switch active build target and WAIT for completion
             BuildTargetGroup targetGroup = BuildPipeline.GetBuildTargetGroup(buildTarget);
-            EditorUserBuildSettings.SwitchActiveBuildTarget(targetGroup, buildTarget);
+            
+            // If already at the target, no need to switch
+            if (EditorUserBuildSettings.activeBuildTarget == buildTarget)
+            {
+                Log.Debug("BuildConfigurator", $"Already at build target {buildTarget}, no switch needed.");
+            }
+            else
+            {
+                Log.Debug("BuildConfigurator", $"Switching build target from {originalBuildTarget} to {buildTarget}...");
+                bool switchResult = EditorUserBuildSettings.SwitchActiveBuildTarget(targetGroup, buildTarget);
+                
+                if (!switchResult)
+                {
+                    Log.Warning("BuildConfigurator", $"SwitchActiveBuildTarget returned false for {buildTarget}. Target may not be installed.");
+                }
+                
+                // CRITICAL: Wait for the build target switch to complete
+                // SwitchActiveBuildTarget is asynchronous and returns immediately
+                WaitForBuildTargetSwitch(buildTarget, targetGroup);
+            }
 
             // Set subtarget for standalone
             if (buildTarget == BuildTarget.StandaloneWindows64 || buildTarget == BuildTarget.StandaloneLinux64 || buildTarget == BuildTarget.StandaloneOSX)
@@ -90,6 +141,78 @@ namespace FishMMO.Shared.CustomBuildTool.Config
                 PlayerSettings.WebGL.decompressionFallback = true;
                 PlayerSettings.WebGL.dataCaching = true;
             }
+            
+            // Save changes after applying new settings
+            AssetDatabase.SaveAssets();
+            Log.Debug("BuildConfigurator", $"Build target switch to {buildTarget} completed successfully.");
+        }
+        
+        /// <summary>
+        /// Waits for the build target switch to complete.
+        /// SwitchActiveBuildTarget is async and doesn't provide callbacks.
+        /// </summary>
+        private void WaitForBuildTargetSwitch(BuildTarget targetBuildTarget, BuildTargetGroup targetGroup)
+        {
+            // If already at target, return immediately
+            if (EditorUserBuildSettings.activeBuildTarget == targetBuildTarget)
+            {
+                Log.Debug("BuildConfigurator", "Build target is already set correctly.");
+                return;
+            }
+
+            int frameCount = 0;
+            bool switchCompleted = false;
+            EditorApplication.CallbackFunction updateCallback = null;
+            
+            updateCallback = () =>
+            {
+                frameCount++;
+                
+                // Check if switch completed
+                if (EditorUserBuildSettings.activeBuildTarget == targetBuildTarget)
+                {
+                    switchCompleted = true;
+                    EditorApplication.update -= updateCallback;
+                    Log.Debug("BuildConfigurator", $"Build target switch completed after {frameCount} editor updates.");
+                    return;
+                }
+                
+                // Log progress every 60 updates (~1 second)
+                if (frameCount % 60 == 0)
+                {
+                    Log.Debug("BuildConfigurator", $"Waiting for build target switch... (update {frameCount})");
+                }
+                
+                // Timeout check (600 updates = ~10 seconds)
+                if (frameCount >= MAX_WAIT_FRAMES)
+                {
+                    EditorApplication.update -= updateCallback;
+                    string errorMsg = $"Build target switch timed out after {frameCount} updates. " +
+                        $"Current: {EditorUserBuildSettings.activeBuildTarget}, Expected: {targetBuildTarget}";
+                    Log.Error("BuildConfigurator", errorMsg);
+                    throw new System.TimeoutException($"Failed to switch to build target {targetBuildTarget}");
+                }
+            };
+            
+            EditorApplication.update += updateCallback;
+            
+            // Wait for switch to complete by spinning (allowing Unity's update to be called)
+            while (!switchCompleted && frameCount < MAX_WAIT_FRAMES)
+            {
+                // Yield to prevent tight loop - allows Unity's event loop to process
+                System.Threading.Thread.Sleep(1);
+            }
+            
+            // Cleanup
+            EditorApplication.update -= updateCallback;
+            
+            if (!switchCompleted)
+            {
+                string errorMsg = $"Build target switch failed. " +
+                    $"Current: {EditorUserBuildSettings.activeBuildTarget}, Expected: {targetBuildTarget}";
+                Log.Error("BuildConfigurator", errorMsg);
+                throw new System.TimeoutException($"Failed to switch to build target {targetBuildTarget}");
+            }
         }
 
         /// <summary>
@@ -106,9 +229,27 @@ namespace FishMMO.Shared.CustomBuildTool.Config
             PlayerSettings.WebGL.compressionFormat = originalCompressionFormat;
             PlayerSettings.WebGL.decompressionFallback = originalDecompressionFallback;
             PlayerSettings.WebGL.dataCaching = originalDataCaching;
-            EditorUserBuildSettings.SwitchActiveBuildTarget(originalGroup, originalBuildTarget);
+            
+            // Switch back to original build target and WAIT for completion
+            Log.Debug("BuildConfigurator", $"Restoring build target to {originalBuildTarget}...");
+            bool switchResult = EditorUserBuildSettings.SwitchActiveBuildTarget(originalGroup, originalBuildTarget);
+            
+            if (!switchResult)
+            {
+                Log.Warning("BuildConfigurator", "SwitchActiveBuildTarget (restore) returned false. Target may already be active.");
+            }
+            
+            // CRITICAL: Wait for the restore to complete
+            WaitForBuildTargetSwitch(originalBuildTarget, originalGroup);
+            
             EditorUserBuildSettings.standaloneBuildSubtarget = originalBuildSubtarget;
+            
+            // Save restored settings
+            AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
+            
+            Log.Debug("BuildConfigurator", "Build target restored successfully.");
+            
             ForceEditorScriptRecompile();
         }
 

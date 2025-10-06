@@ -62,7 +62,6 @@
 			return array;
 		}
 
-
 		/// <summary>
 		/// Populates a 2D array with new instances of type T, specifying the height of each sub-array.
 		/// </summary>

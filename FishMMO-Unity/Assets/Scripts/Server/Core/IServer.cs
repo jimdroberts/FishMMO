@@ -50,7 +50,6 @@ namespace FishMMO.Server.Core
 		/// </summary>
 		IAccountManager<TConnection> AccountManager { get; }
 
-
 		/// <summary>
 		/// Registry that manages all server behaviours.
 		/// </summary>

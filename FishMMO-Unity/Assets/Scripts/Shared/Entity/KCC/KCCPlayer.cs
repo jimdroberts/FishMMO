@@ -151,7 +151,7 @@ namespace FishMMO.Shared
 			if (base.IsServerStarted)
 			{
 				KinematicCharacterMotorState reconcileState = CharacterController.GetState();
-				reconcileState.CurrentPlatformID = currentPlatform.ID;
+				reconcileState.CurrentPlatformID = currentPlatform?.ID ?? 0;
 				Reconcile(reconcileState);
 			}
 		}

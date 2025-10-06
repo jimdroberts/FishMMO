@@ -582,8 +582,8 @@ MonoBehaviour:
   PlayButtonText: {fileID: 1342158545}
   HtmlText: {fileID: 2101316213}
   HtmlTextLinkHandler: {fileID: 2101316215}
-  HtmlViewURL: https://github.com/jimdroberts/FishMMO/wiki
-  DivClass: markdown-body
+  HtmlViewURL: https://www.fishmmo.com/docs/introduction.html
+  DivClass: content
   DefaultScreenWidth: 1024
   DefaultScreenHeight: 768
   UnityWebRequestService: {fileID: 468852881}

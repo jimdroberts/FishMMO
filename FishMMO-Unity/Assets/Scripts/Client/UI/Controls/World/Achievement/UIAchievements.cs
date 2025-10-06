@@ -38,7 +38,6 @@ namespace FishMMO.Client
 		/// </summary>
 		private Dictionary<AchievementCategory, Dictionary<int, UIAchievementDescription>> Categories = new Dictionary<AchievementCategory, Dictionary<int, UIAchievementDescription>>();
 
-
 		/// <summary>
 		/// Called when the UI is starting. Subscribes to character and local client events.
 		/// </summary>

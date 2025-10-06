@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using FishMMO.Shared;
 using FishMMO.Logging;
 using TMPro;
@@ -60,7 +61,7 @@ namespace FishMMO.Client
 			Resolution[] resolutions = Screen.resolutions;
 
 			// Create a list to hold the resolution names for the dropdown
-			System.Collections.Generic.List<string> options = new System.Collections.Generic.List<string>();
+			List<string> options = new List<string>();
 
 			foreach (Resolution res in resolutions)
 			{

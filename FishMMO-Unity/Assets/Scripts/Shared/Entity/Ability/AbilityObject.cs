@@ -123,17 +123,14 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			if (Ability.Template.OnHitEvents != null && Ability.Template.OnHitEvents.Count > 0)
+			if (Ability.Template.TargetTrigger != null)
 			{
 				// Create an AbilityCollisionEventData for the collision
 				AbilityCollisionEventData collisionEvent = new AbilityCollisionEventData(Caster, hitCharacter, this, collision);
 				// Add the CharacterHitEventData to the collision event (for damage, effects, etc)
 				collisionEvent.Add(new CharacterHitEventData(Caster, hitCharacter, RNG));
 
-				foreach (var trigger in Ability.Template.OnHitEvents)
-				{
-					trigger.Execute(collisionEvent);
-				}
+				Ability.Template.TargetTrigger.Execute(collisionEvent);
 			}
 
 			// Check if object should be destroyed after hits.
@@ -201,15 +198,12 @@ namespace FishMMO.Shared
 			// Self target abilities don't spawn ability objects and instead apply immediately
 			if (template.AbilitySpawnTarget == AbilitySpawnTarget.Self)
 			{
-				if (template.OnHitEvents != null && template.OnHitEvents.Count > 0)
+				if (template.TargetTrigger != null)
 				{
 					// Create a collision event for self-target abilities
 					AbilityCollisionEventData collisionEvent = new AbilityCollisionEventData(caster, caster);
 					collisionEvent.Add(new CharacterHitEventData(caster, caster, new System.Random(seed)));
-					foreach (var trigger in template.OnHitEvents)
-					{
-						trigger.Execute(collisionEvent);
-					}
+					template.TargetTrigger.Execute(collisionEvent);
 				}
 				return;
 			}

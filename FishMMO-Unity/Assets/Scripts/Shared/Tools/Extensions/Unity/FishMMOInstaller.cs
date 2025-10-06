@@ -1185,7 +1185,6 @@ namespace FishMMO.Shared
 						await cmd.ExecuteNonQueryAsync();
 					}
 
-
 					Log($"Successfully granted comprehensive permissions to user '{usernameToGrant}' on database '{dbName}'.");
 				}
 			}

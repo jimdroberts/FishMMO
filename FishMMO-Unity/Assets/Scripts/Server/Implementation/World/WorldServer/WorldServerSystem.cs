@@ -42,7 +42,7 @@ namespace FishMMO.Server.Implementation.WorldServer
 
 		/// <summary>
 		/// Indicates whether the world server is locked (not accepting new connections).
-		/// Exposed as part of <see cref="IWorldServer"/>.
+		/// Exposed as part of <see cref="IWorldServerSystem"/>.
 		/// </summary>
 		public bool IsLocked => locked;
 
