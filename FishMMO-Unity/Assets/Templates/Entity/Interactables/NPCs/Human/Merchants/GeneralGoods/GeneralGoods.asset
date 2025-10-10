@@ -21,15 +21,15 @@ MonoBehaviour:
   - {fileID: 11400000, guid: f455d8a612b6da645b9a5f066502307b, type: 2}
   - {fileID: 11400000, guid: 070a580671acc704ba34689f4865bcf4, type: 2}
   AbilityEvents:
-  - {fileID: 11400000, guid: e2515f67b6dcce8438d18005decc2c29, type: 2}
-  - {fileID: 11400000, guid: 47a1e5c6cb2cdad41aa9ecc8acb69c1a, type: 2}
-  - {fileID: 11400000, guid: 5a49dbc5bd95c4149a537a1a52e4f161, type: 2}
-  - {fileID: 11400000, guid: f2d6e37479575f64b8a515553b0972a4, type: 2}
-  - {fileID: 11400000, guid: 0312175c8f0d5eb4cb034cea5952573b, type: 2}
-  - {fileID: 11400000, guid: 9ff935e98f3e2294ab9e0a838ad8ca5b, type: 2}
-  - {fileID: 11400000, guid: 31fd812565fea7940b6681ede8b3797f, type: 2}
-  - {fileID: 11400000, guid: cb25ec34218f1f24b9ce67303dc79860, type: 2}
-  - {fileID: 11400000, guid: 49f4c132334e6924a83535a095c331d9, type: 2}
-  - {fileID: 11400000, guid: 0dcd4269131d0ac46972996284c03e80, type: 2}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
   Items:
   - {fileID: 11400000, guid: 2a666181fba14f54a8a1e2729e38e44e, type: 2}

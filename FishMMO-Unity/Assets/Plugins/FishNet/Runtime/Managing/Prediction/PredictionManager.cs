@@ -421,7 +421,7 @@ namespace FishNet.Managing.Predicting
         /// </summary>
         internal void ReconcileToStates()
         {
-            if (!_networkManager.IsClientStarted)
+            if (_networkManager == null || !_networkManager.IsClientStarted)
                 return;
 
             // Creates a local state update if one is not available in reconcile states.
@@ -432,6 +432,9 @@ namespace FishNet.Managing.Predicting
                 return;
 
             TimeManager tm = _networkManager.TimeManager;
+            if (tm == null)
+                return;
+
             uint localTick = tm.LocalTick;
             uint estimatedLastRemoteTick = tm.LastPacketTick.Value();
 

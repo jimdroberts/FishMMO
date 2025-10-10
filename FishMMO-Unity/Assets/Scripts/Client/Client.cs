@@ -123,11 +123,7 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Static reference to the network manager instance.
 		/// </summary>
-		private static NetworkManager _networkManager;
-		/// <summary>
-		/// Reference to the network manager for client networking.
-		/// </summary>
-		public NetworkManager NetworkManager;
+		public static NetworkManager NetworkManager;
 		/// <summary>
 		/// Reference to the login authenticator for client authentication.
 		/// </summary>
@@ -222,7 +218,6 @@ namespace FishMMO.Client
 					return false;
 				}
 			}
-			_networkManager = NetworkManager;
 
 			NetworkManager.ClientManager.OnClientConnectionState += ClientManager_OnClientConnectionState;
 			NetworkManager.ClientManager.RegisterBroadcast<WorldSceneConnectBroadcast>(OnClientWorldSceneConnectBroadcastReceived);
@@ -291,7 +286,7 @@ namespace FishMMO.Client
 		/// <returns>True if successful, false otherwise.</returns>
 		private bool TryInitializeTransport()
 		{
-			TransportManager transportManager = _networkManager.TransportManager;
+			TransportManager transportManager = NetworkManager.TransportManager;
 			if (transportManager == null)
 			{
 				Log.Error("Client", "TransportManager not found.");
@@ -681,7 +676,7 @@ namespace FishMMO.Client
 		public static void Broadcast<T>(T broadcast, Channel channel = Channel.Reliable) where T : struct, IBroadcast
 		{
 			Log.Debug("Broadcast", "Sending: " + typeof(T));
-			_networkManager.ClientManager.Broadcast(broadcast, channel);
+			NetworkManager.ClientManager.Broadcast(broadcast, channel);
 		}
 
 		/// <summary>
