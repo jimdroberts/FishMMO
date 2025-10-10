@@ -64,7 +64,7 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 				Log.Debug("BuildLogger", "=== Build Process Started ===");
 
 				Log.Debug("BuildLogger", "Configuring build...");
-				configurator.Configure();
+				configurator.Configure(subTarget, buildTarget);
 
 				try
 				{
@@ -180,37 +180,43 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 		[MenuItem("FishMMO/Build/Windows x64/Addressables/Client Addressables")]
 		public static void BuildWindowsClientAddressables()
 		{
-			BuildAddressablesWithExclusionsWrapper(serverAddressableGroups);
+			BuildAddressablesWithExclusionsWrapper(serverAddressableGroups, enableCrcForRemoteLoading: false, useUnityWebRequestForLocal: false);
 		}
 
 		[MenuItem("FishMMO/Build/Windows x64/Addressables/Server Addressables")]
 		public static void BuildWindowsServerAddressables()
 		{
-			BuildAddressablesWithExclusionsWrapper(clientAddressableGroups);
+			BuildAddressablesWithExclusionsWrapper(clientAddressableGroups, enableCrcForRemoteLoading: false, useUnityWebRequestForLocal: false);
 		}
 
 		[MenuItem("FishMMO/Build/Linux x64/Addressables/Client Addressables")]
 		public static void BuildLinuxClientAddressables()
 		{
-			BuildAddressablesWithExclusionsWrapper(serverAddressableGroups);
+			BuildAddressablesWithExclusionsWrapper(serverAddressableGroups, enableCrcForRemoteLoading: false, useUnityWebRequestForLocal: false);
 		}
 
 		[MenuItem("FishMMO/Build/Linux x64/Addressables/Server Addressables")]
 		public static void BuildLinuxServerAddressables()
 		{
-			BuildAddressablesWithExclusionsWrapper(clientAddressableGroups);
+			BuildAddressablesWithExclusionsWrapper(clientAddressableGroups, enableCrcForRemoteLoading: false, useUnityWebRequestForLocal: false);
 		}
 
 		[MenuItem("FishMMO/Build/WebGL/Addressables/Client Addressables")]
 		public static void BuildWebGLAddressables()
 		{
-			BuildAddressablesWithExclusionsWrapper(serverAddressableGroups);
+			// WebGL downloads addressables from game servers over HTTP
+			// Enable CRC to validate network transfer integrity
+			// Use UnityWebRequest (required for browser security)
+			BuildAddressablesWithExclusionsWrapper(serverAddressableGroups, enableCrcForRemoteLoading: true, useUnityWebRequestForLocal: true);
 		}
 
 		/// <summary>
 		/// Helper method to build addressables with proper error handling and cleanup.
 		/// </summary>
-		private static void BuildAddressablesWithExclusionsWrapper(string[] excludeGroups)
+		/// <param name="excludeGroups">Array of group name substrings to exclude from the build.</param>
+		/// <param name="enableCrcForRemoteLoading">If true, enables CRC checking for remote bundle loading (WebGL/CDN). If false, disables CRC for local StreamingAssets loading.</param>
+		/// <param name="useUnityWebRequestForLocal">If true, uses UnityWebRequest for local bundles (WebGL requirement). If false, uses LoadFromFileAsync (better performance for Windows/Linux).</param>
+		private static void BuildAddressablesWithExclusionsWrapper(string[] excludeGroups, bool enableCrcForRemoteLoading = false, bool useUnityWebRequestForLocal = false)
 		{
 			InitializeLogger();
 
@@ -219,8 +225,12 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 
 			try
 			{
-				configurator.Configure();
-				addressableManager.BuildAddressablesWithExclusions(excludeGroups);
+				// Get the current build target - addressables build for current platform
+				StandaloneBuildSubtarget currentSubTarget = EditorUserBuildSettings.standaloneBuildSubtarget;
+				BuildTarget currentTarget = EditorUserBuildSettings.activeBuildTarget;
+
+				configurator.Configure(currentSubTarget, currentTarget);
+				addressableManager.BuildAddressablesWithExclusions(excludeGroups, enableCrcForRemoteLoading, useUnityWebRequestForLocal);
 			}
 			catch (System.Exception ex)
 			{
@@ -284,16 +294,11 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 		private static readonly string[] serverAddressableGroups = new string[] { "ServerOnly" };
 		private static readonly string[] clientAddressableGroups = new string[] { "ClientOnly" };
 
-		private static bool isLoggerInitialized = false;
-
 		/// <summary>
 		/// Initializes the FishMMO Logger for Editor build tools with all log levels enabled.
 		/// </summary>
 		private static void InitializeLogger()
 		{
-			if (isLoggerInitialized)
-				return;
-
 			try
 			{
 				// Initialize custom logging for the Editor build tool
@@ -317,7 +322,6 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 
 				Log.Initialize(null, unityConsoleFormatter, manualLoggers, Log.OnInternalLogMessage, new List<Type>() { typeof(UnityConsoleLoggerConfig) });
 
-				isLoggerInitialized = true;
 				Debug.Log("[BuildTool] Logger initialized successfully with all log levels enabled.");
 			}
 			catch (Exception ex)
@@ -354,8 +358,7 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 				Log.Error("BuildTool", $"Build executable failed: {ex.Message}");
 				EditorUtility.DisplayDialog("Build Failed", $"Build process failed:\n{ex.Message}", "OK");
 			}
-
-			if (Log.IsInitialized)
+			finally
 			{
 				Log.Shutdown();
 			}
