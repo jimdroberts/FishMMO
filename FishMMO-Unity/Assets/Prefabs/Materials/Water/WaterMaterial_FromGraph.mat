@@ -8,7 +8,7 @@ Material:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: WaterMaterial_FromGraph
-  m_Shader: {fileID: -6465566751694194690, guid: d4c0c8c4a8f5c6b4bb0c8f7c8e9d3a2b, type: 3}
+  m_Shader: {fileID: 4800000, guid: d764da3b6e88a654e8a09de8c76c4a31, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords: []
@@ -16,39 +16,75 @@ Material:
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
   m_DoubleSidedGI: 0
-  m_CustomRenderQueue: 3000
-  m_StringTagMap:
-    RenderType: Transparent
-  m_DisabledShaderPasses: []
+  m_CustomRenderQueue: -1
+  stringTagMap: {}
+  disabledShaderPasses: []
   m_LockedProperties: 
   m_SavedProperties:
     serializedVersion: 3
     m_TexEnvs:
+    - _FoamNoise:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
     - _MainNormal:
         m_Texture: {fileID: 2800000, guid: 2ed3d41b7c655bf4daa77f71b994f6ed, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
-    - _SecondNormal:
-        m_Texture: {fileID: 2800000, guid: 11154d936b05e66498f68fa178c5cfbb, type: 3}
+    - _NormalMap:
+        m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _ReflectionTexture:
         m_Texture: {fileID: 8400000, guid: 4ae8ae7350b67b44785d874c413a2e03, type: 2}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
+    - _SecondNormal:
+        m_Texture: {fileID: 2800000, guid: 11154d936b05e66498f68fa178c5cfbb, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _SecondaryNormalMap:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
-    - _Smoothness: 0.8
-    - _NormalStrength: 1.0
-    - _NormalTiling: 1.0
     - _Displacement: 0.2
-    - _DistortionPower: 1.0
-    - _ReflectionStrength: 0.5
-    - _WaveSpeed: 1.0
-    - _WaveScale: 1.0
+    - _DistanceWaveReduction: 0.8
+    - _DistortionPower: 1
+    - _EnableInfiniteOcean: 1
+    - _FarOceanFadeDistance: 0.7
+    - _FoamCutoff: 0.3
     - _FoamDistance: 0.1
-    - _FoamPower: 2.0
+    - _FoamIntensity: 1
+    - _FoamPower: 2
+    - _FoamSmoothness: 0.5
+    - _FresnelPower: 2
+    - _HorizonBlend: 0.8
+    - _Metallic: 0
+    - _NoiseScale: 1
+    - _NormalScale: 1
+    - _NormalStrength: 1
+    - _NormalTiling: 1
+    - _ReflectionStrength: 0.5
+    - _SecondaryNormalStrength: 0.5
+    - _ShorelineSmoothing: 0.3
+    - _Smoothness: 0.8
+    - _TideHeight: 0.2
+    - _TideSpeed: 0.1
+    - _Transparency: 0.8
+    - _WaveFrequency: 1
+    - _WaveHeight: 0.1
+    - _WaveScale: 1
+    - _WaveSpeed: 1
     m_Colors:
     - _DeepColor: {r: 0.039215688, g: 0.09803922, b: 0.27450982, a: 0.7058824}
+    - _FarOceanColor: {r: 0.02, g: 0.19999996, b: 0.34999996, a: 1}
     - _FoamColor: {r: 1, g: 1, b: 1, a: 1}
+    - _NormalSpeed: {r: 0.1, g: 0.1, b: 0, a: 0}
+    - _SecondaryNormalSpeed: {r: -0.05, g: 0.15, b: 0, a: 0}
+    - _ShallowColor: {r: 0.24299997, g: 0.6039999, b: 0.78, a: 1}
+    - _WaterColor: {r: 0.042999983, g: 0.30999997, b: 0.42399997, a: 1}
+    - _WaveDirection: {r: 1, g: 1, b: 0, a: 0}
   m_BuildTextureStacks: []
+  m_AllowLocking: 1

@@ -125,7 +125,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 		/// </summary>
 		public override void Destroying()
 		{
-			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
+			using var dbContext = Server?.CoreServer?.NpgsqlDbContextFactory.CreateDbContext();
 			if (dbContext == null)
 			{
 				throw new UnityException("Failed to get dbContext.");
