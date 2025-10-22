@@ -64,7 +64,7 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 				Log.Debug("BuildLogger", "=== Build Process Started ===");
 
 				Log.Debug("BuildLogger", "Configuring build...");
-				configurator.Configure();
+				configurator.Configure(subTarget, buildTarget);
 
 				try
 				{
@@ -117,100 +117,79 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 			}
 		}
 
-		[MenuItem("FishMMO/Build/Windows x64/Game Server")]
-		public static void BuildWindows64GameServer()
+		/// <summary>
+		/// Builds the game executable using the current Build Environment Options (Build Type and OS Target).
+		/// </summary>
+		[MenuItem("FishMMO/Build/Build Game")]
+		public static void BuildGameWithEnvironmentOptions()
 		{
+			// Check if scripts are currently compiling
+			if (BuildEnvironmentOptions.IsCompiling())
+			{
+				UnityEngine.Debug.LogWarning("[CustomBuildTool] Cannot start build while scripts are compiling. Please wait for compilation to finish.");
+				EditorUtility.DisplayDialog("Build Blocked", "Scripts are currently compiling.\nPlease wait for compilation to finish before building.", "OK");
+				return;
+			}
+
+			// Get build settings from environment options
+			BuildTypeEnvironment buildType = BuildEnvironmentOptions.GetBuildType();
+			OSTargetEnvironment osTarget = BuildEnvironmentOptions.GetOSTarget();
+			BuildTarget buildTarget = BuildEnvironmentOptions.GetBuildTarget(osTarget);
+			StandaloneBuildSubtarget buildSubtarget = BuildEnvironmentOptions.GetBuildSubtarget(buildType);
+			CustomBuildType customBuildType = BuildEnvironmentOptions.GetCustomBuildType();
+
+			// Determine executable name based on build type
+			string executableName = (buildType == BuildTypeEnvironment.Server)
+				? GAMESERVER_BUILD_NAME
+				: Constants.Configuration.ProjectName;
+
+			// Build with environment settings
 			BuildExecutable(
-				GAMESERVER_BUILD_NAME,
+				executableName,
 				BOOTSTRAP_SCENES,
-				CustomBuildType.Server,
-				GetBuildOptions(),
-				StandaloneBuildSubtarget.Server,
-				BuildTarget.StandaloneWindows64);
+				customBuildType,
+				GetBuildOptions(buildTarget),
+				buildSubtarget,
+				buildTarget);
 		}
 
-		[MenuItem("FishMMO/Build/Windows x64/Game Client")]
-		public static void BuildWindows64Client()
+		/// <summary>
+		/// Builds addressables using the current Build Environment Options (Build Type and OS Target).
+		/// </summary>
+		[MenuItem("FishMMO/Build/Build Addressables")]
+		public static void BuildAddressablesWithEnvironmentOptions()
 		{
-			BuildExecutable(
-				Constants.Configuration.ProjectName,
-				BOOTSTRAP_SCENES,
-				CustomBuildType.Client,
-				GetBuildOptions(),
-				StandaloneBuildSubtarget.Player,
-				BuildTarget.StandaloneWindows64);
-		}
+			// Check if scripts are currently compiling
+			if (BuildEnvironmentOptions.IsCompiling())
+			{
+				UnityEngine.Debug.LogWarning("[CustomBuildTool] Cannot start addressables build while scripts are compiling. Please wait for compilation to finish.");
+				EditorUtility.DisplayDialog("Build Blocked", "Scripts are currently compiling.\nPlease wait for compilation to finish before building addressables.", "OK");
+				return;
+			}
 
-		[MenuItem("FishMMO/Build/Linux x64/Game Server")]
-		public static void BuildLinux64GameServer()
-		{
-			BuildExecutable(
-				GAMESERVER_BUILD_NAME,
-				BOOTSTRAP_SCENES,
-				CustomBuildType.Server,
-				GetBuildOptions(),
-				StandaloneBuildSubtarget.Server,
-				BuildTarget.StandaloneLinux64);
-		}
+			// Get build settings from environment options
+			BuildTypeEnvironment buildType = BuildEnvironmentOptions.GetBuildType();
+			OSTargetEnvironment osTarget = BuildEnvironmentOptions.GetOSTarget();
 
-		[MenuItem("FishMMO/Build/Linux x64/Game Client")]
-		public static void BuildLinux64Client()
-		{
-			BuildExecutable(
-				Constants.Configuration.ProjectName,
-				BOOTSTRAP_SCENES,
-				CustomBuildType.Client,
-				GetBuildOptions(),
-				StandaloneBuildSubtarget.Player,
-				BuildTarget.StandaloneLinux64);
-		}
+			// Determine which groups to exclude based on build type
+			string[] excludedGroups = (buildType == BuildTypeEnvironment.Server)
+				? clientAddressableGroups
+				: serverAddressableGroups;
 
-		[MenuItem("FishMMO/Build/WebGL/Game Client")]
-		public static void BuildWebGLClient()
-		{
-			BuildExecutable(
-				Constants.Configuration.ProjectName,
-				BOOTSTRAP_SCENES,
-				CustomBuildType.Client,
-				GetBuildOptions(BuildTarget.WebGL),
-				StandaloneBuildSubtarget.Player,
-				BuildTarget.WebGL);
-		}
+			// Determine if we need special settings for WebGL
+			bool enableCrc = (osTarget == OSTargetEnvironment.WebGL);
+			bool useUnityWebRequest = (osTarget == OSTargetEnvironment.WebGL);
 
-		[MenuItem("FishMMO/Build/Windows x64/Addressables/Client Addressables")]
-		public static void BuildWindowsClientAddressables()
-		{
-			BuildAddressablesWithExclusionsWrapper(serverAddressableGroups);
-		}
-
-		[MenuItem("FishMMO/Build/Windows x64/Addressables/Server Addressables")]
-		public static void BuildWindowsServerAddressables()
-		{
-			BuildAddressablesWithExclusionsWrapper(clientAddressableGroups);
-		}
-
-		[MenuItem("FishMMO/Build/Linux x64/Addressables/Client Addressables")]
-		public static void BuildLinuxClientAddressables()
-		{
-			BuildAddressablesWithExclusionsWrapper(serverAddressableGroups);
-		}
-
-		[MenuItem("FishMMO/Build/Linux x64/Addressables/Server Addressables")]
-		public static void BuildLinuxServerAddressables()
-		{
-			BuildAddressablesWithExclusionsWrapper(clientAddressableGroups);
-		}
-
-		[MenuItem("FishMMO/Build/WebGL/Addressables/Client Addressables")]
-		public static void BuildWebGLAddressables()
-		{
-			BuildAddressablesWithExclusionsWrapper(serverAddressableGroups);
+			BuildAddressablesWithExclusionsWrapper(excludedGroups, enableCrc, useUnityWebRequest);
 		}
 
 		/// <summary>
 		/// Helper method to build addressables with proper error handling and cleanup.
 		/// </summary>
-		private static void BuildAddressablesWithExclusionsWrapper(string[] excludeGroups)
+		/// <param name="excludeGroups">Array of group name substrings to exclude from the build.</param>
+		/// <param name="enableCrcForRemoteLoading">If true, enables CRC checking for remote bundle loading (WebGL/CDN). If false, disables CRC for local StreamingAssets loading.</param>
+		/// <param name="useUnityWebRequestForLocal">If true, uses UnityWebRequest for local bundles (WebGL requirement). If false, uses LoadFromFileAsync (better performance for Windows/Linux).</param>
+		private static void BuildAddressablesWithExclusionsWrapper(string[] excludeGroups, bool enableCrcForRemoteLoading = false, bool useUnityWebRequestForLocal = false)
 		{
 			InitializeLogger();
 
@@ -219,8 +198,12 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 
 			try
 			{
-				configurator.Configure();
-				addressableManager.BuildAddressablesWithExclusions(excludeGroups);
+				// Get the current build target - addressables build for current platform
+				StandaloneBuildSubtarget currentSubTarget = EditorUserBuildSettings.standaloneBuildSubtarget;
+				BuildTarget currentTarget = EditorUserBuildSettings.activeBuildTarget;
+
+				configurator.Configure(currentSubTarget, currentTarget);
+				addressableManager.BuildAddressablesWithExclusions(excludeGroups, enableCrcForRemoteLoading, useUnityWebRequestForLocal);
 			}
 			catch (System.Exception ex)
 			{
@@ -235,28 +218,31 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 		}
 
 		/// <summary>
-		/// Builds the Windows x64 Database Installer executable for FishMMO.
+		/// Builds the Database Installer executable using the current OS Target environment option.
 		/// </summary>
-		[MenuItem("FishMMO/Build/Windows x64/Database Installer")]
-		public static void BuildWindows64Setup()
+		[MenuItem("FishMMO/Build/Build Database Installer")]
+		public static void BuildInstallerWithEnvironmentOptions()
 		{
-			BuildExecutable("Installer",
-							new string[]
-							{
-								Constants.Configuration.InstallerPath,
-							},
-							CustomBuildType.Installer,
-							GetBuildOptions(),
-							StandaloneBuildSubtarget.Server,
-							BuildTarget.StandaloneWindows64);
-		}
+			// Check if scripts are currently compiling
+			if (BuildEnvironmentOptions.IsCompiling())
+			{
+				UnityEngine.Debug.LogWarning("[CustomBuildTool] Cannot start installer build while scripts are compiling. Please wait for compilation to finish.");
+				EditorUtility.DisplayDialog("Build Blocked", "Scripts are currently compiling.\nPlease wait for compilation to finish before building installer.", "OK");
+				return;
+			}
 
-		/// <summary>
-		/// Builds the Linux x64 Database Installer executable for FishMMO.
-		/// </summary>
-		[MenuItem("FishMMO/Build/Linux x64/Database Installer")]
-		public static void BuildLinuxSetup()
-		{
+			// Get OS target from environment options
+			OSTargetEnvironment osTarget = BuildEnvironmentOptions.GetOSTarget();
+			BuildTarget buildTarget = BuildEnvironmentOptions.GetBuildTarget(osTarget);
+
+			// WebGL doesn't support installers
+			if (osTarget == OSTargetEnvironment.WebGL)
+			{
+				UnityEngine.Debug.LogWarning("[CustomBuildTool] Database Installer cannot be built for WebGL. Please select Windows or Linux.");
+				EditorUtility.DisplayDialog("Invalid Target", "Database Installer cannot be built for WebGL.\nPlease select Windows or Linux as the OS Target.", "OK");
+				return;
+			}
+
 			BuildExecutable("Installer",
 							new string[]
 							{
@@ -265,7 +251,7 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 							CustomBuildType.Installer,
 							GetBuildOptions(),
 							StandaloneBuildSubtarget.Server,
-							BuildTarget.StandaloneLinux64);
+							buildTarget);
 		}
 
 		// --- Helper methods and fields (stubs, to be implemented or replaced as needed) ---
@@ -284,16 +270,11 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 		private static readonly string[] serverAddressableGroups = new string[] { "ServerOnly" };
 		private static readonly string[] clientAddressableGroups = new string[] { "ClientOnly" };
 
-		private static bool isLoggerInitialized = false;
-
 		/// <summary>
 		/// Initializes the FishMMO Logger for Editor build tools with all log levels enabled.
 		/// </summary>
 		private static void InitializeLogger()
 		{
-			if (isLoggerInitialized)
-				return;
-
 			try
 			{
 				// Initialize custom logging for the Editor build tool
@@ -317,7 +298,6 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 
 				Log.Initialize(null, unityConsoleFormatter, manualLoggers, Log.OnInternalLogMessage, new List<Type>() { typeof(UnityConsoleLoggerConfig) });
 
-				isLoggerInitialized = true;
 				Debug.Log("[BuildTool] Logger initialized successfully with all log levels enabled.");
 			}
 			catch (Exception ex)
@@ -354,8 +334,7 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 				Log.Error("BuildTool", $"Build executable failed: {ex.Message}");
 				EditorUtility.DisplayDialog("Build Failed", $"Build process failed:\n{ex.Message}", "OK");
 			}
-
-			if (Log.IsInitialized)
+			finally
 			{
 				Log.Shutdown();
 			}
