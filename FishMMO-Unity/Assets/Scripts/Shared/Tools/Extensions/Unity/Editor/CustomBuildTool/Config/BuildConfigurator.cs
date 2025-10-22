@@ -29,7 +29,9 @@ namespace FishMMO.Shared.CustomBuildTool.Config
 
 		/// <summary>
 		/// Configures the Unity Editor and Player settings for the build process, saving the current state for later restoration.
+		/// Attempts to switch to the target build platform if it differs from the current platform.
 		/// </summary>
+		/// <param name="targetSubtarget">The build subtarget to switch to.</param>
 		/// <param name="targetBuildTarget">The build target to switch to.</param>
 		public void Configure(StandaloneBuildSubtarget targetSubtarget, BuildTarget targetBuildTarget)
 		{
@@ -77,6 +79,7 @@ namespace FishMMO.Shared.CustomBuildTool.Config
 
 		/// <summary>
 		/// Saves the current build and player settings, then switches to the specified build target.
+		/// If the switch fails, uses the current build target as a fallback.
 		/// </summary>
 		/// <param name="buildSubtarget">The build subtarget to switch to.</param>
 		/// <param name="buildTarget">The build target to switch to.</param>
@@ -113,10 +116,15 @@ namespace FishMMO.Shared.CustomBuildTool.Config
 				if (!switchResult)
 				{
 					Log.Warning("BuildConfigurator", $"SwitchActiveBuildTarget returned false for {buildTarget}:{buildSubtarget}. Target may not be installed.");
+					Log.Warning("BuildConfigurator", $"Using current build target {originalBuildTarget}:{originalBuildSubtarget} as fallback.");
 				}
 				else
 				{
 					ApplyBuildTargetSettings(buildSubtarget, buildTarget, targetGroup);
+
+					// Force asset database refresh and reimport
+					AssetDatabase.SaveAssets();
+					AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate);
 
 					// Force script recompilation after platform switch
 					ForceEditorScriptRecompile();
@@ -192,6 +200,10 @@ namespace FishMMO.Shared.CustomBuildTool.Config
 					EditorUserBuildSettings.standaloneBuildSubtarget = originalBuildSubtarget;
 
 					Log.Debug("BuildConfigurator", $"Build target restored to {originalBuildTarget}:{originalBuildSubtarget} successfully.");
+
+					// Force asset database refresh and reimport
+					AssetDatabase.SaveAssets();
+					AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate);
 
 					// Force script recompilation after platform switch
 					ForceEditorScriptRecompile();
