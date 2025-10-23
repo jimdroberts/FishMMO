@@ -53,7 +53,7 @@ namespace FishMMO.Shared.CustomBuildTool.Execution
 			}
 			if (customBuildType == CustomBuildType.Installer)
 			{
-				folderName = "FishMMO " + GetBuildTargetShortName(buildTarget) + " " + folderName;
+				folderName = "FishMMO" + GetBuildTargetShortName(buildTarget) + " " + folderName;
 			}
 			else if (string.IsNullOrEmpty(tmpPath))
 			{
