@@ -30,7 +30,7 @@ Navigate to the **`FishMMO/FishMMO-Dependencies`** directory and build the solut
 
 ## **3. Build the FishMMO-Database Project**
 
-Next, build the database project, which is essential for the server components.
+Build the database project, which is essential for the server components.
 
 1.  Go to **`FishMMO/FishMMO-Database`**.
 2.  Open **`FishMMO-Database.sln`**.
@@ -41,7 +41,7 @@ Next, build the database project, which is essential for the server components.
 
 ## **4. Build the FishMMO-Logger Project**
 
-Next, build the logger project, which is essential for logging services within the FishMMO domain.
+Build the Logger project which is essential for logging services within the FishMMO domain.
 
 1.  Go to **`Go to FishMMO/FishMMO-Logger`**.
 2.  Open **`FishMMO-Logger.sln`**.
@@ -50,7 +50,16 @@ Next, build the logger project, which is essential for logging services within t
 
 ---
 
-## **5. Configure Unity Hub**
+## **5. Build the FishMMO-WebServers IPFetchASP.NET Project**
+
+Build the IpFetch project which handles host discovery for client connections and world server load balancing systems.
+
+1.  Go to **`Go to FishMMO/FishMMO-WebServers/IPFetchASP.NET`**.
+2.  Open **`IPFetchASP.sln`**.
+3.  In the Solution Explorer, right-click the solution and select **Clean**.
+4.  Right-click the solution again and select **Build**.
+
+## **6. Configure Unity Hub**
 
 Configure Unity Hub to work with the FishMMO project and its required modules.
 
@@ -70,13 +79,13 @@ Configure Unity Hub to work with the FishMMO project and its required modules.
 
 ---
 
-## **6. Open the FishMMO-Unity Project**
+## **7. Open the FishMMO-Unity Project**
 
 Launch the **`FishMMO-Unity`** project from the Unity Hub.
 
 ---
 
-## **7. Build the FishMMO Database Installer**
+## **8. Build the FishMMO Database Installer**
 
 The Database Installer automates the setup of the backend infrastructure.
 
@@ -86,7 +95,7 @@ The Database Installer automates the setup of the backend infrastructure.
 
 ---
 
-## **8. Run the Database Installer**
+## **9. Run the Database Installer**
 
 Execute the installer to set up the necessary tools and the database.
 
