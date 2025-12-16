@@ -39,7 +39,18 @@ Next, build the database project, which is essential for the server components.
 
 ---
 
-## **4. Configure Unity Hub**
+## **4. Build the FishMMO-Logger Project**
+
+Next, build the logger project, which is essential for logging services within the FishMMO domain.
+
+1.  Go to **`Go to FishMMO/FishMMO-Logger`**.
+2.  Open **`FishMMO-Logger.sln`**.
+3.  In the Solution Explorer, right-click the solution and select **Clean**.
+4.  Right-click the solution again and select **Build**.
+
+---
+
+## **5. Configure Unity Hub**
 
 Configure Unity Hub to work with the FishMMO project and its required modules.
 
@@ -59,13 +70,13 @@ Configure Unity Hub to work with the FishMMO project and its required modules.
 
 ---
 
-## **5. Open the FishMMO-Unity Project**
+## **6. Open the FishMMO-Unity Project**
 
 Launch the **`FishMMO-Unity`** project from the Unity Hub.
 
 ---
 
-## **6. Build the FishMMO Database Installer**
+## **7. Build the FishMMO Database Installer**
 
 The Database Installer automates the setup of the backend infrastructure.
 
@@ -75,7 +86,7 @@ The Database Installer automates the setup of the backend infrastructure.
 
 ---
 
-## **7. Run the Database Installer**
+## **8. Run the Database Installer**
 
 Execute the installer to set up the necessary tools and the database.
 

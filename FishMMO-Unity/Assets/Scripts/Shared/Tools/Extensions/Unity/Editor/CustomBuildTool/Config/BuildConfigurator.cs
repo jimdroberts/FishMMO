@@ -122,13 +122,6 @@ namespace FishMMO.Shared.CustomBuildTool.Config
 				{
 					ApplyBuildTargetSettings(buildSubtarget, buildTarget, targetGroup);
 
-					// Force asset database refresh and reimport
-					AssetDatabase.SaveAssets();
-					AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate);
-
-					// Force script recompilation after platform switch
-					ForceEditorScriptRecompile();
-
 					Log.Debug("BuildConfigurator", $"Build target switched to {buildTarget}:{buildSubtarget} successfully.");
 				}
 			}
@@ -159,8 +152,13 @@ namespace FishMMO.Shared.CustomBuildTool.Config
 				PlayerSettings.WebGL.dataCaching = true;
 			}
 
-			// Save changes after applying new settings
+			// Force asset database refresh and reimport
 			AssetDatabase.SaveAssets();
+			AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate);
+
+			// Force script recompilation after platform switch
+			ForceEditorScriptRecompile();
+
 			Log.Debug("BuildConfigurator", $"Build target configuration applied successfully for {buildTarget}:{buildSubtarget}.");
 		}
 
@@ -180,7 +178,7 @@ namespace FishMMO.Shared.CustomBuildTool.Config
 			PlayerSettings.WebGL.dataCaching = originalDataCaching;
 
 			// Switch back to original build target
-			Log.Debug("BuildConfigurator", $"Restoring build target to {originalBuildTarget}...");
+			/*Log.Debug("BuildConfigurator", $"Restoring build target to {originalBuildTarget}...");
 
 			// If already at original target, no need to switch
 			if (EditorUserBuildSettings.activeBuildTarget == originalBuildTarget && EditorUserBuildSettings.standaloneBuildSubtarget == originalBuildSubtarget)
@@ -212,7 +210,7 @@ namespace FishMMO.Shared.CustomBuildTool.Config
 
 			// Save restored settings
 			AssetDatabase.SaveAssets();
-			AssetDatabase.Refresh();
+			AssetDatabase.Refresh();*/
 
 			Log.Debug("BuildConfigurator", "Build target restored successfully.");
 		}
