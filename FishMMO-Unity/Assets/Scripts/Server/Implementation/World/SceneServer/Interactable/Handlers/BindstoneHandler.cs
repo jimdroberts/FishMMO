@@ -4,7 +4,7 @@ using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
 using FishNet.Connection;
 
-namespace FishMMO.Server.Implementation.SceneServer
+namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 {
 	/// <summary>
 	/// Handles interactions with bindstone objects, allowing players to set their respawn location to the current scene and position.

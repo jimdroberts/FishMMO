@@ -2,7 +2,7 @@ using FishMMO.Shared;
 using FishMMO.Server.Core;
 using FishNet.Connection;
 
-namespace FishMMO.Server.Implementation.SceneServer
+namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 {
 	/// <summary>
 	/// Handles interactions with world item objects, allowing players to pick up items from the world.

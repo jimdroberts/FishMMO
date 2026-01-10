@@ -3,7 +3,7 @@ using FishMMO.Server.Core;
 using FishNet.Connection;
 using UnityEngine;
 
-namespace FishMMO.Server.Implementation.SceneServer
+namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 {
 	/// <summary>
 	/// Handles interactions with teleporter objects, allowing players to teleport to target locations or named destinations.

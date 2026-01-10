@@ -1,4 +1,5 @@
 using FishNet.Connection;
+using FishNet.Transporting;
 using FishMMO.Server.Core.Account;
 
 namespace FishMMO.Server.Core
@@ -28,6 +29,11 @@ namespace FishMMO.Server.Core
 		/// Exposes server lifecycle events such as login/world/scene initialization and other runtime signals.
 		/// </summary>
 		IServerEvents ServerEvents { get; }
+
+		/// <summary>
+		/// Current connection state of the server.
+		/// </summary>
+		LocalConnectionState ServerState { get; }
 	}
 
 	/// <summary>
@@ -38,6 +44,7 @@ namespace FishMMO.Server.Core
 	/// <typeparam name="TConnection">Type used to represent transport connections (for example <see cref="NetworkConnection"/> for FishNet).</typeparam>
 	/// <typeparam name="TServerBehaviour">Type used to represent server behaviours (for example <see cref="FishMMO.Server.Implementation.ServerBehaviour"/>).</typeparam>
 	public interface IServer<TNetworkManager, TConnection, TServerBehaviour> : IServer
+		where TServerBehaviour : IServerComponent
 	{
 		/// <summary>
 		/// Network manager or wrapper instance used to interact with the transport layer and FishNet abstractions.
@@ -53,6 +60,11 @@ namespace FishMMO.Server.Core
 		/// <summary>
 		/// Registry that manages all server behaviours.
 		/// </summary>
-		IServerBehaviourRegistry<TNetworkManager, TConnection, TServerBehaviour> BehaviourRegistry { get; }
+		IServerBehaviourRegistry<TNetworkManager, TConnection, IServerBehaviour> BehaviourRegistry { get; }
+
+		/// <summary>
+		/// Registry that manages all runtime data containers.
+		/// </summary>
+		IServerComponentRegistry<TNetworkManager, TConnection, IRuntimeDataContainer> DataContainerRegistry { get; }
 	}
 }

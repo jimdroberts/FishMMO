@@ -56,5 +56,5 @@
         "temp/": true,
         "Temp/": true
     },
-    "dotnet.defaultSolution": "FishMMO-Unity.sln"
+    "dotnet.defaultSolution": "FishMMO-Unity.slnx"
 }

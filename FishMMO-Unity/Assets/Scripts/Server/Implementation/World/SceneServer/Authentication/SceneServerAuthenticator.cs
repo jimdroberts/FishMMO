@@ -1,7 +1,7 @@
 ﻿using FishMMO.Database.Npgsql;
 using FishMMO.Shared;
 
-namespace FishMMO.Server.Implementation.SceneServer
+namespace FishMMO.Server.Implementation.World.SceneServer
 {
 	/// <summary>
 	/// Scene Server Authenticator for basic password authentication on scene servers.

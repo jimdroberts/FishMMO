@@ -1,4 +1,5 @@
-﻿using FishNet.Transporting;
+﻿using FishNet.Connection;
+using FishNet.Transporting;
 using FishNet.Transporting.Multipass;
 #if UNITY_STANDALONE_LINUX || UNITY_EDITOR_LINUX
 using System;
@@ -8,6 +9,7 @@ using UnityEngine;
 using Cysharp.Text;
 using System.Runtime.CompilerServices;
 using FishMMO.Shared;
+using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.WorldServer;
 
 namespace FishMMO.Server.Implementation
@@ -16,6 +18,7 @@ namespace FishMMO.Server.Implementation
 	/// Updates the server window or console title to reflect current server status, including transport type, connection state, and client count.
 	/// Supports Windows, Linux, and OSX platforms.
 	/// </summary>
+	[CreateAssetMenu(fileName = "ServerWindowTitleUpdater", menuName = "FishMMO/Server/Server Window Title Updater", order = 1)]
 	public class ServerWindowTitleUpdater : ServerBehaviour
 	{
 #if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
@@ -60,29 +63,25 @@ namespace FishMMO.Server.Implementation
 		/// Called once to initialize the server window title updater.
 		/// Disables the component if ServerManager is not available.
 		/// </summary>
-		public override void InitializeOnce()
+		public override ServerComponentInitializationStatus InitializeOnce()
 		{
-			if (ServerManager != null)
-			{
-				UpdateWindowTitle();
-			}
-			else
-			{
-				enabled = false;
-			}
+			UpdateWindowTitle();
+			
+			return ServerComponentInitializationStatus.Initialized;
 		}
 
 		/// <summary>
 		/// Called when the object is being destroyed. No custom logic implemented.
 		/// </summary>
-		public override void Destroying()
+		public override void OnDeinitialize()
 		{
 		}
 
 		/// <summary>
-		/// Updates the window title at the specified rate while the server is running.
+		/// Called by the server's LateUpdate. Updates the window title at the specified rate while the server is running.
 		/// </summary>
-		void LateUpdate()
+		/// <param name="deltaTime">Time elapsed since last frame.</param>
+		public override void OnLateUpdate(float deltaTime)
 		{
 			if (ServerManager == null ||
 				!ServerManager.Started)
@@ -96,7 +95,7 @@ namespace FishMMO.Server.Implementation
 
 				UpdateWindowTitle();
 			}
-			NextUpdate -= Time.deltaTime;
+			NextUpdate -= deltaTime;
 		}
 
 		/// <summary>
@@ -169,8 +168,8 @@ namespace FishMMO.Server.Implementation
 						windowTitle.Append(":");
 						windowTitle.Append(port);
 						windowTitle.Append(" Clients:");
-						// Use WorldSceneSystem's ConnectionCount if available, otherwise fallback to ServerManager.Clients.Count.
-						windowTitle.Append(Server.BehaviourRegistry.TryGet(out IWorldSceneSystem worldSceneSystem) ? worldSceneSystem.ConnectionCount : ServerManager.Clients.Count);
+						// Use WorldSceneMappingData's ConnectionCount if available, otherwise fallback to ServerManager.Clients.Count.
+						windowTitle.Append(Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var sceneData) ? sceneData.ConnectionCount : ServerManager.Clients.Count);
 						windowTitle.Append("]");
 					}
 				}

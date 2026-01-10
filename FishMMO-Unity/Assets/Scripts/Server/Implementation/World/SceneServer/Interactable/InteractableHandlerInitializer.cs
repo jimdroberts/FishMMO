@@ -3,7 +3,7 @@ using FishMMO.Shared;
 using FishMMO.Server.Core;
 using FishNet.Connection;
 
-namespace FishMMO.Server.Implementation.SceneServer
+namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 {
 	/// <summary>
 	/// ScriptableObject initializer for registering interactable handlers in the FishMMO server.

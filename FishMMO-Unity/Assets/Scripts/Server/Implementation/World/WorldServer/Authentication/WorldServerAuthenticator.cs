@@ -1,9 +1,10 @@
+using FishNet.Connection;
 using FishMMO.Database.Npgsql;
 using FishMMO.Server.Core.World.WorldServer;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
 
-namespace FishMMO.Server.Implementation.WorldServer
+namespace FishMMO.Server.Implementation.World.WorldServer
 {
 	/// <summary>
 	/// Authenticator for world server connections, allowing clients to connect with basic password authentication.
@@ -27,8 +28,8 @@ namespace FishMMO.Server.Implementation.WorldServer
 		internal override ClientAuthenticationResult TryLogin(NpgsqlDbContext dbContext, ClientAuthenticationResult result, string username)
 		{
 			// Check if the world server is full.
-			if (Server.BehaviourRegistry.TryGet(out IWorldSceneSystem worldSceneSystem) &&
-				worldSceneSystem.ConnectionCount >= MaxPlayers)
+			if (Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var sceneData) &&
+				sceneData.ConnectionCount >= MaxPlayers)
 			{
 				return ClientAuthenticationResult.ServerFull;
 			}
@@ -39,11 +40,11 @@ namespace FishMMO.Server.Implementation.WorldServer
 			}
 			// If login is successful, assign the character to the world server.
 			else if (result == ClientAuthenticationResult.LoginSuccess &&
-				Server.BehaviourRegistry.TryGet(out WorldServerSystem worldServerSystem) &&
+				Server.DataContainerRegistry.TryGet<IWorldServerRuntimeData>(out var worldData) &&
 				CharacterService.GetSelected(dbContext, username))
 			{
 				// Update the character's world assignment in the database.
-				CharacterService.SetWorld(dbContext, username, worldServerSystem.ID);
+				CharacterService.SetWorld(dbContext, username, worldData.ID);
 
 				return ClientAuthenticationResult.WorldLoginSuccess;
 			}

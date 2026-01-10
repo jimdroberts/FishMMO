@@ -1,4 +1,6 @@
-﻿using System.Runtime.CompilerServices;
+﻿using System;
+using System.Linq;
+using System.Runtime.CompilerServices;
 using UnityEngine;
 using UnityEditor;
 using FishNet.Managing;
@@ -9,13 +11,17 @@ using FishMMO.Server.Core;
 using FishMMO.Shared;
 using FishMMO.Server.Core.Account;
 using FishNet.Connection;
+using System.Collections.Generic;
 
 namespace FishMMO.Server.Implementation
 {
 	/// <summary>
 	/// Composition root: orchestrates Core and Implementation into a running server.
 	/// </summary>
-	public class Server : MonoBehaviour, IServer<INetworkManagerWrapper, NetworkConnection, IServerBehaviour>
+	public class Server : MonoBehaviour,
+		IServer<INetworkManagerWrapper, NetworkConnection, IServerBehaviour>,
+		IServer<INetworkManagerWrapper, NetworkConnection, IRuntimeDataContainer>,
+		IPeriodicUpdateSystem
 	{
 		/// <summary>
 		/// Optional override for the server's bind address.
@@ -59,13 +65,43 @@ namespace FishMMO.Server.Implementation
 		public IServerEvents ServerEvents { get; private set; }
 
 		/// <summary>
+		/// Current connection state of the server.
+		/// </summary>
+		private LocalConnectionState serverState;
+
+		/// <summary>
+		/// Gets the current connection state of the server.
+		/// </summary>
+		public LocalConnectionState ServerState => serverState;
+
+		/// <summary>
+		/// List of all server behaviours attached to the server.
+		/// </summary>
+		[SerializeField]
+		public List<ServerBehaviour> ServerBehaviours = new List<ServerBehaviour>();
+
+		/// <summary>
+		/// List of all runtime data containers managed by the server.
+		/// </summary>
+		public List<RuntimeDataContainer> DataContainers = new List<RuntimeDataContainer>();
+
+		/// <summary>
 		/// Registry that manages all server behaviours.
 		/// </summary>
 		public IServerBehaviourRegistry<INetworkManagerWrapper, NetworkConnection, IServerBehaviour> BehaviourRegistry { get; private set; }
 
 		/// <summary>
-		/// Unity Start method. Initializes and composes all server components.
+		/// Registry that manages all runtime data containers.
 		/// </summary>
+		public IServerComponentRegistry<INetworkManagerWrapper, NetworkConnection, IRuntimeDataContainer> DataContainerRegistry { get; private set; }
+
+		/// <summary>
+		/// Dictionary of registered periodic callbacks indexed by their callback delegate.
+		/// </summary>
+		private Dictionary<Action<float>, PeriodicCallbackData> periodicCallbacks = new Dictionary<Action<float>, PeriodicCallbackData>();
+
+		/// <summary>
+		/// Unity Start method. Initializes and composes all server components.		/// </summary>
 		void Start()
 		{
 			Log.Debug("Server", "Server is starting...");
@@ -79,8 +115,6 @@ namespace FishMMO.Server.Implementation
 
 			CoreServer = new CoreServer(Configuration, ServerEvents);
 			NetworkWrapper = new FishNetNetworkWrapper(networkManager, Configuration, this);
-
-			BehaviourRegistry = new ServerBehaviourRegistry();
 
 			ServerEvents.OnLoginServerInitialized += () => Log.Debug("Server", "LoginServer initialized.");
 			ServerEvents.OnWorldServerInitialized += () => Log.Debug("Server", "WorldServer initialized.");
@@ -113,13 +147,16 @@ namespace FishMMO.Server.Implementation
 
 			AccountManager = new AccountManager();
 
+			// Initialize all registered runtime data containers
+			DataContainerRegistry = new RuntimeDataContainerRegistry();
+			DiscoverAndCreateDataContainers();
+			RegisterAllDataContainers();
+			DataContainerRegistry.InitializeAll(this);
+
 			// Initialize all registered server behaviours
-			ServerBehaviour[] allBehaviours = FindObjectsByType<ServerBehaviour>(FindObjectsSortMode.InstanceID);
-			foreach (var behaviour in allBehaviours)
-			{
-				BehaviourRegistry.Register(behaviour);
-			}
-			BehaviourRegistry.InitializeOnceInternal(this);
+			BehaviourRegistry = new ServerBehaviourRegistry() as IServerBehaviourRegistry<INetworkManagerWrapper, NetworkConnection, IServerBehaviour>;
+			RegisterAllBehaviours();
+			BehaviourRegistry.InitializeAll(this);
 
 			KinematicCharacterSystem.EnsureCreation();
 			KinematicCharacterSystem.Settings.AutoSimulation = false;
@@ -132,13 +169,259 @@ namespace FishMMO.Server.Implementation
 		/// <summary>
 		/// Handles server connection state changes and logs address information.
 		/// </summary>
-		/// <param name="obj">The server connection state arguments.</param>
-		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs obj)
+		/// <param name="args">The server connection state arguments.</param>
+		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs args)
 		{
+			serverState = args.ConnectionState;
+
 			if (AddressProvider.TryGetServerIPAddress(out ServerAddress address))
 			{
 				Log.Debug("Server",
-					$"Local: {address.Address}:{address.Port} Remote: {CoreServer.RemoteAddress}:{address.Port} - {obj.ConnectionState}");
+					$"Local: {address.Address}:{address.Port} Remote: {CoreServer.RemoteAddress}:{address.Port} - {args.ConnectionState}");
+			}
+		}
+
+		/// <summary>
+		/// Unity LateUpdate method. Updates all registered ServerBehaviours and dispatches periodic callbacks.
+		/// </summary>
+		void LateUpdate()
+		{
+			float deltaTime = Time.deltaTime;
+
+			// Update all server behaviours
+			if (ServerBehaviours != null)
+			{
+				for (int i = 0; i < ServerBehaviours.Count; i++)
+				{
+					var behaviour = ServerBehaviours[i];
+					if (behaviour != null && behaviour.Initialized)
+					{
+						behaviour.OnLateUpdate(deltaTime);
+					}
+				}
+			}
+
+			// Process all periodic callbacks
+			if (periodicCallbacks.Count > 0)
+			{
+				// Create temporary list to avoid modification during iteration
+				var callbacksToInvoke = new List<PeriodicCallbackData>();
+
+				foreach (var kvp in periodicCallbacks)
+				{
+					var data = kvp.Value;
+					data.TimeRemaining -= deltaTime;
+
+					if (data.TimeRemaining <= 0)
+					{
+						callbacksToInvoke.Add(data);
+					}
+				}
+
+				// Invoke callbacks that are ready
+				foreach (var data in callbacksToInvoke)
+				{
+					try
+					{
+						data.Callback?.Invoke(deltaTime);
+						data.TimeRemaining = data.Interval; // Reset timer
+					}
+					catch (Exception ex)
+					{
+						Log.Error("Server", $"Error invoking periodic callback {data.Callback.Method.DeclaringType?.Name}.{data.Callback.Method.Name}: {ex.Message}");
+					}
+				}
+			}
+		}
+
+		/// <summary>
+		/// Unity OnDestroy callback. Deinitializes all server components and cleans up resources.
+		/// </summary>
+		void OnDestroy()
+		{
+			DeinitializeAllBehaviours();
+			UnregisterAllBehaviours();
+			DeinitializeAllDataContainers();
+			UnregisterAllDataContainers();
+			periodicCallbacks.Clear();
+			DataContainers.Clear();
+		}
+
+		/// <summary>
+		/// Unity OnApplicationQuit callback. Deinitializes all server components and cleans up resources.
+		/// </summary>
+		void OnApplicationQuit()
+		{
+			DeinitializeAllBehaviours();
+			UnregisterAllBehaviours();
+			DeinitializeAllDataContainers();
+			UnregisterAllDataContainers();
+			periodicCallbacks.Clear();
+			DataContainers.Clear();
+		}
+
+		/// <summary>
+		/// Registers all server behaviours in order.
+		/// </summary>
+		private void RegisterAllBehaviours()
+		{
+			if (ServerBehaviours != null && BehaviourRegistry != null)
+			{
+				// Register in order
+				for (int i = 0; i < ServerBehaviours.Count; i++)
+				{
+					var behaviour = ServerBehaviours[i];
+					if (behaviour != null && !behaviour.Initialized)
+					{
+						// Register to registry before initializing
+						BehaviourRegistry.Register(behaviour);
+					}
+				}
+			}
+		}
+
+		/// <summary>
+		/// Discovers and creates all RuntimeDataContainers required by ServerBehaviours.
+		/// Automatically instantiates containers based on RequiresDataContainer attributes.
+		/// Multiple systems can declare the same container type, and only one instance will be created.
+		/// </summary>
+		private void DiscoverAndCreateDataContainers()
+		{
+			var factory = new RuntimeDataContainerFactory();
+			var containerTypes = new HashSet<Type>(); // Prevent duplicates
+			var containersByPriority = new SortedDictionary<int, List<Type>>();
+
+			// Scan all ServerBehaviours for RequiresDataContainer attributes
+			foreach (var behaviour in ServerBehaviours)
+			{
+				if (behaviour == null)
+					continue;
+
+				var attributes = behaviour.GetType()
+					.GetCustomAttributes(typeof(RequiresDataContainerAttribute), false)
+					.Cast<RequiresDataContainerAttribute>();
+
+				foreach (var attr in attributes)
+				{
+					if (!containerTypes.Add(attr.ContainerType))
+						continue; // Already registered - skip duplicate
+
+					if (!factory.IsValidContainerType(attr.ContainerType))
+					{
+						Log.Error("Server",
+							$"Invalid container type {attr.ContainerType.Name} required by {behaviour.GetType().Name}. " +
+							"Container must be a non-abstract class with a parameterless constructor.");
+						continue;
+					}
+
+					// Group by priority
+					if (!containersByPriority.ContainsKey(attr.InitializationPriority))
+						containersByPriority[attr.InitializationPriority] = new List<Type>();
+
+					containersByPriority[attr.InitializationPriority].Add(attr.ContainerType);
+				}
+			}
+
+			// Create containers in priority order
+			foreach (var priorityGroup in containersByPriority.Values)
+			{
+				foreach (var containerType in priorityGroup)
+				{
+					var container = factory.CreateContainer(containerType);
+					DataContainers.Add((RuntimeDataContainer)container);
+					Log.Debug("Server", $"Auto-created RuntimeDataContainer: {containerType.Name}");
+				}
+			}
+		}
+
+		/// <summary>
+		/// Registers all runtime data containers in order.
+		/// </summary>
+		private void RegisterAllDataContainers()
+		{
+			if (DataContainers != null && DataContainerRegistry != null)
+			{
+				// Register in order
+				for (int i = 0; i < DataContainers.Count; i++)
+				{
+					var container = DataContainers[i];
+					if (container != null && !container.Initialized)
+					{
+						// Register to registry before initializing
+						DataContainerRegistry.Register(container);
+					}
+				}
+			}
+		}
+
+		/// <summary>
+		/// Deinitializes all registered server behaviours in reverse order.
+		/// </summary>
+		private void DeinitializeAllBehaviours()
+		{
+			if (ServerBehaviours != null && BehaviourRegistry != null)
+			{
+				// Deinitialize in reverse order to ensure proper cleanup dependencies
+				for (int i = ServerBehaviours.Count - 1; i >= 0; i--)
+				{
+					var behaviour = ServerBehaviours[i];
+					if (behaviour != null && behaviour.Initialized)
+					{
+						// Deinitialize the behaviour (calls OnDeinitialize and clears references)
+						behaviour.Deinitialize();
+					}
+				}
+			}
+		}
+
+		/// <summary>
+		/// Unregisters all registered server behaviours in reverse order.
+		/// </summary>
+		private void UnregisterAllBehaviours()
+		{
+			if (ServerBehaviours != null && BehaviourRegistry != null)
+			{
+				// Unregister in reverse order to ensure proper cleanup dependencies
+				for (int i = ServerBehaviours.Count - 1; i >= 0; i--)
+				{
+					var behaviour = ServerBehaviours[i];
+					if (behaviour != null && behaviour.Initialized)
+					{
+						// Unregister from registry before deinitializing
+						BehaviourRegistry.Unregister(behaviour);
+					}
+				}
+			}
+		}
+
+		/// <summary>
+		/// Deinitializes all registered runtime data containers in reverse order.
+		/// </summary>
+		private void DeinitializeAllDataContainers()
+		{
+			if (DataContainerRegistry != null)
+			{
+				DataContainerRegistry.DeinitializeAll();
+			}
+		}
+
+		/// <summary>
+		/// Unregisters all registered runtime data containers in reverse order.
+		/// </summary>
+		private void UnregisterAllDataContainers()
+		{
+			if (DataContainers != null && DataContainerRegistry != null)
+			{
+				// Unregister in reverse order to ensure proper cleanup dependencies
+				for (int i = DataContainers.Count - 1; i >= 0; i--)
+				{
+					var container = DataContainers[i];
+					if (container != null && container.Initialized)
+					{
+						// Unregister from registry
+						DataContainerRegistry.Unregister(container);
+					}
+				}
 			}
 		}
 
@@ -154,5 +437,93 @@ namespace FishMMO.Server.Implementation
 			Application.Quit();
 #endif
 		}
+
+		#region IPeriodicUpdateSystem Implementation
+
+		/// <summary>
+		/// Registers a callback to be invoked periodically at the specified interval.
+		/// </summary>
+		/// <param name="interval">Time in seconds between callback invocations.</param>
+		/// <param name="callback">The callback to invoke. Receives delta time since last invocation.</param>
+		public void RegisterPeriodicCallback(float interval, Action<float> callback)
+		{
+			if (callback == null)
+			{
+				Log.Error("Server", "Cannot register null periodic callback.");
+				return;
+			}
+
+			if (interval <= 0)
+			{
+				Log.Error("Server", $"Cannot register periodic callback with non-positive interval: {interval}");
+				return;
+			}
+
+			if (periodicCallbacks.ContainsKey(callback))
+			{
+				Log.Warning("Server", $"Periodic callback {callback.Method.DeclaringType?.Name}.{callback.Method.Name} is already registered. Updating interval.");
+				periodicCallbacks[callback].Interval = interval;
+				periodicCallbacks[callback].TimeRemaining = interval;
+				return;
+			}
+
+			periodicCallbacks[callback] = new PeriodicCallbackData(interval, callback);
+			Log.Debug("Server", $"Registered periodic callback: {callback.Method.DeclaringType?.Name}.{callback.Method.Name} (interval: {interval}s)");
+		}
+
+		/// <summary>
+		/// Unregisters a previously registered periodic callback.
+		/// </summary>
+		/// <param name="callback">The callback to unregister.</param>
+		public void UnregisterPeriodicCallback(Action<float> callback)
+		{
+			if (callback == null)
+			{
+				Log.Error("Server", "Cannot unregister null periodic callback.");
+				return;
+			}
+
+			if (periodicCallbacks.Remove(callback))
+			{
+				Log.Debug("Server", $"Unregistered periodic callback: {callback.Method.DeclaringType?.Name}.{callback.Method.Name}");
+			}
+			else
+			{
+				Log.Warning("Server", $"Attempted to unregister non-existent periodic callback: {callback.Method.DeclaringType?.Name}.{callback.Method.Name}");
+			}
+		}
+
+		/// <summary>
+		/// Updates the interval for an existing periodic callback.
+		/// </summary>
+		/// <param name="callback">The callback whose interval to update.</param>
+		/// <param name="newInterval">The new interval in seconds.</param>
+		public void UpdateCallbackInterval(Action<float> callback, float newInterval)
+		{
+			if (callback == null)
+			{
+				Log.Error("Server", "Cannot update interval for null periodic callback.");
+				return;
+			}
+
+			if (newInterval <= 0)
+			{
+				Log.Error("Server", $"Cannot update periodic callback with non-positive interval: {newInterval}");
+				return;
+			}
+
+			if (periodicCallbacks.TryGetValue(callback, out var data))
+			{
+				data.Interval = newInterval;
+				data.TimeRemaining = newInterval;
+				Log.Debug("Server", $"Updated periodic callback interval: {callback.Method.DeclaringType?.Name}.{callback.Method.Name} (new interval: {newInterval}s)");
+			}
+			else
+			{
+				Log.Warning("Server", $"Attempted to update interval for non-existent periodic callback: {callback.Method.DeclaringType?.Name}.{callback.Method.Name}");
+			}
+		}
+
+		#endregion
 	}
 }

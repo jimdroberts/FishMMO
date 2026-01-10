@@ -1,0 +1,16 @@
+﻿<Solution>
+  <Project Path="Assembly-CSharp.csproj" />
+  <Project Path="FishNet.Runtime.csproj" />
+  <Project Path="Assembly-CSharp-firstpass.csproj" />
+  <Project Path="IngameDebugConsole.Runtime.csproj" />
+  <Project Path="Unity.FishNet.Codegen.csproj" />
+  <Project Path="FishNet.Codegen.Cecil.csproj" />
+  <Project Path="GameKit.Dependencies.csproj" />
+  <Project Path="SimpleWebTransport.csproj" />
+  <Project Path="Bayou.csproj" />
+  <Project Path="ZString.csproj" />
+  <Project Path="FishNet.Demos.csproj" />
+  <Project Path="Assembly-CSharp-Editor.csproj" />
+  <Project Path="Assembly-CSharp-Editor-firstpass.csproj" />
+  <Project Path="IngameDebugConsole.Editor.csproj" />
+</Solution>

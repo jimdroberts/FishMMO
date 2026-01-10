@@ -3,6 +3,7 @@ using FishNet.Connection;
 using FishNet.Transporting;
 using FishMMO.Shared;
 using FishMMO.Logging;
+using FishMMO.Server.Core;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Database.Npgsql;
 using System.Collections.Generic;
@@ -10,12 +11,14 @@ using System.Runtime.CompilerServices;
 using FishMMO.Database.Npgsql.Entities;
 using System.Linq;
 using System;
+using UnityEngine;
 
-namespace FishMMO.Server.Implementation.SceneServer
+namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 {
 	/// <summary>
-	/// This service helps the server validate clients interacting with Interactable objects in scenes.
+	/// Validates and processes client interactions with interactable objects including merchants, crafting, and dungeon finders.
 	/// </summary>
+	[CreateAssetMenu(fileName = "InteractableSystem", menuName = "FishMMO/Server/SceneServer/Interactable System", order = 1)]
 	public class InteractableSystem : ServerBehaviour
 	{
 		public WorldSceneDetailsCache WorldSceneDetailsCache;
@@ -23,28 +26,23 @@ namespace FishMMO.Server.Implementation.SceneServer
 		public int MaxAbilityCount = 25;
 		public CharacterAttributeTemplate CurrencyTemplate;
 
-		public override void InitializeOnce()
+		public override ServerComponentInitializationStatus InitializeOnce()
 		{
-			if (Server != null)
+			if (InteractableHandlerInitializer == null)
 			{
-				if (InteractableHandlerInitializer == null)
-				{
-					Log.Error("InteractableSystem", "InteractableHandlerInitializer cannot be null!");
-				}
-				   InteractableHandlerInitializer.RegisterHandlers(Server);
+				Log.Error("InteractableSystem", "InteractableHandlerInitializer cannot be null!");
+			}
+			InteractableHandlerInitializer.RegisterHandlers(Server);
 
-				Server.NetworkWrapper.RegisterBroadcast<InteractableBroadcast>(OnServerInteractableBroadcastReceived, true);
-				Server.NetworkWrapper.RegisterBroadcast<MerchantPurchaseBroadcast>(OnServerMerchantPurchaseBroadcastReceived, true);
-				Server.NetworkWrapper.RegisterBroadcast<AbilityCraftBroadcast>(OnServerAbilityCraftBroadcastReceived, true);
-				Server.NetworkWrapper.RegisterBroadcast<DungeonFinderBroadcast>(OnServerDungeonFinderBroadcastReceived, true);
-			}
-			else
-			{
-				enabled = false;
-			}
+			Server.NetworkWrapper.RegisterBroadcast<InteractableBroadcast>(OnServerInteractableBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<MerchantPurchaseBroadcast>(OnServerMerchantPurchaseBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<AbilityCraftBroadcast>(OnServerAbilityCraftBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<DungeonFinderBroadcast>(OnServerDungeonFinderBroadcastReceived, true);
+
+			return ServerComponentInitializationStatus.Initialized;
 		}
 
-		public override void Destroying()
+		public override void OnDeinitialize()
 		{
 			if (Server != null)
 			{

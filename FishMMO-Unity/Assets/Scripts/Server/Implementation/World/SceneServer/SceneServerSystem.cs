@@ -6,7 +6,9 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using System;
 using System.Collections.Generic;
+using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
+using FishMMO.Server.Implementation.World.SceneServer;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
 using FishMMO.Logging;
@@ -19,30 +21,19 @@ namespace FishMMO.Server.Implementation.SceneServer
 	/// Manages scene server node services, scene loading/unloading, and heartbeat updates to the world server.
 	/// Tracks scene instances, handles connection events, and synchronizes scene state with the database.
 	/// </summary>
+	[CreateAssetMenu(fileName = "SceneServerSystem", menuName = "FishMMO/Server/SceneServer/Scene Server System", order = 1)]
 	public class SceneServerSystem : ServerBehaviour, ISceneServerSystem<NetworkConnection>
 	{
-		/// <summary>
-		/// Current connection state of the server.
-		/// </summary>
-		private LocalConnectionState serverState;
-
-		/// <summary>
-		/// Database ID for this scene server instance.
-		/// </summary>
-		private long id;
-		/// <summary>
-		/// Indicates whether the scene server is locked (not accepting new connections).
-		/// </summary>
-		private bool locked = false;
-		/// <summary>
-		/// Time remaining until the next heartbeat pulse.
-		/// </summary>
-		private float nextPulse = 0.0f;
 		/// <summary>
 		/// Interval (in seconds) between heartbeat pulses to the database.
 		/// </summary>
 		[SerializeField]
 		private float pulseRate = 5.0f;
+
+		/// <summary>
+		/// Gets or sets the pulse rate for heartbeat updates.
+		/// </summary>
+		public float PulseRate { get { return pulseRate; } set { pulseRate = value; } }
 		/// <summary>
 		/// Cache of world scene details, including max clients per scene.
 		/// </summary>
@@ -50,80 +41,50 @@ namespace FishMMO.Server.Implementation.SceneServer
 		private WorldSceneDetailsCache worldSceneDetailsCache;
 
 		/// <summary>
-		/// Gets the database ID for this scene server instance.
-		/// </summary>
-		public long ID { get { return id; } }
-		/// <summary>
-		/// When true, the scene server is locked and will refuse new load/unload requests.
-		/// </summary>
-		public bool IsLocked { get { return locked; } }
-		/// <summary>
-		/// Interval (in seconds) between heartbeat pulses to the database.
-		/// </summary>
-		public float PulseRate { get { return pulseRate; } }
-		/// <summary>
 		/// Cache of world scene details, including max clients per scene.
 		/// </summary>
 		public WorldSceneDetailsCache WorldSceneDetailsCache { get { return worldSceneDetailsCache; } }
 
 		/// <summary>
-		/// Maps world server IDs to scene names and handles, tracking all loaded scene instances.
-		/// </summary>
-		public Dictionary<long, Dictionary<string, Dictionary<int, ISceneInstanceDetails>>> WorldScenes { get; } = new Dictionary<long, Dictionary<string, Dictionary<int, ISceneInstanceDetails>>>();
-		/// <summary>
-		/// Maps scene handles to scene names for quick lookup.
-		/// </summary>
-		public Dictionary<int, string> SceneNameByHandle { get; } = new Dictionary<int, string>();
-
-		/// <summary>
-		/// Tracks pending scene load requests by scene ID.
-		/// </summary>
-		private Dictionary<long, SceneEntity> pendingScenes = new Dictionary<long, SceneEntity>();
-
-		/// <summary>
 		/// Called once to initialize the scene server system. Registers the server in the database and subscribes to connection and scene events.
 		/// </summary>
-		public override void InitializeOnce()
+		public override ServerComponentInitializationStatus InitializeOnce()
 		{
 			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
 			if (dbContext == null)
 			{
-				throw new UnityException("Failed to get dbContext.");
+				return ServerComponentInitializationStatus.FailedToGetDbContext;
 			}
 
-			if (ServerManager != null &&
-				Server != null &&
-				Server.NetworkWrapper.NetworkManager.SceneManager != null)
+			if (!Server.DataContainerRegistry.TryGet<ISceneInstanceMappingData>(out var mappingData))
+			{
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
+
+			if (Server.NetworkWrapper.NetworkManager.SceneManager != null)
 			{
 				Server.NetworkWrapper.NetworkManager.SceneManager.OnLoadEnd += SceneManager_OnLoadEnd;
 				Server.NetworkWrapper.NetworkManager.SceneManager.OnUnloadEnd += SceneManager_OnUnloadEnd;
-				ServerManager.OnServerConnectionState += ServerManager_OnServerConnectionState;
 
 				if (Server.AddressProvider.TryGetServerIPAddress(out ServerAddress server) &&
-					Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem))
+					Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem) &&
+					Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMappingData))
 				{
-					int characterCount = characterSystem.ConnectionCharacters.Count;
-
-					if (Server.Configuration.TryGetString("ServerName", out string name))
-					{
-						SceneServerService.Add(dbContext, name, server.Address, server.Port, characterCount, locked, out id);
-						SceneService.Delete(dbContext, id);
-					}
-
-					characterSystem.OnDisconnect += CharacterSystem_OnDisconnect;
-					characterSystem.OnAfterLoadCharacter += CharacterSystem_OnAfterLoadCharacter;
+					int characterCount = characterMappingData.ConnectionCharacters.Count;
+					long id;
+					SceneServerService.Add(dbContext, name, server.Address, server.Port, characterCount, mappingData.IsLocked, out id);
+					mappingData.ID = id;
+					SceneService.Delete(dbContext, id);
+					return ServerComponentInitializationStatus.Initialized;
 				}
 			}
-			else
-			{
-				enabled = false;
-			}
+			return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 		}
 
 		/// <summary>
 		/// Called when the system is being destroyed. Unsubscribes from events and deletes scene data from the database.
 		/// </summary>
-		public override void Destroying()
+		public override void OnDeinitialize()
 		{
 			using var dbContext = Server?.CoreServer?.NpgsqlDbContextFactory.CreateDbContext();
 			if (dbContext == null)
@@ -134,31 +95,16 @@ namespace FishMMO.Server.Implementation.SceneServer
 			if (ServerManager != null)
 			{
 				if (Server != null &&
-					Server.Configuration.TryGetString("ServerName", out string name))
+					Server.Configuration.TryGetString("ServerName", out string name) &&
+					Server.DataContainerRegistry.TryGet<ISceneInstanceMappingData>(out var mappingData))
 				{
-					Log.Debug("SceneServerSystem", "Scene Server System: Removing Scene Server scenes: " + id);
-					SceneService.Delete(dbContext, id);
+					Log.Debug("SceneServerSystem", "Scene Server System: Removing Scene Server scenes: " + mappingData.ID);
+					SceneService.Delete(dbContext, mappingData.ID);
 				}
 
 				Server.NetworkWrapper.NetworkManager.SceneManager.OnLoadEnd -= SceneManager_OnLoadEnd;
 				Server.NetworkWrapper.NetworkManager.SceneManager.OnUnloadEnd -= SceneManager_OnUnloadEnd;
-				ServerManager.OnServerConnectionState -= ServerManager_OnServerConnectionState;
 			}
-
-			if (Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem))
-			{
-				characterSystem.OnDisconnect -= CharacterSystem_OnDisconnect;
-				characterSystem.OnAfterLoadCharacter -= CharacterSystem_OnAfterLoadCharacter;
-			}
-		}
-
-		/// <summary>
-		/// Handles changes in the server's connection state.
-		/// </summary>
-		/// <param name="args">Connection state arguments.</param>
-		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs args)
-		{
-			serverState = args.ConnectionState;
 		}
 
 		/// <summary>
@@ -215,67 +161,63 @@ namespace FishMMO.Server.Implementation.SceneServer
 		}
 
 		/// <summary>
-		/// Unity LateUpdate callback. Periodically sends heartbeat pulses to the database and processes scene state.
+		/// Periodic callback that sends heartbeat pulses and processes scene state.
 		/// </summary>
-		void LateUpdate()
+		/// <param name="deltaTime">Delta time parameter (unused).</param>
+		private void OnPeriodicPulse(float deltaTime)
 		{
-			if (serverState == LocalConnectionState.Started)
+			if (Server.ServerState == LocalConnectionState.Started)
 			{
-				if (nextPulse < 0)
+				if (Server != null &&
+					Server.BehaviourRegistry != null &&
+				Server.DataContainerRegistry.TryGet<ISceneInstanceMappingData>(out var mappingData) &&
+				Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMappingData))
 				{
-					nextPulse = PulseRate;
+					// Send heartbeat pulse to the database with current character count.
+					using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
+					int characterCount = characterMappingData.ConnectionCharacters.Count;
+					SceneServerService.Pulse(dbContext, mappingData.ID, characterCount, mappingData.IsLocked);
 
-					if (Server != null &&
-						Server.BehaviourRegistry != null &&
-						Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem))
+					// Process loaded scene pulse update
+					if (mappingData.WorldScenes != null)
 					{
-						// Send heartbeat pulse to the database with current character count.
-						using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-						int characterCount = characterSystem.ConnectionCharacters.Count;
-						SceneServerService.Pulse(dbContext, id, characterCount, locked);
-
-						// Process loaded scene pulse update
-						if (WorldScenes != null)
+						foreach (var sceneGroup in mappingData.WorldScenes.Values)
 						{
-							foreach (Dictionary<string, Dictionary<int, ISceneInstanceDetails>> sceneGroup in WorldScenes.Values)
+							foreach (var scenes in new List<IReadOnlyDictionary<int, ISceneInstanceDetails>>(sceneGroup.Values))
 							{
-								foreach (Dictionary<int, ISceneInstanceDetails> scenes in new List<Dictionary<int, ISceneInstanceDetails>>(sceneGroup.Values))
+								foreach (ISceneInstanceDetails sceneDetails in new List<ISceneInstanceDetails>(scenes.Values))
 								{
-									foreach (ISceneInstanceDetails sceneDetails in new List<ISceneInstanceDetails>(scenes.Values))
+									if (sceneDetails.StalePulse)
 									{
-										if (sceneDetails.StalePulse)
+										double timeSinceLastExit = DateTime.UtcNow.Subtract(sceneDetails.LastExit).TotalMinutes;
+										if (Server.Configuration.TryGetInt("StaleSceneTimeout", out int result) &&
+											timeSinceLastExit < result)
 										{
-											double timeSinceLastExit = DateTime.UtcNow.Subtract(sceneDetails.LastExit).TotalMinutes;
-											if (Server.Configuration.TryGetInt("StaleSceneTimeout", out int result) &&
-												timeSinceLastExit < result)
-											{
-												Log.Debug("SceneServerSystem", $"{sceneDetails.Name}:{sceneDetails.WorldServerID}{sceneDetails.Handle}:{sceneDetails.CharacterCount} Stale Pulse");
-												SceneService.Pulse(dbContext, sceneDetails.Handle, sceneDetails.CharacterCount);
-												continue;
-											}
-
-											// Unload the scene on the server if it is stale.
-											UnloadScene(sceneDetails.Handle);
-										}
-										else
-										{
+											Log.Debug("SceneServerSystem", $"{sceneDetails.Name}:{sceneDetails.WorldServerID}{sceneDetails.Handle}:{sceneDetails.CharacterCount} Stale Pulse");
 											SceneService.Pulse(dbContext, sceneDetails.Handle, sceneDetails.CharacterCount);
+											continue;
 										}
+
+										// Unload the scene on the server if it is stale.
+										UnloadScene(sceneDetails.Handle);
+									}
+									else
+									{
+										SceneService.Pulse(dbContext, sceneDetails.Handle, sceneDetails.CharacterCount);
 									}
 								}
 							}
 						}
+					}
 
-						// Process pending scenes
-						SceneEntity pending = SceneService.Dequeue(dbContext);
-						if (pending != null)
-						{
-							Log.Debug("SceneServerSystem", $"Scene Server System: Dequeued Pending Scene Load request World:{pending.WorldServerID} Scene:{pending.SceneName}");
-							ProcessSceneLoadRequest(pending);
-						}
+					// Process pending scenes
+					SceneEntity pending = SceneService.Dequeue(dbContext);
+					if (pending != null)
+					{
+						Log.Debug("SceneServerSystem", $"Scene Server System: Dequeued Pending Scene Load request World:{pending.WorldServerID} Scene:{pending.SceneName}");
+						ProcessSceneLoadRequest(pending);
 					}
 				}
-				nextPulse -= Time.deltaTime;
 			}
 		}
 
@@ -293,7 +235,12 @@ namespace FishMMO.Server.Implementation.SceneServer
 				return;
 			}
 
-			pendingScenes[sceneEntity.ID] = sceneEntity;
+			if (!Server.DataContainerRegistry.TryGet<ISceneInstanceMappingData>(out var mappingData))
+			{
+				return;
+			}
+
+			mappingData.PendingScenes[sceneEntity.ID] = sceneEntity;
 
 			// Pre-cache the scene on the server
 			SceneLookupData lookupData = new SceneLookupData(sceneEntity.SceneName);
@@ -337,13 +284,14 @@ namespace FishMMO.Server.Implementation.SceneServer
 				return;
 			}
 
-			if (!pendingScenes.TryGetValue((long)args.QueueData.SceneLoadData.Params.ServerParams[0], out SceneEntity sceneEntity))
+			if (!Server.DataContainerRegistry.TryGet<ISceneInstanceMappingData>(out var mappingData) ||
+				!mappingData.PendingScenes.TryGetValue((long)args.QueueData.SceneLoadData.Params.ServerParams[0], out SceneEntity sceneEntity))
 			{
 				Log.Warning("SceneServerSystem", "Pending Scene does not exist!");
 				return;
 			}
 
-			pendingScenes.Remove(sceneEntity.ID);
+			mappingData.PendingScenes.Remove(sceneEntity.ID);
 
 			if (sceneEntity.WorldServerID == UNKNOWN_WORLD_ID)
 			{
@@ -376,7 +324,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 				// Save the loaded scene information to the database
 				using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
 				Log.Debug("SceneServerSystem", $"Saved {sceneType} scene {scene.name}:{scene.handle} to the database.");
-				SceneService.SetReady(dbContext, id, sceneEntity.WorldServerID, scene.name, scene.handle);
+				SceneService.SetReady(dbContext, mappingData.ID, sceneEntity.WorldServerID, scene.name, scene.handle);
 			}
 		}
 
@@ -388,10 +336,15 @@ namespace FishMMO.Server.Implementation.SceneServer
 		/// <param name="worldServerID">World server ID.</param>
 		private void ProcessScene(Scene scene, SceneType sceneType, long worldServerID)
 		{
-			// Configure the mapping for this specific world scene
-			if (!WorldScenes.TryGetValue(worldServerID, out Dictionary<string, Dictionary<int, ISceneInstanceDetails>> scenes))
+			if (!Server.DataContainerRegistry.TryGet<ISceneInstanceMappingData>(out var mappingData))
 			{
-				WorldScenes.Add(worldServerID, scenes = new Dictionary<string, Dictionary<int, ISceneInstanceDetails>>());
+				return;
+			}
+
+			// Configure the mapping for this specific world scene
+			if (!mappingData.WorldScenes.TryGetValue(worldServerID, out Dictionary<string, Dictionary<int, ISceneInstanceDetails>> scenes))
+			{
+				mappingData.WorldScenes.Add(worldServerID, scenes = new Dictionary<string, Dictionary<int, ISceneInstanceDetails>>());
 			}
 			if (!scenes.TryGetValue(scene.name, out Dictionary<int, ISceneInstanceDetails> handles))
 			{
@@ -409,7 +362,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 				handles.Add(scene.handle, new SceneInstanceDetails()
 				{
 					WorldServerID = worldServerID,
-					SceneServerID = id,
+					SceneServerID = mappingData.ID,
 					Name = scene.name,
 					SceneType = sceneType,
 					Handle = scene.handle,
@@ -419,7 +372,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 
 				Log.Debug("SceneServerSystem", $"New scene handle added for {worldServerID}:{scene.name}:{scene.handle}");
 
-				SceneNameByHandle.Add(scene.handle, scene.name);
+					mappingData.SceneNameByHandle.Add(scene.handle, scene.name);
 			}
 			else
 			{
@@ -433,7 +386,8 @@ namespace FishMMO.Server.Implementation.SceneServer
 		/// <param name="args">Scene unload end event arguments.</param>
 		public void SceneManager_OnUnloadEnd(SceneUnloadEndEventArgs args)
 		{
-			if (WorldScenes == null)
+			if (!Server.DataContainerRegistry.TryGet<ISceneInstanceMappingData>(out var mappingData) ||
+				mappingData.WorldScenes == null)
 			{
 				Log.Warning("SceneServerSystem", "No World Scenes found.");
 				return;
@@ -449,7 +403,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 			{
 				UnloadedScene unloaded = args.UnloadedScenesV2[i];
 
-				foreach (Dictionary<string, Dictionary<int, ISceneInstanceDetails>> sceneGroup in WorldScenes.Values)
+					foreach (Dictionary<string, Dictionary<int, ISceneInstanceDetails>> sceneGroup in mappingData.WorldScenes.Values)
 				{
 					foreach (Dictionary<int, ISceneInstanceDetails> scene in sceneGroup.Values)
 					{
@@ -457,7 +411,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 						{
 							// Remove the scene
 							scene.Remove(unloaded.Handle);
-							SceneNameByHandle.Remove(unloaded.Handle);
+							mappingData.SceneNameByHandle.Remove(unloaded.Handle);
 
 							Log.Debug("SceneServerSystem", $"Unloaded scene handle: {unloaded.Handle}");
 
@@ -480,12 +434,13 @@ namespace FishMMO.Server.Implementation.SceneServer
 		{
 			instanceDetails = default;
 
-			if (WorldScenes != null &&
-				WorldScenes.TryGetValue(worldServerID, out Dictionary<string, Dictionary<int, ISceneInstanceDetails>> scenes))
+			if (Server.DataContainerRegistry.TryGet<ISceneInstanceMappingData>(out var mappingData) &&
+				mappingData.WorldScenes != null &&
+				mappingData.WorldScenes.TryGetValue(worldServerID, out var scenes))
 			{
 				if (scenes != null &&
 					!string.IsNullOrEmpty(sceneName) &&
-					scenes.TryGetValue(sceneName, out Dictionary<int, ISceneInstanceDetails> instances))
+					scenes.TryGetValue(sceneName, out var instances))
 				{
 					if (instances != null &&
 						instances.TryGetValue(sceneHandle, out instanceDetails))
@@ -567,8 +522,14 @@ namespace FishMMO.Server.Implementation.SceneServer
 				return;
 			}
 
+			if (!Server.DataContainerRegistry.TryGet<ISceneInstanceMappingData>(out var mappingData))
+			{
+				Log.Warning("SceneServerSystem", "Failed to get ISceneInstanceMappingData during Scene Unload.");
+				return;
+			}
+
 			// Remove the scene details from the database immediately upon an Unload request to prevent new clients from connecting to it.
-			SceneService.Delete(dbContext, id, handle);
+			SceneService.Delete(dbContext, mappingData.ID, handle);
 
 			SceneUnloadData sud = new SceneUnloadData()
 			{

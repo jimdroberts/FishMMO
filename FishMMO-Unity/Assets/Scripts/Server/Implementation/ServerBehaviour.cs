@@ -10,7 +10,7 @@ namespace FishMMO.Server.Implementation
 	/// Base class for all server-side behaviours in the FishMMO server architecture.
 	/// Provides registration, initialization, and lifecycle management for server behaviours.
 	/// </summary>
-	public abstract class ServerBehaviour : MonoBehaviour, IServerBehaviour<INetworkManagerWrapper, ServerManager, NetworkConnection, IServerBehaviour>
+	public abstract class ServerBehaviour : ScriptableObject, IServerBehaviour<INetworkManagerWrapper, ServerManager, NetworkConnection, IServerBehaviour>
 	{
 		/// <summary>
 		/// Indicates whether this behaviour has been initialized.
@@ -30,46 +30,63 @@ namespace FishMMO.Server.Implementation
 		/// </summary>
 		/// <param name="server">The server instance.</param>
 		/// <param name="serverManager">The server manager instance.</param>
-		internal void InternalInitializeOnce(IServer<INetworkManagerWrapper, NetworkConnection, IServerBehaviour> server, ServerManager serverManager)
+		internal ServerComponentInitializationStatus InternalInitializeOnce(IServer<INetworkManagerWrapper, NetworkConnection, IServerBehaviour> server, ServerManager serverManager)
 		{
 			if (Initialized)
-				return;
+			{
+				return ServerComponentInitializationStatus.AlreadyInitialized;
+			}
+
+			if (server == null)
+			{
+				return ServerComponentInitializationStatus.FailedToFindServer;
+			}
+
+			if (serverManager == null)
+			{
+				return ServerComponentInitializationStatus.FailedToFindServerManager;
+			}
 
 			Server = server;
 			ServerManager = serverManager;
-			Initialized = true;
+			ServerComponentInitializationStatus initializationStatus = InitializeOnce();
 
-			InitializeOnce();
+			if (initializationStatus == ServerComponentInitializationStatus.Initialized)
+			{
+				Initialized = true;
+			}
 
-			Log.Debug("ServerBehaviour", "Initialized[" + this.GetType().Name + "]");
+			Log.Debug("ServerBehaviour", "[" + this.GetType().Name + "] Initialization Status: " + initializationStatus);
+			return initializationStatus;
 		}
 
 		/// <summary>
 		/// Called once to initialize the behaviour. Must be implemented by derived classes.
 		/// </summary>
-		public abstract void InitializeOnce();
+		public abstract ServerComponentInitializationStatus InitializeOnce();
 
 		/// <summary>
-		/// Called when the behaviour is being destroyed. Must be implemented by derived classes.
+		/// Called when the behaviour is being deinitialized. Must be implemented by derived classes.
 		/// </summary>
-		public abstract void Destroying();
+		public abstract void OnDeinitialize();
 
 		/// <summary>
-		/// Unity OnDestroy callback. Calls Destroying and unregisters this behaviour instance.
+		/// Called by the Server's LateUpdate to provide mutable data and perform per-frame logic.
+		/// Override this method in derived classes that need per-frame updates.
 		/// </summary>
-		private void OnDestroy()
+		/// <param name="deltaTime">Time elapsed since last frame.</param>
+		public virtual void OnLateUpdate(float deltaTime) { }
+
+		/// <summary>
+		/// Deinitializes this behaviour, calling OnDeinitialize and clearing references.
+		/// </summary>
+		public void Deinitialize()
 		{
-			Destroying();
-			Server?.BehaviourRegistry?.Unregister(this);
-		}
+			OnDeinitialize();
 
-		/// <summary>
-		/// Unity OnApplicationQuit callback. Calls Destroying and unregisters this behaviour instance.
-		/// </summary>
-		private void OnApplicationQuit()
-		{
-			Destroying();
-			Server?.BehaviourRegistry?.Unregister(this);
+			Initialized = false;
+			Server = null;
+			ServerManager = null;
 		}
 	}
 }

@@ -3,7 +3,7 @@ using FishMMO.Server.Core;
 using FishNet.Transporting;
 using FishNet.Connection;
 
-namespace FishMMO.Server.Implementation.SceneServer
+namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 {
 	/// <summary>
 	/// Handles interactions with banker objects, allowing players to access their bank and triggers NPC interaction logic.

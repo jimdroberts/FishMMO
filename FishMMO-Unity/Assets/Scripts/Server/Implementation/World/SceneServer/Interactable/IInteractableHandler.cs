@@ -1,6 +1,6 @@
 using FishMMO.Shared;
 
-namespace FishMMO.Server.Implementation.SceneServer
+namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 {
 	/// <summary>
 	/// Interface for handling interactions between player characters and interactable objects in the FishMMO server.

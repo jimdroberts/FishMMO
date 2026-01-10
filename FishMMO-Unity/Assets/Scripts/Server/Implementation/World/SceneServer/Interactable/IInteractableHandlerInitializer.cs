@@ -1,7 +1,7 @@
 using FishMMO.Server.Core;
 using FishNet.Connection;
 
-namespace FishMMO.Server.Implementation.SceneServer
+namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 {
 	/// <summary>
 	/// Interface for initializing and registering interactable handlers in the FishMMO server.

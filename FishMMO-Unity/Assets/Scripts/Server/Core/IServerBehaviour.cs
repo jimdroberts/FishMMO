@@ -1,9 +1,18 @@
 namespace FishMMO.Server.Core
 {
 	/// <summary>
+	/// Non-generic marker interface for server behaviours.
+	/// Use this when declaring engine-agnostic server behaviour interfaces so the implementation
+	/// registry can discover and register behaviours by their interface types.
+	/// Extends IServerComponent to participate in the unified component registry system.
+	/// </summary>
+	public interface IServerBehaviour : IServerComponent { }
+
+	/// <summary>
 	/// Public interface representing the public API surface of server-side behaviours.
-	/// Typical implementations are MonoBehaviour-derived types that register with the server
+	/// Typical implementations are ScriptableObject-derived types that register with the server
 	/// and perform server-side logic (for example <see cref="FishMMO.Server.Implementation.ServerBehaviour"/>).
+	/// Extends IServerComponent to participate in the unified component initialization lifecycle.
 	/// </summary>
 	/// <typeparam name="TNetworkManager">The concrete network manager or wrapper type exposed by the server (for example <see cref="FishNet.Managing.NetworkManager"/> for FishNet).</typeparam>
 	/// <typeparam name="TServerManager">The concrete server manager type exposed by the server (for example <see cref="FishNet.Managing.Server.ServerManager"/> for FishNet).</typeparam>
@@ -13,41 +22,16 @@ namespace FishMMO.Server.Core
 	/// Implementations should expose the server instance, server manager and lifecycle hooks used by the server runtime
 	/// to initialize and tear down server behaviours in a controlled manner.
 	/// </remarks>
-	/// <summary>
-	/// Non-generic marker interface for server behaviours.
-	/// Use this when declaring engine-agnostic server behaviour interfaces so the implementation
-	/// registry can discover and register behaviours by their interface types.
-	/// </summary>
-	public interface IServerBehaviour { }
-
-	/// <inheritdoc/>
-	public interface IServerBehaviour<TNetworkManager, TServerManager, TConnection, TServerBehaviour> : IServerBehaviour
+	public interface IServerBehaviour<TNetworkManager, TServerManager, TConnection, TServerBehaviour> : 
+		IServerBehaviour, 
+		IServerComponent<TNetworkManager, TServerManager, TConnection, IServerBehaviour>
+		where TServerBehaviour : IServerBehaviour
 	{
-		/// <summary>
-		/// Indicates whether this behaviour has been initialized by the server runtime.
-		/// </summary>
-		bool Initialized { get; }
-
-		/// <summary>
-		/// Reference to the server instance associated with this behaviour.
-		/// </summary>
-		IServer<TNetworkManager, TConnection, TServerBehaviour> Server { get; }
-
-		/// <summary>
-		/// Reference to the FishNet <see cref="ServerManager"/> instance associated with this behaviour.
-		/// </summary>
-		TServerManager ServerManager { get; }
-
-		/// <summary>
-		/// Called once by the server runtime to initialize the behaviour. Implementers should perform
-		/// one-time setup here. This method is guaranteed to be invoked at most once per behaviour instance.
-		/// </summary>
-		void InitializeOnce();
-
-		/// <summary>
-		/// Called when the behaviour is being destroyed or when the application is quitting.
-		/// Implementers should release resources and unregister any external callbacks here.
-		/// </summary>
-		void Destroying();
+		// Inherited from IServerComponent:
+		// - bool Initialized { get; }
+		// - IServer<TNetworkManager, TConnection, IServerBehaviour> Server { get; }
+		// - TServerManager ServerManager { get; }
+		// - ServerComponentInitializationStatus InitializeOnce();
+		// - void Deinitialize();
 	}
 }
