@@ -28,11 +28,13 @@ namespace FishMMO.Server.Implementation
 		public ServerManager ServerManager { get; private set; }
 
 		/// <summary>
-		/// Internal initialization logic for this container. Sets server and manager references and calls InitializeOnce.
+		/// Initializes the container with server and manager references.
+		/// Called by the registry during server startup.
 		/// </summary>
 		/// <param name="server">The server instance.</param>
 		/// <param name="serverManager">The server manager instance.</param>
-		internal ServerComponentInitializationStatus InternalInitializeOnce(IServer<INetworkManagerWrapper, NetworkConnection, IRuntimeDataContainer> server, ServerManager serverManager)
+		/// <returns>The initialization status.</returns>
+		public ServerComponentInitializationStatus Initialize(IServer<INetworkManagerWrapper, NetworkConnection, IRuntimeDataContainer> server, ServerManager serverManager)
 		{
 			if (Initialized)
 			{

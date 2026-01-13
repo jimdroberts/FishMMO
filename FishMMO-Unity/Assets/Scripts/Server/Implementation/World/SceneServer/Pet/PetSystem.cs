@@ -6,6 +6,7 @@ using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
+using FishMMO.Logging;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -23,13 +24,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
+			if (Server == null)
+			{
+				Log.Error("PetSystem", "InitializeOnce: Server is null");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
+
+			// Network broadcasts
 			Server.NetworkWrapper.RegisterBroadcast<PetFollowBroadcast>(OnPetFollowBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<PetStayBroadcast>(OnPetStayBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<PetSummonBroadcast>(OnPetSummonBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<PetReleaseBroadcast>(OnPetReleaseBroadcastReceived, true);
 
+			// Ability events
 			AbilityObject.OnPetSummon += AbilityObject_OnPetSummon;
 
+			// Character system events
 			if (Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem))
 			{
 				characterSystem.OnSpawnCharacter += CharacterSystem_OnSpawnCharacter;
@@ -37,6 +47,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				characterSystem.OnPetKilled += CharacterSystem_OnPetKilled;
 			}
 
+			Log.Debug("PetSystem", "Initialized");
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
@@ -45,21 +56,27 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		public override void OnDeinitialize()
 		{
-			if (ServerManager != null)
+			if (Server == null)
 			{
-				Server.NetworkWrapper.UnregisterBroadcast<PetFollowBroadcast>(OnPetFollowBroadcastReceived);
-				Server.NetworkWrapper.UnregisterBroadcast<PetStayBroadcast>(OnPetStayBroadcastReceived);
-				Server.NetworkWrapper.UnregisterBroadcast<PetSummonBroadcast>(OnPetSummonBroadcastReceived);
-				Server.NetworkWrapper.UnregisterBroadcast<PetReleaseBroadcast>(OnPetReleaseBroadcastReceived);
+				Log.Error("PetSystem", "OnDeinitialize: Server is null");
+				return;
+			}
 
-				AbilityObject.OnPetSummon -= AbilityObject_OnPetSummon;
+			// Network broadcasts
+			Server.NetworkWrapper.UnregisterBroadcast<PetFollowBroadcast>(OnPetFollowBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<PetStayBroadcast>(OnPetStayBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<PetSummonBroadcast>(OnPetSummonBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<PetReleaseBroadcast>(OnPetReleaseBroadcastReceived);
 
-				if (Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem))
-				{
-					characterSystem.OnSpawnCharacter -= CharacterSystem_OnSpawnCharacter;
-					characterSystem.OnDespawnCharacter -= CharacterSystem_OnDespawnCharacter;
-					characterSystem.OnPetKilled -= CharacterSystem_OnPetKilled;
-				}
+			// Ability events
+			AbilityObject.OnPetSummon -= AbilityObject_OnPetSummon;
+
+			// Character system events
+			if (Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem))
+			{
+				characterSystem.OnSpawnCharacter -= CharacterSystem_OnSpawnCharacter;
+				characterSystem.OnDespawnCharacter -= CharacterSystem_OnDespawnCharacter;
+				characterSystem.OnPetKilled -= CharacterSystem_OnPetKilled;
 			}
 		}
 

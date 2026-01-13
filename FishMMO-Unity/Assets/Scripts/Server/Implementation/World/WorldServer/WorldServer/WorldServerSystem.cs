@@ -6,6 +6,7 @@ using UnityEngine;
 using FishMMO.Shared;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.WorldServer;
+using FishMMO.Logging;
 
 namespace FishMMO.Server.Implementation.World.WorldServer
 {
@@ -23,9 +24,16 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
+			if (Server == null)
+			{
+				Log.Error("WorldServerSystem", "InitializeOnce: Server is null");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
+
 			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
 			if (dbContext == null)
 			{
+				Log.Error("WorldServerSystem", "InitializeOnce: Failed to create database context");
 				return ServerComponentInitializationStatus.FailedToGetDbContext;
 			}
 
@@ -38,12 +46,13 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				Register(server.Address, server.Port, characterCount);
 			}
 
-			// Register periodic callback
+			// Periodic callbacks
 			if (Server is IPeriodicUpdateSystem periodicSystem)
 			{
 				periodicSystem.RegisterPeriodicCallback(PulseRate, OnPeriodicPulse);
 			}
 
+			Log.Debug("WorldServerSystem", $"Initialized (PulseRate={PulseRate}s)");
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
@@ -52,7 +61,13 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// </summary>
 		public override void OnDeinitialize()
 		{
-			// Unregister periodic callback
+			if (Server == null)
+			{
+				Log.Error("WorldServerSystem", "OnDeinitialize: Server is null");
+				return;
+			}
+
+			// Periodic callbacks
 			if (Server is IPeriodicUpdateSystem periodicSystem)
 			{
 				periodicSystem.UnregisterPeriodicCallback(OnPeriodicPulse);
@@ -105,7 +120,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// <param name="deltaTime">Delta time parameter (unused).</param>
 		private void OnPeriodicPulse(float deltaTime)
 		{
-			if (Server.ServerState == LocalConnectionState.Started &&
+			if (Server.ServerState == ConnectionState.Started &&
 				Initialized &&
 				Server.BehaviourRegistry.TryGet(out IWorldSceneSystem worldSceneSystem))
 			{

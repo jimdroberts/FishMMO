@@ -90,6 +90,15 @@ namespace FishMMO.Server.Core
 		}
 
 		/// <summary>
+		/// Deinitializes the core server, releasing resources as needed.
+		/// </summary>
+		public void Deinitialize()
+		{
+			NpgsqlDbContextFactory = null;
+			RedisDbContextFactory = null;
+		}
+
+		/// <summary>
 		/// Determines the <see cref="ServerType"/> based on the server type name string.
 		/// </summary>
 		/// <param name="serverTypeName">The name of the server type.</param>

@@ -9,6 +9,7 @@ using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
+using FishMMO.Logging;
 using FishMMO.Database.Npgsql.Entities;
 
 namespace FishMMO.Server.Implementation.World.SceneServer
@@ -73,39 +74,47 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
-			if (Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem) &&
-				characterSystem != null)
+			if (Server == null)
 			{
-				guildChatCommands = new Dictionary<string, ChatCommand>()
-				{
-					{ "/gi", OnGuildInvite },
-					{ "/ginvite", OnGuildInvite },
-				};
-				ChatHelper.AddCommands(guildChatCommands);
-
-				Server.NetworkWrapper.RegisterBroadcast<GuildCreateBroadcast>(OnServerGuildCreateBroadcastReceived, true);
-				Server.NetworkWrapper.RegisterBroadcast<GuildInviteBroadcast>(OnServerGuildInviteBroadcastReceived, true);
-				Server.NetworkWrapper.RegisterBroadcast<GuildAcceptInviteBroadcast>(OnServerGuildAcceptInviteBroadcastReceived, true);
-				Server.NetworkWrapper.RegisterBroadcast<GuildDeclineInviteBroadcast>(OnServerGuildDeclineInviteBroadcastReceived, true);
-				Server.NetworkWrapper.RegisterBroadcast<GuildLeaveBroadcast>(OnServerGuildLeaveBroadcastReceived, true);
-				Server.NetworkWrapper.RegisterBroadcast<GuildRemoveBroadcast>(OnServerGuildRemoveBroadcastReceived, true);
-				Server.NetworkWrapper.RegisterBroadcast<GuildChangeRankBroadcast>(OnServerGuildChangeRankBroadcastReceived, true);
-
-				// remove the characters pending guild invite request on disconnect
-				characterSystem.OnConnect += CharacterSystem_OnConnect;
-				characterSystem.OnDisconnect += CharacterSystem_OnDisconnect;
-			}
-			else
-			{
+				Log.Error("GuildSystem", "InitializeOnce: Server is null");
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 			}
 
-			// Register periodic callback
+			if (!Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem) ||
+				characterSystem == null)
+			{
+				Log.Error("GuildSystem", "Failed to initialize: ICharacterSystem not found");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
+
+			// Chat commands
+			guildChatCommands = new Dictionary<string, ChatCommand>()
+			{
+				{ "/gi", OnGuildInvite },
+				{ "/ginvite", OnGuildInvite },
+			};
+			ChatHelper.AddCommands(guildChatCommands);
+
+			// Network broadcasts
+			Server.NetworkWrapper.RegisterBroadcast<GuildCreateBroadcast>(OnServerGuildCreateBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<GuildInviteBroadcast>(OnServerGuildInviteBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<GuildAcceptInviteBroadcast>(OnServerGuildAcceptInviteBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<GuildDeclineInviteBroadcast>(OnServerGuildDeclineInviteBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<GuildLeaveBroadcast>(OnServerGuildLeaveBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<GuildRemoveBroadcast>(OnServerGuildRemoveBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<GuildChangeRankBroadcast>(OnServerGuildChangeRankBroadcastReceived, true);
+
+			// Character system events
+			characterSystem.OnConnect += CharacterSystem_OnConnect;
+			characterSystem.OnDisconnect += CharacterSystem_OnDisconnect;
+
+			// Periodic callbacks
 			if (Server is IPeriodicUpdateSystem periodicSystem)
 			{
 				periodicSystem.RegisterPeriodicCallback(UpdatePumpRate, OnPeriodicUpdate);
 			}
 
+			Log.Debug("GuildSystem", $"Initialized (MaxGuildSize={MaxGuildSize}, UpdatePumpRate={UpdatePumpRate}s)");
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
@@ -114,28 +123,32 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		public override void OnDeinitialize()
 		{
-			if (Server != null)
+			if (Server == null)
 			{
-				Server.NetworkWrapper.UnregisterBroadcast<GuildCreateBroadcast>(OnServerGuildCreateBroadcastReceived);
-				Server.NetworkWrapper.UnregisterBroadcast<GuildInviteBroadcast>(OnServerGuildInviteBroadcastReceived);
-				Server.NetworkWrapper.UnregisterBroadcast<GuildAcceptInviteBroadcast>(OnServerGuildAcceptInviteBroadcastReceived);
-				Server.NetworkWrapper.UnregisterBroadcast<GuildDeclineInviteBroadcast>(OnServerGuildDeclineInviteBroadcastReceived);
-				Server.NetworkWrapper.UnregisterBroadcast<GuildLeaveBroadcast>(OnServerGuildLeaveBroadcastReceived);
-				Server.NetworkWrapper.UnregisterBroadcast<GuildRemoveBroadcast>(OnServerGuildRemoveBroadcastReceived);
-				Server.NetworkWrapper.UnregisterBroadcast<GuildChangeRankBroadcast>(OnServerGuildChangeRankBroadcastReceived);
+				Log.Error("GuildSystem", "OnDeinitialize: Server is null");
+				return;
+			}
 
-				// remove the characters pending guild invite request on disconnect
-				if (Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem))
-				{
-					characterSystem.OnConnect -= CharacterSystem_OnConnect;
-					characterSystem.OnDisconnect -= CharacterSystem_OnDisconnect;
-				}
+			// Network broadcasts
+			Server.NetworkWrapper.UnregisterBroadcast<GuildCreateBroadcast>(OnServerGuildCreateBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<GuildInviteBroadcast>(OnServerGuildInviteBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<GuildAcceptInviteBroadcast>(OnServerGuildAcceptInviteBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<GuildDeclineInviteBroadcast>(OnServerGuildDeclineInviteBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<GuildLeaveBroadcast>(OnServerGuildLeaveBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<GuildRemoveBroadcast>(OnServerGuildRemoveBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<GuildChangeRankBroadcast>(OnServerGuildChangeRankBroadcastReceived);
 
-				// Unregister periodic callback
-				if (Server is IPeriodicUpdateSystem periodicSystem)
-				{
-					periodicSystem.UnregisterPeriodicCallback(OnPeriodicUpdate);
-				}
+			// Character system events
+			if (Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem))
+			{
+				characterSystem.OnConnect -= CharacterSystem_OnConnect;
+				characterSystem.OnDisconnect -= CharacterSystem_OnDisconnect;
+			}
+
+			// Periodic callbacks
+			if (Server is IPeriodicUpdateSystem periodicSystem)
+			{
+				periodicSystem.UnregisterPeriodicCallback(OnPeriodicUpdate);
 			}
 		}
 
@@ -145,7 +158,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="deltaTime">Delta time parameter (unused).</param>
 		private void OnPeriodicUpdate(float deltaTime)
 		{
-			if (Initialized && Server.ServerState == LocalConnectionState.Started)
+			if (Initialized && Server.ServerState == ConnectionState.Started)
 			{
 				List<GuildUpdateEntity> updates = FetchGuildUpdates();
 				ProcessGuildUpdates(updates);

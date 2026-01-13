@@ -4,6 +4,7 @@ using FishNet.Transporting;
 using FishMMO.Server.Core;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
+using FishMMO.Logging;
 using UnityEngine;
 
 namespace FishMMO.Server.Implementation.LoginServer
@@ -24,8 +25,16 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
+			if (Server == null)
+			{
+				Log.Error("ServerSelectSystem", "InitializeOnce: Server is null");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
+
+			// Network broadcasts
 			Server.NetworkWrapper.RegisterBroadcast<RequestServerListBroadcast>(OnServerRequestServerListBroadcastReceived, true);
 
+			Log.Debug("ServerSelectSystem", $"Initialized (IdleTimeout={IdleTimeout}s)");
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
@@ -34,10 +43,14 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// </summary>
 		public override void OnDeinitialize()
 		{
-			if (Server != null)
+			if (Server == null)
 			{
-				Server.NetworkWrapper.UnregisterBroadcast<RequestServerListBroadcast>(OnServerRequestServerListBroadcastReceived);
+				Log.Error("ServerSelectSystem", "OnDeinitialize: Server is null");
+				return;
 			}
+
+			// Network broadcasts
+			Server.NetworkWrapper.UnregisterBroadcast<RequestServerListBroadcast>(OnServerRequestServerListBroadcastReceived);
 		}
 
 		/// <summary>

@@ -6,6 +6,7 @@ using FishMMO.Database.Npgsql.Entities;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World;
 using FishMMO.Server.DatabaseServices;
+using FishMMO.Logging;
 using UnityEngine;
 
 namespace FishMMO.Server.Implementation.World
@@ -43,14 +44,28 @@ namespace FishMMO.Server.Implementation.World
 		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
+			if (Server == null)
+			{
+				Log.Error("KickRequestSystem", "InitializeOnce: Server is null");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
+
+			if (ServerManager == null)
+			{
+				Log.Error("KickRequestSystem", "InitializeOnce: ServerManager is null");
+				return ServerComponentInitializationStatus.FailedToFindServerManager;
+			}
+
+			// Connection state events
 			ServerManager.OnRemoteConnectionState += ServerManager_OnRemoteConnectionState;
 
-			// Register periodic callback
+			// Periodic callbacks
 			if (Server is IPeriodicUpdateSystem periodicSystem)
 			{
 				periodicSystem.RegisterPeriodicCallback(updatePumpRate, OnPeriodicUpdate);
 			}
 
+			Log.Debug("KickRequestSystem", $"Initialized (UpdatePumpRate={updatePumpRate}s, FetchCount={updateFetchCount})");
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
@@ -59,12 +74,22 @@ namespace FishMMO.Server.Implementation.World
 		/// </summary>
 		public override void OnDeinitialize()
 		{
-			if (ServerManager != null)
+			if (Server == null)
 			{
-				ServerManager.OnRemoteConnectionState -= ServerManager_OnRemoteConnectionState;
+				Log.Error("KickRequestSystem", "OnDeinitialize: Server is null");
+				return;
 			}
 
-			// Unregister periodic callback
+			if (ServerManager == null)
+			{
+				Log.Error("KickRequestSystem", "OnDeinitialize: ServerManager is null");
+				return;
+			}
+
+			// Connection state events
+			ServerManager.OnRemoteConnectionState -= ServerManager_OnRemoteConnectionState;
+
+			// Periodic callbacks
 			if (Server is IPeriodicUpdateSystem periodicSystem)
 			{
 				periodicSystem.UnregisterPeriodicCallback(OnPeriodicUpdate);
@@ -103,7 +128,7 @@ namespace FishMMO.Server.Implementation.World
 		/// <param name="deltaTime">Delta time parameter (unused).</param>
 		private void OnPeriodicUpdate(float deltaTime)
 		{
-			if (Server.ServerState == LocalConnectionState.Started)
+			if (Server.ServerState == ConnectionState.Started)
 			{
 				List<KickRequestEntity> updates = FetchKickRequests();
 				ProcessKickRequests(updates);

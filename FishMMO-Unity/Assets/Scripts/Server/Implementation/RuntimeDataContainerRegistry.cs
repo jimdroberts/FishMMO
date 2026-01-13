@@ -1,6 +1,7 @@
 using FishMMO.Logging;
 using FishMMO.Server.Core;
 using FishNet.Connection;
+using FishNet.Managing.Server;
 
 namespace FishMMO.Server.Implementation
 {
@@ -39,10 +40,10 @@ namespace FishMMO.Server.Implementation
 
 			foreach (var component in components.Values)
 			{
-				if (component is RuntimeDataContainer container)
+				if (component is IRuntimeDataContainer<INetworkManagerWrapper, ServerManager, NetworkConnection, IRuntimeDataContainer> container)
 				{
 					ServerComponentInitializationStatus initializationStatus =
-						container.InternalInitializeOnce(typedServer, typedServer.NetworkWrapper.NetworkManager.ServerManager);
+						container.Initialize(typedServer, typedServer.NetworkWrapper.NetworkManager.ServerManager);
 				}
 			}
 
@@ -61,7 +62,7 @@ namespace FishMMO.Server.Implementation
 
 			foreach (var component in components.Values)
 			{
-				if (component is RuntimeDataContainer container)
+				if (component is IRuntimeDataContainer<INetworkManagerWrapper, ServerManager, NetworkConnection, IRuntimeDataContainer> container)
 				{
 					container.Clear();
 					container.Deinitialize();

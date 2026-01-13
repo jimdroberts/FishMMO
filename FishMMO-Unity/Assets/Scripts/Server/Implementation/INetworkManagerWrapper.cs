@@ -24,6 +24,11 @@ namespace FishMMO.Server.Implementation
 		void StartServer();
 
 		/// <summary>
+		/// Stops the server.
+		/// </summary>
+		void StopServer();
+
+		/// <summary>
 		/// Sets the transport bind address manually.
 		/// </summary>
 		/// <param name="address">The address to bind the transport to.</param>
@@ -67,7 +72,13 @@ namespace FishMMO.Server.Implementation
 		/// Subscribes to server connection state changes.
 		/// </summary>
 		/// <param name="handler">The handler to invoke on connection state changes.</param>
-		void AttachServerConnectionStateEventHandler(Action<ServerConnectionStateArgs> handler);
+		void RegisterServerConnectionStateEventHandler(Action<ServerConnectionStateArgs> handler);
+
+		/// <summary>
+		/// Unsubscribes from server connection state changes.
+		/// </summary>
+		/// <param name="handler"></param>
+		void UnregisterServerConnectionStateEventHandler(Action<ServerConnectionStateArgs> handler);
 
 		/// <summary>
 		/// Attaches a login authenticator using the provided Server.

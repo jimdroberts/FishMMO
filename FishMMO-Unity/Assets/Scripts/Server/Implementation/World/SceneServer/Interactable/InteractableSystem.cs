@@ -28,31 +28,47 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
+			if (Server == null)
+			{
+				Log.Error("InteractableSystem", "InitializeOnce: Server is null");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
+
 			if (InteractableHandlerInitializer == null)
 			{
-				Log.Error("InteractableSystem", "InteractableHandlerInitializer cannot be null!");
+				Log.Error("InteractableSystem", "InitializeOnce: InteractableHandlerInitializer is null");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 			}
+
+			// Interactable handlers
 			InteractableHandlerInitializer.RegisterHandlers(Server);
 
+			// Network broadcasts
 			Server.NetworkWrapper.RegisterBroadcast<InteractableBroadcast>(OnServerInteractableBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<MerchantPurchaseBroadcast>(OnServerMerchantPurchaseBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<AbilityCraftBroadcast>(OnServerAbilityCraftBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<DungeonFinderBroadcast>(OnServerDungeonFinderBroadcastReceived, true);
 
+			Log.Debug("InteractableSystem", "Initialized");
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
 		public override void OnDeinitialize()
 		{
-			if (Server != null)
+			if (Server == null)
 			{
-				ClearAllHandlers();
-
-				Server.NetworkWrapper.UnregisterBroadcast<InteractableBroadcast>(OnServerInteractableBroadcastReceived);
-				Server.NetworkWrapper.UnregisterBroadcast<MerchantPurchaseBroadcast>(OnServerMerchantPurchaseBroadcastReceived);
-				Server.NetworkWrapper.UnregisterBroadcast<AbilityCraftBroadcast>(OnServerAbilityCraftBroadcastReceived);
-				Server.NetworkWrapper.UnregisterBroadcast<DungeonFinderBroadcast>(OnServerDungeonFinderBroadcastReceived);
+				Log.Error("InteractableSystem", "OnDeinitialize: Server is null");
+				return;
 			}
+
+			// Interactable handlers
+			ClearAllHandlers();
+
+			// Network broadcasts
+			Server.NetworkWrapper.UnregisterBroadcast<InteractableBroadcast>(OnServerInteractableBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<MerchantPurchaseBroadcast>(OnServerMerchantPurchaseBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<AbilityCraftBroadcast>(OnServerAbilityCraftBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<DungeonFinderBroadcast>(OnServerDungeonFinderBroadcastReceived);
 		}
 
 		private static Dictionary<Type, IInteractableHandler> interactableHandlers = new Dictionary<Type, IInteractableHandler>();

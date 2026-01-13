@@ -26,6 +26,9 @@ namespace FishMMO.Server.Implementation
 		/// </summary>
 		public override void OnPreload()
 		{
+			AddressableLoadProcessor.OnAddressableLoaded -= AddressableLoadProcessor_OnAddressableLoaded;
+			AddressableLoadProcessor.OnAddressableUnloaded -= AddressableLoadProcessor_OnAddressableUnloaded;
+			
 			// Subscribe to addressable asset load/unload events.
 			AddressableLoadProcessor.OnAddressableLoaded += AddressableLoadProcessor_OnAddressableLoaded;
 			AddressableLoadProcessor.OnAddressableUnloaded += AddressableLoadProcessor_OnAddressableUnloaded;

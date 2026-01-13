@@ -51,16 +51,32 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
+			if (Server == null)
+			{
+				Log.Error("WorldSceneSystem", "InitializeOnce: Server is null");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
+
+			if (ServerManager == null)
+			{
+				Log.Error("WorldSceneSystem", "InitializeOnce: ServerManager is null");
+				return ServerComponentInitializationStatus.FailedToFindServerManager;
+			}
+
 			loginAuthenticator = FindFirstObjectByType<WorldServerAuthenticator>();
 			if (loginAuthenticator == null)
 			{
+				Log.Error("WorldSceneSystem", "Failed to initialize: WorldServerAuthenticator not found");
 				throw new UnityException("WorldServerAuthenticator not found!");
 			}
 
+			// Connection state events
 			ServerManager.OnRemoteConnectionState += ServerManager_OnRemoteConnectionState;
 
+			// Authentication events
 			loginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
 
+			Log.Debug("WorldSceneSystem", $"Initialized (WaitQueueRate={waitQueueRate}s, MaxClientsPerInstance={MAX_CLIENTS_PER_INSTANCE})");
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
@@ -69,20 +85,32 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// </summary>
 		public override void OnDeinitialize()
 		{
-			if (ServerManager != null)
+			if (Server == null)
 			{
-				ServerManager.OnRemoteConnectionState -= ServerManager_OnRemoteConnectionState;
-
-				loginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
+				Log.Error("WorldSceneSystem", "OnDeinitialize: Server is null");
+				return;
 			}
 
-			if (Server != null &&
-				Server.CoreServer.NpgsqlDbContextFactory != null &&
+			if (ServerManager == null)
+			{
+				Log.Error("WorldSceneSystem", "OnDeinitialize: ServerManager is null");
+				return;
+			}
+
+			// Connection state events
+			ServerManager.OnRemoteConnectionState -= ServerManager_OnRemoteConnectionState;
+
+			// Authentication events
+			loginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
+
+			// Delete world scene data from database
+			if (Server.CoreServer.NpgsqlDbContextFactory != null &&
 				Server.DataContainerRegistry.TryGet<IWorldServerRuntimeData>(out var worldData))
 			{
 				using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
 				if (dbContext != null)
 				{
+					Log.Debug("WorldSceneSystem", $"Deinitializing: Deleting world scenes (WorldServerID={worldData.ID})");
 					SceneService.WorldDelete(dbContext, worldData.ID);
 				}
 			}

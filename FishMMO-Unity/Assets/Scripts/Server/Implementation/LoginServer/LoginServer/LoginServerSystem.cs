@@ -4,6 +4,7 @@ using FishMMO.Server.Core;
 using FishMMO.Server.Core.LoginServer;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
+using FishMMO.Logging;
 using UnityEngine;
 
 namespace FishMMO.Server.Implementation.LoginServer
@@ -24,39 +25,63 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
+			if (Server == null)
+			{
+				Log.Error("LoginServerSystem", "InitializeOnce: Server is null");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
+
 			if (!Server.DataContainerRegistry.TryGet<ILoginServerRuntimeData>(out var runtimeData))
 			{
+				Log.Error("LoginServerSystem", "Failed to initialize: ILoginServerRuntimeData not found");
 				return ServerComponentInitializationStatus.FailedToGetDataContainer;
 			}
 
 			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
 			if (dbContext == null)
 			{
+				Log.Error("LoginServerSystem", "Failed to initialize: Could not create database context");
 				return ServerComponentInitializationStatus.FailedToGetDbContext;
 			}
 
-			if (Server.AddressProvider.TryGetServerIPAddress(out ServerAddress server) &&
-				Server.Configuration.TryGetString("ServerName", out string name))
+			if (!Server.AddressProvider.TryGetServerIPAddress(out ServerAddress server))
 			{
-				LoginServerService.Add(dbContext, name, server.Address, server.Port, out long serverId);
-				runtimeData.ID = serverId;
+				Log.Error("LoginServerSystem", "Failed to initialize: Could not get server IP address");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 			}
 
-			// Register periodic callback
+			if (!Server.Configuration.TryGetString("ServerName", out string name))
+			{
+				Log.Error("LoginServerSystem", "Failed to initialize: ServerName not configured");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
+
+			// Register login server in database
+			LoginServerService.Add(dbContext, name, server.Address, server.Port, out long serverId);
+			runtimeData.ID = serverId;
+
+			// Periodic callbacks
 			if (Server is IPeriodicUpdateSystem periodicSystem)
 			{
 				periodicSystem.RegisterPeriodicCallback(PulseRate, OnPeriodicPulse);
 			}
 
+			Log.Debug("LoginServerSystem", $"Initialized (ServerID={serverId}, Address={server.Address}:{server.Port}, PulseRate={PulseRate}s)");
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
 		/// <summary>
-		/// Cleans up the login server system. (No-op)
+		/// Cleans up the login server system.
 		/// </summary>
 		public override void OnDeinitialize()
 		{
-			// Unregister periodic callback
+			if (Server == null)
+			{
+				Log.Error("LoginServerSystem", "OnDeinitialize: Server is null");
+				return;
+			}
+
+			// Periodic callbacks
 			if (Server is IPeriodicUpdateSystem periodicSystem)
 			{
 				periodicSystem.UnregisterPeriodicCallback(OnPeriodicPulse);
@@ -77,7 +102,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <param name="deltaTime">Delta time parameter (unused).</param>
 		private void OnPeriodicPulse(float deltaTime)
 		{
-			if (Server.ServerState == LocalConnectionState.Started &&
+			if (Server.ServerState == ConnectionState.Started &&
 				Server.DataContainerRegistry.TryGet<ILoginServerRuntimeData>(out var runtimeData))
 			{
 				using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();

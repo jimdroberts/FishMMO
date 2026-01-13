@@ -4,6 +4,7 @@ using FishMMO.Shared;
 using System.Collections.Generic;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
+using FishMMO.Logging;
 using UnityEngine;
 
 namespace FishMMO.Server.Implementation.World.SceneServer
@@ -19,9 +20,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
+			if (Server == null)
+			{
+				Log.Error("HotkeySystem", "InitializeOnce: Server is null");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
+
+			// Network broadcasts
 			Server.NetworkWrapper.RegisterBroadcast<HotkeySetBroadcast>(OnServerHotkeySetBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<HotkeySetMultipleBroadcast>(OnServerHotkeySetMultipleBroadcastReceived, true);
 
+			Log.Debug("HotkeySystem", "Initialized");
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
@@ -30,12 +39,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		public override void OnDeinitialize()
 		{
-			if (ServerManager != null &&
-				Server != null)
+			if (Server == null)
 			{
-				Server.NetworkWrapper.UnregisterBroadcast<HotkeySetBroadcast>(OnServerHotkeySetBroadcastReceived);
-				Server.NetworkWrapper.UnregisterBroadcast<HotkeySetMultipleBroadcast>(OnServerHotkeySetMultipleBroadcastReceived);
+				Log.Error("HotkeySystem", "OnDeinitialize: Server is null");
+				return;
 			}
+
+			// Network broadcasts
+			Server.NetworkWrapper.UnregisterBroadcast<HotkeySetBroadcast>(OnServerHotkeySetBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<HotkeySetMultipleBroadcast>(OnServerHotkeySetMultipleBroadcastReceived);
 		}
 
 		/// <summary>

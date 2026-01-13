@@ -191,5 +191,16 @@ namespace FishMMO.Server.Implementation
 			}
 			return true;
 		}
+
+		/// <summary>
+		/// Clears all stored account and connection data.
+		/// </summary>
+		public void Clear()
+		{
+			ConnectionEncryptionDatas.Clear();
+			ConnectionAccounts.Clear();
+			AccountConnections.Clear();
+			ConnectionAccountData.Clear();
+		}
 	}
 }

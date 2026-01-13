@@ -8,14 +8,13 @@ using System;
 using System.Collections.Generic;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
-using FishMMO.Server.Implementation.World.SceneServer;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
 using FishMMO.Logging;
 using FishMMO.Database.Npgsql.Entities;
 using System.Runtime.CompilerServices;
 
-namespace FishMMO.Server.Implementation.SceneServer
+namespace FishMMO.Server.Implementation.World.SceneServer
 {
 	/// <summary>
 	/// Manages scene server node services, scene loading/unloading, and heartbeat updates to the world server.
@@ -50,35 +49,66 @@ namespace FishMMO.Server.Implementation.SceneServer
 		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
+			if (Server == null)
+			{
+				Log.Error("SceneServerSystem", "InitializeOnce: Server is null");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
+
 			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
 			if (dbContext == null)
 			{
+				Log.Error("SceneServerSystem", "Failed to initialize: Could not create database context");
 				return ServerComponentInitializationStatus.FailedToGetDbContext;
 			}
 
 			if (!Server.DataContainerRegistry.TryGet<ISceneInstanceMappingData>(out var mappingData))
 			{
+				Log.Error("SceneServerSystem", "Failed to initialize: ISceneInstanceMappingData not found");
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 			}
 
-			if (Server.NetworkWrapper.NetworkManager.SceneManager != null)
+			if (Server.NetworkWrapper.NetworkManager.SceneManager == null)
 			{
-				Server.NetworkWrapper.NetworkManager.SceneManager.OnLoadEnd += SceneManager_OnLoadEnd;
-				Server.NetworkWrapper.NetworkManager.SceneManager.OnUnloadEnd += SceneManager_OnUnloadEnd;
-
-				if (Server.AddressProvider.TryGetServerIPAddress(out ServerAddress server) &&
-					Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem) &&
-					Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMappingData))
-				{
-					int characterCount = characterMappingData.ConnectionCharacters.Count;
-					long id;
-					SceneServerService.Add(dbContext, name, server.Address, server.Port, characterCount, mappingData.IsLocked, out id);
-					mappingData.ID = id;
-					SceneService.Delete(dbContext, id);
-					return ServerComponentInitializationStatus.Initialized;
-				}
+				Log.Error("SceneServerSystem", "Failed to initialize: SceneManager not found");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 			}
-			return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+
+			// Scene manager events
+			Server.NetworkWrapper.NetworkManager.SceneManager.OnLoadEnd += SceneManager_OnLoadEnd;
+			Server.NetworkWrapper.NetworkManager.SceneManager.OnUnloadEnd += SceneManager_OnUnloadEnd;
+
+			if (!Server.AddressProvider.TryGetServerIPAddress(out ServerAddress server))
+			{
+				Log.Error("SceneServerSystem", "Failed to initialize: Could not get server IP address");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
+
+			if (!Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem))
+			{
+				Log.Error("SceneServerSystem", "Failed to initialize: ICharacterSystem not found");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
+
+			if (!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMappingData))
+			{
+				Log.Error("SceneServerSystem", "Failed to initialize: ICharacterMappingData not found");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
+
+			// Character system events
+			characterSystem.OnDisconnect += CharacterSystem_OnDisconnect;
+			characterSystem.OnAfterLoadCharacter += CharacterSystem_OnAfterLoadCharacter;
+
+			// Register scene server in database
+			int characterCount = characterMappingData.ConnectionCharacters.Count;
+			long id;
+			SceneServerService.Add(dbContext, name, server.Address, server.Port, characterCount, mappingData.IsLocked, out id);
+			mappingData.ID = id;
+			SceneService.Delete(dbContext, id);
+
+			Log.Debug("SceneServerSystem", $"Initialized (ServerID={id}, Address={server.Address}:{server.Port}, CharacterCount={characterCount})");
+			return ServerComponentInitializationStatus.Initialized;
 		}
 
 		/// <summary>
@@ -86,25 +116,37 @@ namespace FishMMO.Server.Implementation.SceneServer
 		/// </summary>
 		public override void OnDeinitialize()
 		{
-			using var dbContext = Server?.CoreServer?.NpgsqlDbContextFactory.CreateDbContext();
+			if (Server == null)
+			{
+				Log.Error("SceneServerSystem", "OnDeinitialize: Server is null");
+				return;
+			}
+
+			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
 			if (dbContext == null)
 			{
-				throw new UnityException("Failed to get dbContext.");
+				Log.Error("SceneServerSystem", "OnDeinitialize: Failed to get dbContext");
+				return;
 			}
 
-			if (ServerManager != null)
+			// Delete scene server data from database
+			if (Server.Configuration.TryGetString("ServerName", out string name) &&
+				Server.DataContainerRegistry.TryGet<ISceneInstanceMappingData>(out var mappingData))
 			{
-				if (Server != null &&
-					Server.Configuration.TryGetString("ServerName", out string name) &&
-					Server.DataContainerRegistry.TryGet<ISceneInstanceMappingData>(out var mappingData))
-				{
-					Log.Debug("SceneServerSystem", "Scene Server System: Removing Scene Server scenes: " + mappingData.ID);
-					SceneService.Delete(dbContext, mappingData.ID);
-				}
-
-				Server.NetworkWrapper.NetworkManager.SceneManager.OnLoadEnd -= SceneManager_OnLoadEnd;
-				Server.NetworkWrapper.NetworkManager.SceneManager.OnUnloadEnd -= SceneManager_OnUnloadEnd;
+				Log.Debug("SceneServerSystem", $"Deinitializing: Removing Scene Server scenes (ServerID={mappingData.ID})");
+				SceneService.Delete(dbContext, mappingData.ID);
 			}
+
+			// Character system events
+			if (Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem))
+			{
+				characterSystem.OnDisconnect -= CharacterSystem_OnDisconnect;
+				characterSystem.OnAfterLoadCharacter -= CharacterSystem_OnAfterLoadCharacter;
+			}
+
+			// Scene manager events
+			Server.NetworkWrapper.NetworkManager.SceneManager.OnLoadEnd -= SceneManager_OnLoadEnd;
+			Server.NetworkWrapper.NetworkManager.SceneManager.OnUnloadEnd -= SceneManager_OnUnloadEnd;
 		}
 
 		/// <summary>
@@ -166,7 +208,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 		/// <param name="deltaTime">Delta time parameter (unused).</param>
 		private void OnPeriodicPulse(float deltaTime)
 		{
-			if (Server.ServerState == LocalConnectionState.Started)
+			if (Server.ServerState == ConnectionState.Started)
 			{
 				if (Server != null &&
 					Server.BehaviourRegistry != null &&
@@ -372,7 +414,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 
 				Log.Debug("SceneServerSystem", $"New scene handle added for {worldServerID}:{scene.name}:{scene.handle}");
 
-					mappingData.SceneNameByHandle.Add(scene.handle, scene.name);
+				mappingData.SceneNameByHandle.Add(scene.handle, scene.name);
 			}
 			else
 			{
@@ -403,7 +445,7 @@ namespace FishMMO.Server.Implementation.SceneServer
 			{
 				UnloadedScene unloaded = args.UnloadedScenesV2[i];
 
-					foreach (Dictionary<string, Dictionary<int, ISceneInstanceDetails>> sceneGroup in mappingData.WorldScenes.Values)
+				foreach (Dictionary<string, Dictionary<int, ISceneInstanceDetails>> sceneGroup in mappingData.WorldScenes.Values)
 				{
 					foreach (Dictionary<int, ISceneInstanceDetails> scene in sceneGroup.Values)
 					{

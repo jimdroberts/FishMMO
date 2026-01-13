@@ -91,5 +91,10 @@ namespace FishMMO.Server.Core.Account
 		/// <param name="onSuccess">A callback to invoke if the state is updated; should return true to continue.</param>
 		/// <returns><c>true</c> if the state was updated and the callback (if provided) succeeded; otherwise, <c>false</c>.</returns>
 		bool TryUpdateSrpState(TConnection connection, SrpState requiredState, SrpState nextState, Func<AccountData, bool> onSuccess);
+
+		/// <summary>
+		/// Clears all stored account and connection data.
+		/// </summary>
+		void Clear();
 	}
 }

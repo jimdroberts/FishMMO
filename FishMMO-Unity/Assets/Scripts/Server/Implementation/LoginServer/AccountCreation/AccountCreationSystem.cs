@@ -4,6 +4,7 @@ using FishMMO.Server.Core;
 using FishMMO.Server.Core.Account;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
+using FishMMO.Logging;
 using System.Text;
 using UnityEngine;
 
@@ -20,9 +21,16 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
-			// Register handler for account creation requests from clients.
+			if (Server == null)
+			{
+				Log.Error("AccountCreationSystem", "InitializeOnce: Server is null");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
+
+			// Network broadcasts
 			Server.NetworkWrapper.RegisterBroadcast<CreateAccountBroadcast>(OnServerCreateAccountBroadcastReceived, false);
 
+			Log.Debug("AccountCreationSystem", "Initialized");
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
@@ -31,10 +39,14 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// </summary>
 		public override void OnDeinitialize()
 		{
-			if (Server != null)
+			if (Server == null)
 			{
-				Server.NetworkWrapper.UnregisterBroadcast<CreateAccountBroadcast>(OnServerCreateAccountBroadcastReceived);
+				Log.Error("AccountCreationSystem", "OnDeinitialize: Server is null");
+				return;
 			}
+
+			// Network broadcasts
+			Server.NetworkWrapper.UnregisterBroadcast<CreateAccountBroadcast>(OnServerCreateAccountBroadcastReceived);
 		}
 
 		/// <summary>

@@ -52,6 +52,19 @@ namespace FishMMO.Server.Implementation
 		}
 
 		/// <summary>
+		/// Stops the server.
+		/// </summary>
+		public void StopServer()
+		{
+			if (NetworkManager.ServerManager != null)
+			{
+				coroutineHost.StopAllCoroutines();
+				
+				NetworkManager.ServerManager.StopConnection(true);
+			}
+		}
+
+		/// <summary>
 		/// Coroutine that waits for the server connection to be ready before proceeding.
 		/// </summary>
 		/// <returns>IEnumerator for coroutine.</returns>
@@ -142,9 +155,18 @@ namespace FishMMO.Server.Implementation
 		/// Subscribes to server connection state changes.
 		/// </summary>
 		/// <param name="handler">The handler to invoke on connection state changes.</param>
-		public void AttachServerConnectionStateEventHandler(Action<ServerConnectionStateArgs> handler)
+		public void RegisterServerConnectionStateEventHandler(Action<ServerConnectionStateArgs> handler)
 		{
 			NetworkManager.ServerManager.OnServerConnectionState += handler;
+		}
+
+		/// <summary>
+		/// Unsubscribes from server connection state changes.
+		/// </summary>
+		/// <param name="handler"></param>
+		public void UnregisterServerConnectionStateEventHandler(Action<ServerConnectionStateArgs> handler)
+		{
+			NetworkManager.ServerManager.OnServerConnectionState -= handler;
 		}
 
 		/// <summary>

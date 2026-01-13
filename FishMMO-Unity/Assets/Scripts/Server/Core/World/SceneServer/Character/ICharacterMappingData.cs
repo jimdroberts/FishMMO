@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using UnityEngine.SceneManagement;
 using FishMMO.Shared;
 
 namespace FishMMO.Server.Core.World.SceneServer
@@ -13,26 +12,26 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// <summary>
 		/// Maps character IDs to player character instances.
 		/// </summary>
-		Dictionary<long, FishMMO.Shared.IPlayerCharacter> CharactersByID { get; }
+		Dictionary<long, IPlayerCharacter> CharactersByID { get; }
 
 		/// <summary>
 		/// Maps lowercase character names to player character instances for case-insensitive lookups.
 		/// </summary>
-		Dictionary<string, FishMMO.Shared.IPlayerCharacter> CharactersByLowerCaseName { get; }
+		Dictionary<string, IPlayerCharacter> CharactersByLowerCaseName { get; }
 
 		/// <summary>
 		/// Maps world server IDs to dictionaries of character IDs and player character instances.
 		/// </summary>
-		Dictionary<long, Dictionary<long, FishMMO.Shared.IPlayerCharacter>> CharactersByWorld { get; }
+		Dictionary<long, Dictionary<long, IPlayerCharacter>> CharactersByWorld { get; }
 
 		/// <summary>
 		/// Maps network connections to player character instances.
 		/// </summary>
-		Dictionary<TConnection, FishMMO.Shared.IPlayerCharacter> ConnectionCharacters { get; }
+		Dictionary<TConnection, IPlayerCharacter> ConnectionCharacters { get; }
 
 		/// <summary>
 		/// Maps network connections to player characters waiting for scene load completion.
 		/// </summary>
-		Dictionary<TConnection, FishMMO.Shared.IPlayerCharacter> WaitingSceneLoadCharacters { get; }
+		Dictionary<TConnection, IPlayerCharacter> WaitingSceneLoadCharacters { get; }
 	}
 }

@@ -9,6 +9,7 @@ using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
+using FishMMO.Logging;
 using FishMMO.Database.Npgsql.Entities;
 
 namespace FishMMO.Server.Implementation.World.SceneServer
@@ -49,15 +50,25 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
+			if (Server == null)
+			{
+				Log.Error("ChatSystem", "InitializeOnce: Server is null");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
+
+			// Chat helper commands
 			ChatHelper.InitializeOnce(GetChannelCommand);
+
+			// Network broadcasts
 			Server.NetworkWrapper.RegisterBroadcast<ChatBroadcast>(OnServerChatBroadcastReceived, true);
 
-			// Register periodic callback
+			// Periodic callbacks
 			if (Server is IPeriodicUpdateSystem periodicSystem)
 			{
 				periodicSystem.RegisterPeriodicCallback(MessagePumpRate, OnPeriodicMessagePump);
 			}
 
+			Log.Debug("ChatSystem", $"Initialized (MessagePumpRate={MessagePumpRate}s, FetchCount={MessageFetchCount})");
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
@@ -66,13 +77,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		public override void OnDeinitialize()
 		{
-			if (ServerManager != null &&
-				Server != null)
+			if (Server == null)
 			{
-				Server.NetworkWrapper.UnregisterBroadcast<ChatBroadcast>(OnServerChatBroadcastReceived);
+				Log.Error("ChatSystem", "OnDeinitialize: Server is null");
+				return;
 			}
 
-			// Unregister periodic callback
+			// Network broadcasts
+			Server.NetworkWrapper.UnregisterBroadcast<ChatBroadcast>(OnServerChatBroadcastReceived);
+
+			// Periodic callbacks
 			if (Server is IPeriodicUpdateSystem periodicSystem)
 			{
 				periodicSystem.UnregisterPeriodicCallback(OnPeriodicMessagePump);
@@ -85,7 +99,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="deltaTime">Delta time parameter (unused).</param>
 		private void OnPeriodicMessagePump(float deltaTime)
 		{
-			if (Initialized && Server.ServerState == LocalConnectionState.Started)
+			if (Initialized && Server.ServerState == ConnectionState.Started)
 			{
 				List<ChatEntity> messages = FetchChatMessages();
 				ProcessChatMessages(messages);

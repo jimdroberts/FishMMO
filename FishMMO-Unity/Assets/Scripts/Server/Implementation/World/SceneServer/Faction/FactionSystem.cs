@@ -1,6 +1,7 @@
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Shared;
+using FishMMO.Logging;
 using UnityEngine;
 
 namespace FishMMO.Server.Implementation.World.SceneServer
@@ -16,14 +17,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
-			if (ServerManager != null)
+			if (Server == null)
 			{
-				IFactionController.OnUpdateFaction += IFactionController_OnUpdateFaction;
+				Log.Error("FactionSystem", "InitializeOnce: Server is null");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 			}
-			else
-			{
-				return ServerComponentInitializationStatus.FailedToFindServerManager;
-			}
+
+			// Faction events
+			IFactionController.OnUpdateFaction += IFactionController_OnUpdateFaction;
+
+			Log.Debug("FactionSystem", "Initialized");
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
@@ -32,10 +35,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		public override void OnDeinitialize()
 		{
-			if (ServerManager != null)
+			if (Server == null)
 			{
-				IFactionController.OnUpdateFaction -= IFactionController_OnUpdateFaction;
+				Log.Error("FactionSystem", "OnDeinitialize: Server is null");
+				return;
 			}
+
+			// Faction events
+			IFactionController.OnUpdateFaction -= IFactionController_OnUpdateFaction;
 		}
 
 		/// <summary>

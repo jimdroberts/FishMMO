@@ -8,7 +8,6 @@ using System.Collections.Generic;
 using System.Linq;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
-using FishMMO.Server.Implementation.World.SceneServer;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
 using FishMMO.Logging;
@@ -73,31 +72,56 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
-			if (Server.BehaviourRegistry.TryGet(out ISceneServerSystem<NetworkConnection> sceneServerSystem))
+			if (Server == null)
 			{
-				loginAuthenticator = FindFirstObjectByType<SceneServerAuthenticator>();
-				if (loginAuthenticator == null)
-					throw new UnityException("SceneServerAuthenticator not found!");
-
-
-				Server.NetworkWrapper.RegisterBroadcast<ClientValidatedSceneBroadcast>(OnClientValidatedSceneBroadcastReceived, true);
-				Server.NetworkWrapper.RegisterBroadcast<ClientScenesUnloadedBroadcast>(OnClientScenesUnloadedBroadcastReceived, true);
-				Server.NetworkWrapper.NetworkManager.SceneManager.OnClientLoadedStartScenes += SceneManager_OnClientLoadedStartScenes;
-
-				IPlayerCharacter.OnTeleport += IPlayerCharacter_OnTeleport;
-				ICharacterDamageController.OnKilled += CharacterDamageController_OnKilled;
-
-				// Register periodic callbacks
-				if (Server is IPeriodicUpdateSystem periodicSystem)
-				{
-					periodicSystem.RegisterPeriodicCallback(SaveRate, OnPeriodicSave);
-					periodicSystem.RegisterPeriodicCallback(OutOfBoundsCheckRate, OnPeriodicOutOfBoundsCheck);
-				}
-			}
-			else
-			{
+				Log.Error("CharacterSystem", "InitializeOnce: Server is null");
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 			}
+
+			if (ServerManager == null)
+			{
+				Log.Error("CharacterSystem", "InitializeOnce: ServerManager is null");
+				return ServerComponentInitializationStatus.FailedToFindServerManager;
+			}
+
+			if (!Server.BehaviourRegistry.TryGet(out ISceneServerSystem<NetworkConnection> sceneServerSystem))
+			{
+				Log.Error("CharacterSystem", "Failed to initialize: ISceneServerSystem not found");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
+
+			loginAuthenticator = FindFirstObjectByType<SceneServerAuthenticator>();
+			if (loginAuthenticator == null)
+			{
+				Log.Error("CharacterSystem", "Failed to initialize: SceneServerAuthenticator not found");
+				throw new UnityException("SceneServerAuthenticator not found!");
+			}
+
+			// Authentication events
+			loginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
+
+			// Network broadcasts
+			Server.NetworkWrapper.RegisterBroadcast<ClientValidatedSceneBroadcast>(OnClientValidatedSceneBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<ClientScenesUnloadedBroadcast>(OnClientScenesUnloadedBroadcastReceived, true);
+
+			// Scene manager events
+			Server.NetworkWrapper.NetworkManager.SceneManager.OnClientLoadedStartScenes += SceneManager_OnClientLoadedStartScenes;
+
+			// Connection state events
+			ServerManager.OnRemoteConnectionState += ServerManager_OnRemoteConnectionState;
+
+			// Character events
+			IPlayerCharacter.OnTeleport += IPlayerCharacter_OnTeleport;
+			ICharacterDamageController.OnKilled += CharacterDamageController_OnKilled;
+
+			// Periodic callbacks
+			if (Server is IPeriodicUpdateSystem periodicSystem)
+			{
+				periodicSystem.RegisterPeriodicCallback(SaveRate, OnPeriodicSave);
+				periodicSystem.RegisterPeriodicCallback(OutOfBoundsCheckRate, OnPeriodicOutOfBoundsCheck);
+			}
+
+			Log.Debug("CharacterSystem", $"Initialized (SaveRate={SaveRate}s, OutOfBoundsCheckRate={OutOfBoundsCheckRate}s)");
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
@@ -106,31 +130,47 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		public override void OnDeinitialize()
 		{
-			if (ServerManager != null)
+			if (Server == null)
 			{
-				loginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
-
-				Server.NetworkWrapper.UnregisterBroadcast<ClientValidatedSceneBroadcast>(OnClientValidatedSceneBroadcastReceived, true);
-				Server.NetworkWrapper.UnregisterBroadcast<ClientScenesUnloadedBroadcast>(OnClientScenesUnloadedBroadcastReceived, true);
-				Server.NetworkWrapper.NetworkManager.SceneManager.OnClientLoadedStartScenes -= SceneManager_OnClientLoadedStartScenes;
-
-				IPlayerCharacter.OnTeleport -= IPlayerCharacter_OnTeleport;
-				ICharacterDamageController.OnKilled -= CharacterDamageController_OnKilled;
-
-				// Unregister periodic callbacks
-				if (Server is IPeriodicUpdateSystem periodicSystem)
-				{
-					periodicSystem.UnregisterPeriodicCallback(OnPeriodicSave);
-					periodicSystem.UnregisterPeriodicCallback(OnPeriodicOutOfBoundsCheck);
-				}
+				Log.Error("CharacterSystem", "OnDeinitialize: Server is null");
+				return;
 			}
 
-			if (Server != null &&
-				Server.CoreServer.NpgsqlDbContextFactory != null)
+			if (ServerManager == null)
+			{
+				Log.Error("CharacterSystem", "OnDeinitialize: ServerManager is null");
+				return;
+			}
+
+			// Authentication events
+			loginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
+
+			// Network broadcasts
+			Server.NetworkWrapper.UnregisterBroadcast<ClientValidatedSceneBroadcast>(OnClientValidatedSceneBroadcastReceived, true);
+			Server.NetworkWrapper.UnregisterBroadcast<ClientScenesUnloadedBroadcast>(OnClientScenesUnloadedBroadcastReceived, true);
+
+			// Scene manager events
+			Server.NetworkWrapper.NetworkManager.SceneManager.OnClientLoadedStartScenes -= SceneManager_OnClientLoadedStartScenes;
+
+			// Connection state events
+			ServerManager.OnRemoteConnectionState -= ServerManager_OnRemoteConnectionState;
+
+			// Character events
+			IPlayerCharacter.OnTeleport -= IPlayerCharacter_OnTeleport;
+			ICharacterDamageController.OnKilled -= CharacterDamageController_OnKilled;
+
+			// Periodic callbacks
+			if (Server is IPeriodicUpdateSystem periodicSystem)
+			{
+				periodicSystem.UnregisterPeriodicCallback(OnPeriodicSave);
+				periodicSystem.UnregisterPeriodicCallback(OnPeriodicOutOfBoundsCheck);
+			}
+
+			// Save all characters before shutdown
+			if (Server.CoreServer.NpgsqlDbContextFactory != null)
 			{
 				if (Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> data))
 				{
-					// save all the characters before we quit
 					using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
 					CharacterService.Save(dbContext, new List<IPlayerCharacter>(data.CharactersByID.Values), false);
 				}
@@ -143,7 +183,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="deltaTime">Delta time parameter (unused).</param>
 		private void OnPeriodicOutOfBoundsCheck(float deltaTime)
 		{
-			if (!Initialized || Server.ServerState != LocalConnectionState.Started)
+			if (!Initialized || Server.ServerState != ConnectionState.Started)
 			{
 				return;
 			}

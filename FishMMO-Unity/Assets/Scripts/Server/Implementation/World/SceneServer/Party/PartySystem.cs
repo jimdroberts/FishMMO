@@ -9,6 +9,7 @@ using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
+using FishMMO.Logging;
 using FishMMO.Database.Npgsql.Entities;
 
 namespace FishMMO.Server.Implementation.World.SceneServer
@@ -61,38 +62,47 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
-			if (Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem) &&
-				characterSystem != null)
+			if (Server == null)
 			{
-				partyChatCommands = new Dictionary<string, ChatCommand>()
-				{
-					{ "/pi", OnPartyInvite },
-					{ "/invite", OnPartyInvite },
-				};
-				ChatHelper.AddCommands(partyChatCommands);
-
-				Server.NetworkWrapper.RegisterBroadcast<PartyCreateBroadcast>(OnServerPartyCreateBroadcastReceived, true);
-				Server.NetworkWrapper.RegisterBroadcast<PartyInviteBroadcast>(OnServerPartyInviteBroadcastReceived, true);
-				Server.NetworkWrapper.RegisterBroadcast<PartyAcceptInviteBroadcast>(OnServerPartyAcceptInviteBroadcastReceived, true);
-				Server.NetworkWrapper.RegisterBroadcast<PartyDeclineInviteBroadcast>(OnServerPartyDeclineInviteBroadcastReceived, true);
-				Server.NetworkWrapper.RegisterBroadcast<PartyLeaveBroadcast>(OnServerPartyLeaveBroadcastReceived, true);
-				Server.NetworkWrapper.RegisterBroadcast<PartyRemoveBroadcast>(OnServerPartyRemoveBroadcastReceived, true);
-				Server.NetworkWrapper.RegisterBroadcast<PartyChangeRankBroadcast>(OnServerPartyChangeRankBroadcastReceived, true);
-
-				characterSystem.OnConnect += CharacterSystem_OnConnect;
-				characterSystem.OnDisconnect += CharacterSystem_OnDisconnect;
-			}
-			else
-			{
+				Log.Error("PartySystem", "InitializeOnce: Server is null");
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 			}
 
-			// Register periodic callback
+			if (!Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem) ||
+				characterSystem == null)
+			{
+				Log.Error("PartySystem", "Failed to initialize: ICharacterSystem not found");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
+
+			// Chat commands
+			partyChatCommands = new Dictionary<string, ChatCommand>()
+			{
+				{ "/pi", OnPartyInvite },
+				{ "/invite", OnPartyInvite },
+			};
+			ChatHelper.AddCommands(partyChatCommands);
+
+			// Network broadcasts
+			Server.NetworkWrapper.RegisterBroadcast<PartyCreateBroadcast>(OnServerPartyCreateBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<PartyInviteBroadcast>(OnServerPartyInviteBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<PartyAcceptInviteBroadcast>(OnServerPartyAcceptInviteBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<PartyDeclineInviteBroadcast>(OnServerPartyDeclineInviteBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<PartyLeaveBroadcast>(OnServerPartyLeaveBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<PartyRemoveBroadcast>(OnServerPartyRemoveBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<PartyChangeRankBroadcast>(OnServerPartyChangeRankBroadcastReceived, true);
+
+			// Character system events
+			characterSystem.OnConnect += CharacterSystem_OnConnect;
+			characterSystem.OnDisconnect += CharacterSystem_OnDisconnect;
+
+			// Periodic callbacks
 			if (Server is IPeriodicUpdateSystem periodicSystem)
 			{
 				periodicSystem.RegisterPeriodicCallback(UpdatePumpRate, OnPeriodicUpdate);
 			}
 
+			Log.Debug("PartySystem", $"Initialized (MaxPartySize={MaxPartySize}, UpdatePumpRate={UpdatePumpRate}s)");
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
@@ -101,28 +111,32 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		public override void OnDeinitialize()
 		{
-			if (Server != null)
+			if (Server == null)
 			{
-				Server.NetworkWrapper.UnregisterBroadcast<PartyCreateBroadcast>(OnServerPartyCreateBroadcastReceived);
-				Server.NetworkWrapper.UnregisterBroadcast<PartyInviteBroadcast>(OnServerPartyInviteBroadcastReceived);
-				Server.NetworkWrapper.UnregisterBroadcast<PartyAcceptInviteBroadcast>(OnServerPartyAcceptInviteBroadcastReceived);
-				Server.NetworkWrapper.UnregisterBroadcast<PartyDeclineInviteBroadcast>(OnServerPartyDeclineInviteBroadcastReceived);
-				Server.NetworkWrapper.UnregisterBroadcast<PartyLeaveBroadcast>(OnServerPartyLeaveBroadcastReceived);
-				Server.NetworkWrapper.UnregisterBroadcast<PartyRemoveBroadcast>(OnServerPartyRemoveBroadcastReceived);
-				Server.NetworkWrapper.UnregisterBroadcast<PartyChangeRankBroadcast>(OnServerPartyChangeRankBroadcastReceived);
+				Log.Error("PartySystem", "OnDeinitialize: Server is null");
+				return;
+			}
 
-				// Remove the characters pending guild invite request on disconnect
-				if (Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem))
-				{
-					characterSystem.OnConnect -= CharacterSystem_OnConnect;
-					characterSystem.OnDisconnect -= CharacterSystem_OnDisconnect;
-				}
+			// Network broadcasts
+			Server.NetworkWrapper.UnregisterBroadcast<PartyCreateBroadcast>(OnServerPartyCreateBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<PartyInviteBroadcast>(OnServerPartyInviteBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<PartyAcceptInviteBroadcast>(OnServerPartyAcceptInviteBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<PartyDeclineInviteBroadcast>(OnServerPartyDeclineInviteBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<PartyLeaveBroadcast>(OnServerPartyLeaveBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<PartyRemoveBroadcast>(OnServerPartyRemoveBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<PartyChangeRankBroadcast>(OnServerPartyChangeRankBroadcastReceived);
 
-				// Unregister periodic callback
-				if (Server is IPeriodicUpdateSystem periodicSystem)
-				{
-					periodicSystem.UnregisterPeriodicCallback(OnPeriodicUpdate);
-				}
+			// Character system events
+			if (Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem))
+			{
+				characterSystem.OnConnect -= CharacterSystem_OnConnect;
+				characterSystem.OnDisconnect -= CharacterSystem_OnDisconnect;
+			}
+
+			// Periodic callbacks
+			if (Server is IPeriodicUpdateSystem periodicSystem)
+			{
+				periodicSystem.UnregisterPeriodicCallback(OnPeriodicUpdate);
 			}
 		}
 
@@ -132,7 +146,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="deltaTime">Delta time parameter (unused).</param>
 		private void OnPeriodicUpdate(float deltaTime)
 		{
-			if (Server.ServerState == LocalConnectionState.Started)
+			if (Server.ServerState == ConnectionState.Started)
 			{
 				List<PartyUpdateEntity> updates = FetchPartyUpdates();
 				ProcessPartyUpdates(updates);

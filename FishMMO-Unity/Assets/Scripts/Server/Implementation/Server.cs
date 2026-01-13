@@ -67,12 +67,12 @@ namespace FishMMO.Server.Implementation
 		/// <summary>
 		/// Current connection state of the server.
 		/// </summary>
-		private LocalConnectionState serverState;
+		private ConnectionState serverState;
 
 		/// <summary>
 		/// Gets the current connection state of the server.
 		/// </summary>
-		public LocalConnectionState ServerState => serverState;
+		public ConnectionState ServerState => serverState;
 
 		/// <summary>
 		/// List of all server behaviours attached to the server.
@@ -101,9 +101,16 @@ namespace FishMMO.Server.Implementation
 		private Dictionary<Action<float>, PeriodicCallbackData> periodicCallbacks = new Dictionary<Action<float>, PeriodicCallbackData>();
 
 		/// <summary>
-		/// Unity Start method. Initializes and composes all server components.		/// </summary>
+		/// Flag indicating whether the server has already performed shutdown.
+		/// </summary>
+		private bool hasShutdown = false;
+
+		/// <summary>
+		/// Unity Start method. Initializes and composes all server components.
+		/// </summary>
 		void Start()
 		{
+			hasShutdown = false;
 			Log.Debug("Server", "Server is starting...");
 
 			NetworkManager networkManager = FindFirstObjectByType<NetworkManager>();
@@ -115,6 +122,10 @@ namespace FishMMO.Server.Implementation
 
 			CoreServer = new CoreServer(Configuration, ServerEvents);
 			NetworkWrapper = new FishNetNetworkWrapper(networkManager, Configuration, this);
+
+			ServerEvents.OnLoginServerInitialized -= () => Log.Debug("Server", "LoginServer initialized.");
+			ServerEvents.OnWorldServerInitialized -= () => Log.Debug("Server", "WorldServer initialized.");
+			ServerEvents.OnSceneServerInitialized -= () => Log.Debug("Server", "SceneServer initialized.");
 
 			ServerEvents.OnLoginServerInitialized += () => Log.Debug("Server", "LoginServer initialized.");
 			ServerEvents.OnWorldServerInitialized += () => Log.Debug("Server", "WorldServer initialized.");
@@ -143,7 +154,7 @@ namespace FishMMO.Server.Implementation
 
 			NetworkWrapper.ApplyTransportConfiguration();
 			NetworkWrapper.AttachLoginAuthenticator(this);
-			NetworkWrapper.AttachServerConnectionStateEventHandler(ServerManager_OnServerConnectionState);
+			NetworkWrapper.RegisterServerConnectionStateEventHandler(ServerManager_OnServerConnectionState);
 
 			AccountManager = new AccountManager();
 
@@ -172,7 +183,7 @@ namespace FishMMO.Server.Implementation
 		/// <param name="args">The server connection state arguments.</param>
 		private void ServerManager_OnServerConnectionState(ServerConnectionStateArgs args)
 		{
-			serverState = args.ConnectionState;
+			serverState = MapConnectionState(args.ConnectionState);
 
 			if (AddressProvider.TryGetServerIPAddress(out ServerAddress address))
 			{
@@ -182,54 +193,83 @@ namespace FishMMO.Server.Implementation
 		}
 
 		/// <summary>
-		/// Unity LateUpdate method. Updates all registered ServerBehaviours and dispatches periodic callbacks.
+		/// Maps FishNet's LocalConnectionState to the server's ConnectionState enum.
+		/// </summary>
+		private ConnectionState MapConnectionState(LocalConnectionState fishNetState)
+		{
+			return fishNetState switch
+			{
+				LocalConnectionState.Started => ConnectionState.Started,
+				LocalConnectionState.Starting => ConnectionState.Starting,
+				LocalConnectionState.Stopping => ConnectionState.Stopping,
+				LocalConnectionState.Stopped => ConnectionState.Stopped,
+				_ => ConnectionState.Stopped
+			};
+		}
+
+		/// <summary>
+		/// Unity LateUpdate method. Orchestrates server behaviour updates and periodic callback dispatch.
 		/// </summary>
 		void LateUpdate()
 		{
 			float deltaTime = Time.deltaTime;
+			UpdateServerBehaviours(deltaTime);
+			UpdatePeriodicCallbacks(deltaTime);
+		}
 
-			// Update all server behaviours
-			if (ServerBehaviours != null)
+		/// <summary>
+		/// Updates all registered ServerBehaviours.
+		/// </summary>
+		/// <param name="deltaTime">Time elapsed since last frame.</param>
+		private void UpdateServerBehaviours(float deltaTime)
+		{
+			if (ServerBehaviours == null)
+				return;
+
+			for (int i = 0; i < ServerBehaviours.Count; i++)
 			{
-				for (int i = 0; i < ServerBehaviours.Count; i++)
+				var behaviour = ServerBehaviours[i];
+				if (behaviour != null && behaviour.Initialized)
 				{
-					var behaviour = ServerBehaviours[i];
-					if (behaviour != null && behaviour.Initialized)
-					{
-						behaviour.OnLateUpdate(deltaTime);
-					}
+					behaviour.OnLateUpdate(deltaTime);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Processes and dispatches periodic callbacks that are ready to execute.
+		/// </summary>
+		/// <param name="deltaTime">Time elapsed since last frame.</param>
+		private void UpdatePeriodicCallbacks(float deltaTime)
+		{
+			if (periodicCallbacks.Count == 0)
+				return;
+
+			// Create temporary list to avoid modification during iteration
+			var callbacksToInvoke = new List<PeriodicCallbackData>();
+
+			foreach (var kvp in periodicCallbacks)
+			{
+				var data = kvp.Value;
+				data.TimeRemaining -= deltaTime;
+
+				if (data.TimeRemaining <= 0)
+				{
+					callbacksToInvoke.Add(data);
 				}
 			}
 
-			// Process all periodic callbacks
-			if (periodicCallbacks.Count > 0)
+			// Invoke callbacks that are ready
+			foreach (var data in callbacksToInvoke)
 			{
-				// Create temporary list to avoid modification during iteration
-				var callbacksToInvoke = new List<PeriodicCallbackData>();
-
-				foreach (var kvp in periodicCallbacks)
+				try
 				{
-					var data = kvp.Value;
-					data.TimeRemaining -= deltaTime;
-
-					if (data.TimeRemaining <= 0)
-					{
-						callbacksToInvoke.Add(data);
-					}
+					data.Callback?.Invoke(deltaTime);
+					data.TimeRemaining = data.Interval; // Reset timer
 				}
-
-				// Invoke callbacks that are ready
-				foreach (var data in callbacksToInvoke)
+				catch (Exception ex)
 				{
-					try
-					{
-						data.Callback?.Invoke(deltaTime);
-						data.TimeRemaining = data.Interval; // Reset timer
-					}
-					catch (Exception ex)
-					{
-						Log.Error("Server", $"Error invoking periodic callback {data.Callback.Method.DeclaringType?.Name}.{data.Callback.Method.Name}: {ex.Message}");
-					}
+					Log.Error("Server", $"Error invoking periodic callback {data.Callback.Method.DeclaringType?.Name}.{data.Callback.Method.Name}: {ex.Message}");
 				}
 			}
 		}
@@ -239,12 +279,7 @@ namespace FishMMO.Server.Implementation
 		/// </summary>
 		void OnDestroy()
 		{
-			DeinitializeAllBehaviours();
-			UnregisterAllBehaviours();
-			DeinitializeAllDataContainers();
-			UnregisterAllDataContainers();
-			periodicCallbacks.Clear();
-			DataContainers.Clear();
+			PerformShutdown();
 		}
 
 		/// <summary>
@@ -252,12 +287,31 @@ namespace FishMMO.Server.Implementation
 		/// </summary>
 		void OnApplicationQuit()
 		{
+			PerformShutdown();
+		}
+
+		private void PerformShutdown()
+		{
+			if (hasShutdown) return;
+			hasShutdown = true;
+
+			periodicCallbacks.Clear();
+
 			DeinitializeAllBehaviours();
 			UnregisterAllBehaviours();
+
 			DeinitializeAllDataContainers();
 			UnregisterAllDataContainers();
-			periodicCallbacks.Clear();
-			DataContainers.Clear();
+
+			NetworkWrapper?.StopServer();
+			CoreServer?.Deinitialize();
+			AccountManager?.Clear();
+
+			ServerEvents.OnLoginServerInitialized -= () => Log.Debug("Server", "LoginServer initialized.");
+			ServerEvents.OnWorldServerInitialized -= () => Log.Debug("Server", "WorldServer initialized.");
+			ServerEvents.OnSceneServerInitialized -= () => Log.Debug("Server", "SceneServer initialized.");
+
+			NetworkWrapper.UnregisterServerConnectionStateEventHandler(ServerManager_OnServerConnectionState);
 		}
 
 		/// <summary>
@@ -308,7 +362,7 @@ namespace FishMMO.Server.Implementation
 
 					if (!factory.IsValidContainerType(attr.ContainerType))
 					{
-						Log.Error("Server",
+						Log.Warning("Server",
 							$"Invalid container type {attr.ContainerType.Name} required by {behaviour.GetType().Name}. " +
 							"Container must be a non-abstract class with a parameterless constructor.");
 						continue;

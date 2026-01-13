@@ -8,6 +8,7 @@ using FishMMO.Server.DatabaseServices;
 using FishMMO.Database.Npgsql;
 using FishMMO.Shared;
 using UnityEngine;
+using FishMMO.Logging;
 
 namespace FishMMO.Server.Implementation.World.SceneServer
 {
@@ -22,9 +23,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
+			if (Server == null)
+			{
+				Log.Error("AchievementSystem", "InitializeOnce: Server is null");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
+
+			// Achievement events
 			IAchievementController.OnUpdateAchievement += IAchievementController_OnUpdateAchievement;
 			IAchievementController.OnCompleteAchievement += IAchievementController_HandleAchievementRewards;
 
+			Log.Debug("AchievementSystem", "Initialized");
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
@@ -33,11 +42,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		public override void OnDeinitialize()
 		{
-			if (ServerManager != null)
+			if (Server == null)
 			{
-				IAchievementController.OnUpdateAchievement -= IAchievementController_OnUpdateAchievement;
-				IAchievementController.OnCompleteAchievement -= IAchievementController_HandleAchievementRewards;
+				Log.Error("AchievementSystem", "OnDeinitialize: Server is null");
+				return;
 			}
+
+			// Achievement events
+			IAchievementController.OnUpdateAchievement -= IAchievementController_OnUpdateAchievement;
+			IAchievementController.OnCompleteAchievement -= IAchievementController_HandleAchievementRewards;
 		}
 
 		/// <summary>

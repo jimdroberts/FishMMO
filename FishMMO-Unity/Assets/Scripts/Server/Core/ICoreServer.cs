@@ -40,5 +40,10 @@ namespace FishMMO.Server.Core
 		/// <param name="remoteAddress">The remote address to use for initialization.</param>
 		/// <param name="serverTypeName">The name of the server type.</param>
 		void Initialize(string remoteAddress, string serverTypeName);
+
+		/// <summary>
+		/// Deinitializes the core server, releasing resources as needed.
+		/// </summary>
+		void Deinitialize();
 	}
 }

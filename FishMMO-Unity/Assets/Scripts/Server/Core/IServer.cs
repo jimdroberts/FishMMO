@@ -1,5 +1,3 @@
-using FishNet.Connection;
-using FishNet.Transporting;
 using FishMMO.Server.Core.Account;
 
 namespace FishMMO.Server.Core
@@ -33,7 +31,7 @@ namespace FishMMO.Server.Core
 		/// <summary>
 		/// Current connection state of the server.
 		/// </summary>
-		LocalConnectionState ServerState { get; }
+		ConnectionState ServerState { get; }
 	}
 
 	/// <summary>
@@ -41,8 +39,8 @@ namespace FishMMO.Server.Core
 	/// This surface represents the instance-level public API of a server MonoBehaviour implementation.
 	/// </summary>
 	/// <typeparam name="TNetworkManager">Type of the network manager or wrapper exposed by the implementation (for example a network wrapper interface).</typeparam>
-	/// <typeparam name="TConnection">Type used to represent transport connections (for example <see cref="NetworkConnection"/> for FishNet).</typeparam>
-	/// <typeparam name="TServerBehaviour">Type used to represent server behaviours (for example <see cref="FishMMO.Server.Implementation.ServerBehaviour"/>).</typeparam>
+	/// <typeparam name="TConnection">Type used to represent transport connections (for example NetworkConnection for FishNet).</typeparam>
+	/// <typeparam name="TServerBehaviour">Type used to represent server behaviours (for example FishMMO.Server.Implementation.ServerBehaviour).</typeparam>
 	public interface IServer<TNetworkManager, TConnection, TServerBehaviour> : IServer
 		where TServerBehaviour : IServerComponent
 	{

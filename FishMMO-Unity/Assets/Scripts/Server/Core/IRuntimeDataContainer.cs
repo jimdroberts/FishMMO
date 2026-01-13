@@ -23,6 +23,17 @@ namespace FishMMO.Server.Core
 		where TDataContainer : IRuntimeDataContainer
 	{
 		/// <summary>
+		/// Initializes the container with server and manager references.
+		/// Called by the registry during server startup.
+		/// </summary>
+		/// <param name="server">The server instance.</param>
+		/// <param name="serverManager">The server manager instance.</param>
+		/// <returns>The initialization status.</returns>
+		ServerComponentInitializationStatus Initialize(
+			IServer<TNetworkManager, TConnection, IRuntimeDataContainer> server,
+			TServerManager serverManager);
+
+		/// <summary>
 		/// Clears all runtime data in this container, resetting it to initial state.
 		/// Called during server shutdown or when data needs to be reset.
 		/// </summary>

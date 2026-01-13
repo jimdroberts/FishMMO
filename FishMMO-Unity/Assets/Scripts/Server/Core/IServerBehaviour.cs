@@ -11,19 +11,19 @@ namespace FishMMO.Server.Core
 	/// <summary>
 	/// Public interface representing the public API surface of server-side behaviours.
 	/// Typical implementations are ScriptableObject-derived types that register with the server
-	/// and perform server-side logic (for example <see cref="FishMMO.Server.Implementation.ServerBehaviour"/>).
+	/// and perform server-side logic (for example FishMMO.Server.Implementation.ServerBehaviour).
 	/// Extends IServerComponent to participate in the unified component initialization lifecycle.
 	/// </summary>
-	/// <typeparam name="TNetworkManager">The concrete network manager or wrapper type exposed by the server (for example <see cref="FishNet.Managing.NetworkManager"/> for FishNet).</typeparam>
-	/// <typeparam name="TServerManager">The concrete server manager type exposed by the server (for example <see cref="FishNet.Managing.Server.ServerManager"/> for FishNet).</typeparam>
-	/// <typeparam name="TConnection">The transport's connection representation (for example <see cref="FishNet.Connection.NetworkConnection"/> for FishNet).</typeparam>
-	/// <typeparam name="TServerBehaviour">The concrete server behaviour type (for example <see cref="FishMMO.Server.Implementation.ServerBehaviour"/>).</typeparam>
+	/// <typeparam name="TNetworkManager">The concrete network manager or wrapper type exposed by the server (for example FishNet.Managing.NetworkManager for FishNet).</typeparam>
+	/// <typeparam name="TServerManager">The concrete server manager type exposed by the server (for example FishNet.Managing.Server.ServerManager for FishNet).</typeparam>
+	/// <typeparam name="TConnection">The transport's connection representation (for example FishNet.Connection.NetworkConnection for FishNet).</typeparam>
+	/// <typeparam name="TServerBehaviour">The concrete server behaviour type (for example FishMMO.Server.Implementation.ServerBehaviour).</typeparam>
 	/// <remarks>
 	/// Implementations should expose the server instance, server manager and lifecycle hooks used by the server runtime
 	/// to initialize and tear down server behaviours in a controlled manner.
 	/// </remarks>
-	public interface IServerBehaviour<TNetworkManager, TServerManager, TConnection, TServerBehaviour> : 
-		IServerBehaviour, 
+	public interface IServerBehaviour<TNetworkManager, TServerManager, TConnection, TServerBehaviour> :
+		IServerBehaviour,
 		IServerComponent<TNetworkManager, TServerManager, TConnection, IServerBehaviour>
 		where TServerBehaviour : IServerBehaviour
 	{
