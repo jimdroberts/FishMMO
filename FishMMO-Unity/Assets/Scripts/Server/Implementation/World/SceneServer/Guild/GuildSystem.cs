@@ -18,6 +18,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	/// Manages guild creation, membership, ranks, invitations, and updates with database synchronization.
 	/// </summary>
 	[CreateAssetMenu(fileName = "GuildSystem", menuName = "FishMMO/Server/SceneServer/Guild System", order = 1)]
+	[RequiresDataContainer(typeof(GuildSystemRuntimeData))]
+	[RequiresDataContainer(typeof(GuildCharacterMappingData))]
 	public class GuildSystem : ServerBehaviour, IGuildSystem<NetworkConnection>
 	{
 		[SerializeField]
@@ -174,12 +176,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
 
 			// fetch guild updates from the database
-			if (!Server.DataContainerRegistry.TryGet(out IGuildRuntimeData runtimeData))
+			if (!Server.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData runtimeData))
 			{
 				return new List<GuildUpdateEntity>();
 			}
 
-			List<GuildUpdateEntity> updates = GuildUpdateService.Fetch(dbContext, runtimeData.GuildCharacterTracker.Keys.ToList(), runtimeData.LastFetchTime);
+			if (!Server.DataContainerRegistry.TryGet<IGuildCharacterMappingData>(out var mappingData))
+			{
+				return new List<GuildUpdateEntity>();
+			}
+
+			List<GuildUpdateEntity> updates = GuildUpdateService.Fetch(dbContext, mappingData.GuildCharacterTracker.Keys.ToList(), runtimeData.LastFetchTime);
 			if (updates != null && updates.Count > 0)
 			{
 				runtimeData.LastFetchTime = DateTime.UtcNow;
@@ -220,13 +227,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				//Log.Debug($"Current Update Guild: {update.GuildID} MemberCount: {currentMemberIDs.Count}");
 
-				if (!Server.DataContainerRegistry.TryGet(out IGuildRuntimeData runtimeData))
+				if (!Server.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData runtimeData))
+				{
+					continue;
+				}
+
+				if (!Server.DataContainerRegistry.TryGet<IGuildCharacterMappingData>(out var mappingData))
 				{
 					continue;
 				}
 
 				// Check if we have previously cached the guild member list
-				if (runtimeData.GuildMemberTracker.TryGetValue(update.GuildID, out var previousMembers))
+				if (mappingData.GuildMemberTracker.TryGetValue(update.GuildID, out var previousMembers))
 				{
 					//Log.Debug($"Previously Cached Guild: {update.GuildID} MemberCount: {previousMembers.Count}");
 
@@ -247,7 +259,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					}
 				}
 				// Cache the guild member IDs
-				runtimeData.GuildMemberTracker[update.GuildID] = currentMemberIDs;
+				mappingData.GuildMemberTracker[update.GuildID] = currentMemberIDs;
 
 				var addBroadcasts = dbMembers.Select(x => new GuildAddBroadcast()
 				{
@@ -294,11 +306,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return;
 			}
-			if (!Server.DataContainerRegistry.TryGet(out IGuildRuntimeData runtimeData))
+			if (!Server.DataContainerRegistry.TryGet<IGuildCharacterMappingData>(out var mappingData))
 			{
 				return;
 			}
-			var tracker = runtimeData.GuildCharacterTracker;
+			var tracker = mappingData.GuildCharacterTracker;
 			if (!tracker.TryGetValue(guildID, out HashSet<long> characterIDs))
 			{
 				tracker.Add(guildID, characterIDs = new HashSet<long>());
@@ -320,19 +332,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return;
 			}
-			if (!Server.DataContainerRegistry.TryGet(out IGuildRuntimeData runtimeData))
+			if (!Server.DataContainerRegistry.TryGet<IGuildCharacterMappingData>(out var mappingData))
 			{
 				return;
 			}
-			if (runtimeData.GuildCharacterTracker.TryGetValue(guildID, out HashSet<long> characterIDs))
+			if (mappingData.GuildCharacterTracker.TryGetValue(guildID, out HashSet<long> characterIDs))
 			{
 				characterIDs.Remove(characterID);
 
 				// If there are no active guild members we can remove the character and member trackers for the guild.
 				if (characterIDs.Count < 1)
 				{
-					runtimeData.GuildCharacterTracker.Remove(guildID);
-					runtimeData.GuildMemberTracker.Remove(guildID);
+					mappingData.GuildCharacterTracker.Remove(guildID);
+					mappingData.GuildMemberTracker.Remove(guildID);
 				}
 			}
 		}
@@ -375,7 +387,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="character">The character that disconnected.</param>
 		public void CharacterSystem_OnDisconnect(NetworkConnection conn, IPlayerCharacter character)
 		{
-			if (character != null && Server.DataContainerRegistry.TryGet(out IGuildRuntimeData runtimeData))
+			if (character != null && Server.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData runtimeData))
 			{
 				runtimeData.PendingInvitations.Remove(character.ID);
 			}
@@ -502,7 +514,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			if (!Server.DataContainerRegistry.TryGet(out IGuildRuntimeData runtimeData))
+			if (!Server.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData runtimeData))
 			{
 				return;
 			}
@@ -556,7 +568,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			if (!Server.DataContainerRegistry.TryGet(out IGuildRuntimeData runtimeData))
+			if (!Server.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData runtimeData))
 			{
 				return;
 			}
@@ -605,7 +617,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		public void OnServerGuildDeclineInviteBroadcastReceived(NetworkConnection conn, GuildDeclineInviteBroadcast msg, Channel channel)
 		{
 			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			if (character != null && Server.DataContainerRegistry.TryGet(out IGuildRuntimeData runtimeData))
+			if (character != null && Server.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData runtimeData))
 			{
 				runtimeData.PendingInvitations.Remove(character.ID);
 			}

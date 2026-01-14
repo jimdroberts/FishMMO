@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using FishNet.Transporting;
 using FishMMO.Server.Core;
+using FishMMO.Server.Core.LoginServer;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
 using FishMMO.Logging;
@@ -13,7 +14,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 	/// Manages server selection for clients, providing the list of available world servers from the database.
 	/// </summary>
 	[CreateAssetMenu(fileName = "ServerSelectSystem", menuName = "FishMMO/Server/LoginServer/Server Select System", order = 1)]
-	public class ServerSelectSystem : ServerBehaviour
+	public class ServerSelectSystem : ServerBehaviour, IServerSelectSystem
 	{
 		/// <summary>
 		/// Idle timeout in seconds for world servers to be considered active.

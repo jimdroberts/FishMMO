@@ -16,6 +16,7 @@ namespace FishMMO.Server.Implementation.World
 	/// Periodically polls the database for new kick requests and processes them.
 	/// </summary>
 	[CreateAssetMenu(fileName = "KickRequestSystem", menuName = "FishMMO/Server/WorldServer/Kick Request System", order = 1)]
+	[RequiresDataContainer(typeof(KickRequestSystemQueueData))]
 	public class KickRequestSystem : ServerBehaviour, IKickRequestSystem
 	{
 		/// <summary>
@@ -142,7 +143,7 @@ namespace FishMMO.Server.Implementation.World
 		/// <returns>List of new kick request entities.</returns>
 		private List<KickRequestEntity> FetchKickRequests()
 		{
-			if (!Server.DataContainerRegistry.TryGet(out IKickRequestQueueData data))
+			if (!Server.DataContainerRegistry.TryGet(out IKickRequestSystemQueueData data))
 			{
 				return null;
 			}

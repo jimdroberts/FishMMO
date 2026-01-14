@@ -10,16 +10,6 @@ namespace FishMMO.Server.Core.World.SceneServer
 	public interface ISceneInstanceMappingData : IRuntimeDataContainer
 	{
 		/// <summary>
-		/// Database ID for this scene server instance.
-		/// </summary>
-		long ID { get; set; }
-
-		/// <summary>
-		/// Indicates whether the scene server is locked (not accepting new connections).
-		/// </summary>
-		bool IsLocked { get; set; }
-
-		/// <summary>
 		/// Maps world server IDs to scene names and handles, tracking all loaded scene instances.
 		/// </summary>
 		Dictionary<long, Dictionary<string, Dictionary<int, ISceneInstanceDetails>>> WorldScenes { get; }

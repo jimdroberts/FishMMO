@@ -50,7 +50,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		/// <param name="character">The character whose faction was updated.</param>
 		/// <param name="faction">The updated faction data.</param>
-	private void IFactionController_OnUpdateFaction(ICharacter character, Faction faction)
+		private void IFactionController_OnUpdateFaction(ICharacter character, Faction faction)
 		{
 			if (character == null || faction == null)
 			{

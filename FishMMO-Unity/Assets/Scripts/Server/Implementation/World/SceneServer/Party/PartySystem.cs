@@ -19,7 +19,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	/// Handles party broadcasts, chat commands, and synchronizes party state with the database.
 	/// </summary>
 	[CreateAssetMenu(fileName = "PartySystem", menuName = "FishMMO/Server/SceneServer/Party System", order = 1)]
-	[RequiresDataContainer(typeof(PartyRuntimeData))]
+	[RequiresDataContainer(typeof(PartySystemRuntimeData))]
+	[RequiresDataContainer(typeof(PartyCharacterMappingData))]
 	public class PartySystem : ServerBehaviour, IPartySystem<NetworkConnection>
 	{
 		/// <summary>
@@ -162,12 +163,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
 
 			// Fetch party updates from the database
-			if (!Server.DataContainerRegistry.TryGet(out IPartyRuntimeData runtimeData))
+			if (!Server.DataContainerRegistry.TryGet(out IPartySystemRuntimeData runtimeData))
 			{
 				return new List<PartyUpdateEntity>();
 			}
 
-			List<PartyUpdateEntity> updates = PartyUpdateService.Fetch(dbContext, runtimeData.PartyCharacterTracker.Keys.ToList(), runtimeData.LastFetchTime);
+			if (!Server.DataContainerRegistry.TryGet<IPartyCharacterMappingData>(out var mappingData))
+			{
+				return new List<PartyUpdateEntity>();
+			}
+
+			List<PartyUpdateEntity> updates = PartyUpdateService.Fetch(dbContext, mappingData.PartyCharacterTracker.Keys.ToList(), runtimeData.LastFetchTime);
 			if (updates != null && updates.Count > 0)
 			{
 				runtimeData.LastFetchTime = DateTime.UtcNow;
@@ -206,13 +212,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// Get the current member IDs
 				var currentMemberIDs = dbMembers.Select(x => x.CharacterID).ToHashSet();
 
-				if (!Server.DataContainerRegistry.TryGet(out IPartyRuntimeData runtimeData))
+				if (!Server.DataContainerRegistry.TryGet(out IPartySystemRuntimeData runtimeData))
+				{
+					continue;
+				}
+
+				if (!Server.DataContainerRegistry.TryGet<IPartyCharacterMappingData>(out var mappingData))
 				{
 					continue;
 				}
 
 				// Check if we have previously cached the party member list
-				if (runtimeData.PartyMemberTracker.TryGetValue(update.PartyID, out var previousMembers))
+				if (mappingData.PartyMemberTracker.TryGetValue(update.PartyID, out var previousMembers))
 				{
 					// Compute the difference: members that are in previousMembers but not in currentMemberIDs
 					List<long> difference = previousMembers.Except(currentMemberIDs).ToList();
@@ -231,7 +242,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					}
 				}
 				// Cache the party member IDs
-				runtimeData.PartyMemberTracker[update.PartyID] = currentMemberIDs;
+				mappingData.PartyMemberTracker[update.PartyID] = currentMemberIDs;
 
 				var addBroadcasts = dbMembers.Select(x => new PartyAddBroadcast()
 				{
@@ -275,11 +286,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return;
 			}
-			if (!Server.DataContainerRegistry.TryGet(out IPartyRuntimeData runtimeData))
+			if (!Server.DataContainerRegistry.TryGet<IPartyCharacterMappingData>(out var mappingData))
 			{
 				return;
 			}
-			var tracker = runtimeData.PartyCharacterTracker;
+			var tracker = mappingData.PartyCharacterTracker;
 			if (!tracker.TryGetValue(partyID, out HashSet<long> characterIDs))
 			{
 				tracker.Add(partyID, characterIDs = new HashSet<long>());
@@ -299,19 +310,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return;
 			}
-			if (!Server.DataContainerRegistry.TryGet(out IPartyRuntimeData runtimeData))
+			if (!Server.DataContainerRegistry.TryGet<IPartyCharacterMappingData>(out var mappingData))
 			{
 				return;
 			}
-			if (runtimeData.PartyCharacterTracker.TryGetValue(partyID, out HashSet<long> characterIDs))
+			if (mappingData.PartyCharacterTracker.TryGetValue(partyID, out HashSet<long> characterIDs))
 			{
 				characterIDs.Remove(characterID);
 
 				// If there are no active party members we can remove the character and member trackers for the party.
 				if (characterIDs.Count < 1)
 				{
-					runtimeData.PartyCharacterTracker.Remove(partyID);
-					runtimeData.PartyMemberTracker.Remove(partyID);
+					mappingData.PartyCharacterTracker.Remove(partyID);
+					mappingData.PartyMemberTracker.Remove(partyID);
 				}
 			}
 		}
@@ -349,7 +360,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		public void CharacterSystem_OnDisconnect(NetworkConnection conn, IPlayerCharacter character)
 		{
-			if (character != null && Server.DataContainerRegistry.TryGet(out IPartyRuntimeData runtimeData))
+			if (character != null && Server.DataContainerRegistry.TryGet(out IPartySystemRuntimeData runtimeData))
 			{
 				runtimeData.PendingInvitations.Remove(character.ID);
 			}
@@ -449,7 +460,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			if (!Server.DataContainerRegistry.TryGet(out IPartyRuntimeData runtimeData))
+			if (!Server.DataContainerRegistry.TryGet(out IPartySystemRuntimeData runtimeData))
 			{
 				return;
 			}
@@ -503,7 +514,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			if (!Server.DataContainerRegistry.TryGet(out IPartyRuntimeData runtimeData))
+			if (!Server.DataContainerRegistry.TryGet(out IPartySystemRuntimeData runtimeData))
 			{
 				return;
 			}
@@ -559,7 +570,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		public void OnServerPartyDeclineInviteBroadcastReceived(NetworkConnection conn, PartyDeclineInviteBroadcast msg, Channel channel)
 		{
 			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
-			if (character != null && Server.DataContainerRegistry.TryGet(out IPartyRuntimeData runtimeData))
+			if (character != null && Server.DataContainerRegistry.TryGet(out IPartySystemRuntimeData runtimeData))
 			{
 				runtimeData.PendingInvitations.Remove(character.ID);
 			}

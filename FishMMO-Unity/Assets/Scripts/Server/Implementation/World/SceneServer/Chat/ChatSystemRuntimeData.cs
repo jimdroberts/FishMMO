@@ -8,7 +8,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	/// Runtime data container for chat message synchronization state.
 	/// Manages chat database polling state separately from ChatSystem logic.
 	/// </summary>
-	public class ChatMessageQueueData : RuntimeDataContainer, IChatMessageQueueData
+	public class ChatSystemRuntimeData : RuntimeDataContainer, IChatSystemRuntimeData
 	{
 		/// <summary>
 		/// Timestamp of the last successful database fetch for chat messages.

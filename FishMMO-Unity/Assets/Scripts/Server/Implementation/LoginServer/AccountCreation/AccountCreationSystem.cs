@@ -2,6 +2,7 @@
 using FishNet.Transporting;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.Account;
+using FishMMO.Server.Core.LoginServer;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
 using FishMMO.Logging;
@@ -14,7 +15,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 	/// Handles player account creation requests, validates credentials, and stores new accounts in the database.
 	/// </summary>
 	[CreateAssetMenu(fileName = "AccountCreationSystem", menuName = "FishMMO/Server/LoginServer/Account Creation System", order = 1)]
-	public class AccountCreationSystem : ServerBehaviour
+	public class AccountCreationSystem : ServerBehaviour, IAccountCreationSystem
 	{
 		/// <summary>
 		/// Initializes the account creation system and registers the broadcast handler for account creation requests.

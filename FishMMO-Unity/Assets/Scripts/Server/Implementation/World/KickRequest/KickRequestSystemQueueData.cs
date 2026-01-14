@@ -8,7 +8,7 @@ namespace FishMMO.Server.Implementation.World
 	/// Runtime data container for kick request processing state.
 	/// Manages kick request database polling state separately from KickRequestSystem logic.
 	/// </summary>
-	public class KickRequestQueueData : RuntimeDataContainer, IKickRequestQueueData
+	public class KickRequestSystemQueueData : RuntimeDataContainer, IKickRequestSystemQueueData
 	{
 		/// <summary>
 		/// Timestamp of the last successful database fetch for kick requests.

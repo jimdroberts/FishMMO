@@ -6,7 +6,7 @@ namespace FishMMO.Server.Core.World
 	/// Runtime data container for kick request processing state.
 	/// Tracks database polling position for kick request processing.
 	/// </summary>
-	public interface IKickRequestQueueData : IRuntimeDataContainer
+	public interface IKickRequestSystemQueueData : IRuntimeDataContainer
 	{
 		/// <summary>
 		/// Timestamp of the last successful database fetch for kick requests.

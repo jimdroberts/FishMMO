@@ -3,7 +3,6 @@ using FishNet.Managing.Server;
 using FishNet.Transporting;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.WorldServer;
-using FishMMO.Server.Implementation.World.WorldServer;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
 using FishMMO.Logging;
@@ -20,17 +19,14 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 	/// Handles open world and instanced scene logic, connection authentication, and database updates.
 	/// </summary>
 	[CreateAssetMenu(fileName = "WorldSceneSystem", menuName = "FishMMO/Server/WorldServer/World Scene System", order = 1)]
+	[RequiresDataContainer(typeof(WorldSceneSystemRuntimeData))]
+	[RequiresDataContainer(typeof(WorldSceneMappingData))]
 	public class WorldSceneSystem : ServerBehaviour, IWorldSceneSystem
 	{
 		/// <summary>
 		/// Maximum number of clients allowed per scene instance.
 		/// </summary>
 		private const int MAX_CLIENTS_PER_INSTANCE = 500;
-
-		/// <summary>
-		/// Reference to the world server authenticator for login/authentication events.
-		/// </summary>
-		private WorldServerAuthenticator loginAuthenticator;
 
 		/// <summary>
 		/// Cache of world scene details, including max clients per scene.
@@ -41,10 +37,6 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// Interval (in seconds) between wait queue updates.
 		/// </summary>
 		private float waitQueueRate = 2.0f;
-		/// <summary>
-		/// Time remaining until the next wait queue update.
-		/// </summary>
-		private float nextWaitQueueUpdate = 0.0f;
 
 		/// <summary>
 		/// Called once to initialize the world scene system. Subscribes to authentication and connection events.
@@ -63,8 +55,14 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				return ServerComponentInitializationStatus.FailedToFindServerManager;
 			}
 
-			loginAuthenticator = FindFirstObjectByType<WorldServerAuthenticator>();
-			if (loginAuthenticator == null)
+			if (!Server.DataContainerRegistry.TryGet<WorldSceneSystemRuntimeData>(out var runtimeData))
+			{
+				Log.Error("WorldSceneSystem", "InitializeOnce: WorldSceneSystemRuntimeData not found");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
+
+			runtimeData.LoginAuthenticator = FindFirstObjectByType<WorldServerAuthenticator>();
+			if (runtimeData.LoginAuthenticator == null)
 			{
 				Log.Error("WorldSceneSystem", "Failed to initialize: WorldServerAuthenticator not found");
 				throw new UnityException("WorldServerAuthenticator not found!");
@@ -74,7 +72,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			ServerManager.OnRemoteConnectionState += ServerManager_OnRemoteConnectionState;
 
 			// Authentication events
-			loginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
+			runtimeData.LoginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
 
 			Log.Debug("WorldSceneSystem", $"Initialized (WaitQueueRate={waitQueueRate}s, MaxClientsPerInstance={MAX_CLIENTS_PER_INSTANCE})");
 			return ServerComponentInitializationStatus.Initialized;
@@ -97,15 +95,24 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				return;
 			}
 
+			if (!Server.DataContainerRegistry.TryGet<WorldSceneSystemRuntimeData>(out var runtimeData))
+			{
+				Log.Error("WorldSceneSystem", "OnDeinitialize: WorldSceneSystemRuntimeData not found");
+				return;
+			}
+
 			// Connection state events
 			ServerManager.OnRemoteConnectionState -= ServerManager_OnRemoteConnectionState;
 
 			// Authentication events
-			loginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
+			if (runtimeData.LoginAuthenticator != null)
+			{
+				runtimeData.LoginAuthenticator.OnClientAuthenticationResult -= Authenticator_OnClientAuthenticationResult;
+			}
 
 			// Delete world scene data from database
 			if (Server.CoreServer.NpgsqlDbContextFactory != null &&
-				Server.DataContainerRegistry.TryGet<IWorldServerRuntimeData>(out var worldData))
+				Server.DataContainerRegistry.TryGet<IWorldServerSystemRuntimeData>(out var worldData))
 			{
 				using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
 				if (dbContext != null)
@@ -141,9 +148,14 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// <param name="deltaTime">Time elapsed since last frame.</param>
 		public override void OnLateUpdate(float deltaTime)
 		{
-			if (nextWaitQueueUpdate <= 0)
+			if (!Server.DataContainerRegistry.TryGet<IWorldSceneSystemRuntimeData>(out var runtimeData))
 			{
-				nextWaitQueueUpdate = waitQueueRate;
+				return;
+			}
+
+			if (runtimeData.NextWaitQueueUpdate <= 0)
+			{
+				runtimeData.NextWaitQueueUpdate = waitQueueRate;
 
 				if (Initialized && Server.CoreServer.NpgsqlDbContextFactory != null &&
 					Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData))
@@ -161,7 +173,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 					UpdateConnectionCount(dbContext);
 				}
 			}
-			nextWaitQueueUpdate -= deltaTime;
+			runtimeData.NextWaitQueueUpdate -= deltaTime;
 		}
 
 		/// <summary>
@@ -187,7 +199,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			int maxClientsPerInstance = GetMaxClients(sceneName);
 
 			// Try and get an existing scene
-			long worldServerID = Server.DataContainerRegistry.TryGet<IWorldServerRuntimeData>(out var worldData) ? worldData.ID : 0;
+			long worldServerID = Server.DataContainerRegistry.TryGet<IWorldServerSystemRuntimeData>(out var worldData) ? worldData.ID : 0;
 			List<SceneEntity> loadedScenes = SceneService.GetServerList(dbContext, worldServerID, sceneName, maxClientsPerInstance);
 			if (loadedScenes?.Count() > 0)
 			{
@@ -333,7 +345,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			}
 
 			// Get the scene data from each of our worlds scenes
-			long worldServerID = Server.DataContainerRegistry.TryGet<IWorldServerRuntimeData>(out var worldData) ? worldData.ID : 0;
+			long worldServerID = Server.DataContainerRegistry.TryGet<IWorldServerSystemRuntimeData>(out var worldData) ? worldData.ID : 0;
 			List<SceneEntity> sceneServerCount = SceneService.GetServerList(dbContext, worldServerID);
 			int waitingOpenWorldCount = mappingData.WaitingOpenWorldConnections?.Sum(kvp => kvp.Value.Count) ?? 0;
 			int waitingInstanceCount = mappingData.WaitingInstanceConnections?.Sum(kvp => kvp.Value.Count) ?? 0;

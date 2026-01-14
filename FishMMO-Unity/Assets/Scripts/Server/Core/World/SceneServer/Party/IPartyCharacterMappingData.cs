@@ -1,13 +1,12 @@
-using System;
 using System.Collections.Generic;
 
 namespace FishMMO.Server.Core.World.SceneServer
 {
 	/// <summary>
-	/// Runtime data container for party membership tracking and invitation state.
-	/// Provides read-only access to party tracking collections.
+	/// Runtime data container for party member and character tracking.
+	/// Provides read-only access to party membership lookups.
 	/// </summary>
-	public interface IPartyRuntimeData : IRuntimeDataContainer
+	public interface IPartyCharacterMappingData : IRuntimeDataContainer
 	{
 		/// <summary>
 		/// Tracks all party members for parties with at least one member logged into this server.
@@ -20,16 +19,5 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// Key: Party ID, Value: Set of Character IDs.
 		/// </summary>
 		Dictionary<long, HashSet<long>> PartyCharacterTracker { get; }
-
-		/// <summary>
-		/// Tracks pending party invitations.
-		/// Key: FromCharacterID, Value: ToCharacterID.
-		/// </summary>
-		Dictionary<long, long> PendingInvitations { get; }
-
-		/// <summary>
-		/// Timestamp of the last successful database fetch for party updates.
-		/// </summary>
-		DateTime LastFetchTime { get; set; }
 	}
 }

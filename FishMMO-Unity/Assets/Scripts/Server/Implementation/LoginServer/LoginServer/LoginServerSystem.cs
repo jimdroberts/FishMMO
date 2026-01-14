@@ -1,6 +1,4 @@
-﻿using FishNet.Managing.Server;
-using FishNet.Transporting;
-using FishMMO.Server.Core;
+﻿using FishMMO.Server.Core;
 using FishMMO.Server.Core.LoginServer;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
@@ -13,6 +11,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 	/// Manages login server lifecycle, including database registration and heartbeat updates for the login service.
 	/// </summary>
 	[CreateAssetMenu(fileName = "LoginServerSystem", menuName = "FishMMO/Server/LoginServer/Login Server System", order = 1)]
+	[RequiresDataContainer(typeof(LoginServerRuntimeData))]
 	public class LoginServerSystem : ServerBehaviour, ILoginServerSystem
 	{
 		/// <summary>

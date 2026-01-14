@@ -58,7 +58,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		/// <param name="character">The character whose achievement was updated.</param>
 		/// <param name="achievement">The updated achievement data.</param>
-	private void IAchievementController_OnUpdateAchievement(ICharacter character, Achievement achievement)
+		private void IAchievementController_OnUpdateAchievement(ICharacter character, Achievement achievement)
 		{
 			if (character == null || achievement == null)
 			{

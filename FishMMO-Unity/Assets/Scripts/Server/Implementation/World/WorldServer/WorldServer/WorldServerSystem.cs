@@ -1,6 +1,4 @@
 ﻿using FishNet.Connection;
-using FishNet.Managing.Server;
-using FishNet.Transporting;
 using FishMMO.Server.DatabaseServices;
 using UnityEngine;
 using FishMMO.Shared;
@@ -15,6 +13,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 	/// Periodically updates the world server's status and character count.
 	/// </summary>
 	[CreateAssetMenu(fileName = "WorldServerSystem", menuName = "FishMMO/Server/WorldServer/World Server System", order = 1)]
+	[RequiresDataContainer(typeof(WorldServerSystemRuntimeData))]
 	public class WorldServerSystem : ServerBehaviour, IWorldServerSystem
 	{
 		/// <summary>
@@ -83,9 +82,9 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// <param name="characterCount">Character count to register.</param>
 		public void Register(string serverAddress, ushort port, int characterCount)
 		{
-			if (!Server.DataContainerRegistry.TryGet(out IWorldServerRuntimeData data))
+			if (!Server.DataContainerRegistry.TryGet(out IWorldServerSystemRuntimeData data))
 			{
-				throw new UnityException("Failed to get IWorldServerRuntimeData.");
+				throw new UnityException("Failed to get IWorldServerSystemRuntimeData.");
 			}
 			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
 			if (dbContext == null)
@@ -106,7 +105,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// <param name="characterCount">Current character count.</param>
 		public void Pulse(int characterCount)
 		{
-			if (!Server.DataContainerRegistry.TryGet(out IWorldServerRuntimeData data))
+			if (!Server.DataContainerRegistry.TryGet(out IWorldServerSystemRuntimeData data))
 			{
 				return;
 			}

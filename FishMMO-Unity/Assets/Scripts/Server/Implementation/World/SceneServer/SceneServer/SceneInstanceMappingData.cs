@@ -7,20 +7,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 {
 	/// <summary>
 	/// Runtime data container for scene instance tracking and scene handle management.
-	/// Manages all scene instance state separately from SceneServerSystem logic.
+	/// Manages all scene instance mappings separately from SceneServerSystem logic.
 	/// </summary>
 	public class SceneInstanceMappingData : RuntimeDataContainer, ISceneInstanceMappingData
 	{
-		/// <summary>
-		/// Database ID for this scene server instance.
-		/// </summary>
-		public long ID { get; set; }
-
-		/// <summary>
-		/// Indicates whether the scene server is locked (not accepting new connections).
-		/// </summary>
-		public bool IsLocked { get; set; }
-
 		/// <summary>
 		/// Maps world server IDs to scene names and handles, tracking all loaded scene instances.
 		/// </summary>

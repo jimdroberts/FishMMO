@@ -40,7 +40,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			}
 			// If login is successful, assign the character to the world server.
 			else if (result == ClientAuthenticationResult.LoginSuccess &&
-				Server.DataContainerRegistry.TryGet<IWorldServerRuntimeData>(out var worldData) &&
+				Server.DataContainerRegistry.TryGet<IWorldServerSystemRuntimeData>(out var worldData) &&
 				CharacterService.GetSelected(dbContext, username))
 			{
 				// Update the character's world assignment in the database.

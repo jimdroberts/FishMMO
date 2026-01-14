@@ -4,6 +4,7 @@ using System;
 using FishMMO.Database.Npgsql;
 using FishMMO.Database.Npgsql.Entities;
 using FishMMO.Server.Core;
+using FishMMO.Server.Core.LoginServer;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
 using FishMMO.Logging;
@@ -16,16 +17,19 @@ namespace FishMMO.Server.Implementation.LoginServer
 	/// Manages character creation for player accounts, validates character data, and initializes starting equipment and abilities.
 	/// </summary>
 	[CreateAssetMenu(fileName = "CharacterCreateSystem", menuName = "FishMMO/Server/LoginServer/Character Create System", order = 1)]
-	public class CharacterCreateSystem : ServerBehaviour
+	public class CharacterCreateSystem : ServerBehaviour, ICharacterCreateSystem
 	{
+		/// <summary>
+		/// Maximum number of characters allowed per account.
+		/// </summary>
+		[SerializeField]
+		private int maxCharacters = 8;
+
+		public int MaxCharacters => maxCharacters;
 		/// <summary>
 		/// Cached world scene details used for validating spawn positions and initial character creation.
 		/// </summary>
 		public WorldSceneDetailsCache WorldSceneDetailsCache;
-		/// <summary>
-		/// Maximum number of characters allowed per account.
-		/// </summary>
-		public int MaxCharacters = 8;
 		/// <summary>
 		/// List of ability templates to grant to new characters on creation.
 		/// </summary>

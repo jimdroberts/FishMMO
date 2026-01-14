@@ -12,5 +12,14 @@ namespace FishMMO.Server.Core.World.SceneServer
 	/// </summary>
 	public interface IChatSystem : IServerBehaviour, IChatHelper
 	{
+		/// <summary>
+		/// Rate limit for chat messages per player (messages per second).
+		/// </summary>
+		float MessageRateLimit { get; }
+
+		/// <summary>
+		/// Maximum length allowed for chat messages.
+		/// </summary>
+		int MaxMessageLength { get; }
 	}
 }

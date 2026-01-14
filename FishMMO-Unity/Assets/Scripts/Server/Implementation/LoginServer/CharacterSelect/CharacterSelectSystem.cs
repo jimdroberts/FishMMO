@@ -2,6 +2,7 @@
 using FishNet.Transporting;
 using System.Collections.Generic;
 using FishMMO.Server.Core;
+using FishMMO.Server.Core.LoginServer;
 using FishMMO.Server.DatabaseServices;
 using FishMMO.Shared;
 using FishMMO.Logging;
@@ -13,7 +14,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 	/// Manages character selection, deletion, and listing for player accounts on the login server.
 	/// </summary>
 	[CreateAssetMenu(fileName = "CharacterSelectSystem", menuName = "FishMMO/Server/LoginServer/Character Select System", order = 1)]
-	public class CharacterSelectSystem : ServerBehaviour
+	public class CharacterSelectSystem : ServerBehaviour, ICharacterSelectSystem
 	{
 		/// <summary>
 		/// If true, keeps deleted character data in the database for recovery or auditing.

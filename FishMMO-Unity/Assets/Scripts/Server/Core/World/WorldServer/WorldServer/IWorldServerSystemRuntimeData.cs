@@ -4,7 +4,7 @@ namespace FishMMO.Server.Core.World.WorldServer
 	/// Runtime data container for world server instance state.
 	/// Tracks world server ID and lock status.
 	/// </summary>
-	public interface IWorldServerRuntimeData : IRuntimeDataContainer
+	public interface IWorldServerSystemRuntimeData : IRuntimeDataContainer
 	{
 		/// <summary>
 		/// Database ID for this world server instance.

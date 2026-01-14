@@ -21,6 +21,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	/// Core character management system handling character spawning, despawning, saving, and lifecycle events for player characters.
 	/// </summary>
 	[CreateAssetMenu(fileName = "CharacterSystem", menuName = "FishMMO/Server/SceneServer/Character System", order = 1)]
+	[RequiresDataContainer(typeof(CharacterMappingData))]
 	public class CharacterSystem : ServerBehaviour, ICharacterSystem<NetworkConnection, Scene>
 	{
 		/// <summary>

@@ -18,12 +18,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	/// Manages all chat functionality including public, party, guild, whisper, and system messages with rate limiting and spam protection.
 	/// </summary>
 	[CreateAssetMenu(fileName = "ChatSystem", menuName = "FishMMO/Server/SceneServer/Chat System", order = 1)]
+	[RequiresDataContainer(typeof(ChatSystemRuntimeData))]
 	public class ChatSystem : ServerBehaviour, IChatSystem
 	{
 		/// <summary>
+		/// Internal message rate limit tracker.
+		/// </summary>
+		[SerializeField]
+		[Tooltip("The server chat rate limit in milliseconds. This should be equal to the clients UIChat.messageRateLimit")]
+		private float messageRateLimit = 0.0f;
+		/// <summary>
 		/// Maximum allowed chat message length.
 		/// </summary>
-		public const int MAX_LENGTH = 128;
+		[SerializeField]
+		[Tooltip("Maximum allowed chat message length.")]
+		private int maxMessageLength = 128;
 
 		/// <summary>
 		/// If true, allows repeat messages from clients without spam filtering.
@@ -32,13 +41,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// The server chat rate limit in milliseconds. Should match the client's UIChat.messageRateLimit.
 		/// </summary>
-		[Tooltip("The server chat rate limit in milliseconds. This should be equal to the clients UIChat.messageRateLimit")]
-		public float MessageRateLimit = 0.0f;
+		public float MessageRateLimit => messageRateLimit;
+		/// <summary>
+		/// Maximum allowed chat message length.
+		/// </summary>
+		public int MaxMessageLength => maxMessageLength;
 		/// <summary>
 		/// The server chat message pump rate limit in seconds.
 		/// </summary>
 		[Tooltip("The server chat message pump rate limit in seconds.")]
-		[SerializeField]
 		public float MessagePumpRate = 2.0f;
 		/// <summary>
 		/// Number of chat messages to fetch per database poll.
@@ -116,14 +127,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return null;
 			}
-			if (!Server.DataContainerRegistry.TryGet(out IChatMessageQueueData data))
+			if (!Server.DataContainerRegistry.TryGet(out IChatSystemRuntimeData data))
 			{
 				return null;
 			}
 			using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
 
 			// fetch chat messages from the database
-			long sceneServerID = Server.DataContainerRegistry.TryGet<ISceneInstanceMappingData>(out var sceneData) ? sceneData.ID : 0;
+			long sceneServerID = Server.DataContainerRegistry.TryGet<ISceneServerRuntimeData>(out var runtimeData) ? runtimeData.ID : 0;
 			List<ChatEntity> messages = ChatService.Fetch(dbContext, data.LastFetchTime, data.LastFetchPosition, MessageFetchCount, sceneServerID);
 			if (messages != null)
 			{
@@ -216,7 +227,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// validate message length
 			if (sender == null ||
 				string.IsNullOrWhiteSpace(msg.Text) ||
-				msg.Text.Length > MAX_LENGTH)
+				msg.Text.Length > maxMessageLength)
 			{
 				conn.Kick(FishNet.Managing.Server.KickReason.ExploitExcessiveData);
 				return;
@@ -295,12 +306,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						break;
 				}
 
-			if (commandDetails.Func.Invoke(sender, msg))
-			{
-				// write the parsed message to the database
-				using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
-				long sceneServerID = Server.DataContainerRegistry.TryGet<ISceneInstanceMappingData>(out var sceneData) ? sceneData.ID : 0;
-				ChatService.Save(dbContext, sender.ID, sender.WorldServerID, sceneServerID, msg.Channel, msg.Text);
+				if (commandDetails.Func.Invoke(sender, msg))
+				{
+					// write the parsed message to the database
+					using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
+					long sceneServerID = Server.DataContainerRegistry.TryGet<ISceneServerRuntimeData>(out var runtimeData) ? runtimeData.ID : 0;
+					ChatService.Save(dbContext, sender.ID, sender.WorldServerID, sceneServerID, msg.Channel, msg.Text);
 				}
 			}
 		}

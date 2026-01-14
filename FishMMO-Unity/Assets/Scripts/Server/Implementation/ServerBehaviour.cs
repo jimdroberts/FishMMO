@@ -55,8 +55,6 @@ namespace FishMMO.Server.Implementation
 			{
 				Initialized = true;
 			}
-
-			Log.Debug("ServerBehaviour", "[" + this.GetType().Name + "] Initialization Status: " + initializationStatus);
 			return initializationStatus;
 		}
 

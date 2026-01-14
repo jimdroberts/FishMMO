@@ -1,7 +1,6 @@
 ﻿using FishNet.Connection;
 using FishNet.Managing.Scened;
 using SceneManager = FishNet.Managing.Scened.SceneManager;
-using FishNet.Transporting;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using System;
@@ -21,6 +20,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	/// Tracks scene instances, handles connection events, and synchronizes scene state with the database.
 	/// </summary>
 	[CreateAssetMenu(fileName = "SceneServerSystem", menuName = "FishMMO/Server/SceneServer/Scene Server System", order = 1)]
+	[RequiresDataContainer(typeof(SceneInstanceMappingData))]
+	[RequiresDataContainer(typeof(SceneServerRuntimeData))]
 	public class SceneServerSystem : ServerBehaviour, ISceneServerSystem<NetworkConnection>
 	{
 		/// <summary>
@@ -68,6 +69,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
 			}
 
+			if (!Server.DataContainerRegistry.TryGet<ISceneServerRuntimeData>(out var runtimeData))
+			{
+				Log.Error("SceneServerSystem", "InitializeOnce: ISceneServerRuntimeData not found");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
+
 			if (Server.NetworkWrapper.NetworkManager.SceneManager == null)
 			{
 				Log.Error("SceneServerSystem", "Failed to initialize: SceneManager not found");
@@ -100,11 +107,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			characterSystem.OnDisconnect += CharacterSystem_OnDisconnect;
 			characterSystem.OnAfterLoadCharacter += CharacterSystem_OnAfterLoadCharacter;
 
+			// Scene manager events
+			Server.NetworkWrapper.NetworkManager.SceneManager.OnLoadEnd += SceneManager_OnLoadEnd;
+			Server.NetworkWrapper.NetworkManager.SceneManager.OnUnloadEnd += SceneManager_OnUnloadEnd;
+
 			// Register scene server in database
 			int characterCount = characterMappingData.ConnectionCharacters.Count;
 			long id;
-			SceneServerService.Add(dbContext, name, server.Address, server.Port, characterCount, mappingData.IsLocked, out id);
-			mappingData.ID = id;
+			SceneServerService.Add(dbContext, name, server.Address, server.Port, characterCount, runtimeData.IsLocked, out id);
+			runtimeData.ID = id;
 			SceneService.Delete(dbContext, id);
 
 			Log.Debug("SceneServerSystem", $"Initialized (ServerID={id}, Address={server.Address}:{server.Port}, CharacterCount={characterCount})");
@@ -131,10 +142,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			// Delete scene server data from database
 			if (Server.Configuration.TryGetString("ServerName", out string name) &&
-				Server.DataContainerRegistry.TryGet<ISceneInstanceMappingData>(out var mappingData))
+				Server.DataContainerRegistry.TryGet<ISceneServerRuntimeData>(out var runtimeData))
 			{
-				Log.Debug("SceneServerSystem", $"Deinitializing: Removing Scene Server scenes (ServerID={mappingData.ID})");
-				SceneService.Delete(dbContext, mappingData.ID);
+				Log.Debug("SceneServerSystem", $"Deinitializing: Removing Scene Server scenes (ServerID={runtimeData.ID})");
+				SceneService.Delete(dbContext, runtimeData.ID);
 			}
 
 			// Character system events
@@ -213,12 +224,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				if (Server != null &&
 					Server.BehaviourRegistry != null &&
 				Server.DataContainerRegistry.TryGet<ISceneInstanceMappingData>(out var mappingData) &&
+				Server.DataContainerRegistry.TryGet<ISceneServerRuntimeData>(out var runtimeData) &&
 				Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMappingData))
 				{
 					// Send heartbeat pulse to the database with current character count.
 					using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
 					int characterCount = characterMappingData.ConnectionCharacters.Count;
-					SceneServerService.Pulse(dbContext, mappingData.ID, characterCount, mappingData.IsLocked);
+					SceneServerService.Pulse(dbContext, runtimeData.ID, characterCount, runtimeData.IsLocked);
 
 					// Process loaded scene pulse update
 					if (mappingData.WorldScenes != null)
@@ -365,8 +377,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				// Save the loaded scene information to the database
 				using var dbContext = Server.CoreServer.NpgsqlDbContextFactory.CreateDbContext();
+				if (!Server.DataContainerRegistry.TryGet<ISceneServerRuntimeData>(out var runtimeData))
+				{
+					Log.Error("SceneServerSystem", "Failed to get ISceneServerRuntimeData after scene load.");
+					return;
+				}
 				Log.Debug("SceneServerSystem", $"Saved {sceneType} scene {scene.name}:{scene.handle} to the database.");
-				SceneService.SetReady(dbContext, mappingData.ID, sceneEntity.WorldServerID, scene.name, scene.handle);
+				SceneService.SetReady(dbContext, runtimeData.ID, sceneEntity.WorldServerID, scene.name, scene.handle);
 			}
 		}
 
@@ -379,6 +396,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		private void ProcessScene(Scene scene, SceneType sceneType, long worldServerID)
 		{
 			if (!Server.DataContainerRegistry.TryGet<ISceneInstanceMappingData>(out var mappingData))
+			{
+				return;
+			}
+
+			if (!Server.DataContainerRegistry.TryGet<ISceneServerRuntimeData>(out var runtimeData))
 			{
 				return;
 			}
@@ -404,7 +426,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				handles.Add(scene.handle, new SceneInstanceDetails()
 				{
 					WorldServerID = worldServerID,
-					SceneServerID = mappingData.ID,
+					SceneServerID = runtimeData.ID,
 					Name = scene.name,
 					SceneType = sceneType,
 					Handle = scene.handle,
@@ -570,8 +592,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
+			if (!Server.DataContainerRegistry.TryGet<ISceneServerRuntimeData>(out var runtimeData))
+			{
+				Log.Warning("SceneServerSystem", "Failed to get ISceneServerRuntimeData during Scene Unload.");
+				return;
+			}
+
 			// Remove the scene details from the database immediately upon an Unload request to prevent new clients from connecting to it.
-			SceneService.Delete(dbContext, mappingData.ID, handle);
+			SceneService.Delete(dbContext, runtimeData.ID, handle);
 
 			SceneUnloadData sud = new SceneUnloadData()
 			{
