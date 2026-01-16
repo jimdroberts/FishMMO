@@ -17,22 +17,227 @@
 
 ### Prerequisites
 - .NET 8.0 SDK or newer
-- Windows OS (tested)
+- Supported operating systems: Windows, Linux (CachyOS, Ubuntu, and other distributions), macOS
 
-### Building
-1. Clone the repository or copy the source files.
-2. Open a terminal in the project directory.
-3. Run:
+---
+
+## Platform-Specific Setup
+
+### Windows Setup
+
+#### Prerequisites
+1. Install [.NET 8.0 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) or newer
+2. Open PowerShell or Command Prompt
+
+#### Building
+1. Clone the repository or copy the source files
+2. Navigate to the project directory:
+   ```powershell
+   cd "C:\Path\To\FishMMO-AppHealthMonitor"
+   ```
+3. Build the project:
    ```powershell
    dotnet build
    ```
 
-### Running
-1. Ensure your `appsettings.json` is configured (see below).
-2. Run the application:
-   ```powershell
-   dotnet run --project AppHealthMonitor/AppHealthMonitor.csproj
+#### Configuration
+1. Edit `AppHealthMonitor\appsettings.json`
+2. Set your application paths using Windows-style paths with escaped backslashes:
+   ```json
+   {
+     "Applications": [
+       {
+         "Name": "MyGameServer",
+         "ApplicationExePath": "C:\\Path\\To\\Your\\GameServer.exe",
+         "MonitoredPort": 7770,
+         "PortTypes": ["TCP", "UDP"],
+         "LaunchArguments": "LOGIN"
+       }
+     ]
+   }
    ```
+
+#### Running
+Run the application:
+```powershell
+dotnet run --project AppHealthMonitor\AppHealthMonitor.csproj
+```
+
+Or run the compiled executable:
+```powershell
+.\AppHealthMonitor\bin\Debug\net8.0\AppHealthMonitor.exe
+```
+
+---
+
+### Linux Setup (CachyOS with Fish Terminal)
+
+#### Prerequisites
+1. Install .NET 8.0 SDK:
+   ```fish
+   # CachyOS (using pacman)
+   sudo pacman -S dotnet-sdk
+   ```
+
+#### Building
+1. Clone the repository or copy the source files
+2. Navigate to the project directory:
+   ```fish
+   cd ~/Dev/FishMMO-AppHealthMonitor
+   ```
+3. Build the project:
+   ```fish
+   dotnet build
+   ```
+
+#### Configuration
+1. Edit `AppHealthMonitor/appsettings.json`
+2. Set your application paths using Unix-style paths:
+   ```json
+   {
+     "Applications": [
+       {
+         "Name": "MyGameServer",
+         "ApplicationExePath": "/home/username/gameserver/GameServer",
+         "MonitoredPort": 7770,
+         "PortTypes": ["TCP", "UDP"],
+         "LaunchArguments": "LOGIN"
+       }
+     ]
+   }
+   ```
+   
+   **Note:** Ensure your executable has execute permissions:
+   ```fish
+   chmod +x /home/username/gameserver/GameServer
+   ```
+
+#### Running
+Run the application:
+```fish
+dotnet run --project AppHealthMonitor/AppHealthMonitor.csproj
+```
+
+Or run the compiled executable:
+```fish
+./AppHealthMonitor/bin/Debug/net8.0/AppHealthMonitor
+```
+
+#### Running as a Systemd Service (Optional)
+Create a systemd service file at `/etc/systemd/system/apphealthmonitor.service`:
+```ini
+[Unit]
+Description=FishMMO Application Health Monitor
+After=network.target
+
+[Service]
+Type=simple
+User=your-username
+WorkingDirectory=/home/username/FishMMO-AppHealthMonitor
+ExecStart=/usr/bin/dotnet /home/username/FishMMO-AppHealthMonitor/AppHealthMonitor/bin/Release/net8.0/AppHealthMonitor.dll
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable and start the service:
+```fish
+sudo systemctl daemon-reload
+sudo systemctl enable apphealthmonitor
+sudo systemctl start apphealthmonitor
+sudo systemctl status apphealthmonitor
+```
+
+---
+
+### Linux Setup (Ubuntu)
+
+#### Prerequisites
+1. Install .NET 8.0 SDK:
+   ```bash
+   # Ubuntu 22.04 or newer
+   wget https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
+   sudo dpkg -i packages-microsoft-prod.deb
+   rm packages-microsoft-prod.deb
+   
+   sudo apt-get update
+   sudo apt-get install -y dotnet-sdk-8.0
+   ```
+
+#### Building
+1. Clone the repository or copy the source files
+2. Navigate to the project directory:
+   ```bash
+   cd ~/FishMMO-AppHealthMonitor
+   ```
+3. Build the project:
+   ```bash
+   dotnet build
+   ```
+
+#### Configuration
+1. Edit `AppHealthMonitor/appsettings.json`
+2. Set your application paths using Unix-style paths:
+   ```json
+   {
+     "Applications": [
+       {
+         "Name": "MyGameServer",
+         "ApplicationExePath": "/home/username/gameserver/GameServer",
+         "MonitoredPort": 7770,
+         "PortTypes": ["TCP", "UDP"],
+         "LaunchArguments": "LOGIN"
+       }
+     ]
+   }
+   ```
+   
+   **Note:** Ensure your executable has execute permissions:
+   ```bash
+   chmod +x /home/username/gameserver/GameServer
+   ```
+
+#### Running
+Run the application:
+```bash
+dotnet run --project AppHealthMonitor/AppHealthMonitor.csproj
+```
+
+Or run the compiled executable:
+```bash
+./AppHealthMonitor/bin/Debug/net8.0/AppHealthMonitor
+```
+
+#### Running as a Systemd Service (Optional)
+Create a systemd service file at `/etc/systemd/system/apphealthmonitor.service`:
+```ini
+[Unit]
+Description=FishMMO Application Health Monitor
+After=network.target
+
+[Service]
+Type=simple
+User=your-username
+WorkingDirectory=/home/username/FishMMO-AppHealthMonitor
+ExecStart=/usr/bin/dotnet /home/username/FishMMO-AppHealthMonitor/AppHealthMonitor/bin/Release/net8.0/AppHealthMonitor.dll
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable and start the service:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable apphealthmonitor
+sudo systemctl start apphealthmonitor
+sudo systemctl status apphealthmonitor
+```
+
+---
 
 ## Configuration
 
@@ -45,9 +250,9 @@ The main configuration file is `appsettings.json`. It should contain an `Applica
   "Applications": [
     {
       "Name": "MyApp",
-      "ApplicationExePath": "C:/Path/To/MyApp.exe",
+      "ApplicationExePath": "/path/to/your/application",
       "MonitoredPort": 12345,
-      "PortTypes": ["Tcp", "Udp"],
+      "PortTypes": ["TCP", "UDP"],
       "LaunchArguments": "--option value",
       "CheckIntervalSeconds": 10,
       "LaunchDelaySeconds": 2,
@@ -64,11 +269,13 @@ The main configuration file is `appsettings.json`. It should contain an `Applica
 }
 ```
 
+**Note:** Path separators are automatically handled cross-platform. Use forward slashes `/` for Unix-like systems (Linux, macOS) or backslashes `\\` for Windows. The .NET runtime normalizes paths appropriately.
+
 #### Application Configuration Options
 - **Name**: Display name for the application.
-- **ApplicationExePath**: Full path to the executable to monitor.
+- **ApplicationExePath**: Full path to the executable to monitor (supports Windows, Linux, and macOS paths).
 - **MonitoredPort**: (Optional) Port number to check for application health.
-- **PortTypes**: (Optional) List of port types to monitor (`Tcp`, `Udp`, or `None`).
+- **PortTypes**: (Optional) List of port types to monitor (`TCP`, `UDP`, `WebSocket`, or `None`).
 - **LaunchArguments**: (Optional) Command-line arguments for the application.
 - **CheckIntervalSeconds**: (Optional) How often to check application health (default: 10).
 - **LaunchDelaySeconds**: (Optional) Delay before launching the next application (default: 0).

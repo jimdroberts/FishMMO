@@ -6,20 +6,80 @@ namespace AppHealthMonitor
 	/// </summary>
 	public class AppConfig
 	{
-		public string Name { get; set; } // Friendly name for the application
-		public string ApplicationExePath { get; set; } // Full path to the executable
-		public string LaunchArguments { get; set; } // Optional arguments for launching
-		public int MonitoredPort { get; set; } // Port to monitor, can be 0 if only process monitoring
-		public List<PortType> PortTypes { get; set; } = new List<PortType>(); // Types of ports to monitor (e.g., TCP, UDP, WebSocket, None)
-		public int CheckIntervalSeconds { get; set; } // How often to perform health checks
-		public int LaunchDelaySeconds { get; set; } // Delay before starting this app after the previous one
-		public int CpuThresholdPercent { get; set; } // CPU usage threshold for restart (0 for no limit)
-		public int MemoryThresholdMB { get; set; } // Memory usage threshold for restart (0 for no limit)
-		public int GracefulShutdownTimeoutSeconds { get; set; } // Timeout for graceful shutdown
-		public int InitialRestartDelaySeconds { get; set; } // Initial delay for backoff restart
-		public int MaxRestartDelaySeconds { get; set; } // Maximum delay for backoff restart
-		public int MaxRestartAttempts { get; set; } // Max attempts for backoff restart before giving up
-		public int CircuitBreakerFailureThreshold { get; set; } // Consecutive failures to trip circuit breaker
-		public int CircuitBreakerResetTimeoutMinutes { get; set; } // Time before circuit breaker attempts reset
+		/// <summary>
+		/// Gets or sets the friendly name for the application.
+		/// </summary>
+		public string Name { get; set; }
+
+		/// <summary>
+		/// Gets or sets the full path to the executable.
+		/// Supports both Windows and Unix-style paths.
+		/// </summary>
+		public string ApplicationExePath { get; set; }
+
+		/// <summary>
+		/// Gets or sets the optional command-line arguments for launching the application.
+		/// </summary>
+		public string LaunchArguments { get; set; }
+
+		/// <summary>
+		/// Gets or sets the port to monitor. Set to 0 for process-only monitoring.
+		/// </summary>
+		public int MonitoredPort { get; set; }
+
+		/// <summary>
+		/// Gets or sets the types of ports to monitor (e.g., TCP, UDP, WebSocket, None).
+		/// </summary>
+		public List<PortType> PortTypes { get; set; } = new List<PortType>();
+
+		/// <summary>
+		/// Gets or sets how often to perform health checks in seconds.
+		/// </summary>
+		public int CheckIntervalSeconds { get; set; }
+
+		/// <summary>
+		/// Gets or sets the delay before starting this app after the previous one in seconds.
+		/// </summary>
+		public int LaunchDelaySeconds { get; set; }
+
+		/// <summary>
+		/// Gets or sets the CPU usage threshold percentage for restart (0 for no limit).
+		/// </summary>
+		public int CpuThresholdPercent { get; set; }
+
+		/// <summary>
+		/// Gets or sets the memory usage threshold for restart in megabytes (0 for no limit).
+		/// </summary>
+		public int MemoryThresholdMB { get; set; }
+
+		/// <summary>
+		/// Gets or sets the timeout for graceful shutdown in seconds.
+		/// </summary>
+		public int GracefulShutdownTimeoutSeconds { get; set; }
+
+		/// <summary>
+		/// Gets or sets the initial delay for backoff restart in seconds.
+		/// </summary>
+		public int InitialRestartDelaySeconds { get; set; }
+
+		/// <summary>
+		/// Gets or sets the maximum delay for backoff restart in seconds.
+		/// </summary>
+		public int MaxRestartDelaySeconds { get; set; }
+
+		/// <summary>
+		/// Gets or sets the maximum attempts for backoff restart before giving up.
+		/// </summary>
+		public int MaxRestartAttempts { get; set; }
+
+		/// <summary>
+		/// Gets or sets the consecutive failures required to trip the circuit breaker.
+		/// </summary>
+		public int CircuitBreakerFailureThreshold { get; set; }
+
+		/// <summary>
+		/// Gets or sets the time before circuit breaker attempts reset in minutes.
+		/// </summary>
+		public int CircuitBreakerResetTimeoutMinutes { get; set; }
 	}
 }

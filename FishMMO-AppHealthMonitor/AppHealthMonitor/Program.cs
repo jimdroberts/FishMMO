@@ -3,20 +3,39 @@ using FishMMO.Logging;
 
 namespace AppHealthMonitor
 {
+	/// <summary>
+	/// Main program class for the Application Health Monitor daemon.
+	/// Orchestrates monitoring of multiple configured applications with health checks and automatic restarts.
+	/// </summary>
 	class Program
 	{
-		// ManualResetEventSlim to signal when monitoring should start/restart
+		/// <summary>
+		/// Event to signal when monitoring should start or restart.
+		/// </summary>
 		private static ManualResetEventSlim startMonitoringEvent = new ManualResetEventSlim(false);
 
-		// CancellationTokenSource for the *current monitoring cycle*.
-		// This allows 'stop' to cancel only the active monitoring without shutting down the daemon.
+		/// <summary>
+		/// Cancellation token source for the current monitoring cycle.
+		/// Allows stopping active monitoring without shutting down the entire daemon.
+		/// </summary>
 		private static CancellationTokenSource currentMonitoringCts;
 
-		// List to keep track of HealthMonitor instances for explicit cleanup
+		/// <summary>
+		/// List to track active HealthMonitor instances for cleanup operations.
+		/// </summary>
 		private static List<HealthMonitor> activeMonitors = new List<HealthMonitor>();
 
+		/// <summary>
+		/// Name of the logging configuration file.
+		/// </summary>
 		private static readonly string loggingConfigName = "logging.json";
 
+		/// <summary>
+		/// Main entry point for the Application Health Monitor daemon.
+		/// Initializes configuration, logging, and starts the orchestration loop.
+		/// </summary>
+		/// <param name="args">Command-line arguments (currently unused).</param>
+		/// <returns>A task representing the asynchronous operation.</returns>
 		static async Task Main(string[] args)
 		{
 			string workingDirectory = Directory.GetCurrentDirectory();
@@ -87,11 +106,12 @@ namespace AppHealthMonitor
 		}
 
 		/// <summary>
-		/// This method contains the main loop that orchestrates starting and stopping monitoring cycles.
-		/// It waits for the 'start' signal, launches monitors, and then waits for a 'stop' or daemon shutdown signal.
+		/// Contains the main orchestration loop that manages starting and stopping monitoring cycles.
+		/// Waits for the start signal, launches monitors, and handles stop or shutdown signals.
 		/// </summary>
-		/// <param name="appConfigs">List of application configurations.</param>
+		/// <param name="appConfigs">List of application configurations to monitor.</param>
 		/// <param name="daemonCancellationToken">Cancellation token for overall daemon shutdown.</param>
+		/// <returns>A task representing the asynchronous orchestration operation.</returns>
 		static async Task RunMonitoringOrchestrationLoop(
 			List<AppConfig> appConfigs,
 			CancellationToken daemonCancellationToken)
@@ -254,10 +274,12 @@ namespace AppHealthMonitor
 		}
 
 		/// <summary>
-		/// Reads console input and triggers daemon actions based on commands.
+		/// Reads console input and executes daemon commands.
+		/// Supports commands for starting, stopping, and managing monitored applications.
 		/// </summary>
 		/// <param name="sharedDaemonCts">The shared CancellationTokenSource for overall daemon shutdown.</param>
 		/// <param name="startEvent">ManualResetEventSlim to signal the start of monitoring.</param>
+		/// <returns>A task representing the asynchronous command reading operation.</returns>
 		static async Task ConsoleCommandReader(CancellationTokenSource sharedDaemonCts, ManualResetEventSlim startEvent)
 		{
 			var commands = new Dictionary<string, ConsoleCommand>();
