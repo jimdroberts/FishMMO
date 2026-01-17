@@ -5,14 +5,15 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FishMMO.Database.Npgsql.Entities
 {
-	[Table("guilds", Schema = "fish_mmo_postgresql")]
-	[Index(nameof(Name))]
+	[Table("guilds")]
+	[Index(nameof(Name), IsUnique = true)]
 	public class GuildEntity
 	{
 		[DatabaseGenerated(DatabaseGeneratedOption.Identity)]
 		public long ID { get; set; }
 		public string Name { get; set; }
 		public string Notice { get; set; }
+		public DateTime TimeCreated { get; set; }
 
 		public List<CharacterGuildEntity> Characters { get; set; }
 	}

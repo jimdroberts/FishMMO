@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FishMMO.Database.Npgsql.Entities
 {
-	[Table("kick_requests", Schema = "fish_mmo_postgresql")]
+	[Table("kick_requests")]
 	[Index(nameof(AccountName))]
 	public class KickRequestEntity
 	{

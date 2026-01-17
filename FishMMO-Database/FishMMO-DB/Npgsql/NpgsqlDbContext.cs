@@ -5,8 +5,14 @@ namespace FishMMO.Database.Npgsql
 {
 	public class NpgsqlDbContext : DbContext
 	{
-		public NpgsqlDbContext(DbContextOptions options) : base(options)
+		/// <summary>
+		/// Gets the database schema name for this context.
+		/// </summary>
+		public string Schema { get; }
+
+		public NpgsqlDbContext(DbContextOptions options, string schema) : base(options)
 		{
+			Schema = schema ?? "public";
 		}
 
 		//protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
@@ -55,8 +61,29 @@ namespace FishMMO.Database.Npgsql
 		{
 			base.OnModelCreating(modelBuilder);
 
-			// add collation to character entity name
+			// Set default schema for all entities
+			modelBuilder.HasDefaultSchema(Schema);
+
+			// Apply all entity configurations for explicit control over indexes, constraints, and defaults
+			// Benefits: Explicit index definitions, collation settings, computed columns, FK relationships
 			modelBuilder.ApplyConfiguration(new CharacterEntityConfiguration());
+			modelBuilder.ApplyConfiguration(new AccountEntityConfiguration());
+			modelBuilder.ApplyConfiguration(new GuildEntityConfiguration());
+			modelBuilder.ApplyConfiguration(new PartyEntityConfiguration());
+			modelBuilder.ApplyConfiguration(new SceneEntityConfiguration());
+			modelBuilder.ApplyConfiguration(new LoginServerEntityConfiguration());
+			modelBuilder.ApplyConfiguration(new PatchServerEntityConfiguration());
+			modelBuilder.ApplyConfiguration(new WorldServerEntityConfiguration());
+			modelBuilder.ApplyConfiguration(new SceneServerEntityConfiguration());
+			modelBuilder.ApplyConfiguration(new ChatEntityConfiguration());
+			modelBuilder.ApplyConfiguration(new KickRequestEntityConfiguration());
+			modelBuilder.ApplyConfiguration(new CharacterMailEntityConfiguration());
+			modelBuilder.ApplyConfiguration(new CharacterGuildEntityConfiguration());
+			modelBuilder.ApplyConfiguration(new CharacterPartyEntityConfiguration());
+			modelBuilder.ApplyConfiguration(new CharacterInventoryEntityConfiguration());
+			modelBuilder.ApplyConfiguration(new CharacterAbilityEntityConfiguration());
+			modelBuilder.ApplyConfiguration(new CharacterAttributeEntityConfiguration());
+			modelBuilder.ApplyConfiguration(new CharacterEquipmentEntityConfiguration());
 
 			// other settings
 			/*modelBuilder.Entity<CharacterBuffEntity>()

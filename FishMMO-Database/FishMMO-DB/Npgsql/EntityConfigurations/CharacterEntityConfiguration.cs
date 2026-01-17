@@ -10,6 +10,10 @@ namespace FishMMO.Database.Npgsql.Entities
 			builder.Property(e => e.Name)
 				.IsRequired();
 
+			builder.Property(e => e.TimeCreated)
+				.IsRequired()
+				.HasDefaultValueSql("CURRENT_TIMESTAMP");
+
 			builder.Property(e => e.NameLowercase)
 				.HasComputedColumnSql("LOWER(\"name\")", stored: true);
 

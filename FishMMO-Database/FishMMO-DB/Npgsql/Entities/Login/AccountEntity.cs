@@ -4,7 +4,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace FishMMO.Database.Npgsql.Entities
 {
-	[Table("accounts", Schema = "fish_mmo_postgresql")]
+	[Table("accounts")]
 	public class AccountEntity
 	{
 		[Key]
@@ -12,7 +12,7 @@ namespace FishMMO.Database.Npgsql.Entities
 		public string Salt { get; set; }
 		public string Verifier { get; set; }
 		public byte AccessLevel { get; set; }
-		public DateTime Created { get; set; }
+		public DateTime TimeCreated { get; set; }
 		public DateTime Lastlogin { get; set; }
 	}
 }

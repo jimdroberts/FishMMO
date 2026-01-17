@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FishMMO.Database.Npgsql.Entities
 {
-	[Table("scenes", Schema = "fish_mmo_postgresql")]
+	[Table("scenes")]
 	[Index(nameof(SceneServerID))]
 	[Index(nameof(WorldServerID))]
 	[Index(nameof(CharacterID))]

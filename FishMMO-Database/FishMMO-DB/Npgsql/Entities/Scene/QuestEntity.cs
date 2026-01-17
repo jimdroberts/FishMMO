@@ -2,7 +2,7 @@
 
 namespace FishMMO.Database.Npgsql.Entities
 {
-	[Table("quest", Schema = "fish_mmo_postgresql")]
+	[Table("quest")]
 	public class QuestEntity
 	{
 	}

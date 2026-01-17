@@ -1,0 +1,202 @@
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+using FishMMO.Database.Data;
+using FishMMO.Database.Data.Enums;
+
+namespace FishMMO.Database.Npgsql.Services
+{
+	/// <summary>
+	/// Service interface for managing character entities in the database.
+	/// Handles core character operations including creation, retrieval, updates, and deletion.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// All write operations (Create*, Save*, Delete*, Set*, Update*) in this service use execution strategies
+	/// to ensure transient database failures are automatically retried according to the retry policy configured
+	/// on the DbContext. This is critical because ExecuteSqlInterpolatedAsync and SaveChangesAsync do not
+	/// automatically benefit from EnableRetryOnFailure without manual wrapping.
+	/// </para>
+	/// <para>
+	/// All methods return <see cref="DatabaseResult"/> or <see cref="DatabaseResult{T}"/> to provide
+	/// structured error information through the DatabaseException system, helping distinguish between:
+	/// - Validation failures (invalid parameters)
+	/// - Business rule violations (name already exists)
+	/// - Database errors (connection issues, constraint violations, timeouts)
+	/// - Entity not found errors
+	/// - Unexpected runtime errors
+	/// </para>
+	/// <para>
+	/// All SQL operations use atomic UPDATE, INSERT, and DELETE commands to prevent race conditions
+	/// when multiple servers or clients modify character data simultaneously.
+	/// </para>
+	/// </remarks>
+	public interface ICharacterService
+	{
+		/// <summary>
+		/// Gets the count of non-deleted characters for a specific account.
+		/// </summary>
+		/// <param name="account">The account name.</param>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>
+		/// A <see cref="DatabaseResult{T}"/> containing the character count on success,
+		/// or a <see cref="DatabaseException"/> on failure.
+		/// </returns>
+		/// <remarks>
+		/// This method uses LINQ (CountAsync with AsNoTracking) and automatically benefits from
+		/// the retry policy configured on the DbContext without requiring explicit execution strategy wrapping.
+		/// </remarks>
+		Task<DatabaseResult<int>> GetCountAsync(string account, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Creates a new character in the database using SaveChangesAsync.
+		/// </summary>
+		/// <param name="characterData">The character data to create.</param>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>
+		/// A <see cref="DatabaseResult{T}"/> containing a CharacterOperationResult on success,
+		/// or a <see cref="DatabaseException"/> on failure.
+		/// </returns>
+		/// <remarks>
+		/// Uses EF Core's SaveChangesAsync for insert operations with execution strategy wrapping
+		/// to ensure transient database failures are automatically retried.
+		/// Character names are stored with a lowercase version for case-insensitive uniqueness.
+		/// </remarks>
+		Task<DatabaseResult<CharacterOperationResult>> CreateCharacterAsync(CharacterData characterData, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Saves an existing character's data to the database using atomic UPDATE.
+		/// </summary>
+		/// <param name="characterData">The character data to save.</param>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>
+		/// A <see cref="DatabaseResult"/> indicating success or containing a <see cref="DatabaseException"/> on failure.
+		/// </returns>
+		/// <remarks>
+		/// Uses atomic UPDATE operation to save all character fields in one operation.
+		/// Only updates non-deleted characters. Updates the last_saved timestamp automatically.
+		/// Execution strategy wrapping ensures transient database failures are automatically retried.
+		/// </remarks>
+		Task<DatabaseResult> SaveCharacterAsync(CharacterData characterData, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Deletes a character from the database.
+		/// </summary>
+		/// <param name="characterId">The character ID to delete.</param>
+		/// <param name="softDelete">If true, marks the character as deleted but preserves data; if false, removes the character entirely.</param>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>
+		/// A <see cref="DatabaseResult"/> indicating success or containing a <see cref="DatabaseException"/> on failure.
+		/// </returns>
+		/// <remarks>
+		/// Soft delete: Sets deleted flag to true, time_deleted to current UTC time, and online to false (preserves all data).
+		/// Hard delete: Removes the character record entirely from the database.
+		/// Execution strategy wrapping ensures transient database failures are automatically retried.
+		/// </remarks>
+		Task<DatabaseResult> DeleteCharacterAsync(long characterId, bool softDelete, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Retrieves a character by its ID.
+		/// </summary>
+		/// <param name="characterId">The character ID.</param>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>
+		/// A <see cref="DatabaseResult{T}"/> containing the character data (or null if not found) on success,
+		/// or a <see cref="DatabaseException"/> on failure.
+		/// </returns>
+		Task<DatabaseResult<CharacterData?>> GetCharacterAsync(long characterId, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Retrieves all non-deleted characters for a specific account.
+		/// </summary>
+		/// <param name="account">The account name.</param>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>
+		/// A <see cref="DatabaseResult{T}"/> containing a list of character data on success,
+		/// or a <see cref="DatabaseException"/> on failure.
+		/// </returns>
+		Task<DatabaseResult<IReadOnlyList<CharacterData>>> GetCharactersAsync(string account, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Retrieves a character by its name.
+		/// </summary>
+		/// <param name="name">The character name (case-insensitive).</param>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>
+		/// A <see cref="DatabaseResult{T}"/> containing the character data (or null if not found) on success,
+		/// or a <see cref="DatabaseException"/> on failure.
+		/// </returns>
+		Task<DatabaseResult<CharacterData?>> GetCharacterByNameAsync(string name, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Sets the selected character for an account atomically. Deselects all other characters for the account.
+		/// </summary>
+		/// <param name="account">The account name.</param>
+		/// <param name="characterId">The character ID to select.</param>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>
+		/// A <see cref="DatabaseResult"/> indicating success or containing a <see cref="DatabaseException"/> on failure.
+		/// </returns>
+		/// <remarks>
+		/// Uses a single atomic UPDATE with conditional logic: SET selected = (id = characterId).
+		/// This ensures all characters for the account are updated in one operation without race conditions.
+		/// Execution strategy wrapping ensures transient database failures are automatically retried.
+		/// </remarks>
+		Task<DatabaseResult> SetSelectedAsync(string account, long characterId, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Sets the online status for a character atomically.
+		/// </summary>
+		/// <param name="characterId">The character ID.</param>
+		/// <param name="online">The online status to set.</param>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>
+		/// A <see cref="DatabaseResult"/> indicating success or containing a <see cref="DatabaseException"/> on failure.
+		/// </returns>
+		/// <remarks>
+		/// Uses atomic UPDATE without loading the entity. Updates last_saved timestamp automatically.
+		/// Only updates non-deleted characters.
+		/// Execution strategy wrapping ensures transient database failures are automatically retried.
+		/// </remarks>
+		Task<DatabaseResult> SetOnlineStatusAsync(long characterId, bool online, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Updates the position and rotation of a character atomically.
+		/// </summary>
+		/// <param name="characterId">The character ID.</param>
+		/// <param name="x">The X coordinate.</param>
+		/// <param name="y">The Y coordinate.</param>
+		/// <param name="z">The Z coordinate.</param>
+		/// <param name="rotX">The rotation X component.</param>
+		/// <param name="rotY">The rotation Y component.</param>
+		/// <param name="rotZ">The rotation Z component.</param>
+		/// <param name="rotW">The rotation W component.</param>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>
+		/// A <see cref="DatabaseResult"/> indicating success or containing a <see cref="DatabaseException"/> on failure.
+		/// </returns>
+		/// <remarks>
+		/// Uses atomic UPDATE to set all position and rotation components in one operation.
+		/// Updates last_saved timestamp automatically. Only updates non-deleted characters.
+		/// Execution strategy wrapping ensures transient database failures are automatically retried.
+		/// </remarks>
+		Task<DatabaseResult> UpdatePositionAsync(long characterId, float x, float y, float z, float rotX, float rotY, float rotZ, float rotW, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Updates the scene information for a character atomically.
+		/// </summary>
+		/// <param name="characterId">The character ID.</param>
+		/// <param name="sceneName">The scene name.</param>
+		/// <param name="sceneHandle">The scene handle.</param>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>
+		/// A <see cref="DatabaseResult"/> indicating success or containing a <see cref="DatabaseException"/> on failure.
+		/// </returns>
+		/// <remarks>
+		/// Uses atomic UPDATE to set scene_name and scene_handle in one operation.
+		/// Updates last_saved timestamp automatically. Only updates non-deleted characters.
+		/// Execution strategy wrapping ensures transient database failures are automatically retried.
+		/// </remarks>
+		Task<DatabaseResult> UpdateSceneAsync(long characterId, string sceneName, int sceneHandle, CancellationToken cancellationToken = default);
+	}
+}

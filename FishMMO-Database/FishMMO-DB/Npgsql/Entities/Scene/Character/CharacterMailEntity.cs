@@ -1,9 +1,10 @@
+using System;
 using System.ComponentModel.DataAnnotations.Schema;
 using Microsoft.EntityFrameworkCore;
 
 namespace FishMMO.Database.Npgsql.Entities
 {
-	[Table("character_mail", Schema = "fish_mmo_postgresql")]
+	[Table("character_mail")]
 	[Index(nameof(CharacterID))]
 	public class CharacterMailEntity
 	{
@@ -16,5 +17,6 @@ namespace FishMMO.Database.Npgsql.Entities
 		public int ItemAttachmentTemplateID { get; set; }
 		public int ItemAttachmentSeed { get; set; }
 		public uint ItemAttachmentAmount { get; set; }
+		public DateTime TimeCreated { get; set; }
 	}
 }

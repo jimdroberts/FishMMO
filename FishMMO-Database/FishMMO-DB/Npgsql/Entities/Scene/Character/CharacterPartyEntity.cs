@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FishMMO.Database.Npgsql.Entities
 {
-	[Table("character_party", Schema = "fish_mmo_postgresql")]
+	[Table("character_party")]
 	// add index on party to avoid full scans when loading guild members
 	[Index(nameof(CharacterID))]
 	[Index(nameof(PartyID))]

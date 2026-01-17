@@ -1,101 +1,218 @@
 ﻿using System;
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Configuration;
+using FishMMO.Database.Npgsql.Monitoring.Metrics;
+using FishMMO.Database.Npgsql.Monitoring.Diagnostics;
 
 namespace FishMMO.Database.Npgsql
 {
-	public class NpgsqlDbContextFactory : IDesignTimeDbContextFactory<NpgsqlDbContext>
+	/// <summary>
+	/// Factory for creating NpgsqlDbContext instances with proper async configuration.
+	/// Thread-safe and stateless - creates new DbContext per call.
+	/// Implements both custom interface and IDesignTimeDbContextFactory for migrations.
+	/// </summary>
+	public class NpgsqlDbContextFactory : INpgsqlDbContextFactory, IDesignTimeDbContextFactory<NpgsqlDbContext>
 	{
-		private string configPath = "";
-		private bool enableLogging = false;
-		private DbContextOptionsBuilder optionsBuilder = null;
+		private readonly string connectionString;
+		private readonly string schema;
+		private readonly bool enableLogging;
+		private readonly int commandTimeout;
+		private readonly int maxRetryCount;
+		private readonly int maxRetryDelaySeconds;
+		private readonly ConnectionPoolMetrics poolMetrics;
+		private readonly int maxPoolSize;
+		private readonly QueryPerformanceTracker performanceTracker;
 
+		/// <summary>
+		/// Initializes a new instance of NpgsqlDbContextFactory with default configuration path.
+		/// </summary>
 		public NpgsqlDbContextFactory()
+			: this(Directory.GetParent(AppDomain.CurrentDomain.BaseDirectory)?.FullName ?? AppDomain.CurrentDomain.BaseDirectory, false, 10)
 		{
-			this.configPath = Directory.GetParent(AppDomain.CurrentDomain.BaseDirectory).FullName;
-
-			if (this.optionsBuilder == null)
-			{
-				this.optionsBuilder = LoadDbContextOptionsBuilder();
-			}
 		}
+
+		/// <summary>
+		/// Initializes a new instance of NpgsqlDbContextFactory with specified configuration path.
+		/// </summary>
+		/// <param name="configPath">Path to configuration directory containing appsettings.json.</param>
 		public NpgsqlDbContextFactory(string configPath)
+			: this(configPath, false, 10)
 		{
-			this.configPath = configPath;
-
-			if (this.optionsBuilder == null)
-			{
-				this.optionsBuilder = LoadDbContextOptionsBuilder();
-			}
 		}
 
+		/// <summary>
+		/// Initializes a new instance of NpgsqlDbContextFactory with specified configuration and logging.
+		/// </summary>
+		/// <param name="configPath">Path to configuration directory containing appsettings.json.</param>
+		/// <param name="enableLogging">Enable sensitive data logging for development.</param>
 		public NpgsqlDbContextFactory(string configPath, bool enableLogging)
+			: this(configPath, enableLogging, 10)
 		{
-			this.configPath = configPath;
-			this.enableLogging = enableLogging;
-
-			if (this.optionsBuilder == null)
-			{
-				this.optionsBuilder = LoadDbContextOptionsBuilder();
-			}
 		}
 
-		internal DbContextOptionsBuilder LoadDbContextOptionsBuilder()
+		/// <summary>
+		/// Initializes a new instance of NpgsqlDbContextFactory with full configuration.
+		/// </summary>
+		/// <param name="configPath">Path to configuration directory containing appsettings.json.</param>
+		/// <param name="enableLogging">Enable sensitive data logging for development.</param>
+		/// <param name="commandTimeout">Command timeout in seconds (overrides config file value).</param>
+		public NpgsqlDbContextFactory(string configPath, bool enableLogging, int commandTimeout)
 		{
-			string basePath = string.IsNullOrWhiteSpace(this.configPath) ? AppDomain.CurrentDomain.BaseDirectory : this.configPath;
+			this.enableLogging = enableLogging;
+			this.commandTimeout = commandTimeout;
+
+			// Load configuration once in constructor - immutable after initialization
+			string basePath = string.IsNullOrWhiteSpace(configPath) ? AppDomain.CurrentDomain.BaseDirectory : configPath;
 
 			IConfiguration configuration = new ConfigurationBuilder()
 				.SetBasePath(basePath)
 				.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
 				.Build();
 
-			string? database = configuration.GetSection("Npgsql")["Database"] ?? "fish_mmo_postgresql";
-			string? userID = configuration.GetSection("Npgsql")["Username"] ?? "user";
-			string? password = configuration.GetSection("Npgsql")["Password"] ?? "pass";
-			string? host = configuration.GetSection("Npgsql")["Host"] ?? "127.0.0.1";
-			string? port = configuration.GetSection("Npgsql")["Port"] ?? "5432";
+			string database = configuration.GetSection("Npgsql")["Database"] ?? "fish_mmo_postgresql";
+			schema = database;
+			string userID = configuration.GetSection("Npgsql")["Username"] ?? "user";
+			string password = configuration.GetSection("Npgsql")["Password"] ?? "pass";
+			string host = configuration.GetSection("Npgsql")["Host"] ?? "127.0.0.1";
+			string port = configuration.GetSection("Npgsql")["Port"] ?? "5432";
 
-			string connectionString = $"Host={host};Port={port};Database={database};Username={userID};Password={password}";
+			// Read pooling configuration from settings
+			int minPoolSize = 5;
+			int maxPoolSize = 100;
+			int configTimeout = 10;
+			int connectionTimeout = 15; // Default connection timeout
+			int maxRetryCount = 3; // Default retry count
+			int maxRetryDelaySeconds = 5; // Default retry delay
 
-			DbContextOptionsBuilder dbContextOptionsBuilder = new DbContextOptionsBuilder<NpgsqlDbContext>()
-				.UseNpgsql(connectionString)
-				.UseSnakeCaseNamingConvention();
+			if (int.TryParse(configuration.GetSection("Npgsql")["MinPoolSize"], out int minSize))
+				minPoolSize = minSize;
+			if (int.TryParse(configuration.GetSection("Npgsql")["MaxPoolSize"], out int maxSize))
+				maxPoolSize = maxSize;
+			if (int.TryParse(configuration.GetSection("Npgsql")["CommandTimeout"], out int cfgTimeout))
+				configTimeout = cfgTimeout;
+			if (int.TryParse(configuration.GetSection("Npgsql")["ConnectionTimeout"], out int connTimeout))
+				connectionTimeout = connTimeout;
+			if (int.TryParse(configuration.GetSection("Npgsql")["MaxRetryCount"], out int retryCount))
+				maxRetryCount = retryCount;
+			if (int.TryParse(configuration.GetSection("Npgsql")["MaxRetryDelaySeconds"], out int retryDelay))
+				maxRetryDelaySeconds = retryDelay;
 
-			return dbContextOptionsBuilder;
+			// Use provided timeout or fall back to config
+			if (this.commandTimeout == 10 && configTimeout != 10)
+				this.commandTimeout = configTimeout;
+
+			// Store retry configuration
+			this.maxRetryCount = maxRetryCount;
+			this.maxRetryDelaySeconds = maxRetryDelaySeconds;
+
+			// Build connection string with pooling and separate timeout configuration
+			// Timeout = time to establish connection, Command Timeout = time for query execution
+			connectionString =
+				$"Host={host};Port={port};Database={database};Username={userID};Password={password};" +
+				$"Pooling=true;Minimum Pool Size={minPoolSize};Maximum Pool Size={maxPoolSize};" +
+				$"Timeout={connectionTimeout};Command Timeout={this.commandTimeout};";
+
+			// Initialize pool metrics tracker
+			this.maxPoolSize = maxPoolSize;
+			poolMetrics = new ConnectionPoolMetrics();
+
+			// Initialize query performance tracker with configuration from appsettings
+			var perfConfig = new QueryPerformanceConfiguration();
+			if (bool.TryParse(configuration.GetSection("QueryPerformanceTracking")["Enabled"], out bool perfEnabled))
+				perfConfig.Enabled = perfEnabled;
+			if (Enum.TryParse<TrackingLevel>(configuration.GetSection("QueryPerformanceTracking")["Level"], out var level))
+				perfConfig.Level = level;
+			if (double.TryParse(configuration.GetSection("QueryPerformanceTracking")["SlowQueryThresholdMs"], out double threshold))
+				perfConfig.SlowQueryThresholdMs = threshold;
+			if (double.TryParse(configuration.GetSection("QueryPerformanceTracking")["SampleRate"], out double sampleRate))
+				perfConfig.SampleRate = sampleRate;
+
+			performanceTracker = new QueryPerformanceTracker(perfConfig);
 		}
 
+		/// <summary>
+		/// Gets the connection pool metrics for monitoring and diagnostics.
+		/// </summary>
+		public ConnectionPoolMetrics PoolMetrics => poolMetrics;
+
+		/// <summary>
+		/// Gets the configured maximum pool size.
+		/// </summary>
+		public int MaxPoolSize => maxPoolSize;
+
+		/// <summary>
+		/// Gets the query performance tracker for operation-level monitoring.
+		/// </summary>
+		public QueryPerformanceTracker PerformanceTracker => performanceTracker;
+
+		/// <summary>
+		/// Creates a new DbContext instance. Thread-safe.
+		/// Each call creates a fresh context with new options - safe for concurrent use.
+		/// </summary>
+		/// <returns>A new NpgsqlDbContext instance.</returns>
 		public NpgsqlDbContext CreateDbContext()
 		{
-			if (this.optionsBuilder == null)
-			{
-				this.optionsBuilder = LoadDbContextOptionsBuilder();
-			}
+			// Track connection creation
+			poolMetrics.RecordConnectionCreated();
 
-			if (this.enableLogging)
+			try
 			{
-				this.optionsBuilder
-					.EnableSensitiveDataLogging(true);
-			}
+				// Create fresh DbContextOptionsBuilder each time - no shared state
+				var optionsBuilder = new DbContextOptionsBuilder<NpgsqlDbContext>()
+					.UseNpgsql(connectionString, npgsqlOptions =>
+					{
+						npgsqlOptions.CommandTimeout(commandTimeout);
+						// Use configurable retry policy for transient failure handling
+						npgsqlOptions.EnableRetryOnFailure(
+							maxRetryCount: maxRetryCount,
+							maxRetryDelay: TimeSpan.FromSeconds(maxRetryDelaySeconds),
+							errorCodesToAdd: null);
+					});
 
-			return new NpgsqlDbContext(this.optionsBuilder.Options);
+				if (enableLogging)
+				{
+					optionsBuilder.EnableSensitiveDataLogging(true);
+				}
+
+				var context = new NpgsqlDbContext(optionsBuilder.Options, schema);
+
+				return context;
+			}
+			catch
+			{
+				// Track connection error and decrement active count
+				poolMetrics.RecordConnectionError();
+				poolMetrics.RecordConnectionDisposed();
+				throw;
+			}
 		}
 
+		/// <summary>
+		/// Asynchronously creates a new DbContext instance.
+		/// DbContext creation is CPU-bound, not I/O-bound, so this returns a completed task.
+		/// </summary>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>A new NpgsqlDbContext instance.</returns>
+		public Task<NpgsqlDbContext> CreateDbContextAsync(CancellationToken cancellationToken = default)
+		{
+			// DbContext creation is CPU-bound, not I/O-bound
+			// Return completed task with synchronous result
+			return Task.FromResult(CreateDbContext());
+		}
+
+		/// <summary>
+		/// IDesignTimeDbContextFactory implementation for EF Core migrations.
+		/// Used by dotnet ef commands for database migrations.
+		/// </summary>
+		/// <param name="args">Command line arguments from migration tools.</param>
+		/// <returns>A new NpgsqlDbContext instance.</returns>
 		public NpgsqlDbContext CreateDbContext(string[] args)
 		{
-			if (this.optionsBuilder == null)
-			{
-				this.optionsBuilder = LoadDbContextOptionsBuilder();
-			}
-
-			if (this.enableLogging)
-			{
-				this.optionsBuilder
-					.EnableSensitiveDataLogging(true);
-			}
-
-			return new NpgsqlDbContext(this.optionsBuilder.Options);
+			return CreateDbContext();
 		}
 	}
 }
