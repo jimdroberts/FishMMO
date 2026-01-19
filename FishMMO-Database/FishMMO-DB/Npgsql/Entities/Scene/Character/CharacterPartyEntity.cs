@@ -5,9 +5,6 @@ namespace FishMMO.Database.Npgsql.Entities
 {
 	[Table("character_party")]
 	// add index on party to avoid full scans when loading guild members
-	[Index(nameof(CharacterID))]
-	[Index(nameof(PartyID))]
-	[Index(nameof(CharacterID), nameof(PartyID), IsUnique = true)]
 	public class CharacterPartyEntity
 	{
 		[DatabaseGenerated(DatabaseGeneratedOption.Identity)]

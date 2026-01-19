@@ -5,8 +5,6 @@ using Microsoft.EntityFrameworkCore;
 namespace FishMMO.Database.Npgsql.Entities
 {
 	[Table("chat")]
-	[Index(nameof(WorldServerID))]
-	[Index(nameof(TimeCreated))]
 	public class ChatEntity
 	{
 		[DatabaseGenerated(DatabaseGeneratedOption.Identity)]

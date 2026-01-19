@@ -203,7 +203,83 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <summary>
-		/// Validates that a rows affected count is greater than 0.
+	/// Executes a database operation within an explicit transaction scope.
+	/// Use this for operations that span multiple tables and require atomicity.
+	/// Note: Execution strategies cannot be used with user-controlled transactions.
+	/// </summary>
+	/// <typeparam name="TResult">The result type.</typeparam>
+	/// <param name="operation">The operation to execute with dbContext and transaction.</param>
+	/// <param name="operationName">Name of the operation for error reporting.</param>
+	/// <param name="cancellationToken">Cancellation token.</param>
+	/// <returns>DatabaseResult containing the operation result or error.</returns>
+	protected async Task<DatabaseResult<TResult>> ExecuteInTransactionAsync<TResult>(
+		Func<NpgsqlDbContext, IDbContextTransaction, Task<TResult>> operation,
+		string operationName,
+		CancellationToken cancellationToken = default)
+	{
+		await using var dbContext = DbContextFactory.CreateDbContext();
+
+		try
+		{
+			// Begin explicit transaction for multi-table atomicity
+			await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+			try
+			{
+				var result = await operation(dbContext, transaction);
+				await transaction.CommitAsync(cancellationToken);
+				return DatabaseResult<TResult>.Success(result);
+			}
+			catch
+			{
+				await transaction.RollbackAsync(cancellationToken);
+				throw;
+			}
+		}
+		catch (Exception ex)
+		{
+			return DatabaseResult<TResult>.FromException(MapException(ex, operationName, dbContext));
+		}
+	}
+
+	/// <summary>
+	/// Executes a database operation without return value within an explicit transaction scope.
+	/// Use this for operations that span multiple tables and require atomicity.
+	/// Note: Execution strategies cannot be used with user-controlled transactions.
+	/// </summary>
+	/// <param name="operation">The operation to execute with dbContext and transaction.</param>
+	/// <param name="operationName">Name of the operation for error reporting.</param>
+	/// <param name="cancellationToken">Cancellation token.</param>
+	/// <returns>DatabaseResult indicating success or error.</returns>
+	protected async Task<DatabaseResult> ExecuteInTransactionAsync(
+		Func<NpgsqlDbContext, IDbContextTransaction, Task> operation,
+		string operationName,
+		CancellationToken cancellationToken = default)
+	{
+		await using var dbContext = DbContextFactory.CreateDbContext();
+
+		try
+		{
+			// Begin explicit transaction for multi-table atomicity
+			await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+			try
+			{
+				await operation(dbContext, transaction);
+				await transaction.CommitAsync(cancellationToken);
+				return DatabaseResult.Success();
+			}
+			catch
+			{
+				await transaction.RollbackAsync(cancellationToken);
+				throw;
+			}
+		}
+		catch (Exception ex)
+		{
+			return DatabaseResult.FromException(MapException(ex, operationName, dbContext));
+		}
+	}
+
+	/// <summary>
 		/// Returns DatabaseEntityNotFoundException if no rows were affected.
 		/// </summary>
 		/// <param name="rowsAffected">Number of rows affected by the operation.</param>

@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using FishMMO.Database.Data;
 using FishMMO.Database.Data.Enums;
 using FishMMO.Database.Npgsql.Entities;
+using FishMMO.Database.Exceptions;
 using Microsoft.EntityFrameworkCore;
 
 namespace FishMMO.Database.Npgsql.Services
@@ -189,6 +190,25 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
+		/// <remarks>
+		/// <para><b>Transaction Scope:</b></para>
+		/// This operation uses an explicit transaction to ensure atomicity across multiple tables.
+		/// When performing a hard delete, the following related data is automatically deleted via 
+		/// CASCADE constraints configured in entity relationships:
+		/// <list type="bullet">
+		/// <item>Character abilities (character_ability table)</item>
+		/// <item>Character attributes (character_attribute table)</item>
+		/// <item>Character equipment (character_equipment table)</item>
+		/// <item>Character inventory (character_inventory table)</item>
+		/// <item>Character guild membership (character_guild table)</item>
+		/// <item>Character party membership (character_party table)</item>
+		/// <item>Character mail (character_mail table)</item>
+		/// <item>Character quests (character_quest table)</item>
+		/// <item>Character pets (character_pet table)</item>
+		/// <item>Character buffs, hotkeys, skills, etc.</item>
+		/// </list>
+		/// Soft deletes only mark the character as deleted without removing related data.
+		/// </remarks>
 		public async Task<DatabaseResult> DeleteCharacterAsync(long characterId, bool softDelete, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0)
@@ -196,36 +216,39 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			var result = await ExecuteWithStrategyAsync<int>(async (dbContext, strategy) =>
+			// Use explicit transaction for atomic multi-table operation
+			return await ExecuteInTransactionAsync(async (dbContext, transaction) =>
 			{
-				return await strategy.ExecuteAsync(async () =>
+				int rowsAffected;
+
+				if (softDelete)
 				{
-					// Use atomic UPDATE or DELETE for thread safety
-					if (softDelete)
-					{
-						return await dbContext.Database.ExecuteSqlInterpolatedAsync(
-							$@"UPDATE {TableName} 
-							   SET time_deleted = CURRENT_TIMESTAMP,
-							       deleted = true,
-							       online = false
-							   WHERE id = {characterId}",
-							cancellationToken);
-					}
-					else
-					{
-						return await dbContext.Database.ExecuteSqlInterpolatedAsync(
-							$@"DELETE FROM {TableName} 
-							   WHERE id = {characterId}",
-							cancellationToken);
-					}
-				});
+					// Soft delete: mark as deleted and set offline
+					rowsAffected = await dbContext.Database.ExecuteSqlInterpolatedAsync(
+						$@"UPDATE {TableName} 
+						SET time_deleted = CURRENT_TIMESTAMP, 
+							deleted = true, 
+							online = false 
+						WHERE id = {characterId}",
+						cancellationToken);
+				}
+				else
+				{
+					// Hard delete: CASCADE constraints will automatically delete related data
+					// This includes abilities, attributes, equipment, inventory, guild/party membership, etc.
+					rowsAffected = await dbContext.Database.ExecuteSqlInterpolatedAsync(
+						$@"DELETE FROM {TableName} 
+						WHERE id = {characterId}",
+						cancellationToken);
+				}
+
+				if (rowsAffected == 0)
+				{
+					throw new DatabaseEntityNotFoundException("Character", characterId.ToString());
+				}
 			}, "DeleteCharacter", cancellationToken);
-
-			if (!result.IsSuccess)
-				return DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage);
-
-			return ValidateRowsAffected(result.Data, "Character", characterId);
 		}
+
 
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<CharacterData?>> GetCharacterAsync(long characterId, CancellationToken cancellationToken = default)

@@ -5,7 +5,6 @@ using Microsoft.EntityFrameworkCore;
 namespace FishMMO.Database.Npgsql.Entities
 {
 	[Table("kick_requests")]
-	[Index(nameof(AccountName))]
 	public class KickRequestEntity
 	{
 		[DatabaseGenerated(DatabaseGeneratedOption.Identity)]

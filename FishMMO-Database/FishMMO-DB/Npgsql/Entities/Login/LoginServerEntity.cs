@@ -5,7 +5,6 @@ using Microsoft.EntityFrameworkCore;
 namespace FishMMO.Database.Npgsql.Entities
 {
 	[Table("login_servers")]
-	[Index(nameof(Name))]
 	public class LoginServerEntity
 	{
 		[DatabaseGenerated(DatabaseGeneratedOption.Identity)]

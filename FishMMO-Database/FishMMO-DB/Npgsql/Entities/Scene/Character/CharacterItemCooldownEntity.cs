@@ -4,8 +4,6 @@ using Microsoft.EntityFrameworkCore;
 namespace FishMMO.Database.Npgsql.Entities
 {
 	[Table("character_itemcooldowns")]
-	[Index(nameof(CharacterID))]
-	[Index(nameof(CharacterID), nameof(Category), IsUnique = true)]
 	public class CharacterItemCooldownEntity
 	{
 		[DatabaseGenerated(DatabaseGeneratedOption.Identity)]

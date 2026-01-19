@@ -4,8 +4,6 @@ using Microsoft.EntityFrameworkCore;
 namespace FishMMO.Database.Npgsql.Entities
 {
 	[Table("character_achievements")]
-	[Index(nameof(CharacterID))]
-	[Index(nameof(CharacterID), nameof(TemplateID), IsUnique = true)]
 	public class CharacterAchievementEntity
 	{
 		[DatabaseGenerated(DatabaseGeneratedOption.Identity)]

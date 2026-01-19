@@ -4,9 +4,6 @@ using Microsoft.EntityFrameworkCore;
 namespace FishMMO.Database.Npgsql.Entities
 {
 	[Table("character_hotkeys")]
-	[Index(nameof(CharacterID))]
-	[Index(nameof(Slot))]
-	[Index(nameof(CharacterID), nameof(Slot), IsUnique = true)]
 	public class CharacterHotkeyEntity
 	{
 		[DatabaseGenerated(DatabaseGeneratedOption.Identity)]

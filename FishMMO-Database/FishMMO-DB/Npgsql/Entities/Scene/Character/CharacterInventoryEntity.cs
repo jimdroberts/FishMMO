@@ -4,8 +4,6 @@ using Microsoft.EntityFrameworkCore;
 namespace FishMMO.Database.Npgsql.Entities
 {
 	[Table("character_inventory")]
-	[Index(nameof(CharacterID))]
-	[Index(nameof(CharacterID), nameof(Slot), IsUnique = true)]
 	public class CharacterInventoryEntity
 	{
 		[DatabaseGenerated(DatabaseGeneratedOption.Identity)]

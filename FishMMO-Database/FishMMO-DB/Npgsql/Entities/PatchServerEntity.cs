@@ -5,7 +5,6 @@ using Microsoft.EntityFrameworkCore;
 namespace FishMMO.Database.Npgsql.Entities
 {
 	[Table("patch_servers")]
-	[Index(nameof(Address), nameof(Port), IsUnique = true)]
 	public class PatchServerEntity
 	{
 		[DatabaseGenerated(DatabaseGeneratedOption.Identity)]

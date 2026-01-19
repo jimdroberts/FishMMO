@@ -121,19 +121,22 @@ namespace FishMMO.Database.Npgsql.Services
 			// Use SceneData? (nullable) since no pending scenes is valid business logic, not an error
 			var result = await ExecuteWithStrategyAsync<SceneData?>(async (dbContext, strategy) =>
 			{
-				// Atomically dequeue next pending scene with FOR UPDATE SKIP LOCKED
+				// Atomically dequeue next pending scene with CTE and FOR UPDATE SKIP LOCKED
+				// CTE ensures the row is locked BEFORE the UPDATE, preventing race conditions
 				var entity = await dbContext.Scenes
 					.FromSqlInterpolated($@"
-					UPDATE {TableName}
-					SET scene_status = {(int)SceneStatus.Loading}
-					WHERE id = (
+					WITH scene_to_update AS (
 						SELECT id FROM {TableName}
 						WHERE scene_status = {(int)SceneStatus.Pending}
 						ORDER BY time_created
-						LIMIT 1
 						FOR UPDATE SKIP LOCKED
+						LIMIT 1
 					)
-					RETURNING id, world_server_id, scene_server_id, scene_name, scene_handle, scene_status, scene_type, character_id, character_count, time_created")
+					UPDATE {TableName}
+					SET scene_status = {(int)SceneStatus.Loading}
+					FROM scene_to_update
+					WHERE {TableName}.id = scene_to_update.id
+					RETURNING {TableName}.id, {TableName}.world_server_id, {TableName}.scene_server_id, {TableName}.scene_name, {TableName}.scene_handle, {TableName}.scene_status, {TableName}.scene_type, {TableName}.character_id, {TableName}.character_count, {TableName}.time_created")
 					.AsNoTracking()
 					.FirstOrDefaultAsync(cancellationToken);
 

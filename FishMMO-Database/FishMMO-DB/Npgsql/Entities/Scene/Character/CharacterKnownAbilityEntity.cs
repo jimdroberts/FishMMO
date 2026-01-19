@@ -4,8 +4,6 @@ using Microsoft.EntityFrameworkCore;
 namespace FishMMO.Database.Npgsql.Entities
 {
 	[Table("character_knownabilities")]
-	[Index(nameof(CharacterID))]
-	[Index(nameof(CharacterID), nameof(TemplateID), IsUnique = true)]
 	public class CharacterKnownAbilityEntity
 	{
 		[DatabaseGenerated(DatabaseGeneratedOption.Identity)]

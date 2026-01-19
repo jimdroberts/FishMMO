@@ -5,7 +5,6 @@ using Microsoft.EntityFrameworkCore;
 namespace FishMMO.Database.Npgsql.Entities
 {
 	[Table("guild_updates")]
-	[Index(nameof(GuildID), IsUnique = true)]
 	public class GuildUpdateEntity
 	{
 		[DatabaseGenerated(DatabaseGeneratedOption.Identity)]

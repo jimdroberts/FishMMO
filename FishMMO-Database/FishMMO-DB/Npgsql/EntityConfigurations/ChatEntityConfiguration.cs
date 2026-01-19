@@ -55,6 +55,12 @@ namespace FishMMO.Database.Npgsql.Entities
 			// Covers WHERE time_created >= @lastFetch AND id > @lastPosition ORDER BY time_created, id
 			builder.HasIndex(e => new { e.TimeCreated, e.ID })
 				.HasDatabaseName("IX_Chat_TimeCreated_ID");
+
+			// Composite index for scene-server local channel filtering (FetchAsync hot path)
+			// Covers WHERE scene_server_id = @sceneServerId filtering by channel
+			// Used to exclude local messages: localChannels.Contains(c.Channel) && c.SceneServerID == sceneServerId
+			builder.HasIndex(e => new { e.SceneServerID, e.Channel })
+				.HasDatabaseName("IX_Chat_SceneServerID_Channel");
 		}
 	}
 }

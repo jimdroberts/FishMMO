@@ -110,6 +110,15 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
+		/// <remarks>
+		/// <para><b>Transaction Scope:</b></para>
+		/// This operation uses an explicit transaction to ensure atomicity.
+		/// CASCADE delete constraints automatically remove related data:
+		/// <list type="bullet">
+		/// <item>All character guild memberships (character_guild table)</item>
+		/// <item>Guild update notifications (guild_update table)</item>
+		/// </list>
+		/// </remarks>
 		public async Task<DatabaseResult> DeleteAsync(long guildId, CancellationToken cancellationToken = default)
 		{
 			if (guildId <= 0)
@@ -117,11 +126,17 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid guild ID");
 			}
 
-			return await ExecuteWithStrategyAsync(async context =>
+			// Use explicit transaction for atomic multi-table operation
+			return await ExecuteInTransactionAsync(async (dbContext, transaction) =>
 			{
-				await context.Database.ExecuteSqlInterpolatedAsync(
+				var rowsAffected = await dbContext.Database.ExecuteSqlInterpolatedAsync(
 					$"DELETE FROM {TableName} WHERE id = {guildId}",
 					cancellationToken);
+
+				if (rowsAffected == 0)
+				{
+					throw new DatabaseEntityNotFoundException("Guild", guildId.ToString());
+				}
 			}, "DeleteGuild", cancellationToken);
 		}
 

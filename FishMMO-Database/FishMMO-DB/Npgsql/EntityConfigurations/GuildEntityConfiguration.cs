@@ -28,9 +28,6 @@ namespace FishMMO.Database.Npgsql.Entities
 				.IsUnique()
 				.HasDatabaseName("IX_Guild_Name_Unique");
 
-			// Performance index for guild lookups
-			builder.HasIndex(e => e.Name)
-				.HasDatabaseName("IX_Guild_Name");
 		}
 	}
 }

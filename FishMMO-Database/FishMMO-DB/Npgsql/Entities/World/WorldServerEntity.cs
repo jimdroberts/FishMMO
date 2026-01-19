@@ -5,7 +5,6 @@ using Microsoft.EntityFrameworkCore;
 namespace FishMMO.Database.Npgsql.Entities
 {
 	[Table("world_servers")]
-	[Index(nameof(Name), IsUnique = true)]
 	public class WorldServerEntity
 	{
 		[DatabaseGenerated(DatabaseGeneratedOption.Identity)]

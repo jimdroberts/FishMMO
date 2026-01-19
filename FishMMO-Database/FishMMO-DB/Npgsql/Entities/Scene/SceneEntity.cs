@@ -5,9 +5,6 @@ using Microsoft.EntityFrameworkCore;
 namespace FishMMO.Database.Npgsql.Entities
 {
 	[Table("scenes")]
-	[Index(nameof(SceneServerID))]
-	[Index(nameof(WorldServerID))]
-	[Index(nameof(CharacterID))]
 	public class SceneEntity
 	{
 		[DatabaseGenerated(DatabaseGeneratedOption.Identity)]

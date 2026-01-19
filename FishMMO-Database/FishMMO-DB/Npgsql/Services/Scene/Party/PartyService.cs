@@ -62,28 +62,38 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> DeleteAsync(long partyId, CancellationToken cancellationToken = default)
+	/// <remarks>
+	/// <para><b>Transaction Scope:</b></para>
+	/// This operation uses an explicit transaction to ensure atomicity.
+	/// CASCADE delete constraints automatically remove related data:
+	/// <list type="bullet">
+	/// <item>All character party memberships (character_party table)</item>
+	/// <item>Party update notifications (party_update table)</item>
+	/// </list>
+	/// </remarks>
+	public async Task<DatabaseResult> DeleteAsync(long partyId, CancellationToken cancellationToken = default)
+	{
+		if (partyId <= 0)
 		{
-			if (partyId <= 0)
-			{
-				return DatabaseResult.Failure("INVALID_PARTY_ID", "Party ID must be greater than zero.");
-			}
-
-			return await ExecuteWithStrategyAsync(async (dbContext, strategy) =>
-			{
-				var rowsAffected = await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$"DELETE FROM {TableName} WHERE id = {partyId}",
-					cancellationToken);
-
-				if (rowsAffected == 0)
-				{
-					throw new DatabaseEntityNotFoundException(
-						"Party",
-						partyId.ToString(),
-						"Party not found.");
-				}
-			}, "DeleteParty", cancellationToken);
+			return DatabaseResult.Failure("INVALID_PARTY_ID", "Party ID must be greater than zero.");
 		}
+
+		// Use explicit transaction for atomic multi-table operation
+		return await ExecuteInTransactionAsync(async (dbContext, transaction) =>
+		{
+			var rowsAffected = await dbContext.Database.ExecuteSqlInterpolatedAsync(
+				$"DELETE FROM {TableName} WHERE id = {partyId}",
+				cancellationToken);
+
+			if (rowsAffected == 0)
+			{
+				throw new DatabaseEntityNotFoundException(
+					"Party",
+					partyId.ToString(),
+					"Party not found.");
+			}
+		}, "DeleteParty", cancellationToken);
+	}
 
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<PartyData>> LoadAsync(long partyId, CancellationToken cancellationToken = default)

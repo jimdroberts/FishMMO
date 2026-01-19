@@ -36,10 +36,9 @@ namespace FishMMO.Database.Npgsql.Entities
 			builder.Property(e => e.Port)
 				.IsRequired();
 
-			// Unique constraint on server name
+			// Index on server name
 			builder.HasIndex(e => e.Name)
-				.IsUnique()
-				.HasDatabaseName("IX_LoginServer_Name_Unique");
+				.HasDatabaseName("IX_LoginServer_Name");
 
 			// Performance index for active server queries
 			builder.HasIndex(e => e.LastPulse)

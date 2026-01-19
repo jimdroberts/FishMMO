@@ -64,42 +64,52 @@ namespace FishMMO.Database.Npgsql
 			// Set default schema for all entities
 			modelBuilder.HasDefaultSchema(Schema);
 
-			// Apply all entity configurations for explicit control over indexes, constraints, and defaults
-			// Benefits: Explicit index definitions, collation settings, computed columns, FK relationships
-			modelBuilder.ApplyConfiguration(new CharacterEntityConfiguration());
-			modelBuilder.ApplyConfiguration(new AccountEntityConfiguration());
-			modelBuilder.ApplyConfiguration(new GuildEntityConfiguration());
-			modelBuilder.ApplyConfiguration(new PartyEntityConfiguration());
-			modelBuilder.ApplyConfiguration(new SceneEntityConfiguration());
-			modelBuilder.ApplyConfiguration(new LoginServerEntityConfiguration());
+			// Server entities
 			modelBuilder.ApplyConfiguration(new PatchServerEntityConfiguration());
+			modelBuilder.ApplyConfiguration(new LoginServerEntityConfiguration());
 			modelBuilder.ApplyConfiguration(new WorldServerEntityConfiguration());
 			modelBuilder.ApplyConfiguration(new SceneServerEntityConfiguration());
-			modelBuilder.ApplyConfiguration(new ChatEntityConfiguration());
+
+			// Account/Auth entities
+			modelBuilder.ApplyConfiguration(new AccountEntityConfiguration());
 			modelBuilder.ApplyConfiguration(new KickRequestEntityConfiguration());
-			modelBuilder.ApplyConfiguration(new CharacterMailEntityConfiguration());
-			modelBuilder.ApplyConfiguration(new CharacterGuildEntityConfiguration());
-			modelBuilder.ApplyConfiguration(new CharacterPartyEntityConfiguration());
-			modelBuilder.ApplyConfiguration(new CharacterInventoryEntityConfiguration());
+
+			// Scene/World entities
+			modelBuilder.ApplyConfiguration(new SceneEntityConfiguration());
+			modelBuilder.ApplyConfiguration(new ChatEntityConfiguration());
+
+			// Character core
+			modelBuilder.ApplyConfiguration(new CharacterEntityConfiguration());
+
+			// Character child entities
 			modelBuilder.ApplyConfiguration(new CharacterAbilityEntityConfiguration());
+			modelBuilder.ApplyConfiguration(new CharacterAchievementEntityConfiguration());
 			modelBuilder.ApplyConfiguration(new CharacterAttributeEntityConfiguration());
-			modelBuilder.ApplyConfiguration(new CharacterEquipmentEntityConfiguration());		modelBuilder.ApplyConfiguration(new GuildUpdateEntityConfiguration());
-		modelBuilder.ApplyConfiguration(new PartyUpdateEntityConfiguration());
-			// other settings
-			/*modelBuilder.Entity<CharacterBuffEntity>()
-                .HasKey(cb => new { cb.character, cb.name });
-            modelBuilder.Entity<CharacterEquipmentEntity>()
-                .HasKey(ce => new { ce.character, ce.slot });
-            modelBuilder.Entity<CharacterGuildEntity>()
-                .HasKey(cg => new { cg.character, cg.guild });
-            modelBuilder.Entity<CharacterInventoryEntity>()
-                .HasKey(ci => new { ci.character, ci.slot });
-            modelBuilder.Entity<CharacterItemCooldownEntity>()
-                .HasKey(ic => new { ic.character, ic.category });
-            modelBuilder.Entity<CharacterQuestEntity>()
-                .HasKey(cq => new { cq.character, cq.name });
-            modelBuilder.Entity<CharacterSkillEntity>()
-                .HasKey(cs => new { cs.character, cs.hash });*/
+			modelBuilder.ApplyConfiguration(new CharacterBankEntityConfiguration());
+			modelBuilder.ApplyConfiguration(new CharacterBuffEntityConfiguration());
+			modelBuilder.ApplyConfiguration(new CharacterEquipmentEntityConfiguration());
+			modelBuilder.ApplyConfiguration(new CharacterFactionEntityConfiguration());
+			modelBuilder.ApplyConfiguration(new CharacterFriendEntityConfiguration());
+			modelBuilder.ApplyConfiguration(new CharacterHotkeyEntityConfiguration());
+			modelBuilder.ApplyConfiguration(new CharacterInventoryEntityConfiguration());
+			modelBuilder.ApplyConfiguration(new CharacterItemCooldownEntityConfiguration());
+			modelBuilder.ApplyConfiguration(new CharacterKnownAbilityEntityConfiguration());
+			modelBuilder.ApplyConfiguration(new CharacterMailEntityConfiguration());
+			modelBuilder.ApplyConfiguration(new CharacterPetEntityConfiguration());
+			modelBuilder.ApplyConfiguration(new CharacterPetAttributeEntityConfiguration());
+			modelBuilder.ApplyConfiguration(new CharacterPetBuffEntityConfiguration());
+			modelBuilder.ApplyConfiguration(new CharacterQuestEntityConfiguration());
+			modelBuilder.ApplyConfiguration(new CharacterSkillEntityConfiguration());
+
+			// Guild entities
+			modelBuilder.ApplyConfiguration(new GuildEntityConfiguration());
+			modelBuilder.ApplyConfiguration(new GuildUpdateEntityConfiguration());
+			modelBuilder.ApplyConfiguration(new CharacterGuildEntityConfiguration());
+
+			// Party entities
+			modelBuilder.ApplyConfiguration(new PartyEntityConfiguration());
+			modelBuilder.ApplyConfiguration(new PartyUpdateEntityConfiguration());
+			modelBuilder.ApplyConfiguration(new CharacterPartyEntityConfiguration());
 		}
 	}
 }
