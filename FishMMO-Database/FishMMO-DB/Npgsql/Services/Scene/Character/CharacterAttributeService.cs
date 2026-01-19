@@ -4,26 +4,36 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Database.Data;
-using FishMMO.Database.Exceptions;
 using FishMMO.Database.Npgsql.Entities;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 
 namespace FishMMO.Database.Npgsql.Services
 {
-	/// <inheritdoc/>
-	public sealed class CharacterAttributeService : ICharacterAttributeService
+	/// <summary>
+	/// Service for managing character attributes in the database.
+	/// Provides async operations for CRUD operations on character attribute data.
+	/// Implements execution strategies for automatic retry on transient database failures.
+	/// Returns DatabaseResult for consistent, safe error handling.
+	/// </summary>
+	public sealed class CharacterAttributeService : BaseService<CharacterAttributeEntity>, ICharacterAttributeService
 	{
-		private readonly INpgsqlDbContextFactory dbContextFactory;
+		/// <summary>
+		/// Compiled query for retrieving character attributes (hot path for character load).
+		/// </summary>
+		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterAttributeEntity>>> GetAttributesQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
+				context.CharacterAttributes
+					.AsNoTracking()
+					.Where(a => a.CharacterID == characterId)
+					.ToList());
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="CharacterAttributeService"/> class.
 		/// </summary>
 		/// <param name="dbContextFactory">Factory for creating database contexts.</param>
 		/// <exception cref="ArgumentNullException">Thrown when dbContextFactory is null.</exception>
-		public CharacterAttributeService(INpgsqlDbContextFactory dbContextFactory)
+		public CharacterAttributeService(INpgsqlDbContextFactory dbContextFactory) : base(dbContextFactory)
 		{
-			this.dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
 		}
 
 		/// <inheritdoc/>
@@ -36,14 +46,10 @@ namespace FishMMO.Database.Npgsql.Services
 					"Attributes collection must not be null or empty.");
 			}
 
-			try
+			return await ExecuteWithStrategyAsync(async (dbContext, strategy) =>
 			{
-				await using var dbContext = dbContextFactory.CreateDbContext();
-				var strategy = dbContext.Database.CreateExecutionStrategy();
-
 				await strategy.ExecuteAsync(async () =>
 				{
-					var tableName = dbContext.GetTableName<CharacterAttributeEntity>();
 					var attributeList = attributes.ToList();
 
 					// Extract arrays for bulk UPSERT
@@ -54,7 +60,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 					// Single bulk UPSERT using UNNEST - atomic operation, no transaction needed
 					await dbContext.Database.ExecuteSqlInterpolatedAsync(
-						$@"INSERT INTO {tableName} 
+						$@"INSERT INTO {TableName} 
 						(character_id, template_id, value, current_value)
 						SELECT * FROM UNNEST(
 							{characterIds}::bigint[],
@@ -68,46 +74,7 @@ namespace FishMMO.Database.Npgsql.Services
 							current_value = EXCLUDED.current_value",
 							cancellationToken);
 				});
-
-				return DatabaseResult.Success();
-			}
-			catch (OperationCanceledException)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseTimeoutException("SaveCharacterAttributes", 30));
-			}
-			catch (PostgresException pgEx)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseQueryException(
-						"SaveCharacterAttributes",
-						"A database error occurred.",
-						$"Database query error (SQL State: {pgEx.SqlState}): {pgEx.Message}",
-						false,
-						pgEx.SqlState,
-						pgEx));
-			}
-			catch (NpgsqlException npgsqlEx)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseConnectionException("Failed to connect to the database.", npgsqlEx));
-			}
-			catch (DbUpdateException dbEx)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseQueryException(
-						"SaveCharacterAttributes",
-						"A database error occurred.",
-						$"Database error: {dbEx.Message}",
-						false,
-						null,
-						dbEx));
-			}
-			catch (Exception ex)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseException("An unexpected error occurred.", ex));
-			}
+			}, "SaveCharacterAttributes", cancellationToken);
 		}
 
 		/// <inheritdoc/>
@@ -120,59 +87,16 @@ namespace FishMMO.Database.Npgsql.Services
 					"Character ID must be greater than 0.");
 			}
 
-			try
+			return await ExecuteWithStrategyAsync(async (dbContext, strategy) =>
 			{
-				await using var dbContext = dbContextFactory.CreateDbContext();
-				var strategy = dbContext.Database.CreateExecutionStrategy();
-
 				await strategy.ExecuteAsync(async () =>
 				{
 					// Use atomic DELETE for thread safety
-					var tableName = dbContext.GetTableName<CharacterAttributeEntity>();
 					await dbContext.Database.ExecuteSqlInterpolatedAsync(
-						$@"DELETE FROM {tableName} WHERE character_id = {characterId}",
+						$@"DELETE FROM {TableName} WHERE character_id = {characterId}",
 						cancellationToken);
 				});
-
-				return DatabaseResult.Success();
-			}
-			catch (OperationCanceledException)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseTimeoutException("DeleteCharacterAttributes", 30));
-			}
-			catch (PostgresException pgEx)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseQueryException(
-						"DeleteCharacterAttributes",
-						"A database error occurred.",
-						$"Database query error (SQL State: {pgEx.SqlState}): {pgEx.Message}",
-						false,
-						pgEx.SqlState,
-						pgEx));
-			}
-			catch (NpgsqlException npgsqlEx)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseConnectionException("Failed to connect to the database.", npgsqlEx));
-			}
-			catch (DbUpdateException dbEx)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseQueryException(
-						"DeleteCharacterAttributes",
-						"A database error occurred.",
-						$"Database error: {dbEx.Message}",
-						false,
-						null,
-						dbEx));
-			}
-			catch (Exception ex)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseException("An unexpected error occurred.", ex));
-			}
+			}, "DeleteCharacterAttributes", cancellationToken);
 		}
 
 		/// <inheritdoc/>
@@ -185,51 +109,19 @@ namespace FishMMO.Database.Npgsql.Services
 					"Character ID must be greater than 0.");
 			}
 
-			try
+			return await ExecuteWithStrategyAsync(async dbContext =>
 			{
-				await using var dbContext = dbContextFactory.CreateDbContext();
+				var entities = await GetAttributesQuery(dbContext, characterId, cancellationToken);
+				var attributes = entities.Select(a => new CharacterAttributeData(
+					id: a.ID,
+					characterID: a.CharacterID,
+					templateID: a.TemplateID,
+					value: a.Value,
+					currentValue: a.CurrentValue
+				)).ToList();
 
-				var attributes = await dbContext.CharacterAttributes
-					.AsNoTracking()
-					.Where(a => a.CharacterID == characterId)
-					.Select(a => new CharacterAttributeData
-					{
-						ID = a.ID,
-						CharacterID = a.CharacterID,
-						TemplateID = a.TemplateID,
-						Value = a.Value,
-						CurrentValue = a.CurrentValue
-					})
-					.ToListAsync(cancellationToken);
-
-				return DatabaseResult<IReadOnlyList<CharacterAttributeData>>.Success(attributes);
-			}
-			catch (OperationCanceledException)
-			{
-				return DatabaseResult<IReadOnlyList<CharacterAttributeData>>.FromException(
-					new DatabaseTimeoutException("GetCharacterAttributes", 30));
-			}
-			catch (PostgresException pgEx)
-			{
-				return DatabaseResult<IReadOnlyList<CharacterAttributeData>>.FromException(
-					new DatabaseQueryException(
-						"GetCharacterAttributes",
-						"A database error occurred.",
-						$"Database query error (SQL State: {pgEx.SqlState}): {pgEx.Message}",
-						false,
-						pgEx.SqlState,
-						pgEx));
-			}
-			catch (NpgsqlException npgsqlEx)
-			{
-				return DatabaseResult<IReadOnlyList<CharacterAttributeData>>.FromException(
-					new DatabaseConnectionException("Failed to connect to the database.", npgsqlEx));
-			}
-			catch (Exception ex)
-			{
-				return DatabaseResult<IReadOnlyList<CharacterAttributeData>>.FromException(
-					new DatabaseException("An unexpected error occurred.", ex));
-			}
+				return (IReadOnlyList<CharacterAttributeData>)attributes;
+			}, "GetCharacterAttributes", cancellationToken);
 		}
 	}
 }

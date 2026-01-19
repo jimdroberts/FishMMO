@@ -5,10 +5,19 @@ namespace FishMMO.Database.Data
 	/// </summary>
 	public struct CharacterHotkeyData
 	{
-		public long ID { get; set; }
-		public long CharacterID { get; set; }
-		public byte Type { get; set; }
-		public int Slot { get; set; }
-		public long ReferenceID { get; set; }
+		public readonly long ID;
+		public readonly long CharacterID;
+		public readonly byte Type;
+		public readonly int Slot;
+		public readonly long ReferenceID;
+
+		public CharacterHotkeyData(long id, long characterID, byte type, int slot, long referenceID)
+		{
+			ID = id;
+			CharacterID = characterID;
+			Type = type;
+			Slot = slot;
+			ReferenceID = referenceID;
+		}
 	}
 }

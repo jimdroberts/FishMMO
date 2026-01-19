@@ -4,9 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 using FishMMO.Database.Data;
-using FishMMO.Database.Exceptions;
 using FishMMO.Database.Npgsql.Entities;
 
 namespace FishMMO.Database.Npgsql.Services
@@ -34,21 +32,25 @@ namespace FishMMO.Database.Npgsql.Services
 	/// Methods return DatabaseResult to provide structured error handling
 	/// without throwing exceptions to calling code.
 	/// </remarks>
-	public sealed class CharacterFactionService : ICharacterFactionService
+	public sealed class CharacterFactionService : BaseService<CharacterFactionEntity>, ICharacterFactionService
 	{
 		/// <summary>
-		/// Factory for creating database contexts.
+		/// Compiled query for retrieving character factions.
 		/// </summary>
-		private readonly INpgsqlDbContextFactory dbContextFactory;
+		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterFactionEntity>>> GetFactionsQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
+				context.CharacterFactions
+					.AsNoTracking()
+					.Where(f => f.CharacterID == characterId)
+					.ToList());
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="CharacterFactionService"/> class.
 		/// </summary>
 		/// <param name="dbContextFactory">Factory for creating database contexts.</param>
 		/// <exception cref="ArgumentNullException">Thrown when dbContextFactory is null.</exception>
-		public CharacterFactionService(INpgsqlDbContextFactory dbContextFactory)
+		public CharacterFactionService(INpgsqlDbContextFactory dbContextFactory) : base(dbContextFactory)
 		{
-			this.dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
 		}
 
 		/// <inheritdoc/>
@@ -59,88 +61,31 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				return DatabaseResult.Failure(
 					"VALIDATION_ERROR",
-					"Empty or null factions collection.",
-					isTransient: false);
+					"Empty or null factions collection.");
 			}
 
-			await using var dbContext = dbContextFactory.CreateDbContext();
-
-			try
+			return await ExecuteWithStrategyAsync(async (dbContext, strategy) =>
 			{
-				var strategy = dbContext.Database.CreateExecutionStrategy();
+				// Extract arrays for bulk UPSERT
+				var characterIds = factionList.Select(f => f.CharacterID).ToArray();
+				var templateIds = factionList.Select(f => f.TemplateID).ToArray();
+				var values = factionList.Select(f => f.Value).ToArray();
 
+				// Single bulk UPSERT using UNNEST - atomic operation, no transaction needed
 				await strategy.ExecuteAsync(async () =>
 				{
-					var tableName = dbContext.GetTableName<CharacterFactionEntity>();
-
-					// Extract arrays for bulk UPSERT
-					var characterIds = factionList.Select(f => f.CharacterID).ToArray();
-					var templateIds = factionList.Select(f => f.TemplateID).ToArray();
-					var values = factionList.Select(f => f.Value).ToArray();
-
-					// Single bulk UPSERT using UNNEST - atomic operation, no transaction needed
 					await dbContext.Database.ExecuteSqlInterpolatedAsync(
-						$@"INSERT INTO {tableName} (character_id, template_id, value)
-						SELECT * FROM UNNEST(
-							{characterIds}::bigint[],
-							{templateIds}::int[],
-							{values}::int[]
-						)
-						ON CONFLICT (character_id, template_id) DO UPDATE SET
-							value = EXCLUDED.value",
+						$@"INSERT INTO {TableName} (character_id, template_id, value)
+					SELECT * FROM UNNEST(
+						{characterIds}::bigint[],
+						{templateIds}::int[],
+						{values}::int[]
+					)
+					ON CONFLICT (character_id, template_id) DO UPDATE SET
+						value = EXCLUDED.value",
 						cancellationToken);
 				});
-
-				return DatabaseResult.Success();
-			}
-			catch (OperationCanceledException)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseTimeoutException("SaveFactions", 10));
-			}
-			catch (PostgresException ex) when (ex.SqlState == "23505") // Unique violation
-			{
-				return DatabaseResult.FromException(
-					new DatabaseConstraintException(
-						ConstraintType.Unique,
-						"character_faction_character_id_template_id_key",
-						"A faction with this character and template ID already exists.",
-						ex));
-			}
-			catch (PostgresException ex) when (ex.SqlState == "23503") // Foreign key violation
-			{
-				return DatabaseResult.FromException(
-					new DatabaseConstraintException(
-						ConstraintType.ForeignKey,
-						"character_faction_character_id_fkey",
-						"Character does not exist.",
-						ex));
-			}
-			catch (NpgsqlException ex)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseConnectionException("database", ex));
-			}
-			catch (DbUpdateException ex)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseQueryException(
-						"SaveFactions",
-						"Failed to save factions due to a database error.",
-						$"DbUpdateException in SaveFactionsAsync: {ex.Message}",
-						isTransient: false,
-						innerException: ex));
-			}
-			catch (Exception ex)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseQueryException(
-						"SaveFactions",
-						"An unexpected error occurred while saving factions.",
-						$"Unexpected error in SaveFactionsAsync: {ex.Message}",
-						isTransient: false,
-						innerException: ex));
-			}
+			}, "SaveFactions", cancellationToken);
 		}
 
 		/// <inheritdoc/>
@@ -150,57 +95,19 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				return DatabaseResult.Failure(
 					"VALIDATION_ERROR",
-					"Invalid character ID. Character ID must be greater than 0.",
-					isTransient: false);
+					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
-			await using var dbContext = dbContextFactory.CreateDbContext();
-
-			try
+			return await ExecuteWithStrategyAsync(async (dbContext, strategy) =>
 			{
-				var strategy = dbContext.Database.CreateExecutionStrategy();
-
+				// Use atomic DELETE for thread safety
 				await strategy.ExecuteAsync(async () =>
 				{
-					// Use atomic DELETE for thread safety
-					var tableName = dbContext.GetTableName<CharacterFactionEntity>();
 					await dbContext.Database.ExecuteSqlInterpolatedAsync(
-						$@"DELETE FROM {tableName} WHERE character_id = {characterId}",
+						$@"DELETE FROM {TableName} WHERE character_id = {characterId}",
 						cancellationToken);
 				});
-
-				return DatabaseResult.Success();
-			}
-			catch (OperationCanceledException)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseTimeoutException("DeleteFactions", 10));
-			}
-			catch (NpgsqlException ex)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseConnectionException("database", ex));
-			}
-			catch (DbUpdateException ex)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseQueryException(
-						"DeleteFactions",
-						"Failed to delete factions due to a database error.",
-						$"DbUpdateException in DeleteFactionsAsync: {ex.Message}",
-						isTransient: false,
-						innerException: ex));
-			}
-			catch (Exception ex)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseQueryException(
-						"DeleteFactions",
-						"An unexpected error occurred while deleting factions.",
-						$"Unexpected error in DeleteFactionsAsync: {ex.Message}",
-						isTransient: false,
-						innerException: ex));
-			}
+			}, "DeleteFactions", cancellationToken);
 		}
 
 		/// <inheritdoc/>
@@ -210,48 +117,21 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				return DatabaseResult<IReadOnlyList<CharacterFactionData>>.Failure(
 					"VALIDATION_ERROR",
-					"Invalid character ID. Character ID must be greater than 0.",
-					isTransient: false);
+					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
-			try
+			return await ExecuteWithStrategyAsync<IReadOnlyList<CharacterFactionData>>(async dbContext =>
 			{
-				await using var dbContext = dbContextFactory.CreateDbContext();
+				var entities = await GetFactionsQuery(dbContext, characterId, cancellationToken);
+				var factions = entities.Select(f => new CharacterFactionData(
+					id: f.ID,
+					characterID: f.CharacterID,
+					templateID: f.TemplateID,
+					value: f.Value
+				)).ToList();
 
-				var factions = await dbContext.CharacterFactions
-					.AsNoTracking()
-					.Where(f => f.CharacterID == characterId)
-					.Select(f => new CharacterFactionData
-					{
-						ID = f.ID,
-						CharacterID = f.CharacterID,
-						TemplateID = f.TemplateID,
-						Value = f.Value
-					})
-					.ToListAsync(cancellationToken);
-
-				return DatabaseResult<IReadOnlyList<CharacterFactionData>>.Success(factions);
-			}
-			catch (OperationCanceledException)
-			{
-				return DatabaseResult<IReadOnlyList<CharacterFactionData>>.FromException(
-					new DatabaseTimeoutException("GetFactions", 10));
-			}
-			catch (NpgsqlException ex)
-			{
-				return DatabaseResult<IReadOnlyList<CharacterFactionData>>.FromException(
-					new DatabaseConnectionException("database", ex));
-			}
-			catch (Exception ex)
-			{
-				return DatabaseResult<IReadOnlyList<CharacterFactionData>>.FromException(
-					new DatabaseQueryException(
-						"GetFactions",
-						"An unexpected error occurred while retrieving factions.",
-						$"Unexpected error in GetFactionsAsync: {ex.Message}",
-						isTransient: false,
-						innerException: ex));
-			}
+				return (IReadOnlyList<CharacterFactionData>)factions;
+			}, "GetFactions", cancellationToken);
 		}
 	}
 }

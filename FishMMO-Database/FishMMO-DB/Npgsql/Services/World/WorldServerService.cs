@@ -4,7 +4,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 using FishMMO.Database.Data;
 using FishMMO.Database.Exceptions;
 using FishMMO.Database.Npgsql.Entities;
@@ -24,10 +23,8 @@ namespace FishMMO.Database.Npgsql.Services
 	/// <item>Exception → DatabaseQueryException</item>
 	/// </list>
 	/// </remarks>
-	public sealed class WorldServerService : IWorldServerService
+	public sealed class WorldServerService : BaseService<WorldServerEntity>, IWorldServerService
 	{
-		private readonly INpgsqlDbContextFactory dbContextFactory;
-
 		/// <summary>
 		/// Compiled query for GetActiveServersAsync hot path.
 		/// Pre-compiles the query expression tree for better performance on repeated executions.
@@ -46,9 +43,8 @@ namespace FishMMO.Database.Npgsql.Services
 		/// </summary>
 		/// <param name="dbContextFactory">DbContext factory for creating contexts.</param>
 		/// <exception cref="ArgumentNullException">Thrown when dbContextFactory is null.</exception>
-		public WorldServerService(INpgsqlDbContextFactory dbContextFactory)
+		public WorldServerService(INpgsqlDbContextFactory dbContextFactory) : base(dbContextFactory)
 		{
-			this.dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
 		}
 
 		/// <inheritdoc/>
@@ -65,21 +61,11 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<(long, WorldServerData)>.Failure("INVALID_PARAMETERS", "Server name and address must not be empty.");
 			}
 
-			await using var dbContext = dbContextFactory.CreateDbContext();
-
-			try
+			return await ExecuteWithStrategyAsync<(long ServerId, WorldServerData ServerData)>(async (dbContext, strategy) =>
 			{
-				var strategy = dbContext.Database.CreateExecutionStrategy();
-
-				var result = await strategy.ExecuteAsync(async () =>
-				{
-					// Atomic UPSERT - PostgreSQL specific using FormattableString
-					var tableName = dbContext.GetTableName<WorldServerEntity>();
-					return await dbContext.WorldServers
-						.FromSqlInterpolated($@"
-						INSERT INTO {tableName} 
-							(name, address, port, character_count, locked, lastpulse)
-						VALUES 
+				var result = await dbContext.WorldServers
+					.FromSqlInterpolated($@"
+					INSERT INTO {TableName} 
 							({name}, {address}, {port}, {characterCount}, {locked}, CURRENT_TIMESTAMP)
 						ON CONFLICT (name) 
 						DO UPDATE SET 
@@ -91,67 +77,15 @@ namespace FishMMO.Database.Npgsql.Services
 						RETURNING id, name, address, port, character_count, locked, lastpulse")
 							.AsNoTracking()
 							.FirstOrDefaultAsync(cancellationToken);
-				});
 
 				if (result == null)
 				{
-					return DatabaseResult<(long, WorldServerData)>.FromException(new DatabaseEntityNotFoundException(
-						"WorldServer",
-						"UPSERT operation returned no result."));
+					throw new DatabaseEntityNotFoundException("WorldServer", "UPSERT operation returned no result.");
 				}
 
 				var serverData = MapEntityToDto(result);
-				return DatabaseResult<(long, WorldServerData)>.Success((result.ID, serverData));
-			}
-			catch (OperationCanceledException ex)
-			{
-				return DatabaseResult<(long, WorldServerData)>.FromException(new DatabaseTimeoutException(
-					"AddOrUpdateWorldServer",
-					30,
-					ex));
-			}
-			catch (PostgresException ex) when (ex.SqlState == "23505")
-			{
-				return DatabaseResult<(long, WorldServerData)>.FromException(new DatabaseConstraintException(
-					ConstraintType.Unique,
-					"world_servers_name_key",
-					"A server with this name already exists.",
-					ex));
-			}
-			catch (PostgresException ex) when (ex.SqlState == "23503")
-			{
-				return DatabaseResult<(long, WorldServerData)>.FromException(new DatabaseConstraintException(
-					ConstraintType.ForeignKey,
-					"world_servers_foreign_key",
-					"The referenced entity does not exist.",
-					ex));
-			}
-			catch (NpgsqlException ex)
-			{
-				return DatabaseResult<(long, WorldServerData)>.FromException(new DatabaseConnectionException(
-					dbContext?.Database.GetConnectionString() ?? "unknown",
-					ex));
-			}
-			catch (DbUpdateException ex)
-			{
-				return DatabaseResult<(long, WorldServerData)>.FromException(new DatabaseQueryException(
-					"AddOrUpdateWorldServer",
-					"Failed to add or update world server.",
-					ex.Message,
-					false,
-					null,
-					ex));
-			}
-			catch (Exception ex)
-			{
-				return DatabaseResult<(long, WorldServerData)>.FromException(new DatabaseQueryException(
-					"AddOrUpdateWorldServer",
-					"An unexpected error occurred while adding or updating world server.",
-					ex.Message,
-					false,
-					null,
-					ex));
-			}
+				return (result.ID, serverData);
+			}, "AddOrUpdateWorldServer", cancellationToken);
 		}
 
 		/// <inheritdoc/>
@@ -162,81 +96,19 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("INVALID_SERVER_ID", "Server ID must be greater than 0.");
 			}
 
-			await using var dbContext = dbContextFactory.CreateDbContext();
-
-			try
+			return await ExecuteWithStrategyAsync(async (dbContext, strategy) =>
 			{
-				var strategy = dbContext.Database.CreateExecutionStrategy();
-
-				var rowsAffected = await strategy.ExecuteAsync(async () =>
-				{
-					var tableName = dbContext.GetTableName<WorldServerEntity>();
-					return await dbContext.Database.ExecuteSqlInterpolatedAsync(
-						$@"UPDATE {tableName} 
-						SET lastpulse = CURRENT_TIMESTAMP, character_count = {characterCount} 
-						WHERE id = {serverId}",
-						cancellationToken);
-				});
+				var rowsAffected = await dbContext.Database.ExecuteSqlInterpolatedAsync(
+					$@"UPDATE {TableName} 
+					SET lastpulse = CURRENT_TIMESTAMP, character_count = {characterCount} 
+					WHERE id = {serverId}",
+					cancellationToken);
 
 				if (rowsAffected == 0)
 				{
-					return DatabaseResult.FromException(new DatabaseEntityNotFoundException(
-						"WorldServer",
-						serverId.ToString(),
-						"Server not found."));
+					throw new DatabaseEntityNotFoundException("WorldServer", serverId.ToString());
 				}
-
-				return DatabaseResult.Success();
-			}
-			catch (OperationCanceledException ex)
-			{
-				return DatabaseResult.FromException(new DatabaseTimeoutException(
-					"PulseWorldServer",
-					30,
-					ex));
-			}
-			catch (PostgresException ex) when (ex.SqlState == "23505")
-			{
-				return DatabaseResult.FromException(new DatabaseConstraintException(
-					ConstraintType.Unique,
-					"world_servers_pkey",
-					"A server with this ID already exists.",
-					ex));
-			}
-			catch (PostgresException ex) when (ex.SqlState == "23503")
-			{
-				return DatabaseResult.FromException(new DatabaseConstraintException(
-					ConstraintType.ForeignKey,
-					"world_servers_foreign_key",
-					"The referenced entity does not exist.",
-					ex));
-			}
-			catch (NpgsqlException ex)
-			{
-				return DatabaseResult.FromException(new DatabaseConnectionException(
-					dbContext?.Database.GetConnectionString() ?? "unknown",
-					ex));
-			}
-			catch (DbUpdateException ex)
-			{
-				return DatabaseResult.FromException(new DatabaseQueryException(
-					"PulseWorldServer",
-					"Failed to pulse world server.",
-					ex.Message,
-					false,
-					null,
-					ex));
-			}
-			catch (Exception ex)
-			{
-				return DatabaseResult.FromException(new DatabaseQueryException(
-					"PulseWorldServer",
-					"An unexpected error occurred while pulsing world server.",
-					ex.Message,
-					false,
-					null,
-					ex));
-			}
+			}, "PulseWorldServer", cancellationToken);
 		}
 
 		/// <inheritdoc/>
@@ -247,79 +119,17 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("INVALID_SERVER_ID", "Server ID must be greater than 0.");
 			}
 
-			await using var dbContext = dbContextFactory.CreateDbContext();
-
-			try
+			return await ExecuteWithStrategyAsync(async (dbContext, strategy) =>
 			{
-				var strategy = dbContext.Database.CreateExecutionStrategy();
-
-				var rowsAffected = await strategy.ExecuteAsync(async () =>
-				{
-					var tableName = dbContext.GetTableName<WorldServerEntity>();
-					return await dbContext.Database.ExecuteSqlInterpolatedAsync(
-						$"DELETE FROM {tableName} WHERE id = {serverId}",
-						cancellationToken);
-				});
+				var rowsAffected = await dbContext.Database.ExecuteSqlInterpolatedAsync(
+					$"DELETE FROM {TableName} WHERE id = {serverId}",
+					cancellationToken);
 
 				if (rowsAffected == 0)
 				{
-					return DatabaseResult.FromException(new DatabaseEntityNotFoundException(
-						"WorldServer",
-						serverId.ToString(),
-						"Server not found."));
+					throw new DatabaseEntityNotFoundException("WorldServer", serverId.ToString());
 				}
-
-				return DatabaseResult.Success();
-			}
-			catch (OperationCanceledException ex)
-			{
-				return DatabaseResult.FromException(new DatabaseTimeoutException(
-					"DeleteWorldServer",
-					30,
-					ex));
-			}
-			catch (PostgresException ex) when (ex.SqlState == "23505")
-			{
-				return DatabaseResult.FromException(new DatabaseConstraintException(
-					ConstraintType.Unique,
-					"world_servers_pkey",
-					"A server with this ID already exists.",
-					ex));
-			}
-			catch (PostgresException ex) when (ex.SqlState == "23503")
-			{
-				return DatabaseResult.FromException(new DatabaseConstraintException(
-					ConstraintType.ForeignKey,
-					"world_servers_foreign_key",
-					"The referenced entity does not exist.",
-					ex));
-			}
-			catch (NpgsqlException ex)
-			{
-				return DatabaseResult.FromException(new DatabaseConnectionException(
-					dbContext?.Database.GetConnectionString() ?? "unknown",
-					ex));
-			}
-			catch (DbUpdateException ex)
-			{
-				return DatabaseResult.FromException(new DatabaseQueryException(
-					"DeleteWorldServer",
-					"Failed to delete world server.",
-					ex.Message,
-					false,
-					null,
-					ex));
-			}
-			catch (Exception ex)
-			{
-				return DatabaseResult.FromException(new DatabaseQueryException(
-					"DeleteWorldServer",
-					"An unexpected error occurred while deleting world server.",
-					ex.Message,
-					false,
-					null,
-					ex));
-			}
+			}, "DeleteWorldServer", cancellationToken);
 		}
 
 		/// <inheritdoc/>
@@ -330,73 +140,19 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<WorldServerData>.Failure("INVALID_SERVER_ID", "Server ID must be greater than 0.");
 			}
 
-			await using var context = dbContextFactory.CreateDbContext();
-
-			try
+			return await ExecuteWithStrategyAsync(async dbContext =>
 			{
-				var server = await context.WorldServers
+				var server = await dbContext.WorldServers
 					.AsNoTracking()
 					.FirstOrDefaultAsync(s => s.ID == serverId, cancellationToken);
 
 				if (server == null)
 				{
-					return DatabaseResult<WorldServerData>.FromException(new DatabaseEntityNotFoundException(
-						"WorldServer",
-						serverId.ToString(),
-						"Server not found."));
+					throw new DatabaseEntityNotFoundException("WorldServer", serverId.ToString());
 				}
 
-				return DatabaseResult<WorldServerData>.Success(MapEntityToDto(server));
-			}
-			catch (OperationCanceledException ex)
-			{
-				return DatabaseResult<WorldServerData>.FromException(new DatabaseTimeoutException(
-					"GetWorldServer",
-					30,
-					ex));
-			}
-			catch (PostgresException ex) when (ex.SqlState == "23505")
-			{
-				return DatabaseResult<WorldServerData>.FromException(new DatabaseConstraintException(
-					ConstraintType.Unique,
-					"world_servers_pkey",
-					"A server with this ID already exists.",
-					ex));
-			}
-			catch (PostgresException ex) when (ex.SqlState == "23503")
-			{
-				return DatabaseResult<WorldServerData>.FromException(new DatabaseConstraintException(
-					ConstraintType.ForeignKey,
-					"world_servers_foreign_key",
-					"The referenced entity does not exist.",
-					ex));
-			}
-			catch (NpgsqlException ex)
-			{
-				return DatabaseResult<WorldServerData>.FromException(new DatabaseConnectionException(
-					context?.Database.GetConnectionString() ?? "unknown",
-					ex));
-			}
-			catch (DbUpdateException ex)
-			{
-				return DatabaseResult<WorldServerData>.FromException(new DatabaseQueryException(
-					"GetWorldServer",
-					"Failed to get world server.",
-					ex.Message,
-					false,
-					null,
-					ex));
-			}
-			catch (Exception ex)
-			{
-				return DatabaseResult<WorldServerData>.FromException(new DatabaseQueryException(
-					"GetWorldServer",
-					"An unexpected error occurred while getting world server.",
-					ex.Message,
-					false,
-					null,
-					ex));
-			}
+				return MapEntityToDto(server);
+			}, "GetWorldServer", cancellationToken);
 		}
 
 		/// <inheritdoc/>
@@ -404,68 +160,17 @@ namespace FishMMO.Database.Npgsql.Services
 			float idleTimeoutSeconds = 60.0f,
 			CancellationToken cancellationToken = default)
 		{
-			await using var context = dbContextFactory.CreateDbContext();
-
-			try
+			return await ExecuteWithStrategyAsync(async dbContext =>
 			{
 				// Calculate cutoff time in application for compiled query compatibility
 				// Database will use server time when query executes, avoiding clock skew
 				var cutoffTime = DateTime.UtcNow.AddSeconds(-idleTimeoutSeconds);
-				
-				// Use compiled query for hot path performance
-				var servers = await GetActiveServersQuery(context, cutoffTime, cancellationToken);
 
-				return DatabaseResult<List<WorldServerData>>.Success(servers.Select(MapEntityToDto).ToList());
-			}
-			catch (OperationCanceledException ex)
-			{
-				return DatabaseResult<List<WorldServerData>>.FromException(new DatabaseTimeoutException(
-					"GetActiveWorldServers",
-					30,
-					ex));
-			}
-			catch (PostgresException ex) when (ex.SqlState == "23505")
-			{
-				return DatabaseResult<List<WorldServerData>>.FromException(new DatabaseConstraintException(
-					ConstraintType.Unique,
-					"world_servers_pkey",
-					"A server with this ID already exists.",
-					ex));
-			}
-			catch (PostgresException ex) when (ex.SqlState == "23503")
-			{
-				return DatabaseResult<List<WorldServerData>>.FromException(new DatabaseConstraintException(
-					ConstraintType.ForeignKey,
-					"world_servers_foreign_key",
-					"The referenced entity does not exist.",
-					ex));
-			}
-			catch (NpgsqlException ex)
-			{
-				return DatabaseResult<List<WorldServerData>>.FromException(new DatabaseConnectionException(
-					context?.Database.GetConnectionString() ?? "unknown",
-					ex));
-			}
-			catch (DbUpdateException ex)
-			{
-				return DatabaseResult<List<WorldServerData>>.FromException(new DatabaseQueryException(
-					"GetActiveWorldServers",
-					"Failed to get active world servers.",
-					ex.Message,
-					false,
-					null,
-					ex));
-			}
-			catch (Exception ex)
-			{
-				return DatabaseResult<List<WorldServerData>>.FromException(new DatabaseQueryException(
-					"GetActiveWorldServers",
-					"An unexpected error occurred while getting active world servers.",
-					ex.Message,
-					false,
-					null,
-					ex));
-			}
+				// Use compiled query for hot path performance
+				var servers = await GetActiveServersQuery(dbContext, cutoffTime, cancellationToken);
+
+				return servers.Select(MapEntityToDto).ToList();
+			}, "GetActiveWorldServers", cancellationToken);
 		}
 
 		/// <summary>
@@ -475,16 +180,15 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <returns>World server data DTO.</returns>
 		private WorldServerData MapEntityToDto(WorldServerEntity entity)
 		{
-			return new WorldServerData
-			{
-				ID = entity.ID,
-				Name = entity.Name,
-				Address = entity.Address,
-				Port = entity.Port,
-				CharacterCount = entity.CharacterCount,
-				Locked = entity.Locked,
-				LastPulse = entity.LastPulse
-			};
+			return new WorldServerData(
+				id: entity.ID,
+				name: entity.Name,
+				lastPulse: entity.LastPulse,
+				address: entity.Address,
+				port: entity.Port,
+				characterCount: entity.CharacterCount,
+				locked: entity.Locked
+			);
 		}
 	}
 }

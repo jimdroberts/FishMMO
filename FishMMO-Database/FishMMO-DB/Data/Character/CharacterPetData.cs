@@ -7,10 +7,19 @@ namespace FishMMO.Database.Data
 	/// </summary>
 	public struct CharacterPetData
 	{
-		public long ID { get; set; }
-		public long CharacterID { get; set; }
-		public int TemplateID { get; set; }
-		public List<int> Abilities { get; set; }
-		public bool Spawned { get; set; }
+		public readonly long ID;
+		public readonly long CharacterID;
+		public readonly int TemplateID;
+		public readonly List<int> Abilities;
+		public readonly bool Spawned;
+
+		public CharacterPetData(long id, long characterID, int templateID, List<int> abilities, bool spawned)
+		{
+			ID = id;
+			CharacterID = characterID;
+			TemplateID = templateID;
+			Abilities = abilities;
+			Spawned = spawned;
+		}
 	}
 }

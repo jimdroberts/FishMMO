@@ -5,10 +5,19 @@ namespace FishMMO.Database.Data
 	/// </summary>
 	public struct CharacterQuestData
 	{
-		public long ID { get; set; }
-		public long CharacterID { get; set; }
-		public int TemplateID { get; set; }
-		public int Progress { get; set; }
-		public bool Completed { get; set; }
+		public readonly long ID;
+		public readonly long CharacterID;
+		public readonly int TemplateID;
+		public readonly int Progress;
+		public readonly bool Completed;
+
+		public CharacterQuestData(long id, long characterID, int templateID, int progress, bool completed)
+		{
+			ID = id;
+			CharacterID = characterID;
+			TemplateID = templateID;
+			Progress = progress;
+			Completed = completed;
+		}
 	}
 }

@@ -7,8 +7,15 @@ namespace FishMMO.Database.Data
 	/// </summary>
 	public struct GuildUpdateData
 	{
-		public long ID { get; set; }
-		public long GuildID { get; set; }
-		public DateTime LastUpdate { get; set; }
+		public readonly long ID;
+		public readonly long GuildID;
+		public readonly DateTime LastUpdate;
+
+		public GuildUpdateData(long id, long guildID, DateTime lastUpdate)
+		{
+			ID = id;
+			GuildID = guildID;
+			LastUpdate = lastUpdate;
+		}
 	}
 }

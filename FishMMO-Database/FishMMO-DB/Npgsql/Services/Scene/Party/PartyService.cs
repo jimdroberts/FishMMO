@@ -1,8 +1,8 @@
 ﻿using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 using FishMMO.Database.Data;
 using FishMMO.Database.Exceptions;
 using FishMMO.Database.Npgsql.Entities;
@@ -11,20 +11,14 @@ using FishMMO.Database.Npgsql.Services.Interfaces;
 namespace FishMMO.Database.Npgsql.Services
 {
 	/// <inheritdoc/>
-	/// <remarks>
-	/// <para><b>Exception Handling:</b></para>
-	/// <list type="bullet">
-	/// <item><description><see cref="OperationCanceledException"/> → <see cref="DatabaseTimeoutException"/></description></item>
-	/// <item><description><see cref="PostgresException"/> (23505) → <see cref="DatabaseConstraintException"/> (Unique)</description></item>
-	/// <item><description><see cref="PostgresException"/> (23503) → <see cref="DatabaseConstraintException"/> (ForeignKey)</description></item>
-	/// <item><description><see cref="NpgsqlException"/> → <see cref="DatabaseConnectionException"/></description></item>
-	/// <item><description><see cref="DbUpdateException"/> → <see cref="DatabaseQueryException"/></description></item>
-	/// <item><description><see cref="Exception"/> → <see cref="DatabaseQueryException"/></description></item>
-	/// </list>
-	/// </remarks>
-	public sealed class PartyService : IPartyService
+	public sealed class PartyService : BaseService<PartyEntity>, IPartyService
 	{
-		private readonly INpgsqlDbContextFactory dbContextFactory;
+		/// <summary>
+		/// Compiled query for checking party existence (hot path for party validations).
+		/// </summary>
+		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<bool>> PartyExistsQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long partyId, CancellationToken ct) =>
+				context.Parties.Any(p => p.ID == partyId));
 
 		/// <summary>
 		/// Initializes a new instance of PartyService.
@@ -32,8 +26,8 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <param name="dbContextFactory">DbContext factory for creating contexts.</param>
 		/// <exception cref="ArgumentNullException">Thrown when dbContextFactory is null.</exception>
 		public PartyService(INpgsqlDbContextFactory dbContextFactory)
+			: base(dbContextFactory)
 		{
-			this.dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
 		}
 
 		/// <inheritdoc/>
@@ -42,135 +36,29 @@ namespace FishMMO.Database.Npgsql.Services
 			if (partyId <= 0)
 				return DatabaseResult<bool>.Success(false);
 
-			await using var context = dbContextFactory.CreateDbContext();
-
-			try
+			return await ExecuteWithStrategyAsync(async dbContext =>
 			{
-				bool exists = await context.Parties
-					.AsNoTracking()
-					.AnyAsync(p => p.ID == partyId, cancellationToken);
-
-				return DatabaseResult<bool>.Success(exists);
-			}
-			catch (OperationCanceledException ex)
-			{
-				return DatabaseResult<bool>.FromException(new DatabaseTimeoutException(
-					"CheckPartyExists",
-					30,
-					ex));
-			}
-			catch (PostgresException ex) when (ex.SqlState == "23505")
-			{
-				return DatabaseResult<bool>.FromException(new DatabaseConstraintException(
-					ConstraintType.Unique,
-					"parties_pkey",
-					"A party with this ID already exists.",
-					ex));
-			}
-			catch (PostgresException ex) when (ex.SqlState == "23503")
-			{
-				return DatabaseResult<bool>.FromException(new DatabaseConstraintException(
-					ConstraintType.ForeignKey,
-					"parties_foreign_key",
-					"The referenced entity does not exist.",
-					ex));
-			}
-			catch (NpgsqlException ex)
-			{
-				return DatabaseResult<bool>.FromException(new DatabaseConnectionException(
-					context?.Database.GetConnectionString() ?? "unknown",
-					ex));
-			}
-			catch (DbUpdateException ex)
-			{
-				return DatabaseResult<bool>.FromException(new DatabaseQueryException(
-					"CheckPartyExists",
-					"Failed to check if party exists.",
-					ex.Message,
-					false,
-					null,
-					ex));
-			}
-			catch (Exception ex)
-			{
-				return DatabaseResult<bool>.FromException(new DatabaseQueryException(
-					"CheckPartyExists",
-					"An unexpected error occurred while checking if party exists.",
-					ex.Message,
-					false,
-					null,
-					ex));
-			}
+				return await PartyExistsQuery(dbContext, partyId, cancellationToken);
+			}, "CheckPartyExists", cancellationToken);
 		}
 
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<long>> CreateAsync(CancellationToken cancellationToken = default)
 		{
-			await using var context = dbContextFactory.CreateDbContext();
+			return await ExecuteWithStrategyAsync(async dbContext =>
+			{
+				// Use atomic INSERT with RETURNING for proper retry strategy support
+				// Optimized: RETURNING only id for better performance
+				var result = await dbContext.Parties
+					.FromSqlInterpolated($@"
+					INSERT INTO {TableName} (time_created)
+					VALUES (CURRENT_TIMESTAMP)
+					RETURNING id")
+						.AsNoTracking()
+						.FirstOrDefaultAsync(cancellationToken);
 
-			try
-			{
-				var strategy = context.Database.CreateExecutionStrategy();
-
-				var partyId = await strategy.ExecuteAsync(async () =>
-				{
-					var party = new PartyEntity();
-					context.Parties.Add(party);
-					await context.SaveChangesAsync(cancellationToken);
-					return party.ID;
-				});
-
-				return DatabaseResult<long>.Success(partyId);
-			}
-			catch (OperationCanceledException ex)
-			{
-				return DatabaseResult<long>.FromException(new DatabaseTimeoutException(
-					"CreateParty",
-					30,
-					ex));
-			}
-			catch (PostgresException ex) when (ex.SqlState == "23505")
-			{
-				return DatabaseResult<long>.FromException(new DatabaseConstraintException(
-					ConstraintType.Unique,
-					"parties_pkey",
-					"A party with this ID already exists.",
-					ex));
-			}
-			catch (PostgresException ex) when (ex.SqlState == "23503")
-			{
-				return DatabaseResult<long>.FromException(new DatabaseConstraintException(
-					ConstraintType.ForeignKey,
-					"parties_foreign_key",
-					"The referenced entity does not exist.",
-					ex));
-			}
-			catch (NpgsqlException ex)
-			{
-				return DatabaseResult<long>.FromException(new DatabaseConnectionException(
-					context?.Database.GetConnectionString() ?? "unknown",
-					ex));
-			}
-			catch (DbUpdateException ex)
-			{
-				return DatabaseResult<long>.FromException(new DatabaseQueryException(
-					"CreateParty",
-					"Failed to create party.",
-					ex.Message,
-					false,
-					null,
-					ex));
-			}
-			catch (Exception ex)
-			{
-				return DatabaseResult<long>.FromException(new DatabaseQueryException(
-					"CreateParty",
-					"An unexpected error occurred while creating party.",
-					ex.Message,
-					false,
-					null,
-					ex));
-			}
+				return result?.ID ?? 0;
+			}, "CreateParty", cancellationToken);
 		}
 
 		/// <inheritdoc/>
@@ -181,79 +69,20 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("INVALID_PARTY_ID", "Party ID must be greater than zero.");
 			}
 
-			await using var context = dbContextFactory.CreateDbContext();
-
-			try
+			return await ExecuteWithStrategyAsync(async (dbContext, strategy) =>
 			{
-				var strategy = context.Database.CreateExecutionStrategy();
-
-				var rowsAffected = await strategy.ExecuteAsync(async () =>
-				{
-					var tableName = context.GetTableName<PartyEntity>();
-					return await context.Database.ExecuteSqlInterpolatedAsync(
-						$"DELETE FROM {tableName} WHERE id = {partyId}",
-						cancellationToken);
-				});
+				var rowsAffected = await dbContext.Database.ExecuteSqlInterpolatedAsync(
+					$"DELETE FROM {TableName} WHERE id = {partyId}",
+					cancellationToken);
 
 				if (rowsAffected == 0)
 				{
-					return DatabaseResult.FromException(new DatabaseEntityNotFoundException(
+					throw new DatabaseEntityNotFoundException(
 						"Party",
 						partyId.ToString(),
-						"Party not found."));
+						"Party not found.");
 				}
-
-				return DatabaseResult.Success();
-			}
-			catch (OperationCanceledException ex)
-			{
-				return DatabaseResult.FromException(new DatabaseTimeoutException(
-					"DeleteParty",
-					30,
-					ex));
-			}
-			catch (PostgresException ex) when (ex.SqlState == "23505")
-			{
-				return DatabaseResult.FromException(new DatabaseConstraintException(
-					ConstraintType.Unique,
-					"parties_pkey",
-					"A party with this ID already exists.",
-					ex));
-			}
-			catch (PostgresException ex) when (ex.SqlState == "23503")
-			{
-				return DatabaseResult.FromException(new DatabaseConstraintException(
-					ConstraintType.ForeignKey,
-					"parties_foreign_key",
-					"The referenced entity does not exist.",
-					ex));
-			}
-			catch (NpgsqlException ex)
-			{
-				return DatabaseResult.FromException(new DatabaseConnectionException(
-					context?.Database.GetConnectionString() ?? "unknown",
-					ex));
-			}
-			catch (DbUpdateException ex)
-			{
-				return DatabaseResult.FromException(new DatabaseQueryException(
-					"DeleteParty",
-					"Failed to delete party.",
-					ex.Message,
-					false,
-					null,
-					ex));
-			}
-			catch (Exception ex)
-			{
-				return DatabaseResult.FromException(new DatabaseQueryException(
-					"DeleteParty",
-					"An unexpected error occurred while deleting party.",
-					ex.Message,
-					false,
-					null,
-					ex));
-			}
+			}, "DeleteParty", cancellationToken);
 		}
 
 		/// <inheritdoc/>
@@ -264,73 +93,16 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<PartyData>.Failure("INVALID_PARTY_ID", "Party ID must be greater than zero.");
 			}
 
-			await using var context = dbContextFactory.CreateDbContext();
-
-			try
+			return await ExecuteWithStrategyAsync(async dbContext =>
 			{
-				var party = await context.Parties
+				var party = await dbContext.Parties
 					.AsNoTracking()
 					.FirstOrDefaultAsync(p => p.ID == partyId, cancellationToken);
 
-				if (party == null)
-				{
-					return DatabaseResult<PartyData>.FromException(new DatabaseEntityNotFoundException(
-						"Party",
-						partyId.ToString(),
-						"Party not found."));
-				}
+				ValidateEntityExists(party, "Party", partyId.ToString());
 
-				return DatabaseResult<PartyData>.Success(MapEntityToDto(party));
-			}
-			catch (OperationCanceledException ex)
-			{
-				return DatabaseResult<PartyData>.FromException(new DatabaseTimeoutException(
-					"LoadParty",
-					30,
-					ex));
-			}
-			catch (PostgresException ex) when (ex.SqlState == "23505")
-			{
-				return DatabaseResult<PartyData>.FromException(new DatabaseConstraintException(
-					ConstraintType.Unique,
-					"parties_pkey",
-					"A party with this ID already exists.",
-					ex));
-			}
-			catch (PostgresException ex) when (ex.SqlState == "23503")
-			{
-				return DatabaseResult<PartyData>.FromException(new DatabaseConstraintException(
-					ConstraintType.ForeignKey,
-					"parties_foreign_key",
-					"The referenced entity does not exist.",
-					ex));
-			}
-			catch (NpgsqlException ex)
-			{
-				return DatabaseResult<PartyData>.FromException(new DatabaseConnectionException(
-					context?.Database.GetConnectionString() ?? "unknown",
-					ex));
-			}
-			catch (DbUpdateException ex)
-			{
-				return DatabaseResult<PartyData>.FromException(new DatabaseQueryException(
-					"LoadParty",
-					"Failed to load party.",
-					ex.Message,
-					false,
-					null,
-					ex));
-			}
-			catch (Exception ex)
-			{
-				return DatabaseResult<PartyData>.FromException(new DatabaseQueryException(
-					"LoadParty",
-					"An unexpected error occurred while loading party.",
-					ex.Message,
-					false,
-					null,
-					ex));
-			}
+				return MapEntityToDto(party!);
+			}, "LoadParty", cancellationToken);
 		}
 
 		/// <summary>
@@ -340,10 +112,8 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <returns>Party data DTO.</returns>
 		private PartyData MapEntityToDto(PartyEntity entity)
 		{
-			return new PartyData
-			{
-				ID = entity.ID
-			};
+			return new PartyData(
+				id: entity.ID);
 		}
 	}
 }

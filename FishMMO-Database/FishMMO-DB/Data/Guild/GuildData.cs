@@ -5,8 +5,15 @@ namespace FishMMO.Database.Data
 	/// </summary>
 	public struct GuildData
 	{
-		public long ID { get; set; }
-		public string Name { get; set; }
-		public string Notice { get; set; }
+		public readonly long ID;
+		public readonly string Name;
+		public readonly string Notice;
+
+		public GuildData(long id, string name, string notice)
+		{
+			ID = id;
+			Name = name;
+			Notice = notice;
+		}
 	}
 }

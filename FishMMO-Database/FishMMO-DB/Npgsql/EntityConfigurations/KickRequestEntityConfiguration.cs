@@ -32,6 +32,11 @@ namespace FishMMO.Database.Npgsql.Entities
 			// Index for creation time (sorting/filtering old requests)
 			builder.HasIndex(e => e.TimeCreated)
 				.HasDatabaseName("IX_KickRequest_TimeCreated");
+
+			// Composite index for kick request pagination (FetchAsync hot path)
+			// Covers WHERE time_created >= @lastFetch AND id > @lastPosition ORDER BY time_created, id
+			builder.HasIndex(e => new { e.TimeCreated, e.ID })
+				.HasDatabaseName("IX_KickRequest_TimeCreated_ID");
 		}
 	}
 }

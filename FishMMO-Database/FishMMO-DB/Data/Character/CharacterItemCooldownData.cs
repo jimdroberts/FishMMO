@@ -5,9 +5,17 @@ namespace FishMMO.Database.Data
 	/// </summary>
 	public struct CharacterItemCooldownData
 	{
-		public long ID { get; set; }
-		public long CharacterID { get; set; }
-		public int Category { get; set; }
-		public float CooldownEnd { get; set; }
+		public readonly long ID;
+		public readonly long CharacterID;
+		public readonly int Category;
+		public readonly float CooldownEnd;
+
+		public CharacterItemCooldownData(long id, long characterID, int category, float cooldownEnd)
+		{
+			ID = id;
+			CharacterID = characterID;
+			Category = category;
+			CooldownEnd = cooldownEnd;
+		}
 	}
 }

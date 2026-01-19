@@ -7,10 +7,19 @@ namespace FishMMO.Database.Data
 	/// </summary>
 	public struct LoginServerData
 	{
-		public long ID { get; set; }
-		public string Name { get; set; }
-		public DateTime LastPulse { get; set; }
-		public string Address { get; set; }
-		public ushort Port { get; set; }
+		public readonly long ID;
+		public readonly string Name;
+		public readonly DateTime LastPulse;
+		public readonly string Address;
+		public readonly ushort Port;
+
+		public LoginServerData(long id, string name, DateTime lastPulse, string address, ushort port)
+		{
+			ID = id;
+			Name = name;
+			LastPulse = lastPulse;
+			Address = address;
+			Port = port;
+		}
 	}
 }

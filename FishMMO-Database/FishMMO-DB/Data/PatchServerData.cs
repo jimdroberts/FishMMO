@@ -7,9 +7,17 @@ namespace FishMMO.Database.Data
 	/// </summary>
 	public struct PatchServerData
 	{
-		public long ID { get; set; }
-		public string Address { get; set; }
-		public ushort Port { get; set; }
-		public DateTime LastPulse { get; set; }
+		public readonly long ID;
+		public readonly string Address;
+		public readonly ushort Port;
+		public readonly DateTime LastPulse;
+
+		public PatchServerData(long id, string address, ushort port, DateTime lastPulse)
+		{
+			ID = id;
+			Address = address;
+			Port = port;
+			LastPulse = lastPulse;
+		}
 	}
 }

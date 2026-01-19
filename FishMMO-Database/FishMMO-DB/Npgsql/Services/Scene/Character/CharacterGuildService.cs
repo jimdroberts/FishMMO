@@ -4,9 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 using FishMMO.Database.Data;
-using FishMMO.Database.Exceptions;
 using FishMMO.Database.Npgsql.Entities;
 
 namespace FishMMO.Database.Npgsql.Services
@@ -35,21 +33,43 @@ namespace FishMMO.Database.Npgsql.Services
 	/// Methods return DatabaseResult to provide structured error handling
 	/// without throwing exceptions to calling code.
 	/// </remarks>
-	public sealed class CharacterGuildService : ICharacterGuildService
+	public sealed class CharacterGuildService : BaseService<CharacterGuildEntity>, ICharacterGuildService
 	{
 		/// <summary>
-		/// Factory for creating database contexts.
+		/// Compiled query for retrieving guild membership by character ID.
 		/// </summary>
-		private readonly INpgsqlDbContextFactory dbContextFactory;
+#pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type
+		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<CharacterGuildEntity?>> GetGuildMembershipQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
+				context.CharacterGuilds
+					.AsNoTracking()
+					.FirstOrDefault(g => g.CharacterID == characterId));
+#pragma warning restore CS8619
+		/// </summary>
+		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterGuildEntity>>> GetGuildMembersQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long guildId, CancellationToken ct) =>
+				context.CharacterGuilds
+					.AsNoTracking()
+					.Where(g => g.GuildID == guildId)
+					.ToList());
+
+		/// <summary>
+		/// Compiled query for counting guild members.
+		/// </summary>
+		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<int>> GetGuildMemberCountQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long guildId, CancellationToken ct) =>
+				context.CharacterGuilds
+					.AsNoTracking()
+					.Where(g => g.GuildID == guildId)
+					.Count());
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="CharacterGuildService"/> class.
 		/// </summary>
 		/// <param name="dbContextFactory">Factory for creating database contexts.</param>
 		/// <exception cref="ArgumentNullException">Thrown when dbContextFactory is null.</exception>
-		public CharacterGuildService(INpgsqlDbContextFactory dbContextFactory)
+		public CharacterGuildService(INpgsqlDbContextFactory dbContextFactory) : base(dbContextFactory)
 		{
-			this.dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
 		}
 
 		/// <inheritdoc/>
@@ -59,74 +79,23 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				return DatabaseResult.Failure(
 					"VALIDATION_ERROR",
-					"Invalid character ID or guild ID. Both must be greater than 0.",
-					isTransient: false);
+					"Invalid character ID or guild ID. Both must be greater than 0.");
 			}
 
-			await using var dbContext = dbContextFactory.CreateDbContext();
-
-			try
+			return await ExecuteWithStrategyAsync(async dbContext =>
 			{
-				var strategy = dbContext.Database.CreateExecutionStrategy();
-
-				await strategy.ExecuteAsync(async () =>
-				{
-					var tableName = dbContext.GetTableName<CharacterGuildEntity>();
-
-					// Use PostgreSQL UPSERT for atomic insert-or-update
-					await dbContext.Database.ExecuteSqlInterpolatedAsync(
-						$@"INSERT INTO {tableName} 
-						   (character_id, guild_id, rank, location)
-						   VALUES ({guildData.CharacterID}, {guildData.GuildID}, {guildData.Rank}, {guildData.Location})
-						   ON CONFLICT (character_id) 
-						   DO UPDATE SET 
-						       guild_id = EXCLUDED.guild_id,
-						       rank = EXCLUDED.rank,
-						       location = EXCLUDED.location",
-						cancellationToken);
-				});
-
-				return DatabaseResult.Success();
-			}
-			catch (OperationCanceledException)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseTimeoutException("SaveGuildMembership", 10));
-			}
-			catch (PostgresException ex) when (ex.SqlState == "23503") // Foreign key violation
-			{
-				return DatabaseResult.FromException(
-					new DatabaseConstraintException(
-						ConstraintType.ForeignKey,
-						"character_guild_character_id_fkey",
-						"Character or guild does not exist.",
-						ex));
-			}
-			catch (NpgsqlException ex)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseConnectionException("database", ex));
-			}
-			catch (DbUpdateException ex)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseQueryException(
-						"SaveGuildMembership",
-						"Failed to save guild membership due to a database error.",
-						$"DbUpdateException in SaveGuildMembershipAsync: {ex.Message}",
-						isTransient: false,
-						innerException: ex));
-			}
-			catch (Exception ex)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseQueryException(
-						"SaveGuildMembership",
-						"An unexpected error occurred while saving guild membership.",
-						$"Unexpected error in SaveGuildMembershipAsync: {ex.Message}",
-						isTransient: false,
-						innerException: ex));
-			}
+				// Use PostgreSQL UPSERT for atomic insert-or-update
+				await dbContext.Database.ExecuteSqlInterpolatedAsync(
+					$@"INSERT INTO {TableName} 
+								(character_id, guild_id, rank, location)
+								VALUES ({guildData.CharacterID}, {guildData.GuildID}, {guildData.Rank}, {guildData.Location})
+								ON CONFLICT (character_id) 
+								DO UPDATE SET 
+									guild_id = EXCLUDED.guild_id,
+									rank = EXCLUDED.rank,
+									location = EXCLUDED.location",
+					cancellationToken);
+			}, "SaveGuildMembership", cancellationToken);
 		}
 
 		/// <inheritdoc/>
@@ -136,69 +105,32 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				return DatabaseResult.Failure(
 					"VALIDATION_ERROR",
-					"Invalid character ID or guild ID. Both must be greater than 0.",
-					isTransient: false);
+					"Invalid character ID or guild ID. Both must be greater than 0.");
 			}
 
-			await using var dbContext = dbContextFactory.CreateDbContext();
-
-			try
-			{
-				var strategy = dbContext.Database.CreateExecutionStrategy();
-
-				var rowsAffected = await strategy.ExecuteAsync(async () =>
+			var result = await ExecuteWithStrategyAsync<int>(
+				async (dbContext, strategy) =>
 				{
-					var tableName = dbContext.GetTableName<CharacterGuildEntity>();
+					return await strategy.ExecuteAsync(async () =>
+					{
+						// Atomic update without loading entity
+						return await dbContext.Database.ExecuteSqlInterpolatedAsync(
+							$@"UPDATE {TableName} 
+							SET rank = {rank} 
+							WHERE character_id = {characterId} AND guild_id = {guildId}",
+							cancellationToken);
+					});
+				},
+				"UpdateRank",
+				cancellationToken);
 
-					// Atomic update without loading entity
-					return await dbContext.Database.ExecuteSqlInterpolatedAsync(
-						$@"UPDATE {tableName} 
-						SET rank = {rank} 
-						WHERE character_id = {characterId} AND guild_id = {guildId}",
-						cancellationToken);
-				});
+			if (!result.IsSuccess)
+				return DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage);
 
-				if (rowsAffected == 0)
-				{
-					return DatabaseResult.FromException(
-						new DatabaseEntityNotFoundException(
-							"CharacterGuild",
-							$"characterId={characterId}, guildId={guildId}",
-							"Guild membership not found or character not in specified guild."));
-				}
-
-				return DatabaseResult.Success();
-			}
-			catch (OperationCanceledException)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseTimeoutException("UpdateRank", 10));
-			}
-			catch (NpgsqlException ex)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseConnectionException("database", ex));
-			}
-			catch (DbUpdateException ex)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseQueryException(
-						"UpdateRank",
-						"Failed to update guild rank due to a database error.",
-						$"DbUpdateException in UpdateRankAsync: {ex.Message}",
-						isTransient: false,
-						innerException: ex));
-			}
-			catch (Exception ex)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseQueryException(
-						"UpdateRank",
-						"An unexpected error occurred while updating guild rank.",
-						$"Unexpected error in UpdateRankAsync: {ex.Message}",
-						isTransient: false,
-						innerException: ex));
-			}
+			return ValidateRowsAffected(
+				result.Data,
+				"CharacterGuild",
+				$"characterId={characterId}, guildId={guildId}");
 		}
 
 		/// <inheritdoc/>
@@ -208,58 +140,16 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				return DatabaseResult.Failure(
 					"VALIDATION_ERROR",
-					"Invalid character ID. Character ID must be greater than 0.",
-					isTransient: false);
+					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
-			await using var dbContext = dbContextFactory.CreateDbContext();
-
-			try
-			{
-				var strategy = dbContext.Database.CreateExecutionStrategy();
-
-				await strategy.ExecuteAsync(async () =>
-				{
-					var tableName = dbContext.GetTableName<CharacterGuildEntity>();
-
-					// Use atomic DELETE for thread safety
-					await dbContext.Database.ExecuteSqlInterpolatedAsync(
-						$@"DELETE FROM {tableName} WHERE character_id = {characterId}",
-						cancellationToken);
-				});
-
-				return DatabaseResult.Success();
-			}
-			catch (OperationCanceledException)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseTimeoutException("DeleteGuildMembership", 10));
-			}
-			catch (NpgsqlException ex)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseConnectionException("database", ex));
-			}
-			catch (DbUpdateException ex)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseQueryException(
-						"DeleteGuildMembership",
-						"Failed to delete guild membership due to a database error.",
-						$"DbUpdateException in DeleteGuildMembershipAsync: {ex.Message}",
-						isTransient: false,
-						innerException: ex));
-			}
-			catch (Exception ex)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseQueryException(
-						"DeleteGuildMembership",
-						"An unexpected error occurred while deleting guild membership.",
-						$"Unexpected error in DeleteGuildMembershipAsync: {ex.Message}",
-						isTransient: false,
-						innerException: ex));
-			}
+			return await ExecuteWithStrategyAsync(async dbContext =>
+		{
+			// Use atomic DELETE for thread safety
+			await dbContext.Database.ExecuteSqlInterpolatedAsync(
+				$@"DELETE FROM {TableName} WHERE character_id = {characterId}",
+				cancellationToken);
+		}, "DeleteGuildMembership", cancellationToken);
 		}
 
 		/// <inheritdoc/>
@@ -269,49 +159,23 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				return DatabaseResult<CharacterGuildData?>.Failure(
 					"VALIDATION_ERROR",
-					"Invalid character ID. Character ID must be greater than 0.",
-					isTransient: false);
+					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
-			try
+			return await ExecuteWithStrategyAsync<CharacterGuildData?>(async dbContext =>
 			{
-				await using var dbContext = dbContextFactory.CreateDbContext();
+				var entity = await GetGuildMembershipQuery(dbContext, characterId, cancellationToken);
+				if (entity == null)
+					return null;
 
-				var membership = await dbContext.CharacterGuilds
-					.AsNoTracking()
-					.Where(g => g.CharacterID == characterId)
-					.Select(g => new CharacterGuildData
-					{
-						ID = g.ID,
-						CharacterID = g.CharacterID,
-						GuildID = g.GuildID,
-						Rank = g.Rank,
-						Location = g.Location
-					})
-					.FirstOrDefaultAsync(cancellationToken);
-
-				return DatabaseResult<CharacterGuildData?>.Success(membership);
-			}
-			catch (OperationCanceledException)
-			{
-				return DatabaseResult<CharacterGuildData?>.FromException(
-					new DatabaseTimeoutException("GetGuildMembership", 10));
-			}
-			catch (NpgsqlException ex)
-			{
-				return DatabaseResult<CharacterGuildData?>.FromException(
-					new DatabaseConnectionException("database", ex));
-			}
-			catch (Exception ex)
-			{
-				return DatabaseResult<CharacterGuildData?>.FromException(
-					new DatabaseQueryException(
-						"GetGuildMembership",
-						"An unexpected error occurred while retrieving guild membership.",
-						$"Unexpected error in GetGuildMembershipAsync: {ex.Message}",
-						isTransient: false,
-						innerException: ex));
-			}
+				return new CharacterGuildData(
+					id: entity.ID,
+					characterID: entity.CharacterID,
+					guildID: entity.GuildID,
+					rank: entity.Rank,
+					location: entity.Location
+				);
+			}, "GetGuildMembership", cancellationToken);
 		}
 
 		/// <inheritdoc/>
@@ -321,49 +185,25 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				return DatabaseResult<IReadOnlyList<CharacterGuildData>>.Failure(
 					"VALIDATION_ERROR",
-					"Invalid guild ID. Guild ID must be greater than 0.",
-					isTransient: false);
+					"Invalid guild ID. Guild ID must be greater than 0.");
 			}
 
-			try
-			{
-				await using var dbContext = dbContextFactory.CreateDbContext();
+			return await ExecuteWithStrategyAsync(
+				async (dbContext) =>
+				{
+					var entities = await GetGuildMembersQuery(dbContext, guildId, cancellationToken);
+					var members = entities.Select(g => new CharacterGuildData(
+						id: g.ID,
+						characterID: g.CharacterID,
+						guildID: g.GuildID,
+						rank: g.Rank,
+						location: g.Location
+					)).ToList();
 
-				var members = await dbContext.CharacterGuilds
-					.AsNoTracking()
-					.Where(g => g.GuildID == guildId)
-					.Select(g => new CharacterGuildData
-					{
-						ID = g.ID,
-						CharacterID = g.CharacterID,
-						GuildID = g.GuildID,
-						Rank = g.Rank,
-						Location = g.Location
-					})
-					.ToListAsync(cancellationToken);
-
-				return DatabaseResult<IReadOnlyList<CharacterGuildData>>.Success(members);
-			}
-			catch (OperationCanceledException)
-			{
-				return DatabaseResult<IReadOnlyList<CharacterGuildData>>.FromException(
-					new DatabaseTimeoutException("GetGuildMembers", 10));
-			}
-			catch (NpgsqlException ex)
-			{
-				return DatabaseResult<IReadOnlyList<CharacterGuildData>>.FromException(
-					new DatabaseConnectionException("database", ex));
-			}
-			catch (Exception ex)
-			{
-				return DatabaseResult<IReadOnlyList<CharacterGuildData>>.FromException(
-					new DatabaseQueryException(
-						"GetGuildMembers",
-						"An unexpected error occurred while retrieving guild members.",
-						$"Unexpected error in GetGuildMembersAsync: {ex.Message}",
-						isTransient: false,
-						innerException: ex));
-			}
+					return (IReadOnlyList<CharacterGuildData>)members;
+				},
+				"GetGuildMembers",
+				cancellationToken);
 		}
 
 		/// <inheritdoc/>
@@ -373,41 +213,16 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				return DatabaseResult<int>.Failure(
 					"VALIDATION_ERROR",
-					"Invalid guild ID. Guild ID must be greater than 0.",
-					isTransient: false);
+					"Invalid guild ID. Guild ID must be greater than 0.");
 			}
 
-			try
-			{
-				await using var dbContext = dbContextFactory.CreateDbContext();
-
-				var count = await dbContext.CharacterGuilds
-					.AsNoTracking()
-					.Where(g => g.GuildID == guildId)
-					.CountAsync(cancellationToken);
-
-				return DatabaseResult<int>.Success(count);
-			}
-			catch (OperationCanceledException)
-			{
-				return DatabaseResult<int>.FromException(
-					new DatabaseTimeoutException("GetGuildMemberCount", 10));
-			}
-			catch (NpgsqlException ex)
-			{
-				return DatabaseResult<int>.FromException(
-					new DatabaseConnectionException("database", ex));
-			}
-			catch (Exception ex)
-			{
-				return DatabaseResult<int>.FromException(
-					new DatabaseQueryException(
-						"GetGuildMemberCount",
-						"An unexpected error occurred while retrieving guild member count.",
-						$"Unexpected error in GetGuildMemberCountAsync: {ex.Message}",
-						isTransient: false,
-						innerException: ex));
-			}
+			return await ExecuteWithStrategyAsync(
+				async (dbContext) =>
+				{
+					return await GetGuildMemberCountQuery(dbContext, guildId, cancellationToken);
+				},
+				"GetGuildMemberCount",
+				cancellationToken);
 		}
 	}
 }

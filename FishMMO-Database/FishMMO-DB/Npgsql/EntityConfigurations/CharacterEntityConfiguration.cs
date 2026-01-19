@@ -21,12 +21,14 @@ namespace FishMMO.Database.Npgsql.Entities
 				.IsUnique()
 				.HasDatabaseName("IX_CharacterEntity_NameLowercase");
 
-			/*builder.HasIndex($"LOWER(\"{nameof(CharacterEntity.name)}\")")
-                .IsUnique()
-                .HasName("idx_character_name_case_insensitive");
-            
-            builder.HasAnnotation("Relational:SqlCreateIndexStatement", 
-                "CREATE UNIQUE INDEX idx_character_name_case_insensitive ON \"MyEntities\" (LOWER(\"name\")) COLLATE \"en_US.utf8\"");*/
+			// Performance index for account character queries (GetCharactersAsync hot path)
+			builder.HasIndex(e => new { e.Account, e.Deleted })
+				.HasDatabaseName("IX_Character_Account_Deleted");
+
+			// Performance index for online status filtering
+			builder.HasIndex(e => e.Online)
+				.HasDatabaseName("IX_Character_Online")
+				.HasFilter("online = true AND NOT deleted");
 		}
 	}
 }

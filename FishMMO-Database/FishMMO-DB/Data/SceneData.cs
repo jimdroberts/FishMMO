@@ -7,15 +7,29 @@ namespace FishMMO.Database.Data
 	/// </summary>
 	public struct SceneData
 	{
-		public long ID { get; set; }
-		public long SceneServerID { get; set; }
-		public long WorldServerID { get; set; }
-		public string SceneName { get; set; }
-		public int SceneHandle { get; set; }
-		public int SceneStatus { get; set; }
-		public int SceneType { get; set; }
-		public long CharacterID { get; set; }
-		public int CharacterCount { get; set; }
-		public DateTime TimeCreated { get; set; }
+		public readonly long ID;
+		public readonly long SceneServerID;
+		public readonly long WorldServerID;
+		public readonly string SceneName;
+		public readonly int SceneHandle;
+		public readonly int SceneStatus;
+		public readonly int SceneType;
+		public readonly long CharacterID;
+		public readonly int CharacterCount;
+		public readonly DateTime TimeCreated;
+
+		public SceneData(long id, long sceneServerID, long worldServerID, string sceneName, int sceneHandle, int sceneStatus, int sceneType, long characterID, int characterCount, DateTime timeCreated)
+		{
+			ID = id;
+			SceneServerID = sceneServerID;
+			WorldServerID = worldServerID;
+			SceneName = sceneName;
+			SceneHandle = sceneHandle;
+			SceneStatus = sceneStatus;
+			SceneType = sceneType;
+			CharacterID = characterID;
+			CharacterCount = characterCount;
+			TimeCreated = timeCreated;
+		}
 	}
 }

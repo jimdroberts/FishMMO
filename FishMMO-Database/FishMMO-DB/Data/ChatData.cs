@@ -7,13 +7,25 @@ namespace FishMMO.Database.Data
 	/// </summary>
 	public struct ChatData
 	{
-		public long ID { get; set; }
-		public long CharacterID { get; set; }
-		public long WorldServerID { get; set; }
-		public long SceneServerID { get; set; }
-		public byte Channel { get; set; }
-		public string Message { get; set; }
-		public DateTime ServerReceivedTime { get; set; }
-		public DateTime TimeCreated { get; set; }
+		public readonly long ID;
+		public readonly long CharacterID;
+		public readonly long WorldServerID;
+		public readonly long SceneServerID;
+		public readonly byte Channel;
+		public readonly string Message;
+		public readonly DateTime ServerReceivedTime;
+		public readonly DateTime TimeCreated;
+
+		public ChatData(long id, long characterID, long worldServerID, long sceneServerID, byte channel, string message, DateTime serverReceivedTime, DateTime timeCreated)
+		{
+			ID = id;
+			CharacterID = characterID;
+			WorldServerID = worldServerID;
+			SceneServerID = sceneServerID;
+			Channel = channel;
+			Message = message;
+			ServerReceivedTime = serverReceivedTime;
+			TimeCreated = timeCreated;
+		}
 	}
 }

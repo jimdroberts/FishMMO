@@ -5,8 +5,15 @@ namespace FishMMO.Database.Data
 	/// </summary>
 	public struct CharacterFriendData
 	{
-		public long ID { get; set; }
-		public long CharacterID { get; set; }
-		public long FriendCharacterID { get; set; }
+		public readonly long ID;
+		public readonly long CharacterID;
+		public readonly long FriendCharacterID;
+
+		public CharacterFriendData(long id, long characterID, long friendCharacterID)
+		{
+			ID = id;
+			CharacterID = characterID;
+			FriendCharacterID = friendCharacterID;
+		}
 	}
 }

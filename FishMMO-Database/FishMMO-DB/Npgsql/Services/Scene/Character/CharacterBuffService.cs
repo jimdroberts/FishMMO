@@ -4,9 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 using FishMMO.Database.Data;
-using FishMMO.Database.Exceptions;
 using FishMMO.Database.Npgsql.Entities;
 
 namespace FishMMO.Database.Npgsql.Services
@@ -29,21 +27,25 @@ namespace FishMMO.Database.Npgsql.Services
 	/// - Returns DatabaseResult for safe, typed error handling
 	/// - Preserves detailed error information for logging while exposing safe messages to clients
 	/// </remarks>
-	public sealed class CharacterBuffService : ICharacterBuffService
+	public sealed class CharacterBuffService : BaseService<CharacterBuffEntity>, ICharacterBuffService
 	{
 		/// <summary>
-		/// Factory for creating database context instances with proper connection pooling and retry configuration.
+		/// Compiled query for retrieving character buffs (hot path for character state).
 		/// </summary>
-		private readonly INpgsqlDbContextFactory dbContextFactory;
+		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterBuffEntity>>> GetBuffsQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
+				context.CharacterBuffs
+					.AsNoTracking()
+					.Where(b => b.CharacterID == characterId)
+					.ToList());
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="CharacterBuffService"/> class.
 		/// </summary>
 		/// <param name="dbContextFactory">Factory for creating database contexts.</param>
 		/// <exception cref="ArgumentNullException">Thrown when dbContextFactory is null.</exception>
-		public CharacterBuffService(INpgsqlDbContextFactory dbContextFactory)
+		public CharacterBuffService(INpgsqlDbContextFactory dbContextFactory) : base(dbContextFactory)
 		{
-			this.dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
 		}
 
 		/// <inheritdoc/>
@@ -54,94 +56,34 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				return DatabaseResult.Failure(
 					"VALIDATION_ERROR",
-					"No buffs to save. Buffs collection must not be null or empty.",
-					isTransient: false);
+					"No buffs to save. Buffs collection must not be null or empty.");
 			}
 
-			await using var dbContext = dbContextFactory.CreateDbContext();
+			return await ExecuteWithStrategyAsync(async (dbContext, strategy) =>
+			{
+				// Extract arrays for bulk UPSERT
+				var characterIds = buffList.Select(b => b.CharacterID).ToArray();
+				var templateIds = buffList.Select(b => b.TemplateID).ToArray();
+				var remainingTimes = buffList.Select(b => b.RemainingTime).ToArray();
+				var tickTimes = buffList.Select(b => b.TickTime).ToArray();
+				var stacks = buffList.Select(b => b.Stacks).ToArray();
 
-			try
-			{
-				var strategy = dbContext.Database.CreateExecutionStrategy();
-
-				await strategy.ExecuteAsync(async () =>
-				{
-					var tableName = dbContext.GetTableName<CharacterBuffEntity>();
-
-					// Extract arrays for bulk UPSERT
-					var characterIds = buffList.Select(b => b.CharacterID).ToArray();
-					var templateIds = buffList.Select(b => b.TemplateID).ToArray();
-					var remainingTimes = buffList.Select(b => b.RemainingTime).ToArray();
-					var tickTimes = buffList.Select(b => b.TickTime).ToArray();
-					var stacks = buffList.Select(b => b.Stacks).ToArray();
-
-					// Single bulk UPSERT using UNNEST - atomic operation, no transaction needed
-					await dbContext.Database.ExecuteSqlInterpolatedAsync(
-						$@"INSERT INTO {tableName} (character_id, template_id, remaining_time, tick_time, stacks)
-						SELECT * FROM UNNEST(
-							{characterIds}::bigint[],
-							{templateIds}::int[],
-							{remainingTimes}::float4[],
-							{tickTimes}::float4[],
-							{stacks}::int[]
-						)
-						ON CONFLICT (character_id, template_id) DO UPDATE SET
-							remaining_time = EXCLUDED.remaining_time,
-							tick_time = EXCLUDED.tick_time,
-							stacks = EXCLUDED.stacks",
-						cancellationToken);
-				});
-
-				return DatabaseResult.Success();
-			}
-			catch (OperationCanceledException)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseTimeoutException("SaveBuffs", 10));
-			}
-			catch (PostgresException ex) when (ex.SqlState == "23505") // Unique violation
-			{
-				return DatabaseResult.FromException(
-					new DatabaseConstraintException(
-						ConstraintType.Unique,
-						"character_buffs_character_id_template_id_key",
-						"One or more buffs have conflicting template IDs.",
-						ex));
-			}
-			catch (PostgresException ex) when (ex.SqlState == "23503") // Foreign key violation
-			{
-				return DatabaseResult.FromException(
-					new DatabaseConstraintException(
-						ConstraintType.ForeignKey,
-						"character_buffs_character_id_fkey",
-						"One or more characters do not exist.",
-						ex));
-			}
-			catch (NpgsqlException ex)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseConnectionException("database", ex));
-			}
-			catch (DbUpdateException ex)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseQueryException(
-						"SaveBuffs",
-						"Failed to save buffs due to a database error.",
-						$"DbUpdateException in SaveBuffsAsync: {ex.Message}",
-						isTransient: false,
-						innerException: ex));
-			}
-			catch (Exception ex)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseQueryException(
-						"SaveBuffs",
-						"An unexpected error occurred while saving buffs.",
-						$"Unexpected error in SaveBuffsAsync: {ex.Message}",
-						isTransient: false,
-						innerException: ex));
-			}
+				// Single bulk UPSERT using UNNEST - atomic operation, no transaction needed
+				await dbContext.Database.ExecuteSqlInterpolatedAsync(
+					$@"INSERT INTO {TableName} (character_id, template_id, remaining_time, tick_time, stacks)
+					SELECT * FROM UNNEST(
+						{characterIds}::bigint[],
+						{templateIds}::int[],
+						{remainingTimes}::float4[],
+						{tickTimes}::float4[],
+						{stacks}::int[]
+					)
+					ON CONFLICT (character_id, template_id) DO UPDATE SET
+						remaining_time = EXCLUDED.remaining_time,
+						tick_time = EXCLUDED.tick_time,
+						stacks = EXCLUDED.stacks",
+					cancellationToken);
+			}, "SaveBuffs", cancellationToken);
 		}
 
 		/// <inheritdoc/>
@@ -151,57 +93,16 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				return DatabaseResult.Failure(
 					"VALIDATION_ERROR",
-					"Invalid character ID. Character ID must be greater than 0.",
-					isTransient: false);
+					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
-			await using var dbContext = dbContextFactory.CreateDbContext();
-
-			try
+			return await ExecuteWithStrategyAsync(async (dbContext, strategy) =>
 			{
-				var strategy = dbContext.Database.CreateExecutionStrategy();
-
-				await strategy.ExecuteAsync(async () =>
-				{
-					// Use atomic DELETE for thread safety
-					var tableName = dbContext.GetTableName<CharacterBuffEntity>();
-					await dbContext.Database.ExecuteSqlInterpolatedAsync(
-						$@"DELETE FROM {tableName} WHERE character_id = {characterId}",
-						cancellationToken);
-				});
-
-				return DatabaseResult.Success();
-			}
-			catch (OperationCanceledException)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseTimeoutException("DeleteBuffs", 10));
-			}
-			catch (NpgsqlException ex)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseConnectionException("database", ex));
-			}
-			catch (DbUpdateException ex)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseQueryException(
-						"DeleteBuffs",
-						"Failed to delete buffs due to a database error.",
-						$"DbUpdateException in DeleteBuffsAsync: {ex.Message}",
-						isTransient: false,
-						innerException: ex));
-			}
-			catch (Exception ex)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseQueryException(
-						"DeleteBuffs",
-						"An unexpected error occurred while deleting buffs.",
-						$"Unexpected error in DeleteBuffsAsync: {ex.Message}",
-						isTransient: false,
-						innerException: ex));
-			}
+				// Use atomic DELETE for thread safety
+				await dbContext.Database.ExecuteSqlInterpolatedAsync(
+					$@"DELETE FROM {TableName} WHERE character_id = {characterId}",
+					cancellationToken);
+			}, "DeleteBuffs", cancellationToken);
 		}
 
 		/// <inheritdoc/>
@@ -211,50 +112,23 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				return DatabaseResult<IReadOnlyList<CharacterBuffData>>.Failure(
 					"VALIDATION_ERROR",
-					"Invalid character ID. Character ID must be greater than 0.",
-					isTransient: false);
+					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
-			try
+			return await ExecuteWithStrategyAsync(async dbContext =>
 			{
-				await using var dbContext = dbContextFactory.CreateDbContext();
+				var entities = await GetBuffsQuery(dbContext, characterId, cancellationToken);
+				var buffs = entities.Select(b => new CharacterBuffData(
+					id: b.ID,
+					characterID: b.CharacterID,
+					templateID: b.TemplateID,
+					remainingTime: b.RemainingTime,
+					tickTime: b.TickTime,
+					stacks: b.Stacks
+				)).ToList();
 
-				var buffs = await dbContext.CharacterBuffs
-					.AsNoTracking()
-					.Where(b => b.CharacterID == characterId)
-					.Select(b => new CharacterBuffData
-					{
-						ID = b.ID,
-						CharacterID = b.CharacterID,
-						TemplateID = b.TemplateID,
-						RemainingTime = b.RemainingTime,
-						TickTime = b.TickTime,
-						Stacks = b.Stacks
-					})
-					.ToListAsync(cancellationToken);
-
-				return DatabaseResult<IReadOnlyList<CharacterBuffData>>.Success(buffs);
-			}
-			catch (OperationCanceledException)
-			{
-				return DatabaseResult<IReadOnlyList<CharacterBuffData>>.FromException(
-					new DatabaseTimeoutException("GetBuffs", 10));
-			}
-			catch (NpgsqlException ex)
-			{
-				return DatabaseResult<IReadOnlyList<CharacterBuffData>>.FromException(
-					new DatabaseConnectionException("database", ex));
-			}
-			catch (Exception ex)
-			{
-				return DatabaseResult<IReadOnlyList<CharacterBuffData>>.FromException(
-					new DatabaseQueryException(
-						"GetBuffs",
-						"Failed to retrieve buffs.",
-						$"Unexpected error in GetBuffsAsync: {ex.Message}",
-						isTransient: false,
-						innerException: ex));
-			}
+				return (IReadOnlyList<CharacterBuffData>)buffs;
+			}, "GetBuffs", cancellationToken);
 		}
 	}
 }

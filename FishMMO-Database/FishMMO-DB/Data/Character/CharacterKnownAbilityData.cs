@@ -5,8 +5,15 @@ namespace FishMMO.Database.Data
 	/// </summary>
 	public struct CharacterKnownAbilityData
 	{
-		public long ID { get; set; }
-		public long CharacterID { get; set; }
-		public int TemplateID { get; set; }
+		public readonly long ID;
+		public readonly long CharacterID;
+		public readonly int TemplateID;
+
+		public CharacterKnownAbilityData(long id, long characterID, int templateID)
+		{
+			ID = id;
+			CharacterID = characterID;
+			TemplateID = templateID;
+		}
 	}
 }

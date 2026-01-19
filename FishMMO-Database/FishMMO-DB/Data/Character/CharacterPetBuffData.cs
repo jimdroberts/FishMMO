@@ -5,10 +5,19 @@ namespace FishMMO.Database.Data
 	/// </summary>
 	public struct CharacterPetBuffData
 	{
-		public long ID { get; set; }
-		public long CharacterID { get; set; }
-		public int TemplateID { get; set; }
-		public int Level { get; set; }
-		public float BuffTimeEnd { get; set; }
+		public readonly long ID;
+		public readonly long CharacterID;
+		public readonly int TemplateID;
+		public readonly int Level;
+		public readonly float BuffTimeEnd;
+
+		public CharacterPetBuffData(long id, long characterID, int templateID, int level, float buffTimeEnd)
+		{
+			ID = id;
+			CharacterID = characterID;
+			TemplateID = templateID;
+			Level = level;
+			BuffTimeEnd = buffTimeEnd;
+		}
 	}
 }

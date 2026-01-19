@@ -5,10 +5,19 @@ namespace FishMMO.Database.Data
 	/// </summary>
 	public struct CharacterAttributeData
 	{
-		public long ID { get; set; }
-		public long CharacterID { get; set; }
-		public int TemplateID { get; set; }
-		public int Value { get; set; }
-		public float CurrentValue { get; set; }
+		public readonly long ID;
+		public readonly long CharacterID;
+		public readonly int TemplateID;
+		public readonly int Value;
+		public readonly float CurrentValue;
+
+		public CharacterAttributeData(long id, long characterID, int templateID, int value, float currentValue)
+		{
+			ID = id;
+			CharacterID = characterID;
+			TemplateID = templateID;
+			Value = value;
+			CurrentValue = currentValue;
+		}
 	}
 }

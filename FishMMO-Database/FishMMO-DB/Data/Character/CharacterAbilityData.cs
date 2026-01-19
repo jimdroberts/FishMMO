@@ -7,10 +7,19 @@ namespace FishMMO.Database.Data
 	/// </summary>
 	public struct CharacterAbilityData
 	{
-		public long ID { get; set; }
-		public long CharacterID { get; set; }
-		public int TemplateID { get; set; }
-		public List<int> AbilityEvents { get; set; }
-		public float Cooldown { get; set; }
+		public readonly long ID;
+		public readonly long CharacterID;
+		public readonly int TemplateID;
+		public readonly List<int> AbilityEvents;
+		public readonly float Cooldown;
+
+		public CharacterAbilityData(long id, long characterID, int templateID, List<int> abilityEvents, float cooldown)
+		{
+			ID = id;
+			CharacterID = characterID;
+			TemplateID = templateID;
+			AbilityEvents = abilityEvents;
+			Cooldown = cooldown;
+		}
 	}
 }

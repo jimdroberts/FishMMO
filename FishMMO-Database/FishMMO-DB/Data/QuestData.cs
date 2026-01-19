@@ -5,7 +5,13 @@ namespace FishMMO.Database.Data
 	/// </summary>
 	public struct QuestData
 	{
-		public long ID { get; set; }
-		public string Name { get; set; }
+		public readonly long ID;
+		public readonly string Name;
+
+		public QuestData(long id, string name)
+		{
+			ID = id;
+			Name = name;
+		}
 	}
 }

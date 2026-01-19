@@ -7,8 +7,15 @@ namespace FishMMO.Database.Data
 	/// </summary>
 	public struct KickRequestData
 	{
-		public long ID { get; set; }
-		public string AccountName { get; set; }
-		public DateTime TimeCreated { get; set; }
+		public readonly long ID;
+		public readonly string AccountName;
+		public readonly DateTime TimeCreated;
+
+		public KickRequestData(long id, string accountName, DateTime timeCreated)
+		{
+			ID = id;
+			AccountName = accountName;
+			TimeCreated = timeCreated;
+		}
 	}
 }

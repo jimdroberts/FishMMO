@@ -1,29 +1,49 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 using FishMMO.Database.Data;
-using FishMMO.Database.Exceptions;
 using FishMMO.Database.Npgsql.Entities;
 
 namespace FishMMO.Database.Npgsql.Services
 {
-	/// <inheritdoc/>
-	public sealed class CharacterAbilityService : ICharacterAbilityService
+	/// <summary>
+	/// Service for managing character abilities in the database.
+	/// Provides async operations for CRUD operations on character ability data.
+	/// Implements execution strategies for automatic retry on transient database failures.
+	/// Returns DatabaseResult for consistent, safe error handling.
+	/// </summary>
+	public sealed class CharacterAbilityService : BaseService<CharacterAbilityEntity>, ICharacterAbilityService
 	{
-		private readonly INpgsqlDbContextFactory dbContextFactory;
+		/// <summary>
+		/// Compiled query for retrieving character abilities (hot path for character load).
+		/// </summary>
+		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterAbilityEntity>>> GetAbilitiesQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
+				context.CharacterAbilities
+					.AsNoTracking()
+					.Where(a => a.CharacterID == characterId)
+					.ToList());
+
+		/// <summary>
+		/// Compiled query for counting character abilities.
+		/// </summary>
+		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<int>> GetCountQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
+				context.CharacterAbilities
+					.AsNoTracking()
+					.Where(a => a.CharacterID == characterId)
+					.Count());
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="CharacterAbilityService"/> class.
 		/// </summary>
 		/// <param name="dbContextFactory">Factory for creating database contexts.</param>
 		/// <exception cref="ArgumentNullException">Thrown when dbContextFactory is null.</exception>
-		public CharacterAbilityService(INpgsqlDbContextFactory dbContextFactory)
+		public CharacterAbilityService(INpgsqlDbContextFactory dbContextFactory) : base(dbContextFactory)
 		{
-			this.dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
 		}
 
 		/// <inheritdoc/>
@@ -36,43 +56,10 @@ namespace FishMMO.Database.Npgsql.Services
 					"Character ID must be greater than 0.");
 			}
 
-			try
+			return await ExecuteWithStrategyAsync(async dbContext =>
 			{
-				await using var dbContext = dbContextFactory.CreateDbContext();
-
-				var count = await dbContext.CharacterAbilities
-					.AsNoTracking()
-					.Where(a => a.CharacterID == characterId)
-					.CountAsync(cancellationToken);
-
-				return DatabaseResult<int>.Success(count);
-			}
-			catch (OperationCanceledException)
-			{
-				return DatabaseResult<int>.FromException(
-					new DatabaseTimeoutException("GetCharacterAbilityCount", 30));
-			}
-			catch (PostgresException pgEx)
-			{
-				return DatabaseResult<int>.FromException(
-					new DatabaseQueryException(
-						"GetCharacterAbilityCount",
-						"A database error occurred.",
-						$"Database query error (SQL State: {pgEx.SqlState}): {pgEx.Message}",
-						false,
-						pgEx.SqlState,
-						pgEx));
-			}
-			catch (NpgsqlException npgsqlEx)
-			{
-				return DatabaseResult<int>.FromException(
-					new DatabaseConnectionException("Failed to connect to the database.", npgsqlEx));
-			}
-			catch (Exception ex)
-			{
-				return DatabaseResult<int>.FromException(
-					new DatabaseException("An unexpected error occurred.", ex));
-			}
+				return await GetCountQuery(dbContext, characterId, cancellationToken);
+			}, "GetCharacterAbilityCount", cancellationToken);
 		}
 
 		/// <inheritdoc/>
@@ -85,86 +72,29 @@ namespace FishMMO.Database.Npgsql.Services
 					"Character ID must be greater than 0.");
 			}
 
-			try
+			return await ExecuteWithStrategyAsync(async dbContext =>
 			{
-				await using var dbContext = dbContextFactory.CreateDbContext();
-				var strategy = dbContext.Database.CreateExecutionStrategy();
+				// Use atomic UPSERT with RETURNING for thread safety and proper retry strategy support
+				var events = abilityData.AbilityEvents ?? new List<int>();
 
-				var abilityId = await strategy.ExecuteAsync(async () =>
-				{
-					// Use atomic UPSERT for thread safety
-					if (abilityData.ID > 0)
-					{
-						// Update existing ability atomically
-						var tableName = dbContext.GetTableName<CharacterAbilityEntity>();
-						await dbContext.Database.ExecuteSqlInterpolatedAsync(
-							$@"UPDATE {tableName} 
-							SET template_id = {abilityData.TemplateID},
-								ability_events = {abilityData.AbilityEvents ?? new List<int>()},
-								cooldown = {abilityData.Cooldown}
-							WHERE id = {abilityData.ID} AND character_id = {abilityData.CharacterID}",
-							cancellationToken);
-						return abilityData.ID;
-					}
-					else
-					{
-						// Insert new ability
-						var newAbility = new CharacterAbilityEntity
-						{
-							CharacterID = abilityData.CharacterID,
-							TemplateID = abilityData.TemplateID,
-							AbilityEvents = abilityData.AbilityEvents ?? new List<int>(),
-							Cooldown = abilityData.Cooldown
-						};
-						dbContext.CharacterAbilities.Add(newAbility);
-						await dbContext.SaveChangesAsync(cancellationToken);
-						return newAbility.ID;
-					}
-				});
+				var result = await dbContext.CharacterAbilities
+					.FromSqlInterpolated($@"
+						INSERT INTO {TableName} (character_id, template_id, ability_events, cooldown)
+						VALUES ({abilityData.CharacterID}, {abilityData.TemplateID}, {events}, {abilityData.Cooldown})
+						ON CONFLICT (character_id, template_id)
+						DO UPDATE SET
+							ability_events = EXCLUDED.ability_events,
+							cooldown = EXCLUDED.cooldown
+						RETURNING id, character_id, template_id, ability_events, cooldown")
+					.AsNoTracking()
+					.FirstOrDefaultAsync(cancellationToken);
 
-				return DatabaseResult<long>.Success(abilityId);
-			}
-			catch (OperationCanceledException)
-			{
-				return DatabaseResult<long>.FromException(
-					new DatabaseTimeoutException("SaveCharacterAbility", 30));
-			}
-			catch (PostgresException pgEx)
-			{
-				return DatabaseResult<long>.FromException(
-					new DatabaseQueryException(
-						"SaveCharacterAbility",
-						"A database error occurred.",
-						$"Database query error (SQL State: {pgEx.SqlState}): {pgEx.Message}",
-						false,
-						pgEx.SqlState,
-						pgEx));
-			}
-			catch (NpgsqlException npgsqlEx)
-			{
-				return DatabaseResult<long>.FromException(
-					new DatabaseConnectionException("Failed to connect to the database.", npgsqlEx));
-			}
-			catch (DbUpdateException dbEx)
-			{
-				return DatabaseResult<long>.FromException(
-					new DatabaseQueryException(
-						"SaveCharacterAbility",
-						"A database error occurred.",
-						$"Database update failed: {dbEx.Message}",
-						false,
-						null,
-						dbEx));
-			}
-			catch (Exception ex)
-			{
-				return DatabaseResult<long>.FromException(
-					new DatabaseException("An unexpected error occurred.", ex));
-			}
+				return result?.ID ?? 0;
+			}, "SaveCharacterAbility", cancellationToken);
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> SaveAbilitiesAsync(IEnumerable<CharacterAbilityData> abilities, CancellationToken ct = default)
+		public async Task<DatabaseResult> SaveAbilitiesAsync(IEnumerable<CharacterAbilityData> abilities, CancellationToken cancellationToken = default)
 		{
 			if (abilities == null || !abilities.Any())
 			{
@@ -173,105 +103,64 @@ namespace FishMMO.Database.Npgsql.Services
 					"Abilities collection must not be null or empty.");
 			}
 
-			try
+			return await ExecuteWithStrategyAsync(async (dbContext, strategy) =>
 			{
-				await using var dbContext = dbContextFactory.CreateDbContext();
-				var strategy = dbContext.Database.CreateExecutionStrategy();
+				var list = abilities.ToList();
+				var newItems = list.Where(a => a.ID <= 0).ToList();
+				var existingItems = list.Where(a => a.ID > 0).ToList();
 
-				// Execute multiple operations atomically within a transaction
-				// Transaction ensures all-or-nothing semantics for INSERT + UPDATE
-				// Execution strategy retries entire transaction block on transient failures
-				await strategy.ExecuteAsync(async () =>
+				// Handle new abilities with atomic INSERT using ON CONFLICT
+				if (newItems.Any())
 				{
-					await using var transaction = await dbContext.Database.BeginTransactionAsync(ct);
+					var newCharacterIds = newItems.Select(a => a.CharacterID).ToArray();
+					var newTemplateIds = newItems.Select(a => a.TemplateID).ToArray();
+					var newEventArrays = newItems.Select(a => a.AbilityEvents?.ToArray() ?? Array.Empty<int>()).ToArray();
+					var newCooldowns = newItems.Select(a => a.Cooldown).ToArray();
 
-					var list = abilities.ToList();
-					var newItems = list.Where(a => a.ID <= 0).ToList();
-					var existingItems = list.Where(a => a.ID > 0).ToList();
+					// Atomic UPSERT for new items - uses unique constraint (character_id, template_id)
+					await dbContext.Database.ExecuteSqlInterpolatedAsync($@"
+						INSERT INTO {TableName} (character_id, template_id, ability_events, cooldown)
+						SELECT * FROM UNNEST(
+							{newCharacterIds}::bigint[],
+							{newTemplateIds}::int[],
+							{newEventArrays}::int[][],
+							{newCooldowns}::float4[]
+						)
+						ON CONFLICT (character_id, template_id)
+						DO UPDATE SET
+							ability_events = EXCLUDED.ability_events,
+							cooldown = EXCLUDED.cooldown",
+						cancellationToken);
+				}
 
-					// 1. Handle New Abilities via EF Core (Safe ID generation)
-					if (newItems.Any())
-					{
-						var entities = newItems.Select(a => new CharacterAbilityEntity
-						{
-							CharacterID = a.CharacterID,
-							TemplateID = a.TemplateID,
-							AbilityEvents = a.AbilityEvents ?? new List<int>(),
-							Cooldown = a.Cooldown
-						});
-						await dbContext.CharacterAbilities.AddRangeAsync(entities, ct);
-						await dbContext.SaveChangesAsync(ct);
-					}
+				// Handle existing abilities with atomic UPDATE by ID
+				if (existingItems.Any())
+				{
+					var ids = existingItems.Select(a => a.ID).ToArray();
+					var characterIds = existingItems.Select(a => a.CharacterID).ToArray();
+					var templateIds = existingItems.Select(a => a.TemplateID).ToArray();
+					var eventArrays = existingItems.Select(a => a.AbilityEvents?.ToArray() ?? Array.Empty<int>()).ToArray();
+					var cooldowns = existingItems.Select(a => a.Cooldown).ToArray();
 
-					// 2. Handle Existing Abilities via UNNEST (Bulk Update)
-					if (existingItems.Any())
-					{
-						var tableName = dbContext.GetTableName<CharacterAbilityEntity>();
-
-						var ids = existingItems.Select(a => a.ID).ToArray();
-						var templates = existingItems.Select(a => a.TemplateID).ToArray();
-						var cooldowns = existingItems.Select(a => a.Cooldown).ToArray();
-						var eventArrays = existingItems
-							.Select(a => a.AbilityEvents?.ToArray() ?? Array.Empty<int>())
-							.ToArray();
-
-						await dbContext.Database.ExecuteSqlInterpolatedAsync($@"
-							UPDATE {tableName} AS target
-							SET template_id = source.t_id,
-								ability_events = source.evs,
-								cooldown = source.cd
-							FROM UNNEST(
-								{ids}::bigint[], 
-								{templates}::int[], 
-								{eventArrays}::int[][], 
-								{cooldowns}::float4[]
-							) AS source(id, t_id, evs, cd)
-							WHERE target.id = source.id", ct);
-					}
-
-					// Commit transaction - auto-rollback on exception
-					await transaction.CommitAsync(ct);
-				});
-
-				return DatabaseResult.Success();
-			}
-			catch (OperationCanceledException)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseTimeoutException("SaveCharacterAbilities", 30));
-			}
-			catch (PostgresException pgEx)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseQueryException(
-						"SaveCharacterAbilities",
-						"A database error occurred.",
-						$"Database query error (SQL State: {pgEx.SqlState}): {pgEx.Message}",
-						false,
-						pgEx.SqlState,
-						pgEx));
-			}
-			catch (NpgsqlException npgsqlEx)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseConnectionException("Failed to connect to the database.", npgsqlEx));
-			}
-			catch (DbUpdateException dbEx)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseQueryException(
-						"SaveCharacterAbilities",
-						"A database error occurred.",
-						$"Bulk save failed: {dbEx.Message}",
-						false,
-						null,
-						dbEx));
-			}
-			catch (Exception ex)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseException("An unexpected error occurred.", ex));
-			}
+					// Atomic bulk UPDATE by ID - preserves ID-based update semantics
+					// Allows changing template_id if needed
+					await dbContext.Database.ExecuteSqlInterpolatedAsync($@"
+						UPDATE {TableName} AS target
+						SET character_id = source.char_id,
+							template_id = source.t_id,
+							ability_events = source.evs,
+							cooldown = source.cd
+						FROM UNNEST(
+							{ids}::bigint[],
+							{characterIds}::bigint[],
+							{templateIds}::int[],
+							{eventArrays}::int[][],
+							{cooldowns}::float4[]
+						) AS source(id, char_id, t_id, evs, cd)
+						WHERE target.id = source.id",
+						cancellationToken);
+				}
+			}, "SaveCharacterAbilities", cancellationToken);
 		}
 
 		/// <inheritdoc/>
@@ -284,59 +173,14 @@ namespace FishMMO.Database.Npgsql.Services
 					"Character ID must be greater than 0.");
 			}
 
-			try
+			return await ExecuteWithStrategyAsync(async dbContext =>
 			{
-				await using var dbContext = dbContextFactory.CreateDbContext();
-				var strategy = dbContext.Database.CreateExecutionStrategy();
-
-				await strategy.ExecuteAsync(async () =>
-				{
-					// Use atomic DELETE for thread safety
-					var tableName = dbContext.GetTableName<CharacterAbilityEntity>();
-					await dbContext.Database.ExecuteSqlInterpolatedAsync(
-						$@"DELETE FROM {tableName} WHERE character_id = {characterId}",
-						cancellationToken);
-				});
-
-				return DatabaseResult.Success();
-			}
-			catch (OperationCanceledException)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseTimeoutException("DeleteCharacterAbilities", 30));
-			}
-			catch (PostgresException pgEx)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseQueryException(
-						"DeleteCharacterAbilities",
-						"A database error occurred.",
-						$"Database query error (SQL State: {pgEx.SqlState}): {pgEx.Message}",
-						false,
-						pgEx.SqlState,
-						pgEx));
-			}
-			catch (NpgsqlException npgsqlEx)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseConnectionException("Failed to connect to the database.", npgsqlEx));
-			}
-			catch (DbUpdateException dbEx)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseQueryException(
-						"DeleteCharacterAbilities",
-						"A database error occurred.",
-						$"Database update failed: {dbEx.Message}",
-						false,
-						null,
-						dbEx));
-			}
-			catch (Exception ex)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseException("An unexpected error occurred.", ex));
-			}
+				var tableName = dbContext.GetTableName<CharacterAbilityEntity>();
+				// Use atomic DELETE for thread safety
+				await dbContext.Database.ExecuteSqlInterpolatedAsync(
+					$@"DELETE FROM {TableName} WHERE character_id = {characterId}",
+					cancellationToken);
+			}, "DeleteCharacterAbilities", cancellationToken);
 		}
 
 		/// <inheritdoc/>
@@ -349,59 +193,14 @@ namespace FishMMO.Database.Npgsql.Services
 					"Character ID and ability ID must be greater than 0.");
 			}
 
-			try
+			return await ExecuteWithStrategyAsync(async dbContext =>
 			{
-				await using var dbContext = dbContextFactory.CreateDbContext();
-				var strategy = dbContext.Database.CreateExecutionStrategy();
-
-				await strategy.ExecuteAsync(async () =>
-				{
-					// Use atomic DELETE for thread safety
-					var tableName = dbContext.GetTableName<CharacterAbilityEntity>();
-					await dbContext.Database.ExecuteSqlInterpolatedAsync(
-						$@"DELETE FROM {tableName} WHERE character_id = {characterId} AND id = {abilityId}",
-						cancellationToken);
-				});
-
-				return DatabaseResult.Success();
-			}
-			catch (OperationCanceledException)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseTimeoutException("DeleteCharacterAbility", 30));
-			}
-			catch (PostgresException pgEx)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseQueryException(
-						"DeleteCharacterAbility",
-						"A database error occurred.",
-						$"Database query error (SQL State: {pgEx.SqlState}): {pgEx.Message}",
-						false,
-						pgEx.SqlState,
-						pgEx));
-			}
-			catch (NpgsqlException npgsqlEx)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseConnectionException("Failed to connect to the database.", npgsqlEx));
-			}
-			catch (DbUpdateException dbEx)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseQueryException(
-						"DeleteCharacterAbility",
-						"A database error occurred.",
-						$"Database update failed: {dbEx.Message}",
-						false,
-						null,
-						dbEx));
-			}
-			catch (Exception ex)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseException("An unexpected error occurred.", ex));
-			}
+				var tableName = dbContext.GetTableName<CharacterAbilityEntity>();
+				// Use atomic DELETE for thread safety
+				await dbContext.Database.ExecuteSqlInterpolatedAsync(
+					$@"DELETE FROM {TableName} WHERE character_id = {characterId} AND id = {abilityId}",
+					cancellationToken);
+			}, "DeleteCharacterAbility", cancellationToken);
 		}
 
 		/// <inheritdoc/>
@@ -414,51 +213,19 @@ namespace FishMMO.Database.Npgsql.Services
 					"Character ID must be greater than 0.");
 			}
 
-			try
+			return await ExecuteWithStrategyAsync(async dbContext =>
 			{
-				await using var dbContext = dbContextFactory.CreateDbContext();
+				var entities = await GetAbilitiesQuery(dbContext, characterId, cancellationToken);
+				var abilities = entities.Select(a => new CharacterAbilityData(
+					id: a.ID,
+					characterID: a.CharacterID,
+					templateID: a.TemplateID,
+					abilityEvents: a.AbilityEvents,
+					cooldown: a.Cooldown
+				)).ToList();
 
-				var abilities = await dbContext.CharacterAbilities
-					.AsNoTracking()
-					.Where(a => a.CharacterID == characterId)
-					.Select(a => new CharacterAbilityData
-					{
-						ID = a.ID,
-						CharacterID = a.CharacterID,
-						TemplateID = a.TemplateID,
-						AbilityEvents = a.AbilityEvents,
-						Cooldown = a.Cooldown
-					})
-					.ToListAsync(cancellationToken);
-
-				return DatabaseResult<IReadOnlyList<CharacterAbilityData>>.Success(abilities);
-			}
-			catch (OperationCanceledException)
-			{
-				return DatabaseResult<IReadOnlyList<CharacterAbilityData>>.FromException(
-					new DatabaseTimeoutException("GetCharacterAbilities", 30));
-			}
-			catch (PostgresException pgEx)
-			{
-				return DatabaseResult<IReadOnlyList<CharacterAbilityData>>.FromException(
-					new DatabaseQueryException(
-						"GetCharacterAbilities",
-						"A database error occurred.",
-						$"Database query error (SQL State: {pgEx.SqlState}): {pgEx.Message}",
-						false,
-						pgEx.SqlState,
-						pgEx));
-			}
-			catch (NpgsqlException npgsqlEx)
-			{
-				return DatabaseResult<IReadOnlyList<CharacterAbilityData>>.FromException(
-					new DatabaseConnectionException("Failed to connect to the database.", npgsqlEx));
-			}
-			catch (Exception ex)
-			{
-				return DatabaseResult<IReadOnlyList<CharacterAbilityData>>.FromException(
-					new DatabaseException("An unexpected error occurred.", ex));
-			}
+				return (IReadOnlyList<CharacterAbilityData>)abilities;
+			}, "GetCharacterAbilities", cancellationToken);
 		}
 	}
 }

@@ -50,6 +50,11 @@ namespace FishMMO.Database.Npgsql.Entities
 			// Composite index for character chat history
 			builder.HasIndex(e => new { e.CharacterID, e.TimeCreated })
 				.HasDatabaseName("IX_Chat_CharacterID_TimeCreated");
+
+			// Composite index for chat pagination (FetchAsync hot path)
+			// Covers WHERE time_created >= @lastFetch AND id > @lastPosition ORDER BY time_created, id
+			builder.HasIndex(e => new { e.TimeCreated, e.ID })
+				.HasDatabaseName("IX_Chat_TimeCreated_ID");
 		}
 	}
 }

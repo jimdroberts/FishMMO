@@ -13,27 +13,18 @@ namespace FishMMO.Database
 	/// Follows Single Responsibility Principle: coordinates database infrastructure components.
 	/// Designed to be instantiated and managed by the server orchestrator (e.g., Server.cs).
 	/// </summary>
-	public sealed class Database
+	public sealed class Database : IDatabase
 	{
-		/// <summary>
-		/// Gets the service registry for accessing database services.
-		/// </summary>
+		/// <inheritdoc/>
 		public IDatabaseServiceRegistry ServiceRegistry { get; private set; }
 
-		/// <summary>
-		/// Gets the database health monitor for connectivity and performance checks.
-		/// </summary>
+		/// <inheritdoc/>
 		public DatabaseHealthMonitor HealthMonitor { get; private set; }
 
-		/// <summary>
-		/// Gets the database metrics tracker for operation statistics.
-		/// </summary>
+		/// <inheritdoc/>
 		public DatabaseMetricsTracker MetricsTracker { get; private set; }
 
-		/// <summary>
-		/// Gets the Npgsql database context factory.
-		/// Exposed for direct access when needed (e.g., custom queries, migrations).
-		/// </summary>
+		/// <inheritdoc/>
 		public INpgsqlDbContextFactory DbContextFactory { get; private set; }
 
 		/// <summary>

@@ -4,9 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 using FishMMO.Database.Data;
-using FishMMO.Database.Exceptions;
 using FishMMO.Database.Npgsql.Entities;
 
 namespace FishMMO.Database.Npgsql.Services
@@ -35,21 +33,25 @@ namespace FishMMO.Database.Npgsql.Services
 	/// Methods return DatabaseResult to provide structured error handling
 	/// without throwing exceptions to calling code.
 	/// </remarks>
-	public sealed class CharacterInventoryService : ICharacterInventoryService
+	public sealed class CharacterInventoryService : BaseService<CharacterInventoryEntity>, ICharacterInventoryService
 	{
 		/// <summary>
-		/// Factory for creating database contexts.
+		/// Compiled query for retrieving character inventory (hot path for character load).
 		/// </summary>
-		private readonly INpgsqlDbContextFactory dbContextFactory;
+		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterInventoryEntity>>> GetInventoryItemsQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
+				context.CharacterInventoryItems
+					.AsNoTracking()
+					.Where(i => i.CharacterID == characterId)
+					.ToList());
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="CharacterInventoryService"/> class.
 		/// </summary>
 		/// <param name="dbContextFactory">Factory for creating database contexts.</param>
 		/// <exception cref="ArgumentNullException">Thrown when dbContextFactory is null.</exception>
-		public CharacterInventoryService(INpgsqlDbContextFactory dbContextFactory)
+		public CharacterInventoryService(INpgsqlDbContextFactory dbContextFactory) : base(dbContextFactory)
 		{
-			this.dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
 		}
 
 		/// <inheritdoc/>
@@ -60,88 +62,37 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<long>.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			await using var dbContext = dbContextFactory.CreateDbContext();
-
-			try
-			{
-				var strategy = dbContext.Database.CreateExecutionStrategy();
-
-				var result = await strategy.ExecuteAsync(async () =>
+			return await ExecuteWithStrategyAsync<long>(
+				async (dbContext, strategy) =>
 				{
-					var tableName = dbContext.GetTableName<CharacterInventoryEntity>();
+					var result = await strategy.ExecuteAsync(async () =>
+					{
+						// Use PostgreSQL UPSERT for atomic insert-or-update
+						return await dbContext.CharacterInventoryItems
+							.FromSqlInterpolated($@"
+							INSERT INTO {TableName} 
+								(character_id, template_id, slot, seed, amount)
+							VALUES 
+								({item.CharacterID}, {item.TemplateID}, {item.Slot}, {item.Seed}, {item.Amount})
+							ON CONFLICT (character_id, slot) 
+							DO UPDATE SET 
+								template_id = EXCLUDED.template_id,
+								seed = EXCLUDED.seed,
+								amount = EXCLUDED.amount
+							RETURNING id, character_id, template_id, slot, seed, amount")
+							.AsNoTracking()
+							.FirstOrDefaultAsync(cancellationToken);
+					});
 
-					// Use PostgreSQL UPSERT for atomic insert-or-update
-					return await dbContext.CharacterInventoryItems
-						.FromSqlInterpolated($@"
-						INSERT INTO {tableName} 
-							(character_id, template_id, slot, seed, amount)
-						VALUES 
-							({item.CharacterID}, {item.TemplateID}, {item.Slot}, {item.Seed}, {item.Amount})
-						ON CONFLICT (character_id, slot) 
-						DO UPDATE SET 
-							template_id = EXCLUDED.template_id,
-							seed = EXCLUDED.seed,
-							amount = EXCLUDED.amount
-						RETURNING id, character_id, template_id, slot, seed, amount")
-						.AsNoTracking()
-						.FirstOrDefaultAsync(cancellationToken);
-				});
+					if (result == null || result.ID == 0)
+					{
+						throw new InvalidOperationException("Failed to save item");
+					}
 
-				if (result == null || result.ID == 0)
-				{
-					return DatabaseResult<long>.Failure("SAVE_FAILED", "Failed to save item");
-				}
-
-				return DatabaseResult<long>.Success(result.ID);
-			}
-			catch (OperationCanceledException)
-			{
-				return DatabaseResult<long>.FromException(
-					new DatabaseTimeoutException("SaveInventoryItem", 10));
-			}
-			catch (PostgresException ex) when (ex.SqlState == "23505") // Unique violation
-			{
-				return DatabaseResult<long>.FromException(
-					new DatabaseConstraintException(
-						ConstraintType.Unique,
-						"character_inventory_items_character_id_slot_key",
-						"An inventory item already exists in this slot.",
-						ex));
-			}
-			catch (PostgresException ex) when (ex.SqlState == "23503") // Foreign key violation
-			{
-				return DatabaseResult<long>.FromException(
-					new DatabaseConstraintException(
-						ConstraintType.ForeignKey,
-						"character_inventory_items_character_id_fkey",
-						"Character does not exist.",
-						ex));
-			}
-			catch (NpgsqlException ex)
-			{
-				return DatabaseResult<long>.FromException(
-					new DatabaseConnectionException("database", ex));
-			}
-			catch (DbUpdateException ex)
-			{
-				return DatabaseResult<long>.FromException(
-					new DatabaseQueryException(
-						"SaveInventoryItem",
-						"Failed to save inventory item due to a database error.",
-						$"DbUpdateException in SaveInventoryItemAsync: {ex.Message}",
-						isTransient: false,
-						innerException: ex));
-			}
-			catch (Exception ex)
-			{
-				return DatabaseResult<long>.FromException(
-					new DatabaseQueryException(
-						"SaveInventoryItem",
-						"An unexpected error occurred while saving the inventory item.",
-						$"Unexpected error in SaveInventoryItemAsync: {ex.Message}",
-						isTransient: false,
-						innerException: ex));
-			}
+					return result.ID;
+				},
+				"SaveInventoryItem",
+				cancellationToken);
 		}
 
 		/// <inheritdoc/>
@@ -153,90 +104,31 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Empty or null items collection");
 			}
 
-			await using var dbContext = dbContextFactory.CreateDbContext();
+			return await ExecuteWithStrategyAsync(async dbContext =>
+			{
+				// Extract arrays for bulk UPSERT
+				var characterIds = itemList.Select(i => i.CharacterID).ToArray();
+				var templateIds = itemList.Select(i => i.TemplateID).ToArray();
+				var slots = itemList.Select(i => i.Slot).ToArray();
+				var seeds = itemList.Select(i => i.Seed).ToArray();
+				var amounts = itemList.Select(i => (int)i.Amount).ToArray();
 
-			try
-			{
-				var strategy = dbContext.Database.CreateExecutionStrategy();
-
-				await strategy.ExecuteAsync(async () =>
-				{
-					var tableName = dbContext.GetTableName<CharacterInventoryEntity>();
-
-					// Extract arrays for bulk UPSERT
-					var characterIds = itemList.Select(i => i.CharacterID).ToArray();
-					var templateIds = itemList.Select(i => i.TemplateID).ToArray();
-					var slots = itemList.Select(i => i.Slot).ToArray();
-					var seeds = itemList.Select(i => i.Seed).ToArray();
-					var amounts = itemList.Select(i => (int)i.Amount).ToArray();
-
-					// Single bulk UPSERT using UNNEST - atomic operation, no transaction needed
-					await dbContext.Database.ExecuteSqlInterpolatedAsync(
-						$@"INSERT INTO {tableName} (character_id, template_id, slot, seed, amount)
-						SELECT * FROM UNNEST(
-							{characterIds}::bigint[],
-							{templateIds}::int[],
-							{slots}::int[],
-							{seeds}::int[],
-							{amounts}::int[]
-						)
-						ON CONFLICT (character_id, slot) DO UPDATE SET
-							template_id = EXCLUDED.template_id,
-							seed = EXCLUDED.seed,
-							amount = EXCLUDED.amount",
-						cancellationToken);
-				});
-
-				return DatabaseResult.Success();
-			}
-			catch (OperationCanceledException)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseTimeoutException("SaveInventoryItems", 10));
-			}
-			catch (PostgresException ex) when (ex.SqlState == "23505") // Unique violation
-			{
-				return DatabaseResult.FromException(
-					new DatabaseConstraintException(
-						ConstraintType.Unique,
-						"character_inventory_items_character_id_slot_key",
-						"An inventory item already exists in one of the slots.",
-						ex));
-			}
-			catch (PostgresException ex) when (ex.SqlState == "23503") // Foreign key violation
-			{
-				return DatabaseResult.FromException(
-					new DatabaseConstraintException(
-						ConstraintType.ForeignKey,
-						"character_inventory_items_character_id_fkey",
-						"One or more characters do not exist.",
-						ex));
-			}
-			catch (NpgsqlException ex)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseConnectionException("database", ex));
-			}
-			catch (DbUpdateException ex)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseQueryException(
-						"SaveInventoryItems",
-						"Failed to save inventory items due to a database error.",
-						$"DbUpdateException in SaveInventoryItemsAsync: {ex.Message}",
-						isTransient: false,
-						innerException: ex));
-			}
-			catch (Exception ex)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseQueryException(
-						"SaveInventoryItems",
-						"An unexpected error occurred while saving inventory items.",
-						$"Unexpected error in SaveInventoryItemsAsync: {ex.Message}",
-						isTransient: false,
-						innerException: ex));
-			}
+				// Single bulk UPSERT using UNNEST - atomic operation, no transaction needed
+				await dbContext.Database.ExecuteSqlInterpolatedAsync(
+					$@"INSERT INTO {TableName} (character_id, template_id, slot, seed, amount)
+								SELECT * FROM UNNEST(
+									{characterIds}::bigint[],
+									{templateIds}::int[],
+									{slots}::int[],
+									{seeds}::int[],
+									{amounts}::int[]
+								)
+								ON CONFLICT (character_id, slot) DO UPDATE SET
+									template_id = EXCLUDED.template_id,
+									seed = EXCLUDED.seed,
+									amount = EXCLUDED.amount",
+					cancellationToken);
+			}, "SaveInventoryItems", cancellationToken);
 		}
 
 		/// <inheritdoc/>
@@ -247,72 +139,13 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			await using var dbContext = dbContextFactory.CreateDbContext();
-
-			try
+			return await ExecuteWithStrategyAsync(async dbContext =>
 			{
-				var strategy = dbContext.Database.CreateExecutionStrategy();
-
-				await strategy.ExecuteAsync(async () =>
-				{
-					var tableName = dbContext.GetTableName<CharacterInventoryEntity>();
-
-					// Use atomic DELETE for thread safety
-					await dbContext.Database.ExecuteSqlInterpolatedAsync(
-						$@"DELETE FROM {tableName} WHERE character_id = {characterId}",
-						cancellationToken);
-				});
-
-				return DatabaseResult.Success();
-			}
-			catch (OperationCanceledException)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseTimeoutException("DeleteInventoryItems", 10));
-			}
-			catch (PostgresException ex) when (ex.SqlState == "23505") // Unique violation
-			{
-				return DatabaseResult.FromException(
-					new DatabaseConstraintException(
-						ConstraintType.Unique,
-						"character_inventory_constraint",
-						"Constraint violation while deleting inventory items.",
-						ex));
-			}
-			catch (PostgresException ex) when (ex.SqlState == "23503") // Foreign key violation
-			{
-				return DatabaseResult.FromException(
-					new DatabaseConstraintException(
-						ConstraintType.ForeignKey,
-						"character_inventory_constraint",
-						"Cannot delete inventory items due to foreign key constraint.",
-						ex));
-			}
-			catch (NpgsqlException ex)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseConnectionException("database", ex));
-			}
-			catch (DbUpdateException ex)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseQueryException(
-						"DeleteInventoryItems",
-						"Failed to delete inventory items due to a database error.",
-						$"DbUpdateException in DeleteInventoryItemsAsync: {ex.Message}",
-						isTransient: false,
-						innerException: ex));
-			}
-			catch (Exception ex)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseQueryException(
-						"DeleteInventoryItems",
-						"An unexpected error occurred while deleting inventory items.",
-						$"Unexpected error in DeleteInventoryItemsAsync: {ex.Message}",
-						isTransient: false,
-						innerException: ex));
-			}
+				// Use atomic DELETE for thread safety
+				await dbContext.Database.ExecuteSqlInterpolatedAsync(
+					$@"DELETE FROM {TableName} WHERE character_id = {characterId}",
+					cancellationToken);
+			}, "DeleteInventoryItems", cancellationToken);
 		}
 
 		/// <inheritdoc/>
@@ -323,72 +156,13 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			await using var dbContext = dbContextFactory.CreateDbContext();
-
-			try
+			return await ExecuteWithStrategyAsync(async dbContext =>
 			{
-				var strategy = dbContext.Database.CreateExecutionStrategy();
-
-				await strategy.ExecuteAsync(async () =>
-				{
-					var tableName = dbContext.GetTableName<CharacterInventoryEntity>();
-
-					// Use atomic DELETE for thread safety
-					await dbContext.Database.ExecuteSqlInterpolatedAsync(
-						$@"DELETE FROM {tableName} WHERE character_id = {characterId} AND slot = {slot}",
-						cancellationToken);
-				});
-
-				return DatabaseResult.Success();
-			}
-			catch (OperationCanceledException)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseTimeoutException("DeleteInventorySlot", 10));
-			}
-			catch (PostgresException ex) when (ex.SqlState == "23505") // Unique violation
-			{
-				return DatabaseResult.FromException(
-					new DatabaseConstraintException(
-						ConstraintType.Unique,
-						"character_inventory_constraint",
-						"Constraint violation while deleting inventory slot.",
-						ex));
-			}
-			catch (PostgresException ex) when (ex.SqlState == "23503") // Foreign key violation
-			{
-				return DatabaseResult.FromException(
-					new DatabaseConstraintException(
-						ConstraintType.ForeignKey,
-						"character_inventory_constraint",
-						"Cannot delete inventory slot due to foreign key constraint.",
-						ex));
-			}
-			catch (NpgsqlException ex)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseConnectionException("database", ex));
-			}
-			catch (DbUpdateException ex)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseQueryException(
-						"DeleteInventorySlot",
-						"Failed to delete inventory slot due to a database error.",
-						$"DbUpdateException in DeleteInventorySlotAsync: {ex.Message}",
-						isTransient: false,
-						innerException: ex));
-			}
-			catch (Exception ex)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseQueryException(
-						"DeleteInventorySlot",
-						"An unexpected error occurred while deleting inventory slot.",
-						$"Unexpected error in DeleteInventorySlotAsync: {ex.Message}",
-						isTransient: false,
-						innerException: ex));
-			}
+				// Use atomic DELETE for thread safety
+				await dbContext.Database.ExecuteSqlInterpolatedAsync(
+					$@"DELETE FROM {TableName} WHERE character_id = {characterId} AND slot = {slot}",
+					cancellationToken);
+			}, "DeleteInventorySlot", cancellationToken);
 		}
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<IReadOnlyList<CharacterInventoryData>>> GetInventoryItemsAsync(long characterId, CancellationToken cancellationToken = default)
@@ -398,74 +172,23 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<IReadOnlyList<CharacterInventoryData>>.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			try
-			{
-				await using var dbContext = dbContextFactory.CreateDbContext();
+			return await ExecuteWithStrategyAsync(
+				async (dbContext) =>
+				{
+					var entities = await GetInventoryItemsQuery(dbContext, characterId, cancellationToken);
+					var items = entities.Select(i => new CharacterInventoryData(
+						id: i.ID,
+						characterID: i.CharacterID,
+						templateID: i.TemplateID,
+						slot: i.Slot,
+						seed: i.Seed,
+						amount: i.Amount
+					)).ToList();
 
-				var items = await dbContext.CharacterInventoryItems
-					.AsNoTracking()
-					.Where(i => i.CharacterID == characterId)
-					.Select(i => new CharacterInventoryData
-					{
-						ID = i.ID,
-						CharacterID = i.CharacterID,
-						TemplateID = i.TemplateID,
-						Slot = i.Slot,
-						Seed = i.Seed,
-						Amount = i.Amount
-					})
-					.ToListAsync(cancellationToken);
-
-				return DatabaseResult<IReadOnlyList<CharacterInventoryData>>.Success(items);
-			}
-			catch (OperationCanceledException)
-			{
-				return DatabaseResult<IReadOnlyList<CharacterInventoryData>>.FromException(
-					new DatabaseTimeoutException("GetInventoryItems", 10));
-			}
-			catch (PostgresException ex) when (ex.SqlState == "23505") // Unique violation
-			{
-				return DatabaseResult<IReadOnlyList<CharacterInventoryData>>.FromException(
-					new DatabaseConstraintException(
-						ConstraintType.Unique,
-						"character_inventory_constraint",
-						"Constraint violation while retrieving inventory items.",
-						ex));
-			}
-			catch (PostgresException ex) when (ex.SqlState == "23503") // Foreign key violation
-			{
-				return DatabaseResult<IReadOnlyList<CharacterInventoryData>>.FromException(
-					new DatabaseConstraintException(
-						ConstraintType.ForeignKey,
-						"character_inventory_constraint",
-						"Foreign key constraint issue while retrieving inventory items.",
-						ex));
-			}
-			catch (NpgsqlException ex)
-			{
-				return DatabaseResult<IReadOnlyList<CharacterInventoryData>>.FromException(
-					new DatabaseConnectionException("database", ex));
-			}
-			catch (DbUpdateException ex)
-			{
-				return DatabaseResult<IReadOnlyList<CharacterInventoryData>>.FromException(
-					new DatabaseQueryException(
-						"GetInventoryItems",
-						"Failed to retrieve inventory items due to a database error.",
-						$"DbUpdateException in GetInventoryItemsAsync: {ex.Message}",
-						isTransient: false,
-						innerException: ex));
-			}
-			catch (Exception ex)
-			{
-				return DatabaseResult<IReadOnlyList<CharacterInventoryData>>.FromException(
-					new DatabaseQueryException(
-						"GetInventoryItems",
-						"An unexpected error occurred while retrieving inventory items.",
-						$"Unexpected error in GetInventoryItemsAsync: {ex.Message}",
-						isTransient: false,
-						innerException: ex));
-			}
+					return (IReadOnlyList<CharacterInventoryData>)items;
+				},
+				"GetInventoryItems",
+				cancellationToken);
 		}
 	}
 }

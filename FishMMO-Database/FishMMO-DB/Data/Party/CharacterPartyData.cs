@@ -5,10 +5,19 @@ namespace FishMMO.Database.Data
 	/// </summary>
 	public struct CharacterPartyData
 	{
-		public long ID { get; set; }
-		public long CharacterID { get; set; }
-		public long PartyID { get; set; }
-		public byte Rank { get; set; }
-		public float HealthPCT { get; set; }
+		public readonly long ID;
+		public readonly long CharacterID;
+		public readonly long PartyID;
+		public readonly byte Rank;
+		public readonly float HealthPCT;
+
+		public CharacterPartyData(long id, long characterID, long partyID, byte rank, float healthPCT)
+		{
+			ID = id;
+			CharacterID = characterID;
+			PartyID = partyID;
+			Rank = rank;
+			HealthPCT = healthPCT;
+		}
 	}
 }

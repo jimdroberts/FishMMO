@@ -83,8 +83,8 @@ namespace FishMMO.Database.Npgsql
 			modelBuilder.ApplyConfiguration(new CharacterInventoryEntityConfiguration());
 			modelBuilder.ApplyConfiguration(new CharacterAbilityEntityConfiguration());
 			modelBuilder.ApplyConfiguration(new CharacterAttributeEntityConfiguration());
-			modelBuilder.ApplyConfiguration(new CharacterEquipmentEntityConfiguration());
-
+			modelBuilder.ApplyConfiguration(new CharacterEquipmentEntityConfiguration());		modelBuilder.ApplyConfiguration(new GuildUpdateEntityConfiguration());
+		modelBuilder.ApplyConfiguration(new PartyUpdateEntityConfiguration());
 			// other settings
 			/*modelBuilder.Entity<CharacterBuffEntity>()
                 .HasKey(cb => new { cb.character, cb.name });

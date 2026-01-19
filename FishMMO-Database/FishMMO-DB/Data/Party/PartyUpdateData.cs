@@ -7,8 +7,15 @@ namespace FishMMO.Database.Data
 	/// </summary>
 	public struct PartyUpdateData
 	{
-		public long ID { get; set; }
-		public long PartyID { get; set; }
-		public DateTime LastUpdate { get; set; }
+		public readonly long ID;
+		public readonly long PartyID;
+		public readonly DateTime LastUpdate;
+
+		public PartyUpdateData(long id, long partyID, DateTime lastUpdate)
+		{
+			ID = id;
+			PartyID = partyID;
+			LastUpdate = lastUpdate;
+		}
 	}
 }

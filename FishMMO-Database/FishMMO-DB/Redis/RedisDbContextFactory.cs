@@ -1,6 +1,7 @@
 ﻿using System;
 using Microsoft.Extensions.Configuration;
 using StackExchange.Redis;
+using RedisDatabase = StackExchange.Redis.IDatabase;
 
 namespace FishMMO.Database.Redis
 {
@@ -50,7 +51,7 @@ namespace FishMMO.Database.Redis
 			Connection.Close();
 		}
 
-		public IDatabase GetDatabase()
+		public RedisDatabase GetDatabase()
 		{
 			return Connection.GetDatabase();
 		}

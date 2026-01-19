@@ -62,6 +62,12 @@ namespace FishMMO.Database.Npgsql.Entities
 
 			builder.HasIndex(e => e.TimeCreated)
 				.HasDatabaseName("IX_Scene_TimeCreated");
+
+			// Performance index for scene queue dequeue (hot path: DequeueAsync)
+			// Covers WHERE scene_status = 0 ORDER BY time_created LIMIT 1
+			builder.HasIndex(e => new { e.SceneStatus, e.TimeCreated })
+				.HasDatabaseName("IX_Scene_Status_TimeCreated")
+				.HasFilter("scene_status = 0");
 		}
 	}
 }
