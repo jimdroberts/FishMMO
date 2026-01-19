@@ -1,10 +1,8 @@
 ﻿using System.ComponentModel.DataAnnotations.Schema;
-using Microsoft.EntityFrameworkCore;
 
 namespace FishMMO.Database.Npgsql.Entities
 {
 	[Table("character_guild")]
-	// add index on guild to avoid full scans when loading guild members
 	public class CharacterGuildEntity
 	{
 		[DatabaseGenerated(DatabaseGeneratedOption.Identity)]
