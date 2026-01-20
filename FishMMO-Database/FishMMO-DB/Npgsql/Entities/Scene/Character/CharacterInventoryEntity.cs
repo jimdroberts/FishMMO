@@ -5,7 +5,6 @@ namespace FishMMO.Database.Npgsql.Entities
 	[Table("character_inventory")]
 	public class CharacterInventoryEntity
 	{
-		[DatabaseGenerated(DatabaseGeneratedOption.Identity)]
 		public long ID { get; set; }
 		public long CharacterID { get; set; }
 		public CharacterEntity Character { get; set; }

@@ -6,7 +6,6 @@ namespace FishMMO.Database.Npgsql.Entities
 	[Table("scenes")]
 	public class SceneEntity
 	{
-		[DatabaseGenerated(DatabaseGeneratedOption.Identity)]
 		public long ID { get; set; }
 		public long SceneServerID { get; set; }
 		public long WorldServerID { get; set; }

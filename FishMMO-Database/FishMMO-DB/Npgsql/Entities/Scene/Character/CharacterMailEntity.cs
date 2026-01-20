@@ -6,7 +6,6 @@ namespace FishMMO.Database.Npgsql.Entities
 	[Table("character_mail")]
 	public class CharacterMailEntity
 	{
-		[DatabaseGenerated(DatabaseGeneratedOption.Identity)]
 		public long ID { get; set; }
 		public long SenderCharacterID { get; set; }
 		public long CharacterID { get; set; }

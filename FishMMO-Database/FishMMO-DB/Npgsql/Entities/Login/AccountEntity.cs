@@ -7,7 +7,6 @@ namespace FishMMO.Database.Npgsql.Entities
 	[Table("accounts")]
 	public class AccountEntity
 	{
-		[Key]
 		public string Name { get; set; }
 		public string Salt { get; set; }
 		public string Verifier { get; set; }

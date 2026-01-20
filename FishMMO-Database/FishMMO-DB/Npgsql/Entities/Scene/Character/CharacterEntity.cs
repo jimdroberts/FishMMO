@@ -7,7 +7,6 @@ namespace FishMMO.Database.Npgsql.Entities
 	[Table("characters")]
 	public class CharacterEntity
 	{
-		[DatabaseGenerated(DatabaseGeneratedOption.Identity)]
 		public long ID { get; set; }
 		// [COLLATE NOCASE for case insensitive compare. this way we can't both create 'Archer' and 'archer' as characters]
 		// note: the collation has been added in the DbContext OnModelCreating function since the Postgres provider

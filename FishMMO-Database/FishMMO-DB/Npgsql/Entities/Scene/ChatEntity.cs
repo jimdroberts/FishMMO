@@ -6,7 +6,6 @@ namespace FishMMO.Database.Npgsql.Entities
 	[Table("chat")]
 	public class ChatEntity
 	{
-		[DatabaseGenerated(DatabaseGeneratedOption.Identity)]
 		public long ID { get; set; }
 		public long CharacterID { get; set; }
 		public long WorldServerID { get; set; }

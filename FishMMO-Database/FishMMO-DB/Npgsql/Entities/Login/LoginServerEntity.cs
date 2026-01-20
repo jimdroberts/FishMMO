@@ -6,7 +6,6 @@ namespace FishMMO.Database.Npgsql.Entities
 	[Table("login_servers")]
 	public class LoginServerEntity
 	{
-		[DatabaseGenerated(DatabaseGeneratedOption.Identity)]
 		public long ID { get; set; }
 		public string Name { get; set; }
 		public DateTime TimeCreated { get; set; }

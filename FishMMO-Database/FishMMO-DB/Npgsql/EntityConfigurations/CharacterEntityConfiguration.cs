@@ -7,6 +7,12 @@ namespace FishMMO.Database.Npgsql.Entities
 	{
 		public void Configure(EntityTypeBuilder<CharacterEntity> builder)
 		{
+			// Primary Key
+			builder.HasKey(e => e.ID);
+
+			builder.Property(e => e.ID)
+				.ValueGeneratedOnAdd();
+
 			builder.Property(e => e.Name)
 				.IsRequired();
 

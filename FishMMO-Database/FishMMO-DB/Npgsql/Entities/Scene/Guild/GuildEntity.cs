@@ -7,7 +7,6 @@ namespace FishMMO.Database.Npgsql.Entities
 	[Table("guilds")]
 	public class GuildEntity
 	{
-		[DatabaseGenerated(DatabaseGeneratedOption.Identity)]
 		public long ID { get; set; }
 		public string Name { get; set; }
 		public string Notice { get; set; }
