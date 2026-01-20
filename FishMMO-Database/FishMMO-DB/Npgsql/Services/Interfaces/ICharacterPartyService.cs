@@ -30,18 +30,27 @@ namespace FishMMO.Database.Npgsql.Services
 	public interface ICharacterPartyService
 	{
 		/// <summary>
-		/// Saves or updates a character's party membership using an atomic UPSERT operation.
+		/// Saves or updates a character's party membership using an atomic transaction with capacity validation.
 		/// </summary>
 		/// <param name="partyData">The party membership data to save.</param>
+		/// <param name="maxCapacity">Maximum number of members allowed in the party. Must be greater than 0.</param>
 		/// <param name="cancellationToken">Token to cancel the operation.</param>
 		/// <returns>
 		/// DatabaseResult indicating success or containing error details.
 		/// </returns>
 		/// <remarks>
+		/// Uses transaction with row-level locking to atomically validate capacity and save membership.
+		/// 
+		/// Process:
+		/// 1. Checks if character is already a member (UPDATE vs INSERT case)
+		/// 2. For new joins, locks party member rows with FOR UPDATE and counts members
+		/// 3. Rejects join if capacity reached with CAPACITY_EXCEEDED error
+		/// 4. Performs UPSERT (INSERT ... ON CONFLICT DO UPDATE)
+		/// 
 		/// Uses PostgreSQL INSERT ON CONFLICT to ensure atomic insert-or-update operations.
-		/// Execution strategy wrapping ensures transient database failures are automatically retried.
+		/// Transaction ensures capacity validation is race-condition safe.
 		/// </remarks>
-		Task<DatabaseResult> SavePartyMembershipAsync(CharacterPartyData partyData, CancellationToken cancellationToken = default);
+		Task<DatabaseResult> SavePartyMembershipAsync(CharacterPartyData partyData, int maxCapacity, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Updates a character's party rank atomically.

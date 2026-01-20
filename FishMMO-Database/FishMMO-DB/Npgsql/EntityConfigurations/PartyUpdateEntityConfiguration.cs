@@ -29,10 +29,12 @@ namespace FishMMO.Database.Npgsql.Entities
 				.IsUnique()
 				.HasDatabaseName("IX_PartyUpdate_PartyID_Unique");
 
-			// Performance index for party update fetch queries (FetchAsync hot path)
-			// Covers WHERE last_update >= @lastFetch AND party_id IN (@partyIds)
-			builder.HasIndex(e => e.LastUpdate)
-				.HasDatabaseName("IX_PartyUpdate_LastUpdate");
+			// Composite index for party update fetch queries (FetchAsync hot path)
+			// Optimizes WHERE last_update >= @lastFetch AND party_id IN (@partyIds)
+			// Using (last_update, party_id) allows efficient range scan on last_update
+			// followed by party_id filtering without additional lookups
+			builder.HasIndex(e => new { e.LastUpdate, e.PartyID })
+				.HasDatabaseName("IX_PartyUpdate_LastUpdate_PartyID");
 		}
 	}
 }

@@ -64,28 +64,27 @@ namespace FishMMO.Database.Npgsql.Services
 					"Empty or null factions collection.");
 			}
 
-			return await ExecuteWithStrategyAsync(async (dbContext, strategy) =>
-			{
-				// Extract arrays for bulk UPSERT
-				var characterIds = factionList.Select(f => f.CharacterID).ToArray();
-				var templateIds = factionList.Select(f => f.TemplateID).ToArray();
-				var values = factionList.Select(f => f.Value).ToArray();
+			// Extract arrays for bulk UPSERT
+			var characterIds = factionList.Select(f => f.CharacterID).ToArray();
+			var templateIds = factionList.Select(f => f.TemplateID).ToArray();
+			var values = factionList.Select(f => f.Value).ToArray();
 
-				// Single bulk UPSERT using UNNEST - atomic operation, no transaction needed
-				await strategy.ExecuteAsync(async () =>
-				{
-					await dbContext.Database.ExecuteSqlInterpolatedAsync(
-						$@"INSERT INTO {TableName} (character_id, template_id, value)
-					SELECT * FROM UNNEST(
-						{characterIds}::bigint[],
-						{templateIds}::int[],
-						{values}::int[]
-					)
-					ON CONFLICT (character_id, template_id) DO UPDATE SET
-						value = EXCLUDED.value",
-						cancellationToken);
-				});
-			}, "SaveFactions", cancellationToken);
+			// Single bulk UPSERT using UNNEST - atomic operation, no transaction needed
+			var result = await ExecuteSqlAsync(
+				$@"INSERT INTO {TableName} (character_id, template_id, value)
+				SELECT * FROM UNNEST(
+					{characterIds}::bigint[],
+					{templateIds}::int[],
+					{values}::int[]
+				)
+				ON CONFLICT (character_id, template_id) DO UPDATE SET
+					value = EXCLUDED.value",
+				"SaveFactions",
+				entityName: "CharacterFaction",
+				requireRowsAffected: false,
+				cancellationToken: cancellationToken);
+
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -98,16 +97,16 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
-			return await ExecuteWithStrategyAsync(async (dbContext, strategy) =>
-			{
-				// Use atomic DELETE for thread safety
-				await strategy.ExecuteAsync(async () =>
-				{
-					await dbContext.Database.ExecuteSqlInterpolatedAsync(
-						$@"DELETE FROM {TableName} WHERE character_id = {characterId}",
-						cancellationToken);
-				});
-			}, "DeleteFactions", cancellationToken);
+			// Use atomic DELETE for thread safety
+			var result = await ExecuteSqlAsync(
+				$@"DELETE FROM {TableName} WHERE character_id = {characterId}",
+				"DeleteFactions",
+				entityName: "CharacterFaction",
+				entityId: characterId,
+				requireRowsAffected: false,
+				cancellationToken: cancellationToken);
+
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>

@@ -73,25 +73,22 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 
 			return await ExecuteWithStrategyAsync<long>(
-				async (dbContext, strategy) =>
+				async (dbContext) =>
 				{
-					var result = await strategy.ExecuteAsync(async () =>
-					{
-						// Use PostgreSQL UPSERT for atomic insert-or-update
-						return await dbContext.CharacterHotkeys
-								.FromSqlInterpolated($@"
-								INSERT INTO {TableName} 
-									(character_id, type, slot, reference_id)
-								VALUES 
-									({hotkey.CharacterID}, {hotkey.Type}, {hotkey.Slot}, {hotkey.ReferenceID})
-								ON CONFLICT (character_id, slot) 
-								DO UPDATE SET 
-									type = EXCLUDED.type,
-									reference_id = EXCLUDED.reference_id
-								RETURNING id, character_id, type, slot, reference_id")
-								.AsNoTracking()
-								.FirstOrDefaultAsync(cancellationToken);
-					});
+					// Use PostgreSQL UPSERT for atomic insert-or-update
+					var result = await dbContext.CharacterHotkeys
+							.FromSqlInterpolated($@"
+							INSERT INTO {TableName} 
+								(character_id, type, slot, reference_id)
+							VALUES 
+								({hotkey.CharacterID}, {hotkey.Type}, {hotkey.Slot}, {hotkey.ReferenceID})
+							ON CONFLICT (character_id, slot) 
+							DO UPDATE SET 
+								type = EXCLUDED.type,
+								reference_id = EXCLUDED.reference_id
+							RETURNING id, character_id, type, slot, reference_id")
+							.AsNoTracking()
+							.FirstOrDefaultAsync(cancellationToken);
 
 					if (result == null || result.ID == 0)
 					{
@@ -113,34 +110,29 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Empty or null hotkeys collection");
 			}
 
-			return await ExecuteWithStrategyAsync(
-				async (dbContext, strategy) =>
-				{
-					await strategy.ExecuteAsync(async () =>
-					{
-						// Extract arrays for bulk UPSERT
-						var characterIds = hotkeyList.Select(h => h.CharacterID).ToArray();
-						var types = hotkeyList.Select(h => (short)h.Type).ToArray();
-						var slots = hotkeyList.Select(h => h.Slot).ToArray();
-						var referenceIds = hotkeyList.Select(h => h.ReferenceID).ToArray();
+			// Extract arrays for bulk UPSERT
+			var characterIds = hotkeyList.Select(h => h.CharacterID).ToArray();
+			var types = hotkeyList.Select(h => (short)h.Type).ToArray();
+			var slots = hotkeyList.Select(h => h.Slot).ToArray();
+			var referenceIds = hotkeyList.Select(h => h.ReferenceID).ToArray();
 
-						// Single bulk UPSERT using UNNEST - atomic operation, no transaction needed
-						await dbContext.Database.ExecuteSqlInterpolatedAsync(
-							$@"INSERT INTO {TableName} (character_id, type, slot, reference_id)
-							SELECT * FROM UNNEST(
-								{characterIds}::bigint[],
-								{types}::smallint[],
-								{slots}::int[],
-								{referenceIds}::bigint[]
-							)
-							ON CONFLICT (character_id, slot) DO UPDATE SET
-								type = EXCLUDED.type,
-								reference_id = EXCLUDED.reference_id",
-							cancellationToken);
-					});
-				},
+			var result = await ExecuteSqlAsync(
+				$@"INSERT INTO {TableName} (character_id, type, slot, reference_id)
+					SELECT * FROM UNNEST(
+						{characterIds}::bigint[],
+						{types}::smallint[],
+						{slots}::int[],
+						{referenceIds}::bigint[]
+					)
+					ON CONFLICT (character_id, slot) DO UPDATE SET
+						type = EXCLUDED.type,
+						reference_id = EXCLUDED.reference_id",
 				"SaveHotkeys",
-				cancellationToken);
+				entityName: "CharacterHotkey",
+				requireRowsAffected: false,
+				cancellationToken: cancellationToken);
+
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -151,19 +143,15 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			return await ExecuteWithStrategyAsync(
-				async (dbContext, strategy) =>
-				{
-					await strategy.ExecuteAsync(async () =>
-					{
-						// Use atomic DELETE for thread safety
-						await dbContext.Database.ExecuteSqlInterpolatedAsync(
-							$@"DELETE FROM {TableName} WHERE character_id = {characterId}",
-							cancellationToken);
-					});
-				},
+			var result = await ExecuteSqlAsync(
+				$@"DELETE FROM {TableName} WHERE character_id = {characterId}",
 				"DeleteHotkeys",
-				cancellationToken);
+				entityName: "CharacterHotkey",
+				entityId: characterId,
+				requireRowsAffected: false,
+				cancellationToken: cancellationToken);
+
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>

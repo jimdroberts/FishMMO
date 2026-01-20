@@ -38,7 +38,7 @@ namespace FishMMO.Database.Npgsql.Services
 					"Name and address must not be empty.");
 			}
 
-			return await ExecuteWithStrategyAsync<(long ServerId, SceneServerData ServerData)>(async (dbContext, strategy) =>
+			return await ExecuteWithStrategyAsync<(long ServerId, SceneServerData ServerData)>(async (dbContext) =>
 			{
 				// Atomic UPSERT - PostgreSQL specific using FormattableString
 				var result = await dbContext.SceneServers
@@ -81,22 +81,17 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("INVALID_SERVER_ID", "Server ID must be greater than zero.");
 			}
 
-			return await ExecuteWithStrategyAsync(async (dbContext, strategy) =>
-			{
-				var rowsAffected = await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$@"UPDATE {TableName} 
+			var result = await ExecuteSqlAsync(
+				$@"UPDATE {TableName} 
 					SET lastpulse = CURRENT_TIMESTAMP, character_count = {characterCount}, locked = {locked} 
 					WHERE id = {serverId}",
-					cancellationToken);
+				"PulseSceneServer",
+				entityName: "SceneServer",
+				entityId: serverId,
+				requireRowsAffected: true,
+				cancellationToken: cancellationToken);
 
-				if (rowsAffected == 0)
-				{
-					throw new DatabaseEntityNotFoundException(
-						"SceneServer",
-						serverId.ToString(),
-						"Scene server not found.");
-				}
-			}, "PulseSceneServer", cancellationToken);
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -107,20 +102,15 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("INVALID_SERVER_ID", "Server ID must be greater than zero.");
 			}
 
-			return await ExecuteWithStrategyAsync(async (dbContext, strategy) =>
-			{
-				var rowsAffected = await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$"DELETE FROM {TableName} WHERE id = {serverId}",
-					cancellationToken);
+			var result = await ExecuteSqlAsync(
+				$"DELETE FROM {TableName} WHERE id = {serverId}",
+				"DeleteSceneServer",
+				entityName: "SceneServer",
+				entityId: serverId,
+				requireRowsAffected: true,
+				cancellationToken: cancellationToken);
 
-				if (rowsAffected == 0)
-				{
-					throw new DatabaseEntityNotFoundException(
-						"SceneServer",
-						serverId.ToString(),
-						"Scene server not found.");
-				}
-			}, "DeleteSceneServer", cancellationToken);
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>

@@ -59,31 +59,33 @@ namespace FishMMO.Database.Npgsql.Services
 					"No buffs to save. Buffs collection must not be null or empty.");
 			}
 
-			return await ExecuteWithStrategyAsync(async (dbContext, strategy) =>
-			{
-				// Extract arrays for bulk UPSERT
-				var characterIds = buffList.Select(b => b.CharacterID).ToArray();
-				var templateIds = buffList.Select(b => b.TemplateID).ToArray();
-				var remainingTimes = buffList.Select(b => b.RemainingTime).ToArray();
-				var tickTimes = buffList.Select(b => b.TickTime).ToArray();
-				var stacks = buffList.Select(b => b.Stacks).ToArray();
+			// Extract arrays for bulk UPSERT
+			var characterIds = buffList.Select(b => b.CharacterID).ToArray();
+			var templateIds = buffList.Select(b => b.TemplateID).ToArray();
+			var remainingTimes = buffList.Select(b => b.RemainingTime).ToArray();
+			var tickTimes = buffList.Select(b => b.TickTime).ToArray();
+			var stacks = buffList.Select(b => b.Stacks).ToArray();
 
-				// Single bulk UPSERT using UNNEST - atomic operation, no transaction needed
-				await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$@"INSERT INTO {TableName} (character_id, template_id, remaining_time, tick_time, stacks)
-					SELECT * FROM UNNEST(
-						{characterIds}::bigint[],
-						{templateIds}::int[],
-						{remainingTimes}::float4[],
-						{tickTimes}::float4[],
-						{stacks}::int[]
-					)
-					ON CONFLICT (character_id, template_id) DO UPDATE SET
-						remaining_time = EXCLUDED.remaining_time,
-						tick_time = EXCLUDED.tick_time,
-						stacks = EXCLUDED.stacks",
-					cancellationToken);
-			}, "SaveBuffs", cancellationToken);
+			// Single bulk UPSERT using UNNEST - atomic operation, no transaction needed
+			var result = await ExecuteSqlAsync(
+				$@"INSERT INTO {TableName} (character_id, template_id, remaining_time, tick_time, stacks)
+				SELECT * FROM UNNEST(
+					{characterIds}::bigint[],
+					{templateIds}::int[],
+					{remainingTimes}::float4[],
+					{tickTimes}::float4[],
+					{stacks}::int[]
+				)
+				ON CONFLICT (character_id, template_id) DO UPDATE SET
+					remaining_time = EXCLUDED.remaining_time,
+					tick_time = EXCLUDED.tick_time,
+					stacks = EXCLUDED.stacks",
+				"SaveBuffs",
+				entityName: "CharacterBuff",
+				requireRowsAffected: false,
+				cancellationToken: cancellationToken);
+
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -96,13 +98,15 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
-			return await ExecuteWithStrategyAsync(async (dbContext, strategy) =>
-			{
-				// Use atomic DELETE for thread safety
-				await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$@"DELETE FROM {TableName} WHERE character_id = {characterId}",
-					cancellationToken);
-			}, "DeleteBuffs", cancellationToken);
+			var result = await ExecuteSqlAsync(
+				$@"DELETE FROM {TableName} WHERE character_id = {characterId}",
+				"DeleteBuffs",
+				entityName: "CharacterBuff",
+				entityId: characterId,
+				requireRowsAffected: false,
+				cancellationToken: cancellationToken);
+
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>

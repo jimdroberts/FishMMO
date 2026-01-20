@@ -31,16 +31,18 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("INVALID_PARTY_ID", "Party ID must be greater than zero.");
 			}
 
-			return await ExecuteWithStrategyAsync(async (dbContext, strategy) =>
-			{
-				await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$@"INSERT INTO {TableName} (party_id, last_update) 
+			var result = await ExecuteSqlAsync(
+				$@"INSERT INTO {TableName} (party_id, last_update) 
 					VALUES ({partyId}, CURRENT_TIMESTAMP) 
 					ON CONFLICT (party_id) 
-					DO UPDATE SET last_update = EXCLUDED.last_update 
-					WHERE {TableName}.last_update < EXCLUDED.last_update",
-					cancellationToken);
-			}, "SavePartyUpdate", cancellationToken);
+					DO UPDATE SET last_update = GREATEST({TableName}.last_update, EXCLUDED.last_update)",
+				"SavePartyUpdate",
+				entityName: "PartyUpdate",
+				entityId: partyId,
+				requireRowsAffected: false,
+				cancellationToken: cancellationToken);
+
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -51,15 +53,13 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<int>.Failure("INVALID_PARTY_ID", "Party ID must be greater than zero.");
 			}
 
-			return await ExecuteWithStrategyAsync<int>(async (dbContext, strategy) =>
-			{
-				var rowsDeleted = await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$"DELETE FROM {TableName} WHERE party_id = {partyId}",
-					cancellationToken);
-
-				// Idempotent: 0 rows is success
-				return rowsDeleted;
-			}, "DeletePartyUpdate", cancellationToken);
+			return await ExecuteSqlAsync(
+				$"DELETE FROM {TableName} WHERE party_id = {partyId}",
+				"DeletePartyUpdate",
+				entityName: "PartyUpdate",
+				entityId: partyId,
+				requireRowsAffected: false,
+				cancellationToken: cancellationToken);
 		}
 
 		/// <inheritdoc/>

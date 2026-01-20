@@ -94,16 +94,14 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<CharacterOperationResult>.Success(CharacterOperationResult.DatabaseError);
 			}
 
-			return await ExecuteWithStrategyAsync<CharacterOperationResult>(async (dbContext, strategy) =>
+			return await ExecuteWithStrategyAsync<CharacterOperationResult>(async dbContext =>
 			{
 				var nameLower = characterData.Name.ToLower();
 
 				// Use CURRENT_TIMESTAMP from database server for consistency
 				// Optimized: RETURNING only id for better performance and reduced memory overhead
-				var characterId = await strategy.ExecuteAsync(async () =>
-				{
-					var result = await dbContext.Characters
-						.FromSqlInterpolated($@"
+				var result = await dbContext.Characters
+					.FromSqlInterpolated($@"
 					INSERT INTO {TableName} 
 						(name, name_lowercase, account, selected, world_server_id, scene_name, scene_handle, 
 						 bind_scene, bind_x, bind_y, bind_z, instance_id, instance_x, instance_y, instance_z, 
@@ -122,11 +120,10 @@ namespace FishMMO.Database.Npgsql.Services
 						 {characterData.AccessLevel}, {characterData.Online}, {characterData.Flags}, 
 						 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, NULL, false)
 					RETURNING id")
-						.AsNoTracking()
-						.FirstOrDefaultAsync(cancellationToken);
+					.AsNoTracking()
+					.FirstOrDefaultAsync(cancellationToken);
 
-					return result?.ID ?? 0;
-				});
+				var characterId = result?.ID ?? 0;
 				return characterId > 0 ? CharacterOperationResult.CharacterCreated : CharacterOperationResult.DatabaseError;
 			}, "CreateCharacter", cancellationToken);
 		}
@@ -139,54 +136,59 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			var result = await ExecuteWithStrategyAsync<int>(async (dbContext, strategy) =>
+			// Use optimistic concurrency control to prevent lost updates from concurrent saves
+			// Check last_saved timestamp to ensure character hasn't been modified by another server
+			var result = await ExecuteSqlAsync(
+				$@"UPDATE {TableName} 
+				   SET name = {characterData.Name},
+				       name_lowercase = {characterData.Name.ToLower()},
+				       account = {characterData.Account},
+				       selected = {characterData.Selected},
+				       world_server_id = {characterData.WorldServerID},
+				       scene_name = {characterData.SceneName ?? string.Empty},
+				       scene_handle = {characterData.SceneHandle},
+				       bind_scene = {characterData.BindScene ?? string.Empty},
+				       bind_x = {characterData.BindX},
+				       bind_y = {characterData.BindY},
+				       bind_z = {characterData.BindZ},
+				       instance_id = {characterData.InstanceID},
+				       instance_x = {characterData.InstanceX},
+				       instance_y = {characterData.InstanceY},
+				       instance_z = {characterData.InstanceZ},
+				       instance_rot_x = {characterData.InstanceRotX},
+				       instance_rot_y = {characterData.InstanceRotY},
+				       instance_rot_z = {characterData.InstanceRotZ},
+				       instance_rot_w = {characterData.InstanceRotW},
+				       race_id = {characterData.RaceID},
+				       model_index = {characterData.ModelIndex},
+				       x = {characterData.X},
+				       y = {characterData.Y},
+				       z = {characterData.Z},
+				       rot_x = {characterData.RotX},
+				       rot_y = {characterData.RotY},
+				       rot_z = {characterData.RotZ},
+				       rot_w = {characterData.RotW},
+				       access_level = {characterData.AccessLevel},
+				       online = {characterData.Online},
+				       flags = {characterData.Flags},
+				       last_saved = CURRENT_TIMESTAMP 
+				   WHERE id = {characterData.ID} AND deleted = false AND last_saved = {characterData.LastSaved}",
+				"SaveCharacter",
+				entityName: "Character",
+				entityId: characterData.ID,
+				requireRowsAffected: true,
+				cancellationToken: cancellationToken);
+
+			// If no rows affected, character was modified by another server (concurrency conflict)
+			if (!result.IsSuccess && result.ErrorCode == "DB_NO_ROWS_AFFECTED")
 			{
-				return await strategy.ExecuteAsync(async () =>
-				{
-					// Use atomic UPDATE for thread safety
-					return await dbContext.Database.ExecuteSqlInterpolatedAsync(
-						$@"UPDATE {TableName} 
-						   SET name = {characterData.Name},
-						       name_lowercase = {characterData.Name.ToLower()},
-						       account = {characterData.Account},
-						       selected = {characterData.Selected},
-						       world_server_id = {characterData.WorldServerID},
-						       scene_name = {characterData.SceneName ?? string.Empty},
-						       scene_handle = {characterData.SceneHandle},
-						       bind_scene = {characterData.BindScene ?? string.Empty},
-						       bind_x = {characterData.BindX},
-						       bind_y = {characterData.BindY},
-						       bind_z = {characterData.BindZ},
-						       instance_id = {characterData.InstanceID},
-						       instance_x = {characterData.InstanceX},
-						       instance_y = {characterData.InstanceY},
-						       instance_z = {characterData.InstanceZ},
-						       instance_rot_x = {characterData.InstanceRotX},
-						       instance_rot_y = {characterData.InstanceRotY},
-						       instance_rot_z = {characterData.InstanceRotZ},
-						       instance_rot_w = {characterData.InstanceRotW},
-						       race_id = {characterData.RaceID},
-						       model_index = {characterData.ModelIndex},
-						       x = {characterData.X},
-						       y = {characterData.Y},
-						       z = {characterData.Z},
-						       rot_x = {characterData.RotX},
-						       rot_y = {characterData.RotY},
-						       rot_z = {characterData.RotZ},
-						       rot_w = {characterData.RotW},
-						       access_level = {characterData.AccessLevel},
-						       online = {characterData.Online},
-						       flags = {characterData.Flags},
-						       last_saved = CURRENT_TIMESTAMP 
-						   WHERE id = {characterData.ID} AND deleted = false",
-						cancellationToken);
-				});
-			}, "SaveCharacter", cancellationToken);
+				return DatabaseResult.Failure(
+					"CONCURRENCY_CONFLICT",
+					"Character was modified by another server. Please reload and try again.",
+					isTransient: false);
+			}
 
-			if (!result.IsSuccess)
-				return DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage);
-
-			return ValidateRowsAffected(result.Data, "Character", characterData.ID);
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -216,46 +218,46 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			// Use explicit transaction for atomic multi-table operation
-			return await ExecuteInTransactionAsync(async (dbContext, transaction) =>
+			if (softDelete)
 			{
-				int rowsAffected;
+				// Soft delete: mark as deleted and set offline
+				var result = await ExecuteSqlAsync(
+					$@"UPDATE {TableName} 
+					SET time_deleted = CURRENT_TIMESTAMP, 
+						deleted = true, 
+						online = false 
+					WHERE id = {characterId}",
+					"DeleteCharacter",
+					entityName: "Character",
+					entityId: characterId,
+					requireRowsAffected: true,
+					cancellationToken: cancellationToken);
 
-				if (softDelete)
-				{
-					// Soft delete: mark as deleted and set offline
-					rowsAffected = await dbContext.Database.ExecuteSqlInterpolatedAsync(
-						$@"UPDATE {TableName} 
-						SET time_deleted = CURRENT_TIMESTAMP, 
-							deleted = true, 
-							online = false 
-						WHERE id = {characterId}",
-						cancellationToken);
-				}
-				else
-				{
-					// Hard delete: CASCADE constraints will automatically delete related data
-					// This includes abilities, attributes, equipment, inventory, guild/party membership, etc.
-					rowsAffected = await dbContext.Database.ExecuteSqlInterpolatedAsync(
-						$@"DELETE FROM {TableName} 
-						WHERE id = {characterId}",
-						cancellationToken);
-				}
+				return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			}
+			else
+			{
+				// Hard delete: CASCADE constraints will automatically delete related data
+				// This includes abilities, attributes, equipment, inventory, guild/party membership, etc.
+				var result = await ExecuteSqlAsync(
+					$@"DELETE FROM {TableName} 
+					WHERE id = {characterId}",
+					"DeleteCharacter",
+					entityName: "Character",
+					entityId: characterId,
+					requireRowsAffected: true,
+					cancellationToken: cancellationToken);
 
-				if (rowsAffected == 0)
-				{
-					throw new DatabaseEntityNotFoundException("Character", characterId.ToString());
-				}
-			}, "DeleteCharacter", cancellationToken);
+				return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			}
 		}
-
 
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<CharacterData?>> GetCharacterAsync(long characterId, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0)
 			{
-				return DatabaseResult<CharacterData?>.Success(null);
+				return DatabaseResult<CharacterData?>.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
 			return await ExecuteWithStrategyAsync(async dbContext =>
@@ -277,7 +279,7 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			if (string.IsNullOrWhiteSpace(account))
 			{
-				return DatabaseResult<IReadOnlyList<CharacterData>>.Success(Array.Empty<CharacterData>());
+				return DatabaseResult<IReadOnlyList<CharacterData>>.Failure("VALIDATION_ERROR", "Account name is required");
 			}
 
 			return await ExecuteWithStrategyAsync(async dbContext =>
@@ -293,7 +295,7 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			if (string.IsNullOrWhiteSpace(name))
 			{
-				return DatabaseResult<CharacterData?>.Success(null);
+				return DatabaseResult<CharacterData?>.Failure("VALIDATION_ERROR", "Character name is required");
 			}
 
 			return await ExecuteWithStrategyAsync(async dbContext =>
@@ -311,6 +313,13 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
+		/// <remarks>
+		/// <para><b>Concurrency Safety:</b></para>
+		/// Uses explicit transaction with SELECT FOR UPDATE to prevent race conditions
+		/// when multiple requests attempt to select different characters concurrently.
+		/// Row-level locks are acquired for all characters belonging to the account,
+		/// ensuring only one selection operation can proceed at a time per account.
+		/// </remarks>
 		public async Task<DatabaseResult> SetSelectedAsync(string account, long characterId, CancellationToken cancellationToken = default)
 		{
 			if (string.IsNullOrWhiteSpace(account) || characterId <= 0)
@@ -318,26 +327,40 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid account or character ID");
 			}
 
-			var result = await ExecuteWithStrategyAsync<int>(async (dbContext, strategy) =>
+			// Use explicit transaction with row-level locking to prevent race conditions
+			var transactionResult = await ExecuteInTransactionAsync(async (dbContext, transaction) =>
 			{
-				return await strategy.ExecuteAsync(async () =>
+				// Acquire row-level locks on all characters for this account
+				// This prevents concurrent SetSelected operations from interfering
+				await dbContext.Database.ExecuteSqlInterpolatedAsync(
+					$@"SELECT id FROM {TableName} 
+					WHERE account = {account} AND NOT deleted 
+					FOR UPDATE",
+					cancellationToken);
+
+				var rowsAffected = await dbContext.Database.ExecuteSqlInterpolatedAsync(
+					$@"UPDATE {TableName} 
+					SET selected = (id = {characterId})
+					WHERE account = {account} AND NOT deleted",
+					cancellationToken);
+
+				if (rowsAffected == 0)
 				{
-					// Atomic operation: Set selected = true only for the specified character
-					// and selected = false for all other characters in one UPDATE statement
-					return await dbContext.Database.ExecuteSqlInterpolatedAsync(
-						$@"UPDATE {TableName} 
-						SET selected = (id = {characterId})
-						WHERE account = {account} AND NOT deleted",
-						cancellationToken);
-				});
+					throw new DatabaseEntityNotFoundException("Character", characterId.ToString());
+				}
+
+				return true;
 			}, "SetSelected", cancellationToken);
 
-			if (!result.IsSuccess)
-				return DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage);
-
-			return ValidateRowsAffected(result.Data, "Character", characterId);
+			if (transactionResult.IsSuccess)
+			{
+				return DatabaseResult.Success();
+			}
+			else
+			{
+				return DatabaseResult.Failure(transactionResult.ErrorCode, transactionResult.ErrorMessage, transactionResult.IsTransient);
+			}
 		}
-
 		/// <inheritdoc/>
 		public async Task<DatabaseResult> SetOnlineStatusAsync(long characterId, bool online, CancellationToken cancellationToken = default)
 		{
@@ -346,24 +369,18 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			var result = await ExecuteWithStrategyAsync<int>(async (dbContext, strategy) =>
-			{
-				return await strategy.ExecuteAsync(async () =>
-				{
-					// Atomic update without loading entity
-					return await dbContext.Database.ExecuteSqlInterpolatedAsync(
-						$@"UPDATE {TableName} 
-						SET online = {online}, 
-							last_saved = CURRENT_TIMESTAMP 
-						WHERE id = {characterId} AND NOT deleted",
-						cancellationToken);
-				});
-			}, "SetOnlineStatus", cancellationToken);
+			var result = await ExecuteSqlAsync(
+				$@"UPDATE {TableName} 
+				SET online = {online}, 
+					last_saved = CURRENT_TIMESTAMP 
+				WHERE id = {characterId} AND NOT deleted",
+				"SetOnlineStatus",
+				entityName: "Character",
+				entityId: characterId,
+				requireRowsAffected: true,
+				cancellationToken: cancellationToken);
 
-			if (!result.IsSuccess)
-				return DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage);
-
-			return ValidateRowsAffected(result.Data, "Character", characterId);
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -374,25 +391,19 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			var result = await ExecuteWithStrategyAsync<int>(async (dbContext, strategy) =>
-			{
-				return await strategy.ExecuteAsync(async () =>
-				{
-					// Atomic update without loading entity
-					return await dbContext.Database.ExecuteSqlInterpolatedAsync(
-						$@"UPDATE {TableName} 
-						SET x = {x}, y = {y}, z = {z}, 
-							rot_x = {rotX}, rot_y = {rotY}, rot_z = {rotZ}, rot_w = {rotW}, 
-							last_saved = CURRENT_TIMESTAMP 
-						WHERE id = {characterId} AND NOT deleted",
-						cancellationToken);
-				});
-			}, "UpdatePosition", cancellationToken);
+			var result = await ExecuteSqlAsync(
+				$@"UPDATE {TableName} 
+				SET x = {x}, y = {y}, z = {z}, 
+					rot_x = {rotX}, rot_y = {rotY}, rot_z = {rotZ}, rot_w = {rotW}, 
+					last_saved = CURRENT_TIMESTAMP 
+				WHERE id = {characterId} AND NOT deleted",
+				"UpdatePosition",
+				entityName: "Character",
+				entityId: characterId,
+				requireRowsAffected: true,
+				cancellationToken: cancellationToken);
 
-			if (!result.IsSuccess)
-				return DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage);
-
-			return ValidateRowsAffected(result.Data, "Character", characterId);
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -403,25 +414,19 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			var result = await ExecuteWithStrategyAsync<int>(async (dbContext, strategy) =>
-			{
-				return await strategy.ExecuteAsync(async () =>
-				{
-					// Use atomic UPDATE for thread safety
-					return await dbContext.Database.ExecuteSqlInterpolatedAsync(
-						$@"UPDATE {TableName} 
-						SET scene_name = {sceneName ?? string.Empty}, 
-							scene_handle = {sceneHandle}, 
-							last_saved = CURRENT_TIMESTAMP 
-						WHERE id = {characterId} AND deleted = false",
-						cancellationToken);
-				});
-			}, "UpdateScene", cancellationToken);
+			var result = await ExecuteSqlAsync(
+				$@"UPDATE {TableName} 
+				SET scene_name = {sceneName ?? string.Empty}, 
+					scene_handle = {sceneHandle}, 
+					last_saved = CURRENT_TIMESTAMP 
+				WHERE id = {characterId} AND deleted = false",
+				"UpdateScene",
+				entityName: "Character",
+				entityId: characterId,
+				requireRowsAffected: true,
+				cancellationToken: cancellationToken);
 
-			if (!result.IsSuccess)
-				return DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage);
-
-			return ValidateRowsAffected(result.Data, "Character", characterId);
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <summary>

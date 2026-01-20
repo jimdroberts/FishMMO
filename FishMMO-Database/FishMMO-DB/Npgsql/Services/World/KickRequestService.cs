@@ -5,7 +5,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using FishMMO.Database.Data;
-using FishMMO.Database.Exceptions;
 using FishMMO.Database.Npgsql.Entities;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 
@@ -24,6 +23,13 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
+		/// <remarks>
+		/// <para><b>Race Condition Protection:</b></para>
+		/// Uses ON CONFLICT clause with unique constraint on account_name to prevent duplicate
+		/// kick requests in distributed environments. If a duplicate request is attempted, the
+		/// timestamp is updated instead, ensuring idempotency and preventing DOS attacks through
+		/// request flooding.
+		/// </remarks>
 		public async Task<DatabaseResult> SaveAsync(string accountName, CancellationToken cancellationToken = default)
 		{
 			if (string.IsNullOrWhiteSpace(accountName))
@@ -31,25 +37,19 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("INVALID_ACCOUNT_NAME", "Account name must not be empty.");
 			}
 
-			return await ExecuteWithStrategyAsync(async (dbContext, strategy) =>
-			{
-				var rowsAffected = await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$@"INSERT INTO {TableName} 
-					   (account_name, time_created)
-					   VALUES ({accountName}, CURRENT_TIMESTAMP)",
-					cancellationToken);
+			var result = await ExecuteSqlAsync(
+				$@"INSERT INTO {TableName} 
+				   (account_name, time_created)
+				   VALUES ({accountName}, CURRENT_TIMESTAMP)
+				   ON CONFLICT (account_name) 
+				   DO UPDATE SET time_created = CURRENT_TIMESTAMP",
+				"SaveKickRequest",
+				entityName: "KickRequest",
+				entityId: accountName,
+				requireRowsAffected: false,
+				cancellationToken: cancellationToken);
 
-				if (rowsAffected == 0)
-				{
-					throw new DatabaseQueryException(
-						"SaveKickRequest",
-						"Failed to save kick request.",
-						"No rows affected.",
-						false,
-						null,
-						null);
-				}
-			}, "SaveKickRequest", cancellationToken);
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -60,12 +60,13 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<int>.Failure("INVALID_ACCOUNT_NAME", "Account name must not be empty.");
 			}
 
-			return await ExecuteWithStrategyAsync<int>(async (dbContext, strategy) =>
-			{
-				return await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$"DELETE FROM {TableName} WHERE account_name = {accountName}",
-					cancellationToken);
-			}, "DeleteKickRequest", cancellationToken);
+			return await ExecuteSqlAsync(
+				$"DELETE FROM {TableName} WHERE account_name = {accountName}",
+				"DeleteKickRequest",
+				entityName: "KickRequest",
+				entityId: accountName,
+				requireRowsAffected: false,
+				cancellationToken: cancellationToken);
 		}
 
 		/// <inheritdoc/>

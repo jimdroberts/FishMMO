@@ -46,32 +46,33 @@ namespace FishMMO.Database.Npgsql.Services
 					"Achievements collection must not be null or empty.");
 			}
 
-			return await ExecuteWithStrategyAsync(async dbContext =>
-			{
-				var achievementList = achievements.ToList();
+			var achievementList = achievements.ToList();
 
-				// Extract arrays for bulk UPSERT
-				var characterIds = achievementList.Select(a => a.CharacterID).ToArray();
-				var templateIds = achievementList.Select(a => a.TemplateID).ToArray();
-				var tiers = achievementList.Select(a => a.Tier).ToArray();
-				var values = achievementList.Select(a => a.Value).ToArray();
+			// Extract arrays for bulk UPSERT
+			var characterIds = achievementList.Select(a => a.CharacterID).ToArray();
+			var templateIds = achievementList.Select(a => a.TemplateID).ToArray();
+			var tiers = achievementList.Select(a => a.Tier).ToArray();
+			var values = achievementList.Select(a => a.Value).ToArray();
 
-				// Single bulk UPSERT using UNNEST - atomic operation, no transaction needed
-				await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$@"INSERT INTO {TableName} 
-							(character_id, template_id, tier, value)
-							SELECT * FROM UNNEST(
-								{characterIds}::bigint[],
-								{templateIds}::int[],
-								{tiers}::smallint[],
-								{values}::int[]
-							)
-							ON CONFLICT (character_id, template_id) 
-							DO UPDATE SET 
-								tier = EXCLUDED.tier,
-								value = EXCLUDED.value",
-						cancellationToken);
-			}, "SaveCharacterAchievements", cancellationToken);
+			var result = await ExecuteSqlAsync(
+				$@"INSERT INTO {TableName} 
+					(character_id, template_id, tier, value)
+					SELECT * FROM UNNEST(
+						{characterIds}::bigint[],
+						{templateIds}::int[],
+						{tiers}::smallint[],
+						{values}::int[]
+					)
+					ON CONFLICT (character_id, template_id) 
+					DO UPDATE SET 
+						tier = EXCLUDED.tier,
+						value = EXCLUDED.value",
+				"SaveCharacterAchievements",
+				entityName: "CharacterAchievement",
+				requireRowsAffected: false,
+				cancellationToken: cancellationToken);
+
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -84,13 +85,15 @@ namespace FishMMO.Database.Npgsql.Services
 					"Character ID must be greater than 0.");
 			}
 
-			return await ExecuteWithStrategyAsync(async dbContext =>
-			{
-				// Use atomic DELETE for thread safety
-				await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$@"DELETE FROM {TableName} WHERE character_id = {characterId}",
-					cancellationToken);
-			}, "DeleteCharacterAchievements", cancellationToken);
+			var result = await ExecuteSqlAsync(
+				$@"DELETE FROM {TableName} WHERE character_id = {characterId}",
+				"DeleteCharacterAchievements",
+				entityName: "CharacterAchievement",
+				entityId: characterId,
+				requireRowsAffected: false,
+				cancellationToken: cancellationToken);
+
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>

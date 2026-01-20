@@ -110,29 +110,33 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteWithStrategyAsync(async (dbContext, strategy) =>
+			try
 			{
-				// Atomically check for existing account and insert in single query
-				// Using INSERT ... ON CONFLICT with proper error handling for race conditions
-				var rowsAffected = await strategy.ExecuteAsync(async () =>
-			{
-				return await dbContext.Database.ExecuteSqlInterpolatedAsync(
+				var result = await ExecuteSqlAsync(
 					$@"INSERT INTO {TableName} 
 						(name, salt, verifier, access_level, created, lastlogin) 
 						VALUES 
 							({accountName}, {salt}, {verifier}, {(byte)AccessLevel.Player}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 						ON CONFLICT (name) DO NOTHING",
-					cancellationToken);
-			});
+					"CreateAccount",
+					entityName: "Account",
+					entityId: accountName,
+					requireRowsAffected: true,
+					cancellationToken: cancellationToken);
 
-				if (rowsAffected == 0)
-				{
-					throw new DatabaseConstraintException(
+				return result.IsSuccess
+					? DatabaseResult.Success()
+					: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			}
+			catch (DatabaseEntityNotFoundException)
+			{
+				// Convert not found to constraint violation for INSERT ... ON CONFLICT DO NOTHING
+				return DatabaseResult.FromException(
+					new DatabaseConstraintException(
 						ConstraintType.Unique,
 						"accounts_name_key",
-						"An account with this name already exists.");
-				}
-			}, "CreateAccount", cancellationToken);
+						"An account with this name already exists."));
+			}
 		}
 
 		/// <inheritdoc/>
@@ -202,19 +206,19 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteWithStrategyAsync(async (dbContext, strategy) =>
-			{
-				var rowsAffected = await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$@"UPDATE {TableName} 
-						SET lastlogin = CURRENT_TIMESTAMP 
-						WHERE name = {accountName}",
-					cancellationToken);
+			var result = await ExecuteSqlAsync(
+				$@"UPDATE {TableName} 
+					SET lastlogin = CURRENT_TIMESTAMP 
+					WHERE name = {accountName}",
+				"UpdateLastLogin",
+				entityName: "Account",
+				entityId: accountName,
+				requireRowsAffected: true,
+				cancellationToken: cancellationToken);
 
-				if (rowsAffected == 0)
-				{
-					throw new DatabaseEntityNotFoundException("Account", accountName);
-				}
-			}, "UpdateLastLogin", cancellationToken);
+			return result.IsSuccess
+				? DatabaseResult.Success()
+				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>

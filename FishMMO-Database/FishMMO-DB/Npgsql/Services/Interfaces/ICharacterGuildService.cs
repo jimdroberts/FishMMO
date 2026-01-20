@@ -38,29 +38,38 @@ namespace FishMMO.Database.Npgsql.Services
 		/// Uses atomic UPSERT operation wrapped in execution strategy for automatic retry.
 		/// </summary>
 		/// <param name="guildData">The guild membership data to save. CharacterID and GuildID must be greater than 0.</param>
+		/// <param name="maxCapacity">Maximum number of members allowed in the guild. Must be greater than 0.</param>
 		/// <param name="cancellationToken">Token to cancel the asynchronous operation.</param>
 		/// <returns>
 		/// DatabaseResult indicating success or containing error details.
 		/// </returns>
 		/// <remarks>
-		/// Wrapped in execution strategy to automatically retry on transient failures.
+		/// Uses transaction with row-level locking to atomically validate capacity and save membership.
+		/// 
+		/// Process:
+		/// 1. Checks if character is already a member (UPDATE vs INSERT case)
+		/// 2. For new joins, locks guild member rows with FOR UPDATE and counts members
+		/// 3. Rejects join if capacity reached with CAPACITY_EXCEEDED error
+		/// 4. Performs UPSERT (INSERT ... ON CONFLICT DO UPDATE) on character_id
 		/// 
 		/// Uses UPSERT (INSERT ... ON CONFLICT DO UPDATE) on character_id:
 		/// - If character has guild membership: Updates guild_id, rank, location
-		/// - If character has no guild: Inserts new membership
+		/// - If character has no guild: Inserts new membership if capacity available
 		/// 
 		/// Possible return scenarios:
 		/// - Success: Guild membership saved successfully
-		/// - Failure with VALIDATION_ERROR: Invalid character ID or guild ID
+		/// - Failure with VALIDATION_ERROR: Invalid character ID, guild ID, or max capacity
+		/// - Failure with CAPACITY_EXCEEDED: Guild has reached maximum capacity
 		/// - Failure with DatabaseConstraintException: Constraint violation (foreign key)
 		/// - Failure with DatabaseTimeoutException: Operation timed out
 		/// - Failure with DatabaseConnectionException: Connection error
 		/// - Failure with DatabaseQueryException: Database operation failed
 		/// 
-		/// Thread-safe due to UPSERT constraint on character_id.
+		/// Thread-safe due to transaction with row-level locking (FOR UPDATE).
 		/// Only one guild per character enforced at database level.
+		/// Capacity validation is race-condition safe.
 		/// </remarks>
-		Task<DatabaseResult> SaveGuildMembershipAsync(CharacterGuildData guildData, CancellationToken cancellationToken = default);
+		Task<DatabaseResult> SaveGuildMembershipAsync(CharacterGuildData guildData, int maxCapacity, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Updates a character's guild rank.

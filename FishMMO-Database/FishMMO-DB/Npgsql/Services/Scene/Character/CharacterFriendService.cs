@@ -72,15 +72,17 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID or friend character ID. Both must be greater than 0.");
 			}
 
-			return await ExecuteWithStrategyAsync(async dbContext =>
-			{
-				// Use atomic INSERT with ON CONFLICT DO NOTHING for thread safety
-				await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$@"INSERT INTO {TableName} (character_id, friend_character_id)
-				   VALUES ({characterId}, {friendCharacterId})
-				   ON CONFLICT (character_id, friend_character_id) DO NOTHING",
-					cancellationToken);
-			}, "SaveFriend", cancellationToken);
+			var result = await ExecuteSqlAsync(
+				$@"INSERT INTO {TableName} (character_id, friend_character_id)
+			   VALUES ({characterId}, {friendCharacterId})
+			   ON CONFLICT (character_id, friend_character_id) DO NOTHING",
+				"SaveFriend",
+				entityName: "CharacterFriend",
+				entityId: characterId,
+				requireRowsAffected: false,
+				cancellationToken: cancellationToken);
+
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -93,16 +95,16 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID or friend character ID. Both must be greater than 0.");
 			}
 
-			return await ExecuteWithStrategyAsync(async dbContext =>
-			{
-				// Use atomic DELETE for thread safety
-				await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$@"DELETE FROM {TableName} 
-					   WHERE character_id = {characterId} AND friend_character_id = {friendCharacterId}",
-					cancellationToken);
-			},
-			"DeleteFriend",
-			cancellationToken);
+			var result = await ExecuteSqlAsync(
+				$@"DELETE FROM {TableName} 
+				   WHERE character_id = {characterId} AND friend_character_id = {friendCharacterId}",
+				"DeleteFriend",
+				entityName: "CharacterFriend",
+				entityId: characterId,
+				requireRowsAffected: false,
+				cancellationToken: cancellationToken);
+
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -115,15 +117,15 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
-			return await ExecuteWithStrategyAsync(async dbContext =>
-			{
-				// Use atomic DELETE for thread safety
-				await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$@"DELETE FROM {TableName} WHERE character_id = {characterId}",
-					cancellationToken);
-			},
-			"DeleteAllFriends",
-			cancellationToken);
+			var result = await ExecuteSqlAsync(
+				$@"DELETE FROM {TableName} WHERE character_id = {characterId}",
+				"DeleteAllFriends",
+				entityName: "CharacterFriend",
+				entityId: characterId,
+				requireRowsAffected: false,
+				cancellationToken: cancellationToken);
+
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>

@@ -62,15 +62,17 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			return await ExecuteWithStrategyAsync(async dbContext =>
-			{
-				// Use atomic INSERT with ON CONFLICT DO NOTHING for thread safety
-				await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$@"INSERT INTO {TableName} (character_id, template_id)
-								VALUES ({characterId}, {templateId})
-								ON CONFLICT (character_id, template_id) DO NOTHING",
-					cancellationToken);
-			}, "SaveKnownAbility", cancellationToken);
+			var result = await ExecuteSqlAsync(
+				$@"INSERT INTO {TableName} (character_id, template_id)
+					VALUES ({characterId}, {templateId})
+					ON CONFLICT (character_id, template_id) DO NOTHING",
+				"SaveKnownAbility",
+				entityName: "CharacterKnownAbility",
+				entityId: characterId,
+				requireRowsAffected: false,
+				cancellationToken: cancellationToken);
+
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -82,22 +84,23 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Empty or null abilities collection");
 			}
 
-			return await ExecuteWithStrategyAsync(async dbContext =>
-			{
-				// Extract arrays for bulk UPSERT
-				var characterIds = abilityList.Select(a => a.CharacterID).ToArray();
-				var templateIds = abilityList.Select(a => a.TemplateID).ToArray();
+			// Extract arrays for bulk UPSERT
+			var characterIds = abilityList.Select(a => a.CharacterID).ToArray();
+			var templateIds = abilityList.Select(a => a.TemplateID).ToArray();
 
-				// Single bulk INSERT using UNNEST with ON CONFLICT - atomic operation, no transaction needed
-				await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$@"INSERT INTO {TableName} (character_id, template_id)
-						SELECT * FROM UNNEST(
-							{characterIds}::bigint[],
-							{templateIds}::int[]
-						)
-						ON CONFLICT (character_id, template_id) DO NOTHING",
-					cancellationToken);
-			}, "SaveKnownAbilities", cancellationToken);
+			var result = await ExecuteSqlAsync(
+				$@"INSERT INTO {TableName} (character_id, template_id)
+					SELECT * FROM UNNEST(
+						{characterIds}::bigint[],
+						{templateIds}::int[]
+					)
+					ON CONFLICT (character_id, template_id) DO NOTHING",
+				"SaveKnownAbilities",
+				entityName: "CharacterKnownAbility",
+				requireRowsAffected: false,
+				cancellationToken: cancellationToken);
+
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -108,14 +111,16 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			return await ExecuteWithStrategyAsync(async dbContext =>
-			{
-				// Use atomic DELETE for thread safety
-				await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$@"DELETE FROM {TableName} 
-							WHERE character_id = {characterId} AND template_id = {templateId}",
-					cancellationToken);
-			}, "DeleteKnownAbility", cancellationToken);
+			var result = await ExecuteSqlAsync(
+				$@"DELETE FROM {TableName} 
+					WHERE character_id = {characterId} AND template_id = {templateId}",
+				"DeleteKnownAbility",
+				entityName: "CharacterKnownAbility",
+				entityId: characterId,
+				requireRowsAffected: false,
+				cancellationToken: cancellationToken);
+
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -126,13 +131,15 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			return await ExecuteWithStrategyAsync(async dbContext =>
-			{
-				// Use atomic DELETE for thread safety
-				await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$@"DELETE FROM {TableName} WHERE character_id = {characterId}",
-					cancellationToken);
-			}, "DeleteAllKnownAbilities", cancellationToken);
+			var result = await ExecuteSqlAsync(
+				$@"DELETE FROM {TableName} WHERE character_id = {characterId}",
+				"DeleteAllKnownAbilities",
+				entityName: "CharacterKnownAbility",
+				entityId: characterId,
+				requireRowsAffected: false,
+				cancellationToken: cancellationToken);
+
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>

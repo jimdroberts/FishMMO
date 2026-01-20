@@ -35,7 +35,7 @@ namespace FishMMO.Database.Npgsql.Services
 					"Server name and address must not be empty.");
 			}
 
-			return await ExecuteWithStrategyAsync<LoginServerData>(async (dbContext, strategy) =>
+			return await ExecuteWithStrategyAsync<LoginServerData>(async (dbContext) =>
 			{
 				var result = await dbContext.LoginServers
 					.FromSqlInterpolated($@"
@@ -75,19 +75,19 @@ namespace FishMMO.Database.Npgsql.Services
 					"Server ID must be greater than 0.");
 			}
 
-			return await ExecuteWithStrategyAsync(async (dbContext, strategy) =>
-			{
-				var rowsAffected = await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$@"UPDATE {TableName} 
-					SET lastpulse = CURRENT_TIMESTAMP 
-					WHERE id = {serverId}",
-					cancellationToken);
-
-				if (rowsAffected == 0)
-				{
-					throw new DatabaseEntityNotFoundException("LoginServer", serverId.ToString());
-				}
-			}, "PulseLoginServer", cancellationToken);
+			var result = await ExecuteSqlAsync(
+				$@"UPDATE {TableName} 
+				SET lastpulse = CURRENT_TIMESTAMP 
+				WHERE id = {serverId}",
+				"PulseLoginServer",
+				entityName: "LoginServer",
+				entityId: serverId.ToString(),
+				requireRowsAffected: true,
+				cancellationToken: cancellationToken);
+			
+			return result.IsSuccess 
+				? DatabaseResult.Success() 
+				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -100,17 +100,17 @@ namespace FishMMO.Database.Npgsql.Services
 					"Server ID must be greater than 0.");
 			}
 
-			return await ExecuteWithStrategyAsync(async (dbContext, strategy) =>
-			{
-				var rowsAffected = await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$@"DELETE FROM {TableName} WHERE id = {serverId}",
-					cancellationToken);
-
-				if (rowsAffected == 0)
-				{
-					throw new DatabaseEntityNotFoundException("LoginServer", serverId.ToString());
-				}
-			}, "DeleteLoginServer", cancellationToken);
+			var result = await ExecuteSqlAsync(
+				$@"DELETE FROM {TableName} WHERE id = {serverId}",
+				"DeleteLoginServer",
+				entityName: "LoginServer",
+				entityId: serverId.ToString(),
+				requireRowsAffected: true,
+				cancellationToken: cancellationToken);
+			
+			return result.IsSuccess 
+				? DatabaseResult.Success() 
+				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>

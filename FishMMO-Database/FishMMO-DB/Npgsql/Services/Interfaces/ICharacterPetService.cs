@@ -44,6 +44,22 @@ namespace FishMMO.Database.Npgsql.Services
 		Task<DatabaseResult> SavePetAsync(CharacterPetData pet, CancellationToken cancellationToken = default);
 
 		/// <summary>
+		/// Saves or updates multiple character pets using atomic batch operations.
+		/// </summary>
+		/// <param name="pets">Collection of pet data to save.</param>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>
+		/// A <see cref="DatabaseResult"/> indicating success or containing a <see cref="DatabaseException"/> on failure.
+		/// </returns>
+		/// <remarks>
+		/// Separates pets into updates (ID > 0) and inserts (ID = 0) for efficient batch processing.
+		/// Uses UNNEST for bulk operations to minimize database round-trips.
+		/// All operations are atomic and handle conflicts with ON CONFLICT clauses.
+		/// Execution strategy wrapping ensures transient database failures are automatically retried.
+		/// </remarks>
+		Task<DatabaseResult> SavePetsAsync(System.Collections.Generic.IEnumerable<CharacterPetData> pets, CancellationToken cancellationToken = default);
+
+		/// <summary>
 		/// Deletes a character's pet.
 		/// </summary>
 		/// <param name="characterId">The character ID.</param>

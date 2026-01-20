@@ -29,10 +29,12 @@ namespace FishMMO.Database.Npgsql.Entities
 				.IsUnique()
 				.HasDatabaseName("IX_GuildUpdate_GuildID_Unique");
 
-			// Performance index for guild update fetch queries (FetchAsync hot path)
-			// Covers WHERE last_update >= @lastFetch AND guild_id IN (@guildIds)
-			builder.HasIndex(e => e.LastUpdate)
-				.HasDatabaseName("IX_GuildUpdate_LastUpdate");
+			// Composite index for guild update fetch queries (FetchAsync hot path)
+			// Optimizes WHERE last_update >= @lastFetch AND guild_id IN (@guildIds)
+			// Using (last_update, guild_id) allows efficient range scan on last_update
+			// followed by guild_id filtering without additional lookups
+			builder.HasIndex(e => new { e.LastUpdate, e.GuildID })
+				.HasDatabaseName("IX_GuildUpdate_LastUpdate_GuildID");
 		}
 	}
 }

@@ -40,28 +40,19 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("INVALID_PARAMETERS", "World server ID, scene server ID must be greater than zero and message must not be empty.");
 			}
 
-			return await ExecuteWithStrategyAsync(async (dbContext, strategy) =>
-			{
-				var channelByte = (byte)channel;
+			var channelByte = (byte)channel;
 
-				// ServerReceivedTime = when server received message (app timestamp)
-				// time_created = CURRENT_TIMESTAMP (DB timestamp for audit/legal purposes)
-				var rowsAffected = await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$@"INSERT INTO {TableName} 
-					   (character_id, world_server_id, scene_server_id, server_received_time, time_created, channel, message)
-					   VALUES ({characterId}, {worldServerId}, {sceneServerId}, {serverReceivedTime}, CURRENT_TIMESTAMP, {channelByte}, {message})",
-					cancellationToken);
+			var result = await ExecuteSqlAsync(
+				$@"INSERT INTO {TableName} 
+				   (character_id, world_server_id, scene_server_id, server_received_time, time_created, channel, message)
+				   VALUES ({characterId}, {worldServerId}, {sceneServerId}, {serverReceivedTime}, CURRENT_TIMESTAMP, {channelByte}, {message})",
+				"SaveChatMessage",
+				entityName: "Chat",
+				entityId: characterId,
+				requireRowsAffected: true,
+				cancellationToken: cancellationToken);
 
-				if (rowsAffected == 0)
-				{
-					throw new DatabaseQueryException(
-						"SaveChatMessage",
-						"Failed to save chat message.",
-						"INSERT returned 0 rows",
-						false,
-						null);
-				}
-			}, "SaveChatMessage", cancellationToken);
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>

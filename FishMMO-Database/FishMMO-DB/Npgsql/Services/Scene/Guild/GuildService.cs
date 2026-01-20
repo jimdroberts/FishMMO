@@ -90,7 +90,7 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			if (string.IsNullOrWhiteSpace(name))
 			{
-				return DatabaseResult<long?>.Success(null);
+				return DatabaseResult<long?>.Failure("VALIDATION_ERROR", "Guild name is required");
 			}
 
 			return await ExecuteWithStrategyAsync(async context =>
@@ -126,18 +126,15 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid guild ID");
 			}
 
-			// Use explicit transaction for atomic multi-table operation
-			return await ExecuteInTransactionAsync(async (dbContext, transaction) =>
-			{
-				var rowsAffected = await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$"DELETE FROM {TableName} WHERE id = {guildId}",
-					cancellationToken);
+			var result = await ExecuteSqlAsync(
+				$"DELETE FROM {TableName} WHERE id = {guildId}",
+				"DeleteGuild",
+				entityName: "Guild",
+				entityId: guildId,
+				requireRowsAffected: true,
+				cancellationToken: cancellationToken);
 
-				if (rowsAffected == 0)
-				{
-					throw new DatabaseEntityNotFoundException("Guild", guildId.ToString());
-				}
-			}, "DeleteGuild", cancellationToken);
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>

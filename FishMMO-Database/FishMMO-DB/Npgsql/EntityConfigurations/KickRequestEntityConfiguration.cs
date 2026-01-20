@@ -27,6 +27,7 @@ namespace FishMMO.Database.Npgsql.Entities
 
 			// Performance index for kick request lookups
 			builder.HasIndex(e => e.AccountName)
+				.IsUnique()
 				.HasDatabaseName("IX_KickRequest_AccountName");
 
 			// Index for creation time (sorting/filtering old requests)

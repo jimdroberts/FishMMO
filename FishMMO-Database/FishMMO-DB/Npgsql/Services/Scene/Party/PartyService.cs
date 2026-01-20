@@ -4,7 +4,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using FishMMO.Database.Data;
-using FishMMO.Database.Exceptions;
 using FishMMO.Database.Npgsql.Entities;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 
@@ -78,21 +77,15 @@ namespace FishMMO.Database.Npgsql.Services
 			return DatabaseResult.Failure("INVALID_PARTY_ID", "Party ID must be greater than zero.");
 		}
 
-		// Use explicit transaction for atomic multi-table operation
-		return await ExecuteInTransactionAsync(async (dbContext, transaction) =>
-		{
-			var rowsAffected = await dbContext.Database.ExecuteSqlInterpolatedAsync(
-				$"DELETE FROM {TableName} WHERE id = {partyId}",
-				cancellationToken);
+		var result = await ExecuteSqlAsync(
+			$"DELETE FROM {TableName} WHERE id = {partyId}",
+			"DeleteParty",
+			entityName: "Party",
+			entityId: partyId,
+			requireRowsAffected: true,
+			cancellationToken: cancellationToken);
 
-			if (rowsAffected == 0)
-			{
-				throw new DatabaseEntityNotFoundException(
-					"Party",
-					partyId.ToString(),
-					"Party not found.");
-			}
-		}, "DeleteParty", cancellationToken);
+		return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 	}
 
 		/// <inheritdoc/>

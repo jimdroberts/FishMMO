@@ -61,11 +61,13 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<(long, WorldServerData)>.Failure("INVALID_PARAMETERS", "Server name and address must not be empty.");
 			}
 
-			return await ExecuteWithStrategyAsync<(long ServerId, WorldServerData ServerData)>(async (dbContext, strategy) =>
+			return await ExecuteWithStrategyAsync<(long ServerId, WorldServerData ServerData)>(async (dbContext) =>
 			{
 				var result = await dbContext.WorldServers
 					.FromSqlInterpolated($@"
-					INSERT INTO {TableName} 
+						INSERT INTO {TableName} 
+							(name, address, port, character_count, locked, lastpulse)
+						VALUES 
 							({name}, {address}, {port}, {characterCount}, {locked}, CURRENT_TIMESTAMP)
 						ON CONFLICT (name) 
 						DO UPDATE SET 
@@ -96,19 +98,17 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("INVALID_SERVER_ID", "Server ID must be greater than 0.");
 			}
 
-			return await ExecuteWithStrategyAsync(async (dbContext, strategy) =>
-			{
-				var rowsAffected = await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$@"UPDATE {TableName} 
-					SET lastpulse = CURRENT_TIMESTAMP, character_count = {characterCount} 
-					WHERE id = {serverId}",
-					cancellationToken);
+			var result = await ExecuteSqlAsync(
+				$@"UPDATE {TableName} 
+				SET lastpulse = CURRENT_TIMESTAMP, character_count = {characterCount} 
+				WHERE id = {serverId}",
+				"PulseWorldServer",
+				entityName: "WorldServer",
+				entityId: serverId.ToString(),
+				requireRowsAffected: true,
+				cancellationToken: cancellationToken);
 
-				if (rowsAffected == 0)
-				{
-					throw new DatabaseEntityNotFoundException("WorldServer", serverId.ToString());
-				}
-			}, "PulseWorldServer", cancellationToken);
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -119,17 +119,15 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("INVALID_SERVER_ID", "Server ID must be greater than 0.");
 			}
 
-			return await ExecuteWithStrategyAsync(async (dbContext, strategy) =>
-			{
-				var rowsAffected = await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$"DELETE FROM {TableName} WHERE id = {serverId}",
-					cancellationToken);
+			var result = await ExecuteSqlAsync(
+				$"DELETE FROM {TableName} WHERE id = {serverId}",
+				"DeleteWorldServer",
+				entityName: "WorldServer",
+				entityId: serverId.ToString(),
+				requireRowsAffected: true,
+				cancellationToken: cancellationToken);
 
-				if (rowsAffected == 0)
-				{
-					throw new DatabaseEntityNotFoundException("WorldServer", serverId.ToString());
-				}
-			}, "DeleteWorldServer", cancellationToken);
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>

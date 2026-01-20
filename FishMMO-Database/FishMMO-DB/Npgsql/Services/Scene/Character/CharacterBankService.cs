@@ -58,7 +58,7 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
-			return await ExecuteWithStrategyAsync<long>(async (dbContext, strategy) =>
+			return await ExecuteWithStrategyAsync<long>(async dbContext =>
 			{
 				// Use PostgreSQL UPSERT for atomic insert-or-update
 				var result = await dbContext.CharacterBankItems
@@ -93,31 +93,33 @@ namespace FishMMO.Database.Npgsql.Services
 					"No items to save. Items collection must not be null or empty.");
 			}
 
-			return await ExecuteWithStrategyAsync(async (dbContext, strategy) =>
-			{
-				// Extract arrays for bulk UPSERT
-				var characterIds = itemList.Select(i => i.CharacterID).ToArray();
-				var templateIds = itemList.Select(i => i.TemplateID).ToArray();
-				var slots = itemList.Select(i => i.Slot).ToArray();
-				var seeds = itemList.Select(i => i.Seed).ToArray();
-				var amounts = itemList.Select(i => (int)i.Amount).ToArray();
+			// Extract arrays for bulk UPSERT
+			var characterIds = itemList.Select(i => i.CharacterID).ToArray();
+			var templateIds = itemList.Select(i => i.TemplateID).ToArray();
+			var slots = itemList.Select(i => i.Slot).ToArray();
+			var seeds = itemList.Select(i => i.Seed).ToArray();
+			var amounts = itemList.Select(i => (int)i.Amount).ToArray();
 
-				// Single bulk UPSERT using UNNEST - atomic operation, no transaction needed
-				await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$@"INSERT INTO {TableName} (character_id, template_id, slot, seed, amount)
-					SELECT * FROM UNNEST(
-						{characterIds}::bigint[],
-						{templateIds}::int[],
-						{slots}::int[],
-						{seeds}::int[],
-						{amounts}::int[]
-					)
-					ON CONFLICT (character_id, slot) DO UPDATE SET
-						template_id = EXCLUDED.template_id,
-						seed = EXCLUDED.seed,
-						amount = EXCLUDED.amount",
-					cancellationToken);
-			}, "SaveBankItems", cancellationToken);
+			// Single bulk UPSERT using UNNEST - atomic operation, no transaction needed
+			var result = await ExecuteSqlAsync(
+				$@"INSERT INTO {TableName} (character_id, template_id, slot, seed, amount)
+				SELECT * FROM UNNEST(
+					{characterIds}::bigint[],
+					{templateIds}::int[],
+					{slots}::int[],
+					{seeds}::int[],
+					{amounts}::int[]
+				)
+				ON CONFLICT (character_id, slot) DO UPDATE SET
+					template_id = EXCLUDED.template_id,
+					seed = EXCLUDED.seed,
+					amount = EXCLUDED.amount",
+				"SaveBankItems",
+				entityName: "CharacterBankItem",
+				requireRowsAffected: false,
+				cancellationToken: cancellationToken);
+
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -130,13 +132,15 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
-			return await ExecuteWithStrategyAsync(async (dbContext, strategy) =>
-			{
-				// Use atomic DELETE for thread safety
-				await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$@"DELETE FROM {TableName} WHERE character_id = {characterId}",
-					cancellationToken);
-			}, "DeleteBankItems", cancellationToken);
+			var result = await ExecuteSqlAsync(
+				$@"DELETE FROM {TableName} WHERE character_id = {characterId}",
+				"DeleteBankItems",
+				entityName: "CharacterBankItem",
+				entityId: characterId,
+				requireRowsAffected: false,
+				cancellationToken: cancellationToken);
+
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -149,13 +153,15 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
-			return await ExecuteWithStrategyAsync(async (dbContext, strategy) =>
-			{
-				// Use atomic DELETE for thread safety
-				await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$@"DELETE FROM {TableName} WHERE character_id = {characterId} AND slot = {slot}",
-					cancellationToken);
-			}, "DeleteBankSlot", cancellationToken);
+			var result = await ExecuteSqlAsync(
+				$@"DELETE FROM {TableName} WHERE character_id = {characterId} AND slot = {slot}",
+				"DeleteBankSlot",
+				entityName: "CharacterBankItem",
+				entityId: characterId,
+				requireRowsAffected: false,
+				cancellationToken: cancellationToken);
+
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>

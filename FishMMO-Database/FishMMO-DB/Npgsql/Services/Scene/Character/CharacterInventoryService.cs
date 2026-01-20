@@ -63,26 +63,23 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 
 			return await ExecuteWithStrategyAsync<long>(
-				async (dbContext, strategy) =>
+				async (dbContext) =>
 				{
-					var result = await strategy.ExecuteAsync(async () =>
-					{
-						// Use PostgreSQL UPSERT for atomic insert-or-update
-						return await dbContext.CharacterInventoryItems
-							.FromSqlInterpolated($@"
-							INSERT INTO {TableName} 
-								(character_id, template_id, slot, seed, amount)
-							VALUES 
-								({item.CharacterID}, {item.TemplateID}, {item.Slot}, {item.Seed}, {item.Amount})
-							ON CONFLICT (character_id, slot) 
-							DO UPDATE SET 
-								template_id = EXCLUDED.template_id,
-								seed = EXCLUDED.seed,
-								amount = EXCLUDED.amount
-							RETURNING id, character_id, template_id, slot, seed, amount")
-							.AsNoTracking()
-							.FirstOrDefaultAsync(cancellationToken);
-					});
+					// Use PostgreSQL UPSERT for atomic insert-or-update
+					var result = await dbContext.CharacterInventoryItems
+						.FromSqlInterpolated($@"
+						INSERT INTO {TableName} 
+							(character_id, template_id, slot, seed, amount)
+						VALUES 
+							({item.CharacterID}, {item.TemplateID}, {item.Slot}, {item.Seed}, {item.Amount})
+						ON CONFLICT (character_id, slot) 
+						DO UPDATE SET 
+							template_id = EXCLUDED.template_id,
+							seed = EXCLUDED.seed,
+							amount = EXCLUDED.amount
+						RETURNING id, character_id, template_id, slot, seed, amount")
+						.AsNoTracking()
+						.FirstOrDefaultAsync(cancellationToken);
 
 					if (result == null || result.ID == 0)
 					{
@@ -104,31 +101,32 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Empty or null items collection");
 			}
 
-			return await ExecuteWithStrategyAsync(async dbContext =>
-			{
-				// Extract arrays for bulk UPSERT
-				var characterIds = itemList.Select(i => i.CharacterID).ToArray();
-				var templateIds = itemList.Select(i => i.TemplateID).ToArray();
-				var slots = itemList.Select(i => i.Slot).ToArray();
-				var seeds = itemList.Select(i => i.Seed).ToArray();
-				var amounts = itemList.Select(i => (int)i.Amount).ToArray();
+			// Extract arrays for bulk UPSERT
+			var characterIds = itemList.Select(i => i.CharacterID).ToArray();
+			var templateIds = itemList.Select(i => i.TemplateID).ToArray();
+			var slots = itemList.Select(i => i.Slot).ToArray();
+			var seeds = itemList.Select(i => i.Seed).ToArray();
+			var amounts = itemList.Select(i => (int)i.Amount).ToArray();
 
-				// Single bulk UPSERT using UNNEST - atomic operation, no transaction needed
-				await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$@"INSERT INTO {TableName} (character_id, template_id, slot, seed, amount)
-								SELECT * FROM UNNEST(
-									{characterIds}::bigint[],
-									{templateIds}::int[],
-									{slots}::int[],
-									{seeds}::int[],
-									{amounts}::int[]
-								)
-								ON CONFLICT (character_id, slot) DO UPDATE SET
-									template_id = EXCLUDED.template_id,
-									seed = EXCLUDED.seed,
-									amount = EXCLUDED.amount",
-					cancellationToken);
-			}, "SaveInventoryItems", cancellationToken);
+			var result = await ExecuteSqlAsync(
+				$@"INSERT INTO {TableName} (character_id, template_id, slot, seed, amount)
+					SELECT * FROM UNNEST(
+						{characterIds}::bigint[],
+						{templateIds}::int[],
+						{slots}::int[],
+						{seeds}::int[],
+						{amounts}::int[]
+					)
+					ON CONFLICT (character_id, slot) DO UPDATE SET
+						template_id = EXCLUDED.template_id,
+						seed = EXCLUDED.seed,
+						amount = EXCLUDED.amount",
+				"SaveInventoryItems",
+				entityName: "CharacterInventory",
+				requireRowsAffected: false,
+				cancellationToken: cancellationToken);
+
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -139,13 +137,15 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			return await ExecuteWithStrategyAsync(async dbContext =>
-			{
-				// Use atomic DELETE for thread safety
-				await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$@"DELETE FROM {TableName} WHERE character_id = {characterId}",
-					cancellationToken);
-			}, "DeleteInventoryItems", cancellationToken);
+			var result = await ExecuteSqlAsync(
+				$@"DELETE FROM {TableName} WHERE character_id = {characterId}",
+				"DeleteInventoryItems",
+				entityName: "CharacterInventory",
+				entityId: characterId,
+				requireRowsAffected: false,
+				cancellationToken: cancellationToken);
+
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -156,14 +156,17 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			return await ExecuteWithStrategyAsync(async dbContext =>
-			{
-				// Use atomic DELETE for thread safety
-				await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$@"DELETE FROM {TableName} WHERE character_id = {characterId} AND slot = {slot}",
-					cancellationToken);
-			}, "DeleteInventorySlot", cancellationToken);
+			var result = await ExecuteSqlAsync(
+				$@"DELETE FROM {TableName} WHERE character_id = {characterId} AND slot = {slot}",
+				"DeleteInventorySlot",
+				entityName: "CharacterInventory",
+				entityId: characterId,
+				requireRowsAffected: false,
+				cancellationToken: cancellationToken);
+
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
+
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<IReadOnlyList<CharacterInventoryData>>> GetInventoryItemsAsync(long characterId, CancellationToken cancellationToken = default)
 		{

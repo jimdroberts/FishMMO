@@ -2,7 +2,6 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Database.Data;
-using FishMMO.Database.Data.Enums;
 
 namespace FishMMO.Database.Npgsql.Services.Interfaces
 {

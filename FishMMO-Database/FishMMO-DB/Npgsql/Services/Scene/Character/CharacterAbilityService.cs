@@ -103,12 +103,13 @@ namespace FishMMO.Database.Npgsql.Services
 					"Abilities collection must not be null or empty.");
 			}
 
-			return await ExecuteWithStrategyAsync(async (dbContext, strategy) =>
-			{
-				var list = abilities.ToList();
-				var newItems = list.Where(a => a.ID <= 0).ToList();
-				var existingItems = list.Where(a => a.ID > 0).ToList();
+			var list = abilities.ToList();
+			var newItems = list.Where(a => a.ID <= 0).ToList();
+			var existingItems = list.Where(a => a.ID > 0).ToList();
 
+			// Wrap both operations in transaction for atomicity
+			var transactionResult = await ExecuteInTransactionAsync(async (dbContext, transaction) =>
+			{
 				// Handle new abilities with atomic INSERT using ON CONFLICT
 				if (newItems.Any())
 				{
@@ -118,8 +119,8 @@ namespace FishMMO.Database.Npgsql.Services
 					var newCooldowns = newItems.Select(a => a.Cooldown).ToArray();
 
 					// Atomic UPSERT for new items - uses unique constraint (character_id, template_id)
-					await dbContext.Database.ExecuteSqlInterpolatedAsync($@"
-						INSERT INTO {TableName} (character_id, template_id, ability_events, cooldown)
+					await dbContext.Database.ExecuteSqlInterpolatedAsync(
+						$@"INSERT INTO {TableName} (character_id, template_id, ability_events, cooldown)
 						SELECT * FROM UNNEST(
 							{newCharacterIds}::bigint[],
 							{newTemplateIds}::int[],
@@ -128,8 +129,8 @@ namespace FishMMO.Database.Npgsql.Services
 						)
 						ON CONFLICT (character_id, template_id)
 						DO UPDATE SET
-							ability_events = EXCLUDED.ability_events,
-							cooldown = EXCLUDED.cooldown",
+						ability_events = EXCLUDED.ability_events,
+						cooldown = EXCLUDED.cooldown",
 						cancellationToken);
 				}
 
@@ -144,8 +145,8 @@ namespace FishMMO.Database.Npgsql.Services
 
 					// Atomic bulk UPDATE by ID - preserves ID-based update semantics
 					// Allows changing template_id if needed
-					await dbContext.Database.ExecuteSqlInterpolatedAsync($@"
-						UPDATE {TableName} AS target
+					await dbContext.Database.ExecuteSqlInterpolatedAsync(
+						$@"UPDATE {TableName} AS target
 						SET character_id = source.char_id,
 							template_id = source.t_id,
 							ability_events = source.evs,
@@ -160,7 +161,18 @@ namespace FishMMO.Database.Npgsql.Services
 						WHERE target.id = source.id",
 						cancellationToken);
 				}
+
+				return true;
 			}, "SaveCharacterAbilities", cancellationToken);
+
+			if (transactionResult.IsSuccess)
+			{
+				return DatabaseResult.Success();
+			}
+			else
+			{
+				return DatabaseResult.Failure(transactionResult.ErrorCode, transactionResult.ErrorMessage, transactionResult.IsTransient);
+			}
 		}
 
 		/// <inheritdoc/>
@@ -173,14 +185,15 @@ namespace FishMMO.Database.Npgsql.Services
 					"Character ID must be greater than 0.");
 			}
 
-			return await ExecuteWithStrategyAsync(async dbContext =>
-			{
-				var tableName = dbContext.GetTableName<CharacterAbilityEntity>();
-				// Use atomic DELETE for thread safety
-				await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$@"DELETE FROM {TableName} WHERE character_id = {characterId}",
-					cancellationToken);
-			}, "DeleteCharacterAbilities", cancellationToken);
+			var result = await ExecuteSqlAsync(
+				$@"DELETE FROM {TableName} WHERE character_id = {characterId}",
+				"DeleteCharacterAbilities",
+				entityName: "CharacterAbility",
+				entityId: characterId,
+				requireRowsAffected: false,
+				cancellationToken: cancellationToken);
+
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -193,14 +206,15 @@ namespace FishMMO.Database.Npgsql.Services
 					"Character ID and ability ID must be greater than 0.");
 			}
 
-			return await ExecuteWithStrategyAsync(async dbContext =>
-			{
-				var tableName = dbContext.GetTableName<CharacterAbilityEntity>();
-				// Use atomic DELETE for thread safety
-				await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$@"DELETE FROM {TableName} WHERE character_id = {characterId} AND id = {abilityId}",
-					cancellationToken);
-			}, "DeleteCharacterAbility", cancellationToken);
+			var result = await ExecuteSqlAsync(
+				$@"DELETE FROM {TableName} WHERE character_id = {characterId} AND id = {abilityId}",
+				"DeleteCharacterAbility",
+				entityName: "CharacterAbility",
+				entityId: abilityId,
+				requireRowsAffected: false,
+				cancellationToken: cancellationToken);
+
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>

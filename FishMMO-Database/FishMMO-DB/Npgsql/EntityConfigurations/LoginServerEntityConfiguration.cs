@@ -38,6 +38,7 @@ namespace FishMMO.Database.Npgsql.Entities
 
 			// Index on server name
 			builder.HasIndex(e => e.Name)
+				.IsUnique()
 				.HasDatabaseName("IX_LoginServer_Name");
 
 			// Performance index for active server queries

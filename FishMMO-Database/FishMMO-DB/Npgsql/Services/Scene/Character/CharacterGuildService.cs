@@ -45,6 +45,9 @@ namespace FishMMO.Database.Npgsql.Services
 					.AsNoTracking()
 					.FirstOrDefault(g => g.CharacterID == characterId));
 #pragma warning restore CS8619
+
+		/// <summary>
+		/// Compiled query for retrieving all guild members.
 		/// </summary>
 		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterGuildEntity>>> GetGuildMembersQuery =
 			EF.CompileAsyncQuery((NpgsqlDbContext context, long guildId, CancellationToken ct) =>
@@ -73,7 +76,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> SaveGuildMembershipAsync(CharacterGuildData guildData, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> SaveGuildMembershipAsync(CharacterGuildData guildData, int maxCapacity, CancellationToken cancellationToken = default)
 		{
 			if (guildData.CharacterID == 0 || guildData.GuildID == 0)
 			{
@@ -82,20 +85,66 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID or guild ID. Both must be greater than 0.");
 			}
 
-			return await ExecuteWithStrategyAsync(async dbContext =>
+			if (maxCapacity <= 0)
 			{
-				// Use PostgreSQL UPSERT for atomic insert-or-update
+				return DatabaseResult.Failure(
+					"VALIDATION_ERROR",
+					"Invalid max capacity. Max capacity must be greater than 0.");
+			}
+
+			// Use transaction to atomically check capacity and insert/update membership
+			var result = await ExecuteInTransactionAsync(async (dbContext, transaction) =>
+			{
+				// Check if character is already in this guild (UPDATE case)
+				var existingMembership = await dbContext.CharacterGuilds
+					.AsNoTracking()
+					.FirstOrDefaultAsync(g => g.CharacterID == guildData.CharacterID, cancellationToken);
+
+				// If this is a new guild join (not an UPDATE), validate capacity
+				if (existingMembership == null || existingMembership.GuildID != guildData.GuildID)
+				{
+					// Lock guild rows to prevent concurrent capacity violations
+					// Using SELECT ... FOR UPDATE to acquire row-level locks
+					var guildEntity = await dbContext.Guilds
+						.Where(g => g.ID == guildData.GuildID)
+						.FirstOrDefaultAsync(cancellationToken);
+
+					if (guildEntity == null)
+					{
+						return DatabaseResult.Failure(
+							"NOT_FOUND",
+							$"Guild with ID {guildData.GuildID} does not exist.");
+					}
+
+					// Count current members (within same transaction, so count is consistent)
+					var currentCount = await dbContext.CharacterGuilds
+						.Where(g => g.GuildID == guildData.GuildID)
+						.CountAsync(cancellationToken);
+
+					if (currentCount >= maxCapacity)
+					{
+						return DatabaseResult.Failure(
+							"CAPACITY_EXCEEDED",
+							$"Guild has reached maximum capacity of {maxCapacity} members.");
+					}
+				}
+
+				// Perform UPSERT
 				await dbContext.Database.ExecuteSqlInterpolatedAsync(
 					$@"INSERT INTO {TableName} 
-								(character_id, guild_id, rank, location)
-								VALUES ({guildData.CharacterID}, {guildData.GuildID}, {guildData.Rank}, {guildData.Location})
-								ON CONFLICT (character_id) 
-								DO UPDATE SET 
-									guild_id = EXCLUDED.guild_id,
-									rank = EXCLUDED.rank,
-									location = EXCLUDED.location",
+						(character_id, guild_id, rank, location)
+						VALUES ({guildData.CharacterID}, {guildData.GuildID}, {guildData.Rank}, {guildData.Location})
+						ON CONFLICT (character_id) 
+						DO UPDATE SET 
+							guild_id = EXCLUDED.guild_id,
+							rank = EXCLUDED.rank,
+							location = EXCLUDED.location",
 					cancellationToken);
+
+				return DatabaseResult.Success();
 			}, "SaveGuildMembership", cancellationToken);
+
+			return result.IsSuccess ? result.Data : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -108,29 +157,17 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID or guild ID. Both must be greater than 0.");
 			}
 
-			var result = await ExecuteWithStrategyAsync<int>(
-				async (dbContext, strategy) =>
-				{
-					return await strategy.ExecuteAsync(async () =>
-					{
-						// Atomic update without loading entity
-						return await dbContext.Database.ExecuteSqlInterpolatedAsync(
-							$@"UPDATE {TableName} 
-							SET rank = {rank} 
-							WHERE character_id = {characterId} AND guild_id = {guildId}",
-							cancellationToken);
-					});
-				},
+			var result = await ExecuteSqlAsync(
+				$@"UPDATE {TableName} 
+					SET rank = {rank} 
+					WHERE character_id = {characterId} AND guild_id = {guildId}",
 				"UpdateRank",
-				cancellationToken);
+				entityName: "CharacterGuild",
+				entityId: characterId,
+				requireRowsAffected: false,
+				cancellationToken: cancellationToken);
 
-			if (!result.IsSuccess)
-				return DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage);
-
-			return ValidateRowsAffected(
-				result.Data,
-				"CharacterGuild",
-				$"characterId={characterId}, guildId={guildId}");
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -143,13 +180,15 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
-			return await ExecuteWithStrategyAsync(async dbContext =>
-		{
-			// Use atomic DELETE for thread safety
-			await dbContext.Database.ExecuteSqlInterpolatedAsync(
+			var result = await ExecuteSqlAsync(
 				$@"DELETE FROM {TableName} WHERE character_id = {characterId}",
-				cancellationToken);
-		}, "DeleteGuildMembership", cancellationToken);
+				"DeleteGuildMembership",
+				entityName: "CharacterGuild",
+				entityId: characterId,
+				requireRowsAffected: false,
+				cancellationToken: cancellationToken);
+
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>

@@ -31,16 +31,18 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("INVALID_GUILD_ID", "Guild ID must be greater than zero.");
 			}
 
-			return await ExecuteWithStrategyAsync(async (dbContext, strategy) =>
-			{
-				await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$@"INSERT INTO {TableName} (guild_id, last_update) 
+			var result = await ExecuteSqlAsync(
+				$@"INSERT INTO {TableName} (guild_id, last_update) 
 					VALUES ({guildId}, CURRENT_TIMESTAMP) 
 					ON CONFLICT (guild_id) 
-					DO UPDATE SET last_update = EXCLUDED.last_update 
-					WHERE {TableName}.last_update < EXCLUDED.last_update",
-					cancellationToken);
-			}, "SaveGuildUpdate", cancellationToken);
+					DO UPDATE SET last_update = GREATEST({TableName}.last_update, EXCLUDED.last_update)",
+				"SaveGuildUpdate",
+				entityName: "GuildUpdate",
+				entityId: guildId,
+				requireRowsAffected: false,
+				cancellationToken: cancellationToken);
+
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -51,14 +53,13 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<int>.Failure("INVALID_GUILD_ID", "Guild ID must be greater than zero.");
 			}
 
-			return await ExecuteWithStrategyAsync<int>(async (dbContext, strategy) =>
-			{
-				var rowsDeleted = await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$"DELETE FROM {TableName} WHERE guild_id = {guildId}",
-					cancellationToken);
-
-				return rowsDeleted;
-			}, "DeleteGuildUpdate", cancellationToken);
+			return await ExecuteSqlAsync(
+				$"DELETE FROM {TableName} WHERE guild_id = {guildId}",
+				"DeleteGuildUpdate",
+				entityName: "GuildUpdate",
+				entityId: guildId,
+				requireRowsAffected: false,
+				cancellationToken: cancellationToken);
 		}
 
 		/// <inheritdoc/>

@@ -1,18 +1,52 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using System;
+using System.Text.RegularExpressions;
+using Microsoft.EntityFrameworkCore;
 using FishMMO.Database.Npgsql.Entities;
+using FishMMO.Database.Npgsql.Monitoring.Metrics;
 
 namespace FishMMO.Database.Npgsql
 {
 	public class NpgsqlDbContext : DbContext
 	{
+		private readonly ConnectionPoolMetrics poolMetrics;
+		private bool disposed = false;
+
 		/// <summary>
 		/// Gets the database schema name for this context.
 		/// </summary>
 		public string Schema { get; }
 
-		public NpgsqlDbContext(DbContextOptions options, string schema) : base(options)
+		public NpgsqlDbContext(DbContextOptions options, string schema, ConnectionPoolMetrics poolMetrics = null) : base(options)
 		{
-			Schema = schema ?? "public";
+			schema = schema ?? "public";
+			
+			// Validate schema name to prevent SQL injection
+			if (!IsValidSchemaName(schema))
+			{
+				throw new ArgumentException(
+					$"Invalid schema name '{schema}'. Schema names must start with a letter or underscore " +
+					"and contain only letters, digits, and underscores.",
+					nameof(schema));
+			}
+
+			Schema = schema;
+			this.poolMetrics = poolMetrics;
+		}
+
+		/// <summary>
+		/// Validates that a schema name contains only safe characters to prevent SQL injection.
+		/// </summary>
+		/// <param name="schemaName">The schema name to validate.</param>
+		/// <returns>True if the schema name is valid, false otherwise.</returns>
+		private static bool IsValidSchemaName(string schemaName)
+		{
+			if (string.IsNullOrWhiteSpace(schemaName))
+				return false;
+
+			// PostgreSQL identifier rules: must start with letter or underscore,
+			// followed by letters, digits, underscores, or dollar signs
+			// We're being more restrictive and disallowing dollar signs for security
+			return Regex.IsMatch(schemaName, @"^[a-zA-Z_][a-zA-Z0-9_]*$");
 		}
 
 		//protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
@@ -56,6 +90,32 @@ namespace FishMMO.Database.Npgsql
 
 		// game data (?)
 		//public DbSet<QuestEntity> Quests { get; set; }
+
+		/// <summary>
+		/// Disposes the context and records disposal in pool metrics.
+		/// </summary>
+		public override void Dispose()
+		{
+			if (!disposed)
+			{
+				disposed = true;
+				poolMetrics?.RecordConnectionDisposed();
+				base.Dispose();
+			}
+		}
+
+		/// <summary>
+		/// Asynchronously disposes the context and records disposal in pool metrics.
+		/// </summary>
+		public override async ValueTask DisposeAsync()
+		{
+			if (!disposed)
+			{
+				disposed = true;
+				poolMetrics?.RecordConnectionDisposed();
+				await base.DisposeAsync();
+			}
+		}
 
 		protected override void OnModelCreating(ModelBuilder modelBuilder)
 		{

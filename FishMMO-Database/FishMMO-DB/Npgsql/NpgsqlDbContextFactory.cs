@@ -178,7 +178,7 @@ namespace FishMMO.Database.Npgsql
 					optionsBuilder.EnableSensitiveDataLogging(true);
 				}
 
-				var context = new NpgsqlDbContext(optionsBuilder.Options, schema);
+			var context = new NpgsqlDbContext(optionsBuilder.Options, schema, poolMetrics);
 
 				return context;
 			}

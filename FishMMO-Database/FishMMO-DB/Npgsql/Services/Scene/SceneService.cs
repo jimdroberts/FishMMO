@@ -84,7 +84,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<long>.Failure("VALIDATION_ERROR", "Invalid parameters: world server ID and scene name are required.");
 			}
 
-			return await ExecuteWithStrategyAsync<long>(async (dbContext, strategy) =>
+			return await ExecuteWithStrategyAsync<long>(async (dbContext) =>
 			{
 				var sceneTypeInt = (int)sceneType;
 				var sceneStatusInt = (int)SceneStatus.Pending;
@@ -119,7 +119,7 @@ namespace FishMMO.Database.Npgsql.Services
 		public async Task<DatabaseResult<SceneData>> DequeueAsync(CancellationToken cancellationToken = default)
 		{
 			// Use SceneData? (nullable) since no pending scenes is valid business logic, not an error
-			var result = await ExecuteWithStrategyAsync<SceneData?>(async (dbContext, strategy) =>
+			var result = await ExecuteWithStrategyAsync<SceneData?>(async (dbContext) =>
 			{
 				// Atomically dequeue next pending scene with CTE and FOR UPDATE SKIP LOCKED
 				// CTE ensures the row is locked BEFORE the UPDATE, preventing race conditions
@@ -167,19 +167,17 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid scene ID.");
 			}
 
-			return await ExecuteWithStrategyAsync(async (dbContext, strategy) =>
-			{
-				var rowsAffected = await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$@"UPDATE {TableName} 
+			var result = await ExecuteSqlAsync(
+				$@"UPDATE {TableName} 
 					SET scene_status = {(int)status} 
 					WHERE id = {sceneId}",
-					cancellationToken);
+				"UpdateSceneStatus",
+				entityName: "Scene",
+				entityId: sceneId,
+				requireRowsAffected: true,
+				cancellationToken: cancellationToken);
 
-				if (rowsAffected == 0)
-				{
-					throw new DatabaseEntityNotFoundException("Scene", $"ID {sceneId}");
-				}
-			}, "UpdateSceneStatus", cancellationToken);
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -195,41 +193,35 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid parameters: scene server ID, world server ID, and scene name are required.");
 			}
 
-			return await ExecuteWithStrategyAsync(async (dbContext, strategy) =>
-			{
-				var rowsAffected = await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$@"UPDATE {TableName} 
+			var result = await ExecuteSqlAsync(
+				$@"UPDATE {TableName} 
 					SET scene_status = {(int)SceneStatus.Ready}, 
 						scene_server_id = {sceneServerId}, 
 						scene_handle = {sceneHandle} 
 					WHERE world_server_id = {worldServerId} 
 						AND scene_name = {sceneName} 
 						AND scene_status = {(int)SceneStatus.Loading}",
-					cancellationToken);
+				"SetSceneReady",
+				entityName: "Scene",
+				requireRowsAffected: true,
+				cancellationToken: cancellationToken);
 
-				if (rowsAffected == 0)
-				{
-					throw new DatabaseEntityNotFoundException("Scene", $"world server {worldServerId}, scene {sceneName} in Loading status");
-				}
-			}, "SetSceneReady", cancellationToken);
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
 		public async Task<DatabaseResult> PulseAsync(int sceneHandle, int characterCount, CancellationToken cancellationToken = default)
 		{
-			return await ExecuteWithStrategyAsync(async (dbContext, strategy) =>
-			{
-				var rowsAffected = await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$@"UPDATE {TableName}
+			var result = await ExecuteSqlAsync(
+				$@"UPDATE {TableName}
 					SET character_count = {characterCount} 
 					WHERE scene_handle = {sceneHandle}",
-					cancellationToken);
+				"PulseScene",
+				entityName: "Scene",
+				requireRowsAffected: true,
+				cancellationToken: cancellationToken);
 
-				if (rowsAffected == 0)
-				{
-					throw new DatabaseEntityNotFoundException("Scene", $"handle {sceneHandle}");
-				}
-			}, "PulseScene", cancellationToken);
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -240,14 +232,12 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<int>.Failure("VALIDATION_ERROR", "Invalid scene server ID.");
 			}
 
-			return await ExecuteWithStrategyAsync<int>(async (dbContext, strategy) =>
-			{
-				var rowsDeleted = await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$"DELETE FROM {TableName} WHERE scene_server_id = {sceneServerId}",
-					cancellationToken);
-
-				return rowsDeleted;
-			}, "DeleteBySceneServer", cancellationToken);
+			return await ExecuteSqlAsync(
+				$"DELETE FROM {TableName} WHERE scene_server_id = {sceneServerId}",
+				"DeleteBySceneServer",
+				entityName: "Scene",
+				requireRowsAffected: false,
+				cancellationToken: cancellationToken);
 		}
 
 		/// <inheritdoc/>
@@ -258,14 +248,12 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<int>.Failure("VALIDATION_ERROR", "Invalid world server ID.");
 			}
 
-			return await ExecuteWithStrategyAsync<int>(async (dbContext, strategy) =>
-			{
-				var rowsDeleted = await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$"DELETE FROM {TableName} WHERE world_server_id = {worldServerId}",
-					cancellationToken);
-
-				return rowsDeleted;
-			}, "DeleteByWorldServer", cancellationToken);
+			return await ExecuteSqlAsync(
+				$"DELETE FROM {TableName} WHERE world_server_id = {worldServerId}",
+				"DeleteByWorldServer",
+				entityName: "Scene",
+				requireRowsAffected: false,
+				cancellationToken: cancellationToken);
 		}
 
 		/// <inheritdoc/>
@@ -276,18 +264,15 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid scene server ID.");
 			}
 
-			return await ExecuteWithStrategyAsync(async (dbContext, strategy) =>
-			{
-				var rowsAffected = await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$@"DELETE FROM {TableName} 
+			var result = await ExecuteSqlAsync(
+				$@"DELETE FROM {TableName} 
 					WHERE scene_server_id = {sceneServerId} AND scene_handle = {sceneHandle}",
-					cancellationToken);
+				"DeleteByHandle",
+				entityName: "Scene",
+				requireRowsAffected: true,
+				cancellationToken: cancellationToken);
 
-				if (rowsAffected == 0)
-				{
-					throw new DatabaseEntityNotFoundException("Scene", $"server {sceneServerId}, handle {sceneHandle}");
-				}
-			}, "DeleteByHandle", cancellationToken);
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>

@@ -22,6 +22,9 @@ namespace FishMMO.Database.Npgsql.Services
 					.AsNoTracking()
 					.FirstOrDefault(p => p.CharacterID == characterId));
 #pragma warning restore CS8619
+
+		/// <summary>
+		/// Compiled query for retrieving spawned character pet.
 		/// </summary>
 #pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type
 		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<CharacterPetEntity?>> GetSpawnedPetQuery =
@@ -30,6 +33,9 @@ namespace FishMMO.Database.Npgsql.Services
 					.AsNoTracking()
 					.FirstOrDefault(p => p.CharacterID == characterId && p.Spawned));
 #pragma warning restore CS8619
+
+		/// <summary>
+		/// Initializes a new instance of the <see cref="CharacterPetService"/> class.
 		/// </summary>
 		/// <param name="dbContextFactory">Factory for creating database contexts.</param>
 		/// <exception cref="ArgumentNullException">Thrown when dbContextFactory is null.</exception>
@@ -45,26 +51,23 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			return await ExecuteWithStrategyAsync(async dbContext =>
-			{
-				// Use atomic UPDATE for thread safety
-				await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$@"UPDATE {TableName} 
-					   SET character_id = {petData.CharacterID},
-					       template_id = {petData.TemplateID},
-					       abilities = {petData.Abilities},
-					       spawned = {petData.Spawned}
-					   WHERE id = {petData.ID}",
-					cancellationToken);
-			}, "SavePet", cancellationToken);
+			var result = await ExecuteSqlAsync(
+				$@"UPDATE {TableName} 
+				   SET character_id = {petData.CharacterID},
+				       template_id = {petData.TemplateID},
+				       abilities = {petData.Abilities},
+				       spawned = {petData.Spawned}
+				   WHERE id = {petData.ID}",
+				"SavePet",
+				entityName: "CharacterPet",
+				entityId: petData.ID,
+				requireRowsAffected: false,
+				cancellationToken: cancellationToken);
+
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
-		/// <summary>
-		/// Saves multiple pets (helper method, not in interface).
-		/// </summary>
-		/// <param name="pets">Collection of pet data to save.</param>
-		/// <param name="cancellationToken">Token to cancel the operation.</param>
-		/// <returns>DatabaseResult indicating success or failure.</returns>
+		/// <inheritdoc/>
 		public async Task<DatabaseResult> SavePetsAsync(IEnumerable<CharacterPetData> pets, CancellationToken cancellationToken = default)
 		{
 			var petList = pets?.Where(p => p.CharacterID > 0).ToList();
@@ -73,12 +76,13 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Empty or null pets collection");
 			}
 
-			return await ExecuteWithStrategyAsync(async (dbContext, strategy) =>
-			{
-				// Separate pets into updates and inserts based on ID
-				var petsToUpdate = petList.Where(p => p.ID > 0).ToList();
-				var petsToInsert = petList.Where(p => p.ID == 0).ToList();
+			// Separate pets into updates and inserts based on ID
+			var petsToUpdate = petList.Where(p => p.ID > 0).ToList();
+			var petsToInsert = petList.Where(p => p.ID == 0).ToList();
 
+			// Wrap both operations in transaction for atomicity
+			var transactionResult = await ExecuteInTransactionAsync(async (dbContext, transaction) =>
+			{
 				// Handle existing pets with atomic UPDATE by ID
 				if (petsToUpdate.Count > 0)
 				{
@@ -88,9 +92,8 @@ namespace FishMMO.Database.Npgsql.Services
 					var updateAbilities = petsToUpdate.Select(p => p.Abilities.ToArray()).ToArray();
 					var updateSpawned = petsToUpdate.Select(p => p.Spawned).ToArray();
 
-					// Atomic bulk UPDATE by ID - preserves ID-based update semantics
 					await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$@"UPDATE {TableName} AS t SET
+						$@"UPDATE {TableName} AS t SET
 						character_id = u.character_id,
 						template_id = u.template_id,
 						abilities = u.abilities,
@@ -103,7 +106,7 @@ namespace FishMMO.Database.Npgsql.Services
 						{updateSpawned}::boolean[]
 					) AS u(id, character_id, template_id, abilities, spawned)) AS u
 					WHERE t.id = u.id",
-					cancellationToken);
+						cancellationToken);
 				}
 
 				// Handle new pets with atomic UPSERT using character_id unique constraint
@@ -114,9 +117,8 @@ namespace FishMMO.Database.Npgsql.Services
 					var insertAbilities = petsToInsert.Select(p => p.Abilities.ToArray()).ToArray();
 					var insertSpawned = petsToInsert.Select(p => p.Spawned).ToArray();
 
-					// Atomic UPSERT for new pets - uses unique constraint on character_id
 					await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$@"INSERT INTO {TableName} (character_id, template_id, abilities, spawned)
+						$@"INSERT INTO {TableName} (character_id, template_id, abilities, spawned)
 					SELECT * FROM UNNEST(
 						{insertCharacterIds}::bigint[],
 						{insertTemplateIds}::int[],
@@ -128,9 +130,20 @@ namespace FishMMO.Database.Npgsql.Services
 						template_id = EXCLUDED.template_id,
 						abilities = EXCLUDED.abilities,
 						spawned = EXCLUDED.spawned",
-					cancellationToken);
+						cancellationToken);
 				}
+
+				return true;
 			}, "SavePets", cancellationToken);
+
+			if (transactionResult.IsSuccess)
+			{
+				return DatabaseResult.Success();
+			}
+			else
+			{
+				return DatabaseResult.Failure(transactionResult.ErrorCode, transactionResult.ErrorMessage, transactionResult.IsTransient);
+			}
 		}
 
 		public async Task<DatabaseResult> DeletePetAsync(long characterId, CancellationToken cancellationToken = default)
@@ -140,35 +153,15 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			return await ExecuteWithStrategyAsync(async dbContext =>
-			{
-				// Use atomic DELETE for thread safety
-				await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$@"DELETE FROM {TableName} WHERE character_id = {characterId}",
-					cancellationToken);
-			}, "DeletePet", cancellationToken);
-		}
+			var result = await ExecuteSqlAsync(
+				$@"DELETE FROM {TableName} WHERE character_id = {characterId}",
+				"DeletePet",
+				entityName: "CharacterPet",
+				entityId: characterId,
+				requireRowsAffected: false,
+				cancellationToken: cancellationToken);
 
-		/// <summary>
-		/// Deletes all pets for a character.
-		/// </summary>
-		/// <param name="characterId">The character ID.</param>
-		/// <param name="cancellationToken">Token to cancel the operation.</param>
-		/// <returns>DatabaseResult indicating success or failure.</returns>
-		public async Task<DatabaseResult> DeleteAllPetsAsync(long characterId, CancellationToken cancellationToken = default)
-		{
-			if (characterId == 0)
-			{
-				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
-			}
-
-			return await ExecuteWithStrategyAsync(async dbContext =>
-			{
-				// Use atomic DELETE for thread safety
-				await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$@"DELETE FROM {TableName} WHERE character_id = {characterId}",
-					cancellationToken);
-			}, "DeleteAllPets", cancellationToken);
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>

@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Metadata;
 
 namespace FishMMO.Database.Npgsql
 {
@@ -36,7 +35,7 @@ namespace FishMMO.Database.Npgsql
 			var schema = entityType.GetSchema() ?? context.Schema;
 			var tableName = entityType.GetTableName();
 
-			return $"{schema}.{tableName}";
+			return $"\"{schema}\".\"{tableName}\"";
 		}
 	}
 }

@@ -40,6 +40,9 @@ namespace FishMMO.Database.Npgsql.Services
 					.AsNoTracking()
 					.FirstOrDefault(p => p.CharacterID == characterId));
 #pragma warning restore CS8619
+
+		/// <summary>
+		/// Compiled query for retrieving all party members.
 		/// </summary>
 		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterPartyEntity>>> GetPartyMembersQuery =
 			EF.CompileAsyncQuery((NpgsqlDbContext context, long partyId, CancellationToken ct) =>
@@ -68,43 +71,71 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> SavePartyMembershipAsync(CharacterPartyData partyData, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> SavePartyMembershipAsync(CharacterPartyData partyData, int maxCapacity, CancellationToken cancellationToken = default)
 		{
 			if (partyData.CharacterID == 0 || partyData.PartyID == 0)
 			{
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character or party ID");
 			}
 
-			var result = await ExecuteWithStrategyAsync<int>(async (dbContext, strategy) =>
+			if (maxCapacity <= 0)
 			{
-				var rowsAffected = await strategy.ExecuteAsync(async () =>
+				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid max capacity. Max capacity must be greater than 0.");
+			}
+
+			// Use transaction to atomically check capacity and insert/update membership
+			var result = await ExecuteInTransactionAsync(async (dbContext, transaction) =>
+			{
+				// Check if character is already in this party (UPDATE case)
+				var existingMembership = await dbContext.CharacterParties
+					.AsNoTracking()
+					.FirstOrDefaultAsync(p => p.CharacterID == partyData.CharacterID, cancellationToken);
+
+				// If this is a new party join (not an UPDATE), validate capacity
+				if (existingMembership == null || existingMembership.PartyID != partyData.PartyID)
 				{
-					// Use PostgreSQL UPSERT for atomic insert-or-update
-					return await dbContext.Database.ExecuteSqlInterpolatedAsync(
-						$@"INSERT INTO {TableName} 
+					// Lock party rows to prevent concurrent capacity violations
+					// Using SELECT ... FOR UPDATE to acquire row-level locks
+					var partyEntity = await dbContext.Parties
+						.Where(p => p.ID == partyData.PartyID)
+						.FirstOrDefaultAsync(cancellationToken);
+
+					if (partyEntity == null)
+					{
+						return DatabaseResult.Failure(
+							"NOT_FOUND",
+							$"Party with ID {partyData.PartyID} does not exist.");
+					}
+
+					// Count current members (within same transaction, so count is consistent)
+					var currentCount = await dbContext.CharacterParties
+						.Where(p => p.PartyID == partyData.PartyID)
+						.CountAsync(cancellationToken);
+
+					if (currentCount >= maxCapacity)
+					{
+						return DatabaseResult.Failure(
+							"CAPACITY_EXCEEDED",
+							$"Party has reached maximum capacity of {maxCapacity} members.");
+					}
+				}
+
+				// Perform UPSERT
+				await dbContext.Database.ExecuteSqlInterpolatedAsync(
+					$@"INSERT INTO {TableName} 
 					   (character_id, party_id, rank, health_pct)
 					   VALUES ({partyData.CharacterID}, {partyData.PartyID}, {partyData.Rank}, {partyData.HealthPCT})
 					   ON CONFLICT (character_id) 
 					   DO UPDATE SET 
-					       party_id = EXCLUDED.party_id,
-					       rank = EXCLUDED.rank,
-					       health_pct = EXCLUDED.health_pct",
-						cancellationToken);
-				});
+						   party_id = EXCLUDED.party_id,
+						   rank = EXCLUDED.rank,
+						   health_pct = EXCLUDED.health_pct",
+					cancellationToken);
 
-				if (rowsAffected == 0)
-				{
-					throw new DatabaseQueryException(
-						"SavePartyMembership",
-						"No rows affected during party membership save.",
-						"SAVE_FAILED",
-						false);
-				}
-
-				return rowsAffected;
+				return DatabaseResult.Success();
 			}, "SavePartyMembership", cancellationToken);
 
-			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage);
+			return result.IsSuccess ? result.Data : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -115,13 +146,15 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			return await ExecuteWithStrategyAsync(async dbContext =>
-			{
-				// Use atomic DELETE for thread safety
-				await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$@"DELETE FROM {TableName} WHERE character_id = {characterId}",
-					cancellationToken);
-			}, "DeletePartyMembership", cancellationToken);
+			var result = await ExecuteSqlAsync(
+				$@"DELETE FROM {TableName} WHERE character_id = {characterId}",
+				"DeletePartyMembership",
+				entityName: "CharacterParty",
+				entityId: characterId,
+				requireRowsAffected: false,
+				cancellationToken: cancellationToken);
+
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -132,30 +165,17 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character or party ID");
 			}
 
-			var result = await ExecuteWithStrategyAsync<int>(async (dbContext, strategy) =>
-			{
-				var rowsAffected = await strategy.ExecuteAsync(async () =>
-				{
-					// Atomic update without loading entity
-					return await dbContext.Database.ExecuteSqlInterpolatedAsync(
-						$@"UPDATE {TableName} 
-						SET rank = {rank} 
-						WHERE character_id = {characterId} AND party_id = {partyId}",
-						cancellationToken);
-				});
+			var result = await ExecuteSqlAsync(
+				$@"UPDATE {TableName} 
+					SET rank = {rank} 
+					WHERE character_id = {characterId} AND party_id = {partyId}",
+				"UpdateRank",
+				entityName: "CharacterParty",
+				entityId: characterId,
+				requireRowsAffected: false,
+				cancellationToken: cancellationToken);
 
-				if (rowsAffected == 0)
-				{
-					throw new DatabaseEntityNotFoundException(
-						"PartyMembership",
-						$"character_id={characterId}, party_id={partyId}",
-						"Membership not found");
-				}
-
-				return rowsAffected;
-			}, "UpdateRank", cancellationToken);
-
-			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage);
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>

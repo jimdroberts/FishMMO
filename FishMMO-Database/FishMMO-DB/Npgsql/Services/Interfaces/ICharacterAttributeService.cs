@@ -108,5 +108,47 @@ namespace FishMMO.Database.Npgsql.Services
 		/// The returned DTOs are safe to use after database context disposal.
 		/// </remarks>
 		Task<DatabaseResult<IReadOnlyList<CharacterAttributeData>>> GetAttributesAsync(long characterId, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Atomically increments or decrements a character attribute value.
+		/// Uses database-level atomic operations to prevent race conditions.
+		/// </summary>
+		/// <param name="characterId">The character ID. Must be greater than 0.</param>
+		/// <param name="templateId">The attribute template ID.</param>
+		/// <param name="valueDelta">Amount to add to the value field (can be negative for decrement).</param>
+		/// <param name="currentValueDelta">Amount to add to the current_value field (can be negative for decrement).</param>
+		/// <param name="allowNegative">Whether to allow negative values. If false, operation fails if result would be negative.</param>
+		/// <param name="cancellationToken">Token to cancel the asynchronous operation.</param>
+		/// <returns>DatabaseResult indicating success or failure with error details.</returns>
+		/// <remarks>
+		/// This method provides atomic increment/decrement operations to prevent race conditions
+		/// in concurrent currency/attribute modifications.
+		/// 
+		/// Atomicity guarantees:
+		/// - Uses PostgreSQL's atomic UPDATE with arithmetic operations
+		/// - Multiple concurrent increments will all be applied correctly
+		/// - No lost updates from read-modify-write race conditions
+		/// 
+		/// Behavior:
+		/// - If attribute exists: Atomically adds delta to current values
+		/// - If attribute doesn't exist: Creates new attribute with delta as initial value
+		/// - If allowNegative is false and result would be negative: Operation fails, no changes made
+		/// 
+		/// Success: Attribute incremented/decremented successfully.
+		/// Failure cases:
+		/// - VALIDATION_ERROR: Invalid character ID or would result in negative value when not allowed
+		/// - DB_CONNECTION_FAILED: Database connection error (transient)
+		/// - DB_TIMEOUT: Operation timeout (transient)
+		/// - DB_CONSTRAINT_VIOLATION: Constraint check failed (e.g., negative value when not allowed)
+		/// 
+		/// Performance: Single atomic SQL operation, no transaction overhead needed.
+		/// </remarks>
+		Task<DatabaseResult> IncrementAttributeAsync(
+			long characterId,
+			int templateId,
+			int valueDelta,
+			float currentValueDelta,
+			bool allowNegative = false,
+			CancellationToken cancellationToken = default);
 	}
 }
