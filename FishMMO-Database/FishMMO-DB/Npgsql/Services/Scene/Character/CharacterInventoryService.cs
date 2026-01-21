@@ -23,7 +23,7 @@ namespace FishMMO.Database.Npgsql.Services
 	/// - Inventory retrieval
 	/// 
 	/// All database exceptions are caught and wrapped in appropriate DatabaseException types:
-	/// - OperationCanceledException → DatabaseTimeoutException
+	/// - OperationCanceledException → DatabaseOperationCanceledException
 	/// - PostgresException (23505) → DatabaseConstraintException (Unique violation)
 	/// - PostgresException (23503) → DatabaseConstraintException (Foreign key violation)
 	/// - NpgsqlException → DatabaseConnectionException
@@ -62,7 +62,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<long>.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			return await ExecuteWithStrategyAsync<long>(
+			return await ExecuteSqlAsync<long>(
 				async (dbContext) =>
 				{
 					// Use PostgreSQL UPSERT for atomic insert-or-update
@@ -175,7 +175,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<IReadOnlyList<CharacterInventoryData>>.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			return await ExecuteWithStrategyAsync(
+			return await ExecuteSqlAsync(
 				async (dbContext) =>
 				{
 					var entities = await GetInventoryItemsQuery(dbContext, characterId, cancellationToken);

@@ -13,6 +13,12 @@ namespace FishMMO.Database.Npgsql
 	public interface INpgsqlDbContextFactory
 	{
 		/// <summary>
+		/// Gets settings for BaseService execution (transient retries/backoff/idempotency validation).
+		/// Loaded from appsettings.json by the factory.
+		/// </summary>
+		DatabaseServiceExecutionSettings ServiceExecutionSettings { get; }
+
+		/// <summary>
 		/// Gets the connection pool metrics for monitoring and diagnostics.
 		/// </summary>
 		ConnectionPoolMetrics PoolMetrics { get; }

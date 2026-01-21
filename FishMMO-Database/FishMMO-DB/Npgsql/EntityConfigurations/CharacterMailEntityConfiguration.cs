@@ -62,6 +62,19 @@ namespace FishMMO.Database.Npgsql.Entities
 			// Composite index for character + time queries
 			builder.HasIndex(e => new { e.CharacterID, e.TimeCreated })
 				.HasDatabaseName("IX_CharacterMail_CharacterID_TimeCreated");
+
+			// Foreign key relationships (prevent orphaned mail rows)
+			builder.HasOne<CharacterEntity>()
+				.WithMany()
+				.HasForeignKey(e => e.CharacterID)
+				.OnDelete(DeleteBehavior.Cascade)
+				.HasConstraintName("FK_CharacterMail_RecipientCharacterID");
+
+			builder.HasOne<CharacterEntity>()
+				.WithMany()
+				.HasForeignKey(e => e.SenderCharacterID)
+				.OnDelete(DeleteBehavior.Restrict)
+				.HasConstraintName("FK_CharacterMail_SenderCharacterID");
 		}
 	}
 }

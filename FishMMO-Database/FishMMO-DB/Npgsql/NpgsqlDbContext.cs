@@ -89,6 +89,7 @@ namespace FishMMO.Database.Npgsql
 		public DbSet<PartyEntity> Parties { get; set; }
 		public DbSet<PartyUpdateEntity> PartyUpdates { get; set; }
 		public DbSet<ChatEntity> Chat { get; set; }
+		public DbSet<ProcessedRequestEntity> ProcessedRequests { get; set; }
 
 		// game data (?)
 		//public DbSet<QuestEntity> Quests { get; set; }
@@ -188,6 +189,9 @@ namespace FishMMO.Database.Npgsql
 			modelBuilder.ApplyConfiguration(new PartyEntityConfiguration());
 			modelBuilder.ApplyConfiguration(new PartyUpdateEntityConfiguration());
 			modelBuilder.ApplyConfiguration(new CharacterPartyEntityConfiguration());
+
+			// Idempotency
+			modelBuilder.ApplyConfiguration(new ProcessedRequestEntityConfiguration());
 		}
 	}
 }

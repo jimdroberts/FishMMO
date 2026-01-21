@@ -58,7 +58,7 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
-			return await ExecuteWithStrategyAsync<long>(async dbContext =>
+			return await ExecuteSqlAsync<long>(async dbContext =>
 			{
 				// Use PostgreSQL UPSERT for atomic insert-or-update
 				var result = await dbContext.CharacterEquippedItems
@@ -75,10 +75,8 @@ namespace FishMMO.Database.Npgsql.Services
 					RETURNING id, character_id, template_id, slot, seed, amount")
 					.AsNoTracking()
 					.FirstOrDefaultAsync(cancellationToken);
-
-				ValidateEntityExists(result, "CharacterEquipment", $"{equipment.CharacterID}:{equipment.Slot}");
-
-				return result!.ID;
+				var existingEquipment = RequireEntityExists(result, "CharacterEquipment", $"{equipment.CharacterID}:{equipment.Slot}");
+				return existingEquipment.ID;
 			}, "SaveEquipment", cancellationToken);
 		}
 
@@ -174,7 +172,7 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
-			return await ExecuteWithStrategyAsync(async dbContext =>
+			return await ExecuteSqlAsync(async dbContext =>
 			{
 				var entities = await GetEquipmentQuery(dbContext, characterId, cancellationToken);
 				var equipment = entities.Select(e => new CharacterEquipmentData(

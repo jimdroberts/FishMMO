@@ -74,19 +74,6 @@ namespace FishMMO.Database
 		/// Limits maximum concurrent connections to the database.
 		/// </summary>
 		public int MaxPoolSize { get; set; } = 100;
-
-		/// <summary>
-		/// Gets or sets the maximum retry count for transient database failures (default: 3).
-		/// Number of times to retry a failed database operation before giving up.
-		/// </summary>
-		public int MaxRetryCount { get; set; } = 3;
-
-		/// <summary>
-		/// Gets or sets the maximum retry delay in seconds (default: 5).
-		/// Maximum time to wait between retry attempts for transient failures.
-		/// Uses exponential backoff: delay = min(2^attempt, MaxRetryDelay).
-		/// </summary>
-		public int MaxRetryDelaySeconds { get; set; } = 5;
 	}
 
 	/// <summary>

@@ -15,7 +15,7 @@ namespace FishMMO.Database.Npgsql.Services
 	/// <remarks>
 	/// <para><b>Exception Handling:</b></para>
 	/// <list type="bullet">
-	/// <item><description><see cref="OperationCanceledException"/> → <see cref="DatabaseTimeoutException"/></description></item>
+	/// <item><description><see cref="OperationCanceledException"/> → <see cref="DatabaseOperationCanceledException"/></description></item>
 	/// <item><description><see cref="PostgresException"/> (23505) → <see cref="DatabaseConstraintException"/> (Unique)</description></item>
 	/// <item><description><see cref="PostgresException"/> (23503) → <see cref="DatabaseConstraintException"/> (ForeignKey)</description></item>
 	/// <item><description><see cref="NpgsqlException"/> → <see cref="DatabaseConnectionException"/></description></item>
@@ -60,7 +60,7 @@ namespace FishMMO.Database.Npgsql.Services
 			if (string.IsNullOrWhiteSpace(name))
 				return DatabaseResult<bool>.Failure("VALIDATION_ERROR", "Invalid guild name");
 
-			return await ExecuteWithStrategyAsync(async context =>
+			return await ExecuteSqlAsync(async context =>
 			{
 				var upperName = name.ToUpper();
 				return await GuildExistsByNameQuery(context, upperName, cancellationToken);
@@ -73,7 +73,7 @@ namespace FishMMO.Database.Npgsql.Services
 			if (guildId <= 0)
 				return DatabaseResult<string>.Failure("VALIDATION_ERROR", "Invalid guild ID");
 
-			return await ExecuteWithStrategyAsync(async context =>
+			return await ExecuteSqlAsync(async context =>
 			{
 				var guild = await context.Guilds
 					.AsNoTracking()
@@ -93,19 +93,30 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<long?>.Failure("VALIDATION_ERROR", "Guild name is required");
 			}
 
-			return await ExecuteWithStrategyAsync(async context =>
+			return await ExecuteSqlAsync(async context =>
 			{
-				// Use atomic INSERT with RETURNING for proper retry strategy support
-				// Optimized: RETURNING only id for better performance
-				var result = await context.Guilds
+				// Idempotent by natural key (name): safe under transient retries.
+				var inserted = await context.Guilds
 					.FromSqlInterpolated($@"
 					INSERT INTO {TableName} (name, notice, time_created)
 					VALUES ({name}, {string.Empty}, CURRENT_TIMESTAMP)
+					ON CONFLICT (name) DO NOTHING
 					RETURNING id")
-						.AsNoTracking()
-						.FirstOrDefaultAsync(cancellationToken);
+					.AsNoTracking()
+					.FirstOrDefaultAsync(cancellationToken);
 
-				return (long?)result?.ID;
+				if (inserted?.ID > 0)
+				{
+					return (long?)inserted.ID;
+				}
+
+				var existingId = await context.Guilds
+					.AsNoTracking()
+					.Where(g => g.Name == name)
+					.Select(g => (long?)g.ID)
+					.FirstOrDefaultAsync(cancellationToken);
+
+				return existingId;
 			}, "CreateGuild", cancellationToken);
 		}
 
@@ -143,7 +154,7 @@ namespace FishMMO.Database.Npgsql.Services
 			if (string.IsNullOrWhiteSpace(name))
 				return DatabaseResult<GuildData?>.Failure("VALIDATION_ERROR", "Invalid guild name");
 
-			return await ExecuteWithStrategyAsync(async context =>
+			return await ExecuteSqlAsync(async context =>
 			{
 				var upperName = name.ToUpper();
 				var guild = await context.Guilds
@@ -159,7 +170,7 @@ namespace FishMMO.Database.Npgsql.Services
 			if (guildId <= 0)
 				return DatabaseResult<GuildData?>.Failure("VALIDATION_ERROR", "Invalid guild ID");
 
-			return await ExecuteWithStrategyAsync(async context =>
+			return await ExecuteSqlAsync(async context =>
 			{
 				var guild = await GetGuildByIdQuery(context, guildId, cancellationToken);
 

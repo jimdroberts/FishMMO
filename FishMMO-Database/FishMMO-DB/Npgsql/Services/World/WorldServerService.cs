@@ -15,7 +15,7 @@ namespace FishMMO.Database.Npgsql.Services
 	/// <remarks>
 	/// <para><b>Exception Handling Order:</b></para>
 	/// <list type="number">
-	/// <item>OperationCanceledException → DatabaseTimeoutException</item>
+	/// <item>OperationCanceledException → DatabaseOperationCanceledException</item>
 	/// <item>PostgresException (SqlState "23505") → DatabaseConstraintException (Unique)</item>
 	/// <item>PostgresException (SqlState "23503") → DatabaseConstraintException (ForeignKey)</item>
 	/// <item>NpgsqlException → DatabaseConnectionException</item>
@@ -61,7 +61,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<(long, WorldServerData)>.Failure("INVALID_PARAMETERS", "Server name and address must not be empty.");
 			}
 
-			return await ExecuteWithStrategyAsync<(long ServerId, WorldServerData ServerData)>(async (dbContext) =>
+			return await ExecuteSqlAsync<(long ServerId, WorldServerData ServerData)>(async (dbContext) =>
 			{
 				var result = await dbContext.WorldServers
 					.FromSqlInterpolated($@"
@@ -138,7 +138,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<WorldServerData>.Failure("INVALID_SERVER_ID", "Server ID must be greater than 0.");
 			}
 
-			return await ExecuteWithStrategyAsync(async dbContext =>
+			return await ExecuteSqlAsync(async dbContext =>
 			{
 				var server = await dbContext.WorldServers
 					.AsNoTracking()
@@ -158,7 +158,7 @@ namespace FishMMO.Database.Npgsql.Services
 			float idleTimeoutSeconds = 60.0f,
 			CancellationToken cancellationToken = default)
 		{
-			return await ExecuteWithStrategyAsync(async dbContext =>
+			return await ExecuteSqlAsync(async dbContext =>
 			{
 				// Calculate cutoff time in application for compiled query compatibility
 				// Database will use server time when query executes, avoiding clock skew

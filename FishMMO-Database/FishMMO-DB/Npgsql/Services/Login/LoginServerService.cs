@@ -35,7 +35,7 @@ namespace FishMMO.Database.Npgsql.Services
 					"Server name and address must not be empty.");
 			}
 
-			return await ExecuteWithStrategyAsync<LoginServerData>(async (dbContext) =>
+			return await ExecuteSqlAsync<LoginServerData>(async (dbContext) =>
 			{
 				var result = await dbContext.LoginServers
 					.FromSqlInterpolated($@"
@@ -123,7 +123,7 @@ namespace FishMMO.Database.Npgsql.Services
 					"Server ID must be greater than 0.");
 			}
 
-			return await ExecuteWithStrategyAsync(async dbContext =>
+			return await ExecuteSqlAsync(async dbContext =>
 			{
 				var server = await dbContext.LoginServers
 					.AsNoTracking()

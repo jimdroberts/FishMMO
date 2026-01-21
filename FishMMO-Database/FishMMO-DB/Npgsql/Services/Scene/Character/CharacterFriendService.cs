@@ -22,7 +22,7 @@ namespace FishMMO.Database.Npgsql.Services
 	/// - Friend retrieval and count queries
 	/// 
 	/// All database exceptions are caught and wrapped in appropriate DatabaseException types:
-	/// - OperationCanceledException → DatabaseTimeoutException
+	/// - OperationCanceledException → DatabaseOperationCanceledException
 	/// - PostgresException (23503) → DatabaseConstraintException (Foreign key violation)
 	/// - NpgsqlException → DatabaseConnectionException
 	/// - DbUpdateException → DatabaseQueryException
@@ -138,7 +138,7 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
-			return await ExecuteWithStrategyAsync(
+			return await ExecuteSqlAsync(
 				async (dbContext) =>
 				{
 					var entities = await GetFriendsQuery(dbContext, characterId, cancellationToken);
@@ -164,7 +164,7 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
-			return await ExecuteWithStrategyAsync(
+			return await ExecuteSqlAsync(
 				async (dbContext) =>
 				{
 					return await GetFriendCountQuery(dbContext, characterId, cancellationToken);

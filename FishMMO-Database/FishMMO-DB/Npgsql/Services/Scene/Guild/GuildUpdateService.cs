@@ -71,7 +71,7 @@ namespace FishMMO.Database.Npgsql.Services
 			if (guildIds == null || guildIds.Count == 0)
 				return DatabaseResult<List<GuildUpdateData>>.Success(new List<GuildUpdateData>());
 
-			return await ExecuteWithStrategyAsync(async dbContext =>
+			return await ExecuteSqlAsync(async dbContext =>
 			{
 				var updates = await dbContext.GuildUpdates
 					.AsNoTracking()

@@ -31,13 +31,11 @@ namespace FishMMO.Database.Npgsql.Entities
 				.HasMaxLength(200);
 
 			// Unique constraint: one character can only be in one guild
-			builder.HasIndex(e => new { e.CharacterID, e.GuildID })
+			builder.HasIndex(e => e.CharacterID)
 				.IsUnique()
-				.HasDatabaseName("IX_CharacterGuild_Character_Guild_Unique");
+				.HasDatabaseName("IX_CharacterGuild_CharacterID_Unique");
 
 			// Performance indexes for lookups
-			builder.HasIndex(e => e.CharacterID)
-				.HasDatabaseName("IX_CharacterGuild_CharacterID");
 
 			builder.HasIndex(e => e.GuildID)
 				.HasDatabaseName("IX_CharacterGuild_GuildID");

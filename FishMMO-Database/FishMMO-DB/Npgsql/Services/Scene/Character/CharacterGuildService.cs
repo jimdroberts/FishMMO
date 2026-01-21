@@ -24,7 +24,7 @@ namespace FishMMO.Database.Npgsql.Services
 	/// - Member count queries
 	/// 
 	/// All database exceptions are caught and wrapped in appropriate DatabaseException types:
-	/// - OperationCanceledException → DatabaseTimeoutException
+	/// - OperationCanceledException → DatabaseOperationCanceledException
 	/// - PostgresException (23503) → DatabaseConstraintException (Foreign key violation)
 	/// - NpgsqlException → DatabaseConnectionException
 	/// - DbUpdateException → DatabaseQueryException
@@ -93,7 +93,7 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 
 			// Use transaction to atomically check capacity and insert/update membership
-			var result = await ExecuteInTransactionAsync(async (dbContext, transaction) =>
+			var result = await ExecuteSqlAsync(async (dbContext, transaction) =>
 			{
 				// Check if character is already in this guild (UPDATE case)
 				var existingMembership = await dbContext.CharacterGuilds
@@ -203,7 +203,7 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
-			return await ExecuteWithStrategyAsync<CharacterGuildData?>(async dbContext =>
+			return await ExecuteSqlAsync<CharacterGuildData?>(async dbContext =>
 			{
 				var entity = await GetGuildMembershipQuery(dbContext, characterId, cancellationToken);
 				if (entity == null)
@@ -229,7 +229,7 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid guild ID. Guild ID must be greater than 0.");
 			}
 
-			return await ExecuteWithStrategyAsync(
+			return await ExecuteSqlAsync(
 				async (dbContext) =>
 				{
 					var entities = await GetGuildMembersQuery(dbContext, guildId, cancellationToken);
@@ -257,7 +257,7 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid guild ID. Guild ID must be greater than 0.");
 			}
 
-			return await ExecuteWithStrategyAsync(
+			return await ExecuteSqlAsync(
 				async (dbContext) =>
 				{
 					return await GetGuildMemberCountQuery(dbContext, guildId, cancellationToken);

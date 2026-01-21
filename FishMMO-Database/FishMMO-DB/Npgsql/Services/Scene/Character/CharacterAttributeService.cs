@@ -108,7 +108,7 @@ namespace FishMMO.Database.Npgsql.Services
 					"Character ID must be greater than 0.");
 			}
 
-			return await ExecuteWithStrategyAsync(async dbContext =>
+			return await ExecuteSqlAsync(async dbContext =>
 			{
 				var entities = await GetAttributesQuery(dbContext, characterId, cancellationToken);
 				var attributes = entities.Select(a => new CharacterAttributeData(

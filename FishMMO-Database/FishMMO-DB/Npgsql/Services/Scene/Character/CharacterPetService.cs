@@ -81,7 +81,7 @@ namespace FishMMO.Database.Npgsql.Services
 			var petsToInsert = petList.Where(p => p.ID == 0).ToList();
 
 			// Wrap both operations in transaction for atomicity
-			var transactionResult = await ExecuteInTransactionAsync(async (dbContext, transaction) =>
+			var transactionResult = await ExecuteSqlAsync(async (dbContext, transaction) =>
 			{
 				// Handle existing pets with atomic UPDATE by ID
 				if (petsToUpdate.Count > 0)
@@ -172,7 +172,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<CharacterPetData?>.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			return await ExecuteWithStrategyAsync<CharacterPetData?>(async dbContext =>
+			return await ExecuteSqlAsync<CharacterPetData?>(async dbContext =>
 			{
 				var entity = await GetPetQuery(dbContext, characterId, cancellationToken);
 				if (entity == null)
@@ -196,7 +196,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<CharacterPetData?>.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			return await ExecuteWithStrategyAsync<CharacterPetData?>(async dbContext =>
+			return await ExecuteSqlAsync<CharacterPetData?>(async dbContext =>
 			{
 				var entity = await GetSpawnedPetQuery(dbContext, characterId, cancellationToken);
 				if (entity == null)

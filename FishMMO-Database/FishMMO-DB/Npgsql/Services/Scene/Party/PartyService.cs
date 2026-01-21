@@ -35,16 +35,20 @@ namespace FishMMO.Database.Npgsql.Services
 			if (partyId <= 0)
 				return DatabaseResult<bool>.Success(false);
 
-			return await ExecuteWithStrategyAsync(async dbContext =>
+			return await ExecuteSqlAsync(async dbContext =>
 			{
 				return await PartyExistsQuery(dbContext, partyId, cancellationToken);
 			}, "CheckPartyExists", cancellationToken);
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<long>> CreateAsync(CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<long>> CreateAsync(Guid requestId, long accountId, CancellationToken cancellationToken = default)
 		{
-			return await ExecuteWithStrategyAsync(async dbContext =>
+			return await ExecuteSqlAsync(
+				requestId,
+				accountId,
+				"CreateParty",
+				async (dbContext, _) =>
 			{
 				// Use atomic INSERT with RETURNING for proper retry strategy support
 				// Optimized: RETURNING only id for better performance
@@ -57,7 +61,8 @@ namespace FishMMO.Database.Npgsql.Services
 						.FirstOrDefaultAsync(cancellationToken);
 
 				return result?.ID ?? 0;
-			}, "CreateParty", cancellationToken);
+			},
+				cancellationToken);
 		}
 
 		/// <inheritdoc/>
@@ -96,15 +101,13 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<PartyData>.Failure("INVALID_PARTY_ID", "Party ID must be greater than zero.");
 			}
 
-			return await ExecuteWithStrategyAsync(async dbContext =>
+			return await ExecuteSqlAsync(async dbContext =>
 			{
 				var party = await dbContext.Parties
 					.AsNoTracking()
 					.FirstOrDefaultAsync(p => p.ID == partyId, cancellationToken);
-
-				ValidateEntityExists(party, "Party", partyId.ToString());
-
-				return MapEntityToDto(party!);
+				var existingParty = RequireEntityExists(party, "Party", partyId);
+				return MapEntityToDto(existingParty);
 			}, "LoadParty", cancellationToken);
 		}
 

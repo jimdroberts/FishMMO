@@ -72,7 +72,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<int>.Failure("VALIDATION_ERROR", "Invalid account");
 			}
 
-			return await ExecuteWithStrategyAsync(async dbContext =>
+			return await ExecuteSqlAsync(async dbContext =>
 			{
 				return await dbContext.Characters
 					.AsNoTracking()
@@ -94,7 +94,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<CharacterOperationResult>.Success(CharacterOperationResult.DatabaseError);
 			}
 
-			return await ExecuteWithStrategyAsync<CharacterOperationResult>(async dbContext =>
+			return await ExecuteSqlAsync<CharacterOperationResult>(async dbContext =>
 			{
 				var nameLower = characterData.Name.ToLower();
 
@@ -260,7 +260,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<CharacterData?>.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			return await ExecuteWithStrategyAsync(async dbContext =>
+			return await ExecuteSqlAsync(async dbContext =>
 			{
 				// Use compiled query for hot path performance
 				var entity = await GetCharacterByIdQuery(dbContext, characterId, cancellationToken);
@@ -282,7 +282,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<IReadOnlyList<CharacterData>>.Failure("VALIDATION_ERROR", "Account name is required");
 			}
 
-			return await ExecuteWithStrategyAsync(async dbContext =>
+			return await ExecuteSqlAsync(async dbContext =>
 			{
 				var entities = await GetCharactersByAccountQuery(dbContext, account, cancellationToken);
 
@@ -298,7 +298,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<CharacterData?>.Failure("VALIDATION_ERROR", "Character name is required");
 			}
 
-			return await ExecuteWithStrategyAsync(async dbContext =>
+			return await ExecuteSqlAsync(async dbContext =>
 			{
 				var nameLower = name.ToLower();
 				var entity = await GetCharacterByNameQuery(dbContext, nameLower, cancellationToken);
@@ -328,7 +328,7 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 
 			// Use explicit transaction with row-level locking to prevent race conditions
-			var transactionResult = await ExecuteInTransactionAsync(async (dbContext, transaction) =>
+			var transactionResult = await ExecuteSqlAsync(async (dbContext, transaction) =>
 			{
 				// Use CTE to combine SELECT FOR UPDATE and UPDATE into single atomic operation
 				// This ensures the lock is held throughout the entire update

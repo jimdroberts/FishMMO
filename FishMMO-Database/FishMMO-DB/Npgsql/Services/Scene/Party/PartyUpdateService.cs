@@ -71,7 +71,7 @@ namespace FishMMO.Database.Npgsql.Services
 			if (partyIds == null || partyIds.Count == 0)
 				return DatabaseResult<List<PartyUpdateData>>.Success(new List<PartyUpdateData>());
 
-			return await ExecuteWithStrategyAsync(async dbContext =>
+			return await ExecuteSqlAsync(async dbContext =>
 			{
 				var updates = await dbContext.PartyUpdates
 					.AsNoTracking()

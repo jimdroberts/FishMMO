@@ -23,7 +23,7 @@ namespace FishMMO.Database.Npgsql.Services
 	/// - Known ability retrieval
 	/// 
 	/// All database exceptions are caught and wrapped in appropriate DatabaseException types:
-	/// - OperationCanceledException → DatabaseTimeoutException
+	/// - OperationCanceledException → DatabaseOperationCanceledException
 	/// - PostgresException (23505) → DatabaseConstraintException (Unique violation)
 	/// - PostgresException (23503) → DatabaseConstraintException (Foreign key violation)
 	/// - NpgsqlException → DatabaseConnectionException
@@ -150,7 +150,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<IReadOnlyList<CharacterKnownAbilityData>>.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			return await ExecuteWithStrategyAsync<IReadOnlyList<CharacterKnownAbilityData>>(
+			return await ExecuteSqlAsync<IReadOnlyList<CharacterKnownAbilityData>>(
 				async (dbContext) =>
 				{
 					var entities = await GetKnownAbilitiesQuery(dbContext, characterId, cancellationToken);

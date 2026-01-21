@@ -23,7 +23,7 @@ namespace FishMMO.Database.Npgsql.Services
 	/// - Party membership deletion
 	/// - Party membership and member retrieval
 	/// 
-	/// All database operations use BaseService.ExecuteWithStrategyAsync for:
+	/// All database operations use BaseService.ExecuteSqlAsync for:
 	/// - Automatic execution strategy with transient failure retry
 	/// - Centralized exception handling and mapping
 	/// - Consistent DatabaseResult pattern
@@ -84,7 +84,7 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 
 			// Use transaction to atomically check capacity and insert/update membership
-			var result = await ExecuteInTransactionAsync(async (dbContext, transaction) =>
+			var result = await ExecuteSqlAsync(async (dbContext, transaction) =>
 			{
 				// Check if character is already in this party (UPDATE case)
 				var existingMembership = await dbContext.CharacterParties
@@ -188,7 +188,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<CharacterPartyData?>.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			return await ExecuteWithStrategyAsync(async dbContext =>
+			return await ExecuteSqlAsync(async dbContext =>
 			{
 				var entity = await GetPartyMembershipQuery(dbContext, characterId, cancellationToken);
 				if (entity == null)
@@ -212,7 +212,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<IReadOnlyList<CharacterPartyData>>.Failure("VALIDATION_ERROR", "Invalid party ID");
 			}
 
-			return await ExecuteWithStrategyAsync(async dbContext =>
+			return await ExecuteSqlAsync(async dbContext =>
 			{
 				var entities = await GetPartyMembersQuery(dbContext, partyId, cancellationToken);
 				var members = entities.Select(p => new CharacterPartyData(
@@ -235,7 +235,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<int>.Failure("VALIDATION_ERROR", "Invalid party ID");
 			}
 
-			return await ExecuteWithStrategyAsync(async dbContext =>
+			return await ExecuteSqlAsync(async dbContext =>
 			{
 				return await GetPartyMemberCountQuery(dbContext, partyId, cancellationToken);
 			}, "GetPartyMemberCount", cancellationToken);

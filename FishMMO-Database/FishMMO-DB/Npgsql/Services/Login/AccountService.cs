@@ -62,7 +62,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteWithStrategyAsync(async dbContext =>
+			return await ExecuteSqlAsync(async dbContext =>
 			{
 				var account = await dbContext.Accounts
 					.AsNoTracking()
@@ -110,33 +110,31 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			try
-			{
-				var result = await ExecuteSqlAsync(
-					$@"INSERT INTO {TableName} 
-						(name, salt, verifier, access_level, created, lastlogin) 
-						VALUES 
-							({accountName}, {salt}, {verifier}, {(byte)AccessLevel.Player}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-						ON CONFLICT (name) DO NOTHING",
-					"CreateAccount",
-					entityName: "Account",
-					entityId: accountName,
-					requireRowsAffected: true,
-					cancellationToken: cancellationToken);
+			var result = await ExecuteSqlAsync(
+				$@"INSERT INTO {TableName} 
+					(name, salt, verifier, access_level, created, lastlogin) 
+				VALUES 
+					({accountName}, {salt}, {verifier}, {(byte)AccessLevel.Player}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+				ON CONFLICT (name) DO NOTHING",
+				"CreateAccount",
+				cancellationToken: cancellationToken);
 
-				return result.IsSuccess
-					? DatabaseResult.Success()
-					: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
-			}
-			catch (DatabaseEntityNotFoundException)
+			if (!result.IsSuccess)
 			{
-				// Convert not found to constraint violation for INSERT ... ON CONFLICT DO NOTHING
+				return DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			}
+
+			// INSERT ... ON CONFLICT DO NOTHING affects 0 rows on duplicate.
+			if (result.Data == 0)
+			{
 				return DatabaseResult.FromException(
 					new DatabaseConstraintException(
 						ConstraintType.Unique,
 						"accounts_name_key",
 						"An account with this name already exists."));
 			}
+
+			return DatabaseResult.Success();
 		}
 
 		/// <inheritdoc/>
@@ -152,22 +150,14 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			var result = await ExecuteWithStrategyAsync(async dbContext =>
-			{
-				return await GetAccountForLoginQuery(dbContext, accountName, cancellationToken);
-			}, "GetAccountForLogin", cancellationToken);
+			var result = await ExecuteSqlAsync(async dbContext =>
+				await GetAccountForLoginQuery(dbContext, accountName, cancellationToken),
+				"GetAccountForLogin",
+				cancellationToken);
 
-			// Handle business logic errors with specific error codes
 			if (!result.IsSuccess)
 			{
-				return DatabaseResult<AccountData>.FromException(
-					new DatabaseQueryException(
-						"GetAccountForLogin",
-						result.ErrorMessage,
-						result.ErrorMessage,
-						result.IsTransient,
-						null,
-						null));
+				return DatabaseResult<AccountData>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 			}
 
 			var accountEntity = result.Data;
@@ -232,7 +222,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<bool>.Success(false);
 			}
 
-			return await ExecuteWithStrategyAsync(async dbContext =>
+			return await ExecuteSqlAsync(async dbContext =>
 			{
 				// Use compiled query for hot path performance
 				return await AccountExistsByNameQuery(dbContext, accountName, cancellationToken);
@@ -251,9 +241,9 @@ namespace FishMMO.Database.Npgsql.Services
 		/// - Maximum length: 32 characters
 		/// 
 		/// This validation is performed before any database operations to prevent
-		/// unnecessary database calls and to provide consistent validation across all methods.
+		/// unnecessary queries and reduce enumeration risk.
 		/// </remarks>
-		private bool IsValidUsername(string username)
+		private static bool IsValidUsername(string username)
 		{
 			return !string.IsNullOrWhiteSpace(username) &&
 				   username.Length >= 3 &&
@@ -269,14 +259,8 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <remarks>
 		/// This method performs a shallow copy of entity data to a DTO.
 		/// All properties are value types or immutable strings, so deep cloning is not required.
-		/// 
-		/// The DTO pattern is used to:
-		/// - Decouple database entities from business logic
-		/// - Prevent accidental entity modifications
-		/// - Enable entity disposal without affecting returned data
-		/// - Provide a clean API contract for service consumers
 		/// </remarks>
-		private AccountData MapEntityToDto(AccountEntity entity)
+		private static AccountData MapEntityToDto(AccountEntity entity)
 		{
 			return new AccountData(
 				name: entity.Name,

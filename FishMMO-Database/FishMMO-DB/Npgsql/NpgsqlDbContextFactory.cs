@@ -22,8 +22,7 @@ namespace FishMMO.Database.Npgsql
 		private readonly string schema;
 		private readonly bool enableLogging;
 		private readonly int commandTimeout;
-		private readonly int maxRetryCount;
-		private readonly int maxRetryDelaySeconds;
+		private readonly DatabaseServiceExecutionSettings serviceExecutionSettings;
 		private readonly ConnectionPoolMetrics poolMetrics;
 		private readonly int maxPoolSize;
 		private readonly QueryPerformanceTracker performanceTracker;
@@ -74,6 +73,8 @@ namespace FishMMO.Database.Npgsql
 				.AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
 				.Build();
 
+			serviceExecutionSettings = LoadServiceExecutionSettings(configuration);
+
 			string database = configuration.GetSection("Npgsql")["Database"] ?? "fish_mmo_postgresql";
 			schema = database;
 			string userID = configuration.GetSection("Npgsql")["Username"] ?? "user";
@@ -86,8 +87,6 @@ namespace FishMMO.Database.Npgsql
 			int maxPoolSize = 100;
 			int configTimeout = 10;
 			int connectionTimeout = 15; // Default connection timeout
-			int maxRetryCount = 3; // Default retry count
-			int maxRetryDelaySeconds = 5; // Default retry delay
 
 			if (int.TryParse(configuration.GetSection("Npgsql")["MinPoolSize"], out int minSize))
 				minPoolSize = minSize;
@@ -97,18 +96,10 @@ namespace FishMMO.Database.Npgsql
 				configTimeout = cfgTimeout;
 			if (int.TryParse(configuration.GetSection("Npgsql")["ConnectionTimeout"], out int connTimeout))
 				connectionTimeout = connTimeout;
-			if (int.TryParse(configuration.GetSection("Npgsql")["MaxRetryCount"], out int retryCount))
-				maxRetryCount = retryCount;
-			if (int.TryParse(configuration.GetSection("Npgsql")["MaxRetryDelaySeconds"], out int retryDelay))
-				maxRetryDelaySeconds = retryDelay;
 
 			// Use provided timeout or fall back to config
 			if (this.commandTimeout == 10 && configTimeout != 10)
 				this.commandTimeout = configTimeout;
-
-			// Store retry configuration
-			this.maxRetryCount = maxRetryCount;
-			this.maxRetryDelaySeconds = maxRetryDelaySeconds;
 
 			// Build connection string with pooling and separate timeout configuration
 			// Timeout = time to establish connection, Command Timeout = time for query execution
@@ -135,10 +126,42 @@ namespace FishMMO.Database.Npgsql
 			performanceTracker = new QueryPerformanceTracker(perfConfig);
 		}
 
+		private static DatabaseServiceExecutionSettings LoadServiceExecutionSettings(IConfiguration configuration)
+		{
+			var settings = new DatabaseServiceExecutionSettings();
+			var section = configuration.GetSection("DatabaseServiceExecution");
+
+			if (int.TryParse(section["MaxTransientRetryCount"], out var maxTransientRetryCount) && maxTransientRetryCount >= 0)
+				settings.MaxTransientRetryCount = maxTransientRetryCount;
+
+			if (int.TryParse(section["BaseRetryDelayMs"], out var baseRetryDelayMs) && baseRetryDelayMs >= 0)
+				settings.BaseRetryDelayMs = baseRetryDelayMs;
+
+			if (int.TryParse(section["MaxRetryDelayMs"], out var maxRetryDelayMs) && maxRetryDelayMs >= 0)
+				settings.MaxRetryDelayMs = maxRetryDelayMs;
+
+			if (int.TryParse(section["MaxIdempotencyOperationNameLength"], out var maxIdempotencyOperationNameLength) && maxIdempotencyOperationNameLength > 0)
+				settings.MaxIdempotencyOperationNameLength = maxIdempotencyOperationNameLength;
+
+			if (int.TryParse(section["ProcessedRequestsRetentionDays"], out var processedRequestsRetentionDays) && processedRequestsRetentionDays >= 0)
+				settings.ProcessedRequestsRetentionDays = processedRequestsRetentionDays;
+
+			if (int.TryParse(section["ProcessedRequestsCleanupMaxRows"], out var processedRequestsCleanupMaxRows) && processedRequestsCleanupMaxRows > 0)
+				settings.ProcessedRequestsCleanupMaxRows = processedRequestsCleanupMaxRows;
+
+			if (int.TryParse(section["ProcessedRequestsCleanupMinIntervalMinutes"], out var processedRequestsCleanupMinIntervalMinutes) && processedRequestsCleanupMinIntervalMinutes >= 0)
+				settings.ProcessedRequestsCleanupMinIntervalMinutes = processedRequestsCleanupMinIntervalMinutes;
+
+			return settings;
+		}
+
 		/// <summary>
 		/// Gets the connection pool metrics for monitoring and diagnostics.
 		/// </summary>
 		public ConnectionPoolMetrics PoolMetrics => poolMetrics;
+
+		/// <inheritdoc />
+		public DatabaseServiceExecutionSettings ServiceExecutionSettings => serviceExecutionSettings;
 
 		/// <summary>
 		/// Gets the configured maximum pool size.
@@ -164,11 +187,6 @@ namespace FishMMO.Database.Npgsql
 					.UseNpgsql(connectionString, npgsqlOptions =>
 					{
 						npgsqlOptions.CommandTimeout(commandTimeout);
-						// Use configurable retry policy for transient failure handling
-						npgsqlOptions.EnableRetryOnFailure(
-							maxRetryCount: maxRetryCount,
-							maxRetryDelay: TimeSpan.FromSeconds(maxRetryDelaySeconds),
-							errorCodesToAdd: null);
 					});
 
 				if (enableLogging)

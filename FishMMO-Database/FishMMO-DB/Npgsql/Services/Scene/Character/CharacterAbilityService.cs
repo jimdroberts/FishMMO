@@ -56,7 +56,7 @@ namespace FishMMO.Database.Npgsql.Services
 					"Character ID must be greater than 0.");
 			}
 
-			return await ExecuteWithStrategyAsync(async dbContext =>
+			return await ExecuteSqlAsync(async dbContext =>
 			{
 				return await GetCountQuery(dbContext, characterId, cancellationToken);
 			}, "GetCharacterAbilityCount", cancellationToken);
@@ -72,7 +72,7 @@ namespace FishMMO.Database.Npgsql.Services
 					"Character ID must be greater than 0.");
 			}
 
-			return await ExecuteWithStrategyAsync(async dbContext =>
+			return await ExecuteSqlAsync(async dbContext =>
 			{
 				// Use atomic UPSERT with RETURNING for thread safety and proper retry strategy support
 				var events = abilityData.AbilityEvents ?? new List<int>();
@@ -108,7 +108,7 @@ namespace FishMMO.Database.Npgsql.Services
 			var existingItems = list.Where(a => a.ID > 0).ToList();
 
 			// Wrap both operations in transaction for atomicity
-			var transactionResult = await ExecuteInTransactionAsync(async (dbContext, transaction) =>
+			var transactionResult = await ExecuteSqlAsync(async (dbContext, transaction) =>
 			{
 				// Handle new abilities with atomic INSERT using ON CONFLICT
 				if (newItems.Any())
@@ -227,7 +227,7 @@ namespace FishMMO.Database.Npgsql.Services
 					"Character ID must be greater than 0.");
 			}
 
-			return await ExecuteWithStrategyAsync(async dbContext =>
+			return await ExecuteSqlAsync(async dbContext =>
 			{
 				var entities = await GetAbilitiesQuery(dbContext, characterId, cancellationToken);
 				var abilities = entities.Select(a => new CharacterAbilityData(

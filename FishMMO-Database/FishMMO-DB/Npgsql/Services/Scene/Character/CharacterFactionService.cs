@@ -22,7 +22,7 @@ namespace FishMMO.Database.Npgsql.Services
 	/// - Faction retrieval
 	/// 
 	/// All database exceptions are caught and wrapped in appropriate DatabaseException types:
-	/// - OperationCanceledException → DatabaseTimeoutException
+	/// - OperationCanceledException → DatabaseOperationCanceledException
 	/// - PostgresException (23505) → DatabaseConstraintException (Unique violation)
 	/// - PostgresException (23503) → DatabaseConstraintException (Foreign key violation)
 	/// - NpgsqlException → DatabaseConnectionException
@@ -119,7 +119,7 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
-			return await ExecuteWithStrategyAsync<IReadOnlyList<CharacterFactionData>>(async dbContext =>
+			return await ExecuteSqlAsync<IReadOnlyList<CharacterFactionData>>(async dbContext =>
 			{
 				var entities = await GetFactionsQuery(dbContext, characterId, cancellationToken);
 				var factions = entities.Select(f => new CharacterFactionData(

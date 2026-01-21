@@ -32,13 +32,11 @@ namespace FishMMO.Database.Npgsql.Entities
 				.HasDefaultValue(1.0f);
 
 			// Unique constraint: one character can only be in one party
-			builder.HasIndex(e => new { e.CharacterID, e.PartyID })
+			builder.HasIndex(e => e.CharacterID)
 				.IsUnique()
-				.HasDatabaseName("IX_CharacterParty_Character_Party_Unique");
+				.HasDatabaseName("IX_CharacterParty_CharacterID_Unique");
 
 			// Performance indexes for lookups
-			builder.HasIndex(e => e.CharacterID)
-				.HasDatabaseName("IX_CharacterParty_CharacterID");
 
 			builder.HasIndex(e => e.PartyID)
 				.HasDatabaseName("IX_CharacterParty_PartyID");

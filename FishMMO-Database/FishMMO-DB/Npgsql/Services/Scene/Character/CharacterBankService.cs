@@ -58,7 +58,7 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
-			return await ExecuteWithStrategyAsync<long>(async dbContext =>
+			return await ExecuteSqlAsync<long>(async dbContext =>
 			{
 				// Use PostgreSQL UPSERT for atomic insert-or-update
 				var result = await dbContext.CharacterBankItems
@@ -75,10 +75,8 @@ namespace FishMMO.Database.Npgsql.Services
 					RETURNING id, character_id, template_id, slot, seed, amount")
 						.AsNoTracking()
 						.FirstOrDefaultAsync(cancellationToken);
-
-				ValidateEntityExists(result, "CharacterBankItem", $"{item.CharacterID}:{item.Slot}");
-
-				return result!.ID;
+				var existingItem = RequireEntityExists(result, "CharacterBankItem", $"{item.CharacterID}:{item.Slot}");
+				return existingItem.ID;
 			}, "SaveBankItem", cancellationToken);
 		}
 
@@ -167,7 +165,14 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<IReadOnlyList<CharacterBankData>>> GetBankItemsAsync(long characterId, CancellationToken cancellationToken = default)
 		{
-			return await ExecuteWithStrategyAsync(async dbContext =>
+			if (characterId == 0)
+			{
+				return DatabaseResult<IReadOnlyList<CharacterBankData>>.Failure(
+					"VALIDATION_ERROR",
+					"Invalid character ID. Character ID must be greater than 0.");
+			}
+
+			return await ExecuteSqlAsync(async dbContext =>
 			{
 				var entities = await GetBankItemsQuery(dbContext, characterId, cancellationToken);
 				var items = entities.Select(i => new CharacterBankData(

@@ -1,3 +1,4 @@
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Database.Data;
@@ -44,18 +45,19 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		Task<DatabaseResult<bool>> ExistsAsync(long partyId, CancellationToken cancellationToken = default);
 
 		/// <summary>
-		/// Creates a new party.
+		/// Creates a new party (idempotent).
 		/// </summary>
+		/// <param name="requestId">Client-provided idempotency key.</param>
+		/// <param name="accountId">Account id associated with the request.</param>
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>
 		/// A <see cref="DatabaseResult{T}"/> containing the party ID on success,
 		/// or a <see cref="DatabaseException"/> on failure.
 		/// </returns>
 		/// <remarks>
-		/// Uses SaveChangesAsync with execution strategy wrapping to ensure transient database failures
-		/// are automatically retried. Creates an empty party entity.
+		/// This method requires an idempotency key to prevent duplicate party creation on retries.
 		/// </remarks>
-		Task<DatabaseResult<long>> CreateAsync(CancellationToken cancellationToken = default);
+		Task<DatabaseResult<long>> CreateAsync(Guid requestId, long accountId, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Deletes a party by ID.

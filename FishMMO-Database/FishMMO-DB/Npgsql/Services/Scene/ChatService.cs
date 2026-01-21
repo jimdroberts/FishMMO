@@ -71,7 +71,7 @@ namespace FishMMO.Database.Npgsql.Services
 			if (amount <= 0)
 				return DatabaseResult<List<ChatData>>.Success(new List<ChatData>());
 
-			return await ExecuteWithStrategyAsync(async dbContext =>
+			return await ExecuteSqlAsync(async dbContext =>
 			{
 				// Filter out local messages for the specified scene server
 				var localChannels = new byte[]

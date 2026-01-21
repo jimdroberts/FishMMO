@@ -23,7 +23,7 @@ namespace FishMMO.Database.Npgsql.Services
 	/// - Hotkey retrieval and count queries
 	/// 
 	/// All database exceptions are caught and wrapped in appropriate DatabaseException types:
-	/// - OperationCanceledException → DatabaseTimeoutException
+	/// - OperationCanceledException → DatabaseOperationCanceledException
 	/// - PostgresException (23505) → DatabaseConstraintException (Unique violation)
 	/// - PostgresException (23503) → DatabaseConstraintException (Foreign key violation)
 	/// - NpgsqlException → DatabaseConnectionException
@@ -72,7 +72,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<long>.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			return await ExecuteWithStrategyAsync<long>(
+			return await ExecuteSqlAsync<long>(
 				async (dbContext) =>
 				{
 					// Use PostgreSQL UPSERT for atomic insert-or-update
@@ -162,7 +162,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<IReadOnlyList<CharacterHotkeyData>>.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			return await ExecuteWithStrategyAsync(
+			return await ExecuteSqlAsync(
 				async (dbContext) =>
 				{
 					var entities = await GetHotkeysQuery(dbContext, characterId, cancellationToken);
@@ -188,7 +188,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<int>.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			return await ExecuteWithStrategyAsync(
+			return await ExecuteSqlAsync(
 				async (dbContext) =>
 				{
 					return await GetHotkeyCountQuery(dbContext, characterId, cancellationToken);

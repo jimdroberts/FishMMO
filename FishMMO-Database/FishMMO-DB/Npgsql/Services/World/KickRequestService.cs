@@ -79,7 +79,7 @@ namespace FishMMO.Database.Npgsql.Services
 			if (amount <= 0)
 				return DatabaseResult<List<KickRequestData>>.Success(new List<KickRequestData>());
 
-			return await ExecuteWithStrategyAsync(async dbContext =>
+			return await ExecuteSqlAsync(async dbContext =>
 			{
 				var requests = await dbContext.KickRequests
 					.AsNoTracking()
