@@ -100,13 +100,15 @@ namespace FishMMO.Database.Npgsql.Services
 					.AsNoTracking()
 					.FirstOrDefaultAsync(g => g.CharacterID == guildData.CharacterID, cancellationToken);
 
-				// If this is a new guild join (not an UPDATE), validate capacity
-				if (existingMembership == null || existingMembership.GuildID != guildData.GuildID)
+				// Refined check: determine if capacity validation is needed
+				bool needsCapacityCheck = existingMembership == null || existingMembership.GuildID != guildData.GuildID;
+
+				if (needsCapacityCheck)
 				{
-					// Lock guild rows to prevent concurrent capacity violations
-					// Using SELECT ... FOR UPDATE to acquire row-level locks
+					// Lock guild row to prevent concurrent capacity violations
+					// Using SELECT ... FOR UPDATE to acquire row-level lock
 					var guildEntity = await dbContext.Guilds
-						.Where(g => g.ID == guildData.GuildID)
+						.FromSqlInterpolated($"SELECT * FROM guilds WHERE id = {guildData.GuildID} FOR UPDATE")
 						.FirstOrDefaultAsync(cancellationToken);
 
 					if (guildEntity == null)
@@ -116,7 +118,7 @@ namespace FishMMO.Database.Npgsql.Services
 							$"Guild with ID {guildData.GuildID} does not exist.");
 					}
 
-					// Count current members (within same transaction, so count is consistent)
+					// Count current members (lock is held, preventing concurrent inserts)
 					var currentCount = await dbContext.CharacterGuilds
 						.Where(g => g.GuildID == guildData.GuildID)
 						.CountAsync(cancellationToken);

@@ -14,10 +14,29 @@ namespace FishMMO.Database.Npgsql.Monitoring.Diagnostics
 	public sealed class QueryPerformanceTracker
 	{
 		private readonly QueryPerformanceConfiguration configuration;
-		private readonly ConcurrentDictionary<string, QueryMetrics> operationMetrics;
-		private readonly Random random;
+		private readonly ConcurrentDictionary<string, (QueryMetrics Metrics, long LastAccessTicks)> operationMetrics;
 		private volatile bool isEnabled;
 		private volatile TrackingLevel currentLevel;
+
+		/// <summary>
+		/// Thread-local random instance for thread-safe sampling.
+		/// Each thread gets its own Random instance to avoid contention.
+		/// </summary>
+		[ThreadStatic]
+		private static Random threadRandom;
+
+		/// <summary>
+		/// Gets or creates a thread-local Random instance.
+		/// </summary>
+		private static Random ThreadRandom
+		{
+			get
+			{
+				if (threadRandom == null)
+					threadRandom = new Random(Guid.NewGuid().GetHashCode());
+				return threadRandom;
+			}
+		}
 
 		/// <summary>
 		/// Event raised when a slow query is detected.
@@ -56,8 +75,7 @@ namespace FishMMO.Database.Npgsql.Monitoring.Diagnostics
 		public QueryPerformanceTracker(QueryPerformanceConfiguration configuration = null)
 		{
 			this.configuration = configuration ?? new QueryPerformanceConfiguration();
-			this.operationMetrics = new ConcurrentDictionary<string, QueryMetrics>();
-			this.random = new Random();
+			this.operationMetrics = new ConcurrentDictionary<string, (QueryMetrics, long)>();
 			this.isEnabled = this.configuration.Enabled;
 			this.currentLevel = this.configuration.Level;
 		}
@@ -120,12 +138,19 @@ namespace FishMMO.Database.Npgsql.Monitoring.Diagnostics
 
 		/// <summary>
 		/// Gets metrics for a specific operation.
+		/// Updates last access time for LRU tracking.
 		/// </summary>
 		/// <param name="operationName">The operation name.</param>
 		/// <returns>The metrics or null if not found.</returns>
 		public QueryMetrics? GetMetrics(string operationName)
 		{
-			return operationMetrics.TryGetValue(operationName, out var metrics) ? metrics : null;
+			if (operationMetrics.TryGetValue(operationName, out var entry))
+			{
+				// Update last access time for LRU
+				operationMetrics[operationName] = (entry.Metrics, DateTime.UtcNow.Ticks);
+				return entry.Metrics;
+			}
+			return null;
 		}
 
 		/// <summary>
@@ -134,7 +159,7 @@ namespace FishMMO.Database.Npgsql.Monitoring.Diagnostics
 		/// <returns>Collection of all operation metrics.</returns>
 		public IReadOnlyCollection<QueryMetrics> GetAllMetrics()
 		{
-			return operationMetrics.Values.ToList();
+			return operationMetrics.Values.Select(v => v.Metrics).ToList();
 		}
 
 		/// <summary>
@@ -145,6 +170,7 @@ namespace FishMMO.Database.Npgsql.Monitoring.Diagnostics
 		public IReadOnlyCollection<QueryMetrics> GetSlowestOperations(int count)
 		{
 			return operationMetrics.Values
+				.Select(v => v.Metrics)
 				.OrderByDescending(m => m.AverageMs)
 				.Take(count)
 				.ToList();
@@ -158,6 +184,7 @@ namespace FishMMO.Database.Npgsql.Monitoring.Diagnostics
 		public IReadOnlyCollection<QueryMetrics> GetMostSlowQueries(int count)
 		{
 			return operationMetrics.Values
+				.Select(v => v.Metrics)
 				.Where(m => m.SlowQueryCount > 0)
 				.OrderByDescending(m => m.SlowQueryCount)
 				.Take(count)
@@ -169,9 +196,9 @@ namespace FishMMO.Database.Npgsql.Monitoring.Diagnostics
 		/// </summary>
 		public void ResetAll()
 		{
-			foreach (var metric in operationMetrics.Values)
+			foreach (var entry in operationMetrics.Values)
 			{
-				metric.Reset();
+				entry.Metrics.Reset();
 			}
 		}
 
@@ -225,31 +252,44 @@ namespace FishMMO.Database.Npgsql.Monitoring.Diagnostics
 
 		/// <summary>
 		/// Gets or creates metrics for an operation.
-		/// Enforces maximum tracked operations limit.
+		/// Enforces maximum tracked operations limit with LRU eviction.
 		/// </summary>
 		private QueryMetrics? GetOrCreateMetrics(string operationName)
 		{
-			if (operationMetrics.TryGetValue(operationName, out var metrics))
-				return metrics;
+			var currentTicks = DateTime.UtcNow.Ticks;
 
-			// Check limit
+			if (operationMetrics.TryGetValue(operationName, out var entry))
+			{
+				// Update last access time for LRU tracking
+				operationMetrics[operationName] = (entry.Metrics, currentTicks);
+				return entry.Metrics;
+			}
+
+			// Check limit and evict LRU if necessary
 			if (operationMetrics.Count >= configuration.MaxTrackedOperations)
-				return null;
+			{
+				// Find and evict least recently used operation
+				var lruKey = operationMetrics.OrderBy(kvp => kvp.Value.LastAccessTicks).First().Key;
+				operationMetrics.TryRemove(lruKey, out _);
+			}
 
-			return operationMetrics.GetOrAdd(
-				operationName,
-				name => new QueryMetrics(name, configuration.MaxRecentSamplesPerOperation));
+			// Create new metrics entry with current timestamp
+			var newMetrics = new QueryMetrics(operationName, configuration.MaxRecentSamplesPerOperation);
+			var newEntry = (newMetrics, currentTicks);
+			operationMetrics[operationName] = newEntry;
+			return newMetrics;
 		}
 
 		/// <summary>
 		/// Determines if the current execution should be sampled based on configuration.
+		/// Uses thread-local Random for thread-safe sampling.
 		/// </summary>
 		private bool ShouldSample()
 		{
 			if (configuration.SampleRate >= 1.0)
 				return true;
 
-			return random.NextDouble() < configuration.SampleRate;
+			return ThreadRandom.NextDouble() < configuration.SampleRate;
 		}
 
 		/// <summary>

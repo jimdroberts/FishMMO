@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using FishMMO.Database.Npgsql.Entities;
 using FishMMO.Database.Npgsql.Monitoring.Metrics;
@@ -9,7 +11,7 @@ namespace FishMMO.Database.Npgsql
 	public class NpgsqlDbContext : DbContext
 	{
 		private readonly ConnectionPoolMetrics poolMetrics;
-		private bool disposed = false;
+		private int disposed = 0;
 
 		/// <summary>
 		/// Gets the database schema name for this context.
@@ -19,7 +21,7 @@ namespace FishMMO.Database.Npgsql
 		public NpgsqlDbContext(DbContextOptions options, string schema, ConnectionPoolMetrics poolMetrics = null) : base(options)
 		{
 			schema = schema ?? "public";
-			
+
 			// Validate schema name to prevent SQL injection
 			if (!IsValidSchemaName(schema))
 			{
@@ -93,27 +95,43 @@ namespace FishMMO.Database.Npgsql
 
 		/// <summary>
 		/// Disposes the context and records disposal in pool metrics.
+		/// Thread-safe disposal using Interlocked.Exchange to prevent race conditions.
+		/// Ensures base disposal completes before recording metrics to prevent
+		/// incorrect counts if base.Dispose() throws an exception.
 		/// </summary>
 		public override void Dispose()
 		{
-			if (!disposed)
+			if (Interlocked.Exchange(ref disposed, 1) == 0)
 			{
-				disposed = true;
-				poolMetrics?.RecordConnectionDisposed();
-				base.Dispose();
+				try
+				{
+					base.Dispose();
+				}
+				finally
+				{
+					poolMetrics?.RecordConnectionDisposed();
+				}
 			}
 		}
 
 		/// <summary>
 		/// Asynchronously disposes the context and records disposal in pool metrics.
+		/// Thread-safe disposal using Interlocked.Exchange to prevent race conditions.
+		/// Ensures base disposal completes before recording metrics to prevent
+		/// incorrect counts if base.DisposeAsync() throws an exception.
 		/// </summary>
 		public override async ValueTask DisposeAsync()
 		{
-			if (!disposed)
+			if (Interlocked.Exchange(ref disposed, 1) == 0)
 			{
-				disposed = true;
-				poolMetrics?.RecordConnectionDisposed();
-				await base.DisposeAsync();
+				try
+				{
+					await base.DisposeAsync();
+				}
+				finally
+				{
+					poolMetrics?.RecordConnectionDisposed();
+				}
 			}
 		}
 

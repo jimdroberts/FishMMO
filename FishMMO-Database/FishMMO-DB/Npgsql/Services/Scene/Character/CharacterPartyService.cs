@@ -91,13 +91,15 @@ namespace FishMMO.Database.Npgsql.Services
 					.AsNoTracking()
 					.FirstOrDefaultAsync(p => p.CharacterID == partyData.CharacterID, cancellationToken);
 
-				// If this is a new party join (not an UPDATE), validate capacity
-				if (existingMembership == null || existingMembership.PartyID != partyData.PartyID)
+				// Refined check: determine if capacity validation is needed
+				bool needsCapacityCheck = existingMembership == null || existingMembership.PartyID != partyData.PartyID;
+
+				if (needsCapacityCheck)
 				{
-					// Lock party rows to prevent concurrent capacity violations
-					// Using SELECT ... FOR UPDATE to acquire row-level locks
+					// Lock party row to prevent concurrent capacity violations
+					// Using SELECT ... FOR UPDATE to acquire row-level lock
 					var partyEntity = await dbContext.Parties
-						.Where(p => p.ID == partyData.PartyID)
+						.FromSqlInterpolated($"SELECT * FROM parties WHERE id = {partyData.PartyID} FOR UPDATE")
 						.FirstOrDefaultAsync(cancellationToken);
 
 					if (partyEntity == null)
@@ -107,7 +109,7 @@ namespace FishMMO.Database.Npgsql.Services
 							$"Party with ID {partyData.PartyID} does not exist.");
 					}
 
-					// Count current members (within same transaction, so count is consistent)
+					// Count current members (lock is held, preventing concurrent inserts)
 					var currentCount = await dbContext.CharacterParties
 						.Where(p => p.PartyID == partyData.PartyID)
 						.CountAsync(cancellationToken);

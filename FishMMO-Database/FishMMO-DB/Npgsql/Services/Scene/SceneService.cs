@@ -193,14 +193,22 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid parameters: scene server ID, world server ID, and scene name are required.");
 			}
 
+			// Use CTE with SELECT FOR UPDATE SKIP LOCKED to prevent race conditions
+			// Only one scene server can claim a specific scene at a time
 			var result = await ExecuteSqlAsync(
-				$@"UPDATE {TableName} 
-					SET scene_status = {(int)SceneStatus.Ready}, 
-						scene_server_id = {sceneServerId}, 
-						scene_handle = {sceneHandle} 
-					WHERE world_server_id = {worldServerId} 
-						AND scene_name = {sceneName} 
-						AND scene_status = {(int)SceneStatus.Loading}",
+				$@"WITH claimable_scene AS (
+				SELECT id FROM {TableName}
+				WHERE world_server_id = {worldServerId} 
+					AND scene_name = {sceneName} 
+					AND scene_status = {(int)SceneStatus.Loading}
+				FOR UPDATE SKIP LOCKED
+				LIMIT 1
+			)
+			UPDATE {TableName} 
+			SET scene_status = {(int)SceneStatus.Ready}, 
+				scene_server_id = {sceneServerId}, 
+				scene_handle = {sceneHandle}
+			WHERE id IN (SELECT id FROM claimable_scene)",
 				"SetSceneReady",
 				entityName: "Scene",
 				requireRowsAffected: true,

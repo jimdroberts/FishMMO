@@ -40,6 +40,11 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("INVALID_PARAMETERS", "World server ID, scene server ID must be greater than zero and message must not be empty.");
 			}
 
+			if (message.Length > 4096) // 4KB max
+			{
+				return DatabaseResult.Failure("MESSAGE_TOO_LONG", "Message exceeds maximum length.");
+			}
+
 			var channelByte = (byte)channel;
 
 			var result = await ExecuteSqlAsync(

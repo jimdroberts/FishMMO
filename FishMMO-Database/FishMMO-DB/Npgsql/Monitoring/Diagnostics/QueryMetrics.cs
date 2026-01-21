@@ -20,7 +20,7 @@ namespace FishMMO.Database.Npgsql.Monitoring.Diagnostics
 		private long minDurationTicks = long.MaxValue;
 		private long maxDurationTicks;
 		private long slowQueryCount;
-		private readonly List<double> recentExecutionTimesMs;
+		private readonly Queue<double> recentExecutionTimesMs;
 		private readonly int maxRecentSamples;
 
 		/// <summary>
@@ -139,7 +139,7 @@ namespace FishMMO.Database.Npgsql.Monitoring.Diagnostics
 		{
 			this.operationName = operationName ?? throw new ArgumentNullException(nameof(operationName));
 			this.maxRecentSamples = maxRecentSamples;
-			this.recentExecutionTimesMs = new List<double>(maxRecentSamples);
+			this.recentExecutionTimesMs = new Queue<double>(maxRecentSamples);
 		}
 
 		/// <summary>
@@ -168,15 +168,15 @@ namespace FishMMO.Database.Npgsql.Monitoring.Diagnostics
 				Interlocked.Increment(ref slowQueryCount);
 			}
 
-			// Add to recent samples for percentile calculation
+			// Add to recent samples for percentile calculation - O(1) operation
 			lock (lockObject)
 			{
 				if (recentExecutionTimesMs.Count >= maxRecentSamples)
 				{
-					// Remove oldest sample (FIFO)
-					recentExecutionTimesMs.RemoveAt(0);
+					// Remove oldest sample (FIFO) - O(1) operation
+					recentExecutionTimesMs.Dequeue();
 				}
-				recentExecutionTimesMs.Add(durationMs);
+				recentExecutionTimesMs.Enqueue(durationMs);
 			}
 		}
 
@@ -228,13 +228,17 @@ namespace FishMMO.Database.Npgsql.Monitoring.Diagnostics
 		/// <summary>
 		/// Calculates the specified percentile from recent execution times.
 		/// Must be called within a lock.
+		/// Sorts on demand - simpler and thread-safe at cost of O(n log n) per access.
+		/// Performance impact is negligible for sample sizes up to 1000 elements.
 		/// </summary>
 		private double CalculatePercentile(double percentile)
 		{
 			if (recentExecutionTimesMs.Count == 0)
 				return 0;
 
+			// Sort on demand - simpler and eliminates race condition
 			var sorted = recentExecutionTimesMs.OrderBy(x => x).ToList();
+
 			var index = (int)Math.Ceiling(percentile * sorted.Count) - 1;
 			if (index < 0) index = 0;
 			if (index >= sorted.Count) index = sorted.Count - 1;

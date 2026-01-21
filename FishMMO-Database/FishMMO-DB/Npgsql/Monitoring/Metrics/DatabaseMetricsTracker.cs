@@ -55,13 +55,16 @@ namespace FishMMO.Database.Npgsql.Monitoring.Metrics
 				errorType = "Unknown";
 			}
 
-			Interlocked.Increment(ref totalQueries);
-			Interlocked.Increment(ref failedQueries);
-			Interlocked.Add(ref totalResponseTimeTicks, responseTime.Ticks);
-			UpdateMinMax(responseTime.Ticks);
+			var ticks = responseTime.Ticks;
 
+			// Update all metrics atomically within lock to ensure consistency
 			lock (lockObject)
 			{
+				Interlocked.Increment(ref totalQueries);
+				Interlocked.Increment(ref failedQueries);
+				Interlocked.Add(ref totalResponseTimeTicks, ticks);
+				UpdateMinMax(ticks);
+
 				if (!errorCountsByType.ContainsKey(errorType))
 				{
 					errorCountsByType[errorType] = 0;

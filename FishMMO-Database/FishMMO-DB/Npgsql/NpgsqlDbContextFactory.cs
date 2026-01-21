@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Configuration;
+using Npgsql;
 using FishMMO.Database.Npgsql.Monitoring.Metrics;
 using FishMMO.Database.Npgsql.Monitoring.Diagnostics;
 
@@ -70,7 +71,7 @@ namespace FishMMO.Database.Npgsql
 
 			IConfiguration configuration = new ConfigurationBuilder()
 				.SetBasePath(basePath)
-				.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+				.AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
 				.Build();
 
 			string database = configuration.GetSection("Npgsql")["Database"] ?? "fish_mmo_postgresql";
@@ -156,9 +157,6 @@ namespace FishMMO.Database.Npgsql
 		/// <returns>A new NpgsqlDbContext instance.</returns>
 		public NpgsqlDbContext CreateDbContext()
 		{
-			// Track connection creation
-			poolMetrics.RecordConnectionCreated();
-
 			try
 			{
 				// Create fresh DbContextOptionsBuilder each time - no shared state
@@ -178,17 +176,60 @@ namespace FishMMO.Database.Npgsql
 					optionsBuilder.EnableSensitiveDataLogging(true);
 				}
 
-			var context = new NpgsqlDbContext(optionsBuilder.Options, schema, poolMetrics);
+				var context = new NpgsqlDbContext(optionsBuilder.Options, schema, poolMetrics);
+
+				// Only track connection after successful creation
+				poolMetrics.RecordConnectionCreated();
 
 				return context;
 			}
-			catch
+			catch (NpgsqlException npgsqlEx) when (IsPoolExhaustionException(npgsqlEx))
 			{
-				// Track connection error and decrement active count
+				// Track both pool exhaustion and generic connection error
+				poolMetrics.RecordPoolExhaustion();
 				poolMetrics.RecordConnectionError();
-				poolMetrics.RecordConnectionDisposed();
 				throw;
 			}
+			catch
+			{
+				// Track generic connection error
+				poolMetrics.RecordConnectionError();
+				throw;
+			}
+		}
+
+		/// <summary>
+		/// Determines if an NpgsqlException indicates connection pool exhaustion.
+		/// </summary>
+		/// <param name="exception">The Npgsql exception to check.</param>
+		/// <returns>True if the exception indicates pool exhaustion; otherwise, false.</returns>
+		private static bool IsPoolExhaustionException(NpgsqlException exception)
+		{
+			// Check for pool exhaustion indicators in exception message and inner exceptions
+			// Common patterns: "timeout", "pool", "connection limit", "too many connections"
+			var message = exception.Message;
+
+			// Check if message contains pool exhaustion keywords
+			if (message.Contains("pool", StringComparison.OrdinalIgnoreCase) ||
+				message.Contains("timeout", StringComparison.OrdinalIgnoreCase) ||
+				message.Contains("too many connections", StringComparison.OrdinalIgnoreCase) ||
+				message.Contains("connection limit", StringComparison.OrdinalIgnoreCase))
+			{
+				return true;
+			}
+
+			// Check inner PostgresException for SqlState 53300 (too_many_connections)
+			var innerException = exception.InnerException;
+			while (innerException != null)
+			{
+				if (innerException is PostgresException pgEx && pgEx.SqlState == "53300")
+				{
+					return true;
+				}
+				innerException = innerException.InnerException;
+			}
+
+			return false;
 		}
 
 		/// <summary>

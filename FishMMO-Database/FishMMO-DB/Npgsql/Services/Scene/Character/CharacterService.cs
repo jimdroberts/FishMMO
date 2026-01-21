@@ -330,18 +330,18 @@ namespace FishMMO.Database.Npgsql.Services
 			// Use explicit transaction with row-level locking to prevent race conditions
 			var transactionResult = await ExecuteInTransactionAsync(async (dbContext, transaction) =>
 			{
-				// Acquire row-level locks on all characters for this account
-				// This prevents concurrent SetSelected operations from interfering
-				await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$@"SELECT id FROM {TableName} 
-					WHERE account = {account} AND NOT deleted 
-					FOR UPDATE",
-					cancellationToken);
-
+				// Use CTE to combine SELECT FOR UPDATE and UPDATE into single atomic operation
+				// This ensures the lock is held throughout the entire update
 				var rowsAffected = await dbContext.Database.ExecuteSqlInterpolatedAsync(
-					$@"UPDATE {TableName} 
+					$@"WITH locked_chars AS (
+					SELECT id FROM {TableName} 
+					WHERE account = {account} AND NOT deleted 
+					FOR UPDATE
+					)
+					UPDATE {TableName} 
 					SET selected = (id = {characterId})
-					WHERE account = {account} AND NOT deleted",
+					WHERE account = {account} AND NOT deleted
+					AND id IN (SELECT id FROM locked_chars)",
 					cancellationToken);
 
 				if (rowsAffected == 0)
@@ -361,6 +361,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure(transactionResult.ErrorCode, transactionResult.ErrorMessage, transactionResult.IsTransient);
 			}
 		}
+
 		/// <inheritdoc/>
 		public async Task<DatabaseResult> SetOnlineStatusAsync(long characterId, bool online, CancellationToken cancellationToken = default)
 		{
