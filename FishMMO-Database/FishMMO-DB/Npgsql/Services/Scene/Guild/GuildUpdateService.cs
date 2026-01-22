@@ -71,12 +71,12 @@ namespace FishMMO.Database.Npgsql.Services
 			if (guildIds == null || guildIds.Count == 0)
 				return DatabaseResult<List<GuildUpdateData>>.Success(new List<GuildUpdateData>());
 
-			return await ExecuteSqlAsync(async dbContext =>
+			return await ExecuteSqlAsync(async (dbContext, ct) =>
 			{
 				var updates = await dbContext.GuildUpdates
 					.AsNoTracking()
 					.Where(u => u.LastUpdate >= lastFetch && guildIds.Contains(u.GuildID))
-					.ToListAsync(cancellationToken);
+					.ToListAsync(ct);
 
 				return updates.Select(MapEntityToDto).ToList();
 			}, "FetchGuildUpdates", cancellationToken);

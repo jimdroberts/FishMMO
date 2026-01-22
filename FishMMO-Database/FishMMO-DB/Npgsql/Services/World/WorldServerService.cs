@@ -61,7 +61,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<(long, WorldServerData)>.Failure("INVALID_PARAMETERS", "Server name and address must not be empty.");
 			}
 
-			return await ExecuteSqlAsync<(long ServerId, WorldServerData ServerData)>(async (dbContext) =>
+			return await ExecuteSqlAsync<(long ServerId, WorldServerData ServerData)>(async (dbContext, ct) =>
 			{
 				var result = await dbContext.WorldServers
 					.FromSqlInterpolated($@"
@@ -78,7 +78,7 @@ namespace FishMMO.Database.Npgsql.Services
 							lastpulse = EXCLUDED.lastpulse
 						RETURNING id, name, address, port, character_count, locked, lastpulse")
 							.AsNoTracking()
-							.FirstOrDefaultAsync(cancellationToken);
+							.FirstOrDefaultAsync(ct);
 
 				if (result == null)
 				{
@@ -138,11 +138,11 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<WorldServerData>.Failure("INVALID_SERVER_ID", "Server ID must be greater than 0.");
 			}
 
-			return await ExecuteSqlAsync(async dbContext =>
+			return await ExecuteSqlAsync(async (dbContext, ct) =>
 			{
 				var server = await dbContext.WorldServers
 					.AsNoTracking()
-					.FirstOrDefaultAsync(s => s.ID == serverId, cancellationToken);
+					.FirstOrDefaultAsync(s => s.ID == serverId, ct);
 
 				if (server == null)
 				{
@@ -158,14 +158,14 @@ namespace FishMMO.Database.Npgsql.Services
 			float idleTimeoutSeconds = 60.0f,
 			CancellationToken cancellationToken = default)
 		{
-			return await ExecuteSqlAsync(async dbContext =>
+			return await ExecuteSqlAsync(async (dbContext, ct) =>
 			{
 				// Calculate cutoff time in application for compiled query compatibility
 				// Database will use server time when query executes, avoiding clock skew
 				var cutoffTime = DateTime.UtcNow.AddSeconds(-idleTimeoutSeconds);
 
 				// Use compiled query for hot path performance
-				var servers = await GetActiveServersQuery(dbContext, cutoffTime, cancellationToken);
+				var servers = await GetActiveServersQuery(dbContext, cutoffTime, ct);
 
 				return servers.Select(MapEntityToDto).ToList();
 			}, "GetActiveWorldServers", cancellationToken);

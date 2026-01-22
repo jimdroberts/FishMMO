@@ -16,7 +16,7 @@ namespace FishMMO.Database.Exceptions
 		/// <summary>
 		/// Gets the PostgreSQL error code if available (e.g., "23505" for unique violation).
 		/// </summary>
-		public string PostgreSqlErrorCode { get; }
+		public string? PostgreSqlErrorCode { get; }
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="DatabaseQueryException"/> class.
@@ -32,8 +32,8 @@ namespace FishMMO.Database.Exceptions
 			string safeMessage,
 			string detailedMessage,
 			bool isTransient = false,
-			string postgreSqlErrorCode = null,
-			Exception innerException = null)
+			string? postgreSqlErrorCode = null,
+			Exception? innerException = null)
 			: base(
 				safeMessage: safeMessage ?? "A database error occurred while processing your request.",
 				detailedMessage: detailedMessage,

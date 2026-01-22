@@ -57,6 +57,18 @@ namespace FishMMO.Database.Npgsql
 		public int ProcessedRequestsCleanupMaxRows { get; set; } = 5000;
 
 		/// <summary>
+		/// Timeout for an idempotent request that is stuck in the "in progress" state.
+		/// 
+		/// If a server crashes while processing an idempotent operation, the row in
+		/// <c>processed_requests</c> may remain in status 0 (in progress). Once the row is older than
+		/// this timeout, a subsequent retry may reclaim the request and proceed.
+		/// 
+		/// Unit: minutes.
+		/// Set to 0 to disable stale takeover (not recommended for production).
+		/// </summary>
+		public int ProcessedRequestsInProgressTimeoutMinutes { get; set; } = 5;
+
+		/// <summary>
 		/// Minimum interval between cleanup invocations.
 		/// 
 		/// Unit: minutes.

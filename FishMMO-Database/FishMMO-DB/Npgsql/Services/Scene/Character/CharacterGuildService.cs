@@ -93,23 +93,41 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 
 			// Use transaction to atomically check capacity and insert/update membership
-			var result = await ExecuteSqlAsync(async (dbContext, transaction) =>
+			// RACE CONDITION MITIGATION: Uses strict lock ordering (character -> guild) and
+			// SELECT FOR UPDATE to prevent deadlocks and ensure atomicity. The lock hierarchy
+			// ensures that concurrent operations acquire locks in a consistent order, preventing
+			// circular wait conditions.
+			//
+			// Lock Ordering Strategy:
+			// 1. Lock character's membership row FIRST (establishes consistent order)
+			// 2. Lock guild row SECOND (only if capacity check needed)
+			// 3. Perform capacity check (protected by both locks)
+			// 4. UPSERT membership (atomic operation)
+			//
+			// This pattern is safe because:
+			// - All operations follow the same lock order (character -> guild)
+			// - SELECT FOR UPDATE holds locks until transaction commits
+			// - Capacity check is protected by guild lock
+			// - UPSERT is atomic and idempotent
+			var result = await ExecuteSqlAsync(async (dbContext, transaction, ct) =>
 			{
-				// Check if character is already in this guild (UPDATE case)
+				// Lock character's membership row FIRST to establish consistent lock ordering
+				// This prevents deadlocks and ensures atomicity across concurrent requests
 				var existingMembership = await dbContext.CharacterGuilds
-					.AsNoTracking()
-					.FirstOrDefaultAsync(g => g.CharacterID == guildData.CharacterID, cancellationToken);
+					.FromSqlInterpolated($"SELECT * FROM character_guilds WHERE character_id = {guildData.CharacterID} FOR UPDATE")
+					.FirstOrDefaultAsync(ct);
 
 				// Refined check: determine if capacity validation is needed
+				// Skip capacity check if character is already in the same guild (rank/location update)
 				bool needsCapacityCheck = existingMembership == null || existingMembership.GuildID != guildData.GuildID;
 
 				if (needsCapacityCheck)
 				{
-					// Lock guild row to prevent concurrent capacity violations
-					// Using SELECT ... FOR UPDATE to acquire row-level lock
+					// Then lock guild row to prevent concurrent capacity violations
+					// Lock ordering: character membership -> guild (prevents race conditions)
 					var guildEntity = await dbContext.Guilds
 						.FromSqlInterpolated($"SELECT * FROM guilds WHERE id = {guildData.GuildID} FOR UPDATE")
-						.FirstOrDefaultAsync(cancellationToken);
+						.FirstOrDefaultAsync(ct);
 
 					if (guildEntity == null)
 					{
@@ -119,9 +137,13 @@ namespace FishMMO.Database.Npgsql.Services
 					}
 
 					// Count current members (lock is held, preventing concurrent inserts)
+					// This count is accurate because:
+					// 1. Guild row is locked (no new members can be added)
+					// 2. Character row is locked (this character can't join another guild)
+					// 3. Transaction isolation ensures consistency
 					var currentCount = await dbContext.CharacterGuilds
 						.Where(g => g.GuildID == guildData.GuildID)
-						.CountAsync(cancellationToken);
+						.CountAsync(ct);
 
 					if (currentCount >= maxCapacity)
 					{
@@ -131,7 +153,8 @@ namespace FishMMO.Database.Npgsql.Services
 					}
 				}
 
-				// Perform UPSERT
+				// Perform UPSERT - atomic operation that either inserts new membership
+				// or updates existing membership (rank/location change within same guild)
 				await dbContext.Database.ExecuteSqlInterpolatedAsync(
 					$@"INSERT INTO {TableName} 
 						(character_id, guild_id, rank, location)
@@ -141,7 +164,7 @@ namespace FishMMO.Database.Npgsql.Services
 							guild_id = EXCLUDED.guild_id,
 							rank = EXCLUDED.rank,
 							location = EXCLUDED.location",
-					cancellationToken);
+					ct);
 
 				return DatabaseResult.Success();
 			}, "SaveGuildMembership", cancellationToken);
@@ -203,9 +226,9 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
-			return await ExecuteSqlAsync<CharacterGuildData?>(async dbContext =>
+			return await ExecuteSqlAsync<CharacterGuildData?>(async (dbContext, ct) =>
 			{
-				var entity = await GetGuildMembershipQuery(dbContext, characterId, cancellationToken);
+				var entity = await GetGuildMembershipQuery(dbContext, characterId, ct);
 				if (entity == null)
 					return null;
 
@@ -230,9 +253,9 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 
 			return await ExecuteSqlAsync(
-				async (dbContext) =>
+				async (dbContext, ct) =>
 				{
-					var entities = await GetGuildMembersQuery(dbContext, guildId, cancellationToken);
+					var entities = await GetGuildMembersQuery(dbContext, guildId, ct);
 					var members = entities.Select(g => new CharacterGuildData(
 						id: g.ID,
 						characterID: g.CharacterID,
@@ -258,9 +281,9 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 
 			return await ExecuteSqlAsync(
-				async (dbContext) =>
+				async (dbContext, ct) =>
 				{
-					return await GetGuildMemberCountQuery(dbContext, guildId, cancellationToken);
+					return await GetGuildMemberCountQuery(dbContext, guildId, ct);
 				},
 				"GetGuildMemberCount",
 				cancellationToken);

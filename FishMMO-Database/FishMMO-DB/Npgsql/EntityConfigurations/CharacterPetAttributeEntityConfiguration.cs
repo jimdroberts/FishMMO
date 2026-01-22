@@ -31,9 +31,15 @@ namespace FishMMO.Database.Npgsql.Entities
 				.IsRequired()
 				.HasDefaultValue(0f);
 
-			// Performance index for character pet attribute queries
-			builder.HasIndex(e => e.CharacterID)
-				.HasDatabaseName("IX_CharacterPetAttribute_CharacterID");
+			// Unique constraint: one attribute template per character pet
+			builder.HasIndex(e => new { e.CharacterID, e.TemplateID })
+				.IsUnique()
+				.HasDatabaseName("IX_CharacterPetAttribute_Character_Template_Unique");
+
+			builder.HasOne(e => e.Character)
+				.WithMany()
+				.HasForeignKey(e => e.CharacterID)
+				.OnDelete(DeleteBehavior.Cascade);
 		}
 	}
 }

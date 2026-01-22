@@ -151,9 +151,9 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 
 			return await ExecuteSqlAsync<IReadOnlyList<CharacterKnownAbilityData>>(
-				async (dbContext) =>
+				async (dbContext, ct) =>
 				{
-					var entities = await GetKnownAbilitiesQuery(dbContext, characterId, cancellationToken);
+					var entities = await GetKnownAbilitiesQuery(dbContext, characterId, ct);
 					var abilities = entities.Select(a => new CharacterKnownAbilityData(
 						id: a.ID,
 						characterID: a.CharacterID,

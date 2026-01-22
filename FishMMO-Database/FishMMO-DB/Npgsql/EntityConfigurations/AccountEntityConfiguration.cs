@@ -33,7 +33,7 @@ namespace FishMMO.Database.Npgsql.Entities
 				.IsRequired()
 				.HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-			builder.Property(e => e.Lastlogin)
+			builder.Property(e => e.LastLogin)
 				.IsRequired()
 				.HasDefaultValueSql("CURRENT_TIMESTAMP");
 

@@ -73,7 +73,7 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 
 			return await ExecuteSqlAsync<long>(
-				async (dbContext) =>
+				async (dbContext, ct) =>
 				{
 					// Use PostgreSQL UPSERT for atomic insert-or-update
 					var result = await dbContext.CharacterHotkeys
@@ -88,14 +88,10 @@ namespace FishMMO.Database.Npgsql.Services
 								reference_id = EXCLUDED.reference_id
 							RETURNING id, character_id, type, slot, reference_id")
 							.AsNoTracking()
-							.FirstOrDefaultAsync(cancellationToken);
+							.FirstOrDefaultAsync(ct);
 
-					if (result == null || result.ID == 0)
-					{
-						throw new Exception("Failed to save hotkey");
-					}
-
-					return result.ID;
+				var existingHotkey = RequireEntityExists(result, "CharacterHotkey", $"{hotkey.CharacterID}:{hotkey.Slot}");
+				return existingHotkey.ID;
 				},
 				"SaveHotkey",
 				cancellationToken);
@@ -163,9 +159,9 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 
 			return await ExecuteSqlAsync(
-				async (dbContext) =>
+				async (dbContext, ct) =>
 				{
-					var entities = await GetHotkeysQuery(dbContext, characterId, cancellationToken);
+					var entities = await GetHotkeysQuery(dbContext, characterId, ct);
 					var hotkeys = entities.Select(h => new CharacterHotkeyData(
 						id: h.ID,
 						characterID: h.CharacterID,
@@ -189,9 +185,9 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 
 			return await ExecuteSqlAsync(
-				async (dbContext) =>
+				async (dbContext, ct) =>
 				{
-					return await GetHotkeyCountQuery(dbContext, characterId, cancellationToken);
+					return await GetHotkeyCountQuery(dbContext, characterId, ct);
 				},
 				"GetHotkeyCount",
 				cancellationToken);

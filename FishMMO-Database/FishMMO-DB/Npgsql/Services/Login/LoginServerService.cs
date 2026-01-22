@@ -35,7 +35,7 @@ namespace FishMMO.Database.Npgsql.Services
 					"Server name and address must not be empty.");
 			}
 
-			return await ExecuteSqlAsync<LoginServerData>(async (dbContext) =>
+			return await ExecuteSqlAsync<LoginServerData>(async (dbContext, ct) =>
 			{
 				var result = await dbContext.LoginServers
 					.FromSqlInterpolated($@"
@@ -48,7 +48,7 @@ namespace FishMMO.Database.Npgsql.Services
 							lastpulse = EXCLUDED.lastpulse
 						RETURNING id, name, address, port, lastpulse")
 					.AsNoTracking()
-					.FirstOrDefaultAsync(cancellationToken);
+						.FirstOrDefaultAsync(ct);
 
 				if (result == null)
 				{
@@ -123,11 +123,11 @@ namespace FishMMO.Database.Npgsql.Services
 					"Server ID must be greater than 0.");
 			}
 
-			return await ExecuteSqlAsync(async dbContext =>
+			return await ExecuteSqlAsync(async (dbContext, ct) =>
 			{
 				var server = await dbContext.LoginServers
 					.AsNoTracking()
-					.FirstOrDefaultAsync(s => s.ID == serverId, cancellationToken);
+					.FirstOrDefaultAsync(s => s.ID == serverId, ct);
 
 				if (server == null)
 				{

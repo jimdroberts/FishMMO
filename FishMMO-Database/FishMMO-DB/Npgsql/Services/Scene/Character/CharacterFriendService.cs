@@ -139,9 +139,9 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 
 			return await ExecuteSqlAsync(
-				async (dbContext) =>
+				async (dbContext, ct) =>
 				{
-					var entities = await GetFriendsQuery(dbContext, characterId, cancellationToken);
+					var entities = await GetFriendsQuery(dbContext, characterId, ct);
 					var friends = entities.Select(f => new CharacterFriendData(
 						id: f.ID,
 						characterID: f.CharacterID,
@@ -165,9 +165,9 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 
 			return await ExecuteSqlAsync(
-				async (dbContext) =>
+				async (dbContext, ct) =>
 				{
-					return await GetFriendCountQuery(dbContext, characterId, cancellationToken);
+					return await GetFriendCountQuery(dbContext, characterId, ct);
 				},
 				"GetFriendCount",
 				cancellationToken);

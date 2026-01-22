@@ -84,7 +84,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<long>.Failure("VALIDATION_ERROR", "Invalid parameters: world server ID and scene name are required.");
 			}
 
-			return await ExecuteSqlAsync<long>(async (dbContext) =>
+			return await ExecuteSqlAsync<long>(async (dbContext, ct) =>
 			{
 				var sceneTypeInt = (int)sceneType;
 				var sceneStatusInt = (int)SceneStatus.Pending;
@@ -98,7 +98,7 @@ namespace FishMMO.Database.Npgsql.Services
 					VALUES ({worldServerId}, {sceneName}, {sceneTypeInt}, {sceneStatusInt}, {characterId}, CURRENT_TIMESTAMP)
 					RETURNING id")
 						.AsNoTracking()
-						.FirstOrDefaultAsync(cancellationToken);
+						.FirstOrDefaultAsync(ct);
 
 				var sceneId = result?.ID ?? 0;
 				if (sceneId <= 0)
@@ -119,7 +119,7 @@ namespace FishMMO.Database.Npgsql.Services
 		public async Task<DatabaseResult<SceneData>> DequeueAsync(CancellationToken cancellationToken = default)
 		{
 			// Use SceneData? (nullable) since no pending scenes is valid business logic, not an error
-			var result = await ExecuteSqlAsync<SceneData?>(async (dbContext) =>
+			var result = await ExecuteSqlAsync<SceneData?>(async (dbContext, ct) =>
 			{
 				// Atomically dequeue next pending scene with CTE and FOR UPDATE SKIP LOCKED
 				// CTE ensures the row is locked BEFORE the UPDATE, preventing race conditions
@@ -138,7 +138,7 @@ namespace FishMMO.Database.Npgsql.Services
 					WHERE {TableName}.id = scene_to_update.id
 					RETURNING {TableName}.id, {TableName}.world_server_id, {TableName}.scene_server_id, {TableName}.scene_name, {TableName}.scene_handle, {TableName}.scene_status, {TableName}.scene_type, {TableName}.character_id, {TableName}.character_count, {TableName}.time_created")
 					.AsNoTracking()
-					.FirstOrDefaultAsync(cancellationToken);
+					.FirstOrDefaultAsync(ct);
 
 				return entity != null ? MapEntityToDto(entity) : null;
 			}, "DequeueScene", cancellationToken);
@@ -294,10 +294,10 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<SceneData>.Failure("VALIDATION_ERROR", "Invalid character ID.");
 			}
 
-			return await ExecuteSqlAsync(async dbContext =>
+			return await ExecuteSqlAsync(async (dbContext, ct) =>
 			{
 				var type = (int)sceneType;
-				var scene = await GetCharacterInstanceQuery(dbContext, characterId, type, cancellationToken);
+				var scene = await GetCharacterInstanceQuery(dbContext, characterId, type, ct);
 
 				if (scene == null)
 				{
@@ -316,9 +316,9 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<SceneData>.Failure("VALIDATION_ERROR", "Invalid scene ID.");
 			}
 
-			return await ExecuteSqlAsync(async dbContext =>
+			return await ExecuteSqlAsync(async (dbContext, ct) =>
 			{
-				var scene = await GetInstanceByIdQuery(dbContext, sceneId, cancellationToken);
+				var scene = await GetInstanceByIdQuery(dbContext, sceneId, ct);
 
 				if (scene == null)
 				{
@@ -341,10 +341,10 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<List<SceneData>>.Failure("VALIDATION_ERROR", "Invalid parameters: world server ID and scene name are required.");
 			}
 
-			return await ExecuteSqlAsync(async dbContext =>
+			return await ExecuteSqlAsync(async (dbContext, ct) =>
 			{
 				var readyStatus = (int)SceneStatus.Ready;
-				var scenes = await GetAvailableScenesQuery(dbContext, worldServerId, sceneName, maxClients, readyStatus, cancellationToken);
+				var scenes = await GetAvailableScenesQuery(dbContext, worldServerId, sceneName, maxClients, readyStatus, ct);
 
 				return scenes.Select(MapEntityToDto).ToList();
 			}, "GetAvailableScenes", cancellationToken);
@@ -358,10 +358,10 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<List<SceneData>>.Failure("VALIDATION_ERROR", "Invalid world server ID.");
 			}
 
-			return await ExecuteSqlAsync(async dbContext =>
+			return await ExecuteSqlAsync(async (dbContext, ct) =>
 			{
 				var readyStatus = (int)SceneStatus.Ready;
-				var scenes = await GetReadyScenesQuery(dbContext, worldServerId, readyStatus, cancellationToken);
+				var scenes = await GetReadyScenesQuery(dbContext, worldServerId, readyStatus, ct);
 
 				return scenes.Select(MapEntityToDto).ToList();
 			}, "GetReadyScenes", cancellationToken);

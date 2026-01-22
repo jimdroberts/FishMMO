@@ -38,10 +38,6 @@ namespace FishMMO.Database.Npgsql.Entities
 			builder.HasIndex(e => e.CharacterID)
 				.HasDatabaseName("IX_CharacterHotkey_CharacterID");
 
-			// Performance index for slot-based queries
-			builder.HasIndex(e => e.Slot)
-				.HasDatabaseName("IX_CharacterHotkey_Slot");
-
 			// Foreign key relationship (prevent orphan hotkey rows)
 			builder.HasOne(e => e.Character)
 				.WithMany()

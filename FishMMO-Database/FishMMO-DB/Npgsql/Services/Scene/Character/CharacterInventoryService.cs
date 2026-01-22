@@ -63,7 +63,7 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 
 			return await ExecuteSqlAsync<long>(
-				async (dbContext) =>
+				async (dbContext, ct) =>
 				{
 					// Use PostgreSQL UPSERT for atomic insert-or-update
 					var result = await dbContext.CharacterInventoryItems
@@ -79,14 +79,10 @@ namespace FishMMO.Database.Npgsql.Services
 							amount = EXCLUDED.amount
 						RETURNING id, character_id, template_id, slot, seed, amount")
 						.AsNoTracking()
-						.FirstOrDefaultAsync(cancellationToken);
+						.FirstOrDefaultAsync(ct);
 
-					if (result == null || result.ID == 0)
-					{
-						throw new InvalidOperationException("Failed to save item");
-					}
-
-					return result.ID;
+				var existingItem = RequireEntityExists(result, "CharacterInventoryItem", $"{item.CharacterID}:{item.Slot}");
+				return existingItem.ID;
 				},
 				"SaveInventoryItem",
 				cancellationToken);
@@ -176,9 +172,9 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 
 			return await ExecuteSqlAsync(
-				async (dbContext) =>
+				async (dbContext, ct) =>
 				{
-					var entities = await GetInventoryItemsQuery(dbContext, characterId, cancellationToken);
+					var entities = await GetInventoryItemsQuery(dbContext, characterId, ct);
 					var items = entities.Select(i => new CharacterInventoryData(
 						id: i.ID,
 						characterID: i.CharacterID,

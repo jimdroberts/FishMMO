@@ -35,9 +35,10 @@ namespace FishMMO.Database.Npgsql.Entities
 				.IsRequired()
 				.HasDefaultValue(1);
 
-			// Performance index for character pet buff queries
-			builder.HasIndex(e => e.CharacterID)
-				.HasDatabaseName("IX_CharacterPetBuff_CharacterID");
+			// Unique constraint: one buff template per character pet
+			builder.HasIndex(e => new { e.CharacterID, e.TemplateID })
+				.IsUnique()
+				.HasDatabaseName("IX_CharacterPetBuff_Character_Template_Unique");
 
 			// Foreign key relationship
 			builder.HasOne(e => e.Character)

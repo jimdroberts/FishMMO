@@ -30,12 +30,13 @@ namespace FishMMO.Database.Npgsql.Services
 		/// Pre-compiles the query expression tree for better performance on repeated executions.
 		/// </summary>
 		private static readonly Func<NpgsqlDbContext, string, CancellationToken, Task<bool>> GuildExistsByNameQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, string upperName, CancellationToken ct) =>
+			EF.CompileAsyncQuery((NpgsqlDbContext context, string nameLowercase, CancellationToken ct) =>
 				context.Guilds
 					.AsNoTracking()
-					.Any(g => g.Name.ToUpper() == upperName));
+					.Any(g => g.NameLowercase == nameLowercase));
 
-		/// <summary>	/// Compiled query for LoadByIdAsync hot path (guild data retrieval).
+		/// <summary>
+		/// Compiled query for LoadByIdAsync hot path (guild data retrieval).
 		/// Pre-compiles the query expression tree for better performance on repeated executions.
 		/// </summary>
 #pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type
@@ -46,7 +47,8 @@ namespace FishMMO.Database.Npgsql.Services
 					.FirstOrDefault(g => g.ID == guildId));
 #pragma warning restore CS8619
 
-		/// <summary>		/// Initializes a new instance of GuildService.
+		/// <summary>
+		/// Initializes a new instance of GuildService.
 		/// </summary>
 		/// <param name="dbContextFactory">DbContext factory for creating contexts.</param>
 		/// <exception cref="ArgumentNullException">Thrown when dbContextFactory is null.</exception>
@@ -60,10 +62,10 @@ namespace FishMMO.Database.Npgsql.Services
 			if (string.IsNullOrWhiteSpace(name))
 				return DatabaseResult<bool>.Failure("VALIDATION_ERROR", "Invalid guild name");
 
-			return await ExecuteSqlAsync(async context =>
+			return await ExecuteSqlAsync(async (context, ct) =>
 			{
-				var upperName = name.ToUpper();
-				return await GuildExistsByNameQuery(context, upperName, cancellationToken);
+				var nameLowercase = name.ToLowerInvariant();
+				return await GuildExistsByNameQuery(context, nameLowercase, ct);
 			}, "GuildExists", cancellationToken);
 		}
 
@@ -73,13 +75,13 @@ namespace FishMMO.Database.Npgsql.Services
 			if (guildId <= 0)
 				return DatabaseResult<string>.Failure("VALIDATION_ERROR", "Invalid guild ID");
 
-			return await ExecuteSqlAsync(async context =>
+			return await ExecuteSqlAsync(async (context, ct) =>
 			{
 				var guild = await context.Guilds
 					.AsNoTracking()
 					.Where(g => g.ID == guildId)
 					.Select(g => g.Name)
-					.FirstOrDefaultAsync(cancellationToken);
+					.FirstOrDefaultAsync(ct);
 
 				return guild ?? string.Empty;
 			}, "GetGuildName", cancellationToken);
@@ -93,17 +95,19 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<long?>.Failure("VALIDATION_ERROR", "Guild name is required");
 			}
 
-			return await ExecuteSqlAsync(async context =>
+			return await ExecuteSqlAsync(async (context, ct) =>
 			{
+				var nameLowercase = name.ToLowerInvariant();
+
 				// Idempotent by natural key (name): safe under transient retries.
 				var inserted = await context.Guilds
 					.FromSqlInterpolated($@"
 					INSERT INTO {TableName} (name, notice, time_created)
 					VALUES ({name}, {string.Empty}, CURRENT_TIMESTAMP)
-					ON CONFLICT (name) DO NOTHING
+					ON CONFLICT (name_lowercase) DO NOTHING
 					RETURNING id")
 					.AsNoTracking()
-					.FirstOrDefaultAsync(cancellationToken);
+					.FirstOrDefaultAsync(ct);
 
 				if (inserted?.ID > 0)
 				{
@@ -112,9 +116,9 @@ namespace FishMMO.Database.Npgsql.Services
 
 				var existingId = await context.Guilds
 					.AsNoTracking()
-					.Where(g => g.Name == name)
+					.Where(g => g.NameLowercase == nameLowercase)
 					.Select(g => (long?)g.ID)
-					.FirstOrDefaultAsync(cancellationToken);
+					.FirstOrDefaultAsync(ct);
 
 				return existingId;
 			}, "CreateGuild", cancellationToken);
@@ -154,11 +158,11 @@ namespace FishMMO.Database.Npgsql.Services
 			if (string.IsNullOrWhiteSpace(name))
 				return DatabaseResult<GuildData?>.Failure("VALIDATION_ERROR", "Invalid guild name");
 
-			return await ExecuteSqlAsync(async context =>
+			return await ExecuteSqlAsync(async (context, ct) =>
 			{
-				var upperName = name.ToUpper();
 				var guild = await context.Guilds
-					.AsNoTracking().FirstOrDefaultAsync(g => g.Name.ToUpper() == upperName, cancellationToken);
+					.AsNoTracking()
+					.FirstOrDefaultAsync(g => g.NameLowercase == name.ToLowerInvariant(), ct);
 
 				return guild != null ? MapEntityToDto(guild) : (GuildData?)null;
 			}, "LoadGuildByName", cancellationToken);
@@ -170,9 +174,9 @@ namespace FishMMO.Database.Npgsql.Services
 			if (guildId <= 0)
 				return DatabaseResult<GuildData?>.Failure("VALIDATION_ERROR", "Invalid guild ID");
 
-			return await ExecuteSqlAsync(async context =>
+			return await ExecuteSqlAsync(async (context, ct) =>
 			{
-				var guild = await GetGuildByIdQuery(context, guildId, cancellationToken);
+				var guild = await GetGuildByIdQuery(context, guildId, ct);
 
 				return guild != null ? MapEntityToDto(guild) : (GuildData?)null;
 			}, "LoadGuildById", cancellationToken);

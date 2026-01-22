@@ -35,9 +35,9 @@ namespace FishMMO.Database.Npgsql.Services
 			if (partyId <= 0)
 				return DatabaseResult<bool>.Success(false);
 
-			return await ExecuteSqlAsync(async dbContext =>
+			return await ExecuteSqlAsync(async (dbContext, ct) =>
 			{
-				return await PartyExistsQuery(dbContext, partyId, cancellationToken);
+				return await PartyExistsQuery(dbContext, partyId, ct);
 			}, "CheckPartyExists", cancellationToken);
 		}
 
@@ -48,7 +48,7 @@ namespace FishMMO.Database.Npgsql.Services
 				requestId,
 				accountId,
 				"CreateParty",
-				async (dbContext, _) =>
+				async (dbContext, transaction, ct) =>
 			{
 				// Use atomic INSERT with RETURNING for proper retry strategy support
 				// Optimized: RETURNING only id for better performance
@@ -58,7 +58,7 @@ namespace FishMMO.Database.Npgsql.Services
 					VALUES (CURRENT_TIMESTAMP)
 					RETURNING id")
 						.AsNoTracking()
-						.FirstOrDefaultAsync(cancellationToken);
+						.FirstOrDefaultAsync(ct);
 
 				return result?.ID ?? 0;
 			},
@@ -66,32 +66,32 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-	/// <remarks>
-	/// <para><b>Transaction Scope:</b></para>
-	/// This operation uses an explicit transaction to ensure atomicity.
-	/// CASCADE delete constraints automatically remove related data:
-	/// <list type="bullet">
-	/// <item>All character party memberships (character_party table)</item>
-	/// <item>Party update notifications (party_update table)</item>
-	/// </list>
-	/// </remarks>
-	public async Task<DatabaseResult> DeleteAsync(long partyId, CancellationToken cancellationToken = default)
-	{
-		if (partyId <= 0)
+		/// <remarks>
+		/// <para><b>Transaction Scope:</b></para>
+		/// This operation uses an explicit transaction to ensure atomicity.
+		/// CASCADE delete constraints automatically remove related data:
+		/// <list type="bullet">
+		/// <item>All character party memberships (character_party table)</item>
+		/// <item>Party update notifications (party_update table)</item>
+		/// </list>
+		/// </remarks>
+		public async Task<DatabaseResult> DeleteAsync(long partyId, CancellationToken cancellationToken = default)
 		{
-			return DatabaseResult.Failure("INVALID_PARTY_ID", "Party ID must be greater than zero.");
+			if (partyId <= 0)
+			{
+				return DatabaseResult.Failure("INVALID_PARTY_ID", "Party ID must be greater than zero.");
+			}
+
+			var result = await ExecuteSqlAsync(
+				$"DELETE FROM {TableName} WHERE id = {partyId}",
+				"DeleteParty",
+				entityName: "Party",
+				entityId: partyId,
+				requireRowsAffected: true,
+				cancellationToken: cancellationToken);
+
+			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
-
-		var result = await ExecuteSqlAsync(
-			$"DELETE FROM {TableName} WHERE id = {partyId}",
-			"DeleteParty",
-			entityName: "Party",
-			entityId: partyId,
-			requireRowsAffected: true,
-			cancellationToken: cancellationToken);
-
-		return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
-	}
 
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<PartyData>> LoadAsync(long partyId, CancellationToken cancellationToken = default)
@@ -101,11 +101,11 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<PartyData>.Failure("INVALID_PARTY_ID", "Party ID must be greater than zero.");
 			}
 
-			return await ExecuteSqlAsync(async dbContext =>
+			return await ExecuteSqlAsync(async (dbContext, ct) =>
 			{
 				var party = await dbContext.Parties
 					.AsNoTracking()
-					.FirstOrDefaultAsync(p => p.ID == partyId, cancellationToken);
+					.FirstOrDefaultAsync(p => p.ID == partyId, ct);
 				var existingParty = RequireEntityExists(party, "Party", partyId);
 				return MapEntityToDto(existingParty);
 			}, "LoadParty", cancellationToken);

@@ -23,6 +23,15 @@ namespace FishMMO.Database.Npgsql.Entities
 			builder.Property(e => e.NameLowercase)
 				.HasComputedColumnSql("LOWER(\"name\")", stored: true);
 
+			// Foreign key relationship to Account
+			// Account property is the account name (string) which is the PK of AccountEntity
+			// Restrict delete behavior prevents orphaned characters
+			builder.HasOne<AccountEntity>()
+				.WithMany()
+				.HasForeignKey(e => e.Account)
+				.OnDelete(DeleteBehavior.Restrict)
+				.HasConstraintName("FK_Character_Account");
+
 			builder.HasIndex(e => e.NameLowercase)
 				.IsUnique()
 				.HasDatabaseName("IX_CharacterEntity_NameLowercase");

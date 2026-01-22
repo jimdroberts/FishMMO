@@ -1,3 +1,4 @@
+using System;
 using Microsoft.EntityFrameworkCore;
 
 namespace FishMMO.Database.Npgsql
@@ -34,7 +35,12 @@ namespace FishMMO.Database.Npgsql
 
 			var schema = entityType.GetSchema() ?? context.Schema;
 			var tableName = entityType.GetTableName();
-
+			if (string.IsNullOrWhiteSpace(tableName))
+			{
+				throw new InvalidOperationException(
+					$"Entity type {typeof(TEntity).Name} does not have a table name. " +
+					"This entity may be an owned type, keyless entity, or view.");
+			}
 			return $"\"{schema}\".\"{tableName}\"";
 		}
 	}

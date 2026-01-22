@@ -20,13 +20,19 @@ namespace FishMMO.Database.Npgsql.Entities
 				.IsRequired()
 				.HasDefaultValueSql("CURRENT_TIMESTAMP");
 
+			builder.Property(e => e.Name)
+				.IsRequired();
+
+			builder.Property(e => e.NameLowercase)
+				.HasComputedColumnSql("LOWER(\"name\")", stored: true);
+
 			builder.Property(e => e.Notice)
 				.HasMaxLength(500);
 
-			// Unique constraint on guild name (case-insensitive)
-			builder.HasIndex(e => e.Name)
+			// Case-insensitive uniqueness via normalized computed column.
+			builder.HasIndex(e => e.NameLowercase)
 				.IsUnique()
-				.HasDatabaseName("IX_Guild_Name_Unique");
+				.HasDatabaseName("IX_Guild_NameLowercase_Unique");
 
 		}
 	}

@@ -1,5 +1,6 @@
 using System;
 using System.Data.Common;
+using System.Diagnostics;
 using System.Threading;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -13,6 +14,48 @@ using FishMMO.Database.Npgsql.Entities;
 namespace FishMMO.Database.Npgsql.Services
 {
 	/// <summary>
+	/// Provides a process-wide throttle for background maintenance work.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// This is intentionally non-generic so throttling is global across all services.
+	/// Some maintenance tasks (e.g., idempotency table cleanup) operate on a shared table and
+	/// must not run once per closed generic <see cref="BaseService{TEntity}"/>.
+	/// </para>
+	/// </remarks>
+	internal static class GlobalMaintenanceThrottle
+	{
+		private static long processedRequestsCleanupLastRunTicks;
+
+		/// <summary>
+		/// Attempts to begin a throttled maintenance operation.
+		/// </summary>
+		/// <param name="minInterval">
+		/// Minimum time that must elapse between successful begins.
+		/// Use <see cref="TimeSpan.Zero"/> to disable throttling.
+		/// </param>
+		/// <returns>
+		/// True if the caller should proceed with the operation; otherwise false.
+		/// </returns>
+		public static bool TryBeginProcessedRequestsCleanup(TimeSpan minInterval)
+		{
+			if (minInterval <= TimeSpan.Zero)
+			{
+				return true;
+			}
+
+			var nowTicks = DateTime.UtcNow.Ticks;
+			var lastTicks = Interlocked.Read(ref processedRequestsCleanupLastRunTicks);
+			if (nowTicks - lastTicks < minInterval.Ticks)
+			{
+				return false;
+			}
+
+			return Interlocked.CompareExchange(ref processedRequestsCleanupLastRunTicks, nowTicks, lastTicks) == lastTicks;
+		}
+	}
+
+	/// <summary>
 	/// Base class for all Npgsql database services.
 	/// Provides common functionality: context creation, exception handling, and execution strategies.
 	/// Follows DRY principle by centralizing repeated patterns across all services.
@@ -20,9 +63,6 @@ namespace FishMMO.Database.Npgsql.Services
 	/// <typeparam name="TEntity">The entity type this service operates on.</typeparam>
 	public abstract class BaseService<TEntity> where TEntity : class
 	{
-		private static string? cachedTableName;
-		private static long processedRequestsCleanupLastRunTicks;
-
 		private static readonly JsonSerializerOptions IdempotencyJsonOptions = new JsonSerializerOptions
 		{
 			PropertyNamingPolicy = JsonNamingPolicy.CamelCase
@@ -35,6 +75,7 @@ namespace FishMMO.Database.Npgsql.Services
 		private readonly int processedRequestsRetentionDays;
 		private readonly int processedRequestsCleanupMaxRows;
 		private readonly int processedRequestsCleanupMinIntervalMinutes;
+		private readonly int processedRequestsInProgressTimeoutMinutes;
 
 		/// <summary>
 		/// Factory for creating database context instances with proper connection pooling and retry configuration.
@@ -63,14 +104,11 @@ namespace FishMMO.Database.Npgsql.Services
 			processedRequestsRetentionDays = Math.Max(0, settings.ProcessedRequestsRetentionDays);
 			processedRequestsCleanupMaxRows = Math.Max(1, settings.ProcessedRequestsCleanupMaxRows);
 			processedRequestsCleanupMinIntervalMinutes = Math.Max(0, settings.ProcessedRequestsCleanupMinIntervalMinutes);
+			processedRequestsInProgressTimeoutMinutes = Math.Max(0, settings.ProcessedRequestsInProgressTimeoutMinutes);
 
 			// Cache table name once at construction - dispose context immediately
-			if (cachedTableName == null)
-			{
-				using var dbContext = DbContextFactory.CreateDbContext();
-				cachedTableName = dbContext.GetTableName<TEntity>();
-			}
-			TableName = cachedTableName;
+			using var dbContext = DbContextFactory.CreateDbContext();
+			TableName = dbContext.GetTableName<TEntity>();
 		}
 
 		private async Task MaybeCleanupProcessedRequestsAsync()
@@ -84,14 +122,7 @@ namespace FishMMO.Database.Npgsql.Services
 				? TimeSpan.Zero
 				: TimeSpan.FromMinutes(processedRequestsCleanupMinIntervalMinutes);
 
-			var nowTicks = DateTime.UtcNow.Ticks;
-			var lastTicks = Interlocked.Read(ref processedRequestsCleanupLastRunTicks);
-			if (minInterval > TimeSpan.Zero && nowTicks - lastTicks < minInterval.Ticks)
-			{
-				return;
-			}
-
-			if (Interlocked.CompareExchange(ref processedRequestsCleanupLastRunTicks, nowTicks, lastTicks) != lastTicks)
+			if (!GlobalMaintenanceThrottle.TryBeginProcessedRequestsCleanup(minInterval))
 			{
 				return;
 			}
@@ -129,14 +160,18 @@ namespace FishMMO.Database.Npgsql.Services
 			Action? onAttemptStart = null,
 			Func<NpgsqlDbContext, DatabaseException, bool, CancellationToken, Task>? onFailureAsync = null)
 		{
+			var performanceTracker = DbContextFactory.PerformanceTracker;
+
 			for (var attempt = 0; attempt <= maxTransientRetryCount; attempt++)
 			{
 				await using var dbContext = DbContextFactory.CreateDbContext();
 				IDbContextTransaction? transaction = null;
+				Stopwatch? stopwatch = null;
 				try
 				{
 					cancellationToken.ThrowIfCancellationRequested();
 					onAttemptStart?.Invoke();
+					stopwatch = performanceTracker?.StartTracking();
 
 					if (useTransaction)
 					{
@@ -159,6 +194,12 @@ namespace FishMMO.Database.Npgsql.Services
 							}
 						}
 
+						if (stopwatch != null)
+						{
+							stopwatch.Stop();
+							performanceTracker?.RecordQuery(operationName, stopwatch.Elapsed, result.IsSuccess);
+						}
+
 						return result;
 					}
 					catch
@@ -173,6 +214,12 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 				catch (Exception ex)
 				{
+					if (stopwatch != null)
+					{
+						stopwatch.Stop();
+						performanceTracker?.RecordQuery(operationName, stopwatch.Elapsed, success: false);
+					}
+
 					var dbEx = MapException(ex, operationName, dbContext);
 					var willRetry = dbEx.IsTransient && attempt < maxTransientRetryCount;
 
@@ -259,14 +306,14 @@ namespace FishMMO.Database.Npgsql.Services
 		/// Unified protected entrypoint for executing non-transactional operations.
 		/// </summary>
 		protected Task<DatabaseResult<TResult>> ExecuteSqlAsync<TResult>(
-			Func<NpgsqlDbContext, Task<TResult>> operation,
+			Func<NpgsqlDbContext, CancellationToken, Task<TResult>> operation,
 			string operationName,
 			CancellationToken cancellationToken = default)
 		{
 			if (operation == null) throw new ArgumentNullException(nameof(operation));
 
 			return ExecuteWorkAsync(
-				async (dbContext, ct) => DatabaseResult<TResult>.Success(await operation(dbContext)),
+				async (dbContext, ct) => DatabaseResult<TResult>.Success(await operation(dbContext, ct)),
 				operationName,
 				cancellationToken);
 		}
@@ -275,7 +322,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// Unified protected entrypoint for executing non-transactional operations with no return value.
 		/// </summary>
 		protected async Task<DatabaseResult> ExecuteSqlAsync(
-			Func<NpgsqlDbContext, Task> operation,
+			Func<NpgsqlDbContext, CancellationToken, Task> operation,
 			string operationName,
 			CancellationToken cancellationToken = default)
 		{
@@ -284,7 +331,7 @@ namespace FishMMO.Database.Npgsql.Services
 			var result = await ExecuteWorkAsync(
 				async (dbContext, ct) =>
 				{
-					await operation(dbContext);
+					await operation(dbContext, ct);
 					return DatabaseResult<bool>.Success(true);
 				},
 				operationName,
@@ -299,14 +346,14 @@ namespace FishMMO.Database.Npgsql.Services
 		/// Unified protected entrypoint for executing transactional operations.
 		/// </summary>
 		protected Task<DatabaseResult<TResult>> ExecuteSqlAsync<TResult>(
-			Func<NpgsqlDbContext, IDbContextTransaction, Task<TResult>> operation,
+			Func<NpgsqlDbContext, IDbContextTransaction, CancellationToken, Task<TResult>> operation,
 			string operationName,
 			CancellationToken cancellationToken = default)
 		{
 			if (operation == null) throw new ArgumentNullException(nameof(operation));
 
 			return ExecuteWorkInTransactionAsync(
-				async (dbContext, transaction, ct) => DatabaseResult<TResult>.Success(await operation(dbContext, transaction)),
+				async (dbContext, transaction, ct) => DatabaseResult<TResult>.Success(await operation(dbContext, transaction, ct)),
 				operationName,
 				cancellationToken);
 		}
@@ -315,7 +362,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// Unified protected entrypoint for executing transactional operations with no return value.
 		/// </summary>
 		protected async Task<DatabaseResult> ExecuteSqlAsync(
-			Func<NpgsqlDbContext, IDbContextTransaction, Task> operation,
+			Func<NpgsqlDbContext, IDbContextTransaction, CancellationToken, Task> operation,
 			string operationName,
 			CancellationToken cancellationToken = default)
 		{
@@ -324,7 +371,7 @@ namespace FishMMO.Database.Npgsql.Services
 			var result = await ExecuteWorkInTransactionAsync(
 				async (dbContext, transaction, ct) =>
 				{
-					await operation(dbContext, transaction);
+					await operation(dbContext, transaction, ct);
 					return DatabaseResult<bool>.Success(true);
 				},
 				operationName,
@@ -342,7 +389,7 @@ namespace FishMMO.Database.Npgsql.Services
 			Guid requestId,
 			long accountId,
 			string operationName,
-			Func<NpgsqlDbContext, IDbContextTransaction, Task<TResult>> operation,
+			Func<NpgsqlDbContext, IDbContextTransaction, CancellationToken, Task<TResult>> operation,
 			CancellationToken cancellationToken = default)
 		{
 			return ExecuteIdempotentAsync(requestId, accountId, operationName, operation, cancellationToken);
@@ -363,7 +410,7 @@ namespace FishMMO.Database.Npgsql.Services
 			Guid requestId,
 			long accountId,
 			string operationName,
-			Func<NpgsqlDbContext, IDbContextTransaction, Task<TResult>> operation,
+			Func<NpgsqlDbContext, IDbContextTransaction, CancellationToken, Task<TResult>> operation,
 			CancellationToken cancellationToken = default)
 		{
 			if (requestId == Guid.Empty)
@@ -420,6 +467,32 @@ namespace FishMMO.Database.Npgsql.Services
 								"IDEMPOTENCY_MISMATCH",
 								"RequestId is already in use.");
 						}
+
+						// Prevent permanent request poisoning: if the request is stuck "in progress" (status=0)
+						// due to a server crash, allow a later retry to reclaim it once it becomes stale.
+						// This is done atomically in SQL (single UPDATE with a time predicate) so only one
+						// caller can successfully take over the request.
+						var tookOverStaleRequest = false;
+						if (status == 0 && string.IsNullOrWhiteSpace(existingResponse) && processedRequestsInProgressTimeoutMinutes > 0)
+						{
+							tookOverStaleRequest = await TryTakeOverStaleIdempotentRequestAsync(
+								dbContext,
+								transaction!,
+								requestsTableName,
+								requestId,
+								accountId,
+								operationName,
+								processedRequestsInProgressTimeoutMinutes,
+								ct);
+
+							if (tookOverStaleRequest)
+							{
+								didInsert = true;
+							}
+						}
+
+						if (!tookOverStaleRequest)
+						{
 
 						if (status == 2)
 						{
@@ -487,9 +560,10 @@ namespace FishMMO.Database.Npgsql.Services
 						return DatabaseResult<TResult>.Failure(
 							"IDEMPOTENCY_IN_PROGRESS",
 							"This request is already being processed.");
+						}
 					}
 
-					var data = await operation(dbContext, transaction!);
+					var data = await operation(dbContext, transaction!, ct);
 					var responseJson = JsonSerializer.Serialize(
 						new IdempotencyEnvelope<TResult>
 						{
@@ -540,6 +614,64 @@ namespace FishMMO.Database.Npgsql.Services
 						WHERE request_id = {requestId}",
 						CancellationToken.None);
 				});
+		}
+
+		/// <summary>
+		/// Attempts to reclaim an idempotent request row that is stuck "in progress" (status=0) and has become stale.
+		/// </summary>
+		/// <remarks>
+		/// This prevents permanent request-id poisoning after process crashes.
+		/// The takeover is atomic (single UPDATE with time predicate) so only one caller succeeds.
+		/// The row is reset to a fresh in-progress state with cleared response/error fields.
+		/// </remarks>
+		/// <param name="dbContext">Database context.</param>
+		/// <param name="transaction">Transaction to bind the command to.</param>
+		/// <param name="requestsTable">Fully-qualified processed_requests table identifier.</param>
+		/// <param name="requestId">Request idempotency key.</param>
+		/// <param name="accountId">Account id associated with the request.</param>
+		/// <param name="operationName">Logical operation name.</param>
+		/// <param name="timeoutMinutes">Staleness timeout in minutes.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>True if the caller successfully reclaimed the request; otherwise false.</returns>
+		private static async Task<bool> TryTakeOverStaleIdempotentRequestAsync(
+			NpgsqlDbContext dbContext,
+			IDbContextTransaction transaction,
+			string requestsTable,
+			Guid requestId,
+			long accountId,
+			string operationName,
+			int timeoutMinutes,
+			CancellationToken cancellationToken)
+		{
+			if (timeoutMinutes <= 0)
+			{
+				return false;
+			}
+
+			await dbContext.Database.OpenConnectionAsync(cancellationToken);
+			await using var command = dbContext.Database.GetDbConnection().CreateCommand();
+			command.Transaction = transaction.GetDbTransaction();
+			command.CommandText = $@"UPDATE {requestsTable}
+				SET account_id = @account_id,
+					operation_name = @operation_name,
+					status = 0,
+					response = NULL,
+					error_code = NULL,
+					error_message = NULL,
+					created_at = CURRENT_TIMESTAMP,
+					completed_at = NULL
+				WHERE request_id = @request_id
+					AND status = 0
+					AND created_at < (CURRENT_TIMESTAMP - (@timeout_minutes * INTERVAL '1 minute'))
+				RETURNING 1;";
+
+			AddParameter(command, "@request_id", requestId);
+			AddParameter(command, "@account_id", accountId);
+			AddParameter(command, "@operation_name", operationName);
+			AddParameter(command, "@timeout_minutes", timeoutMinutes);
+
+			var result = await command.ExecuteScalarAsync(cancellationToken);
+			return result != null && result != DBNull.Value;
 		}
 
 		private static async Task<(bool didInsert, long accountId, string operationName, byte status, string? response, string? errorCode, string? errorMessage)> TryBeginIdempotentRequestAsync(
@@ -610,6 +742,10 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <returns>Mapped DatabaseException.</returns>
 		protected DatabaseException MapException(Exception ex, string operationName, NpgsqlDbContext dbContext)
 		{
+			var timeoutSeconds = GetCommandTimeoutSeconds(dbContext);
+			var postgresSqlState = TryGetPostgresSqlState(ex);
+			var isTransient = IsTransientDatabaseFailure(ex, postgresSqlState);
+
 			return ex switch
 			{
 				// Pass through DatabaseExceptions unchanged (already sanitized)
@@ -619,6 +755,11 @@ namespace FishMMO.Database.Npgsql.Services
 				OperationCanceledException cancelEx => new DatabaseOperationCanceledException(
 					operationName,
 					cancelEx),
+
+				TimeoutException timeoutEx => new DatabaseTimeoutException(
+					operationName,
+					timeoutSeconds,
+					timeoutEx),
 
 				PostgresException pgEx when pgEx.SqlState == "23505" => new DatabaseConstraintException(
 					ConstraintType.Unique,
@@ -632,6 +773,23 @@ namespace FishMMO.Database.Npgsql.Services
 					"The referenced entity does not exist.",
 					pgEx),
 
+				PostgresException pgEx when IsTimeoutSqlState(pgEx.SqlState) => new DatabaseTimeoutException(
+					operationName,
+					timeoutSeconds,
+					pgEx),
+
+				PostgresException pgEx when IsConnectionSqlState(pgEx.SqlState) => new DatabaseConnectionException(
+					GetSafeConnectionIdentifier(dbContext),
+					pgEx),
+
+				PostgresException pgEx when IsTransientSqlState(pgEx.SqlState) => new DatabaseQueryException(
+					operationName,
+					"The database is temporarily unavailable. Please try again.",
+					pgEx.Message,
+					isTransient: true,
+					postgreSqlErrorCode: pgEx.SqlState,
+					innerException: pgEx),
+
 				NpgsqlException npgsqlEx => new DatabaseConnectionException(
 					GetSafeConnectionIdentifier(dbContext),
 					npgsqlEx),
@@ -640,18 +798,149 @@ namespace FishMMO.Database.Npgsql.Services
 					operationName,
 					"Database update failed.",
 					dbUpdateEx.Message,
-					false,
-					null,
+					isTransient,
+					postgresSqlState,
 					dbUpdateEx),
 
 				_ => new DatabaseQueryException(
 					operationName,
 					"An unexpected database error occurred.",
 					ex.Message,
-					false,
-					null,
+					isTransient,
+					postgresSqlState,
 					ex)
 			};
+		}
+
+		/// <summary>
+		/// Attempts to extract a PostgreSQL SQLSTATE from the exception chain.
+		/// </summary>
+		/// <param name="exception">Exception to inspect.</param>
+		/// <returns>SQLSTATE code if present; otherwise null.</returns>
+		private static string? TryGetPostgresSqlState(Exception exception)
+		{
+			for (var current = exception; current != null; current = current.InnerException)
+			{
+				if (current is PostgresException pgEx)
+				{
+					return pgEx.SqlState;
+				}
+			}
+
+			return null;
+		}
+
+		/// <summary>
+		/// Determines whether a failure is transient (retryable) based on exception type and SQLSTATE.
+		/// </summary>
+		/// <param name="exception">Exception to inspect.</param>
+		/// <param name="sqlState">Extracted SQLSTATE, if available.</param>
+		/// <returns>True if the failure is considered transient; otherwise false.</returns>
+		private static bool IsTransientDatabaseFailure(Exception exception, string? sqlState)
+		{
+			if (exception is OperationCanceledException)
+			{
+				return false;
+			}
+
+			if (exception is TimeoutException)
+			{
+				return true;
+			}
+
+			if (!string.IsNullOrWhiteSpace(sqlState))
+			{
+				return IsTimeoutSqlState(sqlState) || IsConnectionSqlState(sqlState) || IsTransientSqlState(sqlState);
+			}
+
+			if (exception is NpgsqlException)
+			{
+				return true;
+			}
+
+			return false;
+		}
+
+		/// <summary>
+		/// Determines whether a SQLSTATE represents a statement timeout or query cancel.
+		/// </summary>
+		/// <param name="sqlState">PostgreSQL SQLSTATE code.</param>
+		/// <returns>True if the SQLSTATE is considered a timeout.</returns>
+		private static bool IsTimeoutSqlState(string? sqlState)
+		{
+			// 57014 = query_canceled (includes canceling statement due to statement timeout)
+			return string.Equals(sqlState, "57014", StringComparison.Ordinal);
+		}
+
+		/// <summary>
+		/// Determines whether a SQLSTATE indicates a connection-level failure.
+		/// </summary>
+		/// <param name="sqlState">PostgreSQL SQLSTATE code.</param>
+		/// <returns>True if the SQLSTATE represents a connection-level failure.</returns>
+		private static bool IsConnectionSqlState(string? sqlState)
+		{
+			if (string.IsNullOrWhiteSpace(sqlState))
+			{
+				return false;
+			}
+
+			// 08XXX = connection exception class
+			if (sqlState.StartsWith("08", StringComparison.Ordinal))
+			{
+				return true;
+			}
+
+			// 57P01/57P02/57P03 = shutdown/crash/cannot_connect_now (often transient during restarts/failovers)
+			return string.Equals(sqlState, "57P01", StringComparison.Ordinal)
+				|| string.Equals(sqlState, "57P02", StringComparison.Ordinal)
+				|| string.Equals(sqlState, "57P03", StringComparison.Ordinal);
+		}
+
+		/// <summary>
+		/// Determines whether a SQLSTATE should be treated as transient (retryable).
+		/// </summary>
+		/// <param name="sqlState">PostgreSQL SQLSTATE code.</param>
+		/// <returns>True if the SQLSTATE is considered retryable.</returns>
+		private static bool IsTransientSqlState(string? sqlState)
+		{
+			if (string.IsNullOrWhiteSpace(sqlState))
+			{
+				return false;
+			}
+
+			// 40P01 = deadlock_detected
+			// 40001 = serialization_failure
+			// 55P03 = lock_not_available
+			// 53300 = too_many_connections
+			return string.Equals(sqlState, "40P01", StringComparison.Ordinal)
+				|| string.Equals(sqlState, "40001", StringComparison.Ordinal)
+				|| string.Equals(sqlState, "55P03", StringComparison.Ordinal)
+				|| string.Equals(sqlState, "53300", StringComparison.Ordinal);
+		}
+
+		/// <summary>
+		/// Attempts to read the configured command timeout (seconds) from the DbContext connection string.
+		/// Returns 0 when unavailable.
+		/// </summary>
+		/// <param name="dbContext">DbContext to extract connection string from.</param>
+		/// <returns>Command timeout in seconds, or 0 if unknown.</returns>
+		private static int GetCommandTimeoutSeconds(NpgsqlDbContext dbContext)
+		{
+			try
+			{
+				var connectionString = dbContext?.Database.GetConnectionString();
+				if (string.IsNullOrWhiteSpace(connectionString))
+				{
+					return 0;
+				}
+
+				var builder = new NpgsqlConnectionStringBuilder(connectionString);
+				return builder.CommandTimeout;
+			}
+			catch
+			{
+				return 0;
+			}
 		}
 
 		/// <summary>
@@ -719,9 +1008,9 @@ namespace FishMMO.Database.Npgsql.Services
 			bool requireRowsAffected = false,
 			CancellationToken cancellationToken = default)
 		{
-			return await ExecuteSqlAsync(async dbContext =>
+			return await ExecuteSqlAsync(async (dbContext, ct) =>
 			{
-				var rowsAffected = await dbContext.Database.ExecuteSqlInterpolatedAsync(sql, cancellationToken);
+				var rowsAffected = await dbContext.Database.ExecuteSqlInterpolatedAsync(sql, ct);
 
 				if (requireRowsAffected && rowsAffected == 0)
 				{

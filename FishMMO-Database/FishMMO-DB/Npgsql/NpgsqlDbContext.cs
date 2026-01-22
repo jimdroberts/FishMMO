@@ -104,13 +104,22 @@ namespace FishMMO.Database.Npgsql
 		{
 			if (Interlocked.Exchange(ref disposed, 1) == 0)
 			{
+				Exception disposalException = null;
 				try
 				{
 					base.Dispose();
 				}
+				catch (Exception ex)
+				{
+					disposalException = ex;
+					throw;
+				}
 				finally
 				{
-					poolMetrics?.RecordConnectionDisposed();
+					if (disposalException == null)
+					{
+						poolMetrics?.RecordConnectionDisposed();
+					}
 				}
 			}
 		}
@@ -125,13 +134,22 @@ namespace FishMMO.Database.Npgsql
 		{
 			if (Interlocked.Exchange(ref disposed, 1) == 0)
 			{
+				Exception disposalException = null;
 				try
 				{
-					await base.DisposeAsync();
+					base.Dispose();
+				}
+				catch (Exception ex)
+				{
+					disposalException = ex;
+					throw;
 				}
 				finally
 				{
-					poolMetrics?.RecordConnectionDisposed();
+					if (disposalException == null)
+					{
+						poolMetrics?.RecordConnectionDisposed();
+					}
 				}
 			}
 		}

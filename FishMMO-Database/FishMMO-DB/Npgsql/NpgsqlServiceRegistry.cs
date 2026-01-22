@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -11,22 +12,16 @@ namespace FishMMO.Database.Npgsql
 	/// Thread-safe singleton pattern with lazy initialization.
 	/// Follows Single Responsibility Principle: solely responsible for service lifecycle management.
 	/// </summary>
+	/// <remarks>
+	/// Uses ConcurrentDictionary for lock-free reads, providing excellent performance
+	/// under high concurrency. Thread-safe for all operations.
+	/// </remarks>
 	public sealed class NpgsqlServiceRegistry : IDatabaseServiceRegistry
 	{
-		private readonly Dictionary<Type, object> services;
-		private readonly object lockObject = new object();
+		private readonly ConcurrentDictionary<Type, object> services;
 
 		/// <inheritdoc/>
-		public int ServiceCount
-		{
-			get
-			{
-				lock (lockObject)
-				{
-					return services.Count;
-				}
-			}
-		}
+		public int ServiceCount => services.Count;
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="NpgsqlServiceRegistry"/> class.
@@ -40,7 +35,7 @@ namespace FishMMO.Database.Npgsql
 			if (dbContextFactory == null)
 				throw new ArgumentNullException(nameof(dbContextFactory));
 
-			services = new Dictionary<Type, object>();
+			services = new ConcurrentDictionary<Type, object>();
 
 			// Discover and register all services
 			DiscoverAndRegisterServices(dbContextFactory);
@@ -49,17 +44,14 @@ namespace FishMMO.Database.Npgsql
 		/// <inheritdoc/>
 		public bool TryGet<TService>(out TService service) where TService : class
 		{
-			lock (lockObject)
+			if (services.TryGetValue(typeof(TService), out var serviceInstance))
 			{
-				if (services.TryGetValue(typeof(TService), out var serviceInstance))
-				{
-					service = (serviceInstance as TService)!;
-					return service != null;
-				}
-
-				service = null!;
-				return false;
+				service = (serviceInstance as TService)!;
+				return service != null;
 			}
+
+			service = null!;
+			return false;
 		}
 
 		/// <inheritdoc/>
@@ -68,19 +60,13 @@ namespace FishMMO.Database.Npgsql
 			if (serviceType == null)
 				throw new ArgumentNullException(nameof(serviceType));
 
-			lock (lockObject)
-			{
-				return services.TryGetValue(serviceType, out service);
-			}
+			return services.TryGetValue(serviceType, out service);
 		}
 
 		/// <inheritdoc/>
 		public bool IsRegistered<TService>() where TService : class
 		{
-			lock (lockObject)
-			{
-				return services.ContainsKey(typeof(TService));
-			}
+			return services.ContainsKey(typeof(TService));
 		}
 
 		/// <inheritdoc/>
@@ -89,19 +75,13 @@ namespace FishMMO.Database.Npgsql
 			if (serviceType == null)
 				throw new ArgumentNullException(nameof(serviceType));
 
-			lock (lockObject)
-			{
-				return services.ContainsKey(serviceType);
-			}
+			return services.ContainsKey(serviceType);
 		}
 
 		/// <inheritdoc/>
 		public Type[] GetRegisteredServiceTypes()
 		{
-			lock (lockObject)
-			{
-				return services.Keys.ToArray();
-			}
+			return services.Keys.ToArray();
 		}
 
 		/// <summary>

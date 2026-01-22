@@ -72,12 +72,9 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<int>.Failure("VALIDATION_ERROR", "Invalid account");
 			}
 
-			return await ExecuteSqlAsync(async dbContext =>
+			return await ExecuteSqlAsync(async (dbContext, ct) =>
 			{
-				return await dbContext.Characters
-					.AsNoTracking()
-					.Where(c => c.Account == account && !c.Deleted)
-					.CountAsync(cancellationToken);
+				return await GetCharacterCountByAccountQuery(dbContext, account, ct);
 			}, "GetCount", cancellationToken);
 		}
 
@@ -94,7 +91,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<CharacterOperationResult>.Success(CharacterOperationResult.DatabaseError);
 			}
 
-			return await ExecuteSqlAsync<CharacterOperationResult>(async dbContext =>
+			return await ExecuteSqlAsync<CharacterOperationResult>(async (dbContext, ct) =>
 			{
 				var nameLower = characterData.Name.ToLower();
 
@@ -121,7 +118,7 @@ namespace FishMMO.Database.Npgsql.Services
 						 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, NULL, false)
 					RETURNING id")
 					.AsNoTracking()
-					.FirstOrDefaultAsync(cancellationToken);
+					.FirstOrDefaultAsync(ct);
 
 				var characterId = result?.ID ?? 0;
 				return characterId > 0 ? CharacterOperationResult.CharacterCreated : CharacterOperationResult.DatabaseError;
@@ -176,19 +173,46 @@ namespace FishMMO.Database.Npgsql.Services
 				"SaveCharacter",
 				entityName: "Character",
 				entityId: characterData.ID,
-				requireRowsAffected: true,
+				requireRowsAffected: false,
 				cancellationToken: cancellationToken);
 
-			// If no rows affected, character was modified by another server (concurrency conflict)
-			if (!result.IsSuccess && result.ErrorCode == "DB_NO_ROWS_AFFECTED")
+			if (!result.IsSuccess)
 			{
+				return DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			}
+
+			// rowsAffected == 0 can mean either:
+			// - Concurrency conflict (last_saved mismatch)
+			// - Not found / deleted
+			if (result.Data == 0)
+			{
+				var existsResult = await ExecuteSqlAsync(async (dbContext, ct) =>
+				{
+					return await dbContext.Characters
+						.AsNoTracking()
+						.AnyAsync(c => c.ID == characterData.ID && !c.Deleted, ct);
+				}, "CheckCharacterExistsForSave", cancellationToken);
+
+				if (!existsResult.IsSuccess)
+				{
+					return DatabaseResult.Failure(existsResult.ErrorCode, existsResult.ErrorMessage, existsResult.IsTransient);
+				}
+
+				if (!existsResult.Data)
+				{
+					return DatabaseResult.Failure(
+						"DB_NOT_FOUND",
+						"Character not found.",
+						isTransient: false);
+				}
+
 				return DatabaseResult.Failure(
 					"CONCURRENCY_CONFLICT",
 					"Character was modified by another server. Please reload and try again.",
 					isTransient: false);
 			}
 
-			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return DatabaseResult.Success();
 		}
 
 		/// <inheritdoc/>
@@ -260,10 +284,10 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<CharacterData?>.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			return await ExecuteSqlAsync(async dbContext =>
+			return await ExecuteSqlAsync(async (dbContext, ct) =>
 			{
 				// Use compiled query for hot path performance
-				var entity = await GetCharacterByIdQuery(dbContext, characterId, cancellationToken);
+				var entity = await GetCharacterByIdQuery(dbContext, characterId, ct);
 
 				if (entity == null)
 				{
@@ -282,9 +306,9 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<IReadOnlyList<CharacterData>>.Failure("VALIDATION_ERROR", "Account name is required");
 			}
 
-			return await ExecuteSqlAsync(async dbContext =>
+			return await ExecuteSqlAsync(async (dbContext, ct) =>
 			{
-				var entities = await GetCharactersByAccountQuery(dbContext, account, cancellationToken);
+				var entities = await GetCharactersByAccountQuery(dbContext, account, ct);
 
 				return (IReadOnlyList<CharacterData>)entities.Select(MapEntityToData).ToList();
 			}, "GetCharacters", cancellationToken);
@@ -298,10 +322,10 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<CharacterData?>.Failure("VALIDATION_ERROR", "Character name is required");
 			}
 
-			return await ExecuteSqlAsync(async dbContext =>
+			return await ExecuteSqlAsync(async (dbContext, ct) =>
 			{
 				var nameLower = name.ToLower();
-				var entity = await GetCharacterByNameQuery(dbContext, nameLower, cancellationToken);
+				var entity = await GetCharacterByNameQuery(dbContext, nameLower, ct);
 
 				if (entity == null)
 				{
@@ -328,7 +352,7 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 
 			// Use explicit transaction with row-level locking to prevent race conditions
-			var transactionResult = await ExecuteSqlAsync(async (dbContext, transaction) =>
+			var transactionResult = await ExecuteSqlAsync(async (dbContext, transaction, ct) =>
 			{
 				// Use CTE to combine SELECT FOR UPDATE and UPDATE into single atomic operation
 				// This ensures the lock is held throughout the entire update
@@ -342,7 +366,7 @@ namespace FishMMO.Database.Npgsql.Services
 					SET selected = (id = {characterId})
 					WHERE account = {account} AND NOT deleted
 					AND id IN (SELECT id FROM locked_chars)",
-					cancellationToken);
+					ct);
 
 				if (rowsAffected == 0)
 				{

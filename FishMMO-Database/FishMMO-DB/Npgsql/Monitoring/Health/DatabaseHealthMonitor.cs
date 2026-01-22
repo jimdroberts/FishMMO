@@ -101,9 +101,16 @@ namespace FishMMO.Database.Npgsql.Monitoring.Health
 		/// Safe to call from Unity main thread.
 		/// </summary>
 		/// <returns>Health check result containing status and diagnostic information.</returns>
+		/// <remarks>
+		/// <para><b>Security Warning:</b> The returned HealthCheckResult contains sensitive
+		/// infrastructure details including database names, server addresses, and connection
+		/// pool information. If exposing this result via public APIs or external systems,
+		/// call <see cref="HealthCheckResult.Sanitize"/> to redact sensitive information.</para>
+		/// <para>Example: <c>var sanitizedResult = CheckHealth().Sanitize();</c></para>
+		/// </remarks>
 		public HealthCheckResult CheckHealth()
 		{
-			return CheckHealthAsync(CancellationToken.None).GetAwaiter().GetResult();
+			return CheckHealthAsync(CancellationToken.None).ConfigureAwait(false).GetAwaiter().GetResult();
 		}
 
 		/// <summary>
@@ -112,6 +119,13 @@ namespace FishMMO.Database.Npgsql.Monitoring.Health
 		/// </summary>
 		/// <param name="cancellationToken">Cancellation token to cancel the operation.</param>
 		/// <returns>Health check result containing status and diagnostic information.</returns>
+		/// <remarks>
+		/// <para><b>Security Warning:</b> The returned HealthCheckResult contains sensitive
+		/// infrastructure details including database names, server addresses, and connection
+		/// pool information. If exposing this result via public APIs or external systems,
+		/// call <see cref="HealthCheckResult.Sanitize"/> to redact sensitive information.</para>
+		/// <para>Example: <c>var sanitizedResult = await CheckHealthAsync().Sanitize();</c></para>
+		/// </remarks>
 		public async Task<HealthCheckResult> CheckHealthAsync(CancellationToken cancellationToken = default)
 		{
 			var startTime = DateTime.UtcNow;
@@ -125,7 +139,7 @@ namespace FishMMO.Database.Npgsql.Monitoring.Health
 				// Open connection if needed
 				if (connection.State != ConnectionState.Open)
 				{
-					await connection.OpenAsync(cancellationToken);
+					await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
 				}
 
 				// Execute simple ping query
@@ -133,7 +147,7 @@ namespace FishMMO.Database.Npgsql.Monitoring.Health
 				command.CommandText = "SELECT 1";
 				command.CommandTimeout = 5;
 
-				var queryResult = await command.ExecuteScalarAsync(cancellationToken);
+				var queryResult = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
 				var elapsed = DateTime.UtcNow - startTime;
 
 				// Populate result

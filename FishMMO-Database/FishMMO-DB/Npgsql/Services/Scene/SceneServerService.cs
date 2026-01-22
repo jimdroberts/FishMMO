@@ -38,7 +38,7 @@ namespace FishMMO.Database.Npgsql.Services
 					"Name and address must not be empty.");
 			}
 
-			return await ExecuteSqlAsync<(long ServerId, SceneServerData ServerData)>(async (dbContext) =>
+			return await ExecuteSqlAsync<(long ServerId, SceneServerData ServerData)>(async (dbContext, ct) =>
 			{
 				// Atomic UPSERT - PostgreSQL specific using FormattableString
 				var result = await dbContext.SceneServers
@@ -56,7 +56,7 @@ namespace FishMMO.Database.Npgsql.Services
 						lastpulse = EXCLUDED.lastpulse
 					RETURNING id, name, address, port, character_count, locked, lastpulse")
 						.AsNoTracking()
-						.FirstOrDefaultAsync(cancellationToken);
+						.FirstOrDefaultAsync(ct);
 
 				if (result == null)
 				{
@@ -121,11 +121,11 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<SceneServerData>.Failure("INVALID_SERVER_ID", "Server ID must be greater than zero.");
 			}
 
-			return await ExecuteSqlAsync(async dbContext =>
+			return await ExecuteSqlAsync(async (dbContext, ct) =>
 			{
 				var server = await dbContext.SceneServers
 					.AsNoTracking()
-					.FirstOrDefaultAsync(s => s.ID == serverId, cancellationToken);
+					.FirstOrDefaultAsync(s => s.ID == serverId, ct);
 				var existingServer = RequireEntityExists(server, "SceneServer", serverId);
 				return MapEntityToDto(existingServer);
 			}, "GetSceneServer", cancellationToken);

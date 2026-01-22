@@ -56,9 +56,9 @@ namespace FishMMO.Database.Npgsql.Services
 					"Character ID must be greater than 0.");
 			}
 
-			return await ExecuteSqlAsync(async dbContext =>
+			return await ExecuteSqlAsync(async (dbContext, ct) =>
 			{
-				return await GetCountQuery(dbContext, characterId, cancellationToken);
+				return await GetCountQuery(dbContext, characterId, ct);
 			}, "GetCharacterAbilityCount", cancellationToken);
 		}
 
@@ -72,7 +72,7 @@ namespace FishMMO.Database.Npgsql.Services
 					"Character ID must be greater than 0.");
 			}
 
-			return await ExecuteSqlAsync(async dbContext =>
+			return await ExecuteSqlAsync(async (dbContext, ct) =>
 			{
 				// Use atomic UPSERT with RETURNING for thread safety and proper retry strategy support
 				var events = abilityData.AbilityEvents ?? new List<int>();
@@ -87,7 +87,7 @@ namespace FishMMO.Database.Npgsql.Services
 							cooldown = EXCLUDED.cooldown
 						RETURNING id, character_id, template_id, ability_events, cooldown")
 					.AsNoTracking()
-					.FirstOrDefaultAsync(cancellationToken);
+						.FirstOrDefaultAsync(ct);
 
 				return result?.ID ?? 0;
 			}, "SaveCharacterAbility", cancellationToken);
@@ -108,7 +108,7 @@ namespace FishMMO.Database.Npgsql.Services
 			var existingItems = list.Where(a => a.ID > 0).ToList();
 
 			// Wrap both operations in transaction for atomicity
-			var transactionResult = await ExecuteSqlAsync(async (dbContext, transaction) =>
+			var transactionResult = await ExecuteSqlAsync(async (dbContext, transaction, ct) =>
 			{
 				// Handle new abilities with atomic INSERT using ON CONFLICT
 				if (newItems.Any())
@@ -131,7 +131,7 @@ namespace FishMMO.Database.Npgsql.Services
 						DO UPDATE SET
 						ability_events = EXCLUDED.ability_events,
 						cooldown = EXCLUDED.cooldown",
-						cancellationToken);
+						ct);
 				}
 
 				// Handle existing abilities with atomic UPDATE by ID
@@ -159,7 +159,7 @@ namespace FishMMO.Database.Npgsql.Services
 							{cooldowns}::float4[]
 						) AS source(id, char_id, t_id, evs, cd)
 						WHERE target.id = source.id",
-						cancellationToken);
+						ct);
 				}
 
 				return true;
@@ -227,9 +227,9 @@ namespace FishMMO.Database.Npgsql.Services
 					"Character ID must be greater than 0.");
 			}
 
-			return await ExecuteSqlAsync(async dbContext =>
+			return await ExecuteSqlAsync(async (dbContext, ct) =>
 			{
-				var entities = await GetAbilitiesQuery(dbContext, characterId, cancellationToken);
+				var entities = await GetAbilitiesQuery(dbContext, characterId, ct);
 				var abilities = entities.Select(a => new CharacterAbilityData(
 					id: a.ID,
 					characterID: a.CharacterID,

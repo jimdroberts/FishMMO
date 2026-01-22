@@ -71,12 +71,12 @@ namespace FishMMO.Database.Npgsql.Services
 			if (partyIds == null || partyIds.Count == 0)
 				return DatabaseResult<List<PartyUpdateData>>.Success(new List<PartyUpdateData>());
 
-			return await ExecuteSqlAsync(async dbContext =>
+			return await ExecuteSqlAsync(async (dbContext, ct) =>
 			{
 				var updates = await dbContext.PartyUpdates
 					.AsNoTracking()
 					.Where(u => u.LastUpdate >= lastFetch && partyIds.Contains(u.PartyID))
-					.ToListAsync(cancellationToken);
+					.ToListAsync(ct);
 
 				return updates.Select(MapEntityToDto).ToList();
 			}, "FetchPartyUpdates", cancellationToken);

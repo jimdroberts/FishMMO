@@ -119,9 +119,9 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
-			return await ExecuteSqlAsync<IReadOnlyList<CharacterFactionData>>(async dbContext =>
+			return await ExecuteSqlAsync<IReadOnlyList<CharacterFactionData>>(async (dbContext, ct) =>
 			{
-				var entities = await GetFactionsQuery(dbContext, characterId, cancellationToken);
+				var entities = await GetFactionsQuery(dbContext, characterId, ct);
 				var factions = entities.Select(f => new CharacterFactionData(
 					id: f.ID,
 					characterID: f.CharacterID,

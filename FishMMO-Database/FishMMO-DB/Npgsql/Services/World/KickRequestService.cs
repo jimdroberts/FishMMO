@@ -79,7 +79,7 @@ namespace FishMMO.Database.Npgsql.Services
 			if (amount <= 0)
 				return DatabaseResult<List<KickRequestData>>.Success(new List<KickRequestData>());
 
-			return await ExecuteSqlAsync(async dbContext =>
+			return await ExecuteSqlAsync(async (dbContext, ct) =>
 			{
 				var requests = await dbContext.KickRequests
 					.AsNoTracking()
@@ -87,7 +87,7 @@ namespace FishMMO.Database.Npgsql.Services
 					.OrderBy(kr => kr.TimeCreated)
 					.ThenBy(kr => kr.ID)
 					.Take(amount)
-					.ToListAsync(cancellationToken);
+					.ToListAsync(ct);
 
 				return requests.Select(MapEntityToDto).ToList();
 			}, "FetchKickRequests", cancellationToken);

@@ -81,7 +81,7 @@ namespace FishMMO.Database.Npgsql.Services
 			var petsToInsert = petList.Where(p => p.ID == 0).ToList();
 
 			// Wrap both operations in transaction for atomicity
-			var transactionResult = await ExecuteSqlAsync(async (dbContext, transaction) =>
+			var transactionResult = await ExecuteSqlAsync(async (dbContext, transaction, ct) =>
 			{
 				// Handle existing pets with atomic UPDATE by ID
 				if (petsToUpdate.Count > 0)
@@ -106,7 +106,7 @@ namespace FishMMO.Database.Npgsql.Services
 						{updateSpawned}::boolean[]
 					) AS u(id, character_id, template_id, abilities, spawned)) AS u
 					WHERE t.id = u.id",
-						cancellationToken);
+						ct);
 				}
 
 				// Handle new pets with atomic UPSERT using character_id unique constraint
@@ -130,7 +130,7 @@ namespace FishMMO.Database.Npgsql.Services
 						template_id = EXCLUDED.template_id,
 						abilities = EXCLUDED.abilities,
 						spawned = EXCLUDED.spawned",
-						cancellationToken);
+						ct);
 				}
 
 				return true;
@@ -172,9 +172,9 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<CharacterPetData?>.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			return await ExecuteSqlAsync<CharacterPetData?>(async dbContext =>
+			return await ExecuteSqlAsync<CharacterPetData?>(async (dbContext, ct) =>
 			{
-				var entity = await GetPetQuery(dbContext, characterId, cancellationToken);
+				var entity = await GetPetQuery(dbContext, characterId, ct);
 				if (entity == null)
 					return null;
 
@@ -196,9 +196,9 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<CharacterPetData?>.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			return await ExecuteSqlAsync<CharacterPetData?>(async dbContext =>
+			return await ExecuteSqlAsync<CharacterPetData?>(async (dbContext, ct) =>
 			{
-				var entity = await GetSpawnedPetQuery(dbContext, characterId, cancellationToken);
+				var entity = await GetSpawnedPetQuery(dbContext, characterId, ct);
 				if (entity == null)
 					return null;
 

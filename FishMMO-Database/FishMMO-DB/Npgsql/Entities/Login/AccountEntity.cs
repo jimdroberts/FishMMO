@@ -12,6 +12,6 @@ namespace FishMMO.Database.Npgsql.Entities
 		public string Verifier { get; set; }
 		public byte AccessLevel { get; set; }
 		public DateTime TimeCreated { get; set; }
-		public DateTime Lastlogin { get; set; }
+		public DateTime LastLogin { get; set; }
 	}
 }

@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using FishMMO.Database.Data;
 using FishMMO.Database.Data.Enums;
-using FishMMO.Database.Exceptions;
 using FishMMO.Database.Npgsql.Entities;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 
@@ -71,7 +70,7 @@ namespace FishMMO.Database.Npgsql.Services
 			if (amount <= 0)
 				return DatabaseResult<List<ChatData>>.Success(new List<ChatData>());
 
-			return await ExecuteSqlAsync(async dbContext =>
+			return await ExecuteSqlAsync(async (dbContext, ct) =>
 			{
 				// Filter out local messages for the specified scene server
 				var localChannels = new byte[]
@@ -91,7 +90,7 @@ namespace FishMMO.Database.Npgsql.Services
 					.OrderBy(c => c.TimeCreated)
 					.ThenBy(c => c.ID)
 					.Take(amount)
-					.ToListAsync(cancellationToken);
+					.ToListAsync(ct);
 
 				return messages.Select(MapEntityToDto).ToList();
 			}, "FetchChatMessages", cancellationToken);

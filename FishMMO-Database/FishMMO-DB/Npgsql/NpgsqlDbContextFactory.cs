@@ -223,13 +223,17 @@ namespace FishMMO.Database.Npgsql
 		/// <returns>True if the exception indicates pool exhaustion; otherwise, false.</returns>
 		private static bool IsPoolExhaustionException(NpgsqlException exception)
 		{
-			// Check for pool exhaustion indicators in exception message and inner exceptions
-			// Common patterns: "timeout", "pool", "connection limit", "too many connections"
-			var message = exception.Message;
+			// IMPORTANT: Do not treat generic "timeout" as pool exhaustion.
+			// Command/query timeouts are common and should not be counted as pool exhaustion.
+			// Only match connection-acquisition/pool-specific timeout patterns.
+			var message = exception.Message ?? string.Empty;
 
-			// Check if message contains pool exhaustion keywords
-			if (message.Contains("pool", StringComparison.OrdinalIgnoreCase) ||
-				message.Contains("timeout", StringComparison.OrdinalIgnoreCase) ||
+			if (message.Contains("timeout while getting a connection", StringComparison.OrdinalIgnoreCase) ||
+				message.Contains("timeout waiting for a connection", StringComparison.OrdinalIgnoreCase) ||
+				message.Contains("timeout waiting for connection", StringComparison.OrdinalIgnoreCase) ||
+				message.Contains("timeout while getting a connection from pool", StringComparison.OrdinalIgnoreCase) ||
+				(message.Contains("connection pool", StringComparison.OrdinalIgnoreCase) &&
+					(message.Contains("exhaust", StringComparison.OrdinalIgnoreCase) || message.Contains("depleted", StringComparison.OrdinalIgnoreCase))) ||
 				message.Contains("too many connections", StringComparison.OrdinalIgnoreCase) ||
 				message.Contains("connection limit", StringComparison.OrdinalIgnoreCase))
 			{

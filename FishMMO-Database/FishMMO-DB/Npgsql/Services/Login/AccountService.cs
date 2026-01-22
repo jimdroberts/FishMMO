@@ -62,20 +62,20 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteSqlAsync(async dbContext =>
+			return await ExecuteSqlAsync(async (dbContext, ct) =>
 			{
 				var account = await dbContext.Accounts
 					.AsNoTracking()
 					.Where(a => a.Name == accountName)
-					.Select(a => new { a.Lastlogin })
-					.FirstOrDefaultAsync(cancellationToken);
+					.Select(a => new { a.LastLogin })
+					.FirstOrDefaultAsync(ct);
 
 				if (account == null)
 				{
 					throw new DatabaseEntityNotFoundException("Account", accountName);
 				}
 
-				return account.Lastlogin;
+				return account.LastLogin;
 			}, "GetLastLogin", cancellationToken);
 		}
 
@@ -150,8 +150,8 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			var result = await ExecuteSqlAsync(async dbContext =>
-				await GetAccountForLoginQuery(dbContext, accountName, cancellationToken),
+			var result = await ExecuteSqlAsync(async (dbContext, ct) =>
+				await GetAccountForLoginQuery(dbContext, accountName, ct),
 				"GetAccountForLogin",
 				cancellationToken);
 
@@ -222,10 +222,10 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<bool>.Success(false);
 			}
 
-			return await ExecuteSqlAsync(async dbContext =>
+			return await ExecuteSqlAsync(async (dbContext, ct) =>
 			{
 				// Use compiled query for hot path performance
-				return await AccountExistsByNameQuery(dbContext, accountName, cancellationToken);
+				return await AccountExistsByNameQuery(dbContext, accountName, ct);
 			}, "AccountExists", cancellationToken);
 		}
 
@@ -268,7 +268,7 @@ namespace FishMMO.Database.Npgsql.Services
 				verifier: entity.Verifier,
 				accessLevel: entity.AccessLevel,
 				created: entity.TimeCreated,
-				lastLogin: entity.Lastlogin
+				lastLogin: entity.LastLogin
 			);
 		}
 	}

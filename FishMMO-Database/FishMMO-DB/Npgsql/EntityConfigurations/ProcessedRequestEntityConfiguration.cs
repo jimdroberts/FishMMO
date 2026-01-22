@@ -52,6 +52,15 @@ namespace FishMMO.Database.Npgsql.Entities
 
 			builder.HasIndex(e => e.CreatedAt)
 				.HasDatabaseName("IX_ProcessedRequests_CreatedAt");
+
+			builder.HasIndex(e => e.AccountID)
+				.HasDatabaseName("IX_ProcessedRequests_AccountID");
+
+			builder.HasIndex(e => e.Status)
+				.HasDatabaseName("IX_ProcessedRequests_Status");
+
+			builder.HasIndex(e => new { e.AccountID, e.CreatedAt })
+				.HasDatabaseName("IX_ProcessedRequests_AccountID_CreatedAt");
 		}
 	}
 }

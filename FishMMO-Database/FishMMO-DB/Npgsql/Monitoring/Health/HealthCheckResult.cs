@@ -137,5 +137,64 @@ namespace FishMMO.Database.Npgsql.Monitoring.Health
 		{
 			return $"[{Status}] {Message} | Connected: {IsConnected}, Response: {ResponseTimeMs:F2}ms";
 		}
+
+		/// <summary>
+		/// Creates a sanitized copy of the health check result suitable for external exposure.
+		/// Redacts sensitive infrastructure details including database names, server addresses,
+		/// connection pool details, and exception information.
+		/// </summary>
+		/// <returns>A new HealthCheckResult with sensitive information redacted.</returns>
+		/// <remarks>
+		/// <para><b>Security:</b> This method should be used when exposing health check results
+		/// via public APIs, logging to external systems, or any scenario where the data may be
+		/// accessible to unauthorized users.</para>
+		/// <para><b>Redacted Fields:</b>
+		/// - DatabaseName → "***"
+		/// - ServerAddress → "***"
+		/// - PoolInfo → Summary text without connection details
+		/// - ErrorCode → "***" (if present)
+		/// - Exception → null
+		/// </para>
+		/// <para><b>Preserved Fields:</b>
+		/// - Status, Message, IsConnected, ResponseTimeMs
+		/// - Connection metrics (counts and percentages)
+		/// - Pool health indicators
+		/// - HasWarning flag
+		/// </para>
+		/// </remarks>
+		public HealthCheckResult Sanitize()
+		{
+			return new HealthCheckResult
+			{
+				// Preserve health status and metrics
+				Status = this.Status,
+				Message = this.Message,
+				IsConnected = this.IsConnected,
+				ResponseTimeMs = this.ResponseTimeMs,
+				HasWarning = this.HasWarning,
+
+				// Redact sensitive infrastructure details
+				DatabaseName = "***",
+				ServerAddress = "***",
+				PoolInfo = this.PoolUtilizationPercent > 0 
+					? $"Utilization: {this.PoolUtilizationPercent:F1}%" 
+					: string.Empty,
+				ErrorCode = string.IsNullOrEmpty(this.ErrorCode) ? string.Empty : "***",
+
+				// Preserve non-sensitive metrics
+				ActiveConnections = this.ActiveConnections,
+				PeakConnections = this.PeakConnections,
+				TotalConnectionsCreated = this.TotalConnectionsCreated,
+				PoolUtilizationPercent = this.PoolUtilizationPercent,
+				ConnectionErrors = this.ConnectionErrors,
+				PoolExhaustionCount = this.PoolExhaustionCount,
+				PoolHealthStatus = this.PoolHealthStatus,
+				PoolHealthMessage = this.PoolHealthMessage,
+				PoolRequiresAction = this.PoolRequiresAction,
+
+				// Redact exception details
+				Exception = null
+			};
+		}
 	}
 }
