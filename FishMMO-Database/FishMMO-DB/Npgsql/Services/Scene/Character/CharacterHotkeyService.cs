@@ -88,13 +88,13 @@ namespace FishMMO.Database.Npgsql.Services
 								reference_id = EXCLUDED.reference_id
 							RETURNING id, character_id, type, slot, reference_id")
 							.AsNoTracking()
-							.FirstOrDefaultAsync(ct);
+							.FirstOrDefaultAsync(ct).ConfigureAwait(false);
 
 				var existingHotkey = RequireEntityExists(result, "CharacterHotkey", $"{hotkey.CharacterID}:{hotkey.Slot}");
 				return existingHotkey.ID;
 				},
 				"SaveHotkey",
-				cancellationToken);
+				cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -126,7 +126,7 @@ namespace FishMMO.Database.Npgsql.Services
 				"SaveHotkeys",
 				entityName: "CharacterHotkey",
 				requireRowsAffected: false,
-				cancellationToken: cancellationToken);
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
@@ -145,7 +145,7 @@ namespace FishMMO.Database.Npgsql.Services
 				entityName: "CharacterHotkey",
 				entityId: characterId,
 				requireRowsAffected: false,
-				cancellationToken: cancellationToken);
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
@@ -161,7 +161,7 @@ namespace FishMMO.Database.Npgsql.Services
 			return await ExecuteSqlAsync(
 				async (dbContext, ct) =>
 				{
-					var entities = await GetHotkeysQuery(dbContext, characterId, ct);
+					var entities = await GetHotkeysQuery(dbContext, characterId, ct).ConfigureAwait(false);
 					var hotkeys = entities.Select(h => new CharacterHotkeyData(
 						id: h.ID,
 						characterID: h.CharacterID,
@@ -173,7 +173,7 @@ namespace FishMMO.Database.Npgsql.Services
 					return (IReadOnlyList<CharacterHotkeyData>)hotkeys;
 				},
 				"GetHotkeys",
-				cancellationToken);
+				cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -187,10 +187,10 @@ namespace FishMMO.Database.Npgsql.Services
 			return await ExecuteSqlAsync(
 				async (dbContext, ct) =>
 				{
-					return await GetHotkeyCountQuery(dbContext, characterId, ct);
+					return await GetHotkeyCountQuery(dbContext, characterId, ct).ConfigureAwait(false);
 				},
 				"GetHotkeyCount",
-				cancellationToken);
+				cancellationToken).ConfigureAwait(false);
 		}
 	}
 }

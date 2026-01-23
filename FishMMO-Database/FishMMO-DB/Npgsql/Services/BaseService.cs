@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
+using NpgsqlTypes;
 using FishMMO.Database.Exceptions;
 using FishMMO.Database.Npgsql.Entities;
 
@@ -132,7 +133,7 @@ namespace FishMMO.Database.Npgsql.Services
 				await CleanupProcessedRequestsAsync(
 					TimeSpan.FromDays(processedRequestsRetentionDays),
 					processedRequestsCleanupMaxRows,
-					CancellationToken.None);
+					CancellationToken.None).ConfigureAwait(false);
 			}
 			catch
 			{
@@ -175,22 +176,22 @@ namespace FishMMO.Database.Npgsql.Services
 
 					if (useTransaction)
 					{
-						transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+						transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 					}
 
 					try
 					{
-						var result = await operation(dbContext, transaction, cancellationToken);
+						var result = await operation(dbContext, transaction, cancellationToken).ConfigureAwait(false);
 
 						if (transaction != null)
 						{
 							if (result.IsSuccess)
 							{
-								await transaction.CommitAsync(cancellationToken);
+								await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 							}
 							else
 							{
-								await transaction.RollbackAsync(CancellationToken.None);
+								await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
 							}
 						}
 
@@ -206,7 +207,7 @@ namespace FishMMO.Database.Npgsql.Services
 					{
 						if (transaction != null)
 						{
-							await transaction.RollbackAsync(CancellationToken.None);
+							await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
 						}
 
 						throw;
@@ -227,7 +228,7 @@ namespace FishMMO.Database.Npgsql.Services
 					{
 						try
 						{
-							await onFailureAsync(dbContext, dbEx, willRetry, cancellationToken);
+							await onFailureAsync(dbContext, dbEx, willRetry, cancellationToken).ConfigureAwait(false);
 						}
 						catch
 						{
@@ -240,13 +241,13 @@ namespace FishMMO.Database.Npgsql.Services
 						return DatabaseResult<TResult>.FromException(dbEx);
 					}
 
-					await Task.Delay(GetRetryDelay(attempt), cancellationToken);
+					await Task.Delay(GetRetryDelay(attempt), cancellationToken).ConfigureAwait(false);
 				}
 				finally
 				{
 					if (transaction != null)
 					{
-						await transaction.DisposeAsync();
+						await transaction.DisposeAsync().ConfigureAwait(false);
 					}
 				}
 			}
@@ -268,10 +269,32 @@ namespace FishMMO.Database.Npgsql.Services
 		private sealed class IdempotencyEnvelope<T>
 		{
 			public bool IsSuccess { get; set; }
-			public T Data { get; set; }
-			public string ErrorCode { get; set; }
-			public string ErrorMessage { get; set; }
+			public T Data { get; set; } = default!;
+			public string? ErrorCode { get; set; }
+			public string? ErrorMessage { get; set; }
 			public bool IsTransient { get; set; }
+		}
+
+		private readonly struct IdempotencyState
+		{
+			public IdempotencyState(bool didInsert, long accountId, string operationName, byte status, string? response, string? errorCode, string? errorMessage)
+			{
+				DidInsert = didInsert;
+				AccountId = accountId;
+				OperationName = operationName;
+				Status = status;
+				Response = response;
+				ErrorCode = errorCode;
+				ErrorMessage = errorMessage;
+			}
+
+			public bool DidInsert { get; }
+			public long AccountId { get; }
+			public string OperationName { get; }
+			public byte Status { get; }
+			public string? Response { get; }
+			public string? ErrorCode { get; }
+			public string? ErrorMessage { get; }
 		}
 
 		private Task<DatabaseResult<TResult>> ExecuteWorkAsync<TResult>(
@@ -313,7 +336,7 @@ namespace FishMMO.Database.Npgsql.Services
 			if (operation == null) throw new ArgumentNullException(nameof(operation));
 
 			return ExecuteWorkAsync(
-				async (dbContext, ct) => DatabaseResult<TResult>.Success(await operation(dbContext, ct)),
+				async (dbContext, ct) => DatabaseResult<TResult>.Success(await operation(dbContext, ct).ConfigureAwait(false)),
 				operationName,
 				cancellationToken);
 		}
@@ -331,11 +354,11 @@ namespace FishMMO.Database.Npgsql.Services
 			var result = await ExecuteWorkAsync(
 				async (dbContext, ct) =>
 				{
-					await operation(dbContext, ct);
+					await operation(dbContext, ct).ConfigureAwait(false);
 					return DatabaseResult<bool>.Success(true);
 				},
 				operationName,
-				cancellationToken);
+				cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
 				? DatabaseResult.Success()
@@ -353,7 +376,7 @@ namespace FishMMO.Database.Npgsql.Services
 			if (operation == null) throw new ArgumentNullException(nameof(operation));
 
 			return ExecuteWorkInTransactionAsync(
-				async (dbContext, transaction, ct) => DatabaseResult<TResult>.Success(await operation(dbContext, transaction, ct)),
+				async (dbContext, transaction, ct) => DatabaseResult<TResult>.Success(await operation(dbContext, transaction, ct).ConfigureAwait(false)),
 				operationName,
 				cancellationToken);
 		}
@@ -371,11 +394,11 @@ namespace FishMMO.Database.Npgsql.Services
 			var result = await ExecuteWorkInTransactionAsync(
 				async (dbContext, transaction, ct) =>
 				{
-					await operation(dbContext, transaction, ct);
+					await operation(dbContext, transaction, ct).ConfigureAwait(false);
 					return DatabaseResult<bool>.Success(true);
 				},
 				operationName,
-				cancellationToken);
+				cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
 				? DatabaseResult.Success()
@@ -435,135 +458,105 @@ namespace FishMMO.Database.Npgsql.Services
 					$"OperationName must be {maxIdempotencyOperationNameLength} characters or less.");
 			}
 
-			await MaybeCleanupProcessedRequestsAsync();
+			await MaybeCleanupProcessedRequestsAsync().ConfigureAwait(false);
 
-			var didInsert = false;
-			var requestsTableName = string.Empty;
+			// Phase 1: acquire or read idempotency state in a durable, non-transactional step.
+			// This must not be rolled back by the business operation transaction.
+			var beginResult = await ExecuteWorkAsync(
+				async (dbContext, ct) =>
+				{
+					var requestsTable = dbContext.GetTableName<ProcessedRequestEntity>();
+					var state = await TryBeginIdempotentRequestAsync(
+						dbContext,
+						dbTransaction: null,
+						requestsTable,
+						requestId,
+						accountId,
+						operationName,
+						ct).ConfigureAwait(false);
 
+					if (!state.DidInsert && state.AccountId != accountId)
+					{
+						return DatabaseResult<IdempotencyState>.Failure("IDEMPOTENCY_MISMATCH", "RequestId is already in use.");
+					}
+
+					if (!state.DidInsert && !string.Equals(state.OperationName, operationName, StringComparison.Ordinal))
+					{
+						return DatabaseResult<IdempotencyState>.Failure("IDEMPOTENCY_MISMATCH", "RequestId is already in use.");
+					}
+
+					// If another node is currently processing this request and it isn't stale, fail fast.
+					if (!state.DidInsert && state.Status == 0 && string.IsNullOrWhiteSpace(state.Response))
+					{
+						if (processedRequestsInProgressTimeoutMinutes <= 0)
+						{
+							return DatabaseResult<IdempotencyState>.Failure("IDEMPOTENCY_IN_PROGRESS", "This request is already being processed.");
+						}
+
+						var tookOver = await TryTakeOverStaleIdempotentRequestAsync(
+							dbContext,
+							dbTransaction: null,
+							requestsTable,
+							requestId,
+							accountId,
+							operationName,
+							processedRequestsInProgressTimeoutMinutes,
+							ct).ConfigureAwait(false);
+
+						if (!tookOver)
+						{
+							return DatabaseResult<IdempotencyState>.Failure("IDEMPOTENCY_IN_PROGRESS", "This request is already being processed.");
+						}
+
+						state = new IdempotencyState(true, accountId, operationName, status: 0, response: null, errorCode: null, errorMessage: null);
+					}
+
+					return DatabaseResult<IdempotencyState>.Success(state);
+				},
+				$"{operationName}.IdempotencyBegin",
+				cancellationToken).ConfigureAwait(false);
+
+			if (!beginResult.IsSuccess)
+			{
+				return DatabaseResult<TResult>.Failure(beginResult.ErrorCode, beginResult.ErrorMessage, beginResult.IsTransient);
+			}
+
+			var beginState = beginResult.Data;
+			if (!beginState.DidInsert)
+			{
+				if (TryGetCachedIdempotencyResponse<TResult>(beginState.Status, beginState.Response, beginState.ErrorCode, beginState.ErrorMessage, out var cached))
+				{
+					return cached;
+				}
+			}
+
+			// Phase 2: run the business operation and mark completion within the SAME transaction.
+			// This ensures we never commit side effects without also persisting the cached response.
 			return await ExecuteInternalAsync(
 				operationName,
 				async (dbContext, transaction, ct) =>
 				{
-					didInsert = false;
-					requestsTableName = dbContext.GetTableName<ProcessedRequestEntity>();
+					var requestsTable = dbContext.GetTableName<ProcessedRequestEntity>();
 
-					var (insertedThisCall, existingAccountId, existingOperationName, status, existingResponse, errorCode, errorMessage) =
-						await TryBeginIdempotentRequestAsync(
-							dbContext,
-							transaction!,
-							requestsTableName,
-							requestId,
-							accountId,
-							operationName,
-							ct);
+					// Re-check state in the operation transaction so transient retries do not double-execute.
+					var state = await TryBeginIdempotentRequestAsync(
+						dbContext,
+						transaction?.GetDbTransaction(),
+						requestsTable,
+						requestId,
+						accountId,
+						operationName,
+						ct).ConfigureAwait(false);
 
-					didInsert = insertedThisCall;
-
-					if (!insertedThisCall)
+					if (!state.DidInsert)
 					{
-						if (existingAccountId != accountId || !string.Equals(existingOperationName, operationName, StringComparison.Ordinal))
+						if (TryGetCachedIdempotencyResponse<TResult>(state.Status, state.Response, state.ErrorCode, state.ErrorMessage, out var cached))
 						{
-							return DatabaseResult<TResult>.Failure(
-								"IDEMPOTENCY_MISMATCH",
-								"RequestId is already in use.");
-						}
-
-						// Prevent permanent request poisoning: if the request is stuck "in progress" (status=0)
-						// due to a server crash, allow a later retry to reclaim it once it becomes stale.
-						// This is done atomically in SQL (single UPDATE with a time predicate) so only one
-						// caller can successfully take over the request.
-						var tookOverStaleRequest = false;
-						if (status == 0 && string.IsNullOrWhiteSpace(existingResponse) && processedRequestsInProgressTimeoutMinutes > 0)
-						{
-							tookOverStaleRequest = await TryTakeOverStaleIdempotentRequestAsync(
-								dbContext,
-								transaction!,
-								requestsTableName,
-								requestId,
-								accountId,
-								operationName,
-								processedRequestsInProgressTimeoutMinutes,
-								ct);
-
-							if (tookOverStaleRequest)
-							{
-								didInsert = true;
-							}
-						}
-
-						if (!tookOverStaleRequest)
-						{
-
-						if (status == 2)
-						{
-							if (!string.IsNullOrWhiteSpace(existingResponse))
-							{
-								IdempotencyEnvelope<TResult>? failureEnvelope = null;
-								try
-								{
-									failureEnvelope = JsonSerializer.Deserialize<IdempotencyEnvelope<TResult>>(existingResponse, IdempotencyJsonOptions);
-								}
-								catch
-								{
-									// Fall back to error fields below.
-								}
-
-								if (failureEnvelope != null)
-								{
-									return failureEnvelope.IsSuccess
-										? DatabaseResult<TResult>.Success(failureEnvelope.Data)
-										: DatabaseResult<TResult>.Failure(
-											failureEnvelope.ErrorCode,
-											failureEnvelope.ErrorMessage,
-											failureEnvelope.IsTransient);
-								}
-							}
-
-							return DatabaseResult<TResult>.Failure(
-								errorCode ?? "IDEMPOTENCY_FAILED",
-								errorMessage ?? "This request previously failed.");
-						}
-
-						if (!string.IsNullOrWhiteSpace(existingResponse))
-						{
-							IdempotencyEnvelope<TResult>? envelope = null;
-							try
-							{
-								envelope = JsonSerializer.Deserialize<IdempotencyEnvelope<TResult>>(existingResponse, IdempotencyJsonOptions);
-							}
-							catch
-							{
-								return DatabaseResult<TResult>.Failure(
-									"IDEMPOTENCY_ERROR",
-									"Cached idempotency response is invalid.");
-							}
-
-							if (envelope == null)
-							{
-								return DatabaseResult<TResult>.Failure(
-									"IDEMPOTENCY_ERROR",
-									"Cached idempotency response is missing.");
-							}
-
-							return envelope.IsSuccess
-								? DatabaseResult<TResult>.Success(envelope.Data)
-								: DatabaseResult<TResult>.Failure(envelope.ErrorCode, envelope.ErrorMessage, envelope.IsTransient);
-						}
-
-						if (status == 1)
-						{
-							return DatabaseResult<TResult>.Failure(
-								"IDEMPOTENCY_COMPLETED",
-								"This request has already completed.");
-						}
-
-						return DatabaseResult<TResult>.Failure(
-							"IDEMPOTENCY_IN_PROGRESS",
-							"This request is already being processed.");
+							return cached;
 						}
 					}
 
-					var data = await operation(dbContext, transaction!, ct);
+					var data = await operation(dbContext, transaction!, ct).ConfigureAwait(false);
 					var responseJson = JsonSerializer.Serialize(
 						new IdempotencyEnvelope<TResult>
 						{
@@ -575,28 +568,37 @@ namespace FishMMO.Database.Npgsql.Services
 						},
 						IdempotencyJsonOptions);
 
-					await dbContext.Database.ExecuteSqlInterpolatedAsync(
-						$@"UPDATE {requestsTableName} 
-						SET status = 1, completed_at = CURRENT_TIMESTAMP, response = {responseJson}, error_code = NULL, error_message = NULL
-						WHERE request_id = {requestId}",
-						ct);
+					var rows = await UpdateProcessedRequestAsync(
+						dbContext,
+						transaction?.GetDbTransaction(),
+						requestsTable,
+						requestId,
+						accountId,
+						operationName,
+						status: 1,
+						responseJson,
+						errorCode: null,
+						errorMessage: null,
+						ct).ConfigureAwait(false);
+
+					if (rows == 0)
+					{
+						throw new InvalidOperationException("Unable to finalize idempotent request state.");
+					}
 
 					return DatabaseResult<TResult>.Success(data);
 				},
 				useTransaction: true,
 				cancellationToken: cancellationToken,
-				onAttemptStart: () => didInsert = false,
-				onFailureAsync: async (dbContext, dbEx, willRetry, _) =>
+				onFailureAsync: async (dbContext, dbEx, willRetry, ct) =>
 				{
-					if (willRetry || !didInsert)
+					if (willRetry)
 					{
 						return;
 					}
 
-					var requestsTable = string.IsNullOrWhiteSpace(requestsTableName)
-						? dbContext.GetTableName<ProcessedRequestEntity>()
-						: requestsTableName;
-
+					// Best-effort: persist failure to enable deterministic retries.
+					var requestsTable = dbContext.GetTableName<ProcessedRequestEntity>();
 					var failureJson = JsonSerializer.Serialize(
 						new IdempotencyEnvelope<TResult>
 						{
@@ -608,12 +610,81 @@ namespace FishMMO.Database.Npgsql.Services
 						},
 						IdempotencyJsonOptions);
 
-					await dbContext.Database.ExecuteSqlInterpolatedAsync(
-						$@"UPDATE {requestsTable}
-						SET status = 2, completed_at = CURRENT_TIMESTAMP, error_code = {dbEx.ErrorCode}, error_message = {dbEx.SafeMessage}, response = {failureJson}
-						WHERE request_id = {requestId}",
-						CancellationToken.None);
-				});
+					try
+					{
+						await UpdateProcessedRequestAsync(
+							dbContext,
+							dbTransaction: null,
+							requestsTable,
+							requestId,
+							accountId,
+							operationName,
+							status: 2,
+							failureJson,
+							dbEx.ErrorCode,
+							dbEx.SafeMessage,
+							CancellationToken.None).ConfigureAwait(false);
+					}
+					catch
+					{
+						// Best-effort only.
+					}
+				}).ConfigureAwait(false);
+		}
+
+		private static bool TryGetCachedIdempotencyResponse<TResult>(
+			byte status,
+			string? responseJson,
+			string? errorCode,
+			string? errorMessage,
+			out DatabaseResult<TResult> result)
+		{
+			result = default;
+
+			if (!string.IsNullOrWhiteSpace(responseJson))
+			{
+				IdempotencyEnvelope<TResult>? envelope;
+				try
+				{
+					envelope = JsonSerializer.Deserialize<IdempotencyEnvelope<TResult>>(responseJson, IdempotencyJsonOptions);
+				}
+				catch
+				{
+					result = DatabaseResult<TResult>.Failure("IDEMPOTENCY_ERROR", "Cached idempotency response is invalid.");
+					return true;
+				}
+
+				if (envelope == null)
+				{
+					result = DatabaseResult<TResult>.Failure("IDEMPOTENCY_ERROR", "Cached idempotency response is missing.");
+					return true;
+				}
+
+				result = envelope.IsSuccess
+					? DatabaseResult<TResult>.Success(envelope.Data)
+					: DatabaseResult<TResult>.Failure(envelope.ErrorCode ?? "IDEMPOTENCY_FAILED", envelope.ErrorMessage ?? "This request previously failed.", envelope.IsTransient);
+				return true;
+			}
+
+			if (status == 2)
+			{
+				result = DatabaseResult<TResult>.Failure(errorCode ?? "IDEMPOTENCY_FAILED", errorMessage ?? "This request previously failed.");
+				return true;
+			}
+
+			if (status == 1)
+			{
+				result = DatabaseResult<TResult>.Failure("IDEMPOTENCY_COMPLETED", "This request has already completed.");
+				return true;
+			}
+
+			if (status == 0)
+			{
+				result = DatabaseResult<TResult>.Failure("IDEMPOTENCY_IN_PROGRESS", "This request is already being processed.");
+				return true;
+			}
+
+			return false;
 		}
 
 		/// <summary>
@@ -635,7 +706,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <returns>True if the caller successfully reclaimed the request; otherwise false.</returns>
 		private static async Task<bool> TryTakeOverStaleIdempotentRequestAsync(
 			NpgsqlDbContext dbContext,
-			IDbContextTransaction transaction,
+			DbTransaction? dbTransaction,
 			string requestsTable,
 			Guid requestId,
 			long accountId,
@@ -648,9 +719,9 @@ namespace FishMMO.Database.Npgsql.Services
 				return false;
 			}
 
-			await dbContext.Database.OpenConnectionAsync(cancellationToken);
+			await dbContext.Database.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
 			await using var command = dbContext.Database.GetDbConnection().CreateCommand();
-			command.Transaction = transaction.GetDbTransaction();
+			command.Transaction = dbTransaction;
 			command.CommandText = $@"UPDATE {requestsTable}
 				SET account_id = @account_id,
 					operation_name = @operation_name,
@@ -670,22 +741,22 @@ namespace FishMMO.Database.Npgsql.Services
 			AddParameter(command, "@operation_name", operationName);
 			AddParameter(command, "@timeout_minutes", timeoutMinutes);
 
-			var result = await command.ExecuteScalarAsync(cancellationToken);
+			var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
 			return result != null && result != DBNull.Value;
 		}
 
-		private static async Task<(bool didInsert, long accountId, string operationName, byte status, string? response, string? errorCode, string? errorMessage)> TryBeginIdempotentRequestAsync(
+		private static async Task<IdempotencyState> TryBeginIdempotentRequestAsync(
 			NpgsqlDbContext dbContext,
-			IDbContextTransaction transaction,
+			DbTransaction? dbTransaction,
 			string requestsTable,
 			Guid requestId,
 			long accountId,
 			string operationName,
 			CancellationToken cancellationToken)
 		{
-			await dbContext.Database.OpenConnectionAsync(cancellationToken);
+			await dbContext.Database.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
 			await using var command = dbContext.Database.GetDbConnection().CreateCommand();
-			command.Transaction = transaction.GetDbTransaction();
+			command.Transaction = dbTransaction;
 			command.CommandText = $@"WITH inserted AS (
 										INSERT INTO {requestsTable} (request_id, account_id, operation_name, status, response, error_code, error_message, created_at, completed_at)
 										VALUES (@request_id, @account_id, @operation_name, 0, NULL, NULL, NULL, CURRENT_TIMESTAMP, NULL)
@@ -708,8 +779,8 @@ namespace FishMMO.Database.Npgsql.Services
 			AddParameter(command, "@account_id", accountId);
 			AddParameter(command, "@operation_name", operationName);
 
-			await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-			if (!await reader.ReadAsync(cancellationToken))
+			await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+			if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
 			{
 				throw new InvalidOperationException("Unable to resolve idempotent request state.");
 			}
@@ -721,7 +792,65 @@ namespace FishMMO.Database.Npgsql.Services
 			var existingResponse = reader.IsDBNull(4) ? null : reader.GetString(4);
 			var existingErrorCode = reader.IsDBNull(5) ? null : reader.GetString(5);
 			var existingErrorMessage = reader.IsDBNull(6) ? null : reader.GetString(6);
-			return (insertedFlag, existingAccountId, existingOperationName, existingStatus, existingResponse, existingErrorCode, existingErrorMessage);
+			return new IdempotencyState(insertedFlag, existingAccountId, existingOperationName, existingStatus, existingResponse, existingErrorCode, existingErrorMessage);
+		}
+
+		private static async Task<int> UpdateProcessedRequestAsync(
+			NpgsqlDbContext dbContext,
+			DbTransaction? dbTransaction,
+			string requestsTable,
+			Guid requestId,
+			long accountId,
+			string operationName,
+			byte status,
+			string? responseJson,
+			string? errorCode,
+			string? errorMessage,
+			CancellationToken cancellationToken)
+		{
+			await dbContext.Database.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+			await using var command = dbContext.Database.GetDbConnection().CreateCommand();
+			command.Transaction = dbTransaction;
+			command.CommandText = $@"UPDATE {requestsTable}
+				SET status = @status,
+					completed_at = CURRENT_TIMESTAMP,
+					response = @response,
+					error_code = @error_code,
+					error_message = @error_message
+				WHERE request_id = @request_id
+					AND account_id = @account_id
+					AND operation_name = @operation_name
+					AND status = 0;";
+
+			var timeoutSeconds = GetCommandTimeoutSeconds(dbContext);
+			if (timeoutSeconds > 0)
+			{
+				command.CommandTimeout = timeoutSeconds;
+			}
+
+			AddParameter(command, "@request_id", requestId);
+			AddParameter(command, "@account_id", accountId);
+			AddParameter(command, "@operation_name", operationName);
+			AddParameter(command, "@status", status);
+			AddJsonbParameter(command, "@response", responseJson);
+			AddParameter(command, "@error_code", (object?)errorCode ?? DBNull.Value);
+			AddParameter(command, "@error_message", (object?)errorMessage ?? DBNull.Value);
+
+			return await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+		}
+
+		private static void AddJsonbParameter(DbCommand command, string name, string? json)
+		{
+			var parameter = command.CreateParameter();
+			parameter.ParameterName = name;
+			parameter.Value = json == null ? DBNull.Value : json;
+
+			if (parameter is NpgsqlParameter npgsqlParameter)
+			{
+				npgsqlParameter.NpgsqlDbType = NpgsqlDbType.Jsonb;
+			}
+
+			command.Parameters.Add(parameter);
 		}
 
 		private static void AddParameter(DbCommand command, string name, object value)
@@ -1010,7 +1139,7 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			return await ExecuteSqlAsync(async (dbContext, ct) =>
 			{
-				var rowsAffected = await dbContext.Database.ExecuteSqlInterpolatedAsync(sql, ct);
+				var rowsAffected = await dbContext.Database.ExecuteSqlInterpolatedAsync(sql, ct).ConfigureAwait(false);
 
 				if (requireRowsAffected && rowsAffected == 0)
 				{
@@ -1020,7 +1149,7 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				return rowsAffected;
-			}, operationName, cancellationToken);
+			}, operationName, cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <summary>
@@ -1054,19 +1183,28 @@ namespace FishMMO.Database.Npgsql.Services
 				async (dbContext, ct) =>
 				{
 					var requestsTable = dbContext.GetTableName<ProcessedRequestEntity>();
-					var rows = await dbContext.Database.ExecuteSqlInterpolatedAsync(
-						$@"
-							DELETE FROM {requestsTable}
-							WHERE request_id IN (
-								SELECT request_id
-								FROM {requestsTable}
-								WHERE (completed_at IS NOT NULL AND completed_at < {cutoff})
-								   OR (completed_at IS NULL AND created_at < {cutoff})
-								ORDER BY created_at
-								LIMIT {maxRows}
-							)",
-						ct);
+					await dbContext.Database.OpenConnectionAsync(ct).ConfigureAwait(false);
+					await using var command = dbContext.Database.GetDbConnection().CreateCommand();
+					command.CommandText = $@"DELETE FROM {requestsTable}
+						WHERE request_id IN (
+							SELECT request_id
+							FROM {requestsTable}
+							WHERE (completed_at IS NOT NULL AND completed_at < @cutoff)
+							   OR (completed_at IS NULL AND created_at < @cutoff)
+							ORDER BY created_at
+							LIMIT @max_rows
+						);";
 
+					var timeoutSeconds = GetCommandTimeoutSeconds(dbContext);
+					if (timeoutSeconds > 0)
+					{
+						command.CommandTimeout = timeoutSeconds;
+					}
+
+					AddParameter(command, "@cutoff", cutoff);
+					AddParameter(command, "@max_rows", maxRows);
+
+					var rows = await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
 					return DatabaseResult<int>.Success(rows);
 				},
 				"CleanupProcessedRequests",

@@ -1,16 +1,13 @@
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 
 namespace FishMMO.Database.Npgsql
 {
 	/// <summary>
 	/// Service registry for Npgsql-based database services.
-	/// Automatically discovers and instantiates all services in the FishMMO.Database.Npgsql.Services namespace.
-	/// Thread-safe singleton pattern with lazy initialization.
-	/// Follows Single Responsibility Principle: solely responsible for service lifecycle management.
+	/// Explicitly registers and owns the lifecycle of all Npgsql services.
+	/// Thread-safe singleton-style registry (constructed once and then used concurrently).
 	/// </summary>
 	/// <remarks>
 	/// Uses ConcurrentDictionary for lock-free reads, providing excellent performance
@@ -25,20 +22,11 @@ namespace FishMMO.Database.Npgsql
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="NpgsqlServiceRegistry"/> class.
-		/// Automatically discovers and registers all services in the Services namespace.
+		/// Services must be registered explicitly by the composition root.
 		/// </summary>
-		/// <param name="dbContextFactory">The database context factory to inject into services.</param>
-		/// <exception cref="ArgumentNullException">Thrown when dbContextFactory is null.</exception>
-		/// <exception cref="InvalidOperationException">Thrown when service instantiation fails.</exception>
-		public NpgsqlServiceRegistry(INpgsqlDbContextFactory dbContextFactory)
+		public NpgsqlServiceRegistry()
 		{
-			if (dbContextFactory == null)
-				throw new ArgumentNullException(nameof(dbContextFactory));
-
 			services = new ConcurrentDictionary<Type, object>();
-
-			// Discover and register all services
-			DiscoverAndRegisterServices(dbContextFactory);
 		}
 
 		/// <inheritdoc/>
@@ -84,60 +72,14 @@ namespace FishMMO.Database.Npgsql
 			return services.Keys.ToArray();
 		}
 
-		/// <summary>
-		/// Discovers all service interfaces and their implementations in the Services namespace.
-		/// Automatically instantiates each service with the provided factory.
-		/// </summary>
-		/// <param name="dbContextFactory">The database context factory to inject into services.</param>
-		/// <exception cref="InvalidOperationException">Thrown when service instantiation fails.</exception>
-		private void DiscoverAndRegisterServices(INpgsqlDbContextFactory dbContextFactory)
+		internal void Register<TService>(TService serviceInstance) where TService : class
 		{
-			var assembly = Assembly.GetExecutingAssembly();
-			var serviceNamespace = "FishMMO.Database.Npgsql.Services";
+			if (serviceInstance == null)
+				throw new ArgumentNullException(nameof(serviceInstance));
 
-			// Find all interfaces in the Services.Interfaces namespace that start with 'I'
-			var interfaceTypes = assembly.GetTypes()
-				.Where(t => t.IsInterface &&
-							t.Namespace != null &&
-							t.Namespace.StartsWith(serviceNamespace) &&
-							t.Name.StartsWith("I") &&
-							t.Name.EndsWith("Service"))
-				.ToList();
-
-			// Find all concrete service implementations
-			var implementationTypes = assembly.GetTypes()
-				.Where(t => t.IsClass &&
-							!t.IsAbstract &&
-							t.Namespace != null &&
-							t.Namespace.StartsWith(serviceNamespace))
-				.ToList();
-
-			// Match interfaces to implementations and instantiate
-			foreach (var interfaceType in interfaceTypes)
+			if (!services.TryAdd(typeof(TService), serviceInstance))
 			{
-				var implementationType = implementationTypes
-					.FirstOrDefault(t => interfaceType.IsAssignableFrom(t));
-
-				if (implementationType == null)
-					continue;
-
-				// Instantiate the service with the factory
-				try
-				{
-					var serviceInstance = Activator.CreateInstance(implementationType, dbContextFactory);
-					if (serviceInstance != null)
-					{
-						services[interfaceType] = serviceInstance;
-					}
-				}
-				catch (Exception ex)
-				{
-					throw new InvalidOperationException(
-						$"Failed to instantiate service {implementationType.Name} for interface {interfaceType.Name}. " +
-						$"Ensure the service has a constructor that accepts INpgsqlDbContextFactory. " +
-						$"Inner exception: {ex.Message}",
-						ex);
-				}
+				throw new InvalidOperationException($"Service already registered: {typeof(TService).FullName}");
 			}
 		}
 	}

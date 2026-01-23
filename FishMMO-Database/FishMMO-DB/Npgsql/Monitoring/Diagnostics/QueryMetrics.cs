@@ -108,10 +108,7 @@ namespace FishMMO.Database.Npgsql.Monitoring.Diagnostics
 		{
 			get
 			{
-				lock (lockObject)
-				{
-					return CalculatePercentile(0.95);
-				}
+				return CalculatePercentileSnapshot(0.95);
 			}
 		}
 
@@ -123,10 +120,7 @@ namespace FishMMO.Database.Npgsql.Monitoring.Diagnostics
 		{
 			get
 			{
-				lock (lockObject)
-				{
-					return CalculatePercentile(0.99);
-				}
+				return CalculatePercentileSnapshot(0.99);
 			}
 		}
 
@@ -231,19 +225,24 @@ namespace FishMMO.Database.Npgsql.Monitoring.Diagnostics
 		/// Sorts on demand - simpler and thread-safe at cost of O(n log n) per access.
 		/// Performance impact is negligible for sample sizes up to 1000 elements.
 		/// </summary>
-		private double CalculatePercentile(double percentile)
+		private double CalculatePercentileSnapshot(double percentile)
 		{
-			if (recentExecutionTimesMs.Count == 0)
-				return 0;
+			double[] snapshot;
+			lock (lockObject)
+			{
+				if (recentExecutionTimesMs.Count == 0)
+				{
+					return 0;
+				}
 
-			// Sort on demand - simpler and eliminates race condition
-			var sorted = recentExecutionTimesMs.OrderBy(x => x).ToList();
+				snapshot = recentExecutionTimesMs.ToArray();
+			}
 
-			var index = (int)Math.Ceiling(percentile * sorted.Count) - 1;
+			Array.Sort(snapshot);
+			var index = (int)Math.Ceiling(percentile * snapshot.Length) - 1;
 			if (index < 0) index = 0;
-			if (index >= sorted.Count) index = sorted.Count - 1;
-
-			return sorted[index];
+			if (index >= snapshot.Length) index = snapshot.Length - 1;
+			return snapshot[index];
 		}
 
 		/// <summary>

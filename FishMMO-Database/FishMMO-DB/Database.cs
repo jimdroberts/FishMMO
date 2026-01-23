@@ -1,5 +1,7 @@
 using System;
 using FishMMO.Database.Npgsql;
+using FishMMO.Database.Npgsql.Services;
+using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Database.Npgsql.Monitoring.Health;
 using FishMMO.Database.Npgsql.Monitoring.Metrics;
 using FishMMO.Database.Npgsql.Monitoring.Diagnostics;
@@ -56,8 +58,8 @@ namespace FishMMO.Database
 					enableLogging,
 					commandTimeout);
 
-				// Initialize service registry with automatic discovery
-				ServiceRegistry = new NpgsqlServiceRegistry(DbContextFactory);
+				// Initialize service registry (composition root)
+				ServiceRegistry = CreateNpgsqlServiceRegistry(DbContextFactory);
 
 				// Initialize health monitoring
 				HealthMonitor = new DatabaseHealthMonitor(
@@ -96,8 +98,8 @@ namespace FishMMO.Database
 				// Create the database context factory with default configuration path
 				DbContextFactory = new NpgsqlDbContextFactory();
 
-				// Initialize service registry with automatic discovery
-				ServiceRegistry = new NpgsqlServiceRegistry(DbContextFactory);
+				// Initialize service registry (composition root)
+				ServiceRegistry = CreateNpgsqlServiceRegistry(DbContextFactory);
 
 				// Initialize health monitoring
 				HealthMonitor = new DatabaseHealthMonitor(
@@ -114,6 +116,41 @@ namespace FishMMO.Database
 					$"Failed to initialize database orchestrator: {ex.Message}",
 					ex);
 			}
+		}
+
+		private IDatabaseServiceRegistry CreateNpgsqlServiceRegistry(INpgsqlDbContextFactory dbContextFactory)
+		{
+			if (dbContextFactory == null)
+				throw new ArgumentNullException(nameof(dbContextFactory));
+
+			var registry = new NpgsqlServiceRegistry();
+			registry.Register<IAccountService>(new AccountService(dbContextFactory));
+			registry.Register<ICharacterAbilityService>(new CharacterAbilityService(dbContextFactory));
+			registry.Register<ICharacterAchievementService>(new CharacterAchievementService(dbContextFactory));
+			registry.Register<ICharacterAttributeService>(new CharacterAttributeService(dbContextFactory));
+			registry.Register<ICharacterBankService>(new CharacterBankService(dbContextFactory));
+			registry.Register<ICharacterBuffService>(new CharacterBuffService(dbContextFactory));
+			registry.Register<ICharacterEquipmentService>(new CharacterEquipmentService(dbContextFactory));
+			registry.Register<ICharacterFactionService>(new CharacterFactionService(dbContextFactory));
+			registry.Register<ICharacterFriendService>(new CharacterFriendService(dbContextFactory));
+			registry.Register<ICharacterGuildService>(new CharacterGuildService(dbContextFactory));
+			registry.Register<ICharacterHotkeyService>(new CharacterHotkeyService(dbContextFactory));
+			registry.Register<ICharacterInventoryService>(new CharacterInventoryService(dbContextFactory));
+			registry.Register<ICharacterKnownAbilityService>(new CharacterKnownAbilityService(dbContextFactory));
+			registry.Register<ICharacterPartyService>(new CharacterPartyService(dbContextFactory));
+			registry.Register<ICharacterPetService>(new CharacterPetService(dbContextFactory));
+			registry.Register<ICharacterService>(new CharacterService(dbContextFactory));
+			registry.Register<IChatService>(new ChatService(dbContextFactory));
+			registry.Register<IGuildService>(new GuildService(dbContextFactory));
+			registry.Register<IGuildUpdateService>(new GuildUpdateService(dbContextFactory));
+			registry.Register<IKickRequestService>(new KickRequestService(dbContextFactory));
+			registry.Register<ILoginServerService>(new LoginServerService(dbContextFactory));
+			registry.Register<IPartyService>(new PartyService(dbContextFactory));
+			registry.Register<IPartyUpdateService>(new PartyUpdateService(dbContextFactory));
+			registry.Register<ISceneServerService>(new SceneServerService(dbContextFactory));
+			registry.Register<ISceneService>(new SceneService(dbContextFactory));
+			registry.Register<IWorldServerService>(new WorldServerService(dbContextFactory));
+			return registry;
 		}
 	}
 }

@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 
 namespace FishMMO.Database.Npgsql.Monitoring.Diagnostics
 {
@@ -17,26 +18,17 @@ namespace FishMMO.Database.Npgsql.Monitoring.Diagnostics
 		private readonly ConcurrentDictionary<string, (QueryMetrics Metrics, long LastAccessTicks)> operationMetrics;
 		private volatile bool isEnabled;
 		private volatile TrackingLevel currentLevel;
+		private readonly object evictionGate;
+		private long lastEvictionTicks;
+		private const int MaxOperationNameLength = 128;
+		private const int EvictionSampleSize = 32;
+		private static readonly TimeSpan MinEvictionInterval = TimeSpan.FromSeconds(1);
 
 		/// <summary>
 		/// Thread-local random instance for thread-safe sampling.
-		/// Each thread gets its own Random instance to avoid contention.
 		/// </summary>
-		[ThreadStatic]
-		private static Random threadRandom;
-
-		/// <summary>
-		/// Gets or creates a thread-local Random instance.
-		/// </summary>
-		private static Random ThreadRandom
-		{
-			get
-			{
-				if (threadRandom == null)
-					threadRandom = new Random(Guid.NewGuid().GetHashCode());
-				return threadRandom;
-			}
-		}
+		private static readonly ThreadLocal<Random> ThreadRandom =
+			new ThreadLocal<Random>(() => new Random(Guid.NewGuid().GetHashCode()));
 
 		/// <summary>
 		/// Event raised when a slow query is detected.
@@ -78,6 +70,7 @@ namespace FishMMO.Database.Npgsql.Monitoring.Diagnostics
 			this.operationMetrics = new ConcurrentDictionary<string, (QueryMetrics, long)>();
 			this.isEnabled = this.configuration.Enabled;
 			this.currentLevel = this.configuration.Level;
+			this.evictionGate = new object();
 		}
 
 		/// <summary>
@@ -93,6 +86,10 @@ namespace FishMMO.Database.Npgsql.Monitoring.Diagnostics
 				return;
 
 			if (string.IsNullOrWhiteSpace(operationName))
+				return;
+
+			operationName = NormalizeOperationName(operationName);
+			if (operationName.Length == 0)
 				return;
 
 			var durationMs = duration.TotalMilliseconds;
@@ -144,10 +141,21 @@ namespace FishMMO.Database.Npgsql.Monitoring.Diagnostics
 		/// <returns>The metrics or null if not found.</returns>
 		public QueryMetrics? GetMetrics(string operationName)
 		{
+			if (string.IsNullOrWhiteSpace(operationName))
+			{
+				return null;
+			}
+
+			operationName = NormalizeOperationName(operationName);
+			if (operationName.Length == 0)
+			{
+				return null;
+			}
+
 			if (operationMetrics.TryGetValue(operationName, out var entry))
 			{
-				// Update last access time for LRU
-				operationMetrics[operationName] = (entry.Metrics, DateTime.UtcNow.Ticks);
+				// Update last access time without resurrecting removed keys.
+				operationMetrics.TryUpdate(operationName, (entry.Metrics, DateTime.UtcNow.Ticks), entry);
 				return entry.Metrics;
 			}
 			return null;
@@ -262,8 +270,8 @@ namespace FishMMO.Database.Npgsql.Monitoring.Diagnostics
 			// Try to update existing entry atomically
 			if (operationMetrics.TryGetValue(operationName, out var entry))
 			{
-				// Update last access time for LRU tracking
-				operationMetrics[operationName] = (entry.Metrics, currentTicks);
+				// Update last access time without resurrecting removed keys.
+				operationMetrics.TryUpdate(operationName, (entry.Metrics, currentTicks), entry);
 				return entry.Metrics;
 			}
 
@@ -274,33 +282,10 @@ namespace FishMMO.Database.Npgsql.Monitoring.Diagnostics
 			// Use GetOrAdd for atomic check-and-insert
 			var addedEntry = operationMetrics.GetOrAdd(operationName, newEntry);
 
-			// If we successfully added a new entry (not retrieved existing), check capacity
+			// If we successfully added a new entry (not retrieved existing), enforce capacity.
 			if (ReferenceEquals(addedEntry.Metrics, newMetrics))
 			{
-				// Only the thread that successfully added the entry attempts cleanup
-				// This prevents multiple threads from evicting simultaneously
-				if (operationMetrics.Count > configuration.MaxTrackedOperations)
-				{
-					// RACE CONDITION DOCUMENTED: This is a soft limit for memory management.
-					// Multiple threads may simultaneously exceed the limit, and the LRU key
-					// determination is not atomic. This is acceptable as:
-					// 1. The limit is advisory (memory management, not correctness)
-					// 2. The dictionary will naturally stabilize near the limit
-					// 3. The performance cost of strict synchronization outweighs the benefit
-					// 4. In worst case, the dictionary grows slightly beyond MaxTrackedOperations
-					//    until next eviction cycle
-					//
-					// Alternative: Use SemaphoreSlim around this block for strict enforcement,
-					// but this adds contention and reduces throughput for minimal benefit.
-					var lruKey = operationMetrics
-						.OrderBy(kvp => kvp.Value.LastAccessTicks)
-						.FirstOrDefault().Key;
-
-					if (lruKey != null && lruKey != operationName)
-					{
-						operationMetrics.TryRemove(lruKey, out _);
-					}
-				}
+				TryEvictIfOverCapacity(currentTicks);
 			}
 
 			return addedEntry.Metrics;
@@ -315,7 +300,10 @@ namespace FishMMO.Database.Npgsql.Monitoring.Diagnostics
 			if (configuration.SampleRate >= 1.0)
 				return true;
 
-			return ThreadRandom.NextDouble() < configuration.SampleRate;
+			if (configuration.SampleRate <= 0.0)
+				return false;
+
+			return ThreadRandom.Value!.NextDouble() < configuration.SampleRate;
 		}
 
 		/// <summary>
@@ -323,12 +311,123 @@ namespace FishMMO.Database.Npgsql.Monitoring.Diagnostics
 		/// </summary>
 		private void OnSlowQueryDetected(string operationName, TimeSpan duration, bool success)
 		{
-			SlowQueryDetected?.Invoke(this, new SlowQueryEventArgs(
+			var handlers = SlowQueryDetected;
+			if (handlers == null)
+			{
+				return;
+			}
+
+			var args = new SlowQueryEventArgs(
 				operationName,
 				duration,
 				Configuration.SlowQueryThresholdMs,
 				success,
-				DateTime.UtcNow));
+				DateTime.UtcNow);
+
+			// Dispatch off-thread so instrumentation cannot add latency to database calls.
+			ThreadPool.QueueUserWorkItem(_ => InvokeSlowQueryHandlersSafely(handlers, args));
+		}
+
+		private static void InvokeSlowQueryHandlersSafely(EventHandler<SlowQueryEventArgs> handlers, SlowQueryEventArgs args)
+		{
+			var invocationList = handlers.GetInvocationList();
+			for (var i = 0; i < invocationList.Length; i++)
+			{
+				if (invocationList[i] is EventHandler<SlowQueryEventArgs> handler)
+				{
+					try
+					{
+						handler.Invoke(null, args);
+					}
+					catch
+					{
+						// Never allow consumer code to break instrumentation.
+					}
+				}
+			}
+		}
+
+		private string NormalizeOperationName(string operationName)
+		{
+			operationName = operationName.Trim();
+			if (operationName.Length > MaxOperationNameLength)
+			{
+				// Avoid label explosion from dynamic names.
+				return string.Empty;
+			}
+
+			return operationName;
+		}
+
+		private void TryEvictIfOverCapacity(long nowTicks)
+		{
+			if (!configuration.TrackPerOperationMetrics)
+			{
+				return;
+			}
+
+			var maxTracked = configuration.MaxTrackedOperations;
+			if (maxTracked <= 0)
+			{
+				return;
+			}
+
+			if (operationMetrics.Count <= maxTracked)
+			{
+				return;
+			}
+
+			var lastTicks = Interlocked.Read(ref lastEvictionTicks);
+			if (nowTicks - lastTicks < MinEvictionInterval.Ticks)
+			{
+				return;
+			}
+
+			lock (evictionGate)
+			{
+				lastTicks = Interlocked.Read(ref lastEvictionTicks);
+				if (nowTicks - lastTicks < MinEvictionInterval.Ticks)
+				{
+					return;
+				}
+
+				Interlocked.Exchange(ref lastEvictionTicks, nowTicks);
+
+				while (operationMetrics.Count > maxTracked)
+				{
+					var candidate = FindEvictionCandidateKey();
+					if (candidate.Length == 0)
+					{
+						break;
+					}
+
+					operationMetrics.TryRemove(candidate, out _);
+				}
+			}
+		}
+
+		private string FindEvictionCandidateKey()
+		{
+			string? candidateKey = null;
+			long candidateTicks = long.MaxValue;
+			var inspected = 0;
+
+			foreach (var kvp in operationMetrics)
+			{
+				if (kvp.Value.LastAccessTicks < candidateTicks)
+				{
+					candidateTicks = kvp.Value.LastAccessTicks;
+					candidateKey = kvp.Key;
+				}
+
+				inspected++;
+				if (inspected >= EvictionSampleSize)
+				{
+					break;
+				}
+			}
+
+			return candidateKey ?? string.Empty;
 		}
 	}
 

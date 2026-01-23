@@ -70,7 +70,7 @@ namespace FishMMO.Database.Npgsql.Services
 				"SaveCharacterAchievements",
 				entityName: "CharacterAchievement",
 				requireRowsAffected: false,
-				cancellationToken: cancellationToken);
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
@@ -91,7 +91,7 @@ namespace FishMMO.Database.Npgsql.Services
 				entityName: "CharacterAchievement",
 				entityId: characterId,
 				requireRowsAffected: false,
-				cancellationToken: cancellationToken);
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
@@ -108,7 +108,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteSqlAsync(async (dbContext, ct) =>
 			{
-				var entities = await GetAchievementsQuery(dbContext, characterId, ct);
+				var entities = await GetAchievementsQuery(dbContext, characterId, ct).ConfigureAwait(false);
 				var achievements = entities.Select(a => new CharacterAchievementData(
 					id: a.ID,
 					characterID: a.CharacterID,
@@ -118,7 +118,7 @@ namespace FishMMO.Database.Npgsql.Services
 				)).ToList();
 
 				return (IReadOnlyList<CharacterAchievementData>)achievements;
-			}, "GetCharacterAchievements", cancellationToken);
+			}, "GetCharacterAchievements", cancellationToken).ConfigureAwait(false);
 		}
 	}
 }

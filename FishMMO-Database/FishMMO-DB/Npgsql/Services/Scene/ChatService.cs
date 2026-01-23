@@ -54,7 +54,7 @@ namespace FishMMO.Database.Npgsql.Services
 				entityName: "Chat",
 				entityId: characterId,
 				requireRowsAffected: true,
-				cancellationToken: cancellationToken);
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
@@ -90,10 +90,10 @@ namespace FishMMO.Database.Npgsql.Services
 					.OrderBy(c => c.TimeCreated)
 					.ThenBy(c => c.ID)
 					.Take(amount)
-					.ToListAsync(ct);
+					.ToListAsync(ct).ConfigureAwait(false);
 
 				return messages.Select(MapEntityToDto).ToList();
-			}, "FetchChatMessages", cancellationToken);
+			}, "FetchChatMessages", cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <summary>

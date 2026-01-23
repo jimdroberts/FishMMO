@@ -37,8 +37,8 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteSqlAsync(async (dbContext, ct) =>
 			{
-				return await PartyExistsQuery(dbContext, partyId, ct);
-			}, "CheckPartyExists", cancellationToken);
+				return await PartyExistsQuery(dbContext, partyId, ct).ConfigureAwait(false);
+			}, "CheckPartyExists", cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -58,11 +58,11 @@ namespace FishMMO.Database.Npgsql.Services
 					VALUES (CURRENT_TIMESTAMP)
 					RETURNING id")
 						.AsNoTracking()
-						.FirstOrDefaultAsync(ct);
+						.FirstOrDefaultAsync(ct).ConfigureAwait(false);
 
 				return result?.ID ?? 0;
 			},
-				cancellationToken);
+				cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -88,7 +88,7 @@ namespace FishMMO.Database.Npgsql.Services
 				entityName: "Party",
 				entityId: partyId,
 				requireRowsAffected: true,
-				cancellationToken: cancellationToken);
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
@@ -105,10 +105,10 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				var party = await dbContext.Parties
 					.AsNoTracking()
-					.FirstOrDefaultAsync(p => p.ID == partyId, ct);
+					.FirstOrDefaultAsync(p => p.ID == partyId, ct).ConfigureAwait(false);
 				var existingParty = RequireEntityExists(party, "Party", partyId);
 				return MapEntityToDto(existingParty);
-			}, "LoadParty", cancellationToken);
+			}, "LoadParty", cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <summary>

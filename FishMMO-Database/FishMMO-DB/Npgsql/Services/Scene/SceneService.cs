@@ -98,7 +98,7 @@ namespace FishMMO.Database.Npgsql.Services
 					VALUES ({worldServerId}, {sceneName}, {sceneTypeInt}, {sceneStatusInt}, {characterId}, CURRENT_TIMESTAMP)
 					RETURNING id")
 						.AsNoTracking()
-						.FirstOrDefaultAsync(ct);
+						.FirstOrDefaultAsync(ct).ConfigureAwait(false);
 
 				var sceneId = result?.ID ?? 0;
 				if (sceneId <= 0)
@@ -112,7 +112,7 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				return sceneId;
-			}, "EnqueueScene", cancellationToken);
+			}, "EnqueueScene", cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -138,10 +138,10 @@ namespace FishMMO.Database.Npgsql.Services
 					WHERE {TableName}.id = scene_to_update.id
 					RETURNING {TableName}.id, {TableName}.world_server_id, {TableName}.scene_server_id, {TableName}.scene_name, {TableName}.scene_handle, {TableName}.scene_status, {TableName}.scene_type, {TableName}.character_id, {TableName}.character_count, {TableName}.time_created")
 					.AsNoTracking()
-					.FirstOrDefaultAsync(ct);
+					.FirstOrDefaultAsync(ct).ConfigureAwait(false);
 
 				return entity != null ? MapEntityToDto(entity) : null;
-			}, "DequeueScene", cancellationToken);
+			}, "DequeueScene", cancellationToken).ConfigureAwait(false);
 
 			// Convert null result to business logic failure (not an exception case)
 			if (result.IsSuccess && result.Data == null)
@@ -175,7 +175,7 @@ namespace FishMMO.Database.Npgsql.Services
 				entityName: "Scene",
 				entityId: sceneId,
 				requireRowsAffected: true,
-				cancellationToken: cancellationToken);
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
@@ -212,7 +212,7 @@ namespace FishMMO.Database.Npgsql.Services
 				"SetSceneReady",
 				entityName: "Scene",
 				requireRowsAffected: true,
-				cancellationToken: cancellationToken);
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
@@ -227,7 +227,7 @@ namespace FishMMO.Database.Npgsql.Services
 				"PulseScene",
 				entityName: "Scene",
 				requireRowsAffected: true,
-				cancellationToken: cancellationToken);
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
@@ -245,7 +245,7 @@ namespace FishMMO.Database.Npgsql.Services
 				"DeleteBySceneServer",
 				entityName: "Scene",
 				requireRowsAffected: false,
-				cancellationToken: cancellationToken);
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -261,7 +261,7 @@ namespace FishMMO.Database.Npgsql.Services
 				"DeleteByWorldServer",
 				entityName: "Scene",
 				requireRowsAffected: false,
-				cancellationToken: cancellationToken);
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -278,7 +278,7 @@ namespace FishMMO.Database.Npgsql.Services
 				"DeleteByHandle",
 				entityName: "Scene",
 				requireRowsAffected: true,
-				cancellationToken: cancellationToken);
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
@@ -297,7 +297,7 @@ namespace FishMMO.Database.Npgsql.Services
 			return await ExecuteSqlAsync(async (dbContext, ct) =>
 			{
 				var type = (int)sceneType;
-				var scene = await GetCharacterInstanceQuery(dbContext, characterId, type, ct);
+				var scene = await GetCharacterInstanceQuery(dbContext, characterId, type, ct).ConfigureAwait(false);
 
 				if (scene == null)
 				{
@@ -305,7 +305,7 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				return MapEntityToDto(scene);
-			}, "GetCharacterInstance", cancellationToken);
+			}, "GetCharacterInstance", cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -318,7 +318,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteSqlAsync(async (dbContext, ct) =>
 			{
-				var scene = await GetInstanceByIdQuery(dbContext, sceneId, ct);
+				var scene = await GetInstanceByIdQuery(dbContext, sceneId, ct).ConfigureAwait(false);
 
 				if (scene == null)
 				{
@@ -326,7 +326,7 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				return MapEntityToDto(scene);
-			}, "GetSceneById", cancellationToken);
+			}, "GetSceneById", cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -344,10 +344,10 @@ namespace FishMMO.Database.Npgsql.Services
 			return await ExecuteSqlAsync(async (dbContext, ct) =>
 			{
 				var readyStatus = (int)SceneStatus.Ready;
-				var scenes = await GetAvailableScenesQuery(dbContext, worldServerId, sceneName, maxClients, readyStatus, ct);
+				var scenes = await GetAvailableScenesQuery(dbContext, worldServerId, sceneName, maxClients, readyStatus, ct).ConfigureAwait(false);
 
 				return scenes.Select(MapEntityToDto).ToList();
-			}, "GetAvailableScenes", cancellationToken);
+			}, "GetAvailableScenes", cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -361,10 +361,10 @@ namespace FishMMO.Database.Npgsql.Services
 			return await ExecuteSqlAsync(async (dbContext, ct) =>
 			{
 				var readyStatus = (int)SceneStatus.Ready;
-				var scenes = await GetReadyScenesQuery(dbContext, worldServerId, readyStatus, ct);
+				var scenes = await GetReadyScenesQuery(dbContext, worldServerId, readyStatus, ct).ConfigureAwait(false);
 
 				return scenes.Select(MapEntityToDto).ToList();
-			}, "GetReadyScenes", cancellationToken);
+			}, "GetReadyScenes", cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <summary>

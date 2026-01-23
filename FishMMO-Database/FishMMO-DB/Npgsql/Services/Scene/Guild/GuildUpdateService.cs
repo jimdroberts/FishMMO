@@ -40,7 +40,7 @@ namespace FishMMO.Database.Npgsql.Services
 				entityName: "GuildUpdate",
 				entityId: guildId,
 				requireRowsAffected: false,
-				cancellationToken: cancellationToken);
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
@@ -59,7 +59,7 @@ namespace FishMMO.Database.Npgsql.Services
 				entityName: "GuildUpdate",
 				entityId: guildId,
 				requireRowsAffected: false,
-				cancellationToken: cancellationToken);
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -76,10 +76,10 @@ namespace FishMMO.Database.Npgsql.Services
 				var updates = await dbContext.GuildUpdates
 					.AsNoTracking()
 					.Where(u => u.LastUpdate >= lastFetch && guildIds.Contains(u.GuildID))
-					.ToListAsync(ct);
+					.ToListAsync(ct).ConfigureAwait(false);
 
 				return updates.Select(MapEntityToDto).ToList();
-			}, "FetchGuildUpdates", cancellationToken);
+			}, "FetchGuildUpdates", cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <summary>

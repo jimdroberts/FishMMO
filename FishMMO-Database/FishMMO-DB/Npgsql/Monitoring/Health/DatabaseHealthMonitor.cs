@@ -102,6 +102,10 @@ namespace FishMMO.Database.Npgsql.Monitoring.Health
 		/// </summary>
 		/// <returns>Health check result containing status and diagnostic information.</returns>
 		/// <remarks>
+		/// <para>
+		/// This method performs a truly synchronous database call (no sync-over-async) to avoid
+		/// thread-pool starvation under load.
+		/// </para>
 		/// <para><b>Security Warning:</b> The returned HealthCheckResult contains sensitive
 		/// infrastructure details including database names, server addresses, and connection
 		/// pool information. If exposing this result via public APIs or external systems,
@@ -110,7 +114,78 @@ namespace FishMMO.Database.Npgsql.Monitoring.Health
 		/// </remarks>
 		public HealthCheckResult CheckHealth()
 		{
-			return CheckHealthAsync(CancellationToken.None).ConfigureAwait(false).GetAwaiter().GetResult();
+			var startTime = DateTime.UtcNow;
+			var result = new HealthCheckResult();
+
+			try
+			{
+				using var dbContext = dbContextFactory.CreateDbContext();
+				var connection = dbContext.Database.GetDbConnection();
+
+				if (connection.State != ConnectionState.Open)
+				{
+					connection.Open();
+				}
+
+				using var command = connection.CreateCommand();
+				command.CommandText = "SELECT 1";
+				command.CommandTimeout = 5;
+				_ = command.ExecuteScalar();
+
+				var elapsed = DateTime.UtcNow - startTime;
+				result.ResponseTimeMs = elapsed.TotalMilliseconds;
+				result.IsConnected = true;
+				result.DatabaseName = connection.Database;
+				result.ServerAddress = connection.DataSource;
+
+				if (connection is NpgsqlConnection npgsqlConnection)
+				{
+					result.PoolInfo = GetPoolInfo(npgsqlConnection);
+				}
+
+				ExtractPoolMetrics(result);
+
+				if (elapsed > criticalThreshold)
+				{
+					result.Status = HealthStatus.Degraded;
+					result.Message = $"Database responding slowly: {elapsed.TotalMilliseconds:F2}ms";
+				}
+				else if (elapsed > warningThreshold)
+				{
+					result.Status = HealthStatus.Healthy;
+					result.Message = $"Database healthy (warning: {elapsed.TotalMilliseconds:F2}ms)";
+					result.HasWarning = true;
+				}
+				else
+				{
+					result.Status = HealthStatus.Healthy;
+					result.Message = $"Database healthy: {elapsed.TotalMilliseconds:F2}ms";
+				}
+
+				UpdateLastCheckInfo(result.Status, result.Message);
+				return result;
+			}
+			catch (NpgsqlException ex)
+			{
+				result.Status = HealthStatus.Unhealthy;
+				result.Message = $"Database connection failed: {ex.Message}";
+				result.IsConnected = false;
+				result.ResponseTimeMs = (DateTime.UtcNow - startTime).TotalMilliseconds;
+				result.ErrorCode = ex.ErrorCode.ToString();
+				result.Exception = ex;
+				UpdateLastCheckInfo(result.Status, result.Message);
+				return result;
+			}
+			catch (Exception ex)
+			{
+				result.Status = HealthStatus.Unhealthy;
+				result.Message = $"Health check failed: {ex.Message}";
+				result.IsConnected = false;
+				result.ResponseTimeMs = (DateTime.UtcNow - startTime).TotalMilliseconds;
+				result.Exception = ex;
+				UpdateLastCheckInfo(result.Status, result.Message);
+				return result;
+			}
 		}
 
 		/// <summary>

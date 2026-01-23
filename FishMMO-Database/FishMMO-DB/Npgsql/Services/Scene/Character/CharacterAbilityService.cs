@@ -58,8 +58,8 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteSqlAsync(async (dbContext, ct) =>
 			{
-				return await GetCountQuery(dbContext, characterId, ct);
-			}, "GetCharacterAbilityCount", cancellationToken);
+				return await GetCountQuery(dbContext, characterId, ct).ConfigureAwait(false);
+			}, "GetCharacterAbilityCount", cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -87,10 +87,10 @@ namespace FishMMO.Database.Npgsql.Services
 							cooldown = EXCLUDED.cooldown
 						RETURNING id, character_id, template_id, ability_events, cooldown")
 					.AsNoTracking()
-						.FirstOrDefaultAsync(ct);
+								.FirstOrDefaultAsync(ct).ConfigureAwait(false);
 
 				return result?.ID ?? 0;
-			}, "SaveCharacterAbility", cancellationToken);
+			}, "SaveCharacterAbility", cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -131,7 +131,7 @@ namespace FishMMO.Database.Npgsql.Services
 						DO UPDATE SET
 						ability_events = EXCLUDED.ability_events,
 						cooldown = EXCLUDED.cooldown",
-						ct);
+						ct).ConfigureAwait(false);
 				}
 
 				// Handle existing abilities with atomic UPDATE by ID
@@ -159,11 +159,11 @@ namespace FishMMO.Database.Npgsql.Services
 							{cooldowns}::float4[]
 						) AS source(id, char_id, t_id, evs, cd)
 						WHERE target.id = source.id",
-						ct);
+						ct).ConfigureAwait(false);
 				}
 
 				return true;
-			}, "SaveCharacterAbilities", cancellationToken);
+			}, "SaveCharacterAbilities", cancellationToken).ConfigureAwait(false);
 
 			if (transactionResult.IsSuccess)
 			{
@@ -191,7 +191,7 @@ namespace FishMMO.Database.Npgsql.Services
 				entityName: "CharacterAbility",
 				entityId: characterId,
 				requireRowsAffected: false,
-				cancellationToken: cancellationToken);
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
@@ -212,7 +212,7 @@ namespace FishMMO.Database.Npgsql.Services
 				entityName: "CharacterAbility",
 				entityId: abilityId,
 				requireRowsAffected: false,
-				cancellationToken: cancellationToken);
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
@@ -229,7 +229,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteSqlAsync(async (dbContext, ct) =>
 			{
-				var entities = await GetAbilitiesQuery(dbContext, characterId, ct);
+				var entities = await GetAbilitiesQuery(dbContext, characterId, ct).ConfigureAwait(false);
 				var abilities = entities.Select(a => new CharacterAbilityData(
 					id: a.ID,
 					characterID: a.CharacterID,
@@ -239,7 +239,7 @@ namespace FishMMO.Database.Npgsql.Services
 				)).ToList();
 
 				return (IReadOnlyList<CharacterAbilityData>)abilities;
-			}, "GetCharacterAbilities", cancellationToken);
+			}, "GetCharacterAbilities", cancellationToken).ConfigureAwait(false);
 		}
 	}
 }

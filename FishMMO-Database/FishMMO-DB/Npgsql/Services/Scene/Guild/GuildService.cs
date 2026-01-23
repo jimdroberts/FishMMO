@@ -65,8 +65,8 @@ namespace FishMMO.Database.Npgsql.Services
 			return await ExecuteSqlAsync(async (context, ct) =>
 			{
 				var nameLowercase = name.ToLowerInvariant();
-				return await GuildExistsByNameQuery(context, nameLowercase, ct);
-			}, "GuildExists", cancellationToken);
+				return await GuildExistsByNameQuery(context, nameLowercase, ct).ConfigureAwait(false);
+			}, "GuildExists", cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -81,10 +81,10 @@ namespace FishMMO.Database.Npgsql.Services
 					.AsNoTracking()
 					.Where(g => g.ID == guildId)
 					.Select(g => g.Name)
-					.FirstOrDefaultAsync(ct);
+					.FirstOrDefaultAsync(ct).ConfigureAwait(false);
 
 				return guild ?? string.Empty;
-			}, "GetGuildName", cancellationToken);
+			}, "GetGuildName", cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -107,7 +107,7 @@ namespace FishMMO.Database.Npgsql.Services
 					ON CONFLICT (name_lowercase) DO NOTHING
 					RETURNING id")
 					.AsNoTracking()
-					.FirstOrDefaultAsync(ct);
+					.FirstOrDefaultAsync(ct).ConfigureAwait(false);
 
 				if (inserted?.ID > 0)
 				{
@@ -118,10 +118,10 @@ namespace FishMMO.Database.Npgsql.Services
 					.AsNoTracking()
 					.Where(g => g.NameLowercase == nameLowercase)
 					.Select(g => (long?)g.ID)
-					.FirstOrDefaultAsync(ct);
+					.FirstOrDefaultAsync(ct).ConfigureAwait(false);
 
 				return existingId;
-			}, "CreateGuild", cancellationToken);
+			}, "CreateGuild", cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -147,7 +147,7 @@ namespace FishMMO.Database.Npgsql.Services
 				entityName: "Guild",
 				entityId: guildId,
 				requireRowsAffected: true,
-				cancellationToken: cancellationToken);
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
@@ -162,10 +162,10 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				var guild = await context.Guilds
 					.AsNoTracking()
-					.FirstOrDefaultAsync(g => g.NameLowercase == name.ToLowerInvariant(), ct);
+					.FirstOrDefaultAsync(g => g.NameLowercase == name.ToLowerInvariant(), ct).ConfigureAwait(false);
 
 				return guild != null ? MapEntityToDto(guild) : (GuildData?)null;
-			}, "LoadGuildByName", cancellationToken);
+			}, "LoadGuildByName", cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -176,10 +176,10 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteSqlAsync(async (context, ct) =>
 			{
-				var guild = await GetGuildByIdQuery(context, guildId, ct);
+				var guild = await GetGuildByIdQuery(context, guildId, ct).ConfigureAwait(false);
 
 				return guild != null ? MapEntityToDto(guild) : (GuildData?)null;
-			}, "LoadGuildById", cancellationToken);
+			}, "LoadGuildById", cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <summary>

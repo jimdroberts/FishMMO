@@ -47,7 +47,7 @@ namespace FishMMO.Database.Npgsql.Services
 				entityName: "KickRequest",
 				entityId: accountName,
 				requireRowsAffected: false,
-				cancellationToken: cancellationToken);
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
@@ -66,7 +66,7 @@ namespace FishMMO.Database.Npgsql.Services
 				entityName: "KickRequest",
 				entityId: accountName,
 				requireRowsAffected: false,
-				cancellationToken: cancellationToken);
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -87,10 +87,10 @@ namespace FishMMO.Database.Npgsql.Services
 					.OrderBy(kr => kr.TimeCreated)
 					.ThenBy(kr => kr.ID)
 					.Take(amount)
-					.ToListAsync(ct);
+					.ToListAsync(ct).ConfigureAwait(false);
 
 				return requests.Select(MapEntityToDto).ToList();
-			}, "FetchKickRequests", cancellationToken);
+			}, "FetchKickRequests", cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <summary>

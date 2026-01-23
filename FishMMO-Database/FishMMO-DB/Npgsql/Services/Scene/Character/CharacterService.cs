@@ -74,8 +74,8 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteSqlAsync(async (dbContext, ct) =>
 			{
-				return await GetCharacterCountByAccountQuery(dbContext, account, ct);
-			}, "GetCount", cancellationToken);
+				return await GetCharacterCountByAccountQuery(dbContext, account, ct).ConfigureAwait(false);
+			}, "GetCount", cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -118,11 +118,11 @@ namespace FishMMO.Database.Npgsql.Services
 						 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, NULL, false)
 					RETURNING id")
 					.AsNoTracking()
-					.FirstOrDefaultAsync(ct);
+					.FirstOrDefaultAsync(ct).ConfigureAwait(false);
 
 				var characterId = result?.ID ?? 0;
 				return characterId > 0 ? CharacterOperationResult.CharacterCreated : CharacterOperationResult.DatabaseError;
-			}, "CreateCharacter", cancellationToken);
+			}, "CreateCharacter", cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -174,7 +174,7 @@ namespace FishMMO.Database.Npgsql.Services
 				entityName: "Character",
 				entityId: characterData.ID,
 				requireRowsAffected: false,
-				cancellationToken: cancellationToken);
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			if (!result.IsSuccess)
 			{
@@ -190,8 +190,8 @@ namespace FishMMO.Database.Npgsql.Services
 				{
 					return await dbContext.Characters
 						.AsNoTracking()
-						.AnyAsync(c => c.ID == characterData.ID && !c.Deleted, ct);
-				}, "CheckCharacterExistsForSave", cancellationToken);
+						.AnyAsync(c => c.ID == characterData.ID && !c.Deleted, ct).ConfigureAwait(false);
+				}, "CheckCharacterExistsForSave", cancellationToken).ConfigureAwait(false);
 
 				if (!existsResult.IsSuccess)
 				{
@@ -255,7 +255,7 @@ namespace FishMMO.Database.Npgsql.Services
 					entityName: "Character",
 					entityId: characterId,
 					requireRowsAffected: true,
-					cancellationToken: cancellationToken);
+					cancellationToken: cancellationToken).ConfigureAwait(false);
 
 				return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 			}
@@ -270,7 +270,7 @@ namespace FishMMO.Database.Npgsql.Services
 					entityName: "Character",
 					entityId: characterId,
 					requireRowsAffected: true,
-					cancellationToken: cancellationToken);
+					cancellationToken: cancellationToken).ConfigureAwait(false);
 
 				return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 			}
@@ -287,7 +287,7 @@ namespace FishMMO.Database.Npgsql.Services
 			return await ExecuteSqlAsync(async (dbContext, ct) =>
 			{
 				// Use compiled query for hot path performance
-				var entity = await GetCharacterByIdQuery(dbContext, characterId, ct);
+				var entity = await GetCharacterByIdQuery(dbContext, characterId, ct).ConfigureAwait(false);
 
 				if (entity == null)
 				{
@@ -295,7 +295,7 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				return MapEntityToData(entity);
-			}, "GetCharacter", cancellationToken);
+			}, "GetCharacter", cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -308,10 +308,10 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteSqlAsync(async (dbContext, ct) =>
 			{
-				var entities = await GetCharactersByAccountQuery(dbContext, account, ct);
+				var entities = await GetCharactersByAccountQuery(dbContext, account, ct).ConfigureAwait(false);
 
 				return (IReadOnlyList<CharacterData>)entities.Select(MapEntityToData).ToList();
-			}, "GetCharacters", cancellationToken);
+			}, "GetCharacters", cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -325,7 +325,7 @@ namespace FishMMO.Database.Npgsql.Services
 			return await ExecuteSqlAsync(async (dbContext, ct) =>
 			{
 				var nameLower = name.ToLower();
-				var entity = await GetCharacterByNameQuery(dbContext, nameLower, ct);
+				var entity = await GetCharacterByNameQuery(dbContext, nameLower, ct).ConfigureAwait(false);
 
 				if (entity == null)
 				{
@@ -333,7 +333,7 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				return MapEntityToData(entity);
-			}, "GetCharacterByName", cancellationToken);
+			}, "GetCharacterByName", cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -366,7 +366,7 @@ namespace FishMMO.Database.Npgsql.Services
 					SET selected = (id = {characterId})
 					WHERE account = {account} AND NOT deleted
 					AND id IN (SELECT id FROM locked_chars)",
-					ct);
+					ct).ConfigureAwait(false);
 
 				if (rowsAffected == 0)
 				{
@@ -374,7 +374,7 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				return true;
-			}, "SetSelected", cancellationToken);
+			}, "SetSelected", cancellationToken).ConfigureAwait(false);
 
 			if (transactionResult.IsSuccess)
 			{
@@ -403,7 +403,7 @@ namespace FishMMO.Database.Npgsql.Services
 				entityName: "Character",
 				entityId: characterId,
 				requireRowsAffected: true,
-				cancellationToken: cancellationToken);
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
@@ -426,7 +426,7 @@ namespace FishMMO.Database.Npgsql.Services
 				entityName: "Character",
 				entityId: characterId,
 				requireRowsAffected: true,
-				cancellationToken: cancellationToken);
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
@@ -449,7 +449,7 @@ namespace FishMMO.Database.Npgsql.Services
 				entityName: "Character",
 				entityId: characterId,
 				requireRowsAffected: true,
-				cancellationToken: cancellationToken);
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}

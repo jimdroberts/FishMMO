@@ -68,7 +68,7 @@ namespace FishMMO.Database.Npgsql.Services
 					.AsNoTracking()
 					.Where(a => a.Name == accountName)
 					.Select(a => new { a.LastLogin })
-					.FirstOrDefaultAsync(ct);
+					.FirstOrDefaultAsync(ct).ConfigureAwait(false);
 
 				if (account == null)
 				{
@@ -76,7 +76,7 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				return account.LastLogin;
-			}, "GetLastLogin", cancellationToken);
+			}, "GetLastLogin", cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -117,7 +117,7 @@ namespace FishMMO.Database.Npgsql.Services
 					({accountName}, {salt}, {verifier}, {(byte)AccessLevel.Player}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 				ON CONFLICT (name) DO NOTHING",
 				"CreateAccount",
-				cancellationToken: cancellationToken);
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			if (!result.IsSuccess)
 			{
@@ -151,9 +151,9 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 
 			var result = await ExecuteSqlAsync(async (dbContext, ct) =>
-				await GetAccountForLoginQuery(dbContext, accountName, ct),
+				await GetAccountForLoginQuery(dbContext, accountName, ct).ConfigureAwait(false),
 				"GetAccountForLogin",
-				cancellationToken);
+				cancellationToken).ConfigureAwait(false);
 
 			if (!result.IsSuccess)
 			{
@@ -204,7 +204,7 @@ namespace FishMMO.Database.Npgsql.Services
 				entityName: "Account",
 				entityId: accountName,
 				requireRowsAffected: true,
-				cancellationToken: cancellationToken);
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
 				? DatabaseResult.Success()
@@ -225,8 +225,8 @@ namespace FishMMO.Database.Npgsql.Services
 			return await ExecuteSqlAsync(async (dbContext, ct) =>
 			{
 				// Use compiled query for hot path performance
-				return await AccountExistsByNameQuery(dbContext, accountName, ct);
-			}, "AccountExists", cancellationToken);
+				return await AccountExistsByNameQuery(dbContext, accountName, ct).ConfigureAwait(false);
+			}, "AccountExists", cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <summary>

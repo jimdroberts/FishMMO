@@ -90,7 +90,7 @@ namespace FishMMO.Database.Npgsql.Services
 				// This prevents deadlocks and ensures atomicity across concurrent requests
 				var existingMembership = await dbContext.CharacterParties
 					.FromSqlInterpolated($"SELECT * FROM character_parties WHERE character_id = {partyData.CharacterID} FOR UPDATE")
-					.FirstOrDefaultAsync(ct);
+					.FirstOrDefaultAsync(ct).ConfigureAwait(false);
 
 				// Refined check: determine if capacity validation is needed
 				bool needsCapacityCheck = existingMembership == null || existingMembership.PartyID != partyData.PartyID;
@@ -101,7 +101,7 @@ namespace FishMMO.Database.Npgsql.Services
 					// Lock ordering: character membership -> party (prevents race conditions)
 					var partyEntity = await dbContext.Parties
 						.FromSqlInterpolated($"SELECT * FROM parties WHERE id = {partyData.PartyID} FOR UPDATE")
-						.FirstOrDefaultAsync(ct);
+						.FirstOrDefaultAsync(ct).ConfigureAwait(false);
 
 					if (partyEntity == null)
 					{
@@ -113,7 +113,7 @@ namespace FishMMO.Database.Npgsql.Services
 					// Count current members (lock is held, preventing concurrent inserts)
 					var currentCount = await dbContext.CharacterParties
 						.Where(p => p.PartyID == partyData.PartyID)
-						.CountAsync(ct);
+						.CountAsync(ct).ConfigureAwait(false);
 
 					if (currentCount >= maxCapacity)
 					{
@@ -133,10 +133,10 @@ namespace FishMMO.Database.Npgsql.Services
 						   party_id = EXCLUDED.party_id,
 						   rank = EXCLUDED.rank,
 						   health_pct = EXCLUDED.health_pct",
-					ct);
+					ct).ConfigureAwait(false);
 
 				return DatabaseResult.Success();
-			}, "SavePartyMembership", cancellationToken);
+			}, "SavePartyMembership", cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess ? result.Data : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
@@ -155,7 +155,7 @@ namespace FishMMO.Database.Npgsql.Services
 				entityName: "CharacterParty",
 				entityId: characterId,
 				requireRowsAffected: false,
-				cancellationToken: cancellationToken);
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
@@ -176,7 +176,7 @@ namespace FishMMO.Database.Npgsql.Services
 				entityName: "CharacterParty",
 				entityId: characterId,
 				requireRowsAffected: false,
-				cancellationToken: cancellationToken);
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
@@ -191,7 +191,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteSqlAsync(async (dbContext, ct) =>
 			{
-				var entity = await GetPartyMembershipQuery(dbContext, characterId, ct);
+				var entity = await GetPartyMembershipQuery(dbContext, characterId, ct).ConfigureAwait(false);
 				if (entity == null)
 					return (CharacterPartyData?)null;
 
@@ -202,7 +202,7 @@ namespace FishMMO.Database.Npgsql.Services
 					rank: entity.Rank,
 					healthPCT: entity.HealthPCT
 				);
-			}, "GetPartyMembership", cancellationToken);
+			}, "GetPartyMembership", cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -215,7 +215,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteSqlAsync(async (dbContext, ct) =>
 			{
-				var entities = await GetPartyMembersQuery(dbContext, partyId, ct);
+				var entities = await GetPartyMembersQuery(dbContext, partyId, ct).ConfigureAwait(false);
 				var members = entities.Select(p => new CharacterPartyData(
 					id: p.ID,
 					characterID: p.CharacterID,
@@ -225,7 +225,7 @@ namespace FishMMO.Database.Npgsql.Services
 				)).ToList();
 
 				return (IReadOnlyList<CharacterPartyData>)members;
-			}, "GetPartyMembers", cancellationToken);
+			}, "GetPartyMembers", cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -238,8 +238,8 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteSqlAsync(async (dbContext, ct) =>
 			{
-				return await GetPartyMemberCountQuery(dbContext, partyId, ct);
-			}, "GetPartyMemberCount", cancellationToken);
+				return await GetPartyMemberCountQuery(dbContext, partyId, ct).ConfigureAwait(false);
+			}, "GetPartyMemberCount", cancellationToken).ConfigureAwait(false);
 		}
 	}
 }

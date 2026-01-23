@@ -79,13 +79,13 @@ namespace FishMMO.Database.Npgsql.Services
 							amount = EXCLUDED.amount
 						RETURNING id, character_id, template_id, slot, seed, amount")
 						.AsNoTracking()
-						.FirstOrDefaultAsync(ct);
+						.FirstOrDefaultAsync(ct).ConfigureAwait(false);
 
 				var existingItem = RequireEntityExists(result, "CharacterInventoryItem", $"{item.CharacterID}:{item.Slot}");
 				return existingItem.ID;
 				},
 				"SaveInventoryItem",
-				cancellationToken);
+				cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -120,7 +120,7 @@ namespace FishMMO.Database.Npgsql.Services
 				"SaveInventoryItems",
 				entityName: "CharacterInventory",
 				requireRowsAffected: false,
-				cancellationToken: cancellationToken);
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
@@ -139,7 +139,7 @@ namespace FishMMO.Database.Npgsql.Services
 				entityName: "CharacterInventory",
 				entityId: characterId,
 				requireRowsAffected: false,
-				cancellationToken: cancellationToken);
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
@@ -158,7 +158,7 @@ namespace FishMMO.Database.Npgsql.Services
 				entityName: "CharacterInventory",
 				entityId: characterId,
 				requireRowsAffected: false,
-				cancellationToken: cancellationToken);
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
@@ -174,7 +174,7 @@ namespace FishMMO.Database.Npgsql.Services
 			return await ExecuteSqlAsync(
 				async (dbContext, ct) =>
 				{
-					var entities = await GetInventoryItemsQuery(dbContext, characterId, ct);
+					var entities = await GetInventoryItemsQuery(dbContext, characterId, ct).ConfigureAwait(false);
 					var items = entities.Select(i => new CharacterInventoryData(
 						id: i.ID,
 						characterID: i.CharacterID,
@@ -187,7 +187,7 @@ namespace FishMMO.Database.Npgsql.Services
 					return (IReadOnlyList<CharacterInventoryData>)items;
 				},
 				"GetInventoryItems",
-				cancellationToken);
+				cancellationToken).ConfigureAwait(false);
 		}
 	}
 }

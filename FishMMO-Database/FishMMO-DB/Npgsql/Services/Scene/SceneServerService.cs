@@ -56,7 +56,7 @@ namespace FishMMO.Database.Npgsql.Services
 						lastpulse = EXCLUDED.lastpulse
 					RETURNING id, name, address, port, character_count, locked, lastpulse")
 						.AsNoTracking()
-						.FirstOrDefaultAsync(ct);
+						.FirstOrDefaultAsync(ct).ConfigureAwait(false);
 
 				if (result == null)
 				{
@@ -70,7 +70,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 				var serverData = MapEntityToDto(result);
 				return (result.ID, serverData);
-			}, "AddOrUpdateSceneServer", cancellationToken);
+			}, "AddOrUpdateSceneServer", cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -89,7 +89,7 @@ namespace FishMMO.Database.Npgsql.Services
 				entityName: "SceneServer",
 				entityId: serverId,
 				requireRowsAffected: true,
-				cancellationToken: cancellationToken);
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
@@ -108,7 +108,7 @@ namespace FishMMO.Database.Npgsql.Services
 				entityName: "SceneServer",
 				entityId: serverId,
 				requireRowsAffected: true,
-				cancellationToken: cancellationToken);
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
@@ -125,10 +125,10 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				var server = await dbContext.SceneServers
 					.AsNoTracking()
-					.FirstOrDefaultAsync(s => s.ID == serverId, ct);
+					.FirstOrDefaultAsync(s => s.ID == serverId, ct).ConfigureAwait(false);
 				var existingServer = RequireEntityExists(server, "SceneServer", serverId);
 				return MapEntityToDto(existingServer);
-			}, "GetSceneServer", cancellationToken);
+			}, "GetSceneServer", cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <summary>

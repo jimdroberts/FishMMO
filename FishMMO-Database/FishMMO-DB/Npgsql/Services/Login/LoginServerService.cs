@@ -48,7 +48,7 @@ namespace FishMMO.Database.Npgsql.Services
 							lastpulse = EXCLUDED.lastpulse
 						RETURNING id, name, address, port, lastpulse")
 					.AsNoTracking()
-						.FirstOrDefaultAsync(ct);
+						.FirstOrDefaultAsync(ct).ConfigureAwait(false);
 
 				if (result == null)
 				{
@@ -62,7 +62,7 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				return MapEntityToDto(result);
-			}, "AddOrUpdateLoginServer", cancellationToken);
+			}, "AddOrUpdateLoginServer", cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -83,7 +83,7 @@ namespace FishMMO.Database.Npgsql.Services
 				entityName: "LoginServer",
 				entityId: serverId.ToString(),
 				requireRowsAffected: true,
-				cancellationToken: cancellationToken);
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 			
 			return result.IsSuccess 
 				? DatabaseResult.Success() 
@@ -106,7 +106,7 @@ namespace FishMMO.Database.Npgsql.Services
 				entityName: "LoginServer",
 				entityId: serverId.ToString(),
 				requireRowsAffected: true,
-				cancellationToken: cancellationToken);
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 			
 			return result.IsSuccess 
 				? DatabaseResult.Success() 
@@ -127,7 +127,7 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				var server = await dbContext.LoginServers
 					.AsNoTracking()
-					.FirstOrDefaultAsync(s => s.ID == serverId, ct);
+					.FirstOrDefaultAsync(s => s.ID == serverId, ct).ConfigureAwait(false);
 
 				if (server == null)
 				{
@@ -135,7 +135,7 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				return MapEntityToDto(server);
-			}, "GetLoginServer", cancellationToken);
+			}, "GetLoginServer", cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <summary>
