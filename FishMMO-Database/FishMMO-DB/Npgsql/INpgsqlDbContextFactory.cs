@@ -47,5 +47,16 @@ namespace FishMMO.Database.Npgsql
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>A new NpgsqlDbContext instance.</returns>
 		Task<NpgsqlDbContext> CreateDbContextAsync(CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Shuts down the factory and rejects new DbContext creation.
+		/// Unity-friendly synchronous shutdown (safe to call from main thread).
+		/// </summary>
+		void Shutdown();
+
+		/// <summary>
+		/// Asynchronously shuts down the factory and rejects new DbContext creation.
+		/// </summary>
+		Task ShutdownAsync(CancellationToken cancellationToken = default);
 	}
 }

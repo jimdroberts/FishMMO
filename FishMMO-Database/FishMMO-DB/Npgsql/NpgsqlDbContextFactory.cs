@@ -18,6 +18,7 @@ namespace FishMMO.Database.Npgsql
 	/// </summary>
 	public class NpgsqlDbContextFactory : INpgsqlDbContextFactory, IDesignTimeDbContextFactory<NpgsqlDbContext>
 	{
+		private int shutdown;
 		private readonly string connectionString;
 		private readonly string schema;
 		private readonly bool enableLogging;
@@ -183,6 +184,9 @@ namespace FishMMO.Database.Npgsql
 		/// <returns>A new NpgsqlDbContext instance.</returns>
 		public NpgsqlDbContext CreateDbContext()
 		{
+			if (Volatile.Read(ref shutdown) != 0)
+				throw new ObjectDisposedException(nameof(NpgsqlDbContextFactory), "NpgsqlDbContextFactory has been shut down.");
+
 			try
 			{
 				// Create fresh DbContextOptionsBuilder each time - no shared state
@@ -265,9 +269,25 @@ namespace FishMMO.Database.Npgsql
 		/// <returns>A new NpgsqlDbContext instance.</returns>
 		public Task<NpgsqlDbContext> CreateDbContextAsync(CancellationToken cancellationToken = default)
 		{
+			if (Volatile.Read(ref shutdown) != 0)
+				throw new ObjectDisposedException(nameof(NpgsqlDbContextFactory), "NpgsqlDbContextFactory has been shut down.");
+
 			// DbContext creation is CPU-bound, not I/O-bound
 			// Return completed task with synchronous result
 			return Task.FromResult(CreateDbContext());
+		}
+
+		/// <inheritdoc />
+		public void Shutdown()
+		{
+			Interlocked.Exchange(ref shutdown, 1);
+		}
+
+		/// <inheritdoc />
+		public Task ShutdownAsync(CancellationToken cancellationToken = default)
+		{
+			Shutdown();
+			return Task.CompletedTask;
 		}
 
 		/// <summary>
@@ -278,6 +298,9 @@ namespace FishMMO.Database.Npgsql
 		/// <returns>A new NpgsqlDbContext instance.</returns>
 		public NpgsqlDbContext CreateDbContext(string[] args)
 		{
+			if (Volatile.Read(ref shutdown) != 0)
+				throw new ObjectDisposedException(nameof(NpgsqlDbContextFactory), "NpgsqlDbContextFactory has been shut down.");
+
 			return CreateDbContext();
 		}
 	}

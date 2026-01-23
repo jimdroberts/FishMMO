@@ -137,7 +137,7 @@ namespace FishMMO.Database.Npgsql
 				Exception disposalException = null;
 				try
 				{
-					base.Dispose();
+					await base.DisposeAsync().ConfigureAwait(false);
 				}
 				catch (Exception ex)
 				{

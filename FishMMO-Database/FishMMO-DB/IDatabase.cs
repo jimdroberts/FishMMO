@@ -1,3 +1,5 @@
+using System.Threading;
+using System.Threading.Tasks;
 using FishMMO.Database.Npgsql;
 using FishMMO.Database.Npgsql.Monitoring.Health;
 using FishMMO.Database.Npgsql.Monitoring.Metrics;
@@ -42,5 +44,18 @@ namespace FishMMO.Database
 		/// In most cases, prefer using services from ServiceRegistry.
 		/// </summary>
 		INpgsqlDbContextFactory DbContextFactory { get; }
+
+		/// <summary>
+		/// Shuts down the database orchestrator.
+		/// Unity-friendly synchronous shutdown (safe to call from main thread).
+		/// After shutdown, new DbContext creation should be rejected.
+		/// </summary>
+		void Shutdown();
+
+		/// <summary>
+		/// Asynchronously shuts down the database orchestrator.
+		/// After shutdown, new DbContext creation should be rejected.
+		/// </summary>
+		Task ShutdownAsync(CancellationToken cancellationToken = default);
 	}
 }

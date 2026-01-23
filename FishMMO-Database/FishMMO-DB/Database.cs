@@ -1,4 +1,6 @@
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 using FishMMO.Database.Npgsql;
 using FishMMO.Database.Npgsql.Services;
 using FishMMO.Database.Npgsql.Services.Interfaces;
@@ -151,6 +153,18 @@ namespace FishMMO.Database
 			registry.Register<ISceneService>(new SceneService(dbContextFactory));
 			registry.Register<IWorldServerService>(new WorldServerService(dbContextFactory));
 			return registry;
+		}
+
+		/// <inheritdoc/>
+		public void Shutdown()
+		{
+			DbContextFactory.Shutdown();
+		}
+
+		/// <inheritdoc/>
+		public Task ShutdownAsync(CancellationToken cancellationToken = default)
+		{
+			return DbContextFactory.ShutdownAsync(cancellationToken);
 		}
 	}
 }
