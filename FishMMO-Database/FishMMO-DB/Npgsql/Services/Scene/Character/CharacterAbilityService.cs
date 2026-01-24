@@ -56,7 +56,7 @@ namespace FishMMO.Database.Npgsql.Services
 					"Character ID must be greater than 0.");
 			}
 
-			return await ExecuteSqlAsync(async (dbContext, ct) =>
+			return await ExecuteAsync(async (dbContext, ct) =>
 			{
 				return await GetCountQuery(dbContext, characterId, ct).ConfigureAwait(false);
 			}, "GetCharacterAbilityCount", cancellationToken).ConfigureAwait(false);
@@ -72,20 +72,24 @@ namespace FishMMO.Database.Npgsql.Services
 					"Character ID must be greater than 0.");
 			}
 
-			return await ExecuteSqlAsync(async (dbContext, ct) =>
+			return await ExecuteAsync(async (dbContext, ct) =>
 			{
 				// Use atomic UPSERT with RETURNING for thread safety and proper retry strategy support
 				var events = abilityData.AbilityEvents ?? new List<int>();
 
 				var result = await dbContext.CharacterAbilities
-					.FromSqlInterpolated($@"
+					.FromSqlRaw($@"
 						INSERT INTO {TableName} (character_id, template_id, ability_events, cooldown)
-						VALUES ({abilityData.CharacterID}, {abilityData.TemplateID}, {events}, {abilityData.Cooldown})
+						VALUES ({{0}}, {{1}}, {{2}}, {{3}})
 						ON CONFLICT (character_id, template_id)
 						DO UPDATE SET
 							ability_events = EXCLUDED.ability_events,
 							cooldown = EXCLUDED.cooldown
-						RETURNING id, character_id, template_id, ability_events, cooldown")
+						RETURNING id, character_id, template_id, ability_events, cooldown",
+						abilityData.CharacterID,
+						abilityData.TemplateID,
+						events.ToArray(),
+						abilityData.Cooldown)
 					.AsNoTracking()
 								.FirstOrDefaultAsync(ct).ConfigureAwait(false);
 
@@ -108,7 +112,7 @@ namespace FishMMO.Database.Npgsql.Services
 			var existingItems = list.Where(a => a.ID > 0).ToList();
 
 			// Wrap both operations in transaction for atomicity
-			var transactionResult = await ExecuteSqlAsync(async (dbContext, transaction, ct) =>
+			var transactionResult = await ExecuteTransactionAsync(async (dbContext, transaction, ct) =>
 			{
 				// Handle new abilities with atomic INSERT using ON CONFLICT
 				if (newItems.Any())
@@ -119,18 +123,19 @@ namespace FishMMO.Database.Npgsql.Services
 					var newCooldowns = newItems.Select(a => a.Cooldown).ToArray();
 
 					// Atomic UPSERT for new items - uses unique constraint (character_id, template_id)
-					await dbContext.Database.ExecuteSqlInterpolatedAsync(
+					await dbContext.Database.ExecuteSqlRawAsync(
 						$@"INSERT INTO {TableName} (character_id, template_id, ability_events, cooldown)
 						SELECT * FROM UNNEST(
-							{newCharacterIds}::bigint[],
-							{newTemplateIds}::int[],
-							{newEventArrays}::int[][],
-							{newCooldowns}::float4[]
+							{{0}}::bigint[],
+							{{1}}::int[],
+							{{2}}::int[][],
+							{{3}}::float4[]
 						)
 						ON CONFLICT (character_id, template_id)
 						DO UPDATE SET
 						ability_events = EXCLUDED.ability_events,
 						cooldown = EXCLUDED.cooldown",
+						new object[] { newCharacterIds, newTemplateIds, newEventArrays, newCooldowns },
 						ct).ConfigureAwait(false);
 				}
 
@@ -145,20 +150,21 @@ namespace FishMMO.Database.Npgsql.Services
 
 					// Atomic bulk UPDATE by ID - preserves ID-based update semantics
 					// Allows changing template_id if needed
-					await dbContext.Database.ExecuteSqlInterpolatedAsync(
+					await dbContext.Database.ExecuteSqlRawAsync(
 						$@"UPDATE {TableName} AS target
 						SET character_id = source.char_id,
 							template_id = source.t_id,
 							ability_events = source.evs,
 							cooldown = source.cd
 						FROM UNNEST(
-							{ids}::bigint[],
-							{characterIds}::bigint[],
-							{templateIds}::int[],
-							{eventArrays}::int[][],
-							{cooldowns}::float4[]
+							{{0}}::bigint[],
+							{{1}}::bigint[],
+							{{2}}::int[],
+							{{3}}::int[][],
+							{{4}}::float4[]
 						) AS source(id, char_id, t_id, evs, cd)
 						WHERE target.id = source.id",
+						new object[] { ids, characterIds, templateIds, eventArrays, cooldowns },
 						ct).ConfigureAwait(false);
 				}
 
@@ -185,9 +191,10 @@ namespace FishMMO.Database.Npgsql.Services
 					"Character ID must be greater than 0.");
 			}
 
-			var result = await ExecuteSqlAsync(
-				$@"DELETE FROM {TableName} WHERE character_id = {characterId}",
+			var result = await ExecuteRawSqlAsync(
+				$@"DELETE FROM {TableName} WHERE character_id = {{0}}",
 				"DeleteCharacterAbilities",
+				new object[] { characterId },
 				entityName: "CharacterAbility",
 				entityId: characterId,
 				requireRowsAffected: false,
@@ -206,9 +213,10 @@ namespace FishMMO.Database.Npgsql.Services
 					"Character ID and ability ID must be greater than 0.");
 			}
 
-			var result = await ExecuteSqlAsync(
-				$@"DELETE FROM {TableName} WHERE character_id = {characterId} AND id = {abilityId}",
+			var result = await ExecuteRawSqlAsync(
+				$@"DELETE FROM {TableName} WHERE character_id = {{0}} AND id = {{1}}",
 				"DeleteCharacterAbility",
+				new object[] { characterId, abilityId },
 				entityName: "CharacterAbility",
 				entityId: abilityId,
 				requireRowsAffected: false,
@@ -227,7 +235,7 @@ namespace FishMMO.Database.Npgsql.Services
 					"Character ID must be greater than 0.");
 			}
 
-			return await ExecuteSqlAsync(async (dbContext, ct) =>
+			return await ExecuteAsync(async (dbContext, ct) =>
 			{
 				var entities = await GetAbilitiesQuery(dbContext, characterId, ct).ConfigureAwait(false);
 				var abilities = entities.Select(a => new CharacterAbilityData(

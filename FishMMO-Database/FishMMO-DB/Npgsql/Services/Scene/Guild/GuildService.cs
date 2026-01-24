@@ -62,7 +62,7 @@ namespace FishMMO.Database.Npgsql.Services
 			if (string.IsNullOrWhiteSpace(name))
 				return DatabaseResult<bool>.Failure("VALIDATION_ERROR", "Invalid guild name");
 
-			return await ExecuteSqlAsync(async (context, ct) =>
+			return await ExecuteAsync(async (context, ct) =>
 			{
 				var nameLowercase = name.ToLowerInvariant();
 				return await GuildExistsByNameQuery(context, nameLowercase, ct).ConfigureAwait(false);
@@ -75,7 +75,7 @@ namespace FishMMO.Database.Npgsql.Services
 			if (guildId <= 0)
 				return DatabaseResult<string>.Failure("VALIDATION_ERROR", "Invalid guild ID");
 
-			return await ExecuteSqlAsync(async (context, ct) =>
+			return await ExecuteAsync(async (context, ct) =>
 			{
 				var guild = await context.Guilds
 					.AsNoTracking()
@@ -95,17 +95,19 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<long?>.Failure("VALIDATION_ERROR", "Guild name is required");
 			}
 
-			return await ExecuteSqlAsync(async (context, ct) =>
+			return await ExecuteAsync(async (context, ct) =>
 			{
 				var nameLowercase = name.ToLowerInvariant();
 
 				// Idempotent by natural key (name): safe under transient retries.
 				var inserted = await context.Guilds
-					.FromSqlInterpolated($@"
+					.FromSqlRaw($@"
 					INSERT INTO {TableName} (name, notice, time_created)
-					VALUES ({name}, {string.Empty}, CURRENT_TIMESTAMP)
+					VALUES ({{0}}, {{1}}, CURRENT_TIMESTAMP)
 					ON CONFLICT (name_lowercase) DO NOTHING
-					RETURNING id")
+					RETURNING id",
+					name,
+					string.Empty)
 					.AsNoTracking()
 					.FirstOrDefaultAsync(ct).ConfigureAwait(false);
 
@@ -141,9 +143,10 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid guild ID");
 			}
 
-			var result = await ExecuteSqlAsync(
-				$"DELETE FROM {TableName} WHERE id = {guildId}",
+			var result = await ExecuteRawSqlAsync(
+				$"DELETE FROM {TableName} WHERE id = {{0}}",
 				"DeleteGuild",
+				new object[] { guildId },
 				entityName: "Guild",
 				entityId: guildId,
 				requireRowsAffected: true,
@@ -158,7 +161,7 @@ namespace FishMMO.Database.Npgsql.Services
 			if (string.IsNullOrWhiteSpace(name))
 				return DatabaseResult<GuildData?>.Failure("VALIDATION_ERROR", "Invalid guild name");
 
-			return await ExecuteSqlAsync(async (context, ct) =>
+			return await ExecuteAsync(async (context, ct) =>
 			{
 				var guild = await context.Guilds
 					.AsNoTracking()
@@ -174,7 +177,7 @@ namespace FishMMO.Database.Npgsql.Services
 			if (guildId <= 0)
 				return DatabaseResult<GuildData?>.Failure("VALIDATION_ERROR", "Invalid guild ID");
 
-			return await ExecuteSqlAsync(async (context, ct) =>
+			return await ExecuteAsync(async (context, ct) =>
 			{
 				var guild = await GetGuildByIdQuery(context, guildId, ct).ConfigureAwait(false);
 

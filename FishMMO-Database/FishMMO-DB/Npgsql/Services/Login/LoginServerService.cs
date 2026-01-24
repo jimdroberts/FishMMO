@@ -35,18 +35,21 @@ namespace FishMMO.Database.Npgsql.Services
 					"Server name and address must not be empty.");
 			}
 
-			return await ExecuteSqlAsync<LoginServerData>(async (dbContext, ct) =>
+			return await ExecuteAsync<LoginServerData>(async (dbContext, ct) =>
 			{
 				var result = await dbContext.LoginServers
-					.FromSqlInterpolated($@"
+					.FromSqlRaw($@"
 						INSERT INTO {TableName} (name, address, port, lastpulse)
-						VALUES ({name}, {address}, {port}, CURRENT_TIMESTAMP)
+						VALUES ({{0}}, {{1}}, {{2}}, CURRENT_TIMESTAMP)
 						ON CONFLICT (name) 
 						DO UPDATE SET 
 							address = EXCLUDED.address,
 							port = EXCLUDED.port,
 							lastpulse = EXCLUDED.lastpulse
-						RETURNING id, name, address, port, lastpulse")
+						RETURNING id, name, address, port, lastpulse",
+						name,
+						address,
+						port)
 					.AsNoTracking()
 						.FirstOrDefaultAsync(ct).ConfigureAwait(false);
 
@@ -75,11 +78,12 @@ namespace FishMMO.Database.Npgsql.Services
 					"Server ID must be greater than 0.");
 			}
 
-			var result = await ExecuteSqlAsync(
+			var result = await ExecuteRawSqlAsync(
 				$@"UPDATE {TableName} 
 				SET lastpulse = CURRENT_TIMESTAMP 
-				WHERE id = {serverId}",
+				WHERE id = {{0}}",
 				"PulseLoginServer",
+				new object[] { serverId },
 				entityName: "LoginServer",
 				entityId: serverId.ToString(),
 				requireRowsAffected: true,
@@ -100,9 +104,10 @@ namespace FishMMO.Database.Npgsql.Services
 					"Server ID must be greater than 0.");
 			}
 
-			var result = await ExecuteSqlAsync(
-				$@"DELETE FROM {TableName} WHERE id = {serverId}",
+			var result = await ExecuteRawSqlAsync(
+				$@"DELETE FROM {TableName} WHERE id = {{0}}",
 				"DeleteLoginServer",
+				new object[] { serverId },
 				entityName: "LoginServer",
 				entityId: serverId.ToString(),
 				requireRowsAffected: true,
@@ -123,7 +128,7 @@ namespace FishMMO.Database.Npgsql.Services
 					"Server ID must be greater than 0.");
 			}
 
-			return await ExecuteSqlAsync(async (dbContext, ct) =>
+			return await ExecuteAsync(async (dbContext, ct) =>
 			{
 				var server = await dbContext.LoginServers
 					.AsNoTracking()

@@ -17,7 +17,7 @@ namespace FishMMO.Database.Npgsql.Services
 	/// Follows SOLID principles: SRP, OCP, LSP, ISP, DIP.
 	/// </summary>
 	/// <remarks>
-	/// All methods that use ExecuteSqlInterpolatedAsync are wrapped in execution strategies
+	/// All methods that use ExecuteSqlRawAsync are wrapped in execution strategies
 	/// to provide automatic retry logic (up to 3 attempts) for transient database failures
 	/// such as connection timeouts, deadlocks, or network interruptions.
 	/// 
@@ -58,21 +58,26 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
-			return await ExecuteSqlAsync<long>(async (dbContext, ct) =>
+			return await ExecuteAsync<long>(async (dbContext, ct) =>
 			{
 				// Use PostgreSQL UPSERT for atomic insert-or-update
 				var result = await dbContext.CharacterBankItems
-					.FromSqlInterpolated($@"
+					.FromSqlRaw($@"
 					INSERT INTO {TableName}
 						(character_id, template_id, slot, seed, amount)
 					VALUES 
-						({item.CharacterID}, {item.TemplateID}, {item.Slot}, {item.Seed}, {item.Amount})
+						({{0}}, {{1}}, {{2}}, {{3}}, {{4}})
 					ON CONFLICT (character_id, slot) 
 					DO UPDATE SET 
 						template_id = EXCLUDED.template_id,
 						seed = EXCLUDED.seed,
 						amount = EXCLUDED.amount
-					RETURNING id, character_id, template_id, slot, seed, amount")
+					RETURNING id, character_id, template_id, slot, seed, amount",
+					item.CharacterID,
+					item.TemplateID,
+					item.Slot,
+					item.Seed,
+					item.Amount)
 						.AsNoTracking()
 						.FirstOrDefaultAsync(ct);
 				var existingItem = RequireEntityExists(result, "CharacterBankItem", $"{item.CharacterID}:{item.Slot}");
@@ -99,20 +104,21 @@ namespace FishMMO.Database.Npgsql.Services
 			var amounts = itemList.Select(i => (int)i.Amount).ToArray();
 
 			// Single bulk UPSERT using UNNEST - atomic operation, no transaction needed
-			var result = await ExecuteSqlAsync(
+			var result = await ExecuteRawSqlAsync(
 				$@"INSERT INTO {TableName} (character_id, template_id, slot, seed, amount)
 				SELECT * FROM UNNEST(
-					{characterIds}::bigint[],
-					{templateIds}::int[],
-					{slots}::int[],
-					{seeds}::int[],
-					{amounts}::int[]
+					{{0}}::bigint[],
+					{{1}}::int[],
+					{{2}}::int[],
+					{{3}}::int[],
+					{{4}}::int[]
 				)
 				ON CONFLICT (character_id, slot) DO UPDATE SET
 					template_id = EXCLUDED.template_id,
 					seed = EXCLUDED.seed,
 					amount = EXCLUDED.amount",
 				"SaveBankItems",
+				new object[] { characterIds, templateIds, slots, seeds, amounts },
 				entityName: "CharacterBankItem",
 				requireRowsAffected: false,
 				cancellationToken: cancellationToken);
@@ -130,9 +136,10 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
-			var result = await ExecuteSqlAsync(
-				$@"DELETE FROM {TableName} WHERE character_id = {characterId}",
+			var result = await ExecuteRawSqlAsync(
+				$@"DELETE FROM {TableName} WHERE character_id = {{0}}",
 				"DeleteBankItems",
+				new object[] { characterId },
 				entityName: "CharacterBankItem",
 				entityId: characterId,
 				requireRowsAffected: false,
@@ -151,9 +158,10 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
-			var result = await ExecuteSqlAsync(
-				$@"DELETE FROM {TableName} WHERE character_id = {characterId} AND slot = {slot}",
+			var result = await ExecuteRawSqlAsync(
+				$@"DELETE FROM {TableName} WHERE character_id = {{0}} AND slot = {{1}}",
 				"DeleteBankSlot",
+				new object[] { characterId, slot },
 				entityName: "CharacterBankItem",
 				entityId: characterId,
 				requireRowsAffected: false,
@@ -172,7 +180,7 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
-			return await ExecuteSqlAsync(async (dbContext, ct) =>
+			return await ExecuteAsync(async (dbContext, ct) =>
 			{
 				var entities = await GetBankItemsQuery(dbContext, characterId, ct);
 				var items = entities.Select(i => new CharacterBankData(

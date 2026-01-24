@@ -14,7 +14,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	/// <para>
 	/// Write operations (Save*, Delete*) in this service use execution strategies to ensure transient
 	/// database failures are automatically retried according to the retry policy configured on the DbContext.
-	/// This is critical because ExecuteSqlInterpolatedAsync does not automatically benefit from
+	/// This is critical because ExecuteSqlRawAsync does not automatically benefit from
 	/// EnableRetryOnFailure without manual wrapping.
 	/// </para>
 	/// <para>
@@ -41,7 +41,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// A <see cref="DatabaseResult"/> indicating success or containing a <see cref="DatabaseException"/> on failure.
 		/// </returns>
 		/// <remarks>
-		/// Uses ExecuteSqlInterpolatedAsync with execution strategy wrapping to ensure transient database
+		/// Uses ExecuteSqlRawAsync with execution strategy wrapping to ensure transient database
 		/// failures are automatically retried. Uses PostgreSQL ON CONFLICT for atomic UPSERT with conditional
 		/// update to prevent race conditions.
 		/// </remarks>
@@ -57,7 +57,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// or a <see cref="DatabaseException"/> on failure.
 		/// </returns>
 		/// <remarks>
-		/// Uses ExecuteSqlInterpolatedAsync with execution strategy wrapping to ensure transient database
+		/// Uses ExecuteSqlRawAsync with execution strategy wrapping to ensure transient database
 		/// failures are automatically retried. Returns 0 rows deleted if party doesn't exist (idempotent).
 		/// </remarks>
 		Task<DatabaseResult<int>> DeleteAsync(long partyId, CancellationToken cancellationToken = default);

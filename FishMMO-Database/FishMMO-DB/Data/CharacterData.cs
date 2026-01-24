@@ -41,10 +41,11 @@ namespace FishMMO.Database.Data
 		public readonly int Flags;
 		public readonly DateTime TimeCreated;
 		public readonly DateTime LastSaved;
-		public readonly DateTime TimeDeleted;
-		public readonly bool Deleted;
 
-		public CharacterData(long id, string name, string nameLowercase, string account, bool selected, long worldServerID, string sceneName, int sceneHandle, string bindScene, float bindX, float bindY, float bindZ, long instanceID, float instanceX, float instanceY, float instanceZ, float instanceRotX, float instanceRotY, float instanceRotZ, float instanceRotW, int raceID, int modelIndex, float x, float y, float z, float rotX, float rotY, float rotZ, float rotW, byte accessLevel, bool online, int flags, DateTime timeCreated, DateTime lastSaved, DateTime timeDeleted, bool deleted)
+		/// <summary>
+		/// Initializes a new instance of the <see cref="CharacterData"/> struct.
+		/// </summary>
+		public CharacterData(long id, string name, string nameLowercase, string account, bool selected, long worldServerID, string sceneName, int sceneHandle, string bindScene, float bindX, float bindY, float bindZ, long instanceID, float instanceX, float instanceY, float instanceZ, float instanceRotX, float instanceRotY, float instanceRotZ, float instanceRotW, int raceID, int modelIndex, float x, float y, float z, float rotX, float rotY, float rotZ, float rotW, byte accessLevel, bool online, int flags, DateTime timeCreated, DateTime lastSaved)
 		{
 			ID = id;
 			Name = name;
@@ -80,8 +81,6 @@ namespace FishMMO.Database.Data
 			Flags = flags;
 			TimeCreated = timeCreated;
 			LastSaved = lastSaved;
-			TimeDeleted = timeDeleted;
-			Deleted = deleted;
 		}
 	}
 }

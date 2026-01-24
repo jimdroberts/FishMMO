@@ -23,7 +23,7 @@ namespace FishMMO.Database.Npgsql.Services
 	/// - Party membership deletion
 	/// - Party membership and member retrieval
 	/// 
-	/// All database operations use BaseService.ExecuteSqlAsync for:
+	/// All database operations use BaseService.ExecuteAsync for:
 	/// - Automatic execution strategy with transient failure retry
 	/// - Centralized exception handling and mapping
 	/// - Consistent DatabaseResult pattern
@@ -84,12 +84,12 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 
 			// Use transaction to atomically check capacity and insert/update membership
-			var result = await ExecuteSqlAsync(async (dbContext, transaction, ct) =>
+			var result = await ExecuteTransactionAsync(async (dbContext, transaction, ct) =>
 			{
 				// Lock character's membership row FIRST to establish consistent lock ordering
 				// This prevents deadlocks and ensures atomicity across concurrent requests
 				var existingMembership = await dbContext.CharacterParties
-					.FromSqlInterpolated($"SELECT * FROM character_parties WHERE character_id = {partyData.CharacterID} FOR UPDATE")
+					.FromSqlRaw($"SELECT * FROM {TableName} WHERE character_id = {{0}} FOR UPDATE", partyData.CharacterID)
 					.FirstOrDefaultAsync(ct).ConfigureAwait(false);
 
 				// Refined check: determine if capacity validation is needed
@@ -97,10 +97,12 @@ namespace FishMMO.Database.Npgsql.Services
 
 				if (needsCapacityCheck)
 				{
+					var partyTableName = dbContext.GetTableName<PartyEntity>();
+
 					// Then lock party row to prevent concurrent capacity violations
 					// Lock ordering: character membership -> party (prevents race conditions)
 					var partyEntity = await dbContext.Parties
-						.FromSqlInterpolated($"SELECT * FROM parties WHERE id = {partyData.PartyID} FOR UPDATE")
+						.FromSqlRaw($"SELECT * FROM {partyTableName} WHERE id = {{0}} FOR UPDATE", partyData.PartyID)
 						.FirstOrDefaultAsync(ct).ConfigureAwait(false);
 
 					if (partyEntity == null)
@@ -124,15 +126,16 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				// Perform UPSERT
-				await dbContext.Database.ExecuteSqlInterpolatedAsync(
+				await dbContext.Database.ExecuteSqlRawAsync(
 					$@"INSERT INTO {TableName} 
 					   (character_id, party_id, rank, health_pct)
-					   VALUES ({partyData.CharacterID}, {partyData.PartyID}, {partyData.Rank}, {partyData.HealthPCT})
+					   VALUES ({{0}}, {{1}}, {{2}}, {{3}})
 					   ON CONFLICT (character_id) 
 					   DO UPDATE SET 
 						   party_id = EXCLUDED.party_id,
 						   rank = EXCLUDED.rank,
 						   health_pct = EXCLUDED.health_pct",
+					new object[] { partyData.CharacterID, partyData.PartyID, partyData.Rank, partyData.HealthPCT },
 					ct).ConfigureAwait(false);
 
 				return DatabaseResult.Success();
@@ -149,9 +152,10 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			var result = await ExecuteSqlAsync(
-				$@"DELETE FROM {TableName} WHERE character_id = {characterId}",
+			var result = await ExecuteRawSqlAsync(
+				$@"DELETE FROM {TableName} WHERE character_id = {{0}}",
 				"DeletePartyMembership",
+				new object[] { characterId },
 				entityName: "CharacterParty",
 				entityId: characterId,
 				requireRowsAffected: false,
@@ -168,11 +172,12 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character or party ID");
 			}
 
-			var result = await ExecuteSqlAsync(
+			var result = await ExecuteRawSqlAsync(
 				$@"UPDATE {TableName} 
-					SET rank = {rank} 
-					WHERE character_id = {characterId} AND party_id = {partyId}",
+					SET rank = {{0}} 
+					WHERE character_id = {{1}} AND party_id = {{2}}",
 				"UpdateRank",
+				new object[] { rank, characterId, partyId },
 				entityName: "CharacterParty",
 				entityId: characterId,
 				requireRowsAffected: false,
@@ -189,7 +194,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<CharacterPartyData?>.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			return await ExecuteSqlAsync(async (dbContext, ct) =>
+			return await ExecuteAsync(async (dbContext, ct) =>
 			{
 				var entity = await GetPartyMembershipQuery(dbContext, characterId, ct).ConfigureAwait(false);
 				if (entity == null)
@@ -213,7 +218,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<IReadOnlyList<CharacterPartyData>>.Failure("VALIDATION_ERROR", "Invalid party ID");
 			}
 
-			return await ExecuteSqlAsync(async (dbContext, ct) =>
+			return await ExecuteAsync(async (dbContext, ct) =>
 			{
 				var entities = await GetPartyMembersQuery(dbContext, partyId, ct).ConfigureAwait(false);
 				var members = entities.Select(p => new CharacterPartyData(
@@ -236,7 +241,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<int>.Failure("VALIDATION_ERROR", "Invalid party ID");
 			}
 
-			return await ExecuteSqlAsync(async (dbContext, ct) =>
+			return await ExecuteAsync(async (dbContext, ct) =>
 			{
 				return await GetPartyMemberCountQuery(dbContext, partyId, ct).ConfigureAwait(false);
 			}, "GetPartyMemberCount", cancellationToken).ConfigureAwait(false);

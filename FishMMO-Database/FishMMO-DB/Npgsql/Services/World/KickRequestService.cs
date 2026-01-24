@@ -37,13 +37,14 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("INVALID_ACCOUNT_NAME", "Account name must not be empty.");
 			}
 
-			var result = await ExecuteSqlAsync(
+			var result = await ExecuteRawSqlAsync(
 				$@"INSERT INTO {TableName} 
 				   (account_name, time_created)
-				   VALUES ({accountName}, CURRENT_TIMESTAMP)
+				   VALUES ({{0}}, CURRENT_TIMESTAMP)
 				   ON CONFLICT (account_name) 
 				   DO UPDATE SET time_created = CURRENT_TIMESTAMP",
 				"SaveKickRequest",
+				new object[] { accountName },
 				entityName: "KickRequest",
 				entityId: accountName,
 				requireRowsAffected: false,
@@ -60,9 +61,10 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<int>.Failure("INVALID_ACCOUNT_NAME", "Account name must not be empty.");
 			}
 
-			return await ExecuteSqlAsync(
-				$"DELETE FROM {TableName} WHERE account_name = {accountName}",
+			return await ExecuteRawSqlAsync(
+				$"DELETE FROM {TableName} WHERE account_name = {{0}}",
 				"DeleteKickRequest",
+				new object[] { accountName },
 				entityName: "KickRequest",
 				entityId: accountName,
 				requireRowsAffected: false,
@@ -79,7 +81,7 @@ namespace FishMMO.Database.Npgsql.Services
 			if (amount <= 0)
 				return DatabaseResult<List<KickRequestData>>.Success(new List<KickRequestData>());
 
-			return await ExecuteSqlAsync(async (dbContext, ct) =>
+			return await ExecuteAsync(async (dbContext, ct) =>
 			{
 				var requests = await dbContext.KickRequests
 					.AsNoTracking()

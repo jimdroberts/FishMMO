@@ -5,37 +5,15 @@ namespace FishMMO.Database.Npgsql
 	/// 
 	/// These values are loaded by <c>NpgsqlDbContextFactory</c> from the <c>DatabaseServiceExecution</c>
 	/// section of <c>appsettings.json</c> and used to control:
-	/// - Transient-only retry behavior (count + backoff)
 	/// - Idempotency validation constraints
 	/// - Best-effort idempotency table cleanup (retention / bounded deletes)
 	/// 
 	/// Notes:
-	/// - <c>BaseService</c> clamps invalid values defensively (e.g., negative counts become 0).
+	/// - The factory clamps invalid values defensively (e.g., negative counts become 0).
 	/// - Setting <see cref="ProcessedRequestsRetentionDays"/> to 0 disables cleanup.
 	/// </summary>
 	public sealed class DatabaseServiceExecutionSettings
 	{
-		/// <summary>
-		/// Maximum number of transient retry attempts.
-		/// 
-		/// The total number of tries is <c>MaxTransientRetryCount + 1</c> (initial attempt + retries).
-		/// Use 0 to disable retries.
-		/// </summary>
-		public int MaxTransientRetryCount { get; set; } = 5;
-
-		/// <summary>
-		/// Base delay in milliseconds used for exponential backoff.
-		/// 
-		/// The engine uses exponential backoff with jitter and caps the delay via
-		/// <see cref="MaxRetryDelayMs"/>.
-		/// </summary>
-		public int BaseRetryDelayMs { get; set; } = 100;
-
-		/// <summary>
-		/// Maximum delay in milliseconds between retry attempts.
-		/// </summary>
-		public int MaxRetryDelayMs { get; set; } = 2000;
-
 		/// <summary>
 		/// Maximum allowed length of the logical idempotency operation name.
 		/// </summary>

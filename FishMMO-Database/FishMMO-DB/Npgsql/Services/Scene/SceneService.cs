@@ -84,19 +84,19 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<long>.Failure("VALIDATION_ERROR", "Invalid parameters: world server ID and scene name are required.");
 			}
 
-			return await ExecuteSqlAsync<long>(async (dbContext, ct) =>
+			return await ExecuteAsync<long>(async (dbContext, ct) =>
 			{
 				var sceneTypeInt = (int)sceneType;
 				var sceneStatusInt = (int)SceneStatus.Pending;
+				var sql = $@"INSERT INTO {TableName}
+					(world_server_id, scene_name, scene_type, scene_status, character_id, time_created)
+				VALUES ({{0}}, {{1}}, {{2}}, {{3}}, {{4}}, CURRENT_TIMESTAMP)
+				RETURNING id";
 
 				// Use CURRENT_TIMESTAMP from database server for consistency
 				// Optimized: RETURNING only id for better performance and reduced memory overhead
 				var result = await dbContext.Scenes
-					.FromSqlInterpolated($@"
-					INSERT INTO {TableName} 
-					(world_server_id, scene_name, scene_type, scene_status, character_id, time_created)
-					VALUES ({worldServerId}, {sceneName}, {sceneTypeInt}, {sceneStatusInt}, {characterId}, CURRENT_TIMESTAMP)
-					RETURNING id")
+					.FromSqlRaw(sql, worldServerId, sceneName, sceneTypeInt, sceneStatusInt, characterId)
 						.AsNoTracking()
 						.FirstOrDefaultAsync(ct).ConfigureAwait(false);
 
@@ -119,24 +119,28 @@ namespace FishMMO.Database.Npgsql.Services
 		public async Task<DatabaseResult<SceneData>> DequeueAsync(CancellationToken cancellationToken = default)
 		{
 			// Use SceneData? (nullable) since no pending scenes is valid business logic, not an error
-			var result = await ExecuteSqlAsync<SceneData?>(async (dbContext, ct) =>
+			var result = await ExecuteAsync<SceneData?>(async (dbContext, ct) =>
 			{
+				var sql = $@"WITH scene_to_update AS (
+					SELECT id FROM {TableName}
+					WHERE scene_status = {{0}}
+					ORDER BY time_created
+					FOR UPDATE SKIP LOCKED
+					LIMIT 1
+				)
+				UPDATE {TableName}
+				SET scene_status = {{1}}
+				FROM scene_to_update
+				WHERE {TableName}.id = scene_to_update.id
+				RETURNING {TableName}.id, {TableName}.world_server_id, {TableName}.scene_server_id, {TableName}.scene_name, {TableName}.scene_handle, {TableName}.scene_status, {TableName}.scene_type, {TableName}.character_id, {TableName}.character_count, {TableName}.time_created";
+
+				var pendingStatus = (int)SceneStatus.Pending;
+				var loadingStatus = (int)SceneStatus.Loading;
+
 				// Atomically dequeue next pending scene with CTE and FOR UPDATE SKIP LOCKED
 				// CTE ensures the row is locked BEFORE the UPDATE, preventing race conditions
 				var entity = await dbContext.Scenes
-					.FromSqlInterpolated($@"
-					WITH scene_to_update AS (
-						SELECT id FROM {TableName}
-						WHERE scene_status = {(int)SceneStatus.Pending}
-						ORDER BY time_created
-						FOR UPDATE SKIP LOCKED
-						LIMIT 1
-					)
-					UPDATE {TableName}
-					SET scene_status = {(int)SceneStatus.Loading}
-					FROM scene_to_update
-					WHERE {TableName}.id = scene_to_update.id
-					RETURNING {TableName}.id, {TableName}.world_server_id, {TableName}.scene_server_id, {TableName}.scene_name, {TableName}.scene_handle, {TableName}.scene_status, {TableName}.scene_type, {TableName}.character_id, {TableName}.character_count, {TableName}.time_created")
+					.FromSqlRaw(sql, pendingStatus, loadingStatus)
 					.AsNoTracking()
 					.FirstOrDefaultAsync(ct).ConfigureAwait(false);
 
@@ -167,11 +171,12 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid scene ID.");
 			}
 
-			var result = await ExecuteSqlAsync(
-				$@"UPDATE {TableName} 
-					SET scene_status = {(int)status} 
-					WHERE id = {sceneId}",
+			var result = await ExecuteRawSqlAsync(
+				$@"UPDATE {TableName}
+					SET scene_status = {{0}}
+					WHERE id = {{1}}",
 				"UpdateSceneStatus",
+				new object[] { (int)status, sceneId },
 				entityName: "Scene",
 				entityId: sceneId,
 				requireRowsAffected: true,
@@ -195,21 +200,22 @@ namespace FishMMO.Database.Npgsql.Services
 
 			// Use CTE with SELECT FOR UPDATE SKIP LOCKED to prevent race conditions
 			// Only one scene server can claim a specific scene at a time
-			var result = await ExecuteSqlAsync(
+			var result = await ExecuteRawSqlAsync(
 				$@"WITH claimable_scene AS (
 				SELECT id FROM {TableName}
-				WHERE world_server_id = {worldServerId} 
-					AND scene_name = {sceneName} 
-					AND scene_status = {(int)SceneStatus.Loading}
+				WHERE world_server_id = {{0}}
+					AND scene_name = {{1}}
+					AND scene_status = {{2}}
 				FOR UPDATE SKIP LOCKED
 				LIMIT 1
 			)
-			UPDATE {TableName} 
-			SET scene_status = {(int)SceneStatus.Ready}, 
-				scene_server_id = {sceneServerId}, 
-				scene_handle = {sceneHandle}
+			UPDATE {TableName}
+			SET scene_status = {{3}},
+				scene_server_id = {{4}},
+				scene_handle = {{5}}
 			WHERE id IN (SELECT id FROM claimable_scene)",
 				"SetSceneReady",
+				new object[] { worldServerId, sceneName, (int)SceneStatus.Loading, (int)SceneStatus.Ready, sceneServerId, sceneHandle },
 				entityName: "Scene",
 				requireRowsAffected: true,
 				cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -220,11 +226,12 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <inheritdoc/>
 		public async Task<DatabaseResult> PulseAsync(int sceneHandle, int characterCount, CancellationToken cancellationToken = default)
 		{
-			var result = await ExecuteSqlAsync(
+			var result = await ExecuteRawSqlAsync(
 				$@"UPDATE {TableName}
-					SET character_count = {characterCount} 
-					WHERE scene_handle = {sceneHandle}",
+					SET character_count = {{0}}
+					WHERE scene_handle = {{1}}",
 				"PulseScene",
+				new object[] { characterCount, sceneHandle },
 				entityName: "Scene",
 				requireRowsAffected: true,
 				cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -240,9 +247,10 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<int>.Failure("VALIDATION_ERROR", "Invalid scene server ID.");
 			}
 
-			return await ExecuteSqlAsync(
-				$"DELETE FROM {TableName} WHERE scene_server_id = {sceneServerId}",
+			return await ExecuteRawSqlAsync(
+				$@"DELETE FROM {TableName} WHERE scene_server_id = {{0}}",
 				"DeleteBySceneServer",
+				new object[] { sceneServerId },
 				entityName: "Scene",
 				requireRowsAffected: false,
 				cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -256,9 +264,10 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<int>.Failure("VALIDATION_ERROR", "Invalid world server ID.");
 			}
 
-			return await ExecuteSqlAsync(
-				$"DELETE FROM {TableName} WHERE world_server_id = {worldServerId}",
+			return await ExecuteRawSqlAsync(
+				$@"DELETE FROM {TableName} WHERE world_server_id = {{0}}",
 				"DeleteByWorldServer",
+				new object[] { worldServerId },
 				entityName: "Scene",
 				requireRowsAffected: false,
 				cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -272,10 +281,11 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid scene server ID.");
 			}
 
-			var result = await ExecuteSqlAsync(
-				$@"DELETE FROM {TableName} 
-					WHERE scene_server_id = {sceneServerId} AND scene_handle = {sceneHandle}",
+			var result = await ExecuteRawSqlAsync(
+				$@"DELETE FROM {TableName}
+					WHERE scene_server_id = {{0}} AND scene_handle = {{1}}",
 				"DeleteByHandle",
+				new object[] { sceneServerId, sceneHandle },
 				entityName: "Scene",
 				requireRowsAffected: true,
 				cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -294,7 +304,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<SceneData>.Failure("VALIDATION_ERROR", "Invalid character ID.");
 			}
 
-			return await ExecuteSqlAsync(async (dbContext, ct) =>
+			return await ExecuteAsync(async (dbContext, ct) =>
 			{
 				var type = (int)sceneType;
 				var scene = await GetCharacterInstanceQuery(dbContext, characterId, type, ct).ConfigureAwait(false);
@@ -316,7 +326,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<SceneData>.Failure("VALIDATION_ERROR", "Invalid scene ID.");
 			}
 
-			return await ExecuteSqlAsync(async (dbContext, ct) =>
+			return await ExecuteAsync(async (dbContext, ct) =>
 			{
 				var scene = await GetInstanceByIdQuery(dbContext, sceneId, ct).ConfigureAwait(false);
 
@@ -341,7 +351,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<List<SceneData>>.Failure("VALIDATION_ERROR", "Invalid parameters: world server ID and scene name are required.");
 			}
 
-			return await ExecuteSqlAsync(async (dbContext, ct) =>
+			return await ExecuteAsync(async (dbContext, ct) =>
 			{
 				var readyStatus = (int)SceneStatus.Ready;
 				var scenes = await GetAvailableScenesQuery(dbContext, worldServerId, sceneName, maxClients, readyStatus, ct).ConfigureAwait(false);
@@ -358,7 +368,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<List<SceneData>>.Failure("VALIDATION_ERROR", "Invalid world server ID.");
 			}
 
-			return await ExecuteSqlAsync(async (dbContext, ct) =>
+			return await ExecuteAsync(async (dbContext, ct) =>
 			{
 				var readyStatus = (int)SceneStatus.Ready;
 				var scenes = await GetReadyScenesQuery(dbContext, worldServerId, readyStatus, ct).ConfigureAwait(false);

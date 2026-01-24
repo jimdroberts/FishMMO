@@ -13,7 +13,7 @@ namespace FishMMO.Database.Npgsql.Services
 	/// <para>
 	/// All write operations (Save*, Update*, Delete*) in this service use execution strategies to ensure
 	/// transient database failures are automatically retried according to the retry policy configured
-	/// on the DbContext. This is critical because ExecuteSqlInterpolatedAsync does not automatically
+	/// on the DbContext. This is critical because ExecuteSqlRawAsync does not automatically
 	/// benefit from EnableRetryOnFailure without manual wrapping.
 	/// </para>
 	/// <para>

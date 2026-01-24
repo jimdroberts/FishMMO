@@ -45,6 +45,13 @@ namespace FishMMO.Database.Npgsql.Entities
 				.WithMany(g => g.Characters)
 				.HasForeignKey(e => e.GuildID)
 				.OnDelete(DeleteBehavior.Cascade);
+
+			// Foreign key relationship to Character
+			// Deleting a character must remove the character's guild membership row.
+			builder.HasOne(e => e.Character)
+				.WithOne(c => c.Guild)
+				.HasForeignKey<CharacterGuildEntity>(e => e.CharacterID)
+				.OnDelete(DeleteBehavior.Cascade);
 		}
 	}
 }

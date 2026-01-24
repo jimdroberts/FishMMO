@@ -47,7 +47,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// - If equipment doesn't exist at slot: Inserts new record
 		/// - Returns the saved equipment data including ID
 		/// 
-		/// Performance note: Uses FromSqlInterpolated with RETURNING for single round-trip efficiency.
+		/// Performance note: Uses FromSqlRaw with RETURNING for single round-trip efficiency.
 		/// Thread-safe due to UPSERT constraint on (character_id, slot).
 		/// </remarks>
 		Task<DatabaseResult<long>> SaveEquipmentAsync(CharacterEquipmentData equipment, CancellationToken cancellationToken = default);

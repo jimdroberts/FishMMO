@@ -9,6 +9,8 @@ namespace FishMMO.Database.Data
 	{
 		public readonly long ID;
 		public readonly long CharacterID;
+		public readonly string CharacterName;
+		public readonly string AccountName;
 		public readonly long WorldServerID;
 		public readonly long SceneServerID;
 		public readonly byte Channel;
@@ -20,6 +22,32 @@ namespace FishMMO.Database.Data
 		{
 			ID = id;
 			CharacterID = characterID;
+			CharacterName = string.Empty;
+			AccountName = string.Empty;
+			WorldServerID = worldServerID;
+			SceneServerID = sceneServerID;
+			Channel = channel;
+			Message = message;
+			ServerReceivedTime = serverReceivedTime;
+			TimeCreated = timeCreated;
+		}
+
+		public ChatData(
+			long id,
+			long characterID,
+			string characterName,
+			string accountName,
+			long worldServerID,
+			long sceneServerID,
+			byte channel,
+			string message,
+			DateTime serverReceivedTime,
+			DateTime timeCreated)
+		{
+			ID = id;
+			CharacterID = characterID;
+			CharacterName = characterName ?? string.Empty;
+			AccountName = accountName ?? string.Empty;
 			WorldServerID = worldServerID;
 			SceneServerID = sceneServerID;
 			Channel = channel;

@@ -14,7 +14,7 @@ namespace FishMMO.Database.Npgsql.Services
 	/// <para>
 	/// All write operations (Create*, Save*, Delete*, Set*, Update*) in this service use execution strategies
 	/// to ensure transient database failures are automatically retried according to the retry policy configured
-	/// on the DbContext. This is critical because ExecuteSqlInterpolatedAsync and SaveChangesAsync do not
+	/// on the DbContext. This is critical because ExecuteSqlRawAsync and SaveChangesAsync do not
 	/// automatically benefit from EnableRetryOnFailure without manual wrapping.
 	/// </para>
 	/// <para>
@@ -34,7 +34,7 @@ namespace FishMMO.Database.Npgsql.Services
 	public interface ICharacterService
 	{
 		/// <summary>
-		/// Gets the count of non-deleted characters for a specific account.
+		/// Gets the count of characters for a specific account.
 		/// </summary>
 		/// <param name="account">The account name.</param>
 		/// <param name="cancellationToken">Token to cancel the operation.</param>
@@ -74,7 +74,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// </returns>
 		/// <remarks>
 		/// Uses atomic UPDATE operation to save all character fields in one operation.
-		/// Only updates non-deleted characters. Updates the last_saved timestamp automatically.
+		/// Updates the last_saved timestamp automatically.
 		/// Execution strategy wrapping ensures transient database failures are automatically retried.
 		/// </remarks>
 		Task<DatabaseResult> SaveCharacterAsync(CharacterData characterData, CancellationToken cancellationToken = default);
@@ -83,17 +83,16 @@ namespace FishMMO.Database.Npgsql.Services
 		/// Deletes a character from the database.
 		/// </summary>
 		/// <param name="characterId">The character ID to delete.</param>
-		/// <param name="softDelete">If true, marks the character as deleted but preserves data; if false, removes the character entirely.</param>
 		/// <param name="cancellationToken">Token to cancel the operation.</param>
 		/// <returns>
 		/// A <see cref="DatabaseResult"/> indicating success or containing a <see cref="DatabaseException"/> on failure.
 		/// </returns>
 		/// <remarks>
-		/// Soft delete: Sets deleted flag to true, time_deleted to current UTC time, and online to false (preserves all data).
-		/// Hard delete: Removes the character record entirely from the database.
+		/// Removes the character record entirely from the database.
+		/// If the character does not exist, this method returns success (idempotent delete).
 		/// Execution strategy wrapping ensures transient database failures are automatically retried.
 		/// </remarks>
-		Task<DatabaseResult> DeleteCharacterAsync(long characterId, bool softDelete, CancellationToken cancellationToken = default);
+		Task<DatabaseResult> DeleteCharacterAsync(long characterId, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Retrieves a character by its ID.
@@ -107,7 +106,7 @@ namespace FishMMO.Database.Npgsql.Services
 		Task<DatabaseResult<CharacterData?>> GetCharacterAsync(long characterId, CancellationToken cancellationToken = default);
 
 		/// <summary>
-		/// Retrieves all non-deleted characters for a specific account.
+		/// Retrieves all characters for a specific account.
 		/// </summary>
 		/// <param name="account">The account name.</param>
 		/// <param name="cancellationToken">Token to cancel the operation.</param>
@@ -155,7 +154,6 @@ namespace FishMMO.Database.Npgsql.Services
 		/// </returns>
 		/// <remarks>
 		/// Uses atomic UPDATE without loading the entity. Updates last_saved timestamp automatically.
-		/// Only updates non-deleted characters.
 		/// Execution strategy wrapping ensures transient database failures are automatically retried.
 		/// </remarks>
 		Task<DatabaseResult> SetOnlineStatusAsync(long characterId, bool online, CancellationToken cancellationToken = default);
@@ -177,7 +175,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// </returns>
 		/// <remarks>
 		/// Uses atomic UPDATE to set all position and rotation components in one operation.
-		/// Updates last_saved timestamp automatically. Only updates non-deleted characters.
+		/// Updates last_saved timestamp automatically.
 		/// Execution strategy wrapping ensures transient database failures are automatically retried.
 		/// </remarks>
 		Task<DatabaseResult> UpdatePositionAsync(long characterId, float x, float y, float z, float rotX, float rotY, float rotZ, float rotW, CancellationToken cancellationToken = default);
@@ -194,7 +192,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// </returns>
 		/// <remarks>
 		/// Uses atomic UPDATE to set scene_name and scene_handle in one operation.
-		/// Updates last_saved timestamp automatically. Only updates non-deleted characters.
+		/// Updates last_saved timestamp automatically.
 		/// Execution strategy wrapping ensures transient database failures are automatically retried.
 		/// </remarks>
 		Task<DatabaseResult> UpdateSceneAsync(long characterId, string sceneName, int sceneHandle, CancellationToken cancellationToken = default);

@@ -62,22 +62,27 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<long>.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			return await ExecuteSqlAsync<long>(
+			return await ExecuteAsync<long>(
 				async (dbContext, ct) =>
 				{
 					// Use PostgreSQL UPSERT for atomic insert-or-update
 					var result = await dbContext.CharacterInventoryItems
-						.FromSqlInterpolated($@"
+						.FromSqlRaw($@"
 						INSERT INTO {TableName} 
 							(character_id, template_id, slot, seed, amount)
 						VALUES 
-							({item.CharacterID}, {item.TemplateID}, {item.Slot}, {item.Seed}, {item.Amount})
+							({{0}}, {{1}}, {{2}}, {{3}}, {{4}})
 						ON CONFLICT (character_id, slot) 
 						DO UPDATE SET 
 							template_id = EXCLUDED.template_id,
 							seed = EXCLUDED.seed,
 							amount = EXCLUDED.amount
-						RETURNING id, character_id, template_id, slot, seed, amount")
+						RETURNING id, character_id, template_id, slot, seed, amount",
+						item.CharacterID,
+						item.TemplateID,
+						item.Slot,
+						item.Seed,
+						item.Amount)
 						.AsNoTracking()
 						.FirstOrDefaultAsync(ct).ConfigureAwait(false);
 
@@ -104,20 +109,21 @@ namespace FishMMO.Database.Npgsql.Services
 			var seeds = itemList.Select(i => i.Seed).ToArray();
 			var amounts = itemList.Select(i => (int)i.Amount).ToArray();
 
-			var result = await ExecuteSqlAsync(
+			var result = await ExecuteRawSqlAsync(
 				$@"INSERT INTO {TableName} (character_id, template_id, slot, seed, amount)
 					SELECT * FROM UNNEST(
-						{characterIds}::bigint[],
-						{templateIds}::int[],
-						{slots}::int[],
-						{seeds}::int[],
-						{amounts}::int[]
+						{{0}}::bigint[],
+						{{1}}::int[],
+						{{2}}::int[],
+						{{3}}::int[],
+						{{4}}::int[]
 					)
 					ON CONFLICT (character_id, slot) DO UPDATE SET
 						template_id = EXCLUDED.template_id,
 						seed = EXCLUDED.seed,
 						amount = EXCLUDED.amount",
 				"SaveInventoryItems",
+				new object[] { characterIds, templateIds, slots, seeds, amounts },
 				entityName: "CharacterInventory",
 				requireRowsAffected: false,
 				cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -133,9 +139,10 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			var result = await ExecuteSqlAsync(
-				$@"DELETE FROM {TableName} WHERE character_id = {characterId}",
+			var result = await ExecuteRawSqlAsync(
+				$@"DELETE FROM {TableName} WHERE character_id = {{0}}",
 				"DeleteInventoryItems",
+				new object[] { characterId },
 				entityName: "CharacterInventory",
 				entityId: characterId,
 				requireRowsAffected: false,
@@ -152,9 +159,10 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			var result = await ExecuteSqlAsync(
-				$@"DELETE FROM {TableName} WHERE character_id = {characterId} AND slot = {slot}",
+			var result = await ExecuteRawSqlAsync(
+				$@"DELETE FROM {TableName} WHERE character_id = {{0}} AND slot = {{1}}",
 				"DeleteInventorySlot",
+				new object[] { characterId, slot },
 				entityName: "CharacterInventory",
 				entityId: characterId,
 				requireRowsAffected: false,
@@ -171,7 +179,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<IReadOnlyList<CharacterInventoryData>>.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			return await ExecuteSqlAsync(
+			return await ExecuteAsync(
 				async (dbContext, ct) =>
 				{
 					var entities = await GetInventoryItemsQuery(dbContext, characterId, ct).ConfigureAwait(false);

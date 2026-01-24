@@ -13,7 +13,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	/// <para>
 	/// Write operations (Create*, Delete*) in this service use execution strategies to ensure transient
 	/// database failures are automatically retried according to the retry policy configured on the DbContext.
-	/// This is critical because SaveChangesAsync and ExecuteSqlInterpolatedAsync do not automatically
+	/// This is critical because SaveChangesAsync and ExecuteSqlRawAsync do not automatically
 	/// benefit from EnableRetryOnFailure without manual wrapping.
 	/// </para>
 	/// <para>
@@ -69,7 +69,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// Returns <see cref="DatabaseEntityNotFoundException"/> if party doesn't exist.
 		/// </returns>
 		/// <remarks>
-		/// Uses ExecuteSqlInterpolatedAsync with execution strategy wrapping to ensure transient database
+		/// Uses ExecuteSqlRawAsync with execution strategy wrapping to ensure transient database
 		/// failures are automatically retried.
 		/// </remarks>
 		Task<DatabaseResult> DeleteAsync(long partyId, CancellationToken cancellationToken = default);

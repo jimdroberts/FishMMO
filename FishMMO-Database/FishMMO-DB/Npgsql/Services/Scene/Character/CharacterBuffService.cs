@@ -17,7 +17,7 @@ namespace FishMMO.Database.Npgsql.Services
 	/// Follows SOLID principles: SRP, OCP, LSP, ISP, DIP.
 	/// </summary>
 	/// <remarks>
-	/// All methods that use ExecuteSqlInterpolatedAsync are wrapped in execution strategies
+	/// All methods that use ExecuteSqlRawAsync are wrapped in execution strategies
 	/// to provide automatic retry logic (up to 3 attempts) for transient database failures
 	/// such as connection timeouts, deadlocks, or network interruptions.
 	/// 
@@ -67,20 +67,21 @@ namespace FishMMO.Database.Npgsql.Services
 			var stacks = buffList.Select(b => b.Stacks).ToArray();
 
 			// Single bulk UPSERT using UNNEST - atomic operation, no transaction needed
-			var result = await ExecuteSqlAsync(
+			var result = await ExecuteRawSqlAsync(
 				$@"INSERT INTO {TableName} (character_id, template_id, remaining_time, tick_time, stacks)
 				SELECT * FROM UNNEST(
-					{characterIds}::bigint[],
-					{templateIds}::int[],
-					{remainingTimes}::float4[],
-					{tickTimes}::float4[],
-					{stacks}::int[]
+					{{0}}::bigint[],
+					{{1}}::int[],
+					{{2}}::float4[],
+					{{3}}::float4[],
+					{{4}}::int[]
 				)
 				ON CONFLICT (character_id, template_id) DO UPDATE SET
 					remaining_time = EXCLUDED.remaining_time,
 					tick_time = EXCLUDED.tick_time,
 					stacks = EXCLUDED.stacks",
 				"SaveBuffs",
+				new object[] { characterIds, templateIds, remainingTimes, tickTimes, stacks },
 				entityName: "CharacterBuff",
 				requireRowsAffected: false,
 				cancellationToken: cancellationToken);
@@ -98,9 +99,10 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
-			var result = await ExecuteSqlAsync(
-				$@"DELETE FROM {TableName} WHERE character_id = {characterId}",
+			var result = await ExecuteRawSqlAsync(
+				$@"DELETE FROM {TableName} WHERE character_id = {{0}}",
 				"DeleteBuffs",
+				new object[] { characterId },
 				entityName: "CharacterBuff",
 				entityId: characterId,
 				requireRowsAffected: false,
@@ -119,7 +121,7 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
-			return await ExecuteSqlAsync(async (dbContext, ct) =>
+			return await ExecuteAsync(async (dbContext, ct) =>
 			{
 				var entities = await GetBuffsQuery(dbContext, characterId, ct);
 				var buffs = entities.Select(b => new CharacterBuffData(

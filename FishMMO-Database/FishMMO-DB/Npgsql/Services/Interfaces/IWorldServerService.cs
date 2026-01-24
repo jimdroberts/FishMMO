@@ -10,7 +10,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	/// Provides async methods for server registration, heartbeat updates, and retrieval.
 	/// </summary>
 	/// <remarks>
-	/// <para><b>Execution Strategy:</b> All write operations (AddOrUpdateAsync, PulseAsync, DeleteAsync) use execution strategy wrappers to handle transient database failures with automatic retry. FromSqlInterpolated and ExecuteSqlInterpolatedAsync calls do not automatically retry without manual wrapping.</para>
+	/// <para><b>Execution Strategy:</b> All write operations (AddOrUpdateAsync, PulseAsync, DeleteAsync) use execution strategy wrappers to handle transient database failures with automatic retry. FromSqlRaw and ExecuteSqlRawAsync calls do not automatically retry without manual wrapping.</para>
 	/// <para><b>Read Operations:</b> Read operations (GetServerAsync, GetActiveServersAsync) use LINQ queries which automatically benefit from EnableRetryOnFailure without additional wrapping.</para>
 	/// <para><b>Error Handling:</b> All database operations return DatabaseResult or DatabaseResult&lt;T&gt; for comprehensive exception handling with typed database exceptions (DatabaseConnectionException, DatabaseConstraintException, DatabaseQueryException, DatabaseTimeoutException, DatabaseEntityNotFoundException).</para>
 	/// </remarks>
@@ -28,8 +28,8 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="cancellationToken">Cancellation token for async operation.</param>
 		/// <returns>DatabaseResult containing tuple (ServerId, ServerData) if successful.</returns>
 		/// <remarks>
-		/// <para><b>Operation:</b> Performs atomic UPSERT using FromSqlInterpolated with RETURNING clause.</para>
-		/// <para><b>Execution Strategy:</b> Wrapped with CreateExecutionStrategy().ExecuteAsync() for transient failure retry (FromSqlInterpolated doesn't auto-retry).</para>
+		/// <para><b>Operation:</b> Performs atomic UPSERT using FromSqlRaw with RETURNING clause.</para>
+		/// <para><b>Execution Strategy:</b> Wrapped with CreateExecutionStrategy().ExecuteAsync() for transient failure retry (FromSqlRaw doesn't auto-retry).</para>
 		/// <para><b>Returns:</b> Failure if name/address empty or operation fails; Success with (ServerId, ServerData) on success.</para>
 		/// </remarks>
 		Task<DatabaseResult<(long ServerId, WorldServerData ServerData)>> AddOrUpdateAsync(
@@ -49,8 +49,8 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="cancellationToken">Cancellation token for async operation.</param>
 		/// <returns>DatabaseResult indicating success or failure with detailed error information.</returns>
 		/// <remarks>
-		/// <para><b>Operation:</b> Uses ExecuteSqlInterpolatedAsync to UPDATE lastpulse and character_count.</para>
-		/// <para><b>Execution Strategy:</b> Wrapped with CreateExecutionStrategy().ExecuteAsync() for transient failure retry (ExecuteSqlInterpolatedAsync doesn't auto-retry).</para>
+		/// <para><b>Operation:</b> Uses ExecuteSqlRawAsync to UPDATE lastpulse and character_count.</para>
+		/// <para><b>Execution Strategy:</b> Wrapped with CreateExecutionStrategy().ExecuteAsync() for transient failure retry (ExecuteSqlRawAsync doesn't auto-retry).</para>
 		/// <para><b>Returns:</b> Failure if serverId <= 0; DatabaseEntityNotFoundException if no rows affected; Success if updated.</para>
 		/// </remarks>
 		Task<DatabaseResult> PulseAsync(long serverId, int characterCount, CancellationToken cancellationToken = default);
@@ -63,8 +63,8 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="cancellationToken">Cancellation token for async operation.</param>
 		/// <returns>DatabaseResult indicating success or failure with detailed error information.</returns>
 		/// <remarks>
-		/// <para><b>Operation:</b> Uses ExecuteSqlInterpolatedAsync to DELETE server registration by ID.</para>
-		/// <para><b>Execution Strategy:</b> Wrapped with CreateExecutionStrategy().ExecuteAsync() for transient failure retry (ExecuteSqlInterpolatedAsync doesn't auto-retry).</para>
+		/// <para><b>Operation:</b> Uses ExecuteSqlRawAsync to DELETE server registration by ID.</para>
+		/// <para><b>Execution Strategy:</b> Wrapped with CreateExecutionStrategy().ExecuteAsync() for transient failure retry (ExecuteSqlRawAsync doesn't auto-retry).</para>
 		/// <para><b>Returns:</b> Failure if serverId <= 0; DatabaseEntityNotFoundException if no rows affected; Success if deleted.</para>
 		/// </remarks>
 		Task<DatabaseResult> DeleteAsync(long serverId, CancellationToken cancellationToken = default);

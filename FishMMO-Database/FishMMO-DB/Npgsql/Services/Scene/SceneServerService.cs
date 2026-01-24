@@ -38,15 +38,15 @@ namespace FishMMO.Database.Npgsql.Services
 					"Name and address must not be empty.");
 			}
 
-			return await ExecuteSqlAsync<(long ServerId, SceneServerData ServerData)>(async (dbContext, ct) =>
+			return await ExecuteAsync<(long ServerId, SceneServerData ServerData)>(async (dbContext, ct) =>
 			{
-				// Atomic UPSERT - PostgreSQL specific using FormattableString
+				// Atomic UPSERT - PostgreSQL specific using Raw SQL
 				var result = await dbContext.SceneServers
-					.FromSqlInterpolated($@"
+					.FromSqlRaw($@"
 					INSERT INTO {TableName} 
 						(name, address, port, character_count, locked, lastpulse)
 					VALUES 
-						({name}, {address}, {port}, {characterCount}, {locked}, CURRENT_TIMESTAMP)
+						({{0}}, {{1}}, {{2}}, {{3}}, {{4}}, CURRENT_TIMESTAMP)
 					ON CONFLICT (name) 
 					DO UPDATE SET 
 						address = EXCLUDED.address,
@@ -54,7 +54,12 @@ namespace FishMMO.Database.Npgsql.Services
 						character_count = EXCLUDED.character_count,
 						locked = EXCLUDED.locked,
 						lastpulse = EXCLUDED.lastpulse
-					RETURNING id, name, address, port, character_count, locked, lastpulse")
+					RETURNING id, name, address, port, character_count, locked, lastpulse",
+					name,
+					address,
+					port,
+					characterCount,
+					locked)
 						.AsNoTracking()
 						.FirstOrDefaultAsync(ct).ConfigureAwait(false);
 
@@ -81,11 +86,12 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("INVALID_SERVER_ID", "Server ID must be greater than zero.");
 			}
 
-			var result = await ExecuteSqlAsync(
+			var result = await ExecuteRawSqlAsync(
 				$@"UPDATE {TableName} 
-					SET lastpulse = CURRENT_TIMESTAMP, character_count = {characterCount}, locked = {locked} 
-					WHERE id = {serverId}",
+					SET lastpulse = CURRENT_TIMESTAMP, character_count = {{0}}, locked = {{1}} 
+					WHERE id = {{2}}",
 				"PulseSceneServer",
+				new object[] { characterCount, locked, serverId },
 				entityName: "SceneServer",
 				entityId: serverId,
 				requireRowsAffected: true,
@@ -102,9 +108,10 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("INVALID_SERVER_ID", "Server ID must be greater than zero.");
 			}
 
-			var result = await ExecuteSqlAsync(
-				$"DELETE FROM {TableName} WHERE id = {serverId}",
+			var result = await ExecuteRawSqlAsync(
+				$"DELETE FROM {TableName} WHERE id = {{0}}",
 				"DeleteSceneServer",
+				new object[] { serverId },
 				entityName: "SceneServer",
 				entityId: serverId,
 				requireRowsAffected: true,
@@ -121,7 +128,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<SceneServerData>.Failure("INVALID_SERVER_ID", "Server ID must be greater than zero.");
 			}
 
-			return await ExecuteSqlAsync(async (dbContext, ct) =>
+			return await ExecuteAsync(async (dbContext, ct) =>
 			{
 				var server = await dbContext.SceneServers
 					.AsNoTracking()

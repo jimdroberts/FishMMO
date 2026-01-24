@@ -24,6 +24,9 @@ namespace FishMMO.Database.Npgsql
 		private readonly bool enableLogging;
 		private readonly int commandTimeout;
 		private readonly DatabaseServiceExecutionSettings serviceExecutionSettings;
+		private readonly int maxRetryCount;
+		private readonly int maxRetryDelaySeconds;
+		private readonly DbContextOptions<NpgsqlDbContext> cachedOptions;
 		private readonly ConnectionPoolMetrics poolMetrics;
 		private readonly int maxPoolSize;
 		private readonly QueryPerformanceTracker performanceTracker;
@@ -88,6 +91,8 @@ namespace FishMMO.Database.Npgsql
 			int maxPoolSize = 100;
 			int configTimeout = 10;
 			int connectionTimeout = 15; // Default connection timeout
+			int maxRetryCount = 5;
+			int maxRetryDelaySeconds = 30;
 
 			if (int.TryParse(configuration.GetSection("Npgsql")["MinPoolSize"], out int minSize))
 				minPoolSize = minSize;
@@ -97,6 +102,10 @@ namespace FishMMO.Database.Npgsql
 				configTimeout = cfgTimeout;
 			if (int.TryParse(configuration.GetSection("Npgsql")["ConnectionTimeout"], out int connTimeout))
 				connectionTimeout = connTimeout;
+			if (int.TryParse(configuration.GetSection("Npgsql")["MaxRetryCount"], out int cfgMaxRetryCount) && cfgMaxRetryCount >= 0)
+				maxRetryCount = cfgMaxRetryCount;
+			if (int.TryParse(configuration.GetSection("Npgsql")["MaxRetryDelaySeconds"], out int cfgMaxRetryDelaySeconds) && cfgMaxRetryDelaySeconds >= 0)
+				maxRetryDelaySeconds = cfgMaxRetryDelaySeconds;
 
 			// Use provided timeout or fall back to config
 			if (this.commandTimeout == 10 && configTimeout != 10)
@@ -111,7 +120,31 @@ namespace FishMMO.Database.Npgsql
 
 			// Initialize pool metrics tracker
 			this.maxPoolSize = maxPoolSize;
+			this.maxRetryCount = maxRetryCount;
+			this.maxRetryDelaySeconds = maxRetryDelaySeconds;
 			poolMetrics = new ConnectionPoolMetrics();
+
+			// Cache DbContext options once to avoid rebuilding fluent configuration on every call.
+			var optionsBuilder = new DbContextOptionsBuilder<NpgsqlDbContext>()
+				.UseNpgsql(connectionString, npgsqlOptions =>
+				{
+					npgsqlOptions.CommandTimeout(this.commandTimeout);
+
+					if (this.maxRetryCount > 0)
+					{
+						npgsqlOptions.EnableRetryOnFailure(
+							maxRetryCount: this.maxRetryCount,
+							maxRetryDelay: TimeSpan.FromSeconds(this.maxRetryDelaySeconds),
+							errorCodesToAdd: null);
+					}
+				});
+
+			if (this.enableLogging)
+			{
+				optionsBuilder.EnableSensitiveDataLogging(true);
+			}
+
+			cachedOptions = optionsBuilder.Options;
 
 			// Initialize query performance tracker with configuration from appsettings
 			var perfConfig = new QueryPerformanceConfiguration();
@@ -131,15 +164,6 @@ namespace FishMMO.Database.Npgsql
 		{
 			var settings = new DatabaseServiceExecutionSettings();
 			var section = configuration.GetSection("DatabaseServiceExecution");
-
-			if (int.TryParse(section["MaxTransientRetryCount"], out var maxTransientRetryCount) && maxTransientRetryCount >= 0)
-				settings.MaxTransientRetryCount = maxTransientRetryCount;
-
-			if (int.TryParse(section["BaseRetryDelayMs"], out var baseRetryDelayMs) && baseRetryDelayMs >= 0)
-				settings.BaseRetryDelayMs = baseRetryDelayMs;
-
-			if (int.TryParse(section["MaxRetryDelayMs"], out var maxRetryDelayMs) && maxRetryDelayMs >= 0)
-				settings.MaxRetryDelayMs = maxRetryDelayMs;
 
 			if (int.TryParse(section["MaxIdempotencyOperationNameLength"], out var maxIdempotencyOperationNameLength) && maxIdempotencyOperationNameLength > 0)
 				settings.MaxIdempotencyOperationNameLength = maxIdempotencyOperationNameLength;
@@ -189,19 +213,7 @@ namespace FishMMO.Database.Npgsql
 
 			try
 			{
-				// Create fresh DbContextOptionsBuilder each time - no shared state
-				var optionsBuilder = new DbContextOptionsBuilder<NpgsqlDbContext>()
-					.UseNpgsql(connectionString, npgsqlOptions =>
-					{
-						npgsqlOptions.CommandTimeout(commandTimeout);
-					});
-
-				if (enableLogging)
-				{
-					optionsBuilder.EnableSensitiveDataLogging(true);
-				}
-
-				var context = new NpgsqlDbContext(optionsBuilder.Options, schema, poolMetrics);
+				var context = new NpgsqlDbContext(cachedOptions, schema, poolMetrics);
 
 				// Only track connection after successful creation
 				poolMetrics.RecordConnectionCreated();

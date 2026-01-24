@@ -1,43 +1,58 @@
 namespace FishMMO.Database.Data.Enums
 {
 	/// <summary>
-	/// Chat channel enumeration for different message scopes.
+	/// Enum representing the different chat channels available in the game.
 	/// </summary>
-	public enum ChatChannel
+	public enum ChatChannel : byte
 	{
 		/// <summary>
-		/// System messages.
+		/// Local chat, visible to nearby players.
 		/// </summary>
-		System = 0,
+		Say = 0,
 
 		/// <summary>
-		/// Local area chat.
+		/// Global chat, visible to all players in the world.
 		/// </summary>
-		Local = 1,
+		World,
 
 		/// <summary>
-		/// Private tell/whisper.
+		/// Region chat, visible to players in the same region.
 		/// </summary>
-		Tell = 2,
+		Region,
 
 		/// <summary>
-		/// Guild chat.
+		/// Party chat, visible to party members.
 		/// </summary>
-		Guild = 3,
+		Party,
 
 		/// <summary>
-		/// Party chat.
+		/// Guild chat, visible to guild members.
 		/// </summary>
-		Party = 4,
+		Guild,
 
 		/// <summary>
-		/// World chat.
+		/// Private message (tell) between two players.
 		/// </summary>
-		World = 5,
+		Tell,
 
 		/// <summary>
-		/// Trade channel.
+		/// Trade chat, for trading-related messages.
 		/// </summary>
-		Trade = 6
+		Trade,
+
+		/// <summary>
+		/// System messages, such as notifications or alerts.
+		/// </summary>
+		System,
+
+		/// <summary>
+		/// Command channel, for entering game commands.
+		/// </summary>
+		Command,
+
+		/// <summary>
+		/// Discord integration channel.
+		/// </summary>
+		Discord,
 	}
 }

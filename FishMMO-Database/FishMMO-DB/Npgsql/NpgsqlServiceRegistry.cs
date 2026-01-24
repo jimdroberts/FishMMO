@@ -77,6 +77,14 @@ namespace FishMMO.Database.Npgsql
 			if (serviceInstance == null)
 				throw new ArgumentNullException(nameof(serviceInstance));
 
+			// Enforce interface-based registration so consumers always resolve services by their contract type.
+			// This avoids multiple registrations for the same concrete service under different keys.
+			if (!typeof(TService).IsInterface)
+			{
+				throw new InvalidOperationException(
+					$"Services must be registered by interface type. Attempted to register '{typeof(TService).FullName}'.");
+			}
+
 			if (!services.TryAdd(typeof(TService), serviceInstance))
 			{
 				throw new InvalidOperationException($"Service already registered: {typeof(TService).FullName}");

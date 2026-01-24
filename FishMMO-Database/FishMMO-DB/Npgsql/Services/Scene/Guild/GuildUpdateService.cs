@@ -31,12 +31,13 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("INVALID_GUILD_ID", "Guild ID must be greater than zero.");
 			}
 
-			var result = await ExecuteSqlAsync(
+			var result = await ExecuteRawSqlAsync(
 				$@"INSERT INTO {TableName} (guild_id, last_update) 
-					VALUES ({guildId}, CURRENT_TIMESTAMP) 
+					VALUES ({{0}}, CURRENT_TIMESTAMP) 
 					ON CONFLICT (guild_id) 
 					DO UPDATE SET last_update = GREATEST({TableName}.last_update, EXCLUDED.last_update)",
 				"SaveGuildUpdate",
+				new object[] { guildId },
 				entityName: "GuildUpdate",
 				entityId: guildId,
 				requireRowsAffected: false,
@@ -53,9 +54,10 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<int>.Failure("INVALID_GUILD_ID", "Guild ID must be greater than zero.");
 			}
 
-			return await ExecuteSqlAsync(
-				$"DELETE FROM {TableName} WHERE guild_id = {guildId}",
+			return await ExecuteRawSqlAsync(
+				$"DELETE FROM {TableName} WHERE guild_id = {{0}}",
 				"DeleteGuildUpdate",
+				new object[] { guildId },
 				entityName: "GuildUpdate",
 				entityId: guildId,
 				requireRowsAffected: false,
@@ -71,7 +73,7 @@ namespace FishMMO.Database.Npgsql.Services
 			if (guildIds == null || guildIds.Count == 0)
 				return DatabaseResult<List<GuildUpdateData>>.Success(new List<GuildUpdateData>());
 
-			return await ExecuteSqlAsync(async (dbContext, ct) =>
+			return await ExecuteAsync(async (dbContext, ct) =>
 			{
 				var updates = await dbContext.GuildUpdates
 					.AsNoTracking()

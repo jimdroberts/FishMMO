@@ -8,6 +8,8 @@ namespace FishMMO.Database.Npgsql.Entities
 	{
 		public long ID { get; set; }
 		public long CharacterID { get; set; }
+		public string CharacterName { get; set; }
+		public string AccountName { get; set; }
 		public long WorldServerID { get; set; }
 		public long SceneServerID { get; set; }
 		public DateTime ServerReceivedTime { get; set; }

@@ -51,14 +51,15 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			var result = await ExecuteSqlAsync(
+			var result = await ExecuteRawSqlAsync(
 				$@"UPDATE {TableName} 
-				   SET character_id = {petData.CharacterID},
-				       template_id = {petData.TemplateID},
-				       abilities = {petData.Abilities},
-				       spawned = {petData.Spawned}
-				   WHERE id = {petData.ID}",
+				   SET character_id = {{0}},
+				       template_id = {{1}},
+				       abilities = {{2}},
+				       spawned = {{3}}
+				   WHERE id = {{4}}",
 				"SavePet",
+				new object[] { petData.CharacterID, petData.TemplateID, petData.Abilities.ToArray(), petData.Spawned, petData.ID },
 				entityName: "CharacterPet",
 				entityId: petData.ID,
 				requireRowsAffected: false,
@@ -81,7 +82,7 @@ namespace FishMMO.Database.Npgsql.Services
 			var petsToInsert = petList.Where(p => p.ID == 0).ToList();
 
 			// Wrap both operations in transaction for atomicity
-			var transactionResult = await ExecuteSqlAsync(async (dbContext, transaction, ct) =>
+			var transactionResult = await ExecuteTransactionAsync(async (dbContext, transaction, ct) =>
 			{
 				// Handle existing pets with atomic UPDATE by ID
 				if (petsToUpdate.Count > 0)
@@ -92,20 +93,21 @@ namespace FishMMO.Database.Npgsql.Services
 					var updateAbilities = petsToUpdate.Select(p => p.Abilities.ToArray()).ToArray();
 					var updateSpawned = petsToUpdate.Select(p => p.Spawned).ToArray();
 
-					await dbContext.Database.ExecuteSqlInterpolatedAsync(
+					await dbContext.Database.ExecuteSqlRawAsync(
 						$@"UPDATE {TableName} AS t SET
 						character_id = u.character_id,
 						template_id = u.template_id,
 						abilities = u.abilities,
 						spawned = u.spawned
 					FROM (SELECT * FROM UNNEST(
-						{updateIds}::bigint[],
-						{updateCharacterIds}::bigint[],
-						{updateTemplateIds}::int[],
-						{updateAbilities}::int[][],
-						{updateSpawned}::boolean[]
+						{{0}}::bigint[],
+						{{1}}::bigint[],
+						{{2}}::int[],
+						{{3}}::int[][],
+						{{4}}::boolean[]
 					) AS u(id, character_id, template_id, abilities, spawned)) AS u
 					WHERE t.id = u.id",
+						new object[] { updateIds, updateCharacterIds, updateTemplateIds, updateAbilities, updateSpawned },
 						ct);
 				}
 
@@ -117,19 +119,20 @@ namespace FishMMO.Database.Npgsql.Services
 					var insertAbilities = petsToInsert.Select(p => p.Abilities.ToArray()).ToArray();
 					var insertSpawned = petsToInsert.Select(p => p.Spawned).ToArray();
 
-					await dbContext.Database.ExecuteSqlInterpolatedAsync(
+					await dbContext.Database.ExecuteSqlRawAsync(
 						$@"INSERT INTO {TableName} (character_id, template_id, abilities, spawned)
 					SELECT * FROM UNNEST(
-						{insertCharacterIds}::bigint[],
-						{insertTemplateIds}::int[],
-						{insertAbilities}::int[][],
-						{insertSpawned}::boolean[]
+						{{0}}::bigint[],
+						{{1}}::int[],
+						{{2}}::int[][],
+						{{3}}::boolean[]
 					)
 					ON CONFLICT (character_id)
 					DO UPDATE SET
 						template_id = EXCLUDED.template_id,
 						abilities = EXCLUDED.abilities,
 						spawned = EXCLUDED.spawned",
+						new object[] { insertCharacterIds, insertTemplateIds, insertAbilities, insertSpawned },
 						ct);
 				}
 
@@ -153,9 +156,10 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			var result = await ExecuteSqlAsync(
-				$@"DELETE FROM {TableName} WHERE character_id = {characterId}",
+			var result = await ExecuteRawSqlAsync(
+				$@"DELETE FROM {TableName} WHERE character_id = {{0}}",
 				"DeletePet",
+				new object[] { characterId },
 				entityName: "CharacterPet",
 				entityId: characterId,
 				requireRowsAffected: false,
@@ -172,7 +176,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<CharacterPetData?>.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			return await ExecuteSqlAsync<CharacterPetData?>(async (dbContext, ct) =>
+			return await ExecuteAsync<CharacterPetData?>(async (dbContext, ct) =>
 			{
 				var entity = await GetPetQuery(dbContext, characterId, ct);
 				if (entity == null)
@@ -196,7 +200,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<CharacterPetData?>.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			return await ExecuteSqlAsync<CharacterPetData?>(async (dbContext, ct) =>
+			return await ExecuteAsync<CharacterPetData?>(async (dbContext, ct) =>
 			{
 				var entity = await GetSpawnedPetQuery(dbContext, characterId, ct);
 				if (entity == null)

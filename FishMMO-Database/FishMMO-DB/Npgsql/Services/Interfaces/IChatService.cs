@@ -30,9 +30,11 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	public interface IChatService
 	{
 		/// <summary>
-		/// Saves a chat message using SaveChangesAsync.
+		/// Saves a chat message with denormalized audit fields.
 		/// </summary>
 		/// <param name="characterId">Character ID sending the message.</param>
+		/// <param name="characterName">Character name (denormalized for audit retention).</param>
+		/// <param name="accountName">Account name (denormalized for audit retention).</param>
 		/// <param name="worldServerId">World server ID.</param>
 		/// <param name="sceneServerId">Scene server ID.</param>
 		/// <param name="channel">Chat channel.</param>
@@ -43,12 +45,13 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// A <see cref="DatabaseResult"/> indicating success or containing a <see cref="DatabaseException"/> on failure.
 		/// </returns>
 		/// <remarks>
-		/// Uses EF Core's SaveChangesAsync with execution strategy wrapping to ensure transient database
-		/// failures are automatically retried. Validates worldServerId, sceneServerId, and message content.
-		/// ServerReceivedTime provides application-level timestamp, while TimeCreated uses DB CURRENT_TIMESTAMP for dual audit trail.
+		/// Chat audit fields are denormalized so logs can survive character deletion.
+		/// Passing the names avoids a race where the character row is deleted between lookup and insert.
 		/// </remarks>
 		Task<DatabaseResult> SaveAsync(
 			long characterId,
+			string characterName,
+			string accountName,
 			long worldServerId,
 			long sceneServerId,
 			ChatChannel channel,

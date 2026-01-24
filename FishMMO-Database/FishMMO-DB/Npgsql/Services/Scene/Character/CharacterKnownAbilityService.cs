@@ -62,11 +62,12 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			var result = await ExecuteSqlAsync(
+			var result = await ExecuteRawSqlAsync(
 				$@"INSERT INTO {TableName} (character_id, template_id)
-					VALUES ({characterId}, {templateId})
+					VALUES ({{0}}, {{1}})
 					ON CONFLICT (character_id, template_id) DO NOTHING",
 				"SaveKnownAbility",
+				new object[] { characterId, templateId },
 				entityName: "CharacterKnownAbility",
 				entityId: characterId,
 				requireRowsAffected: false,
@@ -88,14 +89,15 @@ namespace FishMMO.Database.Npgsql.Services
 			var characterIds = abilityList.Select(a => a.CharacterID).ToArray();
 			var templateIds = abilityList.Select(a => a.TemplateID).ToArray();
 
-			var result = await ExecuteSqlAsync(
+			var result = await ExecuteRawSqlAsync(
 				$@"INSERT INTO {TableName} (character_id, template_id)
 					SELECT * FROM UNNEST(
-						{characterIds}::bigint[],
-						{templateIds}::int[]
+						{{0}}::bigint[],
+						{{1}}::int[]
 					)
 					ON CONFLICT (character_id, template_id) DO NOTHING",
 				"SaveKnownAbilities",
+				new object[] { characterIds, templateIds },
 				entityName: "CharacterKnownAbility",
 				requireRowsAffected: false,
 				cancellationToken: cancellationToken);
@@ -111,10 +113,11 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			var result = await ExecuteSqlAsync(
+			var result = await ExecuteRawSqlAsync(
 				$@"DELETE FROM {TableName} 
-					WHERE character_id = {characterId} AND template_id = {templateId}",
+					WHERE character_id = {{0}} AND template_id = {{1}}",
 				"DeleteKnownAbility",
+				new object[] { characterId, templateId },
 				entityName: "CharacterKnownAbility",
 				entityId: characterId,
 				requireRowsAffected: false,
@@ -131,9 +134,10 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			var result = await ExecuteSqlAsync(
-				$@"DELETE FROM {TableName} WHERE character_id = {characterId}",
+			var result = await ExecuteRawSqlAsync(
+				$@"DELETE FROM {TableName} WHERE character_id = {{0}}",
 				"DeleteAllKnownAbilities",
+				new object[] { characterId },
 				entityName: "CharacterKnownAbility",
 				entityId: characterId,
 				requireRowsAffected: false,
@@ -150,7 +154,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<IReadOnlyList<CharacterKnownAbilityData>>.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			return await ExecuteSqlAsync<IReadOnlyList<CharacterKnownAbilityData>>(
+			return await ExecuteAsync<IReadOnlyList<CharacterKnownAbilityData>>(
 				async (dbContext, ct) =>
 				{
 					var entities = await GetKnownAbilitiesQuery(dbContext, characterId, ct);

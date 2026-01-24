@@ -70,16 +70,17 @@ namespace FishMMO.Database.Npgsql.Services
 			var values = factionList.Select(f => f.Value).ToArray();
 
 			// Single bulk UPSERT using UNNEST - atomic operation, no transaction needed
-			var result = await ExecuteSqlAsync(
+			var result = await ExecuteRawSqlAsync(
 				$@"INSERT INTO {TableName} (character_id, template_id, value)
 				SELECT * FROM UNNEST(
-					{characterIds}::bigint[],
-					{templateIds}::int[],
-					{values}::int[]
+					{{0}}::bigint[],
+					{{1}}::int[],
+					{{2}}::int[]
 				)
 				ON CONFLICT (character_id, template_id) DO UPDATE SET
 					value = EXCLUDED.value",
 				"SaveFactions",
+				new object[] { characterIds, templateIds, values },
 				entityName: "CharacterFaction",
 				requireRowsAffected: false,
 				cancellationToken: cancellationToken);
@@ -98,9 +99,10 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 
 			// Use atomic DELETE for thread safety
-			var result = await ExecuteSqlAsync(
-				$@"DELETE FROM {TableName} WHERE character_id = {characterId}",
+			var result = await ExecuteRawSqlAsync(
+				$@"DELETE FROM {TableName} WHERE character_id = {{0}}",
 				"DeleteFactions",
+				new object[] { characterId },
 				entityName: "CharacterFaction",
 				entityId: characterId,
 				requireRowsAffected: false,
@@ -119,7 +121,7 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
-			return await ExecuteSqlAsync<IReadOnlyList<CharacterFactionData>>(async (dbContext, ct) =>
+			return await ExecuteAsync<IReadOnlyList<CharacterFactionData>>(async (dbContext, ct) =>
 			{
 				var entities = await GetFactionsQuery(dbContext, characterId, ct);
 				var factions = entities.Select(f => new CharacterFactionData(

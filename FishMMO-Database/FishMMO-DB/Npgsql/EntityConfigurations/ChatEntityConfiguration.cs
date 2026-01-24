@@ -20,6 +20,14 @@ namespace FishMMO.Database.Npgsql.Entities
 			builder.Property(e => e.CharacterID)
 				.IsRequired();
 
+			builder.Property(e => e.CharacterName)
+				.IsRequired()
+				.HasMaxLength(50);
+
+			builder.Property(e => e.AccountName)
+				.IsRequired()
+				.HasMaxLength(50);
+
 			builder.Property(e => e.WorldServerID)
 				.IsRequired();
 

@@ -4,6 +4,9 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace FishMMO.Database.Npgsql.Entities
 {
+	/// <summary>
+	/// Database entity representing a player character.
+	/// </summary>
 	[Table("characters")]
 	public class CharacterEntity
 	{
@@ -47,8 +50,6 @@ namespace FishMMO.Database.Npgsql.Entities
 		public int Flags { get; set; }
 		public DateTime TimeCreated { get; set; }
 		public DateTime LastSaved { get; set; }
-		public DateTime TimeDeleted { get; set; }
-		public bool Deleted { get; set; }
 
 		// foreign keys
 		public ICollection<CharacterAbilityEntity> Abilities { get; set; }

@@ -13,7 +13,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	/// <para>
 	/// Write operations (AddOrUpdate*, Pulse*, Delete*) in this service use execution strategies to ensure transient
 	/// database failures are automatically retried according to the retry policy configured on the DbContext.
-	/// This is critical because ExecuteSqlInterpolatedAsync and FromSqlInterpolated do not automatically
+	/// This is critical because ExecuteSqlRawAsync and FromSqlRaw do not automatically
 	/// benefit from EnableRetryOnFailure without manual wrapping.
 	/// </para>
 	/// <para>
@@ -38,7 +38,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>DatabaseResult containing LoginServerData with server ID and details on success.</returns>
 		/// <remarks>
-		/// Uses FromSqlInterpolated with RETURNING clause and execution strategy wrapping to ensure transient database
+		/// Uses FromSqlRaw with RETURNING clause and execution strategy wrapping to ensure transient database
 		/// failures are automatically retried. Uses PostgreSQL ON CONFLICT for atomic UPSERT with full data return.
 		/// 
 		/// Success: Returns complete server data including generated ID and current timestamp.
@@ -61,7 +61,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>DatabaseResult indicating success or failure with error details.</returns>
 		/// <remarks>
-		/// Uses ExecuteSqlInterpolatedAsync with execution strategy wrapping to ensure transient database
+		/// Uses ExecuteSqlRawAsync with execution strategy wrapping to ensure transient database
 		/// failures are automatically retried. Updates timestamp to current database server time.
 		/// 
 		/// Success: Pulse timestamp updated to CURRENT_TIMESTAMP.
@@ -81,7 +81,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>DatabaseResult indicating success or failure with error details.</returns>
 		/// <remarks>
-		/// Uses ExecuteSqlInterpolatedAsync with execution strategy wrapping to ensure transient database
+		/// Uses ExecuteSqlRawAsync with execution strategy wrapping to ensure transient database
 		/// failures are automatically retried.
 		/// 
 		/// Success: Server registration removed from database.

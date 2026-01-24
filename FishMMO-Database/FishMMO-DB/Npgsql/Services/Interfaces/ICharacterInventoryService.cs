@@ -57,7 +57,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// - Failure with DatabaseConnectionException: Connection error
 		/// - Failure with DatabaseQueryException: UPSERT operation failed
 		/// 
-		/// Performance note: Uses FromSqlInterpolated with RETURNING for single round-trip efficiency.
+		/// Performance note: Uses FromSqlRaw with RETURNING for single round-trip efficiency.
 		/// Thread-safe due to UPSERT constraint on (character_id, slot).
 		/// </remarks>
 		Task<DatabaseResult<long>> SaveInventoryItemAsync(CharacterInventoryData item, CancellationToken cancellationToken = default);

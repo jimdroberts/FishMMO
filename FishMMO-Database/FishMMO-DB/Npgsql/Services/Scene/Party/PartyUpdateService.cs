@@ -31,12 +31,13 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("INVALID_PARTY_ID", "Party ID must be greater than zero.");
 			}
 
-			var result = await ExecuteSqlAsync(
+			var result = await ExecuteRawSqlAsync(
 				$@"INSERT INTO {TableName} (party_id, last_update) 
-					VALUES ({partyId}, CURRENT_TIMESTAMP) 
+					VALUES ({{0}}, CURRENT_TIMESTAMP) 
 					ON CONFLICT (party_id) 
 					DO UPDATE SET last_update = GREATEST({TableName}.last_update, EXCLUDED.last_update)",
 				"SavePartyUpdate",
+				new object[] { partyId },
 				entityName: "PartyUpdate",
 				entityId: partyId,
 				requireRowsAffected: false,
@@ -53,9 +54,10 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<int>.Failure("INVALID_PARTY_ID", "Party ID must be greater than zero.");
 			}
 
-			return await ExecuteSqlAsync(
-				$"DELETE FROM {TableName} WHERE party_id = {partyId}",
+			return await ExecuteRawSqlAsync(
+				$"DELETE FROM {TableName} WHERE party_id = {{0}}",
 				"DeletePartyUpdate",
+				new object[] { partyId },
 				entityName: "PartyUpdate",
 				entityId: partyId,
 				requireRowsAffected: false,
@@ -71,7 +73,7 @@ namespace FishMMO.Database.Npgsql.Services
 			if (partyIds == null || partyIds.Count == 0)
 				return DatabaseResult<List<PartyUpdateData>>.Success(new List<PartyUpdateData>());
 
-			return await ExecuteSqlAsync(async (dbContext, ct) =>
+			return await ExecuteAsync(async (dbContext, ct) =>
 			{
 				var updates = await dbContext.PartyUpdates
 					.AsNoTracking()

@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Concurrent;
+using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 
 namespace FishMMO.Database.Npgsql
@@ -8,6 +10,20 @@ namespace FishMMO.Database.Npgsql
 	/// </summary>
 	public static class DbContextExtensions
 	{
+		private readonly struct TableInfo
+		{
+			public TableInfo(string tableName, string? schema)
+			{
+				TableName = tableName;
+				Schema = schema;
+			}
+
+			public string TableName { get; }
+			public string? Schema { get; }
+		}
+
+		private static readonly ConcurrentDictionary<Type, TableInfo> TableInfoCache = new ConcurrentDictionary<Type, TableInfo>();
+
 		/// <summary>
 		/// Gets the fully qualified table name (schema.table_name) for the specified entity type.
 		/// </summary>
@@ -17,31 +33,69 @@ namespace FishMMO.Database.Npgsql
 		/// <exception cref="System.ArgumentNullException">Thrown when context is null.</exception>
 		/// <exception cref="System.InvalidOperationException">Thrown when entity type is not found in the model.</exception>
 		/// <remarks>
-		/// <para><b>SQL Injection Safety:</b> This method is safe for use in ExecuteSqlInterpolated/FromSqlInterpolated 
-		/// operations. Table names are retrieved from EF Core's internal metadata model, NOT from user input. 
-		/// The values are controlled by the application's entity configuration and cannot be manipulated externally.</para>
-		/// <para><b>Usage with Interpolated SQL:</b> When used with ExecuteSqlInterpolatedAsync or FromSqlInterpolated, 
-		/// EF Core automatically parameterizes all interpolated values EXCEPT table/column names from GetTableName(). 
-		/// This is safe because table names come from trusted metadata, not user input.</para>
-		/// <para>Example safe usage: <c>$"SELECT * FROM {tableName} WHERE id = {userId}"</c> - userId is parameterized, tableName is metadata-derived.</para>
+		/// <para><b>Identifier Safety:</b> The schema and table name are resolved from EF Core metadata (not user input).
+		/// However, SQL identifiers cannot be passed as parameters. When using interpolated SQL APIs (e.g., ExecuteSqlInterpolatedAsync
+		/// or FromSqlInterpolated), EF Core parameterizes the interpolated holes, which would turn the table name into a SQL parameter
+		/// and break the statement.</para>
+		/// <para><b>Required Usage:</b> Embed the returned identifier into SQL text and use ExecuteSqlRaw/FromSqlRaw with parameter placeholders
+		/// (<c>{0}</c>, <c>{1}</c>, ...) for values. Never build SQL by concatenating untrusted strings.</para>
 		/// </remarks>
 		public static string GetTableName<TEntity>(this NpgsqlDbContext context) where TEntity : class
 		{
-			var entityType = context.Model.FindEntityType(typeof(TEntity));
-			if (entityType == null)
+			if (context == null)
 			{
-				throw new System.InvalidOperationException($"Entity type {typeof(TEntity).Name} not found in model.");
+				throw new ArgumentNullException(nameof(context));
 			}
 
-			var schema = entityType.GetSchema() ?? context.Schema;
-			var tableName = entityType.GetTableName();
-			if (string.IsNullOrWhiteSpace(tableName))
+			var tableInfo = TableInfoCache.GetOrAdd(typeof(TEntity), _ =>
+			{
+				var entityType = context.Model.FindEntityType(typeof(TEntity));
+				if (entityType == null)
+				{
+					throw new InvalidOperationException($"Entity type {typeof(TEntity).Name} not found in model.");
+				}
+
+				var tableName = entityType.GetTableName();
+				if (string.IsNullOrWhiteSpace(tableName))
+				{
+					throw new InvalidOperationException(
+						$"Entity type {typeof(TEntity).Name} does not have a table name. " +
+						"This entity may be an owned type, keyless entity, or view.");
+				}
+
+				var schema = entityType.GetSchema();
+
+				// Validate identifiers once at cache population time.
+				// If schema is null, it will be resolved from context.Schema on each call.
+				if (!IsValidUnquotedIdentifier(tableName) || (schema != null && !IsValidUnquotedIdentifier(schema)))
+				{
+					throw new InvalidOperationException(
+						$"Entity type {typeof(TEntity).Name} resolves to an identifier that cannot be safely represented as an unquoted PostgreSQL identifier. " +
+						$"Schema='{schema}', Table='{tableName}'. Ensure schema/table names contain only lowercase letters, digits, and underscores and start with a letter or underscore.");
+				}
+
+				return new TableInfo(tableName, schema);
+			});
+
+			var resolvedSchema = tableInfo.Schema ?? context.Schema;
+			if (!IsValidUnquotedIdentifier(resolvedSchema))
 			{
 				throw new InvalidOperationException(
-					$"Entity type {typeof(TEntity).Name} does not have a table name. " +
-					"This entity may be an owned type, keyless entity, or view.");
+					$"Entity type {typeof(TEntity).Name} resolves to an identifier that cannot be safely represented as an unquoted PostgreSQL identifier. " +
+					$"Schema='{resolvedSchema}', Table='{tableInfo.TableName}'. Ensure schema/table names contain only lowercase letters, digits, and underscores and start with a letter or underscore.");
 			}
-			return $"\"{schema}\".\"{tableName}\"";
+
+			return $"{resolvedSchema}.{tableInfo.TableName}";
+		}
+
+		private static bool IsValidUnquotedIdentifier(string identifier)
+		{
+			if (string.IsNullOrWhiteSpace(identifier))
+			{
+				return false;
+			}
+
+			return Regex.IsMatch(identifier, "^[a-z_][a-z0-9_]*$");
 		}
 	}
 }

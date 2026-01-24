@@ -15,6 +15,21 @@ namespace FishMMO.Database.Npgsql.Services
 	public sealed class ChatService : BaseService<ChatEntity>, IChatService
 	{
 		/// <summary>
+		/// Maximum allowed length for chat messages. This length should never be close to reached. Maximum server message should be 256 characters.
+		/// </summary>
+		public const int MaxMessageLength = 4000;
+
+		/// <summary>
+		/// Maximum allowed length for audit character name. This length should never be close to reached. Maximum character name is 32 characters.
+		/// </summary>
+		public const int MaxAuditNameLength = 256;
+
+		/// <summary>
+		/// Maximum allowed length for audit account name. This length should never be close to reached. Maximum account name is 32 characters.
+		/// </summary>
+		public const int MaxAuditAccountLength = 256;
+
+		/// <summary>
 		/// Initializes a new instance of ChatService.
 		/// </summary>
 		/// <param name="dbContextFactory">DbContext factory for creating contexts.</param>
@@ -27,6 +42,8 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <inheritdoc/>
 		public async Task<DatabaseResult> SaveAsync(
 			long characterId,
+			string characterName,
+			string accountName,
 			long worldServerId,
 			long sceneServerId,
 			ChatChannel channel,
@@ -39,24 +56,39 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("INVALID_PARAMETERS", "World server ID, scene server ID must be greater than zero and message must not be empty.");
 			}
 
-			if (message.Length > 4096) // 4KB max
+			if (message.Length > MaxMessageLength)
 			{
 				return DatabaseResult.Failure("MESSAGE_TOO_LONG", "Message exceeds maximum length.");
 			}
 
-			var channelByte = (byte)channel;
+			var normalizedCharacterName = string.IsNullOrWhiteSpace(characterName) ? string.Empty : characterName;
+			if (normalizedCharacterName.Length > MaxAuditNameLength)
+				normalizedCharacterName = normalizedCharacterName.Substring(0, MaxAuditNameLength);
 
-			var result = await ExecuteSqlAsync(
-				$@"INSERT INTO {TableName} 
-				   (character_id, world_server_id, scene_server_id, server_received_time, time_created, channel, message)
-				   VALUES ({characterId}, {worldServerId}, {sceneServerId}, {serverReceivedTime}, CURRENT_TIMESTAMP, {channelByte}, {message})",
+			var normalizedAccountName = string.IsNullOrWhiteSpace(accountName) ? string.Empty : accountName;
+			if (normalizedAccountName.Length > MaxAuditAccountLength)
+				normalizedAccountName = normalizedAccountName.Substring(0, MaxAuditAccountLength);
+
+			var channelByte = (byte)channel;
+			var insert = await ExecuteRawSqlAsync(
+				$@"INSERT INTO {TableName}
+					(character_id, character_name, account_name, world_server_id, scene_server_id, server_received_time, time_created, channel, message)
+					VALUES ({{0}}, {{1}}, {{2}}, {{3}}, {{4}}, {{5}}, CURRENT_TIMESTAMP, {{6}}, {{7}})",
 				"SaveChatMessage",
+				new object[] { characterId, normalizedCharacterName, normalizedAccountName, worldServerId, sceneServerId, serverReceivedTime, channelByte, message },
 				entityName: "Chat",
 				entityId: characterId,
 				requireRowsAffected: true,
 				cancellationToken: cancellationToken).ConfigureAwait(false);
 
-			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			if (!insert.IsSuccess)
+				return DatabaseResult.Failure(insert.ErrorCode, insert.ErrorMessage, insert.IsTransient);
+
+			var hasAuditNames = !string.IsNullOrWhiteSpace(normalizedCharacterName) && !string.IsNullOrWhiteSpace(normalizedAccountName);
+			if (!hasAuditNames)
+				return DatabaseResult.Failure("MISSING_AUDIT_FIELDS", "Chat saved, but character/account audit fields were missing.");
+
+			return DatabaseResult.Success();
 		}
 
 		/// <inheritdoc/>
@@ -70,7 +102,7 @@ namespace FishMMO.Database.Npgsql.Services
 			if (amount <= 0)
 				return DatabaseResult<List<ChatData>>.Success(new List<ChatData>());
 
-			return await ExecuteSqlAsync(async (dbContext, ct) =>
+			return await ExecuteAsync(async (dbContext, ct) =>
 			{
 				// Filter out local messages for the specified scene server
 				var localChannels = new byte[]
@@ -106,6 +138,8 @@ namespace FishMMO.Database.Npgsql.Services
 			return new ChatData(
 				id: entity.ID,
 				characterID: entity.CharacterID,
+				characterName: entity.CharacterName ?? string.Empty,
+				accountName: entity.AccountName ?? string.Empty,
 				worldServerID: entity.WorldServerID,
 				sceneServerID: entity.SceneServerID,
 				channel: entity.Channel,

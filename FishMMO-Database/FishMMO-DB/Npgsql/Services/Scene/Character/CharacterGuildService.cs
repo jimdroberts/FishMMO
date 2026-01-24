@@ -109,12 +109,12 @@ namespace FishMMO.Database.Npgsql.Services
 			// - SELECT FOR UPDATE holds locks until transaction commits
 			// - Capacity check is protected by guild lock
 			// - UPSERT is atomic and idempotent
-			var result = await ExecuteSqlAsync(async (dbContext, transaction, ct) =>
+			var result = await ExecuteTransactionAsync(async (dbContext, transaction, ct) =>
 			{
 				// Lock character's membership row FIRST to establish consistent lock ordering
 				// This prevents deadlocks and ensures atomicity across concurrent requests
 				var existingMembership = await dbContext.CharacterGuilds
-					.FromSqlInterpolated($"SELECT * FROM character_guilds WHERE character_id = {guildData.CharacterID} FOR UPDATE")
+					.FromSqlRaw($"SELECT * FROM {TableName} WHERE character_id = {{0}} FOR UPDATE", guildData.CharacterID)
 					.FirstOrDefaultAsync(ct);
 
 				// Refined check: determine if capacity validation is needed
@@ -123,10 +123,12 @@ namespace FishMMO.Database.Npgsql.Services
 
 				if (needsCapacityCheck)
 				{
+					var guildTableName = dbContext.GetTableName<GuildEntity>();
+
 					// Then lock guild row to prevent concurrent capacity violations
 					// Lock ordering: character membership -> guild (prevents race conditions)
 					var guildEntity = await dbContext.Guilds
-						.FromSqlInterpolated($"SELECT * FROM guilds WHERE id = {guildData.GuildID} FOR UPDATE")
+						.FromSqlRaw($"SELECT * FROM {guildTableName} WHERE id = {{0}} FOR UPDATE", guildData.GuildID)
 						.FirstOrDefaultAsync(ct);
 
 					if (guildEntity == null)
@@ -155,15 +157,16 @@ namespace FishMMO.Database.Npgsql.Services
 
 				// Perform UPSERT - atomic operation that either inserts new membership
 				// or updates existing membership (rank/location change within same guild)
-				await dbContext.Database.ExecuteSqlInterpolatedAsync(
+				await dbContext.Database.ExecuteSqlRawAsync(
 					$@"INSERT INTO {TableName} 
 						(character_id, guild_id, rank, location)
-						VALUES ({guildData.CharacterID}, {guildData.GuildID}, {guildData.Rank}, {guildData.Location})
+						VALUES ({{0}}, {{1}}, {{2}}, {{3}})
 						ON CONFLICT (character_id) 
 						DO UPDATE SET 
 							guild_id = EXCLUDED.guild_id,
 							rank = EXCLUDED.rank,
 							location = EXCLUDED.location",
+					new object[] { guildData.CharacterID, guildData.GuildID, guildData.Rank, guildData.Location },
 					ct);
 
 				return DatabaseResult.Success();
@@ -182,11 +185,12 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID or guild ID. Both must be greater than 0.");
 			}
 
-			var result = await ExecuteSqlAsync(
+			var result = await ExecuteRawSqlAsync(
 				$@"UPDATE {TableName} 
-					SET rank = {rank} 
-					WHERE character_id = {characterId} AND guild_id = {guildId}",
+					SET rank = {{0}} 
+					WHERE character_id = {{1}} AND guild_id = {{2}}",
 				"UpdateRank",
+				new object[] { rank, characterId, guildId },
 				entityName: "CharacterGuild",
 				entityId: characterId,
 				requireRowsAffected: false,
@@ -205,9 +209,10 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
-			var result = await ExecuteSqlAsync(
-				$@"DELETE FROM {TableName} WHERE character_id = {characterId}",
+			var result = await ExecuteRawSqlAsync(
+				$@"DELETE FROM {TableName} WHERE character_id = {{0}}",
 				"DeleteGuildMembership",
+				new object[] { characterId },
 				entityName: "CharacterGuild",
 				entityId: characterId,
 				requireRowsAffected: false,
@@ -226,7 +231,7 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
-			return await ExecuteSqlAsync<CharacterGuildData?>(async (dbContext, ct) =>
+			return await ExecuteAsync<CharacterGuildData?>(async (dbContext, ct) =>
 			{
 				var entity = await GetGuildMembershipQuery(dbContext, characterId, ct);
 				if (entity == null)
@@ -252,7 +257,7 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid guild ID. Guild ID must be greater than 0.");
 			}
 
-			return await ExecuteSqlAsync(
+			return await ExecuteAsync(
 				async (dbContext, ct) =>
 				{
 					var entities = await GetGuildMembersQuery(dbContext, guildId, ct);
@@ -280,7 +285,7 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid guild ID. Guild ID must be greater than 0.");
 			}
 
-			return await ExecuteSqlAsync(
+			return await ExecuteAsync(
 				async (dbContext, ct) =>
 				{
 					return await GetGuildMemberCountQuery(dbContext, guildId, ct);

@@ -72,11 +72,12 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID or friend character ID. Both must be greater than 0.");
 			}
 
-			var result = await ExecuteSqlAsync(
+			var result = await ExecuteRawSqlAsync(
 				$@"INSERT INTO {TableName} (character_id, friend_character_id)
-			   VALUES ({characterId}, {friendCharacterId})
+			   VALUES ({{0}}, {{1}})
 			   ON CONFLICT (character_id, friend_character_id) DO NOTHING",
 				"SaveFriend",
+				new object[] { characterId, friendCharacterId },
 				entityName: "CharacterFriend",
 				entityId: characterId,
 				requireRowsAffected: false,
@@ -95,10 +96,11 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID or friend character ID. Both must be greater than 0.");
 			}
 
-			var result = await ExecuteSqlAsync(
+			var result = await ExecuteRawSqlAsync(
 				$@"DELETE FROM {TableName} 
-				   WHERE character_id = {characterId} AND friend_character_id = {friendCharacterId}",
+				   WHERE character_id = {{0}} AND friend_character_id = {{1}}",
 				"DeleteFriend",
+				new object[] { characterId, friendCharacterId },
 				entityName: "CharacterFriend",
 				entityId: characterId,
 				requireRowsAffected: false,
@@ -117,9 +119,10 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
-			var result = await ExecuteSqlAsync(
-				$@"DELETE FROM {TableName} WHERE character_id = {characterId}",
+			var result = await ExecuteRawSqlAsync(
+				$@"DELETE FROM {TableName} WHERE character_id = {{0}}",
 				"DeleteAllFriends",
+				new object[] { characterId },
 				entityName: "CharacterFriend",
 				entityId: characterId,
 				requireRowsAffected: false,
@@ -138,7 +141,7 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
-			return await ExecuteSqlAsync(
+			return await ExecuteAsync(
 				async (dbContext, ct) =>
 				{
 					var entities = await GetFriendsQuery(dbContext, characterId, ct);
@@ -164,7 +167,7 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
-			return await ExecuteSqlAsync(
+			return await ExecuteAsync(
 				async (dbContext, ct) =>
 				{
 					return await GetFriendCountQuery(dbContext, characterId, ct);

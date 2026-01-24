@@ -54,20 +54,21 @@ namespace FishMMO.Database.Npgsql.Services
 			var tiers = achievementList.Select(a => a.Tier).ToArray();
 			var values = achievementList.Select(a => a.Value).ToArray();
 
-			var result = await ExecuteSqlAsync(
+			var result = await ExecuteRawSqlAsync(
 				$@"INSERT INTO {TableName} 
 					(character_id, template_id, tier, value)
 					SELECT * FROM UNNEST(
-						{characterIds}::bigint[],
-						{templateIds}::int[],
-						{tiers}::smallint[],
-						{values}::int[]
+						{{0}}::bigint[],
+						{{1}}::int[],
+						{{2}}::smallint[],
+						{{3}}::int[]
 					)
 					ON CONFLICT (character_id, template_id) 
 					DO UPDATE SET 
 						tier = EXCLUDED.tier,
 						value = EXCLUDED.value",
 				"SaveCharacterAchievements",
+				new object[] { characterIds, templateIds, tiers, values },
 				entityName: "CharacterAchievement",
 				requireRowsAffected: false,
 				cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -85,9 +86,10 @@ namespace FishMMO.Database.Npgsql.Services
 					"Character ID must be greater than 0.");
 			}
 
-			var result = await ExecuteSqlAsync(
-				$@"DELETE FROM {TableName} WHERE character_id = {characterId}",
+			var result = await ExecuteRawSqlAsync(
+				$@"DELETE FROM {TableName} WHERE character_id = {{0}}",
 				"DeleteCharacterAchievements",
+				new object[] { characterId },
 				entityName: "CharacterAchievement",
 				entityId: characterId,
 				requireRowsAffected: false,
@@ -106,7 +108,7 @@ namespace FishMMO.Database.Npgsql.Services
 					"Character ID must be greater than 0.");
 			}
 
-			return await ExecuteSqlAsync(async (dbContext, ct) =>
+			return await ExecuteAsync(async (dbContext, ct) =>
 			{
 				var entities = await GetAchievementsQuery(dbContext, characterId, ct).ConfigureAwait(false);
 				var achievements = entities.Select(a => new CharacterAchievementData(

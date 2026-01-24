@@ -55,20 +55,21 @@ namespace FishMMO.Database.Npgsql.Services
 			var currentValues = attributeList.Select(a => a.CurrentValue).ToArray();
 
 			// Single bulk UPSERT using UNNEST - atomic operation, no transaction needed
-			var result = await ExecuteSqlAsync(
+			var result = await ExecuteRawSqlAsync(
 				$@"INSERT INTO {TableName} 
 				(character_id, template_id, value, current_value)
 				SELECT * FROM UNNEST(
-					{characterIds}::bigint[],
-					{templateIds}::int[],
-					{values}::int[],
-					{currentValues}::float4[]
+					{{0}}::bigint[],
+					{{1}}::int[],
+					{{2}}::int[],
+					{{3}}::float4[]
 				)
 				ON CONFLICT (character_id, template_id) 
 				DO UPDATE SET 
 					value = EXCLUDED.value,
 					current_value = EXCLUDED.current_value",
 				"SaveCharacterAttributes",
+				new object[] { characterIds, templateIds, values, currentValues },
 				entityName: "CharacterAttribute",
 				requireRowsAffected: false,
 				cancellationToken: cancellationToken);
@@ -87,9 +88,10 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 
 			// Use atomic DELETE for thread safety
-			var result = await ExecuteSqlAsync(
-				$@"DELETE FROM {TableName} WHERE character_id = {characterId}",
+			var result = await ExecuteRawSqlAsync(
+				$@"DELETE FROM {TableName} WHERE character_id = {{0}}",
 				"DeleteCharacterAttributes",
+				new object[] { characterId },
 				entityName: "CharacterAttribute",
 				entityId: characterId,
 				requireRowsAffected: false,
@@ -108,7 +110,7 @@ namespace FishMMO.Database.Npgsql.Services
 					"Character ID must be greater than 0.");
 			}
 
-			return await ExecuteSqlAsync(async (dbContext, ct) =>
+			return await ExecuteAsync(async (dbContext, ct) =>
 			{
 				var entities = await GetAttributesQuery(dbContext, characterId, ct);
 				var attributes = entities.Select(a => new CharacterAttributeData(
@@ -142,38 +144,44 @@ namespace FishMMO.Database.Npgsql.Services
 			// Build atomic increment query with optional negative value check
 			// Uses UPSERT pattern: insert if not exists, update if exists
 			// The WHERE clause on the UPDATE prevents negative values if allowNegative is false
-			var whereClause = allowNegative ? "" : $" WHERE {TableName}.value + {valueDelta} >= 0 AND {TableName}.current_value + {currentValueDelta} >= 0";
+			var sql = allowNegative
+				? $@"INSERT INTO {TableName} (character_id, template_id, value, current_value)
+				   VALUES ({{0}}, {{1}}, {{2}}, {{3}})
+				   ON CONFLICT (character_id, template_id)
+				   DO UPDATE SET
+					   value = {TableName}.value + {{2}},
+					   current_value = {TableName}.current_value + {{3}}"
+				: $@"INSERT INTO {TableName} (character_id, template_id, value, current_value)
+				   VALUES ({{0}}, {{1}}, {{2}}, {{3}})
+				   ON CONFLICT (character_id, template_id)
+				   DO UPDATE SET
+					   value = {TableName}.value + {{2}},
+					   current_value = {TableName}.current_value + {{3}}
+				   WHERE {TableName}.value + {{2}} >= 0 AND {TableName}.current_value + {{3}} >= 0";
 
-			var result = await ExecuteSqlAsync(
-				$@"INSERT INTO {TableName} (character_id, template_id, value, current_value)
-				   VALUES ({characterId}, {templateId}, {valueDelta}, {currentValueDelta})
-				   ON CONFLICT (character_id, template_id) 
-				   DO UPDATE SET 
-					   value = {TableName}.value + {valueDelta},
-					   current_value = {TableName}.current_value + {currentValueDelta}{whereClause}",
+			var result = await ExecuteRawSqlAsync(
+				sql,
 				"IncrementCharacterAttribute",
+				new object[] { characterId, templateId, valueDelta, currentValueDelta },
 				entityName: "CharacterAttribute",
 				entityId: characterId,
-				requireRowsAffected: !allowNegative, // Require row affected if we're checking for negative values
+				requireRowsAffected: false,
 				cancellationToken: cancellationToken);
 
-			// If requireRowsAffected is true and no rows were affected, it means the WHERE clause prevented the update
 			if (result.IsSuccess)
 			{
+				if (!allowNegative && result.Data == 0)
+				{
+					return DatabaseResult.Failure(
+						"VALIDATION_ERROR",
+						"Operation would result in negative attribute value.",
+						isTransient: false);
+				}
+
 				return DatabaseResult.Success();
 			}
-			else if (result.ErrorCode == "DB_NO_ROWS_AFFECTED")
-			{
-				// This means the WHERE clause prevented the update due to negative value constraint
-				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"Operation would result in negative attribute value.",
-					isTransient: false);
-			}
-			else
-			{
-				return DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
-			}
+
+			return DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 	}
 }

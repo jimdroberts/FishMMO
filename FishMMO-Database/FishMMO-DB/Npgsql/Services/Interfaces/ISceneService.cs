@@ -15,7 +15,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	/// <para>
 	/// Write operations (Enqueue*, Dequeue*, Update*, Set*, Pulse*, Delete*) in this service use execution strategies to ensure transient
 	/// database failures are automatically retried according to the retry policy configured on the DbContext.
-	/// This is critical because SaveChangesAsync, ExecuteSqlInterpolatedAsync, and FromSqlInterpolated do not automatically
+	/// This is critical because SaveChangesAsync, ExecuteSqlRawAsync, and FromSqlRaw do not automatically
 	/// benefit from EnableRetryOnFailure without manual wrapping.
 	/// </para>
 	/// <para>
@@ -61,7 +61,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// DatabaseResult containing scene data if a pending scene was found and dequeued, empty result if no pending scenes, or error information on failure.
 		/// </returns>
 		/// <remarks>
-		/// Uses FromSqlInterpolated with FOR UPDATE SKIP LOCKED and execution strategy wrapping to ensure transient database
+		/// Uses FromSqlRaw with FOR UPDATE SKIP LOCKED and execution strategy wrapping to ensure transient database
 		/// failures are automatically retried. Atomically updates status from Pending to Loading to prevent race conditions.
 		/// Returns success with null data when no pending scenes exist (not an error condition).
 		/// </remarks>
@@ -77,7 +77,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// DatabaseResult indicating success or error information on failure.
 		/// </returns>
 		/// <remarks>
-		/// Uses ExecuteSqlInterpolatedAsync with execution strategy wrapping to ensure transient database
+		/// Uses ExecuteSqlRawAsync with execution strategy wrapping to ensure transient database
 		/// failures are automatically retried. Returns entity not found exception if scene doesn't exist.
 		/// </remarks>
 		Task<DatabaseResult> UpdateStatusAsync(long sceneId, SceneStatus status, CancellationToken cancellationToken = default);
@@ -94,7 +94,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// DatabaseResult indicating success or error information on failure.
 		/// </returns>
 		/// <remarks>
-		/// Uses ExecuteSqlInterpolatedAsync with execution strategy wrapping to ensure transient database
+		/// Uses ExecuteSqlRawAsync with execution strategy wrapping to ensure transient database
 		/// failures are automatically retried. Only updates scenes in Loading status.
 		/// Returns entity not found exception if scene doesn't exist or is not in Loading status.
 		/// </remarks>
@@ -115,7 +115,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// DatabaseResult indicating success or error information on failure.
 		/// </returns>
 		/// <remarks>
-		/// Uses ExecuteSqlInterpolatedAsync with execution strategy wrapping to ensure transient database
+		/// Uses ExecuteSqlRawAsync with execution strategy wrapping to ensure transient database
 		/// failures are automatically retried. Updates character count for scene matching the handle.
 		/// Returns entity not found exception if scene doesn't exist.
 		/// </remarks>
@@ -130,7 +130,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// DatabaseResult containing number of scenes deleted on success, or error information on failure.
 		/// </returns>
 		/// <remarks>
-		/// Uses ExecuteSqlInterpolatedAsync with execution strategy wrapping to ensure transient database
+		/// Uses ExecuteSqlRawAsync with execution strategy wrapping to ensure transient database
 		/// failures are automatically retried. Returns 0 rows deleted if no scenes exist (idempotent).
 		/// </remarks>
 		Task<DatabaseResult<int>> DeleteBySceneServerAsync(long sceneServerId, CancellationToken cancellationToken = default);
@@ -144,7 +144,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// DatabaseResult containing number of scenes deleted on success, or error information on failure.
 		/// </returns>
 		/// <remarks>
-		/// Uses ExecuteSqlInterpolatedAsync with execution strategy wrapping to ensure transient database
+		/// Uses ExecuteSqlRawAsync with execution strategy wrapping to ensure transient database
 		/// failures are automatically retried. Returns 0 rows deleted if no scenes exist (idempotent).
 		/// </remarks>
 		Task<DatabaseResult<int>> DeleteByWorldServerAsync(long worldServerId, CancellationToken cancellationToken = default);
@@ -159,7 +159,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// DatabaseResult indicating success or error information on failure.
 		/// </returns>
 		/// <remarks>
-		/// Uses ExecuteSqlInterpolatedAsync with execution strategy wrapping to ensure transient database
+		/// Uses ExecuteSqlRawAsync with execution strategy wrapping to ensure transient database
 		/// failures are automatically retried. Returns entity not found exception if scene doesn't exist.
 		/// </remarks>
 		Task<DatabaseResult> DeleteByHandleAsync(long sceneServerId, int sceneHandle, CancellationToken cancellationToken = default);

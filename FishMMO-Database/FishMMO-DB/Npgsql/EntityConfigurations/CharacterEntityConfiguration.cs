@@ -3,6 +3,9 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace FishMMO.Database.Npgsql.Entities
 {
+	/// <summary>
+	/// Entity configuration for <see cref="CharacterEntity"/>.
+	/// </summary>
 	public class CharacterEntityConfiguration : IEntityTypeConfiguration<CharacterEntity>
 	{
 		public void Configure(EntityTypeBuilder<CharacterEntity> builder)
@@ -37,13 +40,13 @@ namespace FishMMO.Database.Npgsql.Entities
 				.HasDatabaseName("IX_CharacterEntity_NameLowercase");
 
 			// Performance index for account character queries (GetCharactersAsync hot path)
-			builder.HasIndex(e => new { e.Account, e.Deleted })
-				.HasDatabaseName("IX_Character_Account_Deleted");
+			builder.HasIndex(e => e.Account)
+				.HasDatabaseName("IX_Character_Account");
 
 			// Performance index for online status filtering
 			builder.HasIndex(e => e.Online)
 				.HasDatabaseName("IX_Character_Online")
-				.HasFilter("online = true AND NOT deleted");
+				.HasFilter("online = true");
 		}
 	}
 }

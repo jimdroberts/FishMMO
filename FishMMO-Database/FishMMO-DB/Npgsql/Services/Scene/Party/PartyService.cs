@@ -10,7 +10,7 @@ using FishMMO.Database.Npgsql.Services.Interfaces;
 namespace FishMMO.Database.Npgsql.Services
 {
 	/// <inheritdoc/>
-	public sealed class PartyService : BaseService<PartyEntity>, IPartyService
+	public sealed class PartyService : IdempotentBaseService<PartyEntity>, IPartyService
 	{
 		/// <summary>
 		/// Compiled query for checking party existence (hot path for party validations).
@@ -35,7 +35,7 @@ namespace FishMMO.Database.Npgsql.Services
 			if (partyId <= 0)
 				return DatabaseResult<bool>.Success(false);
 
-			return await ExecuteSqlAsync(async (dbContext, ct) =>
+			return await ExecuteAsync(async (dbContext, ct) =>
 			{
 				return await PartyExistsQuery(dbContext, partyId, ct).ConfigureAwait(false);
 			}, "CheckPartyExists", cancellationToken).ConfigureAwait(false);
@@ -44,7 +44,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<long>> CreateAsync(Guid requestId, long accountId, CancellationToken cancellationToken = default)
 		{
-			return await ExecuteSqlAsync(
+			return await ExecuteIdempotentAsync(
 				requestId,
 				accountId,
 				"CreateParty",
@@ -53,7 +53,7 @@ namespace FishMMO.Database.Npgsql.Services
 				// Use atomic INSERT with RETURNING for proper retry strategy support
 				// Optimized: RETURNING only id for better performance
 				var result = await dbContext.Parties
-					.FromSqlInterpolated($@"
+					.FromSqlRaw($@"
 					INSERT INTO {TableName} (time_created)
 					VALUES (CURRENT_TIMESTAMP)
 					RETURNING id")
@@ -82,9 +82,10 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("INVALID_PARTY_ID", "Party ID must be greater than zero.");
 			}
 
-			var result = await ExecuteSqlAsync(
-				$"DELETE FROM {TableName} WHERE id = {partyId}",
+			var result = await ExecuteRawSqlAsync(
+				$"DELETE FROM {TableName} WHERE id = {{0}}",
 				"DeleteParty",
+				new object[] { partyId },
 				entityName: "Party",
 				entityId: partyId,
 				requireRowsAffected: true,
@@ -101,7 +102,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<PartyData>.Failure("INVALID_PARTY_ID", "Party ID must be greater than zero.");
 			}
 
-			return await ExecuteSqlAsync(async (dbContext, ct) =>
+			return await ExecuteAsync(async (dbContext, ct) =>
 			{
 				var party = await dbContext.Parties
 					.AsNoTracking()

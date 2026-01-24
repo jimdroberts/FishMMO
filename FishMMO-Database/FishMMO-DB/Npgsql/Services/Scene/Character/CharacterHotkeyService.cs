@@ -72,21 +72,25 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<long>.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			return await ExecuteSqlAsync<long>(
+			return await ExecuteAsync<long>(
 				async (dbContext, ct) =>
 				{
 					// Use PostgreSQL UPSERT for atomic insert-or-update
 					var result = await dbContext.CharacterHotkeys
-							.FromSqlInterpolated($@"
+							.FromSqlRaw($@"
 							INSERT INTO {TableName} 
 								(character_id, type, slot, reference_id)
 							VALUES 
-								({hotkey.CharacterID}, {hotkey.Type}, {hotkey.Slot}, {hotkey.ReferenceID})
+								({{0}}, {{1}}, {{2}}, {{3}})
 							ON CONFLICT (character_id, slot) 
 							DO UPDATE SET 
 								type = EXCLUDED.type,
 								reference_id = EXCLUDED.reference_id
-							RETURNING id, character_id, type, slot, reference_id")
+							RETURNING id, character_id, type, slot, reference_id",
+							hotkey.CharacterID,
+							hotkey.Type,
+							hotkey.Slot,
+							hotkey.ReferenceID)
 							.AsNoTracking()
 							.FirstOrDefaultAsync(ct).ConfigureAwait(false);
 
@@ -112,18 +116,19 @@ namespace FishMMO.Database.Npgsql.Services
 			var slots = hotkeyList.Select(h => h.Slot).ToArray();
 			var referenceIds = hotkeyList.Select(h => h.ReferenceID).ToArray();
 
-			var result = await ExecuteSqlAsync(
+			var result = await ExecuteRawSqlAsync(
 				$@"INSERT INTO {TableName} (character_id, type, slot, reference_id)
 					SELECT * FROM UNNEST(
-						{characterIds}::bigint[],
-						{types}::smallint[],
-						{slots}::int[],
-						{referenceIds}::bigint[]
+						{{0}}::bigint[],
+						{{1}}::smallint[],
+						{{2}}::int[],
+						{{3}}::bigint[]
 					)
 					ON CONFLICT (character_id, slot) DO UPDATE SET
 						type = EXCLUDED.type,
 						reference_id = EXCLUDED.reference_id",
 				"SaveHotkeys",
+				new object[] { characterIds, types, slots, referenceIds },
 				entityName: "CharacterHotkey",
 				requireRowsAffected: false,
 				cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -139,9 +144,10 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			var result = await ExecuteSqlAsync(
-				$@"DELETE FROM {TableName} WHERE character_id = {characterId}",
+			var result = await ExecuteRawSqlAsync(
+				$@"DELETE FROM {TableName} WHERE character_id = {{0}}",
 				"DeleteHotkeys",
+				new object[] { characterId },
 				entityName: "CharacterHotkey",
 				entityId: characterId,
 				requireRowsAffected: false,
@@ -158,7 +164,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<IReadOnlyList<CharacterHotkeyData>>.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			return await ExecuteSqlAsync(
+			return await ExecuteAsync(
 				async (dbContext, ct) =>
 				{
 					var entities = await GetHotkeysQuery(dbContext, characterId, ct).ConfigureAwait(false);
@@ -184,7 +190,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<int>.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			return await ExecuteSqlAsync(
+			return await ExecuteAsync(
 				async (dbContext, ct) =>
 				{
 					return await GetHotkeyCountQuery(dbContext, characterId, ct).ConfigureAwait(false);

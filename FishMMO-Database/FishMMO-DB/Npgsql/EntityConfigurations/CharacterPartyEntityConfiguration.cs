@@ -46,6 +46,13 @@ namespace FishMMO.Database.Npgsql.Entities
 				.WithMany(p => p.Characters)
 				.HasForeignKey(e => e.PartyID)
 				.OnDelete(DeleteBehavior.Cascade);
+
+			// Foreign key relationship to Character
+			// Deleting a character must remove the character's party membership row.
+			builder.HasOne(e => e.Character)
+				.WithOne(c => c.Party)
+				.HasForeignKey<CharacterPartyEntity>(e => e.CharacterID)
+				.OnDelete(DeleteBehavior.Cascade);
 		}
 	}
 }

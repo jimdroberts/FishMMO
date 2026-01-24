@@ -62,7 +62,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteSqlAsync(async (dbContext, ct) =>
+			return await ExecuteAsync(async (dbContext, ct) =>
 			{
 				var account = await dbContext.Accounts
 					.AsNoTracking()
@@ -110,13 +110,16 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			var result = await ExecuteSqlAsync(
-				$@"INSERT INTO {TableName} 
-					(name, salt, verifier, access_level, created, lastlogin) 
-				VALUES 
-					({accountName}, {salt}, {verifier}, {(byte)AccessLevel.Player}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-				ON CONFLICT (name) DO NOTHING",
+			var sql = $@"INSERT INTO {TableName}
+				(name, salt, verifier, access_level, created, lastlogin)
+			VALUES
+				({{0}}, {{1}}, {{2}}, {{3}}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			ON CONFLICT (name) DO NOTHING";
+
+			var result = await ExecuteRawSqlAsync(
+				sql,
 				"CreateAccount",
+				new object[] { accountName, salt, verifier, (byte)AccessLevel.Player },
 				cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			if (!result.IsSuccess)
@@ -150,7 +153,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			var result = await ExecuteSqlAsync(async (dbContext, ct) =>
+			var result = await ExecuteAsync(async (dbContext, ct) =>
 				await GetAccountForLoginQuery(dbContext, accountName, ct).ConfigureAwait(false),
 				"GetAccountForLogin",
 				cancellationToken).ConfigureAwait(false);
@@ -196,11 +199,14 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			var result = await ExecuteSqlAsync(
-				$@"UPDATE {TableName} 
-					SET lastlogin = CURRENT_TIMESTAMP 
-					WHERE name = {accountName}",
+			var sql = $@"UPDATE {TableName}
+				SET lastlogin = CURRENT_TIMESTAMP
+				WHERE name = {{0}}";
+
+			var result = await ExecuteRawSqlAsync(
+				sql,
 				"UpdateLastLogin",
+				new object[] { accountName },
 				entityName: "Account",
 				entityId: accountName,
 				requireRowsAffected: true,
@@ -222,7 +228,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<bool>.Success(false);
 			}
 
-			return await ExecuteSqlAsync(async (dbContext, ct) =>
+			return await ExecuteAsync(async (dbContext, ct) =>
 			{
 				// Use compiled query for hot path performance
 				return await AccountExistsByNameQuery(dbContext, accountName, ct).ConfigureAwait(false);
