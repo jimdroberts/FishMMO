@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Database.Data;
+using FishMMO.Database.Exceptions;
 using FishMMO.Database.Npgsql.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -54,25 +55,31 @@ namespace FishMMO.Database.Npgsql.Services
 			var values = attributeList.Select(a => a.Value).ToArray();
 			var currentValues = attributeList.Select(a => a.CurrentValue).ToArray();
 
-			// Single bulk UPSERT using UNNEST - atomic operation, no transaction needed
-			var result = await ExecuteRawSqlAsync(
-				$@"INSERT INTO {TableName} 
-				(character_id, template_id, value, current_value)
-				SELECT * FROM UNNEST(
-					{{0}}::bigint[],
-					{{1}}::int[],
-					{{2}}::int[],
-					{{3}}::float4[]
-				)
-				ON CONFLICT (character_id, template_id) 
-				DO UPDATE SET 
-					value = EXCLUDED.value,
-					current_value = EXCLUDED.current_value",
-				"SaveCharacterAttributes",
-				new object[] { characterIds, templateIds, values, currentValues },
-				entityName: "CharacterAttribute",
-				requireRowsAffected: false,
-				cancellationToken: cancellationToken);
+			var result = await ExecuteAsync(async (dbContext, ct) =>
+			{
+				var charactersTableName = dbContext.GetTableName<CharacterEntity>();
+				return await dbContext.Database.ExecuteSqlRawAsync(
+					$@"WITH active_characters AS (
+						SELECT id
+						FROM {charactersTableName}
+						WHERE id = ANY({{0}}::bigint[]) AND deleted = FALSE
+						FOR KEY SHARE
+					)
+					INSERT INTO {TableName} (character_id, template_id, value, current_value, time_created)
+					SELECT u.character_id, u.template_id, u.value, u.current_value, CURRENT_TIMESTAMP
+					FROM UNNEST(
+						{{0}}::bigint[],
+						{{1}}::int[],
+						{{2}}::int[],
+						{{3}}::float4[]
+					) AS u(character_id, template_id, value, current_value)
+					JOIN active_characters ac ON ac.id = u.character_id
+					ON CONFLICT (character_id, template_id) DO UPDATE SET
+						value = EXCLUDED.value,
+						current_value = EXCLUDED.current_value",
+					new object[] { characterIds, templateIds, values, currentValues },
+					ct);
+			}, "SaveCharacterAttributes", cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
@@ -141,36 +148,43 @@ namespace FishMMO.Database.Npgsql.Services
 					"Character ID must be greater than 0.");
 			}
 
-			// Build atomic increment query with optional negative value check
-			// Uses UPSERT pattern: insert if not exists, update if exists
-			// The WHERE clause on the UPDATE prevents negative values if allowNegative is false
-			var sql = allowNegative
-				? $@"INSERT INTO {TableName} (character_id, template_id, value, current_value)
-				   VALUES ({{0}}, {{1}}, {{2}}, {{3}})
-				   ON CONFLICT (character_id, template_id)
-				   DO UPDATE SET
-					   value = {TableName}.value + {{2}},
-					   current_value = {TableName}.current_value + {{3}}"
-				: $@"INSERT INTO {TableName} (character_id, template_id, value, current_value)
-				   VALUES ({{0}}, {{1}}, {{2}}, {{3}})
-				   ON CONFLICT (character_id, template_id)
-				   DO UPDATE SET
-					   value = {TableName}.value + {{2}},
-					   current_value = {TableName}.current_value + {{3}}
-				   WHERE {TableName}.value + {{2}} >= 0 AND {TableName}.current_value + {{3}} >= 0";
-
-			var result = await ExecuteRawSqlAsync(
-				sql,
-				"IncrementCharacterAttribute",
-				new object[] { characterId, templateId, valueDelta, currentValueDelta },
-				entityName: "CharacterAttribute",
-				entityId: characterId,
-				requireRowsAffected: false,
-				cancellationToken: cancellationToken);
-
-			if (result.IsSuccess)
+			var transactionResult = await ExecuteTransactionAsync(async (dbContext, transaction, ct) =>
 			{
-				if (!allowNegative && result.Data == 0)
+				// Lock/check parent row to serialize against DeleteCharacterAsync (FOR UPDATE)
+				var charactersTableName = dbContext.GetTableName<CharacterEntity>();
+				var activeCharacter = await dbContext.Characters
+					.FromSqlRaw($@"SELECT * FROM {charactersTableName} WHERE id = {{0}} AND deleted = FALSE FOR KEY SHARE", characterId)
+					.AsNoTracking()
+					.FirstOrDefaultAsync(ct)
+					.ConfigureAwait(false);
+
+				if (activeCharacter == null)
+				{
+					throw new DatabaseEntityNotFoundException("Character", characterId.ToString());
+				}
+
+				// Build atomic increment query with optional negative value check
+				var sql = allowNegative
+					? $@"INSERT INTO {TableName} (character_id, template_id, value, current_value, time_created)
+					   VALUES ({{0}}, {{1}}, {{2}}, {{3}}, CURRENT_TIMESTAMP)
+					   ON CONFLICT (character_id, template_id)
+					   DO UPDATE SET
+						   value = {TableName}.value + {{2}},
+						   current_value = {TableName}.current_value + {{3}}"
+					: $@"INSERT INTO {TableName} (character_id, template_id, value, current_value, time_created)
+					   VALUES ({{0}}, {{1}}, {{2}}, {{3}}, CURRENT_TIMESTAMP)
+					   ON CONFLICT (character_id, template_id)
+					   DO UPDATE SET
+						   value = {TableName}.value + {{2}},
+						   current_value = {TableName}.current_value + {{3}}
+					   WHERE {TableName}.value + {{2}} >= 0 AND {TableName}.current_value + {{3}} >= 0";
+
+				var rows = await dbContext.Database.ExecuteSqlRawAsync(
+					sql,
+					new object[] { characterId, templateId, valueDelta, currentValueDelta },
+					ct).ConfigureAwait(false);
+
+				if (!allowNegative && rows == 0)
 				{
 					return DatabaseResult.Failure(
 						"VALIDATION_ERROR",
@@ -179,9 +193,11 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				return DatabaseResult.Success();
-			}
+			}, "IncrementCharacterAttribute", cancellationToken).ConfigureAwait(false);
 
-			return DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return transactionResult.IsSuccess
+				? transactionResult.Data
+				: DatabaseResult.Failure(transactionResult.ErrorCode, transactionResult.ErrorMessage, transactionResult.IsTransient);
 		}
 	}
 }

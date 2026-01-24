@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
+﻿using System;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace FishMMO.Database.Npgsql.Entities
 {
@@ -11,6 +12,7 @@ namespace FishMMO.Database.Npgsql.Entities
 		public long PartyID { get; set; }
 		public PartyEntity Party { get; set; }
 		public byte Rank { get; set; }
+		public DateTime TimeCreated { get; set; }
 		public float HealthPCT { get; set; }
 	}
 }

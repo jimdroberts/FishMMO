@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq.Expressions;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -210,6 +211,69 @@ namespace FishMMO.Database.Npgsql
 
 			// Idempotency
 			modelBuilder.ApplyConfiguration(new ProcessedRequestEntityConfiguration());
+
+			ApplySoftDeleteConventions(modelBuilder);
+			ApplyTimeCreatedConventions(modelBuilder);
+		}
+
+		private static void ApplyTimeCreatedConventions(ModelBuilder modelBuilder)
+		{
+			foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+			{
+				var clrType = entityType.ClrType;
+				if (clrType == null)
+					continue;
+
+				var timeCreatedProperty = entityType.FindProperty("TimeCreated");
+				if (timeCreatedProperty?.ClrType != typeof(DateTime))
+					continue;
+
+				modelBuilder.Entity(clrType)
+					.Property<DateTime>("TimeCreated")
+					.IsRequired()
+					.ValueGeneratedOnAdd()
+					.HasDefaultValueSql("CURRENT_TIMESTAMP");
+			}
+		}
+
+		private static void ApplySoftDeleteConventions(ModelBuilder modelBuilder)
+		{
+			var efPropertyMethod = typeof(EF).GetMethod(nameof(EF.Property))!;
+
+			foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+			{
+				var clrType = entityType.ClrType;
+				if (clrType == null)
+					continue;
+
+				var deletedProperty = entityType.FindProperty("Deleted");
+				if (deletedProperty?.ClrType != typeof(bool))
+					continue;
+
+				modelBuilder.Entity(clrType)
+					.Property<bool>("Deleted")
+					.IsRequired()
+					.HasDefaultValue(false);
+
+				var timeDeletedProperty = entityType.FindProperty("TimeDeleted");
+				if (timeDeletedProperty?.ClrType == typeof(DateTime?))
+				{
+					modelBuilder.Entity(clrType)
+						.Property<DateTime?>("TimeDeleted")
+						.IsRequired(false);
+				}
+
+				// Global query filter: only return non-deleted rows by default.
+				var parameter = Expression.Parameter(clrType, "e");
+				var deletedEfProperty = Expression.Call(
+					efPropertyMethod.MakeGenericMethod(typeof(bool)),
+					parameter,
+					Expression.Constant("Deleted"));
+				var filterBody = Expression.Equal(deletedEfProperty, Expression.Constant(false));
+				var filterLambda = Expression.Lambda(filterBody, parameter);
+
+				modelBuilder.Entity(clrType).HasQueryFilter(filterLambda);
+			}
 		}
 	}
 }

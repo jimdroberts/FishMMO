@@ -62,16 +62,23 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			var result = await ExecuteRawSqlAsync(
-				$@"INSERT INTO {TableName} (character_id, template_id)
-					VALUES ({{0}}, {{1}})
+			var result = await ExecuteAsync(async (dbContext, ct) =>
+			{
+				var charactersTableName = dbContext.GetTableName<CharacterEntity>();
+				return await dbContext.Database.ExecuteSqlRawAsync(
+					$@"WITH active_character AS (
+						SELECT id
+						FROM {charactersTableName}
+						WHERE id = {{0}} AND deleted = FALSE
+						FOR KEY SHARE
+					)
+					INSERT INTO {TableName} (character_id, template_id, time_created)
+					SELECT {{0}}, {{1}}, CURRENT_TIMESTAMP
+					FROM active_character
 					ON CONFLICT (character_id, template_id) DO NOTHING",
-				"SaveKnownAbility",
-				new object[] { characterId, templateId },
-				entityName: "CharacterKnownAbility",
-				entityId: characterId,
-				requireRowsAffected: false,
-				cancellationToken: cancellationToken);
+					new object[] { characterId, templateId },
+					ct);
+			}, "SaveKnownAbility", cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
@@ -89,18 +96,27 @@ namespace FishMMO.Database.Npgsql.Services
 			var characterIds = abilityList.Select(a => a.CharacterID).ToArray();
 			var templateIds = abilityList.Select(a => a.TemplateID).ToArray();
 
-			var result = await ExecuteRawSqlAsync(
-				$@"INSERT INTO {TableName} (character_id, template_id)
-					SELECT * FROM UNNEST(
+			var result = await ExecuteAsync(async (dbContext, ct) =>
+			{
+				var charactersTableName = dbContext.GetTableName<CharacterEntity>();
+				return await dbContext.Database.ExecuteSqlRawAsync(
+					$@"WITH active_characters AS (
+						SELECT id
+						FROM {charactersTableName}
+						WHERE id = ANY({{0}}::bigint[]) AND deleted = FALSE
+						FOR KEY SHARE
+					)
+					INSERT INTO {TableName} (character_id, template_id, time_created)
+					SELECT u.character_id, u.template_id, CURRENT_TIMESTAMP
+					FROM UNNEST(
 						{{0}}::bigint[],
 						{{1}}::int[]
-					)
+					) AS u(character_id, template_id)
+					JOIN active_characters ac ON ac.id = u.character_id
 					ON CONFLICT (character_id, template_id) DO NOTHING",
-				"SaveKnownAbilities",
-				new object[] { characterIds, templateIds },
-				entityName: "CharacterKnownAbility",
-				requireRowsAffected: false,
-				cancellationToken: cancellationToken);
+					new object[] { characterIds, templateIds },
+					ct);
+			}, "SaveKnownAbilities", cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}

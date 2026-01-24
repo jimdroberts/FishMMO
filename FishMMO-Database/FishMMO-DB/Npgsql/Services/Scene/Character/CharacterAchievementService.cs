@@ -54,24 +54,31 @@ namespace FishMMO.Database.Npgsql.Services
 			var tiers = achievementList.Select(a => a.Tier).ToArray();
 			var values = achievementList.Select(a => a.Value).ToArray();
 
-			var result = await ExecuteRawSqlAsync(
-				$@"INSERT INTO {TableName} 
-					(character_id, template_id, tier, value)
-					SELECT * FROM UNNEST(
+			var result = await ExecuteAsync(async (dbContext, ct) =>
+			{
+				var charactersTableName = dbContext.GetTableName<CharacterEntity>();
+				return await dbContext.Database.ExecuteSqlRawAsync(
+					$@"WITH active_characters AS (
+						SELECT id
+						FROM {charactersTableName}
+						WHERE id = ANY({{0}}::bigint[]) AND deleted = FALSE
+						FOR KEY SHARE
+					)
+					INSERT INTO {TableName} (character_id, template_id, tier, value, time_created)
+					SELECT u.character_id, u.template_id, u.tier, u.value, CURRENT_TIMESTAMP
+					FROM UNNEST(
 						{{0}}::bigint[],
 						{{1}}::int[],
 						{{2}}::smallint[],
 						{{3}}::int[]
-					)
-					ON CONFLICT (character_id, template_id) 
-					DO UPDATE SET 
+					) AS u(character_id, template_id, tier, value)
+					JOIN active_characters ac ON ac.id = u.character_id
+					ON CONFLICT (character_id, template_id) DO UPDATE SET
 						tier = EXCLUDED.tier,
 						value = EXCLUDED.value",
-				"SaveCharacterAchievements",
-				new object[] { characterIds, templateIds, tiers, values },
-				entityName: "CharacterAchievement",
-				requireRowsAffected: false,
-				cancellationToken: cancellationToken).ConfigureAwait(false);
+					new object[] { characterIds, templateIds, tiers, values },
+					ct);
+			}, "SaveCharacterAchievements", cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}

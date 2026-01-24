@@ -42,7 +42,7 @@ namespace FishMMO.Database.Npgsql.Entities
 				.HasMaxLength(256)
 				.HasColumnName("error_message");
 
-			builder.Property(e => e.CreatedAt)
+			builder.Property(e => e.TimeCreated)
 				.IsRequired()
 				.HasDefaultValueSql("CURRENT_TIMESTAMP")
 				.HasColumnName("created_at");
@@ -50,7 +50,7 @@ namespace FishMMO.Database.Npgsql.Entities
 			builder.Property(e => e.CompletedAt)
 				.HasColumnName("completed_at");
 
-			builder.HasIndex(e => e.CreatedAt)
+			builder.HasIndex(e => e.TimeCreated)
 				.HasDatabaseName("IX_ProcessedRequests_CreatedAt");
 
 			builder.HasIndex(e => e.AccountID)
@@ -59,7 +59,7 @@ namespace FishMMO.Database.Npgsql.Entities
 			builder.HasIndex(e => e.Status)
 				.HasDatabaseName("IX_ProcessedRequests_Status");
 
-			builder.HasIndex(e => new { e.AccountID, e.CreatedAt })
+			builder.HasIndex(e => new { e.AccountID, e.TimeCreated })
 				.HasDatabaseName("IX_ProcessedRequests_AccountID_CreatedAt");
 		}
 	}

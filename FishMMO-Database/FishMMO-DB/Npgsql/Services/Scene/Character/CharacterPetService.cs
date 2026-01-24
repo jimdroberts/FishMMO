@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using FishMMO.Database.Data;
+using FishMMO.Database.Exceptions;
 using FishMMO.Database.Npgsql.Entities;
 
 namespace FishMMO.Database.Npgsql.Services
@@ -51,21 +52,36 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			var result = await ExecuteRawSqlAsync(
-				$@"UPDATE {TableName} 
-				   SET character_id = {{0}},
-				       template_id = {{1}},
-				       abilities = {{2}},
-				       spawned = {{3}}
-				   WHERE id = {{4}}",
-				"SavePet",
-				new object[] { petData.CharacterID, petData.TemplateID, petData.Abilities.ToArray(), petData.Spawned, petData.ID },
-				entityName: "CharacterPet",
-				entityId: petData.ID,
-				requireRowsAffected: false,
-				cancellationToken: cancellationToken);
+			var transactionResult = await ExecuteTransactionAsync(async (dbContext, transaction, ct) =>
+			{
+				var charactersTableName = dbContext.GetTableName<CharacterEntity>();
+				var activeCharacter = await dbContext.Characters
+					.FromSqlRaw($@"SELECT * FROM {charactersTableName} WHERE id = {{0}} AND deleted = FALSE FOR KEY SHARE", petData.CharacterID)
+					.AsNoTracking()
+					.FirstOrDefaultAsync(ct)
+					.ConfigureAwait(false);
 
-			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+				if (activeCharacter == null)
+				{
+					throw new DatabaseEntityNotFoundException("Character", petData.CharacterID.ToString());
+				}
+
+				await dbContext.Database.ExecuteSqlRawAsync(
+					$@"UPDATE {TableName}
+					   SET character_id = {{0}},
+					       template_id = {{1}},
+					       abilities = {{2}},
+					       spawned = {{3}}
+					   WHERE id = {{4}}",
+					new object[] { petData.CharacterID, petData.TemplateID, petData.Abilities.ToArray(), petData.Spawned, petData.ID },
+					ct).ConfigureAwait(false);
+
+				return true;
+			}, "SavePet", cancellationToken).ConfigureAwait(false);
+
+			return transactionResult.IsSuccess
+				? DatabaseResult.Success()
+				: DatabaseResult.Failure(transactionResult.ErrorCode, transactionResult.ErrorMessage, transactionResult.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -84,6 +100,14 @@ namespace FishMMO.Database.Npgsql.Services
 			// Wrap both operations in transaction for atomicity
 			var transactionResult = await ExecuteTransactionAsync(async (dbContext, transaction, ct) =>
 			{
+				var charactersTableName = dbContext.GetTableName<CharacterEntity>();
+				var distinctCharacterIds = petList.Select(p => p.CharacterID).Distinct().ToArray();
+				var lockedCount = await dbContext.Database.ExecuteSqlRawAsync(
+					$@"SELECT 1 FROM {charactersTableName} WHERE id = ANY({{0}}::bigint[]) AND deleted = FALSE FOR KEY SHARE",
+					new object[] { distinctCharacterIds },
+					ct).ConfigureAwait(false);
+				_ = lockedCount;
+
 				// Handle existing pets with atomic UPDATE by ID
 				if (petsToUpdate.Count > 0)
 				{
@@ -94,7 +118,13 @@ namespace FishMMO.Database.Npgsql.Services
 					var updateSpawned = petsToUpdate.Select(p => p.Spawned).ToArray();
 
 					await dbContext.Database.ExecuteSqlRawAsync(
-						$@"UPDATE {TableName} AS t SET
+						$@"WITH active_characters AS (
+							SELECT id
+							FROM {charactersTableName}
+							WHERE id = ANY({{1}}::bigint[]) AND deleted = FALSE
+							FOR KEY SHARE
+						)
+						UPDATE {TableName} AS t SET
 						character_id = u.character_id,
 						template_id = u.template_id,
 						abilities = u.abilities,
@@ -106,7 +136,8 @@ namespace FishMMO.Database.Npgsql.Services
 						{{3}}::int[][],
 						{{4}}::boolean[]
 					) AS u(id, character_id, template_id, abilities, spawned)) AS u
-					WHERE t.id = u.id",
+					WHERE t.id = u.id
+					AND EXISTS (SELECT 1 FROM active_characters ac WHERE ac.id = u.character_id)",
 						new object[] { updateIds, updateCharacterIds, updateTemplateIds, updateAbilities, updateSpawned },
 						ct);
 				}
@@ -120,13 +151,21 @@ namespace FishMMO.Database.Npgsql.Services
 					var insertSpawned = petsToInsert.Select(p => p.Spawned).ToArray();
 
 					await dbContext.Database.ExecuteSqlRawAsync(
-						$@"INSERT INTO {TableName} (character_id, template_id, abilities, spawned)
-					SELECT * FROM UNNEST(
-						{{0}}::bigint[],
-						{{1}}::int[],
-						{{2}}::int[][],
-						{{3}}::boolean[]
-					)
+						$@"WITH active_characters AS (
+							SELECT id
+							FROM {charactersTableName}
+							WHERE id = ANY({{0}}::bigint[]) AND deleted = FALSE
+							FOR KEY SHARE
+						)
+						INSERT INTO {TableName} (character_id, template_id, abilities, spawned, time_created)
+						SELECT u.character_id, u.template_id, u.abilities, u.spawned, CURRENT_TIMESTAMP
+						FROM UNNEST(
+							{{0}}::bigint[],
+							{{1}}::int[],
+							{{2}}::int[][],
+							{{3}}::boolean[]
+						) AS u(character_id, template_id, abilities, spawned)
+						JOIN active_characters ac ON ac.id = u.character_id
 					ON CONFLICT (character_id)
 					DO UPDATE SET
 						template_id = EXCLUDED.template_id,

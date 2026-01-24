@@ -111,6 +111,19 @@ namespace FishMMO.Database.Npgsql.Services
 			// - UPSERT is atomic and idempotent
 			var result = await ExecuteTransactionAsync(async (dbContext, transaction, ct) =>
 			{
+				var charactersTableName = dbContext.GetTableName<CharacterEntity>();
+				var activeCharacter = await dbContext.Characters
+					.FromSqlRaw($@"SELECT * FROM {charactersTableName} WHERE id = {{0}} AND deleted = FALSE FOR KEY SHARE", guildData.CharacterID)
+					.AsNoTracking()
+					.FirstOrDefaultAsync(ct)
+					.ConfigureAwait(false);
+				if (activeCharacter == null)
+				{
+					return DatabaseResult.Failure(
+						"DB_NOT_FOUND",
+						"Character not found or deleted.");
+				}
+
 				// Lock character's membership row FIRST to establish consistent lock ordering
 				// This prevents deadlocks and ensures atomicity across concurrent requests
 				var existingMembership = await dbContext.CharacterGuilds
@@ -159,8 +172,8 @@ namespace FishMMO.Database.Npgsql.Services
 				// or updates existing membership (rank/location change within same guild)
 				await dbContext.Database.ExecuteSqlRawAsync(
 					$@"INSERT INTO {TableName} 
-						(character_id, guild_id, rank, location)
-						VALUES ({{0}}, {{1}}, {{2}}, {{3}})
+						(character_id, guild_id, rank, location, time_created)
+						VALUES ({{0}}, {{1}}, {{2}}, {{3}}, CURRENT_TIMESTAMP)
 						ON CONFLICT (character_id) 
 						DO UPDATE SET 
 							guild_id = EXCLUDED.guild_id,

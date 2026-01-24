@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using FishMMO.Database.Data;
+using FishMMO.Database.Exceptions;
 using FishMMO.Database.Npgsql.Entities;
 
 namespace FishMMO.Database.Npgsql.Services
@@ -75,18 +76,26 @@ namespace FishMMO.Database.Npgsql.Services
 			return await ExecuteAsync<long>(
 				async (dbContext, ct) =>
 				{
+					var charactersTableName = dbContext.GetTableName<CharacterEntity>();
 					// Use PostgreSQL UPSERT for atomic insert-or-update
 					var result = await dbContext.CharacterHotkeys
 							.FromSqlRaw($@"
+							WITH active_character AS (
+								SELECT id
+								FROM {charactersTableName}
+								WHERE id = {{0}} AND deleted = FALSE
+								FOR KEY SHARE
+							)
 							INSERT INTO {TableName} 
-								(character_id, type, slot, reference_id)
-							VALUES 
-								({{0}}, {{1}}, {{2}}, {{3}})
+								(character_id, type, slot, reference_id, time_created)
+							SELECT
+								{{0}}, {{1}}, {{2}}, {{3}}, CURRENT_TIMESTAMP
+							FROM active_character
 							ON CONFLICT (character_id, slot) 
 							DO UPDATE SET 
 								type = EXCLUDED.type,
 								reference_id = EXCLUDED.reference_id
-							RETURNING id, character_id, type, slot, reference_id",
+							RETURNING id, character_id, type, slot, reference_id, time_created",
 							hotkey.CharacterID,
 							hotkey.Type,
 							hotkey.Slot,
@@ -94,8 +103,12 @@ namespace FishMMO.Database.Npgsql.Services
 							.AsNoTracking()
 							.FirstOrDefaultAsync(ct).ConfigureAwait(false);
 
-				var existingHotkey = RequireEntityExists(result, "CharacterHotkey", $"{hotkey.CharacterID}:{hotkey.Slot}");
-				return existingHotkey.ID;
+					if (result == null)
+					{
+						throw new DatabaseEntityNotFoundException("Character", hotkey.CharacterID.ToString());
+					}
+
+					return result.ID;
 				},
 				"SaveHotkey",
 				cancellationToken).ConfigureAwait(false);
@@ -116,22 +129,31 @@ namespace FishMMO.Database.Npgsql.Services
 			var slots = hotkeyList.Select(h => h.Slot).ToArray();
 			var referenceIds = hotkeyList.Select(h => h.ReferenceID).ToArray();
 
-			var result = await ExecuteRawSqlAsync(
-				$@"INSERT INTO {TableName} (character_id, type, slot, reference_id)
-					SELECT * FROM UNNEST(
+			var result = await ExecuteAsync(async (dbContext, ct) =>
+			{
+				var charactersTableName = dbContext.GetTableName<CharacterEntity>();
+				return await dbContext.Database.ExecuteSqlRawAsync(
+					$@"WITH active_characters AS (
+						SELECT id
+						FROM {charactersTableName}
+						WHERE id = ANY({{0}}::bigint[]) AND deleted = FALSE
+						FOR KEY SHARE
+					)
+					INSERT INTO {TableName} (character_id, type, slot, reference_id, time_created)
+					SELECT u.character_id, u.type, u.slot, u.reference_id, CURRENT_TIMESTAMP
+					FROM UNNEST(
 						{{0}}::bigint[],
 						{{1}}::smallint[],
 						{{2}}::int[],
 						{{3}}::bigint[]
-					)
+					) AS u(character_id, type, slot, reference_id)
+					JOIN active_characters ac ON ac.id = u.character_id
 					ON CONFLICT (character_id, slot) DO UPDATE SET
 						type = EXCLUDED.type,
 						reference_id = EXCLUDED.reference_id",
-				"SaveHotkeys",
-				new object[] { characterIds, types, slots, referenceIds },
-				entityName: "CharacterHotkey",
-				requireRowsAffected: false,
-				cancellationToken: cancellationToken).ConfigureAwait(false);
+					new object[] { characterIds, types, slots, referenceIds },
+					ct);
+			}, "SaveHotkeys", cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}

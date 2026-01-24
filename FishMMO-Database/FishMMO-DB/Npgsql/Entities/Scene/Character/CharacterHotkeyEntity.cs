@@ -1,3 +1,4 @@
+using System;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace FishMMO.Database.Npgsql.Entities
@@ -11,5 +12,8 @@ namespace FishMMO.Database.Npgsql.Entities
 		public byte Type { get; set; }
 		public int Slot { get; set; }
 		public long ReferenceID { get; set; }
+		public DateTime TimeCreated { get; set; }
+		public bool Deleted { get; set; }
+		public DateTime? TimeDeleted { get; set; }
 	}
 }

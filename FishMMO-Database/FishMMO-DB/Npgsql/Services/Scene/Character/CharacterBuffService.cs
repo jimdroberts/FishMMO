@@ -66,25 +66,33 @@ namespace FishMMO.Database.Npgsql.Services
 			var tickTimes = buffList.Select(b => b.TickTime).ToArray();
 			var stacks = buffList.Select(b => b.Stacks).ToArray();
 
-			// Single bulk UPSERT using UNNEST - atomic operation, no transaction needed
-			var result = await ExecuteRawSqlAsync(
-				$@"INSERT INTO {TableName} (character_id, template_id, remaining_time, tick_time, stacks)
-				SELECT * FROM UNNEST(
-					{{0}}::bigint[],
-					{{1}}::int[],
-					{{2}}::float4[],
-					{{3}}::float4[],
-					{{4}}::int[]
-				)
-				ON CONFLICT (character_id, template_id) DO UPDATE SET
-					remaining_time = EXCLUDED.remaining_time,
-					tick_time = EXCLUDED.tick_time,
-					stacks = EXCLUDED.stacks",
-				"SaveBuffs",
-				new object[] { characterIds, templateIds, remainingTimes, tickTimes, stacks },
-				entityName: "CharacterBuff",
-				requireRowsAffected: false,
-				cancellationToken: cancellationToken);
+			var result = await ExecuteAsync(async (dbContext, ct) =>
+			{
+				var charactersTableName = dbContext.GetTableName<CharacterEntity>();
+				return await dbContext.Database.ExecuteSqlRawAsync(
+					$@"WITH active_characters AS (
+						SELECT id
+						FROM {charactersTableName}
+						WHERE id = ANY({{0}}::bigint[]) AND deleted = FALSE
+						FOR KEY SHARE
+					)
+					INSERT INTO {TableName} (character_id, template_id, remaining_time, tick_time, stacks, time_created)
+					SELECT u.character_id, u.template_id, u.remaining_time, u.tick_time, u.stacks, CURRENT_TIMESTAMP
+					FROM UNNEST(
+						{{0}}::bigint[],
+						{{1}}::int[],
+						{{2}}::float4[],
+						{{3}}::float4[],
+						{{4}}::int[]
+					) AS u(character_id, template_id, remaining_time, tick_time, stacks)
+					JOIN active_characters ac ON ac.id = u.character_id
+					ON CONFLICT (character_id, template_id) DO UPDATE SET
+						remaining_time = EXCLUDED.remaining_time,
+						tick_time = EXCLUDED.tick_time,
+						stacks = EXCLUDED.stacks",
+					new object[] { characterIds, templateIds, remainingTimes, tickTimes, stacks },
+					ct);
+			}, "SaveBuffs", cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}

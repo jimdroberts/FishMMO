@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
+﻿using System;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace FishMMO.Database.Npgsql.Entities
 {
@@ -10,5 +11,8 @@ namespace FishMMO.Database.Npgsql.Entities
 		public CharacterEntity Character { get; set; }
 		public int TemplateID { get; set; }
 		public int Value { get; set; }
+		public DateTime TimeCreated { get; set; }
+		public bool Deleted { get; set; }
+		public DateTime? TimeDeleted { get; set; }
 	}
 }

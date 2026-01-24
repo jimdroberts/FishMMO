@@ -13,7 +13,7 @@ namespace FishMMO.Database.Npgsql.Entities
 		public string Response { get; set; }
 		public string ErrorCode { get; set; }
 		public string ErrorMessage { get; set; }
-		public DateTime CreatedAt { get; set; }
+		public DateTime TimeCreated { get; set; }
 		public DateTime? CompletedAt { get; set; }
 	}
 }

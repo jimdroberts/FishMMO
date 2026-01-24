@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using FishMMO.Database.Data;
+using FishMMO.Database.Exceptions;
 using FishMMO.Database.Npgsql.Entities;
 
 namespace FishMMO.Database.Npgsql.Services
@@ -65,19 +66,27 @@ namespace FishMMO.Database.Npgsql.Services
 			return await ExecuteAsync<long>(
 				async (dbContext, ct) =>
 				{
+					var charactersTableName = dbContext.GetTableName<CharacterEntity>();
 					// Use PostgreSQL UPSERT for atomic insert-or-update
 					var result = await dbContext.CharacterInventoryItems
 						.FromSqlRaw($@"
+						WITH active_character AS (
+							SELECT id
+							FROM {charactersTableName}
+							WHERE id = {{0}} AND deleted = FALSE
+							FOR KEY SHARE
+						)
 						INSERT INTO {TableName} 
-							(character_id, template_id, slot, seed, amount)
-						VALUES 
-							({{0}}, {{1}}, {{2}}, {{3}}, {{4}})
+							(character_id, template_id, slot, seed, amount, time_created)
+						SELECT
+							{{0}}, {{1}}, {{2}}, {{3}}, {{4}}, CURRENT_TIMESTAMP
+						FROM active_character
 						ON CONFLICT (character_id, slot) 
 						DO UPDATE SET 
 							template_id = EXCLUDED.template_id,
 							seed = EXCLUDED.seed,
 							amount = EXCLUDED.amount
-						RETURNING id, character_id, template_id, slot, seed, amount",
+						RETURNING id, character_id, template_id, slot, seed, amount, time_created",
 						item.CharacterID,
 						item.TemplateID,
 						item.Slot,
@@ -86,8 +95,12 @@ namespace FishMMO.Database.Npgsql.Services
 						.AsNoTracking()
 						.FirstOrDefaultAsync(ct).ConfigureAwait(false);
 
-				var existingItem = RequireEntityExists(result, "CharacterInventoryItem", $"{item.CharacterID}:{item.Slot}");
-				return existingItem.ID;
+					if (result == null)
+					{
+						throw new DatabaseEntityNotFoundException("Character", item.CharacterID.ToString());
+					}
+
+					return result.ID;
 				},
 				"SaveInventoryItem",
 				cancellationToken).ConfigureAwait(false);
@@ -109,24 +122,33 @@ namespace FishMMO.Database.Npgsql.Services
 			var seeds = itemList.Select(i => i.Seed).ToArray();
 			var amounts = itemList.Select(i => (int)i.Amount).ToArray();
 
-			var result = await ExecuteRawSqlAsync(
-				$@"INSERT INTO {TableName} (character_id, template_id, slot, seed, amount)
-					SELECT * FROM UNNEST(
+			var result = await ExecuteAsync(async (dbContext, ct) =>
+			{
+				var charactersTableName = dbContext.GetTableName<CharacterEntity>();
+				return await dbContext.Database.ExecuteSqlRawAsync(
+					$@"WITH active_characters AS (
+						SELECT id
+						FROM {charactersTableName}
+						WHERE id = ANY({{0}}::bigint[]) AND deleted = FALSE
+						FOR KEY SHARE
+					)
+					INSERT INTO {TableName} (character_id, template_id, slot, seed, amount, time_created)
+					SELECT u.character_id, u.template_id, u.slot, u.seed, u.amount, CURRENT_TIMESTAMP
+					FROM UNNEST(
 						{{0}}::bigint[],
 						{{1}}::int[],
 						{{2}}::int[],
 						{{3}}::int[],
 						{{4}}::int[]
-					)
+					) AS u(character_id, template_id, slot, seed, amount)
+					JOIN active_characters ac ON ac.id = u.character_id
 					ON CONFLICT (character_id, slot) DO UPDATE SET
 						template_id = EXCLUDED.template_id,
 						seed = EXCLUDED.seed,
 						amount = EXCLUDED.amount",
-				"SaveInventoryItems",
-				new object[] { characterIds, templateIds, slots, seeds, amounts },
-				entityName: "CharacterInventory",
-				requireRowsAffected: false,
-				cancellationToken: cancellationToken).ConfigureAwait(false);
+					new object[] { characterIds, templateIds, slots, seeds, amounts },
+					ct);
+			}, "SaveInventoryItems", cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}

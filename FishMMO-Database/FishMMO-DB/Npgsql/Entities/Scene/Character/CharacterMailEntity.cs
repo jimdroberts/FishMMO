@@ -15,5 +15,7 @@ namespace FishMMO.Database.Npgsql.Entities
 		public int ItemAttachmentSeed { get; set; }
 		public uint ItemAttachmentAmount { get; set; }
 		public DateTime TimeCreated { get; set; }
+		public bool Deleted { get; set; }
+		public DateTime? TimeDeleted { get; set; }
 	}
 }

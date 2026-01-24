@@ -69,5 +69,8 @@ namespace FishMMO.Database.Npgsql.Entities
 		public CharacterPetEntity Pet { get; set; }
 		public ICollection<CharacterQuestEntity> Quests { get; set; }
 		public ICollection<CharacterSkillEntity> Skills { get; set; }
+
+		public bool Deleted { get; set; }
+		public DateTime? TimeDeleted { get; set; }
 	}
 }

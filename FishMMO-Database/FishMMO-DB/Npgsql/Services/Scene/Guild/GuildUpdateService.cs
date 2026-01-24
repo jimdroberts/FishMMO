@@ -32,8 +32,8 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 
 			var result = await ExecuteRawSqlAsync(
-				$@"INSERT INTO {TableName} (guild_id, last_update) 
-					VALUES ({{0}}, CURRENT_TIMESTAMP) 
+				$@"INSERT INTO {TableName} (guild_id, time_created, last_update) 
+					VALUES ({{0}}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) 
 					ON CONFLICT (guild_id) 
 					DO UPDATE SET last_update = GREATEST({TableName}.last_update, EXCLUDED.last_update)",
 				"SaveGuildUpdate",

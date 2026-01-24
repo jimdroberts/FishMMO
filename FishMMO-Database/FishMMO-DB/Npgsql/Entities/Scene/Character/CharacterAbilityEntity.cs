@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace FishMMO.Database.Npgsql.Entities
@@ -12,5 +13,8 @@ namespace FishMMO.Database.Npgsql.Entities
 		public int TemplateID { get; set; }
 		public List<int> AbilityEvents { get; set; }
 		public float Cooldown { get; set; }
+		public DateTime TimeCreated { get; set; }
+		public bool Deleted { get; set; }
+		public DateTime? TimeDeleted { get; set; }
 	}
 }

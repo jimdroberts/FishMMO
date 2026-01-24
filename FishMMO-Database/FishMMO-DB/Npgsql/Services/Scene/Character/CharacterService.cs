@@ -93,14 +93,12 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteAsync<CharacterOperationResult>(async (dbContext, ct) =>
 			{
-				var nameLower = characterData.Name.ToLower();
-
 				// Use CURRENT_TIMESTAMP from database server for consistency
 				// Optimized: RETURNING only id for better performance and reduced memory overhead
 				var result = await dbContext.Characters
 					.FromSqlRaw($@"
 					INSERT INTO {TableName} 
-						(name, name_lowercase, account, selected, world_server_id, scene_name, scene_handle, 
+						(name, account, selected, world_server_id, scene_name, scene_handle, 
 						 bind_scene, bind_x, bind_y, bind_z, instance_id, instance_x, instance_y, instance_z, 
 						 instance_rot_x, instance_rot_y, instance_rot_z, instance_rot_w, race_id, model_index, 
 						 x, y, z, rot_x, rot_y, rot_z, rot_w, access_level, online, flags, 
@@ -108,17 +106,16 @@ namespace FishMMO.Database.Npgsql.Services
 					VALUES 
 						({{0}}, {{1}}, {{2}}, {{3}}, 
 						 {{4}}, {{5}}, {{6}}, 
-						 {{7}}, {{8}}, {{9}}, {{10}}, 
-						 {{11}}, {{12}}, {{13}}, {{14}}, 
-						 {{15}}, {{16}}, {{17}}, {{18}}, 
-						 {{19}}, {{20}}, 
-						 {{21}}, {{22}}, {{23}}, 
-						 {{24}}, {{25}}, {{26}}, {{27}}, 
-						 {{28}}, {{29}}, {{30}}, 
+						 {{7}}, {{8}}, {{9}}, 
+						 {{10}}, {{11}}, {{12}}, {{13}}, 
+						 {{14}}, {{15}}, {{16}}, {{17}}, 
+						 {{18}}, {{19}}, 
+						 {{20}}, {{21}}, {{22}}, 
+						 {{23}}, {{24}}, {{25}}, {{26}}, 
+						 {{27}}, {{28}}, {{29}}, 
 						 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 					RETURNING id",
 					characterData.Name,
-					nameLower,
 					characterData.Account,
 					characterData.Selected,
 					characterData.WorldServerID,
@@ -166,47 +163,44 @@ namespace FishMMO.Database.Npgsql.Services
 
 			// Use optimistic concurrency control to prevent lost updates from concurrent saves
 			// Check last_saved timestamp to ensure character hasn't been modified by another server
-			var nameLowercase = characterData.Name.ToLower();
 			var result = await ExecuteRawSqlAsync(
 				$@"UPDATE {TableName} 
 				   SET name = {{0}},
-				       name_lowercase = {{1}},
-				       account = {{2}},
-				       selected = {{3}},
-				       world_server_id = {{4}},
-				       scene_name = {{5}},
-				       scene_handle = {{6}},
-				       bind_scene = {{7}},
-				       bind_x = {{8}},
-				       bind_y = {{9}},
-				       bind_z = {{10}},
-				       instance_id = {{11}},
-				       instance_x = {{12}},
-				       instance_y = {{13}},
-				       instance_z = {{14}},
-				       instance_rot_x = {{15}},
-				       instance_rot_y = {{16}},
-				       instance_rot_z = {{17}},
-				       instance_rot_w = {{18}},
-				       race_id = {{19}},
-				       model_index = {{20}},
-				       x = {{21}},
-				       y = {{22}},
-				       z = {{23}},
-				       rot_x = {{24}},
-				       rot_y = {{25}},
-				       rot_z = {{26}},
-				       rot_w = {{27}},
-				       access_level = {{28}},
-				       online = {{29}},
-				       flags = {{30}},
+				       account = {{1}},
+				       selected = {{2}},
+				       world_server_id = {{3}},
+				       scene_name = {{4}},
+				       scene_handle = {{5}},
+				       bind_scene = {{6}},
+				       bind_x = {{7}},
+				       bind_y = {{8}},
+				       bind_z = {{9}},
+				       instance_id = {{10}},
+				       instance_x = {{11}},
+				       instance_y = {{12}},
+				       instance_z = {{13}},
+				       instance_rot_x = {{14}},
+				       instance_rot_y = {{15}},
+				       instance_rot_z = {{16}},
+				       instance_rot_w = {{17}},
+				       race_id = {{18}},
+				       model_index = {{19}},
+				       x = {{20}},
+				       y = {{21}},
+				       z = {{22}},
+				       rot_x = {{23}},
+				       rot_y = {{24}},
+				       rot_z = {{25}},
+				       rot_w = {{26}},
+				       access_level = {{27}},
+				       online = {{28}},
+				       flags = {{29}},
 				       last_saved = CURRENT_TIMESTAMP 
-				   WHERE id = {{31}} AND last_saved = {{32}}",
+				   WHERE id = {{30}} AND last_saved = {{31}} AND deleted = FALSE",
 				"SaveCharacter",
 				new object[]
 				{
 					characterData.Name,
-					nameLowercase,
 					characterData.Account,
 					characterData.Selected,
 					characterData.WorldServerID,
@@ -285,22 +279,11 @@ namespace FishMMO.Database.Npgsql.Services
 
 		/// <inheritdoc/>
 		/// <remarks>
-		/// <para><b>Transaction Scope:</b></para>
-		/// This operation uses an explicit transaction to ensure atomicity across multiple tables.
-		/// When performing a hard delete, the following related data is automatically deleted via 
-		/// CASCADE constraints configured in entity relationships:
-		/// <list type="bullet">
-		/// <item>Character abilities (character_ability table)</item>
-		/// <item>Character attributes (character_attribute table)</item>
-		/// <item>Character equipment (character_equipment table)</item>
-		/// <item>Character inventory (character_inventory table)</item>
-		/// <item>Character guild membership (character_guild table)</item>
-		/// <item>Character party membership (character_party table)</item>
-		/// <item>Character mail (character_mail table)</item>
-		/// <item>Character quests (character_quest table)</item>
-		/// <item>Character pets (character_pet table)</item>
-		/// <item>Character buffs, hotkeys, skills, etc.</item>
-		/// </list>
+		/// <para><b>Soft Delete:</b></para>
+		/// This performs an atomic soft delete rather than removing data.
+		/// It renames the character (appending <c>_DELETED_{GUID}</c>) to free up the original name,
+		/// sets <c>deleted=true</c>, and applies a soft-cascade update to all character-owned tables.
+		/// Character guild/party memberships are hard-deleted (temporary state).
 		/// </remarks>
 		public async Task<DatabaseResult> DeleteCharacterAsync(long characterId, CancellationToken cancellationToken = default)
 		{
@@ -309,20 +292,81 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			// Hard delete: CASCADE constraints will automatically delete related data.
-			// Idempotent: if the character does not exist, return success.
-			var result = await ExecuteRawSqlAsync(
-				$@"DELETE FROM {TableName} WHERE id = {{0}}",
-				"DeleteCharacter",
-				new object[] { characterId },
-				entityName: "Character",
-				entityId: characterId,
-				requireRowsAffected: false,
-				cancellationToken: cancellationToken).ConfigureAwait(false);
+			var transactionResult = await ExecuteTransactionAsync(async (dbContext, transaction, ct) =>
+			{
+				// Lock the character row to prevent concurrent deletes/renames.
+				var character = await dbContext.Characters
+					.FromSqlRaw($@"SELECT * FROM {TableName} WHERE id = {{0}} FOR UPDATE", characterId)
+					.FirstOrDefaultAsync(ct).ConfigureAwait(false);
 
-			return result.IsSuccess
+				// Idempotent: not found or already deleted.
+				if (character == null || character.Deleted)
+					return true;
+
+				var guid = Guid.NewGuid().ToString("D");
+				var suffix = $"_DELETED_{guid}";
+				var deletedName = (character.Name ?? string.Empty) + suffix;
+
+				// Rename + mark deleted.
+				await dbContext.Database.ExecuteSqlRawAsync(
+					$@"UPDATE {TableName}
+						SET name = {{1}},
+							deleted = TRUE,
+							time_deleted = CURRENT_TIMESTAMP
+						WHERE id = {{0}} AND deleted = FALSE",
+					new object[] { characterId, deletedName },
+					ct).ConfigureAwait(false);
+
+				// Hard-delete temporary membership state.
+				var characterGuildsTable = dbContext.GetTableName<CharacterGuildEntity>();
+				await dbContext.Database.ExecuteSqlRawAsync(
+					$@"DELETE FROM {characterGuildsTable} WHERE character_id = {{0}}",
+					new object[] { characterId },
+					ct).ConfigureAwait(false);
+
+				var characterPartiesTable = dbContext.GetTableName<CharacterPartyEntity>();
+				await dbContext.Database.ExecuteSqlRawAsync(
+					$@"DELETE FROM {characterPartiesTable} WHERE character_id = {{0}}",
+					new object[] { characterId },
+					ct).ConfigureAwait(false);
+
+				// Soft-cascade all character-owned tables.
+				static Task SoftDeleteTableAsync(NpgsqlDbContext ctx, string tableName, long id, CancellationToken token)
+				{
+					return ctx.Database.ExecuteSqlRawAsync(
+						$@"UPDATE {tableName}
+							SET deleted = TRUE,
+								time_deleted = CURRENT_TIMESTAMP
+							WHERE character_id = {{0}} AND deleted = FALSE",
+						new object[] { id },
+						token);
+				}
+
+				await SoftDeleteTableAsync(dbContext, dbContext.GetTableName<CharacterAbilityEntity>(), characterId, ct).ConfigureAwait(false);
+				await SoftDeleteTableAsync(dbContext, dbContext.GetTableName<CharacterKnownAbilityEntity>(), characterId, ct).ConfigureAwait(false);
+				await SoftDeleteTableAsync(dbContext, dbContext.GetTableName<CharacterAttributeEntity>(), characterId, ct).ConfigureAwait(false);
+				await SoftDeleteTableAsync(dbContext, dbContext.GetTableName<CharacterAchievementEntity>(), characterId, ct).ConfigureAwait(false);
+				await SoftDeleteTableAsync(dbContext, dbContext.GetTableName<CharacterInventoryEntity>(), characterId, ct).ConfigureAwait(false);
+				await SoftDeleteTableAsync(dbContext, dbContext.GetTableName<CharacterEquipmentEntity>(), characterId, ct).ConfigureAwait(false);
+				await SoftDeleteTableAsync(dbContext, dbContext.GetTableName<CharacterBankEntity>(), characterId, ct).ConfigureAwait(false);
+				await SoftDeleteTableAsync(dbContext, dbContext.GetTableName<CharacterHotkeyEntity>(), characterId, ct).ConfigureAwait(false);
+				await SoftDeleteTableAsync(dbContext, dbContext.GetTableName<CharacterMailEntity>(), characterId, ct).ConfigureAwait(false);
+				await SoftDeleteTableAsync(dbContext, dbContext.GetTableName<CharacterItemCooldownEntity>(), characterId, ct).ConfigureAwait(false);
+				await SoftDeleteTableAsync(dbContext, dbContext.GetTableName<CharacterSkillEntity>(), characterId, ct).ConfigureAwait(false);
+				await SoftDeleteTableAsync(dbContext, dbContext.GetTableName<CharacterBuffEntity>(), characterId, ct).ConfigureAwait(false);
+				await SoftDeleteTableAsync(dbContext, dbContext.GetTableName<CharacterPetEntity>(), characterId, ct).ConfigureAwait(false);
+				await SoftDeleteTableAsync(dbContext, dbContext.GetTableName<CharacterPetAttributeEntity>(), characterId, ct).ConfigureAwait(false);
+				await SoftDeleteTableAsync(dbContext, dbContext.GetTableName<CharacterPetBuffEntity>(), characterId, ct).ConfigureAwait(false);
+				await SoftDeleteTableAsync(dbContext, dbContext.GetTableName<CharacterFactionEntity>(), characterId, ct).ConfigureAwait(false);
+				await SoftDeleteTableAsync(dbContext, dbContext.GetTableName<CharacterQuestEntity>(), characterId, ct).ConfigureAwait(false);
+				await SoftDeleteTableAsync(dbContext, dbContext.GetTableName<CharacterFriendEntity>(), characterId, ct).ConfigureAwait(false);
+
+				return true;
+			}, "SoftDeleteCharacter", cancellationToken).ConfigureAwait(false);
+
+			return transactionResult.IsSuccess
 				? DatabaseResult.Success()
-				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+				: DatabaseResult.Failure(transactionResult.ErrorCode, transactionResult.ErrorMessage, transactionResult.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -408,12 +452,12 @@ namespace FishMMO.Database.Npgsql.Services
 				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
 					$@"WITH locked_chars AS (
 					SELECT id FROM {TableName} 
-					WHERE account = {{0}}
+					WHERE account = {{0}} AND deleted = FALSE
 					FOR UPDATE
 					)
 					UPDATE {TableName} 
 					SET selected = (id = {{1}})
-					WHERE account = {{0}}
+					WHERE account = {{0}} AND deleted = FALSE
 					AND id IN (SELECT id FROM locked_chars)",
 					new object[] { account, characterId },
 					ct).ConfigureAwait(false);
@@ -448,7 +492,7 @@ namespace FishMMO.Database.Npgsql.Services
 				$@"UPDATE {TableName} 
 				SET online = {{0}}, 
 					last_saved = CURRENT_TIMESTAMP 
-				WHERE id = {{1}}",
+				WHERE id = {{1}} AND deleted = FALSE",
 				"SetOnlineStatus",
 				new object[] { online, characterId },
 				entityName: "Character",
@@ -472,7 +516,7 @@ namespace FishMMO.Database.Npgsql.Services
 				SET x = {{0}}, y = {{1}}, z = {{2}}, 
 					rot_x = {{3}}, rot_y = {{4}}, rot_z = {{5}}, rot_w = {{6}}, 
 					last_saved = CURRENT_TIMESTAMP 
-				WHERE id = {{7}}",
+				WHERE id = {{7}} AND deleted = FALSE",
 				"UpdatePosition",
 				new object[] { x, y, z, rotX, rotY, rotZ, rotW, characterId },
 				entityName: "Character",
@@ -496,7 +540,7 @@ namespace FishMMO.Database.Npgsql.Services
 				SET scene_name = {{0}}, 
 					scene_handle = {{1}}, 
 					last_saved = CURRENT_TIMESTAMP 
-				WHERE id = {{2}}",
+				WHERE id = {{2}} AND deleted = FALSE",
 				"UpdateScene",
 				new object[] { sceneName ?? string.Empty, sceneHandle, characterId },
 				entityName: "Character",

@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using FishMMO.Database.Data;
+using FishMMO.Database.Exceptions;
 using FishMMO.Database.Npgsql.Entities;
 
 namespace FishMMO.Database.Npgsql.Services
@@ -60,19 +61,27 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteAsync<long>(async (dbContext, ct) =>
 			{
+				var charactersTableName = dbContext.GetTableName<CharacterEntity>();
 				// Use PostgreSQL UPSERT for atomic insert-or-update
 				var result = await dbContext.CharacterEquippedItems
 					.FromSqlRaw($@"
+					WITH active_character AS (
+						SELECT id
+						FROM {charactersTableName}
+						WHERE id = {{0}} AND deleted = FALSE
+						FOR KEY SHARE
+					)
 					INSERT INTO {TableName}
-						(character_id, template_id, slot, seed, amount)
-					VALUES 
-						({{0}}, {{1}}, {{2}}, {{3}}, {{4}})
+						(character_id, template_id, slot, seed, amount, time_created)
+					SELECT
+						{{0}}, {{1}}, {{2}}, {{3}}, {{4}}, CURRENT_TIMESTAMP
+					FROM active_character
 					ON CONFLICT (character_id, slot) 
 					DO UPDATE SET 
 						template_id = EXCLUDED.template_id,
 						seed = EXCLUDED.seed,
 						amount = EXCLUDED.amount
-					RETURNING id, character_id, template_id, slot, seed, amount",
+					RETURNING id, character_id, template_id, slot, seed, amount, time_created",
 					equipment.CharacterID,
 					equipment.TemplateID,
 					equipment.Slot,
@@ -80,8 +89,13 @@ namespace FishMMO.Database.Npgsql.Services
 					equipment.Amount)
 					.AsNoTracking()
 					.FirstOrDefaultAsync(ct);
-				var existingEquipment = RequireEntityExists(result, "CharacterEquipment", $"{equipment.CharacterID}:{equipment.Slot}");
-				return existingEquipment.ID;
+
+				if (result == null)
+				{
+					throw new DatabaseEntityNotFoundException("Character", equipment.CharacterID.ToString());
+				}
+
+				return result.ID;
 			}, "SaveEquipment", cancellationToken);
 		}
 
@@ -103,27 +117,37 @@ namespace FishMMO.Database.Npgsql.Services
 			var seeds = equipmentList.Select(e => e.Seed).ToArray();
 			var amounts = equipmentList.Select(e => (int)e.Amount).ToArray();
 
-			// Single bulk UPSERT using UNNEST - atomic operation, no transaction needed
-			var result = await ExecuteRawSqlAsync(
-				$@"INSERT INTO {TableName} (character_id, template_id, slot, seed, amount)
-				SELECT * FROM UNNEST(
-					{{0}}::bigint[],
-					{{1}}::int[],
-					{{2}}::int[],
-					{{3}}::int[],
-					{{4}}::int[]
-				)
-				ON CONFLICT (character_id, slot) DO UPDATE SET
-					template_id = EXCLUDED.template_id,
-					seed = EXCLUDED.seed,
-					amount = EXCLUDED.amount",
-				"SaveEquipmentMultiple",
-				new object[] { characterIds, templateIds, slots, seeds, amounts },
-				entityName: "CharacterEquipment",
-				requireRowsAffected: false,
-				cancellationToken: cancellationToken);
+			var result = await ExecuteAsync(async (dbContext, ct) =>
+			{
+				var charactersTableName = dbContext.GetTableName<CharacterEntity>();
+				return await dbContext.Database.ExecuteSqlRawAsync(
+					$@"WITH active_characters AS (
+						SELECT id
+						FROM {charactersTableName}
+						WHERE id = ANY({{0}}::bigint[]) AND deleted = FALSE
+						FOR KEY SHARE
+					)
+					INSERT INTO {TableName} (character_id, template_id, slot, seed, amount, time_created)
+					SELECT u.character_id, u.template_id, u.slot, u.seed, u.amount, CURRENT_TIMESTAMP
+					FROM UNNEST(
+						{{0}}::bigint[],
+						{{1}}::int[],
+						{{2}}::int[],
+						{{3}}::int[],
+						{{4}}::int[]
+					) AS u(character_id, template_id, slot, seed, amount)
+					JOIN active_characters ac ON ac.id = u.character_id
+					ON CONFLICT (character_id, slot) DO UPDATE SET
+						template_id = EXCLUDED.template_id,
+						seed = EXCLUDED.seed,
+						amount = EXCLUDED.amount",
+					new object[] { characterIds, templateIds, slots, seeds, amounts },
+					ct);
+			}, "SaveEquipmentMultiple", cancellationToken).ConfigureAwait(false);
 
-			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result.IsSuccess
+				? DatabaseResult.Success()
+				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>

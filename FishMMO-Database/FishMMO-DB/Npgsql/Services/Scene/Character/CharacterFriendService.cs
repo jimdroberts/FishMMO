@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using FishMMO.Database.Data;
+using FishMMO.Database.Exceptions;
 using FishMMO.Database.Npgsql.Entities;
 
 namespace FishMMO.Database.Npgsql.Services
@@ -72,16 +73,23 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID or friend character ID. Both must be greater than 0.");
 			}
 
-			var result = await ExecuteRawSqlAsync(
-				$@"INSERT INTO {TableName} (character_id, friend_character_id)
-			   VALUES ({{0}}, {{1}})
-			   ON CONFLICT (character_id, friend_character_id) DO NOTHING",
-				"SaveFriend",
-				new object[] { characterId, friendCharacterId },
-				entityName: "CharacterFriend",
-				entityId: characterId,
-				requireRowsAffected: false,
-				cancellationToken: cancellationToken);
+			var result = await ExecuteAsync(async (dbContext, ct) =>
+			{
+				var charactersTableName = dbContext.GetTableName<CharacterEntity>();
+				return await dbContext.Database.ExecuteSqlRawAsync(
+					$@"WITH active_character AS (
+						SELECT id
+						FROM {charactersTableName}
+						WHERE id = {{0}} AND deleted = FALSE
+						FOR KEY SHARE
+					)
+					INSERT INTO {TableName} (character_id, friend_character_id, time_created)
+					SELECT {{0}}, {{1}}, CURRENT_TIMESTAMP
+					FROM active_character
+					ON CONFLICT (character_id, friend_character_id) DO NOTHING",
+					new object[] { characterId, friendCharacterId },
+					ct);
+			}, "SaveFriend", cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}

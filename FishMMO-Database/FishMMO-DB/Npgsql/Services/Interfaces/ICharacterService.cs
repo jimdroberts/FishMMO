@@ -80,7 +80,7 @@ namespace FishMMO.Database.Npgsql.Services
 		Task<DatabaseResult> SaveCharacterAsync(CharacterData characterData, CancellationToken cancellationToken = default);
 
 		/// <summary>
-		/// Deletes a character from the database.
+		/// Soft-deletes a character.
 		/// </summary>
 		/// <param name="characterId">The character ID to delete.</param>
 		/// <param name="cancellationToken">Token to cancel the operation.</param>
@@ -88,8 +88,11 @@ namespace FishMMO.Database.Npgsql.Services
 		/// A <see cref="DatabaseResult"/> indicating success or containing a <see cref="DatabaseException"/> on failure.
 		/// </returns>
 		/// <remarks>
-		/// Removes the character record entirely from the database.
-		/// If the character does not exist, this method returns success (idempotent delete).
+		/// Marks the character and all character-owned rows as deleted (soft cascade), without removing data.
+		/// To allow reusing the character name, the character is renamed by appending <c>_DELETED_{GUID}</c>
+		/// to both <c>Name</c> and <c>NameLowercase</c>.
+		/// Character guild/party membership rows are hard-deleted (temporary state).
+		/// If the character does not exist (or is already deleted), this method returns success (idempotent).
 		/// Execution strategy wrapping ensures transient database failures are automatically retried.
 		/// </remarks>
 		Task<DatabaseResult> DeleteCharacterAsync(long characterId, CancellationToken cancellationToken = default);

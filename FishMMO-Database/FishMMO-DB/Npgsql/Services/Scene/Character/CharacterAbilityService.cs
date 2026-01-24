@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using FishMMO.Database.Data;
+using FishMMO.Database.Exceptions;
 using FishMMO.Database.Npgsql.Entities;
 
 namespace FishMMO.Database.Npgsql.Services
@@ -74,18 +75,26 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteAsync(async (dbContext, ct) =>
 			{
+				var charactersTableName = dbContext.GetTableName<CharacterEntity>();
 				// Use atomic UPSERT with RETURNING for thread safety and proper retry strategy support
 				var events = abilityData.AbilityEvents ?? new List<int>();
 
 				var result = await dbContext.CharacterAbilities
 					.FromSqlRaw($@"
-						INSERT INTO {TableName} (character_id, template_id, ability_events, cooldown)
-						VALUES ({{0}}, {{1}}, {{2}}, {{3}})
+						WITH active_character AS (
+							SELECT id
+							FROM {charactersTableName}
+							WHERE id = {{0}} AND deleted = FALSE
+							FOR KEY SHARE
+						)
+						INSERT INTO {TableName} (character_id, template_id, ability_events, cooldown, time_created)
+						SELECT {{0}}, {{1}}, {{2}}, {{3}}, CURRENT_TIMESTAMP
+						FROM active_character
 						ON CONFLICT (character_id, template_id)
 						DO UPDATE SET
 							ability_events = EXCLUDED.ability_events,
 							cooldown = EXCLUDED.cooldown
-						RETURNING id, character_id, template_id, ability_events, cooldown",
+						RETURNING id, character_id, template_id, ability_events, cooldown, time_created",
 						abilityData.CharacterID,
 						abilityData.TemplateID,
 						events.ToArray(),
@@ -93,7 +102,12 @@ namespace FishMMO.Database.Npgsql.Services
 					.AsNoTracking()
 								.FirstOrDefaultAsync(ct).ConfigureAwait(false);
 
-				return result?.ID ?? 0;
+				if (result == null)
+				{
+					throw new DatabaseEntityNotFoundException("Character", abilityData.CharacterID.ToString());
+				}
+
+				return result.ID;
 			}, "SaveCharacterAbility", cancellationToken).ConfigureAwait(false);
 		}
 
@@ -114,6 +128,7 @@ namespace FishMMO.Database.Npgsql.Services
 			// Wrap both operations in transaction for atomicity
 			var transactionResult = await ExecuteTransactionAsync(async (dbContext, transaction, ct) =>
 			{
+				var charactersTableName = dbContext.GetTableName<CharacterEntity>();
 				// Handle new abilities with atomic INSERT using ON CONFLICT
 				if (newItems.Any())
 				{
@@ -124,13 +139,21 @@ namespace FishMMO.Database.Npgsql.Services
 
 					// Atomic UPSERT for new items - uses unique constraint (character_id, template_id)
 					await dbContext.Database.ExecuteSqlRawAsync(
-						$@"INSERT INTO {TableName} (character_id, template_id, ability_events, cooldown)
-						SELECT * FROM UNNEST(
+						$@"WITH active_characters AS (
+							SELECT id
+							FROM {charactersTableName}
+							WHERE id = ANY({{0}}::bigint[]) AND deleted = FALSE
+							FOR KEY SHARE
+						)
+						INSERT INTO {TableName} (character_id, template_id, ability_events, cooldown, time_created)
+						SELECT u.character_id, u.template_id, u.ability_events, u.cooldown, CURRENT_TIMESTAMP
+						FROM UNNEST(
 							{{0}}::bigint[],
 							{{1}}::int[],
 							{{2}}::int[][],
 							{{3}}::float4[]
-						)
+						) AS u(character_id, template_id, ability_events, cooldown)
+						JOIN active_characters ac ON ac.id = u.character_id
 						ON CONFLICT (character_id, template_id)
 						DO UPDATE SET
 						ability_events = EXCLUDED.ability_events,
@@ -151,7 +174,13 @@ namespace FishMMO.Database.Npgsql.Services
 					// Atomic bulk UPDATE by ID - preserves ID-based update semantics
 					// Allows changing template_id if needed
 					await dbContext.Database.ExecuteSqlRawAsync(
-						$@"UPDATE {TableName} AS target
+						$@"WITH active_characters AS (
+							SELECT id
+							FROM {charactersTableName}
+							WHERE id = ANY({{1}}::bigint[]) AND deleted = FALSE
+							FOR KEY SHARE
+						)
+						UPDATE {TableName} AS target
 						SET character_id = source.char_id,
 							template_id = source.t_id,
 							ability_events = source.evs,
@@ -163,7 +192,8 @@ namespace FishMMO.Database.Npgsql.Services
 							{{3}}::int[][],
 							{{4}}::float4[]
 						) AS source(id, char_id, t_id, evs, cd)
-						WHERE target.id = source.id",
+						WHERE target.id = source.id
+						AND EXISTS (SELECT 1 FROM active_characters ac WHERE ac.id = source.char_id)",
 						new object[] { ids, characterIds, templateIds, eventArrays, cooldowns },
 						ct).ConfigureAwait(false);
 				}

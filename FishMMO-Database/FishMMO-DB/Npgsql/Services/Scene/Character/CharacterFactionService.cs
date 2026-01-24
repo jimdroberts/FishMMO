@@ -69,21 +69,29 @@ namespace FishMMO.Database.Npgsql.Services
 			var templateIds = factionList.Select(f => f.TemplateID).ToArray();
 			var values = factionList.Select(f => f.Value).ToArray();
 
-			// Single bulk UPSERT using UNNEST - atomic operation, no transaction needed
-			var result = await ExecuteRawSqlAsync(
-				$@"INSERT INTO {TableName} (character_id, template_id, value)
-				SELECT * FROM UNNEST(
-					{{0}}::bigint[],
-					{{1}}::int[],
-					{{2}}::int[]
-				)
-				ON CONFLICT (character_id, template_id) DO UPDATE SET
-					value = EXCLUDED.value",
-				"SaveFactions",
-				new object[] { characterIds, templateIds, values },
-				entityName: "CharacterFaction",
-				requireRowsAffected: false,
-				cancellationToken: cancellationToken);
+			var result = await ExecuteAsync(async (dbContext, ct) =>
+			{
+				var charactersTableName = dbContext.GetTableName<CharacterEntity>();
+				return await dbContext.Database.ExecuteSqlRawAsync(
+					$@"WITH active_characters AS (
+						SELECT id
+						FROM {charactersTableName}
+						WHERE id = ANY({{0}}::bigint[]) AND deleted = FALSE
+						FOR KEY SHARE
+					)
+					INSERT INTO {TableName} (character_id, template_id, value, time_created)
+					SELECT u.character_id, u.template_id, u.value, CURRENT_TIMESTAMP
+					FROM UNNEST(
+						{{0}}::bigint[],
+						{{1}}::int[],
+						{{2}}::int[]
+					) AS u(character_id, template_id, value)
+					JOIN active_characters ac ON ac.id = u.character_id
+					ON CONFLICT (character_id, template_id) DO UPDATE SET
+						value = EXCLUDED.value",
+					new object[] { characterIds, templateIds, values },
+					ct);
+			}, "SaveFactions", cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
