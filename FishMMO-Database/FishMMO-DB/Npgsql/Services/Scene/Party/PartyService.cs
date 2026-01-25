@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using FishMMO.Database.Data;
+using FishMMO.Database.Exceptions;
 using FishMMO.Database.Npgsql.Entities;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 
@@ -42,8 +43,14 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<long>> CreateAsync(Guid requestId, long accountId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<long>> CreateAsync(long accountId, CancellationToken cancellationToken = default)
 		{
+			if (accountId <= 0)
+			{
+				return DatabaseResult<long>.Failure("VALIDATION_ERROR", "Invalid account ID.");
+			}
+
+			var requestId = Guid.NewGuid();
 			return await ExecuteIdempotentAsync(
 				requestId,
 				accountId,
@@ -60,7 +67,18 @@ namespace FishMMO.Database.Npgsql.Services
 						.AsNoTracking()
 						.FirstOrDefaultAsync(ct).ConfigureAwait(false);
 
-				return result?.ID ?? 0;
+				var partyId = result?.ID ?? 0;
+				if (partyId <= 0)
+				{
+					throw new DatabaseQueryException(
+						"CreateParty",
+						"Failed to create party.",
+						"INSERT RETURNING returned no results",
+						false,
+						null);
+				}
+
+				return partyId;
 			},
 				cancellationToken).ConfigureAwait(false);
 		}

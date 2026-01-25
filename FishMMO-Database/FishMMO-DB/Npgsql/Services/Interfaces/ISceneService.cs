@@ -26,7 +26,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	/// </para>
 	/// <para>
 	/// DequeueAsync uses atomic FOR UPDATE SKIP LOCKED pattern to prevent race conditions during concurrent dequeuing.
-	/// EnqueueAsync relies on unique constraints to prevent duplicate scene loads.
+	/// EnqueueAsync is retry-idempotent (protects against EF Core execution-strategy retries after transient failures).
 	/// </para>
 	/// </remarks>
 	public interface ISceneService
@@ -44,7 +44,9 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// </returns>
 		/// <remarks>
 		/// Uses SaveChangesAsync with execution strategy wrapping to ensure transient database failures
-		/// are automatically retried. Returns constraint exception if scene is already enqueued (unique constraint violation).
+		/// are automatically retried.
+		/// Retry-idempotency: if a transient failure occurs after the INSERT committed, retries will return the same scene ID
+		/// instead of inserting a duplicate row.
 		/// </remarks>
 		Task<DatabaseResult<long>> EnqueueAsync(
 			long worldServerId,

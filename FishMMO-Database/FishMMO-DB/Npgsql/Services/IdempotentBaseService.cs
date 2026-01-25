@@ -154,6 +154,61 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <summary>
 		/// Unified protected entrypoint for executing idempotent operations.
 		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// This method provides request-scoped idempotency using the <c>processed_requests</c> table.
+		/// </para>
+		/// <para>
+		/// <b>Typical usage in this codebase:</b> the calling service method generates a new <paramref name="requestId"/>
+		/// once per API call, then passes it through the full execution pipeline.
+		/// If EF Core's execution strategy retries due to a transient failure, the same <paramref name="requestId"/> is
+		/// reused and the cached response prevents duplicate writes.
+		/// </para>
+		/// <para>
+		/// <b>Important:</b> this design assumes the server does not intentionally replay the same logical request across
+		/// separate API calls after failures. If that changes in the future (e.g., explicit client retries with the same
+		/// request semantics), a caller-stable idempotency key would be required.
+		/// </para>
+		/// <para>
+		/// <b>Retry semantics:</b> The underlying execution pipeline uses EF Core's execution strategy
+		/// (<see cref="Microsoft.EntityFrameworkCore.Storage.IExecutionStrategy"/>) which may retry the operation delegate
+		/// on transient failures (e.g., deadlocks, serialization failures, or connection interruptions).
+		/// For this reason, the <paramref name="operation"/> delegate must be safe to invoke more than once.
+		/// </para>
+		/// <para>
+		/// <b>Enforcement guidance:</b> The <paramref name="operation"/> delegate must be <b>database-only</b> and must not perform
+		/// side effects outside of PostgreSQL (e.g., network calls, message publishing, file I/O, or writes to other datastores).
+		/// This library intentionally keeps these services DB-only to preserve correctness under retries.
+		/// </para>
+		/// <para>
+		/// <b>How double execution is prevented:</b> The idempotency state is checked once before the business transaction
+		/// and then re-checked inside the transactional attempt. If a prior attempt already finalized the request,
+		/// the cached response is returned and the business operation body is not executed again.
+		/// </para>
+		/// <para>
+		/// <b>Execution flow (where retries/re-checks occur):</b>
+		/// <list type="number">
+		/// <item><description>
+		/// <b>Begin (non-transactional):</b> <c>ExecuteInternalAsync($"{operationName}.IdempotencyBegin", ...)</c>
+		/// creates/reads the <c>processed_requests</c> row and may be retried by the provider execution strategy.
+		/// </description></item>
+		/// <item><description>
+		/// <b>Fast-path:</b> If <c>processed_requests</c> already contains a completed response, this method returns it
+		/// immediately (no business transaction is started).
+		/// </description></item>
+		/// <item><description>
+		/// <b>Business transaction:</b> <c>ExecuteInternalAsync(operationName, ... useTransaction: true ...)</c>
+		/// runs the business operation and finalizes the cached response in the same transaction.
+		/// This entire block may be retried on transient failures.
+		/// </description></item>
+		/// <item><description>
+		/// <b>Transactional re-check:</b> At the start of each transactional attempt, the code calls
+		/// <c>TryBeginIdempotentRequestAsync(..., dbTransaction: transaction)</c> again. If a previous attempt already
+		/// finalized the request, the cached response is returned and <paramref name="operation"/> is not invoked.
+		/// </description></item>
+		/// </list>
+		/// </para>
+		/// </remarks>
 		protected async Task<DatabaseResult<TResult>> ExecuteIdempotentAsync<TResult>(
 			Guid requestId,
 			long accountId,
@@ -189,6 +244,8 @@ namespace FishMMO.Database.Npgsql.Services
 
 			// Acquire or read idempotency state in a durable, non-transactional step.
 			// This must not be rolled back by the business operation transaction.
+			// NOTE: ExecuteInternalAsync uses EF Core's execution strategy. This begin step may be invoked multiple
+			// times under transient retries, but it is safe because it only inserts/reads the idempotency row.
 			var beginResult = await ExecuteInternalAsync(
 				$"{operationName}.IdempotencyBegin",
 				async (dbContext, _, ct) =>
@@ -252,6 +309,9 @@ namespace FishMMO.Database.Npgsql.Services
 			var beginState = beginResult.Data;
 			if (!beginState.DidInsert)
 			{
+				// Fast-path: the request row already existed. If it already contains a cached response (success or failure),
+				// return it immediately. This prevents starting the business transaction and guarantees idempotent behavior
+				// for duplicate caller retries.
 				if (TryGetCachedIdempotencyResponse<TResult>(beginState.Status, beginState.Response, beginState.ErrorCode, beginState.ErrorMessage, out var cached))
 				{
 					return cached;
@@ -260,13 +320,18 @@ namespace FishMMO.Database.Npgsql.Services
 
 			// Run the business operation and mark completion within the SAME transaction.
 			// This ensures we never commit side effects without also persisting the cached response.
+			// NOTE: ExecuteInternalAsync may retry this entire delegate on transient failures.
+			// The transactional re-check at the top of the delegate is what prevents double execution across retries
+			// when a prior attempt already committed.
 			return await ExecuteInternalAsync(
 				operationName,
 				async (dbContext, transaction, ct) =>
 				{
 					var requestsTable = dbContext.GetTableName<ProcessedRequestEntity>();
 
-					// Re-check state in the operation transaction so transient retries do not double-execute.
+					// Re-check state inside THIS transaction attempt.
+					// If a previous attempt already finalized the request (status/response set), we return the cached response
+					// and do NOT invoke the business operation delegate again.
 					var state = await TryBeginIdempotentRequestAsync(
 						dbContext,
 						transaction?.GetDbTransaction(),
@@ -284,6 +349,8 @@ namespace FishMMO.Database.Npgsql.Services
 						}
 					}
 
+					// At this point, this attempt owns the request in-progress state and is responsible for producing
+					// the authoritative cached response in processed_requests.
 					var data = await operation(dbContext, transaction!, ct).ConfigureAwait(false);
 					var responseJson = JsonSerializer.Serialize(
 						new IdempotencyEnvelope<TResult>
@@ -322,10 +389,13 @@ namespace FishMMO.Database.Npgsql.Services
 				{
 					if (willRetry)
 					{
+						// The execution strategy intends to retry. Avoid persisting a failure record for this attempt.
+						// A later successful retry should be able to finalize the request as success.
 						return;
 					}
 
 					// Best-effort: persist failure to enable deterministic retries.
+					// This hook is invoked after retries are exhausted (or for non-retryable errors).
 					var requestsTable = dbContext.GetTableName<ProcessedRequestEntity>();
 					var failureJson = JsonSerializer.Serialize(
 						new IdempotencyEnvelope<TResult>
@@ -473,18 +543,18 @@ namespace FishMMO.Database.Npgsql.Services
 									VALUES (@request_id, @account_id, @operation_name, 0, NULL, NULL, NULL, CURRENT_TIMESTAMP, NULL)
 									ON CONFLICT (request_id) DO NOTHING
 									RETURNING 1 AS inserted
-								)
-								SELECT
-									COALESCE((SELECT inserted FROM inserted), 0) AS inserted,
-									account_id,
-									operation_name,
-									status,
-									response,
-									error_code,
-									error_message
-								FROM {requestsTable}
-								WHERE request_id = @request_id
-								LIMIT 1;";
+									)
+									SELECT
+										COALESCE((SELECT inserted FROM inserted), 0) AS inserted,
+										account_id,
+										operation_name,
+										status,
+										response,
+										error_code,
+										error_message
+									FROM {requestsTable}
+									WHERE request_id = @request_id
+									LIMIT 1;";
 
 			AddParameter(command, "@request_id", requestId);
 			AddParameter(command, "@account_id", accountId);

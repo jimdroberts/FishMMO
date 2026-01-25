@@ -13,7 +13,7 @@ using FishMMO.Database.Npgsql.Services.Interfaces;
 namespace FishMMO.Database.Npgsql.Services
 {
 	/// <inheritdoc/>
-	public sealed class SceneService : BaseService<SceneEntity>, ISceneService
+	public sealed class SceneService : IdempotentBaseService<SceneEntity>, ISceneService
 	{
 		/// <summary>
 		/// Compiled query for retrieving character instance scene (hot path for scene loading).
@@ -84,14 +84,23 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<long>.Failure("VALIDATION_ERROR", "Invalid parameters: world server ID and scene name are required.");
 			}
 
-			return await ExecuteAsync<long>(async (dbContext, ct) =>
+			// Retry-safety: EF Core's execution strategy may re-invoke the delegate after a transient failure
+			// (deadlock/serialization/lock timeout). If a prior attempt already committed the INSERT but the client
+			// observed an exception, this idempotency key ensures we return the cached scene id instead of inserting again.
+			var requestId = Guid.NewGuid();
+
+			return await ExecuteIdempotentAsync<long>(
+				requestId,
+				accountId: worldServerId,
+				operationName: "EnqueueScene",
+				operation: async (dbContext, _, ct) =>
 			{
 				var sceneTypeInt = (int)sceneType;
 				var sceneStatusInt = (int)SceneStatus.Pending;
 				var sql = $@"INSERT INTO {TableName}
-					(world_server_id, scene_name, scene_type, scene_status, character_id, time_created)
-				VALUES ({{0}}, {{1}}, {{2}}, {{3}}, {{4}}, CURRENT_TIMESTAMP)
-				RETURNING id";
+							(world_server_id, scene_name, scene_type, scene_status, character_id, time_created)
+							VALUES ({{0}}, {{1}}, {{2}}, {{3}}, {{4}}, CURRENT_TIMESTAMP)
+							RETURNING id";
 
 				// Use CURRENT_TIMESTAMP from database server for consistency
 				// Optimized: RETURNING only id for better performance and reduced memory overhead
@@ -112,7 +121,8 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				return sceneId;
-			}, "EnqueueScene", cancellationToken).ConfigureAwait(false);
+			},
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -127,12 +137,12 @@ namespace FishMMO.Database.Npgsql.Services
 					ORDER BY time_created
 					FOR UPDATE SKIP LOCKED
 					LIMIT 1
-				)
-				UPDATE {TableName}
-				SET scene_status = {{1}}
-				FROM scene_to_update
-				WHERE {TableName}.id = scene_to_update.id
-				RETURNING {TableName}.id, {TableName}.world_server_id, {TableName}.scene_server_id, {TableName}.scene_name, {TableName}.scene_handle, {TableName}.scene_status, {TableName}.scene_type, {TableName}.character_id, {TableName}.character_count, {TableName}.time_created";
+					)
+					UPDATE {TableName}
+					SET scene_status = {{1}}
+					FROM scene_to_update
+					WHERE {TableName}.id = scene_to_update.id
+					RETURNING {TableName}.id, {TableName}.world_server_id, {TableName}.scene_server_id, {TableName}.scene_name, {TableName}.scene_handle, {TableName}.scene_status, {TableName}.scene_type, {TableName}.character_id, {TableName}.character_count, {TableName}.time_created";
 
 				var pendingStatus = (int)SceneStatus.Pending;
 				var loadingStatus = (int)SceneStatus.Loading;

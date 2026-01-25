@@ -12,8 +12,15 @@ using Microsoft.EntityFrameworkCore;
 namespace FishMMO.Database.Npgsql.Services
 {
 	/// <inheritdoc/>
-	public sealed class CharacterService : BaseService<CharacterEntity>, ICharacterService
+	public sealed class CharacterService : IdempotentBaseService<CharacterEntity>, ICharacterService
 	{
+		private enum SaveCharacterWriteOutcome
+		{
+			Success = 0,
+			NotFound = 1,
+			ConcurrencyConflict = 2,
+		}
+
 		/// <summary>
 		/// Compiled query for GetCharacterAsync hot path.
 		/// Pre-compiles the query expression tree for better performance on repeated executions.
@@ -93,10 +100,12 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteAsync<CharacterOperationResult>(async (dbContext, ct) =>
 			{
-				// Use CURRENT_TIMESTAMP from database server for consistency
-				// Optimized: RETURNING only id for better performance and reduced memory overhead
-				var result = await dbContext.Characters
-					.FromSqlRaw($@"
+				// Retry-safety: avoid raising a unique-constraint exception on name collisions so transient retries
+				// (after a successful first attempt commit) don't incorrectly fail.
+				//
+				// If the name already exists for ANOTHER account, we return NameAlreadyExists.
+				// If the name exists for the SAME account, treat as idempotent retry success.
+				var insertSql = $@"
 					INSERT INTO {TableName} 
 						(name, account, selected, world_server_id, scene_name, scene_handle, 
 						 bind_scene, bind_x, bind_y, bind_z, instance_id, instance_x, instance_y, instance_z, 
@@ -114,7 +123,13 @@ namespace FishMMO.Database.Npgsql.Services
 						 {{23}}, {{24}}, {{25}}, {{26}}, 
 						 {{27}}, {{28}}, {{29}}, 
 						 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-					RETURNING id",
+					ON CONFLICT (name_lowercase) DO NOTHING
+					RETURNING id";
+
+				// Optimized: RETURNING only id for better performance and reduced memory overhead.
+				var inserted = await dbContext.Characters
+					.FromSqlRaw(
+						insertSql,
 					characterData.Name,
 					characterData.Account,
 					characterData.Selected,
@@ -148,8 +163,23 @@ namespace FishMMO.Database.Npgsql.Services
 					.AsNoTracking()
 					.FirstOrDefaultAsync(ct).ConfigureAwait(false);
 
-				var characterId = result?.ID ?? 0;
-				return characterId > 0 ? CharacterOperationResult.CharacterCreated : CharacterOperationResult.DatabaseError;
+				var characterId = inserted?.ID ?? 0;
+				if (characterId > 0)
+				{
+					return CharacterOperationResult.CharacterCreated;
+				}
+
+				// Insert didn't happen (likely name collision). Determine whether it's a real conflict or an idempotent retry.
+				var nameLower = characterData.Name.Trim().ToLowerInvariant();
+				var existing = await GetCharacterByNameQuery(dbContext, nameLower, ct).ConfigureAwait(false);
+				if (existing == null)
+				{
+					return CharacterOperationResult.DatabaseError;
+				}
+
+				return string.Equals(existing.Account, characterData.Account, StringComparison.Ordinal)
+					? CharacterOperationResult.CharacterCreated
+					: CharacterOperationResult.NameAlreadyExists;
 			}, "CreateCharacter", cancellationToken).ConfigureAwait(false);
 		}
 
@@ -161,120 +191,126 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			// Use optimistic concurrency control to prevent lost updates from concurrent saves
-			// Check last_saved timestamp to ensure character hasn't been modified by another server
-			var result = await ExecuteRawSqlAsync(
-				$@"UPDATE {TableName} 
-				   SET name = {{0}},
-				       account = {{1}},
-				       selected = {{2}},
-				       world_server_id = {{3}},
-				       scene_name = {{4}},
-				       scene_handle = {{5}},
-				       bind_scene = {{6}},
-				       bind_x = {{7}},
-				       bind_y = {{8}},
-				       bind_z = {{9}},
-				       instance_id = {{10}},
-				       instance_x = {{11}},
-				       instance_y = {{12}},
-				       instance_z = {{13}},
-				       instance_rot_x = {{14}},
-				       instance_rot_y = {{15}},
-				       instance_rot_z = {{16}},
-				       instance_rot_w = {{17}},
-				       race_id = {{18}},
-				       model_index = {{19}},
-				       x = {{20}},
-				       y = {{21}},
-				       z = {{22}},
-				       rot_x = {{23}},
-				       rot_y = {{24}},
-				       rot_z = {{25}},
-				       rot_w = {{26}},
-				       access_level = {{27}},
-				       online = {{28}},
-				       flags = {{29}},
-				       last_saved = CURRENT_TIMESTAMP 
-				   WHERE id = {{30}} AND last_saved = {{31}} AND deleted = FALSE",
-				"SaveCharacter",
-				new object[]
+			// Retry-idempotent: EF Core execution strategy retries can re-run this UPDATE. If a transient error
+			// occurs after commit, a retry can observe rowsAffected == 0 due to the last_saved precondition.
+			// ExecuteIdempotentAsync ensures in-call retries return the cached outcome.
+			var requestId = Guid.NewGuid();
+			var idempotentResult = await ExecuteIdempotentAsync(
+				requestId,
+				accountId: characterData.ID,
+				operationName: "SaveCharacter",
+				operation: async (dbContext, transaction, ct) =>
 				{
-					characterData.Name,
-					characterData.Account,
-					characterData.Selected,
-					characterData.WorldServerID,
-					characterData.SceneName ?? string.Empty,
-					characterData.SceneHandle,
-					characterData.BindScene ?? string.Empty,
-					characterData.BindX,
-					characterData.BindY,
-					characterData.BindZ,
-					characterData.InstanceID,
-					characterData.InstanceX,
-					characterData.InstanceY,
-					characterData.InstanceZ,
-					characterData.InstanceRotX,
-					characterData.InstanceRotY,
-					characterData.InstanceRotZ,
-					characterData.InstanceRotW,
-					characterData.RaceID,
-					characterData.ModelIndex,
-					characterData.X,
-					characterData.Y,
-					characterData.Z,
-					characterData.RotX,
-					characterData.RotY,
-					characterData.RotZ,
-					characterData.RotW,
-					characterData.AccessLevel,
-					characterData.Online,
-					characterData.Flags,
-					characterData.ID,
-					characterData.LastSaved,
+					var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
+						$@"UPDATE {TableName} 
+						   SET name = {{0}},
+						       account = {{1}},
+						       selected = {{2}},
+						       world_server_id = {{3}},
+						       scene_name = {{4}},
+						       scene_handle = {{5}},
+						       bind_scene = {{6}},
+						       bind_x = {{7}},
+						       bind_y = {{8}},
+						       bind_z = {{9}},
+						       instance_id = {{10}},
+						       instance_x = {{11}},
+						       instance_y = {{12}},
+						       instance_z = {{13}},
+						       instance_rot_x = {{14}},
+						       instance_rot_y = {{15}},
+						       instance_rot_z = {{16}},
+						       instance_rot_w = {{17}},
+						       race_id = {{18}},
+						       model_index = {{19}},
+						       x = {{20}},
+						       y = {{21}},
+						       z = {{22}},
+						       rot_x = {{23}},
+						       rot_y = {{24}},
+						       rot_z = {{25}},
+						       rot_w = {{26}},
+						       access_level = {{27}},
+						       online = {{28}},
+						       flags = {{29}},
+						       last_saved = CURRENT_TIMESTAMP 
+						   WHERE id = {{30}} AND last_saved = {{31}} AND deleted = FALSE",
+						new object[]
+						{
+							characterData.Name,
+							characterData.Account,
+							characterData.Selected,
+							characterData.WorldServerID,
+							characterData.SceneName ?? string.Empty,
+							characterData.SceneHandle,
+							characterData.BindScene ?? string.Empty,
+							characterData.BindX,
+							characterData.BindY,
+							characterData.BindZ,
+							characterData.InstanceID,
+							characterData.InstanceX,
+							characterData.InstanceY,
+							characterData.InstanceZ,
+							characterData.InstanceRotX,
+							characterData.InstanceRotY,
+							characterData.InstanceRotZ,
+							characterData.InstanceRotW,
+							characterData.RaceID,
+							characterData.ModelIndex,
+							characterData.X,
+							characterData.Y,
+							characterData.Z,
+							characterData.RotX,
+							characterData.RotY,
+							characterData.RotZ,
+							characterData.RotW,
+							characterData.AccessLevel,
+							characterData.Online,
+							characterData.Flags,
+							characterData.ID,
+							characterData.LastSaved,
+						},
+						ct).ConfigureAwait(false);
+
+					if (rowsAffected > 0)
+					{
+						return SaveCharacterWriteOutcome.Success;
+					}
+
+					// rowsAffected == 0 can mean either:
+					// - Concurrency conflict (last_saved mismatch)
+					// - Not found
+					var exists = await dbContext.Characters
+						.AsNoTracking()
+						.AnyAsync(c => c.ID == characterData.ID && !c.Deleted, ct)
+						.ConfigureAwait(false);
+
+					return exists ? SaveCharacterWriteOutcome.ConcurrencyConflict : SaveCharacterWriteOutcome.NotFound;
 				},
-				entityName: "Character",
-				entityId: characterData.ID,
-				requireRowsAffected: false,
 				cancellationToken: cancellationToken).ConfigureAwait(false);
 
-			if (!result.IsSuccess)
+			if (!idempotentResult.IsSuccess)
 			{
-				return DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+				return DatabaseResult.Failure(idempotentResult.ErrorCode, idempotentResult.ErrorMessage, idempotentResult.IsTransient);
 			}
 
-			// rowsAffected == 0 can mean either:
-			// - Concurrency conflict (last_saved mismatch)
-			// - Not found
-			if (result.Data == 0)
+			switch (idempotentResult.Data)
 			{
-				var existsResult = await ExecuteAsync(async (dbContext, ct) =>
-				{
-					return await dbContext.Characters
-						.AsNoTracking()
-						.AnyAsync(c => c.ID == characterData.ID, ct).ConfigureAwait(false);
-				}, "CheckCharacterExistsForSave", cancellationToken).ConfigureAwait(false);
-
-				if (!existsResult.IsSuccess)
-				{
-					return DatabaseResult.Failure(existsResult.ErrorCode, existsResult.ErrorMessage, existsResult.IsTransient);
-				}
-
-				if (!existsResult.Data)
-				{
+				case SaveCharacterWriteOutcome.Success:
+					return DatabaseResult.Success();
+				case SaveCharacterWriteOutcome.NotFound:
 					return DatabaseResult.Failure(
 						"DB_NOT_FOUND",
 						"Character not found.",
 						isTransient: false);
-				}
-
-				return DatabaseResult.Failure(
-					"CONCURRENCY_CONFLICT",
-					"Character was modified by another server. Please reload and try again.",
-					isTransient: false);
+				case SaveCharacterWriteOutcome.ConcurrencyConflict:
+					return DatabaseResult.Failure(
+						"CONCURRENCY_CONFLICT",
+						"Character was modified by another server. Please reload and try again.",
+						isTransient: false);
+				default:
+					return DatabaseResult.Failure("DATABASE_ERROR", "Unexpected save outcome.");
 			}
-
-			return DatabaseResult.Success();
 		}
 
 		/// <inheritdoc/>

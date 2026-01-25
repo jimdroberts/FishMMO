@@ -41,7 +41,6 @@ namespace FishMMO.Database.Npgsql.Services
 
 		/// <inheritdoc/>
 		public async Task<DatabaseResult> SaveAsync(
-			Guid requestId,
 			long accountId,
 			long characterId,
 			string characterName,
@@ -53,11 +52,6 @@ namespace FishMMO.Database.Npgsql.Services
 			DateTime serverReceivedTime,
 			CancellationToken cancellationToken = default)
 		{
-			if (requestId == Guid.Empty)
-			{
-				return DatabaseResult.Failure("VALIDATION_ERROR", "RequestId is required.");
-			}
-
 			if (accountId <= 0)
 			{
 				return DatabaseResult.Failure("VALIDATION_ERROR", "AccountId must be greater than 0.");
@@ -82,6 +76,7 @@ namespace FishMMO.Database.Npgsql.Services
 				normalizedAccountName = normalizedAccountName.Substring(0, MaxAuditAccountLength);
 
 			var channelByte = (byte)channel;
+			var requestId = Guid.NewGuid();
 			var result = await ExecuteIdempotentAsync(
 				requestId,
 				accountId,
