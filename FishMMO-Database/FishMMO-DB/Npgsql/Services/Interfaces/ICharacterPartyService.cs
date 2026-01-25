@@ -33,7 +33,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// Saves or updates a character's party membership using an atomic transaction with capacity validation.
 		/// </summary>
 		/// <param name="partyData">The party membership data to save.</param>
-		/// <param name="maxCapacity">Maximum number of members allowed in the party. Must be greater than 0.</param>
+		/// <param name="maxCapacity">Maximum number of members allowed in the party. Must be between 1 and 40.</param>
 		/// <param name="cancellationToken">Token to cancel the operation.</param>
 		/// <returns>
 		/// DatabaseResult indicating success or containing error details.

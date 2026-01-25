@@ -110,7 +110,7 @@ namespace FishMMO.Database.Npgsql.Services
 				new object[] { serverId },
 				entityName: "LoginServer",
 				entityId: serverId.ToString(),
-				requireRowsAffected: true,
+				requireRowsAffected: false,
 				cancellationToken: cancellationToken).ConfigureAwait(false);
 			
 			return result.IsSuccess 

@@ -143,16 +143,46 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid guild ID");
 			}
 
-			var result = await ExecuteRawSqlAsync(
-				$"DELETE FROM {TableName} WHERE id = {{0}}",
-				"DeleteGuild",
-				new object[] { guildId },
-				entityName: "Guild",
-				entityId: guildId,
-				requireRowsAffected: true,
-				cancellationToken: cancellationToken).ConfigureAwait(false);
+			// Avoid FK-cascade deadlocks by taking locks in a deterministic order
+			// that matches concurrent upsert patterns (dependent rows first, then parent row).
+			var transactionResult = await ExecuteTransactionAsync(async (dbContext, transaction, ct) =>
+			{
+				var characterGuildsTable = dbContext.GetTableName<CharacterGuildEntity>();
+				await dbContext.CharacterGuilds
+					.FromSqlRaw($@"SELECT * FROM {characterGuildsTable} WHERE guild_id = {{0}} ORDER BY character_id FOR UPDATE", guildId)
+					.AsNoTracking()
+					.ToListAsync(ct)
+					.ConfigureAwait(false);
 
-			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+				var guildUpdatesTable = dbContext.GetTableName<GuildUpdateEntity>();
+				await dbContext.GuildUpdates
+					.FromSqlRaw($@"SELECT * FROM {guildUpdatesTable} WHERE guild_id = {{0}} ORDER BY guild_id FOR UPDATE", guildId)
+					.AsNoTracking()
+					.ToListAsync(ct)
+					.ConfigureAwait(false);
+
+				var guildTable = dbContext.GetTableName<GuildEntity>();
+				var existingGuild = await dbContext.Guilds
+					.FromSqlRaw($@"SELECT * FROM {guildTable} WHERE id = {{0}} FOR UPDATE", guildId)
+					.AsNoTracking()
+					.FirstOrDefaultAsync(ct)
+					.ConfigureAwait(false);
+
+				// Idempotent: already deleted.
+				if (existingGuild == null)
+					return DatabaseResult.Success();
+
+				await dbContext.Database.ExecuteSqlRawAsync(
+					$@"DELETE FROM {guildTable} WHERE id = {{0}}",
+					new object[] { guildId },
+					ct).ConfigureAwait(false);
+
+				return DatabaseResult.Success();
+			}, "DeleteGuild", cancellationToken).ConfigureAwait(false);
+
+			return transactionResult.IsSuccess
+				? DatabaseResult.Success()
+				: DatabaseResult.Failure(transactionResult.ErrorCode, transactionResult.ErrorMessage, transactionResult.IsTransient);
 		}
 
 		/// <inheritdoc/>

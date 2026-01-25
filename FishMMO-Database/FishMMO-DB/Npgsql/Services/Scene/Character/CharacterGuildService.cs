@@ -35,6 +35,8 @@ namespace FishMMO.Database.Npgsql.Services
 	/// </remarks>
 	public sealed class CharacterGuildService : BaseService<CharacterGuildEntity>, ICharacterGuildService
 	{
+		private const int MaxAllowedGuildCapacity = 256;
+
 		/// <summary>
 		/// Compiled query for retrieving guild membership by character ID.
 		/// </summary>
@@ -90,6 +92,13 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure(
 					"VALIDATION_ERROR",
 					"Invalid max capacity. Max capacity must be greater than 0.");
+			}
+
+			if (maxCapacity > MaxAllowedGuildCapacity)
+			{
+				return DatabaseResult.Failure(
+					"VALIDATION_ERROR",
+					$"Invalid max capacity. Max capacity must not exceed {MaxAllowedGuildCapacity}.");
 			}
 
 			// Use transaction to atomically check capacity and insert/update membership

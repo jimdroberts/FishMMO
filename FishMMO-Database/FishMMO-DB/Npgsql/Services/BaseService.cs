@@ -71,30 +71,56 @@ namespace FishMMO.Database.Npgsql.Services
 			Func<NpgsqlDbContext, DatabaseException, bool, CancellationToken, Task>? onFailureAsync = null)
 		{
 			var performanceTracker = DbContextFactory.PerformanceTracker;
-			await using var dbContext = DbContextFactory.CreateDbContext();
-			var strategy = dbContext.Database.CreateExecutionStrategy();
 			Stopwatch? stopwatch = null;
 			Exception? lastAttemptException = null;
 			DatabaseException? lastAttemptMappedException = null;
 
+			async Task InvokeFailureHookAsync(DatabaseException dbException, bool willRetry, CancellationToken hookToken)
+			{
+				if (onFailureAsync == null)
+				{
+					return;
+				}
+
+				try
+				{
+					// Always run failure hooks on a fresh context. The attempt context may have
+					// a broken connection or an invalid internal state after an exception.
+					await using var failureContext = DbContextFactory.CreateDbContext();
+					await onFailureAsync(failureContext, dbException, willRetry, hookToken).ConfigureAwait(false);
+				}
+				catch
+				{
+					// Best-effort only. Never hide the original failure.
+				}
+			}
+
 			try
 			{
 				stopwatch = performanceTracker?.StartTracking();
+
+				// Create a context once to obtain the provider-configured execution strategy.
+				// The actual work must use a fresh DbContext per attempt to avoid retries
+				// reusing a potentially corrupted change tracker/connection state.
+				await using var bootstrapContext = DbContextFactory.CreateDbContext();
+				var strategy = bootstrapContext.Database.CreateExecutionStrategy();
+
 				var result = await strategy.ExecuteAsync<DatabaseResult<TResult>>(async ct =>
 				{
+					await using var attemptContext = DbContextFactory.CreateDbContext();
 					try
 					{
 						ct.ThrowIfCancellationRequested();
 
 						if (!useTransaction)
 						{
-							return await operation(dbContext, null, ct).ConfigureAwait(false);
+							return await operation(attemptContext, null, ct).ConfigureAwait(false);
 						}
 
-						await using var transaction = await dbContext.Database.BeginTransactionAsync(ct).ConfigureAwait(false);
+						await using var transaction = await attemptContext.Database.BeginTransactionAsync(ct).ConfigureAwait(false);
 						try
 						{
-							var operationResult = await operation(dbContext, transaction, ct).ConfigureAwait(false);
+							var operationResult = await operation(attemptContext, transaction, ct).ConfigureAwait(false);
 
 							if (operationResult.IsSuccess)
 							{
@@ -116,19 +142,12 @@ namespace FishMMO.Database.Npgsql.Services
 					catch (Exception ex)
 					{
 						lastAttemptException = ex;
-						lastAttemptMappedException = MapException(ex, operationName, dbContext);
+						lastAttemptMappedException = MapException(ex, operationName, attemptContext);
 						var willRetry = strategy.RetriesOnFailure && lastAttemptMappedException.IsTransient;
 
-						if (willRetry && onFailureAsync != null)
+						if (willRetry)
 						{
-							try
-							{
-								await onFailureAsync(dbContext, lastAttemptMappedException, true, ct).ConfigureAwait(false);
-							}
-							catch
-							{
-								// Best-effort only. Never hide the original failure.
-							}
+							await InvokeFailureHookAsync(lastAttemptMappedException, willRetry: true, ct).ConfigureAwait(false);
 						}
 
 						throw;
@@ -151,22 +170,20 @@ namespace FishMMO.Database.Npgsql.Services
 					performanceTracker?.RecordQuery(operationName, stopwatch.Elapsed, success: false);
 				}
 
-				var dbEx = (ex == lastAttemptException && lastAttemptMappedException != null)
-					? lastAttemptMappedException
-					: MapException(ex, operationName, dbContext);
-
-				if (onFailureAsync != null)
+				DatabaseException dbEx;
+				if (ex == lastAttemptException && lastAttemptMappedException != null)
 				{
-					try
-					{
-						// The native execution strategy has already exhausted retries by this point.
-						await onFailureAsync(dbContext, dbEx, false, cancellationToken).ConfigureAwait(false);
-					}
-					catch
-					{
-						// Best-effort only. Never hide the original failure.
-					}
+					dbEx = lastAttemptMappedException;
 				}
+				else
+				{
+					// Map using a fresh context to ensure we can read provider settings safely.
+					await using var mappingContext = DbContextFactory.CreateDbContext();
+					dbEx = MapException(ex, operationName, mappingContext);
+				}
+
+				// The native execution strategy has already exhausted retries by this point.
+				await InvokeFailureHookAsync(dbEx, willRetry: false, cancellationToken).ConfigureAwait(false);
 
 				return DatabaseResult<TResult>.FromException(dbEx);
 			}
@@ -191,12 +208,6 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <summary>
-		/// Unified protected entrypoint for executing non-transactional operations with no return value.
-		/// </summary>
-		// Removed: non-generic ExecuteAsync(Func<..., Task>) overload.
-		// Callers should use the generic ExecuteAsync<TResult> overload (e.g., return true) and map if needed.
-
-		/// <summary>
 		/// Unified protected entrypoint for executing transactional operations.
 		/// </summary>
 		protected Task<DatabaseResult<TResult>> ExecuteTransactionAsync<TResult>(
@@ -215,12 +226,6 @@ namespace FishMMO.Database.Npgsql.Services
 		#endregion
 
 		#region Exception Mapping
-
-		/// <summary>
-		/// Unified protected entrypoint for executing transactional operations with no return value.
-		/// </summary>
-		// Removed: non-generic ExecuteTransactionAsync(Func<..., IDbContextTransaction, ..., Task>) overload.
-		// Callers should use the generic transactional ExecuteTransactionAsync<TResult> overload and map if needed.
 
 		/// <summary>
 		/// Maps database exceptions to custom DatabaseException hierarchy with sanitized messages.

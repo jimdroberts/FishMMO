@@ -30,6 +30,8 @@ namespace FishMMO.Database.Npgsql.Services
 	/// </remarks>
 	public sealed class CharacterPartyService : BaseService<CharacterPartyEntity>, ICharacterPartyService
 	{
+		private const int MaxAllowedPartyCapacity = 40;
+
 		/// <summary>
 		/// Compiled query for retrieving party membership by character ID.
 		/// </summary>
@@ -81,6 +83,13 @@ namespace FishMMO.Database.Npgsql.Services
 			if (maxCapacity <= 0)
 			{
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid max capacity. Max capacity must be greater than 0.");
+			}
+
+			if (maxCapacity > MaxAllowedPartyCapacity)
+			{
+				return DatabaseResult.Failure(
+					"VALIDATION_ERROR",
+					$"Invalid max capacity. Max capacity must not exceed {MaxAllowedPartyCapacity}.");
 			}
 
 			// Use transaction to atomically check capacity and insert/update membership

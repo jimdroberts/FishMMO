@@ -47,6 +47,21 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 
 			var achievementList = achievements.ToList();
+			// Prevent duplicate keys within the same batch from causing
+			// "ON CONFLICT DO UPDATE command cannot affect row a second time".
+			if (achievementList.Count > 1)
+			{
+				var deduped = new Dictionary<(long CharacterID, int TemplateID), CharacterAchievementData>();
+				foreach (var achievement in achievementList)
+				{
+					deduped[(achievement.CharacterID, achievement.TemplateID)] = achievement;
+				}
+
+				if (deduped.Count != achievementList.Count)
+				{
+					achievementList = deduped.Values.ToList();
+				}
+			}
 
 			// Extract arrays for bulk UPSERT
 			var characterIds = achievementList.Select(a => a.CharacterID).ToArray();

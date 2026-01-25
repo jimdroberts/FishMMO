@@ -64,6 +64,22 @@ namespace FishMMO.Database.Npgsql.Services
 					"Empty or null factions collection.");
 			}
 
+			// Prevent duplicate keys within the same batch from causing
+			// "ON CONFLICT DO UPDATE command cannot affect row a second time".
+			if (factionList.Count > 1)
+			{
+				var deduped = new Dictionary<(long CharacterID, int TemplateID), CharacterFactionData>();
+				foreach (var faction in factionList)
+				{
+					deduped[(faction.CharacterID, faction.TemplateID)] = faction;
+				}
+
+				if (deduped.Count != factionList.Count)
+				{
+					factionList = deduped.Values.ToList();
+				}
+			}
+
 			// Extract arrays for bulk UPSERT
 			var characterIds = factionList.Select(f => f.CharacterID).ToArray();
 			var templateIds = factionList.Select(f => f.TemplateID).ToArray();

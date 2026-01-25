@@ -123,6 +123,22 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Empty or null hotkeys collection");
 			}
 
+			// Prevent duplicate keys within the same batch from causing
+			// "ON CONFLICT DO UPDATE command cannot affect row a second time".
+			if (hotkeyList.Count > 1)
+			{
+				var deduped = new Dictionary<(long CharacterID, int Slot), CharacterHotkeyData>();
+				foreach (var hotkey in hotkeyList)
+				{
+					deduped[(hotkey.CharacterID, hotkey.Slot)] = hotkey;
+				}
+
+				if (deduped.Count != hotkeyList.Count)
+				{
+					hotkeyList = deduped.Values.ToList();
+				}
+			}
+
 			// Extract arrays for bulk UPSERT
 			var characterIds = hotkeyList.Select(h => h.CharacterID).ToArray();
 			var types = hotkeyList.Select(h => (short)h.Type).ToArray();

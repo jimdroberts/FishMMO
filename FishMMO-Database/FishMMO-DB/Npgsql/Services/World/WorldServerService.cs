@@ -118,7 +118,7 @@ namespace FishMMO.Database.Npgsql.Services
 				new object[] { serverId },
 				entityName: "WorldServer",
 				entityId: serverId.ToString(),
-				requireRowsAffected: true,
+				requireRowsAffected: false,
 				cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
@@ -168,7 +168,8 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <summary>
-		/// Maps WorldServerEntity to WorldServerData DTO.		/// </summary>
+		/// Maps WorldServerEntity to WorldServerData DTO.
+		/// </summary>
 		/// <param name="entity">World server entity from database.</param>
 		/// <returns>World server data DTO.</returns>
 		private WorldServerData MapEntityToDto(WorldServerEntity entity)

@@ -198,29 +198,64 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid parameters: scene server ID, world server ID, and scene name are required.");
 			}
 
-			// Use CTE with SELECT FOR UPDATE SKIP LOCKED to prevent race conditions
-			// Only one scene server can claim a specific scene at a time
-			var result = await ExecuteRawSqlAsync(
-				$@"WITH claimable_scene AS (
+			// Retry-idempotent: if the claim already succeeded in a previous attempt and a transient error
+			// caused a retry, the UPDATE may affect 0 rows. In that case, treat "already ready" as success.
+			var result = await ExecuteAsync(async (dbContext, ct) =>
+			{
+				var sql = $@"WITH claimable_scene AS (
 				SELECT id FROM {TableName}
 				WHERE world_server_id = {{0}}
 					AND scene_name = {{1}}
 					AND scene_status = {{2}}
 				FOR UPDATE SKIP LOCKED
 				LIMIT 1
-			)
-			UPDATE {TableName}
-			SET scene_status = {{3}},
-				scene_server_id = {{4}},
-				scene_handle = {{5}}
-			WHERE id IN (SELECT id FROM claimable_scene)",
-				"SetSceneReady",
-				new object[] { worldServerId, sceneName, (int)SceneStatus.Loading, (int)SceneStatus.Ready, sceneServerId, sceneHandle },
-				entityName: "Scene",
-				requireRowsAffected: true,
-				cancellationToken: cancellationToken).ConfigureAwait(false);
+				)
+				UPDATE {TableName}
+				SET scene_status = {{3}},
+					scene_server_id = {{4}},
+					scene_handle = {{5}}
+				WHERE id IN (SELECT id FROM claimable_scene)";
 
-			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+				var rows = await dbContext.Database.ExecuteSqlRawAsync(
+					sql,
+					new object[]
+					{
+						worldServerId,
+						sceneName,
+						(int)SceneStatus.Loading,
+						(int)SceneStatus.Ready,
+						sceneServerId,
+						sceneHandle
+					},
+					ct).ConfigureAwait(false);
+
+				if (rows > 0)
+				{
+					return true;
+				}
+
+				// Idempotent success case: already ready with the same target values.
+				var alreadyReady = await dbContext.Scenes
+					.AsNoTracking()
+					.AnyAsync(s =>
+						s.WorldServerID == worldServerId
+						&& s.SceneName == sceneName
+						&& s.SceneStatus == (int)SceneStatus.Ready
+						&& s.SceneServerID == sceneServerId
+						&& s.SceneHandle == sceneHandle,
+					ct).ConfigureAwait(false);
+
+				if (alreadyReady)
+				{
+					return true;
+				}
+
+				return false;
+			}, "SetSceneReady", cancellationToken).ConfigureAwait(false);
+
+			return result.IsSuccess
+				? (result.Data ? DatabaseResult.Success() : DatabaseResult.Failure("SCENE_NOT_CLAIMABLE", "No matching loading scene could be claimed."))
+				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -287,7 +322,7 @@ namespace FishMMO.Database.Npgsql.Services
 				"DeleteByHandle",
 				new object[] { sceneServerId, sceneHandle },
 				entityName: "Scene",
-				requireRowsAffected: true,
+				requireRowsAffected: false,
 				cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);

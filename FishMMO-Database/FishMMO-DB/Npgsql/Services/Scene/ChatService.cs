@@ -12,7 +12,7 @@ using FishMMO.Database.Npgsql.Services.Interfaces;
 namespace FishMMO.Database.Npgsql.Services
 {
 	/// <inheritdoc/>
-	public sealed class ChatService : BaseService<ChatEntity>, IChatService
+	public sealed class ChatService : IdempotentBaseService<ChatEntity>, IChatService
 	{
 		/// <summary>
 		/// Maximum allowed length for chat messages. This length should never be close to reached. Maximum server message should be 256 characters.
@@ -41,6 +41,8 @@ namespace FishMMO.Database.Npgsql.Services
 
 		/// <inheritdoc/>
 		public async Task<DatabaseResult> SaveAsync(
+			Guid requestId,
+			long accountId,
 			long characterId,
 			string characterName,
 			string accountName,
@@ -51,6 +53,16 @@ namespace FishMMO.Database.Npgsql.Services
 			DateTime serverReceivedTime,
 			CancellationToken cancellationToken = default)
 		{
+			if (requestId == Guid.Empty)
+			{
+				return DatabaseResult.Failure("VALIDATION_ERROR", "RequestId is required.");
+			}
+
+			if (accountId <= 0)
+			{
+				return DatabaseResult.Failure("VALIDATION_ERROR", "AccountId must be greater than 0.");
+			}
+
 			if (worldServerId <= 0 || sceneServerId <= 0 || string.IsNullOrWhiteSpace(message))
 			{
 				return DatabaseResult.Failure("INVALID_PARAMETERS", "World server ID, scene server ID must be greater than zero and message must not be empty.");
@@ -70,25 +82,38 @@ namespace FishMMO.Database.Npgsql.Services
 				normalizedAccountName = normalizedAccountName.Substring(0, MaxAuditAccountLength);
 
 			var channelByte = (byte)channel;
-			var insert = await ExecuteRawSqlAsync(
-				$@"INSERT INTO {TableName}
-					(character_id, character_name, account_name, world_server_id, scene_server_id, server_received_time, time_created, channel, message)
-					VALUES ({{0}}, {{1}}, {{2}}, {{3}}, {{4}}, {{5}}, CURRENT_TIMESTAMP, {{6}}, {{7}})",
+			var result = await ExecuteIdempotentAsync(
+				requestId,
+				accountId,
 				"SaveChatMessage",
-				new object[] { characterId, normalizedCharacterName, normalizedAccountName, worldServerId, sceneServerId, serverReceivedTime, channelByte, message },
-				entityName: "Chat",
-				entityId: characterId,
-				requireRowsAffected: true,
-				cancellationToken: cancellationToken).ConfigureAwait(false);
+				async (dbContext, transaction, ct) =>
+				{
+					var sql = $@"INSERT INTO {TableName}
+						(character_id, character_name, account_name, world_server_id, scene_server_id, server_received_time, time_created, channel, message)
+						VALUES ({{0}}, {{1}}, {{2}}, {{3}}, {{4}}, {{5}}, CURRENT_TIMESTAMP, {{6}}, {{7}})";
 
-			if (!insert.IsSuccess)
-				return DatabaseResult.Failure(insert.ErrorCode, insert.ErrorMessage, insert.IsTransient);
+					_ = await dbContext.Database.ExecuteSqlRawAsync(
+						sql,
+						new object[]
+						{
+							characterId,
+							normalizedCharacterName,
+							normalizedAccountName,
+							worldServerId,
+							sceneServerId,
+							serverReceivedTime,
+							channelByte,
+							message
+						},
+						ct).ConfigureAwait(false);
 
-			var hasAuditNames = !string.IsNullOrWhiteSpace(normalizedCharacterName) && !string.IsNullOrWhiteSpace(normalizedAccountName);
-			if (!hasAuditNames)
-				return DatabaseResult.Failure("MISSING_AUDIT_FIELDS", "Chat saved, but character/account audit fields were missing.");
+					return true;
+				},
+				cancellationToken).ConfigureAwait(false);
 
-			return DatabaseResult.Success();
+			return result.IsSuccess
+				? DatabaseResult.Success()
+				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>

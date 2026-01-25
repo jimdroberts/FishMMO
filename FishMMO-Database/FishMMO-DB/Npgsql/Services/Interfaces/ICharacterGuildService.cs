@@ -38,7 +38,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// Uses atomic UPSERT operation wrapped in execution strategy for automatic retry.
 		/// </summary>
 		/// <param name="guildData">The guild membership data to save. CharacterID and GuildID must be greater than 0.</param>
-		/// <param name="maxCapacity">Maximum number of members allowed in the guild. Must be greater than 0.</param>
+		/// <param name="maxCapacity">Maximum number of members allowed in the guild. Must be between 1 and 256.</param>
 		/// <param name="cancellationToken">Token to cancel the asynchronous operation.</param>
 		/// <returns>
 		/// DatabaseResult indicating success or containing error details.

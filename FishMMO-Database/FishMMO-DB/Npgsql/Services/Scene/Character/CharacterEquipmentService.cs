@@ -110,6 +110,22 @@ namespace FishMMO.Database.Npgsql.Services
 					"Empty or null equipment collection.");
 			}
 
+			// Prevent duplicate keys within the same batch from causing
+			// "ON CONFLICT DO UPDATE command cannot affect row a second time".
+			if (equipmentList.Count > 1)
+			{
+				var deduped = new Dictionary<(long CharacterID, int Slot), CharacterEquipmentData>();
+				foreach (var item in equipmentList)
+				{
+					deduped[(item.CharacterID, item.Slot)] = item;
+				}
+
+				if (deduped.Count != equipmentList.Count)
+				{
+					equipmentList = deduped.Values.ToList();
+				}
+			}
+
 			// Extract arrays for bulk UPSERT
 			var characterIds = equipmentList.Select(e => e.CharacterID).ToArray();
 			var templateIds = equipmentList.Select(e => e.TemplateID).ToArray();

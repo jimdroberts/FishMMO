@@ -59,6 +59,22 @@ namespace FishMMO.Database.Npgsql.Services
 					"No buffs to save. Buffs collection must not be null or empty.");
 			}
 
+			// Prevent duplicate keys within the same batch from causing
+			// "ON CONFLICT DO UPDATE command cannot affect row a second time".
+			if (buffList.Count > 1)
+			{
+				var deduped = new Dictionary<(long CharacterID, int TemplateID), CharacterBuffData>();
+				foreach (var buff in buffList)
+				{
+					deduped[(buff.CharacterID, buff.TemplateID)] = buff;
+				}
+
+				if (deduped.Count != buffList.Count)
+				{
+					buffList = deduped.Values.ToList();
+				}
+			}
+
 			// Extract arrays for bulk UPSERT
 			var characterIds = buffList.Select(b => b.CharacterID).ToArray();
 			var templateIds = buffList.Select(b => b.TemplateID).ToArray();

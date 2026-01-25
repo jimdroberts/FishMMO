@@ -30,7 +30,8 @@ namespace FishMMO.Database.Npgsql.Services
 					.AsNoTracking()
 					.Any(a => a.Name == accountName));
 
-		/// <summary>	/// Compiled query for GetAccountForLoginAsync hot path (login authentication).
+		/// <summary>
+		/// Compiled query for GetAccountForLoginAsync hot path (login authentication).
 		/// Pre-compiles the query expression tree for better performance on repeated executions.
 		/// </summary>
 #pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type
@@ -41,7 +42,8 @@ namespace FishMMO.Database.Npgsql.Services
 					.FirstOrDefault(a => a.Name == accountName));
 #pragma warning restore CS8619
 
-		/// <summary>		/// Initializes a new instance of AccountService.
+		/// <summary>
+		/// Initializes a new instance of AccountService.
 		/// </summary>
 		/// <param name="dbContextFactory">DbContext factory for creating contexts.</param>
 		/// <exception cref="ArgumentNullException">Thrown when dbContextFactory is null.</exception>

@@ -105,7 +105,7 @@ namespace FishMMO.Database.Npgsql
 		{
 			if (Interlocked.Exchange(ref disposed, 1) == 0)
 			{
-				Exception disposalException = null;
+				Exception? disposalException = null;
 				try
 				{
 					base.Dispose();
@@ -135,7 +135,7 @@ namespace FishMMO.Database.Npgsql
 		{
 			if (Interlocked.Exchange(ref disposed, 1) == 0)
 			{
-				Exception disposalException = null;
+				Exception? disposalException = null;
 				try
 				{
 					await base.DisposeAsync().ConfigureAwait(false);

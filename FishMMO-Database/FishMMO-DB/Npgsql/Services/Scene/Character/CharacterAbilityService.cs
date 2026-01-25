@@ -125,6 +125,35 @@ namespace FishMMO.Database.Npgsql.Services
 			var newItems = list.Where(a => a.ID <= 0).ToList();
 			var existingItems = list.Where(a => a.ID > 0).ToList();
 
+			// Prevent duplicate keys within the same batch from causing
+			// "ON CONFLICT DO UPDATE command cannot affect row a second time".
+			if (newItems.Count > 1)
+			{
+				var dedupedNew = new Dictionary<(long CharacterID, int TemplateID), CharacterAbilityData>();
+				foreach (var ability in newItems)
+				{
+					dedupedNew[(ability.CharacterID, ability.TemplateID)] = ability;
+				}
+				if (dedupedNew.Count != newItems.Count)
+				{
+					newItems = dedupedNew.Values.ToList();
+				}
+			}
+
+			// Avoid ambiguous multi-match UPDATE ... FROM when duplicate IDs are present.
+			if (existingItems.Count > 1)
+			{
+				var dedupedExisting = new Dictionary<long, CharacterAbilityData>();
+				foreach (var ability in existingItems)
+				{
+					dedupedExisting[ability.ID] = ability;
+				}
+				if (dedupedExisting.Count != existingItems.Count)
+				{
+					existingItems = dedupedExisting.Values.ToList();
+				}
+			}
+
 			// Wrap both operations in transaction for atomicity
 			var transactionResult = await ExecuteTransactionAsync(async (dbContext, transaction, ct) =>
 			{

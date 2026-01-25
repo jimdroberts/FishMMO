@@ -4,7 +4,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Database.Data;
-using FishMMO.Database.Exceptions;
 using FishMMO.Database.Npgsql.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -48,6 +47,21 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 
 			var attributeList = attributes.ToList();
+			// Prevent duplicate keys within the same batch from causing
+			// "ON CONFLICT DO UPDATE command cannot affect row a second time".
+			if (attributeList.Count > 1)
+			{
+				var deduped = new Dictionary<(long CharacterID, int TemplateID), CharacterAttributeData>();
+				foreach (var attribute in attributeList)
+				{
+					deduped[(attribute.CharacterID, attribute.TemplateID)] = attribute;
+				}
+
+				if (deduped.Count != attributeList.Count)
+				{
+					attributeList = deduped.Values.ToList();
+				}
+			}
 
 			// Extract arrays for bulk UPSERT
 			var characterIds = attributeList.Select(a => a.CharacterID).ToArray();
@@ -130,74 +144,6 @@ namespace FishMMO.Database.Npgsql.Services
 
 				return (IReadOnlyList<CharacterAttributeData>)attributes;
 			}, "GetCharacterAttributes", cancellationToken);
-		}
-
-		/// <inheritdoc/>
-		public async Task<DatabaseResult> IncrementAttributeAsync(
-			long characterId,
-			int templateId,
-			int valueDelta,
-			float currentValueDelta,
-			bool allowNegative = false,
-			CancellationToken cancellationToken = default)
-		{
-			if (characterId <= 0)
-			{
-				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"Character ID must be greater than 0.");
-			}
-
-			var transactionResult = await ExecuteTransactionAsync(async (dbContext, transaction, ct) =>
-			{
-				// Lock/check parent row to serialize against DeleteCharacterAsync (FOR UPDATE)
-				var charactersTableName = dbContext.GetTableName<CharacterEntity>();
-				var activeCharacter = await dbContext.Characters
-					.FromSqlRaw($@"SELECT * FROM {charactersTableName} WHERE id = {{0}} AND deleted = FALSE FOR KEY SHARE", characterId)
-					.AsNoTracking()
-					.FirstOrDefaultAsync(ct)
-					.ConfigureAwait(false);
-
-				if (activeCharacter == null)
-				{
-					throw new DatabaseEntityNotFoundException("Character", characterId.ToString());
-				}
-
-				// Build atomic increment query with optional negative value check
-				var sql = allowNegative
-					? $@"INSERT INTO {TableName} (character_id, template_id, value, current_value, time_created)
-					   VALUES ({{0}}, {{1}}, {{2}}, {{3}}, CURRENT_TIMESTAMP)
-					   ON CONFLICT (character_id, template_id)
-					   DO UPDATE SET
-						   value = {TableName}.value + {{2}},
-						   current_value = {TableName}.current_value + {{3}}"
-					: $@"INSERT INTO {TableName} (character_id, template_id, value, current_value, time_created)
-					   VALUES ({{0}}, {{1}}, {{2}}, {{3}}, CURRENT_TIMESTAMP)
-					   ON CONFLICT (character_id, template_id)
-					   DO UPDATE SET
-						   value = {TableName}.value + {{2}},
-						   current_value = {TableName}.current_value + {{3}}
-					   WHERE {TableName}.value + {{2}} >= 0 AND {TableName}.current_value + {{3}} >= 0";
-
-				var rows = await dbContext.Database.ExecuteSqlRawAsync(
-					sql,
-					new object[] { characterId, templateId, valueDelta, currentValueDelta },
-					ct).ConfigureAwait(false);
-
-				if (!allowNegative && rows == 0)
-				{
-					return DatabaseResult.Failure(
-						"VALIDATION_ERROR",
-						"Operation would result in negative attribute value.",
-						isTransient: false);
-				}
-
-				return DatabaseResult.Success();
-			}, "IncrementCharacterAttribute", cancellationToken).ConfigureAwait(false);
-
-			return transactionResult.IsSuccess
-				? transactionResult.Data
-				: DatabaseResult.Failure(transactionResult.ErrorCode, transactionResult.ErrorMessage, transactionResult.IsTransient);
 		}
 	}
 }

@@ -82,16 +82,46 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("INVALID_PARTY_ID", "Party ID must be greater than zero.");
 			}
 
-			var result = await ExecuteRawSqlAsync(
-				$"DELETE FROM {TableName} WHERE id = {{0}}",
-				"DeleteParty",
-				new object[] { partyId },
-				entityName: "Party",
-				entityId: partyId,
-				requireRowsAffected: true,
-				cancellationToken: cancellationToken).ConfigureAwait(false);
+			// Avoid FK-cascade deadlocks by taking locks in a deterministic order
+			// that matches concurrent upsert patterns (dependent rows first, then parent row).
+			var transactionResult = await ExecuteTransactionAsync(async (dbContext, transaction, ct) =>
+			{
+				var characterPartiesTable = dbContext.GetTableName<CharacterPartyEntity>();
+				await dbContext.CharacterParties
+					.FromSqlRaw($@"SELECT * FROM {characterPartiesTable} WHERE party_id = {{0}} ORDER BY character_id FOR UPDATE", partyId)
+					.AsNoTracking()
+					.ToListAsync(ct)
+					.ConfigureAwait(false);
 
-			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+				var partyUpdatesTable = dbContext.GetTableName<PartyUpdateEntity>();
+				await dbContext.PartyUpdates
+					.FromSqlRaw($@"SELECT * FROM {partyUpdatesTable} WHERE party_id = {{0}} ORDER BY party_id FOR UPDATE", partyId)
+					.AsNoTracking()
+					.ToListAsync(ct)
+					.ConfigureAwait(false);
+
+				var partyTable = dbContext.GetTableName<PartyEntity>();
+				var existingParty = await dbContext.Parties
+					.FromSqlRaw($@"SELECT * FROM {partyTable} WHERE id = {{0}} FOR UPDATE", partyId)
+					.AsNoTracking()
+					.FirstOrDefaultAsync(ct)
+					.ConfigureAwait(false);
+
+				// Idempotent: already deleted.
+				if (existingParty == null)
+					return DatabaseResult.Success();
+
+				await dbContext.Database.ExecuteSqlRawAsync(
+					$@"DELETE FROM {partyTable} WHERE id = {{0}}",
+					new object[] { partyId },
+					ct).ConfigureAwait(false);
+
+				return DatabaseResult.Success();
+			}, "DeleteParty", cancellationToken).ConfigureAwait(false);
+
+			return transactionResult.IsSuccess
+				? DatabaseResult.Success()
+				: DatabaseResult.Failure(transactionResult.ErrorCode, transactionResult.ErrorMessage, transactionResult.IsTransient);
 		}
 
 		/// <inheritdoc/>

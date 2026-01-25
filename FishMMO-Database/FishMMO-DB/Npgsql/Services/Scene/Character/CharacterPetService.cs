@@ -97,6 +97,35 @@ namespace FishMMO.Database.Npgsql.Services
 			var petsToUpdate = petList.Where(p => p.ID > 0).ToList();
 			var petsToInsert = petList.Where(p => p.ID == 0).ToList();
 
+			// Prevent duplicate keys within the same batch from causing
+			// "ON CONFLICT DO UPDATE command cannot affect row a second time".
+			if (petsToInsert.Count > 1)
+			{
+				var dedupedInsert = new Dictionary<long, CharacterPetData>();
+				foreach (var pet in petsToInsert)
+				{
+					dedupedInsert[pet.CharacterID] = pet;
+				}
+				if (dedupedInsert.Count != petsToInsert.Count)
+				{
+					petsToInsert = dedupedInsert.Values.ToList();
+				}
+			}
+
+			// Avoid ambiguous multi-match UPDATE ... FROM when duplicate IDs are present.
+			if (petsToUpdate.Count > 1)
+			{
+				var dedupedUpdate = new Dictionary<long, CharacterPetData>();
+				foreach (var pet in petsToUpdate)
+				{
+					dedupedUpdate[pet.ID] = pet;
+				}
+				if (dedupedUpdate.Count != petsToUpdate.Count)
+				{
+					petsToUpdate = dedupedUpdate.Values.ToList();
+				}
+			}
+
 			// Wrap both operations in transaction for atomicity
 			var transactionResult = await ExecuteTransactionAsync(async (dbContext, transaction, ct) =>
 			{

@@ -114,7 +114,7 @@ namespace FishMMO.Database.Npgsql.Services
 				new object[] { serverId },
 				entityName: "SceneServer",
 				entityId: serverId,
-				requireRowsAffected: true,
+				requireRowsAffected: false,
 				cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);

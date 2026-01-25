@@ -187,7 +187,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 			await MaybeCleanupProcessedRequestsAsync().ConfigureAwait(false);
 
-			// Phase 1: acquire or read idempotency state in a durable, non-transactional step.
+			// Acquire or read idempotency state in a durable, non-transactional step.
 			// This must not be rolled back by the business operation transaction.
 			var beginResult = await ExecuteInternalAsync(
 				$"{operationName}.IdempotencyBegin",
@@ -258,7 +258,7 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 			}
 
-			// Phase 2: run the business operation and mark completion within the SAME transaction.
+			// Run the business operation and mark completion within the SAME transaction.
 			// This ensures we never commit side effects without also persisting the cached response.
 			return await ExecuteInternalAsync(
 				operationName,

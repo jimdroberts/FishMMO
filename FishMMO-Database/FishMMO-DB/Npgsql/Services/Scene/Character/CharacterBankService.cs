@@ -110,6 +110,22 @@ namespace FishMMO.Database.Npgsql.Services
 					"No items to save. Items collection must not be null or empty.");
 			}
 
+			// Prevent duplicate keys within the same batch from causing
+			// "ON CONFLICT DO UPDATE command cannot affect row a second time".
+			if (itemList.Count > 1)
+			{
+				var deduped = new Dictionary<(long CharacterID, int Slot), CharacterBankData>();
+				foreach (var item in itemList)
+				{
+					deduped[(item.CharacterID, item.Slot)] = item;
+				}
+
+				if (deduped.Count != itemList.Count)
+				{
+					itemList = deduped.Values.ToList();
+				}
+			}
+
 			// Extract arrays for bulk UPSERT
 			var characterIds = itemList.Select(i => i.CharacterID).ToArray();
 			var templateIds = itemList.Select(i => i.TemplateID).ToArray();

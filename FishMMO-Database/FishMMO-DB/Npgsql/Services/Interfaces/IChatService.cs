@@ -32,6 +32,14 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <summary>
 		/// Saves a chat message with denormalized audit fields.
 		/// </summary>
+		/// <param name="requestId">
+		/// Idempotency key for this write operation.
+		/// This must be unique per logical chat message to ensure retry safety under transient failures.
+		/// </param>
+		/// <param name="accountId">
+		/// Numeric account identifier used for idempotency scoping.
+		/// This is not the account name; it is a stable numeric ID provided by the caller.
+		/// </param>
 		/// <param name="characterId">Character ID sending the message.</param>
 		/// <param name="characterName">Character name (denormalized for audit retention).</param>
 		/// <param name="accountName">Account name (denormalized for audit retention).</param>
@@ -47,8 +55,11 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <remarks>
 		/// Chat audit fields are denormalized so logs can survive character deletion.
 		/// Passing the names avoids a race where the character row is deleted between lookup and insert.
+		/// This method is retry-idempotent using the processed_requests table.
 		/// </remarks>
 		Task<DatabaseResult> SaveAsync(
+			Guid requestId,
+			long accountId,
 			long characterId,
 			string characterName,
 			string accountName,
