@@ -50,6 +50,7 @@ namespace FishMMO.Database.Npgsql.Services
 			ChatChannel channel,
 			string message,
 			DateTime serverReceivedTime,
+			Guid requestId,
 			CancellationToken cancellationToken = default)
 		{
 			if (accountId <= 0)
@@ -67,6 +68,11 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("MESSAGE_TOO_LONG", "Message exceeds maximum length.");
 			}
 
+			if (requestId == Guid.Empty)
+			{
+				return DatabaseResult.Failure("VALIDATION_ERROR", "RequestId is required.");
+			}
+
 			var normalizedCharacterName = string.IsNullOrWhiteSpace(characterName) ? string.Empty : characterName;
 			if (normalizedCharacterName.Length > MaxAuditNameLength)
 				normalizedCharacterName = normalizedCharacterName.Substring(0, MaxAuditNameLength);
@@ -76,7 +82,6 @@ namespace FishMMO.Database.Npgsql.Services
 				normalizedAccountName = normalizedAccountName.Substring(0, MaxAuditAccountLength);
 
 			var channelByte = (byte)channel;
-			var requestId = Guid.NewGuid();
 			var result = await ExecuteIdempotentAsync(
 				requestId,
 				accountId,
@@ -136,9 +141,9 @@ namespace FishMMO.Database.Npgsql.Services
 
 				var messages = await dbContext.Chat
 					.AsNoTracking()
-					.Where(c => c.TimeCreated >= lastFetch &&
-							   c.ID > lastPosition &&
-							   !(localChannels.Contains(c.Channel) && c.SceneServerID == sceneServerId))
+					.Where(c =>
+						(c.TimeCreated > lastFetch || (c.TimeCreated == lastFetch && c.ID > lastPosition))
+						&& !(localChannels.Contains(c.Channel) && c.SceneServerID == sceneServerId))
 					.OrderBy(c => c.TimeCreated)
 					.ThenBy(c => c.ID)
 					.Take(amount)

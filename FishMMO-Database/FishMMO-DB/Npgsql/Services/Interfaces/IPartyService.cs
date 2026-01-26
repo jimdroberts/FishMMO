@@ -48,6 +48,10 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// Creates a new party (idempotent).
 		/// </summary>
 		/// <param name="accountId">Account id associated with the request.</param>
+		/// <param name="requestId">
+			/// Required idempotency key.
+			/// Retries of the same logical request must reuse this value to prevent duplicate writes.
+		/// </param>
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>
 		/// A <see cref="DatabaseResult{T}"/> containing the party ID on success,
@@ -55,10 +59,10 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// </returns>
 		/// <remarks>
 		/// This method is retry-idempotent using the processed_requests table.
-		/// The service generates an internal idempotency key once per call to ensure execution-strategy retries
-		/// do not create multiple parties.
+		/// Callers must supply a stable <paramref name="requestId"/> for the logical request; transient execution-strategy
+		/// retries will reuse the same processed_requests entry and return deterministically.
 		/// </remarks>
-		Task<DatabaseResult<long>> CreateAsync(long accountId, CancellationToken cancellationToken = default);
+		Task<DatabaseResult<long>> CreateAsync(long accountId, Guid requestId, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Deletes a party by ID.

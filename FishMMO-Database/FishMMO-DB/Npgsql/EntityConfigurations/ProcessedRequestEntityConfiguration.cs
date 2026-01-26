@@ -16,9 +16,9 @@ namespace FishMMO.Database.Npgsql.Entities
 				.IsRequired()
 				.HasColumnName("request_id");
 
-			builder.Property(e => e.AccountID)
+			builder.Property(e => e.ScopeID)
 				.IsRequired()
-				.HasColumnName("account_id");
+				.HasColumnName("scope_id");
 
 			builder.Property(e => e.OperationName)
 				.IsRequired()
@@ -29,6 +29,14 @@ namespace FishMMO.Database.Npgsql.Entities
 				.IsRequired()
 				.HasDefaultValue((byte)0)
 				.HasColumnName("status");
+
+			builder.Property(e => e.OwnerID)
+				.IsRequired()
+				.HasColumnName("owner_id");
+
+			builder.Property(e => e.LeaseExpiresAt)
+				.IsRequired()
+				.HasColumnName("lease_expires_at");
 
 			builder.Property(e => e.Response)
 				.HasColumnType("jsonb")
@@ -53,14 +61,17 @@ namespace FishMMO.Database.Npgsql.Entities
 			builder.HasIndex(e => e.TimeCreated)
 				.HasDatabaseName("IX_ProcessedRequests_CreatedAt");
 
-			builder.HasIndex(e => e.AccountID)
-				.HasDatabaseName("IX_ProcessedRequests_AccountID");
+			builder.HasIndex(e => e.ScopeID)
+				.HasDatabaseName("IX_ProcessedRequests_ScopeID");
 
 			builder.HasIndex(e => e.Status)
 				.HasDatabaseName("IX_ProcessedRequests_Status");
 
-			builder.HasIndex(e => new { e.AccountID, e.TimeCreated })
-				.HasDatabaseName("IX_ProcessedRequests_AccountID_CreatedAt");
+			builder.HasIndex(e => e.LeaseExpiresAt)
+				.HasDatabaseName("IX_ProcessedRequests_LeaseExpiresAt");
+
+			builder.HasIndex(e => new { e.ScopeID, e.TimeCreated })
+				.HasDatabaseName("IX_ProcessedRequests_ScopeID_CreatedAt");
 		}
 	}
 }

@@ -43,14 +43,18 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<long>> CreateAsync(long accountId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<long>> CreateAsync(long accountId, Guid requestId, CancellationToken cancellationToken = default)
 		{
 			if (accountId <= 0)
 			{
 				return DatabaseResult<long>.Failure("VALIDATION_ERROR", "Invalid account ID.");
 			}
 
-			var requestId = Guid.NewGuid();
+			if (requestId == Guid.Empty)
+			{
+				return DatabaseResult<long>.Failure("VALIDATION_ERROR", "RequestId is required.");
+			}
+
 			return await ExecuteIdempotentAsync(
 				requestId,
 				accountId,
@@ -105,34 +109,26 @@ namespace FishMMO.Database.Npgsql.Services
 			var transactionResult = await ExecuteTransactionAsync(async (dbContext, transaction, ct) =>
 			{
 				var characterPartiesTable = dbContext.GetTableName<CharacterPartyEntity>();
-				await dbContext.CharacterParties
-					.FromSqlRaw($@"SELECT * FROM {characterPartiesTable} WHERE party_id = {{0}} ORDER BY character_id FOR UPDATE", partyId)
-					.AsNoTracking()
-					.ToListAsync(ct)
-					.ConfigureAwait(false);
+				_ = await dbContext.Database.ExecuteSqlRawAsync(
+					$@"SELECT 1 FROM {characterPartiesTable} WHERE party_id = {{0}} ORDER BY character_id FOR UPDATE",
+					new object[] { partyId },
+					ct).ConfigureAwait(false);
 
 				var partyUpdatesTable = dbContext.GetTableName<PartyUpdateEntity>();
-				await dbContext.PartyUpdates
-					.FromSqlRaw($@"SELECT * FROM {partyUpdatesTable} WHERE party_id = {{0}} ORDER BY party_id FOR UPDATE", partyId)
-					.AsNoTracking()
-					.ToListAsync(ct)
-					.ConfigureAwait(false);
+				_ = await dbContext.Database.ExecuteSqlRawAsync(
+					$@"SELECT 1 FROM {partyUpdatesTable} WHERE party_id = {{0}} ORDER BY party_id FOR UPDATE",
+					new object[] { partyId },
+					ct).ConfigureAwait(false);
 
 				var partyTable = dbContext.GetTableName<PartyEntity>();
-				var existingParty = await dbContext.Parties
-					.FromSqlRaw($@"SELECT * FROM {partyTable} WHERE id = {{0}} FOR UPDATE", partyId)
-					.AsNoTracking()
-					.FirstOrDefaultAsync(ct)
-					.ConfigureAwait(false);
-
-				// Idempotent: already deleted.
-				if (existingParty == null)
-					return DatabaseResult.Success();
-
-				await dbContext.Database.ExecuteSqlRawAsync(
+				var rows = await dbContext.Database.ExecuteSqlRawAsync(
 					$@"DELETE FROM {partyTable} WHERE id = {{0}}",
 					new object[] { partyId },
 					ct).ConfigureAwait(false);
+
+				// Idempotent: already deleted.
+				if (rows <= 0)
+					return DatabaseResult.Success();
 
 				return DatabaseResult.Success();
 			}, "DeleteParty", cancellationToken).ConfigureAwait(false);

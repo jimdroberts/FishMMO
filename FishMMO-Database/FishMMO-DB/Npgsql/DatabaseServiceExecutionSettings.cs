@@ -42,7 +42,7 @@ namespace FishMMO.Database.Npgsql
 		/// this timeout, a subsequent retry may reclaim the request and proceed.
 		/// 
 		/// Unit: minutes.
-		/// Set to 0 to disable stale takeover (not recommended for production).
+		/// Minimum value is 1. Values less than 1 are treated as 1.
 		/// </summary>
 		public int ProcessedRequestsInProgressTimeoutMinutes { get; set; } = 5;
 

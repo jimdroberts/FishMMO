@@ -184,20 +184,24 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> SaveCharacterAsync(CharacterData characterData, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> SaveCharacterAsync(CharacterData characterData, Guid requestId, CancellationToken cancellationToken = default)
 		{
 			if (characterData.ID <= 0)
 			{
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
+			if (requestId == Guid.Empty)
+			{
+				return DatabaseResult.Failure("VALIDATION_ERROR", "RequestId is required.");
+			}
+
 			// Retry-idempotent: EF Core execution strategy retries can re-run this UPDATE. If a transient error
 			// occurs after commit, a retry can observe rowsAffected == 0 due to the last_saved precondition.
 			// ExecuteIdempotentAsync ensures in-call retries return the cached outcome.
-			var requestId = Guid.NewGuid();
 			var idempotentResult = await ExecuteIdempotentAsync(
 				requestId,
-				accountId: characterData.ID,
+				scopeId: characterData.ID,
 				operationName: "SaveCharacter",
 				operation: async (dbContext, transaction, ct) =>
 				{
@@ -330,28 +334,24 @@ namespace FishMMO.Database.Npgsql.Services
 
 			var transactionResult = await ExecuteTransactionAsync(async (dbContext, transaction, ct) =>
 			{
-				// Lock the character row to prevent concurrent deletes/renames.
-				var character = await dbContext.Characters
-					.FromSqlRaw($@"SELECT * FROM {TableName} WHERE id = {{0}} FOR UPDATE", characterId)
-					.FirstOrDefaultAsync(ct).ConfigureAwait(false);
-
-				// Idempotent: not found or already deleted.
-				if (character == null || character.Deleted)
-					return true;
-
 				var guid = Guid.NewGuid().ToString("D");
 				var suffix = $"_DELETED_{guid}";
-				var deletedName = (character.Name ?? string.Empty) + suffix;
 
-				// Rename + mark deleted.
-				await dbContext.Database.ExecuteSqlRawAsync(
+				// Atomic rename + mark deleted.
+				// Idempotent: if the row does not exist or is already deleted, rowsAffected will be 0.
+				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
 					$@"UPDATE {TableName}
-						SET name = {{1}},
+						SET name = (COALESCE(name, '') || {{1}}),
 							deleted = TRUE,
 							time_deleted = CURRENT_TIMESTAMP
 						WHERE id = {{0}} AND deleted = FALSE",
-					new object[] { characterId, deletedName },
+					new object[] { characterId, suffix },
 					ct).ConfigureAwait(false);
+
+				if (rowsAffected <= 0)
+				{
+					return true;
+				}
 
 				// Hard-delete temporary membership state.
 				var characterGuildsTable = dbContext.GetTableName<CharacterGuildEntity>();

@@ -178,7 +178,7 @@ namespace FishMMO.Database.Npgsql
 				settings.ProcessedRequestsCleanupMinIntervalMinutes = processedRequestsCleanupMinIntervalMinutes;
 
 			if (int.TryParse(section["ProcessedRequestsInProgressTimeoutMinutes"], out var processedRequestsInProgressTimeoutMinutes) && processedRequestsInProgressTimeoutMinutes >= 0)
-				settings.ProcessedRequestsInProgressTimeoutMinutes = processedRequestsInProgressTimeoutMinutes;
+				settings.ProcessedRequestsInProgressTimeoutMinutes = Math.Max(1, processedRequestsInProgressTimeoutMinutes);
 
 			return settings;
 		}

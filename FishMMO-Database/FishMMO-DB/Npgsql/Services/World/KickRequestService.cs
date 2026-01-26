@@ -85,7 +85,9 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				var requests = await dbContext.KickRequests
 					.AsNoTracking()
-					.Where(kr => kr.TimeCreated >= lastFetch && kr.ID > lastPosition)
+					.Where(kr =>
+						kr.TimeCreated > lastFetch ||
+						(kr.TimeCreated == lastFetch && kr.ID > lastPosition))
 					.OrderBy(kr => kr.TimeCreated)
 					.ThenBy(kr => kr.ID)
 					.Take(amount)

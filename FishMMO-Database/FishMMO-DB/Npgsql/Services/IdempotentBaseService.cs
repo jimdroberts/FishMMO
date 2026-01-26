@@ -84,11 +84,11 @@ namespace FishMMO.Database.Npgsql.Services
 			: base(dbContextFactory)
 		{
 			var settings = DbContextFactory.ServiceExecutionSettings ?? new DatabaseServiceExecutionSettings();
-			maxIdempotencyOperationNameLength = Math.Max(1, settings.MaxIdempotencyOperationNameLength);
+			maxIdempotencyOperationNameLength = Math.Min(64, Math.Max(1, settings.MaxIdempotencyOperationNameLength));
 			processedRequestsRetentionDays = Math.Max(0, settings.ProcessedRequestsRetentionDays);
 			processedRequestsCleanupMaxRows = Math.Max(1, settings.ProcessedRequestsCleanupMaxRows);
 			processedRequestsCleanupMinIntervalMinutes = Math.Max(0, settings.ProcessedRequestsCleanupMinIntervalMinutes);
-			processedRequestsInProgressTimeoutMinutes = Math.Max(0, settings.ProcessedRequestsInProgressTimeoutMinutes);
+			processedRequestsInProgressTimeoutMinutes = Math.Max(1, settings.ProcessedRequestsInProgressTimeoutMinutes);
 		}
 
 		private async Task MaybeCleanupProcessedRequestsAsync()
@@ -131,11 +131,13 @@ namespace FishMMO.Database.Npgsql.Services
 
 		private readonly struct IdempotencyState
 		{
-			public IdempotencyState(bool didInsert, long accountId, string operationName, byte status, string? response, string? errorCode, string? errorMessage)
+			public IdempotencyState(bool didInsert, long scopeId, string operationName, Guid ownerId, DateTime leaseExpiresAt, byte status, string? response, string? errorCode, string? errorMessage)
 			{
 				DidInsert = didInsert;
-				AccountId = accountId;
+				ScopeId = scopeId;
 				OperationName = operationName;
+				OwnerId = ownerId;
+				LeaseExpiresAt = leaseExpiresAt;
 				Status = status;
 				Response = response;
 				ErrorCode = errorCode;
@@ -143,8 +145,10 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 
 			public bool DidInsert { get; }
-			public long AccountId { get; }
+			public long ScopeId { get; }
 			public string OperationName { get; }
+			public Guid OwnerId { get; }
+			public DateTime LeaseExpiresAt { get; }
 			public byte Status { get; }
 			public string? Response { get; }
 			public string? ErrorCode { get; }
@@ -211,7 +215,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// </remarks>
 		protected async Task<DatabaseResult<TResult>> ExecuteIdempotentAsync<TResult>(
 			Guid requestId,
-			long accountId,
+			long scopeId,
 			string operationName,
 			Func<NpgsqlDbContext, IDbContextTransaction, CancellationToken, Task<TResult>> operation,
 			CancellationToken cancellationToken = default)
@@ -223,9 +227,9 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<TResult>.Failure("VALIDATION_ERROR", "RequestId is required.");
 			}
 
-			if (accountId <= 0)
+			if (scopeId <= 0)
 			{
-				return DatabaseResult<TResult>.Failure("VALIDATION_ERROR", "AccountId must be greater than 0.");
+				return DatabaseResult<TResult>.Failure("VALIDATION_ERROR", "ScopeId must be greater than 0.");
 			}
 
 			if (string.IsNullOrWhiteSpace(operationName))
@@ -242,13 +246,16 @@ namespace FishMMO.Database.Npgsql.Services
 
 			await MaybeCleanupProcessedRequestsAsync().ConfigureAwait(false);
 
+			var ownerId = Guid.NewGuid();
+			var leaseTimeoutMinutes = processedRequestsInProgressTimeoutMinutes;
+
 			// Acquire or read idempotency state in a durable, non-transactional step.
 			// This must not be rolled back by the business operation transaction.
 			// NOTE: ExecuteInternalAsync uses EF Core's execution strategy. This begin step may be invoked multiple
 			// times under transient retries, but it is safe because it only inserts/reads the idempotency row.
 			var beginResult = await ExecuteInternalAsync(
 				$"{operationName}.IdempotencyBegin",
-				async (dbContext, _, ct) =>
+				async (dbContext, transaction, ct) =>
 				{
 					var requestsTable = dbContext.GetTableName<ProcessedRequestEntity>();
 					var state = await TryBeginIdempotentRequestAsync(
@@ -256,11 +263,13 @@ namespace FishMMO.Database.Npgsql.Services
 						dbTransaction: null,
 						requestsTable,
 						requestId,
-						accountId,
+						scopeId,
 						operationName,
+						ownerId,
+						leaseTimeoutMinutes,
 						ct).ConfigureAwait(false);
 
-					if (!state.DidInsert && state.AccountId != accountId)
+					if (!state.DidInsert && state.ScopeId != scopeId)
 					{
 						return DatabaseResult<IdempotencyState>.Failure("IDEMPOTENCY_MISMATCH", "RequestId is already in use.");
 					}
@@ -270,22 +279,18 @@ namespace FishMMO.Database.Npgsql.Services
 						return DatabaseResult<IdempotencyState>.Failure("IDEMPOTENCY_MISMATCH", "RequestId is already in use.");
 					}
 
-					// If another node is currently processing this request and it isn't stale, fail fast.
-					if (!state.DidInsert && state.Status == 0 && string.IsNullOrWhiteSpace(state.Response))
+					// If another node is currently processing this request and the lease hasn't expired, fail fast.
+					if (!state.DidInsert && state.Status == 0 && string.IsNullOrWhiteSpace(state.Response) && state.OwnerId != ownerId)
 					{
-						if (processedRequestsInProgressTimeoutMinutes <= 0)
-						{
-							return DatabaseResult<IdempotencyState>.Failure("IDEMPOTENCY_IN_PROGRESS", "This request is already being processed.");
-						}
-
 						var tookOver = await TryTakeOverStaleIdempotentRequestAsync(
 							dbContext,
 							dbTransaction: null,
 							requestsTable,
 							requestId,
-							accountId,
+							scopeId,
 							operationName,
-							processedRequestsInProgressTimeoutMinutes,
+							ownerId,
+							leaseTimeoutMinutes,
 							ct).ConfigureAwait(false);
 
 						if (!tookOver)
@@ -293,7 +298,19 @@ namespace FishMMO.Database.Npgsql.Services
 							return DatabaseResult<IdempotencyState>.Failure("IDEMPOTENCY_IN_PROGRESS", "This request is already being processed.");
 						}
 
-						state = new IdempotencyState(true, accountId, operationName, status: 0, response: null, errorCode: null, errorMessage: null);
+						state = new IdempotencyState(true, scopeId, operationName, ownerId, DateTime.UtcNow.AddMinutes(leaseTimeoutMinutes), status: 0, response: null, errorCode: null, errorMessage: null);
+					}
+
+					if (state.Status == 0 && state.OwnerId == ownerId)
+					{
+						await RefreshIdempotencyLeaseAsync(
+							dbContext,
+							dbTransaction: null,
+							requestsTable,
+							requestId,
+							ownerId,
+							leaseTimeoutMinutes,
+							ct).ConfigureAwait(false);
 					}
 
 					return DatabaseResult<IdempotencyState>.Success(state);
@@ -337,8 +354,10 @@ namespace FishMMO.Database.Npgsql.Services
 						transaction?.GetDbTransaction(),
 						requestsTable,
 						requestId,
-						accountId,
+						scopeId,
 						operationName,
+						ownerId,
+						leaseTimeoutMinutes,
 						ct).ConfigureAwait(false);
 
 					if (!state.DidInsert)
@@ -347,6 +366,23 @@ namespace FishMMO.Database.Npgsql.Services
 						{
 							return cached;
 						}
+
+						if (state.Status == 0 && string.IsNullOrWhiteSpace(state.Response) && state.OwnerId != ownerId)
+						{
+							return DatabaseResult<TResult>.Failure("IDEMPOTENCY_IN_PROGRESS", "This request is already being processed.", isTransient: false);
+						}
+					}
+
+					if (state.Status == 0 && state.OwnerId == ownerId)
+					{
+						await RefreshIdempotencyLeaseAsync(
+							dbContext,
+							transaction?.GetDbTransaction(),
+							requestsTable,
+							requestId,
+							ownerId,
+							leaseTimeoutMinutes,
+							ct).ConfigureAwait(false);
 					}
 
 					// At this point, this attempt owns the request in-progress state and is responsible for producing
@@ -368,8 +404,9 @@ namespace FishMMO.Database.Npgsql.Services
 						transaction?.GetDbTransaction(),
 						requestsTable,
 						requestId,
-						accountId,
+						scopeId,
 						operationName,
+						ownerId,
 						status: 1,
 						responseJson,
 						errorCode: null,
@@ -415,8 +452,9 @@ namespace FishMMO.Database.Npgsql.Services
 							dbTransaction: null,
 							requestsTable,
 							requestId,
-							accountId,
+							scopeId,
 							operationName,
+							ownerId,
 							status: 2,
 							failureJson,
 							dbEx.ErrorCode,
@@ -484,8 +522,9 @@ namespace FishMMO.Database.Npgsql.Services
 			DbTransaction? dbTransaction,
 			string requestsTable,
 			Guid requestId,
-			long accountId,
+			long scopeId,
 			string operationName,
+			Guid ownerId,
 			int timeoutMinutes,
 			CancellationToken cancellationToken)
 		{
@@ -498,8 +537,10 @@ namespace FishMMO.Database.Npgsql.Services
 			await using var command = dbContext.Database.GetDbConnection().CreateCommand();
 			command.Transaction = dbTransaction;
 			command.CommandText = $@"UPDATE {requestsTable}
-				SET account_id = @account_id,
+				SET scope_id = @scope_id,
 					operation_name = @operation_name,
+					owner_id = @owner_id,
+					lease_expires_at = (CURRENT_TIMESTAMP + (@timeout_minutes * INTERVAL '1 minute')),
 					status = 0,
 					response = NULL,
 					error_code = NULL,
@@ -508,12 +549,13 @@ namespace FishMMO.Database.Npgsql.Services
 					completed_at = NULL
 				WHERE request_id = @request_id
 					AND status = 0
-					AND created_at < (CURRENT_TIMESTAMP - (@timeout_minutes * INTERVAL '1 minute'))
+					AND lease_expires_at < CURRENT_TIMESTAMP
 				RETURNING 1;";
 
 			AddParameter(command, "@request_id", requestId);
-			AddParameter(command, "@account_id", accountId);
+			AddParameter(command, "@scope_id", scopeId);
 			AddParameter(command, "@operation_name", operationName);
+			AddParameter(command, "@owner_id", ownerId);
 			AddParameter(command, "@timeout_minutes", timeoutMinutes);
 
 			var timeoutSeconds = dbContext.Database.GetCommandTimeout() ?? 0;
@@ -531,34 +573,40 @@ namespace FishMMO.Database.Npgsql.Services
 			DbTransaction? dbTransaction,
 			string requestsTable,
 			Guid requestId,
-			long accountId,
+			long scopeId,
 			string operationName,
+			Guid ownerId,
+			int leaseTimeoutMinutes,
 			CancellationToken cancellationToken)
 		{
 			await EnsureConnectionOpenAsync(dbContext, cancellationToken).ConfigureAwait(false);
 			await using var command = dbContext.Database.GetDbConnection().CreateCommand();
 			command.Transaction = dbTransaction;
 			command.CommandText = $@"WITH inserted AS (
-									INSERT INTO {requestsTable} (request_id, account_id, operation_name, status, response, error_code, error_message, created_at, completed_at)
-									VALUES (@request_id, @account_id, @operation_name, 0, NULL, NULL, NULL, CURRENT_TIMESTAMP, NULL)
-									ON CONFLICT (request_id) DO NOTHING
-									RETURNING 1 AS inserted
-									)
-									SELECT
-										COALESCE((SELECT inserted FROM inserted), 0) AS inserted,
-										account_id,
-										operation_name,
-										status,
-										response,
-										error_code,
-										error_message
-									FROM {requestsTable}
-									WHERE request_id = @request_id
-									LIMIT 1;";
+								INSERT INTO {requestsTable} (request_id, scope_id, operation_name, status, owner_id, lease_expires_at, response, error_code, error_message, created_at, completed_at)
+								VALUES (@request_id, @scope_id, @operation_name, 0, @owner_id, (CURRENT_TIMESTAMP + (@lease_minutes * INTERVAL '1 minute')), NULL, NULL, NULL, CURRENT_TIMESTAMP, NULL)
+								ON CONFLICT (request_id) DO NOTHING
+								RETURNING 1 AS inserted
+								)
+								SELECT
+									COALESCE((SELECT inserted FROM inserted), 0) AS inserted,
+									scope_id,
+									operation_name,
+									owner_id,
+									lease_expires_at,
+									status,
+									response,
+									error_code,
+									error_message
+								FROM {requestsTable}
+								WHERE request_id = @request_id
+								LIMIT 1;";
 
 			AddParameter(command, "@request_id", requestId);
-			AddParameter(command, "@account_id", accountId);
+			AddParameter(command, "@scope_id", scopeId);
 			AddParameter(command, "@operation_name", operationName);
+			AddParameter(command, "@owner_id", ownerId);
+			AddParameter(command, "@lease_minutes", Math.Max(1, leaseTimeoutMinutes));
 
 			var timeoutSeconds = dbContext.Database.GetCommandTimeout() ?? 0;
 			if (timeoutSeconds > 0)
@@ -573,13 +621,46 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 
 			var insertedFlag = Convert.ToInt32(reader.GetValue(0)) == 1;
-			var existingAccountId = Convert.ToInt64(reader.GetValue(1));
+			var existingScopeId = Convert.ToInt64(reader.GetValue(1));
 			var existingOperationName = reader.IsDBNull(2) ? string.Empty : reader.GetString(2);
-			var existingStatus = Convert.ToByte(reader.GetValue(3));
-			var existingResponse = reader.IsDBNull(4) ? null : reader.GetString(4);
-			var existingErrorCode = reader.IsDBNull(5) ? null : reader.GetString(5);
-			var existingErrorMessage = reader.IsDBNull(6) ? null : reader.GetString(6);
-			return new IdempotencyState(insertedFlag, existingAccountId, existingOperationName, existingStatus, existingResponse, existingErrorCode, existingErrorMessage);
+			var existingOwnerId = reader.IsDBNull(3) ? Guid.Empty : reader.GetGuid(3);
+			var existingLeaseExpiresAt = reader.IsDBNull(4) ? DateTime.MinValue : reader.GetDateTime(4);
+			var existingStatus = Convert.ToByte(reader.GetValue(5));
+			var existingResponse = reader.IsDBNull(6) ? null : reader.GetString(6);
+			var existingErrorCode = reader.IsDBNull(7) ? null : reader.GetString(7);
+			var existingErrorMessage = reader.IsDBNull(8) ? null : reader.GetString(8);
+			return new IdempotencyState(insertedFlag, existingScopeId, existingOperationName, existingOwnerId, existingLeaseExpiresAt, existingStatus, existingResponse, existingErrorCode, existingErrorMessage);
+		}
+
+		private static async Task<int> RefreshIdempotencyLeaseAsync(
+			NpgsqlDbContext dbContext,
+			DbTransaction? dbTransaction,
+			string requestsTable,
+			Guid requestId,
+			Guid ownerId,
+			int leaseTimeoutMinutes,
+			CancellationToken cancellationToken)
+		{
+			await EnsureConnectionOpenAsync(dbContext, cancellationToken).ConfigureAwait(false);
+			await using var command = dbContext.Database.GetDbConnection().CreateCommand();
+			command.Transaction = dbTransaction;
+			command.CommandText = $@"UPDATE {requestsTable}
+				SET lease_expires_at = (CURRENT_TIMESTAMP + (@lease_minutes * INTERVAL '1 minute'))
+				WHERE request_id = @request_id
+					AND owner_id = @owner_id
+					AND status = 0;";
+
+			var timeoutSeconds = dbContext.Database.GetCommandTimeout() ?? 0;
+			if (timeoutSeconds > 0)
+			{
+				command.CommandTimeout = timeoutSeconds;
+			}
+
+			AddParameter(command, "@request_id", requestId);
+			AddParameter(command, "@owner_id", ownerId);
+			AddParameter(command, "@lease_minutes", Math.Max(1, leaseTimeoutMinutes));
+
+			return await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
 		}
 
 		private static async Task<int> UpdateProcessedRequestAsync(
@@ -587,8 +668,9 @@ namespace FishMMO.Database.Npgsql.Services
 			DbTransaction? dbTransaction,
 			string requestsTable,
 			Guid requestId,
-			long accountId,
+			long scopeId,
 			string operationName,
+			Guid ownerId,
 			byte status,
 			string? responseJson,
 			string? errorCode,
@@ -601,12 +683,14 @@ namespace FishMMO.Database.Npgsql.Services
 			command.CommandText = $@"UPDATE {requestsTable}
 				SET status = @status,
 					completed_at = CURRENT_TIMESTAMP,
+					lease_expires_at = CURRENT_TIMESTAMP,
 					response = @response,
 					error_code = @error_code,
 					error_message = @error_message
 				WHERE request_id = @request_id
-					AND account_id = @account_id
+					AND scope_id = @scope_id
 					AND operation_name = @operation_name
+					AND owner_id = @owner_id
 					AND status = 0;";
 
 			var timeoutSeconds = dbContext.Database.GetCommandTimeout() ?? 0;
@@ -616,8 +700,9 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 
 			AddParameter(command, "@request_id", requestId);
-			AddParameter(command, "@account_id", accountId);
+			AddParameter(command, "@scope_id", scopeId);
 			AddParameter(command, "@operation_name", operationName);
+			AddParameter(command, "@owner_id", ownerId);
 			AddParameter(command, "@status", status);
 			AddJsonbParameter(command, "@response", responseJson);
 			AddParameter(command, "@error_code", (object?)errorCode ?? DBNull.Value);
@@ -673,11 +758,15 @@ namespace FishMMO.Database.Npgsql.Services
 				return Task.FromResult(DatabaseResult<int>.Failure("VALIDATION_ERROR", "MaxRows must be greater than 0."));
 			}
 
-			var cutoff = DateTime.UtcNow.Subtract(retention);
+			var retentionSeconds = (long)Math.Ceiling(retention.TotalSeconds);
+			if (retentionSeconds <= 0)
+			{
+				return Task.FromResult(DatabaseResult<int>.Failure("VALIDATION_ERROR", "Retention must be greater than 0."));
+			}
 
 			return ExecuteInternalAsync(
 				"CleanupProcessedRequests",
-				async (dbContext, _, ct) =>
+				async (dbContext, transaction, ct) =>
 				{
 					var requestsTable = dbContext.GetTableName<ProcessedRequestEntity>();
 					await EnsureConnectionOpenAsync(dbContext, ct).ConfigureAwait(false);
@@ -686,8 +775,8 @@ namespace FishMMO.Database.Npgsql.Services
 						WHERE request_id IN (
 							SELECT request_id
 							FROM {requestsTable}
-							WHERE (completed_at IS NOT NULL AND completed_at < @cutoff)
-							   OR (completed_at IS NULL AND created_at < @cutoff)
+							WHERE (completed_at IS NOT NULL AND completed_at < (CURRENT_TIMESTAMP - (@retention_seconds * INTERVAL '1 second')))
+							   OR (completed_at IS NULL AND lease_expires_at < (CURRENT_TIMESTAMP - (@retention_seconds * INTERVAL '1 second')))
 							ORDER BY created_at
 							LIMIT @max_rows
 						);";
@@ -698,7 +787,7 @@ namespace FishMMO.Database.Npgsql.Services
 						command.CommandTimeout = timeoutSeconds;
 					}
 
-					AddParameter(command, "@cutoff", cutoff);
+					AddParameter(command, "@retention_seconds", retentionSeconds);
 					AddParameter(command, "@max_rows", maxRows);
 
 					var rows = await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -68,6 +69,10 @@ namespace FishMMO.Database.Npgsql.Services
 		/// Saves an existing character's data to the database using atomic UPDATE.
 		/// </summary>
 		/// <param name="characterData">The character data to save.</param>
+		/// <param name="requestId">
+		/// Required idempotency key.
+		/// Retries of the same logical request must reuse this value to prevent duplicate execution under transient retries.
+		/// </param>
 		/// <param name="cancellationToken">Token to cancel the operation.</param>
 		/// <returns>
 		/// A <see cref="DatabaseResult"/> indicating success or containing a <see cref="DatabaseException"/> on failure.
@@ -77,7 +82,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// Updates the last_saved timestamp automatically.
 		/// Execution strategy wrapping ensures transient database failures are automatically retried.
 		/// </remarks>
-		Task<DatabaseResult> SaveCharacterAsync(CharacterData characterData, CancellationToken cancellationToken = default);
+		Task<DatabaseResult> SaveCharacterAsync(CharacterData characterData, Guid requestId, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Soft-deletes a character.
@@ -90,7 +95,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <remarks>
 		/// Marks the character and all character-owned rows as deleted (soft cascade), without removing data.
 		/// To allow reusing the character name, the character is renamed by appending <c>_DELETED_{GUID}</c>
-		/// to both <c>Name</c> and <c>NameLowercase</c>.
+		/// to <c>Name</c>. <c>NameLowercase</c> is derived from <c>Name</c> (case-insensitive uniqueness).
 		/// Character guild/party membership rows are hard-deleted (temporary state).
 		/// If the character does not exist (or is already deleted), this method returns success (idempotent).
 		/// Execution strategy wrapping ensures transient database failures are automatically retried.

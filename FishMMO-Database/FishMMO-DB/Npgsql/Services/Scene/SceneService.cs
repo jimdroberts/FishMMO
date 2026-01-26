@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using FishMMO.Database.Data;
 using FishMMO.Database.Data.Enums;
 using FishMMO.Database.Exceptions;
@@ -76,6 +77,7 @@ namespace FishMMO.Database.Npgsql.Services
 			long worldServerId,
 			string sceneName,
 			SceneType sceneType,
+			Guid requestId,
 			long characterId = 0,
 			CancellationToken cancellationToken = default)
 		{
@@ -84,16 +86,19 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<long>.Failure("VALIDATION_ERROR", "Invalid parameters: world server ID and scene name are required.");
 			}
 
+			if (requestId == Guid.Empty)
+			{
+				return DatabaseResult<long>.Failure("VALIDATION_ERROR", "RequestId is required.");
+			}
+
 			// Retry-safety: EF Core's execution strategy may re-invoke the delegate after a transient failure
 			// (deadlock/serialization/lock timeout). If a prior attempt already committed the INSERT but the client
 			// observed an exception, this idempotency key ensures we return the cached scene id instead of inserting again.
-			var requestId = Guid.NewGuid();
-
 			return await ExecuteIdempotentAsync<long>(
 				requestId,
-				accountId: worldServerId,
+				scopeId: worldServerId,
 				operationName: "EnqueueScene",
-				operation: async (dbContext, _, ct) =>
+				operation: async (dbContext, transaction, ct) =>
 			{
 				var sceneTypeInt = (int)sceneType;
 				var sceneStatusInt = (int)SceneStatus.Pending;
@@ -126,36 +131,43 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<SceneData>> DequeueAsync(CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<SceneData>> DequeueAsync(Guid requestId, CancellationToken cancellationToken = default)
 		{
-			// Use SceneData? (nullable) since no pending scenes is valid business logic, not an error
-			var result = await ExecuteAsync<SceneData?>(async (dbContext, ct) =>
+			if (requestId == Guid.Empty)
 			{
-				var sql = $@"WITH scene_to_update AS (
-					SELECT id FROM {TableName}
-					WHERE scene_status = {{0}}
-					ORDER BY time_created
-					FOR UPDATE SKIP LOCKED
-					LIMIT 1
-					)
-					UPDATE {TableName}
-					SET scene_status = {{1}}
-					FROM scene_to_update
-					WHERE {TableName}.id = scene_to_update.id
-					RETURNING {TableName}.id, {TableName}.world_server_id, {TableName}.scene_server_id, {TableName}.scene_name, {TableName}.scene_handle, {TableName}.scene_status, {TableName}.scene_type, {TableName}.character_id, {TableName}.character_count, {TableName}.time_created";
+				return DatabaseResult<SceneData>.Failure("VALIDATION_ERROR", "RequestId is required.");
+			}
 
-				var pendingStatus = (int)SceneStatus.Pending;
-				var loadingStatus = (int)SceneStatus.Loading;
+			var result = await ExecuteIdempotentAsync<SceneData?>(
+				requestId,
+				scopeId: 1,
+				operationName: "DequeueScene",
+				operation: async (dbContext, transaction, ct) =>
+				{
+					var sql = $@"WITH scene_to_update AS (
+						SELECT id FROM {TableName}
+						WHERE scene_status = {{0}}
+						ORDER BY time_created, id
+						FOR UPDATE SKIP LOCKED
+						LIMIT 1
+						)
+						UPDATE {TableName}
+						SET scene_status = {{1}}
+						FROM scene_to_update
+						WHERE {TableName}.id = scene_to_update.id
+						RETURNING {TableName}.id, {TableName}.world_server_id, {TableName}.scene_server_id, {TableName}.scene_name, {TableName}.scene_handle, {TableName}.scene_status, {TableName}.scene_type, {TableName}.character_id, {TableName}.character_count, {TableName}.time_created";
 
-				// Atomically dequeue next pending scene with CTE and FOR UPDATE SKIP LOCKED
-				// CTE ensures the row is locked BEFORE the UPDATE, preventing race conditions
-				var entity = await dbContext.Scenes
-					.FromSqlRaw(sql, pendingStatus, loadingStatus)
-					.AsNoTracking()
-					.FirstOrDefaultAsync(ct).ConfigureAwait(false);
+					var pendingStatus = (int)SceneStatus.Pending;
+					var loadingStatus = (int)SceneStatus.Loading;
 
-				return entity != null ? MapEntityToDto(entity) : null;
-			}, "DequeueScene", cancellationToken).ConfigureAwait(false);
+					var entity = await dbContext.Scenes
+						.FromSqlRaw(sql, pendingStatus, loadingStatus)
+						.AsNoTracking()
+						.FirstOrDefaultAsync(ct).ConfigureAwait(false);
+
+					return entity != null ? (SceneData?)MapEntityToDto(entity) : null;
+				},
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			// Convert null result to business logic failure (not an exception case)
 			if (result.IsSuccess && result.Data == null)
@@ -201,6 +213,7 @@ namespace FishMMO.Database.Npgsql.Services
 			long worldServerId,
 			string sceneName,
 			int sceneHandle,
+			Guid requestId,
 			CancellationToken cancellationToken = default)
 		{
 			if (sceneServerId <= 0 || worldServerId <= 0 || string.IsNullOrWhiteSpace(sceneName))
@@ -208,64 +221,85 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid parameters: scene server ID, world server ID, and scene name are required.");
 			}
 
+			if (requestId == Guid.Empty)
+			{
+				return DatabaseResult.Failure("VALIDATION_ERROR", "RequestId is required.");
+			}
+
 			// Retry-idempotent: if the claim already succeeded in a previous attempt and a transient error
 			// caused a retry, the UPDATE may affect 0 rows. In that case, treat "already ready" as success.
-			var result = await ExecuteAsync(async (dbContext, ct) =>
-			{
-				var sql = $@"WITH claimable_scene AS (
-				SELECT id FROM {TableName}
-				WHERE world_server_id = {{0}}
-					AND scene_name = {{1}}
-					AND scene_status = {{2}}
-				FOR UPDATE SKIP LOCKED
-				LIMIT 1
-				)
-				UPDATE {TableName}
-				SET scene_status = {{3}},
-					scene_server_id = {{4}},
-					scene_handle = {{5}}
-				WHERE id IN (SELECT id FROM claimable_scene)";
-
-				var rows = await dbContext.Database.ExecuteSqlRawAsync(
-					sql,
-					new object[]
+			var result = await ExecuteIdempotentAsync<long?>(
+				requestId,
+				scopeId: worldServerId,
+				operationName: "SetSceneReady",
+				operation: async (dbContext, transaction, ct) =>
+				{
+					if (dbContext.Database.GetDbConnection().State != System.Data.ConnectionState.Open)
 					{
-						worldServerId,
-						sceneName,
-						(int)SceneStatus.Loading,
-						(int)SceneStatus.Ready,
-						sceneServerId,
-						sceneHandle
-					},
-					ct).ConfigureAwait(false);
+						await dbContext.Database.OpenConnectionAsync(ct).ConfigureAwait(false);
+					}
 
-				if (rows > 0)
-				{
-					return true;
-				}
+					await using var command = dbContext.Database.GetDbConnection().CreateCommand();
+					command.Transaction = transaction.GetDbTransaction();
+					command.CommandText = $@"WITH claimable_scene AS (
+						SELECT id FROM {TableName}
+						WHERE world_server_id = @world_server_id
+							AND scene_name = @scene_name
+							AND scene_status = @loading_status
+						ORDER BY time_created, id
+						FOR UPDATE SKIP LOCKED
+						LIMIT 1
+					)
+					UPDATE {TableName}
+					SET scene_status = @ready_status,
+						scene_server_id = @scene_server_id,
+						scene_handle = @scene_handle
+					FROM claimable_scene
+					WHERE {TableName}.id = claimable_scene.id
+					RETURNING {TableName}.id;";
 
-				// Idempotent success case: already ready with the same target values.
-				var alreadyReady = await dbContext.Scenes
-					.AsNoTracking()
-					.AnyAsync(s =>
-						s.WorldServerID == worldServerId
-						&& s.SceneName == sceneName
-						&& s.SceneStatus == (int)SceneStatus.Ready
-						&& s.SceneServerID == sceneServerId
-						&& s.SceneHandle == sceneHandle,
-					ct).ConfigureAwait(false);
+					AddDbParameter(command, "@world_server_id", worldServerId);
+					AddDbParameter(command, "@scene_name", sceneName);
+					AddDbParameter(command, "@loading_status", (int)SceneStatus.Loading);
+					AddDbParameter(command, "@ready_status", (int)SceneStatus.Ready);
+					AddDbParameter(command, "@scene_server_id", sceneServerId);
+					AddDbParameter(command, "@scene_handle", sceneHandle);
 
-				if (alreadyReady)
-				{
-					return true;
-				}
+					var scalar = await command.ExecuteScalarAsync(ct).ConfigureAwait(false);
+					if (scalar != null && scalar != DBNull.Value)
+					{
+						return Convert.ToInt64(scalar);
+					}
 
-				return false;
-			}, "SetSceneReady", cancellationToken).ConfigureAwait(false);
+					var alreadyReadyId = await dbContext.Scenes
+						.AsNoTracking()
+						.Where(s =>
+							s.WorldServerID == worldServerId
+							&& s.SceneName == sceneName
+							&& s.SceneStatus == (int)SceneStatus.Ready
+							&& s.SceneServerID == sceneServerId
+							&& s.SceneHandle == sceneHandle)
+						.OrderBy(s => s.TimeCreated)
+						.ThenBy(s => s.ID)
+						.Select(s => (long?)s.ID)
+						.FirstOrDefaultAsync(ct)
+						.ConfigureAwait(false);
+
+					return alreadyReadyId;
+				},
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
-				? (result.Data ? DatabaseResult.Success() : DatabaseResult.Failure("SCENE_NOT_CLAIMABLE", "No matching loading scene could be claimed."))
+				? (result.Data.HasValue ? DatabaseResult.Success() : DatabaseResult.Failure("SCENE_NOT_CLAIMABLE", "No matching loading scene could be claimed."))
 				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+		}
+
+		private static void AddDbParameter(System.Data.Common.DbCommand command, string name, object value)
+		{
+			var parameter = command.CreateParameter();
+			parameter.ParameterName = name;
+			parameter.Value = value ?? DBNull.Value;
+			command.Parameters.Add(parameter);
 		}
 
 		/// <inheritdoc/>

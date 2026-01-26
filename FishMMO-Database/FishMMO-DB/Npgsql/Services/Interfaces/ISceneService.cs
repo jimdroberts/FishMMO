@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -38,6 +39,10 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="sceneName">Scene name.</param>
 		/// <param name="sceneType">Scene type.</param>
 		/// <param name="characterId">Character ID (optional, for instances).</param>
+		/// <param name="requestId">
+		/// Required idempotency key.
+		/// Retries of the same logical request must reuse this value to prevent duplicate writes.
+		/// </param>
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>
 		/// DatabaseResult containing scene ID on success, or error information on failure.
@@ -52,22 +57,27 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 			long worldServerId,
 			string sceneName,
 			SceneType sceneType,
+			Guid requestId,
 			long characterId = 0,
 			CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Dequeues the next pending scene load request and marks it as loading.
 		/// </summary>
+		/// <param name="requestId">
+		/// Required idempotency key.
+		/// Retries of the same logical request must reuse this value to prevent double-dequeue under transient retries.
+		/// </param>
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>
-		/// DatabaseResult containing scene data if a pending scene was found and dequeued, empty result if no pending scenes, or error information on failure.
+		/// DatabaseResult containing scene data if a pending scene was found and dequeued, or error information on failure.
 		/// </returns>
 		/// <remarks>
 		/// Uses FromSqlRaw with FOR UPDATE SKIP LOCKED and execution strategy wrapping to ensure transient database
 		/// failures are automatically retried. Atomically updates status from Pending to Loading to prevent race conditions.
-		/// Returns success with null data when no pending scenes exist (not an error condition).
+		/// Returns failure with error code <c>NO_PENDING_SCENES</c> when no pending scenes exist.
 		/// </remarks>
-		Task<DatabaseResult<SceneData>> DequeueAsync(CancellationToken cancellationToken = default);
+		Task<DatabaseResult<SceneData>> DequeueAsync(Guid requestId, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Updates the status of a scene.
@@ -91,6 +101,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="worldServerId">World server ID.</param>
 		/// <param name="sceneName">Scene name.</param>
 		/// <param name="sceneHandle">Scene handle.</param>
+		/// <param name="requestId">Required idempotency key for this claim operation.</param>
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>
 		/// DatabaseResult indicating success or error information on failure.
@@ -100,12 +111,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// failures are automatically retried. Only updates scenes in Loading status.
 		/// Returns entity not found exception if scene doesn't exist or is not in Loading status.
 		/// </remarks>
-		Task<DatabaseResult> SetReadyAsync(
-			long sceneServerId,
-			long worldServerId,
-			string sceneName,
-			int sceneHandle,
-			CancellationToken cancellationToken = default);
+		Task<DatabaseResult> SetReadyAsync(long sceneServerId, long worldServerId, string sceneName, int sceneHandle, Guid requestId, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Updates the character count for a scene (heartbeat).

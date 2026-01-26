@@ -148,34 +148,26 @@ namespace FishMMO.Database.Npgsql.Services
 			var transactionResult = await ExecuteTransactionAsync(async (dbContext, transaction, ct) =>
 			{
 				var characterGuildsTable = dbContext.GetTableName<CharacterGuildEntity>();
-				await dbContext.CharacterGuilds
-					.FromSqlRaw($@"SELECT * FROM {characterGuildsTable} WHERE guild_id = {{0}} ORDER BY character_id FOR UPDATE", guildId)
-					.AsNoTracking()
-					.ToListAsync(ct)
-					.ConfigureAwait(false);
+				_ = await dbContext.Database.ExecuteSqlRawAsync(
+					$@"SELECT 1 FROM {characterGuildsTable} WHERE guild_id = {{0}} ORDER BY character_id FOR UPDATE",
+					new object[] { guildId },
+					ct).ConfigureAwait(false);
 
 				var guildUpdatesTable = dbContext.GetTableName<GuildUpdateEntity>();
-				await dbContext.GuildUpdates
-					.FromSqlRaw($@"SELECT * FROM {guildUpdatesTable} WHERE guild_id = {{0}} ORDER BY guild_id FOR UPDATE", guildId)
-					.AsNoTracking()
-					.ToListAsync(ct)
-					.ConfigureAwait(false);
+				_ = await dbContext.Database.ExecuteSqlRawAsync(
+					$@"SELECT 1 FROM {guildUpdatesTable} WHERE guild_id = {{0}} ORDER BY guild_id FOR UPDATE",
+					new object[] { guildId },
+					ct).ConfigureAwait(false);
 
 				var guildTable = dbContext.GetTableName<GuildEntity>();
-				var existingGuild = await dbContext.Guilds
-					.FromSqlRaw($@"SELECT * FROM {guildTable} WHERE id = {{0}} FOR UPDATE", guildId)
-					.AsNoTracking()
-					.FirstOrDefaultAsync(ct)
-					.ConfigureAwait(false);
-
-				// Idempotent: already deleted.
-				if (existingGuild == null)
-					return DatabaseResult.Success();
-
-				await dbContext.Database.ExecuteSqlRawAsync(
+				var rows = await dbContext.Database.ExecuteSqlRawAsync(
 					$@"DELETE FROM {guildTable} WHERE id = {{0}}",
 					new object[] { guildId },
 					ct).ConfigureAwait(false);
+
+				// Idempotent: already deleted.
+				if (rows <= 0)
+					return DatabaseResult.Success();
 
 				return DatabaseResult.Success();
 			}, "DeleteGuild", cancellationToken).ConfigureAwait(false);

@@ -64,10 +64,16 @@ namespace FishMMO.Database.Npgsql.Entities
 				.HasDatabaseName("IX_Scene_TimeCreated");
 
 			// Performance index for scene queue dequeue (hot path: DequeueAsync)
-			// Covers WHERE scene_status = 0 ORDER BY time_created LIMIT 1
-			builder.HasIndex(e => new { e.SceneStatus, e.TimeCreated })
+			// Covers WHERE scene_status = 0 ORDER BY time_created, id LIMIT 1
+			builder.HasIndex(e => new { e.SceneStatus, e.TimeCreated, e.ID })
 				.HasDatabaseName("IX_Scene_Status_TimeCreated")
 				.HasFilter("scene_status = 0");
+
+			// Performance index for scene ready-claim (hot path: SetReadyAsync)
+			// Covers WHERE world_server_id = ? AND scene_name = ? AND scene_status = 1 ORDER BY time_created, id LIMIT 1
+			builder.HasIndex(e => new { e.WorldServerID, e.SceneName, e.TimeCreated, e.ID })
+				.HasDatabaseName("IX_Scene_ClaimReady")
+				.HasFilter("scene_status = 1");
 		}
 	}
 }

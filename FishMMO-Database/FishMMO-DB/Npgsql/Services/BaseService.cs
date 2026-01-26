@@ -124,18 +124,47 @@ namespace FishMMO.Database.Npgsql.Services
 
 							if (operationResult.IsSuccess)
 							{
-								await transaction.CommitAsync(ct).ConfigureAwait(false);
+									try
+									{
+										await transaction.CommitAsync(ct).ConfigureAwait(false);
+									}
+									catch
+									{
+										try
+										{
+											await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+										}
+										catch
+										{
+											// Best-effort only. Never hide commit failures.
+										}
+										throw;
+									}
 							}
 							else
 							{
-								await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+									try
+									{
+										await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+									}
+									catch
+									{
+										// Best-effort only. Non-success results must not be converted into exceptions.
+									}
 							}
 
 							return operationResult;
 						}
 						catch
 						{
-							await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+							try
+							{
+								await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+							}
+							catch
+							{
+								// Best-effort only. Never hide original exceptions.
+							}
 							throw;
 						}
 					}
