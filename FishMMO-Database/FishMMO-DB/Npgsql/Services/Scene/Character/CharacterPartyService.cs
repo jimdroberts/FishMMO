@@ -28,7 +28,7 @@ namespace FishMMO.Database.Npgsql.Services
 	/// - Centralized exception handling and mapping
 	/// - Consistent DatabaseResult pattern
 	/// </remarks>
-	public sealed class CharacterPartyService : BaseService<CharacterPartyEntity>, ICharacterPartyService
+	public sealed class CharacterPartyService : IdempotentBaseService<CharacterPartyEntity>, ICharacterPartyService
 	{
 		private const int MaxAllowedPartyCapacity = 40;
 
@@ -73,7 +73,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> SavePartyMembershipAsync(CharacterPartyData partyData, int maxCapacity, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> SavePartyMembershipAsync(CharacterPartyData partyData, int maxCapacity, Guid requestId, CancellationToken cancellationToken = default)
 		{
 			if (partyData.CharacterID == 0 || partyData.PartyID == 0)
 			{
@@ -92,8 +92,17 @@ namespace FishMMO.Database.Npgsql.Services
 					$"Invalid max capacity. Max capacity must not exceed {MaxAllowedPartyCapacity}.");
 			}
 
+			if (requestId == Guid.Empty)
+			{
+				return DatabaseResult.Failure("VALIDATION_ERROR", "RequestId is required for idempotent party membership save.");
+			}
+
 			// Use transaction to atomically check capacity and insert/update membership
-			var result = await ExecuteTransactionAsync(async (dbContext, transaction, ct) =>
+			var result = await ExecuteIdempotentResultAsync(
+				requestId,
+				scopeId: partyData.CharacterID,
+				operationName: "SavePartyMembership",
+				operation: async (dbContext, transaction, ct) =>
 			{
 				var charactersTableName = dbContext.GetTableName<CharacterEntity>();
 				var activeCharacter = await dbContext.Characters
@@ -120,27 +129,42 @@ namespace FishMMO.Database.Npgsql.Services
 				if (needsCapacityCheck)
 				{
 					var partyTableName = dbContext.GetTableName<PartyEntity>();
+					var membershipTableName = dbContext.GetTableName<CharacterPartyEntity>();
 
-					// Then lock party row to prevent concurrent capacity violations
-					// Lock ordering: character membership -> party (prevents race conditions)
-					var partyEntity = await dbContext.Parties
-						.FromSqlRaw($"SELECT * FROM {partyTableName} WHERE id = {{0}} FOR UPDATE", partyData.PartyID)
+					// Atomic capacity check with proper locking to prevent race conditions
+					// Uses FOR UPDATE on party and FOR SHARE on member count to ensure consistent read
+					// Lock ordering: character membership (already locked) -> party -> member count
+					var capacityResult = await dbContext.Parties
+						.FromSqlRaw($@"
+							SELECT p.*
+							FROM {partyTableName} p
+							CROSS JOIN LATERAL (
+								SELECT COUNT(*) as member_count
+								FROM {membershipTableName}
+								WHERE party_id = {{0}}
+								FOR SHARE
+							) mc
+							WHERE p.id = {{0}}
+								AND mc.member_count < {{1}}
+							FOR UPDATE",
+							partyData.PartyID,
+							maxCapacity)
 						.FirstOrDefaultAsync(ct).ConfigureAwait(false);
 
-					if (partyEntity == null)
+					if (capacityResult == null)
 					{
-						return DatabaseResult.Failure(
-							"NOT_FOUND",
-							$"Party with ID {partyData.PartyID} does not exist.");
-					}
+						// Either party doesn't exist or capacity exceeded - check which
+						var partyExists = await dbContext.Parties
+							.AsNoTracking()
+							.AnyAsync(p => p.ID == partyData.PartyID, ct).ConfigureAwait(false);
 
-					// Count current members (lock is held, preventing concurrent inserts)
-					var currentCount = await dbContext.CharacterParties
-						.Where(p => p.PartyID == partyData.PartyID)
-						.CountAsync(ct).ConfigureAwait(false);
+						if (!partyExists)
+						{
+							return DatabaseResult.Failure(
+								"NOT_FOUND",
+								$"Party with ID {partyData.PartyID} does not exist.");
+						}
 
-					if (currentCount >= maxCapacity)
-					{
 						return DatabaseResult.Failure(
 							"CAPACITY_EXCEEDED",
 							$"Party has reached maximum capacity of {maxCapacity} members.");
@@ -161,9 +185,10 @@ namespace FishMMO.Database.Npgsql.Services
 					ct).ConfigureAwait(false);
 
 				return DatabaseResult.Success();
-			}, "SavePartyMembership", cancellationToken).ConfigureAwait(false);
+			},
+				cancellationToken).ConfigureAwait(false);
 
-			return result.IsSuccess ? result.Data : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 
 		/// <inheritdoc/>

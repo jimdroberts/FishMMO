@@ -54,16 +54,27 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 
 		/// <summary>
 		/// Creates a new account with the specified credentials.
-		/// Uses atomic UPSERT to prevent race conditions.
+		/// Uses request-scoped idempotency to guarantee correct outcomes under transient retries.
 		/// </summary>
 		/// <param name="accountName">The account name. Must be 3-32 characters.</param>
 		/// <param name="salt">The salt for SRP password hashing. Must not be null or whitespace.</param>
 		/// <param name="verifier">The verifier for SRP password hashing. Must not be null or whitespace.</param>
+		/// <param name="requestId">
+		/// A caller-generated idempotency key that must be stable for the duration of the logical request.
+		/// Use the same value across retries of the same logical call; use a different value for distinct calls.
+		/// </param>
 		/// <param name="cancellationToken">Token to cancel the asynchronous operation.</param>
 		/// <returns>DatabaseResult indicating success or failure with error details.</returns>
 		/// <remarks>
-		/// This method uses PostgreSQL UPSERT (INSERT ... ON CONFLICT DO NOTHING) for atomic
-		/// account creation. Wrapped in execution strategy to automatically retry on transient failures.
+		/// <para>
+		/// Business rule: Create must fail if the account already exists for distinct calls.
+		/// To satisfy this while still being safe under EF Core execution-strategy retries,
+		/// the operation is request-idempotent:
+		/// </para>
+		/// <list type="bullet">
+		/// <item><description>Same <paramref name="requestId"/> across retries: deterministic success/failure.</description></item>
+		/// <item><description>Different <paramref name="requestId"/> for a distinct call: pre-existing account fails.</description></item>
+		/// </list>
 		/// 
 		/// Success: Account created with Player access level and current timestamp.
 		/// Failure cases:
@@ -77,6 +88,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 			string accountName,
 			string salt,
 			string verifier,
+			Guid requestId,
 			CancellationToken cancellationToken = default);
 
 		/// <summary>

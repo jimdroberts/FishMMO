@@ -1,7 +1,9 @@
 using System;
 using System.Data;
 using System.Data.Common;
+using System.Security.Cryptography;
 using System.Threading;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -56,8 +58,125 @@ namespace FishMMO.Database.Npgsql.Services
 	}
 
 	/// <summary>
-	/// Base service that adds idempotency support via the processed_requests table.
+	/// Base service that adds DSL-level idempotency support via the processed_requests table.
 	/// </summary>
+	/// <remarks>
+	/// <para><b>Purpose: DSL-Level Idempotency for Non-Idempotent Operations</b></para>
+	/// <para>
+	/// This service extends <see cref="BaseService{TEntity}"/> to provide database-tracked idempotency for operations
+	/// that are NOT naturally idempotent at the SQL level (e.g., account creation, party creation, chat message logging).
+	/// </para>
+	/// 
+	/// <para><b>Architecture: In-Process DSL with Database Network Hop</b></para>
+	/// <para>
+	/// This Database Service Layer (DSL) is integrated directly into the Application Server Layer (no network hop between them).
+	/// However, there IS a network hop from the DSL to the PostgreSQL database. This architecture requires DSL-level
+	/// idempotency tracking because:
+	/// </para>
+	/// <list type="bullet">
+	/// <item><description>Network timeouts between DSL and database can occur</description></item>
+	/// <item><description>Client retries after timeouts must not cause duplicate operations</description></item>
+	/// <item><description>EF Core execution strategy retries must not cause duplicate operations</description></item>
+	/// <item><description>The Application Server Layer cannot determine if a timed-out operation completed on the database</description></item>
+	/// </list>
+	/// 
+	/// <para><b>Request ID Contract: Caller Provides Stable Identifiers</b></para>
+	/// <para>
+	/// <b>CRITICAL REQUIREMENT:</b> The <c>requestId</c> parameter MUST be provided by the Application Server Layer,
+	/// NOT generated within the DSL service methods. The Application Server Layer is responsible for:
+	/// </para>
+	/// <list type="number">
+	/// <item><description>Generating a unique <c>Guid</c> per logical operation at the API boundary</description></item>
+	/// <item><description>Passing the same <c>requestId</c> on all retries of the same logical operation</description></item>
+	/// <item><description>Using different <c>requestId</c> values for distinct operations (even if they have identical parameters)</description></item>
+	/// </list>
+	/// <para>
+	/// <b>Why this matters:</b> If the DSL generates the <c>requestId</c> internally, each client retry will get a
+	/// new identifier, defeating idempotency protection. The cached response in <c>processed_requests</c> will be
+	/// bypassed, and the operation may execute multiple times.
+	/// </para>
+	/// 
+	/// <para><b>Idempotency Mechanism: processed_requests Table</b></para>
+	/// <para>
+	/// The <c>processed_requests</c> table tracks:
+	/// </para>
+	/// <list type="bullet">
+	/// <item><description><b>request_id:</b> Unique identifier provided by the Application Server Layer</description></item>
+	/// <item><description><b>scope_id:</b> Logical scope (e.g., account ID, character ID) to prevent request ID reuse across entities</description></item>
+	/// <item><description><b>operation_name:</b> Operation being performed (e.g., "CreateAccount", "SavePet")</description></item>
+	/// <item><description><b>status:</b> 0=in-progress, 1=success, 2=failure</description></item>
+	/// <item><description><b>owner_id:</b> Identifies which process instance owns the in-progress request</description></item>
+	/// <item><description><b>lease_expires_at:</b> Timestamp for lease expiration (allows takeover of stale requests)</description></item>
+	/// <item><description><b>response:</b> Cached response (success data or failure details) stored as JSONB</description></item>
+	/// </list>
+	/// 
+	/// <para><b>Execution Flow: Two-Phase Commit with Cached Responses</b></para>
+	/// <para>
+	/// When an idempotent operation is invoked via <see cref="ExecuteIdempotentAsync{TResult}"/>:
+	/// </para>
+	/// <list type="number">
+	/// <item>
+	/// <term>Phase 1: Acquire or Read Idempotency State (Non-Transactional)</term>
+	/// <description>
+	/// <list type="bullet">
+	/// <item><description>Attempts to INSERT the request row with status=in-progress, owner_id=new Guid, and lease expiration</description></item>
+	/// <item><description>If row already exists (ON CONFLICT DO NOTHING), reads the existing state</description></item>
+	/// <item><description>If existing row has status=success or status=failure, returns cached response immediately (fast path)</description></item>
+	/// <item><description>If existing row has status=in-progress but lease expired, attempts to take over ownership</description></item>
+	/// <item><description>If another process owns the in-progress request and lease is active, returns IDEMPOTENCY_IN_PROGRESS error</description></item>
+	/// </list>
+	/// </description>
+	/// </item>
+	/// <item>
+	/// <term>Phase 2: Execute Business Operation and Finalize (Transactional)</term>
+	/// <description>
+	/// <list type="bullet">
+	/// <item><description>Re-checks idempotency state inside the transaction (prevents double execution on retry)</description></item>
+	/// <item><description>If another attempt already finalized the request, returns the cached response</description></item>
+	/// <item><description>Otherwise, executes the business operation delegate</description></item>
+	/// <item><description>Serializes the result to JSONB and updates the request row to status=success or status=failure</description></item>
+	/// <item><description>Commits the transaction, atomically finalizing both the business operation and the cached response</description></item>
+	/// </list>
+	/// </description>
+	/// </item>
+	/// </list>
+	/// 
+	/// <para><b>Retry Safety: EF Core Execution Strategy and Caller Retries</b></para>
+	/// <para>
+	/// This design is safe under two retry scenarios:
+	/// </para>
+	/// <list type="bullet">
+	/// <item><description><b>EF Core execution strategy retries (same call):</b> Uses the same requestId, re-checks cached state before re-executing</description></item>
+	/// <item><description><b>Client/Application Server retries (separate calls):</b> Uses the same requestId, reads cached response if available</description></item>
+	/// </list>
+	/// <para>
+	/// If a transient failure occurs AFTER the business operation commits but BEFORE the cached response is persisted,
+	/// a subsequent retry will re-check the idempotency state, find the finalized cached response, and return it.
+	/// </para>
+	/// 
+	/// <para><b>Lease Management and Stale Request Handling</b></para>
+	/// <para>
+	/// In-progress requests have a configurable lease timeout (default: several minutes). If a process crashes or times out
+	/// while holding an in-progress lease, subsequent requests with the same requestId can take over ownership after the
+	/// lease expires. This prevents indefinite blocking while maintaining safety.
+	/// </para>
+	/// 
+	/// <para><b>Cleanup: Automatic Pruning of Old Requests</b></para>
+	/// <para>
+	/// The <see cref="CleanupProcessedRequestsAsync"/> method removes completed and stale in-progress requests older than
+	/// a configured retention period. This prevents unbounded growth of the <c>processed_requests</c> table. Cleanup is
+	/// throttled globally to avoid excessive concurrent cleanup operations.
+	/// </para>
+	/// 
+	/// <para><b>Best Practices for Service Implementers</b></para>
+	/// <list type="bullet">
+	/// <item><description><b>Always accept requestId as a parameter</b> in public service methods that require idempotency</description></item>
+	/// <item><description><b>Validate requestId is not Guid.Empty</b> before calling ExecuteIdempotentAsync</description></item>
+	/// <item><description><b>Use stable scopeId values</b> (e.g., hash of entity identifier) to prevent requestId reuse across entities</description></item>
+	/// <item><description><b>Keep operation names short and stable</b> (max 64 characters, no versioning in name)</description></item>
+	/// <item><description><b>Ensure operation delegates are database-only</b> - no external API calls, message publishes, or file I/O</description></item>
+	/// </list>
+	/// </remarks>
 	public abstract class IdempotentBaseService<TEntity> : BaseService<TEntity> where TEntity : class
 	{
 		private static readonly JsonSerializerOptions IdempotencyJsonOptions = new JsonSerializerOptions
@@ -109,15 +228,94 @@ namespace FishMMO.Database.Npgsql.Services
 
 			try
 			{
+				using var bestEffortToken = CreateBestEffortCancellationToken(TimeSpan.FromSeconds(2));
 				await CleanupProcessedRequestsAsync(
 					TimeSpan.FromDays(processedRequestsRetentionDays),
 					processedRequestsCleanupMaxRows,
-					CancellationToken.None).ConfigureAwait(false);
+					bestEffortToken.Token).ConfigureAwait(false);
 			}
 			catch
 			{
 				// Best-effort maintenance only.
 			}
+		}
+
+		/// <summary>
+		/// Creates a best-effort cancellation token source with a short timeout.
+		/// </summary>
+		/// <remarks>
+		/// This is used for cleanup/failure-persistence paths that should not hang the caller
+		/// indefinitely when the database/network is unhealthy.
+		/// </remarks>
+		/// <param name="timeout">Maximum time to allow the best-effort operation to run.</param>
+		/// <returns>A disposable <see cref="CancellationTokenSource"/> with the given timeout.</returns>
+		private static CancellationTokenSource CreateBestEffortCancellationToken(TimeSpan timeout)
+		{
+			return new CancellationTokenSource(timeout <= TimeSpan.Zero ? TimeSpan.FromSeconds(2) : timeout);
+		}
+
+		private static readonly long ProcessedRequestsCleanupLockKey = ComputeAdvisoryLockKey(
+			"FishMMO.Database.Npgsql.Services.IdempotentBaseService.ProcessedRequestsCleanup");
+
+		/// <summary>
+		/// Computes a stable, positive scope identifier from a string value.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// This method is intended for idempotency scoping (e.g., to prevent reusing the same <c>requestId</c>
+		/// across different logical resources).
+		/// </para>
+		/// <para>
+		/// The implementation must be stable across processes/runtimes. Do not use <see cref="string.GetHashCode"/>.
+		/// </para>
+		/// </remarks>
+		/// <param name="value">Input value used to derive the scope.</param>
+		/// <returns>A positive, non-zero scope identifier.</returns>
+		protected static long ComputeScopeId(string value)
+		{
+			return ComputeStablePositiveSha25664(value);
+		}
+
+		private static long ComputeAdvisoryLockKey(string value)
+		{
+			return ComputeStablePositiveFnv1a64(value);
+		}
+
+		private static long ComputeStablePositiveFnv1a64(string value)
+		{
+			// Must be stable across processes/runtimes. Do not use string.GetHashCode/HashCode.
+			// FNV-1a 64-bit over UTF8 bytes.
+			const ulong offsetBasis = 14695981039346656037;
+			const ulong prime = 1099511628211;
+
+			var bytes = Encoding.UTF8.GetBytes(value ?? string.Empty);
+			ulong hash = offsetBasis;
+			for (var i = 0; i < bytes.Length; i++)
+			{
+				hash ^= bytes[i];
+				hash *= prime;
+			}
+
+			var key = (long)(hash & 0x7FFFFFFFFFFFFFFF);
+			return key == 0 ? 1 : key;
+		}
+
+		private static long ComputeStablePositiveSha25664(string value)
+		{
+			// Stable across processes/runtimes. Uses SHA-256 to reduce collision risk.
+			// Derives a positive non-zero long from the first 8 bytes interpreted as big-endian.
+			var input = Encoding.UTF8.GetBytes(value ?? string.Empty);
+			using var sha256 = SHA256.Create();
+			var digest = sha256.ComputeHash(input);
+
+			ulong unsignedValue = 0;
+			for (var i = 0; i < 8; i++)
+			{
+				unsignedValue = (unsignedValue << 8) | digest[i];
+			}
+
+			var key = (long)(unsignedValue & 0x7FFFFFFFFFFFFFFF);
+			return key == 0 ? 1 : key;
 		}
 
 		private sealed class IdempotencyEnvelope<T>
@@ -431,6 +629,13 @@ namespace FishMMO.Database.Npgsql.Services
 						return;
 					}
 
+					// Do not cache cancellations as permanent failures. Cancellations should remain retryable
+					// via the lease/takeover mechanism rather than poisoning the idempotency key.
+					if (dbEx is DatabaseOperationCanceledException)
+					{
+						return;
+					}
+
 					// Best-effort: persist failure to enable deterministic retries.
 					// This hook is invoked after retries are exhausted (or for non-retryable errors).
 					var requestsTable = dbContext.GetTableName<ProcessedRequestEntity>();
@@ -447,6 +652,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 					try
 					{
+						using var bestEffortToken = CreateBestEffortCancellationToken(TimeSpan.FromSeconds(2));
 						await UpdateProcessedRequestAsync(
 							dbContext,
 							dbTransaction: null,
@@ -459,13 +665,78 @@ namespace FishMMO.Database.Npgsql.Services
 							failureJson,
 							dbEx.ErrorCode,
 							dbEx.SafeMessage,
-							CancellationToken.None).ConfigureAwait(false);
+							bestEffortToken.Token).ConfigureAwait(false);
 					}
 					catch
 					{
 						// Best-effort only.
 					}
 				}).ConfigureAwait(false);
+		}
+
+		/// <summary>
+		/// Executes an idempotent operation that itself returns a <see cref="DatabaseResult"/>.
+		/// </summary>
+		/// <remarks>
+		/// This is a convenience wrapper for services that already model business-rule failures as
+		/// <see cref="DatabaseResult"/> values (e.g., capacity checks) rather than exceptions.
+		/// The idempotency pipeline needs failures to be represented as exceptions so they can be
+		/// cached and replayed correctly across transient retries.
+		/// </remarks>
+		protected async Task<DatabaseResult> ExecuteIdempotentResultAsync(
+			Guid requestId,
+			long scopeId,
+			string operationName,
+			Func<NpgsqlDbContext, IDbContextTransaction, CancellationToken, Task<DatabaseResult>> operation,
+			CancellationToken cancellationToken = default)
+		{
+			var result = await ExecuteIdempotentResultAsync<bool>(
+				requestId,
+				scopeId,
+				operationName,
+				async (dbContext, transaction, ct) =>
+				{
+					var inner = await operation(dbContext, transaction, ct).ConfigureAwait(false);
+					return inner.IsSuccess
+						? DatabaseResult<bool>.Success(true)
+						: DatabaseResult<bool>.Failure(inner.ErrorCode, inner.ErrorMessage, inner.IsTransient);
+				},
+				cancellationToken).ConfigureAwait(false);
+
+			return result.IsSuccess
+				? DatabaseResult.Success()
+				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+		}
+
+		/// <summary>
+		/// Executes an idempotent operation that itself returns a <see cref="DatabaseResult{T}"/>.
+		/// </summary>
+		protected async Task<DatabaseResult<TResult>> ExecuteIdempotentResultAsync<TResult>(
+			Guid requestId,
+			long scopeId,
+			string operationName,
+			Func<NpgsqlDbContext, IDbContextTransaction, CancellationToken, Task<DatabaseResult<TResult>>> operation,
+			CancellationToken cancellationToken = default)
+		{
+			return await ExecuteIdempotentAsync(
+				requestId,
+				scopeId,
+				operationName,
+				async (dbContext, transaction, ct) =>
+				{
+					var inner = await operation(dbContext, transaction, ct).ConfigureAwait(false);
+					if (!inner.IsSuccess)
+					{
+						throw new DatabaseOperationFailedException(
+							operation: operationName,
+							errorCode: inner.ErrorCode ?? "DATABASE_ERROR",
+							safeMessage: inner.ErrorMessage ?? "Operation failed.",
+							isTransient: inner.IsTransient);
+					}
+
+					return inner.Data;
+				},
+				cancellationToken).ConfigureAwait(false);
 		}
 
 		private static bool TryGetCachedIdempotencyResponse<TResult>(
@@ -510,7 +781,9 @@ namespace FishMMO.Database.Npgsql.Services
 
 			if (status == 1)
 			{
-				result = DatabaseResult<TResult>.Failure("IDEMPOTENCY_COMPLETED", "This request has already completed.");
+				result = DatabaseResult<TResult>.Failure(
+					"IDEMPOTENCY_CORRUPT",
+					"Cached idempotency record is incomplete.");
 				return true;
 			}
 
@@ -771,15 +1044,31 @@ namespace FishMMO.Database.Npgsql.Services
 					var requestsTable = dbContext.GetTableName<ProcessedRequestEntity>();
 					await EnsureConnectionOpenAsync(dbContext, ct).ConfigureAwait(false);
 					await using var command = dbContext.Database.GetDbConnection().CreateCommand();
-					command.CommandText = $@"DELETE FROM {requestsTable}
-						WHERE request_id IN (
-							SELECT request_id
-							FROM {requestsTable}
-							WHERE (completed_at IS NOT NULL AND completed_at < (CURRENT_TIMESTAMP - (@retention_seconds * INTERVAL '1 second')))
-							   OR (completed_at IS NULL AND lease_expires_at < (CURRENT_TIMESTAMP - (@retention_seconds * INTERVAL '1 second')))
-							ORDER BY created_at
-							LIMIT @max_rows
-						);";
+					// Concurrency notes:
+					// - Cleanup may run on multiple nodes. Use a transaction-scoped advisory lock so only one node
+					//   performs work per attempt (no lock leakage risk with pooled connections).
+					// - Use FOR UPDATE SKIP LOCKED so overlapping cleanup attempts (or other writers) don't block.
+					// - Perform selection + deletion in one statement for atomicity and efficiency.
+					command.CommandText = $@"WITH cleanup_lock AS (
+						SELECT pg_try_advisory_xact_lock(@cleanup_lock_key) AS got
+					), candidates AS (
+						SELECT request_id
+						FROM {requestsTable}
+						WHERE (SELECT got FROM cleanup_lock)
+						  AND (
+								(completed_at IS NOT NULL AND completed_at < (CURRENT_TIMESTAMP - (@retention_seconds * INTERVAL '1 second')))
+							 OR (completed_at IS NULL AND lease_expires_at < (CURRENT_TIMESTAMP - (@retention_seconds * INTERVAL '1 second')))
+						  )
+						ORDER BY created_at, request_id
+						LIMIT @max_rows
+						FOR UPDATE SKIP LOCKED
+					), deleted AS (
+						DELETE FROM {requestsTable} pr
+						USING candidates c
+						WHERE pr.request_id = c.request_id
+						RETURNING 1
+					)
+					SELECT COUNT(*) FROM deleted;";
 
 					var timeoutSeconds = dbContext.Database.GetCommandTimeout() ?? 0;
 					if (timeoutSeconds > 0)
@@ -787,10 +1076,12 @@ namespace FishMMO.Database.Npgsql.Services
 						command.CommandTimeout = timeoutSeconds;
 					}
 
+					AddParameter(command, "@cleanup_lock_key", ProcessedRequestsCleanupLockKey);
 					AddParameter(command, "@retention_seconds", retentionSeconds);
 					AddParameter(command, "@max_rows", maxRows);
 
-					var rows = await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+					var scalar = await command.ExecuteScalarAsync(ct).ConfigureAwait(false);
+					var rows = scalar is int i ? i : Convert.ToInt32(scalar);
 					return DatabaseResult<int>.Success(rows);
 				},
 				useTransaction: false,

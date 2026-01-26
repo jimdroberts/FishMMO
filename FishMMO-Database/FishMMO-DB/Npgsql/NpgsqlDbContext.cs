@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Linq.Expressions;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -249,6 +250,22 @@ namespace FishMMO.Database.Npgsql
 				var deletedProperty = entityType.FindProperty("Deleted");
 				if (deletedProperty?.ClrType != typeof(bool))
 					continue;
+
+				// If this is a character-owned table that uses soft delete, ensure we have an index
+				// that supports common predicates like: WHERE character_id = ? AND deleted = FALSE.
+				var characterIdProperty = entityType.FindProperty("CharacterID") ?? entityType.FindProperty("CharacterId");
+				if (characterIdProperty != null)
+				{
+					bool hasCharacterIdDeletedIndex = entityType.GetIndexes().Any(i =>
+						i.Properties.Count == 2 &&
+						i.Properties[0].Name == characterIdProperty.Name &&
+						i.Properties[1].Name == "Deleted");
+
+					if (!hasCharacterIdDeletedIndex)
+					{
+						modelBuilder.Entity(clrType).HasIndex(characterIdProperty.Name, "Deleted");
+					}
+				}
 
 				modelBuilder.Entity(clrType)
 					.Property<bool>("Deleted")

@@ -234,43 +234,40 @@ namespace FishMMO.Database.Npgsql.Services
 				operationName: "SetSceneReady",
 				operation: async (dbContext, transaction, ct) =>
 				{
-					if (dbContext.Database.GetDbConnection().State != System.Data.ConnectionState.Open)
+					var claimedScenes = await dbContext.Scenes
+						.FromSqlRaw($@"
+							WITH claimable_scene AS (
+								SELECT id FROM {TableName}
+								WHERE world_server_id = {{0}}
+									AND scene_name = {{1}}
+									AND scene_status = {{2}}
+								ORDER BY time_created, id
+								FOR UPDATE SKIP LOCKED
+								LIMIT 1
+							)
+							UPDATE {TableName}
+							SET scene_status = {{3}},
+								scene_server_id = {{4}},
+								scene_handle = {{5}}
+							FROM claimable_scene
+							WHERE {TableName}.id = claimable_scene.id
+							RETURNING {TableName}.id",
+							worldServerId,
+							sceneName,
+							(int)SceneStatus.Loading,
+							(int)SceneStatus.Ready,
+							sceneServerId,
+							sceneHandle)
+						.AsNoTracking()
+						.ToListAsync(ct)
+						.ConfigureAwait(false);
+
+					if (claimedScenes.Count > 0)
 					{
-						await dbContext.Database.OpenConnectionAsync(ct).ConfigureAwait(false);
+						return (long?)claimedScenes[0].ID;
 					}
 
-					await using var command = dbContext.Database.GetDbConnection().CreateCommand();
-					command.Transaction = transaction.GetDbTransaction();
-					command.CommandText = $@"WITH claimable_scene AS (
-						SELECT id FROM {TableName}
-						WHERE world_server_id = @world_server_id
-							AND scene_name = @scene_name
-							AND scene_status = @loading_status
-						ORDER BY time_created, id
-						FOR UPDATE SKIP LOCKED
-						LIMIT 1
-					)
-					UPDATE {TableName}
-					SET scene_status = @ready_status,
-						scene_server_id = @scene_server_id,
-						scene_handle = @scene_handle
-					FROM claimable_scene
-					WHERE {TableName}.id = claimable_scene.id
-					RETURNING {TableName}.id;";
-
-					AddDbParameter(command, "@world_server_id", worldServerId);
-					AddDbParameter(command, "@scene_name", sceneName);
-					AddDbParameter(command, "@loading_status", (int)SceneStatus.Loading);
-					AddDbParameter(command, "@ready_status", (int)SceneStatus.Ready);
-					AddDbParameter(command, "@scene_server_id", sceneServerId);
-					AddDbParameter(command, "@scene_handle", sceneHandle);
-
-					var scalar = await command.ExecuteScalarAsync(ct).ConfigureAwait(false);
-					if (scalar != null && scalar != DBNull.Value)
-					{
-						return Convert.ToInt64(scalar);
-					}
-
+					// Fallback: check if already ready (idempotency on retry)
 					var alreadyReadyId = await dbContext.Scenes
 						.AsNoTracking()
 						.Where(s =>
@@ -292,14 +289,6 @@ namespace FishMMO.Database.Npgsql.Services
 			return result.IsSuccess
 				? (result.Data.HasValue ? DatabaseResult.Success() : DatabaseResult.Failure("SCENE_NOT_CLAIMABLE", "No matching loading scene could be claimed."))
 				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
-		}
-
-		private static void AddDbParameter(System.Data.Common.DbCommand command, string name, object value)
-		{
-			var parameter = command.CreateParameter();
-			parameter.ParameterName = name;
-			parameter.Value = value ?? DBNull.Value;
-			command.Parameters.Add(parameter);
 		}
 
 		/// <inheritdoc/>

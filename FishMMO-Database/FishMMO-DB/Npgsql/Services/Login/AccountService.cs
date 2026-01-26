@@ -18,7 +18,7 @@ namespace FishMMO.Database.Npgsql.Services
 	/// Returns DatabaseResult for consistent, safe error handling with sanitized messages.
 	/// Follows SOLID principles: SRP, OCP, LSP, ISP, DIP.
 	/// </summary>
-	public sealed class AccountService : BaseService<AccountEntity>, IAccountService
+	public sealed class AccountService : IdempotentBaseService<AccountEntity>, IAccountService
 	{
 		/// <summary>
 		/// Compiled query for AccountExistsAsync hot path.
@@ -86,6 +86,7 @@ namespace FishMMO.Database.Npgsql.Services
 			string accountName,
 			string salt,
 			string verifier,
+			Guid requestId,
 			CancellationToken cancellationToken = default)
 		{
 			if (!IsValidUsername(accountName))
@@ -112,34 +113,52 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			var sql = $@"INSERT INTO {TableName}
-				(name, salt, verifier, access_level, created, lastlogin)
-			VALUES
-				({{0}}, {{1}}, {{2}}, {{3}}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-			ON CONFLICT (name) DO NOTHING";
-
-			var result = await ExecuteRawSqlAsync(
-				sql,
-				"CreateAccount",
-				new object[] { accountName, salt, verifier, (byte)AccessLevel.Player },
-				cancellationToken: cancellationToken).ConfigureAwait(false);
-
-			if (!result.IsSuccess)
+			if (requestId == Guid.Empty)
 			{
-				return DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+				return DatabaseResult.Failure(
+					"VALIDATION_ERROR",
+					"RequestId is required for idempotent account creation.",
+					isTransient: false);
 			}
 
-			// INSERT ... ON CONFLICT DO NOTHING affects 0 rows on duplicate.
-			if (result.Data == 0)
-			{
-				return DatabaseResult.FromException(
-					new DatabaseConstraintException(
+			// Business rule: create must fail if pre-existing for distinct calls.
+			// Retry rule: must be safe under EF Core execution strategy retries.
+			// Solution: request-scoped idempotency wraps an INSERT ... ON CONFLICT DO NOTHING.
+			// - Same requestId (retry): returns cached outcome.
+			// - Different requestId (distinct call): duplicate insert returns "already exists" failure.
+			var scopeId = ComputeScopeId(accountName);
+			var result = await ExecuteIdempotentAsync(
+				requestId,
+				scopeId,
+				"CreateAccount",
+				async (dbContext, transaction, ct) =>
+				{
+					var sql = $@"INSERT INTO {TableName}
+						(name, salt, verifier, access_level, created, lastlogin)
+						VALUES
+							({{0}}, {{1}}, {{2}}, {{3}}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+						ON CONFLICT (name) DO NOTHING";
+
+					var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
+						sql,
+						new object[] { accountName, salt, verifier, (byte)AccessLevel.Player },
+						ct).ConfigureAwait(false);
+
+					if (rowsAffected == 1)
+					{
+						return true;
+					}
+
+					throw new DatabaseConstraintException(
 						ConstraintType.Unique,
 						"accounts_name_key",
-						"An account with this name already exists."));
-			}
+						"An account with this name already exists.");
+				},
+				cancellationToken).ConfigureAwait(false);
 
-			return DatabaseResult.Success();
+			return result.IsSuccess
+				? DatabaseResult.Success()
+				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>

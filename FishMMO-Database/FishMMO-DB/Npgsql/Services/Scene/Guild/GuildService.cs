@@ -3,7 +3,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 using FishMMO.Database.Data;
 using FishMMO.Database.Exceptions;
 using FishMMO.Database.Npgsql.Entities;
@@ -16,14 +15,14 @@ namespace FishMMO.Database.Npgsql.Services
 	/// <para><b>Exception Handling:</b></para>
 	/// <list type="bullet">
 	/// <item><description><see cref="OperationCanceledException"/> → <see cref="DatabaseOperationCanceledException"/></description></item>
-	/// <item><description><see cref="PostgresException"/> (23505) → <see cref="DatabaseConstraintException"/> (Unique)</description></item>
-	/// <item><description><see cref="PostgresException"/> (23503) → <see cref="DatabaseConstraintException"/> (ForeignKey)</description></item>
-	/// <item><description><see cref="NpgsqlException"/> → <see cref="DatabaseConnectionException"/></description></item>
+	/// <item><description><see cref="Npgsql.PostgresException"/> (23505) → <see cref="DatabaseConstraintException"/> (Unique)</description></item>
+	/// <item><description><see cref="Npgsql.PostgresException"/> (23503) → <see cref="DatabaseConstraintException"/> (ForeignKey)</description></item>
+	/// <item><description><see cref="Npgsql.NpgsqlException"/> → <see cref="DatabaseConnectionException"/></description></item>
 	/// <item><description><see cref="DbUpdateException"/> → <see cref="DatabaseQueryException"/></description></item>
 	/// <item><description><see cref="Exception"/> → <see cref="DatabaseQueryException"/></description></item>
 	/// </list>
 	/// </remarks>
-	public sealed class GuildService : BaseService<GuildEntity>, IGuildService
+	public sealed class GuildService : IdempotentBaseService<GuildEntity>, IGuildService
 	{
 		/// <summary>
 		/// Compiled query for ExistsAsync hot path.
@@ -88,42 +87,55 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<long?>> CreateAsync(string name, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<long?>> CreateAsync(string name, Guid requestId, CancellationToken cancellationToken = default)
 		{
 			if (string.IsNullOrWhiteSpace(name))
 			{
 				return DatabaseResult<long?>.Failure("VALIDATION_ERROR", "Guild name is required");
 			}
 
-			return await ExecuteAsync(async (context, ct) =>
+			if (requestId == Guid.Empty)
 			{
-				var nameLowercase = name.ToLowerInvariant();
+				return DatabaseResult<long?>.Failure("VALIDATION_ERROR", "RequestId is required for idempotent guild creation.");
+			}
 
-				// Idempotent by natural key (name): safe under transient retries.
-				var inserted = await context.Guilds
-					.FromSqlRaw($@"
-					INSERT INTO {TableName} (name, notice, time_created)
-					VALUES ({{0}}, {{1}}, CURRENT_TIMESTAMP)
-					ON CONFLICT (name_lowercase) DO NOTHING
-					RETURNING id",
-					name,
-					string.Empty)
-					.AsNoTracking()
-					.FirstOrDefaultAsync(ct).ConfigureAwait(false);
+			var nameLowercase = name.ToLowerInvariant();
+			// Use hash of guild name as stable scope ID to prevent requestId reuse across different guilds
+			var scopeId = ComputeScopeId(nameLowercase);
 
-				if (inserted?.ID > 0)
+			return await ExecuteIdempotentAsync<long?>(
+				requestId,
+				scopeId,
+				"CreateGuild",
+				async (context, transaction, ct) =>
 				{
-					return (long?)inserted.ID;
-				}
+					// Wrap in transaction to ensure atomicity of INSERT + fallback query
+					var inserted = await context.Guilds
+						.FromSqlRaw($@"
+						INSERT INTO {TableName} (name, notice, time_created)
+						VALUES ({{0}}, {{1}}, CURRENT_TIMESTAMP)
+						ON CONFLICT (name_lowercase) DO NOTHING
+						RETURNING id",
+						name,
+						string.Empty)
+						.AsNoTracking()
+						.FirstOrDefaultAsync(ct).ConfigureAwait(false);
 
-				var existingId = await context.Guilds
-					.AsNoTracking()
-					.Where(g => g.NameLowercase == nameLowercase)
-					.Select(g => (long?)g.ID)
-					.FirstOrDefaultAsync(ct).ConfigureAwait(false);
+					if (inserted?.ID > 0)
+					{
+						return (long?)inserted.ID;
+					}
 
-				return existingId;
-			}, "CreateGuild", cancellationToken).ConfigureAwait(false);
+					// Within transaction: guild must exist if INSERT conflict occurred
+					var existingId = await context.Guilds
+						.AsNoTracking()
+						.Where(g => g.NameLowercase == nameLowercase)
+						.Select(g => (long?)g.ID)
+						.FirstOrDefaultAsync(ct).ConfigureAwait(false);
+
+					return existingId;
+				},
+				cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>

@@ -30,28 +30,33 @@ namespace FishMMO.Database.Npgsql.Services
 	public interface ICharacterPartyService
 	{
 		/// <summary>
-		/// Saves or updates a character's party membership using an atomic transaction with capacity validation.
-		/// </summary>
-		/// <param name="partyData">The party membership data to save.</param>
-		/// <param name="maxCapacity">Maximum number of members allowed in the party. Must be between 1 and 40.</param>
-		/// <param name="cancellationToken">Token to cancel the operation.</param>
-		/// <returns>
-		/// DatabaseResult indicating success or containing error details.
-		/// </returns>
-		/// <remarks>
-		/// Uses transaction with row-level locking to atomically validate capacity and save membership.
-		/// 
-		/// Process:
-		/// 1. Checks if character is already a member (UPDATE vs INSERT case)
-		/// 2. For new joins, locks party member rows with FOR UPDATE and counts members
-		/// 3. Rejects join if capacity reached with CAPACITY_EXCEEDED error
-		/// 4. Performs UPSERT (INSERT ... ON CONFLICT DO UPDATE)
-		/// 
-		/// Uses PostgreSQL INSERT ON CONFLICT to ensure atomic insert-or-update operations.
-		/// Transaction ensures capacity validation is race-condition safe.
-		/// </remarks>
-		Task<DatabaseResult> SavePartyMembershipAsync(CharacterPartyData partyData, int maxCapacity, CancellationToken cancellationToken = default);
-
+	/// Saves or updates a character's party membership using an atomic transaction with capacity validation and idempotency protection.
+	/// </summary>
+	/// <param name="partyData">The party membership data to save.</param>
+	/// <param name="maxCapacity">Maximum number of members allowed in the party. Must be between 1 and 40.</param>
+	/// <param name="requestId">Unique request ID for idempotency. Must be provided by the caller (Application Server Layer) to enable true cross-request idempotency protection.</param>
+	/// <param name="cancellationToken">Token to cancel the operation.</param>
+	/// <returns>
+	/// DatabaseResult indicating success or containing error details.
+	/// </returns>
+	/// <remarks>
+	/// <para>
+	/// Uses DSL-level idempotency via the processed_requests table. The <paramref name="requestId"/> must be stable
+	/// across retries from the Application Server Layer to prevent duplicate execution when clients retry after timeouts.
+	/// </para>
+	/// <para>
+	/// Uses transaction with row-level locking to atomically validate capacity and save membership.
+	/// </para>
+	/// Process:
+	/// 1. Checks if character is already a member (UPDATE vs INSERT case)
+	/// 2. For new joins, locks party member rows with FOR UPDATE and counts members
+	/// 3. Rejects join if capacity reached with CAPACITY_EXCEEDED error
+	/// 4. Performs UPSERT (INSERT ... ON CONFLICT DO UPDATE)
+	/// 
+	/// Uses PostgreSQL INSERT ON CONFLICT to ensure atomic insert-or-update operations.
+	/// Transaction ensures capacity validation is race-condition safe.
+	/// </remarks>
+	Task<DatabaseResult> SavePartyMembershipAsync(CharacterPartyData partyData, int maxCapacity, System.Guid requestId, CancellationToken cancellationToken = default);
 		/// <summary>
 		/// Updates a character's party rank atomically.
 		/// </summary>

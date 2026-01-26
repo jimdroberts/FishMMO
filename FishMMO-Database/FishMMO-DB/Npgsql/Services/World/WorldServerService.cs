@@ -51,17 +51,17 @@ namespace FishMMO.Database.Npgsql.Services
 			return await ExecuteAsync<(long ServerId, WorldServerData ServerData)>(async (dbContext, ct) =>
 			{
 				var sql = $@"INSERT INTO {TableName}
-					(name, address, port, character_count, locked, lastpulse)
-				VALUES
-					({{0}}, {{1}}, {{2}}, {{3}}, {{4}}, CURRENT_TIMESTAMP)
-				ON CONFLICT (name)
-				DO UPDATE SET
-					address = EXCLUDED.address,
-					port = EXCLUDED.port,
-					character_count = EXCLUDED.character_count,
-					locked = EXCLUDED.locked,
-					lastpulse = EXCLUDED.lastpulse
-				RETURNING id, name, address, port, character_count, locked, lastpulse";
+						(name, address, port, character_count, locked, lastpulse)
+						VALUES
+							({{0}}, {{1}}, {{2}}, {{3}}, {{4}}, CURRENT_TIMESTAMP)
+						ON CONFLICT (name)
+						DO UPDATE SET
+							address = EXCLUDED.address,
+							port = EXCLUDED.port,
+							character_count = EXCLUDED.character_count,
+							locked = EXCLUDED.locked,
+							lastpulse = EXCLUDED.lastpulse
+						RETURNING id, name, address, port, character_count, locked, lastpulse";
 
 				var result = await dbContext.WorldServers
 					.FromSqlRaw(sql, name, address, port, characterCount, locked)

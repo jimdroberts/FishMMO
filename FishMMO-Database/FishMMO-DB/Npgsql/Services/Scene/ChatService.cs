@@ -58,6 +58,16 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "AccountId must be greater than 0.");
 			}
 
+			if (characterId <= 0)
+			{
+				return DatabaseResult.Failure("VALIDATION_ERROR", "CharacterId must be greater than 0.");
+			}
+
+			if (!Enum.IsDefined(typeof(ChatChannel), channel))
+			{
+				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid chat channel.");
+			}
+
 			if (worldServerId <= 0 || sceneServerId <= 0 || string.IsNullOrWhiteSpace(message))
 			{
 				return DatabaseResult.Failure("INVALID_PARAMETERS", "World server ID, scene server ID must be greater than zero and message must not be empty.");
@@ -84,7 +94,7 @@ namespace FishMMO.Database.Npgsql.Services
 			var channelByte = (byte)channel;
 			var result = await ExecuteIdempotentAsync(
 				requestId,
-				accountId,
+				scopeId: characterId,
 				"SaveChatMessage",
 				async (dbContext, transaction, ct) =>
 				{

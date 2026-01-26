@@ -33,7 +33,7 @@ namespace FishMMO.Database.Npgsql.Services
 	/// Methods return DatabaseResult to provide structured error handling
 	/// without throwing exceptions to calling code.
 	/// </remarks>
-	public sealed class CharacterGuildService : BaseService<CharacterGuildEntity>, ICharacterGuildService
+	public sealed class CharacterGuildService : IdempotentBaseService<CharacterGuildEntity>, ICharacterGuildService
 	{
 		private const int MaxAllowedGuildCapacity = 256;
 
@@ -78,7 +78,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> SaveGuildMembershipAsync(CharacterGuildData guildData, int maxCapacity, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> SaveGuildMembershipAsync(CharacterGuildData guildData, int maxCapacity, Guid requestId, CancellationToken cancellationToken = default)
 		{
 			if (guildData.CharacterID == 0 || guildData.GuildID == 0)
 			{
@@ -101,6 +101,11 @@ namespace FishMMO.Database.Npgsql.Services
 					$"Invalid max capacity. Max capacity must not exceed {MaxAllowedGuildCapacity}.");
 			}
 
+			if (requestId == Guid.Empty)
+			{
+				return DatabaseResult.Failure("VALIDATION_ERROR", "RequestId is required for idempotent guild membership save.");
+			}
+
 			// Use transaction to atomically check capacity and insert/update membership
 			// RACE CONDITION MITIGATION: Uses strict lock ordering (character -> guild) and
 			// SELECT FOR UPDATE to prevent deadlocks and ensure atomicity. The lock hierarchy
@@ -118,7 +123,11 @@ namespace FishMMO.Database.Npgsql.Services
 			// - SELECT FOR UPDATE holds locks until transaction commits
 			// - Capacity check is protected by guild lock
 			// - UPSERT is atomic and idempotent
-			var result = await ExecuteTransactionAsync(async (dbContext, transaction, ct) =>
+			var result = await ExecuteIdempotentResultAsync(
+				requestId,
+				scopeId: guildData.CharacterID,
+				operationName: "SaveGuildMembership",
+				operation: async (dbContext, transaction, ct) =>
 			{
 				var charactersTableName = dbContext.GetTableName<CharacterEntity>();
 				var activeCharacter = await dbContext.Characters
@@ -146,31 +155,42 @@ namespace FishMMO.Database.Npgsql.Services
 				if (needsCapacityCheck)
 				{
 					var guildTableName = dbContext.GetTableName<GuildEntity>();
+					var membershipTableName = dbContext.GetTableName<CharacterGuildEntity>();
 
-					// Then lock guild row to prevent concurrent capacity violations
-					// Lock ordering: character membership -> guild (prevents race conditions)
-					var guildEntity = await dbContext.Guilds
-						.FromSqlRaw($"SELECT * FROM {guildTableName} WHERE id = {{0}} FOR UPDATE", guildData.GuildID)
+					// Atomic capacity check with proper locking to prevent race conditions
+					// Uses FOR UPDATE on guild and FOR SHARE on member count to ensure consistent read
+					// Lock ordering: character membership (already locked) -> guild -> member count
+					var capacityResult = await dbContext.Guilds
+						.FromSqlRaw($@"
+							SELECT g.*
+							FROM {guildTableName} g
+							CROSS JOIN LATERAL (
+								SELECT COUNT(*) as member_count
+								FROM {membershipTableName}
+								WHERE guild_id = {{0}}
+								FOR SHARE
+							) mc
+							WHERE g.id = {{0}}
+								AND mc.member_count < {{1}}
+							FOR UPDATE",
+							guildData.GuildID,
+							maxCapacity)
 						.FirstOrDefaultAsync(ct);
 
-					if (guildEntity == null)
+					if (capacityResult == null)
 					{
-						return DatabaseResult.Failure(
-							"NOT_FOUND",
-							$"Guild with ID {guildData.GuildID} does not exist.");
-					}
+						// Either guild doesn't exist or capacity exceeded - check which
+						var guildExists = await dbContext.Guilds
+							.AsNoTracking()
+							.AnyAsync(g => g.ID == guildData.GuildID, ct);
 
-					// Count current members (lock is held, preventing concurrent inserts)
-					// This count is accurate because:
-					// 1. Guild row is locked (no new members can be added)
-					// 2. Character row is locked (this character can't join another guild)
-					// 3. Transaction isolation ensures consistency
-					var currentCount = await dbContext.CharacterGuilds
-						.Where(g => g.GuildID == guildData.GuildID)
-						.CountAsync(ct);
+						if (!guildExists)
+						{
+							return DatabaseResult.Failure(
+								"NOT_FOUND",
+								$"Guild with ID {guildData.GuildID} does not exist.");
+						}
 
-					if (currentCount >= maxCapacity)
-					{
 						return DatabaseResult.Failure(
 							"CAPACITY_EXCEEDED",
 							$"Guild has reached maximum capacity of {maxCapacity} members.");
@@ -192,9 +212,10 @@ namespace FishMMO.Database.Npgsql.Services
 					ct);
 
 				return DatabaseResult.Success();
-			}, "SaveGuildMembership", cancellationToken);
+			},
+				cancellationToken).ConfigureAwait(false);
 
-			return result.IsSuccess ? result.Data : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return result;
 		}
 
 		/// <inheritdoc/>

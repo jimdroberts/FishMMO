@@ -489,6 +489,7 @@ namespace FishMMO.Database.Npgsql.Services
 					$@"WITH locked_chars AS (
 					SELECT id FROM {TableName} 
 					WHERE account = {{0}} AND deleted = FALSE
+					ORDER BY id
 					FOR UPDATE
 					)
 					UPDATE {TableName} 

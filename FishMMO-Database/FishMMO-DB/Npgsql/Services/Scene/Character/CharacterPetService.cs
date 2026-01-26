@@ -11,7 +11,7 @@ using FishMMO.Database.Npgsql.Entities;
 namespace FishMMO.Database.Npgsql.Services
 {
 	/// <inheritdoc/>
-	public sealed class CharacterPetService : BaseService<CharacterPetEntity>, ICharacterPetService
+	public sealed class CharacterPetService : IdempotentBaseService<CharacterPetEntity>, ICharacterPetService
 	{
 		/// <summary>
 		/// Compiled query for retrieving character pet.
@@ -45,14 +45,23 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> SavePetAsync(CharacterPetData petData, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> SavePetAsync(CharacterPetData petData, Guid requestId, CancellationToken cancellationToken = default)
 		{
 			if (petData.CharacterID == 0)
 			{
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			var transactionResult = await ExecuteTransactionAsync(async (dbContext, transaction, ct) =>
+			if (requestId == Guid.Empty)
+			{
+				return DatabaseResult.Failure("VALIDATION_ERROR", "RequestId is required for idempotent pet save.");
+			}
+
+			var transactionResult = await ExecuteIdempotentResultAsync(
+				requestId,
+				scopeId: petData.CharacterID,
+				operationName: "SavePet",
+				operation: async (dbContext, transaction, ct) =>
 			{
 				var charactersTableName = dbContext.GetTableName<CharacterEntity>();
 				var activeCharacter = await dbContext.Characters
@@ -66,18 +75,22 @@ namespace FishMMO.Database.Npgsql.Services
 					throw new DatabaseEntityNotFoundException("Character", petData.CharacterID.ToString());
 				}
 
+				// Use UPSERT for true idempotency - ensures operation succeeds exactly once even on retry
+				// The unique constraint on 'id' ensures this UPDATE is idempotent across retries
 				await dbContext.Database.ExecuteSqlRawAsync(
-					$@"UPDATE {TableName}
-					   SET character_id = {{0}},
-					       template_id = {{1}},
-					       abilities = {{2}},
-					       spawned = {{3}}
-					   WHERE id = {{4}}",
-					new object[] { petData.CharacterID, petData.TemplateID, petData.Abilities.ToArray(), petData.Spawned, petData.ID },
+					$@"INSERT INTO {TableName} (id, character_id, template_id, abilities, spawned, time_created)
+					   VALUES ({{0}}, {{1}}, {{2}}, {{3}}, {{4}}, CURRENT_TIMESTAMP)
+					   ON CONFLICT (id) DO UPDATE SET
+						   character_id = EXCLUDED.character_id,
+						   template_id = EXCLUDED.template_id,
+						   abilities = EXCLUDED.abilities,
+						   spawned = EXCLUDED.spawned",
+					new object[] { petData.ID, petData.CharacterID, petData.TemplateID, petData.Abilities.ToArray(), petData.Spawned },
 					ct).ConfigureAwait(false);
 
-				return true;
-			}, "SavePet", cancellationToken).ConfigureAwait(false);
+				return DatabaseResult.Success();
+			},
+				cancellationToken).ConfigureAwait(false);
 
 			return transactionResult.IsSuccess
 				? DatabaseResult.Success()
@@ -85,12 +98,17 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> SavePetsAsync(IEnumerable<CharacterPetData> pets, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> SavePetsAsync(IEnumerable<CharacterPetData> pets, Guid requestId, CancellationToken cancellationToken = default)
 		{
 			var petList = pets?.Where(p => p.CharacterID > 0).ToList();
 			if (petList == null || petList.Count == 0)
 			{
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Empty or null pets collection");
+			}
+
+			if (requestId == Guid.Empty)
+			{
+				return DatabaseResult.Failure("VALIDATION_ERROR", "RequestId is required for idempotent pets save.");
 			}
 
 			// Separate pets into updates and inserts based on ID
@@ -127,12 +145,18 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 
 			// Wrap both operations in transaction for atomicity
-			var transactionResult = await ExecuteTransactionAsync(async (dbContext, transaction, ct) =>
+
+			var scopeId = petList[0].CharacterID;
+			var transactionResult = await ExecuteIdempotentResultAsync(
+				requestId,
+				scopeId,
+				operationName: "SavePets",
+				operation: async (dbContext, transaction, ct) =>
 			{
 				var charactersTableName = dbContext.GetTableName<CharacterEntity>();
 				var distinctCharacterIds = petList.Select(p => p.CharacterID).Distinct().ToArray();
 				var lockedCount = await dbContext.Database.ExecuteSqlRawAsync(
-					$@"SELECT 1 FROM {charactersTableName} WHERE id = ANY({{0}}::bigint[]) AND deleted = FALSE FOR KEY SHARE",
+					$@"SELECT id FROM {charactersTableName} WHERE id = ANY({{0}}::bigint[]) AND deleted = FALSE ORDER BY id FOR KEY SHARE",
 					new object[] { distinctCharacterIds },
 					ct).ConfigureAwait(false);
 				_ = lockedCount;
@@ -151,6 +175,7 @@ namespace FishMMO.Database.Npgsql.Services
 							SELECT id
 							FROM {charactersTableName}
 							WHERE id = ANY({{1}}::bigint[]) AND deleted = FALSE
+							ORDER BY id
 							FOR KEY SHARE
 						)
 						UPDATE {TableName} AS t SET
@@ -184,6 +209,7 @@ namespace FishMMO.Database.Npgsql.Services
 							SELECT id
 							FROM {charactersTableName}
 							WHERE id = ANY({{0}}::bigint[]) AND deleted = FALSE
+							ORDER BY id
 							FOR KEY SHARE
 						)
 						INSERT INTO {TableName} (character_id, template_id, abilities, spawned, time_created)
@@ -204,8 +230,9 @@ namespace FishMMO.Database.Npgsql.Services
 						ct);
 				}
 
-				return true;
-			}, "SavePets", cancellationToken);
+				return DatabaseResult.Success();
+			},
+				cancellationToken).ConfigureAwait(false);
 
 			if (transactionResult.IsSuccess)
 			{

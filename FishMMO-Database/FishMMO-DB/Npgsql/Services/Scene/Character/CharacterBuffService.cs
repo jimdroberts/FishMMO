@@ -90,6 +90,7 @@ namespace FishMMO.Database.Npgsql.Services
 						SELECT id
 						FROM {charactersTableName}
 						WHERE id = ANY({{0}}::bigint[]) AND deleted = FALSE
+						ORDER BY id
 						FOR KEY SHARE
 					)
 					INSERT INTO {TableName} (character_id, template_id, remaining_time, tick_time, stacks, time_created)

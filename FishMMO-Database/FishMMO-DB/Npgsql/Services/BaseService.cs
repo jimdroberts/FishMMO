@@ -14,6 +14,68 @@ namespace FishMMO.Database.Npgsql.Services
 	/// Provides common functionality: context creation, exception handling, and execution strategies.
 	/// Follows DRY principle by centralizing repeated patterns across all services.
 	/// </summary>
+	/// <remarks>
+	/// <para><b>Architecture: Database Service Layer (DSL) Design</b></para>
+	/// <para>
+	/// This Database Service Layer (DSL) is a library integrated directly into the Application Server Layer with NO network hop.
+	/// There IS a network hop from the DSL to the PostgreSQL database. This architecture dictates that idempotency must be
+	/// implemented at the DSL level, not at the Application Server Layer.
+	/// </para>
+	/// 
+	/// <para><b>Idempotency Strategy: Two-Tier Approach</b></para>
+	/// <list type="number">
+	/// <item>
+	/// <term>Non-Idempotent Operations (BaseService)</term>
+	/// <description>
+	/// Services extending <see cref="BaseService{TEntity}"/> handle operations that are naturally idempotent at the SQL level:
+	/// <list type="bullet">
+	/// <item><description><b>UPSERT operations:</b> Use ON CONFLICT DO UPDATE/NOTHING for natural idempotency</description></item>
+	/// <item><description><b>Read operations:</b> Safe to retry without side effects</description></item>
+	/// <item><description><b>Delete operations:</b> Naturally idempotent (deleting twice is safe)</description></item>
+	/// <item><description><b>Heartbeat/pulse operations:</b> UPSERT-based timestamp updates</description></item>
+	/// </list>
+	/// These operations use <see cref="ExecuteAsync{TResult}"/> and <see cref="ExecuteTransactionAsync{TResult}"/>
+	/// with provider-configured retry strategies but do NOT track request IDs.
+	/// </description>
+	/// </item>
+	/// <item>
+	/// <term>Idempotent Operations (IdempotentBaseService)</term>
+	/// <description>
+	/// Services extending <see cref="IdempotentBaseService{TEntity}"/> handle operations requiring DSL-level idempotency:
+	/// <list type="bullet">
+	/// <item><description><b>CREATE operations:</b> Must not create duplicate entities (account creation, party creation)</description></item>
+	/// <item><description><b>UPDATE with business logic:</b> Operations with optimistic concurrency or capacity checks</description></item>
+	/// <item><description><b>LOGGING/AUDIT operations:</b> Must not duplicate log entries (chat messages)</description></item>
+	/// <item><description><b>QUEUE operations:</b> Enqueue/dequeue that must not execute twice</description></item>
+	/// </list>
+	/// These operations use <see cref="IdempotentBaseService{TEntity}.ExecuteIdempotentAsync{TResult}"/> which tracks
+	/// request IDs in the <c>processed_requests</c> table to prevent double execution across retries and client resends.
+	/// </description>
+	/// </item>
+	/// </list>
+	/// 
+	/// <para><b>Request ID Contract: Caller Responsibility</b></para>
+	/// <para>
+	/// <b>CRITICAL:</b> For operations requiring idempotency protection, the <b>RequestId MUST be provided by the Application Server Layer</b>.
+	/// The Application Server Layer generates a unique RequestId per logical operation and passes it through the entire call chain.
+	/// This enables true cross-request idempotency:
+	/// </para>
+	/// <list type="bullet">
+	/// <item><description><b>Correct Pattern:</b> Application Server generates RequestId → passes to DSL → DSL tracks in processed_requests</description></item>
+	/// <item><description><b>Incorrect Pattern:</b> DSL generates RequestId internally → defeats idempotency on client retry</description></item>
+	/// </list>
+	/// <para>
+	/// When a client retry occurs after a timeout, the same RequestId is used, allowing the DSL to detect duplicate requests
+	/// and return the cached response without re-executing the operation.
+	/// </para>
+	/// 
+	/// <para><b>Event Semantics: Atomic Success or Failure</b></para>
+	/// <para>
+	/// Each DSL operation represents a complete event that either succeeds or fails atomically. The DSL properly communicates
+	/// the result to the Application Server Layer via <see cref="DatabaseResult"/> or <see cref="DatabaseResult{T}"/>.
+	/// Partial failures are not exposed; operations are wrapped in transactions to ensure all-or-nothing semantics.
+	/// </para>
+	/// </remarks>
 	/// <typeparam name="TEntity">The entity type this service operates on.</typeparam>
 	public abstract class BaseService<TEntity> where TEntity : class
 	{
@@ -132,7 +194,7 @@ namespace FishMMO.Database.Npgsql.Services
 									{
 										try
 										{
-											await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+											await RollbackBestEffortAsync(transaction).ConfigureAwait(false);
 										}
 										catch
 										{
@@ -145,7 +207,7 @@ namespace FishMMO.Database.Npgsql.Services
 							{
 									try
 									{
-										await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+										await RollbackBestEffortAsync(transaction).ConfigureAwait(false);
 									}
 									catch
 									{
@@ -159,7 +221,7 @@ namespace FishMMO.Database.Npgsql.Services
 						{
 							try
 							{
-								await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+								await RollbackBestEffortAsync(transaction).ConfigureAwait(false);
 							}
 							catch
 							{
@@ -216,6 +278,22 @@ namespace FishMMO.Database.Npgsql.Services
 
 				return DatabaseResult<TResult>.FromException(dbEx);
 			}
+		}
+
+		/// <summary>
+		/// Rolls back the provided transaction using a short bounded timeout.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Rollback is best-effort cleanup. Using a bounded timeout avoids hangs when the network
+		/// or database is unhealthy while still attempting to release server-side locks.
+		/// </para>
+		/// </remarks>
+		/// <param name="transaction">The transaction to roll back.</param>
+		private static async Task RollbackBestEffortAsync(IDbContextTransaction transaction)
+		{
+			using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+			await transaction.RollbackAsync(cts.Token).ConfigureAwait(false);
 		}
 
 
