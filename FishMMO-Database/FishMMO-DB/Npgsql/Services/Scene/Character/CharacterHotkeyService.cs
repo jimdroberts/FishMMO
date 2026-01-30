@@ -37,9 +37,21 @@ namespace FishMMO.Database.Npgsql.Services
 	public sealed class CharacterHotkeyService : BaseService<CharacterHotkeyEntity>, ICharacterHotkeyService
 	{
 		/// <summary>
+		/// Compiled query for checking whether a character exists and is not deleted.
+		/// Returns the character ID if active, otherwise 0.
+		/// </summary>
+		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<long>> getActiveCharacterIdQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
+				context.Characters
+					.AsNoTracking()
+					.Where(c => c.ID == characterId && !c.Deleted)
+					.Select(c => c.ID)
+					.FirstOrDefault());
+
+		/// <summary>
 		/// Compiled query for retrieving character hotkeys.
 		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterHotkeyEntity>>> GetHotkeysQuery =
+		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterHotkeyEntity>>> getHotkeysQuery =
 			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
 				context.CharacterHotkeys
 					.AsNoTracking()
@@ -49,12 +61,20 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <summary>
 		/// Compiled query for counting character hotkeys.
 		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<int>> GetHotkeyCountQuery =
+		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<int>> getHotkeyCountQuery =
 			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
 				context.CharacterHotkeys
 					.AsNoTracking()
 					.Where(h => h.CharacterID == characterId)
 					.Count());
+
+		/// <summary>
+		/// Compiled query for retrieving a tracked hotkey by character ID and slot.
+		/// </summary>
+		private static readonly Func<NpgsqlDbContext, long, int, CancellationToken, Task<CharacterHotkeyEntity?>> getByCharacterAndSlotTrackingQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, int slot, CancellationToken ct) =>
+				(CharacterHotkeyEntity?)context.CharacterHotkeys
+					.FirstOrDefault(h => h.CharacterID == characterId && h.Slot == slot));
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="CharacterHotkeyService"/> class.
@@ -68,50 +88,70 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<long>> SaveHotkeyAsync(CharacterHotkeyData hotkey, CancellationToken cancellationToken = default)
 		{
-			if (hotkey.CharacterID == 0)
+			if (hotkey.CharacterID <= 0)
 			{
-				return DatabaseResult<long>.Failure("VALIDATION_ERROR", "Invalid character ID");
+				return DatabaseResult<long>.Failure(
+					"VALIDATION_ERROR",
+					"Invalid character ID",
+					isTransient: false);
 			}
 
-			return await ExecuteAsync<long>(
-				async (dbContext, ct) =>
+			var insertResult = await ExecuteMirrorAsync(async dbContext =>
+			{
+				var activeCharacterId = await getActiveCharacterIdQuery(dbContext, hotkey.CharacterID, cancellationToken).ConfigureAwait(false);
+				if (activeCharacterId == 0)
 				{
-					var charactersTableName = dbContext.GetTableName<CharacterEntity>();
-					// Use PostgreSQL UPSERT for atomic insert-or-update
-					var result = await dbContext.CharacterHotkeys
-							.FromSqlRaw($@"
-							WITH active_character AS (
-								SELECT id
-								FROM {charactersTableName}
-								WHERE id = {{0}} AND deleted = FALSE
-								FOR KEY SHARE
-							)
-							INSERT INTO {TableName} 
-								(character_id, type, slot, reference_id, time_created)
-							SELECT
-								{{0}}, {{1}}, {{2}}, {{3}}, CURRENT_TIMESTAMP
-							FROM active_character
-							ON CONFLICT (character_id, slot) 
-							DO UPDATE SET 
-								type = EXCLUDED.type,
-								reference_id = EXCLUDED.reference_id
-							RETURNING id, character_id, type, slot, reference_id, time_created",
-							hotkey.CharacterID,
-							hotkey.Type,
-							hotkey.Slot,
-							hotkey.ReferenceID)
-							.AsNoTracking()
-							.FirstOrDefaultAsync(ct).ConfigureAwait(false);
+					throw new DatabaseEntityNotFoundException("Character", hotkey.CharacterID.ToString());
+				}
 
-					if (result == null)
-					{
-						throw new DatabaseEntityNotFoundException("Character", hotkey.CharacterID.ToString());
-					}
+				var entity = new CharacterHotkeyEntity
+				{
+					CharacterID = hotkey.CharacterID,
+					Version = hotkey.Version,
+					Type = hotkey.Type,
+					Slot = hotkey.Slot,
+					ReferenceID = hotkey.ReferenceID,
+					TimeCreated = DateTime.UtcNow
+				};
+				await dbContext.CharacterHotkeys.AddAsync(entity, cancellationToken).ConfigureAwait(false);
+				return entity;
+			}).ConfigureAwait(false);
 
-					return result.ID;
-				},
-				"SaveHotkey",
-				cancellationToken).ConfigureAwait(false);
+			if (insertResult.IsSuccess)
+			{
+				return DatabaseResult<long>.Success(insertResult.Data.ID);
+			}
+
+			if (insertResult.ErrorCode != "UNIQUE_VIOLATION")
+			{
+				return DatabaseResult<long>.Failure(insertResult.ErrorCode, insertResult.ErrorMessage, insertResult.IsTransient);
+			}
+
+			var updateResult = await ExecuteMirrorAsync(async dbContext =>
+			{
+				var activeCharacterId = await getActiveCharacterIdQuery(dbContext, hotkey.CharacterID, cancellationToken).ConfigureAwait(false);
+				if (activeCharacterId == 0)
+				{
+					throw new DatabaseEntityNotFoundException("Character", hotkey.CharacterID.ToString());
+				}
+
+				var entity = await getByCharacterAndSlotTrackingQuery(dbContext, hotkey.CharacterID, hotkey.Slot, cancellationToken).ConfigureAwait(false);
+				if (entity == null)
+				{
+					throw new DatabaseEntityNotFoundException("CharacterHotkey", $"(CharacterID: {hotkey.CharacterID}, Slot: {hotkey.Slot})");
+				}
+
+				ValidateVersion(entity, hotkey.Version);
+				if (hotkey.Version > 0) entity.Version = hotkey.Version;
+
+				entity.Type = hotkey.Type;
+				entity.ReferenceID = hotkey.ReferenceID;
+				return entity;
+			}).ConfigureAwait(false);
+
+			return updateResult.IsSuccess
+				? DatabaseResult<long>.Success(updateResult.Data.ID)
+				: DatabaseResult<long>.Failure(updateResult.ErrorCode, updateResult.ErrorMessage, updateResult.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -120,7 +160,10 @@ namespace FishMMO.Database.Npgsql.Services
 			var hotkeyList = hotkeys?.ToList();
 			if (hotkeyList == null || hotkeyList.Count == 0)
 			{
-				return DatabaseResult.Failure("VALIDATION_ERROR", "Empty or null hotkeys collection");
+				return DatabaseResult.Failure(
+					"VALIDATION_ERROR",
+					"Empty or null hotkeys collection",
+					isTransient: false);
 			}
 
 			// Prevent duplicate keys within the same batch from causing
@@ -139,76 +182,114 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 			}
 
-			// Extract arrays for bulk UPSERT
-			var characterIds = hotkeyList.Select(h => h.CharacterID).ToArray();
-			var types = hotkeyList.Select(h => (short)h.Type).ToArray();
-			var slots = hotkeyList.Select(h => h.Slot).ToArray();
-			var referenceIds = hotkeyList.Select(h => h.ReferenceID).ToArray();
-
-			var result = await ExecuteAsync(async (dbContext, ct) =>
+			return await ExecuteMirrorAsync(async dbContext =>
 			{
-				var charactersTableName = dbContext.GetTableName<CharacterEntity>();
-				return await dbContext.Database.ExecuteSqlRawAsync(
-					$@"WITH active_characters AS (
-						SELECT id
-						FROM {charactersTableName}
-						WHERE id = ANY({{0}}::bigint[]) AND deleted = FALSE
-						ORDER BY id
-						FOR KEY SHARE
-					)
-					INSERT INTO {TableName} (character_id, type, slot, reference_id, time_created)
-					SELECT u.character_id, u.type, u.slot, u.reference_id, CURRENT_TIMESTAMP
-					FROM UNNEST(
-						{{0}}::bigint[],
-						{{1}}::smallint[],
-						{{2}}::int[],
-						{{3}}::bigint[]
-					) AS u(character_id, type, slot, reference_id)
-					JOIN active_characters ac ON ac.id = u.character_id
-					ON CONFLICT (character_id, slot) DO UPDATE SET
-						type = EXCLUDED.type,
-						reference_id = EXCLUDED.reference_id",
-					new object[] { characterIds, types, slots, referenceIds },
-					ct);
-			}, "SaveHotkeys", cancellationToken).ConfigureAwait(false);
+				var previousAutoDetectChanges = dbContext.ChangeTracker.AutoDetectChangesEnabled;
+				try
+				{
+					dbContext.ChangeTracker.AutoDetectChangesEnabled = false;
 
-			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+					var characterIds = hotkeyList.Select(h => h.CharacterID).Distinct().ToArray();
+					var activeCharacterIds = await dbContext.Characters
+						.AsNoTracking()
+						.Where(c => characterIds.Contains(c.ID) && !c.Deleted)
+						.Select(c => c.ID)
+						.ToListAsync(cancellationToken)
+						.ConfigureAwait(false);
+					var activeCharacterIdSet = new HashSet<long>(activeCharacterIds);
+
+					var slotList = hotkeyList.Select(h => h.Slot).Distinct().ToArray();
+					var desiredKeys = new HashSet<(long CharacterID, int Slot)>(hotkeyList.Select(h => (h.CharacterID, h.Slot)));
+					var existing = await dbContext.CharacterHotkeys
+						.Where(h => activeCharacterIdSet.Contains(h.CharacterID) && slotList.Contains(h.Slot))
+						.ToListAsync(cancellationToken)
+						.ConfigureAwait(false);
+
+					var existingByKey = new Dictionary<(long CharacterID, int Slot), CharacterHotkeyEntity>();
+					foreach (var entity in existing)
+					{
+						var key = (entity.CharacterID, entity.Slot);
+						if (!desiredKeys.Contains(key)) continue;
+						existingByKey[key] = entity;
+					}
+
+					foreach (var hotkey in hotkeyList)
+					{
+						if (!activeCharacterIdSet.Contains(hotkey.CharacterID)) continue;
+
+						var key = (hotkey.CharacterID, hotkey.Slot);
+						if (!existingByKey.TryGetValue(key, out var entity))
+						{
+							entity = new CharacterHotkeyEntity
+							{
+								CharacterID = hotkey.CharacterID,
+								Version = hotkey.Version,
+								Slot = hotkey.Slot,
+								TimeCreated = DateTime.UtcNow
+							};
+							await dbContext.CharacterHotkeys.AddAsync(entity, cancellationToken).ConfigureAwait(false);
+							existingByKey[key] = entity;
+						}
+
+						ValidateVersion(entity, hotkey.Version);
+						if (hotkey.Version > 0) entity.Version = hotkey.Version;
+
+						entity.Type = hotkey.Type;
+						entity.ReferenceID = hotkey.ReferenceID;
+					}
+				}
+				finally
+				{
+					dbContext.ChangeTracker.AutoDetectChangesEnabled = previousAutoDetectChanges;
+				}
+			}).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
 		public async Task<DatabaseResult> DeleteHotkeysAsync(long characterId, CancellationToken cancellationToken = default)
 		{
-			if (characterId == 0)
+			if (characterId <= 0)
 			{
-				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
+				return DatabaseResult.Failure(
+					"VALIDATION_ERROR",
+					"Invalid character ID",
+					isTransient: false);
 			}
 
-			var result = await ExecuteRawSqlAsync(
-				$@"DELETE FROM {TableName} WHERE character_id = {{0}}",
-				"DeleteHotkeys",
-				new object[] { characterId },
-				entityName: "CharacterHotkey",
-				entityId: characterId,
-				requireRowsAffected: false,
-				cancellationToken: cancellationToken).ConfigureAwait(false);
+			return await ExecuteMirrorAsync(async dbContext =>
+			{
+				var hotkeyIds = await dbContext.CharacterHotkeys
+					.AsNoTracking()
+					.Where(h => h.CharacterID == characterId)
+					.Select(h => h.ID)
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
 
-			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+				foreach (var hotkeyId in hotkeyIds)
+				{
+					var entity = new CharacterHotkeyEntity { ID = hotkeyId };
+					dbContext.CharacterHotkeys.Remove(entity);
+				}
+			}).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<IReadOnlyList<CharacterHotkeyData>>> GetHotkeysAsync(long characterId, CancellationToken cancellationToken = default)
 		{
-			if (characterId == 0)
+			if (characterId <= 0)
 			{
-				return DatabaseResult<IReadOnlyList<CharacterHotkeyData>>.Failure("VALIDATION_ERROR", "Invalid character ID");
+				return DatabaseResult<IReadOnlyList<CharacterHotkeyData>>.Failure(
+					"VALIDATION_ERROR",
+					"Invalid character ID",
+					isTransient: false);
 			}
 
-			return await ExecuteAsync(
-				async (dbContext, ct) =>
-				{
-					var entities = await GetHotkeysQuery(dbContext, characterId, ct).ConfigureAwait(false);
+			return await ExecuteMirrorAsync(async dbContext =>
+			{
+				var entities = await getHotkeysQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
 					var hotkeys = entities.Select(h => new CharacterHotkeyData(
 						id: h.ID,
+						version: h.Version,
 						characterID: h.CharacterID,
 						type: h.Type,
 						slot: h.Slot,
@@ -216,26 +297,24 @@ namespace FishMMO.Database.Npgsql.Services
 					)).ToList();
 
 					return (IReadOnlyList<CharacterHotkeyData>)hotkeys;
-				},
-				"GetHotkeys",
-				cancellationToken).ConfigureAwait(false);
+			}).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<int>> GetHotkeyCountAsync(long characterId, CancellationToken cancellationToken = default)
 		{
-			if (characterId == 0)
+			if (characterId <= 0)
 			{
-				return DatabaseResult<int>.Failure("VALIDATION_ERROR", "Invalid character ID");
+				return DatabaseResult<int>.Failure(
+					"VALIDATION_ERROR",
+					"Invalid character ID",
+					isTransient: false);
 			}
 
-			return await ExecuteAsync(
-				async (dbContext, ct) =>
-				{
-					return await GetHotkeyCountQuery(dbContext, characterId, ct).ConfigureAwait(false);
-				},
-				"GetHotkeyCount",
-				cancellationToken).ConfigureAwait(false);
+			return await ExecuteMirrorAsync(async dbContext =>
+			{
+				return await getHotkeyCountQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
+			}).ConfigureAwait(false);
 		}
 	}
 }

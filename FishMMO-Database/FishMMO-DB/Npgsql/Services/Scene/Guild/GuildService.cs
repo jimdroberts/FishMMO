@@ -22,13 +22,13 @@ namespace FishMMO.Database.Npgsql.Services
 	/// <item><description><see cref="Exception"/> → <see cref="DatabaseQueryException"/></description></item>
 	/// </list>
 	/// </remarks>
-	public sealed class GuildService : IdempotentBaseService<GuildEntity>, IGuildService
+	public sealed class GuildService : BaseService<GuildEntity>, IGuildService
 	{
 		/// <summary>
 		/// Compiled query for ExistsAsync hot path.
 		/// Pre-compiles the query expression tree for better performance on repeated executions.
 		/// </summary>
-		private static readonly Func<NpgsqlDbContext, string, CancellationToken, Task<bool>> GuildExistsByNameQuery =
+		private static readonly Func<NpgsqlDbContext, string, CancellationToken, Task<bool>> guildExistsByNameQuery =
 			EF.CompileAsyncQuery((NpgsqlDbContext context, string nameLowercase, CancellationToken ct) =>
 				context.Guilds
 					.AsNoTracking()
@@ -39,7 +39,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// Pre-compiles the query expression tree for better performance on repeated executions.
 		/// </summary>
 #pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<GuildEntity?>> GetGuildByIdQuery =
+		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<GuildEntity?>> getGuildByIdQuery =
 			EF.CompileAsyncQuery((NpgsqlDbContext context, long guildId, CancellationToken ct) =>
 				context.Guilds
 					.AsNoTracking()
@@ -61,11 +61,15 @@ namespace FishMMO.Database.Npgsql.Services
 			if (string.IsNullOrWhiteSpace(name))
 				return DatabaseResult<bool>.Failure("VALIDATION_ERROR", "Invalid guild name");
 
-			return await ExecuteAsync(async (context, ct) =>
+			var result = await ExecuteMirrorAsync(async context =>
 			{
 				var nameLowercase = name.ToLowerInvariant();
-				return await GuildExistsByNameQuery(context, nameLowercase, ct).ConfigureAwait(false);
-			}, "GuildExists", cancellationToken).ConfigureAwait(false);
+				return await guildExistsByNameQuery(context, nameLowercase, cancellationToken).ConfigureAwait(false);
+			}).ConfigureAwait(false);
+
+			return result.IsSuccess
+				? DatabaseResult<bool>.Success(result.Data)
+				: DatabaseResult<bool>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -74,68 +78,67 @@ namespace FishMMO.Database.Npgsql.Services
 			if (guildId <= 0)
 				return DatabaseResult<string>.Failure("VALIDATION_ERROR", "Invalid guild ID");
 
-			return await ExecuteAsync(async (context, ct) =>
+			var result = await ExecuteMirrorAsync(async context =>
 			{
 				var guild = await context.Guilds
 					.AsNoTracking()
 					.Where(g => g.ID == guildId)
 					.Select(g => g.Name)
-					.FirstOrDefaultAsync(ct).ConfigureAwait(false);
+					.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
 
 				return guild ?? string.Empty;
-			}, "GetGuildName", cancellationToken).ConfigureAwait(false);
+			}).ConfigureAwait(false);
+
+			return result.IsSuccess
+				? DatabaseResult<string>.Success(result.Data)
+				: DatabaseResult<string>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<long?>> CreateAsync(string name, Guid requestId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<long?>> CreateAsync(string name, CancellationToken cancellationToken = default)
 		{
 			if (string.IsNullOrWhiteSpace(name))
 			{
 				return DatabaseResult<long?>.Failure("VALIDATION_ERROR", "Guild name is required");
 			}
 
-			if (requestId == Guid.Empty)
+			var nameLowercase = name.ToLowerInvariant();
+
+			var insertResult = await ExecuteMirrorAsync(async context =>
 			{
-				return DatabaseResult<long?>.Failure("VALIDATION_ERROR", "RequestId is required for idempotent guild creation.");
+				var guild = new GuildEntity
+				{
+					Name = name,
+					Notice = string.Empty,
+					TimeCreated = DateTime.UtcNow
+				};
+				await context.Guilds.AddAsync(guild, cancellationToken).ConfigureAwait(false);
+				return guild;
+			}).ConfigureAwait(false);
+
+			if (insertResult.IsSuccess)
+			{
+				return DatabaseResult<long?>.Success(insertResult.Data.ID);
 			}
 
-			var nameLowercase = name.ToLowerInvariant();
-			// Use hash of guild name as stable scope ID to prevent requestId reuse across different guilds
-			var scopeId = ComputeScopeId(nameLowercase);
+			if (insertResult.ErrorCode != "UNIQUE_VIOLATION")
+			{
+				return DatabaseResult<long?>.Failure(insertResult.ErrorCode, insertResult.ErrorMessage, insertResult.IsTransient);
+			}
 
-			return await ExecuteIdempotentAsync<long?>(
-				requestId,
-				scopeId,
-				"CreateGuild",
-				async (context, transaction, ct) =>
-				{
-					// Wrap in transaction to ensure atomicity of INSERT + fallback query
-					var inserted = await context.Guilds
-						.FromSqlRaw($@"
-						INSERT INTO {TableName} (name, notice, time_created)
-						VALUES ({{0}}, {{1}}, CURRENT_TIMESTAMP)
-						ON CONFLICT (name_lowercase) DO NOTHING
-						RETURNING id",
-						name,
-						string.Empty)
-						.AsNoTracking()
-						.FirstOrDefaultAsync(ct).ConfigureAwait(false);
+			var existingResult = await ExecuteMirrorAsync(async context =>
+			{
+				return await context.Guilds
+					.AsNoTracking()
+					.Where(g => g.NameLowercase == nameLowercase)
+					.Select(g => (long?)g.ID)
+					.FirstOrDefaultAsync(cancellationToken)
+					.ConfigureAwait(false);
+			}).ConfigureAwait(false);
 
-					if (inserted?.ID > 0)
-					{
-						return (long?)inserted.ID;
-					}
-
-					// Within transaction: guild must exist if INSERT conflict occurred
-					var existingId = await context.Guilds
-						.AsNoTracking()
-						.Where(g => g.NameLowercase == nameLowercase)
-						.Select(g => (long?)g.ID)
-						.FirstOrDefaultAsync(ct).ConfigureAwait(false);
-
-					return existingId;
-				},
-				cancellationToken).ConfigureAwait(false);
+			return existingResult.IsSuccess
+				? DatabaseResult<long?>.Success(existingResult.Data)
+				: DatabaseResult<long?>.Failure(existingResult.ErrorCode, existingResult.ErrorMessage, existingResult.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -155,38 +158,54 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid guild ID");
 			}
 
-			// Avoid FK-cascade deadlocks by taking locks in a deterministic order
-			// that matches concurrent upsert patterns (dependent rows first, then parent row).
-			var transactionResult = await ExecuteTransactionAsync(async (dbContext, transaction, ct) =>
+			var result = await ExecuteMirrorAsync(async dbContext =>
 			{
-				var characterGuildsTable = dbContext.GetTableName<CharacterGuildEntity>();
-				_ = await dbContext.Database.ExecuteSqlRawAsync(
-					$@"SELECT 1 FROM {characterGuildsTable} WHERE guild_id = {{0}} ORDER BY character_id FOR UPDATE",
-					new object[] { guildId },
-					ct).ConfigureAwait(false);
+				var membershipIds = await dbContext.CharacterGuilds
+					.AsNoTracking()
+					.Where(cg => cg.GuildID == guildId)
+					.Select(cg => cg.ID)
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
+				foreach (var membershipId in membershipIds)
+				{
+					var membership = await dbContext.CharacterGuilds
+						.FirstOrDefaultAsync(cg => cg.ID == membershipId, cancellationToken)
+						.ConfigureAwait(false);
+					if (membership != null)
+					{
+						dbContext.CharacterGuilds.Remove(membership);
+					}
+				}
 
-				var guildUpdatesTable = dbContext.GetTableName<GuildUpdateEntity>();
-				_ = await dbContext.Database.ExecuteSqlRawAsync(
-					$@"SELECT 1 FROM {guildUpdatesTable} WHERE guild_id = {{0}} ORDER BY guild_id FOR UPDATE",
-					new object[] { guildId },
-					ct).ConfigureAwait(false);
+				var updateIds = await dbContext.GuildUpdates
+					.AsNoTracking()
+					.Where(gu => gu.GuildID == guildId)
+					.Select(gu => gu.ID)
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
+				foreach (var updateId in updateIds)
+				{
+					var update = await dbContext.GuildUpdates
+						.FirstOrDefaultAsync(gu => gu.ID == updateId, cancellationToken)
+						.ConfigureAwait(false);
+					if (update != null)
+					{
+						dbContext.GuildUpdates.Remove(update);
+					}
+				}
 
-				var guildTable = dbContext.GetTableName<GuildEntity>();
-				var rows = await dbContext.Database.ExecuteSqlRawAsync(
-					$@"DELETE FROM {guildTable} WHERE id = {{0}}",
-					new object[] { guildId },
-					ct).ConfigureAwait(false);
+				var guild = await dbContext.Guilds
+					.FirstOrDefaultAsync(g => g.ID == guildId, cancellationToken)
+					.ConfigureAwait(false);
+				if (guild != null)
+				{
+					dbContext.Guilds.Remove(guild);
+				}
+			}).ConfigureAwait(false);
 
-				// Idempotent: already deleted.
-				if (rows <= 0)
-					return DatabaseResult.Success();
-
-				return DatabaseResult.Success();
-			}, "DeleteGuild", cancellationToken).ConfigureAwait(false);
-
-			return transactionResult.IsSuccess
+			return result.IsSuccess
 				? DatabaseResult.Success()
-				: DatabaseResult.Failure(transactionResult.ErrorCode, transactionResult.ErrorMessage, transactionResult.IsTransient);
+				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -195,14 +214,19 @@ namespace FishMMO.Database.Npgsql.Services
 			if (string.IsNullOrWhiteSpace(name))
 				return DatabaseResult<GuildData?>.Failure("VALIDATION_ERROR", "Invalid guild name");
 
-			return await ExecuteAsync(async (context, ct) =>
+			var result = await ExecuteMirrorAsync(async context =>
 			{
 				var guild = await context.Guilds
 					.AsNoTracking()
-					.FirstOrDefaultAsync(g => g.NameLowercase == name.ToLowerInvariant(), ct).ConfigureAwait(false);
+					.FirstOrDefaultAsync(g => g.NameLowercase == name.ToLowerInvariant(), cancellationToken)
+					.ConfigureAwait(false);
 
 				return guild != null ? MapEntityToDto(guild) : (GuildData?)null;
-			}, "LoadGuildByName", cancellationToken).ConfigureAwait(false);
+			}).ConfigureAwait(false);
+
+			return result.IsSuccess
+				? DatabaseResult<GuildData?>.Success(result.Data)
+				: DatabaseResult<GuildData?>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -211,12 +235,15 @@ namespace FishMMO.Database.Npgsql.Services
 			if (guildId <= 0)
 				return DatabaseResult<GuildData?>.Failure("VALIDATION_ERROR", "Invalid guild ID");
 
-			return await ExecuteAsync(async (context, ct) =>
+			var result = await ExecuteMirrorAsync(async context =>
 			{
-				var guild = await GetGuildByIdQuery(context, guildId, ct).ConfigureAwait(false);
-
+				var guild = await getGuildByIdQuery(context, guildId, cancellationToken).ConfigureAwait(false);
 				return guild != null ? MapEntityToDto(guild) : (GuildData?)null;
-			}, "LoadGuildById", cancellationToken).ConfigureAwait(false);
+			}).ConfigureAwait(false);
+
+			return result.IsSuccess
+				? DatabaseResult<GuildData?>.Success(result.Data)
+				: DatabaseResult<GuildData?>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <summary>

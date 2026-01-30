@@ -8,6 +8,7 @@ namespace FishMMO.Database.Data
 	public struct CharacterMailData
 	{
 		public readonly long ID;
+		public readonly long Version;
 		public readonly long CharacterID;
 		public readonly long SenderID;
 		public readonly string SenderName;
@@ -19,8 +20,14 @@ namespace FishMMO.Database.Data
 		public readonly int ItemAttachment;
 
 		public CharacterMailData(long id, long characterID, long senderID, string senderName, string subject, string body, DateTime timeSent, bool read, int currencyAttachment, int itemAttachment)
+			: this(id, version: 0, characterID, senderID, senderName, subject, body, timeSent, read, currencyAttachment, itemAttachment)
+		{
+		}
+
+		public CharacterMailData(long id, long version, long characterID, long senderID, string senderName, string subject, string body, DateTime timeSent, bool read, int currencyAttachment, int itemAttachment)
 		{
 			ID = id;
+			Version = version;
 			CharacterID = characterID;
 			SenderID = senderID;
 			SenderName = senderName;

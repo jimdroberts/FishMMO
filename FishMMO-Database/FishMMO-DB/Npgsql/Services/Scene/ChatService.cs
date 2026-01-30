@@ -12,7 +12,7 @@ using FishMMO.Database.Npgsql.Services.Interfaces;
 namespace FishMMO.Database.Npgsql.Services
 {
 	/// <inheritdoc/>
-	public sealed class ChatService : IdempotentBaseService<ChatEntity>, IChatService
+	public sealed class ChatService : BaseService<ChatEntity>, IChatService
 	{
 		/// <summary>
 		/// Maximum allowed length for chat messages. This length should never be close to reached. Maximum server message should be 256 characters.
@@ -50,7 +50,6 @@ namespace FishMMO.Database.Npgsql.Services
 			ChatChannel channel,
 			string message,
 			DateTime serverReceivedTime,
-			Guid requestId,
 			CancellationToken cancellationToken = default)
 		{
 			if (accountId <= 0)
@@ -78,11 +77,6 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("MESSAGE_TOO_LONG", "Message exceeds maximum length.");
 			}
 
-			if (requestId == Guid.Empty)
-			{
-				return DatabaseResult.Failure("VALIDATION_ERROR", "RequestId is required.");
-			}
-
 			var normalizedCharacterName = string.IsNullOrWhiteSpace(characterName) ? string.Empty : characterName;
 			if (normalizedCharacterName.Length > MaxAuditNameLength)
 				normalizedCharacterName = normalizedCharacterName.Substring(0, MaxAuditNameLength);
@@ -91,35 +85,25 @@ namespace FishMMO.Database.Npgsql.Services
 			if (normalizedAccountName.Length > MaxAuditAccountLength)
 				normalizedAccountName = normalizedAccountName.Substring(0, MaxAuditAccountLength);
 
+
 			var channelByte = (byte)channel;
-			var result = await ExecuteIdempotentAsync(
-				requestId,
-				scopeId: characterId,
-				"SaveChatMessage",
-				async (dbContext, transaction, ct) =>
+			var result = await ExecuteMirrorAsync(async dbContext =>
+			{
+				var entity = new ChatEntity
 				{
-					var sql = $@"INSERT INTO {TableName}
-						(character_id, character_name, account_name, world_server_id, scene_server_id, server_received_time, time_created, channel, message)
-						VALUES ({{0}}, {{1}}, {{2}}, {{3}}, {{4}}, {{5}}, CURRENT_TIMESTAMP, {{6}}, {{7}})";
+					CharacterID = characterId,
+					CharacterName = normalizedCharacterName,
+					AccountName = normalizedAccountName,
+					WorldServerID = worldServerId,
+					SceneServerID = sceneServerId,
+					ServerReceivedTime = serverReceivedTime,
+					TimeCreated = DateTime.UtcNow,
+					Channel = channelByte,
+					Message = message
+				};
 
-					_ = await dbContext.Database.ExecuteSqlRawAsync(
-						sql,
-						new object[]
-						{
-							characterId,
-							normalizedCharacterName,
-							normalizedAccountName,
-							worldServerId,
-							sceneServerId,
-							serverReceivedTime,
-							channelByte,
-							message
-						},
-						ct).ConfigureAwait(false);
-
-					return true;
-				},
-				cancellationToken).ConfigureAwait(false);
+				await dbContext.Chat.AddAsync(entity, cancellationToken).ConfigureAwait(false);
+			}).ConfigureAwait(false);
 
 			return result.IsSuccess
 				? DatabaseResult.Success()
@@ -137,7 +121,7 @@ namespace FishMMO.Database.Npgsql.Services
 			if (amount <= 0)
 				return DatabaseResult<List<ChatData>>.Success(new List<ChatData>());
 
-			return await ExecuteAsync(async (dbContext, ct) =>
+			var result = await ExecuteMirrorAsync(async dbContext =>
 			{
 				// Filter out local messages for the specified scene server
 				var localChannels = new byte[]
@@ -157,10 +141,14 @@ namespace FishMMO.Database.Npgsql.Services
 					.OrderBy(c => c.TimeCreated)
 					.ThenBy(c => c.ID)
 					.Take(amount)
-					.ToListAsync(ct).ConfigureAwait(false);
+					.ToListAsync(cancellationToken).ConfigureAwait(false);
 
 				return messages.Select(MapEntityToDto).ToList();
-			}, "FetchChatMessages", cancellationToken).ConfigureAwait(false);
+			}).ConfigureAwait(false);
+
+			return result.IsSuccess
+				? DatabaseResult<List<ChatData>>.Success(result.Data)
+				: DatabaseResult<List<ChatData>>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <summary>

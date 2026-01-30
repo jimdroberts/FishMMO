@@ -34,48 +34,22 @@ namespace FishMMO.Database.Npgsql.Services
 	public interface ICharacterGuildService
 	{
 		/// <summary>
-	/// Saves or updates a character's guild membership with idempotency protection.
-	/// Uses atomic UPSERT operation wrapped in execution strategy for automatic retry.
-	/// </summary>
-	/// <param name="guildData">The guild membership data to save. CharacterID and GuildID must be greater than 0.</param>
-	/// <param name="maxCapacity">Maximum number of members allowed in the guild. Must be between 1 and 256.</param>
-	/// <param name="requestId">Unique request ID for idempotency. Must be provided by the caller (Application Server Layer) to enable true cross-request idempotency protection.</param>
-	/// <param name="cancellationToken">Token to cancel the asynchronous operation.</param>
-	/// <returns>
-	/// DatabaseResult indicating success or containing error details.
-	/// </returns>
-	/// <remarks>
-	/// <para>
-	/// Uses DSL-level idempotency via the processed_requests table. The <paramref name="requestId"/> must be stable
-	/// across retries from the Application Server Layer to prevent duplicate execution when clients retry after timeouts.
-	/// </para>
-	/// <para>
-	/// Uses transaction with row-level locking to atomically validate capacity and save membership.
-	/// </para>
-	/// Process:
-	/// 1. Checks if character is already a member (UPDATE vs INSERT case)
-	/// 2. For new joins, locks guild member rows with FOR UPDATE and counts members
-	/// 3. Rejects join if capacity reached with CAPACITY_EXCEEDED error
-	/// 4. Performs UPSERT (INSERT ... ON CONFLICT DO UPDATE) on character_id
-	/// 
-	/// Uses UPSERT (INSERT ... ON CONFLICT DO UPDATE) on character_id:
-	/// - If character has guild membership: Updates guild_id, rank, location
-	/// - If character has no guild: Inserts new membership if capacity available
-	/// 
-	/// Possible return scenarios:
-	/// - Success: Guild membership saved successfully
-	/// - Failure with VALIDATION_ERROR: Invalid character ID, guild ID, or max capacity
-	/// - Failure with CAPACITY_EXCEEDED: Guild has reached maximum capacity
-	/// - Failure with DatabaseConstraintException: Constraint violation (foreign key)
-	/// - Failure with DatabaseTimeoutException: Operation timed out
-	/// - Failure with DatabaseConnectionException: Connection error
-	/// - Failure with DatabaseQueryException: Database operation failed
-	/// 
-	/// Thread-safe due to transaction with row-level locking (FOR UPDATE).
-	/// Only one guild per character enforced at database level.
-	/// Capacity validation is race-condition safe.
-	/// </remarks>
-	Task<DatabaseResult> SaveGuildMembershipAsync(CharacterGuildData guildData, int maxCapacity, System.Guid requestId, CancellationToken cancellationToken = default);
+		/// Saves or updates a character's guild membership.
+		/// </summary>
+		/// <param name="guildData">The guild membership data to save. CharacterID and GuildID must be greater than 0.</param>
+		/// <param name="maxCapacity">Maximum number of members allowed in the guild. Must be between 1 and 256.</param>
+		/// <param name="cancellationToken">Token to cancel the asynchronous operation.</param>
+		/// <returns>DatabaseResult indicating success or containing error details.</returns>
+		/// <remarks>
+		/// Uses BaseService.ExecuteMirrorAsync for:
+		/// - Automatic transient failure retry
+		/// - Centralized exception handling and mapping
+		/// - Consistent DatabaseResult pattern
+		/// 
+		/// Capacity validation returns CAPACITY_EXCEEDED when the guild is full.
+		/// Only one guild per character is enforced at the database level.
+		/// </remarks>
+		Task<DatabaseResult> SaveGuildMembershipAsync(CharacterGuildData guildData, int maxCapacity, CancellationToken cancellationToken = default);
 		/// <summary>
 		/// Updates a character's guild rank.
 		/// Uses atomic UPDATE operation wrapped in execution strategy for automatic retry.

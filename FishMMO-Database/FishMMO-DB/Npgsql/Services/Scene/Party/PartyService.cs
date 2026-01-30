@@ -11,12 +11,12 @@ using FishMMO.Database.Npgsql.Services.Interfaces;
 namespace FishMMO.Database.Npgsql.Services
 {
 	/// <inheritdoc/>
-	public sealed class PartyService : IdempotentBaseService<PartyEntity>, IPartyService
+	public sealed class PartyService : BaseService<PartyEntity>, IPartyService
 	{
 		/// <summary>
 		/// Compiled query for checking party existence (hot path for party validations).
 		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<bool>> PartyExistsQuery =
+		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<bool>> partyExistsQuery =
 			EF.CompileAsyncQuery((NpgsqlDbContext context, long partyId, CancellationToken ct) =>
 				context.Parties.Any(p => p.ID == partyId));
 
@@ -36,55 +36,43 @@ namespace FishMMO.Database.Npgsql.Services
 			if (partyId <= 0)
 				return DatabaseResult<bool>.Success(false);
 
-			return await ExecuteAsync(async (dbContext, ct) =>
-			{
-				return await PartyExistsQuery(dbContext, partyId, ct).ConfigureAwait(false);
-			}, "CheckPartyExists", cancellationToken).ConfigureAwait(false);
+			var result = await ExecuteMirrorAsync(async dbContext =>
+				await partyExistsQuery(dbContext, partyId, cancellationToken).ConfigureAwait(false)).ConfigureAwait(false);
+
+			return result.IsSuccess
+				? DatabaseResult<bool>.Success(result.Data)
+				: DatabaseResult<bool>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<long>> CreateAsync(long accountId, Guid requestId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<long>> CreateAsync(long accountId, CancellationToken cancellationToken = default)
 		{
 			if (accountId <= 0)
 			{
 				return DatabaseResult<long>.Failure("VALIDATION_ERROR", "Invalid account ID.");
 			}
 
-			if (requestId == Guid.Empty)
+			var result = await ExecuteMirrorAsync(async dbContext =>
 			{
-				return DatabaseResult<long>.Failure("VALIDATION_ERROR", "RequestId is required.");
+				var party = new PartyEntity
+				{
+					TimeCreated = DateTime.UtcNow
+				};
+				await dbContext.Parties.AddAsync(party, cancellationToken).ConfigureAwait(false);
+				return party;
+			}).ConfigureAwait(false);
+
+			if (!result.IsSuccess)
+			{
+				return DatabaseResult<long>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 			}
 
-			return await ExecuteIdempotentAsync(
-				requestId,
-				accountId,
-				"CreateParty",
-				async (dbContext, transaction, ct) =>
+			if (result.Data.ID <= 0)
 			{
-				// Use atomic INSERT with RETURNING for proper retry strategy support
-				// Optimized: RETURNING only id for better performance
-				var result = await dbContext.Parties
-					.FromSqlRaw($@"
-					INSERT INTO {TableName} (time_created)
-					VALUES (CURRENT_TIMESTAMP)
-					RETURNING id")
-						.AsNoTracking()
-						.FirstOrDefaultAsync(ct).ConfigureAwait(false);
+				return DatabaseResult<long>.Failure("DATABASE_ERROR", "Failed to create party.", isTransient: true);
+			}
 
-				var partyId = result?.ID ?? 0;
-				if (partyId <= 0)
-				{
-					throw new DatabaseQueryException(
-						"CreateParty",
-						"Failed to create party.",
-						"INSERT RETURNING returned no results",
-						false,
-						null);
-				}
-
-				return partyId;
-			},
-				cancellationToken).ConfigureAwait(false);
+			return DatabaseResult<long>.Success(result.Data.ID);
 		}
 
 		/// <inheritdoc/>
@@ -104,38 +92,54 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("INVALID_PARTY_ID", "Party ID must be greater than zero.");
 			}
 
-			// Avoid FK-cascade deadlocks by taking locks in a deterministic order
-			// that matches concurrent upsert patterns (dependent rows first, then parent row).
-			var transactionResult = await ExecuteTransactionAsync(async (dbContext, transaction, ct) =>
+			var result = await ExecuteMirrorAsync(async dbContext =>
 			{
-				var characterPartiesTable = dbContext.GetTableName<CharacterPartyEntity>();
-				_ = await dbContext.Database.ExecuteSqlRawAsync(
-					$@"SELECT 1 FROM {characterPartiesTable} WHERE party_id = {{0}} ORDER BY character_id FOR UPDATE",
-					new object[] { partyId },
-					ct).ConfigureAwait(false);
+				var membershipIds = await dbContext.CharacterParties
+					.AsNoTracking()
+					.Where(cp => cp.PartyID == partyId)
+					.Select(cp => cp.ID)
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
+				foreach (var membershipId in membershipIds)
+				{
+					var membership = await dbContext.CharacterParties
+						.FirstOrDefaultAsync(cp => cp.ID == membershipId, cancellationToken)
+						.ConfigureAwait(false);
+					if (membership != null)
+					{
+						dbContext.CharacterParties.Remove(membership);
+					}
+				}
 
-				var partyUpdatesTable = dbContext.GetTableName<PartyUpdateEntity>();
-				_ = await dbContext.Database.ExecuteSqlRawAsync(
-					$@"SELECT 1 FROM {partyUpdatesTable} WHERE party_id = {{0}} ORDER BY party_id FOR UPDATE",
-					new object[] { partyId },
-					ct).ConfigureAwait(false);
+				var updateIds = await dbContext.PartyUpdates
+					.AsNoTracking()
+					.Where(pu => pu.PartyID == partyId)
+					.Select(pu => pu.ID)
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
+				foreach (var updateId in updateIds)
+				{
+					var update = await dbContext.PartyUpdates
+						.FirstOrDefaultAsync(pu => pu.ID == updateId, cancellationToken)
+						.ConfigureAwait(false);
+					if (update != null)
+					{
+						dbContext.PartyUpdates.Remove(update);
+					}
+				}
 
-				var partyTable = dbContext.GetTableName<PartyEntity>();
-				var rows = await dbContext.Database.ExecuteSqlRawAsync(
-					$@"DELETE FROM {partyTable} WHERE id = {{0}}",
-					new object[] { partyId },
-					ct).ConfigureAwait(false);
+				var party = await dbContext.Parties
+					.FirstOrDefaultAsync(p => p.ID == partyId, cancellationToken)
+					.ConfigureAwait(false);
+				if (party != null)
+				{
+					dbContext.Parties.Remove(party);
+				}
+			}).ConfigureAwait(false);
 
-				// Idempotent: already deleted.
-				if (rows <= 0)
-					return DatabaseResult.Success();
-
-				return DatabaseResult.Success();
-			}, "DeleteParty", cancellationToken).ConfigureAwait(false);
-
-			return transactionResult.IsSuccess
+			return result.IsSuccess
 				? DatabaseResult.Success()
-				: DatabaseResult.Failure(transactionResult.ErrorCode, transactionResult.ErrorMessage, transactionResult.IsTransient);
+				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -146,14 +150,22 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<PartyData>.Failure("INVALID_PARTY_ID", "Party ID must be greater than zero.");
 			}
 
-			return await ExecuteAsync(async (dbContext, ct) =>
+			var result = await ExecuteMirrorAsync(async dbContext =>
 			{
 				var party = await dbContext.Parties
 					.AsNoTracking()
-					.FirstOrDefaultAsync(p => p.ID == partyId, ct).ConfigureAwait(false);
-				var existingParty = RequireEntityExists(party, "Party", partyId);
-				return MapEntityToDto(existingParty);
-			}, "LoadParty", cancellationToken).ConfigureAwait(false);
+					.FirstOrDefaultAsync(p => p.ID == partyId, cancellationToken)
+					.ConfigureAwait(false);
+				if (party == null)
+				{
+					throw new DatabaseEntityNotFoundException("Party", partyId.ToString());
+				}
+				return MapEntityToDto(party);
+			}).ConfigureAwait(false);
+
+			return result.IsSuccess
+				? DatabaseResult<PartyData>.Success(result.Data)
+				: DatabaseResult<PartyData>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <summary>

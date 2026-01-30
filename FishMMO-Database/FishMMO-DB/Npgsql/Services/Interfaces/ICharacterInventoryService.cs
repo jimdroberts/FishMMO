@@ -11,7 +11,7 @@ namespace FishMMO.Database.Npgsql.Services
 	/// Implements execution strategies for automatic retry on transient database failures.
 	/// Returns DatabaseResult for consistent, safe error handling.
 	/// </summary>
-	/// <remarks>
+	/// Save a character inventory item.
 	/// This service manages character inventory including:
 	/// - Single inventory item save/update with atomic UPSERT operations
 	/// - Batch inventory save/update with transactions
@@ -36,7 +36,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// Saves or updates a single inventory item in the database.
 		/// Uses atomic UPSERT operation wrapped in execution strategy for automatic retry.
 		/// </summary>
-		/// <param name="item">The inventory item data to save. CharacterID must be greater than 0.</param>
+		/// Save a collection of character inventory items. Items for deleted or missing characters are ignored.
 		/// <param name="cancellationToken">Token to cancel the asynchronous operation.</param>
 		/// <returns>
 		/// DatabaseResult containing the ID of the saved item on success, or error details on failure.
@@ -66,7 +66,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// Saves or updates multiple inventory items in a single transaction.
 		/// Uses atomic UPSERT operations wrapped in execution strategy for automatic retry.
 		/// </summary>
-		/// <param name="items">Collection of inventory item data to save. Must not be null or empty.</param>
+		/// Delete all inventory items for a character. This operation is idempotent.
 		/// <param name="cancellationToken">Token to cancel the asynchronous operation.</param>
 		/// <returns>
 		/// DatabaseResult indicating success or containing error details.
@@ -101,7 +101,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// Deletes all inventory items for a specific character.
 		/// Uses atomic DELETE operation wrapped in execution strategy for automatic retry.
 		/// </summary>
-		/// <param name="characterId">The character ID. Must be greater than 0.</param>
+		/// Delete an inventory slot for a character. This operation is idempotent.
 		/// <param name="cancellationToken">Token to cancel the asynchronous operation.</param>
 		/// <returns>
 		/// DatabaseResult indicating success or containing error details.

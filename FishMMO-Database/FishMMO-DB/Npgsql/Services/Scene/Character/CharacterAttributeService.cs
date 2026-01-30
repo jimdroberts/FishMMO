@@ -20,7 +20,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <summary>
 		/// Compiled query for retrieving character attributes (hot path for character load).
 		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterAttributeEntity>>> GetAttributesQuery =
+		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterAttributeEntity>>> getAttributesQuery =
 			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
 				context.CharacterAttributes
 					.AsNoTracking()
@@ -43,7 +43,8 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				return DatabaseResult.Failure(
 					"VALIDATION_ERROR",
-					"Attributes collection must not be null or empty.");
+					"Attributes collection must not be null or empty.",
+					isTransient: false);
 			}
 
 			var attributeList = attributes.ToList();
@@ -63,40 +64,53 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 			}
 
-			// Extract arrays for bulk UPSERT
-			var characterIds = attributeList.Select(a => a.CharacterID).ToArray();
-			var templateIds = attributeList.Select(a => a.TemplateID).ToArray();
-			var values = attributeList.Select(a => a.Value).ToArray();
-			var currentValues = attributeList.Select(a => a.CurrentValue).ToArray();
-
-			var result = await ExecuteAsync(async (dbContext, ct) =>
+			return await ExecuteMirrorAsync(async dbContext =>
 			{
-				var charactersTableName = dbContext.GetTableName<CharacterEntity>();
-				return await dbContext.Database.ExecuteSqlRawAsync(
-					$@"WITH active_characters AS (
-						SELECT id
-						FROM {charactersTableName}
-						WHERE id = ANY({{0}}::bigint[]) AND deleted = FALSE
-						ORDER BY id
-						FOR KEY SHARE
-					)
-					INSERT INTO {TableName} (character_id, template_id, value, current_value, time_created)
-					SELECT u.character_id, u.template_id, u.value, u.current_value, CURRENT_TIMESTAMP
-					FROM UNNEST(
-						{{0}}::bigint[],
-						{{1}}::int[],
-						{{2}}::int[],
-						{{3}}::float4[]
-					) AS u(character_id, template_id, value, current_value)
-					JOIN active_characters ac ON ac.id = u.character_id
-					ON CONFLICT (character_id, template_id) DO UPDATE SET
-						value = EXCLUDED.value,
-						current_value = EXCLUDED.current_value",
-					new object[] { characterIds, templateIds, values, currentValues },
-					ct);
-			}, "SaveCharacterAttributes", cancellationToken).ConfigureAwait(false);
+				var characterIds = attributeList.Select(a => a.CharacterID).Distinct().ToArray();
+				var activeCharacterIds = await dbContext.Characters
+					.AsNoTracking()
+					.Where(c => characterIds.Contains(c.ID) && !c.Deleted)
+					.Select(c => c.ID)
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
+				var activeCharacterIdSet = new HashSet<long>(activeCharacterIds);
 
-			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+				var templateIds = attributeList.Select(a => a.TemplateID).Distinct().ToArray();
+				var existing = await dbContext.CharacterAttributes
+					.Where(a => activeCharacterIdSet.Contains(a.CharacterID) && templateIds.Contains(a.TemplateID))
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
+
+				var existingByKey = new Dictionary<(long CharacterID, int TemplateID), CharacterAttributeEntity>();
+				foreach (var entity in existing)
+				{
+					existingByKey[(entity.CharacterID, entity.TemplateID)] = entity;
+				}
+
+				foreach (var attribute in attributeList)
+				{
+					if (!activeCharacterIdSet.Contains(attribute.CharacterID)) continue;
+
+					var key = (attribute.CharacterID, attribute.TemplateID);
+					if (!existingByKey.TryGetValue(key, out var entity))
+					{
+						entity = new CharacterAttributeEntity
+						{
+							CharacterID = attribute.CharacterID,
+							TemplateID = attribute.TemplateID,
+							Version = attribute.Version,
+							TimeCreated = DateTime.UtcNow
+						};
+						await dbContext.CharacterAttributes.AddAsync(entity, cancellationToken).ConfigureAwait(false);
+						existingByKey[key] = entity;
+					}
+
+					ValidateVersion(entity, attribute.Version);
+					if (attribute.Version > 0) entity.Version = attribute.Version;
+					entity.Value = attribute.Value;
+					entity.CurrentValue = attribute.CurrentValue;
+				}
+			}).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -106,20 +120,25 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				return DatabaseResult.Failure(
 					"VALIDATION_ERROR",
-					"Character ID must be greater than 0.");
+					"Character ID must be greater than 0.",
+					isTransient: false);
 			}
 
-			// Use atomic DELETE for thread safety
-			var result = await ExecuteRawSqlAsync(
-				$@"DELETE FROM {TableName} WHERE character_id = {{0}}",
-				"DeleteCharacterAttributes",
-				new object[] { characterId },
-				entityName: "CharacterAttribute",
-				entityId: characterId,
-				requireRowsAffected: false,
-				cancellationToken: cancellationToken);
+			return await ExecuteMirrorAsync(async dbContext =>
+			{
+				var attributeIds = await dbContext.CharacterAttributes
+					.AsNoTracking()
+					.Where(a => a.CharacterID == characterId)
+					.Select(a => a.ID)
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
 
-			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+				foreach (var attributeId in attributeIds)
+				{
+					var entity = new CharacterAttributeEntity { ID = attributeId };
+					dbContext.CharacterAttributes.Remove(entity);
+				}
+			}).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -129,14 +148,16 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				return DatabaseResult<IReadOnlyList<CharacterAttributeData>>.Failure(
 					"VALIDATION_ERROR",
-					"Character ID must be greater than 0.");
+					"Character ID must be greater than 0.",
+					isTransient: false);
 			}
 
-			return await ExecuteAsync(async (dbContext, ct) =>
+			return await ExecuteMirrorAsync(async dbContext =>
 			{
-				var entities = await GetAttributesQuery(dbContext, characterId, ct);
+				var entities = await getAttributesQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
 				var attributes = entities.Select(a => new CharacterAttributeData(
 					id: a.ID,
+					version: a.Version,
 					characterID: a.CharacterID,
 					templateID: a.TemplateID,
 					value: a.Value,
@@ -144,7 +165,7 @@ namespace FishMMO.Database.Npgsql.Services
 				)).ToList();
 
 				return (IReadOnlyList<CharacterAttributeData>)attributes;
-			}, "GetCharacterAttributes", cancellationToken);
+			}).ConfigureAwait(false);
 		}
 	}
 }

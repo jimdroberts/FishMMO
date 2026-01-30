@@ -37,20 +37,19 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("INVALID_ACCOUNT_NAME", "Account name must not be empty.");
 			}
 
-			var result = await ExecuteRawSqlAsync(
-				$@"INSERT INTO {TableName} 
-				   (account_name, time_created)
-				   VALUES ({{0}}, CURRENT_TIMESTAMP)
-				   ON CONFLICT (account_name) 
-				   DO UPDATE SET time_created = CURRENT_TIMESTAMP",
-				"SaveKickRequest",
-				new object[] { accountName },
-				entityName: "KickRequest",
-				entityId: accountName,
-				requireRowsAffected: false,
-				cancellationToken: cancellationToken).ConfigureAwait(false);
+			return await ExecuteMirrorAsync(async dbContext =>
+			{
+				// Use database server time to avoid clock skew issues.
+				// Keep atomic UPSERT semantics to prevent duplicate kick requests under concurrency.
+				var sql = $@"INSERT INTO {TableName}
+					(account_name, time_created)
+					VALUES ({{0}}, CURRENT_TIMESTAMP)
+					ON CONFLICT (account_name)
+					DO UPDATE SET time_created = CURRENT_TIMESTAMP";
 
-			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { accountName }, cancellationToken)
+					.ConfigureAwait(false);
+			}).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -61,14 +60,12 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<int>.Failure("INVALID_ACCOUNT_NAME", "Account name must not be empty.");
 			}
 
-			return await ExecuteRawSqlAsync(
-				$"DELETE FROM {TableName} WHERE account_name = {{0}}",
-				"DeleteKickRequest",
-				new object[] { accountName },
-				entityName: "KickRequest",
-				entityId: accountName,
-				requireRowsAffected: false,
-				cancellationToken: cancellationToken).ConfigureAwait(false);
+			return await ExecuteMirrorAsync(async dbContext =>
+			{
+				var sql = $"DELETE FROM {TableName} WHERE account_name = {{0}}";
+				return await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { accountName }, cancellationToken)
+					.ConfigureAwait(false);
+			}).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -81,7 +78,7 @@ namespace FishMMO.Database.Npgsql.Services
 			if (amount <= 0)
 				return DatabaseResult<List<KickRequestData>>.Success(new List<KickRequestData>());
 
-			return await ExecuteAsync(async (dbContext, ct) =>
+			return await ExecuteMirrorAsync(async dbContext =>
 			{
 				var requests = await dbContext.KickRequests
 					.AsNoTracking()
@@ -91,10 +88,10 @@ namespace FishMMO.Database.Npgsql.Services
 					.OrderBy(kr => kr.TimeCreated)
 					.ThenBy(kr => kr.ID)
 					.Take(amount)
-					.ToListAsync(ct).ConfigureAwait(false);
+					.ToListAsync(cancellationToken).ConfigureAwait(false);
 
 				return requests.Select(MapEntityToDto).ToList();
-			}, "FetchKickRequests", cancellationToken).ConfigureAwait(false);
+			}).ConfigureAwait(false);
 		}
 
 		/// <summary>

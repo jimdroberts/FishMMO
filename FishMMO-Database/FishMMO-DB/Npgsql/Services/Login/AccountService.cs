@@ -12,19 +12,17 @@ using FishMMO.Database.Npgsql.Services.Interfaces;
 namespace FishMMO.Database.Npgsql.Services
 {
 	/// <summary>
-	/// Account service with async operations, atomic SQL, and DTO pattern.
-	/// Uses repository pattern with EF Core and raw SQL for race-condition-prone operations.
-	/// Implements execution strategies for automatic retry on transient database failures.
+	/// Account service providing async operations for account creation and login.
+	/// Uses EF Core compiled queries for hot paths and the BaseService execution strategy for retries.
 	/// Returns DatabaseResult for consistent, safe error handling with sanitized messages.
-	/// Follows SOLID principles: SRP, OCP, LSP, ISP, DIP.
 	/// </summary>
-	public sealed class AccountService : IdempotentBaseService<AccountEntity>, IAccountService
+	public sealed class AccountService : BaseService<AccountEntity>, IAccountService
 	{
 		/// <summary>
 		/// Compiled query for AccountExistsAsync hot path.
 		/// Pre-compiles the query expression tree for better performance on repeated executions.
 		/// </summary>
-		private static readonly Func<NpgsqlDbContext, string, CancellationToken, Task<bool>> AccountExistsByNameQuery =
+		private static readonly Func<NpgsqlDbContext, string, CancellationToken, Task<bool>> accountExistsByNameQuery =
 			EF.CompileAsyncQuery((NpgsqlDbContext context, string accountName, CancellationToken ct) =>
 				context.Accounts
 					.AsNoTracking()
@@ -35,11 +33,25 @@ namespace FishMMO.Database.Npgsql.Services
 		/// Pre-compiles the query expression tree for better performance on repeated executions.
 		/// </summary>
 #pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type
-		private static readonly Func<NpgsqlDbContext, string, CancellationToken, Task<AccountEntity?>> GetAccountForLoginQuery =
+		private static readonly Func<NpgsqlDbContext, string, CancellationToken, Task<AccountEntity?>> getAccountForLoginQuery =
 			EF.CompileAsyncQuery((NpgsqlDbContext context, string accountName, CancellationToken ct) =>
 				context.Accounts
 					.AsNoTracking()
 					.FirstOrDefault(a => a.Name == accountName));
+#pragma warning restore CS8619
+
+		/// <summary>
+		/// Compiled query for GetLastLoginAsync hot path.
+		/// Pre-compiles the query expression tree for better performance on repeated executions.
+		/// </summary>
+#pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type
+		private static readonly Func<NpgsqlDbContext, string, CancellationToken, Task<DateTime?>> getLastLoginQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, string accountName, CancellationToken ct) =>
+				context.Accounts
+					.AsNoTracking()
+					.Where(a => a.Name == accountName)
+					.Select(a => (DateTime?)a.LastLogin)
+					.FirstOrDefault());
 #pragma warning restore CS8619
 
 		/// <summary>
@@ -64,21 +76,15 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteAsync(async (dbContext, ct) =>
+			return await ExecuteMirrorAsync(async dbContext =>
 			{
-				var account = await dbContext.Accounts
-					.AsNoTracking()
-					.Where(a => a.Name == accountName)
-					.Select(a => new { a.LastLogin })
-					.FirstOrDefaultAsync(ct).ConfigureAwait(false);
-
-				if (account == null)
+				var lastLogin = await getLastLoginQuery(dbContext, accountName, cancellationToken).ConfigureAwait(false);
+				if (lastLogin == null)
 				{
 					throw new DatabaseEntityNotFoundException("Account", accountName);
 				}
-
-				return account.LastLogin;
-			}, "GetLastLogin", cancellationToken).ConfigureAwait(false);
+				return lastLogin.Value;
+			}).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -86,7 +92,6 @@ namespace FishMMO.Database.Npgsql.Services
 			string accountName,
 			string salt,
 			string verifier,
-			Guid requestId,
 			CancellationToken cancellationToken = default)
 		{
 			if (!IsValidUsername(accountName))
@@ -113,52 +118,19 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			if (requestId == Guid.Empty)
+			return await ExecuteMirrorAsync(async dbContext =>
 			{
-				return DatabaseResult.Failure(
-					"VALIDATION_ERROR",
-					"RequestId is required for idempotent account creation.",
-					isTransient: false);
-			}
-
-			// Business rule: create must fail if pre-existing for distinct calls.
-			// Retry rule: must be safe under EF Core execution strategy retries.
-			// Solution: request-scoped idempotency wraps an INSERT ... ON CONFLICT DO NOTHING.
-			// - Same requestId (retry): returns cached outcome.
-			// - Different requestId (distinct call): duplicate insert returns "already exists" failure.
-			var scopeId = ComputeScopeId(accountName);
-			var result = await ExecuteIdempotentAsync(
-				requestId,
-				scopeId,
-				"CreateAccount",
-				async (dbContext, transaction, ct) =>
+				var entity = new AccountEntity
 				{
-					var sql = $@"INSERT INTO {TableName}
-						(name, salt, verifier, access_level, created, lastlogin)
-						VALUES
-							({{0}}, {{1}}, {{2}}, {{3}}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-						ON CONFLICT (name) DO NOTHING";
+					Name = accountName,
+					Salt = salt,
+					Verifier = verifier,
+					AccessLevel = (byte)AccessLevel.Player,
+					LastLogin = DateTime.UtcNow
+				};
 
-					var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
-						sql,
-						new object[] { accountName, salt, verifier, (byte)AccessLevel.Player },
-						ct).ConfigureAwait(false);
-
-					if (rowsAffected == 1)
-					{
-						return true;
-					}
-
-					throw new DatabaseConstraintException(
-						ConstraintType.Unique,
-						"accounts_name_key",
-						"An account with this name already exists.");
-				},
-				cancellationToken).ConfigureAwait(false);
-
-			return result.IsSuccess
-				? DatabaseResult.Success()
-				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+				await dbContext.Accounts.AddAsync(entity, cancellationToken).ConfigureAwait(false);
+			}).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -174,10 +146,8 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			var result = await ExecuteAsync(async (dbContext, ct) =>
-				await GetAccountForLoginQuery(dbContext, accountName, ct).ConfigureAwait(false),
-				"GetAccountForLogin",
-				cancellationToken).ConfigureAwait(false);
+			var result = await ExecuteMirrorAsync(async dbContext =>
+				await getAccountForLoginQuery(dbContext, accountName, cancellationToken).ConfigureAwait(false)).ConfigureAwait(false);
 
 			if (!result.IsSuccess)
 			{
@@ -220,22 +190,19 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			var sql = $@"UPDATE {TableName}
-				SET lastlogin = CURRENT_TIMESTAMP
-				WHERE name = {{0}}";
+			return await ExecuteMirrorAsync(async dbContext =>
+			{
+				var account = await dbContext.Accounts
+					.FirstOrDefaultAsync(a => a.Name == accountName, cancellationToken)
+					.ConfigureAwait(false);
 
-			var result = await ExecuteRawSqlAsync(
-				sql,
-				"UpdateLastLogin",
-				new object[] { accountName },
-				entityName: "Account",
-				entityId: accountName,
-				requireRowsAffected: true,
-				cancellationToken: cancellationToken).ConfigureAwait(false);
+				if (account == null)
+				{
+					throw new DatabaseEntityNotFoundException("Account", accountName);
+				}
 
-			return result.IsSuccess
-				? DatabaseResult.Success()
-				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+				account.LastLogin = DateTime.UtcNow;
+			}).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -249,11 +216,8 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<bool>.Success(false);
 			}
 
-			return await ExecuteAsync(async (dbContext, ct) =>
-			{
-				// Use compiled query for hot path performance
-				return await AccountExistsByNameQuery(dbContext, accountName, ct).ConfigureAwait(false);
-			}, "AccountExists", cancellationToken).ConfigureAwait(false);
+			return await ExecuteMirrorAsync(async dbContext =>
+				await accountExistsByNameQuery(dbContext, accountName, cancellationToken).ConfigureAwait(false)).ConfigureAwait(false);
 		}
 
 		/// <summary>

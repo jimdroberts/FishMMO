@@ -91,7 +91,6 @@ namespace FishMMO.Database.Npgsql
 		public DbSet<PartyEntity> Parties { get; set; }
 		public DbSet<PartyUpdateEntity> PartyUpdates { get; set; }
 		public DbSet<ChatEntity> Chat { get; set; }
-		public DbSet<ProcessedRequestEntity> ProcessedRequests { get; set; }
 
 		// game data (?)
 		//public DbSet<QuestEntity> Quests { get; set; }
@@ -210,11 +209,65 @@ namespace FishMMO.Database.Npgsql
 			modelBuilder.ApplyConfiguration(new PartyUpdateEntityConfiguration());
 			modelBuilder.ApplyConfiguration(new CharacterPartyEntityConfiguration());
 
-			// Idempotency
-			modelBuilder.ApplyConfiguration(new ProcessedRequestEntityConfiguration());
-
+			ApplyXminConcurrencyConventions(modelBuilder);
+			ApplyLogicalVersionConventions(modelBuilder);
 			ApplySoftDeleteConventions(modelBuilder);
 			ApplyTimeCreatedConventions(modelBuilder);
+		}
+
+		private static void ApplyXminConcurrencyConventions(ModelBuilder modelBuilder)
+		{
+			foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+			{
+				var clrType = entityType.ClrType;
+				if (clrType == null)
+					continue;
+
+				// Avoid adding duplicate shadow properties for derived types (TPH/TPT).
+				if (entityType.BaseType != null)
+					continue;
+
+				// Skip owned/keyless entity types.
+				if (entityType.FindOwnership() != null)
+					continue;
+				if (entityType.FindPrimaryKey() == null)
+					continue;
+
+				// If a shadow property already exists, don't override it.
+				if (entityType.FindProperty("Xmin") != null)
+					continue;
+
+				// Map PostgreSQL system column xmin as a shadow property used for optimistic concurrency.
+				modelBuilder.Entity(clrType)
+					.Property<uint>("Xmin")
+					.HasColumnName("xmin")
+					.HasColumnType("xid")
+					.ValueGeneratedOnAddOrUpdate()
+					.IsConcurrencyToken();
+			}
+		}
+
+		private static void ApplyLogicalVersionConventions(ModelBuilder modelBuilder)
+		{
+			foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+			{
+				var clrType = entityType.ClrType;
+				if (clrType == null)
+					continue;
+				if (!typeof(IVersionedEntity).IsAssignableFrom(clrType))
+					continue;
+
+				// Skip keyless/owned types.
+				if (entityType.FindOwnership() != null)
+					continue;
+				if (entityType.FindPrimaryKey() == null)
+					continue;
+
+				modelBuilder.Entity(clrType)
+					.Property<long>(nameof(IVersionedEntity.Version))
+					.IsRequired()
+					.HasDefaultValue(0L);
+			}
 		}
 
 		private static void ApplyTimeCreatedConventions(ModelBuilder modelBuilder)

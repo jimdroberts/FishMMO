@@ -8,7 +8,7 @@ namespace FishMMO.Database.Npgsql.Services
 	/// <summary>
 	/// Service interface for managing character achievements in the database.
 	/// Provides async operations for CRUD operations on character achievement data.
-	/// Implements execution strategies for automatic retry on transient database failures.
+	/// Uses service-level execution strategies for automatic retry on transient database failures.
 	/// Returns DatabaseResult for consistent, safe error handling with sanitized messages.
 	/// </summary>
 	/// <remarks>
@@ -31,32 +31,22 @@ namespace FishMMO.Database.Npgsql.Services
 	{
 		/// <summary>
 		/// Saves or updates multiple character achievements in a single transaction.
-		/// Uses atomic UPSERT operations wrapped in execution strategy for automatic retry.
+		/// Uses a single transactional operation wrapped in the service retry strategy.
 		/// </summary>
 		/// <param name="achievements">Collection of character achievement data to save. Must not be null or empty.</param>
 		/// <param name="cancellationToken">Token to cancel the asynchronous operation.</param>
 		/// <returns>DatabaseResult indicating success or failure with error details.</returns>
 		/// <remarks>
-		/// Wrapped in execution strategy to automatically retry on transient failures.
-		/// All operations are performed within a database transaction for atomicity.
-		/// 
 		/// Transaction behavior:
 		/// - All achievements are processed in a single transaction
 		/// - If any achievement fails, entire transaction is rolled back
 		/// - On success, all changes are committed atomically
-		/// 
-		/// Uses UPSERT (INSERT ... ON CONFLICT DO UPDATE) for each achievement:
-		/// - If achievement exists (character_id, template_id): Updates tier and value
-		/// - If achievement doesn't exist: Inserts new record
+		/// - Achievements targeting deleted/missing characters are skipped
 		/// 
 		/// Success: All achievements saved successfully.
 		/// Failure cases:
 		/// - VALIDATION_ERROR: Empty or null achievements collection
-		/// - DB_CONNECTION_FAILED: Database connection error (transient)
-		/// - DB_TIMEOUT: Operation timeout (transient)
-		/// - DB_QUERY_FAILED: Transaction failed, all changes rolled back
-		/// 
-		/// Performance note: Uses raw SQL with UPSERT for optimal concurrency and minimal round-trips.
+		/// - DATABASE_ERROR: Transaction failed, all changes rolled back
 		/// </remarks>
 		Task<DatabaseResult> SaveAchievementsAsync(IEnumerable<CharacterAchievementData> achievements, CancellationToken cancellationToken = default);
 
@@ -68,19 +58,14 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <param name="cancellationToken">Token to cancel the asynchronous operation.</param>
 		/// <returns>DatabaseResult indicating success or failure with error details.</returns>
 		/// <remarks>
-		/// Wrapped in execution strategy to automatically retry on transient failures.
-		/// 
 		/// Deletion behavior:
 		/// - Deletes all achievements for the specified character in a single atomic operation
 		/// - If character has no achievements, operation succeeds
-		/// - Uses raw SQL for optimal performance
 		/// 
 		/// Success: All achievements deleted successfully (or character has no achievements).
 		/// Failure cases:
 		/// - VALIDATION_ERROR: Invalid character ID (less than or equal to 0)
-		/// - DB_CONNECTION_FAILED: Database connection error (transient)
-		/// - DB_TIMEOUT: Operation timeout (transient)
-		/// - DB_QUERY_FAILED: Database operation error
+		/// - DATABASE_ERROR: Database operation error
 		/// </remarks>
 		Task<DatabaseResult> DeleteAchievementsAsync(long characterId, CancellationToken cancellationToken = default);
 
@@ -91,9 +76,6 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <param name="cancellationToken">Token to cancel the asynchronous operation.</param>
 		/// <returns>DatabaseResult containing a read-only collection of character achievement data on success.</returns>
 		/// <remarks>
-		/// This method uses LINQ query which automatically benefits from EF Core's
-		/// configured retry policy for transient failures.
-		/// 
 		/// Query behavior:
 		/// - Returns all achievements for the specified character
 		/// - Uses AsNoTracking() for optimal read performance
@@ -102,8 +84,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// Success: Returns collection (may be empty if character has no achievements).
 		/// Failure cases:
 		/// - VALIDATION_ERROR: Invalid character ID (less than or equal to 0)
-		/// - DB_CONNECTION_FAILED: Database connection error (transient)
-		/// - DB_TIMEOUT: Query timeout (transient)
+		/// - DATABASE_ERROR: Query error
 		/// 
 		/// The returned DTOs are safe to use after database context disposal.
 		/// </remarks>

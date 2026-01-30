@@ -4,9 +4,10 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace FishMMO.Database.Npgsql.Entities
 {
 	[Table("character_mail")]
-	public class CharacterMailEntity
+	public class CharacterMailEntity : IVersionedEntity
 	{
 		public long ID { get; set; }
+		public long Version { get; set; }
 		public long SenderCharacterID { get; set; }
 		public long CharacterID { get; set; }
 		public string Subject { get; set; }

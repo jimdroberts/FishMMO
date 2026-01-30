@@ -32,7 +32,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <summary>
 		/// Compiled query for retrieving character buffs (hot path for character state).
 		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterBuffEntity>>> GetBuffsQuery =
+		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterBuffEntity>>> getBuffsQuery =
 			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
 				context.CharacterBuffs
 					.AsNoTracking()
@@ -56,7 +56,8 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				return DatabaseResult.Failure(
 					"VALIDATION_ERROR",
-					"No buffs to save. Buffs collection must not be null or empty.");
+					"No buffs to save. Buffs collection must not be null or empty.",
+					isTransient: false);
 			}
 
 			// Prevent duplicate keys within the same batch from causing
@@ -75,82 +76,101 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 			}
 
-			// Extract arrays for bulk UPSERT
-			var characterIds = buffList.Select(b => b.CharacterID).ToArray();
-			var templateIds = buffList.Select(b => b.TemplateID).ToArray();
-			var remainingTimes = buffList.Select(b => b.RemainingTime).ToArray();
-			var tickTimes = buffList.Select(b => b.TickTime).ToArray();
-			var stacks = buffList.Select(b => b.Stacks).ToArray();
-
-			var result = await ExecuteAsync(async (dbContext, ct) =>
+			return await ExecuteMirrorAsync(async dbContext =>
 			{
-				var charactersTableName = dbContext.GetTableName<CharacterEntity>();
-				return await dbContext.Database.ExecuteSqlRawAsync(
-					$@"WITH active_characters AS (
-						SELECT id
-						FROM {charactersTableName}
-						WHERE id = ANY({{0}}::bigint[]) AND deleted = FALSE
-						ORDER BY id
-						FOR KEY SHARE
-					)
-					INSERT INTO {TableName} (character_id, template_id, remaining_time, tick_time, stacks, time_created)
-					SELECT u.character_id, u.template_id, u.remaining_time, u.tick_time, u.stacks, CURRENT_TIMESTAMP
-					FROM UNNEST(
-						{{0}}::bigint[],
-						{{1}}::int[],
-						{{2}}::float4[],
-						{{3}}::float4[],
-						{{4}}::int[]
-					) AS u(character_id, template_id, remaining_time, tick_time, stacks)
-					JOIN active_characters ac ON ac.id = u.character_id
-					ON CONFLICT (character_id, template_id) DO UPDATE SET
-						remaining_time = EXCLUDED.remaining_time,
-						tick_time = EXCLUDED.tick_time,
-						stacks = EXCLUDED.stacks",
-					new object[] { characterIds, templateIds, remainingTimes, tickTimes, stacks },
-					ct);
-			}, "SaveBuffs", cancellationToken).ConfigureAwait(false);
+				var characterIds = buffList.Select(b => b.CharacterID).Distinct().ToArray();
+				var activeCharacterIds = await dbContext.Characters
+					.AsNoTracking()
+					.Where(c => characterIds.Contains(c.ID) && !c.Deleted)
+					.Select(c => c.ID)
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
+				var activeCharacterIdSet = new HashSet<long>(activeCharacterIds);
 
-			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+				var templateIds = buffList.Select(b => b.TemplateID).Distinct().ToArray();
+				var existing = await dbContext.CharacterBuffs
+					.Where(b => activeCharacterIdSet.Contains(b.CharacterID) && templateIds.Contains(b.TemplateID))
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
+
+				var existingByKey = new Dictionary<(long CharacterID, int TemplateID), CharacterBuffEntity>();
+				foreach (var entity in existing)
+				{
+					existingByKey[(entity.CharacterID, entity.TemplateID)] = entity;
+				}
+
+				foreach (var buff in buffList)
+				{
+					if (!activeCharacterIdSet.Contains(buff.CharacterID)) continue;
+
+					var key = (buff.CharacterID, buff.TemplateID);
+					if (!existingByKey.TryGetValue(key, out var entity))
+					{
+						entity = new CharacterBuffEntity
+						{
+							CharacterID = buff.CharacterID,
+							TemplateID = buff.TemplateID,
+							Version = buff.Version,
+							TimeCreated = DateTime.UtcNow
+						};
+						await dbContext.CharacterBuffs.AddAsync(entity, cancellationToken).ConfigureAwait(false);
+						existingByKey[key] = entity;
+					}
+
+					ValidateVersion(entity, buff.Version);
+					if (buff.Version > 0) entity.Version = buff.Version;
+					entity.RemainingTime = buff.RemainingTime;
+					entity.TickTime = buff.TickTime;
+					entity.Stacks = buff.Stacks;
+				}
+			}).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
 		public async Task<DatabaseResult> DeleteBuffsAsync(long characterId, CancellationToken cancellationToken = default)
 		{
-			if (characterId == 0)
+			if (characterId <= 0)
 			{
 				return DatabaseResult.Failure(
 					"VALIDATION_ERROR",
-					"Invalid character ID. Character ID must be greater than 0.");
+					"Invalid character ID. Character ID must be greater than 0.",
+					isTransient: false);
 			}
 
-			var result = await ExecuteRawSqlAsync(
-				$@"DELETE FROM {TableName} WHERE character_id = {{0}}",
-				"DeleteBuffs",
-				new object[] { characterId },
-				entityName: "CharacterBuff",
-				entityId: characterId,
-				requireRowsAffected: false,
-				cancellationToken: cancellationToken);
+			return await ExecuteMirrorAsync(async dbContext =>
+			{
+				var buffIds = await dbContext.CharacterBuffs
+					.AsNoTracking()
+					.Where(b => b.CharacterID == characterId)
+					.Select(b => b.ID)
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
 
-			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+				foreach (var buffId in buffIds)
+				{
+					var entity = new CharacterBuffEntity { ID = buffId };
+					dbContext.CharacterBuffs.Remove(entity);
+				}
+			}).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<IReadOnlyList<CharacterBuffData>>> GetBuffsAsync(long characterId, CancellationToken cancellationToken = default)
 		{
-			if (characterId == 0)
+			if (characterId <= 0)
 			{
 				return DatabaseResult<IReadOnlyList<CharacterBuffData>>.Failure(
 					"VALIDATION_ERROR",
-					"Invalid character ID. Character ID must be greater than 0.");
+					"Invalid character ID. Character ID must be greater than 0.",
+					isTransient: false);
 			}
 
-			return await ExecuteAsync(async (dbContext, ct) =>
+			return await ExecuteMirrorAsync(async dbContext =>
 			{
-				var entities = await GetBuffsQuery(dbContext, characterId, ct);
+				var entities = await getBuffsQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
 				var buffs = entities.Select(b => new CharacterBuffData(
 					id: b.ID,
+					version: b.Version,
 					characterID: b.CharacterID,
 					templateID: b.TemplateID,
 					remainingTime: b.RemainingTime,
@@ -159,7 +179,7 @@ namespace FishMMO.Database.Npgsql.Services
 				)).ToList();
 
 				return (IReadOnlyList<CharacterBuffData>)buffs;
-			}, "GetBuffs", cancellationToken);
+			}).ConfigureAwait(false);
 		}
 	}
 }

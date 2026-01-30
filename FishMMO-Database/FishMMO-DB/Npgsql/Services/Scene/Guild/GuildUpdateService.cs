@@ -14,6 +14,15 @@ namespace FishMMO.Database.Npgsql.Services
 	public sealed class GuildUpdateService : BaseService<GuildUpdateEntity>, IGuildUpdateService
 	{
 		/// <summary>
+		/// Compiled query for retrieving a tracked guild update row by guild ID.
+		/// </summary>
+#pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type
+		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<GuildUpdateEntity?>> getByGuildIdTrackingQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long guildId, CancellationToken ct) =>
+				context.GuildUpdates.FirstOrDefault(u => u.GuildID == guildId));
+#pragma warning restore CS8619
+
+		/// <summary>
 		/// Initializes a new instance of GuildUpdateService.
 		/// </summary>
 		/// <param name="dbContextFactory">DbContext factory for creating contexts.</param>
@@ -31,19 +40,31 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("INVALID_GUILD_ID", "Guild ID must be greater than zero.");
 			}
 
-			var result = await ExecuteRawSqlAsync(
-				$@"INSERT INTO {TableName} (guild_id, time_created, last_update) 
-					VALUES ({{0}}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) 
-					ON CONFLICT (guild_id) 
-					DO UPDATE SET last_update = GREATEST({TableName}.last_update, EXCLUDED.last_update)",
-				"SaveGuildUpdate",
-				new object[] { guildId },
-				entityName: "GuildUpdate",
-				entityId: guildId,
-				requireRowsAffected: false,
-				cancellationToken: cancellationToken).ConfigureAwait(false);
+			var now = DateTime.UtcNow;
+			var result = await ExecuteMirrorAsync(async dbContext =>
+			{
+				var existing = await getByGuildIdTrackingQuery(dbContext, guildId, cancellationToken).ConfigureAwait(false);
+				if (existing == null)
+				{
+					existing = new GuildUpdateEntity
+					{
+						GuildID = guildId,
+						TimeCreated = now,
+						LastUpdate = now,
+					};
+					await dbContext.GuildUpdates.AddAsync(existing, cancellationToken).ConfigureAwait(false);
+					return;
+				}
 
-			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+				if (existing.LastUpdate < now)
+				{
+					existing.LastUpdate = now;
+				}
+			}).ConfigureAwait(false);
+
+			return result.IsSuccess
+				? DatabaseResult.Success()
+				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -54,14 +75,20 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<int>.Failure("INVALID_GUILD_ID", "Guild ID must be greater than zero.");
 			}
 
-			return await ExecuteRawSqlAsync(
-				$"DELETE FROM {TableName} WHERE guild_id = {{0}}",
-				"DeleteGuildUpdate",
-				new object[] { guildId },
-				entityName: "GuildUpdate",
-				entityId: guildId,
-				requireRowsAffected: false,
-				cancellationToken: cancellationToken).ConfigureAwait(false);
+			var result = await ExecuteMirrorAsync(async dbContext =>
+			{
+				var existing = await getByGuildIdTrackingQuery(dbContext, guildId, cancellationToken).ConfigureAwait(false);
+				if (existing == null)
+				{
+					return 0;
+				}
+				dbContext.GuildUpdates.Remove(existing);
+				return 1;
+			}).ConfigureAwait(false);
+
+			return result.IsSuccess
+				? DatabaseResult<int>.Success(result.Data)
+				: DatabaseResult<int>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -73,15 +100,20 @@ namespace FishMMO.Database.Npgsql.Services
 			if (guildIds == null || guildIds.Count == 0)
 				return DatabaseResult<List<GuildUpdateData>>.Success(new List<GuildUpdateData>());
 
-			return await ExecuteAsync(async (dbContext, ct) =>
+			var result = await ExecuteMirrorAsync(async dbContext =>
 			{
 				var updates = await dbContext.GuildUpdates
 					.AsNoTracking()
 					.Where(u => u.LastUpdate >= lastFetch && guildIds.Contains(u.GuildID))
-					.ToListAsync(ct).ConfigureAwait(false);
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
 
 				return updates.Select(MapEntityToDto).ToList();
-			}, "FetchGuildUpdates", cancellationToken).ConfigureAwait(false);
+			}).ConfigureAwait(false);
+
+			return result.IsSuccess
+				? DatabaseResult<List<GuildUpdateData>>.Success(result.Data)
+				: DatabaseResult<List<GuildUpdateData>>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <summary>

@@ -41,28 +41,12 @@ namespace FishMMO.Database.Npgsql.Services
 		/// DatabaseResult indicating success or containing error details.
 		/// </returns>
 		/// <remarks>
-		/// Wrapped in execution strategy to automatically retry on transient failures.
-		/// All operations are performed within a database transaction for atomicity.
+		/// Executes inside the BaseService transaction + retry wrapper.
 		/// 
-		/// Transaction behavior:
-		/// - All factions are processed in a single transaction
-		/// - If any faction fails, entire transaction is rolled back
-		/// - On success, all changes are committed atomically
-		/// 
-		/// Uses UPSERT (INSERT ... ON CONFLICT DO UPDATE) for each faction:
-		/// - If faction exists (character_id, template_id): Updates value (reputation)
-		/// - If faction doesn't exist: Inserts new record
-		/// 
-		/// Possible return scenarios:
-		/// - Success: All factions saved successfully
-		/// - Failure with VALIDATION_ERROR: Empty or null factions collection
-		/// - Failure with DatabaseConstraintException: Constraint violation (unique/foreign key)
-		/// - Failure with DatabaseTimeoutException: Operation timed out
-		/// - Failure with DatabaseConnectionException: Connection error
-		/// - Failure with DatabaseQueryException: Transaction rolled back or query error
-		/// 
-		/// Performance note: Uses raw SQL with UPSERT for optimal concurrency and minimal round-trips.
-		/// Thread-safe due to UPSERT constraint on (character_id, template_id).
+		/// Behavior:
+		/// - Inserts missing factions and updates existing factions by (CharacterID, TemplateID)
+		/// - Skips characters that are missing or marked deleted
+		/// - Duplicates in the input are de-duplicated by (CharacterID, TemplateID)
 		/// </remarks>
 		Task<DatabaseResult> SaveFactionsAsync(IEnumerable<CharacterFactionData> factions, CancellationToken cancellationToken = default);
 
@@ -76,19 +60,8 @@ namespace FishMMO.Database.Npgsql.Services
 		/// DatabaseResult indicating success or containing error details.
 		/// </returns>
 		/// <remarks>
-		/// Wrapped in execution strategy to automatically retry on transient failures.
-		/// 
-		/// Deletion behavior:
-		/// - Deletes all factions for the specified character in a single atomic operation
-		/// - If character has no factions, operation succeeds
-		/// - Uses raw SQL for optimal performance
-		/// 
-		/// Possible return scenarios:
-		/// - Success: All factions deleted successfully (or character has no factions)
-		/// - Failure with VALIDATION_ERROR: Invalid character ID
-		/// - Failure with DatabaseTimeoutException: Operation timed out
-		/// - Failure with DatabaseConnectionException: Connection error
-		/// - Failure with DatabaseQueryException: Delete operation failed
+		/// Executes inside the BaseService transaction + retry wrapper.
+		/// If the character has no factions, operation succeeds.
 		/// </remarks>
 		Task<DatabaseResult> DeleteFactionsAsync(long characterId, CancellationToken cancellationToken = default);
 
@@ -102,23 +75,8 @@ namespace FishMMO.Database.Npgsql.Services
 		/// or error details on failure.
 		/// </returns>
 		/// <remarks>
-		/// This method uses LINQ query which automatically benefits from EF Core's
-		/// configured retry policy for transient failures.
-		/// 
-		/// Query behavior:
-		/// - Returns all factions for the specified character
-		/// - Uses AsNoTracking() for optimal read performance
-		/// - Projects to DTO to decouple from entity layer
-		/// 
-		/// Return scenarios:
-		/// - Success with data: Character has factions
-		/// - Success with empty collection: Character has no factions
-		/// - Failure with VALIDATION_ERROR: Invalid character ID
-		/// - Failure with DatabaseTimeoutException: Operation timed out
-		/// - Failure with DatabaseConnectionException: Connection error
-		/// - Failure with DatabaseQueryException: Query execution failed
-		/// 
-		/// The returned DTOs are safe to use after database context disposal.
+		/// Executes inside the BaseService transaction + retry wrapper.
+		/// Returns an empty collection if the character has no factions.
 		/// </remarks>
 		Task<DatabaseResult<IReadOnlyList<CharacterFactionData>>> GetFactionsAsync(long characterId, CancellationToken cancellationToken = default);
 	}

@@ -5,7 +5,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using FishMMO.Database.Data;
-using FishMMO.Database.Exceptions;
 using FishMMO.Database.Npgsql.Entities;
 
 namespace FishMMO.Database.Npgsql.Services
@@ -35,9 +34,21 @@ namespace FishMMO.Database.Npgsql.Services
 	public sealed class CharacterFriendService : BaseService<CharacterFriendEntity>, ICharacterFriendService
 	{
 		/// <summary>
+		/// Compiled query for checking whether a character exists and is not deleted.
+		/// Returns the character ID if active, otherwise 0.
+		/// </summary>
+		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<long>> getActiveCharacterIdQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
+				context.Characters
+					.AsNoTracking()
+					.Where(c => c.ID == characterId && !c.Deleted)
+					.Select(c => c.ID)
+					.FirstOrDefault());
+
+		/// <summary>
 		/// Compiled query for retrieving character friends.
 		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterFriendEntity>>> GetFriendsQuery =
+		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterFriendEntity>>> getFriendsQuery =
 			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
 				context.CharacterFriends
 					.AsNoTracking()
@@ -47,7 +58,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <summary>
 		/// Compiled query for counting character friends.
 		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<int>> GetFriendCountQuery =
+		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<int>> getFriendCountQuery =
 			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
 				context.CharacterFriends
 					.AsNoTracking()
@@ -66,122 +77,137 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <inheritdoc/>
 		public async Task<DatabaseResult> SaveFriendAsync(long characterId, long friendCharacterId, CancellationToken cancellationToken = default)
 		{
-			if (characterId == 0 || friendCharacterId == 0)
+			if (characterId <= 0 || friendCharacterId <= 0)
 			{
 				return DatabaseResult.Failure(
 					"VALIDATION_ERROR",
-					"Invalid character ID or friend character ID. Both must be greater than 0.");
+					"Invalid character ID or friend character ID. Both must be greater than 0.",
+					isTransient: false);
 			}
 
-			var result = await ExecuteAsync(async (dbContext, ct) =>
+			var insertResult = await ExecuteMirrorAsync(async dbContext =>
 			{
-				var charactersTableName = dbContext.GetTableName<CharacterEntity>();
-				return await dbContext.Database.ExecuteSqlRawAsync(
-					$@"WITH active_character AS (
-						SELECT id
-						FROM {charactersTableName}
-						WHERE id = {{0}} AND deleted = FALSE
-						FOR KEY SHARE
-					)
-					INSERT INTO {TableName} (character_id, friend_character_id, time_created)
-					SELECT {{0}}, {{1}}, CURRENT_TIMESTAMP
-					FROM active_character
-					ON CONFLICT (character_id, friend_character_id) DO NOTHING",
-					new object[] { characterId, friendCharacterId },
-					ct);
-			}, "SaveFriend", cancellationToken).ConfigureAwait(false);
+				var activeCharacterId = await getActiveCharacterIdQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
+				if (activeCharacterId == 0)
+				{
+					return;
+				}
 
-			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+				var entity = new CharacterFriendEntity
+				{
+					CharacterID = characterId,
+					FriendCharacterID = friendCharacterId,
+					TimeCreated = DateTime.UtcNow
+				};
+				await dbContext.CharacterFriends.AddAsync(entity, cancellationToken).ConfigureAwait(false);
+			}).ConfigureAwait(false);
+
+			if (insertResult.IsSuccess)
+			{
+				return DatabaseResult.Success();
+			}
+
+			return insertResult.ErrorCode == "UNIQUE_VIOLATION"
+				? DatabaseResult.Success()
+				: DatabaseResult.Failure(insertResult.ErrorCode, insertResult.ErrorMessage, insertResult.IsTransient);
 		}
 
 		/// <inheritdoc/>
 		public async Task<DatabaseResult> DeleteFriendAsync(long characterId, long friendCharacterId, CancellationToken cancellationToken = default)
 		{
-			if (characterId == 0 || friendCharacterId == 0)
+			if (characterId <= 0 || friendCharacterId <= 0)
 			{
 				return DatabaseResult.Failure(
 					"VALIDATION_ERROR",
-					"Invalid character ID or friend character ID. Both must be greater than 0.");
+					"Invalid character ID or friend character ID. Both must be greater than 0.",
+					isTransient: false);
 			}
 
-			var result = await ExecuteRawSqlAsync(
-				$@"DELETE FROM {TableName} 
-				   WHERE character_id = {{0}} AND friend_character_id = {{1}}",
-				"DeleteFriend",
-				new object[] { characterId, friendCharacterId },
-				entityName: "CharacterFriend",
-				entityId: characterId,
-				requireRowsAffected: false,
-				cancellationToken: cancellationToken);
+			return await ExecuteMirrorAsync(async dbContext =>
+			{
+				var friendIds = await dbContext.CharacterFriends
+					.AsNoTracking()
+					.Where(f => f.CharacterID == characterId && f.FriendCharacterID == friendCharacterId)
+					.Select(f => f.ID)
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
 
-			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+				foreach (var friendId in friendIds)
+				{
+					var entity = new CharacterFriendEntity { ID = friendId };
+					dbContext.CharacterFriends.Remove(entity);
+				}
+			}).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
 		public async Task<DatabaseResult> DeleteAllFriendsAsync(long characterId, CancellationToken cancellationToken = default)
 		{
-			if (characterId == 0)
+			if (characterId <= 0)
 			{
 				return DatabaseResult.Failure(
 					"VALIDATION_ERROR",
-					"Invalid character ID. Character ID must be greater than 0.");
+					"Invalid character ID. Character ID must be greater than 0.",
+					isTransient: false);
 			}
 
-			var result = await ExecuteRawSqlAsync(
-				$@"DELETE FROM {TableName} WHERE character_id = {{0}}",
-				"DeleteAllFriends",
-				new object[] { characterId },
-				entityName: "CharacterFriend",
-				entityId: characterId,
-				requireRowsAffected: false,
-				cancellationToken: cancellationToken);
+			return await ExecuteMirrorAsync(async dbContext =>
+			{
+				var friendIds = await dbContext.CharacterFriends
+					.AsNoTracking()
+					.Where(f => f.CharacterID == characterId)
+					.Select(f => f.ID)
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
 
-			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+				foreach (var friendId in friendIds)
+				{
+					var entity = new CharacterFriendEntity { ID = friendId };
+					dbContext.CharacterFriends.Remove(entity);
+				}
+			}).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<IReadOnlyList<CharacterFriendData>>> GetFriendsAsync(long characterId, CancellationToken cancellationToken = default)
 		{
-			if (characterId == 0)
+			if (characterId <= 0)
 			{
 				return DatabaseResult<IReadOnlyList<CharacterFriendData>>.Failure(
 					"VALIDATION_ERROR",
-					"Invalid character ID. Character ID must be greater than 0.");
+					"Invalid character ID. Character ID must be greater than 0.",
+					isTransient: false);
 			}
 
-			return await ExecuteAsync(
-				async (dbContext, ct) =>
-				{
-					var entities = await GetFriendsQuery(dbContext, characterId, ct);
+			return await ExecuteMirrorAsync(async dbContext =>
+			{
+				var entities = await getFriendsQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
 					var friends = entities.Select(f => new CharacterFriendData(
 						id: f.ID,
+						version: f.Version,
 						characterID: f.CharacterID,
 						friendCharacterID: f.FriendCharacterID
 					)).ToList();
 
 					return (IReadOnlyList<CharacterFriendData>)friends;
-				},
-				"GetFriends",
-				cancellationToken);
+			}).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<int>> GetFriendCountAsync(long characterId, CancellationToken cancellationToken = default)
 		{
-			if (characterId == 0)
+			if (characterId <= 0)
 			{
 				return DatabaseResult<int>.Failure(
 					"VALIDATION_ERROR",
-					"Invalid character ID. Character ID must be greater than 0.");
+					"Invalid character ID. Character ID must be greater than 0.",
+					isTransient: false);
 			}
 
-			return await ExecuteAsync(
-				async (dbContext, ct) =>
-				{
-					return await GetFriendCountQuery(dbContext, characterId, ct);
-				},
-				"GetFriendCount",
-				cancellationToken);
+			return await ExecuteMirrorAsync(async dbContext =>
+			{
+				return await getFriendCountQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
+			}).ConfigureAwait(false);
 		}
 	}
 }

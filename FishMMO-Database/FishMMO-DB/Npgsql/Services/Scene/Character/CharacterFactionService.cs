@@ -37,7 +37,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <summary>
 		/// Compiled query for retrieving character factions.
 		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterFactionEntity>>> GetFactionsQuery =
+		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterFactionEntity>>> getFactionsQuery =
 			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
 				context.CharacterFactions
 					.AsNoTracking()
@@ -61,7 +61,8 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				return DatabaseResult.Failure(
 					"VALIDATION_ERROR",
-					"Empty or null factions collection.");
+					"Empty or null factions collection.",
+					isTransient: false);
 			}
 
 			// Prevent duplicate keys within the same batch from causing
@@ -80,84 +81,107 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 			}
 
-			// Extract arrays for bulk UPSERT
-			var characterIds = factionList.Select(f => f.CharacterID).ToArray();
-			var templateIds = factionList.Select(f => f.TemplateID).ToArray();
-			var values = factionList.Select(f => f.Value).ToArray();
-
-			var result = await ExecuteAsync(async (dbContext, ct) =>
+			return await ExecuteMirrorAsync(async dbContext =>
 			{
-				var charactersTableName = dbContext.GetTableName<CharacterEntity>();
-				return await dbContext.Database.ExecuteSqlRawAsync(
-					$@"WITH active_characters AS (
-						SELECT id
-						FROM {charactersTableName}
-						WHERE id = ANY({{0}}::bigint[]) AND deleted = FALSE
-						ORDER BY id
-						FOR KEY SHARE
-					)
-					INSERT INTO {TableName} (character_id, template_id, value, time_created)
-					SELECT u.character_id, u.template_id, u.value, CURRENT_TIMESTAMP
-					FROM UNNEST(
-						{{0}}::bigint[],
-						{{1}}::int[],
-						{{2}}::int[]
-					) AS u(character_id, template_id, value)
-					JOIN active_characters ac ON ac.id = u.character_id
-					ON CONFLICT (character_id, template_id) DO UPDATE SET
-						value = EXCLUDED.value",
-					new object[] { characterIds, templateIds, values },
-					ct);
-			}, "SaveFactions", cancellationToken).ConfigureAwait(false);
+				var characterIds = factionList.Select(f => f.CharacterID).Distinct().ToArray();
+				var activeCharacterIds = await dbContext.Characters
+					.AsNoTracking()
+					.Where(c => characterIds.Contains(c.ID) && !c.Deleted)
+					.Select(c => c.ID)
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
+				var activeCharacterIdSet = new HashSet<long>(activeCharacterIds);
 
-			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+				var templateIds = factionList.Select(f => f.TemplateID).Distinct().ToArray();
+				var existing = await dbContext.CharacterFactions
+					.Where(f => activeCharacterIdSet.Contains(f.CharacterID) && templateIds.Contains(f.TemplateID))
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
+
+				var existingByKey = new Dictionary<(long CharacterID, int TemplateID), CharacterFactionEntity>();
+				foreach (var entity in existing)
+				{
+					existingByKey[(entity.CharacterID, entity.TemplateID)] = entity;
+				}
+
+				foreach (var faction in factionList)
+				{
+					if (!activeCharacterIdSet.Contains(faction.CharacterID)) continue;
+
+					var key = (faction.CharacterID, faction.TemplateID);
+					if (!existingByKey.TryGetValue(key, out var entity))
+					{
+						entity = new CharacterFactionEntity
+						{
+							CharacterID = faction.CharacterID,
+							TemplateID = faction.TemplateID,
+							Version = faction.Version,
+							TimeCreated = DateTime.UtcNow
+						};
+						await dbContext.CharacterFactions.AddAsync(entity, cancellationToken).ConfigureAwait(false);
+						existingByKey[key] = entity;
+					}
+
+					ValidateVersion(entity, faction.Version);
+					if (faction.Version > 0) entity.Version = faction.Version;
+
+					entity.Value = faction.Value;
+				}
+			}).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
 		public async Task<DatabaseResult> DeleteFactionsAsync(long characterId, CancellationToken cancellationToken = default)
 		{
-			if (characterId == 0)
+			if (characterId <= 0)
 			{
 				return DatabaseResult.Failure(
 					"VALIDATION_ERROR",
-					"Invalid character ID. Character ID must be greater than 0.");
+					"Invalid character ID. Character ID must be greater than 0.",
+					isTransient: false);
 			}
 
-			// Use atomic DELETE for thread safety
-			var result = await ExecuteRawSqlAsync(
-				$@"DELETE FROM {TableName} WHERE character_id = {{0}}",
-				"DeleteFactions",
-				new object[] { characterId },
-				entityName: "CharacterFaction",
-				entityId: characterId,
-				requireRowsAffected: false,
-				cancellationToken: cancellationToken);
+			return await ExecuteMirrorAsync(async dbContext =>
+			{
+				var factionIds = await dbContext.CharacterFactions
+					.AsNoTracking()
+					.Where(f => f.CharacterID == characterId)
+					.Select(f => f.ID)
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
 
-			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+				foreach (var factionId in factionIds)
+				{
+					var entity = new CharacterFactionEntity { ID = factionId };
+					dbContext.CharacterFactions.Remove(entity);
+				}
+			}).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<IReadOnlyList<CharacterFactionData>>> GetFactionsAsync(long characterId, CancellationToken cancellationToken = default)
 		{
-			if (characterId == 0)
+			if (characterId <= 0)
 			{
 				return DatabaseResult<IReadOnlyList<CharacterFactionData>>.Failure(
 					"VALIDATION_ERROR",
-					"Invalid character ID. Character ID must be greater than 0.");
+					"Invalid character ID. Character ID must be greater than 0.",
+					isTransient: false);
 			}
 
-			return await ExecuteAsync<IReadOnlyList<CharacterFactionData>>(async (dbContext, ct) =>
+			return await ExecuteMirrorAsync(async dbContext =>
 			{
-				var entities = await GetFactionsQuery(dbContext, characterId, ct);
+				var entities = await getFactionsQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
 				var factions = entities.Select(f => new CharacterFactionData(
 					id: f.ID,
+					version: f.Version,
 					characterID: f.CharacterID,
 					templateID: f.TemplateID,
 					value: f.Value
 				)).ToList();
 
 				return (IReadOnlyList<CharacterFactionData>)factions;
-			}, "GetFactions", cancellationToken);
+			}).ConfigureAwait(false);
 		}
 	}
 }

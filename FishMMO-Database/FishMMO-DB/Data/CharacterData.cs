@@ -39,6 +39,7 @@ namespace FishMMO.Database.Data
 		public readonly byte AccessLevel;
 		public readonly bool Online;
 		public readonly int Flags;
+		public readonly long Version;
 		public readonly DateTime TimeCreated;
 		public readonly DateTime LastSaved;
 
@@ -46,6 +47,14 @@ namespace FishMMO.Database.Data
 		/// Initializes a new instance of the <see cref="CharacterData"/> struct.
 		/// </summary>
 		public CharacterData(long id, string name, string nameLowercase, string account, bool selected, long worldServerID, string sceneName, int sceneHandle, string bindScene, float bindX, float bindY, float bindZ, long instanceID, float instanceX, float instanceY, float instanceZ, float instanceRotX, float instanceRotY, float instanceRotZ, float instanceRotW, int raceID, int modelIndex, float x, float y, float z, float rotX, float rotY, float rotZ, float rotW, byte accessLevel, bool online, int flags, DateTime timeCreated, DateTime lastSaved)
+			: this(id, name, nameLowercase, account, selected, worldServerID, sceneName, sceneHandle, bindScene, bindX, bindY, bindZ, instanceID, instanceX, instanceY, instanceZ, instanceRotX, instanceRotY, instanceRotZ, instanceRotW, raceID, modelIndex, x, y, z, rotX, rotY, rotZ, rotW, accessLevel, online, flags, version: 0, timeCreated: timeCreated, lastSaved: lastSaved)
+		{
+		}
+
+		/// <summary>
+		/// Initializes a new instance of the <see cref="CharacterData"/> struct.
+		/// </summary>
+		public CharacterData(long id, string name, string nameLowercase, string account, bool selected, long worldServerID, string sceneName, int sceneHandle, string bindScene, float bindX, float bindY, float bindZ, long instanceID, float instanceX, float instanceY, float instanceZ, float instanceRotX, float instanceRotY, float instanceRotZ, float instanceRotW, int raceID, int modelIndex, float x, float y, float z, float rotX, float rotY, float rotZ, float rotW, byte accessLevel, bool online, int flags, long version, DateTime timeCreated, DateTime lastSaved)
 		{
 			ID = id;
 			Name = name;
@@ -79,6 +88,7 @@ namespace FishMMO.Database.Data
 			AccessLevel = accessLevel;
 			Online = online;
 			Flags = flags;
+			Version = version;
 			TimeCreated = timeCreated;
 			LastSaved = lastSaved;
 		}

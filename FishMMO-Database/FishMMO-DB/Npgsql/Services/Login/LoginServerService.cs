@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -9,9 +10,39 @@ using FishMMO.Database.Npgsql.Services.Interfaces;
 
 namespace FishMMO.Database.Npgsql.Services
 {
-	/// <inheritdoc/>
+	/// <summary>
+	/// Login server registration and management service.
+	/// Uses EF Core compiled queries for hot paths and the BaseService execution strategy for retries.
+	/// </summary>
 	public sealed class LoginServerService : BaseService<LoginServerEntity>, ILoginServerService
 	{
+		/// <summary>
+		/// Compiled query for retrieving a login server by ID without tracking.
+		/// </summary>
+#pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type
+		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<LoginServerEntity?>> getByIdNoTrackingQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long serverId, CancellationToken ct) =>
+				context.LoginServers
+					.AsNoTracking()
+					.FirstOrDefault(s => s.ID == serverId));
+
+		/// <summary>
+		/// Compiled query for retrieving a login server by ID with tracking.
+		/// </summary>
+		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<LoginServerEntity?>> getByIdTrackingQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long serverId, CancellationToken ct) =>
+				context.LoginServers
+					.FirstOrDefault(s => s.ID == serverId));
+
+		/// <summary>
+		/// Compiled query for retrieving a login server by unique name with tracking.
+		/// </summary>
+		private static readonly Func<NpgsqlDbContext, string, CancellationToken, Task<LoginServerEntity?>> getByNameTrackingQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, string name, CancellationToken ct) =>
+				context.LoginServers
+					.FirstOrDefault(s => s.Name == name));
+#pragma warning restore CS8619
+
 		/// <summary>
 		/// Initializes a new instance of LoginServerService.
 		/// </summary>
@@ -32,40 +63,53 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				return DatabaseResult<LoginServerData>.Failure(
 					"VALIDATION_ERROR",
-					"Server name and address must not be empty.");
+					"Server name and address must not be empty.",
+					isTransient: false);
 			}
 
-			return await ExecuteAsync<LoginServerData>(async (dbContext, ct) =>
+			// Fast path: attempt insert first; on unique violation, fall back to update.
+			var insertResult = await ExecuteMirrorAsync(async dbContext =>
 			{
-				var result = await dbContext.LoginServers
-					.FromSqlRaw($@"
-						INSERT INTO {TableName} (name, address, port, lastpulse)
-						VALUES ({{0}}, {{1}}, {{2}}, CURRENT_TIMESTAMP)
-						ON CONFLICT (name) 
-						DO UPDATE SET 
-							address = EXCLUDED.address,
-							port = EXCLUDED.port,
-							lastpulse = EXCLUDED.lastpulse
-						RETURNING id, name, address, port, lastpulse",
-						name,
-						address,
-						port)
-					.AsNoTracking()
-						.FirstOrDefaultAsync(ct).ConfigureAwait(false);
-
-				if (result == null)
+				var entity = new LoginServerEntity
 				{
-					throw new DatabaseQueryException(
-						"AddOrUpdateLoginServer",
-						"Failed to retrieve server data after upsert.",
-						"UPSERT returned no result.",
-						false,
-						null,
-						null);
-				}
+					Name = name,
+					Address = address,
+					Port = port,
+					TimeCreated = DateTime.UtcNow,
+					LastPulse = DateTime.UtcNow
+				};
 
-				return MapEntityToDto(result);
-			}, "AddOrUpdateLoginServer", cancellationToken).ConfigureAwait(false);
+				await dbContext.LoginServers.AddAsync(entity, cancellationToken).ConfigureAwait(false);
+				await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+				return MapEntityToDto(entity);
+			}).ConfigureAwait(false);
+
+			if (insertResult.IsSuccess)
+			{
+				return insertResult;
+			}
+
+			// If another writer inserted concurrently, retry as update.
+			if (string.Equals(insertResult.ErrorCode, "UNIQUE_VIOLATION", StringComparison.Ordinal))
+			{
+				return await ExecuteMirrorAsync(async dbContext =>
+				{
+					var existing = await getByNameTrackingQuery(dbContext, name, cancellationToken).ConfigureAwait(false);
+					if (existing == null)
+					{
+						throw new DatabaseEntityNotFoundException("LoginServer", name);
+					}
+
+					existing.Address = address;
+					existing.Port = port;
+					existing.LastPulse = DateTime.UtcNow;
+
+					await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+					return MapEntityToDto(existing);
+				}).ConfigureAwait(false);
+			}
+
+			return insertResult;
 		}
 
 		/// <inheritdoc/>
@@ -75,23 +119,22 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				return DatabaseResult.Failure(
 					"VALIDATION_ERROR",
-					"Server ID must be greater than 0.");
+					"Server ID must be greater than 0.",
+					isTransient: false);
 			}
 
-			var result = await ExecuteRawSqlAsync(
-				$@"UPDATE {TableName} 
-				SET lastpulse = CURRENT_TIMESTAMP 
-				WHERE id = {{0}}",
-				"PulseLoginServer",
-				new object[] { serverId },
-				entityName: "LoginServer",
-				entityId: serverId.ToString(),
-				requireRowsAffected: true,
-				cancellationToken: cancellationToken).ConfigureAwait(false);
-			
-			return result.IsSuccess 
-				? DatabaseResult.Success() 
-				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			var result = await ExecuteMirrorAsync(async dbContext =>
+			{
+				var server = await getByIdTrackingQuery(dbContext, serverId, cancellationToken).ConfigureAwait(false);
+				if (server == null)
+				{
+					throw new DatabaseEntityNotFoundException("LoginServer", serverId.ToString());
+				}
+
+				server.LastPulse = DateTime.UtcNow;
+			}).ConfigureAwait(false);
+
+			return result;
 		}
 
 		/// <inheritdoc/>
@@ -101,21 +144,20 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				return DatabaseResult.Failure(
 					"VALIDATION_ERROR",
-					"Server ID must be greater than 0.");
+					"Server ID must be greater than 0.",
+					isTransient: false);
 			}
 
-			var result = await ExecuteRawSqlAsync(
-				$@"DELETE FROM {TableName} WHERE id = {{0}}",
-				"DeleteLoginServer",
-				new object[] { serverId },
-				entityName: "LoginServer",
-				entityId: serverId.ToString(),
-				requireRowsAffected: false,
-				cancellationToken: cancellationToken).ConfigureAwait(false);
-			
-			return result.IsSuccess 
-				? DatabaseResult.Success() 
-				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return await ExecuteMirrorAsync(async dbContext =>
+			{
+				var server = await getByIdTrackingQuery(dbContext, serverId, cancellationToken).ConfigureAwait(false);
+				if (server == null)
+				{
+					return;
+				}
+
+				dbContext.LoginServers.Remove(server);
+			}).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -125,22 +167,20 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				return DatabaseResult<LoginServerData>.Failure(
 					"VALIDATION_ERROR",
-					"Server ID must be greater than 0.");
+					"Server ID must be greater than 0.",
+					isTransient: false);
 			}
 
-			return await ExecuteAsync(async (dbContext, ct) =>
+			return await ExecuteMirrorAsync(async dbContext =>
 			{
-				var server = await dbContext.LoginServers
-					.AsNoTracking()
-					.FirstOrDefaultAsync(s => s.ID == serverId, ct).ConfigureAwait(false);
-
+				var server = await getByIdNoTrackingQuery(dbContext, serverId, cancellationToken).ConfigureAwait(false);
 				if (server == null)
 				{
 					throw new DatabaseEntityNotFoundException("LoginServer", serverId.ToString());
 				}
 
 				return MapEntityToDto(server);
-			}, "GetLoginServer", cancellationToken).ConfigureAwait(false);
+			}).ConfigureAwait(false);
 		}
 
 		/// <summary>
@@ -148,7 +188,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// </summary>
 		/// <param name="entity">Login server entity from database.</param>
 		/// <returns>Login server data DTO.</returns>
-		private LoginServerData MapEntityToDto(LoginServerEntity entity)
+		private static LoginServerData MapEntityToDto(LoginServerEntity entity)
 		{
 			return new LoginServerData(
 				id: entity.ID,

@@ -16,7 +16,7 @@ namespace FishMMO.Database.Npgsql.Services
 	/// All write operations (Create*, Save*, Delete*, Set*, Update*) in this service use execution strategies
 	/// to ensure transient database failures are automatically retried according to the retry policy configured
 	/// on the DbContext. This is critical because ExecuteSqlRawAsync and SaveChangesAsync do not
-	/// automatically benefit from EnableRetryOnFailure without manual wrapping.
+	/// Execution is wrapped by BaseService for retries/transactions.
 	/// </para>
 	/// <para>
 	/// All methods return <see cref="DatabaseResult"/> or <see cref="DatabaseResult{T}"/> to provide
@@ -69,10 +69,6 @@ namespace FishMMO.Database.Npgsql.Services
 		/// Saves an existing character's data to the database using atomic UPDATE.
 		/// </summary>
 		/// <param name="characterData">The character data to save.</param>
-		/// <param name="requestId">
-		/// Required idempotency key.
-		/// Retries of the same logical request must reuse this value to prevent duplicate execution under transient retries.
-		/// </param>
 		/// <param name="cancellationToken">Token to cancel the operation.</param>
 		/// <returns>
 		/// A <see cref="DatabaseResult"/> indicating success or containing a <see cref="DatabaseException"/> on failure.
@@ -80,9 +76,9 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <remarks>
 		/// Uses atomic UPDATE operation to save all character fields in one operation.
 		/// Updates the last_saved timestamp automatically.
-		/// Execution strategy wrapping ensures transient database failures are automatically retried.
+		/// Uses BaseService.ExecuteMirrorAsync for automatic transient failure retry and centralized exception mapping.
 		/// </remarks>
-		Task<DatabaseResult> SaveCharacterAsync(CharacterData characterData, Guid requestId, CancellationToken cancellationToken = default);
+		Task<DatabaseResult> SaveCharacterAsync(CharacterData characterData, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Soft-deletes a character.

@@ -9,70 +9,26 @@ namespace FishMMO.Database.Npgsql.Services
 	/// <summary>
 	/// Service interface for managing character pets in the database.
 	/// </summary>
-	/// <remarks>
-	/// <para>
-	/// All write operations (Save*, Delete*) in this service use execution strategies to ensure
-	/// transient database failures are automatically retried according to the retry policy configured
-	/// on the DbContext. This is critical because ExecuteSqlRawAsync and SaveChangesAsync
-	/// do not automatically benefit from EnableRetryOnFailure without manual wrapping.
-	/// </para>
-	/// <para>
-	/// All methods return <see cref="DatabaseResult"/> or <see cref="DatabaseResult{T}"/> to provide
-	/// structured error information through the DatabaseException system, helping distinguish between:
-	/// - Validation failures (invalid parameters)
-	/// - Database errors (connection issues, constraint violations, timeouts)
-	/// - Entity not found errors
-	/// - Unexpected runtime errors
-	/// </para>
-	/// <para>
-	/// All SQL operations use atomic UPDATE, INSERT, and DELETE commands to prevent race conditions
-	/// when multiple servers or clients modify pet data simultaneously.
-	/// </para>
-	/// </remarks>
 	public interface ICharacterPetService
 	{
 		/// <summary>
-		/// Saves or updates a character's pet using atomic operations with idempotency protection.
+		/// Saves or updates a character's pet.
 		/// </summary>
 		/// <param name="pet">The pet data to save.</param>
-		/// <param name="requestId">Unique request ID for idempotency. Must be provided by the caller (Application Server Layer) to enable true cross-request idempotency protection.</param>
 		/// <param name="cancellationToken">Token to cancel the operation.</param>
 		/// <returns>
 		/// A <see cref="DatabaseResult"/> indicating success or containing a <see cref="DatabaseException"/> on failure.
 		/// </returns>
-		/// <remarks>
-		/// <para>
-		/// Uses DSL-level idempotency via the processed_requests table. The <paramref name="requestId"/> must be stable
-		/// across retries from the Application Server Layer to prevent duplicate execution when clients retry after timeouts.
-		/// </para>
-		/// <para>
-		/// If pet.ID > 0, performs an atomic UPDATE. Otherwise, uses SaveChangesAsync to insert a new pet.
-		/// Execution strategy wrapping ensures transient database failures are automatically retried.
-		/// </para>
-		/// </remarks>
-		Task<DatabaseResult> SavePetAsync(CharacterPetData pet, Guid requestId, CancellationToken cancellationToken = default);
+		Task<DatabaseResult> SavePetAsync(CharacterPetData pet, CancellationToken cancellationToken = default);
 		/// <summary>
-		/// Saves or updates multiple character pets using atomic batch operations with idempotency protection.
+		/// Saves or updates multiple character pets. Pets for deleted or missing characters are ignored.
 		/// </summary>
 		/// <param name="pets">Collection of pet data to save.</param>
-		/// <param name="requestId">Unique request ID for idempotency. Must be provided by the caller (Application Server Layer) to enable true cross-request idempotency protection.</param>
 		/// <param name="cancellationToken">Token to cancel the operation.</param>
 		/// <returns>
 		/// A <see cref="DatabaseResult"/> indicating success or containing a <see cref="DatabaseException"/> on failure.
 		/// </returns>
-		/// <remarks>
-		/// <para>
-		/// Uses DSL-level idempotency via the processed_requests table. The <paramref name="requestId"/> must be stable
-		/// across retries from the Application Server Layer to prevent duplicate execution when clients retry after timeouts.
-		/// </para>
-		/// <para>
-		/// Separates pets into updates (ID > 0) and inserts (ID = 0) for efficient batch processing.
-		/// Uses UNNEST for bulk operations to minimize database round-trips.
-		/// All operations are atomic and handle conflicts with ON CONFLICT clauses.
-		/// Execution strategy wrapping ensures transient database failures are automatically retried.
-		/// </para>
-		/// </remarks>
-		Task<DatabaseResult> SavePetsAsync(IEnumerable<CharacterPetData> pets, Guid requestId, CancellationToken cancellationToken = default);
+		Task<DatabaseResult> SavePetsAsync(IEnumerable<CharacterPetData> pets, CancellationToken cancellationToken = default);
 		/// <summary>
 		/// Deletes a character's pet.
 		/// </summary>

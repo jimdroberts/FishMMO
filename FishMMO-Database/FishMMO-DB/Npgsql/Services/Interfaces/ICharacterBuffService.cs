@@ -36,19 +36,12 @@ namespace FishMMO.Database.Npgsql.Services
 		/// DatabaseResult indicating success or failure with error information.
 		/// </returns>
 		/// <remarks>
-		/// Wrapped in execution strategy to automatically retry on transient failures.
-		/// All operations are performed within a database transaction for atomicity.
+		/// Executes inside the BaseService transaction + retry wrapper.
 		/// 
-		/// Transaction behavior:
-		/// - All buffs are processed in a single transaction
-		/// - If any buff fails, entire transaction is rolled back
-		/// - On success, all changes are committed atomically
-		/// 
-		/// Uses UPSERT (INSERT ... ON CONFLICT DO UPDATE) for each buff:
-		/// - If buff exists (character_id, template_id): Updates remaining_time, tick_time, stacks
-		/// - If buff doesn't exist: Inserts new record
-		/// 
-		/// Performance note: Uses raw SQL with UPSERT for optimal concurrency and minimal round-trips.
+		/// Behavior:
+		/// - Inserts missing buffs and updates existing ones by (CharacterID, TemplateID)
+		/// - Skips characters that are missing or marked deleted
+		/// - Duplicates in the input are de-duplicated by (CharacterID, TemplateID)
 		/// </remarks>
 		Task<DatabaseResult> SaveBuffsAsync(IEnumerable<CharacterBuffData> buffs, CancellationToken cancellationToken = default);
 
@@ -62,12 +55,8 @@ namespace FishMMO.Database.Npgsql.Services
 		/// DatabaseResult indicating success or failure with error information.
 		/// </returns>
 		/// <remarks>
-		/// Wrapped in execution strategy to automatically retry on transient failures.
-		/// 
-		/// Deletion behavior:
-		/// - Deletes all buffs for the specified character in a single atomic operation
-		/// - If character has no buffs, operation succeeds
-		/// - Uses raw SQL for optimal performance
+		/// Executes inside the BaseService transaction + retry wrapper.
+		/// If the character has no buffs, operation succeeds.
 		/// </remarks>
 		Task<DatabaseResult> DeleteBuffsAsync(long characterId, CancellationToken cancellationToken = default);
 
@@ -81,15 +70,8 @@ namespace FishMMO.Database.Npgsql.Services
 		/// Returns empty collection if character has no buffs.
 		/// </returns>
 		/// <remarks>
-		/// This method uses LINQ query which automatically benefits from EF Core's
-		/// configured retry policy for transient failures.
-		/// 
-		/// Query behavior:
-		/// - Returns all buffs for the specified character
-		/// - Uses AsNoTracking() for optimal read performance
-		/// - Projects to DTO to decouple from entity layer
-		/// 
-		/// The returned DTOs are safe to use after database context disposal.
+		/// Executes inside the BaseService transaction + retry wrapper.
+		/// Returns an empty collection if the character has no buffs.
 		/// </remarks>
 		Task<DatabaseResult<IReadOnlyList<CharacterBuffData>>> GetBuffsAsync(long characterId, CancellationToken cancellationToken = default);
 	}

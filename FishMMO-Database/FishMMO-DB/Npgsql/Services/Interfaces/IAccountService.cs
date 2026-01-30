@@ -54,41 +54,24 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 
 		/// <summary>
 		/// Creates a new account with the specified credentials.
-		/// Uses request-scoped idempotency to guarantee correct outcomes under transient retries.
+		/// Creates a new account record.
 		/// </summary>
 		/// <param name="accountName">The account name. Must be 3-32 characters.</param>
 		/// <param name="salt">The salt for SRP password hashing. Must not be null or whitespace.</param>
 		/// <param name="verifier">The verifier for SRP password hashing. Must not be null or whitespace.</param>
-		/// <param name="requestId">
-		/// A caller-generated idempotency key that must be stable for the duration of the logical request.
-		/// Use the same value across retries of the same logical call; use a different value for distinct calls.
-		/// </param>
 		/// <param name="cancellationToken">Token to cancel the asynchronous operation.</param>
 		/// <returns>DatabaseResult indicating success or failure with error details.</returns>
 		/// <remarks>
-		/// <para>
-		/// Business rule: Create must fail if the account already exists for distinct calls.
-		/// To satisfy this while still being safe under EF Core execution-strategy retries,
-		/// the operation is request-idempotent:
-		/// </para>
-		/// <list type="bullet">
-		/// <item><description>Same <paramref name="requestId"/> across retries: deterministic success/failure.</description></item>
-		/// <item><description>Different <paramref name="requestId"/> for a distinct call: pre-existing account fails.</description></item>
-		/// </list>
-		/// 
 		/// Success: Account created with Player access level and current timestamp.
 		/// Failure cases:
 		/// - VALIDATION_ERROR: Invalid username, salt, or verifier
-		/// - DB_CONSTRAINT_UNIQUE: Account name already exists
-		/// - DB_CONNECTION_FAILED: Database connection error (transient)
-		/// - DB_TIMEOUT: Operation timeout (transient)
-		/// - DB_QUERY_FAILED: Unexpected database error
+		/// - UNIQUE_VIOLATION: Account name already exists
+		/// - DATABASE_ERROR: Unexpected database error (transient)
 		/// </remarks>
 		Task<DatabaseResult> CreateAccountAsync(
 			string accountName,
 			string salt,
 			string verifier,
-			Guid requestId,
 			CancellationToken cancellationToken = default);
 
 		/// <summary>
@@ -161,14 +144,13 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// Success: Returns true if account exists, false otherwise.
 		/// Failure cases:
 		/// - VALIDATION_ERROR: Username validation failed (treated as not exists)
-		/// - DB_CONNECTION_FAILED: Database connection error (transient)
-		/// - DB_TIMEOUT: Query timeout (transient)
+		/// - DATABASE_ERROR: Unexpected database error (transient)
 		/// 
 		/// The query uses AsNoTracking() for optimal performance since entity
 		/// tracking is not required for existence checks.
 		/// 
-		/// Note: Returns false (not failure) for validation errors to maintain backwards
-		/// compatibility and prevent enumeration attacks.
+		/// Note: Returns false (not failure) for validation errors to reduce enumeration risk
+		/// and avoid unnecessary database queries.
 		/// </remarks>
 		Task<DatabaseResult<bool>> AccountExistsAsync(
 			string accountName,

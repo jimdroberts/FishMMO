@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using FishMMO.Database.Data;
+using FishMMO.Database.Exceptions;
 using FishMMO.Database.Npgsql.Entities;
 
 namespace FishMMO.Database.Npgsql.Services
@@ -33,15 +34,41 @@ namespace FishMMO.Database.Npgsql.Services
 	/// Methods return DatabaseResult to provide structured error handling
 	/// without throwing exceptions to calling code.
 	/// </remarks>
-	public sealed class CharacterGuildService : IdempotentBaseService<CharacterGuildEntity>, ICharacterGuildService
+	public sealed class CharacterGuildService : BaseService<CharacterGuildEntity>, ICharacterGuildService
 	{
 		private const int MaxAllowedGuildCapacity = 256;
+
+		private sealed class SaveMembershipPrecheckResult
+		{
+			public bool IsAllowed { get; }
+			public string? ErrorCode { get; }
+			public string? ErrorMessage { get; }
+
+			public SaveMembershipPrecheckResult(bool isAllowed, string? errorCode, string? errorMessage)
+			{
+				IsAllowed = isAllowed;
+				ErrorCode = errorCode;
+				ErrorMessage = errorMessage;
+			}
+		}
+
+		/// <summary>
+		/// Compiled query for checking whether a character exists and is not deleted.
+		/// Returns the character ID if active, otherwise 0.
+		/// </summary>
+		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<long>> getActiveCharacterIdQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
+				context.Characters
+					.AsNoTracking()
+					.Where(c => c.ID == characterId && !c.Deleted)
+					.Select(c => c.ID)
+					.FirstOrDefault());
 
 		/// <summary>
 		/// Compiled query for retrieving guild membership by character ID.
 		/// </summary>
 #pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<CharacterGuildEntity?>> GetGuildMembershipQuery =
+		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<CharacterGuildEntity?>> getGuildMembershipQuery =
 			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
 				context.CharacterGuilds
 					.AsNoTracking()
@@ -51,7 +78,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <summary>
 		/// Compiled query for retrieving all guild members.
 		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterGuildEntity>>> GetGuildMembersQuery =
+		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterGuildEntity>>> getGuildMembersQuery =
 			EF.CompileAsyncQuery((NpgsqlDbContext context, long guildId, CancellationToken ct) =>
 				context.CharacterGuilds
 					.AsNoTracking()
@@ -61,12 +88,20 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <summary>
 		/// Compiled query for counting guild members.
 		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<int>> GetGuildMemberCountQuery =
+		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<int>> getGuildMemberCountQuery =
 			EF.CompileAsyncQuery((NpgsqlDbContext context, long guildId, CancellationToken ct) =>
 				context.CharacterGuilds
 					.AsNoTracking()
 					.Where(g => g.GuildID == guildId)
 					.Count());
+
+		/// <summary>
+		/// Compiled query for retrieving a tracked guild membership by character ID.
+		/// </summary>
+		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<CharacterGuildEntity?>> getMembershipByCharacterTrackingQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
+				(CharacterGuildEntity?)context.CharacterGuilds
+					.FirstOrDefault(g => g.CharacterID == characterId));
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="CharacterGuildService"/> class.
@@ -78,7 +113,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> SaveGuildMembershipAsync(CharacterGuildData guildData, int maxCapacity, Guid requestId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> SaveGuildMembershipAsync(CharacterGuildData guildData, int maxCapacity, CancellationToken cancellationToken = default)
 		{
 			if (guildData.CharacterID == 0 || guildData.GuildID == 0)
 			{
@@ -101,121 +136,107 @@ namespace FishMMO.Database.Npgsql.Services
 					$"Invalid max capacity. Max capacity must not exceed {MaxAllowedGuildCapacity}.");
 			}
 
-			if (requestId == Guid.Empty)
+			var precheck = await ExecuteMirrorAsync(async dbContext =>
 			{
-				return DatabaseResult.Failure("VALIDATION_ERROR", "RequestId is required for idempotent guild membership save.");
+				var activeCharacterId = await getActiveCharacterIdQuery(dbContext, guildData.CharacterID, cancellationToken).ConfigureAwait(false);
+				if (activeCharacterId == 0)
+				{
+					return new SaveMembershipPrecheckResult(false, "DB_NOT_FOUND", "Character not found or deleted.");
+				}
+
+				var existingGuildId = await dbContext.CharacterGuilds
+					.AsNoTracking()
+					.Where(g => g.CharacterID == guildData.CharacterID)
+					.Select(g => g.GuildID)
+					.FirstOrDefaultAsync(cancellationToken)
+					.ConfigureAwait(false);
+
+				var needsCapacityCheck = existingGuildId == 0 || existingGuildId != guildData.GuildID;
+				if (!needsCapacityCheck)
+				{
+					return new SaveMembershipPrecheckResult(true, null, null);
+				}
+
+				var guildExists = await dbContext.Guilds
+					.AsNoTracking()
+					.AnyAsync(g => g.ID == guildData.GuildID, cancellationToken)
+					.ConfigureAwait(false);
+				if (!guildExists)
+				{
+					return new SaveMembershipPrecheckResult(false, "NOT_FOUND", $"Guild with ID {guildData.GuildID} does not exist.");
+				}
+
+				var currentCount = await getGuildMemberCountQuery(dbContext, guildData.GuildID, cancellationToken).ConfigureAwait(false);
+				if (currentCount >= maxCapacity)
+				{
+					return new SaveMembershipPrecheckResult(false, "CAPACITY_EXCEEDED", $"Guild has reached maximum capacity of {maxCapacity} members.");
+				}
+
+				return new SaveMembershipPrecheckResult(true, null, null);
+			}).ConfigureAwait(false);
+
+			if (!precheck.IsSuccess)
+			{
+				return DatabaseResult.Failure(precheck.ErrorCode, precheck.ErrorMessage, precheck.IsTransient);
 			}
 
-			// Use transaction to atomically check capacity and insert/update membership
-			// RACE CONDITION MITIGATION: Uses strict lock ordering (character -> guild) and
-			// SELECT FOR UPDATE to prevent deadlocks and ensure atomicity. The lock hierarchy
-			// ensures that concurrent operations acquire locks in a consistent order, preventing
-			// circular wait conditions.
-			//
-			// Lock Ordering Strategy:
-			// 1. Lock character's membership row FIRST (establishes consistent order)
-			// 2. Lock guild row SECOND (only if capacity check needed)
-			// 3. Perform capacity check (protected by both locks)
-			// 4. UPSERT membership (atomic operation)
-			//
-			// This pattern is safe because:
-			// - All operations follow the same lock order (character -> guild)
-			// - SELECT FOR UPDATE holds locks until transaction commits
-			// - Capacity check is protected by guild lock
-			// - UPSERT is atomic and idempotent
-			var result = await ExecuteIdempotentResultAsync(
-				requestId,
-				scopeId: guildData.CharacterID,
-				operationName: "SaveGuildMembership",
-				operation: async (dbContext, transaction, ct) =>
+			var precheckResult = precheck.Data;
+			if (!precheckResult.IsAllowed)
 			{
-				var charactersTableName = dbContext.GetTableName<CharacterEntity>();
-				var activeCharacter = await dbContext.Characters
-					.FromSqlRaw($@"SELECT * FROM {charactersTableName} WHERE id = {{0}} AND deleted = FALSE FOR KEY SHARE", guildData.CharacterID)
-					.AsNoTracking()
-					.FirstOrDefaultAsync(ct)
-					.ConfigureAwait(false);
-				if (activeCharacter == null)
+				return DatabaseResult.Failure(precheckResult.ErrorCode!, precheckResult.ErrorMessage!, isTransient: false);
+			}
+
+			var insertResult = await ExecuteMirrorAsync(async dbContext =>
+			{
+				var membership = await getMembershipByCharacterTrackingQuery(dbContext, guildData.CharacterID, cancellationToken).ConfigureAwait(false);
+				if (membership == null)
 				{
-					return DatabaseResult.Failure(
-						"DB_NOT_FOUND",
-						"Character not found or deleted.");
-				}
-
-				// Lock character's membership row FIRST to establish consistent lock ordering
-				// This prevents deadlocks and ensures atomicity across concurrent requests
-				var existingMembership = await dbContext.CharacterGuilds
-					.FromSqlRaw($"SELECT * FROM {TableName} WHERE character_id = {{0}} FOR UPDATE", guildData.CharacterID)
-					.FirstOrDefaultAsync(ct);
-
-				// Refined check: determine if capacity validation is needed
-				// Skip capacity check if character is already in the same guild (rank/location update)
-				bool needsCapacityCheck = existingMembership == null || existingMembership.GuildID != guildData.GuildID;
-
-				if (needsCapacityCheck)
-				{
-					var guildTableName = dbContext.GetTableName<GuildEntity>();
-					var membershipTableName = dbContext.GetTableName<CharacterGuildEntity>();
-
-					// Atomic capacity check with proper locking to prevent race conditions
-					// Uses FOR UPDATE on guild and FOR SHARE on member count to ensure consistent read
-					// Lock ordering: character membership (already locked) -> guild -> member count
-					var capacityResult = await dbContext.Guilds
-						.FromSqlRaw($@"
-							SELECT g.*
-							FROM {guildTableName} g
-							CROSS JOIN LATERAL (
-								SELECT COUNT(*) as member_count
-								FROM {membershipTableName}
-								WHERE guild_id = {{0}}
-								FOR SHARE
-							) mc
-							WHERE g.id = {{0}}
-								AND mc.member_count < {{1}}
-							FOR UPDATE",
-							guildData.GuildID,
-							maxCapacity)
-						.FirstOrDefaultAsync(ct);
-
-					if (capacityResult == null)
+					membership = new CharacterGuildEntity
 					{
-						// Either guild doesn't exist or capacity exceeded - check which
-						var guildExists = await dbContext.Guilds
-							.AsNoTracking()
-							.AnyAsync(g => g.ID == guildData.GuildID, ct);
-
-						if (!guildExists)
-						{
-							return DatabaseResult.Failure(
-								"NOT_FOUND",
-								$"Guild with ID {guildData.GuildID} does not exist.");
-						}
-
-						return DatabaseResult.Failure(
-							"CAPACITY_EXCEEDED",
-							$"Guild has reached maximum capacity of {maxCapacity} members.");
-					}
+						CharacterID = guildData.CharacterID,
+						Version = guildData.Version,
+						TimeCreated = DateTime.UtcNow
+					};
+					await dbContext.CharacterGuilds.AddAsync(membership, cancellationToken).ConfigureAwait(false);
 				}
 
-				// Perform UPSERT - atomic operation that either inserts new membership
-				// or updates existing membership (rank/location change within same guild)
-				await dbContext.Database.ExecuteSqlRawAsync(
-					$@"INSERT INTO {TableName} 
-						(character_id, guild_id, rank, location, time_created)
-						VALUES ({{0}}, {{1}}, {{2}}, {{3}}, CURRENT_TIMESTAMP)
-						ON CONFLICT (character_id) 
-						DO UPDATE SET 
-							guild_id = EXCLUDED.guild_id,
-							rank = EXCLUDED.rank,
-							location = EXCLUDED.location",
-					new object[] { guildData.CharacterID, guildData.GuildID, guildData.Rank, guildData.Location },
-					ct);
+				ValidateVersion(membership, guildData.Version);
+				if (guildData.Version > 0) membership.Version = guildData.Version;
 
+				membership.GuildID = guildData.GuildID;
+				membership.Rank = guildData.Rank;
+				membership.Location = guildData.Location;
+			}).ConfigureAwait(false);
+
+			if (insertResult.IsSuccess)
+			{
 				return DatabaseResult.Success();
-			},
-				cancellationToken).ConfigureAwait(false);
+			}
 
-			return result;
+			if (insertResult.ErrorCode != "UNIQUE_VIOLATION")
+			{
+				return DatabaseResult.Failure(insertResult.ErrorCode, insertResult.ErrorMessage, insertResult.IsTransient);
+			}
+
+			var updateResult = await ExecuteMirrorAsync(async dbContext =>
+			{
+				var membership = await getMembershipByCharacterTrackingQuery(dbContext, guildData.CharacterID, cancellationToken).ConfigureAwait(false);
+				if (membership == null)
+				{
+					throw new DatabaseEntityNotFoundException("CharacterGuild", guildData.CharacterID.ToString());
+				}
+
+				ValidateVersion(membership, guildData.Version);
+				if (guildData.Version > 0) membership.Version = guildData.Version;
+
+				membership.GuildID = guildData.GuildID;
+				membership.Rank = guildData.Rank;
+				membership.Location = guildData.Location;
+			}).ConfigureAwait(false);
+
+			return updateResult.IsSuccess
+				? DatabaseResult.Success()
+				: DatabaseResult.Failure(updateResult.ErrorCode, updateResult.ErrorMessage, updateResult.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -228,18 +249,21 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID or guild ID. Both must be greater than 0.");
 			}
 
-			var result = await ExecuteRawSqlAsync(
-				$@"UPDATE {TableName} 
-					SET rank = {{0}} 
-					WHERE character_id = {{1}} AND guild_id = {{2}}",
-				"UpdateRank",
-				new object[] { rank, characterId, guildId },
-				entityName: "CharacterGuild",
-				entityId: characterId,
-				requireRowsAffected: false,
-				cancellationToken: cancellationToken);
+			var result = await ExecuteMirrorAsync(async dbContext =>
+			{
+				var membership = await dbContext.CharacterGuilds
+					.FirstOrDefaultAsync(g => g.CharacterID == characterId && g.GuildID == guildId, cancellationToken)
+					.ConfigureAwait(false);
 
-			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+				if (membership != null)
+				{
+					membership.Rank = rank;
+				}
+			}).ConfigureAwait(false);
+
+			return result.IsSuccess
+				? DatabaseResult.Success()
+				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -252,16 +276,24 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
-			var result = await ExecuteRawSqlAsync(
-				$@"DELETE FROM {TableName} WHERE character_id = {{0}}",
-				"DeleteGuildMembership",
-				new object[] { characterId },
-				entityName: "CharacterGuild",
-				entityId: characterId,
-				requireRowsAffected: false,
-				cancellationToken: cancellationToken);
+			var result = await ExecuteMirrorAsync(async dbContext =>
+			{
+				var memberships = await dbContext.CharacterGuilds
+					.Where(g => g.CharacterID == characterId)
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
 
-			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+				if (memberships.Count == 0)
+				{
+					return;
+				}
+
+				dbContext.CharacterGuilds.RemoveRange(memberships);
+			}).ConfigureAwait(false);
+
+			return result.IsSuccess
+				? DatabaseResult.Success()
+				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -274,20 +306,26 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
-			return await ExecuteAsync<CharacterGuildData?>(async (dbContext, ct) =>
+			var result = await ExecuteMirrorAsync<CharacterGuildData?>(async dbContext =>
 			{
-				var entity = await GetGuildMembershipQuery(dbContext, characterId, ct);
+				var entity = await getGuildMembershipQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
 				if (entity == null)
+				{
 					return null;
+				}
 
 				return new CharacterGuildData(
 					id: entity.ID,
+					version: entity.Version,
 					characterID: entity.CharacterID,
 					guildID: entity.GuildID,
 					rank: entity.Rank,
-					location: entity.Location
-				);
-			}, "GetGuildMembership", cancellationToken);
+					location: entity.Location);
+			}).ConfigureAwait(false);
+
+			return result.IsSuccess
+				? DatabaseResult<CharacterGuildData?>.Success(result.Data)
+				: DatabaseResult<CharacterGuildData?>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -300,22 +338,23 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid guild ID. Guild ID must be greater than 0.");
 			}
 
-			return await ExecuteAsync(
-				async (dbContext, ct) =>
-				{
-					var entities = await GetGuildMembersQuery(dbContext, guildId, ct);
-					var members = entities.Select(g => new CharacterGuildData(
-						id: g.ID,
-						characterID: g.CharacterID,
-						guildID: g.GuildID,
-						rank: g.Rank,
-						location: g.Location
-					)).ToList();
+			var result = await ExecuteMirrorAsync(async dbContext =>
+			{
+				var entities = await getGuildMembersQuery(dbContext, guildId, cancellationToken).ConfigureAwait(false);
+				var members = entities.Select(g => new CharacterGuildData(
+					id: g.ID,
+					version: g.Version,
+					characterID: g.CharacterID,
+					guildID: g.GuildID,
+					rank: g.Rank,
+					location: g.Location)).ToList();
 
-					return (IReadOnlyList<CharacterGuildData>)members;
-				},
-				"GetGuildMembers",
-				cancellationToken);
+				return (IReadOnlyList<CharacterGuildData>)members;
+			}).ConfigureAwait(false);
+
+			return result.IsSuccess
+				? DatabaseResult<IReadOnlyList<CharacterGuildData>>.Success(result.Data)
+				: DatabaseResult<IReadOnlyList<CharacterGuildData>>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -328,13 +367,12 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid guild ID. Guild ID must be greater than 0.");
 			}
 
-			return await ExecuteAsync(
-				async (dbContext, ct) =>
-				{
-					return await GetGuildMemberCountQuery(dbContext, guildId, ct);
-				},
-				"GetGuildMemberCount",
-				cancellationToken);
+			var result = await ExecuteMirrorAsync(async dbContext =>
+				await getGuildMemberCountQuery(dbContext, guildId, cancellationToken).ConfigureAwait(false)).ConfigureAwait(false);
+
+			return result.IsSuccess
+				? DatabaseResult<int>.Success(result.Data)
+				: DatabaseResult<int>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 	}
 }

@@ -31,14 +31,34 @@ namespace FishMMO.Database.Npgsql.Services
 	public sealed class CharacterEquipmentService : BaseService<CharacterEquipmentEntity>, ICharacterEquipmentService
 	{
 		/// <summary>
+		/// Compiled query for checking whether a character exists and is not deleted.
+		/// Returns the character ID if active, otherwise 0.
+		/// </summary>
+		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<long>> getActiveCharacterIdQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
+				context.Characters
+					.AsNoTracking()
+					.Where(c => c.ID == characterId && !c.Deleted)
+					.Select(c => c.ID)
+					.FirstOrDefault());
+
+		/// <summary>
 		/// Compiled query for retrieving character equipment (hot path for character rendering).
 		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterEquipmentEntity>>> GetEquipmentQuery =
+		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterEquipmentEntity>>> getEquipmentQuery =
 			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
 				context.CharacterEquippedItems
 					.AsNoTracking()
 					.Where(e => e.CharacterID == characterId)
 					.ToList());
+
+		/// <summary>
+		/// Compiled query for retrieving a tracked equipment item by character ID and slot.
+		/// </summary>
+		private static readonly Func<NpgsqlDbContext, long, int, CancellationToken, Task<CharacterEquipmentEntity?>> getByCharacterAndSlotTrackingQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, int slot, CancellationToken ct) =>
+				(CharacterEquipmentEntity?)context.CharacterEquippedItems
+					.FirstOrDefault(e => e.CharacterID == characterId && e.Slot == slot));
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="CharacterEquipmentService"/> class.
@@ -52,51 +72,72 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<long>> SaveEquipmentAsync(CharacterEquipmentData equipment, CancellationToken cancellationToken = default)
 		{
-			if (equipment.CharacterID == 0)
+			if (equipment.CharacterID <= 0)
 			{
 				return DatabaseResult<long>.Failure(
 					"VALIDATION_ERROR",
-					"Invalid character ID. Character ID must be greater than 0.");
+					"Invalid character ID. Character ID must be greater than 0.",
+					isTransient: false);
 			}
 
-			return await ExecuteAsync<long>(async (dbContext, ct) =>
+			var insertResult = await ExecuteMirrorAsync(async dbContext =>
 			{
-				var charactersTableName = dbContext.GetTableName<CharacterEntity>();
-				// Use PostgreSQL UPSERT for atomic insert-or-update
-				var result = await dbContext.CharacterEquippedItems
-					.FromSqlRaw($@"
-					WITH active_character AS (
-						SELECT id
-						FROM {charactersTableName}
-						WHERE id = {{0}} AND deleted = FALSE
-						FOR KEY SHARE
-					)
-					INSERT INTO {TableName}
-						(character_id, template_id, slot, seed, amount, time_created)
-					SELECT
-						{{0}}, {{1}}, {{2}}, {{3}}, {{4}}, CURRENT_TIMESTAMP
-					FROM active_character
-					ON CONFLICT (character_id, slot) 
-					DO UPDATE SET 
-						template_id = EXCLUDED.template_id,
-						seed = EXCLUDED.seed,
-						amount = EXCLUDED.amount
-					RETURNING id, character_id, template_id, slot, seed, amount, time_created",
-					equipment.CharacterID,
-					equipment.TemplateID,
-					equipment.Slot,
-					equipment.Seed,
-					equipment.Amount)
-					.AsNoTracking()
-					.FirstOrDefaultAsync(ct);
-
-				if (result == null)
+				var activeCharacterId = await getActiveCharacterIdQuery(dbContext, equipment.CharacterID, cancellationToken).ConfigureAwait(false);
+				if (activeCharacterId == 0)
 				{
 					throw new DatabaseEntityNotFoundException("Character", equipment.CharacterID.ToString());
 				}
 
-				return result.ID;
-			}, "SaveEquipment", cancellationToken);
+				var entity = new CharacterEquipmentEntity
+				{
+					CharacterID = equipment.CharacterID,
+					Version = equipment.Version,
+					TemplateID = equipment.TemplateID,
+					Slot = equipment.Slot,
+					Seed = equipment.Seed,
+					Amount = equipment.Amount,
+					TimeCreated = DateTime.UtcNow
+				};
+				await dbContext.CharacterEquippedItems.AddAsync(entity, cancellationToken).ConfigureAwait(false);
+				return entity;
+			}).ConfigureAwait(false);
+
+			if (insertResult.IsSuccess)
+			{
+				return DatabaseResult<long>.Success(insertResult.Data.ID);
+			}
+
+			if (insertResult.ErrorCode != "UNIQUE_VIOLATION")
+			{
+				return DatabaseResult<long>.Failure(insertResult.ErrorCode, insertResult.ErrorMessage, insertResult.IsTransient);
+			}
+
+			var updateResult = await ExecuteMirrorAsync(async dbContext =>
+			{
+				var activeCharacterId = await getActiveCharacterIdQuery(dbContext, equipment.CharacterID, cancellationToken).ConfigureAwait(false);
+				if (activeCharacterId == 0)
+				{
+					throw new DatabaseEntityNotFoundException("Character", equipment.CharacterID.ToString());
+				}
+
+				var entity = await getByCharacterAndSlotTrackingQuery(dbContext, equipment.CharacterID, equipment.Slot, cancellationToken).ConfigureAwait(false);
+				if (entity == null)
+				{
+					throw new DatabaseEntityNotFoundException("CharacterEquipment", $"(CharacterID: {equipment.CharacterID}, Slot: {equipment.Slot})");
+				}
+
+				ValidateVersion(entity, equipment.Version);
+				if (equipment.Version > 0) entity.Version = equipment.Version;
+
+				entity.TemplateID = equipment.TemplateID;
+				entity.Seed = equipment.Seed;
+				entity.Amount = equipment.Amount;
+				return entity;
+			}).ConfigureAwait(false);
+
+			return updateResult.IsSuccess
+				? DatabaseResult<long>.Success(updateResult.Data.ID)
+				: DatabaseResult<long>.Failure(updateResult.ErrorCode, updateResult.ErrorMessage, updateResult.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -107,7 +148,8 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				return DatabaseResult.Failure(
 					"VALIDATION_ERROR",
-					"Empty or null equipment collection.");
+					"Empty or null equipment collection.",
+					isTransient: false);
 			}
 
 			// Prevent duplicate keys within the same batch from causing
@@ -126,106 +168,143 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 			}
 
-			// Extract arrays for bulk UPSERT
-			var characterIds = equipmentList.Select(e => e.CharacterID).ToArray();
-			var templateIds = equipmentList.Select(e => e.TemplateID).ToArray();
-			var slots = equipmentList.Select(e => e.Slot).ToArray();
-			var seeds = equipmentList.Select(e => e.Seed).ToArray();
-			var amounts = equipmentList.Select(e => (int)e.Amount).ToArray();
-
-			var result = await ExecuteAsync(async (dbContext, ct) =>
+			return await ExecuteMirrorAsync(async dbContext =>
 			{
-				var charactersTableName = dbContext.GetTableName<CharacterEntity>();
-				return await dbContext.Database.ExecuteSqlRawAsync(
-					$@"WITH active_characters AS (
-						SELECT id
-						FROM {charactersTableName}
-						WHERE id = ANY({{0}}::bigint[]) AND deleted = FALSE
-						ORDER BY id
-						FOR KEY SHARE
-					)
-					INSERT INTO {TableName} (character_id, template_id, slot, seed, amount, time_created)
-					SELECT u.character_id, u.template_id, u.slot, u.seed, u.amount, CURRENT_TIMESTAMP
-					FROM UNNEST(
-						{{0}}::bigint[],
-						{{1}}::int[],
-						{{2}}::int[],
-						{{3}}::int[],
-						{{4}}::int[]
-					) AS u(character_id, template_id, slot, seed, amount)
-					JOIN active_characters ac ON ac.id = u.character_id
-					ON CONFLICT (character_id, slot) DO UPDATE SET
-						template_id = EXCLUDED.template_id,
-						seed = EXCLUDED.seed,
-						amount = EXCLUDED.amount",
-					new object[] { characterIds, templateIds, slots, seeds, amounts },
-					ct);
-			}, "SaveEquipmentMultiple", cancellationToken).ConfigureAwait(false);
+				var previousAutoDetectChanges = dbContext.ChangeTracker.AutoDetectChangesEnabled;
+				try
+				{
+					dbContext.ChangeTracker.AutoDetectChangesEnabled = false;
 
-			return result.IsSuccess
-				? DatabaseResult.Success()
-				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+					var characterIds = equipmentList.Select(e => e.CharacterID).Distinct().ToArray();
+					var activeCharacterIds = await dbContext.Characters
+						.AsNoTracking()
+						.Where(c => characterIds.Contains(c.ID) && !c.Deleted)
+						.Select(c => c.ID)
+						.ToListAsync(cancellationToken)
+						.ConfigureAwait(false);
+					var activeCharacterIdSet = new HashSet<long>(activeCharacterIds);
+
+					var slotList = equipmentList.Select(e => e.Slot).Distinct().ToArray();
+					var desiredKeys = new HashSet<(long CharacterID, int Slot)>(equipmentList.Select(e => (e.CharacterID, e.Slot)));
+					var existing = await dbContext.CharacterEquippedItems
+						.Where(e => activeCharacterIdSet.Contains(e.CharacterID) && slotList.Contains(e.Slot))
+						.ToListAsync(cancellationToken)
+						.ConfigureAwait(false);
+
+					var existingByKey = new Dictionary<(long CharacterID, int Slot), CharacterEquipmentEntity>();
+					foreach (var entity in existing)
+					{
+						var key = (entity.CharacterID, entity.Slot);
+						if (!desiredKeys.Contains(key)) continue;
+						existingByKey[key] = entity;
+					}
+
+					foreach (var item in equipmentList)
+					{
+						if (!activeCharacterIdSet.Contains(item.CharacterID)) continue;
+
+						var key = (item.CharacterID, item.Slot);
+						if (!existingByKey.TryGetValue(key, out var entity))
+						{
+							entity = new CharacterEquipmentEntity
+							{
+								CharacterID = item.CharacterID,
+								Version = item.Version,
+								Slot = item.Slot,
+								TimeCreated = DateTime.UtcNow
+							};
+							await dbContext.CharacterEquippedItems.AddAsync(entity, cancellationToken).ConfigureAwait(false);
+							existingByKey[key] = entity;
+						}
+
+						ValidateVersion(entity, item.Version);
+						if (item.Version > 0) entity.Version = item.Version;
+
+						entity.TemplateID = item.TemplateID;
+						entity.Seed = item.Seed;
+						entity.Amount = item.Amount;
+					}
+				}
+				finally
+				{
+					dbContext.ChangeTracker.AutoDetectChangesEnabled = previousAutoDetectChanges;
+				}
+			}).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
 		public async Task<DatabaseResult> DeleteEquipmentAsync(long characterId, CancellationToken cancellationToken = default)
 		{
-			if (characterId == 0)
+			if (characterId <= 0)
 			{
 				return DatabaseResult.Failure(
 					"VALIDATION_ERROR",
-					"Invalid character ID. Character ID must be greater than 0.");
+					"Invalid character ID. Character ID must be greater than 0.",
+					isTransient: false);
 			}
 
-			var result = await ExecuteRawSqlAsync(
-				$@"DELETE FROM {TableName} WHERE character_id = {{0}}",
-				"DeleteEquipment",
-				new object[] { characterId },
-				entityName: "CharacterEquipment",
-				entityId: characterId,
-				requireRowsAffected: false,
-				cancellationToken: cancellationToken);
+			return await ExecuteMirrorAsync(async dbContext =>
+			{
+				var equipmentIds = await dbContext.CharacterEquippedItems
+					.AsNoTracking()
+					.Where(e => e.CharacterID == characterId)
+					.Select(e => e.ID)
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
 
-			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+				foreach (var equipmentId in equipmentIds)
+				{
+					var entity = new CharacterEquipmentEntity { ID = equipmentId };
+					dbContext.CharacterEquippedItems.Remove(entity);
+				}
+			}).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
 		public async Task<DatabaseResult> DeleteEquipmentSlotAsync(long characterId, int slot, CancellationToken cancellationToken = default)
 		{
-			if (characterId == 0)
+			if (characterId <= 0)
 			{
 				return DatabaseResult.Failure(
 					"VALIDATION_ERROR",
-					"Invalid character ID. Character ID must be greater than 0.");
+					"Invalid character ID. Character ID must be greater than 0.",
+					isTransient: false);
 			}
 
-			var result = await ExecuteRawSqlAsync(
-				$@"DELETE FROM {TableName} WHERE character_id = {{0}} AND slot = {{1}}",
-				"DeleteEquipmentSlot",
-				new object[] { characterId, slot },
-				entityName: "CharacterEquipment",
-				entityId: characterId,
-				requireRowsAffected: false,
-				cancellationToken: cancellationToken);
+			return await ExecuteMirrorAsync(async dbContext =>
+			{
+				var equipmentIds = await dbContext.CharacterEquippedItems
+					.AsNoTracking()
+					.Where(e => e.CharacterID == characterId && e.Slot == slot)
+					.Select(e => e.ID)
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
 
-			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+				foreach (var equipmentId in equipmentIds)
+				{
+					var entity = new CharacterEquipmentEntity { ID = equipmentId };
+					dbContext.CharacterEquippedItems.Remove(entity);
+				}
+			}).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<IReadOnlyList<CharacterEquipmentData>>> GetEquipmentAsync(long characterId, CancellationToken cancellationToken = default)
 		{
-			if (characterId == 0)
+			if (characterId <= 0)
 			{
 				return DatabaseResult<IReadOnlyList<CharacterEquipmentData>>.Failure(
 					"VALIDATION_ERROR",
-					"Invalid character ID. Character ID must be greater than 0.");
+					"Invalid character ID. Character ID must be greater than 0.",
+					isTransient: false);
 			}
 
-			return await ExecuteAsync(async (dbContext, ct) =>
+			return await ExecuteMirrorAsync(async dbContext =>
 			{
-				var entities = await GetEquipmentQuery(dbContext, characterId, ct);
+				var entities = await getEquipmentQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
 				var equipment = entities.Select(e => new CharacterEquipmentData(
 					id: e.ID,
+					version: e.Version,
 					characterID: e.CharacterID,
 					templateID: e.TemplateID,
 					slot: e.Slot,
@@ -234,7 +313,7 @@ namespace FishMMO.Database.Npgsql.Services
 				)).ToList();
 
 				return (IReadOnlyList<CharacterEquipmentData>)equipment;
-			}, "GetEquipment", cancellationToken);
+			}).ConfigureAwait(false);
 		}
 	}
 }

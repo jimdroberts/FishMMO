@@ -23,9 +23,6 @@ namespace FishMMO.Database.Npgsql
 		private readonly string schema;
 		private readonly bool enableLogging;
 		private readonly int commandTimeout;
-		private readonly DatabaseServiceExecutionSettings serviceExecutionSettings;
-		private readonly int maxRetryCount;
-		private readonly int maxRetryDelaySeconds;
 		private readonly DbContextOptions<NpgsqlDbContext> cachedOptions;
 		private readonly ConnectionPoolMetrics poolMetrics;
 		private readonly int maxPoolSize;
@@ -77,8 +74,6 @@ namespace FishMMO.Database.Npgsql
 				.AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
 				.Build();
 
-			serviceExecutionSettings = LoadServiceExecutionSettings(configuration);
-
 			string database = configuration.GetSection("Npgsql")["Database"] ?? "fish_mmo_postgresql";
 			schema = database;
 			string userID = configuration.GetSection("Npgsql")["Username"] ?? "user";
@@ -91,8 +86,6 @@ namespace FishMMO.Database.Npgsql
 			int maxPoolSize = 100;
 			int configTimeout = 10;
 			int connectionTimeout = 15; // Default connection timeout
-			int maxRetryCount = 5;
-			int maxRetryDelaySeconds = 30;
 
 			if (int.TryParse(configuration.GetSection("Npgsql")["MinPoolSize"], out int minSize))
 				minPoolSize = minSize;
@@ -102,10 +95,6 @@ namespace FishMMO.Database.Npgsql
 				configTimeout = cfgTimeout;
 			if (int.TryParse(configuration.GetSection("Npgsql")["ConnectionTimeout"], out int connTimeout))
 				connectionTimeout = connTimeout;
-			if (int.TryParse(configuration.GetSection("Npgsql")["MaxRetryCount"], out int cfgMaxRetryCount) && cfgMaxRetryCount >= 0)
-				maxRetryCount = cfgMaxRetryCount;
-			if (int.TryParse(configuration.GetSection("Npgsql")["MaxRetryDelaySeconds"], out int cfgMaxRetryDelaySeconds) && cfgMaxRetryDelaySeconds >= 0)
-				maxRetryDelaySeconds = cfgMaxRetryDelaySeconds;
 
 			// Use provided timeout or fall back to config
 			if (this.commandTimeout == 10 && configTimeout != 10)
@@ -120,8 +109,6 @@ namespace FishMMO.Database.Npgsql
 
 			// Initialize pool metrics tracker
 			this.maxPoolSize = maxPoolSize;
-			this.maxRetryCount = maxRetryCount;
-			this.maxRetryDelaySeconds = maxRetryDelaySeconds;
 			poolMetrics = new ConnectionPoolMetrics();
 
 			// Cache DbContext options once to avoid rebuilding fluent configuration on every call.
@@ -129,14 +116,6 @@ namespace FishMMO.Database.Npgsql
 				.UseNpgsql(connectionString, npgsqlOptions =>
 				{
 					npgsqlOptions.CommandTimeout(this.commandTimeout);
-
-					if (this.maxRetryCount > 0)
-					{
-						npgsqlOptions.EnableRetryOnFailure(
-							maxRetryCount: this.maxRetryCount,
-							maxRetryDelay: TimeSpan.FromSeconds(this.maxRetryDelaySeconds),
-							errorCodesToAdd: null);
-					}
 				});
 
 			if (this.enableLogging)
@@ -160,36 +139,10 @@ namespace FishMMO.Database.Npgsql
 			performanceTracker = new QueryPerformanceTracker(perfConfig);
 		}
 
-		private static DatabaseServiceExecutionSettings LoadServiceExecutionSettings(IConfiguration configuration)
-		{
-			var settings = new DatabaseServiceExecutionSettings();
-			var section = configuration.GetSection("DatabaseServiceExecution");
-
-			if (int.TryParse(section["MaxIdempotencyOperationNameLength"], out var maxIdempotencyOperationNameLength) && maxIdempotencyOperationNameLength > 0)
-				settings.MaxIdempotencyOperationNameLength = maxIdempotencyOperationNameLength;
-
-			if (int.TryParse(section["ProcessedRequestsRetentionDays"], out var processedRequestsRetentionDays) && processedRequestsRetentionDays >= 0)
-				settings.ProcessedRequestsRetentionDays = processedRequestsRetentionDays;
-
-			if (int.TryParse(section["ProcessedRequestsCleanupMaxRows"], out var processedRequestsCleanupMaxRows) && processedRequestsCleanupMaxRows > 0)
-				settings.ProcessedRequestsCleanupMaxRows = processedRequestsCleanupMaxRows;
-
-			if (int.TryParse(section["ProcessedRequestsCleanupMinIntervalMinutes"], out var processedRequestsCleanupMinIntervalMinutes) && processedRequestsCleanupMinIntervalMinutes >= 0)
-				settings.ProcessedRequestsCleanupMinIntervalMinutes = processedRequestsCleanupMinIntervalMinutes;
-
-			if (int.TryParse(section["ProcessedRequestsInProgressTimeoutMinutes"], out var processedRequestsInProgressTimeoutMinutes) && processedRequestsInProgressTimeoutMinutes >= 0)
-				settings.ProcessedRequestsInProgressTimeoutMinutes = Math.Max(1, processedRequestsInProgressTimeoutMinutes);
-
-			return settings;
-		}
-
 		/// <summary>
 		/// Gets the connection pool metrics for monitoring and diagnostics.
 		/// </summary>
 		public ConnectionPoolMetrics PoolMetrics => poolMetrics;
-
-		/// <inheritdoc />
-		public DatabaseServiceExecutionSettings ServiceExecutionSettings => serviceExecutionSettings;
 
 		/// <summary>
 		/// Gets the configured maximum pool size.

@@ -13,7 +13,7 @@ namespace FishMMO.Database.Npgsql.Services
 	/// <summary>
 	/// Service for managing character abilities in the database.
 	/// Provides async operations for CRUD operations on character ability data.
-	/// Implements execution strategies for automatic retry on transient database failures.
+	/// Uses the BaseService execution strategy for automatic retry on transient database failures.
 	/// Returns DatabaseResult for consistent, safe error handling.
 	/// </summary>
 	public sealed class CharacterAbilityService : BaseService<CharacterAbilityEntity>, ICharacterAbilityService
@@ -21,7 +21,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <summary>
 		/// Compiled query for retrieving character abilities (hot path for character load).
 		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterAbilityEntity>>> GetAbilitiesQuery =
+		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterAbilityEntity>>> getAbilitiesQuery =
 			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
 				context.CharacterAbilities
 					.AsNoTracking()
@@ -31,12 +31,22 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <summary>
 		/// Compiled query for counting character abilities.
 		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<int>> GetCountQuery =
+		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<int>> getCountQuery =
 			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
 				context.CharacterAbilities
 					.AsNoTracking()
 					.Where(a => a.CharacterID == characterId)
 					.Count());
+
+		/// <summary>
+		/// Compiled query for retrieving an existing ability by composite key (character ID + template ID).
+		/// </summary>
+#pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type
+		private static readonly Func<NpgsqlDbContext, long, int, CancellationToken, Task<CharacterAbilityEntity?>> getByCharacterAndTemplateQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, int templateId, CancellationToken ct) =>
+				context.CharacterAbilities
+					.FirstOrDefault(a => a.CharacterID == characterId && a.TemplateID == templateId));
+#pragma warning restore CS8619
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="CharacterAbilityService"/> class.
@@ -54,13 +64,12 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				return DatabaseResult<int>.Failure(
 					"VALIDATION_ERROR",
-					"Character ID must be greater than 0.");
+					"Character ID must be greater than 0.",
+					isTransient: false);
 			}
 
-			return await ExecuteAsync(async (dbContext, ct) =>
-			{
-				return await GetCountQuery(dbContext, characterId, ct).ConfigureAwait(false);
-			}, "GetCharacterAbilityCount", cancellationToken).ConfigureAwait(false);
+			return await ExecuteMirrorAsync(async dbContext =>
+				await getCountQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false)).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -70,45 +79,54 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				return DatabaseResult<long>.Failure(
 					"VALIDATION_ERROR",
-					"Character ID must be greater than 0.");
+					"Character ID must be greater than 0.",
+					isTransient: false);
 			}
 
-			return await ExecuteAsync(async (dbContext, ct) =>
+			var abilityResult = await ExecuteMirrorAsync(async dbContext =>
 			{
-				var charactersTableName = dbContext.GetTableName<CharacterEntity>();
-				// Use atomic UPSERT with RETURNING for thread safety and proper retry strategy support
-				var events = abilityData.AbilityEvents ?? new List<int>();
-
-				var result = await dbContext.CharacterAbilities
-					.FromSqlRaw($@"
-						WITH active_character AS (
-							SELECT id
-							FROM {charactersTableName}
-							WHERE id = {{0}} AND deleted = FALSE
-							FOR KEY SHARE
-						)
-						INSERT INTO {TableName} (character_id, template_id, ability_events, cooldown, time_created)
-						SELECT {{0}}, {{1}}, {{2}}, {{3}}, CURRENT_TIMESTAMP
-						FROM active_character
-						ON CONFLICT (character_id, template_id)
-						DO UPDATE SET
-							ability_events = EXCLUDED.ability_events,
-							cooldown = EXCLUDED.cooldown
-						RETURNING id, character_id, template_id, ability_events, cooldown, time_created",
-						abilityData.CharacterID,
-						abilityData.TemplateID,
-						events.ToArray(),
-						abilityData.Cooldown)
+				var isCharacterActive = await dbContext.Characters
 					.AsNoTracking()
-								.FirstOrDefaultAsync(ct).ConfigureAwait(false);
-
-				if (result == null)
+					.AnyAsync(c => c.ID == abilityData.CharacterID && !c.Deleted, cancellationToken)
+					.ConfigureAwait(false);
+				if (!isCharacterActive)
 				{
 					throw new DatabaseEntityNotFoundException("Character", abilityData.CharacterID.ToString());
 				}
 
-				return result.ID;
-			}, "SaveCharacterAbility", cancellationToken).ConfigureAwait(false);
+				var ability = await getByCharacterAndTemplateQuery(dbContext, abilityData.CharacterID, abilityData.TemplateID, cancellationToken)
+					.ConfigureAwait(false);
+
+				if (ability == null)
+				{
+					ability = new CharacterAbilityEntity
+					{
+						CharacterID = abilityData.CharacterID,
+						TemplateID = abilityData.TemplateID,
+						Version = abilityData.Version,
+						TimeCreated = DateTime.UtcNow
+					};
+
+					await dbContext.CharacterAbilities.AddAsync(ability, cancellationToken).ConfigureAwait(false);
+				}
+
+				ValidateVersion(ability, abilityData.Version);
+				if (abilityData.Version > 0) ability.Version = abilityData.Version;
+
+				ability.AbilityEvents = abilityData.AbilityEvents == null
+					? new List<int>()
+					: new List<int>(abilityData.AbilityEvents);
+				ability.Cooldown = abilityData.Cooldown;
+
+				return ability;
+			}).ConfigureAwait(false);
+
+			if (!abilityResult.IsSuccess)
+			{
+				return DatabaseResult<long>.Failure(abilityResult.ErrorCode, abilityResult.ErrorMessage, abilityResult.IsTransient);
+			}
+
+			return DatabaseResult<long>.Success(abilityResult.Data.ID);
 		}
 
 		/// <inheritdoc/>
@@ -118,7 +136,8 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				return DatabaseResult.Failure(
 					"VALIDATION_ERROR",
-					"Abilities collection must not be null or empty.");
+					"Abilities collection must not be null or empty.",
+					isTransient: false);
 			}
 
 			var list = abilities.ToList();
@@ -154,92 +173,90 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 			}
 
-			// Wrap both operations in transaction for atomicity
-			var transactionResult = await ExecuteTransactionAsync(async (dbContext, transaction, ct) =>
+			return await ExecuteMirrorAsync(async dbContext =>
 			{
-				var charactersTableName = dbContext.GetTableName<CharacterEntity>();
-				// Handle new abilities with atomic INSERT using ON CONFLICT
-				if (newItems.Any())
+				var previousAutoDetectChanges = dbContext.ChangeTracker.AutoDetectChangesEnabled;
+				dbContext.ChangeTracker.AutoDetectChangesEnabled = false;
+				try
 				{
-					var newCharacterIds = newItems.Select(a => a.CharacterID).ToArray();
-					var newTemplateIds = newItems.Select(a => a.TemplateID).ToArray();
-					var newEventArrays = newItems.Select(a => a.AbilityEvents?.ToArray() ?? Array.Empty<int>()).ToArray();
-					var newCooldowns = newItems.Select(a => a.Cooldown).ToArray();
+					var allCharacterIds = list.Select(a => a.CharacterID).Distinct().ToArray();
+					var activeCharacterIds = await dbContext.Characters
+						.AsNoTracking()
+						.Where(c => allCharacterIds.Contains(c.ID) && !c.Deleted)
+						.Select(c => c.ID)
+						.ToListAsync(cancellationToken)
+						.ConfigureAwait(false);
+					var activeCharacterIdSet = new HashSet<long>(activeCharacterIds);
 
-					// Atomic UPSERT for new items - uses unique constraint (character_id, template_id)
-					await dbContext.Database.ExecuteSqlRawAsync(
-						$@"WITH active_characters AS (
-							SELECT id
-							FROM {charactersTableName}
-							WHERE id = ANY({{0}}::bigint[]) AND deleted = FALSE
-							ORDER BY id
-							FOR KEY SHARE
-						)
-						INSERT INTO {TableName} (character_id, template_id, ability_events, cooldown, time_created)
-						SELECT u.character_id, u.template_id, u.ability_events, u.cooldown, CURRENT_TIMESTAMP
-						FROM UNNEST(
-							{{0}}::bigint[],
-							{{1}}::int[],
-							{{2}}::int[][],
-							{{3}}::float4[]
-						) AS u(character_id, template_id, ability_events, cooldown)
-						JOIN active_characters ac ON ac.id = u.character_id
-						ON CONFLICT (character_id, template_id)
-						DO UPDATE SET
-						ability_events = EXCLUDED.ability_events,
-						cooldown = EXCLUDED.cooldown",
-						new object[] { newCharacterIds, newTemplateIds, newEventArrays, newCooldowns },
-						ct).ConfigureAwait(false);
+					if (newItems.Any())
+					{
+						var templateIds = newItems.Select(a => a.TemplateID).Distinct().ToArray();
+						var existingForCompositeKeys = await dbContext.CharacterAbilities
+							.Where(a => activeCharacterIdSet.Contains(a.CharacterID) && templateIds.Contains(a.TemplateID))
+							.ToListAsync(cancellationToken)
+							.ConfigureAwait(false);
+
+						var existingByKey = new Dictionary<(long CharacterID, int TemplateID), CharacterAbilityEntity>();
+						foreach (var existing in existingForCompositeKeys)
+						{
+							existingByKey[(existing.CharacterID, existing.TemplateID)] = existing;
+						}
+
+						foreach (var ability in newItems)
+						{
+							if (!activeCharacterIdSet.Contains(ability.CharacterID))	continue;
+
+							var key = (ability.CharacterID, ability.TemplateID);
+							if (!existingByKey.TryGetValue(key, out var entity))
+							{
+								entity = new CharacterAbilityEntity
+								{
+									CharacterID = ability.CharacterID,
+									TemplateID = ability.TemplateID,
+									Version = ability.Version,
+									TimeCreated = DateTime.UtcNow
+								};
+								await dbContext.CharacterAbilities.AddAsync(entity, cancellationToken).ConfigureAwait(false);
+								existingByKey[key] = entity;
+							}
+
+							ValidateVersion(entity, ability.Version);
+							if (ability.Version > 0) entity.Version = ability.Version;
+
+							entity.AbilityEvents = ability.AbilityEvents == null ? new List<int>() : new List<int>(ability.AbilityEvents);
+							entity.Cooldown = ability.Cooldown;
+						}
+					}
+
+					if (existingItems.Any())
+					{
+						var ids = existingItems.Select(a => a.ID).Distinct().ToArray();
+						var entities = await dbContext.CharacterAbilities
+							.Where(a => ids.Contains(a.ID))
+							.ToListAsync(cancellationToken)
+							.ConfigureAwait(false);
+						var entitiesById = entities.ToDictionary(a => a.ID);
+
+						foreach (var ability in existingItems)
+						{
+							if (!activeCharacterIdSet.Contains(ability.CharacterID)) continue;
+							if (!entitiesById.TryGetValue(ability.ID, out var entity)) continue;
+
+							ValidateVersion(entity, ability.Version);
+							if (ability.Version > 0) entity.Version = ability.Version;
+
+							entity.CharacterID = ability.CharacterID;
+							entity.TemplateID = ability.TemplateID;
+							entity.AbilityEvents = ability.AbilityEvents == null ? new List<int>() : new List<int>(ability.AbilityEvents);
+							entity.Cooldown = ability.Cooldown;
+						}
+					}
 				}
-
-				// Handle existing abilities with atomic UPDATE by ID
-				if (existingItems.Any())
+				finally
 				{
-					var ids = existingItems.Select(a => a.ID).ToArray();
-					var characterIds = existingItems.Select(a => a.CharacterID).ToArray();
-					var templateIds = existingItems.Select(a => a.TemplateID).ToArray();
-					var eventArrays = existingItems.Select(a => a.AbilityEvents?.ToArray() ?? Array.Empty<int>()).ToArray();
-					var cooldowns = existingItems.Select(a => a.Cooldown).ToArray();
-
-					// Atomic bulk UPDATE by ID - preserves ID-based update semantics
-					// Allows changing template_id if needed
-					await dbContext.Database.ExecuteSqlRawAsync(
-						$@"WITH active_characters AS (
-							SELECT id
-							FROM {charactersTableName}
-							WHERE id = ANY({{1}}::bigint[]) AND deleted = FALSE
-							ORDER BY id
-							FOR KEY SHARE
-						)
-						UPDATE {TableName} AS target
-						SET character_id = source.char_id,
-							template_id = source.t_id,
-							ability_events = source.evs,
-							cooldown = source.cd
-						FROM UNNEST(
-							{{0}}::bigint[],
-							{{1}}::bigint[],
-							{{2}}::int[],
-							{{3}}::int[][],
-							{{4}}::float4[]
-						) AS source(id, char_id, t_id, evs, cd)
-						WHERE target.id = source.id
-						AND EXISTS (SELECT 1 FROM active_characters ac WHERE ac.id = source.char_id)",
-						new object[] { ids, characterIds, templateIds, eventArrays, cooldowns },
-						ct).ConfigureAwait(false);
+					dbContext.ChangeTracker.AutoDetectChangesEnabled = previousAutoDetectChanges;
 				}
-
-				return true;
-			}, "SaveCharacterAbilities", cancellationToken).ConfigureAwait(false);
-
-			if (transactionResult.IsSuccess)
-			{
-				return DatabaseResult.Success();
-			}
-			else
-			{
-				return DatabaseResult.Failure(transactionResult.ErrorCode, transactionResult.ErrorMessage, transactionResult.IsTransient);
-			}
+			}).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -249,19 +266,25 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				return DatabaseResult.Failure(
 					"VALIDATION_ERROR",
-					"Character ID must be greater than 0.");
+					"Character ID must be greater than 0.",
+					isTransient: false);
 			}
 
-			var result = await ExecuteRawSqlAsync(
-				$@"DELETE FROM {TableName} WHERE character_id = {{0}}",
-				"DeleteCharacterAbilities",
-				new object[] { characterId },
-				entityName: "CharacterAbility",
-				entityId: characterId,
-				requireRowsAffected: false,
-				cancellationToken: cancellationToken).ConfigureAwait(false);
+			return await ExecuteMirrorAsync(async dbContext =>
+			{
+				var abilityIds = await dbContext.CharacterAbilities
+					.AsNoTracking()
+					.Where(a => a.CharacterID == characterId)
+					.Select(a => a.ID)
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
 
-			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+				foreach (var abilityId in abilityIds)
+				{
+					var entity = new CharacterAbilityEntity { ID = abilityId };
+					dbContext.CharacterAbilities.Remove(entity);
+				}
+			}).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -271,19 +294,22 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				return DatabaseResult.Failure(
 					"VALIDATION_ERROR",
-					"Character ID and ability ID must be greater than 0.");
+					"Character ID and ability ID must be greater than 0.",
+					isTransient: false);
 			}
 
-			var result = await ExecuteRawSqlAsync(
-				$@"DELETE FROM {TableName} WHERE character_id = {{0}} AND id = {{1}}",
-				"DeleteCharacterAbility",
-				new object[] { characterId, abilityId },
-				entityName: "CharacterAbility",
-				entityId: abilityId,
-				requireRowsAffected: false,
-				cancellationToken: cancellationToken).ConfigureAwait(false);
+			return await ExecuteMirrorAsync(async dbContext =>
+			{
+				var ability = await dbContext.CharacterAbilities
+					.FirstOrDefaultAsync(a => a.ID == abilityId && a.CharacterID == characterId, cancellationToken)
+					.ConfigureAwait(false);
+				if (ability == null)
+				{
+					return;
+				}
 
-			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+				dbContext.CharacterAbilities.Remove(ability);
+			}).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -293,14 +319,16 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				return DatabaseResult<IReadOnlyList<CharacterAbilityData>>.Failure(
 					"VALIDATION_ERROR",
-					"Character ID must be greater than 0.");
+					"Character ID must be greater than 0.",
+					isTransient: false);
 			}
 
-			return await ExecuteAsync(async (dbContext, ct) =>
+			return await ExecuteMirrorAsync(async dbContext =>
 			{
-				var entities = await GetAbilitiesQuery(dbContext, characterId, ct).ConfigureAwait(false);
+				var entities = await getAbilitiesQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
 				var abilities = entities.Select(a => new CharacterAbilityData(
 					id: a.ID,
+					version: a.Version,
 					characterID: a.CharacterID,
 					templateID: a.TemplateID,
 					abilityEvents: a.AbilityEvents,
@@ -308,7 +336,7 @@ namespace FishMMO.Database.Npgsql.Services
 				)).ToList();
 
 				return (IReadOnlyList<CharacterAbilityData>)abilities;
-			}, "GetCharacterAbilities", cancellationToken).ConfigureAwait(false);
+			}).ConfigureAwait(false);
 		}
 	}
 }

@@ -6,14 +6,21 @@ namespace FishMMO.Database.Data
 	public struct CharacterGuildData
 	{
 		public readonly long ID;
+		public readonly long Version;
 		public readonly long CharacterID;
 		public readonly long GuildID;
 		public readonly byte Rank;
 		public readonly string Location;
 
 		public CharacterGuildData(long id, long characterID, long guildID, byte rank, string location)
+			: this(id, version: 0, characterID, guildID, rank, location)
+		{
+		}
+
+		public CharacterGuildData(long id, long version, long characterID, long guildID, byte rank, string location)
 		{
 			ID = id;
+			Version = version;
 			CharacterID = characterID;
 			GuildID = guildID;
 			Rank = rank;

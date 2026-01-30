@@ -17,7 +17,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	/// Write operations (Enqueue*, Dequeue*, Update*, Set*, Pulse*, Delete*) in this service use execution strategies to ensure transient
 	/// database failures are automatically retried according to the retry policy configured on the DbContext.
 	/// This is critical because SaveChangesAsync, ExecuteSqlRawAsync, and FromSqlRaw do not automatically
-	/// benefit from EnableRetryOnFailure without manual wrapping.
+	/// Execution is wrapped by BaseService for retries/transactions.
 	/// </para>
 	/// <para>
 	/// All methods use the DatabaseResult pattern to provide structured success/failure information:
@@ -39,10 +39,6 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="sceneName">Scene name.</param>
 		/// <param name="sceneType">Scene type.</param>
 		/// <param name="characterId">Character ID (optional, for instances).</param>
-		/// <param name="requestId">
-		/// Required idempotency key.
-		/// Retries of the same logical request must reuse this value to prevent duplicate writes.
-		/// </param>
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>
 		/// DatabaseResult containing scene ID on success, or error information on failure.
@@ -50,24 +46,18 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <remarks>
 		/// Uses SaveChangesAsync with execution strategy wrapping to ensure transient database failures
 		/// are automatically retried.
-		/// Retry-idempotency: if a transient failure occurs after the INSERT committed, retries will return the same scene ID
-		/// instead of inserting a duplicate row.
+		/// Uses BaseService.ExecuteMirrorAsync for automatic transient failure retry and centralized exception mapping.
 		/// </remarks>
 		Task<DatabaseResult<long>> EnqueueAsync(
 			long worldServerId,
 			string sceneName,
 			SceneType sceneType,
-			Guid requestId,
 			long characterId = 0,
 			CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Dequeues the next pending scene load request and marks it as loading.
 		/// </summary>
-		/// <param name="requestId">
-		/// Required idempotency key.
-		/// Retries of the same logical request must reuse this value to prevent double-dequeue under transient retries.
-		/// </param>
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>
 		/// DatabaseResult containing scene data if a pending scene was found and dequeued, or error information on failure.
@@ -77,7 +67,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// failures are automatically retried. Atomically updates status from Pending to Loading to prevent race conditions.
 		/// Returns failure with error code <c>NO_PENDING_SCENES</c> when no pending scenes exist.
 		/// </remarks>
-		Task<DatabaseResult<SceneData>> DequeueAsync(Guid requestId, CancellationToken cancellationToken = default);
+		Task<DatabaseResult<SceneData>> DequeueAsync(CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Updates the status of a scene.
@@ -101,7 +91,6 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="worldServerId">World server ID.</param>
 		/// <param name="sceneName">Scene name.</param>
 		/// <param name="sceneHandle">Scene handle.</param>
-		/// <param name="requestId">Required idempotency key for this claim operation.</param>
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>
 		/// DatabaseResult indicating success or error information on failure.
@@ -111,7 +100,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// failures are automatically retried. Only updates scenes in Loading status.
 		/// Returns entity not found exception if scene doesn't exist or is not in Loading status.
 		/// </remarks>
-		Task<DatabaseResult> SetReadyAsync(long sceneServerId, long worldServerId, string sceneName, int sceneHandle, Guid requestId, CancellationToken cancellationToken = default);
+		Task<DatabaseResult> SetReadyAsync(long sceneServerId, long worldServerId, string sceneName, int sceneHandle, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Updates the character count for a scene (heartbeat).

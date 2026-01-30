@@ -44,14 +44,14 @@ namespace FishMMO.Database.Npgsql.Entities
 			builder.HasOne(e => e.Guild)
 				.WithMany(g => g.Characters)
 				.HasForeignKey(e => e.GuildID)
-				.OnDelete(DeleteBehavior.Cascade);
+				.OnDelete(DeleteBehavior.NoAction);
 
 			// Foreign key relationship to Character
 			// Deleting a character must remove the character's guild membership row.
 			builder.HasOne(e => e.Character)
 				.WithOne(c => c.Guild)
 				.HasForeignKey<CharacterGuildEntity>(e => e.CharacterID)
-				.OnDelete(DeleteBehavior.Cascade);
+				.OnDelete(DeleteBehavior.NoAction);
 		}
 	}
 }

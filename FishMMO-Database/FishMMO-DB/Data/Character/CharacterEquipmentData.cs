@@ -6,6 +6,7 @@ namespace FishMMO.Database.Data
 	public struct CharacterEquipmentData
 	{
 		public readonly long ID;
+		public readonly long Version;
 		public readonly long CharacterID;
 		public readonly int TemplateID;
 		public readonly int Slot;
@@ -13,8 +14,14 @@ namespace FishMMO.Database.Data
 		public readonly uint Amount;
 
 		public CharacterEquipmentData(long id, long characterID, int templateID, int slot, int seed, uint amount)
+			: this(id, version: 0, characterID, templateID, slot, seed, amount)
+		{
+		}
+
+		public CharacterEquipmentData(long id, long version, long characterID, int templateID, int slot, int seed, uint amount)
 		{
 			ID = id;
+			Version = version;
 			CharacterID = characterID;
 			TemplateID = templateID;
 			Slot = slot;

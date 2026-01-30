@@ -37,26 +37,16 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <param name="cancellationToken">Token to cancel the asynchronous operation.</param>
 		/// <returns>DatabaseResult indicating success or failure with error details.</returns>
 		/// <remarks>
-		/// Wrapped in execution strategy to automatically retry on transient failures.
-		/// All operations are performed within a database transaction for atomicity.
+		/// Executes inside the BaseService transaction + retry wrapper.
 		/// 
-		/// Transaction behavior:
-		/// - All attributes are processed in a single transaction
-		/// - If any attribute fails, entire transaction is rolled back
-		/// - On success, all changes are committed atomically
+		/// Behavior:
+		/// - Inserts missing attributes and updates existing ones by (CharacterID, TemplateID)
+		/// - Skips characters that are missing or marked deleted
+		/// - Duplicates in the input are de-duplicated by (CharacterID, TemplateID)
 		/// 
-		/// Uses UPSERT (INSERT ... ON CONFLICT DO UPDATE) for each attribute:
-		/// - If attribute exists (character_id, template_id): Updates value and current_value
-		/// - If attribute doesn't exist: Inserts new record
-		/// 
-		/// Success: All attributes saved successfully.
 		/// Failure cases:
 		/// - VALIDATION_ERROR: Empty or null attributes collection
-		/// - DB_CONNECTION_FAILED: Database connection error (transient)
-		/// - DB_TIMEOUT: Operation timeout (transient)
-		/// - DB_QUERY_FAILED: Transaction failed, all changes rolled back
-		/// 
-		/// Performance note: Uses raw SQL with UPSERT for optimal concurrency and minimal round-trips.
+		/// - DATABASE_ERROR: Database failure (may be transient)
 		/// </remarks>
 		Task<DatabaseResult> SaveAttributesAsync(IEnumerable<CharacterAttributeData> attributes, CancellationToken cancellationToken = default);
 
@@ -68,19 +58,15 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <param name="cancellationToken">Token to cancel the asynchronous operation.</param>
 		/// <returns>DatabaseResult indicating success or failure with error details.</returns>
 		/// <remarks>
-		/// Wrapped in execution strategy to automatically retry on transient failures.
+		/// Executes inside the BaseService transaction + retry wrapper.
 		/// 
 		/// Deletion behavior:
-		/// - Deletes all attributes for the specified character in a single atomic operation
+		/// - Deletes all attributes for the specified character
 		/// - If character has no attributes, operation succeeds
-		/// - Uses raw SQL for optimal performance
 		/// 
-		/// Success: All attributes deleted successfully (or character has no attributes).
 		/// Failure cases:
 		/// - VALIDATION_ERROR: Invalid character ID (less than or equal to 0)
-		/// - DB_CONNECTION_FAILED: Database connection error (transient)
-		/// - DB_TIMEOUT: Operation timeout (transient)
-		/// - DB_QUERY_FAILED: Database operation error
+		/// - DATABASE_ERROR: Database failure (may be transient)
 		/// </remarks>
 		Task<DatabaseResult> DeleteAttributesAsync(long characterId, CancellationToken cancellationToken = default);
 
@@ -91,21 +77,8 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <param name="cancellationToken">Token to cancel the asynchronous operation.</param>
 		/// <returns>DatabaseResult containing a read-only collection of character attribute data on success.</returns>
 		/// <remarks>
-		/// This method uses LINQ query which automatically benefits from EF Core's
-		/// configured retry policy for transient failures.
-		/// 
-		/// Query behavior:
-		/// - Returns all attributes for the specified character
-		/// - Uses AsNoTracking() for optimal read performance
-		/// - Projects to DTO to decouple from entity layer
-		/// 
-		/// Success: Returns collection (may be empty if character has no attributes).
-		/// Failure cases:
-		/// - VALIDATION_ERROR: Invalid character ID (less than or equal to 0)
-		/// - DB_CONNECTION_FAILED: Database connection error (transient)
-		/// - DB_TIMEOUT: Query timeout (transient)
-		/// 
-		/// The returned DTOs are safe to use after database context disposal.
+		/// Executes inside the BaseService transaction + retry wrapper.
+		/// Returns an empty collection if the character has no attributes.
 		/// </remarks>
 		Task<DatabaseResult<IReadOnlyList<CharacterAttributeData>>> GetAttributesAsync(long characterId, CancellationToken cancellationToken = default);
 	}

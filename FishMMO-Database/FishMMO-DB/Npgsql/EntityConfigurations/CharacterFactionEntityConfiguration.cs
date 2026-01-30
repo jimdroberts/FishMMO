@@ -40,7 +40,7 @@ namespace FishMMO.Database.Npgsql.Entities
 			builder.HasOne(e => e.Character)
 				.WithMany(c => c.Faction)
 				.HasForeignKey(e => e.CharacterID)
-				.OnDelete(DeleteBehavior.Cascade);
+				.OnDelete(DeleteBehavior.NoAction);
 		}
 	}
 }

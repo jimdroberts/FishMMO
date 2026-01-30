@@ -14,7 +14,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	/// Write operations (Create*, Delete*) in this service use execution strategies to ensure transient
 	/// database failures are automatically retried according to the retry policy configured on the DbContext.
 	/// This is critical because SaveChangesAsync and ExecuteSqlRawAsync do not automatically
-	/// benefit from EnableRetryOnFailure without manual wrapping.
+	/// Execution is wrapped by BaseService for retries/transactions.
 	/// </para>
 	/// <para>
 	/// All methods return <see cref="DatabaseResult"/> or <see cref="DatabaseResult{T}"/> to provide
@@ -63,22 +63,24 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		Task<DatabaseResult<string>> GetNameByIdAsync(long guildId, CancellationToken cancellationToken = default);
 
 		/// <summary>
-		/// Creates a new guild if name is available (case-insensitive check).
-		/// Uses idempotency protection to ensure guild is created exactly once even on retry.
+		/// Creates a new guild if name is available (case-insensitive uniqueness).
 		/// </summary>
 		/// <param name="name">Guild name.</param>
-		/// <param name="requestId">Unique request identifier for idempotency protection.</param>
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>
-		/// A <see cref="DatabaseResult{T}"/> containing the guild ID (or null on validation failure) on success,
+		/// A <see cref="DatabaseResult{T}"/> containing the guild ID on success,
 		/// or a <see cref="DatabaseException"/> on failure.
 		/// </returns>
 		/// <remarks>
-		/// Uses ExecuteIdempotentAsync to ensure transient database failures and client retries
-		/// do not result in duplicate guild creation. The requestId must be provided by the caller
-		/// and should be stable across retries of the same logical operation.
+		/// Uses BaseService.ExecuteMirrorAsync for:
+		/// - Automatic transient failure retry
+		/// - Centralized exception handling and mapping
+		/// - Consistent DatabaseResult pattern
+		/// 
+		/// If the guild already exists (unique name conflict), the existing guild ID is returned.
 		/// </remarks>
-		Task<DatabaseResult<long?>> CreateAsync(string name, Guid requestId, CancellationToken cancellationToken = default);
+		Task<DatabaseResult<long?>> CreateAsync(string name, CancellationToken cancellationToken = default);
+		/// <summary>
 		/// Deletes a guild by ID using atomic DELETE operation.
 		/// </summary>
 		/// <param name="guildId">Guild ID to delete.</param>

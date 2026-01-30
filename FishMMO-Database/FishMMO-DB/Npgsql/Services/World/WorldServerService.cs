@@ -48,34 +48,39 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<(long, WorldServerData)>.Failure("INVALID_PARAMETERS", "Server name and address must not be empty.");
 			}
 
-			return await ExecuteAsync<(long ServerId, WorldServerData ServerData)>(async (dbContext, ct) =>
+			return await ExecuteMirrorAsync<(long ServerId, WorldServerData ServerData)>(async dbContext =>
 			{
-				var sql = $@"INSERT INTO {TableName}
-						(name, address, port, character_count, locked, lastpulse)
-						VALUES
-							({{0}}, {{1}}, {{2}}, {{3}}, {{4}}, CURRENT_TIMESTAMP)
-						ON CONFLICT (name)
-						DO UPDATE SET
-							address = EXCLUDED.address,
-							port = EXCLUDED.port,
-							character_count = EXCLUDED.character_count,
-							locked = EXCLUDED.locked,
-							lastpulse = EXCLUDED.lastpulse
-						RETURNING id, name, address, port, character_count, locked, lastpulse";
+				// Keep atomic UPSERT semantics to avoid unique-violation races.
+				// Use database server time for pulse timestamps.
+				var upsertSql = $@"INSERT INTO {TableName}
+					(name, address, port, character_count, locked, lastpulse)
+					VALUES
+						({{0}}, {{1}}, {{2}}, {{3}}, {{4}}, CURRENT_TIMESTAMP)
+					ON CONFLICT (name)
+					DO UPDATE SET
+						address = EXCLUDED.address,
+						port = EXCLUDED.port,
+						character_count = EXCLUDED.character_count,
+						locked = EXCLUDED.locked,
+						lastpulse = EXCLUDED.lastpulse";
 
-				var result = await dbContext.WorldServers
-					.FromSqlRaw(sql, name, address, port, characterCount, locked)
+				await dbContext.Database.ExecuteSqlRawAsync(
+					upsertSql,
+					new object[] { name, address, port, characterCount, locked },
+					cancellationToken).ConfigureAwait(false);
+
+				var entity = await dbContext.WorldServers
 					.AsNoTracking()
-					.FirstOrDefaultAsync(ct).ConfigureAwait(false);
+					.FirstOrDefaultAsync(s => s.Name == name, cancellationToken)
+					.ConfigureAwait(false);
 
-				if (result == null)
+				if (entity == null)
 				{
 					throw new DatabaseEntityNotFoundException("WorldServer", "UPSERT operation returned no result.");
 				}
 
-				var serverData = MapEntityToDto(result);
-				return (result.ID, serverData);
-			}, "AddOrUpdateWorldServer", cancellationToken).ConfigureAwait(false);
+				return (entity.ID, MapEntityToDto(entity));
+			}).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -86,20 +91,22 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("INVALID_SERVER_ID", "Server ID must be greater than 0.");
 			}
 
-			var sql = $@"UPDATE {TableName}
-			SET lastpulse = CURRENT_TIMESTAMP, character_count = {{0}}
-			WHERE id = {{1}}";
+			return await ExecuteMirrorAsync(async dbContext =>
+			{
+				var sql = $@"UPDATE {TableName}
+					SET lastpulse = CURRENT_TIMESTAMP, character_count = {{0}}
+					WHERE id = {{1}}";
 
-			var result = await ExecuteRawSqlAsync(
-				sql,
-				"PulseWorldServer",
-				new object[] { characterCount, serverId },
-				entityName: "WorldServer",
-				entityId: serverId.ToString(),
-				requireRowsAffected: true,
-				cancellationToken: cancellationToken).ConfigureAwait(false);
+				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
+					sql,
+					new object[] { characterCount, serverId },
+					cancellationToken).ConfigureAwait(false);
 
-			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+				if (rowsAffected <= 0)
+				{
+					throw new DatabaseEntityNotFoundException("WorldServer", serverId.ToString());
+				}
+			}).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -110,18 +117,12 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("INVALID_SERVER_ID", "Server ID must be greater than 0.");
 			}
 
-			var sql = $@"DELETE FROM {TableName} WHERE id = {{0}}";
-
-			var result = await ExecuteRawSqlAsync(
-				sql,
-				"DeleteWorldServer",
-				new object[] { serverId },
-				entityName: "WorldServer",
-				entityId: serverId.ToString(),
-				requireRowsAffected: false,
-				cancellationToken: cancellationToken).ConfigureAwait(false);
-
-			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			return await ExecuteMirrorAsync(async dbContext =>
+			{
+				var sql = $@"DELETE FROM {TableName} WHERE id = {{0}}";
+				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { serverId }, cancellationToken)
+					.ConfigureAwait(false);
+			}).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -132,11 +133,11 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<WorldServerData>.Failure("INVALID_SERVER_ID", "Server ID must be greater than 0.");
 			}
 
-			return await ExecuteAsync(async (dbContext, ct) =>
+			return await ExecuteMirrorAsync(async dbContext =>
 			{
 				var server = await dbContext.WorldServers
 					.AsNoTracking()
-					.FirstOrDefaultAsync(s => s.ID == serverId, ct).ConfigureAwait(false);
+					.FirstOrDefaultAsync(s => s.ID == serverId, cancellationToken).ConfigureAwait(false);
 
 				if (server == null)
 				{
@@ -144,7 +145,7 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				return MapEntityToDto(server);
-			}, "GetWorldServer", cancellationToken).ConfigureAwait(false);
+			}).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -152,7 +153,7 @@ namespace FishMMO.Database.Npgsql.Services
 			float idleTimeoutSeconds = 60.0f,
 			CancellationToken cancellationToken = default)
 		{
-			return await ExecuteAsync(async (dbContext, ct) =>
+			return await ExecuteMirrorAsync(async dbContext =>
 			{
 				// Use database server time to avoid clock skew issues between application and database servers.
 				// Use numeric * interval to keep the timeout value parameterized.
@@ -161,10 +162,11 @@ namespace FishMMO.Database.Npgsql.Services
 
 				var servers = await dbContext.WorldServers
 					.FromSqlRaw(sql, idleTimeoutSeconds)
+					.AsNoTracking()
 					.OrderBy(s => s.Name)
-					.ToListAsync(ct).ConfigureAwait(false);
+					.ToListAsync(cancellationToken).ConfigureAwait(false);
 				return servers.Select(MapEntityToDto).ToList();
-			}, "GetActiveWorldServers", cancellationToken).ConfigureAwait(false);
+			}).ConfigureAwait(false);
 		}
 
 		/// <summary>

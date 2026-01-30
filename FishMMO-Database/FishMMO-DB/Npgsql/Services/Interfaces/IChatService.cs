@@ -15,7 +15,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	/// <para>
 	/// Write operations (Save*) in this service use execution strategies to ensure transient database
 	/// failures are automatically retried according to the retry policy configured on the DbContext.
-	/// This is critical because SaveChangesAsync does not automatically benefit from EnableRetryOnFailure
+	/// This is critical because retry/transaction handling is done by BaseService, not by provider-level retry.
 	/// without manual wrapping.
 	/// </para>
 	/// <para>
@@ -44,10 +44,6 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="channel">Chat channel.</param>
 		/// <param name="message">Message content.</param>
 		/// <param name="serverReceivedTime">Timestamp when server received the message (for legal audit trail).</param>
-		/// <param name="requestId">
-		/// Required idempotency key.
-		/// Retries of the same logical request must reuse this value to prevent duplicate writes.
-		/// </param>
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>
 		/// A <see cref="DatabaseResult"/> indicating success or containing a <see cref="DatabaseException"/> on failure.
@@ -55,9 +51,10 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <remarks>
 		/// Chat audit fields are denormalized so logs can survive character deletion.
 		/// Passing the names avoids a race where the character row is deleted between lookup and insert.
-		/// This method is retry-idempotent using the processed_requests table.
-		/// Callers must supply a stable <paramref name="requestId"/> for the logical request; transient execution-strategy
-		/// retries will reuse the same processed_requests entry and return deterministically.
+		/// Uses BaseService.ExecuteMirrorAsync for:
+		/// - Automatic transient failure retry
+		/// - Centralized exception handling and mapping
+		/// - Consistent DatabaseResult pattern
 		/// </remarks>
 		Task<DatabaseResult> SaveAsync(
 			long accountId,
@@ -69,7 +66,6 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 			ChatChannel channel,
 			string message,
 			DateTime serverReceivedTime,
-			Guid requestId,
 			CancellationToken cancellationToken = default);
 
 		/// <summary>

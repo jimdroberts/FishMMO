@@ -11,13 +11,25 @@ using FishMMO.Database.Npgsql.Entities;
 namespace FishMMO.Database.Npgsql.Services
 {
 	/// <inheritdoc/>
-	public sealed class CharacterPetService : IdempotentBaseService<CharacterPetEntity>, ICharacterPetService
+	public sealed class CharacterPetService : BaseService<CharacterPetEntity>, ICharacterPetService
 	{
+		/// <summary>
+		/// Compiled query for checking whether a character exists and is not deleted.
+		/// Returns the character ID if active, otherwise 0.
+		/// </summary>
+		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<long>> getActiveCharacterIdQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
+				context.Characters
+					.AsNoTracking()
+					.Where(c => c.ID == characterId && !c.Deleted)
+					.Select(c => c.ID)
+					.FirstOrDefault());
+
 		/// <summary>
 		/// Compiled query for retrieving character pet.
 		/// </summary>
 #pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<CharacterPetEntity?>> GetPetQuery =
+		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<CharacterPetEntity?>> getPetQuery =
 			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
 				context.CharacterPets
 					.AsNoTracking()
@@ -28,12 +40,28 @@ namespace FishMMO.Database.Npgsql.Services
 		/// Compiled query for retrieving spawned character pet.
 		/// </summary>
 #pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<CharacterPetEntity?>> GetSpawnedPetQuery =
+		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<CharacterPetEntity?>> getSpawnedPetQuery =
 			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
 				context.CharacterPets
 					.AsNoTracking()
 					.FirstOrDefault(p => p.CharacterID == characterId && p.Spawned));
 #pragma warning restore CS8619
+
+		/// <summary>
+		/// Compiled query for retrieving a tracked pet by ID.
+		/// </summary>
+		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<CharacterPetEntity?>> getByIdTrackingQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long id, CancellationToken ct) =>
+				(CharacterPetEntity?)context.CharacterPets
+					.FirstOrDefault(p => p.ID == id));
+
+		/// <summary>
+		/// Compiled query for retrieving a tracked pet by character ID.
+		/// </summary>
+		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<CharacterPetEntity?>> getByCharacterIdTrackingQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
+				(CharacterPetEntity?)context.CharacterPets
+					.FirstOrDefault(p => p.CharacterID == characterId));
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="CharacterPetService"/> class.
@@ -45,70 +73,117 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> SavePetAsync(CharacterPetData petData, Guid requestId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> SavePetAsync(CharacterPetData petData, CancellationToken cancellationToken = default)
 		{
-			if (petData.CharacterID == 0)
+			if (petData.CharacterID <= 0)
 			{
-				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
+				return DatabaseResult.Failure(
+					"VALIDATION_ERROR",
+					"Character ID must be greater than 0.",
+					isTransient: false);
 			}
 
-			if (requestId == Guid.Empty)
+			if (petData.TemplateID <= 0)
 			{
-				return DatabaseResult.Failure("VALIDATION_ERROR", "RequestId is required for idempotent pet save.");
+				return DatabaseResult.Failure(
+					"VALIDATION_ERROR",
+					"Template ID must be greater than 0.",
+					isTransient: false);
 			}
 
-			var transactionResult = await ExecuteIdempotentResultAsync(
-				requestId,
-				scopeId: petData.CharacterID,
-				operationName: "SavePet",
-				operation: async (dbContext, transaction, ct) =>
+			var saveResult = await ExecuteMirrorAsync(async dbContext =>
 			{
-				var charactersTableName = dbContext.GetTableName<CharacterEntity>();
-				var activeCharacter = await dbContext.Characters
-					.FromSqlRaw($@"SELECT * FROM {charactersTableName} WHERE id = {{0}} AND deleted = FALSE FOR KEY SHARE", petData.CharacterID)
-					.AsNoTracking()
-					.FirstOrDefaultAsync(ct)
-					.ConfigureAwait(false);
-
-				if (activeCharacter == null)
+				var activeCharacterId = await getActiveCharacterIdQuery(dbContext, petData.CharacterID, cancellationToken).ConfigureAwait(false);
+				if (activeCharacterId == 0)
 				{
 					throw new DatabaseEntityNotFoundException("Character", petData.CharacterID.ToString());
 				}
 
-				// Use UPSERT for true idempotency - ensures operation succeeds exactly once even on retry
-				// The unique constraint on 'id' ensures this UPDATE is idempotent across retries
-				await dbContext.Database.ExecuteSqlRawAsync(
-					$@"INSERT INTO {TableName} (id, character_id, template_id, abilities, spawned, time_created)
-					   VALUES ({{0}}, {{1}}, {{2}}, {{3}}, {{4}}, CURRENT_TIMESTAMP)
-					   ON CONFLICT (id) DO UPDATE SET
-						   character_id = EXCLUDED.character_id,
-						   template_id = EXCLUDED.template_id,
-						   abilities = EXCLUDED.abilities,
-						   spawned = EXCLUDED.spawned",
-					new object[] { petData.ID, petData.CharacterID, petData.TemplateID, petData.Abilities.ToArray(), petData.Spawned },
-					ct).ConfigureAwait(false);
+				CharacterPetEntity? entity;
+				var isNew = false;
+				if (petData.ID > 0)
+				{
+					entity = await getByIdTrackingQuery(dbContext, petData.ID, cancellationToken).ConfigureAwait(false);
+					if (entity == null)
+					{
+						throw new DatabaseEntityNotFoundException("CharacterPet", petData.ID.ToString());
+					}
+				}
+				else
+				{
+					entity = await getByCharacterIdTrackingQuery(dbContext, petData.CharacterID, cancellationToken).ConfigureAwait(false);
+					if (entity == null)
+					{
+						entity = new CharacterPetEntity();
+						await dbContext.CharacterPets.AddAsync(entity, cancellationToken).ConfigureAwait(false);
+						isNew = true;
+					}
+				}
 
+				ValidateVersion(entity, petData.Version);
+				if (petData.Version > 0) entity.Version = petData.Version;
+
+				entity.CharacterID = petData.CharacterID;
+				entity.TemplateID = petData.TemplateID;
+				entity.Abilities = petData.Abilities?.ToList() ?? new List<int>();
+				entity.Spawned = petData.Spawned;
+				if (isNew)
+				{
+					entity.TimeCreated = DateTime.UtcNow;
+				}
+			}).ConfigureAwait(false);
+
+			if (saveResult.IsSuccess)
+			{
 				return DatabaseResult.Success();
-			},
-				cancellationToken).ConfigureAwait(false);
+			}
 
-			return transactionResult.IsSuccess
+			if (saveResult.ErrorCode != "UNIQUE_VIOLATION")
+			{
+				return DatabaseResult.Failure(saveResult.ErrorCode, saveResult.ErrorMessage, saveResult.IsTransient);
+			}
+
+			// Retry as update on unique violations.
+			var updateResult = await ExecuteMirrorAsync(async dbContext =>
+			{
+				var activeCharacterId = await getActiveCharacterIdQuery(dbContext, petData.CharacterID, cancellationToken).ConfigureAwait(false);
+				if (activeCharacterId == 0)
+				{
+					throw new DatabaseEntityNotFoundException("Character", petData.CharacterID.ToString());
+				}
+
+				CharacterPetEntity? entity = petData.ID > 0
+					? await getByIdTrackingQuery(dbContext, petData.ID, cancellationToken).ConfigureAwait(false)
+					: await getByCharacterIdTrackingQuery(dbContext, petData.CharacterID, cancellationToken).ConfigureAwait(false);
+
+				if (entity == null)
+				{
+					throw new DatabaseEntityNotFoundException("CharacterPet", $"(CharacterID: {petData.CharacterID}, ID: {petData.ID})");
+				}
+
+				ValidateVersion(entity, petData.Version);
+				if (petData.Version > 0) entity.Version = petData.Version;
+
+				entity.TemplateID = petData.TemplateID;
+				entity.Abilities = petData.Abilities?.ToList() ?? new List<int>();
+				entity.Spawned = petData.Spawned;
+			}).ConfigureAwait(false);
+
+			return updateResult.IsSuccess
 				? DatabaseResult.Success()
-				: DatabaseResult.Failure(transactionResult.ErrorCode, transactionResult.ErrorMessage, transactionResult.IsTransient);
+				: DatabaseResult.Failure(updateResult.ErrorCode, updateResult.ErrorMessage, updateResult.IsTransient);
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> SavePetsAsync(IEnumerable<CharacterPetData> pets, Guid requestId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> SavePetsAsync(IEnumerable<CharacterPetData> pets, CancellationToken cancellationToken = default)
 		{
 			var petList = pets?.Where(p => p.CharacterID > 0).ToList();
 			if (petList == null || petList.Count == 0)
 			{
-				return DatabaseResult.Failure("VALIDATION_ERROR", "Empty or null pets collection");
-			}
-
-			if (requestId == Guid.Empty)
-			{
-				return DatabaseResult.Failure("VALIDATION_ERROR", "RequestId is required for idempotent pets save.");
+				return DatabaseResult.Failure(
+					"VALIDATION_ERROR",
+					"Pets collection must not be null or empty.",
+					isTransient: false);
 			}
 
 			// Separate pets into updates and inserts based on ID
@@ -144,171 +219,165 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 			}
 
-			// Wrap both operations in transaction for atomicity
-
-			var scopeId = petList[0].CharacterID;
-			var transactionResult = await ExecuteIdempotentResultAsync(
-				requestId,
-				scopeId,
-				operationName: "SavePets",
-				operation: async (dbContext, transaction, ct) =>
+			return await ExecuteMirrorAsync(async dbContext =>
 			{
-				var charactersTableName = dbContext.GetTableName<CharacterEntity>();
-				var distinctCharacterIds = petList.Select(p => p.CharacterID).Distinct().ToArray();
-				var lockedCount = await dbContext.Database.ExecuteSqlRawAsync(
-					$@"SELECT id FROM {charactersTableName} WHERE id = ANY({{0}}::bigint[]) AND deleted = FALSE ORDER BY id FOR KEY SHARE",
-					new object[] { distinctCharacterIds },
-					ct).ConfigureAwait(false);
-				_ = lockedCount;
-
-				// Handle existing pets with atomic UPDATE by ID
-				if (petsToUpdate.Count > 0)
+				var previousAutoDetectChanges = dbContext.ChangeTracker.AutoDetectChangesEnabled;
+				try
 				{
-					var updateIds = petsToUpdate.Select(p => p.ID).ToArray();
-					var updateCharacterIds = petsToUpdate.Select(p => p.CharacterID).ToArray();
-					var updateTemplateIds = petsToUpdate.Select(p => p.TemplateID).ToArray();
-					var updateAbilities = petsToUpdate.Select(p => p.Abilities.ToArray()).ToArray();
-					var updateSpawned = petsToUpdate.Select(p => p.Spawned).ToArray();
+					dbContext.ChangeTracker.AutoDetectChangesEnabled = false;
 
-					await dbContext.Database.ExecuteSqlRawAsync(
-						$@"WITH active_characters AS (
-							SELECT id
-							FROM {charactersTableName}
-							WHERE id = ANY({{1}}::bigint[]) AND deleted = FALSE
-							ORDER BY id
-							FOR KEY SHARE
-						)
-						UPDATE {TableName} AS t SET
-						character_id = u.character_id,
-						template_id = u.template_id,
-						abilities = u.abilities,
-						spawned = u.spawned
-					FROM (SELECT * FROM UNNEST(
-						{{0}}::bigint[],
-						{{1}}::bigint[],
-						{{2}}::int[],
-						{{3}}::int[][],
-						{{4}}::boolean[]
-					) AS u(id, character_id, template_id, abilities, spawned)) AS u
-					WHERE t.id = u.id
-					AND EXISTS (SELECT 1 FROM active_characters ac WHERE ac.id = u.character_id)",
-						new object[] { updateIds, updateCharacterIds, updateTemplateIds, updateAbilities, updateSpawned },
-						ct);
+					var characterIds = petList.Select(p => p.CharacterID).Distinct().ToArray();
+					var activeCharacterIds = await dbContext.Characters
+						.AsNoTracking()
+						.Where(c => characterIds.Contains(c.ID) && !c.Deleted)
+						.Select(c => c.ID)
+						.ToListAsync(cancellationToken)
+						.ConfigureAwait(false);
+					var activeCharacterIdSet = new HashSet<long>(activeCharacterIds);
+
+					// Load existing pets for all active characters once.
+					var existing = await dbContext.CharacterPets
+						.Where(p => activeCharacterIdSet.Contains(p.CharacterID))
+						.ToListAsync(cancellationToken)
+						.ConfigureAwait(false);
+
+					var existingByCharacterId = new Dictionary<long, CharacterPetEntity>();
+					var existingById = new Dictionary<long, CharacterPetEntity>();
+					foreach (var entity in existing)
+					{
+						existingByCharacterId[entity.CharacterID] = entity;
+						existingById[entity.ID] = entity;
+					}
+
+					// Apply updates (ID > 0) as update-only (matches previous SQL UPDATE semantics).
+					foreach (var pet in petsToUpdate)
+					{
+						if (!activeCharacterIdSet.Contains(pet.CharacterID)) continue;
+						if (pet.TemplateID <= 0) continue;
+						if (!existingById.TryGetValue(pet.ID, out var entity)) continue;
+
+						ValidateVersion(entity, pet.Version);
+						if (pet.Version > 0) entity.Version = pet.Version;
+
+						entity.CharacterID = pet.CharacterID;
+						entity.TemplateID = pet.TemplateID;
+						entity.Abilities = pet.Abilities?.ToList() ?? new List<int>();
+						entity.Spawned = pet.Spawned;
+					}
+
+					// Apply inserts (ID == 0) with upsert-by-character semantics.
+					foreach (var pet in petsToInsert)
+					{
+						if (!activeCharacterIdSet.Contains(pet.CharacterID)) continue;
+						if (pet.TemplateID <= 0) continue;
+
+						if (!existingByCharacterId.TryGetValue(pet.CharacterID, out var entity))
+						{
+							entity = new CharacterPetEntity
+							{
+								CharacterID = pet.CharacterID,
+								Version = pet.Version,
+								TimeCreated = DateTime.UtcNow
+							};
+							await dbContext.CharacterPets.AddAsync(entity, cancellationToken).ConfigureAwait(false);
+							existingByCharacterId[pet.CharacterID] = entity;
+						}
+
+						ValidateVersion(entity, pet.Version);
+						if (pet.Version > 0) entity.Version = pet.Version;
+
+						entity.TemplateID = pet.TemplateID;
+						entity.Abilities = pet.Abilities?.ToList() ?? new List<int>();
+						entity.Spawned = pet.Spawned;
+					}
 				}
-
-				// Handle new pets with atomic UPSERT using character_id unique constraint
-				if (petsToInsert.Count > 0)
+				finally
 				{
-					var insertCharacterIds = petsToInsert.Select(p => p.CharacterID).ToArray();
-					var insertTemplateIds = petsToInsert.Select(p => p.TemplateID).ToArray();
-					var insertAbilities = petsToInsert.Select(p => p.Abilities.ToArray()).ToArray();
-					var insertSpawned = petsToInsert.Select(p => p.Spawned).ToArray();
-
-					await dbContext.Database.ExecuteSqlRawAsync(
-						$@"WITH active_characters AS (
-							SELECT id
-							FROM {charactersTableName}
-							WHERE id = ANY({{0}}::bigint[]) AND deleted = FALSE
-							ORDER BY id
-							FOR KEY SHARE
-						)
-						INSERT INTO {TableName} (character_id, template_id, abilities, spawned, time_created)
-						SELECT u.character_id, u.template_id, u.abilities, u.spawned, CURRENT_TIMESTAMP
-						FROM UNNEST(
-							{{0}}::bigint[],
-							{{1}}::int[],
-							{{2}}::int[][],
-							{{3}}::boolean[]
-						) AS u(character_id, template_id, abilities, spawned)
-						JOIN active_characters ac ON ac.id = u.character_id
-					ON CONFLICT (character_id)
-					DO UPDATE SET
-						template_id = EXCLUDED.template_id,
-						abilities = EXCLUDED.abilities,
-						spawned = EXCLUDED.spawned",
-						new object[] { insertCharacterIds, insertTemplateIds, insertAbilities, insertSpawned },
-						ct);
+					dbContext.ChangeTracker.AutoDetectChangesEnabled = previousAutoDetectChanges;
 				}
-
-				return DatabaseResult.Success();
-			},
-				cancellationToken).ConfigureAwait(false);
-
-			if (transactionResult.IsSuccess)
-			{
-				return DatabaseResult.Success();
-			}
-			else
-			{
-				return DatabaseResult.Failure(transactionResult.ErrorCode, transactionResult.ErrorMessage, transactionResult.IsTransient);
-			}
+			}).ConfigureAwait(false);
 		}
 
 		public async Task<DatabaseResult> DeletePetAsync(long characterId, CancellationToken cancellationToken = default)
 		{
-			if (characterId == 0)
+			if (characterId <= 0)
 			{
-				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
+				return DatabaseResult.Failure(
+					"VALIDATION_ERROR",
+					"Character ID must be greater than 0.",
+					isTransient: false);
 			}
 
-			var result = await ExecuteRawSqlAsync(
-				$@"DELETE FROM {TableName} WHERE character_id = {{0}}",
-				"DeletePet",
-				new object[] { characterId },
-				entityName: "CharacterPet",
-				entityId: characterId,
-				requireRowsAffected: false,
-				cancellationToken: cancellationToken);
+			return await ExecuteMirrorAsync(async dbContext =>
+			{
+				var pets = await dbContext.CharacterPets
+					.Where(p => p.CharacterID == characterId)
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
 
-			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+				if (pets.Count == 0)
+				{
+					return;
+				}
+
+				dbContext.CharacterPets.RemoveRange(pets);
+			}).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<CharacterPetData?>> GetPetAsync(long characterId, CancellationToken cancellationToken = default)
 		{
-			if (characterId == 0)
+			if (characterId <= 0)
 			{
-				return DatabaseResult<CharacterPetData?>.Failure("VALIDATION_ERROR", "Invalid character ID");
+				return DatabaseResult<CharacterPetData?>.Failure(
+					"VALIDATION_ERROR",
+					"Character ID must be greater than 0.",
+					isTransient: false);
 			}
 
-			return await ExecuteAsync<CharacterPetData?>(async (dbContext, ct) =>
+			return await ExecuteMirrorAsync<CharacterPetData?>(async dbContext =>
 			{
-				var entity = await GetPetQuery(dbContext, characterId, ct);
+				var entity = await getPetQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
 				if (entity == null)
 					return null;
 
 				return new CharacterPetData(
 					id: entity.ID,
+					version: entity.Version,
 					characterID: entity.CharacterID,
 					templateID: entity.TemplateID,
-					abilities: entity.Abilities,
+					abilities: entity.Abilities ?? new List<int>(),
 					spawned: entity.Spawned
 				);
-			}, "GetPet", cancellationToken);
+			}).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<CharacterPetData?>> GetSpawnedPetAsync(long characterId, CancellationToken cancellationToken = default)
 		{
-			if (characterId == 0)
+			if (characterId <= 0)
 			{
-				return DatabaseResult<CharacterPetData?>.Failure("VALIDATION_ERROR", "Invalid character ID");
+				return DatabaseResult<CharacterPetData?>.Failure(
+					"VALIDATION_ERROR",
+					"Character ID must be greater than 0.",
+					isTransient: false);
 			}
 
-			return await ExecuteAsync<CharacterPetData?>(async (dbContext, ct) =>
+			return await ExecuteMirrorAsync<CharacterPetData?>(async dbContext =>
 			{
-				var entity = await GetSpawnedPetQuery(dbContext, characterId, ct);
+				var entity = await getSpawnedPetQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
 				if (entity == null)
 					return null;
 
 				return new CharacterPetData(
 					id: entity.ID,
+					version: entity.Version,
 					characterID: entity.CharacterID,
 					templateID: entity.TemplateID,
-					abilities: entity.Abilities,
+					abilities: entity.Abilities ?? new List<int>(),
 					spawned: entity.Spawned
 				);
-			}, "GetSpawnedPet", cancellationToken);
+			}).ConfigureAwait(false);
 		}
 	}
 }

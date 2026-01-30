@@ -31,14 +31,34 @@ namespace FishMMO.Database.Npgsql.Services
 	public sealed class CharacterBankService : BaseService<CharacterBankEntity>, ICharacterBankService
 	{
 		/// <summary>
+		/// Compiled query for checking whether a character exists and is not deleted.
+		/// Returns the character ID if active, otherwise 0.
+		/// </summary>
+		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<long>> getActiveCharacterIdQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
+				context.Characters
+					.AsNoTracking()
+					.Where(c => c.ID == characterId && !c.Deleted)
+					.Select(c => c.ID)
+					.FirstOrDefault());
+
+		/// <summary>
 		/// Compiled query for retrieving character bank items (hot path for bank access).
 		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterBankEntity>>> GetBankItemsQuery =
+		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterBankEntity>>> getBankItemsQuery =
 			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
 				context.CharacterBankItems
 					.AsNoTracking()
 					.Where(i => i.CharacterID == characterId)
 					.ToList());
+
+		/// <summary>
+		/// Compiled query for retrieving a tracked bank item by character ID and slot.
+		/// </summary>
+		private static readonly Func<NpgsqlDbContext, long, int, CancellationToken, Task<CharacterBankEntity?>> getByCharacterAndSlotTrackingQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, int slot, CancellationToken ct) =>
+				(CharacterBankEntity?)context.CharacterBankItems
+					.FirstOrDefault(i => i.CharacterID == characterId && i.Slot == slot));
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="CharacterBankService"/> class.
@@ -52,51 +72,72 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<long>> SaveBankItemAsync(CharacterBankData item, CancellationToken cancellationToken = default)
 		{
-			if (item.CharacterID == 0)
+			if (item.CharacterID <= 0)
 			{
 				return DatabaseResult<long>.Failure(
 					"VALIDATION_ERROR",
-					"Invalid character ID. Character ID must be greater than 0.");
+					"Invalid character ID. Character ID must be greater than 0.",
+					isTransient: false);
 			}
 
-			return await ExecuteAsync<long>(async (dbContext, ct) =>
+			var insertResult = await ExecuteMirrorAsync(async dbContext =>
 			{
-				var charactersTableName = dbContext.GetTableName<CharacterEntity>();
-				// Use PostgreSQL UPSERT for atomic insert-or-update
-				var result = await dbContext.CharacterBankItems
-					.FromSqlRaw($@"
-					WITH active_character AS (
-						SELECT id
-						FROM {charactersTableName}
-						WHERE id = {{0}} AND deleted = FALSE
-						FOR KEY SHARE
-					)
-					INSERT INTO {TableName}
-						(character_id, template_id, slot, seed, amount, time_created)
-					SELECT
-						{{0}}, {{1}}, {{2}}, {{3}}, {{4}}, CURRENT_TIMESTAMP
-					FROM active_character
-					ON CONFLICT (character_id, slot) 
-					DO UPDATE SET 
-						template_id = EXCLUDED.template_id,
-						seed = EXCLUDED.seed,
-						amount = EXCLUDED.amount
-					RETURNING id, character_id, template_id, slot, seed, amount, time_created",
-					item.CharacterID,
-					item.TemplateID,
-					item.Slot,
-					item.Seed,
-					item.Amount)
-						.AsNoTracking()
-						.FirstOrDefaultAsync(ct);
-
-				if (result == null)
+				var activeCharacterId = await getActiveCharacterIdQuery(dbContext, item.CharacterID, cancellationToken).ConfigureAwait(false);
+				if (activeCharacterId == 0)
 				{
 					throw new DatabaseEntityNotFoundException("Character", item.CharacterID.ToString());
 				}
 
-				return result.ID;
-			}, "SaveBankItem", cancellationToken);
+				var entity = new CharacterBankEntity
+				{
+					CharacterID = item.CharacterID,
+					Version = item.Version,
+					TemplateID = item.TemplateID,
+					Slot = item.Slot,
+					Seed = item.Seed,
+					Amount = item.Amount,
+					TimeCreated = DateTime.UtcNow
+				};
+				await dbContext.CharacterBankItems.AddAsync(entity, cancellationToken).ConfigureAwait(false);
+				return entity;
+			}).ConfigureAwait(false);
+
+			if (insertResult.IsSuccess)
+			{
+				return DatabaseResult<long>.Success(insertResult.Data.ID);
+			}
+
+			if (insertResult.ErrorCode != "UNIQUE_VIOLATION")
+			{
+				return DatabaseResult<long>.Failure(insertResult.ErrorCode, insertResult.ErrorMessage, insertResult.IsTransient);
+			}
+
+			var updateResult = await ExecuteMirrorAsync(async dbContext =>
+			{
+				var activeCharacterId = await getActiveCharacterIdQuery(dbContext, item.CharacterID, cancellationToken).ConfigureAwait(false);
+				if (activeCharacterId == 0)
+				{
+					throw new DatabaseEntityNotFoundException("Character", item.CharacterID.ToString());
+				}
+
+				var entity = await getByCharacterAndSlotTrackingQuery(dbContext, item.CharacterID, item.Slot, cancellationToken).ConfigureAwait(false);
+				if (entity == null)
+				{
+					throw new DatabaseEntityNotFoundException("CharacterBankItem", $"(CharacterID: {item.CharacterID}, Slot: {item.Slot})");
+				}
+
+				ValidateVersion(entity, item.Version);
+				if (item.Version > 0) entity.Version = item.Version;
+
+				entity.TemplateID = item.TemplateID;
+				entity.Seed = item.Seed;
+				entity.Amount = item.Amount;
+				return entity;
+			}).ConfigureAwait(false);
+
+			return updateResult.IsSuccess
+				? DatabaseResult<long>.Success(updateResult.Data.ID)
+				: DatabaseResult<long>.Failure(updateResult.ErrorCode, updateResult.ErrorMessage, updateResult.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -107,7 +148,8 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				return DatabaseResult.Failure(
 					"VALIDATION_ERROR",
-					"No items to save. Items collection must not be null or empty.");
+					"No items to save. Items collection must not be null or empty.",
+					isTransient: false);
 			}
 
 			// Prevent duplicate keys within the same batch from causing
@@ -126,104 +168,143 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 			}
 
-			// Extract arrays for bulk UPSERT
-			var characterIds = itemList.Select(i => i.CharacterID).ToArray();
-			var templateIds = itemList.Select(i => i.TemplateID).ToArray();
-			var slots = itemList.Select(i => i.Slot).ToArray();
-			var seeds = itemList.Select(i => i.Seed).ToArray();
-			var amounts = itemList.Select(i => (int)i.Amount).ToArray();
-
-			var result = await ExecuteAsync(async (dbContext, ct) =>
+			return await ExecuteMirrorAsync(async dbContext =>
 			{
-				var charactersTableName = dbContext.GetTableName<CharacterEntity>();
-				return await dbContext.Database.ExecuteSqlRawAsync(
-					$@"WITH active_characters AS (
-						SELECT id
-						FROM {charactersTableName}
-						WHERE id = ANY({{0}}::bigint[]) AND deleted = FALSE
-						ORDER BY id
-						FOR KEY SHARE
-					)
-					INSERT INTO {TableName} (character_id, template_id, slot, seed, amount, time_created)
-					SELECT u.character_id, u.template_id, u.slot, u.seed, u.amount, CURRENT_TIMESTAMP
-					FROM UNNEST(
-						{{0}}::bigint[],
-						{{1}}::int[],
-						{{2}}::int[],
-						{{3}}::int[],
-						{{4}}::int[]
-					) AS u(character_id, template_id, slot, seed, amount)
-					JOIN active_characters ac ON ac.id = u.character_id
-					ON CONFLICT (character_id, slot) DO UPDATE SET
-						template_id = EXCLUDED.template_id,
-						seed = EXCLUDED.seed,
-						amount = EXCLUDED.amount",
-					new object[] { characterIds, templateIds, slots, seeds, amounts },
-					ct);
-			}, "SaveBankItems", cancellationToken).ConfigureAwait(false);
+				var previousAutoDetectChanges = dbContext.ChangeTracker.AutoDetectChangesEnabled;
+				try
+				{
+					dbContext.ChangeTracker.AutoDetectChangesEnabled = false;
 
-			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+					var characterIds = itemList.Select(i => i.CharacterID).Distinct().ToArray();
+					var activeCharacterIds = await dbContext.Characters
+						.AsNoTracking()
+						.Where(c => characterIds.Contains(c.ID) && !c.Deleted)
+						.Select(c => c.ID)
+						.ToListAsync(cancellationToken)
+						.ConfigureAwait(false);
+					var activeCharacterIdSet = new HashSet<long>(activeCharacterIds);
+
+					var slotList = itemList.Select(i => i.Slot).Distinct().ToArray();
+					var desiredKeys = new HashSet<(long CharacterID, int Slot)>(itemList.Select(i => (i.CharacterID, i.Slot)));
+					var existing = await dbContext.CharacterBankItems
+						.Where(i => activeCharacterIdSet.Contains(i.CharacterID) && slotList.Contains(i.Slot))
+						.ToListAsync(cancellationToken)
+						.ConfigureAwait(false);
+
+					var existingByKey = new Dictionary<(long CharacterID, int Slot), CharacterBankEntity>();
+					foreach (var entity in existing)
+					{
+						var key = (entity.CharacterID, entity.Slot);
+						if (!desiredKeys.Contains(key)) continue;
+						existingByKey[key] = entity;
+					}
+
+					foreach (var item in itemList)
+					{
+						if (!activeCharacterIdSet.Contains(item.CharacterID)) continue;
+
+						var key = (item.CharacterID, item.Slot);
+						if (!existingByKey.TryGetValue(key, out var entity))
+						{
+							entity = new CharacterBankEntity
+							{
+								CharacterID = item.CharacterID,
+								Version = item.Version,
+								Slot = item.Slot,
+								TimeCreated = DateTime.UtcNow
+							};
+							await dbContext.CharacterBankItems.AddAsync(entity, cancellationToken).ConfigureAwait(false);
+							existingByKey[key] = entity;
+						}
+
+						ValidateVersion(entity, item.Version);
+						if (item.Version > 0) entity.Version = item.Version;
+
+						entity.TemplateID = item.TemplateID;
+						entity.Seed = item.Seed;
+						entity.Amount = item.Amount;
+					}
+				}
+				finally
+				{
+					dbContext.ChangeTracker.AutoDetectChangesEnabled = previousAutoDetectChanges;
+				}
+			}).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
 		public async Task<DatabaseResult> DeleteBankItemsAsync(long characterId, CancellationToken cancellationToken = default)
 		{
-			if (characterId == 0)
+			if (characterId <= 0)
 			{
 				return DatabaseResult.Failure(
 					"VALIDATION_ERROR",
-					"Invalid character ID. Character ID must be greater than 0.");
+					"Invalid character ID. Character ID must be greater than 0.",
+					isTransient: false);
 			}
 
-			var result = await ExecuteRawSqlAsync(
-				$@"DELETE FROM {TableName} WHERE character_id = {{0}}",
-				"DeleteBankItems",
-				new object[] { characterId },
-				entityName: "CharacterBankItem",
-				entityId: characterId,
-				requireRowsAffected: false,
-				cancellationToken: cancellationToken);
+			return await ExecuteMirrorAsync(async dbContext =>
+			{
+				var itemIds = await dbContext.CharacterBankItems
+					.AsNoTracking()
+					.Where(i => i.CharacterID == characterId)
+					.Select(i => i.ID)
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
 
-			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+				foreach (var itemId in itemIds)
+				{
+					var entity = new CharacterBankEntity { ID = itemId };
+					dbContext.CharacterBankItems.Remove(entity);
+				}
+			}).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
 		public async Task<DatabaseResult> DeleteBankSlotAsync(long characterId, int slot, CancellationToken cancellationToken = default)
 		{
-			if (characterId == 0)
+			if (characterId <= 0)
 			{
 				return DatabaseResult.Failure(
 					"VALIDATION_ERROR",
-					"Invalid character ID. Character ID must be greater than 0.");
+					"Invalid character ID. Character ID must be greater than 0.",
+					isTransient: false);
 			}
 
-			var result = await ExecuteRawSqlAsync(
-				$@"DELETE FROM {TableName} WHERE character_id = {{0}} AND slot = {{1}}",
-				"DeleteBankSlot",
-				new object[] { characterId, slot },
-				entityName: "CharacterBankItem",
-				entityId: characterId,
-				requireRowsAffected: false,
-				cancellationToken: cancellationToken);
+			return await ExecuteMirrorAsync(async dbContext =>
+			{
+				var itemIds = await dbContext.CharacterBankItems
+					.AsNoTracking()
+					.Where(i => i.CharacterID == characterId && i.Slot == slot)
+					.Select(i => i.ID)
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
 
-			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+				foreach (var itemId in itemIds)
+				{
+					var entity = new CharacterBankEntity { ID = itemId };
+					dbContext.CharacterBankItems.Remove(entity);
+				}
+			}).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<IReadOnlyList<CharacterBankData>>> GetBankItemsAsync(long characterId, CancellationToken cancellationToken = default)
 		{
-			if (characterId == 0)
+			if (characterId <= 0)
 			{
 				return DatabaseResult<IReadOnlyList<CharacterBankData>>.Failure(
 					"VALIDATION_ERROR",
-					"Invalid character ID. Character ID must be greater than 0.");
+					"Invalid character ID. Character ID must be greater than 0.",
+					isTransient: false);
 			}
 
-			return await ExecuteAsync(async (dbContext, ct) =>
+			return await ExecuteMirrorAsync(async dbContext =>
 			{
-				var entities = await GetBankItemsQuery(dbContext, characterId, ct);
+				var entities = await getBankItemsQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
 				var items = entities.Select(i => new CharacterBankData(
 					id: i.ID,
+					version: i.Version,
 					characterID: i.CharacterID,
 					templateID: i.TemplateID,
 					slot: i.Slot,
@@ -232,7 +313,7 @@ namespace FishMMO.Database.Npgsql.Services
 				)).ToList();
 
 				return (IReadOnlyList<CharacterBankData>)items;
-			}, "GetBankItems", cancellationToken);
+			}).ConfigureAwait(false);
 		}
 	}
 }

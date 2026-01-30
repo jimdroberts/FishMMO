@@ -42,21 +42,12 @@ namespace FishMMO.Database.Npgsql.Services
 		/// DatabaseResult indicating success or containing error details.
 		/// </returns>
 		/// <remarks>
-		/// Wrapped in execution strategy to automatically retry on transient failures.
+		/// Executes inside the BaseService transaction + retry wrapper.
 		/// 
-		/// Uses INSERT ... ON CONFLICT DO NOTHING for idempotent friend additions:
-		/// - If friend relationship already exists: No-op, returns success
-		/// - If friend relationship doesn't exist: Inserts new record
-		/// 
-		/// Possible return scenarios:
-		/// - Success: Friend relationship saved successfully (or already exists)
-		/// - Failure with VALIDATION_ERROR: Invalid character ID or friend character ID
-		/// - Failure with DatabaseConstraintException: Constraint violation (foreign key)
-		/// - Failure with DatabaseTimeoutException: Operation timed out
-		/// - Failure with DatabaseConnectionException: Connection error
-		/// - Failure with DatabaseQueryException: Database operation failed
-		/// 
-		/// Thread-safe due to ON CONFLICT constraint on (character_id, friend_character_id).
+		/// Behavior:
+		/// - If the source character is missing or marked deleted: no-op success
+		/// - If the relationship already exists: no-op success
+		/// - Otherwise inserts a new relationship
 		/// </remarks>
 		Task<DatabaseResult> SaveFriendAsync(long characterId, long friendCharacterId, CancellationToken cancellationToken = default);
 
@@ -71,22 +62,8 @@ namespace FishMMO.Database.Npgsql.Services
 		/// DatabaseResult indicating success or containing error details.
 		/// </returns>
 		/// <remarks>
-		/// Wrapped in execution strategy to automatically retry on transient failures.
-		/// 
-		/// Deletion behavior:
-		/// - Deletes the specific friend relationship (character_id, friend_character_id)
-		/// - If relationship doesn't exist, operation succeeds
-		/// - Uses raw SQL with specific WHERE clause for atomic deletion
-		/// 
-		/// Possible return scenarios:
-		/// - Success: Friend relationship deleted successfully (or didn't exist)
-		/// - Failure with VALIDATION_ERROR: Invalid character ID or friend character ID
-		/// - Failure with DatabaseTimeoutException: Operation timed out
-		/// - Failure with DatabaseConnectionException: Connection error
-		/// - Failure with DatabaseQueryException: Delete operation failed
-		/// 
-		/// Note: This is NOT bidirectional. Only removes characterId -> friendCharacterId.
-		/// Call twice with swapped parameters for bidirectional unfriend.
+		/// Executes inside the BaseService transaction + retry wrapper.
+		/// If the relationship doesn't exist, operation succeeds.
 		/// </remarks>
 		Task<DatabaseResult> DeleteFriendAsync(long characterId, long friendCharacterId, CancellationToken cancellationToken = default);
 
@@ -100,21 +77,8 @@ namespace FishMMO.Database.Npgsql.Services
 		/// DatabaseResult indicating success or containing error details.
 		/// </returns>
 		/// <remarks>
-		/// Wrapped in execution strategy to automatically retry on transient failures.
-		/// 
-		/// Deletion behavior:
-		/// - Deletes all friend relationships for the specified character
-		/// - If character has no friends, operation succeeds
-		/// - Uses raw SQL for optimal performance
-		/// 
-		/// Possible return scenarios:
-		/// - Success: All friends deleted successfully (or character has no friends)
-		/// - Failure with VALIDATION_ERROR: Invalid character ID
-		/// - Failure with DatabaseTimeoutException: Operation timed out
-		/// - Failure with DatabaseConnectionException: Connection error
-		/// - Failure with DatabaseQueryException: Delete operation failed
-		/// 
-		/// Use case: Character deletion cleanup or friend list reset.
+		/// Executes inside the BaseService transaction + retry wrapper.
+		/// If the character has no friends, operation succeeds.
 		/// </remarks>
 		Task<DatabaseResult> DeleteAllFriendsAsync(long characterId, CancellationToken cancellationToken = default);
 
@@ -128,23 +92,8 @@ namespace FishMMO.Database.Npgsql.Services
 		/// or error details on failure.
 		/// </returns>
 		/// <remarks>
-		/// This method uses LINQ query which automatically benefits from EF Core's
-		/// configured retry policy for transient failures.
-		/// 
-		/// Query behavior:
-		/// - Returns all friend relationships for the specified character
-		/// - Uses AsNoTracking() for optimal read performance
-		/// - Projects to DTO to decouple from entity layer
-		/// 
-		/// Return scenarios:
-		/// - Success with data: Character has friends
-		/// - Success with empty collection: Character has no friends
-		/// - Failure with VALIDATION_ERROR: Invalid character ID
-		/// - Failure with DatabaseTimeoutException: Operation timed out
-		/// - Failure with DatabaseConnectionException: Connection error
-		/// - Failure with DatabaseQueryException: Query execution failed
-		/// 
-		/// The returned DTOs are safe to use after database context disposal.
+		/// Executes inside the BaseService transaction + retry wrapper.
+		/// Returns an empty collection if the character has no friends.
 		/// </remarks>
 		Task<DatabaseResult<IReadOnlyList<CharacterFriendData>>> GetFriendsAsync(long characterId, CancellationToken cancellationToken = default);
 
@@ -157,23 +106,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// DatabaseResult containing the count of friends on success, or error details on failure.
 		/// </returns>
 		/// <remarks>
-		/// This method uses LINQ query which automatically benefits from EF Core's
-		/// configured retry policy for transient failures.
-		/// 
-		/// Query behavior:
-		/// - Returns count of friend relationships for the specified character
-		/// - Uses AsNoTracking() for optimal read performance
-		/// - Uses CountAsync for efficient database-side counting
-		/// 
-		/// Return scenarios:
-		/// - Success with count > 0: Character has friends
-		/// - Success with count = 0: Character has no friends
-		/// - Failure with VALIDATION_ERROR: Invalid character ID
-		/// - Failure with DatabaseTimeoutException: Operation timed out
-		/// - Failure with DatabaseConnectionException: Connection error
-		/// - Failure with DatabaseQueryException: Query execution failed
-		/// 
-		/// Use case: Friend limit validation or UI display of friend count.
+		/// Executes inside the BaseService transaction + retry wrapper.
 		/// </remarks>
 		Task<DatabaseResult<int>> GetFriendCountAsync(long characterId, CancellationToken cancellationToken = default);
 	}

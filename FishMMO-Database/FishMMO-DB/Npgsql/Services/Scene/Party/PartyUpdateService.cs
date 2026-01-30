@@ -14,6 +14,15 @@ namespace FishMMO.Database.Npgsql.Services
 	public sealed class PartyUpdateService : BaseService<PartyUpdateEntity>, IPartyUpdateService
 	{
 		/// <summary>
+		/// Compiled query for retrieving a tracked party update row by party ID.
+		/// </summary>
+#pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type
+		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<PartyUpdateEntity?>> getByPartyIdTrackingQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long partyId, CancellationToken ct) =>
+				context.PartyUpdates.FirstOrDefault(u => u.PartyID == partyId));
+#pragma warning restore CS8619
+
+		/// <summary>
 		/// Initializes a new instance of PartyUpdateService.
 		/// </summary>
 		/// <param name="dbContextFactory">DbContext factory for creating contexts.</param>
@@ -31,19 +40,31 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("INVALID_PARTY_ID", "Party ID must be greater than zero.");
 			}
 
-			var result = await ExecuteRawSqlAsync(
-				$@"INSERT INTO {TableName} (party_id, time_created, last_update) 
-					VALUES ({{0}}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) 
-					ON CONFLICT (party_id) 
-					DO UPDATE SET last_update = GREATEST({TableName}.last_update, EXCLUDED.last_update)",
-				"SavePartyUpdate",
-				new object[] { partyId },
-				entityName: "PartyUpdate",
-				entityId: partyId,
-				requireRowsAffected: false,
-				cancellationToken: cancellationToken).ConfigureAwait(false);
+			var now = DateTime.UtcNow;
+			var result = await ExecuteMirrorAsync(async dbContext =>
+			{
+				var existing = await getByPartyIdTrackingQuery(dbContext, partyId, cancellationToken).ConfigureAwait(false);
+				if (existing == null)
+				{
+					existing = new PartyUpdateEntity
+					{
+						PartyID = partyId,
+						TimeCreated = now,
+						LastUpdate = now,
+					};
+					await dbContext.PartyUpdates.AddAsync(existing, cancellationToken).ConfigureAwait(false);
+					return;
+				}
 
-			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+				if (existing.LastUpdate < now)
+				{
+					existing.LastUpdate = now;
+				}
+			}).ConfigureAwait(false);
+
+			return result.IsSuccess
+				? DatabaseResult.Success()
+				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -54,14 +75,20 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<int>.Failure("INVALID_PARTY_ID", "Party ID must be greater than zero.");
 			}
 
-			return await ExecuteRawSqlAsync(
-				$"DELETE FROM {TableName} WHERE party_id = {{0}}",
-				"DeletePartyUpdate",
-				new object[] { partyId },
-				entityName: "PartyUpdate",
-				entityId: partyId,
-				requireRowsAffected: false,
-				cancellationToken: cancellationToken).ConfigureAwait(false);
+			var result = await ExecuteMirrorAsync(async dbContext =>
+			{
+				var existing = await getByPartyIdTrackingQuery(dbContext, partyId, cancellationToken).ConfigureAwait(false);
+				if (existing == null)
+				{
+					return 0;
+				}
+				dbContext.PartyUpdates.Remove(existing);
+				return 1;
+			}).ConfigureAwait(false);
+
+			return result.IsSuccess
+				? DatabaseResult<int>.Success(result.Data)
+				: DatabaseResult<int>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -73,15 +100,20 @@ namespace FishMMO.Database.Npgsql.Services
 			if (partyIds == null || partyIds.Count == 0)
 				return DatabaseResult<List<PartyUpdateData>>.Success(new List<PartyUpdateData>());
 
-			return await ExecuteAsync(async (dbContext, ct) =>
+			var result = await ExecuteMirrorAsync(async dbContext =>
 			{
 				var updates = await dbContext.PartyUpdates
 					.AsNoTracking()
 					.Where(u => u.LastUpdate >= lastFetch && partyIds.Contains(u.PartyID))
-					.ToListAsync(ct).ConfigureAwait(false);
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
 
 				return updates.Select(MapEntityToDto).ToList();
-			}, "FetchPartyUpdates", cancellationToken).ConfigureAwait(false);
+			}).ConfigureAwait(false);
+
+			return result.IsSuccess
+				? DatabaseResult<List<PartyUpdateData>>.Success(result.Data)
+				: DatabaseResult<List<PartyUpdateData>>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <summary>

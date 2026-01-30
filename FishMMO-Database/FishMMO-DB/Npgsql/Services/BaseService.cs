@@ -1,465 +1,204 @@
-using System;
-using System.Diagnostics;
-using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
+using System;
+using System.Threading.Tasks;
+using FishMMO.Database.Npgsql.Entities;
 using FishMMO.Database.Exceptions;
 
 namespace FishMMO.Database.Npgsql.Services
 {
-	/// <summary>
-	/// Base class for all Npgsql database services.
-	/// Provides common functionality: context creation, exception handling, and execution strategies.
-	/// Follows DRY principle by centralizing repeated patterns across all services.
-	/// </summary>
-	/// <remarks>
-	/// <para><b>Architecture: Database Service Layer (DSL) Design</b></para>
-	/// <para>
-	/// This Database Service Layer (DSL) is a library integrated directly into the Application Server Layer with NO network hop.
-	/// There IS a network hop from the DSL to the PostgreSQL database. This architecture dictates that idempotency must be
-	/// implemented at the DSL level, not at the Application Server Layer.
-	/// </para>
-	/// 
-	/// <para><b>Idempotency Strategy: Two-Tier Approach</b></para>
-	/// <list type="number">
-	/// <item>
-	/// <term>Non-Idempotent Operations (BaseService)</term>
-	/// <description>
-	/// Services extending <see cref="BaseService{TEntity}"/> handle operations that are naturally idempotent at the SQL level:
-	/// <list type="bullet">
-	/// <item><description><b>UPSERT operations:</b> Use ON CONFLICT DO UPDATE/NOTHING for natural idempotency</description></item>
-	/// <item><description><b>Read operations:</b> Safe to retry without side effects</description></item>
-	/// <item><description><b>Delete operations:</b> Naturally idempotent (deleting twice is safe)</description></item>
-	/// <item><description><b>Heartbeat/pulse operations:</b> UPSERT-based timestamp updates</description></item>
-	/// </list>
-	/// These operations use <see cref="ExecuteAsync{TResult}"/> and <see cref="ExecuteTransactionAsync{TResult}"/>
-	/// with provider-configured retry strategies but do NOT track request IDs.
-	/// </description>
-	/// </item>
-	/// <item>
-	/// <term>Idempotent Operations (IdempotentBaseService)</term>
-	/// <description>
-	/// Services extending <see cref="IdempotentBaseService{TEntity}"/> handle operations requiring DSL-level idempotency:
-	/// <list type="bullet">
-	/// <item><description><b>CREATE operations:</b> Must not create duplicate entities (account creation, party creation)</description></item>
-	/// <item><description><b>UPDATE with business logic:</b> Operations with optimistic concurrency or capacity checks</description></item>
-	/// <item><description><b>LOGGING/AUDIT operations:</b> Must not duplicate log entries (chat messages)</description></item>
-	/// <item><description><b>QUEUE operations:</b> Enqueue/dequeue that must not execute twice</description></item>
-	/// </list>
-	/// These operations use <see cref="IdempotentBaseService{TEntity}.ExecuteIdempotentAsync{TResult}"/> which tracks
-	/// request IDs in the <c>processed_requests</c> table to prevent double execution across retries and client resends.
-	/// </description>
-	/// </item>
-	/// </list>
-	/// 
-	/// <para><b>Request ID Contract: Caller Responsibility</b></para>
-	/// <para>
-	/// <b>CRITICAL:</b> For operations requiring idempotency protection, the <b>RequestId MUST be provided by the Application Server Layer</b>.
-	/// The Application Server Layer generates a unique RequestId per logical operation and passes it through the entire call chain.
-	/// This enables true cross-request idempotency:
-	/// </para>
-	/// <list type="bullet">
-	/// <item><description><b>Correct Pattern:</b> Application Server generates RequestId → passes to DSL → DSL tracks in processed_requests</description></item>
-	/// <item><description><b>Incorrect Pattern:</b> DSL generates RequestId internally → defeats idempotency on client retry</description></item>
-	/// </list>
-	/// <para>
-	/// When a client retry occurs after a timeout, the same RequestId is used, allowing the DSL to detect duplicate requests
-	/// and return the cached response without re-executing the operation.
-	/// </para>
-	/// 
-	/// <para><b>Event Semantics: Atomic Success or Failure</b></para>
-	/// <para>
-	/// Each DSL operation represents a complete event that either succeeds or fails atomically. The DSL properly communicates
-	/// the result to the Application Server Layer via <see cref="DatabaseResult"/> or <see cref="DatabaseResult{T}"/>.
-	/// Partial failures are not exposed; operations are wrapped in transactions to ensure all-or-nothing semantics.
-	/// </para>
-	/// </remarks>
-	/// <typeparam name="TEntity">The entity type this service operates on.</typeparam>
 	public abstract class BaseService<TEntity> where TEntity : class
 	{
-		#region Fields
-		/// <summary>
-		/// Factory for creating database context instances with proper connection pooling and retry configuration.
-		/// </summary>
 		protected readonly INpgsqlDbContextFactory DbContextFactory;
-
-		/// <summary>
-		/// The cached table name for the entity type. Resolved once at construction.
-		/// </summary>
 		protected readonly string TableName;
-		#endregion
+		private const int MaxRetries = 3;
 
-		#region Construction
-
-		/// <summary>
-		/// Initializes a new instance of BaseService.
-		/// </summary>
-		/// <param name="dbContextFactory">DbContext factory for creating contexts.</param>
-		/// <exception cref="ArgumentNullException">Thrown when dbContextFactory is null.</exception>
-		protected BaseService(INpgsqlDbContextFactory dbContextFactory)
+		protected BaseService(INpgsqlDbContextFactory contextFactory)
 		{
-			DbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
+			DbContextFactory = contextFactory ?? throw new ArgumentNullException(nameof(contextFactory));
 
 			// Cache table name once at construction - dispose context immediately
 			using var dbContext = DbContextFactory.CreateDbContext();
 			TableName = dbContext.GetTableName<TEntity>();
 		}
-		#endregion
-
-		#region Execution
 
 		/// <summary>
-		/// Unified execution engine for all database operations.
-		/// Handles context lifetime, optional explicit transactions, exception mapping, and provider-configured retries.
+		/// Executes a database operation with a fresh context and transaction.
+		/// Handles retries for transient failures and technical concurrency conflicts.
+		/// Returns DatabaseResult with success or failure information.
 		/// </summary>
-		/// <typeparam name="TResult">The result data type.</typeparam>
-		/// <param name="operationName">Name of the operation for error reporting.</param>
-		/// <param name="operation">Operation body. Should return a <see cref="DatabaseResult{T}"/> rather than throwing for expected failures.</param>
-		/// <param name="useTransaction">Whether to wrap the operation in an explicit transaction.</param>
-		/// <param name="cancellationToken">Cancellation token.</param>
-		/// <param name="onFailureAsync">
-		/// Optional best-effort hook invoked when an exception is mapped.
-		/// The <c>willRetry</c> argument is a best-effort signal indicating whether the configured execution strategy
-		/// expects to retry the failure.
-		/// </param>
-		/// <returns>A <see cref="DatabaseResult{T}"/> describing success or failure.</returns>
-		protected async Task<DatabaseResult<TResult>> ExecuteInternalAsync<TResult>(
-			string operationName,
-			Func<NpgsqlDbContext, IDbContextTransaction?, CancellationToken, Task<DatabaseResult<TResult>>> operation,
-			bool useTransaction = false,
-			CancellationToken cancellationToken = default,
-			Func<NpgsqlDbContext, DatabaseException, bool, CancellationToken, Task>? onFailureAsync = null)
+		protected async Task<DatabaseResult> ExecuteMirrorAsync(Func<NpgsqlDbContext, Task> action)
 		{
-			var performanceTracker = DbContextFactory.PerformanceTracker;
-			Stopwatch? stopwatch = null;
-			Exception? lastAttemptException = null;
-			DatabaseException? lastAttemptMappedException = null;
-
-			async Task InvokeFailureHookAsync(DatabaseException dbException, bool willRetry, CancellationToken hookToken)
+			for (int attempt = 1; attempt <= MaxRetries; attempt++)
 			{
-				if (onFailureAsync == null)
-				{
-					return;
-				}
+				// NEW Context: Clears the cache and ensures we get fresh data on retry
+				using var context = DbContextFactory.CreateDbContext();
+
+				// NEW Transaction: Required because Postgres kills the transaction on failure
+				using var transaction = await context.Database.BeginTransactionAsync();
 
 				try
 				{
-					// Always run failure hooks on a fresh context. The attempt context may have
-					// a broken connection or an invalid internal state after an exception.
-					await using var failureContext = DbContextFactory.CreateDbContext();
-					await onFailureAsync(failureContext, dbException, willRetry, hookToken).ConfigureAwait(false);
+					await action(context);
+					await context.SaveChangesAsync();
+					await transaction.CommitAsync();
+					return DatabaseResult.Success(); // Success!
 				}
-				catch
+				catch (Exception ex)
 				{
-					// Best-effort only. Never hide the original failure.
-				}
-			}
+					// Rollback the dead transaction immediately
+					try { await transaction.RollbackAsync(); } catch { /* Ignore socket errors */ }
 
-			try
-			{
-				stopwatch = performanceTracker?.StartTracking();
+					var sqlState = TryGetPostgresSqlState(ex);
 
-				// Create a context once to obtain the provider-configured execution strategy.
-				// The actual work must use a fresh DbContext per attempt to avoid retries
-				// reusing a potentially corrupted change tracker/connection state.
-				await using var bootstrapContext = DbContextFactory.CreateDbContext();
-				var strategy = bootstrapContext.Database.CreateExecutionStrategy();
-
-				var result = await strategy.ExecuteAsync<DatabaseResult<TResult>>(async ct =>
-				{
-					await using var attemptContext = DbContextFactory.CreateDbContext();
-					try
+					// Logic failures (Stale Version) should NEVER be retried
+					if (ex is StaleStateException)
 					{
-						ct.ThrowIfCancellationRequested();
-
-						if (!useTransaction)
-						{
-							return await operation(attemptContext, null, ct).ConfigureAwait(false);
-						}
-
-						await using var transaction = await attemptContext.Database.BeginTransactionAsync(ct).ConfigureAwait(false);
-						try
-						{
-							var operationResult = await operation(attemptContext, transaction, ct).ConfigureAwait(false);
-
-							if (operationResult.IsSuccess)
-							{
-									try
-									{
-										await transaction.CommitAsync(ct).ConfigureAwait(false);
-									}
-									catch
-									{
-										try
-										{
-											await RollbackBestEffortAsync(transaction).ConfigureAwait(false);
-										}
-										catch
-										{
-											// Best-effort only. Never hide commit failures.
-										}
-										throw;
-									}
-							}
-							else
-							{
-									try
-									{
-										await RollbackBestEffortAsync(transaction).ConfigureAwait(false);
-									}
-									catch
-									{
-										// Best-effort only. Non-success results must not be converted into exceptions.
-									}
-							}
-
-							return operationResult;
-						}
-						catch
-						{
-							try
-							{
-								await RollbackBestEffortAsync(transaction).ConfigureAwait(false);
-							}
-							catch
-							{
-								// Best-effort only. Never hide original exceptions.
-							}
-							throw;
-						}
+						return DatabaseResult.Failure("STALE_STATE", ex.Message, isTransient: false);
 					}
-					catch (Exception ex)
+
+					// Technical failures (xmin conflict, deadlock, timeout) are retryable
+					if (attempt < MaxRetries && (ex is DbUpdateConcurrencyException || IsTransientDatabaseFailure(ex, sqlState)))
 					{
-						lastAttemptException = ex;
-						lastAttemptMappedException = MapException(ex, operationName, attemptContext);
-						var willRetry = strategy.RetriesOnFailure && lastAttemptMappedException.IsTransient;
-
-						if (willRetry)
-						{
-							await InvokeFailureHookAsync(lastAttemptMappedException, willRetry: true, ct).ConfigureAwait(false);
-						}
-
-						throw;
+						// Linear backoff with jitter to help the DB recover
+						await Task.Delay(TimeSpan.FromMilliseconds(20 * attempt));
+						continue;
 					}
-				}, cancellationToken).ConfigureAwait(false);
 
-				if (stopwatch != null)
-				{
-					stopwatch.Stop();
-					performanceTracker?.RecordQuery(operationName, stopwatch.Elapsed, result.IsSuccess);
+					// Max retries reached or non-retryable error (e.g., Name Taken)
+					return HandleFinalException(ex, sqlState);
 				}
-
-				return result;
 			}
-			catch (Exception ex)
+
+			return DatabaseResult.Failure("MAX_RETRIES", "Maximum retry attempts exceeded", isTransient: true);
+		}
+
+		/// <summary>
+		/// Executes a database operation with a fresh context and transaction, returning a result.
+		/// Returns DatabaseResult<TResult> with success or failure information.
+		/// </summary>
+		protected async Task<DatabaseResult<TResult>> ExecuteMirrorAsync<TResult>(Func<NpgsqlDbContext, Task<TResult>> action)
+		{
+			TResult result = default!;
+
+			for (int attempt = 1; attempt <= MaxRetries; attempt++)
 			{
-				if (stopwatch != null)
-				{
-					stopwatch.Stop();
-					performanceTracker?.RecordQuery(operationName, stopwatch.Elapsed, success: false);
-				}
+				using var context = DbContextFactory.CreateDbContext();
+				using var transaction = await context.Database.BeginTransactionAsync();
 
-				DatabaseException dbEx;
-				if (ex == lastAttemptException && lastAttemptMappedException != null)
+				try
 				{
-					dbEx = lastAttemptMappedException;
+					result = await action(context);
+					await context.SaveChangesAsync();
+					await transaction.CommitAsync();
+					return DatabaseResult<TResult>.Success(result);
 				}
-				else
+				catch (Exception ex)
 				{
-					// Map using a fresh context to ensure we can read provider settings safely.
-					await using var mappingContext = DbContextFactory.CreateDbContext();
-					dbEx = MapException(ex, operationName, mappingContext);
+					try { await transaction.RollbackAsync(); } catch { }
+
+					var sqlState = TryGetPostgresSqlState(ex);
+
+					if (ex is StaleStateException)
+					{
+						return DatabaseResult<TResult>.Failure("STALE_STATE", ex.Message, isTransient: false);
+					}
+
+					if (attempt < MaxRetries && (ex is DbUpdateConcurrencyException || IsTransientDatabaseFailure(ex, sqlState)))
+					{
+						await Task.Delay(TimeSpan.FromMilliseconds(20 * attempt));
+						continue;
+					}
+
+					return HandleFinalException<TResult>(ex, sqlState);
 				}
-
-				// The native execution strategy has already exhausted retries by this point.
-				await InvokeFailureHookAsync(dbEx, willRetry: false, cancellationToken).ConfigureAwait(false);
-
-				return DatabaseResult<TResult>.FromException(dbEx);
 			}
+
+			return DatabaseResult<TResult>.Failure("MAX_RETRIES", "Maximum retry attempts exceeded", isTransient: true);
 		}
 
-		/// <summary>
-		/// Rolls back the provided transaction using a short bounded timeout.
-		/// </summary>
-		/// <remarks>
-		/// <para>
-		/// Rollback is best-effort cleanup. Using a bounded timeout avoids hangs when the network
-		/// or database is unhealthy while still attempting to release server-side locks.
-		/// </para>
-		/// </remarks>
-		/// <param name="transaction">The transaction to roll back.</param>
-		private static async Task RollbackBestEffortAsync(IDbContextTransaction transaction)
+		private DatabaseResult HandleFinalException(Exception ex, string? sqlState)
 		{
-			using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-			await transaction.RollbackAsync(cts.Token).ConfigureAwait(false);
-		}
-
-
-		/// <summary>
-		/// Unified protected entrypoint for executing non-transactional operations.
-		/// </summary>
-		protected Task<DatabaseResult<TResult>> ExecuteAsync<TResult>(
-			Func<NpgsqlDbContext, CancellationToken, Task<TResult>> operation,
-			string operationName,
-			CancellationToken cancellationToken = default)
-		{
-			if (operation == null) throw new ArgumentNullException(nameof(operation));
-
-			return ExecuteInternalAsync(
-				operationName,
-				async (dbContext, _, ct) => DatabaseResult<TResult>.Success(await operation(dbContext, ct).ConfigureAwait(false)),
-				useTransaction: false,
-				cancellationToken: cancellationToken);
-		}
-
-		/// <summary>
-		/// Unified protected entrypoint for executing transactional operations.
-		/// </summary>
-		protected Task<DatabaseResult<TResult>> ExecuteTransactionAsync<TResult>(
-			Func<NpgsqlDbContext, IDbContextTransaction, CancellationToken, Task<TResult>> operation,
-			string operationName,
-			CancellationToken cancellationToken = default)
-		{
-			if (operation == null) throw new ArgumentNullException(nameof(operation));
-
-			return ExecuteInternalAsync(
-				operationName,
-				async (dbContext, transaction, ct) => DatabaseResult<TResult>.Success(await operation(dbContext, transaction!, ct).ConfigureAwait(false)),
-				useTransaction: true,
-				cancellationToken: cancellationToken);
-		}
-		#endregion
-
-		#region Exception Mapping
-
-		/// <summary>
-		/// Maps database exceptions to custom DatabaseException hierarchy with sanitized messages.
-		/// Provides consistent exception handling across all services.
-		/// </summary>
-		/// <param name="ex">The exception to map.</param>
-		/// <param name="operationName">Name of the operation for context.</param>
-		/// <param name="dbContext">Database context for connection string retrieval.</param>
-		/// <returns>Mapped DatabaseException.</returns>
-		protected DatabaseException MapException(Exception ex, string operationName, NpgsqlDbContext dbContext)
-		{
-			var timeoutSeconds = GetCommandTimeoutSeconds(dbContext);
-			var postgresSqlState = TryGetPostgresSqlState(ex);
-			var isTransient = IsTransientDatabaseFailure(ex, postgresSqlState);
-
-			return ex switch
+			// 23505 = unique_violation
+			if (sqlState == "23505")
 			{
-				// Pass through DatabaseExceptions unchanged (already sanitized)
-				DatabaseException dbEx => dbEx,
+				return DatabaseResult.Failure("UNIQUE_VIOLATION", "The record already exists.", isTransient: false);
+			}
 
+			if (ex is ArgumentException argEx)
+			{
+				return DatabaseResult.Failure("INVALID_ARGUMENT", argEx.Message, isTransient: false);
+			}
 
-				OperationCanceledException cancelEx => new DatabaseOperationCanceledException(
-					operationName,
-					cancelEx),
+			if (ex is InvalidOperationException invEx)
+			{
+				return DatabaseResult.Failure("INVALID_OPERATION", invEx.Message, isTransient: false);
+			}
 
-				TimeoutException timeoutEx => new DatabaseTimeoutException(
-					operationName,
-					timeoutSeconds,
-					timeoutEx),
+			if (ex is DatabaseEntityNotFoundException notFoundEx)
+			{
+				return DatabaseResult.Failure("ENTITY_NOT_FOUND", notFoundEx.Message, isTransient: false);
+			}
 
-				PostgresException pgEx when pgEx.SqlState == "23505" => new DatabaseConstraintException(
-					ConstraintType.Unique,
-					pgEx.ConstraintName ?? "unknown_constraint",
-					"A record with this unique value already exists.",
-					pgEx),
+			if (ex is DatabasePersistenceException persistEx)
+			{
+				return DatabaseResult.Failure("PERSISTENCE_FAILED", persistEx.Message, isTransient: true);
+			}
 
-				PostgresException pgEx when pgEx.SqlState == "23503" => new DatabaseConstraintException(
-					ConstraintType.ForeignKey,
-					pgEx.ConstraintName ?? "unknown_constraint",
-					"The referenced entity does not exist.",
-					pgEx),
-
-				PostgresException pgEx when IsTimeoutSqlState(pgEx.SqlState) => new DatabaseTimeoutException(
-					operationName,
-					timeoutSeconds,
-					pgEx),
-
-				PostgresException pgEx when IsConnectionSqlState(pgEx.SqlState) => new DatabaseConnectionException(
-					GetSafeConnectionIdentifier(dbContext),
-					pgEx),
-
-				PostgresException pgEx when IsTransientSqlState(pgEx.SqlState) => new DatabaseQueryException(
-					operationName,
-					"The database is temporarily unavailable. Please try again.",
-					pgEx.Message,
-					isTransient: true,
-					postgreSqlErrorCode: pgEx.SqlState,
-					innerException: pgEx),
-
-				NpgsqlException npgsqlEx => new DatabaseConnectionException(
-					GetSafeConnectionIdentifier(dbContext),
-					npgsqlEx),
-
-				DbUpdateException dbUpdateEx => new DatabaseQueryException(
-					operationName,
-					"Database update failed.",
-					dbUpdateEx.Message,
-					isTransient,
-					postgresSqlState,
-					dbUpdateEx),
-
-				_ => new DatabaseQueryException(
-					operationName,
-					"An unexpected database error occurred.",
-					ex.Message,
-					isTransient,
-					postgresSqlState,
-					ex)
-			};
+			return DatabaseResult.Failure("DATABASE_ERROR", ex.Message, isTransient: true);
 		}
 
-		/// <summary>
-		/// Attempts to extract a PostgreSQL SQLSTATE from the exception chain.
-		/// </summary>
-		/// <param name="exception">Exception to inspect.</param>
-		/// <returns>SQLSTATE code if present; otherwise null.</returns>
+		private DatabaseResult<TResult> HandleFinalException<TResult>(Exception ex, string? sqlState)
+		{
+			// 23505 = unique_violation
+			if (sqlState == "23505")
+			{
+				return DatabaseResult<TResult>.Failure("UNIQUE_VIOLATION", "The record already exists.", isTransient: false);
+			}
+
+			if (ex is ArgumentException argEx)
+			{
+				return DatabaseResult<TResult>.Failure("INVALID_ARGUMENT", argEx.Message, isTransient: false);
+			}
+
+			if (ex is InvalidOperationException invEx)
+			{
+				return DatabaseResult<TResult>.Failure("INVALID_OPERATION", invEx.Message, isTransient: false);
+			}
+
+			if (ex is DatabaseEntityNotFoundException notFoundEx)
+			{
+				return DatabaseResult<TResult>.Failure("ENTITY_NOT_FOUND", notFoundEx.Message, isTransient: false);
+			}
+
+			if (ex is DatabasePersistenceException persistEx)
+			{
+				return DatabaseResult<TResult>.Failure("PERSISTENCE_FAILED", persistEx.Message, isTransient: true);
+			}
+
+			return DatabaseResult<TResult>.Failure("DATABASE_ERROR", ex.Message, isTransient: true);
+		}
+
 		private static string? TryGetPostgresSqlState(Exception exception)
 		{
 			for (var current = exception; current != null; current = current.InnerException)
 			{
-				if (current is PostgresException pgEx)
-				{
-					return pgEx.SqlState;
-				}
+				if (current is PostgresException pgEx) return pgEx.SqlState;
 			}
-
 			return null;
 		}
 
-		/// <summary>
-		/// Determines whether a failure is transient (retryable) based on exception type and SQLSTATE.
-		/// </summary>
-		/// <param name="exception">Exception to inspect.</param>
-		/// <param name="sqlState">Extracted SQLSTATE, if available.</param>
-		/// <returns>True if the failure is considered transient; otherwise false.</returns>
 		private static bool IsTransientDatabaseFailure(Exception exception, string? sqlState)
 		{
-			if (exception is OperationCanceledException)
-			{
-				return false;
-			}
+			if (exception is OperationCanceledException) return false;
 
-			// Npgsql already identifies transient failures.
 			for (var current = exception; current != null; current = current.InnerException)
 			{
-				if (current is NpgsqlException npgsqlEx)
-				{
-					return npgsqlEx.IsTransient;
-				}
+				if (current is NpgsqlException npgsqlEx && npgsqlEx.IsTransient) return true;
 			}
 
-			if (exception is TimeoutException)
-			{
-				return true;
-			}
+			if (exception is TimeoutException) return true;
 
-			// Fallback for wrapped PostgresException cases where NpgsqlException isn't directly visible.
 			if (!string.IsNullOrWhiteSpace(sqlState))
 			{
 				return IsTimeoutSqlState(sqlState) || IsConnectionSqlState(sqlState) || IsTransientSqlState(sqlState);
@@ -468,260 +207,47 @@ namespace FishMMO.Database.Npgsql.Services
 			return false;
 		}
 
-		/// <summary>
-		/// Determines whether a SQLSTATE represents a statement timeout or query cancel.
-		/// </summary>
-		/// <param name="sqlState">PostgreSQL SQLSTATE code.</param>
-		/// <returns>True if the SQLSTATE is considered a timeout.</returns>
-		private static bool IsTimeoutSqlState(string? sqlState)
-		{
-			// 57014 = query_canceled (includes canceling statement due to statement timeout)
-			return string.Equals(sqlState, "57014", StringComparison.Ordinal);
-		}
+		private static bool IsTimeoutSqlState(string? sqlState) =>
+			string.Equals(sqlState, "57014", StringComparison.Ordinal);
 
-		/// <summary>
-		/// Determines whether a SQLSTATE indicates a connection-level failure.
-		/// </summary>
-		/// <param name="sqlState">PostgreSQL SQLSTATE code.</param>
-		/// <returns>True if the SQLSTATE represents a connection-level failure.</returns>
 		private static bool IsConnectionSqlState(string? sqlState)
 		{
-			if (string.IsNullOrWhiteSpace(sqlState))
-			{
-				return false;
-			}
-
-			// 08XXX = connection exception class
-			if (sqlState.StartsWith("08", StringComparison.Ordinal))
-			{
-				return true;
-			}
-
-			// 57P01/57P02/57P03 = shutdown/crash/cannot_connect_now (often transient during restarts/failovers)
-			return string.Equals(sqlState, "57P01", StringComparison.Ordinal)
-				|| string.Equals(sqlState, "57P02", StringComparison.Ordinal)
-				|| string.Equals(sqlState, "57P03", StringComparison.Ordinal);
+			if (string.IsNullOrWhiteSpace(sqlState)) return false;
+			return sqlState.StartsWith("08", StringComparison.Ordinal)
+				|| sqlState == "57P01" || sqlState == "57P02" || sqlState == "57P03";
 		}
 
-		/// <summary>
-		/// Determines whether a SQLSTATE should be treated as transient (retryable).
-		/// </summary>
-		/// <param name="sqlState">PostgreSQL SQLSTATE code.</param>
-		/// <returns>True if the SQLSTATE is considered retryable.</returns>
 		private static bool IsTransientSqlState(string? sqlState)
 		{
-			if (string.IsNullOrWhiteSpace(sqlState))
-			{
-				return false;
-			}
-
-			// 40P01 = deadlock_detected
-			// 40001 = serialization_failure
-			// 55P03 = lock_not_available
-			// 53300 = too_many_connections
-			return string.Equals(sqlState, "40P01", StringComparison.Ordinal)
-				|| string.Equals(sqlState, "40001", StringComparison.Ordinal)
-				|| string.Equals(sqlState, "55P03", StringComparison.Ordinal)
-				|| string.Equals(sqlState, "53300", StringComparison.Ordinal);
+			if (string.IsNullOrWhiteSpace(sqlState)) return false;
+			return sqlState == "40P01" || sqlState == "40001" || sqlState == "55P03" || sqlState == "53300";
 		}
 
-		/// <summary>
-		/// Attempts to read the configured command timeout (seconds) from the DbContext connection string.
-		/// Returns 0 when unavailable.
-		/// </summary>
-		/// <param name="dbContext">DbContext to extract connection string from.</param>
-		/// <returns>Command timeout in seconds, or 0 if unknown.</returns>
-		private static int GetCommandTimeoutSeconds(NpgsqlDbContext dbContext)
+		protected void ValidateVersioning(object entity, long incomingVersion, long? databaseVersion)
 		{
-			try
-			{
-				var connectionString = dbContext?.Database.GetConnectionString();
-				if (string.IsNullOrWhiteSpace(connectionString))
-				{
-					return 0;
-				}
-
-				var builder = new NpgsqlConnectionStringBuilder(connectionString);
-				return builder.CommandTimeout;
-			}
-			catch
-			{
-				return 0;
-			}
+			if (entity is not IVersionedEntity versioned) return;
+			ValidateVersion(versioned, incomingVersion, databaseVersion);
 		}
 
-		/// <summary>
-		/// Creates a safe, non-sensitive connection identifier for logging.
-		/// Never returns the raw connection string.
-		/// </summary>
-		/// <param name="dbContext">The database context used to retrieve connection details.</param>
-		/// <returns>A redacted identifier such as "host:port/database" or "unknown".</returns>
-		private static string GetSafeConnectionIdentifier(NpgsqlDbContext dbContext)
+		protected void ValidateVersion(IVersionedEntity entity, long incomingVersion)
 		{
-			try
-			{
-				var connectionString = dbContext?.Database.GetConnectionString();
-				if (string.IsNullOrWhiteSpace(connectionString))
-				{
-					return "unknown";
-				}
-
-				var builder = new NpgsqlConnectionStringBuilder(connectionString);
-				var host = string.IsNullOrWhiteSpace(builder.Host) ? "unknown" : builder.Host;
-				var database = string.IsNullOrWhiteSpace(builder.Database) ? "unknown" : builder.Database;
-				var port = builder.Port <= 0 ? 5432 : builder.Port;
-				return $"{host}:{port}/{database}";
-			}
-			catch
-			{
-				return "unknown";
-			}
+			ValidateVersion(entity, incomingVersion, databaseVersion: null);
 		}
-		#endregion
 
-		#region Raw SQL Helpers
-
-		/// <summary>
-		/// Executes a raw SQL command with automatic retry strategy and optional row validation.
-		/// </summary>
-		/// <param name="sql">
-		/// The SQL query to execute.
-		/// The SQL text may embed identifiers (e.g., <see cref="TableName"/>) but must use parameter placeholders
-		/// (<c>{0}</c>, <c>{1}</c>, ...) for values.
-		/// </param>
-		/// <param name="operationName">Name of the operation for error reporting.</param>
-		/// <param name="parameters">SQL parameter values for placeholders (<c>{0}</c>, <c>{1}</c>, ...).</param>
-		/// <param name="entityName">Name of the entity for error message (used when requireRowsAffected is true).</param>
-		/// <param name="entityId">ID of the entity for error message (used when requireRowsAffected is true).</param>
-		/// <param name="requireRowsAffected">If true, throws <see cref="DatabaseEntityNotFoundException"/> when no rows are affected.</param>
-		/// <param name="cancellationToken">Cancellation token.</param>
-		/// <returns>DatabaseResult with the number of rows affected.</returns>
-		/// <remarks>
-		/// This method automatically:
-		/// - Applies transient-only retry logic
-		/// - Parameterizes value placeholders via EF Core (prevents SQL injection)
-		/// - Validates rows affected if required
-		/// - Maps exceptions to appropriate DatabaseException types
-		/// 
-		/// Example usage:
-		/// <code>
-		/// var sql = $@"UPDATE {TableName} SET lastlogin = CURRENT_TIMESTAMP WHERE name = {{0}}";
-		/// await ExecuteRawSqlAsync(
-		///     sql,
-		///     "UpdateLastLogin",
-		///     new object[] { accountName },
-		///     entityName: "Account",
-		///     entityId: accountName,
-		///     requireRowsAffected: true,
-		///     cancellationToken: cancellationToken);
-		/// </code>
-		/// </remarks>
-		protected Task<DatabaseResult<int>> ExecuteRawSqlAsync(
-			string sql,
-			string operationName,
-			object[] parameters = null,
-			string entityName = null,
-			object entityId = null,
-			bool requireRowsAffected = false,
-			CancellationToken cancellationToken = default)
+		private static void ValidateVersion(IVersionedEntity entity, long incomingVersion, long? databaseVersion)
 		{
-			return ExecuteRawSqlInternalAsync(
-				sql,
-				operationName,
-				parameters,
-				entityName,
-				entityId,
-				requireRowsAffected,
-				useTransaction: false,
-				cancellationToken);
-		}
+			if (entity == null) throw new ArgumentNullException(nameof(entity));
 
-		/// <summary>
-		/// Executes a raw SQL command inside an explicit transaction, with automatic retry and optional row validation.
-		/// </summary>
-		/// <remarks>
-		/// Prefer this helper when you need a single command executed under an explicit transaction.
-		/// For multi-step transactional flows, keep using the transactional ExecuteTransactionAsync lambda wrapper.
-		/// </remarks>
-		protected Task<DatabaseResult<int>> ExecuteRawSqlTransactionAsync(
-			string sql,
-			string operationName,
-			object[] parameters = null,
-			string entityName = null,
-			object entityId = null,
-			bool requireRowsAffected = false,
-			CancellationToken cancellationToken = default)
-		{
-			return ExecuteRawSqlInternalAsync(
-				sql,
-				operationName,
-				parameters,
-				entityName,
-				entityId,
-				requireRowsAffected,
-				useTransaction: true,
-				cancellationToken);
-		}
+			// Allow legacy callers during rollout.
+			if (incomingVersion <= 0) return;
 
-		private Task<DatabaseResult<int>> ExecuteRawSqlInternalAsync(
-			string sql,
-			string operationName,
-			object[] parameters,
-			string entityName,
-			object entityId,
-			bool requireRowsAffected,
-			bool useTransaction,
-			CancellationToken cancellationToken)
-		{
-			if (string.IsNullOrWhiteSpace(sql))
+			var currentVersion = databaseVersion ?? entity.Version;
+			if (currentVersion >= incomingVersion)
 			{
-				return Task.FromResult(DatabaseResult<int>.Failure("VALIDATION_ERROR", "SQL is required."));
+				throw new StaleStateException(
+					$"Version mismatch on {entity.GetType().Name}! " +
+					$"DB: {currentVersion}, Incoming: {incomingVersion}.");
 			}
-
-			return ExecuteInternalAsync(
-				operationName,
-				async (dbContext, _, ct) =>
-				{
-					var rowsAffected = parameters == null || parameters.Length == 0
-						? await dbContext.Database.ExecuteSqlRawAsync(sql, ct).ConfigureAwait(false)
-						: await dbContext.Database.ExecuteSqlRawAsync(sql, parameters, ct).ConfigureAwait(false);
-
-					if (requireRowsAffected && rowsAffected == 0)
-					{
-						throw new DatabaseEntityNotFoundException(
-							entityName ?? "Entity",
-							entityId?.ToString() ?? "unknown");
-					}
-
-					return DatabaseResult<int>.Success(rowsAffected);
-				},
-				useTransaction: useTransaction,
-				cancellationToken: cancellationToken);
 		}
-		#endregion
-
-		#region Entity Guards
-
-		/// <summary>
-		/// Ensures an entity exists.
-		/// Throws a <see cref="DatabaseEntityNotFoundException"/> when the entity is null.
-		/// </summary>
-		/// <typeparam name="T">Entity type.</typeparam>
-		/// <param name="entity">Entity instance returned from the database.</param>
-		/// <param name="entityName">Entity name used for error reporting.</param>
-		/// <param name="entityId">Entity identifier used for error reporting.</param>
-		/// <returns>The non-null entity.</returns>
-		/// <exception cref="DatabaseEntityNotFoundException">Thrown when <paramref name="entity"/> is null.</exception>
-		protected static T RequireEntityExists<T>(T entity, string entityName, object entityId)
-			where T : class
-		{
-			if (entity == null)
-			{
-				throw new DatabaseEntityNotFoundException(entityName, entityId?.ToString() ?? "unknown");
-			}
-
-			return entity;
-		}
-		#endregion
 	}
 }

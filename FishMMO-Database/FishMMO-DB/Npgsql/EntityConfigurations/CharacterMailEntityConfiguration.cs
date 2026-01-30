@@ -67,13 +67,13 @@ namespace FishMMO.Database.Npgsql.Entities
 			builder.HasOne<CharacterEntity>()
 				.WithMany()
 				.HasForeignKey(e => e.CharacterID)
-				.OnDelete(DeleteBehavior.Cascade)
+				.OnDelete(DeleteBehavior.NoAction)
 				.HasConstraintName("FK_CharacterMail_RecipientCharacterID");
 
 			builder.HasOne<CharacterEntity>()
 				.WithMany()
 				.HasForeignKey(e => e.SenderCharacterID)
-				.OnDelete(DeleteBehavior.Cascade)
+				.OnDelete(DeleteBehavior.NoAction)
 				.HasConstraintName("FK_CharacterMail_SenderCharacterID");
 		}
 	}

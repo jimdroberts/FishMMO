@@ -12,7 +12,7 @@ namespace FishMMO.Database.Npgsql.Services
 	/// <summary>
 	/// Service for managing character achievements in the database.
 	/// Provides async operations for CRUD operations on character achievement data.
-	/// Implements execution strategies for automatic retry on transient database failures.
+	/// Uses the BaseService execution strategy for automatic retry on transient database failures.
 	/// Returns DatabaseResult for consistent, safe error handling.
 	/// </summary>
 	public sealed class CharacterAchievementService : BaseService<CharacterAchievementEntity>, ICharacterAchievementService
@@ -20,7 +20,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <summary>
 		/// Compiled query for retrieving character achievements.
 		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterAchievementEntity>>> GetAchievementsQuery =
+		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<List<CharacterAchievementEntity>>> getAchievementsQuery =
 			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
 				context.CharacterAchievements
 					.AsNoTracking()
@@ -43,7 +43,8 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				return DatabaseResult.Failure(
 					"VALIDATION_ERROR",
-					"Achievements collection must not be null or empty.");
+					"Achievements collection must not be null or empty.",
+					isTransient: false);
 			}
 
 			var achievementList = achievements.ToList();
@@ -63,40 +64,54 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 			}
 
-			// Extract arrays for bulk UPSERT
-			var characterIds = achievementList.Select(a => a.CharacterID).ToArray();
-			var templateIds = achievementList.Select(a => a.TemplateID).ToArray();
-			var tiers = achievementList.Select(a => a.Tier).ToArray();
-			var values = achievementList.Select(a => a.Value).ToArray();
-
-			var result = await ExecuteAsync(async (dbContext, ct) =>
+			return await ExecuteMirrorAsync(async dbContext =>
 			{
-				var charactersTableName = dbContext.GetTableName<CharacterEntity>();
-				return await dbContext.Database.ExecuteSqlRawAsync(
-					$@"WITH active_characters AS (
-						SELECT id
-						FROM {charactersTableName}
-						WHERE id = ANY({{0}}::bigint[]) AND deleted = FALSE
-						ORDER BY id
-						FOR KEY SHARE
-					)
-					INSERT INTO {TableName} (character_id, template_id, tier, value, time_created)
-					SELECT u.character_id, u.template_id, u.tier, u.value, CURRENT_TIMESTAMP
-					FROM UNNEST(
-						{{0}}::bigint[],
-						{{1}}::int[],
-						{{2}}::smallint[],
-						{{3}}::int[]
-					) AS u(character_id, template_id, tier, value)
-					JOIN active_characters ac ON ac.id = u.character_id
-					ON CONFLICT (character_id, template_id) DO UPDATE SET
-						tier = EXCLUDED.tier,
-						value = EXCLUDED.value",
-					new object[] { characterIds, templateIds, tiers, values },
-					ct);
-			}, "SaveCharacterAchievements", cancellationToken).ConfigureAwait(false);
+				var characterIds = achievementList.Select(a => a.CharacterID).Distinct().ToArray();
+				var activeCharacterIds = await dbContext.Characters
+					.AsNoTracking()
+					.Where(c => characterIds.Contains(c.ID) && !c.Deleted)
+					.Select(c => c.ID)
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
+				var activeCharacterIdSet = new HashSet<long>(activeCharacterIds);
 
-			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+				var templateIds = achievementList.Select(a => a.TemplateID).Distinct().ToArray();
+				var existing = await dbContext.CharacterAchievements
+					.Where(a => activeCharacterIdSet.Contains(a.CharacterID) && templateIds.Contains(a.TemplateID))
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
+
+				var existingByKey = new Dictionary<(long CharacterID, int TemplateID), CharacterAchievementEntity>();
+				foreach (var entity in existing)
+				{
+					existingByKey[(entity.CharacterID, entity.TemplateID)] = entity;
+				}
+
+				foreach (var achievement in achievementList)
+				{
+					if (!activeCharacterIdSet.Contains(achievement.CharacterID)) continue;
+
+					var key = (achievement.CharacterID, achievement.TemplateID);
+					if (!existingByKey.TryGetValue(key, out var entity))
+					{
+						entity = new CharacterAchievementEntity
+						{
+							CharacterID = achievement.CharacterID,
+							TemplateID = achievement.TemplateID,
+							Version = achievement.Version,
+							TimeCreated = DateTime.UtcNow
+						};
+						await dbContext.CharacterAchievements.AddAsync(entity, cancellationToken).ConfigureAwait(false);
+						existingByKey[key] = entity;
+					}
+
+					ValidateVersion(entity, achievement.Version);
+					if (achievement.Version > 0) entity.Version = achievement.Version;
+
+					entity.Tier = achievement.Tier;
+					entity.Value = achievement.Value;
+				}
+			}).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -106,19 +121,25 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				return DatabaseResult.Failure(
 					"VALIDATION_ERROR",
-					"Character ID must be greater than 0.");
+					"Character ID must be greater than 0.",
+					isTransient: false);
 			}
 
-			var result = await ExecuteRawSqlAsync(
-				$@"DELETE FROM {TableName} WHERE character_id = {{0}}",
-				"DeleteCharacterAchievements",
-				new object[] { characterId },
-				entityName: "CharacterAchievement",
-				entityId: characterId,
-				requireRowsAffected: false,
-				cancellationToken: cancellationToken).ConfigureAwait(false);
+			return await ExecuteMirrorAsync(async dbContext =>
+			{
+				var achievementIds = await dbContext.CharacterAchievements
+					.AsNoTracking()
+					.Where(a => a.CharacterID == characterId)
+					.Select(a => a.ID)
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
 
-			return result.IsSuccess ? DatabaseResult.Success() : DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+				foreach (var achievementId in achievementIds)
+				{
+					var entity = new CharacterAchievementEntity { ID = achievementId };
+					dbContext.CharacterAchievements.Remove(entity);
+				}
+			}).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -128,14 +149,16 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				return DatabaseResult<IReadOnlyList<CharacterAchievementData>>.Failure(
 					"VALIDATION_ERROR",
-					"Character ID must be greater than 0.");
+					"Character ID must be greater than 0.",
+					isTransient: false);
 			}
 
-			return await ExecuteAsync(async (dbContext, ct) =>
+			return await ExecuteMirrorAsync(async dbContext =>
 			{
-				var entities = await GetAchievementsQuery(dbContext, characterId, ct).ConfigureAwait(false);
+				var entities = await getAchievementsQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
 				var achievements = entities.Select(a => new CharacterAchievementData(
 					id: a.ID,
+					version: a.Version,
 					characterID: a.CharacterID,
 					templateID: a.TemplateID,
 					tier: a.Tier,
@@ -143,7 +166,7 @@ namespace FishMMO.Database.Npgsql.Services
 				)).ToList();
 
 				return (IReadOnlyList<CharacterAchievementData>)achievements;
-			}, "GetCharacterAchievements", cancellationToken).ConfigureAwait(false);
+			}).ConfigureAwait(false);
 		}
 	}
 }

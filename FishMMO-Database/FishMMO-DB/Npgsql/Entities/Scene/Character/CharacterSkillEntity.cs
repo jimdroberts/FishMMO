@@ -4,9 +4,10 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace FishMMO.Database.Npgsql.Entities
 {
 	[Table("character_skills")]
-	public class CharacterSkillEntity
+	public class CharacterSkillEntity : IVersionedEntity
 	{
 		public long ID { get; set; }
+		public long Version { get; set; }
 		public long CharacterID { get; set; }
 		public CharacterEntity Character { get; set; }
 		public int Hash { get; set; }

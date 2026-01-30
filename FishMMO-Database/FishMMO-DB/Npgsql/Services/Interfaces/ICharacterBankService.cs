@@ -37,15 +37,12 @@ namespace FishMMO.Database.Npgsql.Services
 		/// DatabaseResult containing the saved bank item ID on success, or error information on failure.
 		/// </returns>
 		/// <remarks>
-		/// Wrapped in execution strategy to automatically retry on transient failures.
+		/// Executes inside the BaseService transaction + retry wrapper.
 		/// 
-		/// Operation logic:
-		/// Uses UPSERT (INSERT ... ON CONFLICT DO UPDATE) with RETURNING clause:
-		/// - If bank item exists (character_id, slot): Updates template_id, seed, amount
-		/// - If bank item doesn't exist: Inserts new record
-		/// - Returns the ID of the affected row
-		/// 
-		/// Performance note: Uses raw SQL with UPSERT and RETURNING for optimal atomicity.
+		/// Behavior:
+		/// - Inserts a new item if missing, otherwise updates the existing item by (CharacterID, Slot)
+		/// - Returns the affected row ID
+		/// - Fails with ENTITY_NOT_FOUND if the character is missing or marked deleted
 		/// </remarks>
 		Task<DatabaseResult<long>> SaveBankItemAsync(CharacterBankData item, CancellationToken cancellationToken = default);
 
@@ -59,17 +56,12 @@ namespace FishMMO.Database.Npgsql.Services
 		/// DatabaseResult indicating success or failure with error information.
 		/// </returns>
 		/// <remarks>
-		/// Wrapped in execution strategy to automatically retry on transient failures.
-		/// All operations are performed within a database transaction for atomicity.
+		/// Executes inside the BaseService transaction + retry wrapper.
 		/// 
-		/// Transaction behavior:
-		/// - All bank items are processed in a single transaction
-		/// - If any item fails, entire transaction is rolled back
-		/// - On success, all changes are committed atomically
-		/// 
-		/// Uses UPSERT (INSERT ... ON CONFLICT DO UPDATE) for each item:
-		/// - If bank item exists (character_id, slot): Updates template_id, seed, amount
-		/// - If bank item doesn't exist: Inserts new record
+		/// Behavior:
+		/// - Inserts missing items and updates existing ones by (CharacterID, Slot)
+		/// - Skips characters that are missing or marked deleted
+		/// - Duplicates in the input are de-duplicated by (CharacterID, Slot)
 		/// </remarks>
 		Task<DatabaseResult> SaveBankItemsAsync(IEnumerable<CharacterBankData> items, CancellationToken cancellationToken = default);
 
@@ -83,12 +75,8 @@ namespace FishMMO.Database.Npgsql.Services
 		/// DatabaseResult indicating success or failure with error information.
 		/// </returns>
 		/// <remarks>
-		/// Wrapped in execution strategy to automatically retry on transient failures.
-		/// 
-		/// Deletion behavior:
-		/// - Deletes all bank items for the specified character in a single atomic operation
-		/// - If character has no bank items, operation succeeds
-		/// - Uses raw SQL for optimal performance
+		/// Executes inside the BaseService transaction + retry wrapper.
+		/// If the character has no bank items, operation succeeds.
 		/// </remarks>
 		Task<DatabaseResult> DeleteBankItemsAsync(long characterId, CancellationToken cancellationToken = default);
 
@@ -103,15 +91,8 @@ namespace FishMMO.Database.Npgsql.Services
 		/// DatabaseResult indicating success or failure with error information.
 		/// </returns>
 		/// <remarks>
-		/// Wrapped in execution strategy to automatically retry on transient failures.
-		/// 
-		/// Deletion behavior:
-		/// - Deletes only the specific bank item matching both character ID and slot
-		/// - If item doesn't exist, operation succeeds
-		/// - Uses raw SQL for optimal performance
-		/// 
-		/// Security note: Requires both character ID and slot to prevent
-		/// accidental deletion of items from wrong character.
+		/// Executes inside the BaseService transaction + retry wrapper.
+		/// If the slot does not exist for the character, operation succeeds.
 		/// </remarks>
 		Task<DatabaseResult> DeleteBankSlotAsync(long characterId, int slot, CancellationToken cancellationToken = default);
 
@@ -125,15 +106,8 @@ namespace FishMMO.Database.Npgsql.Services
 		/// Returns empty collection if character has no items.
 		/// </returns>
 		/// <remarks>
-		/// This method uses LINQ query which automatically benefits from EF Core's
-		/// configured retry policy for transient failures.
-		/// 
-		/// Query behavior:
-		/// - Returns all bank items for the specified character
-		/// - Uses AsNoTracking() for optimal read performance
-		/// - Projects to DTO to decouple from entity layer
-		/// 
-		/// The returned DTOs are safe to use after database context disposal.
+		/// Executes inside the BaseService transaction + retry wrapper.
+		/// Returns an empty collection if the character has no items.
 		/// </remarks>
 		Task<DatabaseResult<IReadOnlyList<CharacterBankData>>> GetBankItemsAsync(long characterId, CancellationToken cancellationToken = default);
 	}
