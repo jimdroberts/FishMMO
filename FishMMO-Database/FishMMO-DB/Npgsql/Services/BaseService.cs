@@ -223,31 +223,28 @@ namespace FishMMO.Database.Npgsql.Services
 			return sqlState == "40P01" || sqlState == "40001" || sqlState == "55P03" || sqlState == "53300";
 		}
 
-		protected void ValidateVersioning(object entity, long incomingVersion, long? databaseVersion)
-		{
-			if (entity is not IVersionedEntity versioned) return;
-			ValidateVersion(versioned, incomingVersion, databaseVersion);
-		}
-
 		protected void ValidateVersion(IVersionedEntity entity, long incomingVersion)
-		{
-			ValidateVersion(entity, incomingVersion, databaseVersion: null);
-		}
-
-		private static void ValidateVersion(IVersionedEntity entity, long incomingVersion, long? databaseVersion)
 		{
 			if (entity == null) throw new ArgumentNullException(nameof(entity));
 
 			// Allow legacy callers during rollout.
 			if (incomingVersion <= 0) return;
 
-			var currentVersion = databaseVersion ?? entity.Version;
-			if (currentVersion >= incomingVersion)
+			// New entity (insert): accept incoming version and stamp it.
+			if (entity.ID <= 0)
+			{
+				entity.Version = incomingVersion;
+				return;
+			}
+
+			if (entity.Version >= incomingVersion)
 			{
 				throw new StaleStateException(
 					$"Version mismatch on {entity.GetType().Name}! " +
-					$"DB: {currentVersion}, Incoming: {incomingVersion}.");
+					$"DB: {entity.Version}, Incoming: {incomingVersion}.");
 			}
+
+			entity.Version = incomingVersion;
 		}
 	}
 }

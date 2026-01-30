@@ -106,7 +106,6 @@ namespace FishMMO.Database.Npgsql.Services
 					}
 
 					ValidateVersion(entity, attribute.Version);
-					if (attribute.Version > 0) entity.Version = attribute.Version;
 					entity.Value = attribute.Value;
 					entity.CurrentValue = attribute.CurrentValue;
 				}

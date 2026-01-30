@@ -118,7 +118,6 @@ namespace FishMMO.Database.Npgsql.Services
 					}
 
 					ValidateVersion(entity, buff.Version);
-					if (buff.Version > 0) entity.Version = buff.Version;
 					entity.RemainingTime = buff.RemainingTime;
 					entity.TickTime = buff.TickTime;
 					entity.Stacks = buff.Stacks;

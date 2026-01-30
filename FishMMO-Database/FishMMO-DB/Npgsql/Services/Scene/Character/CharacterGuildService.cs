@@ -201,7 +201,6 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				ValidateVersion(membership, guildData.Version);
-				if (guildData.Version > 0) membership.Version = guildData.Version;
 
 				membership.GuildID = guildData.GuildID;
 				membership.Rank = guildData.Rank;
@@ -227,7 +226,6 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				ValidateVersion(membership, guildData.Version);
-				if (guildData.Version > 0) membership.Version = guildData.Version;
 
 				membership.GuildID = guildData.GuildID;
 				membership.Rank = guildData.Rank;

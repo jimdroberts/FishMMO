@@ -123,7 +123,6 @@ namespace FishMMO.Database.Npgsql.Services
 					}
 
 					ValidateVersion(entity, faction.Version);
-					if (faction.Version > 0) entity.Version = faction.Version;
 
 					entity.Value = faction.Value;
 				}

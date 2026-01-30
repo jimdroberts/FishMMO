@@ -133,7 +133,6 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				ValidateVersion(entity, item.Version);
-				if (item.Version > 0) entity.Version = item.Version;
 
 				entity.TemplateID = item.TemplateID;
 				entity.Seed = item.Seed;
@@ -224,7 +223,6 @@ namespace FishMMO.Database.Npgsql.Services
 						}
 
 						ValidateVersion(entity, item.Version);
-						if (item.Version > 0) entity.Version = item.Version;
 
 						entity.TemplateID = item.TemplateID;
 						entity.Seed = item.Seed;

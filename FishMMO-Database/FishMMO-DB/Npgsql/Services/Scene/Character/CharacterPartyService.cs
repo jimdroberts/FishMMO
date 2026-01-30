@@ -200,7 +200,6 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				ValidateVersion(membership, partyData.Version);
-				if (partyData.Version > 0) membership.Version = partyData.Version;
 
 				membership.PartyID = partyData.PartyID;
 				membership.Rank = partyData.Rank;
@@ -226,7 +225,6 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				ValidateVersion(membership, partyData.Version);
-				if (partyData.Version > 0) membership.Version = partyData.Version;
 
 				membership.PartyID = partyData.PartyID;
 				membership.Rank = partyData.Rank;

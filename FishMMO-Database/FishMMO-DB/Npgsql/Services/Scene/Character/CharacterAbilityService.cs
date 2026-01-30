@@ -111,7 +111,6 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				ValidateVersion(ability, abilityData.Version);
-				if (abilityData.Version > 0) ability.Version = abilityData.Version;
 
 				ability.AbilityEvents = abilityData.AbilityEvents == null
 					? new List<int>()
@@ -221,7 +220,6 @@ namespace FishMMO.Database.Npgsql.Services
 							}
 
 							ValidateVersion(entity, ability.Version);
-							if (ability.Version > 0) entity.Version = ability.Version;
 
 							entity.AbilityEvents = ability.AbilityEvents == null ? new List<int>() : new List<int>(ability.AbilityEvents);
 							entity.Cooldown = ability.Cooldown;
@@ -243,7 +241,6 @@ namespace FishMMO.Database.Npgsql.Services
 							if (!entitiesById.TryGetValue(ability.ID, out var entity)) continue;
 
 							ValidateVersion(entity, ability.Version);
-							if (ability.Version > 0) entity.Version = ability.Version;
 
 							entity.CharacterID = ability.CharacterID;
 							entity.TemplateID = ability.TemplateID;

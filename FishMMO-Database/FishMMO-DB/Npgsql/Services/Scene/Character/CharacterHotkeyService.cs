@@ -142,7 +142,6 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				ValidateVersion(entity, hotkey.Version);
-				if (hotkey.Version > 0) entity.Version = hotkey.Version;
 
 				entity.Type = hotkey.Type;
 				entity.ReferenceID = hotkey.ReferenceID;
@@ -232,7 +231,6 @@ namespace FishMMO.Database.Npgsql.Services
 						}
 
 						ValidateVersion(entity, hotkey.Version);
-						if (hotkey.Version > 0) entity.Version = hotkey.Version;
 
 						entity.Type = hotkey.Type;
 						entity.ReferenceID = hotkey.ReferenceID;

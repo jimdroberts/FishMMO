@@ -121,7 +121,6 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				ValidateVersion(entity, petData.Version);
-				if (petData.Version > 0) entity.Version = petData.Version;
 
 				entity.CharacterID = petData.CharacterID;
 				entity.TemplateID = petData.TemplateID;
@@ -162,7 +161,6 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				ValidateVersion(entity, petData.Version);
-				if (petData.Version > 0) entity.Version = petData.Version;
 
 				entity.TemplateID = petData.TemplateID;
 				entity.Abilities = petData.Abilities?.ToList() ?? new List<int>();
@@ -257,7 +255,6 @@ namespace FishMMO.Database.Npgsql.Services
 						if (!existingById.TryGetValue(pet.ID, out var entity)) continue;
 
 						ValidateVersion(entity, pet.Version);
-						if (pet.Version > 0) entity.Version = pet.Version;
 
 						entity.CharacterID = pet.CharacterID;
 						entity.TemplateID = pet.TemplateID;
@@ -284,7 +281,6 @@ namespace FishMMO.Database.Npgsql.Services
 						}
 
 						ValidateVersion(entity, pet.Version);
-						if (pet.Version > 0) entity.Version = pet.Version;
 
 						entity.TemplateID = pet.TemplateID;
 						entity.Abilities = pet.Abilities?.ToList() ?? new List<int>();

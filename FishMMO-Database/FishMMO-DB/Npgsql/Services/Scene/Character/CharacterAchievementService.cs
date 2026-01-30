@@ -106,7 +106,6 @@ namespace FishMMO.Database.Npgsql.Services
 					}
 
 					ValidateVersion(entity, achievement.Version);
-					if (achievement.Version > 0) entity.Version = achievement.Version;
 
 					entity.Tier = achievement.Tier;
 					entity.Value = achievement.Value;
