@@ -68,7 +68,7 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 
 			// Fast path: attempt insert first; on unique violation, fall back to update.
-			var insertResult = await ExecuteMirrorAsync(async dbContext =>
+			var insertResult = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var entity = new LoginServerEntity
 				{
@@ -92,7 +92,7 @@ namespace FishMMO.Database.Npgsql.Services
 			// If another writer inserted concurrently, retry as update.
 			if (string.Equals(insertResult.ErrorCode, "UNIQUE_VIOLATION", StringComparison.Ordinal))
 			{
-				return await ExecuteMirrorAsync(async dbContext =>
+				return await ExecuteTransactionAsync(async dbContext =>
 				{
 					var existing = await getByNameTrackingQuery(dbContext, name, cancellationToken).ConfigureAwait(false);
 					if (existing == null)
@@ -123,7 +123,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			var result = await ExecuteMirrorAsync(async dbContext =>
+			var result = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var server = await getByIdTrackingQuery(dbContext, serverId, cancellationToken).ConfigureAwait(false);
 				if (server == null)
@@ -148,7 +148,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				var server = await getByIdTrackingQuery(dbContext, serverId, cancellationToken).ConfigureAwait(false);
 				if (server == null)
@@ -171,7 +171,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteReadAsync(async dbContext =>
 			{
 				var server = await getByIdNoTrackingQuery(dbContext, serverId, cancellationToken).ConfigureAwait(false);
 				if (server == null)
@@ -180,7 +180,7 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				return MapEntityToDto(server);
-			}).ConfigureAwait(false);
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <summary>

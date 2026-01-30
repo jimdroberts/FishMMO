@@ -86,7 +86,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			var insertResult = await ExecuteMirrorAsync(async dbContext =>
+			var insertResult = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var activeCharacterId = await getActiveCharacterIdQuery(dbContext, item.CharacterID, cancellationToken).ConfigureAwait(false);
 				if (activeCharacterId == 0)
@@ -118,7 +118,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<long>.Failure(insertResult.ErrorCode, insertResult.ErrorMessage, insertResult.IsTransient);
 			}
 
-			var updateResult = await ExecuteMirrorAsync(async dbContext =>
+			var updateResult = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var activeCharacterId = await getActiveCharacterIdQuery(dbContext, item.CharacterID, cancellationToken).ConfigureAwait(false);
 				if (activeCharacterId == 0)
@@ -173,7 +173,7 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				var previousAutoDetectChanges = dbContext.ChangeTracker.AutoDetectChangesEnabled;
 				try
@@ -247,7 +247,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				var itemIds = await dbContext.CharacterInventoryItems
 					.AsNoTracking()
@@ -275,7 +275,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				var itemIds = await dbContext.CharacterInventoryItems
 					.AsNoTracking()
@@ -303,21 +303,21 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteReadAsync(async dbContext =>
 			{
 				var entities = await getInventoryItemsQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
-					var items = entities.Select(i => new CharacterInventoryData(
-						id: i.ID,
-						version: i.Version,
-						characterID: i.CharacterID,
-						templateID: i.TemplateID,
-						slot: i.Slot,
-						seed: i.Seed,
-						amount: i.Amount
-					)).ToList();
+				var items = entities.Select(i => new CharacterInventoryData(
+					id: i.ID,
+					version: i.Version,
+					characterID: i.CharacterID,
+					templateID: i.TemplateID,
+					slot: i.Slot,
+					seed: i.Seed,
+					amount: i.Amount
+				)).ToList();
 
-					return (IReadOnlyList<CharacterInventoryData>)items;
-			}).ConfigureAwait(false);
+				return (IReadOnlyList<CharacterInventoryData>)items;
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 	}
 }

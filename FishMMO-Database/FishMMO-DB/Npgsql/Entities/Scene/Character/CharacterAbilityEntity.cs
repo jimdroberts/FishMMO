@@ -1,10 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations.Schema;
 
 namespace FishMMO.Database.Npgsql.Entities
 {
-	[Table("character_abilities")]
 	public class CharacterAbilityEntity : IVersionedEntity
 	{
 		public long ID { get; set; }

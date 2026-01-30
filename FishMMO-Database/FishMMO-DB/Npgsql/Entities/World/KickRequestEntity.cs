@@ -1,9 +1,7 @@
 ﻿using System;
-using System.ComponentModel.DataAnnotations.Schema;
 
 namespace FishMMO.Database.Npgsql.Entities
 {
-	[Table("kick_requests")]
 	public class KickRequestEntity
 	{
 		public long ID { get; set; }

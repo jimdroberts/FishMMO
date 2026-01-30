@@ -80,7 +80,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			var insertResult = await ExecuteMirrorAsync(async dbContext =>
+			var insertResult = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var activeCharacterId = await getActiveCharacterIdQuery(dbContext, equipment.CharacterID, cancellationToken).ConfigureAwait(false);
 				if (activeCharacterId == 0)
@@ -112,7 +112,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<long>.Failure(insertResult.ErrorCode, insertResult.ErrorMessage, insertResult.IsTransient);
 			}
 
-			var updateResult = await ExecuteMirrorAsync(async dbContext =>
+			var updateResult = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var activeCharacterId = await getActiveCharacterIdQuery(dbContext, equipment.CharacterID, cancellationToken).ConfigureAwait(false);
 				if (activeCharacterId == 0)
@@ -167,7 +167,7 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				var previousAutoDetectChanges = dbContext.ChangeTracker.AutoDetectChangesEnabled;
 				try
@@ -241,7 +241,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				var equipmentIds = await dbContext.CharacterEquippedItems
 					.AsNoTracking()
@@ -269,7 +269,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				var equipmentIds = await dbContext.CharacterEquippedItems
 					.AsNoTracking()
@@ -297,7 +297,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteReadAsync(async dbContext =>
 			{
 				var entities = await getEquipmentQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
 				var equipment = entities.Select(e => new CharacterEquipmentData(
@@ -311,7 +311,7 @@ namespace FishMMO.Database.Npgsql.Services
 				)).ToList();
 
 				return (IReadOnlyList<CharacterEquipmentData>)equipment;
-			}).ConfigureAwait(false);
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 	}
 }

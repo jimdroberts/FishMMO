@@ -48,7 +48,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<(long, WorldServerData)>.Failure("INVALID_PARAMETERS", "Server name and address must not be empty.");
 			}
 
-			return await ExecuteMirrorAsync<(long ServerId, WorldServerData ServerData)>(async dbContext =>
+			return await ExecuteTransactionAsync<(long ServerId, WorldServerData ServerData)>(async dbContext =>
 			{
 				// Keep atomic UPSERT semantics to avoid unique-violation races.
 				// Use database server time for pulse timestamps.
@@ -91,7 +91,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("INVALID_SERVER_ID", "Server ID must be greater than 0.");
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				var sql = $@"UPDATE {TableName}
 					SET lastpulse = CURRENT_TIMESTAMP, character_count = {{0}}
@@ -117,7 +117,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("INVALID_SERVER_ID", "Server ID must be greater than 0.");
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				var sql = $@"DELETE FROM {TableName} WHERE id = {{0}}";
 				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { serverId }, cancellationToken)
@@ -133,7 +133,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<WorldServerData>.Failure("INVALID_SERVER_ID", "Server ID must be greater than 0.");
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteReadAsync(async dbContext =>
 			{
 				var server = await dbContext.WorldServers
 					.AsNoTracking()
@@ -145,7 +145,7 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				return MapEntityToDto(server);
-			}).ConfigureAwait(false);
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -153,7 +153,7 @@ namespace FishMMO.Database.Npgsql.Services
 			float idleTimeoutSeconds = 60.0f,
 			CancellationToken cancellationToken = default)
 		{
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteReadAsync(async dbContext =>
 			{
 				// Use database server time to avoid clock skew issues between application and database servers.
 				// Use numeric * interval to keep the timeout value parameterized.
@@ -166,7 +166,7 @@ namespace FishMMO.Database.Npgsql.Services
 					.OrderBy(s => s.Name)
 					.ToListAsync(cancellationToken).ConfigureAwait(false);
 				return servers.Select(MapEntityToDto).ToList();
-			}).ConfigureAwait(false);
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <summary>

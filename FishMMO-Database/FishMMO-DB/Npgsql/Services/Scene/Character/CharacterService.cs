@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using FishMMO.Database;
 using FishMMO.Database.Data;
 using FishMMO.Database.Data.Enums;
 using FishMMO.Database.Npgsql.Entities;
@@ -75,13 +76,14 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<int>> GetCountAsync(string account, CancellationToken cancellationToken = default)
 		{
-			if (string.IsNullOrWhiteSpace(account))
+			if (!Authentication.IsAllowedUsername(account))
 			{
-				return DatabaseResult<int>.Failure("VALIDATION_ERROR", "Invalid account");
+				return DatabaseResult<int>.Failure("VALIDATION_ERROR", Authentication.InvalidUsernameError);
 			}
 
-			var result = await ExecuteMirrorAsync(async dbContext =>
-				await GetCharacterCountByAccountQuery(dbContext, account, cancellationToken).ConfigureAwait(false)).ConfigureAwait(false);
+			var result = await ExecuteReadAsync(async dbContext =>
+				await GetCharacterCountByAccountQuery(dbContext, account, cancellationToken).ConfigureAwait(false),
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
 				? DatabaseResult<int>.Success(result.Data)
@@ -91,17 +93,17 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<CharacterOperationResult>> CreateCharacterAsync(CharacterData characterData, CancellationToken cancellationToken = default)
 		{
-			if (string.IsNullOrWhiteSpace(characterData.Name))
+			if (!Authentication.IsAllowedCharacterName(characterData.Name))
 			{
 				return DatabaseResult<CharacterOperationResult>.Success(CharacterOperationResult.InvalidName);
 			}
 
-			if (string.IsNullOrWhiteSpace(characterData.Account))
+			if (!Authentication.IsAllowedUsername(characterData.Account))
 			{
 				return DatabaseResult<CharacterOperationResult>.Success(CharacterOperationResult.DatabaseError);
 			}
 
-			var insertResult = await ExecuteMirrorAsync(async dbContext =>
+			var insertResult = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var now = DateTime.UtcNow;
 				var entity = new CharacterEntity
@@ -155,8 +157,9 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 
 			var nameLower = characterData.Name.Trim().ToLowerInvariant();
-			var existingResult = await ExecuteMirrorAsync(async dbContext =>
-				await GetCharacterByNameQuery(dbContext, nameLower, cancellationToken).ConfigureAwait(false)).ConfigureAwait(false);
+			var existingResult = await ExecuteReadAsync(async dbContext =>
+				await GetCharacterByNameQuery(dbContext, nameLower, cancellationToken).ConfigureAwait(false),
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			if (!existingResult.IsSuccess)
 			{
@@ -183,7 +186,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			var saveResult = await ExecuteMirrorAsync(async dbContext =>
+			var saveResult = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var existing = await dbContext.Characters
 					.FirstOrDefaultAsync(c => c.ID == characterData.ID && !c.Deleted, cancellationToken)
@@ -305,7 +308,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			var transactionResult = await ExecuteMirrorAsync(async dbContext =>
+			var transactionResult = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var tableName = dbContext.GetTableName<CharacterEntity>();
 				var guid = Guid.NewGuid().ToString("D");
@@ -389,11 +392,11 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<CharacterData?>.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			var result = await ExecuteMirrorAsync<CharacterData?>(async dbContext =>
+			var result = await ExecuteReadAsync<CharacterData?>(async dbContext =>
 			{
 				var entity = await GetCharacterByIdQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
 				return entity == null ? null : MapEntityToData(entity);
-			}).ConfigureAwait(false);
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
 				? DatabaseResult<CharacterData?>.Success(result.Data)
@@ -403,16 +406,16 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<IReadOnlyList<CharacterData>>> GetCharactersAsync(string account, CancellationToken cancellationToken = default)
 		{
-			if (string.IsNullOrWhiteSpace(account))
+			if (!Authentication.IsAllowedUsername(account))
 			{
-				return DatabaseResult<IReadOnlyList<CharacterData>>.Failure("VALIDATION_ERROR", "Account name is required");
+				return DatabaseResult<IReadOnlyList<CharacterData>>.Failure("VALIDATION_ERROR", Authentication.InvalidUsernameError);
 			}
 
-			var result = await ExecuteMirrorAsync(async dbContext =>
+			var result = await ExecuteReadAsync(async dbContext =>
 			{
 				var entities = await GetCharactersByAccountQuery(dbContext, account, cancellationToken).ConfigureAwait(false);
 				return (IReadOnlyList<CharacterData>)entities.Select(MapEntityToData).ToList();
-			}).ConfigureAwait(false);
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
 				? DatabaseResult<IReadOnlyList<CharacterData>>.Success(result.Data)
@@ -422,17 +425,17 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<CharacterData?>> GetCharacterByNameAsync(string name, CancellationToken cancellationToken = default)
 		{
-			if (string.IsNullOrWhiteSpace(name))
+			if (!Authentication.IsAllowedCharacterName(name))
 			{
-				return DatabaseResult<CharacterData?>.Failure("VALIDATION_ERROR", "Character name is required");
+				return DatabaseResult<CharacterData?>.Failure("VALIDATION_ERROR", Authentication.InvalidCharacterNameError);
 			}
 
-			var result = await ExecuteMirrorAsync<CharacterData?>(async dbContext =>
+			var result = await ExecuteReadAsync<CharacterData?>(async dbContext =>
 			{
 				var nameLower = name.ToLowerInvariant();
 				var entity = await GetCharacterByNameQuery(dbContext, nameLower, cancellationToken).ConfigureAwait(false);
 				return entity == null ? null : MapEntityToData(entity);
-			}).ConfigureAwait(false);
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
 				? DatabaseResult<CharacterData?>.Success(result.Data)
@@ -449,12 +452,12 @@ namespace FishMMO.Database.Npgsql.Services
 		/// </remarks>
 		public async Task<DatabaseResult> SetSelectedAsync(string account, long characterId, CancellationToken cancellationToken = default)
 		{
-			if (string.IsNullOrWhiteSpace(account) || characterId <= 0)
+			if (!Authentication.IsAllowedUsername(account) || characterId <= 0)
 			{
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid account or character ID");
 			}
 
-			var result = await ExecuteMirrorAsync(async dbContext =>
+			var result = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var tableName = dbContext.GetTableName<CharacterEntity>();
 				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
@@ -490,7 +493,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			var result = await ExecuteMirrorAsync(async dbContext =>
+			var result = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var now = DateTime.UtcNow;
 				var character = await dbContext.Characters
@@ -517,7 +520,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			var result = await ExecuteMirrorAsync(async dbContext =>
+			var result = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var now = DateTime.UtcNow;
 				var character = await dbContext.Characters
@@ -550,7 +553,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
-			var result = await ExecuteMirrorAsync(async dbContext =>
+			var result = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var now = DateTime.UtcNow;
 				var character = await dbContext.Characters

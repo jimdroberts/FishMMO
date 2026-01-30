@@ -64,7 +64,7 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				var characterIds = achievementList.Select(a => a.CharacterID).Distinct().ToArray();
 				var activeCharacterIds = await dbContext.Characters
@@ -124,7 +124,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				var achievementIds = await dbContext.CharacterAchievements
 					.AsNoTracking()
@@ -152,7 +152,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteReadAsync(async dbContext =>
 			{
 				var entities = await getAchievementsQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
 				var achievements = entities.Select(a => new CharacterAchievementData(
@@ -165,7 +165,7 @@ namespace FishMMO.Database.Npgsql.Services
 				)).ToList();
 
 				return (IReadOnlyList<CharacterAchievementData>)achievements;
-			}).ConfigureAwait(false);
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 	}
 }

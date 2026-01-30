@@ -136,7 +136,7 @@ namespace FishMMO.Database.Npgsql.Services
 					$"Invalid max capacity. Max capacity must not exceed {MaxAllowedGuildCapacity}.");
 			}
 
-			var precheck = await ExecuteMirrorAsync(async dbContext =>
+			var precheck = await ExecuteReadAsync(async dbContext =>
 			{
 				var activeCharacterId = await getActiveCharacterIdQuery(dbContext, guildData.CharacterID, cancellationToken).ConfigureAwait(false);
 				if (activeCharacterId == 0)
@@ -173,7 +173,7 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				return new SaveMembershipPrecheckResult(true, null, null);
-			}).ConfigureAwait(false);
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			if (!precheck.IsSuccess)
 			{
@@ -186,7 +186,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure(precheckResult.ErrorCode!, precheckResult.ErrorMessage!, isTransient: false);
 			}
 
-			var insertResult = await ExecuteMirrorAsync(async dbContext =>
+			var insertResult = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var membership = await getMembershipByCharacterTrackingQuery(dbContext, guildData.CharacterID, cancellationToken).ConfigureAwait(false);
 				if (membership == null)
@@ -217,7 +217,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure(insertResult.ErrorCode, insertResult.ErrorMessage, insertResult.IsTransient);
 			}
 
-			var updateResult = await ExecuteMirrorAsync(async dbContext =>
+			var updateResult = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var membership = await getMembershipByCharacterTrackingQuery(dbContext, guildData.CharacterID, cancellationToken).ConfigureAwait(false);
 				if (membership == null)
@@ -247,7 +247,7 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID or guild ID. Both must be greater than 0.");
 			}
 
-			var result = await ExecuteMirrorAsync(async dbContext =>
+			var result = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var membership = await dbContext.CharacterGuilds
 					.FirstOrDefaultAsync(g => g.CharacterID == characterId && g.GuildID == guildId, cancellationToken)
@@ -274,7 +274,7 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
-			var result = await ExecuteMirrorAsync(async dbContext =>
+			var result = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var memberships = await dbContext.CharacterGuilds
 					.Where(g => g.CharacterID == characterId)
@@ -304,7 +304,7 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
-			var result = await ExecuteMirrorAsync<CharacterGuildData?>(async dbContext =>
+			var result = await ExecuteReadAsync<CharacterGuildData?>(async dbContext =>
 			{
 				var entity = await getGuildMembershipQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
 				if (entity == null)
@@ -319,7 +319,7 @@ namespace FishMMO.Database.Npgsql.Services
 					guildID: entity.GuildID,
 					rank: entity.Rank,
 					location: entity.Location);
-			}).ConfigureAwait(false);
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
 				? DatabaseResult<CharacterGuildData?>.Success(result.Data)
@@ -336,7 +336,7 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid guild ID. Guild ID must be greater than 0.");
 			}
 
-			var result = await ExecuteMirrorAsync(async dbContext =>
+			var result = await ExecuteReadAsync(async dbContext =>
 			{
 				var entities = await getGuildMembersQuery(dbContext, guildId, cancellationToken).ConfigureAwait(false);
 				var members = entities.Select(g => new CharacterGuildData(
@@ -348,7 +348,7 @@ namespace FishMMO.Database.Npgsql.Services
 					location: g.Location)).ToList();
 
 				return (IReadOnlyList<CharacterGuildData>)members;
-			}).ConfigureAwait(false);
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
 				? DatabaseResult<IReadOnlyList<CharacterGuildData>>.Success(result.Data)
@@ -365,8 +365,9 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid guild ID. Guild ID must be greater than 0.");
 			}
 
-			var result = await ExecuteMirrorAsync(async dbContext =>
-				await getGuildMemberCountQuery(dbContext, guildId, cancellationToken).ConfigureAwait(false)).ConfigureAwait(false);
+			var result = await ExecuteReadAsync(async dbContext =>
+				await getGuildMemberCountQuery(dbContext, guildId, cancellationToken).ConfigureAwait(false),
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
 				? DatabaseResult<int>.Success(result.Data)

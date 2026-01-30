@@ -10,6 +10,8 @@ namespace FishMMO.Database.Npgsql.Entities
 	{
 		public void Configure(EntityTypeBuilder<PatchServerEntity> builder)
 		{
+			builder.ToTable("patch_servers");
+
 			// Primary Key
 			builder.HasKey(e => e.ID);
 
@@ -34,16 +36,13 @@ namespace FishMMO.Database.Npgsql.Entities
 
 			// Unique constraint on server address/port
 			builder.HasIndex(e => new { e.Address, e.Port })
-				.IsUnique()
-				.HasDatabaseName("IX_PatchServer_Address_Port_Unique");
+				.IsUnique();
 
 			// Performance index for active server queries
-			builder.HasIndex(e => e.LastPulse)
-				.HasDatabaseName("IX_PatchServer_LastPulse");
+			builder.HasIndex(e => e.LastPulse);
 
 			// Index for server creation time
-			builder.HasIndex(e => e.TimeCreated)
-				.HasDatabaseName("IX_PatchServer_TimeCreated");
+			builder.HasIndex(e => e.TimeCreated);
 		}
 	}
 }

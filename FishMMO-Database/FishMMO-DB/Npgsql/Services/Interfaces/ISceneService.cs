@@ -46,7 +46,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <remarks>
 		/// Uses SaveChangesAsync with execution strategy wrapping to ensure transient database failures
 		/// are automatically retried.
-		/// Uses BaseService.ExecuteMirrorAsync for automatic transient failure retry and centralized exception mapping.
+		/// Uses BaseService.ExecuteTransactionAsync for automatic transient failure retry and centralized exception mapping.
 		/// </remarks>
 		Task<DatabaseResult<long>> EnqueueAsync(
 			long worldServerId,

@@ -1,9 +1,7 @@
 using System;
-using System.ComponentModel.DataAnnotations.Schema;
 
 namespace FishMMO.Database.Npgsql.Entities
 {
-	[Table("character_hotkeys")]
 	public class CharacterHotkeyEntity : IVersionedEntity
 	{
 		public long ID { get; set; }

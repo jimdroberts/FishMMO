@@ -49,7 +49,7 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 
 			var now = DateTime.UtcNow;
-			var result = await ExecuteMirrorAsync(async dbContext =>
+			var result = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var server = await getByNameTrackingQuery(dbContext, name, cancellationToken).ConfigureAwait(false);
 				if (server == null)
@@ -99,7 +99,7 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 
 			var now = DateTime.UtcNow;
-			var result = await ExecuteMirrorAsync(async dbContext =>
+			var result = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var server = await dbContext.SceneServers
 					.FirstOrDefaultAsync(s => s.ID == serverId, cancellationToken)
@@ -126,7 +126,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("INVALID_SERVER_ID", "Server ID must be greater than zero.");
 			}
 
-			var result = await ExecuteMirrorAsync(async dbContext =>
+			var result = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var server = await dbContext.SceneServers
 					.FirstOrDefaultAsync(s => s.ID == serverId, cancellationToken)
@@ -151,7 +151,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<SceneServerData>.Failure("INVALID_SERVER_ID", "Server ID must be greater than zero.");
 			}
 
-			var result = await ExecuteMirrorAsync(async dbContext =>
+			var result = await ExecuteReadAsync(async dbContext =>
 			{
 				var server = await dbContext.SceneServers
 					.AsNoTracking()
@@ -162,7 +162,7 @@ namespace FishMMO.Database.Npgsql.Services
 					throw new DatabaseEntityNotFoundException("SceneServer", serverId.ToString());
 				}
 				return MapEntityToDto(server);
-			}).ConfigureAwait(false);
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
 				? DatabaseResult<SceneServerData>.Success(result.Data)

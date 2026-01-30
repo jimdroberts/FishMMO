@@ -81,7 +81,7 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				var characterIds = factionList.Select(f => f.CharacterID).Distinct().ToArray();
 				var activeCharacterIds = await dbContext.Characters
@@ -140,7 +140,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				var factionIds = await dbContext.CharacterFactions
 					.AsNoTracking()
@@ -168,7 +168,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteReadAsync(async dbContext =>
 			{
 				var entities = await getFactionsQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
 				var factions = entities.Select(f => new CharacterFactionData(
@@ -180,7 +180,7 @@ namespace FishMMO.Database.Npgsql.Services
 				)).ToList();
 
 				return (IReadOnlyList<CharacterFactionData>)factions;
-			}).ConfigureAwait(false);
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 	}
 }

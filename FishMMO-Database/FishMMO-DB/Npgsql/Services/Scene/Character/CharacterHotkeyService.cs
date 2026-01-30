@@ -96,7 +96,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			var insertResult = await ExecuteMirrorAsync(async dbContext =>
+			var insertResult = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var activeCharacterId = await getActiveCharacterIdQuery(dbContext, hotkey.CharacterID, cancellationToken).ConfigureAwait(false);
 				if (activeCharacterId == 0)
@@ -127,7 +127,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<long>.Failure(insertResult.ErrorCode, insertResult.ErrorMessage, insertResult.IsTransient);
 			}
 
-			var updateResult = await ExecuteMirrorAsync(async dbContext =>
+			var updateResult = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var activeCharacterId = await getActiveCharacterIdQuery(dbContext, hotkey.CharacterID, cancellationToken).ConfigureAwait(false);
 				if (activeCharacterId == 0)
@@ -181,7 +181,7 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				var previousAutoDetectChanges = dbContext.ChangeTracker.AutoDetectChangesEnabled;
 				try
@@ -254,7 +254,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				var hotkeyIds = await dbContext.CharacterHotkeys
 					.AsNoTracking()
@@ -282,20 +282,20 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteReadAsync(async dbContext =>
 			{
 				var entities = await getHotkeysQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
-					var hotkeys = entities.Select(h => new CharacterHotkeyData(
-						id: h.ID,
-						version: h.Version,
-						characterID: h.CharacterID,
-						type: h.Type,
-						slot: h.Slot,
-						referenceID: h.ReferenceID
-					)).ToList();
+				var hotkeys = entities.Select(h => new CharacterHotkeyData(
+					id: h.ID,
+					version: h.Version,
+					characterID: h.CharacterID,
+					type: h.Type,
+					slot: h.Slot,
+					referenceID: h.ReferenceID
+				)).ToList();
 
-					return (IReadOnlyList<CharacterHotkeyData>)hotkeys;
-			}).ConfigureAwait(false);
+				return (IReadOnlyList<CharacterHotkeyData>)hotkeys;
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -309,10 +309,9 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
-			{
-				return await getHotkeyCountQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
-			}).ConfigureAwait(false);
+			return await ExecuteReadAsync(async dbContext =>
+				await getHotkeyCountQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false),
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 	}
 }

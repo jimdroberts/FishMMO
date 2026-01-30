@@ -41,7 +41,6 @@ namespace FishMMO.Database.Npgsql.Services
 
 		/// <inheritdoc/>
 		public async Task<DatabaseResult> SaveAsync(
-			long accountId,
 			long characterId,
 			string characterName,
 			string accountName,
@@ -52,11 +51,6 @@ namespace FishMMO.Database.Npgsql.Services
 			DateTime serverReceivedTime,
 			CancellationToken cancellationToken = default)
 		{
-			if (accountId <= 0)
-			{
-				return DatabaseResult.Failure("VALIDATION_ERROR", "AccountId must be greater than 0.");
-			}
-
 			if (characterId <= 0)
 			{
 				return DatabaseResult.Failure("VALIDATION_ERROR", "CharacterId must be greater than 0.");
@@ -87,7 +81,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 
 			var channelByte = (byte)channel;
-			var result = await ExecuteMirrorAsync(async dbContext =>
+			var result = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var entity = new ChatEntity
 				{
@@ -121,7 +115,7 @@ namespace FishMMO.Database.Npgsql.Services
 			if (amount <= 0)
 				return DatabaseResult<List<ChatData>>.Success(new List<ChatData>());
 
-			var result = await ExecuteMirrorAsync(async dbContext =>
+			var result = await ExecuteReadAsync(async dbContext =>
 			{
 				// Filter out local messages for the specified scene server
 				var localChannels = new byte[]
@@ -144,7 +138,7 @@ namespace FishMMO.Database.Npgsql.Services
 					.ToListAsync(cancellationToken).ConfigureAwait(false);
 
 				return messages.Select(MapEntityToDto).ToList();
-			}).ConfigureAwait(false);
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
 				? DatabaseResult<List<ChatData>>.Success(result.Data)

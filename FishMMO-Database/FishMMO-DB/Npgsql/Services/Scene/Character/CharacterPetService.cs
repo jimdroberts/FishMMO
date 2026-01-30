@@ -91,7 +91,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			var saveResult = await ExecuteMirrorAsync(async dbContext =>
+			var saveResult = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var activeCharacterId = await getActiveCharacterIdQuery(dbContext, petData.CharacterID, cancellationToken).ConfigureAwait(false);
 				if (activeCharacterId == 0)
@@ -143,7 +143,7 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 
 			// Retry as update on unique violations.
-			var updateResult = await ExecuteMirrorAsync(async dbContext =>
+			var updateResult = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var activeCharacterId = await getActiveCharacterIdQuery(dbContext, petData.CharacterID, cancellationToken).ConfigureAwait(false);
 				if (activeCharacterId == 0)
@@ -217,7 +217,7 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				var previousAutoDetectChanges = dbContext.ChangeTracker.AutoDetectChangesEnabled;
 				try
@@ -304,7 +304,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				var pets = await dbContext.CharacterPets
 					.Where(p => p.CharacterID == characterId)
@@ -331,7 +331,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteMirrorAsync<CharacterPetData?>(async dbContext =>
+			return await ExecuteReadAsync<CharacterPetData?>(async dbContext =>
 			{
 				var entity = await getPetQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
 				if (entity == null)
@@ -345,7 +345,7 @@ namespace FishMMO.Database.Npgsql.Services
 					abilities: entity.Abilities ?? new List<int>(),
 					spawned: entity.Spawned
 				);
-			}).ConfigureAwait(false);
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -359,7 +359,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteMirrorAsync<CharacterPetData?>(async dbContext =>
+			return await ExecuteReadAsync<CharacterPetData?>(async dbContext =>
 			{
 				var entity = await getSpawnedPetQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
 				if (entity == null)
@@ -373,7 +373,7 @@ namespace FishMMO.Database.Npgsql.Services
 					abilities: entity.Abilities ?? new List<int>(),
 					spawned: entity.Spawned
 				);
-			}).ConfigureAwait(false);
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 	}
 }

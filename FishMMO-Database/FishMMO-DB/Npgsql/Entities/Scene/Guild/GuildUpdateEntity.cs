@@ -1,9 +1,7 @@
 ﻿using System;
-using System.ComponentModel.DataAnnotations.Schema;
 
 namespace FishMMO.Database.Npgsql.Entities
 {
-	[Table("guild_updates")]
 	public class GuildUpdateEntity
 	{
 		public long ID { get; set; }

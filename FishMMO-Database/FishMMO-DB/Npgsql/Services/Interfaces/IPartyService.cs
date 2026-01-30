@@ -54,7 +54,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// or a <see cref="DatabaseException"/> on failure.
 		/// </returns>
 		/// <remarks>
-		/// Uses BaseService.ExecuteMirrorAsync for:
+		/// Uses BaseService.ExecuteTransactionAsync for:
 		/// - Automatic transient failure retry
 		/// - Centralized exception handling and mapping
 		/// - Consistent DatabaseResult pattern

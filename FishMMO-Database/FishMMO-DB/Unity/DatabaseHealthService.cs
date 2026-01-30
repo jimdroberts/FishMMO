@@ -57,25 +57,12 @@ namespace FishMMO.Server.Database
 
 		[Header("Metrics Configuration")]
 		[SerializeField]
-		[Tooltip("Enable automatic metrics logging to Unity console")]
-		private bool enableMetricsLogging = true;
+		[Tooltip("Enable periodic metrics refresh (no logging; server subscribes to events)")]
+		private bool enableMetricsRefresh = true;
 
 		[SerializeField]
-		[Tooltip("Interval in seconds between metrics logging")]
-		private float metricsLogInterval = 60f;
-
-		[Header("Alerting Configuration")]
-		[SerializeField]
-		[Tooltip("Enable console alerts for critical health issues")]
-		private bool enableAlerts = true;
-
-		[SerializeField]
-		[Tooltip("Enable slow query logging")]
-		private bool enableSlowQueryLogging = true;
-
-		[SerializeField]
-		[Tooltip("Slow query threshold in milliseconds")]
-		private float slowQueryThresholdMs = 1000f;
+		[Tooltip("Interval in seconds between metrics refresh")]
+		private float metricsRefreshInterval = 60f;
 
 		[Header("Status Display (Read-Only)")]
 		[SerializeField]
@@ -114,10 +101,14 @@ namespace FishMMO.Server.Database
 		[Tooltip("Average query response time in milliseconds")]
 		private float avgResponseTimeMs = 0f;
 
-		// Event for external systems to subscribe to health changes
+		// Events for external systems (server-side logging/telemetry happens outside this DLL)
+		public event Action<HealthCheckResult> OnHealthCheckCompleted;
 		public event Action<HealthCheckResult> OnHealthStatusChanged;
+		public event Action<PoolHealthResult> OnPoolHealthChecked;
 		public event Action<PoolHealthResult> OnPoolStatusChanged;
 		public event Action<SlowQueryEventArgs> OnSlowQueryDetected;
+		public event Action<MetricsSummary> OnMetricsSummaryUpdated;
+		public event Action<Exception> OnMonitoringError;
 
 		/// <summary>
 		/// Gets the last recorded health check result.
@@ -157,8 +148,8 @@ namespace FishMMO.Server.Database
 			this.database = database;
 			isInitialized = true;
 
-			// Subscribe to slow query events if enabled
-			if (enableSlowQueryLogging && database.DbContextFactory is Npgsql.INpgsqlDbContextFactory npgsqlFactory)
+			// Subscribe to slow query events (server decides what to do with them)
+			if (database.DbContextFactory is Npgsql.INpgsqlDbContextFactory npgsqlFactory)
 			{
 				npgsqlFactory.PerformanceTracker.SlowQueryDetected += OnSlowQueryDetectedInternal;
 			}
@@ -166,7 +157,7 @@ namespace FishMMO.Server.Database
 			// Start monitoring
 			StartMonitoring();
 
-			Debug.Log("[DatabaseHealthService] Initialized successfully.");
+			// Intentionally no logging here; server project should handle logging.
 		}
 
 		/// <summary>
@@ -174,17 +165,8 @@ namespace FishMMO.Server.Database
 		/// </summary>
 		public void StartMonitoring()
 		{
-			if (!isInitialized)
-			{
-				Debug.LogWarning("[DatabaseHealthService] Cannot start monitoring - not initialized.");
+			if (!isInitialized || isMonitoring)
 				return;
-			}
-
-			if (isMonitoring)
-			{
-				Debug.LogWarning("[DatabaseHealthService] Monitoring is already running.");
-				return;
-			}
 
 			// Start periodic health checks
 			if (enableHealthChecks)
@@ -198,14 +180,13 @@ namespace FishMMO.Server.Database
 				InvokeRepeating(nameof(CheckPoolHealth), poolCheckInterval / 2f, poolCheckInterval);
 			}
 
-			// Start periodic metrics logging
-			if (enableMetricsLogging)
+			// Start periodic metrics refresh (no logging)
+			if (enableMetricsRefresh)
 			{
-				InvokeRepeating(nameof(LogMetrics), metricsLogInterval, metricsLogInterval);
+				InvokeRepeating(nameof(RefreshMetrics), metricsRefreshInterval, metricsRefreshInterval);
 			}
 
 			isMonitoring = true;
-			Debug.Log("[DatabaseHealthService] Monitoring started.");
 		}
 
 		/// <summary>
@@ -218,7 +199,6 @@ namespace FishMMO.Server.Database
 
 			CancelInvoke();
 			isMonitoring = false;
-			Debug.Log("[DatabaseHealthService] Monitoring stopped.");
 		}
 
 		/// <summary>
@@ -238,6 +218,7 @@ namespace FishMMO.Server.Database
 				// Perform synchronous health check (safe for Unity main thread)
 				var previousStatus = LastHealthResult?.Status ?? HealthStatus.Unknown;
 				LastHealthResult = database.HealthMonitor.CheckHealth();
+				OnHealthCheckCompleted?.Invoke(LastHealthResult);
 
 				// Update inspector-visible fields
 				currentHealthStatus = LastHealthResult.Status.ToString();
@@ -254,27 +235,10 @@ namespace FishMMO.Server.Database
 				{
 					OnHealthStatusChanged?.Invoke(LastHealthResult);
 				}
-
-				// Log based on severity
-				if (enableAlerts)
-				{
-					if (LastHealthResult.Status == HealthStatus.Unhealthy)
-					{
-						Debug.LogError($"[DatabaseHealthService] 🔴 UNHEALTHY: {LastHealthResult.Message}");
-					}
-					else if (LastHealthResult.Status == HealthStatus.Degraded)
-					{
-						Debug.LogWarning($"[DatabaseHealthService] 🟡 DEGRADED: {LastHealthResult.Message}");
-					}
-					else if (LastHealthResult.PoolRequiresAction)
-					{
-						Debug.LogWarning($"[DatabaseHealthService] ⚠️  POOL WARNING: {LastHealthResult.PoolHealthMessage}");
-					}
-				}
 			}
 			catch (Exception ex)
 			{
-				Debug.LogError($"[DatabaseHealthService] Health check failed: {ex.Message}");
+				OnMonitoringError?.Invoke(ex);
 				currentHealthStatus = "Error";
 				lastHealthMessage = ex.Message;
 			}
@@ -292,7 +256,8 @@ namespace FishMMO.Server.Database
 			try
 			{
 				var previousStatus = LastPoolHealth?.Status ?? PoolHealthStatus.Healthy;
-				LastPoolHealth = database.HealthMonitor.GetPoolHealth();
+				LastPoolHealth = database.HealthMonitor.GetPoolHealth(poolWarningThreshold, poolCriticalThreshold);
+				OnPoolHealthChecked?.Invoke(LastPoolHealth);
 
 				// Update inspector fields
 				poolStatus = LastPoolHealth.Status.ToString();
@@ -304,40 +269,25 @@ namespace FishMMO.Server.Database
 				{
 					OnPoolStatusChanged?.Invoke(LastPoolHealth);
 				}
-
-				// Alert on critical pool conditions
-				if (enableAlerts)
-				{
-					if (LastPoolHealth.Status == PoolHealthStatus.Unhealthy)
-					{
-						Debug.LogError($"[DatabaseHealthService] 🚨 POOL CRITICAL: {LastPoolHealth.Message}\n" +
-									   $"Action Required: {LastPoolHealth.RecommendedAction}");
-					}
-					else if (LastPoolHealth.Status == PoolHealthStatus.Critical)
-					{
-						Debug.LogWarning($"[DatabaseHealthService] ⚠️  POOL CRITICAL: {LastPoolHealth.Message}\n" +
-										$"Recommendation: {LastPoolHealth.RecommendedAction}");
-					}
-				}
 			}
 			catch (Exception ex)
 			{
-				Debug.LogError($"[DatabaseHealthService] Pool health check failed: {ex.Message}");
+				OnMonitoringError?.Invoke(ex);
 			}
 		}
 
 		/// <summary>
-		/// Logs current database metrics to Unity console.
-		/// Called automatically at configured intervals if enableMetricsLogging is true.
+		/// Refreshes current database metrics and emits them via events.
+		/// Called automatically at configured intervals if enableMetricsRefresh is true.
 		/// </summary>
-		private void LogMetrics()
+		private void RefreshMetrics()
 		{
 			if (!isInitialized || database == null)
 				return;
 
 			try
 			{
-				// Get query performance metrics if available
+				// Query performance tracker metrics (per-operation)
 				if (database.DbContextFactory is Npgsql.INpgsqlDbContextFactory npgsqlFactory)
 				{
 					var allMetrics = npgsqlFactory.PerformanceTracker.GetAllMetrics();
@@ -360,29 +310,20 @@ namespace FishMMO.Server.Database
 						totalQueries = totalExecutions;
 						successRate = totalExecutions > 0 ? (float)(successfulExecutions * 100.0 / totalExecutions) : 100f;
 						avgResponseTimeMs = totalExecutions > 0 ? (float)(totalDurationMs / totalExecutions) : 0f;
-
-						Debug.Log($"[DatabaseHealthService] 📊 Metrics Summary:\n" +
-								  $"  Total Queries: {totalExecutions:N0}\n" +
-								  $"  Success Rate: {successRate:F2}%\n" +
-								  $"  Avg Response: {avgResponseTimeMs:F2}ms\n" +
-								  $"  Pool: {poolMetrics.ActiveConnections} active / {poolMetrics.TotalConnectionsCreated} created / {poolMetrics.ConnectionErrors} errors");
-
-						// Log top 5 slowest operations
-						var slowest = npgsqlFactory.PerformanceTracker.GetSlowestOperations(5);
-						if (slowest.Count > 0)
-						{
-							Debug.Log("[DatabaseHealthService] 🐌 Slowest Operations:");
-							foreach (var op in slowest)
-							{
-								Debug.Log($"  {op.OperationName}: {op.AverageMs:F2}ms avg ({op.TotalExecutions} calls)");
-							}
-						}
 					}
+				}
+
+				// Aggregate metrics tracker snapshot (if your server is recording into it)
+				// Note: This DLL does not log. Server should subscribe to OnMetricsSummaryUpdated.
+				var summary = database.MetricsTracker?.GetSummary();
+				if (summary != null)
+				{
+					OnMetricsSummaryUpdated?.Invoke(summary);
 				}
 			}
 			catch (Exception ex)
 			{
-				Debug.LogError($"[DatabaseHealthService] Failed to retrieve metrics: {ex.Message}");
+				OnMonitoringError?.Invoke(ex);
 			}
 		}
 
@@ -391,13 +332,7 @@ namespace FishMMO.Server.Database
 		/// </summary>
 		private void OnSlowQueryDetectedInternal(object sender, SlowQueryEventArgs e)
 		{
-			if (enableSlowQueryLogging)
-			{
-				Debug.LogWarning($"[DatabaseHealthService] 🐢 SLOW QUERY: {e.OperationName} took {e.Duration.TotalMilliseconds:F2}ms " +
-								$"(threshold: {slowQueryThresholdMs}ms) - Success: {e.Success}");
-			}
-
-			// Notify external subscribers
+			// Notify external subscribers (server logs/alerts if desired)
 			OnSlowQueryDetected?.Invoke(e);
 		}
 
@@ -421,9 +356,9 @@ namespace FishMMO.Server.Database
 		/// <summary>
 		/// Manually retrieves and logs current metrics outside of the automatic schedule.
 		/// </summary>
-		public void ManualMetricsLog()
+		public void ManualMetricsRefresh()
 		{
-			LogMetrics();
+			RefreshMetrics();
 		}
 
 		/// <summary>
@@ -473,7 +408,7 @@ namespace FishMMO.Server.Database
 			}
 
 			isInitialized = false;
-			Debug.Log("[DatabaseHealthService] Shutdown complete.");
+			// Intentionally no logging here; server project should handle logging.
 		}
 
 		#region Context Menu Commands (Unity Editor)
@@ -505,7 +440,7 @@ namespace FishMMO.Server.Database
 		[ContextMenu("Log Metrics")]
 		private void ContextMenu_LogMetrics()
 		{
-			ManualMetricsLog();
+			ManualMetricsRefresh();
 		}
 
 		/// <summary>
@@ -515,7 +450,8 @@ namespace FishMMO.Server.Database
 		[ContextMenu("Print Health Report")]
 		private void ContextMenu_PrintHealthReport()
 		{
-			Debug.Log(GetHealthReport());
+			// Server project: log or display GetHealthReport() result.
+			// Example: ServerLogger.Info(GetHealthReport());
 		}
 
 		/// <summary>

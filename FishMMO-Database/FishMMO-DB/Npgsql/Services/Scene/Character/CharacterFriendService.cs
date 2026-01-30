@@ -85,7 +85,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			var insertResult = await ExecuteMirrorAsync(async dbContext =>
+			var insertResult = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var activeCharacterId = await getActiveCharacterIdQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
 				if (activeCharacterId == 0)
@@ -123,7 +123,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				var friendIds = await dbContext.CharacterFriends
 					.AsNoTracking()
@@ -151,7 +151,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				var friendIds = await dbContext.CharacterFriends
 					.AsNoTracking()
@@ -179,18 +179,18 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteReadAsync(async dbContext =>
 			{
 				var entities = await getFriendsQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
-					var friends = entities.Select(f => new CharacterFriendData(
-						id: f.ID,
-						version: f.Version,
-						characterID: f.CharacterID,
-						friendCharacterID: f.FriendCharacterID
-					)).ToList();
+				var friends = entities.Select(f => new CharacterFriendData(
+					id: f.ID,
+					version: f.Version,
+					characterID: f.CharacterID,
+					friendCharacterID: f.FriendCharacterID
+				)).ToList();
 
-					return (IReadOnlyList<CharacterFriendData>)friends;
-			}).ConfigureAwait(false);
+				return (IReadOnlyList<CharacterFriendData>)friends;
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -204,10 +204,9 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
-			{
-				return await getFriendCountQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
-			}).ConfigureAwait(false);
+			return await ExecuteReadAsync(async dbContext =>
+				await getFriendCountQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false),
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 	}
 }

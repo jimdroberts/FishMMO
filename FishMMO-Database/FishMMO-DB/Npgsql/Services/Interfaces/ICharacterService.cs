@@ -76,7 +76,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <remarks>
 		/// Uses atomic UPDATE operation to save all character fields in one operation.
 		/// Updates the last_saved timestamp automatically.
-		/// Uses BaseService.ExecuteMirrorAsync for automatic transient failure retry and centralized exception mapping.
+		/// Uses BaseService.ExecuteTransactionAsync for automatic transient failure retry and centralized exception mapping.
 		/// </remarks>
 		Task<DatabaseResult> SaveCharacterAsync(CharacterData characterData, CancellationToken cancellationToken = default);
 

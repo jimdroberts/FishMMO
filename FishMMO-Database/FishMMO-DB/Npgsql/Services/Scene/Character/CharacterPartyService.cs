@@ -23,7 +23,7 @@ namespace FishMMO.Database.Npgsql.Services
 	/// - Party membership deletion
 	/// - Party membership and member retrieval
 	/// 
-	/// All database operations use BaseService.ExecuteMirrorAsync for:
+	/// All database operations use BaseService.ExecuteTransactionAsync for:
 	/// - Automatic transient failure retry
 	/// - Centralized exception handling and mapping
 	/// - Consistent DatabaseResult pattern
@@ -135,7 +135,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			var precheck = await ExecuteMirrorAsync(async dbContext =>
+			var precheck = await ExecuteReadAsync(async dbContext =>
 			{
 				var activeCharacterId = await getActiveCharacterIdQuery(dbContext, partyData.CharacterID, cancellationToken).ConfigureAwait(false);
 				if (activeCharacterId == 0)
@@ -172,7 +172,7 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				return new SaveMembershipPrecheckResult(true, null, null, true);
-			}).ConfigureAwait(false);
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			if (!precheck.IsSuccess)
 			{
@@ -185,7 +185,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure(precheckResult.ErrorCode!, precheckResult.ErrorMessage!, isTransient: false);
 			}
 
-			var insertResult = await ExecuteMirrorAsync(async dbContext =>
+			var insertResult = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var membership = await getMembershipByCharacterTrackingQuery(dbContext, partyData.CharacterID, cancellationToken).ConfigureAwait(false);
 				if (membership == null)
@@ -216,7 +216,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure(insertResult.ErrorCode, insertResult.ErrorMessage, insertResult.IsTransient);
 			}
 
-			var updateResult = await ExecuteMirrorAsync(async dbContext =>
+			var updateResult = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var membership = await getMembershipByCharacterTrackingQuery(dbContext, partyData.CharacterID, cancellationToken).ConfigureAwait(false);
 				if (membership == null)
@@ -247,7 +247,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				var memberships = await dbContext.CharacterParties
 					.Where(p => p.CharacterID == characterId)
@@ -274,7 +274,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				var membership = await dbContext.CharacterParties
 					.FirstOrDefaultAsync(p => p.CharacterID == characterId && p.PartyID == partyId, cancellationToken)
@@ -298,7 +298,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteReadAsync(async dbContext =>
 			{
 				var entity = await getPartyMembershipQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
 				if (entity == null)
@@ -312,7 +312,7 @@ namespace FishMMO.Database.Npgsql.Services
 					rank: entity.Rank,
 					healthPCT: entity.HealthPCT
 				);
-			}).ConfigureAwait(false);
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -326,7 +326,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteReadAsync(async dbContext =>
 			{
 				var entities = await getPartyMembersQuery(dbContext, partyId, cancellationToken).ConfigureAwait(false);
 				var members = entities.Select(p => new CharacterPartyData(
@@ -339,7 +339,7 @@ namespace FishMMO.Database.Npgsql.Services
 				)).ToList();
 
 				return (IReadOnlyList<CharacterPartyData>)members;
-			}).ConfigureAwait(false);
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -353,10 +353,9 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
-			{
-				return await getPartyMemberCountQuery(dbContext, partyId, cancellationToken).ConfigureAwait(false);
-			}).ConfigureAwait(false);
+			return await ExecuteReadAsync(async dbContext =>
+				await getPartyMemberCountQuery(dbContext, partyId, cancellationToken).ConfigureAwait(false),
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 	}
 }

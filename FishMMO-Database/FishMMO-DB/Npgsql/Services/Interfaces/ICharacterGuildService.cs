@@ -41,7 +41,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <param name="cancellationToken">Token to cancel the asynchronous operation.</param>
 		/// <returns>DatabaseResult indicating success or containing error details.</returns>
 		/// <remarks>
-		/// Uses BaseService.ExecuteMirrorAsync for:
+		/// Uses BaseService.ExecuteTransactionAsync for:
 		/// - Automatic transient failure retry
 		/// - Centralized exception handling and mapping
 		/// - Consistent DatabaseResult pattern

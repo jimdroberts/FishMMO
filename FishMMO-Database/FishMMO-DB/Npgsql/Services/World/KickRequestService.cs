@@ -37,7 +37,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("INVALID_ACCOUNT_NAME", "Account name must not be empty.");
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				// Use database server time to avoid clock skew issues.
 				// Keep atomic UPSERT semantics to prevent duplicate kick requests under concurrency.
@@ -60,7 +60,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<int>.Failure("INVALID_ACCOUNT_NAME", "Account name must not be empty.");
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				var sql = $"DELETE FROM {TableName} WHERE account_name = {{0}}";
 				return await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { accountName }, cancellationToken)
@@ -78,7 +78,7 @@ namespace FishMMO.Database.Npgsql.Services
 			if (amount <= 0)
 				return DatabaseResult<List<KickRequestData>>.Success(new List<KickRequestData>());
 
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteReadAsync(async dbContext =>
 			{
 				var requests = await dbContext.KickRequests
 					.AsNoTracking()
@@ -91,7 +91,7 @@ namespace FishMMO.Database.Npgsql.Services
 					.ToListAsync(cancellationToken).ConfigureAwait(false);
 
 				return requests.Select(MapEntityToDto).ToList();
-			}).ConfigureAwait(false);
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <summary>

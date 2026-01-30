@@ -68,8 +68,9 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
-				await getCountQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false)).ConfigureAwait(false);
+			return await ExecuteReadAsync(async dbContext =>
+				await getCountQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false),
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -83,7 +84,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			var abilityResult = await ExecuteMirrorAsync(async dbContext =>
+			var abilityResult = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var isCharacterActive = await dbContext.Characters
 					.AsNoTracking()
@@ -172,7 +173,7 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				var previousAutoDetectChanges = dbContext.ChangeTracker.AutoDetectChangesEnabled;
 				dbContext.ChangeTracker.AutoDetectChangesEnabled = false;
@@ -203,7 +204,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 						foreach (var ability in newItems)
 						{
-							if (!activeCharacterIdSet.Contains(ability.CharacterID))	continue;
+							if (!activeCharacterIdSet.Contains(ability.CharacterID)) continue;
 
 							var key = (ability.CharacterID, ability.TemplateID);
 							if (!existingByKey.TryGetValue(key, out var entity))
@@ -267,7 +268,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				var abilityIds = await dbContext.CharacterAbilities
 					.AsNoTracking()
@@ -295,7 +296,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				var ability = await dbContext.CharacterAbilities
 					.FirstOrDefaultAsync(a => a.ID == abilityId && a.CharacterID == characterId, cancellationToken)
@@ -320,7 +321,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteReadAsync(async dbContext =>
 			{
 				var entities = await getAbilitiesQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
 				var abilities = entities.Select(a => new CharacterAbilityData(
@@ -333,7 +334,7 @@ namespace FishMMO.Database.Npgsql.Services
 				)).ToList();
 
 				return (IReadOnlyList<CharacterAbilityData>)abilities;
-			}).ConfigureAwait(false);
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 	}
 }

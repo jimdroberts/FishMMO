@@ -32,10 +32,6 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <summary>
 		/// Saves a chat message with denormalized audit fields.
 		/// </summary>
-		/// <param name="accountId">
-		/// Numeric account identifier used for idempotency scoping.
-		/// This is not the account name; it is a stable numeric ID provided by the caller.
-		/// </param>
 		/// <param name="characterId">Character ID sending the message.</param>
 		/// <param name="characterName">Character name (denormalized for audit retention).</param>
 		/// <param name="accountName">Account name (denormalized for audit retention).</param>
@@ -51,13 +47,12 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <remarks>
 		/// Chat audit fields are denormalized so logs can survive character deletion.
 		/// Passing the names avoids a race where the character row is deleted between lookup and insert.
-		/// Uses BaseService.ExecuteMirrorAsync for:
+		/// Uses BaseService.ExecuteTransactionAsync for:
 		/// - Automatic transient failure retry
 		/// - Centralized exception handling and mapping
 		/// - Consistent DatabaseResult pattern
 		/// </remarks>
 		Task<DatabaseResult> SaveAsync(
-			long accountId,
 			long characterId,
 			string characterName,
 			string accountName,

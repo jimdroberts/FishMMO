@@ -41,7 +41,7 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 
 			var now = DateTime.UtcNow;
-			var result = await ExecuteMirrorAsync(async dbContext =>
+			var result = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var existing = await getByPartyIdTrackingQuery(dbContext, partyId, cancellationToken).ConfigureAwait(false);
 				if (existing == null)
@@ -75,7 +75,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<int>.Failure("INVALID_PARTY_ID", "Party ID must be greater than zero.");
 			}
 
-			var result = await ExecuteMirrorAsync(async dbContext =>
+			var result = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var existing = await getByPartyIdTrackingQuery(dbContext, partyId, cancellationToken).ConfigureAwait(false);
 				if (existing == null)
@@ -100,7 +100,7 @@ namespace FishMMO.Database.Npgsql.Services
 			if (partyIds == null || partyIds.Count == 0)
 				return DatabaseResult<List<PartyUpdateData>>.Success(new List<PartyUpdateData>());
 
-			var result = await ExecuteMirrorAsync(async dbContext =>
+			var result = await ExecuteReadAsync(async dbContext =>
 			{
 				var updates = await dbContext.PartyUpdates
 					.AsNoTracking()
@@ -109,7 +109,7 @@ namespace FishMMO.Database.Npgsql.Services
 					.ConfigureAwait(false);
 
 				return updates.Select(MapEntityToDto).ToList();
-			}).ConfigureAwait(false);
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
 				? DatabaseResult<List<PartyUpdateData>>.Success(result.Data)

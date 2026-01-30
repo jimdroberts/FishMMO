@@ -1,9 +1,7 @@
 ﻿using System;
-using System.ComponentModel.DataAnnotations.Schema;
 
 namespace FishMMO.Database.Npgsql.Entities
 {
-	[Table("login_servers")]
 	public class LoginServerEntity
 	{
 		public long ID { get; set; }

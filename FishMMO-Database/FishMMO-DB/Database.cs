@@ -1,9 +1,9 @@
 using System;
+using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Database.Npgsql;
-using FishMMO.Database.Npgsql.Services;
-using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Database.Npgsql.Monitoring.Health;
 using FishMMO.Database.Npgsql.Monitoring.Metrics;
 using FishMMO.Database.Npgsql.Monitoring.Diagnostics;
@@ -126,33 +126,90 @@ namespace FishMMO.Database
 				throw new ArgumentNullException(nameof(dbContextFactory));
 
 			var registry = new NpgsqlServiceRegistry();
-			registry.Register<IAccountService>(new AccountService(dbContextFactory));
-			registry.Register<ICharacterAbilityService>(new CharacterAbilityService(dbContextFactory));
-			registry.Register<ICharacterAchievementService>(new CharacterAchievementService(dbContextFactory));
-			registry.Register<ICharacterAttributeService>(new CharacterAttributeService(dbContextFactory));
-			registry.Register<ICharacterBankService>(new CharacterBankService(dbContextFactory));
-			registry.Register<ICharacterBuffService>(new CharacterBuffService(dbContextFactory));
-			registry.Register<ICharacterEquipmentService>(new CharacterEquipmentService(dbContextFactory));
-			registry.Register<ICharacterFactionService>(new CharacterFactionService(dbContextFactory));
-			registry.Register<ICharacterFriendService>(new CharacterFriendService(dbContextFactory));
-			registry.Register<ICharacterGuildService>(new CharacterGuildService(dbContextFactory));
-			registry.Register<ICharacterHotkeyService>(new CharacterHotkeyService(dbContextFactory));
-			registry.Register<ICharacterInventoryService>(new CharacterInventoryService(dbContextFactory));
-			registry.Register<ICharacterKnownAbilityService>(new CharacterKnownAbilityService(dbContextFactory));
-			registry.Register<ICharacterPartyService>(new CharacterPartyService(dbContextFactory));
-			registry.Register<ICharacterPetService>(new CharacterPetService(dbContextFactory));
-			registry.Register<ICharacterService>(new CharacterService(dbContextFactory));
-			registry.Register<IChatService>(new ChatService(dbContextFactory));
-			registry.Register<IGuildService>(new GuildService(dbContextFactory));
-			registry.Register<IGuildUpdateService>(new GuildUpdateService(dbContextFactory));
-			registry.Register<IKickRequestService>(new KickRequestService(dbContextFactory));
-			registry.Register<ILoginServerService>(new LoginServerService(dbContextFactory));
-			registry.Register<IPartyService>(new PartyService(dbContextFactory));
-			registry.Register<IPartyUpdateService>(new PartyUpdateService(dbContextFactory));
-			registry.Register<ISceneServerService>(new SceneServerService(dbContextFactory));
-			registry.Register<ISceneService>(new SceneService(dbContextFactory));
-			registry.Register<IWorldServerService>(new WorldServerService(dbContextFactory));
+			RegisterNpgsqlServicesByReflection(registry, dbContextFactory);
 			return registry;
+		}
+
+		private static void RegisterNpgsqlServicesByReflection(NpgsqlServiceRegistry registry, INpgsqlDbContextFactory dbContextFactory)
+		{
+			if (registry == null)
+				throw new ArgumentNullException(nameof(registry));
+			if (dbContextFactory == null)
+				throw new ArgumentNullException(nameof(dbContextFactory));
+
+			// Discover all service interfaces and their concrete implementations, then register them.
+			// This avoids a growing manual registration wall as new tables/services are added.
+			const string interfaceNamespace = "FishMMO.Database.Npgsql.Services.Interfaces";
+
+			var assembly = typeof(NpgsqlDbContextFactory).Assembly;
+			var serviceInterfaces = assembly.GetTypes()
+				.Where(t => t.IsInterface
+					&& string.Equals(t.Namespace, interfaceNamespace, StringComparison.Ordinal)
+					&& t.Name.EndsWith("Service", StringComparison.Ordinal))
+				.OrderBy(t => t.FullName, StringComparer.Ordinal)
+				.ToArray();
+
+			var candidates = assembly.GetTypes()
+				.Where(t => t.IsClass
+					&& !t.IsAbstract
+					&& t.Namespace != null
+					&& t.Namespace.StartsWith("FishMMO.Database.Npgsql.Services", StringComparison.Ordinal))
+				.ToArray();
+
+			var registerOpenMethod = typeof(NpgsqlServiceRegistry).GetMethod(
+				"Register",
+				BindingFlags.Instance | BindingFlags.NonPublic);
+			if (registerOpenMethod == null)
+			{
+				throw new InvalidOperationException(
+					"Failed to locate NpgsqlServiceRegistry.Register<TService>(TService) method for dynamic registration.");
+			}
+
+			foreach (var serviceInterface in serviceInterfaces)
+			{
+				var implementations = candidates
+					.Where(t => serviceInterface.IsAssignableFrom(t))
+					.ToArray();
+
+				if (implementations.Length == 0)
+				{
+					throw new InvalidOperationException(
+						$"No implementation found for service interface '{serviceInterface.FullName}'.");
+				}
+
+				if (implementations.Length > 1)
+				{
+					var implList = string.Join(", ", implementations.Select(t => t.FullName).OrderBy(n => n, StringComparer.Ordinal));
+					throw new InvalidOperationException(
+						$"Multiple implementations found for service interface '{serviceInterface.FullName}': {implList}." +
+						" Please keep exactly one implementation per service interface.");
+				}
+
+				var implementation = implementations[0];
+				object instance;
+
+				try
+				{
+					instance = Activator.CreateInstance(implementation, dbContextFactory)!;
+				}
+				catch (TargetInvocationException tie)
+				{
+					var inner = tie.InnerException ?? tie;
+					throw new InvalidOperationException(
+						$"Failed to construct '{implementation.FullName}' for '{serviceInterface.FullName}': {inner.Message}",
+						inner);
+				}
+				catch (Exception ex)
+				{
+					throw new InvalidOperationException(
+						$"Failed to construct '{implementation.FullName}' for '{serviceInterface.FullName}'. " +
+						$"Ensure it has a public constructor accepting '{nameof(INpgsqlDbContextFactory)}'.",
+						ex);
+				}
+
+				var registerMethod = registerOpenMethod.MakeGenericMethod(serviceInterface);
+				registerMethod.Invoke(registry, new[] { instance });
+			}
 		}
 
 		/// <inheritdoc/>

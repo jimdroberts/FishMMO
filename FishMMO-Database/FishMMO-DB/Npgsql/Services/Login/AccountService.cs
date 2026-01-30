@@ -68,15 +68,15 @@ namespace FishMMO.Database.Npgsql.Services
 			string accountName,
 			CancellationToken cancellationToken = default)
 		{
-			if (!IsValidUsername(accountName))
+			if (!Authentication.IsAllowedUsername(accountName))
 			{
 				return DatabaseResult<DateTime>.Failure(
 					"VALIDATION_ERROR",
-					"Invalid username. Username must be between 3 and 32 characters.",
+					Authentication.InvalidUsernameError,
 					isTransient: false);
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteReadAsync(async dbContext =>
 			{
 				var lastLogin = await getLastLoginQuery(dbContext, accountName, cancellationToken).ConfigureAwait(false);
 				if (lastLogin == null)
@@ -84,7 +84,7 @@ namespace FishMMO.Database.Npgsql.Services
 					throw new DatabaseEntityNotFoundException("Account", accountName);
 				}
 				return lastLogin.Value;
-			}).ConfigureAwait(false);
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -94,11 +94,11 @@ namespace FishMMO.Database.Npgsql.Services
 			string verifier,
 			CancellationToken cancellationToken = default)
 		{
-			if (!IsValidUsername(accountName))
+			if (!Authentication.IsAllowedUsername(accountName))
 			{
 				return DatabaseResult.Failure(
 					"VALIDATION_ERROR",
-					"Invalid username. Username must be between 3 and 32 characters.",
+					Authentication.InvalidUsernameError,
 					isTransient: false);
 			}
 
@@ -118,7 +118,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				var entity = new AccountEntity
 				{
@@ -138,16 +138,17 @@ namespace FishMMO.Database.Npgsql.Services
 			string accountName,
 			CancellationToken cancellationToken = default)
 		{
-			if (!IsValidUsername(accountName))
+			if (!Authentication.IsAllowedUsername(accountName))
 			{
 				return DatabaseResult<AccountData>.Failure(
 					"VALIDATION_ERROR",
-					"Invalid username. Username must be between 3 and 32 characters.",
+					Authentication.InvalidUsernameError,
 					isTransient: false);
 			}
 
-			var result = await ExecuteMirrorAsync(async dbContext =>
-				await getAccountForLoginQuery(dbContext, accountName, cancellationToken).ConfigureAwait(false)).ConfigureAwait(false);
+			var result = await ExecuteReadAsync(async dbContext =>
+				await getAccountForLoginQuery(dbContext, accountName, cancellationToken).ConfigureAwait(false),
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			if (!result.IsSuccess)
 			{
@@ -182,15 +183,15 @@ namespace FishMMO.Database.Npgsql.Services
 			string accountName,
 			CancellationToken cancellationToken = default)
 		{
-			if (!IsValidUsername(accountName))
+			if (!Authentication.IsAllowedUsername(accountName))
 			{
 				return DatabaseResult.Failure(
 					"VALIDATION_ERROR",
-					"Invalid username. Username must be between 3 and 32 characters.",
+					Authentication.InvalidUsernameError,
 					isTransient: false);
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				var account = await dbContext.Accounts
 					.FirstOrDefaultAsync(a => a.Name == accountName, cancellationToken)
@@ -210,35 +211,15 @@ namespace FishMMO.Database.Npgsql.Services
 			string accountName,
 			CancellationToken cancellationToken = default)
 		{
-			if (!IsValidUsername(accountName))
+			if (!Authentication.IsAllowedUsername(accountName))
 			{
 				// Return false (not failure) to prevent enumeration attacks
 				return DatabaseResult<bool>.Success(false);
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
-				await accountExistsByNameQuery(dbContext, accountName, cancellationToken).ConfigureAwait(false)).ConfigureAwait(false);
-		}
-
-		/// <summary>
-		/// Validates username according to business rules.
-		/// </summary>
-		/// <param name="username">The username to validate.</param>
-		/// <returns>True if username meets all validation criteria; otherwise, false.</returns>
-		/// <remarks>
-		/// Username validation rules:
-		/// - Must not be null, empty, or whitespace only
-		/// - Minimum length: 3 characters
-		/// - Maximum length: 32 characters
-		/// 
-		/// This validation is performed before any database operations to prevent
-		/// unnecessary queries and reduce enumeration risk.
-		/// </remarks>
-		private static bool IsValidUsername(string username)
-		{
-			return !string.IsNullOrWhiteSpace(username) &&
-				   username.Length >= 3 &&
-				   username.Length <= 32;
+			return await ExecuteReadAsync(async dbContext =>
+				await accountExistsByNameQuery(dbContext, accountName, cancellationToken).ConfigureAwait(false),
+				cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <summary>

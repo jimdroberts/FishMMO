@@ -162,52 +162,8 @@ namespace FishMMO.Database.Npgsql
 			// Set default schema for all entities
 			modelBuilder.HasDefaultSchema(Schema);
 
-			// Server entities
-			modelBuilder.ApplyConfiguration(new PatchServerEntityConfiguration());
-			modelBuilder.ApplyConfiguration(new LoginServerEntityConfiguration());
-			modelBuilder.ApplyConfiguration(new WorldServerEntityConfiguration());
-			modelBuilder.ApplyConfiguration(new SceneServerEntityConfiguration());
-
-			// Account/Auth entities
-			modelBuilder.ApplyConfiguration(new AccountEntityConfiguration());
-			modelBuilder.ApplyConfiguration(new KickRequestEntityConfiguration());
-
-			// Scene/World entities
-			modelBuilder.ApplyConfiguration(new SceneEntityConfiguration());
-			modelBuilder.ApplyConfiguration(new ChatEntityConfiguration());
-
-			// Character core
-			modelBuilder.ApplyConfiguration(new CharacterEntityConfiguration());
-
-			// Character child entities
-			modelBuilder.ApplyConfiguration(new CharacterAbilityEntityConfiguration());
-			modelBuilder.ApplyConfiguration(new CharacterAchievementEntityConfiguration());
-			modelBuilder.ApplyConfiguration(new CharacterAttributeEntityConfiguration());
-			modelBuilder.ApplyConfiguration(new CharacterBankEntityConfiguration());
-			modelBuilder.ApplyConfiguration(new CharacterBuffEntityConfiguration());
-			modelBuilder.ApplyConfiguration(new CharacterEquipmentEntityConfiguration());
-			modelBuilder.ApplyConfiguration(new CharacterFactionEntityConfiguration());
-			modelBuilder.ApplyConfiguration(new CharacterFriendEntityConfiguration());
-			modelBuilder.ApplyConfiguration(new CharacterHotkeyEntityConfiguration());
-			modelBuilder.ApplyConfiguration(new CharacterInventoryEntityConfiguration());
-			modelBuilder.ApplyConfiguration(new CharacterItemCooldownEntityConfiguration());
-			modelBuilder.ApplyConfiguration(new CharacterKnownAbilityEntityConfiguration());
-			modelBuilder.ApplyConfiguration(new CharacterMailEntityConfiguration());
-			modelBuilder.ApplyConfiguration(new CharacterPetEntityConfiguration());
-			modelBuilder.ApplyConfiguration(new CharacterPetAttributeEntityConfiguration());
-			modelBuilder.ApplyConfiguration(new CharacterPetBuffEntityConfiguration());
-			modelBuilder.ApplyConfiguration(new CharacterQuestEntityConfiguration());
-			modelBuilder.ApplyConfiguration(new CharacterSkillEntityConfiguration());
-
-			// Guild entities
-			modelBuilder.ApplyConfiguration(new GuildEntityConfiguration());
-			modelBuilder.ApplyConfiguration(new GuildUpdateEntityConfiguration());
-			modelBuilder.ApplyConfiguration(new CharacterGuildEntityConfiguration());
-
-			// Party entities
-			modelBuilder.ApplyConfiguration(new PartyEntityConfiguration());
-			modelBuilder.ApplyConfiguration(new PartyUpdateEntityConfiguration());
-			modelBuilder.ApplyConfiguration(new CharacterPartyEntityConfiguration());
+			// Apply all configurations in the assembly
+			modelBuilder.ApplyConfigurationsFromAssembly(typeof(NpgsqlDbContext).Assembly);
 
 			ApplyXminConcurrencyConventions(modelBuilder);
 			ApplyLogicalVersionConventions(modelBuilder);
@@ -234,12 +190,12 @@ namespace FishMMO.Database.Npgsql
 					continue;
 
 				// If a shadow property already exists, don't override it.
-				if (entityType.FindProperty("Xmin") != null)
+				if (entityType.FindProperty("xmin") != null)
 					continue;
 
 				// Map PostgreSQL system column xmin as a shadow property used for optimistic concurrency.
 				modelBuilder.Entity(clrType)
-					.Property<uint>("Xmin")
+					.Property<uint>("xmin")
 					.HasColumnName("xmin")
 					.HasColumnType("xid")
 					.ValueGeneratedOnAddOrUpdate()

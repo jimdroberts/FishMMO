@@ -76,7 +76,7 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				var characterIds = buffList.Select(b => b.CharacterID).Distinct().ToArray();
 				var activeCharacterIds = await dbContext.Characters
@@ -136,7 +136,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				var buffIds = await dbContext.CharacterBuffs
 					.AsNoTracking()
@@ -164,7 +164,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			return await ExecuteMirrorAsync(async dbContext =>
+			return await ExecuteReadAsync(async dbContext =>
 			{
 				var entities = await getBuffsQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
 				var buffs = entities.Select(b => new CharacterBuffData(
@@ -178,7 +178,7 @@ namespace FishMMO.Database.Npgsql.Services
 				)).ToList();
 
 				return (IReadOnlyList<CharacterBuffData>)buffs;
-			}).ConfigureAwait(false);
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 	}
 }

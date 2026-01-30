@@ -1,9 +1,7 @@
 ﻿using System;
-using System.ComponentModel.DataAnnotations.Schema;
 
 namespace FishMMO.Database.Npgsql.Entities
 {
-	[Table("scene_servers")]
 	public class SceneServerEntity
 	{
 		public long ID { get; set; }

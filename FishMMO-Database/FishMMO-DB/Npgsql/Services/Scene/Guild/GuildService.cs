@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using FishMMO.Database;
 using FishMMO.Database.Data;
 using FishMMO.Database.Exceptions;
 using FishMMO.Database.Npgsql.Entities;
@@ -58,14 +59,14 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<bool>> ExistsAsync(string name, CancellationToken cancellationToken = default)
 		{
-			if (string.IsNullOrWhiteSpace(name))
-				return DatabaseResult<bool>.Failure("VALIDATION_ERROR", "Invalid guild name");
+			if (!Authentication.IsAllowedGuildName(name))
+				return DatabaseResult<bool>.Failure("VALIDATION_ERROR", Authentication.InvalidGuildNameError);
 
-			var result = await ExecuteMirrorAsync(async context =>
+			var result = await ExecuteReadAsync(async context =>
 			{
 				var nameLowercase = name.ToLowerInvariant();
 				return await guildExistsByNameQuery(context, nameLowercase, cancellationToken).ConfigureAwait(false);
-			}).ConfigureAwait(false);
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
 				? DatabaseResult<bool>.Success(result.Data)
@@ -78,7 +79,7 @@ namespace FishMMO.Database.Npgsql.Services
 			if (guildId <= 0)
 				return DatabaseResult<string>.Failure("VALIDATION_ERROR", "Invalid guild ID");
 
-			var result = await ExecuteMirrorAsync(async context =>
+			var result = await ExecuteReadAsync(async context =>
 			{
 				var guild = await context.Guilds
 					.AsNoTracking()
@@ -87,7 +88,7 @@ namespace FishMMO.Database.Npgsql.Services
 					.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
 
 				return guild ?? string.Empty;
-			}).ConfigureAwait(false);
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
 				? DatabaseResult<string>.Success(result.Data)
@@ -97,14 +98,12 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<long?>> CreateAsync(string name, CancellationToken cancellationToken = default)
 		{
-			if (string.IsNullOrWhiteSpace(name))
-			{
-				return DatabaseResult<long?>.Failure("VALIDATION_ERROR", "Guild name is required");
-			}
+			if (!Authentication.IsAllowedGuildName(name))
+				return DatabaseResult<long?>.Failure("VALIDATION_ERROR", Authentication.InvalidGuildNameError);
 
 			var nameLowercase = name.ToLowerInvariant();
 
-			var insertResult = await ExecuteMirrorAsync(async context =>
+			var insertResult = await ExecuteTransactionAsync(async context =>
 			{
 				var guild = new GuildEntity
 				{
@@ -126,7 +125,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<long?>.Failure(insertResult.ErrorCode, insertResult.ErrorMessage, insertResult.IsTransient);
 			}
 
-			var existingResult = await ExecuteMirrorAsync(async context =>
+			var existingResult = await ExecuteReadAsync(async context =>
 			{
 				return await context.Guilds
 					.AsNoTracking()
@@ -134,7 +133,7 @@ namespace FishMMO.Database.Npgsql.Services
 					.Select(g => (long?)g.ID)
 					.FirstOrDefaultAsync(cancellationToken)
 					.ConfigureAwait(false);
-			}).ConfigureAwait(false);
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return existingResult.IsSuccess
 				? DatabaseResult<long?>.Success(existingResult.Data)
@@ -158,7 +157,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid guild ID");
 			}
 
-			var result = await ExecuteMirrorAsync(async dbContext =>
+			var result = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var membershipIds = await dbContext.CharacterGuilds
 					.AsNoTracking()
@@ -211,10 +210,10 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<GuildData?>> LoadByNameAsync(string name, CancellationToken cancellationToken = default)
 		{
-			if (string.IsNullOrWhiteSpace(name))
-				return DatabaseResult<GuildData?>.Failure("VALIDATION_ERROR", "Invalid guild name");
+			if (!Authentication.IsAllowedGuildName(name))
+				return DatabaseResult<GuildData?>.Failure("VALIDATION_ERROR", Authentication.InvalidGuildNameError);
 
-			var result = await ExecuteMirrorAsync(async context =>
+			var result = await ExecuteReadAsync(async context =>
 			{
 				var guild = await context.Guilds
 					.AsNoTracking()
@@ -222,7 +221,7 @@ namespace FishMMO.Database.Npgsql.Services
 					.ConfigureAwait(false);
 
 				return guild != null ? MapEntityToDto(guild) : (GuildData?)null;
-			}).ConfigureAwait(false);
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
 				? DatabaseResult<GuildData?>.Success(result.Data)
@@ -235,11 +234,11 @@ namespace FishMMO.Database.Npgsql.Services
 			if (guildId <= 0)
 				return DatabaseResult<GuildData?>.Failure("VALIDATION_ERROR", "Invalid guild ID");
 
-			var result = await ExecuteMirrorAsync(async context =>
+			var result = await ExecuteReadAsync(async context =>
 			{
 				var guild = await getGuildByIdQuery(context, guildId, cancellationToken).ConfigureAwait(false);
 				return guild != null ? MapEntityToDto(guild) : (GuildData?)null;
-			}).ConfigureAwait(false);
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
 				? DatabaseResult<GuildData?>.Success(result.Data)

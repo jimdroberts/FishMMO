@@ -1,20 +1,20 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations.Schema;
 
 namespace FishMMO.Database.Npgsql.Entities
 {
 	/// <summary>
 	/// Database entity representing a player character.
 	/// </summary>
-	[Table("characters")]
 	public class CharacterEntity : IVersionedEntity
 	{
 		public long ID { get; set; }
 		public long Version { get; set; }
-		// [COLLATE NOCASE for case insensitive compare. this way we can't both create 'Archer' and 'archer' as characters]
-		// note: the collation has been added in the DbContext OnModelCreating function since the Postgres provider
-		// doesn't support collations via attributes
+		/// <remarks>
+		/// [COLLATE NOCASE for case insensitive compare. this way we can't both create 'Archer' and 'archer' as characters]
+		/// note: the collation has been added in the DbContext OnModelCreating function since the Postgres provider
+		/// doesn't support collations via attributes
+		/// </remarks>
 		public string Name { get; set; }
 		public string NameLowercase { get; set; }
 		public string Account { get; set; }
@@ -44,9 +44,11 @@ namespace FishMMO.Database.Npgsql.Entities
 		public float RotZ { get; set; }
 		public float RotW { get; set; }
 		public byte AccessLevel { get; set; }
-		// online status can be checked from external programs with either just
-		// just 'online', or 'online && (DateTime.UtcNow - lastsaved) <= 1min)
-		// which is robust to server crashes too.
+		/// <remarks>
+		/// Online status can be checked from external programs with either just
+		/// just 'online', or 'online && (DateTime.UtcNow - lastsaved) <= 1min)
+		/// which is robust to server crashes too.
+		/// </remarks>
 		public bool Online { get; set; }
 		public int Flags { get; set; }
 		public DateTime TimeCreated { get; set; }
