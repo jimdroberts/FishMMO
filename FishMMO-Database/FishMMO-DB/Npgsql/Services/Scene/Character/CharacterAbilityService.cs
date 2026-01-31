@@ -25,7 +25,7 @@ namespace FishMMO.Database.Npgsql.Services
 			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
 				context.CharacterAbilities
 					.AsNoTracking()
-					.Where(a => a.CharacterID == characterId)
+					.Where(a => a.CharacterID == characterId && !a.Deleted)
 					.ToList());
 
 		/// <summary>
@@ -35,7 +35,7 @@ namespace FishMMO.Database.Npgsql.Services
 			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
 				context.CharacterAbilities
 					.AsNoTracking()
-					.Where(a => a.CharacterID == characterId)
+					.Where(a => a.CharacterID == characterId && !a.Deleted)
 					.Count());
 
 		/// <summary>
@@ -112,6 +112,11 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				ValidateVersion(ability, abilityData.Version);
+				if (ability.Deleted)
+				{
+					ability.Deleted = false;
+					ability.TimeDeleted = null;
+				}
 
 				ability.AbilityEvents = abilityData.AbilityEvents == null
 					? new List<int>()
@@ -221,6 +226,11 @@ namespace FishMMO.Database.Npgsql.Services
 							}
 
 							ValidateVersion(entity, ability.Version);
+							if (entity.Deleted)
+							{
+								entity.Deleted = false;
+								entity.TimeDeleted = null;
+							}
 
 							entity.AbilityEvents = ability.AbilityEvents == null ? new List<int>() : new List<int>(ability.AbilityEvents);
 							entity.Cooldown = ability.Cooldown;
@@ -242,6 +252,11 @@ namespace FishMMO.Database.Npgsql.Services
 							if (!entitiesById.TryGetValue(ability.ID, out var entity)) continue;
 
 							ValidateVersion(entity, ability.Version);
+							if (entity.Deleted)
+							{
+								entity.Deleted = false;
+								entity.TimeDeleted = null;
+							}
 
 							entity.CharacterID = ability.CharacterID;
 							entity.TemplateID = ability.TemplateID;
@@ -270,17 +285,20 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteTransactionAsync(async dbContext =>
 			{
+				var now = DateTime.UtcNow;
 				var abilityIds = await dbContext.CharacterAbilities
 					.AsNoTracking()
-					.Where(a => a.CharacterID == characterId)
+					.Where(a => a.CharacterID == characterId && !a.Deleted)
 					.Select(a => a.ID)
 					.ToListAsync(cancellationToken)
 					.ConfigureAwait(false);
 
 				foreach (var abilityId in abilityIds)
 				{
-					var entity = new CharacterAbilityEntity { ID = abilityId };
-					dbContext.CharacterAbilities.Remove(entity);
+					var entity = new CharacterAbilityEntity { ID = abilityId, Deleted = true, TimeDeleted = now };
+					dbContext.Attach(entity);
+					dbContext.Entry(entity).Property(e => e.Deleted).IsModified = true;
+					dbContext.Entry(entity).Property(e => e.TimeDeleted).IsModified = true;
 				}
 			}).ConfigureAwait(false);
 		}
@@ -299,14 +317,15 @@ namespace FishMMO.Database.Npgsql.Services
 			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				var ability = await dbContext.CharacterAbilities
-					.FirstOrDefaultAsync(a => a.ID == abilityId && a.CharacterID == characterId, cancellationToken)
+					.FirstOrDefaultAsync(a => a.ID == abilityId && a.CharacterID == characterId && !a.Deleted, cancellationToken)
 					.ConfigureAwait(false);
 				if (ability == null)
 				{
 					return;
 				}
 
-				dbContext.CharacterAbilities.Remove(ability);
+				ability.Deleted = true;
+				ability.TimeDeleted = DateTime.UtcNow;
 			}).ConfigureAwait(false);
 		}
 

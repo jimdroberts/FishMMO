@@ -24,7 +24,7 @@ namespace FishMMO.Database.Npgsql.Services
 			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
 				context.CharacterAchievements
 					.AsNoTracking()
-					.Where(a => a.CharacterID == characterId)
+					.Where(a => a.CharacterID == characterId && !a.Deleted)
 					.ToList());
 
 		/// <summary>
@@ -106,6 +106,11 @@ namespace FishMMO.Database.Npgsql.Services
 					}
 
 					ValidateVersion(entity, achievement.Version);
+					if (entity.Deleted)
+					{
+						entity.Deleted = false;
+						entity.TimeDeleted = null;
+					}
 
 					entity.Tier = achievement.Tier;
 					entity.Value = achievement.Value;
@@ -126,17 +131,20 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteTransactionAsync(async dbContext =>
 			{
+				var now = DateTime.UtcNow;
 				var achievementIds = await dbContext.CharacterAchievements
 					.AsNoTracking()
-					.Where(a => a.CharacterID == characterId)
+					.Where(a => a.CharacterID == characterId && !a.Deleted)
 					.Select(a => a.ID)
 					.ToListAsync(cancellationToken)
 					.ConfigureAwait(false);
 
 				foreach (var achievementId in achievementIds)
 				{
-					var entity = new CharacterAchievementEntity { ID = achievementId };
-					dbContext.CharacterAchievements.Remove(entity);
+					var entity = new CharacterAchievementEntity { ID = achievementId, Deleted = true, TimeDeleted = now };
+					dbContext.Attach(entity);
+					dbContext.Entry(entity).Property(e => e.Deleted).IsModified = true;
+					dbContext.Entry(entity).Property(e => e.TimeDeleted).IsModified = true;
 				}
 			}).ConfigureAwait(false);
 		}

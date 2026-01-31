@@ -49,7 +49,7 @@ namespace FishMMO.Database.Npgsql.Services
 			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
 				context.CharacterEquippedItems
 					.AsNoTracking()
-					.Where(e => e.CharacterID == characterId)
+					.Where(e => e.CharacterID == characterId && !e.Deleted)
 					.ToList());
 
 		/// <summary>
@@ -127,6 +127,11 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				ValidateVersion(entity, equipment.Version);
+				if (entity.Deleted)
+				{
+					entity.Deleted = false;
+					entity.TimeDeleted = null;
+				}
 
 				entity.TemplateID = equipment.TemplateID;
 				entity.Seed = equipment.Seed;
@@ -217,6 +222,11 @@ namespace FishMMO.Database.Npgsql.Services
 						}
 
 						ValidateVersion(entity, item.Version);
+						if (entity.Deleted)
+						{
+							entity.Deleted = false;
+							entity.TimeDeleted = null;
+						}
 
 						entity.TemplateID = item.TemplateID;
 						entity.Seed = item.Seed;
@@ -243,17 +253,20 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteTransactionAsync(async dbContext =>
 			{
+				var now = DateTime.UtcNow;
 				var equipmentIds = await dbContext.CharacterEquippedItems
 					.AsNoTracking()
-					.Where(e => e.CharacterID == characterId)
+					.Where(e => e.CharacterID == characterId && !e.Deleted)
 					.Select(e => e.ID)
 					.ToListAsync(cancellationToken)
 					.ConfigureAwait(false);
 
 				foreach (var equipmentId in equipmentIds)
 				{
-					var entity = new CharacterEquipmentEntity { ID = equipmentId };
-					dbContext.CharacterEquippedItems.Remove(entity);
+					var entity = new CharacterEquipmentEntity { ID = equipmentId, Deleted = true, TimeDeleted = now };
+					dbContext.Attach(entity);
+					dbContext.Entry(entity).Property(e => e.Deleted).IsModified = true;
+					dbContext.Entry(entity).Property(e => e.TimeDeleted).IsModified = true;
 				}
 			}).ConfigureAwait(false);
 		}
@@ -271,17 +284,20 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteTransactionAsync(async dbContext =>
 			{
+				var now = DateTime.UtcNow;
 				var equipmentIds = await dbContext.CharacterEquippedItems
 					.AsNoTracking()
-					.Where(e => e.CharacterID == characterId && e.Slot == slot)
+					.Where(e => e.CharacterID == characterId && e.Slot == slot && !e.Deleted)
 					.Select(e => e.ID)
 					.ToListAsync(cancellationToken)
 					.ConfigureAwait(false);
 
 				foreach (var equipmentId in equipmentIds)
 				{
-					var entity = new CharacterEquipmentEntity { ID = equipmentId };
-					dbContext.CharacterEquippedItems.Remove(entity);
+					var entity = new CharacterEquipmentEntity { ID = equipmentId, Deleted = true, TimeDeleted = now };
+					dbContext.Attach(entity);
+					dbContext.Entry(entity).Property(e => e.Deleted).IsModified = true;
+					dbContext.Entry(entity).Property(e => e.TimeDeleted).IsModified = true;
 				}
 			}).ConfigureAwait(false);
 		}

@@ -36,7 +36,7 @@ namespace FishMMO.Database.Npgsql.Services
 			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
 				context.CharacterBuffs
 					.AsNoTracking()
-					.Where(b => b.CharacterID == characterId)
+					.Where(b => b.CharacterID == characterId && !b.Deleted)
 					.ToList());
 
 		/// <summary>
@@ -118,6 +118,11 @@ namespace FishMMO.Database.Npgsql.Services
 					}
 
 					ValidateVersion(entity, buff.Version);
+					if (entity.Deleted)
+					{
+						entity.Deleted = false;
+						entity.TimeDeleted = null;
+					}
 					entity.RemainingTime = buff.RemainingTime;
 					entity.TickTime = buff.TickTime;
 					entity.Stacks = buff.Stacks;
@@ -138,17 +143,20 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteTransactionAsync(async dbContext =>
 			{
+				var now = DateTime.UtcNow;
 				var buffIds = await dbContext.CharacterBuffs
 					.AsNoTracking()
-					.Where(b => b.CharacterID == characterId)
+					.Where(b => b.CharacterID == characterId && !b.Deleted)
 					.Select(b => b.ID)
 					.ToListAsync(cancellationToken)
 					.ConfigureAwait(false);
 
 				foreach (var buffId in buffIds)
 				{
-					var entity = new CharacterBuffEntity { ID = buffId };
-					dbContext.CharacterBuffs.Remove(entity);
+					var entity = new CharacterBuffEntity { ID = buffId, Deleted = true, TimeDeleted = now };
+					dbContext.Attach(entity);
+					dbContext.Entry(entity).Property(e => e.Deleted).IsModified = true;
+					dbContext.Entry(entity).Property(e => e.TimeDeleted).IsModified = true;
 				}
 			}).ConfigureAwait(false);
 		}

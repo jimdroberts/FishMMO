@@ -55,7 +55,7 @@ namespace FishMMO.Database.Npgsql.Services
 			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
 				context.CharacterHotkeys
 					.AsNoTracking()
-					.Where(h => h.CharacterID == characterId)
+					.Where(h => h.CharacterID == characterId && !h.Deleted)
 					.ToList());
 
 		/// <summary>
@@ -65,7 +65,7 @@ namespace FishMMO.Database.Npgsql.Services
 			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
 				context.CharacterHotkeys
 					.AsNoTracking()
-					.Where(h => h.CharacterID == characterId)
+					.Where(h => h.CharacterID == characterId && !h.Deleted)
 					.Count());
 
 		/// <summary>
@@ -142,6 +142,11 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				ValidateVersion(entity, hotkey.Version);
+				if (entity.Deleted)
+				{
+					entity.Deleted = false;
+					entity.TimeDeleted = null;
+				}
 
 				entity.Type = hotkey.Type;
 				entity.ReferenceID = hotkey.ReferenceID;
@@ -231,6 +236,11 @@ namespace FishMMO.Database.Npgsql.Services
 						}
 
 						ValidateVersion(entity, hotkey.Version);
+						if (entity.Deleted)
+						{
+							entity.Deleted = false;
+							entity.TimeDeleted = null;
+						}
 
 						entity.Type = hotkey.Type;
 						entity.ReferenceID = hotkey.ReferenceID;
@@ -256,17 +266,20 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteTransactionAsync(async dbContext =>
 			{
+				var now = DateTime.UtcNow;
 				var hotkeyIds = await dbContext.CharacterHotkeys
 					.AsNoTracking()
-					.Where(h => h.CharacterID == characterId)
+					.Where(h => h.CharacterID == characterId && !h.Deleted)
 					.Select(h => h.ID)
 					.ToListAsync(cancellationToken)
 					.ConfigureAwait(false);
 
 				foreach (var hotkeyId in hotkeyIds)
 				{
-					var entity = new CharacterHotkeyEntity { ID = hotkeyId };
-					dbContext.CharacterHotkeys.Remove(entity);
+					var entity = new CharacterHotkeyEntity { ID = hotkeyId, Deleted = true, TimeDeleted = now };
+					dbContext.Attach(entity);
+					dbContext.Entry(entity).Property(e => e.Deleted).IsModified = true;
+					dbContext.Entry(entity).Property(e => e.TimeDeleted).IsModified = true;
 				}
 			}).ConfigureAwait(false);
 		}

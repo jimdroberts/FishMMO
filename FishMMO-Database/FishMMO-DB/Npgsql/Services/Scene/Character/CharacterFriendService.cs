@@ -52,7 +52,7 @@ namespace FishMMO.Database.Npgsql.Services
 			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
 				context.CharacterFriends
 					.AsNoTracking()
-					.Where(f => f.CharacterID == characterId)
+					.Where(f => f.CharacterID == characterId && !f.Deleted)
 					.ToList());
 
 		/// <summary>
@@ -62,7 +62,7 @@ namespace FishMMO.Database.Npgsql.Services
 			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
 				context.CharacterFriends
 					.AsNoTracking()
-					.Where(f => f.CharacterID == characterId)
+					.Where(f => f.CharacterID == characterId && !f.Deleted)
 					.Count());
 
 		/// <summary>
@@ -90,6 +90,19 @@ namespace FishMMO.Database.Npgsql.Services
 				var activeCharacterId = await getActiveCharacterIdQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
 				if (activeCharacterId == 0)
 				{
+					return;
+				}
+
+				var existing = await dbContext.CharacterFriends
+					.FirstOrDefaultAsync(f => f.CharacterID == characterId && f.FriendCharacterID == friendCharacterId, cancellationToken)
+					.ConfigureAwait(false);
+				if (existing != null)
+				{
+					if (existing.Deleted)
+					{
+						existing.Deleted = false;
+						existing.TimeDeleted = null;
+					}
 					return;
 				}
 
@@ -125,17 +138,20 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteTransactionAsync(async dbContext =>
 			{
+				var now = DateTime.UtcNow;
 				var friendIds = await dbContext.CharacterFriends
 					.AsNoTracking()
-					.Where(f => f.CharacterID == characterId && f.FriendCharacterID == friendCharacterId)
+					.Where(f => f.CharacterID == characterId && f.FriendCharacterID == friendCharacterId && !f.Deleted)
 					.Select(f => f.ID)
 					.ToListAsync(cancellationToken)
 					.ConfigureAwait(false);
 
 				foreach (var friendId in friendIds)
 				{
-					var entity = new CharacterFriendEntity { ID = friendId };
-					dbContext.CharacterFriends.Remove(entity);
+					var entity = new CharacterFriendEntity { ID = friendId, Deleted = true, TimeDeleted = now };
+					dbContext.Attach(entity);
+					dbContext.Entry(entity).Property(e => e.Deleted).IsModified = true;
+					dbContext.Entry(entity).Property(e => e.TimeDeleted).IsModified = true;
 				}
 			}).ConfigureAwait(false);
 		}
@@ -153,17 +169,20 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteTransactionAsync(async dbContext =>
 			{
+				var now = DateTime.UtcNow;
 				var friendIds = await dbContext.CharacterFriends
 					.AsNoTracking()
-					.Where(f => f.CharacterID == characterId)
+					.Where(f => f.CharacterID == characterId && !f.Deleted)
 					.Select(f => f.ID)
 					.ToListAsync(cancellationToken)
 					.ConfigureAwait(false);
 
 				foreach (var friendId in friendIds)
 				{
-					var entity = new CharacterFriendEntity { ID = friendId };
-					dbContext.CharacterFriends.Remove(entity);
+					var entity = new CharacterFriendEntity { ID = friendId, Deleted = true, TimeDeleted = now };
+					dbContext.Attach(entity);
+					dbContext.Entry(entity).Property(e => e.Deleted).IsModified = true;
+					dbContext.Entry(entity).Property(e => e.TimeDeleted).IsModified = true;
 				}
 			}).ConfigureAwait(false);
 		}

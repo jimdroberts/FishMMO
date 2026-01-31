@@ -36,7 +36,7 @@ namespace FishMMO.Database.Npgsql.Services
 			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
 				context.CharacterKnownAbilities
 					.AsNoTracking()
-					.Where(a => a.CharacterID == characterId)
+					.Where(a => a.CharacterID == characterId && !a.Deleted)
 					.ToList());
 
 		/// <summary>
@@ -76,12 +76,17 @@ namespace FishMMO.Database.Npgsql.Services
 					return;
 				}
 
-				var exists = await dbContext.CharacterKnownAbilities
-					.AsNoTracking()
-					.AnyAsync(a => a.CharacterID == characterId && a.TemplateID == templateId, cancellationToken)
+
+				var existing = await dbContext.CharacterKnownAbilities
+					.FirstOrDefaultAsync(a => a.CharacterID == characterId && a.TemplateID == templateId, cancellationToken)
 					.ConfigureAwait(false);
-				if (exists)
+				if (existing != null)
 				{
+					if (existing.Deleted)
+					{
+						existing.Deleted = false;
+						existing.TimeDeleted = null;
+					}
 					return;
 				}
 
@@ -142,14 +147,17 @@ namespace FishMMO.Database.Npgsql.Services
 					var activeCharacterIdSet = new HashSet<long>(activeCharacterIds);
 
 					var templateIds = abilityList.Select(a => a.TemplateID).Distinct().ToArray();
-					var existingKeys = await dbContext.CharacterKnownAbilities
-						.AsNoTracking()
+
+					var existing = await dbContext.CharacterKnownAbilities
 						.Where(a => activeCharacterIdSet.Contains(a.CharacterID) && templateIds.Contains(a.TemplateID))
-						.Select(a => new { a.CharacterID, a.TemplateID })
 						.ToListAsync(cancellationToken)
 						.ConfigureAwait(false);
 
-					var existingKeySet = new HashSet<(long CharacterID, int TemplateID)>(existingKeys.Select(k => (k.CharacterID, k.TemplateID)));
+					var existingByKey = new Dictionary<(long CharacterID, int TemplateID), CharacterKnownAbilityEntity>();
+					foreach (var entity in existing)
+					{
+						existingByKey[(entity.CharacterID, entity.TemplateID)] = entity;
+					}
 
 					foreach (var ability in abilityList)
 					{
@@ -157,7 +165,15 @@ namespace FishMMO.Database.Npgsql.Services
 						if (ability.TemplateID <= 0) continue;
 
 						var key = (ability.CharacterID, ability.TemplateID);
-						if (existingKeySet.Contains(key)) continue;
+						if (existingByKey.TryGetValue(key, out var existingEntity))
+						{
+							if (existingEntity.Deleted)
+							{
+								existingEntity.Deleted = false;
+								existingEntity.TimeDeleted = null;
+							}
+							continue;
+						}
 
 						var entity = new CharacterKnownAbilityEntity
 						{
@@ -167,7 +183,7 @@ namespace FishMMO.Database.Npgsql.Services
 							TimeCreated = DateTime.UtcNow
 						};
 						await dbContext.CharacterKnownAbilities.AddAsync(entity, cancellationToken).ConfigureAwait(false);
-						existingKeySet.Add(key);
+						existingByKey[key] = entity;
 					}
 				}
 				finally
@@ -205,9 +221,10 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteTransactionAsync(async dbContext =>
 			{
+				var now = DateTime.UtcNow;
 				var abilityId = await dbContext.CharacterKnownAbilities
 					.AsNoTracking()
-					.Where(a => a.CharacterID == characterId && a.TemplateID == templateId)
+					.Where(a => a.CharacterID == characterId && a.TemplateID == templateId && !a.Deleted)
 					.Select(a => a.ID)
 					.FirstOrDefaultAsync(cancellationToken)
 					.ConfigureAwait(false);
@@ -217,8 +234,10 @@ namespace FishMMO.Database.Npgsql.Services
 					return;
 				}
 
-				var entity = new CharacterKnownAbilityEntity { ID = abilityId };
-				dbContext.CharacterKnownAbilities.Remove(entity);
+				var entity = new CharacterKnownAbilityEntity { ID = abilityId, Deleted = true, TimeDeleted = now };
+				dbContext.Attach(entity);
+				dbContext.Entry(entity).Property(e => e.Deleted).IsModified = true;
+				dbContext.Entry(entity).Property(e => e.TimeDeleted).IsModified = true;
 			}).ConfigureAwait(false);
 		}
 
@@ -235,17 +254,20 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteTransactionAsync(async dbContext =>
 			{
+				var now = DateTime.UtcNow;
 				var abilityIds = await dbContext.CharacterKnownAbilities
 					.AsNoTracking()
-					.Where(a => a.CharacterID == characterId)
+					.Where(a => a.CharacterID == characterId && !a.Deleted)
 					.Select(a => a.ID)
 					.ToListAsync(cancellationToken)
 					.ConfigureAwait(false);
 
 				foreach (var abilityId in abilityIds)
 				{
-					var entity = new CharacterKnownAbilityEntity { ID = abilityId };
-					dbContext.CharacterKnownAbilities.Remove(entity);
+					var entity = new CharacterKnownAbilityEntity { ID = abilityId, Deleted = true, TimeDeleted = now };
+					dbContext.Attach(entity);
+					dbContext.Entry(entity).Property(e => e.Deleted).IsModified = true;
+					dbContext.Entry(entity).Property(e => e.TimeDeleted).IsModified = true;
 				}
 			}).ConfigureAwait(false);
 		}

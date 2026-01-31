@@ -55,7 +55,7 @@ namespace FishMMO.Database.Npgsql.Services
 			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
 				context.CharacterInventoryItems
 					.AsNoTracking()
-					.Where(i => i.CharacterID == characterId)
+					.Where(i => i.CharacterID == characterId && !i.Deleted)
 					.ToList());
 
 		/// <summary>
@@ -133,6 +133,11 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				ValidateVersion(entity, item.Version);
+				if (entity.Deleted)
+				{
+					entity.Deleted = false;
+					entity.TimeDeleted = null;
+				}
 
 				entity.TemplateID = item.TemplateID;
 				entity.Seed = item.Seed;
@@ -223,6 +228,11 @@ namespace FishMMO.Database.Npgsql.Services
 						}
 
 						ValidateVersion(entity, item.Version);
+						if (entity.Deleted)
+						{
+							entity.Deleted = false;
+							entity.TimeDeleted = null;
+						}
 
 						entity.TemplateID = item.TemplateID;
 						entity.Seed = item.Seed;
@@ -249,17 +259,20 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteTransactionAsync(async dbContext =>
 			{
+				var now = DateTime.UtcNow;
 				var itemIds = await dbContext.CharacterInventoryItems
 					.AsNoTracking()
-					.Where(i => i.CharacterID == characterId)
+					.Where(i => i.CharacterID == characterId && !i.Deleted)
 					.Select(i => i.ID)
 					.ToListAsync(cancellationToken)
 					.ConfigureAwait(false);
 
 				foreach (var itemId in itemIds)
 				{
-					var entity = new CharacterInventoryEntity { ID = itemId };
-					dbContext.CharacterInventoryItems.Remove(entity);
+					var entity = new CharacterInventoryEntity { ID = itemId, Deleted = true, TimeDeleted = now };
+					dbContext.Attach(entity);
+					dbContext.Entry(entity).Property(e => e.Deleted).IsModified = true;
+					dbContext.Entry(entity).Property(e => e.TimeDeleted).IsModified = true;
 				}
 			}).ConfigureAwait(false);
 		}
@@ -277,17 +290,20 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteTransactionAsync(async dbContext =>
 			{
+				var now = DateTime.UtcNow;
 				var itemIds = await dbContext.CharacterInventoryItems
 					.AsNoTracking()
-					.Where(i => i.CharacterID == characterId && i.Slot == slot)
+					.Where(i => i.CharacterID == characterId && i.Slot == slot && !i.Deleted)
 					.Select(i => i.ID)
 					.ToListAsync(cancellationToken)
 					.ConfigureAwait(false);
 
 				foreach (var itemId in itemIds)
 				{
-					var entity = new CharacterInventoryEntity { ID = itemId };
-					dbContext.CharacterInventoryItems.Remove(entity);
+					var entity = new CharacterInventoryEntity { ID = itemId, Deleted = true, TimeDeleted = now };
+					dbContext.Attach(entity);
+					dbContext.Entry(entity).Property(e => e.Deleted).IsModified = true;
+					dbContext.Entry(entity).Property(e => e.TimeDeleted).IsModified = true;
 				}
 			}).ConfigureAwait(false);
 		}

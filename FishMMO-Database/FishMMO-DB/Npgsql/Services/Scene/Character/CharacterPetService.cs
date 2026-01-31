@@ -33,7 +33,7 @@ namespace FishMMO.Database.Npgsql.Services
 			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
 				context.CharacterPets
 					.AsNoTracking()
-					.FirstOrDefault(p => p.CharacterID == characterId));
+					.FirstOrDefault(p => p.CharacterID == characterId && !p.Deleted));
 #pragma warning restore CS8619
 
 		/// <summary>
@@ -44,7 +44,7 @@ namespace FishMMO.Database.Npgsql.Services
 			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
 				context.CharacterPets
 					.AsNoTracking()
-					.FirstOrDefault(p => p.CharacterID == characterId && p.Spawned));
+					.FirstOrDefault(p => p.CharacterID == characterId && p.Spawned && !p.Deleted));
 #pragma warning restore CS8619
 
 		/// <summary>
@@ -122,6 +122,12 @@ namespace FishMMO.Database.Npgsql.Services
 
 				ValidateVersion(entity, petData.Version);
 
+				if (entity.Deleted)
+				{
+					entity.Deleted = false;
+					entity.TimeDeleted = null;
+				}
+
 				entity.CharacterID = petData.CharacterID;
 				entity.TemplateID = petData.TemplateID;
 				entity.Abilities = petData.Abilities?.ToList() ?? new List<int>();
@@ -161,6 +167,12 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				ValidateVersion(entity, petData.Version);
+
+				if (entity.Deleted)
+				{
+					entity.Deleted = false;
+					entity.TimeDeleted = null;
+				}
 
 				entity.TemplateID = petData.TemplateID;
 				entity.Abilities = petData.Abilities?.ToList() ?? new List<int>();
@@ -256,6 +268,12 @@ namespace FishMMO.Database.Npgsql.Services
 
 						ValidateVersion(entity, pet.Version);
 
+						if (entity.Deleted)
+						{
+							entity.Deleted = false;
+							entity.TimeDeleted = null;
+						}
+
 						entity.CharacterID = pet.CharacterID;
 						entity.TemplateID = pet.TemplateID;
 						entity.Abilities = pet.Abilities?.ToList() ?? new List<int>();
@@ -282,6 +300,12 @@ namespace FishMMO.Database.Npgsql.Services
 
 						ValidateVersion(entity, pet.Version);
 
+						if (entity.Deleted)
+						{
+							entity.Deleted = false;
+							entity.TimeDeleted = null;
+						}
+
 						entity.TemplateID = pet.TemplateID;
 						entity.Abilities = pet.Abilities?.ToList() ?? new List<int>();
 						entity.Spawned = pet.Spawned;
@@ -306,17 +330,21 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteTransactionAsync(async dbContext =>
 			{
-				var pets = await dbContext.CharacterPets
-					.Where(p => p.CharacterID == characterId)
+				var now = DateTime.UtcNow;
+				var petIds = await dbContext.CharacterPets
+					.AsNoTracking()
+					.Where(p => p.CharacterID == characterId && !p.Deleted)
+					.Select(p => p.ID)
 					.ToListAsync(cancellationToken)
 					.ConfigureAwait(false);
 
-				if (pets.Count == 0)
+				foreach (var petId in petIds)
 				{
-					return;
+					var entity = new CharacterPetEntity { ID = petId, Deleted = true, TimeDeleted = now };
+					dbContext.Attach(entity);
+					dbContext.Entry(entity).Property(e => e.Deleted).IsModified = true;
+					dbContext.Entry(entity).Property(e => e.TimeDeleted).IsModified = true;
 				}
-
-				dbContext.CharacterPets.RemoveRange(pets);
 			}).ConfigureAwait(false);
 		}
 

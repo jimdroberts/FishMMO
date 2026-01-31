@@ -31,7 +31,7 @@ namespace FishMMO.Database.Npgsql.Services
 			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
 				(CharacterEntity?)context.Characters
 					.AsNoTracking()
-					.FirstOrDefault(c => c.ID == characterId));
+					.FirstOrDefault(c => c.ID == characterId && !c.Deleted));
 
 		/// <summary>
 		/// Compiled query for retrieving character by name (hot path for login/character selection).
@@ -41,7 +41,7 @@ namespace FishMMO.Database.Npgsql.Services
 			EF.CompileAsyncQuery((NpgsqlDbContext context, string nameLower, CancellationToken ct) =>
 				context.Characters
 					.AsNoTracking()
-					.FirstOrDefault(c => c.NameLowercase == nameLower));
+					.FirstOrDefault(c => c.NameLowercase == nameLower && !c.Deleted));
 #pragma warning restore CS8619
 
 		/// <summary>
@@ -51,7 +51,7 @@ namespace FishMMO.Database.Npgsql.Services
 			EF.CompileAsyncQuery((NpgsqlDbContext context, string account, CancellationToken ct) =>
 				context.Characters
 						.AsNoTracking()
-						.Where(c => c.Account == account)
+						.Where(c => c.Account == account && !c.Deleted)
 						.Count());
 
 		/// <summary>
@@ -61,7 +61,7 @@ namespace FishMMO.Database.Npgsql.Services
 			EF.CompileAsyncQuery((NpgsqlDbContext context, string account, CancellationToken ct) =>
 				context.Characters
 					.AsNoTracking()
-					.Where(c => c.Account == account)
+					.Where(c => c.Account == account && !c.Deleted)
 					.ToList());
 
 		/// <summary>
