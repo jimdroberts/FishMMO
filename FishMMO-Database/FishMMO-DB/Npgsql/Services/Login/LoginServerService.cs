@@ -68,6 +68,7 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 
 			// Fast path: attempt insert first; on unique violation, fall back to update.
+			var now = DateTime.UtcNow;
 			var insertResult = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var entity = new LoginServerEntity
@@ -75,24 +76,24 @@ namespace FishMMO.Database.Npgsql.Services
 					Name = name,
 					Address = address,
 					Port = port,
-					TimeCreated = DateTime.UtcNow,
-					LastPulse = DateTime.UtcNow
+					TimeCreated = now,
+					LastPulse = now
 				};
 
 				await dbContext.LoginServers.AddAsync(entity, cancellationToken).ConfigureAwait(false);
-				await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-				return MapEntityToDto(entity);
-			}).ConfigureAwait(false);
+				return entity;
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			if (insertResult.IsSuccess)
 			{
-				return insertResult;
+				return DatabaseResult<LoginServerData>.Success(MapEntityToDto(insertResult.Data));
 			}
 
 			// If another writer inserted concurrently, retry as update.
 			if (string.Equals(insertResult.ErrorCode, "UNIQUE_VIOLATION", StringComparison.Ordinal))
 			{
-				return await ExecuteTransactionAsync(async dbContext =>
+				var updateNow = DateTime.UtcNow;
+				var updateResult = await ExecuteTransactionAsync(async dbContext =>
 				{
 					var existing = await getByNameTrackingQuery(dbContext, name, cancellationToken).ConfigureAwait(false);
 					if (existing == null)
@@ -102,14 +103,16 @@ namespace FishMMO.Database.Npgsql.Services
 
 					existing.Address = address;
 					existing.Port = port;
-					existing.LastPulse = DateTime.UtcNow;
+					existing.LastPulse = updateNow;
+					return existing;
+				}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-					await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-					return MapEntityToDto(existing);
-				}).ConfigureAwait(false);
+				return updateResult.IsSuccess
+					? DatabaseResult<LoginServerData>.Success(MapEntityToDto(updateResult.Data))
+					: DatabaseResult<LoginServerData>.Failure(updateResult.ErrorCode, updateResult.ErrorMessage, updateResult.IsTransient);
 			}
 
-			return insertResult;
+			return DatabaseResult<LoginServerData>.Failure(insertResult.ErrorCode, insertResult.ErrorMessage, insertResult.IsTransient);
 		}
 
 		/// <inheritdoc/>

@@ -26,6 +26,16 @@ namespace FishMMO.Database.Npgsql.Services
 	public sealed class WorldServerService : BaseService<WorldServerEntity>, IWorldServerService
 	{
 		/// <summary>
+		/// Compiled query for retrieving a world server by unique name with tracking.
+		/// </summary>
+#pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type
+		private static readonly Func<NpgsqlDbContext, string, CancellationToken, Task<WorldServerEntity?>> getByNameTrackingQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, string serverName, CancellationToken ct) =>
+				context.WorldServers
+					.FirstOrDefault(s => s.Name == serverName));
+#pragma warning restore CS8619
+
+		/// <summary>
 		/// Initializes a new instance of WorldServerService.
 		/// </summary>
 		/// <param name="dbContextFactory">DbContext factory for creating contexts.</param>
@@ -48,39 +58,55 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<(long, WorldServerData)>.Failure("INVALID_PARAMETERS", "Server name and address must not be empty.");
 			}
 
-			return await ExecuteTransactionAsync<(long ServerId, WorldServerData ServerData)>(async dbContext =>
+			var now = DateTime.UtcNow;
+			var insertResult = await ExecuteTransactionAsync(async dbContext =>
 			{
-				// Keep atomic UPSERT semantics to avoid unique-violation races.
-				// Use database server time for pulse timestamps.
-				var upsertSql = $@"INSERT INTO {TableName}
-					(name, address, port, character_count, locked, lastpulse)
-					VALUES
-						({{0}}, {{1}}, {{2}}, {{3}}, {{4}}, CURRENT_TIMESTAMP)
-					ON CONFLICT (name)
-					DO UPDATE SET
-						address = EXCLUDED.address,
-						port = EXCLUDED.port,
-						character_count = EXCLUDED.character_count,
-						locked = EXCLUDED.locked,
-						lastpulse = EXCLUDED.lastpulse";
+				var entity = new WorldServerEntity
+				{
+					Name = name,
+					Address = address,
+					Port = port,
+					CharacterCount = characterCount,
+					Locked = locked,
+					TimeCreated = now,
+					LastPulse = now
+				};
 
-				await dbContext.Database.ExecuteSqlRawAsync(
-					upsertSql,
-					new object[] { name, address, port, characterCount, locked },
-					cancellationToken).ConfigureAwait(false);
+				await dbContext.WorldServers.AddAsync(entity, cancellationToken).ConfigureAwait(false);
+				return entity;
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-				var entity = await dbContext.WorldServers
-					.AsNoTracking()
-					.FirstOrDefaultAsync(s => s.Name == name, cancellationToken)
-					.ConfigureAwait(false);
+			if (insertResult.IsSuccess)
+			{
+				var entity = insertResult.Data;
+				return DatabaseResult<(long ServerId, WorldServerData ServerData)>.Success((entity.ID, MapEntityToDto(entity)));
+			}
 
+			if (!string.Equals(insertResult.ErrorCode, "UNIQUE_VIOLATION", StringComparison.Ordinal))
+			{
+				return DatabaseResult<(long ServerId, WorldServerData ServerData)>.Failure(insertResult.ErrorCode, insertResult.ErrorMessage, insertResult.IsTransient);
+			}
+
+			var updateNow = DateTime.UtcNow;
+			var updateResult = await ExecuteTransactionAsync(async dbContext =>
+			{
+				var entity = await getByNameTrackingQuery(dbContext, name, cancellationToken).ConfigureAwait(false);
 				if (entity == null)
 				{
-					throw new DatabaseEntityNotFoundException("WorldServer", "UPSERT operation returned no result.");
+					throw new DatabaseEntityNotFoundException("WorldServer", name);
 				}
 
-				return (entity.ID, MapEntityToDto(entity));
-			}).ConfigureAwait(false);
+				entity.Address = address;
+				entity.Port = port;
+				entity.CharacterCount = characterCount;
+				entity.Locked = locked;
+				entity.LastPulse = updateNow;
+				return entity;
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+			return updateResult.IsSuccess
+				? DatabaseResult<(long ServerId, WorldServerData ServerData)>.Success((updateResult.Data.ID, MapEntityToDto(updateResult.Data)))
+				: DatabaseResult<(long ServerId, WorldServerData ServerData)>.Failure(updateResult.ErrorCode, updateResult.ErrorMessage, updateResult.IsTransient);
 		}
 
 		/// <inheritdoc/>

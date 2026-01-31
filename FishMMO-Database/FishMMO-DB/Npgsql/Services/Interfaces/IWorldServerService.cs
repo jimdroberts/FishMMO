@@ -17,8 +17,8 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	public interface IWorldServerService
 	{
 		/// <summary>
-		/// Adds or updates a world server registration with atomic UPSERT operation.
-		/// Uses PostgreSQL INSERT...ON CONFLICT for atomic upsert of server registrations.
+		/// Adds or updates a world server registration.
+		/// Uses an insert-first approach and falls back to update on unique constraint conflicts.
 		/// </summary>
 		/// <param name="name">Server name (unique identifier for conflict resolution).</param>
 		/// <param name="address">Server IP address or hostname.</param>
@@ -28,8 +28,8 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="cancellationToken">Cancellation token for async operation.</param>
 		/// <returns>DatabaseResult containing tuple (ServerId, ServerData) if successful.</returns>
 		/// <remarks>
-		/// <para><b>Operation:</b> Performs atomic UPSERT using FromSqlRaw with RETURNING clause.</para>
-		/// <para><b>Execution Strategy:</b> Wrapped with CreateExecutionStrategy().ExecuteAsync() for transient failure retry (FromSqlRaw doesn't auto-retry).</para>
+		/// <para><b>Operation:</b> Attempts INSERT; on unique violation, loads the existing row and updates it.</para>
+		/// <para><b>Returns:</b> The returned ServerId is populated after SaveChanges runs in the BaseService transaction wrapper.</para>
 		/// <para><b>Returns:</b> Failure if name/address empty or operation fails; Success with (ServerId, ServerData) on success.</para>
 		/// </remarks>
 		Task<DatabaseResult<(long ServerId, WorldServerData ServerData)>> AddOrUpdateAsync(
