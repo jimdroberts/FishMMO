@@ -75,46 +75,57 @@ namespace FishMMO.Database.Npgsql.Services
 					.ConfigureAwait(false);
 				var activeCharacterIdSet = new HashSet<long>(activeCharacterIds);
 
-				var templateIds = achievementList.Select(a => a.TemplateID).Distinct().ToArray();
-				var existing = await dbContext.CharacterAchievements
-					.Where(a => activeCharacterIdSet.Contains(a.CharacterID) && templateIds.Contains(a.TemplateID))
-					.ToListAsync(cancellationToken)
-					.ConfigureAwait(false);
-
-				var existingByKey = new Dictionary<(long CharacterID, int TemplateID), CharacterAchievementEntity>();
-				foreach (var entity in existing)
+				var activeAchievements = achievementList.Where(a => activeCharacterIdSet.Contains(a.CharacterID)).ToList();
+				if (activeAchievements.Count == 0)
 				{
-					existingByKey[(entity.CharacterID, entity.TemplateID)] = entity;
+					return;
 				}
 
-				foreach (var achievement in achievementList)
-				{
-					if (!activeCharacterIdSet.Contains(achievement.CharacterID)) continue;
+				var now = DateTime.UtcNow;
+				var characterIdArray = activeAchievements.Select(a => a.CharacterID).ToArray();
+				var templateIdArray = activeAchievements.Select(a => a.TemplateID).ToArray();
+				var versionArray = activeAchievements.Select(a => a.Version).ToArray();
+				var tierArray = activeAchievements.Select(a => (short)a.Tier).ToArray();
+				var valueArray = activeAchievements.Select(a => (long)a.Value).ToArray();
 
-					var key = (achievement.CharacterID, achievement.TemplateID);
-					if (!existingByKey.TryGetValue(key, out var entity))
-					{
-						entity = new CharacterAchievementEntity
-						{
-							CharacterID = achievement.CharacterID,
-							TemplateID = achievement.TemplateID,
-							Version = achievement.Version,
-							TimeCreated = DateTime.UtcNow
-						};
-						await dbContext.CharacterAchievements.AddAsync(entity, cancellationToken).ConfigureAwait(false);
-						existingByKey[key] = entity;
-					}
+				var sql = $@"
+					INSERT INTO {TableName}
+						(character_id, template_id, version, tier, value, time_created, deleted, time_deleted)
+					SELECT
+						u.character_id,
+						u.template_id,
+						u.version,
+						u.tier,
+						u.value,
+						{{5}},
+						FALSE,
+						NULL
+					FROM UNNEST(
+						{{0}}::bigint[],
+						{{1}}::integer[],
+						{{2}}::bigint[],
+						{{3}}::smallint[],
+						{{4}}::bigint[]
+					) AS u(character_id, template_id, version, tier, value)
+					ON CONFLICT (character_id, template_id)
+					DO UPDATE SET
+						tier = EXCLUDED.tier,
+						value = EXCLUDED.value,
+						deleted = FALSE,
+						time_deleted = NULL,
+						version = CASE
+							WHEN EXCLUDED.version > 0 THEN EXCLUDED.version
+							ELSE {TableName}.version
+						END
+					WHERE EXCLUDED.version <= 0 OR EXCLUDED.version > {TableName}.version;";
 
-					ValidateVersion(entity, achievement.Version);
-					if (entity.Deleted)
-					{
-						entity.Deleted = false;
-						entity.TimeDeleted = null;
-					}
-
-					entity.Tier = achievement.Tier;
-					entity.Value = achievement.Value;
-				}
+				await ExecuteBulkUpsertAsync(
+					dbContext,
+					sql,
+					activeAchievements.Count,
+					new object[] { characterIdArray, templateIdArray, versionArray, tierArray, valueArray, now },
+					"One or more achievements were rejected due to a stale Version.",
+					cancellationToken).ConfigureAwait(false);
 			}).ConfigureAwait(false);
 		}
 
@@ -132,20 +143,11 @@ namespace FishMMO.Database.Npgsql.Services
 			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				var now = DateTime.UtcNow;
-				var achievementIds = await dbContext.CharacterAchievements
-					.AsNoTracking()
-					.Where(a => a.CharacterID == characterId && !a.Deleted)
-					.Select(a => a.ID)
-					.ToListAsync(cancellationToken)
+				var sql = $@"UPDATE {TableName}
+					SET deleted = TRUE, time_deleted = {{0}}
+					WHERE character_id = {{1}} AND deleted = FALSE";
+				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { now, characterId }, cancellationToken)
 					.ConfigureAwait(false);
-
-				foreach (var achievementId in achievementIds)
-				{
-					var entity = new CharacterAchievementEntity { ID = achievementId, Deleted = true, TimeDeleted = now };
-					dbContext.Attach(entity);
-					dbContext.Entry(entity).Property(e => e.Deleted).IsModified = true;
-					dbContext.Entry(entity).Property(e => e.TimeDeleted).IsModified = true;
-				}
 			}).ConfigureAwait(false);
 		}
 

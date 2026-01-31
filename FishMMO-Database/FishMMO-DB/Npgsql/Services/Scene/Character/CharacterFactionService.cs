@@ -92,45 +92,53 @@ namespace FishMMO.Database.Npgsql.Services
 					.ConfigureAwait(false);
 				var activeCharacterIdSet = new HashSet<long>(activeCharacterIds);
 
-				var templateIds = factionList.Select(f => f.TemplateID).Distinct().ToArray();
-				var existing = await dbContext.CharacterFactions
-					.Where(f => activeCharacterIdSet.Contains(f.CharacterID) && templateIds.Contains(f.TemplateID))
-					.ToListAsync(cancellationToken)
-					.ConfigureAwait(false);
-
-				var existingByKey = new Dictionary<(long CharacterID, int TemplateID), CharacterFactionEntity>();
-				foreach (var entity in existing)
+				var activeFactions = factionList.Where(f => activeCharacterIdSet.Contains(f.CharacterID)).ToList();
+				if (activeFactions.Count == 0)
 				{
-					existingByKey[(entity.CharacterID, entity.TemplateID)] = entity;
+					return;
 				}
 
-				foreach (var faction in factionList)
-				{
-					if (!activeCharacterIdSet.Contains(faction.CharacterID)) continue;
+				var now = DateTime.UtcNow;
+				var characterIdArray = activeFactions.Select(f => f.CharacterID).ToArray();
+				var templateIdArray = activeFactions.Select(f => f.TemplateID).ToArray();
+				var versionArray = activeFactions.Select(f => f.Version).ToArray();
+				var valueArray = activeFactions.Select(f => f.Value).ToArray();
 
-					var key = (faction.CharacterID, faction.TemplateID);
-					if (!existingByKey.TryGetValue(key, out var entity))
-					{
-						entity = new CharacterFactionEntity
-						{
-							CharacterID = faction.CharacterID,
-							TemplateID = faction.TemplateID,
-							Version = faction.Version,
-							TimeCreated = DateTime.UtcNow
-						};
-						await dbContext.CharacterFactions.AddAsync(entity, cancellationToken).ConfigureAwait(false);
-						existingByKey[key] = entity;
-					}
+				var sql = $@"
+					INSERT INTO {TableName}
+						(character_id, template_id, version, value, time_created, deleted, time_deleted)
+					SELECT
+						u.character_id,
+						u.template_id,
+						u.version,
+						u.value,
+						{{4}},
+						FALSE,
+						NULL
+					FROM UNNEST(
+						{{0}}::bigint[],
+						{{1}}::integer[],
+						{{2}}::bigint[],
+						{{3}}::integer[]
+					) AS u(character_id, template_id, version, value)
+					ON CONFLICT (character_id, template_id)
+					DO UPDATE SET
+						value = EXCLUDED.value,
+						deleted = FALSE,
+						time_deleted = NULL,
+						version = CASE
+							WHEN EXCLUDED.version > 0 THEN EXCLUDED.version
+							ELSE {TableName}.version
+						END
+					WHERE EXCLUDED.version <= 0 OR EXCLUDED.version > {TableName}.version;";
 
-					ValidateVersion(entity, faction.Version);
-					if (entity.Deleted)
-					{
-						entity.Deleted = false;
-						entity.TimeDeleted = null;
-					}
-
-					entity.Value = faction.Value;
-				}
+				await ExecuteBulkUpsertAsync(
+					dbContext,
+					sql,
+					activeFactions.Count,
+					new object[] { characterIdArray, templateIdArray, versionArray, valueArray, now },
+					"One or more factions were rejected due to a stale Version.",
+					cancellationToken).ConfigureAwait(false);
 			}).ConfigureAwait(false);
 		}
 
@@ -148,20 +156,11 @@ namespace FishMMO.Database.Npgsql.Services
 			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				var now = DateTime.UtcNow;
-				var factionIds = await dbContext.CharacterFactions
-					.AsNoTracking()
-					.Where(f => f.CharacterID == characterId && !f.Deleted)
-					.Select(f => f.ID)
-					.ToListAsync(cancellationToken)
+				var sql = $@"UPDATE {TableName}
+					SET deleted = TRUE, time_deleted = {{0}}
+					WHERE character_id = {{1}} AND deleted = FALSE";
+				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { now, characterId }, cancellationToken)
 					.ConfigureAwait(false);
-
-				foreach (var factionId in factionIds)
-				{
-					var entity = new CharacterFactionEntity { ID = factionId, Deleted = true, TimeDeleted = now };
-					dbContext.Attach(entity);
-					dbContext.Entry(entity).Property(e => e.Deleted).IsModified = true;
-					dbContext.Entry(entity).Property(e => e.TimeDeleted).IsModified = true;
-				}
 			}).ConfigureAwait(false);
 		}
 

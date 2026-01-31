@@ -50,7 +50,7 @@ namespace FishMMO.Database.Npgsql.Entities
 				.HasDefaultValue(DateTime.UnixEpoch);
 
 			builder.Property(e => e.NameLowercase)
-				.HasComputedColumnSql("LOWER(\"name\")", stored: true);
+				.HasComputedColumnSql("LOWER(name)", stored: true);
 
 			// Foreign key relationship to Account
 			// Account property is the account name (string) which is the PK of AccountEntity

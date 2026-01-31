@@ -231,89 +231,132 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteTransactionAsync(async dbContext =>
 			{
-				var previousAutoDetectChanges = dbContext.ChangeTracker.AutoDetectChangesEnabled;
-				try
-				{
-					dbContext.ChangeTracker.AutoDetectChangesEnabled = false;
+				var characterIds = petList.Select(p => p.CharacterID).Distinct().ToArray();
+				var activeCharacterIds = await dbContext.Characters
+					.AsNoTracking()
+					.Where(c => characterIds.Contains(c.ID) && !c.Deleted)
+					.Select(c => c.ID)
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
+				var activeCharacterIdSet = new HashSet<long>(activeCharacterIds);
+				var now = DateTime.UtcNow;
 
-					var characterIds = petList.Select(p => p.CharacterID).Distinct().ToArray();
-					var activeCharacterIds = await dbContext.Characters
+				var activeUpdates = petsToUpdate
+					.Where(p => activeCharacterIdSet.Contains(p.CharacterID) && p.TemplateID > 0)
+					.ToList();
+				var activeInserts = petsToInsert
+					.Where(p => activeCharacterIdSet.Contains(p.CharacterID) && p.TemplateID > 0)
+					.ToList();
+
+				if (activeUpdates.Count > 0)
+				{
+					var ids = activeUpdates.Select(p => p.ID).Distinct().ToArray();
+					var existingIds = await dbContext.CharacterPets
 						.AsNoTracking()
-						.Where(c => characterIds.Contains(c.ID) && !c.Deleted)
-						.Select(c => c.ID)
+						.Where(p => ids.Contains(p.ID) && activeCharacterIdSet.Contains(p.CharacterID))
+						.Select(p => p.ID)
 						.ToListAsync(cancellationToken)
 						.ConfigureAwait(false);
-					var activeCharacterIdSet = new HashSet<long>(activeCharacterIds);
-
-					// Load existing pets for all active characters once.
-					var existing = await dbContext.CharacterPets
-						.Where(p => activeCharacterIdSet.Contains(p.CharacterID))
-						.ToListAsync(cancellationToken)
-						.ConfigureAwait(false);
-
-					var existingByCharacterId = new Dictionary<long, CharacterPetEntity>();
-					var existingById = new Dictionary<long, CharacterPetEntity>();
-					foreach (var entity in existing)
-					{
-						existingByCharacterId[entity.CharacterID] = entity;
-						existingById[entity.ID] = entity;
-					}
-
-					// Apply updates (ID > 0) as update-only (matches previous SQL UPDATE semantics).
-					foreach (var pet in petsToUpdate)
-					{
-						if (!activeCharacterIdSet.Contains(pet.CharacterID)) continue;
-						if (pet.TemplateID <= 0) continue;
-						if (!existingById.TryGetValue(pet.ID, out var entity)) continue;
-
-						ValidateVersion(entity, pet.Version);
-
-						if (entity.Deleted)
-						{
-							entity.Deleted = false;
-							entity.TimeDeleted = null;
-						}
-
-						entity.CharacterID = pet.CharacterID;
-						entity.TemplateID = pet.TemplateID;
-						entity.Abilities = pet.Abilities?.ToList() ?? new List<int>();
-						entity.Spawned = pet.Spawned;
-					}
-
-					// Apply inserts (ID == 0) with upsert-by-character semantics.
-					foreach (var pet in petsToInsert)
-					{
-						if (!activeCharacterIdSet.Contains(pet.CharacterID)) continue;
-						if (pet.TemplateID <= 0) continue;
-
-						if (!existingByCharacterId.TryGetValue(pet.CharacterID, out var entity))
-						{
-							entity = new CharacterPetEntity
-							{
-								CharacterID = pet.CharacterID,
-								Version = pet.Version,
-								TimeCreated = DateTime.UtcNow
-							};
-							await dbContext.CharacterPets.AddAsync(entity, cancellationToken).ConfigureAwait(false);
-							existingByCharacterId[pet.CharacterID] = entity;
-						}
-
-						ValidateVersion(entity, pet.Version);
-
-						if (entity.Deleted)
-						{
-							entity.Deleted = false;
-							entity.TimeDeleted = null;
-						}
-
-						entity.TemplateID = pet.TemplateID;
-						entity.Abilities = pet.Abilities?.ToList() ?? new List<int>();
-						entity.Spawned = pet.Spawned;
-					}
+					var existingIdSet = new HashSet<long>(existingIds);
+					activeUpdates = activeUpdates.Where(p => existingIdSet.Contains(p.ID)).ToList();
 				}
-				finally
+
+				if (activeUpdates.Count > 0)
 				{
-					dbContext.ChangeTracker.AutoDetectChangesEnabled = previousAutoDetectChanges;
+					var idArray = activeUpdates.Select(p => p.ID).ToArray();
+					var characterIdArray = activeUpdates.Select(p => p.CharacterID).ToArray();
+					var templateIdArray = activeUpdates.Select(p => p.TemplateID).ToArray();
+					var versionArray = activeUpdates.Select(p => p.Version).ToArray();
+					var abilitiesArray = activeUpdates
+						.Select(p => (p.Abilities ?? new List<int>()).ToArray())
+						.ToArray();
+					var spawnedArray = activeUpdates.Select(p => p.Spawned).ToArray();
+
+					var sql = $@"
+						UPDATE {TableName} AS t
+						SET
+							character_id = u.character_id,
+							template_id = u.template_id,
+							abilities = u.abilities,
+							spawned = u.spawned,
+							deleted = FALSE,
+							time_deleted = NULL,
+							version = CASE
+								WHEN u.version > 0 THEN u.version
+								ELSE t.version
+							END
+						FROM UNNEST(
+							{{0}}::bigint[],
+							{{1}}::bigint[],
+							{{2}}::integer[],
+							{{3}}::bigint[],
+							{{4}}::integer[][],
+							{{5}}::boolean[]
+						) AS u(id, character_id, template_id, version, abilities, spawned)
+						WHERE t.id = u.id
+							AND (u.version <= 0 OR u.version > t.version);";
+
+					await ExecuteBulkUpsertAsync(
+						dbContext,
+						sql,
+						activeUpdates.Count,
+						new object[] { idArray, characterIdArray, templateIdArray, versionArray, abilitiesArray, spawnedArray },
+						"One or more pets were rejected due to a stale Version.",
+						cancellationToken).ConfigureAwait(false);
+				}
+
+				if (activeInserts.Count > 0)
+				{
+					var characterIdArray = activeInserts.Select(p => p.CharacterID).ToArray();
+					var templateIdArray = activeInserts.Select(p => p.TemplateID).ToArray();
+					var versionArray = activeInserts.Select(p => p.Version).ToArray();
+					var abilitiesArray = activeInserts
+						.Select(p => (p.Abilities ?? new List<int>()).ToArray())
+						.ToArray();
+					var spawnedArray = activeInserts.Select(p => p.Spawned).ToArray();
+
+					var sql = $@"
+						INSERT INTO {TableName}
+							(character_id, template_id, version, abilities, spawned, time_created, deleted, time_deleted)
+						SELECT
+							u.character_id,
+							u.template_id,
+							CASE
+								WHEN u.version > 0 THEN u.version
+								ELSE 0
+							END,
+							u.abilities,
+							u.spawned,
+							{{5}},
+							FALSE,
+							NULL
+						FROM UNNEST(
+							{{0}}::bigint[],
+							{{1}}::integer[],
+							{{2}}::bigint[],
+							{{3}}::integer[][],
+							{{4}}::boolean[]
+						) AS u(character_id, template_id, version, abilities, spawned)
+						ON CONFLICT (character_id)
+						DO UPDATE SET
+							template_id = EXCLUDED.template_id,
+							abilities = EXCLUDED.abilities,
+							spawned = EXCLUDED.spawned,
+							deleted = FALSE,
+							time_deleted = NULL,
+							version = CASE
+								WHEN EXCLUDED.version > 0 THEN EXCLUDED.version
+								ELSE {TableName}.version
+							END
+						WHERE EXCLUDED.version <= 0 OR EXCLUDED.version > {TableName}.version;";
+
+					await ExecuteBulkUpsertAsync(
+						dbContext,
+						sql,
+						activeInserts.Count,
+						new object[] { characterIdArray, templateIdArray, versionArray, abilitiesArray, spawnedArray, now },
+						"One or more pets were rejected due to a stale Version.",
+						cancellationToken).ConfigureAwait(false);
 				}
 			}).ConfigureAwait(false);
 		}
@@ -331,20 +374,11 @@ namespace FishMMO.Database.Npgsql.Services
 			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				var now = DateTime.UtcNow;
-				var petIds = await dbContext.CharacterPets
-					.AsNoTracking()
-					.Where(p => p.CharacterID == characterId && !p.Deleted)
-					.Select(p => p.ID)
-					.ToListAsync(cancellationToken)
+				var sql = $@"UPDATE {TableName}
+					SET deleted = TRUE, time_deleted = {{0}}
+					WHERE character_id = {{1}} AND deleted = FALSE";
+				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { now, characterId }, cancellationToken)
 					.ConfigureAwait(false);
-
-				foreach (var petId in petIds)
-				{
-					var entity = new CharacterPetEntity { ID = petId, Deleted = true, TimeDeleted = now };
-					dbContext.Attach(entity);
-					dbContext.Entry(entity).Property(e => e.Deleted).IsModified = true;
-					dbContext.Entry(entity).Property(e => e.TimeDeleted).IsModified = true;
-				}
 			}).ConfigureAwait(false);
 		}
 

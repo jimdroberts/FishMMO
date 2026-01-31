@@ -174,69 +174,70 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteTransactionAsync(async dbContext =>
 			{
-				var previousAutoDetectChanges = dbContext.ChangeTracker.AutoDetectChangesEnabled;
-				try
+				var characterIds = equipmentList.Select(e => e.CharacterID).Distinct().ToArray();
+				var activeCharacterIds = await dbContext.Characters
+					.AsNoTracking()
+					.Where(c => characterIds.Contains(c.ID) && !c.Deleted)
+					.Select(c => c.ID)
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
+				var activeCharacterIdSet = new HashSet<long>(activeCharacterIds);
+
+				var activeEquipment = equipmentList.Where(e => activeCharacterIdSet.Contains(e.CharacterID)).ToList();
+				if (activeEquipment.Count == 0)
 				{
-					dbContext.ChangeTracker.AutoDetectChangesEnabled = false;
-
-					var characterIds = equipmentList.Select(e => e.CharacterID).Distinct().ToArray();
-					var activeCharacterIds = await dbContext.Characters
-						.AsNoTracking()
-						.Where(c => characterIds.Contains(c.ID) && !c.Deleted)
-						.Select(c => c.ID)
-						.ToListAsync(cancellationToken)
-						.ConfigureAwait(false);
-					var activeCharacterIdSet = new HashSet<long>(activeCharacterIds);
-
-					var slotList = equipmentList.Select(e => e.Slot).Distinct().ToArray();
-					var desiredKeys = new HashSet<(long CharacterID, int Slot)>(equipmentList.Select(e => (e.CharacterID, e.Slot)));
-					var existing = await dbContext.CharacterEquippedItems
-						.Where(e => activeCharacterIdSet.Contains(e.CharacterID) && slotList.Contains(e.Slot))
-						.ToListAsync(cancellationToken)
-						.ConfigureAwait(false);
-
-					var existingByKey = new Dictionary<(long CharacterID, int Slot), CharacterEquipmentEntity>();
-					foreach (var entity in existing)
-					{
-						var key = (entity.CharacterID, entity.Slot);
-						if (!desiredKeys.Contains(key)) continue;
-						existingByKey[key] = entity;
-					}
-
-					foreach (var item in equipmentList)
-					{
-						if (!activeCharacterIdSet.Contains(item.CharacterID)) continue;
-
-						var key = (item.CharacterID, item.Slot);
-						if (!existingByKey.TryGetValue(key, out var entity))
-						{
-							entity = new CharacterEquipmentEntity
-							{
-								CharacterID = item.CharacterID,
-								Version = item.Version,
-								Slot = item.Slot,
-								TimeCreated = DateTime.UtcNow
-							};
-							await dbContext.CharacterEquippedItems.AddAsync(entity, cancellationToken).ConfigureAwait(false);
-							existingByKey[key] = entity;
-						}
-
-						ValidateVersion(entity, item.Version);
-						if (entity.Deleted)
-						{
-							entity.Deleted = false;
-							entity.TimeDeleted = null;
-						}
-
-						entity.TemplateID = item.TemplateID;
-						entity.Seed = item.Seed;
-						entity.Amount = item.Amount;
-					}
+					return;
 				}
-				finally
-				{
-					dbContext.ChangeTracker.AutoDetectChangesEnabled = previousAutoDetectChanges;
-				}
+
+				var now = DateTime.UtcNow;
+				var characterIdArray = activeEquipment.Select(e => e.CharacterID).ToArray();
+				var slotArray = activeEquipment.Select(e => e.Slot).ToArray();
+				var versionArray = activeEquipment.Select(e => e.Version).ToArray();
+				var templateIdArray = activeEquipment.Select(e => e.TemplateID).ToArray();
+				var seedArray = activeEquipment.Select(e => e.Seed).ToArray();
+				var amountArray = activeEquipment.Select(e => e.Amount).ToArray();
+
+				var sql = $@"
+					INSERT INTO {TableName}
+						(character_id, slot, version, template_id, seed, amount, time_created, deleted, time_deleted)
+					SELECT
+						u.character_id,
+						u.slot,
+						u.version,
+						u.template_id,
+						u.seed,
+						u.amount,
+						{{6}},
+						FALSE,
+						NULL
+					FROM UNNEST(
+						{{0}}::bigint[],
+						{{1}}::integer[],
+						{{2}}::bigint[],
+						{{3}}::integer[],
+						{{4}}::integer[],
+						{{5}}::integer[]
+					) AS u(character_id, slot, version, template_id, seed, amount)
+					ON CONFLICT (character_id, slot)
+					DO UPDATE SET
+						template_id = EXCLUDED.template_id,
+						seed = EXCLUDED.seed,
+						amount = EXCLUDED.amount,
+						deleted = FALSE,
+						time_deleted = NULL,
+						version = CASE
+							WHEN EXCLUDED.version > 0 THEN EXCLUDED.version
+							ELSE {TableName}.version
+						END
+					WHERE EXCLUDED.version <= 0 OR EXCLUDED.version > {TableName}.version;";
+
+				await ExecuteBulkUpsertAsync(
+					dbContext,
+					sql,
+					activeEquipment.Count,
+					new object[] { characterIdArray, slotArray, versionArray, templateIdArray, seedArray, amountArray, now },
+					"One or more equipment items were rejected due to a stale Version.",
+					cancellationToken).ConfigureAwait(false);
 			}).ConfigureAwait(false);
 		}
 
@@ -254,20 +255,11 @@ namespace FishMMO.Database.Npgsql.Services
 			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				var now = DateTime.UtcNow;
-				var equipmentIds = await dbContext.CharacterEquippedItems
-					.AsNoTracking()
-					.Where(e => e.CharacterID == characterId && !e.Deleted)
-					.Select(e => e.ID)
-					.ToListAsync(cancellationToken)
+				var sql = $@"UPDATE {TableName}
+					SET deleted = TRUE, time_deleted = {{0}}
+					WHERE character_id = {{1}} AND deleted = FALSE";
+				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { now, characterId }, cancellationToken)
 					.ConfigureAwait(false);
-
-				foreach (var equipmentId in equipmentIds)
-				{
-					var entity = new CharacterEquipmentEntity { ID = equipmentId, Deleted = true, TimeDeleted = now };
-					dbContext.Attach(entity);
-					dbContext.Entry(entity).Property(e => e.Deleted).IsModified = true;
-					dbContext.Entry(entity).Property(e => e.TimeDeleted).IsModified = true;
-				}
 			}).ConfigureAwait(false);
 		}
 
@@ -285,20 +277,11 @@ namespace FishMMO.Database.Npgsql.Services
 			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				var now = DateTime.UtcNow;
-				var equipmentIds = await dbContext.CharacterEquippedItems
-					.AsNoTracking()
-					.Where(e => e.CharacterID == characterId && e.Slot == slot && !e.Deleted)
-					.Select(e => e.ID)
-					.ToListAsync(cancellationToken)
+				var sql = $@"UPDATE {TableName}
+					SET deleted = TRUE, time_deleted = {{0}}
+					WHERE character_id = {{1}} AND slot = {{2}} AND deleted = FALSE";
+				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { now, characterId, slot }, cancellationToken)
 					.ConfigureAwait(false);
-
-				foreach (var equipmentId in equipmentIds)
-				{
-					var entity = new CharacterEquipmentEntity { ID = equipmentId, Deleted = true, TimeDeleted = now };
-					dbContext.Attach(entity);
-					dbContext.Entry(entity).Property(e => e.Deleted).IsModified = true;
-					dbContext.Entry(entity).Property(e => e.TimeDeleted).IsModified = true;
-				}
 			}).ConfigureAwait(false);
 		}
 

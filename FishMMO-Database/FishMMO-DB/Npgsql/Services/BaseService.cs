@@ -603,5 +603,52 @@ namespace FishMMO.Database.Npgsql.Services
 
 			entity.Version = incomingVersion;
 		}
+
+		/// <summary>
+		/// Executes a bulk UPSERT statement and enforces version/authority semantics by validating the affected row count.
+		/// </summary>
+		/// <param name="dbContext">The active DbContext for the current transaction.</param>
+		/// <param name="sql">
+		/// A fully-formed SQL statement (typically using UNNEST + INSERT ... ON CONFLICT DO UPDATE) built with <see cref="TableName"/>.
+		/// The SQL should be parameterized for values and must never accept user-controlled identifiers.
+		/// </param>
+		/// <param name="expectedRowsAffected">
+		/// The number of rows that must be inserted or updated for the operation to be considered successful.
+		/// Callers should pre-filter inputs (e.g., skip non-active characters) so this expectation is stable.
+		/// </param>
+		/// <param name="parameters">SQL parameters to pass to EF Core.</param>
+		/// <param name="staleStateMessage">Message used when version/authority is lost.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <exception cref="ArgumentNullException">Thrown when <paramref name="dbContext"/> or <paramref name="sql"/> is null.</exception>
+		/// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="expectedRowsAffected"/> is negative.</exception>
+		/// <exception cref="StaleStateException">
+		/// Thrown when fewer than <paramref name="expectedRowsAffected"/> rows were affected, indicating that at least one incoming row
+		/// was rejected by version gating (e.g., <c>EXCLUDED.version &lt;= table.version</c>).
+		/// </exception>
+		protected static async Task ExecuteBulkUpsertAsync(
+			NpgsqlDbContext dbContext,
+			string sql,
+			int expectedRowsAffected,
+			object[] parameters,
+			string staleStateMessage,
+			CancellationToken cancellationToken)
+		{
+			if (dbContext == null) throw new ArgumentNullException(nameof(dbContext));
+			if (sql == null) throw new ArgumentNullException(nameof(sql));
+			if (expectedRowsAffected < 0) throw new ArgumentOutOfRangeException(nameof(expectedRowsAffected));
+
+			if (expectedRowsAffected == 0)
+			{
+				return;
+			}
+
+			var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(sql, parameters, cancellationToken)
+				.ConfigureAwait(false);
+
+			if (rowsAffected != expectedRowsAffected)
+			{
+				throw new StaleStateException(staleStateMessage);
+			}
+		}
 	}
 }

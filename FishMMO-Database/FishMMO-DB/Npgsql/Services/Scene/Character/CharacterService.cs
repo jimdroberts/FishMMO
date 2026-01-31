@@ -338,23 +338,15 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				// Hard-delete temporary membership state (intentional).
-				var guildMemberships = await dbContext.CharacterGuilds
-					.Where(e => e.CharacterID == characterId)
-					.ToListAsync(cancellationToken)
-					.ConfigureAwait(false);
-				if (guildMemberships.Count > 0)
-				{
-					dbContext.CharacterGuilds.RemoveRange(guildMemberships);
-				}
+				await dbContext.Database.ExecuteSqlRawAsync(
+					"DELETE FROM character_guild WHERE character_id = {0}",
+					new object[] { characterId },
+					cancellationToken).ConfigureAwait(false);
 
-				var partyMemberships = await dbContext.CharacterParties
-					.Where(e => e.CharacterID == characterId)
-					.ToListAsync(cancellationToken)
-					.ConfigureAwait(false);
-				if (partyMemberships.Count > 0)
-				{
-					dbContext.CharacterParties.RemoveRange(partyMemberships);
-				}
+				await dbContext.Database.ExecuteSqlRawAsync(
+					"DELETE FROM character_party WHERE character_id = {0}",
+					new object[] { characterId },
+					cancellationToken).ConfigureAwait(false);
 
 				// Soft-cascade all character-owned tables.
 				static Task SoftDeleteTableAsync(NpgsqlDbContext ctx, string tableName, long id, CancellationToken token)

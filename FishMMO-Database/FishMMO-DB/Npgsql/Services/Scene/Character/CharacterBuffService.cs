@@ -87,46 +87,61 @@ namespace FishMMO.Database.Npgsql.Services
 					.ConfigureAwait(false);
 				var activeCharacterIdSet = new HashSet<long>(activeCharacterIds);
 
-				var templateIds = buffList.Select(b => b.TemplateID).Distinct().ToArray();
-				var existing = await dbContext.CharacterBuffs
-					.Where(b => activeCharacterIdSet.Contains(b.CharacterID) && templateIds.Contains(b.TemplateID))
-					.ToListAsync(cancellationToken)
-					.ConfigureAwait(false);
-
-				var existingByKey = new Dictionary<(long CharacterID, int TemplateID), CharacterBuffEntity>();
-				foreach (var entity in existing)
+				var activeBuffs = buffList.Where(b => activeCharacterIdSet.Contains(b.CharacterID)).ToList();
+				if (activeBuffs.Count == 0)
 				{
-					existingByKey[(entity.CharacterID, entity.TemplateID)] = entity;
+					return;
 				}
 
-				foreach (var buff in buffList)
-				{
-					if (!activeCharacterIdSet.Contains(buff.CharacterID)) continue;
+				var now = DateTime.UtcNow;
+				var characterIdArray = activeBuffs.Select(b => b.CharacterID).ToArray();
+				var templateIdArray = activeBuffs.Select(b => b.TemplateID).ToArray();
+				var versionArray = activeBuffs.Select(b => b.Version).ToArray();
+				var remainingTimeArray = activeBuffs.Select(b => b.RemainingTime).ToArray();
+				var tickTimeArray = activeBuffs.Select(b => b.TickTime).ToArray();
+				var stacksArray = activeBuffs.Select(b => b.Stacks).ToArray();
 
-					var key = (buff.CharacterID, buff.TemplateID);
-					if (!existingByKey.TryGetValue(key, out var entity))
-					{
-						entity = new CharacterBuffEntity
-						{
-							CharacterID = buff.CharacterID,
-							TemplateID = buff.TemplateID,
-							Version = buff.Version,
-							TimeCreated = DateTime.UtcNow
-						};
-						await dbContext.CharacterBuffs.AddAsync(entity, cancellationToken).ConfigureAwait(false);
-						existingByKey[key] = entity;
-					}
+				var sql = $@"
+					INSERT INTO {TableName}
+						(character_id, template_id, version, remaining_time, tick_time, stacks, time_created, deleted, time_deleted)
+					SELECT
+						u.character_id,
+						u.template_id,
+						u.version,
+						u.remaining_time,
+						u.tick_time,
+						u.stacks,
+						{{6}},
+						FALSE,
+						NULL
+					FROM UNNEST(
+						{{0}}::bigint[],
+						{{1}}::integer[],
+						{{2}}::bigint[],
+						{{3}}::real[],
+						{{4}}::real[],
+						{{5}}::integer[]
+					) AS u(character_id, template_id, version, remaining_time, tick_time, stacks)
+					ON CONFLICT (character_id, template_id)
+					DO UPDATE SET
+						remaining_time = EXCLUDED.remaining_time,
+						tick_time = EXCLUDED.tick_time,
+						stacks = EXCLUDED.stacks,
+						deleted = FALSE,
+						time_deleted = NULL,
+						version = CASE
+							WHEN EXCLUDED.version > 0 THEN EXCLUDED.version
+							ELSE {TableName}.version
+						END
+					WHERE EXCLUDED.version <= 0 OR EXCLUDED.version > {TableName}.version;";
 
-					ValidateVersion(entity, buff.Version);
-					if (entity.Deleted)
-					{
-						entity.Deleted = false;
-						entity.TimeDeleted = null;
-					}
-					entity.RemainingTime = buff.RemainingTime;
-					entity.TickTime = buff.TickTime;
-					entity.Stacks = buff.Stacks;
-				}
+				await ExecuteBulkUpsertAsync(
+					dbContext,
+					sql,
+					activeBuffs.Count,
+					new object[] { characterIdArray, templateIdArray, versionArray, remainingTimeArray, tickTimeArray, stacksArray, now },
+					"One or more buffs were rejected due to a stale Version.",
+					cancellationToken).ConfigureAwait(false);
 			}).ConfigureAwait(false);
 		}
 
@@ -144,20 +159,11 @@ namespace FishMMO.Database.Npgsql.Services
 			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				var now = DateTime.UtcNow;
-				var buffIds = await dbContext.CharacterBuffs
-					.AsNoTracking()
-					.Where(b => b.CharacterID == characterId && !b.Deleted)
-					.Select(b => b.ID)
-					.ToListAsync(cancellationToken)
+				var sql = $@"UPDATE {TableName}
+					SET deleted = TRUE, time_deleted = {{0}}
+					WHERE character_id = {{1}} AND deleted = FALSE";
+				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { now, characterId }, cancellationToken)
 					.ConfigureAwait(false);
-
-				foreach (var buffId in buffIds)
-				{
-					var entity = new CharacterBuffEntity { ID = buffId, Deleted = true, TimeDeleted = now };
-					dbContext.Attach(entity);
-					dbContext.Entry(entity).Property(e => e.Deleted).IsModified = true;
-					dbContext.Entry(entity).Property(e => e.TimeDeleted).IsModified = true;
-				}
 			}).ConfigureAwait(false);
 		}
 

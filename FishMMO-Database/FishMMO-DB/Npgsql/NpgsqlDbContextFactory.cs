@@ -120,7 +120,8 @@ namespace FishMMO.Database.Npgsql
 				.UseNpgsql(connectionString, npgsqlOptions =>
 				{
 					npgsqlOptions.CommandTimeout(this.commandTimeout);
-				});
+				})
+				.UseSnakeCaseNamingConvention();
 
 			if (this.enableLogging)
 			{

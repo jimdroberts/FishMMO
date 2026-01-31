@@ -188,68 +188,66 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteTransactionAsync(async dbContext =>
 			{
-				var previousAutoDetectChanges = dbContext.ChangeTracker.AutoDetectChangesEnabled;
-				try
+				var characterIds = hotkeyList.Select(h => h.CharacterID).Distinct().ToArray();
+				var activeCharacterIds = await dbContext.Characters
+					.AsNoTracking()
+					.Where(c => characterIds.Contains(c.ID) && !c.Deleted)
+					.Select(c => c.ID)
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
+				var activeCharacterIdSet = new HashSet<long>(activeCharacterIds);
+
+				var activeHotkeys = hotkeyList.Where(h => activeCharacterIdSet.Contains(h.CharacterID)).ToList();
+				if (activeHotkeys.Count == 0)
 				{
-					dbContext.ChangeTracker.AutoDetectChangesEnabled = false;
-
-					var characterIds = hotkeyList.Select(h => h.CharacterID).Distinct().ToArray();
-					var activeCharacterIds = await dbContext.Characters
-						.AsNoTracking()
-						.Where(c => characterIds.Contains(c.ID) && !c.Deleted)
-						.Select(c => c.ID)
-						.ToListAsync(cancellationToken)
-						.ConfigureAwait(false);
-					var activeCharacterIdSet = new HashSet<long>(activeCharacterIds);
-
-					var slotList = hotkeyList.Select(h => h.Slot).Distinct().ToArray();
-					var desiredKeys = new HashSet<(long CharacterID, int Slot)>(hotkeyList.Select(h => (h.CharacterID, h.Slot)));
-					var existing = await dbContext.CharacterHotkeys
-						.Where(h => activeCharacterIdSet.Contains(h.CharacterID) && slotList.Contains(h.Slot))
-						.ToListAsync(cancellationToken)
-						.ConfigureAwait(false);
-
-					var existingByKey = new Dictionary<(long CharacterID, int Slot), CharacterHotkeyEntity>();
-					foreach (var entity in existing)
-					{
-						var key = (entity.CharacterID, entity.Slot);
-						if (!desiredKeys.Contains(key)) continue;
-						existingByKey[key] = entity;
-					}
-
-					foreach (var hotkey in hotkeyList)
-					{
-						if (!activeCharacterIdSet.Contains(hotkey.CharacterID)) continue;
-
-						var key = (hotkey.CharacterID, hotkey.Slot);
-						if (!existingByKey.TryGetValue(key, out var entity))
-						{
-							entity = new CharacterHotkeyEntity
-							{
-								CharacterID = hotkey.CharacterID,
-								Version = hotkey.Version,
-								Slot = hotkey.Slot,
-								TimeCreated = DateTime.UtcNow
-							};
-							await dbContext.CharacterHotkeys.AddAsync(entity, cancellationToken).ConfigureAwait(false);
-							existingByKey[key] = entity;
-						}
-
-						ValidateVersion(entity, hotkey.Version);
-						if (entity.Deleted)
-						{
-							entity.Deleted = false;
-							entity.TimeDeleted = null;
-						}
-
-						entity.Type = hotkey.Type;
-						entity.ReferenceID = hotkey.ReferenceID;
-					}
+					return;
 				}
-				finally
-				{
-					dbContext.ChangeTracker.AutoDetectChangesEnabled = previousAutoDetectChanges;
-				}
+
+				var now = DateTime.UtcNow;
+				var characterIdArray = activeHotkeys.Select(h => h.CharacterID).ToArray();
+				var slotArray = activeHotkeys.Select(h => h.Slot).ToArray();
+				var versionArray = activeHotkeys.Select(h => h.Version).ToArray();
+				var typeArray = activeHotkeys.Select(h => (short)h.Type).ToArray();
+				var referenceIdArray = activeHotkeys.Select(h => h.ReferenceID).ToArray();
+
+				var sql = $@"
+					INSERT INTO {TableName}
+						(character_id, slot, version, type, reference_id, time_created, deleted, time_deleted)
+					SELECT
+						u.character_id,
+						u.slot,
+						u.version,
+						u.type,
+						u.reference_id,
+						{{5}},
+						FALSE,
+						NULL
+					FROM UNNEST(
+						{{0}}::bigint[],
+						{{1}}::integer[],
+						{{2}}::bigint[],
+						{{3}}::smallint[],
+						{{4}}::bigint[]
+					) AS u(character_id, slot, version, type, reference_id)
+					ON CONFLICT (character_id, slot)
+					DO UPDATE SET
+						type = EXCLUDED.type,
+						reference_id = EXCLUDED.reference_id,
+						deleted = FALSE,
+						time_deleted = NULL,
+						version = CASE
+							WHEN EXCLUDED.version > 0 THEN EXCLUDED.version
+							ELSE {TableName}.version
+						END
+					WHERE EXCLUDED.version <= 0 OR EXCLUDED.version > {TableName}.version;";
+
+				await ExecuteBulkUpsertAsync(
+					dbContext,
+					sql,
+					activeHotkeys.Count,
+					new object[] { characterIdArray, slotArray, versionArray, typeArray, referenceIdArray, now },
+					"One or more hotkeys were rejected due to a stale Version.",
+					cancellationToken).ConfigureAwait(false);
 			}).ConfigureAwait(false);
 		}
 
@@ -267,20 +265,11 @@ namespace FishMMO.Database.Npgsql.Services
 			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				var now = DateTime.UtcNow;
-				var hotkeyIds = await dbContext.CharacterHotkeys
-					.AsNoTracking()
-					.Where(h => h.CharacterID == characterId && !h.Deleted)
-					.Select(h => h.ID)
-					.ToListAsync(cancellationToken)
+				var sql = $@"UPDATE {TableName}
+					SET deleted = TRUE, time_deleted = {{0}}
+					WHERE character_id = {{1}} AND deleted = FALSE";
+				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { now, characterId }, cancellationToken)
 					.ConfigureAwait(false);
-
-				foreach (var hotkeyId in hotkeyIds)
-				{
-					var entity = new CharacterHotkeyEntity { ID = hotkeyId, Deleted = true, TimeDeleted = now };
-					dbContext.Attach(entity);
-					dbContext.Entry(entity).Property(e => e.Deleted).IsModified = true;
-					dbContext.Entry(entity).Property(e => e.TimeDeleted).IsModified = true;
-				}
 			}).ConfigureAwait(false);
 		}
 

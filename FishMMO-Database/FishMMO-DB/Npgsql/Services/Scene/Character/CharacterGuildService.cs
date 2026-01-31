@@ -276,17 +276,11 @@ namespace FishMMO.Database.Npgsql.Services
 
 			var result = await ExecuteTransactionAsync(async dbContext =>
 			{
-				var memberships = await dbContext.CharacterGuilds
-					.Where(g => g.CharacterID == characterId)
-					.ToListAsync(cancellationToken)
+				await dbContext.Database.ExecuteSqlRawAsync(
+					"DELETE FROM character_guild WHERE character_id = {0}",
+					new object[] { characterId },
+					cancellationToken)
 					.ConfigureAwait(false);
-
-				if (memberships.Count == 0)
-				{
-					return;
-				}
-
-				dbContext.CharacterGuilds.RemoveRange(memberships);
 			}).ConfigureAwait(false);
 
 			return result.IsSuccess

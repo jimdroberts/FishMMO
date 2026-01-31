@@ -26,7 +26,7 @@ namespace FishMMO.Database.Npgsql.Entities
 				.IsRequired();
 
 			builder.Property(e => e.NameLowercase)
-				.HasComputedColumnSql("LOWER(\"name\")", stored: true);
+				.HasComputedColumnSql("LOWER(name)", stored: true);
 
 			builder.Property(e => e.Notice)
 				.HasMaxLength(500);

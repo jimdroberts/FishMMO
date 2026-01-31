@@ -132,64 +132,52 @@ namespace FishMMO.Database.Npgsql.Services
 
 			var saveResult = await ExecuteTransactionAsync(async dbContext =>
 			{
-				var previousAutoDetectChanges = dbContext.ChangeTracker.AutoDetectChangesEnabled;
-				try
+				var characterIds = abilityList.Select(a => a.CharacterID).Distinct().ToArray();
+				var activeCharacterIds = await dbContext.Characters
+					.AsNoTracking()
+					.Where(c => characterIds.Contains(c.ID) && !c.Deleted)
+					.Select(c => c.ID)
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
+				var activeCharacterIdSet = new HashSet<long>(activeCharacterIds);
+
+				var activeAbilities = abilityList
+					.Where(a => a.TemplateID > 0 && activeCharacterIdSet.Contains(a.CharacterID))
+					.ToList();
+				if (activeAbilities.Count == 0)
 				{
-					dbContext.ChangeTracker.AutoDetectChangesEnabled = false;
-
-					var characterIds = abilityList.Select(a => a.CharacterID).Distinct().ToArray();
-					var activeCharacterIds = await dbContext.Characters
-						.AsNoTracking()
-						.Where(c => characterIds.Contains(c.ID) && !c.Deleted)
-						.Select(c => c.ID)
-						.ToListAsync(cancellationToken)
-						.ConfigureAwait(false);
-					var activeCharacterIdSet = new HashSet<long>(activeCharacterIds);
-
-					var templateIds = abilityList.Select(a => a.TemplateID).Distinct().ToArray();
-
-					var existing = await dbContext.CharacterKnownAbilities
-						.Where(a => activeCharacterIdSet.Contains(a.CharacterID) && templateIds.Contains(a.TemplateID))
-						.ToListAsync(cancellationToken)
-						.ConfigureAwait(false);
-
-					var existingByKey = new Dictionary<(long CharacterID, int TemplateID), CharacterKnownAbilityEntity>();
-					foreach (var entity in existing)
-					{
-						existingByKey[(entity.CharacterID, entity.TemplateID)] = entity;
-					}
-
-					foreach (var ability in abilityList)
-					{
-						if (!activeCharacterIdSet.Contains(ability.CharacterID)) continue;
-						if (ability.TemplateID <= 0) continue;
-
-						var key = (ability.CharacterID, ability.TemplateID);
-						if (existingByKey.TryGetValue(key, out var existingEntity))
-						{
-							if (existingEntity.Deleted)
-							{
-								existingEntity.Deleted = false;
-								existingEntity.TimeDeleted = null;
-							}
-							continue;
-						}
-
-						var entity = new CharacterKnownAbilityEntity
-						{
-							CharacterID = ability.CharacterID,
-							TemplateID = ability.TemplateID,
-							Version = ability.Version,
-							TimeCreated = DateTime.UtcNow
-						};
-						await dbContext.CharacterKnownAbilities.AddAsync(entity, cancellationToken).ConfigureAwait(false);
-						existingByKey[key] = entity;
-					}
+					return;
 				}
-				finally
-				{
-					dbContext.ChangeTracker.AutoDetectChangesEnabled = previousAutoDetectChanges;
-				}
+
+				var now = DateTime.UtcNow;
+				var characterIdArray = activeAbilities.Select(a => a.CharacterID).ToArray();
+				var templateIdArray = activeAbilities.Select(a => a.TemplateID).ToArray();
+				var versionArray = activeAbilities.Select(a => a.Version).ToArray();
+
+				var sql = $@"
+					INSERT INTO {TableName}
+						(character_id, template_id, version, time_created, deleted, time_deleted)
+					SELECT
+						u.character_id,
+						u.template_id,
+						u.version,
+						{{3}},
+						FALSE,
+						NULL
+					FROM UNNEST(
+						{{0}}::bigint[],
+						{{1}}::integer[],
+						{{2}}::bigint[]
+					) AS u(character_id, template_id, version)
+					ON CONFLICT (character_id, template_id)
+					DO UPDATE SET
+						deleted = FALSE,
+						time_deleted = NULL;";
+
+				await dbContext.Database.ExecuteSqlRawAsync(
+					sql,
+					new object[] { characterIdArray, templateIdArray, versionArray, now },
+					cancellationToken).ConfigureAwait(false);
 			}).ConfigureAwait(false);
 
 			if (saveResult.IsSuccess || saveResult.ErrorCode == "UNIQUE_VIOLATION")
@@ -222,22 +210,11 @@ namespace FishMMO.Database.Npgsql.Services
 			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				var now = DateTime.UtcNow;
-				var abilityId = await dbContext.CharacterKnownAbilities
-					.AsNoTracking()
-					.Where(a => a.CharacterID == characterId && a.TemplateID == templateId && !a.Deleted)
-					.Select(a => a.ID)
-					.FirstOrDefaultAsync(cancellationToken)
+				var sql = $@"UPDATE {TableName}
+					SET deleted = TRUE, time_deleted = {{0}}
+					WHERE character_id = {{1}} AND template_id = {{2}} AND deleted = FALSE";
+				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { now, characterId, templateId }, cancellationToken)
 					.ConfigureAwait(false);
-
-				if (abilityId <= 0)
-				{
-					return;
-				}
-
-				var entity = new CharacterKnownAbilityEntity { ID = abilityId, Deleted = true, TimeDeleted = now };
-				dbContext.Attach(entity);
-				dbContext.Entry(entity).Property(e => e.Deleted).IsModified = true;
-				dbContext.Entry(entity).Property(e => e.TimeDeleted).IsModified = true;
 			}).ConfigureAwait(false);
 		}
 
@@ -255,20 +232,11 @@ namespace FishMMO.Database.Npgsql.Services
 			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				var now = DateTime.UtcNow;
-				var abilityIds = await dbContext.CharacterKnownAbilities
-					.AsNoTracking()
-					.Where(a => a.CharacterID == characterId && !a.Deleted)
-					.Select(a => a.ID)
-					.ToListAsync(cancellationToken)
+				var sql = $@"UPDATE {TableName}
+					SET deleted = TRUE, time_deleted = {{0}}
+					WHERE character_id = {{1}} AND deleted = FALSE";
+				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { now, characterId }, cancellationToken)
 					.ConfigureAwait(false);
-
-				foreach (var abilityId in abilityIds)
-				{
-					var entity = new CharacterKnownAbilityEntity { ID = abilityId, Deleted = true, TimeDeleted = now };
-					dbContext.Attach(entity);
-					dbContext.Entry(entity).Property(e => e.Deleted).IsModified = true;
-					dbContext.Entry(entity).Property(e => e.TimeDeleted).IsModified = true;
-				}
 			}).ConfigureAwait(false);
 		}
 

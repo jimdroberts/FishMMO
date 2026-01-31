@@ -180,94 +180,132 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteTransactionAsync(async dbContext =>
 			{
-				var previousAutoDetectChanges = dbContext.ChangeTracker.AutoDetectChangesEnabled;
-				dbContext.ChangeTracker.AutoDetectChangesEnabled = false;
-				try
+				var allCharacterIds = list.Select(a => a.CharacterID).Distinct().ToArray();
+				var activeCharacterIds = await dbContext.Characters
+					.AsNoTracking()
+					.Where(c => allCharacterIds.Contains(c.ID) && !c.Deleted)
+					.Select(c => c.ID)
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
+				var activeCharacterIdSet = new HashSet<long>(activeCharacterIds);
+
+				var activeNewItems = newItems
+					.Where(a => activeCharacterIdSet.Contains(a.CharacterID))
+					.ToList();
+				var activeExistingItems = existingItems
+					.Where(a => activeCharacterIdSet.Contains(a.CharacterID))
+					.ToList();
+
+				if (activeExistingItems.Count > 0)
 				{
-					var allCharacterIds = list.Select(a => a.CharacterID).Distinct().ToArray();
-					var activeCharacterIds = await dbContext.Characters
+					var ids = activeExistingItems.Select(a => a.ID).Distinct().ToArray();
+					var existingIds = await dbContext.CharacterAbilities
 						.AsNoTracking()
-						.Where(c => allCharacterIds.Contains(c.ID) && !c.Deleted)
-						.Select(c => c.ID)
+						.Where(a => ids.Contains(a.ID))
+						.Select(a => a.ID)
 						.ToListAsync(cancellationToken)
 						.ConfigureAwait(false);
-					var activeCharacterIdSet = new HashSet<long>(activeCharacterIds);
-
-					if (newItems.Any())
-					{
-						var templateIds = newItems.Select(a => a.TemplateID).Distinct().ToArray();
-						var existingForCompositeKeys = await dbContext.CharacterAbilities
-							.Where(a => activeCharacterIdSet.Contains(a.CharacterID) && templateIds.Contains(a.TemplateID))
-							.ToListAsync(cancellationToken)
-							.ConfigureAwait(false);
-
-						var existingByKey = new Dictionary<(long CharacterID, int TemplateID), CharacterAbilityEntity>();
-						foreach (var existing in existingForCompositeKeys)
-						{
-							existingByKey[(existing.CharacterID, existing.TemplateID)] = existing;
-						}
-
-						foreach (var ability in newItems)
-						{
-							if (!activeCharacterIdSet.Contains(ability.CharacterID)) continue;
-
-							var key = (ability.CharacterID, ability.TemplateID);
-							if (!existingByKey.TryGetValue(key, out var entity))
-							{
-								entity = new CharacterAbilityEntity
-								{
-									CharacterID = ability.CharacterID,
-									TemplateID = ability.TemplateID,
-									Version = ability.Version,
-									TimeCreated = DateTime.UtcNow
-								};
-								await dbContext.CharacterAbilities.AddAsync(entity, cancellationToken).ConfigureAwait(false);
-								existingByKey[key] = entity;
-							}
-
-							ValidateVersion(entity, ability.Version);
-							if (entity.Deleted)
-							{
-								entity.Deleted = false;
-								entity.TimeDeleted = null;
-							}
-
-							entity.AbilityEvents = ability.AbilityEvents == null ? new List<int>() : new List<int>(ability.AbilityEvents);
-							entity.Cooldown = ability.Cooldown;
-						}
-					}
-
-					if (existingItems.Any())
-					{
-						var ids = existingItems.Select(a => a.ID).Distinct().ToArray();
-						var entities = await dbContext.CharacterAbilities
-							.Where(a => ids.Contains(a.ID))
-							.ToListAsync(cancellationToken)
-							.ConfigureAwait(false);
-						var entitiesById = entities.ToDictionary(a => a.ID);
-
-						foreach (var ability in existingItems)
-						{
-							if (!activeCharacterIdSet.Contains(ability.CharacterID)) continue;
-							if (!entitiesById.TryGetValue(ability.ID, out var entity)) continue;
-
-							ValidateVersion(entity, ability.Version);
-							if (entity.Deleted)
-							{
-								entity.Deleted = false;
-								entity.TimeDeleted = null;
-							}
-
-							entity.CharacterID = ability.CharacterID;
-							entity.TemplateID = ability.TemplateID;
-							entity.AbilityEvents = ability.AbilityEvents == null ? new List<int>() : new List<int>(ability.AbilityEvents);
-							entity.Cooldown = ability.Cooldown;
-						}
-					}
+					var existingIdSet = new HashSet<long>(existingIds);
+					activeExistingItems = activeExistingItems.Where(a => existingIdSet.Contains(a.ID)).ToList();
 				}
-				finally
+
+				var now = DateTime.UtcNow;
+
+				if (activeExistingItems.Count > 0)
 				{
-					dbContext.ChangeTracker.AutoDetectChangesEnabled = previousAutoDetectChanges;
+					var idArray = activeExistingItems.Select(a => a.ID).ToArray();
+					var characterIdArray = activeExistingItems.Select(a => a.CharacterID).ToArray();
+					var templateIdArray = activeExistingItems.Select(a => a.TemplateID).ToArray();
+					var versionArray = activeExistingItems.Select(a => a.Version).ToArray();
+					var abilityEventsArray = activeExistingItems
+						.Select(a => (a.AbilityEvents ?? new List<int>()).ToArray())
+						.ToArray();
+					var cooldownArray = activeExistingItems.Select(a => a.Cooldown).ToArray();
+
+					var sql = $@"
+						UPDATE {TableName} AS t
+						SET
+							character_id = u.character_id,
+							template_id = u.template_id,
+							ability_events = u.ability_events,
+							cooldown = u.cooldown,
+							deleted = FALSE,
+							time_deleted = NULL,
+							version = CASE
+								WHEN u.version > 0 THEN u.version
+								ELSE t.version
+							END
+						FROM UNNEST(
+							{{0}}::bigint[],
+							{{1}}::bigint[],
+							{{2}}::integer[],
+							{{3}}::bigint[],
+							{{4}}::integer[][],
+							{{5}}::real[]
+						) AS u(id, character_id, template_id, version, ability_events, cooldown)
+						WHERE t.id = u.id
+							AND (u.version <= 0 OR u.version > t.version);";
+
+					await ExecuteBulkUpsertAsync(
+						dbContext,
+						sql,
+						activeExistingItems.Count,
+						new object[] { idArray, characterIdArray, templateIdArray, versionArray, abilityEventsArray, cooldownArray },
+						"One or more abilities were rejected due to a stale Version.",
+						cancellationToken).ConfigureAwait(false);
+				}
+
+				if (activeNewItems.Count > 0)
+				{
+					var characterIdArray = activeNewItems.Select(a => a.CharacterID).ToArray();
+					var templateIdArray = activeNewItems.Select(a => a.TemplateID).ToArray();
+					var versionArray = activeNewItems.Select(a => a.Version).ToArray();
+					var abilityEventsArray = activeNewItems
+						.Select(a => (a.AbilityEvents ?? new List<int>()).ToArray())
+						.ToArray();
+					var cooldownArray = activeNewItems.Select(a => a.Cooldown).ToArray();
+
+					var sql = $@"
+						INSERT INTO {TableName}
+							(character_id, template_id, version, ability_events, cooldown, time_created, deleted, time_deleted)
+						SELECT
+							u.character_id,
+							u.template_id,
+							CASE
+								WHEN u.version > 0 THEN u.version
+								ELSE 0
+							END,
+							u.ability_events,
+							u.cooldown,
+							{{5}},
+							FALSE,
+							NULL
+						FROM UNNEST(
+							{{0}}::bigint[],
+							{{1}}::integer[],
+							{{2}}::bigint[],
+							{{3}}::integer[][],
+							{{4}}::real[]
+						) AS u(character_id, template_id, version, ability_events, cooldown)
+						ON CONFLICT (character_id, template_id)
+						DO UPDATE SET
+							ability_events = EXCLUDED.ability_events,
+							cooldown = EXCLUDED.cooldown,
+							deleted = FALSE,
+							time_deleted = NULL,
+							version = CASE
+								WHEN EXCLUDED.version > 0 THEN EXCLUDED.version
+								ELSE {TableName}.version
+							END
+						WHERE EXCLUDED.version <= 0 OR EXCLUDED.version > {TableName}.version;";
+
+					await ExecuteBulkUpsertAsync(
+						dbContext,
+						sql,
+						activeNewItems.Count,
+						new object[] { characterIdArray, templateIdArray, versionArray, abilityEventsArray, cooldownArray, now },
+						"One or more abilities were rejected due to a stale Version.",
+						cancellationToken).ConfigureAwait(false);
 				}
 			}).ConfigureAwait(false);
 		}
@@ -286,20 +324,11 @@ namespace FishMMO.Database.Npgsql.Services
 			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				var now = DateTime.UtcNow;
-				var abilityIds = await dbContext.CharacterAbilities
-					.AsNoTracking()
-					.Where(a => a.CharacterID == characterId && !a.Deleted)
-					.Select(a => a.ID)
-					.ToListAsync(cancellationToken)
+				var sql = $@"UPDATE {TableName}
+					SET deleted = TRUE, time_deleted = {{0}}
+					WHERE character_id = {{1}} AND deleted = FALSE";
+				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { now, characterId }, cancellationToken)
 					.ConfigureAwait(false);
-
-				foreach (var abilityId in abilityIds)
-				{
-					var entity = new CharacterAbilityEntity { ID = abilityId, Deleted = true, TimeDeleted = now };
-					dbContext.Attach(entity);
-					dbContext.Entry(entity).Property(e => e.Deleted).IsModified = true;
-					dbContext.Entry(entity).Property(e => e.TimeDeleted).IsModified = true;
-				}
 			}).ConfigureAwait(false);
 		}
 
@@ -316,16 +345,12 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteTransactionAsync(async dbContext =>
 			{
-				var ability = await dbContext.CharacterAbilities
-					.FirstOrDefaultAsync(a => a.ID == abilityId && a.CharacterID == characterId && !a.Deleted, cancellationToken)
+				var now = DateTime.UtcNow;
+				var sql = $@"UPDATE {TableName}
+					SET deleted = TRUE, time_deleted = {{0}}
+					WHERE id = {{1}} AND character_id = {{2}} AND deleted = FALSE";
+				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { now, abilityId, characterId }, cancellationToken)
 					.ConfigureAwait(false);
-				if (ability == null)
-				{
-					return;
-				}
-
-				ability.Deleted = true;
-				ability.TimeDeleted = DateTime.UtcNow;
 			}).ConfigureAwait(false);
 		}
 

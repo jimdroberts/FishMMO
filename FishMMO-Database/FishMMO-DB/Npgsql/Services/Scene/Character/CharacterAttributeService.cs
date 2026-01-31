@@ -75,45 +75,57 @@ namespace FishMMO.Database.Npgsql.Services
 					.ConfigureAwait(false);
 				var activeCharacterIdSet = new HashSet<long>(activeCharacterIds);
 
-				var templateIds = attributeList.Select(a => a.TemplateID).Distinct().ToArray();
-				var existing = await dbContext.CharacterAttributes
-					.Where(a => activeCharacterIdSet.Contains(a.CharacterID) && templateIds.Contains(a.TemplateID))
-					.ToListAsync(cancellationToken)
-					.ConfigureAwait(false);
-
-				var existingByKey = new Dictionary<(long CharacterID, int TemplateID), CharacterAttributeEntity>();
-				foreach (var entity in existing)
+				var activeAttributes = attributeList.Where(a => activeCharacterIdSet.Contains(a.CharacterID)).ToList();
+				if (activeAttributes.Count == 0)
 				{
-					existingByKey[(entity.CharacterID, entity.TemplateID)] = entity;
+					return;
 				}
 
-				foreach (var attribute in attributeList)
-				{
-					if (!activeCharacterIdSet.Contains(attribute.CharacterID)) continue;
+				var now = DateTime.UtcNow;
+				var characterIdArray = activeAttributes.Select(a => a.CharacterID).ToArray();
+				var templateIdArray = activeAttributes.Select(a => a.TemplateID).ToArray();
+				var versionArray = activeAttributes.Select(a => a.Version).ToArray();
+				var valueArray = activeAttributes.Select(a => a.Value).ToArray();
+				var currentValueArray = activeAttributes.Select(a => a.CurrentValue).ToArray();
 
-					var key = (attribute.CharacterID, attribute.TemplateID);
-					if (!existingByKey.TryGetValue(key, out var entity))
-					{
-						entity = new CharacterAttributeEntity
-						{
-							CharacterID = attribute.CharacterID,
-							TemplateID = attribute.TemplateID,
-							Version = attribute.Version,
-							TimeCreated = DateTime.UtcNow
-						};
-						await dbContext.CharacterAttributes.AddAsync(entity, cancellationToken).ConfigureAwait(false);
-						existingByKey[key] = entity;
-					}
+				var sql = $@"
+					INSERT INTO {TableName}
+						(character_id, template_id, version, value, current_value, time_created, deleted, time_deleted)
+					SELECT
+						u.character_id,
+						u.template_id,
+						u.version,
+						u.value,
+						u.current_value,
+						{{5}},
+						FALSE,
+						NULL
+					FROM UNNEST(
+						{{0}}::bigint[],
+						{{1}}::integer[],
+						{{2}}::bigint[],
+						{{3}}::integer[],
+						{{4}}::real[]
+					) AS u(character_id, template_id, version, value, current_value)
+					ON CONFLICT (character_id, template_id)
+					DO UPDATE SET
+						value = EXCLUDED.value,
+						current_value = EXCLUDED.current_value,
+						deleted = FALSE,
+						time_deleted = NULL,
+						version = CASE
+							WHEN EXCLUDED.version > 0 THEN EXCLUDED.version
+							ELSE {TableName}.version
+						END
+					WHERE EXCLUDED.version <= 0 OR EXCLUDED.version > {TableName}.version;";
 
-					ValidateVersion(entity, attribute.Version);
-					if (entity.Deleted)
-					{
-						entity.Deleted = false;
-						entity.TimeDeleted = null;
-					}
-					entity.Value = attribute.Value;
-					entity.CurrentValue = attribute.CurrentValue;
-				}
+				await ExecuteBulkUpsertAsync(
+					dbContext,
+					sql,
+					activeAttributes.Count,
+					new object[] { characterIdArray, templateIdArray, versionArray, valueArray, currentValueArray, now },
+					"One or more attributes were rejected due to a stale Version.",
+					cancellationToken).ConfigureAwait(false);
 			}).ConfigureAwait(false);
 		}
 
@@ -131,20 +143,11 @@ namespace FishMMO.Database.Npgsql.Services
 			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				var now = DateTime.UtcNow;
-				var attributeIds = await dbContext.CharacterAttributes
-					.AsNoTracking()
-					.Where(a => a.CharacterID == characterId && !a.Deleted)
-					.Select(a => a.ID)
-					.ToListAsync(cancellationToken)
+				var sql = $@"UPDATE {TableName}
+					SET deleted = TRUE, time_deleted = {{0}}
+					WHERE character_id = {{1}} AND deleted = FALSE";
+				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { now, characterId }, cancellationToken)
 					.ConfigureAwait(false);
-
-				foreach (var attributeId in attributeIds)
-				{
-					var entity = new CharacterAttributeEntity { ID = attributeId, Deleted = true, TimeDeleted = now };
-					dbContext.Attach(entity);
-					dbContext.Entry(entity).Property(e => e.Deleted).IsModified = true;
-					dbContext.Entry(entity).Property(e => e.TimeDeleted).IsModified = true;
-				}
 			}).ConfigureAwait(false);
 		}
 
