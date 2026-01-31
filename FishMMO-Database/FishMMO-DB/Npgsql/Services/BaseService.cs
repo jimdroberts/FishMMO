@@ -399,21 +399,6 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <summary>
-		/// Computes a point-in-time health assessment of the connection pool using runtime metrics.
-		/// </summary>
-		/// <param name="warningThreshold">Pool utilization percentage threshold for warning status.</param>
-		/// <param name="criticalThreshold">Pool utilization percentage threshold for critical status.</param>
-		/// <returns>A <see cref="PoolHealthResult"/> describing current pool health.</returns>
-		/// <remarks>
-		/// Thresholds are expressed as percentages of the configured pool size (see <see cref="MaxPoolSize"/>).
-		/// Intended for telemetry/health endpoints.
-		/// </remarks>
-		protected PoolHealthResult GetConnectionPoolHealth(double warningThreshold = 70.0, double criticalThreshold = 85.0)
-		{
-			return PoolMetrics.GetPoolHealth(MaxPoolSize, warningThreshold, criticalThreshold);
-		}
-
-		/// <summary>
 		/// Resolves a stable operation name for metrics and diagnostics.
 		/// </summary>
 		/// <param name="operationName">The caller-provided operation name.</param>

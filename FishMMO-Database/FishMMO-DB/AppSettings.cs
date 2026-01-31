@@ -31,6 +31,16 @@ namespace FishMMO.Database
 		public string Database { get; set; }
 
 		/// <summary>
+		/// Gets or sets the database schema name.
+		/// </summary>
+		/// <remarks>
+		/// This value is used as the default schema for EF Core model mapping.
+		/// It must be a safe, unquoted PostgreSQL identifier in snake_case (lowercase letters, digits, and underscores).
+		/// If not specified, the schema defaults to <c>public</c>.
+		/// </remarks>
+		public string Schema { get; set; } = "public";
+
+		/// <summary>
 		/// Gets or sets the database username.
 		/// </summary>
 		public string Username { get; set; }

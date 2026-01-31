@@ -11,7 +11,9 @@ namespace FishMMO.Database.Npgsql.Entities
 		public long GuildID { get; set; }
 		public GuildEntity Guild { get; set; }
 		public byte Rank { get; set; }
-		public DateTime TimeCreated { get; set; }
 		public string Location { get; set; }
+		public DateTime TimeCreated { get; set; }
+		public bool Deleted { get; set; }
+		public DateTime? TimeDeleted { get; set; }
 	}
 }

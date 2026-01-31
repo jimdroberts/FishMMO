@@ -75,7 +75,11 @@ namespace FishMMO.Database.Npgsql
 				.Build();
 
 			string database = configuration.GetSection("Npgsql")["Database"] ?? "fish_mmo_postgresql";
-			schema = database;
+			schema = configuration.GetSection("Npgsql")["Schema"] ?? "public";
+
+			ValidateUnquotedIdentifierSetting("Npgsql:Database", database);
+			ValidateUnquotedIdentifierSetting("Npgsql:Schema", schema);
+
 			string userID = configuration.GetSection("Npgsql")["Username"] ?? "user";
 			string password = configuration.GetSection("Npgsql")["Password"] ?? "pass";
 			string host = configuration.GetSection("Npgsql")["Host"] ?? "127.0.0.1";
@@ -137,6 +141,19 @@ namespace FishMMO.Database.Npgsql
 				perfConfig.SampleRate = sampleRate;
 
 			performanceTracker = new QueryPerformanceTracker(perfConfig);
+		}
+
+		private static void ValidateUnquotedIdentifierSetting(string settingPath, string value)
+		{
+			if (DbContextExtensions.IsValidUnquotedIdentifier(value))
+			{
+				return;
+			}
+
+			throw new InvalidOperationException(
+				$"Invalid configuration value for '{settingPath}': '{value}'. " +
+				"The value must be a valid unquoted PostgreSQL identifier (snake_case only): " +
+				"lowercase letters, digits, and underscores; starting with a letter or underscore.");
 		}
 
 		/// <summary>

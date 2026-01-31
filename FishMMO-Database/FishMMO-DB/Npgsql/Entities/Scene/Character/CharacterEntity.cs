@@ -53,6 +53,8 @@ namespace FishMMO.Database.Npgsql.Entities
 		public int Flags { get; set; }
 		public DateTime TimeCreated { get; set; }
 		public DateTime LastSaved { get; set; }
+		public bool Deleted { get; set; }
+		public DateTime? TimeDeleted { get; set; }
 
 		// foreign keys
 		public ICollection<CharacterAbilityEntity> Abilities { get; set; }
@@ -72,8 +74,5 @@ namespace FishMMO.Database.Npgsql.Entities
 		public CharacterPetEntity Pet { get; set; }
 		public ICollection<CharacterQuestEntity> Quests { get; set; }
 		public ICollection<CharacterSkillEntity> Skills { get; set; }
-
-		public bool Deleted { get; set; }
-		public DateTime? TimeDeleted { get; set; }
 	}
 }

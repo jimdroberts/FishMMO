@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Linq;
 using System.Linq.Expressions;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -22,36 +21,13 @@ namespace FishMMO.Database.Npgsql
 
 		public NpgsqlDbContext(DbContextOptions options, string schema, ConnectionPoolMetrics poolMetrics = null) : base(options)
 		{
-			schema = schema ?? "public";
-
-			// Validate schema name to prevent SQL injection
-			if (!IsValidSchemaName(schema))
-			{
-				throw new ArgumentException(
-					$"Invalid schema name '{schema}'. Schema names must start with a letter or underscore " +
-					"and contain only letters, digits, and underscores.",
-					nameof(schema));
-			}
+			schema = string.IsNullOrWhiteSpace(schema) ? "public" : schema;
 
 			Schema = schema;
 			this.poolMetrics = poolMetrics;
 		}
 
-		/// <summary>
-		/// Validates that a schema name contains only safe characters to prevent SQL injection.
-		/// </summary>
-		/// <param name="schemaName">The schema name to validate.</param>
-		/// <returns>True if the schema name is valid, false otherwise.</returns>
-		private static bool IsValidSchemaName(string schemaName)
-		{
-			if (string.IsNullOrWhiteSpace(schemaName))
-				return false;
 
-			// PostgreSQL identifier rules: must start with letter or underscore,
-			// followed by letters, digits, underscores, or dollar signs
-			// We're being more restrictive and disallowing dollar signs for security
-			return Regex.IsMatch(schemaName, @"^[a-zA-Z_][a-zA-Z0-9_]*$");
-		}
 
 		//protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
 		//    => optionsBuilder.LogTo(Console.WriteLine);

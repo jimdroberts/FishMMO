@@ -88,7 +88,7 @@ namespace FishMMO.Database.Npgsql
 			return $"{resolvedSchema}.{tableInfo.TableName}";
 		}
 
-		private static bool IsValidUnquotedIdentifier(string identifier)
+		internal static bool IsValidUnquotedIdentifier(string identifier)
 		{
 			if (string.IsNullOrWhiteSpace(identifier))
 			{
