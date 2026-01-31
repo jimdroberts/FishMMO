@@ -160,7 +160,29 @@ namespace FishMMO.Database.Npgsql.Services
 		/// Uses atomic UPDATE without loading the entity. Updates last_saved timestamp automatically.
 		/// Execution strategy wrapping ensures transient database failures are automatically retried.
 		/// </remarks>
-		Task<DatabaseResult> SetOnlineStatusAsync(long characterId, bool online, CancellationToken cancellationToken = default);
+		/// <summary>
+		/// Attempts to claim ownership of a character session.
+		/// </summary>
+		/// <remarks>
+		/// A claim is permitted if the character is offline or the previous owner's lease has expired.
+		/// On success, returns a new session owner token that must be presented for subsequent transitions.
+		/// </remarks>
+		Task<DatabaseResult<Guid>> TryClaimAsync(long characterId, long ownerServerId, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Marks a character as transitioning, preventing other servers from claiming it.
+		/// </summary>
+		Task<DatabaseResult> BeginTransitionAsync(long characterId, long ownerServerId, Guid ownerToken, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Releases a transitioning character back to offline and clears ownership.
+		/// </summary>
+		Task<DatabaseResult> ReleaseToOfflineAsync(long characterId, long ownerServerId, Guid ownerToken, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Refreshes the session lease for an owned (online/transitioning) character.
+		/// </summary>
+		Task<DatabaseResult> RefreshSessionLeaseAsync(long characterId, long ownerServerId, Guid ownerToken, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Updates the position and rotation of a character atomically.

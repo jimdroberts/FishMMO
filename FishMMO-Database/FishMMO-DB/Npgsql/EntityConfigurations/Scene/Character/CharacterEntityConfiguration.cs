@@ -1,5 +1,7 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using System;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using FishMMO.Database.Data.Enums;
 
 namespace FishMMO.Database.Npgsql.Entities
 {
@@ -29,6 +31,24 @@ namespace FishMMO.Database.Npgsql.Entities
 				.IsRequired()
 				.HasDefaultValue(0L);
 
+			builder.Property(e => e.SessionState)
+				.IsRequired()
+				.HasConversion<short>()
+				.HasColumnType("smallint")
+				.HasDefaultValue((short)CharacterSessionState.Offline);
+
+			builder.Property(e => e.SessionOwnerServerId)
+				.IsRequired()
+				.HasDefaultValue(0L);
+
+			builder.Property(e => e.SessionOwnerToken)
+				.IsRequired()
+				.HasDefaultValue(Guid.Empty);
+
+			builder.Property(e => e.SessionLeaseExpiresUtc)
+				.IsRequired()
+				.HasDefaultValue(DateTime.UnixEpoch);
+
 			builder.Property(e => e.NameLowercase)
 				.HasComputedColumnSql("LOWER(\"name\")", stored: true);
 
@@ -47,9 +67,9 @@ namespace FishMMO.Database.Npgsql.Entities
 			// Performance index for account character queries (GetCharactersAsync hot path)
 			builder.HasIndex(e => e.Account);
 
-			// Performance index for online status filtering
-			builder.HasIndex(e => e.Online)
-				.HasFilter("online = true");
+			// Performance index for session state filtering (online/transitioning queries).
+			builder.HasIndex(e => e.SessionState)
+				.HasFilter("session_state <> 0");
 		}
 	}
 }

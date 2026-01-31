@@ -3,7 +3,7 @@ namespace FishMMO.Database.Data.Enums
 	/// <summary>
 	/// Character session state used for distributed concurrency coordination.
 	/// </summary>
-	public enum CharacterState
+	public enum CharacterSessionState
 	{
 		/// <summary>
 		/// Character is offline and may be claimed.

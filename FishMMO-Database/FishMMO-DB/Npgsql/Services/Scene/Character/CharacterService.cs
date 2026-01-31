@@ -15,6 +15,8 @@ namespace FishMMO.Database.Npgsql.Services
 	/// <inheritdoc/>
 	public sealed class CharacterService : BaseService<CharacterEntity>, ICharacterService
 	{
+		private static readonly TimeSpan DefaultSessionLeaseDuration = TimeSpan.FromMinutes(2);
+
 		private enum SaveCharacterWriteOutcome
 		{
 			Success = 0,
@@ -136,7 +138,10 @@ namespace FishMMO.Database.Npgsql.Services
 					RotZ = characterData.RotZ,
 					RotW = characterData.RotW,
 					AccessLevel = characterData.AccessLevel,
-					Online = characterData.Online,
+					SessionState = CharacterSessionState.Offline,
+					SessionOwnerServerId = 0,
+					SessionOwnerToken = Guid.Empty,
+					SessionLeaseExpiresUtc = DateTime.UnixEpoch,
 					Flags = characterData.Flags,
 					Version = characterData.Version,
 					TimeCreated = now,
@@ -253,13 +258,17 @@ namespace FishMMO.Database.Npgsql.Services
 				existing.RotZ = characterData.RotZ;
 				existing.RotW = characterData.RotW;
 				existing.AccessLevel = characterData.AccessLevel;
-				existing.Online = characterData.Online;
 				existing.Flags = characterData.Flags;
 				if (characterData.Version > 0)
 				{
 					existing.Version = characterData.Version;
 				}
-				existing.LastSaved = DateTime.UtcNow;
+				var now = DateTime.UtcNow;
+				existing.LastSaved = now;
+				if (existing.SessionState != CharacterSessionState.Offline)
+				{
+					existing.SessionLeaseExpiresUtc = now + DefaultSessionLeaseDuration;
+				}
 
 				return SaveCharacterWriteOutcome.Success;
 			}).ConfigureAwait(false);
@@ -486,25 +495,212 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> SetOnlineStatusAsync(long characterId, bool online, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<Guid>> TryClaimAsync(long characterId, long ownerServerId, CancellationToken cancellationToken = default)
 		{
-			if (characterId <= 0)
+			if (characterId <= 0 || ownerServerId <= 0)
 			{
-				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
+				return DatabaseResult<Guid>.Failure("VALIDATION_ERROR", "Invalid character ID or owner server ID.", isTransient: false);
+			}
+
+			return await ExecuteTransactionAsync(async dbContext =>
+			{
+				var now = DateTime.UtcNow;
+				var newToken = Guid.NewGuid();
+				var newLeaseExpiresUtc = now + DefaultSessionLeaseDuration;
+				var tableName = dbContext.GetTableName<CharacterEntity>();
+
+				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
+					$@"UPDATE {tableName}
+					SET
+						session_state = {{0}},
+						session_owner_server_id = {{1}},
+						session_owner_token = {{2}},
+						session_lease_expires_utc = {{3}},
+						last_saved = {{4}}
+					WHERE id = {{5}} AND deleted = false
+						AND (session_state = {{6}} OR session_lease_expires_utc <= {{4}})",
+					(short)CharacterSessionState.Online,
+					ownerServerId,
+					newToken,
+					newLeaseExpiresUtc,
+					now,
+					characterId,
+					(short)CharacterSessionState.Offline
+				).ConfigureAwait(false);
+
+				if (rowsAffected == 1)
+				{
+					return newToken;
+				}
+
+				var exists = await dbContext.Characters
+					.AnyAsync(c => c.ID == characterId && !c.Deleted, cancellationToken)
+					.ConfigureAwait(false);
+				if (!exists)
+				{
+					throw new DatabaseEntityNotFoundException("Character", characterId.ToString());
+				}
+
+				throw new InvalidOperationException("Character is already owned or transitioning.");
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult> BeginTransitionAsync(long characterId, long ownerServerId, Guid ownerToken, CancellationToken cancellationToken = default)
+		{
+			if (characterId <= 0 || ownerServerId <= 0 || ownerToken == Guid.Empty)
+			{
+				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID, owner server ID, or owner token.", isTransient: false);
 			}
 
 			var result = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var now = DateTime.UtcNow;
-				var character = await dbContext.Characters
-					.FirstOrDefaultAsync(c => c.ID == characterId && !c.Deleted, cancellationToken)
+				var newLeaseExpiresUtc = now + DefaultSessionLeaseDuration;
+				var tableName = dbContext.GetTableName<CharacterEntity>();
+
+				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
+					$@"UPDATE {tableName}
+					SET
+						session_state = {{0}},
+						session_lease_expires_utc = {{1}},
+						last_saved = {{2}}
+					WHERE id = {{3}} AND deleted = false
+						AND session_state = {{4}}
+						AND session_owner_server_id = {{5}}
+						AND session_owner_token = {{6}}",
+					(short)CharacterSessionState.Transitioning,
+					newLeaseExpiresUtc,
+					now,
+					characterId,
+					(short)CharacterSessionState.Online,
+					ownerServerId,
+					ownerToken
+				).ConfigureAwait(false);
+
+				if (rowsAffected == 1)
+				{
+					return;
+				}
+
+				var exists = await dbContext.Characters
+					.AnyAsync(c => c.ID == characterId && !c.Deleted, cancellationToken)
 					.ConfigureAwait(false);
-				if (character == null)
+				if (!exists)
 				{
 					throw new DatabaseEntityNotFoundException("Character", characterId.ToString());
 				}
-				character.Online = online;
-				character.LastSaved = now;
+
+				throw new InvalidOperationException("Character is not owned by this server or is not online.");
+			}).ConfigureAwait(false);
+
+			return result.IsSuccess
+				? DatabaseResult.Success()
+				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult> ReleaseToOfflineAsync(long characterId, long ownerServerId, Guid ownerToken, CancellationToken cancellationToken = default)
+		{
+			if (characterId <= 0 || ownerServerId <= 0 || ownerToken == Guid.Empty)
+			{
+				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID, owner server ID, or owner token.", isTransient: false);
+			}
+
+			var result = await ExecuteTransactionAsync(async dbContext =>
+			{
+				var now = DateTime.UtcNow;
+				var tableName = dbContext.GetTableName<CharacterEntity>();
+
+				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
+					$@"UPDATE {tableName}
+					SET
+						session_state = {{0}},
+						session_owner_server_id = {{1}},
+						session_owner_token = {{2}},
+						session_lease_expires_utc = {{3}},
+						last_saved = {{4}}
+					WHERE id = {{5}} AND deleted = false
+						AND session_state = {{6}}
+						AND session_owner_server_id = {{7}}
+						AND session_owner_token = {{8}}",
+					(short)CharacterSessionState.Offline,
+					0L,
+					Guid.Empty,
+					DateTime.UnixEpoch,
+					now,
+					characterId,
+					(short)CharacterSessionState.Transitioning,
+					ownerServerId,
+					ownerToken
+				).ConfigureAwait(false);
+
+				if (rowsAffected == 1)
+				{
+					return;
+				}
+
+				var exists = await dbContext.Characters
+					.AnyAsync(c => c.ID == characterId && !c.Deleted, cancellationToken)
+					.ConfigureAwait(false);
+				if (!exists)
+				{
+					throw new DatabaseEntityNotFoundException("Character", characterId.ToString());
+				}
+
+				throw new InvalidOperationException("Character is not transitioning under this server.");
+			}).ConfigureAwait(false);
+
+			return result.IsSuccess
+				? DatabaseResult.Success()
+				: DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult> RefreshSessionLeaseAsync(long characterId, long ownerServerId, Guid ownerToken, CancellationToken cancellationToken = default)
+		{
+			if (characterId <= 0 || ownerServerId <= 0 || ownerToken == Guid.Empty)
+			{
+				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID, owner server ID, or owner token.", isTransient: false);
+			}
+
+			var result = await ExecuteTransactionAsync(async dbContext =>
+			{
+				var now = DateTime.UtcNow;
+				var newLeaseExpiresUtc = now + DefaultSessionLeaseDuration;
+				var tableName = dbContext.GetTableName<CharacterEntity>();
+
+				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
+					$@"UPDATE {tableName}
+					SET
+						session_lease_expires_utc = {{0}},
+						last_saved = {{1}}
+					WHERE id = {{2}} AND deleted = false
+						AND session_state <> {{3}}
+						AND session_owner_server_id = {{4}}
+						AND session_owner_token = {{5}}",
+					newLeaseExpiresUtc,
+					now,
+					characterId,
+					(short)CharacterSessionState.Offline,
+					ownerServerId,
+					ownerToken
+				).ConfigureAwait(false);
+
+				if (rowsAffected == 1)
+				{
+					return;
+				}
+
+				var exists = await dbContext.Characters
+					.AnyAsync(c => c.ID == characterId && !c.Deleted, cancellationToken)
+					.ConfigureAwait(false);
+				if (!exists)
+				{
+					throw new DatabaseEntityNotFoundException("Character", characterId.ToString());
+				}
+
+				throw new InvalidOperationException("Character is not owned by this server.");
 			}).ConfigureAwait(false);
 
 			return result.IsSuccess
@@ -575,6 +771,8 @@ namespace FishMMO.Database.Npgsql.Services
 
 		private static bool HasSameState(CharacterEntity existing, CharacterData expected)
 		{
+			var existingOnline = existing.SessionState != CharacterSessionState.Offline;
+
 			return string.Equals(existing.Name ?? string.Empty, expected.Name ?? string.Empty, StringComparison.Ordinal)
 				&& string.Equals(existing.Account ?? string.Empty, expected.Account ?? string.Empty, StringComparison.Ordinal)
 				&& existing.Selected == expected.Selected
@@ -603,7 +801,7 @@ namespace FishMMO.Database.Npgsql.Services
 				&& existing.RotZ.Equals(expected.RotZ)
 				&& existing.RotW.Equals(expected.RotW)
 				&& existing.AccessLevel == expected.AccessLevel
-				&& existing.Online == expected.Online
+				&& existingOnline == expected.Online
 				&& existing.Flags == expected.Flags
 				&& existing.Version == expected.Version;
 		}
@@ -615,6 +813,8 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <returns>The character data DTO.</returns>
 		private static CharacterData MapEntityToData(CharacterEntity entity)
 		{
+			var online = entity.SessionState != CharacterSessionState.Offline;
+
 			return new CharacterData(
 				entity.ID,
 				entity.Name,
@@ -646,7 +846,7 @@ namespace FishMMO.Database.Npgsql.Services
 				entity.RotZ,
 				entity.RotW,
 				entity.AccessLevel,
-				entity.Online,
+				online,
 				entity.Flags,
 				entity.Version,
 				entity.TimeCreated,

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using FishMMO.Database.Data.Enums;
 
 namespace FishMMO.Database.Npgsql.Entities
 {
@@ -44,12 +45,29 @@ namespace FishMMO.Database.Npgsql.Entities
 		public float RotZ { get; set; }
 		public float RotW { get; set; }
 		public byte AccessLevel { get; set; }
-		/// <remarks>
-		/// Online status can be checked from external programs with either just
-		/// just 'online', or 'online && (DateTime.UtcNow - lastsaved) <= 1min)
-		/// which is robust to server crashes too.
-		/// </remarks>
-		public bool Online { get; set; }
+
+		/// <summary>
+		/// Distributed session state used to coordinate ownership/claims across servers.
+		/// </summary>
+		public CharacterSessionState SessionState { get; set; }
+
+		/// <summary>
+		/// Current owning Scene Server instance ID (0 means unowned).
+		/// </summary>
+		public long SessionOwnerServerId { get; set; }
+
+		/// <summary>
+		/// Ownership token that changes every successful claim (Guid.Empty means unowned).
+		/// Used to prevent stale releases/transitions.
+		/// </summary>
+		public Guid SessionOwnerToken { get; set; }
+
+		/// <summary>
+		/// Lease expiry timestamp for dead-server recovery.
+		/// A server should extend this periodically while it still owns the character.
+		/// </summary>
+		public DateTime SessionLeaseExpiresUtc { get; set; }
+
 		public int Flags { get; set; }
 		public DateTime TimeCreated { get; set; }
 		public DateTime LastSaved { get; set; }
