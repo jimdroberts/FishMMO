@@ -6,6 +6,8 @@ namespace FishMMO.Database.Npgsql.Monitoring.Metrics
 {
 	/// <summary>
 	/// Tracks runtime connection pool metrics for monitoring and diagnostics.
+	/// NOTE: Active connection counts are derived from DbConnection open/close events
+	/// (via EF Core connection interceptors), not DbContext creation/disposal.
 	/// Thread-safe implementation using atomic operations.
 	/// </summary>
 	public sealed class ConnectionPoolMetrics
@@ -64,10 +66,10 @@ namespace FishMMO.Database.Npgsql.Monitoring.Metrics
 		}
 
 		/// <summary>
-		/// Records a new connection being created.
+		/// Records a connection being opened (checked out from the pool).
 		/// Thread-safe operation.
 		/// </summary>
-		public void RecordConnectionCreated()
+		public void RecordConnectionOpened()
 		{
 			Interlocked.Increment(ref totalConnectionsCreated);
 			var current = Interlocked.Increment(ref activeConnections);
@@ -75,10 +77,10 @@ namespace FishMMO.Database.Npgsql.Monitoring.Metrics
 		}
 
 		/// <summary>
-		/// Records a connection being disposed.
+		/// Records a connection being closed (returned to the pool).
 		/// Thread-safe operation.
 		/// </summary>
-		public void RecordConnectionDisposed()
+		public void RecordConnectionClosed()
 		{
 			Interlocked.Increment(ref totalConnectionsDisposed);
 			Interlocked.Decrement(ref activeConnections);

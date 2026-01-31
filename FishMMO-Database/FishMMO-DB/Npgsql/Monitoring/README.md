@@ -12,7 +12,7 @@ Monitoring/
 │   └── HealthStatus.cs             # Health status enumeration (Healthy, Degraded, Unhealthy)
 │
 ├── Metrics/                     # Performance metrics and statistics tracking
-│   ├── ConnectionPoolMetrics.cs    # Runtime connection pool statistics
+│   ├── ConnectionPoolMetrics.cs    # Runtime connection open/close + pool signals (via EF Core interceptors)
 │   ├── DatabaseMetricsTracker.cs   # Aggregate database operation metrics
 │   └── MetricsSummary.cs           # Metrics summary data structure
 │
@@ -42,7 +42,7 @@ Focuses on **availability** and **connectivity**:
 Focuses on **performance** and **statistics**:
 - Query success/failure rates
 - Response time aggregation
-- Connection pool runtime metrics
+- Connection open/close + pool runtime metrics
 - Performance summaries
 
 ### Diagnostics
@@ -88,6 +88,10 @@ Console.WriteLine($"Avg Response: {summary.AverageResponseTimeMs}ms");
 ```
 
 ### Connection Pool Metrics
+
+`ConnectionPoolMetrics` is updated from EF Core connection interceptors (DbConnection open/close events). This means:
+- `ActiveConnections` reflects currently-open DbConnections (checked out from the pool).
+- It does *not* reflect DbContext creation/disposal counts.
 
 
 ### Query Performance Diagnostics

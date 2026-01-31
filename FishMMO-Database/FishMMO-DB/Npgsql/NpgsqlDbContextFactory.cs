@@ -114,6 +114,7 @@ namespace FishMMO.Database.Npgsql
 			// Initialize pool metrics tracker
 			this.maxPoolSize = maxPoolSize;
 			poolMetrics = new ConnectionPoolMetrics();
+			var connectionMetricsInterceptor = new ConnectionMetricsInterceptor(poolMetrics);
 
 			// Cache DbContext options once to avoid rebuilding fluent configuration on every call.
 			var optionsBuilder = new DbContextOptionsBuilder<NpgsqlDbContext>()
@@ -121,7 +122,8 @@ namespace FishMMO.Database.Npgsql
 				{
 					npgsqlOptions.CommandTimeout(this.commandTimeout);
 				})
-				.UseSnakeCaseNamingConvention();
+				.UseSnakeCaseNamingConvention()
+				.AddInterceptors(connectionMetricsInterceptor);
 
 			if (this.enableLogging)
 			{
@@ -184,12 +186,7 @@ namespace FishMMO.Database.Npgsql
 
 			try
 			{
-				var context = new NpgsqlDbContext(cachedOptions, schema, poolMetrics);
-
-				// Only track connection after successful creation
-				poolMetrics.RecordConnectionCreated();
-
-				return context;
+				return new NpgsqlDbContext(cachedOptions, schema);
 			}
 			catch (NpgsqlException npgsqlEx) when (IsPoolExhaustionException(npgsqlEx))
 			{

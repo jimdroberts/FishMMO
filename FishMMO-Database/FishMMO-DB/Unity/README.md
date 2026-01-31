@@ -5,7 +5,7 @@ Production-ready Unity MonoBehaviour for comprehensive database monitoring in Un
 ## Features
 
 ✅ **Automatic Health Checks** - Periodic connectivity and response time monitoring  
-✅ **Connection Pool Monitoring** - Real-time pool utilization and exhaustion tracking  
+✅ **Connection Pool Monitoring** - Open-connection utilization and exhaustion tracking  
 ✅ **Query Performance Tracking** - Slow query detection and metrics collection  
 ✅ **Configurable Alerts** - Console warnings/errors based on severity  
 ✅ **Inspector Integration** - Real-time status display in Unity Editor  
@@ -51,7 +51,7 @@ Use the Unity Inspector to adjust:
 - **Health Check Interval**: How often to check database connectivity (default: 30s)
 - **Pool Check Interval**: How often to check connection pool (default: 15s)  
 - **Metrics Log Interval**: How often to log performance metrics (default: 60s)
-- **Alert Thresholds**: Warning/critical levels for pool utilization (default: 70%/85%)
+- **Alert Thresholds**: Warning/critical levels for open-connection utilization (default: 70%/85%)
 
 ## Configuration
 

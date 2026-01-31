@@ -11,20 +11,18 @@ namespace FishMMO.Database.Npgsql
 {
 	public class NpgsqlDbContext : DbContext
 	{
-		private readonly ConnectionPoolMetrics poolMetrics;
-		private int disposed = 0;
+			private int disposed = 0;
 
 		/// <summary>
 		/// Gets the database schema name for this context.
 		/// </summary>
 		public string Schema { get; }
 
-		public NpgsqlDbContext(DbContextOptions options, string schema, ConnectionPoolMetrics poolMetrics = null) : base(options)
+			public NpgsqlDbContext(DbContextOptions options, string schema) : base(options)
 		{
 			schema = string.IsNullOrWhiteSpace(schema) ? "public" : schema;
 
 			Schema = schema;
-			this.poolMetrics = poolMetrics;
 		}
 
 
@@ -71,64 +69,21 @@ namespace FishMMO.Database.Npgsql
 		// game data (?)
 		//public DbSet<QuestEntity> Quests { get; set; }
 
-		/// <summary>
-		/// Disposes the context and records disposal in pool metrics.
-		/// Thread-safe disposal using Interlocked.Exchange to prevent race conditions.
-		/// Ensures base disposal completes before recording metrics to prevent
-		/// incorrect counts if base.Dispose() throws an exception.
-		/// </summary>
 		public override void Dispose()
 		{
 			if (Interlocked.Exchange(ref disposed, 1) == 0)
 			{
-				Exception? disposalException = null;
-				try
-				{
-					base.Dispose();
-				}
-				catch (Exception ex)
-				{
-					disposalException = ex;
-					throw;
-				}
-				finally
-				{
-					if (disposalException == null)
-					{
-						poolMetrics?.RecordConnectionDisposed();
-					}
-				}
+				base.Dispose();
 			}
 		}
 
-		/// <summary>
-		/// Asynchronously disposes the context and records disposal in pool metrics.
-		/// Thread-safe disposal using Interlocked.Exchange to prevent race conditions.
-		/// Ensures base disposal completes before recording metrics to prevent
-		/// incorrect counts if base.DisposeAsync() throws an exception.
-		/// </summary>
-		public override async ValueTask DisposeAsync()
+		public override ValueTask DisposeAsync()
 		{
 			if (Interlocked.Exchange(ref disposed, 1) == 0)
 			{
-				Exception? disposalException = null;
-				try
-				{
-					await base.DisposeAsync().ConfigureAwait(false);
-				}
-				catch (Exception ex)
-				{
-					disposalException = ex;
-					throw;
-				}
-				finally
-				{
-					if (disposalException == null)
-					{
-						poolMetrics?.RecordConnectionDisposed();
-					}
-				}
+				return base.DisposeAsync();
 			}
+			return default;
 		}
 
 		protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -143,7 +98,6 @@ namespace FishMMO.Database.Npgsql
 
 			ApplyXminConcurrencyConventions(modelBuilder);
 			ApplyLogicalVersionConventions(modelBuilder);
-			ApplySoftDeleteConventions(modelBuilder);
 			ApplyTimeCreatedConventions(modelBuilder);
 		}
 
@@ -219,62 +173,6 @@ namespace FishMMO.Database.Npgsql
 					.IsRequired()
 					.ValueGeneratedOnAdd()
 					.HasDefaultValueSql("CURRENT_TIMESTAMP");
-			}
-		}
-
-		private static void ApplySoftDeleteConventions(ModelBuilder modelBuilder)
-		{
-			var efPropertyMethod = typeof(EF).GetMethod(nameof(EF.Property))!;
-
-			foreach (var entityType in modelBuilder.Model.GetEntityTypes())
-			{
-				var clrType = entityType.ClrType;
-				if (clrType == null)
-					continue;
-
-				var deletedProperty = entityType.FindProperty("Deleted");
-				if (deletedProperty?.ClrType != typeof(bool))
-					continue;
-
-				// If this is a character-owned table that uses soft delete, ensure we have an index
-				// that supports common predicates like: WHERE character_id = ? AND deleted = FALSE.
-				var characterIdProperty = entityType.FindProperty("CharacterID") ?? entityType.FindProperty("CharacterId");
-				if (characterIdProperty != null)
-				{
-					bool hasCharacterIdDeletedIndex = entityType.GetIndexes().Any(i =>
-						i.Properties.Count == 2 &&
-						i.Properties[0].Name == characterIdProperty.Name &&
-						i.Properties[1].Name == "Deleted");
-
-					if (!hasCharacterIdDeletedIndex)
-					{
-						modelBuilder.Entity(clrType).HasIndex(characterIdProperty.Name, "Deleted");
-					}
-				}
-
-				modelBuilder.Entity(clrType)
-					.Property<bool>("Deleted")
-					.IsRequired()
-					.HasDefaultValue(false);
-
-				var timeDeletedProperty = entityType.FindProperty("TimeDeleted");
-				if (timeDeletedProperty?.ClrType == typeof(DateTime?))
-				{
-					modelBuilder.Entity(clrType)
-						.Property<DateTime?>("TimeDeleted")
-						.IsRequired(false);
-				}
-
-				// Global query filter: only return non-deleted rows by default.
-				var parameter = Expression.Parameter(clrType, "e");
-				var deletedEfProperty = Expression.Call(
-					efPropertyMethod.MakeGenericMethod(typeof(bool)),
-					parameter,
-					Expression.Constant("Deleted"));
-				var filterBody = Expression.Equal(deletedEfProperty, Expression.Constant(false));
-				var filterLambda = Expression.Lambda(filterBody, parameter);
-
-				modelBuilder.Entity(clrType).HasQueryFilter(filterLambda);
 			}
 		}
 	}

@@ -148,7 +148,7 @@ namespace FishMMO.Database.Npgsql.Services
 				catch (Exception ex)
 				{
 					// Rollback the dead transaction immediately
-					try { await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false); } catch { /* Ignore socket errors */ }
+					try { await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false); } catch { /* Ignore socket errors */ }
 
 					var sqlState = TryGetPostgresSqlState(ex);
 					RecordOperationAttempt(resolvedOperationName, stopwatch, attemptStartUtc, success: false);
@@ -230,7 +230,7 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 				catch (Exception ex)
 				{
-					try { await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false); } catch { }
+					try { await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false); } catch { }
 
 					var sqlState = TryGetPostgresSqlState(ex);
 					RecordOperationAttempt(resolvedOperationName, stopwatch, attemptStartUtc, success: false);
@@ -467,10 +467,38 @@ namespace FishMMO.Database.Npgsql.Services
 				return ("DB_CANCELED", "The database operation was canceled.", false);
 			}
 
+			// Prefer explicit, safe database-layer exceptions.
+			// These are designed to avoid leaking SQL/connection details to callers.
+			if (ex is DatabaseException dbEx)
+			{
+				return (
+					string.IsNullOrWhiteSpace(dbEx.ErrorCode) ? "DATABASE_ERROR" : dbEx.ErrorCode,
+					string.IsNullOrWhiteSpace(dbEx.SafeMessage) ? "A database error occurred." : dbEx.SafeMessage,
+					dbEx.IsTransient);
+			}
+
 			// 23505 = unique_violation
 			if (sqlState == "23505")
 			{
 				return ("UNIQUE_VIOLATION", "The record already exists.", false);
+			}
+
+			// 23503 = foreign_key_violation
+			if (sqlState == "23503")
+			{
+				return ("FOREIGN_KEY_VIOLATION", "A referenced record was not found.", false);
+			}
+
+			// 23502 = not_null_violation
+			if (sqlState == "23502")
+			{
+				return ("NOT_NULL_VIOLATION", "A required field was missing.", false);
+			}
+
+			// 23514 = check_violation
+			if (sqlState == "23514")
+			{
+				return ("CHECK_VIOLATION", "One or more values were invalid.", false);
 			}
 
 			if (ex is ArgumentException argEx)
@@ -490,11 +518,26 @@ namespace FishMMO.Database.Npgsql.Services
 
 			if (ex is DatabasePersistenceException persistEx)
 			{
-				return ("PERSISTENCE_FAILED", persistEx.Message, true);
+				return ("PERSISTENCE_FAILED", "The database could not persist the changes.", true);
 			}
 
-			return ("DATABASE_ERROR", ex.Message, true);
+			// Avoid leaking internal DB details (SQL text, schema names, constraint names, etc.).
+			// If the failure is likely transient, callers may choose to retry.
+			var isTransient = IsTransientDatabaseFailure(ex, sqlState);
+			return ("DATABASE_ERROR", "A database error occurred.", isTransient);
 		}
+
+		/// <summary>
+		/// Determines whether an exception represents a transient failure that is safe to retry.
+		/// </summary>
+		/// <param name="exception">The exception.</param>
+		/// <param name="sqlState">The PostgreSQL SQLSTATE, if available.</param>
+		/// <returns>True if the failure is considered transient; otherwise false.</returns>
+		/// <remarks>
+		/// Cancellation is never treated as transient.
+		/// Transience is determined from <see cref="NpgsqlException.IsTransient"/>, well-known SQLSTATE codes,
+		/// and certain exception types such as <see cref="TimeoutException"/>.
+		/// </remarks>
 
 		/// <summary>
 		/// Extracts the PostgreSQL SQLSTATE from an exception chain, if present.
@@ -510,17 +553,6 @@ namespace FishMMO.Database.Npgsql.Services
 			return null;
 		}
 
-		/// <summary>
-		/// Determines whether an exception represents a transient failure that is safe to retry.
-		/// </summary>
-		/// <param name="exception">The exception.</param>
-		/// <param name="sqlState">The PostgreSQL SQLSTATE, if available.</param>
-		/// <returns>True if the failure is considered transient; otherwise false.</returns>
-		/// <remarks>
-		/// Cancellation is never treated as transient.
-		/// Transience is determined from <see cref="NpgsqlException.IsTransient"/>, well-known SQLSTATE codes,
-		/// and certain exception types such as <see cref="TimeoutException"/>.
-		/// </remarks>
 		private static bool IsTransientDatabaseFailure(Exception exception, string? sqlState)
 		{
 			if (exception is OperationCanceledException) return false;
