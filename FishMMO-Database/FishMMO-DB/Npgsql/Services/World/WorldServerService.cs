@@ -26,16 +26,6 @@ namespace FishMMO.Database.Npgsql.Services
 	public sealed class WorldServerService : BaseService<WorldServerEntity>, IWorldServerService
 	{
 		/// <summary>
-		/// Compiled query for retrieving a world server by unique name with tracking.
-		/// </summary>
-#pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type
-		private static readonly Func<NpgsqlDbContext, string, CancellationToken, Task<WorldServerEntity?>> getByNameTrackingQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, string serverName, CancellationToken ct) =>
-				context.WorldServers
-					.FirstOrDefault(s => s.Name == serverName));
-#pragma warning restore CS8619
-
-		/// <summary>
 		/// Initializes a new instance of WorldServerService.
 		/// </summary>
 		/// <param name="dbContextFactory">DbContext factory for creating contexts.</param>
@@ -58,55 +48,29 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<(long, WorldServerData)>.Failure("INVALID_PARAMETERS", "Server name and address must not be empty.");
 			}
 
-			var now = DateTime.UtcNow;
-			var insertResult = await ExecuteTransactionAsync(async dbContext =>
+			var result = await ExecuteTransactionAsync(async dbContext =>
 			{
-				var entity = new WorldServerEntity
-				{
-					Name = name,
-					Address = address,
-					Port = port,
-					CharacterCount = characterCount,
-					Locked = locked,
-					TimeCreated = now,
-					LastPulse = now
-				};
+				var sql = $@"INSERT INTO {TableName} (name, address, port, character_count, locked)
+					VALUES ({{0}}, {{1}}, {{2}}, {{3}}, {{4}})
+					ON CONFLICT (name)
+					DO UPDATE SET
+						address = EXCLUDED.address,
+						port = EXCLUDED.port,
+						character_count = EXCLUDED.character_count,
+						locked = EXCLUDED.locked,
+						last_pulse = CURRENT_TIMESTAMP
+					RETURNING id, name, time_created, last_pulse, address, port, character_count, locked";
 
-				await dbContext.WorldServers.AddAsync(entity, cancellationToken).ConfigureAwait(false);
-				return entity;
+				return await dbContext.WorldServers
+					.FromSqlRaw(sql, name, address, port, characterCount, locked)
+					.AsNoTracking()
+					.FirstAsync(cancellationToken)
+					.ConfigureAwait(false);
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-			if (insertResult.IsSuccess)
-			{
-				var entity = insertResult.Data;
-				return DatabaseResult<(long ServerId, WorldServerData ServerData)>.Success((entity.ID, MapEntityToDto(entity)));
-			}
-
-			if (!string.Equals(insertResult.ErrorCode, "UNIQUE_VIOLATION", StringComparison.Ordinal))
-			{
-				return DatabaseResult<(long ServerId, WorldServerData ServerData)>.Failure(insertResult.ErrorCode, insertResult.ErrorMessage, insertResult.IsTransient);
-			}
-
-			var updateNow = DateTime.UtcNow;
-			var updateResult = await ExecuteTransactionAsync(async dbContext =>
-			{
-				var entity = await getByNameTrackingQuery(dbContext, name, cancellationToken).ConfigureAwait(false);
-				if (entity == null)
-				{
-					throw new DatabaseEntityNotFoundException("WorldServer", name);
-				}
-
-				entity.Address = address;
-				entity.Port = port;
-				entity.CharacterCount = characterCount;
-				entity.Locked = locked;
-				entity.LastPulse = updateNow;
-				return entity;
-			}, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-			return updateResult.IsSuccess
-				? DatabaseResult<(long ServerId, WorldServerData ServerData)>.Success((updateResult.Data.ID, MapEntityToDto(updateResult.Data)))
-				: DatabaseResult<(long ServerId, WorldServerData ServerData)>.Failure(updateResult.ErrorCode, updateResult.ErrorMessage, updateResult.IsTransient);
+			return result.IsSuccess
+				? DatabaseResult<(long ServerId, WorldServerData ServerData)>.Success((result.Data.ID, MapEntityToDto(result.Data)))
+				: DatabaseResult<(long ServerId, WorldServerData ServerData)>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -120,7 +84,7 @@ namespace FishMMO.Database.Npgsql.Services
 			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				var sql = $@"UPDATE {TableName}
-					SET lastpulse = CURRENT_TIMESTAMP, character_count = {{0}}
+					SET last_pulse = CURRENT_TIMESTAMP, character_count = {{0}}
 					WHERE id = {{1}}";
 
 				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
@@ -184,7 +148,7 @@ namespace FishMMO.Database.Npgsql.Services
 				// Use database server time to avoid clock skew issues between application and database servers.
 				// Use numeric * interval to keep the timeout value parameterized.
 				var sql = $@"SELECT * FROM {TableName}
-					WHERE lastpulse >= (CURRENT_TIMESTAMP - ({{0}} * INTERVAL '1 second'))";
+					WHERE last_pulse >= (CURRENT_TIMESTAMP - ({{0}} * INTERVAL '1 second'))";
 
 				var servers = await dbContext.WorldServers
 					.FromSqlRaw(sql, idleTimeoutSeconds)

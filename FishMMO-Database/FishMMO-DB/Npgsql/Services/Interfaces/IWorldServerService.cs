@@ -42,14 +42,14 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 
 		/// <summary>
 		/// Updates the last pulse timestamp and character count for a world server (heartbeat).
-		/// Keeps server registration alive by updating lastpulse to prevent timeout.
+		/// Keeps server registration alive by updating last_pulse to prevent timeout.
 		/// </summary>
 		/// <param name="serverId">Server ID to pulse.</param>
 		/// <param name="characterCount">Current character count on server.</param>
 		/// <param name="cancellationToken">Cancellation token for async operation.</param>
 		/// <returns>DatabaseResult indicating success or failure with detailed error information.</returns>
 		/// <remarks>
-		/// <para><b>Operation:</b> Uses ExecuteSqlRawAsync to UPDATE lastpulse and character_count.</para>
+		/// <para><b>Operation:</b> Uses ExecuteSqlRawAsync to UPDATE last_pulse and character_count.</para>
 		/// <para><b>Execution Strategy:</b> Wrapped with CreateExecutionStrategy().ExecuteAsync() for transient failure retry (ExecuteSqlRawAsync doesn't auto-retry).</para>
 		/// <para><b>Returns:</b> Failure if serverId <= 0; DatabaseEntityNotFoundException if no rows affected; Success if updated.</para>
 		/// </remarks>
@@ -84,13 +84,13 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 
 		/// <summary>
 		/// Gets list of active world servers that have pulsed within the timeout window.
-		/// Filters servers by lastpulse timestamp to return only servers that are currently online.
+		/// Filters servers by last_pulse timestamp to return only servers that are currently online.
 		/// </summary>
 		/// <param name="idleTimeoutSeconds">Idle timeout in seconds before server considered inactive (default 60).</param>
 		/// <param name="cancellationToken">Cancellation token for async operation.</param>
 		/// <returns>DatabaseResult containing List of active WorldServerData ordered by name; empty list if no active servers.</returns>
 		/// <remarks>
-		/// <para><b>Operation:</b> LINQ query filtering by lastpulse >= (UtcNow - timeout), ordered by name.</para>
+		/// <para><b>Operation:</b> LINQ query filtering by last_pulse >= (UtcNow - timeout), ordered by name.</para>
 		/// <para><b>Execution Strategy:</b> BaseService handles retries/transactions.</para>
 		/// </remarks>
 		Task<DatabaseResult<List<WorldServerData>>> GetActiveServersAsync(

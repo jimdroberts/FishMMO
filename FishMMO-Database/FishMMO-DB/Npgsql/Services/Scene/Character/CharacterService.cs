@@ -749,21 +749,33 @@ namespace FishMMO.Database.Npgsql.Services
 			var result = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var now = DateTime.UtcNow;
-				var character = await dbContext.Characters
-					.FirstOrDefaultAsync(c => c.ID == characterId && !c.Deleted, cancellationToken)
-					.ConfigureAwait(false);
-				if (character == null)
+				var tableName = dbContext.GetTableName<CharacterEntity>();
+				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
+					$@"UPDATE {tableName}
+					SET
+						x = {{0}},
+						y = {{1}},
+						z = {{2}},
+						rot_x = {{3}},
+						rot_y = {{4}},
+						rot_z = {{5}},
+						rot_w = {{6}},
+						last_saved = {{7}}
+					WHERE id = {{8}} AND deleted = FALSE",
+					x,
+					y,
+					z,
+					rotX,
+					rotY,
+					rotZ,
+					rotW,
+					now,
+					characterId).ConfigureAwait(false);
+
+				if (rowsAffected <= 0)
 				{
 					throw new DatabaseEntityNotFoundException("Character", characterId.ToString());
 				}
-				character.X = x;
-				character.Y = y;
-				character.Z = z;
-				character.RotX = rotX;
-				character.RotY = rotY;
-				character.RotZ = rotZ;
-				character.RotW = rotW;
-				character.LastSaved = now;
 			}).ConfigureAwait(false);
 
 			return result.IsSuccess
@@ -782,16 +794,23 @@ namespace FishMMO.Database.Npgsql.Services
 			var result = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var now = DateTime.UtcNow;
-				var character = await dbContext.Characters
-					.FirstOrDefaultAsync(c => c.ID == characterId && !c.Deleted, cancellationToken)
-					.ConfigureAwait(false);
-				if (character == null)
+				var tableName = dbContext.GetTableName<CharacterEntity>();
+				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
+					$@"UPDATE {tableName}
+					SET
+						scene_name = {{0}},
+						scene_handle = {{1}},
+						last_saved = {{2}}
+					WHERE id = {{3}} AND deleted = FALSE",
+					sceneName ?? string.Empty,
+					sceneHandle,
+					now,
+					characterId).ConfigureAwait(false);
+
+				if (rowsAffected <= 0)
 				{
 					throw new DatabaseEntityNotFoundException("Character", characterId.ToString());
 				}
-				character.SceneName = sceneName ?? string.Empty;
-				character.SceneHandle = sceneHandle;
-				character.LastSaved = now;
 			}).ConfigureAwait(false);
 
 			return result.IsSuccess

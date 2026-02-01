@@ -76,27 +76,19 @@ namespace FishMMO.Database.Npgsql.Services
 					return;
 				}
 
+				var now = DateTime.UtcNow;
+				var sql = $@"INSERT INTO {TableName}
+					(character_id, template_id, version, time_created, deleted, time_deleted)
+					VALUES ({{0}}, {{1}}, 0, {{2}}, FALSE, NULL)
+					ON CONFLICT (character_id, template_id)
+					DO UPDATE SET
+						deleted = FALSE,
+						time_deleted = NULL";
 
-				var existing = await dbContext.CharacterKnownAbilities
-					.FirstOrDefaultAsync(a => a.CharacterID == characterId && a.TemplateID == templateId, cancellationToken)
-					.ConfigureAwait(false);
-				if (existing != null)
-				{
-					if (existing.Deleted)
-					{
-						existing.Deleted = false;
-						existing.TimeDeleted = null;
-					}
-					return;
-				}
-
-				var entity = new CharacterKnownAbilityEntity
-				{
-					CharacterID = characterId,
-					TemplateID = templateId,
-					TimeCreated = DateTime.UtcNow
-				};
-				await dbContext.CharacterKnownAbilities.AddAsync(entity, cancellationToken).ConfigureAwait(false);
+				await dbContext.Database.ExecuteSqlRawAsync(
+					sql,
+					new object[] { characterId, templateId, now },
+					cancellationToken).ConfigureAwait(false);
 			}).ConfigureAwait(false);
 
 			if (insertResult.IsSuccess || insertResult.ErrorCode == "UNIQUE_VIOLATION")
@@ -172,15 +164,23 @@ namespace FishMMO.Database.Npgsql.Services
 					ON CONFLICT (character_id, template_id)
 					DO UPDATE SET
 						deleted = FALSE,
-						time_deleted = NULL;";
+						time_deleted = NULL,
+						version = CASE
+							WHEN EXCLUDED.version > 0 THEN EXCLUDED.version
+							ELSE {TableName}.version
+						END
+					WHERE EXCLUDED.version <= 0 OR EXCLUDED.version > {TableName}.version;";
 
-				await dbContext.Database.ExecuteSqlRawAsync(
+				await ExecuteBulkUpsertAsync(
+					dbContext,
 					sql,
+					activeAbilities.Count,
 					new object[] { characterIdArray, templateIdArray, versionArray, now },
+					"One or more known abilities were rejected due to a stale Version.",
 					cancellationToken).ConfigureAwait(false);
 			}).ConfigureAwait(false);
 
-			if (saveResult.IsSuccess || saveResult.ErrorCode == "UNIQUE_VIOLATION")
+			if (saveResult.IsSuccess)
 			{
 				return DatabaseResult.Success();
 			}

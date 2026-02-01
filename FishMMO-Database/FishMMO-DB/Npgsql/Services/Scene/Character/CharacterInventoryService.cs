@@ -87,36 +87,43 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				var now = DateTime.UtcNow;
-				await ExecuteBulkUpsertAsync(
-					dbContext,
-					GetUpsertSql(),
-					expectedRowsAffected: 1,
-					new object[]
-					{
-						new[] { item.CharacterID },
-						new[] { item.Slot },
-						new[] { item.Version },
-						new[] { item.TemplateID },
-						new[] { item.Seed },
-						new[] { item.Amount },
-						now,
-					},
-					"Inventory item was rejected due to a stale Version.",
-					cancellationToken).ConfigureAwait(false);
+				var sql = $@"INSERT INTO {TableName}
+					(character_id, slot, version, template_id, seed, amount, time_created, deleted, time_deleted)
+					VALUES ({{0}}, {{1}}, {{2}}, {{3}}, {{4}}, {{5}}, {{6}}, FALSE, NULL)
+					ON CONFLICT (character_id, slot)
+					DO UPDATE SET
+						template_id = EXCLUDED.template_id,
+						seed = EXCLUDED.seed,
+						amount = EXCLUDED.amount,
+						deleted = FALSE,
+						time_deleted = NULL,
+						version = CASE
+							WHEN EXCLUDED.version > 0 THEN EXCLUDED.version
+							ELSE {TableName}.version
+						END
+					WHERE EXCLUDED.version <= 0 OR EXCLUDED.version > {TableName}.version
+					RETURNING id, version, character_id, template_id, slot, seed, amount, time_created, deleted, time_deleted";
 
-				var id = await dbContext.CharacterInventoryItems
+				var upserted = await dbContext.CharacterInventoryItems
+					.FromSqlRaw(
+						sql,
+						item.CharacterID,
+						item.Slot,
+						item.Version,
+						item.TemplateID,
+						item.Seed,
+						item.Amount,
+						now)
 					.AsNoTracking()
-					.Where(i => i.CharacterID == item.CharacterID && i.Slot == item.Slot && !i.Deleted)
-					.Select(i => i.ID)
 					.FirstOrDefaultAsync(cancellationToken)
 					.ConfigureAwait(false);
 
-				if (id <= 0)
+				if (upserted == null)
 				{
-					throw new DatabaseEntityNotFoundException("CharacterInventory", $"(CharacterID: {item.CharacterID}, Slot: {item.Slot})");
+					throw new StaleStateException("Inventory item was rejected due to a stale Version.");
 				}
 
-				return id;
+				return upserted.ID;
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess

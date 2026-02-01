@@ -102,9 +102,14 @@ namespace FishMMO.Database.Npgsql.Services
 
 			var result = await ExecuteReadAsync(async dbContext =>
 			{
+				var partyIdArray = partyIds.Distinct().ToArray();
+				var sql = $@"SELECT * FROM {TableName}
+					WHERE last_update >= {{0}}
+					AND party_id = ANY({{1}})";
+
 				var updates = await dbContext.PartyUpdates
+					.FromSqlRaw(sql, lastFetch, partyIdArray)
 					.AsNoTracking()
-					.Where(u => u.LastUpdate >= lastFetch && partyIds.Contains(u.PartyID))
 					.ToListAsync(cancellationToken)
 					.ConfigureAwait(false);
 

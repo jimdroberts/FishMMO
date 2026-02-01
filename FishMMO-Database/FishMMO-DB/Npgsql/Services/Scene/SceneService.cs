@@ -167,14 +167,19 @@ namespace FishMMO.Database.Npgsql.Services
 
 			var result = await ExecuteTransactionAsync(async dbContext =>
 			{
-				var scene = await dbContext.Scenes
-					.FirstOrDefaultAsync(s => s.ID == sceneId, cancellationToken)
-					.ConfigureAwait(false);
-				if (scene == null)
+				var sql = $@"UPDATE {TableName}
+					SET scene_status = {{0}}
+					WHERE id = {{1}}";
+
+				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
+					sql,
+					new object[] { (int)status, sceneId },
+					cancellationToken).ConfigureAwait(false);
+
+				if (rowsAffected <= 0)
 				{
 					throw new DatabaseEntityNotFoundException("Scene", sceneId.ToString());
 				}
-				scene.SceneStatus = (int)status;
 			}).ConfigureAwait(false);
 
 			return result.IsSuccess
@@ -259,14 +264,19 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			var result = await ExecuteTransactionAsync(async dbContext =>
 			{
-				var scene = await dbContext.Scenes
-					.FirstOrDefaultAsync(s => s.SceneHandle == sceneHandle, cancellationToken)
-					.ConfigureAwait(false);
-				if (scene == null)
+				var sql = $@"UPDATE {TableName}
+					SET character_count = {{0}}
+					WHERE scene_handle = {{1}}";
+
+				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
+					sql,
+					new object[] { characterCount, sceneHandle },
+					cancellationToken).ConfigureAwait(false);
+
+				if (rowsAffected <= 0)
 				{
 					throw new DatabaseEntityNotFoundException("Scene", $"handle {sceneHandle}");
 				}
-				scene.CharacterCount = characterCount;
 			}).ConfigureAwait(false);
 
 			return result.IsSuccess
@@ -284,25 +294,11 @@ namespace FishMMO.Database.Npgsql.Services
 
 			var result = await ExecuteTransactionAsync(async dbContext =>
 			{
-				var ids = await dbContext.Scenes
-					.AsNoTracking()
-					.Where(s => s.SceneServerID == sceneServerId)
-					.Select(s => s.ID)
-					.ToListAsync(cancellationToken)
-					.ConfigureAwait(false);
-
-				foreach (var id in ids)
-				{
-					var scene = await dbContext.Scenes
-						.FirstOrDefaultAsync(s => s.ID == id, cancellationToken)
-						.ConfigureAwait(false);
-					if (scene != null)
-					{
-						dbContext.Scenes.Remove(scene);
-					}
-				}
-
-				return ids.Count;
+				var sql = $@"DELETE FROM {TableName} WHERE scene_server_id = {{0}}";
+				return await dbContext.Database.ExecuteSqlRawAsync(
+					sql,
+					new object[] { sceneServerId },
+					cancellationToken).ConfigureAwait(false);
 			}).ConfigureAwait(false);
 
 			return result.IsSuccess
@@ -320,25 +316,11 @@ namespace FishMMO.Database.Npgsql.Services
 
 			var result = await ExecuteTransactionAsync(async dbContext =>
 			{
-				var ids = await dbContext.Scenes
-					.AsNoTracking()
-					.Where(s => s.WorldServerID == worldServerId)
-					.Select(s => s.ID)
-					.ToListAsync(cancellationToken)
-					.ConfigureAwait(false);
-
-				foreach (var id in ids)
-				{
-					var scene = await dbContext.Scenes
-						.FirstOrDefaultAsync(s => s.ID == id, cancellationToken)
-						.ConfigureAwait(false);
-					if (scene != null)
-					{
-						dbContext.Scenes.Remove(scene);
-					}
-				}
-
-				return ids.Count;
+				var sql = $@"DELETE FROM {TableName} WHERE world_server_id = {{0}}";
+				return await dbContext.Database.ExecuteSqlRawAsync(
+					sql,
+					new object[] { worldServerId },
+					cancellationToken).ConfigureAwait(false);
 			}).ConfigureAwait(false);
 
 			return result.IsSuccess
@@ -356,23 +338,11 @@ namespace FishMMO.Database.Npgsql.Services
 
 			var result = await ExecuteTransactionAsync(async dbContext =>
 			{
-				var ids = await dbContext.Scenes
-					.AsNoTracking()
-					.Where(s => s.SceneServerID == sceneServerId && s.SceneHandle == sceneHandle)
-					.Select(s => s.ID)
-					.ToListAsync(cancellationToken)
-					.ConfigureAwait(false);
-
-				foreach (var id in ids)
-				{
-					var scene = await dbContext.Scenes
-						.FirstOrDefaultAsync(s => s.ID == id, cancellationToken)
-						.ConfigureAwait(false);
-					if (scene != null)
-					{
-						dbContext.Scenes.Remove(scene);
-					}
-				}
+				var sql = $@"DELETE FROM {TableName} WHERE scene_server_id = {{0}} AND scene_handle = {{1}}";
+				await dbContext.Database.ExecuteSqlRawAsync(
+					sql,
+					new object[] { sceneServerId, sceneHandle },
+					cancellationToken).ConfigureAwait(false);
 			}).ConfigureAwait(false);
 
 			return result.IsSuccess

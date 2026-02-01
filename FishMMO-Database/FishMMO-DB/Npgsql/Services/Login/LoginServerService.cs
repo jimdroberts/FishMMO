@@ -67,52 +67,27 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			// Fast path: attempt insert first; on unique violation, fall back to update.
-			var now = DateTime.UtcNow;
-			var insertResult = await ExecuteTransactionAsync(async dbContext =>
+			var result = await ExecuteTransactionAsync(async dbContext =>
 			{
-				var entity = new LoginServerEntity
-				{
-					Name = name,
-					Address = address,
-					Port = port,
-					TimeCreated = now,
-					LastPulse = now
-				};
+				var sql = $@"INSERT INTO {TableName} (name, address, port)
+					VALUES ({{0}}, {{1}}, {{2}})
+					ON CONFLICT (name)
+					DO UPDATE SET
+						address = EXCLUDED.address,
+						port = EXCLUDED.port,
+						last_pulse = CURRENT_TIMESTAMP
+					RETURNING id, name, time_created, last_pulse, address, port";
 
-				await dbContext.LoginServers.AddAsync(entity, cancellationToken).ConfigureAwait(false);
-				return entity;
+				return await dbContext.LoginServers
+					.FromSqlRaw(sql, name, address, port)
+					.AsNoTracking()
+					.FirstAsync(cancellationToken)
+					.ConfigureAwait(false);
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-			if (insertResult.IsSuccess)
-			{
-				return DatabaseResult<LoginServerData>.Success(MapEntityToDto(insertResult.Data));
-			}
-
-			// If another writer inserted concurrently, retry as update.
-			if (string.Equals(insertResult.ErrorCode, "UNIQUE_VIOLATION", StringComparison.Ordinal))
-			{
-				var updateNow = DateTime.UtcNow;
-				var updateResult = await ExecuteTransactionAsync(async dbContext =>
-				{
-					var existing = await getByNameTrackingQuery(dbContext, name, cancellationToken).ConfigureAwait(false);
-					if (existing == null)
-					{
-						throw new DatabaseEntityNotFoundException("LoginServer", name);
-					}
-
-					existing.Address = address;
-					existing.Port = port;
-					existing.LastPulse = updateNow;
-					return existing;
-				}, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-				return updateResult.IsSuccess
-					? DatabaseResult<LoginServerData>.Success(MapEntityToDto(updateResult.Data))
-					: DatabaseResult<LoginServerData>.Failure(updateResult.ErrorCode, updateResult.ErrorMessage, updateResult.IsTransient);
-			}
-
-			return DatabaseResult<LoginServerData>.Failure(insertResult.ErrorCode, insertResult.ErrorMessage, insertResult.IsTransient);
+			return result.IsSuccess
+				? DatabaseResult<LoginServerData>.Success(MapEntityToDto(result.Data))
+				: DatabaseResult<LoginServerData>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>

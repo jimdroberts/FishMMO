@@ -3,6 +3,7 @@ using Npgsql;
 using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Database.Npgsql.Entities;
@@ -23,7 +24,7 @@ namespace FishMMO.Database.Npgsql.Services
 	/// </typeparam>
 	/// <remarks>
 	/// <para>
-	/// This base type provides two primary execution paths:
+	/// This base type provides three primary execution paths:
 	/// </para>
 	/// <list type="bullet">
 	/// <item>
@@ -32,6 +33,14 @@ namespace FishMMO.Database.Npgsql.Services
 	/// <see cref="ExecuteTransactionAsync{TResult}(System.Func{FishMMO.Database.Npgsql.NpgsqlDbContext,System.Threading.Tasks.Task{TResult}},string,System.Threading.CancellationToken)"/>
 	/// create a fresh <see cref="NpgsqlDbContext"/>, begin an explicit transaction, execute the delegate,
 	/// then call <see cref="DbContext.SaveChangesAsync(System.Threading.CancellationToken)"/> and commit.
+	/// </description>
+	/// </item>
+	/// <item>
+	/// <description>
+	/// <see cref="ExecuteWriteAsync(System.Func{FishMMO.Database.Npgsql.NpgsqlDbContext,System.Threading.Tasks.Task},string,System.Threading.CancellationToken)"/> and
+	/// <see cref="ExecuteWriteAsync{TResult}(System.Func{FishMMO.Database.Npgsql.NpgsqlDbContext,System.Threading.Tasks.Task{TResult}},string,System.Threading.CancellationToken)"/>
+	/// create a fresh <see cref="NpgsqlDbContext"/>, execute the delegate, then call <see cref="DbContext.SaveChangesAsync(System.Threading.CancellationToken)"/>
+	/// without starting an explicit transaction.
 	/// </description>
 	/// </item>
 	/// <item>
@@ -50,6 +59,64 @@ namespace FishMMO.Database.Npgsql.Services
 	/// </remarks>
 	public abstract class BaseService<TEntity> where TEntity : class
 	{
+		/// <summary>
+		/// Tracks whether the current logical async flow is already executing inside a BaseService
+		/// database execution scope.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// This is used to prevent accidental nesting of <see cref="ExecuteTransactionAsync(System.Func{FishMMO.Database.Npgsql.NpgsqlDbContext,System.Threading.Tasks.Task},string,System.Threading.CancellationToken)"/>
+		/// and <see cref="ExecuteReadAsync(System.Func{FishMMO.Database.Npgsql.NpgsqlDbContext,System.Threading.Tasks.Task},string,System.Threading.CancellationToken)"/>
+		/// wrappers (including cross-service calls), which would otherwise create multiple DbContexts/transactions and break atomic UoW semantics.
+		/// </para>
+		/// <para>
+		/// <see cref="AsyncLocal{T}"/> values flow with the current <see cref="System.Threading.ExecutionContext"/>, so concurrent requests on different
+		/// threads do not interfere with each other. This guard does <b>not</b> serialize execution globally; it only detects reentrancy within the same
+		/// async call chain.
+		/// </para>
+		/// </remarks>
+		private static readonly AsyncLocal<int> ExecutionScopeDepth = new AsyncLocal<int>();
+
+		/// <summary>
+		/// Enters a BaseService execution scope for the current logical async flow.
+		/// Throws if a scope is already active to prevent nested BaseService wrapper calls.
+		/// </summary>
+		/// <param name="requestedScope">The name of the wrapper attempting to enter the scope (for diagnostics).</param>
+		/// <returns>A token that must be disposed to exit the scope.</returns>
+		/// <exception cref="InvalidOperationException">
+		/// Thrown when a BaseService execution scope is already active in this logical async flow.
+		/// </exception>
+		private static ExecutionScopeToken EnterExecutionScope(string requestedScope)
+		{
+			var depth = ExecutionScopeDepth.Value;
+			if (depth > 0)
+			{
+				throw new InvalidOperationException(
+					"Nested BaseService execution scopes are not supported. " +
+					$"Attempted to enter '{requestedScope}' while already inside another database execution scope. " +
+					"This usually indicates a service method calling another service method that also wraps its own DbContext/transaction. " +
+					"Refactor so the outermost method owns the DbContext/transaction and inner operations execute on that context.");
+			}
+
+			ExecutionScopeDepth.Value = depth + 1;
+			return new ExecutionScopeToken();
+		}
+
+		/// <summary>
+		/// Scope-exit token returned by <see cref="EnterExecutionScope"/>.
+		/// </summary>
+		/// <remarks>
+		/// Disposing the token decrements the current logical async flow depth.
+		/// </remarks>
+		private readonly struct ExecutionScopeToken : IDisposable
+		{
+			public void Dispose()
+			{
+				var depth = ExecutionScopeDepth.Value;
+				ExecutionScopeDepth.Value = depth <= 0 ? 0 : depth - 1;
+			}
+		}
+
 		/// <summary>
 		/// Factory used to create new <see cref="NpgsqlDbContext"/> instances.
 		/// </summary>
@@ -87,6 +154,19 @@ namespace FishMMO.Database.Npgsql.Services
 		/// </summary>
 		private const int MaxRetries = 3;
 
+		private static TimeSpan GetRetryDelay(int attempt)
+		{
+			if (attempt <= 0)
+			{
+				attempt = 1;
+			}
+
+			// Linear backoff with small jitter to reduce thundering herd retries.
+			// Random.Shared is not available on netstandard2.1; use a thread-safe RNG API.
+			var jitterMs = RandomNumberGenerator.GetInt32(0, 10);
+			return TimeSpan.FromMilliseconds((20 * attempt) + jitterMs);
+		}
+
 		/// <summary>
 		/// Initializes the service and caches the table name for <typeparamref name="TEntity"/>.
 		/// </summary>
@@ -107,6 +187,10 @@ namespace FishMMO.Database.Npgsql.Services
 		/// Returns a <see cref="DatabaseResult"/> with success or failure information.
 		/// </summary>
 		/// <param name="action">The database operation to execute within the transaction.</param>
+		/// <param name="saveChanges">
+		/// When true (default), calls <see cref="DbContext.SaveChangesAsync(System.Threading.CancellationToken)"/> before committing.
+		/// Set to false when the operation only uses raw SQL (e.g., <c>ExecuteSqlRawAsync</c>) or when the delegate performs its own SaveChanges.
+		/// </param>
 		/// <param name="operationName">Operation name for metrics; defaults to caller member name.</param>
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>A <see cref="DatabaseResult"/> describing the outcome.</returns>
@@ -119,10 +203,12 @@ namespace FishMMO.Database.Npgsql.Services
 		/// </remarks>
 		protected async Task<DatabaseResult> ExecuteTransactionAsync(
 			Func<NpgsqlDbContext, Task> action,
+			bool saveChanges = true,
 			[CallerMemberName] string operationName = null,
 			CancellationToken cancellationToken = default)
 		{
 			var resolvedOperationName = ResolveOperationName(operationName);
+			using var scope = EnterExecutionScope("ExecuteTransactionAsync");
 
 			for (int attempt = 1; attempt <= MaxRetries; attempt++)
 			{
@@ -140,7 +226,10 @@ namespace FishMMO.Database.Npgsql.Services
 				try
 				{
 					await action(context);
-					await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+					if (saveChanges)
+					{
+						await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+					}
 					await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 					RecordOperationAttempt(resolvedOperationName, stopwatch, attemptStartUtc, success: true);
 					return DatabaseResult.Success(); // Success!
@@ -150,18 +239,7 @@ namespace FishMMO.Database.Npgsql.Services
 					// Rollback the dead transaction immediately
 					try { await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false); } catch { /* Ignore socket errors */ }
 
-					var sqlState = TryGetPostgresSqlState(ex);
-					RecordOperationAttempt(resolvedOperationName, stopwatch, attemptStartUtc, success: false);
-
-					// If the failure indicates "too many connections", count it as pool exhaustion.
-					if (sqlState == "53300")
-					{
-						PoolMetrics?.RecordPoolExhaustion();
-					}
-					else if (IsConnectionSqlState(sqlState))
-					{
-						PoolMetrics?.RecordConnectionError();
-					}
+					var sqlState = RecordFailureAndGetSqlState(ex, resolvedOperationName, stopwatch, attemptStartUtc);
 
 					// Logic failures (Stale Version) should NEVER be retried
 					if (ex is StaleStateException)
@@ -172,8 +250,7 @@ namespace FishMMO.Database.Npgsql.Services
 					// Technical failures (xmin conflict, deadlock, timeout) are retryable
 					if (attempt < MaxRetries && (ex is DbUpdateConcurrencyException || IsTransientDatabaseFailure(ex, sqlState)))
 					{
-						// Linear backoff with jitter to help the DB recover
-						await Task.Delay(TimeSpan.FromMilliseconds(20 * attempt), cancellationToken).ConfigureAwait(false);
+						await Task.Delay(GetRetryDelay(attempt), cancellationToken).ConfigureAwait(false);
 						continue;
 					}
 
@@ -192,6 +269,10 @@ namespace FishMMO.Database.Npgsql.Services
 		/// </summary>
 		/// <typeparam name="TResult">The result type returned by the operation.</typeparam>
 		/// <param name="action">The database operation to execute within the transaction.</param>
+		/// <param name="saveChanges">
+		/// When true (default), calls <see cref="DbContext.SaveChangesAsync(System.Threading.CancellationToken)"/> before committing.
+		/// Set to false when the operation only uses raw SQL (e.g., <c>ExecuteSqlRawAsync</c>) or when the delegate performs its own SaveChanges.
+		/// </param>
 		/// <param name="operationName">Operation name for metrics; defaults to caller member name.</param>
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>A <see cref="DatabaseResult{TResult}"/> describing the outcome.</returns>
@@ -204,11 +285,13 @@ namespace FishMMO.Database.Npgsql.Services
 		/// </remarks>
 		protected async Task<DatabaseResult<TResult>> ExecuteTransactionAsync<TResult>(
 			Func<NpgsqlDbContext, Task<TResult>> action,
+			bool saveChanges = true,
 			[CallerMemberName] string operationName = null,
 			CancellationToken cancellationToken = default)
 		{
 			TResult result = default!;
 			var resolvedOperationName = ResolveOperationName(operationName);
+			using var scope = EnterExecutionScope("ExecuteTransactionAsync<TResult>");
 
 			for (int attempt = 1; attempt <= MaxRetries; attempt++)
 			{
@@ -223,7 +306,10 @@ namespace FishMMO.Database.Npgsql.Services
 				try
 				{
 					result = await action(context);
-					await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+					if (saveChanges)
+					{
+						await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+					}
 					await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 					RecordOperationAttempt(resolvedOperationName, stopwatch, attemptStartUtc, success: true);
 					return DatabaseResult<TResult>.Success(result);
@@ -232,17 +318,7 @@ namespace FishMMO.Database.Npgsql.Services
 				{
 					try { await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false); } catch { }
 
-					var sqlState = TryGetPostgresSqlState(ex);
-					RecordOperationAttempt(resolvedOperationName, stopwatch, attemptStartUtc, success: false);
-
-					if (sqlState == "53300")
-					{
-						PoolMetrics?.RecordPoolExhaustion();
-					}
-					else if (IsConnectionSqlState(sqlState))
-					{
-						PoolMetrics?.RecordConnectionError();
-					}
+					var sqlState = RecordFailureAndGetSqlState(ex, resolvedOperationName, stopwatch, attemptStartUtc);
 
 					if (ex is StaleStateException)
 					{
@@ -251,7 +327,150 @@ namespace FishMMO.Database.Npgsql.Services
 
 					if (attempt < MaxRetries && (ex is DbUpdateConcurrencyException || IsTransientDatabaseFailure(ex, sqlState)))
 					{
-						await Task.Delay(TimeSpan.FromMilliseconds(20 * attempt), cancellationToken).ConfigureAwait(false);
+						await Task.Delay(GetRetryDelay(attempt), cancellationToken).ConfigureAwait(false);
+						continue;
+					}
+
+					return HandleFinalException<TResult>(ex, sqlState);
+				}
+			}
+
+			return DatabaseResult<TResult>.Failure("MAX_RETRIES", "Maximum retry attempts exceeded", isTransient: true);
+		}
+
+		/// <summary>
+		/// Executes a write database operation with a fresh context.
+		/// Does not create an explicit transaction, and calls SaveChanges by default.
+		/// Retries technical concurrency conflicts and transient database failures.
+		/// Returns a <see cref="DatabaseResult"/> with success or failure information.
+		/// </summary>
+		/// <param name="action">The write operation to execute.</param>
+		/// <param name="saveChanges">
+		/// When true (default), calls <see cref="DbContext.SaveChangesAsync(System.Threading.CancellationToken)"/> after <paramref name="action"/> completes.
+		/// Set to false when the operation does not use EF change tracking (e.g., only <c>ExecuteSqlRawAsync</c>) or when the delegate performs its own SaveChanges.
+		/// </param>
+		/// <param name="operationName">Operation name for metrics; defaults to caller member name.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>A <see cref="DatabaseResult"/> describing the outcome.</returns>
+		/// <remarks>
+		/// <para>
+		/// This wrapper is intended for small, single-statement writes where an explicit transaction is not required
+		/// and where the operation is safe to retry on transient failures.
+		/// </para>
+		/// <para>
+		/// A new context is created per attempt to avoid EF change-tracker state leaking across retries.
+		/// <see cref="StaleStateException"/> is treated as a logical conflict and is not retried.
+		/// </para>
+		/// </remarks>
+		protected async Task<DatabaseResult> ExecuteWriteAsync(
+			Func<NpgsqlDbContext, Task> action,
+			bool saveChanges = true,
+			[CallerMemberName] string operationName = null,
+			CancellationToken cancellationToken = default)
+		{
+			var resolvedOperationName = ResolveOperationName(operationName);
+			using var scope = EnterExecutionScope("ExecuteWriteAsync");
+
+			for (int attempt = 1; attempt <= MaxRetries; attempt++)
+			{
+				cancellationToken.ThrowIfCancellationRequested();
+
+				var stopwatch = PerformanceTracker?.StartTracking();
+				var attemptStartUtc = stopwatch == null ? DateTime.UtcNow : default;
+
+				using var context = DbContextFactory.CreateDbContext();
+
+				try
+				{
+					await action(context).ConfigureAwait(false);
+					if (saveChanges)
+					{
+						await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+					}
+					RecordOperationAttempt(resolvedOperationName, stopwatch, attemptStartUtc, success: true);
+					return DatabaseResult.Success();
+				}
+				catch (Exception ex)
+				{
+					var sqlState = RecordFailureAndGetSqlState(ex, resolvedOperationName, stopwatch, attemptStartUtc);
+
+					if (ex is StaleStateException)
+					{
+						return DatabaseResult.Failure("STALE_STATE", ex.Message, isTransient: false);
+					}
+
+					if (attempt < MaxRetries && (ex is DbUpdateConcurrencyException || IsTransientDatabaseFailure(ex, sqlState)))
+					{
+						await Task.Delay(GetRetryDelay(attempt), cancellationToken).ConfigureAwait(false);
+						continue;
+					}
+
+					return HandleFinalException(ex, sqlState);
+				}
+			}
+
+			return DatabaseResult.Failure("MAX_RETRIES", "Maximum retry attempts exceeded", isTransient: true);
+		}
+
+		/// <summary>
+		/// Executes a write database operation with a fresh context and returns a value.
+		/// Does not create an explicit transaction, and calls SaveChanges by default.
+		/// Retries technical concurrency conflicts and transient database failures.
+		/// Returns a <see cref="DatabaseResult{TResult}"/> with success or failure information.
+		/// </summary>
+		/// <typeparam name="TResult">The result type returned by the operation.</typeparam>
+		/// <param name="action">The write operation to execute.</param>
+		/// <param name="saveChanges">
+		/// When true (default), calls <see cref="DbContext.SaveChangesAsync(System.Threading.CancellationToken)"/> after <paramref name="action"/> completes.
+		/// Set to false when the operation does not use EF change tracking (e.g., only <c>ExecuteSqlRawAsync</c>) or when the delegate performs its own SaveChanges.
+		/// </param>
+		/// <param name="operationName">Operation name for metrics; defaults to caller member name.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>A <see cref="DatabaseResult{TResult}"/> describing the outcome.</returns>
+		/// <remarks>
+		/// A new context is created per attempt to avoid EF change-tracker state leaking across retries.
+		/// <see cref="StaleStateException"/> is treated as a logical conflict and is not retried.
+		/// </remarks>
+		protected async Task<DatabaseResult<TResult>> ExecuteWriteAsync<TResult>(
+			Func<NpgsqlDbContext, Task<TResult>> action,
+			bool saveChanges = true,
+			[CallerMemberName] string operationName = null,
+			CancellationToken cancellationToken = default)
+		{
+			var resolvedOperationName = ResolveOperationName(operationName);
+			using var scope = EnterExecutionScope("ExecuteWriteAsync<TResult>");
+
+			for (int attempt = 1; attempt <= MaxRetries; attempt++)
+			{
+				cancellationToken.ThrowIfCancellationRequested();
+
+				var stopwatch = PerformanceTracker?.StartTracking();
+				var attemptStartUtc = stopwatch == null ? DateTime.UtcNow : default;
+
+				using var context = DbContextFactory.CreateDbContext();
+
+				try
+				{
+					var result = await action(context).ConfigureAwait(false);
+					if (saveChanges)
+					{
+						await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+					}
+					RecordOperationAttempt(resolvedOperationName, stopwatch, attemptStartUtc, success: true);
+					return DatabaseResult<TResult>.Success(result);
+				}
+				catch (Exception ex)
+				{
+					var sqlState = RecordFailureAndGetSqlState(ex, resolvedOperationName, stopwatch, attemptStartUtc);
+
+					if (ex is StaleStateException)
+					{
+						return DatabaseResult<TResult>.Failure("STALE_STATE", ex.Message, isTransient: false);
+					}
+
+					if (attempt < MaxRetries && (ex is DbUpdateConcurrencyException || IsTransientDatabaseFailure(ex, sqlState)))
+					{
+						await Task.Delay(GetRetryDelay(attempt), cancellationToken).ConfigureAwait(false);
 						continue;
 					}
 
@@ -282,6 +501,7 @@ namespace FishMMO.Database.Npgsql.Services
 			CancellationToken cancellationToken = default)
 		{
 			var resolvedOperationName = ResolveOperationName(operationName);
+			using var scope = EnterExecutionScope("ExecuteReadAsync");
 
 			for (int attempt = 1; attempt <= MaxRetries; attempt++)
 			{
@@ -300,17 +520,7 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 				catch (Exception ex)
 				{
-					var sqlState = TryGetPostgresSqlState(ex);
-					RecordOperationAttempt(resolvedOperationName, stopwatch, attemptStartUtc, success: false);
-
-					if (sqlState == "53300")
-					{
-						PoolMetrics?.RecordPoolExhaustion();
-					}
-					else if (IsConnectionSqlState(sqlState))
-					{
-						PoolMetrics?.RecordConnectionError();
-					}
+					var sqlState = RecordFailureAndGetSqlState(ex, resolvedOperationName, stopwatch, attemptStartUtc);
 
 					if (ex is StaleStateException)
 					{
@@ -319,7 +529,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 					if (attempt < MaxRetries && IsTransientDatabaseFailure(ex, sqlState))
 					{
-						await Task.Delay(TimeSpan.FromMilliseconds(20 * attempt), cancellationToken).ConfigureAwait(false);
+						await Task.Delay(GetRetryDelay(attempt), cancellationToken).ConfigureAwait(false);
 						continue;
 					}
 
@@ -350,6 +560,7 @@ namespace FishMMO.Database.Npgsql.Services
 			CancellationToken cancellationToken = default)
 		{
 			var resolvedOperationName = ResolveOperationName(operationName);
+			using var scope = EnterExecutionScope("ExecuteReadAsync<TResult>");
 
 			for (int attempt = 1; attempt <= MaxRetries; attempt++)
 			{
@@ -368,17 +579,7 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 				catch (Exception ex)
 				{
-					var sqlState = TryGetPostgresSqlState(ex);
-					RecordOperationAttempt(resolvedOperationName, stopwatch, attemptStartUtc, success: false);
-
-					if (sqlState == "53300")
-					{
-						PoolMetrics?.RecordPoolExhaustion();
-					}
-					else if (IsConnectionSqlState(sqlState))
-					{
-						PoolMetrics?.RecordConnectionError();
-					}
+					var sqlState = RecordFailureAndGetSqlState(ex, resolvedOperationName, stopwatch, attemptStartUtc);
 
 					if (ex is StaleStateException)
 					{
@@ -387,7 +588,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 					if (attempt < MaxRetries && IsTransientDatabaseFailure(ex, sqlState))
 					{
-						await Task.Delay(TimeSpan.FromMilliseconds(20 * attempt), cancellationToken).ConfigureAwait(false);
+						await Task.Delay(GetRetryDelay(attempt), cancellationToken).ConfigureAwait(false);
 						continue;
 					}
 
@@ -426,6 +627,27 @@ namespace FishMMO.Database.Npgsql.Services
 			catch
 			{
 				// Monitoring must never break core database execution.
+			}
+		}
+
+		private string? RecordFailureAndGetSqlState(Exception ex, string resolvedOperationName, Stopwatch? stopwatch, DateTime attemptStartUtc)
+		{
+			var sqlState = TryGetPostgresSqlState(ex);
+			RecordOperationAttempt(resolvedOperationName, stopwatch, attemptStartUtc, success: false);
+			RecordPoolMetricsForFailure(sqlState);
+			return sqlState;
+		}
+
+		private void RecordPoolMetricsForFailure(string? sqlState)
+		{
+			// If the failure indicates "too many connections", count it as pool exhaustion.
+			if (sqlState == "53300")
+			{
+				PoolMetrics?.RecordPoolExhaustion();
+			}
+			else if (IsConnectionSqlState(sqlState))
+			{
+				PoolMetrics?.RecordConnectionError();
 			}
 		}
 
