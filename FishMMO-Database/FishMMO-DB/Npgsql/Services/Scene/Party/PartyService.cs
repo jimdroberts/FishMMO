@@ -95,47 +95,10 @@ namespace FishMMO.Database.Npgsql.Services
 
 			var result = await ExecuteTransactionAsync(async dbContext =>
 			{
-				var membershipIds = await dbContext.CharacterParties
-					.AsNoTracking()
-					.Where(cp => cp.PartyID == partyId)
-					.Select(cp => cp.ID)
-					.ToListAsync(cancellationToken)
+				// Rely on ON DELETE CASCADE constraints to remove related rows.
+				var sql = $@"DELETE FROM {TableName} WHERE id = {{0}}";
+				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { partyId }, cancellationToken)
 					.ConfigureAwait(false);
-				foreach (var membershipId in membershipIds)
-				{
-					var membership = await dbContext.CharacterParties
-						.FirstOrDefaultAsync(cp => cp.ID == membershipId, cancellationToken)
-						.ConfigureAwait(false);
-					if (membership != null)
-					{
-						dbContext.CharacterParties.Remove(membership);
-					}
-				}
-
-				var updateIds = await dbContext.PartyUpdates
-					.AsNoTracking()
-					.Where(pu => pu.PartyID == partyId)
-					.Select(pu => pu.ID)
-					.ToListAsync(cancellationToken)
-					.ConfigureAwait(false);
-				foreach (var updateId in updateIds)
-				{
-					var update = await dbContext.PartyUpdates
-						.FirstOrDefaultAsync(pu => pu.ID == updateId, cancellationToken)
-						.ConfigureAwait(false);
-					if (update != null)
-					{
-						dbContext.PartyUpdates.Remove(update);
-					}
-				}
-
-				var party = await dbContext.Parties
-					.FirstOrDefaultAsync(p => p.ID == partyId, cancellationToken)
-					.ConfigureAwait(false);
-				if (party != null)
-				{
-					dbContext.Parties.Remove(party);
-				}
 			}).ConfigureAwait(false);
 
 			return result.IsSuccess

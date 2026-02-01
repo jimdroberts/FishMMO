@@ -69,14 +69,6 @@ namespace FishMMO.Database.Npgsql.Services
 					.Count());
 
 		/// <summary>
-		/// Compiled query for retrieving a tracked hotkey by character ID and slot.
-		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, int, CancellationToken, Task<CharacterHotkeyEntity?>> getByCharacterAndSlotTrackingQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, int slot, CancellationToken ct) =>
-				(CharacterHotkeyEntity?)context.CharacterHotkeys
-					.FirstOrDefault(h => h.CharacterID == characterId && h.Slot == slot));
-
-		/// <summary>
 		/// Initializes a new instance of the <see cref="CharacterHotkeyService"/> class.
 		/// </summary>
 		/// <param name="dbContextFactory">Factory for creating database contexts.</param>
@@ -96,7 +88,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			var insertResult = await ExecuteTransactionAsync(async dbContext =>
+			var result = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var activeCharacterId = await getActiveCharacterIdQuery(dbContext, hotkey.CharacterID, cancellationToken).ConfigureAwait(false);
 				if (activeCharacterId == 0)
@@ -104,58 +96,41 @@ namespace FishMMO.Database.Npgsql.Services
 					throw new DatabaseEntityNotFoundException("Character", hotkey.CharacterID.ToString());
 				}
 
-				var entity = new CharacterHotkeyEntity
-				{
-					CharacterID = hotkey.CharacterID,
-					Version = hotkey.Version,
-					Type = hotkey.Type,
-					Slot = hotkey.Slot,
-					ReferenceID = hotkey.ReferenceID,
-					TimeCreated = DateTime.UtcNow
-				};
-				await dbContext.CharacterHotkeys.AddAsync(entity, cancellationToken).ConfigureAwait(false);
-				return entity;
-			}).ConfigureAwait(false);
+				var now = DateTime.UtcNow;
+				await ExecuteBulkUpsertAsync(
+					dbContext,
+					GetUpsertSql(),
+					expectedRowsAffected: 1,
+					new object[]
+					{
+						new[] { hotkey.CharacterID },
+						new[] { hotkey.Slot },
+						new[] { hotkey.Version },
+						new[] { (short)hotkey.Type },
+						new[] { hotkey.ReferenceID },
+						now,
+					},
+					"Hotkey was rejected due to a stale Version.",
+					cancellationToken).ConfigureAwait(false);
 
-			if (insertResult.IsSuccess)
-			{
-				return DatabaseResult<long>.Success(insertResult.Data.ID);
-			}
+				var id = await dbContext.CharacterHotkeys
+					.AsNoTracking()
+					.Where(h => h.CharacterID == hotkey.CharacterID && h.Slot == hotkey.Slot && !h.Deleted)
+					.Select(h => h.ID)
+					.FirstOrDefaultAsync(cancellationToken)
+					.ConfigureAwait(false);
 
-			if (insertResult.ErrorCode != "UNIQUE_VIOLATION")
-			{
-				return DatabaseResult<long>.Failure(insertResult.ErrorCode, insertResult.ErrorMessage, insertResult.IsTransient);
-			}
-
-			var updateResult = await ExecuteTransactionAsync(async dbContext =>
-			{
-				var activeCharacterId = await getActiveCharacterIdQuery(dbContext, hotkey.CharacterID, cancellationToken).ConfigureAwait(false);
-				if (activeCharacterId == 0)
-				{
-					throw new DatabaseEntityNotFoundException("Character", hotkey.CharacterID.ToString());
-				}
-
-				var entity = await getByCharacterAndSlotTrackingQuery(dbContext, hotkey.CharacterID, hotkey.Slot, cancellationToken).ConfigureAwait(false);
-				if (entity == null)
+				if (id <= 0)
 				{
 					throw new DatabaseEntityNotFoundException("CharacterHotkey", $"(CharacterID: {hotkey.CharacterID}, Slot: {hotkey.Slot})");
 				}
 
-				ValidateVersion(entity, hotkey.Version);
-				if (entity.Deleted)
-				{
-					entity.Deleted = false;
-					entity.TimeDeleted = null;
-				}
+				return id;
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-				entity.Type = hotkey.Type;
-				entity.ReferenceID = hotkey.ReferenceID;
-				return entity;
-			}).ConfigureAwait(false);
-
-			return updateResult.IsSuccess
-				? DatabaseResult<long>.Success(updateResult.Data.ID)
-				: DatabaseResult<long>.Failure(updateResult.ErrorCode, updateResult.ErrorMessage, updateResult.IsTransient);
+			return result.IsSuccess
+				? DatabaseResult<long>.Success(result.Data)
+				: DatabaseResult<long>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -210,36 +185,7 @@ namespace FishMMO.Database.Npgsql.Services
 				var typeArray = activeHotkeys.Select(h => (short)h.Type).ToArray();
 				var referenceIdArray = activeHotkeys.Select(h => h.ReferenceID).ToArray();
 
-				var sql = $@"
-					INSERT INTO {TableName}
-						(character_id, slot, version, type, reference_id, time_created, deleted, time_deleted)
-					SELECT
-						u.character_id,
-						u.slot,
-						u.version,
-						u.type,
-						u.reference_id,
-						{{5}},
-						FALSE,
-						NULL
-					FROM UNNEST(
-						{{0}}::bigint[],
-						{{1}}::integer[],
-						{{2}}::bigint[],
-						{{3}}::smallint[],
-						{{4}}::bigint[]
-					) AS u(character_id, slot, version, type, reference_id)
-					ON CONFLICT (character_id, slot)
-					DO UPDATE SET
-						type = EXCLUDED.type,
-						reference_id = EXCLUDED.reference_id,
-						deleted = FALSE,
-						time_deleted = NULL,
-						version = CASE
-							WHEN EXCLUDED.version > 0 THEN EXCLUDED.version
-							ELSE {TableName}.version
-						END
-					WHERE EXCLUDED.version <= 0 OR EXCLUDED.version > {TableName}.version;";
+				var sql = GetUpsertSql();
 
 				await ExecuteBulkUpsertAsync(
 					dbContext,
@@ -249,6 +195,40 @@ namespace FishMMO.Database.Npgsql.Services
 					"One or more hotkeys were rejected due to a stale Version.",
 					cancellationToken).ConfigureAwait(false);
 			}).ConfigureAwait(false);
+		}
+
+		private string GetUpsertSql()
+		{
+			return $@"
+				INSERT INTO {TableName}
+					(character_id, slot, version, type, reference_id, time_created, deleted, time_deleted)
+				SELECT
+					u.character_id,
+					u.slot,
+					u.version,
+					u.type,
+					u.reference_id,
+					{{5}},
+					FALSE,
+					NULL
+				FROM UNNEST(
+					{{0}}::bigint[],
+					{{1}}::integer[],
+					{{2}}::bigint[],
+					{{3}}::smallint[],
+					{{4}}::bigint[]
+				) AS u(character_id, slot, version, type, reference_id)
+				ON CONFLICT (character_id, slot)
+				DO UPDATE SET
+					type = EXCLUDED.type,
+					reference_id = EXCLUDED.reference_id,
+					deleted = FALSE,
+					time_deleted = NULL,
+					version = CASE
+						WHEN EXCLUDED.version > 0 THEN EXCLUDED.version
+						ELSE {TableName}.version
+					END
+				WHERE EXCLUDED.version <= 0 OR EXCLUDED.version > {TableName}.version;";
 		}
 
 		/// <inheritdoc/>

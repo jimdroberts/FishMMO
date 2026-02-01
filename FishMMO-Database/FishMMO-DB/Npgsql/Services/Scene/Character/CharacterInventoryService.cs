@@ -59,14 +59,6 @@ namespace FishMMO.Database.Npgsql.Services
 					.ToList());
 
 		/// <summary>
-		/// Compiled query for retrieving a tracked inventory item by character ID and slot.
-		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, int, CancellationToken, Task<CharacterInventoryEntity?>> getByCharacterAndSlotTrackingQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, int slot, CancellationToken ct) =>
-				(CharacterInventoryEntity?)context.CharacterInventoryItems
-					.FirstOrDefault(i => i.CharacterID == characterId && i.Slot == slot));
-
-		/// <summary>
 		/// Initializes a new instance of the <see cref="CharacterInventoryService"/> class.
 		/// </summary>
 		/// <param name="dbContextFactory">Factory for creating database contexts.</param>
@@ -86,7 +78,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			var insertResult = await ExecuteTransactionAsync(async dbContext =>
+			var result = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var activeCharacterId = await getActiveCharacterIdQuery(dbContext, item.CharacterID, cancellationToken).ConfigureAwait(false);
 				if (activeCharacterId == 0)
@@ -94,60 +86,42 @@ namespace FishMMO.Database.Npgsql.Services
 					throw new DatabaseEntityNotFoundException("Character", item.CharacterID.ToString());
 				}
 
-				var entity = new CharacterInventoryEntity
-				{
-					CharacterID = item.CharacterID,
-					Version = item.Version,
-					TemplateID = item.TemplateID,
-					Slot = item.Slot,
-					Seed = item.Seed,
-					Amount = item.Amount,
-					TimeCreated = DateTime.UtcNow
-				};
-				await dbContext.CharacterInventoryItems.AddAsync(entity, cancellationToken).ConfigureAwait(false);
-				return entity;
-			}).ConfigureAwait(false);
+				var now = DateTime.UtcNow;
+				await ExecuteBulkUpsertAsync(
+					dbContext,
+					GetUpsertSql(),
+					expectedRowsAffected: 1,
+					new object[]
+					{
+						new[] { item.CharacterID },
+						new[] { item.Slot },
+						new[] { item.Version },
+						new[] { item.TemplateID },
+						new[] { item.Seed },
+						new[] { item.Amount },
+						now,
+					},
+					"Inventory item was rejected due to a stale Version.",
+					cancellationToken).ConfigureAwait(false);
 
-			if (insertResult.IsSuccess)
-			{
-				return DatabaseResult<long>.Success(insertResult.Data.ID);
-			}
+				var id = await dbContext.CharacterInventoryItems
+					.AsNoTracking()
+					.Where(i => i.CharacterID == item.CharacterID && i.Slot == item.Slot && !i.Deleted)
+					.Select(i => i.ID)
+					.FirstOrDefaultAsync(cancellationToken)
+					.ConfigureAwait(false);
 
-			if (insertResult.ErrorCode != "UNIQUE_VIOLATION")
-			{
-				return DatabaseResult<long>.Failure(insertResult.ErrorCode, insertResult.ErrorMessage, insertResult.IsTransient);
-			}
-
-			var updateResult = await ExecuteTransactionAsync(async dbContext =>
-			{
-				var activeCharacterId = await getActiveCharacterIdQuery(dbContext, item.CharacterID, cancellationToken).ConfigureAwait(false);
-				if (activeCharacterId == 0)
-				{
-					throw new DatabaseEntityNotFoundException("Character", item.CharacterID.ToString());
-				}
-
-				var entity = await getByCharacterAndSlotTrackingQuery(dbContext, item.CharacterID, item.Slot, cancellationToken).ConfigureAwait(false);
-				if (entity == null)
+				if (id <= 0)
 				{
 					throw new DatabaseEntityNotFoundException("CharacterInventory", $"(CharacterID: {item.CharacterID}, Slot: {item.Slot})");
 				}
 
-				ValidateVersion(entity, item.Version);
-				if (entity.Deleted)
-				{
-					entity.Deleted = false;
-					entity.TimeDeleted = null;
-				}
+				return id;
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-				entity.TemplateID = item.TemplateID;
-				entity.Seed = item.Seed;
-				entity.Amount = item.Amount;
-				return entity;
-			}).ConfigureAwait(false);
-
-			return updateResult.IsSuccess
-				? DatabaseResult<long>.Success(updateResult.Data.ID)
-				: DatabaseResult<long>.Failure(updateResult.ErrorCode, updateResult.ErrorMessage, updateResult.IsTransient);
+			return result.IsSuccess
+				? DatabaseResult<long>.Success(result.Data)
+				: DatabaseResult<long>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -203,39 +177,7 @@ namespace FishMMO.Database.Npgsql.Services
 				var seedArray = activeItems.Select(i => i.Seed).ToArray();
 				var amountArray = activeItems.Select(i => i.Amount).ToArray();
 
-				var sql = $@"
-					INSERT INTO {TableName}
-						(character_id, slot, version, template_id, seed, amount, time_created, deleted, time_deleted)
-					SELECT
-						u.character_id,
-						u.slot,
-						u.version,
-						u.template_id,
-						u.seed,
-						u.amount,
-						{{6}},
-						FALSE,
-						NULL
-					FROM UNNEST(
-						{{0}}::bigint[],
-						{{1}}::integer[],
-						{{2}}::bigint[],
-						{{3}}::integer[],
-						{{4}}::integer[],
-						{{5}}::integer[]
-					) AS u(character_id, slot, version, template_id, seed, amount)
-					ON CONFLICT (character_id, slot)
-					DO UPDATE SET
-						template_id = EXCLUDED.template_id,
-						seed = EXCLUDED.seed,
-						amount = EXCLUDED.amount,
-						deleted = FALSE,
-						time_deleted = NULL,
-						version = CASE
-							WHEN EXCLUDED.version > 0 THEN EXCLUDED.version
-							ELSE {TableName}.version
-						END
-					WHERE EXCLUDED.version <= 0 OR EXCLUDED.version > {TableName}.version;";
+				var sql = GetUpsertSql();
 
 				await ExecuteBulkUpsertAsync(
 					dbContext,
@@ -245,6 +187,43 @@ namespace FishMMO.Database.Npgsql.Services
 					"One or more inventory items were rejected due to a stale Version.",
 					cancellationToken).ConfigureAwait(false);
 			}).ConfigureAwait(false);
+		}
+
+		private string GetUpsertSql()
+		{
+			return $@"
+				INSERT INTO {TableName}
+					(character_id, slot, version, template_id, seed, amount, time_created, deleted, time_deleted)
+				SELECT
+					u.character_id,
+					u.slot,
+					u.version,
+					u.template_id,
+					u.seed,
+					u.amount,
+					{{6}},
+					FALSE,
+					NULL
+				FROM UNNEST(
+					{{0}}::bigint[],
+					{{1}}::integer[],
+					{{2}}::bigint[],
+					{{3}}::integer[],
+					{{4}}::integer[],
+					{{5}}::integer[]
+				) AS u(character_id, slot, version, template_id, seed, amount)
+				ON CONFLICT (character_id, slot)
+				DO UPDATE SET
+					template_id = EXCLUDED.template_id,
+					seed = EXCLUDED.seed,
+					amount = EXCLUDED.amount,
+					deleted = FALSE,
+					time_deleted = NULL,
+					version = CASE
+						WHEN EXCLUDED.version > 0 THEN EXCLUDED.version
+						ELSE {TableName}.version
+					END
+				WHERE EXCLUDED.version <= 0 OR EXCLUDED.version > {TableName}.version;";
 		}
 
 		/// <inheritdoc/>

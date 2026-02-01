@@ -48,46 +48,83 @@ namespace FishMMO.Database.Npgsql.Services
 					"Name and address must not be empty.");
 			}
 
-			var now = DateTime.UtcNow;
-			var result = await ExecuteTransactionAsync(async dbContext =>
+			// Insert-first strategy to avoid the race condition where two writers both observe
+			// a missing row and attempt to insert simultaneously.
+			var insertNow = DateTime.UtcNow;
+			var insertResult = await ExecuteTransactionAsync(async dbContext =>
 			{
-				var server = await getByNameTrackingQuery(dbContext, name, cancellationToken).ConfigureAwait(false);
-				if (server == null)
+				var entity = new SceneServerEntity
 				{
-					server = new SceneServerEntity
-					{
-						Name = name,
-						TimeCreated = now,
-						LastPulse = now,
-						Address = address,
-						Port = port,
-						CharacterCount = characterCount,
-						Locked = locked,
-					};
-					await dbContext.SceneServers.AddAsync(server, cancellationToken).ConfigureAwait(false);
-					return server;
+					Name = name,
+					TimeCreated = insertNow,
+					LastPulse = insertNow,
+					Address = address,
+					Port = port,
+					CharacterCount = characterCount,
+					Locked = locked,
+				};
+
+				await dbContext.SceneServers.AddAsync(entity, cancellationToken).ConfigureAwait(false);
+				return entity;
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+			if (insertResult.IsSuccess)
+			{
+				if (insertResult.Data.ID <= 0)
+				{
+					return DatabaseResult<(long ServerId, SceneServerData ServerData)>.Failure(
+						"DATABASE_ERROR",
+						"Failed to insert scene server.",
+						isTransient: true);
 				}
 
-				server.Address = address;
-				server.Port = port;
-				server.CharacterCount = characterCount;
-				server.Locked = locked;
-				server.LastPulse = now;
-				return server;
-			}).ConfigureAwait(false);
-
-			if (!result.IsSuccess)
-			{
-				return DatabaseResult<(long ServerId, SceneServerData ServerData)>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+				return DatabaseResult<(long ServerId, SceneServerData ServerData)>.Success(
+					(insertResult.Data.ID, MapEntityToDto(insertResult.Data)));
 			}
 
-			if (result.Data.ID <= 0)
+			if (!string.Equals(insertResult.ErrorCode, "UNIQUE_VIOLATION", StringComparison.Ordinal))
 			{
-				return DatabaseResult<(long ServerId, SceneServerData ServerData)>.Failure("DATABASE_ERROR", "Failed to upsert scene server.", isTransient: true);
+				return DatabaseResult<(long ServerId, SceneServerData ServerData)>.Failure(
+					insertResult.ErrorCode,
+					insertResult.ErrorMessage,
+					insertResult.IsTransient);
 			}
 
-			var serverData = MapEntityToDto(result.Data);
-			return DatabaseResult<(long ServerId, SceneServerData ServerData)>.Success((result.Data.ID, serverData));
+			var updateNow = DateTime.UtcNow;
+			var updateResult = await ExecuteTransactionAsync(async dbContext =>
+			{
+				var existing = await getByNameTrackingQuery(dbContext, name, cancellationToken).ConfigureAwait(false);
+				if (existing == null)
+				{
+					throw new DatabaseEntityNotFoundException("SceneServer", name);
+				}
+
+				existing.Address = address;
+				existing.Port = port;
+				existing.CharacterCount = characterCount;
+				existing.Locked = locked;
+				existing.LastPulse = updateNow;
+				return existing;
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+			if (!updateResult.IsSuccess)
+			{
+				return DatabaseResult<(long ServerId, SceneServerData ServerData)>.Failure(
+					updateResult.ErrorCode,
+					updateResult.ErrorMessage,
+					updateResult.IsTransient);
+			}
+
+			if (updateResult.Data.ID <= 0)
+			{
+				return DatabaseResult<(long ServerId, SceneServerData ServerData)>.Failure(
+					"DATABASE_ERROR",
+					"Failed to update scene server.",
+					isTransient: true);
+			}
+
+			return DatabaseResult<(long ServerId, SceneServerData ServerData)>.Success(
+				(updateResult.Data.ID, MapEntityToDto(updateResult.Data)));
 		}
 
 		/// <inheritdoc/>

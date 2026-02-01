@@ -21,8 +21,7 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			Success = 0,
 			NotFound = 1,
-			ConcurrencyConflict = 2,
-			AuthorityLost = 3,
+			AuthorityLost = 2,
 		}
 
 		/// <summary>
@@ -143,7 +142,7 @@ namespace FishMMO.Database.Npgsql.Services
 					SessionOwnerToken = Guid.Empty,
 					SessionLeaseExpiresUtc = DateTime.UnixEpoch,
 					Flags = characterData.Flags,
-					Version = characterData.Version,
+					Version = 1,
 					TimeCreated = now,
 					LastSaved = now,
 				};
@@ -191,87 +190,131 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult.Failure("VALIDATION_ERROR", "Invalid character ID");
 			}
 
+			// Version is required and authoritative.
+			// LastSaved is treated as analytics only and is not used for concurrency.
+			if (characterData.Version <= 0)
+			{
+				return DatabaseResult.Failure(
+					"VALIDATION_ERROR",
+					"Invalid Version. Version must be greater than zero.",
+					isTransient: false);
+			}
+
 			var saveResult = await ExecuteTransactionAsync(async dbContext =>
 			{
-				var existing = await dbContext.Characters
+				var now = DateTime.UtcNow;
+				var newLeaseExpiresUtc = now + DefaultSessionLeaseDuration;
+				var sceneName = characterData.SceneName ?? string.Empty;
+				var bindScene = characterData.BindScene ?? string.Empty;
+
+				var sql = $@"UPDATE {TableName}
+					SET name = {{0}},
+						account = {{1}},
+						selected = {{2}},
+						world_server_id = {{3}},
+						scene_name = {{4}},
+						scene_handle = {{5}},
+						bind_scene = {{6}},
+						bind_x = {{7}},
+						bind_y = {{8}},
+						bind_z = {{9}},
+						instance_id = {{10}},
+						instance_x = {{11}},
+						instance_y = {{12}},
+						instance_z = {{13}},
+						instance_rot_x = {{14}},
+						instance_rot_y = {{15}},
+						instance_rot_z = {{16}},
+						instance_rot_w = {{17}},
+						race_id = {{18}},
+						model_index = {{19}},
+						x = {{20}},
+						y = {{21}},
+						z = {{22}},
+						rot_x = {{23}},
+						rot_y = {{24}},
+						rot_z = {{25}},
+						rot_w = {{26}},
+						access_level = {{27}},
+						flags = {{28}},
+						version = {{29}},
+						last_saved = {{30}},
+						session_lease_expires_utc = CASE
+							WHEN session_state <> 0 THEN {{31}}
+							ELSE session_lease_expires_utc
+						END
+					WHERE id = {{32}} AND deleted = FALSE AND version < {{29}}";
+
+				var rowsAffected = await dbContext.Database.ExecuteSqlRawAsync(
+					sql,
+					new object[]
+					{
+						characterData.Name,
+						characterData.Account,
+						characterData.Selected,
+						characterData.WorldServerID,
+						sceneName,
+						characterData.SceneHandle,
+						bindScene,
+						characterData.BindX,
+						characterData.BindY,
+						characterData.BindZ,
+						characterData.InstanceID,
+						characterData.InstanceX,
+						characterData.InstanceY,
+						characterData.InstanceZ,
+						characterData.InstanceRotX,
+						characterData.InstanceRotY,
+						characterData.InstanceRotZ,
+						characterData.InstanceRotW,
+						characterData.RaceID,
+						characterData.ModelIndex,
+						characterData.X,
+						characterData.Y,
+						characterData.Z,
+						characterData.RotX,
+						characterData.RotY,
+						characterData.RotZ,
+						characterData.RotW,
+						characterData.AccessLevel,
+						characterData.Flags,
+						characterData.Version,
+						now,
+						newLeaseExpiresUtc,
+						characterData.ID,
+					},
+					cancellationToken).ConfigureAwait(false);
+
+				if (rowsAffected > 0)
+				{
+					return SaveCharacterWriteOutcome.Success;
+				}
+
+				// No row updated: either missing, deleted, or authority lost.
+				// Load current state (no tracking) only for the conflict path to preserve idempotency.
+				var current = await dbContext.Characters
+					.AsNoTracking()
 					.FirstOrDefaultAsync(c => c.ID == characterData.ID && !c.Deleted, cancellationToken)
 					.ConfigureAwait(false);
 
-				if (existing == null)
+				if (current == null)
 				{
 					return SaveCharacterWriteOutcome.NotFound;
 				}
 
-				// Game-logic authority check (Version is the boss):
-				// If the caller doesn't provide a Version (0), fall back to legacy LastSaved semantics.
-				if (characterData.Version > 0)
+				if (current.Version > characterData.Version)
 				{
-					// - If DB has a higher Version, the caller is stale and must not overwrite progress.
-					// - If Versions match, only allow idempotent success (same final state).
-					if (existing.Version > characterData.Version)
-					{
-						return SaveCharacterWriteOutcome.AuthorityLost;
-					}
-					if (existing.Version == characterData.Version)
-					{
-						return HasSameState(existing, characterData)
-							? SaveCharacterWriteOutcome.Success
-							: SaveCharacterWriteOutcome.AuthorityLost;
-					}
-				}
-				else
-				{
-					// Legacy optimistic concurrency: LastSaved acts as the caller's "snapshot".
-					if (existing.LastSaved != characterData.LastSaved)
-					{
-						return HasSameState(existing, characterData)
-							? SaveCharacterWriteOutcome.Success
-							: SaveCharacterWriteOutcome.ConcurrencyConflict;
-					}
+					return SaveCharacterWriteOutcome.AuthorityLost;
 				}
 
-				existing.Name = characterData.Name;
-				existing.Account = characterData.Account;
-				existing.Selected = characterData.Selected;
-				existing.WorldServerID = characterData.WorldServerID;
-				existing.SceneName = characterData.SceneName ?? string.Empty;
-				existing.SceneHandle = characterData.SceneHandle;
-				existing.BindScene = characterData.BindScene ?? string.Empty;
-				existing.BindX = characterData.BindX;
-				existing.BindY = characterData.BindY;
-				existing.BindZ = characterData.BindZ;
-				existing.InstanceID = characterData.InstanceID;
-				existing.InstanceX = characterData.InstanceX;
-				existing.InstanceY = characterData.InstanceY;
-				existing.InstanceZ = characterData.InstanceZ;
-				existing.InstanceRotX = characterData.InstanceRotX;
-				existing.InstanceRotY = characterData.InstanceRotY;
-				existing.InstanceRotZ = characterData.InstanceRotZ;
-				existing.InstanceRotW = characterData.InstanceRotW;
-				existing.RaceID = characterData.RaceID;
-				existing.ModelIndex = characterData.ModelIndex;
-				existing.X = characterData.X;
-				existing.Y = characterData.Y;
-				existing.Z = characterData.Z;
-				existing.RotX = characterData.RotX;
-				existing.RotY = characterData.RotY;
-				existing.RotZ = characterData.RotZ;
-				existing.RotW = characterData.RotW;
-				existing.AccessLevel = characterData.AccessLevel;
-				existing.Flags = characterData.Flags;
-				if (characterData.Version > 0)
+				// Idempotency: allow replaying the same Version if and only if it results in the same final state.
+				if (current.Version == characterData.Version && HasSameState(current, characterData))
 				{
-					existing.Version = characterData.Version;
-				}
-				var now = DateTime.UtcNow;
-				existing.LastSaved = now;
-				if (existing.SessionState != CharacterSessionState.Offline)
-				{
-					existing.SessionLeaseExpiresUtc = now + DefaultSessionLeaseDuration;
+					return SaveCharacterWriteOutcome.Success;
 				}
 
-				return SaveCharacterWriteOutcome.Success;
-			}).ConfigureAwait(false);
+				return SaveCharacterWriteOutcome.AuthorityLost;
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			if (!saveResult.IsSuccess)
 			{
@@ -286,11 +329,6 @@ namespace FishMMO.Database.Npgsql.Services
 					return DatabaseResult.Failure(
 						"DB_NOT_FOUND",
 						"Character not found.",
-						isTransient: false);
-				case SaveCharacterWriteOutcome.ConcurrencyConflict:
-					return DatabaseResult.Failure(
-						"CONCURRENCY_CONFLICT",
-						"Character was modified by another server. Please reload and try again.",
 						isTransient: false);
 				case SaveCharacterWriteOutcome.AuthorityLost:
 					return DatabaseResult.Failure(

@@ -18,15 +18,14 @@ namespace FishMMO.Database.Npgsql.Services
 	/// Follows SOLID principles: SRP, OCP, LSP, ISP, DIP.
 	/// </summary>
 	/// <remarks>
-	/// All methods that use ExecuteSqlRawAsync are wrapped in execution strategies
-	/// to provide automatic retry logic (up to 3 attempts) for transient database failures
-	/// such as connection timeouts, deadlocks, or network interruptions.
+	/// This service manages character equipped-item storage including:
+	/// - Single-item save/update via atomic UPSERT (INSERT ... ON CONFLICT DO UPDATE)
+	/// - Batch save/update via UNNEST + UPSERT
+	/// - Soft-delete operations (bulk and slot-specific)
+	/// - Retrieval of current equipment
 	/// 
-	/// Exception Handling Strategy:
-	/// - Catches specific exceptions (NpgsqlException, DbUpdateException, TimeoutException)
-	/// - Converts to custom DatabaseException hierarchy with sanitized messages
-	/// - Returns DatabaseResult for safe, typed error handling
-	/// - Preserves detailed error information for logging while exposing safe messages to clients
+	/// Write operations are executed inside <see cref="BaseService{TEntity}.ExecuteTransactionAsync"/> for retry and exception mapping.
+	/// Version/authority semantics are enforced in UPSERT via <see cref="BaseService{TEntity}.ExecuteBulkUpsertAsync"/>.
 	/// </remarks>
 	public sealed class CharacterEquipmentService : BaseService<CharacterEquipmentEntity>, ICharacterEquipmentService
 	{
@@ -53,14 +52,6 @@ namespace FishMMO.Database.Npgsql.Services
 					.ToList());
 
 		/// <summary>
-		/// Compiled query for retrieving a tracked equipment item by character ID and slot.
-		/// </summary>
-		private static readonly Func<NpgsqlDbContext, long, int, CancellationToken, Task<CharacterEquipmentEntity?>> getByCharacterAndSlotTrackingQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, int slot, CancellationToken ct) =>
-				(CharacterEquipmentEntity?)context.CharacterEquippedItems
-					.FirstOrDefault(e => e.CharacterID == characterId && e.Slot == slot));
-
-		/// <summary>
 		/// Initializes a new instance of the <see cref="CharacterEquipmentService"/> class.
 		/// </summary>
 		/// <param name="dbContextFactory">Factory for creating database contexts.</param>
@@ -80,7 +71,7 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
-			var insertResult = await ExecuteTransactionAsync(async dbContext =>
+			var result = await ExecuteTransactionAsync(async dbContext =>
 			{
 				var activeCharacterId = await getActiveCharacterIdQuery(dbContext, equipment.CharacterID, cancellationToken).ConfigureAwait(false);
 				if (activeCharacterId == 0)
@@ -88,60 +79,42 @@ namespace FishMMO.Database.Npgsql.Services
 					throw new DatabaseEntityNotFoundException("Character", equipment.CharacterID.ToString());
 				}
 
-				var entity = new CharacterEquipmentEntity
-				{
-					CharacterID = equipment.CharacterID,
-					Version = equipment.Version,
-					TemplateID = equipment.TemplateID,
-					Slot = equipment.Slot,
-					Seed = equipment.Seed,
-					Amount = equipment.Amount,
-					TimeCreated = DateTime.UtcNow
-				};
-				await dbContext.CharacterEquippedItems.AddAsync(entity, cancellationToken).ConfigureAwait(false);
-				return entity;
-			}).ConfigureAwait(false);
+				var now = DateTime.UtcNow;
+				await ExecuteBulkUpsertAsync(
+					dbContext,
+					GetUpsertSql(),
+					expectedRowsAffected: 1,
+					new object[]
+					{
+						new[] { equipment.CharacterID },
+						new[] { equipment.Slot },
+						new[] { equipment.Version },
+						new[] { equipment.TemplateID },
+						new[] { equipment.Seed },
+						new[] { equipment.Amount },
+						now,
+					},
+					"Equipment item was rejected due to a stale Version.",
+					cancellationToken).ConfigureAwait(false);
 
-			if (insertResult.IsSuccess)
-			{
-				return DatabaseResult<long>.Success(insertResult.Data.ID);
-			}
+				var id = await dbContext.CharacterEquippedItems
+					.AsNoTracking()
+					.Where(e => e.CharacterID == equipment.CharacterID && e.Slot == equipment.Slot && !e.Deleted)
+					.Select(e => e.ID)
+					.FirstOrDefaultAsync(cancellationToken)
+					.ConfigureAwait(false);
 
-			if (insertResult.ErrorCode != "UNIQUE_VIOLATION")
-			{
-				return DatabaseResult<long>.Failure(insertResult.ErrorCode, insertResult.ErrorMessage, insertResult.IsTransient);
-			}
-
-			var updateResult = await ExecuteTransactionAsync(async dbContext =>
-			{
-				var activeCharacterId = await getActiveCharacterIdQuery(dbContext, equipment.CharacterID, cancellationToken).ConfigureAwait(false);
-				if (activeCharacterId == 0)
-				{
-					throw new DatabaseEntityNotFoundException("Character", equipment.CharacterID.ToString());
-				}
-
-				var entity = await getByCharacterAndSlotTrackingQuery(dbContext, equipment.CharacterID, equipment.Slot, cancellationToken).ConfigureAwait(false);
-				if (entity == null)
+				if (id <= 0)
 				{
 					throw new DatabaseEntityNotFoundException("CharacterEquipment", $"(CharacterID: {equipment.CharacterID}, Slot: {equipment.Slot})");
 				}
 
-				ValidateVersion(entity, equipment.Version);
-				if (entity.Deleted)
-				{
-					entity.Deleted = false;
-					entity.TimeDeleted = null;
-				}
+				return id;
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-				entity.TemplateID = equipment.TemplateID;
-				entity.Seed = equipment.Seed;
-				entity.Amount = equipment.Amount;
-				return entity;
-			}).ConfigureAwait(false);
-
-			return updateResult.IsSuccess
-				? DatabaseResult<long>.Success(updateResult.Data.ID)
-				: DatabaseResult<long>.Failure(updateResult.ErrorCode, updateResult.ErrorMessage, updateResult.IsTransient);
+			return result.IsSuccess
+				? DatabaseResult<long>.Success(result.Data)
+				: DatabaseResult<long>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
 		/// <inheritdoc/>
@@ -197,39 +170,7 @@ namespace FishMMO.Database.Npgsql.Services
 				var seedArray = activeEquipment.Select(e => e.Seed).ToArray();
 				var amountArray = activeEquipment.Select(e => e.Amount).ToArray();
 
-				var sql = $@"
-					INSERT INTO {TableName}
-						(character_id, slot, version, template_id, seed, amount, time_created, deleted, time_deleted)
-					SELECT
-						u.character_id,
-						u.slot,
-						u.version,
-						u.template_id,
-						u.seed,
-						u.amount,
-						{{6}},
-						FALSE,
-						NULL
-					FROM UNNEST(
-						{{0}}::bigint[],
-						{{1}}::integer[],
-						{{2}}::bigint[],
-						{{3}}::integer[],
-						{{4}}::integer[],
-						{{5}}::integer[]
-					) AS u(character_id, slot, version, template_id, seed, amount)
-					ON CONFLICT (character_id, slot)
-					DO UPDATE SET
-						template_id = EXCLUDED.template_id,
-						seed = EXCLUDED.seed,
-						amount = EXCLUDED.amount,
-						deleted = FALSE,
-						time_deleted = NULL,
-						version = CASE
-							WHEN EXCLUDED.version > 0 THEN EXCLUDED.version
-							ELSE {TableName}.version
-						END
-					WHERE EXCLUDED.version <= 0 OR EXCLUDED.version > {TableName}.version;";
+				var sql = GetUpsertSql();
 
 				await ExecuteBulkUpsertAsync(
 					dbContext,
@@ -239,6 +180,43 @@ namespace FishMMO.Database.Npgsql.Services
 					"One or more equipment items were rejected due to a stale Version.",
 					cancellationToken).ConfigureAwait(false);
 			}).ConfigureAwait(false);
+		}
+
+		private string GetUpsertSql()
+		{
+			return $@"
+				INSERT INTO {TableName}
+					(character_id, slot, version, template_id, seed, amount, time_created, deleted, time_deleted)
+				SELECT
+					u.character_id,
+					u.slot,
+					u.version,
+					u.template_id,
+					u.seed,
+					u.amount,
+					{{6}},
+					FALSE,
+					NULL
+				FROM UNNEST(
+					{{0}}::bigint[],
+					{{1}}::integer[],
+					{{2}}::bigint[],
+					{{3}}::integer[],
+					{{4}}::integer[],
+					{{5}}::integer[]
+				) AS u(character_id, slot, version, template_id, seed, amount)
+				ON CONFLICT (character_id, slot)
+				DO UPDATE SET
+					template_id = EXCLUDED.template_id,
+					seed = EXCLUDED.seed,
+					amount = EXCLUDED.amount,
+					deleted = FALSE,
+					time_deleted = NULL,
+					version = CASE
+						WHEN EXCLUDED.version > 0 THEN EXCLUDED.version
+						ELSE {TableName}.version
+					END
+				WHERE EXCLUDED.version <= 0 OR EXCLUDED.version > {TableName}.version;";
 		}
 
 		/// <inheritdoc/>

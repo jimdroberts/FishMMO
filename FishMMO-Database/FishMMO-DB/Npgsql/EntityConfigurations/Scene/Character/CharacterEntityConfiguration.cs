@@ -29,7 +29,7 @@ namespace FishMMO.Database.Npgsql.Entities
 
 			builder.Property(e => e.Version)
 				.IsRequired()
-				.HasDefaultValue(0L);
+				.HasDefaultValue(1L);
 
 			builder.Property(e => e.SessionState)
 				.IsRequired()

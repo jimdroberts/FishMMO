@@ -3,7 +3,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using FishMMO.Database;
 using FishMMO.Database.Data;
 using FishMMO.Database.Exceptions;
 using FishMMO.Database.Npgsql.Entities;
@@ -159,47 +158,10 @@ namespace FishMMO.Database.Npgsql.Services
 
 			var result = await ExecuteTransactionAsync(async dbContext =>
 			{
-				var membershipIds = await dbContext.CharacterGuilds
-					.AsNoTracking()
-					.Where(cg => cg.GuildID == guildId)
-					.Select(cg => cg.ID)
-					.ToListAsync(cancellationToken)
+				// Rely on ON DELETE CASCADE constraints to remove related rows.
+				var sql = $@"DELETE FROM {TableName} WHERE id = {{0}}";
+				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { guildId }, cancellationToken)
 					.ConfigureAwait(false);
-				foreach (var membershipId in membershipIds)
-				{
-					var membership = await dbContext.CharacterGuilds
-						.FirstOrDefaultAsync(cg => cg.ID == membershipId, cancellationToken)
-						.ConfigureAwait(false);
-					if (membership != null)
-					{
-						dbContext.CharacterGuilds.Remove(membership);
-					}
-				}
-
-				var updateIds = await dbContext.GuildUpdates
-					.AsNoTracking()
-					.Where(gu => gu.GuildID == guildId)
-					.Select(gu => gu.ID)
-					.ToListAsync(cancellationToken)
-					.ConfigureAwait(false);
-				foreach (var updateId in updateIds)
-				{
-					var update = await dbContext.GuildUpdates
-						.FirstOrDefaultAsync(gu => gu.ID == updateId, cancellationToken)
-						.ConfigureAwait(false);
-					if (update != null)
-					{
-						dbContext.GuildUpdates.Remove(update);
-					}
-				}
-
-				var guild = await dbContext.Guilds
-					.FirstOrDefaultAsync(g => g.ID == guildId, cancellationToken)
-					.ConfigureAwait(false);
-				if (guild != null)
-				{
-					dbContext.Guilds.Remove(guild);
-				}
 			}).ConfigureAwait(false);
 
 			return result.IsSuccess
