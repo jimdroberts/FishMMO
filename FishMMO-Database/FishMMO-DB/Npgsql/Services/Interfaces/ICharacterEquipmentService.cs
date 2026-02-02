@@ -84,7 +84,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// Uses an explicit transaction only when more than one database statement is required.
 		/// If the character has no equipment, operation succeeds.
 		/// </remarks>
-		Task<DatabaseResult> DeleteEquipmentAsync(long characterId, CancellationToken cancellationToken = default);
+		Task<DatabaseResult> DeleteEquipmentAsync(long characterId, long incomingVersion, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Deletes a specific equipment item by slot.
@@ -101,7 +101,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// Uses an explicit transaction only when more than one database statement is required.
 		/// If the slot is empty, operation succeeds.
 		/// </remarks>
-		Task<DatabaseResult> DeleteEquipmentSlotAsync(long characterId, int slot, CancellationToken cancellationToken = default);
+		Task<DatabaseResult> DeleteEquipmentSlotAsync(long characterId, int slot, long incomingVersion, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Retrieves all equipment items for a specific character.

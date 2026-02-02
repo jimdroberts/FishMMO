@@ -41,7 +41,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <returns>
 		/// DatabaseResult indicating success or containing error details.
 		/// </returns>
-		Task<DatabaseResult> DeleteKnownAbilityAsync(long characterId, int templateId, CancellationToken cancellationToken = default);
+		Task<DatabaseResult> DeleteKnownAbilityAsync(long characterId, int templateId, long incomingVersion, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Deletes all known abilities for a specific character.
@@ -51,7 +51,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <returns>
 		/// DatabaseResult indicating success or containing error details.
 		/// </returns>
-		Task<DatabaseResult> DeleteAllKnownAbilitiesAsync(long characterId, CancellationToken cancellationToken = default);
+		Task<DatabaseResult> DeleteAllKnownAbilitiesAsync(long characterId, long incomingVersion, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Retrieves all known abilities for a specific character.

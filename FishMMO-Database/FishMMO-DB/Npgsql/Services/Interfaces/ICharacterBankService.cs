@@ -81,7 +81,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// Uses an explicit transaction only when more than one database statement is required.
 		/// If the character has no bank items, operation succeeds.
 		/// </remarks>
-		Task<DatabaseResult> DeleteBankItemsAsync(long characterId, CancellationToken cancellationToken = default);
+		Task<DatabaseResult> DeleteBankItemsAsync(long characterId, long incomingVersion, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Deletes a specific bank item by slot.
@@ -98,7 +98,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// Uses an explicit transaction only when more than one database statement is required.
 		/// If the slot does not exist for the character, operation succeeds.
 		/// </remarks>
-		Task<DatabaseResult> DeleteBankSlotAsync(long characterId, int slot, CancellationToken cancellationToken = default);
+		Task<DatabaseResult> DeleteBankSlotAsync(long characterId, int slot, long incomingVersion, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Retrieves all bank items for a specific character.

@@ -67,7 +67,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// Uses an explicit transaction only when more than one database statement is required.
 		/// If the relationship doesn't exist, operation succeeds.
 		/// </remarks>
-		Task<DatabaseResult> DeleteFriendAsync(long characterId, long friendCharacterId, CancellationToken cancellationToken = default);
+		Task<DatabaseResult> DeleteFriendAsync(long characterId, long friendCharacterId, long incomingVersion, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Deletes all friends for a specific character.
@@ -83,7 +83,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// Uses an explicit transaction only when more than one database statement is required.
 		/// If the character has no friends, operation succeeds.
 		/// </remarks>
-		Task<DatabaseResult> DeleteAllFriendsAsync(long characterId, CancellationToken cancellationToken = default);
+		Task<DatabaseResult> DeleteAllFriendsAsync(long characterId, long incomingVersion, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Retrieves all friends for a specific character.

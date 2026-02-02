@@ -32,7 +32,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// Uses atomic UPDATE without loading the entity. Returns DatabaseEntityNotFoundException if the membership doesn't exist.
 		/// Execution strategy wrapping ensures transient database failures are automatically retried.
 		/// </remarks>
-		Task<DatabaseResult> UpdateRankAsync(long characterId, long partyId, byte rank, CancellationToken cancellationToken = default);
+		Task<DatabaseResult> UpdateRankAsync(long characterId, long partyId, byte rank, long incomingVersion, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Deletes a character's party membership.
@@ -46,7 +46,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// Uses atomic DELETE operation. Returns success even if the membership doesn't exist (idempotent).
 		/// Execution strategy wrapping ensures transient database failures are automatically retried.
 		/// </remarks>
-		Task<DatabaseResult> DeletePartyMembershipAsync(long characterId, CancellationToken cancellationToken = default);
+		Task<DatabaseResult> DeletePartyMembershipAsync(long characterId, long incomingVersion, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Retrieves a character's party membership.

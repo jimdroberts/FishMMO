@@ -203,7 +203,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> UpdateRankAsync(long characterId, long guildId, byte rank, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> UpdateRankAsync(long characterId, long guildId, byte rank, long incomingVersion, CancellationToken cancellationToken = default)
 		{
 			if (characterId == 0 || guildId == 0)
 			{
@@ -212,11 +212,43 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID or guild ID. Both must be greater than 0.");
 			}
 
+			if (incomingVersion <= 0)
+			{
+				return DatabaseResult.Failure(
+					"VALIDATION_ERROR",
+					"Invalid Version. Version must be greater than 0.",
+					isTransient: false);
+			}
+
 			var result = await ExecuteWriteAsync(async dbContext =>
 			{
-				var sql = $@"UPDATE {TableName} SET rank = {{0}} WHERE character_id = {{1}} AND guild_id = {{2}}";
-				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { rank, characterId, guildId }, cancellationToken)
+				var updateSql = $@"UPDATE {TableName}
+					SET rank = {{0}}, version = {{1}}
+					WHERE character_id = {{2}} AND guild_id = {{3}} AND version < {{1}}";
+
+				var rowsAffected = await dbContext.Database
+					.ExecuteSqlRawAsync(updateSql, new object[] { rank, incomingVersion, characterId, guildId }, cancellationToken)
 					.ConfigureAwait(false);
+
+				if (rowsAffected == 0)
+				{
+					var existing = await dbContext.CharacterGuilds
+						.AsNoTracking()
+						.FirstOrDefaultAsync(g => g.CharacterID == characterId && g.GuildID == guildId, cancellationToken)
+						.ConfigureAwait(false);
+
+					if (existing == null)
+					{
+						throw new DatabaseEntityNotFoundException("CharacterGuild", characterId.ToString());
+					}
+
+					if (existing.Version == incomingVersion && existing.Rank == rank)
+					{
+						return;
+					}
+
+					throw new StaleStateException("Guild rank update rejected due to a stale Version.");
+				}
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
@@ -225,7 +257,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> DeleteGuildMembershipAsync(long characterId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> DeleteGuildMembershipAsync(long characterId, long incomingVersion, CancellationToken cancellationToken = default)
 		{
 			if (characterId == 0)
 			{
@@ -234,13 +266,35 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid character ID. Character ID must be greater than 0.");
 			}
 
+			if (incomingVersion <= 0)
+			{
+				return DatabaseResult.Failure(
+					"VALIDATION_ERROR",
+					"Invalid Version. Version must be greater than 0.",
+					isTransient: false);
+			}
+
 			var result = await ExecuteWriteAsync(async dbContext =>
 			{
-				await dbContext.Database.ExecuteSqlRawAsync(
-					"DELETE FROM character_guild WHERE character_id = {0}",
-					new object[] { characterId },
-					cancellationToken)
+				var deleteSql = $@"DELETE FROM {TableName}
+					WHERE character_id = {{0}} AND version < {{1}}";
+
+				var rowsAffected = await dbContext.Database
+					.ExecuteSqlRawAsync(deleteSql, new object[] { characterId, incomingVersion }, cancellationToken)
 					.ConfigureAwait(false);
+
+				if (rowsAffected == 0)
+				{
+					var existing = await dbContext.CharacterGuilds
+						.AsNoTracking()
+						.FirstOrDefaultAsync(g => g.CharacterID == characterId, cancellationToken)
+						.ConfigureAwait(false);
+
+					if (existing != null)
+					{
+						throw new StaleStateException("Guild membership delete rejected due to a stale Version.");
+					}
+				}
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess

@@ -212,7 +212,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> DeletePartyMembershipAsync(long characterId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> DeletePartyMembershipAsync(long characterId, long incomingVersion, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0)
 			{
@@ -222,18 +222,40 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
+			if (incomingVersion <= 0)
+			{
+				return DatabaseResult.Failure(
+					"VALIDATION_ERROR",
+					"Invalid Version. Version must be greater than 0.",
+					isTransient: false);
+			}
+
 			return await ExecuteWriteAsync(async dbContext =>
 			{
-				await dbContext.Database.ExecuteSqlRawAsync(
-					"DELETE FROM character_party WHERE character_id = {0}",
-					new object[] { characterId },
-					cancellationToken)
+				var deleteSql = $@"DELETE FROM {TableName}
+					WHERE character_id = {{0}} AND version < {{1}}";
+
+				var rowsAffected = await dbContext.Database
+					.ExecuteSqlRawAsync(deleteSql, new object[] { characterId, incomingVersion }, cancellationToken)
 					.ConfigureAwait(false);
+
+				if (rowsAffected == 0)
+				{
+					var existing = await dbContext.CharacterParties
+						.AsNoTracking()
+						.FirstOrDefaultAsync(p => p.CharacterID == characterId, cancellationToken)
+						.ConfigureAwait(false);
+
+					if (existing != null)
+					{
+						throw new StaleStateException("Party membership delete rejected due to a stale Version.");
+					}
+				}
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> UpdateRankAsync(long characterId, long partyId, byte rank, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> UpdateRankAsync(long characterId, long partyId, byte rank, long incomingVersion, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0 || partyId <= 0)
 			{
@@ -243,13 +265,43 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
+			if (incomingVersion <= 0)
+			{
+				return DatabaseResult.Failure(
+					"VALIDATION_ERROR",
+					"Invalid Version. Version must be greater than 0.",
+					isTransient: false);
+			}
+
 			return await ExecuteWriteAsync(async dbContext =>
 			{
-				await dbContext.Database.ExecuteSqlRawAsync(
-					$"UPDATE {TableName} SET rank = {{2}} WHERE character_id = {{0}} AND party_id = {{1}}",
-					new object[] { characterId, partyId, rank },
-					cancellationToken)
+				var updateSql = $@"UPDATE {TableName}
+					SET rank = {{0}}, version = {{1}}
+					WHERE character_id = {{2}} AND party_id = {{3}} AND version < {{1}}";
+
+				var rowsAffected = await dbContext.Database
+					.ExecuteSqlRawAsync(updateSql, new object[] { rank, incomingVersion, characterId, partyId }, cancellationToken)
 					.ConfigureAwait(false);
+
+				if (rowsAffected == 0)
+				{
+					var existing = await dbContext.CharacterParties
+						.AsNoTracking()
+						.FirstOrDefaultAsync(p => p.CharacterID == characterId && p.PartyID == partyId, cancellationToken)
+						.ConfigureAwait(false);
+
+					if (existing == null)
+					{
+						throw new DatabaseEntityNotFoundException("CharacterParty", characterId.ToString());
+					}
+
+					if (existing.Version == incomingVersion && existing.Rank == rank)
+					{
+						return;
+					}
+
+					throw new StaleStateException("Party rank update rejected due to a stale Version.");
+				}
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 

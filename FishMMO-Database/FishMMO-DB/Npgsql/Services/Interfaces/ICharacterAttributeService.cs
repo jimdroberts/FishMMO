@@ -70,7 +70,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// - VALIDATION_ERROR: Invalid character ID (less than or equal to 0)
 		/// - DATABASE_ERROR: Database failure (may be transient)
 		/// </remarks>
-		Task<DatabaseResult> DeleteAttributesAsync(long characterId, CancellationToken cancellationToken = default);
+		Task<DatabaseResult> DeleteAttributesAsync(long characterId, long incomingVersion, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Retrieves all attributes for a specific character.

@@ -123,7 +123,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// 
 		/// Use case: Character deletion cleanup or hotkey bar reset.
 		/// </remarks>
-		Task<DatabaseResult> DeleteHotkeysAsync(long characterId, CancellationToken cancellationToken = default);
+		Task<DatabaseResult> DeleteHotkeysAsync(long characterId, long incomingVersion, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Retrieves all hotkeys for a specific character.

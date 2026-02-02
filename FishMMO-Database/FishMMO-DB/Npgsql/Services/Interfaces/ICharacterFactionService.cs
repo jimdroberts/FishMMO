@@ -65,7 +65,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// Uses an explicit transaction only when more than one database statement is required.
 		/// If the character has no factions, operation succeeds.
 		/// </remarks>
-		Task<DatabaseResult> DeleteFactionsAsync(long characterId, CancellationToken cancellationToken = default);
+		Task<DatabaseResult> DeleteFactionsAsync(long characterId, long incomingVersion, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Retrieves all factions for a specific character.

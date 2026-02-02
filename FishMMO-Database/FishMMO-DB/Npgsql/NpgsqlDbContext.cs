@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using FishMMO.Database.Npgsql.Entities;
+using Npgsql.EntityFrameworkCore.PostgreSQL;
 
 namespace FishMMO.Database.Npgsql
 {
@@ -129,17 +130,9 @@ namespace FishMMO.Database.Npgsql
 				if (entityType.FindPrimaryKey() == null)
 					continue;
 
-				// If a shadow property already exists, don't override it.
-				if (entityType.FindProperty("xmin") != null)
-					continue;
-
-				// Map PostgreSQL system column xmin as a shadow property used for optimistic concurrency.
-				modelBuilder.Entity(clrType)
-					.Property<uint>("xmin")
-					.HasColumnName("xmin")
-					.HasColumnType("xid")
-					.ValueGeneratedOnAddOrUpdate()
-					.IsConcurrencyToken();
+				// Configure PostgreSQL system column xmin as an optimistic concurrency token.
+				// Use provider-supported configuration so migrations do not treat xmin as a normal mapped column.
+				modelBuilder.Entity(clrType).UseXminAsConcurrencyToken();
 			}
 		}
 

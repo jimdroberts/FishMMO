@@ -60,7 +60,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// Uses an explicit transaction only when more than one database statement is required.
 		/// If the character has no buffs, operation succeeds.
 		/// </remarks>
-		Task<DatabaseResult> DeleteBuffsAsync(long characterId, CancellationToken cancellationToken = default);
+		Task<DatabaseResult> DeleteBuffsAsync(long characterId, long incomingVersion, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Retrieves all buffs for a specific character.

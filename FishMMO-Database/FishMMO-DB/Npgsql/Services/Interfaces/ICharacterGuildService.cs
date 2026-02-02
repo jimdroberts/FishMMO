@@ -79,7 +79,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// 
 		/// Use case: Guild officer promoting/demoting members.
 		/// </remarks>
-		Task<DatabaseResult> UpdateRankAsync(long characterId, long guildId, byte rank, CancellationToken cancellationToken = default);
+		Task<DatabaseResult> UpdateRankAsync(long characterId, long guildId, byte rank, long incomingVersion, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Deletes a character's guild membership.
@@ -107,7 +107,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// 
 		/// Use case: Character leaving guild or character deletion cleanup.
 		/// </remarks>
-		Task<DatabaseResult> DeleteGuildMembershipAsync(long characterId, CancellationToken cancellationToken = default);
+		Task<DatabaseResult> DeleteGuildMembershipAsync(long characterId, long incomingVersion, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Retrieves a character's guild membership.

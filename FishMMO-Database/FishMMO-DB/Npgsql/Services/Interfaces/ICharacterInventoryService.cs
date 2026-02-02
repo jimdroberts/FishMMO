@@ -121,7 +121,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// - Failure with DatabaseConnectionException: Connection error
 		/// - Failure with DatabaseQueryException: Delete operation failed
 		/// </remarks>
-		Task<DatabaseResult> DeleteInventoryItemsAsync(long characterId, CancellationToken cancellationToken = default);
+		Task<DatabaseResult> DeleteInventoryItemsAsync(long characterId, long incomingVersion, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Deletes a specific inventory item by slot.
@@ -150,7 +150,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// 
 		/// Use case: Dropping a single item or clearing specific inventory slot.
 		/// </remarks>
-		Task<DatabaseResult> DeleteInventorySlotAsync(long characterId, int slot, CancellationToken cancellationToken = default);
+		Task<DatabaseResult> DeleteInventorySlotAsync(long characterId, int slot, long incomingVersion, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Retrieves all inventory items for a specific character.

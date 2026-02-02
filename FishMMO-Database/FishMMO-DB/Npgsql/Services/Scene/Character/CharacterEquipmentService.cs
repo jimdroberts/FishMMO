@@ -242,7 +242,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> DeleteEquipmentAsync(long characterId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> DeleteEquipmentAsync(long characterId, long incomingVersion, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0)
 			{
@@ -252,19 +252,41 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
+			if (incomingVersion <= 0)
+			{
+				return DatabaseResult.Failure(
+					"VALIDATION_ERROR",
+					"Invalid Version. Version must be greater than 0.",
+					isTransient: false);
+			}
+
 			return await ExecuteWriteAsync(async dbContext =>
 			{
 				var now = DateTime.UtcNow;
 				var sql = $@"UPDATE {TableName}
-					SET deleted = TRUE, time_deleted = {{0}}
-					WHERE character_id = {{1}} AND deleted = FALSE";
-				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { now, characterId }, cancellationToken)
+					SET deleted = TRUE, time_deleted = {{0}}, version = {{1}}
+					WHERE character_id = {{2}} AND deleted = FALSE AND version < {{1}}";
+				var rowsAffected = await dbContext.Database
+					.ExecuteSqlRawAsync(sql, new object[] { now, incomingVersion, characterId }, cancellationToken)
 					.ConfigureAwait(false);
+
+				if (rowsAffected == 0)
+				{
+					var anyActive = await dbContext.CharacterEquippedItems
+						.AsNoTracking()
+						.AnyAsync(e => e.CharacterID == characterId && !e.Deleted, cancellationToken)
+						.ConfigureAwait(false);
+
+					if (anyActive)
+					{
+						throw new StaleStateException("Equipment delete rejected due to a stale Version.");
+					}
+				}
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> DeleteEquipmentSlotAsync(long characterId, int slot, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> DeleteEquipmentSlotAsync(long characterId, int slot, long incomingVersion, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0)
 			{
@@ -274,14 +296,36 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
+			if (incomingVersion <= 0)
+			{
+				return DatabaseResult.Failure(
+					"VALIDATION_ERROR",
+					"Invalid Version. Version must be greater than 0.",
+					isTransient: false);
+			}
+
 			return await ExecuteWriteAsync(async dbContext =>
 			{
 				var now = DateTime.UtcNow;
 				var sql = $@"UPDATE {TableName}
-					SET deleted = TRUE, time_deleted = {{0}}
-					WHERE character_id = {{1}} AND slot = {{2}} AND deleted = FALSE";
-				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { now, characterId, slot }, cancellationToken)
+					SET deleted = TRUE, time_deleted = {{0}}, version = {{1}}
+					WHERE character_id = {{2}} AND slot = {{3}} AND deleted = FALSE AND version < {{1}}";
+				var rowsAffected = await dbContext.Database
+					.ExecuteSqlRawAsync(sql, new object[] { now, incomingVersion, characterId, slot }, cancellationToken)
 					.ConfigureAwait(false);
+
+				if (rowsAffected == 0)
+				{
+					var stillActive = await dbContext.CharacterEquippedItems
+						.AsNoTracking()
+						.AnyAsync(e => e.CharacterID == characterId && e.Slot == slot && !e.Deleted, cancellationToken)
+						.ConfigureAwait(false);
+
+					if (stillActive)
+					{
+						throw new StaleStateException("Equipment slot delete rejected due to a stale Version.");
+					}
+				}
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 

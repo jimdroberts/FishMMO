@@ -97,7 +97,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// - VALIDATION_ERROR: Invalid character ID (less than or equal to 0)
 		/// - DATABASE_ERROR: Database operation error
 		/// </remarks>
-		Task<DatabaseResult> DeleteAbilitiesAsync(long characterId, CancellationToken cancellationToken = default);
+		Task<DatabaseResult> DeleteAbilitiesAsync(long characterId, long incomingVersion, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Deletes a specific ability for a character.
@@ -120,7 +120,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// Security note: Requires both character ID and ability ID to prevent
 		/// accidental deletion of abilities from wrong character.
 		/// </remarks>
-		Task<DatabaseResult> DeleteAbilityAsync(long characterId, long abilityId, CancellationToken cancellationToken = default);
+		Task<DatabaseResult> DeleteAbilityAsync(long characterId, long abilityId, long incomingVersion, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Retrieves all abilities for a specific character.

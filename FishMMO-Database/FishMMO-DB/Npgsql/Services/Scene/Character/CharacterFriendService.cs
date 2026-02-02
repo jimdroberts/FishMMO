@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using FishMMO.Database.Data;
+using FishMMO.Database.Exceptions;
 using FishMMO.Database.Npgsql.Entities;
 
 namespace FishMMO.Database.Npgsql.Services
@@ -112,7 +113,7 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> DeleteFriendAsync(long characterId, long friendCharacterId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> DeleteFriendAsync(long characterId, long friendCharacterId, long incomingVersion, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0 || friendCharacterId <= 0)
 			{
@@ -122,19 +123,41 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
+			if (incomingVersion <= 0)
+			{
+				return DatabaseResult.Failure(
+					"VALIDATION_ERROR",
+					"Invalid Version. Version must be greater than 0.",
+					isTransient: false);
+			}
+
 			return await ExecuteWriteAsync(async dbContext =>
 			{
 				var now = DateTime.UtcNow;
 				var sql = $@"UPDATE {TableName}
-					SET deleted = TRUE, time_deleted = {{0}}
-					WHERE character_id = {{1}} AND friend_character_id = {{2}} AND deleted = FALSE";
-				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { now, characterId, friendCharacterId }, cancellationToken)
+					SET deleted = TRUE, time_deleted = {{0}}, version = {{1}}
+					WHERE character_id = {{2}} AND friend_character_id = {{3}} AND deleted = FALSE AND version < {{1}}";
+				var rowsAffected = await dbContext.Database
+					.ExecuteSqlRawAsync(sql, new object[] { now, incomingVersion, characterId, friendCharacterId }, cancellationToken)
 					.ConfigureAwait(false);
+
+				if (rowsAffected == 0)
+				{
+					var stillActive = await dbContext.CharacterFriends
+						.AsNoTracking()
+						.AnyAsync(f => f.CharacterID == characterId && f.FriendCharacterID == friendCharacterId && !f.Deleted, cancellationToken)
+						.ConfigureAwait(false);
+
+					if (stillActive)
+					{
+						throw new StaleStateException("Friend delete rejected due to a stale Version.");
+					}
+				}
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> DeleteAllFriendsAsync(long characterId, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult> DeleteAllFriendsAsync(long characterId, long incomingVersion, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0)
 			{
@@ -144,14 +167,36 @@ namespace FishMMO.Database.Npgsql.Services
 					isTransient: false);
 			}
 
+			if (incomingVersion <= 0)
+			{
+				return DatabaseResult.Failure(
+					"VALIDATION_ERROR",
+					"Invalid Version. Version must be greater than 0.",
+					isTransient: false);
+			}
+
 			return await ExecuteWriteAsync(async dbContext =>
 			{
 				var now = DateTime.UtcNow;
 				var sql = $@"UPDATE {TableName}
-					SET deleted = TRUE, time_deleted = {{0}}
-					WHERE character_id = {{1}} AND deleted = FALSE";
-				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { now, characterId }, cancellationToken)
+					SET deleted = TRUE, time_deleted = {{0}}, version = {{1}}
+					WHERE character_id = {{2}} AND deleted = FALSE AND version < {{1}}";
+				var rowsAffected = await dbContext.Database
+					.ExecuteSqlRawAsync(sql, new object[] { now, incomingVersion, characterId }, cancellationToken)
 					.ConfigureAwait(false);
+
+				if (rowsAffected == 0)
+				{
+					var anyActive = await dbContext.CharacterFriends
+						.AsNoTracking()
+						.AnyAsync(f => f.CharacterID == characterId && !f.Deleted, cancellationToken)
+						.ConfigureAwait(false);
+
+					if (anyActive)
+					{
+						throw new StaleStateException("Friend delete rejected due to a stale Version.");
+					}
+				}
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 

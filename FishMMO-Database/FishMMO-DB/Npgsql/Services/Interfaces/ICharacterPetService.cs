@@ -41,7 +41,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// Uses atomic DELETE operation. Returns success even if the pet doesn't exist (idempotent).
 		/// Execution strategy wrapping ensures transient database failures are automatically retried.
 		/// </remarks>
-		Task<DatabaseResult> DeletePetAsync(long characterId, CancellationToken cancellationToken = default);
+		Task<DatabaseResult> DeletePetAsync(long characterId, long incomingVersion, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Retrieves a character's pet.

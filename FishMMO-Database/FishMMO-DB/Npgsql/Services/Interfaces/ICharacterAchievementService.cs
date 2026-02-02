@@ -67,7 +67,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// - VALIDATION_ERROR: Invalid character ID (less than or equal to 0)
 		/// - DATABASE_ERROR: Database operation error
 		/// </remarks>
-		Task<DatabaseResult> DeleteAchievementsAsync(long characterId, CancellationToken cancellationToken = default);
+		Task<DatabaseResult> DeleteAchievementsAsync(long characterId, long incomingVersion, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Retrieves all achievements for a specific character.
